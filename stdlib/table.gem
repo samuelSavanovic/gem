@@ -1,0 +1,69 @@
+# stdlib/table — array/table utilities for Gem
+#
+# Usage:
+#   load "stdlib/table"
+#   table.each([1,2,3]) do |item|
+#     print(item)
+#   end
+
+# ─── each(arr, fn) ───────────────────────────────────────────
+
+fn _table_each(arr, f)
+  let i = 0
+  let n = len(arr)
+  while i < n
+    f(arr[i])
+    i += 1
+  end
+end
+
+# ─── map(arr, fn) ────────────────────────────────────────────
+
+fn _table_map(arr, f)
+  let result = []
+  let i = 0
+  let n = len(arr)
+  while i < n
+    push(result, f(arr[i]))
+    i += 1
+  end
+  result
+end
+
+# ─── filter(arr, fn) ─────────────────────────────────────────
+
+fn _table_filter(arr, f)
+  let result = []
+  let i = 0
+  let n = len(arr)
+  while i < n
+    if f(arr[i])
+      push(result, arr[i])
+    end
+    i += 1
+  end
+  result
+end
+
+# ─── contains(arr, value) ────────────────────────────────────
+
+fn _table_contains(arr, value)
+  let i = 0
+  let n = len(arr)
+  while i < n
+    if arr[i] == value
+      return true
+    end
+    i += 1
+  end
+  false
+end
+
+# ─── Namespace table ─────────────────────────────────────────
+
+let table = {
+  each: _table_each,
+  map: _table_map,
+  filter: _table_filter,
+  contains: _table_contains
+}

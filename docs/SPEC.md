@@ -390,6 +390,39 @@ File inclusion with a re-inclusion guard — the runtime keeps a table of alread
 
 No namespacing in v0. Everything is global.
 
+**Standard Library (stdlib/)**
+
+Convention: each stdlib file exports a single table as a namespace. No language changes needed — `load` dumps everything into scope, but the exported table acts as a namespace.
+
+```
+load "stdlib/string"
+load "stdlib/table"
+
+let parts = string.split("a,b,c", ",")
+let trimmed = string.trim("  hello  ")
+table.each(parts) { |item| print(item) }
+```
+
+`stdlib/string` — exports `string` table:
+
+- `string.split(s, delim)` — split string by delimiter, return array
+- `string.index_of(s, needle)` — find first occurrence, return index or -1
+- `string.join(arr, delim)` — join array elements with delimiter
+- `string.trim(s)` — strip leading/trailing ASCII whitespace
+- `string.starts_with(s, prefix)` / `string.ends_with(s, suffix)` — boolean prefix/suffix check
+- `string.upper(s)` / `string.lower(s)` — ASCII case conversion
+
+`stdlib/table` — exports `table` table:
+
+- `table.each(arr, fn)` — iterate calling fn(item)
+- `table.map(arr, fn)` — return new array with fn(item) applied
+- `table.filter(arr, fn)` — return new array where fn(item) is truthy
+- `table.contains(arr, value)` — linear scan for value equality
+
+The C builtins (`split`, `index_of`, etc.) remain available alongside the stdlib versions. Users can choose either. The stdlib versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`buf_str()`, and `substr()`.
+
+Note: stdlib table-as-namespace variables (like `string`, `table`) are top-level `let` bindings. Due to the current compilation model, they are accessible in top-level code and closures but not inside named `fn` declarations defined before or after the `load`. Named functions should use the C builtins or accept the namespace table as a parameter.
+
 **What the Compiler Needs to Emit**
 
 Every value is a tagged C union. The compiler emits C code that uses the runtime glue (~200–350 lines) which wires together Boehm GC, minicoro, and stb_ds.h. The generated C code calls `GC_malloc` for allocations (with coroutine stacks registered as GC roots via custom allocator), uses minicoro for coroutines with a built-in round-robin scheduler and mailbox channels, and stb_ds for table operations. The compiler emits C `#line` directives so that runtime errors report Gem source file and line numbers instead of C line numbers.

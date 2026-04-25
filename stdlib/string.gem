@@ -1,0 +1,177 @@
+# stdlib/string — string utilities for Gem
+#
+# Usage:
+#   load "stdlib/string"
+#   let parts = string.split("a,b,c", ",")
+
+# ─── Helpers ──────────────────────────────────────────────────
+
+fn _str_eq_at(s, pos, needle)
+  let nlen = len(needle)
+  if pos + nlen > len(s)
+    return false
+  end
+  let i = 0
+  while i < nlen
+    if ord(s, pos + i) != ord(needle, i)
+      return false
+    end
+    i += 1
+  end
+  true
+end
+
+# ─── split(s, delim) ─────────────────────────────────────────
+
+fn _string_split(s, delim)
+  let result = []
+  let slen = len(s)
+  let dlen = len(delim)
+  if dlen == 0
+    push(result, s)
+    return result
+  end
+  let buf = buf_new()
+  let i = 0
+  while i < slen
+    if _str_eq_at(s, i, delim)
+      push(result, buf_str(buf))
+      buf = buf_new()
+      i += dlen
+    else
+      buf_push(buf, chr(ord(s, i)))
+      i += 1
+    end
+  end
+  push(result, buf_str(buf))
+  result
+end
+
+# ─── index_of(s, needle) ─────────────────────────────────────
+
+fn _string_index_of(s, needle)
+  let slen = len(s)
+  let nlen = len(needle)
+  if nlen == 0
+    return 0
+  end
+  if nlen > slen
+    return -1
+  end
+  let i = 0
+  let limit = slen - nlen
+  while i <= limit
+    if _str_eq_at(s, i, needle)
+      return i
+    end
+    i += 1
+  end
+  -1
+end
+
+# ─── join(arr, delim) ────────────────────────────────────────
+
+fn _string_join(arr, delim)
+  let buf = buf_new()
+  let i = 0
+  let n = len(arr)
+  while i < n
+    if i > 0
+      buf_push(buf, delim)
+    end
+    buf_push(buf, arr[i])
+    i += 1
+  end
+  buf_str(buf)
+end
+
+# ─── trim(s) ─────────────────────────────────────────────────
+
+fn _string_trim(s)
+  let slen = len(s)
+  if slen == 0
+    return s
+  end
+  let start = 0
+  while start < slen
+    let c = ord(s, start)
+    if c != 32 and c != 9 and c != 10 and c != 13
+      break
+    end
+    start += 1
+  end
+  if start == slen
+    return ""
+  end
+  let stop = slen - 1
+  while stop >= start
+    let c = ord(s, stop)
+    if c != 32 and c != 9 and c != 10 and c != 13
+      break
+    end
+    stop -= 1
+  end
+  substr(s, start, stop - start + 1)
+end
+
+# ─── starts_with(s, prefix) / ends_with(s, suffix) ──────────
+
+fn _string_starts_with(s, prefix)
+  _str_eq_at(s, 0, prefix)
+end
+
+fn _string_ends_with(s, suffix)
+  let slen = len(s)
+  let plen = len(suffix)
+  if plen > slen
+    return false
+  end
+  _str_eq_at(s, slen - plen, suffix)
+end
+
+# ─── upper(s) / lower(s) — ASCII only ───────────────────────
+
+fn _string_upper(s)
+  let buf = buf_new()
+  let i = 0
+  let slen = len(s)
+  while i < slen
+    let c = ord(s, i)
+    if c >= 97 and c <= 122
+      buf_push(buf, chr(c - 32))
+    else
+      buf_push(buf, chr(c))
+    end
+    i += 1
+  end
+  buf_str(buf)
+end
+
+fn _string_lower(s)
+  let buf = buf_new()
+  let i = 0
+  let slen = len(s)
+  while i < slen
+    let c = ord(s, i)
+    if c >= 65 and c <= 90
+      buf_push(buf, chr(c + 32))
+    else
+      buf_push(buf, chr(c))
+    end
+    i += 1
+  end
+  buf_str(buf)
+end
+
+# ─── Namespace table ─────────────────────────────────────────
+
+let string = {
+  split: _string_split,
+  index_of: _string_index_of,
+  join: _string_join,
+  trim: _string_trim,
+  starts_with: _string_starts_with,
+  ends_with: _string_ends_with,
+  upper: _string_upper,
+  lower: _string_lower
+}

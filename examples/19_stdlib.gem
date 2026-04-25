@@ -1,0 +1,116 @@
+# stdlib tests — string and table modules
+
+load "../stdlib/string"
+load "../stdlib/table"
+
+# ─── string.split ────────────────────────────────────────────
+
+let parts = string.split("a,b,c", ",")
+print(len(parts))
+print(parts[0])
+print(parts[1])
+print(parts[2])
+
+# Split with no match — single element
+let no_match = string.split("hello", ",")
+print(len(no_match))
+print(no_match[0])
+
+# Split with delimiter at start/end
+let edges = string.split(",a,b,", ",")
+print(len(edges))
+print(edges[0])
+print(edges[1])
+print(edges[2])
+print(edges[3])
+
+# Split empty string
+let empty = string.split("", ",")
+print(len(empty))
+print(empty[0])
+
+# Split with multi-char delimiter
+let multi = string.split("a::b::c", "::")
+print(len(multi))
+print(multi[0])
+print(multi[1])
+print(multi[2])
+
+# ─── string.index_of ────────────────────────────────────────
+
+print(string.index_of("hello world", "world"))
+print(string.index_of("hello world", "xyz"))
+print(string.index_of("hello", ""))
+print(string.index_of("", "x"))
+print(string.index_of("abcabc", "bc"))
+
+# ─── string.join ─────────────────────────────────────────────
+
+print(string.join(["a", "b", "c"], ", "))
+print(string.join(["solo"], ", "))
+print(string.join([], ", "))
+
+# ─── string.trim ─────────────────────────────────────────────
+
+print(string.trim("  hello  "))
+print(string.trim("no_spaces"))
+print(string.trim("   "))
+print(string.trim(""))
+
+# ─── string.starts_with / ends_with ─────────────────────────
+
+print(string.starts_with("hello world", "hello"))
+print(string.starts_with("hello world", "world"))
+print(string.ends_with("hello world", "world"))
+print(string.ends_with("hello world", "hello"))
+print(string.starts_with("hi", "hello"))
+print(string.ends_with("hi", "hello"))
+
+# ─── string.upper / string.lower ────────────────────────────
+
+print(string.upper("hello"))
+print(string.lower("HELLO"))
+print(string.upper("Hello World 123!"))
+print(string.lower("Hello World 123!"))
+
+# ─── table.each ──────────────────────────────────────────────
+
+table.each([10, 20, 30]) do |item|
+  print(item)
+end
+
+# Empty array — should print nothing
+table.each([]) do |item|
+  print(item)
+end
+
+# ─── table.map ───────────────────────────────────────────────
+
+let doubled = table.map([1, 2, 3]) { |x| x * 2 }
+print(doubled[0])
+print(doubled[1])
+print(doubled[2])
+
+# Map empty
+let empty_map = table.map([]) { |x| x }
+print(len(empty_map))
+
+# ─── table.filter ────────────────────────────────────────────
+
+let evens = table.filter([1, 2, 3, 4, 5, 6]) { |x| x % 2 == 0 }
+print(len(evens))
+print(evens[0])
+print(evens[1])
+print(evens[2])
+
+# Filter all out
+let none = table.filter([1, 3, 5]) { |x| x % 2 == 0 }
+print(len(none))
+
+# ─── table.contains ──────────────────────────────────────────
+
+print(table.contains([1, 2, 3], 2))
+print(table.contains([1, 2, 3], 5))
+print(table.contains([], 1))
+print(table.contains(["a", "b"], "b"))
+print(table.contains(["a", "b"], "c"))
