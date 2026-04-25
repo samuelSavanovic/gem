@@ -20,10 +20,15 @@ GRAMMAR = r"""
          | while_stmt
          | match_stmt
          | return_stmt
+         | break_stmt
+         | continue_stmt
          | load_stmt
          | extern_fn
          | extern_include
          | expr
+
+    break_stmt: "break"
+    continue_stmt: "continue"
 
     load_stmt: "load" STRING
     extern_fn: "extern" "fn" NAME "(" extern_params ")" ("->" extern_type)?
@@ -99,7 +104,7 @@ GRAMMAR = r"""
     array_literal: "[" _NL* array_entries? _NL* "]"
     array_entries: expr ((_NL* "," | _NL+) _NL* expr)* ","?
 
-    NAME: /(?!(?:fn|end|let|if|else|while|return|do|match|when|and|or|not|true|false|nil|load|extern)\b)[a-zA-Z_][a-zA-Z0-9_]*/
+    NAME: /(?!(?:fn|end|let|if|else|while|return|break|continue|do|match|when|and|or|not|true|false|nil|load|extern)\b)[a-zA-Z_][a-zA-Z0-9_]*/
     NUMBER: /[0-9]+(\.[0-9]+)?/
     STRING: /\"([^\"\\]|\\.)*\"/
 
@@ -181,6 +186,12 @@ class ASTBuilder(Transformer):
     def return_stmt(self, items):
         value = items[0] if items else None
         return {"tag": "return", "value": value}
+
+    def break_stmt(self, items):
+        return {"tag": "break"}
+
+    def continue_stmt(self, items):
+        return {"tag": "continue"}
 
     def if_stmt(self, items):
         cond = items[0]
@@ -416,6 +427,10 @@ static GemVal gem_string(const char *s) {
     return r;
 }
 
+/* ─── Forward decl for error ─── */
+
+static void gem_error(const char *msg);
+
 /* ─── Table operations ─── */
 
 static int gem_val_eq(GemVal a, GemVal b);
@@ -449,6 +464,14 @@ static void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
 }
 
 static GemVal gem_table_get(GemVal tbl, GemVal key) {
+    if (tbl.type == VAL_STRING) {
+        if (key.type != VAL_INT) { gem_error("string index must be int"); }
+        int64_t idx = key.ival;
+        int64_t slen = (int64_t)strlen(tbl.sval);
+        if (idx < 0 || idx >= slen) { gem_error("string index out of bounds"); }
+        char buf[2]; buf[0] = tbl.sval[idx]; buf[1] = '\0';
+        return gem_string(buf);
+    }
     if (tbl.type != VAL_TABLE) { fprintf(stderr, "error: index get on non-table\n"); exit(1); }
     GemTable *t = tbl.table;
     for (int i = 0; i < t->len; i++) {
@@ -616,6 +639,36 @@ static GemVal gem_error_fn(void *_env, GemVal *args, int argc) {
     return GEM_NIL;
 }
 
+/* ─── Built-in: len ─── */
+
+static GemVal gem_len_val(GemVal v) {
+    if (v.type == VAL_STRING) return gem_int((int64_t)strlen(v.sval));
+    if (v.type == VAL_TABLE) return gem_int((int64_t)v.table->len);
+    gem_error("len: expected string or table");
+    return GEM_NIL;
+}
+
+static GemVal gem_len_fn(void *_env, GemVal *args, int argc) {
+    if (argc < 1) { gem_error("len: expected 1 argument"); }
+    return gem_len_val(args[0]);
+}
+
+/* ─── Built-in: type ─── */
+
+static GemVal gem_type_fn(void *_env, GemVal *args, int argc) {
+    if (argc < 1) return gem_string("nil");
+    switch (args[0].type) {
+        case VAL_NIL: return gem_string("nil");
+        case VAL_BOOL: return gem_string("bool");
+        case VAL_INT: return gem_string("int");
+        case VAL_FLOAT: return gem_string("float");
+        case VAL_STRING: return gem_string("string");
+        case VAL_FN: return gem_string("fn");
+        case VAL_TABLE: return gem_string("table");
+    }
+    return gem_string("unknown");
+}
+
 /* ─── Forward declarations ─── */
 """
 
@@ -626,7 +679,7 @@ class CodeGen:
         self.tmp_counter = 0
         self.anon_counter = 0
         self.defined_fns = set() # names of user-defined functions
-        self.builtins = {"print", "error"}
+        self.builtins = {"print", "error", "len", "type"}
         # Per-scope state — set during function compilation
         self.boxed_vars = set()  # variables that are heap-allocated (captured by closures)
 
@@ -637,6 +690,10 @@ class CodeGen:
     def _anon_name(self):
         self.anon_counter += 1
         return f"_anon_{self.anon_counter}"
+
+    def _mangle(self, name):
+        """Prefix Gem variable names to avoid C keyword collisions."""
+        return f"gem_v_{name}"
 
     # ─── Free variable analysis ───
 
@@ -910,12 +967,13 @@ class CodeGen:
 
         # Bind parameters
         for i, p in enumerate(params):
+            mp = self._mangle(p)
             if p in captured:
                 # Box: allocate on heap so closures can capture a pointer
-                lines.append(f"    GemVal *{p} = malloc(sizeof(GemVal));")
-                lines.append(f"    *{p} = (argc > {i}) ? args[{i}] : GEM_NIL;")
+                lines.append(f"    GemVal *{mp} = malloc(sizeof(GemVal));")
+                lines.append(f"    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;")
             else:
-                lines.append(f"    GemVal {p} = (argc > {i}) ? args[{i}] : GEM_NIL;")
+                lines.append(f"    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;")
 
         # Compile body — last expression is the return value
         if body:
@@ -953,7 +1011,7 @@ class CodeGen:
         struct_name = f"_closure_{name}"
         struct_def = f"struct {struct_name} {{\n"
         for c in captures:
-            struct_def += f"    GemVal *{c};\n"
+            struct_def += f"    GemVal *{self._mangle(c)};\n"
         struct_def += "};\n"
 
         # Generate function
@@ -962,15 +1020,17 @@ class CodeGen:
         if captures:
             lines.append(f"    struct {struct_name} *_cls = (struct {struct_name} *)_env;")
             for c in captures:
-                lines.append(f"    GemVal *{c} = _cls->{c};")
+                mc = self._mangle(c)
+                lines.append(f"    GemVal *{mc} = _cls->{mc};")
 
         # Bind parameters
         for i, p in enumerate(params):
+            mp = self._mangle(p)
             if p in inner_captured:
-                lines.append(f"    GemVal *{p} = malloc(sizeof(GemVal));")
-                lines.append(f"    *{p} = (argc > {i}) ? args[{i}] : GEM_NIL;")
+                lines.append(f"    GemVal *{mp} = malloc(sizeof(GemVal));")
+                lines.append(f"    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;")
             else:
-                lines.append(f"    GemVal {p} = (argc > {i}) ? args[{i}] : GEM_NIL;")
+                lines.append(f"    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;")
 
         if body:
             for stmt in body[:-1]:
@@ -1001,15 +1061,17 @@ class CodeGen:
         if tag == "let":
             expr_code, setup = self._compile_expr(node["value"])
             name = node["name"]
+            mname = self._mangle(name)
             if name in self.boxed_vars:
-                return setup + f"{pad}GemVal *{name} = malloc(sizeof(GemVal));\n{pad}*{name} = {expr_code};"
-            return setup + f"{pad}GemVal {name} = {expr_code};"
+                return setup + f"{pad}GemVal *{mname} = malloc(sizeof(GemVal));\n{pad}*{mname} = {expr_code};"
+            return setup + f"{pad}GemVal {mname} = {expr_code};"
         elif tag == "assign":
             expr_code, setup = self._compile_expr(node["value"])
             name = node["name"]
+            mname = self._mangle(name)
             if name in self.boxed_vars:
-                return setup + f"{pad}*{name} = {expr_code};"
-            return setup + f"{pad}{name} = {expr_code};"
+                return setup + f"{pad}*{mname} = {expr_code};"
+            return setup + f"{pad}{mname} = {expr_code};"
         elif tag == "dot_assign":
             obj_code, obj_setup = self._compile_expr(node["object"])
             val_code, val_setup = self._compile_expr(node["value"])
@@ -1026,6 +1088,10 @@ class CodeGen:
             return self._compile_while(node, indent)
         elif tag == "match":
             return self._compile_match(node, indent)
+        elif tag == "break":
+            return f"{pad}break;"
+        elif tag == "continue":
+            return f"{pad}continue;"
         elif tag == "return":
             if node["value"] is not None:
                 expr_code, setup = self._compile_expr(node["value"])
@@ -1047,16 +1113,18 @@ class CodeGen:
         if tag == "let":
             expr_code, setup = self._compile_expr(node["value"])
             name = node["name"]
+            mname = self._mangle(name)
             if name in self.boxed_vars:
-                return setup + f"{pad}GemVal *{name} = malloc(sizeof(GemVal));\n{pad}*{name} = {expr_code};\n{pad}return GEM_NIL;"
-            return setup + f"{pad}GemVal {name} = {expr_code};\n{pad}return GEM_NIL;"
+                return setup + f"{pad}GemVal *{mname} = malloc(sizeof(GemVal));\n{pad}*{mname} = {expr_code};\n{pad}return GEM_NIL;"
+            return setup + f"{pad}GemVal {mname} = {expr_code};\n{pad}return GEM_NIL;"
         elif tag == "assign":
             expr_code, setup = self._compile_expr(node["value"])
             tmp = self.tmp()
             name = node["name"]
+            mname = self._mangle(name)
             if name in self.boxed_vars:
-                return setup + f"{pad}GemVal {tmp} = {expr_code};\n{pad}*{name} = {tmp};\n{pad}return {tmp};"
-            return setup + f"{pad}GemVal {tmp} = {expr_code};\n{pad}{name} = {tmp};\n{pad}return {tmp};"
+                return setup + f"{pad}GemVal {tmp} = {expr_code};\n{pad}*{mname} = {tmp};\n{pad}return {tmp};"
+            return setup + f"{pad}GemVal {tmp} = {expr_code};\n{pad}{mname} = {tmp};\n{pad}return {tmp};"
         elif tag == "return":
             if node["value"] is not None:
                 expr_code, setup = self._compile_expr(node["value"])
@@ -1098,9 +1166,14 @@ class CodeGen:
                 return "gem_make_fn(gem_print, NULL)", ""
             if name == "error":
                 return "gem_make_fn(gem_error_fn, NULL)", ""
+            if name == "len":
+                return "gem_make_fn(gem_len_fn, NULL)", ""
+            if name == "type":
+                return "gem_make_fn(gem_type_fn, NULL)", ""
+            mname = self._mangle(name)
             if name in self.boxed_vars:
-                return f"(*{name})", ""
-            return name, ""
+                return f"(*{mname})", ""
+            return mname, ""
         elif tag == "call":
             return self._compile_call(node)
         elif tag == "binop":
@@ -1171,25 +1244,33 @@ class CodeGen:
         env_tmp = self.tmp()
         setup += f"    struct {struct_name} *{env_tmp} = malloc(sizeof(struct {struct_name}));\n"
         for c in captures:
+            mc = self._mangle(c)
             if c in self.boxed_vars:
                 # Already a pointer — pass it directly
-                setup += f"    {env_tmp}->{c} = {c};\n"
+                setup += f"    {env_tmp}->{mc} = {mc};\n"
             else:
                 # Need to take address — but this var isn't boxed!
                 # This shouldn't happen if capture analysis is correct.
                 # The var should have been boxed in the enclosing scope.
-                setup += f"    {env_tmp}->{c} = &{c};\n"
+                setup += f"    {env_tmp}->{mc} = &{mc};\n"
         return f"gem_make_fn({fn_name}, {env_tmp})", setup
 
     def _compile_call(self, node):
         func = node["func"]
         args = node["args"]
 
+        # Method call detection: obj.len() → gem_len_val(obj)
+        if func["tag"] == "dot" and func["field"] == "len" and len(args) == 0:
+            obj_code, obj_setup = self._compile_expr(func["object"])
+            return f"gem_len_val({obj_code})", obj_setup
+
         # Direct call optimization for known functions
         if func["tag"] == "var":
             name = func["name"]
-            if name == "print" or name == "error":
-                fn_name = "gem_print" if name == "print" else "gem_error_fn"
+            if name in ("print", "error", "len", "type"):
+                fn_map = {"print": "gem_print", "error": "gem_error_fn",
+                          "len": "gem_len_fn", "type": "gem_type_fn"}
+                fn_name = fn_map[name]
                 arg_setups = []
                 arg_exprs = []
                 for a in args:

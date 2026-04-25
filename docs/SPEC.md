@@ -139,6 +139,22 @@ else
 end
 ```
 
+`break` exits the innermost `while` loop. `continue` skips to the next iteration.
+
+```
+let i = 0
+while i < 100
+  i += 1
+  if i % 2 == 0
+    continue
+  end
+  if i > 10
+    break
+  end
+  print(i)
+end
+```
+
 No `for` keyword. Use `range().each` or define iteration functions in stdlib using blocks. `while` is sufficient for the bootstrap compiler.
 
 **Closures**
