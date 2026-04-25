@@ -37,6 +37,21 @@ struct GemTable {
 
 GemVal GEM_NIL = {VAL_NIL, {0}};
 
+/* ─── Call stack ─── */
+
+GemFrame gem_call_stack[GEM_MAX_CALL_DEPTH];
+int gem_call_depth = 0;
+
+void gem_print_stack_trace(void) {
+    int max = gem_call_depth < GEM_MAX_CALL_DEPTH ? gem_call_depth : GEM_MAX_CALL_DEPTH;
+    for (int i = max - 1; i >= 0; i--) {
+        fprintf(stderr, "  at %s (%s:%d)\n",
+            gem_call_stack[i].name,
+            gem_call_stack[i].file,
+            gem_call_stack[i].line);
+    }
+}
+
 /* ─── Constructors ─── */
 
 GemVal gem_int(int64_t v) { return (GemVal){VAL_INT, {.ival = v}}; }
@@ -83,7 +98,7 @@ GemVal gem_table_new(void) {
 }
 
 void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
-    if (tbl.type != VAL_TABLE) { fprintf(stderr, "error: index set on non-table\n"); exit(1); }
+    if (tbl.type != VAL_TABLE) { gem_error("index set on non-table"); }
     GemTable *t = tbl.table;
 
     /* String key: use hash index for O(1) lookup */
@@ -141,7 +156,7 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
         return gem_string(buf);
     }
 
-    if (tbl.type != VAL_TABLE) { fprintf(stderr, "error: index get on non-table\n"); exit(1); }
+    if (tbl.type != VAL_TABLE) { gem_error("index get on non-table"); }
     GemTable *t = tbl.table;
 
     /* String key: use hash index */
@@ -192,6 +207,7 @@ int gem_truthy(GemVal v) {
 
 void gem_error(const char *msg) {
     fprintf(stderr, "error: %s\n", msg);
+    gem_print_stack_trace();
     exit(1);
 }
 
@@ -325,6 +341,7 @@ GemVal gem_error_fn(void *_env, GemVal *args, int argc) {
     } else {
         fprintf(stderr, "error\n");
     }
+    gem_print_stack_trace();
     exit(1);
     return GEM_NIL;
 }
@@ -419,6 +436,7 @@ GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
     } else {
         fprintf(stderr, "%s:%d: error\n", file, line);
     }
+    gem_print_stack_trace();
     exit(1);
     return GEM_NIL;
 }

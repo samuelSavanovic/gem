@@ -281,13 +281,13 @@ print("wrapped: {wrap("inner")}")
 
 **Error Handling**
 
-No exceptions in v0. `error(msg)` prints the message with file and line info to stderr and halts immediately (`fprintf` + `exit(1)` in emitted C). The compiler reports the first error and stops. No error recovery.
+No exceptions in v0. `error(msg)` prints the message with file and line info to stderr, followed by a call stack trace showing each Gem function frame, and halts (`exit(1)`). Runtime type errors (e.g. `1 + "a"`) also print a stack trace. The compiler reports the first error and stops. No error recovery.
 
 **Built-in Functions**
 
 `print(args...)` — prints values separated by spaces, followed by a newline.
 
-`error(msg)` — prints the message with file and line info to stderr and halts (`exit(1)`).
+`error(msg)` — prints the message with file and line info to stderr, prints a call stack trace, and halts (`exit(1)`).
 
 `len(v)` — returns the length of a string or the number of entries in a table.
 

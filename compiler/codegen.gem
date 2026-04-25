@@ -861,9 +861,10 @@ fn make_codegen(source_name)
     elif tag == "return"
       if node.value != nil
         let r = compile_expr(node.value)
-        return "{line_dir}{r.setup}{p}return {r.expr};"
+        let t = tmp()
+        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}gem_pop_frame();\n{p}return {t};"
       end
-      return "{line_dir}{p}return GEM_NIL;"
+      return "{line_dir}{p}gem_pop_frame();\n{p}return GEM_NIL;"
     elif tag == "call"
       let r = compile_expr(node)
       return "{line_dir}{r.setup}{p}(void)({r.expr});"
@@ -897,28 +898,29 @@ fn make_codegen(source_name)
       let name = node.name
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return "{line_dir}{r.setup}{p}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{p}*{mname} = {r.expr};\n{p}return GEM_NIL;"
+        return "{line_dir}{r.setup}{p}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{p}*{mname} = {r.expr};\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
       end
-      return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};\n{p}return GEM_NIL;"
+      return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
     elif tag == "assign"
       let r = compile_expr(node.value)
       let t = tmp()
       let name = node.name
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}*{mname} = {t};\n{p}return {t};"
+        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}*{mname} = {t};\n{p}gem_pop_frame();\n{p}return {t};"
       end
-      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{mname} = {t};\n{p}return {t};"
+      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{mname} = {t};\n{p}gem_pop_frame();\n{p}return {t};"
     elif tag == "return"
       if node.value != nil
         let r = compile_expr(node.value)
-        return "{line_dir}{r.setup}{p}return {r.expr};"
+        let t = tmp()
+        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}gem_pop_frame();\n{p}return {t};"
       end
-      return "{line_dir}{p}return GEM_NIL;"
+      return "{line_dir}{p}gem_pop_frame();\n{p}return GEM_NIL;"
     elif tag == "if"
       return "{line_dir}" + compile_if_return(node, indent)
     elif tag == "while"
-      return "{line_dir}{compile_while(node, indent)}\n{p}return GEM_NIL;"
+      return "{line_dir}{compile_while(node, indent)}\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
     elif tag == "match"
       return "{line_dir}" + compile_match_return(node, indent)
     elif tag == "block"
@@ -932,11 +934,12 @@ fn make_codegen(source_name)
       out = out + "{p}}"
       return out
     elif tag == "dot_assign" or tag == "index_assign" or tag == "break" or tag == "continue" or tag == "fn_def"
-      return "{compile_stmt(node, indent)}\n{p}return GEM_NIL;"
+      return "{compile_stmt(node, indent)}\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
     end
 
     let r = compile_expr(node)
-    "{line_dir}{r.setup}{p}return {r.expr};"
+    let t = tmp()
+    "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}gem_pop_frame();\n{p}return {t};"
   end
 
   # ─── compile_if ──
@@ -969,7 +972,7 @@ fn make_codegen(source_name)
       end
       out = out + compile_stmt_return(then_body[len(then_body) - 1], indent + 1) + "\n"
     else
-      out = out + "{p}    return GEM_NIL;\n"
+      out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
     end
     if node["else"] != nil
       out = out + "{p}} else \{\n"
@@ -980,11 +983,11 @@ fn make_codegen(source_name)
         end
         out = out + compile_stmt_return(else_body[len(else_body) - 1], indent + 1) + "\n"
       else
-        out = out + "{p}    return GEM_NIL;\n"
+        out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
       end
     else
       out = out + "{p}} else \{\n"
-      out = out + "{p}    return GEM_NIL;\n"
+      out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
     end
     out = out + "{p}}"
     out
@@ -1056,7 +1059,7 @@ fn make_codegen(source_name)
         end
         out = out + compile_stmt_return(body[len(body) - 1], indent + 1) + "\n"
       else
-        out = out + "{p}    return GEM_NIL;\n"
+        out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
       end
     end
     if node["else"] != nil
@@ -1068,11 +1071,11 @@ fn make_codegen(source_name)
         end
         out = out + compile_stmt_return(else_body[len(else_body) - 1], indent + 1) + "\n"
       else
-        out = out + "{p}    return GEM_NIL;\n"
+        out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
       end
     else
       out = out + "{p}} else \{\n"
-      out = out + "{p}    return GEM_NIL;\n"
+      out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
     end
     out = out + "{p}}"
     out
@@ -1201,6 +1204,12 @@ fn make_codegen(source_name)
       end
     end
 
+    let fn_line = 0
+    if node.line != nil
+      fn_line = node.line
+    end
+    lines = lines + "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", {fn_line});\n"
+
     # Compile body — last expression is the return value
     if len(body) > 0
       for i = 0, len(body) - 1
@@ -1208,7 +1217,7 @@ fn make_codegen(source_name)
       end
       lines = lines + compile_stmt_return(body[len(body) - 1], 1) + "\n"
     else
-      lines = lines + "    return GEM_NIL;\n"
+      lines = lines + "    gem_pop_frame();\n    return GEM_NIL;\n"
     end
 
     lines = lines + "}"
@@ -1271,13 +1280,15 @@ fn make_codegen(source_name)
       end
     end
 
+    lines = lines + "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", 0);\n"
+
     if len(body) > 0
       for i = 0, len(body) - 1
         lines = lines + compile_stmt(body[i], 1) + "\n"
       end
       lines = lines + compile_stmt_return(body[len(body) - 1], 1) + "\n"
     else
-      lines = lines + "    return GEM_NIL;\n"
+      lines = lines + "    gem_pop_frame();\n    return GEM_NIL;\n"
     end
 
     lines = lines + "}"
@@ -1346,6 +1357,7 @@ fn make_codegen(source_name)
     end
 
     let main_c = "int main(void) \{\n"
+    main_c = main_c + "    gem_push_frame(\"main\", \"{escape_c_string(source_name)}\", 0);\n"
     if main_body != ""
       main_c = main_c + main_body
     end
@@ -1353,7 +1365,7 @@ fn make_codegen(source_name)
       main_c = main_c + "    GemVal _margs[1] = \{GEM_NIL};\n"
       main_c = main_c + "    gem_fn_main(NULL, _margs, 0);\n"
     end
-    main_c = main_c + "    return 0;\n}\n"
+    main_c = main_c + "    gem_pop_frame();\n    return 0;\n}\n"
 
 
     # Assemble

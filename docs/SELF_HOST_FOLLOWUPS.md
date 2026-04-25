@@ -46,8 +46,8 @@ The codegen needs string replacement for re-indenting setup code in `and`/`or`/`
 ### Source-mapped error messages — DONE
 The compiler now emits C `#line` directives in generated output so that runtime errors report Gem source file and line numbers. Added `.line` field to all statement-level AST constructors (`let`, `assign`, `dot_assign`, `index_assign`, `fn_def`, `if`, `while`, `match`, `return`). The parser captures `peek().line` at the start of each statement and passes it through. The codegen emits `#line N "file.gem"` before each statement's C code. Synthetic nodes from `for..in` and `elif` desugaring carry the original keyword's line number. Multi-file `#line` (tracking per-node filenames across `load` boundaries) deferred for later. Fixed-point verified.
 
-### Stack traces on error
-`error()` kills the program with one message and no call stack. When a crash happens deep in the parser (called from a test harness, called from main), there's no way to see the call chain without manually adding print statements. At minimum, print a call stack on `error()`.
+### Stack traces on error — DONE
+Added a global call stack to the C runtime (`GemFrame gem_call_stack[]`). The codegen emits `gem_push_frame()` at function/closure entry and `gem_pop_frame()` before every return. All error paths (`gem_error()`, `gem_error_fn()`, `gem_error_at_fn()`) call `gem_print_stack_trace()` which walks the stack and prints `at <name> (<file>:<line>)` for each frame. Works for named functions, closures, runtime type errors, and the top-level main. Fixed-point verified.
 
 ### Warn on shadowed/unreachable named `fn` inside functions
 A named `fn` definition inside another function is silently ignored — the function compiles but never binds. This caused a subtle bug where `fn check(...)` couldn't access top-level `let` variables, producing silently wrong results. The compiler should emit a warning (or error) when a `fn_def` appears in a non-top-level scope.

@@ -37,6 +37,32 @@ struct GemVal {
 
 extern GemVal GEM_NIL;
 
+/* ─── Call stack for stack traces ─── */
+
+#define GEM_MAX_CALL_DEPTH 256
+
+typedef struct {
+    const char *name;
+    const char *file;
+    int line;
+} GemFrame;
+
+extern GemFrame gem_call_stack[GEM_MAX_CALL_DEPTH];
+extern int gem_call_depth;
+
+static inline void gem_push_frame(const char *name, const char *file, int line) {
+    if (gem_call_depth < GEM_MAX_CALL_DEPTH) {
+        gem_call_stack[gem_call_depth].name = name;
+        gem_call_stack[gem_call_depth].file = file;
+        gem_call_stack[gem_call_depth].line = line;
+    }
+    gem_call_depth++;
+}
+
+static inline void gem_pop_frame(void) {
+    if (gem_call_depth > 0) gem_call_depth--;
+}
+
 /* ─── Constructors ─── */
 
 GemVal gem_int(int64_t v);
