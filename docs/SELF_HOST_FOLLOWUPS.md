@@ -29,8 +29,8 @@ String interpolation (`{expr}`) auto-coerces all types to strings, eliminating t
 ### 7. `has_key` / `in` operator for tables
 Currently checking key existence with `table[key] != nil`. A `has_key(table, key)` builtin or `key in table` syntax would be clearer.
 
-### 10. `keys()` as a builtin
-The codegen needs `keys()` to iterate table fields during AST walking (free variable analysis, capture analysis). This required adding `gem_keys()` to the C runtime and declaring it via `extern fn`. It should be a builtin like `len()` and `type()` — accessible without extern declarations.
+### ~~10. `keys()` as a builtin~~ DONE
+`keys()` is now a first-class builtin like `len` and `type`. `gem_keys_fn` added to the runtime; registered in the builtins table, var reference block, and direct call optimization in codegen. The `extern fn keys` declaration is removed from `compiler/codegen.gem`.
 
 ### 11. `match` on strings
 The codegen has many tag-dispatch patterns (`if tag == "int" ... if tag == "float" ...`) that would naturally be `match` statements, but `match` uses `==` comparison which works on strings. The problem is `match` doesn't short-circuit on return — when a `when` branch returns, execution falls through checking subsequent branches. This is correct but wasteful. More importantly, using `match` here would require all the handler code to be in the `when` body, which doesn't help when each handler is 5+ lines. This is really the same issue as `elif` (item 2) — both solve tag dispatch. `elif` is strictly more useful since it handles arbitrary conditions, not just equality.

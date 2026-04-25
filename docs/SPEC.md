@@ -332,7 +332,7 @@ print(items[0])    # a
 
 `pcall(f)` — calls `f()` with zero arguments in a protected context. Returns `{ok: true, value: <result>}` on success, `{ok: false, error: <message>, stack: <frames>}` on error. See Error Handling section.
 
-`keys(tbl)` — returns a new table containing the keys of `tbl` as an integer-indexed array. Currently requires `extern fn` declaration; will become a builtin.
+`keys(tbl)` — returns a new table containing the keys of `tbl` as an integer-indexed array.
 
 All builtins are first-class values — they can be stored in variables and passed to functions.
 

@@ -458,6 +458,12 @@ GemVal gem_keys(GemVal tbl) {
     return result;
 }
 
+GemVal gem_keys_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("keys: expected 1 argument"); return GEM_NIL; }
+    return gem_keys(args[0]);
+}
+
 /* ─── Built-in: error with location ─── */
 
 GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
