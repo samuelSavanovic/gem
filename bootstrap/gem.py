@@ -661,6 +661,9 @@ class CodeGen:
         if ret_type == "Nil":
             lines.append(f"    {call_expr};")
             lines.append("    return GEM_NIL;")
+        elif ret_type == "Table":
+            # Table/GemVal passthrough — the C function returns GemVal directly
+            lines.append(f"    return {call_expr};")
         elif ret_type in type_map:
             c_type, field, constructor = type_map[ret_type]
             if ret_type == "Ptr":
@@ -870,6 +873,8 @@ class CodeGen:
             return self._compile_stmt(node, indent) + f"\n{pad}return GEM_NIL;"
         elif tag == "match":
             return self._compile_match_return(node, indent)
+        elif tag in ("dot_assign", "index_assign", "break", "continue", "fn_def"):
+            return self._compile_stmt(node, indent) + f"\n{pad}return GEM_NIL;"
         else:
             expr_code, setup = self._compile_expr(node)
             return setup + f"{pad}return {expr_code};"

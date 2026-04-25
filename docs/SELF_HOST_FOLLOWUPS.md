@@ -16,6 +16,8 @@ end
 ```
 Add `for x in items` (arrays) and `for i = 0, n` (ranges).
 
+**Codegen note:** This got dramatically worse in codegen. The codegen has ~30 manual counter loops, many nested 2-3 deep (`i`, `j`, sometimes a third). Free variable analysis, capture analysis, compile_stmts, compile_match, extern fn param iteration, forward decl emission, function assembly — every one is the same 4-line boilerplate. `for..in` would cut ~120 lines from codegen.gem alone.
+
 ### 2. `elif`
 The parser and codegen are long chains of `if ... end` repeated. With `elif`:
 ```gem
@@ -31,6 +33,8 @@ if tag == "string"            end
 end
 ```
 
+**Codegen note:** The codegen is worse than the parser here because `if/else` chains nest deeply. `compile_expr` dispatches on ~15 tag types, each as `if tag == "..." ... end`. `compile_extern_fn` has a 6-deep nested `if/else` chain for type dispatch (`Int`/`Float`/`String`/`Bool`/`Ptr`/`Table`). The free variable analysis functions (`collect_free_node`, `walk_captures_node`) each have 10+ tag dispatches nested inside each other. Without `elif`, these become pyramids of indentation that are hard to read and easy to get wrong (missing an `end` is a common mistake). `elif` is the single biggest readability improvement for the codegen.
+
 ### 3. Multi-line function call arguments
 The grammar currently disallows newlines between `(` and `)`. This forces long single-line calls:
 ```gem
@@ -41,6 +45,8 @@ Allow newlines inside argument lists.
 ### 4. `push()` builtin
 Every array build is `arr[count] = val; count += 1`. A builtin `push(arr, val)` would eliminate the manual count variable pattern.
 
+**Codegen note:** The codegen has arrays built this way everywhere: `functions`, `forward_decls`, `fn_defs`, `extern_fns_list`, `extern_includes`, `top_stmts`, `c_args`, `arg_exprs`, `captures`. Each needs a parallel counter variable (`fn_count`, `fwd_count`, etc.). There are ~15 such counter variables in codegen.gem. `push()` would eliminate all of them.
+
 ## Medium Priority
 
 ### 5. String interpolation
@@ -50,22 +56,47 @@ error("expected '" + tp + "' but got '" + t.type + "' at line " + to_string(t.li
 ```
 Something like `error("expected '{tp}' but got '{t.type}' at line {t.line}")` with auto `to_string`.
 
+**Codegen note:** The codegen is the worst offender in the entire codebase for string concatenation. Almost every line of the codegen builds C source code via `+` chains. Example from `compile_extern_fn`:
+```gem
+lines = lines + "    " + c_type + " _p" + to_string(i) + " = args[" + to_string(i) + "]." + field + ";\n"
+```
+These are extremely hard to read and easy to get wrong (missing a quote, wrong spacing). String interpolation would be transformative here.
+
 ### 6. Implicit `to_string` in concatenation
 `"count: " + to_string(n)` should just be `"count: " + n`. If string interpolation lands first, this becomes less urgent.
 
+**Codegen note:** The codegen calls `to_string()` constantly when embedding integers into C source: `to_string(i)`, `to_string(argc)`, `to_string(line)`, `to_string(node.value)`. This is pervasive — at least 30 occurrences in codegen.gem. Implicit coercion would help even without string interpolation.
+
 ### 7. `has_key` / `in` operator for tables
 Currently checking key existence with `table[key] != nil`. A `has_key(table, key)` builtin or `key in table` syntax would be clearer.
+
+### 10. `keys()` as a builtin
+The codegen needs `keys()` to iterate table fields during AST walking (free variable analysis, capture analysis). This required adding `gem_keys()` to the C runtime and declaring it via `extern fn`. It should be a builtin like `len()` and `type()` — accessible without extern declarations.
+
+### 11. `match` on strings
+The codegen has many tag-dispatch patterns (`if tag == "int" ... if tag == "float" ...`) that would naturally be `match` statements, but `match` uses `==` comparison which works on strings. The problem is `match` doesn't short-circuit on return — when a `when` branch returns, execution falls through checking subsequent branches. This is correct but wasteful. More importantly, using `match` here would require all the handler code to be in the `when` body, which doesn't help when each handler is 5+ lines. This is really the same issue as `elif` (item 2) — both solve tag dispatch. `elif` is strictly more useful since it handles arbitrary conditions, not just equality.
+
+### 12. `str_replace` builtin
+The codegen needs string replacement for re-indenting setup code in `and`/`or`/`while` short-circuit compilation. Had to write a 20-line `str_replace_all` function in Gem. A builtin `str_replace(s, old, new)` would be cleaner.
+
+### 13. Reserved word `match` as variable name
+`match` is a keyword, which means `let match = true` is a parse error. Hit this when porting `str_replace_all` — had to rename the variable to `found`. Other keywords that might conflict with common variable names: `end`, `do`, `when`. Not a high priority but worth noting.
 
 ## Debugging & Error Handling
 
 ### Source-mapped error messages
 Runtime errors currently report C line numbers (`gem.c:847`), not Gem source locations. The compiler should emit `#line` directives or track source positions so that crashes point back to the `.gem` file and line. This was the single biggest time sink during development.
 
+**Codegen note:** Confirmed — this was again the biggest debugging pain. When the codegen crashes (e.g., `len: expected string or table`), the error gives no indication of WHERE in the Gem source the problem is. Debugging required binary-search with print statements to narrow down which function, which loop iteration, which expression caused the crash. `#line` directives would have saved hours.
+
 ### Stack traces on error
 `error()` kills the program with one message and no call stack. When a crash happens deep in the parser (called from a test harness, called from main), there's no way to see the call chain without manually adding print statements. At minimum, print a call stack on `error()`.
 
 ### Warn on shadowed/unreachable named `fn` inside functions
 A named `fn` definition inside another function is silently ignored — the function compiles but never binds. This caused a subtle bug where `fn check(...)` couldn't access top-level `let` variables, producing silently wrong results. The compiler should emit a warning (or error) when a `fn_def` appears in a non-top-level scope.
+
+### `_compile_stmt_return` completeness
+The bootstrap's `_compile_stmt_return` didn't handle `dot_assign`, `index_assign`, `break`, `continue`, or `fn_def` — these fell through to `compile_expr` which produced `/* unknown node */` comments in the C output. This was a silent correctness bug: `set_add(defined_fns, name)` inside a function body was silently compiled to a no-op, causing the codegen to treat all user-defined functions as generic closure calls. Fixed in the bootstrap by adding an explicit case for these statement types (compile as statement + `return GEM_NIL`). This class of bug — a missing case that silently produces wrong output instead of erroring — is worth guarding against systematically.
 
 ### Error recovery (paradigm TBD)
 Currently `error()` is fatal — no way to catch failures. This makes it impossible to write tests that verify the parser rejects bad input. Some form of recoverable errors is needed, but the right paradigm is an open question:
@@ -75,6 +106,9 @@ Currently `error()` is fatal — no way to catch failures. This makes it impossi
 - **Multiple return + error flag** — minimal, but verbose at call sites
 
 Decision deferred until we have more experience with what the language needs.
+
+### `extern fn` should support `Table` / `GemVal` return types
+The `extern fn` type map only handled `Int`, `Float`, `String`, `Bool`, `Ptr`, and `Nil`. Unknown return types (including `Table`) silently discarded the return value and returned `GEM_NIL`. This caused `keys()` to always return nil. Fixed by adding `Table` as a passthrough type (return the `GemVal` directly). The silent failure mode was particularly nasty — no error, just nil propagating until something downstream crashes.
 
 ## Low Priority
 

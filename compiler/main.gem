@@ -1,0 +1,84 @@
+# Main driver for the Gem self-hosting compiler.
+# Reads a .gem source file, parses it, generates C, and writes to stdout.
+
+load "parser"
+load "codegen"
+
+extern include "file_io.h"
+extern include "compiler_helpers.h"
+extern fn gem_read_file(path: String) -> String
+extern fn puts(s: String) -> Int
+extern fn gem_get_argv(idx: Int) -> String
+extern fn gem_get_argc() -> Int
+extern fn gem_dirname(path: String) -> String
+extern fn gem_path_join(dir: String, file: String) -> String
+extern fn gem_normalize_path(path: String) -> String
+
+# ─── Load resolution ──────────────────────────────────────────
+
+fn resolve_loads(ast, base_dir, loaded)
+  let new_stmts = []
+  let count = 0
+  let i = 0
+  while i < len(ast.stmts)
+    let stmt = ast.stmts[i]
+    if type(stmt) == "table" and stmt.tag == "load"
+      let path = stmt.path
+      # Add .gem extension if needed
+      if len(path) < 4 or (path[len(path) - 4] != "." or path[len(path) - 3] != "g" or path[len(path) - 2] != "e" or path[len(path) - 1] != "m")
+        path = path + ".gem"
+      end
+      let full_path = gem_normalize_path(gem_path_join(base_dir, path))
+
+      # Re-inclusion guard
+      if loaded[full_path] == true
+        i += 1
+        continue
+      end
+      loaded[full_path] = true
+
+      let source = gem_read_file(full_path)
+      if source == ""
+        error("cannot load '" + full_path + "'")
+      end
+
+      let loaded_ast = parse_source(source)
+      let loaded_dir = gem_dirname(full_path)
+      let resolved = resolve_loads(loaded_ast, loaded_dir, loaded)
+
+      let j = 0
+      while j < len(resolved.stmts)
+        new_stmts[count] = resolved.stmts[j]
+        count += 1
+        j += 1
+      end
+    else
+      new_stmts[count] = stmt
+      count += 1
+    end
+    i += 1
+  end
+  make_program(new_stmts)
+end
+
+# ─── Main ─────────────────────────────────────────────────────
+
+let argc = gem_get_argc()
+if argc < 2
+  error("usage: gem_compiler <file.gem>")
+end
+
+let src_path = gem_get_argv(1)
+let source = gem_read_file(src_path)
+if source == ""
+  error("cannot read '" + src_path + "'")
+end
+
+let ast = parse_source(source)
+let base_dir = gem_dirname(src_path)
+let loaded = {}
+let resolved_ast = resolve_loads(ast, base_dir, loaded)
+
+let cg = make_codegen(src_path)
+let c_code = cg.compile(resolved_ast)
+puts(c_code)

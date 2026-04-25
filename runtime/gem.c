@@ -380,6 +380,21 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
     return gem_string("");
 }
 
+/* ─── Built-in: keys ─── */
+
+GemVal gem_keys(GemVal tbl) {
+    if (tbl.type != VAL_TABLE) {
+        gem_error("keys: expected table");
+        return GEM_NIL;
+    }
+    GemTable *t = tbl.table;
+    GemVal result = gem_table_new();
+    for (int i = 0; i < t->len; i++) {
+        gem_table_set(result, gem_int(i), t->keys[i]);
+    }
+    return result;
+}
+
 /* ─── Built-in: error with location ─── */
 
 GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {

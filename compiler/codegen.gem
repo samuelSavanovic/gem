@@ -1,0 +1,1618 @@
+# Code generator — compiles AST to C source code.
+# Faithful port of bootstrap/gem.py CodeGen class.
+# Uses closure-based pattern: fn make_codegen() returns a table of methods.
+
+load "ast"
+
+# ─── String helpers ─────────────────────────────────────────────
+
+fn escape_c_string(s)
+  let result = ""
+  let i = 0
+  while i < len(s)
+    let ch = s[i]
+    if ch == "\\"
+      result = result + "\\\\"
+    else
+      if ch == "\""
+        result = result + "\\\""
+      else
+        if ch == "\n"
+          result = result + "\\n"
+        else
+          if ch == "\t"
+            result = result + "\\t"
+          else
+            result = result + ch
+          end
+        end
+      end
+    end
+    i += 1
+  end
+  result
+end
+
+fn repeat_str(s, n)
+  let result = ""
+  let i = 0
+  while i < n
+    result = result + s
+    i += 1
+  end
+  result
+end
+
+fn pad_for(indent)
+  repeat_str("    ", indent)
+end
+
+fn format_float(val)
+  let s = to_string(val)
+  # Ensure the string has a decimal point
+  let has_dot = false
+  let i = 0
+  while i < len(s)
+    if s[i] == "."
+      has_dot = true
+    end
+    i += 1
+  end
+  if not has_dot
+    s = s + ".0"
+  end
+  s
+end
+
+# ─── Array/set helpers ──────────────────────────────────────────
+
+fn array_contains(arr, val)
+  let i = 0
+  while i < len(arr)
+    if arr[i] == val
+      return true
+    end
+    i += 1
+  end
+  false
+end
+
+fn set_add(s, val)
+  if s[val] != true
+    s[val] = true
+  end
+end
+
+fn set_contains(s, val)
+  s[val] == true
+end
+
+fn set_union(a, b)
+  let result = {}
+  let keys_a = keys(a)
+  let i = 0
+  while i < len(keys_a)
+    result[keys_a[i]] = true
+    i += 1
+  end
+  let keys_b = keys(b)
+  i = 0
+  while i < len(keys_b)
+    result[keys_b[i]] = true
+    i += 1
+  end
+  result
+end
+
+fn set_intersect(a, b)
+  let result = {}
+  let ks = keys(a)
+  let i = 0
+  while i < len(ks)
+    if b[ks[i]] == true
+      result[ks[i]] = true
+    end
+    i += 1
+  end
+  result
+end
+
+fn set_to_sorted_array(s)
+  let ks = keys(s)
+  # Simple insertion sort
+  let i = 1
+  while i < len(ks)
+    let key = ks[i]
+    let j = i - 1
+    while j >= 0 and ks[j] > key
+      ks[j + 1] = ks[j]
+      j -= 1
+    end
+    ks[j + 1] = key
+    i += 1
+  end
+  ks
+end
+
+fn sorted_array_to_set(arr)
+  let s = {}
+  let i = 0
+  while i < len(arr)
+    s[arr[i]] = true
+    i += 1
+  end
+  s
+end
+
+# ─── Codegen constructor ───────────────────────────────────────
+
+extern fn keys(t: Table) -> Table
+
+fn make_codegen(source_name)
+  let functions = []
+  let fn_count = 0
+  let forward_decls = []
+  let fwd_count = 0
+  let tmp_counter = 0
+  let anon_counter = 0
+  let defined_fns = {}
+  let builtins = {}
+  builtins["print"] = true
+  builtins["error"] = true
+  builtins["len"] = true
+  builtins["type"] = true
+  builtins["to_string"] = true
+  let boxed_vars = {}
+
+  # ─── Helpers ──
+
+  let tmp = fn()
+    tmp_counter += 1
+    "_t" + to_string(tmp_counter)
+  end
+
+  let anon_name = fn()
+    anon_counter += 1
+    "_anon_" + to_string(anon_counter)
+  end
+
+  let mangle = fn(name)
+    "gem_v_" + name
+  end
+
+  # ─── Free variable analysis ──
+
+  let collect_free_vars = nil
+  let collect_free_node = nil
+
+  collect_free_node = fn(node, defined, free)
+    if node == nil
+      return nil
+    end
+    if type(node) != "table"
+      return nil
+    end
+    let tag = node.tag
+    if tag == nil
+      return nil
+    end
+
+    if tag == "var"
+      let name = node.name
+      if not set_contains(defined, name) and not set_contains(builtins, name) and not set_contains(defined_fns, name)
+        set_add(free, name)
+      end
+    else
+      if tag == "let"
+        collect_free_node(node.value, defined, free)
+      else
+        if tag == "assign"
+          let name = node.name
+          if not set_contains(defined, name) and not set_contains(builtins, name) and not set_contains(defined_fns, name)
+            set_add(free, name)
+          end
+          collect_free_node(node.value, defined, free)
+        else
+          if tag == "anon_fn"
+            let inner_defined = set_union(defined, sorted_array_to_set(node.params))
+            let inner_free = collect_free_vars(node.body, inner_defined)
+            let ks = keys(inner_free)
+            let i = 0
+            while i < len(ks)
+              set_add(free, ks[i])
+              i += 1
+            end
+          else
+            if tag == "fn_def"
+              # Named functions are global — skip
+            else
+              if tag == "if"
+                collect_free_node(node.cond, defined, free)
+                let d = defined
+                let thens = node["then"]
+                let i = 0
+                while i < len(thens)
+                  collect_free_node(thens[i], d, free)
+                  if type(thens[i]) == "table" and thens[i].tag == "let"
+                    d = set_union(d, {})
+                    set_add(d, thens[i].name)
+                  end
+                  i += 1
+                end
+                let el = node["else"]
+                if el != nil
+                  d = defined
+                  i = 0
+                  while i < len(el)
+                    collect_free_node(el[i], d, free)
+                    if type(el[i]) == "table" and el[i].tag == "let"
+                      d = set_union(d, {})
+                      set_add(d, el[i].name)
+                    end
+                    i += 1
+                  end
+                end
+              else
+                if tag == "while"
+                  collect_free_node(node.cond, defined, free)
+                  let d = defined
+                  let i = 0
+                  while i < len(node.body)
+                    collect_free_node(node.body[i], d, free)
+                    if type(node.body[i]) == "table" and node.body[i].tag == "let"
+                      d = set_union(d, {})
+                      set_add(d, node.body[i].name)
+                    end
+                    i += 1
+                  end
+                else
+                  if tag == "match"
+                    collect_free_node(node.target, defined, free)
+                    let i = 0
+                    while i < len(node.whens)
+                      let w = node.whens[i]
+                      collect_free_node(w.value, defined, free)
+                      let d = defined
+                      let j = 0
+                      while j < len(w.body)
+                        collect_free_node(w.body[j], d, free)
+                        if type(w.body[j]) == "table" and w.body[j].tag == "let"
+                          d = set_union(d, {})
+                          set_add(d, w.body[j].name)
+                        end
+                        j += 1
+                      end
+                      i += 1
+                    end
+                    let el = node["else"]
+                    if el != nil
+                      let d = defined
+                      let j = 0
+                      while j < len(el)
+                        collect_free_node(el[j], d, free)
+                        if type(el[j]) == "table" and el[j].tag == "let"
+                          d = set_union(d, {})
+                          set_add(d, el[j].name)
+                        end
+                        j += 1
+                      end
+                    end
+                  else
+                    if tag == "when_clause"
+                      collect_free_node(node.value, defined, free)
+                      let d = defined
+                      let i = 0
+                      while i < len(node.body)
+                        collect_free_node(node.body[i], d, free)
+                        if type(node.body[i]) == "table" and node.body[i].tag == "let"
+                          d = set_union(d, {})
+                          set_add(d, node.body[i].name)
+                        end
+                        i += 1
+                      end
+                    else
+                      if tag == "return"
+                        if node.value != nil
+                          collect_free_node(node.value, defined, free)
+                        end
+                      else
+                        # Generic recursion for binop, unop, call, dot, index, etc.
+                        let ks = keys(node)
+                        let i = 0
+                        while i < len(ks)
+                          let k = ks[i]
+                          if k != "tag"
+                            let v = node[k]
+                            if type(v) == "table"
+                              # Check if it's an array (has numeric keys) or a dict node
+                              let vks = keys(v)
+                              if len(vks) > 0 and type(vks[0]) == "int"
+                                # It's an array — iterate
+                                let j = 0
+                                while j < len(v)
+                                  if type(v[j]) == "table"
+                                    collect_free_node(v[j], defined, free)
+                                  end
+                                  j += 1
+                                end
+                              else
+                                collect_free_node(v, defined, free)
+                              end
+                            end
+                          end
+                          i += 1
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  collect_free_vars = fn(stmts, defined)
+    let free = {}
+    let d = set_union(defined, {})
+    let i = 0
+    while i < len(stmts)
+      collect_free_node(stmts[i], d, free)
+      if type(stmts[i]) == "table" and stmts[i].tag == "let"
+        set_add(d, stmts[i].name)
+      end
+      i += 1
+    end
+    free
+  end
+
+  # ─── Capture analysis ──
+
+  let walk_captures = nil
+  let walk_captures_node = nil
+
+  walk_captures_node = fn(node, scope_vars, captured)
+    if node == nil
+      return nil
+    end
+    if type(node) != "table"
+      return nil
+    end
+    let tag = node.tag
+    if tag == nil
+      return nil
+    end
+
+    if tag == "anon_fn"
+      let inner_defined = sorted_array_to_set(node.params)
+      let free = collect_free_vars(node.body, inner_defined)
+      let inter = set_intersect(free, scope_vars)
+      let ks = keys(inter)
+      let i = 0
+      while i < len(ks)
+        set_add(captured, ks[i])
+        i += 1
+      end
+      walk_captures(node.body, set_union(scope_vars, sorted_array_to_set(node.params)), captured)
+    else
+      if tag == "fn_def"
+        # Named fns are global — skip
+      else
+        if tag == "if"
+          walk_captures_node(node.cond, scope_vars, captured)
+          walk_captures(node["then"], scope_vars, captured)
+          if node["else"] != nil
+            walk_captures(node["else"], scope_vars, captured)
+          end
+        else
+          if tag == "while"
+            walk_captures_node(node.cond, scope_vars, captured)
+            walk_captures(node.body, scope_vars, captured)
+          else
+            if tag == "match"
+              walk_captures_node(node.target, scope_vars, captured)
+              let i = 0
+              while i < len(node.whens)
+                walk_captures_node(node.whens[i].value, scope_vars, captured)
+                walk_captures(node.whens[i].body, scope_vars, captured)
+                i += 1
+              end
+              if node["else"] != nil
+                walk_captures(node["else"], scope_vars, captured)
+              end
+            else
+              if tag == "return"
+                if node.value != nil
+                  walk_captures_node(node.value, scope_vars, captured)
+                end
+              else
+                if tag == "let"
+                  walk_captures_node(node.value, scope_vars, captured)
+                else
+                  if tag == "assign"
+                    walk_captures_node(node.value, scope_vars, captured)
+                  else
+                    # Generic recursion
+                    let ks = keys(node)
+                    let i = 0
+                    while i < len(ks)
+                      let k = ks[i]
+                      if k != "tag"
+                        let v = node[k]
+                        if type(v) == "table"
+                          let vks = keys(v)
+                          if len(vks) > 0 and type(vks[0]) == "int"
+                            let j = 0
+                            while j < len(v)
+                              if type(v[j]) == "table"
+                                walk_captures_node(v[j], scope_vars, captured)
+                              end
+                              j += 1
+                            end
+                          else
+                            walk_captures_node(v, scope_vars, captured)
+                          end
+                        end
+                      end
+                      i += 1
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  walk_captures = fn(stmts, scope_vars, captured)
+    let sv = scope_vars
+    let i = 0
+    while i < len(stmts)
+      walk_captures_node(stmts[i], sv, captured)
+      if type(stmts[i]) == "table" and stmts[i].tag == "let"
+        sv = set_union(sv, {})
+        set_add(sv, stmts[i].name)
+      end
+      i += 1
+    end
+  end
+
+  let find_captured_in_scope = fn(body, scope_vars)
+    let captured = {}
+    walk_captures(body, scope_vars, captured)
+    captured
+  end
+
+  # ─── Compilation ──
+
+  let compile_expr = nil
+  let compile_stmt = nil
+  let compile_stmt_return = nil
+  let compile_stmts = nil
+  let compile_if = nil
+  let compile_if_return = nil
+  let compile_while = nil
+  let compile_match = nil
+  let compile_match_return = nil
+  let compile_call = nil
+  let compile_binop = nil
+  let compile_anon_fn = nil
+  let compile_closure_fn = nil
+  let compile_table = nil
+  let compile_array = nil
+  let compile_extern_fn = nil
+  let compile_fn = nil
+
+  # ─── compile_expr ──
+
+  compile_expr = fn(node)
+    let tag = node.tag
+
+    if tag == "int"
+      return {expr: "gem_int(" + to_string(node.value) + ")", setup: ""}
+    end
+
+    if tag == "float"
+      return {expr: "gem_float(" + format_float(node.value) + ")", setup: ""}
+    end
+
+    if tag == "string"
+      let escaped = escape_c_string(node.value)
+      return {expr: "gem_string(\"" + escaped + "\")", setup: ""}
+    end
+
+    if tag == "bool"
+      if node.value
+        return {expr: "gem_bool(1)", setup: ""}
+      end
+      return {expr: "gem_bool(0)", setup: ""}
+    end
+
+    if tag == "nil"
+      return {expr: "GEM_NIL", setup: ""}
+    end
+
+    if tag == "var"
+      let name = node.name
+      if name == "print"
+        return {expr: "gem_make_fn(gem_print, NULL)", setup: ""}
+      end
+      if name == "error"
+        return {expr: "gem_make_fn(gem_error_fn, NULL)", setup: ""}
+      end
+      if name == "len"
+        return {expr: "gem_make_fn(gem_len_fn, NULL)", setup: ""}
+      end
+      if name == "type"
+        return {expr: "gem_make_fn(gem_type_fn, NULL)", setup: ""}
+      end
+      if name == "to_string"
+        return {expr: "gem_make_fn(gem_to_string_fn, NULL)", setup: ""}
+      end
+      if set_contains(defined_fns, name)
+        return {expr: "gem_make_fn(gem_fn_" + name + ", NULL)", setup: ""}
+      end
+      let mname = mangle(name)
+      if set_contains(boxed_vars, name)
+        return {expr: "(*" + mname + ")", setup: ""}
+      end
+      return {expr: mname, setup: ""}
+    end
+
+    if tag == "call"
+      return compile_call(node)
+    end
+
+    if tag == "binop"
+      return compile_binop(node)
+    end
+
+    if tag == "unop"
+      let r = compile_expr(node.expr)
+      if node.op == "-"
+        return {expr: "gem_neg(" + r.expr + ")", setup: r.setup}
+      end
+      if node.op == "not"
+        return {expr: "gem_not(" + r.expr + ")", setup: r.setup}
+      end
+    end
+
+    if tag == "anon_fn"
+      return compile_anon_fn(node)
+    end
+
+    if tag == "table"
+      return compile_table(node)
+    end
+
+    if tag == "array"
+      return compile_array(node)
+    end
+
+    if tag == "dot"
+      let r = compile_expr(node.object)
+      let t = tmp()
+      let setup = r.setup + "    GemVal " + t + " = " + r.expr + ";\n"
+      let escaped = escape_c_string(node.field)
+      return {expr: "gem_table_get(" + t + ", gem_string(\"" + escaped + "\"))", setup: setup}
+    end
+
+    if tag == "index"
+      let obj_r = compile_expr(node.object)
+      let key_r = compile_expr(node.key)
+      return {expr: "gem_table_get(" + obj_r.expr + ", " + key_r.expr + ")", setup: obj_r.setup + key_r.setup}
+    end
+
+    {expr: "GEM_NIL", setup: "/* unknown node: " + tag + " */\n"}
+  end
+
+  # ─── compile_table ──
+
+  compile_table = fn(node)
+    let entries = node.entries
+    let t = tmp()
+    let setup = "    GemVal " + t + " = gem_table_new();\n"
+    let i = 0
+    while i < len(entries)
+      let val_r = compile_expr(entries[i].value)
+      let escaped = escape_c_string(entries[i].key)
+      setup = setup + val_r.setup
+      setup = setup + "    gem_table_set(" + t + ", gem_string(\"" + escaped + "\"), " + val_r.expr + ");\n"
+      i += 1
+    end
+    {expr: t, setup: setup}
+  end
+
+  # ─── compile_array ──
+
+  compile_array = fn(node)
+    let elements = node.elements
+    let t = tmp()
+    let setup = "    GemVal " + t + " = gem_table_new();\n"
+    let i = 0
+    while i < len(elements)
+      let elem_r = compile_expr(elements[i])
+      setup = setup + elem_r.setup
+      setup = setup + "    gem_table_set(" + t + ", gem_int(" + to_string(i) + "), " + elem_r.expr + ");\n"
+      i += 1
+    end
+    {expr: t, setup: setup}
+  end
+
+  # ─── compile_anon_fn ──
+
+  compile_anon_fn = fn(node)
+    let inner_defined = sorted_array_to_set(node.params)
+    let free = collect_free_vars(node.body, inner_defined)
+    let captures = set_to_sorted_array(free)
+
+    if len(captures) == 0
+      let result = compile_closure_fn(node, [])
+      return {expr: "gem_make_fn(" + result.fn_name + ", NULL)", setup: ""}
+    end
+
+    let result = compile_closure_fn(node, captures)
+
+    let setup = ""
+    let env_tmp = tmp()
+    setup = setup + "    struct " + result.struct_name + " *" + env_tmp + " = GC_MALLOC(sizeof(struct " + result.struct_name + "));\n"
+    let i = 0
+    while i < len(captures)
+      let mc = mangle(captures[i])
+      if set_contains(boxed_vars, captures[i])
+        setup = setup + "    " + env_tmp + "->" + mc + " = " + mc + ";\n"
+      else
+        setup = setup + "    " + env_tmp + "->" + mc + " = &" + mc + ";\n"
+      end
+      i += 1
+    end
+    {expr: "gem_make_fn(" + result.fn_name + ", " + env_tmp + ")", setup: setup}
+  end
+
+  # ─── compile_call ──
+
+  compile_call = fn(node)
+    let func = node.func
+    let args = node.args
+
+    # Method call: obj.len() → gem_len_val(obj)
+    if func.tag == "dot" and func.field == "len" and len(args) == 0
+      let obj_r = compile_expr(func.object)
+      return {expr: "gem_len_val(" + obj_r.expr + ")", setup: obj_r.setup}
+    end
+
+    # Direct call optimization for known functions
+    if func.tag == "var"
+      let name = func.name
+
+      if name == "error"
+        let line = node.line
+        if line == nil
+          line = 0
+        end
+        let escaped_file = escape_c_string(source_name)
+        let arg_setups = ""
+        let arg_exprs = []
+        let i = 0
+        while i < len(args)
+          let r = compile_expr(args[i])
+          arg_setups = arg_setups + r.setup
+          arg_exprs[i] = r.expr
+          i += 1
+        end
+        let argc = len(args)
+        if argc == 0
+          return {expr: "gem_error_at_fn(\"" + escaped_file + "\", " + to_string(line) + ", NULL, 0)", setup: arg_setups}
+        end
+        let t = tmp()
+        let arr = arg_exprs[0]
+        i = 1
+        while i < argc
+          arr = arr + ", " + arg_exprs[i]
+          i += 1
+        end
+        let setup = arg_setups + "    GemVal " + t + "[] = {" + arr + "};\n"
+        return {expr: "gem_error_at_fn(\"" + escaped_file + "\", " + to_string(line) + ", " + t + ", " + to_string(argc) + ")", setup: setup}
+      end
+
+      if name == "print" or name == "len" or name == "type" or name == "to_string"
+        let fn_name = ""
+        if name == "print"
+          fn_name = "gem_print"
+        end
+        if name == "len"
+          fn_name = "gem_len_fn"
+        end
+        if name == "type"
+          fn_name = "gem_type_fn"
+        end
+        if name == "to_string"
+          fn_name = "gem_to_string_fn"
+        end
+        let arg_setups = ""
+        let arg_exprs = []
+        let i = 0
+        while i < len(args)
+          let r = compile_expr(args[i])
+          arg_setups = arg_setups + r.setup
+          arg_exprs[i] = r.expr
+          i += 1
+        end
+        let argc = len(args)
+        if argc == 0
+          return {expr: fn_name + "(NULL, NULL, 0)", setup: arg_setups}
+        end
+        let t = tmp()
+        let arr = arg_exprs[0]
+        i = 1
+        while i < argc
+          arr = arr + ", " + arg_exprs[i]
+          i += 1
+        end
+        let setup = arg_setups + "    GemVal " + t + "[] = {" + arr + "};\n"
+        return {expr: fn_name + "(NULL, " + t + ", " + to_string(argc) + ")", setup: setup}
+      end
+
+      if set_contains(defined_fns, name)
+        let arg_setups = ""
+        let arg_exprs = []
+        let i = 0
+        while i < len(args)
+          let r = compile_expr(args[i])
+          arg_setups = arg_setups + r.setup
+          arg_exprs[i] = r.expr
+          i += 1
+        end
+        let argc = len(args)
+        if argc == 0
+          return {expr: "gem_fn_" + name + "(NULL, NULL, 0)", setup: arg_setups}
+        end
+        let t = tmp()
+        let arr = arg_exprs[0]
+        i = 1
+        while i < argc
+          arr = arr + ", " + arg_exprs[i]
+          i += 1
+        end
+        let setup = arg_setups + "    GemVal " + t + "[] = {" + arr + "};\n"
+        return {expr: "gem_fn_" + name + "(NULL, " + t + ", " + to_string(argc) + ")", setup: setup}
+      end
+    end
+
+    # General case: call through function value
+    let func_r = compile_expr(func)
+    let arg_setups = ""
+    let arg_exprs = []
+    let i = 0
+    while i < len(args)
+      let r = compile_expr(args[i])
+      arg_setups = arg_setups + r.setup
+      arg_exprs[i] = r.expr
+      i += 1
+    end
+    let setup = func_r.setup + arg_setups
+    let argc = len(args)
+    let tmp_fn = tmp()
+    setup = setup + "    GemVal " + tmp_fn + " = " + func_r.expr + ";\n"
+    if argc == 0
+      return {expr: tmp_fn + ".fn(" + tmp_fn + ".env, NULL, 0)", setup: setup}
+    end
+    let tmp_args = tmp()
+    let arr = arg_exprs[0]
+    i = 1
+    while i < argc
+      arr = arr + ", " + arg_exprs[i]
+      i += 1
+    end
+    setup = setup + "    GemVal " + tmp_args + "[] = {" + arr + "};\n"
+    {expr: tmp_fn + ".fn(" + tmp_fn + ".env, " + tmp_args + ", " + to_string(argc) + ")", setup: setup}
+  end
+
+  # ─── compile_binop ──
+
+  compile_binop = fn(node)
+    let op = node.op
+    let lc_r = compile_expr(node.left)
+    let lc = lc_r.expr
+    let ls = lc_r.setup
+
+    if op == "+"
+      let rc_r = compile_expr(node.right)
+      return {expr: "gem_add(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+    end
+    if op == "-"
+      let rc_r = compile_expr(node.right)
+      return {expr: "gem_sub(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+    end
+    if op == "*"
+      let rc_r = compile_expr(node.right)
+      return {expr: "gem_mul(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+    end
+    if op == "/"
+      let rc_r = compile_expr(node.right)
+      return {expr: "gem_div(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+    end
+    if op == "%"
+      let rc_r = compile_expr(node.right)
+      return {expr: "gem_mod(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+    end
+    if op == "=="
+      let rc_r = compile_expr(node.right)
+      return {expr: "gem_eq(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+    end
+    if op == "!="
+      let rc_r = compile_expr(node.right)
+      return {expr: "gem_neq(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+    end
+    if op == "<"
+      let rc_r = compile_expr(node.right)
+      return {expr: "gem_lt(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+    end
+    if op == ">"
+      let rc_r = compile_expr(node.right)
+      return {expr: "gem_gt(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+    end
+    if op == "<="
+      let rc_r = compile_expr(node.right)
+      return {expr: "gem_le(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+    end
+    if op == ">="
+      let rc_r = compile_expr(node.right)
+      return {expr: "gem_ge(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+    end
+
+    if op == "and"
+      let rc_r = compile_expr(node.right)
+      let t = tmp()
+      let setup = ls
+      setup = setup + "    GemVal " + t + ";\n"
+      setup = setup + "    if (!gem_truthy(" + lc + ")) {\n"
+      setup = setup + "        " + t + " = " + lc + ";\n"
+      setup = setup + "    } else {\n"
+      if rc_r.setup != ""
+        setup = setup + str_replace_all(rc_r.setup, "    ", "        ")
+      end
+      setup = setup + "        " + t + " = " + rc_r.expr + ";\n"
+      setup = setup + "    }\n"
+      return {expr: t, setup: setup}
+    end
+
+    if op == "or"
+      let rc_r = compile_expr(node.right)
+      let t = tmp()
+      let setup = ls
+      setup = setup + "    GemVal " + t + ";\n"
+      setup = setup + "    if (gem_truthy(" + lc + ")) {\n"
+      setup = setup + "        " + t + " = " + lc + ";\n"
+      setup = setup + "    } else {\n"
+      if rc_r.setup != ""
+        setup = setup + str_replace_all(rc_r.setup, "    ", "        ")
+      end
+      setup = setup + "        " + t + " = " + rc_r.expr + ";\n"
+      setup = setup + "    }\n"
+      return {expr: t, setup: setup}
+    end
+
+    let rc_r = compile_expr(node.right)
+    {expr: "GEM_NIL", setup: ls + rc_r.setup + "/* unknown op: " + op + " */\n"}
+  end
+
+  # ─── compile_stmts ──
+
+  compile_stmts = fn(stmts, indent)
+    let out = ""
+    let i = 0
+    while i < len(stmts)
+      out = out + compile_stmt(stmts[i], indent) + "\n"
+      i += 1
+    end
+    out
+  end
+
+  # ─── compile_stmt ──
+
+  compile_stmt = fn(node, indent)
+    let p = pad_for(indent)
+    let tag = node.tag
+
+    if tag == "let"
+      let r = compile_expr(node.value)
+      let name = node.name
+      let mname = mangle(name)
+      if set_contains(boxed_vars, name)
+        return r.setup + p + "GemVal *" + mname + " = GC_MALLOC(sizeof(GemVal));\n" + p + "*" + mname + " = " + r.expr + ";"
+      end
+      return r.setup + p + "GemVal " + mname + " = " + r.expr + ";"
+    end
+
+    if tag == "assign"
+      let r = compile_expr(node.value)
+      let name = node.name
+      let mname = mangle(name)
+      if set_contains(boxed_vars, name)
+        return r.setup + p + "*" + mname + " = " + r.expr + ";"
+      end
+      return r.setup + p + mname + " = " + r.expr + ";"
+    end
+
+    if tag == "dot_assign"
+      let obj_r = compile_expr(node.object)
+      let val_r = compile_expr(node.value)
+      let escaped = escape_c_string(node.field)
+      return obj_r.setup + val_r.setup + p + "gem_table_set(" + obj_r.expr + ", gem_string(\"" + escaped + "\"), " + val_r.expr + ");"
+    end
+
+    if tag == "index_assign"
+      let obj_r = compile_expr(node.object)
+      let key_r = compile_expr(node.key)
+      let val_r = compile_expr(node.value)
+      return obj_r.setup + key_r.setup + val_r.setup + p + "gem_table_set(" + obj_r.expr + ", " + key_r.expr + ", " + val_r.expr + ");"
+    end
+
+    if tag == "if"
+      return compile_if(node, indent)
+    end
+
+    if tag == "while"
+      return compile_while(node, indent)
+    end
+
+    if tag == "match"
+      return compile_match(node, indent)
+    end
+
+    if tag == "break"
+      return p + "break;"
+    end
+
+    if tag == "continue"
+      return p + "continue;"
+    end
+
+    if tag == "return"
+      if node.value != nil
+        let r = compile_expr(node.value)
+        return r.setup + p + "return " + r.expr + ";"
+      end
+      return p + "return GEM_NIL;"
+    end
+
+    if tag == "call"
+      let r = compile_expr(node)
+      return r.setup + p + "(void)(" + r.expr + ");"
+    end
+
+    if tag == "fn_def"
+      return ""
+    end
+
+    let r = compile_expr(node)
+    r.setup + p + "(void)(" + r.expr + ");"
+  end
+
+  # ─── compile_stmt_return ──
+
+  compile_stmt_return = fn(node, indent)
+    let p = pad_for(indent)
+    let tag = node.tag
+
+    if tag == "let"
+      let r = compile_expr(node.value)
+      let name = node.name
+      let mname = mangle(name)
+      if set_contains(boxed_vars, name)
+        return r.setup + p + "GemVal *" + mname + " = GC_MALLOC(sizeof(GemVal));\n" + p + "*" + mname + " = " + r.expr + ";\n" + p + "return GEM_NIL;"
+      end
+      return r.setup + p + "GemVal " + mname + " = " + r.expr + ";\n" + p + "return GEM_NIL;"
+    end
+
+    if tag == "assign"
+      let r = compile_expr(node.value)
+      let t = tmp()
+      let name = node.name
+      let mname = mangle(name)
+      if set_contains(boxed_vars, name)
+        return r.setup + p + "GemVal " + t + " = " + r.expr + ";\n" + p + "*" + mname + " = " + t + ";\n" + p + "return " + t + ";"
+      end
+      return r.setup + p + "GemVal " + t + " = " + r.expr + ";\n" + p + mname + " = " + t + ";\n" + p + "return " + t + ";"
+    end
+
+    if tag == "return"
+      if node.value != nil
+        let r = compile_expr(node.value)
+        return r.setup + p + "return " + r.expr + ";"
+      end
+      return p + "return GEM_NIL;"
+    end
+
+    if tag == "if"
+      return compile_if_return(node, indent)
+    end
+
+    if tag == "while"
+      return compile_while(node, indent) + "\n" + p + "return GEM_NIL;"
+    end
+
+    if tag == "match"
+      return compile_match_return(node, indent)
+    end
+
+    if tag == "dot_assign" or tag == "index_assign" or tag == "break" or tag == "continue" or tag == "fn_def"
+      return compile_stmt(node, indent) + "\n" + p + "return GEM_NIL;"
+    end
+
+    let r = compile_expr(node)
+    r.setup + p + "return " + r.expr + ";"
+  end
+
+  # ─── compile_if ──
+
+  compile_if = fn(node, indent)
+    let p = pad_for(indent)
+    let cond_r = compile_expr(node.cond)
+    let out = cond_r.setup
+    out = out + p + "if (gem_truthy(" + cond_r.expr + ")) {\n"
+    out = out + compile_stmts(node["then"], indent + 1)
+    if node["else"] != nil
+      out = out + p + "} else {\n"
+      out = out + compile_stmts(node["else"], indent + 1)
+    end
+    out = out + p + "}"
+    out
+  end
+
+  # ─── compile_if_return ──
+
+  compile_if_return = fn(node, indent)
+    let p = pad_for(indent)
+    let cond_r = compile_expr(node.cond)
+    let out = cond_r.setup
+    out = out + p + "if (gem_truthy(" + cond_r.expr + ")) {\n"
+    let then_body = node["then"]
+    if len(then_body) > 0
+      let i = 0
+      while i < len(then_body) - 1
+        out = out + compile_stmt(then_body[i], indent + 1) + "\n"
+        i += 1
+      end
+      out = out + compile_stmt_return(then_body[len(then_body) - 1], indent + 1) + "\n"
+    else
+      out = out + p + "    return GEM_NIL;\n"
+    end
+    if node["else"] != nil
+      out = out + p + "} else {\n"
+      let else_body = node["else"]
+      if len(else_body) > 0
+        let i = 0
+        while i < len(else_body) - 1
+          out = out + compile_stmt(else_body[i], indent + 1) + "\n"
+          i += 1
+        end
+        out = out + compile_stmt_return(else_body[len(else_body) - 1], indent + 1) + "\n"
+      else
+        out = out + p + "    return GEM_NIL;\n"
+      end
+    else
+      out = out + p + "} else {\n"
+      out = out + p + "    return GEM_NIL;\n"
+    end
+    out = out + p + "}"
+    out
+  end
+
+  # ─── compile_while ──
+
+  compile_while = fn(node, indent)
+    let p = pad_for(indent)
+    let cond_r = compile_expr(node.cond)
+    let out = p + "while (1) {\n"
+    if cond_r.setup != ""
+      out = out + str_replace_all(cond_r.setup, "    ", p + "    ")
+    end
+    out = out + p + "    if (!gem_truthy(" + cond_r.expr + ")) break;\n"
+    out = out + compile_stmts(node.body, indent + 1)
+    out = out + p + "}"
+    out
+  end
+
+  # ─── compile_match ──
+
+  compile_match = fn(node, indent)
+    let p = pad_for(indent)
+    let target_r = compile_expr(node.target)
+    let t = tmp()
+    let out = target_r.setup
+    out = out + p + "GemVal " + t + " = " + target_r.expr + ";\n"
+    let i = 0
+    while i < len(node.whens)
+      let w = node.whens[i]
+      let val_r = compile_expr(w.value)
+      let keyword = "if"
+      if i > 0
+        keyword = "} else if"
+      end
+      out = out + val_r.setup
+      out = out + p + keyword + " (gem_truthy(gem_eq(" + t + ", " + val_r.expr + "))) {\n"
+      out = out + compile_stmts(w.body, indent + 1)
+      i += 1
+    end
+    if node["else"] != nil
+      out = out + p + "} else {\n"
+      out = out + compile_stmts(node["else"], indent + 1)
+    end
+    out = out + p + "}"
+    out
+  end
+
+  # ─── compile_match_return ──
+
+  compile_match_return = fn(node, indent)
+    let p = pad_for(indent)
+    let target_r = compile_expr(node.target)
+    let t = tmp()
+    let out = target_r.setup
+    out = out + p + "GemVal " + t + " = " + target_r.expr + ";\n"
+    let i = 0
+    while i < len(node.whens)
+      let w = node.whens[i]
+      let val_r = compile_expr(w.value)
+      let keyword = "if"
+      if i > 0
+        keyword = "} else if"
+      end
+      out = out + val_r.setup
+      out = out + p + keyword + " (gem_truthy(gem_eq(" + t + ", " + val_r.expr + "))) {\n"
+      let body = w.body
+      if len(body) > 0
+        let j = 0
+        while j < len(body) - 1
+          out = out + compile_stmt(body[j], indent + 1) + "\n"
+          j += 1
+        end
+        out = out + compile_stmt_return(body[len(body) - 1], indent + 1) + "\n"
+      else
+        out = out + p + "    return GEM_NIL;\n"
+      end
+      i += 1
+    end
+    if node["else"] != nil
+      out = out + p + "} else {\n"
+      let else_body = node["else"]
+      if len(else_body) > 0
+        let i = 0
+        while i < len(else_body) - 1
+          out = out + compile_stmt(else_body[i], indent + 1) + "\n"
+          i += 1
+        end
+        out = out + compile_stmt_return(else_body[len(else_body) - 1], indent + 1) + "\n"
+      else
+        out = out + p + "    return GEM_NIL;\n"
+      end
+    else
+      out = out + p + "} else {\n"
+      out = out + p + "    return GEM_NIL;\n"
+    end
+    out = out + p + "}"
+    out
+  end
+
+  # ─── compile_extern_fn ──
+
+  compile_extern_fn = fn(node)
+    let name = node.name
+    let params = node.params
+    let ret_type = node.ret_type
+
+    let lines = "static GemVal gem_fn_" + name + "(void *_env, GemVal *args, int argc) {\n"
+
+    let c_args = []
+    let i = 0
+    while i < len(params)
+      let p = params[i]
+      let ptype = p["type"]
+      if ptype == "Int"
+        lines = lines + "    int64_t _p" + to_string(i) + " = args[" + to_string(i) + "].ival;\n"
+        c_args[i] = "_p" + to_string(i)
+      else
+        if ptype == "Float"
+          lines = lines + "    double _p" + to_string(i) + " = args[" + to_string(i) + "].fval;\n"
+          c_args[i] = "_p" + to_string(i)
+        else
+          if ptype == "String"
+            lines = lines + "    char* _p" + to_string(i) + " = args[" + to_string(i) + "].sval;\n"
+            c_args[i] = "_p" + to_string(i)
+          else
+            if ptype == "Bool"
+              lines = lines + "    int _p" + to_string(i) + " = args[" + to_string(i) + "].bval;\n"
+              c_args[i] = "_p" + to_string(i)
+            else
+              if ptype == "Ptr"
+                lines = lines + "    void* _p" + to_string(i) + " = (void*)(intptr_t)args[" + to_string(i) + "].ival;\n"
+                c_args[i] = "_p" + to_string(i)
+              else
+                if ptype == "Table"
+                  c_args[i] = "args[" + to_string(i) + "]"
+                else
+                  c_args[i] = "args[" + to_string(i) + "]"
+                end
+              end
+            end
+          end
+        end
+      end
+      i += 1
+    end
+
+    # Build call arg list
+    let call_args = ""
+    i = 0
+    while i < len(c_args)
+      if i > 0
+        call_args = call_args + ", "
+      end
+      call_args = call_args + c_args[i]
+      i += 1
+    end
+
+    let call_expr = name + "(" + call_args + ")"
+
+    if ret_type == "Nil"
+      lines = lines + "    " + call_expr + ";\n"
+      lines = lines + "    return GEM_NIL;\n"
+    else
+      if ret_type == "Table"
+        lines = lines + "    return " + call_expr + ";\n"
+      else
+      if ret_type == "Int"
+        lines = lines + "    int64_t _ret = " + call_expr + ";\n"
+        lines = lines + "    return gem_int(_ret);\n"
+      else
+        if ret_type == "Float"
+          lines = lines + "    double _ret = " + call_expr + ";\n"
+          lines = lines + "    return gem_float(_ret);\n"
+        else
+          if ret_type == "String"
+            lines = lines + "    char* _ret = " + call_expr + ";\n"
+            lines = lines + "    return gem_string(_ret);\n"
+          else
+            if ret_type == "Bool"
+              lines = lines + "    int _ret = " + call_expr + ";\n"
+              lines = lines + "    return gem_bool(_ret);\n"
+            else
+              if ret_type == "Ptr"
+                lines = lines + "    void *_ret = " + call_expr + ";\n"
+                lines = lines + "    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n"
+              else
+                lines = lines + "    " + call_expr + ";\n"
+                lines = lines + "    return GEM_NIL;\n"
+              end
+            end
+          end
+        end
+      end
+      end
+    end
+
+    lines = lines + "}"
+
+    # Add forward declaration
+    forward_decls[fwd_count] = "static GemVal gem_fn_" + name + "(void *_env, GemVal *args, int argc);"
+    fwd_count += 1
+
+    lines
+  end
+
+  # ─── compile_fn ──
+
+  compile_fn = fn(node)
+    let params = node.params
+    let body = node.body
+    let name = node.name
+
+    # Determine which variables are captured by nested closures
+    let scope_vars = sorted_array_to_set(params)
+    let i = 0
+    while i < len(body)
+      if type(body[i]) == "table" and body[i].tag == "let"
+        set_add(scope_vars, body[i].name)
+      end
+      i += 1
+    end
+    let captured = find_captured_in_scope(body, scope_vars)
+
+    let saved_boxed = boxed_vars
+    boxed_vars = captured
+
+    let lines = "static GemVal gem_fn_" + name + "(void *_env, GemVal *args, int argc) {\n"
+
+    # Bind parameters
+    i = 0
+    while i < len(params)
+      let mp = mangle(params[i])
+      if set_contains(captured, params[i])
+        lines = lines + "    GemVal *" + mp + " = GC_MALLOC(sizeof(GemVal));\n"
+        lines = lines + "    *" + mp + " = (argc > " + to_string(i) + ") ? args[" + to_string(i) + "] : GEM_NIL;\n"
+      else
+        lines = lines + "    GemVal " + mp + " = (argc > " + to_string(i) + ") ? args[" + to_string(i) + "] : GEM_NIL;\n"
+      end
+      i += 1
+    end
+
+    # Compile body — last expression is the return value
+    if len(body) > 0
+      i = 0
+      while i < len(body) - 1
+        lines = lines + compile_stmt(body[i], 1) + "\n"
+        i += 1
+      end
+      lines = lines + compile_stmt_return(body[len(body) - 1], 1) + "\n"
+    else
+      lines = lines + "    return GEM_NIL;\n"
+    end
+
+    lines = lines + "}"
+    boxed_vars = saved_boxed
+    lines
+  end
+
+  # ─── compile_closure_fn ──
+
+  compile_closure_fn = fn(node, captures)
+    let params = node.params
+    let body = node.body
+    let name = anon_name()
+
+    # Find which vars inside THIS closure are captured by nested closures
+    let inner_scope = sorted_array_to_set(params)
+    let i = 0
+    while i < len(body)
+      if type(body[i]) == "table" and body[i].tag == "let"
+        set_add(inner_scope, body[i].name)
+      end
+      i += 1
+    end
+    let inner_captured = find_captured_in_scope(body, inner_scope)
+
+    let saved_boxed = boxed_vars
+    boxed_vars = set_union(inner_captured, sorted_array_to_set(captures))
+
+    # Generate struct
+    let struct_name = "_closure_" + name
+    let struct_def = "struct " + struct_name + " {\n"
+    i = 0
+    while i < len(captures)
+      struct_def = struct_def + "    GemVal *" + mangle(captures[i]) + ";\n"
+      i += 1
+    end
+    struct_def = struct_def + "};\n"
+
+    # Generate function
+    let lines = "static GemVal " + name + "(void *_env, GemVal *args, int argc) {\n"
+    if len(captures) > 0
+      lines = lines + "    struct " + struct_name + " *_cls = (struct " + struct_name + " *)_env;\n"
+      i = 0
+      while i < len(captures)
+        let mc = mangle(captures[i])
+        lines = lines + "    GemVal *" + mc + " = _cls->" + mc + ";\n"
+        i += 1
+      end
+    end
+
+    # Bind parameters
+    i = 0
+    while i < len(params)
+      let mp = mangle(params[i])
+      if set_contains(inner_captured, params[i])
+        lines = lines + "    GemVal *" + mp + " = GC_MALLOC(sizeof(GemVal));\n"
+        lines = lines + "    *" + mp + " = (argc > " + to_string(i) + ") ? args[" + to_string(i) + "] : GEM_NIL;\n"
+      else
+        lines = lines + "    GemVal " + mp + " = (argc > " + to_string(i) + ") ? args[" + to_string(i) + "] : GEM_NIL;\n"
+      end
+      i += 1
+    end
+
+    if len(body) > 0
+      i = 0
+      while i < len(body) - 1
+        lines = lines + compile_stmt(body[i], 1) + "\n"
+        i += 1
+      end
+      lines = lines + compile_stmt_return(body[len(body) - 1], 1) + "\n"
+    else
+      lines = lines + "    return GEM_NIL;\n"
+    end
+
+    lines = lines + "}"
+    boxed_vars = saved_boxed
+
+    # Add struct + function to functions list
+    functions[fn_count] = struct_def + lines
+    fn_count += 1
+
+    {fn_name: name, struct_name: struct_name, captures: captures}
+  end
+
+  # ─── compile (top-level) ──
+
+  let compile = fn(ast)
+    # Separate different statement types
+    let fn_defs = []
+    let fn_def_count = 0
+    let extern_fns_list = []
+    let extern_fn_count = 0
+    let extern_includes = []
+    let extern_inc_count = 0
+    let top_stmts = []
+    let top_count = 0
+
+    let i = 0
+    while i < len(ast.stmts)
+      let s = ast.stmts[i]
+      if s.tag == "fn_def"
+        fn_defs[fn_def_count] = s
+        fn_def_count += 1
+      else
+        if s.tag == "extern_fn"
+          extern_fns_list[extern_fn_count] = s
+          extern_fn_count += 1
+        else
+          if s.tag == "extern_include"
+            extern_includes[extern_inc_count] = s
+            extern_inc_count += 1
+          else
+            top_stmts[top_count] = s
+            top_count += 1
+          end
+        end
+      end
+      i += 1
+    end
+
+    # Register extern fns as defined (callable)
+    i = 0
+    while i < extern_fn_count
+      set_add(defined_fns, extern_fns_list[i].name)
+      i += 1
+    end
+
+    # Forward declarations for user-defined functions
+    i = 0
+    while i < fn_def_count
+      set_add(defined_fns, fn_defs[i].name)
+      forward_decls[fwd_count] = "static GemVal gem_fn_" + fn_defs[i].name + "(void *_env, GemVal *args, int argc);"
+      fwd_count += 1
+      i += 1
+    end
+
+    # Emit extern fn wrappers
+    i = 0
+    while i < extern_fn_count
+      functions[fn_count] = compile_extern_fn(extern_fns_list[i])
+      fn_count += 1
+      i += 1
+    end
+
+    # Emit function definitions
+    i = 0
+    while i < fn_def_count
+      functions[fn_count] = compile_fn(fn_defs[i])
+      fn_count += 1
+      i += 1
+    end
+
+    # Build main
+    let saved_boxed = boxed_vars
+    boxed_vars = find_captured_in_scope(top_stmts, {})
+    let main_body = compile_stmts(top_stmts, 1)
+    boxed_vars = saved_boxed
+
+    let has_main = false
+    i = 0
+    while i < fn_def_count
+      if fn_defs[i].name == "main"
+        has_main = true
+      end
+      i += 1
+    end
+
+    let main_c = "int main(void) {\n"
+    if main_body != ""
+      main_c = main_c + main_body
+    end
+    if has_main
+      main_c = main_c + "    GemVal _margs[1] = {GEM_NIL};\n"
+      main_c = main_c + "    gem_fn_main(NULL, _margs, 0);\n"
+    end
+    main_c = main_c + "    return 0;\n}\n"
+
+    # Assemble
+    let out = ""
+    i = 0
+    while i < extern_inc_count
+      out = out + "#include \"" + extern_includes[i].path + "\"\n"
+      i += 1
+    end
+    out = out + "#include \"gem.h\"\n"
+
+    # Forward declarations
+    i = 0
+    while i < fwd_count
+      out = out + forward_decls[i]
+      if i < fwd_count - 1
+        out = out + "\n"
+      end
+      i += 1
+    end
+    out = out + "\n\n"
+
+    # Functions
+    i = 0
+    while i < fn_count
+      out = out + functions[i]
+      if i < fn_count - 1
+        out = out + "\n\n"
+      end
+      i += 1
+    end
+    out = out + "\n\n"
+
+    out = out + main_c
+    out
+  end
+
+  {compile: compile}
+end
+
+# ─── String split helper ───────────────────────────────────────
+
+fn split_string(s, delim)
+  let result = []
+  let count = 0
+  let current = ""
+  let i = 0
+  while i < len(s)
+    if s[i] == delim
+      result[count] = current
+      count += 1
+      current = ""
+    else
+      current = current + s[i]
+    end
+    i += 1
+  end
+  result[count] = current
+  result
+end
+
+fn str_replace_all(s, old, new_s)
+  let result = ""
+  let i = 0
+  let old_len = len(old)
+  let s_len = len(s)
+  while i < s_len
+    # Check if substring starting at i matches old
+    if i + old_len <= s_len
+      let found = true
+      let j = 0
+      while j < old_len
+        if s[i + j] != old[j]
+          found = false
+          break
+        end
+        j += 1
+      end
+      if found
+        result = result + new_s
+        i += old_len
+        continue
+      end
+    end
+    result = result + s[i]
+    i += 1
+  end
+  result
+end
