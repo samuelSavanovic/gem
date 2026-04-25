@@ -18,6 +18,7 @@ end
 fn make_parser(tokens)
   let pos = 0
   let gensym_counter = 0
+  let fn_depth = 0
 
   # ── Token access ──
 
@@ -165,7 +166,9 @@ fn make_parser(tokens)
       expect("(")
       let params = parse_params()
       expect(")")
+      fn_depth += 1
       let body = parse_fn_body()
+      fn_depth -= 1
       expect("end")
       return make_anon_fn(params, body)
     end
@@ -255,7 +258,9 @@ fn make_parser(tokens)
             bparams = parse_params()
             expect("|")
           end
+          fn_depth += 1
           let body = parse_fn_body()
+          fn_depth -= 1
           expect("end")
           push(args, make_anon_fn(bparams, body))
         else
@@ -443,10 +448,15 @@ fn make_parser(tokens)
       let line = t.line
       advance()
       let name = expect("NAME").value
+      if fn_depth > 0
+        error("named fn '{name}' inside function body is not supported at line {line} — use: let {name} = fn(...) ... end")
+      end
       expect("(")
       let params = parse_params()
       expect(")")
+      fn_depth += 1
       let body = parse_fn_body()
+      fn_depth -= 1
       expect("end")
       return make_fn_def(name, params, body, line)
     end
