@@ -18,6 +18,7 @@ GRAMMAR = r"""
          | let_decl
          | if_stmt
          | while_stmt
+         | for_stmt
          | match_stmt
          | return_stmt
          | break_stmt
@@ -48,6 +49,8 @@ GRAMMAR = r"""
 
     if_stmt: "if" expr body ("else" body)? "end"
     while_stmt: "while" expr body "end"
+    for_stmt: "for" NAME "in" expr body "end" -> for_in_stmt
+            | "for" NAME "=" expr "," expr body "end" -> for_range_stmt
     match_stmt: "match" expr _NL* (when_clause)+ ("else" body)? "end"
     when_clause: "when" expr body
 
@@ -105,7 +108,7 @@ GRAMMAR = r"""
     array_literal: "[" _NL* array_entries? _NL* "]"
     array_entries: expr ((_NL* "," | _NL+) _NL* expr)* ","?
 
-    NAME: /(?!(?:fn|end|let|if|else|while|return|break|continue|do|match|when|and|or|not|true|false|nil|load|extern)\b)[a-zA-Z_][a-zA-Z0-9_]*/
+    NAME: /(?!(?:fn|end|let|if|else|while|for|in|return|break|continue|do|match|when|and|or|not|true|false|nil|load|extern)\b)[a-zA-Z_][a-zA-Z0-9_]*/
     NUMBER: /[0-9]+(\.[0-9]+)?/
     STRING: /\"([^\"\\]|\\.)*\"/
 
@@ -123,6 +126,10 @@ parser = Lark(GRAMMAR, parser="earley", propagate_positions=True)
 # ─── AST Transformer ────────────────────────────────────────────────────────
 
 class ASTBuilder(Transformer):
+    def __init__(self):
+        super().__init__()
+        self._gensym_counter = 0
+
     def start(self, items):
         return {"tag": "program", "stmts": items}
 
@@ -204,6 +211,47 @@ class ASTBuilder(Transformer):
         cond = items[0]
         body = items[1]
         return {"tag": "while", "cond": cond, "body": body}
+
+    def for_in_stmt(self, items):
+        var_name = str(items[0])
+        items_expr = items[1]
+        body = items[2]
+        self._gensym_counter += 1
+        n = self._gensym_counter
+        items_var = f"_for_items_{n}"
+        idx_var = f"_for_i_{n}"
+        inner = [
+            {"tag": "let", "name": var_name, "value": {"tag": "index", "object": {"tag": "var", "name": items_var}, "key": {"tag": "var", "name": idx_var}}},
+            {"tag": "assign", "name": idx_var, "value": {"tag": "binop", "op": "+", "left": {"tag": "var", "name": idx_var}, "right": {"tag": "int", "value": 1}}},
+            *body,
+        ]
+        while_node = {"tag": "while", "cond": {"tag": "binop", "op": "<", "left": {"tag": "var", "name": idx_var}, "right": {"tag": "call", "func": {"tag": "var", "name": "len"}, "args": [{"tag": "var", "name": items_var}], "line": 0}}, "body": inner}
+        return {"tag": "block", "stmts": [
+            {"tag": "let", "name": items_var, "value": items_expr},
+            {"tag": "let", "name": idx_var, "value": {"tag": "int", "value": 0}},
+            while_node,
+        ]}
+
+    def for_range_stmt(self, items):
+        var_name = str(items[0])
+        start_expr = items[1]
+        end_expr = items[2]
+        body = items[3]
+        self._gensym_counter += 1
+        n = self._gensym_counter
+        idx_var = f"_for_i_{n}"
+        limit_var = f"_for_limit_{n}"
+        inner = [
+            {"tag": "let", "name": var_name, "value": {"tag": "var", "name": idx_var}},
+            {"tag": "assign", "name": idx_var, "value": {"tag": "binop", "op": "+", "left": {"tag": "var", "name": idx_var}, "right": {"tag": "int", "value": 1}}},
+            *body,
+        ]
+        while_node = {"tag": "while", "cond": {"tag": "binop", "op": "<", "left": {"tag": "var", "name": idx_var}, "right": {"tag": "var", "name": limit_var}}, "body": inner}
+        return {"tag": "block", "stmts": [
+            {"tag": "let", "name": idx_var, "value": start_expr},
+            {"tag": "let", "name": limit_var, "value": end_expr},
+            while_node,
+        ]}
 
     def match_stmt(self, items):
         target = items[0]
@@ -438,6 +486,10 @@ class CodeGen:
             self._collect_free_node(stmt, defined, free)
             if isinstance(stmt, dict) and stmt.get("tag") == "let":
                 defined.add(stmt["name"])
+            if isinstance(stmt, dict) and stmt.get("tag") == "block":
+                for s in stmt["stmts"]:
+                    if isinstance(s, dict) and s.get("tag") == "let":
+                        defined.add(s["name"])
         return free
 
     def _collect_free_node(self, node, defined, free):
@@ -499,6 +551,12 @@ class CodeGen:
                 self._collect_free_node(s, defined, free)
                 if isinstance(s, dict) and s.get("tag") == "let":
                     defined = defined | {s["name"]}
+        elif tag == "block":
+            d = set(defined)
+            for s in node["stmts"]:
+                self._collect_free_node(s, d, free)
+                if isinstance(s, dict) and s.get("tag") == "let":
+                    d = d | {s["name"]}
         elif tag == "return":
             if node["value"] is not None:
                 self._collect_free_node(node["value"], defined, free)
@@ -525,6 +583,10 @@ class CodeGen:
             self._walk_captures_node(stmt, scope_vars, captured)
             if isinstance(stmt, dict) and stmt.get("tag") == "let":
                 scope_vars = scope_vars | {stmt["name"]}
+            if isinstance(stmt, dict) and stmt.get("tag") == "block":
+                for s in stmt["stmts"]:
+                    if isinstance(s, dict) and s.get("tag") == "let":
+                        scope_vars = scope_vars | {s["name"]}
 
     def _walk_captures_node(self, node, scope_vars, captured):
         if not isinstance(node, dict):
@@ -555,6 +617,8 @@ class CodeGen:
                 self._walk_captures(when["body"], scope_vars, captured)
             if node["else"]:
                 self._walk_captures(node["else"], scope_vars, captured)
+        elif tag == "block":
+            self._walk_captures(node["stmts"], scope_vars, captured)
         elif tag == "return":
             if node["value"] is not None:
                 self._walk_captures_node(node["value"], scope_vars, captured)
@@ -693,6 +757,10 @@ class CodeGen:
         for stmt in body:
             if isinstance(stmt, dict) and stmt.get("tag") == "let":
                 scope_vars.add(stmt["name"])
+            if isinstance(stmt, dict) and stmt.get("tag") == "block":
+                for s in stmt["stmts"]:
+                    if isinstance(s, dict) and s.get("tag") == "let":
+                        scope_vars.add(s["name"])
         captured = self._find_captured_in_scope(body, scope_vars)
 
         saved_boxed = self.boxed_vars
@@ -736,6 +804,10 @@ class CodeGen:
         for stmt in body:
             if isinstance(stmt, dict) and stmt.get("tag") == "let":
                 inner_scope.add(stmt["name"])
+            if isinstance(stmt, dict) and stmt.get("tag") == "block":
+                for s in stmt["stmts"]:
+                    if isinstance(s, dict) and s.get("tag") == "let":
+                        inner_scope.add(s["name"])
         inner_captured = self._find_captured_in_scope(body, inner_scope)
         # Also: captured vars from outer scope that we receive via env are GemVal*
         # and may be re-captured by inner closures — they're already boxed
@@ -839,6 +911,12 @@ class CodeGen:
             return setup + f"{pad}(void)({expr_code});"
         elif tag == "fn_def":
             return ""
+        elif tag == "block":
+            out = f"{pad}{{\n"
+            for s in node["stmts"]:
+                out += self._compile_stmt(s, indent + 1) + "\n"
+            out += f"{pad}}}"
+            return out
         else:
             expr_code, setup = self._compile_expr(node)
             return setup + f"{pad}(void)({expr_code});"
@@ -873,6 +951,15 @@ class CodeGen:
             return self._compile_stmt(node, indent) + f"\n{pad}return GEM_NIL;"
         elif tag == "match":
             return self._compile_match_return(node, indent)
+        elif tag == "block":
+            stmts = node["stmts"]
+            out = f"{pad}{{\n"
+            for s in stmts[:-1]:
+                out += self._compile_stmt(s, indent + 1) + "\n"
+            if stmts:
+                out += self._compile_stmt_return(stmts[-1], indent + 1) + "\n"
+            out += f"{pad}}}"
+            return out
         elif tag in ("dot_assign", "index_assign", "break", "continue", "fn_def"):
             return self._compile_stmt(node, indent) + f"\n{pad}return GEM_NIL;"
         else:

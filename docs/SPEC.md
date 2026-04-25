@@ -139,23 +139,25 @@ else
 end
 ```
 
-`break` exits the innermost `while` loop. `continue` skips to the next iteration.
+`break` exits the innermost loop (`while` or `for`). `continue` skips to the next iteration.
+
+**For Loops**
+
+Two forms, both desugared to `while` at parse time:
 
 ```
-let i = 0
-while i < 100
-  i += 1
-  if i % 2 == 0
-    continue
-  end
-  if i > 10
-    break
-  end
+# Array iteration
+for item in items
+  print(item)
+end
+
+# Range iteration (0 to n-1)
+for i = 0, n
   print(i)
 end
 ```
 
-No `for` keyword. Use `range().each` or define iteration functions in stdlib using blocks. `while` is sufficient for the bootstrap compiler.
+`break` and `continue` work inside `for` loops. The iterator increment happens before the user body, so `continue` correctly advances to the next element.
 
 **Closures**
 

@@ -5,18 +5,9 @@ Prioritized by impact on real code (the compiler itself is the benchmark).
 
 ## High Priority
 
-### 1. `for..in` loops
-Every loop is `while` with a manual counter. The lexer, parser, codegen, and tests are full of:
-```gem
-let i = 0
-while i < len(items)
-  # use items[i]
-  i += 1
-end
-```
-Add `for x in items` (arrays) and `for i = 0, n` (ranges).
-
-**Codegen note:** This got dramatically worse in codegen. The codegen has ~30 manual counter loops, many nested 2-3 deep (`i`, `j`, sometimes a third). Free variable analysis, capture analysis, compile_stmts, compile_match, extern fn param iteration, forward decl emission, function assembly — every one is the same 4-line boilerplate. `for..in` would cut ~120 lines from codegen.gem alone.
+### 1. `for..in` loops — DONE
+Added `for x in items` (array iteration) and `for i = 0, n` (range iteration).
+Both desugar to `while` at parse time. Iterator increment happens before the user body so `break`/`continue` work correctly. All compiler files rewritten to use `for..in`. Fixed-point verified.
 
 ### 2. `elif`
 The parser and codegen are long chains of `if ... end` repeated. With `elif`:

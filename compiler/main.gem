@@ -19,9 +19,7 @@ extern fn gem_normalize_path(path: String) -> String
 fn resolve_loads(ast, base_dir, loaded)
   let new_stmts = []
   let count = 0
-  let i = 0
-  while i < len(ast.stmts)
-    let stmt = ast.stmts[i]
+  for stmt in ast.stmts
     if type(stmt) == "table" and stmt.tag == "load"
       let path = stmt.path
       # Add .gem extension if needed
@@ -32,7 +30,6 @@ fn resolve_loads(ast, base_dir, loaded)
 
       # Re-inclusion guard
       if loaded[full_path] == true
-        i += 1
         continue
       end
       loaded[full_path] = true
@@ -46,17 +43,14 @@ fn resolve_loads(ast, base_dir, loaded)
       let loaded_dir = gem_dirname(full_path)
       let resolved = resolve_loads(loaded_ast, loaded_dir, loaded)
 
-      let j = 0
-      while j < len(resolved.stmts)
-        new_stmts[count] = resolved.stmts[j]
+      for rs in resolved.stmts
+        new_stmts[count] = rs
         count += 1
-        j += 1
       end
     else
       new_stmts[count] = stmt
       count += 1
     end
-    i += 1
   end
   make_program(new_stmts)
 end

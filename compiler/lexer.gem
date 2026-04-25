@@ -3,7 +3,7 @@
 #   {type: "NUMBER", value: "42", line: 3}
 #
 # Token types: NUMBER, STRING, NAME, NEWLINE, EOF,
-# keywords (fn, end, let, if, else, while, return, break, continue,
+# keywords (fn, end, let, if, else, while, for, in, return, break, continue,
 #   do, match, when, and, or, not, true, false, nil, load, extern),
 # operators (+, -, *, /, %, ==, !=, <=, >=, <, >, =, +=, -=, *=, /=, ->),
 # punctuation ( ( ) [ ] { } . , : | )
@@ -53,10 +53,8 @@ end
 
 fn str_to_int(s)
   let result = 0
-  let i = 0
-  while i < len(s)
+  for i = 0, len(s)
     result = result * 10 + digit_val(s[i])
-    i += 1
   end
   result
 end
@@ -64,12 +62,10 @@ end
 extern fn atof(s: String) -> Float
 
 fn contains_dot(s)
-  let i = 0
-  while i < len(s)
+  for i = 0, len(s)
     if s[i] == "."
       return true
     end
-    i += 1
   end
   false
 end
@@ -98,6 +94,8 @@ fn build_keyword_set()
   t["nil"] = true
   t["load"] = true
   t["extern"] = true
+  t["for"] = true
+  t["in"] = true
   t
 end
 

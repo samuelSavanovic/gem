@@ -1,0 +1,78 @@
+# For loops — for..in and for range
+
+# Array iteration
+let fruits = ["apple", "banana", "cherry"]
+for fruit in fruits
+  print(fruit)
+end
+
+# Range iteration
+for i = 0, 5
+  print(i)
+end
+
+# Nested for loops
+for i = 0, 3
+  for j = 0, 3
+    if i == j
+      print(i * 10 + j)
+    end
+  end
+end
+
+# Break inside for..in
+let nums = [1, 2, 3, 4, 5]
+for n in nums
+  if n == 3
+    break
+  end
+  print(n)
+end
+
+# Continue inside for..in
+for n in nums
+  if n == 3
+    continue
+  end
+  print(n)
+end
+
+# Continue inside range
+for i = 0, 6
+  if i == 3
+    continue
+  end
+  print(i)
+end
+
+# Empty array
+let empty = []
+for x in empty
+  print("should not print")
+end
+print("after empty")
+
+# Range where start >= end
+for i = 5, 3
+  print("should not print")
+end
+print("after empty range")
+
+# for..in with index tracking
+let letters = ["a", "b", "c", "d"]
+let idx = 0
+for letter in letters
+  print(to_string(idx) + ":" + letter)
+  idx += 1
+end
+
+# Nested for..in with continue
+let matrix = [[1, 2], [3, 4], [5, 6]]
+for row in matrix
+  for val in row
+    if val == 3
+      continue
+    end
+    print(val)
+  end
+end

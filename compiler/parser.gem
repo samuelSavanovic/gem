@@ -17,6 +17,7 @@ end
 
 fn make_parser(tokens)
   let pos = 0
+  let gensym_counter = 0
 
   # ── Token access ──
 
@@ -463,6 +464,62 @@ fn make_parser(tokens)
       let wbody = parse_body()
       expect("end")
       return make_while(cond, wbody)
+    end
+
+    # for..in statement (desugars to while)
+    if t.type == "for"
+      advance()
+      let var_name = expect("NAME").value
+
+      if peek().type == "in"
+        # for x in items ... end → let _items=items; let _i=0; while _i<len(_items) ...
+        advance()
+        let items_expr = parse_expr()
+        gensym_counter += 1
+        let items_var = "_for_items_" + to_string(gensym_counter)
+        let idx_var = "_for_i_" + to_string(gensym_counter)
+        let fbody = parse_body()
+        expect("end")
+        let inner_stmts = []
+        let ic = 0
+        inner_stmts[ic] = make_let(var_name, make_index(make_var(items_var), make_var(idx_var)))
+        ic += 1
+        inner_stmts[ic] = make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)))
+        ic += 1
+        for bi = 0, len(fbody)
+          inner_stmts[ic] = fbody[bi]
+          ic += 1
+        end
+        let while_node = make_while(make_binop("<", make_var(idx_var), make_call(make_var("len"), [make_var(items_var)], 0)), inner_stmts)
+        return {tag: "block", stmts: [make_let(items_var, items_expr), make_let(idx_var, make_int(0)), while_node]}
+      end
+
+      if peek().type == "="
+        # for i = start, end ... end → let i=start; let _limit=end; while i<_limit ...
+        advance()
+        let start_expr = parse_expr()
+        expect(",")
+        let end_expr = parse_expr()
+        let fbody = parse_body()
+        expect("end")
+        gensym_counter += 1
+        let idx_var = "_for_i_" + to_string(gensym_counter)
+        let limit_var = "_for_limit_" + to_string(gensym_counter)
+        let inner_stmts = []
+        let ic = 0
+        inner_stmts[ic] = make_let(var_name, make_var(idx_var))
+        ic += 1
+        inner_stmts[ic] = make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)))
+        ic += 1
+        for bi = 0, len(fbody)
+          inner_stmts[ic] = fbody[bi]
+          ic += 1
+        end
+        let while_node = make_while(make_binop("<", make_var(idx_var), make_var(limit_var)), inner_stmts)
+        return {tag: "block", stmts: [make_let(idx_var, start_expr), make_let(limit_var, end_expr), while_node]}
+      end
+
+      error("expected 'in' or '=' after for variable at line " + to_string(peek().line))
     end
 
     # match statement
