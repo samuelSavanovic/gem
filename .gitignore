@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.o
+*.dSYM/
+prototype/gc_coro_test
+prototype/scheduler_test
