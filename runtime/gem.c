@@ -13,6 +13,10 @@
 #define STBDS_FREE(c, p)       ((void)(p))  /* GC handles freeing */
 #include "stb_ds.h"
 
+#include <poll.h>
+#include <fcntl.h>
+#include <errno.h>
+
 #include "gem.h"
 
 /* ─── GC-aware allocators ─── */
@@ -838,12 +842,28 @@ int gem_self_pid(void) {
     return gem_current_pid;
 }
 
+void gem_io_yield(int fd, int for_write) {
+    if (gem_current_pid < 0 || gem_current_pid >= GEM_MAX_PROCS) {
+        /* Not inside a coroutine — can't yield, just return and let
+           the caller retry with a blocking call or spin. */
+        return;
+    }
+    GemProcess *proc = &gem_proc_table[gem_current_pid];
+    proc->state = GEM_PROC_IO_WAIT;
+    proc->wait_fd = fd;
+    proc->wait_write = for_write;
+    mco_yield(proc->coro);
+}
+
 void gem_run_scheduler(void) {
     int active = 1;
 
     while (active) {
         active = 0;
         int has_ready = 0;
+        int has_io_wait = 0;
+        int has_msg_wait = 0;
+
         for (int i = 0; i < GEM_MAX_PROCS; i++) {
             GemProcess *proc = &gem_proc_table[i];
 
@@ -859,11 +879,52 @@ void gem_run_scheduler(void) {
                     proc->state = GEM_PROC_FREE;
                 }
             } else if (proc->state == GEM_PROC_WAITING) {
+                has_msg_wait = 1;
+                active = 1;
+            } else if (proc->state == GEM_PROC_IO_WAIT) {
+                has_io_wait = 1;
                 active = 1;
             }
         }
-        /* Deadlock detection: processes alive but none can make progress */
-        if (active && !has_ready) break;
+
+        /* If we ran at least one READY process, loop immediately —
+           the resumed coroutines may have enqueued messages or spawned
+           new work. */
+        if (has_ready) continue;
+
+        /* Nothing was READY. Check for I/O waiters. */
+        if (has_io_wait) {
+            /* Build a pollfd array for all IO_WAIT processes. */
+            struct pollfd pfds[GEM_MAX_PROCS];
+            int pfd_pid[GEM_MAX_PROCS];  /* maps pollfd index → pid */
+            int nfds = 0;
+
+            for (int i = 0; i < GEM_MAX_PROCS; i++) {
+                if (gem_proc_table[i].state == GEM_PROC_IO_WAIT) {
+                    pfds[nfds].fd = gem_proc_table[i].wait_fd;
+                    pfds[nfds].events = gem_proc_table[i].wait_write ? POLLOUT : POLLIN;
+                    pfds[nfds].revents = 0;
+                    pfd_pid[nfds] = i;
+                    nfds++;
+                }
+            }
+
+            /* Block until at least one fd is ready.
+               Use -1 timeout: the only way to make progress is I/O. */
+            int ready = poll(pfds, (nfds_t)nfds, -1);
+            if (ready > 0) {
+                for (int j = 0; j < nfds; j++) {
+                    if (pfds[j].revents & (POLLIN | POLLOUT | POLLERR | POLLHUP)) {
+                        gem_proc_table[pfd_pid[j]].state = GEM_PROC_READY;
+                    }
+                }
+            }
+            /* Loop back to resume the now-READY processes. */
+            continue;
+        }
+
+        /* Only mailbox waiters remain and nobody can send → deadlock. */
+        if (has_msg_wait && !has_io_wait) break;
     }
     gem_current_pid = -1;
 }

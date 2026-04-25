@@ -68,7 +68,7 @@ Adding a new builtin requires editing codegen.gem in 3 places:
 This is error-prone. A data-driven approach (single table mapping name → C function)
 would eliminate the duplication.
 
-## 6. Server is single-threaded (no spawn per connection)
+## 6. Server is single-threaded (no spawn per connection) — FIXED
 
 **Severity:** Architectural limitation for stress testing.
 
@@ -76,6 +76,15 @@ The current server handles connections sequentially in the main loop. Using `spa
 per connection would exercise the concurrency runtime, but `accept()` is a blocking
 call that doesn't yield to the scheduler. Would need non-blocking sockets + scheduler
 integration to make this work properly.
+
+**Fix:** Added non-blocking I/O support to the runtime scheduler:
+- New `GEM_PROC_IO_WAIT` process state in the scheduler
+- `gem_io_yield(fd, for_write)` — marks current coroutine as waiting on an fd and yields
+- Scheduler uses `poll()` to check fd readiness, avoids busy-spinning
+- `net.c` wrappers set `O_NONBLOCK` and yield on `EAGAIN`/`EWOULDBLOCK`
+- Server now spawns a green thread per accepted connection
+
+Performance: ~24K req/s at 100 concurrent connections, ~21K req/s at 400 connections.
 
 ## Not pain points (things that worked well)
 

@@ -164,6 +164,7 @@ typedef enum {
     GEM_PROC_FREE,      /* slot available */
     GEM_PROC_READY,     /* can be resumed */
     GEM_PROC_WAITING,   /* blocked on receive() */
+    GEM_PROC_IO_WAIT,   /* blocked on I/O (fd not ready) */
     GEM_PROC_DEAD,      /* finished execution */
 } GemProcState;
 
@@ -173,6 +174,8 @@ typedef struct {
     mco_coro *coro;
     GemMailbox mailbox;
     int pid;
+    int wait_fd;        /* fd this process is waiting on (when IO_WAIT) */
+    int wait_write;     /* 0 = waiting for read, 1 = waiting for write */
 } GemProcess;
 
 #define GEM_MAX_PROCS 1024
@@ -186,6 +189,10 @@ void gem_send_msg(int pid, GemVal val);
 GemVal gem_receive_msg(void);
 int gem_self_pid(void);
 void gem_run_scheduler(void);
+
+/* Non-blocking I/O: yield current coroutine until fd is ready.
+   for_write=0 means wait for readable, for_write=1 means wait for writable. */
+void gem_io_yield(int fd, int for_write);
 
 /* Built-in function wrappers (GemFnPtr signature) */
 GemVal gem_spawn_builtin(void *_env, GemVal *args, int argc);

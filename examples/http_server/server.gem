@@ -182,11 +182,19 @@ end
 
 print("Gem HTTP server listening on port {port}")
 
-while true
-  let client_fd = net_accept(server_fd)
-  if client_fd >= 0
-    let fd = client_fd
-    let r = router
-    handle_connection(fd, r)
+# The accept loop runs inside a spawned process so that net_accept
+# can yield to the scheduler (non-blocking I/O requires a coroutine).
+# Each accepted connection is handled in its own green thread.
+
+let r = router
+spawn(fn()
+  while true
+    let client_fd = net_accept(server_fd)
+    if client_fd >= 0
+      let fd = client_fd
+      spawn(fn()
+        handle_connection(fd, r)
+      end)
+    end
   end
-end
+end)
