@@ -464,6 +464,50 @@ GemVal gem_keys_fn(void *_env, GemVal *args, int argc) {
     return gem_keys(args[0]);
 }
 
+/* ─── Built-in: str_replace ─── */
+
+GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 3) { gem_error("str_replace: expected 3 arguments"); }
+    if (args[0].type != VAL_STRING || args[1].type != VAL_STRING || args[2].type != VAL_STRING) {
+        gem_error("str_replace: all arguments must be strings");
+    }
+    const char *s = args[0].sval;
+    const char *old = args[1].sval;
+    const char *new_s = args[2].sval;
+    size_t s_len = strlen(s);
+    size_t old_len = strlen(old);
+    size_t new_len = strlen(new_s);
+
+    if (old_len == 0) return args[0]; /* empty pattern — return original */
+
+    /* Count occurrences to pre-allocate */
+    int count = 0;
+    const char *p = s;
+    while ((p = strstr(p, old)) != NULL) {
+        count++;
+        p += old_len;
+    }
+    if (count == 0) return args[0];
+
+    size_t result_len = s_len + (size_t)count * (new_len - old_len);
+    char *result = (char *)GC_MALLOC_ATOMIC(result_len + 1);
+    char *dst = result;
+    p = s;
+    while (*p) {
+        if (strncmp(p, old, old_len) == 0) {
+            memcpy(dst, new_s, new_len);
+            dst += new_len;
+            p += old_len;
+        } else {
+            *dst++ = *p++;
+        }
+    }
+    *dst = '\0';
+    GemVal r; r.type = VAL_STRING; r.sval = result;
+    return r;
+}
+
 /* ─── Built-in: error with location ─── */
 
 GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {

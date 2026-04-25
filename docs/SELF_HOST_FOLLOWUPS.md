@@ -35,8 +35,8 @@ Currently checking key existence with `table[key] != nil`. A `has_key(table, key
 ### 11. `match` on strings
 The codegen has many tag-dispatch patterns (`if tag == "int" ... if tag == "float" ...`) that would naturally be `match` statements, but `match` uses `==` comparison which works on strings. The problem is `match` doesn't short-circuit on return — when a `when` branch returns, execution falls through checking subsequent branches. This is correct but wasteful. More importantly, using `match` here would require all the handler code to be in the `when` body, which doesn't help when each handler is 5+ lines. This is really the same issue as `elif` (item 2) — both solve tag dispatch. `elif` is strictly more useful since it handles arbitrary conditions, not just equality.
 
-### 12. `str_replace` builtin
-The codegen needs string replacement for re-indenting setup code in `and`/`or`/`while` short-circuit compilation. Had to write a 20-line `str_replace_all` function in Gem. A builtin `str_replace(s, old, new)` would be cleaner.
+### 12. `str_replace` builtin — DONE
+The codegen needs string replacement for re-indenting setup code in `and`/`or`/`while` short-circuit compilation. Had a 20-line `str_replace_all` function in Gem. Replaced with a C runtime builtin `str_replace(s, old, new)`.
 
 ### 13. Reserved word `match` as variable name
 `match` is a keyword, which means `let match = true` is a parse error. Hit this when porting `str_replace_all` — had to rename the variable to `found`. Other keywords that might conflict with common variable names: `end`, `do`, `when`. Not a high priority but worth noting.

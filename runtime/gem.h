@@ -125,6 +125,7 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc);
 GemVal gem_push_fn(void *_env, GemVal *args, int argc);
 GemVal gem_pcall_fn(void *_env, GemVal *args, int argc);
 GemVal gem_keys_fn(void *_env, GemVal *args, int argc);
+GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc);
 
 /* ─── Helpers used by codegen ─── */
 

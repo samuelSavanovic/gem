@@ -334,6 +334,8 @@ print(items[0])    # a
 
 `keys(tbl)` — returns a new table containing the keys of `tbl` as an integer-indexed array.
 
+`str_replace(s, old, new)` — replaces all occurrences of `old` with `new` in string `s`. Returns a new string. If `old` is empty, returns `s` unchanged.
+
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
 **Module System (v0.1 — minimal)**

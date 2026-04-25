@@ -145,6 +145,7 @@ fn make_codegen(source_name)
   builtins["push"] = true
   builtins["pcall"] = true
   builtins["keys"] = true
+  builtins["str_replace"] = true
   let boxed_vars = {}
 
   # ─── Helpers ──
@@ -514,6 +515,8 @@ fn make_codegen(source_name)
         return {expr: "gem_make_fn(gem_pcall_fn, NULL)", setup: ""}
       elif name == "keys"
         return {expr: "gem_make_fn(gem_keys_fn, NULL)", setup: ""}
+      elif name == "str_replace"
+        return {expr: "gem_make_fn(gem_str_replace_fn, NULL)", setup: ""}
       elif set_contains(defined_fns, name)
         return {expr: "gem_make_fn(gem_fn_{name}, NULL)", setup: ""}
       end
@@ -652,7 +655,7 @@ fn make_codegen(source_name)
         let setup = arg_setups + "    GemVal {t}[] = \{{arr}};\n"
         let call = "gem_error_at_fn(\"{escaped_file}\", {line}, {t}, {argc})"
         return {expr: call, setup: setup}
-      elif name == "print" or name == "len" or name == "type" or name == "to_string" or name == "push" or name == "pcall" or name == "keys"
+      elif name == "print" or name == "len" or name == "type" or name == "to_string" or name == "push" or name == "pcall" or name == "keys" or name == "str_replace"
         let fn_name = ""
         if name == "print"
           fn_name = "gem_print"
@@ -668,6 +671,8 @@ fn make_codegen(source_name)
           fn_name = "gem_pcall_fn"
         elif name == "keys"
           fn_name = "gem_keys_fn"
+        elif name == "str_replace"
+          fn_name = "gem_str_replace_fn"
         end
         let arg_setups = ""
         let arg_exprs = []
@@ -785,7 +790,7 @@ fn make_codegen(source_name)
       setup = setup + "        {t} = {lc};\n"
       setup = setup + "    } else \{\n"
       if rc_r.setup != ""
-        setup = setup + str_replace_all(rc_r.setup, "    ", "        ")
+        setup = setup + str_replace(rc_r.setup, "    ", "        ")
       end
       setup = setup + "        {t} = {rc_r.expr};\n"
       setup = setup + "    }\n"
@@ -799,7 +804,7 @@ fn make_codegen(source_name)
       setup = setup + "        {t} = {lc};\n"
       setup = setup + "    } else \{\n"
       if rc_r.setup != ""
-        setup = setup + str_replace_all(rc_r.setup, "    ", "        ")
+        setup = setup + str_replace(rc_r.setup, "    ", "        ")
       end
       setup = setup + "        {t} = {rc_r.expr};\n"
       setup = setup + "    }\n"
@@ -1008,7 +1013,7 @@ fn make_codegen(source_name)
     let cond_r = compile_expr(node.cond)
     let out = "{p}while (1) \{\n"
     if cond_r.setup != ""
-      out = out + str_replace_all(cond_r.setup, "    ", "{p}    ")
+      out = out + str_replace(cond_r.setup, "    ", "{p}    ")
     end
     out = out + "{p}    if (!gem_truthy({cond_r.expr})) break;\n"
     out = out + compile_stmts(node.body, indent + 1)
@@ -1425,13 +1430,15 @@ fn split_string(s, delim)
   result
 end
 
-fn str_replace_all(s, old, new_s)
+# Bootstrap fallback: old stage0 doesn't know str_replace is a builtin.
+# The new compiler treats calls to str_replace as direct builtin calls and
+# never invokes this function body. It exists so stage0 can compile this file.
+fn str_replace(s, old, new_s)
   let result = ""
   let i = 0
   let old_len = len(old)
   let s_len = len(s)
   while i < s_len
-    # Check if substring starting at i matches old
     if i + old_len <= s_len
       let found = true
       let j = 0
