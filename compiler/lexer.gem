@@ -234,6 +234,44 @@ fn tokenize(source)
       continue
     end
 
+    # Single-quoted strings (no interpolation)
+    if ch == "'"
+      pos += 1
+      let val = ""
+      while pos < length and source[pos] != "'"
+        if source[pos] == "\\"
+          pos += 1
+          if pos >= length
+            error("unterminated string escape at line {line}")
+          end
+          let esc = source[pos]
+          if esc == "n"
+            val = val + "\n"
+          elif esc == "r"
+            val = val + CR
+          elif esc == "t"
+            val = val + "\t"
+          elif esc == "\\"
+            val = val + "\\"
+          elif esc == "'"
+            val = val + "'"
+          else
+            val = val + "\\" + esc
+          end
+          pos += 1
+          continue
+        end
+        val = val + source[pos]
+        pos += 1
+      end
+      if pos >= length
+        error("unterminated string at line {line}")
+      end
+      pos += 1
+      push(tokens, {type: "STRING", value: val, line: line})
+      continue
+    end
+
     # Names and keywords
     if is_alpha(ch)
       let val = ""

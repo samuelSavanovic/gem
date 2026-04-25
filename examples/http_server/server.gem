@@ -128,7 +128,7 @@ router.add("GET", "/hello", fn(req)
 end)
 
 router.add("GET", "/json", fn(req)
-  response_json("\{\"status\":\"ok\",\"language\":\"gem\"}")
+  response_json('{"status":"ok","language":"gem"}')
 end)
 
 router.add("POST", "/echo", fn(req)

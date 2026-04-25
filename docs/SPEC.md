@@ -239,16 +239,35 @@ extern include "stdio.h"
 
 **Strings**
 
+Two quote styles: double-quoted strings support interpolation, single-quoted strings do not.
+
 ```
 let s = "hello"
+let t = 'hello'
 s.len()
 s[0]
 s + " world"
 ```
 
+Both styles support escape sequences: `\n`, `\r`, `\t`, `\\`, and the matching quote (`\"` or `\'`). Double-quoted strings also support `\{` and `\}` to escape interpolation braces.
+
+Single-quoted strings pass content through literally — `{` has no special meaning:
+
+```
+let json = '{"key": "value"}'     # no escaping needed
+print('hello {name}')              # prints: hello {name}
+```
+
+Each quote style can contain the other without escaping:
+
+```
+print("it's fine")                 # it's fine
+print('say "hello"')               # say "hello"
+```
+
 **String Interpolation**
 
-Expressions inside `{...}` in string literals are evaluated and auto-coerced to strings via `to_string`:
+Expressions inside `{...}` in double-quoted string literals are evaluated and auto-coerced to strings via `to_string`:
 
 ```
 let name = "world"
@@ -257,7 +276,7 @@ print("{1 + 2} items")         # 3 items
 print("flag: {true}")          # flag: true
 ```
 
-Literal braces are escaped with `\{` and `\}`:
+Literal braces in double-quoted strings are escaped with `\{` and `\}`:
 
 ```
 print("literal \{brace\}")     # literal {brace}
