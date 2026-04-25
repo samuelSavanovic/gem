@@ -15,15 +15,44 @@ GRAMMAR = r"""
     start: (_NL* stmt)*  _NL*
 
     ?stmt: fn_def
+         | let_decl
+         | if_stmt
+         | while_stmt
+         | match_stmt
+         | return_stmt
+         | load_stmt
+         | extern_fn
+         | extern_include
          | expr
+
+    load_stmt: "load" STRING
+    extern_fn: "extern" "fn" NAME "(" extern_params ")" ("->" extern_type)?
+    extern_params: (extern_param ("," extern_param)*)?
+    extern_param: NAME ":" extern_type
+    extern_type: NAME
+    extern_include: "extern" "include" STRING
+
+    return_stmt: "return" expr?
+
+    let_decl: "let" NAME "=" expr
 
     fn_def: "fn" NAME "(" params ")" body "end"
     params: (NAME ("," NAME)*)?
     body: (_NL* stmt)*  _NL*
 
+    if_stmt: "if" expr body ("else" body)? "end"
+    while_stmt: "while" expr body "end"
+    match_stmt: "match" expr _NL* (when_clause)+ ("else" body)? "end"
+    when_clause: "when" expr body
+
     ?expr: assign
 
-    ?assign: or_expr
+    ?assign: NAME "=" expr            -> assign_stmt
+           | NAME ASSIGN_OP expr      -> compound_assign
+           | call "." NAME "=" expr   -> dot_assign
+           | call "[" expr "]" "=" expr -> index_assign
+           | or_expr
+    ASSIGN_OP: "+=" | "-=" | "*=" | "/="
 
     ?or_expr: and_expr ("or" and_expr)*
     ?and_expr: not_expr ("and" not_expr)*
@@ -41,16 +70,34 @@ GRAMMAR = r"""
     ?unary: "-" unary -> neg
           | call
 
-    ?call: atom ("(" args ")")*
+    ?call: atom postfix*
+    ?postfix: "(" args ")" trailing_block?  -> call_postfix
+            | "." NAME       -> dot_postfix
+            | "[" expr "]"   -> index_postfix
     args: (expr ("," expr)*)?
+
+    ?trailing_block: do_block | brace_block
+    do_block: "do" block_params? body "end"
+    brace_block: "{" block_params? expr "}"
+    block_params: "|" (NAME ("," NAME)*)? "|"
 
     ?atom: NUMBER        -> number
          | STRING        -> string
          | "true"        -> true_lit
          | "false"       -> false_lit
          | "nil"         -> nil_lit
+         | "fn" "(" params ")" body "end" -> anon_fn
+         | table_literal
+         | array_literal
          | NAME          -> var
          | "(" expr ")"
+
+    table_literal: "{" _NL* table_entries? _NL* "}"
+    table_entries: table_entry ((_NL* "," | _NL+) _NL* table_entry)* ","?
+    table_entry: NAME ":" expr
+
+    array_literal: "[" _NL* array_entries? _NL* "]"
+    array_entries: expr ((_NL* "," | _NL+) _NL* expr)* ","?
 
     NAME: /(?!(?:fn|end|let|if|else|while|return|do|match|when|and|or|not|true|false|nil|load|extern)\b)[a-zA-Z_][a-zA-Z0-9_]*/
     NUMBER: /[0-9]+(\.[0-9]+)?/
@@ -72,6 +119,95 @@ parser = Lark(GRAMMAR, parser="earley", propagate_positions=True)
 class ASTBuilder(Transformer):
     def start(self, items):
         return {"tag": "program", "stmts": items}
+
+    def let_decl(self, items):
+        name = str(items[0])
+        value = items[1]
+        return {"tag": "let", "name": name, "value": value}
+
+    def assign_stmt(self, items):
+        name = str(items[0])
+        value = items[1]
+        return {"tag": "assign", "name": name, "value": value}
+
+    def compound_assign(self, items):
+        name = str(items[0])
+        op = str(items[1])  # "+=", "-=", etc.
+        value = items[2]
+        base_op = op[0]
+        return {"tag": "assign", "name": name, "value": {
+            "tag": "binop", "op": base_op,
+            "left": {"tag": "var", "name": name},
+            "right": value,
+        }}
+
+    def dot_assign(self, items):
+        obj = items[0]
+        field = str(items[1])
+        value = items[2]
+        return {"tag": "dot_assign", "object": obj, "field": field, "value": value}
+
+    def index_assign(self, items):
+        obj = items[0]
+        key = items[1]
+        value = items[2]
+        return {"tag": "index_assign", "object": obj, "key": key, "value": value}
+
+    def load_stmt(self, items):
+        raw = str(items[0])
+        path = raw[1:-1]  # strip quotes
+        return {"tag": "load", "path": path}
+
+    def extern_fn(self, items):
+        name = str(items[0])
+        params = items[1]
+        ret_type = str(items[2]) if len(items) > 2 else "Nil"
+        return {"tag": "extern_fn", "name": name, "params": params, "ret_type": ret_type}
+
+    def extern_params(self, items):
+        return list(items)
+
+    def extern_param(self, items):
+        return {"name": str(items[0]), "type": str(items[1])}
+
+    def extern_type(self, items):
+        return str(items[0])
+
+    def extern_include(self, items):
+        raw = str(items[0])
+        path = raw[1:-1]
+        return {"tag": "extern_include", "path": path}
+
+    def return_stmt(self, items):
+        value = items[0] if items else None
+        return {"tag": "return", "value": value}
+
+    def if_stmt(self, items):
+        cond = items[0]
+        then_body = items[1]
+        else_body = items[2] if len(items) > 2 else None
+        return {"tag": "if", "cond": cond, "then": then_body, "else": else_body}
+
+    def while_stmt(self, items):
+        cond = items[0]
+        body = items[1]
+        return {"tag": "while", "cond": cond, "body": body}
+
+    def match_stmt(self, items):
+        target = items[0]
+        whens = []
+        else_body = None
+        for item in items[1:]:
+            if isinstance(item, dict) and item.get("tag") == "when_clause":
+                whens.append(item)
+            elif isinstance(item, list):
+                else_body = item
+        return {"tag": "match", "target": target, "whens": whens, "else": else_body}
+
+    def when_clause(self, items):
+        value = items[0]
+        body = items[1]
+        return {"tag": "when_clause", "value": value, "body": body}
 
     def fn_def(self, items):
         name = str(items[0])
@@ -105,16 +241,68 @@ class ASTBuilder(Transformer):
     def nil_lit(self, items):
         return {"tag": "nil"}
 
+    def anon_fn(self, items):
+        params = items[0]
+        body = items[1]
+        return {"tag": "anon_fn", "params": params, "body": body}
+
     def var(self, items):
         return {"tag": "var", "name": str(items[0])}
 
     def call(self, items):
-        func = items[0]
-        for arg_list in items[1:]:
-            func = {"tag": "call", "func": func, "args": arg_list}
-        return func
+        # items[0] is the atom, rest are postfix operations
+        result = items[0]
+        for postfix in items[1:]:
+            if postfix["_postfix"] == "call":
+                result = {"tag": "call", "func": result, "args": postfix["args"]}
+            elif postfix["_postfix"] == "dot":
+                result = {"tag": "dot", "object": result, "field": postfix["field"]}
+            elif postfix["_postfix"] == "index":
+                result = {"tag": "index", "object": result, "key": postfix["key"]}
+        return result
+
+    def call_postfix(self, items):
+        args = items[0]
+        block = items[1] if len(items) > 1 else None
+        if block is not None:
+            args = args + [block]
+        return {"_postfix": "call", "args": args}
+
+    def dot_postfix(self, items):
+        return {"_postfix": "dot", "field": str(items[0])}
+
+    def index_postfix(self, items):
+        return {"_postfix": "index", "key": items[0]}
+
+    def do_block(self, items):
+        params = items[0] if len(items) > 1 else []
+        body = items[-1]
+        return {"tag": "anon_fn", "params": params, "body": body}
+
+    def brace_block(self, items):
+        params = items[0] if len(items) > 1 else []
+        expr = items[-1]
+        return {"tag": "anon_fn", "params": params, "body": [expr]}
+
+    def block_params(self, items):
+        return [str(t) for t in items]
 
     def args(self, items):
+        return list(items)
+
+    def table_literal(self, items):
+        return {"tag": "table", "entries": items[0] if items else []}
+
+    def table_entries(self, items):
+        return list(items)
+
+    def table_entry(self, items):
+        return {"key": str(items[0]), "value": items[1]}
+
+    def array_literal(self, items):
+        return {"tag": "array", "elements": items[0] if items else []}
+
+    def array_entries(self, items):
         return list(items)
 
     def not_op(self, items):
@@ -186,11 +374,20 @@ C_RUNTIME = r"""
 /* ─── Tagged value ─── */
 
 typedef enum {
-    VAL_NIL, VAL_BOOL, VAL_INT, VAL_FLOAT, VAL_STRING, VAL_FN,
+    VAL_NIL, VAL_BOOL, VAL_INT, VAL_FLOAT, VAL_STRING, VAL_FN, VAL_TABLE,
 } GemType;
 
 typedef struct GemVal GemVal;
-typedef GemVal (*GemFnPtr)(GemVal *args, int argc);
+typedef GemVal (*GemFnPtr)(void *env, GemVal *args, int argc);
+
+/* ─── Table (dynamic array of key-value pairs) ─── */
+
+typedef struct {
+    GemVal *keys;
+    GemVal *vals;
+    int len;
+    int cap;
+} GemTable;
 
 struct GemVal {
     GemType type;
@@ -199,7 +396,8 @@ struct GemVal {
         double fval;
         char *sval;
         int bval;
-        GemFnPtr fn;
+        struct { GemFnPtr fn; void *env; };
+        GemTable *table;
     };
 };
 
@@ -208,7 +406,7 @@ static GemVal GEM_NIL = {VAL_NIL, {0}};
 static GemVal gem_int(int64_t v) { return (GemVal){VAL_INT, {.ival = v}}; }
 static GemVal gem_float(double v) { GemVal r; r.type = VAL_FLOAT; r.fval = v; return r; }
 static GemVal gem_bool(int v) { GemVal r; r.type = VAL_BOOL; r.bval = v; return r; }
-static GemVal gem_fn(GemFnPtr f) { GemVal r; r.type = VAL_FN; r.fn = f; return r; }
+static GemVal gem_make_fn(GemFnPtr f, void *env) { GemVal r; r.type = VAL_FN; r.fn = f; r.env = env; return r; }
 
 static GemVal gem_string(const char *s) {
     GemVal r;
@@ -216,6 +414,59 @@ static GemVal gem_string(const char *s) {
     r.sval = malloc(strlen(s) + 1);
     strcpy(r.sval, s);
     return r;
+}
+
+/* ─── Table operations ─── */
+
+static int gem_val_eq(GemVal a, GemVal b);
+
+static GemVal gem_table_new(void) {
+    GemTable *t = malloc(sizeof(GemTable));
+    t->len = 0;
+    t->cap = 4;
+    t->keys = malloc(sizeof(GemVal) * t->cap);
+    t->vals = malloc(sizeof(GemVal) * t->cap);
+    GemVal r; r.type = VAL_TABLE; r.table = t; return r;
+}
+
+static void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
+    if (tbl.type != VAL_TABLE) { fprintf(stderr, "error: index set on non-table\n"); exit(1); }
+    GemTable *t = tbl.table;
+    for (int i = 0; i < t->len; i++) {
+        if (gem_val_eq(t->keys[i], key)) {
+            t->vals[i] = val;
+            return;
+        }
+    }
+    if (t->len >= t->cap) {
+        t->cap *= 2;
+        t->keys = realloc(t->keys, sizeof(GemVal) * t->cap);
+        t->vals = realloc(t->vals, sizeof(GemVal) * t->cap);
+    }
+    t->keys[t->len] = key;
+    t->vals[t->len] = val;
+    t->len++;
+}
+
+static GemVal gem_table_get(GemVal tbl, GemVal key) {
+    if (tbl.type != VAL_TABLE) { fprintf(stderr, "error: index get on non-table\n"); exit(1); }
+    GemTable *t = tbl.table;
+    for (int i = 0; i < t->len; i++) {
+        if (gem_val_eq(t->keys[i], key)) return t->vals[i];
+    }
+    return (GemVal){VAL_NIL, {0}};
+}
+
+static int gem_val_eq(GemVal a, GemVal b) {
+    if (a.type != b.type) return 0;
+    switch (a.type) {
+        case VAL_NIL: return 1;
+        case VAL_BOOL: return a.bval == b.bval;
+        case VAL_INT: return a.ival == b.ival;
+        case VAL_FLOAT: return a.fval == b.fval;
+        case VAL_STRING: return strcmp(a.sval, b.sval) == 0;
+        default: return 0;
+    }
 }
 
 /* ─── Truthiness ─── */
@@ -335,7 +586,7 @@ static GemVal gem_not(GemVal a) {
 
 /* ─── Built-in: print ─── */
 
-static GemVal gem_print(GemVal *args, int argc) {
+static GemVal gem_print(void *_env, GemVal *args, int argc) {
     for (int i = 0; i < argc; i++) {
         if (i > 0) printf(" ");
         GemVal v = args[i];
@@ -346,6 +597,7 @@ static GemVal gem_print(GemVal *args, int argc) {
             case VAL_FLOAT: printf("%g", v.fval); break;
             case VAL_STRING: printf("%s", v.sval); break;
             case VAL_FN: printf("<fn>"); break;
+            case VAL_TABLE: printf("<table:%d>", v.table->len); break;
         }
     }
     printf("\n");
@@ -354,7 +606,7 @@ static GemVal gem_print(GemVal *args, int argc) {
 
 /* ─── Built-in: error ─── */
 
-static GemVal gem_error_fn(GemVal *args, int argc) {
+static GemVal gem_error_fn(void *_env, GemVal *args, int argc) {
     if (argc > 0 && args[0].type == VAL_STRING) {
         fprintf(stderr, "error: %s\n", args[0].sval);
     } else {
@@ -372,33 +624,199 @@ class CodeGen:
         self.functions = []     # list of C function definitions
         self.forward_decls = [] # forward declarations
         self.tmp_counter = 0
+        self.anon_counter = 0
         self.defined_fns = set() # names of user-defined functions
         self.builtins = {"print", "error"}
+        # Per-scope state — set during function compilation
+        self.boxed_vars = set()  # variables that are heap-allocated (captured by closures)
 
     def tmp(self):
         self.tmp_counter += 1
         return f"_t{self.tmp_counter}"
 
-    def compile(self, ast):
-        # Collect all function defs and top-level statements
-        fn_defs = [s for s in ast["stmts"] if s["tag"] == "fn_def"]
-        top_stmts = [s for s in ast["stmts"] if s["tag"] != "fn_def"]
+    def _anon_name(self):
+        self.anon_counter += 1
+        return f"_anon_{self.anon_counter}"
 
-        # Emit forward declarations
+    # ─── Free variable analysis ───
+
+    def _collect_free_vars(self, stmts, defined):
+        """Return set of variable names used in stmts but not defined in them or in 'defined'."""
+        free = set()
+        defined = set(defined)
+        for stmt in stmts:
+            self._collect_free_node(stmt, defined, free)
+            if isinstance(stmt, dict) and stmt.get("tag") == "let":
+                defined.add(stmt["name"])
+        return free
+
+    def _collect_free_node(self, node, defined, free):
+        if not isinstance(node, dict):
+            return
+        tag = node.get("tag")
+        if tag == "var":
+            name = node["name"]
+            if name not in defined and name not in self.builtins and name not in self.defined_fns:
+                free.add(name)
+        elif tag == "let":
+            self._collect_free_node(node["value"], defined, free)
+        elif tag == "assign":
+            name = node["name"]
+            if name not in defined and name not in self.builtins and name not in self.defined_fns:
+                free.add(name)
+            self._collect_free_node(node["value"], defined, free)
+        elif tag == "anon_fn":
+            # Recurse into the anon fn body with its own scope
+            inner_defined = defined | set(node["params"])
+            inner_free = self._collect_free_vars(node["body"], inner_defined)
+            free.update(inner_free)
+        elif tag == "fn_def":
+            # Named functions are global — don't recurse for free var purposes
+            pass
+        elif tag in ("if",):
+            self._collect_free_node(node["cond"], defined, free)
+            for s in node["then"]:
+                self._collect_free_node(s, defined, free)
+                if isinstance(s, dict) and s.get("tag") == "let":
+                    defined = defined | {s["name"]}
+            if node["else"]:
+                for s in node["else"]:
+                    self._collect_free_node(s, defined, free)
+                    if isinstance(s, dict) and s.get("tag") == "let":
+                        defined = defined | {s["name"]}
+        elif tag == "while":
+            self._collect_free_node(node["cond"], defined, free)
+            for s in node["body"]:
+                self._collect_free_node(s, defined, free)
+                if isinstance(s, dict) and s.get("tag") == "let":
+                    defined = defined | {s["name"]}
+        elif tag == "match":
+            self._collect_free_node(node["target"], defined, free)
+            for when in node["whens"]:
+                self._collect_free_node(when["value"], defined, free)
+                for s in when["body"]:
+                    self._collect_free_node(s, defined, free)
+                    if isinstance(s, dict) and s.get("tag") == "let":
+                        defined = defined | {s["name"]}
+            if node["else"]:
+                for s in node["else"]:
+                    self._collect_free_node(s, defined, free)
+                    if isinstance(s, dict) and s.get("tag") == "let":
+                        defined = defined | {s["name"]}
+        elif tag == "when_clause":
+            self._collect_free_node(node["value"], defined, free)
+            for s in node["body"]:
+                self._collect_free_node(s, defined, free)
+                if isinstance(s, dict) and s.get("tag") == "let":
+                    defined = defined | {s["name"]}
+        elif tag == "return":
+            if node["value"] is not None:
+                self._collect_free_node(node["value"], defined, free)
+        else:
+            # Generic recursion for binop, unop, call, etc.
+            for k, v in node.items():
+                if k == "tag":
+                    continue
+                if isinstance(v, dict):
+                    self._collect_free_node(v, defined, free)
+                elif isinstance(v, list):
+                    for item in v:
+                        if isinstance(item, dict):
+                            self._collect_free_node(item, defined, free)
+
+    def _find_captured_in_scope(self, body, scope_vars):
+        """Find which variables from scope_vars are captured by anon_fns in body."""
+        captured = set()
+        self._walk_captures(body, set(scope_vars), captured)
+        return captured
+
+    def _walk_captures(self, stmts, scope_vars, captured):
+        for stmt in stmts:
+            self._walk_captures_node(stmt, scope_vars, captured)
+            if isinstance(stmt, dict) and stmt.get("tag") == "let":
+                scope_vars = scope_vars | {stmt["name"]}
+
+    def _walk_captures_node(self, node, scope_vars, captured):
+        if not isinstance(node, dict):
+            return
+        tag = node.get("tag")
+        if tag == "anon_fn":
+            # Find free vars of this anon fn
+            inner_defined = set(node["params"])
+            free = self._collect_free_vars(node["body"], inner_defined)
+            captured.update(free & scope_vars)
+            # Also recurse into the anon fn body for nested closures
+            # that might capture from our scope through this one
+            self._walk_captures(node["body"], scope_vars | set(node["params"]), captured)
+        elif tag == "fn_def":
+            pass  # named fns are global
+        elif tag == "if":
+            self._walk_captures_node(node["cond"], scope_vars, captured)
+            self._walk_captures(node["then"], scope_vars, captured)
+            if node["else"]:
+                self._walk_captures(node["else"], scope_vars, captured)
+        elif tag == "while":
+            self._walk_captures_node(node["cond"], scope_vars, captured)
+            self._walk_captures(node["body"], scope_vars, captured)
+        elif tag == "match":
+            self._walk_captures_node(node["target"], scope_vars, captured)
+            for when in node["whens"]:
+                self._walk_captures_node(when["value"], scope_vars, captured)
+                self._walk_captures(when["body"], scope_vars, captured)
+            if node["else"]:
+                self._walk_captures(node["else"], scope_vars, captured)
+        elif tag == "return":
+            if node["value"] is not None:
+                self._walk_captures_node(node["value"], scope_vars, captured)
+        elif tag == "let":
+            self._walk_captures_node(node["value"], scope_vars, captured)
+        elif tag == "assign":
+            self._walk_captures_node(node["value"], scope_vars, captured)
+        else:
+            for k, v in node.items():
+                if k == "tag":
+                    continue
+                if isinstance(v, dict):
+                    self._walk_captures_node(v, scope_vars, captured)
+                elif isinstance(v, list):
+                    for item in v:
+                        if isinstance(item, dict):
+                            self._walk_captures_node(item, scope_vars, captured)
+
+    # ─── Compilation ───
+
+    def compile(self, ast):
+        # Separate different statement types
+        fn_defs = [s for s in ast["stmts"] if s["tag"] == "fn_def"]
+        extern_fns = [s for s in ast["stmts"] if s["tag"] == "extern_fn"]
+        extern_includes = [s for s in ast["stmts"] if s["tag"] == "extern_include"]
+        top_stmts = [s for s in ast["stmts"] if s["tag"] not in ("fn_def", "extern_fn", "extern_include")]
+
+        # Register extern fns as defined (callable)
+        for ef in extern_fns:
+            self.defined_fns.add(ef["name"])
+
+        # Emit forward declarations for user-defined functions
         for fn in fn_defs:
             self.defined_fns.add(fn["name"])
             self.forward_decls.append(
-                f"static GemVal gem_fn_{fn['name']}(GemVal *args, int argc);"
+                f"static GemVal gem_fn_{fn['name']}(void *_env, GemVal *args, int argc);"
             )
+
+        # Emit extern fn wrappers
+        for ef in extern_fns:
+            self.functions.append(self._compile_extern_fn(ef))
 
         # Emit function definitions
         for fn in fn_defs:
             self.functions.append(self._compile_fn(fn))
 
         # Build main
+        saved_boxed = self.boxed_vars
+        self.boxed_vars = self._find_captured_in_scope(top_stmts, set())
         main_body = self._compile_stmts(top_stmts, indent=1)
+        self.boxed_vars = saved_boxed
 
-        # Check if there's a user-defined main
         has_main = any(fn["name"] == "main" for fn in fn_defs)
 
         main_c = "int main(void) {\n"
@@ -406,43 +824,172 @@ class CodeGen:
             main_c += main_body
         if has_main:
             main_c += "    GemVal _margs[1] = {GEM_NIL};\n"
-            main_c += "    gem_fn_main(_margs, 0);\n"
+            main_c += "    gem_fn_main(NULL, _margs, 0);\n"
         main_c += "    return 0;\n}\n"
 
-        # Assemble
-        out = C_RUNTIME
+        # Assemble — extern includes go before the runtime
+        out = ""
+        for ei in extern_includes:
+            out += f'#include "{ei["path"]}"\n'
+        out += C_RUNTIME
         out += "\n".join(self.forward_decls) + "\n\n"
         out += "\n\n".join(self.functions) + "\n\n"
         out += main_c
         return out
+
+    def _compile_extern_fn(self, node):
+        """Generate a GemVal wrapper around a C function."""
+        name = node["name"]
+        params = node["params"]
+        ret_type = node["ret_type"]
+
+        type_map = {
+            "Int": ("int64_t", "ival", "gem_int"),
+            "Float": ("double", "fval", "gem_float"),
+            "String": ("char*", "sval", "gem_string"),
+            "Bool": ("int", "bval", "gem_bool"),
+            "Ptr": ("void*", "ival", None),  # opaque pointer stored as ival
+        }
+
+        lines = []
+        lines.append(f"static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) {{")
+
+        # Extract args
+        c_args = []
+        for i, p in enumerate(params):
+            ptype = p["type"]
+            if ptype in type_map:
+                c_type, field, _ = type_map[ptype]
+                lines.append(f"    {c_type} _p{i} = args[{i}].{field};")
+                c_args.append(f"_p{i}")
+            else:
+                c_args.append(f"args[{i}]")
+
+        # Call
+        call_expr = f"{name}({', '.join(c_args)})"
+
+        if ret_type == "Nil":
+            lines.append(f"    {call_expr};")
+            lines.append("    return GEM_NIL;")
+        elif ret_type in type_map:
+            c_type, field, constructor = type_map[ret_type]
+            if ret_type == "Ptr":
+                lines.append(f"    void *_ret = {call_expr};")
+                lines.append("    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;")
+            else:
+                lines.append(f"    {c_type} _ret = {call_expr};")
+                lines.append(f"    return {constructor}(_ret);")
+        else:
+            lines.append(f"    {call_expr};")
+            lines.append("    return GEM_NIL;")
+
+        lines.append("}")
+
+        # Also add forward declaration
+        self.forward_decls.append(f"static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
+
+        return "\n".join(lines)
 
     def _compile_fn(self, node):
         params = node["params"]
         body = node["body"]
         name = node["name"]
 
+        # Determine which variables are captured by nested closures
+        scope_vars = set(params)
+        for stmt in body:
+            if isinstance(stmt, dict) and stmt.get("tag") == "let":
+                scope_vars.add(stmt["name"])
+        captured = self._find_captured_in_scope(body, scope_vars)
+
+        saved_boxed = self.boxed_vars
+        self.boxed_vars = captured
+
         lines = []
-        lines.append(f"static GemVal gem_fn_{name}(GemVal *args, int argc) {{")
+        lines.append(f"static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) {{")
 
         # Bind parameters
         for i, p in enumerate(params):
-            lines.append(f"    GemVal {p} = (argc > {i}) ? args[{i}] : GEM_NIL;")
+            if p in captured:
+                # Box: allocate on heap so closures can capture a pointer
+                lines.append(f"    GemVal *{p} = malloc(sizeof(GemVal));")
+                lines.append(f"    *{p} = (argc > {i}) ? args[{i}] : GEM_NIL;")
+            else:
+                lines.append(f"    GemVal {p} = (argc > {i}) ? args[{i}] : GEM_NIL;")
 
         # Compile body — last expression is the return value
         if body:
             for stmt in body[:-1]:
                 lines.append(self._compile_stmt(stmt, indent=1))
-            # Last statement: return its value
             last = body[-1]
             lines.append(self._compile_stmt_return(last, indent=1))
         else:
             lines.append("    return GEM_NIL;")
 
         lines.append("}")
+        self.boxed_vars = saved_boxed
         return "\n".join(lines)
 
+    def _compile_closure_fn(self, node, captures):
+        """Compile an anonymous function as a static C function with closure env."""
+        params = node["params"]
+        body = node["body"]
+        name = self._anon_name()
+        captures = sorted(captures)  # deterministic order
+
+        # Find which vars inside THIS closure are captured by nested closures
+        inner_scope = set(params)
+        for stmt in body:
+            if isinstance(stmt, dict) and stmt.get("tag") == "let":
+                inner_scope.add(stmt["name"])
+        inner_captured = self._find_captured_in_scope(body, inner_scope)
+        # Also: captured vars from outer scope that we receive via env are GemVal*
+        # and may be re-captured by inner closures — they're already boxed
+
+        saved_boxed = self.boxed_vars
+        self.boxed_vars = inner_captured | set(captures)  # all env vars are boxed (GemVal*)
+
+        # Generate struct
+        struct_name = f"_closure_{name}"
+        struct_def = f"struct {struct_name} {{\n"
+        for c in captures:
+            struct_def += f"    GemVal *{c};\n"
+        struct_def += "};\n"
+
+        # Generate function
+        lines = []
+        lines.append(f"static GemVal {name}(void *_env, GemVal *args, int argc) {{")
+        if captures:
+            lines.append(f"    struct {struct_name} *_cls = (struct {struct_name} *)_env;")
+            for c in captures:
+                lines.append(f"    GemVal *{c} = _cls->{c};")
+
+        # Bind parameters
+        for i, p in enumerate(params):
+            if p in inner_captured:
+                lines.append(f"    GemVal *{p} = malloc(sizeof(GemVal));")
+                lines.append(f"    *{p} = (argc > {i}) ? args[{i}] : GEM_NIL;")
+            else:
+                lines.append(f"    GemVal {p} = (argc > {i}) ? args[{i}] : GEM_NIL;")
+
+        if body:
+            for stmt in body[:-1]:
+                lines.append(self._compile_stmt(stmt, indent=1))
+            last = body[-1]
+            lines.append(self._compile_stmt_return(last, indent=1))
+        else:
+            lines.append("    return GEM_NIL;")
+
+        lines.append("}")
+
+        self.boxed_vars = saved_boxed
+
+        # Add struct + function to forward_decls/functions
+        self.functions.append(struct_def + "\n".join(lines))
+
+        return name, struct_name, captures
+
     def _compile_stmts(self, stmts, indent=0):
-        pad = "    " * indent
         out = ""
         for s in stmts:
             out += self._compile_stmt(s, indent) + "\n"
@@ -451,22 +998,80 @@ class CodeGen:
     def _compile_stmt(self, node, indent=0):
         pad = "    " * indent
         tag = node["tag"]
-        if tag == "call":
-            tmp = self.tmp()
+        if tag == "let":
+            expr_code, setup = self._compile_expr(node["value"])
+            name = node["name"]
+            if name in self.boxed_vars:
+                return setup + f"{pad}GemVal *{name} = malloc(sizeof(GemVal));\n{pad}*{name} = {expr_code};"
+            return setup + f"{pad}GemVal {name} = {expr_code};"
+        elif tag == "assign":
+            expr_code, setup = self._compile_expr(node["value"])
+            name = node["name"]
+            if name in self.boxed_vars:
+                return setup + f"{pad}*{name} = {expr_code};"
+            return setup + f"{pad}{name} = {expr_code};"
+        elif tag == "dot_assign":
+            obj_code, obj_setup = self._compile_expr(node["object"])
+            val_code, val_setup = self._compile_expr(node["value"])
+            escaped = node["field"].replace('"', '\\"')
+            return obj_setup + val_setup + f'{pad}gem_table_set({obj_code}, gem_string("{escaped}"), {val_code});'
+        elif tag == "index_assign":
+            obj_code, obj_setup = self._compile_expr(node["object"])
+            key_code, key_setup = self._compile_expr(node["key"])
+            val_code, val_setup = self._compile_expr(node["value"])
+            return obj_setup + key_setup + val_setup + f"{pad}gem_table_set({obj_code}, {key_code}, {val_code});"
+        elif tag == "if":
+            return self._compile_if(node, indent)
+        elif tag == "while":
+            return self._compile_while(node, indent)
+        elif tag == "match":
+            return self._compile_match(node, indent)
+        elif tag == "return":
+            if node["value"] is not None:
+                expr_code, setup = self._compile_expr(node["value"])
+                return setup + f"{pad}return {expr_code};"
+            else:
+                return f"{pad}return GEM_NIL;"
+        elif tag == "call":
             expr_code, setup = self._compile_expr(node)
             return setup + f"{pad}(void)({expr_code});"
         elif tag == "fn_def":
-            # Nested function — already handled at top level
             return ""
         else:
-            tmp = self.tmp()
             expr_code, setup = self._compile_expr(node)
             return setup + f"{pad}(void)({expr_code});"
 
     def _compile_stmt_return(self, node, indent=0):
         pad = "    " * indent
-        expr_code, setup = self._compile_expr(node)
-        return setup + f"{pad}return {expr_code};"
+        tag = node["tag"]
+        if tag == "let":
+            expr_code, setup = self._compile_expr(node["value"])
+            name = node["name"]
+            if name in self.boxed_vars:
+                return setup + f"{pad}GemVal *{name} = malloc(sizeof(GemVal));\n{pad}*{name} = {expr_code};\n{pad}return GEM_NIL;"
+            return setup + f"{pad}GemVal {name} = {expr_code};\n{pad}return GEM_NIL;"
+        elif tag == "assign":
+            expr_code, setup = self._compile_expr(node["value"])
+            tmp = self.tmp()
+            name = node["name"]
+            if name in self.boxed_vars:
+                return setup + f"{pad}GemVal {tmp} = {expr_code};\n{pad}*{name} = {tmp};\n{pad}return {tmp};"
+            return setup + f"{pad}GemVal {tmp} = {expr_code};\n{pad}{name} = {tmp};\n{pad}return {tmp};"
+        elif tag == "return":
+            if node["value"] is not None:
+                expr_code, setup = self._compile_expr(node["value"])
+                return setup + f"{pad}return {expr_code};"
+            else:
+                return f"{pad}return GEM_NIL;"
+        elif tag == "if":
+            return self._compile_if_return(node, indent)
+        elif tag == "while":
+            return self._compile_stmt(node, indent) + f"\n{pad}return GEM_NIL;"
+        elif tag == "match":
+            return self._compile_match_return(node, indent)
+        else:
+            expr_code, setup = self._compile_expr(node)
+            return setup + f"{pad}return {expr_code};"
 
     def _compile_expr(self, node):
         """Returns (expr_string, setup_code)."""
@@ -489,11 +1094,12 @@ class CodeGen:
             return "GEM_NIL", ""
         elif tag == "var":
             name = node["name"]
-            # Built-in functions
             if name == "print":
-                return "gem_fn(gem_print)", ""
+                return "gem_make_fn(gem_print, NULL)", ""
             if name == "error":
-                return "gem_fn(gem_error_fn)", ""
+                return "gem_make_fn(gem_error_fn, NULL)", ""
+            if name in self.boxed_vars:
+                return f"(*{name})", ""
             return name, ""
         elif tag == "call":
             return self._compile_call(node)
@@ -505,8 +1111,75 @@ class CodeGen:
                 return f"gem_neg({expr_code})", setup
             elif node["op"] == "not":
                 return f"gem_not({expr_code})", setup
+        elif tag == "anon_fn":
+            return self._compile_anon_fn(node)
+        elif tag == "table":
+            return self._compile_table(node)
+        elif tag == "array":
+            return self._compile_array(node)
+        elif tag == "dot":
+            obj_code, obj_setup = self._compile_expr(node["object"])
+            tmp = self.tmp()
+            setup = obj_setup + f"    GemVal {tmp} = {obj_code};\n"
+            escaped = node["field"].replace('"', '\\"')
+            return f'gem_table_get({tmp}, gem_string("{escaped}"))', setup
+        elif tag == "index":
+            obj_code, obj_setup = self._compile_expr(node["object"])
+            key_code, key_setup = self._compile_expr(node["key"])
+            return f"gem_table_get({obj_code}, {key_code})", obj_setup + key_setup
         else:
             return "GEM_NIL", f"/* unknown node: {tag} */\n"
+
+    def _compile_table(self, node):
+        entries = node["entries"]
+        tmp = self.tmp()
+        setup = f"    GemVal {tmp} = gem_table_new();\n"
+        for entry in entries:
+            val_code, val_setup = self._compile_expr(entry["value"])
+            escaped = entry["key"].replace('"', '\\"')
+            setup += val_setup
+            setup += f'    gem_table_set({tmp}, gem_string("{escaped}"), {val_code});\n'
+        return tmp, setup
+
+    def _compile_array(self, node):
+        elements = node["elements"]
+        tmp = self.tmp()
+        setup = f"    GemVal {tmp} = gem_table_new();\n"
+        for i, elem in enumerate(elements):
+            elem_code, elem_setup = self._compile_expr(elem)
+            setup += elem_setup
+            setup += f"    gem_table_set({tmp}, gem_int({i}), {elem_code});\n"
+        return tmp, setup
+
+    def _compile_anon_fn(self, node):
+        """Compile an anonymous fn expression into a closure."""
+        # Find free variables
+        inner_defined = set(node["params"])
+        free = self._collect_free_vars(node["body"], inner_defined)
+        captures = sorted(free)  # variables to capture from enclosing scope
+
+        if not captures:
+            # No captures — simple function, no closure needed
+            fn_name, _, _ = self._compile_closure_fn(node, [])
+            return f"gem_make_fn({fn_name}, NULL)", ""
+
+        # Generate the closure function and struct
+        fn_name, struct_name, captures = self._compile_closure_fn(node, captures)
+
+        # At the creation site, allocate env and populate
+        setup = ""
+        env_tmp = self.tmp()
+        setup += f"    struct {struct_name} *{env_tmp} = malloc(sizeof(struct {struct_name}));\n"
+        for c in captures:
+            if c in self.boxed_vars:
+                # Already a pointer — pass it directly
+                setup += f"    {env_tmp}->{c} = {c};\n"
+            else:
+                # Need to take address — but this var isn't boxed!
+                # This shouldn't happen if capture analysis is correct.
+                # The var should have been boxed in the enclosing scope.
+                setup += f"    {env_tmp}->{c} = &{c};\n"
+        return f"gem_make_fn({fn_name}, {env_tmp})", setup
 
     def _compile_call(self, node):
         func = node["func"]
@@ -526,16 +1199,12 @@ class CodeGen:
                 setup = "".join(arg_setups)
                 argc = len(args)
                 if argc == 0:
-                    return f"{fn_name}(NULL, 0)", setup
+                    return f"{fn_name}(NULL, NULL, 0)", setup
                 tmp = self.tmp()
                 arr = ", ".join(arg_exprs)
                 setup += f"    GemVal {tmp}[] = {{{arr}}};\n"
-                return f"{fn_name}({tmp}, {argc})", setup
-            else:
-                # User-defined function — call gem_fn_<name> directly
-                if name not in self.defined_fns:
-                    print(f"error: undefined function '{name}'", file=sys.stderr)
-                    sys.exit(1)
+                return f"{fn_name}(NULL, {tmp}, {argc})", setup
+            elif name in self.defined_fns:
                 arg_setups = []
                 arg_exprs = []
                 for a in args:
@@ -545,13 +1214,13 @@ class CodeGen:
                 setup = "".join(arg_setups)
                 argc = len(args)
                 if argc == 0:
-                    return f"gem_fn_{name}(NULL, 0)", setup
+                    return f"gem_fn_{name}(NULL, NULL, 0)", setup
                 tmp = self.tmp()
                 arr = ", ".join(arg_exprs)
                 setup += f"    GemVal {tmp}[] = {{{arr}}};\n"
-                return f"gem_fn_{name}({tmp}, {argc})", setup
+                return f"gem_fn_{name}(NULL, {tmp}, {argc})", setup
 
-        # General case: call through function value
+        # General case: call through function value (could be closure)
         func_code, func_setup = self._compile_expr(func)
         arg_setups = []
         arg_exprs = []
@@ -564,11 +1233,11 @@ class CodeGen:
         tmp_fn = self.tmp()
         setup += f"    GemVal {tmp_fn} = {func_code};\n"
         if argc == 0:
-            return f"{tmp_fn}.fn(NULL, 0)", setup
+            return f"{tmp_fn}.fn({tmp_fn}.env, NULL, 0)", setup
         tmp_args = self.tmp()
         arr = ", ".join(arg_exprs)
         setup += f"    GemVal {tmp_args}[] = {{{arr}}};\n"
-        return f"{tmp_fn}.fn({tmp_args}, {argc})", setup
+        return f"{tmp_fn}.fn({tmp_fn}.env, {tmp_args}, {argc})", setup
 
     def _compile_binop(self, node):
         op = node["op"]
@@ -596,10 +1265,145 @@ class CodeGen:
         else:
             return "GEM_NIL", setup + f"/* unknown op: {op} */\n"
 
+    def _compile_if(self, node, indent=0):
+        pad = "    " * indent
+        cond_code, cond_setup = self._compile_expr(node["cond"])
+        out = cond_setup
+        out += f"{pad}if (gem_truthy({cond_code})) {{\n"
+        out += self._compile_stmts(node["then"], indent + 1)
+        if node["else"] is not None:
+            out += f"{pad}}} else {{\n"
+            out += self._compile_stmts(node["else"], indent + 1)
+        out += f"{pad}}}"
+        return out
+
+    def _compile_if_return(self, node, indent=0):
+        """Compile if/else where each branch's last stmt is a return."""
+        pad = "    " * indent
+        cond_code, cond_setup = self._compile_expr(node["cond"])
+        out = cond_setup
+        out += f"{pad}if (gem_truthy({cond_code})) {{\n"
+        then_body = node["then"]
+        if then_body:
+            for s in then_body[:-1]:
+                out += self._compile_stmt(s, indent + 1) + "\n"
+            out += self._compile_stmt_return(then_body[-1], indent + 1) + "\n"
+        else:
+            out += f"{pad}    return GEM_NIL;\n"
+        if node["else"] is not None:
+            out += f"{pad}}} else {{\n"
+            else_body = node["else"]
+            if else_body:
+                for s in else_body[:-1]:
+                    out += self._compile_stmt(s, indent + 1) + "\n"
+                out += self._compile_stmt_return(else_body[-1], indent + 1) + "\n"
+            else:
+                out += f"{pad}    return GEM_NIL;\n"
+        else:
+            out += f"{pad}}} else {{\n"
+            out += f"{pad}    return GEM_NIL;\n"
+        out += f"{pad}}}"
+        return out
+
+    def _compile_while(self, node, indent=0):
+        pad = "    " * indent
+        cond_code, cond_setup = self._compile_expr(node["cond"])
+        out = f"{pad}while (1) {{\n"
+        out += cond_setup.replace("    ", pad + "    ")  if cond_setup else ""
+        out += f"{pad}    if (!gem_truthy({cond_code})) break;\n"
+        out += self._compile_stmts(node["body"], indent + 1)
+        out += f"{pad}}}"
+        return out
+
+    def _compile_match(self, node, indent=0):
+        pad = "    " * indent
+        target_code, target_setup = self._compile_expr(node["target"])
+        tmp = self.tmp()
+        out = target_setup
+        out += f"{pad}GemVal {tmp} = {target_code};\n"
+        for i, when in enumerate(node["whens"]):
+            val_code, val_setup = self._compile_expr(when["value"])
+            keyword = "if" if i == 0 else "} else if"
+            out += val_setup
+            out += f"{pad}{keyword} (gem_truthy(gem_eq({tmp}, {val_code}))) {{\n"
+            out += self._compile_stmts(when["body"], indent + 1)
+        if node["else"] is not None:
+            out += f"{pad}}} else {{\n"
+            out += self._compile_stmts(node["else"], indent + 1)
+        out += f"{pad}}}"
+        return out
+
+    def _compile_match_return(self, node, indent=0):
+        pad = "    " * indent
+        target_code, target_setup = self._compile_expr(node["target"])
+        tmp = self.tmp()
+        out = target_setup
+        out += f"{pad}GemVal {tmp} = {target_code};\n"
+        for i, when in enumerate(node["whens"]):
+            val_code, val_setup = self._compile_expr(when["value"])
+            keyword = "if" if i == 0 else "} else if"
+            out += val_setup
+            out += f"{pad}{keyword} (gem_truthy(gem_eq({tmp}, {val_code}))) {{\n"
+            body = when["body"]
+            if body:
+                for s in body[:-1]:
+                    out += self._compile_stmt(s, indent + 1) + "\n"
+                out += self._compile_stmt_return(body[-1], indent + 1) + "\n"
+            else:
+                out += f"{pad}    return GEM_NIL;\n"
+        if node["else"] is not None:
+            out += f"{pad}}} else {{\n"
+            else_body = node["else"]
+            if else_body:
+                for s in else_body[:-1]:
+                    out += self._compile_stmt(s, indent + 1) + "\n"
+                out += self._compile_stmt_return(else_body[-1], indent + 1) + "\n"
+            else:
+                out += f"{pad}    return GEM_NIL;\n"
+        else:
+            out += f"{pad}}} else {{\n"
+            out += f"{pad}    return GEM_NIL;\n"
+        out += f"{pad}}}"
+        return out
+
 
 # ─── Driver ─────────────────────────────────────────────────────────────────
 
-def compile_gem(source, source_name="<stdin>"):
+def resolve_loads(ast, base_dir, loaded=None):
+    """Recursively resolve load statements by inlining loaded file ASTs."""
+    if loaded is None:
+        loaded = set()
+    new_stmts = []
+    for stmt in ast["stmts"]:
+        if isinstance(stmt, dict) and stmt.get("tag") == "load":
+            path = stmt["path"]
+            # Resolve relative to base_dir, add .gem extension if needed
+            if not path.endswith(".gem"):
+                path += ".gem"
+            full_path = os.path.normpath(os.path.join(base_dir, path))
+            if full_path in loaded:
+                continue  # re-inclusion guard
+            loaded.add(full_path)
+            if not os.path.exists(full_path):
+                print(f"error: cannot load '{full_path}'", file=sys.stderr)
+                sys.exit(1)
+            with open(full_path) as f:
+                source = f.read()
+            try:
+                tree = parser.parse(source)
+            except UnexpectedInput as e:
+                line = getattr(e, "line", "?")
+                col = getattr(e, "column", "?")
+                print(f"{full_path}:{line}:{col}: parse error: {e}", file=sys.stderr)
+                sys.exit(1)
+            loaded_ast = ASTBuilder().transform(tree)
+            loaded_ast = resolve_loads(loaded_ast, os.path.dirname(full_path), loaded)
+            new_stmts.extend(loaded_ast["stmts"])
+        else:
+            new_stmts.append(stmt)
+    return {"tag": "program", "stmts": new_stmts}
+
+def compile_gem(source, source_name="<stdin>", base_dir="."):
     try:
         tree = parser.parse(source)
     except UnexpectedInput as e:
@@ -608,6 +1412,7 @@ def compile_gem(source, source_name="<stdin>"):
         print(f"{source_name}:{line}:{col}: parse error: {e}", file=sys.stderr)
         sys.exit(1)
     ast = ASTBuilder().transform(tree)
+    ast = resolve_loads(ast, base_dir)
     codegen = CodeGen()
     return codegen.compile(ast)
 
@@ -622,7 +1427,7 @@ def main():
     with open(src_path) as f:
         source = f.read()
 
-    c_code = compile_gem(source, src_path)
+    c_code = compile_gem(source, src_path, os.path.dirname(os.path.abspath(src_path)))
 
     if "--emit-c" in flags:
         print(c_code)
