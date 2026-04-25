@@ -104,8 +104,8 @@ fn print_ast(node)
   if tag == "if"
     let tstr = join_list(node.then, print_ast)
     let estr = "nil"
-    if node["else"] != nil
-      estr = "[" + join_list(node["else"], print_ast) + "]"
+    if node.else != nil
+      estr = "[" + join_list(node.else, print_ast) + "]"
     end
     return "(if " + print_ast(node.cond) + " [" + tstr + "] " + estr + ")"
   end
@@ -116,8 +116,8 @@ fn print_ast(node)
   if tag == "match"
     let wstr = join_list(node.whens, print_ast)
     let estr = "nil"
-    if node["else"] != nil
-      estr = "[" + join_list(node["else"], print_ast) + "]"
+    if node.else != nil
+      estr = "[" + join_list(node.else, print_ast) + "]"
     end
     return "(match " + print_ast(node.target) + " [" + wstr + "] " + estr + ")"
   end

@@ -213,14 +213,14 @@ fn make_codegen(source_name)
     elif tag == "if"
       collect_free_node(node.cond, defined, free)
       let d = set_union(defined, {})
-      let thens = node["then"]
+      let thens = node.then
       for i = 0, len(thens)
         collect_free_node(thens[i], d, free)
         if type(thens[i]) == "table" and thens[i].tag == "let"
           set_add(d, thens[i].name)
         end
       end
-      let el = node["else"]
+      let el = node.else
       if el != nil
         d = set_union(defined, {})
         for i = 0, len(el)
@@ -252,7 +252,7 @@ fn make_codegen(source_name)
           end
         end
       end
-      let el = node["else"]
+      let el = node.else
       if el != nil
         let d = set_union(defined, {})
         for j = 0, len(el)
@@ -363,9 +363,9 @@ fn make_codegen(source_name)
       # Named fns are global — skip
     elif tag == "if"
       walk_captures_node(node.cond, scope_vars, captured)
-      walk_captures(node["then"], scope_vars, captured)
-      if node["else"] != nil
-        walk_captures(node["else"], scope_vars, captured)
+      walk_captures(node.then, scope_vars, captured)
+      if node.else != nil
+        walk_captures(node.else, scope_vars, captured)
       end
     elif tag == "while"
       walk_captures_node(node.cond, scope_vars, captured)
@@ -376,8 +376,8 @@ fn make_codegen(source_name)
         walk_captures_node(node.whens[i].value, scope_vars, captured)
         walk_captures(node.whens[i].body, scope_vars, captured)
       end
-      if node["else"] != nil
-        walk_captures(node["else"], scope_vars, captured)
+      if node.else != nil
+        walk_captures(node.else, scope_vars, captured)
       end
     elif tag == "block"
       walk_captures(node.stmts, scope_vars, captured)
@@ -992,10 +992,10 @@ fn make_codegen(source_name)
     let cond_r = compile_expr(node.cond)
     let out = cond_r.setup
     out = out + "{p}if (gem_truthy({cond_r.expr})) \{\n"
-    out = out + compile_stmts(node["then"], indent + 1)
-    if node["else"] != nil
+    out = out + compile_stmts(node.then, indent + 1)
+    if node.else != nil
       out = out + "{p}} else \{\n"
-      out = out + compile_stmts(node["else"], indent + 1)
+      out = out + compile_stmts(node.else, indent + 1)
     end
     out = out + "{p}}"
     out
@@ -1008,7 +1008,7 @@ fn make_codegen(source_name)
     let cond_r = compile_expr(node.cond)
     let out = cond_r.setup
     out = out + "{p}if (gem_truthy({cond_r.expr})) \{\n"
-    let then_body = node["then"]
+    let then_body = node.then
     if len(then_body) > 0
       for i = 0, len(then_body) - 1
         out = out + compile_stmt(then_body[i], indent + 1) + "\n"
@@ -1017,9 +1017,9 @@ fn make_codegen(source_name)
     else
       out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
     end
-    if node["else"] != nil
+    if node.else != nil
       out = out + "{p}} else \{\n"
-      let else_body = node["else"]
+      let else_body = node.else
       if len(else_body) > 0
         for i = 0, len(else_body) - 1
           out = out + compile_stmt(else_body[i], indent + 1) + "\n"
@@ -1070,9 +1070,9 @@ fn make_codegen(source_name)
       out = out + "{p}{keyword} (gem_truthy(gem_eq({t}, {val_r.expr}))) \{\n"
       out = out + compile_stmts(w.body, indent + 1)
     end
-    if node["else"] != nil
+    if node.else != nil
       out = out + "{p}} else \{\n"
-      out = out + compile_stmts(node["else"], indent + 1)
+      out = out + compile_stmts(node.else, indent + 1)
     end
     out = out + "{p}}"
     out
@@ -1105,9 +1105,9 @@ fn make_codegen(source_name)
         out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
       end
     end
-    if node["else"] != nil
+    if node.else != nil
       out = out + "{p}} else \{\n"
-      let else_body = node["else"]
+      let else_body = node.else
       if len(else_body) > 0
         for i = 0, len(else_body) - 1
           out = out + compile_stmt(else_body[i], indent + 1) + "\n"

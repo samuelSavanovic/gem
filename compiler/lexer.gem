@@ -74,29 +74,29 @@ end
 
 fn build_keyword_set()
   let t = {}
-  t["fn"] = true
-  t["end"] = true
-  t["let"] = true
-  t["if"] = true
-  t["elif"] = true
-  t["else"] = true
-  t["while"] = true
-  t["return"] = true
-  t["break"] = true
-  t["continue"] = true
-  t["do"] = true
-  t["match"] = true
-  t["when"] = true
-  t["and"] = true
-  t["or"] = true
-  t["not"] = true
-  t["true"] = true
-  t["false"] = true
-  t["nil"] = true
-  t["load"] = true
-  t["extern"] = true
-  t["for"] = true
-  t["in"] = true
+  t.fn = true
+  t.end = true
+  t.let = true
+  t.if = true
+  t.elif = true
+  t.else = true
+  t.while = true
+  t.return = true
+  t.break = true
+  t.continue = true
+  t.do = true
+  t.match = true
+  t.when = true
+  t.and = true
+  t.or = true
+  t.not = true
+  t.true = true
+  t.false = true
+  t.nil = true
+  t.load = true
+  t.extern = true
+  t.for = true
+  t.in = true
   t
 end
 
@@ -238,7 +238,7 @@ fn tokenize(source)
         val = val + source[pos]
         pos += 1
       end
-      if kw[val] == true
+      if val in kw
         push(tokens, {type: val, value: val, line: line})
       else
         push(tokens, {type: "NAME", value: val, line: line})

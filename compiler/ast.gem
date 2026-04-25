@@ -98,9 +98,7 @@ fn make_fn_def(name, params, body, line)
 end
 
 fn make_if(cond, then_body, else_body, line)
-  let node = {tag: "if", cond: cond, then: then_body, line: line}
-  node["else"] = else_body
-  node
+  {tag: "if", cond: cond, then: then_body, else: else_body, line: line}
 end
 
 fn make_while(cond, body, line)
@@ -108,9 +106,7 @@ fn make_while(cond, body, line)
 end
 
 fn make_match(target, whens, else_body, line)
-  let node = {tag: "match", target: target, whens: whens, line: line}
-  node["else"] = else_body
-  node
+  {tag: "match", target: target, whens: whens, else: else_body, line: line}
 end
 
 fn make_when(value, body)
