@@ -244,7 +244,30 @@ s[0]
 s + " world"
 ```
 
-String interpolation is not in v0. Keep the lexer simple.
+**String Interpolation**
+
+Expressions inside `{...}` in string literals are evaluated and auto-coerced to strings via `to_string`:
+
+```
+let name = "world"
+print("hello {name}")          # hello world
+print("{1 + 2} items")         # 3 items
+print("flag: {true}")          # flag: true
+```
+
+Literal braces are escaped with `\{` and `\}`:
+
+```
+print("literal \{brace\}")     # literal {brace}
+```
+
+Interpolation supports arbitrary expressions including function calls, table access, and nested strings:
+
+```
+print("len: {len(arr)}")
+print("val: {obj.field}")
+print("wrapped: {wrap("inner")}")
+```
 
 **Nil and Truthiness**
 

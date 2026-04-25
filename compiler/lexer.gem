@@ -47,7 +47,7 @@ fn digit_val(ch)
   when "9"
     9
   else
-    error("not a digit: " + ch)
+    error("not a digit: {ch}")
   end
 end
 
@@ -106,6 +106,8 @@ fn tokenize(source)
   let pos = 0
   let line = 1
   let length = len(source)
+  let interp_depth = 0
+  let interp_brace = {}
 
   while pos < length
     let ch = source[pos]
@@ -180,35 +182,52 @@ fn tokenize(source)
     if ch == "\""
       pos += 1
       let val = ""
+      let hit_interp = false
       while pos < length and source[pos] != "\""
         if source[pos] == "\\"
           pos += 1
           if pos >= length
-            error("unterminated string escape at line " + to_string(line))
+            error("unterminated string escape at line {line}")
           end
           let esc = source[pos]
-          match esc
-          when "n"
+          if esc == "n"
             val = val + "\n"
-          when "t"
+          elif esc == "t"
             val = val + "\t"
-          when "\\"
+          elif esc == "\\"
             val = val + "\\"
-          when "\""
+          elif esc == "\""
             val = val + "\""
+          elif esc == "\{"
+            val = val + "\{"
+          elif esc == "}"
+            val = val + "}"
           else
             val = val + "\\" + esc
           end
-        else
-          val = val + source[pos]
+          pos += 1
+          continue
         end
+        if source[pos] == "\{"
+          push(tokens, {type: "INTERP_START", value: "", line: line})
+          push(tokens, {type: "STRING", value: val, line: line})
+          val = ""
+          pos += 1
+          interp_brace[interp_depth] = 0
+          interp_depth += 1
+          hit_interp = true
+          break
+        end
+        val = val + source[pos]
         pos += 1
       end
-      if pos >= length
-        error("unterminated string at line " + to_string(line))
+      if not hit_interp
+        if pos >= length
+          error("unterminated string at line {line}")
+        end
+        pos += 1
+        push(tokens, {type: "STRING", value: val, line: line})
       end
-      pos += 1
-      push(tokens, {type: "STRING", value: val, line: line})
       continue
     end
 
@@ -290,7 +309,77 @@ fn tokenize(source)
       pos += 1
       continue
     end
-    if ch == "(" or ch == ")" or ch == "[" or ch == "]" or ch == "{" or ch == "}"
+    # Interpolation brace tracking
+    if interp_depth > 0 and ch == "\{"
+      let idx = interp_depth - 1
+      interp_brace[idx] = interp_brace[idx] + 1
+      push(tokens, {type: "\{", value: "\{", line: line})
+      pos += 1
+      continue
+    end
+    if interp_depth > 0 and ch == "}"
+      let idx = interp_depth - 1
+      if interp_brace[idx] > 0
+        interp_brace[idx] = interp_brace[idx] - 1
+        push(tokens, {type: "}", value: "}", line: line})
+        pos += 1
+        continue
+      end
+      # Close interpolation expression, resume string scanning
+      interp_depth -= 1
+      pos += 1
+      let val = ""
+      let hit_interp = false
+      while pos < length and source[pos] != "\""
+        if source[pos] == "\\"
+          pos += 1
+          if pos >= length
+            error("unterminated string escape at line {line}")
+          end
+          let esc = source[pos]
+          if esc == "n"
+            val = val + "\n"
+          elif esc == "t"
+            val = val + "\t"
+          elif esc == "\\"
+            val = val + "\\"
+          elif esc == "\""
+            val = val + "\""
+          elif esc == "\{"
+            val = val + "\{"
+          elif esc == "}"
+            val = val + "}"
+          else
+            val = val + "\\" + esc
+          end
+          pos += 1
+          continue
+        end
+        if source[pos] == "\{"
+          # Another interpolation expression
+          push(tokens, {type: "STRING", value: val, line: line})
+          val = ""
+          pos += 1
+          interp_brace[interp_depth] = 0
+          interp_depth += 1
+          hit_interp = true
+          break
+        end
+        val = val + source[pos]
+        pos += 1
+      end
+      if not hit_interp
+        if pos >= length
+          error("unterminated string interpolation at line {line}")
+        end
+        push(tokens, {type: "STRING", value: val, line: line})
+        push(tokens, {type: "INTERP_END", value: "", line: line})
+        pos += 1
+      end
+      continue
+    end
+
+    if ch == "(" or ch == ")" or ch == "[" or ch == "]" or ch == "\{" or ch == "}"
       push(tokens, {type: ch, value: ch, line: line})
       pos += 1
       continue
@@ -301,7 +390,7 @@ fn tokenize(source)
       continue
     end
 
-    error("unexpected character: '" + ch + "' at line " + to_string(line))
+    error("unexpected character: '{ch}' at line {line}")
   end
 
   push(tokens, {type: "EOF", value: "", line: line})

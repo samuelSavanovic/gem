@@ -71,6 +71,10 @@ fn make_array(elements)
   {tag: "array", elements: elements}
 end
 
+fn make_interp(parts)
+  {tag: "interp", parts: parts}
+end
+
 # ─── Statements ──────────────────────────────────────────────────
 
 fn make_let(name, value)

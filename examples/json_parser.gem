@@ -78,7 +78,7 @@ fn parse_value(s)
   if ch == "\""
     return parse_string(s)
   end
-  if ch == "{"
+  if ch == "\{"
     return parse_object(s)
   end
   if ch == "["
@@ -293,16 +293,16 @@ print(len(empty_arr))
 
 # Objects
 print("=== objects ===")
-let obj = parse_json("{\"name\": \"gem\", \"version\": 1}")
+let obj = parse_json("\{\"name\": \"gem\", \"version\": 1}")
 print(obj["name"])
 print(obj["version"])
 
-let empty_obj = parse_json("{}")
+let empty_obj = parse_json("\{}")
 print(len(empty_obj))
 
 # Nested structures
 print("=== nested ===")
-let data = parse_json("{\"users\": [{\"name\": \"alice\", \"age\": 30}, {\"name\": \"bob\", \"age\": 25}], \"count\": 2}")
+let data = parse_json("\{\"users\": [\{\"name\": \"alice\", \"age\": 30}, \{\"name\": \"bob\", \"age\": 25}], \"count\": 2}")
 print(data["count"])
 print(data["users"][0]["name"])
 print(data["users"][0]["age"])
@@ -318,7 +318,7 @@ print(escaped2)
 
 # Whitespace handling
 print("=== whitespace ===")
-let spaced = parse_json("  {  \"a\"  :  1  ,  \"b\"  :  2  }  ")
+let spaced = parse_json("  \{  \"a\"  :  1  ,  \"b\"  :  2  }  ")
 print(spaced["a"])
 print(spaced["b"])
 
@@ -334,7 +334,7 @@ print(mixed[5][0])
 
 # Deeply nested
 print("=== deep nesting ===")
-let deep = parse_json("{\"a\": {\"b\": {\"c\": {\"d\": 42}}}}")
+let deep = parse_json("\{\"a\": \{\"b\": \{\"c\": \{\"d\": 42}}}}")
 print(deep["a"]["b"]["c"]["d"])
 
 print("=== all tests passed ===")

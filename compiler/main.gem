@@ -36,7 +36,7 @@ fn resolve_loads(ast, base_dir, loaded)
 
       let source = gem_read_file(full_path)
       if source == ""
-        error("cannot load '" + full_path + "'")
+        error("cannot load '{full_path}'")
       end
 
       let loaded_ast = parse_source(source)
@@ -65,7 +65,7 @@ end
 let src_path = gem_get_argv(1)
 let source = gem_read_file(src_path)
 if source == ""
-  error("cannot read '" + src_path + "'")
+  error("cannot read '{src_path}'")
 end
 
 let ast = parse_source(source)

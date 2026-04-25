@@ -1,0 +1,43 @@
+# String interpolation tests
+
+# Basic interpolation
+let name = "world"
+print("hello {name}")
+
+# Multiple expressions
+let a = 1
+let b = 2
+print("{a} + {b} = {a + b}")
+
+# Auto-coercion: int, bool, nil
+print("count: {42}")
+print("flag: {true}")
+print("nothing: {nil}")
+
+# Function call inside interpolation
+let s = "hello"
+print("length: {len(s)}")
+
+# Expression-only string (no literal segments)
+let x = "gem"
+print("{x}")
+
+# Adjacent interpolations
+print("{a}{b}")
+
+# Escaped braces
+print("literal \{brace\}")
+
+# Nested expression (parenthesized table)
+print("val: {({a: 10}).a}")
+
+# to_string on float
+print("pi: {3.14}")
+
+# Empty string segments around expression
+let v = "mid"
+print("{v}!")
+print("!{v}")
+
+# Complex expression
+print("result: {2 * (3 + 4)}")

@@ -151,16 +151,16 @@ fn make_codegen(source_name)
 
   let tmp = fn()
     tmp_counter += 1
-    "_t" + to_string(tmp_counter)
+    "_t{tmp_counter}"
   end
 
   let anon_name = fn()
     anon_counter += 1
-    "_anon_" + to_string(anon_counter)
+    "_anon_{anon_counter}"
   end
 
   let mangle = fn(name)
-    "gem_v_" + name
+    "gem_v_{name}"
   end
 
   # ─── Free variable analysis ──
@@ -459,12 +459,36 @@ fn make_codegen(source_name)
     let tag = node.tag
 
     if tag == "int"
-      return {expr: "gem_int(" + to_string(node.value) + ")", setup: ""}
+      return {expr: "gem_int({node.value})", setup: ""}
     elif tag == "float"
-      return {expr: "gem_float(" + format_float(node.value) + ")", setup: ""}
+      return {expr: "gem_float({format_float(node.value)})", setup: ""}
     elif tag == "string"
       let escaped = escape_c_string(node.value)
-      return {expr: "gem_string(\"" + escaped + "\")", setup: ""}
+      return {expr: "gem_string(\"{escaped}\")", setup: ""}
+    elif tag == "interp"
+      let parts = node.parts
+      if len(parts) == 0
+        return {expr: "gem_string(\"\")", setup: ""}
+      end
+      let setup = ""
+      let compiled = []
+      for i = 0, len(parts)
+        let part = parts[i]
+        let r = compile_expr(part)
+        setup = setup + r.setup
+        if part.tag == "string"
+          push(compiled, r.expr)
+        else
+          let ts = tmp()
+          setup = setup + "    GemVal {ts}[] = \{{r.expr}};\n"
+          push(compiled, "gem_to_string_fn(NULL, {ts}, 1)")
+        end
+      end
+      let acc = compiled[0]
+      for i = 1, len(compiled)
+        acc = "gem_add({acc}, {compiled[i]})"
+      end
+      return {expr: acc, setup: setup}
     elif tag == "bool"
       if node.value
         return {expr: "gem_bool(1)", setup: ""}
@@ -487,11 +511,11 @@ fn make_codegen(source_name)
       elif name == "push"
         return {expr: "gem_make_fn(gem_push_fn, NULL)", setup: ""}
       elif set_contains(defined_fns, name)
-        return {expr: "gem_make_fn(gem_fn_" + name + ", NULL)", setup: ""}
+        return {expr: "gem_make_fn(gem_fn_{name}, NULL)", setup: ""}
       end
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return {expr: "(*" + mname + ")", setup: ""}
+        return {expr: "(*{mname})", setup: ""}
       end
       return {expr: mname, setup: ""}
     elif tag == "call"
@@ -501,9 +525,9 @@ fn make_codegen(source_name)
     elif tag == "unop"
       let r = compile_expr(node.expr)
       if node.op == "-"
-        return {expr: "gem_neg(" + r.expr + ")", setup: r.setup}
+        return {expr: "gem_neg({r.expr})", setup: r.setup}
       elif node.op == "not"
-        return {expr: "gem_not(" + r.expr + ")", setup: r.setup}
+        return {expr: "gem_not({r.expr})", setup: r.setup}
       end
     elif tag == "anon_fn"
       return compile_anon_fn(node)
@@ -514,13 +538,13 @@ fn make_codegen(source_name)
     elif tag == "dot"
       let r = compile_expr(node.object)
       let t = tmp()
-      let setup = r.setup + "    GemVal " + t + " = " + r.expr + ";\n"
+      let setup = r.setup + "    GemVal {t} = {r.expr};\n"
       let escaped = escape_c_string(node.field)
-      return {expr: "gem_table_get(" + t + ", gem_string(\"" + escaped + "\"))", setup: setup}
+      return {expr: "gem_table_get({t}, gem_string(\"{escaped}\"))", setup: setup}
     elif tag == "index"
       let obj_r = compile_expr(node.object)
       let key_r = compile_expr(node.key)
-      return {expr: "gem_table_get(" + obj_r.expr + ", " + key_r.expr + ")", setup: obj_r.setup + key_r.setup}
+      return {expr: "gem_table_get({obj_r.expr}, {key_r.expr})", setup: obj_r.setup + key_r.setup}
     end
 
     {expr: "GEM_NIL", setup: "/* unknown node: " + tag + " */\n"}
@@ -531,12 +555,12 @@ fn make_codegen(source_name)
   compile_table = fn(node)
     let entries = node.entries
     let t = tmp()
-    let setup = "    GemVal " + t + " = gem_table_new();\n"
+    let setup = "    GemVal {t} = gem_table_new();\n"
     for entry in entries
       let val_r = compile_expr(entry.value)
       let escaped = escape_c_string(entry.key)
       setup = setup + val_r.setup
-      setup = setup + "    gem_table_set(" + t + ", gem_string(\"" + escaped + "\"), " + val_r.expr + ");\n"
+      setup = setup + "    gem_table_set({t}, gem_string(\"{escaped}\"), {val_r.expr});\n"
     end
     {expr: t, setup: setup}
   end
@@ -546,11 +570,11 @@ fn make_codegen(source_name)
   compile_array = fn(node)
     let elements = node.elements
     let t = tmp()
-    let setup = "    GemVal " + t + " = gem_table_new();\n"
+    let setup = "    GemVal {t} = gem_table_new();\n"
     for i = 0, len(elements)
       let elem_r = compile_expr(elements[i])
       setup = setup + elem_r.setup
-      setup = setup + "    gem_table_set(" + t + ", gem_int(" + to_string(i) + "), " + elem_r.expr + ");\n"
+      setup = setup + "    gem_table_set({t}, gem_int({i}), {elem_r.expr});\n"
     end
     {expr: t, setup: setup}
   end
@@ -564,24 +588,23 @@ fn make_codegen(source_name)
 
     if len(captures) == 0
       let result = compile_closure_fn(node, [])
-      return {expr: "gem_make_fn(" + result.fn_name + ", NULL)", setup: ""}
+      return {expr: "gem_make_fn({result.fn_name}, NULL)", setup: ""}
     end
 
     let result = compile_closure_fn(node, captures)
 
     let setup = ""
     let env_tmp = tmp()
-    let alloc = "    struct " + result.struct_name + " *" + env_tmp + " = GC_MALLOC(sizeof(struct " + result.struct_name + "));\n"
-    setup = setup + alloc
+    setup = setup + "    struct {result.struct_name} *{env_tmp} = GC_MALLOC(sizeof(struct {result.struct_name}));\n"
     for cap in captures
       let mc = mangle(cap)
       if set_contains(boxed_vars, cap)
-        setup = setup + "    " + env_tmp + "->" + mc + " = " + mc + ";\n"
+        setup = setup + "    {env_tmp}->{mc} = {mc};\n"
       else
-        setup = setup + "    " + env_tmp + "->" + mc + " = &" + mc + ";\n"
+        setup = setup + "    {env_tmp}->{mc} = &{mc};\n"
       end
     end
-    {expr: "gem_make_fn(" + result.fn_name + ", " + env_tmp + ")", setup: setup}
+    {expr: "gem_make_fn({result.fn_name}, {env_tmp})", setup: setup}
   end
 
   # ─── compile_call ──
@@ -593,7 +616,7 @@ fn make_codegen(source_name)
     # Method call: obj.len() → gem_len_val(obj)
     if func.tag == "dot" and func.field == "len" and len(args) == 0
       let obj_r = compile_expr(func.object)
-      return {expr: "gem_len_val(" + obj_r.expr + ")", setup: obj_r.setup}
+      return {expr: "gem_len_val({obj_r.expr})", setup: obj_r.setup}
     end
 
     # Direct call optimization for known functions
@@ -615,15 +638,15 @@ fn make_codegen(source_name)
         end
         let argc = len(args)
         if argc == 0
-          return {expr: "gem_error_at_fn(\"" + escaped_file + "\", " + to_string(line) + ", NULL, 0)", setup: arg_setups}
+          return {expr: "gem_error_at_fn(\"{escaped_file}\", {line}, NULL, 0)", setup: arg_setups}
         end
         let t = tmp()
         let arr = arg_exprs[0]
         for i = 1, argc
           arr = arr + ", " + arg_exprs[i]
         end
-        let setup = arg_setups + "    GemVal " + t + "[] = {" + arr + "};\n"
-        let call = "gem_error_at_fn(\"" + escaped_file + "\", " + to_string(line) + ", " + t + ", " + to_string(argc) + ")"
+        let setup = arg_setups + "    GemVal {t}[] = \{{arr}};\n"
+        let call = "gem_error_at_fn(\"{escaped_file}\", {line}, {t}, {argc})"
         return {expr: call, setup: setup}
       elif name == "print" or name == "len" or name == "type" or name == "to_string" or name == "push"
         let fn_name = ""
@@ -647,15 +670,15 @@ fn make_codegen(source_name)
         end
         let argc = len(args)
         if argc == 0
-          return {expr: fn_name + "(NULL, NULL, 0)", setup: arg_setups}
+          return {expr: "{fn_name}(NULL, NULL, 0)", setup: arg_setups}
         end
         let t = tmp()
         let arr = arg_exprs[0]
         for i = 1, argc
           arr = arr + ", " + arg_exprs[i]
         end
-        let setup = arg_setups + "    GemVal " + t + "[] = {" + arr + "};\n"
-        return {expr: fn_name + "(NULL, " + t + ", " + to_string(argc) + ")", setup: setup}
+        let setup = arg_setups + "    GemVal {t}[] = \{{arr}};\n"
+        return {expr: "{fn_name}(NULL, {t}, {argc})", setup: setup}
       elif set_contains(defined_fns, name)
         let arg_setups = ""
         let arg_exprs = []
@@ -666,15 +689,15 @@ fn make_codegen(source_name)
         end
         let argc = len(args)
         if argc == 0
-          return {expr: "gem_fn_" + name + "(NULL, NULL, 0)", setup: arg_setups}
+          return {expr: "gem_fn_{name}(NULL, NULL, 0)", setup: arg_setups}
         end
         let t = tmp()
         let arr = arg_exprs[0]
         for i = 1, argc
           arr = arr + ", " + arg_exprs[i]
         end
-        let setup = arg_setups + "    GemVal " + t + "[] = {" + arr + "};\n"
-        return {expr: "gem_fn_" + name + "(NULL, " + t + ", " + to_string(argc) + ")", setup: setup}
+        let setup = arg_setups + "    GemVal {t}[] = \{{arr}};\n"
+        return {expr: "gem_fn_{name}(NULL, {t}, {argc})", setup: setup}
       end
     end
 
@@ -690,17 +713,17 @@ fn make_codegen(source_name)
     let setup = func_r.setup + arg_setups
     let argc = len(args)
     let tmp_fn = tmp()
-    setup = setup + "    GemVal " + tmp_fn + " = " + func_r.expr + ";\n"
+    setup = setup + "    GemVal {tmp_fn} = {func_r.expr};\n"
     if argc == 0
-      return {expr: tmp_fn + ".fn(" + tmp_fn + ".env, NULL, 0)", setup: setup}
+      return {expr: "{tmp_fn}.fn({tmp_fn}.env, NULL, 0)", setup: setup}
     end
     let tmp_args = tmp()
     let arr = arg_exprs[0]
     for i = 1, argc
       arr = arr + ", " + arg_exprs[i]
     end
-    setup = setup + "    GemVal " + tmp_args + "[] = {" + arr + "};\n"
-    let call = tmp_fn + ".fn(" + tmp_fn + ".env, " + tmp_args + ", " + to_string(argc) + ")"
+    setup = setup + "    GemVal {tmp_args}[] = \{{arr}};\n"
+    let call = "{tmp_fn}.fn({tmp_fn}.env, {tmp_args}, {argc})"
     {expr: call, setup: setup}
   end
 
@@ -714,63 +737,63 @@ fn make_codegen(source_name)
 
     if op == "+"
       let rc_r = compile_expr(node.right)
-      return {expr: "gem_add(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+      return {expr: "gem_add({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
     elif op == "-"
       let rc_r = compile_expr(node.right)
-      return {expr: "gem_sub(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+      return {expr: "gem_sub({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
     elif op == "*"
       let rc_r = compile_expr(node.right)
-      return {expr: "gem_mul(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+      return {expr: "gem_mul({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
     elif op == "/"
       let rc_r = compile_expr(node.right)
-      return {expr: "gem_div(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+      return {expr: "gem_div({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
     elif op == "%"
       let rc_r = compile_expr(node.right)
-      return {expr: "gem_mod(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+      return {expr: "gem_mod({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
     elif op == "=="
       let rc_r = compile_expr(node.right)
-      return {expr: "gem_eq(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+      return {expr: "gem_eq({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
     elif op == "!="
       let rc_r = compile_expr(node.right)
-      return {expr: "gem_neq(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+      return {expr: "gem_neq({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
     elif op == "<"
       let rc_r = compile_expr(node.right)
-      return {expr: "gem_lt(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+      return {expr: "gem_lt({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
     elif op == ">"
       let rc_r = compile_expr(node.right)
-      return {expr: "gem_gt(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+      return {expr: "gem_gt({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
     elif op == "<="
       let rc_r = compile_expr(node.right)
-      return {expr: "gem_le(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+      return {expr: "gem_le({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
     elif op == ">="
       let rc_r = compile_expr(node.right)
-      return {expr: "gem_ge(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
+      return {expr: "gem_ge({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
     elif op == "and"
       let rc_r = compile_expr(node.right)
       let t = tmp()
       let setup = ls
-      setup = setup + "    GemVal " + t + ";\n"
-      setup = setup + "    if (!gem_truthy(" + lc + ")) {\n"
-      setup = setup + "        " + t + " = " + lc + ";\n"
-      setup = setup + "    } else {\n"
+      setup = setup + "    GemVal {t};\n"
+      setup = setup + "    if (!gem_truthy({lc})) \{\n"
+      setup = setup + "        {t} = {lc};\n"
+      setup = setup + "    } else \{\n"
       if rc_r.setup != ""
         setup = setup + str_replace_all(rc_r.setup, "    ", "        ")
       end
-      setup = setup + "        " + t + " = " + rc_r.expr + ";\n"
+      setup = setup + "        {t} = {rc_r.expr};\n"
       setup = setup + "    }\n"
       return {expr: t, setup: setup}
     elif op == "or"
       let rc_r = compile_expr(node.right)
       let t = tmp()
       let setup = ls
-      setup = setup + "    GemVal " + t + ";\n"
-      setup = setup + "    if (gem_truthy(" + lc + ")) {\n"
-      setup = setup + "        " + t + " = " + lc + ";\n"
-      setup = setup + "    } else {\n"
+      setup = setup + "    GemVal {t};\n"
+      setup = setup + "    if (gem_truthy({lc})) \{\n"
+      setup = setup + "        {t} = {lc};\n"
+      setup = setup + "    } else \{\n"
       if rc_r.setup != ""
         setup = setup + str_replace_all(rc_r.setup, "    ", "        ")
       end
-      setup = setup + "        " + t + " = " + rc_r.expr + ";\n"
+      setup = setup + "        {t} = {rc_r.expr};\n"
       setup = setup + "    }\n"
       return {expr: t, setup: setup}
     end
@@ -800,27 +823,27 @@ fn make_codegen(source_name)
       let name = node.name
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return r.setup + p + "GemVal *" + mname + " = GC_MALLOC(sizeof(GemVal));\n" + p + "*" + mname + " = " + r.expr + ";"
+        return "{r.setup}{p}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{p}*{mname} = {r.expr};"
       end
-      return r.setup + p + "GemVal " + mname + " = " + r.expr + ";"
+      return "{r.setup}{p}GemVal {mname} = {r.expr};"
     elif tag == "assign"
       let r = compile_expr(node.value)
       let name = node.name
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return r.setup + p + "*" + mname + " = " + r.expr + ";"
+        return "{r.setup}{p}*{mname} = {r.expr};"
       end
-      return r.setup + p + mname + " = " + r.expr + ";"
+      return "{r.setup}{p}{mname} = {r.expr};"
     elif tag == "dot_assign"
       let obj_r = compile_expr(node.object)
       let val_r = compile_expr(node.value)
       let escaped = escape_c_string(node.field)
-      return obj_r.setup + val_r.setup + p + "gem_table_set(" + obj_r.expr + ", gem_string(\"" + escaped + "\"), " + val_r.expr + ");"
+      return "{obj_r.setup}{val_r.setup}{p}gem_table_set({obj_r.expr}, gem_string(\"{escaped}\"), {val_r.expr});"
     elif tag == "index_assign"
       let obj_r = compile_expr(node.object)
       let key_r = compile_expr(node.key)
       let val_r = compile_expr(node.value)
-      return obj_r.setup + key_r.setup + val_r.setup + p + "gem_table_set(" + obj_r.expr + ", " + key_r.expr + ", " + val_r.expr + ");"
+      return "{obj_r.setup}{key_r.setup}{val_r.setup}{p}gem_table_set({obj_r.expr}, {key_r.expr}, {val_r.expr});"
     elif tag == "if"
       return compile_if(node, indent)
     elif tag == "while"
@@ -834,25 +857,25 @@ fn make_codegen(source_name)
     elif tag == "return"
       if node.value != nil
         let r = compile_expr(node.value)
-        return r.setup + p + "return " + r.expr + ";"
+        return "{r.setup}{p}return {r.expr};"
       end
-      return p + "return GEM_NIL;"
+      return "{p}return GEM_NIL;"
     elif tag == "call"
       let r = compile_expr(node)
-      return r.setup + p + "(void)(" + r.expr + ");"
+      return "{r.setup}{p}(void)({r.expr});"
     elif tag == "fn_def"
       return ""
     elif tag == "block"
-      let out = p + "{\n"
+      let out = "{p}\{\n"
       for stmt in node.stmts
         out = out + compile_stmt(stmt, indent + 1) + "\n"
       end
-      out = out + p + "}"
+      out = out + "{p}}"
       return out
     end
 
     let r = compile_expr(node)
-    r.setup + p + "(void)(" + r.expr + ");"
+    "{r.setup}{p}(void)({r.expr});"
   end
 
   # ─── compile_stmt_return ���─
@@ -866,46 +889,46 @@ fn make_codegen(source_name)
       let name = node.name
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return r.setup + p + "GemVal *" + mname + " = GC_MALLOC(sizeof(GemVal));\n" + p + "*" + mname + " = " + r.expr + ";\n" + p + "return GEM_NIL;"
+        return "{r.setup}{p}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{p}*{mname} = {r.expr};\n{p}return GEM_NIL;"
       end
-      return r.setup + p + "GemVal " + mname + " = " + r.expr + ";\n" + p + "return GEM_NIL;"
+      return "{r.setup}{p}GemVal {mname} = {r.expr};\n{p}return GEM_NIL;"
     elif tag == "assign"
       let r = compile_expr(node.value)
       let t = tmp()
       let name = node.name
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return r.setup + p + "GemVal " + t + " = " + r.expr + ";\n" + p + "*" + mname + " = " + t + ";\n" + p + "return " + t + ";"
+        return "{r.setup}{p}GemVal {t} = {r.expr};\n{p}*{mname} = {t};\n{p}return {t};"
       end
-      return r.setup + p + "GemVal " + t + " = " + r.expr + ";\n" + p + mname + " = " + t + ";\n" + p + "return " + t + ";"
+      return "{r.setup}{p}GemVal {t} = {r.expr};\n{p}{mname} = {t};\n{p}return {t};"
     elif tag == "return"
       if node.value != nil
         let r = compile_expr(node.value)
-        return r.setup + p + "return " + r.expr + ";"
+        return "{r.setup}{p}return {r.expr};"
       end
-      return p + "return GEM_NIL;"
+      return "{p}return GEM_NIL;"
     elif tag == "if"
       return compile_if_return(node, indent)
     elif tag == "while"
-      return compile_while(node, indent) + "\n" + p + "return GEM_NIL;"
+      return "{compile_while(node, indent)}\n{p}return GEM_NIL;"
     elif tag == "match"
       return compile_match_return(node, indent)
     elif tag == "block"
-      let out = p + "{\n"
+      let out = "{p}\{\n"
       for i = 0, len(node.stmts) - 1
         out = out + compile_stmt(node.stmts[i], indent + 1) + "\n"
       end
       if len(node.stmts) > 0
         out = out + compile_stmt_return(node.stmts[len(node.stmts) - 1], indent + 1) + "\n"
       end
-      out = out + p + "}"
+      out = out + "{p}}"
       return out
     elif tag == "dot_assign" or tag == "index_assign" or tag == "break" or tag == "continue" or tag == "fn_def"
-      return compile_stmt(node, indent) + "\n" + p + "return GEM_NIL;"
+      return "{compile_stmt(node, indent)}\n{p}return GEM_NIL;"
     end
 
     let r = compile_expr(node)
-    r.setup + p + "return " + r.expr + ";"
+    "{r.setup}{p}return {r.expr};"
   end
 
   # ─── compile_if ──
@@ -914,13 +937,13 @@ fn make_codegen(source_name)
     let p = pad_for(indent)
     let cond_r = compile_expr(node.cond)
     let out = cond_r.setup
-    out = out + p + "if (gem_truthy(" + cond_r.expr + ")) {\n"
+    out = out + "{p}if (gem_truthy({cond_r.expr})) \{\n"
     out = out + compile_stmts(node["then"], indent + 1)
     if node["else"] != nil
-      out = out + p + "} else {\n"
+      out = out + "{p}} else \{\n"
       out = out + compile_stmts(node["else"], indent + 1)
     end
-    out = out + p + "}"
+    out = out + "{p}}"
     out
   end
 
@@ -930,7 +953,7 @@ fn make_codegen(source_name)
     let p = pad_for(indent)
     let cond_r = compile_expr(node.cond)
     let out = cond_r.setup
-    out = out + p + "if (gem_truthy(" + cond_r.expr + ")) {\n"
+    out = out + "{p}if (gem_truthy({cond_r.expr})) \{\n"
     let then_body = node["then"]
     if len(then_body) > 0
       for i = 0, len(then_body) - 1
@@ -938,10 +961,10 @@ fn make_codegen(source_name)
       end
       out = out + compile_stmt_return(then_body[len(then_body) - 1], indent + 1) + "\n"
     else
-      out = out + p + "    return GEM_NIL;\n"
+      out = out + "{p}    return GEM_NIL;\n"
     end
     if node["else"] != nil
-      out = out + p + "} else {\n"
+      out = out + "{p}} else \{\n"
       let else_body = node["else"]
       if len(else_body) > 0
         for i = 0, len(else_body) - 1
@@ -949,13 +972,13 @@ fn make_codegen(source_name)
         end
         out = out + compile_stmt_return(else_body[len(else_body) - 1], indent + 1) + "\n"
       else
-        out = out + p + "    return GEM_NIL;\n"
+        out = out + "{p}    return GEM_NIL;\n"
       end
     else
-      out = out + p + "} else {\n"
-      out = out + p + "    return GEM_NIL;\n"
+      out = out + "{p}} else \{\n"
+      out = out + "{p}    return GEM_NIL;\n"
     end
-    out = out + p + "}"
+    out = out + "{p}}"
     out
   end
 
@@ -964,13 +987,13 @@ fn make_codegen(source_name)
   compile_while = fn(node, indent)
     let p = pad_for(indent)
     let cond_r = compile_expr(node.cond)
-    let out = p + "while (1) {\n"
+    let out = "{p}while (1) \{\n"
     if cond_r.setup != ""
-      out = out + str_replace_all(cond_r.setup, "    ", p + "    ")
+      out = out + str_replace_all(cond_r.setup, "    ", "{p}    ")
     end
-    out = out + p + "    if (!gem_truthy(" + cond_r.expr + ")) break;\n"
+    out = out + "{p}    if (!gem_truthy({cond_r.expr})) break;\n"
     out = out + compile_stmts(node.body, indent + 1)
-    out = out + p + "}"
+    out = out + "{p}}"
     out
   end
 
@@ -981,7 +1004,7 @@ fn make_codegen(source_name)
     let target_r = compile_expr(node.target)
     let t = tmp()
     let out = target_r.setup
-    out = out + p + "GemVal " + t + " = " + target_r.expr + ";\n"
+    out = out + "{p}GemVal {t} = {target_r.expr};\n"
     for i = 0, len(node.whens)
       let w = node.whens[i]
       let val_r = compile_expr(w.value)
@@ -990,14 +1013,14 @@ fn make_codegen(source_name)
         keyword = "} else if"
       end
       out = out + val_r.setup
-      out = out + p + keyword + " (gem_truthy(gem_eq(" + t + ", " + val_r.expr + "))) {\n"
+      out = out + "{p}{keyword} (gem_truthy(gem_eq({t}, {val_r.expr}))) \{\n"
       out = out + compile_stmts(w.body, indent + 1)
     end
     if node["else"] != nil
-      out = out + p + "} else {\n"
+      out = out + "{p}} else \{\n"
       out = out + compile_stmts(node["else"], indent + 1)
     end
-    out = out + p + "}"
+    out = out + "{p}}"
     out
   end
 
@@ -1008,7 +1031,7 @@ fn make_codegen(source_name)
     let target_r = compile_expr(node.target)
     let t = tmp()
     let out = target_r.setup
-    out = out + p + "GemVal " + t + " = " + target_r.expr + ";\n"
+    out = out + "{p}GemVal {t} = {target_r.expr};\n"
     for i = 0, len(node.whens)
       let w = node.whens[i]
       let val_r = compile_expr(w.value)
@@ -1017,7 +1040,7 @@ fn make_codegen(source_name)
         keyword = "} else if"
       end
       out = out + val_r.setup
-      out = out + p + keyword + " (gem_truthy(gem_eq(" + t + ", " + val_r.expr + "))) {\n"
+      out = out + "{p}{keyword} (gem_truthy(gem_eq({t}, {val_r.expr}))) \{\n"
       let body = w.body
       if len(body) > 0
         for j = 0, len(body) - 1
@@ -1025,11 +1048,11 @@ fn make_codegen(source_name)
         end
         out = out + compile_stmt_return(body[len(body) - 1], indent + 1) + "\n"
       else
-        out = out + p + "    return GEM_NIL;\n"
+        out = out + "{p}    return GEM_NIL;\n"
       end
     end
     if node["else"] != nil
-      out = out + p + "} else {\n"
+      out = out + "{p}} else \{\n"
       let else_body = node["else"]
       if len(else_body) > 0
         for i = 0, len(else_body) - 1
@@ -1037,13 +1060,13 @@ fn make_codegen(source_name)
         end
         out = out + compile_stmt_return(else_body[len(else_body) - 1], indent + 1) + "\n"
       else
-        out = out + p + "    return GEM_NIL;\n"
+        out = out + "{p}    return GEM_NIL;\n"
       end
     else
-      out = out + p + "} else {\n"
-      out = out + p + "    return GEM_NIL;\n"
+      out = out + "{p}} else \{\n"
+      out = out + "{p}    return GEM_NIL;\n"
     end
-    out = out + p + "}"
+    out = out + "{p}}"
     out
   end
 
@@ -1054,31 +1077,31 @@ fn make_codegen(source_name)
     let params = node.params
     let ret_type = node.ret_type
 
-    let lines = "static GemVal gem_fn_" + name + "(void *_env, GemVal *args, int argc) {\n"
+    let lines = "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n"
 
     let c_args = []
     for i = 0, len(params)
       let p = params[i]
       let ptype = p["type"]
       if ptype == "Int"
-        lines = lines + "    int64_t _p" + to_string(i) + " = args[" + to_string(i) + "].ival;\n"
-        push(c_args, "_p" + to_string(i))
+        lines = lines + "    int64_t _p{i} = args[{i}].ival;\n"
+        push(c_args, "_p{i}")
       elif ptype == "Float"
-        lines = lines + "    double _p" + to_string(i) + " = args[" + to_string(i) + "].fval;\n"
-        push(c_args, "_p" + to_string(i))
+        lines = lines + "    double _p{i} = args[{i}].fval;\n"
+        push(c_args, "_p{i}")
       elif ptype == "String"
-        lines = lines + "    char* _p" + to_string(i) + " = args[" + to_string(i) + "].sval;\n"
-        push(c_args, "_p" + to_string(i))
+        lines = lines + "    char* _p{i} = args[{i}].sval;\n"
+        push(c_args, "_p{i}")
       elif ptype == "Bool"
-        lines = lines + "    int _p" + to_string(i) + " = args[" + to_string(i) + "].bval;\n"
-        push(c_args, "_p" + to_string(i))
+        lines = lines + "    int _p{i} = args[{i}].bval;\n"
+        push(c_args, "_p{i}")
       elif ptype == "Ptr"
-        lines = lines + "    void* _p" + to_string(i) + " = (void*)(intptr_t)args[" + to_string(i) + "].ival;\n"
-        push(c_args, "_p" + to_string(i))
+        lines = lines + "    void* _p{i} = (void*)(intptr_t)args[{i}].ival;\n"
+        push(c_args, "_p{i}")
       elif ptype == "Table"
-        push(c_args, "args[" + to_string(i) + "]")
+        push(c_args, "args[{i}]")
       else
-        push(c_args, "args[" + to_string(i) + "]")
+        push(c_args, "args[{i}]")
       end
     end
 
@@ -1091,37 +1114,37 @@ fn make_codegen(source_name)
       call_args = call_args + c_args[i]
     end
 
-    let call_expr = name + "(" + call_args + ")"
+    let call_expr = "{name}({call_args})"
 
     if ret_type == "Nil"
-      lines = lines + "    " + call_expr + ";\n"
+      lines = lines + "    {call_expr};\n"
       lines = lines + "    return GEM_NIL;\n"
     elif ret_type == "Table"
-      lines = lines + "    return " + call_expr + ";\n"
+      lines = lines + "    return {call_expr};\n"
     elif ret_type == "Int"
-      lines = lines + "    int64_t _ret = " + call_expr + ";\n"
+      lines = lines + "    int64_t _ret = {call_expr};\n"
       lines = lines + "    return gem_int(_ret);\n"
     elif ret_type == "Float"
-      lines = lines + "    double _ret = " + call_expr + ";\n"
+      lines = lines + "    double _ret = {call_expr};\n"
       lines = lines + "    return gem_float(_ret);\n"
     elif ret_type == "String"
-      lines = lines + "    char* _ret = " + call_expr + ";\n"
+      lines = lines + "    char* _ret = {call_expr};\n"
       lines = lines + "    return gem_string(_ret);\n"
     elif ret_type == "Bool"
-      lines = lines + "    int _ret = " + call_expr + ";\n"
+      lines = lines + "    int _ret = {call_expr};\n"
       lines = lines + "    return gem_bool(_ret);\n"
     elif ret_type == "Ptr"
-      lines = lines + "    void *_ret = " + call_expr + ";\n"
+      lines = lines + "    void *_ret = {call_expr};\n"
       lines = lines + "    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n"
     else
-      lines = lines + "    " + call_expr + ";\n"
+      lines = lines + "    {call_expr};\n"
       lines = lines + "    return GEM_NIL;\n"
     end
 
     lines = lines + "}"
 
     # Add forward declaration
-    push(forward_decls, "static GemVal gem_fn_" + name + "(void *_env, GemVal *args, int argc);")
+    push(forward_decls, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
 
     lines
   end
@@ -1152,16 +1175,16 @@ fn make_codegen(source_name)
     let saved_boxed = boxed_vars
     boxed_vars = captured
 
-    let lines = "static GemVal gem_fn_" + name + "(void *_env, GemVal *args, int argc) {\n"
+    let lines = "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n"
 
     # Bind parameters
     for i = 0, len(params)
       let mp = mangle(params[i])
       if set_contains(captured, params[i])
-        lines = lines + "    GemVal *" + mp + " = GC_MALLOC(sizeof(GemVal));\n"
-        lines = lines + "    *" + mp + " = (argc > " + to_string(i) + ") ? args[" + to_string(i) + "] : GEM_NIL;\n"
+        lines = lines + "    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));\n"
+        lines = lines + "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
       else
-        lines = lines + "    GemVal " + mp + " = (argc > " + to_string(i) + ") ? args[" + to_string(i) + "] : GEM_NIL;\n"
+        lines = lines + "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
       end
     end
 
@@ -1207,20 +1230,20 @@ fn make_codegen(source_name)
     boxed_vars = set_union(inner_captured, sorted_array_to_set(captures))
 
     # Generate struct
-    let struct_name = "_closure_" + name
-    let struct_def = "struct " + struct_name + " {\n"
+    let struct_name = "_closure_{name}"
+    let struct_def = "struct {struct_name} \{\n"
     for cap in captures
-      struct_def = struct_def + "    GemVal *" + mangle(cap) + ";\n"
+      struct_def = struct_def + "    GemVal *{mangle(cap)};\n"
     end
     struct_def = struct_def + "};\n"
 
     # Generate function
-    let lines = "static GemVal " + name + "(void *_env, GemVal *args, int argc) {\n"
+    let lines = "static GemVal {name}(void *_env, GemVal *args, int argc) \{\n"
     if len(captures) > 0
-      lines = lines + "    struct " + struct_name + " *_cls = (struct " + struct_name + " *)_env;\n"
+      lines = lines + "    struct {struct_name} *_cls = (struct {struct_name} *)_env;\n"
       for cap in captures
         let mc = mangle(cap)
-        lines = lines + "    GemVal *" + mc + " = _cls->" + mc + ";\n"
+        lines = lines + "    GemVal *{mc} = _cls->{mc};\n"
       end
     end
 
@@ -1228,10 +1251,10 @@ fn make_codegen(source_name)
     for i = 0, len(params)
       let mp = mangle(params[i])
       if set_contains(inner_captured, params[i])
-        lines = lines + "    GemVal *" + mp + " = GC_MALLOC(sizeof(GemVal));\n"
-        lines = lines + "    *" + mp + " = (argc > " + to_string(i) + ") ? args[" + to_string(i) + "] : GEM_NIL;\n"
+        lines = lines + "    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));\n"
+        lines = lines + "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
       else
-        lines = lines + "    GemVal " + mp + " = (argc > " + to_string(i) + ") ? args[" + to_string(i) + "] : GEM_NIL;\n"
+        lines = lines + "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
       end
     end
 
@@ -1282,7 +1305,7 @@ fn make_codegen(source_name)
     # Forward declarations for user-defined functions
     for fd in fn_defs
       set_add(defined_fns, fd.name)
-      let decl = "static GemVal gem_fn_" + fd.name + "(void *_env, GemVal *args, int argc);"
+      let decl = "static GemVal gem_fn_{fd.name}(void *_env, GemVal *args, int argc);"
       push(forward_decls, decl)
     end
 
@@ -1309,20 +1332,21 @@ fn make_codegen(source_name)
       end
     end
 
-    let main_c = "int main(void) {\n"
+    let main_c = "int main(void) \{\n"
     if main_body != ""
       main_c = main_c + main_body
     end
     if has_main
-      main_c = main_c + "    GemVal _margs[1] = {GEM_NIL};\n"
+      main_c = main_c + "    GemVal _margs[1] = \{GEM_NIL};\n"
       main_c = main_c + "    gem_fn_main(NULL, _margs, 0);\n"
     end
     main_c = main_c + "    return 0;\n}\n"
 
+
     # Assemble
     let out = ""
     for ei in extern_includes
-      out = out + "#include \"" + ei.path + "\"\n"
+      out = out + "#include \"{ei.path}\"\n"
     end
     out = out + "#include \"gem.h\"\n"
 

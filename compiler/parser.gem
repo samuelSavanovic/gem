@@ -42,7 +42,7 @@ fn make_parser(tokens)
   let expect = fn(tp)
     let t = tokens[pos]
     if t.type != tp
-      error("expected '" + tp + "' but got '" + t.type + "' at line " + to_string(t.line))
+      error("expected '{tp}' but got '{t.type}' at line {t.line}")
     end
     pos += 1
     t
@@ -123,6 +123,26 @@ fn make_parser(tokens)
       return make_string(t.value)
     end
 
+    # String interpolation
+    if t.type == "INTERP_START"
+      advance()
+      let parts = []
+      skip_nl()
+      while peek().type != "INTERP_END"
+        if peek().type == "STRING"
+          let sval = advance().value
+          if len(sval) > 0
+            push(parts, make_string(sval))
+          end
+        else
+          push(parts, parse_expr())
+        end
+        skip_nl()
+      end
+      expect("INTERP_END")
+      return make_interp(parts)
+    end
+
     # Booleans
     if t.type == "true"
       advance()
@@ -151,7 +171,7 @@ fn make_parser(tokens)
     end
 
     # Table literal: {key: val, ...}
-    if t.type == "{"
+    if t.type == "\{"
       advance()
       skip_nl()
       let entries = []
@@ -201,7 +221,7 @@ fn make_parser(tokens)
       return make_var(t.value)
     end
 
-    error("unexpected token '" + t.type + "' at line " + to_string(t.line))
+    error("unexpected token '{t.type}' at line {t.line}")
   end
 
   # call: atom followed by postfix ops (calls, dot, index)
@@ -241,7 +261,7 @@ fn make_parser(tokens)
         else
           # Trailing brace block: {|params| expr} or {expr}
           # Distinguish from table literal by lookahead
-          if peek().type == "{"
+          if peek().type == "\{"
             let is_block = false
             if peek_at(1).type == "|"
               is_block = true
@@ -382,7 +402,7 @@ fn make_parser(tokens)
       if lhs.tag == "index"
         return make_index_assign(lhs.object, lhs.key, value)
       end
-      error("invalid assignment target at line " + to_string(peek().line))
+      error("invalid assignment target at line {peek().line}")
     end
 
     # Compound assignment: var += expr, etc. (desugars to assign + binop)
@@ -391,7 +411,7 @@ fn make_parser(tokens)
       let base_op = op_tok.value[0]
       let value = parse_expr()
       if lhs.tag != "var"
-        error("compound assignment requires variable target at line " + to_string(op_tok.line))
+        error("compound assignment requires variable target at line {op_tok.line}")
       end
       return make_assign(lhs.name, make_binop(base_op, make_var(lhs.name), value))
     end
@@ -467,8 +487,8 @@ fn make_parser(tokens)
         advance()
         let items_expr = parse_expr()
         gensym_counter += 1
-        let items_var = "_for_items_" + to_string(gensym_counter)
-        let idx_var = "_for_i_" + to_string(gensym_counter)
+        let items_var = "_for_items_{gensym_counter}"
+        let idx_var = "_for_i_{gensym_counter}"
         let fbody = parse_body()
         expect("end")
         let inner_stmts = []
@@ -495,8 +515,8 @@ fn make_parser(tokens)
         let fbody = parse_body()
         expect("end")
         gensym_counter += 1
-        let idx_var = "_for_i_" + to_string(gensym_counter)
-        let limit_var = "_for_limit_" + to_string(gensym_counter)
+        let idx_var = "_for_i_{gensym_counter}"
+        let limit_var = "_for_limit_{gensym_counter}"
         let inner_stmts = []
         push(inner_stmts, make_let(var_name, make_var(idx_var)))
         push(inner_stmts, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1))))
@@ -513,7 +533,7 @@ fn make_parser(tokens)
           while_node
         ]}
       else
-        error("expected 'in' or '=' after for variable at line " + to_string(peek().line))
+        error("expected 'in' or '=' after for variable at line {peek().line}")
       end
     end
 
@@ -601,7 +621,7 @@ fn make_parser(tokens)
         let path = expect("STRING").value
         return make_extern_include(path)
       else
-        error("expected 'fn' or 'include' after 'extern' at line " + to_string(peek().line))
+        error("expected 'fn' or 'include' after 'extern' at line {peek().line}")
       end
     end
 

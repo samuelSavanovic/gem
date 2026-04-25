@@ -20,23 +20,11 @@ Added `push(arr, val)` as a runtime builtin (`gem_push_fn`) that appends a value
 
 ## Medium Priority
 
-### 5. String interpolation
-Error messages and debug output require painful concat chains:
-```gem
-error("expected '" + tp + "' but got '" + t.type + "' at line " + to_string(t.line))
-```
-Something like `error("expected '{tp}' but got '{t.type}' at line {t.line}")` with auto `to_string`.
+### 5. String interpolation — DONE
+Added `{expr}` interpolation syntax in string literals. Expressions are auto-coerced to strings via `to_string`. Literal braces escaped with `\{` and `\}`. Lexer emits INTERP_START/STRING/expr/INTERP_END token sequences; parser collects into `interp` AST nodes; codegen chains parts with `gem_add` and `gem_to_string_fn`. Supports nested expressions including function calls, table literals (with brace depth tracking), and nested strings. Two-phase bootstrap required: first bootstrap `\{` escape support, then escape all literal braces in source strings. Fixed-point verified.
 
-**Codegen note:** The codegen is the worst offender in the entire codebase for string concatenation. Almost every line of the codegen builds C source code via `+` chains. Example from `compile_extern_fn`:
-```gem
-lines = lines + "    " + c_type + " _p" + to_string(i) + " = args[" + to_string(i) + "]." + field + ";\n"
-```
-These are extremely hard to read and easy to get wrong (missing a quote, wrong spacing). String interpolation would be transformative here.
-
-### 6. Implicit `to_string` in concatenation
-`"count: " + to_string(n)` should just be `"count: " + n`. If string interpolation lands first, this becomes less urgent.
-
-**Codegen note:** The codegen calls `to_string()` constantly when embedding integers into C source: `to_string(i)`, `to_string(argc)`, `to_string(line)`, `to_string(node.value)`. This is pervasive — at least 30 occurrences in codegen.gem. Implicit coercion would help even without string interpolation.
+### 6. Implicit `to_string` in concatenation — DONE (via #5)
+String interpolation (`{expr}`) auto-coerces all types to strings, eliminating the need for explicit `to_string()` calls. The remaining manual `to_string()` calls in `+` chains will be cleaned up as the compiler is rewritten to use interpolation.
 
 ### 7. `has_key` / `in` operator for tables
 Currently checking key existence with `table[key] != nil`. A `has_key(table, key)` builtin or `key in table` syntax would be clearer.
