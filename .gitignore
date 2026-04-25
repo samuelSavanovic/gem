@@ -4,3 +4,4 @@ __pycache__/
 *.dSYM/
 prototype/gc_coro_test
 prototype/scheduler_test
+build/

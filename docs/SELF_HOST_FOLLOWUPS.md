@@ -9,22 +9,8 @@ Prioritized by impact on real code (the compiler itself is the benchmark).
 Added `for x in items` (array iteration) and `for i = 0, n` (range iteration).
 Both desugar to `while` at parse time. Iterator increment happens before the user body so `break`/`continue` work correctly. All compiler files rewritten to use `for..in`. Fixed-point verified.
 
-### 2. `elif`
-The parser and codegen are long chains of `if ... end` repeated. With `elif`:
-```gem
-# before                      # after
-if tag == "int"               if tag == "int"
-  ...                           ...
-end                           elif tag == "float"
-if tag == "float"               ...
-  ...                         elif tag == "string"
-end                             ...
-if tag == "string"            end
-  ...
-end
-```
-
-**Codegen note:** The codegen is worse than the parser here because `if/else` chains nest deeply. `compile_expr` dispatches on ~15 tag types, each as `if tag == "..." ... end`. `compile_extern_fn` has a 6-deep nested `if/else` chain for type dispatch (`Int`/`Float`/`String`/`Bool`/`Ptr`/`Table`). The free variable analysis functions (`collect_free_node`, `walk_captures_node`) each have 10+ tag dispatches nested inside each other. Without `elif`, these become pyramids of indentation that are hard to read and easy to get wrong (missing an `end` is a common mistake). `elif` is the single biggest readability improvement for the codegen.
+### 2. `elif` — DONE
+Added `elif` as parser-level desugaring into nested `if/else`. No new AST nodes or codegen changes needed — the parser rewrites `if/elif/elif/else/end` into `if/else{if/else{if/else/end}/end}/end`. All compiler files rewritten to use `elif`, eliminating deeply nested tag-dispatch pyramids. Codegen.gem dropped ~160 lines. Fixed-point verified. Test runner updated to use self-hosted compiler.
 
 ### 3. Multi-line function call arguments
 The grammar currently disallows newlines between `(` and `)`. This forces long single-line calls:

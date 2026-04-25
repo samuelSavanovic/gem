@@ -1,0 +1,78 @@
+# elif — desugars to nested if/else at parse time
+
+# Basic elif
+let x = 2
+if x == 1
+  print("one")
+elif x == 2
+  print("two")
+elif x == 3
+  print("three")
+else
+  print("other")
+end
+
+# Chained elif hitting last branch
+let y = 99
+if y == 1
+  print("a")
+elif y == 2
+  print("b")
+elif y == 3
+  print("c")
+else
+  print("d")
+end
+
+# elif without else
+let z = 5
+if z == 1
+  print("nope")
+elif z == 5
+  print("five")
+elif z == 6
+  print("nope2")
+end
+
+# elif where no branch matches (no else)
+if false
+  print("nope")
+elif false
+  print("nope")
+end
+print("fell through")
+
+# Nested if/elif inside elif
+let a = 2
+let b = 3
+if a == 1
+  print("a1")
+elif a == 2
+  if b == 1
+    print("b1")
+  elif b == 3
+    print("b3")
+  else
+    print("bother")
+  end
+else
+  print("aother")
+end
+
+# elif in a function (return value)
+fn classify(n)
+  if n < 0
+    "negative"
+  elif n == 0
+    "zero"
+  elif n < 10
+    "small"
+  else
+    "big"
+  end
+end
+
+print(classify(-5))
+print(classify(0))
+print(classify(7))
+print(classify(100))

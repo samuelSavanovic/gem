@@ -121,6 +121,8 @@ end
 ```
 if x > 10
   print("big")
+elif x > 5
+  print("medium")
 else
   print("small")
 end
@@ -138,6 +140,8 @@ else
   error("unknown: " + tag)
 end
 ```
+
+`elif` desugars to nested `if/else` at parse time — no new AST nodes. One `end` closes the entire chain.
 
 `break` exits the innermost loop (`while` or `for`). `continue` skips to the next iteration.
 

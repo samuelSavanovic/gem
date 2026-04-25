@@ -5,37 +5,45 @@ A dynamically typed language that compiles to C. See `docs/SPEC.md` for the full
 ## Project Structure
 
 ```
+compiler/             # self-hosting compiler (lexer, parser, AST, codegen, main)
+runtime/              # standalone C runtime (gem.h + gem.c + stb_ds.h)
+bootstrap/stage0.c    # checked-in C output — bootstrap artifact for clean builds
+build/gem             # compiled compiler binary (gitignored, built from stage0.c)
+examples/             # test programs + run_all.sh
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 prototype/            # C prototypes (Boehm GC + minicoro integration, scheduler + mailbox)
-bootstrap/            # Python bootstrap compiler (WIP)
-runtime/              # standalone C runtime (gem.h + gem.c + stb_ds.h)
-examples/             # test programs + run_all.sh
 ```
 
 ## Setup
 
 ```bash
-python3.14 -m venv .venv
-source .venv/bin/activate
-pip install lark
+brew install bdw-gc    # Boehm GC
+make build             # compiles bootstrap/stage0.c → build/gem
 ```
 
-- **Lark** — EBNF parser generator. Gem grammar defined declaratively, Lark builds the parse tree. Use `propagate_positions=True` for line/column info in error messages. Use Earley parser (handles ambiguity, speed doesn't matter for bootstrap).
+No Python, no external parser generators. The compiler is fully self-hosted.
 
-## C Dependencies (for compiling Gem output)
-
-```bash
-brew install bdw-gc
-```
+## C Dependencies
 
 - **Boehm GC** (`bdw-gc`) — garbage collector
 - **minicoro** (`prototype/minicoro.h`) — single-header coroutine library, vendored
 - **stb_ds.h** (`runtime/stb_ds.h`) — single-header hash maps/arrays, vendored
 
+## Building
+
+```bash
+make build             # stage0.c → build/gem (first time or after clean)
+make bootstrap         # regenerate stage0.c from current compiler sources (verified roundtrip)
+make clean             # remove build/ and /tmp/gem_*
+```
+
+After changing compiler sources, run `make bootstrap` to update `stage0.c`. The bootstrap target verifies the new stage0 can compile itself (fixed-point check) before replacing it.
+
 ## Key Decisions
 
-- Bootstrap compiler targets ~1500 lines of Python. It will be deleted after self-hosting.
 - Compilation target is C source code. `cc` handles optimization and linking.
+- The compiler is self-hosting: `build/gem` compiles `compiler/main.gem` → C → new binary.
+- `bootstrap/stage0.c` is the escape hatch — checked into git so any C compiler can rebuild from scratch.
 - Coroutine stacks must be registered as GC roots via `GC_add_roots()` — see `prototype/gc_coro_test.c`.
 - Scheduler and mailbox (spawn/send/receive) are built on minicoro, not a library — see `prototype/scheduler_test.c`.
 - libdill is dead (crashes on arm64 macOS). Don't use it.

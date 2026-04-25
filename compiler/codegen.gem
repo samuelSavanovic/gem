@@ -12,20 +12,14 @@ fn escape_c_string(s)
     let ch = s[i]
     if ch == "\\"
       result = result + "\\\\"
+    elif ch == "\""
+      result = result + "\\\""
+    elif ch == "\n"
+      result = result + "\\n"
+    elif ch == "\t"
+      result = result + "\\t"
     else
-      if ch == "\""
-        result = result + "\\\""
-      else
-        if ch == "\n"
-          result = result + "\\n"
-        else
-          if ch == "\t"
-            result = result + "\\t"
-          else
-            result = result + ch
-          end
-        end
-      end
+      result = result + ch
     end
   end
   result
@@ -192,143 +186,123 @@ fn make_codegen(source_name)
       if not set_contains(defined, name) and not set_contains(builtins, name) and not set_contains(defined_fns, name)
         set_add(free, name)
       end
-    else
-      if tag == "let"
-        collect_free_node(node.value, defined, free)
-      else
-        if tag == "assign"
-          let name = node.name
-          if not set_contains(defined, name) and not set_contains(builtins, name) and not set_contains(defined_fns, name)
-            set_add(free, name)
+    elif tag == "let"
+      collect_free_node(node.value, defined, free)
+    elif tag == "assign"
+      let name = node.name
+      if not set_contains(defined, name) and not set_contains(builtins, name) and not set_contains(defined_fns, name)
+        set_add(free, name)
+      end
+      collect_free_node(node.value, defined, free)
+    elif tag == "anon_fn"
+      let inner_defined = set_union(defined, sorted_array_to_set(node.params))
+      let inner_free = collect_free_vars(node.body, inner_defined)
+      let ifks = keys(inner_free)
+      let ifi = 0
+      while ifi < len(ifks)
+        set_add(free, ifks[ifi])
+        ifi += 1
+      end
+    elif tag == "fn_def"
+      # Named functions are global — skip
+    elif tag == "if"
+      collect_free_node(node.cond, defined, free)
+      let d = set_union(defined, {})
+      let thens = node["then"]
+      for i = 0, len(thens)
+        collect_free_node(thens[i], d, free)
+        if type(thens[i]) == "table" and thens[i].tag == "let"
+          set_add(d, thens[i].name)
+        end
+      end
+      let el = node["else"]
+      if el != nil
+        d = set_union(defined, {})
+        for i = 0, len(el)
+          collect_free_node(el[i], d, free)
+          if type(el[i]) == "table" and el[i].tag == "let"
+            set_add(d, el[i].name)
           end
-          collect_free_node(node.value, defined, free)
-        else
-          if tag == "anon_fn"
-            let inner_defined = set_union(defined, sorted_array_to_set(node.params))
-            let inner_free = collect_free_vars(node.body, inner_defined)
-            let ifks = keys(inner_free)
-            let ifi = 0
-            while ifi < len(ifks)
-              set_add(free, ifks[ifi])
-              ifi += 1
-            end
-          else
-            if tag == "fn_def"
-              # Named functions are global — skip
-            else
-              if tag == "if"
-                collect_free_node(node.cond, defined, free)
-                let d = set_union(defined, {})
-                let thens = node["then"]
-                for i = 0, len(thens)
-                  collect_free_node(thens[i], d, free)
-                  if type(thens[i]) == "table" and thens[i].tag == "let"
-                    set_add(d, thens[i].name)
-                  end
+        end
+      end
+    elif tag == "while"
+      collect_free_node(node.cond, defined, free)
+      let d = set_union(defined, {})
+      for i = 0, len(node.body)
+        collect_free_node(node.body[i], d, free)
+        if type(node.body[i]) == "table" and node.body[i].tag == "let"
+          set_add(d, node.body[i].name)
+        end
+      end
+    elif tag == "match"
+      collect_free_node(node.target, defined, free)
+      for i = 0, len(node.whens)
+        let w = node.whens[i]
+        collect_free_node(w.value, defined, free)
+        let d = set_union(defined, {})
+        for j = 0, len(w.body)
+          collect_free_node(w.body[j], d, free)
+          if type(w.body[j]) == "table" and w.body[j].tag == "let"
+            set_add(d, w.body[j].name)
+          end
+        end
+      end
+      let el = node["else"]
+      if el != nil
+        let d = set_union(defined, {})
+        for j = 0, len(el)
+          collect_free_node(el[j], d, free)
+          if type(el[j]) == "table" and el[j].tag == "let"
+            set_add(d, el[j].name)
+          end
+        end
+      end
+    elif tag == "when_clause"
+      collect_free_node(node.value, defined, free)
+      let d = set_union(defined, {})
+      for i = 0, len(node.body)
+        collect_free_node(node.body[i], d, free)
+        if type(node.body[i]) == "table" and node.body[i].tag == "let"
+          set_add(d, node.body[i].name)
+        end
+      end
+    elif tag == "block"
+      let d = set_union(defined, {})
+      for i = 0, len(node.stmts)
+        collect_free_node(node.stmts[i], d, free)
+        if type(node.stmts[i]) == "table" and node.stmts[i].tag == "let"
+          set_add(d, node.stmts[i].name)
+        end
+      end
+    elif tag == "return"
+      if node.value != nil
+        collect_free_node(node.value, defined, free)
+      end
+    else
+      # Generic recursion for binop, unop, call, dot, index, etc.
+      let nks = keys(node)
+      let nki = 0
+      while nki < len(nks)
+        if nks[nki] != "tag"
+          let v = node[nks[nki]]
+          if type(v) == "table"
+            # Check if it's an array (has numeric keys) or a dict node
+            let vks = keys(v)
+            if len(vks) > 0 and type(vks[0]) == "int"
+              # It's an array — iterate
+              let vi = 0
+              while vi < len(v)
+                if type(v[vi]) == "table"
+                  collect_free_node(v[vi], defined, free)
                 end
-                let el = node["else"]
-                if el != nil
-                  d = set_union(defined, {})
-                  for i = 0, len(el)
-                    collect_free_node(el[i], d, free)
-                    if type(el[i]) == "table" and el[i].tag == "let"
-                      set_add(d, el[i].name)
-                    end
-                  end
-                end
-              else
-                if tag == "while"
-                  collect_free_node(node.cond, defined, free)
-                  let d = set_union(defined, {})
-                  for i = 0, len(node.body)
-                    collect_free_node(node.body[i], d, free)
-                    if type(node.body[i]) == "table" and node.body[i].tag == "let"
-                      set_add(d, node.body[i].name)
-                    end
-                  end
-                else
-                  if tag == "match"
-                    collect_free_node(node.target, defined, free)
-                    for i = 0, len(node.whens)
-                      let w = node.whens[i]
-                      collect_free_node(w.value, defined, free)
-                      let d = set_union(defined, {})
-                      for j = 0, len(w.body)
-                        collect_free_node(w.body[j], d, free)
-                        if type(w.body[j]) == "table" and w.body[j].tag == "let"
-                          set_add(d, w.body[j].name)
-                        end
-                      end
-                    end
-                    let el = node["else"]
-                    if el != nil
-                      let d = set_union(defined, {})
-                      for j = 0, len(el)
-                        collect_free_node(el[j], d, free)
-                        if type(el[j]) == "table" and el[j].tag == "let"
-                          set_add(d, el[j].name)
-                        end
-                      end
-                    end
-                  else
-                    if tag == "when_clause"
-                      collect_free_node(node.value, defined, free)
-                      let d = set_union(defined, {})
-                      for i = 0, len(node.body)
-                        collect_free_node(node.body[i], d, free)
-                        if type(node.body[i]) == "table" and node.body[i].tag == "let"
-                          set_add(d, node.body[i].name)
-                        end
-                      end
-                    else
-                      if tag == "block"
-                        let d = set_union(defined, {})
-                        for i = 0, len(node.stmts)
-                          collect_free_node(node.stmts[i], d, free)
-                          if type(node.stmts[i]) == "table" and node.stmts[i].tag == "let"
-                            set_add(d, node.stmts[i].name)
-                          end
-                        end
-                      else
-                        if tag == "return"
-                          if node.value != nil
-                            collect_free_node(node.value, defined, free)
-                          end
-                        else
-                          # Generic recursion for binop, unop, call, dot, index, etc.
-                          let nks = keys(node)
-                          let nki = 0
-                          while nki < len(nks)
-                            if nks[nki] != "tag"
-                              let v = node[nks[nki]]
-                              if type(v) == "table"
-                                # Check if it's an array (has numeric keys) or a dict node
-                                let vks = keys(v)
-                                if len(vks) > 0 and type(vks[0]) == "int"
-                                  # It's an array — iterate
-                                  let vi = 0
-                                  while vi < len(v)
-                                    if type(v[vi]) == "table"
-                                      collect_free_node(v[vi], defined, free)
-                                    end
-                                    vi += 1
-                                  end
-                                else
-                                  collect_free_node(v, defined, free)
-                                end
-                              end
-                            end
-                            nki += 1
-                          end
-                        end
-                      end
-                    end
-                  end
-                end
+                vi += 1
               end
+            else
+              collect_free_node(v, defined, free)
             end
           end
         end
+        nki += 1
       end
     end
   end
@@ -380,75 +354,59 @@ fn make_codegen(source_name)
         iki += 1
       end
       walk_captures(node.body, set_union(scope_vars, sorted_array_to_set(node.params)), captured)
+    elif tag == "fn_def"
+      # Named fns are global — skip
+    elif tag == "if"
+      walk_captures_node(node.cond, scope_vars, captured)
+      walk_captures(node["then"], scope_vars, captured)
+      if node["else"] != nil
+        walk_captures(node["else"], scope_vars, captured)
+      end
+    elif tag == "while"
+      walk_captures_node(node.cond, scope_vars, captured)
+      walk_captures(node.body, scope_vars, captured)
+    elif tag == "match"
+      walk_captures_node(node.target, scope_vars, captured)
+      for i = 0, len(node.whens)
+        walk_captures_node(node.whens[i].value, scope_vars, captured)
+        walk_captures(node.whens[i].body, scope_vars, captured)
+      end
+      if node["else"] != nil
+        walk_captures(node["else"], scope_vars, captured)
+      end
+    elif tag == "block"
+      walk_captures(node.stmts, scope_vars, captured)
+    elif tag == "return"
+      if node.value != nil
+        walk_captures_node(node.value, scope_vars, captured)
+      end
+    elif tag == "let"
+      walk_captures_node(node.value, scope_vars, captured)
+    elif tag == "assign"
+      walk_captures_node(node.value, scope_vars, captured)
     else
-      if tag == "fn_def"
-        # Named fns are global — skip
-      else
-        if tag == "if"
-          walk_captures_node(node.cond, scope_vars, captured)
-          walk_captures(node["then"], scope_vars, captured)
-          if node["else"] != nil
-            walk_captures(node["else"], scope_vars, captured)
-          end
-        else
-          if tag == "while"
-            walk_captures_node(node.cond, scope_vars, captured)
-            walk_captures(node.body, scope_vars, captured)
-          else
-            if tag == "match"
-              walk_captures_node(node.target, scope_vars, captured)
-              for i = 0, len(node.whens)
-                walk_captures_node(node.whens[i].value, scope_vars, captured)
-                walk_captures(node.whens[i].body, scope_vars, captured)
-              end
-              if node["else"] != nil
-                walk_captures(node["else"], scope_vars, captured)
+      # Generic recursion
+      let nks = keys(node)
+      let nki = 0
+      while nki < len(nks)
+        if nks[nki] != "tag"
+          let v = node[nks[nki]]
+          if type(v) == "table"
+            let vks = keys(v)
+            if len(vks) > 0 and type(vks[0]) == "int"
+              let vi = 0
+              while vi < len(v)
+                if type(v[vi]) == "table"
+                  walk_captures_node(v[vi], scope_vars, captured)
+                end
+                vi += 1
               end
             else
-              if tag == "block"
-                walk_captures(node.stmts, scope_vars, captured)
-              else
-                if tag == "return"
-                  if node.value != nil
-                    walk_captures_node(node.value, scope_vars, captured)
-                  end
-                else
-                  if tag == "let"
-                    walk_captures_node(node.value, scope_vars, captured)
-                  else
-                    if tag == "assign"
-                      walk_captures_node(node.value, scope_vars, captured)
-                    else
-                      # Generic recursion
-                      let nks = keys(node)
-                      let nki = 0
-                      while nki < len(nks)
-                        if nks[nki] != "tag"
-                          let v = node[nks[nki]]
-                          if type(v) == "table"
-                            let vks = keys(v)
-                            if len(vks) > 0 and type(vks[0]) == "int"
-                              let vi = 0
-                              while vi < len(v)
-                                if type(v[vi]) == "table"
-                                  walk_captures_node(v[vi], scope_vars, captured)
-                                end
-                                vi += 1
-                              end
-                            else
-                              walk_captures_node(v, scope_vars, captured)
-                            end
-                          end
-                        end
-                        nki += 1
-                      end
-                    end
-                  end
-                end
-              end
+              walk_captures_node(v, scope_vars, captured)
             end
           end
         end
+        nki += 1
       end
     end
   end
@@ -503,46 +461,31 @@ fn make_codegen(source_name)
 
     if tag == "int"
       return {expr: "gem_int(" + to_string(node.value) + ")", setup: ""}
-    end
-
-    if tag == "float"
+    elif tag == "float"
       return {expr: "gem_float(" + format_float(node.value) + ")", setup: ""}
-    end
-
-    if tag == "string"
+    elif tag == "string"
       let escaped = escape_c_string(node.value)
       return {expr: "gem_string(\"" + escaped + "\")", setup: ""}
-    end
-
-    if tag == "bool"
+    elif tag == "bool"
       if node.value
         return {expr: "gem_bool(1)", setup: ""}
       end
       return {expr: "gem_bool(0)", setup: ""}
-    end
-
-    if tag == "nil"
+    elif tag == "nil"
       return {expr: "GEM_NIL", setup: ""}
-    end
-
-    if tag == "var"
+    elif tag == "var"
       let name = node.name
       if name == "print"
         return {expr: "gem_make_fn(gem_print, NULL)", setup: ""}
-      end
-      if name == "error"
+      elif name == "error"
         return {expr: "gem_make_fn(gem_error_fn, NULL)", setup: ""}
-      end
-      if name == "len"
+      elif name == "len"
         return {expr: "gem_make_fn(gem_len_fn, NULL)", setup: ""}
-      end
-      if name == "type"
+      elif name == "type"
         return {expr: "gem_make_fn(gem_type_fn, NULL)", setup: ""}
-      end
-      if name == "to_string"
+      elif name == "to_string"
         return {expr: "gem_make_fn(gem_to_string_fn, NULL)", setup: ""}
-      end
-      if set_contains(defined_fns, name)
+      elif set_contains(defined_fns, name)
         return {expr: "gem_make_fn(gem_fn_" + name + ", NULL)", setup: ""}
       end
       let mname = mangle(name)
@@ -550,47 +493,30 @@ fn make_codegen(source_name)
         return {expr: "(*" + mname + ")", setup: ""}
       end
       return {expr: mname, setup: ""}
-    end
-
-    if tag == "call"
+    elif tag == "call"
       return compile_call(node)
-    end
-
-    if tag == "binop"
+    elif tag == "binop"
       return compile_binop(node)
-    end
-
-    if tag == "unop"
+    elif tag == "unop"
       let r = compile_expr(node.expr)
       if node.op == "-"
         return {expr: "gem_neg(" + r.expr + ")", setup: r.setup}
-      end
-      if node.op == "not"
+      elif node.op == "not"
         return {expr: "gem_not(" + r.expr + ")", setup: r.setup}
       end
-    end
-
-    if tag == "anon_fn"
+    elif tag == "anon_fn"
       return compile_anon_fn(node)
-    end
-
-    if tag == "table"
+    elif tag == "table"
       return compile_table(node)
-    end
-
-    if tag == "array"
+    elif tag == "array"
       return compile_array(node)
-    end
-
-    if tag == "dot"
+    elif tag == "dot"
       let r = compile_expr(node.object)
       let t = tmp()
       let setup = r.setup + "    GemVal " + t + " = " + r.expr + ";\n"
       let escaped = escape_c_string(node.field)
       return {expr: "gem_table_get(" + t + ", gem_string(\"" + escaped + "\"))", setup: setup}
-    end
-
-    if tag == "index"
+    elif tag == "index"
       let obj_r = compile_expr(node.object)
       let key_r = compile_expr(node.key)
       return {expr: "gem_table_get(" + obj_r.expr + ", " + key_r.expr + ")", setup: obj_r.setup + key_r.setup}
@@ -696,20 +622,15 @@ fn make_codegen(source_name)
         end
         let setup = arg_setups + "    GemVal " + t + "[] = {" + arr + "};\n"
         return {expr: "gem_error_at_fn(\"" + escaped_file + "\", " + to_string(line) + ", " + t + ", " + to_string(argc) + ")", setup: setup}
-      end
-
-      if name == "print" or name == "len" or name == "type" or name == "to_string"
+      elif name == "print" or name == "len" or name == "type" or name == "to_string"
         let fn_name = ""
         if name == "print"
           fn_name = "gem_print"
-        end
-        if name == "len"
+        elif name == "len"
           fn_name = "gem_len_fn"
-        end
-        if name == "type"
+        elif name == "type"
           fn_name = "gem_type_fn"
-        end
-        if name == "to_string"
+        elif name == "to_string"
           fn_name = "gem_to_string_fn"
         end
         let arg_setups = ""
@@ -730,9 +651,7 @@ fn make_codegen(source_name)
         end
         let setup = arg_setups + "    GemVal " + t + "[] = {" + arr + "};\n"
         return {expr: fn_name + "(NULL, " + t + ", " + to_string(argc) + ")", setup: setup}
-      end
-
-      if set_contains(defined_fns, name)
+      elif set_contains(defined_fns, name)
         let arg_setups = ""
         let arg_exprs = []
         for i = 0, len(args)
@@ -790,49 +709,37 @@ fn make_codegen(source_name)
     if op == "+"
       let rc_r = compile_expr(node.right)
       return {expr: "gem_add(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
-    end
-    if op == "-"
+    elif op == "-"
       let rc_r = compile_expr(node.right)
       return {expr: "gem_sub(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
-    end
-    if op == "*"
+    elif op == "*"
       let rc_r = compile_expr(node.right)
       return {expr: "gem_mul(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
-    end
-    if op == "/"
+    elif op == "/"
       let rc_r = compile_expr(node.right)
       return {expr: "gem_div(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
-    end
-    if op == "%"
+    elif op == "%"
       let rc_r = compile_expr(node.right)
       return {expr: "gem_mod(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
-    end
-    if op == "=="
+    elif op == "=="
       let rc_r = compile_expr(node.right)
       return {expr: "gem_eq(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
-    end
-    if op == "!="
+    elif op == "!="
       let rc_r = compile_expr(node.right)
       return {expr: "gem_neq(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
-    end
-    if op == "<"
+    elif op == "<"
       let rc_r = compile_expr(node.right)
       return {expr: "gem_lt(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
-    end
-    if op == ">"
+    elif op == ">"
       let rc_r = compile_expr(node.right)
       return {expr: "gem_gt(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
-    end
-    if op == "<="
+    elif op == "<="
       let rc_r = compile_expr(node.right)
       return {expr: "gem_le(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
-    end
-    if op == ">="
+    elif op == ">="
       let rc_r = compile_expr(node.right)
       return {expr: "gem_ge(" + lc + ", " + rc_r.expr + ")", setup: ls + rc_r.setup}
-    end
-
-    if op == "and"
+    elif op == "and"
       let rc_r = compile_expr(node.right)
       let t = tmp()
       let setup = ls
@@ -846,9 +753,7 @@ fn make_codegen(source_name)
       setup = setup + "        " + t + " = " + rc_r.expr + ";\n"
       setup = setup + "    }\n"
       return {expr: t, setup: setup}
-    end
-
-    if op == "or"
+    elif op == "or"
       let rc_r = compile_expr(node.right)
       let t = tmp()
       let setup = ls
@@ -892,9 +797,7 @@ fn make_codegen(source_name)
         return r.setup + p + "GemVal *" + mname + " = GC_MALLOC(sizeof(GemVal));\n" + p + "*" + mname + " = " + r.expr + ";"
       end
       return r.setup + p + "GemVal " + mname + " = " + r.expr + ";"
-    end
-
-    if tag == "assign"
+    elif tag == "assign"
       let r = compile_expr(node.value)
       let name = node.name
       let mname = mangle(name)
@@ -902,60 +805,38 @@ fn make_codegen(source_name)
         return r.setup + p + "*" + mname + " = " + r.expr + ";"
       end
       return r.setup + p + mname + " = " + r.expr + ";"
-    end
-
-    if tag == "dot_assign"
+    elif tag == "dot_assign"
       let obj_r = compile_expr(node.object)
       let val_r = compile_expr(node.value)
       let escaped = escape_c_string(node.field)
       return obj_r.setup + val_r.setup + p + "gem_table_set(" + obj_r.expr + ", gem_string(\"" + escaped + "\"), " + val_r.expr + ");"
-    end
-
-    if tag == "index_assign"
+    elif tag == "index_assign"
       let obj_r = compile_expr(node.object)
       let key_r = compile_expr(node.key)
       let val_r = compile_expr(node.value)
       return obj_r.setup + key_r.setup + val_r.setup + p + "gem_table_set(" + obj_r.expr + ", " + key_r.expr + ", " + val_r.expr + ");"
-    end
-
-    if tag == "if"
+    elif tag == "if"
       return compile_if(node, indent)
-    end
-
-    if tag == "while"
+    elif tag == "while"
       return compile_while(node, indent)
-    end
-
-    if tag == "match"
+    elif tag == "match"
       return compile_match(node, indent)
-    end
-
-    if tag == "break"
+    elif tag == "break"
       return p + "break;"
-    end
-
-    if tag == "continue"
+    elif tag == "continue"
       return p + "continue;"
-    end
-
-    if tag == "return"
+    elif tag == "return"
       if node.value != nil
         let r = compile_expr(node.value)
         return r.setup + p + "return " + r.expr + ";"
       end
       return p + "return GEM_NIL;"
-    end
-
-    if tag == "call"
+    elif tag == "call"
       let r = compile_expr(node)
       return r.setup + p + "(void)(" + r.expr + ");"
-    end
-
-    if tag == "fn_def"
+    elif tag == "fn_def"
       return ""
-    end
-
-    if tag == "block"
+    elif tag == "block"
       let out = p + "{\n"
       for stmt in node.stmts
         out = out + compile_stmt(stmt, indent + 1) + "\n"
@@ -982,9 +863,7 @@ fn make_codegen(source_name)
         return r.setup + p + "GemVal *" + mname + " = GC_MALLOC(sizeof(GemVal));\n" + p + "*" + mname + " = " + r.expr + ";\n" + p + "return GEM_NIL;"
       end
       return r.setup + p + "GemVal " + mname + " = " + r.expr + ";\n" + p + "return GEM_NIL;"
-    end
-
-    if tag == "assign"
+    elif tag == "assign"
       let r = compile_expr(node.value)
       let t = tmp()
       let name = node.name
@@ -993,29 +872,19 @@ fn make_codegen(source_name)
         return r.setup + p + "GemVal " + t + " = " + r.expr + ";\n" + p + "*" + mname + " = " + t + ";\n" + p + "return " + t + ";"
       end
       return r.setup + p + "GemVal " + t + " = " + r.expr + ";\n" + p + mname + " = " + t + ";\n" + p + "return " + t + ";"
-    end
-
-    if tag == "return"
+    elif tag == "return"
       if node.value != nil
         let r = compile_expr(node.value)
         return r.setup + p + "return " + r.expr + ";"
       end
       return p + "return GEM_NIL;"
-    end
-
-    if tag == "if"
+    elif tag == "if"
       return compile_if_return(node, indent)
-    end
-
-    if tag == "while"
+    elif tag == "while"
       return compile_while(node, indent) + "\n" + p + "return GEM_NIL;"
-    end
-
-    if tag == "match"
+    elif tag == "match"
       return compile_match_return(node, indent)
-    end
-
-    if tag == "block"
+    elif tag == "block"
       let out = p + "{\n"
       for i = 0, len(node.stmts) - 1
         out = out + compile_stmt(node.stmts[i], indent + 1) + "\n"
@@ -1025,9 +894,7 @@ fn make_codegen(source_name)
       end
       out = out + p + "}"
       return out
-    end
-
-    if tag == "dot_assign" or tag == "index_assign" or tag == "break" or tag == "continue" or tag == "fn_def"
+    elif tag == "dot_assign" or tag == "index_assign" or tag == "break" or tag == "continue" or tag == "fn_def"
       return compile_stmt(node, indent) + "\n" + p + "return GEM_NIL;"
     end
 
@@ -1190,32 +1057,22 @@ fn make_codegen(source_name)
       if ptype == "Int"
         lines = lines + "    int64_t _p" + to_string(i) + " = args[" + to_string(i) + "].ival;\n"
         c_args[i] = "_p" + to_string(i)
+      elif ptype == "Float"
+        lines = lines + "    double _p" + to_string(i) + " = args[" + to_string(i) + "].fval;\n"
+        c_args[i] = "_p" + to_string(i)
+      elif ptype == "String"
+        lines = lines + "    char* _p" + to_string(i) + " = args[" + to_string(i) + "].sval;\n"
+        c_args[i] = "_p" + to_string(i)
+      elif ptype == "Bool"
+        lines = lines + "    int _p" + to_string(i) + " = args[" + to_string(i) + "].bval;\n"
+        c_args[i] = "_p" + to_string(i)
+      elif ptype == "Ptr"
+        lines = lines + "    void* _p" + to_string(i) + " = (void*)(intptr_t)args[" + to_string(i) + "].ival;\n"
+        c_args[i] = "_p" + to_string(i)
+      elif ptype == "Table"
+        c_args[i] = "args[" + to_string(i) + "]"
       else
-        if ptype == "Float"
-          lines = lines + "    double _p" + to_string(i) + " = args[" + to_string(i) + "].fval;\n"
-          c_args[i] = "_p" + to_string(i)
-        else
-          if ptype == "String"
-            lines = lines + "    char* _p" + to_string(i) + " = args[" + to_string(i) + "].sval;\n"
-            c_args[i] = "_p" + to_string(i)
-          else
-            if ptype == "Bool"
-              lines = lines + "    int _p" + to_string(i) + " = args[" + to_string(i) + "].bval;\n"
-              c_args[i] = "_p" + to_string(i)
-            else
-              if ptype == "Ptr"
-                lines = lines + "    void* _p" + to_string(i) + " = (void*)(intptr_t)args[" + to_string(i) + "].ival;\n"
-                c_args[i] = "_p" + to_string(i)
-              else
-                if ptype == "Table"
-                  c_args[i] = "args[" + to_string(i) + "]"
-                else
-                  c_args[i] = "args[" + to_string(i) + "]"
-                end
-              end
-            end
-          end
-        end
+        c_args[i] = "args[" + to_string(i) + "]"
       end
     end
 
@@ -1233,38 +1090,26 @@ fn make_codegen(source_name)
     if ret_type == "Nil"
       lines = lines + "    " + call_expr + ";\n"
       lines = lines + "    return GEM_NIL;\n"
+    elif ret_type == "Table"
+      lines = lines + "    return " + call_expr + ";\n"
+    elif ret_type == "Int"
+      lines = lines + "    int64_t _ret = " + call_expr + ";\n"
+      lines = lines + "    return gem_int(_ret);\n"
+    elif ret_type == "Float"
+      lines = lines + "    double _ret = " + call_expr + ";\n"
+      lines = lines + "    return gem_float(_ret);\n"
+    elif ret_type == "String"
+      lines = lines + "    char* _ret = " + call_expr + ";\n"
+      lines = lines + "    return gem_string(_ret);\n"
+    elif ret_type == "Bool"
+      lines = lines + "    int _ret = " + call_expr + ";\n"
+      lines = lines + "    return gem_bool(_ret);\n"
+    elif ret_type == "Ptr"
+      lines = lines + "    void *_ret = " + call_expr + ";\n"
+      lines = lines + "    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n"
     else
-      if ret_type == "Table"
-        lines = lines + "    return " + call_expr + ";\n"
-      else
-      if ret_type == "Int"
-        lines = lines + "    int64_t _ret = " + call_expr + ";\n"
-        lines = lines + "    return gem_int(_ret);\n"
-      else
-        if ret_type == "Float"
-          lines = lines + "    double _ret = " + call_expr + ";\n"
-          lines = lines + "    return gem_float(_ret);\n"
-        else
-          if ret_type == "String"
-            lines = lines + "    char* _ret = " + call_expr + ";\n"
-            lines = lines + "    return gem_string(_ret);\n"
-          else
-            if ret_type == "Bool"
-              lines = lines + "    int _ret = " + call_expr + ";\n"
-              lines = lines + "    return gem_bool(_ret);\n"
-            else
-              if ret_type == "Ptr"
-                lines = lines + "    void *_ret = " + call_expr + ";\n"
-                lines = lines + "    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n"
-              else
-                lines = lines + "    " + call_expr + ";\n"
-                lines = lines + "    return GEM_NIL;\n"
-              end
-            end
-          end
-        end
-      end
-      end
+      lines = lines + "    " + call_expr + ";\n"
+      lines = lines + "    return GEM_NIL;\n"
     end
 
     lines = lines + "}"
@@ -1421,19 +1266,15 @@ fn make_codegen(source_name)
       if s.tag == "fn_def"
         fn_defs[fn_def_count] = s
         fn_def_count += 1
+      elif s.tag == "extern_fn"
+        extern_fns_list[extern_fn_count] = s
+        extern_fn_count += 1
+      elif s.tag == "extern_include"
+        extern_includes[extern_inc_count] = s
+        extern_inc_count += 1
       else
-        if s.tag == "extern_fn"
-          extern_fns_list[extern_fn_count] = s
-          extern_fn_count += 1
-        else
-          if s.tag == "extern_include"
-            extern_includes[extern_inc_count] = s
-            extern_inc_count += 1
-          else
-            top_stmts[top_count] = s
-            top_count += 1
-          end
-        end
+        top_stmts[top_count] = s
+        top_count += 1
       end
     end
 
