@@ -1,0 +1,46 @@
+# Test 1: catch an error
+let r = pcall(fn()
+  error("boom")
+end)
+print(r.ok)
+print(r.error)
+
+# Test 2: successful call
+let r2 = pcall(fn()
+  42
+end)
+print(r2.ok)
+print(r2.value)
+
+# Test 3: catch a runtime type error
+let r3 = pcall(fn()
+  1 + "hello"
+end)
+print(r3.ok)
+print(r3.error)
+
+# Test 4: nested pcall
+let r4 = pcall(fn()
+  let inner = pcall(fn()
+    error("inner boom")
+  end)
+  inner.error
+end)
+print(r4.ok)
+print(r4.value)
+
+# Test 5: code after pcall continues normally
+print("still running")
+
+# Test 6: error with interpolation (error message includes file:line prefix)
+let r5 = pcall(fn()
+  let x = 42
+  error("value is {x}")
+end)
+print(r5.ok)
+
+# Test 7: stack trace is captured
+let r6 = pcall(fn()
+  error("trace me")
+end)
+print(len(r6.stack) > 0)

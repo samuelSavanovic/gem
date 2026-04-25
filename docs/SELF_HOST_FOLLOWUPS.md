@@ -55,14 +55,8 @@ A named `fn` definition inside another function is silently ignored — the func
 ### `_compile_stmt_return` completeness
 The bootstrap's `_compile_stmt_return` didn't handle `dot_assign`, `index_assign`, `break`, `continue`, or `fn_def` — these fell through to `compile_expr` which produced `/* unknown node */` comments in the C output. This was a silent correctness bug: `set_add(defined_fns, name)` inside a function body was silently compiled to a no-op, causing the codegen to treat all user-defined functions as generic closure calls. Fixed in the bootstrap by adding an explicit case for these statement types (compile as statement + `return GEM_NIL`). This class of bug — a missing case that silently produces wrong output instead of erroring — is worth guarding against systematically.
 
-### Error recovery (paradigm TBD)
-Currently `error()` is fatal — no way to catch failures. This makes it impossible to write tests that verify the parser rejects bad input. Some form of recoverable errors is needed, but the right paradigm is an open question:
-- **try/catch** (exceptions) — familiar, but adds complexity to codegen and runtime
-- **pcall-style** (Lua) — `let ok, result = pcall(fn() ... end)` — simpler, no stack unwinding
-- **Result types** — functional style, but needs sum types or conventions
-- **Multiple return + error flag** — minimal, but verbose at call sites
-
-Decision deferred until we have more experience with what the language needs.
+### Error recovery — DONE
+Added `pcall(f)` (Lua-style protected call). Calls `f()` with zero arguments; on success returns `{ok: true, value: <result>}`, on error returns `{ok: false, error: <message>, stack: <frames>}`. Uses `setjmp`/`longjmp` in the runtime. All error paths (`gem_error`, `gem_error_fn`, `gem_error_at_fn`) check for active pcall before exiting. Nested pcall works. Call stack is snapshotted into the result before longjmp restores it. Fixed-point verified.
 
 ### `extern fn` should support `Table` / `GemVal` return types
 The `extern fn` type map only handled `Int`, `Float`, `String`, `Bool`, `Ptr`, and `Nil`. Unknown return types (including `Table`) silently discarded the return value and returned `GEM_NIL`. This caused `keys()` to always return nil. Fixed by adding `Table` as a passthrough type (return the `GemVal` directly). The silent failure mode was particularly nasty — no error, just nil propagating until something downstream crashes.

@@ -145,6 +145,7 @@ fn make_codegen(source_name)
   builtins["type"] = true
   builtins["to_string"] = true
   builtins["push"] = true
+  builtins["pcall"] = true
   let boxed_vars = {}
 
   # ─── Helpers ──
@@ -510,6 +511,8 @@ fn make_codegen(source_name)
         return {expr: "gem_make_fn(gem_to_string_fn, NULL)", setup: ""}
       elif name == "push"
         return {expr: "gem_make_fn(gem_push_fn, NULL)", setup: ""}
+      elif name == "pcall"
+        return {expr: "gem_make_fn(gem_pcall_fn, NULL)", setup: ""}
       elif set_contains(defined_fns, name)
         return {expr: "gem_make_fn(gem_fn_{name}, NULL)", setup: ""}
       end
@@ -648,7 +651,7 @@ fn make_codegen(source_name)
         let setup = arg_setups + "    GemVal {t}[] = \{{arr}};\n"
         let call = "gem_error_at_fn(\"{escaped_file}\", {line}, {t}, {argc})"
         return {expr: call, setup: setup}
-      elif name == "print" or name == "len" or name == "type" or name == "to_string" or name == "push"
+      elif name == "print" or name == "len" or name == "type" or name == "to_string" or name == "push" or name == "pcall"
         let fn_name = ""
         if name == "print"
           fn_name = "gem_print"
@@ -660,6 +663,8 @@ fn make_codegen(source_name)
           fn_name = "gem_to_string_fn"
         elif name == "push"
           fn_name = "gem_push_fn"
+        elif name == "pcall"
+          fn_name = "gem_pcall_fn"
         end
         let arg_setups = ""
         let arg_exprs = []

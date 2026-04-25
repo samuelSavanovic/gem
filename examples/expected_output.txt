@@ -203,3 +203,14 @@ pi: 3.14
 mid!
 !mid
 result: 14
+false
+boom
+true
+42
+false
+type error in +
+true
+inner boom
+still running
+false
+true

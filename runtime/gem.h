@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <setjmp.h>
 #include <gc.h>
 
 /* ─── Tagged value ─── */
@@ -98,6 +99,22 @@ GemVal gem_ge(GemVal a, GemVal b);
 GemVal gem_neg(GemVal a);
 GemVal gem_not(GemVal a);
 
+/* ─── Protected call (pcall) ─── */
+
+#define GEM_MAX_PCALL_DEPTH 64
+
+typedef struct {
+    jmp_buf buf;
+    int saved_call_depth;
+    const char *error_msg;
+    GemVal stack_snapshot;
+} GemPcallFrame;
+
+extern GemPcallFrame gem_pcall_stack[GEM_MAX_PCALL_DEPTH];
+extern int gem_pcall_depth;
+
+void gem_raise_error(const char *msg);
+
 /* ─── Built-in functions (GemFnPtr signature) ─── */
 
 GemVal gem_print(void *_env, GemVal *args, int argc);
@@ -106,6 +123,7 @@ GemVal gem_len_fn(void *_env, GemVal *args, int argc);
 GemVal gem_type_fn(void *_env, GemVal *args, int argc);
 GemVal gem_to_string_fn(void *_env, GemVal *args, int argc);
 GemVal gem_push_fn(void *_env, GemVal *args, int argc);
+GemVal gem_pcall_fn(void *_env, GemVal *args, int argc);
 
 /* ─── Helpers used by codegen ─── */
 

@@ -281,7 +281,32 @@ print("wrapped: {wrap("inner")}")
 
 **Error Handling**
 
-No exceptions in v0. `error(msg)` prints the message with file and line info to stderr, followed by a call stack trace showing each Gem function frame, and halts (`exit(1)`). Runtime type errors (e.g. `1 + "a"`) also print a stack trace. The compiler reports the first error and stops. No error recovery.
+`error(msg)` prints the message with file and line info to stderr, followed by a call stack trace showing each Gem function frame, and halts (`exit(1)`). Runtime type errors (e.g. `1 + "a"`) also print a stack trace. The compiler reports the first error and stops.
+
+**Recoverable errors** use `pcall(f)` (protected call), which calls `f()` with zero arguments and catches any error instead of halting:
+
+```
+let result = pcall(fn()
+  error("boom")
+end)
+print(result.ok)      # false
+print(result.error)   # boom
+
+let result2 = pcall(fn()
+  42
+end)
+print(result2.ok)     # true
+print(result2.value)  # 42
+```
+
+- On success: returns `{ok: true, value: <return value>}`
+- On error: returns `{ok: false, error: <error message string>, stack: <array of {name, file, line} tables>}`
+- Errors caught by `pcall` do not print to stderr and do not call `exit(1)`
+- If no `pcall` is active, errors behave as before (print + stack trace + exit)
+- `pcall` catches both user `error()` calls and runtime type errors (e.g. `1 + "hello"`)
+- Nested `pcall` works — each level catches errors independently
+- To pass arguments to the called function, use a closure: `pcall(fn() f(x, y) end)`
+- `pcall` is a regular builtin function, not a keyword or syntax construct
 
 **Built-in Functions**
 
@@ -305,6 +330,8 @@ print(len(items))  # 2
 print(items[0])    # a
 ```
 
+`pcall(f)` — calls `f()` with zero arguments in a protected context. Returns `{ok: true, value: <result>}` on success, `{ok: false, error: <message>, stack: <frames>}` on error. See Error Handling section.
+
 `keys(tbl)` — returns a new table containing the keys of `tbl` as an integer-indexed array. Currently requires `extern fn` declaration; will become a builtin.
 
 All builtins are first-class values — they can be stored in variables and passed to functions.
@@ -326,6 +353,6 @@ Every value is a tagged C union. The compiler emits C code that uses the runtime
 
 **What's NOT in v0**
 
-No classes. No inheritance. No exceptions (use `error()` to halt). No string interpolation. No variadic functions. No destructuring. No type system. No operator overloading. No namespaces.
+No classes. No inheritance. No exceptions (use `error()` to halt, `pcall()` for recovery). No variadic functions. No destructuring. No type system. No operator overloading. No namespaces.
 
 All of those can be added later _in the language itself_ via blocks, or in a future compiler version compiled by v0.
