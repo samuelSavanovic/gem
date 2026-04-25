@@ -83,8 +83,8 @@ Minor ergonomic win for parser helpers and similar patterns. Not blocking anythi
 ### String performance prerequisites
 These runtime/compiler improvements would make pure-Gem string code competitive with C:
 
-1. **String views / slices** — `substr` returns a pointer+offset+length into the original string instead of allocating a copy. Makes substring extraction O(1).
-2. **String builder or `+=` optimization** — detect `s = s + x` in loops and use a mutable buffer internally, avoiding O(n²) reallocation.
-3. **Byte-level access without allocation** — `ord(s[i])` currently allocates a 1-char string just to get an int. A direct byte-index operation (e.g., `ord(s, i)` or `s.byte(i)`) would skip the allocation.
+1. **String views / slices** — `substr` returns a pointer+offset+length into the original string instead of allocating a copy. Makes substring extraction O(1). Not yet implemented — requires changing the string representation in GemVal (add len field, stop assuming null-termination). Every string consumer (strlen, strcmp, printf %s) would need updating. Deferred until needed.
+2. **String builder (`buf_new`/`buf_push`/`buf_str`)** — DONE. Explicit mutable buffer builtins with doubling growth. `buf_push` appends without allocating a new string; `buf_str` finalizes into an immutable GemVal string. Benchmarks: ~58x faster than `s = s + x` at 100K iterations.
+3. **Byte-level access without allocation (`ord(s, i)`)** — DONE. `ord` now accepts an optional second argument for direct byte indexing into the string. `ord(s, i)` returns the byte value at index `i` without allocating a temporary 1-char string.
 
-Once these are in place, a pure-Gem `split` would be competitive with the current C version. Until then, the C builtins are the pragmatic choice.
+With #2 and #3 in place, a pure-Gem `split` and `index_of` can be written using `ord(s, i)` for scanning and `buf_*` for accumulation, with performance close to the C versions. String views (#1) would further help `substr` but are not blocking.

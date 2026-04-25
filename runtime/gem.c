@@ -365,6 +365,7 @@ GemVal gem_print(void *_env, GemVal *args, int argc) {
             case VAL_STRING: printf("%s", v.sval); break;
             case VAL_FN: printf("<fn>"); break;
             case VAL_TABLE: printf("<table:%d>", v.table->len); break;
+            case VAL_BUFFER: printf("<buffer:%d>", v.buffer->len); break;
         }
     }
     printf("\n");
@@ -411,6 +412,7 @@ GemVal gem_type_fn(void *_env, GemVal *args, int argc) {
         case VAL_STRING: return gem_string("string");
         case VAL_FN: return gem_string("fn");
         case VAL_TABLE: return gem_string("table");
+        case VAL_BUFFER: return gem_string("buffer");
     }
     return gem_string("unknown");
 }
@@ -430,6 +432,7 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
         case VAL_STRING: return v;
         case VAL_FN: return gem_string("<fn>");
         case VAL_TABLE: snprintf(buf, sizeof(buf), "<table:%d>", v.table->len); return gem_string(buf);
+        case VAL_BUFFER: snprintf(buf, sizeof(buf), "<buffer:%d>", v.buffer->len); return gem_string(buf);
     }
     return gem_string("");
 }
@@ -710,8 +713,72 @@ GemVal gem_chr_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_ord_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1 || args[0].type != VAL_STRING) { gem_error("ord: expected string argument"); }
+    if (argc >= 2) {
+        /* ord(s, i) — direct byte access by index, no allocation */
+        if (args[1].type != VAL_INT) { gem_error("ord: index must be an integer"); }
+        int64_t idx = args[1].ival;
+        int64_t slen = (int64_t)strlen(args[0].sval);
+        if (idx < 0 || idx >= slen) { gem_error("ord: index out of bounds"); }
+        return gem_int((int64_t)(unsigned char)args[0].sval[idx]);
+    }
     if (strlen(args[0].sval) == 0) { gem_error("ord: empty string"); }
     return gem_int((int64_t)(unsigned char)args[0].sval[0]);
+}
+
+/* ─── String builder (buf_new / buf_push / buf_str) ─── */
+
+GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc) {
+    (void)_env; (void)args; (void)argc;
+    GemBuffer *b = (GemBuffer *)GC_MALLOC(sizeof(GemBuffer));
+    b->cap = 64;
+    b->len = 0;
+    b->data = (char *)GC_MALLOC_ATOMIC(b->cap);
+    GemVal r;
+    r.type = VAL_BUFFER;
+    r.buffer = b;
+    return r;
+}
+
+GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_BUFFER) { gem_error("buf_push: expected buffer and value"); }
+    GemBuffer *b = args[0].buffer;
+    /* Coerce second argument to string */
+    const char *s;
+    char tmp[64];
+    switch (args[1].type) {
+        case VAL_STRING: s = args[1].sval; break;
+        case VAL_INT: snprintf(tmp, sizeof(tmp), "%lld", (long long)args[1].ival); s = tmp; break;
+        case VAL_FLOAT: snprintf(tmp, sizeof(tmp), "%g", args[1].fval); s = tmp; break;
+        case VAL_BOOL: s = args[1].bval ? "true" : "false"; break;
+        case VAL_NIL: s = "nil"; break;
+        default: s = ""; break;
+    }
+    int slen = (int)strlen(s);
+    /* Grow buffer if needed */
+    while (b->len + slen >= b->cap) {
+        int new_cap = b->cap * 2;
+        char *new_data = (char *)GC_MALLOC_ATOMIC(new_cap);
+        memcpy(new_data, b->data, b->len);
+        b->data = new_data;
+        b->cap = new_cap;
+    }
+    memcpy(b->data + b->len, s, slen);
+    b->len += slen;
+    return args[0]; /* return buffer for chaining */
+}
+
+GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_BUFFER) { gem_error("buf_str: expected buffer"); }
+    GemBuffer *b = args[0].buffer;
+    char *s = (char *)GC_MALLOC_ATOMIC(b->len + 1);
+    memcpy(s, b->data, b->len);
+    s[b->len] = '\0';
+    GemVal r;
+    r.type = VAL_STRING;
+    r.sval = s;
+    return r;
 }
 
 /* ─── Concurrency: scheduler + mailbox ─── */

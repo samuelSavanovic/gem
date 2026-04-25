@@ -22,13 +22,20 @@ typedef struct mco_coro mco_coro;
 /* ─── Tagged value ─── */
 
 typedef enum {
-    VAL_NIL, VAL_BOOL, VAL_INT, VAL_FLOAT, VAL_STRING, VAL_FN, VAL_TABLE,
+    VAL_NIL, VAL_BOOL, VAL_INT, VAL_FLOAT, VAL_STRING, VAL_FN, VAL_TABLE, VAL_BUFFER,
 } GemType;
 
 typedef struct GemVal GemVal;
 typedef GemVal (*GemFnPtr)(void *env, GemVal *args, int argc);
 
 typedef struct GemTable GemTable;
+
+/* String builder — mutable buffer for O(n) string construction */
+typedef struct {
+    char *data;
+    int len;
+    int cap;
+} GemBuffer;
 
 struct GemVal {
     GemType type;
@@ -39,6 +46,7 @@ struct GemVal {
         int bval;
         struct { GemFnPtr fn; void *env; };
         GemTable *table;
+        GemBuffer *buffer;
     };
 };
 
@@ -138,6 +146,9 @@ GemVal gem_substr_fn(void *_env, GemVal *args, int argc);
 GemVal gem_index_of_fn(void *_env, GemVal *args, int argc);
 GemVal gem_chr_fn(void *_env, GemVal *args, int argc);
 GemVal gem_ord_fn(void *_env, GemVal *args, int argc);
+GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc);
+GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc);
+GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc);
 
 /* ─── Helpers used by codegen ─── */
 

@@ -369,6 +369,14 @@ print(items[0])    # a
 
 `ord(s)` — returns the byte value of the first character of string `s` as an integer.
 
+`ord(s, i)` — returns the byte value at index `i` in string `s` without allocating a temporary string. Equivalent to `ord(s[i])` but avoids the 1-char string allocation.
+
+`buf_new()` — creates a new mutable string buffer. Returns a buffer value (type `"buffer"`).
+
+`buf_push(buf, val)` — appends `val` to the buffer. Non-string values are auto-coerced to strings. Returns the buffer for chaining. Uses a doubling growth strategy internally — O(n) total for n appends vs O(n²) for repeated `+` concatenation.
+
+`buf_str(buf)` — finalizes the buffer into an immutable string. The buffer can still be used after this call.
+
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
 **Module System (v0.1 — minimal)**
