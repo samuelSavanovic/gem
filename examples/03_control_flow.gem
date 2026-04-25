@@ -1,0 +1,79 @@
+# If/else
+let x = 15
+if x > 10
+  print("big")
+else
+  print("small")
+end
+
+# Nested if
+if x > 20
+  print("huge")
+else
+  if x > 10
+    print("medium")
+  else
+    print("tiny")
+  end
+end
+
+# While loop
+let i = 0
+while i < 5
+  print(i)
+  i += 1
+end
+
+# Break
+let j = 0
+while true
+  if j >= 3
+    break
+  end
+  print("loop " + to_string(j))
+  j += 1
+end
+
+# Continue
+let k = 0
+while k < 6
+  k += 1
+  if k % 2 == 0
+    continue
+  end
+  print("odd " + to_string(k))
+end
+
+# Match
+fn describe(val)
+  match val
+  when 1
+    print("one")
+  when 2
+    print("two")
+  when 3
+    print("three")
+  else
+    print("other: " + to_string(val))
+  end
+end
+describe(1)
+describe(2)
+describe(3)
+describe(99)
+
+# Match on strings
+fn color_code(c)
+  match c
+  when "red"
+    0
+  when "green"
+    1
+  when "blue"
+    2
+  else
+    -1
+  end
+end
+print(color_code("green"))
+print(color_code("purple"))

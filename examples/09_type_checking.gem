@@ -1,0 +1,39 @@
+# type() builtin
+print(type(42))
+print(type(3.14))
+print(type("hello"))
+print(type(true))
+print(type(nil))
+print(type([1, 2]))
+print(type(fn(x) x end))
+print(type(print))
+
+# Truthiness
+fn truthy(v)
+  if v
+    print(to_string(v) + " is truthy")
+  else
+    print(to_string(v) + " is falsy")
+  end
+end
+
+truthy(1)
+truthy(0)
+truthy("")
+truthy("x")
+truthy(true)
+truthy(false)
+truthy(nil)
+
+# Boolean operators
+print(true and true)
+print(true and false)
+print(false or true)
+print(false or false)
+print(not true)
+print(not false)
+print(not nil)
+
+# Short-circuit
+print(nil and "nope")
+print(42 or "nope")

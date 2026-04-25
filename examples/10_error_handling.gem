@@ -1,0 +1,11 @@
+# error() with file/line info
+fn safe_div(a, b)
+  if b == 0
+    error("division by zero in safe_div")
+  end
+  a / b
+end
+
+print(safe_div(10, 2))
+# Uncomment to test error output:
+# safe_div(1, 0)

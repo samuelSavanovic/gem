@@ -41,9 +41,10 @@ GRAMMAR = r"""
 
     let_decl: "let" NAME "=" expr
 
-    fn_def: "fn" NAME "(" params ")" body "end"
+    fn_def: "fn" NAME "(" params ")" fn_body "end"
     params: (NAME ("," NAME)*)?
-    body: (_NL* stmt)*  _NL*
+    body: (_NL+ stmt)*  _NL*
+    fn_body: (_NL* stmt)*  _NL*
 
     if_stmt: "if" expr body ("else" body)? "end"
     while_stmt: "while" expr body "end"
@@ -82,7 +83,7 @@ GRAMMAR = r"""
     args: (expr ("," expr)*)?
 
     ?trailing_block: do_block | brace_block
-    do_block: "do" block_params? body "end"
+    do_block: "do" block_params? fn_body "end"
     brace_block: "{" block_params? expr "}"
     block_params: "|" (NAME ("," NAME)*)? "|"
 
@@ -91,7 +92,7 @@ GRAMMAR = r"""
          | "true"        -> true_lit
          | "false"       -> false_lit
          | "nil"         -> nil_lit
-         | "fn" "(" params ")" body "end" -> anon_fn
+         | "fn" "(" params ")" fn_body "end" -> anon_fn
          | table_literal
          | array_literal
          | NAME          -> var
@@ -232,6 +233,9 @@ class ASTBuilder(Transformer):
     def body(self, items):
         return items
 
+    def fn_body(self, items):
+        return items
+
     def number(self, items):
         s = str(items[0])
         if "." in s:
@@ -240,8 +244,29 @@ class ASTBuilder(Transformer):
 
     def string(self, items):
         raw = str(items[0])
-        # Strip quotes and handle escapes
-        return {"tag": "string", "value": raw[1:-1].replace('\\"', '"').replace("\\n", "\n").replace("\\t", "\t").replace("\\\\", "\\")}
+        # Strip quotes and handle escapes with single-pass processing
+        s = raw[1:-1]
+        result = []
+        i = 0
+        while i < len(s):
+            if s[i] == '\\' and i + 1 < len(s):
+                c = s[i + 1]
+                if c == 'n':
+                    result.append('\n')
+                elif c == 't':
+                    result.append('\t')
+                elif c == '\\':
+                    result.append('\\')
+                elif c == '"':
+                    result.append('"')
+                else:
+                    result.append('\\')
+                    result.append(c)
+                i += 2
+            else:
+                result.append(s[i])
+                i += 1
+        return {"tag": "string", "value": ''.join(result)}
 
     def true_lit(self, items):
         return {"tag": "bool", "value": True}
@@ -265,19 +290,20 @@ class ASTBuilder(Transformer):
         result = items[0]
         for postfix in items[1:]:
             if postfix["_postfix"] == "call":
-                result = {"tag": "call", "func": result, "args": postfix["args"]}
+                result = {"tag": "call", "func": result, "args": postfix["args"], "line": postfix.get("_line")}
             elif postfix["_postfix"] == "dot":
                 result = {"tag": "dot", "object": result, "field": postfix["field"]}
             elif postfix["_postfix"] == "index":
                 result = {"tag": "index", "object": result, "key": postfix["key"]}
         return result
 
-    def call_postfix(self, items):
+    @v_args(meta=True)
+    def call_postfix(self, meta, items):
         args = items[0]
         block = items[1] if len(items) > 1 else None
         if block is not None:
             args = args + [block]
-        return {"_postfix": "call", "args": args}
+        return {"_postfix": "call", "args": args, "_line": meta.line}
 
     def dot_postfix(self, items):
         return {"_postfix": "dot", "field": str(items[0])}
@@ -669,17 +695,48 @@ static GemVal gem_type_fn(void *_env, GemVal *args, int argc) {
     return gem_string("unknown");
 }
 
+/* ─── Built-in: to_string ─── */
+
+static GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
+    if (argc < 1) return gem_string("");
+    GemVal v = args[0];
+    char buf[64];
+    switch (v.type) {
+        case VAL_NIL: return gem_string("nil");
+        case VAL_BOOL: return gem_string(v.bval ? "true" : "false");
+        case VAL_INT: snprintf(buf, sizeof(buf), "%lld", (long long)v.ival); return gem_string(buf);
+        case VAL_FLOAT: snprintf(buf, sizeof(buf), "%g", v.fval); return gem_string(buf);
+        case VAL_STRING: return v;
+        case VAL_FN: return gem_string("<fn>");
+        case VAL_TABLE: snprintf(buf, sizeof(buf), "<table:%d>", v.table->len); return gem_string(buf);
+    }
+    return gem_string("");
+}
+
+/* ─── Built-in: error with location ─── */
+
+static GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
+    if (argc > 0 && args[0].type == VAL_STRING) {
+        fprintf(stderr, "%s:%d: error: %s\n", file, line, args[0].sval);
+    } else {
+        fprintf(stderr, "%s:%d: error\n", file, line);
+    }
+    exit(1);
+    return GEM_NIL;
+}
+
 /* ─── Forward declarations ─── */
 """
 
 class CodeGen:
-    def __init__(self):
+    def __init__(self, source_name="<stdin>"):
         self.functions = []     # list of C function definitions
         self.forward_decls = [] # forward declarations
         self.tmp_counter = 0
         self.anon_counter = 0
         self.defined_fns = set() # names of user-defined functions
-        self.builtins = {"print", "error", "len", "type"}
+        self.builtins = {"print", "error", "len", "type", "to_string"}
+        self.source_name = source_name
         # Per-scope state — set during function compilation
         self.boxed_vars = set()  # variables that are heap-allocated (captured by closures)
 
@@ -1170,6 +1227,10 @@ class CodeGen:
                 return "gem_make_fn(gem_len_fn, NULL)", ""
             if name == "type":
                 return "gem_make_fn(gem_type_fn, NULL)", ""
+            if name == "to_string":
+                return "gem_make_fn(gem_to_string_fn, NULL)", ""
+            if name in self.defined_fns:
+                return f"gem_make_fn(gem_fn_{name}, NULL)", ""
             mname = self._mangle(name)
             if name in self.boxed_vars:
                 return f"(*{mname})", ""
@@ -1267,9 +1328,28 @@ class CodeGen:
         # Direct call optimization for known functions
         if func["tag"] == "var":
             name = func["name"]
-            if name in ("print", "error", "len", "type"):
-                fn_map = {"print": "gem_print", "error": "gem_error_fn",
-                          "len": "gem_len_fn", "type": "gem_type_fn"}
+            if name == "error":
+                # error() with file/line info
+                line = node.get("line") or 0
+                escaped_file = self.source_name.replace("\\", "\\\\").replace('"', '\\"')
+                arg_setups = []
+                arg_exprs = []
+                for a in args:
+                    ec, s = self._compile_expr(a)
+                    arg_setups.append(s)
+                    arg_exprs.append(ec)
+                setup = "".join(arg_setups)
+                argc = len(args)
+                if argc == 0:
+                    return f'gem_error_at_fn("{escaped_file}", {line}, NULL, 0)', setup
+                tmp = self.tmp()
+                arr = ", ".join(arg_exprs)
+                setup += f"    GemVal {tmp}[] = {{{arr}}};\n"
+                return f'gem_error_at_fn("{escaped_file}", {line}, {tmp}, {argc})', setup
+            elif name in ("print", "len", "type", "to_string"):
+                fn_map = {"print": "gem_print",
+                          "len": "gem_len_fn", "type": "gem_type_fn",
+                          "to_string": "gem_to_string_fn"}
                 fn_name = fn_map[name]
                 arg_setups = []
                 arg_exprs = []
@@ -1494,7 +1574,7 @@ def compile_gem(source, source_name="<stdin>", base_dir="."):
         sys.exit(1)
     ast = ASTBuilder().transform(tree)
     ast = resolve_loads(ast, base_dir)
-    codegen = CodeGen()
+    codegen = CodeGen(source_name=source_name)
     return codegen.compile(ast)
 
 def main():

@@ -1,0 +1,47 @@
+# Trailing blocks with do/end
+fn times(n, body)
+  let i = 0
+  while i < n
+    body(i)
+    i += 1
+  end
+end
+
+times(3) do |i|
+  print("iteration " + to_string(i))
+end
+
+# Single-expression brace blocks
+fn each(arr, body)
+  let i = 0
+  while i < len(arr)
+    body(arr[i])
+    i += 1
+  end
+end
+
+let nums = [10, 20, 30]
+each(nums) { |n| print(n) }
+
+# Map using blocks
+fn map(arr, f)
+  let result = []
+  let i = 0
+  while i < len(arr)
+    result[i] = f(arr[i])
+    i += 1
+  end
+  result
+end
+
+let doubled = map([1, 2, 3]) { |x| x * 2 }
+print(doubled[0])
+print(doubled[1])
+print(doubled[2])
+
+# Block capturing outer scope
+let total = 0
+times(5) do |i|
+  total += i
+end
+print(total)

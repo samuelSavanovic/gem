@@ -1,0 +1,131 @@
+13
+7
+30
+3
+1
+-10
+3.14
+4.14
+hello world
+5
+w
+true
+false
+nil
+15
+12
+24
+6
+7
+hello gem
+120
+7
+20
+99
+big
+medium
+0
+1
+2
+3
+4
+loop 0
+loop 1
+loop 2
+odd 1
+odd 3
+odd 5
+one
+two
+three
+other: 99
+1
+-1
+1
+2
+3
+15
+25
+6
+42
+99
+10
+20
+10
+30
+20
+0
+100
+10
+20
+30
+3
+99
+0
+0
+0
+9
+16
+iteration 0
+iteration 1
+iteration 2
+10
+20
+30
+2
+4
+6
+10
+25
+27
+16
+9
+8
+36
+64
+11
+12
+11
+h
+w
+foobar
+value: 42
+pi: 3.14
+flag: true
+nothing: nil
+true
+false
+true
+true
+g
+e
+m
+abababab
+tab:	here
+newline follows
+quote: "hi"
+int
+float
+string
+bool
+nil
+table
+fn
+fn
+1 is truthy
+0 is truthy
+ is truthy
+x is truthy
+true is truthy
+false is falsy
+nil is falsy
+true
+false
+true
+false
+false
+true
+true
+nil
+42
+5

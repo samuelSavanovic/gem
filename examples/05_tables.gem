@@ -1,0 +1,49 @@
+# Table literal
+let point = {x: 10, y: 20}
+print(point.x)
+print(point.y)
+print(point["x"])
+
+# Mutation
+point.x = 30
+print(point.x)
+
+# Dynamic keys
+let key = "y"
+print(point[key])
+
+# Nested tables
+let rect = {
+  origin: {x: 0, y: 0},
+  size: {w: 100, h: 50}
+}
+print(rect.origin.x)
+print(rect.size.w)
+
+# Arrays (integer-keyed tables)
+let arr = [10, 20, 30]
+print(arr[0])
+print(arr[1])
+print(arr[2])
+print(len(arr))
+
+# Array mutation
+arr[1] = 99
+print(arr[1])
+
+# Empty table and array
+let empty_t = {}
+let empty_a = []
+print(len(empty_t))
+print(len(empty_a))
+
+# Building a table dynamically
+let t = {}
+let i = 0
+while i < 5
+  t[to_string(i)] = i * i
+  i += 1
+end
+print(t["0"])
+print(t["3"])
+print(t["4"])

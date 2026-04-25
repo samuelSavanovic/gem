@@ -1,0 +1,47 @@
+# String operations
+let s = "hello world"
+print(len(s))
+print(s[0])
+print(s[6])
+
+# String concatenation
+print("foo" + "bar")
+
+# to_string for building strings
+print("value: " + to_string(42))
+print("pi: " + to_string(3.14))
+print("flag: " + to_string(true))
+print("nothing: " + to_string(nil))
+
+# String comparison
+print("abc" == "abc")
+print("abc" == "def")
+print("abc" != "def")
+print("abc" < "def")
+
+# Character-by-character iteration
+fn chars(s)
+  let i = 0
+  while i < len(s)
+    print(s[i])
+    i += 1
+  end
+end
+chars("gem")
+
+# String building
+fn repeat(s, n)
+  let result = ""
+  let i = 0
+  while i < n
+    result = result + s
+    i += 1
+  end
+  result
+end
+print(repeat("ab", 4))
+
+# Escape sequences
+print("tab:\there")
+print("newline follows")
+print("quote: \"hi\"")

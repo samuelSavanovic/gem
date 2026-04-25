@@ -1,0 +1,48 @@
+# Closures capture their environment
+fn counter(start)
+  let n = start
+  fn()
+    n = n + 1
+    n
+  end
+end
+
+let c = counter(0)
+print(c())
+print(c())
+print(c())
+
+# Closure over multiple vars
+fn adder(x)
+  fn(y)
+    x + y
+  end
+end
+
+let add5 = adder(5)
+print(add5(10))
+print(add5(20))
+
+# Nested closures
+fn outer(a)
+  fn(b)
+    fn(c)
+      a + b + c
+    end
+  end
+end
+print(outer(1)(2)(3))
+
+# Closure mutation visible to all references
+fn make_pair()
+  let val = 0
+  let get = fn() val end
+  let set = fn(v) val = v end
+  {get: get, set: set}
+end
+
+let p = make_pair()
+p.set(42)
+print(p.get())
+p.set(99)
+print(p.get())

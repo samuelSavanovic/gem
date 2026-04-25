@@ -1,0 +1,33 @@
+# Variables, literals, arithmetic, string ops
+let x = 10
+let y = 3
+print(x + y)
+print(x - y)
+print(x * y)
+print(x / y)
+print(x % y)
+print(-x)
+
+let pi = 3.14
+print(pi)
+print(pi + 1.0)
+
+let name = "world"
+print("hello " + name)
+print(name.len())
+print(name[0])
+
+print(true)
+print(false)
+print(nil)
+
+# Compound assignment
+let n = 5
+n += 10
+print(n)
+n -= 3
+print(n)
+n *= 2
+print(n)
+n /= 4
+print(n)

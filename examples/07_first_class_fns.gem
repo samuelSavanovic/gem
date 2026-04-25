@@ -1,0 +1,50 @@
+# Named functions as values
+fn square(x)
+  x * x
+end
+
+fn cube(x)
+  x * x * x
+end
+
+fn apply(f, x)
+  f(x)
+end
+
+print(apply(square, 5))
+print(apply(cube, 3))
+
+# Store in variables
+let f = square
+print(f(4))
+
+# Store in arrays
+let fns = [square, cube]
+print(fns[0](3))
+print(fns[1](2))
+
+# Store in tables
+let ops = {sq: square, cu: cube}
+print(ops.sq(6))
+print(ops.cu(4))
+
+# Higher-order: compose
+fn compose(f, g)
+  fn(x)
+    f(g(x))
+  end
+end
+
+fn double(x)
+  x * 2
+end
+
+fn inc(x)
+  x + 1
+end
+
+let double_then_inc = compose(inc, double)
+print(double_then_inc(5))
+
+let inc_then_double = compose(double, inc)
+print(inc_then_double(5))
