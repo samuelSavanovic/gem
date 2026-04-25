@@ -1079,8 +1079,6 @@ class CodeGen:
     def _compile_binop(self, node):
         op = node["op"]
         lc, ls = self._compile_expr(node["left"])
-        rc, rs = self._compile_expr(node["right"])
-        setup = ls + rs
 
         op_map = {
             "+": "gem_add", "-": "gem_sub", "*": "gem_mul",
@@ -1091,16 +1089,38 @@ class CodeGen:
         }
 
         if op in op_map:
+            rc, rs = self._compile_expr(node["right"])
+            setup = ls + rs
             return f"{op_map[op]}({lc}, {rc})", setup
         elif op == "and":
+            # Short-circuit: if left is falsy, result is left; else evaluate right
+            rc, rs = self._compile_expr(node["right"])
             tmp = self.tmp()
+            setup = ls
             setup += f"    GemVal {tmp};\n"
-            # Short-circuit: if left is falsy, result is left; else result is right
-            return f"(gem_truthy({lc}) ? ({rc}) : ({lc}))", setup
+            setup += f"    if (!gem_truthy({lc})) {{\n"
+            setup += f"        {tmp} = {lc};\n"
+            setup += f"    }} else {{\n"
+            setup += rs.replace("    ", "        ") if rs else ""
+            setup += f"        {tmp} = {rc};\n"
+            setup += f"    }}\n"
+            return tmp, setup
         elif op == "or":
-            return f"(gem_truthy({lc}) ? ({lc}) : ({rc}))", setup
+            # Short-circuit: if left is truthy, result is left; else evaluate right
+            rc, rs = self._compile_expr(node["right"])
+            tmp = self.tmp()
+            setup = ls
+            setup += f"    GemVal {tmp};\n"
+            setup += f"    if (gem_truthy({lc})) {{\n"
+            setup += f"        {tmp} = {lc};\n"
+            setup += f"    }} else {{\n"
+            setup += rs.replace("    ", "        ") if rs else ""
+            setup += f"        {tmp} = {rc};\n"
+            setup += f"    }}\n"
+            return tmp, setup
         else:
-            return "GEM_NIL", setup + f"/* unknown op: {op} */\n"
+            rc, rs = self._compile_expr(node["right"])
+            return "GEM_NIL", ls + rs + f"/* unknown op: {op} */\n"
 
     def _compile_if(self, node, indent=0):
         pad = "    " * indent
