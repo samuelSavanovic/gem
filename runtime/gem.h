@@ -79,6 +79,7 @@ GemVal gem_error_fn(void *_env, GemVal *args, int argc);
 GemVal gem_len_fn(void *_env, GemVal *args, int argc);
 GemVal gem_type_fn(void *_env, GemVal *args, int argc);
 GemVal gem_to_string_fn(void *_env, GemVal *args, int argc);
+GemVal gem_push_fn(void *_env, GemVal *args, int argc);
 
 /* ─── Helpers used by codegen ─── */
 

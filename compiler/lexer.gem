@@ -106,7 +106,6 @@ fn tokenize(source)
   let pos = 0
   let line = 1
   let length = len(source)
-  let count = 0
 
   while pos < length
     let ch = source[pos]
@@ -128,12 +127,11 @@ fn tokenize(source)
     # Newlines and semicolons — collapse consecutive
     if ch == "\n" or ch == ";"
       let should_add = true
-      if count > 0 and tokens[count - 1].type == "NEWLINE"
+      if len(tokens) > 0 and tokens[len(tokens) - 1].type == "NEWLINE"
         should_add = false
       end
       if should_add
-        tokens[count] = {type: "NEWLINE", value: "\n", line: line}
-        count += 1
+        push(tokens, {type: "NEWLINE", value: "\n", line: line})
       end
       if ch == "\n"
         line += 1
@@ -174,8 +172,7 @@ fn tokenize(source)
           pos += 1
         end
       end
-      tokens[count] = {type: "NUMBER", value: val, line: line}
-      count += 1
+      push(tokens, {type: "NUMBER", value: val, line: line})
       continue
     end
 
@@ -211,8 +208,7 @@ fn tokenize(source)
         error("unterminated string at line " + to_string(line))
       end
       pos += 1
-      tokens[count] = {type: "STRING", value: val, line: line}
-      count += 1
+      push(tokens, {type: "STRING", value: val, line: line})
       continue
     end
 
@@ -224,11 +220,10 @@ fn tokenize(source)
         pos += 1
       end
       if kw[val] == true
-        tokens[count] = {type: val, value: val, line: line}
+        push(tokens, {type: val, value: val, line: line})
       else
-        tokens[count] = {type: "NAME", value: val, line: line}
+        push(tokens, {type: "NAME", value: val, line: line})
       end
-      count += 1
       continue
     end
 
@@ -239,82 +234,69 @@ fn tokenize(source)
     end
 
     if ch == "=" and next == "="
-      tokens[count] = {type: "==", value: "==", line: line}
-      count += 1
+      push(tokens, {type: "==", value: "==", line: line})
       pos += 2
       continue
     end
     if ch == "!" and next == "="
-      tokens[count] = {type: "!=", value: "!=", line: line}
-      count += 1
+      push(tokens, {type: "!=", value: "!=", line: line})
       pos += 2
       continue
     end
     if ch == "<" and next == "="
-      tokens[count] = {type: "<=", value: "<=", line: line}
-      count += 1
+      push(tokens, {type: "<=", value: "<=", line: line})
       pos += 2
       continue
     end
     if ch == ">" and next == "="
-      tokens[count] = {type: ">=", value: ">=", line: line}
-      count += 1
+      push(tokens, {type: ">=", value: ">=", line: line})
       pos += 2
       continue
     end
     if ch == "+" and next == "="
-      tokens[count] = {type: "+=", value: "+=", line: line}
-      count += 1
+      push(tokens, {type: "+=", value: "+=", line: line})
       pos += 2
       continue
     end
     if ch == "-" and next == "="
-      tokens[count] = {type: "-=", value: "-=", line: line}
-      count += 1
+      push(tokens, {type: "-=", value: "-=", line: line})
       pos += 2
       continue
     end
     if ch == "*" and next == "="
-      tokens[count] = {type: "*=", value: "*=", line: line}
-      count += 1
+      push(tokens, {type: "*=", value: "*=", line: line})
       pos += 2
       continue
     end
     if ch == "/" and next == "="
-      tokens[count] = {type: "/=", value: "/=", line: line}
-      count += 1
+      push(tokens, {type: "/=", value: "/=", line: line})
       pos += 2
       continue
     end
     if ch == "-" and next == ">"
-      tokens[count] = {type: "->", value: "->", line: line}
-      count += 1
+      push(tokens, {type: "->", value: "->", line: line})
       pos += 2
       continue
     end
 
     # Single-char operators and punctuation
     if ch == "+" or ch == "-" or ch == "*" or ch == "/" or ch == "%"
-      tokens[count] = {type: ch, value: ch, line: line}
-      count += 1
+      push(tokens, {type: ch, value: ch, line: line})
       pos += 1
       continue
     end
     if ch == "<" or ch == ">" or ch == "="
-      tokens[count] = {type: ch, value: ch, line: line}
-      count += 1
+      push(tokens, {type: ch, value: ch, line: line})
       pos += 1
       continue
     end
     if ch == "(" or ch == ")" or ch == "[" or ch == "]" or ch == "{" or ch == "}"
-      tokens[count] = {type: ch, value: ch, line: line}
-      count += 1
+      push(tokens, {type: ch, value: ch, line: line})
       pos += 1
       continue
     end
     if ch == "." or ch == "," or ch == ":" or ch == "|"
-      tokens[count] = {type: ch, value: ch, line: line}
-      count += 1
+      push(tokens, {type: ch, value: ch, line: line})
       pos += 1
       continue
     end
@@ -322,6 +304,6 @@ fn tokenize(source)
     error("unexpected character: '" + ch + "' at line " + to_string(line))
   end
 
-  tokens[count] = {type: "EOF", value: "", line: line}
+  push(tokens, {type: "EOF", value: "", line: line})
   tokens
 end

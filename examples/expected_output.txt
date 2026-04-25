@@ -171,3 +171,16 @@ negative
 zero
 small
 big
+3
+10
+20
+30
+99
+4
+0
+10
+20
+30
+40
+hello
+world

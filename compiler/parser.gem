@@ -58,14 +58,11 @@ fn make_parser(tokens)
 
   let parse_params = fn()
     let params = []
-    let cnt = 0
     if peek().type == "NAME"
-      params[0] = advance().value
-      cnt = 1
+      push(params, advance().value)
       while peek().type == ","
         advance()
-        params[cnt] = expect("NAME").value
-        cnt += 1
+        push(params, expect("NAME").value)
       end
     end
     params
@@ -84,11 +81,9 @@ fn make_parser(tokens)
 
   let parse_body = fn()
     let stmts = []
-    let cnt = 0
     skip_nl()
     while peek().type != "end" and peek().type != "elif" and peek().type != "else" and peek().type != "when" and not at_end()
-      stmts[cnt] = parse_stmt()
-      cnt += 1
+      push(stmts, parse_stmt())
       skip_nl()
     end
     stmts
@@ -99,11 +94,9 @@ fn make_parser(tokens)
 
   let parse_fn_body = fn()
     let stmts = []
-    let cnt = 0
     skip_nl()
     while peek().type != "end" and not at_end()
-      stmts[cnt] = parse_stmt()
-      cnt += 1
+      push(stmts, parse_stmt())
       skip_nl()
     end
     stmts
@@ -162,13 +155,11 @@ fn make_parser(tokens)
       advance()
       skip_nl()
       let entries = []
-      let cnt = 0
       while peek().type != "}"
         let key = expect("NAME").value
         expect(":")
         let val = parse_expr()
-        entries[cnt] = make_table_entry(key, val)
-        cnt += 1
+        push(entries, make_table_entry(key, val))
         skip_nl()
         if peek().type == ","
           advance()
@@ -184,10 +175,8 @@ fn make_parser(tokens)
       advance()
       skip_nl()
       let elements = []
-      let cnt = 0
       while peek().type != "]"
-        elements[cnt] = parse_expr()
-        cnt += 1
+        push(elements, parse_expr())
         skip_nl()
         if peek().type == ","
           advance()
@@ -225,14 +214,11 @@ fn make_parser(tokens)
         let call_line = peek().line
         advance()
         let args = []
-        let argc = 0
         if peek().type != ")"
-          args[0] = parse_expr()
-          argc = 1
+          push(args, parse_expr())
           while peek().type == ","
             advance()
-            args[argc] = parse_expr()
-            argc += 1
+            push(args, parse_expr())
           end
         end
         expect(")")
@@ -248,8 +234,7 @@ fn make_parser(tokens)
           end
           let body = parse_fn_body()
           expect("end")
-          args[argc] = make_anon_fn(bparams, body)
-          argc += 1
+          push(args, make_anon_fn(bparams, body))
         else
           # Trailing brace block: {|params| expr} or {expr}
           # Distinguish from table literal by lookahead
@@ -272,8 +257,7 @@ fn make_parser(tokens)
               end
               let bexpr = parse_expr()
               expect("}")
-              args[argc] = make_anon_fn(bparams, [bexpr])
-              argc += 1
+              push(args, make_anon_fn(bparams, [bexpr]))
             end
           end
         end
@@ -485,14 +469,10 @@ fn make_parser(tokens)
         let fbody = parse_body()
         expect("end")
         let inner_stmts = []
-        let ic = 0
-        inner_stmts[ic] = make_let(var_name, make_index(make_var(items_var), make_var(idx_var)))
-        ic += 1
-        inner_stmts[ic] = make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)))
-        ic += 1
+        push(inner_stmts, make_let(var_name, make_index(make_var(items_var), make_var(idx_var))))
+        push(inner_stmts, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1))))
         for bi = 0, len(fbody)
-          inner_stmts[ic] = fbody[bi]
-          ic += 1
+          push(inner_stmts, fbody[bi])
         end
         let while_node = make_while(make_binop("<", make_var(idx_var), make_call(make_var("len"), [make_var(items_var)], 0)), inner_stmts)
         return {tag: "block", stmts: [make_let(items_var, items_expr), make_let(idx_var, make_int(0)), while_node]}
@@ -508,14 +488,10 @@ fn make_parser(tokens)
         let idx_var = "_for_i_" + to_string(gensym_counter)
         let limit_var = "_for_limit_" + to_string(gensym_counter)
         let inner_stmts = []
-        let ic = 0
-        inner_stmts[ic] = make_let(var_name, make_var(idx_var))
-        ic += 1
-        inner_stmts[ic] = make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)))
-        ic += 1
+        push(inner_stmts, make_let(var_name, make_var(idx_var)))
+        push(inner_stmts, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1))))
         for bi = 0, len(fbody)
-          inner_stmts[ic] = fbody[bi]
-          ic += 1
+          push(inner_stmts, fbody[bi])
         end
         let while_node = make_while(make_binop("<", make_var(idx_var), make_var(limit_var)), inner_stmts)
         return {tag: "block", stmts: [make_let(idx_var, start_expr), make_let(limit_var, end_expr), while_node]}
@@ -530,13 +506,11 @@ fn make_parser(tokens)
       let target = parse_expr()
       skip_nl()
       let whens = []
-      let wcnt = 0
       while peek().type == "when"
         advance()
         let wval = parse_expr()
         let wbody = parse_body()
-        whens[wcnt] = make_when(wval, wbody)
-        wcnt += 1
+        push(whens, make_when(wval, wbody))
         skip_nl()
       end
       let else_body = nil
@@ -585,20 +559,17 @@ fn make_parser(tokens)
         let name = expect("NAME").value
         expect("(")
         let eparams = []
-        let pcnt = 0
         if peek().type != ")"
           let pname = expect("NAME").value
           expect(":")
           let ptype = expect("NAME").value
-          eparams[0] = make_extern_param(pname, ptype)
-          pcnt = 1
+          push(eparams, make_extern_param(pname, ptype))
           while peek().type == ","
             advance()
             let pn2 = expect("NAME").value
             expect(":")
             let pt2 = expect("NAME").value
-            eparams[pcnt] = make_extern_param(pn2, pt2)
-            pcnt += 1
+            push(eparams, make_extern_param(pn2, pt2))
           end
         end
         expect(")")
@@ -628,11 +599,9 @@ fn make_parser(tokens)
 
   let parse = fn()
     let stmts = []
-    let cnt = 0
     skip_nl()
     while not at_end()
-      stmts[cnt] = parse_stmt()
-      cnt += 1
+      push(stmts, parse_stmt())
       skip_nl()
     end
     make_program(stmts)

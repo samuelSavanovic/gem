@@ -380,6 +380,22 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
     return gem_string("");
 }
 
+/* ─── Built-in: push ─── */
+
+GemVal gem_push_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("push: expected 2 arguments"); }
+    GemVal tbl = args[0];
+    if (tbl.type != VAL_TABLE) { gem_error("push: expected table as first argument"); }
+    GemTable *t = tbl.table;
+    GemVal val = args[1];
+    if (t->len >= t->cap) gem_table_grow(t);
+    t->keys[t->len] = gem_int(t->len);
+    t->vals[t->len] = val;
+    t->len++;
+    return val;
+}
+
 /* ─── Built-in: keys ─── */
 
 GemVal gem_keys(GemVal tbl) {

@@ -19,10 +19,8 @@ check("compound assign desugars", "x += 1", "(assign x (binop + (var x) (int 1))
 ```
 Allow newlines inside argument lists.
 
-### 4. `push()` builtin
-Every array build is `arr[count] = val; count += 1`. A builtin `push(arr, val)` would eliminate the manual count variable pattern.
-
-**Codegen note:** The codegen has arrays built this way everywhere: `functions`, `forward_decls`, `fn_defs`, `extern_fns_list`, `extern_includes`, `top_stmts`, `c_args`, `arg_exprs`, `captures`. Each needs a parallel counter variable (`fn_count`, `fwd_count`, etc.). There are ~15 such counter variables in codegen.gem. `push()` would eliminate all of them.
+### 4. `push()` builtin — DONE
+Added `push(arr, val)` as a runtime builtin (`gem_push_fn`) that appends a value at the next integer index. Returns the pushed value. Registered in the codegen as a builtin with direct call optimization. All compiler files (codegen.gem, parser.gem, lexer.gem) rewritten to use `push()`, eliminating ~15 counter variables and ~30 `count += 1` lines. Fixed-point verified.
 
 ## Medium Priority
 

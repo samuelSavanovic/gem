@@ -134,9 +134,7 @@ extern fn keys(t: Table) -> Table
 
 fn make_codegen(source_name)
   let functions = []
-  let fn_count = 0
   let forward_decls = []
-  let fwd_count = 0
   let tmp_counter = 0
   let anon_counter = 0
   let defined_fns = {}
@@ -146,6 +144,7 @@ fn make_codegen(source_name)
   builtins["len"] = true
   builtins["type"] = true
   builtins["to_string"] = true
+  builtins["push"] = true
   let boxed_vars = {}
 
   # ─── Helpers ──
@@ -485,6 +484,8 @@ fn make_codegen(source_name)
         return {expr: "gem_make_fn(gem_type_fn, NULL)", setup: ""}
       elif name == "to_string"
         return {expr: "gem_make_fn(gem_to_string_fn, NULL)", setup: ""}
+      elif name == "push"
+        return {expr: "gem_make_fn(gem_push_fn, NULL)", setup: ""}
       elif set_contains(defined_fns, name)
         return {expr: "gem_make_fn(gem_fn_" + name + ", NULL)", setup: ""}
       end
@@ -609,7 +610,7 @@ fn make_codegen(source_name)
         for i = 0, len(args)
           let r = compile_expr(args[i])
           arg_setups = arg_setups + r.setup
-          arg_exprs[i] = r.expr
+          push(arg_exprs, r.expr)
         end
         let argc = len(args)
         if argc == 0
@@ -622,7 +623,7 @@ fn make_codegen(source_name)
         end
         let setup = arg_setups + "    GemVal " + t + "[] = {" + arr + "};\n"
         return {expr: "gem_error_at_fn(\"" + escaped_file + "\", " + to_string(line) + ", " + t + ", " + to_string(argc) + ")", setup: setup}
-      elif name == "print" or name == "len" or name == "type" or name == "to_string"
+      elif name == "print" or name == "len" or name == "type" or name == "to_string" or name == "push"
         let fn_name = ""
         if name == "print"
           fn_name = "gem_print"
@@ -632,13 +633,15 @@ fn make_codegen(source_name)
           fn_name = "gem_type_fn"
         elif name == "to_string"
           fn_name = "gem_to_string_fn"
+        elif name == "push"
+          fn_name = "gem_push_fn"
         end
         let arg_setups = ""
         let arg_exprs = []
         for i = 0, len(args)
           let r = compile_expr(args[i])
           arg_setups = arg_setups + r.setup
-          arg_exprs[i] = r.expr
+          push(arg_exprs, r.expr)
         end
         let argc = len(args)
         if argc == 0
@@ -657,7 +660,7 @@ fn make_codegen(source_name)
         for i = 0, len(args)
           let r = compile_expr(args[i])
           arg_setups = arg_setups + r.setup
-          arg_exprs[i] = r.expr
+          push(arg_exprs, r.expr)
         end
         let argc = len(args)
         if argc == 0
@@ -680,7 +683,7 @@ fn make_codegen(source_name)
     for i = 0, len(args)
       let r = compile_expr(args[i])
       arg_setups = arg_setups + r.setup
-      arg_exprs[i] = r.expr
+      push(arg_exprs, r.expr)
     end
     let setup = func_r.setup + arg_setups
     let argc = len(args)
@@ -1056,23 +1059,23 @@ fn make_codegen(source_name)
       let ptype = p["type"]
       if ptype == "Int"
         lines = lines + "    int64_t _p" + to_string(i) + " = args[" + to_string(i) + "].ival;\n"
-        c_args[i] = "_p" + to_string(i)
+        push(c_args, "_p" + to_string(i))
       elif ptype == "Float"
         lines = lines + "    double _p" + to_string(i) + " = args[" + to_string(i) + "].fval;\n"
-        c_args[i] = "_p" + to_string(i)
+        push(c_args, "_p" + to_string(i))
       elif ptype == "String"
         lines = lines + "    char* _p" + to_string(i) + " = args[" + to_string(i) + "].sval;\n"
-        c_args[i] = "_p" + to_string(i)
+        push(c_args, "_p" + to_string(i))
       elif ptype == "Bool"
         lines = lines + "    int _p" + to_string(i) + " = args[" + to_string(i) + "].bval;\n"
-        c_args[i] = "_p" + to_string(i)
+        push(c_args, "_p" + to_string(i))
       elif ptype == "Ptr"
         lines = lines + "    void* _p" + to_string(i) + " = (void*)(intptr_t)args[" + to_string(i) + "].ival;\n"
-        c_args[i] = "_p" + to_string(i)
+        push(c_args, "_p" + to_string(i))
       elif ptype == "Table"
-        c_args[i] = "args[" + to_string(i) + "]"
+        push(c_args, "args[" + to_string(i) + "]")
       else
-        c_args[i] = "args[" + to_string(i) + "]"
+        push(c_args, "args[" + to_string(i) + "]")
       end
     end
 
@@ -1115,8 +1118,7 @@ fn make_codegen(source_name)
     lines = lines + "}"
 
     # Add forward declaration
-    forward_decls[fwd_count] = "static GemVal gem_fn_" + name + "(void *_env, GemVal *args, int argc);"
-    fwd_count += 1
+    push(forward_decls, "static GemVal gem_fn_" + name + "(void *_env, GemVal *args, int argc);")
 
     lines
   end
@@ -1243,8 +1245,7 @@ fn make_codegen(source_name)
     boxed_vars = saved_boxed
 
     # Add struct + function to functions list
-    functions[fn_count] = struct_def + lines
-    fn_count += 1
+    push(functions, struct_def + lines)
 
     {fn_name: name, struct_name: struct_name, captures: captures}
   end
@@ -1254,27 +1255,19 @@ fn make_codegen(source_name)
   let compile = fn(ast)
     # Separate different statement types
     let fn_defs = []
-    let fn_def_count = 0
     let extern_fns_list = []
-    let extern_fn_count = 0
     let extern_includes = []
-    let extern_inc_count = 0
     let top_stmts = []
-    let top_count = 0
 
     for s in ast.stmts
       if s.tag == "fn_def"
-        fn_defs[fn_def_count] = s
-        fn_def_count += 1
+        push(fn_defs, s)
       elif s.tag == "extern_fn"
-        extern_fns_list[extern_fn_count] = s
-        extern_fn_count += 1
+        push(extern_fns_list, s)
       elif s.tag == "extern_include"
-        extern_includes[extern_inc_count] = s
-        extern_inc_count += 1
+        push(extern_includes, s)
       else
-        top_stmts[top_count] = s
-        top_count += 1
+        push(top_stmts, s)
       end
     end
 
@@ -1286,20 +1279,17 @@ fn make_codegen(source_name)
     # Forward declarations for user-defined functions
     for fd in fn_defs
       set_add(defined_fns, fd.name)
-      forward_decls[fwd_count] = "static GemVal gem_fn_" + fd.name + "(void *_env, GemVal *args, int argc);"
-      fwd_count += 1
+      push(forward_decls, "static GemVal gem_fn_" + fd.name + "(void *_env, GemVal *args, int argc);")
     end
 
     # Emit extern fn wrappers
     for ef in extern_fns_list
-      functions[fn_count] = compile_extern_fn(ef)
-      fn_count += 1
+      push(functions, compile_extern_fn(ef))
     end
 
     # Emit function definitions
     for fd in fn_defs
-      functions[fn_count] = compile_fn(fd)
-      fn_count += 1
+      push(functions, compile_fn(fd))
     end
 
     # Build main
@@ -1333,18 +1323,18 @@ fn make_codegen(source_name)
     out = out + "#include \"gem.h\"\n"
 
     # Forward declarations
-    for i = 0, fwd_count
+    for i = 0, len(forward_decls)
       out = out + forward_decls[i]
-      if i < fwd_count - 1
+      if i < len(forward_decls) - 1
         out = out + "\n"
       end
     end
     out = out + "\n\n"
 
     # Functions
-    for i = 0, fn_count
+    for i = 0, len(functions)
       out = out + functions[i]
-      if i < fn_count - 1
+      if i < len(functions) - 1
         out = out + "\n\n"
       end
     end
@@ -1361,18 +1351,16 @@ end
 
 fn split_string(s, delim)
   let result = []
-  let count = 0
   let current = ""
   for i = 0, len(s)
     if s[i] == delim
-      result[count] = current
-      count += 1
+      push(result, current)
       current = ""
     else
       current = current + s[i]
     end
   end
-  result[count] = current
+  push(result, current)
   result
 end
 

@@ -6,7 +6,7 @@ _(working name, obviously)_
 
 **Implementation Strategy**
 
-Bootstrap compiler written in Python — quick and dirty, optimized for speed of development, will be thrown away after self-hosting. Its only job is to compile the real compiler written in Gem itself. No dependencies, pure stdlib: `re` for the lexer, dicts for AST nodes, f-strings for C codegen. Target ~1500 lines.
+The compiler is self-hosting — written in Gem, compiling itself. A checked-in C file (`bootstrap/stage0.c`) serves as the bootstrap artifact so any C compiler can rebuild from scratch. No Python, no external parser generators.
 
 Compilation target is C source code. `gcc`/`clang` handles optimization and linking. This gives us free C interop since we're already in native land.
 
@@ -18,14 +18,14 @@ C runtime is minimal glue code (~100–200 lines) wiring together three librarie
 
 **Boehm + coroutine integration: prototyped and working.** See `prototype/gc_coro_test.c`. The trick: provide minicoro a custom stack allocator that calls `malloc()` + `GC_add_roots()`, and on dealloc calls `GC_remove_roots()` + `free()`. This lets Boehm scan coroutine stacks for GC roots. Tested with 50 concurrent coroutines under heavy GC pressure.
 
-**Bootstrap Path**
+**Bootstrap Path** (all complete)
 
 1. ~~Prototype Boehm + coroutine integration~~ — done, see `prototype/`
-2. Python bootstrap compiler (~1500 lines, a weekend or two)
-3. C runtime glue (~200–350 lines wiring Boehm + minicoro + stb_ds + scheduler/channels)
-4. Write the real Gem compiler in Gem, compile it with the Python bootstrap
-5. New compiler compiles itself
-6. Delete the Python code forever
+2. ~~Python bootstrap compiler~~ — done, deleted
+3. ~~C runtime glue~~ — done, `runtime/gem.c`
+4. ~~Write the real Gem compiler in Gem~~ — done, `compiler/`
+5. ~~New compiler compiles itself~~ — done, fixed-point verified
+6. ~~Delete the Python code forever~~ — done
 
 ---
 
@@ -251,6 +251,32 @@ String interpolation is not in v0. Keep the lexer simple.
 
 No exceptions in v0. `error(msg)` prints the message with file and line info to stderr and halts immediately (`fprintf` + `exit(1)` in emitted C). The compiler reports the first error and stops. No error recovery.
 
+**Built-in Functions**
+
+`print(args...)` — prints values separated by spaces, followed by a newline.
+
+`error(msg)` — prints the message with file and line info to stderr and halts (`exit(1)`).
+
+`len(v)` — returns the length of a string or the number of entries in a table.
+
+`type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`.
+
+`to_string(v)` — converts any value to its string representation.
+
+`push(arr, val)` — appends `val` to the table at the next integer index. Mutates the table in place. Returns the pushed value.
+
+```
+let items = []
+push(items, "a")
+push(items, "b")
+print(len(items))  # 2
+print(items[0])    # a
+```
+
+`keys(tbl)` — returns a new table containing the keys of `tbl` as an integer-indexed array. Currently requires `extern fn` declaration; will become a builtin.
+
+All builtins are first-class values — they can be stored in variables and passed to functions.
+
 **Module System (v0.1 — minimal)**
 
 ```
@@ -268,6 +294,6 @@ Every value is a tagged C union. The compiler emits C code that uses the runtime
 
 **What's NOT in v0**
 
-No classes. No inheritance. No exceptions (use `error()` to halt). No string interpolation. No variadic functions. No destructuring. No type system. No operator overloading. No namespaces. No `for` keyword.
+No classes. No inheritance. No exceptions (use `error()` to halt). No string interpolation. No variadic functions. No destructuring. No type system. No operator overloading. No namespaces.
 
 All of those can be added later _in the language itself_ via blocks, or in a future compiler version compiled by v0.
