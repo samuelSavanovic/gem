@@ -402,331 +402,7 @@ class ASTBuilder(Transformer):
 
 # ─── C Code Generation ─────────────────────────────────────────────────────
 
-C_RUNTIME = r"""
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-
-/* ─── Tagged value ─── */
-
-typedef enum {
-    VAL_NIL, VAL_BOOL, VAL_INT, VAL_FLOAT, VAL_STRING, VAL_FN, VAL_TABLE,
-} GemType;
-
-typedef struct GemVal GemVal;
-typedef GemVal (*GemFnPtr)(void *env, GemVal *args, int argc);
-
-/* ─── Table (dynamic array of key-value pairs) ─── */
-
-typedef struct {
-    GemVal *keys;
-    GemVal *vals;
-    int len;
-    int cap;
-} GemTable;
-
-struct GemVal {
-    GemType type;
-    union {
-        int64_t ival;
-        double fval;
-        char *sval;
-        int bval;
-        struct { GemFnPtr fn; void *env; };
-        GemTable *table;
-    };
-};
-
-static GemVal GEM_NIL = {VAL_NIL, {0}};
-
-static GemVal gem_int(int64_t v) { return (GemVal){VAL_INT, {.ival = v}}; }
-static GemVal gem_float(double v) { GemVal r; r.type = VAL_FLOAT; r.fval = v; return r; }
-static GemVal gem_bool(int v) { GemVal r; r.type = VAL_BOOL; r.bval = v; return r; }
-static GemVal gem_make_fn(GemFnPtr f, void *env) { GemVal r; r.type = VAL_FN; r.fn = f; r.env = env; return r; }
-
-static GemVal gem_string(const char *s) {
-    GemVal r;
-    r.type = VAL_STRING;
-    r.sval = malloc(strlen(s) + 1);
-    strcpy(r.sval, s);
-    return r;
-}
-
-/* ─── Forward decl for error ─── */
-
-static void gem_error(const char *msg);
-
-/* ─── Table operations ─── */
-
-static int gem_val_eq(GemVal a, GemVal b);
-
-static GemVal gem_table_new(void) {
-    GemTable *t = malloc(sizeof(GemTable));
-    t->len = 0;
-    t->cap = 4;
-    t->keys = malloc(sizeof(GemVal) * t->cap);
-    t->vals = malloc(sizeof(GemVal) * t->cap);
-    GemVal r; r.type = VAL_TABLE; r.table = t; return r;
-}
-
-static void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
-    if (tbl.type != VAL_TABLE) { fprintf(stderr, "error: index set on non-table\n"); exit(1); }
-    GemTable *t = tbl.table;
-    for (int i = 0; i < t->len; i++) {
-        if (gem_val_eq(t->keys[i], key)) {
-            t->vals[i] = val;
-            return;
-        }
-    }
-    if (t->len >= t->cap) {
-        t->cap *= 2;
-        t->keys = realloc(t->keys, sizeof(GemVal) * t->cap);
-        t->vals = realloc(t->vals, sizeof(GemVal) * t->cap);
-    }
-    t->keys[t->len] = key;
-    t->vals[t->len] = val;
-    t->len++;
-}
-
-static GemVal gem_table_get(GemVal tbl, GemVal key) {
-    if (tbl.type == VAL_STRING) {
-        if (key.type != VAL_INT) { gem_error("string index must be int"); }
-        int64_t idx = key.ival;
-        int64_t slen = (int64_t)strlen(tbl.sval);
-        if (idx < 0 || idx >= slen) { gem_error("string index out of bounds"); }
-        char buf[2]; buf[0] = tbl.sval[idx]; buf[1] = '\0';
-        return gem_string(buf);
-    }
-    if (tbl.type != VAL_TABLE) { fprintf(stderr, "error: index get on non-table\n"); exit(1); }
-    GemTable *t = tbl.table;
-    for (int i = 0; i < t->len; i++) {
-        if (gem_val_eq(t->keys[i], key)) return t->vals[i];
-    }
-    return (GemVal){VAL_NIL, {0}};
-}
-
-static int gem_val_eq(GemVal a, GemVal b) {
-    if (a.type != b.type) return 0;
-    switch (a.type) {
-        case VAL_NIL: return 1;
-        case VAL_BOOL: return a.bval == b.bval;
-        case VAL_INT: return a.ival == b.ival;
-        case VAL_FLOAT: return a.fval == b.fval;
-        case VAL_STRING: return strcmp(a.sval, b.sval) == 0;
-        default: return 0;
-    }
-}
-
-/* ─── Truthiness ─── */
-
-static int gem_truthy(GemVal v) {
-    if (v.type == VAL_NIL) return 0;
-    if (v.type == VAL_BOOL) return v.bval;
-    return 1;
-}
-
-/* ─── Runtime error ─── */
-
-static void gem_error(const char *msg) {
-    fprintf(stderr, "error: %s\n", msg);
-    exit(1);
-}
-
-/* ─── Arithmetic / operators ─── */
-
-static GemVal gem_add(GemVal a, GemVal b) {
-    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int(a.ival + b.ival);
-    if (a.type == VAL_FLOAT && b.type == VAL_FLOAT) return gem_float(a.fval + b.fval);
-    if (a.type == VAL_INT && b.type == VAL_FLOAT) return gem_float((double)a.ival + b.fval);
-    if (a.type == VAL_FLOAT && b.type == VAL_INT) return gem_float(a.fval + (double)b.ival);
-    if (a.type == VAL_STRING && b.type == VAL_STRING) {
-        size_t la = strlen(a.sval), lb = strlen(b.sval);
-        char *s = malloc(la + lb + 1);
-        memcpy(s, a.sval, la);
-        memcpy(s + la, b.sval, lb + 1);
-        GemVal r; r.type = VAL_STRING; r.sval = s; return r;
-    }
-    gem_error("type error in +"); return GEM_NIL;
-}
-
-static GemVal gem_sub(GemVal a, GemVal b) {
-    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int(a.ival - b.ival);
-    if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
-        double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
-        double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
-        return gem_float(fa - fb);
-    }
-    gem_error("type error in -"); return GEM_NIL;
-}
-
-static GemVal gem_mul(GemVal a, GemVal b) {
-    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int(a.ival * b.ival);
-    if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
-        double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
-        double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
-        return gem_float(fa * fb);
-    }
-    gem_error("type error in *"); return GEM_NIL;
-}
-
-static GemVal gem_div(GemVal a, GemVal b) {
-    if (a.type == VAL_INT && b.type == VAL_INT) {
-        if (b.ival == 0) gem_error("division by zero");
-        return gem_int(a.ival / b.ival);
-    }
-    if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
-        double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
-        if (fb == 0.0) gem_error("division by zero");
-        double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
-        return gem_float(fa / fb);
-    }
-    gem_error("type error in /"); return GEM_NIL;
-}
-
-static GemVal gem_mod(GemVal a, GemVal b) {
-    if (a.type == VAL_INT && b.type == VAL_INT) {
-        if (b.ival == 0) gem_error("division by zero");
-        return gem_int(a.ival % b.ival);
-    }
-    gem_error("type error in %"); return GEM_NIL;
-}
-
-static GemVal gem_eq(GemVal a, GemVal b) {
-    if (a.type != b.type) return gem_bool(0);
-    switch (a.type) {
-        case VAL_NIL: return gem_bool(1);
-        case VAL_BOOL: return gem_bool(a.bval == b.bval);
-        case VAL_INT: return gem_bool(a.ival == b.ival);
-        case VAL_FLOAT: return gem_bool(a.fval == b.fval);
-        case VAL_STRING: return gem_bool(strcmp(a.sval, b.sval) == 0);
-        default: return gem_bool(0);
-    }
-}
-
-static GemVal gem_neq(GemVal a, GemVal b) {
-    return gem_bool(!gem_truthy(gem_eq(a, b)));
-}
-
-static GemVal gem_lt(GemVal a, GemVal b) {
-    if (a.type == VAL_INT && b.type == VAL_INT) return gem_bool(a.ival < b.ival);
-    if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
-        double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
-        double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
-        return gem_bool(fa < fb);
-    }
-    if (a.type == VAL_STRING && b.type == VAL_STRING) return gem_bool(strcmp(a.sval, b.sval) < 0);
-    gem_error("type error in <"); return GEM_NIL;
-}
-
-static GemVal gem_gt(GemVal a, GemVal b) { return gem_lt(b, a); }
-static GemVal gem_le(GemVal a, GemVal b) { return gem_bool(!gem_truthy(gem_gt(a, b))); }
-static GemVal gem_ge(GemVal a, GemVal b) { return gem_bool(!gem_truthy(gem_lt(a, b))); }
-
-static GemVal gem_neg(GemVal a) {
-    if (a.type == VAL_INT) return gem_int(-a.ival);
-    if (a.type == VAL_FLOAT) return gem_float(-a.fval);
-    gem_error("type error in unary -"); return GEM_NIL;
-}
-
-static GemVal gem_not(GemVal a) {
-    return gem_bool(!gem_truthy(a));
-}
-
-/* ─── Built-in: print ─── */
-
-static GemVal gem_print(void *_env, GemVal *args, int argc) {
-    for (int i = 0; i < argc; i++) {
-        if (i > 0) printf(" ");
-        GemVal v = args[i];
-        switch (v.type) {
-            case VAL_NIL: printf("nil"); break;
-            case VAL_BOOL: printf("%s", v.bval ? "true" : "false"); break;
-            case VAL_INT: printf("%lld", (long long)v.ival); break;
-            case VAL_FLOAT: printf("%g", v.fval); break;
-            case VAL_STRING: printf("%s", v.sval); break;
-            case VAL_FN: printf("<fn>"); break;
-            case VAL_TABLE: printf("<table:%d>", v.table->len); break;
-        }
-    }
-    printf("\n");
-    return GEM_NIL;
-}
-
-/* ─── Built-in: error ─── */
-
-static GemVal gem_error_fn(void *_env, GemVal *args, int argc) {
-    if (argc > 0 && args[0].type == VAL_STRING) {
-        fprintf(stderr, "error: %s\n", args[0].sval);
-    } else {
-        fprintf(stderr, "error\n");
-    }
-    exit(1);
-    return GEM_NIL;
-}
-
-/* ─── Built-in: len ─── */
-
-static GemVal gem_len_val(GemVal v) {
-    if (v.type == VAL_STRING) return gem_int((int64_t)strlen(v.sval));
-    if (v.type == VAL_TABLE) return gem_int((int64_t)v.table->len);
-    gem_error("len: expected string or table");
-    return GEM_NIL;
-}
-
-static GemVal gem_len_fn(void *_env, GemVal *args, int argc) {
-    if (argc < 1) { gem_error("len: expected 1 argument"); }
-    return gem_len_val(args[0]);
-}
-
-/* ─── Built-in: type ─── */
-
-static GemVal gem_type_fn(void *_env, GemVal *args, int argc) {
-    if (argc < 1) return gem_string("nil");
-    switch (args[0].type) {
-        case VAL_NIL: return gem_string("nil");
-        case VAL_BOOL: return gem_string("bool");
-        case VAL_INT: return gem_string("int");
-        case VAL_FLOAT: return gem_string("float");
-        case VAL_STRING: return gem_string("string");
-        case VAL_FN: return gem_string("fn");
-        case VAL_TABLE: return gem_string("table");
-    }
-    return gem_string("unknown");
-}
-
-/* ─── Built-in: to_string ─── */
-
-static GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
-    if (argc < 1) return gem_string("");
-    GemVal v = args[0];
-    char buf[64];
-    switch (v.type) {
-        case VAL_NIL: return gem_string("nil");
-        case VAL_BOOL: return gem_string(v.bval ? "true" : "false");
-        case VAL_INT: snprintf(buf, sizeof(buf), "%lld", (long long)v.ival); return gem_string(buf);
-        case VAL_FLOAT: snprintf(buf, sizeof(buf), "%g", v.fval); return gem_string(buf);
-        case VAL_STRING: return v;
-        case VAL_FN: return gem_string("<fn>");
-        case VAL_TABLE: snprintf(buf, sizeof(buf), "<table:%d>", v.table->len); return gem_string(buf);
-    }
-    return gem_string("");
-}
-
-/* ─── Built-in: error with location ─── */
-
-static GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
-    if (argc > 0 && args[0].type == VAL_STRING) {
-        fprintf(stderr, "%s:%d: error: %s\n", file, line, args[0].sval);
-    } else {
-        fprintf(stderr, "%s:%d: error\n", file, line);
-    }
-    exit(1);
-    return GEM_NIL;
-}
-
-/* ─── Forward declarations ─── */
-"""
+C_RUNTIME = '#include "gem.h"\n'
 
 class CodeGen:
     def __init__(self, source_name="<stdin>"):
@@ -1027,7 +703,7 @@ class CodeGen:
             mp = self._mangle(p)
             if p in captured:
                 # Box: allocate on heap so closures can capture a pointer
-                lines.append(f"    GemVal *{mp} = malloc(sizeof(GemVal));")
+                lines.append(f"    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));")
                 lines.append(f"    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;")
             else:
                 lines.append(f"    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;")
@@ -1084,7 +760,7 @@ class CodeGen:
         for i, p in enumerate(params):
             mp = self._mangle(p)
             if p in inner_captured:
-                lines.append(f"    GemVal *{mp} = malloc(sizeof(GemVal));")
+                lines.append(f"    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));")
                 lines.append(f"    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;")
             else:
                 lines.append(f"    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;")
@@ -1120,7 +796,7 @@ class CodeGen:
             name = node["name"]
             mname = self._mangle(name)
             if name in self.boxed_vars:
-                return setup + f"{pad}GemVal *{mname} = malloc(sizeof(GemVal));\n{pad}*{mname} = {expr_code};"
+                return setup + f"{pad}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{pad}*{mname} = {expr_code};"
             return setup + f"{pad}GemVal {mname} = {expr_code};"
         elif tag == "assign":
             expr_code, setup = self._compile_expr(node["value"])
@@ -1172,7 +848,7 @@ class CodeGen:
             name = node["name"]
             mname = self._mangle(name)
             if name in self.boxed_vars:
-                return setup + f"{pad}GemVal *{mname} = malloc(sizeof(GemVal));\n{pad}*{mname} = {expr_code};\n{pad}return GEM_NIL;"
+                return setup + f"{pad}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{pad}*{mname} = {expr_code};\n{pad}return GEM_NIL;"
             return setup + f"{pad}GemVal {mname} = {expr_code};\n{pad}return GEM_NIL;"
         elif tag == "assign":
             expr_code, setup = self._compile_expr(node["value"])
@@ -1303,7 +979,7 @@ class CodeGen:
         # At the creation site, allocate env and populate
         setup = ""
         env_tmp = self.tmp()
-        setup += f"    struct {struct_name} *{env_tmp} = malloc(sizeof(struct {struct_name}));\n"
+        setup += f"    struct {struct_name} *{env_tmp} = GC_MALLOC(sizeof(struct {struct_name}));\n"
         for c in captures:
             mc = self._mangle(c)
             if c in self.boxed_vars:
@@ -1602,10 +1278,20 @@ def main():
     with open(out_c, "w") as f:
         f.write(c_code)
 
-    # Compile
+    # Compile — link against the standalone runtime
     cc = os.environ.get("CC", "cc")
+    runtime_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "runtime")
+    runtime_c = os.path.join(runtime_dir, "gem.c")
+
+    # Get Boehm GC flags via pkg-config
+    gc_flags = subprocess.run(
+        ["pkg-config", "--cflags", "--libs", "bdw-gc"],
+        capture_output=True, text=True
+    )
+    gc_args = gc_flags.stdout.strip().split() if gc_flags.returncode == 0 else ["-lgc"]
+
     result = subprocess.run(
-        [cc, "-o", out_bin, out_c, "-std=c11", "-Wall"],
+        [cc, "-o", out_bin, out_c, runtime_c, "-I", runtime_dir, "-std=c11", "-Wall"] + gc_args,
         capture_output=True, text=True
     )
     if result.returncode != 0:

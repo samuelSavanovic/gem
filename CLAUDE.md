@@ -8,6 +8,8 @@ A dynamically typed language that compiles to C. See `docs/SPEC.md` for the full
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 prototype/            # C prototypes (Boehm GC + minicoro integration, scheduler + mailbox)
 bootstrap/            # Python bootstrap compiler (WIP)
+runtime/              # standalone C runtime (gem.h + gem.c + stb_ds.h)
+examples/             # test programs + run_all.sh
 ```
 
 ## Setup
@@ -28,7 +30,7 @@ brew install bdw-gc
 
 - **Boehm GC** (`bdw-gc`) — garbage collector
 - **minicoro** (`prototype/minicoro.h`) — single-header coroutine library, vendored
-- **stb_ds.h** — single-header hash maps/arrays (not yet vendored)
+- **stb_ds.h** (`runtime/stb_ds.h`) — single-header hash maps/arrays, vendored
 
 ## Key Decisions
 
@@ -48,6 +50,13 @@ After any compiler change, run edge-case and adversarial tests before considerin
 4. **Regression** — re-run previous features to make sure nothing broke
 
 Write a `.gem` test file, compile and run it, verify output. For expected errors (parse errors, runtime errors), confirm the compiler or program fails with a sensible message rather than crashing or silently producing wrong output.
+
+## Running Tests
+
+```bash
+make test          # run all numbered examples against expected output
+make test-json     # run JSON parser stress test
+```
 
 ## Running Prototypes
 

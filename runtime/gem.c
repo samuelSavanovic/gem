@@ -1,0 +1,393 @@
+/*
+ * gem.c — Gem language runtime implementation.
+ * Uses Boehm GC for memory management and stb_ds for hash indexing.
+ */
+
+#include <gc.h>
+
+#define STB_DS_IMPLEMENTATION
+#define STBDS_REALLOC(c, p, s) GC_REALLOC((p), (s))
+#define STBDS_FREE(c, p)       ((void)(p))  /* GC handles freeing */
+#include "stb_ds.h"
+
+#include "gem.h"
+
+/* ─── GC-aware allocators ─── */
+
+#define ALLOC(type) ((type *)GC_MALLOC(sizeof(type)))
+#define ALLOC_N(type, n) ((type *)GC_MALLOC(sizeof(type) * (n)))
+
+/* ─── Table internals ─── */
+
+/* String key -> index mapping for O(1) lookup */
+typedef struct {
+    char *key;       /* stb_ds uses this field name */
+    int value;       /* index into keys/vals arrays */
+} GemStrIndex;
+
+struct GemTable {
+    GemVal *keys;
+    GemVal *vals;
+    int len;
+    int cap;
+    GemStrIndex *str_index;  /* stb_ds string hash map (NULL until first string key) */
+};
+
+/* ─── Globals ─── */
+
+GemVal GEM_NIL = {VAL_NIL, {0}};
+
+/* ─── Constructors ─── */
+
+GemVal gem_int(int64_t v) { return (GemVal){VAL_INT, {.ival = v}}; }
+GemVal gem_float(double v) { GemVal r; r.type = VAL_FLOAT; r.fval = v; return r; }
+GemVal gem_bool(int v) { GemVal r; r.type = VAL_BOOL; r.bval = v; return r; }
+GemVal gem_make_fn(GemFnPtr f, void *env) { GemVal r; r.type = VAL_FN; r.fn = f; r.env = env; return r; }
+
+GemVal gem_string(const char *s) {
+    GemVal r;
+    r.type = VAL_STRING;
+    size_t len = strlen(s) + 1;
+    r.sval = (char *)GC_MALLOC_ATOMIC(len);
+    memcpy(r.sval, s, len);
+    return r;
+}
+
+/* ─── Forward decl ─── */
+
+void gem_error(const char *msg);
+
+/* ─── Table operations ─── */
+
+int gem_val_eq(GemVal a, GemVal b);
+
+static void gem_table_grow(GemTable *t) {
+    int new_cap = t->cap * 2;
+    GemVal *new_keys = ALLOC_N(GemVal, new_cap);
+    GemVal *new_vals = ALLOC_N(GemVal, new_cap);
+    memcpy(new_keys, t->keys, sizeof(GemVal) * t->len);
+    memcpy(new_vals, t->vals, sizeof(GemVal) * t->len);
+    t->keys = new_keys;
+    t->vals = new_vals;
+    t->cap = new_cap;
+}
+
+GemVal gem_table_new(void) {
+    GemTable *t = ALLOC(GemTable);
+    t->len = 0;
+    t->cap = 4;
+    t->keys = ALLOC_N(GemVal, 4);
+    t->vals = ALLOC_N(GemVal, 4);
+    t->str_index = NULL;
+    GemVal r; r.type = VAL_TABLE; r.table = t; return r;
+}
+
+void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
+    if (tbl.type != VAL_TABLE) { fprintf(stderr, "error: index set on non-table\n"); exit(1); }
+    GemTable *t = tbl.table;
+
+    /* String key: use hash index for O(1) lookup */
+    if (key.type == VAL_STRING) {
+        if (t->str_index != NULL) {
+            ptrdiff_t idx = shgeti(t->str_index, key.sval);
+            if (idx >= 0) {
+                t->vals[t->str_index[idx].value] = val;
+                return;
+            }
+        }
+        /* Not found — append */
+        if (t->len >= t->cap) gem_table_grow(t);
+        int pos = t->len;
+        t->keys[pos] = key;
+        t->vals[pos] = val;
+        t->len++;
+        shput(t->str_index, key.sval, pos);
+        return;
+    }
+
+    /* Integer key: check for direct array-style indexing */
+    if (key.type == VAL_INT) {
+        int64_t ik = key.ival;
+        /* If key is within existing range, update in place */
+        if (ik >= 0 && ik < t->len && t->keys[ik].type == VAL_INT && t->keys[ik].ival == ik) {
+            t->vals[ik] = val;
+            return;
+        }
+    }
+
+    /* Fallback: linear scan for non-string, non-array-pattern keys */
+    for (int i = 0; i < t->len; i++) {
+        if (gem_val_eq(t->keys[i], key)) {
+            t->vals[i] = val;
+            return;
+        }
+    }
+
+    /* Append new entry */
+    if (t->len >= t->cap) gem_table_grow(t);
+    t->keys[t->len] = key;
+    t->vals[t->len] = val;
+    t->len++;
+}
+
+GemVal gem_table_get(GemVal tbl, GemVal key) {
+    /* String indexing: tbl[i] on a string returns single char */
+    if (tbl.type == VAL_STRING) {
+        if (key.type != VAL_INT) { gem_error("string index must be int"); }
+        int64_t idx = key.ival;
+        int64_t slen = (int64_t)strlen(tbl.sval);
+        if (idx < 0 || idx >= slen) { gem_error("string index out of bounds"); }
+        char buf[2]; buf[0] = tbl.sval[idx]; buf[1] = '\0';
+        return gem_string(buf);
+    }
+
+    if (tbl.type != VAL_TABLE) { fprintf(stderr, "error: index get on non-table\n"); exit(1); }
+    GemTable *t = tbl.table;
+
+    /* String key: use hash index */
+    if (key.type == VAL_STRING) {
+        if (t->str_index != NULL) {
+            ptrdiff_t idx = shgeti(t->str_index, key.sval);
+            if (idx >= 0) return t->vals[t->str_index[idx].value];
+        }
+        return (GemVal){VAL_NIL, {0}};
+    }
+
+    /* Integer key: try direct array indexing */
+    if (key.type == VAL_INT) {
+        int64_t ik = key.ival;
+        if (ik >= 0 && ik < t->len && t->keys[ik].type == VAL_INT && t->keys[ik].ival == ik) {
+            return t->vals[ik];
+        }
+    }
+
+    /* Fallback: linear scan */
+    for (int i = 0; i < t->len; i++) {
+        if (gem_val_eq(t->keys[i], key)) return t->vals[i];
+    }
+    return (GemVal){VAL_NIL, {0}};
+}
+
+int gem_val_eq(GemVal a, GemVal b) {
+    if (a.type != b.type) return 0;
+    switch (a.type) {
+        case VAL_NIL: return 1;
+        case VAL_BOOL: return a.bval == b.bval;
+        case VAL_INT: return a.ival == b.ival;
+        case VAL_FLOAT: return a.fval == b.fval;
+        case VAL_STRING: return strcmp(a.sval, b.sval) == 0;
+        default: return 0;
+    }
+}
+
+/* ─── Truthiness ─── */
+
+int gem_truthy(GemVal v) {
+    if (v.type == VAL_NIL) return 0;
+    if (v.type == VAL_BOOL) return v.bval;
+    return 1;
+}
+
+/* ─── Runtime error ─── */
+
+void gem_error(const char *msg) {
+    fprintf(stderr, "error: %s\n", msg);
+    exit(1);
+}
+
+/* ─── Arithmetic / operators ─── */
+
+GemVal gem_add(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int(a.ival + b.ival);
+    if (a.type == VAL_FLOAT && b.type == VAL_FLOAT) return gem_float(a.fval + b.fval);
+    if (a.type == VAL_INT && b.type == VAL_FLOAT) return gem_float((double)a.ival + b.fval);
+    if (a.type == VAL_FLOAT && b.type == VAL_INT) return gem_float(a.fval + (double)b.ival);
+    if (a.type == VAL_STRING && b.type == VAL_STRING) {
+        size_t la = strlen(a.sval), lb = strlen(b.sval);
+        char *s = (char *)GC_MALLOC_ATOMIC(la + lb + 1);
+        memcpy(s, a.sval, la);
+        memcpy(s + la, b.sval, lb + 1);
+        GemVal r; r.type = VAL_STRING; r.sval = s; return r;
+    }
+    gem_error("type error in +"); return GEM_NIL;
+}
+
+GemVal gem_sub(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int(a.ival - b.ival);
+    if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
+        double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
+        double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
+        return gem_float(fa - fb);
+    }
+    gem_error("type error in -"); return GEM_NIL;
+}
+
+GemVal gem_mul(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int(a.ival * b.ival);
+    if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
+        double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
+        double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
+        return gem_float(fa * fb);
+    }
+    gem_error("type error in *"); return GEM_NIL;
+}
+
+GemVal gem_div(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) {
+        if (b.ival == 0) gem_error("division by zero");
+        return gem_int(a.ival / b.ival);
+    }
+    if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
+        double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
+        if (fb == 0.0) gem_error("division by zero");
+        double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
+        return gem_float(fa / fb);
+    }
+    gem_error("type error in /"); return GEM_NIL;
+}
+
+GemVal gem_mod(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) {
+        if (b.ival == 0) gem_error("division by zero");
+        return gem_int(a.ival % b.ival);
+    }
+    gem_error("type error in %"); return GEM_NIL;
+}
+
+GemVal gem_eq(GemVal a, GemVal b) {
+    if (a.type != b.type) return gem_bool(0);
+    switch (a.type) {
+        case VAL_NIL: return gem_bool(1);
+        case VAL_BOOL: return gem_bool(a.bval == b.bval);
+        case VAL_INT: return gem_bool(a.ival == b.ival);
+        case VAL_FLOAT: return gem_bool(a.fval == b.fval);
+        case VAL_STRING: return gem_bool(strcmp(a.sval, b.sval) == 0);
+        default: return gem_bool(0);
+    }
+}
+
+GemVal gem_neq(GemVal a, GemVal b) {
+    return gem_bool(!gem_truthy(gem_eq(a, b)));
+}
+
+GemVal gem_lt(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_bool(a.ival < b.ival);
+    if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
+        double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
+        double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
+        return gem_bool(fa < fb);
+    }
+    if (a.type == VAL_STRING && b.type == VAL_STRING) return gem_bool(strcmp(a.sval, b.sval) < 0);
+    gem_error("type error in <"); return GEM_NIL;
+}
+
+GemVal gem_gt(GemVal a, GemVal b) { return gem_lt(b, a); }
+GemVal gem_le(GemVal a, GemVal b) { return gem_bool(!gem_truthy(gem_gt(a, b))); }
+GemVal gem_ge(GemVal a, GemVal b) { return gem_bool(!gem_truthy(gem_lt(a, b))); }
+
+GemVal gem_neg(GemVal a) {
+    if (a.type == VAL_INT) return gem_int(-a.ival);
+    if (a.type == VAL_FLOAT) return gem_float(-a.fval);
+    gem_error("type error in unary -"); return GEM_NIL;
+}
+
+GemVal gem_not(GemVal a) {
+    return gem_bool(!gem_truthy(a));
+}
+
+/* ─── Built-in: print ─── */
+
+GemVal gem_print(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    for (int i = 0; i < argc; i++) {
+        if (i > 0) printf(" ");
+        GemVal v = args[i];
+        switch (v.type) {
+            case VAL_NIL: printf("nil"); break;
+            case VAL_BOOL: printf("%s", v.bval ? "true" : "false"); break;
+            case VAL_INT: printf("%lld", (long long)v.ival); break;
+            case VAL_FLOAT: printf("%g", v.fval); break;
+            case VAL_STRING: printf("%s", v.sval); break;
+            case VAL_FN: printf("<fn>"); break;
+            case VAL_TABLE: printf("<table:%d>", v.table->len); break;
+        }
+    }
+    printf("\n");
+    return GEM_NIL;
+}
+
+/* ─── Built-in: error ─── */
+
+GemVal gem_error_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc > 0 && args[0].type == VAL_STRING) {
+        fprintf(stderr, "error: %s\n", args[0].sval);
+    } else {
+        fprintf(stderr, "error\n");
+    }
+    exit(1);
+    return GEM_NIL;
+}
+
+/* ─── Built-in: len ─── */
+
+GemVal gem_len_val(GemVal v) {
+    if (v.type == VAL_STRING) return gem_int((int64_t)strlen(v.sval));
+    if (v.type == VAL_TABLE) return gem_int((int64_t)v.table->len);
+    gem_error("len: expected string or table");
+    return GEM_NIL;
+}
+
+GemVal gem_len_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("len: expected 1 argument"); }
+    return gem_len_val(args[0]);
+}
+
+/* ─── Built-in: type ─── */
+
+GemVal gem_type_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) return gem_string("nil");
+    switch (args[0].type) {
+        case VAL_NIL: return gem_string("nil");
+        case VAL_BOOL: return gem_string("bool");
+        case VAL_INT: return gem_string("int");
+        case VAL_FLOAT: return gem_string("float");
+        case VAL_STRING: return gem_string("string");
+        case VAL_FN: return gem_string("fn");
+        case VAL_TABLE: return gem_string("table");
+    }
+    return gem_string("unknown");
+}
+
+/* ─── Built-in: to_string ─── */
+
+GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) return gem_string("");
+    GemVal v = args[0];
+    char buf[64];
+    switch (v.type) {
+        case VAL_NIL: return gem_string("nil");
+        case VAL_BOOL: return gem_string(v.bval ? "true" : "false");
+        case VAL_INT: snprintf(buf, sizeof(buf), "%lld", (long long)v.ival); return gem_string(buf);
+        case VAL_FLOAT: snprintf(buf, sizeof(buf), "%g", v.fval); return gem_string(buf);
+        case VAL_STRING: return v;
+        case VAL_FN: return gem_string("<fn>");
+        case VAL_TABLE: snprintf(buf, sizeof(buf), "<table:%d>", v.table->len); return gem_string(buf);
+    }
+    return gem_string("");
+}
+
+/* ─── Built-in: error with location ─── */
+
+GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
+    if (argc > 0 && args[0].type == VAL_STRING) {
+        fprintf(stderr, "%s:%d: error: %s\n", file, line, args[0].sval);
+    } else {
+        fprintf(stderr, "%s:%d: error\n", file, line);
+    }
+    exit(1);
+    return GEM_NIL;
+}
