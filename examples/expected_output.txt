@@ -222,3 +222,12 @@ true
 true
 false
 true
+self works: int
+20
+40
+60
+80
+pong 0
+pong 1
+pong 2
+chain result: 5

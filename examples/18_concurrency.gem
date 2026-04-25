@@ -1,0 +1,92 @@
+# Concurrent worker pool: fan-out tasks, collect results
+
+# --- helpers ---
+
+fn double(x)
+  x * 2
+end
+
+# --- fan-out / fan-in ---
+
+# Spawn a pool of workers, each receives a value and sends back the result
+let collector = spawn(fn()
+  let results = []
+  let i = 0
+  while i < 4
+    let msg = receive()
+    push(results, msg)
+    i += 1
+  end
+  # Print sorted results (workers may finish in any order)
+  for i = 0, len(results)
+    for j = i + 1, len(results)
+      if results[j] < results[i]
+        let tmp = results[i]
+        results[i] = results[j]
+        results[j] = tmp
+      end
+    end
+  end
+  for r in results
+    print(r)
+  end
+end)
+
+# Spawn 4 workers
+let tasks = [10, 20, 30, 40]
+for task in tasks
+  let value = task
+  let dest = collector
+  spawn(fn()
+    send(dest, double(value))
+  end)
+end
+
+# --- ping-pong ---
+
+let pong = spawn(fn()
+  let i = 0
+  while i < 3
+    let msg = receive()
+    send(msg.from, "pong {i}")
+    i += 1
+  end
+end)
+
+let ping = spawn(fn()
+  let me = self()
+  let i = 0
+  while i < 3
+    send(pong, {from: me, data: "ping {i}"})
+    let reply = receive()
+    print(reply)
+    i += 1
+  end
+end)
+
+# --- chain relay ---
+
+# Build a chain of processes that each add 1 and forward
+let last = spawn(fn()
+  let v = receive()
+  print("chain result: {v}")
+end)
+
+let i = 0
+while i < 5
+  let next = last
+  last = spawn(fn()
+    let v = receive()
+    send(next, v + 1)
+  end)
+  i += 1
+end
+
+send(last, 0)
+
+# --- self inside spawned process ---
+
+spawn(fn()
+  let me = self()
+  print("self works: {type(me)}")
+end)
