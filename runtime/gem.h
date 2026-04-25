@@ -13,6 +13,12 @@
 #include <setjmp.h>
 #include <gc.h>
 
+/* minicoro forward declaration — full impl is in gem.c.
+   minicoro.h uses this same typedef, so guard against redefinition. */
+#ifndef MINICORO_H
+typedef struct mco_coro mco_coro;
+#endif
+
 /* ─── Tagged value ─── */
 
 typedef enum {
@@ -134,5 +140,52 @@ GemVal gem_len_val(GemVal v);
 void gem_error(const char *msg);
 GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc);
 GemVal gem_keys(GemVal tbl);
+
+/* ─── Concurrency: mailbox, process table, scheduler ─── */
+
+/* Mailbox: GC-allocated linked list queue of GemVal messages */
+typedef struct GemMsgNode {
+    GemVal value;
+    struct GemMsgNode *next;
+} GemMsgNode;
+
+typedef struct {
+    GemMsgNode *head;
+    GemMsgNode *tail;
+} GemMailbox;
+
+/* Process states */
+typedef enum {
+    GEM_PROC_FREE,      /* slot available */
+    GEM_PROC_READY,     /* can be resumed */
+    GEM_PROC_WAITING,   /* blocked on receive() */
+    GEM_PROC_DEAD,      /* finished execution */
+} GemProcState;
+
+/* Process slot */
+typedef struct {
+    GemProcState state;
+    mco_coro *coro;
+    GemMailbox mailbox;
+    int pid;
+} GemProcess;
+
+#define GEM_MAX_PROCS 1024
+
+extern GemProcess gem_proc_table[GEM_MAX_PROCS];
+extern int gem_current_pid;
+
+/* Core concurrency API */
+int gem_spawn_fn(GemFnPtr fn, void *env);
+void gem_send_msg(int pid, GemVal val);
+GemVal gem_receive_msg(void);
+int gem_self_pid(void);
+void gem_run_scheduler(void);
+
+/* Built-in function wrappers (GemFnPtr signature) */
+GemVal gem_spawn_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_send_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_receive_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_self_builtin(void *_env, GemVal *args, int argc);
 
 #endif /* GEM_H */

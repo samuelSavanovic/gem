@@ -31,6 +31,10 @@ bootstrap: $(GEM)
 test: $(GEM)
 	@bash examples/run_all.sh
 
+test-concurrency:
+	$(CC) -o /tmp/gem_test_concurrency runtime/test_concurrency.c $(RUNTIME) -I $(RUNTIME_DIR) $(CFLAGS) $(GC_FLAGS)
+	/tmp/gem_test_concurrency
+
 test-json: $(GEM)
 	@$(GEM) examples/json_parser.gem --emit-c > /tmp/gem_json_parser.c
 	@$(CC) -o /tmp/gem_json_parser /tmp/gem_json_parser.c $(RUNTIME) -I $(RUNTIME_DIR) $(CFLAGS) $(GC_FLAGS)
