@@ -464,6 +464,39 @@ GemVal gem_keys_fn(void *_env, GemVal *args, int argc) {
     return gem_keys(args[0]);
 }
 
+/* ─── Built-in: has_key ─── */
+
+GemVal gem_has_key_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("has_key: expected 2 arguments"); }
+    if (args[0].type != VAL_TABLE) { gem_error("has_key: expected table as first argument"); }
+    GemTable *t = args[0].table;
+    GemVal key = args[1];
+
+    /* String key: use hash index */
+    if (key.type == VAL_STRING) {
+        if (t->str_index != NULL) {
+            ptrdiff_t idx = shgeti(t->str_index, key.sval);
+            if (idx >= 0) return gem_bool(1);
+        }
+        return gem_bool(0);
+    }
+
+    /* Integer key: try direct array indexing */
+    if (key.type == VAL_INT) {
+        int64_t ik = key.ival;
+        if (ik >= 0 && ik < t->len && t->keys[ik].type == VAL_INT && t->keys[ik].ival == ik) {
+            return gem_bool(1);
+        }
+    }
+
+    /* Fallback: linear scan */
+    for (int i = 0; i < t->len; i++) {
+        if (gem_val_eq(t->keys[i], key)) return gem_bool(1);
+    }
+    return gem_bool(0);
+}
+
 /* ─── Built-in: str_replace ─── */
 
 GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc) {

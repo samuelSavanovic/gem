@@ -336,6 +336,8 @@ print(items[0])    # a
 
 `str_replace(s, old, new)` — replaces all occurrences of `old` with `new` in string `s`. Returns a new string. If `old` is empty, returns `s` unchanged.
 
+`has_key(tbl, key)` — returns `true` if `key` exists in the table, `false` otherwise. Unlike `tbl[key] != nil`, correctly detects keys whose value is `nil`.
+
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
 **Module System (v0.1 — minimal)**

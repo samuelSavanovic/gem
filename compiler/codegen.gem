@@ -146,6 +146,7 @@ fn make_codegen(source_name)
   builtins["pcall"] = true
   builtins["keys"] = true
   builtins["str_replace"] = true
+  builtins["has_key"] = true
   let boxed_vars = {}
 
   # ─── Helpers ──
@@ -517,6 +518,8 @@ fn make_codegen(source_name)
         return {expr: "gem_make_fn(gem_keys_fn, NULL)", setup: ""}
       elif name == "str_replace"
         return {expr: "gem_make_fn(gem_str_replace_fn, NULL)", setup: ""}
+      elif name == "has_key"
+        return {expr: "gem_make_fn(gem_has_key_fn, NULL)", setup: ""}
       elif set_contains(defined_fns, name)
         return {expr: "gem_make_fn(gem_fn_{name}, NULL)", setup: ""}
       end
@@ -655,7 +658,7 @@ fn make_codegen(source_name)
         let setup = arg_setups + "    GemVal {t}[] = \{{arr}};\n"
         let call = "gem_error_at_fn(\"{escaped_file}\", {line}, {t}, {argc})"
         return {expr: call, setup: setup}
-      elif name == "print" or name == "len" or name == "type" or name == "to_string" or name == "push" or name == "pcall" or name == "keys" or name == "str_replace"
+      elif name == "print" or name == "len" or name == "type" or name == "to_string" or name == "push" or name == "pcall" or name == "keys" or name == "str_replace" or name == "has_key"
         let fn_name = ""
         if name == "print"
           fn_name = "gem_print"
@@ -673,6 +676,8 @@ fn make_codegen(source_name)
           fn_name = "gem_keys_fn"
         elif name == "str_replace"
           fn_name = "gem_str_replace_fn"
+        elif name == "has_key"
+          fn_name = "gem_has_key_fn"
         end
         let arg_setups = ""
         let arg_exprs = []

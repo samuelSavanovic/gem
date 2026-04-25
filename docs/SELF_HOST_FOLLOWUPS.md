@@ -26,8 +26,8 @@ Added `{expr}` interpolation syntax in string literals. Expressions are auto-coe
 ### 6. Implicit `to_string` in concatenation — DONE (via #5)
 String interpolation (`{expr}`) auto-coerces all types to strings, eliminating the need for explicit `to_string()` calls. The remaining manual `to_string()` calls in `+` chains will be cleaned up as the compiler is rewritten to use interpolation.
 
-### 7. `has_key` / `in` operator for tables
-Currently checking key existence with `table[key] != nil`. A `has_key(table, key)` builtin or `key in table` syntax would be clearer.
+### ~~7. `has_key` / `in` operator for tables~~ PARTIALLY DONE
+`has_key(tbl, key)` builtin is implemented — `gem_has_key_fn` added to the runtime, declared in `gem.h`, and registered in codegen (builtins table, var reference block, direct call optimization). The `in` operator syntax is deferred.
 
 ### ~~10. `keys()` as a builtin~~ DONE
 `keys()` is now a first-class builtin like `len` and `type`. `gem_keys_fn` added to the runtime; registered in the builtins table, var reference block, and direct call optimization in codegen. The `extern fn keys` declaration is removed from `compiler/codegen.gem`.
