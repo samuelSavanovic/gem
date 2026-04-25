@@ -38,6 +38,17 @@ brew install bdw-gc
 - Scheduler and mailbox (spawn/send/receive) are built on minicoro, not a library — see `prototype/scheduler_test.c`.
 - libdill is dead (crashes on arm64 macOS). Don't use it.
 
+## Testing
+
+After any compiler change, run edge-case and adversarial tests before considering the work done. This means:
+
+1. **Happy path** — basic programs that exercise the new feature
+2. **Edge cases** — empty bodies, zero args, boundary values, nested constructs
+3. **Adversarial inputs** — malformed source, missing tokens, type mismatches at runtime
+4. **Regression** — re-run previous features to make sure nothing broke
+
+Write a `.gem` test file, compile and run it, verify output. For expected errors (parse errors, runtime errors), confirm the compiler or program fails with a sensible message rather than crashing or silently producing wrong output.
+
 ## Running Prototypes
 
 ```bash
