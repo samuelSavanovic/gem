@@ -12,12 +12,8 @@ Both desugar to `while` at parse time. Iterator increment happens before the use
 ### 2. `elif` — DONE
 Added `elif` as parser-level desugaring into nested `if/else`. No new AST nodes or codegen changes needed — the parser rewrites `if/elif/elif/else/end` into `if/else{if/else{if/else/end}/end}/end`. All compiler files rewritten to use `elif`, eliminating deeply nested tag-dispatch pyramids. Codegen.gem dropped ~160 lines. Fixed-point verified. Test runner updated to use self-hosted compiler.
 
-### 3. Multi-line function call arguments
-The grammar currently disallows newlines between `(` and `)`. This forces long single-line calls:
-```gem
-check("compound assign desugars", "x += 1", "(assign x (binop + (var x) (int 1)))")
-```
-Allow newlines inside argument lists.
+### 3. Multi-line function call arguments — DONE
+Added `skip_nl()` calls in `parse_call` after the opening paren, after each comma, and before the closing paren. This allows newlines anywhere inside `(...)` argument lists. No lexer, AST, or codegen changes needed. Trailing `do` blocks still work since `skip_nl()` only consumes NEWLINE tokens. Fixed-point verified.
 
 ### 4. `push()` builtin — DONE
 Added `push(arr, val)` as a runtime builtin (`gem_push_fn`) that appends a value at the next integer index. Returns the pushed value. Registered in the codegen as a builtin with direct call optimization. All compiler files (codegen.gem, parser.gem, lexer.gem) rewritten to use `push()`, eliminating ~15 counter variables and ~30 `count += 1` lines. Fixed-point verified.

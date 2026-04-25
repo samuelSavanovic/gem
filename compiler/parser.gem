@@ -213,14 +213,17 @@ fn make_parser(tokens)
       if peek().type == "("
         let call_line = peek().line
         advance()
+        skip_nl()
         let args = []
         if peek().type != ")"
           push(args, parse_expr())
           while peek().type == ","
             advance()
+            skip_nl()
             push(args, parse_expr())
           end
         end
+        skip_nl()
         expect(")")
 
         # Trailing do block (must be on same line — no NEWLINE between ) and do)
@@ -474,8 +477,15 @@ fn make_parser(tokens)
         for bi = 0, len(fbody)
           push(inner_stmts, fbody[bi])
         end
-        let while_node = make_while(make_binop("<", make_var(idx_var), make_call(make_var("len"), [make_var(items_var)], 0)), inner_stmts)
-        return {tag: "block", stmts: [make_let(items_var, items_expr), make_let(idx_var, make_int(0)), while_node]}
+        let while_node = make_while(
+          make_binop("<", make_var(idx_var), make_call(make_var("len"), [make_var(items_var)], 0)),
+          inner_stmts
+        )
+        return {tag: "block", stmts: [
+          make_let(items_var, items_expr),
+          make_let(idx_var, make_int(0)),
+          while_node
+        ]}
       elif peek().type == "="
         # for i = start, end ... end → let i=start; let _limit=end; while i<_limit ...
         advance()
@@ -493,8 +503,15 @@ fn make_parser(tokens)
         for bi = 0, len(fbody)
           push(inner_stmts, fbody[bi])
         end
-        let while_node = make_while(make_binop("<", make_var(idx_var), make_var(limit_var)), inner_stmts)
-        return {tag: "block", stmts: [make_let(idx_var, start_expr), make_let(limit_var, end_expr), while_node]}
+        let while_node = make_while(
+          make_binop("<", make_var(idx_var), make_var(limit_var)),
+          inner_stmts
+        )
+        return {tag: "block", stmts: [
+          make_let(idx_var, start_expr),
+          make_let(limit_var, end_expr),
+          while_node
+        ]}
       else
         error("expected 'in' or '=' after for variable at line " + to_string(peek().line))
       end

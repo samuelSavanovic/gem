@@ -55,6 +55,15 @@ end
 
 Last expression is implicit return. Explicit `return` also works.
 
+Function call argument lists allow newlines inside the parentheses — after `(`, after each `,`, and before `)`:
+
+```
+let result = add(
+  long_expression_a,
+  long_expression_b
+)
+```
+
 **Blocks**
 
 This is the core feature. Any function can accept a trailing block with `do`/`end`. The block is passed as the last argument as an `Fn` value.

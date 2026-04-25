@@ -571,7 +571,8 @@ fn make_codegen(source_name)
 
     let setup = ""
     let env_tmp = tmp()
-    setup = setup + "    struct " + result.struct_name + " *" + env_tmp + " = GC_MALLOC(sizeof(struct " + result.struct_name + "));\n"
+    let alloc = "    struct " + result.struct_name + " *" + env_tmp + " = GC_MALLOC(sizeof(struct " + result.struct_name + "));\n"
+    setup = setup + alloc
     for cap in captures
       let mc = mangle(cap)
       if set_contains(boxed_vars, cap)
@@ -622,7 +623,8 @@ fn make_codegen(source_name)
           arr = arr + ", " + arg_exprs[i]
         end
         let setup = arg_setups + "    GemVal " + t + "[] = {" + arr + "};\n"
-        return {expr: "gem_error_at_fn(\"" + escaped_file + "\", " + to_string(line) + ", " + t + ", " + to_string(argc) + ")", setup: setup}
+        let call = "gem_error_at_fn(\"" + escaped_file + "\", " + to_string(line) + ", " + t + ", " + to_string(argc) + ")"
+        return {expr: call, setup: setup}
       elif name == "print" or name == "len" or name == "type" or name == "to_string" or name == "push"
         let fn_name = ""
         if name == "print"
@@ -698,7 +700,8 @@ fn make_codegen(source_name)
       arr = arr + ", " + arg_exprs[i]
     end
     setup = setup + "    GemVal " + tmp_args + "[] = {" + arr + "};\n"
-    {expr: tmp_fn + ".fn(" + tmp_fn + ".env, " + tmp_args + ", " + to_string(argc) + ")", setup: setup}
+    let call = tmp_fn + ".fn(" + tmp_fn + ".env, " + tmp_args + ", " + to_string(argc) + ")"
+    {expr: call, setup: setup}
   end
 
   # ─── compile_binop ──
@@ -1279,7 +1282,8 @@ fn make_codegen(source_name)
     # Forward declarations for user-defined functions
     for fd in fn_defs
       set_add(defined_fns, fd.name)
-      push(forward_decls, "static GemVal gem_fn_" + fd.name + "(void *_env, GemVal *args, int argc);")
+      let decl = "static GemVal gem_fn_" + fd.name + "(void *_env, GemVal *args, int argc);"
+      push(forward_decls, decl)
     end
 
     # Emit extern fn wrappers
