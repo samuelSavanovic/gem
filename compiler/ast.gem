@@ -1,0 +1,142 @@
+# AST Node Constructors
+# Each returns a table with a "tag" field.
+# This is the single source of truth for AST shape.
+# The parser calls these; codegen pattern-matches on them.
+
+# ─── Program ─────────────────────────────────────────────────────
+
+fn make_program(stmts)
+  {tag: "program", stmts: stmts}
+end
+
+# ─── Expressions ─────────────────────────────────────────────────
+
+fn make_int(value)
+  {tag: "int", value: value}
+end
+
+fn make_float(value)
+  {tag: "float", value: value}
+end
+
+fn make_string(value)
+  {tag: "string", value: value}
+end
+
+fn make_bool(value)
+  {tag: "bool", value: value}
+end
+
+fn make_nil_node()
+  {tag: "nil"}
+end
+
+fn make_var(name)
+  {tag: "var", name: name}
+end
+
+fn make_binop(op, left, right)
+  {tag: "binop", op: op, left: left, right: right}
+end
+
+fn make_unop(op, expr)
+  {tag: "unop", op: op, expr: expr}
+end
+
+fn make_call(func, args, line)
+  {tag: "call", func: func, args: args, line: line}
+end
+
+fn make_dot(object, field)
+  {tag: "dot", object: object, field: field}
+end
+
+fn make_index(object, key)
+  {tag: "index", object: object, key: key}
+end
+
+fn make_anon_fn(params, body)
+  {tag: "anon_fn", params: params, body: body}
+end
+
+fn make_table(entries)
+  {tag: "table", entries: entries}
+end
+
+fn make_table_entry(key, value)
+  {key: key, value: value}
+end
+
+fn make_array(elements)
+  {tag: "array", elements: elements}
+end
+
+# ─── Statements ──────────────────────────────────────────────────
+
+fn make_let(name, value)
+  {tag: "let", name: name, value: value}
+end
+
+fn make_assign(name, value)
+  {tag: "assign", name: name, value: value}
+end
+
+fn make_dot_assign(object, field, value)
+  {tag: "dot_assign", object: object, field: field, value: value}
+end
+
+fn make_index_assign(object, key, value)
+  {tag: "index_assign", object: object, key: key, value: value}
+end
+
+fn make_fn_def(name, params, body)
+  {tag: "fn_def", name: name, params: params, body: body}
+end
+
+fn make_if(cond, then_body, else_body)
+  let node = {tag: "if", cond: cond, then: then_body}
+  node["else"] = else_body
+  node
+end
+
+fn make_while(cond, body)
+  {tag: "while", cond: cond, body: body}
+end
+
+fn make_match(target, whens, else_body)
+  let node = {tag: "match", target: target, whens: whens}
+  node["else"] = else_body
+  node
+end
+
+fn make_when(value, body)
+  {tag: "when_clause", value: value, body: body}
+end
+
+fn make_return(value)
+  {tag: "return", value: value}
+end
+
+fn make_break()
+  {tag: "break"}
+end
+
+fn make_continue()
+  {tag: "continue"}
+end
+
+fn make_load(path)
+  {tag: "load", path: path}
+end
+
+fn make_extern_fn(name, params, ret_type)
+  {tag: "extern_fn", name: name, params: params, ret_type: ret_type}
+end
+
+fn make_extern_param(name, type_name)
+  {name: name, type: type_name}
+end
+
+fn make_extern_include(path)
+  {tag: "extern_include", path: path}
+end

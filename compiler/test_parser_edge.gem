@@ -1,0 +1,277 @@
+# Edge-case and adversarial tests for the self-hosting parser.
+
+load "parser"
+
+let pass_count = 0
+let fail_count = 0
+
+let check = fn(label, source, expected)
+  let ast = parse_source(source)
+  let node = ast.stmts[0]
+  let result = print_ast(node)
+  if result == expected
+    print("PASS: " + label)
+    pass_count += 1
+  else
+    print("FAIL: " + label)
+    print("  expected: " + expected)
+    print("  got:      " + result)
+    fail_count += 1
+  end
+end
+
+# Check that parse_source returns a program with expected stmt count
+let check_program = fn(label, source, expected_count)
+  let ast = parse_source(source)
+  if len(ast.stmts) == expected_count
+    print("PASS: " + label)
+    pass_count += 1
+  else
+    print("FAIL: " + label + " (expected " + to_string(expected_count) + " stmts, got " + to_string(len(ast.stmts)) + ")")
+    fail_count += 1
+  end
+end
+
+# Check that parsing fails with an error
+let check_error = fn(label, source)
+  let ok = true
+  let msg = ""
+  # We can't catch errors in Gem, so we skip adversarial error tests
+  # Just note them as skipped
+  print("SKIP: " + label + " (no error handling)")
+end
+
+# ─── S-expression printer (duplicated from test_parser.gem) ─────
+
+fn join_list(items, printer)
+  let s = ""
+  let i = 0
+  while i < len(items)
+    if i > 0
+      s = s + " "
+    end
+    s = s + printer(items[i])
+    i += 1
+  end
+  s
+end
+
+fn print_ast(node)
+  if node == nil
+    return "nil"
+  end
+  let tag = node.tag
+  if tag == "int"
+    return "(int " + to_string(node.value) + ")"
+  end
+  if tag == "float"
+    return "(float " + to_string(node.value) + ")"
+  end
+  if tag == "string"
+    return "(string \"" + node.value + "\")"
+  end
+  if tag == "bool"
+    if node.value
+      return "(bool true)"
+    end
+    return "(bool false)"
+  end
+  if tag == "nil"
+    return "(nil)"
+  end
+  if tag == "var"
+    return "(var " + node.name + ")"
+  end
+  if tag == "binop"
+    return "(binop " + node.op + " " + print_ast(node.left) + " " + print_ast(node.right) + ")"
+  end
+  if tag == "unop"
+    return "(unop " + node.op + " " + print_ast(node.expr) + ")"
+  end
+  if tag == "call"
+    return "(call " + print_ast(node.func) + " [" + join_list(node.args, print_ast) + "])"
+  end
+  if tag == "dot"
+    return "(dot " + print_ast(node.object) + " " + node.field + ")"
+  end
+  if tag == "index"
+    return "(index " + print_ast(node.object) + " " + print_ast(node.key) + ")"
+  end
+  if tag == "anon_fn"
+    let pstr = join_list(node.params, fn(x) x end)
+    let bstr = join_list(node.body, print_ast)
+    return "(anon_fn [" + pstr + "] [" + bstr + "])"
+  end
+  if tag == "table"
+    let s = "(table ["
+    let i = 0
+    while i < len(node.entries)
+      if i > 0
+        s = s + " "
+      end
+      s = s + "(" + node.entries[i].key + " " + print_ast(node.entries[i].value) + ")"
+      i += 1
+    end
+    return s + "])"
+  end
+  if tag == "array"
+    return "(array [" + join_list(node.elements, print_ast) + "])"
+  end
+  if tag == "let"
+    return "(let " + node.name + " " + print_ast(node.value) + ")"
+  end
+  if tag == "assign"
+    return "(assign " + node.name + " " + print_ast(node.value) + ")"
+  end
+  if tag == "dot_assign"
+    return "(dot_assign " + print_ast(node.object) + " " + node.field + " " + print_ast(node.value) + ")"
+  end
+  if tag == "index_assign"
+    return "(index_assign " + print_ast(node.object) + " " + print_ast(node.key) + " " + print_ast(node.value) + ")"
+  end
+  if tag == "fn_def"
+    let pstr = join_list(node.params, fn(x) x end)
+    let bstr = join_list(node.body, print_ast)
+    return "(fn_def " + node.name + " [" + pstr + "] [" + bstr + "])"
+  end
+  if tag == "if"
+    let tstr = join_list(node.then, print_ast)
+    let estr = "nil"
+    if node["else"] != nil
+      estr = "[" + join_list(node["else"], print_ast) + "]"
+    end
+    return "(if " + print_ast(node.cond) + " [" + tstr + "] " + estr + ")"
+  end
+  if tag == "while"
+    let bstr = join_list(node.body, print_ast)
+    return "(while " + print_ast(node.cond) + " [" + bstr + "])"
+  end
+  if tag == "match"
+    let wstr = join_list(node.whens, print_ast)
+    let estr = "nil"
+    if node["else"] != nil
+      estr = "[" + join_list(node["else"], print_ast) + "]"
+    end
+    return "(match " + print_ast(node.target) + " [" + wstr + "] " + estr + ")"
+  end
+  if tag == "when_clause"
+    let bstr = join_list(node.body, print_ast)
+    return "(when " + print_ast(node.value) + " [" + bstr + "])"
+  end
+  if tag == "return"
+    return "(return " + print_ast(node.value) + ")"
+  end
+  if tag == "break"
+    return "(break)"
+  end
+  if tag == "continue"
+    return "(continue)"
+  end
+  if tag == "load"
+    return "(load " + node.path + ")"
+  end
+  if tag == "extern_fn"
+    return "(extern_fn " + node.name + ")"
+  end
+  if tag == "extern_include"
+    return "(extern_include " + node.path + ")"
+  end
+  if tag == "program"
+    return "(program [" + join_list(node.stmts, print_ast) + "])"
+  end
+  "(unknown " + tag + ")"
+end
+
+# ─── Edge cases ─────────────────────────────────────────────────
+
+print("=== Edge case tests ===")
+
+# Empty program
+check_program("empty program", "", 0)
+
+# Single newlines / whitespace only
+check_program("whitespace only", "   ", 0)
+check_program("newlines only", "\n\n\n", 0)
+check_program("comments only", "# just a comment\n# another", 0)
+
+# Literals
+check("integer zero", "0", "(int 0)")
+check("large integer", "999999", "(int 999999)")
+check("float zero", "0.0", "(float 0)")
+check("float no trailing", "3.0", "(float 3)")
+check("float with fraction", "3.14", "(float 3.14)")
+check("string empty", "\"\"", "(string \"\")")
+check("string with escape n", "\"hello\\nworld\"", "(string \"hello\nworld\")")
+check("nil literal", "nil", "(nil)")
+check("true literal", "true", "(bool true)")
+check("false literal", "false", "(bool false)")
+
+# Deeply nested expressions
+check("deeply nested parens", "((((x))))", "(var x)")
+check("deeply nested calls", "f(g(h(x)))", "(call (var f) [(call (var g) [(call (var h) [(var x)])])])")
+check("nested dot and index", "a.b[0].c", "(dot (index (dot (var a) b) (int 0)) c)")
+
+# Operator edge cases
+check("chained addition", "a + b + c", "(binop + (binop + (var a) (var b)) (var c))")
+check("chained multiplication", "a * b * c", "(binop * (binop * (var a) (var b)) (var c))")
+check("mixed precedence", "a + b * c - d / e", "(binop - (binop + (var a) (binop * (var b) (var c))) (binop / (var d) (var e)))")
+check("unary minus in expr", "1 + -2", "(binop + (int 1) (unop - (int 2)))")
+check("double unary minus", "--x", "(unop - (unop - (var x)))")
+check("not not", "not not x", "(unop not (unop not (var x)))")
+check("comparison chain", "a < b < c", "(binop < (binop < (var a) (var b)) (var c))")
+check("all comparison ops", "a != b", "(binop != (var a) (var b))")
+check("lte", "a <= b", "(binop <= (var a) (var b))")
+check("gte", "a >= b", "(binop >= (var a) (var b))")
+check("modulo", "a % b", "(binop % (var a) (var b))")
+
+# Statement edge cases
+check("if no else", "if true\n  x\nend", "(if (bool true) [(var x)] nil)")
+check("if with else", "if true\n  x\nelse\n  y\nend", "(if (bool true) [(var x)] [(var y)])")
+check("while empty body", "while false\nend", "(while (bool false) [])")
+check("fn no params", "fn f()\n  1\nend", "(fn_def f [] [(int 1)])")
+check("fn multiple params", "fn f(a, b, c)\n  a\nend", "(fn_def f [a b c] [(var a)])")
+check("return no value", "return", "(return nil)")
+check("return with value", "return 42", "(return (int 42))")
+check("break stmt", "break", "(break)")
+check("continue stmt", "continue", "(continue)")
+check("load stmt", "load \"foo\"", "(load foo)")
+
+# Match statement
+check("match with else", "match x\nwhen 1\n  a\nwhen 2\n  b\nelse\n  c\nend", "(match (var x) [(when (int 1) [(var a)]) (when (int 2) [(var b)])] [(var c)])")
+check("match no else", "match x\nwhen 1\n  a\nend", "(match (var x) [(when (int 1) [(var a)])] nil)")
+
+# Compound assignment
+check("minus assign", "x -= 1", "(assign x (binop - (var x) (int 1)))")
+check("times assign", "x *= 2", "(assign x (binop * (var x) (int 2)))")
+check("div assign", "x /= 3", "(assign x (binop / (var x) (int 3)))")
+
+# Anon fn edge cases
+check("anon fn no params", "fn() 1 end", "(anon_fn [] [(int 1)])")
+check("anon fn multi params", "fn(a, b) a end", "(anon_fn [a b] [(var a)])")
+
+# Table/array edge cases
+check("single entry table", "{x: 1}", "(table [(x (int 1))])")
+check("single element array", "[1]", "(array [(int 1)])")
+check("nested table", "{a: {b: 1}}", "(table [(a (table [(b (int 1))]))])")
+check("nested array", "[[1, 2], [3]]", "(array [(array [(int 1) (int 2)]) (array [(int 3)])])")
+check("array of tables", "[{a: 1}]", "(array [(table [(a (int 1))])])")
+
+# Extern declarations
+check("extern fn no params", "extern fn foo() -> Int", "(extern_fn foo)")
+check("extern include", "extern include \"bar.h\"", "(extern_include bar.h)")
+
+# Multiple statements
+check_program("semicolons separate", "x; y; z", 3)
+check_program("newlines separate", "x\ny\nz", 3)
+
+# ─── Summary ────────────────────────────────────────────────────
+
+print("")
+print("=== Edge Case Summary ===")
+print(to_string(pass_count) + " passed, " + to_string(fail_count) + " failed")
+
+if fail_count > 0
+  error("EDGE CASE TESTS FAILED")
+end
+
+print("All edge case tests passed!")

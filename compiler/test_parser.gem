@@ -1,0 +1,246 @@
+# Test harness for the Gem self-hosting parser.
+# Part (a): targeted AST checks via S-expression comparison.
+# Part (b): smoke tests — parse every file in examples/ without error.
+
+load "parser"
+
+extern include "file_io.h"
+extern fn gem_read_file(path: String) -> String
+
+# ─── S-expression printer ───────────────────────────────────────
+
+fn join_list(items, printer)
+  let s = ""
+  let i = 0
+  while i < len(items)
+    if i > 0
+      s = s + " "
+    end
+    s = s + printer(items[i])
+    i += 1
+  end
+  s
+end
+
+fn print_ast(node)
+  if node == nil
+    return "nil"
+  end
+  let tag = node.tag
+
+  if tag == "int"
+    return "(int " + to_string(node.value) + ")"
+  end
+  if tag == "float"
+    return "(float " + to_string(node.value) + ")"
+  end
+  if tag == "string"
+    return "(string \"" + node.value + "\")"
+  end
+  if tag == "bool"
+    if node.value
+      return "(bool true)"
+    end
+    return "(bool false)"
+  end
+  if tag == "nil"
+    return "(nil)"
+  end
+  if tag == "var"
+    return "(var " + node.name + ")"
+  end
+  if tag == "binop"
+    return "(binop " + node.op + " " + print_ast(node.left) + " " + print_ast(node.right) + ")"
+  end
+  if tag == "unop"
+    return "(unop " + node.op + " " + print_ast(node.expr) + ")"
+  end
+  if tag == "call"
+    return "(call " + print_ast(node.func) + " [" + join_list(node.args, print_ast) + "])"
+  end
+  if tag == "dot"
+    return "(dot " + print_ast(node.object) + " " + node.field + ")"
+  end
+  if tag == "index"
+    return "(index " + print_ast(node.object) + " " + print_ast(node.key) + ")"
+  end
+  if tag == "anon_fn"
+    let pstr = join_list(node.params, fn(x) x end)
+    let bstr = join_list(node.body, print_ast)
+    return "(anon_fn [" + pstr + "] [" + bstr + "])"
+  end
+  if tag == "table"
+    let s = "(table ["
+    let i = 0
+    while i < len(node.entries)
+      if i > 0
+        s = s + " "
+      end
+      s = s + "(" + node.entries[i].key + " " + print_ast(node.entries[i].value) + ")"
+      i += 1
+    end
+    return s + "])"
+  end
+  if tag == "array"
+    return "(array [" + join_list(node.elements, print_ast) + "])"
+  end
+  if tag == "let"
+    return "(let " + node.name + " " + print_ast(node.value) + ")"
+  end
+  if tag == "assign"
+    return "(assign " + node.name + " " + print_ast(node.value) + ")"
+  end
+  if tag == "dot_assign"
+    return "(dot_assign " + print_ast(node.object) + " " + node.field + " " + print_ast(node.value) + ")"
+  end
+  if tag == "index_assign"
+    return "(index_assign " + print_ast(node.object) + " " + print_ast(node.key) + " " + print_ast(node.value) + ")"
+  end
+  if tag == "fn_def"
+    let pstr = join_list(node.params, fn(x) x end)
+    let bstr = join_list(node.body, print_ast)
+    return "(fn_def " + node.name + " [" + pstr + "] [" + bstr + "])"
+  end
+  if tag == "if"
+    let tstr = join_list(node.then, print_ast)
+    let estr = "nil"
+    if node["else"] != nil
+      estr = "[" + join_list(node["else"], print_ast) + "]"
+    end
+    return "(if " + print_ast(node.cond) + " [" + tstr + "] " + estr + ")"
+  end
+  if tag == "while"
+    let bstr = join_list(node.body, print_ast)
+    return "(while " + print_ast(node.cond) + " [" + bstr + "])"
+  end
+  if tag == "match"
+    let wstr = join_list(node.whens, print_ast)
+    let estr = "nil"
+    if node["else"] != nil
+      estr = "[" + join_list(node["else"], print_ast) + "]"
+    end
+    return "(match " + print_ast(node.target) + " [" + wstr + "] " + estr + ")"
+  end
+  if tag == "when_clause"
+    let bstr = join_list(node.body, print_ast)
+    return "(when " + print_ast(node.value) + " [" + bstr + "])"
+  end
+  if tag == "return"
+    return "(return " + print_ast(node.value) + ")"
+  end
+  if tag == "break"
+    return "(break)"
+  end
+  if tag == "continue"
+    return "(continue)"
+  end
+  if tag == "load"
+    return "(load " + node.path + ")"
+  end
+  if tag == "extern_fn"
+    return "(extern_fn " + node.name + ")"
+  end
+  if tag == "extern_include"
+    return "(extern_include " + node.path + ")"
+  end
+  if tag == "program"
+    return "(program [" + join_list(node.stmts, print_ast) + "])"
+  end
+  "(unknown " + tag + ")"
+end
+
+# ─── Test runner ─────────────────────────────────────────────────
+
+let pass_count = 0
+let fail_count = 0
+
+let check = fn(label, source, expected)
+  let ast = parse_source(source)
+  let node = ast.stmts[0]
+  let result = print_ast(node)
+  if result == expected
+    print("PASS: " + label)
+    pass_count += 1
+  else
+    print("FAIL: " + label)
+    print("  expected: " + expected)
+    print("  got:      " + result)
+    fail_count += 1
+  end
+end
+
+# ─── Part (a): Targeted AST checks ──────────────────────────────
+
+print("=== Targeted AST checks ===")
+
+check("precedence: add vs mul", "1 + 2 * 3", "(binop + (int 1) (binop * (int 2) (int 3)))")
+check("chained calls", "f(x)(y)", "(call (call (var f) [(var x)]) [(var y)])")
+check("not binds tighter than and", "not a and b", "(binop and (unop not (var a)) (var b))")
+check("dot chaining", "a.b.c", "(dot (dot (var a) b) c)")
+check("index assign", "t[0] = x", "(index_assign (var t) (int 0) (var x))")
+check("let with anon fn", "let f = fn(x) x end", "(let f (anon_fn [x] [(var x)]))")
+check("compound assign desugars", "x += 1", "(assign x (binop + (var x) (int 1)))")
+check("trailing do block", "f(x) do |i| i end", "(call (var f) [(var x) (anon_fn [i] [(var i)])])")
+check("table literal", "{a: 1, b: 2}", "(table [(a (int 1)) (b (int 2))])")
+check("array literal", "[1, 2]", "(array [(int 1) (int 2)])")
+check("trailing brace block", "f(x) { |n| n }", "(call (var f) [(var x) (anon_fn [n] [(var n)])])")
+check("unary minus", "-x", "(unop - (var x))")
+check("comparison chaining", "a < b == c", "(binop == (binop < (var a) (var b)) (var c))")
+check("dot assign", "obj.x = 42", "(dot_assign (var obj) x (int 42))")
+check("method call", "s.len()", "(call (dot (var s) len) [])")
+check("empty table", "{}", "(table [])")
+check("empty array", "[]", "(array [])")
+check("or precedence", "a or b and c", "(binop or (var a) (binop and (var b) (var c)))")
+check("nested index", "t[0][1]", "(index (index (var t) (int 0)) (int 1))")
+check("call with no args", "f()", "(call (var f) [])")
+
+# ─── Part (b): Smoke tests — parse all examples ─────────────────
+
+print("")
+print("=== Smoke tests: parsing example files ===")
+
+let examples = [
+  "examples/01_basics.gem",
+  "examples/02_functions.gem",
+  "examples/03_control_flow.gem",
+  "examples/04_closures.gem",
+  "examples/05_tables.gem",
+  "examples/06_blocks.gem",
+  "examples/07_first_class_fns.gem",
+  "examples/08_strings.gem",
+  "examples/09_type_checking.gem",
+  "examples/10_error_handling.gem",
+  "examples/json_parser.gem"
+]
+
+let smoke_pass = 0
+let smoke_fail = 0
+let ei = 0
+while ei < len(examples)
+  let path = examples[ei]
+  let source = gem_read_file(path)
+  if source == ""
+    print(path + " ... SKIP (could not read)")
+    smoke_fail += 1
+  else
+    let tokens = tokenize(source)
+    let p = make_parser(tokens)
+    let ast = p.parse()
+    print(path + " ... OK (" + to_string(len(ast.stmts)) + " stmts)")
+    smoke_pass += 1
+  end
+  ei += 1
+end
+
+# ─── Summary ─────────────────────────────────────────────────────
+
+print("")
+print("=== Summary ===")
+print("AST checks: " + to_string(pass_count) + " passed, " + to_string(fail_count) + " failed")
+print("Smoke tests: " + to_string(smoke_pass) + " passed, " + to_string(smoke_fail) + " failed")
+
+if fail_count > 0 or smoke_fail > 0
+  error("TESTS FAILED")
+end
+
+print("All tests passed!")

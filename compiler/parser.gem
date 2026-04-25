@@ -1,0 +1,583 @@
+# Parser — recursive descent parser for Gem.
+# Takes a token array from the lexer, returns an AST using constructors from ast.gem.
+# Produces the EXACT same AST shape as the bootstrap compiler.
+
+load "ast"
+load "lexer"
+
+# ─── Helpers ─────────────────────────────────────────────────────
+
+fn parse_source(source)
+  let tokens = tokenize(source)
+  let p = make_parser(tokens)
+  p.parse()
+end
+
+# ─── Parser constructor ─────────────────────────────────────────
+
+fn make_parser(tokens)
+  let pos = 0
+
+  # ── Token access ──
+
+  let peek = fn()
+    tokens[pos]
+  end
+
+  let peek_at = fn(n)
+    tokens[pos + n]
+  end
+
+  let advance = fn()
+    let t = tokens[pos]
+    pos += 1
+    t
+  end
+
+  let at_end = fn()
+    tokens[pos].type == "EOF"
+  end
+
+  let expect = fn(tp)
+    let t = tokens[pos]
+    if t.type != tp
+      error("expected '" + tp + "' but got '" + t.type + "' at line " + to_string(t.line))
+    end
+    pos += 1
+    t
+  end
+
+  let skip_nl = fn()
+    while tokens[pos].type == "NEWLINE"
+      pos += 1
+    end
+  end
+
+  # ── Parameter list ──
+
+  let parse_params = fn()
+    let params = []
+    let cnt = 0
+    if peek().type == "NAME"
+      params[0] = advance().value
+      cnt = 1
+      while peek().type == ","
+        advance()
+        params[cnt] = expect("NAME").value
+        cnt += 1
+      end
+    end
+    params
+  end
+
+  # ── Forward declarations for mutual recursion ──
+
+  let parse_expr = nil
+  let parse_stmt = nil
+  let parse_unary = nil
+  let parse_not = nil
+
+  # ── Body parsers ──
+  # parse_body: for if/while/when/else bodies
+  # Terminates at: end, else, when, EOF
+
+  let parse_body = fn()
+    let stmts = []
+    let cnt = 0
+    skip_nl()
+    while peek().type != "end" and peek().type != "else" and peek().type != "when" and not at_end()
+      stmts[cnt] = parse_stmt()
+      cnt += 1
+      skip_nl()
+    end
+    stmts
+  end
+
+  # parse_fn_body: for fn_def, anon_fn, do blocks
+  # Terminates at: end, EOF
+
+  let parse_fn_body = fn()
+    let stmts = []
+    let cnt = 0
+    skip_nl()
+    while peek().type != "end" and not at_end()
+      stmts[cnt] = parse_stmt()
+      cnt += 1
+      skip_nl()
+    end
+    stmts
+  end
+
+  # ── Expression parsing (precedence climbing) ──
+
+  # atom: literals, variables, parenthesized exprs, anon fn, table, array
+  let parse_atom = fn()
+    let t = peek()
+
+    # Number
+    if t.type == "NUMBER"
+      advance()
+      if contains_dot(t.value)
+        return make_float(atof(t.value))
+      end
+      return make_int(str_to_int(t.value))
+    end
+
+    # String
+    if t.type == "STRING"
+      advance()
+      return make_string(t.value)
+    end
+
+    # Booleans
+    if t.type == "true"
+      advance()
+      return make_bool(true)
+    end
+    if t.type == "false"
+      advance()
+      return make_bool(false)
+    end
+
+    # Nil
+    if t.type == "nil"
+      advance()
+      return make_nil_node()
+    end
+
+    # Anonymous function: fn(params) body end
+    if t.type == "fn"
+      advance()
+      expect("(")
+      let params = parse_params()
+      expect(")")
+      let body = parse_fn_body()
+      expect("end")
+      return make_anon_fn(params, body)
+    end
+
+    # Table literal: {key: val, ...}
+    if t.type == "{"
+      advance()
+      skip_nl()
+      let entries = []
+      let cnt = 0
+      while peek().type != "}"
+        let key = expect("NAME").value
+        expect(":")
+        let val = parse_expr()
+        entries[cnt] = make_table_entry(key, val)
+        cnt += 1
+        skip_nl()
+        if peek().type == ","
+          advance()
+          skip_nl()
+        end
+      end
+      expect("}")
+      return make_table(entries)
+    end
+
+    # Array literal: [expr, ...]
+    if t.type == "["
+      advance()
+      skip_nl()
+      let elements = []
+      let cnt = 0
+      while peek().type != "]"
+        elements[cnt] = parse_expr()
+        cnt += 1
+        skip_nl()
+        if peek().type == ","
+          advance()
+          skip_nl()
+        end
+      end
+      expect("]")
+      return make_array(elements)
+    end
+
+    # Parenthesized expression
+    if t.type == "("
+      advance()
+      let e = parse_expr()
+      expect(")")
+      return e
+    end
+
+    # Variable
+    if t.type == "NAME"
+      advance()
+      return make_var(t.value)
+    end
+
+    error("unexpected token '" + t.type + "' at line " + to_string(t.line))
+  end
+
+  # call: atom followed by postfix ops (calls, dot, index)
+  let parse_call = fn()
+    let node = parse_atom()
+
+    while true
+      # Function call: node(args) [trailing_block]
+      if peek().type == "("
+        let call_line = peek().line
+        advance()
+        let args = []
+        let argc = 0
+        if peek().type != ")"
+          args[0] = parse_expr()
+          argc = 1
+          while peek().type == ","
+            advance()
+            args[argc] = parse_expr()
+            argc += 1
+          end
+        end
+        expect(")")
+
+        # Trailing do block (must be on same line — no NEWLINE between ) and do)
+        if peek().type == "do"
+          advance()
+          let bparams = []
+          if peek().type == "|"
+            advance()
+            bparams = parse_params()
+            expect("|")
+          end
+          let body = parse_fn_body()
+          expect("end")
+          args[argc] = make_anon_fn(bparams, body)
+          argc += 1
+        else
+          # Trailing brace block: {|params| expr} or {expr}
+          # Distinguish from table literal by lookahead
+          if peek().type == "{"
+            let is_block = false
+            if peek_at(1).type == "|"
+              is_block = true
+            else
+              if peek_at(1).type == "}" or (peek_at(1).type == "NAME" and peek_at(2).type == ":")
+                is_block = false
+              else
+                is_block = true
+              end
+            end
+            if is_block
+              advance()
+              let bparams = []
+              if peek().type == "|"
+                advance()
+                bparams = parse_params()
+                expect("|")
+              end
+              let bexpr = parse_expr()
+              expect("}")
+              args[argc] = make_anon_fn(bparams, [bexpr])
+              argc += 1
+            end
+          end
+        end
+
+        node = make_call(node, args, call_line)
+        continue
+      end
+
+      # Dot access: node.field
+      if peek().type == "."
+        advance()
+        let field = expect("NAME").value
+        node = make_dot(node, field)
+        continue
+      end
+
+      # Index access: node[key]
+      if peek().type == "["
+        advance()
+        let key = parse_expr()
+        expect("]")
+        node = make_index(node, key)
+        continue
+      end
+
+      break
+    end
+
+    node
+  end
+
+  # unary: -expr | call
+  parse_unary = fn()
+    if peek().type == "-"
+      advance()
+      return make_unop("-", parse_unary())
+    end
+    parse_call()
+  end
+
+  # mul: unary (* | / | % unary)*
+  let parse_mul = fn()
+    let left = parse_unary()
+    while peek().type == "*" or peek().type == "/" or peek().type == "%"
+      let op = advance().type
+      let right = parse_unary()
+      left = make_binop(op, left, right)
+    end
+    left
+  end
+
+  # add: mul (+ | - mul)*
+  let parse_add = fn()
+    let left = parse_mul()
+    while peek().type == "+" or peek().type == "-"
+      let op = advance().type
+      let right = parse_mul()
+      left = make_binop(op, left, right)
+    end
+    left
+  end
+
+  # compare: add (comp_op add)*
+  let parse_compare = fn()
+    let left = parse_add()
+    while peek().type == "==" or peek().type == "!=" or peek().type == "<" or peek().type == ">" or peek().type == "<=" or peek().type == ">="
+      let op = advance().type
+      let right = parse_add()
+      left = make_binop(op, left, right)
+    end
+    left
+  end
+
+  # not: "not" not | compare
+  parse_not = fn()
+    if peek().type == "not"
+      advance()
+      return make_unop("not", parse_not())
+    end
+    parse_compare()
+  end
+
+  # and: not ("and" not)*
+  let parse_and = fn()
+    let left = parse_not()
+    while peek().type == "and"
+      advance()
+      let right = parse_not()
+      left = make_binop("and", left, right)
+    end
+    left
+  end
+
+  # or: and ("or" and)*
+  let parse_or = fn()
+    let left = parse_and()
+    while peek().type == "or"
+      advance()
+      let right = parse_and()
+      left = make_binop("or", left, right)
+    end
+    left
+  end
+
+  # assign: lhs = expr | lhs op= expr | or_expr
+  let parse_assign_fn = fn()
+    let lhs = parse_or()
+
+    # Simple assignment: var = expr, obj.field = expr, obj[key] = expr
+    if peek().type == "="
+      advance()
+      let value = parse_expr()
+      if lhs.tag == "var"
+        return make_assign(lhs.name, value)
+      end
+      if lhs.tag == "dot"
+        return make_dot_assign(lhs.object, lhs.field, value)
+      end
+      if lhs.tag == "index"
+        return make_index_assign(lhs.object, lhs.key, value)
+      end
+      error("invalid assignment target at line " + to_string(peek().line))
+    end
+
+    # Compound assignment: var += expr, etc. (desugars to assign + binop)
+    if peek().type == "+=" or peek().type == "-=" or peek().type == "*=" or peek().type == "/="
+      let op_tok = advance()
+      let base_op = op_tok.value[0]
+      let value = parse_expr()
+      if lhs.tag != "var"
+        error("compound assignment requires variable target at line " + to_string(op_tok.line))
+      end
+      return make_assign(lhs.name, make_binop(base_op, make_var(lhs.name), value))
+    end
+
+    lhs
+  end
+
+  # Wire up forward declaration
+  parse_expr = parse_assign_fn
+
+  # ── Statement parsing ──
+
+  let parse_stmt_fn = fn()
+    let t = peek()
+
+    # let declaration
+    if t.type == "let"
+      advance()
+      let name = expect("NAME").value
+      expect("=")
+      let value = parse_expr()
+      return make_let(name, value)
+    end
+
+    # fn definition: fn NAME(params) body end
+    if t.type == "fn" and peek_at(1).type == "NAME"
+      advance()
+      let name = expect("NAME").value
+      expect("(")
+      let params = parse_params()
+      expect(")")
+      let body = parse_fn_body()
+      expect("end")
+      return make_fn_def(name, params, body)
+    end
+
+    # if statement
+    if t.type == "if"
+      advance()
+      let cond = parse_expr()
+      let then_body = parse_body()
+      let else_body = nil
+      if peek().type == "else"
+        advance()
+        else_body = parse_body()
+      end
+      expect("end")
+      return make_if(cond, then_body, else_body)
+    end
+
+    # while statement
+    if t.type == "while"
+      advance()
+      let cond = parse_expr()
+      let wbody = parse_body()
+      expect("end")
+      return make_while(cond, wbody)
+    end
+
+    # match statement
+    if t.type == "match"
+      advance()
+      let target = parse_expr()
+      skip_nl()
+      let whens = []
+      let wcnt = 0
+      while peek().type == "when"
+        advance()
+        let wval = parse_expr()
+        let wbody = parse_body()
+        whens[wcnt] = make_when(wval, wbody)
+        wcnt += 1
+        skip_nl()
+      end
+      let else_body = nil
+      if peek().type == "else"
+        advance()
+        else_body = parse_body()
+      end
+      expect("end")
+      return make_match(target, whens, else_body)
+    end
+
+    # return statement
+    if t.type == "return"
+      advance()
+      let value = nil
+      if peek().type != "NEWLINE" and peek().type != "EOF" and peek().type != "end" and peek().type != "else" and peek().type != "when"
+        value = parse_expr()
+      end
+      return make_return(value)
+    end
+
+    # break
+    if t.type == "break"
+      advance()
+      return make_break()
+    end
+
+    # continue
+    if t.type == "continue"
+      advance()
+      return make_continue()
+    end
+
+    # load "path"
+    if t.type == "load"
+      advance()
+      let path = expect("STRING").value
+      return make_load(path)
+    end
+
+    # extern fn / extern include
+    if t.type == "extern"
+      advance()
+      if peek().type == "fn"
+        advance()
+        let name = expect("NAME").value
+        expect("(")
+        let eparams = []
+        let pcnt = 0
+        if peek().type != ")"
+          let pname = expect("NAME").value
+          expect(":")
+          let ptype = expect("NAME").value
+          eparams[0] = make_extern_param(pname, ptype)
+          pcnt = 1
+          while peek().type == ","
+            advance()
+            let pn2 = expect("NAME").value
+            expect(":")
+            let pt2 = expect("NAME").value
+            eparams[pcnt] = make_extern_param(pn2, pt2)
+            pcnt += 1
+          end
+        end
+        expect(")")
+        let ret_type = "Nil"
+        if peek().type == "->"
+          advance()
+          ret_type = expect("NAME").value
+        end
+        return make_extern_fn(name, eparams, ret_type)
+      end
+      if peek().type == "NAME" and peek().value == "include"
+        advance()
+        let path = expect("STRING").value
+        return make_extern_include(path)
+      end
+      error("expected 'fn' or 'include' after 'extern' at line " + to_string(peek().line))
+    end
+
+    # Default: expression statement
+    parse_expr()
+  end
+
+  # Wire up forward declaration
+  parse_stmt = parse_stmt_fn
+
+  # ── Top-level parse ──
+
+  let parse = fn()
+    let stmts = []
+    let cnt = 0
+    skip_nl()
+    while not at_end()
+      stmts[cnt] = parse_stmt()
+      cnt += 1
+      skip_nl()
+    end
+    make_program(stmts)
+  end
+
+  {parse: parse}
+end
