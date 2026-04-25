@@ -816,6 +816,67 @@ static int test_builtin_wrappers(void) {
     return 1;
 }
 
+/* --- Test 21: Deadlock detection — scheduler exits when all blocked --- */
+
+typedef struct { int msgs_received; } t21_ctx;
+
+static GemVal t21_looper(void *env, GemVal *args, int argc) {
+    (void)args; (void)argc;
+    t21_ctx *ctx = (t21_ctx *)env;
+    /* Receive in a loop — will block after messages are exhausted */
+    for (;;) {
+        GemVal msg = gem_receive_msg();
+        if (msg.type == VAL_NIL) break;
+        ctx->msgs_received++;
+    }
+    return GEM_NIL;
+}
+
+static int test_deadlock_detection(void) {
+    t21_ctx *ctx = (t21_ctx *)GC_MALLOC(sizeof(t21_ctx));
+    ctx->msgs_received = 0;
+    int pid = gem_spawn_fn(t21_looper, ctx);
+
+    /* Send 3 messages, then a nil sentinel to stop the loop */
+    gem_send_msg(pid, gem_string("a"));
+    gem_send_msg(pid, gem_string("b"));
+    gem_send_msg(pid, gem_string("c"));
+    gem_send_msg(pid, GEM_NIL);
+
+    gem_run_scheduler();
+    ASSERT(ctx->msgs_received == 3, "looper didn't get all messages");
+    return 1;
+}
+
+/* --- Test 22: Scheduler terminates with blocked infinite-receive process --- */
+
+static GemVal t22_infinite_receiver(void *env, GemVal *args, int argc) {
+    (void)args; (void)argc;
+    int *count = (int *)env;
+    /* Receive forever — scheduler must detect deadlock and exit */
+    for (;;) {
+        gem_receive_msg();
+        (*count)++;
+    }
+    return GEM_NIL;
+}
+
+static int test_scheduler_exits_on_deadlock(void) {
+    int *count = (int *)GC_MALLOC(sizeof(int));
+    *count = 0;
+    int pid = gem_spawn_fn(t22_infinite_receiver, count);
+
+    /* Send 2 messages, then let it block */
+    gem_send_msg(pid, gem_int(1));
+    gem_send_msg(pid, gem_int(2));
+
+    /* This MUST return (not hang). Before the deadlock fix, it would spin forever. */
+    gem_run_scheduler();
+
+    ASSERT(*count == 2, "infinite receiver didn't consume both messages");
+    return 1;
+}
+
 /* ================================================================ */
 
 int main(void) {
@@ -843,6 +904,8 @@ int main(void) {
     RUN_TEST(test_table_messages);
     RUN_TEST(test_request_reply);
     RUN_TEST(test_builtin_wrappers);
+    RUN_TEST(test_deadlock_detection);
+    RUN_TEST(test_scheduler_exits_on_deadlock);
 
     printf("\n%d/%d tests passed.\n", tests_passed, tests_run);
     if (tests_passed == tests_run) {

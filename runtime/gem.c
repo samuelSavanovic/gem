@@ -736,10 +736,12 @@ void gem_run_scheduler(void) {
 
     while (active) {
         active = 0;
+        int has_ready = 0;
         for (int i = 0; i < GEM_MAX_PROCS; i++) {
             GemProcess *proc = &gem_proc_table[i];
 
             if (proc->state == GEM_PROC_READY) {
+                has_ready = 1;
                 active = 1;
                 gem_current_pid = i;
                 mco_resume(proc->coro);
@@ -753,6 +755,8 @@ void gem_run_scheduler(void) {
                 active = 1;
             }
         }
+        /* Deadlock detection: processes alive but none can make progress */
+        if (active && !has_ready) break;
     }
     gem_current_pid = -1;
 }
