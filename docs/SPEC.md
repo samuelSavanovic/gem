@@ -340,6 +340,16 @@ print(items[0])    # a
 
 `has_key(tbl, key)` — returns `true` if `key` exists in the table, `false` otherwise. Unlike `tbl[key] != nil`, correctly detects keys whose value is `nil`.
 
+`split(s, delim)` — splits string `s` by `delim` and returns a table of substrings. If `delim` is empty, splits into individual characters.
+
+`substr(s, start[, len])` — returns a substring of `s` starting at `start`. If `len` is provided, returns at most `len` characters; otherwise returns to the end of the string.
+
+`index_of(s, needle)` — returns the index of the first occurrence of `needle` in `s`, or `-1` if not found.
+
+`chr(n)` — converts an integer (0–255) to a single-character string with that byte value.
+
+`ord(s)` — returns the byte value of the first character of string `s` as an integer.
+
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
 **Module System (v0.1 — minimal)**

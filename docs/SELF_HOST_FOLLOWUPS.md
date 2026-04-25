@@ -68,3 +68,23 @@ The `extern fn` type map only handled `Int`, `Float`, `String`, `Bool`, `Ptr`, a
 
 ### 9. Destructuring / multi-return
 Minor ergonomic win for parser helpers and similar patterns. Not blocking anything.
+
+## Stdlib Migration — Move Builtins to Gem
+
+**Goal:** Keep the C runtime minimal. Several builtins added for the HTTP server stress test (`split`, `substr`, `index_of`) could be rewritten in pure Gem once string performance is addressed. `chr`/`ord` must stay in C (no way to construct arbitrary bytes in pure Gem).
+
+### Builtins that can move to Gem
+- `split(s, delim)` — loop over `index_of` + `substr`
+- `index_of(s, needle)` — loop comparing substrings
+
+### Builtins that could move with string performance work
+- `substr(s, start, len)` — trivial in Gem but currently copies; needs string views or slices to be competitive
+
+### String performance prerequisites
+These runtime/compiler improvements would make pure-Gem string code competitive with C:
+
+1. **String views / slices** — `substr` returns a pointer+offset+length into the original string instead of allocating a copy. Makes substring extraction O(1).
+2. **String builder or `+=` optimization** — detect `s = s + x` in loops and use a mutable buffer internally, avoiding O(n²) reallocation.
+3. **Byte-level access without allocation** — `ord(s[i])` currently allocates a 1-char string just to get an int. A direct byte-index operation (e.g., `ord(s, i)` or `s.byte(i)`) would skip the allocation.
+
+Once these are in place, a pure-Gem `split` would be competitive with the current C version. Until then, the C builtins are the pragmatic choice.

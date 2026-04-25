@@ -1,0 +1,192 @@
+# HTTP/1.1 server — stress test for Gem language
+#
+# Exercises: extern fn, Ptr interop, string parsing,
+# tables, closures, green threads (spawn/send/receive),
+# pcall for error recovery.
+
+# ─── C socket wrappers (defined in net.c) ───
+
+extern include "net.h"
+
+extern fn net_listen(port: Int) -> Int
+extern fn net_accept(server_fd: Int) -> Int
+extern fn net_read(fd: Int, max_bytes: Int) -> String
+extern fn net_write(fd: Int, data: String) -> Int
+extern fn net_close(fd: Int) -> Nil
+
+# ─── HTTP parsing ───
+
+fn parse_request(raw)
+  let lines = split(raw, "\r\n")
+  if len(lines) < 1
+    return {error: "empty request"}
+  end
+
+  let request_line = lines[0]
+  let parts = split(request_line, " ")
+  if len(parts) < 3
+    return {error: "malformed request line"}
+  end
+
+  let method = parts[0]
+  let path = parts[1]
+  let version = parts[2]
+
+  # Parse headers
+  let headers = {}
+  let i = 1
+  while i < len(lines)
+    let line = lines[i]
+    if line == ""
+      i += 1
+      break
+    end
+    let colon = index_of(line, ": ")
+    if colon >= 0
+      let key = substr(line, 0, colon)
+      let value = substr(line, colon + 2)
+      headers[key] = value
+    end
+    i += 1
+  end
+
+  # Body is everything after the blank line
+  let body = ""
+  while i < len(lines)
+    if body != ""
+      body = body + "\r\n"
+    end
+    body = body + lines[i]
+    i += 1
+  end
+
+  {method: method, path: path, version: version, headers: headers, body: body}
+end
+
+# ─── HTTP response helpers ───
+
+fn response(status, status_text, content_type, body)
+  let headers = "HTTP/1.1 {status} {status_text}\r\n"
+  headers = headers + "Content-Type: {content_type}\r\n"
+  headers = headers + "Content-Length: {len(body)}\r\n"
+  headers = headers + "Connection: close\r\n"
+  headers = headers + "\r\n"
+  headers + body
+end
+
+fn response_ok(body)
+  response(200, "OK", "text/plain", body)
+end
+
+fn response_html(body)
+  response(200, "OK", "text/html", body)
+end
+
+fn response_json(body)
+  response(200, "OK", "application/json", body)
+end
+
+fn response_not_found()
+  response(404, "Not Found", "text/plain", "404 Not Found")
+end
+
+fn response_error(msg)
+  response(500, "Internal Server Error", "text/plain", "500 Internal Server Error: {msg}")
+end
+
+# ─── Router ───
+
+fn create_router()
+  let routes = []
+
+  let add = fn(method, path, handler)
+    push(routes, {method: method, path: path, handler: handler})
+  end
+
+  let dispatch = fn(req)
+    for route in routes
+      if route.method == req.method and route.path == req.path
+        return route.handler(req)
+      end
+    end
+    response_not_found()
+  end
+
+  {add: add, dispatch: dispatch}
+end
+
+# ─── Application routes ───
+
+let router = create_router()
+
+router.add("GET", "/", fn(req)
+  response_html("<h1>Gem HTTP Server</h1><p>It works!</p>")
+end)
+
+router.add("GET", "/hello", fn(req)
+  response_ok("Hello, World!")
+end)
+
+router.add("GET", "/json", fn(req)
+  response_json("\{\"status\":\"ok\",\"language\":\"gem\"}")
+end)
+
+router.add("POST", "/echo", fn(req)
+  response_ok(req.body)
+end)
+
+router.add("GET", "/headers", fn(req)
+  let out = ""
+  let ks = keys(req.headers)
+  for k in ks
+    out = out + "{k}: {req.headers[k]}\n"
+  end
+  response_ok(out)
+end)
+
+# ─── Connection handler ───
+
+fn handle_connection(client_fd, router)
+  let raw = net_read(client_fd, 8192)
+  if raw == ""
+    net_close(client_fd)
+    return nil
+  end
+
+  let result = pcall(fn()
+    let req = parse_request(raw)
+    if "error" in req
+      return response_error(req.error)
+    end
+    router.dispatch(req)
+  end)
+
+  let resp = ""
+  if result.ok
+    resp = result.value
+  else
+    resp = response_error(result.error)
+  end
+
+  net_write(client_fd, resp)
+  net_close(client_fd)
+end
+
+# ─── Main server loop ───
+
+let port = 8080
+let server_fd = net_listen(port)
+if server_fd < 0
+  error("Failed to listen on port {port}")
+end
+
+print("Gem HTTP server listening on port {port}")
+
+while true
+  let client_fd = net_accept(server_fd)
+  if client_fd >= 0
+    let fd = client_fd
+    let r = router
+    handle_connection(fd, r)
+  end
+end

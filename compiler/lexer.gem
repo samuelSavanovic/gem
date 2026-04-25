@@ -108,6 +108,7 @@ fn tokenize(source)
   let length = len(source)
   let interp_depth = 0
   let interp_brace = {}
+  let CR = chr(13)
 
   while pos < length
     let ch = source[pos]
@@ -192,6 +193,8 @@ fn tokenize(source)
           let esc = source[pos]
           if esc == "n"
             val = val + "\n"
+          elif esc == "r"
+            val = val + CR
           elif esc == "t"
             val = val + "\t"
           elif esc == "\\"
@@ -339,6 +342,8 @@ fn tokenize(source)
           let esc = source[pos]
           if esc == "n"
             val = val + "\n"
+          elif esc == "r"
+            val = val + CR
           elif esc == "t"
             val = val + "\t"
           elif esc == "\\"

@@ -603,6 +603,113 @@ GemVal gem_pcall_fn(void *_env, GemVal *args, int argc) {
     return result;
 }
 
+/* ─── Built-in: split ─── */
+
+GemVal gem_split_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("split: expected 2 arguments"); }
+    if (args[0].type != VAL_STRING || args[1].type != VAL_STRING) {
+        gem_error("split: arguments must be strings");
+    }
+    const char *s = args[0].sval;
+    const char *delim = args[1].sval;
+    size_t dlen = strlen(delim);
+    GemVal result = gem_table_new();
+
+    if (dlen == 0) {
+        /* Split into individual characters */
+        size_t slen = strlen(s);
+        for (size_t i = 0; i < slen; i++) {
+            char buf[2] = {s[i], '\0'};
+            gem_table_set(result, gem_int((int64_t)i), gem_string(buf));
+        }
+        return result;
+    }
+
+    int idx = 0;
+    const char *p = s;
+    while (1) {
+        const char *found = strstr(p, delim);
+        if (!found) {
+            gem_table_set(result, gem_int(idx), gem_string(p));
+            break;
+        }
+        size_t part_len = (size_t)(found - p);
+        char *part = (char *)GC_MALLOC_ATOMIC(part_len + 1);
+        memcpy(part, p, part_len);
+        part[part_len] = '\0';
+        GemVal sv; sv.type = VAL_STRING; sv.sval = part;
+        gem_table_set(result, gem_int(idx), sv);
+        idx++;
+        p = found + dlen;
+    }
+    return result;
+}
+
+/* ─── Built-in: substr ─── */
+
+GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("substr: expected 2-3 arguments"); }
+    if (args[0].type != VAL_STRING || args[1].type != VAL_INT) {
+        gem_error("substr: expected (string, int[, int])");
+    }
+    const char *s = args[0].sval;
+    int64_t start = args[1].ival;
+    int64_t slen = (int64_t)strlen(s);
+
+    if (start < 0) start = 0;
+    if (start >= slen) return gem_string("");
+
+    int64_t count;
+    if (argc >= 3 && args[2].type == VAL_INT) {
+        count = args[2].ival;
+        if (count < 0) count = 0;
+    } else {
+        count = slen - start;
+    }
+    if (start + count > slen) count = slen - start;
+
+    char *buf = (char *)GC_MALLOC_ATOMIC((size_t)count + 1);
+    memcpy(buf, s + start, (size_t)count);
+    buf[count] = '\0';
+    GemVal r; r.type = VAL_STRING; r.sval = buf;
+    return r;
+}
+
+/* ─── Built-in: index_of ─── */
+
+GemVal gem_index_of_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("index_of: expected 2 arguments"); }
+    if (args[0].type != VAL_STRING || args[1].type != VAL_STRING) {
+        gem_error("index_of: arguments must be strings");
+    }
+    const char *haystack = args[0].sval;
+    const char *needle = args[1].sval;
+    const char *found = strstr(haystack, needle);
+    if (!found) return gem_int(-1);
+    return gem_int((int64_t)(found - haystack));
+}
+
+/* ─── Built-in: chr / ord ─── */
+
+GemVal gem_chr_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_INT) { gem_error("chr: expected int argument"); }
+    char buf[2];
+    buf[0] = (char)(args[0].ival & 0xFF);
+    buf[1] = '\0';
+    return gem_string(buf);
+}
+
+GemVal gem_ord_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) { gem_error("ord: expected string argument"); }
+    if (strlen(args[0].sval) == 0) { gem_error("ord: empty string"); }
+    return gem_int((int64_t)(unsigned char)args[0].sval[0]);
+}
+
 /* ─── Concurrency: scheduler + mailbox ─── */
 
 GemProcess gem_proc_table[GEM_MAX_PROCS];

@@ -7,6 +7,7 @@ load "ast"
 # ─── String helpers ─────────────────────────────────────────────
 
 fn escape_c_string(s)
+  let cr = chr(13)
   let result = ""
   for i = 0, len(s)
     let ch = s[i]
@@ -16,6 +17,8 @@ fn escape_c_string(s)
       result = result + "\\\""
     elif ch == "\n"
       result = result + "\\n"
+    elif ch == cr
+      result = result + "\\r"
     elif ch == "\t"
       result = result + "\\t"
     else
@@ -147,6 +150,11 @@ fn make_codegen(source_name)
   builtins["keys"] = true
   builtins["str_replace"] = true
   builtins["has_key"] = true
+  builtins["split"] = true
+  builtins["substr"] = true
+  builtins["index_of"] = true
+  builtins["chr"] = true
+  builtins["ord"] = true
   builtins["spawn"] = true
   builtins["send"] = true
   builtins["receive"] = true
@@ -524,6 +532,16 @@ fn make_codegen(source_name)
         return {expr: "gem_make_fn(gem_str_replace_fn, NULL)", setup: ""}
       elif name == "has_key"
         return {expr: "gem_make_fn(gem_has_key_fn, NULL)", setup: ""}
+      elif name == "split"
+        return {expr: "gem_make_fn(gem_split_fn, NULL)", setup: ""}
+      elif name == "substr"
+        return {expr: "gem_make_fn(gem_substr_fn, NULL)", setup: ""}
+      elif name == "index_of"
+        return {expr: "gem_make_fn(gem_index_of_fn, NULL)", setup: ""}
+      elif name == "chr"
+        return {expr: "gem_make_fn(gem_chr_fn, NULL)", setup: ""}
+      elif name == "ord"
+        return {expr: "gem_make_fn(gem_ord_fn, NULL)", setup: ""}
       elif name == "spawn"
         return {expr: "gem_make_fn(gem_spawn_builtin, NULL)", setup: ""}
       elif name == "send"
@@ -670,7 +688,7 @@ fn make_codegen(source_name)
         let setup = arg_setups + "    GemVal {t}[] = \{{arr}};\n"
         let call = "gem_error_at_fn(\"{escaped_file}\", {line}, {t}, {argc})"
         return {expr: call, setup: setup}
-      elif name == "print" or name == "len" or name == "type" or name == "to_string" or name == "push" or name == "pcall" or name == "keys" or name == "str_replace" or name == "has_key" or name == "spawn" or name == "send" or name == "receive" or name == "self"
+      elif name == "print" or name == "len" or name == "type" or name == "to_string" or name == "push" or name == "pcall" or name == "keys" or name == "str_replace" or name == "has_key" or name == "split" or name == "substr" or name == "index_of" or name == "chr" or name == "ord" or name == "spawn" or name == "send" or name == "receive" or name == "self"
         let fn_name = ""
         if name == "print"
           fn_name = "gem_print"
@@ -690,6 +708,16 @@ fn make_codegen(source_name)
           fn_name = "gem_str_replace_fn"
         elif name == "has_key"
           fn_name = "gem_has_key_fn"
+        elif name == "split"
+          fn_name = "gem_split_fn"
+        elif name == "substr"
+          fn_name = "gem_substr_fn"
+        elif name == "index_of"
+          fn_name = "gem_index_of_fn"
+        elif name == "chr"
+          fn_name = "gem_chr_fn"
+        elif name == "ord"
+          fn_name = "gem_ord_fn"
         elif name == "spawn"
           fn_name = "gem_spawn_builtin"
         elif name == "send"
