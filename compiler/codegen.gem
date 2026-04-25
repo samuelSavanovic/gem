@@ -817,39 +817,43 @@ fn make_codegen(source_name)
   compile_stmt = fn(node, indent)
     let p = pad_for(indent)
     let tag = node.tag
+    let line_dir = ""
+    if node.line != nil
+      line_dir = "#line {node.line} \"{escape_c_string(source_name)}\"\n"
+    end
 
     if tag == "let"
       let r = compile_expr(node.value)
       let name = node.name
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return "{r.setup}{p}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{p}*{mname} = {r.expr};"
+        return "{line_dir}{r.setup}{p}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{p}*{mname} = {r.expr};"
       end
-      return "{r.setup}{p}GemVal {mname} = {r.expr};"
+      return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};"
     elif tag == "assign"
       let r = compile_expr(node.value)
       let name = node.name
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return "{r.setup}{p}*{mname} = {r.expr};"
+        return "{line_dir}{r.setup}{p}*{mname} = {r.expr};"
       end
-      return "{r.setup}{p}{mname} = {r.expr};"
+      return "{line_dir}{r.setup}{p}{mname} = {r.expr};"
     elif tag == "dot_assign"
       let obj_r = compile_expr(node.object)
       let val_r = compile_expr(node.value)
       let escaped = escape_c_string(node.field)
-      return "{obj_r.setup}{val_r.setup}{p}gem_table_set({obj_r.expr}, gem_string(\"{escaped}\"), {val_r.expr});"
+      return "{line_dir}{obj_r.setup}{val_r.setup}{p}gem_table_set({obj_r.expr}, gem_string(\"{escaped}\"), {val_r.expr});"
     elif tag == "index_assign"
       let obj_r = compile_expr(node.object)
       let key_r = compile_expr(node.key)
       let val_r = compile_expr(node.value)
-      return "{obj_r.setup}{key_r.setup}{val_r.setup}{p}gem_table_set({obj_r.expr}, {key_r.expr}, {val_r.expr});"
+      return "{line_dir}{obj_r.setup}{key_r.setup}{val_r.setup}{p}gem_table_set({obj_r.expr}, {key_r.expr}, {val_r.expr});"
     elif tag == "if"
-      return compile_if(node, indent)
+      return "{line_dir}" + compile_if(node, indent)
     elif tag == "while"
-      return compile_while(node, indent)
+      return "{line_dir}" + compile_while(node, indent)
     elif tag == "match"
-      return compile_match(node, indent)
+      return "{line_dir}" + compile_match(node, indent)
     elif tag == "break"
       return p + "break;"
     elif tag == "continue"
@@ -857,12 +861,12 @@ fn make_codegen(source_name)
     elif tag == "return"
       if node.value != nil
         let r = compile_expr(node.value)
-        return "{r.setup}{p}return {r.expr};"
+        return "{line_dir}{r.setup}{p}return {r.expr};"
       end
-      return "{p}return GEM_NIL;"
+      return "{line_dir}{p}return GEM_NIL;"
     elif tag == "call"
       let r = compile_expr(node)
-      return "{r.setup}{p}(void)({r.expr});"
+      return "{line_dir}{r.setup}{p}(void)({r.expr});"
     elif tag == "fn_def"
       return ""
     elif tag == "block"
@@ -875,7 +879,7 @@ fn make_codegen(source_name)
     end
 
     let r = compile_expr(node)
-    "{r.setup}{p}(void)({r.expr});"
+    "{line_dir}{r.setup}{p}(void)({r.expr});"
   end
 
   # ─── compile_stmt_return ���─
@@ -883,36 +887,40 @@ fn make_codegen(source_name)
   compile_stmt_return = fn(node, indent)
     let p = pad_for(indent)
     let tag = node.tag
+    let line_dir = ""
+    if node.line != nil
+      line_dir = "#line {node.line} \"{escape_c_string(source_name)}\"\n"
+    end
 
     if tag == "let"
       let r = compile_expr(node.value)
       let name = node.name
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return "{r.setup}{p}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{p}*{mname} = {r.expr};\n{p}return GEM_NIL;"
+        return "{line_dir}{r.setup}{p}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{p}*{mname} = {r.expr};\n{p}return GEM_NIL;"
       end
-      return "{r.setup}{p}GemVal {mname} = {r.expr};\n{p}return GEM_NIL;"
+      return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};\n{p}return GEM_NIL;"
     elif tag == "assign"
       let r = compile_expr(node.value)
       let t = tmp()
       let name = node.name
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return "{r.setup}{p}GemVal {t} = {r.expr};\n{p}*{mname} = {t};\n{p}return {t};"
+        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}*{mname} = {t};\n{p}return {t};"
       end
-      return "{r.setup}{p}GemVal {t} = {r.expr};\n{p}{mname} = {t};\n{p}return {t};"
+      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{mname} = {t};\n{p}return {t};"
     elif tag == "return"
       if node.value != nil
         let r = compile_expr(node.value)
-        return "{r.setup}{p}return {r.expr};"
+        return "{line_dir}{r.setup}{p}return {r.expr};"
       end
-      return "{p}return GEM_NIL;"
+      return "{line_dir}{p}return GEM_NIL;"
     elif tag == "if"
-      return compile_if_return(node, indent)
+      return "{line_dir}" + compile_if_return(node, indent)
     elif tag == "while"
-      return "{compile_while(node, indent)}\n{p}return GEM_NIL;"
+      return "{line_dir}{compile_while(node, indent)}\n{p}return GEM_NIL;"
     elif tag == "match"
-      return compile_match_return(node, indent)
+      return "{line_dir}" + compile_match_return(node, indent)
     elif tag == "block"
       let out = "{p}\{\n"
       for i = 0, len(node.stmts) - 1
@@ -928,7 +936,7 @@ fn make_codegen(source_name)
     end
 
     let r = compile_expr(node)
-    "{r.setup}{p}return {r.expr};"
+    "{line_dir}{r.setup}{p}return {r.expr};"
   end
 
   # ─── compile_if ──
@@ -1176,6 +1184,11 @@ fn make_codegen(source_name)
     boxed_vars = captured
 
     let lines = "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n"
+
+    # Emit #line for function start
+    if node.line != nil
+      lines = lines + "#line {node.line} \"{escape_c_string(source_name)}\"\n"
+    end
 
     # Bind parameters
     for i = 0, len(params)

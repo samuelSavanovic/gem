@@ -77,38 +77,38 @@ end
 
 # ─── Statements ──────────────────────────────────────────────────
 
-fn make_let(name, value)
-  {tag: "let", name: name, value: value}
+fn make_let(name, value, line)
+  {tag: "let", name: name, value: value, line: line}
 end
 
-fn make_assign(name, value)
-  {tag: "assign", name: name, value: value}
+fn make_assign(name, value, line)
+  {tag: "assign", name: name, value: value, line: line}
 end
 
-fn make_dot_assign(object, field, value)
-  {tag: "dot_assign", object: object, field: field, value: value}
+fn make_dot_assign(object, field, value, line)
+  {tag: "dot_assign", object: object, field: field, value: value, line: line}
 end
 
-fn make_index_assign(object, key, value)
-  {tag: "index_assign", object: object, key: key, value: value}
+fn make_index_assign(object, key, value, line)
+  {tag: "index_assign", object: object, key: key, value: value, line: line}
 end
 
-fn make_fn_def(name, params, body)
-  {tag: "fn_def", name: name, params: params, body: body}
+fn make_fn_def(name, params, body, line)
+  {tag: "fn_def", name: name, params: params, body: body, line: line}
 end
 
-fn make_if(cond, then_body, else_body)
-  let node = {tag: "if", cond: cond, then: then_body}
+fn make_if(cond, then_body, else_body, line)
+  let node = {tag: "if", cond: cond, then: then_body, line: line}
   node["else"] = else_body
   node
 end
 
-fn make_while(cond, body)
-  {tag: "while", cond: cond, body: body}
+fn make_while(cond, body, line)
+  {tag: "while", cond: cond, body: body, line: line}
 end
 
-fn make_match(target, whens, else_body)
-  let node = {tag: "match", target: target, whens: whens}
+fn make_match(target, whens, else_body, line)
+  let node = {tag: "match", target: target, whens: whens, line: line}
   node["else"] = else_body
   node
 end
@@ -117,8 +117,8 @@ fn make_when(value, body)
   {tag: "when_clause", value: value, body: body}
 end
 
-fn make_return(value)
-  {tag: "return", value: value}
+fn make_return(value, line)
+  {tag: "return", value: value, line: line}
 end
 
 fn make_break()

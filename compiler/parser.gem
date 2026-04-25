@@ -387,6 +387,7 @@ fn make_parser(tokens)
 
   # assign: lhs = expr | lhs op= expr | or_expr
   let parse_assign_fn = fn()
+    let start_line = peek().line
     let lhs = parse_or()
 
     # Simple assignment: var = expr, obj.field = expr, obj[key] = expr
@@ -394,13 +395,13 @@ fn make_parser(tokens)
       advance()
       let value = parse_expr()
       if lhs.tag == "var"
-        return make_assign(lhs.name, value)
+        return make_assign(lhs.name, value, start_line)
       end
       if lhs.tag == "dot"
-        return make_dot_assign(lhs.object, lhs.field, value)
+        return make_dot_assign(lhs.object, lhs.field, value, start_line)
       end
       if lhs.tag == "index"
-        return make_index_assign(lhs.object, lhs.key, value)
+        return make_index_assign(lhs.object, lhs.key, value, start_line)
       end
       error("invalid assignment target at line {peek().line}")
     end
@@ -413,7 +414,7 @@ fn make_parser(tokens)
       if lhs.tag != "var"
         error("compound assignment requires variable target at line {op_tok.line}")
       end
-      return make_assign(lhs.name, make_binop(base_op, make_var(lhs.name), value))
+      return make_assign(lhs.name, make_binop(base_op, make_var(lhs.name), value), start_line)
     end
 
     lhs
@@ -429,15 +430,17 @@ fn make_parser(tokens)
 
     # let declaration
     if t.type == "let"
+      let line = t.line
       advance()
       let name = expect("NAME").value
       expect("=")
       let value = parse_expr()
-      return make_let(name, value)
+      return make_let(name, value, line)
     end
 
     # fn definition: fn NAME(params) body end
     if t.type == "fn" and peek_at(1).type == "NAME"
+      let line = t.line
       advance()
       let name = expect("NAME").value
       expect("(")
@@ -445,11 +448,12 @@ fn make_parser(tokens)
       expect(")")
       let body = parse_fn_body()
       expect("end")
-      return make_fn_def(name, params, body)
+      return make_fn_def(name, params, body, line)
     end
 
     # if / elif statement
     if t.type == "if" or t.type == "elif"
+      let line = t.line
       advance()
       let cond = parse_expr()
       let then_body = parse_body()
@@ -465,20 +469,22 @@ fn make_parser(tokens)
       if t.type == "if"
         expect("end")
       end
-      return make_if(cond, then_body, else_body)
+      return make_if(cond, then_body, else_body, line)
     end
 
     # while statement
     if t.type == "while"
+      let line = t.line
       advance()
       let cond = parse_expr()
       let wbody = parse_body()
       expect("end")
-      return make_while(cond, wbody)
+      return make_while(cond, wbody, line)
     end
 
     # for..in statement (desugars to while)
     if t.type == "for"
+      let line = t.line
       advance()
       let var_name = expect("NAME").value
 
@@ -492,18 +498,19 @@ fn make_parser(tokens)
         let fbody = parse_body()
         expect("end")
         let inner_stmts = []
-        push(inner_stmts, make_let(var_name, make_index(make_var(items_var), make_var(idx_var))))
-        push(inner_stmts, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1))))
+        push(inner_stmts, make_let(var_name, make_index(make_var(items_var), make_var(idx_var)), line))
+        push(inner_stmts, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
         for bi = 0, len(fbody)
           push(inner_stmts, fbody[bi])
         end
         let while_node = make_while(
           make_binop("<", make_var(idx_var), make_call(make_var("len"), [make_var(items_var)], 0)),
-          inner_stmts
+          inner_stmts,
+          line
         )
         return {tag: "block", stmts: [
-          make_let(items_var, items_expr),
-          make_let(idx_var, make_int(0)),
+          make_let(items_var, items_expr, line),
+          make_let(idx_var, make_int(0), line),
           while_node
         ]}
       elif peek().type == "="
@@ -518,18 +525,19 @@ fn make_parser(tokens)
         let idx_var = "_for_i_{gensym_counter}"
         let limit_var = "_for_limit_{gensym_counter}"
         let inner_stmts = []
-        push(inner_stmts, make_let(var_name, make_var(idx_var)))
-        push(inner_stmts, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1))))
+        push(inner_stmts, make_let(var_name, make_var(idx_var), line))
+        push(inner_stmts, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
         for bi = 0, len(fbody)
           push(inner_stmts, fbody[bi])
         end
         let while_node = make_while(
           make_binop("<", make_var(idx_var), make_var(limit_var)),
-          inner_stmts
+          inner_stmts,
+          line
         )
         return {tag: "block", stmts: [
-          make_let(idx_var, start_expr),
-          make_let(limit_var, end_expr),
+          make_let(idx_var, start_expr, line),
+          make_let(limit_var, end_expr, line),
           while_node
         ]}
       else
@@ -539,6 +547,7 @@ fn make_parser(tokens)
 
     # match statement
     if t.type == "match"
+      let line = t.line
       advance()
       let target = parse_expr()
       skip_nl()
@@ -556,17 +565,18 @@ fn make_parser(tokens)
         else_body = parse_body()
       end
       expect("end")
-      return make_match(target, whens, else_body)
+      return make_match(target, whens, else_body, line)
     end
 
     # return statement
     if t.type == "return"
+      let line = t.line
       advance()
       let value = nil
       if peek().type != "NEWLINE" and peek().type != "EOF" and peek().type != "end" and peek().type != "elif" and peek().type != "else" and peek().type != "when"
         value = parse_expr()
       end
-      return make_return(value)
+      return make_return(value, line)
     end
 
     # break

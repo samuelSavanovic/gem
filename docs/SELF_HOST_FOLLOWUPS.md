@@ -43,10 +43,8 @@ The codegen needs string replacement for re-indenting setup code in `and`/`or`/`
 
 ## Debugging & Error Handling
 
-### Source-mapped error messages
-Runtime errors currently report C line numbers (`gem.c:847`), not Gem source locations. The compiler should emit `#line` directives or track source positions so that crashes point back to the `.gem` file and line. This was the single biggest time sink during development.
-
-**Codegen note:** Confirmed — this was again the biggest debugging pain. When the codegen crashes (e.g., `len: expected string or table`), the error gives no indication of WHERE in the Gem source the problem is. Debugging required binary-search with print statements to narrow down which function, which loop iteration, which expression caused the crash. `#line` directives would have saved hours.
+### Source-mapped error messages — DONE
+The compiler now emits C `#line` directives in generated output so that runtime errors report Gem source file and line numbers. Added `.line` field to all statement-level AST constructors (`let`, `assign`, `dot_assign`, `index_assign`, `fn_def`, `if`, `while`, `match`, `return`). The parser captures `peek().line` at the start of each statement and passes it through. The codegen emits `#line N "file.gem"` before each statement's C code. Synthetic nodes from `for..in` and `elif` desugaring carry the original keyword's line number. Multi-file `#line` (tracking per-node filenames across `load` boundaries) deferred for later. Fixed-point verified.
 
 ### Stack traces on error
 `error()` kills the program with one message and no call stack. When a crash happens deep in the parser (called from a test harness, called from main), there's no way to see the call chain without manually adding print statements. At minimum, print a call stack on `error()`.
