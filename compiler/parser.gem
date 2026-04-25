@@ -174,15 +174,24 @@ fn make_parser(tokens)
     end
 
     # Table literal: {key: val, ...}
+    # Keys can be names or keywords (else, end, when, match, etc.)
     if t.type == "\{"
       advance()
       skip_nl()
       let entries = []
       while peek().type != "}"
-        let key = expect("NAME").value
+        let key_tok = peek()
+        if key_tok.type == "NAME"
+          advance()
+        elif peek_at(1).type == ":"
+          # Keyword in key position — allow it
+          advance()
+        else
+          error("expected table key at line {key_tok.line}")
+        end
         expect(":")
         let val = parse_expr()
-        push(entries, make_table_entry(key, val))
+        push(entries, make_table_entry(key_tok.value, val))
         skip_nl()
         if peek().type == ","
           advance()
@@ -294,11 +303,17 @@ fn make_parser(tokens)
         continue
       end
 
-      # Dot access: node.field
+      # Dot access: node.field (field can be a name or keyword)
       if peek().type == "."
         advance()
-        let field = expect("NAME").value
-        node = make_dot(node, field)
+        let field_tok = peek()
+        if field_tok.type == "NAME"
+          advance()
+        else
+          # Allow keywords as field names
+          advance()
+        end
+        node = make_dot(node, field_tok.value)
         continue
       end
 
@@ -351,7 +366,7 @@ fn make_parser(tokens)
   # compare: add (comp_op add)*
   let parse_compare = fn()
     let left = parse_add()
-    while peek().type == "==" or peek().type == "!=" or peek().type == "<" or peek().type == ">" or peek().type == "<=" or peek().type == ">="
+    while peek().type == "==" or peek().type == "!=" or peek().type == "<" or peek().type == ">" or peek().type == "<=" or peek().type == ">=" or peek().type == "in"
       let op = advance().type
       let right = parse_add()
       left = make_binop(op, left, right)

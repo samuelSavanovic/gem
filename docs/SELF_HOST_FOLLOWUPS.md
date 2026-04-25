@@ -26,20 +26,20 @@ Added `{expr}` interpolation syntax in string literals. Expressions are auto-coe
 ### 6. Implicit `to_string` in concatenation — DONE (via #5)
 String interpolation (`{expr}`) auto-coerces all types to strings, eliminating the need for explicit `to_string()` calls. The remaining manual `to_string()` calls in `+` chains will be cleaned up as the compiler is rewritten to use interpolation.
 
-### ~~7. `has_key` / `in` operator for tables~~ PARTIALLY DONE
-`has_key(tbl, key)` builtin is implemented — `gem_has_key_fn` added to the runtime, declared in `gem.h`, and registered in codegen (builtins table, var reference block, direct call optimization). The `in` operator syntax is deferred.
+### ~~7. `has_key` / `in` operator for tables~~ DONE
+`has_key(tbl, key)` builtin is implemented. The `in` operator (`key in tbl`) is parsed as a binary operator at comparison precedence and compiles to `gem_has_key_fn` with swapped arguments. Works with `not`, `and`, `or`, and `for..in` coexists without ambiguity since `for` consumes `in` as part of its own syntax before expression parsing.
 
 ### ~~10. `keys()` as a builtin~~ DONE
 `keys()` is now a first-class builtin like `len` and `type`. `gem_keys_fn` added to the runtime; registered in the builtins table, var reference block, and direct call optimization in codegen. The `extern fn keys` declaration is removed from `compiler/codegen.gem`.
 
-### 11. `match` on strings
-The codegen has many tag-dispatch patterns (`if tag == "int" ... if tag == "float" ...`) that would naturally be `match` statements, but `match` uses `==` comparison which works on strings. The problem is `match` doesn't short-circuit on return — when a `when` branch returns, execution falls through checking subsequent branches. This is correct but wasteful. More importantly, using `match` here would require all the handler code to be in the `when` body, which doesn't help when each handler is 5+ lines. This is really the same issue as `elif` (item 2) — both solve tag dispatch. `elif` is strictly more useful since it handles arbitrary conditions, not just equality.
+### ~~11. `match` on strings~~ DONE
+`match` works on strings — the codegen already emits `else if` chains, so branches short-circuit correctly. Both `compile_match` and `compile_match_return` use `} else if` between when-clauses. No code changes needed; the original concern about fall-through was outdated.
 
 ### 12. `str_replace` builtin — DONE
 The codegen needs string replacement for re-indenting setup code in `and`/`or`/`while` short-circuit compilation. Had a 20-line `str_replace_all` function in Gem. Replaced with a C runtime builtin `str_replace(s, old, new)`.
 
-### 13. Reserved word `match` as variable name
-`match` is a keyword, which means `let match = true` is a parse error. Hit this when porting `str_replace_all` — had to rename the variable to `found`. Other keywords that might conflict with common variable names: `end`, `do`, `when`. Not a high priority but worth noting.
+### ~~13. Reserved words as table keys~~ DONE
+Keywords (`else`, `end`, `when`, `match`, `fn`, `for`, `in`, etc.) are now allowed in table literal key position and after `.` for dot access/assignment. The parser accepts any token as a key when followed by `:` in table literals, and any token as a field name after `.`. This eliminates the need for `node["else"]` — you can write `{else: body}` and `node.else` directly. Keywords are still reserved as variable names (`let match = ...` remains an error) since that would create real ambiguity.
 
 ## Debugging & Error Handling
 

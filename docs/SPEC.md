@@ -101,7 +101,7 @@ let list = [1, 2, 3]
 list[0]
 ```
 
-`{ }` with keys is a table. `[ ]` is sugar for an integer-keyed table. Dot access is sugar for string key lookup.
+`{ }` with keys is a table. `[ ]` is sugar for an integer-keyed table. Dot access is sugar for string key lookup. Keywords are allowed as table keys and dot fields: `{else: body}`, `node.else`.
 
 Tables can have methods via closures:
 
@@ -229,7 +229,9 @@ extern include "stdio.h"
 
 `+` for both arithmetic and string concatenation. If types don't match (e.g. string + int), runtime error. No `..` operator — keep it simple.
 
-`+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `not`
+`+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `not`, `in`
+
+`key in tbl` — returns `true` if `key` exists in the table. Same as `has_key(tbl, key)`. Precedence is at the comparison level (same as `==`, `<`, etc.).
 
 **Assignment Operators**
 
