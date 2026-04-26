@@ -15,6 +15,22 @@
 
 GemVal GEM_NIL = {VAL_NIL, {0}};
 
+/* ─── Single-character string cache ─── */
+
+static GemVal gem_char_cache[256];
+static int gem_char_cache_ready = 0;
+
+static void gem_init_char_cache(void) {
+    for (int i = 0; i < 256; i++) {
+        char *s = (char *)GC_MALLOC_ATOMIC(2);
+        s[0] = (char)i;
+        s[1] = '\0';
+        gem_char_cache[i].type = VAL_STRING;
+        gem_char_cache[i].sval = s;
+    }
+    gem_char_cache_ready = 1;
+}
+
 /* ─── Constructors ─── */
 
 GemVal gem_int(int64_t v) { return (GemVal){VAL_INT, {.ival = v}}; }
@@ -117,10 +133,9 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
     if (tbl.type == VAL_STRING) {
         if (key.type != VAL_INT) { char buf[128]; snprintf(buf, sizeof(buf), "string index must be int, got %s", gem_type_str(key)); gem_error(buf); }
         int64_t idx = key.ival;
-        int64_t slen = (int64_t)strlen(tbl.sval);
-        if (idx < 0 || idx >= slen) { gem_error("string index out of bounds"); }
-        char buf[2]; buf[0] = tbl.sval[idx]; buf[1] = '\0';
-        return gem_string(buf);
+        if (idx < 0 || tbl.sval[idx] == '\0') { gem_error("string index out of bounds"); }
+        if (!gem_char_cache_ready) gem_init_char_cache();
+        return gem_char_cache[(unsigned char)tbl.sval[idx]];
     }
 
     if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "index get on non-table: got %s", gem_type_str(tbl)); gem_error(buf); }
