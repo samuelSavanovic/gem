@@ -210,7 +210,7 @@ fn make_parser(tokens)
           # Keyword in key position — allow it
           advance()
         else
-          error("expected table key at line {key_tok.line}")
+          error("expected table key (name or keyword) but got '{key_tok.type}' at line {key_tok.line}")
         end
         expect(":")
         let val = parse_expr()
@@ -256,7 +256,7 @@ fn make_parser(tokens)
       return make_var(t.value)
     end
 
-    error("unexpected token '{t.type}' at line {t.line}")
+    error("unexpected token '{t.type}' (expected expression) at line {t.line}")
   end
 
   # call: atom followed by postfix ops (calls, dot, index)
@@ -456,7 +456,7 @@ fn make_parser(tokens)
       if lhs.tag == "index"
         return make_index_assign(lhs.object, lhs.key, value, start_line)
       end
-      error("invalid assignment target at line {peek().line}")
+      error("invalid assignment target (expected variable, field, or index) at line {start_line}")
     end
 
     # Compound assignment: var += expr, etc. (desugars to assign + binop)

@@ -117,12 +117,23 @@ end
 
 # ─── Codegen constructor ───────────────────────────────────────
 
+fn collect_block_lets(stmt, result)
+  if type(stmt) == "table" and stmt.tag == "block"
+    for j = 0, len(stmt.stmts)
+      if type(stmt.stmts[j]) == "table" and stmt.stmts[j].tag == "let"
+        set_add(result, stmt.stmts[j].name)
+      end
+    end
+  end
+end
+
 fn collect_top_let_names(stmts, result)
   for i = 0, len(stmts)
     let s = stmts[i]
     if type(s) == "table" and s.tag == "let"
       set_add(result, s.name)
     end
+    collect_block_lets(s, result)
   end
 end
 
@@ -330,13 +341,7 @@ fn make_codegen(source_name)
       if type(stmts[i]) == "table" and stmts[i].tag == "let"
         set_add(d, stmts[i].name)
       end
-      if type(stmts[i]) == "table" and stmts[i].tag == "block"
-        for j = 0, len(stmts[i].stmts)
-          if type(stmts[i].stmts[j]) == "table" and stmts[i].stmts[j].tag == "let"
-            set_add(d, stmts[i].stmts[j].name)
-          end
-        end
-      end
+      collect_block_lets(stmts[i], d)
     end
     free
   end
@@ -432,13 +437,7 @@ fn make_codegen(source_name)
       if type(stmts[i]) == "table" and stmts[i].tag == "let"
         set_add(sv, stmts[i].name)
       end
-      if type(stmts[i]) == "table" and stmts[i].tag == "block"
-        for j = 0, len(stmts[i].stmts)
-          if type(stmts[i].stmts[j]) == "table" and stmts[i].stmts[j].tag == "let"
-            set_add(sv, stmts[i].stmts[j].name)
-          end
-        end
-      end
+      collect_block_lets(stmts[i], sv)
     end
   end
 
@@ -992,6 +991,14 @@ fn make_codegen(source_name)
     let t = tmp()
     let out = target_r.setup
     out = out + "{p}GemVal {t} = {target_r.expr};\n"
+    if len(node.whens) == 0
+      # No when clauses — just emit else body if present
+      if node.else != nil
+        out = out + compile_stmts(node.else, indent)
+      end
+      out = out + "{p}(void){t};"
+      return out
+    end
     for i = 0, len(node.whens)
       let w = node.whens[i]
       let val_r = compile_expr(w.value)
@@ -1019,6 +1026,24 @@ fn make_codegen(source_name)
     let t = tmp()
     let out = target_r.setup
     out = out + "{p}GemVal {t} = {target_r.expr};\n"
+    if len(node.whens) == 0
+      # No when clauses — emit else body or return nil
+      if node.else != nil
+        let else_body = node.else
+        if len(else_body) > 0
+          for i = 0, len(else_body) - 1
+            out = out + compile_stmt(else_body[i], indent) + "\n"
+          end
+          out = out + compile_stmt_return(else_body[len(else_body) - 1], indent) + "\n"
+        else
+          out = out + "{p}gem_pop_frame();\n{p}return GEM_NIL;\n"
+        end
+      else
+        out = out + "{p}gem_pop_frame();\n{p}return GEM_NIL;\n"
+      end
+      out = out + "{p}(void){t};"
+      return out
+    end
     for i = 0, len(node.whens)
       let w = node.whens[i]
       let val_r = compile_expr(w.value)
@@ -1179,6 +1204,65 @@ fn make_codegen(source_name)
     lines
   end
 
+  # ─── emit_param_bindings: generate C code to bind params, rest, block ──
+
+  let emit_param_bindings = fn(node, params, cap_set)
+    let out = ""
+    # Bind required parameters
+    for i = 0, len(params)
+      let mp = mangle(params[i])
+      if set_contains(cap_set, params[i])
+        out = out + "    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));\n"
+        out = out + "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
+      else
+        out = out + "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
+      end
+    end
+
+    # Bind rest param: pack args[N .. argc-end_count-1] into an array
+    if node.rest_param != nil
+      let N = len(params)
+      let end_count = 0
+      if node.block_param != nil
+        end_count = 1
+      end
+      let mp_rest = mangle(node.rest_param)
+      if set_contains(cap_set, node.rest_param)
+        out = out + "    GemVal *{mp_rest} = GC_MALLOC(sizeof(GemVal));\n"
+        out = out + "    *{mp_rest} = gem_table_new();\n"
+        out = out + "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n"
+      else
+        out = out + "    GemVal {mp_rest} = gem_table_new();\n"
+        out = out + "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n"
+      end
+      if node.block_param != nil
+        let mp_block = mangle(node.block_param)
+        if set_contains(cap_set, node.block_param)
+          out = out + "    GemVal *{mp_block} = GC_MALLOC(sizeof(GemVal));\n"
+          out = out + "    *{mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n"
+        else
+          out = out + "    GemVal {mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n"
+        end
+      end
+    end
+    out
+  end
+
+  # ─── emit_fn_body: compile body stmts with implicit return ──
+
+  let emit_fn_body = fn(body)
+    let out = ""
+    if len(body) > 0
+      for i = 0, len(body) - 1
+        out = out + compile_stmt(body[i], 1) + "\n"
+      end
+      out = out + compile_stmt_return(body[len(body) - 1], 1) + "\n"
+    else
+      out = out + "    gem_pop_frame();\n    return GEM_NIL;\n"
+    end
+    out
+  end
+
   # ─── compile_fn ──
 
   compile_fn = fn(node)
@@ -1192,18 +1276,7 @@ fn make_codegen(source_name)
     if node.block_param != nil
       set_add(scope_vars, node.block_param)
     end
-    for i = 0, len(body)
-      if type(body[i]) == "table" and body[i].tag == "let"
-        set_add(scope_vars, body[i].name)
-      end
-      if type(body[i]) == "table" and body[i].tag == "block"
-        for j = 0, len(body[i].stmts)
-          if type(body[i].stmts[j]) == "table" and body[i].stmts[j].tag == "let"
-            set_add(scope_vars, body[i].stmts[j].name)
-          end
-        end
-      end
-    end
+    collect_top_let_names(body, scope_vars)
     let captured = find_captured_in_scope(body, scope_vars)
 
     let saved_boxed = boxed_vars
@@ -1218,43 +1291,7 @@ fn make_codegen(source_name)
       lines = lines + "#line {node.line} \"{escape_c_string(source_name)}\"\n"
     end
 
-    # Bind required parameters
-    for i = 0, len(params)
-      let mp = mangle(params[i])
-      if set_contains(captured, params[i])
-        lines = lines + "    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));\n"
-        lines = lines + "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
-      else
-        lines = lines + "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
-      end
-    end
-
-    # Bind rest param: pack args[N .. argc-end_count-1] into an array
-    if node.rest_param != nil
-      let N = len(params)
-      let end_count = 0
-      if node.block_param != nil
-        end_count = 1
-      end
-      let mp_rest = mangle(node.rest_param)
-      if set_contains(captured, node.rest_param)
-        lines = lines + "    GemVal *{mp_rest} = GC_MALLOC(sizeof(GemVal));\n"
-        lines = lines + "    *{mp_rest} = gem_table_new();\n"
-        lines = lines + "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n"
-      else
-        lines = lines + "    GemVal {mp_rest} = gem_table_new();\n"
-        lines = lines + "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n"
-      end
-      if node.block_param != nil
-        let mp_block = mangle(node.block_param)
-        if set_contains(captured, node.block_param)
-          lines = lines + "    GemVal *{mp_block} = GC_MALLOC(sizeof(GemVal));\n"
-          lines = lines + "    *{mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n"
-        else
-          lines = lines + "    GemVal {mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n"
-        end
-      end
-    end
+    lines = lines + emit_param_bindings(node, params, captured)
 
     let fn_line = 0
     if node.line != nil
@@ -1262,15 +1299,7 @@ fn make_codegen(source_name)
     end
     lines = lines + "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", {fn_line});\n"
 
-    # Compile body — last expression is the return value
-    if len(body) > 0
-      for i = 0, len(body) - 1
-        lines = lines + compile_stmt(body[i], 1) + "\n"
-      end
-      lines = lines + compile_stmt_return(body[len(body) - 1], 1) + "\n"
-    else
-      lines = lines + "    gem_pop_frame();\n    return GEM_NIL;\n"
-    end
+    lines = lines + emit_fn_body(body)
 
     lines = lines + "}"
     boxed_vars = saved_boxed
@@ -1292,18 +1321,7 @@ fn make_codegen(source_name)
     if node.block_param != nil
       set_add(inner_scope, node.block_param)
     end
-    for i = 0, len(body)
-      if type(body[i]) == "table" and body[i].tag == "let"
-        set_add(inner_scope, body[i].name)
-      end
-      if type(body[i]) == "table" and body[i].tag == "block"
-        for j = 0, len(body[i].stmts)
-          if type(body[i].stmts[j]) == "table" and body[i].stmts[j].tag == "let"
-            set_add(inner_scope, body[i].stmts[j].name)
-          end
-        end
-      end
-    end
+    collect_top_let_names(body, inner_scope)
     let inner_captured = find_captured_in_scope(body, inner_scope)
 
     let saved_boxed = boxed_vars
@@ -1329,54 +1347,11 @@ fn make_codegen(source_name)
       end
     end
 
-    # Bind required parameters
-    for i = 0, len(params)
-      let mp = mangle(params[i])
-      if set_contains(inner_captured, params[i])
-        lines = lines + "    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));\n"
-        lines = lines + "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
-      else
-        lines = lines + "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
-      end
-    end
-
-    # Bind rest param: pack args[N .. argc-end_count-1] into an array
-    if node.rest_param != nil
-      let N = len(params)
-      let end_count = 0
-      if node.block_param != nil
-        end_count = 1
-      end
-      let mp_rest = mangle(node.rest_param)
-      if set_contains(inner_captured, node.rest_param)
-        lines = lines + "    GemVal *{mp_rest} = GC_MALLOC(sizeof(GemVal));\n"
-        lines = lines + "    *{mp_rest} = gem_table_new();\n"
-        lines = lines + "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n"
-      else
-        lines = lines + "    GemVal {mp_rest} = gem_table_new();\n"
-        lines = lines + "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n"
-      end
-      if node.block_param != nil
-        let mp_block = mangle(node.block_param)
-        if set_contains(inner_captured, node.block_param)
-          lines = lines + "    GemVal *{mp_block} = GC_MALLOC(sizeof(GemVal));\n"
-          lines = lines + "    *{mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n"
-        else
-          lines = lines + "    GemVal {mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n"
-        end
-      end
-    end
+    lines = lines + emit_param_bindings(node, params, inner_captured)
 
     lines = lines + "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", 0);\n"
 
-    if len(body) > 0
-      for i = 0, len(body) - 1
-        lines = lines + compile_stmt(body[i], 1) + "\n"
-      end
-      lines = lines + compile_stmt_return(body[len(body) - 1], 1) + "\n"
-    else
-      lines = lines + "    gem_pop_frame();\n    return GEM_NIL;\n"
-    end
+    lines = lines + emit_fn_body(body)
 
     lines = lines + "}"
     boxed_vars = saved_boxed

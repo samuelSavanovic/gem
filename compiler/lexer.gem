@@ -70,6 +70,34 @@ fn contains_dot(s)
   false
 end
 
+# ─── Escape handling ─────────────────────────────────────────────
+# mode: "dq" for double-quoted strings (handles \", \{, }, \0)
+#       "sq" for single-quoted strings (handles \')
+# Returns the replacement string, or nil for unknown escapes.
+
+fn apply_escape(esc, mode)
+  if esc == "n"
+    return "\n"
+  elif esc == "r"
+    return chr(13)
+  elif esc == "t"
+    return "\t"
+  elif esc == "\\"
+    return "\\"
+  elif esc == "0" and mode == "dq"
+    return chr(0)
+  elif esc == "\"" and mode == "dq"
+    return "\""
+  elif esc == "\{" and mode == "dq"
+    return "\{"
+  elif esc == "}" and mode == "dq"
+    return "}"
+  elif esc == "'" and mode == "sq"
+    return "'"
+  end
+  nil
+end
+
 # ─── Tokenizer ───────────────────────────────────────────────────
 
 fn build_keyword_set()
@@ -264,22 +292,9 @@ fn tokenize(source)
               error("unterminated string escape at line {line}")
             end
             let tqe = source[pos]
-            if tqe == "n"
-              val = val + "\n"
-            elif tqe == "r"
-              val = val + CR
-            elif tqe == "t"
-              val = val + "\t"
-            elif tqe == "\\"
-              val = val + "\\"
-            elif tqe == "\""
-              val = val + "\""
-            elif tqe == "\{"
-              val = val + "\{"
-            elif tqe == "}"
-              val = val + "}"
-            elif tqe == "0"
-              val = val + NUL
+            let esc_result = apply_escape(tqe, "dq")
+            if esc_result != nil
+              val = val + esc_result
             else
               val = val + "\\" + tqe
             end
@@ -317,22 +332,9 @@ fn tokenize(source)
             error("unterminated string escape at line {line}")
           end
           let esc = source[pos]
-          if esc == "n"
-            val = val + "\n"
-          elif esc == "r"
-            val = val + CR
-          elif esc == "t"
-            val = val + "\t"
-          elif esc == "\\"
-            val = val + "\\"
-          elif esc == "\""
-            val = val + "\""
-          elif esc == "\{"
-            val = val + "\{"
-          elif esc == "}"
-            val = val + "}"
-          elif esc == "0"
-            val = val + NUL
+          let esc_result = apply_escape(esc, "dq")
+          if esc_result != nil
+            val = val + esc_result
           else
             val = val + "\\" + esc
           end
@@ -442,16 +444,9 @@ fn tokenize(source)
               error("unterminated string escape at line {line}")
             end
             let sqe = source[pos]
-            if sqe == "n"
-              val = val + "\n"
-            elif sqe == "r"
-              val = val + CR
-            elif sqe == "t"
-              val = val + "\t"
-            elif sqe == "\\"
-              val = val + "\\"
-            elif sqe == "'"
-              val = val + "'"
+            let esc_result = apply_escape(sqe, "sq")
+            if esc_result != nil
+              val = val + esc_result
             else
               val = val + "\\" + sqe
             end
@@ -475,16 +470,9 @@ fn tokenize(source)
             error("unterminated string escape at line {line}")
           end
           let esc = source[pos]
-          if esc == "n"
-            val = val + "\n"
-          elif esc == "r"
-            val = val + CR
-          elif esc == "t"
-            val = val + "\t"
-          elif esc == "\\"
-            val = val + "\\"
-          elif esc == "'"
-            val = val + "'"
+          let esc_result = apply_escape(esc, "sq")
+          if esc_result != nil
+            val = val + esc_result
           else
             val = val + "\\" + esc
           end
@@ -639,22 +627,9 @@ fn tokenize(source)
               error("unterminated string escape at line {line}")
             end
             let tqre = source[pos]
-            if tqre == "n"
-              val = val + "\n"
-            elif tqre == "r"
-              val = val + CR
-            elif tqre == "t"
-              val = val + "\t"
-            elif tqre == "\\"
-              val = val + "\\"
-            elif tqre == "\""
-              val = val + "\""
-            elif tqre == "\{"
-              val = val + "\{"
-            elif tqre == "}"
-              val = val + "}"
-            elif tqre == "0"
-              val = val + NUL
+            let esc_result = apply_escape(tqre, "dq")
+            if esc_result != nil
+              val = val + esc_result
             else
               val = val + "\\" + tqre
             end
@@ -695,22 +670,9 @@ fn tokenize(source)
             error("unterminated string escape at line {line}")
           end
           let esc = source[pos]
-          if esc == "n"
-            val = val + "\n"
-          elif esc == "r"
-            val = val + CR
-          elif esc == "t"
-            val = val + "\t"
-          elif esc == "\\"
-            val = val + "\\"
-          elif esc == "\""
-            val = val + "\""
-          elif esc == "\{"
-            val = val + "\{"
-          elif esc == "}"
-            val = val + "}"
-          elif esc == "0"
-            val = val + NUL
+          let esc_result = apply_escape(esc, "dq")
+          if esc_result != nil
+            val = val + esc_result
           else
             val = val + "\\" + esc
           end

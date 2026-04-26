@@ -1,0 +1,158 @@
+# Edge case and adversarial tests
+
+# ── Deeply nested closures capturing the same variable ──────────
+
+let x = 10
+let f1 = fn()
+  let f2 = fn()
+    let f3 = fn()
+      x
+    end
+    f3()
+  end
+  f2()
+end
+print(f1())                # 10
+
+# Mutating a captured variable through nested closures
+let counter = 0
+let inc = fn()
+  counter += 1
+end
+let get = fn()
+  counter
+end
+inc()
+inc()
+inc()
+print(get())               # 3
+
+# ── Match with no when clauses (else only) ──────────────────────
+
+fn match_else_only(val)
+  match val
+  else
+    return "fallback"
+  end
+end
+print(match_else_only(42))     # fallback
+
+# ── Match with no when and no else ──────────────────────────────
+
+fn match_empty(val)
+  match val
+  end
+  "after"
+end
+print(match_empty("ignored"))  # after
+
+# ── for-kv over an array (integer keys) ────────────────────────
+
+let arr = ["a", "b", "c"]
+for k, v in arr
+  print("{k}:{v}")
+end
+# 0:a
+# 1:b
+# 2:c
+
+# ── Empty triple-quoted strings ─────────────────────────────────
+
+let empty_dq = """
+"""
+print(len(empty_dq))       # 0
+
+let empty_sq = '''
+'''
+print(len(empty_sq))       # 0
+
+# ── Triple-quoted string with blank line (stripped to empty) ────
+
+let ws = """
+
+"""
+print(len(ws))             # 0  (blank line, but trailing newline stripped)
+
+# ── Interpolation with nested braces ────────────────────────────
+
+let tbl = {a: 1}
+print("val={tbl.a}")       # val=1
+
+let arr2 = [10, 20]
+print("sum={arr2[0] + arr2[1]}")  # sum=30
+
+# ── Table with keyword keys ────────────────────────────────────
+
+let t = {end: 1, if: 2, else: 3}
+print(t.end)               # 1
+print(t.if)                # 2
+print(t.else)              # 3
+
+# ── Chained dot access and method calls ─────────────────────────
+
+let outer = {inner: {val: "deep"}}
+print(outer.inner.val)     # deep
+
+# ── Nested table literals ──────────────────────────────────────
+
+let nested = {a: {b: {c: 99}}}
+print(nested.a.b.c)        # 99
+
+# ── Empty function body ────────────────────────────────────────
+
+fn noop()
+end
+let r = noop()
+print(r)                   # nil
+
+# ── Closure over loop variable ──────────────────────────────────
+
+let fns = []
+for i = 0, 3
+  let captured_i = i
+  push(fns, fn() captured_i end)
+end
+print(fns[0]())            # 0
+print(fns[1]())            # 1
+print(fns[2]())            # 2
+
+# ── Destructuring with single field ────────────────────────────
+
+let {only} = {only: "solo"}
+print(only)                # solo
+
+# ── Array destructuring ────────────────────────────────────────
+
+let [first, second] = [100, 200]
+print(first)               # 100
+print(second)              # 200
+
+# ── Nested string interpolation ────────────────────────────────
+
+let a = 1
+let b = 2
+print("a+b={a + b}, a*b={a * b}")  # a+b=3, a*b=2
+
+# ── Boolean edge cases ─────────────────────────────────────────
+
+print(not false)           # true
+print(not true)            # false
+print(not nil)             # true
+print(not 0)               # false (0 is truthy in Gem)
+
+# ── String comparison ──────────────────────────────────────────
+
+print("abc" == "abc")      # true
+print("abc" == "def")      # false
+print("" == "")            # true
+
+# ── Recursive closure ──────────────────────────────────────────
+
+let fib = nil
+fib = fn(n)
+  if n <= 1
+    return n
+  end
+  fib(n - 1) + fib(n - 2)
+end
+print(fib(10))             # 55
