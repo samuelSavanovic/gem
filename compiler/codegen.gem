@@ -315,11 +315,8 @@ fn make_codegen(source_name)
       end
     else
       # Generic recursion for binop, unop, call, dot, index, etc.
-      let nks = keys(node)
-      let nki = 0
-      while nki < len(nks)
-        if nks[nki] != "tag"
-          let v = node[nks[nki]]
+      for nk, v in node
+        if nk != "tag"
           if type(v) == "table"
             # Check if it's an array (has numeric keys) or a dict node
             let vks = keys(v)
@@ -337,7 +334,6 @@ fn make_codegen(source_name)
             end
           end
         end
-        nki += 1
       end
     end
   end
@@ -421,11 +417,8 @@ fn make_codegen(source_name)
       walk_captures_node(node.value, scope_vars, captured)
     else
       # Generic recursion
-      let nks = keys(node)
-      let nki = 0
-      while nki < len(nks)
-        if nks[nki] != "tag"
-          let v = node[nks[nki]]
+      for nk, v in node
+        if nk != "tag"
           if type(v) == "table"
             let vks = keys(v)
             if len(vks) > 0 and type(vks[0]) == "int"
@@ -441,7 +434,6 @@ fn make_codegen(source_name)
             end
           end
         end
-        nki += 1
       end
     end
   end
