@@ -476,6 +476,136 @@ fn make_parser(tokens)
   # Wire up forward declaration
   parse_expr = parse_assign_fn
 
+  # ── Pattern parsing (for match destructuring) ──
+
+  let parse_pattern = nil
+
+  parse_pattern = fn(target_expr)
+    let and_chain = fn(conditions)
+      if len(conditions) == 0
+        return make_bool(true)
+      end
+      let result = conditions[0]
+      for i = 1, len(conditions)
+        result = make_binop("and", result, conditions[i])
+      end
+      result
+    end
+    let t = peek()
+
+    # Table pattern: {key: pattern, ...}
+    if t.type == "\{"
+      advance()
+      skip_nl()
+      let conditions = [make_binop("==", make_call(make_var("type"), [target_expr], 0), make_string("table"))]
+      let bindings = []
+      while peek().type != "}"
+        let key_tok = peek()
+        if key_tok.type == "NAME"
+          advance()
+        elif peek_at(1).type == ":"
+          # keyword as key
+          advance()
+        else
+          error("expected key name in table pattern at line {key_tok.line}")
+        end
+        let key_name = key_tok.value
+        let key_str = make_string(key_name)
+        push(conditions, make_call(make_var("has_key"), [target_expr, key_str], 0))
+        let sub_target = make_index(target_expr, key_str)
+        if peek().type == ":"
+          advance()
+          skip_nl()
+          let sub = parse_pattern(sub_target)
+          if sub.condition.tag != "bool" or sub.condition.value != true
+            push(conditions, sub.condition)
+          end
+          for b in sub.bindings
+            push(bindings, b)
+          end
+        else
+          # Shorthand: {name} means {name: name} — bind value to variable
+          push(bindings, make_let(key_name, sub_target, 0))
+        end
+        skip_nl()
+        if peek().type == ","
+          advance()
+          skip_nl()
+        end
+      end
+      expect("}")
+      return {condition: and_chain(conditions), bindings: bindings}
+    end
+
+    # Array pattern: [pattern, ...]
+    if t.type == "["
+      advance()
+      skip_nl()
+      let sub_patterns = []
+      let idx = 0
+      while peek().type != "]"
+        let sub = parse_pattern(make_index(target_expr, make_int(idx)))
+        push(sub_patterns, sub)
+        idx += 1
+        skip_nl()
+        if peek().type == ","
+          advance()
+          skip_nl()
+        end
+      end
+      expect("]")
+      let conditions = [make_binop("==", make_call(make_var("type"), [target_expr], 0), make_string("table"))]
+      push(conditions, make_binop("==", make_call(make_var("len"), [target_expr], 0), make_int(idx)))
+      let bindings = []
+      for i = 0, len(sub_patterns)
+        let sub = sub_patterns[i]
+        if sub.condition.tag != "bool" or sub.condition.value != true
+          push(conditions, sub.condition)
+        end
+        for b in sub.bindings
+          push(bindings, b)
+        end
+      end
+      return {condition: and_chain(conditions), bindings: bindings}
+    end
+
+    # Literal patterns: number, string, bool, nil — equality match
+    if t.type == "NUMBER"
+      advance()
+      let lit = nil
+      if contains_dot(t.value)
+        lit = make_float(atof(t.value))
+      else
+        lit = make_int(str_to_int(t.value))
+      end
+      return {condition: make_binop("==", target_expr, lit), bindings: []}
+    end
+    if t.type == "STRING"
+      advance()
+      return {condition: make_binop("==", target_expr, make_string(t.value)), bindings: []}
+    end
+    if t.type == "true"
+      advance()
+      return {condition: make_binop("==", target_expr, make_bool(true)), bindings: []}
+    end
+    if t.type == "false"
+      advance()
+      return {condition: make_binop("==", target_expr, make_bool(false)), bindings: []}
+    end
+    if t.type == "nil"
+      advance()
+      return {condition: make_binop("==", target_expr, make_nil_node()), bindings: []}
+    end
+
+    # Name pattern: variable binding (catch-all)
+    if t.type == "NAME"
+      advance()
+      return {condition: make_bool(true), bindings: [make_let(t.value, target_expr, 0)]}
+    end
+
+    error("expected pattern but got '{t.type}' at line {t.line}")
+  end
+
   # ── Statement parsing ──
 
   let parse_stmt_fn = fn()
@@ -697,12 +827,30 @@ fn make_parser(tokens)
       advance()
       let target = parse_expr()
       skip_nl()
+      gensym_counter += 1
+      let match_var = "_match_{gensym_counter}"
+      let target_var_expr = make_var(match_var)
       let whens = []
       while peek().type == "when"
         advance()
-        let wval = parse_expr()
-        let wbody = parse_body()
-        push(whens, make_when(wval, wbody))
+        # Check if this is a destructuring pattern ({, [) or bare name catch-all
+        let pt = peek().type
+        let next = peek_at(1).type
+        if pt == "\{" or pt == "["
+          let pat = parse_pattern(target_var_expr)
+          let wbody = parse_body()
+          push(whens, make_when(pat.condition, wbody, pat.bindings))
+        elif pt == "NAME" and (next == "NEWLINE" or next == "EOF" or next == "end" or next == "else" or next == "when")
+          # Bare name — catch-all with binding
+          let pat = parse_pattern(target_var_expr)
+          let wbody = parse_body()
+          push(whens, make_when(pat.condition, wbody, pat.bindings))
+        else
+          # Regular expression match (literal, variable expression, etc.)
+          let wval = parse_expr()
+          let wbody = parse_body()
+          push(whens, make_when(make_binop("==", target_var_expr, wval), wbody, []))
+        end
         skip_nl()
       end
       let else_body = nil
@@ -711,7 +859,7 @@ fn make_parser(tokens)
         else_body = parse_body()
       end
       expect("end")
-      return make_match(target, whens, else_body, line)
+      return make_match(target, whens, else_body, line, match_var)
     end
 
     # return statement

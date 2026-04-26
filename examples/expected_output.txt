@@ -421,3 +421,38 @@ inner
 
 bbbbbb
 abc
+1: table literal match
+2: Alice is 30
+3: (3, 4)
+4: value=42
+5: click at (10, 20)
+6: caught 99
+7: literal match works
+8: number=7
+9: fell through to else
+10: matched 3: 1,2,3
+11: string did not match table pattern
+12: int did not match array pattern
+13: user=Bob
+14: OK
+15: 2D point (1, 2)
+16: circle r=5
+16: rect 3x4
+16: unknown
+17: empty table pattern matched
+18: false matched
+19: nil matched
+20: var expr match works
+1: missing key falls through
+2: partial match works
+3: empty array matched
+4: non-empty rejected by empty pattern
+5: nested=first
+6: circle(10)
+6: pair(3,4)
+6: other
+7: 404 matched
+8: inner
+8b: inner
+9: zero count
+10: nil fell through

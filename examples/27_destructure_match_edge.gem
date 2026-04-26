@@ -1,0 +1,105 @@
+# Edge cases and adversarial tests for destructuring match
+
+# 1. Missing key — should not match
+let t1 = {a: 1}
+match t1
+when {a: 1, b: 2}
+  print("1: FAIL - matched with missing key")
+else
+  print("1: missing key falls through")
+end
+
+# 2. Extra keys — should still match (partial match)
+let t2 = {a: 1, b: 2, c: 3}
+match t2
+when {a: 1}
+  print("2: partial match works")
+else
+  print("2: FAIL")
+end
+
+# 3. Empty array pattern — match only empty array
+let t3 = []
+match t3
+when []
+  print("3: empty array matched")
+else
+  print("3: FAIL")
+end
+
+# Non-empty against empty pattern
+let t4 = [1]
+match t4
+when []
+  print("4: FAIL - non-empty matched empty pattern")
+else
+  print("4: non-empty rejected by empty pattern")
+end
+
+# 5. Nested table in array in table
+let t5 = {items: [{id: 1, name: "first"}]}
+match t5
+when {items: [{id: 1, name: n}]}
+  print("5: nested={n}")
+else
+  print("5: FAIL")
+end
+
+# 6. Match used as expression in function return
+fn describe(x)
+  match x
+  when {shape: "circle", r: r}
+    return "circle({r})"
+  when [a, b]
+    return "pair({a},{b})"
+  else
+    return "other"
+  end
+end
+print("6: " + describe({shape: "circle", r: 10}))
+print("6: " + describe([3, 4]))
+print("6: " + describe("hello"))
+
+# 7. Multiple when clauses with same structure, different literals
+let t7 = {code: 404}
+match t7
+when {code: 200}
+  print("7: FAIL - 200")
+when {code: 404}
+  print("7: 404 matched")
+when {code: 500}
+  print("7: FAIL - 500")
+else
+  print("7: FAIL - else")
+end
+
+# 8. Binding shadows outer variable
+let name = "outer"
+let t8 = {name: "inner"}
+match t8
+when {name: name}
+  print("8: {name}")
+end
+# After the match, name should still be "outer" if bindings are scoped
+# Actually in Gem, let creates a new variable in the current scope
+# so 'name' inside the when body is the bound value
+print("8b: {name}")
+
+# 9. Pattern with numeric key in table
+let t9 = {count: 0}
+match t9
+when {count: 0}
+  print("9: zero count")
+else
+  print("9: FAIL")
+end
+
+# 10. nil target
+match nil
+when {a: 1}
+  print("10: FAIL - nil matched table")
+when [x]
+  print("10: FAIL - nil matched array")
+else
+  print("10: nil fell through")
+end

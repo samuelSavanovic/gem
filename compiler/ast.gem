@@ -105,12 +105,12 @@ fn make_while(cond, body, line)
   {tag: "while", cond: cond, body: body, line: line}
 end
 
-fn make_match(target, whens, else_body, line)
-  {tag: "match", target: target, whens: whens, else: else_body, line: line}
+fn make_match(target, whens, else_body, line, target_var)
+  {tag: "match", target: target, whens: whens, else: else_body, line: line, target_var: target_var}
 end
 
-fn make_when(value, body)
-  {tag: "when_clause", value: value, body: body}
+fn make_when(value, body, bindings)
+  {tag: "when_clause", value: value, body: body, bindings: bindings}
 end
 
 fn make_return(value, line)

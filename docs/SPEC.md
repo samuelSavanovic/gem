@@ -207,6 +207,51 @@ else
 end
 ```
 
+**Destructuring Patterns in Match**
+
+When clauses support destructuring patterns that match on the shape of data and bind inner values to variables:
+
+```
+# Table pattern — match if target has these keys, recurse on values
+match response
+when {ok: true, value: v}
+  print(v)
+when {ok: false, error: msg}
+  print("failed: " + msg)
+end
+
+# Array pattern — match on length and bind positional elements
+match point
+when [x, y, 0]
+  print("2D point")
+when [x, y, z]
+  print("3D point")
+end
+
+# Bare name — catch-all with binding
+match val
+when x
+  print("caught: " + to_string(x))
+end
+
+# Nested patterns
+match event
+when {type: "click", pos: [x, y]}
+  handle_click(x, y)
+end
+```
+
+Pattern rules:
+- `{key: pattern, ...}` — checks target is a table, each key exists, and recursively matches each value against its sub-pattern. Extra keys in the target are ignored (partial match).
+- `[p1, p2, ...]` — checks target is a table with `len(target) == N`, then recursively matches each element.
+- A literal (int, float, string, bool, nil) in pattern position matches by equality.
+- A name in pattern position is a variable binding — always matches and binds the matched value.
+- A bare name after `when` (e.g., `when x`) is a catch-all that binds the entire match target.
+- Patterns compose recursively: `{users: [{name: n}]}` works.
+- Regular expression whens (e.g., `when some_var + 1`) still work alongside destructuring patterns.
+
+Destructuring patterns desugar in the parser to condition checks + variable bindings. The codegen sees normal if/else chains with let statements — no new AST node types are needed.
+
 `elif` desugars to nested `if/else` at parse time — no new AST nodes. One `end` closes the entire chain.
 
 `break` exits the innermost loop (`while` or `for`). `continue` skips to the next iteration.

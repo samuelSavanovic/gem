@@ -1,0 +1,199 @@
+# Test: destructuring patterns in match arms
+
+# 1. Table pattern with literal values
+let r1 = {type: "add", value: 10}
+match r1
+when {type: "add"}
+  print("1: table literal match")
+else
+  print("1: FAIL")
+end
+
+# 2. Table pattern with variable bindings
+let person = {name: "Alice", age: 30}
+match person
+when {name: n, age: a}
+  print("2: {n} is {a}")
+else
+  print("2: FAIL")
+end
+
+# 3. Array pattern
+let point2d = [3, 4]
+match point2d
+when [x, y]
+  print("3: ({x}, {y})")
+else
+  print("3: FAIL")
+end
+
+# 4. Mixed literal + binding
+let resp = {ok: true, value: 42}
+match resp
+when {ok: false, error: msg}
+  print("4: FAIL - error branch")
+when {ok: true, value: v}
+  print("4: value={v}")
+else
+  print("4: FAIL - else")
+end
+
+# 5. Nested patterns: table containing array
+let event = {type: "click", pos: [10, 20]}
+match event
+when {type: "click", pos: [x, y]}
+  print("5: click at ({x}, {y})")
+else
+  print("5: FAIL")
+end
+
+# 6. Bare variable catch-all
+let val = 99
+match val
+when {type: "x"}
+  print("6: FAIL - table match")
+when x
+  print("6: caught {x}")
+end
+
+# 7. Regular literal when (regression)
+match 42
+when 42
+  print("7: literal match works")
+when 43
+  print("7: FAIL")
+else
+  print("7: FAIL - else")
+end
+
+# 8. Mixed destructuring and literal whens
+let token = {type: "number", value: 7}
+match token
+when "EOF"
+  print("8: FAIL - EOF")
+when {type: "number", value: n}
+  print("8: number={n}")
+else
+  print("8: FAIL - else")
+end
+
+# 9. Pattern that doesn't match (falls through to else)
+let data = {status: "pending"}
+match data
+when {status: "done", result: r}
+  print("9: FAIL - matched done")
+else
+  print("9: fell through to else")
+end
+
+# 10. Array length mismatch (should not match)
+let arr = [1, 2, 3]
+match arr
+when [a, b]
+  print("10: FAIL - matched 2 elements")
+when [a, b, c]
+  print("10: matched 3: {a},{b},{c}")
+else
+  print("10: FAIL - else")
+end
+
+# 11. Non-table target against table pattern (should not match)
+match "hello"
+when {type: "x"}
+  print("11: FAIL - string matched table pattern")
+else
+  print("11: string did not match table pattern")
+end
+
+# 12. Non-table target against array pattern
+match 42
+when [x]
+  print("12: FAIL - int matched array pattern")
+else
+  print("12: int did not match array pattern")
+end
+
+# 13. Deeply nested: {users: [{name: n}]}
+let db = {users: [{name: "Bob"}]}
+match db
+when {users: [{name: n}]}
+  print("13: user={n}")
+else
+  print("13: FAIL")
+end
+
+# 14. Table pattern with string key literal match
+let msg = {code: 200, body: "OK"}
+match msg
+when {code: 404, body: b}
+  print("14: FAIL - 404")
+when {code: 200, body: b}
+  print("14: {b}")
+else
+  print("14: FAIL - else")
+end
+
+# 15. Array pattern with literal in position
+let coords = [1, 2, 0]
+match coords
+when [x, y, 0]
+  print("15: 2D point ({x}, {y})")
+when [x, y, z]
+  print("15: FAIL - 3D")
+else
+  print("15: FAIL - else")
+end
+
+# 16. Match in a function (return position)
+fn classify(shape)
+  match shape
+  when {type: "circle", radius: r}
+    return "circle r={r}"
+  when {type: "rect", w: w, h: h}
+    return "rect {w}x{h}"
+  else
+    return "unknown"
+  end
+end
+print("16: " + classify({type: "circle", radius: 5}))
+print("16: " + classify({type: "rect", w: 3, h: 4}))
+print("16: " + classify("other"))
+
+# 17. Empty table pattern (just checks type is table)
+# Not technically useful but should work
+let tbl = {a: 1}
+match tbl
+when {}
+  print("17: empty table pattern matched")
+else
+  print("17: FAIL")
+end
+
+# 18. Bool literal in pattern
+let flag = {enabled: false}
+match flag
+when {enabled: true}
+  print("18: FAIL - true")
+when {enabled: false}
+  print("18: false matched")
+else
+  print("18: FAIL - else")
+end
+
+# 19. Nil literal in pattern
+let opt = {value: nil}
+match opt
+when {value: nil}
+  print("19: nil matched")
+else
+  print("19: FAIL")
+end
+
+# 20. Regular variable expression match (regression)
+let expected = "hello"
+match "hello"
+when expected
+  print("20: var expr match works")
+else
+  print("20: FAIL")
+end
