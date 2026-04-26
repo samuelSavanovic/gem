@@ -108,6 +108,14 @@ static char* gem_normalize_path(const char *path) {
     return result;
 }
 
+/* ─── File existence check ─── */
+
+static int64_t gem_file_exists(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (f) { fclose(f); return 1; }
+    return 0;
+}
+
 /* ─── keys() alias ─── */
 
 static GemVal keys(GemVal tbl) {

@@ -1,7 +1,7 @@
-# stdlib/string — string utilities for Gem
+# std/string — string utilities for Gem
 #
 # Usage:
-#   load "stdlib/string"
+#   load "std/string"
 #   let parts = string.split("a,b,c", ",")
 
 # ─── Helpers ──────────────────────────────────────────────────

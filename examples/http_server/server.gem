@@ -4,6 +4,8 @@
 # tables, closures, green threads (spawn/send/receive),
 # pcall for error recovery.
 
+load "std/string"
+
 # ─── C socket wrappers (defined in net.c) ───
 
 extern include "net.h"
@@ -17,13 +19,13 @@ extern fn net_close(fd: Int) -> Nil
 # ─── HTTP parsing ───
 
 fn parse_request(raw)
-  let lines = split(raw, "\r\n")
+  let lines = string.split(raw, "\r\n")
   if len(lines) < 1
     return {error: "empty request"}
   end
 
   let request_line = lines[0]
-  let parts = split(request_line, " ")
+  let parts = string.split(request_line, " ")
   if len(parts) < 3
     return {error: "malformed request line"}
   end
@@ -41,7 +43,7 @@ fn parse_request(raw)
       i += 1
       break
     end
-    let colon = index_of(line, ": ")
+    let colon = string.index_of(line, ": ")
     if colon >= 0
       let key = substr(line, 0, colon)
       let value = substr(line, colon + 2)

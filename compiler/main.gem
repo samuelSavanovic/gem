@@ -13,6 +13,11 @@ extern fn gem_get_argc() -> Int
 extern fn gem_dirname(path: String) -> String
 extern fn gem_path_join(dir: String, file: String) -> String
 extern fn gem_normalize_path(path: String) -> String
+extern fn gem_file_exists(path: String) -> Int
+
+# ─── Install root (for std/ resolution) ──────────────────────
+
+let install_root = gem_dirname(gem_dirname(gem_get_argv(0)))
 
 # ─── Load resolution ──────────────────────────────────────────
 
@@ -26,7 +31,16 @@ fn resolve_loads(ast, base_dir, loaded)
       if len(path) < 4 or (path[len(path) - 4] != "." or path[len(path) - 3] != "g" or path[len(path) - 2] != "e" or path[len(path) - 1] != "m")
         path = path + ".gem"
       end
-      let full_path = gem_normalize_path(gem_path_join(base_dir, path))
+
+      # Step 1: resolve relative to importing file
+      let full_path = gem_path_join(base_dir, path)
+
+      # Step 2: if not found, try relative to install root
+      if gem_file_exists(full_path) == 0
+        full_path = gem_path_join(install_root, path)
+      end
+
+      full_path = gem_normalize_path(full_path)
 
       # Re-inclusion guard
       if loaded[full_path] == true

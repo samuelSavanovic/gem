@@ -88,7 +88,7 @@ Single-expression blocks use braces:
 times(5) { |i| print(i) }
 ```
 
-This one rule lets stdlib define `each`, `map`, `unless`, `until`, `with_file`, `loop`, etc. without compiler changes.
+This one rule lets std define `each`, `map`, `unless`, `until`, `with_file`, `loop`, etc. without compiler changes.
 
 **Tables**
 
@@ -359,11 +359,7 @@ print(items[0])    # a
 
 `has_key(tbl, key)` — returns `true` if `key` exists in the table, `false` otherwise. Unlike `tbl[key] != nil`, correctly detects keys whose value is `nil`.
 
-`split(s, delim)` — splits string `s` by `delim` and returns a table of substrings. If `delim` is empty, splits into individual characters.
-
 `substr(s, start[, len])` — returns a substring of `s` starting at `start`. If `len` is provided, returns at most `len` characters; otherwise returns to the end of the string.
-
-`index_of(s, needle)` — returns the index of the first occurrence of `needle` in `s`, or `-1` if not found.
 
 `chr(n)` — converts an integer (0–255) to a single-character string with that byte value.
 
@@ -383,27 +379,34 @@ All builtins are first-class values — they can be stored in variables and pass
 
 ```
 load "compiler/parser"
-load "stdlib/table"
+load "std/table"
 ```
 
-File inclusion with a re-inclusion guard — the runtime keeps a table of already-loaded file paths. `load` checks before including. Prevents double-loading in multi-file projects like the compiler itself.
+File inclusion with a re-inclusion guard — the compiler keeps a table of already-loaded file paths. `load` checks before including. Prevents double-loading in multi-file projects like the compiler itself.
+
+Two-step path resolution:
+
+1. **Relative to the importing file** — `load "parser"` from `compiler/main.gem` finds `compiler/parser.gem`.
+2. **Relative to the install root** — if step 1 fails, try `<binary_dir>/../<path>.gem`. Since `build/gem` lives at `<project>/build/gem`, the install root is `<project>/`. So `load "std/string"` resolves to `<project>/std/string.gem` from any source file location.
+
+The first path that exists wins. This lets `load "std/string"` work without fragile relative paths like `../../std/string`.
 
 No namespacing in v0. Everything is global.
 
-**Standard Library (stdlib/)**
+**Standard Library (std/)**
 
-Convention: each stdlib file exports a single table as a namespace. No language changes needed — `load` dumps everything into scope, but the exported table acts as a namespace.
+Convention: each std file exports a single table as a namespace. No language changes needed — `load` dumps everything into scope, but the exported table acts as a namespace.
 
 ```
-load "stdlib/string"
-load "stdlib/table"
+load "std/string"
+load "std/table"
 
 let parts = string.split("a,b,c", ",")
 let trimmed = string.trim("  hello  ")
 table.each(parts) { |item| print(item) }
 ```
 
-`stdlib/string` — exports `string` table:
+`std/string` — exports `string` table:
 
 - `string.split(s, delim)` — split string by delimiter, return array
 - `string.index_of(s, needle)` — find first occurrence, return index or -1
@@ -412,16 +415,16 @@ table.each(parts) { |item| print(item) }
 - `string.starts_with(s, prefix)` / `string.ends_with(s, suffix)` — boolean prefix/suffix check
 - `string.upper(s)` / `string.lower(s)` — ASCII case conversion
 
-`stdlib/table` — exports `table` table:
+`std/table` — exports `table` table:
 
 - `table.each(arr, fn)` — iterate calling fn(item)
 - `table.map(arr, fn)` — return new array with fn(item) applied
 - `table.filter(arr, fn)` — return new array where fn(item) is truthy
 - `table.contains(arr, value)` — linear scan for value equality
 
-The C builtins (`split`, `index_of`, etc.) remain available alongside the stdlib versions. Users can choose either. The stdlib versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`buf_str()`, and `substr()`.
+The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`buf_str()`, and `substr()`. `split` and `index_of` are only available through `std/string` (not as bare builtins).
 
-Top-level `let` bindings (including stdlib namespaces like `string`, `table`) compile to C globals, so they are accessible from named `fn` declarations, closures, and top-level code alike.
+Top-level `let` bindings (including std namespaces like `string`, `table`) compile to C globals, so they are accessible from named `fn` declarations, closures, and top-level code alike.
 
 **What the Compiler Needs to Emit**
 

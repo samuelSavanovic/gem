@@ -1,7 +1,7 @@
-# stdlib/table — array/table utilities for Gem
+# std/table — array/table utilities for Gem
 #
 # Usage:
-#   load "stdlib/table"
+#   load "std/table"
 #   table.each([1,2,3]) do |item|
 #     print(item)
 #   end

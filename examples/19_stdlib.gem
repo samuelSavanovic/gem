@@ -1,7 +1,7 @@
-# stdlib tests — string and table modules
+# std tests — string and table modules
 
-load "../stdlib/string"
-load "../stdlib/table"
+load "std/string"
+load "std/table"
 
 # ─── string.split ────────────────────────────────────────────
 
