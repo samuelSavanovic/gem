@@ -74,11 +74,12 @@ Minor ergonomic win for parser helpers and similar patterns. Not blocking anythi
 
 ## Stdlib Migration — Move Builtins to Gem
 
-**Goal:** Keep the C runtime minimal. Several builtins added for the HTTP server stress test (`split`, `substr`, `index_of`) could be rewritten in pure Gem once string performance is addressed. `chr`/`ord` must stay in C (no way to construct arbitrary bytes in pure Gem).
+**Goal:** Keep the C runtime minimal. `chr`/`ord` must stay in C (no way to construct arbitrary bytes in pure Gem).
 
-### Builtins that can move to Gem
-- `split(s, delim)` — loop over `index_of` + `substr`
-- `index_of(s, needle)` — loop comparing substrings
+### Migrated to `std/` — DONE
+- `split(s, delim)` — now `string.split` in `std/string.gem`, implemented in pure Gem using `ord(s, i)` + `buf_*`
+- `index_of(s, needle)` — now `string.index_of` in `std/string.gem`, implemented in pure Gem
+- Removed as bare builtins from the compiler. `std/string` is the canonical source.
 
 ### Builtins that could move with string performance work
 - `substr(s, start, len)` — trivial in Gem but currently copies; needs string views or slices to be competitive
@@ -89,5 +90,3 @@ These runtime/compiler improvements would make pure-Gem string code competitive 
 1. **String views / slices** — `substr` returns a pointer+offset+length into the original string instead of allocating a copy. Makes substring extraction O(1). Not yet implemented — requires changing the string representation in GemVal (add len field, stop assuming null-termination). Every string consumer (strlen, strcmp, printf %s) would need updating. Deferred until needed.
 2. **String builder (`buf_new`/`buf_push`/`buf_str`)** — DONE. Explicit mutable buffer builtins with doubling growth. `buf_push` appends without allocating a new string; `buf_str` finalizes into an immutable GemVal string. Benchmarks: ~58x faster than `s = s + x` at 100K iterations.
 3. **Byte-level access without allocation (`ord(s, i)`)** — DONE. `ord` now accepts an optional second argument for direct byte indexing into the string. `ord(s, i)` returns the byte value at index `i` without allocating a temporary 1-char string.
-
-With #2 and #3 in place, a pure-Gem `split` and `index_of` can be written using `ord(s, i)` for scanning and `buf_*` for accumulation, with performance close to the C versions. String views (#1) would further help `substr` but are not blocking.

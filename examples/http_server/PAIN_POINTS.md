@@ -38,7 +38,7 @@ declarations.
 **Possible improvement:** Auto-generate C forward declarations from the `extern fn`
 type signatures — the compiler already knows the C types.
 
-## 3. JSON strings are awkward
+## 3. JSON strings are awkward — FIXED
 
 **Severity:** Cosmetic but real.
 
@@ -46,9 +46,8 @@ Producing `{"key": "value"}` in a Gem string is painful because `{` starts
 interpolation. You must write `"\{\"key\": \"value\"}"` mixing brace escapes
 with quote escapes.
 
-**Possible improvements:**
-- Raw string syntax (e.g., `r"..."` or `'...'`) that disables interpolation
-- Single-quoted strings with no interpolation
+**Fix:** Single-quoted strings (`'...'`) with no interpolation were added.
+`'{"key": "value"}'` works directly.
 
 ## 4. No `\0` null byte escape
 
@@ -56,17 +55,12 @@ with quote escapes.
 
 Not supported yet. Would need the same `chr(0)` bootstrap treatment as `\r`.
 
-## 5. Builtin registration is 3 separate code locations
+## 5. Builtin registration is 3 separate code locations — FIXED
 
 **Severity:** Developer friction.
 
-Adding a new builtin requires editing codegen.gem in 3 places:
-1. `builtins["name"] = true` (the table)
-2. `elif name == "name" → return {expr: "gem_make_fn(...)", ...}` (var ref)
-3. The long `or` chain + `elif name == "name" → fn_name = "..."` (direct call opt)
-
-This is error-prone. A data-driven approach (single table mapping name → C function)
-would eliminate the duplication.
+**Fix:** Refactored to a single data table mapping builtin name → C function name.
+Adding a new builtin is now a one-line addition.
 
 ## 6. Server is single-threaded (no spawn per connection) — FIXED
 
@@ -91,6 +85,6 @@ Performance: ~24K req/s at 100 concurrent connections, ~21K req/s at 400 connect
 - `extern fn` + `Ptr` interop worked smoothly for POSIX sockets
 - `pcall` caught malformed request errors gracefully
 - String interpolation made HTTP response building clean
-- `split`, `substr`, `index_of` were easy to add as runtime builtins
+- `string.split`, `substr`, `string.index_of` worked well for HTTP parsing (`split`/`index_of` now live in `std/string`)
 - `extern include` made C header inclusion straightforward
 - The table-as-object pattern (`router.add`, `router.dispatch`) felt natural
