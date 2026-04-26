@@ -59,15 +59,6 @@ end
 
 # ─── Array/set helpers ────────��─────────────────────────────────
 
-fn array_contains(arr, val)
-  for i = 0, len(arr)
-    if arr[i] == val
-      return true
-    end
-  end
-  false
-end
-
 fn set_add(s, val)
   if s[val] != true
     s[val] = true
@@ -80,30 +71,21 @@ end
 
 fn set_union(a, b)
   let result = {}
-  let ks = keys(a)
-  let i = 0
-  while i < len(ks)
-    result[ks[i]] = true
-    i += 1
+  for k, _ in a
+    result[k] = true
   end
-  let ks2 = keys(b)
-  let j = 0
-  while j < len(ks2)
-    result[ks2[j]] = true
-    j += 1
+  for k, _ in b
+    result[k] = true
   end
   result
 end
 
 fn set_intersect(a, b)
   let result = {}
-  let ks = keys(a)
-  let i = 0
-  while i < len(ks)
-    if b[ks[i]] == true
-      result[ks[i]] = true
+  for k, _ in a
+    if b[k] == true
+      result[k] = true
     end
-    i += 1
   end
   result
 end
@@ -174,9 +156,8 @@ fn make_codegen(source_name)
     self: "gem_self_builtin"
   }
   let builtins = {}
-  let _bkeys = keys(builtin_fns)
-  for _bi = 0, len(_bkeys)
-    builtins[_bkeys[_bi]] = true
+  for k, _ in builtin_fns
+    builtins[k] = true
   end
   let boxed_vars = {}
   let top_level_vars = {}
@@ -238,11 +219,8 @@ fn make_codegen(source_name)
         set_add(inner_defined, node.block_param)
       end
       let inner_free = collect_free_vars(node.body, inner_defined)
-      let ifks = keys(inner_free)
-      let ifi = 0
-      while ifi < len(ifks)
-        set_add(free, ifks[ifi])
-        ifi += 1
+      for ifk, _ in inner_free
+        set_add(free, ifk)
       end
     elif tag == "fn_def"
       # Named functions are global — skip
@@ -390,11 +368,8 @@ fn make_codegen(source_name)
       end
       let free = collect_free_vars(node.body, inner_defined)
       let inter = set_intersect(free, scope_vars)
-      let iks = keys(inter)
-      let iki = 0
-      while iki < len(iks)
-        set_add(captured, iks[iki])
-        iki += 1
+      for ik, _ in inter
+        set_add(captured, ik)
       end
       walk_captures(node.body, set_union(scope_vars, inner_defined), captured)
     elif tag == "fn_def"
@@ -559,6 +534,7 @@ fn make_codegen(source_name)
       elif node.op == "not"
         return {expr: "gem_not({r.expr})", setup: r.setup}
       end
+      error("unknown unary operator: {node.op}")
     elif tag == "anon_fn"
       return compile_anon_fn(node)
     elif tag == "table"
@@ -577,7 +553,7 @@ fn make_codegen(source_name)
       return {expr: "gem_table_get({obj_r.expr}, {key_r.expr})", setup: obj_r.setup + key_r.setup}
     end
 
-    {expr: "GEM_NIL", setup: "/* unknown node: " + tag + " */\n"}
+    error("unknown expression node: {tag}")
   end
 
   # ─── compile_table ─���
@@ -643,6 +619,37 @@ fn make_codegen(source_name)
     {expr: "gem_make_fn({result.fn_name}, {env_tmp})", setup: setup}
   end
 
+  # ─── compile_args: compile an argument list into setup + array name ──
+  # Returns {setup, arr_name, argc}. arr_name is nil when argc == 0.
+
+  let compile_args = fn(args)
+    let arg_setups = ""
+    let arg_exprs = []
+    for i = 0, len(args)
+      let r = compile_expr(args[i])
+      arg_setups = arg_setups + r.setup
+      push(arg_exprs, r.expr)
+    end
+    let argc = len(args)
+    if argc == 0
+      return {setup: arg_setups, arr_name: nil, argc: 0}
+    end
+    let t = tmp()
+    let arr = arg_exprs[0]
+    for i = 1, argc
+      arr = arr + ", " + arg_exprs[i]
+    end
+    {setup: arg_setups + "    GemVal {t}[] = \{{arr}};\n", arr_name: t, argc: argc}
+  end
+
+  # Emit a direct call: fn_name(env, args, argc)
+  let emit_direct_call = fn(fn_name, env, ca)
+    if ca.argc == 0
+      return {expr: "{fn_name}({env}, NULL, 0)", setup: ca.setup}
+    end
+    {expr: "{fn_name}({env}, {ca.arr_name}, {ca.argc})", setup: ca.setup}
+  end
+
   # ─── compile_call ──
 
   compile_call = fn(node)
@@ -664,91 +671,27 @@ fn make_codegen(source_name)
           line = 0
         end
         let escaped_file = escape_c_string(source_name)
-        let arg_setups = ""
-        let arg_exprs = []
-        for i = 0, len(args)
-          let r = compile_expr(args[i])
-          arg_setups = arg_setups + r.setup
-          push(arg_exprs, r.expr)
+        let ca = compile_args(args)
+        if ca.argc == 0
+          return {expr: "gem_error_at_fn(\"{escaped_file}\", {line}, NULL, 0)", setup: ca.setup}
         end
-        let argc = len(args)
-        if argc == 0
-          return {expr: "gem_error_at_fn(\"{escaped_file}\", {line}, NULL, 0)", setup: arg_setups}
-        end
-        let t = tmp()
-        let arr = arg_exprs[0]
-        for i = 1, argc
-          arr = arr + ", " + arg_exprs[i]
-        end
-        let setup = arg_setups + "    GemVal {t}[] = \{{arr}};\n"
-        let call = "gem_error_at_fn(\"{escaped_file}\", {line}, {t}, {argc})"
-        return {expr: call, setup: setup}
+        return {expr: "gem_error_at_fn(\"{escaped_file}\", {line}, {ca.arr_name}, {ca.argc})", setup: ca.setup}
       elif has_key(builtin_fns, name)
-        let fn_name = builtin_fns[name]
-        let arg_setups = ""
-        let arg_exprs = []
-        for i = 0, len(args)
-          let r = compile_expr(args[i])
-          arg_setups = arg_setups + r.setup
-          push(arg_exprs, r.expr)
-        end
-        let argc = len(args)
-        if argc == 0
-          return {expr: "{fn_name}(NULL, NULL, 0)", setup: arg_setups}
-        end
-        let t = tmp()
-        let arr = arg_exprs[0]
-        for i = 1, argc
-          arr = arr + ", " + arg_exprs[i]
-        end
-        let setup = arg_setups + "    GemVal {t}[] = \{{arr}};\n"
-        return {expr: "{fn_name}(NULL, {t}, {argc})", setup: setup}
+        return emit_direct_call(builtin_fns[name], "NULL", compile_args(args))
       elif set_contains(defined_fns, name)
-        let arg_setups = ""
-        let arg_exprs = []
-        for i = 0, len(args)
-          let r = compile_expr(args[i])
-          arg_setups = arg_setups + r.setup
-          push(arg_exprs, r.expr)
-        end
-        let argc = len(args)
-        if argc == 0
-          return {expr: "gem_fn_{name}(NULL, NULL, 0)", setup: arg_setups}
-        end
-        let t = tmp()
-        let arr = arg_exprs[0]
-        for i = 1, argc
-          arr = arr + ", " + arg_exprs[i]
-        end
-        let setup = arg_setups + "    GemVal {t}[] = \{{arr}};\n"
-        return {expr: "gem_fn_{name}(NULL, {t}, {argc})", setup: setup}
+        return emit_direct_call("gem_fn_{name}", "NULL", compile_args(args))
       end
     end
 
     # General case: call through function value
     let func_r = compile_expr(func)
-    let arg_setups = ""
-    let arg_exprs = []
-    for i = 0, len(args)
-      let r = compile_expr(args[i])
-      arg_setups = arg_setups + r.setup
-      push(arg_exprs, r.expr)
-    end
-    let setup = func_r.setup + arg_setups
-    let argc = len(args)
+    let ca = compile_args(args)
     let tmp_fn = tmp()
-    setup = setup + "    GemVal {tmp_fn} = {func_r.expr};\n"
-    if argc == 0
+    let setup = func_r.setup + ca.setup + "    GemVal {tmp_fn} = {func_r.expr};\n"
+    if ca.argc == 0
       return {expr: "{tmp_fn}.fn({tmp_fn}.env, NULL, 0)", setup: setup}
     end
-    let tmp_args = tmp()
-    let arr = arg_exprs[0]
-    for i = 1, argc
-      arr = arr + ", " + arg_exprs[i]
-    end
-    setup = setup + "    GemVal {tmp_args}[] = \{{arr}};\n"
-    let call = "{tmp_fn}.fn({tmp_fn}.env, {tmp_args}, {argc})"
-    {expr: call, setup: setup}
+    {expr: "{tmp_fn}.fn({tmp_fn}.env, {ca.arr_name}, {ca.argc})", setup: setup}
   end
 
   # ─── compile_binop ──
@@ -827,8 +770,7 @@ fn make_codegen(source_name)
       return {expr: t, setup: setup}
     end
 
-    let rc_r = compile_expr(node.right)
-    {expr: "GEM_NIL", setup: ls + rc_r.setup + "/* unknown op: " + op + " */\n"}
+    error("unknown binary operator: {op}")
   end
 
   # ─── compile_stmts ──
@@ -1571,23 +1513,6 @@ fn make_codegen(source_name)
   end
 
   {compile: compile}
-end
-
-# ─── String split helper ────────────────���──────────────────────
-
-fn split_string(s, delim)
-  let result = []
-  let current = ""
-  for i = 0, len(s)
-    if s[i] == delim
-      push(result, current)
-      current = ""
-    else
-      current = current + s[i]
-    end
-  end
-  push(result, current)
-  result
 end
 
 # Bootstrap fallback: old stage0 doesn't know str_replace is a builtin.

@@ -31,7 +31,7 @@ C runtime is minimal glue code (~100–200 lines) wiring together three librarie
 
 **Values and Types**
 
-Six types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`. All dynamically typed. Every value is a tagged C union. Yes this means primitives are boxed and slow — doesn't matter for v0. Future optimization: NaN-boxing to pack ints, bools, and nil into a double's NaN space, eliminating heap allocation for primitives.
+Eight types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`. All dynamically typed. Every value is a tagged C union. Yes this means primitives are boxed and slow — doesn't matter for v0. Future optimization: NaN-boxing to pack ints, bools, and nil into a double's NaN space, eliminating heap allocation for primitives.
 
 **Variables**
 
@@ -537,6 +537,6 @@ Every value is a tagged C union. The compiler emits C code that uses the runtime
 
 **What's NOT in v0**
 
-No classes. No inheritance. No exceptions (use `error()` to halt, `pcall()` for recovery). No destructuring (of variadic rest params). No type system. No operator overloading. No namespaces.
+No classes. No inheritance. No exceptions (use `error()` to halt, `pcall()` for recovery). No type system. No operator overloading. No namespaces.
 
 All of those can be added later _in the language itself_ via blocks, or in a future compiler version compiled by v0.
