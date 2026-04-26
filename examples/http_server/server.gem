@@ -1,10 +1,12 @@
-# HTTP/1.1 server — stress test for Gem language
+# HTTP/1.1 server — stress test for Gem concurrency
 #
 # Exercises: extern fn, Ptr interop, string parsing,
 # tables, closures, green threads (spawn/send/receive),
-# pcall for error recovery.
+# pcall for error recovery, supervisors, monitors,
+# selective receive with after.
 
 load "std/string"
+load "std/supervisor"
 
 # ─── C socket wrappers (defined in net.c) ───
 
@@ -92,6 +94,10 @@ end
 
 fn response_error(msg)
   response(500, "Internal Server Error", "text/plain", "500 Internal Server Error: {msg}")
+end
+
+fn response_busy()
+  response(503, "Service Unavailable", "text/plain", "503 Server Busy")
 end
 
 # ─── Router ───
@@ -188,7 +194,57 @@ fn handle_connection(client_fd, router)
   net_close(client_fd)
 end
 
-# ─── Main server loop ───
+# ─── Acceptor process ───
+# Accepts connections, spawns handler processes, tracks active count
+# via monitor + non-blocking receive drain.
+
+let MAX_CONNECTIONS = 900  # leave headroom below GEM_MAX_PROCS (1024)
+
+fn acceptor(server_fd, router)
+  let active = 0
+  let total = 0
+
+  while true
+    # Drain DOWN messages from finished handlers (non-blocking)
+    let draining = true
+    while draining
+      receive
+      when {tag: "DOWN"}
+        active -= 1
+      after 0
+        draining = false
+      end
+    end
+
+    let client_fd = net_accept(server_fd)
+    if client_fd < 0
+      # Accept error, continue
+    elif active >= MAX_CONNECTIONS
+      # Backpressure: reject with 503
+      net_write(client_fd, response_busy())
+      net_close(client_fd)
+    else
+      let fd = client_fd
+      let r = router
+      let result = pcall(fn()
+        let pid = spawn(fn()
+          handle_connection(fd, r)
+        end)
+        monitor(pid)
+      end)
+      if result.ok
+        active += 1
+        total += 1
+      else
+        # spawn failed (process table full) — reject gracefully
+        net_write(client_fd, response_busy())
+        net_close(client_fd)
+      end
+    end
+  end
+end
+
+# ─── Main ───
 
 let port = 8080
 let server_fd = net_listen(port)
@@ -197,20 +253,21 @@ if server_fd < 0
 end
 
 print("Gem HTTP server listening on port {port}")
+print("Max connections: {MAX_CONNECTIONS}")
 
-# The accept loop runs inside a spawned process so that net_accept
-# can yield to the scheduler (non-blocking I/O requires a coroutine).
-# Each accepted connection is handled in its own green thread.
-
+# Start acceptor under a one_for_one supervisor.
+# If the acceptor crashes, it gets restarted automatically.
+let sfd = server_fd
 let r = router
-spawn(fn()
-  while true
-    let client_fd = net_accept(server_fd)
-    if client_fd >= 0
-      let fd = client_fd
+supervisor.start({
+  strategy: "one_for_one",
+  max_restarts: 10,
+  max_seconds: 5000,
+  children: [
+    {id: "acceptor", start: fn()
       spawn(fn()
-        handle_connection(fd, r)
+        acceptor(sfd, r)
       end)
-    end
-  end
-end)
+    end}
+  ]
+})

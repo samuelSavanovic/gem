@@ -44,7 +44,7 @@ int64_t net_listen(int64_t port) {
         return -1;
     }
 
-    if (listen(fd, 128) < 0) {
+    if (listen(fd, 1024) < 0) {
         close(fd);
         return -1;
     }

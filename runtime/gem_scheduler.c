@@ -125,6 +125,20 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
             break;
         }
     }
+    /* Reclaim dead process slots if no free slots available */
+    if (pid < 0) {
+        for (int i = 0; i < GEM_MAX_PROCS; i++) {
+            if (gem_proc_table[i].state == GEM_PROC_DEAD) {
+                gem_proc_table[i].state = GEM_PROC_FREE;
+                gem_proc_table[i].coro = NULL;
+                gem_proc_table[i].mailbox = (GemMailbox){NULL, NULL};
+                gem_proc_table[i].monitors = NULL;
+                gem_proc_table[i].exit_reason = NULL;
+                pid = i;
+                break;
+            }
+        }
+    }
     if (pid < 0) {
         gem_error("spawn: process table full");
         return -1;
