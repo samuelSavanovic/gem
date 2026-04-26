@@ -1,7 +1,5 @@
 # json_stress.gem — stress test the JSON parser against a large file
 
-extern fn gem_read_file(path: String) -> String
-
 # ─── Scanner ──────────────────────────────────────────────────────
 
 fn make_scanner(input)
@@ -199,7 +197,7 @@ let path = "/tmp/stress_test.json"
 print("Reading: " + path)
 
 let t0 = time_ms()
-let src = gem_read_file(path)
+let src = read_file(path)
 let t1 = time_ms()
 print("File size (chars): " + to_string(len(src)))
 print("Read time:         " + to_string(t1 - t0) + " ms")

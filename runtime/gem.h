@@ -174,6 +174,8 @@ GemVal gem_to_float_fn(void *_env, GemVal *args, int argc);
 GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc);
 GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc);
 GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc);
+GemVal gem_read_file_fn(void *_env, GemVal *args, int argc);
+GemVal gem_write_file_fn(void *_env, GemVal *args, int argc);
 
 /* ─── Helpers used by codegen ─── */
 

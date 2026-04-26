@@ -4,9 +4,7 @@
 load "parser"
 load "codegen"
 
-extern include "file_io.h"
 extern include "compiler_helpers.h"
-extern fn gem_read_file(path: String) -> String
 extern fn puts(s: String) -> Int
 extern fn gem_get_argv(idx: Int) -> String
 extern fn gem_get_argc() -> Int
@@ -48,10 +46,7 @@ fn resolve_loads(ast, base_dir, loaded)
       end
       loaded[full_path] = true
 
-      let source = gem_read_file(full_path)
-      if source == ""
-        error("cannot load '{full_path}'")
-      end
+      let source = read_file(full_path)
 
       let loaded_ast = parse_source(source, full_path)
       let loaded_dir = gem_dirname(full_path)
@@ -77,10 +72,7 @@ if argc < 2
 end
 
 let src_path = gem_get_argv(1)
-let source = gem_read_file(src_path)
-if source == ""
-  error("cannot read '{src_path}'")
-end
+let source = read_file(src_path)
 
 let ast = parse_source(source, src_path)
 let base_dir = gem_dirname(src_path)

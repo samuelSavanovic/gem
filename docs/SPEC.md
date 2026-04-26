@@ -699,6 +699,10 @@ print(items[0])    # a
 
 `process_info(pid)` — returns a table with process metadata: `state`, `mailbox_len`, `links`, `monitors`, `trap_exit`, `exit_reason`. Returns `nil` for invalid/free pids.
 
+`read_file(path)` — reads the entire file at `path` and returns its contents as a string. Opens in binary mode (no newline translation). Raises an error if the file cannot be opened.
+
+`write_file(path, content)` — writes the string `content` to `path`, overwriting any existing file. Opens in binary mode. Raises an error if the file cannot be opened or if the write fails.
+
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
 **Module System (v0.1 — minimal)**

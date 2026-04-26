@@ -413,6 +413,49 @@ GemVal gem_make_ref_builtin(void *_env, GemVal *args, int argc) {
     return gem_make_ref();
 }
 
+/* ─── Built-in: read_file / write_file ─── */
+
+GemVal gem_read_file_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "read_file: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    const char *path = args[0].sval;
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        char buf[512]; snprintf(buf, sizeof(buf), "read_file: cannot open '%s'", path); gem_error(buf);
+    }
+    fseek(f, 0, SEEK_END);
+    long flen = ftell(f);
+    rewind(f);
+    char *data = (char *)GC_MALLOC_ATOMIC((size_t)flen + 1);
+    size_t nread = fread(data, 1, (size_t)flen, f);
+    data[nread] = '\0';
+    fclose(f);
+    GemVal r; r.type = VAL_STRING; r.sval = data;
+    return r;
+}
+
+GemVal gem_write_file_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_STRING || args[1].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "write_file: expected (string, string), got (%s, %s)", argc < 1 ? "nothing" : gem_type_str(args[0]), argc < 2 ? "nothing" : gem_type_str(args[1])); gem_error(buf);
+    }
+    const char *path = args[0].sval;
+    const char *content = args[1].sval;
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        char buf[512]; snprintf(buf, sizeof(buf), "write_file: cannot open '%s' for writing", path); gem_error(buf);
+    }
+    size_t len = strlen(content);
+    size_t nwritten = fwrite(content, 1, len, f);
+    fclose(f);
+    if (nwritten != len) {
+        char buf[512]; snprintf(buf, sizeof(buf), "write_file: write failed for '%s'", path); gem_error(buf);
+    }
+    return GEM_NIL;
+}
+
 /* ─── Built-in: pcall ─── */
 
 GemVal gem_pcall_fn(void *_env, GemVal *args, int argc) {

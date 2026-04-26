@@ -4,9 +4,6 @@
 
 load "parser"
 
-extern include "file_io.h"
-extern fn gem_read_file(path: String) -> String
-
 # ─── S-expression printer ───────────────────────────────────────
 
 fn join_list(items, printer)
@@ -218,7 +215,7 @@ let smoke_fail = 0
 let ei = 0
 while ei < len(examples)
   let path = examples[ei]
-  let source = gem_read_file(path)
+  let source = read_file(path)
   if source == ""
     print(path + " ... SKIP (could not read)")
     smoke_fail += 1
