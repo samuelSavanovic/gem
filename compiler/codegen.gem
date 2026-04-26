@@ -133,6 +133,15 @@ end
 
 # ─── Codegen constructor ───────────────────────────────────────
 
+fn collect_top_let_names(stmts, result)
+  for i = 0, len(stmts)
+    let s = stmts[i]
+    if type(s) == "table" and s.tag == "let"
+      set_add(result, s.name)
+    end
+  end
+end
+
 fn make_codegen(source_name)
   let functions = []
   let forward_decls = []
@@ -169,6 +178,9 @@ fn make_codegen(source_name)
     builtins[_bkeys[_bi]] = true
   end
   let boxed_vars = {}
+  let top_level_vars = {}
+  let top_level_boxed = {}
+  let in_top_level = false
 
   # ─── Helpers ──
 
@@ -527,7 +539,7 @@ fn make_codegen(source_name)
         return {expr: "gem_make_fn(gem_fn_{name}, NULL)", setup: ""}
       end
       let mname = mangle(name)
-      if set_contains(boxed_vars, name)
+      if set_contains(boxed_vars, name) or set_contains(top_level_boxed, name)
         return {expr: "(*{mname})", setup: ""}
       end
       return {expr: mname, setup: ""}
@@ -833,6 +845,12 @@ fn make_codegen(source_name)
       let r = compile_expr(node.value)
       let name = node.name
       let mname = mangle(name)
+      if in_top_level and set_contains(top_level_vars, name)
+        if set_contains(boxed_vars, name)
+          return "{line_dir}{r.setup}{p}{mname} = GC_MALLOC(sizeof(GemVal));\n{p}*{mname} = {r.expr};"
+        end
+        return "{line_dir}{r.setup}{p}{mname} = {r.expr};"
+      end
       if set_contains(boxed_vars, name)
         return "{line_dir}{r.setup}{p}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{p}*{mname} = {r.expr};"
       end
@@ -841,7 +859,7 @@ fn make_codegen(source_name)
       let r = compile_expr(node.value)
       let name = node.name
       let mname = mangle(name)
-      if set_contains(boxed_vars, name)
+      if set_contains(boxed_vars, name) or set_contains(top_level_boxed, name)
         return "{line_dir}{r.setup}{p}*{mname} = {r.expr};"
       end
       return "{line_dir}{r.setup}{p}{mname} = {r.expr};"
@@ -913,7 +931,7 @@ fn make_codegen(source_name)
       let t = tmp()
       let name = node.name
       let mname = mangle(name)
-      if set_contains(boxed_vars, name)
+      if set_contains(boxed_vars, name) or set_contains(top_level_boxed, name)
         return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}*{mname} = {t};\n{p}gem_pop_frame();\n{p}return {t};"
       end
       return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{mname} = {t};\n{p}gem_pop_frame();\n{p}return {t};"
@@ -1191,7 +1209,9 @@ fn make_codegen(source_name)
     let captured = find_captured_in_scope(body, scope_vars)
 
     let saved_boxed = boxed_vars
+    let saved_top = in_top_level
     boxed_vars = captured
+    in_top_level = false
 
     let lines = "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n"
 
@@ -1229,6 +1249,7 @@ fn make_codegen(source_name)
 
     lines = lines + "}"
     boxed_vars = saved_boxed
+    in_top_level = saved_top
     lines
   end
 
@@ -1256,7 +1277,9 @@ fn make_codegen(source_name)
     let inner_captured = find_captured_in_scope(body, inner_scope)
 
     let saved_boxed = boxed_vars
+    let saved_top = in_top_level
     boxed_vars = set_union(inner_captured, sorted_array_to_set(captures))
+    in_top_level = false
 
     # Generate struct
     let struct_name = "_closure_{name}"
@@ -1300,6 +1323,7 @@ fn make_codegen(source_name)
 
     lines = lines + "}"
     boxed_vars = saved_boxed
+    in_top_level = saved_top
 
     # Add struct + function to functions list
     push(functions, struct_def + lines)
@@ -1340,6 +1364,10 @@ fn make_codegen(source_name)
       push(forward_decls, decl)
     end
 
+    # Collect top-level variable names and compute which are captured
+    collect_top_let_names(top_stmts, top_level_vars)
+    top_level_boxed = find_captured_in_scope(top_stmts, {})
+
     # Emit extern fn wrappers
     for ef in extern_fns_list
       push(functions, compile_extern_fn(ef))
@@ -1352,8 +1380,10 @@ fn make_codegen(source_name)
 
     # Build main
     let saved_boxed = boxed_vars
-    boxed_vars = find_captured_in_scope(top_stmts, {})
+    boxed_vars = top_level_boxed
+    in_top_level = true
     let main_body = compile_stmts(top_stmts, 1)
+    in_top_level = false
     boxed_vars = saved_boxed
 
     let has_main = false
@@ -1390,7 +1420,19 @@ fn make_codegen(source_name)
         out = out + "\n"
       end
     end
-    out = out + "\n\n"
+    out = out + "\n"
+
+    # Top-level variable globals
+    let tlv_keys = keys(top_level_vars)
+    for i = 0, len(tlv_keys)
+      let vname = tlv_keys[i]
+      if set_contains(top_level_boxed, vname)
+        out = out + "GemVal *gem_v_{vname};\n"
+      else
+        out = out + "GemVal gem_v_{vname};\n"
+      end
+    end
+    out = out + "\n"
 
     # Functions
     for i = 0, len(functions)

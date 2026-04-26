@@ -421,7 +421,7 @@ table.each(parts) { |item| print(item) }
 
 The C builtins (`split`, `index_of`, etc.) remain available alongside the stdlib versions. Users can choose either. The stdlib versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`buf_str()`, and `substr()`.
 
-Note: stdlib table-as-namespace variables (like `string`, `table`) are top-level `let` bindings. Due to the current compilation model, they are accessible in top-level code and closures but not inside named `fn` declarations defined before or after the `load`. Named functions should use the C builtins or accept the namespace table as a parameter.
+Top-level `let` bindings (including stdlib namespaces like `string`, `table`) compile to C globals, so they are accessible from named `fn` declarations, closures, and top-level code alike.
 
 **What the Compiler Needs to Emit**
 
