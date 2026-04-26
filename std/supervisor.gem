@@ -36,20 +36,17 @@ end
 # ─── handle DOWN ─────────────────────────────────────────────
 
 fn _sup_handle_down(state, dead_pid, reason)
-  # Find which child died
   let children = state.children
   let specs = state.specs
-  let i = 0
   let found = -1
-  while i < len(children)
+  for i = 0, len(children)
     if children[i].pid == dead_pid
       found = i
+      break
     end
-    i += 1
   end
 
   if found == -1
-    # Unknown pid, ignore
     _sup_loop(state)
     return nil
   end
@@ -60,7 +57,6 @@ fn _sup_handle_down(state, dead_pid, reason)
     restart = spec.restart
   end
 
-  # Check restart policy
   let should_restart = false
   if restart == "permanent"
     should_restart = true
@@ -69,34 +65,24 @@ fn _sup_handle_down(state, dead_pid, reason)
       should_restart = true
     end
   end
-  # "temporary" → never restart
 
-  if should_restart == false
-    # Mark child as dead (pid = -1), continue loop
+  if not should_restart
     children[found] = {id: spec.id, pid: -1}
     _sup_loop(state)
     return nil
   end
 
-  # Check restart intensity
   let now = time_ms()
-  let window = state.max_seconds
-  let max_r = state.max_restarts
-
-  # Record this restart
   push(state.restart_times, now)
 
-  # Count restarts within the window
   let count = 0
-  let j = 0
-  while j < len(state.restart_times)
-    if now - state.restart_times[j] <= window
+  for t in state.restart_times
+    if now - t <= state.max_seconds
       count += 1
     end
-    j += 1
   end
 
-  if count > max_r
+  if count > state.max_restarts
     error("max restart intensity reached")
   end
 
@@ -107,23 +93,12 @@ fn _sup_handle_down(state, dead_pid, reason)
     children[found] = {id: spec.id, pid: new_pid}
     _sup_loop(state)
   elif strategy == "one_for_all"
-    # Kill all living children
-    let k = 0
-    while k < len(children)
-      if children[k].pid != -1 and children[k].pid != dead_pid
-        kill(children[k].pid, "shutdown")
-      end
-      k += 1
-    end
-
-    # Drain remaining DOWN messages for killed children
     let alive_count = 0
-    let m = 0
-    while m < len(children)
-      if children[m].pid != -1 and children[m].pid != dead_pid
+    for child in children
+      if child.pid != -1 and child.pid != dead_pid
+        kill(child.pid, "shutdown")
         alive_count += 1
       end
-      m += 1
     end
 
     let drained = 0
@@ -134,12 +109,9 @@ fn _sup_handle_down(state, dead_pid, reason)
       end
     end
 
-    # Restart all children in order
-    let n = 0
-    while n < len(specs)
-      let new_pid = _sup_start_child(specs[n])
-      children[n] = {id: specs[n].id, pid: new_pid}
-      n += 1
+    for i = 0, len(specs)
+      let new_pid = _sup_start_child(specs[i])
+      children[i] = {id: specs[i].id, pid: new_pid}
     end
     _sup_loop(state)
   else
@@ -151,8 +123,7 @@ end
 
 fn _sup_handle_which_children(state, reply_to)
   let result = []
-  let i = 0
-  while i < len(state.children)
+  for i = 0, len(state.children)
     let child = state.children[i]
     let spec = state.specs[i]
     let restart = "permanent"
@@ -160,7 +131,6 @@ fn _sup_handle_which_children(state, reply_to)
       restart = spec.restart
     end
     push(result, {id: spec.id, pid: child.pid, restart: restart})
-    i += 1
   end
   send(reply_to, {tag: "supervisor_children", children: result})
 end
@@ -190,14 +160,10 @@ fn _supervisor_start(spec)
   end
 
   let sup_pid = spawn(fn()
-    # Start all children in order
     let children = []
-    let i = 0
-    while i < len(child_specs)
-      let child_spec = child_specs[i]
+    for child_spec in child_specs
       let pid = _sup_start_child(child_spec)
       push(children, {id: child_spec.id, pid: pid})
-      i += 1
     end
 
     let state = {

@@ -24,15 +24,12 @@ fn parse_request(raw)
     return {error: "empty request"}
   end
 
-  let request_line = lines[0]
-  let parts = string.split(request_line, " ")
+  let parts = string.split(lines[0], " ")
   if len(parts) < 3
     return {error: "malformed request line"}
   end
 
-  let method = parts[0]
-  let path = parts[1]
-  let version = parts[2]
+  let [method, path, version] = parts
 
   # Parse headers
   let headers = {}
@@ -52,28 +49,31 @@ fn parse_request(raw)
     i += 1
   end
 
-  # Body is everything after the blank line
-  let body = ""
+  let body_buf = buf_new()
+  let first = true
   while i < len(lines)
-    if body != ""
-      body = body + "\r\n"
+    if not first
+      buf_push(body_buf, "\r\n")
     end
-    body = body + lines[i]
+    buf_push(body_buf, lines[i])
+    first = false
     i += 1
   end
 
-  {method: method, path: path, version: version, headers: headers, body: body}
+  {method: method, path: path, version: version, headers: headers, body: buf_str(body_buf)}
 end
 
 # ─── HTTP response helpers ───
 
 fn response(status, status_text, content_type, body)
-  let headers = "HTTP/1.1 {status} {status_text}\r\n"
-  headers = headers + "Content-Type: {content_type}\r\n"
-  headers = headers + "Content-Length: {len(body)}\r\n"
-  headers = headers + "Connection: close\r\n"
-  headers = headers + "\r\n"
-  headers + body
+  let buf = buf_new()
+  buf_push(buf, "HTTP/1.1 {status} {status_text}\r\n")
+  buf_push(buf, "Content-Type: {content_type}\r\n")
+  buf_push(buf, "Content-Length: {len(body)}\r\n")
+  buf_push(buf, "Connection: close\r\n")
+  buf_push(buf, "\r\n")
+  buf_push(buf, body)
+  buf_str(buf)
 end
 
 fn response_ok(body)
@@ -158,12 +158,11 @@ router.add("POST", "/echo", fn(req)
 end)
 
 router.add("GET", "/headers", fn(req)
-  let out = ""
-  let ks = keys(req.headers)
-  for k in ks
-    out = out + "{k}: {req.headers[k]}\n"
+  let buf = buf_new()
+  for k, v in req.headers
+    buf_push(buf, "{k}: {v}\n")
   end
-  response_ok(out)
+  response_ok(buf_str(buf))
 end)
 
 # ─── Connection handler ───

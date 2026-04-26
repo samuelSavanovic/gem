@@ -4,6 +4,7 @@
 
 #include "stb_ds.h"
 #include "gem.h"
+#include <errno.h>
 
 /* ─── Built-in: print ─── */
 
@@ -295,6 +296,58 @@ GemVal gem_ord_fn(void *_env, GemVal *args, int argc) {
     }
     if (strlen(args[0].sval) == 0) { gem_error("ord: empty string"); }
     return gem_int((int64_t)(unsigned char)args[0].sval[0]);
+}
+
+/* ─── Built-in: to_int / to_float ─── */
+
+GemVal gem_to_int_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("to_int: expected 1 argument"); }
+    GemVal v = args[0];
+    if (v.type == VAL_INT) return v;
+    if (v.type == VAL_FLOAT) return gem_int((int64_t)v.fval);
+    if (v.type == VAL_BOOL) return gem_int(v.ival ? 1 : 0);
+    if (v.type == VAL_STRING) {
+        const char *s = v.sval;
+        char *end;
+        errno = 0;
+        long long val = strtoll(s, &end, 10);
+        if (end == s || *end != '\0' || errno == ERANGE) {
+            char buf[256];
+            snprintf(buf, sizeof(buf), "to_int: cannot convert \"%s\" to int", s);
+            gem_error(buf);
+        }
+        return gem_int((int64_t)val);
+    }
+    char buf[128];
+    snprintf(buf, sizeof(buf), "to_int: cannot convert %s to int", gem_type_str(v));
+    gem_error(buf);
+    return GEM_NIL;
+}
+
+GemVal gem_to_float_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("to_float: expected 1 argument"); }
+    GemVal v = args[0];
+    if (v.type == VAL_FLOAT) return v;
+    if (v.type == VAL_INT) return gem_float((double)v.ival);
+    if (v.type == VAL_BOOL) return gem_float(v.ival ? 1.0 : 0.0);
+    if (v.type == VAL_STRING) {
+        const char *s = v.sval;
+        char *end;
+        errno = 0;
+        double val = strtod(s, &end);
+        if (end == s || *end != '\0' || errno == ERANGE) {
+            char buf[256];
+            snprintf(buf, sizeof(buf), "to_float: cannot convert \"%s\" to float", s);
+            gem_error(buf);
+        }
+        return gem_float(val);
+    }
+    char buf[128];
+    snprintf(buf, sizeof(buf), "to_float: cannot convert %s to float", gem_type_str(v));
+    gem_error(buf);
+    return GEM_NIL;
 }
 
 /* ─── String builder (buf_new / buf_push / buf_str) ─── */

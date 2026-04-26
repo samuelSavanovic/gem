@@ -158,6 +158,8 @@ fn make_codegen(source_name)
     substr: "gem_substr_fn",
     chr: "gem_chr_fn",
     ord: "gem_ord_fn",
+    to_int: "gem_to_int_fn",
+    to_float: "gem_to_float_fn",
     buf_new: "gem_buf_new_fn",
     buf_push: "gem_buf_push_fn",
     buf_str: "gem_buf_str_fn",

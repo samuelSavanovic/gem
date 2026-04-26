@@ -9,11 +9,8 @@
 # ─── each(arr, fn) ───────────────────────────────────────────
 
 fn _table_each(arr, f)
-  let i = 0
-  let n = len(arr)
-  while i < n
-    f(arr[i])
-    i += 1
+  for item in arr
+    f(item)
   end
 end
 
@@ -21,11 +18,8 @@ end
 
 fn _table_map(arr, f)
   let result = []
-  let i = 0
-  let n = len(arr)
-  while i < n
-    push(result, f(arr[i]))
-    i += 1
+  for item in arr
+    push(result, f(item))
   end
   result
 end
@@ -34,13 +28,65 @@ end
 
 fn _table_filter(arr, f)
   let result = []
-  let i = 0
-  let n = len(arr)
-  while i < n
-    if f(arr[i])
-      push(result, arr[i])
+  for item in arr
+    if f(item)
+      push(result, item)
     end
-    i += 1
+  end
+  result
+end
+
+# ─── reduce(arr, init, fn) ───────────────────────────────────
+
+fn _table_reduce(arr, init, f)
+  let acc = init
+  for item in arr
+    acc = f(acc, item)
+  end
+  acc
+end
+
+# ─── find(arr, fn) ───────────────────────────────────────────
+
+fn _table_find(arr, f)
+  for item in arr
+    if f(item)
+      return item
+    end
+  end
+  nil
+end
+
+# ─── any(arr, fn) ────────────────────────────────────────────
+
+fn _table_any(arr, f)
+  for item in arr
+    if f(item)
+      return true
+    end
+  end
+  false
+end
+
+# ─── all(arr, fn) ────────────────────────────────────────────
+
+fn _table_all(arr, f)
+  for item in arr
+    if not f(item)
+      return false
+    end
+  end
+  true
+end
+
+# ─── reverse(arr) ────────────────────────────────────────────
+
+fn _table_reverse(arr)
+  let result = []
+  let i = len(arr) - 1
+  while i >= 0
+    push(result, arr[i])
+    i -= 1
   end
   result
 end
@@ -48,13 +94,10 @@ end
 # ─── contains(arr, value) ────────────────────────────────────
 
 fn _table_contains(arr, value)
-  let i = 0
-  let n = len(arr)
-  while i < n
-    if arr[i] == value
+  for item in arr
+    if item == value
       return true
     end
-    i += 1
   end
   false
 end
@@ -65,5 +108,10 @@ let table = {
   each: _table_each,
   map: _table_map,
   filter: _table_filter,
+  reduce: _table_reduce,
+  find: _table_find,
+  any: _table_any,
+  all: _table_all,
+  reverse: _table_reverse,
   contains: _table_contains
 }

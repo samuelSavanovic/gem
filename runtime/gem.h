@@ -169,6 +169,8 @@ GemVal gem_has_key_fn(void *_env, GemVal *args, int argc);
 GemVal gem_substr_fn(void *_env, GemVal *args, int argc);
 GemVal gem_chr_fn(void *_env, GemVal *args, int argc);
 GemVal gem_ord_fn(void *_env, GemVal *args, int argc);
+GemVal gem_to_int_fn(void *_env, GemVal *args, int argc);
+GemVal gem_to_float_fn(void *_env, GemVal *args, int argc);
 GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc);
 GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc);
 GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc);

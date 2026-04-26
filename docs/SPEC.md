@@ -647,6 +647,10 @@ print(result2.value)  # 42
 
 `to_string(v)` — converts any value to its string representation.
 
+`to_int(v)` — converts a value to an integer. Strings are parsed as decimal integers. Floats are truncated. Bools become 0/1. Errors on nil, tables, functions, or unparseable strings.
+
+`to_float(v)` — converts a value to a float. Strings are parsed as decimal floats. Ints are widened. Bools become 0.0/1.0. Errors on nil, tables, functions, or unparseable strings.
+
 `push(arr, val)` — appends `val` to the table at the next integer index. Mutates the table in place. Returns the pushed value.
 
 ```
@@ -736,12 +740,19 @@ table.each(parts) { |item| print(item) }
 - `string.trim(s)` — strip leading/trailing ASCII whitespace
 - `string.starts_with(s, prefix)` / `string.ends_with(s, suffix)` — boolean prefix/suffix check
 - `string.upper(s)` / `string.lower(s)` — ASCII case conversion
+- `string.contains(s, needle)` — return true if needle is found in s
+- `string.repeat(s, n)` — repeat string n times
 
 `std/table` — exports `table` table:
 
 - `table.each(arr, fn)` — iterate calling fn(item)
 - `table.map(arr, fn)` — return new array with fn(item) applied
 - `table.filter(arr, fn)` — return new array where fn(item) is truthy
+- `table.reduce(arr, init, fn)` — fold array: fn(accumulator, item) for each element
+- `table.find(arr, fn)` — return first element where fn(item) is truthy, or nil
+- `table.any(arr, fn)` — return true if fn(item) is truthy for any element
+- `table.all(arr, fn)` — return true if fn(item) is truthy for all elements
+- `table.reverse(arr)` — return new array with elements in reverse order
 - `table.contains(arr, value)` — linear scan for value equality
 
 The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`buf_str()`, and `substr()`. `split` and `index_of` are only available through `std/string` (not as bare builtins).

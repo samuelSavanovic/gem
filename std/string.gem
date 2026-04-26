@@ -133,32 +133,42 @@ end
 
 fn _string_upper(s)
   let buf = buf_new()
-  let i = 0
-  let slen = len(s)
-  while i < slen
+  for i = 0, len(s)
     let c = ord(s, i)
     if c >= 97 and c <= 122
       buf_push(buf, chr(c - 32))
     else
       buf_push(buf, chr(c))
     end
-    i += 1
   end
   buf_str(buf)
 end
 
 fn _string_lower(s)
   let buf = buf_new()
-  let i = 0
-  let slen = len(s)
-  while i < slen
+  for i = 0, len(s)
     let c = ord(s, i)
     if c >= 65 and c <= 90
       buf_push(buf, chr(c + 32))
     else
       buf_push(buf, chr(c))
     end
-    i += 1
+  end
+  buf_str(buf)
+end
+
+# ─── contains(s, needle) ────────────────────────────────────
+
+fn _string_contains(s, needle)
+  _string_index_of(s, needle) >= 0
+end
+
+# ─── repeat(s, n) ───────────────────────────────────────────
+
+fn _string_repeat(s, n)
+  let buf = buf_new()
+  for i = 0, n
+    buf_push(buf, s)
   end
   buf_str(buf)
 end
@@ -173,5 +183,7 @@ let string = {
   starts_with: _string_starts_with,
   ends_with: _string_ends_with,
   upper: _string_upper,
-  lower: _string_lower
+  lower: _string_lower,
+  contains: _string_contains,
+  repeat: _string_repeat
 }

@@ -1,0 +1,40 @@
+# to_int / to_float conversion builtins
+
+# ─── to_int ──────────────────────────────────────────────────
+print(to_int("42"))
+print(to_int("-7"))
+print(to_int("0"))
+print(to_int(3.14))
+print(to_int(3.99))
+print(to_int(true))
+print(to_int(false))
+print(to_int(99))
+
+# ─── to_float ────────────────────────────────────────────────
+print(to_float("3.14"))
+print(to_float("-2.5"))
+print(to_float("0.0"))
+print(to_float(42))
+print(to_float(true))
+print(to_float(1.5))
+
+# ─── roundtrip ───────────────────────────────────────────────
+print(to_int(to_string(123)))
+print(to_float(to_string(3.14)))
+
+# ─── error cases ─────────────────────────────────────────────
+let r1 = pcall(fn() to_int("abc") end)
+print(r1.ok)
+
+let r2 = pcall(fn() to_float("xyz") end)
+print(r2.ok)
+
+let r3 = pcall(fn() to_int(nil) end)
+print(r3.ok)
+
+let r4 = pcall(fn() to_float([]) end)
+print(r4.ok)
+
+# ─── first-class ─────────────────────────────────────────────
+let f = to_int
+print(f("55"))
