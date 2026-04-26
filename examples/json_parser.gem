@@ -65,7 +65,7 @@ fn digit_val(ch)
   when "9"
     9
   else
-    error("not a digit: " + ch)
+    error("not a digit: {ch}")
   end
 end
 
@@ -96,7 +96,7 @@ fn parse_value(s)
   if ch == "-" or is_digit(ch)
     return parse_number(s)
   end
-  error("unexpected character: " + ch)
+  error("unexpected character: {ch}")
 end
 
 fn parse_literal(s, text, value)
@@ -212,7 +212,7 @@ fn parse_object(s)
     s.skip_ws()
     let colon = s.advance()
     if colon != ":"
-      error("expected ':' in object, got: " + colon)
+      error("expected ':' in object, got: {colon}")
     end
     let val = parse_value(s)
     obj[key] = val
@@ -223,7 +223,7 @@ fn parse_object(s)
       break
     end
     if next != ","
-      error("expected ',' or '}' in object, got: " + next)
+      error("expected ',' or '}' in object, got: {next}")
     end
   end
   obj
@@ -233,7 +233,6 @@ fn parse_array(s)
   s.advance()  # skip [
   s.skip_ws()
   let arr = []
-  let idx = 0
   if s.peek() == "]"
     s.advance()
     return arr
@@ -241,8 +240,7 @@ fn parse_array(s)
 
   while true
     let val = parse_value(s)
-    arr[idx] = val
-    idx += 1
+    push(arr, val)
 
     s.skip_ws()
     let next = s.advance()
@@ -250,7 +248,7 @@ fn parse_array(s)
       break
     end
     if next != ","
-      error("expected ',' or ']' in array, got: " + next)
+      error("expected ',' or ']' in array, got: {next}")
     end
   end
   arr
