@@ -456,3 +456,21 @@ abc
 8b: inner
 9: zero count
 10: nil fell through
+test3: got pid=int
+test6: healthy process completed
+test7: pcall ok=false error=caught locally
+test10: whereis found=int
+test10: whereis missing=nil
+test1: tag=DOWN reason=normal
+test2: tag=DOWN reason=boom
+test3: tag=DOWN reason=normal
+test4a: tag=DOWN reason=normal
+test4b: tag=DOWN reason=normal
+test5: tag=DOWN reason=normal
+test6: crasher reason=kaboom
+test7: tag=DOWN reason=normal
+test11: after death whereis=nil
+test8: B got DOWN from C, reason=chain-crash
+test9: worker got hello by name
+test12: server got from client
+test8: A got DOWN from B, reason=b-also-crashes

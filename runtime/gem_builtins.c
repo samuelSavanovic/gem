@@ -42,15 +42,17 @@ GemVal gem_error_fn(void *_env, GemVal *args, int argc) {
 /* ─── Built-in: error with location ─── */
 
 GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
-    if (gem_pcall_depth > 0) {
-        /* Caught by pcall — pass just the user's message */
+    /* If pcall or coroutine isolation will catch it, pass just the user's message */
+    if (gem_pcall_depth > 0 || (gem_current_pid >= 0 && gem_current_pid < GEM_MAX_PROCS
+            && gem_proc_table[gem_current_pid].state != GEM_PROC_FREE
+            && gem_proc_table[gem_current_pid].state != GEM_PROC_DEAD)) {
         if (argc > 0 && args[0].type == VAL_STRING) {
             gem_raise_error(args[0].sval);
         } else {
             gem_raise_error("error");
         }
     } else {
-        /* No pcall — fatal error with file:line prefix */
+        /* No pcall, no coroutine — fatal error with file:line prefix */
         if (argc > 0 && args[0].type == VAL_STRING) {
             fprintf(stderr, "%s:%d: error: %s\n", file, line, args[0].sval);
         } else {

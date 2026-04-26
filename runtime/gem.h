@@ -200,6 +200,12 @@ typedef enum {
     GEM_PROC_DEAD,      /* finished execution */
 } GemProcState;
 
+/* Monitor list node */
+typedef struct GemMonitorNode {
+    int pid;                      /* pid of the monitoring process */
+    struct GemMonitorNode *next;
+} GemMonitorNode;
+
 /* Process slot */
 typedef struct {
     GemProcState state;
@@ -208,6 +214,9 @@ typedef struct {
     int pid;
     int wait_fd;        /* fd this process is waiting on (when IO_WAIT) */
     int wait_write;     /* 0 = waiting for read, 1 = waiting for write */
+    GemMonitorNode *monitors;     /* linked list of pids monitoring this process */
+    jmp_buf proc_jmp;             /* process-level error handler (crash isolation) */
+    const char *exit_reason;      /* NULL while alive, set on exit/crash */
 } GemProcess;
 
 #define GEM_MAX_PROCS 1024
@@ -226,10 +235,31 @@ void gem_run_scheduler(void);
    for_write=0 means wait for readable, for_write=1 means wait for writable. */
 void gem_io_yield(int fd, int for_write);
 
+/* Process name registry (stb_ds string hash map: name → pid) */
+typedef struct {
+    char *key;
+    int value;
+} GemNameEntry;
+
+extern GemNameEntry *gem_name_registry;
+
+/* Named process API */
+void gem_register_name(const char *name, int pid);
+int gem_whereis_name(const char *name);        /* returns pid or -1 */
+void gem_unregister_name_for_pid(int pid);     /* auto-cleanup on death */
+
+/* Monitor API */
+void gem_monitor_fn(int target_pid);
+void gem_deliver_down_messages(int pid, const char *reason);
+
 /* Built-in function wrappers (GemFnPtr signature) */
 GemVal gem_spawn_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_send_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_receive_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_self_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_monitor_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_spawn_monitor_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_register_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_whereis_builtin(void *_env, GemVal *args, int argc);
 
 #endif /* GEM_H */

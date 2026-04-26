@@ -1,0 +1,182 @@
+# Process monitoring tests
+
+# --- Test 1: Normal exit monitoring ---
+let parent1 = spawn(fn()
+  let child = spawn(fn()
+    # just return normally
+  end)
+  monitor(child)
+  let msg = receive()
+  print("test1: tag={msg.tag} reason={msg.reason}")
+end)
+
+# --- Test 2: Crash monitoring ---
+let parent2 = spawn(fn()
+  let child = spawn(fn()
+    error("boom")
+  end)
+  monitor(child)
+  let msg = receive()
+  print("test2: tag={msg.tag} reason={msg.reason}")
+end)
+
+# --- Test 3: spawn_monitor ---
+let parent3 = spawn(fn()
+  let result = spawn_monitor(fn()
+    # return normally
+  end)
+  print("test3: got pid={type(result.pid)}")
+  let msg = receive()
+  print("test3: tag={msg.tag} reason={msg.reason}")
+end)
+
+# --- Test 4: Multiple monitors ---
+let target4 = spawn(fn()
+  let msg = receive()
+  # exit after receiving
+end)
+
+let mon4a = spawn(fn()
+  monitor(target4)
+  let msg = receive()
+  print("test4a: tag={msg.tag} reason={msg.reason}")
+end)
+
+let mon4b = spawn(fn()
+  monitor(target4)
+  let msg = receive()
+  print("test4b: tag={msg.tag} reason={msg.reason}")
+end)
+
+# Give monitors time to register, then signal target to exit
+spawn(fn()
+  send(target4, "go")
+end)
+
+# --- Test 5: Monitor already-dead process ---
+let parent5 = spawn(fn()
+  let child = spawn(fn()
+    # exit immediately
+  end)
+  # Yield a few times to let child finish
+  let dummy = receive()  # will get the DOWN eventually
+  # Actually, let's use a different approach: send ourselves a delayed msg
+end)
+
+# Simpler approach for test 5: use a relay
+let parent5b = spawn(fn()
+  let me = self()
+  let child = spawn(fn()
+    # exit immediately
+  end)
+  # Send ourselves a wakeup to ensure child has run and died
+  let relay = spawn(fn()
+    send(me, "wakeup")
+  end)
+  let wakeup = receive()
+  # Now child should be dead, monitor it
+  monitor(child)
+  let msg = receive()
+  print("test5: tag={msg.tag} reason={msg.reason}")
+end)
+
+# --- Test 6: Crash doesn't kill other processes ---
+let parent6 = spawn(fn()
+  let crasher = spawn(fn()
+    error("kaboom")
+  end)
+  let healthy = spawn(fn()
+    print("test6: healthy process completed")
+  end)
+  monitor(crasher)
+  let msg = receive()
+  print("test6: crasher reason={msg.reason}")
+end)
+
+# --- Test 7: pcall inside monitored process ---
+let parent7 = spawn(fn()
+  let child = spawn(fn()
+    let result = pcall(fn()
+      error("caught locally")
+    end)
+    print("test7: pcall ok={result.ok} error={result.error}")
+    # Process continues after pcall, no DOWN yet
+  end)
+  monitor(child)
+  let msg = receive()
+  print("test7: tag={msg.tag} reason={msg.reason}")
+end)
+
+# --- Test 8: Chain of monitors ---
+# A monitors B, B monitors C. C crashes -> B gets DOWN -> B crashes -> A gets DOWN
+let parent8 = spawn(fn()
+  let me = self()
+
+  let b = spawn(fn()
+    let c = spawn(fn()
+      error("chain-crash")
+    end)
+    monitor(c)
+    let msg = receive()
+    print("test8: B got DOWN from C, reason={msg.reason}")
+    error("b-also-crashes")
+  end)
+
+  monitor(b)
+  let msg = receive()
+  print("test8: A got DOWN from B, reason={msg.reason}")
+end)
+
+# --- Test 9: Named processes - register and send by name ---
+let parent9 = spawn(fn()
+  let worker = spawn(fn()
+    register("echo_worker", self())
+    let msg = receive()
+    print("test9: worker got {msg}")
+  end)
+  # Give worker time to register
+  let relay = spawn(fn()
+    send("echo_worker", "hello by name")
+  end)
+end)
+
+# --- Test 10: whereis ---
+let parent10 = spawn(fn()
+  let worker = spawn(fn()
+    register("lookup_test", self())
+    let _ = receive()
+  end)
+  # Small relay to let worker register first
+  let relay = spawn(fn()
+    let pid = whereis("lookup_test")
+    print("test10: whereis found={type(pid)}")
+    let missing = whereis("nonexistent")
+    print("test10: whereis missing={type(missing)}")
+    send("lookup_test", "done")
+  end)
+end)
+
+# --- Test 11: Auto-unregister on death ---
+let parent11 = spawn(fn()
+  let worker = spawn(fn()
+    register("ephemeral", self())
+    # exit immediately
+  end)
+  monitor(worker)
+  let down = receive()
+  # After death, name should be gone
+  let pid = whereis("ephemeral")
+  print("test11: after death whereis={type(pid)}")
+end)
+
+# --- Test 12: send by name to registered process ---
+let parent12 = spawn(fn()
+  let server = spawn(fn()
+    register("server12", self())
+    let msg = receive()
+    print("test12: server got {msg.data}")
+  end)
+  let client = spawn(fn()
+    send("server12", {data: "from client"})
+  end)
+end)

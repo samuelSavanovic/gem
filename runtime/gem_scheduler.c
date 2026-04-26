@@ -10,11 +10,13 @@
 #include <errno.h>
 
 #include "gem.h"
+#include "stb_ds.h"
 
 /* ─── Globals ─── */
 
 GemProcess gem_proc_table[GEM_MAX_PROCS];
 int gem_current_pid = -1;
+GemNameEntry *gem_name_registry = NULL;
 
 /* GC-aware stack allocator for minicoro coroutines.
    malloc the stack, then register it as a GC root so Boehm
@@ -58,7 +60,10 @@ static GemVal gem_mailbox_pop(GemMailbox *mb) {
     return val;
 }
 
-/* Coroutine entry point — calls the GemFnPtr stored in user_data */
+/* Coroutine entry point — calls the GemFnPtr stored in user_data.
+   Wraps the call in setjmp for crash isolation: if gem_error is called
+   inside a coroutine (and no pcall catches it), we longjmp here instead
+   of exit(1), mark the process DEAD, and let the scheduler continue. */
 typedef struct {
     GemFnPtr fn;
     void *env;
@@ -66,7 +71,15 @@ typedef struct {
 
 static void gem_coro_entry(mco_coro *co) {
     GemCoroCtx *ctx = (GemCoroCtx *)mco_get_user_data(co);
-    ctx->fn(ctx->env, NULL, 0);
+    int pid = gem_current_pid;
+    GemProcess *proc = &gem_proc_table[pid];
+
+    if (setjmp(proc->proc_jmp) == 0) {
+        /* Normal path */
+        ctx->fn(ctx->env, NULL, 0);
+        proc->exit_reason = "normal";
+    }
+    /* If longjmp landed here, exit_reason was already set by gem_raise_error */
 }
 
 /* Core API */
@@ -104,6 +117,8 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].coro = co;
     gem_proc_table[pid].mailbox = (GemMailbox){NULL, NULL};
     gem_proc_table[pid].pid = pid;
+    gem_proc_table[pid].monitors = NULL;
+    gem_proc_table[pid].exit_reason = NULL;
 
     return pid;
 }
@@ -173,7 +188,10 @@ void gem_run_scheduler(void) {
                 if (mco_status(proc->coro) == MCO_DEAD) {
                     mco_destroy(proc->coro);
                     proc->coro = NULL;
-                    proc->state = GEM_PROC_FREE;
+                    const char *reason = proc->exit_reason ? proc->exit_reason : "normal";
+                    gem_deliver_down_messages(i, reason);
+                    gem_unregister_name_for_pid(i);
+                    proc->state = GEM_PROC_DEAD;
                 }
             } else if (proc->state == GEM_PROC_WAITING) {
                 has_msg_wait = 1;
@@ -226,6 +244,88 @@ void gem_run_scheduler(void) {
     gem_current_pid = -1;
 }
 
+/* ─── Monitor API ─── */
+
+void gem_deliver_down_messages(int pid, const char *reason) {
+    GemProcess *proc = &gem_proc_table[pid];
+    GemMonitorNode *mon = proc->monitors;
+    while (mon) {
+        /* Build {tag: "DOWN", pid: <pid>, reason: <reason>} */
+        GemVal msg = gem_table_new();
+        gem_table_set(msg, gem_string("tag"), gem_string("DOWN"));
+        gem_table_set(msg, gem_string("pid"), gem_int(pid));
+        gem_table_set(msg, gem_string("reason"), gem_string(reason));
+        gem_send_msg(mon->pid, msg);
+        mon = mon->next;
+    }
+    proc->monitors = NULL;
+}
+
+void gem_monitor_fn(int target_pid) {
+    if (target_pid < 0 || target_pid >= GEM_MAX_PROCS) return;
+    int caller = gem_current_pid;
+    if (caller < 0) {
+        gem_error("monitor: not inside a spawned process");
+        return;
+    }
+    GemProcess *target = &gem_proc_table[target_pid];
+
+    /* If target is already dead, deliver DOWN immediately */
+    if (target->state == GEM_PROC_DEAD || target->state == GEM_PROC_FREE) {
+        const char *reason = target->exit_reason ? target->exit_reason : "noproc";
+        GemVal msg = gem_table_new();
+        gem_table_set(msg, gem_string("tag"), gem_string("DOWN"));
+        gem_table_set(msg, gem_string("pid"), gem_int(target_pid));
+        gem_table_set(msg, gem_string("reason"), gem_string(reason));
+        gem_send_msg(caller, msg);
+        return;
+    }
+
+    /* Deduplicate: check if caller is already monitoring target */
+    GemMonitorNode *node = target->monitors;
+    while (node) {
+        if (node->pid == caller) return;  /* already monitoring */
+        node = node->next;
+    }
+
+    /* Add caller to target's monitor list */
+    GemMonitorNode *new_node = (GemMonitorNode *)GC_MALLOC(sizeof(GemMonitorNode));
+    new_node->pid = caller;
+    new_node->next = target->monitors;
+    target->monitors = new_node;
+}
+
+/* ─── Named Process Registry ─── */
+
+void gem_register_name(const char *name, int pid) {
+    if (pid < 0 || pid >= GEM_MAX_PROCS) {
+        gem_error("register: invalid pid");
+        return;
+    }
+    /* Check if name is already taken */
+    ptrdiff_t idx = shgeti(gem_name_registry, name);
+    if (idx >= 0) {
+        gem_error("register: name already taken");
+        return;
+    }
+    shput(gem_name_registry, name, pid);
+}
+
+int gem_whereis_name(const char *name) {
+    ptrdiff_t idx = shgeti(gem_name_registry, name);
+    if (idx >= 0) return gem_name_registry[idx].value;
+    return -1;
+}
+
+void gem_unregister_name_for_pid(int pid) {
+    /* Scan registry for entries pointing to this pid and remove them */
+    for (int i = (int)shlen(gem_name_registry) - 1; i >= 0; i--) {
+        if (gem_name_registry[i].value == pid) {
+            shdel(gem_name_registry, gem_name_registry[i].key);
+        }
+    }
+}
+
 /* Built-in function wrappers for use from compiled Gem code */
 
 GemVal gem_spawn_builtin(void *_env, GemVal *args, int argc) {
@@ -239,10 +339,23 @@ GemVal gem_spawn_builtin(void *_env, GemVal *args, int argc) {
 
 GemVal gem_send_builtin(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 2 || args[0].type != VAL_INT) {
-        gem_error("send: expected (pid, value)");
+    if (argc < 2) {
+        gem_error("send: expected (pid_or_name, value)");
     }
-    gem_send_msg((int)args[0].ival, args[1]);
+    int pid;
+    if (args[0].type == VAL_INT) {
+        pid = (int)args[0].ival;
+    } else if (args[0].type == VAL_STRING) {
+        pid = gem_whereis_name(args[0].sval);
+        if (pid < 0) {
+            gem_error("send: no process registered with that name");
+            return GEM_NIL;
+        }
+    } else {
+        gem_error("send: first argument must be pid (int) or name (string)");
+        return GEM_NIL;
+    }
+    gem_send_msg(pid, args[1]);
     return GEM_NIL;
 }
 
@@ -258,4 +371,53 @@ GemVal gem_self_builtin(void *_env, GemVal *args, int argc) {
     (void)args;
     (void)argc;
     return gem_int(gem_self_pid());
+}
+
+GemVal gem_monitor_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_INT) {
+        gem_error("monitor: expected pid (int) argument");
+    }
+    gem_monitor_fn((int)args[0].ival);
+    return gem_bool(1);
+}
+
+GemVal gem_spawn_monitor_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_FN) {
+        gem_error("spawn_monitor: expected function argument");
+    }
+    int pid = gem_spawn_fn(args[0].fn, args[0].env);
+
+    /* Atomically register monitor before the new process gets a chance to run */
+    int caller = gem_current_pid;
+    if (caller >= 0) {
+        GemMonitorNode *new_node = (GemMonitorNode *)GC_MALLOC(sizeof(GemMonitorNode));
+        new_node->pid = caller;
+        new_node->next = gem_proc_table[pid].monitors;
+        gem_proc_table[pid].monitors = new_node;
+    }
+
+    GemVal result = gem_table_new();
+    gem_table_set(result, gem_string("pid"), gem_int(pid));
+    return result;
+}
+
+GemVal gem_register_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_STRING || args[1].type != VAL_INT) {
+        gem_error("register: expected (name, pid)");
+    }
+    gem_register_name(args[0].sval, (int)args[1].ival);
+    return gem_bool(1);
+}
+
+GemVal gem_whereis_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        gem_error("whereis: expected name (string) argument");
+    }
+    int pid = gem_whereis_name(args[0].sval);
+    if (pid < 0) return GEM_NIL;
+    return gem_int(pid);
 }

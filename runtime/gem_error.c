@@ -27,6 +27,7 @@ void gem_print_stack_trace(void) {
 /* ─── Runtime error ─── */
 
 void gem_raise_error(const char *msg) {
+    /* pcall takes priority — innermost handler first */
     if (gem_pcall_depth > 0) {
         gem_pcall_depth--;
         GemPcallFrame *frame = &gem_pcall_stack[gem_pcall_depth];
@@ -50,6 +51,22 @@ void gem_raise_error(const char *msg) {
         gem_call_depth = saved;
         longjmp(frame->buf, 1);
     }
+
+    /* Process-level crash isolation: if inside a coroutine, longjmp to
+       the process handler instead of exit(1). */
+    if (gem_current_pid >= 0 && gem_current_pid < GEM_MAX_PROCS) {
+        GemProcess *proc = &gem_proc_table[gem_current_pid];
+        if (proc->state != GEM_PROC_FREE && proc->state != GEM_PROC_DEAD) {
+            /* GC-allocate the reason string so it survives the longjmp */
+            size_t len = strlen(msg) + 1;
+            char *saved_msg = (char *)GC_MALLOC_ATOMIC(len);
+            memcpy(saved_msg, msg, len);
+            proc->exit_reason = saved_msg;
+            gem_call_depth = 0;
+            longjmp(proc->proc_jmp, 1);
+        }
+    }
+
     fprintf(stderr, "error: %s\n", msg);
     gem_print_stack_trace();
     exit(1);

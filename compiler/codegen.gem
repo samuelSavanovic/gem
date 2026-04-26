@@ -164,7 +164,11 @@ fn make_codegen(source_name)
     spawn: "gem_spawn_builtin",
     send: "gem_send_builtin",
     receive: "gem_receive_builtin",
-    self: "gem_self_builtin"
+    self: "gem_self_builtin",
+    monitor: "gem_monitor_builtin",
+    spawn_monitor: "gem_spawn_monitor_builtin",
+    register: "gem_register_builtin",
+    whereis: "gem_whereis_builtin"
   }
   let builtins = {}
   for k, _ in builtin_fns

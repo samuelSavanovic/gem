@@ -315,6 +315,43 @@ send(pid, "world")
 
 `spawn`, `send`, `receive` are runtime functions, not keywords. Under the hood they use minicoro coroutines with a round-robin scheduler. Each spawned coroutine gets a mailbox (a simple queue). `receive` yields the coroutine if the mailbox is empty; the scheduler resumes it when a message arrives via `send`.
 
+**Process Monitoring**
+
+```
+let child = spawn do
+  error("crash")
+end
+monitor(child)
+let msg = receive()
+# msg == {tag: "DOWN", pid: <child_pid>, reason: "crash"}
+```
+
+`monitor(pid)` registers the caller as a monitor of the target. When the target exits (normally or via error), a `DOWN` message is delivered to each monitor's mailbox:
+
+- `{tag: "DOWN", pid: <target_pid>, reason: "normal"}` — clean exit
+- `{tag: "DOWN", pid: <target_pid>, reason: "<error message>"}` — crash
+
+Monitoring a dead/invalid pid delivers the DOWN message immediately. Duplicate monitors are deduplicated. Returns `true`.
+
+`spawn_monitor(fn)` atomically spawns and monitors a process. Returns `{pid: <pid>}`.
+
+Error isolation: a crashing spawned process does not kill other processes. The error is captured, DOWN messages are delivered, and the scheduler continues. `pcall` inside a monitored process still works — it catches errors locally before the process-level handler.
+
+**Named Processes**
+
+```
+let pid = spawn do
+  register("worker", self())
+  let msg = receive()
+  print(msg)
+end
+
+send("worker", "hello")    # send by name
+let p = whereis("worker")  # returns pid or nil
+```
+
+`register(name, pid)` associates a string name with a pid. Errors if the name is already taken. `whereis(name)` returns the pid for a name, or `nil` if not registered. `send` accepts either a pid (int) or a registered name (string). When a process dies, its name is automatically unregistered.
+
 **C Interop**
 
 ```
