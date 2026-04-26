@@ -1,0 +1,28 @@
+{
+  "name": "gem-language",
+  "displayName": "Gem Language",
+  "description": "Syntax highlighting for the Gem programming language",
+  "version": "0.1.0",
+  "publisher": "placeholder",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "gem",
+        "aliases": ["Gem", "gem"],
+        "extensions": [".gem"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "gem",
+        "scopeName": "source.gem",
+        "path": "./syntaxes/gem.tmLanguage.json"
+      }
+    ]
+  }
+}
