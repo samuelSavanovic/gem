@@ -636,8 +636,7 @@ fn make_codegen(source_name)
   # ─── compile_call ──
 
   compile_call = fn(node)
-    let func = node.func
-    let args = node.args
+    let {func, args} = node
 
     # Method call: obj.len() → gem_len_val(obj)
     if func.tag == "dot" and func.field == "len" and len(args) == 0
@@ -1109,9 +1108,7 @@ fn make_codegen(source_name)
   # ─── compile_extern_fn ──
 
   compile_extern_fn = fn(node)
-    let name = node.name
-    let params = node.params
-    let ret_type = node.ret_type
+    let {name, params, ret_type} = node
 
     let lines = "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n"
 
@@ -1233,9 +1230,7 @@ fn make_codegen(source_name)
   # ─── compile_fn ──
 
   compile_fn = fn(node)
-    let params = node.params
-    let body = node.body
-    let name = node.name
+    let {params, body, name} = node
 
     # Determine which variables are captured by nested closures
     let scope_vars = sorted_array_to_set(params)
@@ -1301,8 +1296,7 @@ fn make_codegen(source_name)
   # ─── compile_closure_fn ──
 
   compile_closure_fn = fn(node, captures)
-    let params = node.params
-    let body = node.body
+    let {params, body} = node
     let name = anon_name()
 
     # Find which vars inside THIS closure are captured by nested closures
