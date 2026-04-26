@@ -1,0 +1,108 @@
+# Test for k, v in table iteration
+
+# Basic iteration — collect pairs then sort for deterministic output
+let t = {a: 1, b: 2, c: 3}
+let pairs = []
+for k, v in t
+  push(pairs, "{k}={v}")
+end
+# sort pairs for deterministic output order
+let sorted = []
+for i = 0, len(pairs)
+  let min_idx = i
+  for j = i + 1, len(pairs)
+    if pairs[j] < pairs[min_idx]
+      min_idx = j
+    end
+  end
+  let tmp = pairs[i]
+  pairs[i] = pairs[min_idx]
+  pairs[min_idx] = tmp
+end
+for p in pairs
+  print(p)
+end
+
+# Empty table — no output, no crash
+let empty = {}
+for k, v in empty
+  print("should not print")
+end
+print("empty ok")
+
+# RHS evaluated exactly once
+let call_count = 0
+fn make_table()
+  call_count += 1
+  {x: 10, y: 20}
+end
+for k, v in make_table()
+  # just iterate, don't print (non-deterministic order)
+end
+print("call_count={call_count}")
+
+# Nested loops with independent gensym counters
+let outer = {p: 100, q: 200}
+let inner = {m: 1, n: 2}
+let total = 0
+for ok, ov in outer
+  for ik, iv in inner
+    total += iv
+  end
+end
+print("total={total}")
+
+# break inside for k, v
+let found_key = "none"
+let t2 = {a: 1, b: 2, c: 3}
+let ks = keys(t2)
+# iterate with for k, v and break when value == 2
+for k, v in t2
+  if v == 2
+    found_key = k
+    break
+  end
+end
+print("found_key is b: {found_key == "b"}")
+
+# continue inside for k, v
+let evens = []
+let t3 = {a: 1, b: 2, c: 3, d: 4}
+for k, v in t3
+  if v % 2 != 0
+    continue
+  end
+  push(evens, v)
+end
+# sort evens
+for i = 0, len(evens)
+  for j = i + 1, len(evens)
+    if evens[j] < evens[i]
+      let tmp2 = evens[i]
+      evens[i] = evens[j]
+      evens[j] = tmp2
+    end
+  end
+end
+for e in evens
+  print(e)
+end
+
+# String keys
+let t4 = {"hello": 1, "world": 2}
+let str_pairs = []
+for k, v in t4
+  push(str_pairs, "{k}:{v}")
+end
+for i = 0, len(str_pairs)
+  for j = i + 1, len(str_pairs)
+    if str_pairs[j] < str_pairs[i]
+      let stmp = str_pairs[i]
+      str_pairs[i] = str_pairs[j]
+      str_pairs[j] = stmp
+    end
+  end
+end
+for sp in str_pairs
+  print(sp)
+end

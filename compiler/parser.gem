@@ -571,7 +571,37 @@ fn make_parser(tokens)
       advance()
       let var_name = expect("NAME").value
 
-      if peek().type == "in"
+      if peek().type == "," and peek_at(1).type == "NAME"
+        # for k, v in table ... end → let _tbl=table; let _keys=keys(_tbl); let _i=0; while _i<len(_keys) ...
+        advance()  # consume ","
+        let val_name = expect("NAME").value
+        expect("in")
+        let tbl_expr = parse_expr()
+        gensym_counter += 1
+        let tbl_var = "_for_tbl_{gensym_counter}"
+        let keys_var = "_for_keys_{gensym_counter}"
+        let idx_var = "_for_i_{gensym_counter}"
+        let fbody = parse_body()
+        expect("end")
+        let inner_stmts = []
+        push(inner_stmts, make_let(var_name, make_index(make_var(keys_var), make_var(idx_var)), line))
+        push(inner_stmts, make_let(val_name, make_index(make_var(tbl_var), make_index(make_var(keys_var), make_var(idx_var))), line))
+        push(inner_stmts, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
+        for bi = 0, len(fbody)
+          push(inner_stmts, fbody[bi])
+        end
+        let while_node = make_while(
+          make_binop("<", make_var(idx_var), make_call(make_var("len"), [make_var(keys_var)], 0)),
+          inner_stmts,
+          line
+        )
+        return {tag: "block", stmts: [
+          make_let(tbl_var, tbl_expr, line),
+          make_let(keys_var, make_call(make_var("keys"), [make_var(tbl_var)], 0), line),
+          make_let(idx_var, make_int(0), line),
+          while_node
+        ]}
+      elif peek().type == "in"
         # for x in items ... end → let _items=items; let _i=0; while _i<len(_items) ...
         advance()
         let items_expr = parse_expr()

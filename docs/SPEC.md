@@ -168,12 +168,17 @@ end
 
 **For Loops**
 
-Two forms, both desugared to `while` at parse time:
+Three forms, all desugared to `while` at parse time:
 
 ```
 # Array iteration
 for item in items
   print(item)
+end
+
+# Table key-value iteration
+for key, value in table
+  print("{key} = {value}")
 end
 
 # Range iteration (0 to n-1)
@@ -183,6 +188,8 @@ end
 ```
 
 `break` and `continue` work inside `for` loops. The iterator increment happens before the user body, so `continue` correctly advances to the next element.
+
+The table form evaluates the RHS expression exactly once. It desugars to: store the table in a temp, call `keys()` on it, iterate by index, and look up each value by key inside the loop.
 
 **Closures**
 
