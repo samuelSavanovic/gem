@@ -98,6 +98,7 @@ fn make_parser(tokens)
   let parse_stmt = nil
   let parse_unary = nil
   let parse_not = nil
+  let parse_pattern = nil
 
   # ── Body parsers ──
   # parse_body: for if/while/when/else bodies
@@ -106,7 +107,7 @@ fn make_parser(tokens)
   let parse_body = fn()
     let stmts = []
     skip_nl()
-    while peek().type != "end" and peek().type != "elif" and peek().type != "else" and peek().type != "when" and not at_end()
+    while peek().type != "end" and peek().type != "elif" and peek().type != "else" and peek().type != "when" and peek().type != "after" and not at_end()
       push(stmts, parse_stmt())
       skip_nl()
     end
@@ -477,8 +478,6 @@ fn make_parser(tokens)
   parse_expr = parse_assign_fn
 
   # ── Pattern parsing (for match destructuring) ──
-
-  let parse_pattern = nil
 
   parse_pattern = fn(target_expr)
     let and_chain = fn(conditions)
@@ -926,6 +925,51 @@ fn make_parser(tokens)
         return make_extern_include(path)
       else
         error("expected 'fn' or 'include' after 'extern' at line {peek().line}")
+      end
+    end
+
+    # receive block: receive when ... end
+    if t.type == "NAME" and t.value == "receive"
+      let rla = 1
+      while peek_at(rla).type == "NEWLINE"
+        rla += 1
+      end
+      if peek_at(rla).type == "when"
+        let rline = t.line
+        advance()
+        skip_nl()
+        gensym_counter += 1
+        let recv_var = "_recv_{gensym_counter}"
+        let recv_var_expr = make_var(recv_var)
+        let rarms = []
+        while peek().type == "when"
+          advance()
+          let rpt = peek().type
+          let rnext = peek_at(1).type
+          if rpt == "\{" or rpt == "["
+            let rpat = parse_pattern(recv_var_expr)
+            let rwbody = parse_body()
+            push(rarms, {pattern: rpat, body: rwbody})
+          elif rpt == "NAME" and (rnext == "NEWLINE" or rnext == "EOF" or rnext == "end" or rnext == "else" or rnext == "when" or rnext == "after")
+            let rpat = parse_pattern(recv_var_expr)
+            let rwbody = parse_body()
+            push(rarms, {pattern: rpat, body: rwbody})
+          else
+            let rwval = parse_expr()
+            let rwbody = parse_body()
+            push(rarms, {pattern: {condition: make_binop("==", recv_var_expr, rwval), bindings: []}, body: rwbody})
+          end
+          skip_nl()
+        end
+        let rafter_ms = nil
+        let rafter_body = nil
+        if peek().type == "after"
+          advance()
+          rafter_ms = parse_expr()
+          rafter_body = parse_body()
+        end
+        expect("end")
+        return make_receive_match(rarms, rafter_ms, rafter_body, rline, recv_var)
       end
     end
 

@@ -474,3 +474,18 @@ test8: B got DOWN from C, reason=chain-crash
 test9: worker got hello by name
 test12: server got from client
 test8: A got DOWN from B, reason=b-also-crashes
+test1: got b val=2
+test2: y=20
+test2: next=10
+test3: data=42
+test3: remaining=ping
+test4: a=100 b=200
+test6: timed out
+test7: timed out
+test7: leftover=wrong
+test8: result=42
+test9: plain message
+test10: outer=1
+test10: inner=2
+test5: down reason=crash!
+test5: app data=hello

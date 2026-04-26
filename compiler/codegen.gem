@@ -315,6 +315,42 @@ fn make_codegen(source_name)
           set_add(d, body[i].name)
         end
       end
+    when {tag: "receive_match", arms: rm_arms, after_ms: rm_after_ms, after_body: rm_after_body}
+      let recv_def = set_union(defined, {})
+      if node.recv_var != nil
+        set_add(recv_def, node.recv_var)
+      end
+      for i = 0, len(rm_arms)
+        let arm = rm_arms[i]
+        collect_free_node(arm.pattern.condition, recv_def, free)
+        let d = set_union(recv_def, {})
+        if arm.pattern.bindings != nil
+          for bi = 0, len(arm.pattern.bindings)
+            collect_free_node(arm.pattern.bindings[bi], d, free)
+            if type(arm.pattern.bindings[bi]) == "table" and arm.pattern.bindings[bi].tag == "let"
+              set_add(d, arm.pattern.bindings[bi].name)
+            end
+          end
+        end
+        for j = 0, len(arm.body)
+          collect_free_node(arm.body[j], d, free)
+          if type(arm.body[j]) == "table" and arm.body[j].tag == "let"
+            set_add(d, arm.body[j].name)
+          end
+        end
+      end
+      if rm_after_ms != nil
+        collect_free_node(rm_after_ms, recv_def, free)
+      end
+      if rm_after_body != nil
+        let d = set_union(recv_def, {})
+        for j = 0, len(rm_after_body)
+          collect_free_node(rm_after_body[j], d, free)
+          if type(rm_after_body[j]) == "table" and rm_after_body[j].tag == "let"
+            set_add(d, rm_after_body[j].name)
+          end
+        end
+      end
     when {tag: "block", stmts: stmts}
       let d = set_union(defined, {})
       for i = 0, len(stmts)
@@ -419,6 +455,22 @@ fn make_codegen(source_name)
       if el != nil
         walk_captures(el, scope_vars, captured)
       end
+    when {tag: "receive_match", arms: rm_arms, after_ms: rm_after_ms, after_body: rm_after_body}
+      for i = 0, len(rm_arms)
+        walk_captures_node(rm_arms[i].pattern.condition, scope_vars, captured)
+        if rm_arms[i].pattern.bindings != nil
+          for bi = 0, len(rm_arms[i].pattern.bindings)
+            walk_captures_node(rm_arms[i].pattern.bindings[bi], scope_vars, captured)
+          end
+        end
+        walk_captures(rm_arms[i].body, scope_vars, captured)
+      end
+      if rm_after_ms != nil
+        walk_captures_node(rm_after_ms, scope_vars, captured)
+      end
+      if rm_after_body != nil
+        walk_captures(rm_after_body, scope_vars, captured)
+      end
     when {tag: "block", stmts: stmts}
       walk_captures(stmts, scope_vars, captured)
     when {tag: "return", value: value}
@@ -480,6 +532,8 @@ fn make_codegen(source_name)
   let compile_while = nil
   let compile_match = nil
   let compile_match_return = nil
+  let compile_receive_match = nil
+  let compile_receive_match_return = nil
   let compile_call = nil
   let compile_binop = nil
   let compile_anon_fn = nil
@@ -847,6 +901,8 @@ fn make_codegen(source_name)
       return "{line_dir}" + compile_while(node, indent)
     when {tag: "match"}
       return "{line_dir}" + compile_match(node, indent)
+    when {tag: "receive_match"}
+      return "{line_dir}" + compile_receive_match(node, indent)
     when {tag: "break"}
       return p + "break;"
     when {tag: "continue"}
@@ -913,6 +969,8 @@ fn make_codegen(source_name)
       return "{line_dir}{compile_while(node, indent)}\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
     when {tag: "match"}
       return "{line_dir}" + compile_match_return(node, indent)
+    when {tag: "receive_match"}
+      return "{line_dir}" + compile_receive_match_return(node, indent)
     when {tag: "block", stmts: stmts}
       let out = "{p}\{\n"
       for i = 0, len(stmts) - 1
@@ -1133,6 +1191,259 @@ fn make_codegen(source_name)
     for i = 1, len(node.whens)
       out = out + "\n{p}}"
     end
+    out
+  end
+
+  # ─── compile_receive_match ──
+
+  compile_receive_match = fn(node, indent)
+    let p = pad_for(indent)
+    let arms = node.arms
+    let after_ms = node.after_ms
+    let after_body = node.after_body
+
+    # Use the recv_var from the parser (pattern conditions reference it)
+    let recv_tmp = mangle(node.recv_var)
+    let matched_tmp = tmp()
+    let prev_tmp = tmp()
+    let cur_tmp = tmp()
+    let deadline_tmp = tmp()
+    let proc_tmp = tmp()
+
+    let out = ""
+
+    # Declare the receive value variable (patterns reference this via mangle(recv_var))
+    out = out + "{p}GemVal {recv_tmp} = GEM_NIL;\n"
+    out = out + "{p}int {matched_tmp} = -1;\n"
+
+    # Set up deadline if after clause present
+    if after_ms != nil
+      let ms_r = compile_expr(after_ms)
+      out = out + ms_r.setup
+      out = out + "{p}int64_t {deadline_tmp} = gem_now_ms() + (int64_t)({ms_r.expr}).ival;\n"
+    end
+
+    # Outer loop: keep scanning until a match or timeout
+    out = out + "{p}while (1) \{\n"
+    let p2 = pad_for(indent + 1)
+
+    # Get current process
+    out = out + "{p2}GemProcess *{proc_tmp} = &gem_proc_table[gem_current_pid];\n"
+
+    # Scan mailbox
+    out = out + "{p2}GemMsgNode *{prev_tmp} = NULL;\n"
+    out = out + "{p2}GemMsgNode *{cur_tmp} = {proc_tmp}->mailbox.head;\n"
+    out = out + "{p2}{matched_tmp} = -1;\n"
+    out = out + "{p2}while ({cur_tmp}) \{\n"
+    let p3 = pad_for(indent + 2)
+    out = out + "{p3}{recv_tmp} = {cur_tmp}->value;\n"
+
+    # Test each arm's pattern condition
+    for i = 0, len(arms)
+      let arm = arms[i]
+      let cond_r = compile_expr(arm.pattern.condition)
+      if i == 0
+        out = out + cond_r.setup
+        out = out + "{p3}if (gem_truthy({cond_r.expr})) \{\n"
+      else
+        out = out + "{p3}} else \{\n"
+        out = out + cond_r.setup
+        out = out + "{p3}if (gem_truthy({cond_r.expr})) \{\n"
+      end
+      out = out + "{pad_for(indent + 3)}{matched_tmp} = {i};\n"
+    end
+    # Close all arm conditions
+    for i = 0, len(arms)
+      out = out + "{p3}}"
+      if i < len(arms) - 1
+        out = out + "\n"
+      end
+    end
+    out = out + "\n"
+
+    # If matched, splice out node and break
+    out = out + "{p3}if ({matched_tmp} >= 0) \{\n"
+    let p4 = pad_for(indent + 3)
+    out = out + "{p4}gem_mailbox_remove(&{proc_tmp}->mailbox, {prev_tmp}, {cur_tmp});\n"
+    out = out + "{p4}break;\n"
+    out = out + "{p3}}\n"
+
+    # Advance to next node
+    out = out + "{p3}{prev_tmp} = {cur_tmp};\n"
+    out = out + "{p3}{cur_tmp} = {cur_tmp}->next;\n"
+    out = out + "{p2}}\n"
+
+    # No match found — check timeout or yield
+    out = out + "{p2}if ({matched_tmp} >= 0) break;\n"
+    if after_ms != nil
+      out = out + "{p2}if (gem_now_ms() >= {deadline_tmp}) \{\n"
+      out = out + "{p2}    {matched_tmp} = -2;\n"
+      out = out + "{p2}    break;\n"
+      out = out + "{p2}}\n"
+      out = out + "{p2}gem_selective_yield({deadline_tmp});\n"
+      # Check if timed out after yield
+      out = out + "{p2}if ({proc_tmp}->timed_out) \{\n"
+      out = out + "{p2}    {matched_tmp} = -2;\n"
+      out = out + "{p2}    break;\n"
+      out = out + "{p2}}\n"
+    else
+      out = out + "{p2}gem_selective_yield(-1);\n"
+    end
+
+    out = out + "{p}}\n"
+
+    # Now dispatch based on matched arm
+    for i = 0, len(arms)
+      let arm = arms[i]
+      if i == 0
+        out = out + "{p}if ({matched_tmp} == {i}) \{\n"
+      else
+        out = out + "{p}} else if ({matched_tmp} == {i}) \{\n"
+      end
+      # Emit bindings
+      if arm.pattern.bindings != nil
+        for b in arm.pattern.bindings
+          out = out + compile_stmt(b, indent + 1) + "\n"
+        end
+      end
+      out = out + compile_stmts(arm.body, indent + 1)
+    end
+
+    # After clause
+    if after_ms != nil
+      out = out + "{p}} else if ({matched_tmp} == -2) \{\n"
+      if after_body != nil
+        out = out + compile_stmts(after_body, indent + 1)
+      end
+    end
+
+    out = out + "{p}}"
+    out
+  end
+
+  compile_receive_match_return = fn(node, indent)
+    let p = pad_for(indent)
+    let arms = node.arms
+    let after_ms = node.after_ms
+    let after_body = node.after_body
+
+    let recv_tmp = mangle(node.recv_var)
+    let matched_tmp = tmp()
+    let prev_tmp = tmp()
+    let cur_tmp = tmp()
+    let deadline_tmp = tmp()
+    let proc_tmp = tmp()
+
+    let out = ""
+
+    out = out + "{p}GemVal {recv_tmp} = GEM_NIL;\n"
+    out = out + "{p}int {matched_tmp} = -1;\n"
+
+    if after_ms != nil
+      let ms_r = compile_expr(after_ms)
+      out = out + ms_r.setup
+      out = out + "{p}int64_t {deadline_tmp} = gem_now_ms() + (int64_t)({ms_r.expr}).ival;\n"
+    end
+
+    out = out + "{p}while (1) \{\n"
+    let p2 = pad_for(indent + 1)
+
+    out = out + "{p2}GemProcess *{proc_tmp} = &gem_proc_table[gem_current_pid];\n"
+    out = out + "{p2}GemMsgNode *{prev_tmp} = NULL;\n"
+    out = out + "{p2}GemMsgNode *{cur_tmp} = {proc_tmp}->mailbox.head;\n"
+    out = out + "{p2}{matched_tmp} = -1;\n"
+    out = out + "{p2}while ({cur_tmp}) \{\n"
+    let p3 = pad_for(indent + 2)
+    out = out + "{p3}{recv_tmp} = {cur_tmp}->value;\n"
+
+    for i = 0, len(arms)
+      let arm = arms[i]
+      let cond_r = compile_expr(arm.pattern.condition)
+      if i == 0
+        out = out + cond_r.setup
+        out = out + "{p3}if (gem_truthy({cond_r.expr})) \{\n"
+      else
+        out = out + "{p3}} else \{\n"
+        out = out + cond_r.setup
+        out = out + "{p3}if (gem_truthy({cond_r.expr})) \{\n"
+      end
+      out = out + "{pad_for(indent + 3)}{matched_tmp} = {i};\n"
+    end
+    for i = 0, len(arms)
+      out = out + "{p3}}"
+      if i < len(arms) - 1
+        out = out + "\n"
+      end
+    end
+    out = out + "\n"
+
+    out = out + "{p3}if ({matched_tmp} >= 0) \{\n"
+    let p4 = pad_for(indent + 3)
+    out = out + "{p4}gem_mailbox_remove(&{proc_tmp}->mailbox, {prev_tmp}, {cur_tmp});\n"
+    out = out + "{p4}break;\n"
+    out = out + "{p3}}\n"
+
+    out = out + "{p3}{prev_tmp} = {cur_tmp};\n"
+    out = out + "{p3}{cur_tmp} = {cur_tmp}->next;\n"
+    out = out + "{p2}}\n"
+
+    out = out + "{p2}if ({matched_tmp} >= 0) break;\n"
+    if after_ms != nil
+      out = out + "{p2}if (gem_now_ms() >= {deadline_tmp}) \{\n"
+      out = out + "{p2}    {matched_tmp} = -2;\n"
+      out = out + "{p2}    break;\n"
+      out = out + "{p2}}\n"
+      out = out + "{p2}gem_selective_yield({deadline_tmp});\n"
+      out = out + "{p2}if ({proc_tmp}->timed_out) \{\n"
+      out = out + "{p2}    {matched_tmp} = -2;\n"
+      out = out + "{p2}    break;\n"
+      out = out + "{p2}}\n"
+    else
+      out = out + "{p2}gem_selective_yield(-1);\n"
+    end
+
+    out = out + "{p}}\n"
+
+    # Dispatch with return
+    for i = 0, len(arms)
+      let arm = arms[i]
+      if i == 0
+        out = out + "{p}if ({matched_tmp} == {i}) \{\n"
+      else
+        out = out + "{p}} else if ({matched_tmp} == {i}) \{\n"
+      end
+      if arm.pattern.bindings != nil
+        for b in arm.pattern.bindings
+          out = out + compile_stmt(b, indent + 1) + "\n"
+        end
+      end
+      let body = arm.body
+      if len(body) > 0
+        for j = 0, len(body) - 1
+          out = out + compile_stmt(body[j], indent + 1) + "\n"
+        end
+        out = out + compile_stmt_return(body[len(body) - 1], indent + 1) + "\n"
+      else
+        out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
+      end
+    end
+
+    if after_ms != nil
+      out = out + "{p}} else if ({matched_tmp} == -2) \{\n"
+      if after_body != nil and len(after_body) > 0
+        for j = 0, len(after_body) - 1
+          out = out + compile_stmt(after_body[j], indent + 1) + "\n"
+        end
+        out = out + compile_stmt_return(after_body[len(after_body) - 1], indent + 1) + "\n"
+      else
+        out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
+      end
+    else
+      out = out + "{p}} else \{\n"
+      out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
+    end
+
+    out = out + "{p}}"
     out
   end
 

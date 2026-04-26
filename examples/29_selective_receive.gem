@@ -1,0 +1,146 @@
+# Selective receive with pattern matching tests
+
+# --- Test 1: Basic selective receive — receive second message first by pattern ---
+spawn(fn()
+  let me = self()
+  send(me, {tag: "a", val: 1})
+  send(me, {tag: "b", val: 2})
+
+  receive
+  when {tag: "b", val: v}
+    print("test1: got b val={v}")
+  end
+end)
+
+# --- Test 2: Messages stay in order ---
+spawn(fn()
+  let me = self()
+  send(me, {tag: "x", val: 10})
+  send(me, {tag: "y", val: 20})
+  send(me, {tag: "x", val: 30})
+
+  # Selectively receive tag "y" first
+  receive
+  when {tag: "y", val: v}
+    print("test2: y={v}")
+  end
+  # Then plain receive should get first "x" (val 10)
+  let msg = receive()
+  print("test2: next={msg.val}")
+end)
+
+# --- Test 3: Multiple arms — first matching arm wins ---
+spawn(fn()
+  let me = self()
+  send(me, {kind: "ping"})
+  send(me, {kind: "data", payload: 42})
+  send(me, {kind: "stop"})
+
+  # "data" arm should match the second message (skipping "ping")
+  receive
+  when {kind: "data", payload: p}
+    print("test3: data={p}")
+  when {kind: "stop"}
+    print("test3: stop")
+  end
+  # "ping" should still be first in mailbox
+  let msg = receive()
+  print("test3: remaining={msg.kind}")
+end)
+
+# --- Test 4: Destructuring bind with nested array pattern ---
+spawn(fn()
+  let me = self()
+  send(me, {tag: "data", items: [100, 200]})
+
+  receive
+  when {tag: "data", items: [a, b]}
+    print("test4: a={a} b={b}")
+  end
+end)
+
+# --- Test 5: Receive with monitor DOWN ---
+spawn(fn()
+  let me = self()
+  send(me, {tag: "app", data: "hello"})
+  let child = spawn(fn()
+    error("crash!")
+  end)
+  monitor(child)
+  # Give child time to crash and DOWN to arrive
+  # Both app message and DOWN will be in mailbox
+
+  # Selectively get DOWN first
+  receive
+  when {tag: "DOWN", reason: r}
+    print("test5: down reason={r}")
+  end
+  # Then get the app message
+  let msg = receive()
+  print("test5: app data={msg.data}")
+end)
+
+# --- Test 6: after timeout on empty mailbox ---
+spawn(fn()
+  receive
+  when {tag: "nope"}
+    print("test6: WRONG")
+  after 0
+    print("test6: timed out")
+  end
+end)
+
+# --- Test 7: after with non-matching messages ---
+spawn(fn()
+  let me = self()
+  send(me, {tag: "wrong"})
+
+  receive
+  when {tag: "right"}
+    print("test7: WRONG")
+  after 0
+    print("test7: timed out")
+  end
+  # Non-matching message should still be in mailbox
+  let msg = receive()
+  print("test7: leftover={msg.tag}")
+end)
+
+# --- Test 8: Receive block produces a value (as last stmt in fn) ---
+spawn(fn()
+  let me = self()
+  send(me, {tag: "val", n: 42})
+
+  let get_val = fn()
+    receive
+    when {tag: "val", n: x}
+      x
+    end
+  end
+  let result = get_val()
+  print("test8: result={result}")
+end)
+
+# --- Test 9: Existing receive() still works ---
+spawn(fn()
+  let me = self()
+  send(me, "plain message")
+  let msg = receive()
+  print("test9: {msg}")
+end)
+
+# --- Test 10: Nested receive blocks ---
+spawn(fn()
+  let me = self()
+  send(me, {tag: "outer", val: 1})
+  send(me, {tag: "inner", val: 2})
+
+  receive
+  when {tag: "outer", val: v}
+    print("test10: outer={v}")
+    receive
+    when {tag: "inner", val: w}
+      print("test10: inner={w}")
+    end
+  end
+end)

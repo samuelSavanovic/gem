@@ -48,7 +48,7 @@
         },
         {
           "name": "keyword.control.gem",
-          "match": "\\b(if|elif|else|end|while|for|in|match|when|do|return|break|continue)\\b"
+          "match": "\\b(if|elif|else|end|while|for|in|match|when|do|return|break|continue|after)\\b"
         },
         {
           "name": "keyword.other.gem",

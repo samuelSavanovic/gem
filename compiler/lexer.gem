@@ -125,6 +125,7 @@ fn build_keyword_set()
   t.extern = true
   t.for = true
   t.in = true
+  t.after = true
   t
 end
 

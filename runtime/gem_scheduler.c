@@ -8,6 +8,7 @@
 #include <poll.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <time.h>
 
 #include "gem.h"
 #include "stb_ds.h"
@@ -58,6 +59,38 @@ static GemVal gem_mailbox_pop(GemMailbox *mb) {
     mb->head = node->next;
     if (!mb->head) mb->tail = NULL;
     return val;
+}
+
+/* Remove a specific node from the mailbox given its predecessor */
+void gem_mailbox_remove(GemMailbox *mb, GemMsgNode *prev, GemMsgNode *node) {
+    if (prev) {
+        prev->next = node->next;
+    } else {
+        mb->head = node->next;
+    }
+    if (node == mb->tail) {
+        mb->tail = prev;
+    }
+}
+
+/* Monotonic time in milliseconds */
+int64_t gem_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+/* Yield for selective receive — sets deadline and transitions to WAITING */
+void gem_selective_yield(int64_t deadline_ms) {
+    if (gem_current_pid < 0 || gem_current_pid >= GEM_MAX_PROCS) {
+        gem_error("receive: not inside a spawned process");
+        return;
+    }
+    GemProcess *proc = &gem_proc_table[gem_current_pid];
+    proc->deadline_ms = deadline_ms;
+    proc->timed_out = 0;
+    proc->state = GEM_PROC_WAITING;
+    mco_yield(proc->coro);
 }
 
 /* Coroutine entry point — calls the GemFnPtr stored in user_data.
@@ -119,6 +152,8 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].pid = pid;
     gem_proc_table[pid].monitors = NULL;
     gem_proc_table[pid].exit_reason = NULL;
+    gem_proc_table[pid].deadline_ms = -1;
+    gem_proc_table[pid].timed_out = 0;
 
     return pid;
 }
@@ -196,6 +231,16 @@ void gem_run_scheduler(void) {
             } else if (proc->state == GEM_PROC_WAITING) {
                 has_msg_wait = 1;
                 active = 1;
+                /* Check deadline for selective receive with after */
+                if (proc->deadline_ms >= 0) {
+                    int64_t now = gem_now_ms();
+                    if (now >= proc->deadline_ms) {
+                        proc->timed_out = 1;
+                        proc->deadline_ms = -1;
+                        proc->state = GEM_PROC_READY;
+                        has_ready = 1;
+                    }
+                }
             } else if (proc->state == GEM_PROC_IO_WAIT) {
                 has_io_wait = 1;
                 active = 1;
@@ -238,8 +283,31 @@ void gem_run_scheduler(void) {
             continue;
         }
 
-        /* Only mailbox waiters remain and nobody can send → deadlock. */
-        if (has_msg_wait && !has_io_wait) break;
+        /* Only mailbox waiters remain. Check if any have deadlines —
+           if so, sleep until the earliest deadline, then loop. */
+        if (has_msg_wait && !has_io_wait) {
+            int64_t earliest = -1;
+            for (int i = 0; i < GEM_MAX_PROCS; i++) {
+                if (gem_proc_table[i].state == GEM_PROC_WAITING &&
+                    gem_proc_table[i].deadline_ms >= 0) {
+                    if (earliest < 0 || gem_proc_table[i].deadline_ms < earliest) {
+                        earliest = gem_proc_table[i].deadline_ms;
+                    }
+                }
+            }
+            if (earliest < 0) break;  /* true deadlock — no deadlines */
+            /* Sleep until earliest deadline */
+            int64_t now = gem_now_ms();
+            int64_t wait_ms = earliest - now;
+            if (wait_ms > 0) {
+                struct timespec ts_sleep;
+                ts_sleep.tv_sec = wait_ms / 1000;
+                ts_sleep.tv_nsec = (wait_ms % 1000) * 1000000;
+                nanosleep(&ts_sleep, NULL);
+            }
+            /* Loop back — the deadline check above will mark it READY */
+            continue;
+        }
     }
     gem_current_pid = -1;
 }

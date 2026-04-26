@@ -217,6 +217,8 @@ typedef struct {
     GemMonitorNode *monitors;     /* linked list of pids monitoring this process */
     jmp_buf proc_jmp;             /* process-level error handler (crash isolation) */
     const char *exit_reason;      /* NULL while alive, set on exit/crash */
+    int64_t deadline_ms;          /* -1 = no deadline; else absolute time in ms */
+    int timed_out;                /* set to 1 by scheduler when deadline expires */
 } GemProcess;
 
 #define GEM_MAX_PROCS 1024
@@ -230,6 +232,16 @@ void gem_send_msg(int pid, GemVal val);
 GemVal gem_receive_msg(void);
 int gem_self_pid(void);
 void gem_run_scheduler(void);
+
+/* Selective receive: remove a specific node from the mailbox */
+void gem_mailbox_remove(GemMailbox *mb, GemMsgNode *prev, GemMsgNode *node);
+
+/* Selective receive: yield until new messages arrive or deadline expires.
+   Sets deadline_ms on the process. Pass -1 for no timeout. */
+void gem_selective_yield(int64_t deadline_ms);
+
+/* Get current monotonic time in milliseconds */
+int64_t gem_now_ms(void);
 
 /* Non-blocking I/O: yield current coroutine until fd is ready.
    for_write=0 means wait for readable, for_write=1 means wait for writable. */

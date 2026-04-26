@@ -352,6 +352,29 @@ let p = whereis("worker")  # returns pid or nil
 
 `register(name, pid)` associates a string name with a pid. Errors if the name is already taken. `whereis(name)` returns the pid for a name, or `nil` if not registered. `send` accepts either a pid (int) or a registered name (string). When a process dies, its name is automatically unregistered.
 
+**Selective Receive**
+
+```
+receive
+when {tag: "DOWN", pid: p, reason: r}
+  print("process " + to_string(p) + " died: " + r)
+when {tag: "request", body: b}
+  handle(b)
+after 5000
+  print("timed out")
+end
+```
+
+`receive ... when ... end` is a syntactic form (not a function call) for Erlang-style selective receive. The process scans its mailbox from oldest to newest, testing each message against the `when` arms in order using the same destructuring patterns as `match`. When a pattern matches, that message is removed from the mailbox (even if it's not the head), pattern variables are bound, and the arm body executes. Non-matching messages remain in the mailbox in their original order.
+
+If no arm matches any message, the process yields. When new messages arrive, it re-scans from the oldest unmatched message.
+
+The `after <ms>` clause is optional. If present and the timeout elapses with no matching message, the `after` body executes. `after 0` means "check once, don't block." Omitting `after` means block forever (like `receive()`).
+
+The `receive` block can produce a value when used as the last statement of a function (implicit return), just like `match`.
+
+The existing `receive()` function call continues to work unchanged — it always pops the head of the mailbox unconditionally.
+
 **C Interop**
 
 ```

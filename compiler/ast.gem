@@ -113,6 +113,10 @@ fn make_when(value, body, bindings)
   {tag: "when_clause", value: value, body: body, bindings: bindings}
 end
 
+fn make_receive_match(arms, after_ms, after_body, line, recv_var)
+  {tag: "receive_match", arms: arms, after_ms: after_ms, after_body: after_body, line: line, recv_var: recv_var}
+end
+
 fn make_return(value, line)
   {tag: "return", value: value, line: line}
 end
