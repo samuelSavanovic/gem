@@ -251,11 +251,14 @@ typedef struct {
 
 extern GemProcess gem_proc_table[GEM_MAX_PROCS];
 extern int gem_current_pid;
+extern int gem_free_head;
+extern int gem_free_tail;
 
 /* Preemptive yield check — call at loop back-edges */
 void gem_yield_check(void);
 
 /* Core concurrency API */
+void gem_scheduler_init(void);
 int gem_spawn_fn(GemFnPtr fn, void *env);
 void gem_send_msg(int pid, GemVal val);
 GemVal gem_receive_msg(void);

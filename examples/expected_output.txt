@@ -540,7 +540,7 @@ test4: monitors_count=1
 test6: nil
 test7: before=false
 test7: after=true
-test5: state=dead reason=normal
+test5: nil
 test1: got tick
 test2: received through 10 spinners
 test3: for loop preempted

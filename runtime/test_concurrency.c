@@ -45,6 +45,7 @@ static int tests_passed = 0;
     fflush(stdout); \
     memset(gem_proc_table, 0, sizeof(gem_proc_table)); \
     gem_current_pid = -1; \
+    gem_scheduler_init(); \
     if (fn()) { \
         tests_passed++; \
         printf("PASS\n"); \

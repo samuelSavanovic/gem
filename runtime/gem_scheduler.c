@@ -17,6 +17,8 @@
 
 GemProcess gem_proc_table[GEM_MAX_PROCS];
 int gem_current_pid = -1;
+int gem_free_head = 0;
+int gem_free_tail = GEM_MAX_PROCS - 1;
 GemNameEntry *gem_name_registry = NULL;
 GemTimer gem_timers[GEM_MAX_TIMERS];
 
@@ -35,6 +37,33 @@ static void gem_coro_stack_free(void *ptr, size_t size, void *udata) {
     (void)udata;
     GC_remove_roots(ptr, (char *)ptr + size);
     free(ptr);
+}
+
+void gem_scheduler_init(void) {
+    for (int i = 0; i < GEM_MAX_PROCS - 1; i++) {
+        gem_proc_table[i].pid = i + 1;
+    }
+    gem_proc_table[GEM_MAX_PROCS - 1].pid = -1;
+    gem_free_head = 0;
+    gem_free_tail = GEM_MAX_PROCS - 1;
+}
+
+static void gem_free_proc_slot(int pid) {
+    GemProcess *proc = &gem_proc_table[pid];
+    proc->state = GEM_PROC_FREE;
+    proc->coro = NULL;
+    proc->mailbox = (GemMailbox){NULL, NULL};
+    proc->monitors = NULL;
+    proc->links = NULL;
+    proc->trap_exit = 0;
+    proc->pcall_depth = 0;
+    proc->pid = -1;
+    if (gem_free_tail >= 0) {
+        gem_proc_table[gem_free_tail].pid = pid;
+    } else {
+        gem_free_head = pid;
+    }
+    gem_free_tail = pid;
 }
 
 #define GEM_REDUCTION_LIMIT 4000
@@ -132,34 +161,13 @@ static void gem_coro_entry(mco_coro *co) {
 /* Core API */
 
 int gem_spawn_fn(GemFnPtr fn, void *env) {
-    int pid = -1;
-    for (int i = 0; i < GEM_MAX_PROCS; i++) {
-        if (gem_proc_table[i].state == GEM_PROC_FREE) {
-            pid = i;
-            break;
-        }
-    }
-    /* Reclaim dead process slots if no free slots available */
-    if (pid < 0) {
-        for (int i = 0; i < GEM_MAX_PROCS; i++) {
-            if (gem_proc_table[i].state == GEM_PROC_DEAD) {
-                gem_proc_table[i].state = GEM_PROC_FREE;
-                gem_proc_table[i].coro = NULL;
-                gem_proc_table[i].mailbox = (GemMailbox){NULL, NULL};
-                gem_proc_table[i].monitors = NULL;
-                gem_proc_table[i].links = NULL;
-                gem_proc_table[i].trap_exit = 0;
-                gem_proc_table[i].exit_reason = NULL;
-                gem_proc_table[i].pcall_depth = 0;
-                pid = i;
-                break;
-            }
-        }
-    }
-    if (pid < 0) {
+    if (gem_free_head < 0) {
         gem_error("spawn: process table full");
         return -1;
     }
+    int pid = gem_free_head;
+    gem_free_head = gem_proc_table[pid].pid;
+    if (gem_free_head < 0) gem_free_tail = -1;
 
     GemCoroCtx *ctx = (GemCoroCtx *)GC_MALLOC(sizeof(GemCoroCtx));
     ctx->fn = fn;
@@ -290,9 +298,9 @@ void gem_run_scheduler(void) {
                     mco_destroy(proc->coro);
                     proc->coro = NULL;
                     const char *reason = proc->exit_reason ? proc->exit_reason : "normal";
+                    proc->state = GEM_PROC_DEAD;
                     gem_deliver_down_messages(i, reason);
                     gem_unregister_name_for_pid(i);
-                    proc->state = GEM_PROC_DEAD;
                     gem_propagate_exit(i, reason);
                 }
             } else if (proc->state == GEM_PROC_WAITING) {
@@ -586,8 +594,12 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
         }
     }
 
+    /* Free all worklist entries (original dead + transitively killed) */
+    for (int i = 0; i < wl_tail; i++) {
+        gem_free_proc_slot(worklist[i]);
+    }
+
     if (self_kill_pending) {
-        /* Raise inside the running coroutine; proc_jmp catches it. */
         gem_error(self_kill_reason);
     }
 }
@@ -788,15 +800,14 @@ GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
     GemProcess *proc = &gem_proc_table[pid];
     if (proc->state == GEM_PROC_DEAD || proc->state == GEM_PROC_FREE) return GEM_NIL;
 
-    /* Mark the process as dead, deliver DOWN messages, unregister name */
     proc->exit_reason = reason;
     if (proc->coro) {
         mco_destroy(proc->coro);
         proc->coro = NULL;
     }
+    proc->state = GEM_PROC_DEAD;
     gem_deliver_down_messages(pid, reason);
     gem_unregister_name_for_pid(pid);
-    proc->state = GEM_PROC_DEAD;
     gem_propagate_exit(pid, reason);
     return gem_bool(1);
 }
