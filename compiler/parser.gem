@@ -4,18 +4,19 @@
 
 load "ast"
 load "lexer"
+load "errors"
 
 # ─── Helpers ─────────────────────────────────────────────────────
 
-fn parse_source(source)
-  let tokens = tokenize(source)
-  let p = make_parser(tokens)
+fn parse_source(source, file)
+  let tokens = tokenize(source, file)
+  let p = make_parser(tokens, source, file)
   p.parse()
 end
 
 # ─── Parser constructor ─────────────────────────────────────────
 
-fn make_parser(tokens)
+fn make_parser(tokens, source, file)
   let pos = 0
   let gensym_counter = 0
   let fn_depth = 0
@@ -43,7 +44,7 @@ fn make_parser(tokens)
   let expect = fn(tp)
     let t = tokens[pos]
     if t.type != tp
-      error("expected '{tp}' but got '{t.type}' at line {t.line}")
+      compile_error(source, file, t.line, t.col, len(t.value), "expected '{tp}' but got '{t.type}'", nil)
     end
     pos += 1
     t
@@ -73,11 +74,11 @@ fn make_parser(tokens)
         if peek().type == ","
           advance()
           if peek().type != "NAME"
-            error("expected parameter name after rest param at line {peek().line}")
+            compile_error(source, file, peek().line, peek().col, len(peek().value), "expected parameter name after rest param", nil)
           end
           block_param = advance().value
           if peek().type == ","
-            error("only one parameter is allowed after a rest param at line {peek().line}")
+            compile_error(source, file, peek().line, peek().col, len(peek().value), "only one parameter is allowed after a rest param", nil)
           end
         end
         break
@@ -207,11 +208,11 @@ fn make_parser(tokens)
         let key_tok = peek()
         if key_tok.type == "NAME"
           advance()
-        elif peek_at(1).type == ":"
+        elif not at_end() and peek_at(1).type == ":"
           # Keyword in key position — allow it
           advance()
         else
-          error("expected table key (name or keyword) but got '{key_tok.type}' at line {key_tok.line}")
+          compile_error(source, file, key_tok.line, key_tok.col, len(key_tok.value), "expected '}' or table key but got '{key_tok.type}'", nil)
         end
         expect(":")
         let val = parse_expr()
@@ -257,7 +258,7 @@ fn make_parser(tokens)
       return make_var(t.value)
     end
 
-    error("unexpected token '{t.type}' (expected expression) at line {t.line}")
+    compile_error(source, file, t.line, t.col, len(t.value), "unexpected token '{t.type}' (expected expression)", nil)
   end
 
   # call: atom followed by postfix ops (calls, dot, index)
@@ -457,7 +458,7 @@ fn make_parser(tokens)
       if lhs.tag == "index"
         return make_index_assign(lhs.object, lhs.key, value, start_line)
       end
-      error("invalid assignment target (expected variable, field, or index) at line {start_line}")
+      compile_error(source, file, start_line, 1, 1, "invalid assignment target (expected variable, field, or index)", nil)
     end
 
     # Compound assignment: var += expr, etc. (desugars to assign + binop)
@@ -466,7 +467,7 @@ fn make_parser(tokens)
       let base_op = op_tok.value[0]
       let value = parse_expr()
       if lhs.tag != "var"
-        error("compound assignment requires variable target at line {op_tok.line}")
+        compile_error(source, file, op_tok.line, op_tok.col, len(op_tok.value), "compound assignment requires variable target", nil)
       end
       return make_assign(lhs.name, make_binop(base_op, make_var(lhs.name), value), start_line)
     end
@@ -506,7 +507,7 @@ fn make_parser(tokens)
           # keyword as key
           advance()
         else
-          error("expected key name in table pattern at line {key_tok.line}")
+          compile_error(source, file, key_tok.line, key_tok.col, len(key_tok.value), "expected key name in table pattern", nil)
         end
         let key_name = key_tok.value
         let key_str = make_string(key_name)
@@ -602,7 +603,7 @@ fn make_parser(tokens)
       return {condition: make_bool(true), bindings: [make_let(t.value, target_expr, 0)]}
     end
 
-    error("expected pattern but got '{t.type}' at line {t.line}")
+    compile_error(source, file, t.line, t.col, len(t.value), "expected pattern but got '{t.type}'", nil)
   end
 
   # ── Statement parsing ──
@@ -684,7 +685,7 @@ fn make_parser(tokens)
       advance()
       let name = expect("NAME").value
       if fn_depth > 0
-        error("named fn '{name}' inside function body is not supported at line {line} — use: let {name} = fn(...) ... end")
+        compile_error(source, file, line, 1, len(name) + 3, "named fn inside function body is not supported", "use: let {name} = fn(...) ... end")
       end
       expect("(")
       let pr = parse_params()
@@ -816,7 +817,7 @@ fn make_parser(tokens)
           while_node
         ]}
       else
-        error("expected 'in' or '=' after for variable at line {peek().line}")
+        compile_error(source, file, peek().line, peek().col, len(peek().value), "expected 'in' or '=' after for variable", nil)
       end
     end
 
@@ -924,7 +925,7 @@ fn make_parser(tokens)
         let path = expect("STRING").value
         return make_extern_include(path)
       else
-        error("expected 'fn' or 'include' after 'extern' at line {peek().line}")
+        compile_error(source, file, peek().line, peek().col, len(peek().value), "expected 'fn' or 'include' after 'extern'", nil)
       end
     end
 

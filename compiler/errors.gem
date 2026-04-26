@@ -1,0 +1,69 @@
+# Error reporting — Rust-style compile error diagnostics.
+
+extern fn gem_eprint(msg: String) -> Nil
+extern fn gem_exit_process(code: Int) -> Nil
+
+fn get_source_line(source, line_num)
+  let current = 1
+  let i = 0
+  let slen = len(source)
+  while i < slen
+    if current == line_num
+      let start = i
+      while i < slen and source[i] != "\n"
+        i += 1
+      end
+      return substr(source, start, i - start)
+    end
+    if source[i] == "\n"
+      current += 1
+    end
+    i += 1
+  end
+  ""
+end
+
+fn repeat_char(ch, n)
+  let result = ""
+  for i = 0, n
+    result = result + ch
+  end
+  result
+end
+
+fn compile_error(source, file, line, col, span_len, msg, hint)
+  if file == nil
+    file = "<input>"
+  end
+  if source == nil or line == nil
+    gem_eprint("\n[Compile Error]: " + msg + "\n")
+    gem_exit_process(1)
+  end
+  if col == nil or col < 1
+    col = 1
+  end
+
+  let line_str = to_string(line)
+  let gutter_width = len(line_str)
+  let padding = repeat_char(" ", gutter_width)
+  let src_line = get_source_line(source, line)
+
+  let actual_span = span_len
+  if actual_span == nil or actual_span < 1
+    actual_span = 1
+  end
+
+  let out = "\n[Compile Error]: " + msg + "\n"
+  out = out + "  --> " + file + ":" + line_str + ":" + to_string(col) + "\n"
+  out = out + " " + padding + " |\n"
+  out = out + " " + line_str + " | " + src_line + "\n"
+  out = out + " " + padding + " | " + repeat_char(" ", col - 1) + repeat_char("^", actual_span) + "\n"
+  out = out + " " + padding + " |\n"
+
+  if hint != nil
+    out = out + "Hint: " + hint + "\n"
+  end
+
+  gem_eprint(out)
+  gem_exit_process(1)
+end

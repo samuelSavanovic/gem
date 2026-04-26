@@ -122,4 +122,14 @@ static GemVal keys(GemVal tbl) {
     return gem_keys(tbl);
 }
 
+/* ─── stderr printing for compile errors ─── */
+
+static void gem_eprint(const char *msg) {
+    fprintf(stderr, "%s", msg);
+}
+
+static void gem_exit_process(int64_t code) {
+    exit((int)code);
+}
+
 #endif /* COMPILER_HELPERS_H */

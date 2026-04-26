@@ -53,7 +53,7 @@ fn resolve_loads(ast, base_dir, loaded)
         error("cannot load '{full_path}'")
       end
 
-      let loaded_ast = parse_source(source)
+      let loaded_ast = parse_source(source, full_path)
       let loaded_dir = gem_dirname(full_path)
       let resolved = resolve_loads(loaded_ast, loaded_dir, loaded)
 
@@ -82,7 +82,7 @@ if source == ""
   error("cannot read '{src_path}'")
 end
 
-let ast = parse_source(source)
+let ast = parse_source(source, src_path)
 let base_dir = gem_dirname(src_path)
 let loaded = {}
 let resolved_ast = resolve_loads(ast, base_dir, loaded)

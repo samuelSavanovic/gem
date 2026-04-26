@@ -595,7 +595,20 @@ print("wrapped: {wrap("inner")}")
 
 **Error Handling**
 
-`error(msg)` prints the message with file and line info to stderr, followed by a call stack trace showing each Gem function frame, and halts (`exit(1)`). Runtime type errors (e.g. `1 + "a"`) also print a stack trace. The compiler reports the first error and stops.
+`error(msg)` prints the message with file and line info to stderr, followed by a call stack trace showing each Gem function frame, and halts (`exit(1)`). Runtime type errors (e.g. `1 + "a"`) also print a stack trace with the actual types involved (e.g. `type error in +: got string and int`). The compiler reports the first error and stops.
+
+**Compile-time error format**: the compiler produces Rust-style diagnostics to stderr with source context, caret highlighting, and optional hints:
+
+```
+[Compile Error]: expected 'end' but got 'EOF'
+  --> src/example.gem:5:1
+   |
+ 5 | fn broken(
+   | ^^
+   |
+```
+
+Tokens carry line and column information from the lexer, so the caret points to the exact position of the offending token. Multi-character tokens get a proportionally wide underline.
 
 **Recoverable errors** use `pcall(f)` (protected call), which calls `f()` with zero arguments and catches any error instead of halting:
 

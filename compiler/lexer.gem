@@ -1,6 +1,8 @@
 # Lexer — hand-written scanner for Gem source code.
 # Takes a source string, returns a flat array of token tables:
-#   {type: "NUMBER", value: "42", line: 3}
+#   {type: "NUMBER", value: "42", line: 3, col: 1}
+
+load "errors"
 #
 # Token types: NUMBER, STRING, NAME, NEWLINE, EOF,
 # keywords (fn, end, let, if, else, while, for, in, return, break, continue,
@@ -129,11 +131,12 @@ fn build_keyword_set()
   t
 end
 
-fn tokenize(source)
+fn tokenize(source, file)
   let kw = build_keyword_set()
   let tokens = []
   let pos = 0
   let line = 1
+  let line_start = 0
   let length = len(source)
   let interp_depth = 0
   let interp_brace = {}
@@ -141,9 +144,11 @@ fn tokenize(source)
   let NUL = chr(0)
   let in_triple_dq = false
   let triple_dq_indent = 0
+  let tstart = 0
 
   while pos < length
     let ch = source[pos]
+    tstart = pos
 
     # Skip whitespace (spaces/tabs, NOT newlines)
     if ch == " " or ch == "\t"
@@ -166,10 +171,11 @@ fn tokenize(source)
         should_add = false
       end
       if should_add
-        push(tokens, {type: "NEWLINE", value: "\n", line: line})
+        push(tokens, {type: "NEWLINE", value: "\n", line: line, col: tstart - line_start + 1})
       end
       if ch == "\n"
         line += 1
+        line_start = pos + 1
       end
       pos += 1
       # Skip additional newlines, semicolons, whitespace, comments
@@ -177,6 +183,7 @@ fn tokenize(source)
         let c2 = source[pos]
         if c2 == "\n"
           line += 1
+          line_start = pos + 1
           pos += 1
         elif c2 == ";" or c2 == " " or c2 == "\t"
           pos += 1
@@ -207,7 +214,7 @@ fn tokenize(source)
           pos += 1
         end
       end
-      push(tokens, {type: "NUMBER", value: val, line: line})
+      push(tokens, {type: "NUMBER", value: val, line: line, col: tstart - line_start + 1})
       continue
     end
 
@@ -223,9 +230,10 @@ fn tokenize(source)
           pos += 1
         end
         if pos >= length or source[pos] != "\n"
-          error("triple-quoted string must be followed by a newline at line {line}")
+          compile_error(source, file, line, pos - line_start + 1, 1, "triple-quoted string must be followed by a newline", nil)
         end
         line += 1
+        line_start = pos + 1
         pos += 1
 
         # Pre-scan: find the indentation of the closing """
@@ -251,7 +259,7 @@ fn tokenize(source)
           end
         end
         if not tq_found
-          error("unterminated triple-quoted string at line {line}")
+          compile_error(source, file, line, pos - line_start + 1, 1, "unterminated triple-quoted string", nil)
         end
         triple_dq_indent = tq_bi
 
@@ -283,6 +291,7 @@ fn tokenize(source)
           if tqc == "\n"
             val = val + "\n"
             line += 1
+            line_start = pos + 1
             pos += 1
             tq_als = true
             continue
@@ -290,7 +299,7 @@ fn tokenize(source)
           if tqc == "\\"
             pos += 1
             if pos >= length
-              error("unterminated string escape at line {line}")
+              compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
             end
             let tqe = source[pos]
             let esc_result = apply_escape(tqe, "dq")
@@ -303,8 +312,8 @@ fn tokenize(source)
             continue
           end
           if tqc == "\{"
-            push(tokens, {type: "INTERP_START", value: "", line: line})
-            push(tokens, {type: "STRING", value: val, line: line})
+            push(tokens, {type: "INTERP_START", value: "", line: line, col: tstart - line_start + 1})
+            push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
             val = ""
             pos += 1
             interp_brace[interp_depth] = 0
@@ -318,7 +327,7 @@ fn tokenize(source)
         end
 
         if not hit_interp
-          push(tokens, {type: "STRING", value: val, line: line})
+          push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
         end
         continue
       end
@@ -330,7 +339,7 @@ fn tokenize(source)
         if source[pos] == "\\"
           pos += 1
           if pos >= length
-            error("unterminated string escape at line {line}")
+            compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
           end
           let esc = source[pos]
           let esc_result = apply_escape(esc, "dq")
@@ -343,8 +352,8 @@ fn tokenize(source)
           continue
         end
         if source[pos] == "\{"
-          push(tokens, {type: "INTERP_START", value: "", line: line})
-          push(tokens, {type: "STRING", value: val, line: line})
+          push(tokens, {type: "INTERP_START", value: "", line: line, col: tstart - line_start + 1})
+          push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
           val = ""
           pos += 1
           interp_brace[interp_depth] = 0
@@ -357,10 +366,10 @@ fn tokenize(source)
       end
       if not hit_interp
         if pos >= length
-          error("unterminated string at line {line}")
+          compile_error(source, file, line, tstart - line_start + 1, 1, "unterminated string", "this string is never closed")
         end
         pos += 1
-        push(tokens, {type: "STRING", value: val, line: line})
+        push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
       end
       continue
     end
@@ -377,9 +386,10 @@ fn tokenize(source)
           pos += 1
         end
         if pos >= length or source[pos] != "\n"
-          error("triple-quoted string must be followed by a newline at line {line}")
+          compile_error(source, file, line, pos - line_start + 1, 1, "triple-quoted string must be followed by a newline", nil)
         end
         line += 1
+        line_start = pos + 1
         pos += 1
 
         # Pre-scan: find the indentation of the closing '''
@@ -405,7 +415,7 @@ fn tokenize(source)
           end
         end
         if not sq_found
-          error("unterminated triple-quoted string at line {line}")
+          compile_error(source, file, line, pos - line_start + 1, 1, "unterminated triple-quoted string", nil)
         end
 
         # Real scan: collect content with dedent (no interpolation)
@@ -435,6 +445,7 @@ fn tokenize(source)
           if sqc == "\n"
             val = val + "\n"
             line += 1
+            line_start = pos + 1
             pos += 1
             sq_als = true
             continue
@@ -442,7 +453,7 @@ fn tokenize(source)
           if sqc == "\\"
             pos += 1
             if pos >= length
-              error("unterminated string escape at line {line}")
+              compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
             end
             let sqe = source[pos]
             let esc_result = apply_escape(sqe, "sq")
@@ -458,7 +469,7 @@ fn tokenize(source)
           pos += 1
         end
 
-        push(tokens, {type: "STRING", value: val, line: line})
+        push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
         continue
       end
 
@@ -468,7 +479,7 @@ fn tokenize(source)
         if source[pos] == "\\"
           pos += 1
           if pos >= length
-            error("unterminated string escape at line {line}")
+            compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
           end
           let esc = source[pos]
           let esc_result = apply_escape(esc, "sq")
@@ -484,10 +495,10 @@ fn tokenize(source)
         pos += 1
       end
       if pos >= length
-        error("unterminated string at line {line}")
+        compile_error(source, file, line, tstart - line_start + 1, 1, "unterminated string", "this string is never closed")
       end
       pos += 1
-      push(tokens, {type: "STRING", value: val, line: line})
+      push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
       continue
     end
 
@@ -499,9 +510,9 @@ fn tokenize(source)
         pos += 1
       end
       if val in kw
-        push(tokens, {type: val, value: val, line: line})
+        push(tokens, {type: val, value: val, line: line, col: tstart - line_start + 1})
       else
-        push(tokens, {type: "NAME", value: val, line: line})
+        push(tokens, {type: "NAME", value: val, line: line, col: tstart - line_start + 1})
       end
       continue
     end
@@ -513,59 +524,59 @@ fn tokenize(source)
     end
 
     if ch == "=" and next == "="
-      push(tokens, {type: "==", value: "==", line: line})
+      push(tokens, {type: "==", value: "==", line: line, col: tstart - line_start + 1})
       pos += 2
       continue
     end
     if ch == "!" and next == "="
-      push(tokens, {type: "!=", value: "!=", line: line})
+      push(tokens, {type: "!=", value: "!=", line: line, col: tstart - line_start + 1})
       pos += 2
       continue
     end
     if ch == "<" and next == "="
-      push(tokens, {type: "<=", value: "<=", line: line})
+      push(tokens, {type: "<=", value: "<=", line: line, col: tstart - line_start + 1})
       pos += 2
       continue
     end
     if ch == ">" and next == "="
-      push(tokens, {type: ">=", value: ">=", line: line})
+      push(tokens, {type: ">=", value: ">=", line: line, col: tstart - line_start + 1})
       pos += 2
       continue
     end
     if ch == "+" and next == "="
-      push(tokens, {type: "+=", value: "+=", line: line})
+      push(tokens, {type: "+=", value: "+=", line: line, col: tstart - line_start + 1})
       pos += 2
       continue
     end
     if ch == "-" and next == "="
-      push(tokens, {type: "-=", value: "-=", line: line})
+      push(tokens, {type: "-=", value: "-=", line: line, col: tstart - line_start + 1})
       pos += 2
       continue
     end
     if ch == "*" and next == "="
-      push(tokens, {type: "*=", value: "*=", line: line})
+      push(tokens, {type: "*=", value: "*=", line: line, col: tstart - line_start + 1})
       pos += 2
       continue
     end
     if ch == "/" and next == "="
-      push(tokens, {type: "/=", value: "/=", line: line})
+      push(tokens, {type: "/=", value: "/=", line: line, col: tstart - line_start + 1})
       pos += 2
       continue
     end
     if ch == "-" and next == ">"
-      push(tokens, {type: "->", value: "->", line: line})
+      push(tokens, {type: "->", value: "->", line: line, col: tstart - line_start + 1})
       pos += 2
       continue
     end
 
     # Single-char operators and punctuation
     if ch == "+" or ch == "-" or ch == "*" or ch == "/" or ch == "%"
-      push(tokens, {type: ch, value: ch, line: line})
+      push(tokens, {type: ch, value: ch, line: line, col: tstart - line_start + 1})
       pos += 1
       continue
     end
     if ch == "<" or ch == ">" or ch == "="
-      push(tokens, {type: ch, value: ch, line: line})
+      push(tokens, {type: ch, value: ch, line: line, col: tstart - line_start + 1})
       pos += 1
       continue
     end
@@ -573,7 +584,7 @@ fn tokenize(source)
     if interp_depth > 0 and ch == "\{"
       let idx = interp_depth - 1
       interp_brace[idx] = interp_brace[idx] + 1
-      push(tokens, {type: "\{", value: "\{", line: line})
+      push(tokens, {type: "\{", value: "\{", line: line, col: tstart - line_start + 1})
       pos += 1
       continue
     end
@@ -581,7 +592,7 @@ fn tokenize(source)
       let idx = interp_depth - 1
       if interp_brace[idx] > 0
         interp_brace[idx] = interp_brace[idx] - 1
-        push(tokens, {type: "}", value: "}", line: line})
+        push(tokens, {type: "}", value: "}", line: line, col: tstart - line_start + 1})
         pos += 1
         continue
       end
@@ -618,6 +629,7 @@ fn tokenize(source)
           if tqrc == "\n"
             val = val + "\n"
             line += 1
+            line_start = pos + 1
             pos += 1
             tqr_als = true
             continue
@@ -625,7 +637,7 @@ fn tokenize(source)
           if tqrc == "\\"
             pos += 1
             if pos >= length
-              error("unterminated string escape at line {line}")
+              compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
             end
             let tqre = source[pos]
             let esc_result = apply_escape(tqre, "dq")
@@ -638,7 +650,7 @@ fn tokenize(source)
             continue
           end
           if tqrc == "\{"
-            push(tokens, {type: "STRING", value: val, line: line})
+            push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
             val = ""
             pos += 1
             interp_brace[interp_depth] = 0
@@ -653,10 +665,10 @@ fn tokenize(source)
 
         if not hit_interp
           if pos >= length
-            error("unterminated triple-quoted string interpolation at line {line}")
+            compile_error(source, file, line, pos - line_start + 1, 1, "unterminated triple-quoted string interpolation", nil)
           end
-          push(tokens, {type: "STRING", value: val, line: line})
-          push(tokens, {type: "INTERP_END", value: "", line: line})
+          push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
+          push(tokens, {type: "INTERP_END", value: "", line: line, col: tstart - line_start + 1})
         end
         continue
       end
@@ -668,7 +680,7 @@ fn tokenize(source)
         if source[pos] == "\\"
           pos += 1
           if pos >= length
-            error("unterminated string escape at line {line}")
+            compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
           end
           let esc = source[pos]
           let esc_result = apply_escape(esc, "dq")
@@ -682,7 +694,7 @@ fn tokenize(source)
         end
         if source[pos] == "\{"
           # Another interpolation expression
-          push(tokens, {type: "STRING", value: val, line: line})
+          push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
           val = ""
           pos += 1
           interp_brace[interp_depth] = 0
@@ -695,34 +707,34 @@ fn tokenize(source)
       end
       if not hit_interp
         if pos >= length
-          error("unterminated string interpolation at line {line}")
+          compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string interpolation", nil)
         end
-        push(tokens, {type: "STRING", value: val, line: line})
-        push(tokens, {type: "INTERP_END", value: "", line: line})
+        push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
+        push(tokens, {type: "INTERP_END", value: "", line: line, col: tstart - line_start + 1})
         pos += 1
       end
       continue
     end
 
     if ch == "(" or ch == ")" or ch == "[" or ch == "]" or ch == "\{" or ch == "}"
-      push(tokens, {type: ch, value: ch, line: line})
+      push(tokens, {type: ch, value: ch, line: line, col: tstart - line_start + 1})
       pos += 1
       continue
     end
     if ch == "." and pos + 1 < length and source[pos + 1] == "." and pos + 2 < length and source[pos + 2] == "."
-      push(tokens, {type: "...", value: "...", line: line})
+      push(tokens, {type: "...", value: "...", line: line, col: tstart - line_start + 1})
       pos += 3
       continue
     end
     if ch == "." or ch == "," or ch == ":" or ch == "|"
-      push(tokens, {type: ch, value: ch, line: line})
+      push(tokens, {type: ch, value: ch, line: line, col: tstart - line_start + 1})
       pos += 1
       continue
     end
 
-    error("unexpected character: '{ch}' at line {line}")
+    compile_error(source, file, line, pos - line_start + 1, 1, "unexpected character: '{ch}'", nil)
   end
 
-  push(tokens, {type: "EOF", value: "", line: line})
+  push(tokens, {type: "EOF", value: "", line: line, col: tstart - line_start + 1})
   tokens
 end
