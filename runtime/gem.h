@@ -214,6 +214,19 @@ typedef struct GemLinkNode {
     struct GemLinkNode *next;
 } GemLinkNode;
 
+/* Timer entry — global fixed-size array checked by the scheduler */
+#define GEM_MAX_TIMERS 256
+
+typedef struct {
+    int active;
+    int64_t ref;           /* make_ref() value identifying this timer */
+    int target_pid;
+    GemVal msg;
+    int64_t deadline_ms;
+} GemTimer;
+
+extern GemTimer gem_timers[GEM_MAX_TIMERS];
+
 /* Process slot */
 typedef struct {
     GemProcState state;
@@ -301,5 +314,8 @@ GemVal gem_unlink_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_spawn_link_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_process_flag_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_make_ref_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_send_after_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_cancel_timer_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_process_info_builtin(void *_env, GemVal *args, int argc);
 
 #endif /* GEM_H */

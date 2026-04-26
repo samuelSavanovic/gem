@@ -522,4 +522,22 @@ test3: count=2 first=raw1 second=raw2
 test1: after incr 5 = 15
 test2: got delayed: request
 test1: after reset = 0
+test5: timeouts_fired=true
+test5: still_counting=true
 test4: ok=false err=gen_server.call timeout
+test1: type=ref
+test2: cancelled=true
+test3: cancel_bogus=false
+test6: unique=true
+test1: got tick
+test2: got fallback
+test5: done
+test4: first second third
+test1: state=ready trap=false
+test2: mailbox_len=3
+test3: links_count=2
+test4: monitors_count=1
+test6: nil
+test7: before=false
+test7: after=true
+test5: state=dead reason=normal

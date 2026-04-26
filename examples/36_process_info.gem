@@ -1,0 +1,80 @@
+# process_info tests
+
+# ─── Test 1: basic introspection of a running process ───────────
+
+spawn(fn()
+  let me = self()
+  let info = process_info(me)
+  print("test1: state={info.state} trap={info.trap_exit}")
+end)
+
+# ─── Test 2: mailbox_len after sends ────────────────────────────
+
+spawn(fn()
+  let child = spawn(fn()
+    # block forever
+    receive()
+  end)
+  send(child, "a")
+  send(child, "b")
+  send(child, "c")
+  let info = process_info(child)
+  print("test2: mailbox_len={info.mailbox_len}")
+  kill(child, "done")
+end)
+
+# ─── Test 3: links array ────────────────────────────────────────
+
+spawn(fn()
+  process_flag("trap_exit", true)
+  let c1 = spawn_link(fn() receive() end)
+  let c2 = spawn_link(fn() receive() end)
+  let info = process_info(self())
+  print("test3: links_count={len(info.links)}")
+  kill(c1, "done")
+  kill(c2, "done")
+  receive()
+  receive()
+end)
+
+# ─── Test 4: monitors array ─────────────────────────────────────
+
+spawn(fn()
+  let child = spawn(fn() receive() end)
+  monitor(child)
+  let info = process_info(child)
+  print("test4: monitors_count={len(info.monitors)}")
+  kill(child, "done")
+  receive()
+end)
+
+# ─── Test 5: dead process returns dead state ─────────────────────
+
+spawn(fn()
+  let child = spawn(fn() end)
+  send_after(self(), "check", 50)
+  receive()
+  let info = process_info(child)
+  if info == nil
+    print("test5: nil")
+  else
+    print("test5: state={info.state} reason={info.exit_reason}")
+  end
+end)
+
+# ─── Test 6: invalid pid returns nil ─────────────────────────────
+
+spawn(fn()
+  let info = process_info(9999)
+  print("test6: {info}")
+end)
+
+# ─── Test 7: trap_exit flag reflects process_flag changes ────────
+
+spawn(fn()
+  let info1 = process_info(self())
+  print("test7: before={info1.trap_exit}")
+  process_flag("trap_exit", true)
+  let info2 = process_info(self())
+  print("test7: after={info2.trap_exit}")
+end)

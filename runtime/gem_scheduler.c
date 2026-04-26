@@ -18,6 +18,7 @@
 GemProcess gem_proc_table[GEM_MAX_PROCS];
 int gem_current_pid = -1;
 GemNameEntry *gem_name_registry = NULL;
+GemTimer gem_timers[GEM_MAX_TIMERS];
 
 /* GC-aware stack allocator for minicoro coroutines.
    malloc the stack, then register it as a GC root so Boehm
@@ -222,6 +223,34 @@ void gem_io_yield(int fd, int for_write) {
     mco_yield(proc->coro);
 }
 
+static void gem_fire_timers(void) {
+    int64_t now = gem_now_ms();
+    for (int i = 0; i < GEM_MAX_TIMERS; i++) {
+        if (!gem_timers[i].active) continue;
+        if (now >= gem_timers[i].deadline_ms) {
+            gem_timers[i].active = 0;
+            int pid = gem_timers[i].target_pid;
+            if (pid >= 0 && pid < GEM_MAX_PROCS) {
+                GemProcess *proc = &gem_proc_table[pid];
+                if (proc->state != GEM_PROC_FREE && proc->state != GEM_PROC_DEAD) {
+                    gem_send_msg(pid, gem_timers[i].msg);
+                }
+            }
+        }
+    }
+}
+
+static int64_t gem_earliest_timer_deadline(void) {
+    int64_t earliest = -1;
+    for (int i = 0; i < GEM_MAX_TIMERS; i++) {
+        if (!gem_timers[i].active) continue;
+        if (earliest < 0 || gem_timers[i].deadline_ms < earliest) {
+            earliest = gem_timers[i].deadline_ms;
+        }
+    }
+    return earliest;
+}
+
 void gem_run_scheduler(void) {
     int active = 1;
 
@@ -230,6 +259,8 @@ void gem_run_scheduler(void) {
         int has_ready = 0;
         int has_io_wait = 0;
         int has_msg_wait = 0;
+
+        gem_fire_timers();
 
         for (int i = 0; i < GEM_MAX_PROCS; i++) {
             GemProcess *proc = &gem_proc_table[i];
@@ -304,9 +335,13 @@ void gem_run_scheduler(void) {
             continue;
         }
 
-        /* Only mailbox waiters remain. Check if any have deadlines —
-           if so, sleep until the earliest deadline, then loop. */
-        if (has_msg_wait && !has_io_wait) {
+        /* Check for pending timers — they keep the scheduler alive */
+        int64_t timer_dl = gem_earliest_timer_deadline();
+        if (timer_dl >= 0) active = 1;
+
+        /* Only mailbox waiters (or timers) remain. Check if any have deadlines or
+           there are pending timers — sleep until the earliest, then loop. */
+        if ((has_msg_wait || timer_dl >= 0) && !has_io_wait) {
             int64_t earliest = -1;
             for (int i = 0; i < GEM_MAX_PROCS; i++) {
                 if (gem_proc_table[i].state == GEM_PROC_WAITING &&
@@ -315,6 +350,9 @@ void gem_run_scheduler(void) {
                         earliest = gem_proc_table[i].deadline_ms;
                     }
                 }
+            }
+            if (timer_dl >= 0 && (earliest < 0 || timer_dl < earliest)) {
+                earliest = timer_dl;
             }
             if (earliest < 0) break;  /* true deadlock — no deadlines */
             /* Sleep until earliest deadline */
@@ -326,7 +364,7 @@ void gem_run_scheduler(void) {
                 ts_sleep.tv_nsec = (wait_ms % 1000) * 1000000;
                 nanosleep(&ts_sleep, NULL);
             }
-            /* Loop back — the deadline check above will mark it READY */
+            /* Loop back — the deadline/timer check above will mark it READY */
             continue;
         }
     }
@@ -746,4 +784,113 @@ GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
     proc->state = GEM_PROC_DEAD;
     gem_propagate_exit(pid, reason);
     return gem_bool(1);
+}
+
+/* ─── Timer API ─── */
+
+GemVal gem_send_after_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 3 || args[0].type != VAL_INT || args[2].type != VAL_INT) {
+        gem_error("send_after: expected (pid, msg, delay_ms)");
+    }
+    int pid = (int)args[0].ival;
+    GemVal msg = args[1];
+    int64_t delay_ms = args[2].ival;
+
+    int slot = -1;
+    for (int i = 0; i < GEM_MAX_TIMERS; i++) {
+        if (!gem_timers[i].active) { slot = i; break; }
+    }
+    if (slot < 0) {
+        gem_error("send_after: timer table full");
+        return GEM_NIL;
+    }
+
+    GemVal ref = gem_make_ref();
+    gem_timers[slot].active = 1;
+    gem_timers[slot].ref = ref.rval;
+    gem_timers[slot].target_pid = pid;
+    gem_timers[slot].msg = msg;
+    gem_timers[slot].deadline_ms = gem_now_ms() + delay_ms;
+    return ref;
+}
+
+GemVal gem_cancel_timer_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_REF) {
+        gem_error("cancel_timer: expected ref argument");
+    }
+    int64_t ref = args[0].rval;
+    for (int i = 0; i < GEM_MAX_TIMERS; i++) {
+        if (gem_timers[i].active && gem_timers[i].ref == ref) {
+            gem_timers[i].active = 0;
+            return gem_bool(1);
+        }
+    }
+    return gem_bool(0);
+}
+
+/* ─── Process Introspection ─── */
+
+GemVal gem_process_info_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_INT) {
+        gem_error("process_info: expected pid (int) argument");
+    }
+    int pid = (int)args[0].ival;
+    if (pid < 0 || pid >= GEM_MAX_PROCS) return GEM_NIL;
+
+    GemProcess *proc = &gem_proc_table[pid];
+    if (proc->state == GEM_PROC_FREE) return GEM_NIL;
+
+    GemVal info = gem_table_new();
+
+    /* state */
+    const char *state_str;
+    switch (proc->state) {
+        case GEM_PROC_READY:    state_str = "ready"; break;
+        case GEM_PROC_WAITING:  state_str = "waiting"; break;
+        case GEM_PROC_IO_WAIT:  state_str = "waiting"; break;
+        case GEM_PROC_DEAD:     state_str = "dead"; break;
+        default:                state_str = "free"; break;
+    }
+    gem_table_set(info, gem_string("state"), gem_string(state_str));
+
+    /* mailbox_len */
+    int mlen = 0;
+    GemMsgNode *node = proc->mailbox.head;
+    while (node) { mlen++; node = node->next; }
+    gem_table_set(info, gem_string("mailbox_len"), gem_int(mlen));
+
+    /* links — array of pids */
+    GemVal links = gem_table_new();
+    GemLinkNode *lnode = proc->links;
+    int li = 0;
+    while (lnode) {
+        gem_table_set(links, gem_int(li++), gem_int(lnode->pid));
+        lnode = lnode->next;
+    }
+    gem_table_set(info, gem_string("links"), links);
+
+    /* monitors — array of pids */
+    GemVal monitors = gem_table_new();
+    GemMonitorNode *mnode = proc->monitors;
+    int mi = 0;
+    while (mnode) {
+        gem_table_set(monitors, gem_int(mi++), gem_int(mnode->pid));
+        mnode = mnode->next;
+    }
+    gem_table_set(info, gem_string("monitors"), monitors);
+
+    /* trap_exit */
+    gem_table_set(info, gem_string("trap_exit"), gem_bool(proc->trap_exit));
+
+    /* exit_reason */
+    if (proc->exit_reason) {
+        gem_table_set(info, gem_string("exit_reason"), gem_string(proc->exit_reason));
+    } else {
+        gem_table_set(info, gem_string("exit_reason"), GEM_NIL);
+    }
+
+    return info;
 }

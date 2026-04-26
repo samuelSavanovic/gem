@@ -63,7 +63,7 @@
 
     "builtin": {
       "name": "support.function.builtin.gem",
-      "match": "\\b(print|error|len|type|to_string|push|pcall|keys|str_replace|has_key|substr|chr|ord|buf_new|buf_push|buf_str|spawn|send|receive|monitor|spawn_monitor|register|whereis|time_ms|kill|link|unlink|spawn_link|process_flag|make_ref)\\b(?=\\s*[({])"
+      "match": "\\b(print|error|len|type|to_string|push|pcall|keys|str_replace|has_key|substr|chr|ord|buf_new|buf_push|buf_str|spawn|send|receive|monitor|spawn_monitor|register|whereis|time_ms|kill|link|unlink|spawn_link|process_flag|make_ref|send_after|cancel_timer|process_info)\\b(?=\\s*[({])"
     },
 
     "named-fn-decl": {

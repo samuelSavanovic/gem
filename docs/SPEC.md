@@ -418,6 +418,38 @@ The existing `receive()` function call continues to work unchanged — it always
 
 `time_ms()` returns the current monotonic time in milliseconds (int). Useful for timeouts, benchmarks, and restart intensity tracking.
 
+**Timers**
+
+```
+let ref = send_after(pid, "tick", 1000)
+cancel_timer(ref)
+```
+
+`send_after(pid, msg, delay_ms)` schedules `msg` to be delivered to `pid` after `delay_ms` milliseconds. Returns a unique ref identifying the timer. The timer fires from the scheduler loop, not from the calling process, so it works even if the caller is blocked. If the target process is dead when the timer fires, the message is silently dropped.
+
+`cancel_timer(ref)` cancels a pending timer by ref. Returns `true` if cancelled, `false` if already fired or not found.
+
+Timers are stored in a global fixed-size array (256 slots). An error is raised if the array is full.
+
+**Process Introspection**
+
+```
+let info = process_info(pid)
+# info == {state: "ready", mailbox_len: 0, links: [], monitors: [],
+#          trap_exit: false, exit_reason: nil}
+```
+
+`process_info(pid)` returns a table with metadata about the process:
+
+- `state` — `"ready"`, `"waiting"`, or `"dead"`
+- `mailbox_len` — number of messages in mailbox
+- `links` — array of linked pids
+- `monitors` — array of monitoring pids
+- `trap_exit` — bool
+- `exit_reason` — string or nil
+
+Returns `nil` if the pid is invalid or the slot is free.
+
 **C Interop**
 
 ```
@@ -636,6 +668,12 @@ print(items[0])    # a
 
 `process_flag("trap_exit", bool)` — sets the `trap_exit` flag on the current process. Returns the previous value (bool). When `trap_exit` is `true`, exit signals from linked processes are converted to `{tag: "EXIT", pid: <pid>, reason: <reason>}` messages in the process's mailbox instead of killing the process.
 
+`send_after(pid, msg, delay_ms)` — schedules `msg` to be delivered to `pid` after `delay_ms` milliseconds. Returns a unique ref identifying the timer. The timer fires from the scheduler, not the calling process. Messages to dead processes are silently dropped.
+
+`cancel_timer(ref)` — cancels a pending timer by ref. Returns `true` if cancelled, `false` if already fired or not found.
+
+`process_info(pid)` — returns a table with process metadata: `state`, `mailbox_len`, `links`, `monitors`, `trap_exit`, `exit_reason`. Returns `nil` for invalid/free pids.
+
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
 **Module System (v0.1 — minimal)**
@@ -701,16 +739,18 @@ The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`
 
 The caller provides a module table with callback functions: `init`, `handle_call`, `handle_cast`, and `handle_info`.
 
-- `gen_server.start(module)` — starts a gen_server process running the given module. Returns `{pid: <pid>}`. The module's `init()` is called to produce the initial state.
+- `gen_server.start(module)` — starts a gen_server process running the given module. Returns `{pid: <pid>}`. The module's `init()` is called to produce the initial state. `init` may return a bare value (used as initial state) or `{state: <s>, timeout: <ms>}` to set an initial idle timeout.
 - `gen_server.call(target, msg)` / `gen_server.call(target, msg, timeout_ms)` — sends a synchronous request and waits for a reply. Default timeout is 5000ms. Internally sends `{tag: "call", from: {pid, ref}, msg: <msg>}` to the server, then blocks waiting for a matching `{tag: "gs_reply", ref: <ref>, value: <value>}`. Returns the reply value. Errors on timeout.
 - `gen_server.cast(target, msg)` — sends an asynchronous (fire-and-forget) message. Sends `{tag: "cast", msg: <msg>}` to the server. Returns `nil`.
 - `gen_server.reply(from, value)` — sends a reply to a pending `call`. Used for deferred replies when `handle_call` returns `{noreply: state}` instead of replying immediately. Returns `nil`.
 
 Module callback return values:
 
-- `handle_call(msg, from, state)` — must return `{reply: <value>, state: <new_state>}` to reply immediately, or `{noreply: <new_state>}` to defer the reply (use `gen_server.reply(from, value)` later).
-- `handle_cast(msg, state)` — must return `{state: <new_state>}`.
-- `handle_info(msg, state)` — handles any message not from `call`/`cast` (e.g. DOWN messages, EXIT messages). Must return `{state: <new_state>}`.
+- `handle_call(msg, from, state)` — must return `{reply: <value>, state: <new_state>}` to reply immediately, or `{noreply: <new_state>}` to defer the reply (use `gen_server.reply(from, value)` later). May include `timeout: <ms>` to schedule an idle timeout.
+- `handle_cast(msg, state)` — must return `{state: <new_state>}`. May include `timeout: <ms>`.
+- `handle_info(msg, state)` — handles any message not from `call`/`cast` (e.g. DOWN messages, EXIT messages, `"timeout"`). Must return `{state: <new_state>}`. May include `timeout: <ms>`.
+
+When any callback returns a `timeout` field, a timer is scheduled: after `timeout` milliseconds with no other message, `handle_info` is called with the string `"timeout"` as the message. Each new timeout cancels the previous pending one. Omitting `timeout` (or setting it to `nil`) cancels any pending timeout without scheduling a new one.
 
 ```
 load "std/gen_server"

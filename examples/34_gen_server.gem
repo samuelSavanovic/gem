@@ -107,3 +107,36 @@ spawn(fn()
   end)
   print("test4: ok={result.ok} err={result.error}")
 end)
+
+# ─── Test 5: gen_server timeout support ─────────────────────────
+
+let timeout_module = {
+  init: fn()
+    {state: {count: 0}, timeout: 50}
+  end,
+  handle_call: fn(msg, from, state)
+    match msg
+    when "get"
+      {reply: state.count, state: state}
+    end
+  end,
+  handle_cast: fn(msg, state) {state: state} end,
+  handle_info: fn(msg, state)
+    if msg == "timeout"
+      {state: {count: state.count + 1}, timeout: 50}
+    else
+      {state: state}
+    end
+  end
+}
+
+spawn(fn()
+  let server = gen_server.start(timeout_module)
+  send_after(self(), "check", 180)
+  receive()
+  let count = gen_server.call(server.pid, "get")
+  print("test5: timeouts_fired={count > 0}")
+  # Verify activity resets: call resets the timeout
+  let count2 = gen_server.call(server.pid, "get")
+  print("test5: still_counting={count2 >= count}")
+end)

@@ -1,0 +1,67 @@
+# Timer tests
+
+# ─── Test 1: basic send_after delivers message ──────────────────
+
+spawn(fn()
+  let me = self()
+  let ref = send_after(me, "tick", 50)
+  print("test1: type={type(ref)}")
+  let msg = receive()
+  print("test1: got {msg}")
+end)
+
+# ─── Test 2: cancel_timer prevents delivery ─────────────────────
+
+spawn(fn()
+  let me = self()
+  let ref = send_after(me, "cancelled", 50)
+  let ok = cancel_timer(ref)
+  print("test2: cancelled={ok}")
+  send_after(me, "fallback", 80)
+  let msg = receive()
+  print("test2: got {msg}")
+end)
+
+# ─── Test 3: cancel non-existent/already-fired returns false ────
+
+spawn(fn()
+  let ref = make_ref()
+  let ok = cancel_timer(ref)
+  print("test3: cancel_bogus={ok}")
+end)
+
+# ─── Test 4: multiple timers fire in deadline order ──────────────
+
+spawn(fn()
+  let me = self()
+  send_after(me, "third", 150)
+  send_after(me, "first", 50)
+  send_after(me, "second", 100)
+  let m1 = receive()
+  let m2 = receive()
+  let m3 = receive()
+  print("test4: {m1} {m2} {m3}")
+end)
+
+# ─── Test 5: timer to dead process — no crash ───────────────────
+
+spawn(fn()
+  let child = spawn(fn()
+    # exits immediately
+  end)
+  send_after(child, "ghost", 30)
+  send_after(self(), "done", 100)
+  let msg = receive()
+  print("test5: {msg}")
+end)
+
+# ─── Test 6: timer ref uniqueness ───────────────────────────────
+
+spawn(fn()
+  let me = self()
+  let r1 = send_after(me, "a", 50)
+  let r2 = send_after(me, "b", 50)
+  print("test6: unique={r1 != r2}")
+  receive()
+  receive()
+end)

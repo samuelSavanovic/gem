@@ -175,7 +175,10 @@ fn make_codegen(source_name)
     unlink: "gem_unlink_builtin",
     spawn_link: "gem_spawn_link_builtin",
     process_flag: "gem_process_flag_builtin",
-    make_ref: "gem_make_ref_builtin"
+    make_ref: "gem_make_ref_builtin",
+    send_after: "gem_send_after_builtin",
+    cancel_timer: "gem_cancel_timer_builtin",
+    process_info: "gem_process_info_builtin"
   }
   let builtins = {}
   for k, _ in builtin_fns
