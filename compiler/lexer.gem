@@ -110,6 +110,8 @@ fn tokenize(source)
   let interp_brace = {}
   let CR = chr(13)
   let NUL = chr(0)
+  let in_triple_dq = false
+  let triple_dq_indent = 0
 
   while pos < length
     let ch = source[pos]
@@ -183,6 +185,129 @@ fn tokenize(source)
     # Strings
     if ch == "\""
       pos += 1
+
+      # Triple-quoted double string: """..."""  (with interpolation)
+      if pos + 1 < length and source[pos] == "\"" and source[pos + 1] == "\""
+        pos += 2
+        # Skip optional whitespace on the opening line, then require a newline
+        while pos < length and (source[pos] == " " or source[pos] == "\t")
+          pos += 1
+        end
+        if pos >= length or source[pos] != "\n"
+          error("triple-quoted string must be followed by a newline at line {line}")
+        end
+        line += 1
+        pos += 1
+
+        # Pre-scan: find the indentation of the closing """
+        let tq_scan = pos
+        let tq_bi = 0
+        let tq_found = false
+        while tq_scan < length and not tq_found
+          let tq_ind = 0
+          while tq_scan < length and source[tq_scan] == " "
+            tq_ind += 1
+            tq_scan += 1
+          end
+          if tq_scan + 2 < length and source[tq_scan] == "\"" and source[tq_scan + 1] == "\"" and source[tq_scan + 2] == "\""
+            tq_bi = tq_ind
+            tq_found = true
+          else
+            while tq_scan < length and source[tq_scan] != "\n"
+              tq_scan += 1
+            end
+            if tq_scan < length
+              tq_scan += 1
+            end
+          end
+        end
+        if not tq_found
+          error("unterminated triple-quoted string at line {line}")
+        end
+        triple_dq_indent = tq_bi
+
+        # Real scan: collect content with dedent and interpolation
+        let val = ""
+        let hit_interp = false
+        let tq_als = true
+
+        while pos < length
+          if tq_als
+            tq_als = false
+            let tq_skip = 0
+            while tq_skip < triple_dq_indent and pos < length and source[pos] == " "
+              pos += 1
+              tq_skip += 1
+            end
+            # Check for closing """
+            if pos + 2 < length and source[pos] == "\"" and source[pos + 1] == "\"" and source[pos + 2] == "\""
+              pos += 3
+              # Strip the trailing newline that precedes the closing delimiter
+              if len(val) > 0 and val[len(val) - 1] == "\n"
+                val = substr(val, 0, len(val) - 1)
+              end
+              break
+            end
+          end
+
+          let tqc = source[pos]
+          if tqc == "\n"
+            val = val + "\n"
+            line += 1
+            pos += 1
+            tq_als = true
+            continue
+          end
+          if tqc == "\\"
+            pos += 1
+            if pos >= length
+              error("unterminated string escape at line {line}")
+            end
+            let tqe = source[pos]
+            if tqe == "n"
+              val = val + "\n"
+            elif tqe == "r"
+              val = val + CR
+            elif tqe == "t"
+              val = val + "\t"
+            elif tqe == "\\"
+              val = val + "\\"
+            elif tqe == "\""
+              val = val + "\""
+            elif tqe == "\{"
+              val = val + "\{"
+            elif tqe == "}"
+              val = val + "}"
+            elif tqe == "0"
+              val = val + NUL
+            else
+              val = val + "\\" + tqe
+            end
+            pos += 1
+            continue
+          end
+          if tqc == "\{"
+            push(tokens, {type: "INTERP_START", value: "", line: line})
+            push(tokens, {type: "STRING", value: val, line: line})
+            val = ""
+            pos += 1
+            interp_brace[interp_depth] = 0
+            interp_depth += 1
+            in_triple_dq = true
+            hit_interp = true
+            break
+          end
+          val = val + tqc
+          pos += 1
+        end
+
+        if not hit_interp
+          push(tokens, {type: "STRING", value: val, line: line})
+        end
+        continue
+      end
+
+      # Regular double-quoted string (unchanged)
       let val = ""
       let hit_interp = false
       while pos < length and source[pos] != "\""
@@ -240,6 +365,108 @@ fn tokenize(source)
     # Single-quoted strings (no interpolation)
     if ch == "'"
       pos += 1
+
+      # Triple-quoted single string: '''...'''  (no interpolation)
+      if pos + 1 < length and source[pos] == "'" and source[pos + 1] == "'"
+        pos += 2
+        # Skip optional whitespace on the opening line, then require a newline
+        while pos < length and (source[pos] == " " or source[pos] == "\t")
+          pos += 1
+        end
+        if pos >= length or source[pos] != "\n"
+          error("triple-quoted string must be followed by a newline at line {line}")
+        end
+        line += 1
+        pos += 1
+
+        # Pre-scan: find the indentation of the closing '''
+        let sq_scan = pos
+        let sq_bi = 0
+        let sq_found = false
+        while sq_scan < length and not sq_found
+          let sq_ind = 0
+          while sq_scan < length and source[sq_scan] == " "
+            sq_ind += 1
+            sq_scan += 1
+          end
+          if sq_scan + 2 < length and source[sq_scan] == "'" and source[sq_scan + 1] == "'" and source[sq_scan + 2] == "'"
+            sq_bi = sq_ind
+            sq_found = true
+          else
+            while sq_scan < length and source[sq_scan] != "\n"
+              sq_scan += 1
+            end
+            if sq_scan < length
+              sq_scan += 1
+            end
+          end
+        end
+        if not sq_found
+          error("unterminated triple-quoted string at line {line}")
+        end
+
+        # Real scan: collect content with dedent (no interpolation)
+        let val = ""
+        let sq_als = true
+
+        while pos < length
+          if sq_als
+            sq_als = false
+            let sq_skip = 0
+            while sq_skip < sq_bi and pos < length and source[pos] == " "
+              pos += 1
+              sq_skip += 1
+            end
+            # Check for closing '''
+            if pos + 2 < length and source[pos] == "'" and source[pos + 1] == "'" and source[pos + 2] == "'"
+              pos += 3
+              # Strip the trailing newline that precedes the closing delimiter
+              if len(val) > 0 and val[len(val) - 1] == "\n"
+                val = substr(val, 0, len(val) - 1)
+              end
+              break
+            end
+          end
+
+          let sqc = source[pos]
+          if sqc == "\n"
+            val = val + "\n"
+            line += 1
+            pos += 1
+            sq_als = true
+            continue
+          end
+          if sqc == "\\"
+            pos += 1
+            if pos >= length
+              error("unterminated string escape at line {line}")
+            end
+            let sqe = source[pos]
+            if sqe == "n"
+              val = val + "\n"
+            elif sqe == "r"
+              val = val + CR
+            elif sqe == "t"
+              val = val + "\t"
+            elif sqe == "\\"
+              val = val + "\\"
+            elif sqe == "'"
+              val = val + "'"
+            else
+              val = val + "\\" + sqe
+            end
+            pos += 1
+            continue
+          end
+          val = val + sqc
+          pos += 1
+        end
+
+        push(tokens, {type: "STRING", value: val, line: line})
+        continue
+      end
+
+      # Regular single-quoted string (unchanged)
       let val = ""
       while pos < length and source[pos] != "'"
         if source[pos] == "\\"
@@ -372,6 +599,93 @@ fn tokenize(source)
       # Close interpolation expression, resume string scanning
       interp_depth -= 1
       pos += 1
+
+      # Resume inside a triple-double-quoted string
+      if in_triple_dq
+        in_triple_dq = false
+        let val = ""
+        let hit_interp = false
+        let tqr_als = false
+
+        while pos < length
+          if tqr_als
+            tqr_als = false
+            let tqr_skip = 0
+            while tqr_skip < triple_dq_indent and pos < length and source[pos] == " "
+              pos += 1
+              tqr_skip += 1
+            end
+            # Check for closing """
+            if pos + 2 < length and source[pos] == "\"" and source[pos + 1] == "\"" and source[pos + 2] == "\""
+              pos += 3
+              if len(val) > 0 and val[len(val) - 1] == "\n"
+                val = substr(val, 0, len(val) - 1)
+              end
+              break
+            end
+          end
+
+          let tqrc = source[pos]
+          if tqrc == "\n"
+            val = val + "\n"
+            line += 1
+            pos += 1
+            tqr_als = true
+            continue
+          end
+          if tqrc == "\\"
+            pos += 1
+            if pos >= length
+              error("unterminated string escape at line {line}")
+            end
+            let tqre = source[pos]
+            if tqre == "n"
+              val = val + "\n"
+            elif tqre == "r"
+              val = val + CR
+            elif tqre == "t"
+              val = val + "\t"
+            elif tqre == "\\"
+              val = val + "\\"
+            elif tqre == "\""
+              val = val + "\""
+            elif tqre == "\{"
+              val = val + "\{"
+            elif tqre == "}"
+              val = val + "}"
+            elif tqre == "0"
+              val = val + NUL
+            else
+              val = val + "\\" + tqre
+            end
+            pos += 1
+            continue
+          end
+          if tqrc == "\{"
+            push(tokens, {type: "STRING", value: val, line: line})
+            val = ""
+            pos += 1
+            interp_brace[interp_depth] = 0
+            interp_depth += 1
+            in_triple_dq = true
+            hit_interp = true
+            break
+          end
+          val = val + tqrc
+          pos += 1
+        end
+
+        if not hit_interp
+          if pos >= length
+            error("unterminated triple-quoted string interpolation at line {line}")
+          end
+          push(tokens, {type: "STRING", value: val, line: line})
+          push(tokens, {type: "INTERP_END", value: "", line: line})
+        end
+        continue
+      end
+
+      # Resume inside a regular double-quoted string
       let val = ""
       let hit_interp = false
       while pos < length and source[pos] != "\""

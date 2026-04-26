@@ -120,7 +120,17 @@ end
 let router = create_router()
 
 router.add("GET", "/", fn(req)
-  response_html("<h1>Gem HTTP Server</h1><p>It works!</p>")
+  let html = """
+    <!DOCTYPE html>
+    <html>
+      <head><title>Gem HTTP Server</title></head>
+      <body>
+        <h1>Gem HTTP Server</h1>
+        <p>It works!</p>
+      </body>
+    </html>
+    """
+  response_html(html)
 end)
 
 router.add("GET", "/hello", fn(req)
@@ -128,7 +138,13 @@ router.add("GET", "/hello", fn(req)
 end)
 
 router.add("GET", "/json", fn(req)
-  response_json('{"status":"ok","language":"gem"}')
+  let body = '''
+    {
+      "status": "ok",
+      "language": "gem"
+    }
+    '''
+  response_json(body)
 end)
 
 router.add("POST", "/echo", fn(req)

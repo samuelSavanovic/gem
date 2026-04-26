@@ -301,3 +301,18 @@ false
 false
 true
 false
+hello
+world
+line one
+line two
+base
+  indented
+base
+{not interpolated}
+tab:	here
+quote:"fine"
+it's fine
+say "hello"
+sum: 7
+empty: ''
+X and Y

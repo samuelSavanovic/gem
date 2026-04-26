@@ -1,0 +1,70 @@
+# Triple-quoted string tests
+
+# Basic """ multi-line with interpolation
+let name = "world"
+let s1 = """
+  hello
+  {name}
+  """
+print(s1)
+
+# Basic ''' multi-line without interpolation
+let s2 = '''
+  line one
+  line two
+  '''
+print(s2)
+
+# Dedent: extra indentation in content is preserved
+let s3 = """
+  base
+    indented
+  base
+  """
+print(s3)
+
+# No interpolation in ''' (braces are literal)
+let s4 = '''
+  {not interpolated}
+  '''
+print(s4)
+
+# Escape sequences in """
+let s5 = """
+  tab:\there
+  quote:"fine"
+  """
+print(s5)
+
+# Single quotes inside """ without escaping
+let s6 = """
+  it's fine
+  """
+print(s6)
+
+# Double quotes inside ''' without escaping
+let s7 = '''
+  say "hello"
+  '''
+print(s7)
+
+# Interpolation with expression
+let a = 3
+let b = 4
+let s8 = """
+  sum: {a + b}
+  """
+print(s8)
+
+# Empty triple-quoted string
+let s9 = """
+  """
+print("empty: '{s9}'")
+
+# Multiple interpolations on one line
+let x = "X"
+let y = "Y"
+let s10 = """
+  {x} and {y}
+  """
+print(s10)

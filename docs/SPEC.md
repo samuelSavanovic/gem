@@ -333,6 +333,43 @@ print("it's fine")                 # it's fine
 print('say "hello"')               # say "hello"
 ```
 
+**Multi-line Strings**
+
+Triple-quoted strings span multiple lines. `"""` supports interpolation and all escape sequences like regular `"` strings. `'''` has no interpolation and minimal escapes like regular `'` strings.
+
+```
+let html = """
+  <html>
+    <body>{title}</body>
+  </html>
+  """
+
+let json = '''
+  {"key": "value",
+   "count": 42}
+  '''
+```
+
+Rules:
+- The opening `"""` or `'''` must be immediately followed by a newline (optional trailing whitespace before the newline is allowed). Content starts on the next line.
+- The closing `"""` or `'''` must appear on its own line with only leading whitespace before it.
+- **Dedent**: the indentation of the closing delimiter (number of leading spaces) is the base indentation. That many leading spaces are stripped from every content line. Extra indentation beyond the base is preserved.
+- The final newline before the closing delimiter is stripped, so the resulting string does not end with a trailing `\n`.
+- `"""` supports `{expr}` interpolation and escape sequences identical to regular `"` strings.
+- `'''` has no interpolation; `{` is a literal character. Escape sequences are identical to regular `'` strings.
+
+Example with dedent:
+
+```
+fn render()
+  let s = """
+    hello
+      world
+    """
+  # s == "hello\n  world"  — 4 spaces stripped from each line (indent of closing """)
+end
+```
+
 **String Interpolation**
 
 Expressions inside `{...}` in double-quoted string literals are evaluated and auto-coerced to strings via `to_string`:

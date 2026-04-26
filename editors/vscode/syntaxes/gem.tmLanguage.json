@@ -5,6 +5,8 @@
   "patterns": [
     { "include": "#comment" },
     { "include": "#extern-decl" },
+    { "include": "#string-triple-double" },
+    { "include": "#string-triple-single" },
     { "include": "#string-double" },
     { "include": "#string-single" },
     { "include": "#number" },
@@ -135,6 +137,37 @@
       }
     },
 
+    "string-triple-double": {
+      "comment": "Triple-double-quoted multi-line string with interpolation",
+      "name": "string.quoted.triple.double.gem",
+      "begin": "\"\"\"",
+      "end": "\"\"\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.gem" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.gem" } },
+      "patterns": [
+        {
+          "name": "constant.character.escape.gem",
+          "match": "\\\\[nrt0\\\\\"{}]"
+        },
+        { "include": "#interpolation" }
+      ]
+    },
+
+    "string-triple-single": {
+      "comment": "Triple-single-quoted multi-line string — no interpolation",
+      "name": "string.quoted.triple.single.gem",
+      "begin": "'''",
+      "end": "'''",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.gem" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.gem" } },
+      "patterns": [
+        {
+          "name": "constant.character.escape.gem",
+          "match": "\\\\[nrt\\\\']"
+        }
+      ]
+    },
+
     "string-double": {
       "comment": "Double-quoted string with interpolation",
       "name": "string.quoted.double.gem",
@@ -160,6 +193,8 @@
       "contentName": "meta.embedded.line.gem",
       "patterns": [
         { "include": "#comment" },
+        { "include": "#string-triple-double" },
+        { "include": "#string-triple-single" },
         { "include": "#string-double" },
         { "include": "#string-single" },
         { "include": "#number" },
