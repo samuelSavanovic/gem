@@ -1085,6 +1085,7 @@ fn make_codegen(source_name)
     let p = pad_for(indent)
     let cond_r = compile_expr(node.cond)
     let out = "{p}while (1) \{\n"
+    out = out + "{p}    gem_yield_check();\n"
     if cond_r.setup != ""
       out = out + str_replace(cond_r.setup, "    ", "{p}    ")
     end

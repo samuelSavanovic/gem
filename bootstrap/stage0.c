@@ -777,6 +777,7 @@ static GemVal gem_fn_str_to_int(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_limit_2 = gem_len_fn(NULL, _t93, 1);
 #line 56 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         if (!gem_truthy(gem_lt(gem_v__for_i_2, gem_v__for_limit_2))) break;
 #line 56 "compiler/main.gem"
         GemVal gem_v_i = gem_v__for_i_2;
@@ -803,6 +804,7 @@ static GemVal gem_fn_contains_dot(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_limit_3 = gem_len_fn(NULL, _t96, 1);
 #line 65 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         if (!gem_truthy(gem_lt(gem_v__for_i_3, gem_v__for_limit_3))) break;
 #line 65 "compiler/main.gem"
         GemVal gem_v_i = gem_v__for_i_3;
@@ -1027,6 +1029,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
     GemVal gem_v_triple_dq_indent = gem_int(0);
 #line 145 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) break;
 #line 146 "compiler/main.gem"
         GemVal gem_v_ch = gem_table_get(gem_v_source, gem_v_pos);
@@ -1046,6 +1049,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
         if (gem_truthy(gem_eq(gem_v_ch, gem_string("#")))) {
 #line 156 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t124;
                 if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) {
                                 _t124 = gem_lt(gem_v_pos, gem_v_length);
@@ -1101,6 +1105,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
             gem_v_pos = gem_add(gem_v_pos, gem_int(1));
 #line 176 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) break;
 #line 177 "compiler/main.gem"
                 GemVal gem_v_c2 = gem_table_get(gem_v_source, gem_v_pos);
@@ -1132,6 +1137,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                         if (gem_truthy(gem_eq(gem_v_c2, gem_string("#")))) {
 #line 184 "compiler/main.gem"
                             while (1) {
+                                gem_yield_check();
                                 GemVal _t134;
                                 if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) {
                                                                 _t134 = gem_lt(gem_v_pos, gem_v_length);
@@ -1157,6 +1163,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
             GemVal gem_v_val = gem_string("");
 #line 197 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t137;
                 if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) {
                                 _t137 = gem_lt(gem_v_pos, gem_v_length);
@@ -1186,6 +1193,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                 gem_v_pos = gem_add(gem_v_pos, gem_int(1));
 #line 205 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     GemVal _t140;
                     if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) {
                                         _t140 = gem_lt(gem_v_pos, gem_v_length);
@@ -1231,6 +1239,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                 gem_v_pos = gem_add(gem_v_pos, gem_int(2));
 #line 222 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     GemVal _t146;
                     if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) {
                                         _t146 = gem_lt(gem_v_pos, gem_v_length);
@@ -1272,6 +1281,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                 GemVal gem_v_tq_found = gem_bool(0);
 #line 235 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     GemVal _t150;
                     if (!gem_truthy(gem_lt(gem_v_tq_scan, gem_v_length))) {
                                         _t150 = gem_lt(gem_v_tq_scan, gem_v_length);
@@ -1283,6 +1293,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                     GemVal gem_v_tq_ind = gem_int(0);
 #line 237 "compiler/main.gem"
                     while (1) {
+                        gem_yield_check();
                         GemVal _t151;
                         if (!gem_truthy(gem_lt(gem_v_tq_scan, gem_v_length))) {
                                                 _t151 = gem_lt(gem_v_tq_scan, gem_v_length);
@@ -1322,6 +1333,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                     } else {
 #line 245 "compiler/main.gem"
                         while (1) {
+                            gem_yield_check();
                             GemVal _t155;
                             if (!gem_truthy(gem_lt(gem_v_tq_scan, gem_v_length))) {
                                                         _t155 = gem_lt(gem_v_tq_scan, gem_v_length);
@@ -1356,6 +1368,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                 GemVal gem_v_tq_als = gem_bool(1);
 #line 263 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) break;
 #line 264 "compiler/main.gem"
                     if (gem_truthy(gem_v_tq_als)) {
@@ -1365,6 +1378,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                         GemVal gem_v_tq_skip = gem_int(0);
 #line 267 "compiler/main.gem"
                         while (1) {
+                            gem_yield_check();
                             GemVal _t158;
                             if (!gem_truthy(gem_lt(gem_v_tq_skip, gem_v_triple_dq_indent))) {
                                                         _t158 = gem_lt(gem_v_tq_skip, gem_v_triple_dq_indent);
@@ -1518,6 +1532,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
             GemVal gem_v_hit_interp = gem_bool(0);
 #line 329 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t177;
                 if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) {
                                 _t177 = gem_lt(gem_v_pos, gem_v_length);
@@ -1629,6 +1644,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                 gem_v_pos = gem_add(gem_v_pos, gem_int(2));
 #line 376 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     GemVal _t192;
                     if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) {
                                         _t192 = gem_lt(gem_v_pos, gem_v_length);
@@ -1670,6 +1686,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                 GemVal gem_v_sq_found = gem_bool(0);
 #line 389 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     GemVal _t196;
                     if (!gem_truthy(gem_lt(gem_v_sq_scan, gem_v_length))) {
                                         _t196 = gem_lt(gem_v_sq_scan, gem_v_length);
@@ -1681,6 +1698,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                     GemVal gem_v_sq_ind = gem_int(0);
 #line 391 "compiler/main.gem"
                     while (1) {
+                        gem_yield_check();
                         GemVal _t197;
                         if (!gem_truthy(gem_lt(gem_v_sq_scan, gem_v_length))) {
                                                 _t197 = gem_lt(gem_v_sq_scan, gem_v_length);
@@ -1720,6 +1738,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                     } else {
 #line 399 "compiler/main.gem"
                         while (1) {
+                            gem_yield_check();
                             GemVal _t201;
                             if (!gem_truthy(gem_lt(gem_v_sq_scan, gem_v_length))) {
                                                         _t201 = gem_lt(gem_v_sq_scan, gem_v_length);
@@ -1750,6 +1769,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                 GemVal gem_v_sq_als = gem_bool(1);
 #line 415 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) break;
 #line 416 "compiler/main.gem"
                     if (gem_truthy(gem_v_sq_als)) {
@@ -1759,6 +1779,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                         GemVal gem_v_sq_skip = gem_int(0);
 #line 419 "compiler/main.gem"
                         while (1) {
+                            gem_yield_check();
                             GemVal _t204;
                             if (!gem_truthy(gem_lt(gem_v_sq_skip, gem_v_sq_bi))) {
                                                         _t204 = gem_lt(gem_v_sq_skip, gem_v_sq_bi);
@@ -1877,6 +1898,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
             GemVal gem_v_val = gem_string("");
 #line 467 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t219;
                 if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) {
                                 _t219 = gem_lt(gem_v_pos, gem_v_length);
@@ -1942,6 +1964,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
             GemVal gem_v_val = gem_string("");
 #line 497 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t229;
                 if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) {
                                 _t229 = gem_lt(gem_v_pos, gem_v_length);
@@ -2280,6 +2303,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                 GemVal gem_v_tqr_als = gem_bool(0);
 #line 599 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) break;
 #line 600 "compiler/main.gem"
                     if (gem_truthy(gem_v_tqr_als)) {
@@ -2289,6 +2313,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
                         GemVal gem_v_tqr_skip = gem_int(0);
 #line 603 "compiler/main.gem"
                         while (1) {
+                            gem_yield_check();
                             GemVal _t278;
                             if (!gem_truthy(gem_lt(gem_v_tqr_skip, gem_v_triple_dq_indent))) {
                                                         _t278 = gem_lt(gem_v_tqr_skip, gem_v_triple_dq_indent);
@@ -2449,6 +2474,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
             GemVal gem_v_hit_interp = gem_bool(0);
 #line 667 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t299;
                 if (!gem_truthy(gem_lt(gem_v_pos, gem_v_length))) {
                                 _t299 = gem_lt(gem_v_pos, gem_v_length);
@@ -2789,6 +2815,7 @@ static GemVal _anon_6(void *_env, GemVal *args, int argc) {
     gem_push_frame("_anon_6", "compiler/main.gem", 0);
 #line 53 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t358 = gem_table_get((*gem_v_tokens), (*gem_v_pos));
         if (!gem_truthy(gem_eq(gem_table_get(_t358, gem_string("type")), gem_string("NEWLINE")))) break;
 #line 54 "compiler/main.gem"
@@ -2818,6 +2845,7 @@ static GemVal _anon_7(void *_env, GemVal *args, int argc) {
     GemVal gem_v_block_param = GEM_NIL;
 #line 69 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t361 = (*gem_v_peek);
         GemVal _t362 = _t361.fn(_t361.env, NULL, 0);
         GemVal _t365;
@@ -2922,6 +2950,7 @@ static GemVal _anon_8(void *_env, GemVal *args, int argc) {
     (void)(_t399.fn(_t399.env, NULL, 0));
 #line 110 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t400 = (*gem_v_peek);
         GemVal _t401 = _t400.fn(_t400.env, NULL, 0);
         GemVal _t404;
@@ -2998,6 +3027,7 @@ static GemVal _anon_9(void *_env, GemVal *args, int argc) {
     (void)(_t422.fn(_t422.env, NULL, 0));
 #line 123 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t423 = (*gem_v_peek);
         GemVal _t424 = _t423.fn(_t423.env, NULL, 0);
         GemVal _t426;
@@ -3100,6 +3130,7 @@ static GemVal _anon_10(void *_env, GemVal *args, int argc) {
         (void)(_t453.fn(_t453.env, NULL, 0));
 #line 156 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             GemVal _t454 = (*gem_v_peek);
             GemVal _t455 = _t454.fn(_t454.env, NULL, 0);
             if (!gem_truthy(gem_neq(gem_table_get(_t455, gem_string("type")), gem_string("INTERP_END")))) break;
@@ -3225,6 +3256,7 @@ static GemVal _anon_10(void *_env, GemVal *args, int argc) {
         GemVal gem_v_entries = _t499;
 #line 206 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             GemVal _t500 = (*gem_v_peek);
             GemVal _t501 = _t500.fn(_t500.env, NULL, 0);
             if (!gem_truthy(gem_neq(gem_table_get(_t501, gem_string("type")), gem_string("}")))) break;
@@ -3307,6 +3339,7 @@ static GemVal _anon_10(void *_env, GemVal *args, int argc) {
         GemVal gem_v_elements = _t532;
 #line 234 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             GemVal _t533 = (*gem_v_peek);
             GemVal _t534 = _t533.fn(_t533.env, NULL, 0);
             if (!gem_truthy(gem_neq(gem_table_get(_t534, gem_string("type")), gem_string("]")))) break;
@@ -3411,6 +3444,7 @@ static GemVal _anon_11(void *_env, GemVal *args, int argc) {
     GemVal gem_v_node = _t564.fn(_t564.env, NULL, 0);
 #line 267 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         if (!gem_truthy(gem_bool(1))) break;
 #line 269 "compiler/main.gem"
     GemVal _t565 = (*gem_v_peek);
@@ -3439,6 +3473,7 @@ static GemVal _anon_11(void *_env, GemVal *args, int argc) {
                 (void)(gem_push_fn(NULL, _t575, 2));
 #line 276 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     GemVal _t576 = (*gem_v_peek);
                     GemVal _t577 = _t576.fn(_t576.env, NULL, 0);
                     if (!gem_truthy(gem_eq(gem_table_get(_t577, gem_string("type")), gem_string(",")))) break;
@@ -3719,6 +3754,7 @@ static GemVal _anon_13(void *_env, GemVal *args, int argc) {
     GemVal gem_v_left = _t664.fn(_t664.env, NULL, 0);
 #line 381 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t665 = (*gem_v_peek);
         GemVal _t666 = _t665.fn(_t665.env, NULL, 0);
         GemVal _t669;
@@ -3770,6 +3806,7 @@ static GemVal _anon_14(void *_env, GemVal *args, int argc) {
     GemVal gem_v_left = _t679.fn(_t679.env, NULL, 0);
 #line 392 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t680 = (*gem_v_peek);
         GemVal _t681 = _t680.fn(_t680.env, NULL, 0);
         GemVal _t684;
@@ -3813,6 +3850,7 @@ static GemVal _anon_15(void *_env, GemVal *args, int argc) {
     GemVal gem_v_left = _t691.fn(_t691.env, NULL, 0);
 #line 403 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t692 = (*gem_v_peek);
         GemVal _t693 = _t692.fn(_t692.env, NULL, 0);
         GemVal _t696;
@@ -3930,6 +3968,7 @@ static GemVal _anon_17(void *_env, GemVal *args, int argc) {
     GemVal gem_v_left = _t727.fn(_t727.env, NULL, 0);
 #line 423 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t728 = (*gem_v_peek);
         GemVal _t729 = _t728.fn(_t728.env, NULL, 0);
         if (!gem_truthy(gem_eq(gem_table_get(_t729, gem_string("type")), gem_string("and")))) break;
@@ -3964,6 +4003,7 @@ static GemVal _anon_18(void *_env, GemVal *args, int argc) {
     GemVal gem_v_left = _t735.fn(_t735.env, NULL, 0);
 #line 434 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t736 = (*gem_v_peek);
         GemVal _t737 = _t736.fn(_t736.env, NULL, 0);
         if (!gem_truthy(gem_eq(gem_table_get(_t737, gem_string("type")), gem_string("or")))) break;
@@ -4133,6 +4173,7 @@ static GemVal _anon_21(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_limit_1 = gem_len_fn(NULL, _t795, 1);
 #line 488 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         if (!gem_truthy(gem_lt(gem_v__for_i_1, gem_v__for_limit_1))) break;
 #line 488 "compiler/main.gem"
         GemVal gem_v_i = gem_v__for_i_1;
@@ -4195,6 +4236,7 @@ static GemVal _anon_20(void *_env, GemVal *args, int argc) {
         GemVal gem_v_bindings = _t808;
 #line 501 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             GemVal _t809 = (*gem_v_peek);
             GemVal _t810 = _t809.fn(_t809.env, NULL, 0);
             if (!gem_truthy(gem_neq(gem_table_get(_t810, gem_string("type")), gem_string("}")))) break;
@@ -4279,6 +4321,7 @@ static GemVal _anon_20(void *_env, GemVal *args, int argc) {
                 GemVal gem_v__for_i_2 = gem_int(0);
 #line 522 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     GemVal _t842[] = {gem_v__for_items_2};
                     if (!gem_truthy(gem_lt(gem_v__for_i_2, gem_len_fn(NULL, _t842, 1)))) break;
 #line 522 "compiler/main.gem"
@@ -4341,6 +4384,7 @@ static GemVal _anon_20(void *_env, GemVal *args, int argc) {
         GemVal gem_v_idx = gem_int(0);
 #line 545 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             GemVal _t861 = (*gem_v_peek);
             GemVal _t862 = _t861.fn(_t861.env, NULL, 0);
             if (!gem_truthy(gem_neq(gem_table_get(_t862, gem_string("type")), gem_string("]")))) break;
@@ -4403,6 +4447,7 @@ static GemVal _anon_20(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_limit_4 = gem_len_fn(NULL, _t888, 1);
 #line 559 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             if (!gem_truthy(gem_lt(gem_v__for_i_4, gem_v__for_limit_4))) break;
 #line 559 "compiler/main.gem"
             GemVal gem_v_i = gem_v__for_i_4;
@@ -4434,6 +4479,7 @@ static GemVal _anon_20(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_i_3 = gem_int(0);
 #line 564 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t897[] = {gem_v__for_items_3};
                 if (!gem_truthy(gem_lt(gem_v__for_i_3, gem_len_fn(NULL, _t897, 1)))) break;
 #line 564 "compiler/main.gem"
@@ -4647,6 +4693,7 @@ static GemVal _anon_22(void *_env, GemVal *args, int argc) {
             (void)(_t968.fn(_t968.env, NULL, 0));
 #line 623 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t969 = (*gem_v_peek);
                 GemVal _t970 = _t969.fn(_t969.env, NULL, 0);
                 if (!gem_truthy(gem_neq(gem_table_get(_t970, gem_string("type")), gem_string("}")))) break;
@@ -4711,6 +4758,7 @@ static GemVal _anon_22(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_5 = gem_len_fn(NULL, _t990, 1);
 #line 644 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_5, gem_v__for_limit_5))) break;
 #line 644 "compiler/main.gem"
                 GemVal gem_v_di = gem_v__for_i_5;
@@ -4747,6 +4795,7 @@ static GemVal _anon_22(void *_env, GemVal *args, int argc) {
             (void)(_t1001.fn(_t1001.env, NULL, 0));
 #line 655 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t1002 = (*gem_v_peek);
                 GemVal _t1003 = _t1002.fn(_t1002.env, NULL, 0);
                 if (!gem_truthy(gem_neq(gem_table_get(_t1003, gem_string("type")), gem_string("]")))) break;
@@ -4799,6 +4848,7 @@ static GemVal _anon_22(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_6 = gem_len_fn(NULL, _t1021, 1);
 #line 669 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_6, gem_v__for_limit_6))) break;
 #line 669 "compiler/main.gem"
                 GemVal gem_v_di = gem_v__for_i_6;
@@ -5080,6 +5130,7 @@ static GemVal _anon_22(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_7 = gem_len_fn(NULL, _t1136, 1);
 #line 752 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_7, gem_v__for_limit_7))) break;
 #line 752 "compiler/main.gem"
                 GemVal gem_v_bi = gem_v__for_i_7;
@@ -5171,6 +5222,7 @@ static GemVal _anon_22(void *_env, GemVal *args, int argc) {
                 GemVal gem_v__for_limit_8 = gem_len_fn(NULL, _t1176, 1);
 #line 778 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     if (!gem_truthy(gem_lt(gem_v__for_i_8, gem_v__for_limit_8))) break;
 #line 778 "compiler/main.gem"
                     GemVal gem_v_bi = gem_v__for_i_8;
@@ -5260,6 +5312,7 @@ static GemVal _anon_22(void *_env, GemVal *args, int argc) {
                     GemVal gem_v__for_limit_9 = gem_len_fn(NULL, _t1212, 1);
 #line 805 "compiler/main.gem"
                     while (1) {
+                        gem_yield_check();
                         if (!gem_truthy(gem_lt(gem_v__for_i_9, gem_v__for_limit_9))) break;
 #line 805 "compiler/main.gem"
                         GemVal gem_v_bi = gem_v__for_i_9;
@@ -5328,6 +5381,7 @@ static GemVal _anon_22(void *_env, GemVal *args, int argc) {
         GemVal gem_v_whens = _t1234;
 #line 833 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             GemVal _t1235 = (*gem_v_peek);
             GemVal _t1236 = _t1235.fn(_t1235.env, NULL, 0);
             if (!gem_truthy(gem_eq(gem_table_get(_t1236, gem_string("type")), gem_string("when")))) break;
@@ -5605,6 +5659,7 @@ static GemVal _anon_22(void *_env, GemVal *args, int argc) {
                 (void)(gem_push_fn(NULL, _t1336, 2));
 #line 907 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     GemVal _t1337 = (*gem_v_peek);
                     GemVal _t1338 = _t1337.fn(_t1337.env, NULL, 0);
                     if (!gem_truthy(gem_eq(gem_table_get(_t1338, gem_string("type")), gem_string(",")))) break;
@@ -5705,6 +5760,7 @@ static GemVal _anon_22(void *_env, GemVal *args, int argc) {
         GemVal gem_v_rla = gem_int(1);
 #line 934 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             GemVal _t1378[] = {gem_v_rla};
             GemVal _t1379 = (*gem_v_peek_at);
             GemVal _t1380 = _t1379.fn(_t1379.env, _t1378, 1);
@@ -5739,6 +5795,7 @@ static GemVal _anon_22(void *_env, GemVal *args, int argc) {
             GemVal gem_v_rarms = _t1389;
 #line 945 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t1390 = (*gem_v_peek);
                 GemVal _t1391 = _t1390.fn(_t1390.env, NULL, 0);
                 if (!gem_truthy(gem_eq(gem_table_get(_t1391, gem_string("type")), gem_string("when")))) break;
@@ -5906,6 +5963,7 @@ static GemVal _anon_23(void *_env, GemVal *args, int argc) {
     (void)(_t1436.fn(_t1436.env, NULL, 0));
 #line 988 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t1437 = (*gem_v_at_end);
         if (!gem_truthy(gem_not(_t1437.fn(_t1437.env, NULL, 0)))) break;
 #line 989 "compiler/main.gem"
@@ -6152,6 +6210,7 @@ static GemVal gem_fn_escape_c_string(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_limit_1 = gem_len_fn(NULL, _t1447, 1);
 #line 12 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         if (!gem_truthy(gem_lt(gem_v__for_i_1, gem_v__for_limit_1))) break;
 #line 12 "compiler/main.gem"
         GemVal gem_v_i = gem_v__for_i_1;
@@ -6218,6 +6277,7 @@ static GemVal gem_fn_repeat_str(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_limit_2 = gem_v_n;
 #line 35 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         if (!gem_truthy(gem_lt(gem_v__for_i_2, gem_v__for_limit_2))) break;
 #line 35 "compiler/main.gem"
         GemVal gem_v_i = gem_v__for_i_2;
@@ -6259,6 +6319,7 @@ static GemVal gem_fn_format_float(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_limit_3 = gem_len_fn(NULL, _t1454, 1);
 #line 49 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         if (!gem_truthy(gem_lt(gem_v__for_i_3, gem_v__for_limit_3))) break;
 #line 49 "compiler/main.gem"
         GemVal gem_v_i = gem_v__for_i_3;
@@ -6325,6 +6386,7 @@ static GemVal gem_fn_set_union(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_i_4 = gem_int(0);
 #line 74 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t1459[] = {gem_v__for_keys_4};
         if (!gem_truthy(gem_lt(gem_v__for_i_4, gem_len_fn(NULL, _t1459, 1)))) break;
 #line 74 "compiler/main.gem"
@@ -6346,6 +6408,7 @@ static GemVal gem_fn_set_union(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_i_5 = gem_int(0);
 #line 77 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t1461[] = {gem_v__for_keys_5};
         if (!gem_truthy(gem_lt(gem_v__for_i_5, gem_len_fn(NULL, _t1461, 1)))) break;
 #line 77 "compiler/main.gem"
@@ -6380,6 +6443,7 @@ static GemVal gem_fn_set_intersect(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_i_6 = gem_int(0);
 #line 85 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t1465[] = {gem_v__for_keys_6};
         if (!gem_truthy(gem_lt(gem_v__for_i_6, gem_len_fn(NULL, _t1465, 1)))) break;
 #line 85 "compiler/main.gem"
@@ -6411,6 +6475,7 @@ static GemVal gem_fn_set_to_sorted_array(void *_env, GemVal *args, int argc) {
     GemVal gem_v_i = gem_int(1);
 #line 97 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t1468[] = {gem_v_ks};
         if (!gem_truthy(gem_lt(gem_v_i, gem_len_fn(NULL, _t1468, 1)))) break;
 #line 98 "compiler/main.gem"
@@ -6419,6 +6484,7 @@ static GemVal gem_fn_set_to_sorted_array(void *_env, GemVal *args, int argc) {
         GemVal gem_v_j = gem_sub(gem_v_i, gem_int(1));
 #line 100 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             GemVal _t1469;
             if (!gem_truthy(gem_ge(gem_v_j, gem_int(0)))) {
                         _t1469 = gem_ge(gem_v_j, gem_int(0));
@@ -6454,6 +6520,7 @@ static GemVal gem_fn_sorted_array_to_set(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_i_7 = gem_int(0);
 #line 112 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t1472[] = {gem_v__for_items_7};
         if (!gem_truthy(gem_lt(gem_v__for_i_7, gem_len_fn(NULL, _t1472, 1)))) break;
 #line 112 "compiler/main.gem"
@@ -6493,6 +6560,7 @@ static GemVal gem_fn_collect_block_lets(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_8 = gem_len_fn(NULL, _t1478, 1);
 #line 122 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_8, gem_v__for_limit_8))) break;
 #line 122 "compiler/main.gem"
                 GemVal gem_v_j = gem_v__for_i_8;
@@ -6539,6 +6607,7 @@ static GemVal gem_fn_collect_top_let_names(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_limit_9 = gem_len_fn(NULL, _t1487, 1);
 #line 131 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             if (!gem_truthy(gem_lt(gem_v__for_i_9, gem_v__for_limit_9))) break;
 #line 131 "compiler/main.gem"
             GemVal gem_v_i = gem_v__for_i_9;
@@ -6876,6 +6945,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_i_12 = gem_int(0);
 #line 245 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t1576[] = {gem_v__for_keys_12};
                 if (!gem_truthy(gem_lt(gem_v__for_i_12, gem_len_fn(NULL, _t1576, 1)))) break;
 #line 245 "compiler/main.gem"
@@ -6967,6 +7037,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_limit_13 = gem_len_fn(NULL, _t1596, 1);
 #line 253 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             if (!gem_truthy(gem_lt(gem_v__for_i_13, gem_v__for_limit_13))) break;
 #line 253 "compiler/main.gem"
             GemVal gem_v_i = gem_v__for_i_13;
@@ -7007,6 +7078,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
                 GemVal gem_v__for_limit_14 = gem_len_fn(NULL, _t1606, 1);
 #line 261 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     if (!gem_truthy(gem_lt(gem_v__for_i_14, gem_v__for_limit_14))) break;
 #line 261 "compiler/main.gem"
                     GemVal gem_v_i = gem_v__for_i_14;
@@ -7089,6 +7161,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_15 = gem_len_fn(NULL, _t1626, 1);
 #line 271 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_15, gem_v__for_limit_15))) break;
 #line 271 "compiler/main.gem"
                 GemVal gem_v_i = gem_v__for_i_15;
@@ -7190,6 +7263,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_limit_18 = gem_len_fn(NULL, _t1651, 1);
 #line 283 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             if (!gem_truthy(gem_lt(gem_v__for_i_18, gem_v__for_limit_18))) break;
 #line 283 "compiler/main.gem"
             GemVal gem_v_i = gem_v__for_i_18;
@@ -7217,6 +7291,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
                 GemVal gem_v__for_limit_16 = gem_len_fn(NULL, _t1659, 1);
 #line 288 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     if (!gem_truthy(gem_lt(gem_v__for_i_16, gem_v__for_limit_16))) break;
 #line 288 "compiler/main.gem"
                     GemVal gem_v_bi = gem_v__for_i_16;
@@ -7256,6 +7331,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_17 = gem_len_fn(NULL, _t1672, 1);
 #line 295 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_17, gem_v__for_limit_17))) break;
 #line 295 "compiler/main.gem"
                 GemVal gem_v_j = gem_v__for_i_17;
@@ -7302,6 +7378,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
                 GemVal gem_v__for_limit_19 = gem_len_fn(NULL, _t1686, 1);
 #line 304 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     if (!gem_truthy(gem_lt(gem_v__for_i_19, gem_v__for_limit_19))) break;
 #line 304 "compiler/main.gem"
                     GemVal gem_v_j = gem_v__for_i_19;
@@ -7394,6 +7471,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_20 = gem_len_fn(NULL, _t1708, 1);
 #line 315 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_20, gem_v__for_limit_20))) break;
 #line 315 "compiler/main.gem"
                 GemVal gem_v_bi = gem_v__for_i_20;
@@ -7429,6 +7507,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_21 = gem_len_fn(NULL, _t1716, 1);
 #line 322 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_21, gem_v__for_limit_21))) break;
 #line 322 "compiler/main.gem"
                 GemVal gem_v_i = gem_v__for_i_21;
@@ -7519,6 +7598,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_limit_24 = gem_len_fn(NULL, _t1739, 1);
 #line 333 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             if (!gem_truthy(gem_lt(gem_v__for_i_24, gem_v__for_limit_24))) break;
 #line 333 "compiler/main.gem"
             GemVal gem_v_i = gem_v__for_i_24;
@@ -7549,6 +7629,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
                 GemVal gem_v__for_limit_22 = gem_len_fn(NULL, _t1750, 1);
 #line 338 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     if (!gem_truthy(gem_lt(gem_v__for_i_22, gem_v__for_limit_22))) break;
 #line 338 "compiler/main.gem"
                     GemVal gem_v_bi = gem_v__for_i_22;
@@ -7592,6 +7673,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_23 = gem_len_fn(NULL, _t1767, 1);
 #line 345 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_23, gem_v__for_limit_23))) break;
 #line 345 "compiler/main.gem"
                 GemVal gem_v_j = gem_v__for_i_23;
@@ -7645,6 +7727,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
                 GemVal gem_v__for_limit_25 = gem_len_fn(NULL, _t1783, 1);
 #line 357 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     if (!gem_truthy(gem_lt(gem_v__for_i_25, gem_v__for_limit_25))) break;
 #line 357 "compiler/main.gem"
                     GemVal gem_v_j = gem_v__for_i_25;
@@ -7710,6 +7793,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_26 = gem_len_fn(NULL, _t1797, 1);
 #line 365 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_26, gem_v__for_limit_26))) break;
 #line 365 "compiler/main.gem"
                 GemVal gem_v_i = gem_v__for_i_26;
@@ -7757,6 +7841,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_27 = gem_len_fn(NULL, _t1807, 1);
 #line 369 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_27, gem_v__for_limit_27))) break;
 #line 369 "compiler/main.gem"
                 GemVal gem_v_i = gem_v__for_i_27;
@@ -7807,6 +7892,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_28 = gem_len_fn(NULL, _t1818, 1);
 #line 374 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_28, gem_v__for_limit_28))) break;
 #line 374 "compiler/main.gem"
                 GemVal gem_v_i = gem_v__for_i_28;
@@ -7883,6 +7969,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_i_29 = gem_int(0);
 #line 386 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t1836[] = {gem_v__for_keys_29};
                 if (!gem_truthy(gem_lt(gem_v__for_i_29, gem_len_fn(NULL, _t1836, 1)))) break;
 #line 386 "compiler/main.gem"
@@ -7913,6 +8000,7 @@ static GemVal _anon_27(void *_env, GemVal *args, int argc) {
                             GemVal gem_v_vi = gem_int(0);
 #line 392 "compiler/main.gem"
                             while (1) {
+                                gem_yield_check();
                                 GemVal _t1842[] = {gem_v_v};
                                 if (!gem_truthy(gem_lt(gem_v_vi, gem_len_fn(NULL, _t1842, 1)))) break;
 #line 393 "compiler/main.gem"
@@ -7977,6 +8065,7 @@ static GemVal _anon_28(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_limit_30 = gem_len_fn(NULL, _t1852, 1);
 #line 410 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         if (!gem_truthy(gem_lt(gem_v__for_i_30, gem_v__for_limit_30))) break;
 #line 410 "compiler/main.gem"
         GemVal gem_v_i = gem_v__for_i_30;
@@ -8133,6 +8222,7 @@ static GemVal _anon_29(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_i_32 = gem_int(0);
 #line 452 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t1887[] = {gem_v__for_keys_32};
                 if (!gem_truthy(gem_lt(gem_v__for_i_32, gem_len_fn(NULL, _t1887, 1)))) break;
 #line 452 "compiler/main.gem"
@@ -8327,6 +8417,7 @@ static GemVal _anon_29(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_limit_34 = gem_len_fn(NULL, _t1935, 1);
 #line 468 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             if (!gem_truthy(gem_lt(gem_v__for_i_34, gem_v__for_limit_34))) break;
 #line 468 "compiler/main.gem"
             GemVal gem_v_i = gem_v__for_i_34;
@@ -8348,6 +8439,7 @@ static GemVal _anon_29(void *_env, GemVal *args, int argc) {
                 GemVal gem_v__for_limit_33 = gem_len_fn(NULL, _t1941, 1);
 #line 471 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     if (!gem_truthy(gem_lt(gem_v__for_i_33, gem_v__for_limit_33))) break;
 #line 471 "compiler/main.gem"
                     GemVal gem_v_bi = gem_v__for_i_33;
@@ -8430,6 +8522,7 @@ static GemVal _anon_29(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_limit_36 = gem_len_fn(NULL, _t1961, 1);
 #line 481 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             if (!gem_truthy(gem_lt(gem_v__for_i_36, gem_v__for_limit_36))) break;
 #line 481 "compiler/main.gem"
             GemVal gem_v_i = gem_v__for_i_36;
@@ -8454,6 +8547,7 @@ static GemVal _anon_29(void *_env, GemVal *args, int argc) {
                 GemVal gem_v__for_limit_35 = gem_len_fn(NULL, _t1970, 1);
 #line 484 "compiler/main.gem"
                 while (1) {
+                    gem_yield_check();
                     if (!gem_truthy(gem_lt(gem_v__for_i_35, gem_v__for_limit_35))) break;
 #line 484 "compiler/main.gem"
                     GemVal gem_v_bi = gem_v__for_i_35;
@@ -8527,6 +8621,7 @@ static GemVal _anon_29(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_37 = gem_len_fn(NULL, _t1989, 1);
 #line 497 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_37, gem_v__for_limit_37))) break;
 #line 497 "compiler/main.gem"
                 GemVal gem_v_i = gem_v__for_i_37;
@@ -8574,6 +8669,7 @@ static GemVal _anon_29(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_38 = gem_len_fn(NULL, _t1999, 1);
 #line 501 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_38, gem_v__for_limit_38))) break;
 #line 501 "compiler/main.gem"
                 GemVal gem_v_i = gem_v__for_i_38;
@@ -8728,6 +8824,7 @@ static GemVal _anon_29(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_i_39 = gem_int(0);
 #line 516 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 GemVal _t2039[] = {gem_v__for_keys_39};
                 if (!gem_truthy(gem_lt(gem_v__for_i_39, gem_len_fn(NULL, _t2039, 1)))) break;
 #line 516 "compiler/main.gem"
@@ -8758,6 +8855,7 @@ static GemVal _anon_29(void *_env, GemVal *args, int argc) {
                             GemVal gem_v_vi = gem_int(0);
 #line 522 "compiler/main.gem"
                             while (1) {
+                                gem_yield_check();
                                 GemVal _t2045[] = {gem_v_v};
                                 if (!gem_truthy(gem_lt(gem_v_vi, gem_len_fn(NULL, _t2045, 1)))) break;
 #line 523 "compiler/main.gem"
@@ -8819,6 +8917,7 @@ static GemVal _anon_30(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_limit_40 = gem_len_fn(NULL, _t2054, 1);
 #line 539 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             if (!gem_truthy(gem_lt(gem_v__for_i_40, gem_v__for_limit_40))) break;
 #line 539 "compiler/main.gem"
             GemVal gem_v_i = gem_v__for_i_40;
@@ -9055,6 +9154,7 @@ static GemVal _anon_32(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_limit_42 = gem_len_fn(NULL, _t2108, 1);
 #line 593 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             if (!gem_truthy(gem_lt(gem_v__for_i_42, gem_v__for_limit_42))) break;
 #line 593 "compiler/main.gem"
             GemVal gem_v_i = gem_v__for_i_42;
@@ -9101,6 +9201,7 @@ static GemVal _anon_32(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_limit_43 = gem_len_fn(NULL, _t2121, 1);
 #line 606 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             if (!gem_truthy(gem_lt(gem_v__for_i_43, gem_v__for_limit_43))) break;
 #line 606 "compiler/main.gem"
             GemVal gem_v_i = gem_v__for_i_43;
@@ -9606,6 +9707,7 @@ static GemVal _anon_33(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_i_44 = gem_int(0);
 #line 667 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t2271[] = {gem_v__for_items_44};
         if (!gem_truthy(gem_lt(gem_v__for_i_44, gem_len_fn(NULL, _t2271, 1)))) break;
 #line 667 "compiler/main.gem"
@@ -9666,6 +9768,7 @@ static GemVal _anon_34(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_limit_45 = gem_len_fn(NULL, _t2288, 1);
 #line 682 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         if (!gem_truthy(gem_lt(gem_v__for_i_45, gem_v__for_limit_45))) break;
 #line 682 "compiler/main.gem"
         GemVal gem_v_i = gem_v__for_i_45;
@@ -9778,6 +9881,7 @@ static GemVal _anon_35(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_i_46 = gem_int(0);
 #line 713 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t2327[] = {gem_v__for_items_46};
         if (!gem_truthy(gem_lt(gem_v__for_i_46, gem_len_fn(NULL, _t2327, 1)))) break;
 #line 713 "compiler/main.gem"
@@ -9838,6 +9942,7 @@ static GemVal _anon_36(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_limit_47 = gem_len_fn(NULL, _t2344, 1);
 #line 730 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         if (!gem_truthy(gem_lt(gem_v__for_i_47, gem_v__for_limit_47))) break;
 #line 730 "compiler/main.gem"
         GemVal gem_v_i = gem_v__for_i_47;
@@ -9881,6 +9986,7 @@ static GemVal _anon_36(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_limit_48 = gem_v_argc;
 #line 741 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         if (!gem_truthy(gem_lt(gem_v__for_i_48, gem_v__for_limit_48))) break;
 #line 741 "compiler/main.gem"
         GemVal gem_v_i = gem_v__for_i_48;
@@ -10515,6 +10621,7 @@ static GemVal _anon_40(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_i_50 = gem_int(0);
 #line 882 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t2600[] = {gem_v__for_items_50};
         if (!gem_truthy(gem_lt(gem_v__for_i_50, gem_len_fn(NULL, _t2600, 1)))) break;
 #line 882 "compiler/main.gem"
@@ -11177,6 +11284,7 @@ static GemVal _anon_41(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_i_52 = gem_int(0);
 #line 954 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             GemVal _t2842[] = {gem_v__for_items_52};
             if (!gem_truthy(gem_lt(gem_v__for_i_52, gem_len_fn(NULL, _t2842, 1)))) break;
 #line 954 "compiler/main.gem"
@@ -11619,6 +11727,7 @@ static GemVal _anon_42(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_limit_54 = gem_sub(gem_len_fn(NULL, _t3007, 1), gem_int(1));
 #line 1006 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             if (!gem_truthy(gem_lt(gem_v__for_i_54, gem_v__for_limit_54))) break;
 #line 1006 "compiler/main.gem"
             GemVal gem_v_i = gem_v__for_i_54;
@@ -11900,6 +12009,7 @@ static GemVal _anon_44(void *_env, GemVal *args, int argc) {
         GemVal gem_v__for_limit_55 = gem_sub(gem_len_fn(NULL, _t3110, 1), gem_int(1));
 #line 1056 "compiler/main.gem"
         while (1) {
+            gem_yield_check();
             if (!gem_truthy(gem_lt(gem_v__for_i_55, gem_v__for_limit_55))) break;
 #line 1056 "compiler/main.gem"
             GemVal gem_v_i = gem_v__for_i_55;
@@ -11941,6 +12051,7 @@ static GemVal _anon_44(void *_env, GemVal *args, int argc) {
             GemVal gem_v__for_limit_56 = gem_sub(gem_len_fn(NULL, _t3122, 1), gem_int(1));
 #line 1067 "compiler/main.gem"
             while (1) {
+                gem_yield_check();
                 if (!gem_truthy(gem_lt(gem_v__for_i_56, gem_v__for_limit_56))) break;
 #line 1067 "compiler/main.gem"
                 GemVal gem_v_i = gem_v__for_i_56;
@@ -12003,30 +12114,33 @@ static GemVal _anon_45(void *_env, GemVal *args, int argc) {
     GemVal _t3140[] = {gem_v_p};
     GemVal gem_v_out = gem_add(gem_to_string_fn(NULL, _t3140, 1), gem_string("while (1) {\n"));
 #line 1088 "compiler/main.gem"
-    GemVal _t3141 = gem_v_cond_r;
-    if (gem_truthy(gem_neq(gem_table_get(_t3141, gem_string("setup")), gem_string("")))) {
+    GemVal _t3141[] = {gem_v_p};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3141, 1), gem_string("    gem_yield_check();\n")));
 #line 1089 "compiler/main.gem"
     GemVal _t3142 = gem_v_cond_r;
-    GemVal _t3143[] = {gem_v_p};
-    GemVal _t3144[] = {gem_table_get(_t3142, gem_string("setup")), gem_string("    "), gem_add(gem_to_string_fn(NULL, _t3143, 1), gem_string("    "))};
-        gem_v_out = gem_add(gem_v_out, gem_str_replace_fn(NULL, _t3144, 3));
+    if (gem_truthy(gem_neq(gem_table_get(_t3142, gem_string("setup")), gem_string("")))) {
+#line 1090 "compiler/main.gem"
+    GemVal _t3143 = gem_v_cond_r;
+    GemVal _t3144[] = {gem_v_p};
+    GemVal _t3145[] = {gem_table_get(_t3143, gem_string("setup")), gem_string("    "), gem_add(gem_to_string_fn(NULL, _t3144, 1), gem_string("    "))};
+        gem_v_out = gem_add(gem_v_out, gem_str_replace_fn(NULL, _t3145, 3));
     }
-#line 1091 "compiler/main.gem"
-    GemVal _t3145[] = {gem_v_p};
-    GemVal _t3146 = gem_v_cond_r;
-    GemVal _t3147[] = {gem_table_get(_t3146, gem_string("expr"))};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3145, 1), gem_string("    if (!gem_truthy(")), gem_to_string_fn(NULL, _t3147, 1)), gem_string(")) break;\n")));
 #line 1092 "compiler/main.gem"
-    GemVal _t3148 = gem_v_node;
-    GemVal _t3149[] = {gem_table_get(_t3148, gem_string("body")), gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3150 = (*gem_v_compile_stmts);
-    gem_v_out = gem_add(gem_v_out, _t3150.fn(_t3150.env, _t3149, 2));
+    GemVal _t3146[] = {gem_v_p};
+    GemVal _t3147 = gem_v_cond_r;
+    GemVal _t3148[] = {gem_table_get(_t3147, gem_string("expr"))};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3146, 1), gem_string("    if (!gem_truthy(")), gem_to_string_fn(NULL, _t3148, 1)), gem_string(")) break;\n")));
 #line 1093 "compiler/main.gem"
-    GemVal _t3151[] = {gem_v_p};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3151, 1), gem_string("}")));
-    GemVal _t3152 = gem_v_out;
+    GemVal _t3149 = gem_v_node;
+    GemVal _t3150[] = {gem_table_get(_t3149, gem_string("body")), gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3151 = (*gem_v_compile_stmts);
+    gem_v_out = gem_add(gem_v_out, _t3151.fn(_t3151.env, _t3150, 2));
+#line 1094 "compiler/main.gem"
+    GemVal _t3152[] = {gem_v_p};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3152, 1), gem_string("}")));
+    GemVal _t3153 = gem_v_out;
     gem_pop_frame();
-    return _t3152;
+    return _t3153;
 }
 
 struct _closure__anon_46 {
@@ -12046,170 +12160,173 @@ static GemVal _anon_46(void *_env, GemVal *args, int argc) {
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     gem_push_frame("_anon_46", "compiler/main.gem", 0);
-#line 1100 "compiler/main.gem"
-    GemVal _t3154[] = {gem_v_indent};
-    GemVal gem_v_p = gem_fn_pad_for(NULL, _t3154, 1);
 #line 1101 "compiler/main.gem"
-    GemVal _t3155 = gem_v_node;
-    GemVal _t3156[] = {gem_table_get(_t3155, gem_string("target"))};
-    GemVal _t3157 = (*gem_v_compile_expr);
-    GemVal gem_v_target_r = _t3157.fn(_t3157.env, _t3156, 1);
+    GemVal _t3155[] = {gem_v_indent};
+    GemVal gem_v_p = gem_fn_pad_for(NULL, _t3155, 1);
 #line 1102 "compiler/main.gem"
-    GemVal gem_v_t = GEM_NIL;
+    GemVal _t3156 = gem_v_node;
+    GemVal _t3157[] = {gem_table_get(_t3156, gem_string("target"))};
+    GemVal _t3158 = (*gem_v_compile_expr);
+    GemVal gem_v_target_r = _t3158.fn(_t3158.env, _t3157, 1);
 #line 1103 "compiler/main.gem"
-    GemVal _t3158 = gem_v_node;
-    if (gem_truthy(gem_neq(gem_table_get(_t3158, gem_string("target_var")), GEM_NIL))) {
+    GemVal gem_v_t = GEM_NIL;
 #line 1104 "compiler/main.gem"
     GemVal _t3159 = gem_v_node;
-    GemVal _t3160[] = {gem_table_get(_t3159, gem_string("target_var"))};
-    GemVal _t3161 = (*gem_v_mangle);
-        gem_v_t = _t3161.fn(_t3161.env, _t3160, 1);
+    if (gem_truthy(gem_neq(gem_table_get(_t3159, gem_string("target_var")), GEM_NIL))) {
+#line 1105 "compiler/main.gem"
+    GemVal _t3160 = gem_v_node;
+    GemVal _t3161[] = {gem_table_get(_t3160, gem_string("target_var"))};
+    GemVal _t3162 = (*gem_v_mangle);
+        gem_v_t = _t3162.fn(_t3162.env, _t3161, 1);
     } else {
-#line 1106 "compiler/main.gem"
-    GemVal _t3162 = (*gem_v_tmp);
-        gem_v_t = _t3162.fn(_t3162.env, NULL, 0);
+#line 1107 "compiler/main.gem"
+    GemVal _t3163 = (*gem_v_tmp);
+        gem_v_t = _t3163.fn(_t3163.env, NULL, 0);
     }
-#line 1108 "compiler/main.gem"
-    GemVal _t3163 = gem_v_target_r;
-    GemVal gem_v_out = gem_table_get(_t3163, gem_string("setup"));
 #line 1109 "compiler/main.gem"
-    GemVal _t3164[] = {gem_v_p};
-    GemVal _t3165[] = {gem_v_t};
-    GemVal _t3166 = gem_v_target_r;
-    GemVal _t3167[] = {gem_table_get(_t3166, gem_string("expr"))};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3164, 1), gem_string("GemVal ")), gem_to_string_fn(NULL, _t3165, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3167, 1)), gem_string(";\n")));
+    GemVal _t3164 = gem_v_target_r;
+    GemVal gem_v_out = gem_table_get(_t3164, gem_string("setup"));
 #line 1110 "compiler/main.gem"
-    GemVal _t3168 = gem_v_node;
-    GemVal _t3169[] = {gem_table_get(_t3168, gem_string("whens"))};
-    if (gem_truthy(gem_eq(gem_len_fn(NULL, _t3169, 1), gem_int(0)))) {
-#line 1112 "compiler/main.gem"
-    GemVal _t3170 = gem_v_node;
-        if (gem_truthy(gem_neq(gem_table_get(_t3170, gem_string("else")), GEM_NIL))) {
+    GemVal _t3165[] = {gem_v_p};
+    GemVal _t3166[] = {gem_v_t};
+    GemVal _t3167 = gem_v_target_r;
+    GemVal _t3168[] = {gem_table_get(_t3167, gem_string("expr"))};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3165, 1), gem_string("GemVal ")), gem_to_string_fn(NULL, _t3166, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3168, 1)), gem_string(";\n")));
+#line 1111 "compiler/main.gem"
+    GemVal _t3169 = gem_v_node;
+    GemVal _t3170[] = {gem_table_get(_t3169, gem_string("whens"))};
+    if (gem_truthy(gem_eq(gem_len_fn(NULL, _t3170, 1), gem_int(0)))) {
 #line 1113 "compiler/main.gem"
     GemVal _t3171 = gem_v_node;
-    GemVal _t3172[] = {gem_table_get(_t3171, gem_string("else")), gem_v_indent};
-    GemVal _t3173 = (*gem_v_compile_stmts);
-            gem_v_out = gem_add(gem_v_out, _t3173.fn(_t3173.env, _t3172, 2));
+        if (gem_truthy(gem_neq(gem_table_get(_t3171, gem_string("else")), GEM_NIL))) {
+#line 1114 "compiler/main.gem"
+    GemVal _t3172 = gem_v_node;
+    GemVal _t3173[] = {gem_table_get(_t3172, gem_string("else")), gem_v_indent};
+    GemVal _t3174 = (*gem_v_compile_stmts);
+            gem_v_out = gem_add(gem_v_out, _t3174.fn(_t3174.env, _t3173, 2));
         }
-#line 1115 "compiler/main.gem"
-    GemVal _t3174[] = {gem_v_p};
-    GemVal _t3175[] = {gem_v_t};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3174, 1), gem_string("(void)")), gem_to_string_fn(NULL, _t3175, 1)), gem_string(";")));
 #line 1116 "compiler/main.gem"
-        GemVal _t3176 = gem_v_out;
+    GemVal _t3175[] = {gem_v_p};
+    GemVal _t3176[] = {gem_v_t};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3175, 1), gem_string("(void)")), gem_to_string_fn(NULL, _t3176, 1)), gem_string(";")));
+#line 1117 "compiler/main.gem"
+        GemVal _t3177 = gem_v_out;
         gem_pop_frame();
-        return _t3176;
+        return _t3177;
     }
-#line 1118 "compiler/main.gem"
-    GemVal gem_v__for_i_58 = gem_int(0);
-#line 1118 "compiler/main.gem"
-    GemVal _t3177 = gem_v_node;
-    GemVal _t3178[] = {gem_table_get(_t3177, gem_string("whens"))};
-    GemVal gem_v__for_limit_58 = gem_len_fn(NULL, _t3178, 1);
-#line 1118 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_58, gem_v__for_limit_58))) break;
-#line 1118 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_58;
-#line 1118 "compiler/main.gem"
-        gem_v__for_i_58 = gem_add(gem_v__for_i_58, gem_int(1));
 #line 1119 "compiler/main.gem"
-    GemVal _t3179 = gem_v_node;
-        GemVal gem_v_w = gem_table_get(gem_table_get(_t3179, gem_string("whens")), gem_v_i);
+    GemVal gem_v__for_i_58 = gem_int(0);
+#line 1119 "compiler/main.gem"
+    GemVal _t3178 = gem_v_node;
+    GemVal _t3179[] = {gem_table_get(_t3178, gem_string("whens"))};
+    GemVal gem_v__for_limit_58 = gem_len_fn(NULL, _t3179, 1);
+#line 1119 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_58, gem_v__for_limit_58))) break;
+#line 1119 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_58;
+#line 1119 "compiler/main.gem"
+        gem_v__for_i_58 = gem_add(gem_v__for_i_58, gem_int(1));
 #line 1120 "compiler/main.gem"
-    GemVal _t3180 = gem_v_w;
-    GemVal _t3181[] = {gem_table_get(_t3180, gem_string("value"))};
-    GemVal _t3182 = (*gem_v_compile_expr);
-        GemVal gem_v_val_r = _t3182.fn(_t3182.env, _t3181, 1);
+    GemVal _t3180 = gem_v_node;
+        GemVal gem_v_w = gem_table_get(gem_table_get(_t3180, gem_string("whens")), gem_v_i);
 #line 1121 "compiler/main.gem"
-        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
+    GemVal _t3181 = gem_v_w;
+    GemVal _t3182[] = {gem_table_get(_t3181, gem_string("value"))};
+    GemVal _t3183 = (*gem_v_compile_expr);
+        GemVal gem_v_val_r = _t3183.fn(_t3183.env, _t3182, 1);
 #line 1122 "compiler/main.gem"
-    GemVal _t3183 = gem_v_val_r;
-            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3183, gem_string("setup")));
+        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
 #line 1123 "compiler/main.gem"
-    GemVal _t3184[] = {gem_v_p};
-    GemVal _t3185 = gem_v_val_r;
-    GemVal _t3186[] = {gem_table_get(_t3185, gem_string("expr"))};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3184, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3186, 1)), gem_string(")) {\n")));
+    GemVal _t3184 = gem_v_val_r;
+            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3184, gem_string("setup")));
+#line 1124 "compiler/main.gem"
+    GemVal _t3185[] = {gem_v_p};
+    GemVal _t3186 = gem_v_val_r;
+    GemVal _t3187[] = {gem_table_get(_t3186, gem_string("expr"))};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3185, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3187, 1)), gem_string(")) {\n")));
         } else {
-#line 1125 "compiler/main.gem"
-    GemVal _t3187[] = {gem_v_p};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3187, 1), gem_string("} else {\n")));
 #line 1126 "compiler/main.gem"
-    GemVal _t3188 = gem_v_val_r;
-            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3188, gem_string("setup")));
+    GemVal _t3188[] = {gem_v_p};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3188, 1), gem_string("} else {\n")));
 #line 1127 "compiler/main.gem"
-    GemVal _t3189[] = {gem_v_p};
-    GemVal _t3190 = gem_v_val_r;
-    GemVal _t3191[] = {gem_table_get(_t3190, gem_string("expr"))};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3189, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3191, 1)), gem_string(")) {\n")));
+    GemVal _t3189 = gem_v_val_r;
+            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3189, gem_string("setup")));
+#line 1128 "compiler/main.gem"
+    GemVal _t3190[] = {gem_v_p};
+    GemVal _t3191 = gem_v_val_r;
+    GemVal _t3192[] = {gem_table_get(_t3191, gem_string("expr"))};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3190, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3192, 1)), gem_string(")) {\n")));
         }
-#line 1129 "compiler/main.gem"
-    GemVal _t3192 = gem_v_w;
-        if (gem_truthy(gem_neq(gem_table_get(_t3192, gem_string("bindings")), GEM_NIL))) {
 #line 1130 "compiler/main.gem"
     GemVal _t3193 = gem_v_w;
-            GemVal gem_v__for_items_57 = gem_table_get(_t3193, gem_string("bindings"));
-#line 1130 "compiler/main.gem"
-            GemVal gem_v__for_i_57 = gem_int(0);
-#line 1130 "compiler/main.gem"
-            while (1) {
-                GemVal _t3194[] = {gem_v__for_items_57};
-                if (!gem_truthy(gem_lt(gem_v__for_i_57, gem_len_fn(NULL, _t3194, 1)))) break;
-#line 1130 "compiler/main.gem"
-                GemVal gem_v_b = gem_table_get(gem_v__for_items_57, gem_v__for_i_57);
-#line 1130 "compiler/main.gem"
-                gem_v__for_i_57 = gem_add(gem_v__for_i_57, gem_int(1));
+        if (gem_truthy(gem_neq(gem_table_get(_t3193, gem_string("bindings")), GEM_NIL))) {
 #line 1131 "compiler/main.gem"
-    GemVal _t3195[] = {gem_v_b, gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3196 = (*gem_v_compile_stmt);
-                gem_v_out = gem_add(gem_add(gem_v_out, _t3196.fn(_t3196.env, _t3195, 2)), gem_string("\n"));
+    GemVal _t3194 = gem_v_w;
+            GemVal gem_v__for_items_57 = gem_table_get(_t3194, gem_string("bindings"));
+#line 1131 "compiler/main.gem"
+            GemVal gem_v__for_i_57 = gem_int(0);
+#line 1131 "compiler/main.gem"
+            while (1) {
+                gem_yield_check();
+                GemVal _t3195[] = {gem_v__for_items_57};
+                if (!gem_truthy(gem_lt(gem_v__for_i_57, gem_len_fn(NULL, _t3195, 1)))) break;
+#line 1131 "compiler/main.gem"
+                GemVal gem_v_b = gem_table_get(gem_v__for_items_57, gem_v__for_i_57);
+#line 1131 "compiler/main.gem"
+                gem_v__for_i_57 = gem_add(gem_v__for_i_57, gem_int(1));
+#line 1132 "compiler/main.gem"
+    GemVal _t3196[] = {gem_v_b, gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3197 = (*gem_v_compile_stmt);
+                gem_v_out = gem_add(gem_add(gem_v_out, _t3197.fn(_t3197.env, _t3196, 2)), gem_string("\n"));
             }
 
         }
-#line 1134 "compiler/main.gem"
-    GemVal _t3197 = gem_v_w;
-    GemVal _t3198[] = {gem_table_get(_t3197, gem_string("body")), gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3199 = (*gem_v_compile_stmts);
-        gem_v_out = gem_add(gem_v_out, _t3199.fn(_t3199.env, _t3198, 2));
+#line 1135 "compiler/main.gem"
+    GemVal _t3198 = gem_v_w;
+    GemVal _t3199[] = {gem_table_get(_t3198, gem_string("body")), gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3200 = (*gem_v_compile_stmts);
+        gem_v_out = gem_add(gem_v_out, _t3200.fn(_t3200.env, _t3199, 2));
     }
 
-#line 1136 "compiler/main.gem"
-    GemVal _t3200 = gem_v_node;
-    if (gem_truthy(gem_neq(gem_table_get(_t3200, gem_string("else")), GEM_NIL))) {
 #line 1137 "compiler/main.gem"
-    GemVal _t3201[] = {gem_v_p};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3201, 1), gem_string("} else {\n")));
+    GemVal _t3201 = gem_v_node;
+    if (gem_truthy(gem_neq(gem_table_get(_t3201, gem_string("else")), GEM_NIL))) {
 #line 1138 "compiler/main.gem"
-    GemVal _t3202 = gem_v_node;
-    GemVal _t3203[] = {gem_table_get(_t3202, gem_string("else")), gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3204 = (*gem_v_compile_stmts);
-        gem_v_out = gem_add(gem_v_out, _t3204.fn(_t3204.env, _t3203, 2));
+    GemVal _t3202[] = {gem_v_p};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3202, 1), gem_string("} else {\n")));
+#line 1139 "compiler/main.gem"
+    GemVal _t3203 = gem_v_node;
+    GemVal _t3204[] = {gem_table_get(_t3203, gem_string("else")), gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3205 = (*gem_v_compile_stmts);
+        gem_v_out = gem_add(gem_v_out, _t3205.fn(_t3205.env, _t3204, 2));
     }
-#line 1141 "compiler/main.gem"
-    GemVal _t3205[] = {gem_v_p};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3205, 1), gem_string("}")));
 #line 1142 "compiler/main.gem"
-    GemVal gem_v__for_i_59 = gem_int(1);
-#line 1142 "compiler/main.gem"
-    GemVal _t3206 = gem_v_node;
-    GemVal _t3207[] = {gem_table_get(_t3206, gem_string("whens"))};
-    GemVal gem_v__for_limit_59 = gem_len_fn(NULL, _t3207, 1);
-#line 1142 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_59, gem_v__for_limit_59))) break;
-#line 1142 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_59;
-#line 1142 "compiler/main.gem"
-        gem_v__for_i_59 = gem_add(gem_v__for_i_59, gem_int(1));
+    GemVal _t3206[] = {gem_v_p};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3206, 1), gem_string("}")));
 #line 1143 "compiler/main.gem"
-    GemVal _t3208[] = {gem_v_p};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("\n"), gem_to_string_fn(NULL, _t3208, 1)), gem_string("}")));
+    GemVal gem_v__for_i_59 = gem_int(1);
+#line 1143 "compiler/main.gem"
+    GemVal _t3207 = gem_v_node;
+    GemVal _t3208[] = {gem_table_get(_t3207, gem_string("whens"))};
+    GemVal gem_v__for_limit_59 = gem_len_fn(NULL, _t3208, 1);
+#line 1143 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_59, gem_v__for_limit_59))) break;
+#line 1143 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_59;
+#line 1143 "compiler/main.gem"
+        gem_v__for_i_59 = gem_add(gem_v__for_i_59, gem_int(1));
+#line 1144 "compiler/main.gem"
+    GemVal _t3209[] = {gem_v_p};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("\n"), gem_to_string_fn(NULL, _t3209, 1)), gem_string("}")));
     }
 
-    GemVal _t3209 = gem_v_out;
+    GemVal _t3210 = gem_v_out;
     gem_pop_frame();
-    return _t3209;
+    return _t3210;
 }
 
 struct _closure__anon_47 {
@@ -12229,273 +12346,279 @@ static GemVal _anon_47(void *_env, GemVal *args, int argc) {
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     gem_push_frame("_anon_47", "compiler/main.gem", 0);
-#line 1151 "compiler/main.gem"
-    GemVal _t3211[] = {gem_v_indent};
-    GemVal gem_v_p = gem_fn_pad_for(NULL, _t3211, 1);
 #line 1152 "compiler/main.gem"
-    GemVal _t3212 = gem_v_node;
-    GemVal _t3213[] = {gem_table_get(_t3212, gem_string("target"))};
-    GemVal _t3214 = (*gem_v_compile_expr);
-    GemVal gem_v_target_r = _t3214.fn(_t3214.env, _t3213, 1);
+    GemVal _t3212[] = {gem_v_indent};
+    GemVal gem_v_p = gem_fn_pad_for(NULL, _t3212, 1);
 #line 1153 "compiler/main.gem"
-    GemVal gem_v_t = GEM_NIL;
+    GemVal _t3213 = gem_v_node;
+    GemVal _t3214[] = {gem_table_get(_t3213, gem_string("target"))};
+    GemVal _t3215 = (*gem_v_compile_expr);
+    GemVal gem_v_target_r = _t3215.fn(_t3215.env, _t3214, 1);
 #line 1154 "compiler/main.gem"
-    GemVal _t3215 = gem_v_node;
-    if (gem_truthy(gem_neq(gem_table_get(_t3215, gem_string("target_var")), GEM_NIL))) {
+    GemVal gem_v_t = GEM_NIL;
 #line 1155 "compiler/main.gem"
     GemVal _t3216 = gem_v_node;
-    GemVal _t3217[] = {gem_table_get(_t3216, gem_string("target_var"))};
-    GemVal _t3218 = (*gem_v_mangle);
-        gem_v_t = _t3218.fn(_t3218.env, _t3217, 1);
+    if (gem_truthy(gem_neq(gem_table_get(_t3216, gem_string("target_var")), GEM_NIL))) {
+#line 1156 "compiler/main.gem"
+    GemVal _t3217 = gem_v_node;
+    GemVal _t3218[] = {gem_table_get(_t3217, gem_string("target_var"))};
+    GemVal _t3219 = (*gem_v_mangle);
+        gem_v_t = _t3219.fn(_t3219.env, _t3218, 1);
     } else {
-#line 1157 "compiler/main.gem"
-    GemVal _t3219 = (*gem_v_tmp);
-        gem_v_t = _t3219.fn(_t3219.env, NULL, 0);
+#line 1158 "compiler/main.gem"
+    GemVal _t3220 = (*gem_v_tmp);
+        gem_v_t = _t3220.fn(_t3220.env, NULL, 0);
     }
-#line 1159 "compiler/main.gem"
-    GemVal _t3220 = gem_v_target_r;
-    GemVal gem_v_out = gem_table_get(_t3220, gem_string("setup"));
 #line 1160 "compiler/main.gem"
-    GemVal _t3221[] = {gem_v_p};
-    GemVal _t3222[] = {gem_v_t};
-    GemVal _t3223 = gem_v_target_r;
-    GemVal _t3224[] = {gem_table_get(_t3223, gem_string("expr"))};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3221, 1), gem_string("GemVal ")), gem_to_string_fn(NULL, _t3222, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3224, 1)), gem_string(";\n")));
+    GemVal _t3221 = gem_v_target_r;
+    GemVal gem_v_out = gem_table_get(_t3221, gem_string("setup"));
 #line 1161 "compiler/main.gem"
-    GemVal _t3225 = gem_v_node;
-    GemVal _t3226[] = {gem_table_get(_t3225, gem_string("whens"))};
-    if (gem_truthy(gem_eq(gem_len_fn(NULL, _t3226, 1), gem_int(0)))) {
-#line 1163 "compiler/main.gem"
-    GemVal _t3227 = gem_v_node;
-        if (gem_truthy(gem_neq(gem_table_get(_t3227, gem_string("else")), GEM_NIL))) {
+    GemVal _t3222[] = {gem_v_p};
+    GemVal _t3223[] = {gem_v_t};
+    GemVal _t3224 = gem_v_target_r;
+    GemVal _t3225[] = {gem_table_get(_t3224, gem_string("expr"))};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3222, 1), gem_string("GemVal ")), gem_to_string_fn(NULL, _t3223, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3225, 1)), gem_string(";\n")));
+#line 1162 "compiler/main.gem"
+    GemVal _t3226 = gem_v_node;
+    GemVal _t3227[] = {gem_table_get(_t3226, gem_string("whens"))};
+    if (gem_truthy(gem_eq(gem_len_fn(NULL, _t3227, 1), gem_int(0)))) {
 #line 1164 "compiler/main.gem"
     GemVal _t3228 = gem_v_node;
-            GemVal gem_v_else_body = gem_table_get(_t3228, gem_string("else"));
+        if (gem_truthy(gem_neq(gem_table_get(_t3228, gem_string("else")), GEM_NIL))) {
 #line 1165 "compiler/main.gem"
-    GemVal _t3229[] = {gem_v_else_body};
-            if (gem_truthy(gem_gt(gem_len_fn(NULL, _t3229, 1), gem_int(0)))) {
-#line 1166 "compiler/main.gem"
-                GemVal gem_v__for_i_60 = gem_int(0);
+    GemVal _t3229 = gem_v_node;
+            GemVal gem_v_else_body = gem_table_get(_t3229, gem_string("else"));
 #line 1166 "compiler/main.gem"
     GemVal _t3230[] = {gem_v_else_body};
-                GemVal gem_v__for_limit_60 = gem_sub(gem_len_fn(NULL, _t3230, 1), gem_int(1));
-#line 1166 "compiler/main.gem"
-                while (1) {
-                    if (!gem_truthy(gem_lt(gem_v__for_i_60, gem_v__for_limit_60))) break;
-#line 1166 "compiler/main.gem"
-                    GemVal gem_v_i = gem_v__for_i_60;
-#line 1166 "compiler/main.gem"
-                    gem_v__for_i_60 = gem_add(gem_v__for_i_60, gem_int(1));
+            if (gem_truthy(gem_gt(gem_len_fn(NULL, _t3230, 1), gem_int(0)))) {
 #line 1167 "compiler/main.gem"
-    GemVal _t3231[] = {gem_table_get(gem_v_else_body, gem_v_i), gem_v_indent};
-    GemVal _t3232 = (*gem_v_compile_stmt);
-                    gem_v_out = gem_add(gem_add(gem_v_out, _t3232.fn(_t3232.env, _t3231, 2)), gem_string("\n"));
+                GemVal gem_v__for_i_60 = gem_int(0);
+#line 1167 "compiler/main.gem"
+    GemVal _t3231[] = {gem_v_else_body};
+                GemVal gem_v__for_limit_60 = gem_sub(gem_len_fn(NULL, _t3231, 1), gem_int(1));
+#line 1167 "compiler/main.gem"
+                while (1) {
+                    gem_yield_check();
+                    if (!gem_truthy(gem_lt(gem_v__for_i_60, gem_v__for_limit_60))) break;
+#line 1167 "compiler/main.gem"
+                    GemVal gem_v_i = gem_v__for_i_60;
+#line 1167 "compiler/main.gem"
+                    gem_v__for_i_60 = gem_add(gem_v__for_i_60, gem_int(1));
+#line 1168 "compiler/main.gem"
+    GemVal _t3232[] = {gem_table_get(gem_v_else_body, gem_v_i), gem_v_indent};
+    GemVal _t3233 = (*gem_v_compile_stmt);
+                    gem_v_out = gem_add(gem_add(gem_v_out, _t3233.fn(_t3233.env, _t3232, 2)), gem_string("\n"));
                 }
 
-#line 1169 "compiler/main.gem"
-    GemVal _t3233[] = {gem_v_else_body};
-    GemVal _t3234[] = {gem_table_get(gem_v_else_body, gem_sub(gem_len_fn(NULL, _t3233, 1), gem_int(1))), gem_v_indent};
-    GemVal _t3235 = (*gem_v_compile_stmt_return);
-                gem_v_out = gem_add(gem_add(gem_v_out, _t3235.fn(_t3235.env, _t3234, 2)), gem_string("\n"));
+#line 1170 "compiler/main.gem"
+    GemVal _t3234[] = {gem_v_else_body};
+    GemVal _t3235[] = {gem_table_get(gem_v_else_body, gem_sub(gem_len_fn(NULL, _t3234, 1), gem_int(1))), gem_v_indent};
+    GemVal _t3236 = (*gem_v_compile_stmt_return);
+                gem_v_out = gem_add(gem_add(gem_v_out, _t3236.fn(_t3236.env, _t3235, 2)), gem_string("\n"));
             } else {
-#line 1171 "compiler/main.gem"
-    GemVal _t3236[] = {gem_v_p};
+#line 1172 "compiler/main.gem"
     GemVal _t3237[] = {gem_v_p};
-                gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3236, 1), gem_string("gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3237, 1)), gem_string("return GEM_NIL;\n")));
+    GemVal _t3238[] = {gem_v_p};
+                gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3237, 1), gem_string("gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3238, 1)), gem_string("return GEM_NIL;\n")));
             }
         } else {
-#line 1174 "compiler/main.gem"
-    GemVal _t3238[] = {gem_v_p};
+#line 1175 "compiler/main.gem"
     GemVal _t3239[] = {gem_v_p};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3238, 1), gem_string("gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3239, 1)), gem_string("return GEM_NIL;\n")));
-        }
-#line 1176 "compiler/main.gem"
     GemVal _t3240[] = {gem_v_p};
-    GemVal _t3241[] = {gem_v_t};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3240, 1), gem_string("(void)")), gem_to_string_fn(NULL, _t3241, 1)), gem_string(";")));
-#line 1177 "compiler/main.gem"
-        GemVal _t3242 = gem_v_out;
-        gem_pop_frame();
-        return _t3242;
-    }
-#line 1179 "compiler/main.gem"
-    GemVal gem_v__for_i_63 = gem_int(0);
-#line 1179 "compiler/main.gem"
-    GemVal _t3243 = gem_v_node;
-    GemVal _t3244[] = {gem_table_get(_t3243, gem_string("whens"))};
-    GemVal gem_v__for_limit_63 = gem_len_fn(NULL, _t3244, 1);
-#line 1179 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_63, gem_v__for_limit_63))) break;
-#line 1179 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_63;
-#line 1179 "compiler/main.gem"
-        gem_v__for_i_63 = gem_add(gem_v__for_i_63, gem_int(1));
-#line 1180 "compiler/main.gem"
-    GemVal _t3245 = gem_v_node;
-        GemVal gem_v_w = gem_table_get(gem_table_get(_t3245, gem_string("whens")), gem_v_i);
-#line 1181 "compiler/main.gem"
-    GemVal _t3246 = gem_v_w;
-    GemVal _t3247[] = {gem_table_get(_t3246, gem_string("value"))};
-    GemVal _t3248 = (*gem_v_compile_expr);
-        GemVal gem_v_val_r = _t3248.fn(_t3248.env, _t3247, 1);
-#line 1182 "compiler/main.gem"
-        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
-#line 1183 "compiler/main.gem"
-    GemVal _t3249 = gem_v_val_r;
-            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3249, gem_string("setup")));
-#line 1184 "compiler/main.gem"
-    GemVal _t3250[] = {gem_v_p};
-    GemVal _t3251 = gem_v_val_r;
-    GemVal _t3252[] = {gem_table_get(_t3251, gem_string("expr"))};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3250, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3252, 1)), gem_string(")) {\n")));
-        } else {
-#line 1186 "compiler/main.gem"
-    GemVal _t3253[] = {gem_v_p};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3253, 1), gem_string("} else {\n")));
-#line 1187 "compiler/main.gem"
-    GemVal _t3254 = gem_v_val_r;
-            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3254, gem_string("setup")));
-#line 1188 "compiler/main.gem"
-    GemVal _t3255[] = {gem_v_p};
-    GemVal _t3256 = gem_v_val_r;
-    GemVal _t3257[] = {gem_table_get(_t3256, gem_string("expr"))};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3255, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3257, 1)), gem_string(")) {\n")));
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3239, 1), gem_string("gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3240, 1)), gem_string("return GEM_NIL;\n")));
         }
-#line 1190 "compiler/main.gem"
-    GemVal _t3258 = gem_v_w;
-        if (gem_truthy(gem_neq(gem_table_get(_t3258, gem_string("bindings")), GEM_NIL))) {
+#line 1177 "compiler/main.gem"
+    GemVal _t3241[] = {gem_v_p};
+    GemVal _t3242[] = {gem_v_t};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3241, 1), gem_string("(void)")), gem_to_string_fn(NULL, _t3242, 1)), gem_string(";")));
+#line 1178 "compiler/main.gem"
+        GemVal _t3243 = gem_v_out;
+        gem_pop_frame();
+        return _t3243;
+    }
+#line 1180 "compiler/main.gem"
+    GemVal gem_v__for_i_63 = gem_int(0);
+#line 1180 "compiler/main.gem"
+    GemVal _t3244 = gem_v_node;
+    GemVal _t3245[] = {gem_table_get(_t3244, gem_string("whens"))};
+    GemVal gem_v__for_limit_63 = gem_len_fn(NULL, _t3245, 1);
+#line 1180 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_63, gem_v__for_limit_63))) break;
+#line 1180 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_63;
+#line 1180 "compiler/main.gem"
+        gem_v__for_i_63 = gem_add(gem_v__for_i_63, gem_int(1));
+#line 1181 "compiler/main.gem"
+    GemVal _t3246 = gem_v_node;
+        GemVal gem_v_w = gem_table_get(gem_table_get(_t3246, gem_string("whens")), gem_v_i);
+#line 1182 "compiler/main.gem"
+    GemVal _t3247 = gem_v_w;
+    GemVal _t3248[] = {gem_table_get(_t3247, gem_string("value"))};
+    GemVal _t3249 = (*gem_v_compile_expr);
+        GemVal gem_v_val_r = _t3249.fn(_t3249.env, _t3248, 1);
+#line 1183 "compiler/main.gem"
+        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
+#line 1184 "compiler/main.gem"
+    GemVal _t3250 = gem_v_val_r;
+            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3250, gem_string("setup")));
+#line 1185 "compiler/main.gem"
+    GemVal _t3251[] = {gem_v_p};
+    GemVal _t3252 = gem_v_val_r;
+    GemVal _t3253[] = {gem_table_get(_t3252, gem_string("expr"))};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3251, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3253, 1)), gem_string(")) {\n")));
+        } else {
+#line 1187 "compiler/main.gem"
+    GemVal _t3254[] = {gem_v_p};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3254, 1), gem_string("} else {\n")));
+#line 1188 "compiler/main.gem"
+    GemVal _t3255 = gem_v_val_r;
+            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3255, gem_string("setup")));
+#line 1189 "compiler/main.gem"
+    GemVal _t3256[] = {gem_v_p};
+    GemVal _t3257 = gem_v_val_r;
+    GemVal _t3258[] = {gem_table_get(_t3257, gem_string("expr"))};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3256, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3258, 1)), gem_string(")) {\n")));
+        }
 #line 1191 "compiler/main.gem"
     GemVal _t3259 = gem_v_w;
-            GemVal gem_v__for_items_61 = gem_table_get(_t3259, gem_string("bindings"));
-#line 1191 "compiler/main.gem"
-            GemVal gem_v__for_i_61 = gem_int(0);
-#line 1191 "compiler/main.gem"
-            while (1) {
-                GemVal _t3260[] = {gem_v__for_items_61};
-                if (!gem_truthy(gem_lt(gem_v__for_i_61, gem_len_fn(NULL, _t3260, 1)))) break;
-#line 1191 "compiler/main.gem"
-                GemVal gem_v_b = gem_table_get(gem_v__for_items_61, gem_v__for_i_61);
-#line 1191 "compiler/main.gem"
-                gem_v__for_i_61 = gem_add(gem_v__for_i_61, gem_int(1));
+        if (gem_truthy(gem_neq(gem_table_get(_t3259, gem_string("bindings")), GEM_NIL))) {
 #line 1192 "compiler/main.gem"
-    GemVal _t3261[] = {gem_v_b, gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3262 = (*gem_v_compile_stmt);
-                gem_v_out = gem_add(gem_add(gem_v_out, _t3262.fn(_t3262.env, _t3261, 2)), gem_string("\n"));
+    GemVal _t3260 = gem_v_w;
+            GemVal gem_v__for_items_61 = gem_table_get(_t3260, gem_string("bindings"));
+#line 1192 "compiler/main.gem"
+            GemVal gem_v__for_i_61 = gem_int(0);
+#line 1192 "compiler/main.gem"
+            while (1) {
+                gem_yield_check();
+                GemVal _t3261[] = {gem_v__for_items_61};
+                if (!gem_truthy(gem_lt(gem_v__for_i_61, gem_len_fn(NULL, _t3261, 1)))) break;
+#line 1192 "compiler/main.gem"
+                GemVal gem_v_b = gem_table_get(gem_v__for_items_61, gem_v__for_i_61);
+#line 1192 "compiler/main.gem"
+                gem_v__for_i_61 = gem_add(gem_v__for_i_61, gem_int(1));
+#line 1193 "compiler/main.gem"
+    GemVal _t3262[] = {gem_v_b, gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3263 = (*gem_v_compile_stmt);
+                gem_v_out = gem_add(gem_add(gem_v_out, _t3263.fn(_t3263.env, _t3262, 2)), gem_string("\n"));
             }
 
         }
-#line 1195 "compiler/main.gem"
-    GemVal _t3263 = gem_v_w;
-        GemVal gem_v_body = gem_table_get(_t3263, gem_string("body"));
 #line 1196 "compiler/main.gem"
-    GemVal _t3264[] = {gem_v_body};
-        if (gem_truthy(gem_gt(gem_len_fn(NULL, _t3264, 1), gem_int(0)))) {
-#line 1197 "compiler/main.gem"
-            GemVal gem_v__for_i_62 = gem_int(0);
+    GemVal _t3264 = gem_v_w;
+        GemVal gem_v_body = gem_table_get(_t3264, gem_string("body"));
 #line 1197 "compiler/main.gem"
     GemVal _t3265[] = {gem_v_body};
-            GemVal gem_v__for_limit_62 = gem_sub(gem_len_fn(NULL, _t3265, 1), gem_int(1));
-#line 1197 "compiler/main.gem"
-            while (1) {
-                if (!gem_truthy(gem_lt(gem_v__for_i_62, gem_v__for_limit_62))) break;
-#line 1197 "compiler/main.gem"
-                GemVal gem_v_j = gem_v__for_i_62;
-#line 1197 "compiler/main.gem"
-                gem_v__for_i_62 = gem_add(gem_v__for_i_62, gem_int(1));
+        if (gem_truthy(gem_gt(gem_len_fn(NULL, _t3265, 1), gem_int(0)))) {
 #line 1198 "compiler/main.gem"
-    GemVal _t3266[] = {gem_table_get(gem_v_body, gem_v_j), gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3267 = (*gem_v_compile_stmt);
-                gem_v_out = gem_add(gem_add(gem_v_out, _t3267.fn(_t3267.env, _t3266, 2)), gem_string("\n"));
+            GemVal gem_v__for_i_62 = gem_int(0);
+#line 1198 "compiler/main.gem"
+    GemVal _t3266[] = {gem_v_body};
+            GemVal gem_v__for_limit_62 = gem_sub(gem_len_fn(NULL, _t3266, 1), gem_int(1));
+#line 1198 "compiler/main.gem"
+            while (1) {
+                gem_yield_check();
+                if (!gem_truthy(gem_lt(gem_v__for_i_62, gem_v__for_limit_62))) break;
+#line 1198 "compiler/main.gem"
+                GemVal gem_v_j = gem_v__for_i_62;
+#line 1198 "compiler/main.gem"
+                gem_v__for_i_62 = gem_add(gem_v__for_i_62, gem_int(1));
+#line 1199 "compiler/main.gem"
+    GemVal _t3267[] = {gem_table_get(gem_v_body, gem_v_j), gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3268 = (*gem_v_compile_stmt);
+                gem_v_out = gem_add(gem_add(gem_v_out, _t3268.fn(_t3268.env, _t3267, 2)), gem_string("\n"));
             }
 
-#line 1200 "compiler/main.gem"
-    GemVal _t3268[] = {gem_v_body};
-    GemVal _t3269[] = {gem_table_get(gem_v_body, gem_sub(gem_len_fn(NULL, _t3268, 1), gem_int(1))), gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3270 = (*gem_v_compile_stmt_return);
-            gem_v_out = gem_add(gem_add(gem_v_out, _t3270.fn(_t3270.env, _t3269, 2)), gem_string("\n"));
+#line 1201 "compiler/main.gem"
+    GemVal _t3269[] = {gem_v_body};
+    GemVal _t3270[] = {gem_table_get(gem_v_body, gem_sub(gem_len_fn(NULL, _t3269, 1), gem_int(1))), gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3271 = (*gem_v_compile_stmt_return);
+            gem_v_out = gem_add(gem_add(gem_v_out, _t3271.fn(_t3271.env, _t3270, 2)), gem_string("\n"));
         } else {
-#line 1202 "compiler/main.gem"
-    GemVal _t3271[] = {gem_v_p};
+#line 1203 "compiler/main.gem"
     GemVal _t3272[] = {gem_v_p};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3271, 1), gem_string("    gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3272, 1)), gem_string("    return GEM_NIL;\n")));
+    GemVal _t3273[] = {gem_v_p};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3272, 1), gem_string("    gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3273, 1)), gem_string("    return GEM_NIL;\n")));
         }
     }
 
-#line 1205 "compiler/main.gem"
-    GemVal _t3273 = gem_v_node;
-    if (gem_truthy(gem_neq(gem_table_get(_t3273, gem_string("else")), GEM_NIL))) {
 #line 1206 "compiler/main.gem"
-    GemVal _t3274[] = {gem_v_p};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3274, 1), gem_string("} else {\n")));
+    GemVal _t3274 = gem_v_node;
+    if (gem_truthy(gem_neq(gem_table_get(_t3274, gem_string("else")), GEM_NIL))) {
 #line 1207 "compiler/main.gem"
-    GemVal _t3275 = gem_v_node;
-        GemVal gem_v_else_body = gem_table_get(_t3275, gem_string("else"));
+    GemVal _t3275[] = {gem_v_p};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3275, 1), gem_string("} else {\n")));
 #line 1208 "compiler/main.gem"
-    GemVal _t3276[] = {gem_v_else_body};
-        if (gem_truthy(gem_gt(gem_len_fn(NULL, _t3276, 1), gem_int(0)))) {
-#line 1209 "compiler/main.gem"
-            GemVal gem_v__for_i_64 = gem_int(0);
+    GemVal _t3276 = gem_v_node;
+        GemVal gem_v_else_body = gem_table_get(_t3276, gem_string("else"));
 #line 1209 "compiler/main.gem"
     GemVal _t3277[] = {gem_v_else_body};
-            GemVal gem_v__for_limit_64 = gem_sub(gem_len_fn(NULL, _t3277, 1), gem_int(1));
-#line 1209 "compiler/main.gem"
-            while (1) {
-                if (!gem_truthy(gem_lt(gem_v__for_i_64, gem_v__for_limit_64))) break;
-#line 1209 "compiler/main.gem"
-                GemVal gem_v_i = gem_v__for_i_64;
-#line 1209 "compiler/main.gem"
-                gem_v__for_i_64 = gem_add(gem_v__for_i_64, gem_int(1));
+        if (gem_truthy(gem_gt(gem_len_fn(NULL, _t3277, 1), gem_int(0)))) {
 #line 1210 "compiler/main.gem"
-    GemVal _t3278[] = {gem_table_get(gem_v_else_body, gem_v_i), gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3279 = (*gem_v_compile_stmt);
-                gem_v_out = gem_add(gem_add(gem_v_out, _t3279.fn(_t3279.env, _t3278, 2)), gem_string("\n"));
+            GemVal gem_v__for_i_64 = gem_int(0);
+#line 1210 "compiler/main.gem"
+    GemVal _t3278[] = {gem_v_else_body};
+            GemVal gem_v__for_limit_64 = gem_sub(gem_len_fn(NULL, _t3278, 1), gem_int(1));
+#line 1210 "compiler/main.gem"
+            while (1) {
+                gem_yield_check();
+                if (!gem_truthy(gem_lt(gem_v__for_i_64, gem_v__for_limit_64))) break;
+#line 1210 "compiler/main.gem"
+                GemVal gem_v_i = gem_v__for_i_64;
+#line 1210 "compiler/main.gem"
+                gem_v__for_i_64 = gem_add(gem_v__for_i_64, gem_int(1));
+#line 1211 "compiler/main.gem"
+    GemVal _t3279[] = {gem_table_get(gem_v_else_body, gem_v_i), gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3280 = (*gem_v_compile_stmt);
+                gem_v_out = gem_add(gem_add(gem_v_out, _t3280.fn(_t3280.env, _t3279, 2)), gem_string("\n"));
             }
 
-#line 1212 "compiler/main.gem"
-    GemVal _t3280[] = {gem_v_else_body};
-    GemVal _t3281[] = {gem_table_get(gem_v_else_body, gem_sub(gem_len_fn(NULL, _t3280, 1), gem_int(1))), gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3282 = (*gem_v_compile_stmt_return);
-            gem_v_out = gem_add(gem_add(gem_v_out, _t3282.fn(_t3282.env, _t3281, 2)), gem_string("\n"));
+#line 1213 "compiler/main.gem"
+    GemVal _t3281[] = {gem_v_else_body};
+    GemVal _t3282[] = {gem_table_get(gem_v_else_body, gem_sub(gem_len_fn(NULL, _t3281, 1), gem_int(1))), gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3283 = (*gem_v_compile_stmt_return);
+            gem_v_out = gem_add(gem_add(gem_v_out, _t3283.fn(_t3283.env, _t3282, 2)), gem_string("\n"));
         } else {
-#line 1214 "compiler/main.gem"
-    GemVal _t3283[] = {gem_v_p};
+#line 1215 "compiler/main.gem"
     GemVal _t3284[] = {gem_v_p};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3283, 1), gem_string("    gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3284, 1)), gem_string("    return GEM_NIL;\n")));
+    GemVal _t3285[] = {gem_v_p};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3284, 1), gem_string("    gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3285, 1)), gem_string("    return GEM_NIL;\n")));
         }
     } else {
-#line 1217 "compiler/main.gem"
-    GemVal _t3285[] = {gem_v_p};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3285, 1), gem_string("} else {\n")));
 #line 1218 "compiler/main.gem"
     GemVal _t3286[] = {gem_v_p};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3286, 1), gem_string("} else {\n")));
+#line 1219 "compiler/main.gem"
     GemVal _t3287[] = {gem_v_p};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3286, 1), gem_string("    gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3287, 1)), gem_string("    return GEM_NIL;\n")));
-    }
-#line 1220 "compiler/main.gem"
     GemVal _t3288[] = {gem_v_p};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3288, 1), gem_string("}")));
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3287, 1), gem_string("    gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3288, 1)), gem_string("    return GEM_NIL;\n")));
+    }
 #line 1221 "compiler/main.gem"
-    GemVal gem_v__for_i_65 = gem_int(1);
-#line 1221 "compiler/main.gem"
-    GemVal _t3289 = gem_v_node;
-    GemVal _t3290[] = {gem_table_get(_t3289, gem_string("whens"))};
-    GemVal gem_v__for_limit_65 = gem_len_fn(NULL, _t3290, 1);
-#line 1221 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_65, gem_v__for_limit_65))) break;
-#line 1221 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_65;
-#line 1221 "compiler/main.gem"
-        gem_v__for_i_65 = gem_add(gem_v__for_i_65, gem_int(1));
+    GemVal _t3289[] = {gem_v_p};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3289, 1), gem_string("}")));
 #line 1222 "compiler/main.gem"
-    GemVal _t3291[] = {gem_v_p};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("\n"), gem_to_string_fn(NULL, _t3291, 1)), gem_string("}")));
+    GemVal gem_v__for_i_65 = gem_int(1);
+#line 1222 "compiler/main.gem"
+    GemVal _t3290 = gem_v_node;
+    GemVal _t3291[] = {gem_table_get(_t3290, gem_string("whens"))};
+    GemVal gem_v__for_limit_65 = gem_len_fn(NULL, _t3291, 1);
+#line 1222 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_65, gem_v__for_limit_65))) break;
+#line 1222 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_65;
+#line 1222 "compiler/main.gem"
+        gem_v__for_i_65 = gem_add(gem_v__for_i_65, gem_int(1));
+#line 1223 "compiler/main.gem"
+    GemVal _t3292[] = {gem_v_p};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("\n"), gem_to_string_fn(NULL, _t3292, 1)), gem_string("}")));
     }
 
-    GemVal _t3292 = gem_v_out;
+    GemVal _t3293 = gem_v_out;
     gem_pop_frame();
-    return _t3292;
+    return _t3293;
 }
 
 struct _closure__anon_48 {
@@ -12515,333 +12638,337 @@ static GemVal _anon_48(void *_env, GemVal *args, int argc) {
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     gem_push_frame("_anon_48", "compiler/main.gem", 0);
-#line 1230 "compiler/main.gem"
-    GemVal _t3294[] = {gem_v_indent};
-    GemVal gem_v_p = gem_fn_pad_for(NULL, _t3294, 1);
 #line 1231 "compiler/main.gem"
-    GemVal _t3295 = gem_v_node;
-    GemVal gem_v_arms = gem_table_get(_t3295, gem_string("arms"));
+    GemVal _t3295[] = {gem_v_indent};
+    GemVal gem_v_p = gem_fn_pad_for(NULL, _t3295, 1);
 #line 1232 "compiler/main.gem"
     GemVal _t3296 = gem_v_node;
-    GemVal gem_v_after_ms = gem_table_get(_t3296, gem_string("after_ms"));
+    GemVal gem_v_arms = gem_table_get(_t3296, gem_string("arms"));
 #line 1233 "compiler/main.gem"
     GemVal _t3297 = gem_v_node;
-    GemVal gem_v_after_body = gem_table_get(_t3297, gem_string("after_body"));
-#line 1236 "compiler/main.gem"
+    GemVal gem_v_after_ms = gem_table_get(_t3297, gem_string("after_ms"));
+#line 1234 "compiler/main.gem"
     GemVal _t3298 = gem_v_node;
-    GemVal _t3299[] = {gem_table_get(_t3298, gem_string("recv_var"))};
-    GemVal _t3300 = (*gem_v_mangle);
-    GemVal gem_v_recv_tmp = _t3300.fn(_t3300.env, _t3299, 1);
+    GemVal gem_v_after_body = gem_table_get(_t3298, gem_string("after_body"));
 #line 1237 "compiler/main.gem"
-    GemVal _t3301 = (*gem_v_tmp);
-    GemVal gem_v_matched_tmp = _t3301.fn(_t3301.env, NULL, 0);
+    GemVal _t3299 = gem_v_node;
+    GemVal _t3300[] = {gem_table_get(_t3299, gem_string("recv_var"))};
+    GemVal _t3301 = (*gem_v_mangle);
+    GemVal gem_v_recv_tmp = _t3301.fn(_t3301.env, _t3300, 1);
 #line 1238 "compiler/main.gem"
     GemVal _t3302 = (*gem_v_tmp);
-    GemVal gem_v_prev_tmp = _t3302.fn(_t3302.env, NULL, 0);
+    GemVal gem_v_matched_tmp = _t3302.fn(_t3302.env, NULL, 0);
 #line 1239 "compiler/main.gem"
     GemVal _t3303 = (*gem_v_tmp);
-    GemVal gem_v_cur_tmp = _t3303.fn(_t3303.env, NULL, 0);
+    GemVal gem_v_prev_tmp = _t3303.fn(_t3303.env, NULL, 0);
 #line 1240 "compiler/main.gem"
     GemVal _t3304 = (*gem_v_tmp);
-    GemVal gem_v_deadline_tmp = _t3304.fn(_t3304.env, NULL, 0);
+    GemVal gem_v_cur_tmp = _t3304.fn(_t3304.env, NULL, 0);
 #line 1241 "compiler/main.gem"
     GemVal _t3305 = (*gem_v_tmp);
-    GemVal gem_v_proc_tmp = _t3305.fn(_t3305.env, NULL, 0);
-#line 1243 "compiler/main.gem"
+    GemVal gem_v_deadline_tmp = _t3305.fn(_t3305.env, NULL, 0);
+#line 1242 "compiler/main.gem"
+    GemVal _t3306 = (*gem_v_tmp);
+    GemVal gem_v_proc_tmp = _t3306.fn(_t3306.env, NULL, 0);
+#line 1244 "compiler/main.gem"
     GemVal gem_v_out = gem_string("");
-#line 1246 "compiler/main.gem"
-    GemVal _t3306[] = {gem_v_p};
-    GemVal _t3307[] = {gem_v_recv_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3306, 1), gem_string("GemVal ")), gem_to_string_fn(NULL, _t3307, 1)), gem_string(" = GEM_NIL;\n")));
 #line 1247 "compiler/main.gem"
-    GemVal _t3308[] = {gem_v_p};
-    GemVal _t3309[] = {gem_v_matched_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3308, 1), gem_string("int ")), gem_to_string_fn(NULL, _t3309, 1)), gem_string(" = -1;\n")));
-#line 1250 "compiler/main.gem"
-    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
+    GemVal _t3307[] = {gem_v_p};
+    GemVal _t3308[] = {gem_v_recv_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3307, 1), gem_string("GemVal ")), gem_to_string_fn(NULL, _t3308, 1)), gem_string(" = GEM_NIL;\n")));
+#line 1248 "compiler/main.gem"
+    GemVal _t3309[] = {gem_v_p};
+    GemVal _t3310[] = {gem_v_matched_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3309, 1), gem_string("int ")), gem_to_string_fn(NULL, _t3310, 1)), gem_string(" = -1;\n")));
 #line 1251 "compiler/main.gem"
-    GemVal _t3310[] = {gem_v_after_ms};
-    GemVal _t3311 = (*gem_v_compile_expr);
-        GemVal gem_v_ms_r = _t3311.fn(_t3311.env, _t3310, 1);
+    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 1252 "compiler/main.gem"
-    GemVal _t3312 = gem_v_ms_r;
-        gem_v_out = gem_add(gem_v_out, gem_table_get(_t3312, gem_string("setup")));
+    GemVal _t3311[] = {gem_v_after_ms};
+    GemVal _t3312 = (*gem_v_compile_expr);
+        GemVal gem_v_ms_r = _t3312.fn(_t3312.env, _t3311, 1);
 #line 1253 "compiler/main.gem"
-    GemVal _t3313[] = {gem_v_p};
-    GemVal _t3314[] = {gem_v_deadline_tmp};
-    GemVal _t3315 = gem_v_ms_r;
-    GemVal _t3316[] = {gem_table_get(_t3315, gem_string("expr"))};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3313, 1), gem_string("int64_t ")), gem_to_string_fn(NULL, _t3314, 1)), gem_string(" = gem_now_ms() + (int64_t)(")), gem_to_string_fn(NULL, _t3316, 1)), gem_string(").ival;\n")));
+    GemVal _t3313 = gem_v_ms_r;
+        gem_v_out = gem_add(gem_v_out, gem_table_get(_t3313, gem_string("setup")));
+#line 1254 "compiler/main.gem"
+    GemVal _t3314[] = {gem_v_p};
+    GemVal _t3315[] = {gem_v_deadline_tmp};
+    GemVal _t3316 = gem_v_ms_r;
+    GemVal _t3317[] = {gem_table_get(_t3316, gem_string("expr"))};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3314, 1), gem_string("int64_t ")), gem_to_string_fn(NULL, _t3315, 1)), gem_string(" = gem_now_ms() + (int64_t)(")), gem_to_string_fn(NULL, _t3317, 1)), gem_string(").ival;\n")));
     }
-#line 1257 "compiler/main.gem"
-    GemVal _t3317[] = {gem_v_p};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3317, 1), gem_string("while (1) {\n")));
 #line 1258 "compiler/main.gem"
-    GemVal _t3318[] = {gem_add(gem_v_indent, gem_int(1))};
-    GemVal gem_v_p2 = gem_fn_pad_for(NULL, _t3318, 1);
-#line 1261 "compiler/main.gem"
-    GemVal _t3319[] = {gem_v_p2};
-    GemVal _t3320[] = {gem_v_proc_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3319, 1), gem_string("GemProcess *")), gem_to_string_fn(NULL, _t3320, 1)), gem_string(" = &gem_proc_table[gem_current_pid];\n")));
-#line 1264 "compiler/main.gem"
-    GemVal _t3321[] = {gem_v_p2};
-    GemVal _t3322[] = {gem_v_prev_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3321, 1), gem_string("GemMsgNode *")), gem_to_string_fn(NULL, _t3322, 1)), gem_string(" = NULL;\n")));
+    GemVal _t3318[] = {gem_v_p};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3318, 1), gem_string("while (1) {\n")));
+#line 1259 "compiler/main.gem"
+    GemVal _t3319[] = {gem_add(gem_v_indent, gem_int(1))};
+    GemVal gem_v_p2 = gem_fn_pad_for(NULL, _t3319, 1);
+#line 1262 "compiler/main.gem"
+    GemVal _t3320[] = {gem_v_p2};
+    GemVal _t3321[] = {gem_v_proc_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3320, 1), gem_string("GemProcess *")), gem_to_string_fn(NULL, _t3321, 1)), gem_string(" = &gem_proc_table[gem_current_pid];\n")));
 #line 1265 "compiler/main.gem"
-    GemVal _t3323[] = {gem_v_p2};
-    GemVal _t3324[] = {gem_v_cur_tmp};
-    GemVal _t3325[] = {gem_v_proc_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3323, 1), gem_string("GemMsgNode *")), gem_to_string_fn(NULL, _t3324, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3325, 1)), gem_string("->mailbox.head;\n")));
+    GemVal _t3322[] = {gem_v_p2};
+    GemVal _t3323[] = {gem_v_prev_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3322, 1), gem_string("GemMsgNode *")), gem_to_string_fn(NULL, _t3323, 1)), gem_string(" = NULL;\n")));
 #line 1266 "compiler/main.gem"
-    GemVal _t3326[] = {gem_v_p2};
-    GemVal _t3327[] = {gem_v_matched_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_to_string_fn(NULL, _t3326, 1), gem_to_string_fn(NULL, _t3327, 1)), gem_string(" = -1;\n")));
+    GemVal _t3324[] = {gem_v_p2};
+    GemVal _t3325[] = {gem_v_cur_tmp};
+    GemVal _t3326[] = {gem_v_proc_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3324, 1), gem_string("GemMsgNode *")), gem_to_string_fn(NULL, _t3325, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3326, 1)), gem_string("->mailbox.head;\n")));
 #line 1267 "compiler/main.gem"
-    GemVal _t3328[] = {gem_v_p2};
-    GemVal _t3329[] = {gem_v_cur_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3328, 1), gem_string("while (")), gem_to_string_fn(NULL, _t3329, 1)), gem_string(") {\n")));
+    GemVal _t3327[] = {gem_v_p2};
+    GemVal _t3328[] = {gem_v_matched_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_to_string_fn(NULL, _t3327, 1), gem_to_string_fn(NULL, _t3328, 1)), gem_string(" = -1;\n")));
 #line 1268 "compiler/main.gem"
-    GemVal _t3330[] = {gem_add(gem_v_indent, gem_int(2))};
-    GemVal gem_v_p3 = gem_fn_pad_for(NULL, _t3330, 1);
+    GemVal _t3329[] = {gem_v_p2};
+    GemVal _t3330[] = {gem_v_cur_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3329, 1), gem_string("while (")), gem_to_string_fn(NULL, _t3330, 1)), gem_string(") {\n")));
 #line 1269 "compiler/main.gem"
-    GemVal _t3331[] = {gem_v_p3};
-    GemVal _t3332[] = {gem_v_recv_tmp};
-    GemVal _t3333[] = {gem_v_cur_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3331, 1), gem_to_string_fn(NULL, _t3332, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3333, 1)), gem_string("->value;\n")));
-#line 1272 "compiler/main.gem"
-    GemVal gem_v__for_i_66 = gem_int(0);
-#line 1272 "compiler/main.gem"
-    GemVal _t3334[] = {gem_v_arms};
-    GemVal gem_v__for_limit_66 = gem_len_fn(NULL, _t3334, 1);
-#line 1272 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_66, gem_v__for_limit_66))) break;
-#line 1272 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_66;
-#line 1272 "compiler/main.gem"
-        gem_v__for_i_66 = gem_add(gem_v__for_i_66, gem_int(1));
+    GemVal _t3331[] = {gem_add(gem_v_indent, gem_int(2))};
+    GemVal gem_v_p3 = gem_fn_pad_for(NULL, _t3331, 1);
+#line 1270 "compiler/main.gem"
+    GemVal _t3332[] = {gem_v_p3};
+    GemVal _t3333[] = {gem_v_recv_tmp};
+    GemVal _t3334[] = {gem_v_cur_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3332, 1), gem_to_string_fn(NULL, _t3333, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3334, 1)), gem_string("->value;\n")));
 #line 1273 "compiler/main.gem"
-        GemVal gem_v_arm = gem_table_get(gem_v_arms, gem_v_i);
+    GemVal gem_v__for_i_66 = gem_int(0);
+#line 1273 "compiler/main.gem"
+    GemVal _t3335[] = {gem_v_arms};
+    GemVal gem_v__for_limit_66 = gem_len_fn(NULL, _t3335, 1);
+#line 1273 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_66, gem_v__for_limit_66))) break;
+#line 1273 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_66;
+#line 1273 "compiler/main.gem"
+        gem_v__for_i_66 = gem_add(gem_v__for_i_66, gem_int(1));
 #line 1274 "compiler/main.gem"
-    GemVal _t3335 = gem_v_arm;
-    GemVal _t3336 = gem_table_get(_t3335, gem_string("pattern"));
-    GemVal _t3337[] = {gem_table_get(_t3336, gem_string("condition"))};
-    GemVal _t3338 = (*gem_v_compile_expr);
-        GemVal gem_v_cond_r = _t3338.fn(_t3338.env, _t3337, 1);
+        GemVal gem_v_arm = gem_table_get(gem_v_arms, gem_v_i);
 #line 1275 "compiler/main.gem"
-        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
+    GemVal _t3336 = gem_v_arm;
+    GemVal _t3337 = gem_table_get(_t3336, gem_string("pattern"));
+    GemVal _t3338[] = {gem_table_get(_t3337, gem_string("condition"))};
+    GemVal _t3339 = (*gem_v_compile_expr);
+        GemVal gem_v_cond_r = _t3339.fn(_t3339.env, _t3338, 1);
 #line 1276 "compiler/main.gem"
-    GemVal _t3339 = gem_v_cond_r;
-            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3339, gem_string("setup")));
+        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
 #line 1277 "compiler/main.gem"
-    GemVal _t3340[] = {gem_v_p3};
-    GemVal _t3341 = gem_v_cond_r;
-    GemVal _t3342[] = {gem_table_get(_t3341, gem_string("expr"))};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3340, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3342, 1)), gem_string(")) {\n")));
+    GemVal _t3340 = gem_v_cond_r;
+            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3340, gem_string("setup")));
+#line 1278 "compiler/main.gem"
+    GemVal _t3341[] = {gem_v_p3};
+    GemVal _t3342 = gem_v_cond_r;
+    GemVal _t3343[] = {gem_table_get(_t3342, gem_string("expr"))};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3341, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3343, 1)), gem_string(")) {\n")));
         } else {
-#line 1279 "compiler/main.gem"
-    GemVal _t3343[] = {gem_v_p3};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3343, 1), gem_string("} else {\n")));
 #line 1280 "compiler/main.gem"
-    GemVal _t3344 = gem_v_cond_r;
-            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3344, gem_string("setup")));
+    GemVal _t3344[] = {gem_v_p3};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3344, 1), gem_string("} else {\n")));
 #line 1281 "compiler/main.gem"
-    GemVal _t3345[] = {gem_v_p3};
-    GemVal _t3346 = gem_v_cond_r;
-    GemVal _t3347[] = {gem_table_get(_t3346, gem_string("expr"))};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3345, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3347, 1)), gem_string(")) {\n")));
+    GemVal _t3345 = gem_v_cond_r;
+            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3345, gem_string("setup")));
+#line 1282 "compiler/main.gem"
+    GemVal _t3346[] = {gem_v_p3};
+    GemVal _t3347 = gem_v_cond_r;
+    GemVal _t3348[] = {gem_table_get(_t3347, gem_string("expr"))};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3346, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3348, 1)), gem_string(")) {\n")));
         }
-#line 1283 "compiler/main.gem"
-    GemVal _t3348[] = {gem_add(gem_v_indent, gem_int(3))};
-    GemVal _t3349[] = {gem_fn_pad_for(NULL, _t3348, 1)};
-    GemVal _t3350[] = {gem_v_matched_tmp};
-    GemVal _t3351[] = {gem_v_i};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3349, 1), gem_to_string_fn(NULL, _t3350, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3351, 1)), gem_string(";\n")));
+#line 1284 "compiler/main.gem"
+    GemVal _t3349[] = {gem_add(gem_v_indent, gem_int(3))};
+    GemVal _t3350[] = {gem_fn_pad_for(NULL, _t3349, 1)};
+    GemVal _t3351[] = {gem_v_matched_tmp};
+    GemVal _t3352[] = {gem_v_i};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3350, 1), gem_to_string_fn(NULL, _t3351, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3352, 1)), gem_string(";\n")));
     }
 
-#line 1286 "compiler/main.gem"
-    GemVal gem_v__for_i_67 = gem_int(0);
-#line 1286 "compiler/main.gem"
-    GemVal _t3352[] = {gem_v_arms};
-    GemVal gem_v__for_limit_67 = gem_len_fn(NULL, _t3352, 1);
-#line 1286 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_67, gem_v__for_limit_67))) break;
-#line 1286 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_67;
-#line 1286 "compiler/main.gem"
-        gem_v__for_i_67 = gem_add(gem_v__for_i_67, gem_int(1));
 #line 1287 "compiler/main.gem"
-    GemVal _t3353[] = {gem_v_p3};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3353, 1), gem_string("}")));
+    GemVal gem_v__for_i_67 = gem_int(0);
+#line 1287 "compiler/main.gem"
+    GemVal _t3353[] = {gem_v_arms};
+    GemVal gem_v__for_limit_67 = gem_len_fn(NULL, _t3353, 1);
+#line 1287 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_67, gem_v__for_limit_67))) break;
+#line 1287 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_67;
+#line 1287 "compiler/main.gem"
+        gem_v__for_i_67 = gem_add(gem_v__for_i_67, gem_int(1));
 #line 1288 "compiler/main.gem"
-    GemVal _t3354[] = {gem_v_arms};
-        if (gem_truthy(gem_lt(gem_v_i, gem_sub(gem_len_fn(NULL, _t3354, 1), gem_int(1))))) {
+    GemVal _t3354[] = {gem_v_p3};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3354, 1), gem_string("}")));
 #line 1289 "compiler/main.gem"
+    GemVal _t3355[] = {gem_v_arms};
+        if (gem_truthy(gem_lt(gem_v_i, gem_sub(gem_len_fn(NULL, _t3355, 1), gem_int(1))))) {
+#line 1290 "compiler/main.gem"
             gem_v_out = gem_add(gem_v_out, gem_string("\n"));
         }
     }
 
-#line 1292 "compiler/main.gem"
+#line 1293 "compiler/main.gem"
     gem_v_out = gem_add(gem_v_out, gem_string("\n"));
-#line 1295 "compiler/main.gem"
-    GemVal _t3355[] = {gem_v_p3};
-    GemVal _t3356[] = {gem_v_matched_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3355, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3356, 1)), gem_string(" >= 0) {\n")));
 #line 1296 "compiler/main.gem"
-    GemVal _t3357[] = {gem_add(gem_v_indent, gem_int(3))};
-    GemVal gem_v_p4 = gem_fn_pad_for(NULL, _t3357, 1);
+    GemVal _t3356[] = {gem_v_p3};
+    GemVal _t3357[] = {gem_v_matched_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3356, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3357, 1)), gem_string(" >= 0) {\n")));
 #line 1297 "compiler/main.gem"
-    GemVal _t3358[] = {gem_v_p4};
-    GemVal _t3359[] = {gem_v_proc_tmp};
-    GemVal _t3360[] = {gem_v_prev_tmp};
-    GemVal _t3361[] = {gem_v_cur_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3358, 1), gem_string("gem_mailbox_remove(&")), gem_to_string_fn(NULL, _t3359, 1)), gem_string("->mailbox, ")), gem_to_string_fn(NULL, _t3360, 1)), gem_string(", ")), gem_to_string_fn(NULL, _t3361, 1)), gem_string(");\n")));
+    GemVal _t3358[] = {gem_add(gem_v_indent, gem_int(3))};
+    GemVal gem_v_p4 = gem_fn_pad_for(NULL, _t3358, 1);
 #line 1298 "compiler/main.gem"
-    GemVal _t3362[] = {gem_v_p4};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3362, 1), gem_string("break;\n")));
+    GemVal _t3359[] = {gem_v_p4};
+    GemVal _t3360[] = {gem_v_proc_tmp};
+    GemVal _t3361[] = {gem_v_prev_tmp};
+    GemVal _t3362[] = {gem_v_cur_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3359, 1), gem_string("gem_mailbox_remove(&")), gem_to_string_fn(NULL, _t3360, 1)), gem_string("->mailbox, ")), gem_to_string_fn(NULL, _t3361, 1)), gem_string(", ")), gem_to_string_fn(NULL, _t3362, 1)), gem_string(");\n")));
 #line 1299 "compiler/main.gem"
-    GemVal _t3363[] = {gem_v_p3};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3363, 1), gem_string("}\n")));
-#line 1302 "compiler/main.gem"
+    GemVal _t3363[] = {gem_v_p4};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3363, 1), gem_string("break;\n")));
+#line 1300 "compiler/main.gem"
     GemVal _t3364[] = {gem_v_p3};
-    GemVal _t3365[] = {gem_v_prev_tmp};
-    GemVal _t3366[] = {gem_v_cur_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3364, 1), gem_to_string_fn(NULL, _t3365, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3366, 1)), gem_string(";\n")));
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3364, 1), gem_string("}\n")));
 #line 1303 "compiler/main.gem"
-    GemVal _t3367[] = {gem_v_p3};
-    GemVal _t3368[] = {gem_v_cur_tmp};
-    GemVal _t3369[] = {gem_v_cur_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3367, 1), gem_to_string_fn(NULL, _t3368, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3369, 1)), gem_string("->next;\n")));
+    GemVal _t3365[] = {gem_v_p3};
+    GemVal _t3366[] = {gem_v_prev_tmp};
+    GemVal _t3367[] = {gem_v_cur_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3365, 1), gem_to_string_fn(NULL, _t3366, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3367, 1)), gem_string(";\n")));
 #line 1304 "compiler/main.gem"
-    GemVal _t3370[] = {gem_v_p2};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3370, 1), gem_string("}\n")));
-#line 1307 "compiler/main.gem"
+    GemVal _t3368[] = {gem_v_p3};
+    GemVal _t3369[] = {gem_v_cur_tmp};
+    GemVal _t3370[] = {gem_v_cur_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3368, 1), gem_to_string_fn(NULL, _t3369, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3370, 1)), gem_string("->next;\n")));
+#line 1305 "compiler/main.gem"
     GemVal _t3371[] = {gem_v_p2};
-    GemVal _t3372[] = {gem_v_matched_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3371, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3372, 1)), gem_string(" >= 0) break;\n")));
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3371, 1), gem_string("}\n")));
 #line 1308 "compiler/main.gem"
-    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
+    GemVal _t3372[] = {gem_v_p2};
+    GemVal _t3373[] = {gem_v_matched_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3372, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3373, 1)), gem_string(" >= 0) break;\n")));
 #line 1309 "compiler/main.gem"
-    GemVal _t3373[] = {gem_v_p2};
-    GemVal _t3374[] = {gem_v_deadline_tmp};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3373, 1), gem_string("if (gem_now_ms() >= ")), gem_to_string_fn(NULL, _t3374, 1)), gem_string(") {\n")));
+    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 1310 "compiler/main.gem"
-    GemVal _t3375[] = {gem_v_p2};
-    GemVal _t3376[] = {gem_v_matched_tmp};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3375, 1), gem_string("    ")), gem_to_string_fn(NULL, _t3376, 1)), gem_string(" = -2;\n")));
+    GemVal _t3374[] = {gem_v_p2};
+    GemVal _t3375[] = {gem_v_deadline_tmp};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3374, 1), gem_string("if (gem_now_ms() >= ")), gem_to_string_fn(NULL, _t3375, 1)), gem_string(") {\n")));
 #line 1311 "compiler/main.gem"
-    GemVal _t3377[] = {gem_v_p2};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3377, 1), gem_string("    break;\n")));
+    GemVal _t3376[] = {gem_v_p2};
+    GemVal _t3377[] = {gem_v_matched_tmp};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3376, 1), gem_string("    ")), gem_to_string_fn(NULL, _t3377, 1)), gem_string(" = -2;\n")));
 #line 1312 "compiler/main.gem"
     GemVal _t3378[] = {gem_v_p2};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3378, 1), gem_string("}\n")));
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3378, 1), gem_string("    break;\n")));
 #line 1313 "compiler/main.gem"
     GemVal _t3379[] = {gem_v_p2};
-    GemVal _t3380[] = {gem_v_deadline_tmp};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3379, 1), gem_string("gem_selective_yield(")), gem_to_string_fn(NULL, _t3380, 1)), gem_string(");\n")));
-#line 1315 "compiler/main.gem"
-    GemVal _t3381[] = {gem_v_p2};
-    GemVal _t3382[] = {gem_v_proc_tmp};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3381, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3382, 1)), gem_string("->timed_out) {\n")));
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3379, 1), gem_string("}\n")));
+#line 1314 "compiler/main.gem"
+    GemVal _t3380[] = {gem_v_p2};
+    GemVal _t3381[] = {gem_v_deadline_tmp};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3380, 1), gem_string("gem_selective_yield(")), gem_to_string_fn(NULL, _t3381, 1)), gem_string(");\n")));
 #line 1316 "compiler/main.gem"
-    GemVal _t3383[] = {gem_v_p2};
-    GemVal _t3384[] = {gem_v_matched_tmp};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3383, 1), gem_string("    ")), gem_to_string_fn(NULL, _t3384, 1)), gem_string(" = -2;\n")));
+    GemVal _t3382[] = {gem_v_p2};
+    GemVal _t3383[] = {gem_v_proc_tmp};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3382, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3383, 1)), gem_string("->timed_out) {\n")));
 #line 1317 "compiler/main.gem"
-    GemVal _t3385[] = {gem_v_p2};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3385, 1), gem_string("    break;\n")));
+    GemVal _t3384[] = {gem_v_p2};
+    GemVal _t3385[] = {gem_v_matched_tmp};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3384, 1), gem_string("    ")), gem_to_string_fn(NULL, _t3385, 1)), gem_string(" = -2;\n")));
 #line 1318 "compiler/main.gem"
     GemVal _t3386[] = {gem_v_p2};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3386, 1), gem_string("}\n")));
-    } else {
-#line 1320 "compiler/main.gem"
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3386, 1), gem_string("    break;\n")));
+#line 1319 "compiler/main.gem"
     GemVal _t3387[] = {gem_v_p2};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3387, 1), gem_string("gem_selective_yield(-1);\n")));
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3387, 1), gem_string("}\n")));
+    } else {
+#line 1321 "compiler/main.gem"
+    GemVal _t3388[] = {gem_v_p2};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3388, 1), gem_string("gem_selective_yield(-1);\n")));
     }
-#line 1323 "compiler/main.gem"
-    GemVal _t3388[] = {gem_v_p};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3388, 1), gem_string("}\n")));
-#line 1326 "compiler/main.gem"
-    GemVal gem_v__for_i_69 = gem_int(0);
-#line 1326 "compiler/main.gem"
-    GemVal _t3389[] = {gem_v_arms};
-    GemVal gem_v__for_limit_69 = gem_len_fn(NULL, _t3389, 1);
-#line 1326 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_69, gem_v__for_limit_69))) break;
-#line 1326 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_69;
-#line 1326 "compiler/main.gem"
-        gem_v__for_i_69 = gem_add(gem_v__for_i_69, gem_int(1));
+#line 1324 "compiler/main.gem"
+    GemVal _t3389[] = {gem_v_p};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3389, 1), gem_string("}\n")));
 #line 1327 "compiler/main.gem"
-        GemVal gem_v_arm = gem_table_get(gem_v_arms, gem_v_i);
+    GemVal gem_v__for_i_69 = gem_int(0);
+#line 1327 "compiler/main.gem"
+    GemVal _t3390[] = {gem_v_arms};
+    GemVal gem_v__for_limit_69 = gem_len_fn(NULL, _t3390, 1);
+#line 1327 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_69, gem_v__for_limit_69))) break;
+#line 1327 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_69;
+#line 1327 "compiler/main.gem"
+        gem_v__for_i_69 = gem_add(gem_v__for_i_69, gem_int(1));
 #line 1328 "compiler/main.gem"
-        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
+        GemVal gem_v_arm = gem_table_get(gem_v_arms, gem_v_i);
 #line 1329 "compiler/main.gem"
-    GemVal _t3390[] = {gem_v_p};
-    GemVal _t3391[] = {gem_v_matched_tmp};
-    GemVal _t3392[] = {gem_v_i};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3390, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3391, 1)), gem_string(" == ")), gem_to_string_fn(NULL, _t3392, 1)), gem_string(") {\n")));
+        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
+#line 1330 "compiler/main.gem"
+    GemVal _t3391[] = {gem_v_p};
+    GemVal _t3392[] = {gem_v_matched_tmp};
+    GemVal _t3393[] = {gem_v_i};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3391, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3392, 1)), gem_string(" == ")), gem_to_string_fn(NULL, _t3393, 1)), gem_string(") {\n")));
         } else {
-#line 1331 "compiler/main.gem"
-    GemVal _t3393[] = {gem_v_p};
-    GemVal _t3394[] = {gem_v_matched_tmp};
-    GemVal _t3395[] = {gem_v_i};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3393, 1), gem_string("} else if (")), gem_to_string_fn(NULL, _t3394, 1)), gem_string(" == ")), gem_to_string_fn(NULL, _t3395, 1)), gem_string(") {\n")));
+#line 1332 "compiler/main.gem"
+    GemVal _t3394[] = {gem_v_p};
+    GemVal _t3395[] = {gem_v_matched_tmp};
+    GemVal _t3396[] = {gem_v_i};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3394, 1), gem_string("} else if (")), gem_to_string_fn(NULL, _t3395, 1)), gem_string(" == ")), gem_to_string_fn(NULL, _t3396, 1)), gem_string(") {\n")));
         }
-#line 1334 "compiler/main.gem"
-    GemVal _t3396 = gem_v_arm;
-    GemVal _t3397 = gem_table_get(_t3396, gem_string("pattern"));
-        if (gem_truthy(gem_neq(gem_table_get(_t3397, gem_string("bindings")), GEM_NIL))) {
 #line 1335 "compiler/main.gem"
-    GemVal _t3398 = gem_v_arm;
-    GemVal _t3399 = gem_table_get(_t3398, gem_string("pattern"));
-            GemVal gem_v__for_items_68 = gem_table_get(_t3399, gem_string("bindings"));
-#line 1335 "compiler/main.gem"
-            GemVal gem_v__for_i_68 = gem_int(0);
-#line 1335 "compiler/main.gem"
-            while (1) {
-                GemVal _t3400[] = {gem_v__for_items_68};
-                if (!gem_truthy(gem_lt(gem_v__for_i_68, gem_len_fn(NULL, _t3400, 1)))) break;
-#line 1335 "compiler/main.gem"
-                GemVal gem_v_b = gem_table_get(gem_v__for_items_68, gem_v__for_i_68);
-#line 1335 "compiler/main.gem"
-                gem_v__for_i_68 = gem_add(gem_v__for_i_68, gem_int(1));
+    GemVal _t3397 = gem_v_arm;
+    GemVal _t3398 = gem_table_get(_t3397, gem_string("pattern"));
+        if (gem_truthy(gem_neq(gem_table_get(_t3398, gem_string("bindings")), GEM_NIL))) {
 #line 1336 "compiler/main.gem"
-    GemVal _t3401[] = {gem_v_b, gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3402 = (*gem_v_compile_stmt);
-                gem_v_out = gem_add(gem_add(gem_v_out, _t3402.fn(_t3402.env, _t3401, 2)), gem_string("\n"));
+    GemVal _t3399 = gem_v_arm;
+    GemVal _t3400 = gem_table_get(_t3399, gem_string("pattern"));
+            GemVal gem_v__for_items_68 = gem_table_get(_t3400, gem_string("bindings"));
+#line 1336 "compiler/main.gem"
+            GemVal gem_v__for_i_68 = gem_int(0);
+#line 1336 "compiler/main.gem"
+            while (1) {
+                gem_yield_check();
+                GemVal _t3401[] = {gem_v__for_items_68};
+                if (!gem_truthy(gem_lt(gem_v__for_i_68, gem_len_fn(NULL, _t3401, 1)))) break;
+#line 1336 "compiler/main.gem"
+                GemVal gem_v_b = gem_table_get(gem_v__for_items_68, gem_v__for_i_68);
+#line 1336 "compiler/main.gem"
+                gem_v__for_i_68 = gem_add(gem_v__for_i_68, gem_int(1));
+#line 1337 "compiler/main.gem"
+    GemVal _t3402[] = {gem_v_b, gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3403 = (*gem_v_compile_stmt);
+                gem_v_out = gem_add(gem_add(gem_v_out, _t3403.fn(_t3403.env, _t3402, 2)), gem_string("\n"));
             }
 
         }
-#line 1339 "compiler/main.gem"
-    GemVal _t3403 = gem_v_arm;
-    GemVal _t3404[] = {gem_table_get(_t3403, gem_string("body")), gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3405 = (*gem_v_compile_stmts);
-        gem_v_out = gem_add(gem_v_out, _t3405.fn(_t3405.env, _t3404, 2));
+#line 1340 "compiler/main.gem"
+    GemVal _t3404 = gem_v_arm;
+    GemVal _t3405[] = {gem_table_get(_t3404, gem_string("body")), gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3406 = (*gem_v_compile_stmts);
+        gem_v_out = gem_add(gem_v_out, _t3406.fn(_t3406.env, _t3405, 2));
     }
 
-#line 1343 "compiler/main.gem"
-    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 1344 "compiler/main.gem"
-    GemVal _t3406[] = {gem_v_p};
-    GemVal _t3407[] = {gem_v_matched_tmp};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3406, 1), gem_string("} else if (")), gem_to_string_fn(NULL, _t3407, 1)), gem_string(" == -2) {\n")));
+    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 1345 "compiler/main.gem"
-        if (gem_truthy(gem_neq(gem_v_after_body, GEM_NIL))) {
+    GemVal _t3407[] = {gem_v_p};
+    GemVal _t3408[] = {gem_v_matched_tmp};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3407, 1), gem_string("} else if (")), gem_to_string_fn(NULL, _t3408, 1)), gem_string(" == -2) {\n")));
 #line 1346 "compiler/main.gem"
-    GemVal _t3408[] = {gem_v_after_body, gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3409 = (*gem_v_compile_stmts);
-            gem_v_out = gem_add(gem_v_out, _t3409.fn(_t3409.env, _t3408, 2));
+        if (gem_truthy(gem_neq(gem_v_after_body, GEM_NIL))) {
+#line 1347 "compiler/main.gem"
+    GemVal _t3409[] = {gem_v_after_body, gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3410 = (*gem_v_compile_stmts);
+            gem_v_out = gem_add(gem_v_out, _t3410.fn(_t3410.env, _t3409, 2));
         }
     }
-#line 1350 "compiler/main.gem"
-    GemVal _t3410[] = {gem_v_p};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3410, 1), gem_string("}")));
-    GemVal _t3411 = gem_v_out;
+#line 1351 "compiler/main.gem"
+    GemVal _t3411[] = {gem_v_p};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3411, 1), gem_string("}")));
+    GemVal _t3412 = gem_v_out;
     gem_pop_frame();
-    return _t3411;
+    return _t3412;
 }
 
 struct _closure__anon_49 {
@@ -12861,402 +12988,408 @@ static GemVal _anon_49(void *_env, GemVal *args, int argc) {
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     gem_push_frame("_anon_49", "compiler/main.gem", 0);
-#line 1355 "compiler/main.gem"
-    GemVal _t3413[] = {gem_v_indent};
-    GemVal gem_v_p = gem_fn_pad_for(NULL, _t3413, 1);
 #line 1356 "compiler/main.gem"
-    GemVal _t3414 = gem_v_node;
-    GemVal gem_v_arms = gem_table_get(_t3414, gem_string("arms"));
+    GemVal _t3414[] = {gem_v_indent};
+    GemVal gem_v_p = gem_fn_pad_for(NULL, _t3414, 1);
 #line 1357 "compiler/main.gem"
     GemVal _t3415 = gem_v_node;
-    GemVal gem_v_after_ms = gem_table_get(_t3415, gem_string("after_ms"));
+    GemVal gem_v_arms = gem_table_get(_t3415, gem_string("arms"));
 #line 1358 "compiler/main.gem"
     GemVal _t3416 = gem_v_node;
-    GemVal gem_v_after_body = gem_table_get(_t3416, gem_string("after_body"));
-#line 1360 "compiler/main.gem"
+    GemVal gem_v_after_ms = gem_table_get(_t3416, gem_string("after_ms"));
+#line 1359 "compiler/main.gem"
     GemVal _t3417 = gem_v_node;
-    GemVal _t3418[] = {gem_table_get(_t3417, gem_string("recv_var"))};
-    GemVal _t3419 = (*gem_v_mangle);
-    GemVal gem_v_recv_tmp = _t3419.fn(_t3419.env, _t3418, 1);
+    GemVal gem_v_after_body = gem_table_get(_t3417, gem_string("after_body"));
 #line 1361 "compiler/main.gem"
-    GemVal _t3420 = (*gem_v_tmp);
-    GemVal gem_v_matched_tmp = _t3420.fn(_t3420.env, NULL, 0);
+    GemVal _t3418 = gem_v_node;
+    GemVal _t3419[] = {gem_table_get(_t3418, gem_string("recv_var"))};
+    GemVal _t3420 = (*gem_v_mangle);
+    GemVal gem_v_recv_tmp = _t3420.fn(_t3420.env, _t3419, 1);
 #line 1362 "compiler/main.gem"
     GemVal _t3421 = (*gem_v_tmp);
-    GemVal gem_v_prev_tmp = _t3421.fn(_t3421.env, NULL, 0);
+    GemVal gem_v_matched_tmp = _t3421.fn(_t3421.env, NULL, 0);
 #line 1363 "compiler/main.gem"
     GemVal _t3422 = (*gem_v_tmp);
-    GemVal gem_v_cur_tmp = _t3422.fn(_t3422.env, NULL, 0);
+    GemVal gem_v_prev_tmp = _t3422.fn(_t3422.env, NULL, 0);
 #line 1364 "compiler/main.gem"
     GemVal _t3423 = (*gem_v_tmp);
-    GemVal gem_v_deadline_tmp = _t3423.fn(_t3423.env, NULL, 0);
+    GemVal gem_v_cur_tmp = _t3423.fn(_t3423.env, NULL, 0);
 #line 1365 "compiler/main.gem"
     GemVal _t3424 = (*gem_v_tmp);
-    GemVal gem_v_proc_tmp = _t3424.fn(_t3424.env, NULL, 0);
-#line 1367 "compiler/main.gem"
+    GemVal gem_v_deadline_tmp = _t3424.fn(_t3424.env, NULL, 0);
+#line 1366 "compiler/main.gem"
+    GemVal _t3425 = (*gem_v_tmp);
+    GemVal gem_v_proc_tmp = _t3425.fn(_t3425.env, NULL, 0);
+#line 1368 "compiler/main.gem"
     GemVal gem_v_out = gem_string("");
-#line 1369 "compiler/main.gem"
-    GemVal _t3425[] = {gem_v_p};
-    GemVal _t3426[] = {gem_v_recv_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3425, 1), gem_string("GemVal ")), gem_to_string_fn(NULL, _t3426, 1)), gem_string(" = GEM_NIL;\n")));
 #line 1370 "compiler/main.gem"
-    GemVal _t3427[] = {gem_v_p};
-    GemVal _t3428[] = {gem_v_matched_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3427, 1), gem_string("int ")), gem_to_string_fn(NULL, _t3428, 1)), gem_string(" = -1;\n")));
-#line 1372 "compiler/main.gem"
-    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
+    GemVal _t3426[] = {gem_v_p};
+    GemVal _t3427[] = {gem_v_recv_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3426, 1), gem_string("GemVal ")), gem_to_string_fn(NULL, _t3427, 1)), gem_string(" = GEM_NIL;\n")));
+#line 1371 "compiler/main.gem"
+    GemVal _t3428[] = {gem_v_p};
+    GemVal _t3429[] = {gem_v_matched_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3428, 1), gem_string("int ")), gem_to_string_fn(NULL, _t3429, 1)), gem_string(" = -1;\n")));
 #line 1373 "compiler/main.gem"
-    GemVal _t3429[] = {gem_v_after_ms};
-    GemVal _t3430 = (*gem_v_compile_expr);
-        GemVal gem_v_ms_r = _t3430.fn(_t3430.env, _t3429, 1);
+    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 1374 "compiler/main.gem"
-    GemVal _t3431 = gem_v_ms_r;
-        gem_v_out = gem_add(gem_v_out, gem_table_get(_t3431, gem_string("setup")));
+    GemVal _t3430[] = {gem_v_after_ms};
+    GemVal _t3431 = (*gem_v_compile_expr);
+        GemVal gem_v_ms_r = _t3431.fn(_t3431.env, _t3430, 1);
 #line 1375 "compiler/main.gem"
-    GemVal _t3432[] = {gem_v_p};
-    GemVal _t3433[] = {gem_v_deadline_tmp};
-    GemVal _t3434 = gem_v_ms_r;
-    GemVal _t3435[] = {gem_table_get(_t3434, gem_string("expr"))};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3432, 1), gem_string("int64_t ")), gem_to_string_fn(NULL, _t3433, 1)), gem_string(" = gem_now_ms() + (int64_t)(")), gem_to_string_fn(NULL, _t3435, 1)), gem_string(").ival;\n")));
+    GemVal _t3432 = gem_v_ms_r;
+        gem_v_out = gem_add(gem_v_out, gem_table_get(_t3432, gem_string("setup")));
+#line 1376 "compiler/main.gem"
+    GemVal _t3433[] = {gem_v_p};
+    GemVal _t3434[] = {gem_v_deadline_tmp};
+    GemVal _t3435 = gem_v_ms_r;
+    GemVal _t3436[] = {gem_table_get(_t3435, gem_string("expr"))};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3433, 1), gem_string("int64_t ")), gem_to_string_fn(NULL, _t3434, 1)), gem_string(" = gem_now_ms() + (int64_t)(")), gem_to_string_fn(NULL, _t3436, 1)), gem_string(").ival;\n")));
     }
-#line 1378 "compiler/main.gem"
-    GemVal _t3436[] = {gem_v_p};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3436, 1), gem_string("while (1) {\n")));
 #line 1379 "compiler/main.gem"
-    GemVal _t3437[] = {gem_add(gem_v_indent, gem_int(1))};
-    GemVal gem_v_p2 = gem_fn_pad_for(NULL, _t3437, 1);
-#line 1381 "compiler/main.gem"
-    GemVal _t3438[] = {gem_v_p2};
-    GemVal _t3439[] = {gem_v_proc_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3438, 1), gem_string("GemProcess *")), gem_to_string_fn(NULL, _t3439, 1)), gem_string(" = &gem_proc_table[gem_current_pid];\n")));
+    GemVal _t3437[] = {gem_v_p};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3437, 1), gem_string("while (1) {\n")));
+#line 1380 "compiler/main.gem"
+    GemVal _t3438[] = {gem_add(gem_v_indent, gem_int(1))};
+    GemVal gem_v_p2 = gem_fn_pad_for(NULL, _t3438, 1);
 #line 1382 "compiler/main.gem"
-    GemVal _t3440[] = {gem_v_p2};
-    GemVal _t3441[] = {gem_v_prev_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3440, 1), gem_string("GemMsgNode *")), gem_to_string_fn(NULL, _t3441, 1)), gem_string(" = NULL;\n")));
+    GemVal _t3439[] = {gem_v_p2};
+    GemVal _t3440[] = {gem_v_proc_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3439, 1), gem_string("GemProcess *")), gem_to_string_fn(NULL, _t3440, 1)), gem_string(" = &gem_proc_table[gem_current_pid];\n")));
 #line 1383 "compiler/main.gem"
-    GemVal _t3442[] = {gem_v_p2};
-    GemVal _t3443[] = {gem_v_cur_tmp};
-    GemVal _t3444[] = {gem_v_proc_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3442, 1), gem_string("GemMsgNode *")), gem_to_string_fn(NULL, _t3443, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3444, 1)), gem_string("->mailbox.head;\n")));
+    GemVal _t3441[] = {gem_v_p2};
+    GemVal _t3442[] = {gem_v_prev_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3441, 1), gem_string("GemMsgNode *")), gem_to_string_fn(NULL, _t3442, 1)), gem_string(" = NULL;\n")));
 #line 1384 "compiler/main.gem"
-    GemVal _t3445[] = {gem_v_p2};
-    GemVal _t3446[] = {gem_v_matched_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_to_string_fn(NULL, _t3445, 1), gem_to_string_fn(NULL, _t3446, 1)), gem_string(" = -1;\n")));
+    GemVal _t3443[] = {gem_v_p2};
+    GemVal _t3444[] = {gem_v_cur_tmp};
+    GemVal _t3445[] = {gem_v_proc_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3443, 1), gem_string("GemMsgNode *")), gem_to_string_fn(NULL, _t3444, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3445, 1)), gem_string("->mailbox.head;\n")));
 #line 1385 "compiler/main.gem"
-    GemVal _t3447[] = {gem_v_p2};
-    GemVal _t3448[] = {gem_v_cur_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3447, 1), gem_string("while (")), gem_to_string_fn(NULL, _t3448, 1)), gem_string(") {\n")));
+    GemVal _t3446[] = {gem_v_p2};
+    GemVal _t3447[] = {gem_v_matched_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_to_string_fn(NULL, _t3446, 1), gem_to_string_fn(NULL, _t3447, 1)), gem_string(" = -1;\n")));
 #line 1386 "compiler/main.gem"
-    GemVal _t3449[] = {gem_add(gem_v_indent, gem_int(2))};
-    GemVal gem_v_p3 = gem_fn_pad_for(NULL, _t3449, 1);
+    GemVal _t3448[] = {gem_v_p2};
+    GemVal _t3449[] = {gem_v_cur_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3448, 1), gem_string("while (")), gem_to_string_fn(NULL, _t3449, 1)), gem_string(") {\n")));
 #line 1387 "compiler/main.gem"
-    GemVal _t3450[] = {gem_v_p3};
-    GemVal _t3451[] = {gem_v_recv_tmp};
-    GemVal _t3452[] = {gem_v_cur_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3450, 1), gem_to_string_fn(NULL, _t3451, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3452, 1)), gem_string("->value;\n")));
-#line 1389 "compiler/main.gem"
-    GemVal gem_v__for_i_70 = gem_int(0);
-#line 1389 "compiler/main.gem"
-    GemVal _t3453[] = {gem_v_arms};
-    GemVal gem_v__for_limit_70 = gem_len_fn(NULL, _t3453, 1);
-#line 1389 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_70, gem_v__for_limit_70))) break;
-#line 1389 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_70;
-#line 1389 "compiler/main.gem"
-        gem_v__for_i_70 = gem_add(gem_v__for_i_70, gem_int(1));
+    GemVal _t3450[] = {gem_add(gem_v_indent, gem_int(2))};
+    GemVal gem_v_p3 = gem_fn_pad_for(NULL, _t3450, 1);
+#line 1388 "compiler/main.gem"
+    GemVal _t3451[] = {gem_v_p3};
+    GemVal _t3452[] = {gem_v_recv_tmp};
+    GemVal _t3453[] = {gem_v_cur_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3451, 1), gem_to_string_fn(NULL, _t3452, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3453, 1)), gem_string("->value;\n")));
 #line 1390 "compiler/main.gem"
-        GemVal gem_v_arm = gem_table_get(gem_v_arms, gem_v_i);
+    GemVal gem_v__for_i_70 = gem_int(0);
+#line 1390 "compiler/main.gem"
+    GemVal _t3454[] = {gem_v_arms};
+    GemVal gem_v__for_limit_70 = gem_len_fn(NULL, _t3454, 1);
+#line 1390 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_70, gem_v__for_limit_70))) break;
+#line 1390 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_70;
+#line 1390 "compiler/main.gem"
+        gem_v__for_i_70 = gem_add(gem_v__for_i_70, gem_int(1));
 #line 1391 "compiler/main.gem"
-    GemVal _t3454 = gem_v_arm;
-    GemVal _t3455 = gem_table_get(_t3454, gem_string("pattern"));
-    GemVal _t3456[] = {gem_table_get(_t3455, gem_string("condition"))};
-    GemVal _t3457 = (*gem_v_compile_expr);
-        GemVal gem_v_cond_r = _t3457.fn(_t3457.env, _t3456, 1);
+        GemVal gem_v_arm = gem_table_get(gem_v_arms, gem_v_i);
 #line 1392 "compiler/main.gem"
-        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
+    GemVal _t3455 = gem_v_arm;
+    GemVal _t3456 = gem_table_get(_t3455, gem_string("pattern"));
+    GemVal _t3457[] = {gem_table_get(_t3456, gem_string("condition"))};
+    GemVal _t3458 = (*gem_v_compile_expr);
+        GemVal gem_v_cond_r = _t3458.fn(_t3458.env, _t3457, 1);
 #line 1393 "compiler/main.gem"
-    GemVal _t3458 = gem_v_cond_r;
-            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3458, gem_string("setup")));
+        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
 #line 1394 "compiler/main.gem"
-    GemVal _t3459[] = {gem_v_p3};
-    GemVal _t3460 = gem_v_cond_r;
-    GemVal _t3461[] = {gem_table_get(_t3460, gem_string("expr"))};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3459, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3461, 1)), gem_string(")) {\n")));
+    GemVal _t3459 = gem_v_cond_r;
+            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3459, gem_string("setup")));
+#line 1395 "compiler/main.gem"
+    GemVal _t3460[] = {gem_v_p3};
+    GemVal _t3461 = gem_v_cond_r;
+    GemVal _t3462[] = {gem_table_get(_t3461, gem_string("expr"))};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3460, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3462, 1)), gem_string(")) {\n")));
         } else {
-#line 1396 "compiler/main.gem"
-    GemVal _t3462[] = {gem_v_p3};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3462, 1), gem_string("} else {\n")));
 #line 1397 "compiler/main.gem"
-    GemVal _t3463 = gem_v_cond_r;
-            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3463, gem_string("setup")));
+    GemVal _t3463[] = {gem_v_p3};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3463, 1), gem_string("} else {\n")));
 #line 1398 "compiler/main.gem"
-    GemVal _t3464[] = {gem_v_p3};
-    GemVal _t3465 = gem_v_cond_r;
-    GemVal _t3466[] = {gem_table_get(_t3465, gem_string("expr"))};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3464, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3466, 1)), gem_string(")) {\n")));
+    GemVal _t3464 = gem_v_cond_r;
+            gem_v_out = gem_add(gem_v_out, gem_table_get(_t3464, gem_string("setup")));
+#line 1399 "compiler/main.gem"
+    GemVal _t3465[] = {gem_v_p3};
+    GemVal _t3466 = gem_v_cond_r;
+    GemVal _t3467[] = {gem_table_get(_t3466, gem_string("expr"))};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3465, 1), gem_string("if (gem_truthy(")), gem_to_string_fn(NULL, _t3467, 1)), gem_string(")) {\n")));
         }
-#line 1400 "compiler/main.gem"
-    GemVal _t3467[] = {gem_add(gem_v_indent, gem_int(3))};
-    GemVal _t3468[] = {gem_fn_pad_for(NULL, _t3467, 1)};
-    GemVal _t3469[] = {gem_v_matched_tmp};
-    GemVal _t3470[] = {gem_v_i};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3468, 1), gem_to_string_fn(NULL, _t3469, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3470, 1)), gem_string(";\n")));
+#line 1401 "compiler/main.gem"
+    GemVal _t3468[] = {gem_add(gem_v_indent, gem_int(3))};
+    GemVal _t3469[] = {gem_fn_pad_for(NULL, _t3468, 1)};
+    GemVal _t3470[] = {gem_v_matched_tmp};
+    GemVal _t3471[] = {gem_v_i};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3469, 1), gem_to_string_fn(NULL, _t3470, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3471, 1)), gem_string(";\n")));
     }
 
-#line 1402 "compiler/main.gem"
-    GemVal gem_v__for_i_71 = gem_int(0);
-#line 1402 "compiler/main.gem"
-    GemVal _t3471[] = {gem_v_arms};
-    GemVal gem_v__for_limit_71 = gem_len_fn(NULL, _t3471, 1);
-#line 1402 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_71, gem_v__for_limit_71))) break;
-#line 1402 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_71;
-#line 1402 "compiler/main.gem"
-        gem_v__for_i_71 = gem_add(gem_v__for_i_71, gem_int(1));
 #line 1403 "compiler/main.gem"
-    GemVal _t3472[] = {gem_v_p3};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3472, 1), gem_string("}")));
+    GemVal gem_v__for_i_71 = gem_int(0);
+#line 1403 "compiler/main.gem"
+    GemVal _t3472[] = {gem_v_arms};
+    GemVal gem_v__for_limit_71 = gem_len_fn(NULL, _t3472, 1);
+#line 1403 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_71, gem_v__for_limit_71))) break;
+#line 1403 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_71;
+#line 1403 "compiler/main.gem"
+        gem_v__for_i_71 = gem_add(gem_v__for_i_71, gem_int(1));
 #line 1404 "compiler/main.gem"
-    GemVal _t3473[] = {gem_v_arms};
-        if (gem_truthy(gem_lt(gem_v_i, gem_sub(gem_len_fn(NULL, _t3473, 1), gem_int(1))))) {
+    GemVal _t3473[] = {gem_v_p3};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3473, 1), gem_string("}")));
 #line 1405 "compiler/main.gem"
+    GemVal _t3474[] = {gem_v_arms};
+        if (gem_truthy(gem_lt(gem_v_i, gem_sub(gem_len_fn(NULL, _t3474, 1), gem_int(1))))) {
+#line 1406 "compiler/main.gem"
             gem_v_out = gem_add(gem_v_out, gem_string("\n"));
         }
     }
 
-#line 1408 "compiler/main.gem"
+#line 1409 "compiler/main.gem"
     gem_v_out = gem_add(gem_v_out, gem_string("\n"));
-#line 1410 "compiler/main.gem"
-    GemVal _t3474[] = {gem_v_p3};
-    GemVal _t3475[] = {gem_v_matched_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3474, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3475, 1)), gem_string(" >= 0) {\n")));
 #line 1411 "compiler/main.gem"
-    GemVal _t3476[] = {gem_add(gem_v_indent, gem_int(3))};
-    GemVal gem_v_p4 = gem_fn_pad_for(NULL, _t3476, 1);
+    GemVal _t3475[] = {gem_v_p3};
+    GemVal _t3476[] = {gem_v_matched_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3475, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3476, 1)), gem_string(" >= 0) {\n")));
 #line 1412 "compiler/main.gem"
-    GemVal _t3477[] = {gem_v_p4};
-    GemVal _t3478[] = {gem_v_proc_tmp};
-    GemVal _t3479[] = {gem_v_prev_tmp};
-    GemVal _t3480[] = {gem_v_cur_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3477, 1), gem_string("gem_mailbox_remove(&")), gem_to_string_fn(NULL, _t3478, 1)), gem_string("->mailbox, ")), gem_to_string_fn(NULL, _t3479, 1)), gem_string(", ")), gem_to_string_fn(NULL, _t3480, 1)), gem_string(");\n")));
+    GemVal _t3477[] = {gem_add(gem_v_indent, gem_int(3))};
+    GemVal gem_v_p4 = gem_fn_pad_for(NULL, _t3477, 1);
 #line 1413 "compiler/main.gem"
-    GemVal _t3481[] = {gem_v_p4};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3481, 1), gem_string("break;\n")));
+    GemVal _t3478[] = {gem_v_p4};
+    GemVal _t3479[] = {gem_v_proc_tmp};
+    GemVal _t3480[] = {gem_v_prev_tmp};
+    GemVal _t3481[] = {gem_v_cur_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3478, 1), gem_string("gem_mailbox_remove(&")), gem_to_string_fn(NULL, _t3479, 1)), gem_string("->mailbox, ")), gem_to_string_fn(NULL, _t3480, 1)), gem_string(", ")), gem_to_string_fn(NULL, _t3481, 1)), gem_string(");\n")));
 #line 1414 "compiler/main.gem"
-    GemVal _t3482[] = {gem_v_p3};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3482, 1), gem_string("}\n")));
-#line 1416 "compiler/main.gem"
+    GemVal _t3482[] = {gem_v_p4};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3482, 1), gem_string("break;\n")));
+#line 1415 "compiler/main.gem"
     GemVal _t3483[] = {gem_v_p3};
-    GemVal _t3484[] = {gem_v_prev_tmp};
-    GemVal _t3485[] = {gem_v_cur_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3483, 1), gem_to_string_fn(NULL, _t3484, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3485, 1)), gem_string(";\n")));
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3483, 1), gem_string("}\n")));
 #line 1417 "compiler/main.gem"
-    GemVal _t3486[] = {gem_v_p3};
-    GemVal _t3487[] = {gem_v_cur_tmp};
-    GemVal _t3488[] = {gem_v_cur_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3486, 1), gem_to_string_fn(NULL, _t3487, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3488, 1)), gem_string("->next;\n")));
+    GemVal _t3484[] = {gem_v_p3};
+    GemVal _t3485[] = {gem_v_prev_tmp};
+    GemVal _t3486[] = {gem_v_cur_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3484, 1), gem_to_string_fn(NULL, _t3485, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3486, 1)), gem_string(";\n")));
 #line 1418 "compiler/main.gem"
-    GemVal _t3489[] = {gem_v_p2};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3489, 1), gem_string("}\n")));
-#line 1420 "compiler/main.gem"
+    GemVal _t3487[] = {gem_v_p3};
+    GemVal _t3488[] = {gem_v_cur_tmp};
+    GemVal _t3489[] = {gem_v_cur_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3487, 1), gem_to_string_fn(NULL, _t3488, 1)), gem_string(" = ")), gem_to_string_fn(NULL, _t3489, 1)), gem_string("->next;\n")));
+#line 1419 "compiler/main.gem"
     GemVal _t3490[] = {gem_v_p2};
-    GemVal _t3491[] = {gem_v_matched_tmp};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3490, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3491, 1)), gem_string(" >= 0) break;\n")));
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3490, 1), gem_string("}\n")));
 #line 1421 "compiler/main.gem"
-    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
+    GemVal _t3491[] = {gem_v_p2};
+    GemVal _t3492[] = {gem_v_matched_tmp};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3491, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3492, 1)), gem_string(" >= 0) break;\n")));
 #line 1422 "compiler/main.gem"
-    GemVal _t3492[] = {gem_v_p2};
-    GemVal _t3493[] = {gem_v_deadline_tmp};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3492, 1), gem_string("if (gem_now_ms() >= ")), gem_to_string_fn(NULL, _t3493, 1)), gem_string(") {\n")));
+    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 1423 "compiler/main.gem"
-    GemVal _t3494[] = {gem_v_p2};
-    GemVal _t3495[] = {gem_v_matched_tmp};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3494, 1), gem_string("    ")), gem_to_string_fn(NULL, _t3495, 1)), gem_string(" = -2;\n")));
+    GemVal _t3493[] = {gem_v_p2};
+    GemVal _t3494[] = {gem_v_deadline_tmp};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3493, 1), gem_string("if (gem_now_ms() >= ")), gem_to_string_fn(NULL, _t3494, 1)), gem_string(") {\n")));
 #line 1424 "compiler/main.gem"
-    GemVal _t3496[] = {gem_v_p2};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3496, 1), gem_string("    break;\n")));
+    GemVal _t3495[] = {gem_v_p2};
+    GemVal _t3496[] = {gem_v_matched_tmp};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3495, 1), gem_string("    ")), gem_to_string_fn(NULL, _t3496, 1)), gem_string(" = -2;\n")));
 #line 1425 "compiler/main.gem"
     GemVal _t3497[] = {gem_v_p2};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3497, 1), gem_string("}\n")));
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3497, 1), gem_string("    break;\n")));
 #line 1426 "compiler/main.gem"
     GemVal _t3498[] = {gem_v_p2};
-    GemVal _t3499[] = {gem_v_deadline_tmp};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3498, 1), gem_string("gem_selective_yield(")), gem_to_string_fn(NULL, _t3499, 1)), gem_string(");\n")));
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3498, 1), gem_string("}\n")));
 #line 1427 "compiler/main.gem"
-    GemVal _t3500[] = {gem_v_p2};
-    GemVal _t3501[] = {gem_v_proc_tmp};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3500, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3501, 1)), gem_string("->timed_out) {\n")));
+    GemVal _t3499[] = {gem_v_p2};
+    GemVal _t3500[] = {gem_v_deadline_tmp};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3499, 1), gem_string("gem_selective_yield(")), gem_to_string_fn(NULL, _t3500, 1)), gem_string(");\n")));
 #line 1428 "compiler/main.gem"
-    GemVal _t3502[] = {gem_v_p2};
-    GemVal _t3503[] = {gem_v_matched_tmp};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3502, 1), gem_string("    ")), gem_to_string_fn(NULL, _t3503, 1)), gem_string(" = -2;\n")));
+    GemVal _t3501[] = {gem_v_p2};
+    GemVal _t3502[] = {gem_v_proc_tmp};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3501, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3502, 1)), gem_string("->timed_out) {\n")));
 #line 1429 "compiler/main.gem"
-    GemVal _t3504[] = {gem_v_p2};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3504, 1), gem_string("    break;\n")));
+    GemVal _t3503[] = {gem_v_p2};
+    GemVal _t3504[] = {gem_v_matched_tmp};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3503, 1), gem_string("    ")), gem_to_string_fn(NULL, _t3504, 1)), gem_string(" = -2;\n")));
 #line 1430 "compiler/main.gem"
     GemVal _t3505[] = {gem_v_p2};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3505, 1), gem_string("}\n")));
-    } else {
-#line 1432 "compiler/main.gem"
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3505, 1), gem_string("    break;\n")));
+#line 1431 "compiler/main.gem"
     GemVal _t3506[] = {gem_v_p2};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3506, 1), gem_string("gem_selective_yield(-1);\n")));
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3506, 1), gem_string("}\n")));
+    } else {
+#line 1433 "compiler/main.gem"
+    GemVal _t3507[] = {gem_v_p2};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3507, 1), gem_string("gem_selective_yield(-1);\n")));
     }
-#line 1435 "compiler/main.gem"
-    GemVal _t3507[] = {gem_v_p};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3507, 1), gem_string("}\n")));
-#line 1438 "compiler/main.gem"
-    GemVal gem_v__for_i_74 = gem_int(0);
-#line 1438 "compiler/main.gem"
-    GemVal _t3508[] = {gem_v_arms};
-    GemVal gem_v__for_limit_74 = gem_len_fn(NULL, _t3508, 1);
-#line 1438 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_74, gem_v__for_limit_74))) break;
-#line 1438 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_74;
-#line 1438 "compiler/main.gem"
-        gem_v__for_i_74 = gem_add(gem_v__for_i_74, gem_int(1));
+#line 1436 "compiler/main.gem"
+    GemVal _t3508[] = {gem_v_p};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3508, 1), gem_string("}\n")));
 #line 1439 "compiler/main.gem"
-        GemVal gem_v_arm = gem_table_get(gem_v_arms, gem_v_i);
+    GemVal gem_v__for_i_74 = gem_int(0);
+#line 1439 "compiler/main.gem"
+    GemVal _t3509[] = {gem_v_arms};
+    GemVal gem_v__for_limit_74 = gem_len_fn(NULL, _t3509, 1);
+#line 1439 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_74, gem_v__for_limit_74))) break;
+#line 1439 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_74;
+#line 1439 "compiler/main.gem"
+        gem_v__for_i_74 = gem_add(gem_v__for_i_74, gem_int(1));
 #line 1440 "compiler/main.gem"
-        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
+        GemVal gem_v_arm = gem_table_get(gem_v_arms, gem_v_i);
 #line 1441 "compiler/main.gem"
-    GemVal _t3509[] = {gem_v_p};
-    GemVal _t3510[] = {gem_v_matched_tmp};
-    GemVal _t3511[] = {gem_v_i};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3509, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3510, 1)), gem_string(" == ")), gem_to_string_fn(NULL, _t3511, 1)), gem_string(") {\n")));
+        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
+#line 1442 "compiler/main.gem"
+    GemVal _t3510[] = {gem_v_p};
+    GemVal _t3511[] = {gem_v_matched_tmp};
+    GemVal _t3512[] = {gem_v_i};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3510, 1), gem_string("if (")), gem_to_string_fn(NULL, _t3511, 1)), gem_string(" == ")), gem_to_string_fn(NULL, _t3512, 1)), gem_string(") {\n")));
         } else {
-#line 1443 "compiler/main.gem"
-    GemVal _t3512[] = {gem_v_p};
-    GemVal _t3513[] = {gem_v_matched_tmp};
-    GemVal _t3514[] = {gem_v_i};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3512, 1), gem_string("} else if (")), gem_to_string_fn(NULL, _t3513, 1)), gem_string(" == ")), gem_to_string_fn(NULL, _t3514, 1)), gem_string(") {\n")));
+#line 1444 "compiler/main.gem"
+    GemVal _t3513[] = {gem_v_p};
+    GemVal _t3514[] = {gem_v_matched_tmp};
+    GemVal _t3515[] = {gem_v_i};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3513, 1), gem_string("} else if (")), gem_to_string_fn(NULL, _t3514, 1)), gem_string(" == ")), gem_to_string_fn(NULL, _t3515, 1)), gem_string(") {\n")));
         }
-#line 1445 "compiler/main.gem"
-    GemVal _t3515 = gem_v_arm;
-    GemVal _t3516 = gem_table_get(_t3515, gem_string("pattern"));
-        if (gem_truthy(gem_neq(gem_table_get(_t3516, gem_string("bindings")), GEM_NIL))) {
 #line 1446 "compiler/main.gem"
-    GemVal _t3517 = gem_v_arm;
-    GemVal _t3518 = gem_table_get(_t3517, gem_string("pattern"));
-            GemVal gem_v__for_items_72 = gem_table_get(_t3518, gem_string("bindings"));
-#line 1446 "compiler/main.gem"
-            GemVal gem_v__for_i_72 = gem_int(0);
-#line 1446 "compiler/main.gem"
-            while (1) {
-                GemVal _t3519[] = {gem_v__for_items_72};
-                if (!gem_truthy(gem_lt(gem_v__for_i_72, gem_len_fn(NULL, _t3519, 1)))) break;
-#line 1446 "compiler/main.gem"
-                GemVal gem_v_b = gem_table_get(gem_v__for_items_72, gem_v__for_i_72);
-#line 1446 "compiler/main.gem"
-                gem_v__for_i_72 = gem_add(gem_v__for_i_72, gem_int(1));
+    GemVal _t3516 = gem_v_arm;
+    GemVal _t3517 = gem_table_get(_t3516, gem_string("pattern"));
+        if (gem_truthy(gem_neq(gem_table_get(_t3517, gem_string("bindings")), GEM_NIL))) {
 #line 1447 "compiler/main.gem"
-    GemVal _t3520[] = {gem_v_b, gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3521 = (*gem_v_compile_stmt);
-                gem_v_out = gem_add(gem_add(gem_v_out, _t3521.fn(_t3521.env, _t3520, 2)), gem_string("\n"));
+    GemVal _t3518 = gem_v_arm;
+    GemVal _t3519 = gem_table_get(_t3518, gem_string("pattern"));
+            GemVal gem_v__for_items_72 = gem_table_get(_t3519, gem_string("bindings"));
+#line 1447 "compiler/main.gem"
+            GemVal gem_v__for_i_72 = gem_int(0);
+#line 1447 "compiler/main.gem"
+            while (1) {
+                gem_yield_check();
+                GemVal _t3520[] = {gem_v__for_items_72};
+                if (!gem_truthy(gem_lt(gem_v__for_i_72, gem_len_fn(NULL, _t3520, 1)))) break;
+#line 1447 "compiler/main.gem"
+                GemVal gem_v_b = gem_table_get(gem_v__for_items_72, gem_v__for_i_72);
+#line 1447 "compiler/main.gem"
+                gem_v__for_i_72 = gem_add(gem_v__for_i_72, gem_int(1));
+#line 1448 "compiler/main.gem"
+    GemVal _t3521[] = {gem_v_b, gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3522 = (*gem_v_compile_stmt);
+                gem_v_out = gem_add(gem_add(gem_v_out, _t3522.fn(_t3522.env, _t3521, 2)), gem_string("\n"));
             }
 
         }
-#line 1450 "compiler/main.gem"
-    GemVal _t3522 = gem_v_arm;
-        GemVal gem_v_body = gem_table_get(_t3522, gem_string("body"));
 #line 1451 "compiler/main.gem"
-    GemVal _t3523[] = {gem_v_body};
-        if (gem_truthy(gem_gt(gem_len_fn(NULL, _t3523, 1), gem_int(0)))) {
-#line 1452 "compiler/main.gem"
-            GemVal gem_v__for_i_73 = gem_int(0);
+    GemVal _t3523 = gem_v_arm;
+        GemVal gem_v_body = gem_table_get(_t3523, gem_string("body"));
 #line 1452 "compiler/main.gem"
     GemVal _t3524[] = {gem_v_body};
-            GemVal gem_v__for_limit_73 = gem_sub(gem_len_fn(NULL, _t3524, 1), gem_int(1));
-#line 1452 "compiler/main.gem"
-            while (1) {
-                if (!gem_truthy(gem_lt(gem_v__for_i_73, gem_v__for_limit_73))) break;
-#line 1452 "compiler/main.gem"
-                GemVal gem_v_j = gem_v__for_i_73;
-#line 1452 "compiler/main.gem"
-                gem_v__for_i_73 = gem_add(gem_v__for_i_73, gem_int(1));
+        if (gem_truthy(gem_gt(gem_len_fn(NULL, _t3524, 1), gem_int(0)))) {
 #line 1453 "compiler/main.gem"
-    GemVal _t3525[] = {gem_table_get(gem_v_body, gem_v_j), gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3526 = (*gem_v_compile_stmt);
-                gem_v_out = gem_add(gem_add(gem_v_out, _t3526.fn(_t3526.env, _t3525, 2)), gem_string("\n"));
-            }
-
-#line 1455 "compiler/main.gem"
-    GemVal _t3527[] = {gem_v_body};
-    GemVal _t3528[] = {gem_table_get(gem_v_body, gem_sub(gem_len_fn(NULL, _t3527, 1), gem_int(1))), gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3529 = (*gem_v_compile_stmt_return);
-            gem_v_out = gem_add(gem_add(gem_v_out, _t3529.fn(_t3529.env, _t3528, 2)), gem_string("\n"));
-        } else {
-#line 1457 "compiler/main.gem"
-    GemVal _t3530[] = {gem_v_p};
-    GemVal _t3531[] = {gem_v_p};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3530, 1), gem_string("    gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3531, 1)), gem_string("    return GEM_NIL;\n")));
-        }
-    }
-
-#line 1461 "compiler/main.gem"
-    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
-#line 1462 "compiler/main.gem"
-    GemVal _t3532[] = {gem_v_p};
-    GemVal _t3533[] = {gem_v_matched_tmp};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3532, 1), gem_string("} else if (")), gem_to_string_fn(NULL, _t3533, 1)), gem_string(" == -2) {\n")));
-#line 1463 "compiler/main.gem"
-    GemVal _t3535;
-    if (!gem_truthy(gem_neq(gem_v_after_body, GEM_NIL))) {
-        _t3535 = gem_neq(gem_v_after_body, GEM_NIL);
-    } else {
-        GemVal _t3534[] = {gem_v_after_body};
-        _t3535 = gem_gt(gem_len_fn(NULL, _t3534, 1), gem_int(0));
-    }
-        if (gem_truthy(_t3535)) {
-#line 1464 "compiler/main.gem"
-            GemVal gem_v__for_i_75 = gem_int(0);
-#line 1464 "compiler/main.gem"
-    GemVal _t3536[] = {gem_v_after_body};
-            GemVal gem_v__for_limit_75 = gem_sub(gem_len_fn(NULL, _t3536, 1), gem_int(1));
-#line 1464 "compiler/main.gem"
+            GemVal gem_v__for_i_73 = gem_int(0);
+#line 1453 "compiler/main.gem"
+    GemVal _t3525[] = {gem_v_body};
+            GemVal gem_v__for_limit_73 = gem_sub(gem_len_fn(NULL, _t3525, 1), gem_int(1));
+#line 1453 "compiler/main.gem"
             while (1) {
-                if (!gem_truthy(gem_lt(gem_v__for_i_75, gem_v__for_limit_75))) break;
-#line 1464 "compiler/main.gem"
-                GemVal gem_v_j = gem_v__for_i_75;
-#line 1464 "compiler/main.gem"
-                gem_v__for_i_75 = gem_add(gem_v__for_i_75, gem_int(1));
-#line 1465 "compiler/main.gem"
-    GemVal _t3537[] = {gem_table_get(gem_v_after_body, gem_v_j), gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3538 = (*gem_v_compile_stmt);
-                gem_v_out = gem_add(gem_add(gem_v_out, _t3538.fn(_t3538.env, _t3537, 2)), gem_string("\n"));
+                gem_yield_check();
+                if (!gem_truthy(gem_lt(gem_v__for_i_73, gem_v__for_limit_73))) break;
+#line 1453 "compiler/main.gem"
+                GemVal gem_v_j = gem_v__for_i_73;
+#line 1453 "compiler/main.gem"
+                gem_v__for_i_73 = gem_add(gem_v__for_i_73, gem_int(1));
+#line 1454 "compiler/main.gem"
+    GemVal _t3526[] = {gem_table_get(gem_v_body, gem_v_j), gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3527 = (*gem_v_compile_stmt);
+                gem_v_out = gem_add(gem_add(gem_v_out, _t3527.fn(_t3527.env, _t3526, 2)), gem_string("\n"));
             }
 
-#line 1467 "compiler/main.gem"
-    GemVal _t3539[] = {gem_v_after_body};
-    GemVal _t3540[] = {gem_table_get(gem_v_after_body, gem_sub(gem_len_fn(NULL, _t3539, 1), gem_int(1))), gem_add(gem_v_indent, gem_int(1))};
-    GemVal _t3541 = (*gem_v_compile_stmt_return);
-            gem_v_out = gem_add(gem_add(gem_v_out, _t3541.fn(_t3541.env, _t3540, 2)), gem_string("\n"));
+#line 1456 "compiler/main.gem"
+    GemVal _t3528[] = {gem_v_body};
+    GemVal _t3529[] = {gem_table_get(gem_v_body, gem_sub(gem_len_fn(NULL, _t3528, 1), gem_int(1))), gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3530 = (*gem_v_compile_stmt_return);
+            gem_v_out = gem_add(gem_add(gem_v_out, _t3530.fn(_t3530.env, _t3529, 2)), gem_string("\n"));
         } else {
-#line 1469 "compiler/main.gem"
-    GemVal _t3542[] = {gem_v_p};
+#line 1458 "compiler/main.gem"
+    GemVal _t3531[] = {gem_v_p};
+    GemVal _t3532[] = {gem_v_p};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3531, 1), gem_string("    gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3532, 1)), gem_string("    return GEM_NIL;\n")));
+        }
+    }
+
+#line 1462 "compiler/main.gem"
+    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
+#line 1463 "compiler/main.gem"
+    GemVal _t3533[] = {gem_v_p};
+    GemVal _t3534[] = {gem_v_matched_tmp};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3533, 1), gem_string("} else if (")), gem_to_string_fn(NULL, _t3534, 1)), gem_string(" == -2) {\n")));
+#line 1464 "compiler/main.gem"
+    GemVal _t3536;
+    if (!gem_truthy(gem_neq(gem_v_after_body, GEM_NIL))) {
+        _t3536 = gem_neq(gem_v_after_body, GEM_NIL);
+    } else {
+        GemVal _t3535[] = {gem_v_after_body};
+        _t3536 = gem_gt(gem_len_fn(NULL, _t3535, 1), gem_int(0));
+    }
+        if (gem_truthy(_t3536)) {
+#line 1465 "compiler/main.gem"
+            GemVal gem_v__for_i_75 = gem_int(0);
+#line 1465 "compiler/main.gem"
+    GemVal _t3537[] = {gem_v_after_body};
+            GemVal gem_v__for_limit_75 = gem_sub(gem_len_fn(NULL, _t3537, 1), gem_int(1));
+#line 1465 "compiler/main.gem"
+            while (1) {
+                gem_yield_check();
+                if (!gem_truthy(gem_lt(gem_v__for_i_75, gem_v__for_limit_75))) break;
+#line 1465 "compiler/main.gem"
+                GemVal gem_v_j = gem_v__for_i_75;
+#line 1465 "compiler/main.gem"
+                gem_v__for_i_75 = gem_add(gem_v__for_i_75, gem_int(1));
+#line 1466 "compiler/main.gem"
+    GemVal _t3538[] = {gem_table_get(gem_v_after_body, gem_v_j), gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3539 = (*gem_v_compile_stmt);
+                gem_v_out = gem_add(gem_add(gem_v_out, _t3539.fn(_t3539.env, _t3538, 2)), gem_string("\n"));
+            }
+
+#line 1468 "compiler/main.gem"
+    GemVal _t3540[] = {gem_v_after_body};
+    GemVal _t3541[] = {gem_table_get(gem_v_after_body, gem_sub(gem_len_fn(NULL, _t3540, 1), gem_int(1))), gem_add(gem_v_indent, gem_int(1))};
+    GemVal _t3542 = (*gem_v_compile_stmt_return);
+            gem_v_out = gem_add(gem_add(gem_v_out, _t3542.fn(_t3542.env, _t3541, 2)), gem_string("\n"));
+        } else {
+#line 1470 "compiler/main.gem"
     GemVal _t3543[] = {gem_v_p};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3542, 1), gem_string("    gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3543, 1)), gem_string("    return GEM_NIL;\n")));
+    GemVal _t3544[] = {gem_v_p};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3543, 1), gem_string("    gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3544, 1)), gem_string("    return GEM_NIL;\n")));
         }
     } else {
-#line 1472 "compiler/main.gem"
-    GemVal _t3544[] = {gem_v_p};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3544, 1), gem_string("} else {\n")));
 #line 1473 "compiler/main.gem"
     GemVal _t3545[] = {gem_v_p};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3545, 1), gem_string("} else {\n")));
+#line 1474 "compiler/main.gem"
     GemVal _t3546[] = {gem_v_p};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3545, 1), gem_string("    gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3546, 1)), gem_string("    return GEM_NIL;\n")));
-    }
-#line 1476 "compiler/main.gem"
     GemVal _t3547[] = {gem_v_p};
-    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3547, 1), gem_string("}")));
-    GemVal _t3548 = gem_v_out;
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3546, 1), gem_string("    gem_pop_frame();\n")), gem_to_string_fn(NULL, _t3547, 1)), gem_string("    return GEM_NIL;\n")));
+    }
+#line 1477 "compiler/main.gem"
+    GemVal _t3548[] = {gem_v_p};
+    gem_v_out = gem_add(gem_v_out, gem_add(gem_to_string_fn(NULL, _t3548, 1), gem_string("}")));
+    GemVal _t3549 = gem_v_out;
     gem_pop_frame();
-    return _t3548;
+    return _t3549;
 }
 
 struct _closure__anon_50 {
@@ -13269,106 +13402,107 @@ static GemVal _anon_50(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_forward_decls = _cls->gem_v_forward_decls;
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     gem_push_frame("_anon_50", "compiler/main.gem", 0);
-#line 1483 "compiler/main.gem"
+#line 1484 "compiler/main.gem"
     GemVal gem_v__d76 = gem_v_node;
-#line 1483 "compiler/main.gem"
-    GemVal _t3550 = gem_v__d76;
-    GemVal gem_v_name = gem_table_get(_t3550, gem_string("name"));
-#line 1483 "compiler/main.gem"
+#line 1484 "compiler/main.gem"
     GemVal _t3551 = gem_v__d76;
-    GemVal gem_v_params = gem_table_get(_t3551, gem_string("params"));
-#line 1483 "compiler/main.gem"
+    GemVal gem_v_name = gem_table_get(_t3551, gem_string("name"));
+#line 1484 "compiler/main.gem"
     GemVal _t3552 = gem_v__d76;
-    GemVal gem_v_ret_type = gem_table_get(_t3552, gem_string("ret_type"));
+    GemVal gem_v_params = gem_table_get(_t3552, gem_string("params"));
+#line 1484 "compiler/main.gem"
+    GemVal _t3553 = gem_v__d76;
+    GemVal gem_v_ret_type = gem_table_get(_t3553, gem_string("ret_type"));
 
-#line 1485 "compiler/main.gem"
-    GemVal _t3553[] = {gem_v_name};
-    GemVal gem_v_lines = gem_add(gem_add(gem_string("static GemVal gem_fn_"), gem_to_string_fn(NULL, _t3553, 1)), gem_string("(void *_env, GemVal *args, int argc) {\n"));
-#line 1487 "compiler/main.gem"
-    GemVal _t3554 = gem_table_new();
-    GemVal gem_v_c_args = _t3554;
+#line 1486 "compiler/main.gem"
+    GemVal _t3554[] = {gem_v_name};
+    GemVal gem_v_lines = gem_add(gem_add(gem_string("static GemVal gem_fn_"), gem_to_string_fn(NULL, _t3554, 1)), gem_string("(void *_env, GemVal *args, int argc) {\n"));
 #line 1488 "compiler/main.gem"
-    GemVal gem_v__for_i_77 = gem_int(0);
-#line 1488 "compiler/main.gem"
-    GemVal _t3555[] = {gem_v_params};
-    GemVal gem_v__for_limit_77 = gem_len_fn(NULL, _t3555, 1);
-#line 1488 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_77, gem_v__for_limit_77))) break;
-#line 1488 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_77;
-#line 1488 "compiler/main.gem"
-        gem_v__for_i_77 = gem_add(gem_v__for_i_77, gem_int(1));
+    GemVal _t3555 = gem_table_new();
+    GemVal gem_v_c_args = _t3555;
 #line 1489 "compiler/main.gem"
-        GemVal gem_v_p = gem_table_get(gem_v_params, gem_v_i);
+    GemVal gem_v__for_i_77 = gem_int(0);
+#line 1489 "compiler/main.gem"
+    GemVal _t3556[] = {gem_v_params};
+    GemVal gem_v__for_limit_77 = gem_len_fn(NULL, _t3556, 1);
+#line 1489 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_77, gem_v__for_limit_77))) break;
+#line 1489 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_77;
+#line 1489 "compiler/main.gem"
+        gem_v__for_i_77 = gem_add(gem_v__for_i_77, gem_int(1));
 #line 1490 "compiler/main.gem"
-        GemVal gem_v_ptype = gem_table_get(gem_v_p, gem_string("type"));
+        GemVal gem_v_p = gem_table_get(gem_v_params, gem_v_i);
 #line 1491 "compiler/main.gem"
-        if (gem_truthy(gem_eq(gem_v_ptype, gem_string("Int")))) {
+        GemVal gem_v_ptype = gem_table_get(gem_v_p, gem_string("type"));
 #line 1492 "compiler/main.gem"
-    GemVal _t3556[] = {gem_v_i};
-    GemVal _t3557[] = {gem_v_i};
-            gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    int64_t _p"), gem_to_string_fn(NULL, _t3556, 1)), gem_string(" = args[")), gem_to_string_fn(NULL, _t3557, 1)), gem_string("].ival;\n")));
+        if (gem_truthy(gem_eq(gem_v_ptype, gem_string("Int")))) {
 #line 1493 "compiler/main.gem"
+    GemVal _t3557[] = {gem_v_i};
     GemVal _t3558[] = {gem_v_i};
-    GemVal _t3559[] = {gem_v_c_args, gem_add(gem_string("_p"), gem_to_string_fn(NULL, _t3558, 1))};
-            (void)(gem_push_fn(NULL, _t3559, 2));
-        } else {
+            gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    int64_t _p"), gem_to_string_fn(NULL, _t3557, 1)), gem_string(" = args[")), gem_to_string_fn(NULL, _t3558, 1)), gem_string("].ival;\n")));
 #line 1494 "compiler/main.gem"
-            if (gem_truthy(gem_eq(gem_v_ptype, gem_string("Float")))) {
+    GemVal _t3559[] = {gem_v_i};
+    GemVal _t3560[] = {gem_v_c_args, gem_add(gem_string("_p"), gem_to_string_fn(NULL, _t3559, 1))};
+            (void)(gem_push_fn(NULL, _t3560, 2));
+        } else {
 #line 1495 "compiler/main.gem"
-    GemVal _t3560[] = {gem_v_i};
-    GemVal _t3561[] = {gem_v_i};
-                gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    double _p"), gem_to_string_fn(NULL, _t3560, 1)), gem_string(" = args[")), gem_to_string_fn(NULL, _t3561, 1)), gem_string("].fval;\n")));
+            if (gem_truthy(gem_eq(gem_v_ptype, gem_string("Float")))) {
 #line 1496 "compiler/main.gem"
+    GemVal _t3561[] = {gem_v_i};
     GemVal _t3562[] = {gem_v_i};
-    GemVal _t3563[] = {gem_v_c_args, gem_add(gem_string("_p"), gem_to_string_fn(NULL, _t3562, 1))};
-                (void)(gem_push_fn(NULL, _t3563, 2));
-            } else {
+                gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    double _p"), gem_to_string_fn(NULL, _t3561, 1)), gem_string(" = args[")), gem_to_string_fn(NULL, _t3562, 1)), gem_string("].fval;\n")));
 #line 1497 "compiler/main.gem"
-                if (gem_truthy(gem_eq(gem_v_ptype, gem_string("String")))) {
+    GemVal _t3563[] = {gem_v_i};
+    GemVal _t3564[] = {gem_v_c_args, gem_add(gem_string("_p"), gem_to_string_fn(NULL, _t3563, 1))};
+                (void)(gem_push_fn(NULL, _t3564, 2));
+            } else {
 #line 1498 "compiler/main.gem"
-    GemVal _t3564[] = {gem_v_i};
-    GemVal _t3565[] = {gem_v_i};
-                    gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    char* _p"), gem_to_string_fn(NULL, _t3564, 1)), gem_string(" = args[")), gem_to_string_fn(NULL, _t3565, 1)), gem_string("].sval;\n")));
+                if (gem_truthy(gem_eq(gem_v_ptype, gem_string("String")))) {
 #line 1499 "compiler/main.gem"
+    GemVal _t3565[] = {gem_v_i};
     GemVal _t3566[] = {gem_v_i};
-    GemVal _t3567[] = {gem_v_c_args, gem_add(gem_string("_p"), gem_to_string_fn(NULL, _t3566, 1))};
-                    (void)(gem_push_fn(NULL, _t3567, 2));
-                } else {
+                    gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    char* _p"), gem_to_string_fn(NULL, _t3565, 1)), gem_string(" = args[")), gem_to_string_fn(NULL, _t3566, 1)), gem_string("].sval;\n")));
 #line 1500 "compiler/main.gem"
-                    if (gem_truthy(gem_eq(gem_v_ptype, gem_string("Bool")))) {
+    GemVal _t3567[] = {gem_v_i};
+    GemVal _t3568[] = {gem_v_c_args, gem_add(gem_string("_p"), gem_to_string_fn(NULL, _t3567, 1))};
+                    (void)(gem_push_fn(NULL, _t3568, 2));
+                } else {
 #line 1501 "compiler/main.gem"
-    GemVal _t3568[] = {gem_v_i};
-    GemVal _t3569[] = {gem_v_i};
-                        gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    int _p"), gem_to_string_fn(NULL, _t3568, 1)), gem_string(" = args[")), gem_to_string_fn(NULL, _t3569, 1)), gem_string("].bval;\n")));
+                    if (gem_truthy(gem_eq(gem_v_ptype, gem_string("Bool")))) {
 #line 1502 "compiler/main.gem"
+    GemVal _t3569[] = {gem_v_i};
     GemVal _t3570[] = {gem_v_i};
-    GemVal _t3571[] = {gem_v_c_args, gem_add(gem_string("_p"), gem_to_string_fn(NULL, _t3570, 1))};
-                        (void)(gem_push_fn(NULL, _t3571, 2));
-                    } else {
+                        gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    int _p"), gem_to_string_fn(NULL, _t3569, 1)), gem_string(" = args[")), gem_to_string_fn(NULL, _t3570, 1)), gem_string("].bval;\n")));
 #line 1503 "compiler/main.gem"
-                        if (gem_truthy(gem_eq(gem_v_ptype, gem_string("Ptr")))) {
+    GemVal _t3571[] = {gem_v_i};
+    GemVal _t3572[] = {gem_v_c_args, gem_add(gem_string("_p"), gem_to_string_fn(NULL, _t3571, 1))};
+                        (void)(gem_push_fn(NULL, _t3572, 2));
+                    } else {
 #line 1504 "compiler/main.gem"
-    GemVal _t3572[] = {gem_v_i};
-    GemVal _t3573[] = {gem_v_i};
-                            gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    void* _p"), gem_to_string_fn(NULL, _t3572, 1)), gem_string(" = (void*)(intptr_t)args[")), gem_to_string_fn(NULL, _t3573, 1)), gem_string("].ival;\n")));
+                        if (gem_truthy(gem_eq(gem_v_ptype, gem_string("Ptr")))) {
 #line 1505 "compiler/main.gem"
+    GemVal _t3573[] = {gem_v_i};
     GemVal _t3574[] = {gem_v_i};
-    GemVal _t3575[] = {gem_v_c_args, gem_add(gem_string("_p"), gem_to_string_fn(NULL, _t3574, 1))};
-                            (void)(gem_push_fn(NULL, _t3575, 2));
-                        } else {
+                            gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    void* _p"), gem_to_string_fn(NULL, _t3573, 1)), gem_string(" = (void*)(intptr_t)args[")), gem_to_string_fn(NULL, _t3574, 1)), gem_string("].ival;\n")));
 #line 1506 "compiler/main.gem"
-                            if (gem_truthy(gem_eq(gem_v_ptype, gem_string("Table")))) {
+    GemVal _t3575[] = {gem_v_i};
+    GemVal _t3576[] = {gem_v_c_args, gem_add(gem_string("_p"), gem_to_string_fn(NULL, _t3575, 1))};
+                            (void)(gem_push_fn(NULL, _t3576, 2));
+                        } else {
 #line 1507 "compiler/main.gem"
-    GemVal _t3576[] = {gem_v_i};
-    GemVal _t3577[] = {gem_v_c_args, gem_add(gem_add(gem_string("args["), gem_to_string_fn(NULL, _t3576, 1)), gem_string("]"))};
-                                (void)(gem_push_fn(NULL, _t3577, 2));
+                            if (gem_truthy(gem_eq(gem_v_ptype, gem_string("Table")))) {
+#line 1508 "compiler/main.gem"
+    GemVal _t3577[] = {gem_v_i};
+    GemVal _t3578[] = {gem_v_c_args, gem_add(gem_add(gem_string("args["), gem_to_string_fn(NULL, _t3577, 1)), gem_string("]"))};
+                                (void)(gem_push_fn(NULL, _t3578, 2));
                             } else {
-#line 1509 "compiler/main.gem"
-    GemVal _t3578[] = {gem_v_i};
-    GemVal _t3579[] = {gem_v_c_args, gem_add(gem_add(gem_string("args["), gem_to_string_fn(NULL, _t3578, 1)), gem_string("]"))};
-                                (void)(gem_push_fn(NULL, _t3579, 2));
+#line 1510 "compiler/main.gem"
+    GemVal _t3579[] = {gem_v_i};
+    GemVal _t3580[] = {gem_v_c_args, gem_add(gem_add(gem_string("args["), gem_to_string_fn(NULL, _t3579, 1)), gem_string("]"))};
+                                (void)(gem_push_fn(NULL, _t3580, 2));
                             }
                         }
                     }
@@ -13377,91 +13511,92 @@ static GemVal _anon_50(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 1514 "compiler/main.gem"
+#line 1515 "compiler/main.gem"
     GemVal gem_v_call_args = gem_string("");
-#line 1515 "compiler/main.gem"
-    GemVal gem_v__for_i_78 = gem_int(0);
-#line 1515 "compiler/main.gem"
-    GemVal _t3580[] = {gem_v_c_args};
-    GemVal gem_v__for_limit_78 = gem_len_fn(NULL, _t3580, 1);
-#line 1515 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_78, gem_v__for_limit_78))) break;
-#line 1515 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_78;
-#line 1515 "compiler/main.gem"
-        gem_v__for_i_78 = gem_add(gem_v__for_i_78, gem_int(1));
 #line 1516 "compiler/main.gem"
-        if (gem_truthy(gem_gt(gem_v_i, gem_int(0)))) {
+    GemVal gem_v__for_i_78 = gem_int(0);
+#line 1516 "compiler/main.gem"
+    GemVal _t3581[] = {gem_v_c_args};
+    GemVal gem_v__for_limit_78 = gem_len_fn(NULL, _t3581, 1);
+#line 1516 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_78, gem_v__for_limit_78))) break;
+#line 1516 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_78;
+#line 1516 "compiler/main.gem"
+        gem_v__for_i_78 = gem_add(gem_v__for_i_78, gem_int(1));
 #line 1517 "compiler/main.gem"
+        if (gem_truthy(gem_gt(gem_v_i, gem_int(0)))) {
+#line 1518 "compiler/main.gem"
             gem_v_call_args = gem_add(gem_v_call_args, gem_string(", "));
         }
-#line 1519 "compiler/main.gem"
+#line 1520 "compiler/main.gem"
         gem_v_call_args = gem_add(gem_v_call_args, gem_table_get(gem_v_c_args, gem_v_i));
     }
 
-#line 1522 "compiler/main.gem"
-    GemVal _t3581[] = {gem_v_name};
-    GemVal _t3582[] = {gem_v_call_args};
-    GemVal gem_v_call_expr = gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3581, 1), gem_string("(")), gem_to_string_fn(NULL, _t3582, 1)), gem_string(")"));
-#line 1524 "compiler/main.gem"
-    if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Nil")))) {
+#line 1523 "compiler/main.gem"
+    GemVal _t3582[] = {gem_v_name};
+    GemVal _t3583[] = {gem_v_call_args};
+    GemVal gem_v_call_expr = gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3582, 1), gem_string("(")), gem_to_string_fn(NULL, _t3583, 1)), gem_string(")"));
 #line 1525 "compiler/main.gem"
-    GemVal _t3583[] = {gem_v_call_expr};
-        gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    "), gem_to_string_fn(NULL, _t3583, 1)), gem_string(";\n")));
+    if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Nil")))) {
 #line 1526 "compiler/main.gem"
+    GemVal _t3584[] = {gem_v_call_expr};
+        gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    "), gem_to_string_fn(NULL, _t3584, 1)), gem_string(";\n")));
+#line 1527 "compiler/main.gem"
         gem_v_lines = gem_add(gem_v_lines, gem_string("    return GEM_NIL;\n"));
     } else {
-#line 1527 "compiler/main.gem"
-        if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Table")))) {
 #line 1528 "compiler/main.gem"
-    GemVal _t3584[] = {gem_v_call_expr};
-            gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    return "), gem_to_string_fn(NULL, _t3584, 1)), gem_string(";\n")));
-        } else {
+        if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Table")))) {
 #line 1529 "compiler/main.gem"
-            if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Int")))) {
-#line 1530 "compiler/main.gem"
     GemVal _t3585[] = {gem_v_call_expr};
-                gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    int64_t _ret = "), gem_to_string_fn(NULL, _t3585, 1)), gem_string(";\n")));
+            gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    return "), gem_to_string_fn(NULL, _t3585, 1)), gem_string(";\n")));
+        } else {
+#line 1530 "compiler/main.gem"
+            if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Int")))) {
 #line 1531 "compiler/main.gem"
+    GemVal _t3586[] = {gem_v_call_expr};
+                gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    int64_t _ret = "), gem_to_string_fn(NULL, _t3586, 1)), gem_string(";\n")));
+#line 1532 "compiler/main.gem"
                 gem_v_lines = gem_add(gem_v_lines, gem_string("    return gem_int(_ret);\n"));
             } else {
-#line 1532 "compiler/main.gem"
-                if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Float")))) {
 #line 1533 "compiler/main.gem"
-    GemVal _t3586[] = {gem_v_call_expr};
-                    gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    double _ret = "), gem_to_string_fn(NULL, _t3586, 1)), gem_string(";\n")));
+                if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Float")))) {
 #line 1534 "compiler/main.gem"
+    GemVal _t3587[] = {gem_v_call_expr};
+                    gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    double _ret = "), gem_to_string_fn(NULL, _t3587, 1)), gem_string(";\n")));
+#line 1535 "compiler/main.gem"
                     gem_v_lines = gem_add(gem_v_lines, gem_string("    return gem_float(_ret);\n"));
                 } else {
-#line 1535 "compiler/main.gem"
-                    if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("String")))) {
 #line 1536 "compiler/main.gem"
-    GemVal _t3587[] = {gem_v_call_expr};
-                        gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    char* _ret = "), gem_to_string_fn(NULL, _t3587, 1)), gem_string(";\n")));
+                    if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("String")))) {
 #line 1537 "compiler/main.gem"
+    GemVal _t3588[] = {gem_v_call_expr};
+                        gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    char* _ret = "), gem_to_string_fn(NULL, _t3588, 1)), gem_string(";\n")));
+#line 1538 "compiler/main.gem"
                         gem_v_lines = gem_add(gem_v_lines, gem_string("    return gem_string(_ret);\n"));
                     } else {
-#line 1538 "compiler/main.gem"
-                        if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Bool")))) {
 #line 1539 "compiler/main.gem"
-    GemVal _t3588[] = {gem_v_call_expr};
-                            gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    int _ret = "), gem_to_string_fn(NULL, _t3588, 1)), gem_string(";\n")));
+                        if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Bool")))) {
 #line 1540 "compiler/main.gem"
+    GemVal _t3589[] = {gem_v_call_expr};
+                            gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    int _ret = "), gem_to_string_fn(NULL, _t3589, 1)), gem_string(";\n")));
+#line 1541 "compiler/main.gem"
                             gem_v_lines = gem_add(gem_v_lines, gem_string("    return gem_bool(_ret);\n"));
                         } else {
-#line 1541 "compiler/main.gem"
-                            if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Ptr")))) {
 #line 1542 "compiler/main.gem"
-    GemVal _t3589[] = {gem_v_call_expr};
-                                gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    void *_ret = "), gem_to_string_fn(NULL, _t3589, 1)), gem_string(";\n")));
+                            if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Ptr")))) {
 #line 1543 "compiler/main.gem"
+    GemVal _t3590[] = {gem_v_call_expr};
+                                gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    void *_ret = "), gem_to_string_fn(NULL, _t3590, 1)), gem_string(";\n")));
+#line 1544 "compiler/main.gem"
                                 gem_v_lines = gem_add(gem_v_lines, gem_string("    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n"));
                             } else {
-#line 1545 "compiler/main.gem"
-    GemVal _t3590[] = {gem_v_call_expr};
-                                gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    "), gem_to_string_fn(NULL, _t3590, 1)), gem_string(";\n")));
 #line 1546 "compiler/main.gem"
+    GemVal _t3591[] = {gem_v_call_expr};
+                                gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_string("    "), gem_to_string_fn(NULL, _t3591, 1)), gem_string(";\n")));
+#line 1547 "compiler/main.gem"
                                 gem_v_lines = gem_add(gem_v_lines, gem_string("    return GEM_NIL;\n"));
                             }
                         }
@@ -13470,42 +13605,42 @@ static GemVal _anon_50(void *_env, GemVal *args, int argc) {
             }
         }
     }
-#line 1549 "compiler/main.gem"
+#line 1550 "compiler/main.gem"
     gem_v_lines = gem_add(gem_v_lines, gem_string("}"));
-#line 1552 "compiler/main.gem"
-    GemVal _t3591[] = {gem_v_name};
-    GemVal _t3592[] = {(*gem_v_forward_decls), gem_add(gem_add(gem_string("static GemVal gem_fn_"), gem_to_string_fn(NULL, _t3591, 1)), gem_string("(void *_env, GemVal *args, int argc);"))};
-    (void)(gem_push_fn(NULL, _t3592, 2));
-#line 1555 "compiler/main.gem"
-    GemVal gem_v_c_ret = gem_string("void");
+#line 1553 "compiler/main.gem"
+    GemVal _t3592[] = {gem_v_name};
+    GemVal _t3593[] = {(*gem_v_forward_decls), gem_add(gem_add(gem_string("static GemVal gem_fn_"), gem_to_string_fn(NULL, _t3592, 1)), gem_string("(void *_env, GemVal *args, int argc);"))};
+    (void)(gem_push_fn(NULL, _t3593, 2));
 #line 1556 "compiler/main.gem"
-    if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Int")))) {
+    GemVal gem_v_c_ret = gem_string("void");
 #line 1557 "compiler/main.gem"
+    if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Int")))) {
+#line 1558 "compiler/main.gem"
         gem_v_c_ret = gem_string("int64_t");
     } else {
-#line 1558 "compiler/main.gem"
-        if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Float")))) {
 #line 1559 "compiler/main.gem"
+        if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Float")))) {
+#line 1560 "compiler/main.gem"
             gem_v_c_ret = gem_string("double");
         } else {
-#line 1560 "compiler/main.gem"
-            if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("String")))) {
 #line 1561 "compiler/main.gem"
+            if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("String")))) {
+#line 1562 "compiler/main.gem"
                 gem_v_c_ret = gem_string("char*");
             } else {
-#line 1562 "compiler/main.gem"
-                if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Bool")))) {
 #line 1563 "compiler/main.gem"
+                if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Bool")))) {
+#line 1564 "compiler/main.gem"
                     gem_v_c_ret = gem_string("int");
                 } else {
-#line 1564 "compiler/main.gem"
-                    if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Ptr")))) {
 #line 1565 "compiler/main.gem"
+                    if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Ptr")))) {
+#line 1566 "compiler/main.gem"
                         gem_v_c_ret = gem_string("void*");
                     } else {
-#line 1566 "compiler/main.gem"
-                        if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Table")))) {
 #line 1567 "compiler/main.gem"
+                        if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Table")))) {
+#line 1568 "compiler/main.gem"
                             gem_v_c_ret = gem_string("GemVal");
                         }
                     }
@@ -13513,64 +13648,65 @@ static GemVal _anon_50(void *_env, GemVal *args, int argc) {
             }
         }
     }
-#line 1570 "compiler/main.gem"
-    GemVal gem_v_c_params = gem_string("");
 #line 1571 "compiler/main.gem"
-    GemVal _t3593[] = {gem_v_params};
-    if (gem_truthy(gem_eq(gem_len_fn(NULL, _t3593, 1), gem_int(0)))) {
+    GemVal gem_v_c_params = gem_string("");
 #line 1572 "compiler/main.gem"
+    GemVal _t3594[] = {gem_v_params};
+    if (gem_truthy(gem_eq(gem_len_fn(NULL, _t3594, 1), gem_int(0)))) {
+#line 1573 "compiler/main.gem"
         gem_v_c_params = gem_string("void");
     } else {
-#line 1574 "compiler/main.gem"
-        GemVal gem_v__for_i_79 = gem_int(0);
-#line 1574 "compiler/main.gem"
-    GemVal _t3594[] = {gem_v_params};
-        GemVal gem_v__for_limit_79 = gem_len_fn(NULL, _t3594, 1);
-#line 1574 "compiler/main.gem"
-        while (1) {
-            if (!gem_truthy(gem_lt(gem_v__for_i_79, gem_v__for_limit_79))) break;
-#line 1574 "compiler/main.gem"
-            GemVal gem_v_i = gem_v__for_i_79;
-#line 1574 "compiler/main.gem"
-            gem_v__for_i_79 = gem_add(gem_v__for_i_79, gem_int(1));
 #line 1575 "compiler/main.gem"
-            if (gem_truthy(gem_gt(gem_v_i, gem_int(0)))) {
+        GemVal gem_v__for_i_79 = gem_int(0);
+#line 1575 "compiler/main.gem"
+    GemVal _t3595[] = {gem_v_params};
+        GemVal gem_v__for_limit_79 = gem_len_fn(NULL, _t3595, 1);
+#line 1575 "compiler/main.gem"
+        while (1) {
+            gem_yield_check();
+            if (!gem_truthy(gem_lt(gem_v__for_i_79, gem_v__for_limit_79))) break;
+#line 1575 "compiler/main.gem"
+            GemVal gem_v_i = gem_v__for_i_79;
+#line 1575 "compiler/main.gem"
+            gem_v__for_i_79 = gem_add(gem_v__for_i_79, gem_int(1));
 #line 1576 "compiler/main.gem"
+            if (gem_truthy(gem_gt(gem_v_i, gem_int(0)))) {
+#line 1577 "compiler/main.gem"
                 gem_v_c_params = gem_add(gem_v_c_params, gem_string(", "));
             }
-#line 1578 "compiler/main.gem"
-            GemVal gem_v_pt = gem_table_get(gem_table_get(gem_v_params, gem_v_i), gem_string("type"));
 #line 1579 "compiler/main.gem"
-            if (gem_truthy(gem_eq(gem_v_pt, gem_string("Int")))) {
+            GemVal gem_v_pt = gem_table_get(gem_table_get(gem_v_params, gem_v_i), gem_string("type"));
 #line 1580 "compiler/main.gem"
+            if (gem_truthy(gem_eq(gem_v_pt, gem_string("Int")))) {
+#line 1581 "compiler/main.gem"
                 gem_v_c_params = gem_add(gem_v_c_params, gem_string("int64_t"));
             } else {
-#line 1581 "compiler/main.gem"
-                if (gem_truthy(gem_eq(gem_v_pt, gem_string("Float")))) {
 #line 1582 "compiler/main.gem"
+                if (gem_truthy(gem_eq(gem_v_pt, gem_string("Float")))) {
+#line 1583 "compiler/main.gem"
                     gem_v_c_params = gem_add(gem_v_c_params, gem_string("double"));
                 } else {
-#line 1583 "compiler/main.gem"
-                    if (gem_truthy(gem_eq(gem_v_pt, gem_string("String")))) {
 #line 1584 "compiler/main.gem"
+                    if (gem_truthy(gem_eq(gem_v_pt, gem_string("String")))) {
+#line 1585 "compiler/main.gem"
                         gem_v_c_params = gem_add(gem_v_c_params, gem_string("const char*"));
                     } else {
-#line 1585 "compiler/main.gem"
-                        if (gem_truthy(gem_eq(gem_v_pt, gem_string("Bool")))) {
 #line 1586 "compiler/main.gem"
+                        if (gem_truthy(gem_eq(gem_v_pt, gem_string("Bool")))) {
+#line 1587 "compiler/main.gem"
                             gem_v_c_params = gem_add(gem_v_c_params, gem_string("int"));
                         } else {
-#line 1587 "compiler/main.gem"
-                            if (gem_truthy(gem_eq(gem_v_pt, gem_string("Ptr")))) {
 #line 1588 "compiler/main.gem"
+                            if (gem_truthy(gem_eq(gem_v_pt, gem_string("Ptr")))) {
+#line 1589 "compiler/main.gem"
                                 gem_v_c_params = gem_add(gem_v_c_params, gem_string("void*"));
                             } else {
-#line 1589 "compiler/main.gem"
-                                if (gem_truthy(gem_eq(gem_v_pt, gem_string("Table")))) {
 #line 1590 "compiler/main.gem"
+                                if (gem_truthy(gem_eq(gem_v_pt, gem_string("Table")))) {
+#line 1591 "compiler/main.gem"
                                     gem_v_c_params = gem_add(gem_v_c_params, gem_string("GemVal"));
                                 } else {
-#line 1592 "compiler/main.gem"
+#line 1593 "compiler/main.gem"
                                     gem_v_c_params = gem_add(gem_v_c_params, gem_string("GemVal"));
                                 }
                             }
@@ -13581,15 +13717,15 @@ static GemVal _anon_50(void *_env, GemVal *args, int argc) {
         }
 
     }
-#line 1597 "compiler/main.gem"
-    GemVal _t3595[] = {gem_v_c_ret};
-    GemVal _t3596[] = {gem_v_name};
-    GemVal _t3597[] = {gem_v_c_params};
-    GemVal _t3598[] = {(*gem_v_extern_c_decls), gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3595, 1), gem_string(" ")), gem_to_string_fn(NULL, _t3596, 1)), gem_string("(")), gem_to_string_fn(NULL, _t3597, 1)), gem_string(");"))};
-    (void)(gem_push_fn(NULL, _t3598, 2));
-    GemVal _t3599 = gem_v_lines;
+#line 1598 "compiler/main.gem"
+    GemVal _t3596[] = {gem_v_c_ret};
+    GemVal _t3597[] = {gem_v_name};
+    GemVal _t3598[] = {gem_v_c_params};
+    GemVal _t3599[] = {(*gem_v_extern_c_decls), gem_add(gem_add(gem_add(gem_add(gem_add(gem_to_string_fn(NULL, _t3596, 1), gem_string(" ")), gem_to_string_fn(NULL, _t3597, 1)), gem_string("(")), gem_to_string_fn(NULL, _t3598, 1)), gem_string(");"))};
+    (void)(gem_push_fn(NULL, _t3599, 2));
+    GemVal _t3600 = gem_v_lines;
     gem_pop_frame();
-    return _t3599;
+    return _t3600;
 }
 
 struct _closure__anon_51 {
@@ -13602,118 +13738,119 @@ static GemVal _anon_51(void *_env, GemVal *args, int argc) {
     GemVal gem_v_params = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_cap_set = (argc > 2) ? args[2] : GEM_NIL;
     gem_push_frame("_anon_51", "compiler/main.gem", 0);
-#line 1605 "compiler/main.gem"
+#line 1606 "compiler/main.gem"
     GemVal gem_v_out = gem_string("");
-#line 1607 "compiler/main.gem"
-    GemVal gem_v__for_i_80 = gem_int(0);
-#line 1607 "compiler/main.gem"
-    GemVal _t3601[] = {gem_v_params};
-    GemVal gem_v__for_limit_80 = gem_len_fn(NULL, _t3601, 1);
-#line 1607 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_80, gem_v__for_limit_80))) break;
-#line 1607 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_80;
-#line 1607 "compiler/main.gem"
-        gem_v__for_i_80 = gem_add(gem_v__for_i_80, gem_int(1));
 #line 1608 "compiler/main.gem"
-    GemVal _t3602[] = {gem_table_get(gem_v_params, gem_v_i)};
-    GemVal _t3603 = (*gem_v_mangle);
-        GemVal gem_v_mp = _t3603.fn(_t3603.env, _t3602, 1);
+    GemVal gem_v__for_i_80 = gem_int(0);
+#line 1608 "compiler/main.gem"
+    GemVal _t3602[] = {gem_v_params};
+    GemVal gem_v__for_limit_80 = gem_len_fn(NULL, _t3602, 1);
+#line 1608 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_80, gem_v__for_limit_80))) break;
+#line 1608 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_80;
+#line 1608 "compiler/main.gem"
+        gem_v__for_i_80 = gem_add(gem_v__for_i_80, gem_int(1));
 #line 1609 "compiler/main.gem"
-    GemVal _t3604[] = {gem_v_cap_set, gem_table_get(gem_v_params, gem_v_i)};
-        if (gem_truthy(gem_fn_set_contains(NULL, _t3604, 2))) {
+    GemVal _t3603[] = {gem_table_get(gem_v_params, gem_v_i)};
+    GemVal _t3604 = (*gem_v_mangle);
+        GemVal gem_v_mp = _t3604.fn(_t3604.env, _t3603, 1);
 #line 1610 "compiler/main.gem"
-    GemVal _t3605[] = {gem_v_mp};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    GemVal *"), gem_to_string_fn(NULL, _t3605, 1)), gem_string(" = GC_MALLOC(sizeof(GemVal));\n")));
+    GemVal _t3605[] = {gem_v_cap_set, gem_table_get(gem_v_params, gem_v_i)};
+        if (gem_truthy(gem_fn_set_contains(NULL, _t3605, 2))) {
 #line 1611 "compiler/main.gem"
     GemVal _t3606[] = {gem_v_mp};
-    GemVal _t3607[] = {gem_v_i};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    GemVal *"), gem_to_string_fn(NULL, _t3606, 1)), gem_string(" = GC_MALLOC(sizeof(GemVal));\n")));
+#line 1612 "compiler/main.gem"
+    GemVal _t3607[] = {gem_v_mp};
     GemVal _t3608[] = {gem_v_i};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("    *"), gem_to_string_fn(NULL, _t3606, 1)), gem_string(" = (argc > ")), gem_to_string_fn(NULL, _t3607, 1)), gem_string(") ? args[")), gem_to_string_fn(NULL, _t3608, 1)), gem_string("] : GEM_NIL;\n")));
+    GemVal _t3609[] = {gem_v_i};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("    *"), gem_to_string_fn(NULL, _t3607, 1)), gem_string(" = (argc > ")), gem_to_string_fn(NULL, _t3608, 1)), gem_string(") ? args[")), gem_to_string_fn(NULL, _t3609, 1)), gem_string("] : GEM_NIL;\n")));
         } else {
-#line 1613 "compiler/main.gem"
-    GemVal _t3609[] = {gem_v_mp};
-    GemVal _t3610[] = {gem_v_i};
+#line 1614 "compiler/main.gem"
+    GemVal _t3610[] = {gem_v_mp};
     GemVal _t3611[] = {gem_v_i};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("    GemVal "), gem_to_string_fn(NULL, _t3609, 1)), gem_string(" = (argc > ")), gem_to_string_fn(NULL, _t3610, 1)), gem_string(") ? args[")), gem_to_string_fn(NULL, _t3611, 1)), gem_string("] : GEM_NIL;\n")));
+    GemVal _t3612[] = {gem_v_i};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("    GemVal "), gem_to_string_fn(NULL, _t3610, 1)), gem_string(" = (argc > ")), gem_to_string_fn(NULL, _t3611, 1)), gem_string(") ? args[")), gem_to_string_fn(NULL, _t3612, 1)), gem_string("] : GEM_NIL;\n")));
         }
     }
 
-#line 1618 "compiler/main.gem"
-    GemVal _t3612 = gem_v_node;
-    if (gem_truthy(gem_neq(gem_table_get(_t3612, gem_string("rest_param")), GEM_NIL))) {
 #line 1619 "compiler/main.gem"
-    GemVal _t3613[] = {gem_v_params};
-        GemVal gem_v_N = gem_len_fn(NULL, _t3613, 1);
+    GemVal _t3613 = gem_v_node;
+    if (gem_truthy(gem_neq(gem_table_get(_t3613, gem_string("rest_param")), GEM_NIL))) {
 #line 1620 "compiler/main.gem"
-        GemVal gem_v_end_count = gem_int(0);
+    GemVal _t3614[] = {gem_v_params};
+        GemVal gem_v_N = gem_len_fn(NULL, _t3614, 1);
 #line 1621 "compiler/main.gem"
-    GemVal _t3614 = gem_v_node;
-        if (gem_truthy(gem_neq(gem_table_get(_t3614, gem_string("block_param")), GEM_NIL))) {
+        GemVal gem_v_end_count = gem_int(0);
 #line 1622 "compiler/main.gem"
+    GemVal _t3615 = gem_v_node;
+        if (gem_truthy(gem_neq(gem_table_get(_t3615, gem_string("block_param")), GEM_NIL))) {
+#line 1623 "compiler/main.gem"
             gem_v_end_count = gem_int(1);
         }
-#line 1624 "compiler/main.gem"
-    GemVal _t3615 = gem_v_node;
-    GemVal _t3616[] = {gem_table_get(_t3615, gem_string("rest_param"))};
-    GemVal _t3617 = (*gem_v_mangle);
-        GemVal gem_v_mp_rest = _t3617.fn(_t3617.env, _t3616, 1);
 #line 1625 "compiler/main.gem"
-    GemVal _t3618 = gem_v_node;
-    GemVal _t3619[] = {gem_v_cap_set, gem_table_get(_t3618, gem_string("rest_param"))};
-        if (gem_truthy(gem_fn_set_contains(NULL, _t3619, 2))) {
+    GemVal _t3616 = gem_v_node;
+    GemVal _t3617[] = {gem_table_get(_t3616, gem_string("rest_param"))};
+    GemVal _t3618 = (*gem_v_mangle);
+        GemVal gem_v_mp_rest = _t3618.fn(_t3618.env, _t3617, 1);
 #line 1626 "compiler/main.gem"
-    GemVal _t3620[] = {gem_v_mp_rest};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    GemVal *"), gem_to_string_fn(NULL, _t3620, 1)), gem_string(" = GC_MALLOC(sizeof(GemVal));\n")));
+    GemVal _t3619 = gem_v_node;
+    GemVal _t3620[] = {gem_v_cap_set, gem_table_get(_t3619, gem_string("rest_param"))};
+        if (gem_truthy(gem_fn_set_contains(NULL, _t3620, 2))) {
 #line 1627 "compiler/main.gem"
     GemVal _t3621[] = {gem_v_mp_rest};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    *"), gem_to_string_fn(NULL, _t3621, 1)), gem_string(" = gem_table_new();\n")));
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    GemVal *"), gem_to_string_fn(NULL, _t3621, 1)), gem_string(" = GC_MALLOC(sizeof(GemVal));\n")));
 #line 1628 "compiler/main.gem"
-    GemVal _t3622[] = {gem_v_N};
-    GemVal _t3623[] = {gem_v_end_count};
-    GemVal _t3624[] = {gem_v_mp_rest};
-    GemVal _t3625[] = {gem_v_N};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("    for (int _ri = "), gem_to_string_fn(NULL, _t3622, 1)), gem_string("; _ri < argc - ")), gem_to_string_fn(NULL, _t3623, 1)), gem_string("; _ri++) gem_table_set(*")), gem_to_string_fn(NULL, _t3624, 1)), gem_string(", gem_int(_ri - ")), gem_to_string_fn(NULL, _t3625, 1)), gem_string("), args[_ri]);\n")));
+    GemVal _t3622[] = {gem_v_mp_rest};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    *"), gem_to_string_fn(NULL, _t3622, 1)), gem_string(" = gem_table_new();\n")));
+#line 1629 "compiler/main.gem"
+    GemVal _t3623[] = {gem_v_N};
+    GemVal _t3624[] = {gem_v_end_count};
+    GemVal _t3625[] = {gem_v_mp_rest};
+    GemVal _t3626[] = {gem_v_N};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("    for (int _ri = "), gem_to_string_fn(NULL, _t3623, 1)), gem_string("; _ri < argc - ")), gem_to_string_fn(NULL, _t3624, 1)), gem_string("; _ri++) gem_table_set(*")), gem_to_string_fn(NULL, _t3625, 1)), gem_string(", gem_int(_ri - ")), gem_to_string_fn(NULL, _t3626, 1)), gem_string("), args[_ri]);\n")));
         } else {
-#line 1630 "compiler/main.gem"
-    GemVal _t3626[] = {gem_v_mp_rest};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    GemVal "), gem_to_string_fn(NULL, _t3626, 1)), gem_string(" = gem_table_new();\n")));
 #line 1631 "compiler/main.gem"
-    GemVal _t3627[] = {gem_v_N};
-    GemVal _t3628[] = {gem_v_end_count};
-    GemVal _t3629[] = {gem_v_mp_rest};
-    GemVal _t3630[] = {gem_v_N};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("    for (int _ri = "), gem_to_string_fn(NULL, _t3627, 1)), gem_string("; _ri < argc - ")), gem_to_string_fn(NULL, _t3628, 1)), gem_string("; _ri++) gem_table_set(")), gem_to_string_fn(NULL, _t3629, 1)), gem_string(", gem_int(_ri - ")), gem_to_string_fn(NULL, _t3630, 1)), gem_string("), args[_ri]);\n")));
+    GemVal _t3627[] = {gem_v_mp_rest};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    GemVal "), gem_to_string_fn(NULL, _t3627, 1)), gem_string(" = gem_table_new();\n")));
+#line 1632 "compiler/main.gem"
+    GemVal _t3628[] = {gem_v_N};
+    GemVal _t3629[] = {gem_v_end_count};
+    GemVal _t3630[] = {gem_v_mp_rest};
+    GemVal _t3631[] = {gem_v_N};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("    for (int _ri = "), gem_to_string_fn(NULL, _t3628, 1)), gem_string("; _ri < argc - ")), gem_to_string_fn(NULL, _t3629, 1)), gem_string("; _ri++) gem_table_set(")), gem_to_string_fn(NULL, _t3630, 1)), gem_string(", gem_int(_ri - ")), gem_to_string_fn(NULL, _t3631, 1)), gem_string("), args[_ri]);\n")));
         }
-#line 1633 "compiler/main.gem"
-    GemVal _t3631 = gem_v_node;
-        if (gem_truthy(gem_neq(gem_table_get(_t3631, gem_string("block_param")), GEM_NIL))) {
 #line 1634 "compiler/main.gem"
     GemVal _t3632 = gem_v_node;
-    GemVal _t3633[] = {gem_table_get(_t3632, gem_string("block_param"))};
-    GemVal _t3634 = (*gem_v_mangle);
-            GemVal gem_v_mp_block = _t3634.fn(_t3634.env, _t3633, 1);
+        if (gem_truthy(gem_neq(gem_table_get(_t3632, gem_string("block_param")), GEM_NIL))) {
 #line 1635 "compiler/main.gem"
-    GemVal _t3635 = gem_v_node;
-    GemVal _t3636[] = {gem_v_cap_set, gem_table_get(_t3635, gem_string("block_param"))};
-            if (gem_truthy(gem_fn_set_contains(NULL, _t3636, 2))) {
+    GemVal _t3633 = gem_v_node;
+    GemVal _t3634[] = {gem_table_get(_t3633, gem_string("block_param"))};
+    GemVal _t3635 = (*gem_v_mangle);
+            GemVal gem_v_mp_block = _t3635.fn(_t3635.env, _t3634, 1);
 #line 1636 "compiler/main.gem"
-    GemVal _t3637[] = {gem_v_mp_block};
-                gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    GemVal *"), gem_to_string_fn(NULL, _t3637, 1)), gem_string(" = GC_MALLOC(sizeof(GemVal));\n")));
+    GemVal _t3636 = gem_v_node;
+    GemVal _t3637[] = {gem_v_cap_set, gem_table_get(_t3636, gem_string("block_param"))};
+            if (gem_truthy(gem_fn_set_contains(NULL, _t3637, 2))) {
 #line 1637 "compiler/main.gem"
     GemVal _t3638[] = {gem_v_mp_block};
-                gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    *"), gem_to_string_fn(NULL, _t3638, 1)), gem_string(" = (argc > 0) ? args[argc - 1] : GEM_NIL;\n")));
-            } else {
-#line 1639 "compiler/main.gem"
+                gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    GemVal *"), gem_to_string_fn(NULL, _t3638, 1)), gem_string(" = GC_MALLOC(sizeof(GemVal));\n")));
+#line 1638 "compiler/main.gem"
     GemVal _t3639[] = {gem_v_mp_block};
-                gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    GemVal "), gem_to_string_fn(NULL, _t3639, 1)), gem_string(" = (argc > 0) ? args[argc - 1] : GEM_NIL;\n")));
+                gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    *"), gem_to_string_fn(NULL, _t3639, 1)), gem_string(" = (argc > 0) ? args[argc - 1] : GEM_NIL;\n")));
+            } else {
+#line 1640 "compiler/main.gem"
+    GemVal _t3640[] = {gem_v_mp_block};
+                gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("    GemVal "), gem_to_string_fn(NULL, _t3640, 1)), gem_string(" = (argc > 0) ? args[argc - 1] : GEM_NIL;\n")));
             }
         }
     }
-    GemVal _t3640 = gem_v_out;
+    GemVal _t3641 = gem_v_out;
     gem_pop_frame();
-    return _t3640;
+    return _t3641;
 }
 
 struct _closure__anon_52 {
@@ -13726,41 +13863,42 @@ static GemVal _anon_52(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_compile_stmt_return = _cls->gem_v_compile_stmt_return;
     GemVal gem_v_body = (argc > 0) ? args[0] : GEM_NIL;
     gem_push_frame("_anon_52", "compiler/main.gem", 0);
-#line 1649 "compiler/main.gem"
-    GemVal gem_v_out = gem_string("");
 #line 1650 "compiler/main.gem"
-    GemVal _t3642[] = {gem_v_body};
-    if (gem_truthy(gem_gt(gem_len_fn(NULL, _t3642, 1), gem_int(0)))) {
-#line 1651 "compiler/main.gem"
-        GemVal gem_v__for_i_81 = gem_int(0);
+    GemVal gem_v_out = gem_string("");
 #line 1651 "compiler/main.gem"
     GemVal _t3643[] = {gem_v_body};
-        GemVal gem_v__for_limit_81 = gem_sub(gem_len_fn(NULL, _t3643, 1), gem_int(1));
-#line 1651 "compiler/main.gem"
-        while (1) {
-            if (!gem_truthy(gem_lt(gem_v__for_i_81, gem_v__for_limit_81))) break;
-#line 1651 "compiler/main.gem"
-            GemVal gem_v_i = gem_v__for_i_81;
-#line 1651 "compiler/main.gem"
-            gem_v__for_i_81 = gem_add(gem_v__for_i_81, gem_int(1));
+    if (gem_truthy(gem_gt(gem_len_fn(NULL, _t3643, 1), gem_int(0)))) {
 #line 1652 "compiler/main.gem"
-    GemVal _t3644[] = {gem_table_get(gem_v_body, gem_v_i), gem_int(1)};
-    GemVal _t3645 = (*gem_v_compile_stmt);
-            gem_v_out = gem_add(gem_add(gem_v_out, _t3645.fn(_t3645.env, _t3644, 2)), gem_string("\n"));
+        GemVal gem_v__for_i_81 = gem_int(0);
+#line 1652 "compiler/main.gem"
+    GemVal _t3644[] = {gem_v_body};
+        GemVal gem_v__for_limit_81 = gem_sub(gem_len_fn(NULL, _t3644, 1), gem_int(1));
+#line 1652 "compiler/main.gem"
+        while (1) {
+            gem_yield_check();
+            if (!gem_truthy(gem_lt(gem_v__for_i_81, gem_v__for_limit_81))) break;
+#line 1652 "compiler/main.gem"
+            GemVal gem_v_i = gem_v__for_i_81;
+#line 1652 "compiler/main.gem"
+            gem_v__for_i_81 = gem_add(gem_v__for_i_81, gem_int(1));
+#line 1653 "compiler/main.gem"
+    GemVal _t3645[] = {gem_table_get(gem_v_body, gem_v_i), gem_int(1)};
+    GemVal _t3646 = (*gem_v_compile_stmt);
+            gem_v_out = gem_add(gem_add(gem_v_out, _t3646.fn(_t3646.env, _t3645, 2)), gem_string("\n"));
         }
 
-#line 1654 "compiler/main.gem"
-    GemVal _t3646[] = {gem_v_body};
-    GemVal _t3647[] = {gem_table_get(gem_v_body, gem_sub(gem_len_fn(NULL, _t3646, 1), gem_int(1))), gem_int(1)};
-    GemVal _t3648 = (*gem_v_compile_stmt_return);
-        gem_v_out = gem_add(gem_add(gem_v_out, _t3648.fn(_t3648.env, _t3647, 2)), gem_string("\n"));
+#line 1655 "compiler/main.gem"
+    GemVal _t3647[] = {gem_v_body};
+    GemVal _t3648[] = {gem_table_get(gem_v_body, gem_sub(gem_len_fn(NULL, _t3647, 1), gem_int(1))), gem_int(1)};
+    GemVal _t3649 = (*gem_v_compile_stmt_return);
+        gem_v_out = gem_add(gem_add(gem_v_out, _t3649.fn(_t3649.env, _t3648, 2)), gem_string("\n"));
     } else {
-#line 1656 "compiler/main.gem"
+#line 1657 "compiler/main.gem"
         gem_v_out = gem_add(gem_v_out, gem_string("    gem_pop_frame();\n    return GEM_NIL;\n"));
     }
-    GemVal _t3649 = gem_v_out;
+    GemVal _t3650 = gem_v_out;
     gem_pop_frame();
-    return _t3649;
+    return _t3650;
 }
 
 struct _closure__anon_53 {
@@ -13781,98 +13919,98 @@ static GemVal _anon_53(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_source_name = _cls->gem_v_source_name;
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     gem_push_frame("_anon_53", "compiler/main.gem", 0);
-#line 1664 "compiler/main.gem"
+#line 1665 "compiler/main.gem"
     GemVal gem_v__d82 = gem_v_node;
-#line 1664 "compiler/main.gem"
-    GemVal _t3651 = gem_v__d82;
-    GemVal gem_v_params = gem_table_get(_t3651, gem_string("params"));
-#line 1664 "compiler/main.gem"
+#line 1665 "compiler/main.gem"
     GemVal _t3652 = gem_v__d82;
-    GemVal gem_v_body = gem_table_get(_t3652, gem_string("body"));
-#line 1664 "compiler/main.gem"
+    GemVal gem_v_params = gem_table_get(_t3652, gem_string("params"));
+#line 1665 "compiler/main.gem"
     GemVal _t3653 = gem_v__d82;
-    GemVal gem_v_name = gem_table_get(_t3653, gem_string("name"));
+    GemVal gem_v_body = gem_table_get(_t3653, gem_string("body"));
+#line 1665 "compiler/main.gem"
+    GemVal _t3654 = gem_v__d82;
+    GemVal gem_v_name = gem_table_get(_t3654, gem_string("name"));
 
-#line 1667 "compiler/main.gem"
-    GemVal _t3654[] = {gem_v_params};
-    GemVal gem_v_scope_vars = gem_fn_sorted_array_to_set(NULL, _t3654, 1);
 #line 1668 "compiler/main.gem"
-    GemVal _t3655 = gem_v_node;
-    if (gem_truthy(gem_neq(gem_table_get(_t3655, gem_string("rest_param")), GEM_NIL))) {
+    GemVal _t3655[] = {gem_v_params};
+    GemVal gem_v_scope_vars = gem_fn_sorted_array_to_set(NULL, _t3655, 1);
 #line 1669 "compiler/main.gem"
     GemVal _t3656 = gem_v_node;
-    GemVal _t3657[] = {gem_v_scope_vars, gem_table_get(_t3656, gem_string("rest_param"))};
-        (void)(gem_fn_set_add(NULL, _t3657, 2));
+    if (gem_truthy(gem_neq(gem_table_get(_t3656, gem_string("rest_param")), GEM_NIL))) {
+#line 1670 "compiler/main.gem"
+    GemVal _t3657 = gem_v_node;
+    GemVal _t3658[] = {gem_v_scope_vars, gem_table_get(_t3657, gem_string("rest_param"))};
+        (void)(gem_fn_set_add(NULL, _t3658, 2));
     }
-#line 1671 "compiler/main.gem"
-    GemVal _t3658 = gem_v_node;
-    if (gem_truthy(gem_neq(gem_table_get(_t3658, gem_string("block_param")), GEM_NIL))) {
 #line 1672 "compiler/main.gem"
     GemVal _t3659 = gem_v_node;
-    GemVal _t3660[] = {gem_v_scope_vars, gem_table_get(_t3659, gem_string("block_param"))};
-        (void)(gem_fn_set_add(NULL, _t3660, 2));
+    if (gem_truthy(gem_neq(gem_table_get(_t3659, gem_string("block_param")), GEM_NIL))) {
+#line 1673 "compiler/main.gem"
+    GemVal _t3660 = gem_v_node;
+    GemVal _t3661[] = {gem_v_scope_vars, gem_table_get(_t3660, gem_string("block_param"))};
+        (void)(gem_fn_set_add(NULL, _t3661, 2));
     }
-#line 1674 "compiler/main.gem"
-    GemVal _t3661[] = {gem_v_body, gem_v_scope_vars};
-    (void)(gem_fn_collect_top_let_names(NULL, _t3661, 2));
 #line 1675 "compiler/main.gem"
     GemVal _t3662[] = {gem_v_body, gem_v_scope_vars};
-    GemVal _t3663 = (*gem_v_find_captured_in_scope);
-    GemVal gem_v_captured = _t3663.fn(_t3663.env, _t3662, 2);
-#line 1677 "compiler/main.gem"
-    GemVal gem_v_saved_boxed = (*gem_v_boxed_vars);
+    (void)(gem_fn_collect_top_let_names(NULL, _t3662, 2));
+#line 1676 "compiler/main.gem"
+    GemVal _t3663[] = {gem_v_body, gem_v_scope_vars};
+    GemVal _t3664 = (*gem_v_find_captured_in_scope);
+    GemVal gem_v_captured = _t3664.fn(_t3664.env, _t3663, 2);
 #line 1678 "compiler/main.gem"
-    GemVal gem_v_saved_top = (*gem_v_in_top_level);
+    GemVal gem_v_saved_boxed = (*gem_v_boxed_vars);
 #line 1679 "compiler/main.gem"
-    *gem_v_boxed_vars = gem_v_captured;
+    GemVal gem_v_saved_top = (*gem_v_in_top_level);
 #line 1680 "compiler/main.gem"
+    *gem_v_boxed_vars = gem_v_captured;
+#line 1681 "compiler/main.gem"
     *gem_v_in_top_level = gem_bool(0);
-#line 1682 "compiler/main.gem"
-    GemVal _t3664[] = {gem_v_name};
-    GemVal gem_v_lines = gem_add(gem_add(gem_string("static GemVal gem_fn_"), gem_to_string_fn(NULL, _t3664, 1)), gem_string("(void *_env, GemVal *args, int argc) {\n"));
-#line 1685 "compiler/main.gem"
-    GemVal _t3665 = gem_v_node;
-    if (gem_truthy(gem_neq(gem_table_get(_t3665, gem_string("line")), GEM_NIL))) {
+#line 1683 "compiler/main.gem"
+    GemVal _t3665[] = {gem_v_name};
+    GemVal gem_v_lines = gem_add(gem_add(gem_string("static GemVal gem_fn_"), gem_to_string_fn(NULL, _t3665, 1)), gem_string("(void *_env, GemVal *args, int argc) {\n"));
 #line 1686 "compiler/main.gem"
     GemVal _t3666 = gem_v_node;
-    GemVal _t3667[] = {gem_table_get(_t3666, gem_string("line"))};
-    GemVal _t3668[] = {(*gem_v_source_name)};
-    GemVal _t3669[] = {gem_fn_escape_c_string(NULL, _t3668, 1)};
-        gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("#line "), gem_to_string_fn(NULL, _t3667, 1)), gem_string(" \"")), gem_to_string_fn(NULL, _t3669, 1)), gem_string("\"\n")));
+    if (gem_truthy(gem_neq(gem_table_get(_t3666, gem_string("line")), GEM_NIL))) {
+#line 1687 "compiler/main.gem"
+    GemVal _t3667 = gem_v_node;
+    GemVal _t3668[] = {gem_table_get(_t3667, gem_string("line"))};
+    GemVal _t3669[] = {(*gem_v_source_name)};
+    GemVal _t3670[] = {gem_fn_escape_c_string(NULL, _t3669, 1)};
+        gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("#line "), gem_to_string_fn(NULL, _t3668, 1)), gem_string(" \"")), gem_to_string_fn(NULL, _t3670, 1)), gem_string("\"\n")));
     }
-#line 1689 "compiler/main.gem"
-    GemVal _t3670[] = {gem_v_node, gem_v_params, gem_v_captured};
-    GemVal _t3671 = (*gem_v_emit_param_bindings);
-    gem_v_lines = gem_add(gem_v_lines, _t3671.fn(_t3671.env, _t3670, 3));
-#line 1691 "compiler/main.gem"
-    GemVal gem_v_fn_line = gem_int(0);
+#line 1690 "compiler/main.gem"
+    GemVal _t3671[] = {gem_v_node, gem_v_params, gem_v_captured};
+    GemVal _t3672 = (*gem_v_emit_param_bindings);
+    gem_v_lines = gem_add(gem_v_lines, _t3672.fn(_t3672.env, _t3671, 3));
 #line 1692 "compiler/main.gem"
-    GemVal _t3672 = gem_v_node;
-    if (gem_truthy(gem_neq(gem_table_get(_t3672, gem_string("line")), GEM_NIL))) {
+    GemVal gem_v_fn_line = gem_int(0);
 #line 1693 "compiler/main.gem"
     GemVal _t3673 = gem_v_node;
-        gem_v_fn_line = gem_table_get(_t3673, gem_string("line"));
+    if (gem_truthy(gem_neq(gem_table_get(_t3673, gem_string("line")), GEM_NIL))) {
+#line 1694 "compiler/main.gem"
+    GemVal _t3674 = gem_v_node;
+        gem_v_fn_line = gem_table_get(_t3674, gem_string("line"));
     }
-#line 1695 "compiler/main.gem"
-    GemVal _t3674[] = {gem_v_name};
-    GemVal _t3675[] = {gem_fn_escape_c_string(NULL, _t3674, 1)};
-    GemVal _t3676[] = {(*gem_v_source_name)};
-    GemVal _t3677[] = {gem_fn_escape_c_string(NULL, _t3676, 1)};
-    GemVal _t3678[] = {gem_v_fn_line};
-    gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("    gem_push_frame(\""), gem_to_string_fn(NULL, _t3675, 1)), gem_string("\", \"")), gem_to_string_fn(NULL, _t3677, 1)), gem_string("\", ")), gem_to_string_fn(NULL, _t3678, 1)), gem_string(");\n")));
-#line 1697 "compiler/main.gem"
-    GemVal _t3679[] = {gem_v_body};
-    GemVal _t3680 = (*gem_v_emit_fn_body);
-    gem_v_lines = gem_add(gem_v_lines, _t3680.fn(_t3680.env, _t3679, 1));
-#line 1699 "compiler/main.gem"
-    gem_v_lines = gem_add(gem_v_lines, gem_string("}"));
+#line 1696 "compiler/main.gem"
+    GemVal _t3675[] = {gem_v_name};
+    GemVal _t3676[] = {gem_fn_escape_c_string(NULL, _t3675, 1)};
+    GemVal _t3677[] = {(*gem_v_source_name)};
+    GemVal _t3678[] = {gem_fn_escape_c_string(NULL, _t3677, 1)};
+    GemVal _t3679[] = {gem_v_fn_line};
+    gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("    gem_push_frame(\""), gem_to_string_fn(NULL, _t3676, 1)), gem_string("\", \"")), gem_to_string_fn(NULL, _t3678, 1)), gem_string("\", ")), gem_to_string_fn(NULL, _t3679, 1)), gem_string(");\n")));
+#line 1698 "compiler/main.gem"
+    GemVal _t3680[] = {gem_v_body};
+    GemVal _t3681 = (*gem_v_emit_fn_body);
+    gem_v_lines = gem_add(gem_v_lines, _t3681.fn(_t3681.env, _t3680, 1));
 #line 1700 "compiler/main.gem"
-    *gem_v_boxed_vars = gem_v_saved_boxed;
+    gem_v_lines = gem_add(gem_v_lines, gem_string("}"));
 #line 1701 "compiler/main.gem"
+    *gem_v_boxed_vars = gem_v_saved_boxed;
+#line 1702 "compiler/main.gem"
     *gem_v_in_top_level = gem_v_saved_top;
-    GemVal _t3681 = gem_v_lines;
+    GemVal _t3682 = gem_v_lines;
     gem_pop_frame();
-    return _t3681;
+    return _t3682;
 }
 
 struct _closure__anon_54 {
@@ -13900,144 +14038,146 @@ static GemVal _anon_54(void *_env, GemVal *args, int argc) {
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_captures = (argc > 1) ? args[1] : GEM_NIL;
     gem_push_frame("_anon_54", "compiler/main.gem", 0);
-#line 1708 "compiler/main.gem"
-    GemVal gem_v__d83 = gem_v_node;
-#line 1708 "compiler/main.gem"
-    GemVal _t3683 = gem_v__d83;
-    GemVal gem_v_params = gem_table_get(_t3683, gem_string("params"));
-#line 1708 "compiler/main.gem"
-    GemVal _t3684 = gem_v__d83;
-    GemVal gem_v_body = gem_table_get(_t3684, gem_string("body"));
-
 #line 1709 "compiler/main.gem"
-    GemVal _t3685 = (*gem_v_anon_name);
-    GemVal gem_v_name = _t3685.fn(_t3685.env, NULL, 0);
-#line 1712 "compiler/main.gem"
-    GemVal _t3686[] = {gem_v_params};
-    GemVal gem_v_inner_scope = gem_fn_sorted_array_to_set(NULL, _t3686, 1);
+    GemVal gem_v__d83 = gem_v_node;
+#line 1709 "compiler/main.gem"
+    GemVal _t3684 = gem_v__d83;
+    GemVal gem_v_params = gem_table_get(_t3684, gem_string("params"));
+#line 1709 "compiler/main.gem"
+    GemVal _t3685 = gem_v__d83;
+    GemVal gem_v_body = gem_table_get(_t3685, gem_string("body"));
+
+#line 1710 "compiler/main.gem"
+    GemVal _t3686 = (*gem_v_anon_name);
+    GemVal gem_v_name = _t3686.fn(_t3686.env, NULL, 0);
 #line 1713 "compiler/main.gem"
-    GemVal _t3687 = gem_v_node;
-    if (gem_truthy(gem_neq(gem_table_get(_t3687, gem_string("rest_param")), GEM_NIL))) {
+    GemVal _t3687[] = {gem_v_params};
+    GemVal gem_v_inner_scope = gem_fn_sorted_array_to_set(NULL, _t3687, 1);
 #line 1714 "compiler/main.gem"
     GemVal _t3688 = gem_v_node;
-    GemVal _t3689[] = {gem_v_inner_scope, gem_table_get(_t3688, gem_string("rest_param"))};
-        (void)(gem_fn_set_add(NULL, _t3689, 2));
+    if (gem_truthy(gem_neq(gem_table_get(_t3688, gem_string("rest_param")), GEM_NIL))) {
+#line 1715 "compiler/main.gem"
+    GemVal _t3689 = gem_v_node;
+    GemVal _t3690[] = {gem_v_inner_scope, gem_table_get(_t3689, gem_string("rest_param"))};
+        (void)(gem_fn_set_add(NULL, _t3690, 2));
     }
-#line 1716 "compiler/main.gem"
-    GemVal _t3690 = gem_v_node;
-    if (gem_truthy(gem_neq(gem_table_get(_t3690, gem_string("block_param")), GEM_NIL))) {
 #line 1717 "compiler/main.gem"
     GemVal _t3691 = gem_v_node;
-    GemVal _t3692[] = {gem_v_inner_scope, gem_table_get(_t3691, gem_string("block_param"))};
-        (void)(gem_fn_set_add(NULL, _t3692, 2));
+    if (gem_truthy(gem_neq(gem_table_get(_t3691, gem_string("block_param")), GEM_NIL))) {
+#line 1718 "compiler/main.gem"
+    GemVal _t3692 = gem_v_node;
+    GemVal _t3693[] = {gem_v_inner_scope, gem_table_get(_t3692, gem_string("block_param"))};
+        (void)(gem_fn_set_add(NULL, _t3693, 2));
     }
-#line 1719 "compiler/main.gem"
-    GemVal _t3693[] = {gem_v_body, gem_v_inner_scope};
-    (void)(gem_fn_collect_top_let_names(NULL, _t3693, 2));
 #line 1720 "compiler/main.gem"
     GemVal _t3694[] = {gem_v_body, gem_v_inner_scope};
-    GemVal _t3695 = (*gem_v_find_captured_in_scope);
-    GemVal gem_v_inner_captured = _t3695.fn(_t3695.env, _t3694, 2);
-#line 1722 "compiler/main.gem"
-    GemVal gem_v_saved_boxed = (*gem_v_boxed_vars);
+    (void)(gem_fn_collect_top_let_names(NULL, _t3694, 2));
+#line 1721 "compiler/main.gem"
+    GemVal _t3695[] = {gem_v_body, gem_v_inner_scope};
+    GemVal _t3696 = (*gem_v_find_captured_in_scope);
+    GemVal gem_v_inner_captured = _t3696.fn(_t3696.env, _t3695, 2);
 #line 1723 "compiler/main.gem"
-    GemVal gem_v_saved_top = (*gem_v_in_top_level);
+    GemVal gem_v_saved_boxed = (*gem_v_boxed_vars);
 #line 1724 "compiler/main.gem"
-    GemVal _t3696[] = {gem_v_captures};
-    GemVal _t3697[] = {gem_v_inner_captured, gem_fn_sorted_array_to_set(NULL, _t3696, 1)};
-    *gem_v_boxed_vars = gem_fn_set_union(NULL, _t3697, 2);
+    GemVal gem_v_saved_top = (*gem_v_in_top_level);
 #line 1725 "compiler/main.gem"
+    GemVal _t3697[] = {gem_v_captures};
+    GemVal _t3698[] = {gem_v_inner_captured, gem_fn_sorted_array_to_set(NULL, _t3697, 1)};
+    *gem_v_boxed_vars = gem_fn_set_union(NULL, _t3698, 2);
+#line 1726 "compiler/main.gem"
     *gem_v_in_top_level = gem_bool(0);
-#line 1728 "compiler/main.gem"
-    GemVal _t3698[] = {gem_v_name};
-    GemVal gem_v_struct_name = gem_add(gem_string("_closure_"), gem_to_string_fn(NULL, _t3698, 1));
 #line 1729 "compiler/main.gem"
-    GemVal _t3699[] = {gem_v_struct_name};
-    GemVal gem_v_struct_def = gem_add(gem_add(gem_string("struct "), gem_to_string_fn(NULL, _t3699, 1)), gem_string(" {\n"));
+    GemVal _t3699[] = {gem_v_name};
+    GemVal gem_v_struct_name = gem_add(gem_string("_closure_"), gem_to_string_fn(NULL, _t3699, 1));
 #line 1730 "compiler/main.gem"
-    GemVal gem_v__for_items_84 = gem_v_captures;
-#line 1730 "compiler/main.gem"
-    GemVal gem_v__for_i_84 = gem_int(0);
-#line 1730 "compiler/main.gem"
-    while (1) {
-        GemVal _t3700[] = {gem_v__for_items_84};
-        if (!gem_truthy(gem_lt(gem_v__for_i_84, gem_len_fn(NULL, _t3700, 1)))) break;
-#line 1730 "compiler/main.gem"
-        GemVal gem_v_cap = gem_table_get(gem_v__for_items_84, gem_v__for_i_84);
-#line 1730 "compiler/main.gem"
-        gem_v__for_i_84 = gem_add(gem_v__for_i_84, gem_int(1));
+    GemVal _t3700[] = {gem_v_struct_name};
+    GemVal gem_v_struct_def = gem_add(gem_add(gem_string("struct "), gem_to_string_fn(NULL, _t3700, 1)), gem_string(" {\n"));
 #line 1731 "compiler/main.gem"
-    GemVal _t3701[] = {gem_v_cap};
-    GemVal _t3702 = (*gem_v_mangle);
-    GemVal _t3703[] = {_t3702.fn(_t3702.env, _t3701, 1)};
-        gem_v_struct_def = gem_add(gem_v_struct_def, gem_add(gem_add(gem_string("    GemVal *"), gem_to_string_fn(NULL, _t3703, 1)), gem_string(";\n")));
+    GemVal gem_v__for_items_84 = gem_v_captures;
+#line 1731 "compiler/main.gem"
+    GemVal gem_v__for_i_84 = gem_int(0);
+#line 1731 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        GemVal _t3701[] = {gem_v__for_items_84};
+        if (!gem_truthy(gem_lt(gem_v__for_i_84, gem_len_fn(NULL, _t3701, 1)))) break;
+#line 1731 "compiler/main.gem"
+        GemVal gem_v_cap = gem_table_get(gem_v__for_items_84, gem_v__for_i_84);
+#line 1731 "compiler/main.gem"
+        gem_v__for_i_84 = gem_add(gem_v__for_i_84, gem_int(1));
+#line 1732 "compiler/main.gem"
+    GemVal _t3702[] = {gem_v_cap};
+    GemVal _t3703 = (*gem_v_mangle);
+    GemVal _t3704[] = {_t3703.fn(_t3703.env, _t3702, 1)};
+        gem_v_struct_def = gem_add(gem_v_struct_def, gem_add(gem_add(gem_string("    GemVal *"), gem_to_string_fn(NULL, _t3704, 1)), gem_string(";\n")));
     }
 
-#line 1733 "compiler/main.gem"
+#line 1734 "compiler/main.gem"
     gem_v_struct_def = gem_add(gem_v_struct_def, gem_string("};\n"));
-#line 1736 "compiler/main.gem"
-    GemVal _t3704[] = {gem_v_name};
-    GemVal gem_v_lines = gem_add(gem_add(gem_string("static GemVal "), gem_to_string_fn(NULL, _t3704, 1)), gem_string("(void *_env, GemVal *args, int argc) {\n"));
 #line 1737 "compiler/main.gem"
-    GemVal _t3705[] = {gem_v_captures};
-    if (gem_truthy(gem_gt(gem_len_fn(NULL, _t3705, 1), gem_int(0)))) {
+    GemVal _t3705[] = {gem_v_name};
+    GemVal gem_v_lines = gem_add(gem_add(gem_string("static GemVal "), gem_to_string_fn(NULL, _t3705, 1)), gem_string("(void *_env, GemVal *args, int argc) {\n"));
 #line 1738 "compiler/main.gem"
-    GemVal _t3706[] = {gem_v_struct_name};
+    GemVal _t3706[] = {gem_v_captures};
+    if (gem_truthy(gem_gt(gem_len_fn(NULL, _t3706, 1), gem_int(0)))) {
+#line 1739 "compiler/main.gem"
     GemVal _t3707[] = {gem_v_struct_name};
-        gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    struct "), gem_to_string_fn(NULL, _t3706, 1)), gem_string(" *_cls = (struct ")), gem_to_string_fn(NULL, _t3707, 1)), gem_string(" *)_env;\n")));
-#line 1739 "compiler/main.gem"
-        GemVal gem_v__for_items_85 = gem_v_captures;
-#line 1739 "compiler/main.gem"
-        GemVal gem_v__for_i_85 = gem_int(0);
-#line 1739 "compiler/main.gem"
-        while (1) {
-            GemVal _t3708[] = {gem_v__for_items_85};
-            if (!gem_truthy(gem_lt(gem_v__for_i_85, gem_len_fn(NULL, _t3708, 1)))) break;
-#line 1739 "compiler/main.gem"
-            GemVal gem_v_cap = gem_table_get(gem_v__for_items_85, gem_v__for_i_85);
-#line 1739 "compiler/main.gem"
-            gem_v__for_i_85 = gem_add(gem_v__for_i_85, gem_int(1));
+    GemVal _t3708[] = {gem_v_struct_name};
+        gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    struct "), gem_to_string_fn(NULL, _t3707, 1)), gem_string(" *_cls = (struct ")), gem_to_string_fn(NULL, _t3708, 1)), gem_string(" *)_env;\n")));
 #line 1740 "compiler/main.gem"
-    GemVal _t3709[] = {gem_v_cap};
-    GemVal _t3710 = (*gem_v_mangle);
-            GemVal gem_v_mc = _t3710.fn(_t3710.env, _t3709, 1);
+        GemVal gem_v__for_items_85 = gem_v_captures;
+#line 1740 "compiler/main.gem"
+        GemVal gem_v__for_i_85 = gem_int(0);
+#line 1740 "compiler/main.gem"
+        while (1) {
+            gem_yield_check();
+            GemVal _t3709[] = {gem_v__for_items_85};
+            if (!gem_truthy(gem_lt(gem_v__for_i_85, gem_len_fn(NULL, _t3709, 1)))) break;
+#line 1740 "compiler/main.gem"
+            GemVal gem_v_cap = gem_table_get(gem_v__for_items_85, gem_v__for_i_85);
+#line 1740 "compiler/main.gem"
+            gem_v__for_i_85 = gem_add(gem_v__for_i_85, gem_int(1));
 #line 1741 "compiler/main.gem"
-    GemVal _t3711[] = {gem_v_mc};
+    GemVal _t3710[] = {gem_v_cap};
+    GemVal _t3711 = (*gem_v_mangle);
+            GemVal gem_v_mc = _t3711.fn(_t3711.env, _t3710, 1);
+#line 1742 "compiler/main.gem"
     GemVal _t3712[] = {gem_v_mc};
-            gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    GemVal *"), gem_to_string_fn(NULL, _t3711, 1)), gem_string(" = _cls->")), gem_to_string_fn(NULL, _t3712, 1)), gem_string(";\n")));
+    GemVal _t3713[] = {gem_v_mc};
+            gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    GemVal *"), gem_to_string_fn(NULL, _t3712, 1)), gem_string(" = _cls->")), gem_to_string_fn(NULL, _t3713, 1)), gem_string(";\n")));
         }
 
     }
-#line 1745 "compiler/main.gem"
-    GemVal _t3713[] = {gem_v_node, gem_v_params, gem_v_inner_captured};
-    GemVal _t3714 = (*gem_v_emit_param_bindings);
-    gem_v_lines = gem_add(gem_v_lines, _t3714.fn(_t3714.env, _t3713, 3));
-#line 1747 "compiler/main.gem"
-    GemVal _t3715[] = {gem_v_name};
-    GemVal _t3716[] = {gem_fn_escape_c_string(NULL, _t3715, 1)};
-    GemVal _t3717[] = {(*gem_v_source_name)};
-    GemVal _t3718[] = {gem_fn_escape_c_string(NULL, _t3717, 1)};
-    gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    gem_push_frame(\""), gem_to_string_fn(NULL, _t3716, 1)), gem_string("\", \"")), gem_to_string_fn(NULL, _t3718, 1)), gem_string("\", 0);\n")));
-#line 1749 "compiler/main.gem"
-    GemVal _t3719[] = {gem_v_body};
-    GemVal _t3720 = (*gem_v_emit_fn_body);
-    gem_v_lines = gem_add(gem_v_lines, _t3720.fn(_t3720.env, _t3719, 1));
-#line 1751 "compiler/main.gem"
-    gem_v_lines = gem_add(gem_v_lines, gem_string("}"));
+#line 1746 "compiler/main.gem"
+    GemVal _t3714[] = {gem_v_node, gem_v_params, gem_v_inner_captured};
+    GemVal _t3715 = (*gem_v_emit_param_bindings);
+    gem_v_lines = gem_add(gem_v_lines, _t3715.fn(_t3715.env, _t3714, 3));
+#line 1748 "compiler/main.gem"
+    GemVal _t3716[] = {gem_v_name};
+    GemVal _t3717[] = {gem_fn_escape_c_string(NULL, _t3716, 1)};
+    GemVal _t3718[] = {(*gem_v_source_name)};
+    GemVal _t3719[] = {gem_fn_escape_c_string(NULL, _t3718, 1)};
+    gem_v_lines = gem_add(gem_v_lines, gem_add(gem_add(gem_add(gem_add(gem_string("    gem_push_frame(\""), gem_to_string_fn(NULL, _t3717, 1)), gem_string("\", \"")), gem_to_string_fn(NULL, _t3719, 1)), gem_string("\", 0);\n")));
+#line 1750 "compiler/main.gem"
+    GemVal _t3720[] = {gem_v_body};
+    GemVal _t3721 = (*gem_v_emit_fn_body);
+    gem_v_lines = gem_add(gem_v_lines, _t3721.fn(_t3721.env, _t3720, 1));
 #line 1752 "compiler/main.gem"
-    *gem_v_boxed_vars = gem_v_saved_boxed;
+    gem_v_lines = gem_add(gem_v_lines, gem_string("}"));
 #line 1753 "compiler/main.gem"
+    *gem_v_boxed_vars = gem_v_saved_boxed;
+#line 1754 "compiler/main.gem"
     *gem_v_in_top_level = gem_v_saved_top;
-#line 1756 "compiler/main.gem"
-    GemVal _t3721[] = {(*gem_v_functions), gem_add(gem_v_struct_def, gem_v_lines)};
-    (void)(gem_push_fn(NULL, _t3721, 2));
-    GemVal _t3722 = gem_table_new();
-    gem_table_set(_t3722, gem_string("fn_name"), gem_v_name);
-    gem_table_set(_t3722, gem_string("struct_name"), gem_v_struct_name);
-    gem_table_set(_t3722, gem_string("captures"), gem_v_captures);
-    GemVal _t3723 = _t3722;
+#line 1757 "compiler/main.gem"
+    GemVal _t3722[] = {(*gem_v_functions), gem_add(gem_v_struct_def, gem_v_lines)};
+    (void)(gem_push_fn(NULL, _t3722, 2));
+    GemVal _t3723 = gem_table_new();
+    gem_table_set(_t3723, gem_string("fn_name"), gem_v_name);
+    gem_table_set(_t3723, gem_string("struct_name"), gem_v_struct_name);
+    gem_table_set(_t3723, gem_string("captures"), gem_v_captures);
+    GemVal _t3724 = _t3723;
     gem_pop_frame();
-    return _t3723;
+    return _t3724;
 }
 
 struct _closure__anon_55 {
@@ -14072,334 +14212,345 @@ static GemVal _anon_55(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_top_level_vars = _cls->gem_v_top_level_vars;
     GemVal gem_v_ast = (argc > 0) ? args[0] : GEM_NIL;
     gem_push_frame("_anon_55", "compiler/main.gem", 0);
-#line 1765 "compiler/main.gem"
-    GemVal _t3725 = gem_table_new();
-    GemVal gem_v_fn_defs = _t3725;
 #line 1766 "compiler/main.gem"
     GemVal _t3726 = gem_table_new();
-    GemVal gem_v_extern_fns_list = _t3726;
+    GemVal gem_v_fn_defs = _t3726;
 #line 1767 "compiler/main.gem"
     GemVal _t3727 = gem_table_new();
-    GemVal gem_v_extern_includes = _t3727;
+    GemVal gem_v_extern_fns_list = _t3727;
 #line 1768 "compiler/main.gem"
     GemVal _t3728 = gem_table_new();
-    GemVal gem_v_top_stmts = _t3728;
-#line 1770 "compiler/main.gem"
-    GemVal _t3729 = gem_v_ast;
-    GemVal gem_v__for_items_86 = gem_table_get(_t3729, gem_string("stmts"));
-#line 1770 "compiler/main.gem"
-    GemVal gem_v__for_i_86 = gem_int(0);
-#line 1770 "compiler/main.gem"
-    while (1) {
-        GemVal _t3730[] = {gem_v__for_items_86};
-        if (!gem_truthy(gem_lt(gem_v__for_i_86, gem_len_fn(NULL, _t3730, 1)))) break;
-#line 1770 "compiler/main.gem"
-        GemVal gem_v_s = gem_table_get(gem_v__for_items_86, gem_v__for_i_86);
-#line 1770 "compiler/main.gem"
-        gem_v__for_i_86 = gem_add(gem_v__for_i_86, gem_int(1));
+    GemVal gem_v_extern_includes = _t3728;
+#line 1769 "compiler/main.gem"
+    GemVal _t3729 = gem_table_new();
+    GemVal gem_v_top_stmts = _t3729;
 #line 1771 "compiler/main.gem"
-    GemVal _t3731 = gem_v_s;
-        if (gem_truthy(gem_eq(gem_table_get(_t3731, gem_string("tag")), gem_string("fn_def")))) {
+    GemVal _t3730 = gem_v_ast;
+    GemVal gem_v__for_items_86 = gem_table_get(_t3730, gem_string("stmts"));
+#line 1771 "compiler/main.gem"
+    GemVal gem_v__for_i_86 = gem_int(0);
+#line 1771 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        GemVal _t3731[] = {gem_v__for_items_86};
+        if (!gem_truthy(gem_lt(gem_v__for_i_86, gem_len_fn(NULL, _t3731, 1)))) break;
+#line 1771 "compiler/main.gem"
+        GemVal gem_v_s = gem_table_get(gem_v__for_items_86, gem_v__for_i_86);
+#line 1771 "compiler/main.gem"
+        gem_v__for_i_86 = gem_add(gem_v__for_i_86, gem_int(1));
 #line 1772 "compiler/main.gem"
-    GemVal _t3732[] = {gem_v_fn_defs, gem_v_s};
-            (void)(gem_push_fn(NULL, _t3732, 2));
-        } else {
+    GemVal _t3732 = gem_v_s;
+        if (gem_truthy(gem_eq(gem_table_get(_t3732, gem_string("tag")), gem_string("fn_def")))) {
 #line 1773 "compiler/main.gem"
-    GemVal _t3733 = gem_v_s;
-            if (gem_truthy(gem_eq(gem_table_get(_t3733, gem_string("tag")), gem_string("extern_fn")))) {
+    GemVal _t3733[] = {gem_v_fn_defs, gem_v_s};
+            (void)(gem_push_fn(NULL, _t3733, 2));
+        } else {
 #line 1774 "compiler/main.gem"
-    GemVal _t3734[] = {gem_v_extern_fns_list, gem_v_s};
-                (void)(gem_push_fn(NULL, _t3734, 2));
-            } else {
+    GemVal _t3734 = gem_v_s;
+            if (gem_truthy(gem_eq(gem_table_get(_t3734, gem_string("tag")), gem_string("extern_fn")))) {
 #line 1775 "compiler/main.gem"
-    GemVal _t3735 = gem_v_s;
-                if (gem_truthy(gem_eq(gem_table_get(_t3735, gem_string("tag")), gem_string("extern_include")))) {
+    GemVal _t3735[] = {gem_v_extern_fns_list, gem_v_s};
+                (void)(gem_push_fn(NULL, _t3735, 2));
+            } else {
 #line 1776 "compiler/main.gem"
-    GemVal _t3736[] = {gem_v_extern_includes, gem_v_s};
-                    (void)(gem_push_fn(NULL, _t3736, 2));
-                } else {
-#line 1778 "compiler/main.gem"
-    GemVal _t3737[] = {gem_v_top_stmts, gem_v_s};
+    GemVal _t3736 = gem_v_s;
+                if (gem_truthy(gem_eq(gem_table_get(_t3736, gem_string("tag")), gem_string("extern_include")))) {
+#line 1777 "compiler/main.gem"
+    GemVal _t3737[] = {gem_v_extern_includes, gem_v_s};
                     (void)(gem_push_fn(NULL, _t3737, 2));
+                } else {
+#line 1779 "compiler/main.gem"
+    GemVal _t3738[] = {gem_v_top_stmts, gem_v_s};
+                    (void)(gem_push_fn(NULL, _t3738, 2));
                 }
             }
         }
     }
 
-#line 1783 "compiler/main.gem"
-    GemVal gem_v__for_items_87 = gem_v_extern_fns_list;
-#line 1783 "compiler/main.gem"
-    GemVal gem_v__for_i_87 = gem_int(0);
-#line 1783 "compiler/main.gem"
-    while (1) {
-        GemVal _t3738[] = {gem_v__for_items_87};
-        if (!gem_truthy(gem_lt(gem_v__for_i_87, gem_len_fn(NULL, _t3738, 1)))) break;
-#line 1783 "compiler/main.gem"
-        GemVal gem_v_ef = gem_table_get(gem_v__for_items_87, gem_v__for_i_87);
-#line 1783 "compiler/main.gem"
-        gem_v__for_i_87 = gem_add(gem_v__for_i_87, gem_int(1));
 #line 1784 "compiler/main.gem"
-    GemVal _t3739 = gem_v_ef;
-    GemVal _t3740[] = {(*gem_v_defined_fns), gem_table_get(_t3739, gem_string("name"))};
-        (void)(gem_fn_set_add(NULL, _t3740, 2));
+    GemVal gem_v__for_items_87 = gem_v_extern_fns_list;
+#line 1784 "compiler/main.gem"
+    GemVal gem_v__for_i_87 = gem_int(0);
+#line 1784 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        GemVal _t3739[] = {gem_v__for_items_87};
+        if (!gem_truthy(gem_lt(gem_v__for_i_87, gem_len_fn(NULL, _t3739, 1)))) break;
+#line 1784 "compiler/main.gem"
+        GemVal gem_v_ef = gem_table_get(gem_v__for_items_87, gem_v__for_i_87);
+#line 1784 "compiler/main.gem"
+        gem_v__for_i_87 = gem_add(gem_v__for_i_87, gem_int(1));
+#line 1785 "compiler/main.gem"
+    GemVal _t3740 = gem_v_ef;
+    GemVal _t3741[] = {(*gem_v_defined_fns), gem_table_get(_t3740, gem_string("name"))};
+        (void)(gem_fn_set_add(NULL, _t3741, 2));
     }
 
-#line 1788 "compiler/main.gem"
-    GemVal gem_v__for_items_88 = gem_v_fn_defs;
-#line 1788 "compiler/main.gem"
-    GemVal gem_v__for_i_88 = gem_int(0);
-#line 1788 "compiler/main.gem"
-    while (1) {
-        GemVal _t3741[] = {gem_v__for_items_88};
-        if (!gem_truthy(gem_lt(gem_v__for_i_88, gem_len_fn(NULL, _t3741, 1)))) break;
-#line 1788 "compiler/main.gem"
-        GemVal gem_v_fd = gem_table_get(gem_v__for_items_88, gem_v__for_i_88);
-#line 1788 "compiler/main.gem"
-        gem_v__for_i_88 = gem_add(gem_v__for_i_88, gem_int(1));
 #line 1789 "compiler/main.gem"
-    GemVal _t3742 = gem_v_fd;
-    GemVal _t3743[] = {(*gem_v_defined_fns), gem_table_get(_t3742, gem_string("name"))};
-        (void)(gem_fn_set_add(NULL, _t3743, 2));
+    GemVal gem_v__for_items_88 = gem_v_fn_defs;
+#line 1789 "compiler/main.gem"
+    GemVal gem_v__for_i_88 = gem_int(0);
+#line 1789 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        GemVal _t3742[] = {gem_v__for_items_88};
+        if (!gem_truthy(gem_lt(gem_v__for_i_88, gem_len_fn(NULL, _t3742, 1)))) break;
+#line 1789 "compiler/main.gem"
+        GemVal gem_v_fd = gem_table_get(gem_v__for_items_88, gem_v__for_i_88);
+#line 1789 "compiler/main.gem"
+        gem_v__for_i_88 = gem_add(gem_v__for_i_88, gem_int(1));
 #line 1790 "compiler/main.gem"
-    GemVal _t3744 = gem_v_fd;
-    GemVal _t3745[] = {gem_table_get(_t3744, gem_string("name"))};
-        GemVal gem_v_decl = gem_add(gem_add(gem_string("static GemVal gem_fn_"), gem_to_string_fn(NULL, _t3745, 1)), gem_string("(void *_env, GemVal *args, int argc);"));
+    GemVal _t3743 = gem_v_fd;
+    GemVal _t3744[] = {(*gem_v_defined_fns), gem_table_get(_t3743, gem_string("name"))};
+        (void)(gem_fn_set_add(NULL, _t3744, 2));
 #line 1791 "compiler/main.gem"
-    GemVal _t3746[] = {(*gem_v_forward_decls), gem_v_decl};
-        (void)(gem_push_fn(NULL, _t3746, 2));
+    GemVal _t3745 = gem_v_fd;
+    GemVal _t3746[] = {gem_table_get(_t3745, gem_string("name"))};
+        GemVal gem_v_decl = gem_add(gem_add(gem_string("static GemVal gem_fn_"), gem_to_string_fn(NULL, _t3746, 1)), gem_string("(void *_env, GemVal *args, int argc);"));
+#line 1792 "compiler/main.gem"
+    GemVal _t3747[] = {(*gem_v_forward_decls), gem_v_decl};
+        (void)(gem_push_fn(NULL, _t3747, 2));
     }
 
-#line 1795 "compiler/main.gem"
-    GemVal _t3747[] = {gem_v_top_stmts, (*gem_v_top_level_vars)};
-    (void)(gem_fn_collect_top_let_names(NULL, _t3747, 2));
 #line 1796 "compiler/main.gem"
-    GemVal _t3748 = gem_table_new();
-    GemVal _t3749[] = {gem_v_top_stmts, _t3748};
-    GemVal _t3750 = (*gem_v_find_captured_in_scope);
-    *gem_v_top_level_boxed = _t3750.fn(_t3750.env, _t3749, 2);
-#line 1799 "compiler/main.gem"
-    GemVal gem_v__for_items_89 = gem_v_extern_fns_list;
-#line 1799 "compiler/main.gem"
-    GemVal gem_v__for_i_89 = gem_int(0);
-#line 1799 "compiler/main.gem"
-    while (1) {
-        GemVal _t3751[] = {gem_v__for_items_89};
-        if (!gem_truthy(gem_lt(gem_v__for_i_89, gem_len_fn(NULL, _t3751, 1)))) break;
-#line 1799 "compiler/main.gem"
-        GemVal gem_v_ef = gem_table_get(gem_v__for_items_89, gem_v__for_i_89);
-#line 1799 "compiler/main.gem"
-        gem_v__for_i_89 = gem_add(gem_v__for_i_89, gem_int(1));
+    GemVal _t3748[] = {gem_v_top_stmts, (*gem_v_top_level_vars)};
+    (void)(gem_fn_collect_top_let_names(NULL, _t3748, 2));
+#line 1797 "compiler/main.gem"
+    GemVal _t3749 = gem_table_new();
+    GemVal _t3750[] = {gem_v_top_stmts, _t3749};
+    GemVal _t3751 = (*gem_v_find_captured_in_scope);
+    *gem_v_top_level_boxed = _t3751.fn(_t3751.env, _t3750, 2);
 #line 1800 "compiler/main.gem"
-    GemVal _t3752[] = {gem_v_ef};
-    GemVal _t3753 = (*gem_v_compile_extern_fn);
-    GemVal _t3754[] = {(*gem_v_functions), _t3753.fn(_t3753.env, _t3752, 1)};
-        (void)(gem_push_fn(NULL, _t3754, 2));
+    GemVal gem_v__for_items_89 = gem_v_extern_fns_list;
+#line 1800 "compiler/main.gem"
+    GemVal gem_v__for_i_89 = gem_int(0);
+#line 1800 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        GemVal _t3752[] = {gem_v__for_items_89};
+        if (!gem_truthy(gem_lt(gem_v__for_i_89, gem_len_fn(NULL, _t3752, 1)))) break;
+#line 1800 "compiler/main.gem"
+        GemVal gem_v_ef = gem_table_get(gem_v__for_items_89, gem_v__for_i_89);
+#line 1800 "compiler/main.gem"
+        gem_v__for_i_89 = gem_add(gem_v__for_i_89, gem_int(1));
+#line 1801 "compiler/main.gem"
+    GemVal _t3753[] = {gem_v_ef};
+    GemVal _t3754 = (*gem_v_compile_extern_fn);
+    GemVal _t3755[] = {(*gem_v_functions), _t3754.fn(_t3754.env, _t3753, 1)};
+        (void)(gem_push_fn(NULL, _t3755, 2));
     }
 
-#line 1804 "compiler/main.gem"
-    GemVal gem_v__for_items_90 = gem_v_fn_defs;
-#line 1804 "compiler/main.gem"
-    GemVal gem_v__for_i_90 = gem_int(0);
-#line 1804 "compiler/main.gem"
-    while (1) {
-        GemVal _t3755[] = {gem_v__for_items_90};
-        if (!gem_truthy(gem_lt(gem_v__for_i_90, gem_len_fn(NULL, _t3755, 1)))) break;
-#line 1804 "compiler/main.gem"
-        GemVal gem_v_fd = gem_table_get(gem_v__for_items_90, gem_v__for_i_90);
-#line 1804 "compiler/main.gem"
-        gem_v__for_i_90 = gem_add(gem_v__for_i_90, gem_int(1));
 #line 1805 "compiler/main.gem"
-    GemVal _t3756[] = {gem_v_fd};
-    GemVal _t3757 = (*gem_v_compile_fn);
-    GemVal _t3758[] = {(*gem_v_functions), _t3757.fn(_t3757.env, _t3756, 1)};
-        (void)(gem_push_fn(NULL, _t3758, 2));
+    GemVal gem_v__for_items_90 = gem_v_fn_defs;
+#line 1805 "compiler/main.gem"
+    GemVal gem_v__for_i_90 = gem_int(0);
+#line 1805 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        GemVal _t3756[] = {gem_v__for_items_90};
+        if (!gem_truthy(gem_lt(gem_v__for_i_90, gem_len_fn(NULL, _t3756, 1)))) break;
+#line 1805 "compiler/main.gem"
+        GemVal gem_v_fd = gem_table_get(gem_v__for_items_90, gem_v__for_i_90);
+#line 1805 "compiler/main.gem"
+        gem_v__for_i_90 = gem_add(gem_v__for_i_90, gem_int(1));
+#line 1806 "compiler/main.gem"
+    GemVal _t3757[] = {gem_v_fd};
+    GemVal _t3758 = (*gem_v_compile_fn);
+    GemVal _t3759[] = {(*gem_v_functions), _t3758.fn(_t3758.env, _t3757, 1)};
+        (void)(gem_push_fn(NULL, _t3759, 2));
     }
 
-#line 1809 "compiler/main.gem"
-    GemVal gem_v_saved_boxed = (*gem_v_boxed_vars);
 #line 1810 "compiler/main.gem"
-    *gem_v_boxed_vars = (*gem_v_top_level_boxed);
+    GemVal gem_v_saved_boxed = (*gem_v_boxed_vars);
 #line 1811 "compiler/main.gem"
-    *gem_v_in_top_level = gem_bool(1);
+    *gem_v_boxed_vars = (*gem_v_top_level_boxed);
 #line 1812 "compiler/main.gem"
-    GemVal _t3759[] = {gem_v_top_stmts, gem_int(1)};
-    GemVal _t3760 = (*gem_v_compile_stmts);
-    GemVal gem_v_main_body = _t3760.fn(_t3760.env, _t3759, 2);
+    *gem_v_in_top_level = gem_bool(1);
 #line 1813 "compiler/main.gem"
-    *gem_v_in_top_level = gem_bool(0);
+    GemVal _t3760[] = {gem_v_top_stmts, gem_int(1)};
+    GemVal _t3761 = (*gem_v_compile_stmts);
+    GemVal gem_v_main_body = _t3761.fn(_t3761.env, _t3760, 2);
 #line 1814 "compiler/main.gem"
+    *gem_v_in_top_level = gem_bool(0);
+#line 1815 "compiler/main.gem"
     *gem_v_boxed_vars = gem_v_saved_boxed;
-#line 1816 "compiler/main.gem"
+#line 1817 "compiler/main.gem"
     GemVal gem_v_has_main = gem_bool(0);
-#line 1817 "compiler/main.gem"
-    GemVal gem_v__for_items_91 = gem_v_fn_defs;
-#line 1817 "compiler/main.gem"
-    GemVal gem_v__for_i_91 = gem_int(0);
-#line 1817 "compiler/main.gem"
-    while (1) {
-        GemVal _t3761[] = {gem_v__for_items_91};
-        if (!gem_truthy(gem_lt(gem_v__for_i_91, gem_len_fn(NULL, _t3761, 1)))) break;
-#line 1817 "compiler/main.gem"
-        GemVal gem_v_fd = gem_table_get(gem_v__for_items_91, gem_v__for_i_91);
-#line 1817 "compiler/main.gem"
-        gem_v__for_i_91 = gem_add(gem_v__for_i_91, gem_int(1));
 #line 1818 "compiler/main.gem"
-    GemVal _t3762 = gem_v_fd;
-        if (gem_truthy(gem_eq(gem_table_get(_t3762, gem_string("name")), gem_string("main")))) {
+    GemVal gem_v__for_items_91 = gem_v_fn_defs;
+#line 1818 "compiler/main.gem"
+    GemVal gem_v__for_i_91 = gem_int(0);
+#line 1818 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        GemVal _t3762[] = {gem_v__for_items_91};
+        if (!gem_truthy(gem_lt(gem_v__for_i_91, gem_len_fn(NULL, _t3762, 1)))) break;
+#line 1818 "compiler/main.gem"
+        GemVal gem_v_fd = gem_table_get(gem_v__for_items_91, gem_v__for_i_91);
+#line 1818 "compiler/main.gem"
+        gem_v__for_i_91 = gem_add(gem_v__for_i_91, gem_int(1));
 #line 1819 "compiler/main.gem"
+    GemVal _t3763 = gem_v_fd;
+        if (gem_truthy(gem_eq(gem_table_get(_t3763, gem_string("name")), gem_string("main")))) {
+#line 1820 "compiler/main.gem"
             gem_v_has_main = gem_bool(1);
         }
     }
 
-#line 1823 "compiler/main.gem"
-    GemVal gem_v_main_c = gem_string("int main(void) {\n");
 #line 1824 "compiler/main.gem"
-    GemVal _t3763[] = {(*gem_v_source_name)};
-    GemVal _t3764[] = {gem_fn_escape_c_string(NULL, _t3763, 1)};
-    gem_v_main_c = gem_add(gem_v_main_c, gem_add(gem_add(gem_string("    gem_push_frame(\"main\", \""), gem_to_string_fn(NULL, _t3764, 1)), gem_string("\", 0);\n")));
+    GemVal gem_v_main_c = gem_string("int main(void) {\n");
 #line 1825 "compiler/main.gem"
-    if (gem_truthy(gem_neq(gem_v_main_body, gem_string("")))) {
+    GemVal _t3764[] = {(*gem_v_source_name)};
+    GemVal _t3765[] = {gem_fn_escape_c_string(NULL, _t3764, 1)};
+    gem_v_main_c = gem_add(gem_v_main_c, gem_add(gem_add(gem_string("    gem_push_frame(\"main\", \""), gem_to_string_fn(NULL, _t3765, 1)), gem_string("\", 0);\n")));
 #line 1826 "compiler/main.gem"
+    if (gem_truthy(gem_neq(gem_v_main_body, gem_string("")))) {
+#line 1827 "compiler/main.gem"
         gem_v_main_c = gem_add(gem_v_main_c, gem_v_main_body);
     }
-#line 1828 "compiler/main.gem"
-    if (gem_truthy(gem_v_has_main)) {
 #line 1829 "compiler/main.gem"
-        gem_v_main_c = gem_add(gem_v_main_c, gem_string("    GemVal _margs[1] = {GEM_NIL};\n"));
+    if (gem_truthy(gem_v_has_main)) {
 #line 1830 "compiler/main.gem"
+        gem_v_main_c = gem_add(gem_v_main_c, gem_string("    GemVal _margs[1] = {GEM_NIL};\n"));
+#line 1831 "compiler/main.gem"
         gem_v_main_c = gem_add(gem_v_main_c, gem_string("    gem_fn_main(NULL, _margs, 0);\n"));
     }
-#line 1832 "compiler/main.gem"
-    gem_v_main_c = gem_add(gem_v_main_c, gem_string("    gem_run_scheduler();\n"));
 #line 1833 "compiler/main.gem"
+    gem_v_main_c = gem_add(gem_v_main_c, gem_string("    gem_run_scheduler();\n"));
+#line 1834 "compiler/main.gem"
     gem_v_main_c = gem_add(gem_v_main_c, gem_string("    gem_pop_frame();\n    return 0;\n}\n"));
-#line 1837 "compiler/main.gem"
+#line 1838 "compiler/main.gem"
     GemVal gem_v_out = gem_string("");
-#line 1838 "compiler/main.gem"
-    GemVal gem_v__for_items_92 = gem_v_extern_includes;
-#line 1838 "compiler/main.gem"
-    GemVal gem_v__for_i_92 = gem_int(0);
-#line 1838 "compiler/main.gem"
-    while (1) {
-        GemVal _t3765[] = {gem_v__for_items_92};
-        if (!gem_truthy(gem_lt(gem_v__for_i_92, gem_len_fn(NULL, _t3765, 1)))) break;
-#line 1838 "compiler/main.gem"
-        GemVal gem_v_ei = gem_table_get(gem_v__for_items_92, gem_v__for_i_92);
-#line 1838 "compiler/main.gem"
-        gem_v__for_i_92 = gem_add(gem_v__for_i_92, gem_int(1));
 #line 1839 "compiler/main.gem"
-    GemVal _t3766 = gem_v_ei;
-    GemVal _t3767[] = {gem_table_get(_t3766, gem_string("path"))};
-        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("#include \""), gem_to_string_fn(NULL, _t3767, 1)), gem_string("\"\n")));
+    GemVal gem_v__for_items_92 = gem_v_extern_includes;
+#line 1839 "compiler/main.gem"
+    GemVal gem_v__for_i_92 = gem_int(0);
+#line 1839 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        GemVal _t3766[] = {gem_v__for_items_92};
+        if (!gem_truthy(gem_lt(gem_v__for_i_92, gem_len_fn(NULL, _t3766, 1)))) break;
+#line 1839 "compiler/main.gem"
+        GemVal gem_v_ei = gem_table_get(gem_v__for_items_92, gem_v__for_i_92);
+#line 1839 "compiler/main.gem"
+        gem_v__for_i_92 = gem_add(gem_v__for_i_92, gem_int(1));
+#line 1840 "compiler/main.gem"
+    GemVal _t3767 = gem_v_ei;
+    GemVal _t3768[] = {gem_table_get(_t3767, gem_string("path"))};
+        gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("#include \""), gem_to_string_fn(NULL, _t3768, 1)), gem_string("\"\n")));
     }
 
-#line 1841 "compiler/main.gem"
+#line 1842 "compiler/main.gem"
     gem_v_out = gem_add(gem_v_out, gem_string("#include \"gem.h\"\n"));
-#line 1845 "compiler/main.gem"
-    GemVal _t3768[] = {gem_v_extern_includes};
-    if (gem_truthy(gem_eq(gem_len_fn(NULL, _t3768, 1), gem_int(0)))) {
 #line 1846 "compiler/main.gem"
-        GemVal gem_v__for_i_93 = gem_int(0);
-#line 1846 "compiler/main.gem"
-    GemVal _t3769[] = {(*gem_v_extern_c_decls)};
-        GemVal gem_v__for_limit_93 = gem_len_fn(NULL, _t3769, 1);
-#line 1846 "compiler/main.gem"
-        while (1) {
-            if (!gem_truthy(gem_lt(gem_v__for_i_93, gem_v__for_limit_93))) break;
-#line 1846 "compiler/main.gem"
-            GemVal gem_v_i = gem_v__for_i_93;
-#line 1846 "compiler/main.gem"
-            gem_v__for_i_93 = gem_add(gem_v__for_i_93, gem_int(1));
+    GemVal _t3769[] = {gem_v_extern_includes};
+    if (gem_truthy(gem_eq(gem_len_fn(NULL, _t3769, 1), gem_int(0)))) {
 #line 1847 "compiler/main.gem"
+        GemVal gem_v__for_i_93 = gem_int(0);
+#line 1847 "compiler/main.gem"
+    GemVal _t3770[] = {(*gem_v_extern_c_decls)};
+        GemVal gem_v__for_limit_93 = gem_len_fn(NULL, _t3770, 1);
+#line 1847 "compiler/main.gem"
+        while (1) {
+            gem_yield_check();
+            if (!gem_truthy(gem_lt(gem_v__for_i_93, gem_v__for_limit_93))) break;
+#line 1847 "compiler/main.gem"
+            GemVal gem_v_i = gem_v__for_i_93;
+#line 1847 "compiler/main.gem"
+            gem_v__for_i_93 = gem_add(gem_v__for_i_93, gem_int(1));
+#line 1848 "compiler/main.gem"
             gem_v_out = gem_add(gem_add(gem_v_out, gem_table_get((*gem_v_extern_c_decls), gem_v_i)), gem_string("\n"));
         }
 
     }
-#line 1852 "compiler/main.gem"
-    GemVal gem_v__for_i_94 = gem_int(0);
-#line 1852 "compiler/main.gem"
-    GemVal _t3770[] = {(*gem_v_forward_decls)};
-    GemVal gem_v__for_limit_94 = gem_len_fn(NULL, _t3770, 1);
-#line 1852 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_94, gem_v__for_limit_94))) break;
-#line 1852 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_94;
-#line 1852 "compiler/main.gem"
-        gem_v__for_i_94 = gem_add(gem_v__for_i_94, gem_int(1));
 #line 1853 "compiler/main.gem"
-        gem_v_out = gem_add(gem_v_out, gem_table_get((*gem_v_forward_decls), gem_v_i));
-#line 1854 "compiler/main.gem"
+    GemVal gem_v__for_i_94 = gem_int(0);
+#line 1853 "compiler/main.gem"
     GemVal _t3771[] = {(*gem_v_forward_decls)};
-        if (gem_truthy(gem_lt(gem_v_i, gem_sub(gem_len_fn(NULL, _t3771, 1), gem_int(1))))) {
+    GemVal gem_v__for_limit_94 = gem_len_fn(NULL, _t3771, 1);
+#line 1853 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_94, gem_v__for_limit_94))) break;
+#line 1853 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_94;
+#line 1853 "compiler/main.gem"
+        gem_v__for_i_94 = gem_add(gem_v__for_i_94, gem_int(1));
+#line 1854 "compiler/main.gem"
+        gem_v_out = gem_add(gem_v_out, gem_table_get((*gem_v_forward_decls), gem_v_i));
 #line 1855 "compiler/main.gem"
+    GemVal _t3772[] = {(*gem_v_forward_decls)};
+        if (gem_truthy(gem_lt(gem_v_i, gem_sub(gem_len_fn(NULL, _t3772, 1), gem_int(1))))) {
+#line 1856 "compiler/main.gem"
             gem_v_out = gem_add(gem_v_out, gem_string("\n"));
         }
     }
 
-#line 1858 "compiler/main.gem"
+#line 1859 "compiler/main.gem"
     gem_v_out = gem_add(gem_v_out, gem_string("\n"));
-#line 1861 "compiler/main.gem"
-    GemVal _t3772[] = {(*gem_v_top_level_vars)};
-    GemVal gem_v_tlv_keys = gem_keys_fn(NULL, _t3772, 1);
 #line 1862 "compiler/main.gem"
-    GemVal gem_v__for_i_95 = gem_int(0);
-#line 1862 "compiler/main.gem"
-    GemVal _t3773[] = {gem_v_tlv_keys};
-    GemVal gem_v__for_limit_95 = gem_len_fn(NULL, _t3773, 1);
-#line 1862 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_95, gem_v__for_limit_95))) break;
-#line 1862 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_95;
-#line 1862 "compiler/main.gem"
-        gem_v__for_i_95 = gem_add(gem_v__for_i_95, gem_int(1));
+    GemVal _t3773[] = {(*gem_v_top_level_vars)};
+    GemVal gem_v_tlv_keys = gem_keys_fn(NULL, _t3773, 1);
 #line 1863 "compiler/main.gem"
-        GemVal gem_v_vname = gem_table_get(gem_v_tlv_keys, gem_v_i);
+    GemVal gem_v__for_i_95 = gem_int(0);
+#line 1863 "compiler/main.gem"
+    GemVal _t3774[] = {gem_v_tlv_keys};
+    GemVal gem_v__for_limit_95 = gem_len_fn(NULL, _t3774, 1);
+#line 1863 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_95, gem_v__for_limit_95))) break;
+#line 1863 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_95;
+#line 1863 "compiler/main.gem"
+        gem_v__for_i_95 = gem_add(gem_v__for_i_95, gem_int(1));
 #line 1864 "compiler/main.gem"
-    GemVal _t3774[] = {(*gem_v_top_level_boxed), gem_v_vname};
-        if (gem_truthy(gem_fn_set_contains(NULL, _t3774, 2))) {
+        GemVal gem_v_vname = gem_table_get(gem_v_tlv_keys, gem_v_i);
 #line 1865 "compiler/main.gem"
-    GemVal _t3775[] = {gem_v_vname};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("GemVal *gem_v_"), gem_to_string_fn(NULL, _t3775, 1)), gem_string(";\n")));
-        } else {
-#line 1867 "compiler/main.gem"
+    GemVal _t3775[] = {(*gem_v_top_level_boxed), gem_v_vname};
+        if (gem_truthy(gem_fn_set_contains(NULL, _t3775, 2))) {
+#line 1866 "compiler/main.gem"
     GemVal _t3776[] = {gem_v_vname};
-            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("GemVal gem_v_"), gem_to_string_fn(NULL, _t3776, 1)), gem_string(";\n")));
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("GemVal *gem_v_"), gem_to_string_fn(NULL, _t3776, 1)), gem_string(";\n")));
+        } else {
+#line 1868 "compiler/main.gem"
+    GemVal _t3777[] = {gem_v_vname};
+            gem_v_out = gem_add(gem_v_out, gem_add(gem_add(gem_string("GemVal gem_v_"), gem_to_string_fn(NULL, _t3777, 1)), gem_string(";\n")));
         }
     }
 
-#line 1870 "compiler/main.gem"
+#line 1871 "compiler/main.gem"
     gem_v_out = gem_add(gem_v_out, gem_string("\n"));
-#line 1873 "compiler/main.gem"
-    GemVal gem_v__for_i_96 = gem_int(0);
-#line 1873 "compiler/main.gem"
-    GemVal _t3777[] = {(*gem_v_functions)};
-    GemVal gem_v__for_limit_96 = gem_len_fn(NULL, _t3777, 1);
-#line 1873 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v__for_i_96, gem_v__for_limit_96))) break;
-#line 1873 "compiler/main.gem"
-        GemVal gem_v_i = gem_v__for_i_96;
-#line 1873 "compiler/main.gem"
-        gem_v__for_i_96 = gem_add(gem_v__for_i_96, gem_int(1));
 #line 1874 "compiler/main.gem"
-        gem_v_out = gem_add(gem_v_out, gem_table_get((*gem_v_functions), gem_v_i));
-#line 1875 "compiler/main.gem"
+    GemVal gem_v__for_i_96 = gem_int(0);
+#line 1874 "compiler/main.gem"
     GemVal _t3778[] = {(*gem_v_functions)};
-        if (gem_truthy(gem_lt(gem_v_i, gem_sub(gem_len_fn(NULL, _t3778, 1), gem_int(1))))) {
+    GemVal gem_v__for_limit_96 = gem_len_fn(NULL, _t3778, 1);
+#line 1874 "compiler/main.gem"
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v__for_i_96, gem_v__for_limit_96))) break;
+#line 1874 "compiler/main.gem"
+        GemVal gem_v_i = gem_v__for_i_96;
+#line 1874 "compiler/main.gem"
+        gem_v__for_i_96 = gem_add(gem_v__for_i_96, gem_int(1));
+#line 1875 "compiler/main.gem"
+        gem_v_out = gem_add(gem_v_out, gem_table_get((*gem_v_functions), gem_v_i));
 #line 1876 "compiler/main.gem"
+    GemVal _t3779[] = {(*gem_v_functions)};
+        if (gem_truthy(gem_lt(gem_v_i, gem_sub(gem_len_fn(NULL, _t3779, 1), gem_int(1))))) {
+#line 1877 "compiler/main.gem"
             gem_v_out = gem_add(gem_v_out, gem_string("\n\n"));
         }
     }
 
-#line 1879 "compiler/main.gem"
+#line 1880 "compiler/main.gem"
     gem_v_out = gem_add(gem_v_out, gem_string("\n\n"));
-#line 1881 "compiler/main.gem"
+#line 1882 "compiler/main.gem"
     gem_v_out = gem_add(gem_v_out, gem_v_main_c);
-    GemVal _t3779 = gem_v_out;
+    GemVal _t3780 = gem_v_out;
     gem_pop_frame();
-    return _t3779;
+    return _t3780;
 }
 
 static GemVal gem_fn_make_codegen(void *_env, GemVal *args, int argc) {
@@ -14480,6 +14631,7 @@ static GemVal gem_fn_make_codegen(void *_env, GemVal *args, int argc) {
     GemVal gem_v__for_i_10 = gem_int(0);
 #line 184 "compiler/main.gem"
     while (1) {
+        gem_yield_check();
         GemVal _t1501[] = {gem_v__for_keys_10};
         if (!gem_truthy(gem_lt(gem_v__for_i_10, gem_len_fn(NULL, _t1501, 1)))) break;
 #line 184 "compiler/main.gem"
@@ -14719,156 +14871,158 @@ static GemVal gem_fn_make_codegen(void *_env, GemVal *args, int argc) {
     _t3135->gem_v_compile_stmt_return = gem_v_compile_stmt_return;
     *gem_v_compile_if_return = gem_make_fn(_anon_44, _t3135);
 #line 1084 "compiler/main.gem"
-    struct _closure__anon_45 *_t3153 = GC_MALLOC(sizeof(struct _closure__anon_45));
-    _t3153->gem_v_compile_expr = gem_v_compile_expr;
-    _t3153->gem_v_compile_stmts = gem_v_compile_stmts;
-    *gem_v_compile_while = gem_make_fn(_anon_45, _t3153);
-#line 1099 "compiler/main.gem"
-    struct _closure__anon_46 *_t3210 = GC_MALLOC(sizeof(struct _closure__anon_46));
-    _t3210->gem_v_compile_expr = gem_v_compile_expr;
-    _t3210->gem_v_compile_stmt = gem_v_compile_stmt;
-    _t3210->gem_v_compile_stmts = gem_v_compile_stmts;
-    _t3210->gem_v_mangle = gem_v_mangle;
-    _t3210->gem_v_tmp = gem_v_tmp;
-    *gem_v_compile_match = gem_make_fn(_anon_46, _t3210);
-#line 1150 "compiler/main.gem"
-    struct _closure__anon_47 *_t3293 = GC_MALLOC(sizeof(struct _closure__anon_47));
-    _t3293->gem_v_compile_expr = gem_v_compile_expr;
-    _t3293->gem_v_compile_stmt = gem_v_compile_stmt;
-    _t3293->gem_v_compile_stmt_return = gem_v_compile_stmt_return;
-    _t3293->gem_v_mangle = gem_v_mangle;
-    _t3293->gem_v_tmp = gem_v_tmp;
-    *gem_v_compile_match_return = gem_make_fn(_anon_47, _t3293);
-#line 1229 "compiler/main.gem"
-    struct _closure__anon_48 *_t3412 = GC_MALLOC(sizeof(struct _closure__anon_48));
-    _t3412->gem_v_compile_expr = gem_v_compile_expr;
-    _t3412->gem_v_compile_stmt = gem_v_compile_stmt;
-    _t3412->gem_v_compile_stmts = gem_v_compile_stmts;
-    _t3412->gem_v_mangle = gem_v_mangle;
-    _t3412->gem_v_tmp = gem_v_tmp;
-    *gem_v_compile_receive_match = gem_make_fn(_anon_48, _t3412);
-#line 1354 "compiler/main.gem"
-    struct _closure__anon_49 *_t3549 = GC_MALLOC(sizeof(struct _closure__anon_49));
-    _t3549->gem_v_compile_expr = gem_v_compile_expr;
-    _t3549->gem_v_compile_stmt = gem_v_compile_stmt;
-    _t3549->gem_v_compile_stmt_return = gem_v_compile_stmt_return;
-    _t3549->gem_v_mangle = gem_v_mangle;
-    _t3549->gem_v_tmp = gem_v_tmp;
-    *gem_v_compile_receive_match_return = gem_make_fn(_anon_49, _t3549);
-#line 1482 "compiler/main.gem"
-    struct _closure__anon_50 *_t3600 = GC_MALLOC(sizeof(struct _closure__anon_50));
-    _t3600->gem_v_extern_c_decls = gem_v_extern_c_decls;
-    _t3600->gem_v_forward_decls = gem_v_forward_decls;
-    *gem_v_compile_extern_fn = gem_make_fn(_anon_50, _t3600);
-#line 1604 "compiler/main.gem"
-    struct _closure__anon_51 *_t3641 = GC_MALLOC(sizeof(struct _closure__anon_51));
-    _t3641->gem_v_mangle = gem_v_mangle;
+    struct _closure__anon_45 *_t3154 = GC_MALLOC(sizeof(struct _closure__anon_45));
+    _t3154->gem_v_compile_expr = gem_v_compile_expr;
+    _t3154->gem_v_compile_stmts = gem_v_compile_stmts;
+    *gem_v_compile_while = gem_make_fn(_anon_45, _t3154);
+#line 1100 "compiler/main.gem"
+    struct _closure__anon_46 *_t3211 = GC_MALLOC(sizeof(struct _closure__anon_46));
+    _t3211->gem_v_compile_expr = gem_v_compile_expr;
+    _t3211->gem_v_compile_stmt = gem_v_compile_stmt;
+    _t3211->gem_v_compile_stmts = gem_v_compile_stmts;
+    _t3211->gem_v_mangle = gem_v_mangle;
+    _t3211->gem_v_tmp = gem_v_tmp;
+    *gem_v_compile_match = gem_make_fn(_anon_46, _t3211);
+#line 1151 "compiler/main.gem"
+    struct _closure__anon_47 *_t3294 = GC_MALLOC(sizeof(struct _closure__anon_47));
+    _t3294->gem_v_compile_expr = gem_v_compile_expr;
+    _t3294->gem_v_compile_stmt = gem_v_compile_stmt;
+    _t3294->gem_v_compile_stmt_return = gem_v_compile_stmt_return;
+    _t3294->gem_v_mangle = gem_v_mangle;
+    _t3294->gem_v_tmp = gem_v_tmp;
+    *gem_v_compile_match_return = gem_make_fn(_anon_47, _t3294);
+#line 1230 "compiler/main.gem"
+    struct _closure__anon_48 *_t3413 = GC_MALLOC(sizeof(struct _closure__anon_48));
+    _t3413->gem_v_compile_expr = gem_v_compile_expr;
+    _t3413->gem_v_compile_stmt = gem_v_compile_stmt;
+    _t3413->gem_v_compile_stmts = gem_v_compile_stmts;
+    _t3413->gem_v_mangle = gem_v_mangle;
+    _t3413->gem_v_tmp = gem_v_tmp;
+    *gem_v_compile_receive_match = gem_make_fn(_anon_48, _t3413);
+#line 1355 "compiler/main.gem"
+    struct _closure__anon_49 *_t3550 = GC_MALLOC(sizeof(struct _closure__anon_49));
+    _t3550->gem_v_compile_expr = gem_v_compile_expr;
+    _t3550->gem_v_compile_stmt = gem_v_compile_stmt;
+    _t3550->gem_v_compile_stmt_return = gem_v_compile_stmt_return;
+    _t3550->gem_v_mangle = gem_v_mangle;
+    _t3550->gem_v_tmp = gem_v_tmp;
+    *gem_v_compile_receive_match_return = gem_make_fn(_anon_49, _t3550);
+#line 1483 "compiler/main.gem"
+    struct _closure__anon_50 *_t3601 = GC_MALLOC(sizeof(struct _closure__anon_50));
+    _t3601->gem_v_extern_c_decls = gem_v_extern_c_decls;
+    _t3601->gem_v_forward_decls = gem_v_forward_decls;
+    *gem_v_compile_extern_fn = gem_make_fn(_anon_50, _t3601);
+#line 1605 "compiler/main.gem"
+    struct _closure__anon_51 *_t3642 = GC_MALLOC(sizeof(struct _closure__anon_51));
+    _t3642->gem_v_mangle = gem_v_mangle;
     GemVal *gem_v_emit_param_bindings = GC_MALLOC(sizeof(GemVal));
-    *gem_v_emit_param_bindings = gem_make_fn(_anon_51, _t3641);
-#line 1648 "compiler/main.gem"
-    struct _closure__anon_52 *_t3650 = GC_MALLOC(sizeof(struct _closure__anon_52));
-    _t3650->gem_v_compile_stmt = gem_v_compile_stmt;
-    _t3650->gem_v_compile_stmt_return = gem_v_compile_stmt_return;
+    *gem_v_emit_param_bindings = gem_make_fn(_anon_51, _t3642);
+#line 1649 "compiler/main.gem"
+    struct _closure__anon_52 *_t3651 = GC_MALLOC(sizeof(struct _closure__anon_52));
+    _t3651->gem_v_compile_stmt = gem_v_compile_stmt;
+    _t3651->gem_v_compile_stmt_return = gem_v_compile_stmt_return;
     GemVal *gem_v_emit_fn_body = GC_MALLOC(sizeof(GemVal));
-    *gem_v_emit_fn_body = gem_make_fn(_anon_52, _t3650);
-#line 1663 "compiler/main.gem"
-    struct _closure__anon_53 *_t3682 = GC_MALLOC(sizeof(struct _closure__anon_53));
-    _t3682->gem_v_boxed_vars = gem_v_boxed_vars;
-    _t3682->gem_v_emit_fn_body = gem_v_emit_fn_body;
-    _t3682->gem_v_emit_param_bindings = gem_v_emit_param_bindings;
-    _t3682->gem_v_find_captured_in_scope = gem_v_find_captured_in_scope;
-    _t3682->gem_v_in_top_level = gem_v_in_top_level;
-    _t3682->gem_v_source_name = gem_v_source_name;
-    *gem_v_compile_fn = gem_make_fn(_anon_53, _t3682);
-#line 1707 "compiler/main.gem"
-    struct _closure__anon_54 *_t3724 = GC_MALLOC(sizeof(struct _closure__anon_54));
-    _t3724->gem_v_anon_name = gem_v_anon_name;
-    _t3724->gem_v_boxed_vars = gem_v_boxed_vars;
-    _t3724->gem_v_emit_fn_body = gem_v_emit_fn_body;
-    _t3724->gem_v_emit_param_bindings = gem_v_emit_param_bindings;
-    _t3724->gem_v_find_captured_in_scope = gem_v_find_captured_in_scope;
-    _t3724->gem_v_functions = gem_v_functions;
-    _t3724->gem_v_in_top_level = gem_v_in_top_level;
-    _t3724->gem_v_mangle = gem_v_mangle;
-    _t3724->gem_v_source_name = gem_v_source_name;
-    *gem_v_compile_closure_fn = gem_make_fn(_anon_54, _t3724);
-#line 1763 "compiler/main.gem"
-    struct _closure__anon_55 *_t3780 = GC_MALLOC(sizeof(struct _closure__anon_55));
-    _t3780->gem_v_boxed_vars = gem_v_boxed_vars;
-    _t3780->gem_v_compile_extern_fn = gem_v_compile_extern_fn;
-    _t3780->gem_v_compile_fn = gem_v_compile_fn;
-    _t3780->gem_v_compile_stmts = gem_v_compile_stmts;
-    _t3780->gem_v_defined_fns = gem_v_defined_fns;
-    _t3780->gem_v_extern_c_decls = gem_v_extern_c_decls;
-    _t3780->gem_v_find_captured_in_scope = gem_v_find_captured_in_scope;
-    _t3780->gem_v_forward_decls = gem_v_forward_decls;
-    _t3780->gem_v_functions = gem_v_functions;
-    _t3780->gem_v_in_top_level = gem_v_in_top_level;
-    _t3780->gem_v_source_name = gem_v_source_name;
-    _t3780->gem_v_top_level_boxed = gem_v_top_level_boxed;
-    _t3780->gem_v_top_level_vars = gem_v_top_level_vars;
-    GemVal gem_v_compile = gem_make_fn(_anon_55, _t3780);
-    GemVal _t3781 = gem_table_new();
-    gem_table_set(_t3781, gem_string("compile"), gem_v_compile);
-    GemVal _t3782 = _t3781;
+    *gem_v_emit_fn_body = gem_make_fn(_anon_52, _t3651);
+#line 1664 "compiler/main.gem"
+    struct _closure__anon_53 *_t3683 = GC_MALLOC(sizeof(struct _closure__anon_53));
+    _t3683->gem_v_boxed_vars = gem_v_boxed_vars;
+    _t3683->gem_v_emit_fn_body = gem_v_emit_fn_body;
+    _t3683->gem_v_emit_param_bindings = gem_v_emit_param_bindings;
+    _t3683->gem_v_find_captured_in_scope = gem_v_find_captured_in_scope;
+    _t3683->gem_v_in_top_level = gem_v_in_top_level;
+    _t3683->gem_v_source_name = gem_v_source_name;
+    *gem_v_compile_fn = gem_make_fn(_anon_53, _t3683);
+#line 1708 "compiler/main.gem"
+    struct _closure__anon_54 *_t3725 = GC_MALLOC(sizeof(struct _closure__anon_54));
+    _t3725->gem_v_anon_name = gem_v_anon_name;
+    _t3725->gem_v_boxed_vars = gem_v_boxed_vars;
+    _t3725->gem_v_emit_fn_body = gem_v_emit_fn_body;
+    _t3725->gem_v_emit_param_bindings = gem_v_emit_param_bindings;
+    _t3725->gem_v_find_captured_in_scope = gem_v_find_captured_in_scope;
+    _t3725->gem_v_functions = gem_v_functions;
+    _t3725->gem_v_in_top_level = gem_v_in_top_level;
+    _t3725->gem_v_mangle = gem_v_mangle;
+    _t3725->gem_v_source_name = gem_v_source_name;
+    *gem_v_compile_closure_fn = gem_make_fn(_anon_54, _t3725);
+#line 1764 "compiler/main.gem"
+    struct _closure__anon_55 *_t3781 = GC_MALLOC(sizeof(struct _closure__anon_55));
+    _t3781->gem_v_boxed_vars = gem_v_boxed_vars;
+    _t3781->gem_v_compile_extern_fn = gem_v_compile_extern_fn;
+    _t3781->gem_v_compile_fn = gem_v_compile_fn;
+    _t3781->gem_v_compile_stmts = gem_v_compile_stmts;
+    _t3781->gem_v_defined_fns = gem_v_defined_fns;
+    _t3781->gem_v_extern_c_decls = gem_v_extern_c_decls;
+    _t3781->gem_v_find_captured_in_scope = gem_v_find_captured_in_scope;
+    _t3781->gem_v_forward_decls = gem_v_forward_decls;
+    _t3781->gem_v_functions = gem_v_functions;
+    _t3781->gem_v_in_top_level = gem_v_in_top_level;
+    _t3781->gem_v_source_name = gem_v_source_name;
+    _t3781->gem_v_top_level_boxed = gem_v_top_level_boxed;
+    _t3781->gem_v_top_level_vars = gem_v_top_level_vars;
+    GemVal gem_v_compile = gem_make_fn(_anon_55, _t3781);
+    GemVal _t3782 = gem_table_new();
+    gem_table_set(_t3782, gem_string("compile"), gem_v_compile);
+    GemVal _t3783 = _t3782;
     gem_pop_frame();
-    return _t3782;
+    return _t3783;
 }
 
 static GemVal gem_fn_str_replace(void *_env, GemVal *args, int argc) {
-#line 1891 "compiler/main.gem"
+#line 1892 "compiler/main.gem"
     GemVal gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_old = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_new_s = (argc > 2) ? args[2] : GEM_NIL;
-    gem_push_frame("str_replace", "compiler/main.gem", 1891);
-#line 1892 "compiler/main.gem"
-    GemVal gem_v_result = gem_string("");
+    gem_push_frame("str_replace", "compiler/main.gem", 1892);
 #line 1893 "compiler/main.gem"
-    GemVal gem_v_i = gem_int(0);
+    GemVal gem_v_result = gem_string("");
 #line 1894 "compiler/main.gem"
-    GemVal _t3783[] = {gem_v_old};
-    GemVal gem_v_old_len = gem_len_fn(NULL, _t3783, 1);
+    GemVal gem_v_i = gem_int(0);
 #line 1895 "compiler/main.gem"
-    GemVal _t3784[] = {gem_v_s};
-    GemVal gem_v_s_len = gem_len_fn(NULL, _t3784, 1);
+    GemVal _t3784[] = {gem_v_old};
+    GemVal gem_v_old_len = gem_len_fn(NULL, _t3784, 1);
 #line 1896 "compiler/main.gem"
-    while (1) {
-        if (!gem_truthy(gem_lt(gem_v_i, gem_v_s_len))) break;
+    GemVal _t3785[] = {gem_v_s};
+    GemVal gem_v_s_len = gem_len_fn(NULL, _t3785, 1);
 #line 1897 "compiler/main.gem"
-        if (gem_truthy(gem_le(gem_add(gem_v_i, gem_v_old_len), gem_v_s_len))) {
+    while (1) {
+        gem_yield_check();
+        if (!gem_truthy(gem_lt(gem_v_i, gem_v_s_len))) break;
 #line 1898 "compiler/main.gem"
-            GemVal gem_v_found = gem_bool(1);
+        if (gem_truthy(gem_le(gem_add(gem_v_i, gem_v_old_len), gem_v_s_len))) {
 #line 1899 "compiler/main.gem"
-            GemVal gem_v_j = gem_int(0);
+            GemVal gem_v_found = gem_bool(1);
 #line 1900 "compiler/main.gem"
-            while (1) {
-                if (!gem_truthy(gem_lt(gem_v_j, gem_v_old_len))) break;
+            GemVal gem_v_j = gem_int(0);
 #line 1901 "compiler/main.gem"
-                if (gem_truthy(gem_neq(gem_table_get(gem_v_s, gem_add(gem_v_i, gem_v_j)), gem_table_get(gem_v_old, gem_v_j)))) {
+            while (1) {
+                gem_yield_check();
+                if (!gem_truthy(gem_lt(gem_v_j, gem_v_old_len))) break;
 #line 1902 "compiler/main.gem"
+                if (gem_truthy(gem_neq(gem_table_get(gem_v_s, gem_add(gem_v_i, gem_v_j)), gem_table_get(gem_v_old, gem_v_j)))) {
+#line 1903 "compiler/main.gem"
                     gem_v_found = gem_bool(0);
                     break;
                 }
-#line 1905 "compiler/main.gem"
+#line 1906 "compiler/main.gem"
                 gem_v_j = gem_add(gem_v_j, gem_int(1));
             }
-#line 1907 "compiler/main.gem"
-            if (gem_truthy(gem_v_found)) {
 #line 1908 "compiler/main.gem"
-                gem_v_result = gem_add(gem_v_result, gem_v_new_s);
+            if (gem_truthy(gem_v_found)) {
 #line 1909 "compiler/main.gem"
+                gem_v_result = gem_add(gem_v_result, gem_v_new_s);
+#line 1910 "compiler/main.gem"
                 gem_v_i = gem_add(gem_v_i, gem_v_old_len);
                 continue;
             }
         }
-#line 1913 "compiler/main.gem"
-        gem_v_result = gem_add(gem_v_result, gem_table_get(gem_v_s, gem_v_i));
 #line 1914 "compiler/main.gem"
+        gem_v_result = gem_add(gem_v_result, gem_table_get(gem_v_s, gem_v_i));
+#line 1915 "compiler/main.gem"
         gem_v_i = gem_add(gem_v_i, gem_int(1));
     }
-    GemVal _t3785 = gem_v_result;
+    GemVal _t3786 = gem_v_result;
     gem_pop_frame();
-    return _t3785;
+    return _t3786;
 }
 
 static GemVal gem_fn_resolve_loads(void *_env, GemVal *args, int argc) {
@@ -14878,83 +15032,84 @@ static GemVal gem_fn_resolve_loads(void *_env, GemVal *args, int argc) {
     GemVal gem_v_loaded = (argc > 2) ? args[2] : GEM_NIL;
     gem_push_frame("resolve_loads", "compiler/main.gem", 24);
 #line 25 "compiler/main.gem"
-    GemVal _t3786 = gem_table_new();
-    GemVal gem_v_new_stmts = _t3786;
+    GemVal _t3787 = gem_table_new();
+    GemVal gem_v_new_stmts = _t3787;
 #line 26 "compiler/main.gem"
     GemVal gem_v_count = gem_int(0);
 #line 27 "compiler/main.gem"
-    GemVal _t3787 = gem_v_ast;
-    GemVal gem_v__for_items_1 = gem_table_get(_t3787, gem_string("stmts"));
+    GemVal _t3788 = gem_v_ast;
+    GemVal gem_v__for_items_1 = gem_table_get(_t3788, gem_string("stmts"));
 #line 27 "compiler/main.gem"
     GemVal gem_v__for_i_1 = gem_int(0);
 #line 27 "compiler/main.gem"
     while (1) {
-        GemVal _t3788[] = {gem_v__for_items_1};
-        if (!gem_truthy(gem_lt(gem_v__for_i_1, gem_len_fn(NULL, _t3788, 1)))) break;
+        gem_yield_check();
+        GemVal _t3789[] = {gem_v__for_items_1};
+        if (!gem_truthy(gem_lt(gem_v__for_i_1, gem_len_fn(NULL, _t3789, 1)))) break;
 #line 27 "compiler/main.gem"
         GemVal gem_v_stmt = gem_table_get(gem_v__for_items_1, gem_v__for_i_1);
 #line 27 "compiler/main.gem"
         gem_v__for_i_1 = gem_add(gem_v__for_i_1, gem_int(1));
 #line 28 "compiler/main.gem"
-    GemVal _t3789[] = {gem_v_stmt};
-    GemVal _t3791;
-    if (!gem_truthy(gem_eq(gem_type_fn(NULL, _t3789, 1), gem_string("table")))) {
-        _t3791 = gem_eq(gem_type_fn(NULL, _t3789, 1), gem_string("table"));
+    GemVal _t3790[] = {gem_v_stmt};
+    GemVal _t3792;
+    if (!gem_truthy(gem_eq(gem_type_fn(NULL, _t3790, 1), gem_string("table")))) {
+        _t3792 = gem_eq(gem_type_fn(NULL, _t3790, 1), gem_string("table"));
     } else {
-        GemVal _t3790 = gem_v_stmt;
-        _t3791 = gem_eq(gem_table_get(_t3790, gem_string("tag")), gem_string("load"));
+        GemVal _t3791 = gem_v_stmt;
+        _t3792 = gem_eq(gem_table_get(_t3791, gem_string("tag")), gem_string("load"));
     }
-        if (gem_truthy(_t3791)) {
+        if (gem_truthy(_t3792)) {
 #line 29 "compiler/main.gem"
-    GemVal _t3792 = gem_v_stmt;
-            GemVal gem_v_path = gem_table_get(_t3792, gem_string("path"));
+    GemVal _t3793 = gem_v_stmt;
+            GemVal gem_v_path = gem_table_get(_t3793, gem_string("path"));
 #line 31 "compiler/main.gem"
-    GemVal _t3793[] = {gem_v_path};
-    GemVal _t3801;
-    if (gem_truthy(gem_lt(gem_len_fn(NULL, _t3793, 1), gem_int(4)))) {
-        _t3801 = gem_lt(gem_len_fn(NULL, _t3793, 1), gem_int(4));
+    GemVal _t3794[] = {gem_v_path};
+    GemVal _t3802;
+    if (gem_truthy(gem_lt(gem_len_fn(NULL, _t3794, 1), gem_int(4)))) {
+        _t3802 = gem_lt(gem_len_fn(NULL, _t3794, 1), gem_int(4));
     } else {
-        GemVal _t3794[] = {gem_v_path};
-        GemVal _t3796;
-        if (gem_truthy(gem_neq(gem_table_get(gem_v_path, gem_sub(gem_len_fn(NULL, _t3794, 1), gem_int(4))), gem_string(".")))) {
-                _t3796 = gem_neq(gem_table_get(gem_v_path, gem_sub(gem_len_fn(NULL, _t3794, 1), gem_int(4))), gem_string("."));
+        GemVal _t3795[] = {gem_v_path};
+        GemVal _t3797;
+        if (gem_truthy(gem_neq(gem_table_get(gem_v_path, gem_sub(gem_len_fn(NULL, _t3795, 1), gem_int(4))), gem_string(".")))) {
+                _t3797 = gem_neq(gem_table_get(gem_v_path, gem_sub(gem_len_fn(NULL, _t3795, 1), gem_int(4))), gem_string("."));
         } else {
-                GemVal _t3795[] = {gem_v_path};
-                _t3796 = gem_neq(gem_table_get(gem_v_path, gem_sub(gem_len_fn(NULL, _t3795, 1), gem_int(3))), gem_string("g"));
+                GemVal _t3796[] = {gem_v_path};
+                _t3797 = gem_neq(gem_table_get(gem_v_path, gem_sub(gem_len_fn(NULL, _t3796, 1), gem_int(3))), gem_string("g"));
         }
-        GemVal _t3798;
-        if (gem_truthy(_t3796)) {
-                _t3798 = _t3796;
+        GemVal _t3799;
+        if (gem_truthy(_t3797)) {
+                _t3799 = _t3797;
         } else {
-                GemVal _t3797[] = {gem_v_path};
-                _t3798 = gem_neq(gem_table_get(gem_v_path, gem_sub(gem_len_fn(NULL, _t3797, 1), gem_int(2))), gem_string("e"));
+                GemVal _t3798[] = {gem_v_path};
+                _t3799 = gem_neq(gem_table_get(gem_v_path, gem_sub(gem_len_fn(NULL, _t3798, 1), gem_int(2))), gem_string("e"));
         }
-        GemVal _t3800;
-        if (gem_truthy(_t3798)) {
-                _t3800 = _t3798;
+        GemVal _t3801;
+        if (gem_truthy(_t3799)) {
+                _t3801 = _t3799;
         } else {
-                GemVal _t3799[] = {gem_v_path};
-                _t3800 = gem_neq(gem_table_get(gem_v_path, gem_sub(gem_len_fn(NULL, _t3799, 1), gem_int(1))), gem_string("m"));
+                GemVal _t3800[] = {gem_v_path};
+                _t3801 = gem_neq(gem_table_get(gem_v_path, gem_sub(gem_len_fn(NULL, _t3800, 1), gem_int(1))), gem_string("m"));
         }
-        _t3801 = _t3800;
+        _t3802 = _t3801;
     }
-            if (gem_truthy(_t3801)) {
+            if (gem_truthy(_t3802)) {
 #line 32 "compiler/main.gem"
                 gem_v_path = gem_add(gem_v_path, gem_string(".gem"));
             }
 #line 36 "compiler/main.gem"
-    GemVal _t3802[] = {gem_v_base_dir, gem_v_path};
-            GemVal gem_v_full_path = gem_fn_gem_path_join(NULL, _t3802, 2);
+    GemVal _t3803[] = {gem_v_base_dir, gem_v_path};
+            GemVal gem_v_full_path = gem_fn_gem_path_join(NULL, _t3803, 2);
 #line 39 "compiler/main.gem"
-    GemVal _t3803[] = {gem_v_full_path};
-            if (gem_truthy(gem_eq(gem_fn_gem_file_exists(NULL, _t3803, 1), gem_int(0)))) {
+    GemVal _t3804[] = {gem_v_full_path};
+            if (gem_truthy(gem_eq(gem_fn_gem_file_exists(NULL, _t3804, 1), gem_int(0)))) {
 #line 40 "compiler/main.gem"
-    GemVal _t3804[] = {gem_v_install_root, gem_v_path};
-                gem_v_full_path = gem_fn_gem_path_join(NULL, _t3804, 2);
+    GemVal _t3805[] = {gem_v_install_root, gem_v_path};
+                gem_v_full_path = gem_fn_gem_path_join(NULL, _t3805, 2);
             }
 #line 43 "compiler/main.gem"
-    GemVal _t3805[] = {gem_v_full_path};
-            gem_v_full_path = gem_fn_gem_normalize_path(NULL, _t3805, 1);
+    GemVal _t3806[] = {gem_v_full_path};
+            gem_v_full_path = gem_fn_gem_normalize_path(NULL, _t3806, 1);
 #line 46 "compiler/main.gem"
             if (gem_truthy(gem_eq(gem_table_get(gem_v_loaded, gem_v_full_path), gem_bool(1)))) {
                 continue;
@@ -14962,33 +15117,34 @@ static GemVal gem_fn_resolve_loads(void *_env, GemVal *args, int argc) {
 #line 49 "compiler/main.gem"
             gem_table_set(gem_v_loaded, gem_v_full_path, gem_bool(1));
 #line 51 "compiler/main.gem"
-    GemVal _t3806[] = {gem_v_full_path};
-            GemVal gem_v_source = gem_fn_gem_read_file(NULL, _t3806, 1);
+    GemVal _t3807[] = {gem_v_full_path};
+            GemVal gem_v_source = gem_fn_gem_read_file(NULL, _t3807, 1);
 #line 52 "compiler/main.gem"
             if (gem_truthy(gem_eq(gem_v_source, gem_string("")))) {
 #line 53 "compiler/main.gem"
-    GemVal _t3807[] = {gem_v_full_path};
-    GemVal _t3808[] = {gem_add(gem_add(gem_string("cannot load '"), gem_to_string_fn(NULL, _t3807, 1)), gem_string("'"))};
-                (void)(gem_error_at_fn("compiler/main.gem", 53, _t3808, 1));
+    GemVal _t3808[] = {gem_v_full_path};
+    GemVal _t3809[] = {gem_add(gem_add(gem_string("cannot load '"), gem_to_string_fn(NULL, _t3808, 1)), gem_string("'"))};
+                (void)(gem_error_at_fn("compiler/main.gem", 53, _t3809, 1));
             }
 #line 56 "compiler/main.gem"
-    GemVal _t3809[] = {gem_v_source};
-            GemVal gem_v_loaded_ast = gem_fn_parse_source(NULL, _t3809, 1);
+    GemVal _t3810[] = {gem_v_source};
+            GemVal gem_v_loaded_ast = gem_fn_parse_source(NULL, _t3810, 1);
 #line 57 "compiler/main.gem"
-    GemVal _t3810[] = {gem_v_full_path};
-            GemVal gem_v_loaded_dir = gem_fn_gem_dirname(NULL, _t3810, 1);
+    GemVal _t3811[] = {gem_v_full_path};
+            GemVal gem_v_loaded_dir = gem_fn_gem_dirname(NULL, _t3811, 1);
 #line 58 "compiler/main.gem"
-    GemVal _t3811[] = {gem_v_loaded_ast, gem_v_loaded_dir, gem_v_loaded};
-            GemVal gem_v_resolved = gem_fn_resolve_loads(NULL, _t3811, 3);
+    GemVal _t3812[] = {gem_v_loaded_ast, gem_v_loaded_dir, gem_v_loaded};
+            GemVal gem_v_resolved = gem_fn_resolve_loads(NULL, _t3812, 3);
 #line 60 "compiler/main.gem"
-    GemVal _t3812 = gem_v_resolved;
-            GemVal gem_v__for_items_2 = gem_table_get(_t3812, gem_string("stmts"));
+    GemVal _t3813 = gem_v_resolved;
+            GemVal gem_v__for_items_2 = gem_table_get(_t3813, gem_string("stmts"));
 #line 60 "compiler/main.gem"
             GemVal gem_v__for_i_2 = gem_int(0);
 #line 60 "compiler/main.gem"
             while (1) {
-                GemVal _t3813[] = {gem_v__for_items_2};
-                if (!gem_truthy(gem_lt(gem_v__for_i_2, gem_len_fn(NULL, _t3813, 1)))) break;
+                gem_yield_check();
+                GemVal _t3814[] = {gem_v__for_items_2};
+                if (!gem_truthy(gem_lt(gem_v__for_i_2, gem_len_fn(NULL, _t3814, 1)))) break;
 #line 60 "compiler/main.gem"
                 GemVal gem_v_rs = gem_table_get(gem_v__for_items_2, gem_v__for_i_2);
 #line 60 "compiler/main.gem"
@@ -15008,63 +15164,63 @@ static GemVal gem_fn_resolve_loads(void *_env, GemVal *args, int argc) {
     }
 
 #line 69 "compiler/main.gem"
-    GemVal _t3814[] = {gem_v_new_stmts};
-    GemVal _t3815 = gem_fn_make_program(NULL, _t3814, 1);
+    GemVal _t3815[] = {gem_v_new_stmts};
+    GemVal _t3816 = gem_fn_make_program(NULL, _t3815, 1);
     gem_pop_frame();
-    return _t3815;
+    return _t3816;
 }
 
 int main(void) {
     gem_push_frame("main", "compiler/main.gem", 0);
 #line 20 "compiler/main.gem"
-    GemVal _t3816[] = {gem_int(0)};
-    GemVal _t3817[] = {gem_fn_gem_get_argv(NULL, _t3816, 1)};
-    GemVal _t3818[] = {gem_fn_gem_dirname(NULL, _t3817, 1)};
-    gem_v_install_root = gem_fn_gem_dirname(NULL, _t3818, 1);
+    GemVal _t3817[] = {gem_int(0)};
+    GemVal _t3818[] = {gem_fn_gem_get_argv(NULL, _t3817, 1)};
+    GemVal _t3819[] = {gem_fn_gem_dirname(NULL, _t3818, 1)};
+    gem_v_install_root = gem_fn_gem_dirname(NULL, _t3819, 1);
 #line 74 "compiler/main.gem"
     gem_v_argc = gem_fn_gem_get_argc(NULL, NULL, 0);
 #line 75 "compiler/main.gem"
     if (gem_truthy(gem_lt(gem_v_argc, gem_int(2)))) {
 #line 76 "compiler/main.gem"
-    GemVal _t3819[] = {gem_string("usage: gem_compiler <file.gem>")};
-        (void)(gem_error_at_fn("compiler/main.gem", 76, _t3819, 1));
+    GemVal _t3820[] = {gem_string("usage: gem_compiler <file.gem>")};
+        (void)(gem_error_at_fn("compiler/main.gem", 76, _t3820, 1));
     }
 #line 79 "compiler/main.gem"
-    GemVal _t3820[] = {gem_int(1)};
-    gem_v_src_path = gem_fn_gem_get_argv(NULL, _t3820, 1);
+    GemVal _t3821[] = {gem_int(1)};
+    gem_v_src_path = gem_fn_gem_get_argv(NULL, _t3821, 1);
 #line 80 "compiler/main.gem"
-    GemVal _t3821[] = {gem_v_src_path};
-    gem_v_source = gem_fn_gem_read_file(NULL, _t3821, 1);
+    GemVal _t3822[] = {gem_v_src_path};
+    gem_v_source = gem_fn_gem_read_file(NULL, _t3822, 1);
 #line 81 "compiler/main.gem"
     if (gem_truthy(gem_eq(gem_v_source, gem_string("")))) {
 #line 82 "compiler/main.gem"
-    GemVal _t3822[] = {gem_v_src_path};
-    GemVal _t3823[] = {gem_add(gem_add(gem_string("cannot read '"), gem_to_string_fn(NULL, _t3822, 1)), gem_string("'"))};
-        (void)(gem_error_at_fn("compiler/main.gem", 82, _t3823, 1));
+    GemVal _t3823[] = {gem_v_src_path};
+    GemVal _t3824[] = {gem_add(gem_add(gem_string("cannot read '"), gem_to_string_fn(NULL, _t3823, 1)), gem_string("'"))};
+        (void)(gem_error_at_fn("compiler/main.gem", 82, _t3824, 1));
     }
 #line 85 "compiler/main.gem"
-    GemVal _t3824[] = {gem_v_source};
-    gem_v_ast = gem_fn_parse_source(NULL, _t3824, 1);
+    GemVal _t3825[] = {gem_v_source};
+    gem_v_ast = gem_fn_parse_source(NULL, _t3825, 1);
 #line 86 "compiler/main.gem"
-    GemVal _t3825[] = {gem_v_src_path};
-    gem_v_base_dir = gem_fn_gem_dirname(NULL, _t3825, 1);
+    GemVal _t3826[] = {gem_v_src_path};
+    gem_v_base_dir = gem_fn_gem_dirname(NULL, _t3826, 1);
 #line 87 "compiler/main.gem"
-    GemVal _t3826 = gem_table_new();
-    gem_v_loaded = _t3826;
+    GemVal _t3827 = gem_table_new();
+    gem_v_loaded = _t3827;
 #line 88 "compiler/main.gem"
-    GemVal _t3827[] = {gem_v_ast, gem_v_base_dir, gem_v_loaded};
-    gem_v_resolved_ast = gem_fn_resolve_loads(NULL, _t3827, 3);
+    GemVal _t3828[] = {gem_v_ast, gem_v_base_dir, gem_v_loaded};
+    gem_v_resolved_ast = gem_fn_resolve_loads(NULL, _t3828, 3);
 #line 90 "compiler/main.gem"
-    GemVal _t3828[] = {gem_v_src_path};
-    gem_v_cg = gem_fn_make_codegen(NULL, _t3828, 1);
+    GemVal _t3829[] = {gem_v_src_path};
+    gem_v_cg = gem_fn_make_codegen(NULL, _t3829, 1);
 #line 91 "compiler/main.gem"
-    GemVal _t3829 = gem_v_cg;
-    GemVal _t3830[] = {gem_v_resolved_ast};
-    GemVal _t3831 = gem_table_get(_t3829, gem_string("compile"));
-    gem_v_c_code = _t3831.fn(_t3831.env, _t3830, 1);
+    GemVal _t3830 = gem_v_cg;
+    GemVal _t3831[] = {gem_v_resolved_ast};
+    GemVal _t3832 = gem_table_get(_t3830, gem_string("compile"));
+    gem_v_c_code = _t3832.fn(_t3832.env, _t3831, 1);
 #line 92 "compiler/main.gem"
-    GemVal _t3832[] = {gem_v_c_code};
-    (void)(gem_fn_puts(NULL, _t3832, 1));
+    GemVal _t3833[] = {gem_v_c_code};
+    (void)(gem_fn_puts(NULL, _t3833, 1));
     gem_run_scheduler();
     gem_pop_frame();
     return 0;

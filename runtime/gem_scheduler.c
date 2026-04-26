@@ -37,6 +37,19 @@ static void gem_coro_stack_free(void *ptr, size_t size, void *udata) {
     free(ptr);
 }
 
+#define GEM_REDUCTION_LIMIT 4000
+
+void gem_yield_check(void) {
+    if (gem_current_pid < 0) return;
+    GemProcess *proc = &gem_proc_table[gem_current_pid];
+    proc->reductions++;
+    if (proc->reductions >= GEM_REDUCTION_LIMIT) {
+        proc->reductions = 0;
+        proc->state = GEM_PROC_READY;
+        mco_yield(proc->coro);
+    }
+}
+
 /* Mailbox operations */
 static void gem_mailbox_push(GemMailbox *mb, GemVal val) {
     GemMsgNode *node = (GemMsgNode *)GC_MALLOC(sizeof(GemMsgNode));
@@ -174,6 +187,7 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].exit_reason = NULL;
     gem_proc_table[pid].deadline_ms = -1;
     gem_proc_table[pid].timed_out = 0;
+    gem_proc_table[pid].reductions = 0;
     gem_proc_table[pid].pcall_depth = 0;
 
     return pid;
@@ -269,6 +283,7 @@ void gem_run_scheduler(void) {
                 has_ready = 1;
                 active = 1;
                 gem_current_pid = i;
+                proc->reductions = 0;
                 mco_resume(proc->coro);
 
                 if (mco_status(proc->coro) == MCO_DEAD) {

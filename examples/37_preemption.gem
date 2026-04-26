@@ -1,0 +1,73 @@
+# Test 1: tight loop doesn't starve another process
+fn test1()
+  let me = self()
+
+  let spinner = spawn(fn()
+    while true
+    end
+  end)
+
+  send_after(me, "tick", 100)
+
+  receive
+    when "tick"
+      print("test1: got tick")
+  after 500
+    print("test1: TIMEOUT")
+  end
+
+  kill(spinner, "kill")
+end
+
+# Test 2: 10 tight-loop processes + 1 receiver
+fn test2()
+  let me = self()
+  let spinners = []
+
+  for i = 0, 10
+    push(spinners, spawn(fn()
+      while true
+      end
+    end))
+  end
+
+  send_after(me, "hello", 100)
+
+  receive
+    when "hello"
+      print("test2: received through 10 spinners")
+  after 1000
+    print("test2: TIMEOUT")
+  end
+
+  for s in spinners
+    kill(s, "kill")
+  end
+end
+
+# Test 3: for loops also yield (they desugar to while)
+fn test3()
+  let me = self()
+
+  let spinner = spawn(fn()
+    for i = 0, 1000000000
+    end
+  end)
+
+  send_after(me, "done", 100)
+
+  receive
+    when "done"
+      print("test3: for loop preempted")
+  after 500
+    print("test3: TIMEOUT")
+  end
+
+  kill(spinner, "kill")
+end
+
+spawn(fn()
+  test1()
+  test2()
+  test3()
+end)

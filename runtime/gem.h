@@ -242,6 +242,7 @@ typedef struct {
     const char *exit_reason;      /* NULL while alive, set on exit/crash */
     int64_t deadline_ms;          /* -1 = no deadline; else absolute time in ms */
     int timed_out;                /* set to 1 by scheduler when deadline expires */
+    int reductions;               /* reduction counter for preemptive yielding */
     GemPcallFrame pcall_stack[GEM_MAX_PCALL_DEPTH];
     int pcall_depth;
 } GemProcess;
@@ -250,6 +251,9 @@ typedef struct {
 
 extern GemProcess gem_proc_table[GEM_MAX_PROCS];
 extern int gem_current_pid;
+
+/* Preemptive yield check — call at loop back-edges */
+void gem_yield_check(void);
 
 /* Core concurrency API */
 int gem_spawn_fn(GemFnPtr fn, void *env);
