@@ -8,8 +8,6 @@ load "std/string"
 
 # ─── C socket wrappers (defined in net.c) ───
 
-extern include "net.h"
-
 extern fn net_listen(port: Int) -> Int
 extern fn net_accept(server_fd: Int) -> Int
 extern fn net_read(fd: Int, max_bytes: Int) -> String

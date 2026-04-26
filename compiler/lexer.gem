@@ -109,6 +109,7 @@ fn tokenize(source)
   let interp_depth = 0
   let interp_brace = {}
   let CR = chr(13)
+  let NUL = chr(0)
 
   while pos < length
     let ch = source[pos]
@@ -205,6 +206,8 @@ fn tokenize(source)
             val = val + "\{"
           elif esc == "}"
             val = val + "}"
+          elif esc == "0"
+            val = val + NUL
           else
             val = val + "\\" + esc
           end
@@ -392,6 +395,8 @@ fn tokenize(source)
             val = val + "\{"
           elif esc == "}"
             val = val + "}"
+          elif esc == "0"
+            val = val + NUL
           else
             val = val + "\\" + esc
           end

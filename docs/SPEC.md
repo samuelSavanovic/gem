@@ -218,7 +218,9 @@ puts("hello from C")
 
 `extern fn` declares a C function. The compiler emits the call directly since we compile to C. Type annotations on extern declarations only — the rest of the language stays dynamically typed. `Ptr` is an opaque type for C pointers.
 
-For C headers:
+The compiler auto-generates C forward declarations from `extern fn` type signatures, so no separate `.h` file is needed for function declarations. The type mapping: `Int` → `int64_t`, `Float` → `double`, `String` → `const char*` (params) / `char*` (returns), `Bool` → `int`, `Ptr` → `void*`, `Nil` → `void`, `Table` → `GemVal`. Auto-generation is skipped when `extern include` is present (the user manages declarations via headers).
+
+For C headers (structs, typedefs, system headers the compiler can't infer):
 
 ```
 extern include "math.h"
@@ -249,7 +251,9 @@ s[0]
 s + " world"
 ```
 
-Both styles support escape sequences: `\n`, `\r`, `\t`, `\\`, and the matching quote (`\"` or `\'`). Double-quoted strings also support `\{` and `\}` to escape interpolation braces.
+Both styles support escape sequences: `\n`, `\r`, `\t`, `\0`, `\\`, and the matching quote (`\"` or `\'`). `\0` produces a null byte (0x00). Double-quoted strings also support `\{` and `\}` to escape interpolation braces.
+
+Note: `\0` in single-quoted strings produces the literal characters `\0` (two chars), not a null byte — single-quoted strings only process `\n`, `\r`, `\t`, `\\`, and `\'`.
 
 Single-quoted strings pass content through literally — `{` has no special meaning:
 
