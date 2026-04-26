@@ -231,6 +231,12 @@ fn make_codegen(source_name)
       collect_free_node(node.value, defined, free)
     elif tag == "anon_fn"
       let inner_defined = set_union(defined, sorted_array_to_set(node.params))
+      if node.rest_param != nil
+        set_add(inner_defined, node.rest_param)
+      end
+      if node.block_param != nil
+        set_add(inner_defined, node.block_param)
+      end
       let inner_free = collect_free_vars(node.body, inner_defined)
       let ifks = keys(inner_free)
       let ifi = 0
@@ -376,6 +382,12 @@ fn make_codegen(source_name)
 
     if tag == "anon_fn"
       let inner_defined = sorted_array_to_set(node.params)
+      if node.rest_param != nil
+        set_add(inner_defined, node.rest_param)
+      end
+      if node.block_param != nil
+        set_add(inner_defined, node.block_param)
+      end
       let free = collect_free_vars(node.body, inner_defined)
       let inter = set_intersect(free, scope_vars)
       let iks = keys(inter)
@@ -384,7 +396,7 @@ fn make_codegen(source_name)
         set_add(captured, iks[iki])
         iki += 1
       end
-      walk_captures(node.body, set_union(scope_vars, sorted_array_to_set(node.params)), captured)
+      walk_captures(node.body, set_union(scope_vars, inner_defined), captured)
     elif tag == "fn_def"
       # Named fns are global — skip
     elif tag == "if"
@@ -601,6 +613,12 @@ fn make_codegen(source_name)
 
   compile_anon_fn = fn(node)
     let inner_defined = sorted_array_to_set(node.params)
+    if node.rest_param != nil
+      set_add(inner_defined, node.rest_param)
+    end
+    if node.block_param != nil
+      set_add(inner_defined, node.block_param)
+    end
     let free = collect_free_vars(node.body, inner_defined)
     let captures = set_to_sorted_array(free)
 
@@ -1226,6 +1244,12 @@ fn make_codegen(source_name)
 
     # Determine which variables are captured by nested closures
     let scope_vars = sorted_array_to_set(params)
+    if node.rest_param != nil
+      set_add(scope_vars, node.rest_param)
+    end
+    if node.block_param != nil
+      set_add(scope_vars, node.block_param)
+    end
     for i = 0, len(body)
       if type(body[i]) == "table" and body[i].tag == "let"
         set_add(scope_vars, body[i].name)
@@ -1252,7 +1276,7 @@ fn make_codegen(source_name)
       lines = lines + "#line {node.line} \"{escape_c_string(source_name)}\"\n"
     end
 
-    # Bind parameters
+    # Bind required parameters
     for i = 0, len(params)
       let mp = mangle(params[i])
       if set_contains(captured, params[i])
@@ -1260,6 +1284,33 @@ fn make_codegen(source_name)
         lines = lines + "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
       else
         lines = lines + "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
+      end
+    end
+
+    # Bind rest param: pack args[N .. argc-end_count-1] into an array
+    if node.rest_param != nil
+      let N = len(params)
+      let end_count = 0
+      if node.block_param != nil
+        end_count = 1
+      end
+      let mp_rest = mangle(node.rest_param)
+      if set_contains(captured, node.rest_param)
+        lines = lines + "    GemVal *{mp_rest} = GC_MALLOC(sizeof(GemVal));\n"
+        lines = lines + "    *{mp_rest} = gem_table_new();\n"
+        lines = lines + "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n"
+      else
+        lines = lines + "    GemVal {mp_rest} = gem_table_new();\n"
+        lines = lines + "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n"
+      end
+      if node.block_param != nil
+        let mp_block = mangle(node.block_param)
+        if set_contains(captured, node.block_param)
+          lines = lines + "    GemVal *{mp_block} = GC_MALLOC(sizeof(GemVal));\n"
+          lines = lines + "    *{mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n"
+        else
+          lines = lines + "    GemVal {mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n"
+        end
       end
     end
 
@@ -1293,6 +1344,12 @@ fn make_codegen(source_name)
 
     # Find which vars inside THIS closure are captured by nested closures
     let inner_scope = sorted_array_to_set(params)
+    if node.rest_param != nil
+      set_add(inner_scope, node.rest_param)
+    end
+    if node.block_param != nil
+      set_add(inner_scope, node.block_param)
+    end
     for i = 0, len(body)
       if type(body[i]) == "table" and body[i].tag == "let"
         set_add(inner_scope, body[i].name)
@@ -1330,7 +1387,7 @@ fn make_codegen(source_name)
       end
     end
 
-    # Bind parameters
+    # Bind required parameters
     for i = 0, len(params)
       let mp = mangle(params[i])
       if set_contains(inner_captured, params[i])
@@ -1338,6 +1395,33 @@ fn make_codegen(source_name)
         lines = lines + "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
       else
         lines = lines + "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
+      end
+    end
+
+    # Bind rest param: pack args[N .. argc-end_count-1] into an array
+    if node.rest_param != nil
+      let N = len(params)
+      let end_count = 0
+      if node.block_param != nil
+        end_count = 1
+      end
+      let mp_rest = mangle(node.rest_param)
+      if set_contains(inner_captured, node.rest_param)
+        lines = lines + "    GemVal *{mp_rest} = GC_MALLOC(sizeof(GemVal));\n"
+        lines = lines + "    *{mp_rest} = gem_table_new();\n"
+        lines = lines + "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n"
+      else
+        lines = lines + "    GemVal {mp_rest} = gem_table_new();\n"
+        lines = lines + "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n"
+      end
+      if node.block_param != nil
+        let mp_block = mangle(node.block_param)
+        if set_contains(inner_captured, node.block_param)
+          lines = lines + "    GemVal *{mp_block} = GC_MALLOC(sizeof(GemVal));\n"
+          lines = lines + "    *{mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n"
+        else
+          lines = lines + "    GemVal {mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n"
+        end
       end
     end
 

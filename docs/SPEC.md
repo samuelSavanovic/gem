@@ -76,6 +76,51 @@ let result = add(
 )
 ```
 
+**Variadic Functions**
+
+A `...name` rest parameter collects extra positional arguments into an array. It must be the last declared parameter, optionally followed by one more parameter that receives the last argument (typically a do block).
+
+```
+fn sum(...nums)
+  let total = 0
+  for n in nums
+    total = total + n
+  end
+  total
+end
+
+sum(1, 2, 3)   # 6
+sum()          # 0 — nums is []
+```
+
+Required parameters before `...` work normally:
+
+```
+fn log(level, ...msgs)
+  for msg in msgs
+    print("{level}: {msg}")
+  end
+end
+
+log("INFO", "started", "port 8080")
+```
+
+When a single parameter follows `...name`, it receives the last argument. This is useful for capturing a do block explicitly:
+
+```
+fn each_with(context, ...items, body)
+  for item in items
+    body(context, item)
+  end
+end
+
+each_with("prefix", "a", "b", "c") do |ctx, item|
+  print("{ctx}_{item}")
+end
+```
+
+Rest param packing happens inside the function body at the C level, so variadic functions also work when stored in a variable or passed as a callback — the packing is unconditional regardless of call form.
+
 **Blocks**
 
 This is the core feature. Any function can accept a trailing block with `do`/`end`. The block is passed as the last argument as an `Fn` value.
@@ -455,6 +500,6 @@ Every value is a tagged C union. The compiler emits C code that uses the runtime
 
 **What's NOT in v0**
 
-No classes. No inheritance. No exceptions (use `error()` to halt, `pcall()` for recovery). No variadic functions. No destructuring. No type system. No operator overloading. No namespaces.
+No classes. No inheritance. No exceptions (use `error()` to halt, `pcall()` for recovery). No destructuring (of variadic rest params). No type system. No operator overloading. No namespaces.
 
 All of those can be added later _in the language itself_ via blocks, or in a future compiler version compiled by v0.

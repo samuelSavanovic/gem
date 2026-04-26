@@ -432,6 +432,11 @@ fn tokenize(source)
       pos += 1
       continue
     end
+    if ch == "." and pos + 1 < length and source[pos + 1] == "." and pos + 2 < length and source[pos + 2] == "."
+      push(tokens, {type: "...", value: "...", line: line})
+      pos += 3
+      continue
+    end
     if ch == "." or ch == "," or ch == ":" or ch == "|"
       push(tokens, {type: ch, value: ch, line: line})
       pos += 1

@@ -56,17 +56,40 @@ fn make_parser(tokens)
   end
 
   # ── Parameter list ──
+  # Returns {params, rest_param, block_param}.
+  # params: required param names before the rest param (or all params if no rest).
+  # rest_param: the name after "...", or nil.
+  # block_param: the single name declared after "...name", or nil.
 
   let parse_params = fn()
     let params = []
-    if peek().type == "NAME"
-      push(params, advance().value)
-      while peek().type == ","
+    let rest_param = nil
+    let block_param = nil
+
+    while peek().type == "NAME" or peek().type == "..."
+      if peek().type == "..."
         advance()
-        push(params, expect("NAME").value)
+        rest_param = expect("NAME").value
+        if peek().type == ","
+          advance()
+          if peek().type != "NAME"
+            error("expected parameter name after rest param at line {peek().line}")
+          end
+          block_param = advance().value
+          if peek().type == ","
+            error("only one parameter is allowed after a rest param at line {peek().line}")
+          end
+        end
+        break
       end
+      push(params, advance().value)
+      if peek().type != ","
+        break
+      end
+      advance()
     end
-    params
+
+    {params: params, rest_param: rest_param, block_param: block_param}
   end
 
   # ── Forward declarations for mutual recursion ──
@@ -164,13 +187,13 @@ fn make_parser(tokens)
     if t.type == "fn"
       advance()
       expect("(")
-      let params = parse_params()
+      let pr = parse_params()
       expect(")")
       fn_depth += 1
       let body = parse_fn_body()
       fn_depth -= 1
       expect("end")
-      return make_anon_fn(params, body)
+      return make_anon_fn(pr.params, pr.rest_param, pr.block_param, body)
     end
 
     # Table literal: {key: val, ...}
@@ -262,16 +285,21 @@ fn make_parser(tokens)
         if peek().type == "do"
           advance()
           let bparams = []
+          let brest = nil
+          let bblock = nil
           if peek().type == "|"
             advance()
-            bparams = parse_params()
+            let bpr = parse_params()
+            bparams = bpr.params
+            brest = bpr.rest_param
+            bblock = bpr.block_param
             expect("|")
           end
           fn_depth += 1
           let body = parse_fn_body()
           fn_depth -= 1
           expect("end")
-          push(args, make_anon_fn(bparams, body))
+          push(args, make_anon_fn(bparams, brest, bblock, body))
         else
           # Trailing brace block: {|params| expr} or {expr}
           # Distinguish from table literal by lookahead
@@ -287,14 +315,19 @@ fn make_parser(tokens)
             if is_block
               advance()
               let bparams = []
+              let brest = nil
+              let bblock = nil
               if peek().type == "|"
                 advance()
-                bparams = parse_params()
+                let bpr = parse_params()
+                bparams = bpr.params
+                brest = bpr.rest_param
+                bblock = bpr.block_param
                 expect("|")
               end
               let bexpr = parse_expr()
               expect("}")
-              push(args, make_anon_fn(bparams, [bexpr]))
+              push(args, make_anon_fn(bparams, brest, bblock, [bexpr]))
             end
           end
         end
@@ -525,13 +558,13 @@ fn make_parser(tokens)
         error("named fn '{name}' inside function body is not supported at line {line} — use: let {name} = fn(...) ... end")
       end
       expect("(")
-      let params = parse_params()
+      let pr = parse_params()
       expect(")")
       fn_depth += 1
       let body = parse_fn_body()
       fn_depth -= 1
       expect("end")
-      return make_fn_def(name, params, body, line)
+      return make_fn_def(name, pr.params, pr.rest_param, pr.block_param, body, line)
     end
 
     # if / elif statement

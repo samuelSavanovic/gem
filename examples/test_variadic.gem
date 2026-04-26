@@ -1,0 +1,120 @@
+# Test variadic functions
+
+# ── Basic rest args ─────────────────────────────────────────────
+
+fn sum(...nums)
+  let total = 0
+  for n in nums
+    total = total + n
+  end
+  total
+end
+
+print(sum(1, 2, 3))         # 6
+print(sum(10, 20))          # 30
+print(sum(42))              # 42
+
+# ── Zero extra args → empty array ───────────────────────────────
+
+fn first_or_nil(...args)
+  if len(args) == 0
+    return "empty"
+  end
+  args[0]
+end
+
+print(first_or_nil())       # empty
+print(first_or_nil("x"))    # x
+
+# ── Required params before rest ─────────────────────────────────
+
+fn log(level, ...msgs)
+  for msg in msgs
+    print("{level}: {msg}")
+  end
+end
+
+log("INFO", "server started", "port 8080")
+# INFO: server started
+# INFO: port 8080
+
+log("WARN")                 # (no output — msgs is empty)
+
+# ── len and for..in on rest param ───────────────────────────────
+
+fn count_args(...args)
+  len(args)
+end
+
+print(count_args())         # 0
+print(count_args(1, 2, 3))  # 3
+
+# ── Nested calls using rest ──────────────────────────────────────
+
+fn wrap(prefix, ...items)
+  let result = []
+  for item in items
+    push(result, "{prefix}:{item}")
+  end
+  result
+end
+
+let wrapped = wrap("x", "a", "b", "c")
+print(wrapped[0])           # x:a
+print(wrapped[1])           # x:b
+print(wrapped[2])           # x:c
+
+# ── Rest param + do block (block goes into rest array) ───────────
+
+fn apply_all(...fns)
+  for f in fns
+    f()
+  end
+end
+
+apply_all(
+  fn() print("hello") end,
+  fn() print("world") end
+)
+# hello
+# world
+
+# ── Rest param in a closure literal ─────────────────────────────
+
+let make_adder = fn(...addends)
+  fn(x)
+    let total = x
+    for a in addends
+      total = total + a
+    end
+    total
+  end
+end
+
+let add_10_20 = make_adder(10, 20)
+print(add_10_20(5))         # 35
+
+# ── Variadic fn with do block (block_param after rest) ───────────
+
+fn each_with(context, ...items, body)
+  for item in items
+    body(context, item)
+  end
+end
+
+each_with("prefix", "a", "b", "c") do |ctx, item|
+  print("{ctx}_{item}")
+end
+# prefix_a
+# prefix_b
+# prefix_c
+
+# ── Passing variadic fn as a value (v0 limitation documented) ────
+# When stored in a variable, the caller doesn't know it's variadic,
+# so extra args arrive flat in args[]. The rest param sees the raw
+# array-as-args behavior: the function receives all args flat and
+# packs them starting at index N. This works correctly at the C
+# level because packing happens inside the function body.
+
+let my_sum = sum
+print(my_sum(4, 5, 6))     # 15  — works: packing is in function body
