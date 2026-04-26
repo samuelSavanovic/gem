@@ -21,6 +21,7 @@ GemVal gem_print(void *_env, GemVal *args, int argc) {
             case VAL_FN: printf("<fn>"); break;
             case VAL_TABLE: printf("<table:%d>", v.table->len); break;
             case VAL_BUFFER: printf("<buffer:%d>", v.buffer->len); break;
+            case VAL_REF: printf("#Ref<%lld>", (long long)v.rval); break;
         }
     }
     printf("\n");
@@ -43,9 +44,15 @@ GemVal gem_error_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
     /* If pcall or coroutine isolation will catch it, pass just the user's message */
-    if (gem_pcall_depth > 0 || (gem_current_pid >= 0 && gem_current_pid < GEM_MAX_PROCS
-            && gem_proc_table[gem_current_pid].state != GEM_PROC_FREE
-            && gem_proc_table[gem_current_pid].state != GEM_PROC_DEAD)) {
+    int will_catch = 0;
+    if (gem_current_pid >= 0 && gem_current_pid < GEM_MAX_PROCS) {
+        GemProcess *_proc = &gem_proc_table[gem_current_pid];
+        if (_proc->state != GEM_PROC_FREE && _proc->state != GEM_PROC_DEAD)
+            will_catch = 1;
+    } else if (gem_pcall_depth > 0) {
+        will_catch = 1;
+    }
+    if (will_catch) {
         if (argc > 0 && args[0].type == VAL_STRING) {
             gem_raise_error(args[0].sval);
         } else {
@@ -93,6 +100,7 @@ GemVal gem_type_fn(void *_env, GemVal *args, int argc) {
         case VAL_FN: return gem_string("fn");
         case VAL_TABLE: return gem_string("table");
         case VAL_BUFFER: return gem_string("buffer");
+        case VAL_REF: return gem_string("ref");
     }
     return gem_string("unknown");
 }
@@ -113,6 +121,7 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
         case VAL_FN: return gem_string("<fn>");
         case VAL_TABLE: snprintf(buf, sizeof(buf), "<table:%d>", v.table->len); return gem_string(buf);
         case VAL_BUFFER: snprintf(buf, sizeof(buf), "<buffer:%d>", v.buffer->len); return gem_string(buf);
+        case VAL_REF: snprintf(buf, sizeof(buf), "#Ref<%lld>", (long long)v.rval); return gem_string(buf);
     }
     return gem_string("");
 }
@@ -344,6 +353,13 @@ GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc) {
     return r;
 }
 
+/* ─── Built-in: make_ref ─── */
+
+GemVal gem_make_ref_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env; (void)args; (void)argc;
+    return gem_make_ref();
+}
+
 /* ─── Built-in: pcall ─── */
 
 GemVal gem_pcall_fn(void *_env, GemVal *args, int argc) {
@@ -354,27 +370,39 @@ GemVal gem_pcall_fn(void *_env, GemVal *args, int argc) {
 
     GemVal fn = args[0];
 
-    if (gem_pcall_depth >= GEM_MAX_PCALL_DEPTH) {
+    /* Use per-process pcall stack if inside a process, else global */
+    GemPcallFrame *stack;
+    int *depth_ptr;
+    if (gem_current_pid >= 0 && gem_current_pid < GEM_MAX_PROCS) {
+        GemProcess *proc = &gem_proc_table[gem_current_pid];
+        stack = proc->pcall_stack;
+        depth_ptr = &proc->pcall_depth;
+    } else {
+        stack = gem_pcall_stack;
+        depth_ptr = &gem_pcall_depth;
+    }
+
+    if (*depth_ptr >= GEM_MAX_PCALL_DEPTH) {
         gem_error("pcall: too many nested pcall levels");
     }
 
-    int frame_idx = gem_pcall_depth;
-    gem_pcall_stack[frame_idx].saved_call_depth = gem_call_depth;
-    gem_pcall_depth++;
+    int frame_idx = *depth_ptr;
+    stack[frame_idx].saved_call_depth = gem_call_depth;
+    (*depth_ptr)++;
 
     volatile GemVal result = gem_table_new();
 
-    if (setjmp(gem_pcall_stack[frame_idx].buf) == 0) {
+    if (setjmp(stack[frame_idx].buf) == 0) {
         /* Normal path — call the function */
         GemVal value = fn.fn(fn.env, NULL, 0);
-        gem_pcall_depth--;
+        (*depth_ptr)--;
         gem_table_set(result, gem_string("ok"), gem_bool(1));
         gem_table_set(result, gem_string("value"), value);
     } else {
         /* Error path — longjmp landed here */
         gem_table_set(result, gem_string("ok"), gem_bool(0));
-        gem_table_set(result, gem_string("error"), gem_string(gem_pcall_stack[frame_idx].error_msg));
-        gem_table_set(result, gem_string("stack"), gem_pcall_stack[frame_idx].stack_snapshot);
+        gem_table_set(result, gem_string("error"), gem_string(stack[frame_idx].error_msg));
+        gem_table_set(result, gem_string("stack"), stack[frame_idx].stack_snapshot);
     }
 
     return result;

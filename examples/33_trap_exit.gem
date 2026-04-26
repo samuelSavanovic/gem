@@ -1,0 +1,85 @@
+# trap_exit tests — convert link exit signals into EXIT messages.
+
+# ─── Test 1: trap_exit catches abnormal exits ───
+spawn(fn()
+  let prev = process_flag("trap_exit", true)
+  print("test1: prev_flag={prev}")
+
+  spawn_link(fn()
+    error("boom")
+  end)
+  receive
+  when {tag: "EXIT", reason: r}
+    print("test1: got EXIT reason={r}")
+  end
+end)
+
+# ─── Test 2: trap_exit also catches normal exits ───
+spawn(fn()
+  process_flag("trap_exit", true)
+  spawn_link(fn()
+    # normal exit
+  end)
+  receive
+  when {tag: "EXIT", reason: r}
+    print("test2: got EXIT reason={r}")
+  end
+end)
+
+# ─── Test 3: process_flag returns previous value ───
+spawn(fn()
+  let v0 = process_flag("trap_exit", true)
+  let v1 = process_flag("trap_exit", false)
+  let v2 = process_flag("trap_exit", true)
+  print("test3: prev_seq={v0} {v1} {v2}")
+end)
+
+# ─── Test 4: trapping survivor stays alive across crashes ───
+spawn(fn()
+  process_flag("trap_exit", true)
+  spawn_link(fn()
+    error("first")
+  end)
+  spawn_link(fn()
+    error("second")
+  end)
+  let received = []
+  let i = 0
+  while i < 2
+    receive
+    when {tag: "EXIT", reason: r}
+      push(received, r)
+    end
+    i += 1
+  end
+  print("test4: received {len(received)} EXIT messages")
+  # Sort-stable expected: order depends on scheduler; just ensure both arrived
+  let saw_first = false
+  let saw_second = false
+  for r in received
+    if r == "first"
+      saw_first = true
+    end
+    if r == "second"
+      saw_second = true
+    end
+  end
+  print("test4: first={saw_first} second={saw_second}")
+end)
+
+# ─── Test 5: turning trap_exit OFF restores kill-on-exit behavior ───
+spawn(fn()
+  let parent = spawn(fn()
+    process_flag("trap_exit", true)
+    process_flag("trap_exit", false)
+    spawn_link(fn()
+      error("now-fatal")
+    end)
+    let _ = receive()  # block, killed by link
+  end)
+  monitor(parent)
+  receive
+  when {tag: "DOWN", reason: r}
+    print("test5: parent died: {r}")
+  end
+end)

@@ -22,6 +22,16 @@ GemVal gem_float(double v) { GemVal r; r.type = VAL_FLOAT; r.fval = v; return r;
 GemVal gem_bool(int v) { GemVal r; r.type = VAL_BOOL; r.bval = v; return r; }
 GemVal gem_make_fn(GemFnPtr f, void *env) { GemVal r; r.type = VAL_FN; r.fn = f; r.env = env; return r; }
 
+/* Global ref counter — single-threaded coroutine model means a plain
+   increment is safe. Starts at 1 so refs are never accidentally 0. */
+static int64_t gem_ref_counter = 0;
+GemVal gem_make_ref(void) {
+    GemVal r;
+    r.type = VAL_REF;
+    r.rval = ++gem_ref_counter;
+    return r;
+}
+
 GemVal gem_string(const char *s) {
     GemVal r;
     r.type = VAL_STRING;
@@ -150,6 +160,7 @@ int gem_val_eq(GemVal a, GemVal b) {
         case VAL_INT: return a.ival == b.ival;
         case VAL_FLOAT: return a.fval == b.fval;
         case VAL_STRING: return strcmp(a.sval, b.sval) == 0;
+        case VAL_REF: return a.rval == b.rval;
         default: return 0;
     }
 }

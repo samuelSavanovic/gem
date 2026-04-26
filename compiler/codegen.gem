@@ -170,7 +170,12 @@ fn make_codegen(source_name)
     register: "gem_register_builtin",
     whereis: "gem_whereis_builtin",
     time_ms: "gem_time_ms_builtin",
-    kill: "gem_exit_builtin"
+    kill: "gem_exit_builtin",
+    link: "gem_link_builtin",
+    unlink: "gem_unlink_builtin",
+    spawn_link: "gem_spawn_link_builtin",
+    process_flag: "gem_process_flag_builtin",
+    make_ref: "gem_make_ref_builtin"
   }
   let builtins = {}
   for k, _ in builtin_fns
@@ -434,12 +439,16 @@ fn make_codegen(source_name)
       if block_param != nil
         set_add(inner_defined, block_param)
       end
+      # collect_free_vars accumulates free vars at arbitrary depth, including
+      # through nested closures. Intersecting with scope_vars finds everything
+      # captured by THIS or any nested closure that comes from our scope.
+      # Don't recurse further — that would pollute captured with vars from
+      # intermediate closures' local scopes.
       let free = collect_free_vars(body, inner_defined)
       let inter = set_intersect(free, scope_vars)
       for ik, _ in inter
         set_add(captured, ik)
       end
-      walk_captures(body, set_union(scope_vars, inner_defined), captured)
     when {tag: "fn_def"}
       # Named fns are global — skip
     when {tag: "if", cond: cond, then: thens, else: el}

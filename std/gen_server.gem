@@ -1,0 +1,107 @@
+# std/gen_server — OTP-style synchronous server with state.
+#
+# Usage:
+#   load "std/gen_server"
+#
+#   let counter = {
+#     init: fn() 0 end,
+#     handle_call: fn(msg, from, state)
+#       match msg
+#       when {op: "get"}
+#         {reply: state, state: state}
+#       when {op: "incr", by: n}
+#         let new_state = state + n
+#         {reply: new_state, state: new_state}
+#       end
+#     end,
+#     handle_cast: fn(msg, state) {state: state} end,
+#     handle_info: fn(msg, state) {state: state} end
+#   }
+#
+#   let server = gen_server.start(counter)
+#   gen_server.call(server.pid, {op: "incr", by: 5})  # 5
+#   gen_server.cast(server.pid, {note: "ignored"})
+
+# ─── server loop ─────────────────────────────────────────────
+# Dispatches based on message tag:
+#   {tag: "call", from: {pid, ref}, msg} → handle_call(msg, from, state)
+#       returns {reply: r, state: s} → reply with r, continue with s
+#       returns {noreply: s}          → no reply (caller blocks until reply()), continue with s
+#   {tag: "cast", msg}                → handle_cast(msg, state) → {state: s}
+#   anything else                     → handle_info(msg, state) → {state: s}
+
+fn _gs_loop(module, state)
+  receive
+  when {tag: "call", from: from, msg: msg}
+    let result = module.handle_call(msg, from, state)
+    let new_state = state
+    if has_key(result, "reply")
+      send(from.pid, {tag: "gs_reply", ref: from.ref, value: result.reply})
+      new_state = result.state
+    else
+      new_state = result.noreply
+    end
+    _gs_loop(module, new_state)
+  when {tag: "cast", msg: msg}
+    let result = module.handle_cast(msg, state)
+    _gs_loop(module, result.state)
+  when other
+    let result = module.handle_info(other, state)
+    _gs_loop(module, result.state)
+  end
+end
+
+# ─── start(module) → {pid: ...} ─────────────────────────────
+
+fn _gs_start(module)
+  let pid = spawn(fn()
+    let initial = module.init()
+    _gs_loop(module, initial)
+  end)
+  {pid: pid}
+end
+
+# ─── call(target, msg [, timeout_ms]) → reply value ─────────
+# Synchronous. Sends {tag: "call", from: {pid, ref}, msg} and selectively
+# receives the matching {tag: "gs_reply", ...} response.
+# Default timeout: 5000ms. Pass a large number for effectively unbounded.
+
+fn _gs_call(target, msg, ...rest)
+  let timeout_ms = 5000
+  if len(rest) > 0
+    timeout_ms = rest[0]
+  end
+  let ref = make_ref()
+  send(target, {tag: "call", from: {pid: self(), ref: ref}, msg: msg})
+  receive
+  when {tag: "gs_reply", ref: r, value: v}
+    v
+  after timeout_ms
+    error("gen_server.call timeout")
+  end
+end
+
+# ─── cast(target, msg) → nil ────────────────────────────────
+
+fn _gs_cast(target, msg)
+  send(target, {tag: "cast", msg: msg})
+  nil
+end
+
+# ─── reply(from, value) → nil ───────────────────────────────
+# Used by handle_call when it returns {noreply: ...}: the server stashes
+# `from` and later sends the reply asynchronously.
+
+fn _gs_reply(from, value)
+  send(from.pid, {tag: "gs_reply", ref: from.ref, value: value})
+  nil
+end
+
+# ─── Namespace ───────────────────────────────────────────────
+
+let gen_server = {
+  start: _gs_start,
+  call: _gs_call,
+  cast: _gs_cast,
+  reply: _gs_reply
+}

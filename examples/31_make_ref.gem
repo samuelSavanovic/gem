@@ -1,0 +1,48 @@
+# make_ref tests — opaque unique references
+
+# ─── Test 1: refs are unique and equal-to-self ───
+let r1 = make_ref()
+let r2 = make_ref()
+print("test1: equal_self={r1 == r1} different={r1 != r2}")
+
+# ─── Test 2: type is "ref" ───
+print("test2: type={type(r1)}")
+
+# ─── Test 3: ref is usable as a table key ───
+let t = {}
+t[r1] = "first"
+t[r2] = "second"
+print("test3: r1={t[r1]} r2={t[r2]}")
+
+# ─── Test 4: ref survives round-trip through a message ───
+spawn(fn()
+  let me = self()
+  let ref = make_ref()
+  send(me, {tag: "ping", ref: ref})
+  receive
+  when {tag: "ping", ref: got_ref}
+    print("test4: ref_equal={got_ref == ref}")
+  end
+end)
+
+# ─── Test 5: distinct refs across many calls ───
+let count = 100
+let refs = []
+let i = 0
+while i < count
+  push(refs, make_ref())
+  i += 1
+end
+let all_unique = true
+let j = 0
+while j < count
+  let k = j + 1
+  while k < count
+    if refs[j] == refs[k]
+      all_unique = false
+    end
+    k += 1
+  end
+  j += 1
+end
+print("test5: unique={all_unique} count={count}")

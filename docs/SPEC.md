@@ -31,7 +31,7 @@ C runtime is minimal glue code (~100–200 lines) wiring together three librarie
 
 **Values and Types**
 
-Eight types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`. All dynamically typed. Every value is a tagged C union. Yes this means primitives are boxed and slow — doesn't matter for v0. Future optimization: NaN-boxing to pack ints, bools, and nil into a double's NaN space, eliminating heap allocation for primitives.
+Nine types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`, `Ref`. All dynamically typed. Every value is a tagged C union. Yes this means primitives are boxed and slow — doesn't matter for v0. Future optimization: NaN-boxing to pack ints, bools, and nil into a double's NaN space, eliminating heap allocation for primitives.
 
 **Variables**
 
@@ -337,6 +337,43 @@ Monitoring a dead/invalid pid delivers the DOWN message immediately. Duplicate m
 
 Error isolation: a crashing spawned process does not kill other processes. The error is captured, DOWN messages are delivered, and the scheduler continues. `pcall` inside a monitored process still works — it catches errors locally before the process-level handler.
 
+**Links**
+
+Links are bidirectional process monitors. When two processes are linked, an abnormal exit in one propagates to the other.
+
+```
+let pid = spawn_link do
+  error("crash")
+end
+
+# caller dies too, unless trap_exit is set
+```
+
+`link(pid)` creates a bidirectional link between the calling process and the target. `unlink(pid)` removes it. `spawn_link(fn)` atomically spawns and links (no race window between spawn and link).
+
+When a linked process dies with a reason other than `"normal"`, the exit signal propagates to all linked processes:
+
+- If the linked process has `trap_exit` set to `true` (via `process_flag("trap_exit", true)`), the exit signal is converted to a message: `{tag: "EXIT", pid: <pid>, reason: <reason>}`.
+- If the linked process does not trap exits, it dies with the same reason, propagating the signal further.
+- Normal exits (reason `"normal"`) do not propagate to non-trapping linked processes.
+
+Propagation is transitive: if A is linked to B and B is linked to C, and C crashes, B dies (unless trapping), which causes A to die (unless trapping). The implementation is cycle-safe.
+
+```
+# Trapping exits turns death signals into messages
+process_flag("trap_exit", true)
+let pid = spawn_link do
+  error("boom")
+end
+
+receive
+when {tag: "EXIT", pid: p, reason: r}
+  print("child " + to_string(p) + " died: " + r)
+end
+```
+
+`process_flag("trap_exit", bool)` sets the trap_exit flag on the current process and returns the previous value.
+
 **Named Processes**
 
 ```
@@ -553,7 +590,7 @@ print(result2.value)  # 42
 
 `len(v)` — returns the length of a string or the number of entries in a table.
 
-`type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`.
+`type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`, `"ref"`.
 
 `to_string(v)` — converts any value to its string representation.
 
@@ -588,6 +625,16 @@ print(items[0])    # a
 `buf_push(buf, val)` — appends `val` to the buffer. Non-string values are auto-coerced to strings. Returns the buffer for chaining. Uses a doubling growth strategy internally — O(n) total for n appends vs O(n²) for repeated `+` concatenation.
 
 `buf_str(buf)` — finalizes the buffer into an immutable string. The buffer can still be used after this call.
+
+`make_ref()` — returns a unique opaque reference value. Type is `"ref"`. Refs are equal only to themselves (identity equality). Usable as table keys. Format: `#Ref<N>` where N is a monotonically increasing integer.
+
+`link(pid)` — creates a bidirectional link between the calling process and the target process. If the target is already dead with a non-normal reason and the caller does not trap exits, the caller dies. Returns `true`.
+
+`unlink(pid)` — removes the bidirectional link between the calling process and the target. Returns `true`.
+
+`spawn_link(fn)` — atomically spawns a new process and links it to the caller. No race window between spawn and link. Returns the new pid.
+
+`process_flag("trap_exit", bool)` — sets the `trap_exit` flag on the current process. Returns the previous value (bool). When `trap_exit` is `true`, exit signals from linked processes are converted to `{tag: "EXIT", pid: <pid>, reason: <reason>}` messages in the process's mailbox instead of killing the process.
 
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
@@ -649,6 +696,54 @@ The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`
   - `max_seconds` — time window in milliseconds for restart intensity (default 5000).
   - `name` — optional string name to register the supervisor process.
 - `supervisor.which_children(pid_or_name)` — query a supervisor for its children. Returns an array of `{id, pid, restart}` tables. Must be called from a spawned process (uses `receive`).
+
+`std/gen_server` — exports `gen_server` table. OTP-style synchronous server abstraction. Load with `load "std/gen_server"`.
+
+The caller provides a module table with callback functions: `init`, `handle_call`, `handle_cast`, and `handle_info`.
+
+- `gen_server.start(module)` — starts a gen_server process running the given module. Returns `{pid: <pid>}`. The module's `init()` is called to produce the initial state.
+- `gen_server.call(target, msg)` / `gen_server.call(target, msg, timeout_ms)` — sends a synchronous request and waits for a reply. Default timeout is 5000ms. Internally sends `{tag: "call", from: {pid, ref}, msg: <msg>}` to the server, then blocks waiting for a matching `{tag: "gs_reply", ref: <ref>, value: <value>}`. Returns the reply value. Errors on timeout.
+- `gen_server.cast(target, msg)` — sends an asynchronous (fire-and-forget) message. Sends `{tag: "cast", msg: <msg>}` to the server. Returns `nil`.
+- `gen_server.reply(from, value)` — sends a reply to a pending `call`. Used for deferred replies when `handle_call` returns `{noreply: state}` instead of replying immediately. Returns `nil`.
+
+Module callback return values:
+
+- `handle_call(msg, from, state)` — must return `{reply: <value>, state: <new_state>}` to reply immediately, or `{noreply: <new_state>}` to defer the reply (use `gen_server.reply(from, value)` later).
+- `handle_cast(msg, state)` — must return `{state: <new_state>}`.
+- `handle_info(msg, state)` — handles any message not from `call`/`cast` (e.g. DOWN messages, EXIT messages). Must return `{state: <new_state>}`.
+
+```
+load "std/gen_server"
+
+let counter_mod = {
+  init: fn()
+    0
+  end,
+  handle_call: fn(msg, from, state)
+    match msg
+    when "get"
+      {reply: state, state: state}
+    when "inc"
+      {reply: state + 1, state: state + 1}
+    end
+  end,
+  handle_cast: fn(msg, state)
+    match msg
+    when "reset"
+      {state: 0}
+    end
+  end,
+  handle_info: fn(msg, state)
+    {state: state}
+  end
+}
+
+let {pid: server} = gen_server.start(counter_mod)
+gen_server.call(server, "inc")    # 1
+gen_server.call(server, "inc")    # 2
+gen_server.call(server, "get")    # 2
+gen_server.cast(server, "reset")
+```
 
 Top-level `let` bindings (including std namespaces like `string`, `table`) compile to C globals, so they are accessible from named `fn` declarations, closures, and top-level code alike.
 

@@ -69,6 +69,7 @@ GemVal gem_eq(GemVal a, GemVal b) {
         case VAL_INT: return gem_bool(a.ival == b.ival);
         case VAL_FLOAT: return gem_bool(a.fval == b.fval);
         case VAL_STRING: return gem_bool(strcmp(a.sval, b.sval) == 0);
+        case VAL_REF: return gem_bool(a.rval == b.rval);
         default: return gem_bool(0);
     }
 }

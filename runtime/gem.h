@@ -27,7 +27,7 @@ typedef struct mco_coro mco_coro;
 /* ─── Tagged value ─── */
 
 typedef enum {
-    VAL_NIL, VAL_BOOL, VAL_INT, VAL_FLOAT, VAL_STRING, VAL_FN, VAL_TABLE, VAL_BUFFER,
+    VAL_NIL, VAL_BOOL, VAL_INT, VAL_FLOAT, VAL_STRING, VAL_FN, VAL_TABLE, VAL_BUFFER, VAL_REF,
 } GemType;
 
 typedef struct GemVal GemVal;
@@ -52,6 +52,7 @@ struct GemVal {
         struct { GemFnPtr fn; void *env; };
         GemTable *table;
         GemBuffer *buffer;
+        int64_t rval;  /* unique reference id (VAL_REF) */
     };
 };
 
@@ -90,6 +91,7 @@ GemVal gem_float(double v);
 GemVal gem_bool(int v);
 GemVal gem_string(const char *s);
 GemVal gem_make_fn(GemFnPtr f, void *env);
+GemVal gem_make_ref(void);
 
 /* ─── Table internals (shared across runtime files) ─── */
 
@@ -206,6 +208,12 @@ typedef struct GemMonitorNode {
     struct GemMonitorNode *next;
 } GemMonitorNode;
 
+/* Link list node — bidirectional */
+typedef struct GemLinkNode {
+    int pid;                      /* pid of the linked process */
+    struct GemLinkNode *next;
+} GemLinkNode;
+
 /* Process slot */
 typedef struct {
     GemProcState state;
@@ -215,10 +223,14 @@ typedef struct {
     int wait_fd;        /* fd this process is waiting on (when IO_WAIT) */
     int wait_write;     /* 0 = waiting for read, 1 = waiting for write */
     GemMonitorNode *monitors;     /* linked list of pids monitoring this process */
+    GemLinkNode *links;           /* linked list of pids linked to this process */
+    int trap_exit;                /* if true, exit signals become EXIT messages */
     jmp_buf proc_jmp;             /* process-level error handler (crash isolation) */
     const char *exit_reason;      /* NULL while alive, set on exit/crash */
     int64_t deadline_ms;          /* -1 = no deadline; else absolute time in ms */
     int timed_out;                /* set to 1 by scheduler when deadline expires */
+    GemPcallFrame pcall_stack[GEM_MAX_PCALL_DEPTH];
+    int pcall_depth;
 } GemProcess;
 
 #define GEM_MAX_PROCS 1024
@@ -264,6 +276,15 @@ void gem_unregister_name_for_pid(int pid);     /* auto-cleanup on death */
 void gem_monitor_fn(int target_pid);
 void gem_deliver_down_messages(int pid, const char *reason);
 
+/* Link API */
+void gem_link_fn(int target_pid);
+void gem_unlink_fn(int target_pid);
+/* Propagate an exit signal from `pid` (with `reason`) to all linked processes.
+   For each link: if trap_exit is set, deliver an EXIT message; otherwise mark
+   the linked process DEAD and recursively propagate. Caller must mark `pid`
+   DEAD before invoking this to prevent cycles. */
+void gem_propagate_exit(int pid, const char *reason);
+
 /* Built-in function wrappers (GemFnPtr signature) */
 GemVal gem_spawn_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_send_builtin(void *_env, GemVal *args, int argc);
@@ -275,5 +296,10 @@ GemVal gem_register_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_whereis_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_time_ms_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_exit_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_link_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_unlink_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_spawn_link_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_process_flag_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_make_ref_builtin(void *_env, GemVal *args, int argc);
 
 #endif /* GEM_H */

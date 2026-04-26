@@ -1,0 +1,125 @@
+# Link tests — bidirectional exit signal propagation.
+
+# ─── Test 1: spawn_link — child crashes, partner dies with same reason ───
+spawn(fn()
+  let parent = spawn(fn()
+    spawn_link(fn()
+      error("crash1")
+    end)
+    let _ = receive()  # block until killed by link
+  end)
+  monitor(parent)
+  receive
+  when {tag: "DOWN", reason: r}
+    print("test1: parent died: {r}")
+  end
+end)
+
+# ─── Test 2: explicit link() — same effect as spawn_link ───
+spawn(fn()
+  let parent = spawn(fn()
+    let child = spawn(fn()
+      receive
+      when "go"
+        error("crash2")
+      end
+    end)
+    link(child)
+    send(child, "go")
+    let _ = receive()  # block until killed
+  end)
+  monitor(parent)
+  receive
+  when {tag: "DOWN", reason: r}
+    print("test2: parent died: {r}")
+  end
+end)
+
+# ─── Test 3: normal exit does NOT propagate to non-trapping link ───
+spawn(fn()
+  let me = self()
+  let parent = spawn(fn()
+    spawn_link(fn()
+      # normal exit
+    end)
+    receive
+    when "stop"
+      # exit normally
+    end
+  end)
+  let signal = spawn(fn()
+    send(parent, "stop")
+  end)
+  monitor(parent)
+  receive
+  when {tag: "DOWN", reason: r}
+    print("test3: parent died: {r}")
+  end
+end)
+
+# ─── Test 4: link chain — A↔B↔C, C crashes, A dies ───
+spawn(fn()
+  let a = spawn(fn()
+    let b = spawn(fn()
+      spawn_link(fn()
+        error("chain-boom")
+      end)
+      let _ = receive()  # block, killed by link from C
+    end)
+    link(b)
+    let _ = receive()  # block, killed by link from B
+  end)
+  monitor(a)
+  receive
+  when {tag: "DOWN", reason: r}
+    print("test4: A died: {r}")
+  end
+end)
+
+# ─── Test 5: unlink prevents propagation ───
+spawn(fn()
+  let parent = spawn(fn()
+    let child = spawn(fn()
+      receive
+      when "go"
+        error("ignored-crash")
+      end
+    end)
+    link(child)
+    unlink(child)
+    send(child, "go")
+    receive
+    when "stop"
+      # exit normally
+    end
+  end)
+  let signal = spawn(fn()
+    send(parent, "stop")
+  end)
+  monitor(parent)
+  receive
+  when {tag: "DOWN", reason: r}
+    print("test5: parent died: {r}")
+  end
+end)
+
+# ─── Test 6: link to already-dead process kills caller (unless trapping) ───
+spawn(fn()
+  let parent = spawn(fn()
+    let me = self()
+    let dead = spawn(fn()
+      error("already-gone")
+    end)
+    let relay = spawn(fn()
+      send(me, "wakeup")
+    end)
+    let _ = receive()
+    link(dead)
+    print("test6: should not print")
+  end)
+  monitor(parent)
+  receive
+  when {tag: "DOWN", reason: r}
+    print("test6: parent died: {r}")
+  end
+end)

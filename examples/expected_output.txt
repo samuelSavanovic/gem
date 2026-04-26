@@ -499,3 +499,27 @@ test3: transient crash restarted ok
 test3: permanent crash restarted ok
 test3: temporary not restarted ok
 test4: supervisor crashed: max restart intensity reached
+test1: equal_self=true different=true
+test2: type=ref
+test3: r1=first r2=second
+test5: unique=true count=100
+test4: ref_equal=true
+test1: parent died: crash1
+test2: parent died: crash2
+test4: A died: chain-boom
+test3: parent died: normal
+test5: parent died: normal
+test6: parent died: already-gone
+test1: prev_flag=false
+test3: prev_seq=false true false
+test1: got EXIT reason=boom
+test2: got EXIT reason=normal
+test4: received 2 EXIT messages
+test4: first=true second=true
+test5: parent died: now-fatal
+test1: after incr 10 = 10
+test3: count=2 first=raw1 second=raw2
+test1: after incr 5 = 15
+test2: got delayed: request
+test1: after reset = 0
+test4: ok=false err=gen_server.call timeout

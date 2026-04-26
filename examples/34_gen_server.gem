@@ -1,0 +1,109 @@
+# gen_server tests
+load "std/gen_server"
+
+# ─── Test 1: counter — call + cast happy path ────────────────
+
+let counter_module = {
+  init: fn() 0 end,
+  handle_call: fn(msg, from, state)
+    match msg
+    when {op: "get"}
+      {reply: state, state: state}
+    when {op: "incr", by: n}
+      let new_state = state + n
+      {reply: new_state, state: new_state}
+    end
+  end,
+  handle_cast: fn(msg, state)
+    match msg
+    when {op: "reset"}
+      {state: 0}
+    end
+  end,
+  handle_info: fn(msg, state)
+    {state: state}
+  end
+}
+
+spawn(fn()
+  let server = gen_server.start(counter_module)
+  let v1 = gen_server.call(server.pid, {op: "incr", by: 10})
+  print("test1: after incr 10 = {v1}")
+  let v2 = gen_server.call(server.pid, {op: "incr", by: 5})
+  print("test1: after incr 5 = {v2}")
+  gen_server.cast(server.pid, {op: "reset"})
+  let v3 = gen_server.call(server.pid, {op: "get"})
+  print("test1: after reset = {v3}")
+end)
+
+# ─── Test 2: noreply + later reply via gen_server.reply ──────
+
+let echo_module = {
+  init: fn() {pending: nil} end,
+  handle_call: fn(msg, from, state)
+    # Stash from; reply later when "go" arrives via handle_info
+    {noreply: {pending: from, msg: msg}}
+  end,
+  handle_cast: fn(msg, state) {state: state} end,
+  handle_info: fn(msg, state)
+    if msg == "go"
+      gen_server.reply(state.pending, "delayed: {state.msg}")
+      {state: {pending: nil, msg: nil}}
+    else
+      {state: state}
+    end
+  end
+}
+
+spawn(fn()
+  let server = gen_server.start(echo_module)
+  let helper = spawn(fn()
+    send(server.pid, "go")
+  end)
+  let v = gen_server.call(server.pid, "request")
+  print("test2: got {v}")
+end)
+
+# ─── Test 3: handle_info handles non-call/cast messages ──────
+
+let logger_module = {
+  init: fn() [] end,
+  handle_call: fn(msg, from, state)
+    match msg
+    when "list"
+      {reply: state, state: state}
+    end
+  end,
+  handle_cast: fn(msg, state) {state: state} end,
+  handle_info: fn(msg, state)
+    push(state, msg)
+    {state: state}
+  end
+}
+
+spawn(fn()
+  let server = gen_server.start(logger_module)
+  send(server.pid, "raw1")
+  send(server.pid, "raw2")
+  let logs = gen_server.call(server.pid, "list")
+  print("test3: count={len(logs)} first={logs[0]} second={logs[1]}")
+end)
+
+# ─── Test 4: adversarial — handle_call raises → caller times out ───
+
+let bad_module = {
+  init: fn() 0 end,
+  handle_call: fn(msg, from, state)
+    error("kaboom from server")
+  end,
+  handle_cast: fn(msg, state) {state: state} end,
+  handle_info: fn(msg, state) {state: state} end
+}
+
+spawn(fn()
+  let server = gen_server.start(bad_module)
+  let result = pcall(fn()
+    gen_server.call(server.pid, "anything", 200)
+  end)
+  print("test4: ok={result.ok} err={result.error}")
+end)

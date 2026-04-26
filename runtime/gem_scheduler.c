@@ -133,7 +133,10 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
                 gem_proc_table[i].coro = NULL;
                 gem_proc_table[i].mailbox = (GemMailbox){NULL, NULL};
                 gem_proc_table[i].monitors = NULL;
+                gem_proc_table[i].links = NULL;
+                gem_proc_table[i].trap_exit = 0;
                 gem_proc_table[i].exit_reason = NULL;
+                gem_proc_table[i].pcall_depth = 0;
                 pid = i;
                 break;
             }
@@ -165,9 +168,12 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].mailbox = (GemMailbox){NULL, NULL};
     gem_proc_table[pid].pid = pid;
     gem_proc_table[pid].monitors = NULL;
+    gem_proc_table[pid].links = NULL;
+    gem_proc_table[pid].trap_exit = 0;
     gem_proc_table[pid].exit_reason = NULL;
     gem_proc_table[pid].deadline_ms = -1;
     gem_proc_table[pid].timed_out = 0;
+    gem_proc_table[pid].pcall_depth = 0;
 
     return pid;
 }
@@ -241,6 +247,7 @@ void gem_run_scheduler(void) {
                     gem_deliver_down_messages(i, reason);
                     gem_unregister_name_for_pid(i);
                     proc->state = GEM_PROC_DEAD;
+                    gem_propagate_exit(i, reason);
                 }
             } else if (proc->state == GEM_PROC_WAITING) {
                 has_msg_wait = 1;
@@ -377,6 +384,161 @@ void gem_monitor_fn(int target_pid) {
     target->monitors = new_node;
 }
 
+/* ─── Link API ─── */
+
+/* Add `pid` to `proc`'s links list (no-op if already present). */
+static void gem_link_add(GemProcess *proc, int pid) {
+    GemLinkNode *node = proc->links;
+    while (node) {
+        if (node->pid == pid) return;
+        node = node->next;
+    }
+    GemLinkNode *new_node = (GemLinkNode *)GC_MALLOC(sizeof(GemLinkNode));
+    new_node->pid = pid;
+    new_node->next = proc->links;
+    proc->links = new_node;
+}
+
+/* Remove `pid` from `proc`'s links list (no-op if absent). */
+static void gem_link_remove(GemProcess *proc, int pid) {
+    GemLinkNode **cur = &proc->links;
+    while (*cur) {
+        if ((*cur)->pid == pid) {
+            *cur = (*cur)->next;
+            return;
+        }
+        cur = &(*cur)->next;
+    }
+}
+
+void gem_link_fn(int target_pid) {
+    if (target_pid < 0 || target_pid >= GEM_MAX_PROCS) return;
+    int caller = gem_current_pid;
+    if (caller < 0) {
+        gem_error("link: not inside a spawned process");
+        return;
+    }
+    if (caller == target_pid) return;  /* don't link to self */
+
+    GemProcess *target = &gem_proc_table[target_pid];
+    GemProcess *self = &gem_proc_table[caller];
+
+    /* If target is already dead, deliver exit signal immediately */
+    if (target->state == GEM_PROC_DEAD || target->state == GEM_PROC_FREE) {
+        const char *reason = target->exit_reason ? target->exit_reason : "noproc";
+        if (self->trap_exit) {
+            GemVal msg = gem_table_new();
+            gem_table_set(msg, gem_string("tag"), gem_string("EXIT"));
+            gem_table_set(msg, gem_string("pid"), gem_int(target_pid));
+            gem_table_set(msg, gem_string("reason"), gem_string(reason));
+            gem_send_msg(caller, msg);
+        } else if (strcmp(reason, "normal") != 0) {
+            /* Caller will die when it next runs; raise now via gem_error path.
+               Mark caller's reason and let the outer error machinery handle it. */
+            gem_error(reason);
+        }
+        return;
+    }
+
+    gem_link_add(self, target_pid);
+    gem_link_add(target, caller);
+}
+
+void gem_unlink_fn(int target_pid) {
+    if (target_pid < 0 || target_pid >= GEM_MAX_PROCS) return;
+    int caller = gem_current_pid;
+    if (caller < 0) return;
+
+    gem_link_remove(&gem_proc_table[caller], target_pid);
+    GemProcess *target = &gem_proc_table[target_pid];
+    if (target->state != GEM_PROC_FREE) {
+        gem_link_remove(target, caller);
+    }
+}
+
+/* Propagate an exit signal from `dead_pid` to all its linked processes.
+   `dead_pid` must already be marked DEAD before calling. Linked processes
+   that don't trap exits and receive a non-normal reason are themselves
+   marked DEAD and propagated transitively.
+
+   Special case: if the propagation would kill the currently-running process
+   (e.g. kill(other) from the running coro, where the current process is
+   linked to `other`), the current coro must not be destroyed mid-flight.
+   We defer that until the rest of the propagation is done, then raise an
+   error so the coro's setjmp handler unwinds; the scheduler will pick up
+   the death and propagate this process's links normally. */
+void gem_propagate_exit(int dead_pid, const char *reason) {
+    int worklist[GEM_MAX_PROCS];
+    const char *reasons[GEM_MAX_PROCS];
+    int wl_head = 0, wl_tail = 0;
+    worklist[wl_tail] = dead_pid;
+    reasons[wl_tail] = reason;
+    wl_tail++;
+
+    int self_pid = gem_current_pid;
+    int self_kill_pending = 0;
+    const char *self_kill_reason = NULL;
+
+    while (wl_head < wl_tail) {
+        int pid = worklist[wl_head];
+        const char *r = reasons[wl_head];
+        wl_head++;
+
+        GemProcess *proc = &gem_proc_table[pid];
+        GemLinkNode *link = proc->links;
+        proc->links = NULL;  /* clear so repeated propagation is idempotent */
+
+        while (link) {
+            int lpid = link->pid;
+            link = link->next;
+            if (lpid < 0 || lpid >= GEM_MAX_PROCS) continue;
+            GemProcess *lproc = &gem_proc_table[lpid];
+            if (lproc->state == GEM_PROC_FREE || lproc->state == GEM_PROC_DEAD) continue;
+
+            /* Remove the back-link so a later propagation doesn't re-visit pid */
+            gem_link_remove(lproc, pid);
+
+            if (lproc->trap_exit) {
+                /* Deliver EXIT message; do not kill */
+                GemVal msg = gem_table_new();
+                gem_table_set(msg, gem_string("tag"), gem_string("EXIT"));
+                gem_table_set(msg, gem_string("pid"), gem_int(pid));
+                gem_table_set(msg, gem_string("reason"), gem_string(r));
+                gem_send_msg(lpid, msg);
+            } else if (strcmp(r, "normal") == 0) {
+                /* Don't propagate normal exits to non-trapping links */
+                continue;
+            } else if (lpid == self_pid) {
+                /* Defer killing the active coroutine until the worklist is
+                   drained. The scheduler will propagate self's links after
+                   its coroutine unwinds via gem_error below. */
+                self_kill_pending = 1;
+                self_kill_reason = r;
+            } else {
+                /* Kill the linked process with the same reason */
+                lproc->exit_reason = r;
+                if (lproc->coro) {
+                    mco_destroy(lproc->coro);
+                    lproc->coro = NULL;
+                }
+                gem_deliver_down_messages(lpid, r);
+                gem_unregister_name_for_pid(lpid);
+                lproc->state = GEM_PROC_DEAD;
+                if (wl_tail < GEM_MAX_PROCS) {
+                    worklist[wl_tail] = lpid;
+                    reasons[wl_tail] = r;
+                    wl_tail++;
+                }
+            }
+        }
+    }
+
+    if (self_kill_pending) {
+        /* Raise inside the running coroutine; proc_jmp catches it. */
+        gem_error(self_kill_reason);
+    }
+}
+
 /* ─── Named Process Registry ─── */
 
 void gem_register_name(const char *name, int pid) {
@@ -509,6 +671,59 @@ GemVal gem_time_ms_builtin(void *_env, GemVal *args, int argc) {
     return gem_int(gem_now_ms());
 }
 
+GemVal gem_link_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_INT) {
+        gem_error("link: expected pid (int) argument");
+    }
+    gem_link_fn((int)args[0].ival);
+    return gem_bool(1);
+}
+
+GemVal gem_unlink_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_INT) {
+        gem_error("unlink: expected pid (int) argument");
+    }
+    gem_unlink_fn((int)args[0].ival);
+    return gem_bool(1);
+}
+
+GemVal gem_spawn_link_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_FN) {
+        gem_error("spawn_link: expected function argument");
+    }
+    int pid = gem_spawn_fn(args[0].fn, args[0].env);
+
+    /* Atomically link before the new process gets a chance to run */
+    int caller = gem_current_pid;
+    if (caller >= 0 && caller != pid) {
+        gem_link_add(&gem_proc_table[caller], pid);
+        gem_link_add(&gem_proc_table[pid], caller);
+    }
+    return gem_int(pid);
+}
+
+GemVal gem_process_flag_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_STRING) {
+        gem_error("process_flag: expected (flag_name, value)");
+    }
+    int caller = gem_current_pid;
+    if (caller < 0) {
+        gem_error("process_flag: not inside a spawned process");
+    }
+    GemProcess *proc = &gem_proc_table[caller];
+    if (strcmp(args[0].sval, "trap_exit") == 0) {
+        int old = proc->trap_exit;
+        proc->trap_exit = gem_truthy(args[1]) ? 1 : 0;
+        return gem_bool(old);
+    }
+    gem_error("process_flag: unknown flag");
+    return GEM_NIL;
+}
+
 GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2 || args[0].type != VAL_INT || args[1].type != VAL_STRING) {
@@ -529,5 +744,6 @@ GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
     gem_deliver_down_messages(pid, reason);
     gem_unregister_name_for_pid(pid);
     proc->state = GEM_PROC_DEAD;
+    gem_propagate_exit(pid, reason);
     return gem_bool(1);
 }
