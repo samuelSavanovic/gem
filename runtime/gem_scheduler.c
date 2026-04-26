@@ -19,8 +19,13 @@ GemProcess gem_proc_table[GEM_MAX_PROCS];
 int gem_current_pid = -1;
 int gem_free_head = 0;
 int gem_free_tail = GEM_MAX_PROCS - 1;
+int gem_proc_hwm = 0;
 GemNameEntry *gem_name_registry = NULL;
 GemTimer gem_timers[GEM_MAX_TIMERS];
+
+/* Pre-allocated poll scratch arrays (avoid malloc/free per scheduler idle) */
+static struct pollfd gem_poll_fds[GEM_MAX_PROCS];
+static int gem_poll_pids[GEM_MAX_PROCS];
 
 /* GC-aware stack allocator for minicoro coroutines.
    malloc the stack, then register it as a GC root so Boehm
@@ -173,7 +178,7 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     ctx->fn = fn;
     ctx->env = env;
 
-    mco_desc desc = mco_desc_init(gem_coro_entry, 0);
+    mco_desc desc = mco_desc_init(gem_coro_entry, GEM_CORO_STACK_SIZE);
     desc.alloc_cb = gem_coro_stack_alloc;
     desc.dealloc_cb = gem_coro_stack_free;
     desc.user_data = ctx;
@@ -198,6 +203,7 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].reductions = 0;
     gem_proc_table[pid].pcall_depth = 0;
 
+    if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
     return pid;
 }
 
@@ -275,6 +281,7 @@ static int64_t gem_earliest_timer_deadline(void) {
 
 void gem_run_scheduler(void) {
     int active = 1;
+    int completed_since_gc = 0;
 
     while (active) {
         active = 0;
@@ -284,7 +291,7 @@ void gem_run_scheduler(void) {
 
         gem_fire_timers();
 
-        for (int i = 0; i < GEM_MAX_PROCS; i++) {
+        for (int i = 0; i < gem_proc_hwm; i++) {
             GemProcess *proc = &gem_proc_table[i];
 
             if (proc->state == GEM_PROC_READY) {
@@ -302,6 +309,7 @@ void gem_run_scheduler(void) {
                     gem_deliver_down_messages(i, reason);
                     gem_unregister_name_for_pid(i);
                     gem_propagate_exit(i, reason);
+                    completed_since_gc++;
                 }
             } else if (proc->state == GEM_PROC_WAITING) {
                 has_msg_wait = 1;
@@ -322,6 +330,13 @@ void gem_run_scheduler(void) {
             }
         }
 
+        /* Periodically collect garbage to bound heap growth under
+           sustained spawn/die churn (e.g. HTTP request handlers). */
+        if (completed_since_gc >= 500) {
+            GC_gcollect();
+            completed_since_gc = 0;
+        }
+
         /* If we ran at least one READY process, loop immediately —
            the resumed coroutines may have enqueued messages or spawned
            new work. */
@@ -329,34 +344,25 @@ void gem_run_scheduler(void) {
 
         /* Nothing was READY. Check for I/O waiters. */
         if (has_io_wait) {
-            /* Build a pollfd array for all IO_WAIT processes. */
-            struct pollfd *pfds = malloc(GEM_MAX_PROCS * sizeof(struct pollfd));
-            int *pfd_pid = malloc(GEM_MAX_PROCS * sizeof(int));
             int nfds = 0;
-
-            for (int i = 0; i < GEM_MAX_PROCS; i++) {
+            for (int i = 0; i < gem_proc_hwm; i++) {
                 if (gem_proc_table[i].state == GEM_PROC_IO_WAIT) {
-                    pfds[nfds].fd = gem_proc_table[i].wait_fd;
-                    pfds[nfds].events = gem_proc_table[i].wait_write ? POLLOUT : POLLIN;
-                    pfds[nfds].revents = 0;
-                    pfd_pid[nfds] = i;
+                    gem_poll_fds[nfds].fd = gem_proc_table[i].wait_fd;
+                    gem_poll_fds[nfds].events = gem_proc_table[i].wait_write ? POLLOUT : POLLIN;
+                    gem_poll_fds[nfds].revents = 0;
+                    gem_poll_pids[nfds] = i;
                     nfds++;
                 }
             }
 
-            /* Block until at least one fd is ready.
-               Use -1 timeout: the only way to make progress is I/O. */
-            int ready = poll(pfds, (nfds_t)nfds, -1);
+            int ready = poll(gem_poll_fds, (nfds_t)nfds, -1);
             if (ready > 0) {
                 for (int j = 0; j < nfds; j++) {
-                    if (pfds[j].revents & (POLLIN | POLLOUT | POLLERR | POLLHUP)) {
-                        gem_proc_table[pfd_pid[j]].state = GEM_PROC_READY;
+                    if (gem_poll_fds[j].revents & (POLLIN | POLLOUT | POLLERR | POLLHUP)) {
+                        gem_proc_table[gem_poll_pids[j]].state = GEM_PROC_READY;
                     }
                 }
             }
-            /* Loop back to resume the now-READY processes. */
-            free(pfds);
-            free(pfd_pid);
             continue;
         }
 
@@ -368,7 +374,7 @@ void gem_run_scheduler(void) {
            there are pending timers — sleep until the earliest, then loop. */
         if ((has_msg_wait || timer_dl >= 0) && !has_io_wait) {
             int64_t earliest = -1;
-            for (int i = 0; i < GEM_MAX_PROCS; i++) {
+            for (int i = 0; i < gem_proc_hwm; i++) {
                 if (gem_proc_table[i].state == GEM_PROC_WAITING &&
                     gem_proc_table[i].deadline_ms >= 0) {
                     if (earliest < 0 || gem_proc_table[i].deadline_ms < earliest) {
@@ -530,9 +536,12 @@ void gem_unlink_fn(int target_pid) {
    We defer that until the rest of the propagation is done, then raise an
    error so the coro's setjmp handler unwinds; the scheduler will pick up
    the death and propagate this process's links normally. */
+static int gem_exit_worklist[GEM_MAX_PROCS];
+static const char *gem_exit_reasons[GEM_MAX_PROCS];
+
 void gem_propagate_exit(int dead_pid, const char *reason) {
-    int *worklist = malloc(GEM_MAX_PROCS * sizeof(int));
-    const char **reasons = malloc(GEM_MAX_PROCS * sizeof(const char *));
+    int *worklist = gem_exit_worklist;
+    const char **reasons = gem_exit_reasons;
     int wl_head = 0, wl_tail = 0;
     worklist[wl_tail] = dead_pid;
     reasons[wl_tail] = reason;
@@ -600,9 +609,6 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
     for (int i = 0; i < wl_tail; i++) {
         gem_free_proc_slot(worklist[i]);
     }
-
-    free(worklist);
-    free(reasons);
 
     if (self_kill_pending) {
         gem_error(self_kill_reason);

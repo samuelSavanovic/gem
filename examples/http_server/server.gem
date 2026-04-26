@@ -203,13 +203,14 @@ let MAX_CONNECTIONS = 900  # leave headroom below GEM_MAX_PROCS (1024)
 fn acceptor(server_fd, router)
   let active = 0
   let total = 0
+  let me = self()
 
   while true
-    # Drain DOWN messages from finished handlers (non-blocking)
+    # Drain completion messages (non-blocking, O(1) per message)
     let draining = true
     while draining
       receive
-      when {tag: "DOWN"}
+      when msg
         active -= 1
       after 0
         draining = false
@@ -226,11 +227,12 @@ fn acceptor(server_fd, router)
     else
       let fd = client_fd
       let r = router
+      let acc = me
       let result = pcall(fn()
-        let pid = spawn(fn()
-          handle_connection(fd, r)
+        spawn(fn()
+          pcall(fn() handle_connection(fd, r) end)
+          send(acc, "done")
         end)
-        monitor(pid)
       end)
       if result.ok
         active += 1

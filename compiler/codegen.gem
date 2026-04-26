@@ -1822,6 +1822,7 @@ fn make_codegen(source_name)
     end
 
     let main_c = "int main(void) \{\n"
+    main_c = main_c + "    GC_INIT();\n"
     main_c = main_c + "    gem_scheduler_init();\n"
     main_c = main_c + "    gem_push_frame(\"main\", \"{escape_c_string(source_name)}\", 0);\n"
     if main_body != ""

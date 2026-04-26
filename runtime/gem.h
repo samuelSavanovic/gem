@@ -251,10 +251,15 @@ typedef struct {
 #define GEM_MAX_PROCS 1024
 #endif
 
+#ifndef GEM_CORO_STACK_SIZE
+#define GEM_CORO_STACK_SIZE (16 * 1024)
+#endif
+
 extern GemProcess gem_proc_table[GEM_MAX_PROCS];
 extern int gem_current_pid;
 extern int gem_free_head;
 extern int gem_free_tail;
+extern int gem_proc_hwm;
 
 /* Preemptive yield check — call at loop back-edges */
 void gem_yield_check(void);
