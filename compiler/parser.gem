@@ -452,6 +452,64 @@ fn make_parser(tokens)
     if t.type == "let"
       let line = t.line
       advance()
+
+      # Table destructuring: let {a, b, c} = expr
+      if peek().type == "\{"
+        advance()
+        let names = []
+        skip_nl()
+        while peek().type != "}"
+          let field_tok = peek()
+          if field_tok.type == "NAME"
+            advance()
+          else
+            # Allow keywords as field names
+            advance()
+          end
+          push(names, field_tok.value)
+          skip_nl()
+          if peek().type == ","
+            advance()
+            skip_nl()
+          end
+        end
+        expect("}")
+        expect("=")
+        let rhs = parse_expr()
+        gensym_counter += 1
+        let tmp = "_d{gensym_counter}"
+        let stmts = [make_let(tmp, rhs, line)]
+        for di = 0, len(names)
+          push(stmts, make_let(names[di], make_dot(make_var(tmp), names[di]), line))
+        end
+        return {tag: "block", stmts: stmts}
+      end
+
+      # Array destructuring: let [a, b, c] = expr
+      if peek().type == "["
+        advance()
+        let names = []
+        skip_nl()
+        while peek().type != "]"
+          push(names, expect("NAME").value)
+          skip_nl()
+          if peek().type == ","
+            advance()
+            skip_nl()
+          end
+        end
+        expect("]")
+        expect("=")
+        let rhs = parse_expr()
+        gensym_counter += 1
+        let tmp = "_d{gensym_counter}"
+        let stmts = [make_let(tmp, rhs, line)]
+        for di = 0, len(names)
+          push(stmts, make_let(names[di], make_index(make_var(tmp), make_int(di)), line))
+        end
+        return {tag: "block", stmts: stmts}
+      end
+
       let name = expect("NAME").value
       expect("=")
       let value = parse_expr()

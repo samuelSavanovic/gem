@@ -1,0 +1,73 @@
+# Destructuring let — table and array forms
+
+# 1. Table destructuring basics
+let t = {x: 10, y: 20, z: 30}
+let {x, y, z} = t
+print("{x} {y} {z}")
+
+# 2. Array destructuring basics
+let arr = [100, 200, 300]
+let [a, b, c] = arr
+print("{a} {b} {c}")
+
+# 3. RHS evaluated once
+let counter = 0
+let make_table = fn()
+  counter += 1
+  {val: counter}
+end
+let {val} = make_table()
+print("val={val} counter={counter}")
+
+# 4. Out-of-bounds array — extras are nil
+let [p, q, r] = [1]
+print("{p} {q} {r}")
+
+# 5. Missing table keys — nil
+let {name, age} = {name: "gem"}
+print("{name} {age}")
+
+# 6. Destructuring in function body
+fn test_in_fn()
+  let {a, b} = {a: 1, b: 2}
+  print("{a} {b}")
+end
+test_in_fn()
+
+# 7. Destructuring in loop
+for i = 0, 3
+  let [v] = [i * 10]
+  print("v={v}")
+end
+
+# 8. Empty destructure — no crash
+let {} = {a: 1}
+let [] = [1, 2]
+print("empty ok")
+
+# 9. Single field/element
+let {solo} = {solo: 42}
+let [only] = [99]
+print("{solo} {only}")
+
+# 10. Destructure from function call
+let call_count = 0
+fn make_result()
+  call_count += 1
+  {ok: true, value: 42}
+end
+let {ok, value} = make_result()
+print("ok={ok} value={value} calls={call_count}")
+
+# 11. Nested usage — destructure inside if
+if true
+  let {inner} = {inner: "yes"}
+  print("inner={inner}")
+end
+
+# 12. Multi-element array from split-like operation
+fn three_things()
+  [10, 20, 30]
+end
+let [first, second, third] = three_things()
+print("{first} {second} {third}")

@@ -41,6 +41,18 @@ let name = "hello"
 x = 20
 ```
 
+Destructuring extracts fields from tables or elements from arrays:
+
+```
+# Table destructuring — extract named fields
+let {method, path} = parse_request(raw)
+
+# Array destructuring — extract by position
+let [first, second] = string.split(line, ",")
+```
+
+Table destructuring extracts by name (`let {a, b} = expr` is `let a = expr.a; let b = expr.b`). Array destructuring extracts by index (`let [a, b] = expr` is `let a = expr[0]; let b = expr[1]`). The RHS is evaluated exactly once. Missing keys/indices produce `nil`. No renaming, nesting, rest/splat, or default values.
+
 **Functions**
 
 ```

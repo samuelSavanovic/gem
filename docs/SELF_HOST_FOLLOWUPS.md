@@ -69,8 +69,8 @@ The `extern fn` type map only handled `Int`, `Float`, `String`, `Bool`, `Ptr`, a
 ### 8. Allow keywords as table literal keys
 `"else"` is a keyword so `{else: body}` is a parse error. Currently requires `node["else"] = body` after construction. Could allow keywords in table literal key position since it's unambiguous.
 
-### 9. Destructuring / multi-return
-Minor ergonomic win for parser helpers and similar patterns. Not blocking anything.
+### 9. Destructuring / multi-return — DONE
+Implemented `let {a, b} = expr` (table) and `let [a, b] = expr` (array) destructuring. Desugars at parse time to a temp variable + individual lets. No renaming, nesting, rest/splat, or defaults (v0 scope).
 
 ## Stdlib Migration — Move Builtins to Gem
 

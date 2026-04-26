@@ -897,11 +897,10 @@ fn make_codegen(source_name)
     elif tag == "fn_def"
       return ""
     elif tag == "block"
-      let out = "{p}\{\n"
+      let out = ""
       for stmt in node.stmts
-        out = out + compile_stmt(stmt, indent + 1) + "\n"
+        out = out + compile_stmt(stmt, indent) + "\n"
       end
-      out = out + "{p}}"
       return out
     end
 
