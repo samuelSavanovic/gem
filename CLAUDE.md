@@ -44,6 +44,17 @@ After changing compiler sources, run `make bootstrap` to update `stage0.c`. The 
 
 After any language change (new syntax, new builtin, changed semantics), update `docs/SPEC.md` to reflect the change. The spec is the source of truth — if it disagrees with the code, fix the spec. Also update `docs/SELF_HOST_FOLLOWUPS.md` if the change completes a listed item.
 
+## Editor Extension Maintenance
+
+After any language change, also update `editors/vscode/syntaxes/gem.tmLanguage.json` to reflect the change. Specifically:
+
+- **New keyword** — add it to the appropriate pattern in the `keyword` repository rule (`keyword.control.gem`, `keyword.other.gem`, or `keyword.declaration.function.gem`)
+- **New builtin function** — add it to the alternation in the `builtin` rule
+- **New syntax construct** — add a new repository rule and include it in the top-level `patterns` array at the right priority (before `#keyword` and `#identifier` if it needs to take precedence)
+- **New type annotation** (extern context) — add it to the alternation in `extern-type-annotation`
+
+The symlink at `~/.vscode/extensions/gem-language` → `editors/vscode` means changes take effect on VS Code reload with no reinstall needed.
+
 ## Key Decisions
 
 - Compilation target is C source code. `cc` handles optimization and linking.
