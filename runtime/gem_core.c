@@ -65,7 +65,7 @@ GemVal gem_table_new(void) {
 }
 
 void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
-    if (tbl.type != VAL_TABLE) { gem_error("index set on non-table"); }
+    if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "index set on non-table: got %s", gem_type_str(tbl)); gem_error(buf); }
     GemTable *t = tbl.table;
 
     /* String key: use hash index for O(1) lookup */
@@ -115,7 +115,7 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
 GemVal gem_table_get(GemVal tbl, GemVal key) {
     /* String indexing: tbl[i] on a string returns single char */
     if (tbl.type == VAL_STRING) {
-        if (key.type != VAL_INT) { gem_error("string index must be int"); }
+        if (key.type != VAL_INT) { char buf[128]; snprintf(buf, sizeof(buf), "string index must be int, got %s", gem_type_str(key)); gem_error(buf); }
         int64_t idx = key.ival;
         int64_t slen = (int64_t)strlen(tbl.sval);
         if (idx < 0 || idx >= slen) { gem_error("string index out of bounds"); }
@@ -123,7 +123,7 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
         return gem_string(buf);
     }
 
-    if (tbl.type != VAL_TABLE) { gem_error("index get on non-table"); }
+    if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "index get on non-table: got %s", gem_type_str(tbl)); gem_error(buf); }
     GemTable *t = tbl.table;
 
     /* String key: use hash index */
@@ -163,6 +163,23 @@ int gem_val_eq(GemVal a, GemVal b) {
         case VAL_REF: return a.rval == b.rval;
         default: return 0;
     }
+}
+
+/* ─── Type name helper ─── */
+
+const char *gem_type_str(GemVal v) {
+    switch (v.type) {
+        case VAL_NIL:    return "nil";
+        case VAL_BOOL:   return "bool";
+        case VAL_INT:    return "int";
+        case VAL_FLOAT:  return "float";
+        case VAL_STRING: return "string";
+        case VAL_FN:     return "fn";
+        case VAL_TABLE:  return "table";
+        case VAL_BUFFER: return "buffer";
+        case VAL_REF:    return "ref";
+    }
+    return "unknown";
 }
 
 /* ─── Truthiness ─── */

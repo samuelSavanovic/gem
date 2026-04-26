@@ -175,6 +175,7 @@ GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc);
 
 /* ─── Helpers used by codegen ─── */
 
+const char *gem_type_str(GemVal v);
 GemVal gem_len_val(GemVal v);
 void gem_error(const char *msg);
 GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc);

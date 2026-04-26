@@ -208,7 +208,7 @@ boom
 true
 42
 false
-type error in +
+type error in +: got int and string
 true
 inner boom
 still running

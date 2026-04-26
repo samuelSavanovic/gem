@@ -76,7 +76,7 @@ GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
 GemVal gem_len_val(GemVal v) {
     if (v.type == VAL_STRING) return gem_int((int64_t)strlen(v.sval));
     if (v.type == VAL_TABLE) return gem_int((int64_t)v.table->len);
-    gem_error("len: expected string or table");
+    { char buf[128]; snprintf(buf, sizeof(buf), "len: expected string or table, got %s", gem_type_str(v)); gem_error(buf); }
     return GEM_NIL;
 }
 
@@ -132,7 +132,7 @@ GemVal gem_push_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2) { gem_error("push: expected 2 arguments"); }
     GemVal tbl = args[0];
-    if (tbl.type != VAL_TABLE) { gem_error("push: expected table as first argument"); }
+    if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "push: expected table as first argument, got %s", gem_type_str(tbl)); gem_error(buf); }
     GemTable *t = tbl.table;
     GemVal val = args[1];
     if (t->len >= t->cap) gem_table_grow(t);
@@ -146,7 +146,7 @@ GemVal gem_push_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_keys(GemVal tbl) {
     if (tbl.type != VAL_TABLE) {
-        gem_error("keys: expected table");
+        char buf[128]; snprintf(buf, sizeof(buf), "keys: expected table, got %s", gem_type_str(tbl)); gem_error(buf);
         return GEM_NIL;
     }
     GemTable *t = tbl.table;
@@ -168,7 +168,7 @@ GemVal gem_keys_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_has_key_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2) { gem_error("has_key: expected 2 arguments"); }
-    if (args[0].type != VAL_TABLE) { gem_error("has_key: expected table as first argument"); }
+    if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "has_key: expected table as first argument, got %s", gem_type_str(args[0])); gem_error(buf); }
     GemTable *t = args[0].table;
     GemVal key = args[1];
 
@@ -202,7 +202,7 @@ GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 3) { gem_error("str_replace: expected 3 arguments"); }
     if (args[0].type != VAL_STRING || args[1].type != VAL_STRING || args[2].type != VAL_STRING) {
-        gem_error("str_replace: all arguments must be strings");
+        char buf[128]; snprintf(buf, sizeof(buf), "str_replace: all arguments must be strings, got %s, %s, %s", gem_type_str(args[0]), gem_type_str(args[1]), gem_type_str(args[2])); gem_error(buf);
     }
     const char *s = args[0].sval;
     const char *old = args[1].sval;
@@ -246,7 +246,7 @@ GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2) { gem_error("substr: expected 2-3 arguments"); }
     if (args[0].type != VAL_STRING || args[1].type != VAL_INT) {
-        gem_error("substr: expected (string, int[, int])");
+        char buf[128]; snprintf(buf, sizeof(buf), "substr: expected (string, int[, int]), got (%s, %s)", gem_type_str(args[0]), gem_type_str(args[1])); gem_error(buf);
     }
     const char *s = args[0].sval;
     int64_t start = args[1].ival;
@@ -275,7 +275,7 @@ GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_chr_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 1 || args[0].type != VAL_INT) { gem_error("chr: expected int argument"); }
+    if (argc < 1 || args[0].type != VAL_INT) { char buf[128]; snprintf(buf, sizeof(buf), "chr: expected int argument, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
     char buf[2];
     buf[0] = (char)(args[0].ival & 0xFF);
     buf[1] = '\0';
@@ -284,7 +284,7 @@ GemVal gem_chr_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_ord_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 1 || args[0].type != VAL_STRING) { gem_error("ord: expected string argument"); }
+    if (argc < 1 || args[0].type != VAL_STRING) { char buf[128]; snprintf(buf, sizeof(buf), "ord: expected string argument, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
     if (argc >= 2) {
         /* ord(s, i) — direct byte access by index, no allocation */
         if (args[1].type != VAL_INT) { gem_error("ord: index must be an integer"); }
@@ -313,7 +313,7 @@ GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 2 || args[0].type != VAL_BUFFER) { gem_error("buf_push: expected buffer and value"); }
+    if (argc < 2 || args[0].type != VAL_BUFFER) { char buf[128]; snprintf(buf, sizeof(buf), "buf_push: expected buffer as first argument, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
     GemBuffer *b = args[0].buffer;
     /* Coerce second argument to string */
     const char *s;
@@ -342,7 +342,7 @@ GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 1 || args[0].type != VAL_BUFFER) { gem_error("buf_str: expected buffer"); }
+    if (argc < 1 || args[0].type != VAL_BUFFER) { char buf[128]; snprintf(buf, sizeof(buf), "buf_str: expected buffer, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
     GemBuffer *b = args[0].buffer;
     char *s = (char *)GC_MALLOC_ATOMIC(b->len + 1);
     memcpy(s, b->data, b->len);

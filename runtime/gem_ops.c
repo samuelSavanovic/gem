@@ -16,7 +16,7 @@ GemVal gem_add(GemVal a, GemVal b) {
         memcpy(s + la, b.sval, lb + 1);
         GemVal r; r.type = VAL_STRING; r.sval = s; return r;
     }
-    gem_error("type error in +"); return GEM_NIL;
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in +: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
 
 GemVal gem_sub(GemVal a, GemVal b) {
@@ -26,7 +26,7 @@ GemVal gem_sub(GemVal a, GemVal b) {
         double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
         return gem_float(fa - fb);
     }
-    gem_error("type error in -"); return GEM_NIL;
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in -: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
 
 GemVal gem_mul(GemVal a, GemVal b) {
@@ -36,7 +36,7 @@ GemVal gem_mul(GemVal a, GemVal b) {
         double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
         return gem_float(fa * fb);
     }
-    gem_error("type error in *"); return GEM_NIL;
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in *: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
 
 GemVal gem_div(GemVal a, GemVal b) {
@@ -50,7 +50,7 @@ GemVal gem_div(GemVal a, GemVal b) {
         double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
         return gem_float(fa / fb);
     }
-    gem_error("type error in /"); return GEM_NIL;
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in /: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
 
 GemVal gem_mod(GemVal a, GemVal b) {
@@ -58,7 +58,7 @@ GemVal gem_mod(GemVal a, GemVal b) {
         if (b.ival == 0) gem_error("division by zero");
         return gem_int(a.ival % b.ival);
     }
-    gem_error("type error in %"); return GEM_NIL;
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in %%: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
 
 GemVal gem_eq(GemVal a, GemVal b) {
@@ -86,7 +86,7 @@ GemVal gem_lt(GemVal a, GemVal b) {
         return gem_bool(fa < fb);
     }
     if (a.type == VAL_STRING && b.type == VAL_STRING) return gem_bool(strcmp(a.sval, b.sval) < 0);
-    gem_error("type error in <"); return GEM_NIL;
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in <: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
 
 GemVal gem_gt(GemVal a, GemVal b) { return gem_lt(b, a); }
@@ -96,7 +96,7 @@ GemVal gem_ge(GemVal a, GemVal b) { return gem_bool(!gem_truthy(gem_lt(a, b))); 
 GemVal gem_neg(GemVal a) {
     if (a.type == VAL_INT) return gem_int(-a.ival);
     if (a.type == VAL_FLOAT) return gem_float(-a.fval);
-    gem_error("type error in unary -"); return GEM_NIL;
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in unary -: got %s", gem_type_str(a)); gem_error(buf); } return GEM_NIL;
 }
 
 GemVal gem_not(GemVal a) {
