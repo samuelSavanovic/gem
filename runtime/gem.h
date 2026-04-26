@@ -1,6 +1,6 @@
 /*
- * gem.h — Gem language runtime public API.
- * Compilers target this header; implementation is in gem.c.
+ * gem.h -- Gem language runtime public API.
+ * Compilers target this header; implementation lives in the runtime directory.
  */
 
 #ifndef GEM_H
@@ -13,11 +13,16 @@
 #include <setjmp.h>
 #include <gc.h>
 
-/* minicoro forward declaration — full impl is in gem.c.
+/* minicoro forward declaration — full impl is in gem_scheduler.c.
    minicoro.h uses this same typedef, so guard against redefinition. */
 #ifndef MINICORO_H
 typedef struct mco_coro mco_coro;
 #endif
+
+/* ─── GC-aware allocators ─── */
+
+#define ALLOC(type) ((type *)GC_MALLOC(sizeof(type)))
+#define ALLOC_N(type, n) ((type *)GC_MALLOC(sizeof(type) * (n)))
 
 /* ─── Tagged value ─── */
 
@@ -86,11 +91,28 @@ GemVal gem_bool(int v);
 GemVal gem_string(const char *s);
 GemVal gem_make_fn(GemFnPtr f, void *env);
 
+/* ─── Table internals (shared across runtime files) ─── */
+
+/* String key -> index mapping for O(1) lookup (stb_ds) */
+typedef struct {
+    char *key;       /* stb_ds uses this field name */
+    int value;       /* index into keys/vals arrays */
+} GemStrIndex;
+
+struct GemTable {
+    GemVal *keys;
+    GemVal *vals;
+    int len;
+    int cap;
+    GemStrIndex *str_index;  /* stb_ds string hash map (NULL until first string key) */
+};
+
 /* ─── Table operations ─── */
 
 GemVal gem_table_new(void);
 void gem_table_set(GemVal tbl, GemVal key, GemVal val);
 GemVal gem_table_get(GemVal tbl, GemVal key);
+void gem_table_grow(GemTable *t);
 
 /* ─── Comparison / equality ─── */
 
@@ -128,6 +150,7 @@ extern GemPcallFrame gem_pcall_stack[GEM_MAX_PCALL_DEPTH];
 extern int gem_pcall_depth;
 
 void gem_raise_error(const char *msg);
+void gem_print_stack_trace(void);
 
 /* ─── Built-in functions (GemFnPtr signature) ─── */
 
