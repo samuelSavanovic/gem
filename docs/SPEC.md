@@ -375,6 +375,12 @@ The `receive` block can produce a value when used as the last statement of a fun
 
 The existing `receive()` function call continues to work unchanged — it always pops the head of the mailbox unconditionally.
 
+**Process Control**
+
+`kill(pid, reason)` terminates a process immediately. The process is marked dead, its DOWN messages are delivered to monitors, and its registered name (if any) is removed. Returns `true` if the process was alive, `nil` otherwise.
+
+`time_ms()` returns the current monotonic time in milliseconds (int). Useful for timeouts, benchmarks, and restart intensity tracking.
+
 **C Interop**
 
 ```
@@ -633,6 +639,16 @@ table.each(parts) { |item| print(item) }
 - `table.contains(arr, value)` — linear scan for value equality
 
 The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`buf_str()`, and `substr()`. `split` and `index_of` are only available through `std/string` (not as bare builtins).
+
+`std/supervisor` — exports `supervisor` table:
+
+- `supervisor.start(spec)` — start a supervisor process. Returns `{pid: <pid>}`. The spec table supports:
+  - `strategy` — `"one_for_one"` (default): restart only the crashed child. `"one_for_all"`: stop all children and restart all in order.
+  - `children` — array of child specs: `{id: <string>, start: <fn>, restart: <string>}`. The `start` function must spawn and return a pid. `restart` is `"permanent"` (always restart, default), `"temporary"` (never restart), or `"transient"` (restart only on abnormal exit).
+  - `max_restarts` — max restarts within the time window before the supervisor itself crashes (default 3).
+  - `max_seconds` — time window in milliseconds for restart intensity (default 5000).
+  - `name` — optional string name to register the supervisor process.
+- `supervisor.which_children(pid_or_name)` — query a supervisor for its children. Returns an array of `{id, pid, restart}` tables. Must be called from a spawned process (uses `receive`).
 
 Top-level `let` bindings (including std namespaces like `string`, `table`) compile to C globals, so they are accessible from named `fn` declarations, closures, and top-level code alike.
 

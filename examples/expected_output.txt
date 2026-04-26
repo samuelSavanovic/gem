@@ -489,3 +489,13 @@ test10: outer=1
 test10: inner=2
 test5: down reason=crash!
 test5: app data=hello
+test5: children count=2
+test5: id=wc1 restart=permanent
+test5: id=wc2 restart=temporary
+test6: named supervisor ok, children=1
+test1: one_for_one restart ok
+test2: one_for_all restart ok
+test3: transient crash restarted ok
+test3: permanent crash restarted ok
+test3: temporary not restarted ok
+test4: supervisor crashed: max restart intensity reached

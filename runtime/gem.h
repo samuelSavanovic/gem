@@ -273,5 +273,7 @@ GemVal gem_monitor_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_spawn_monitor_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_register_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_whereis_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_time_ms_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_exit_builtin(void *_env, GemVal *args, int argc);
 
 #endif /* GEM_H */

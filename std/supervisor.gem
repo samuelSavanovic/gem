@@ -1,0 +1,237 @@
+# std/supervisor — OTP-style supervisor for Gem processes
+#
+# Usage:
+#   load "std/supervisor"
+#   let result = supervisor.start({
+#     strategy: "one_for_one",
+#     children: [
+#       {id: "worker1", start: fn() spawn(fn() ... end) end},
+#       {id: "worker2", start: fn() spawn(fn() ... end) end}
+#     ]
+#   })
+#   let sup_pid = result.pid
+
+# ─── start_child(spec) → pid ────────────────────────────────
+# Calls the child's start function, monitors the returned pid.
+
+fn _sup_start_child(spec)
+  let pid = spec.start()
+  monitor(pid)
+  pid
+end
+
+# ─── supervisor_loop ─────────────────────────────────────────
+# The core receive loop. Watches for DOWN messages and queries.
+
+fn _sup_loop(state)
+  receive
+  when {tag: "DOWN", pid: dead_pid, reason: reason}
+    _sup_handle_down(state, dead_pid, reason)
+  when {tag: "supervisor_which_children", reply_to: reply_to}
+    _sup_handle_which_children(state, reply_to)
+    _sup_loop(state)
+  end
+end
+
+# ─── handle DOWN ─────────────────────────────────────────────
+
+fn _sup_handle_down(state, dead_pid, reason)
+  # Find which child died
+  let children = state.children
+  let specs = state.specs
+  let i = 0
+  let found = -1
+  while i < len(children)
+    if children[i].pid == dead_pid
+      found = i
+    end
+    i += 1
+  end
+
+  if found == -1
+    # Unknown pid, ignore
+    _sup_loop(state)
+    return nil
+  end
+
+  let spec = specs[found]
+  let restart = "permanent"
+  if has_key(spec, "restart")
+    restart = spec.restart
+  end
+
+  # Check restart policy
+  let should_restart = false
+  if restart == "permanent"
+    should_restart = true
+  elif restart == "transient"
+    if reason != "normal"
+      should_restart = true
+    end
+  end
+  # "temporary" → never restart
+
+  if should_restart == false
+    # Mark child as dead (pid = -1), continue loop
+    children[found] = {id: spec.id, pid: -1}
+    _sup_loop(state)
+    return nil
+  end
+
+  # Check restart intensity
+  let now = time_ms()
+  let window = state.max_seconds
+  let max_r = state.max_restarts
+
+  # Record this restart
+  push(state.restart_times, now)
+
+  # Count restarts within the window
+  let count = 0
+  let j = 0
+  while j < len(state.restart_times)
+    if now - state.restart_times[j] <= window
+      count += 1
+    end
+    j += 1
+  end
+
+  if count > max_r
+    error("max restart intensity reached")
+  end
+
+  let strategy = state.strategy
+
+  if strategy == "one_for_one"
+    let new_pid = _sup_start_child(spec)
+    children[found] = {id: spec.id, pid: new_pid}
+    _sup_loop(state)
+  elif strategy == "one_for_all"
+    # Kill all living children
+    let k = 0
+    while k < len(children)
+      if children[k].pid != -1 and children[k].pid != dead_pid
+        kill(children[k].pid, "shutdown")
+      end
+      k += 1
+    end
+
+    # Drain remaining DOWN messages for killed children
+    let alive_count = 0
+    let m = 0
+    while m < len(children)
+      if children[m].pid != -1 and children[m].pid != dead_pid
+        alive_count += 1
+      end
+      m += 1
+    end
+
+    let drained = 0
+    while drained < alive_count
+      receive
+      when {tag: "DOWN"}
+        drained += 1
+      end
+    end
+
+    # Restart all children in order
+    let n = 0
+    while n < len(specs)
+      let new_pid = _sup_start_child(specs[n])
+      children[n] = {id: specs[n].id, pid: new_pid}
+      n += 1
+    end
+    _sup_loop(state)
+  else
+    error("unknown supervisor strategy: {strategy}")
+  end
+end
+
+# ─── handle which_children query ─────────────────────────────
+
+fn _sup_handle_which_children(state, reply_to)
+  let result = []
+  let i = 0
+  while i < len(state.children)
+    let child = state.children[i]
+    let spec = state.specs[i]
+    let restart = "permanent"
+    if has_key(spec, "restart")
+      restart = spec.restart
+    end
+    push(result, {id: spec.id, pid: child.pid, restart: restart})
+    i += 1
+  end
+  send(reply_to, {tag: "supervisor_children", children: result})
+end
+
+# ─── supervisor_start(spec) → {pid: <pid>} ──────────────────
+
+fn _supervisor_start(spec)
+  let strategy = "one_for_one"
+  if has_key(spec, "strategy")
+    strategy = spec.strategy
+  end
+
+  let max_restarts = 3
+  if has_key(spec, "max_restarts")
+    max_restarts = spec.max_restarts
+  end
+
+  let max_seconds = 5000
+  if has_key(spec, "max_seconds")
+    max_seconds = spec.max_seconds
+  end
+
+  let child_specs = spec.children
+  let sup_name = nil
+  if has_key(spec, "name")
+    sup_name = spec.name
+  end
+
+  let sup_pid = spawn(fn()
+    # Start all children in order
+    let children = []
+    let i = 0
+    while i < len(child_specs)
+      let child_spec = child_specs[i]
+      let pid = _sup_start_child(child_spec)
+      push(children, {id: child_spec.id, pid: pid})
+      i += 1
+    end
+
+    let state = {
+      strategy: strategy,
+      children: children,
+      specs: child_specs,
+      max_restarts: max_restarts,
+      max_seconds: max_seconds,
+      restart_times: []
+    }
+
+    if sup_name != nil
+      register(sup_name, self())
+    end
+
+    _sup_loop(state)
+  end)
+
+  {pid: sup_pid}
+end
+
+# ─── supervisor_which_children(pid_or_name) → [...] ─────────
+
+fn _supervisor_which_children(target)
+  send(target, {tag: "supervisor_which_children", reply_to: self()})
+  receive
+  when {tag: "supervisor_children", children: children}
+    children
+  end
+end
+
+# ─── Namespace ───────────────────────────────────────────────
+
+let supervisor = {
+  start: _supervisor_start,
+  which_children: _supervisor_which_children
+}

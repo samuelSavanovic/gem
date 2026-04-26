@@ -489,3 +489,31 @@ GemVal gem_whereis_builtin(void *_env, GemVal *args, int argc) {
     if (pid < 0) return GEM_NIL;
     return gem_int(pid);
 }
+
+GemVal gem_time_ms_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env; (void)args; (void)argc;
+    return gem_int(gem_now_ms());
+}
+
+GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_INT || args[1].type != VAL_STRING) {
+        gem_error("exit: expected (pid, reason)");
+    }
+    int pid = (int)args[0].ival;
+    const char *reason = args[1].sval;
+    if (pid < 0 || pid >= GEM_MAX_PROCS) return GEM_NIL;
+    GemProcess *proc = &gem_proc_table[pid];
+    if (proc->state == GEM_PROC_DEAD || proc->state == GEM_PROC_FREE) return GEM_NIL;
+
+    /* Mark the process as dead, deliver DOWN messages, unregister name */
+    proc->exit_reason = reason;
+    if (proc->coro) {
+        mco_destroy(proc->coro);
+        proc->coro = NULL;
+    }
+    gem_deliver_down_messages(pid, reason);
+    gem_unregister_name_for_pid(pid);
+    proc->state = GEM_PROC_DEAD;
+    return gem_bool(1);
+}

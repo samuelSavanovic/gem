@@ -168,7 +168,9 @@ fn make_codegen(source_name)
     monitor: "gem_monitor_builtin",
     spawn_monitor: "gem_spawn_monitor_builtin",
     register: "gem_register_builtin",
-    whereis: "gem_whereis_builtin"
+    whereis: "gem_whereis_builtin",
+    time_ms: "gem_time_ms_builtin",
+    kill: "gem_exit_builtin"
   }
   let builtins = {}
   for k, _ in builtin_fns
@@ -351,6 +353,14 @@ fn make_codegen(source_name)
           end
         end
       end
+    when {tag: "table", entries: entries}
+      for i = 0, len(entries)
+        collect_free_node(entries[i].value, defined, free)
+      end
+    when {tag: "array", elements: elements}
+      for i = 0, len(elements)
+        collect_free_node(elements[i], defined, free)
+      end
     when {tag: "block", stmts: stmts}
       let d = set_union(defined, {})
       for i = 0, len(stmts)
@@ -470,6 +480,14 @@ fn make_codegen(source_name)
       end
       if rm_after_body != nil
         walk_captures(rm_after_body, scope_vars, captured)
+      end
+    when {tag: "table", entries: entries}
+      for i = 0, len(entries)
+        walk_captures_node(entries[i].value, scope_vars, captured)
+      end
+    when {tag: "array", elements: elements}
+      for i = 0, len(elements)
+        walk_captures_node(elements[i], scope_vars, captured)
       end
     when {tag: "block", stmts: stmts}
       walk_captures(stmts, scope_vars, captured)

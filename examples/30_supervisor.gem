@@ -1,0 +1,280 @@
+# Supervisor tests
+load "std/supervisor"
+
+# Helper: a worker that loops receiving messages until told to stop.
+# Sends {tag: "started", id: id} to parent on startup.
+fn make_worker(id, parent)
+  spawn(fn()
+    send(parent, {tag: "started", id: id, pid: self()})
+    let running = true
+    while running
+      receive
+      when {tag: "crash"}
+        error("crash")
+      when {tag: "exit_normal"}
+        running = false
+      end
+    end
+  end)
+end
+
+# ─── Test 1: one_for_one — crash one, only it restarts ───────
+
+spawn(fn()
+  let me = self()
+
+  let result = supervisor.start({
+    strategy: "one_for_one",
+    children: [
+      {id: "w1", start: fn() make_worker("w1", me) end},
+      {id: "w2", start: fn() make_worker("w2", me) end},
+      {id: "w3", start: fn() make_worker("w3", me) end}
+    ]
+  })
+
+  # Collect initial start notifications
+  let w1_pid = nil
+  let w2_pid = nil
+  let w3_pid = nil
+  let count = 0
+  while count < 3
+    receive
+    when {tag: "started", id: id, pid: p}
+      if id == "w1"
+        w1_pid = p
+      elif id == "w2"
+        w2_pid = p
+      elif id == "w3"
+        w3_pid = p
+      end
+      count += 1
+    end
+  end
+
+  # Crash w2
+  send(w2_pid, {tag: "crash"})
+
+  # Wait for w2 to restart (new "started" message)
+  receive
+  when {tag: "started", id: "w2", pid: new_pid}
+    if new_pid != w2_pid
+      print("test1: one_for_one restart ok")
+    else
+      print("test1: FAIL same pid")
+    end
+  end
+end)
+
+# ─── Test 2: one_for_all — crash one, all restart ────────────
+
+spawn(fn()
+  let me = self()
+
+  let result = supervisor.start({
+    strategy: "one_for_all",
+    children: [
+      {id: "a1", start: fn() make_worker("a1", me) end},
+      {id: "a2", start: fn() make_worker("a2", me) end},
+      {id: "a3", start: fn() make_worker("a3", me) end}
+    ]
+  })
+
+  # Collect initial pids
+  let old_pids = {}
+  let count = 0
+  while count < 3
+    receive
+    when {tag: "started", id: id, pid: p}
+      old_pids[id] = p
+      count += 1
+    end
+  end
+
+  # Crash a2 — all should restart
+  send(old_pids["a2"], {tag: "crash"})
+
+  # Collect 3 restart notifications
+  let new_pids = {}
+  let rcount = 0
+  while rcount < 3
+    receive
+    when {tag: "started", id: id, pid: p}
+      new_pids[id] = p
+      rcount += 1
+    end
+  end
+
+  let all_new = true
+  if new_pids["a1"] == old_pids["a1"]
+    all_new = false
+  end
+  if new_pids["a2"] == old_pids["a2"]
+    all_new = false
+  end
+  if new_pids["a3"] == old_pids["a3"]
+    all_new = false
+  end
+  if all_new
+    print("test2: one_for_all restart ok")
+  else
+    print("test2: FAIL not all restarted")
+  end
+end)
+
+# ─── Test 3: Restart policies — permanent, temporary, transient ──
+
+spawn(fn()
+  let me = self()
+
+  let result = supervisor.start({
+    strategy: "one_for_one",
+    children: [
+      {id: "perm", restart: "permanent", start: fn() make_worker("perm", me) end},
+      {id: "temp", restart: "temporary", start: fn() make_worker("temp", me) end},
+      {id: "trans", restart: "transient", start: fn() make_worker("trans", me) end}
+    ]
+  })
+
+  # Collect initial pids
+  let pids = {}
+  let count = 0
+  while count < 3
+    receive
+    when {tag: "started", id: id, pid: p}
+      pids[id] = p
+      count += 1
+    end
+  end
+
+  # Crash "temp" — should NOT restart (temporary)
+  send(pids["temp"], {tag: "crash"})
+
+  # Crash "trans" — should restart (transient + abnormal exit)
+  send(pids["trans"], {tag: "crash"})
+
+  # Wait for transient restart
+  receive
+  when {tag: "started", id: "trans", pid: new_trans}
+    print("test3: transient crash restarted ok")
+    # Now exit transient normally — should NOT restart
+    send(new_trans, {tag: "exit_normal"})
+  end
+
+  # Crash permanent — should restart
+  send(pids["perm"], {tag: "crash"})
+  receive
+  when {tag: "started", id: "perm"}
+    print("test3: permanent crash restarted ok")
+  end
+
+  # Give a moment for any unexpected restarts, then check with timeout
+  receive
+  when {tag: "started", id: "temp"}
+    print("test3: FAIL temp restarted")
+  after 0
+    print("test3: temporary not restarted ok")
+  end
+end)
+
+# ─── Test 4: Max restart intensity ──────────────────────────
+
+spawn(fn()
+  let me = self()
+
+  let sup_result = supervisor.start({
+    strategy: "one_for_one",
+    max_restarts: 2,
+    max_seconds: 5000,
+    children: [
+      {id: "fragile", start: fn() make_worker("fragile", me) end}
+    ]
+  })
+
+  # Wait for initial start
+  receive
+  when {tag: "started", id: "fragile", pid: p1}
+    send(p1, {tag: "crash"})
+  end
+
+  # 1st restart
+  receive
+  when {tag: "started", id: "fragile", pid: p2}
+    send(p2, {tag: "crash"})
+  end
+
+  # 2nd restart
+  receive
+  when {tag: "started", id: "fragile", pid: p3}
+    send(p3, {tag: "crash"})
+  end
+
+  # 3rd crash should exceed max_restarts=2
+  # The supervisor itself should crash — we monitor it to detect
+  monitor(sup_result.pid)
+  receive
+  when {tag: "DOWN", reason: reason}
+    print("test4: supervisor crashed: {reason}")
+  when {tag: "started", id: "fragile"}
+    print("test4: FAIL should not restart")
+  end
+end)
+
+# ─── Test 5: supervisor_which_children ───────────────────────
+
+spawn(fn()
+  let me = self()
+
+  let result = supervisor.start({
+    strategy: "one_for_one",
+    children: [
+      {id: "wc1", start: fn() make_worker("wc1", me) end},
+      {id: "wc2", restart: "temporary", start: fn() make_worker("wc2", me) end}
+    ]
+  })
+
+  # Wait for children to start
+  let count = 0
+  while count < 2
+    receive
+    when {tag: "started"}
+      count += 1
+    end
+  end
+
+  let children = supervisor.which_children(result.pid)
+  print("test5: children count={len(children)}")
+  let i = 0
+  while i < len(children)
+    let c = children[i]
+    print("test5: id={c.id} restart={c.restart}")
+    i += 1
+  end
+end)
+
+# ─── Test 6: Named supervisor ───────────────────────────────
+
+spawn(fn()
+  let me = self()
+
+  supervisor.start({
+    strategy: "one_for_one",
+    name: "my_sup",
+    children: [
+      {id: "named_w", start: fn() make_worker("named_w", me) end}
+    ]
+  })
+
+  # Wait for child to start
+  receive
+  when {tag: "started", id: "named_w"}
+    nil
+  end
+
+  let sup_pid = whereis("my_sup")
+  if sup_pid != nil
+    let children = supervisor.which_children("my_sup")
+    print("test6: named supervisor ok, children={len(children)}")
+  else
+    print("test6: FAIL whereis returned nil")
+  end
+end)
