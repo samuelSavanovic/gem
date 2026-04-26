@@ -20,7 +20,7 @@ actual=$( for f in "$SCRIPT_DIR"/[0-9]*.gem; do
     bin_file="/tmp/gem_${base}"
     "$COMPILER" "$f" --emit-c > "$c_file"
     cc -o "$bin_file" "$c_file" "$RUNTIME_DIR"/gem_*.c -I "$RUNTIME_DIR" -std=c11 -O2 \
-        $(pkg-config --cflags --libs bdw-gc)
+        $(pkg-config --cflags --libs bdw-gc) -lm
     "$bin_file" 2>&1
 done )
 

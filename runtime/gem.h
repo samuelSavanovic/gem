@@ -176,6 +176,31 @@ GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc);
 GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc);
 GemVal gem_read_file_fn(void *_env, GemVal *args, int argc);
 GemVal gem_write_file_fn(void *_env, GemVal *args, int argc);
+GemVal gem_delete_fn(void *_env, GemVal *args, int argc);
+GemVal gem_pop_fn(void *_env, GemVal *args, int argc);
+GemVal gem_values_fn(void *_env, GemVal *args, int argc);
+GemVal gem_eprint_fn(void *_env, GemVal *args, int argc);
+GemVal gem_exit_process_fn(void *_env, GemVal *args, int argc);
+GemVal gem_argv_fn(void *_env, GemVal *args, int argc);
+GemVal gem_sort_fn(void *_env, GemVal *args, int argc);
+GemVal gem_floor_fn(void *_env, GemVal *args, int argc);
+GemVal gem_ceil_fn(void *_env, GemVal *args, int argc);
+GemVal gem_round_fn(void *_env, GemVal *args, int argc);
+GemVal gem_abs_fn(void *_env, GemVal *args, int argc);
+GemVal gem_pow_fn(void *_env, GemVal *args, int argc);
+GemVal gem_sqrt_fn(void *_env, GemVal *args, int argc);
+GemVal gem_random_fn(void *_env, GemVal *args, int argc);
+GemVal gem_append_file_fn(void *_env, GemVal *args, int argc);
+GemVal gem_getenv_fn(void *_env, GemVal *args, int argc);
+GemVal gem_input_fn(void *_env, GemVal *args, int argc);
+GemVal gem_insert_fn(void *_env, GemVal *args, int argc);
+GemVal gem_remove_at_fn(void *_env, GemVal *args, int argc);
+
+/* ─── Runtime initialization (stores argc/argv, seeds RNG) ─── */
+
+void gem_init(int argc, char **argv);
+extern int gem_stored_argc;
+extern char **gem_stored_argv;
 
 /* ─── Helpers used by codegen ─── */
 

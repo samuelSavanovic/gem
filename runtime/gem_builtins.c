@@ -5,6 +5,7 @@
 #include "stb_ds.h"
 #include "gem.h"
 #include <errno.h>
+#include <math.h>
 
 /* ─── Built-in: print ─── */
 
@@ -502,4 +503,335 @@ GemVal gem_pcall_fn(void *_env, GemVal *args, int argc) {
     }
 
     return result;
+}
+
+/* ─── Built-in: delete (remove key from table) ─── */
+
+GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("delete: expected 2 arguments"); }
+    if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "delete: expected table, got %s", gem_type_str(args[0])); gem_error(buf); }
+    GemTable *t = args[0].table;
+    GemVal key = args[1];
+    int pos = -1;
+
+    if (key.type == VAL_STRING) {
+        if (t->str_index != NULL) {
+            ptrdiff_t idx = shgeti(t->str_index, key.sval);
+            if (idx >= 0) pos = t->str_index[idx].value;
+        }
+    } else {
+        for (int i = 0; i < t->len; i++) {
+            if (gem_val_eq(t->keys[i], key)) { pos = i; break; }
+        }
+    }
+
+    if (pos < 0) return GEM_NIL;
+    GemVal removed = t->vals[pos];
+
+    if (key.type == VAL_STRING && t->str_index != NULL) {
+        shdel(t->str_index, key.sval);
+    }
+
+    int last = t->len - 1;
+    if (pos < last) {
+        GemVal moved_key = t->keys[last];
+        t->keys[pos] = moved_key;
+        t->vals[pos] = t->vals[last];
+        if (moved_key.type == VAL_STRING && t->str_index != NULL) {
+            shput(t->str_index, moved_key.sval, pos);
+        }
+    }
+    t->len--;
+    return removed;
+}
+
+/* ─── Built-in: pop (remove and return last element) ─── */
+
+GemVal gem_pop_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("pop: expected 1 argument"); }
+    if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "pop: expected table, got %s", gem_type_str(args[0])); gem_error(buf); }
+    GemTable *t = args[0].table;
+    if (t->len == 0) { gem_error("pop: empty table"); }
+    t->len--;
+    GemVal removed = t->vals[t->len];
+    GemVal removed_key = t->keys[t->len];
+    if (removed_key.type == VAL_STRING && t->str_index != NULL) {
+        shdel(t->str_index, removed_key.sval);
+    }
+    return removed;
+}
+
+/* ─── Built-in: values ─── */
+
+GemVal gem_values_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("values: expected 1 argument"); }
+    if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "values: expected table, got %s", gem_type_str(args[0])); gem_error(buf); }
+    GemTable *t = args[0].table;
+    GemVal result = gem_table_new();
+    for (int i = 0; i < t->len; i++) {
+        gem_table_set(result, gem_int(i), t->vals[i]);
+    }
+    return result;
+}
+
+/* ─── Built-in: eprint (print to stderr) ─── */
+
+GemVal gem_eprint_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    for (int i = 0; i < argc; i++) {
+        if (i > 0) fprintf(stderr, " ");
+        GemVal v = args[i];
+        switch (v.type) {
+            case VAL_NIL: fprintf(stderr, "nil"); break;
+            case VAL_BOOL: fprintf(stderr, "%s", v.bval ? "true" : "false"); break;
+            case VAL_INT: fprintf(stderr, "%lld", (long long)v.ival); break;
+            case VAL_FLOAT: fprintf(stderr, "%g", v.fval); break;
+            case VAL_STRING: fprintf(stderr, "%s", v.sval); break;
+            case VAL_FN: fprintf(stderr, "<fn>"); break;
+            case VAL_TABLE: fprintf(stderr, "<table:%d>", v.table->len); break;
+            case VAL_BUFFER: fprintf(stderr, "<buffer:%d>", v.buffer->len); break;
+            case VAL_REF: fprintf(stderr, "#Ref<%lld>", (long long)v.rval); break;
+        }
+    }
+    fprintf(stderr, "\n");
+    return GEM_NIL;
+}
+
+/* ─── Built-in: exit (exit with code) ─── */
+
+GemVal gem_exit_process_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    int code = 0;
+    if (argc > 0 && args[0].type == VAL_INT) code = (int)args[0].ival;
+    exit(code);
+    return GEM_NIL;
+}
+
+/* ─── Built-in: argv (return command-line args as array) ─── */
+
+GemVal gem_argv_fn(void *_env, GemVal *args, int argc) {
+    (void)_env; (void)args; (void)argc;
+    GemVal result = gem_table_new();
+    for (int i = 0; i < gem_stored_argc; i++) {
+        gem_table_set(result, gem_int(i), gem_string(gem_stored_argv[i]));
+    }
+    return result;
+}
+
+/* ─── Built-in: sort (in-place, optional comparator) ─── */
+
+static GemVal gem_sort_cmp_fn_global;
+
+static int gem_default_cmp(const void *a, const void *b) {
+    GemVal va = *(const GemVal *)a;
+    GemVal vb = *(const GemVal *)b;
+    if (va.type == VAL_INT && vb.type == VAL_INT) {
+        return (va.ival > vb.ival) - (va.ival < vb.ival);
+    }
+    if (va.type == VAL_FLOAT && vb.type == VAL_FLOAT) {
+        return (va.fval > vb.fval) - (va.fval < vb.fval);
+    }
+    if (va.type == VAL_STRING && vb.type == VAL_STRING) {
+        return strcmp(va.sval, vb.sval);
+    }
+    if ((va.type == VAL_INT || va.type == VAL_FLOAT) &&
+        (vb.type == VAL_INT || vb.type == VAL_FLOAT)) {
+        double da = va.type == VAL_INT ? (double)va.ival : va.fval;
+        double db = vb.type == VAL_INT ? (double)vb.ival : vb.fval;
+        return (da > db) - (da < db);
+    }
+    return (int)va.type - (int)vb.type;
+}
+
+static int gem_custom_cmp(const void *a, const void *b) {
+    GemVal cmp_args[2] = {*(const GemVal *)a, *(const GemVal *)b};
+    GemVal result = gem_sort_cmp_fn_global.fn(gem_sort_cmp_fn_global.env, cmp_args, 2);
+    if (result.type == VAL_INT) {
+        int64_t v = result.ival;
+        return (v > 0) - (v < 0);
+    }
+    if (result.type == VAL_FLOAT) return (result.fval > 0) - (result.fval < 0);
+    return 0;
+}
+
+GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("sort: expected 1-2 arguments"); }
+    if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "sort: expected table, got %s", gem_type_str(args[0])); gem_error(buf); }
+    GemTable *t = args[0].table;
+    if (t->len <= 1) return args[0];
+
+    if (argc >= 2 && args[1].type == VAL_FN) {
+        gem_sort_cmp_fn_global = args[1];
+        qsort(t->vals, (size_t)t->len, sizeof(GemVal), gem_custom_cmp);
+    } else {
+        qsort(t->vals, (size_t)t->len, sizeof(GemVal), gem_default_cmp);
+    }
+    for (int i = 0; i < t->len; i++) {
+        t->keys[i] = gem_int(i);
+    }
+    return args[0];
+}
+
+/* ─── Built-in: math functions ─── */
+
+static double gem_to_num(GemVal v, const char *fn_name) {
+    if (v.type == VAL_INT) return (double)v.ival;
+    if (v.type == VAL_FLOAT) return v.fval;
+    char buf[128]; snprintf(buf, sizeof(buf), "%s: expected number, got %s", fn_name, gem_type_str(v));
+    gem_error(buf);
+    return 0;
+}
+
+GemVal gem_floor_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("floor: expected 1 argument"); }
+    if (args[0].type == VAL_INT) return args[0];
+    return gem_int((int64_t)floor(gem_to_num(args[0], "floor")));
+}
+
+GemVal gem_ceil_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("ceil: expected 1 argument"); }
+    if (args[0].type == VAL_INT) return args[0];
+    return gem_int((int64_t)ceil(gem_to_num(args[0], "ceil")));
+}
+
+GemVal gem_round_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("round: expected 1 argument"); }
+    if (args[0].type == VAL_INT) return args[0];
+    return gem_int((int64_t)round(gem_to_num(args[0], "round")));
+}
+
+GemVal gem_abs_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("abs: expected 1 argument"); }
+    if (args[0].type == VAL_INT) {
+        int64_t v = args[0].ival;
+        return gem_int(v < 0 ? -v : v);
+    }
+    return gem_float(fabs(gem_to_num(args[0], "abs")));
+}
+
+GemVal gem_pow_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("pow: expected 2 arguments"); }
+    double base = gem_to_num(args[0], "pow");
+    double exp = gem_to_num(args[1], "pow");
+    double result = pow(base, exp);
+    if (args[0].type == VAL_INT && args[1].type == VAL_INT && args[1].ival >= 0) {
+        return gem_int((int64_t)result);
+    }
+    return gem_float(result);
+}
+
+GemVal gem_sqrt_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("sqrt: expected 1 argument"); }
+    double v = gem_to_num(args[0], "sqrt");
+    if (v < 0) { gem_error("sqrt: negative argument"); }
+    return gem_float(sqrt(v));
+}
+
+/* ─── Built-in: random ─── */
+
+extern uint64_t gem_rng_next(void);
+
+GemVal gem_random_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc > 0 && args[0].type == VAL_INT) {
+        int64_t n = args[0].ival;
+        if (n <= 0) { gem_error("random: argument must be positive"); }
+        return gem_int((int64_t)(gem_rng_next() % (uint64_t)n));
+    }
+    return gem_float((double)gem_rng_next() / (double)UINT64_MAX);
+}
+
+/* ─── Built-in: append_file ─── */
+
+GemVal gem_append_file_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_STRING || args[1].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "append_file: expected (string, string), got (%s, %s)",
+            argc < 1 ? "nothing" : gem_type_str(args[0]), argc < 2 ? "nothing" : gem_type_str(args[1]));
+        gem_error(buf);
+    }
+    FILE *f = fopen(args[0].sval, "ab");
+    if (!f) { char buf[512]; snprintf(buf, sizeof(buf), "append_file: cannot open '%s'", args[0].sval); gem_error(buf); }
+    size_t len = strlen(args[1].sval);
+    size_t nwritten = fwrite(args[1].sval, 1, len, f);
+    fclose(f);
+    if (nwritten != len) { char buf[512]; snprintf(buf, sizeof(buf), "append_file: write failed for '%s'", args[0].sval); gem_error(buf); }
+    return GEM_NIL;
+}
+
+/* ─── Built-in: getenv ─── */
+
+GemVal gem_getenv_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) { char buf[128]; snprintf(buf, sizeof(buf), "getenv: expected string, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
+    const char *val = getenv(args[0].sval);
+    if (!val) return GEM_NIL;
+    return gem_string(val);
+}
+
+/* ─── Built-in: input (read line from stdin) ─── */
+
+GemVal gem_input_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc > 0 && args[0].type == VAL_STRING) {
+        printf("%s", args[0].sval);
+        fflush(stdout);
+    }
+    char buf[4096];
+    if (!fgets(buf, sizeof(buf), stdin)) return GEM_NIL;
+    size_t len = strlen(buf);
+    if (len > 0 && buf[len - 1] == '\n') buf[--len] = '\0';
+    if (len > 0 && buf[len - 1] == '\r') buf[--len] = '\0';
+    return gem_string(buf);
+}
+
+/* ─── Built-in: insert (insert at index in array) ─── */
+
+GemVal gem_insert_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 3) { gem_error("insert: expected 3 arguments (table, index, value)"); }
+    if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "insert: expected table, got %s", gem_type_str(args[0])); gem_error(buf); }
+    if (args[1].type != VAL_INT) { gem_error("insert: index must be an integer"); }
+    GemTable *t = args[0].table;
+    int64_t idx = args[1].ival;
+    if (idx < 0 || idx > t->len) { gem_error("insert: index out of bounds"); }
+    if (t->len >= t->cap) gem_table_grow(t);
+    int pos = (int)idx;
+    memmove(&t->vals[pos + 1], &t->vals[pos], ((size_t)(t->len - pos)) * sizeof(GemVal));
+    t->vals[pos] = args[2];
+    t->len++;
+    for (int i = pos; i < t->len; i++) {
+        t->keys[i] = gem_int(i);
+    }
+    return args[0];
+}
+
+/* ─── Built-in: remove_at (remove element at index) ─── */
+
+GemVal gem_remove_at_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("remove_at: expected 2 arguments (table, index)"); }
+    if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "remove_at: expected table, got %s", gem_type_str(args[0])); gem_error(buf); }
+    if (args[1].type != VAL_INT) { gem_error("remove_at: index must be an integer"); }
+    GemTable *t = args[0].table;
+    int64_t idx = args[1].ival;
+    if (idx < 0 || idx >= t->len) { gem_error("remove_at: index out of bounds"); }
+    int pos = (int)idx;
+    GemVal removed = t->vals[pos];
+    memmove(&t->vals[pos], &t->vals[pos + 1], ((size_t)(t->len - pos - 1)) * sizeof(GemVal));
+    t->len--;
+    for (int i = pos; i < t->len; i++) {
+        t->keys[i] = gem_int(i);
+    }
+    return removed;
 }

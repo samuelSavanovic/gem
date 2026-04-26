@@ -1,0 +1,87 @@
+# Test batch 1 builtins: delete, pop, values, eprint, exit, argv, sort
+
+# ─── delete ───
+let d = {a: 1, b: 2, c: 3}
+let removed = delete(d, "b")
+print("delete removed:", removed)
+print("delete len:", len(d))
+print("delete has_key b:", has_key(d, "b"))
+print("delete has_key a:", has_key(d, "a"))
+print("delete has_key c:", has_key(d, "c"))
+
+# delete non-existent key returns nil
+let d2 = {x: 10}
+let r = delete(d2, "missing")
+print("delete missing:", r)
+
+# delete from integer-keyed table
+let arr = [10, 20, 30]
+let dr = delete(arr, 1)
+print("delete int key:", dr)
+print("delete int len:", len(arr))
+
+# ─── pop ───
+let stack = [1, 2, 3, 4, 5]
+let top = pop(stack)
+print("pop:", top)
+print("pop len:", len(stack))
+let top2 = pop(stack)
+print("pop2:", top2)
+
+# pop until empty
+let small = [42]
+print("pop single:", pop(small))
+print("pop empty len:", len(small))
+
+# ─── values ───
+let tbl = {name: "gem", version: 1, active: true}
+let vals = values(tbl)
+print("values len:", len(vals))
+
+# values of array
+let arr2 = [10, 20, 30]
+let v2 = values(arr2)
+print("values arr:", v2[0], v2[1], v2[2])
+
+# ─── eprint ───
+eprint("this goes to stderr")
+eprint("stderr multi:", 42, true, nil)
+
+# ─── sort ───
+let nums = [5, 3, 1, 4, 2]
+sort(nums)
+print("sort nums:", nums[0], nums[1], nums[2], nums[3], nums[4])
+
+# sort strings
+let words = ["banana", "apple", "cherry"]
+sort(words)
+print("sort strings:", words[0], words[1], words[2])
+
+# sort with custom comparator (descending)
+let desc = [1, 5, 3, 2, 4]
+sort(desc, fn(a, b) b - a end)
+print("sort desc:", desc[0], desc[1], desc[2], desc[3], desc[4])
+
+# sort empty and single
+let empty = []
+sort(empty)
+print("sort empty:", len(empty))
+
+let single = [42]
+sort(single)
+print("sort single:", single[0])
+
+# sort returns the table (mutates in place)
+let orig = [3, 1, 2]
+let returned = sort(orig)
+print("sort returns same:", orig[0], returned[0])
+
+# sort mixed int/float
+let mixed = [3.0, 1, 2.5, 2]
+sort(mixed)
+print("sort mixed:", mixed[0], mixed[1], mixed[2], mixed[3])
+
+# ─── argv ───
+let args = argv()
+print("argv type:", type(args))
+print("argv len >= 1:", len(args) >= 1)

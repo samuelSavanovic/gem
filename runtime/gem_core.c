@@ -3,6 +3,7 @@
  */
 
 #include <gc.h>
+#include <time.h>
 
 #define STB_DS_IMPLEMENTATION
 #define STBDS_REALLOC(c, p, s) GC_REALLOC((p), (s))
@@ -14,6 +15,35 @@
 /* ─── Globals ─── */
 
 GemVal GEM_NIL = {VAL_NIL, {0}};
+
+/* ─── Stored argc/argv for argv() builtin ─── */
+
+int gem_stored_argc = 0;
+char **gem_stored_argv = NULL;
+
+/* ─── RNG state (xorshift64*) ─── */
+
+static uint64_t gem_rng_state = 0;
+
+uint64_t gem_rng_next(void) {
+    if (gem_rng_state == 0) {
+        gem_rng_state = (uint64_t)time(NULL) ^ ((uint64_t)clock() << 32);
+        if (gem_rng_state == 0) gem_rng_state = 1;
+    }
+    uint64_t x = gem_rng_state;
+    x ^= x >> 12;
+    x ^= x << 25;
+    x ^= x >> 27;
+    gem_rng_state = x;
+    return x * 0x2545F4914F6CDD1DULL;
+}
+
+void gem_init(int argc, char **argv) {
+    gem_stored_argc = argc;
+    gem_stored_argv = argv;
+    gem_rng_state = (uint64_t)time(NULL) ^ ((uint64_t)clock() << 32);
+    if (gem_rng_state == 0) gem_rng_state = 1;
+}
 
 /* ─── Single-character string cache ─── */
 

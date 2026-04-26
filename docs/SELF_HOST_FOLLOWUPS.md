@@ -75,6 +75,15 @@ The `extern fn` type map only handled `Int`, `Float`, `String`, `Bool`, `Ptr`, a
 ### 9. Destructuring / multi-return — DONE
 Implemented `let {a, b} = expr` (table) and `let [a, b] = expr` (array) destructuring. Desugars at parse time to a temp variable + individual lets. No renaming, nesting, rest/splat, or defaults (v0 scope).
 
+### 10. Core C builtins — DONE
+Added 19 new C builtins covering the gaps identified in CORE_GAPS.md:
+- **Table ops:** `delete(tbl, key)`, `pop(arr)`, `values(tbl)`, `insert(arr, i, val)`, `remove_at(arr, i)`
+- **I/O:** `eprint(...)`, `exit(code)`, `argv()`, `append_file(path, content)`, `getenv(name)`, `input([prompt])`
+- **Sort:** `sort(arr[, cmp])` with default and custom comparator via qsort
+- **Math:** `floor`, `ceil`, `round`, `abs`, `pow`, `sqrt`, `random([n])`
+
+Codegen now emits `int main(int argc, char **argv)` with `gem_init(argc, argv)` for argv support. Two-stage bootstrap required (main signature change). The compiler's `extern fn gem_eprint`, `gem_exit_process`, `gem_get_argc`, `gem_get_argv` hacks can now be replaced with builtins.
+
 ## Stdlib Migration — Move Builtins to Gem
 
 **Goal:** Keep the C runtime minimal. `chr`/`ord` must stay in C (no way to construct arbitrary bytes in pure Gem).

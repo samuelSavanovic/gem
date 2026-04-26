@@ -182,7 +182,26 @@ fn make_codegen(source_name)
     cancel_timer: "gem_cancel_timer_builtin",
     process_info: "gem_process_info_builtin",
     read_file: "gem_read_file_fn",
-    write_file: "gem_write_file_fn"
+    write_file: "gem_write_file_fn",
+    delete: "gem_delete_fn",
+    pop: "gem_pop_fn",
+    values: "gem_values_fn",
+    eprint: "gem_eprint_fn",
+    exit: "gem_exit_process_fn",
+    argv: "gem_argv_fn",
+    sort: "gem_sort_fn",
+    floor: "gem_floor_fn",
+    ceil: "gem_ceil_fn",
+    round: "gem_round_fn",
+    abs: "gem_abs_fn",
+    pow: "gem_pow_fn",
+    sqrt: "gem_sqrt_fn",
+    random: "gem_random_fn",
+    append_file: "gem_append_file_fn",
+    getenv: "gem_getenv_fn",
+    input: "gem_input_fn",
+    insert: "gem_insert_fn",
+    remove_at: "gem_remove_at_fn"
   }
   let builtins = {}
   for k, _ in builtin_fns
@@ -192,6 +211,7 @@ fn make_codegen(source_name)
   let top_level_vars = {}
   let top_level_boxed = {}
   let in_top_level = false
+  let local_names = {}
 
   # ─── Helpers ──
 
@@ -227,13 +247,13 @@ fn make_codegen(source_name)
 
     match node
     when {tag: "var", name: name}
-      if not set_contains(defined, name) and not set_contains(builtins, name) and not set_contains(defined_fns, name)
+      if not set_contains(defined, name) and (not set_contains(builtins, name) or set_contains(local_names, name)) and not set_contains(defined_fns, name)
         set_add(free, name)
       end
     when {tag: "let", value: value}
       collect_free_node(value, defined, free)
     when {tag: "assign", name: name, value: value}
-      if not set_contains(defined, name) and not set_contains(builtins, name) and not set_contains(defined_fns, name)
+      if not set_contains(defined, name) and (not set_contains(builtins, name) or set_contains(local_names, name)) and not set_contains(defined_fns, name)
         set_add(free, name)
       end
       collect_free_node(value, defined, free)
@@ -619,10 +639,12 @@ fn make_codegen(source_name)
     when {tag: "nil"}
       return {expr: "GEM_NIL", setup: ""}
     when {tag: "var", name: name}
-      if has_key(builtin_fns, name)
-        return {expr: "gem_make_fn({builtin_fns[name]}, NULL)", setup: ""}
-      elif set_contains(defined_fns, name)
-        return {expr: "gem_make_fn(gem_fn_{name}, NULL)", setup: ""}
+      if not set_contains(local_names, name)
+        if has_key(builtin_fns, name)
+          return {expr: "gem_make_fn({builtin_fns[name]}, NULL)", setup: ""}
+        elif set_contains(defined_fns, name)
+          return {expr: "gem_make_fn(gem_fn_{name}, NULL)", setup: ""}
+        end
       end
       let mname = mangle(name)
       if set_contains(boxed_vars, name) or set_contains(top_level_boxed, name)
@@ -782,9 +804,9 @@ fn make_codegen(source_name)
           return {expr: "gem_error_at_fn(\"{escaped_file}\", {line}, NULL, 0)", setup: ca.setup}
         end
         return {expr: "gem_error_at_fn(\"{escaped_file}\", {line}, {ca.arr_name}, {ca.argc})", setup: ca.setup}
-      elif has_key(builtin_fns, name)
+      elif has_key(builtin_fns, name) and not set_contains(local_names, name)
         return emit_direct_call(builtin_fns[name], "NULL", compile_args(args))
-      elif set_contains(defined_fns, name)
+      elif set_contains(defined_fns, name) and not set_contains(local_names, name)
         return emit_direct_call("gem_fn_{name}", "NULL", compile_args(args))
       end
     end
@@ -1677,10 +1699,14 @@ fn make_codegen(source_name)
       set_add(scope_vars, node.block_param)
     end
     collect_top_let_names(body, scope_vars)
-    let captured = find_captured_in_scope(body, scope_vars)
 
     let saved_boxed = boxed_vars
     let saved_top = in_top_level
+    let saved_local = local_names
+    local_names = scope_vars
+
+    let captured = find_captured_in_scope(body, scope_vars)
+
     boxed_vars = captured
     in_top_level = false
 
@@ -1704,6 +1730,7 @@ fn make_codegen(source_name)
     lines = lines + "}"
     boxed_vars = saved_boxed
     in_top_level = saved_top
+    local_names = saved_local
     lines
   end
 
@@ -1722,10 +1749,14 @@ fn make_codegen(source_name)
       set_add(inner_scope, node.block_param)
     end
     collect_top_let_names(body, inner_scope)
-    let inner_captured = find_captured_in_scope(body, inner_scope)
 
     let saved_boxed = boxed_vars
     let saved_top = in_top_level
+    let saved_local = local_names
+    local_names = set_union(inner_scope, sorted_array_to_set(captures))
+
+    let inner_captured = find_captured_in_scope(body, inner_scope)
+
     boxed_vars = set_union(inner_captured, sorted_array_to_set(captures))
     in_top_level = false
 
@@ -1756,6 +1787,7 @@ fn make_codegen(source_name)
     lines = lines + "}"
     boxed_vars = saved_boxed
     in_top_level = saved_top
+    local_names = saved_local
 
     # Add struct + function to functions list
     push(functions, struct_def + lines)
@@ -1812,11 +1844,17 @@ fn make_codegen(source_name)
 
     # Build main
     let saved_boxed = boxed_vars
+    let saved_local = local_names
     boxed_vars = top_level_boxed
     in_top_level = true
+    local_names = {}
+    for k, _ in top_level_vars
+      set_add(local_names, k)
+    end
     let main_body = compile_stmts(top_stmts, 1)
     in_top_level = false
     boxed_vars = saved_boxed
+    local_names = saved_local
 
     let has_main = false
     for fd in fn_defs
@@ -1825,8 +1863,9 @@ fn make_codegen(source_name)
       end
     end
 
-    let main_c = "int main(void) \{\n"
+    let main_c = "int main(int argc, char **argv) \{\n"
     main_c = main_c + "    GC_INIT();\n"
+    main_c = main_c + "    gem_init(argc, argv);\n"
     main_c = main_c + "    gem_scheduler_init();\n"
     main_c = main_c + "    gem_push_frame(\"main\", \"{escape_c_string(source_name)}\", 0);\n"
     if main_body != ""

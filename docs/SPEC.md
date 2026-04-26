@@ -703,6 +703,50 @@ print(items[0])    # a
 
 `write_file(path, content)` — writes the string `content` to `path`, overwriting any existing file. Opens in binary mode. Raises an error if the file cannot be opened or if the write fails.
 
+`append_file(path, content)` — appends the string `content` to `path`. Creates the file if it doesn't exist. Opens in binary mode. Raises an error on failure.
+
+`delete(tbl, key)` — removes the entry for `key` from the table. Returns the removed value, or `nil` if the key was not found. Uses swap-remove internally (O(1) but does not preserve insertion order). For ordered removal from arrays, use `remove_at`.
+
+`pop(arr)` — removes and returns the last element of an array table. Errors on empty table.
+
+`values(tbl)` — returns a new integer-indexed array containing all values from `tbl`, in storage order.
+
+`eprint(args...)` — like `print`, but writes to stderr instead of stdout.
+
+`exit(code)` — terminates the program with the given exit code (default 0).
+
+`argv()` — returns the command-line arguments as an integer-indexed array. `argv()[0]` is the program name.
+
+`sort(arr)` — sorts an array table in place using the default ordering (numbers < strings, within type: numeric/lexicographic). Returns the table. Renumbers keys to 0..n-1.
+
+`sort(arr, cmp)` — sorts with a custom comparator function. `cmp(a, b)` must return a negative number if a < b, 0 if equal, positive if a > b.
+
+`floor(x)` — returns the largest integer ≤ x. Returns the value unchanged if already an integer.
+
+`ceil(x)` — returns the smallest integer ≥ x. Returns the value unchanged if already an integer.
+
+`round(x)` — rounds to the nearest integer (half away from zero). Returns the value unchanged if already an integer.
+
+`abs(x)` — returns the absolute value. Preserves type (int→int, float→float).
+
+`pow(x, y)` — returns x raised to the power y. Returns int if both arguments are int and y ≥ 0, float otherwise.
+
+`sqrt(x)` — returns the square root of x as a float. Errors on negative argument.
+
+`random()` — returns a random float in [0, 1). Uses xorshift64* internally.
+
+`random(n)` — returns a random integer in [0, n). Errors if n ≤ 0.
+
+`getenv(name)` — returns the value of environment variable `name` as a string, or `nil` if not set.
+
+`input()` — reads a line from stdin, stripping the trailing newline. Returns `nil` on EOF.
+
+`input(prompt)` — prints `prompt` to stdout (no newline), then reads a line from stdin.
+
+`insert(arr, i, val)` — inserts `val` at index `i` in an array table, shifting subsequent elements right. Returns the table. Errors if `i < 0` or `i > len(arr)`.
+
+`remove_at(arr, i)` — removes and returns the element at index `i`, shifting subsequent elements left. Errors if `i` is out of bounds.
+
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
 **Module System (v0.1 — minimal)**

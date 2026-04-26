@@ -1,6 +1,7 @@
 CC ?= cc
 CFLAGS = -std=c11 -O2
 GC_FLAGS := $(shell pkg-config --cflags --libs bdw-gc 2>/dev/null || echo "-lgc")
+LDFLAGS = -lm
 
 RUNTIME_DIR = runtime
 RUNTIME_SRCS = $(wildcard $(RUNTIME_DIR)/gem_*.c)
@@ -21,13 +22,13 @@ $(BUILD_DIR)/%.o: $(RUNTIME_DIR)/%.c $(RUNTIME_DIR)/gem.h
 
 $(GEM): $(STAGE0) $(RUNTIME_OBJS)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) -o $@ $(STAGE0) $(RUNTIME_OBJS) -I $(RUNTIME_DIR) -I $(COMPILER_DIR) $(CFLAGS) $(GC_FLAGS)
+	$(CC) -o $@ $(STAGE0) $(RUNTIME_OBJS) -I $(RUNTIME_DIR) -I $(COMPILER_DIR) $(CFLAGS) $(GC_FLAGS) $(LDFLAGS)
 
 # Regenerate stage0.c from current compiler sources (requires working build/gem)
 bootstrap: $(GEM)
 	$(GEM) $(COMPILER_DIR)/main.gem --emit-c > /tmp/gem_stage0_new.c
 	@# Verify the new stage0 can compile itself before replacing
-	$(CC) -o /tmp/gem_stage0_verify /tmp/gem_stage0_new.c $(RUNTIME_SRCS) -I $(RUNTIME_DIR) -I $(COMPILER_DIR) $(CFLAGS) $(GC_FLAGS)
+	$(CC) -o /tmp/gem_stage0_verify /tmp/gem_stage0_new.c $(RUNTIME_SRCS) -I $(RUNTIME_DIR) -I $(COMPILER_DIR) $(CFLAGS) $(GC_FLAGS) $(LDFLAGS)
 	/tmp/gem_stage0_verify $(COMPILER_DIR)/main.gem --emit-c > /tmp/gem_stage0_roundtrip.c
 	@diff -q /tmp/gem_stage0_new.c /tmp/gem_stage0_roundtrip.c > /dev/null || (echo "FAILED: stage0.c does not roundtrip" && exit 1)
 	cp /tmp/gem_stage0_new.c $(STAGE0)
@@ -37,12 +38,12 @@ test: $(GEM)
 	@bash examples/run_all.sh
 
 test-concurrency:
-	$(CC) -o /tmp/gem_test_concurrency runtime/test_concurrency.c $(RUNTIME_SRCS) -I $(RUNTIME_DIR) $(CFLAGS) $(GC_FLAGS)
+	$(CC) -o /tmp/gem_test_concurrency runtime/test_concurrency.c $(RUNTIME_SRCS) -I $(RUNTIME_DIR) $(CFLAGS) $(GC_FLAGS) $(LDFLAGS)
 	/tmp/gem_test_concurrency
 
 test-json: $(GEM)
 	@$(GEM) examples/json_parser.gem --emit-c > /tmp/gem_json_parser.c
-	@$(CC) -o /tmp/gem_json_parser /tmp/gem_json_parser.c $(RUNTIME_SRCS) -I $(RUNTIME_DIR) $(CFLAGS) $(GC_FLAGS)
+	@$(CC) -o /tmp/gem_json_parser /tmp/gem_json_parser.c $(RUNTIME_SRCS) -I $(RUNTIME_DIR) $(CFLAGS) $(GC_FLAGS) $(LDFLAGS)
 	@/tmp/gem_json_parser
 
 clean:

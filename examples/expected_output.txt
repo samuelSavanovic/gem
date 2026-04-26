@@ -565,3 +565,98 @@ false
 false
 false
 55
+this goes to stderr
+stderr multi: 42 true nil
+delete removed: 2
+delete len: 2
+delete has_key b: false
+delete has_key a: true
+delete has_key c: true
+delete missing: nil
+delete int key: 20
+delete int len: 2
+pop: 5
+pop len: 4
+pop2: 4
+pop single: 42
+pop empty len: 0
+values len: 3
+values arr: 10 20 30
+sort nums: 1 2 3 4 5
+sort strings: apple banana cherry
+sort desc: 5 4 3 2 1
+sort empty: 0
+sort single: 42
+sort returns same: 1 1
+sort mixed: 1 2 2.5 3
+argv type: table
+argv len >= 1: true
+floor 3.7: 3
+floor -2.3: -3
+floor int: 5
+ceil 3.2: 4
+ceil -2.7: -2
+ceil int: 5
+round 3.5: 4
+round 3.4: 3
+round -2.5: -3
+round int: 5
+abs -5: 5
+abs 5: 5
+abs 0: 0
+abs -3.14: 3.14
+abs 2.7: 2.7
+pow 2 10: 1024
+pow 3 0: 1
+pow 2.0 0.5: 1.41421
+sqrt 4: 2
+sqrt 2: true
+sqrt 0: 0
+random float: true
+random int: true
+random range: true
+append_file: true
+getenv HOME: true
+getenv missing: nil
+insert: 1 99 2 3
+insert len: 4
+insert front: 5 10 20
+insert end: 1 2 3
+remove_at: 20
+remove_at arr: 10 30 40
+remove_at len: 3
+remove_at front: 2 3
+remove_at back: 1 2
+remove_at back len: 2
+delete all len: 0
+delete twice: nil
+pop empty err: true
+pop preserve: 10 20
+sort sorted: 1 2 3 4 5
+sort reverse: 1 2 3 4 5
+sort dups: 1 1 2 3 3
+sort 100: true
+floor 0.0: 0
+ceil 0.0: 0
+round 0.0: 0
+abs min int: 1
+pow neg exp: 0.5
+sqrt 1: 1
+sqrt neg: true
+random 1: true
+random 0: true
+random neg: true
+insert empty: first
+insert empty len: 1
+remove_at to empty: 0
+insert neg idx: true
+insert past end: true
+remove_at empty: true
+remove_at oob: true
+getenv non-str: true
+append_file bad: true
+exit type: fn
+values empty: 0
+delete consistency: true
+delete access: true
+ALL EDGE CASES PASSED
