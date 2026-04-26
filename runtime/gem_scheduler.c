@@ -330,8 +330,8 @@ void gem_run_scheduler(void) {
         /* Nothing was READY. Check for I/O waiters. */
         if (has_io_wait) {
             /* Build a pollfd array for all IO_WAIT processes. */
-            struct pollfd pfds[GEM_MAX_PROCS];
-            int pfd_pid[GEM_MAX_PROCS];  /* maps pollfd index → pid */
+            struct pollfd *pfds = malloc(GEM_MAX_PROCS * sizeof(struct pollfd));
+            int *pfd_pid = malloc(GEM_MAX_PROCS * sizeof(int));
             int nfds = 0;
 
             for (int i = 0; i < GEM_MAX_PROCS; i++) {
@@ -355,6 +355,8 @@ void gem_run_scheduler(void) {
                 }
             }
             /* Loop back to resume the now-READY processes. */
+            free(pfds);
+            free(pfd_pid);
             continue;
         }
 
@@ -529,8 +531,8 @@ void gem_unlink_fn(int target_pid) {
    error so the coro's setjmp handler unwinds; the scheduler will pick up
    the death and propagate this process's links normally. */
 void gem_propagate_exit(int dead_pid, const char *reason) {
-    int worklist[GEM_MAX_PROCS];
-    const char *reasons[GEM_MAX_PROCS];
+    int *worklist = malloc(GEM_MAX_PROCS * sizeof(int));
+    const char **reasons = malloc(GEM_MAX_PROCS * sizeof(const char *));
     int wl_head = 0, wl_tail = 0;
     worklist[wl_tail] = dead_pid;
     reasons[wl_tail] = reason;
@@ -598,6 +600,9 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
     for (int i = 0; i < wl_tail; i++) {
         gem_free_proc_slot(worklist[i]);
     }
+
+    free(worklist);
+    free(reasons);
 
     if (self_kill_pending) {
         gem_error(self_kill_reason);

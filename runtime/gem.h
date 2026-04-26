@@ -247,7 +247,9 @@ typedef struct {
     int pcall_depth;
 } GemProcess;
 
+#ifndef GEM_MAX_PROCS
 #define GEM_MAX_PROCS 1024
+#endif
 
 extern GemProcess gem_proc_table[GEM_MAX_PROCS];
 extern int gem_current_pid;
