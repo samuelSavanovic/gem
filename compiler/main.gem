@@ -187,7 +187,7 @@ else
     gc_flags = str_replace(gc_flags, "\n", "")
   end
 
-  let cc_cmd = "cc -o " + out_name + " " + tmp_c + " " + runtime_dir + "/gem_*.c -I " + runtime_dir + " -std=c11 -O2 " + gc_flags + " -lm"
+  let cc_cmd = "cc -o " + out_name + " " + tmp_c + " " + runtime_dir + "/gem_*.c -I " + runtime_dir + " -std=c11 -O2 " + gc_flags + " -lm -pthread"
 
   let cc_ret = exec(cc_cmd)
   if cc_ret != 0

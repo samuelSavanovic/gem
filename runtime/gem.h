@@ -273,6 +273,28 @@ typedef struct {
 
 extern GemTimer gem_timers[GEM_MAX_TIMERS];
 
+/* ─── Thread pool I/O request ─── */
+
+typedef enum {
+    GEM_IO_READ_FILE,
+    GEM_IO_WRITE_FILE,
+    GEM_IO_APPEND_FILE,
+    GEM_IO_EXEC,
+} GemIOOp;
+
+typedef struct {
+    GemIOOp op;
+    int requester_pid;
+    char *path;            /* strdup'd input (freed after completion) */
+    char *content;         /* strdup'd input for write/append */
+    size_t content_len;
+    char *result_data;     /* malloc'd output from worker (read_file result) */
+    size_t result_len;
+    char *error_msg;       /* malloc'd error string, or NULL on success */
+    int exit_code;         /* output for exec */
+    volatile int done;     /* set to 1 by worker thread */
+} GemIORequest;
+
 /* Process slot */
 typedef struct {
     GemProcState state;
@@ -281,6 +303,7 @@ typedef struct {
     int pid;
     int wait_fd;        /* fd this process is waiting on (when IO_WAIT) */
     int wait_write;     /* 0 = waiting for read, 1 = waiting for write */
+    GemIORequest *io_request;     /* non-NULL when waiting on thread pool I/O */
     GemMonitorNode *monitors;     /* linked list of pids monitoring this process */
     GemLinkNode *links;           /* linked list of pids linked to this process */
     int trap_exit;                /* if true, exit signals become EXIT messages */
@@ -332,6 +355,10 @@ int64_t gem_now_ms(void);
    for_write=0 means wait for readable, for_write=1 means wait for writable. */
 void gem_io_yield(int fd, int for_write);
 
+/* Yield the current coroutine for a thread pool I/O request.
+   Sets state to IO_WAIT; caller must set proc->io_request first. */
+void gem_io_pool_yield(void);
+
 /* Process name registry (stb_ds string hash map: name → pid) */
 typedef struct {
     char *key;
@@ -377,5 +404,14 @@ GemVal gem_make_ref_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_send_after_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_cancel_timer_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_process_info_builtin(void *_env, GemVal *args, int argc);
+
+/* ─── Thread pool for async I/O ─── */
+
+void gem_threadpool_init(void);
+void gem_threadpool_shutdown(void);
+GemIORequest *gem_io_submit(GemIOOp op, const char *path,
+                            const char *content, size_t content_len);
+void gem_io_check_completions(void);
+int gem_io_wake_fd(void);
 
 #endif /* GEM_H */

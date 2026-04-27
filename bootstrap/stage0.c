@@ -17232,7 +17232,7 @@ int main(int argc, char **argv) {
             gem_v_gc_flags = gem_str_replace_fn(NULL, _t4429, 3);
         }
 #line 190 "compiler/main.gem"
-        GemVal gem_v_cc_cmd = gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("cc -o "), gem_v_out_name), gem_string(" ")), gem_v_tmp_c), gem_string(" ")), gem_v_runtime_dir), gem_string("/gem_*.c -I ")), gem_v_runtime_dir), gem_string(" -std=c11 -O2 ")), gem_v_gc_flags), gem_string(" -lm"));
+        GemVal gem_v_cc_cmd = gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("cc -o "), gem_v_out_name), gem_string(" ")), gem_v_tmp_c), gem_string(" ")), gem_v_runtime_dir), gem_string("/gem_*.c -I ")), gem_v_runtime_dir), gem_string(" -std=c11 -O2 ")), gem_v_gc_flags), gem_string(" -lm -pthread"));
 #line 192 "compiler/main.gem"
     GemVal _t4430[] = {gem_v_cc_cmd};
         GemVal gem_v_cc_ret = gem_exec_fn(NULL, _t4430, 1);

@@ -51,6 +51,7 @@ void gem_scheduler_init(void) {
     gem_proc_table[GEM_MAX_PROCS - 1].pid = -1;
     gem_free_head = 0;
     gem_free_tail = GEM_MAX_PROCS - 1;
+    gem_threadpool_init();
 }
 
 static void gem_free_proc_slot(int pid) {
@@ -58,6 +59,7 @@ static void gem_free_proc_slot(int pid) {
     proc->state = GEM_PROC_FREE;
     proc->coro = NULL;
     proc->mailbox = (GemMailbox){NULL, NULL};
+    proc->io_request = NULL;
     proc->monitors = NULL;
     proc->links = NULL;
     proc->trap_exit = 0;
@@ -194,6 +196,7 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].coro = co;
     gem_proc_table[pid].mailbox = (GemMailbox){NULL, NULL};
     gem_proc_table[pid].pid = pid;
+    gem_proc_table[pid].io_request = NULL;
     gem_proc_table[pid].monitors = NULL;
     gem_proc_table[pid].links = NULL;
     gem_proc_table[pid].trap_exit = 0;
@@ -236,6 +239,13 @@ GemVal gem_receive_msg(void) {
 
 int gem_self_pid(void) {
     return gem_current_pid;
+}
+
+void gem_io_pool_yield(void) {
+    if (gem_current_pid < 0 || gem_current_pid >= GEM_MAX_PROCS) return;
+    GemProcess *proc = &gem_proc_table[gem_current_pid];
+    proc->state = GEM_PROC_IO_WAIT;
+    mco_yield(proc->coro);
 }
 
 void gem_io_yield(int fd, int for_write) {
@@ -286,10 +296,12 @@ void gem_run_scheduler(void) {
     while (active) {
         active = 0;
         int has_ready = 0;
-        int has_io_wait = 0;
+        int has_fd_wait = 0;
+        int has_pool_wait = 0;
         int has_msg_wait = 0;
 
         gem_fire_timers();
+        gem_io_check_completions();
 
         for (int i = 0; i < gem_proc_hwm; i++) {
             GemProcess *proc = &gem_proc_table[i];
@@ -325,8 +337,11 @@ void gem_run_scheduler(void) {
                     }
                 }
             } else if (proc->state == GEM_PROC_IO_WAIT) {
-                has_io_wait = 1;
                 active = 1;
+                if (proc->io_request)
+                    has_pool_wait = 1;
+                else
+                    has_fd_wait = 1;
             }
         }
 
@@ -342,11 +357,13 @@ void gem_run_scheduler(void) {
            new work. */
         if (has_ready) continue;
 
-        /* Nothing was READY. Check for I/O waiters. */
-        if (has_io_wait) {
+        /* Nothing was READY. Block until something becomes ready:
+           fd I/O, thread pool completions, or a deadline/timer. */
+        if (has_fd_wait || has_pool_wait) {
             int nfds = 0;
             for (int i = 0; i < gem_proc_hwm; i++) {
-                if (gem_proc_table[i].state == GEM_PROC_IO_WAIT) {
+                if (gem_proc_table[i].state == GEM_PROC_IO_WAIT &&
+                    gem_proc_table[i].io_request == NULL) {
                     gem_poll_fds[nfds].fd = gem_proc_table[i].wait_fd;
                     gem_poll_fds[nfds].events = gem_proc_table[i].wait_write ? POLLOUT : POLLIN;
                     gem_poll_fds[nfds].revents = 0;
@@ -355,10 +372,43 @@ void gem_run_scheduler(void) {
                 }
             }
 
-            int ready = poll(gem_poll_fds, (nfds_t)nfds, -1);
+            /* Include the thread pool wake-pipe so poll returns when
+               a worker thread completes an I/O operation. */
+            int wake_fd = gem_io_wake_fd();
+            int wake_idx = -1;
+            if (has_pool_wait && wake_fd >= 0) {
+                wake_idx = nfds;
+                gem_poll_fds[nfds].fd = wake_fd;
+                gem_poll_fds[nfds].events = POLLIN;
+                gem_poll_fds[nfds].revents = 0;
+                gem_poll_pids[nfds] = -1;
+                nfds++;
+            }
+
+            /* Compute timeout: earliest deadline among WAITING procs and timers */
+            int poll_timeout = -1;
+            int64_t timer_dl = gem_earliest_timer_deadline();
+            int64_t earliest = -1;
+            for (int i = 0; i < gem_proc_hwm; i++) {
+                if (gem_proc_table[i].state == GEM_PROC_WAITING &&
+                    gem_proc_table[i].deadline_ms >= 0) {
+                    if (earliest < 0 || gem_proc_table[i].deadline_ms < earliest)
+                        earliest = gem_proc_table[i].deadline_ms;
+                }
+            }
+            if (timer_dl >= 0 && (earliest < 0 || timer_dl < earliest))
+                earliest = timer_dl;
+            if (earliest >= 0) {
+                int64_t now = gem_now_ms();
+                int64_t wait_ms = earliest - now;
+                poll_timeout = (wait_ms > 0) ? (int)wait_ms : 0;
+            }
+
+            int ready = poll(gem_poll_fds, (nfds_t)nfds, poll_timeout);
             if (ready > 0) {
                 for (int j = 0; j < nfds; j++) {
                     if (gem_poll_fds[j].revents & (POLLIN | POLLOUT | POLLERR | POLLHUP)) {
+                        if (j == wake_idx) continue;
                         gem_proc_table[gem_poll_pids[j]].state = GEM_PROC_READY;
                     }
                 }
@@ -372,7 +422,7 @@ void gem_run_scheduler(void) {
 
         /* Only mailbox waiters (or timers) remain. Check if any have deadlines or
            there are pending timers — sleep until the earliest, then loop. */
-        if ((has_msg_wait || timer_dl >= 0) && !has_io_wait) {
+        if (has_msg_wait || timer_dl >= 0) {
             int64_t earliest = -1;
             for (int i = 0; i < gem_proc_hwm; i++) {
                 if (gem_proc_table[i].state == GEM_PROC_WAITING &&
@@ -400,6 +450,7 @@ void gem_run_scheduler(void) {
         }
     }
     gem_current_pid = -1;
+    gem_threadpool_shutdown();
 }
 
 /* ─── Monitor API ─── */

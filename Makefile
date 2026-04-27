@@ -1,7 +1,7 @@
 CC ?= cc
 CFLAGS = -std=c11 -O2
 GC_FLAGS := $(shell pkg-config --cflags --libs bdw-gc 2>/dev/null || echo "-lgc")
-LDFLAGS = -lm
+LDFLAGS = -lm -pthread
 
 RUNTIME_DIR = runtime
 RUNTIME_SRCS = $(wildcard $(RUNTIME_DIR)/gem_*.c)
