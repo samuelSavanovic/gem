@@ -77,14 +77,17 @@ integration to make this work properly.
 - New `GEM_PROC_IO_WAIT` process state in the scheduler
 - `gem_io_yield(fd, for_write)` — marks current coroutine as waiting on an fd and yields
 - Scheduler uses `poll()` to check fd readiness, avoids busy-spinning
-- `net.c` wrappers set `O_NONBLOCK` and yield on `EAGAIN`/`EWOULDBLOCK`
+- TCP builtins (`tcp_listen`, `tcp_accept`, `tcp_read`, `tcp_write`, `tcp_close`) handle non-blocking I/O natively
 - Server now spawns a green thread per accepted connection
 
 Performance: ~24K req/s at 100 concurrent connections, ~21K req/s at 400 connections.
 
+**Update:** The original `extern fn` + `net.c` approach was replaced with the built-in
+TCP builtins, which provide identical performance with no separate C file needed.
+
 ## Not pain points (things that worked well)
 
-- `extern fn` + `Ptr` interop worked smoothly for POSIX sockets
+- TCP builtins worked seamlessly for POSIX sockets
 - `pcall` caught malformed request errors gracefully
 - String interpolation made HTTP response building clean
 - `string.split`, `substr`, `string.index_of` worked well for HTTP parsing (`split`/`index_of` now live in `std/string`)

@@ -1,20 +1,11 @@
 # HTTP/1.1 server — stress test for Gem concurrency
 #
-# Exercises: extern fn, Ptr interop, string parsing,
-# tables, closures, green threads (spawn/send/receive),
-# pcall for error recovery, supervisors, monitors,
-# selective receive with after.
+# Exercises: TCP builtins, string parsing, tables, closures,
+# green threads (spawn/send/receive), pcall for error recovery,
+# supervisors, monitors, selective receive with after.
 
 load "std/string"
 load "std/supervisor"
-
-# ─── C socket wrappers (defined in net.c) ───
-
-extern fn net_listen(port: Int) -> Int
-extern fn net_accept(server_fd: Int) -> Int
-extern fn net_read(fd: Int, max_bytes: Int) -> String
-extern fn net_write(fd: Int, data: String) -> Int
-extern fn net_close(fd: Int) -> Nil
 
 # ─── HTTP parsing ───
 
@@ -31,7 +22,6 @@ fn parse_request(raw)
 
   let [method, path, version] = parts
 
-  # Parse headers
   let headers = {}
   let i = 1
   while i < len(lines)
@@ -168,9 +158,9 @@ end)
 # ─── Connection handler ───
 
 fn handle_connection(client_fd, router)
-  let raw = net_read(client_fd, 8192)
+  let raw = tcp_read(client_fd, 8192)
   if raw == ""
-    net_close(client_fd)
+    tcp_close(client_fd)
     return nil
   end
 
@@ -189,15 +179,13 @@ fn handle_connection(client_fd, router)
     resp = response_error(result.error)
   end
 
-  net_write(client_fd, resp)
-  net_close(client_fd)
+  tcp_write(client_fd, resp)
+  tcp_close(client_fd)
 end
 
 # ─── Acceptor process ───
-# Accepts connections, spawns handler processes, tracks active count
-# via monitor + non-blocking receive drain.
 
-let MAX_CONNECTIONS = 900  # leave headroom below GEM_MAX_PROCS (1024)
+let MAX_CONNECTIONS = 900
 
 fn acceptor(server_fd, router)
   let active = 0
@@ -205,7 +193,6 @@ fn acceptor(server_fd, router)
   let me = self()
 
   while true
-    # Drain completion messages (non-blocking, O(1) per message)
     let draining = true
     while draining
       receive
@@ -216,13 +203,11 @@ fn acceptor(server_fd, router)
       end
     end
 
-    let client_fd = net_accept(server_fd)
-    if client_fd < 0
-      # Accept error, continue
-    elif active >= MAX_CONNECTIONS
-      # Backpressure: reject with 503
-      net_write(client_fd, response_busy())
-      net_close(client_fd)
+    let client_fd = tcp_accept(server_fd)
+
+    if active >= MAX_CONNECTIONS
+      tcp_write(client_fd, response_busy())
+      tcp_close(client_fd)
     else
       let fd = client_fd
       let r = router
@@ -237,9 +222,8 @@ fn acceptor(server_fd, router)
         active += 1
         total += 1
       else
-        # spawn failed (process table full) — reject gracefully
-        net_write(client_fd, response_busy())
-        net_close(client_fd)
+        tcp_write(client_fd, response_busy())
+        tcp_close(client_fd)
       end
     end
   end
@@ -248,16 +232,11 @@ end
 # ─── Main ───
 
 let port = 8080
-let server_fd = net_listen(port)
-if server_fd < 0
-  error("Failed to listen on port {port}")
-end
+let server_fd = tcp_listen("0.0.0.0", port)
 
 print("Gem HTTP server listening on port {port}")
 print("Max connections: {MAX_CONNECTIONS}")
 
-# Start acceptor under a one_for_one supervisor.
-# If the acceptor crashes, it gets restarted automatically.
 let sfd = server_fd
 let r = router
 supervisor.start({

@@ -10,9 +10,9 @@ RUNTIME_SRCS = $(wildcard $(RUNTIME_DIR)/gem_*.c)
 
 build: server
 
-server: server.gem net.c $(RUNTIME_SRCS) $(GEM)
+server: server.gem $(RUNTIME_SRCS) $(GEM)
 	$(GEM) server.gem --emit-c > /tmp/gem_http_server.c
-	$(CC) -o server /tmp/gem_http_server.c net.c $(RUNTIME_SRCS) -I . -I $(RUNTIME_DIR) $(CFLAGS) $(GC_FLAGS)
+	$(CC) -o server /tmp/gem_http_server.c $(RUNTIME_SRCS) -I $(RUNTIME_DIR) $(CFLAGS) $(GC_FLAGS)
 
 run: server
 	./server
