@@ -91,3 +91,7 @@ make test-json     # run JSON parser stress test
 ```bash
 cd prototype && make run
 ```
+
+## Git Conventions
+
+- Never add `Co-Authored-By` trailers to commit messages.
