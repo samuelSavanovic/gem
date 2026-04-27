@@ -167,7 +167,7 @@ fn tokenize(source, file)
     # Newlines and semicolons — collapse consecutive
     if ch == "\n" or ch == ";"
       let should_add = true
-      if len(tokens) > 0 and tokens[len(tokens) - 1].type == "NEWLINE"
+      if len(tokens) > 0 and tokens[-1].type == "NEWLINE"
         should_add = false
       end
       if should_add
@@ -280,7 +280,7 @@ fn tokenize(source, file)
             if pos + 2 < length and source[pos] == "\"" and source[pos + 1] == "\"" and source[pos + 2] == "\""
               pos += 3
               # Strip the trailing newline that precedes the closing delimiter
-              if len(val) > 0 and val[len(val) - 1] == "\n"
+              if len(val) > 0 and val[-1] == "\n"
                 val = substr(val, 0, len(val) - 1)
               end
               break
@@ -434,7 +434,7 @@ fn tokenize(source, file)
             if pos + 2 < length and source[pos] == "'" and source[pos + 1] == "'" and source[pos + 2] == "'"
               pos += 3
               # Strip the trailing newline that precedes the closing delimiter
-              if len(val) > 0 and val[len(val) - 1] == "\n"
+              if len(val) > 0 and val[-1] == "\n"
                 val = substr(val, 0, len(val) - 1)
               end
               break
@@ -618,7 +618,7 @@ fn tokenize(source, file)
             # Check for closing """
             if pos + 2 < length and source[pos] == "\"" and source[pos + 1] == "\"" and source[pos + 2] == "\""
               pos += 3
-              if len(val) > 0 and val[len(val) - 1] == "\n"
+              if len(val) > 0 and val[-1] == "\n"
                 val = substr(val, 0, len(val) - 1)
               end
               break

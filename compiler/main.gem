@@ -23,7 +23,7 @@ fn resolve_loads(ast, base_dir, loaded)
     if type(stmt) == "table" and stmt.tag == "load"
       let path = stmt.path
       # Add .gem extension if needed
-      if len(path) < 4 or (path[len(path) - 4] != "." or path[len(path) - 3] != "g" or path[len(path) - 2] != "e" or path[len(path) - 1] != "m")
+      if len(path) < 4 or (path[-4] != "." or path[-3] != "g" or path[-2] != "e" or path[-1] != "m")
         path = path + ".gem"
       end
 

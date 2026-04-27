@@ -1022,7 +1022,7 @@ fn make_codegen(source_name)
         out = out + compile_stmt(stmts[i], indent + 1) + "\n"
       end
       if len(stmts) > 0
-        out = out + compile_stmt_return(stmts[len(stmts) - 1], indent + 1) + "\n"
+        out = out + compile_stmt_return(stmts[-1], indent + 1) + "\n"
       end
       out = out + "{p}}"
       return out
@@ -1071,7 +1071,7 @@ fn make_codegen(source_name)
       for i = 0, len(then_body) - 1
         out = out + compile_stmt(then_body[i], indent + 1) + "\n"
       end
-      out = out + compile_stmt_return(then_body[len(then_body) - 1], indent + 1) + "\n"
+      out = out + compile_stmt_return(then_body[-1], indent + 1) + "\n"
     else
       out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
     end
@@ -1082,7 +1082,7 @@ fn make_codegen(source_name)
         for i = 0, len(else_body) - 1
           out = out + compile_stmt(else_body[i], indent + 1) + "\n"
         end
-        out = out + compile_stmt_return(else_body[len(else_body) - 1], indent + 1) + "\n"
+        out = out + compile_stmt_return(else_body[-1], indent + 1) + "\n"
       else
         out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
       end
@@ -1182,7 +1182,7 @@ fn make_codegen(source_name)
           for i = 0, len(else_body) - 1
             out = out + compile_stmt(else_body[i], indent) + "\n"
           end
-          out = out + compile_stmt_return(else_body[len(else_body) - 1], indent) + "\n"
+          out = out + compile_stmt_return(else_body[-1], indent) + "\n"
         else
           out = out + "{p}gem_pop_frame();\n{p}return GEM_NIL;\n"
         end
@@ -1213,7 +1213,7 @@ fn make_codegen(source_name)
         for j = 0, len(body) - 1
           out = out + compile_stmt(body[j], indent + 1) + "\n"
         end
-        out = out + compile_stmt_return(body[len(body) - 1], indent + 1) + "\n"
+        out = out + compile_stmt_return(body[-1], indent + 1) + "\n"
       else
         out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
       end
@@ -1225,7 +1225,7 @@ fn make_codegen(source_name)
         for i = 0, len(else_body) - 1
           out = out + compile_stmt(else_body[i], indent + 1) + "\n"
         end
-        out = out + compile_stmt_return(else_body[len(else_body) - 1], indent + 1) + "\n"
+        out = out + compile_stmt_return(else_body[-1], indent + 1) + "\n"
       else
         out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
       end
@@ -1468,7 +1468,7 @@ fn make_codegen(source_name)
         for j = 0, len(body) - 1
           out = out + compile_stmt(body[j], indent + 1) + "\n"
         end
-        out = out + compile_stmt_return(body[len(body) - 1], indent + 1) + "\n"
+        out = out + compile_stmt_return(body[-1], indent + 1) + "\n"
       else
         out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
       end
@@ -1480,7 +1480,7 @@ fn make_codegen(source_name)
         for j = 0, len(after_body) - 1
           out = out + compile_stmt(after_body[j], indent + 1) + "\n"
         end
-        out = out + compile_stmt_return(after_body[len(after_body) - 1], indent + 1) + "\n"
+        out = out + compile_stmt_return(after_body[-1], indent + 1) + "\n"
       else
         out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
       end
@@ -1667,7 +1667,7 @@ fn make_codegen(source_name)
       for i = 0, len(body) - 1
         out = out + compile_stmt(body[i], 1) + "\n"
       end
-      out = out + compile_stmt_return(body[len(body) - 1], 1) + "\n"
+      out = out + compile_stmt_return(body[-1], 1) + "\n"
     else
       out = out + "    gem_pop_frame();\n    return GEM_NIL;\n"
     end

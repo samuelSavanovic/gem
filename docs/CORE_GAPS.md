@@ -51,7 +51,7 @@ Audit of missing primitives. Philosophy: small C runtime, implement as much as p
 The compiler (largest Gem program) shows these pain points:
 
 - **Hand-rolled sort** — `set_to_sorted_array` in codegen.gem was an insertion sort; **replaced with `sort(keys(free))` call**
-- **14x `[len(x) - 1]`** — accessing the last element is verbose without negative indexing — **still open, negative indexing TODO**
+- **14x `[len(x) - 1]`** — accessing the last element is verbose without negative indexing — **resolved: all 14 replaced with `[-1]` after negative indexing landed**
 - **`extern fn` hacks** — compiler_helpers.h provided `gem_eprint`, `gem_exit_process`, `gem_get_argv`, `gem_get_argc`; **all replaced with `eprint()`, `exit()`, `argv()` builtins**; path utils (`gem_file_exists`, `gem_dirname`, `gem_path_join`) still extern in compiler_helpers.h
 - **Char-by-char `.gem` check** — main.gem:29 checks file extension character by character because `string.ends_with` isn't available without loading std/string
 - **195x `out = out + ...`** — O(n²) string building in codegen because buf_* API is more verbose than `+`
