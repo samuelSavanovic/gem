@@ -209,6 +209,7 @@ GemVal gem_remove_file_fn(void *_env, GemVal *args, int argc);
 GemVal gem_mkdir_fn(void *_env, GemVal *args, int argc);
 GemVal gem_list_dir_fn(void *_env, GemVal *args, int argc);
 GemVal gem_is_dir_fn(void *_env, GemVal *args, int argc);
+GemVal gem_exec_fn(void *_env, GemVal *args, int argc);
 
 /* ─── Runtime initialization (stores argc/argv, seeds RNG) ─── */
 

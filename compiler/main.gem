@@ -1,5 +1,11 @@
 # Main driver for the Gem self-hosting compiler.
-# Reads a .gem source file, parses it, generates C, and writes to stdout.
+# Reads a .gem source file, parses it, generates C, and compiles/runs.
+#
+# Usage:
+#   gem foo.gem              # compile to ./foo (default)
+#   gem foo.gem -o name      # compile to ./name
+#   gem foo.gem --emit-c     # print C to stdout (for bootstrapping)
+#   gem foo.gem --run [args] # compile and run immediately
 
 load "../std/string"
 load "parser"
@@ -56,14 +62,90 @@ fn resolve_loads(ast, base_dir, loaded)
   make_program(new_stmts)
 end
 
+# ─── CLI argument parsing ──────────────────────────────────────
+
+fn parse_args(args)
+  let result = {
+    src_path: nil,
+    out_name: nil,
+    emit_c: false,
+    run: false,
+    run_args: []
+  }
+
+  let argc = len(args)
+  let i = 1
+  let run_arg_count = 0
+  let found_run = false
+
+  while i < argc
+    let arg = args[i]
+    if found_run
+      result.run_args[run_arg_count] = arg
+      run_arg_count += 1
+    elif arg == "--emit-c"
+      result.emit_c = true
+    elif arg == "--run"
+      result.run = true
+      found_run = true
+    elif arg == "-o"
+      i += 1
+      if i >= argc
+        error("gem: -o requires an argument")
+      end
+      result.out_name = args[i]
+    elif result.src_path == nil
+      result.src_path = arg
+    else
+      # unknown flag — pass through as run arg if we ever run
+      result.run_args[run_arg_count] = arg
+      run_arg_count += 1
+    end
+    i += 1
+  end
+
+  result
+end
+
+# ─── Basename without extension ───────────────────────────────
+
+fn basename_no_ext(path)
+  # Find the last '/' to get just the filename
+  let plen = len(path)
+  let last_slash = -1
+  let i = 0
+  while i < plen
+    if ord(path, i) == 47  # '/'
+      last_slash = i
+    end
+    i += 1
+  end
+  let name = substr(path, last_slash + 1, plen - last_slash - 1)
+  # Strip .gem extension if present
+  let nlen = len(name)
+  if nlen > 4
+    let maybe_ext = substr(name, nlen - 4, 4)
+    if maybe_ext == ".gem"
+      name = substr(name, 0, nlen - 4)
+    end
+  end
+  name
+end
+
 # ─── Main ─────────────────────────────────────────────────────
 
 let argc = len(argv())
 if argc < 2
-  error("usage: gem_compiler <file.gem>")
+  error("usage: gem <file.gem> [--emit-c | --run | -o <name>]")
 end
 
-let src_path = argv()[1]
+let cli = parse_args(argv())
+
+if cli.src_path == nil
+  error("usage: gem <file.gem> [--emit-c | --run | -o <name>]")
+end
+
+let src_path = cli.src_path
 let source = read_file(src_path)
 
 let ast = parse_source(source, src_path)
@@ -73,4 +155,57 @@ let resolved_ast = resolve_loads(ast, base_dir, loaded)
 
 let cg = make_codegen(src_path)
 let c_code = cg.compile(resolved_ast)
-print(c_code)
+
+# ─── Emit C mode (used for bootstrapping) ─────────────────────
+
+if cli.emit_c
+  print(c_code)
+else
+  # ─── Compile mode ─────────────────────────────────────────────
+
+  let base = basename_no_ext(src_path)
+  let tmp_c = "/tmp/gem_" + base + ".c"
+
+  # Determine output name
+  let out_name = cli.out_name
+  if out_name == nil
+    out_name = "./" + base
+  end
+
+  # Write C to temp file
+  write_file(tmp_c, c_code)
+
+  # Build cc command
+  let runtime_dir = path_join(install_root, "runtime")
+
+  # Try pkg-config for GC flags, fall back to -lgc
+  let gc_flags = "-lgc"
+  let pkg_ret = exec("pkg-config --cflags --libs bdw-gc > /tmp/gem_gc_flags.txt 2>/dev/null")
+  if pkg_ret == 0
+    gc_flags = read_file("/tmp/gem_gc_flags.txt")
+    # Strip trailing newline
+    gc_flags = str_replace(gc_flags, "\n", "")
+  end
+
+  let cc_cmd = "cc -o " + out_name + " " + tmp_c + " " + runtime_dir + "/gem_*.c -I " + runtime_dir + " -std=c11 -O2 " + gc_flags + " -lm"
+
+  let cc_ret = exec(cc_cmd)
+  if cc_ret != 0
+    error("gem: compilation failed (cc exited with " + to_string(cc_ret) + ")")
+  end
+
+  # ─── Run mode ───────────────────────────────────────────────
+
+  if cli.run
+    let run_cmd = out_name
+    let i = 0
+    while i < len(cli.run_args)
+      run_cmd = run_cmd + " " + cli.run_args[i]
+      i += 1
+    end
+    let run_ret = exec(run_cmd)
+    if run_ret != 0
+      exit(run_ret)
+    end
+  end
+end

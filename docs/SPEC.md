@@ -29,6 +29,24 @@ C runtime is minimal glue code (~100–200 lines) wiring together three librarie
 
 ---
 
+**Compiler CLI**
+
+```
+gem <file.gem>              # compile to ./<basename> (e.g. foo.gem → ./foo)
+gem <file.gem> -o <name>    # compile to <name>
+gem <file.gem> --emit-c     # print generated C to stdout (used for bootstrapping)
+gem <file.gem> --run        # compile to a temp binary and run it immediately
+gem <file.gem> --run [args] # compile and run, passing args through to the program
+```
+
+The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.c`, invokes `cc` to compile it to an executable, and produces `./<basename>`. GC flags are sourced from `pkg-config --cflags --libs bdw-gc` if available, falling back to `-lgc`.
+
+`--emit-c` is the current-behavior flag — it prints C to stdout and exits. This is what the bootstrapping Makefile targets use.
+
+`--run` compiles to a temp file and immediately executes it, forwarding any additional arguments. The temp executable is left on disk after the run.
+
+---
+
 **Values and Types**
 
 Nine types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`, `Ref`. All dynamically typed. Every value is a tagged C union. Yes this means primitives are boxed and slow — doesn't matter for v0. Future optimization: NaN-boxing to pack ints, bools, and nil into a double's NaN space, eliminating heap allocation for primitives.
@@ -774,6 +792,8 @@ print(items[0])    # a
 `list_dir(path)` — returns an integer-indexed array of filenames in the directory at `path`, excluding `.` and `..`. Raises an error if the path does not exist or is not a directory. Argument must be a string.
 
 `is_dir(path)` — returns `true` if `path` exists and is a directory, `false` otherwise. Argument must be a string.
+
+`exec(command)` — runs `command` via the system shell (`sh -c`). Blocks until the command exits. Returns the exit code as an integer (0 on success). The shell expands glob patterns and environment variables in `command`. Output goes to the process's stdout/stderr unless redirected inside `command`.
 
 **Negative array indexing** — Integer indices to arrays and strings may be negative. A negative index `i` on a collection of length `n` resolves to `n + i`. So `arr[-1]` is the last element, `arr[-2]` is second-to-last, etc. Indices that remain out of bounds after resolution raise a runtime error.
 

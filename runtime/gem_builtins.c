@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <math.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <libgen.h>
@@ -1009,4 +1010,16 @@ GemVal gem_is_dir_fn(void *_env, GemVal *args, int argc) {
     struct stat st;
     if (stat(args[0].sval, &st) != 0) return gem_bool(0);
     return gem_bool(S_ISDIR(st.st_mode) ? 1 : 0);
+}
+
+/* ─── Built-in: exec (run a shell command, return exit code) ─── */
+
+GemVal gem_exec_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "exec: expected string command, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    int ret = system(args[0].sval);
+    int code = WIFEXITED(ret) ? WEXITSTATUS(ret) : -1;
+    return gem_int(code);
 }

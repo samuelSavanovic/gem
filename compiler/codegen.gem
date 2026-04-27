@@ -202,7 +202,8 @@ fn make_codegen(source_name)
     remove_file: "gem_remove_file_fn",
     mkdir: "gem_mkdir_fn",
     list_dir: "gem_list_dir_fn",
-    is_dir: "gem_is_dir_fn"
+    is_dir: "gem_is_dir_fn",
+    exec: "gem_exec_fn"
   }
   let builtins = {}
   for k, _ in builtin_fns

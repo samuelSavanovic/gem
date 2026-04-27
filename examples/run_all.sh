@@ -6,7 +6,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 EXPECTED="$SCRIPT_DIR/expected_output.txt"
-RUNTIME_DIR="$ROOT/runtime"
 COMPILER="$ROOT/build/gem"
 
 if [[ ! -f "$COMPILER" ]]; then
@@ -15,13 +14,9 @@ if [[ ! -f "$COMPILER" ]]; then
 fi
 
 actual=$( for f in "$SCRIPT_DIR"/[0-9]*.gem; do
-    base=$(basename "$f" .gem)
-    c_file="/tmp/gem_${base}.c"
-    bin_file="/tmp/gem_${base}"
-    "$COMPILER" "$f" --emit-c > "$c_file"
-    cc -o "$bin_file" "$c_file" "$RUNTIME_DIR"/gem_*.c -I "$RUNTIME_DIR" -std=c11 -O2 \
-        $(pkg-config --cflags --libs bdw-gc) -lm
-    "$bin_file" 2>&1
+    bin="/tmp/gem_$(basename "$f" .gem)"
+    "$COMPILER" "$f" -o "$bin" 2>/dev/null
+    "$bin" 2>&1
 done )
 
 if diff -u "$EXPECTED" <(echo "$actual") > /dev/null 2>&1; then

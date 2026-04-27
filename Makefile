@@ -42,9 +42,7 @@ test-concurrency:
 	/tmp/gem_test_concurrency
 
 test-json: $(GEM)
-	@$(GEM) examples/json_parser.gem --emit-c > /tmp/gem_json_parser.c
-	@$(CC) -o /tmp/gem_json_parser /tmp/gem_json_parser.c $(RUNTIME_SRCS) -I $(RUNTIME_DIR) $(CFLAGS) $(GC_FLAGS) $(LDFLAGS)
-	@/tmp/gem_json_parser
+	@$(GEM) examples/json_parser.gem --run
 
 clean:
 	rm -rf $(BUILD_DIR) /tmp/gem_*
