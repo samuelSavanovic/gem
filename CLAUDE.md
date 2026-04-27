@@ -40,6 +40,10 @@ make clean             # remove build/ and /tmp/gem_*
 
 After changing compiler sources, run `make bootstrap` to update `stage0.c`. The bootstrap target verifies the new stage0 can compile itself (fixed-point check) before replacing it.
 
+## Optimization Tracking
+
+`docs/OPTIMIZATIONS.md` tracks future performance improvements. When implementing something that has an obvious optimization opportunity (e.g. a new builtin that copies when it could use views, a hot path that could be specialized), add it there rather than implementing it immediately. Keep the file organized by category.
+
 ## Spec Maintenance
 
 After any language change (new syntax, new builtin, changed semantics), update `docs/SPEC.md` to reflect the change. The spec is the source of truth — if it disagrees with the code, fix the spec. Also update `docs/SELF_HOST_FOLLOWUPS.md` if the change completes a listed item.
