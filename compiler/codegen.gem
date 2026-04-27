@@ -98,12 +98,16 @@ fn sorted_array_to_set(arr)
   s
 end
 
+fn is_node(node, tag)
+  type(node) == "table" and node.tag == tag
+end
+
 # ─── Codegen constructor ───────────────────────────────────────
 
 fn collect_block_lets(stmt, result)
-  if type(stmt) == "table" and stmt.tag == "block"
+  if is_node(stmt, "block")
     for j = 0, len(stmt.stmts)
-      if type(stmt.stmts[j]) == "table" and stmt.stmts[j].tag == "let"
+      if is_node(stmt.stmts[j], "let")
         set_add(result, stmt.stmts[j].name)
       end
     end
@@ -113,7 +117,7 @@ end
 fn collect_top_let_names(stmts, result)
   for i = 0, len(stmts)
     let s = stmts[i]
-    if type(s) == "table" and s.tag == "let"
+    if is_node(s, "let")
       set_add(result, s.name)
     end
     collect_block_lets(s, result)
@@ -273,7 +277,7 @@ fn make_codegen(source_name)
       let d = set_union(defined, {})
       for i = 0, len(thens)
         collect_free_node(thens[i], d, free)
-        if type(thens[i]) == "table" and thens[i].tag == "let"
+        if is_node(thens[i], "let")
           set_add(d, thens[i].name)
         end
       end
@@ -281,7 +285,7 @@ fn make_codegen(source_name)
         d = set_union(defined, {})
         for i = 0, len(el)
           collect_free_node(el[i], d, free)
-          if type(el[i]) == "table" and el[i].tag == "let"
+          if is_node(el[i], "let")
             set_add(d, el[i].name)
           end
         end
@@ -291,7 +295,7 @@ fn make_codegen(source_name)
       let d = set_union(defined, {})
       for i = 0, len(body)
         collect_free_node(body[i], d, free)
-        if type(body[i]) == "table" and body[i].tag == "let"
+        if is_node(body[i], "let")
           set_add(d, body[i].name)
         end
       end
@@ -308,14 +312,14 @@ fn make_codegen(source_name)
         if w.bindings != nil
           for bi = 0, len(w.bindings)
             collect_free_node(w.bindings[bi], d, free)
-            if type(w.bindings[bi]) == "table" and w.bindings[bi].tag == "let"
+            if is_node(w.bindings[bi], "let")
               set_add(d, w.bindings[bi].name)
             end
           end
         end
         for j = 0, len(w.body)
           collect_free_node(w.body[j], d, free)
-          if type(w.body[j]) == "table" and w.body[j].tag == "let"
+          if is_node(w.body[j], "let")
             set_add(d, w.body[j].name)
           end
         end
@@ -324,7 +328,7 @@ fn make_codegen(source_name)
         let d = set_union(defined, {})
         for j = 0, len(el)
           collect_free_node(el[j], d, free)
-          if type(el[j]) == "table" and el[j].tag == "let"
+          if is_node(el[j], "let")
             set_add(d, el[j].name)
           end
         end
@@ -335,14 +339,14 @@ fn make_codegen(source_name)
       if bindings != nil
         for bi = 0, len(bindings)
           collect_free_node(bindings[bi], d, free)
-          if type(bindings[bi]) == "table" and bindings[bi].tag == "let"
+          if is_node(bindings[bi], "let")
             set_add(d, bindings[bi].name)
           end
         end
       end
       for i = 0, len(body)
         collect_free_node(body[i], d, free)
-        if type(body[i]) == "table" and body[i].tag == "let"
+        if is_node(body[i], "let")
           set_add(d, body[i].name)
         end
       end
@@ -358,14 +362,14 @@ fn make_codegen(source_name)
         if arm.pattern.bindings != nil
           for bi = 0, len(arm.pattern.bindings)
             collect_free_node(arm.pattern.bindings[bi], d, free)
-            if type(arm.pattern.bindings[bi]) == "table" and arm.pattern.bindings[bi].tag == "let"
+            if is_node(arm.pattern.bindings[bi], "let")
               set_add(d, arm.pattern.bindings[bi].name)
             end
           end
         end
         for j = 0, len(arm.body)
           collect_free_node(arm.body[j], d, free)
-          if type(arm.body[j]) == "table" and arm.body[j].tag == "let"
+          if is_node(arm.body[j], "let")
             set_add(d, arm.body[j].name)
           end
         end
@@ -377,7 +381,7 @@ fn make_codegen(source_name)
         let d = set_union(recv_def, {})
         for j = 0, len(rm_after_body)
           collect_free_node(rm_after_body[j], d, free)
-          if type(rm_after_body[j]) == "table" and rm_after_body[j].tag == "let"
+          if is_node(rm_after_body[j], "let")
             set_add(d, rm_after_body[j].name)
           end
         end
@@ -394,7 +398,7 @@ fn make_codegen(source_name)
       let d = set_union(defined, {})
       for i = 0, len(stmts)
         collect_free_node(stmts[i], d, free)
-        if type(stmts[i]) == "table" and stmts[i].tag == "let"
+        if is_node(stmts[i], "let")
           set_add(d, stmts[i].name)
         end
       end
@@ -430,7 +434,7 @@ fn make_codegen(source_name)
     let d = set_union(defined, {})
     for i = 0, len(stmts)
       collect_free_node(stmts[i], d, free)
-      if type(stmts[i]) == "table" and stmts[i].tag == "let"
+      if is_node(stmts[i], "let")
         set_add(d, stmts[i].name)
       end
       collect_block_lets(stmts[i], d)
@@ -559,7 +563,7 @@ fn make_codegen(source_name)
     let sv = set_union(scope_vars, {})
     for i = 0, len(stmts)
       walk_captures_node(stmts[i], sv, captured)
-      if type(stmts[i]) == "table" and stmts[i].tag == "let"
+      if is_node(stmts[i], "let")
         set_add(sv, stmts[i].name)
       end
       collect_block_lets(stmts[i], sv)

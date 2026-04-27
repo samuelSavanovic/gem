@@ -51,8 +51,8 @@ Audit of missing primitives. Philosophy: small C runtime, implement as much as p
 | **`table.count(arr, fn)`** | Count elements matching predicate. |
 | **`table.flatten(arr)`** | Flatten nested arrays one level. |
 | **`table.group_by(arr, fn)`** | Group elements by function result. |
-| **`table.last(arr)`** | `arr[len(arr) - 1]`. Trivial but very common pattern. Moot if negative indexing lands. |
-| **`string.char_at(s, i)`** | `chr(ord(s, i))`. Minor but the round-trip through ord/chr is non-obvious. |
+| **`table.last(arr)`** | ~~`arr[len(arr) - 1]`. Trivial but very common pattern. Moot if negative indexing lands.~~ Moot — negative indexing works. |
+| **`string.char_at(s, i)`** | ~~`chr(ord(s, i))`. Minor but the round-trip through ord/chr is non-obvious.~~ Moot — `s[i]` indexing works. |
 
 ## Evidence from the compiler itself
 
@@ -61,7 +61,6 @@ The compiler (largest Gem program) shows these pain points:
 - **Hand-rolled sort** — `set_to_sorted_array` in codegen.gem was an insertion sort; **replaced with `sort(keys(free))` call**
 - **14x `[len(x) - 1]`** — accessing the last element is verbose without negative indexing — **resolved: all 14 replaced with `[-1]` after negative indexing landed**
 - **`extern fn` hacks** — compiler_helpers.h provided `gem_eprint`, `gem_exit_process`, `gem_get_argv`, `gem_get_argc`; **all replaced with `eprint()`, `exit()`, `argv()` builtins**; path utils (`gem_file_exists`, `gem_dirname`, `gem_path_join`, `gem_normalize_path`) **fully resolved** — promoted to builtins `file_exists()`, `dirname()`, `path_join()`, `normalize_path()`; `extern include "compiler_helpers.h"` and all `extern fn` declarations removed from main.gem
-- **Char-by-char `.gem` check** — main.gem still checks the file extension character by character; could use `string.ends_with` now that `std/string` has it, but would require loading std/string in the compiler
-- **`string.ends_with` / `string.starts_with`** — already implemented in `std/string.gem` and exported in the `string` namespace table
+- **Char-by-char `.gem` check** — ~~main.gem still checks the file extension character by character~~ **resolved**: now uses `string.ends_with(path, ".gem")`
 - **195x `out = out + ...`** — O(n²) string building in codegen because buf_* API is more verbose than `+`
-- **24x `type(x) == "table" and x.tag == ...`** — verbose pattern for what's essentially a tagged union check
+- **18x `type(x) == "table" and x.tag == ...`** — ~~verbose pattern for what's essentially a tagged union check~~ **resolved**: replaced with `is_node(node, tag)` helper in both codegen.gem and main.gem
