@@ -13,6 +13,8 @@ build/gem             # compiled compiler binary (gitignored, built from stage0.
 examples/             # test programs + run_all.sh
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 prototype/            # C prototypes (Boehm GC + minicoro integration, scheduler + mailbox)
+editors/vscode/       # VS Code extension (TextMate grammar)
+editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
 ```
 
 ## Setup
@@ -50,7 +52,9 @@ After any language change (new syntax, new builtin, changed semantics), update `
 
 ## Editor Extension Maintenance
 
-After any language change, also update `editors/vscode/syntaxes/gem.tmLanguage.json` to reflect the change. Specifically:
+After any language change, update **both** editor extensions:
+
+### VS Code (`editors/vscode/syntaxes/gem.tmLanguage.json`)
 
 - **New keyword** — add it to the appropriate pattern in the `keyword` repository rule (`keyword.control.gem`, `keyword.other.gem`, or `keyword.declaration.function.gem`)
 - **New builtin function** — add it to the alternation in the `builtin` rule
@@ -58,6 +62,15 @@ After any language change, also update `editors/vscode/syntaxes/gem.tmLanguage.j
 - **New type annotation** (extern context) — add it to the alternation in `extern-type-annotation`
 
 The symlink at `~/.vscode/extensions/gem-language` → `editors/vscode` means changes take effect on VS Code reload with no reinstall needed.
+
+### Helix (`editors/tree-sitter-gem/`)
+
+- **New keyword** — tree-sitter picks it up automatically if it's a string literal in grammar.js; add a highlight query entry in `queries/highlights.scm`
+- **New builtin function** — add it to the `#match?` regex in highlights.scm (both `call_expression` and `call_with_block` patterns)
+- **New syntax construct** — add a rule in `grammar.js`, regenerate, and add highlight/indent/textobject queries as needed
+- **New type annotation** — add it to the `type` choice in grammar.js
+
+After grammar.js changes: `tree-sitter generate` (requires node via mise), `hx --grammar build`, then copy `queries/highlights.scm` to `~/.config/helix/runtime/queries/gem/`. Test with `tree-sitter parse` on all `.gem` files to verify zero errors.
 
 ## Key Decisions
 

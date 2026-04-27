@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "gem",
+      "camelcase": "Gem",
+      "scope": "source.gem",
+      "path": ".",
+      "file-types": ["gem"],
+      "highlights": "queries/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0"
+  }
+}

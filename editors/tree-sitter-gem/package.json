@@ -1,0 +1,13 @@
+{
+  "name": "tree-sitter-gem",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for the Gem programming language",
+  "main": "grammar.js",
+  "tree-sitter": [
+    {
+      "scope": "source.gem",
+      "file-types": ["gem"],
+      "highlights": "queries/highlights.scm"
+    }
+  ]
+}
