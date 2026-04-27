@@ -2054,34 +2054,3 @@ fn make_codegen(source_name)
 
   {compile: compile}
 end
-
-# Bootstrap fallback: old stage0 doesn't know str_replace is a builtin.
-# The new compiler treats calls to str_replace as direct builtin calls and
-# never invokes this function body. It exists so stage0 can compile this file.
-fn str_replace(s, old, new_s)
-  let result = ""
-  let i = 0
-  let old_len = len(old)
-  let s_len = len(s)
-  while i < s_len
-    if i + old_len <= s_len
-      let found = true
-      let j = 0
-      while j < old_len
-        if s[i + j] != old[j]
-          found = false
-          break
-        end
-        j += 1
-      end
-      if found
-        result = result + new_s
-        i += old_len
-        continue
-      end
-    end
-    result = result + s[i]
-    i += 1
-  end
-  result
-end
