@@ -8,34 +8,34 @@ load "ast"
 
 fn escape_c_string(s)
   let cr = chr(13)
-  let result = ""
+  let b = buf_new()
   for i = 0, len(s)
     let ch = s[i]
     if ch == "\\"
-      result = result + "\\\\"
+      buf_push(b, "\\\\")
     elif ch == "\""
-      result = result + "\\\""
+      buf_push(b, "\\\"")
     elif ch == "\n"
-      result = result + "\\n"
+      buf_push(b, "\\n")
     elif ch == cr
-      result = result + "\\r"
+      buf_push(b, "\\r")
     elif ch == "\t"
-      result = result + "\\t"
+      buf_push(b, "\\t")
     elif ord(ch) == 0
-      result = result + "\\0"
+      buf_push(b, "\\0")
     else
-      result = result + ch
+      buf_push(b, ch)
     end
   end
-  result
+  buf_str(b)
 end
 
 fn repeat_str(s, n)
-  let result = ""
+  let b = buf_new()
   for i = 0, n
-    result = result + s
+    buf_push(b, s)
   end
-  result
+  buf_str(b)
 end
 
 fn pad_for(indent)
@@ -57,7 +57,7 @@ fn format_float(val)
   s
 end
 
-# ─── Array/set helpers ────────��─────────────────────────────────
+# ─── Array/set helpers ────────────────────────────────────────────
 
 fn set_add(s, val)
   if s[val] != true
@@ -685,19 +685,20 @@ fn make_codegen(source_name)
     error("unknown expression node: {node.tag}")
   end
 
-  # ─── compile_table ─���
+  # ─── compile_table ──
 
   compile_table = fn(node)
     let entries = node.entries
     let t = tmp()
-    let setup = "    GemVal {t} = gem_table_new();\n"
+    let b = buf_new()
+    buf_push(b, "    GemVal {t} = gem_table_new();\n")
     for entry in entries
       let val_r = compile_expr(entry.value)
       let escaped = escape_c_string(entry.key)
-      setup = setup + val_r.setup
-      setup = setup + "    gem_table_set({t}, gem_string(\"{escaped}\"), {val_r.expr});\n"
+      buf_push(b, val_r.setup)
+      buf_push(b, "    gem_table_set({t}, gem_string(\"{escaped}\"), {val_r.expr});\n")
     end
-    {expr: t, setup: setup}
+    {expr: t, setup: buf_str(b)}
   end
 
   # ─── compile_array ──
@@ -705,16 +706,17 @@ fn make_codegen(source_name)
   compile_array = fn(node)
     let elements = node.elements
     let t = tmp()
-    let setup = "    GemVal {t} = gem_table_new();\n"
+    let b = buf_new()
+    buf_push(b, "    GemVal {t} = gem_table_new();\n")
     for i = 0, len(elements)
       let elem_r = compile_expr(elements[i])
-      setup = setup + elem_r.setup
-      setup = setup + "    gem_table_set({t}, gem_int({i}), {elem_r.expr});\n"
+      buf_push(b, elem_r.setup)
+      buf_push(b, "    gem_table_set({t}, gem_int({i}), {elem_r.expr});\n")
     end
-    {expr: t, setup: setup}
+    {expr: t, setup: buf_str(b)}
   end
 
-  # ──�� compile_anon_fn ──
+  # ─── compile_anon_fn ──
 
   compile_anon_fn = fn(node)
     let inner_defined = sorted_array_to_set(node.params)
@@ -734,41 +736,41 @@ fn make_codegen(source_name)
 
     let result = compile_closure_fn(node, captures)
 
-    let setup = ""
+    let b = buf_new()
     let env_tmp = tmp()
-    setup = setup + "    struct {result.struct_name} *{env_tmp} = GC_MALLOC(sizeof(struct {result.struct_name}));\n"
+    buf_push(b, "    struct {result.struct_name} *{env_tmp} = GC_MALLOC(sizeof(struct {result.struct_name}));\n")
     for cap in captures
       let mc = mangle(cap)
       if set_contains(boxed_vars, cap)
-        setup = setup + "    {env_tmp}->{mc} = {mc};\n"
+        buf_push(b, "    {env_tmp}->{mc} = {mc};\n")
       else
-        setup = setup + "    {env_tmp}->{mc} = &{mc};\n"
+        buf_push(b, "    {env_tmp}->{mc} = &{mc};\n")
       end
     end
-    {expr: "gem_make_fn({result.fn_name}, {env_tmp})", setup: setup}
+    {expr: "gem_make_fn({result.fn_name}, {env_tmp})", setup: buf_str(b)}
   end
 
   # ─── compile_args: compile an argument list into setup + array name ──
   # Returns {setup, arr_name, argc}. arr_name is nil when argc == 0.
 
   let compile_args = fn(args)
-    let arg_setups = ""
+    let b = buf_new()
     let arg_exprs = []
     for i = 0, len(args)
       let r = compile_expr(args[i])
-      arg_setups = arg_setups + r.setup
+      buf_push(b, r.setup)
       push(arg_exprs, r.expr)
     end
     let argc = len(args)
     if argc == 0
-      return {setup: arg_setups, arr_name: nil, argc: 0}
+      return {setup: buf_str(b), arr_name: nil, argc: 0}
     end
     let t = tmp()
     let arr = arg_exprs[0]
     for i = 1, argc
       arr = arr + ", " + arg_exprs[i]
     end
-    {setup: arg_setups + "    GemVal {t}[] = \{{arr}};\n", arr_name: t, argc: argc}
+    {setup: buf_str(b) + "    GemVal {t}[] = \{{arr}};\n", arr_name: t, argc: argc}
   end
 
   # Emit a direct call: fn_name(env, args, argc)
@@ -872,31 +874,33 @@ fn make_codegen(source_name)
     elif op == "and"
       let rc_r = compile_expr(node.right)
       let t = tmp()
-      let setup = ls
-      setup = setup + "    GemVal {t};\n"
-      setup = setup + "    if (!gem_truthy({lc})) \{\n"
-      setup = setup + "        {t} = {lc};\n"
-      setup = setup + "    } else \{\n"
+      let b = buf_new()
+      buf_push(b, ls)
+      buf_push(b, "    GemVal {t};\n")
+      buf_push(b, "    if (!gem_truthy({lc})) \{\n")
+      buf_push(b, "        {t} = {lc};\n")
+      buf_push(b, "    } else \{\n")
       if rc_r.setup != ""
-        setup = setup + str_replace(rc_r.setup, "    ", "        ")
+        buf_push(b, str_replace(rc_r.setup, "    ", "        "))
       end
-      setup = setup + "        {t} = {rc_r.expr};\n"
-      setup = setup + "    }\n"
-      return {expr: t, setup: setup}
+      buf_push(b, "        {t} = {rc_r.expr};\n")
+      buf_push(b, "    }\n")
+      return {expr: t, setup: buf_str(b)}
     elif op == "or"
       let rc_r = compile_expr(node.right)
       let t = tmp()
-      let setup = ls
-      setup = setup + "    GemVal {t};\n"
-      setup = setup + "    if (gem_truthy({lc})) \{\n"
-      setup = setup + "        {t} = {lc};\n"
-      setup = setup + "    } else \{\n"
+      let b = buf_new()
+      buf_push(b, ls)
+      buf_push(b, "    GemVal {t};\n")
+      buf_push(b, "    if (gem_truthy({lc})) \{\n")
+      buf_push(b, "        {t} = {lc};\n")
+      buf_push(b, "    } else \{\n")
       if rc_r.setup != ""
-        setup = setup + str_replace(rc_r.setup, "    ", "        ")
+        buf_push(b, str_replace(rc_r.setup, "    ", "        "))
       end
-      setup = setup + "        {t} = {rc_r.expr};\n"
-      setup = setup + "    }\n"
-      return {expr: t, setup: setup}
+      buf_push(b, "        {t} = {rc_r.expr};\n")
+      buf_push(b, "    }\n")
+      return {expr: t, setup: buf_str(b)}
     end
 
     error("unknown binary operator: {op}")
@@ -905,11 +909,12 @@ fn make_codegen(source_name)
   # ─── compile_stmts ──
 
   compile_stmts = fn(stmts, indent)
-    let out = ""
+    let b = buf_new()
     for stmt in stmts
-      out = out + compile_stmt(stmt, indent) + "\n"
+      buf_push(b, compile_stmt(stmt, indent))
+      buf_push(b, "\n")
     end
-    out
+    buf_str(b)
   end
 
   # ─── compile_stmt ──
@@ -977,18 +982,19 @@ fn make_codegen(source_name)
     when {tag: "fn_def"}
       return ""
     when {tag: "block", stmts: stmts}
-      let out = ""
+      let b = buf_new()
       for stmt in stmts
-        out = out + compile_stmt(stmt, indent) + "\n"
+        buf_push(b, compile_stmt(stmt, indent))
+        buf_push(b, "\n")
       end
-      return out
+      return buf_str(b)
     end
 
     let r = compile_expr(node)
     "{line_dir}{r.setup}{p}(void)({r.expr});"
   end
 
-  # ─── compile_stmt_return ���─
+  # ─── compile_stmt_return ──
 
   compile_stmt_return = fn(node, indent)
     let p = pad_for(indent)
@@ -1029,15 +1035,18 @@ fn make_codegen(source_name)
     when {tag: "receive_match"}
       return "{line_dir}" + compile_receive_match_return(node, indent)
     when {tag: "block", stmts: stmts}
-      let out = "{p}\{\n"
+      let b = buf_new()
+      buf_push(b, "{p}\{\n")
       for i = 0, len(stmts) - 1
-        out = out + compile_stmt(stmts[i], indent + 1) + "\n"
+        buf_push(b, compile_stmt(stmts[i], indent + 1))
+        buf_push(b, "\n")
       end
       if len(stmts) > 0
-        out = out + compile_stmt_return(stmts[-1], indent + 1) + "\n"
+        buf_push(b, compile_stmt_return(stmts[-1], indent + 1))
+        buf_push(b, "\n")
       end
-      out = out + "{p}}"
-      return out
+      buf_push(b, "{p}}")
+      return buf_str(b)
     when {tag: "dot_assign"}
       return "{compile_stmt(node, indent)}\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
     when {tag: "index_assign"}
@@ -1060,15 +1069,16 @@ fn make_codegen(source_name)
   compile_if = fn(node, indent)
     let p = pad_for(indent)
     let cond_r = compile_expr(node.cond)
-    let out = cond_r.setup
-    out = out + "{p}if (gem_truthy({cond_r.expr})) \{\n"
-    out = out + compile_stmts(node.then, indent + 1)
+    let b = buf_new()
+    buf_push(b, cond_r.setup)
+    buf_push(b, "{p}if (gem_truthy({cond_r.expr})) \{\n")
+    buf_push(b, compile_stmts(node.then, indent + 1))
     if node.else != nil
-      out = out + "{p}} else \{\n"
-      out = out + compile_stmts(node.else, indent + 1)
+      buf_push(b, "{p}} else \{\n")
+      buf_push(b, compile_stmts(node.else, indent + 1))
     end
-    out = out + "{p}}"
-    out
+    buf_push(b, "{p}}")
+    buf_str(b)
   end
 
   # ─── compile_if_return ──
@@ -1076,34 +1086,39 @@ fn make_codegen(source_name)
   compile_if_return = fn(node, indent)
     let p = pad_for(indent)
     let cond_r = compile_expr(node.cond)
-    let out = cond_r.setup
-    out = out + "{p}if (gem_truthy({cond_r.expr})) \{\n"
+    let b = buf_new()
+    buf_push(b, cond_r.setup)
+    buf_push(b, "{p}if (gem_truthy({cond_r.expr})) \{\n")
     let then_body = node.then
     if len(then_body) > 0
       for i = 0, len(then_body) - 1
-        out = out + compile_stmt(then_body[i], indent + 1) + "\n"
+        buf_push(b, compile_stmt(then_body[i], indent + 1))
+        buf_push(b, "\n")
       end
-      out = out + compile_stmt_return(then_body[-1], indent + 1) + "\n"
+      buf_push(b, compile_stmt_return(then_body[-1], indent + 1))
+      buf_push(b, "\n")
     else
-      out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
+      buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
     end
     if node.else != nil
-      out = out + "{p}} else \{\n"
+      buf_push(b, "{p}} else \{\n")
       let else_body = node.else
       if len(else_body) > 0
         for i = 0, len(else_body) - 1
-          out = out + compile_stmt(else_body[i], indent + 1) + "\n"
+          buf_push(b, compile_stmt(else_body[i], indent + 1))
+          buf_push(b, "\n")
         end
-        out = out + compile_stmt_return(else_body[-1], indent + 1) + "\n"
+        buf_push(b, compile_stmt_return(else_body[-1], indent + 1))
+        buf_push(b, "\n")
       else
-        out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
+        buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
       end
     else
-      out = out + "{p}} else \{\n"
-      out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
+      buf_push(b, "{p}} else \{\n")
+      buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
     end
-    out = out + "{p}}"
-    out
+    buf_push(b, "{p}}")
+    buf_str(b)
   end
 
   # ─── compile_while ──
@@ -1111,15 +1126,16 @@ fn make_codegen(source_name)
   compile_while = fn(node, indent)
     let p = pad_for(indent)
     let cond_r = compile_expr(node.cond)
-    let out = "{p}while (1) \{\n"
-    out = out + "{p}    gem_yield_check();\n"
+    let b = buf_new()
+    buf_push(b, "{p}while (1) \{\n")
+    buf_push(b, "{p}    gem_yield_check();\n")
     if cond_r.setup != ""
-      out = out + str_replace(cond_r.setup, "    ", "{p}    ")
+      buf_push(b, str_replace(cond_r.setup, "    ", "{p}    "))
     end
-    out = out + "{p}    if (!gem_truthy({cond_r.expr})) break;\n"
-    out = out + compile_stmts(node.body, indent + 1)
-    out = out + "{p}}"
-    out
+    buf_push(b, "{p}    if (!gem_truthy({cond_r.expr})) break;\n")
+    buf_push(b, compile_stmts(node.body, indent + 1))
+    buf_push(b, "{p}}")
+    buf_str(b)
   end
 
   # ─── compile_match ──
@@ -1133,44 +1149,46 @@ fn make_codegen(source_name)
     else
       t = tmp()
     end
-    let out = target_r.setup
-    out = out + "{p}GemVal {t} = {target_r.expr};\n"
+    let b = buf_new()
+    buf_push(b, target_r.setup)
+    buf_push(b, "{p}GemVal {t} = {target_r.expr};\n")
     if len(node.whens) == 0
       # No when clauses — just emit else body if present
       if node.else != nil
-        out = out + compile_stmts(node.else, indent)
+        buf_push(b, compile_stmts(node.else, indent))
       end
-      out = out + "{p}(void){t};"
-      return out
+      buf_push(b, "{p}(void){t};")
+      return buf_str(b)
     end
     for i = 0, len(node.whens)
       let w = node.whens[i]
       let val_r = compile_expr(w.value)
       if i == 0
-        out = out + val_r.setup
-        out = out + "{p}if (gem_truthy({val_r.expr})) \{\n"
+        buf_push(b, val_r.setup)
+        buf_push(b, "{p}if (gem_truthy({val_r.expr})) \{\n")
       else
-        out = out + "{p}} else \{\n"
-        out = out + val_r.setup
-        out = out + "{p}if (gem_truthy({val_r.expr})) \{\n"
+        buf_push(b, "{p}} else \{\n")
+        buf_push(b, val_r.setup)
+        buf_push(b, "{p}if (gem_truthy({val_r.expr})) \{\n")
       end
       if w.bindings != nil
-        for b in w.bindings
-          out = out + compile_stmt(b, indent + 1) + "\n"
+        for binding in w.bindings
+          buf_push(b, compile_stmt(binding, indent + 1))
+          buf_push(b, "\n")
         end
       end
-      out = out + compile_stmts(w.body, indent + 1)
+      buf_push(b, compile_stmts(w.body, indent + 1))
     end
     if node.else != nil
-      out = out + "{p}} else \{\n"
-      out = out + compile_stmts(node.else, indent + 1)
+      buf_push(b, "{p}} else \{\n")
+      buf_push(b, compile_stmts(node.else, indent + 1))
     end
     # Close all the nesting: each when after the first opens an extra else block
-    out = out + "{p}}"
+    buf_push(b, "{p}}")
     for i = 1, len(node.whens)
-      out = out + "\n{p}}"
+      buf_push(b, "\n{p}}")
     end
-    out
+    buf_str(b)
   end
 
   # ─── compile_match_return ──
@@ -1184,72 +1202,80 @@ fn make_codegen(source_name)
     else
       t = tmp()
     end
-    let out = target_r.setup
-    out = out + "{p}GemVal {t} = {target_r.expr};\n"
+    let b = buf_new()
+    buf_push(b, target_r.setup)
+    buf_push(b, "{p}GemVal {t} = {target_r.expr};\n")
     if len(node.whens) == 0
       # No when clauses — emit else body or return nil
       if node.else != nil
         let else_body = node.else
         if len(else_body) > 0
           for i = 0, len(else_body) - 1
-            out = out + compile_stmt(else_body[i], indent) + "\n"
+            buf_push(b, compile_stmt(else_body[i], indent))
+            buf_push(b, "\n")
           end
-          out = out + compile_stmt_return(else_body[-1], indent) + "\n"
+          buf_push(b, compile_stmt_return(else_body[-1], indent))
+          buf_push(b, "\n")
         else
-          out = out + "{p}gem_pop_frame();\n{p}return GEM_NIL;\n"
+          buf_push(b, "{p}gem_pop_frame();\n{p}return GEM_NIL;\n")
         end
       else
-        out = out + "{p}gem_pop_frame();\n{p}return GEM_NIL;\n"
+        buf_push(b, "{p}gem_pop_frame();\n{p}return GEM_NIL;\n")
       end
-      out = out + "{p}(void){t};"
-      return out
+      buf_push(b, "{p}(void){t};")
+      return buf_str(b)
     end
     for i = 0, len(node.whens)
       let w = node.whens[i]
       let val_r = compile_expr(w.value)
       if i == 0
-        out = out + val_r.setup
-        out = out + "{p}if (gem_truthy({val_r.expr})) \{\n"
+        buf_push(b, val_r.setup)
+        buf_push(b, "{p}if (gem_truthy({val_r.expr})) \{\n")
       else
-        out = out + "{p}} else \{\n"
-        out = out + val_r.setup
-        out = out + "{p}if (gem_truthy({val_r.expr})) \{\n"
+        buf_push(b, "{p}} else \{\n")
+        buf_push(b, val_r.setup)
+        buf_push(b, "{p}if (gem_truthy({val_r.expr})) \{\n")
       end
       if w.bindings != nil
-        for b in w.bindings
-          out = out + compile_stmt(b, indent + 1) + "\n"
+        for binding in w.bindings
+          buf_push(b, compile_stmt(binding, indent + 1))
+          buf_push(b, "\n")
         end
       end
       let body = w.body
       if len(body) > 0
         for j = 0, len(body) - 1
-          out = out + compile_stmt(body[j], indent + 1) + "\n"
+          buf_push(b, compile_stmt(body[j], indent + 1))
+          buf_push(b, "\n")
         end
-        out = out + compile_stmt_return(body[-1], indent + 1) + "\n"
+        buf_push(b, compile_stmt_return(body[-1], indent + 1))
+        buf_push(b, "\n")
       else
-        out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
+        buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
       end
     end
     if node.else != nil
-      out = out + "{p}} else \{\n"
+      buf_push(b, "{p}} else \{\n")
       let else_body = node.else
       if len(else_body) > 0
         for i = 0, len(else_body) - 1
-          out = out + compile_stmt(else_body[i], indent + 1) + "\n"
+          buf_push(b, compile_stmt(else_body[i], indent + 1))
+          buf_push(b, "\n")
         end
-        out = out + compile_stmt_return(else_body[-1], indent + 1) + "\n"
+        buf_push(b, compile_stmt_return(else_body[-1], indent + 1))
+        buf_push(b, "\n")
       else
-        out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
+        buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
       end
     else
-      out = out + "{p}} else \{\n"
-      out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
+      buf_push(b, "{p}} else \{\n")
+      buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
     end
-    out = out + "{p}}"
+    buf_push(b, "{p}}")
     for i = 1, len(node.whens)
-      out = out + "\n{p}}"
+      buf_push(b, "\n{p}}")
     end
-    out
+    buf_str(b)
   end
 
   # ─── compile_receive_match ──
@@ -1268,115 +1294,116 @@ fn make_codegen(source_name)
     let deadline_tmp = tmp()
     let proc_tmp = tmp()
 
-    let out = ""
+    let b = buf_new()
 
     # Declare the receive value variable (patterns reference this via mangle(recv_var))
-    out = out + "{p}GemVal {recv_tmp} = GEM_NIL;\n"
-    out = out + "{p}int {matched_tmp} = -1;\n"
+    buf_push(b, "{p}GemVal {recv_tmp} = GEM_NIL;\n")
+    buf_push(b, "{p}int {matched_tmp} = -1;\n")
 
     # Set up deadline if after clause present
     if after_ms != nil
       let ms_r = compile_expr(after_ms)
-      out = out + ms_r.setup
-      out = out + "{p}int64_t {deadline_tmp} = gem_now_ms() + (int64_t)({ms_r.expr}).ival;\n"
+      buf_push(b, ms_r.setup)
+      buf_push(b, "{p}int64_t {deadline_tmp} = gem_now_ms() + (int64_t)({ms_r.expr}).ival;\n")
     end
 
     # Outer loop: keep scanning until a match or timeout
-    out = out + "{p}while (1) \{\n"
+    buf_push(b, "{p}while (1) \{\n")
     let p2 = pad_for(indent + 1)
 
     # Get current process
-    out = out + "{p2}GemProcess *{proc_tmp} = &gem_proc_table[gem_current_pid];\n"
+    buf_push(b, "{p2}GemProcess *{proc_tmp} = &gem_proc_table[gem_current_pid];\n")
 
     # Scan mailbox
-    out = out + "{p2}GemMsgNode *{prev_tmp} = NULL;\n"
-    out = out + "{p2}GemMsgNode *{cur_tmp} = {proc_tmp}->mailbox.head;\n"
-    out = out + "{p2}{matched_tmp} = -1;\n"
-    out = out + "{p2}while ({cur_tmp}) \{\n"
+    buf_push(b, "{p2}GemMsgNode *{prev_tmp} = NULL;\n")
+    buf_push(b, "{p2}GemMsgNode *{cur_tmp} = {proc_tmp}->mailbox.head;\n")
+    buf_push(b, "{p2}{matched_tmp} = -1;\n")
+    buf_push(b, "{p2}while ({cur_tmp}) \{\n")
     let p3 = pad_for(indent + 2)
-    out = out + "{p3}{recv_tmp} = {cur_tmp}->value;\n"
+    buf_push(b, "{p3}{recv_tmp} = {cur_tmp}->value;\n")
 
     # Test each arm's pattern condition
     for i = 0, len(arms)
       let arm = arms[i]
       let cond_r = compile_expr(arm.pattern.condition)
       if i == 0
-        out = out + cond_r.setup
-        out = out + "{p3}if (gem_truthy({cond_r.expr})) \{\n"
+        buf_push(b, cond_r.setup)
+        buf_push(b, "{p3}if (gem_truthy({cond_r.expr})) \{\n")
       else
-        out = out + "{p3}} else \{\n"
-        out = out + cond_r.setup
-        out = out + "{p3}if (gem_truthy({cond_r.expr})) \{\n"
+        buf_push(b, "{p3}} else \{\n")
+        buf_push(b, cond_r.setup)
+        buf_push(b, "{p3}if (gem_truthy({cond_r.expr})) \{\n")
       end
-      out = out + "{pad_for(indent + 3)}{matched_tmp} = {i};\n"
+      buf_push(b, "{pad_for(indent + 3)}{matched_tmp} = {i};\n")
     end
     # Close all arm conditions
     for i = 0, len(arms)
-      out = out + "{p3}}"
+      buf_push(b, "{p3}}")
       if i < len(arms) - 1
-        out = out + "\n"
+        buf_push(b, "\n")
       end
     end
-    out = out + "\n"
+    buf_push(b, "\n")
 
     # If matched, splice out node and break
-    out = out + "{p3}if ({matched_tmp} >= 0) \{\n"
+    buf_push(b, "{p3}if ({matched_tmp} >= 0) \{\n")
     let p4 = pad_for(indent + 3)
-    out = out + "{p4}gem_mailbox_remove(&{proc_tmp}->mailbox, {prev_tmp}, {cur_tmp});\n"
-    out = out + "{p4}break;\n"
-    out = out + "{p3}}\n"
+    buf_push(b, "{p4}gem_mailbox_remove(&{proc_tmp}->mailbox, {prev_tmp}, {cur_tmp});\n")
+    buf_push(b, "{p4}break;\n")
+    buf_push(b, "{p3}}\n")
 
     # Advance to next node
-    out = out + "{p3}{prev_tmp} = {cur_tmp};\n"
-    out = out + "{p3}{cur_tmp} = {cur_tmp}->next;\n"
-    out = out + "{p2}}\n"
+    buf_push(b, "{p3}{prev_tmp} = {cur_tmp};\n")
+    buf_push(b, "{p3}{cur_tmp} = {cur_tmp}->next;\n")
+    buf_push(b, "{p2}}\n")
 
     # No match found — check timeout or yield
-    out = out + "{p2}if ({matched_tmp} >= 0) break;\n"
+    buf_push(b, "{p2}if ({matched_tmp} >= 0) break;\n")
     if after_ms != nil
-      out = out + "{p2}if (gem_now_ms() >= {deadline_tmp}) \{\n"
-      out = out + "{p2}    {matched_tmp} = -2;\n"
-      out = out + "{p2}    break;\n"
-      out = out + "{p2}}\n"
-      out = out + "{p2}gem_selective_yield({deadline_tmp});\n"
+      buf_push(b, "{p2}if (gem_now_ms() >= {deadline_tmp}) \{\n")
+      buf_push(b, "{p2}    {matched_tmp} = -2;\n")
+      buf_push(b, "{p2}    break;\n")
+      buf_push(b, "{p2}}\n")
+      buf_push(b, "{p2}gem_selective_yield({deadline_tmp});\n")
       # Check if timed out after yield
-      out = out + "{p2}if ({proc_tmp}->timed_out) \{\n"
-      out = out + "{p2}    {matched_tmp} = -2;\n"
-      out = out + "{p2}    break;\n"
-      out = out + "{p2}}\n"
+      buf_push(b, "{p2}if ({proc_tmp}->timed_out) \{\n")
+      buf_push(b, "{p2}    {matched_tmp} = -2;\n")
+      buf_push(b, "{p2}    break;\n")
+      buf_push(b, "{p2}}\n")
     else
-      out = out + "{p2}gem_selective_yield(-1);\n"
+      buf_push(b, "{p2}gem_selective_yield(-1);\n")
     end
 
-    out = out + "{p}}\n"
+    buf_push(b, "{p}}\n")
 
     # Now dispatch based on matched arm
     for i = 0, len(arms)
       let arm = arms[i]
       if i == 0
-        out = out + "{p}if ({matched_tmp} == {i}) \{\n"
+        buf_push(b, "{p}if ({matched_tmp} == {i}) \{\n")
       else
-        out = out + "{p}} else if ({matched_tmp} == {i}) \{\n"
+        buf_push(b, "{p}} else if ({matched_tmp} == {i}) \{\n")
       end
       # Emit bindings
       if arm.pattern.bindings != nil
-        for b in arm.pattern.bindings
-          out = out + compile_stmt(b, indent + 1) + "\n"
+        for binding in arm.pattern.bindings
+          buf_push(b, compile_stmt(binding, indent + 1))
+          buf_push(b, "\n")
         end
       end
-      out = out + compile_stmts(arm.body, indent + 1)
+      buf_push(b, compile_stmts(arm.body, indent + 1))
     end
 
     # After clause
     if after_ms != nil
-      out = out + "{p}} else if ({matched_tmp} == -2) \{\n"
+      buf_push(b, "{p}} else if ({matched_tmp} == -2) \{\n")
       if after_body != nil
-        out = out + compile_stmts(after_body, indent + 1)
+        buf_push(b, compile_stmts(after_body, indent + 1))
       end
     end
 
-    out = out + "{p}}"
-    out
+    buf_push(b, "{p}}")
+    buf_str(b)
   end
 
   compile_receive_match_return = fn(node, indent)
@@ -1392,117 +1419,122 @@ fn make_codegen(source_name)
     let deadline_tmp = tmp()
     let proc_tmp = tmp()
 
-    let out = ""
+    let b = buf_new()
 
-    out = out + "{p}GemVal {recv_tmp} = GEM_NIL;\n"
-    out = out + "{p}int {matched_tmp} = -1;\n"
+    buf_push(b, "{p}GemVal {recv_tmp} = GEM_NIL;\n")
+    buf_push(b, "{p}int {matched_tmp} = -1;\n")
 
     if after_ms != nil
       let ms_r = compile_expr(after_ms)
-      out = out + ms_r.setup
-      out = out + "{p}int64_t {deadline_tmp} = gem_now_ms() + (int64_t)({ms_r.expr}).ival;\n"
+      buf_push(b, ms_r.setup)
+      buf_push(b, "{p}int64_t {deadline_tmp} = gem_now_ms() + (int64_t)({ms_r.expr}).ival;\n")
     end
 
-    out = out + "{p}while (1) \{\n"
+    buf_push(b, "{p}while (1) \{\n")
     let p2 = pad_for(indent + 1)
 
-    out = out + "{p2}GemProcess *{proc_tmp} = &gem_proc_table[gem_current_pid];\n"
-    out = out + "{p2}GemMsgNode *{prev_tmp} = NULL;\n"
-    out = out + "{p2}GemMsgNode *{cur_tmp} = {proc_tmp}->mailbox.head;\n"
-    out = out + "{p2}{matched_tmp} = -1;\n"
-    out = out + "{p2}while ({cur_tmp}) \{\n"
+    buf_push(b, "{p2}GemProcess *{proc_tmp} = &gem_proc_table[gem_current_pid];\n")
+    buf_push(b, "{p2}GemMsgNode *{prev_tmp} = NULL;\n")
+    buf_push(b, "{p2}GemMsgNode *{cur_tmp} = {proc_tmp}->mailbox.head;\n")
+    buf_push(b, "{p2}{matched_tmp} = -1;\n")
+    buf_push(b, "{p2}while ({cur_tmp}) \{\n")
     let p3 = pad_for(indent + 2)
-    out = out + "{p3}{recv_tmp} = {cur_tmp}->value;\n"
+    buf_push(b, "{p3}{recv_tmp} = {cur_tmp}->value;\n")
 
     for i = 0, len(arms)
       let arm = arms[i]
       let cond_r = compile_expr(arm.pattern.condition)
       if i == 0
-        out = out + cond_r.setup
-        out = out + "{p3}if (gem_truthy({cond_r.expr})) \{\n"
+        buf_push(b, cond_r.setup)
+        buf_push(b, "{p3}if (gem_truthy({cond_r.expr})) \{\n")
       else
-        out = out + "{p3}} else \{\n"
-        out = out + cond_r.setup
-        out = out + "{p3}if (gem_truthy({cond_r.expr})) \{\n"
+        buf_push(b, "{p3}} else \{\n")
+        buf_push(b, cond_r.setup)
+        buf_push(b, "{p3}if (gem_truthy({cond_r.expr})) \{\n")
       end
-      out = out + "{pad_for(indent + 3)}{matched_tmp} = {i};\n"
+      buf_push(b, "{pad_for(indent + 3)}{matched_tmp} = {i};\n")
     end
     for i = 0, len(arms)
-      out = out + "{p3}}"
+      buf_push(b, "{p3}}")
       if i < len(arms) - 1
-        out = out + "\n"
+        buf_push(b, "\n")
       end
     end
-    out = out + "\n"
+    buf_push(b, "\n")
 
-    out = out + "{p3}if ({matched_tmp} >= 0) \{\n"
+    buf_push(b, "{p3}if ({matched_tmp} >= 0) \{\n")
     let p4 = pad_for(indent + 3)
-    out = out + "{p4}gem_mailbox_remove(&{proc_tmp}->mailbox, {prev_tmp}, {cur_tmp});\n"
-    out = out + "{p4}break;\n"
-    out = out + "{p3}}\n"
+    buf_push(b, "{p4}gem_mailbox_remove(&{proc_tmp}->mailbox, {prev_tmp}, {cur_tmp});\n")
+    buf_push(b, "{p4}break;\n")
+    buf_push(b, "{p3}}\n")
 
-    out = out + "{p3}{prev_tmp} = {cur_tmp};\n"
-    out = out + "{p3}{cur_tmp} = {cur_tmp}->next;\n"
-    out = out + "{p2}}\n"
+    buf_push(b, "{p3}{prev_tmp} = {cur_tmp};\n")
+    buf_push(b, "{p3}{cur_tmp} = {cur_tmp}->next;\n")
+    buf_push(b, "{p2}}\n")
 
-    out = out + "{p2}if ({matched_tmp} >= 0) break;\n"
+    buf_push(b, "{p2}if ({matched_tmp} >= 0) break;\n")
     if after_ms != nil
-      out = out + "{p2}if (gem_now_ms() >= {deadline_tmp}) \{\n"
-      out = out + "{p2}    {matched_tmp} = -2;\n"
-      out = out + "{p2}    break;\n"
-      out = out + "{p2}}\n"
-      out = out + "{p2}gem_selective_yield({deadline_tmp});\n"
-      out = out + "{p2}if ({proc_tmp}->timed_out) \{\n"
-      out = out + "{p2}    {matched_tmp} = -2;\n"
-      out = out + "{p2}    break;\n"
-      out = out + "{p2}}\n"
+      buf_push(b, "{p2}if (gem_now_ms() >= {deadline_tmp}) \{\n")
+      buf_push(b, "{p2}    {matched_tmp} = -2;\n")
+      buf_push(b, "{p2}    break;\n")
+      buf_push(b, "{p2}}\n")
+      buf_push(b, "{p2}gem_selective_yield({deadline_tmp});\n")
+      buf_push(b, "{p2}if ({proc_tmp}->timed_out) \{\n")
+      buf_push(b, "{p2}    {matched_tmp} = -2;\n")
+      buf_push(b, "{p2}    break;\n")
+      buf_push(b, "{p2}}\n")
     else
-      out = out + "{p2}gem_selective_yield(-1);\n"
+      buf_push(b, "{p2}gem_selective_yield(-1);\n")
     end
 
-    out = out + "{p}}\n"
+    buf_push(b, "{p}}\n")
 
     # Dispatch with return
     for i = 0, len(arms)
       let arm = arms[i]
       if i == 0
-        out = out + "{p}if ({matched_tmp} == {i}) \{\n"
+        buf_push(b, "{p}if ({matched_tmp} == {i}) \{\n")
       else
-        out = out + "{p}} else if ({matched_tmp} == {i}) \{\n"
+        buf_push(b, "{p}} else if ({matched_tmp} == {i}) \{\n")
       end
       if arm.pattern.bindings != nil
-        for b in arm.pattern.bindings
-          out = out + compile_stmt(b, indent + 1) + "\n"
+        for binding in arm.pattern.bindings
+          buf_push(b, compile_stmt(binding, indent + 1))
+          buf_push(b, "\n")
         end
       end
       let body = arm.body
       if len(body) > 0
         for j = 0, len(body) - 1
-          out = out + compile_stmt(body[j], indent + 1) + "\n"
+          buf_push(b, compile_stmt(body[j], indent + 1))
+          buf_push(b, "\n")
         end
-        out = out + compile_stmt_return(body[-1], indent + 1) + "\n"
+        buf_push(b, compile_stmt_return(body[-1], indent + 1))
+        buf_push(b, "\n")
       else
-        out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
+        buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
       end
     end
 
     if after_ms != nil
-      out = out + "{p}} else if ({matched_tmp} == -2) \{\n"
+      buf_push(b, "{p}} else if ({matched_tmp} == -2) \{\n")
       if after_body != nil and len(after_body) > 0
         for j = 0, len(after_body) - 1
-          out = out + compile_stmt(after_body[j], indent + 1) + "\n"
+          buf_push(b, compile_stmt(after_body[j], indent + 1))
+          buf_push(b, "\n")
         end
-        out = out + compile_stmt_return(after_body[-1], indent + 1) + "\n"
+        buf_push(b, compile_stmt_return(after_body[-1], indent + 1))
+        buf_push(b, "\n")
       else
-        out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
+        buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
       end
     else
-      out = out + "{p}} else \{\n"
-      out = out + "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n"
+      buf_push(b, "{p}} else \{\n")
+      buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
     end
 
-    out = out + "{p}}"
-    out
+    buf_push(b, "{p}}")
+    buf_str(b)
   end
 
   # ─── compile_extern_fn ──
@@ -1510,26 +1542,27 @@ fn make_codegen(source_name)
   compile_extern_fn = fn(node)
     let {name, params, ret_type} = node
 
-    let lines = "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n"
+    let b = buf_new()
+    buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
 
     let c_args = []
     for i = 0, len(params)
       let p = params[i]
       let ptype = p["type"]
       if ptype == "Int"
-        lines = lines + "    int64_t _p{i} = args[{i}].ival;\n"
+        buf_push(b, "    int64_t _p{i} = args[{i}].ival;\n")
         push(c_args, "_p{i}")
       elif ptype == "Float"
-        lines = lines + "    double _p{i} = args[{i}].fval;\n"
+        buf_push(b, "    double _p{i} = args[{i}].fval;\n")
         push(c_args, "_p{i}")
       elif ptype == "String"
-        lines = lines + "    char* _p{i} = args[{i}].sval;\n"
+        buf_push(b, "    char* _p{i} = args[{i}].sval;\n")
         push(c_args, "_p{i}")
       elif ptype == "Bool"
-        lines = lines + "    int _p{i} = args[{i}].bval;\n"
+        buf_push(b, "    int _p{i} = args[{i}].bval;\n")
         push(c_args, "_p{i}")
       elif ptype == "Ptr"
-        lines = lines + "    void* _p{i} = (void*)(intptr_t)args[{i}].ival;\n"
+        buf_push(b, "    void* _p{i} = (void*)(intptr_t)args[{i}].ival;\n")
         push(c_args, "_p{i}")
       elif ptype == "Table"
         push(c_args, "args[{i}]")
@@ -1550,31 +1583,31 @@ fn make_codegen(source_name)
     let call_expr = "{name}({call_args})"
 
     if ret_type == "Nil"
-      lines = lines + "    {call_expr};\n"
-      lines = lines + "    return GEM_NIL;\n"
+      buf_push(b, "    {call_expr};\n")
+      buf_push(b, "    return GEM_NIL;\n")
     elif ret_type == "Table"
-      lines = lines + "    return {call_expr};\n"
+      buf_push(b, "    return {call_expr};\n")
     elif ret_type == "Int"
-      lines = lines + "    int64_t _ret = {call_expr};\n"
-      lines = lines + "    return gem_int(_ret);\n"
+      buf_push(b, "    int64_t _ret = {call_expr};\n")
+      buf_push(b, "    return gem_int(_ret);\n")
     elif ret_type == "Float"
-      lines = lines + "    double _ret = {call_expr};\n"
-      lines = lines + "    return gem_float(_ret);\n"
+      buf_push(b, "    double _ret = {call_expr};\n")
+      buf_push(b, "    return gem_float(_ret);\n")
     elif ret_type == "String"
-      lines = lines + "    char* _ret = {call_expr};\n"
-      lines = lines + "    return gem_string(_ret);\n"
+      buf_push(b, "    char* _ret = {call_expr};\n")
+      buf_push(b, "    return gem_string(_ret);\n")
     elif ret_type == "Bool"
-      lines = lines + "    int _ret = {call_expr};\n"
-      lines = lines + "    return gem_bool(_ret);\n"
+      buf_push(b, "    int _ret = {call_expr};\n")
+      buf_push(b, "    return gem_bool(_ret);\n")
     elif ret_type == "Ptr"
-      lines = lines + "    void *_ret = {call_expr};\n"
-      lines = lines + "    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n"
+      buf_push(b, "    void *_ret = {call_expr};\n")
+      buf_push(b, "    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n")
     else
-      lines = lines + "    {call_expr};\n"
-      lines = lines + "    return GEM_NIL;\n"
+      buf_push(b, "    {call_expr};\n")
+      buf_push(b, "    return GEM_NIL;\n")
     end
 
-    lines = lines + "}"
+    buf_push(b, "}")
 
     # Add forward declaration for the Gem wrapper
     push(forward_decls, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
@@ -1624,21 +1657,21 @@ fn make_codegen(source_name)
 
     push(extern_c_decls, "{c_ret} {name}({c_params});")
 
-    lines
+    buf_str(b)
   end
 
   # ─── emit_param_bindings: generate C code to bind params, rest, block ──
 
   let emit_param_bindings = fn(node, params, cap_set)
-    let out = ""
+    let b = buf_new()
     # Bind required parameters
     for i = 0, len(params)
       let mp = mangle(params[i])
       if set_contains(cap_set, params[i])
-        out = out + "    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));\n"
-        out = out + "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
+        buf_push(b, "    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));\n")
+        buf_push(b, "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
       else
-        out = out + "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n"
+        buf_push(b, "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
       end
     end
 
@@ -1651,39 +1684,41 @@ fn make_codegen(source_name)
       end
       let mp_rest = mangle(node.rest_param)
       if set_contains(cap_set, node.rest_param)
-        out = out + "    GemVal *{mp_rest} = GC_MALLOC(sizeof(GemVal));\n"
-        out = out + "    *{mp_rest} = gem_table_new();\n"
-        out = out + "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n"
+        buf_push(b, "    GemVal *{mp_rest} = GC_MALLOC(sizeof(GemVal));\n")
+        buf_push(b, "    *{mp_rest} = gem_table_new();\n")
+        buf_push(b, "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
       else
-        out = out + "    GemVal {mp_rest} = gem_table_new();\n"
-        out = out + "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n"
+        buf_push(b, "    GemVal {mp_rest} = gem_table_new();\n")
+        buf_push(b, "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
       end
       if node.block_param != nil
         let mp_block = mangle(node.block_param)
         if set_contains(cap_set, node.block_param)
-          out = out + "    GemVal *{mp_block} = GC_MALLOC(sizeof(GemVal));\n"
-          out = out + "    *{mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n"
+          buf_push(b, "    GemVal *{mp_block} = GC_MALLOC(sizeof(GemVal));\n")
+          buf_push(b, "    *{mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n")
         else
-          out = out + "    GemVal {mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n"
+          buf_push(b, "    GemVal {mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n")
         end
       end
     end
-    out
+    buf_str(b)
   end
 
   # ─── emit_fn_body: compile body stmts with implicit return ──
 
   let emit_fn_body = fn(body)
-    let out = ""
+    let b = buf_new()
     if len(body) > 0
       for i = 0, len(body) - 1
-        out = out + compile_stmt(body[i], 1) + "\n"
+        buf_push(b, compile_stmt(body[i], 1))
+        buf_push(b, "\n")
       end
-      out = out + compile_stmt_return(body[-1], 1) + "\n"
+      buf_push(b, compile_stmt_return(body[-1], 1))
+      buf_push(b, "\n")
     else
-      out = out + "    gem_pop_frame();\n    return GEM_NIL;\n"
+      buf_push(b, "    gem_pop_frame();\n    return GEM_NIL;\n")
     end
-    out
+    buf_str(b)
   end
 
   # ─── compile_fn ──
@@ -1711,28 +1746,29 @@ fn make_codegen(source_name)
     boxed_vars = captured
     in_top_level = false
 
-    let lines = "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n"
+    let b = buf_new()
+    buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
 
     # Emit #line for function start
     if node.line != nil
-      lines = lines + "#line {node.line} \"{escape_c_string(source_name)}\"\n"
+      buf_push(b, "#line {node.line} \"{escape_c_string(source_name)}\"\n")
     end
 
-    lines = lines + emit_param_bindings(node, params, captured)
+    buf_push(b, emit_param_bindings(node, params, captured))
 
     let fn_line = 0
     if node.line != nil
       fn_line = node.line
     end
-    lines = lines + "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", {fn_line});\n"
+    buf_push(b, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", {fn_line});\n")
 
-    lines = lines + emit_fn_body(body)
+    buf_push(b, emit_fn_body(body))
 
-    lines = lines + "}"
+    buf_push(b, "}")
     boxed_vars = saved_boxed
     in_top_level = saved_top
     local_names = saved_local
-    lines
+    buf_str(b)
   end
 
   # ─── compile_closure_fn ──
@@ -1763,35 +1799,36 @@ fn make_codegen(source_name)
 
     # Generate struct
     let struct_name = "_closure_{name}"
-    let struct_def = "struct {struct_name} \{\n"
+    let sb = buf_new()
+    buf_push(sb, "struct {struct_name} \{\n")
     for cap in captures
-      struct_def = struct_def + "    GemVal *{mangle(cap)};\n"
+      buf_push(sb, "    GemVal *{mangle(cap)};\n")
     end
-    struct_def = struct_def + "};\n"
+    buf_push(sb, "};\n")
+    let struct_def = buf_str(sb)
 
     # Generate function
-    let lines = "static GemVal {name}(void *_env, GemVal *args, int argc) \{\n"
+    let fb = buf_new()
+    buf_push(fb, "static GemVal {name}(void *_env, GemVal *args, int argc) \{\n")
     if len(captures) > 0
-      lines = lines + "    struct {struct_name} *_cls = (struct {struct_name} *)_env;\n"
+      buf_push(fb, "    struct {struct_name} *_cls = (struct {struct_name} *)_env;\n")
       for cap in captures
         let mc = mangle(cap)
-        lines = lines + "    GemVal *{mc} = _cls->{mc};\n"
+        buf_push(fb, "    GemVal *{mc} = _cls->{mc};\n")
       end
     end
 
-    lines = lines + emit_param_bindings(node, params, inner_captured)
+    buf_push(fb, emit_param_bindings(node, params, inner_captured))
+    buf_push(fb, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", 0);\n")
+    buf_push(fb, emit_fn_body(body))
+    buf_push(fb, "}")
 
-    lines = lines + "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", 0);\n"
-
-    lines = lines + emit_fn_body(body)
-
-    lines = lines + "}"
     boxed_vars = saved_boxed
     in_top_level = saved_top
     local_names = saved_local
 
     # Add struct + function to functions list
-    push(functions, struct_def + lines)
+    push(functions, struct_def + buf_str(fb))
 
     {fn_name: name, struct_name: struct_name, captures: captures}
   end
@@ -1864,69 +1901,71 @@ fn make_codegen(source_name)
       end
     end
 
-    let main_c = "int main(int argc, char **argv) \{\n"
-    main_c = main_c + "    GC_INIT();\n"
-    main_c = main_c + "    gem_init(argc, argv);\n"
-    main_c = main_c + "    gem_scheduler_init();\n"
-    main_c = main_c + "    gem_push_frame(\"main\", \"{escape_c_string(source_name)}\", 0);\n"
+    let mb = buf_new()
+    buf_push(mb, "int main(int argc, char **argv) \{\n")
+    buf_push(mb, "    GC_INIT();\n")
+    buf_push(mb, "    gem_init(argc, argv);\n")
+    buf_push(mb, "    gem_scheduler_init();\n")
+    buf_push(mb, "    gem_push_frame(\"main\", \"{escape_c_string(source_name)}\", 0);\n")
     if main_body != ""
-      main_c = main_c + main_body
+      buf_push(mb, main_body)
     end
     if has_main
-      main_c = main_c + "    GemVal _margs[1] = \{GEM_NIL};\n"
-      main_c = main_c + "    gem_fn_main(NULL, _margs, 0);\n"
+      buf_push(mb, "    GemVal _margs[1] = \{GEM_NIL};\n")
+      buf_push(mb, "    gem_fn_main(NULL, _margs, 0);\n")
     end
-    main_c = main_c + "    gem_run_scheduler();\n"
-    main_c = main_c + "    gem_pop_frame();\n    return 0;\n}\n"
-
+    buf_push(mb, "    gem_run_scheduler();\n")
+    buf_push(mb, "    gem_pop_frame();\n    return 0;\n}\n")
+    let main_c = buf_str(mb)
 
     # Assemble
-    let out = ""
+    let ob = buf_new()
     for ei in extern_includes
-      out = out + "#include \"{ei.path}\"\n"
+      buf_push(ob, "#include \"{ei.path}\"\n")
     end
-    out = out + "#include \"gem.h\"\n"
+    buf_push(ob, "#include \"gem.h\"\n")
 
     # Extern C forward declarations (auto-generated from extern fn signatures)
     # Skip when extern include is present — the user manages declarations via headers
     if len(extern_includes) == 0
       for i = 0, len(extern_c_decls)
-        out = out + extern_c_decls[i] + "\n"
+        buf_push(ob, extern_c_decls[i])
+        buf_push(ob, "\n")
       end
     end
 
     # Forward declarations
     for i = 0, len(forward_decls)
-      out = out + forward_decls[i]
+      buf_push(ob, forward_decls[i])
       if i < len(forward_decls) - 1
-        out = out + "\n"
+        buf_push(ob, "\n")
       end
     end
-    out = out + "\n"
+    buf_push(ob, "\n")
 
     # Top-level variable globals
     let tlv_keys = keys(top_level_vars)
     for i = 0, len(tlv_keys)
       let vname = tlv_keys[i]
       if set_contains(top_level_boxed, vname)
-        out = out + "GemVal *gem_v_{vname};\n"
+        buf_push(ob, "GemVal *gem_v_{vname};\n")
       else
-        out = out + "GemVal gem_v_{vname};\n"
+        buf_push(ob, "GemVal gem_v_{vname};\n")
       end
     end
-    out = out + "\n"
+    buf_push(ob, "\n")
 
     # Functions
     for i = 0, len(functions)
-      out = out + functions[i]
+      buf_push(ob, functions[i])
       if i < len(functions) - 1
-        out = out + "\n\n"
+        buf_push(ob, "\n\n")
       end
     end
-    out = out + "\n\n"
+    buf_push(ob, "\n\n")
 
-    out = out + main_c
-    out
+    buf_push(ob, main_c)
+    buf_str(ob)
   end
 
   {compile: compile}

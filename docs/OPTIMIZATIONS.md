@@ -24,8 +24,8 @@ Small strings (< 16 bytes) could be interned in a global table, turning equality
 
 ## Codegen Output
 
-### O(n²) string building in codegen
-188 instances of `out = out + ...` in `compiler/codegen.gem`. Each concatenation allocates a new string and copies the old one. Rewrite to use the existing `buf_*` API (`buf_new`/`buf_push`/`buf_str`). Mechanical but large diff.
+### ~~O(n²) string building in codegen~~ ✓ Done
+All heavy string accumulators in `compiler/codegen.gem` rewritten to use `buf_new`/`buf_push`/`buf_str`. Eliminated ~188 O(n²) concatenations.
 
 ### `x = x + y` auto-optimization
 The compiler could detect the self-append pattern `assign(name, binary("+", var(name), expr))` and emit buffer operations instead of `gem_add`. Would fix O(n²) string building globally without requiring source changes. Non-trivial compiler change — needs tracking of which variables are in "append mode".
