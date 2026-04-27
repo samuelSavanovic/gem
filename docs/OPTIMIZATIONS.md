@@ -57,3 +57,8 @@ Unreachable code after `return`, `break`, `error()` could be stripped. Currently
 
 ### Tail call optimization — HIGH PRIORITY
 Critical for the OTP concurrency model. Gen_server loops, supervisor restarts, and recursive message handlers all rely on self-recursive tail calls that currently grow the stack unboundedly. Prioritize **self-recursive TCO** (function calls itself in tail position) — covers ~95% of OTP patterns. Implementation: codegen detects tail self-calls and emits a `while(1)` loop with parameter reassignment instead of a recursive call. Key challenges: tail position detection across if/else/match branches, `gem_push_frame`/`gem_pop_frame` handling (push once on entry, no pop on loop iteration), multi-param reassignment ordering (needs temps), and boxed param reassignment for closure-captured variables. Mutual recursion (trampolines/goto) is lower priority — rare in OTP patterns.
+
+## Runtime I/O
+
+### Non-blocking I/O for the scheduler
+The scheduler currently has no I/O integration — any file or network operation blocks the entire coroutine scheduler. Platform-specific event loops would let coroutines yield on I/O and be resumed when data is ready, matching OTP's non-blocking model. Platform APIs: **kqueue** (macOS/BSD), **epoll** (Linux), **IOCP** (I/O Completion Ports, Windows). Note: these work for sockets, pipes, and network I/O — regular disk files always report as ready. For true async disk I/O, **io_uring** (Linux) is the solution; macOS/Windows require thread pools. Start with kqueue (current dev platform) for socket I/O, then abstract behind a platform layer.
