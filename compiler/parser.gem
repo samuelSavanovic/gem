@@ -108,7 +108,7 @@ fn make_parser(tokens, source, file)
   let parse_body = fn()
     let stmts = []
     skip_nl()
-    while peek().type != "end" and peek().type != "elif" and peek().type != "else" and peek().type != "when" and peek().type != "after" and not at_end()
+    while peek().type != "end" and peek().type != "elif" and peek().type != "else" and peek().type != "when" and peek().type != "after" and peek().type != "then" and not at_end()
       push(stmts, parse_stmt())
       skip_nl()
     end
@@ -702,6 +702,9 @@ fn make_parser(tokens, source, file)
       let line = t.line
       advance()
       let cond = parse_expr()
+      if peek().type == "then"
+        advance()
+      end
       let then_body = parse_body()
       let else_body = nil
       if peek().type == "elif"

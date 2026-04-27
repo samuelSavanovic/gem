@@ -5,8 +5,8 @@
 load "errors"
 #
 # Token types: NUMBER, STRING, NAME, NEWLINE, EOF,
-# keywords (fn, end, let, if, else, while, for, in, return, break, continue,
-#   do, match, when, and, or, not, true, false, nil, load, extern),
+# keywords (fn, end, let, if, elif, else, then, while, for, in, return, break, continue,
+#   do, match, when, after, and, or, not, true, false, nil, load, extern, blocking),
 # operators (+, -, *, /, %, ==, !=, <=, >=, <, >, =, +=, -=, *=, /=, ->),
 # punctuation ( ( ) [ ] { } . , : | )
 
@@ -129,6 +129,7 @@ fn build_keyword_set()
   t.for = true
   t.in = true
   t.after = true
+  t.then = true
   t
 end
 
