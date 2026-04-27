@@ -55,5 +55,5 @@ Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile t
 ### Dead code elimination
 Unreachable code after `return`, `break`, `error()` could be stripped. Currently emitted as-is.
 
-### Tail call optimization
-Functions that return the result of another function call could reuse the stack frame. Gem's recursive patterns (tree walking, list processing) would benefit significantly. Requires detecting tail position in the codegen.
+### Tail call optimization — HIGH PRIORITY
+Critical for the OTP concurrency model. Gen_server loops, supervisor restarts, and recursive message handlers all rely on self-recursive tail calls that currently grow the stack unboundedly. Prioritize **self-recursive TCO** (function calls itself in tail position) — covers ~95% of OTP patterns. Implementation: codegen detects tail self-calls and emits a `while(1)` loop with parameter reassignment instead of a recursive call. Key challenges: tail position detection across if/else/match branches, `gem_push_frame`/`gem_pop_frame` handling (push once on entry, no pop on loop iteration), multi-param reassignment ordering (needs temps), and boxed param reassignment for closure-captured variables. Mutual recursion (trampolines/goto) is lower priority — rare in OTP patterns.
