@@ -945,7 +945,7 @@ fn make_codegen(source_name)
       let rc_r = compile_expr(node.right)
       let t = tmp()
       let setup = ls + rc_r.setup + "    GemVal {t}[] = \{{rc_r.expr}, {lc}};\n"
-      return {expr: "gem_has_key_fn(NULL, {t}, 2)", setup: setup}
+      return {expr: "gem_in_fn(NULL, {t}, 2)", setup: setup}
     elif op == "=="
       let rc_r = compile_expr(node.right)
       return {expr: "gem_eq({lc}, {rc_r.expr})", setup: ls + rc_r.setup}

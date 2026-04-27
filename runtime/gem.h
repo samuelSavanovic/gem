@@ -166,6 +166,7 @@ GemVal gem_pcall_fn(void *_env, GemVal *args, int argc);
 GemVal gem_keys_fn(void *_env, GemVal *args, int argc);
 GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc);
 GemVal gem_has_key_fn(void *_env, GemVal *args, int argc);
+GemVal gem_in_fn(void *_env, GemVal *args, int argc);
 GemVal gem_substr_fn(void *_env, GemVal *args, int argc);
 GemVal gem_chr_fn(void *_env, GemVal *args, int argc);
 GemVal gem_ord_fn(void *_env, GemVal *args, int argc);

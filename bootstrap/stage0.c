@@ -2592,7 +2592,7 @@ static GemVal gem_fn_tokenize(void *_env, GemVal *args, int argc) {
             }
 #line 512 "compiler/main.gem"
     GemVal _t314[] = {gem_v_kw, gem_v_val};
-            if (gem_truthy(gem_has_key_fn(NULL, _t314, 2))) {
+            if (gem_truthy(gem_in_fn(NULL, _t314, 2))) {
 #line 513 "compiler/main.gem"
     GemVal _t315 = gem_table_new();
     gem_table_set(_t315, gem_string("type"), gem_v_val);
@@ -11495,7 +11495,7 @@ static GemVal _anon_42(void *_env, GemVal *args, int argc) {
 #line 948 "compiler/main.gem"
     GemVal _t2733 = gem_table_new();
     GemVal _t2734[] = {gem_v_t};
-    gem_table_set(_t2733, gem_string("expr"), gem_add(gem_add(gem_string("gem_has_key_fn(NULL, "), gem_to_string_fn(NULL, _t2734, 1)), gem_string(", 2)")));
+    gem_table_set(_t2733, gem_string("expr"), gem_add(gem_add(gem_string("gem_in_fn(NULL, "), gem_to_string_fn(NULL, _t2734, 1)), gem_string(", 2)")));
     gem_table_set(_t2733, gem_string("setup"), gem_v_setup);
                             GemVal _t2735 = _t2733;
                             gem_pop_frame();

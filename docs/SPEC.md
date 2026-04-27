@@ -520,7 +520,7 @@ extern include "stdio.h"
 
 `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `not`, `in`
 
-`key in tbl` — returns `true` if `key` exists in the table. Same as `has_key(tbl, key)`. Precedence is at the comparison level (same as `==`, `<`, etc.).
+`x in tbl` — membership test. For arrays (integer-indexed tables with no string keys): returns `true` if `x` equals any value in the array (linear scan). For string-keyed tables: returns `true` if `x` is a key in the table (same as `has_key(tbl, x)`). Precedence is at the comparison level (same as `==`, `<`, etc.).
 
 **Assignment Operators**
 

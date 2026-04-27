@@ -37,7 +37,7 @@ Audit of missing primitives. Philosophy: small C runtime, implement as much as p
 
 | Gap | Notes | Status |
 |-----|-------|--------|
-| **`in` operator for arrays** | `x in arr` should do linear scan for membership, same as `x in tbl` checks keys. Currently `in` only compiles to `gem_has_key_fn` which checks table keys — silently returns `false` for arrays. Every language with `in` supports both (Python, Elixir). | |
+| **`in` operator for arrays** | `x in arr` should do linear scan for membership, same as `x in tbl` checks keys. Currently `in` only compiles to `gem_has_key_fn` which checks table keys — silently returns `false` for arrays. Every language with `in` supports both (Python, Elixir). | **DONE** — `in` now compiles to `gem_in_fn`: value scan for arrays, key check for string-keyed tables. `has_key` unchanged. |
 
 ## Could be Gem stdlib
 

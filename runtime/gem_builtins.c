@@ -203,6 +203,36 @@ GemVal gem_has_key_fn(void *_env, GemVal *args, int argc) {
     return gem_bool(0);
 }
 
+/* ─── Built-in: in operator (value membership for arrays, key check for tables) ─── */
+
+GemVal gem_in_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("in: expected 2 arguments"); }
+    if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "in: expected table as first argument, got %s", gem_type_str(args[0])); gem_error(buf); }
+    GemTable *t = args[0].table;
+    GemVal needle = args[1];
+
+    /* Array (no string keys): scan values for membership */
+    if (t->str_index == NULL) {
+        for (int i = 0; i < t->len; i++) {
+            if (gem_val_eq(t->vals[i], needle)) return gem_bool(1);
+        }
+        return gem_bool(0);
+    }
+
+    /* String-keyed table: check if needle is a key */
+    if (needle.type == VAL_STRING) {
+        ptrdiff_t idx = shgeti(t->str_index, needle.sval);
+        return gem_bool(idx >= 0);
+    }
+
+    /* Fallback: linear scan of keys */
+    for (int i = 0; i < t->len; i++) {
+        if (gem_val_eq(t->keys[i], needle)) return gem_bool(1);
+    }
+    return gem_bool(0);
+}
+
 /* ─── Built-in: str_replace ─── */
 
 GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc) {

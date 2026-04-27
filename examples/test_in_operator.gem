@@ -1,0 +1,37 @@
+# in operator: array value scan + table key check
+
+# basic integer array
+print(3 in [1, 2, 3])       # true
+print(99 in [1, 2, 3])      # false
+
+# string array
+print("a" in ["a", "b", "c"])   # true
+print("z" in ["a", "b", "c"])   # false
+
+# empty array
+print(1 in [])              # false
+
+# nil in array
+print(nil in [nil, 1, 2])   # true
+print(nil in [1, 2, 3])     # false
+
+# float in array
+print(1.5 in [1.0, 1.5, 2.0])  # true
+print(3.0 in [1.0, 1.5, 2.0])  # false
+
+# string-keyed table: key check (existing behavior preserved)
+let tbl = {name: "gem", version: 1}
+print("name" in tbl)        # true
+print("version" in tbl)     # true
+print("missing" in tbl)     # false
+
+# variable
+let arr = [10, 20, 30]
+let x = 20
+print(x in arr)             # true
+let y = 99
+print(y in arr)             # false
+
+# single-element array
+print(42 in [42])           # true
+print(42 in [43])           # false
