@@ -63,5 +63,15 @@ Mutual recursion (A calls B in tail position, B calls A) could use trampolines o
 
 ## Runtime I/O
 
-### Non-blocking I/O for the scheduler
-The scheduler currently has no I/O integration — any file or network operation blocks the entire coroutine scheduler. Platform-specific event loops would let coroutines yield on I/O and be resumed when data is ready, matching OTP's non-blocking model. Platform APIs: **kqueue** (macOS/BSD), **epoll** (Linux), **IOCP** (I/O Completion Ports, Windows). Note: these work for sockets, pipes, and network I/O — regular disk files always report as ready. For true async disk I/O, **io_uring** (Linux) is the solution; macOS/Windows require thread pools. Start with kqueue (current dev platform) for socket I/O, then abstract behind a platform layer.
+### Thread pool for async I/O — HIGH PRIORITY
+The scheduler currently has no I/O integration — any file or network operation blocks the entire coroutine scheduler. All spawned coroutines effectively run sequentially if they do I/O. This breaks the core concurrency promise.
+
+**Phase 1: Thread pool.** Spawn N OS worker threads at startup. When a coroutine calls `read_file`/`write_file`/`net_*`, the scheduler hands the operation to a worker thread, suspends the coroutine, and resumes it when the thread completes. A wake-pipe (the worker writes a byte when done) lets the scheduler poll for completions without busy-waiting. This fixes all I/O — files, sockets, everything — and the Gem-facing API doesn't change. Existing code just starts working concurrently.
+
+**Phase 2: kqueue/epoll for sockets.** After the thread pool works, socket operations (accept, read, write) can be pulled out of the pool and into a platform event loop: **kqueue** (macOS/BSD), **epoll** (Linux), **IOCP** (Windows). Lower latency and no thread overhead per socket op. File I/O stays in the thread pool since kqueue/epoll report regular files as always ready. For true async disk I/O, **io_uring** (Linux 5.1+) is an option; macOS/Windows stay with the thread pool.
+
+The scheduler loop becomes:
+1. Run ready coroutines until they yield
+2. Check wake-pipe for thread pool completions → mark coroutines ready
+3. Check kqueue/epoll for socket events → mark coroutines ready (phase 2)
+4. If nothing ready, block on kevent/epoll_wait with timeout
