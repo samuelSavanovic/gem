@@ -1,17 +1,32 @@
 # Gem Language
 
-A dynamically typed language that compiles to C. See `docs/SPEC.md` for the full spec.
+A dynamically typed language that compiles to C with Erlang-style concurrency. See `docs/SPEC.md` for the full spec.
 
 ## Project Structure
 
 ```
 compiler/             # self-hosting compiler (lexer, parser, AST, codegen, main)
-std/                  # standard library modules (string, table)
-runtime/              # standalone C runtime (gem.h + gem_*.c + stb_ds.h)
+std/                  # standard library (string, table, math, supervisor, gen_server)
+runtime/              # C runtime — split by category:
+  gem.h               #   public API, tagged values, process table, scheduler decls
+  gem_core.c          #   value constructors, table internals, equality
+  gem_ops.c           #   arithmetic and comparison operators
+  gem_error.c         #   error handling, stack trace printing
+  gem_scheduler.c     #   coroutine scheduler, mailbox, process lifecycle, I/O polling
+  gem_threadpool.c    #   worker thread pool for blocking I/O
+  gem_builtins_core.c #   print, error, len, type, conversions, pcall, argv, etc.
+  gem_builtins_collection.c  # push, pop, keys, values, sort, insert, delete
+  gem_builtins_string.c      # str_replace, substr, chr/ord, buf_* API
+  gem_builtins_math.c        # math ops, random, bitwise operations
+  gem_builtins_io.c          # file I/O, filesystem ops, exec
+  gem_builtins_tcp.c         # TCP socket operations (non-blocking)
+  minicoro.h          #   single-header coroutine library (vendored)
+  stb_ds.h            #   single-header hash maps/arrays (vendored)
 bootstrap/stage0.c    # checked-in C output — bootstrap artifact for clean builds
 build/gem             # compiled compiler binary (gitignored, built from stage0.c)
-examples/             # test programs + run_all.sh
+examples/             # 45 numbered tests + run_all.sh, plus json_parser, http_server, tcp_echo
 docs/SPEC.md          # language spec (source of truth for all language decisions)
+docs/OPTIMIZATIONS.md # tracked future performance improvements
 prototype/            # C prototypes (Boehm GC + minicoro integration, scheduler + mailbox)
 editors/vscode/       # VS Code extension (TextMate grammar)
 editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
@@ -29,7 +44,7 @@ No Python, no external parser generators. The compiler is fully self-hosted.
 ## C Dependencies
 
 - **Boehm GC** (`bdw-gc`) — garbage collector
-- **minicoro** (`prototype/minicoro.h`) — single-header coroutine library, vendored
+- **minicoro** (`runtime/minicoro.h`) — single-header coroutine library, vendored
 - **stb_ds.h** (`runtime/stb_ds.h`) — single-header hash maps/arrays, vendored
 
 ## Building
@@ -41,6 +56,15 @@ make clean             # remove build/ and /tmp/gem_*
 ```
 
 After changing compiler sources, run `make bootstrap` to update `stage0.c`. The bootstrap target verifies the new stage0 can compile itself (fixed-point check) before replacing it.
+
+## Adding a New Builtin
+
+1. Implement the C function in the appropriate `runtime/gem_builtins_*.c` file
+2. Add the declaration to `runtime/gem.h`
+3. Add the name → C function mapping in `compiler/codegen.gem` (`builtin_fns` table)
+4. Update `docs/SPEC.md`
+5. Update both editor extensions (see below)
+6. Write tests, run `make test`, run `make bootstrap`
 
 ## Optimization Tracking
 
@@ -77,8 +101,15 @@ After grammar.js changes: `tree-sitter generate` (requires node via mise), `hx -
 - Compilation target is C source code. `cc` handles optimization and linking.
 - The compiler is self-hosting: `build/gem` compiles `compiler/main.gem` → C → new binary.
 - `bootstrap/stage0.c` is the escape hatch — checked into git so any C compiler can rebuild from scratch.
-- Coroutine stacks must be registered as GC roots via `GC_add_roots()` — see `prototype/gc_coro_test.c`.
-- Scheduler and mailbox (spawn/send/receive) are built on minicoro, not a library — see `prototype/scheduler_test.c`.
+- Concurrency uses minicoro (stackful coroutines) with a round-robin scheduler. Each process gets a 16KB coroutine stack registered as a GC root via `GC_add_roots()`.
+- Preemptive scheduling via reduction counter at loop back-edges (threshold: 4000).
+- TCP builtins use non-blocking sockets + `poll()` in the scheduler loop. Blocking operations (file I/O, exec, `extern blocking fn`) use a 4-thread worker pool.
+- Selective receive (`receive ... when ... end`) scans the mailbox and removes the first matching message, leaving others queued.
+- Process monitoring, linking, and `trap_exit` follow Erlang semantics.
+- Named processes via `register`/`whereis` with auto-cleanup on death.
+- Tail call optimization for self-recursive functions emits `while(1)` loops with parameter reassignment.
+- `extern fn` / `extern blocking fn` provide C interop with type marshaling.
+- No classes, static types, exceptions, or namespaces in v0 — by design. Tables with closures serve as objects, `error()`/`pcall()` for error handling.
 - libdill is dead (crashes on arm64 macOS). Don't use it.
 
 ## Testing
