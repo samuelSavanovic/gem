@@ -5,9 +5,6 @@ load "parser"
 load "codegen"
 
 extern include "compiler_helpers.h"
-extern fn puts(s: String) -> Int
-extern fn gem_get_argv(idx: Int) -> String
-extern fn gem_get_argc() -> Int
 extern fn gem_dirname(path: String) -> String
 extern fn gem_path_join(dir: String, file: String) -> String
 extern fn gem_normalize_path(path: String) -> String
@@ -15,7 +12,7 @@ extern fn gem_file_exists(path: String) -> Int
 
 # ─── Install root (for std/ resolution) ──────────────────────
 
-let install_root = gem_dirname(gem_dirname(gem_get_argv(0)))
+let install_root = gem_dirname(gem_dirname(argv()[0]))
 
 # ─── Load resolution ──────────────────────────────────────────
 
@@ -66,12 +63,12 @@ end
 
 # ─── Main ─────────────────────────────────────────────────────
 
-let argc = gem_get_argc()
+let argc = len(argv())
 if argc < 2
   error("usage: gem_compiler <file.gem>")
 end
 
-let src_path = gem_get_argv(1)
+let src_path = argv()[1]
 let source = read_file(src_path)
 
 let ast = parse_source(source, src_path)
@@ -81,4 +78,4 @@ let resolved_ast = resolve_loads(ast, base_dir, loaded)
 
 let cg = make_codegen(src_path)
 let c_code = cg.compile(resolved_ast)
-puts(c_code)
+print(c_code)

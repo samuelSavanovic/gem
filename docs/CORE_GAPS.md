@@ -50,9 +50,9 @@ Audit of missing primitives. Philosophy: small C runtime, implement as much as p
 
 The compiler (largest Gem program) shows these pain points:
 
-- **Hand-rolled sort** — `set_to_sorted_array` in codegen.gem:93 implements insertion sort because there's no `sort` builtin — **now replaceable with `sort()`**
+- **Hand-rolled sort** — `set_to_sorted_array` in codegen.gem was an insertion sort; **replaced with `sort(keys(free))` call**
 - **14x `[len(x) - 1]`** — accessing the last element is verbose without negative indexing — **still open, negative indexing TODO**
-- **`extern fn` hacks** — compiler_helpers.h provides `gem_eprint`, `gem_exit_process`, `gem_get_argv`, `gem_get_argc`, `gem_file_exists`, `gem_dirname`, `gem_path_join` — **`eprint`, `exit`, `argv` now builtins; path utils still extern**
+- **`extern fn` hacks** — compiler_helpers.h provided `gem_eprint`, `gem_exit_process`, `gem_get_argv`, `gem_get_argc`; **all replaced with `eprint()`, `exit()`, `argv()` builtins**; path utils (`gem_file_exists`, `gem_dirname`, `gem_path_join`) still extern in compiler_helpers.h
 - **Char-by-char `.gem` check** — main.gem:29 checks file extension character by character because `string.ends_with` isn't available without loading std/string
 - **195x `out = out + ...`** — O(n²) string building in codegen because buf_* API is more verbose than `+`
 - **24x `type(x) == "table" and x.tag == ...`** — verbose pattern for what's essentially a tagged union check

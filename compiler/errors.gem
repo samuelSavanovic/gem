@@ -1,8 +1,5 @@
 # Error reporting — Rust-style compile error diagnostics.
 
-extern fn gem_eprint(msg: String) -> Nil
-extern fn gem_exit_process(code: Int) -> Nil
-
 fn get_source_line(source, line_num)
   let current = 1
   let i = 0
@@ -36,8 +33,8 @@ fn compile_error(source, file, line, col, span_len, msg, hint)
     file = "<input>"
   end
   if source == nil or line == nil
-    gem_eprint("\n[Compile Error]: " + msg + "\n")
-    gem_exit_process(1)
+    eprint("\n[Compile Error]: " + msg + "\n")
+    exit(1)
   end
   if col == nil or col < 1
     col = 1
@@ -64,6 +61,6 @@ fn compile_error(source, file, line, col, span_len, msg, hint)
     out = out + "Hint: " + hint + "\n"
   end
 
-  gem_eprint(out)
-  gem_exit_process(1)
+  eprint(out)
+  exit(1)
 end

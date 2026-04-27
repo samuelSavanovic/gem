@@ -90,23 +90,6 @@ fn set_intersect(a, b)
   result
 end
 
-fn set_to_sorted_array(s)
-  let ks = keys(s)
-  # Simple insertion sort
-  let i = 1
-  while i < len(ks)
-    let key = ks[i]
-    let j = i - 1
-    while j >= 0 and ks[j] > key
-      ks[j + 1] = ks[j]
-      j -= 1
-    end
-    ks[j + 1] = key
-    i += 1
-  end
-  ks
-end
-
 fn sorted_array_to_set(arr)
   let s = {}
   for item in arr
@@ -724,7 +707,7 @@ fn make_codegen(source_name)
       set_add(inner_defined, node.block_param)
     end
     let free = collect_free_vars(node.body, inner_defined)
-    let captures = set_to_sorted_array(free)
+    let captures = sort(keys(free))
 
     if len(captures) == 0
       let result = compile_closure_fn(node, [])
