@@ -13,6 +13,10 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
 #ifndef GEM_POOL_SIZE
 #define GEM_POOL_SIZE 4
@@ -68,6 +72,88 @@ static void gem_io_do_exec(GemIORequest *req) {
     req->exit_code = WIFEXITED(ret) ? WEXITSTATUS(ret) : -1;
 }
 
+static void gem_io_do_tcp_connect(GemIORequest *req) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        char buf[256];
+        snprintf(buf, sizeof(buf), "socket failed: %s", strerror(errno));
+        req->error_msg = strdup(buf);
+        return;
+    }
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)req->socket_fd);
+
+    if (inet_pton(AF_INET, req->path, &addr.sin_addr) != 1) {
+        struct hostent *he = gethostbyname(req->path);
+        if (!he) {
+            close(fd);
+            char buf[256];
+            snprintf(buf, sizeof(buf), "cannot resolve '%s'", req->path);
+            req->error_msg = strdup(buf);
+            return;
+        }
+        memcpy(&addr.sin_addr, he->h_addr_list[0], (size_t)he->h_length);
+    }
+
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(fd);
+        char buf[256];
+        snprintf(buf, sizeof(buf), "connect failed: %s", strerror(errno));
+        req->error_msg = strdup(buf);
+        return;
+    }
+
+    req->result_fd = fd;
+}
+
+static void gem_io_do_tcp_accept(GemIORequest *req) {
+    struct sockaddr_in addr;
+    socklen_t addr_len = sizeof(addr);
+    int fd = accept(req->socket_fd, (struct sockaddr *)&addr, &addr_len);
+    if (fd < 0) {
+        char buf[256];
+        snprintf(buf, sizeof(buf), "accept failed: %s", strerror(errno));
+        req->error_msg = strdup(buf);
+        return;
+    }
+    req->result_fd = fd;
+}
+
+static void gem_io_do_tcp_read(GemIORequest *req) {
+    size_t cap = req->max_read > 0 ? req->max_read : 4096;
+    char *buf = (char *)malloc(cap);
+    ssize_t n = read(req->socket_fd, buf, cap);
+    if (n < 0) {
+        free(buf);
+        char errbuf[256];
+        snprintf(errbuf, sizeof(errbuf), "tcp read failed: %s", strerror(errno));
+        req->error_msg = strdup(errbuf);
+        return;
+    }
+    req->result_data = buf;
+    req->result_len = (size_t)n;
+}
+
+static void gem_io_do_tcp_write(GemIORequest *req) {
+    const char *data = req->content;
+    size_t remaining = req->content_len;
+    while (remaining > 0) {
+        ssize_t n = write(req->socket_fd, data, remaining);
+        if (n < 0) {
+            char buf[256];
+            snprintf(buf, sizeof(buf), "tcp write failed: %s", strerror(errno));
+            req->error_msg = strdup(buf);
+            return;
+        }
+        data += n;
+        remaining -= (size_t)n;
+    }
+    req->result_len = req->content_len;
+}
+
 static void *gem_io_worker_fn(void *arg) {
     (void)arg;
     for (;;) {
@@ -89,6 +175,10 @@ static void *gem_io_worker_fn(void *arg) {
             case GEM_IO_APPEND_FILE: gem_io_do_write(req, "ab"); break;
             case GEM_IO_EXEC:        gem_io_do_exec(req); break;
             case GEM_IO_EXTERN:      req->extern_fn(req->extern_args); break;
+            case GEM_IO_TCP_CONNECT: gem_io_do_tcp_connect(req); break;
+            case GEM_IO_TCP_ACCEPT:  gem_io_do_tcp_accept(req); break;
+            case GEM_IO_TCP_READ:    gem_io_do_tcp_read(req); break;
+            case GEM_IO_TCP_WRITE:   gem_io_do_tcp_write(req); break;
         }
 
         __sync_synchronize();
@@ -165,6 +255,35 @@ GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args) {
     pthread_mutex_lock(&gem_io_mutex);
     if (gem_io_q_count >= GEM_IO_QUEUE_CAP) {
         pthread_mutex_unlock(&gem_io_mutex);
+        free(req);
+        return NULL;
+    }
+    gem_io_queue[gem_io_q_tail] = req;
+    gem_io_q_tail = (gem_io_q_tail + 1) % GEM_IO_QUEUE_CAP;
+    gem_io_q_count++;
+    pthread_cond_signal(&gem_io_cond);
+    pthread_mutex_unlock(&gem_io_mutex);
+    return req;
+}
+
+GemIORequest *gem_io_submit_tcp(GemIOOp op, int socket_fd,
+                                const char *data, size_t data_len,
+                                size_t max_read) {
+    GemIORequest *req = (GemIORequest *)calloc(1, sizeof(GemIORequest));
+    req->op = op;
+    req->requester_pid = gem_current_pid;
+    req->socket_fd = socket_fd;
+    req->max_read = max_read;
+    if (data && data_len > 0) {
+        req->content = (char *)malloc(data_len);
+        memcpy(req->content, data, data_len);
+        req->content_len = data_len;
+    }
+
+    pthread_mutex_lock(&gem_io_mutex);
+    if (gem_io_q_count >= GEM_IO_QUEUE_CAP) {
+        pthread_mutex_unlock(&gem_io_mutex);
+        free(req->content);
         free(req);
         return NULL;
     }

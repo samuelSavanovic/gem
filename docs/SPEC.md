@@ -819,6 +819,22 @@ print(items[0])    # a
 
 `exec(command)` — runs `command` via the system shell (`sh -c`). Blocks until the command exits. Returns the exit code as an integer (0 on success). The shell expands glob patterns and environment variables in `command`. Output goes to the process's stdout/stderr unless redirected inside `command`.
 
+**TCP Sockets**
+
+`tcp_listen(host, port)` — creates a TCP server socket bound to `host` (string) on `port` (int). Calls `socket`, `bind`, and `listen` with a backlog of 128. Sets `SO_REUSEADDR`. Returns the socket file descriptor as an integer. Raises an error on failure. Always synchronous (fast).
+
+`tcp_connect(host, port)` — opens a TCP connection to `host:port`. Returns the connected socket file descriptor as an integer. Raises an error if the connection fails or the host cannot be resolved. Supports both IP addresses and hostnames. When called from a spawned process, the connection is performed on the thread pool so the coroutine yields instead of blocking the scheduler.
+
+`tcp_accept(socket)` — accepts an incoming connection on a listening socket. Returns the new connection's file descriptor as an integer. When called from a spawned process, the accept is performed on the thread pool so the coroutine yields instead of blocking the scheduler. Raises an error on failure.
+
+`tcp_read(socket[, max_bytes])` — reads up to `max_bytes` bytes from a connected socket (default 4096). Returns the data as a string. Returns an empty string `""` when the remote end has closed the connection (EOF). When called from a spawned process, the read is performed on the thread pool so the coroutine yields instead of blocking the scheduler.
+
+`tcp_write(socket, data)` — writes the string `data` to a connected socket. Writes all bytes (loops internally on partial writes). Returns the number of bytes written as an integer. When called from a spawned process, the write is performed on the thread pool so the coroutine yields instead of blocking the scheduler.
+
+`tcp_close(socket)` — closes a socket file descriptor. Always synchronous. Returns `nil`.
+
+All six TCP builtins work both from the main process (synchronous/blocking) and from spawned processes (non-blocking via thread pool).
+
 **Negative array indexing** — Integer indices to arrays and strings may be negative. A negative index `i` on a collection of length `n` resolves to `n + i`. So `arr[-1]` is the last element, `arr[-2]` is second-to-last, etc. Indices that remain out of bounds after resolution raise a runtime error.
 
 All builtins are first-class values — they can be stored in variables and passed to functions.

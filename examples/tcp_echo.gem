@@ -1,0 +1,29 @@
+# TCP echo server test
+# Server accepts one connection, echoes back, then closes.
+# Client connects, sends a message, reads the echo, prints it.
+
+let port = 9125
+
+let client_pid = spawn() do
+  # Wait for server to signal it's ready
+  receive
+  when "ready"
+    nil
+  end
+
+  let sock = tcp_connect("127.0.0.1", port)
+  tcp_write(sock, "hello from gem")
+  let response = tcp_read(sock)
+  tcp_close(sock)
+  print(response)
+end
+
+spawn() do
+  let server = tcp_listen("0.0.0.0", port)
+  send(client_pid, "ready")
+  let conn = tcp_accept(server)
+  let data = tcp_read(conn)
+  tcp_write(conn, "echo: " + data)
+  tcp_close(conn)
+  tcp_close(server)
+end
