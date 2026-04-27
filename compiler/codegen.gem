@@ -592,13 +592,11 @@ fn make_codegen(source_name)
   let compile_stmt = nil
   let compile_stmt_return = nil
   let compile_stmts = nil
+  let compile_stmts_tail = nil
   let compile_if = nil
-  let compile_if_return = nil
   let compile_while = nil
   let compile_match = nil
-  let compile_match_return = nil
   let compile_receive_match = nil
-  let compile_receive_match_return = nil
   let compile_call = nil
   let compile_binop = nil
   let compile_anon_fn = nil
@@ -1017,6 +1015,25 @@ fn make_codegen(source_name)
     buf_str(b)
   end
 
+  compile_stmts_tail = fn(stmts, indent, return_pos)
+    if not return_pos
+      return compile_stmts(stmts, indent)
+    end
+    let b = buf_new()
+    if len(stmts) > 0
+      for i = 0, len(stmts) - 1
+        buf_push(b, compile_stmt(stmts[i], indent))
+        buf_push(b, "\n")
+      end
+      buf_push(b, compile_stmt_return(stmts[-1], indent))
+      buf_push(b, "\n")
+    else
+      let p = pad_for(indent)
+      buf_push(b, "{p}gem_pop_frame();\n{p}return GEM_NIL;\n")
+    end
+    buf_str(b)
+  end
+
   # ─── compile_stmt ──
 
   compile_stmt = fn(node, indent)
@@ -1058,13 +1075,13 @@ fn make_codegen(source_name)
       let val_r = compile_expr(value)
       return "{line_dir}{obj_r.setup}{key_r.setup}{val_r.setup}{p}gem_table_set({obj_r.expr}, {key_r.expr}, {val_r.expr});"
     when {tag: "if"}
-      return "{line_dir}" + compile_if(node, indent)
+      return "{line_dir}" + compile_if(node, indent, false)
     when {tag: "while"}
       return "{line_dir}" + compile_while(node, indent)
     when {tag: "match"}
-      return "{line_dir}" + compile_match(node, indent)
+      return "{line_dir}" + compile_match(node, indent, false)
     when {tag: "receive_match"}
-      return "{line_dir}" + compile_receive_match(node, indent)
+      return "{line_dir}" + compile_receive_match(node, indent, false)
     when {tag: "break"}
       return p + "break;"
     when {tag: "continue"}
@@ -1136,13 +1153,13 @@ fn make_codegen(source_name)
       end
       return "{line_dir}{p}gem_pop_frame();\n{p}return GEM_NIL;"
     when {tag: "if"}
-      return "{line_dir}" + compile_if_return(node, indent)
+      return "{line_dir}" + compile_if(node, indent, true)
     when {tag: "while"}
       return "{line_dir}{compile_while(node, indent)}\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
     when {tag: "match"}
-      return "{line_dir}" + compile_match_return(node, indent)
+      return "{line_dir}" + compile_match(node, indent, true)
     when {tag: "receive_match"}
-      return "{line_dir}" + compile_receive_match_return(node, indent)
+      return "{line_dir}" + compile_receive_match(node, indent, true)
     when {tag: "block", stmts: stmts}
       let b = buf_new()
       buf_push(b, "{p}\{\n")
@@ -1175,56 +1192,19 @@ fn make_codegen(source_name)
 
   # ─── compile_if ──
 
-  compile_if = fn(node, indent)
+  compile_if = fn(node, indent, return_pos)
     let p = pad_for(indent)
     let cond_r = compile_expr(node.cond)
     let b = buf_new()
     buf_push(b, cond_r.setup)
     buf_push(b, "{p}if (gem_truthy({cond_r.expr})) \{\n")
-    buf_push(b, compile_stmts(node.then, indent + 1))
+    buf_push(b, compile_stmts_tail(node.then, indent + 1, return_pos))
     if node.else != nil
       buf_push(b, "{p}} else \{\n")
-      buf_push(b, compile_stmts(node.else, indent + 1))
-    end
-    buf_push(b, "{p}}")
-    buf_str(b)
-  end
-
-  # ─── compile_if_return ──
-
-  compile_if_return = fn(node, indent)
-    let p = pad_for(indent)
-    let cond_r = compile_expr(node.cond)
-    let b = buf_new()
-    buf_push(b, cond_r.setup)
-    buf_push(b, "{p}if (gem_truthy({cond_r.expr})) \{\n")
-    let then_body = node.then
-    if len(then_body) > 0
-      for i = 0, len(then_body) - 1
-        buf_push(b, compile_stmt(then_body[i], indent + 1))
-        buf_push(b, "\n")
-      end
-      buf_push(b, compile_stmt_return(then_body[-1], indent + 1))
-      buf_push(b, "\n")
-    else
-      buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
-    end
-    if node.else != nil
+      buf_push(b, compile_stmts_tail(node.else, indent + 1, return_pos))
+    elif return_pos
       buf_push(b, "{p}} else \{\n")
-      let else_body = node.else
-      if len(else_body) > 0
-        for i = 0, len(else_body) - 1
-          buf_push(b, compile_stmt(else_body[i], indent + 1))
-          buf_push(b, "\n")
-        end
-        buf_push(b, compile_stmt_return(else_body[-1], indent + 1))
-        buf_push(b, "\n")
-      else
-        buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
-      end
-    else
-      buf_push(b, "{p}} else \{\n")
-      buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
+      buf_push(b, compile_stmts_tail([], indent + 1, true))
     end
     buf_push(b, "{p}}")
     buf_str(b)
@@ -1249,7 +1229,7 @@ fn make_codegen(source_name)
 
   # ─── compile_match ──
 
-  compile_match = fn(node, indent)
+  compile_match = fn(node, indent, return_pos)
     let p = pad_for(indent)
     let target_r = compile_expr(node.target)
     let t = nil
@@ -1262,73 +1242,9 @@ fn make_codegen(source_name)
     buf_push(b, target_r.setup)
     buf_push(b, "{p}GemVal {t} = {target_r.expr};\n")
     if len(node.whens) == 0
-      # No when clauses — just emit else body if present
       if node.else != nil
-        buf_push(b, compile_stmts(node.else, indent))
-      end
-      buf_push(b, "{p}(void){t};")
-      return buf_str(b)
-    end
-    for i = 0, len(node.whens)
-      let w = node.whens[i]
-      let val_r = compile_expr(w.value)
-      if i == 0
-        buf_push(b, val_r.setup)
-        buf_push(b, "{p}if (gem_truthy({val_r.expr})) \{\n")
-      else
-        buf_push(b, "{p}} else \{\n")
-        buf_push(b, val_r.setup)
-        buf_push(b, "{p}if (gem_truthy({val_r.expr})) \{\n")
-      end
-      if w.bindings != nil
-        for binding in w.bindings
-          buf_push(b, compile_stmt(binding, indent + 1))
-          buf_push(b, "\n")
-        end
-      end
-      buf_push(b, compile_stmts(w.body, indent + 1))
-    end
-    if node.else != nil
-      buf_push(b, "{p}} else \{\n")
-      buf_push(b, compile_stmts(node.else, indent + 1))
-    end
-    # Close all the nesting: each when after the first opens an extra else block
-    buf_push(b, "{p}}")
-    for i = 1, len(node.whens)
-      buf_push(b, "\n{p}}")
-    end
-    buf_str(b)
-  end
-
-  # ─── compile_match_return ──
-
-  compile_match_return = fn(node, indent)
-    let p = pad_for(indent)
-    let target_r = compile_expr(node.target)
-    let t = nil
-    if node.target_var != nil
-      t = mangle(node.target_var)
-    else
-      t = tmp()
-    end
-    let b = buf_new()
-    buf_push(b, target_r.setup)
-    buf_push(b, "{p}GemVal {t} = {target_r.expr};\n")
-    if len(node.whens) == 0
-      # No when clauses — emit else body or return nil
-      if node.else != nil
-        let else_body = node.else
-        if len(else_body) > 0
-          for i = 0, len(else_body) - 1
-            buf_push(b, compile_stmt(else_body[i], indent))
-            buf_push(b, "\n")
-          end
-          buf_push(b, compile_stmt_return(else_body[-1], indent))
-          buf_push(b, "\n")
-        else
-          buf_push(b, "{p}gem_pop_frame();\n{p}return GEM_NIL;\n")
-        end
-      else
+        buf_push(b, compile_stmts_tail(node.else, indent, return_pos))
+      elif return_pos
         buf_push(b, "{p}gem_pop_frame();\n{p}return GEM_NIL;\n")
       end
       buf_push(b, "{p}(void){t};")
@@ -1351,34 +1267,14 @@ fn make_codegen(source_name)
           buf_push(b, "\n")
         end
       end
-      let body = w.body
-      if len(body) > 0
-        for j = 0, len(body) - 1
-          buf_push(b, compile_stmt(body[j], indent + 1))
-          buf_push(b, "\n")
-        end
-        buf_push(b, compile_stmt_return(body[-1], indent + 1))
-        buf_push(b, "\n")
-      else
-        buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
-      end
+      buf_push(b, compile_stmts_tail(w.body, indent + 1, return_pos))
     end
     if node.else != nil
       buf_push(b, "{p}} else \{\n")
-      let else_body = node.else
-      if len(else_body) > 0
-        for i = 0, len(else_body) - 1
-          buf_push(b, compile_stmt(else_body[i], indent + 1))
-          buf_push(b, "\n")
-        end
-        buf_push(b, compile_stmt_return(else_body[-1], indent + 1))
-        buf_push(b, "\n")
-      else
-        buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
-      end
-    else
+      buf_push(b, compile_stmts_tail(node.else, indent + 1, return_pos))
+    elif return_pos
       buf_push(b, "{p}} else \{\n")
-      buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
+      buf_push(b, compile_stmts_tail([], indent + 1, true))
     end
     buf_push(b, "{p}}")
     for i = 1, len(node.whens)
@@ -1389,13 +1285,12 @@ fn make_codegen(source_name)
 
   # ─── compile_receive_match ──
 
-  compile_receive_match = fn(node, indent)
+  compile_receive_match = fn(node, indent, return_pos)
     let p = pad_for(indent)
     let arms = node.arms
     let after_ms = node.after_ms
     let after_body = node.after_body
 
-    # Use the recv_var from the parser (pattern conditions reference it)
     let recv_tmp = mangle(node.recv_var)
     let matched_tmp = tmp()
     let prev_tmp = tmp()
@@ -1405,25 +1300,19 @@ fn make_codegen(source_name)
 
     let b = buf_new()
 
-    # Declare the receive value variable (patterns reference this via mangle(recv_var))
     buf_push(b, "{p}GemVal {recv_tmp} = GEM_NIL;\n")
     buf_push(b, "{p}int {matched_tmp} = -1;\n")
 
-    # Set up deadline if after clause present
     if after_ms != nil
       let ms_r = compile_expr(after_ms)
       buf_push(b, ms_r.setup)
       buf_push(b, "{p}int64_t {deadline_tmp} = gem_now_ms() + (int64_t)({ms_r.expr}).ival;\n")
     end
 
-    # Outer loop: keep scanning until a match or timeout
     buf_push(b, "{p}while (1) \{\n")
     let p2 = pad_for(indent + 1)
 
-    # Get current process
     buf_push(b, "{p2}GemProcess *{proc_tmp} = &gem_proc_table[gem_current_pid];\n")
-
-    # Scan mailbox
     buf_push(b, "{p2}GemMsgNode *{prev_tmp} = NULL;\n")
     buf_push(b, "{p2}GemMsgNode *{cur_tmp} = {proc_tmp}->mailbox.head;\n")
     buf_push(b, "{p2}{matched_tmp} = -1;\n")
@@ -1431,7 +1320,6 @@ fn make_codegen(source_name)
     let p3 = pad_for(indent + 2)
     buf_push(b, "{p3}{recv_tmp} = {cur_tmp}->value;\n")
 
-    # Test each arm's pattern condition
     for i = 0, len(arms)
       let arm = arms[i]
       let cond_r = compile_expr(arm.pattern.condition)
@@ -1445,7 +1333,6 @@ fn make_codegen(source_name)
       end
       buf_push(b, "{pad_for(indent + 3)}{matched_tmp} = {i};\n")
     end
-    # Close all arm conditions
     for i = 0, len(arms)
       buf_push(b, "{p3}}")
       if i < len(arms) - 1
@@ -1454,19 +1341,16 @@ fn make_codegen(source_name)
     end
     buf_push(b, "\n")
 
-    # If matched, splice out node and break
     buf_push(b, "{p3}if ({matched_tmp} >= 0) \{\n")
     let p4 = pad_for(indent + 3)
     buf_push(b, "{p4}gem_mailbox_remove(&{proc_tmp}->mailbox, {prev_tmp}, {cur_tmp});\n")
     buf_push(b, "{p4}break;\n")
     buf_push(b, "{p3}}\n")
 
-    # Advance to next node
     buf_push(b, "{p3}{prev_tmp} = {cur_tmp};\n")
     buf_push(b, "{p3}{cur_tmp} = {cur_tmp}->next;\n")
     buf_push(b, "{p2}}\n")
 
-    # No match found — check timeout or yield
     buf_push(b, "{p2}if ({matched_tmp} >= 0) break;\n")
     if after_ms != nil
       buf_push(b, "{p2}if (gem_now_ms() >= {deadline_tmp}) \{\n")
@@ -1474,7 +1358,6 @@ fn make_codegen(source_name)
       buf_push(b, "{p2}    break;\n")
       buf_push(b, "{p2}}\n")
       buf_push(b, "{p2}gem_selective_yield({deadline_tmp});\n")
-      # Check if timed out after yield
       buf_push(b, "{p2}if ({proc_tmp}->timed_out) \{\n")
       buf_push(b, "{p2}    {matched_tmp} = -2;\n")
       buf_push(b, "{p2}    break;\n")
@@ -1485,7 +1368,7 @@ fn make_codegen(source_name)
 
     buf_push(b, "{p}}\n")
 
-    # Now dispatch based on matched arm
+    # Dispatch based on matched arm
     for i = 0, len(arms)
       let arm = arms[i]
       if i == 0
@@ -1493,153 +1376,26 @@ fn make_codegen(source_name)
       else
         buf_push(b, "{p}} else if ({matched_tmp} == {i}) \{\n")
       end
-      # Emit bindings
       if arm.pattern.bindings != nil
         for binding in arm.pattern.bindings
           buf_push(b, compile_stmt(binding, indent + 1))
           buf_push(b, "\n")
         end
       end
-      buf_push(b, compile_stmts(arm.body, indent + 1))
+      buf_push(b, compile_stmts_tail(arm.body, indent + 1, return_pos))
     end
 
     # After clause
     if after_ms != nil
       buf_push(b, "{p}} else if ({matched_tmp} == -2) \{\n")
       if after_body != nil
-        buf_push(b, compile_stmts(after_body, indent + 1))
+        buf_push(b, compile_stmts_tail(after_body, indent + 1, return_pos))
+      elif return_pos
+        buf_push(b, compile_stmts_tail([], indent + 1, true))
       end
-    end
-
-    buf_push(b, "{p}}")
-    buf_str(b)
-  end
-
-  compile_receive_match_return = fn(node, indent)
-    let p = pad_for(indent)
-    let arms = node.arms
-    let after_ms = node.after_ms
-    let after_body = node.after_body
-
-    let recv_tmp = mangle(node.recv_var)
-    let matched_tmp = tmp()
-    let prev_tmp = tmp()
-    let cur_tmp = tmp()
-    let deadline_tmp = tmp()
-    let proc_tmp = tmp()
-
-    let b = buf_new()
-
-    buf_push(b, "{p}GemVal {recv_tmp} = GEM_NIL;\n")
-    buf_push(b, "{p}int {matched_tmp} = -1;\n")
-
-    if after_ms != nil
-      let ms_r = compile_expr(after_ms)
-      buf_push(b, ms_r.setup)
-      buf_push(b, "{p}int64_t {deadline_tmp} = gem_now_ms() + (int64_t)({ms_r.expr}).ival;\n")
-    end
-
-    buf_push(b, "{p}while (1) \{\n")
-    let p2 = pad_for(indent + 1)
-
-    buf_push(b, "{p2}GemProcess *{proc_tmp} = &gem_proc_table[gem_current_pid];\n")
-    buf_push(b, "{p2}GemMsgNode *{prev_tmp} = NULL;\n")
-    buf_push(b, "{p2}GemMsgNode *{cur_tmp} = {proc_tmp}->mailbox.head;\n")
-    buf_push(b, "{p2}{matched_tmp} = -1;\n")
-    buf_push(b, "{p2}while ({cur_tmp}) \{\n")
-    let p3 = pad_for(indent + 2)
-    buf_push(b, "{p3}{recv_tmp} = {cur_tmp}->value;\n")
-
-    for i = 0, len(arms)
-      let arm = arms[i]
-      let cond_r = compile_expr(arm.pattern.condition)
-      if i == 0
-        buf_push(b, cond_r.setup)
-        buf_push(b, "{p3}if (gem_truthy({cond_r.expr})) \{\n")
-      else
-        buf_push(b, "{p3}} else \{\n")
-        buf_push(b, cond_r.setup)
-        buf_push(b, "{p3}if (gem_truthy({cond_r.expr})) \{\n")
-      end
-      buf_push(b, "{pad_for(indent + 3)}{matched_tmp} = {i};\n")
-    end
-    for i = 0, len(arms)
-      buf_push(b, "{p3}}")
-      if i < len(arms) - 1
-        buf_push(b, "\n")
-      end
-    end
-    buf_push(b, "\n")
-
-    buf_push(b, "{p3}if ({matched_tmp} >= 0) \{\n")
-    let p4 = pad_for(indent + 3)
-    buf_push(b, "{p4}gem_mailbox_remove(&{proc_tmp}->mailbox, {prev_tmp}, {cur_tmp});\n")
-    buf_push(b, "{p4}break;\n")
-    buf_push(b, "{p3}}\n")
-
-    buf_push(b, "{p3}{prev_tmp} = {cur_tmp};\n")
-    buf_push(b, "{p3}{cur_tmp} = {cur_tmp}->next;\n")
-    buf_push(b, "{p2}}\n")
-
-    buf_push(b, "{p2}if ({matched_tmp} >= 0) break;\n")
-    if after_ms != nil
-      buf_push(b, "{p2}if (gem_now_ms() >= {deadline_tmp}) \{\n")
-      buf_push(b, "{p2}    {matched_tmp} = -2;\n")
-      buf_push(b, "{p2}    break;\n")
-      buf_push(b, "{p2}}\n")
-      buf_push(b, "{p2}gem_selective_yield({deadline_tmp});\n")
-      buf_push(b, "{p2}if ({proc_tmp}->timed_out) \{\n")
-      buf_push(b, "{p2}    {matched_tmp} = -2;\n")
-      buf_push(b, "{p2}    break;\n")
-      buf_push(b, "{p2}}\n")
-    else
-      buf_push(b, "{p2}gem_selective_yield(-1);\n")
-    end
-
-    buf_push(b, "{p}}\n")
-
-    # Dispatch with return
-    for i = 0, len(arms)
-      let arm = arms[i]
-      if i == 0
-        buf_push(b, "{p}if ({matched_tmp} == {i}) \{\n")
-      else
-        buf_push(b, "{p}} else if ({matched_tmp} == {i}) \{\n")
-      end
-      if arm.pattern.bindings != nil
-        for binding in arm.pattern.bindings
-          buf_push(b, compile_stmt(binding, indent + 1))
-          buf_push(b, "\n")
-        end
-      end
-      let body = arm.body
-      if len(body) > 0
-        for j = 0, len(body) - 1
-          buf_push(b, compile_stmt(body[j], indent + 1))
-          buf_push(b, "\n")
-        end
-        buf_push(b, compile_stmt_return(body[-1], indent + 1))
-        buf_push(b, "\n")
-      else
-        buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
-      end
-    end
-
-    if after_ms != nil
-      buf_push(b, "{p}} else if ({matched_tmp} == -2) \{\n")
-      if after_body != nil and len(after_body) > 0
-        for j = 0, len(after_body) - 1
-          buf_push(b, compile_stmt(after_body[j], indent + 1))
-          buf_push(b, "\n")
-        end
-        buf_push(b, compile_stmt_return(after_body[-1], indent + 1))
-        buf_push(b, "\n")
-      else
-        buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
-      end
-    else
+    elif return_pos
       buf_push(b, "{p}} else \{\n")
-      buf_push(b, "{p}    gem_pop_frame();\n{p}    return GEM_NIL;\n")
+      buf_push(b, compile_stmts_tail([], indent + 1, true))
     end
 
     buf_push(b, "{p}}")
