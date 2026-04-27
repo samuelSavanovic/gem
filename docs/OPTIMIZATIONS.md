@@ -64,13 +64,22 @@ Mutual recursion (A calls B in tail position, B calls A) could use trampolines o
 ## Runtime I/O
 
 ### ~~Thread pool for async I/O (Phase 1)~~ ✓ Done
-4 OS worker threads (`runtime/gem_threadpool.c`) handle `read_file`, `write_file`, `append_file`, and `exec` when called from a spawned process. The coroutine yields on submission; a wake-pipe notifies the scheduler on completion. Top-level (non-coroutine) I/O remains synchronous. The Gem-facing API is unchanged.
+4 OS worker threads (`runtime/gem_threadpool.c`) handle `read_file`, `write_file`, `append_file`, `exec`, and `extern blocking fn` when called from a spawned process. The coroutine yields on submission; a wake-pipe notifies the scheduler on completion. Top-level (non-coroutine) I/O remains synchronous. The Gem-facing API is unchanged.
+
+### ~~Non-blocking sockets for TCP builtins~~ ✓ Done
+TCP builtins (`tcp_accept`, `tcp_read`, `tcp_write`, `tcp_connect`) use non-blocking sockets + `gem_io_yield(fd, direction)` to yield to the scheduler's `poll()` set. No thread pool involvement — the scheduler resumes the coroutine directly when the fd is ready.
+
+**Why not the thread pool?** Benchmarked both approaches with `wrk -t4 -c100 -d10s` against an HTTP server:
+
+| Approach | Req/sec | Notes |
+|----------|---------|-------|
+| Non-blocking + poll (net.c extern fn) | ~24,000 | Original baseline |
+| Thread pool (tcp builtins v1) | ~1,550 | 15x slower — each request needs 3 thread pool round trips (accept/read/write), 4 workers caps throughput |
+| Non-blocking + poll (tcp builtins v2) | ~23,800 | Matches baseline |
+
+The thread pool adds per-operation overhead: mutex lock → enqueue → cond signal → worker thread pickup → execute → wake-pipe write → scheduler drain → process scan → resume. For socket ops on localhost where the actual I/O is microseconds, this coordination overhead dominates. With 4 workers and 3 ops/request, max throughput is ~4/3 ≈ 1.3k req/s — matches the 1,550 observed.
+
+**Lesson:** Thread pool is correct for file I/O and `exec` (where the kernel provides no readiness notification). For sockets, always use non-blocking + readiness notification (poll, kqueue, epoll).
 
 ### kqueue/epoll for sockets (Phase 2)
-Socket operations (accept, read, write) can be pulled out of the thread pool into a platform event loop: **kqueue** (macOS/BSD), **epoll** (Linux), **IOCP** (Windows). Lower latency and no thread overhead per socket op. File I/O stays in the thread pool since kqueue/epoll report regular files as always ready. For true async disk I/O, **io_uring** (Linux 5.1+) is an option; macOS/Windows stay with the thread pool.
-
-The scheduler loop becomes:
-1. Run ready coroutines until they yield
-2. Check wake-pipe for thread pool completions → mark coroutines ready
-3. Check kqueue/epoll for socket events → mark coroutines ready
-4. If nothing ready, block on kevent/epoll_wait with timeout
+The scheduler currently uses `poll()` for socket readiness. Replacing with **kqueue** (macOS/BSD) or **epoll** (Linux) would improve scalability at high connection counts (thousands of fds). `poll()` scans the entire fd set on each call — O(n) per wake. kqueue/epoll return only ready fds — O(ready). For the current HTTP server benchmark (~100 concurrent connections), `poll()` is not the bottleneck; this optimization matters when scaling to thousands of simultaneous connections.

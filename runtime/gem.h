@@ -287,10 +287,6 @@ typedef enum {
     GEM_IO_APPEND_FILE,
     GEM_IO_EXEC,
     GEM_IO_EXTERN,
-    GEM_IO_TCP_CONNECT,
-    GEM_IO_TCP_ACCEPT,
-    GEM_IO_TCP_READ,
-    GEM_IO_TCP_WRITE,
 } GemIOOp;
 
 typedef struct {
@@ -305,9 +301,6 @@ typedef struct {
     int exit_code;         /* output for exec */
     void (*extern_fn)(void *);  /* for GEM_IO_EXTERN: worker calls this */
     void *extern_args;          /* for GEM_IO_EXTERN: opaque args struct */
-    int socket_fd;         /* input fd for tcp_accept/read/write */
-    int result_fd;         /* output fd from tcp_accept */
-    size_t max_read;       /* max bytes for tcp_read */
     volatile int done;     /* set to 1 by worker thread */
 } GemIORequest;
 
@@ -428,9 +421,6 @@ void gem_threadpool_shutdown(void);
 GemIORequest *gem_io_submit(GemIOOp op, const char *path,
                             const char *content, size_t content_len);
 GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args);
-GemIORequest *gem_io_submit_tcp(GemIOOp op, int socket_fd,
-                                const char *data, size_t data_len,
-                                size_t max_read);
 void gem_io_free_request(GemIORequest *req);
 void gem_io_check_completions(void);
 int gem_io_wake_fd(void);

@@ -1139,6 +1139,11 @@ GemVal gem_exec_fn(void *_env, GemVal *args, int argc) {
 
 /* ─── Built-in: TCP socket primitives ─── */
 
+static void gem_set_nonblocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags >= 0) fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+}
+
 GemVal gem_tcp_connect_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2 || args[0].type != VAL_STRING || args[1].type != VAL_INT) {
@@ -1146,25 +1151,6 @@ GemVal gem_tcp_connect_fn(void *_env, GemVal *args, int argc) {
     }
     const char *host = args[0].sval;
     int port = (int)args[1].ival;
-
-    if (gem_current_pid >= 0) {
-        GemIORequest *req = gem_io_submit_tcp(GEM_IO_TCP_CONNECT, port, NULL, 0, 0);
-        if (!req) { gem_error("tcp_connect: I/O queue full"); }
-        req->path = strdup(host);
-        GemProcess *proc = &gem_proc_table[gem_current_pid];
-        proc->io_request = req;
-        gem_io_pool_yield();
-        proc->io_request = NULL;
-        if (req->error_msg) {
-            char buf[512];
-            snprintf(buf, sizeof(buf), "tcp_connect: %s", req->error_msg);
-            gem_io_free_request(req);
-            gem_error(buf);
-        }
-        int fd = req->result_fd;
-        gem_io_free_request(req);
-        return gem_int(fd);
-    }
 
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -1189,13 +1175,36 @@ GemVal gem_tcp_connect_fn(void *_env, GemVal *args, int argc) {
         memcpy(&addr.sin_addr, he->h_addr_list[0], (size_t)he->h_length);
     }
 
+    if (gem_current_pid >= 0) {
+        gem_set_nonblocking(fd);
+        int rc = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
+        if (rc < 0 && errno != EINPROGRESS) {
+            close(fd);
+            char buf[256];
+            snprintf(buf, sizeof(buf), "tcp_connect: connect failed: %s", strerror(errno));
+            gem_error(buf);
+        }
+        if (rc < 0) {
+            gem_io_yield(fd, 1);
+            int err = 0;
+            socklen_t errlen = sizeof(err);
+            getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &errlen);
+            if (err != 0) {
+                close(fd);
+                char buf[256];
+                snprintf(buf, sizeof(buf), "tcp_connect: connect failed: %s", strerror(err));
+                gem_error(buf);
+            }
+        }
+        return gem_int(fd);
+    }
+
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         close(fd);
         char buf[256];
         snprintf(buf, sizeof(buf), "tcp_connect: connect failed: %s", strerror(errno));
         gem_error(buf);
     }
-
     return gem_int(fd);
 }
 
@@ -1240,13 +1249,14 @@ GemVal gem_tcp_listen_fn(void *_env, GemVal *args, int argc) {
         gem_error(buf);
     }
 
-    if (listen(fd, 128) < 0) {
+    if (listen(fd, 1024) < 0) {
         close(fd);
         char buf[256];
         snprintf(buf, sizeof(buf), "tcp_listen: listen failed: %s", strerror(errno));
         gem_error(buf);
     }
 
+    gem_set_nonblocking(fd);
     return gem_int(fd);
 }
 
@@ -1257,26 +1267,26 @@ GemVal gem_tcp_accept_fn(void *_env, GemVal *args, int argc) {
     }
     int server_fd = (int)args[0].ival;
 
-    if (gem_current_pid >= 0) {
-        GemIORequest *req = gem_io_submit_tcp(GEM_IO_TCP_ACCEPT, server_fd, NULL, 0, 0);
-        if (!req) { gem_error("tcp_accept: I/O queue full"); }
-        GemProcess *proc = &gem_proc_table[gem_current_pid];
-        proc->io_request = req;
-        gem_io_pool_yield();
-        proc->io_request = NULL;
-        if (req->error_msg) {
-            char buf[512];
-            snprintf(buf, sizeof(buf), "tcp_accept: %s", req->error_msg);
-            gem_io_free_request(req);
-            gem_error(buf);
-        }
-        int fd = req->result_fd;
-        gem_io_free_request(req);
-        return gem_int(fd);
-    }
-
     struct sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
+
+    if (gem_current_pid >= 0) {
+        while (1) {
+            int fd = accept(server_fd, (struct sockaddr *)&addr, &addr_len);
+            if (fd >= 0) {
+                gem_set_nonblocking(fd);
+                return gem_int(fd);
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                gem_io_yield(server_fd, 0);
+                continue;
+            }
+            char buf[256];
+            snprintf(buf, sizeof(buf), "tcp_accept: accept failed: %s", strerror(errno));
+            gem_error(buf);
+        }
+    }
+
     int fd = accept(server_fd, (struct sockaddr *)&addr, &addr_len);
     if (fd < 0) {
         char buf[256];
@@ -1297,28 +1307,31 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
         max_bytes = (size_t)args[1].ival;
     }
 
+    char *buf = (char *)GC_MALLOC_ATOMIC(max_bytes + 1);
+
     if (gem_current_pid >= 0) {
-        GemIORequest *req = gem_io_submit_tcp(GEM_IO_TCP_READ, fd, NULL, 0, max_bytes);
-        if (!req) { gem_error("tcp_read: I/O queue full"); }
-        GemProcess *proc = &gem_proc_table[gem_current_pid];
-        proc->io_request = req;
-        gem_io_pool_yield();
-        proc->io_request = NULL;
-        if (req->error_msg) {
-            char buf[512];
-            snprintf(buf, sizeof(buf), "tcp_read: %s", req->error_msg);
-            gem_io_free_request(req);
-            gem_error(buf);
+        while (1) {
+            ssize_t n = read(fd, buf, max_bytes);
+            if (n > 0) {
+                buf[n] = '\0';
+                GemVal r; r.type = VAL_STRING; r.sval = buf;
+                return r;
+            }
+            if (n == 0) {
+                buf[0] = '\0';
+                GemVal r; r.type = VAL_STRING; r.sval = buf;
+                return r;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                gem_io_yield(fd, 0);
+                continue;
+            }
+            char errbuf[256];
+            snprintf(errbuf, sizeof(errbuf), "tcp_read: read failed: %s", strerror(errno));
+            gem_error(errbuf);
         }
-        char *data = (char *)GC_MALLOC_ATOMIC(req->result_len + 1);
-        memcpy(data, req->result_data, req->result_len);
-        data[req->result_len] = '\0';
-        gem_io_free_request(req);
-        GemVal r; r.type = VAL_STRING; r.sval = data;
-        return r;
     }
 
-    char *buf = (char *)GC_MALLOC_ATOMIC(max_bytes + 1);
     ssize_t n = read(fd, buf, max_bytes);
     if (n < 0) {
         char errbuf[256];
@@ -1337,39 +1350,39 @@ GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
     }
     int fd = (int)args[0].ival;
     const char *data = args[1].sval;
-    size_t len = strlen(data);
+    size_t total = strlen(data);
 
     if (gem_current_pid >= 0) {
-        GemIORequest *req = gem_io_submit_tcp(GEM_IO_TCP_WRITE, fd, data, len, 0);
-        if (!req) { gem_error("tcp_write: I/O queue full"); }
-        GemProcess *proc = &gem_proc_table[gem_current_pid];
-        proc->io_request = req;
-        gem_io_pool_yield();
-        proc->io_request = NULL;
-        if (req->error_msg) {
-            char buf[512];
-            snprintf(buf, sizeof(buf), "tcp_write: %s", req->error_msg);
-            gem_io_free_request(req);
+        size_t sent = 0;
+        while (sent < total) {
+            ssize_t n = write(fd, data + sent, total - sent);
+            if (n > 0) {
+                sent += (size_t)n;
+                continue;
+            }
+            if (n == 0) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                gem_io_yield(fd, 1);
+                continue;
+            }
+            char buf[256];
+            snprintf(buf, sizeof(buf), "tcp_write: write failed: %s", strerror(errno));
             gem_error(buf);
         }
-        int written = (int)req->result_len;
-        gem_io_free_request(req);
-        return gem_int(written);
+        return gem_int((int64_t)sent);
     }
 
-    const char *p = data;
-    size_t remaining = len;
-    while (remaining > 0) {
-        ssize_t n = write(fd, p, remaining);
+    size_t sent = 0;
+    while (sent < total) {
+        ssize_t n = write(fd, data + sent, total - sent);
         if (n < 0) {
             char buf[256];
             snprintf(buf, sizeof(buf), "tcp_write: write failed: %s", strerror(errno));
             gem_error(buf);
         }
-        p += n;
-        remaining -= (size_t)n;
+        sent += (size_t)n;
     }
-    return gem_int((int64_t)len);
+    return gem_int((int64_t)total);
 }
 
 GemVal gem_tcp_close_fn(void *_env, GemVal *args, int argc) {
