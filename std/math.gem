@@ -1,0 +1,47 @@
+# std/math — math utilities for Gem
+#
+# Usage:
+#   load "std/math"
+#   let x = math.min(3, 1)       # => 1
+#   let y = math.clamp(10, 0, 5) # => 5
+
+fn _math_min(a, b)
+  if a < b
+    return a
+  end
+  b
+end
+
+fn _math_max(a, b)
+  if a > b
+    return a
+  end
+  b
+end
+
+fn _math_clamp(val, low, high)
+  if val < low
+    return low
+  end
+  if val > high
+    return high
+  end
+  val
+end
+
+fn _math_assert(cond, msg)
+  if not cond
+    if msg == nil
+      error("assertion failed")
+    else
+      error("assertion failed: {msg}")
+    end
+  end
+end
+
+let math = {
+  min: _math_min,
+  max: _math_max,
+  clamp: _math_clamp,
+  assert: _math_assert
+}

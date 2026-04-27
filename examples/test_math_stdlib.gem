@@ -1,0 +1,59 @@
+load "std/math"
+
+let pass = 0
+let fail = 0
+
+fn check(name, got, expected)
+  if to_string(got) == to_string(expected)
+    pass += 1
+  else
+    print("FAIL: {name} — got {got}, expected {expected}")
+    fail += 1
+  end
+end
+
+# ─── math.min ────────────────────────────────────────────────
+
+check("min basic", math.min(3, 1), 1)
+check("min equal", math.min(5, 5), 5)
+check("min negative", math.min(-3, -1), -3)
+check("min float", math.min(1.5, 2.5), 1.5)
+check("min mixed", math.min(1, 2.5), 1)
+check("min strings", math.min("b", "a"), "a")
+
+# ─── math.max ────────────────────────────────────────────────
+
+check("max basic", math.max(3, 1), 3)
+check("max equal", math.max(5, 5), 5)
+check("max negative", math.max(-3, -1), -1)
+check("max float", math.max(1.5, 2.5), 2.5)
+check("max strings", math.max("a", "b"), "b")
+
+# ─── math.clamp ─────────────────────────────────────────────
+
+check("clamp in range", math.clamp(5, 0, 10), 5)
+check("clamp below", math.clamp(-5, 0, 10), 0)
+check("clamp above", math.clamp(15, 0, 10), 10)
+check("clamp at low", math.clamp(0, 0, 10), 0)
+check("clamp at high", math.clamp(10, 0, 10), 10)
+check("clamp float", math.clamp(1.5, 2.0, 3.0), 2.0)
+
+# ─── math.assert ─────────────────────────────────────────────
+
+math.assert(true, "should not fail")
+math.assert(1 == 1, "equality")
+math.assert(len([1, 2]) == 2, "len check")
+
+let result = pcall(fn() math.assert(false, "expected failure") end)
+check("assert fails", result.ok, false)
+
+let result2 = pcall(fn() math.assert(false) end)
+check("assert no msg", result2.ok, false)
+
+# ─── Summary ─────────────────────────────────────────────────
+
+print("")
+print("math stdlib tests: {pass} passed, {fail} failed")
+if fail > 0
+  exit(1)
+end

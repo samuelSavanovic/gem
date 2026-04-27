@@ -1,0 +1,134 @@
+load "std/table"
+
+let pass = 0
+let fail = 0
+
+fn check(name, got, expected)
+  if to_string(got) == to_string(expected)
+    pass += 1
+  else
+    print("FAIL: {name} — got {got}, expected {expected}")
+    fail += 1
+  end
+end
+
+# ─── table.sort ──────────────────────────────────────────────
+
+let a = [3, 1, 2]
+table.sort(a)
+check("sort default", a, [1, 2, 3])
+
+let b = [5, 3, 8, 1]
+table.sort(b, fn(x, y) y - x end)
+check("sort desc", b, [8, 5, 3, 1])
+
+let empty = []
+table.sort(empty)
+check("sort empty", empty, [])
+
+let single = [42]
+table.sort(single)
+check("sort single", single, [42])
+
+# ─── table.slice ─────────────────────────────────────────────
+
+check("slice basic", table.slice([10, 20, 30, 40, 50], 1, 3), [20, 30, 40])
+check("slice from start", table.slice([1, 2, 3], 0, 2), [1, 2])
+check("slice past end", table.slice([1, 2, 3], 1, 100), [2, 3])
+check("slice empty", table.slice([], 0, 5), [])
+check("slice zero len", table.slice([1, 2, 3], 1, 0), [])
+check("slice negative start", table.slice([10, 20, 30, 40], -2, 2), [30, 40])
+
+# ─── table.index_of ─────────────────────────────────────────
+
+check("index_of found", table.index_of([10, 20, 30], 20), 1)
+check("index_of first", table.index_of([1, 2, 3], 1), 0)
+check("index_of last", table.index_of([1, 2, 3], 3), 2)
+check("index_of missing", table.index_of([1, 2, 3], 99), -1)
+check("index_of empty", table.index_of([], 1), -1)
+check("index_of string", table.index_of(["a", "b", "c"], "b"), 1)
+
+# ─── table.concat ────────────────────────────────────────────
+
+check("concat basic", table.concat([1, 2], [3, 4]), [1, 2, 3, 4])
+check("concat empty left", table.concat([], [1, 2]), [1, 2])
+check("concat empty right", table.concat([1, 2], []), [1, 2])
+check("concat both empty", table.concat([], []), [])
+
+# ─── table.copy ──────────────────────────────────────────────
+
+let orig_arr = [1, 2, 3]
+let copy_arr = table.copy(orig_arr)
+check("copy array", copy_arr, [1, 2, 3])
+push(copy_arr, 4)
+check("copy array independent", len(orig_arr), 3)
+
+let orig_tbl = {a: 1, b: 2}
+let copy_tbl = table.copy(orig_tbl)
+check("copy table has a", copy_tbl.a, 1)
+check("copy table has b", copy_tbl.b, 2)
+copy_tbl.c = 3
+check("copy table independent", has_key(orig_tbl, "c"), false)
+
+# ─── table.flat_map ──────────────────────────────────────────
+
+check("flat_map basic", table.flat_map([1, 2, 3], fn(x) [x, x * 10] end), [1, 10, 2, 20, 3, 30])
+check("flat_map empty", table.flat_map([], fn(x) [x] end), [])
+check("flat_map scalar", table.flat_map([1, 2], fn(x) x * 2 end), [2, 4])
+
+# ─── table.zip ───────────────────────────────────────────────
+
+check("zip basic", table.zip([1, 2, 3], ["a", "b", "c"]), [[1, "a"], [2, "b"], [3, "c"]])
+check("zip unequal", table.zip([1, 2], ["a", "b", "c"]), [[1, "a"], [2, "b"]])
+check("zip empty", table.zip([], [1, 2]), [])
+
+# ─── table.unique ────────────────────────────────────────────
+
+check("unique basic", table.unique([1, 2, 2, 3, 1]), [1, 2, 3])
+check("unique empty", table.unique([]), [])
+check("unique no dupes", table.unique([1, 2, 3]), [1, 2, 3])
+check("unique strings", table.unique(["a", "b", "a"]), ["a", "b"])
+
+# ─── table.count ─────────────────────────────────────────────
+
+check("count basic", table.count([1, 2, 3, 4, 5], fn(x) x > 3 end), 2)
+check("count none", table.count([1, 2, 3], fn(x) x > 10 end), 0)
+check("count all", table.count([1, 2, 3], fn(x) x > 0 end), 3)
+check("count empty", table.count([], fn(x) true end), 0)
+
+# ─── table.flatten ───────────────────────────────────────────
+
+check("flatten basic", table.flatten([[1, 2], [3, 4], [5]]), [1, 2, 3, 4, 5])
+check("flatten mixed", table.flatten([1, [2, 3], 4]), [1, 2, 3, 4])
+check("flatten empty", table.flatten([]), [])
+check("flatten no nesting", table.flatten([1, 2, 3]), [1, 2, 3])
+check("flatten empty inner", table.flatten([[], [1], []]), [1])
+
+# ─── table.group_by ──────────────────────────────────────────
+
+let grouped = table.group_by([1, 2, 3, 4, 5, 6], fn(x)
+  if x % 2 == 0
+    return "even"
+  end
+  "odd"
+end)
+let even = grouped["even"]
+let odd = grouped["odd"]
+table.sort(even)
+table.sort(odd)
+check("group_by even", even, [2, 4, 6])
+check("group_by odd", odd, [1, 3, 5])
+
+let by_len = table.group_by(["hi", "hey", "yo", "sup"], fn(s) to_string(len(s)) end)
+check("group_by len 2", by_len["2"], ["hi", "yo"])
+check("group_by len 3", by_len["3"], ["hey", "sup"])
+
+check("group_by empty", table.group_by([], fn(x) x end), {})
+
+# ─── Summary ─────────────────────────────────────────────────
+
+print("")
+print("table stdlib tests: {pass} passed, {fail} failed")
+if fail > 0
+  exit(1)
+end

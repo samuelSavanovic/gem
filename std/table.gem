@@ -102,6 +102,185 @@ fn _table_contains(arr, value)
   false
 end
 
+# ─── sort(arr, cmp?) ─────────────────────────────────────────
+
+fn _table_sort(arr, cmp)
+  if cmp == nil
+    sort(arr)
+  else
+    sort(arr, cmp)
+  end
+end
+
+# ─── slice(arr, start, length) ───────────────────────────────
+
+fn _table_slice(arr, start, length)
+  let result = []
+  let n = len(arr)
+  if start < 0
+    start = n + start
+  end
+  if start < 0
+    start = 0
+  end
+  let stop = start + length
+  if stop > n
+    stop = n
+  end
+  let i = start
+  while i < stop
+    push(result, arr[i])
+    i += 1
+  end
+  result
+end
+
+# ─── index_of(arr, val) ──────────────────────────────────────
+
+fn _table_index_of(arr, val)
+  let i = 0
+  while i < len(arr)
+    if arr[i] == val
+      return i
+    end
+    i += 1
+  end
+  -1
+end
+
+# ─── concat(a, b) ────────────────────────────────────────────
+
+fn _table_concat(a, b)
+  let result = []
+  for item in a
+    push(result, item)
+  end
+  for item in b
+    push(result, item)
+  end
+  result
+end
+
+# ─── copy(tbl) ───────────────────────────────────────────────
+
+fn _table_copy(tbl)
+  let ks = keys(tbl)
+  if len(ks) > 0 and type(ks[0]) == "int"
+    let result = []
+    for item in tbl
+      push(result, item)
+    end
+    return result
+  end
+  let result = {}
+  for k, v in tbl
+    result[k] = v
+  end
+  result
+end
+
+# ─── flat_map(arr, fn) ───────────────────────────────────────
+
+fn _table_flat_map(arr, f)
+  let result = []
+  for item in arr
+    let mapped = f(item)
+    if type(mapped) == "table"
+      let ks = keys(mapped)
+      if len(ks) > 0 and type(ks[0]) == "int"
+        for sub in mapped
+          push(result, sub)
+        end
+      else
+        push(result, mapped)
+      end
+    else
+      push(result, mapped)
+    end
+  end
+  result
+end
+
+# ─── zip(a, b) ───────────────────────────────────────────────
+
+fn _table_zip(a, b)
+  let result = []
+  let n = len(a)
+  if len(b) < n
+    n = len(b)
+  end
+  let i = 0
+  while i < n
+    push(result, [a[i], b[i]])
+    i += 1
+  end
+  result
+end
+
+# ─── unique(arr) ─────────────────────────────────────────────
+
+fn _table_unique(arr)
+  let seen = {}
+  let result = []
+  for item in arr
+    let key = to_string(item)
+    if not has_key(seen, key)
+      seen[key] = true
+      push(result, item)
+    end
+  end
+  result
+end
+
+# ─── count(arr, fn) ──────────────────────────────────────────
+
+fn _table_count(arr, f)
+  let n = 0
+  for item in arr
+    if f(item)
+      n += 1
+    end
+  end
+  n
+end
+
+# ─── flatten(arr) ────────────────────────────────────────────
+
+fn _table_flatten(arr)
+  let result = []
+  for item in arr
+    if type(item) == "table"
+      let ks = keys(item)
+      if len(ks) == 0
+        # empty table/array — skip
+      elif type(ks[0]) == "int"
+        for sub in item
+          push(result, sub)
+        end
+      else
+        push(result, item)
+      end
+    else
+      push(result, item)
+    end
+  end
+  result
+end
+
+# ─── group_by(arr, fn) ───────────────────────────────────────
+
+fn _table_group_by(arr, f)
+  let groups = {}
+  for item in arr
+    let key = f(item)
+    if not has_key(groups, key)
+      groups[key] = []
+    end
+    push(groups[key], item)
+  end
+  groups
+end
+
 # ─── Namespace table ─────────────────────────────────────────
 
 let table = {
@@ -113,5 +292,16 @@ let table = {
   any: _table_any,
   all: _table_all,
   reverse: _table_reverse,
-  contains: _table_contains
+  contains: _table_contains,
+  sort: _table_sort,
+  slice: _table_slice,
+  index_of: _table_index_of,
+  concat: _table_concat,
+  copy: _table_copy,
+  flat_map: _table_flat_map,
+  zip: _table_zip,
+  unique: _table_unique,
+  count: _table_count,
+  flatten: _table_flatten,
+  group_by: _table_group_by
 }

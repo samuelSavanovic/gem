@@ -41,22 +41,22 @@ Audit of missing primitives. Philosophy: small C runtime, implement as much as p
 
 ## Could be Gem stdlib
 
-| Gap | Notes |
-|-----|-------|
-| **`min(a, b)` / `max(a, b)`** | Comparison + conditional. Could be variadic: `min(1, 2, 3)`. Fundamental for any real program. |
-| **`clamp(val, low, high)`** | Trivial with min/max but common enough to include. |
-| **`assert(cond, msg)`** | `if not cond then error(msg) end`. Common in tests and invariant checking. |
-| **`table.sort(arr, cmp)`** | Gem wrapper around C `sort` builtin with default comparator. |
-| **`table.slice(arr, start, len)`** | Easy in Gem with a loop + push. |
-| **`table.index_of(arr, val)`** | Linear scan, easy in Gem. |
-| **`table.concat(a, b)`** | Loop + push, easy in Gem. |
-| **`table.copy(tbl)`** | `for k, v in tbl; copy[k] = v; end`. Shallow copy. |
-| **`table.flat_map(arr, fn)`** | Gem, using concat. |
-| **`table.zip(a, b)`** | Gem. |
-| **`table.unique(arr)`** | Gem, using has_key for dedup. |
-| **`table.count(arr, fn)`** | Count elements matching predicate. |
-| **`table.flatten(arr)`** | Flatten nested arrays one level. |
-| **`table.group_by(arr, fn)`** | Group elements by function result. |
+| Gap | Notes | Status |
+|-----|-------|--------|
+| **`min(a, b)` / `max(a, b)`** | Comparison + conditional. Fundamental for any real program. | **DONE** — `math.min`, `math.max` in `std/math` |
+| **`clamp(val, low, high)`** | Trivial with min/max but common enough to include. | **DONE** — `math.clamp` in `std/math` |
+| **`assert(cond, msg)`** | `if not cond then error(msg) end`. Common in tests and invariant checking. | **DONE** — `math.assert` in `std/math` |
+| **`table.sort(arr, cmp)`** | Gem wrapper around C `sort` builtin with default comparator. | **DONE** — `table.sort` in `std/table` |
+| **`table.slice(arr, start, len)`** | Easy in Gem with a loop + push. | **DONE** — `table.slice` in `std/table` |
+| **`table.index_of(arr, val)`** | Linear scan, easy in Gem. | **DONE** — `table.index_of` in `std/table` |
+| **`table.concat(a, b)`** | Loop + push, easy in Gem. | **DONE** — `table.concat` in `std/table` |
+| **`table.copy(tbl)`** | `for k, v in tbl; copy[k] = v; end`. Shallow copy. | **DONE** — `table.copy` in `std/table` |
+| **`table.flat_map(arr, fn)`** | Gem, using concat. | **DONE** — `table.flat_map` in `std/table` |
+| **`table.zip(a, b)`** | Gem. | **DONE** — `table.zip` in `std/table` |
+| **`table.unique(arr)`** | Gem, using has_key for dedup. | **DONE** — `table.unique` in `std/table` |
+| **`table.count(arr, fn)`** | Count elements matching predicate. | **DONE** — `table.count` in `std/table` |
+| **`table.flatten(arr)`** | Flatten nested arrays one level. | **DONE** — `table.flatten` in `std/table` |
+| **`table.group_by(arr, fn)`** | Group elements by function result. | **DONE** — `table.group_by` in `std/table` |
 | **`table.last(arr)`** | ~~`arr[len(arr) - 1]`. Trivial but very common pattern. Moot if negative indexing lands.~~ Moot — negative indexing works. |
 | **`string.char_at(s, i)`** | ~~`chr(ord(s, i))`. Minor but the round-trip through ord/chr is non-obvious.~~ Moot — `s[i]` indexing works. |
 

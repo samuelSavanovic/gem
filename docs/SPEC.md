@@ -211,6 +211,9 @@ else
   print("small")
 end
 
+# Optional 'then' keyword — allows single-line bodies
+if x > 10 then "big" else "small" end
+
 while running
   step()
 end
@@ -892,6 +895,24 @@ table.each(parts) { |item| print(item) }
 - `table.all(arr, fn)` — return true if fn(item) is truthy for all elements
 - `table.reverse(arr)` — return new array with elements in reverse order
 - `table.contains(arr, value)` — linear scan for value equality
+- `table.sort(arr[, cmp])` — sort array in-place. Without `cmp`, uses default ascending order. With `cmp`, uses `cmp(a, b)` returning negative/zero/positive. Wrapper around the `sort` builtin.
+- `table.slice(arr, start, len)` — return new array with `len` elements starting at `start`. Negative `start` counts from end.
+- `table.index_of(arr, val)` — return index of first occurrence of `val`, or -1 if not found
+- `table.concat(a, b)` — return new array with elements of `a` followed by elements of `b`
+- `table.copy(tbl)` — shallow copy of an array or string-keyed table. Mutations to the copy do not affect the original.
+- `table.flat_map(arr, fn)` — map each element with `fn`, then flatten one level. If `fn` returns an array, its elements are inlined; scalars are kept as-is.
+- `table.zip(a, b)` — return array of `[a[i], b[i]]` pairs, truncated to the shorter array
+- `table.unique(arr)` — return new array with duplicate values removed (first occurrence kept). Uses `to_string` for identity comparison.
+- `table.count(arr, fn)` — count elements where `fn(item)` is truthy
+- `table.flatten(arr)` — flatten one level of nesting. Nested arrays are inlined; non-array elements are kept as-is. Empty arrays are dropped.
+- `table.group_by(arr, fn)` — group elements by the string key returned by `fn(item)`. Returns a table mapping keys to arrays of matching elements.
+
+`std/math` — exports `math` table:
+
+- `math.min(a, b)` — return the smaller of two comparable values
+- `math.max(a, b)` — return the larger of two comparable values
+- `math.clamp(val, low, high)` — constrain `val` to the range `[low, high]`
+- `math.assert(cond[, msg])` — raise an error if `cond` is falsy. Optional `msg` is included in the error message.
 
 The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`buf_str()`, and `substr()`. `split` and `index_of` are only available through `std/string` (not as bare builtins).
 
