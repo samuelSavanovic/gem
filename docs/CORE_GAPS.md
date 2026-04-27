@@ -33,6 +33,12 @@ Audit of missing primitives. Philosophy: small C runtime, implement as much as p
 | **`list_dir(path)`** | `opendir`/`readdir` loop, returns array of filenames excluding `.` and `..`. | **DONE** |
 | **`is_dir(path)`** | `stat()` + `S_ISDIR` macro. Returns bool. | **DONE** |
 
+## Language semantics
+
+| Gap | Notes | Status |
+|-----|-------|--------|
+| **`in` operator for arrays** | `x in arr` should do linear scan for membership, same as `x in tbl` checks keys. Currently `in` only compiles to `gem_has_key_fn` which checks table keys — silently returns `false` for arrays. Every language with `in` supports both (Python, Elixir). | |
+
 ## Could be Gem stdlib
 
 | Gap | Notes |

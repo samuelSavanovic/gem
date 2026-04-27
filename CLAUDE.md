@@ -46,7 +46,7 @@ After changing compiler sources, run `make bootstrap` to update `stage0.c`. The 
 
 ## Spec Maintenance
 
-After any language change (new syntax, new builtin, changed semantics), update `docs/SPEC.md` to reflect the change. The spec is the source of truth — if it disagrees with the code, fix the spec. Also update `docs/SELF_HOST_FOLLOWUPS.md` if the change completes a listed item.
+After any language change (new syntax, new builtin, changed semantics), update `docs/SPEC.md` to reflect the change. The spec is the source of truth — if it disagrees with the code, fix the spec.
 
 ## Editor Extension Maintenance
 
