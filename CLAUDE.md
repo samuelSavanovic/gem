@@ -7,7 +7,7 @@ A dynamically typed language that compiles to C. See `docs/SPEC.md` for the full
 ```
 compiler/             # self-hosting compiler (lexer, parser, AST, codegen, main)
 std/                  # standard library modules (string, table)
-runtime/              # standalone C runtime (gem.h + gem.c + stb_ds.h)
+runtime/              # standalone C runtime (gem.h + gem_*.c + stb_ds.h)
 bootstrap/stage0.c    # checked-in C output — bootstrap artifact for clean builds
 build/gem             # compiled compiler binary (gitignored, built from stage0.c)
 examples/             # test programs + run_all.sh
