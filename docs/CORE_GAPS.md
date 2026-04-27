@@ -9,7 +9,7 @@ Audit of missing primitives. Philosophy: small C runtime, implement as much as p
 | **`delete(tbl, key)`** | No way to remove a key from the stb_ds hash map from Gem. You can set to nil but `has_key` still returns true, `keys()` still lists it. Fundamental hole. | **DONE** |
 | **`pop(arr)`** | You can `push` but can't remove the last element. Array length is internal to GemTable — can't shrink it from Gem. Blocks stack/queue patterns. | **DONE** |
 | **`sort(arr)` / `sort(arr, cmp)`** | C qsort with a Gem comparison callback. ~10-50x faster than a pure Gem quicksort. The compiler already has a hand-rolled insertion sort (codegen.gem:93). | **DONE** |
-| **Negative array indexing** | `arr[-1]` for last element. Change in `gem_table_get`. Currently requires `arr[len(arr) - 1]` — 14 instances in the compiler alone. Huge ergonomic win. | TODO |
+| **Negative array indexing** | `arr[-1]` for last element. Change in `gem_table_get`. Currently requires `arr[len(arr) - 1]` — 14 instances in the compiler alone. Huge ergonomic win. | **DONE** |
 | **`eprint(...)`** | Print to stderr. The compiler had to hack this with `extern fn gem_eprint` in compiler_helpers.h. Real programs need stdout vs stderr distinction. | **DONE** |
 | **`append_file(path, content)`** | read_file and write_file exist but no append mode. Needed for logging, incremental output. | **DONE** |
 | **`floor(x)`, `ceil(x)`, `round(x)`** | Need `math.h`. `to_int` truncates toward zero, which is not `floor` for negatives. | **DONE** |
@@ -17,7 +17,7 @@ Audit of missing primitives. Philosophy: small C runtime, implement as much as p
 | **`pow(x, y)`** | Needs `math.h`. Can't exponentiate floats in Gem. | **DONE** |
 | **`sqrt(x)`** | Needs `math.h`. | **DONE** |
 | **`random()` / `random(n)`** | Needs C's random number generator. No way to generate randomness from Gem. | **DONE** |
-| **Bitwise ops: `band`, `bor`, `bxor`, `bnot`, `bshl`, `bshr`** | Operate on the int64 inside the tagged value — no way to express this in Gem. Could be builtins or operators. | TODO |
+| **Bitwise ops: `band`, `bor`, `bxor`, `bnot`, `bshl`, `bshr`** | Operate on the int64 inside the tagged value — no way to express this in Gem. Could be builtins or operators. | **DONE** |
 | **`exit(code)`** | `error()` always exits with 1. The compiler uses `extern fn gem_exit_process`. No clean exit or custom exit codes. | **DONE** |
 | **`argv`** | No access to command-line arguments. The compiler uses `extern fn gem_get_argc/gem_get_argv`. Should be a built-in array. | **DONE** — `argv()` returns array |
 | **`getenv(name)`** | Needs C stdlib `getenv()`. | **DONE** |

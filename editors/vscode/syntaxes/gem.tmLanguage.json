@@ -63,7 +63,7 @@
 
     "builtin": {
       "name": "support.function.builtin.gem",
-      "match": "\\b(print|error|len|type|to_string|to_int|to_float|push|pcall|keys|str_replace|has_key|substr|chr|ord|buf_new|buf_push|buf_str|spawn|send|receive|monitor|spawn_monitor|register|whereis|time_ms|kill|link|unlink|spawn_link|process_flag|make_ref|send_after|cancel_timer|process_info|read_file|write_file|delete|pop|values|eprint|exit|argv|sort|floor|ceil|round|abs|pow|sqrt|random|append_file|getenv|input|insert|remove_at)\\b(?=\\s*[({])"
+      "match": "\\b(print|error|len|type|to_string|to_int|to_float|push|pcall|keys|str_replace|has_key|substr|chr|ord|buf_new|buf_push|buf_str|spawn|send|receive|monitor|spawn_monitor|register|whereis|time_ms|kill|link|unlink|spawn_link|process_flag|make_ref|send_after|cancel_timer|process_info|read_file|write_file|delete|pop|values|eprint|exit|argv|sort|floor|ceil|round|abs|pow|sqrt|random|append_file|getenv|input|insert|remove_at|band|bor|bxor|bnot|bshl|bshr)\\b(?=\\s*[({])"
     },
 
     "named-fn-decl": {

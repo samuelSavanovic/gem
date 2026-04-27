@@ -1,0 +1,45 @@
+# Bitwise builtins: band, bor, bxor, bnot, bshl, bshr
+
+# Happy path: basic operations (10=1010b, 12=1100b)
+print("band:", band(10, 12))     # 8
+print("bor:",  bor(10,  12))     # 14
+print("bxor:", bxor(10, 12))     # 6
+print("bnot 0:", bnot(0))        # -1
+print("bshl:", bshl(1, 4))       # 16
+print("bshr:", bshr(16, 2))      # 4
+
+# Logical (unsigned) right shift — negative value shifts in zeros
+print("bshr neg:", bshr(-1, 1))  # 9223372036854775807
+
+# Edge cases
+print("band same:", band(255, 255))   # 255
+print("bor zero:", bor(0, 0))         # 0
+print("bxor same:", bxor(42, 42))     # 0
+print("bnot -1:", bnot(-1))           # 0
+print("bshl 0:", bshl(7, 0))          # 7
+print("bshr 0:", bshr(7, 0))          # 7
+print("bshl 63:", bshl(1, 63))        # -9223372036854775808
+print("bshr 63:", bshr(-1, 63))       # 1
+
+# Builtins are first-class
+let f = band
+print("first-class:", f(6, 3))        # 2
+
+# Adversarial: non-integer args
+let e1 = pcall(fn() band(1.5, 2) end)
+print("band float:", e1.ok == false)
+
+let e2 = pcall(fn() bor("a", 2) end)
+print("bor str:", e2.ok == false)
+
+let e3 = pcall(fn() bnot(true) end)
+print("bnot bool:", e3.ok == false)
+
+# Adversarial: shift out of range
+let e4 = pcall(fn() bshl(1, 64) end)
+print("bshl oob:", e4.ok == false)
+
+let e5 = pcall(fn() bshr(1, -1) end)
+print("bshr neg:", e5.ok == false)
+
+print("BITWISE DONE")

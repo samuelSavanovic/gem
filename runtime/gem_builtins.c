@@ -835,3 +835,56 @@ GemVal gem_remove_at_fn(void *_env, GemVal *args, int argc) {
     }
     return removed;
 }
+
+/* ─── Built-in: bitwise operations ─── */
+
+static int64_t gem_require_int(GemVal v, const char *fn_name) {
+    if (v.type != VAL_INT) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "%s: expected int, got %s", fn_name, gem_type_str(v));
+        gem_error(buf);
+    }
+    return v.ival;
+}
+
+GemVal gem_band_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("band: expected 2 arguments"); }
+    return gem_int(gem_require_int(args[0], "band") & gem_require_int(args[1], "band"));
+}
+
+GemVal gem_bor_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("bor: expected 2 arguments"); }
+    return gem_int(gem_require_int(args[0], "bor") | gem_require_int(args[1], "bor"));
+}
+
+GemVal gem_bxor_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("bxor: expected 2 arguments"); }
+    return gem_int(gem_require_int(args[0], "bxor") ^ gem_require_int(args[1], "bxor"));
+}
+
+GemVal gem_bnot_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("bnot: expected 1 argument"); }
+    return gem_int(~gem_require_int(args[0], "bnot"));
+}
+
+GemVal gem_bshl_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("bshl: expected 2 arguments"); }
+    int64_t a = gem_require_int(args[0], "bshl");
+    int64_t n = gem_require_int(args[1], "bshl");
+    if (n < 0 || n >= 64) { gem_error("bshl: shift amount out of range (0..63)"); }
+    return gem_int((int64_t)((uint64_t)a << (uint64_t)n));
+}
+
+GemVal gem_bshr_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("bshr: expected 2 arguments"); }
+    int64_t a = gem_require_int(args[0], "bshr");
+    int64_t n = gem_require_int(args[1], "bshr");
+    if (n < 0 || n >= 64) { gem_error("bshr: shift amount out of range (0..63)"); }
+    return gem_int((int64_t)((uint64_t)a >> (uint64_t)n));
+}

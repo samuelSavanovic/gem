@@ -49,7 +49,8 @@ let r7 = pcall(fn() "abc"[5] end)
 print(r7.ok)                 # false
 
 let r8 = pcall(fn() "abc"[-1] end)
-print(r8.ok)                 # false
+print(r8.ok)                 # true — negative indexing now supported
+print(r8.value)              # c
 
 # ── Table get on non-existent key returns nil ───────────────────
 

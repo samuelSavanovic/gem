@@ -195,6 +195,12 @@ GemVal gem_getenv_fn(void *_env, GemVal *args, int argc);
 GemVal gem_input_fn(void *_env, GemVal *args, int argc);
 GemVal gem_insert_fn(void *_env, GemVal *args, int argc);
 GemVal gem_remove_at_fn(void *_env, GemVal *args, int argc);
+GemVal gem_band_fn(void *_env, GemVal *args, int argc);
+GemVal gem_bor_fn(void *_env, GemVal *args, int argc);
+GemVal gem_bxor_fn(void *_env, GemVal *args, int argc);
+GemVal gem_bnot_fn(void *_env, GemVal *args, int argc);
+GemVal gem_bshl_fn(void *_env, GemVal *args, int argc);
+GemVal gem_bshr_fn(void *_env, GemVal *args, int argc);
 
 /* ─── Runtime initialization (stores argc/argv, seeds RNG) ─── */
 

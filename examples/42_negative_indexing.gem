@@ -1,0 +1,45 @@
+# Negative array and string indexing
+
+let arr = [10, 20, 30, 40, 50]
+
+# Happy path: basic negative indexing
+print("last:", arr[-1])
+print("second-to-last:", arr[-2])
+print("first via neg:", arr[-5])
+
+# Edge case: arr[-len(arr)] is the first element
+print("first via neg len:", arr[-len(arr)])
+
+# Set via negative index
+arr[-1] = 99
+print("set last:", arr[4])
+arr[-3] = 77
+print("set middle:", arr[2])
+
+# String negative indexing
+let s = "hello"
+print("str last:", s[-1])
+print("str first:", s[-5])
+print("str second:", s[-4])
+
+# Adversarial: negative index out of bounds (get)
+let err1 = pcall(fn() arr[-10] end)
+print("oob neg get:", err1.ok == false)
+
+# Adversarial: negative index out of bounds (set)
+let err2 = pcall(fn() arr[-10] = 0 end)
+print("oob neg set:", err2.ok == false)
+
+# Adversarial: string negative out of bounds
+let err3 = pcall(fn() s[-10] end)
+print("oob str neg:", err3.ok == false)
+
+# Edge case: single-element array
+let one = [42]
+print("single -1:", one[-1])
+
+# Edge case: empty array negative index should error
+let err4 = pcall(fn() let e = []; e[-1] end)
+print("empty neg:", err4.ok == false)
+
+print("NEGATIVE INDEXING DONE")

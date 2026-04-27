@@ -136,6 +136,15 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
     /* Integer key: check for direct array-style indexing */
     if (key.type == VAL_INT) {
         int64_t ik = key.ival;
+        if (ik < 0) {
+            int64_t resolved = (int64_t)t->len + ik;
+            if (resolved < 0) { char buf[128]; snprintf(buf, sizeof(buf), "array index out of bounds: %lld", (long long)ik); gem_error(buf); }
+            if (resolved < t->len && t->keys[resolved].type == VAL_INT && t->keys[resolved].ival == resolved) {
+                t->vals[resolved] = val;
+                return;
+            }
+            char buf[128]; snprintf(buf, sizeof(buf), "array index out of bounds: %lld", (long long)ik); gem_error(buf);
+        }
         /* If key is within existing range, update in place */
         if (ik >= 0 && ik < t->len && t->keys[ik].type == VAL_INT && t->keys[ik].ival == ik) {
             t->vals[ik] = val;
@@ -163,7 +172,9 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
     if (tbl.type == VAL_STRING) {
         if (key.type != VAL_INT) { char buf[128]; snprintf(buf, sizeof(buf), "string index must be int, got %s", gem_type_str(key)); gem_error(buf); }
         int64_t idx = key.ival;
-        if (idx < 0 || tbl.sval[idx] == '\0') { gem_error("string index out of bounds"); }
+        int64_t slen = (int64_t)strlen(tbl.sval);
+        if (idx < 0) idx = slen + idx;
+        if (idx < 0 || idx >= slen) { gem_error("string index out of bounds"); }
         if (!gem_char_cache_ready) gem_init_char_cache();
         return gem_char_cache[(unsigned char)tbl.sval[idx]];
     }
@@ -183,6 +194,14 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
     /* Integer key: try direct array indexing */
     if (key.type == VAL_INT) {
         int64_t ik = key.ival;
+        if (ik < 0) {
+            int64_t resolved = (int64_t)t->len + ik;
+            if (resolved < 0) { char buf[128]; snprintf(buf, sizeof(buf), "array index out of bounds: %lld", (long long)ik); gem_error(buf); }
+            if (resolved < t->len && t->keys[resolved].type == VAL_INT && t->keys[resolved].ival == resolved) {
+                return t->vals[resolved];
+            }
+            char buf[128]; snprintf(buf, sizeof(buf), "array index out of bounds: %lld", (long long)ik); gem_error(buf);
+        }
         if (ik >= 0 && ik < t->len && t->keys[ik].type == VAL_INT && t->keys[ik].ival == ik) {
             return t->vals[ik];
         }

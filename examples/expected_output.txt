@@ -399,7 +399,8 @@ false
 0
 -0
 false
-false
+true
+c
 nil
 nil
 int_zero
@@ -660,3 +661,40 @@ values empty: 0
 delete consistency: true
 delete access: true
 ALL EDGE CASES PASSED
+last: 50
+second-to-last: 40
+first via neg: 10
+first via neg len: 10
+set last: 99
+set middle: 77
+str last: o
+str first: h
+str second: e
+oob neg get: true
+oob neg set: true
+oob str neg: true
+single -1: 42
+empty neg: true
+NEGATIVE INDEXING DONE
+band: 8
+bor: 14
+bxor: 6
+bnot 0: -1
+bshl: 16
+bshr: 4
+bshr neg: 9223372036854775807
+band same: 255
+bor zero: 0
+bxor same: 0
+bnot -1: 0
+bshl 0: 7
+bshr 0: 7
+bshl 63: -9223372036854775808
+bshr 63: 1
+first-class: 2
+band float: true
+bor str: true
+bnot bool: true
+bshl oob: true
+bshr neg: true
+BITWISE DONE

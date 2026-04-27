@@ -184,7 +184,13 @@ fn make_codegen(source_name)
     getenv: "gem_getenv_fn",
     input: "gem_input_fn",
     insert: "gem_insert_fn",
-    remove_at: "gem_remove_at_fn"
+    remove_at: "gem_remove_at_fn",
+    band: "gem_band_fn",
+    bor: "gem_bor_fn",
+    bxor: "gem_bxor_fn",
+    bnot: "gem_bnot_fn",
+    bshl: "gem_bshl_fn",
+    bshr: "gem_bshr_fn"
   }
   let builtins = {}
   for k, _ in builtin_fns

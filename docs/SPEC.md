@@ -747,6 +747,20 @@ print(items[0])    # a
 
 `remove_at(arr, i)` — removes and returns the element at index `i`, shifting subsequent elements left. Errors if `i` is out of bounds.
 
+`band(a, b)` — bitwise AND of two integers. Both arguments must be integers.
+
+`bor(a, b)` — bitwise OR of two integers. Both arguments must be integers.
+
+`bxor(a, b)` — bitwise XOR of two integers. Both arguments must be integers.
+
+`bnot(a)` — bitwise NOT (complement) of an integer. The argument must be an integer.
+
+`bshl(a, n)` — left-shift `a` by `n` bits. Both arguments must be integers; `n` must be in the range 0..63.
+
+`bshr(a, n)` — logical (unsigned) right-shift `a` by `n` bits. Both arguments must be integers; `n` must be in the range 0..63. The result is always non-negative.
+
+**Negative array indexing** — Integer indices to arrays and strings may be negative. A negative index `i` on a collection of length `n` resolves to `n + i`. So `arr[-1]` is the last element, `arr[-2]` is second-to-last, etc. Indices that remain out of bounds after resolution raise a runtime error.
+
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
 **Module System (v0.1 — minimal)**
