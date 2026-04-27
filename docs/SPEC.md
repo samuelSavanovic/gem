@@ -317,6 +317,23 @@ c()  # 1
 c()  # 2
 ```
 
+**Tail Call Optimization**
+
+Self-recursive functions in tail position are optimized into loops. The compiler detects when a named function calls itself as the last expression (including through `if`/`elif`/`else`, `match`, and `receive` branches) and replaces the recursive call with parameter reassignment and a loop restart. This means tail-recursive functions use constant stack space regardless of recursion depth.
+
+```
+fn loop(n, acc)
+  if n == 0
+    return acc
+  end
+  loop(n - 1, acc + n)   # TCO: becomes a loop, no stack growth
+end
+
+loop(10000000, 0)         # works — would overflow without TCO
+```
+
+TCO applies to named functions (`fn name(...)`) without rest or block parameters. Anonymous functions and mutual recursion are not optimized. Non-tail calls (where the result is used in a further expression, e.g. `n * f(n-1)`) remain normal recursive calls.
+
 **Green Threads and Message Passing**
 
 ```

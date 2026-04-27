@@ -55,8 +55,11 @@ Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile t
 ### Dead code elimination
 Unreachable code after `return`, `break`, `error()` could be stripped. Currently emitted as-is.
 
-### Tail call optimization — HIGH PRIORITY
-Critical for the OTP concurrency model. Gen_server loops, supervisor restarts, and recursive message handlers all rely on self-recursive tail calls that currently grow the stack unboundedly. Prioritize **self-recursive TCO** (function calls itself in tail position) — covers ~95% of OTP patterns. Implementation: codegen detects tail self-calls and emits a `while(1)` loop with parameter reassignment instead of a recursive call. Key challenges: tail position detection across if/else/match branches, `gem_push_frame`/`gem_pop_frame` handling (push once on entry, no pop on loop iteration), multi-param reassignment ordering (needs temps), and boxed param reassignment for closure-captured variables. Mutual recursion (trampolines/goto) is lower priority — rare in OTP patterns.
+### ~~Self-recursive tail call optimization~~ ✓ Done
+Codegen detects self-recursive calls in tail position (last expression in function body, propagating through if/else, match, receive, and block branches) and emits a `while(1)` loop with parameter reassignment + `continue` instead of a recursive call. `gem_push_frame` runs once on entry; `gem_yield_check` runs each iteration for cooperative scheduling. Multi-param reassignment uses temps to avoid ordering issues. Boxed (closure-captured) params reassign through the pointer. Functions with rest/block params or shadowed names skip TCO. Covers ~95% of OTP patterns (gen_server loops, supervisor restarts, recursive receive handlers).
+
+### Mutual tail call optimization
+Mutual recursion (A calls B in tail position, B calls A) could use trampolines or computed goto. Lower priority — rare in OTP patterns. Self-recursive TCO already covers the common case.
 
 ## Runtime I/O
 

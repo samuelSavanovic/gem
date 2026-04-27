@@ -214,6 +214,9 @@ fn make_codegen(source_name)
   let top_level_boxed = {}
   let in_top_level = false
   let local_names = {}
+  let tco_fn_name = nil
+  let tco_params = nil
+  let tco_captured = nil
 
   # ─── Helpers ──
 
@@ -598,6 +601,95 @@ fn make_codegen(source_name)
   let compile_array = nil
   let compile_extern_fn = nil
   let compile_fn = nil
+  let is_self_tail_call = nil
+  let has_self_tail_call = nil
+  let emit_tco_continue = nil
+
+  # ─── TCO (tail call optimization) ──
+
+  is_self_tail_call = fn(fn_name, node)
+    if node == nil
+      return false
+    end
+    if type(node) != "table" or node.tag == nil
+      return false
+    end
+    match node
+    when {tag: "call", func: func}
+      return is_node(func, "var") and func.name == fn_name
+    when {tag: "return", value: value}
+      if value != nil
+        return is_self_tail_call(fn_name, value)
+      end
+      return false
+    when {tag: "if", then: then_body, else: else_body}
+      if has_self_tail_call(fn_name, then_body)
+        return true
+      end
+      if else_body != nil
+        return has_self_tail_call(fn_name, else_body)
+      end
+      return false
+    when {tag: "match", whens: whens, else: else_body}
+      for i = 0, len(whens)
+        if has_self_tail_call(fn_name, whens[i].body)
+          return true
+        end
+      end
+      if else_body != nil
+        return has_self_tail_call(fn_name, else_body)
+      end
+      return false
+    when {tag: "receive_match", arms: arms, after_body: after_body}
+      for i = 0, len(arms)
+        if has_self_tail_call(fn_name, arms[i].body)
+          return true
+        end
+      end
+      if after_body != nil
+        return has_self_tail_call(fn_name, after_body)
+      end
+      return false
+    when {tag: "block", stmts: stmts}
+      return has_self_tail_call(fn_name, stmts)
+    end
+    return false
+  end
+
+  has_self_tail_call = fn(fn_name, stmts)
+    if len(stmts) == 0
+      return false
+    end
+    is_self_tail_call(fn_name, stmts[-1])
+  end
+
+  emit_tco_continue = fn(call_node, indent)
+    let p = pad_for(indent)
+    let b = buf_new()
+    let args = call_node.args
+    let arg_temps = []
+    for i = 0, len(args)
+      let r = compile_expr(args[i])
+      let t = tmp()
+      buf_push(b, r.setup)
+      buf_push(b, "{p}GemVal {t} = {r.expr};\n")
+      push(arg_temps, t)
+    end
+    for i = 0, len(tco_params)
+      let mp = mangle(tco_params[i])
+      let val = "GEM_NIL"
+      if i < len(arg_temps)
+        val = arg_temps[i]
+      end
+      if set_contains(tco_captured, tco_params[i])
+        buf_push(b, "{p}*{mp} = {val};\n")
+      else
+        buf_push(b, "{p}{mp} = {val};\n")
+      end
+    end
+    buf_push(b, "{p}continue;")
+    buf_str(b)
+  end
 
   # ─── compile_expr ──
 
@@ -1002,6 +1094,15 @@ fn make_codegen(source_name)
     let line_dir = ""
     if node.line != nil
       line_dir = "#line {node.line} \"{escape_c_string(source_name)}\"\n"
+    end
+
+    if tco_fn_name != nil
+      if is_node(node, "call") and is_node(node.func, "var") and node.func.name == tco_fn_name and not set_contains(local_names, tco_fn_name)
+        return line_dir + emit_tco_continue(node, indent)
+      end
+      if is_node(node, "return") and node.value != nil and is_node(node.value, "call") and is_node(node.value.func, "var") and node.value.func.name == tco_fn_name and not set_contains(local_names, tco_fn_name)
+        return line_dir + emit_tco_continue(node.value, indent)
+      end
     end
 
     match node
@@ -1747,10 +1848,19 @@ fn make_codegen(source_name)
     boxed_vars = captured
     in_top_level = false
 
+    let use_tco = false
+    if node.rest_param == nil and node.block_param == nil and not set_contains(scope_vars, name)
+      use_tco = has_self_tail_call(name, body)
+    end
+    if use_tco
+      tco_fn_name = name
+      tco_params = params
+      tco_captured = captured
+    end
+
     let b = buf_new()
     buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
 
-    # Emit #line for function start
     if node.line != nil
       buf_push(b, "#line {node.line} \"{escape_c_string(source_name)}\"\n")
     end
@@ -1763,9 +1873,32 @@ fn make_codegen(source_name)
     end
     buf_push(b, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", {fn_line});\n")
 
-    buf_push(b, emit_fn_body(body))
+    if use_tco
+      buf_push(b, "    while(1) \{\n")
+      buf_push(b, "        gem_yield_check();\n")
+      if len(body) > 0
+        for i = 0, len(body) - 1
+          buf_push(b, compile_stmt(body[i], 2))
+          buf_push(b, "\n")
+        end
+        buf_push(b, compile_stmt_return(body[-1], 2))
+        buf_push(b, "\n")
+      else
+        buf_push(b, "        gem_pop_frame();\n        return GEM_NIL;\n")
+      end
+      buf_push(b, "    \}\n")
+    else
+      buf_push(b, emit_fn_body(body))
+    end
 
     buf_push(b, "}")
+
+    if use_tco
+      tco_fn_name = nil
+      tco_params = nil
+      tco_captured = nil
+    end
+
     boxed_vars = saved_boxed
     in_top_level = saved_top
     local_names = saved_local
