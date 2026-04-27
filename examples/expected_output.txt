@@ -698,3 +698,31 @@ bnot bool: true
 bshl oob: true
 bshr neg: true
 BITWISE DONE
+/foo
+/
+a/b
+a/b
+/b
+true
+false
+true
+false
+false
+string
+true
+true
+false
+false
+false
+true
+false
+false
+true
+false
+true
+false
+false
+true
+true
+false
+false

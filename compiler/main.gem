@@ -4,15 +4,9 @@
 load "parser"
 load "codegen"
 
-extern include "compiler_helpers.h"
-extern fn gem_dirname(path: String) -> String
-extern fn gem_path_join(dir: String, file: String) -> String
-extern fn gem_normalize_path(path: String) -> String
-extern fn gem_file_exists(path: String) -> Int
-
 # ─── Install root (for std/ resolution) ──────────────────────
 
-let install_root = gem_dirname(gem_dirname(argv()[0]))
+let install_root = dirname(dirname(argv()[0]))
 
 # ─── Load resolution ──────────────────────────────────────────
 
@@ -28,14 +22,14 @@ fn resolve_loads(ast, base_dir, loaded)
       end
 
       # Step 1: resolve relative to importing file
-      let full_path = gem_path_join(base_dir, path)
+      let full_path = path_join(base_dir, path)
 
       # Step 2: if not found, try relative to install root
-      if gem_file_exists(full_path) == 0
-        full_path = gem_path_join(install_root, path)
+      if not file_exists(full_path)
+        full_path = path_join(install_root, path)
       end
 
-      full_path = gem_normalize_path(full_path)
+      full_path = normalize_path(full_path)
 
       # Re-inclusion guard
       if loaded[full_path] == true
@@ -46,7 +40,7 @@ fn resolve_loads(ast, base_dir, loaded)
       let source = read_file(full_path)
 
       let loaded_ast = parse_source(source, full_path)
-      let loaded_dir = gem_dirname(full_path)
+      let loaded_dir = dirname(full_path)
       let resolved = resolve_loads(loaded_ast, loaded_dir, loaded)
 
       for rs in resolved.stmts
@@ -72,7 +66,7 @@ let src_path = argv()[1]
 let source = read_file(src_path)
 
 let ast = parse_source(source, src_path)
-let base_dir = gem_dirname(src_path)
+let base_dir = dirname(src_path)
 let loaded = {}
 let resolved_ast = resolve_loads(ast, base_dir, loaded)
 

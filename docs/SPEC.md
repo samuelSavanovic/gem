@@ -759,6 +759,22 @@ print(items[0])    # a
 
 `bshr(a, n)` — logical (unsigned) right-shift `a` by `n` bits. Both arguments must be integers; `n` must be in the range 0..63. The result is always non-negative.
 
+`file_exists(path)` — returns `true` if `path` can be opened for reading, `false` otherwise. Argument must be a string.
+
+`dirname(path)` — returns the parent directory component of `path` (POSIX `dirname`). Argument must be a string. `dirname("/foo/bar")` → `"/foo"`. `dirname("/")` → `"/"`.
+
+`path_join(dir, file)` — joins two path components with `/`. If `file` is an absolute path it is returned as-is. Handles trailing slashes in `dir`. Both arguments must be strings.
+
+`normalize_path(path)` — resolves symlinks and `.`/`..` components using `realpath`. Returns the absolute canonical path if the file exists, or `path` unchanged if it does not. Argument must be a string.
+
+`remove_file(path)` — removes the file at `path` using `unlink`. Returns `true` on success, `false` on failure. Argument must be a string.
+
+`mkdir(path)` — creates a directory at `path` with permissions `0755`. Returns `true` on success, `false` if the directory already exists or the operation fails. Argument must be a string.
+
+`list_dir(path)` — returns an integer-indexed array of filenames in the directory at `path`, excluding `.` and `..`. Raises an error if the path does not exist or is not a directory. Argument must be a string.
+
+`is_dir(path)` — returns `true` if `path` exists and is a directory, `false` otherwise. Argument must be a string.
+
 **Negative array indexing** — Integer indices to arrays and strings may be negative. A negative index `i` on a collection of length `n` resolves to `n + i`. So `arr[-1]` is the last element, `arr[-2]` is second-to-last, etc. Indices that remain out of bounds after resolution raise a runtime error.
 
 All builtins are first-class values — they can be stored in variables and passed to functions.

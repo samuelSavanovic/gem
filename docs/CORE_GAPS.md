@@ -24,6 +24,14 @@ Audit of missing primitives. Philosophy: small C runtime, implement as much as p
 | **`input()` / `read_line()`** | Read from stdin. Needs C stdio. | **DONE** — `input([prompt])` |
 | **`values(tbl)`** | Complement to `keys()`. Needs C to iterate the internal arrays efficiently. | **DONE** |
 | **`insert(arr, i, val)` / `remove_at(arr, i)`** | stb_ds has `arrins`/`arrdel` underneath but not exposed. Can't shift internal array from Gem. | **DONE** |
+| **`file_exists(path)`** | Needs C `fopen` to probe for file existence. Returns bool. | **DONE** |
+| **`dirname(path)`** | POSIX `dirname()` — needs C, modifies input buffer. Returns parent directory string. | **DONE** |
+| **`path_join(dir, file)`** | String manipulation with `/` separator and absolute path handling. | **DONE** |
+| **`normalize_path(path)`** | `realpath()` to resolve symlinks and `.`/`..`. Falls back to original path if file doesn't exist. | **DONE** |
+| **`remove_file(path)`** | POSIX `unlink()`. Returns bool success/failure. | **DONE** |
+| **`mkdir(path)`** | POSIX `mkdir()` with 0755 permissions. Returns bool. | **DONE** |
+| **`list_dir(path)`** | `opendir`/`readdir` loop, returns array of filenames excluding `.` and `..`. | **DONE** |
+| **`is_dir(path)`** | `stat()` + `S_ISDIR` macro. Returns bool. | **DONE** |
 
 ## Could be Gem stdlib
 
@@ -52,7 +60,8 @@ The compiler (largest Gem program) shows these pain points:
 
 - **Hand-rolled sort** — `set_to_sorted_array` in codegen.gem was an insertion sort; **replaced with `sort(keys(free))` call**
 - **14x `[len(x) - 1]`** — accessing the last element is verbose without negative indexing — **resolved: all 14 replaced with `[-1]` after negative indexing landed**
-- **`extern fn` hacks** — compiler_helpers.h provided `gem_eprint`, `gem_exit_process`, `gem_get_argv`, `gem_get_argc`; **all replaced with `eprint()`, `exit()`, `argv()` builtins**; path utils (`gem_file_exists`, `gem_dirname`, `gem_path_join`) still extern in compiler_helpers.h
-- **Char-by-char `.gem` check** — main.gem:29 checks file extension character by character because `string.ends_with` isn't available without loading std/string
+- **`extern fn` hacks** — compiler_helpers.h provided `gem_eprint`, `gem_exit_process`, `gem_get_argv`, `gem_get_argc`; **all replaced with `eprint()`, `exit()`, `argv()` builtins**; path utils (`gem_file_exists`, `gem_dirname`, `gem_path_join`, `gem_normalize_path`) **fully resolved** — promoted to builtins `file_exists()`, `dirname()`, `path_join()`, `normalize_path()`; `extern include "compiler_helpers.h"` and all `extern fn` declarations removed from main.gem
+- **Char-by-char `.gem` check** — main.gem still checks the file extension character by character; could use `string.ends_with` now that `std/string` has it, but would require loading std/string in the compiler
+- **`string.ends_with` / `string.starts_with`** — already implemented in `std/string.gem` and exported in the `string` namespace table
 - **195x `out = out + ...`** — O(n²) string building in codegen because buf_* API is more verbose than `+`
 - **24x `type(x) == "table" and x.tag == ...`** — verbose pattern for what's essentially a tagged union check

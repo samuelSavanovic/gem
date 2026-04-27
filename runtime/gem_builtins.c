@@ -6,6 +6,10 @@
 #include "gem.h"
 #include <errno.h>
 #include <math.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <libgen.h>
 
 /* ─── Built-in: print ─── */
 
@@ -887,4 +891,122 @@ GemVal gem_bshr_fn(void *_env, GemVal *args, int argc) {
     int64_t n = gem_require_int(args[1], "bshr");
     if (n < 0 || n >= 64) { gem_error("bshr: shift amount out of range (0..63)"); }
     return gem_int((int64_t)((uint64_t)a >> (uint64_t)n));
+}
+
+/* ─── Built-in: file_exists ─── */
+
+GemVal gem_file_exists_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "file_exists: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    FILE *f = fopen(args[0].sval, "rb");
+    if (f) { fclose(f); return gem_bool(1); }
+    return gem_bool(0);
+}
+
+/* ─── Built-in: dirname ─── */
+
+GemVal gem_dirname_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "dirname: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    char *copy = strdup(args[0].sval);
+    char *dir = dirname(copy);
+    GemVal r = gem_string(dir);
+    free(copy);
+    return r;
+}
+
+/* ─── Built-in: path_join ─── */
+
+GemVal gem_path_join_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_STRING || args[1].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "path_join: expected (string, string), got (%s, %s)",
+            argc < 1 ? "nothing" : gem_type_str(args[0]), argc < 2 ? "nothing" : gem_type_str(args[1])); gem_error(buf);
+    }
+    const char *dir = args[0].sval;
+    const char *file = args[1].sval;
+    if (file[0] == '/') return gem_string(file);
+    size_t dlen = strlen(dir);
+    size_t flen = strlen(file);
+    char *result = (char *)GC_MALLOC_ATOMIC(dlen + 1 + flen + 1);
+    strcpy(result, dir);
+    if (dlen > 0 && dir[dlen-1] != '/') strcat(result, "/");
+    strcat(result, file);
+    GemVal r; r.type = VAL_STRING; r.sval = result;
+    return r;
+}
+
+/* ─── Built-in: normalize_path ─── */
+
+GemVal gem_normalize_path_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "normalize_path: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    char *resolved = realpath(args[0].sval, NULL);
+    if (resolved) {
+        GemVal r = gem_string(resolved);
+        free(resolved);
+        return r;
+    }
+    return gem_string(args[0].sval);
+}
+
+/* ─── Built-in: remove_file ─── */
+
+GemVal gem_remove_file_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "remove_file: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    return gem_bool(unlink(args[0].sval) == 0 ? 1 : 0);
+}
+
+/* ─── Built-in: mkdir ─── */
+
+GemVal gem_mkdir_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "mkdir: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    return gem_bool(mkdir(args[0].sval, 0755) == 0 ? 1 : 0);
+}
+
+/* ─── Built-in: list_dir ─── */
+
+GemVal gem_list_dir_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "list_dir: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    DIR *d = opendir(args[0].sval);
+    if (!d) {
+        char buf[512]; snprintf(buf, sizeof(buf), "list_dir: cannot open directory '%s'", args[0].sval); gem_error(buf);
+    }
+    GemVal result = gem_table_new();
+    struct dirent *entry;
+    int i = 0;
+    while ((entry = readdir(d)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+        gem_table_set(result, gem_int(i), gem_string(entry->d_name));
+        i++;
+    }
+    closedir(d);
+    return result;
+}
+
+/* ─── Built-in: is_dir ─── */
+
+GemVal gem_is_dir_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "is_dir: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    struct stat st;
+    if (stat(args[0].sval, &st) != 0) return gem_bool(0);
+    return gem_bool(S_ISDIR(st.st_mode) ? 1 : 0);
 }

@@ -1,0 +1,47 @@
+# Test filesystem builtins: file_exists, dirname, path_join, normalize_path,
+# remove_file, mkdir, list_dir, is_dir
+
+# dirname
+print(dirname("/foo/bar"))
+print(dirname("/"))
+
+# path_join
+print(path_join("a", "b"))
+print(path_join("a/", "b"))
+print(path_join("a", "/b"))
+
+# file_exists
+print(file_exists("compiler/main.gem"))
+print(file_exists("nonexistent_xyz_abc"))
+
+# is_dir
+print(is_dir("compiler"))
+print(is_dir("compiler/main.gem"))
+print(is_dir("nonexistent_xyz_abc"))
+
+# normalize_path — returns a string (full path varies by machine)
+print(type(normalize_path("compiler/main.gem")))
+
+# mkdir + write + list_dir + remove_file cycle
+let tmpdir = "/tmp/gem_fs_test_44"
+mkdir(tmpdir)
+write_file(tmpdir + "/only.txt", "data")
+
+let files = list_dir(tmpdir)
+let found = false
+for f in files
+  if f == "only.txt"
+    found = true
+  end
+end
+print(found)
+
+print(remove_file(tmpdir + "/only.txt"))
+print(file_exists(tmpdir + "/only.txt"))
+
+# Adversarial: non-string args raise errors
+let r1 = pcall(fn() dirname(42) end)
+print(r1.ok)
+
+let r2 = pcall(fn() file_exists(nil) end)
+print(r2.ok)

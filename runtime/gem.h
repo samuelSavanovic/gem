@@ -201,6 +201,14 @@ GemVal gem_bxor_fn(void *_env, GemVal *args, int argc);
 GemVal gem_bnot_fn(void *_env, GemVal *args, int argc);
 GemVal gem_bshl_fn(void *_env, GemVal *args, int argc);
 GemVal gem_bshr_fn(void *_env, GemVal *args, int argc);
+GemVal gem_file_exists_fn(void *_env, GemVal *args, int argc);
+GemVal gem_dirname_fn(void *_env, GemVal *args, int argc);
+GemVal gem_path_join_fn(void *_env, GemVal *args, int argc);
+GemVal gem_normalize_path_fn(void *_env, GemVal *args, int argc);
+GemVal gem_remove_file_fn(void *_env, GemVal *args, int argc);
+GemVal gem_mkdir_fn(void *_env, GemVal *args, int argc);
+GemVal gem_list_dir_fn(void *_env, GemVal *args, int argc);
+GemVal gem_is_dir_fn(void *_env, GemVal *args, int argc);
 
 /* ─── Runtime initialization (stores argc/argv, seeds RNG) ─── */
 
