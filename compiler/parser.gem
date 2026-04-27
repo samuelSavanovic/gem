@@ -892,9 +892,14 @@ fn make_parser(tokens, source, file)
       return make_load(path)
     end
 
-    # extern fn / extern include
+    # extern fn / extern blocking fn / extern include
     if t.type == "extern"
       advance()
+      let is_blocking = false
+      if peek().type == "blocking"
+        is_blocking = true
+        advance()
+      end
       if peek().type == "fn"
         advance()
         let name = expect("NAME").value
@@ -919,13 +924,13 @@ fn make_parser(tokens, source, file)
           advance()
           ret_type = expect("NAME").value
         end
-        return make_extern_fn(name, eparams, ret_type)
-      elif peek().type == "NAME" and peek().value == "include"
+        return make_extern_fn(name, eparams, ret_type, is_blocking)
+      elif not is_blocking and peek().type == "NAME" and peek().value == "include"
         advance()
         let path = expect("STRING").value
         return make_extern_include(path)
       else
-        compile_error(source, file, peek().line, peek().col, len(peek().value), "expected 'fn' or 'include' after 'extern'", nil)
+        compile_error(source, file, peek().line, peek().col, len(peek().value), "expected 'fn' after 'extern blocking'", nil)
       end
     end
 

@@ -451,7 +451,7 @@ GemVal gem_make_ref_builtin(void *_env, GemVal *args, int argc) {
 
 /* ─── Built-in: read_file / write_file ─── */
 
-static void gem_io_free_request(GemIORequest *req) {
+void gem_io_free_request(GemIORequest *req) {
     if (req->path) free(req->path);
     if (req->content) free(req->content);
     if (req->result_data) free(req->result_data);

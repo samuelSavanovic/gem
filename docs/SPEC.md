@@ -507,6 +507,13 @@ puts("hello from C")
 
 The compiler auto-generates C forward declarations from `extern fn` type signatures, so no separate `.h` file is needed for function declarations. The type mapping: `Int` → `int64_t`, `Float` → `double`, `String` → `const char*` (params) / `char*` (returns), `Bool` → `int`, `Ptr` → `void*`, `Nil` → `void`, `Table` → `GemVal`. Auto-generation is skipped when `extern include` is present (the user manages declarations via headers).
 
+`extern blocking fn` declares a C function that may block (e.g. socket I/O, database calls, DNS lookups). When called from a coroutine (`spawn`), the call is submitted to a thread pool so the scheduler can continue running other coroutines. When called outside a coroutine, it calls directly (synchronous). The C function runs on a worker thread and must not call `GC_MALLOC` — for `String` returns, use `malloc`/`strdup` (the runtime copies to GC memory and frees the original).
+
+```
+extern blocking fn net_accept(server_fd: Int) -> Int
+extern blocking fn net_read(fd: Int, max_bytes: Int) -> String
+```
+
 For C headers (structs, typedefs, system headers the compiler can't infer):
 
 ```

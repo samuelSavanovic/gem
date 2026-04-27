@@ -280,6 +280,7 @@ typedef enum {
     GEM_IO_WRITE_FILE,
     GEM_IO_APPEND_FILE,
     GEM_IO_EXEC,
+    GEM_IO_EXTERN,
 } GemIOOp;
 
 typedef struct {
@@ -292,6 +293,8 @@ typedef struct {
     size_t result_len;
     char *error_msg;       /* malloc'd error string, or NULL on success */
     int exit_code;         /* output for exec */
+    void (*extern_fn)(void *);  /* for GEM_IO_EXTERN: worker calls this */
+    void *extern_args;          /* for GEM_IO_EXTERN: opaque args struct */
     volatile int done;     /* set to 1 by worker thread */
 } GemIORequest;
 
@@ -411,6 +414,8 @@ void gem_threadpool_init(void);
 void gem_threadpool_shutdown(void);
 GemIORequest *gem_io_submit(GemIOOp op, const char *path,
                             const char *content, size_t content_len);
+GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args);
+void gem_io_free_request(GemIORequest *req);
 void gem_io_check_completions(void);
 int gem_io_wake_fd(void);
 

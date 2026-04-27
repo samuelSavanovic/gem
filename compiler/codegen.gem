@@ -600,6 +600,7 @@ fn make_codegen(source_name)
   let compile_table = nil
   let compile_array = nil
   let compile_extern_fn = nil
+  let compile_blocking_extern_fn = nil
   let compile_fn = nil
   let is_self_tail_call = nil
   let has_self_tail_call = nil
@@ -1641,8 +1642,59 @@ fn make_codegen(source_name)
 
   # ─── compile_extern_fn ──
 
+  # Helper: emit C forward declaration for an extern function
+  let emit_extern_c_decl = fn(name, params, ret_type)
+    let c_ret = "void"
+    if ret_type == "Int"
+      c_ret = "int64_t"
+    elif ret_type == "Float"
+      c_ret = "double"
+    elif ret_type == "String"
+      c_ret = "char*"
+    elif ret_type == "Bool"
+      c_ret = "int"
+    elif ret_type == "Ptr"
+      c_ret = "void*"
+    elif ret_type == "Table"
+      c_ret = "GemVal"
+    end
+
+    let c_params = ""
+    if len(params) == 0
+      c_params = "void"
+    else
+      for i = 0, len(params)
+        if i > 0
+          c_params = c_params + ", "
+        end
+        let pt = params[i]["type"]
+        if pt == "Int"
+          c_params = c_params + "int64_t"
+        elif pt == "Float"
+          c_params = c_params + "double"
+        elif pt == "String"
+          c_params = c_params + "const char*"
+        elif pt == "Bool"
+          c_params = c_params + "int"
+        elif pt == "Ptr"
+          c_params = c_params + "void*"
+        elif pt == "Table"
+          c_params = c_params + "GemVal"
+        else
+          c_params = c_params + "GemVal"
+        end
+      end
+    end
+
+    push(extern_c_decls, "{c_ret} {name}({c_params});")
+  end
+
   compile_extern_fn = fn(node)
     let {name, params, ret_type} = node
+
+    if node.blocking
+      return compile_blocking_extern_fn(node)
+    end
 
     let b = buf_new()
     buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
@@ -1711,53 +1763,189 @@ fn make_codegen(source_name)
 
     buf_push(b, "}")
 
-    # Add forward declaration for the Gem wrapper
     push(forward_decls, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
+    emit_extern_c_decl(name, params, ret_type)
 
-    # Auto-generate C forward declaration for the extern function
-    let c_ret = "void"
-    if ret_type == "Int"
-      c_ret = "int64_t"
-    elif ret_type == "Float"
-      c_ret = "double"
-    elif ret_type == "String"
-      c_ret = "char*"
-    elif ret_type == "Bool"
-      c_ret = "int"
-    elif ret_type == "Ptr"
-      c_ret = "void*"
-    elif ret_type == "Table"
-      c_ret = "GemVal"
+    buf_str(b)
+  end
+
+  # ─── compile_blocking_extern_fn ──
+  # Emits: args struct, worker function, Gem wrapper with thread pool path
+
+  compile_blocking_extern_fn = fn(node)
+    let {name, params, ret_type} = node
+    let b = buf_new()
+
+    # 1. Args struct
+    buf_push(b, "struct _blk_{name}_args \{\n")
+    for i = 0, len(params)
+      let ptype = params[i]["type"]
+      if ptype == "Int"
+        buf_push(b, "    int64_t _p{i};\n")
+      elif ptype == "Float"
+        buf_push(b, "    double _p{i};\n")
+      elif ptype == "String"
+        buf_push(b, "    char *_p{i};\n")
+      elif ptype == "Bool"
+        buf_push(b, "    int _p{i};\n")
+      elif ptype == "Ptr"
+        buf_push(b, "    void *_p{i};\n")
+      end
     end
+    if ret_type == "Int"
+      buf_push(b, "    int64_t _result;\n")
+    elif ret_type == "Float"
+      buf_push(b, "    double _result;\n")
+    elif ret_type == "String"
+      buf_push(b, "    char *_result;\n")
+    elif ret_type == "Bool"
+      buf_push(b, "    int _result;\n")
+    elif ret_type == "Ptr"
+      buf_push(b, "    void *_result;\n")
+    end
+    buf_push(b, "};\n\n")
 
-    let c_params = ""
-    if len(params) == 0
-      c_params = "void"
+    # 2. Worker function (called on thread pool)
+    buf_push(b, "static void _blk_{name}_worker(void *_a) \{\n")
+    buf_push(b, "    struct _blk_{name}_args *a = (struct _blk_{name}_args *)_a;\n")
+
+    let w_args = ""
+    for i = 0, len(params)
+      if i > 0
+        w_args = w_args + ", "
+      end
+      w_args = w_args + "a->_p{i}"
+    end
+    let w_call = "{name}({w_args})"
+
+    if ret_type == "Nil"
+      buf_push(b, "    {w_call};\n")
     else
-      for i = 0, len(params)
-        if i > 0
-          c_params = c_params + ", "
-        end
-        let pt = params[i]["type"]
-        if pt == "Int"
-          c_params = c_params + "int64_t"
-        elif pt == "Float"
-          c_params = c_params + "double"
-        elif pt == "String"
-          c_params = c_params + "const char*"
-        elif pt == "Bool"
-          c_params = c_params + "int"
-        elif pt == "Ptr"
-          c_params = c_params + "void*"
-        elif pt == "Table"
-          c_params = c_params + "GemVal"
-        else
-          c_params = c_params + "GemVal"
-        end
+      buf_push(b, "    a->_result = {w_call};\n")
+    end
+    buf_push(b, "}\n\n")
+
+    # 3. Gem wrapper function
+    buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
+
+    # Extract args from GemVal
+    for i = 0, len(params)
+      let ptype = params[i]["type"]
+      if ptype == "Int"
+        buf_push(b, "    int64_t _p{i} = args[{i}].ival;\n")
+      elif ptype == "Float"
+        buf_push(b, "    double _p{i} = args[{i}].fval;\n")
+      elif ptype == "String"
+        buf_push(b, "    char* _p{i} = args[{i}].sval;\n")
+      elif ptype == "Bool"
+        buf_push(b, "    int _p{i} = args[{i}].bval;\n")
+      elif ptype == "Ptr"
+        buf_push(b, "    void* _p{i} = (void*)(intptr_t)args[{i}].ival;\n")
       end
     end
 
-    push(extern_c_decls, "{c_ret} {name}({c_params});")
+    # Blocking path: submit to thread pool, yield, resume with result
+    buf_push(b, "    if (gem_current_pid >= 0) \{\n")
+    buf_push(b, "        struct _blk_{name}_args *_ba = (struct _blk_{name}_args *)malloc(sizeof(struct _blk_{name}_args));\n")
+
+    # Copy args into struct (strdup strings for thread safety)
+    for i = 0, len(params)
+      let ptype = params[i]["type"]
+      if ptype == "String"
+        buf_push(b, "        _ba->_p{i} = strdup(_p{i});\n")
+      else
+        buf_push(b, "        _ba->_p{i} = _p{i};\n")
+      end
+    end
+
+    buf_push(b, "        GemIORequest *_req = gem_io_submit_extern(_blk_{name}_worker, _ba);\n")
+    buf_push(b, "        if (!_req) \{ free(_ba); gem_error(\"{name}: I/O queue full\"); }\n")
+    buf_push(b, "        GemProcess *_proc = &gem_proc_table[gem_current_pid];\n")
+    buf_push(b, "        _proc->io_request = _req;\n")
+    buf_push(b, "        gem_io_pool_yield();\n")
+    buf_push(b, "        _proc->io_request = NULL;\n")
+
+    # Read result, free strdup'd strings, free args struct, free IO request
+    if ret_type == "String"
+      buf_push(b, "        char *_raw = _ba->_result;\n")
+    elif ret_type != "Nil"
+      let c_type = "int64_t"
+      if ret_type == "Float"
+        c_type = "double"
+      elif ret_type == "Bool"
+        c_type = "int"
+      elif ret_type == "Ptr"
+        c_type = "void *"
+      end
+      buf_push(b, "        {c_type} _ret = _ba->_result;\n")
+    end
+
+    # Free strdup'd string inputs
+    for i = 0, len(params)
+      if params[i]["type"] == "String"
+        buf_push(b, "        free(_ba->_p{i});\n")
+      end
+    end
+
+    buf_push(b, "        free(_ba);\n")
+    buf_push(b, "        gem_io_free_request(_req);\n")
+
+    # Return result
+    if ret_type == "Int"
+      buf_push(b, "        return gem_int(_ret);\n")
+    elif ret_type == "Float"
+      buf_push(b, "        return gem_float(_ret);\n")
+    elif ret_type == "String"
+      buf_push(b, "        size_t _len = _raw ? strlen(_raw) : 0;\n")
+      buf_push(b, "        char *_gc = (char *)GC_MALLOC_ATOMIC(_len + 1);\n")
+      buf_push(b, "        if (_raw) \{ memcpy(_gc, _raw, _len + 1); free(_raw); } else \{ _gc[0] = '\\0'; }\n")
+      buf_push(b, "        return gem_string(_gc);\n")
+    elif ret_type == "Bool"
+      buf_push(b, "        return gem_bool(_ret);\n")
+    elif ret_type == "Ptr"
+      buf_push(b, "        GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n")
+    else
+      buf_push(b, "        return GEM_NIL;\n")
+    end
+    buf_push(b, "    }\n")
+
+    # Direct call path (not in a coroutine)
+    let d_args = ""
+    for i = 0, len(params)
+      if i > 0
+        d_args = d_args + ", "
+      end
+      d_args = d_args + "_p{i}"
+    end
+    let d_call = "{name}({d_args})"
+
+    if ret_type == "Nil"
+      buf_push(b, "    {d_call};\n")
+      buf_push(b, "    return GEM_NIL;\n")
+    elif ret_type == "Int"
+      buf_push(b, "    int64_t _ret = {d_call};\n")
+      buf_push(b, "    return gem_int(_ret);\n")
+    elif ret_type == "Float"
+      buf_push(b, "    double _ret = {d_call};\n")
+      buf_push(b, "    return gem_float(_ret);\n")
+    elif ret_type == "String"
+      buf_push(b, "    char* _ret = {d_call};\n")
+      buf_push(b, "    return gem_string(_ret);\n")
+    elif ret_type == "Bool"
+      buf_push(b, "    int _ret = {d_call};\n")
+      buf_push(b, "    return gem_bool(_ret);\n")
+    elif ret_type == "Ptr"
+      buf_push(b, "    void *_ret = {d_call};\n")
+      buf_push(b, "    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n")
+    else
+      buf_push(b, "    {d_call};\n")
+      buf_push(b, "    return GEM_NIL;\n")
+    end
+
+    buf_push(b, "}")
+
+    push(forward_decls, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
+    emit_extern_c_decl(name, params, ret_type)
 
     buf_str(b)
   end

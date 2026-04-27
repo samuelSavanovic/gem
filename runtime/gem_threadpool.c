@@ -14,7 +14,9 @@
 #include <errno.h>
 #include <sys/wait.h>
 
+#ifndef GEM_POOL_SIZE
 #define GEM_POOL_SIZE 4
+#endif
 #define GEM_IO_QUEUE_CAP 1024
 
 static pthread_t gem_io_workers[GEM_POOL_SIZE];
@@ -86,6 +88,7 @@ static void *gem_io_worker_fn(void *arg) {
             case GEM_IO_WRITE_FILE:  gem_io_do_write(req, "wb"); break;
             case GEM_IO_APPEND_FILE: gem_io_do_write(req, "ab"); break;
             case GEM_IO_EXEC:        gem_io_do_exec(req); break;
+            case GEM_IO_EXTERN:      req->extern_fn(req->extern_args); break;
         }
 
         __sync_synchronize();
@@ -141,6 +144,27 @@ GemIORequest *gem_io_submit(GemIOOp op, const char *path,
         pthread_mutex_unlock(&gem_io_mutex);
         free(req->path);
         free(req->content);
+        free(req);
+        return NULL;
+    }
+    gem_io_queue[gem_io_q_tail] = req;
+    gem_io_q_tail = (gem_io_q_tail + 1) % GEM_IO_QUEUE_CAP;
+    gem_io_q_count++;
+    pthread_cond_signal(&gem_io_cond);
+    pthread_mutex_unlock(&gem_io_mutex);
+    return req;
+}
+
+GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args) {
+    GemIORequest *req = (GemIORequest *)calloc(1, sizeof(GemIORequest));
+    req->op = GEM_IO_EXTERN;
+    req->requester_pid = gem_current_pid;
+    req->extern_fn = fn;
+    req->extern_args = args;
+
+    pthread_mutex_lock(&gem_io_mutex);
+    if (gem_io_q_count >= GEM_IO_QUEUE_CAP) {
+        pthread_mutex_unlock(&gem_io_mutex);
         free(req);
         return NULL;
     }

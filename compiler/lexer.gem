@@ -125,6 +125,7 @@ fn build_keyword_set()
   t.nil = true
   t.load = true
   t.extern = true
+  t.blocking = true
   t.for = true
   t.in = true
   t.after = true

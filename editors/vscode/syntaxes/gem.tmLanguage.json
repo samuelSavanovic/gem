@@ -52,7 +52,7 @@
         },
         {
           "name": "keyword.other.gem",
-          "match": "\\b(let|load|extern|include|and|or|not)\\b"
+          "match": "\\b(let|load|extern|blocking|include|and|or|not)\\b"
         },
         {
           "name": "keyword.declaration.function.gem",
@@ -111,13 +111,14 @@
           }
         },
         {
-          "comment": "extern fn name(param: Type) -> Type",
-          "begin": "\\b(extern)\\s+(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+          "comment": "extern [blocking] fn name(param: Type) -> Type",
+          "begin": "\\b(extern)\\s+(?:(blocking)\\s+)?(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
           "end": "(?=\\n|$)",
           "beginCaptures": {
             "1": { "name": "keyword.other.gem" },
-            "2": { "name": "keyword.declaration.function.gem" },
-            "3": { "name": "entity.name.function.gem" }
+            "2": { "name": "keyword.other.gem" },
+            "3": { "name": "keyword.declaration.function.gem" },
+            "4": { "name": "entity.name.function.gem" }
           },
           "patterns": [
             { "include": "#extern-type-annotation" },
