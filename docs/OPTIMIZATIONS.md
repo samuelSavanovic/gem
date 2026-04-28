@@ -101,6 +101,9 @@ The thread pool adds per-operation overhead: mutex lock → enqueue → cond sig
 ### Selective receive save-queue optimization
 `receive ... when` scans the mailbox from oldest to newest on every wake. If a process accumulates many messages and the match is near the end, that's O(n) pattern matches per wake. Erlang's optimization: remember which messages were already tested against the current receive and skip them on re-scan, only testing newly arrived messages. Non-trivial but maps onto the existing mailbox structure — a "scan cursor" per process that advances as messages are rejected and resets when the receive shape changes or a new message arrives.
 
+### Timer min-heap
+Timers are stored in a fixed-size array (256 slots) with linear scan for insert, fire, cancel, and earliest-deadline lookup. Replace with a dynamic min-heap keyed by deadline. Insert and cancel become O(log n), `gem_fire_timers` pops expired entries from the front in O(log n) per fired timer, and `gem_earliest_timer_deadline` becomes O(1) (peek the root). Removes the 256-slot cap — unlimited concurrent timers without hitting "timer table full". Matters for applications with many gen_servers or heavy `send_after` usage.
+
 ### kqueue/epoll for sockets (Phase 2)
 The scheduler currently uses `poll()` for socket readiness. Replacing with **kqueue** (macOS/BSD) or **epoll** (Linux) would improve scalability at high connection counts (thousands of fds). `poll()` scans the entire fd set on each call — O(n) per wake. kqueue/epoll return only ready fds — O(ready). For the current HTTP server benchmark (~100 concurrent connections), `poll()` is not the bottleneck; this optimization matters when scaling to thousands of simultaneous connections.
 
