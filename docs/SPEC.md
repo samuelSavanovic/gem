@@ -977,6 +977,11 @@ table.each(parts) { |item| print(item) }
 
 The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`buf_str()`, and `substr()`. `split` and `index_of` are only available through `std/string` (not as bare builtins).
 
+`std/json` — exports `json` table:
+
+- `json.parse(s)` — parse a JSON string into Gem values. Objects become string-keyed tables, arrays become integer-keyed tables, strings/numbers/booleans map to native types, `null` maps to `nil`. Supports the full JSON spec: nested structures, all string escape sequences (`\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, `\uXXXX`), negative numbers, floats with decimal points and/or exponents (`1.5e-3`). Raises an error on malformed input — wrap with `pcall` for recovery.
+- `json.encode(val)` — serialize a Gem value to a compact JSON string (no extra whitespace). Integer-keyed tables encode as JSON arrays, string-keyed tables as JSON objects, strings are escaped, numbers/booleans/nil map to their JSON equivalents. Raises an error for unencodable types (functions, buffers, refs). Note: empty tables (`{}` / `[]`) are indistinguishable in Gem and always encode as `[]`.
+
 `std/supervisor` — exports `supervisor` table:
 
 - `supervisor.start(spec)` — start a supervisor process. Returns `{pid: <pid>}`. The spec table supports:

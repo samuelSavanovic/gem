@@ -1,0 +1,183 @@
+load "std/json"
+
+# ─── Parse: simple values ─────────────────────────────────────────
+
+print("=== parse simple values ===")
+print(json.parse("42"))
+print(json.parse("-7"))
+print(json.parse("0"))
+print(json.parse("3.14"))
+print(json.parse("-0.5"))
+print(json.parse("true"))
+print(json.parse("false"))
+print(json.parse("null"))
+print(json.parse("\"hello world\""))
+print(json.parse("\"\""))
+
+# ─── Parse: arrays ────────────────────────────────────────────────
+
+print("=== parse arrays ===")
+let arr = json.parse("[1, 2, 3]")
+print(arr[0])
+print(arr[1])
+print(arr[2])
+print(len(arr))
+
+let nested = json.parse("[[1, 2], [3, 4]]")
+print(nested[0][0])
+print(nested[1][1])
+
+let empty_arr = json.parse("[]")
+print(len(empty_arr))
+
+# ─── Parse: objects ───────────────────────────────────────────────
+
+print("=== parse objects ===")
+let obj = json.parse('{"name": "gem", "version": 1}')
+print(obj["name"])
+print(obj["version"])
+
+let empty_obj = json.parse('{}')
+print(len(empty_obj))
+
+# ─── Parse: nested structures ─────────────────────────────────────
+
+print("=== parse nested ===")
+let data = json.parse('{"users": [{"name": "alice", "age": 30}, {"name": "bob", "age": 25}], "count": 2}')
+print(data["count"])
+print(data["users"][0]["name"])
+print(data["users"][0]["age"])
+print(data["users"][1]["name"])
+print(data["users"][1]["age"])
+
+let deep = json.parse('{"a": {"b": {"c": {"d": 42}}}}')
+print(deep["a"]["b"]["c"]["d"])
+
+# ─── Parse: string escapes ────────────────────────────────────────
+
+print("=== parse string escapes ===")
+print(json.parse('"hello\\nworld"'))
+print(json.parse('"tab\\there"'))
+print(json.parse('"back\\\\slash"'))
+print(json.parse('"quote\\"here"'))
+print(json.parse('"slash\\/ok"'))
+
+# ─── Parse: unicode escapes ───────────────────────────────────────
+
+print("=== parse unicode ===")
+print(json.parse('"\\u0041"'))
+print(json.parse('"\\u0042\\u0043"'))
+print(json.parse('"\\u00e9"'))
+print(json.parse('"\\uD83D\\uDE00"'))
+
+# ─── Parse: numbers ───────────────────────────────────────────────
+
+print("=== parse numbers ===")
+print(json.parse("0"))
+print(json.parse("-0"))
+print(json.parse("123"))
+print(json.parse("1.5"))
+print(json.parse("1e2"))
+print(json.parse("1.5e2"))
+print(json.parse("1E+2"))
+print(json.parse("-1.5e-1"))
+
+# ─── Parse: whitespace tolerance ──────────────────────────────────
+
+print("=== parse whitespace ===")
+let spaced = json.parse('  { "a" : 1 , "b" : 2 }  ')
+print(spaced["a"])
+print(spaced["b"])
+
+let ws = json.parse("  \n\t  42  \n  ")
+print(ws)
+
+# ─── Parse: mixed types ──────────────────────────────────────────
+
+print("=== parse mixed ===")
+let mixed = json.parse('[1, "two", true, false, null, [3]]')
+print(mixed[0])
+print(mixed[1])
+print(mixed[2])
+print(mixed[3])
+print(mixed[4])
+print(mixed[5][0])
+
+# ─── Encode: simple values ────────────────────────────────────────
+
+print("=== encode simple values ===")
+print(json.encode(42))
+print(json.encode(-7))
+print(json.encode(3.14))
+print(json.encode(true))
+print(json.encode(false))
+print(json.encode(nil))
+print(json.encode("hello"))
+print(json.encode(""))
+
+# ─── Encode: string escapes ──────────────────────────────────────
+
+print("=== encode string escapes ===")
+print(json.encode("hello\nworld"))
+print(json.encode("tab\there"))
+print(json.encode("back\\slash"))
+print(json.encode("quote\"here"))
+
+# ─── Encode: arrays ──────────────────────────────────────────────
+
+print("=== encode arrays ===")
+print(json.encode([]))
+print(json.encode([1, 2, 3]))
+print(json.encode([1, "two", true, nil]))
+print(json.encode([[1, 2], [3, 4]]))
+
+# ─── Encode: objects ─────────────────────────────────────────────
+
+print("=== encode objects ===")
+print(json.encode({a: 1, b: "two"}))
+
+# ─── Roundtrip ────────────────────────────────────────────────────
+
+print("=== roundtrip ===")
+let input = '{"name":"gem","tags":["lang","compiler"],"version":1,"active":true,"meta":null}'
+let parsed = json.parse(input)
+let encoded = json.encode(parsed)
+let reparsed = json.parse(encoded)
+print(reparsed["name"])
+print(reparsed["tags"][0])
+print(reparsed["tags"][1])
+print(reparsed["version"])
+print(reparsed["active"])
+print(reparsed["meta"])
+
+# ─── Error handling with pcall ────────────────────────────────────
+
+print("=== error handling ===")
+let r1 = pcall json.parse("not json")
+print(r1.ok)
+
+let r2 = pcall json.parse('{')
+print(r2.ok)
+
+let r3 = pcall json.parse('')
+print(r3.ok)
+
+let r4 = pcall json.parse('[1, 2,]')
+print(r4.ok)
+
+let r5 = pcall json.parse('{"a": 1} extra')
+print(r5.ok)
+
+# depth limit
+let deep_json = buf_new()
+for i = 0, 200
+  buf_push(deep_json, "[")
+end
+buf_push(deep_json, "1")
+for i = 0, 200
+  buf_push(deep_json, "]")
+end
+let r6 = pcall json.parse(buf_str(deep_json))
+print(r6.ok)
+
+print("=== all json tests passed ===")

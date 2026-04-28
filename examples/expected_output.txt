@@ -735,3 +735,101 @@ true
 true
 false
 false
+=== parse simple values ===
+42
+-7
+0
+3.14
+-0.5
+true
+false
+nil
+hello world
+
+=== parse arrays ===
+1
+2
+3
+3
+1
+4
+0
+=== parse objects ===
+gem
+1
+0
+=== parse nested ===
+2
+alice
+30
+bob
+25
+42
+=== parse string escapes ===
+hello
+world
+tab	here
+back\slash
+quote"here
+slash/ok
+=== parse unicode ===
+A
+BC
+é
+😀
+=== parse numbers ===
+0
+0
+123
+1.5
+100
+150
+100
+-0.15
+=== parse whitespace ===
+1
+2
+42
+=== parse mixed ===
+1
+two
+true
+false
+nil
+3
+=== encode simple values ===
+42
+-7
+3.14
+true
+false
+null
+"hello"
+""
+=== encode string escapes ===
+"hello\nworld"
+"tab\there"
+"back\\slash"
+"quote\"here"
+=== encode arrays ===
+[]
+[1,2,3]
+[1,"two",true,null]
+[[1,2],[3,4]]
+=== encode objects ===
+{"a":1,"b":"two"}
+=== roundtrip ===
+gem
+lang
+compiler
+1
+true
+nil
+=== error handling ===
+false
+false
+false
+false
+false
+false
+=== all json tests passed ===
