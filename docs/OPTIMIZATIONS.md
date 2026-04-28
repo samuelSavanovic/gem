@@ -5,16 +5,16 @@ Prioritize by real-world impact (the compiler is the benchmark).
 
 ## Value Representation
 
-### NaN boxing
-GemVal is currently 16 bytes (4-byte type enum + 8-byte union + padding). NaN boxing packs type + value into a single 8-byte double by exploiting the NaN payload space. Halves memory per value, improves cache locality, eliminates the type field branch in hot paths. Requires rewriting every GemVal constructor and accessor. Major undertaking but large payoff for value-heavy code.
+### NaN boxing (high priority)
+GemVal is currently 16 bytes (4-byte type enum + 8-byte union + padding). NaN boxing packs type + value into a single 8-byte double by exploiting the NaN payload space. Halves memory per value, improves cache locality, eliminates the type field branch in hot paths. The payoff isn't just memory — every function call, table lookup, and arithmetic op passes GemVals, so halving their size compounds across the entire runtime. Requires rewriting every GemVal constructor and accessor. Major undertaking but large payoff.
 
 ### Avoid hashing integers in tables
 Integer keys currently fall through to a linear scan if they don't match the array-style fast path (sequential 0..n). A dedicated int hash map (parallel to `str_index`) would give O(1) lookup for sparse integer keys. Low priority — most integer keys follow the array pattern.
 
 ## Strings
 
-### String views / slices
-`substr` allocates a copy. A view (pointer + offset + length) into the original string would make substring extraction O(1). Requires changing the string representation in GemVal (add length field, stop assuming null-termination). Every string consumer (`strlen`, `strcmp`, `printf %s`) needs updating. See `docs/SELF_HOST_FOLLOWUPS.md` for details.
+### String views / slices (defer)
+`substr` allocates a copy. A view (pointer + offset + length) into the original string would make substring extraction O(1). Requires changing the string representation in GemVal (add length field, stop assuming null-termination). Every string consumer (`strlen`, `strcmp`, `printf %s`) needs updating. Defer until profiling shows substring allocation as a real bottleneck — the C interop boundary assumes null-terminated strings throughout, and `substr`/`ord(s, i)` already cover the hot cases without changing the representation.
 
 ### String interning for short strings
 Small strings (< 16 bytes) could be interned in a global table, turning equality checks into pointer comparison. Most table keys are short identifier strings — this would speed up every `gem_table_get`/`gem_table_set` with string keys. Trade-off: GC interaction (interned strings must be roots or use weak refs).
@@ -33,6 +33,14 @@ The compiler could detect the self-append pattern `assign(name, binary("+", var(
 ### Redundant `gem_push_frame` / `gem_pop_frame`
 Every function call emits frame push/pop for stack traces. Leaf functions (no calls inside) could skip this. Requires analysis in the codegen to detect leaf status.
 
+## Table Access
+
+### Inline caching for `.field` access (high priority)
+Every `obj.field` goes through a string hash + probe. Most `.field` accesses at a given source location hit the same table shape repeatedly. A polymorphic inline cache (PIC) — 2 slots per call site that remember "last table layout → field offset" — turns a hash lookup into a pointer compare + offset load on the hot path. The compiler itself is the biggest beneficiary: AST walks do millions of `node.tag`, `node.children`, etc. Implementable without hidden classes by caching the stb_ds hash slot or index. Bounded change to codegen (emit a static cache variable per access site) + a small runtime lookup-with-cache function.
+
+### `for k, v in tbl` allocates a keys array
+The for-loop desugaring calls `keys()` on the table, allocating an O(n) array, then re-looks up each value by key during iteration. A direct iterator that walks the underlying stb_ds storage would skip both the allocation and the per-key re-lookup. Localized change: new runtime iterator API + codegen change for the table-iteration for-loop form. Matters because `for k, v in` is idiomatic and the cost is invisible to users.
+
 ## Runtime Hot Paths
 
 ### `gem_eq` for strings
@@ -40,6 +48,9 @@ Currently `strcmp`. If string interning lands, short strings become pointer equa
 
 ### `gem_add` for strings
 Every string `+` does `strlen` on both operands. If strings carried their length, this becomes a field read. Depends on string views/length-aware representation.
+
+### `buf_push` specialization for non-strings
+`buf_push` auto-coerces non-string values via `to_string`, allocating a temporary string. Specialized variants (`buf_push_int`, `buf_push_float`) that write directly into the buffer would skip the allocation. Small win per call but high frequency in formatting-heavy code.
 
 ### Constructor return-by-value
 `gem_int()`, `gem_float()`, `gem_bool()`, `gem_string()` all return `GemVal` by value (16 bytes). With NaN boxing these become trivial bit operations returning 8 bytes. Without NaN boxing, the compiler could use static inline or macros for the trivial constructors.
@@ -49,8 +60,14 @@ Every string `+` does `strlen` on both operands. If strings carried their length
 
 ## Compiler
 
-### Constant folding
-Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile time. The compiler already has all the information.
+### String interpolation codegen
+If `"hello {name}, count {n}"` desugars to repeated `+` concatenation (`"hello " + name + ", count " + to_string(n)`), that's 3 allocations and 4 strlens for one logical operation. A single internal call that buf_pushes all parts into a pre-sized buffer would reduce this to one allocation. Interpolation is everywhere in idiomatic Gem code.
+
+### Escape analysis for non-escaping closures
+Every `fn() ... end` heap-allocates a closure with its captured environment. Most closures never escape: `pcall(fn() ... end)`, `do ... end` blocks passed to iterators, `sort(arr, fn(a,b) ... end)`. If the compiler detects that a closure is only called within the local scope and never stored, it could stack-allocate or skip the closure allocation entirely. The pattern is syntactically detectable for the common cases (immediate call-site argument). Bigger lift but high frequency — closures are the primary abstraction mechanism.
+
+### Constant folding (low priority)
+Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile time. The compiler already has all the information. Low value at current stage — the cases where humans write foldable constants are rare, and it doesn't affect compilation time.
 
 ### Dead code elimination
 Unreachable code after `return`, `break`, `error()` could be stripped. Currently emitted as-is.
@@ -80,6 +97,9 @@ TCP builtins (`tcp_accept`, `tcp_read`, `tcp_write`, `tcp_connect`) use non-bloc
 The thread pool adds per-operation overhead: mutex lock → enqueue → cond signal → worker thread pickup → execute → wake-pipe write → scheduler drain → process scan → resume. For socket ops on localhost where the actual I/O is microseconds, this coordination overhead dominates. With 4 workers and 3 ops/request, max throughput is ~4/3 ≈ 1.3k req/s — matches the 1,550 observed.
 
 **Lesson:** Thread pool is correct for file I/O and `exec` (where the kernel provides no readiness notification). For sockets, always use non-blocking + readiness notification (poll, kqueue, epoll).
+
+### Selective receive save-queue optimization
+`receive ... when` scans the mailbox from oldest to newest on every wake. If a process accumulates many messages and the match is near the end, that's O(n) pattern matches per wake. Erlang's optimization: remember which messages were already tested against the current receive and skip them on re-scan, only testing newly arrived messages. Non-trivial but maps onto the existing mailbox structure — a "scan cursor" per process that advances as messages are rejected and resets when the receive shape changes or a new message arrives.
 
 ### kqueue/epoll for sockets (Phase 2)
 The scheduler currently uses `poll()` for socket readiness. Replacing with **kqueue** (macOS/BSD) or **epoll** (Linux) would improve scalability at high connection counts (thousands of fds). `poll()` scans the entire fd set on each call — O(n) per wake. kqueue/epoll return only ready fds — O(ready). For the current HTTP server benchmark (~100 concurrent connections), `poll()` is not the bottleneck; this optimization matters when scaling to thousands of simultaneous connections.
