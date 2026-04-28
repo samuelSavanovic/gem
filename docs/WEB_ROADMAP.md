@@ -285,7 +285,7 @@ This is explicit, composable, and doesn't require framework machinery. A `http.u
 
 **Effort:** ~400 lines (up from ~300 — buffered reader + keep-alive loop + timeout handling).
 
-### std/request
+### std/request -- DONE
 
 HTTP client for making outbound requests. Pure Gem, no new C builtins. Depends on: TCP builtins, `std/url`, `std/json` (exists).
 

@@ -1104,6 +1104,17 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 - `http.serve(router[, opts])` — starts the HTTP server. Returns the acceptor pid. `opts` table: `port` (default 8080), `host` (default `"0.0.0.0"`).
 - Spawns one process per connection. Supports HTTP/1.1 keep-alive with a 30-second idle timeout (via `tcp_read` timeout). Handles `Connection: close`. Errors in handlers are caught by `pcall` and return 500.
 
+`std/request` — exports `request` table. HTTP/1.1 client for outbound requests. Depends on `std/string`, TCP builtins.
+
+- `request.get(url[, opts])` — GET request. Returns `{status, headers, body}`.
+- `request.post(url[, opts])` — POST request. `opts` supports `body` (string) and `headers` (table).
+- `request.put(url[, opts])` — PUT request. Same opts as post.
+- `request.patch(url[, opts])` — PATCH request. Same opts as post.
+- `request.delete(url[, opts])` — DELETE request. Same opts as get.
+- `request.request(method, url[, opts])` — generic method for full control.
+- URL format: `http://host[:port]/path[?query]`. Default port 80. HTTP only (no TLS).
+- Sends `Connection: close` — no keep-alive. Reads response until EOF.
+
 `std/supervisor` — exports `supervisor` table:
 
 - `supervisor.start(spec)` — start a supervisor process. Returns `{pid: <pid>}`. The spec table supports:

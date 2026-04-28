@@ -1,0 +1,192 @@
+# Integration test for std/request (HTTP client)
+
+load "std/http"
+load "std/json"
+load "std/string"
+load "std/request"
+
+let port = 19881
+
+# ─── Setup test server ───
+
+let r = http.router()
+
+r.get("/", fn(req)
+  http.ok("hello from server")
+end)
+
+r.get("/json", fn(req)
+  http.json_response({name: "gem", version: 1})
+end)
+
+r.post("/echo", fn(req)
+  http.ok(req.body, req.headers["Content-Type"])
+end)
+
+r.get("/headers", fn(req)
+  http.ok("x-custom=" + to_string(req.headers["X-Custom"]))
+end)
+
+r.get("/query", fn(req)
+  http.ok("a=" + req.query.a + ",b=" + req.query.b)
+end)
+
+r.put("/items/:id", fn(req)
+  http.ok("updated:" + req.params.id + ":" + req.body)
+end)
+
+r.patch("/items/:id", fn(req)
+  http.ok("patched:" + req.params.id)
+end)
+
+r.delete("/items/:id", fn(req)
+  http.ok("deleted:" + req.params.id)
+end)
+
+r.get("/redirect", fn(req)
+  http.redirect("/target")
+end)
+
+# ─── Run tests ───
+
+let tr = r
+spawn() do
+  let pass = 0
+  let fail = 0
+
+  let server_pid = http.serve(tr, {port: port})
+  sleep(100)
+
+  let base = "http://127.0.0.1:" + to_string(port)
+
+  # GET
+  let resp = request.get(base + "/")
+  if resp.status == 200 and resp.body == "hello from server"
+    pass += 1
+  else
+    print("FAIL: GET / - status={resp.status} body={resp.body}")
+    fail += 1
+  end
+
+  # GET with query string
+  let resp2 = request.get(base + "/query?a=hello&b=world")
+  if resp2.status == 200 and resp2.body == "a=hello,b=world"
+    pass += 1
+  else
+    print("FAIL: GET /query - body={resp2.body}")
+    fail += 1
+  end
+
+  # GET JSON
+  let resp3 = request.get(base + "/json")
+  if resp3.status == 200
+    let data = json.parse(resp3.body)
+    if data.name == "gem" and data.version == 1
+      pass += 1
+    else
+      print("FAIL: GET /json - bad data")
+      fail += 1
+    end
+  else
+    print("FAIL: GET /json - status={resp3.status}")
+    fail += 1
+  end
+
+  # POST with body
+  let resp4 = request.post(base + "/echo", {
+    headers: {"Content-Type": "text/plain"},
+    body: "hello world"
+  })
+  if resp4.status == 200 and resp4.body == "hello world"
+    pass += 1
+  else
+    print("FAIL: POST /echo - body={resp4.body}")
+    fail += 1
+  end
+
+  # POST JSON body
+  let payload = json.encode({x: 1, y: 2})
+  let resp5 = request.post(base + "/echo", {
+    headers: {"Content-Type": "application/json"},
+    body: payload
+  })
+  if resp5.status == 200 and resp5.body == payload
+    pass += 1
+  else
+    print("FAIL: POST /echo json - body={resp5.body}")
+    fail += 1
+  end
+
+  # Custom headers
+  let resp6 = request.get(base + "/headers", {
+    headers: {"X-Custom": "test-value"}
+  })
+  if resp6.status == 200 and resp6.body == "x-custom=test-value"
+    pass += 1
+  else
+    print("FAIL: GET /headers - body={resp6.body}")
+    fail += 1
+  end
+
+  # PUT
+  let resp7 = request.put(base + "/items/42", {body: "new-data"})
+  if resp7.status == 200 and resp7.body == "updated:42:new-data"
+    pass += 1
+  else
+    print("FAIL: PUT /items/42 - body={resp7.body}")
+    fail += 1
+  end
+
+  # PATCH
+  let resp8 = request.patch(base + "/items/7")
+  if resp8.status == 200 and resp8.body == "patched:7"
+    pass += 1
+  else
+    print("FAIL: PATCH /items/7 - body={resp8.body}")
+    fail += 1
+  end
+
+  # DELETE
+  let resp9 = request.delete(base + "/items/99")
+  if resp9.status == 200 and resp9.body == "deleted:99"
+    pass += 1
+  else
+    print("FAIL: DELETE /items/99 - body={resp9.body}")
+    fail += 1
+  end
+
+  # 404
+  let resp10 = request.get(base + "/nonexistent")
+  if resp10.status == 404
+    pass += 1
+  else
+    print("FAIL: 404 - status={resp10.status}")
+    fail += 1
+  end
+
+  # Redirect (no follow - should return 302)
+  let resp11 = request.get(base + "/redirect")
+  if resp11.status == 302 and resp11.headers["Location"] == "/target"
+    pass += 1
+  else
+    print("FAIL: redirect - status={resp11.status}")
+    fail += 1
+  end
+
+  # Generic request()
+  let resp12 = request.request("GET", base + "/")
+  if resp12.status == 200 and resp12.body == "hello from server"
+    pass += 1
+  else
+    print("FAIL: request() - body={resp12.body}")
+    fail += 1
+  end
+
+  # ─── Summary ───
+
+  kill(server_pid, "shutdown")
+  print("Results: {pass} passed, {fail} failed")
+  if fail > 0
+    exit(1)
+  end
+end

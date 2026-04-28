@@ -1,0 +1,144 @@
+# std/request — HTTP/1.1 client
+
+load "std/string"
+
+let READ_SIZE = 8192
+
+fn parse_url(raw_url)
+  let s = raw_url
+  if string.starts_with(s, "http://")
+    s = substr(s, 7, len(s) - 7)
+  end
+
+  let slash = string.index_of(s, "/")
+  let host_part = ""
+  let path = "/"
+  if slash < 0
+    host_part = s
+  else
+    host_part = substr(s, 0, slash)
+    path = substr(s, slash, len(s) - slash)
+  end
+
+  let colon = string.index_of(host_part, ":")
+  let host = ""
+  let port = 80
+  if colon < 0
+    host = host_part
+  else
+    host = substr(host_part, 0, colon)
+    port = to_int(substr(host_part, colon + 1, len(host_part) - colon - 1))
+  end
+
+  {host: host, port: port, path: path}
+end
+
+fn parse_response(raw)
+  let hdr_end = string.index_of(raw, "\r\n\r\n")
+  if hdr_end < 0
+    error("invalid HTTP response: no header boundary")
+  end
+
+  let header_section = substr(raw, 0, hdr_end)
+  let resp_body = substr(raw, hdr_end + 4, len(raw) - hdr_end - 4)
+
+  let lines = string.split(header_section, "\r\n")
+  let status_line = lines[0]
+  let sp1 = string.index_of(status_line, " ")
+  let rest = substr(status_line, sp1 + 1, len(status_line) - sp1 - 1)
+  let sp2 = string.index_of(rest, " ")
+  let status_code = to_int(substr(rest, 0, sp2))
+
+  let headers = {}
+  let i = 1
+  while i < len(lines)
+    let colon = string.index_of(lines[i], ": ")
+    if colon > 0
+      let key = substr(lines[i], 0, colon)
+      let val = substr(lines[i], colon + 2, len(lines[i]) - colon - 2)
+      headers[key] = val
+    end
+    i += 1
+  end
+
+  {status: status_code, headers: headers, body: resp_body}
+end
+
+fn do_request(method, raw_url, opts)
+  if opts == nil
+    opts = {}
+  end
+
+  let parsed = parse_url(raw_url)
+  let body = opts.body
+  if body == nil
+    body = ""
+  end
+  let user_headers = opts.headers
+  if user_headers == nil
+    user_headers = {}
+  end
+
+  let fd = tcp_connect(parsed.host, parsed.port)
+
+  let buf = buf_new()
+  buf_push(buf, method + " " + parsed.path + " HTTP/1.1\r\n")
+  buf_push(buf, "Host: " + parsed.host + "\r\n")
+  buf_push(buf, "Connection: close\r\n")
+  if len(body) > 0
+    buf_push(buf, "Content-Length: " + to_string(len(body)) + "\r\n")
+  end
+
+  let ks = keys(user_headers)
+  let i = 0
+  while i < len(ks)
+    buf_push(buf, ks[i] + ": " + user_headers[ks[i]] + "\r\n")
+    i += 1
+  end
+
+  buf_push(buf, "\r\n")
+  if len(body) > 0
+    buf_push(buf, body)
+  end
+  tcp_write(fd, buf_str(buf))
+
+  let resp_buf = buf_new()
+  let reading = true
+  while reading
+    let chunk = tcp_read(fd, READ_SIZE)
+    if chunk == ""
+      reading = false
+    else
+      buf_push(resp_buf, chunk)
+    end
+  end
+  tcp_close(fd)
+
+  parse_response(buf_str(resp_buf))
+end
+
+fn get(raw_url, opts = {})
+  do_request("GET", raw_url, opts)
+end
+
+fn post(raw_url, opts = {})
+  do_request("POST", raw_url, opts)
+end
+
+fn put(raw_url, opts = {})
+  do_request("PUT", raw_url, opts)
+end
+
+fn patch(raw_url, opts = {})
+  do_request("PATCH", raw_url, opts)
+end
+
+let delete = fn(raw_url, opts = {})
+  do_request("DELETE", raw_url, opts)
+end
+
+fn request(method, raw_url, opts = {})
+  do_request(method, raw_url, opts)
+end
+
+export get, post, put, patch, delete, request
