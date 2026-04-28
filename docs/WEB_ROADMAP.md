@@ -70,9 +70,9 @@ New file: `runtime/gem_builtins_time.c`. Three new builtins registered in `gem.h
 
 **Effort:** ~60 lines C + declarations in gem.h + codegen.gem mapping.
 
-### SQLite builtins
+### SQLite builtins -- DONE
 
-New file: `runtime/gem_builtins_sqlite.c`. New build dependency: `libsqlite3` (system package, similar to how bdw-gc is handled).
+New file: `runtime/gem_builtins_sqlite.c`. SQLite is vendored as an amalgamation (`runtime/sqlite3.c` + `runtime/sqlite3.h`) — no system dependency.
 
 **Blocking strategy — `extern fn` vs `extern blocking fn`:**
 
@@ -283,7 +283,7 @@ This is explicit, composable, and doesn't require framework machinery. A `http.u
 
 **Effort:** ~400 lines (up from ~300 — buffered reader + keep-alive loop + timeout handling).
 
-### std/sqlite
+### std/sqlite -- DONE
 
 Thin Gem wrapper over the Phase 2 C builtins. Provides a slightly friendlier API.
 

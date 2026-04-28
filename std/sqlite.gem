@@ -1,0 +1,30 @@
+# std/sqlite — thin wrapper over SQLite C builtins
+
+fn open(path)
+  sqlite_open(path)
+end
+
+fn close(db)
+  sqlite_close(db)
+end
+
+fn exec(db, sql)
+  sqlite_exec(db, sql)
+end
+
+fn query(db, sql, params)
+  if params == nil
+    params = []
+  end
+  sqlite_query(db, sql, params)
+end
+
+fn last_id(db)
+  sqlite_last_insert_id(db)
+end
+
+fn changes(db)
+  sqlite_changes(db)
+end
+
+export open, close, exec, query, last_id, changes

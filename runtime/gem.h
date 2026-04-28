@@ -232,6 +232,12 @@ GemVal gem_tcp_close_fn(void *_env, GemVal *args, int argc);
 GemVal gem_epoch_ms_fn(void *_env, GemVal *args, int argc);
 GemVal gem_format_time_fn(void *_env, GemVal *args, int argc);
 GemVal gem_format_time_local_fn(void *_env, GemVal *args, int argc);
+GemVal gem_sqlite_open_fn(void *_env, GemVal *args, int argc);
+GemVal gem_sqlite_close_fn(void *_env, GemVal *args, int argc);
+GemVal gem_sqlite_exec_fn(void *_env, GemVal *args, int argc);
+GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc);
+GemVal gem_sqlite_last_insert_id_fn(void *_env, GemVal *args, int argc);
+GemVal gem_sqlite_changes_fn(void *_env, GemVal *args, int argc);
 
 /* ─── Runtime initialization (stores argc/argv, seeds RNG) ─── */
 

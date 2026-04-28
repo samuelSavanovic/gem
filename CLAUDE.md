@@ -6,7 +6,7 @@ A dynamically typed language that compiles to C with Erlang-style concurrency. S
 
 ```
 compiler/             # self-hosting compiler (lexer, parser, AST, codegen, main)
-std/                  # standard library (string, table, math, supervisor, gen_server)
+std/                  # standard library (string, table, math, supervisor, gen_server, sqlite, ...)
 runtime/              # C runtime — split by category:
   gem.h               #   public API, tagged values, process table, scheduler decls
   gem_core.c          #   value constructors, table internals, equality
@@ -20,11 +20,13 @@ runtime/              # C runtime — split by category:
   gem_builtins_math.c        # math ops, random, bitwise operations
   gem_builtins_io.c          # file I/O, filesystem ops, exec
   gem_builtins_tcp.c         # TCP socket operations (non-blocking)
+  gem_builtins_sqlite.c      # SQLite operations (open, close, exec, query, etc.)
   minicoro.h          #   single-header coroutine library (vendored)
   stb_ds.h            #   single-header hash maps/arrays (vendored)
+  sqlite3.c/sqlite3.h #  SQLite amalgamation (vendored)
 bootstrap/stage0.c    # checked-in C output — bootstrap artifact for clean builds
 build/gem             # compiled compiler binary (gitignored, built from stage0.c)
-examples/             # 45 numbered tests + run_all.sh, plus json_parser, http_server, tcp_echo
+examples/             # 49 numbered tests + run_all.sh, plus json_parser, http_server, tcp_echo
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 docs/OPTIMIZATIONS.md # tracked future performance improvements
 prototype/            # C prototypes (Boehm GC + minicoro integration, scheduler + mailbox)
@@ -46,6 +48,7 @@ No Python, no external parser generators. The compiler is fully self-hosted.
 - **Boehm GC** (`bdw-gc`) — garbage collector
 - **minicoro** (`runtime/minicoro.h`) — single-header coroutine library, vendored
 - **stb_ds.h** (`runtime/stb_ds.h`) — single-header hash maps/arrays, vendored
+- **SQLite** (`runtime/sqlite3.c`, `runtime/sqlite3.h`) — amalgamation, vendored
 
 ## Building
 

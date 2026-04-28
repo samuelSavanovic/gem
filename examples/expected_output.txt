@@ -930,3 +930,32 @@ abc%
 /search
 a?b
 === all url tests passed ===
+1
+2
+1
+2
+Alice
+alice@example.com
+99
+Bob
+nil
+80
+1
+Alice
+99
+0
+nil
+int
+float
+1
+important
+false
+false
+1
+1
+0
+11
+false
+1
+false
+=== all sqlite tests passed ===

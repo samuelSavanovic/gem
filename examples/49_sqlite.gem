@@ -1,0 +1,112 @@
+load "std/sqlite"
+
+let db = sqlite.open(":memory:")
+
+# Create table
+sqlite.exec(db, "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT, score REAL)")
+
+# Insert with params
+sqlite.query(db, "INSERT INTO users (name, email, score) VALUES (?, ?, ?)", ["Alice", "alice@example.com", 95.5])
+let id1 = sqlite.last_id(db)
+print(id1)
+
+sqlite.query(db, "INSERT INTO users (name, email, score) VALUES (?, ?, ?)", ["Bob", nil, 80.0])
+let id2 = sqlite.last_id(db)
+print(id2)
+
+# changes
+sqlite.query(db, "UPDATE users SET score = ? WHERE name = ?", [99.0, "Alice"])
+print(sqlite.changes(db))
+
+# Query all
+let rows = sqlite.query(db, "SELECT * FROM users ORDER BY id")
+print(len(rows))
+print(rows[0].name)
+print(rows[0].email)
+print(rows[0].score)
+print(rows[1].name)
+print(rows[1].email)
+print(rows[1].score)
+
+# Query with params
+let found = sqlite.query(db, "SELECT name, score FROM users WHERE id = ?", [id1])
+print(len(found))
+print(found[0].name)
+print(found[0].score)
+
+# Empty result
+let empty = sqlite.query(db, "SELECT * FROM users WHERE id = ?", [999])
+print(len(empty))
+
+# NULL handling
+let nulls = sqlite.query(db, "SELECT email FROM users WHERE name = ?", ["Bob"])
+print(nulls[0].email)
+
+# Integer column type
+let ids = sqlite.query(db, "SELECT id FROM users ORDER BY id")
+print(type(ids[0].id))
+
+# Float column type
+let scores = sqlite.query(db, "SELECT score FROM users ORDER BY id")
+print(type(scores[0].score))
+
+# exec for DDL
+sqlite.exec(db, "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY, label TEXT)")
+sqlite.query(db, "INSERT INTO tags (label) VALUES (?)", ["important"])
+let tags = sqlite.query(db, "SELECT * FROM tags")
+print(len(tags))
+print(tags[0].label)
+
+# Error handling - bad SQL
+let result = pcall(fn()
+  sqlite.exec(db, "NOT VALID SQL")
+end)
+print(result.ok)
+
+# Error handling - bad query
+let result2 = pcall(fn()
+  sqlite.query(db, "SELECT * FROM nonexistent_table")
+end)
+print(result2.ok)
+
+# Delete and changes
+sqlite.query(db, "DELETE FROM users WHERE name = ?", ["Bob"])
+print(sqlite.changes(db))
+
+# Boolean binding
+sqlite.exec(db, "CREATE TABLE flags (id INTEGER PRIMARY KEY, active INTEGER)")
+sqlite.query(db, "INSERT INTO flags (active) VALUES (?)", [true])
+sqlite.query(db, "INSERT INTO flags (active) VALUES (?)", [false])
+let flags = sqlite.query(db, "SELECT active FROM flags ORDER BY id")
+print(flags[0].active)
+print(flags[1].active)
+
+# Multiple inserts and query count
+for i = 0, 10
+  sqlite.query(db, "INSERT INTO tags (label) VALUES (?)", ["tag_{i}"])
+end
+let all_tags = sqlite.query(db, "SELECT * FROM tags")
+print(len(all_tags))
+
+# Foreign keys enabled check
+sqlite.exec(db, "CREATE TABLE parents (id INTEGER PRIMARY KEY)")
+sqlite.exec(db, "CREATE TABLE children (id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES parents(id))")
+sqlite.query(db, "INSERT INTO parents (id) VALUES (?)", [1])
+let fk_result = pcall(fn()
+  sqlite.query(db, "INSERT INTO children (parent_id) VALUES (?)", [999])
+end)
+print(fk_result.ok)
+
+# query with no params (omitted)
+let all_users = sqlite.query(db, "SELECT * FROM users")
+print(len(all_users))
+
+sqlite.close(db)
+
+# Error after close
+let result3 = pcall(fn()
+  sqlite.query(db, "SELECT 1")
+end)
+print(result3.ok)
+
+print("=== all sqlite tests passed ===")

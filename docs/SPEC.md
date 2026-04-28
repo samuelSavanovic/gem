@@ -857,6 +857,22 @@ print(items[0])    # a
 
 All six TCP builtins work both from the main process (synchronous/blocking) and from spawned processes (non-blocking via scheduler poll). Sockets are set non-blocking when inside a coroutine; the scheduler's `poll()` loop handles readiness notification with zero thread pool overhead.
 
+**SQLite**
+
+`sqlite_open(path)` — opens (or creates) a SQLite database at `path`. Enables WAL mode and foreign keys by default. Returns an opaque database handle (stored as an int). Use `":memory:"` for an in-memory database. When called from a spawned process, runs on the thread pool (blocking fn). Raises on error.
+
+`sqlite_close(db)` — closes the database handle. When called from a spawned process, runs on the thread pool (blocking fn). Returns `nil`.
+
+`sqlite_exec(db, sql)` — executes SQL that returns no rows (DDL, INSERT without RETURNING, etc.). Inline execution (no thread pool). Raises on error.
+
+`sqlite_query(db, sql, params)` — executes a parameterized query. `params` is an array of bind values matching `?` placeholders in `sql`. Returns an array of row tables, where each row is a string-keyed table (e.g., `{id: 1, name: "Alice"}`). Column type mapping: INTEGER → Int, REAL → Float, TEXT → String, NULL → Nil, BLOB → String (raw bytes). Inline execution (no thread pool). Raises on error.
+
+`sqlite_last_insert_id(db)` — returns `sqlite3_last_insert_rowid` as an int.
+
+`sqlite_changes(db)` — returns the number of rows affected by the last INSERT/UPDATE/DELETE as an int.
+
+SQLite is vendored as an amalgamation (`runtime/sqlite3.c` + `runtime/sqlite3.h`), compiled into the runtime static library. No system dependency needed.
+
 **Negative array indexing** — Integer indices to arrays and strings may be negative. A negative index `i` on a collection of length `n` resolves to `n + i`. So `arr[-1]` is the last element, `arr[-2]` is second-to-last, etc. Indices that remain out of bounds after resolution raise a runtime error.
 
 All builtins are first-class values — they can be stored in variables and passed to functions.
@@ -1014,6 +1030,15 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 
 - `log.debug(msg)`, `log.info(msg)`, `log.warn(msg)`, `log.error(msg)` — log at the given level. Output format: `2026-04-28T14:30:00Z [INFO] message`. One line per call, written to stderr via `eprint`.
 - `log.set_level(level)` — set minimum log level. One of `"debug"`, `"info"`, `"warn"`, `"error"`. Default: `"info"`. Messages below the level are silently dropped.
+
+`std/sqlite` — exports `sqlite` table. Thin wrapper over the SQLite C builtins.
+
+- `sqlite.open(path)` — opens (or creates) a SQLite database. Returns an opaque db handle. Use `":memory:"` for in-memory.
+- `sqlite.close(db)` — closes the database handle.
+- `sqlite.exec(db, sql)` — executes SQL that returns no rows (DDL, mutations without RETURNING).
+- `sqlite.query(db, sql, params?)` — executes a parameterized query. `params` defaults to `[]`. Returns an array of row tables. Use `?` placeholders for bind parameters.
+- `sqlite.last_id(db)` — returns the last inserted row ID.
+- `sqlite.changes(db)` — returns the number of rows affected by the last mutation.
 
 `std/supervisor` — exports `supervisor` table:
 
