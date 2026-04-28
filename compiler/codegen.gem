@@ -711,19 +711,15 @@ fn make_codegen(source_name)
         let part = parts[i]
         let r = compile_expr(part)
         setup = setup + r.setup
-        if part.tag == "string"
-          push(compiled, r.expr)
-        else
-          let ts = tmp()
-          setup = setup + "    GemVal {ts}[] = \{{r.expr}};\n"
-          push(compiled, "gem_to_string_fn(NULL, {ts}, 1)")
-        end
+        push(compiled, r.expr)
       end
-      let acc = compiled[0]
+      let arr_tmp = tmp()
+      let items = compiled[0]
       for i = 1, len(compiled)
-        acc = "gem_add({acc}, {compiled[i]})"
+        items = items + ", " + compiled[i]
       end
-      return {expr: acc, setup: setup}
+      setup = setup + "    GemVal {arr_tmp}[] = \{{items}};\n"
+      return {expr: "gem_interp({len(compiled)}, {arr_tmp})", setup: setup}
     when {tag: "bool", value: value}
       if value
         return {expr: "gem_bool(1)", setup: ""}

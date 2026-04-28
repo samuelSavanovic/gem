@@ -60,8 +60,8 @@ Every string `+` does `strlen` on both operands. If strings carried their length
 
 ## Compiler
 
-### String interpolation codegen
-If `"hello {name}, count {n}"` desugars to repeated `+` concatenation (`"hello " + name + ", count " + to_string(n)`), that's 3 allocations and 4 strlens for one logical operation. A single internal call that buf_pushes all parts into a pre-sized buffer would reduce this to one allocation. Interpolation is everywhere in idiomatic Gem code.
+### ~~String interpolation codegen~~ ✓ Done
+Codegen emits `gem_interp(N, parts)` — a single C call that buffers all parts with inline type coercion and produces one final string allocation. Replaces the previous O(N²) chained `gem_add` approach.
 
 ### Escape analysis for non-escaping closures
 Every `fn() ... end` heap-allocates a closure with its captured environment. Most closures never escape: `pcall(fn() ... end)`, `do ... end` blocks passed to iterators, `sort(arr, fn(a,b) ... end)`. If the compiler detects that a closure is only called within the local scope and never stored, it could stack-allocate or skip the closure allocation entirely. The pattern is syntactically detectable for the common cases (immediate call-site argument). Bigger lift but high frequency — closures are the primary abstraction mechanism.

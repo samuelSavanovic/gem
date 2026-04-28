@@ -106,6 +106,50 @@ GemVal gem_ord_fn(void *_env, GemVal *args, int argc) {
     return gem_int((int64_t)(unsigned char)args[0].sval[0]);
 }
 
+/* ─── String interpolation ─── */
+
+static void interp_append(char **data, int *len, int *cap, const char *s, int slen) {
+    while (*len + slen >= *cap) {
+        int new_cap = *cap * 2;
+        char *new_data = (char *)GC_MALLOC_ATOMIC(new_cap);
+        memcpy(new_data, *data, *len);
+        *data = new_data;
+        *cap = new_cap;
+    }
+    memcpy(*data + *len, s, slen);
+    *len += slen;
+}
+
+GemVal gem_interp(int n, GemVal *parts) {
+    int cap = 128, len = 0;
+    char *data = (char *)GC_MALLOC_ATOMIC(cap);
+    char tmp[64];
+    for (int i = 0; i < n; i++) {
+        const char *s;
+        int slen;
+        switch (parts[i].type) {
+            case VAL_STRING: s = parts[i].sval; slen = (int)strlen(s); break;
+            case VAL_INT: slen = snprintf(tmp, sizeof(tmp), "%lld", (long long)parts[i].ival); s = tmp; break;
+            case VAL_FLOAT: slen = snprintf(tmp, sizeof(tmp), "%g", parts[i].fval); s = tmp; break;
+            case VAL_BOOL: s = parts[i].bval ? "true" : "false"; slen = parts[i].bval ? 4 : 5; break;
+            case VAL_NIL: s = "nil"; slen = 3; break;
+            case VAL_TABLE: slen = snprintf(tmp, sizeof(tmp), "<table:%d>", parts[i].table->len); s = tmp; break;
+            case VAL_FN: s = "<fn>"; slen = 4; break;
+            case VAL_BUFFER: slen = snprintf(tmp, sizeof(tmp), "<buffer:%d>", parts[i].buffer->len); s = tmp; break;
+            case VAL_REF: slen = snprintf(tmp, sizeof(tmp), "#Ref<%lld>", (long long)parts[i].rval); s = tmp; break;
+            default: s = ""; slen = 0; break;
+        }
+        interp_append(&data, &len, &cap, s, slen);
+    }
+    char *s = (char *)GC_MALLOC_ATOMIC(len + 1);
+    memcpy(s, data, len);
+    s[len] = '\0';
+    GemVal r;
+    r.type = VAL_STRING;
+    r.sval = s;
+    return r;
+}
+
 /* ─── String builder (buf_new / buf_push / buf_str) ─── */
 
 GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc) {

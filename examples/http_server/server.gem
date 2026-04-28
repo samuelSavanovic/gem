@@ -192,6 +192,8 @@ fn acceptor(server_fd, router)
   let total = 0
   let me = self()
 
+  # active count is approximate: while blocked in tcp_accept, finished
+  # connections aren't drained until the next accept returns
   while true
     let draining = true
     while draining
