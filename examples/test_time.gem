@@ -1,0 +1,110 @@
+# Test time builtins and std/time module
+
+# Test epoch_ms returns a reasonable value (> 2020-01-01 in ms)
+let now = epoch_ms()
+if now > 1577836800000
+  print("epoch_ms: ok")
+else
+  print("epoch_ms: FAIL - got {now}")
+end
+
+# Test format_time with a known epoch
+# 2024-01-15 12:30:00 UTC = 1705318200000 ms
+let known_ms = 1705321800000
+let formatted = format_time(known_ms, "%Y-%m-%d %H:%M:%S")
+if formatted == "2024-01-15 12:30:00"
+  print("format_time: ok")
+else
+  print("format_time: FAIL - got '{formatted}'")
+end
+
+# Test format_time with RFC 7231 format
+let http = format_time(known_ms, "%a, %d %b %Y %H:%M:%S GMT")
+if http == "Mon, 15 Jan 2024 12:30:00 GMT"
+  print("format_time http_date: ok")
+else
+  print("format_time http_date: FAIL - got '{http}'")
+end
+
+# Test format_time with ISO 8601
+let iso = format_time(known_ms, "%Y-%m-%dT%H:%M:%SZ")
+if iso == "2024-01-15T12:30:00Z"
+  print("format_time iso8601: ok")
+else
+  print("format_time iso8601: FAIL - got '{iso}'")
+end
+
+# Test format_time_local returns a string (can't check exact value due to timezone)
+let local_fmt = format_time_local(known_ms, "%Y-%m-%d")
+if len(local_fmt) == 10
+  print("format_time_local: ok")
+else
+  print("format_time_local: FAIL - got '{local_fmt}'")
+end
+
+# Test std/time module
+load "std/time"
+
+let t = time.now()
+if t > 1577836800000
+  print("time.now: ok")
+else
+  print("time.now: FAIL")
+end
+
+let tf = time.format(known_ms, "%Y-%m-%d")
+if tf == "2024-01-15"
+  print("time.format: ok")
+else
+  print("time.format: FAIL - got '{tf}'")
+end
+
+let tfl = time.format_local(known_ms, "%Y")
+if tfl == "2024" or tfl == "2025"
+  print("time.format_local: ok")
+else
+  print("time.format_local: FAIL - got '{tfl}'")
+end
+
+let hd = time.http_date(known_ms)
+if hd == "Mon, 15 Jan 2024 12:30:00 GMT"
+  print("time.http_date: ok")
+else
+  print("time.http_date: FAIL - got '{hd}'")
+end
+
+let iso2 = time.iso8601(known_ms)
+if iso2 == "2024-01-15T12:30:00Z"
+  print("time.iso8601: ok")
+else
+  print("time.iso8601: FAIL - got '{iso2}'")
+end
+
+let d = time.date(known_ms)
+if d == "2024-01-15"
+  print("time.date: ok")
+else
+  print("time.date: FAIL - got '{d}'")
+end
+
+# Test default (no arg) versions return current date strings
+let hd_now = time.http_date()
+if len(hd_now) == 29
+  print("time.http_date() default: ok")
+else
+  print("time.http_date() default: FAIL - got '{hd_now}' (len={len(hd_now)})")
+end
+
+let iso_now = time.iso8601()
+if len(iso_now) == 20
+  print("time.iso8601() default: ok")
+else
+  print("time.iso8601() default: FAIL - got '{iso_now}' (len={len(iso_now)})")
+end
+
+let d_now = time.date()
+if len(d_now) == 10
+  print("time.date() default: ok")
+else
+  print("time.date() default: FAIL - got '{d_now}'")
+end

@@ -210,6 +210,9 @@ fn make_codegen(source_name)
     tcp_read: "gem_tcp_read_fn",
     tcp_write: "gem_tcp_write_fn",
     tcp_close: "gem_tcp_close_fn",
+    epoch_ms: "gem_epoch_ms_fn",
+    format_time: "gem_format_time_fn",
+    format_time_local: "gem_format_time_local_fn",
     __table_key_at: "gem_table_key_at_fn",
     __table_val_at: "gem_table_val_at_fn"
   }

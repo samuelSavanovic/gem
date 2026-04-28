@@ -229,6 +229,9 @@ GemVal gem_tcp_accept_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_close_fn(void *_env, GemVal *args, int argc);
+GemVal gem_epoch_ms_fn(void *_env, GemVal *args, int argc);
+GemVal gem_format_time_fn(void *_env, GemVal *args, int argc);
+GemVal gem_format_time_local_fn(void *_env, GemVal *args, int argc);
 
 /* ─── Runtime initialization (stores argc/argv, seeds RNG) ─── */
 

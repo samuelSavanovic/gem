@@ -454,7 +454,13 @@ The existing `receive()` function call continues to work unchanged — it always
 
 `kill(pid, reason)` terminates a process immediately. The process is marked dead, its DOWN messages are delivered to monitors, and its registered name (if any) is removed. Returns `true` if the process was alive, `nil` otherwise.
 
-`time_ms()` returns the current monotonic time in milliseconds (int). Useful for timeouts, benchmarks, and restart intensity tracking.
+`time_ms()` returns the current monotonic time in milliseconds (int). Useful for timeouts, benchmarks, and restart intensity tracking. Not suitable for wall-clock formatting — use `epoch_ms()` for that.
+
+`epoch_ms()` returns the current wall-clock time as milliseconds since the Unix epoch (int). Use this for timestamps that need to be formatted into dates or times. Uses `gettimeofday` internally.
+
+`format_time(epoch_ms, format_str)` formats a wall-clock epoch millisecond timestamp into a UTC string using `strftime` specifiers. Returns a string. Supported specifiers include `%Y` (4-digit year), `%m` (month 01-12), `%d` (day 01-31), `%H` (hour 00-23), `%M` (minute 00-59), `%S` (second 00-59), `%a` (abbreviated weekday), `%b` (abbreviated month), `%T` (`%H:%M:%S`), `%F` (`%Y-%m-%d`), and all other platform-supported `strftime` specifiers.
+
+`format_time_local(epoch_ms, format_str)` — same as `format_time` but formats in the local timezone instead of UTC.
 
 **Timers**
 
@@ -994,6 +1000,20 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 - `url.parse_query(str)` — parse a query string like `"a=1&b=hello+world&c=%2F"` into a table `{a: "1", b: "hello world", c: "/"}`. Decodes both keys and values. Duplicate keys: last value wins.
 - `url.build_query(table)` — build a query string from a table. Encodes both keys and values.
 - `url.parse(path_with_query)` — split a path on the first `?`. Returns `{path: "/users/123", query_string: "q=foo&page=2", query: {q: "foo", page: "2"}}`. If no `?`, `query_string` is `""` and `query` is `{}`.
+
+`std/time` — exports `time` table:
+
+- `time.now()` — returns the current wall-clock time as milliseconds since the Unix epoch (int). Alias for `epoch_ms()`.
+- `time.format(ms, fmt)` — format epoch milliseconds as a UTC string using `strftime` specifiers. Wraps `format_time`.
+- `time.format_local(ms, fmt)` — format epoch milliseconds as a local timezone string. Wraps `format_time_local`.
+- `time.http_date(ms?)` — RFC 7231 format: `"Mon, 28 Apr 2026 14:30:00 GMT"`. Uses current time if `ms` is omitted.
+- `time.iso8601(ms?)` — ISO 8601 format: `"2026-04-28T14:30:00Z"`. Uses current time if `ms` is omitted.
+- `time.date(ms?)` — calendar date: `"2026-04-28"`. Uses current time if `ms` is omitted.
+
+`std/log` — exports `log` table. Structured logging to stderr. Depends on `std/time`.
+
+- `log.debug(msg)`, `log.info(msg)`, `log.warn(msg)`, `log.error(msg)` — log at the given level. Output format: `2026-04-28T14:30:00Z [INFO] message`. One line per call, written to stderr via `eprint`.
+- `log.set_level(level)` — set minimum log level. One of `"debug"`, `"info"`, `"warn"`, `"error"`. Default: `"info"`. Messages below the level are silently dropped.
 
 `std/supervisor` — exports `supervisor` table:
 

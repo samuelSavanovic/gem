@@ -54,12 +54,13 @@ URL percent-encoding, query string parsing, and path handling. No dependencies.
 
 ## Phase 2: C Runtime Extensions
 
-### Time builtins
+### Time builtins -- DONE
 
-New file: `runtime/gem_builtins_time.c`. Two new builtins registered in `gem.h` and `codegen.gem`.
+New file: `runtime/gem_builtins_time.c`. Three new builtins registered in `gem.h` and `codegen.gem`.
 
 **C builtins:**
 
+- `epoch_ms()` → int. Returns wall-clock time as milliseconds since Unix epoch via `gettimeofday`. Distinct from `time_ms()` which is monotonic.
 - `format_time(epoch_ms, format_str)` → string. Converts epoch milliseconds to UTC broken-down time via `gmtime_r`, formats with `strftime`. Returns GC-allocated string.
 - `format_time_local(epoch_ms, format_str)` → string. Same but uses `localtime_r` for local timezone.
 
@@ -129,24 +130,24 @@ Call `sodium_init()` once during runtime initialization (in `gem_init` or simila
 
 ## Phase 3: Standard Library Modules
 
-### std/time
+### std/time -- DONE
 
 Higher-level time formatting built on the Phase 2 C builtins. Depends on: `format_time`, `format_time_local`, `time_ms` (exists).
 
 **Exports:**
 
-- `time.now()` → Int. Alias for `time_ms()`. Millisecond monotonic timestamp.
+- `time.now()` → Int. Alias for `epoch_ms()`. Wall-clock milliseconds since Unix epoch.
 - `time.format(ms, fmt)` → String. UTC formatting, wraps `format_time`.
 - `time.format_local(ms, fmt)` → String. Local time, wraps `format_time_local`.
 - `time.http_date(ms?)` → String. RFC 7231 format: `"Mon, 28 Apr 2026 14:30:00 GMT"`. Uses `ms` if given, otherwise `time_ms()`. Needed for HTTP `Date` header and cookie `Expires`.
 - `time.iso8601(ms?)` → String. `"2026-04-28T14:30:00Z"`. Default format for logging and APIs.
 - `time.date(ms?)` → String. `"2026-04-28"`. Calendar date only.
 
-**Design decision:** `time.now()` returns monotonic ms (same as `time_ms()`). For wall-clock formatting, `format_time` uses the epoch ms. If monotonic and wall-clock diverge (NTP adjustment), formatted timestamps may drift slightly from monotonic intervals. This is fine — Erlang has the same split and nobody cares for logging/HTTP.
+**Design decision:** `time.now()` returns wall-clock epoch ms (via `epoch_ms()`), not monotonic ms. `time_ms()` remains monotonic for timeouts and benchmarks. `format_time`/`format_time_local` require epoch ms, so `time.now()` gives the right value for formatting.
 
 **Effort:** ~40 lines.
 
-### std/log
+### std/log -- DONE
 
 Structured logging to stderr. Depends on: `std/time`.
 

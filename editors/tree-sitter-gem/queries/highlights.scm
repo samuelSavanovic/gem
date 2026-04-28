@@ -75,7 +75,7 @@
 ; Builtin functions
 ((call_expression
   function: (identifier) @function.builtin)
-  (#match? @function.builtin "^(print|error|len|type|to_string|to_int|to_float|push|pcall|keys|str_replace|has_key|substr|chr|ord|buf_new|buf_push|buf_str|spawn|send|receive|monitor|spawn_monitor|register|whereis|time_ms|kill|link|unlink|spawn_link|process_flag|make_ref|send_after|cancel_timer|process_info|read_file|write_file|delete|pop|values|eprint|exit|argv|sort|floor|ceil|round|abs|pow|sqrt|random|append_file|getenv|input|insert|remove_at|band|bor|bxor|bnot|bshl|bshr|file_exists|dirname|path_join|normalize_path|remove_file|mkdir|list_dir|is_dir|exec|tcp_connect|tcp_listen|tcp_accept|tcp_read|tcp_write|tcp_close)$"))
+  (#match? @function.builtin "^(print|error|len|type|to_string|to_int|to_float|push|pcall|keys|str_replace|has_key|substr|chr|ord|buf_new|buf_push|buf_str|spawn|send|receive|monitor|spawn_monitor|register|whereis|time_ms|kill|link|unlink|spawn_link|process_flag|make_ref|send_after|cancel_timer|process_info|read_file|write_file|delete|pop|values|eprint|exit|argv|sort|floor|ceil|round|abs|pow|sqrt|random|append_file|getenv|input|insert|remove_at|band|bor|bxor|bnot|bshl|bshr|file_exists|dirname|path_join|normalize_path|remove_file|mkdir|list_dir|is_dir|exec|tcp_connect|tcp_listen|tcp_accept|tcp_read|tcp_write|tcp_close|epoch_ms|format_time|format_time_local)$"))
 
 ((call_with_block
   function: (identifier) @function.builtin)

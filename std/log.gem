@@ -1,0 +1,40 @@
+# std/log — structured logging to stderr
+
+load "std/time"
+
+let _level = 1
+
+let _levels = {debug: 0, info: 1, warn: 2, error: 3}
+let _labels = {debug: "DEBUG", info: "INFO", warn: "WARN", error: "ERROR"}
+
+fn set_level(level)
+  let n = _levels[level]
+  if n != nil
+    _level = n
+  end
+end
+
+fn _log(level, msg)
+  if _levels[level] >= _level
+    let ts = time.iso8601()
+    eprint("{ts} [{_labels[level]}] {msg}")
+  end
+end
+
+fn debug(msg)
+  _log("debug", msg)
+end
+
+fn info(msg)
+  _log("info", msg)
+end
+
+fn warn(msg)
+  _log("warn", msg)
+end
+
+fn error(msg)
+  _log("error", msg)
+end
+
+export set_level, debug, info, warn, error
