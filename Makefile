@@ -11,7 +11,7 @@ STAGE0 = bootstrap/stage0.c
 BUILD_DIR = build
 GEM = $(BUILD_DIR)/gem
 
-.PHONY: build test test-json bootstrap clean
+.PHONY: build test test-json test-json-suite bootstrap clean
 
 # Build the compiler from the checked-in stage0.c
 build: $(GEM)
@@ -43,6 +43,9 @@ test-concurrency:
 
 test-json: $(GEM)
 	@$(GEM) examples/json_parser.gem --run
+
+test-json-suite: $(GEM)
+	@bash test_json_suite/run.sh
 
 clean:
 	rm -rf $(BUILD_DIR) /tmp/gem_*

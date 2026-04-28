@@ -1,0 +1,19 @@
+load "std/json"
+
+let args = argv()
+if len(args) < 2
+  print("usage: test_json_suite <file>")
+  error("missing file argument")
+end
+
+let path = args[1]
+let content = read_file(path)
+let result = pcall(fn()
+  json.parse(content)
+end)
+
+if result.ok
+  print("PASS")
+else
+  print("FAIL:" + result.error)
+end
