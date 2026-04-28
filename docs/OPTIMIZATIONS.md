@@ -35,8 +35,8 @@ Every function call emits frame push/pop for stack traces. Leaf functions (no ca
 
 ## Table Access
 
-### Inline caching for `.field` access (high priority)
-Every `obj.field` goes through a string hash + probe. Most `.field` accesses at a given source location hit the same table shape repeatedly. A polymorphic inline cache (PIC) — 2 slots per call site that remember "last table layout → field offset" — turns a hash lookup into a pointer compare + offset load on the hot path. The compiler itself is the biggest beneficiary: AST walks do millions of `node.tag`, `node.children`, etc. Implementable without hidden classes by caching the stb_ds hash slot or index. Bounded change to codegen (emit a static cache variable per access site) + a small runtime lookup-with-cache function.
+### ~~Inline caching for `.field` access~~ ✓ Done
+Codegen emits a `static GemICacheSlot` per `.field` access site. On cache hit (same table + same shape_id), returns `t->vals[cached_index]` directly — no hash, no `gem_string()` allocation. Cache miss falls back to full `shgeti` lookup and populates the cache. `shape_id` on `GemTable` is bumped by structural mutations (delete, pop, sort, insert, remove_at) but not by set/push (which don't move existing key→index mappings). Monomorphic (1 slot per site) — sufficient for AST walking where each access site typically sees one table shape.
 
 ### ~~`for k, v in tbl` allocates a keys array~~ ✓ Done
 Desugaring now uses `__table_key_at` / `__table_val_at` to index directly into the table's storage arrays. No keys array allocation, no per-key re-lookup.

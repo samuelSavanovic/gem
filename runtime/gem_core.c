@@ -107,6 +107,7 @@ GemVal gem_table_new(void) {
     t->keys = ALLOC_N(GemVal, 4);
     t->vals = ALLOC_N(GemVal, 4);
     t->str_index = NULL;
+    t->shape_id = 0;
     GemVal r; r.type = VAL_TABLE; r.table = t; return r;
 }
 
@@ -211,6 +212,23 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
     for (int i = 0; i < t->len; i++) {
         if (gem_val_eq(t->keys[i], key)) return t->vals[i];
     }
+    return (GemVal){VAL_NIL, {0}};
+}
+
+/* ─── Inline cache miss path ─── */
+
+GemVal gem_table_get_ic_miss(GemTable *t, const char *key, GemICacheSlot *cache) {
+    if (t->str_index != NULL) {
+        ptrdiff_t idx = shgeti(t->str_index, key);
+        if (idx >= 0) {
+            int vi = t->str_index[idx].value;
+            cache->table = t;
+            cache->shape_id = t->shape_id;
+            cache->val_index = vi;
+            return t->vals[vi];
+        }
+    }
+    cache->table = NULL;
     return (GemVal){VAL_NIL, {0}};
 }
 

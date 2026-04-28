@@ -166,6 +166,7 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
         }
     }
     t->len--;
+    t->shape_id++;
     return removed;
 }
 
@@ -183,6 +184,7 @@ GemVal gem_pop_fn(void *_env, GemVal *args, int argc) {
     if (removed_key.type == VAL_STRING && t->str_index != NULL) {
         shdel(t->str_index, removed_key.sval);
     }
+    t->shape_id++;
     return removed;
 }
 
@@ -252,6 +254,7 @@ GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
     for (int i = 0; i < t->len; i++) {
         t->keys[i] = gem_int(i);
     }
+    t->shape_id++;
     return args[0];
 }
 
@@ -273,6 +276,7 @@ GemVal gem_insert_fn(void *_env, GemVal *args, int argc) {
     for (int i = pos; i < t->len; i++) {
         t->keys[i] = gem_int(i);
     }
+    t->shape_id++;
     return args[0];
 }
 
@@ -293,5 +297,6 @@ GemVal gem_remove_at_fn(void *_env, GemVal *args, int argc) {
     for (int i = pos; i < t->len; i++) {
         t->keys[i] = gem_int(i);
     }
+    t->shape_id++;
     return removed;
 }

@@ -127,6 +127,8 @@ fn make_codegen(source_name)
   let forward_decls = []
   let extern_c_decls = []
   let tmp_counter = 0
+  let ic_counter = 0
+  let ic_init = chr(123) + "0" + chr(125)
   let anon_counter = 0
   let defined_fns = {}
   let builtin_fns = {
@@ -761,9 +763,11 @@ fn make_codegen(source_name)
     when {tag: "dot", object: object, field: field}
       let r = compile_expr(object)
       let t = tmp()
-      let setup = r.setup + "    GemVal {t} = {r.expr};\n"
+      ic_counter += 1
+      let ic = ic_counter
       let escaped = escape_c_string(field)
-      return {expr: "gem_table_get({t}, gem_string(\"{escaped}\"))", setup: setup}
+      let setup = r.setup + "    GemVal {t} = {r.expr};\n    static GemICacheSlot _ic_{ic} = {ic_init};\n"
+      return {expr: "gem_table_get_cached({t}, \"{escaped}\", &_ic_{ic})", setup: setup}
     when {tag: "index", object: object, key: key}
       let obj_r = compile_expr(object)
       let key_r = compile_expr(key)

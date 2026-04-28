@@ -107,6 +107,7 @@ struct GemTable {
     int len;
     int cap;
     GemStrIndex *str_index;  /* stb_ds string hash map (NULL until first string key) */
+    uint32_t shape_id;       /* incremented on structural mutations (delete, pop, sort, etc.) */
 };
 
 /* ─── Table operations ─── */
@@ -115,6 +116,14 @@ GemVal gem_table_new(void);
 void gem_table_set(GemVal tbl, GemVal key, GemVal val);
 GemVal gem_table_get(GemVal tbl, GemVal key);
 void gem_table_grow(GemTable *t);
+
+/* ─── Inline cache for .field access ─── */
+
+typedef struct {
+    GemTable *table;
+    uint32_t shape_id;
+    int val_index;
+} GemICacheSlot;
 
 /* ─── Comparison / equality ─── */
 
@@ -427,5 +436,22 @@ GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args);
 void gem_io_free_request(GemIORequest *req);
 void gem_io_check_completions(void);
 int gem_io_wake_fd(void);
+
+/* ─── Inline-cached field access (hot path inlined, miss in gem_core.c) ─── */
+
+GemVal gem_table_get_ic_miss(GemTable *t, const char *key, GemICacheSlot *cache);
+
+static inline GemVal gem_table_get_cached(GemVal tbl, const char *key, GemICacheSlot *cache) {
+    if (tbl.type != VAL_TABLE) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "field access on non-table: got %s", gem_type_str(tbl));
+        gem_error(buf);
+    }
+    GemTable *t = tbl.table;
+    if (cache->table == t && cache->shape_id == t->shape_id) {
+        return t->vals[cache->val_index];
+    }
+    return gem_table_get_ic_miss(t, key, cache);
+}
 
 #endif /* GEM_H */
