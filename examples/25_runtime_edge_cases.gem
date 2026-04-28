@@ -2,29 +2,29 @@
 
 # ── Division by zero ────────────────────────────────────────────
 
-let r1 = pcall(fn() 10 / 0 end)
+let r1 = pcall 10 / 0
 print(r1.ok)                 # false
 print(r1.error)              # division by zero
 
-let r2 = pcall(fn() 10 % 0 end)
+let r2 = pcall 10 % 0
 print(r2.ok)                 # false
 print(r2.error)              # division by zero
 
 # ── Float division by zero ──────────────────────────────────────
 
-let r3 = pcall(fn() 10.0 / 0.0 end)
+let r3 = pcall 10.0 / 0.0
 print(r3.ok)                 # false
 print(r3.error)              # division by zero
 
 # ── Type errors in arithmetic ───────────────────────────────────
 
-let r4 = pcall(fn() "a" + 1 end)
+let r4 = pcall "a" + 1
 print(r4.ok)                 # false
 
-let r5 = pcall(fn() "a" - "b" end)
+let r5 = pcall "a" - "b"
 print(r5.ok)                 # false
 
-let r6 = pcall(fn() "a" * 2 end)
+let r6 = pcall "a" * 2
 print(r6.ok)                 # false
 
 # ── Mixed int/float arithmetic ──────────────────────────────────
@@ -45,10 +45,10 @@ print(-0.0)                  # -0
 
 # ── String index out of bounds ──────────────────────────────────
 
-let r7 = pcall(fn() "abc"[5] end)
+let r7 = pcall "abc"[5]
 print(r7.ok)                 # false
 
-let r8 = pcall(fn() "abc"[-1] end)
+let r8 = pcall "abc"[-1]
 print(r8.ok)                 # true — negative indexing now supported
 print(r8.value)              # c
 
@@ -92,14 +92,14 @@ print(has_key(at, 5))        # false
 
 # ── pcall returns value on success ─────────────────────────────
 
-let r9 = pcall(fn() 42 end)
+let r9 = pcall 42
 print(r9.ok)                 # true
 print(r9.value)              # 42
 
 # ── Nested pcall ───────────────────────────────────────────────
 
 let r10 = pcall(fn()
-  let inner = pcall(fn() error("inner") end)
+  let inner = pcall error("inner")
   inner.error
 end)
 print(r10.ok)                # true

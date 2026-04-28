@@ -214,7 +214,7 @@ fn acceptor(server_fd, router)
       let acc = me
       let result = pcall(fn()
         spawn(fn()
-          pcall(fn() handle_connection(fd, r) end)
+          pcall handle_connection(fd, r)
           send(acc, "done")
         end)
       end)

@@ -102,9 +102,7 @@ let bad_module = {
 
 spawn(fn()
   let server = gen_server.start(bad_module)
-  let result = pcall(fn()
-    gen_server.call(server.pid, "anything", 200)
-  end)
+  let result = pcall gen_server.call(server.pid, "anything", 200)
   print("test4: ok={result.ok} err={result.error}")
 end)
 

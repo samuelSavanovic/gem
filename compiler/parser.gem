@@ -299,6 +299,13 @@ fn make_parser(tokens, source, file)
       return e
     end
 
+    # pcall expression: pcall <expr> desugars to pcall(fn() <expr> end)
+    if t.type == "NAME" and t.value == "pcall" and peek_at(1).type != "("
+      advance()
+      let expr = parse_expr()
+      return make_call(make_var("pcall"), [make_anon_fn([], nil, nil, [expr])], t.line)
+    end
+
     # Variable
     if t.type == "NAME"
       advance()

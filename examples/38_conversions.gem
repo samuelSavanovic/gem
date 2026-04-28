@@ -23,16 +23,16 @@ print(to_int(to_string(123)))
 print(to_float(to_string(3.14)))
 
 # ─── error cases ─────────────────────────────────────────────
-let r1 = pcall(fn() to_int("abc") end)
+let r1 = pcall to_int("abc")
 print(r1.ok)
 
-let r2 = pcall(fn() to_float("xyz") end)
+let r2 = pcall to_float("xyz")
 print(r2.ok)
 
-let r3 = pcall(fn() to_int(nil) end)
+let r3 = pcall to_int(nil)
 print(r3.ok)
 
-let r4 = pcall(fn() to_float([]) end)
+let r4 = pcall to_float([])
 print(r4.ok)
 
 # ─── first-class ─────────────────────────────────────────────

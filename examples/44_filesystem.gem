@@ -40,8 +40,8 @@ print(remove_file(tmpdir + "/only.txt"))
 print(file_exists(tmpdir + "/only.txt"))
 
 # Adversarial: non-string args raise errors
-let r1 = pcall(fn() dirname(42) end)
+let r1 = pcall dirname(42)
 print(r1.ok)
 
-let r2 = pcall(fn() file_exists(nil) end)
+let r2 = pcall file_exists(nil)
 print(r2.ok)

@@ -15,7 +15,7 @@ print("delete twice:", r)
 
 # ─── pop edge cases ───
 # pop from error test
-let ok = pcall(fn() pop([]) end)
+let ok = pcall pop([])
 print("pop empty err:", ok.ok == false)
 
 # pop preserves remaining elements
@@ -66,7 +66,7 @@ print("pow neg exp:", pow(2, -1))
 print("sqrt 1:", sqrt(1))
 
 # sqrt error
-let sqrt_err = pcall(fn() sqrt(-1) end)
+let sqrt_err = pcall sqrt(-1)
 print("sqrt neg:", sqrt_err.ok == false)
 
 # ─── random edge cases ───
@@ -74,10 +74,10 @@ let r3 = random(1)
 print("random 1:", r3 == 0)
 
 # random error
-let rand_err = pcall(fn() random(0) end)
+let rand_err = pcall random(0)
 print("random 0:", rand_err.ok == false)
 
-let rand_err2 = pcall(fn() random(-5) end)
+let rand_err2 = pcall random(-5)
 print("random neg:", rand_err2.ok == false)
 
 # ─── insert/remove_at edge cases ───
@@ -93,24 +93,24 @@ remove_at(one, 0)
 print("remove_at to empty:", len(one))
 
 # insert/remove_at errors
-let ins_err = pcall(fn() insert([], -1, "x") end)
+let ins_err = pcall insert([], -1, "x")
 print("insert neg idx:", ins_err.ok == false)
 
-let ins_err2 = pcall(fn() insert([], 1, "x") end)
+let ins_err2 = pcall insert([], 1, "x")
 print("insert past end:", ins_err2.ok == false)
 
-let rem_err = pcall(fn() remove_at([], 0) end)
+let rem_err = pcall remove_at([], 0)
 print("remove_at empty:", rem_err.ok == false)
 
-let rem_err2 = pcall(fn() remove_at([1, 2], 5) end)
+let rem_err2 = pcall remove_at([1, 2], 5)
 print("remove_at oob:", rem_err2.ok == false)
 
 # ─── getenv edge case ───
-let ge_err = pcall(fn() getenv(42) end)
+let ge_err = pcall getenv(42)
 print("getenv non-str:", ge_err.ok == false)
 
 # ─── append_file error ───
-let af_err = pcall(fn() append_file("/nonexistent/dir/file.txt", "data") end)
+let af_err = pcall append_file("/nonexistent/dir/file.txt", "data")
 print("append_file bad:", af_err.ok == false)
 
 # ─── exit error cases ───

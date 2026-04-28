@@ -655,20 +655,38 @@ print("wrapped: {wrap("inner")}")
 
 Tokens carry line and column information from the lexer, so the caret points to the exact position of the offending token. Multi-character tokens get a proportionally wide underline.
 
-**Recoverable errors** use `pcall(f)` (protected call), which calls `f()` with zero arguments and catches any error instead of halting:
+**Recoverable errors** use `pcall` (protected call), which catches any error instead of halting. Two forms:
+
+**Expression form** — `pcall <expr>` wraps a single expression. The parser desugars it to `pcall(fn() <expr> end)`:
 
 ```
-let result = pcall(fn()
-  error("boom")
-end)
+let result = pcall error("boom")
 print(result.ok)      # false
 print(result.error)   # boom
 
-let result2 = pcall(fn()
-  42
-end)
+let result2 = pcall parse(input)
 print(result2.ok)     # true
-print(result2.value)  # 42
+print(result2.value)  # <parsed value>
+```
+
+This composes naturally with `match`:
+
+```
+match pcall parse(dangerous_input)
+when {ok: true, value: ast}
+  compile(ast)
+when {ok: false, error: msg}
+  eprint("parse failed: " + msg)
+end
+```
+
+**Function form** — `pcall(f)` calls `f()` with zero arguments. Useful when the body contains multiple statements:
+
+```
+let result = pcall(fn()
+  let data = read_file(path)
+  parse(data)
+end)
 ```
 
 - On success: returns `{ok: true, value: <return value>}`
@@ -678,7 +696,6 @@ print(result2.value)  # 42
 - `pcall` catches both user `error()` calls and runtime type errors (e.g. `1 + "hello"`)
 - Nested `pcall` works — each level catches errors independently
 - To pass arguments to the called function, use a closure: `pcall(fn() f(x, y) end)`
-- `pcall` is a regular builtin function, not a keyword or syntax construct
 
 **Built-in Functions**
 

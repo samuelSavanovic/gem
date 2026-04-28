@@ -1,29 +1,21 @@
 # Test 1: catch an error
-let r = pcall(fn()
-  error("boom")
-end)
+let r = pcall error("boom")
 print(r.ok)
 print(r.error)
 
 # Test 2: successful call
-let r2 = pcall(fn()
-  42
-end)
+let r2 = pcall 42
 print(r2.ok)
 print(r2.value)
 
 # Test 3: catch a runtime type error
-let r3 = pcall(fn()
-  1 + "hello"
-end)
+let r3 = pcall 1 + "hello"
 print(r3.ok)
 print(r3.error)
 
 # Test 4: nested pcall
 let r4 = pcall(fn()
-  let inner = pcall(fn()
-    error("inner boom")
-  end)
+  let inner = pcall error("inner boom")
   inner.error
 end)
 print(r4.ok)
@@ -40,7 +32,37 @@ end)
 print(r5.ok)
 
 # Test 7: stack trace is captured
-let r6 = pcall(fn()
-  error("trace me")
-end)
+let r6 = pcall error("trace me")
 print(len(r6.stack) > 0)
+
+# Test 8: pcall expression form — error
+let r7 = pcall error("expr boom")
+print(r7.ok)
+print(r7.error)
+
+# Test 9: pcall expression form — success
+let r8 = pcall 1 + 2
+print(r8.ok)
+print(r8.value)
+
+# Test 10: pcall expression with function call
+fn might_fail(x)
+  if x == 0
+    error("zero")
+  end
+  x * 10
+end
+
+let r9 = pcall might_fail(0)
+print(r9.ok)
+print(r9.error)
+
+let r10 = pcall might_fail(5)
+print(r10.ok)
+print(r10.value)
+
+# Test 11: pcall expression with match
+match pcall might_fail(0)
+when {ok: false, error: e}
+  print("matched: " + e)
+end

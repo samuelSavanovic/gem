@@ -214,6 +214,15 @@ inner boom
 still running
 false
 true
+false
+expr boom
+true
+3
+false
+zero
+true
+50
+matched: zero
 true
 false
 true

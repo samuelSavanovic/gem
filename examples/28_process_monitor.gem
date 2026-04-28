@@ -96,9 +96,7 @@ end)
 # --- Test 7: pcall inside monitored process ---
 let parent7 = spawn(fn()
   let child = spawn(fn()
-    let result = pcall(fn()
-      error("caught locally")
-    end)
+    let result = pcall error("caught locally")
     print("test7: pcall ok={result.ok} error={result.error}")
     # Process continues after pcall, no DOWN yet
   end)

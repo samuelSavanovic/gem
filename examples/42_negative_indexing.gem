@@ -23,7 +23,7 @@ print("str first:", s[-5])
 print("str second:", s[-4])
 
 # Adversarial: negative index out of bounds (get)
-let err1 = pcall(fn() arr[-10] end)
+let err1 = pcall arr[-10]
 print("oob neg get:", err1.ok == false)
 
 # Adversarial: negative index out of bounds (set)
@@ -31,7 +31,7 @@ let err2 = pcall(fn() arr[-10] = 0 end)
 print("oob neg set:", err2.ok == false)
 
 # Adversarial: string negative out of bounds
-let err3 = pcall(fn() s[-10] end)
+let err3 = pcall s[-10]
 print("oob str neg:", err3.ok == false)
 
 # Edge case: single-element array

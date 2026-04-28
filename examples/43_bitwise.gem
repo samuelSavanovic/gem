@@ -26,20 +26,20 @@ let f = band
 print("first-class:", f(6, 3))        # 2
 
 # Adversarial: non-integer args
-let e1 = pcall(fn() band(1.5, 2) end)
+let e1 = pcall band(1.5, 2)
 print("band float:", e1.ok == false)
 
-let e2 = pcall(fn() bor("a", 2) end)
+let e2 = pcall bor("a", 2)
 print("bor str:", e2.ok == false)
 
-let e3 = pcall(fn() bnot(true) end)
+let e3 = pcall bnot(true)
 print("bnot bool:", e3.ok == false)
 
 # Adversarial: shift out of range
-let e4 = pcall(fn() bshl(1, 64) end)
+let e4 = pcall bshl(1, 64)
 print("bshl oob:", e4.ok == false)
 
-let e5 = pcall(fn() bshr(1, -1) end)
+let e5 = pcall bshr(1, -1)
 print("bshr neg:", e5.ok == false)
 
 print("BITWISE DONE")

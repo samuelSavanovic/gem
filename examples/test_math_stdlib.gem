@@ -44,10 +44,10 @@ math.assert(true, "should not fail")
 math.assert(1 == 1, "equality")
 math.assert(len([1, 2]) == 2, "len check")
 
-let result = pcall(fn() math.assert(false, "expected failure") end)
+let result = pcall math.assert(false, "expected failure")
 check("assert fails", result.ok, false)
 
-let result2 = pcall(fn() math.assert(false) end)
+let result2 = pcall math.assert(false)
 check("assert no msg", result2.ok, false)
 
 # ─── Summary ─────────────────────────────────────────────────
