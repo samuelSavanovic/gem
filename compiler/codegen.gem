@@ -2,8 +2,6 @@
 # Faithful port of bootstrap/gem.py CodeGen class.
 # Uses closure-based pattern: fn make_codegen() returns a table of methods.
 
-load "ast"
-
 # ─── String helpers ─────────────────────────────────────────────
 
 fn escape_c_string(s)
@@ -2056,3 +2054,5 @@ fn make_codegen(source_name)
 
   {compile: compile}
 end
+
+export make_codegen

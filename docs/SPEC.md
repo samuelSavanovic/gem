@@ -844,7 +844,7 @@ All builtins are first-class values — they can be stored in variables and pass
 
 **Module System**
 
-**Load statement** — `load` brings another file's definitions into scope. The compiler keeps a table of already-loaded file paths and skips duplicates (re-inclusion guard).
+**Load statement** — `load` brings another file's exported definitions into scope. Every loaded file must have an `export` statement declaring its public API. The compiler keeps a table of already-loaded file paths; re-importing a module skips re-parsing but still creates the requested import bindings.
 
 ```
 load "compiler/parser"
@@ -884,7 +884,7 @@ string.split("a,b,c", ",")    # OK — split is exported
 string._helper("x")           # error — _helper is not exported
 ```
 
-Without an `export` statement, `load` works as before — textual inclusion with all names dumped into the caller's scope. This preserves backward compatibility.
+Loading a file without an `export` statement is a compile error.
 
 **Module aliasing** — `load "path" as name` binds the module table to a custom name instead of the basename:
 
@@ -902,7 +902,7 @@ trim("  hello  ")        # OK — imported directly
 join(parts, ",")         # error — join was not imported
 ```
 
-All three `load` forms respect the re-inclusion guard and use the same two-step path resolution.
+All three `load` forms use the same two-step path resolution. When a module has already been loaded by the program, re-importing it skips re-parsing but still creates the requested bindings (table, alias, or selective).
 
 **Standard Library (std/)**
 

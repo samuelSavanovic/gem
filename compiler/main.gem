@@ -8,12 +8,38 @@
 #   gem foo.gem --run [args] # compile and run immediately
 
 load "../std/string"
-load "parser"
-load "codegen"
+load "parser" (parse_source)
+load "codegen" (make_codegen)
 
 # ─── Install root (for std/ resolution) ──────────────────────
 
 let install_root = dirname(dirname(argv()[0]))
+
+# ─── AST helpers (defined locally to avoid shared module deps) ──
+
+fn is_node(node, tag)
+  type(node) == "table" and node.tag == tag
+end
+
+fn make_program(stmts)
+  {tag: "program", stmts: stmts}
+end
+
+fn make_let(name, value, line)
+  {tag: "let", name: name, value: value, line: line}
+end
+
+fn make_var(name)
+  {tag: "var", name: name}
+end
+
+fn make_table(entries)
+  {tag: "table", entries: entries}
+end
+
+fn make_table_entry(key, value)
+  {key: key, value: value}
+end
 
 # ─── Module helpers ───────────────────────────────────────────
 
@@ -52,9 +78,13 @@ fn collect_module_top_names(stmts)
   let names = {}
   for stmt in stmts
     if is_node(stmt, "fn_def")
-      names[stmt.name] = true
+      if not string.starts_with(stmt.name, "_mod_")
+        names[stmt.name] = true
+      end
     elif is_node(stmt, "let")
-      names[stmt.name] = true
+      if not string.starts_with(stmt.name, "_mod_")
+        names[stmt.name] = true
+      end
     end
   end
   names
@@ -266,46 +296,60 @@ fn resolve_loads(ast, base_dir, loaded)
   for stmt in ast.stmts
     if is_node(stmt, "load")
       let path = stmt.path
-      # Add .gem extension if needed
       if not string.ends_with(path, ".gem")
         path = path + ".gem"
       end
 
-      # Step 1: resolve relative to importing file
       let full_path = path_join(base_dir, path)
-
-      # Step 2: if not found, try relative to install root
       if not file_exists(full_path)
         full_path = path_join(install_root, path)
       end
 
       full_path = normalize_path(full_path)
 
-      # Re-inclusion guard
-      if loaded[full_path] == true
+      let cached = loaded[full_path]
+      if cached != nil
+        if cached.exported != nil
+          let prefix = "_mod_" + cached.mod_name + "_"
+          if stmt.selective != nil
+            for sel_name in stmt.selective
+              new_stmts[count] = make_let(sel_name, make_var(prefix + sel_name), 0)
+              count += 1
+            end
+          else
+            let binding_name = cached.mod_name
+            if stmt.alias != nil
+              binding_name = stmt.alias
+            end
+            let entries = []
+            for ename in cached.exported
+              push(entries, make_table_entry(ename, make_var(prefix + ename)))
+            end
+            new_stmts[count] = make_let(binding_name, make_table(entries), 0)
+            count += 1
+          end
+        end
         continue
       end
-      loaded[full_path] = true
+
+      loaded[full_path] = {exported: nil}
 
       let source = read_file(full_path)
-
       let loaded_ast = parse_source(source, full_path)
       let loaded_dir = dirname(full_path)
       let resolved = resolve_loads(loaded_ast, loaded_dir, loaded)
 
       let export_node = find_export_node(resolved.stmts)
-      if export_node != nil
-        let mod_name = module_name_from_path(stmt.path)
-        let mod_stmts = transform_module(resolved.stmts, mod_name, export_node, stmt)
-        for ms in mod_stmts
-          new_stmts[count] = ms
-          count += 1
-        end
-      else
-        for rs in resolved.stmts
-          new_stmts[count] = rs
-          count += 1
-        end
+      if export_node == nil
+        error("gem: loaded file has no export statement: " + full_path)
+      end
+
+      let mod_name = module_name_from_path(stmt.path)
+      loaded[full_path] = {mod_name: mod_name, exported: export_node.names}
+      let mod_stmts = transform_module(resolved.stmts, mod_name, export_node, stmt)
+      for ms in mod_stmts
+        new_stmts[count] = ms
+        count += 1
       end
     else
       new_stmts[count] = stmt

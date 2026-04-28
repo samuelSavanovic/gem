@@ -2,7 +2,7 @@
 # Takes a source string, returns a flat array of token tables:
 #   {type: "NUMBER", value: "42", line: 3, col: 1}
 
-load "errors"
+load "errors" (compile_error)
 #
 # Token types: NUMBER, STRING, NAME, NEWLINE, EOF,
 # keywords (fn, end, let, if, elif, else, then, while, for, in, return, break, continue,
@@ -22,54 +22,6 @@ end
 
 fn is_alnum(ch)
   is_alpha(ch) or is_digit(ch)
-end
-
-# ─── Number conversion helpers ───────────────────────────────────
-
-fn digit_val(ch)
-  match ch
-  when "0"
-    0
-  when "1"
-    1
-  when "2"
-    2
-  when "3"
-    3
-  when "4"
-    4
-  when "5"
-    5
-  when "6"
-    6
-  when "7"
-    7
-  when "8"
-    8
-  when "9"
-    9
-  else
-    error("not a digit: {ch}")
-  end
-end
-
-fn str_to_int(s)
-  let result = 0
-  for i = 0, len(s)
-    result = result * 10 + digit_val(s[i])
-  end
-  result
-end
-
-extern fn atof(s: String) -> Float
-
-fn contains_dot(s)
-  for i = 0, len(s)
-    if s[i] == "."
-      return true
-    end
-  end
-  false
 end
 
 # ─── Escape handling ─────────────────────────────────────────────
@@ -741,3 +693,5 @@ fn tokenize(source, file)
   push(tokens, {type: "EOF", value: "", line: line, col: tstart - line_start + 1})
   tokens
 end
+
+export tokenize, compile_error

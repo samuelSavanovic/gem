@@ -64,3 +64,5 @@ fn compile_error(source, file, line, col, span_len, msg, hint)
   eprint(out)
   exit(1)
 end
+
+export compile_error
