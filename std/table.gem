@@ -1,22 +1,12 @@
 # std/table — array/table utilities for Gem
-#
-# Usage:
-#   load "std/table"
-#   table.each([1,2,3]) do |item|
-#     print(item)
-#   end
 
-# ─── each(arr, fn) ───────────────────────────────────────────
-
-fn _table_each(arr, f)
+fn each(arr, f)
   for item in arr
     f(item)
   end
 end
 
-# ─── map(arr, fn) ────────────────────────────────────────────
-
-fn _table_map(arr, f)
+fn map(arr, f)
   let result = []
   for item in arr
     push(result, f(item))
@@ -24,9 +14,7 @@ fn _table_map(arr, f)
   result
 end
 
-# ─── filter(arr, fn) ─────────────────────────────────────────
-
-fn _table_filter(arr, f)
+fn filter(arr, f)
   let result = []
   for item in arr
     if f(item)
@@ -36,9 +24,7 @@ fn _table_filter(arr, f)
   result
 end
 
-# ─── reduce(arr, init, fn) ───────────────────────────────────
-
-fn _table_reduce(arr, init, f)
+fn reduce(arr, init, f)
   let acc = init
   for item in arr
     acc = f(acc, item)
@@ -46,9 +32,7 @@ fn _table_reduce(arr, init, f)
   acc
 end
 
-# ─── find(arr, fn) ───────────────────────────────────────────
-
-fn _table_find(arr, f)
+fn find(arr, f)
   for item in arr
     if f(item)
       return item
@@ -57,9 +41,7 @@ fn _table_find(arr, f)
   nil
 end
 
-# ─── any(arr, fn) ────────────────────────────────────────────
-
-fn _table_any(arr, f)
+fn any(arr, f)
   for item in arr
     if f(item)
       return true
@@ -68,9 +50,7 @@ fn _table_any(arr, f)
   false
 end
 
-# ─── all(arr, fn) ────────────────────────────────────────────
-
-fn _table_all(arr, f)
+fn all(arr, f)
   for item in arr
     if not f(item)
       return false
@@ -79,9 +59,7 @@ fn _table_all(arr, f)
   true
 end
 
-# ─── reverse(arr) ────────────────────────────────────────────
-
-fn _table_reverse(arr)
+fn reverse(arr)
   let result = []
   let i = len(arr) - 1
   while i >= 0
@@ -91,9 +69,7 @@ fn _table_reverse(arr)
   result
 end
 
-# ─── contains(arr, value) ────────────────────────────────────
-
-fn _table_contains(arr, value)
+fn contains(arr, value)
   for item in arr
     if item == value
       return true
@@ -102,19 +78,7 @@ fn _table_contains(arr, value)
   false
 end
 
-# ─── sort(arr, cmp?) ─────────────────────────────────────────
-
-fn _table_sort(arr, cmp)
-  if cmp == nil
-    sort(arr)
-  else
-    sort(arr, cmp)
-  end
-end
-
-# ─── slice(arr, start, length) ───────────────────────────────
-
-fn _table_slice(arr, start, length)
+fn slice(arr, start, length)
   let result = []
   let n = len(arr)
   if start < 0
@@ -135,9 +99,7 @@ fn _table_slice(arr, start, length)
   result
 end
 
-# ─── index_of(arr, val) ──────────────────────────────────────
-
-fn _table_index_of(arr, val)
+fn index_of(arr, val)
   let i = 0
   while i < len(arr)
     if arr[i] == val
@@ -148,9 +110,7 @@ fn _table_index_of(arr, val)
   -1
 end
 
-# ─── concat(a, b) ────────────────────────────────────────────
-
-fn _table_concat(a, b)
+fn concat(a, b)
   let result = []
   for item in a
     push(result, item)
@@ -161,9 +121,7 @@ fn _table_concat(a, b)
   result
 end
 
-# ─── copy(tbl) ───────────────────────────────────────────────
-
-fn _table_copy(tbl)
+fn copy(tbl)
   let ks = keys(tbl)
   if len(ks) > 0 and type(ks[0]) == "int"
     let result = []
@@ -179,9 +137,7 @@ fn _table_copy(tbl)
   result
 end
 
-# ─── flat_map(arr, fn) ───────────────────────────────────────
-
-fn _table_flat_map(arr, f)
+fn flat_map(arr, f)
   let result = []
   for item in arr
     let mapped = f(item)
@@ -201,9 +157,7 @@ fn _table_flat_map(arr, f)
   result
 end
 
-# ─── zip(a, b) ───────────────────────────────────────────────
-
-fn _table_zip(a, b)
+fn zip(a, b)
   let result = []
   let n = len(a)
   if len(b) < n
@@ -217,9 +171,7 @@ fn _table_zip(a, b)
   result
 end
 
-# ─── unique(arr) ─────────────────────────────────────────────
-
-fn _table_unique(arr)
+fn unique(arr)
   let seen = {}
   let result = []
   for item in arr
@@ -232,9 +184,7 @@ fn _table_unique(arr)
   result
 end
 
-# ─── count(arr, fn) ──────────────────────────────────────────
-
-fn _table_count(arr, f)
+fn count(arr, f)
   let n = 0
   for item in arr
     if f(item)
@@ -244,9 +194,7 @@ fn _table_count(arr, f)
   n
 end
 
-# ─── flatten(arr) ────────────────────────────────────────────
-
-fn _table_flatten(arr)
+fn flatten(arr)
   let result = []
   for item in arr
     if type(item) == "table"
@@ -267,9 +215,7 @@ fn _table_flatten(arr)
   result
 end
 
-# ─── group_by(arr, fn) ───────────────────────────────────────
-
-fn _table_group_by(arr, f)
+fn group_by(arr, f)
   let groups = {}
   for item in arr
     let key = f(item)
@@ -281,27 +227,4 @@ fn _table_group_by(arr, f)
   groups
 end
 
-# ─── Namespace table ─────────────────────────────────────────
-
-let table = {
-  each: _table_each,
-  map: _table_map,
-  filter: _table_filter,
-  reduce: _table_reduce,
-  find: _table_find,
-  any: _table_any,
-  all: _table_all,
-  reverse: _table_reverse,
-  contains: _table_contains,
-  sort: _table_sort,
-  slice: _table_slice,
-  index_of: _table_index_of,
-  concat: _table_concat,
-  copy: _table_copy,
-  flat_map: _table_flat_map,
-  zip: _table_zip,
-  unique: _table_unique,
-  count: _table_count,
-  flatten: _table_flatten,
-  group_by: _table_group_by
-}
+export each, map, filter, reduce, find, any, all, reverse, contains, slice, index_of, concat, copy, flat_map, zip, unique, count, flatten, group_by

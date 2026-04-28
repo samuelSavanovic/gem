@@ -9,6 +9,7 @@
 
 "load" @keyword.control.import
 "include" @keyword.control.import
+"export" @keyword.control.import
 
 "if" @keyword.control.conditional
 "elif" @keyword.control.conditional

@@ -888,11 +888,36 @@ fn make_parser(tokens, source, file)
       return make_continue()
     end
 
-    # load "path"
+    # load "path" [as name | (name, ...)]
     if t.type == "load"
       advance()
       let path = expect("STRING").value
-      return make_load(path)
+      let alias_name = nil
+      let selective = nil
+      if peek().type == "NAME" and peek().value == "as"
+        advance()
+        alias_name = expect("NAME").value
+      elif peek().type == "("
+        advance()
+        selective = [expect("NAME").value]
+        while peek().type == ","
+          advance()
+          push(selective, expect("NAME").value)
+        end
+        expect(")")
+      end
+      return {tag: "load", path: path, alias: alias_name, selective: selective}
+    end
+
+    # export name, name, ...
+    if t.type == "export"
+      advance()
+      let names = [expect("NAME").value]
+      while peek().type == ","
+        advance()
+        push(names, expect("NAME").value)
+      end
+      return make_export(names)
     end
 
     # extern fn / extern blocking fn / extern include

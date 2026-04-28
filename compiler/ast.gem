@@ -133,6 +133,10 @@ fn make_load(path)
   {tag: "load", path: path}
 end
 
+fn make_export(names)
+  {tag: "export", names: names}
+end
+
 fn make_extern_fn(name, params, ret_type, is_blocking)
   {tag: "extern_fn", name: name, params: params, ret_type: ret_type, blocking: is_blocking}
 end

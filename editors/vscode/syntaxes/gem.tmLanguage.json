@@ -52,7 +52,7 @@
         },
         {
           "name": "keyword.other.gem",
-          "match": "\\b(let|load|extern|blocking|include|and|or|not)\\b"
+          "match": "\\b(let|load|export|extern|blocking|include|and|or|not)\\b"
         },
         {
           "name": "keyword.declaration.function.gem",

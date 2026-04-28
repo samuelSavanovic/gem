@@ -15,6 +15,249 @@ load "codegen"
 
 let install_root = dirname(dirname(argv()[0]))
 
+# ─── Module helpers ───────────────────────────────────────────
+
+fn module_name_from_path(path)
+  let plen = len(path)
+  let last_slash = -1
+  let i = 0
+  while i < plen
+    if ord(path, i) == 47
+      last_slash = i
+    end
+    i += 1
+  end
+  let name = substr(path, last_slash + 1, plen - last_slash - 1)
+  let nlen = len(name)
+  if nlen > 4
+    if string.ends_with(name, ".gem")
+      name = substr(name, 0, nlen - 4)
+    end
+  end
+  name
+end
+
+fn find_export_node(stmts)
+  let i = len(stmts) - 1
+  while i >= 0
+    if is_node(stmts[i], "export")
+      return stmts[i]
+    end
+    i -= 1
+  end
+  nil
+end
+
+fn collect_module_top_names(stmts)
+  let names = {}
+  for stmt in stmts
+    if is_node(stmt, "fn_def")
+      names[stmt.name] = true
+    elif is_node(stmt, "let")
+      names[stmt.name] = true
+    end
+  end
+  names
+end
+
+fn build_rename_map(top_names, prefix)
+  let rmap = {}
+  for name, _ in top_names
+    rmap[name] = prefix + name
+  end
+  rmap
+end
+
+fn copy_set(s)
+  let result = {}
+  for k, v in s
+    result[k] = v
+  end
+  result
+end
+
+fn rename_node(node, rmap, shadowed)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table"
+    return nil
+  end
+  if node.tag == nil
+    return nil
+  end
+
+  match node
+  when {tag: "var", name: name}
+    if has_key(rmap, name) and not has_key(shadowed, name)
+      node.name = rmap[name]
+    end
+  when {tag: "fn_def", name: name, params: params, body: body}
+    if has_key(rmap, name)
+      node.name = rmap[name]
+    end
+    let inner = copy_set(shadowed)
+    for p in params
+      inner[p] = true
+    end
+    if node.rest_param != nil
+      inner[node.rest_param] = true
+    end
+    if node.block_param != nil
+      inner[node.block_param] = true
+    end
+    rename_stmts(body, rmap, inner)
+  when {tag: "anon_fn", params: params, body: body}
+    let inner = copy_set(shadowed)
+    for p in params
+      inner[p] = true
+    end
+    if node.rest_param != nil
+      inner[node.rest_param] = true
+    end
+    if node.block_param != nil
+      inner[node.block_param] = true
+    end
+    rename_stmts(body, rmap, inner)
+  when {tag: "let", name: name, value: value}
+    rename_node(value, rmap, shadowed)
+    if has_key(rmap, name) and not has_key(shadowed, name)
+      node.name = rmap[name]
+    end
+  when {tag: "assign", name: name, value: value}
+    rename_node(value, rmap, shadowed)
+    if has_key(rmap, name) and not has_key(shadowed, name)
+      node.name = rmap[name]
+    end
+  when {tag: "call", func: func, args: args}
+    rename_node(func, rmap, shadowed)
+    for a in args
+      rename_node(a, rmap, shadowed)
+    end
+  when {tag: "binop", left: left, right: right}
+    rename_node(left, rmap, shadowed)
+    rename_node(right, rmap, shadowed)
+  when {tag: "unop", expr: expr}
+    rename_node(expr, rmap, shadowed)
+  when {tag: "dot", object: object}
+    rename_node(object, rmap, shadowed)
+  when {tag: "index", object: object, key: key}
+    rename_node(object, rmap, shadowed)
+    rename_node(key, rmap, shadowed)
+  when {tag: "dot_assign", object: object, value: value}
+    rename_node(object, rmap, shadowed)
+    rename_node(value, rmap, shadowed)
+  when {tag: "index_assign", object: object, key: key, value: value}
+    rename_node(object, rmap, shadowed)
+    rename_node(key, rmap, shadowed)
+    rename_node(value, rmap, shadowed)
+  when {tag: "if", cond: cond}
+    rename_node(cond, rmap, shadowed)
+    rename_stmts(node.then, rmap, shadowed)
+    if node.else != nil
+      rename_stmts(node.else, rmap, shadowed)
+    end
+  when {tag: "while", cond: cond, body: body}
+    rename_node(cond, rmap, shadowed)
+    rename_stmts(body, rmap, shadowed)
+  when {tag: "match", target: target, whens: whens}
+    rename_node(target, rmap, shadowed)
+    for w in whens
+      rename_node(w.value, rmap, shadowed)
+      if w.bindings != nil
+        for b in w.bindings
+          rename_node(b, rmap, shadowed)
+        end
+      end
+      rename_stmts(w.body, rmap, shadowed)
+    end
+    if node.else != nil
+      rename_stmts(node.else, rmap, shadowed)
+    end
+  when {tag: "receive_match", arms: arms}
+    for arm in arms
+      rename_node(arm.pattern.condition, rmap, shadowed)
+      if arm.pattern.bindings != nil
+        for b in arm.pattern.bindings
+          rename_node(b, rmap, shadowed)
+        end
+      end
+      rename_stmts(arm.body, rmap, shadowed)
+    end
+    if node.after_ms != nil
+      rename_node(node.after_ms, rmap, shadowed)
+    end
+    if node.after_body != nil
+      rename_stmts(node.after_body, rmap, shadowed)
+    end
+  when {tag: "return", value: value}
+    if value != nil
+      rename_node(value, rmap, shadowed)
+    end
+  when {tag: "table", entries: entries}
+    for e in entries
+      rename_node(e.value, rmap, shadowed)
+    end
+  when {tag: "array", elements: elements}
+    for e in elements
+      rename_node(e, rmap, shadowed)
+    end
+  when {tag: "interp", parts: parts}
+    for p in parts
+      rename_node(p, rmap, shadowed)
+    end
+  when {tag: "block", stmts: stmts}
+    rename_stmts(stmts, rmap, shadowed)
+  end
+end
+
+fn rename_stmts(stmts, rmap, shadowed)
+  let current = copy_set(shadowed)
+  for stmt in stmts
+    rename_node(stmt, rmap, current)
+    if is_node(stmt, "let") and not has_key(rmap, stmt.name)
+      current[stmt.name] = true
+    end
+  end
+end
+
+fn transform_module(stmts, mod_name, export_node, load_node)
+  let prefix = "_mod_" + mod_name + "_"
+  let top_names = collect_module_top_names(stmts)
+  let rmap = build_rename_map(top_names, prefix)
+
+  rename_stmts(stmts, rmap, {})
+
+  let result = []
+  for stmt in stmts
+    if not is_node(stmt, "export")
+      push(result, stmt)
+    end
+  end
+
+  let exported = export_node.names
+
+  if load_node.selective != nil
+    for sel_name in load_node.selective
+      let prefixed = prefix + sel_name
+      push(result, make_let(sel_name, make_var(prefixed), 0))
+    end
+  else
+    let binding_name = mod_name
+    if load_node.alias != nil
+      binding_name = load_node.alias
+    end
+    let entries = []
+    for ename in exported
+      let prefixed = prefix + ename
+      push(entries, make_table_entry(ename, make_var(prefixed)))
+    end
+    push(result, make_let(binding_name, make_table(entries), 0))
+  end
+
+  result
+end
+
 # ─── Load resolution ──────────────────────────────────────────
 
 fn resolve_loads(ast, base_dir, loaded)
@@ -50,9 +293,19 @@ fn resolve_loads(ast, base_dir, loaded)
       let loaded_dir = dirname(full_path)
       let resolved = resolve_loads(loaded_ast, loaded_dir, loaded)
 
-      for rs in resolved.stmts
-        new_stmts[count] = rs
-        count += 1
+      let export_node = find_export_node(resolved.stmts)
+      if export_node != nil
+        let mod_name = module_name_from_path(stmt.path)
+        let mod_stmts = transform_module(resolved.stmts, mod_name, export_node, stmt)
+        for ms in mod_stmts
+          new_stmts[count] = ms
+          count += 1
+        end
+      else
+        for rs in resolved.stmts
+          new_stmts[count] = rs
+          count += 1
+        end
       end
     else
       new_stmts[count] = stmt

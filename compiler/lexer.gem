@@ -124,6 +124,7 @@ fn build_keyword_set()
   t.false = true
   t.nil = true
   t.load = true
+  t.export = true
   t.extern = true
   t.blocking = true
   t.for = true

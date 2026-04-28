@@ -22,6 +22,7 @@ module.exports = grammar({
       $.function_definition,
       $.extern_declaration,
       $.load_statement,
+      $.export_statement,
       $.let_declaration,
       $.assignment,
       $.if_statement,
@@ -87,6 +88,8 @@ module.exports = grammar({
     type: $ => choice('Int', 'Float', 'String', 'Bool', 'Nil', 'Ptr', 'Table', 'Fn'),
 
     load_statement: $ => seq('load', $._string),
+
+    export_statement: $ => seq('export', sep1($.identifier, ',')),
 
     let_declaration: $ => seq(
       'let',

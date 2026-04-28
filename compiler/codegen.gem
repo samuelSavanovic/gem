@@ -1933,6 +1933,8 @@ fn make_codegen(source_name)
         push(extern_fns_list, s)
       elif s.tag == "extern_include"
         push(extern_includes, s)
+      elif s.tag == "export"
+        # handled during load resolution
       else
         push(top_stmts, s)
       end

@@ -842,14 +842,14 @@ All six TCP builtins work both from the main process (synchronous/blocking) and 
 
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
-**Module System (v0.1 — minimal)**
+**Module System**
+
+**Load statement** — `load` brings another file's definitions into scope. The compiler keeps a table of already-loaded file paths and skips duplicates (re-inclusion guard).
 
 ```
 load "compiler/parser"
 load "std/table"
 ```
-
-File inclusion with a re-inclusion guard — the compiler keeps a table of already-loaded file paths. `load` checks before including. Prevents double-loading in multi-file projects like the compiler itself.
 
 Two-step path resolution:
 
@@ -858,11 +858,55 @@ Two-step path resolution:
 
 The first path that exists wins. This lets `load "std/string"` work without fragile relative paths like `../../std/string`.
 
-No namespacing in v0. Everything is global.
+**Export declaration** — `export name1, name2, ...` declares which names a file exports. Placed at the end of the file.
+
+```
+# std/string.gem
+fn split(s, delim)
+  # ...
+end
+
+fn _helper(s)
+  # internal, not exported
+end
+
+export split, join, trim, index_of, starts_with, ends_with, upper, lower, contains, repeat
+```
+
+When a file has an `export` statement, `load` treats it as a module:
+
+- The file's code is scoped — non-exported names are private and not accessible from outside.
+- The exported names are collected into a table named after the file's basename.
+
+```
+load "std/string"
+string.split("a,b,c", ",")    # OK — split is exported
+string._helper("x")           # error — _helper is not exported
+```
+
+Without an `export` statement, `load` works as before — textual inclusion with all names dumped into the caller's scope. This preserves backward compatibility.
+
+**Module aliasing** — `load "path" as name` binds the module table to a custom name instead of the basename:
+
+```
+load "std/string" as str
+str.split("a,b,c", ",")
+```
+
+**Selective import** — `load "path" (name1, name2)` imports specific exported names directly into scope without a namespace prefix:
+
+```
+load "std/string" (split, trim)
+split("a,b,c", ",")     # OK — imported directly
+trim("  hello  ")        # OK — imported directly
+join(parts, ",")         # error — join was not imported
+```
+
+All three `load` forms respect the re-inclusion guard and use the same two-step path resolution.
 
 **Standard Library (std/)**
 
-Convention: each std file exports a single table as a namespace. No language changes needed — `load` dumps everything into scope, but the exported table acts as a namespace.
+Each std file uses `export` to expose a single namespace table. When loaded, the module table is bound to the basename (e.g., `string`, `table`, `math`).
 
 ```
 load "std/string"
@@ -984,6 +1028,6 @@ Every value is a tagged C union. The compiler emits C code that uses the runtime
 
 **What's NOT in v0**
 
-No classes. No inheritance. No exceptions (use `error()` to halt, `pcall()` for recovery). No type system. No operator overloading. No namespaces.
+No classes. No inheritance. No exceptions (use `error()` to halt, `pcall()` for recovery). No type system. No operator overloading.
 
 All of those can be added later _in the language itself_ via blocks, or in a future compiler version compiled by v0.

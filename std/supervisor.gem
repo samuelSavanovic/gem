@@ -1,41 +1,22 @@
 # std/supervisor — OTP-style supervisor for Gem processes
-#
-# Usage:
-#   load "std/supervisor"
-#   let result = supervisor.start({
-#     strategy: "one_for_one",
-#     children: [
-#       {id: "worker1", start: fn() spawn(fn() ... end) end},
-#       {id: "worker2", start: fn() spawn(fn() ... end) end}
-#     ]
-#   })
-#   let sup_pid = result.pid
 
-# ─── start_child(spec) → pid ────────────────────────────────
-# Calls the child's start function, monitors the returned pid.
-
-fn _sup_start_child(spec)
+fn start_child(spec)
   let pid = spec.start()
   monitor(pid)
   pid
 end
 
-# ─── supervisor_loop ─────────────────────────────────────────
-# The core receive loop. Watches for DOWN messages and queries.
-
-fn _sup_loop(state)
+fn sup_loop(state)
   receive
   when {tag: "DOWN", pid: dead_pid, reason: reason}
-    _sup_handle_down(state, dead_pid, reason)
+    handle_down(state, dead_pid, reason)
   when {tag: "supervisor_which_children", reply_to: reply_to}
-    _sup_handle_which_children(state, reply_to)
-    _sup_loop(state)
+    handle_which_children(state, reply_to)
+    sup_loop(state)
   end
 end
 
-# ─── handle DOWN ─────────────────────────────────────────────
-
-fn _sup_handle_down(state, dead_pid, reason)
+fn handle_down(state, dead_pid, reason)
   let children = state.children
   let specs = state.specs
   let found = -1
@@ -47,7 +28,7 @@ fn _sup_handle_down(state, dead_pid, reason)
   end
 
   if found == -1
-    _sup_loop(state)
+    sup_loop(state)
     return nil
   end
 
@@ -68,7 +49,7 @@ fn _sup_handle_down(state, dead_pid, reason)
 
   if not should_restart
     children[found] = {id: spec.id, pid: -1}
-    _sup_loop(state)
+    sup_loop(state)
     return nil
   end
 
@@ -89,9 +70,9 @@ fn _sup_handle_down(state, dead_pid, reason)
   let strategy = state.strategy
 
   if strategy == "one_for_one"
-    let new_pid = _sup_start_child(spec)
+    let new_pid = start_child(spec)
     children[found] = {id: spec.id, pid: new_pid}
-    _sup_loop(state)
+    sup_loop(state)
   elif strategy == "one_for_all"
     let alive_count = 0
     for child in children
@@ -110,18 +91,16 @@ fn _sup_handle_down(state, dead_pid, reason)
     end
 
     for i = 0, len(specs)
-      let new_pid = _sup_start_child(specs[i])
+      let new_pid = start_child(specs[i])
       children[i] = {id: specs[i].id, pid: new_pid}
     end
-    _sup_loop(state)
+    sup_loop(state)
   else
     error("unknown supervisor strategy: {strategy}")
   end
 end
 
-# ─── handle which_children query ─────────────────────────────
-
-fn _sup_handle_which_children(state, reply_to)
+fn handle_which_children(state, reply_to)
   let result = []
   for i = 0, len(state.children)
     let child = state.children[i]
@@ -135,9 +114,7 @@ fn _sup_handle_which_children(state, reply_to)
   send(reply_to, {tag: "supervisor_children", children: result})
 end
 
-# ─── supervisor_start(spec) → {pid: <pid>} ──────────────────
-
-fn _supervisor_start(spec)
+fn start(spec)
   let strategy = "one_for_one"
   if has_key(spec, "strategy")
     strategy = spec.strategy
@@ -162,7 +139,7 @@ fn _supervisor_start(spec)
   let sup_pid = spawn(fn()
     let children = []
     for child_spec in child_specs
-      let pid = _sup_start_child(child_spec)
+      let pid = start_child(child_spec)
       push(children, {id: child_spec.id, pid: pid})
     end
 
@@ -179,15 +156,13 @@ fn _supervisor_start(spec)
       register(sup_name, self())
     end
 
-    _sup_loop(state)
+    sup_loop(state)
   end)
 
   {pid: sup_pid}
 end
 
-# ─── supervisor_which_children(pid_or_name) → [...] ─────────
-
-fn _supervisor_which_children(target)
+fn which_children(target)
   send(target, {tag: "supervisor_which_children", reply_to: self()})
   receive
   when {tag: "supervisor_children", children: children}
@@ -195,9 +170,4 @@ fn _supervisor_which_children(target)
   end
 end
 
-# ─── Namespace ───────────────────────────────────────────────
-
-let supervisor = {
-  start: _supervisor_start,
-  which_children: _supervisor_which_children
-}
+export start, which_children

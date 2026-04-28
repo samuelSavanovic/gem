@@ -1,12 +1,6 @@
 # std/string — string utilities for Gem
-#
-# Usage:
-#   load "std/string"
-#   let parts = string.split("a,b,c", ",")
 
-# ─── Helpers ──────────────────────────────────────────────────
-
-fn _str_eq_at(s, pos, needle)
+fn str_eq_at(s, pos, needle)
   let nlen = len(needle)
   if pos + nlen > len(s)
     return false
@@ -21,9 +15,7 @@ fn _str_eq_at(s, pos, needle)
   true
 end
 
-# ─── split(s, delim) ─────────────────────────────────────────
-
-fn _string_split(s, delim)
+fn split(s, delim)
   let result = []
   let slen = len(s)
   let dlen = len(delim)
@@ -34,7 +26,7 @@ fn _string_split(s, delim)
   let buf = buf_new()
   let i = 0
   while i < slen
-    if _str_eq_at(s, i, delim)
+    if str_eq_at(s, i, delim)
       push(result, buf_str(buf))
       buf = buf_new()
       i += dlen
@@ -47,9 +39,7 @@ fn _string_split(s, delim)
   result
 end
 
-# ─── index_of(s, needle) ─────────────────────────────────────
-
-fn _string_index_of(s, needle)
+fn index_of(s, needle)
   let slen = len(s)
   let nlen = len(needle)
   if nlen == 0
@@ -61,7 +51,7 @@ fn _string_index_of(s, needle)
   let i = 0
   let limit = slen - nlen
   while i <= limit
-    if _str_eq_at(s, i, needle)
+    if str_eq_at(s, i, needle)
       return i
     end
     i += 1
@@ -69,9 +59,7 @@ fn _string_index_of(s, needle)
   -1
 end
 
-# ─── join(arr, delim) ────────────────────────────────────────
-
-fn _string_join(arr, delim)
+fn join(arr, delim)
   let buf = buf_new()
   let i = 0
   let n = len(arr)
@@ -85,9 +73,7 @@ fn _string_join(arr, delim)
   buf_str(buf)
 end
 
-# ─── trim(s) ─────────────────────────────────────────────────
-
-fn _string_trim(s)
+fn trim(s)
   let slen = len(s)
   if slen == 0
     return s
@@ -114,24 +100,20 @@ fn _string_trim(s)
   substr(s, start, stop - start + 1)
 end
 
-# ─── starts_with(s, prefix) / ends_with(s, suffix) ──────────
-
-fn _string_starts_with(s, prefix)
-  _str_eq_at(s, 0, prefix)
+fn starts_with(s, prefix)
+  str_eq_at(s, 0, prefix)
 end
 
-fn _string_ends_with(s, suffix)
+fn ends_with(s, suffix)
   let slen = len(s)
   let plen = len(suffix)
   if plen > slen
     return false
   end
-  _str_eq_at(s, slen - plen, suffix)
+  str_eq_at(s, slen - plen, suffix)
 end
 
-# ─── upper(s) / lower(s) — ASCII only ───────────────────────
-
-fn _string_upper(s)
+fn upper(s)
   let buf = buf_new()
   for i = 0, len(s)
     let c = ord(s, i)
@@ -144,7 +126,7 @@ fn _string_upper(s)
   buf_str(buf)
 end
 
-fn _string_lower(s)
+fn lower(s)
   let buf = buf_new()
   for i = 0, len(s)
     let c = ord(s, i)
@@ -157,15 +139,11 @@ fn _string_lower(s)
   buf_str(buf)
 end
 
-# ─── contains(s, needle) ────────────────────────────────────
-
-fn _string_contains(s, needle)
-  _string_index_of(s, needle) >= 0
+fn contains(s, needle)
+  index_of(s, needle) >= 0
 end
 
-# ─── repeat(s, n) ───────────────────────────────────────────
-
-fn _string_repeat(s, n)
+fn repeat(s, n)
   let buf = buf_new()
   for i = 0, n
     buf_push(buf, s)
@@ -173,17 +151,4 @@ fn _string_repeat(s, n)
   buf_str(buf)
 end
 
-# ─── Namespace table ─────────────────────────────────────────
-
-let string = {
-  split: _string_split,
-  index_of: _string_index_of,
-  join: _string_join,
-  trim: _string_trim,
-  starts_with: _string_starts_with,
-  ends_with: _string_ends_with,
-  upper: _string_upper,
-  lower: _string_lower,
-  contains: _string_contains,
-  repeat: _string_repeat
-}
+export split, index_of, join, trim, starts_with, ends_with, upper, lower, contains, repeat
