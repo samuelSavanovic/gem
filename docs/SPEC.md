@@ -980,6 +980,21 @@ The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`
 - `json.parse(s)` — parse a JSON string into Gem values. Objects become string-keyed tables, arrays become integer-keyed tables, strings/numbers/booleans map to native types, `null` maps to `nil`. Supports the full JSON spec: nested structures, all string escape sequences (`\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, `\uXXXX`), negative numbers, floats with decimal points and/or exponents (`1.5e-3`). Raises an error on malformed input — wrap with `pcall` for recovery.
 - `json.encode(val)` — serialize a Gem value to a compact JSON string (no extra whitespace). Integer-keyed tables encode as JSON arrays, string-keyed tables as JSON objects, strings are escaped, numbers/booleans/nil map to their JSON equivalents. Raises an error for unencodable types (functions, buffers, refs). Note: empty tables (`{}` / `[]`) are indistinguishable in Gem and always encode as `[]`.
 
+`std/mime` — exports `mime` table:
+
+- `mime.lookup(path_or_ext)` — returns the MIME type for a file path or extension. Accepts `"index.html"`, `".html"`, or `"html"`. Returns `"application/octet-stream"` for unknown extensions. Text types (`text/*`, `application/json`, `application/javascript`, `application/xml`) automatically include `; charset=utf-8`. Case-insensitive.
+- `mime.ext(content_type)` — reverse lookup: `"text/html"` → `".html"`. Strips `; charset=...` before matching. Returns `nil` for unknown types.
+
+Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg, ico, webp, avif, woff, woff2, ttf, otf, pdf, zip, gz, mp3, mp4, webm, wasm.
+
+`std/url` — exports `url` table:
+
+- `url.encode(str)` — percent-encode per RFC 3986. Unreserved chars (`A-Za-z0-9-_.~`) pass through, everything else becomes `%XX` (uppercase hex).
+- `url.decode(str)` — percent-decode `%XX` sequences. `+` is decoded as space.
+- `url.parse_query(str)` — parse a query string like `"a=1&b=hello+world&c=%2F"` into a table `{a: "1", b: "hello world", c: "/"}`. Decodes both keys and values. Duplicate keys: last value wins.
+- `url.build_query(table)` — build a query string from a table. Encodes both keys and values.
+- `url.parse(path_with_query)` — split a path on the first `?`. Returns `{path: "/users/123", query_string: "q=foo&page=2", query: {q: "foo", page: "2"}}`. If no `?`, `query_string` is `""` and `query` is `{}`.
+
 `std/supervisor` — exports `supervisor` table:
 
 - `supervisor.start(spec)` — start a supervisor process. Returns `{pid: <pid>}`. The spec table supports:

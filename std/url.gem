@@ -1,0 +1,145 @@
+# std/url — URL percent-encoding, query string parsing, and path handling
+
+fn is_unreserved(c)
+  (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or (c >= 48 and c <= 57) or c == 45 or c == 95 or c == 46 or c == 126
+end
+
+fn hex_digit(n)
+  if n < 10
+    return chr(48 + n)
+  end
+  chr(65 + n - 10)
+end
+
+fn hex_val(c)
+  if c >= 48 and c <= 57
+    return c - 48
+  end
+  if c >= 65 and c <= 70
+    return c - 55
+  end
+  if c >= 97 and c <= 102
+    return c - 87
+  end
+  -1
+end
+
+fn encode(s)
+  let buf = buf_new()
+  let i = 0
+  let slen = len(s)
+  while i < slen
+    let c = ord(s, i)
+    if is_unreserved(c)
+      buf_push(buf, chr(c))
+    else
+      buf_push(buf, "%" + hex_digit(c / 16) + hex_digit(c % 16))
+    end
+    i += 1
+  end
+  buf_str(buf)
+end
+
+fn decode(s)
+  let buf = buf_new()
+  let i = 0
+  let slen = len(s)
+  while i < slen
+    let c = ord(s, i)
+    if c == 43
+      buf_push(buf, " ")
+      i += 1
+    else if c == 37 and i + 2 < slen
+      let hi = hex_val(ord(s, i + 1))
+      let lo = hex_val(ord(s, i + 2))
+      if hi >= 0 and lo >= 0
+        buf_push(buf, chr(hi * 16 + lo))
+        i += 3
+      else
+        buf_push(buf, "%")
+        i += 1
+      end
+    else
+      buf_push(buf, chr(c))
+      i += 1
+    end
+    end
+  end
+  buf_str(buf)
+end
+
+fn parse_query(s)
+  let result = {}
+  if len(s) == 0
+    return result
+  end
+  let i = 0
+  let slen = len(s)
+  let key_buf = buf_new()
+  let val_buf = buf_new()
+  let in_val = false
+  while i <= slen
+    let c = -1
+    if i < slen
+      c = ord(s, i)
+    end
+    if c == 38 or i == slen
+      let k = decode(buf_str(key_buf))
+      if len(k) > 0
+        result[k] = decode(buf_str(val_buf))
+      end
+      key_buf = buf_new()
+      val_buf = buf_new()
+      in_val = false
+    else if c == 61 and not in_val
+      in_val = true
+    else if in_val
+      buf_push(val_buf, chr(c))
+    else
+      buf_push(key_buf, chr(c))
+    end
+    end
+    end
+    i += 1
+  end
+  result
+end
+
+fn build_query(tbl)
+  let buf = buf_new()
+  let ks = keys(tbl)
+  let i = 0
+  let first = true
+  while i < len(ks)
+    let k = ks[i]
+    let v = tbl[k]
+    if not first
+      buf_push(buf, "&")
+    end
+    buf_push(buf, encode(to_string(k)) + "=" + encode(to_string(v)))
+    first = false
+    i += 1
+  end
+  buf_str(buf)
+end
+
+fn parse(path_with_query)
+  let qmark = -1
+  let i = 0
+  let slen = len(path_with_query)
+  while i < slen
+    if ord(path_with_query, i) == 63
+      qmark = i
+      break
+    end
+    i += 1
+  end
+  if qmark < 0
+    return {path: path_with_query, query_string: "", query: {}}
+  end
+  let p = substr(path_with_query, 0, qmark)
+  let qs = substr(path_with_query, qmark + 1, slen - qmark - 1)
+  {path: p, query_string: qs, query: parse_query(qs)}
+end
+
+export encode, decode, parse_query, build_query, parse

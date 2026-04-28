@@ -1,0 +1,115 @@
+load "std/url"
+
+# ─── encode: unreserved chars pass through ───────────────────────
+
+print("=== url encode ===")
+print(url.encode("hello"))
+print(url.encode("test-value_2.0~ok"))
+
+# ─── encode: special chars ───────────────────────────────────────
+
+print("=== encode special ===")
+print(url.encode("hello world"))
+print(url.encode("a=1&b=2"))
+print(url.encode("/path/to/file"))
+print(url.encode("café"))
+
+# ─── decode: basic ───────────────────────────────────────────────
+
+print("=== url decode ===")
+print(url.decode("hello"))
+print(url.decode("hello%20world"))
+print(url.decode("hello+world"))
+print(url.decode("a%3D1%26b%3D2"))
+print(url.decode("%2Fpath%2Fto%2Ffile"))
+
+# ─── decode: mixed case hex ──────────────────────────────────────
+
+print("=== decode mixed case ===")
+print(url.decode("hello%2fworld"))
+print(url.decode("hello%2Fworld"))
+
+# ─── parse_query: basic ─────────────────────────────────────────
+
+print("=== parse_query ===")
+let q1 = url.parse_query("a=1&b=hello+world&c=%2F")
+print(q1.a)
+print(q1.b)
+print(q1.c)
+
+# ─── parse_query: empty ─────────────────────────────────────────
+
+print("=== parse_query empty ===")
+let q2 = url.parse_query("")
+print(len(q2))
+
+# ─── parse_query: single key ────────────────────────────────────
+
+print("=== parse_query single ===")
+let q3 = url.parse_query("key=value")
+print(q3.key)
+
+# ─── parse_query: duplicate keys (last wins) ────────────────────
+
+print("=== parse_query duplicate ===")
+let q4 = url.parse_query("x=1&x=2&x=3")
+print(q4.x)
+
+# ─── build_query: basic ─────────────────────────────────────────
+
+print("=== build_query ===")
+let bq = url.build_query({a: "1", b: "hello world"})
+print(url.decode(bq))
+
+# ─── parse: path with query ─────────────────────────────────────
+
+print("=== url parse ===")
+let p1 = url.parse("/users/123?q=foo&page=2")
+print(p1.path)
+print(p1.query_string)
+print(p1.query.q)
+print(p1.query.page)
+
+# ─── parse: path without query ──────────────────────────────────
+
+print("=== parse no query ===")
+let p2 = url.parse("/about")
+print(p2.path)
+print(p2.query_string)
+print(len(p2.query))
+
+# ─── parse: empty query string ──────────────────────────────────
+
+print("=== parse empty query ===")
+let p3 = url.parse("/search?")
+print(p3.path)
+print(p3.query_string)
+
+# ─── roundtrip encode/decode ─────────────────────────────────────
+
+print("=== roundtrip ===")
+let original = "hello world & goodbye=true"
+print(url.decode(url.encode(original)))
+
+# ─── edge cases ──────────────────────────────────────────────────
+
+print("=== edge cases ===")
+print(url.encode(""))
+print(url.decode(""))
+print(url.encode("%"))
+print(url.decode("%25"))
+print(url.decode("abc%2"))
+print(url.decode("abc%"))
+
+let q5 = url.parse_query("key=")
+print(q5.key)
+
+let q6 = url.parse_query("a=1&=empty&b=2")
+print(q6.a)
+print(q6.b)
+
+let p4 = url.parse("/search?q=a?b")
+print(p4.path)
+print(p4.query.q)
+
+print("=== all url tests passed ===")

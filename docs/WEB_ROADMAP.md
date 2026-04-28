@@ -19,9 +19,9 @@ C: crypto builtins → std/crypto
 
 Build order follows the DAG — leaves first, dependents after.
 
-## Phase 1: Pure Gem Foundations
+## Phase 1: Pure Gem Foundations -- DONE
 
-### std/mime
+### std/mime -- DONE
 
 MIME type lookup by file extension. Pure data table, no dependencies.
 
@@ -36,7 +36,7 @@ MIME type lookup by file extension. Pure data table, no dependencies.
 
 **Effort:** ~80 lines.
 
-### std/url
+### std/url -- DONE
 
 URL percent-encoding, query string parsing, and path handling. No dependencies.
 

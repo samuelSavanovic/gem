@@ -1,0 +1,94 @@
+# std/mime — MIME type lookup by file extension
+
+load "std/string"
+
+let types = {
+  html: "text/html",
+  htm: "text/html",
+  css: "text/css",
+  js: "application/javascript",
+  mjs: "application/javascript",
+  json: "application/json",
+  xml: "application/xml",
+  txt: "text/plain",
+  csv: "text/csv",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  ico: "image/x-icon",
+  webp: "image/webp",
+  avif: "image/avif",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
+  pdf: "application/pdf",
+  zip: "application/zip",
+  gz: "application/gzip",
+  mp3: "audio/mpeg",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  wasm: "application/wasm"
+}
+
+let charset_prefixes = ["text/", "application/json", "application/javascript", "application/xml"]
+
+fn ext_from_path(path_or_ext)
+  let dot = -1
+  let i = len(path_or_ext) - 1
+  while i >= 0
+    if ord(path_or_ext, i) == 46
+      dot = i
+      break
+    end
+    i -= 1
+  end
+  if dot < 0
+    return path_or_ext
+  end
+  substr(path_or_ext, dot + 1, len(path_or_ext) - dot - 1)
+end
+
+fn needs_charset(content_type)
+  let i = 0
+  while i < len(charset_prefixes)
+    if string.starts_with(content_type, charset_prefixes[i])
+      return true
+    end
+    i += 1
+  end
+  false
+end
+
+fn lookup(path_or_ext)
+  let e = string.lower(ext_from_path(path_or_ext))
+  let ct = types[e]
+  if ct == nil
+    return "application/octet-stream"
+  end
+  if needs_charset(ct)
+    return ct + "; charset=utf-8"
+  end
+  ct
+end
+
+fn ext(content_type)
+  let base = content_type
+  let semi = string.index_of(content_type, ";")
+  if semi >= 0
+    base = string.trim(substr(content_type, 0, semi))
+  end
+  let ks = keys(types)
+  let i = 0
+  while i < len(ks)
+    if types[ks[i]] == base
+      return "." + ks[i]
+    end
+    i += 1
+  end
+  nil
+end
+
+export lookup, ext

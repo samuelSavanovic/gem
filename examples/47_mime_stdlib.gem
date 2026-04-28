@@ -1,0 +1,73 @@
+load "std/mime"
+
+# ─── lookup: common types ────────────────────────────────────────
+
+print("=== mime lookup ===")
+print(mime.lookup("index.html"))
+print(mime.lookup("style.css"))
+print(mime.lookup("app.js"))
+print(mime.lookup("data.json"))
+print(mime.lookup("image.png"))
+print(mime.lookup("photo.jpg"))
+print(mime.lookup("icon.svg"))
+print(mime.lookup("font.woff2"))
+print(mime.lookup("doc.pdf"))
+print(mime.lookup("video.mp4"))
+
+# ─── lookup: bare extensions ─────────────────────────────────────
+
+print("=== bare extensions ===")
+print(mime.lookup(".html"))
+print(mime.lookup(".css"))
+print(mime.lookup(".js"))
+
+# ─── lookup: case insensitive ────────────────────────────────────
+
+print("=== case insensitive ===")
+print(mime.lookup("FILE.HTML"))
+print(mime.lookup("style.CSS"))
+
+# ─── lookup: unknown extension ───────────────────────────────────
+
+print("=== unknown extension ===")
+print(mime.lookup("data.xyz"))
+print(mime.lookup("archive.tar"))
+
+# ─── lookup: charset handling ────────────────────────────────────
+
+print("=== charset ===")
+print(mime.lookup("page.html"))
+print(mime.lookup("data.json"))
+print(mime.lookup("script.js"))
+print(mime.lookup("feed.xml"))
+print(mime.lookup("notes.txt"))
+print(mime.lookup("image.png"))
+
+# ─── ext: reverse lookup ────────────────────────────────────────
+
+print("=== ext reverse ===")
+print(mime.ext("text/html"))
+print(mime.ext("text/css"))
+print(mime.ext("application/json"))
+print(mime.ext("image/png"))
+print(mime.ext("application/pdf"))
+
+# ─── ext: with charset ──────────────────────────────────────────
+
+print("=== ext with charset ===")
+print(mime.ext("text/html; charset=utf-8"))
+
+# ─── ext: unknown type ──────────────────────────────────────────
+
+print("=== ext unknown ===")
+print(mime.ext("application/x-custom"))
+
+# ─── edge cases ──────────────────────────────────────────────────
+
+print("=== edge cases ===")
+print(mime.lookup("archive.tar.gz"))
+print(mime.lookup("noext"))
+print(mime.lookup("dir/file.css"))
+print(mime.lookup(".wasm"))
+
+print("=== all mime tests passed ===")
