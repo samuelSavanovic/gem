@@ -133,9 +133,6 @@ fn rename_node(node, rmap, shadowed)
     if node.rest_param != nil
       inner[node.rest_param] = true
     end
-    if node.block_param != nil
-      inner[node.block_param] = true
-    end
     rename_stmts(body, rmap, inner)
   when {tag: "anon_fn", params: params, body: body}
     let inner = copy_set(shadowed)
@@ -144,9 +141,6 @@ fn rename_node(node, rmap, shadowed)
     end
     if node.rest_param != nil
       inner[node.rest_param] = true
-    end
-    if node.block_param != nil
-      inner[node.block_param] = true
     end
     rename_stmts(body, rmap, inner)
   when {tag: "let", name: name, value: value}

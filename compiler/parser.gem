@@ -104,30 +104,18 @@ fn make_parser(tokens, source, file)
   end
 
   # ── Parameter list ──
-  # Returns {params, rest_param, block_param}.
+  # Returns {params, rest_param}.
   # params: required param names before the rest param (or all params if no rest).
   # rest_param: the name after "...", or nil.
-  # block_param: the single name declared after "...name", or nil.
 
   let parse_params = fn()
     let params = []
     let rest_param = nil
-    let block_param = nil
 
     while peek().type == "NAME" or peek().type == "..."
       if peek().type == "..."
         advance()
         rest_param = expect("NAME").value
-        if peek().type == ","
-          advance()
-          if peek().type != "NAME"
-            compile_error(source, file, peek().line, peek().col, len(peek().value), "expected parameter name after rest param", nil)
-          end
-          block_param = advance().value
-          if peek().type == ","
-            compile_error(source, file, peek().line, peek().col, len(peek().value), "only one parameter is allowed after a rest param", nil)
-          end
-        end
         break
       end
       push(params, advance().value)
@@ -137,7 +125,7 @@ fn make_parser(tokens, source, file)
       advance()
     end
 
-    {params: params, rest_param: rest_param, block_param: block_param}
+    {params: params, rest_param: rest_param}
   end
 
   # ── Forward declarations for mutual recursion ──
@@ -242,7 +230,7 @@ fn make_parser(tokens, source, file)
       let body = parse_fn_body()
       fn_depth -= 1
       expect("end")
-      return make_anon_fn(pr.params, pr.rest_param, pr.block_param, body)
+      return make_anon_fn(pr.params, pr.rest_param, body)
     end
 
     # Table literal: {key: val, ...}
@@ -303,7 +291,7 @@ fn make_parser(tokens, source, file)
     if t.type == "NAME" and t.value == "pcall" and peek_at(1).type != "("
       advance()
       let expr = parse_expr()
-      return make_call(make_var("pcall"), [make_anon_fn([], nil, nil, [expr])], t.line)
+      return make_call(make_var("pcall"), [make_anon_fn([], nil, [expr])], t.line)
     end
 
     # Variable
@@ -342,20 +330,18 @@ fn make_parser(tokens, source, file)
           advance()
           let bparams = []
           let brest = nil
-          let bblock = nil
           if peek().type == "|"
             advance()
             let bpr = parse_params()
             bparams = bpr.params
             brest = bpr.rest_param
-            bblock = bpr.block_param
             expect("|")
           end
           fn_depth += 1
           let body = parse_fn_body()
           fn_depth -= 1
           expect("end")
-          push(args, make_anon_fn(bparams, brest, bblock, body))
+          push(args, make_anon_fn(bparams, brest, body))
         else
           # Trailing brace block: {|params| expr} or {expr}
           # Distinguish from table literal by lookahead
@@ -372,18 +358,16 @@ fn make_parser(tokens, source, file)
               advance()
               let bparams = []
               let brest = nil
-              let bblock = nil
               if peek().type == "|"
                 advance()
                 let bpr = parse_params()
                 bparams = bpr.params
                 brest = bpr.rest_param
-                bblock = bpr.block_param
                 expect("|")
               end
               let bexpr = parse_expr()
               expect("}")
-              push(args, make_anon_fn(bparams, brest, bblock, [bexpr]))
+              push(args, make_anon_fn(bparams, brest, [bexpr]))
             end
           end
         end
@@ -748,7 +732,7 @@ fn make_parser(tokens, source, file)
       let body = parse_fn_body()
       fn_depth -= 1
       expect("end")
-      return make_fn_def(name, pr.params, pr.rest_param, pr.block_param, body, line)
+      return make_fn_def(name, pr.params, pr.rest_param, body, line)
     end
 
     # if / elif statement
@@ -792,32 +776,32 @@ fn make_parser(tokens, source, file)
       let var_name = expect("NAME").value
 
       if peek().type == "," and peek_at(1).type == "NAME"
-        # for k, v in table ... end → let _tbl=table; let _keys=keys(_tbl); let _i=0; while _i<len(_keys) ...
+        # for k, v in table ... end → direct iteration over table storage
         advance()  # consume ","
         let val_name = expect("NAME").value
         expect("in")
         let tbl_expr = parse_expr()
         gensym_counter += 1
         let tbl_var = "_for_tbl_{gensym_counter}"
-        let keys_var = "_for_keys_{gensym_counter}"
+        let len_var = "_for_len_{gensym_counter}"
         let idx_var = "_for_i_{gensym_counter}"
         let fbody = parse_body()
         expect("end")
         let inner_stmts = []
-        push(inner_stmts, make_let(var_name, make_index(make_var(keys_var), make_var(idx_var)), line))
-        push(inner_stmts, make_let(val_name, make_index(make_var(tbl_var), make_index(make_var(keys_var), make_var(idx_var))), line))
+        push(inner_stmts, make_let(var_name, make_call(make_var("__table_key_at"), [make_var(tbl_var), make_var(idx_var)], 0), line))
+        push(inner_stmts, make_let(val_name, make_call(make_var("__table_val_at"), [make_var(tbl_var), make_var(idx_var)], 0), line))
         push(inner_stmts, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
         for bi = 0, len(fbody)
           push(inner_stmts, fbody[bi])
         end
         let while_node = make_while(
-          make_binop("<", make_var(idx_var), make_call(make_var("len"), [make_var(keys_var)], 0)),
+          make_binop("<", make_var(idx_var), make_var(len_var)),
           inner_stmts,
           line
         )
         return {tag: "block", stmts: [
           make_let(tbl_var, tbl_expr, line),
-          make_let(keys_var, make_call(make_var("keys"), [make_var(tbl_var)], 0), line),
+          make_let(len_var, make_call(make_var("len"), [make_var(tbl_var)], 0), line),
           make_let(idx_var, make_int(0), line),
           while_node
         ]}

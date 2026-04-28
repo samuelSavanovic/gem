@@ -38,8 +38,8 @@ Every function call emits frame push/pop for stack traces. Leaf functions (no ca
 ### Inline caching for `.field` access (high priority)
 Every `obj.field` goes through a string hash + probe. Most `.field` accesses at a given source location hit the same table shape repeatedly. A polymorphic inline cache (PIC) — 2 slots per call site that remember "last table layout → field offset" — turns a hash lookup into a pointer compare + offset load on the hot path. The compiler itself is the biggest beneficiary: AST walks do millions of `node.tag`, `node.children`, etc. Implementable without hidden classes by caching the stb_ds hash slot or index. Bounded change to codegen (emit a static cache variable per access site) + a small runtime lookup-with-cache function.
 
-### `for k, v in tbl` allocates a keys array
-The for-loop desugaring calls `keys()` on the table, allocating an O(n) array, then re-looks up each value by key during iteration. A direct iterator that walks the underlying stb_ds storage would skip both the allocation and the per-key re-lookup. Localized change: new runtime iterator API + codegen change for the table-iteration for-loop form. Matters because `for k, v in` is idiomatic and the cost is invisible to users.
+### ~~`for k, v in tbl` allocates a keys array~~ ✓ Done
+Desugaring now uses `__table_key_at` / `__table_val_at` to index directly into the table's storage arrays. No keys array allocation, no per-key re-lookup.
 
 ## Runtime Hot Paths
 

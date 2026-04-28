@@ -351,9 +351,6 @@ x:c
 hello
 world
 35
-prefix_a
-prefix_b
-prefix_c
 15
 10
 3

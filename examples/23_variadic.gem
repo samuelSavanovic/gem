@@ -94,21 +94,6 @@ end
 let add_10_20 = make_adder(10, 20)
 print(add_10_20(5))         # 35
 
-# ── Variadic fn with do block (block_param after rest) ───────────
-
-fn each_with(context, ...items, body)
-  for item in items
-    body(context, item)
-  end
-end
-
-each_with("prefix", "a", "b", "c") do |ctx, item|
-  print("{ctx}_{item}")
-end
-# prefix_a
-# prefix_b
-# prefix_c
-
 # ── Passing variadic fn as a value (v0 limitation documented) ────
 # When stored in a variable, the caller doesn't know it's variadic,
 # so extra args arrive flat in args[]. The rest param sees the raw

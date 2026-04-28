@@ -207,7 +207,9 @@ fn make_codegen(source_name)
     tcp_accept: "gem_tcp_accept_fn",
     tcp_read: "gem_tcp_read_fn",
     tcp_write: "gem_tcp_write_fn",
-    tcp_close: "gem_tcp_close_fn"
+    tcp_close: "gem_tcp_close_fn",
+    __table_key_at: "gem_table_key_at_fn",
+    __table_val_at: "gem_table_val_at_fn"
   }
   let builtins = {}
   for k, _ in builtin_fns
@@ -266,13 +268,10 @@ fn make_codegen(source_name)
         set_add(free, name)
       end
       collect_free_node(value, defined, free)
-    when {tag: "anon_fn", params: params, rest_param: rest_param, block_param: block_param, body: body}
+    when {tag: "anon_fn", params: params, rest_param: rest_param, body: body}
       let inner_defined = set_union(defined, sorted_array_to_set(params))
       if rest_param != nil
         set_add(inner_defined, rest_param)
-      end
-      if block_param != nil
-        set_add(inner_defined, block_param)
       end
       let inner_free = collect_free_vars(body, inner_defined)
       for ifk, _ in inner_free
@@ -467,13 +466,10 @@ fn make_codegen(source_name)
     end
 
     match node
-    when {tag: "anon_fn", params: params, rest_param: rest_param, block_param: block_param, body: body}
+    when {tag: "anon_fn", params: params, rest_param: rest_param, body: body}
       let inner_defined = sorted_array_to_set(params)
       if rest_param != nil
         set_add(inner_defined, rest_param)
-      end
-      if block_param != nil
-        set_add(inner_defined, block_param)
       end
       # collect_free_vars accumulates free vars at arbitrary depth, including
       # through nested closures. Intersecting with scope_vars finds everything
@@ -818,9 +814,6 @@ fn make_codegen(source_name)
     let inner_defined = sorted_array_to_set(node.params)
     if node.rest_param != nil
       set_add(inner_defined, node.rest_param)
-    end
-    if node.block_param != nil
-      set_add(inner_defined, node.block_param)
     end
     let free = collect_free_vars(node.body, inner_defined)
     let captures = sort(keys(free))
@@ -1728,27 +1721,14 @@ fn make_codegen(source_name)
     # Bind rest param: pack args[N .. argc-end_count-1] into an array
     if node.rest_param != nil
       let N = len(params)
-      let end_count = 0
-      if node.block_param != nil
-        end_count = 1
-      end
       let mp_rest = mangle(node.rest_param)
       if set_contains(cap_set, node.rest_param)
         buf_push(b, "    GemVal *{mp_rest} = GC_MALLOC(sizeof(GemVal));\n")
         buf_push(b, "    *{mp_rest} = gem_table_new();\n")
-        buf_push(b, "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
+        buf_push(b, "    for (int _ri = {N}; _ri < argc; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
       else
         buf_push(b, "    GemVal {mp_rest} = gem_table_new();\n")
-        buf_push(b, "    for (int _ri = {N}; _ri < argc - {end_count}; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
-      end
-      if node.block_param != nil
-        let mp_block = mangle(node.block_param)
-        if set_contains(cap_set, node.block_param)
-          buf_push(b, "    GemVal *{mp_block} = GC_MALLOC(sizeof(GemVal));\n")
-          buf_push(b, "    *{mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n")
-        else
-          buf_push(b, "    GemVal {mp_block} = (argc > 0) ? args[argc - 1] : GEM_NIL;\n")
-        end
+        buf_push(b, "    for (int _ri = {N}; _ri < argc; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
       end
     end
     buf_str(b)
@@ -1781,9 +1761,6 @@ fn make_codegen(source_name)
     if node.rest_param != nil
       set_add(scope_vars, node.rest_param)
     end
-    if node.block_param != nil
-      set_add(scope_vars, node.block_param)
-    end
     collect_top_let_names(body, scope_vars)
 
     let saved_boxed = boxed_vars
@@ -1797,7 +1774,7 @@ fn make_codegen(source_name)
     in_top_level = false
 
     let use_tco = false
-    if node.rest_param == nil and node.block_param == nil and not set_contains(scope_vars, name)
+    if node.rest_param == nil and not set_contains(scope_vars, name)
       use_tco = has_self_tail_call(name, body)
     end
     if use_tco
@@ -1863,9 +1840,6 @@ fn make_codegen(source_name)
     let inner_scope = sorted_array_to_set(params)
     if node.rest_param != nil
       set_add(inner_scope, node.rest_param)
-    end
-    if node.block_param != nil
-      set_add(inner_scope, node.block_param)
     end
     collect_top_let_names(body, inner_scope)
 

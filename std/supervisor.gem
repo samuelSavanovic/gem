@@ -9,94 +9,90 @@ end
 fn sup_loop(state)
   receive
   when {tag: "DOWN", pid: dead_pid, reason: reason}
-    handle_down(state, dead_pid, reason)
+    let children = state.children
+    let specs = state.specs
+    let found = -1
+    for i = 0, len(children)
+      if children[i].pid == dead_pid
+        found = i
+        break
+      end
+    end
+
+    if found == -1
+      sup_loop(state)
+      return nil
+    end
+
+    let spec = specs[found]
+    let restart = "permanent"
+    if has_key(spec, "restart")
+      restart = spec.restart
+    end
+
+    let should_restart = false
+    if restart == "permanent"
+      should_restart = true
+    elif restart == "transient"
+      if reason != "normal"
+        should_restart = true
+      end
+    end
+
+    if not should_restart
+      children[found] = {id: spec.id, pid: -1}
+      sup_loop(state)
+      return nil
+    end
+
+    let now = time_ms()
+    push(state.restart_times, now)
+
+    let count = 0
+    for t in state.restart_times
+      if now - t <= state.max_seconds
+        count += 1
+      end
+    end
+
+    if count > state.max_restarts
+      error("max restart intensity reached")
+    end
+
+    let strategy = state.strategy
+
+    if strategy == "one_for_one"
+      let new_pid = start_child(spec)
+      children[found] = {id: spec.id, pid: new_pid}
+      sup_loop(state)
+    elif strategy == "one_for_all"
+      let alive_count = 0
+      for child in children
+        if child.pid != -1 and child.pid != dead_pid
+          kill(child.pid, "shutdown")
+          alive_count += 1
+        end
+      end
+
+      let drained = 0
+      while drained < alive_count
+        receive
+        when {tag: "DOWN"}
+          drained += 1
+        end
+      end
+
+      for i = 0, len(specs)
+        let new_pid = start_child(specs[i])
+        children[i] = {id: specs[i].id, pid: new_pid}
+      end
+      sup_loop(state)
+    else
+      error("unknown supervisor strategy: {strategy}")
+    end
   when {tag: "supervisor_which_children", reply_to: reply_to}
     handle_which_children(state, reply_to)
     sup_loop(state)
-  end
-end
-
-fn handle_down(state, dead_pid, reason)
-  let children = state.children
-  let specs = state.specs
-  let found = -1
-  for i = 0, len(children)
-    if children[i].pid == dead_pid
-      found = i
-      break
-    end
-  end
-
-  if found == -1
-    sup_loop(state)
-    return nil
-  end
-
-  let spec = specs[found]
-  let restart = "permanent"
-  if has_key(spec, "restart")
-    restart = spec.restart
-  end
-
-  let should_restart = false
-  if restart == "permanent"
-    should_restart = true
-  elif restart == "transient"
-    if reason != "normal"
-      should_restart = true
-    end
-  end
-
-  if not should_restart
-    children[found] = {id: spec.id, pid: -1}
-    sup_loop(state)
-    return nil
-  end
-
-  let now = time_ms()
-  push(state.restart_times, now)
-
-  let count = 0
-  for t in state.restart_times
-    if now - t <= state.max_seconds
-      count += 1
-    end
-  end
-
-  if count > state.max_restarts
-    error("max restart intensity reached")
-  end
-
-  let strategy = state.strategy
-
-  if strategy == "one_for_one"
-    let new_pid = start_child(spec)
-    children[found] = {id: spec.id, pid: new_pid}
-    sup_loop(state)
-  elif strategy == "one_for_all"
-    let alive_count = 0
-    for child in children
-      if child.pid != -1 and child.pid != dead_pid
-        kill(child.pid, "shutdown")
-        alive_count += 1
-      end
-    end
-
-    let drained = 0
-    while drained < alive_count
-      receive
-      when {tag: "DOWN"}
-        drained += 1
-      end
-    end
-
-    for i = 0, len(specs)
-      let new_pid = start_child(specs[i])
-      children[i] = {id: specs[i].id, pid: new_pid}
-    end
-    sup_loop(state)
-  else
-    error("unknown supervisor strategy: {strategy}")
   end
 end
 

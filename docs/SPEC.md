@@ -96,7 +96,7 @@ let result = add(
 
 **Variadic Functions**
 
-A `...name` rest parameter collects extra positional arguments into an array. It must be the last declared parameter, optionally followed by one more parameter that receives the last argument (typically a do block).
+A `...name` rest parameter collects extra positional arguments into an array. It must be the last declared parameter.
 
 ```
 fn sum(...nums)
@@ -121,20 +121,6 @@ fn log(level, ...msgs)
 end
 
 log("INFO", "started", "port 8080")
-```
-
-When a single parameter follows `...name`, it receives the last argument. This is useful for capturing a do block explicitly:
-
-```
-fn each_with(context, ...items, body)
-  for item in items
-    body(context, item)
-  end
-end
-
-each_with("prefix", "a", "b", "c") do |ctx, item|
-  print("{ctx}_{item}")
-end
 ```
 
 Rest param packing happens inside the function body at the C level, so variadic functions also work when stored in a variable or passed as a callback — the packing is unconditional regardless of call form.

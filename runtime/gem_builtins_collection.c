@@ -22,6 +22,28 @@ GemVal gem_push_fn(void *_env, GemVal *args, int argc) {
     return val;
 }
 
+/* ─── Built-in: __table_key_at / __table_val_at (direct table iteration) ─── */
+
+GemVal gem_table_key_at_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("__table_key_at: expected 2 arguments"); return GEM_NIL; }
+    if (args[0].type != VAL_TABLE) { gem_error("__table_key_at: expected table"); return GEM_NIL; }
+    GemTable *t = args[0].table;
+    int idx = (int)args[1].ival;
+    if (idx < 0 || idx >= t->len) return GEM_NIL;
+    return t->keys[idx];
+}
+
+GemVal gem_table_val_at_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("__table_val_at: expected 2 arguments"); return GEM_NIL; }
+    if (args[0].type != VAL_TABLE) { gem_error("__table_val_at: expected table"); return GEM_NIL; }
+    GemTable *t = args[0].table;
+    int idx = (int)args[1].ival;
+    if (idx < 0 || idx >= t->len) return GEM_NIL;
+    return t->vals[idx];
+}
+
 /* ─── Built-in: keys ─── */
 
 GemVal gem_keys(GemVal tbl) {

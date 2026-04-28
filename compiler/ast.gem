@@ -55,8 +55,8 @@ fn make_index(object, key)
   {tag: "index", object: object, key: key}
 end
 
-fn make_anon_fn(params, rest_param, block_param, body)
-  {tag: "anon_fn", params: params, rest_param: rest_param, block_param: block_param, body: body}
+fn make_anon_fn(params, rest_param, body)
+  {tag: "anon_fn", params: params, rest_param: rest_param, body: body}
 end
 
 fn make_table(entries)
@@ -93,8 +93,8 @@ fn make_index_assign(object, key, value, line)
   {tag: "index_assign", object: object, key: key, value: value, line: line}
 end
 
-fn make_fn_def(name, params, rest_param, block_param, body, line)
-  {tag: "fn_def", name: name, params: params, rest_param: rest_param, block_param: block_param, body: body, line: line}
+fn make_fn_def(name, params, rest_param, body, line)
+  {tag: "fn_def", name: name, params: params, rest_param: rest_param, body: body, line: line}
 end
 
 fn make_if(cond, then_body, else_body, line)
