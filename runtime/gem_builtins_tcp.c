@@ -180,33 +180,51 @@ GemVal gem_tcp_accept_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1 || args[0].type != VAL_INT) {
-        gem_error("tcp_read: expected (int socket_fd[, int max_bytes])");
+        gem_error("tcp_read: expected (int socket_fd[, int max_bytes[, int timeout_ms]])");
     }
     int fd = (int)args[0].ival;
     size_t max_bytes = 4096;
     if (argc >= 2 && args[1].type == VAL_INT) {
         max_bytes = (size_t)args[1].ival;
     }
+    int64_t timeout_ms = -1;
+    if (argc >= 3 && args[2].type == VAL_INT) {
+        timeout_ms = args[2].ival;
+    }
 
     char *buf = (char *)GC_MALLOC_ATOMIC(max_bytes + 1);
 
     if (gem_current_pid >= 0) {
+        GemProcess *proc = &gem_proc_table[gem_current_pid];
+        if (timeout_ms > 0) {
+            proc->deadline_ms = gem_now_ms() + timeout_ms;
+            proc->timed_out = 0;
+        }
         while (1) {
             ssize_t n = read(fd, buf, max_bytes);
             if (n > 0) {
+                proc->deadline_ms = -1;
                 buf[n] = '\0';
                 GemVal r; r.type = VAL_STRING; r.sval = buf;
                 return r;
             }
             if (n == 0) {
+                proc->deadline_ms = -1;
                 buf[0] = '\0';
                 GemVal r; r.type = VAL_STRING; r.sval = buf;
                 return r;
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 gem_io_yield(fd, 0);
+                if (proc->timed_out) {
+                    proc->timed_out = 0;
+                    buf[0] = '\0';
+                    GemVal r; r.type = VAL_STRING; r.sval = buf;
+                    return r;
+                }
                 continue;
             }
+            proc->deadline_ms = -1;
             char errbuf[256];
             snprintf(errbuf, sizeof(errbuf), "tcp_read: read failed: %s", strerror(errno));
             gem_error(errbuf);

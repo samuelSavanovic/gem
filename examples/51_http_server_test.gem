@@ -1,0 +1,268 @@
+# Integration test for std/http server
+
+load "std/http"
+load "std/json"
+load "std/string"
+
+let port = 19880
+
+# ─── Setup routes ───
+
+let r = http.router()
+
+r.get("/", fn(req)
+  http.ok("home")
+end)
+
+r.get("/hello/:name", fn(req)
+  http.ok("Hello, " + req.params.name + "!")
+end)
+
+r.post("/echo", fn(req)
+  http.ok(req.body)
+end)
+
+r.get("/json", fn(req)
+  http.json_response({status: "ok", count: 42})
+end)
+
+r.get("/query", fn(req)
+  http.ok("q=" + req.query.q + ",page=" + req.query.page)
+end)
+
+r.get("/cookies", fn(req)
+  let resp = http.ok("cookie:" + to_string(req.cookies.session))
+  http.set_cookie(resp, "token", "abc", nil)
+end)
+
+r.get("/redirect", fn(req)
+  http.redirect("/target")
+end)
+
+r.get("/error", fn(req)
+  error("intentional error")
+end)
+
+r.get("/html", fn(req)
+  http.html("<h1>" + http.html_escape(req.query.name) + "</h1>")
+end)
+
+# ─── Test runner ───
+
+let tr = r
+spawn() do
+  let pass = 0
+  let fail = 0
+
+  http.serve(tr, {port: port})
+  send_after(self(), "go", 100)
+  receive
+  when msg
+    nil
+  end
+
+  # Helper to make HTTP requests
+  let make_request = fn(method, path, body, extra_headers)
+    let fd = tcp_connect("127.0.0.1", port)
+    let buf = buf_new()
+    buf_push(buf, method + " " + path + " HTTP/1.1\r\n")
+    buf_push(buf, "Host: localhost\r\n")
+    buf_push(buf, "Connection: close\r\n")
+    if body != nil and len(body) > 0
+      buf_push(buf, "Content-Length: " + to_string(len(body)) + "\r\n")
+    end
+    if extra_headers != nil
+      let ks = keys(extra_headers)
+      let i = 0
+      while i < len(ks)
+        buf_push(buf, ks[i] + ": " + extra_headers[ks[i]] + "\r\n")
+        i += 1
+      end
+    end
+    buf_push(buf, "\r\n")
+    if body != nil
+      buf_push(buf, body)
+    end
+    tcp_write(fd, buf_str(buf))
+
+    let resp_buf = buf_new()
+    let reading = true
+    while reading
+      let chunk = tcp_read(fd, 4096)
+      if chunk == ""
+        reading = false
+      else
+        buf_push(resp_buf, chunk)
+      end
+    end
+    tcp_close(fd)
+
+    let raw = buf_str(resp_buf)
+    let hdr_end = string.index_of(raw, "\r\n\r\n")
+    if hdr_end < 0
+      return {status: 0, headers: {}, body: ""}
+    end
+    let header_section = substr(raw, 0, hdr_end)
+    let resp_body = substr(raw, hdr_end + 4, len(raw) - hdr_end - 4)
+
+    let lines = string.split(header_section, "\r\n")
+    let status_line = lines[0]
+    let sp1 = string.index_of(status_line, " ")
+    let rest_line = substr(status_line, sp1 + 1, len(status_line) - sp1 - 1)
+    let sp2 = string.index_of(rest_line, " ")
+    let status_code = to_int(substr(rest_line, 0, sp2))
+
+    let headers = {}
+    let i = 1
+    while i < len(lines)
+      let colon = string.index_of(lines[i], ": ")
+      if colon > 0
+        let key = substr(lines[i], 0, colon)
+        let val = substr(lines[i], colon + 2, len(lines[i]) - colon - 2)
+        headers[key] = val
+      end
+      i += 1
+    end
+
+    {status: status_code, headers: headers, body: resp_body}
+  end
+
+  # ─── Tests ───
+
+  # Basic GET
+  let resp = make_request("GET", "/", nil, nil)
+  if resp.status == 200 and resp.body == "home"
+    pass += 1
+  else
+    print("FAIL: GET / - status={resp.status} body={resp.body}")
+    fail += 1
+  end
+
+  # Route params
+  let resp2 = make_request("GET", "/hello/world", nil, nil)
+  if resp2.status == 200 and resp2.body == "Hello, world!"
+    pass += 1
+  else
+    print("FAIL: GET /hello/:name - body={resp2.body}")
+    fail += 1
+  end
+
+  # POST with body
+  let resp3 = make_request("POST", "/echo", "test payload", nil)
+  if resp3.status == 200 and resp3.body == "test payload"
+    pass += 1
+  else
+    print("FAIL: POST /echo - body={resp3.body}")
+    fail += 1
+  end
+
+  # JSON response
+  let resp4 = make_request("GET", "/json", nil, nil)
+  if resp4.status == 200 and string.contains(resp4.headers["Content-Type"], "application/json")
+    let data = json.parse(resp4.body)
+    if data.status == "ok" and data.count == 42
+      pass += 1
+    else
+      print("FAIL: GET /json - bad json data")
+      fail += 1
+    end
+  else
+    print("FAIL: GET /json - status={resp4.status}")
+    fail += 1
+  end
+
+  # Query string
+  let resp5 = make_request("GET", "/query?q=hello&page=3", nil, nil)
+  if resp5.status == 200 and resp5.body == "q=hello,page=3"
+    pass += 1
+  else
+    print("FAIL: GET /query - body={resp5.body}")
+    fail += 1
+  end
+
+  # 404
+  let resp6 = make_request("GET", "/nonexistent", nil, nil)
+  if resp6.status == 404
+    pass += 1
+  else
+    print("FAIL: 404 - status={resp6.status}")
+    fail += 1
+  end
+
+  # Cookies in request
+  let resp7 = make_request("GET", "/cookies", nil, {"Cookie": "session=mysession"})
+  if resp7.status == 200 and resp7.body == "cookie:mysession" and string.contains(resp7.headers["Set-Cookie"], "token=abc")
+    pass += 1
+  else
+    print("FAIL: cookies - body={resp7.body} set-cookie={resp7.headers["Set-Cookie"]}")
+    fail += 1
+  end
+
+  # Redirect
+  let resp8 = make_request("GET", "/redirect", nil, nil)
+  if resp8.status == 302 and resp8.headers["Location"] == "/target"
+    pass += 1
+  else
+    print("FAIL: redirect - status={resp8.status} loc={resp8.headers["Location"]}")
+    fail += 1
+  end
+
+  # Error handler (500)
+  let resp9 = make_request("GET", "/error", nil, nil)
+  if resp9.status == 500
+    pass += 1
+  else
+    print("FAIL: error - status={resp9.status}")
+    fail += 1
+  end
+
+  # HTML escape in response
+  let resp10 = make_request("GET", "/html?name=%3Cscript%3Ealert(1)%3C%2Fscript%3E", nil, nil)
+  if resp10.status == 200 and string.contains(resp10.body, "&lt;script&gt;") and not string.contains(resp10.body, "<script>alert")
+    pass += 1
+  else
+    print("FAIL: html_escape - body={resp10.body}")
+    fail += 1
+  end
+
+  # ─── Keep-alive test ───
+
+  let fd = tcp_connect("127.0.0.1", port)
+  tcp_write(fd, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+  let chunk = tcp_read(fd, 4096)
+  if string.contains(chunk, "200 OK") and string.contains(chunk, "keep-alive")
+    pass += 1
+  else
+    print("FAIL: keep-alive first request")
+    fail += 1
+  end
+
+  # Second request on same connection
+  tcp_write(fd, "GET /hello/ka HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+  let resp_buf = buf_new()
+  let reading = true
+  while reading
+    chunk = tcp_read(fd, 4096)
+    if chunk == ""
+      reading = false
+    else
+      buf_push(resp_buf, chunk)
+    end
+  end
+  let raw = buf_str(resp_buf)
+  if string.contains(raw, "200 OK") and string.contains(raw, "Hello, ka!")
+    pass += 1
+  else
+    print("FAIL: keep-alive second request - {raw}")
+    fail += 1
+  end
+  tcp_close(fd)
+
+  # ─── Summary ───
+
+  print("Results: {pass} passed, {fail} failed")
+  if fail > 0
+    exit(1)
+  end
+  exit(0)
+end

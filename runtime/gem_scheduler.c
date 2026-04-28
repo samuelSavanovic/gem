@@ -340,8 +340,19 @@ void gem_run_scheduler(void) {
                 active = 1;
                 if (proc->io_request)
                     has_pool_wait = 1;
-                else
+                else {
+                    if (proc->deadline_ms >= 0) {
+                        int64_t now = gem_now_ms();
+                        if (now >= proc->deadline_ms) {
+                            proc->timed_out = 1;
+                            proc->deadline_ms = -1;
+                            proc->state = GEM_PROC_READY;
+                            has_ready = 1;
+                            continue;
+                        }
+                    }
                     has_fd_wait = 1;
+                }
             }
         }
 
@@ -385,12 +396,13 @@ void gem_run_scheduler(void) {
                 nfds++;
             }
 
-            /* Compute timeout: earliest deadline among WAITING procs and timers */
+            /* Compute timeout: earliest deadline among WAITING/IO_WAIT procs and timers */
             int poll_timeout = -1;
             int64_t timer_dl = gem_earliest_timer_deadline();
             int64_t earliest = -1;
             for (int i = 0; i < gem_proc_hwm; i++) {
-                if (gem_proc_table[i].state == GEM_PROC_WAITING &&
+                if ((gem_proc_table[i].state == GEM_PROC_WAITING ||
+                     gem_proc_table[i].state == GEM_PROC_IO_WAIT) &&
                     gem_proc_table[i].deadline_ms >= 0) {
                     if (earliest < 0 || gem_proc_table[i].deadline_ms < earliest)
                         earliest = gem_proc_table[i].deadline_ms;

@@ -959,3 +959,6 @@ false
 1
 false
 === all sqlite tests passed ===
+
+Results: 56 passed, 0 failed
+Results: 12 passed, 0 failed

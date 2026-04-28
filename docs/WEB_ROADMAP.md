@@ -173,7 +173,7 @@ ISO 8601 UTC timestamp, bracketed uppercase level, message. One line per entry. 
 
 **Effort:** ~50 lines Gem + possibly a small C builtin for atomic stderr write.
 
-### std/http
+### std/http -- DONE
 
 The main module. Depends on: `std/url`, `std/mime`, `std/json` (exists), `std/time`, `std/string` (exists).
 

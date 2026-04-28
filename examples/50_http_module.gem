@@ -1,0 +1,166 @@
+# Test std/http module — response builders, router, cookies, html_escape, server
+
+load "std/http"
+load "std/json"
+load "std/string"
+
+let pass = 0
+let fail = 0
+
+fn assert(cond, msg)
+  if cond
+    pass += 1
+  else
+    print("FAIL: {msg}")
+    fail += 1
+  end
+end
+
+# ─── Response builders ───
+
+let r1 = http.response(201, {"X-Custom": "yes"}, "created")
+assert(r1.status == 201, "response status")
+assert(r1.headers["X-Custom"] == "yes", "response custom header")
+assert(r1.body == "created", "response body")
+
+let r2 = http.ok("hello")
+assert(r2.status == 200, "ok status")
+assert(r2.body == "hello", "ok body")
+assert(string.contains(r2.headers["Content-Type"], "text/plain"), "ok content-type")
+
+let r3 = http.ok("data", "application/xml")
+assert(r3.headers["Content-Type"] == "application/xml", "ok custom content-type")
+
+let r4 = http.html("<h1>Hi</h1>")
+assert(r4.status == 200, "html status")
+assert(string.contains(r4.headers["Content-Type"], "text/html"), "html content-type")
+assert(r4.body == "<h1>Hi</h1>", "html body")
+
+let r5 = http.json_response({name: "gem", version: 1})
+assert(r5.status == 200, "json status")
+assert(string.contains(r5.headers["Content-Type"], "application/json"), "json content-type")
+let parsed = json.parse(r5.body)
+assert(parsed.name == "gem", "json body parsed name")
+assert(parsed.version == 1, "json body parsed version")
+
+let r6 = http.redirect("/login")
+assert(r6.status == 302, "redirect default 302")
+assert(r6.headers["Location"] == "/login", "redirect location")
+
+let r7 = http.redirect("/new-url", 301)
+assert(r7.status == 301, "redirect explicit 301")
+
+let r8 = http.not_found()
+assert(r8.status == 404, "not_found status")
+assert(r8.body == "Not Found", "not_found body")
+
+let r9 = http.not_found("custom 404")
+assert(r9.status == 404, "not_found custom status")
+assert(r9.body == "custom 404", "not_found custom body")
+
+let r10 = http.bad_request()
+assert(r10.status == 400, "bad_request status")
+
+let r11 = http.server_error()
+assert(r11.status == 500, "server_error status")
+assert(r11.body == "Internal Server Error", "server_error body")
+
+# ─── Cookies ───
+
+let resp = http.ok("test")
+let with_cookie = http.set_cookie(resp, "session", "abc123", nil)
+assert(with_cookie.status == 200, "set_cookie preserves status")
+let sc = with_cookie.headers["Set-Cookie"]
+assert(string.contains(sc, "session=abc123"), "set_cookie name=value")
+assert(string.contains(sc, "Path=/"), "set_cookie default path")
+assert(string.contains(sc, "HttpOnly"), "set_cookie default httponly")
+assert(string.contains(sc, "SameSite=Lax"), "set_cookie default samesite")
+
+let with_opts = http.set_cookie(resp, "token", "xyz", {path: "/api", secure: true, max_age: 3600, same_site: "Strict", http_only: false})
+let sc2 = with_opts.headers["Set-Cookie"]
+assert(string.contains(sc2, "token=xyz"), "set_cookie opts name=value")
+assert(string.contains(sc2, "Path=/api"), "set_cookie opts path")
+assert(string.contains(sc2, "Secure"), "set_cookie opts secure")
+assert(string.contains(sc2, "Max-Age=3600"), "set_cookie opts max_age")
+assert(string.contains(sc2, "SameSite=Strict"), "set_cookie opts samesite")
+assert(not string.contains(sc2, "HttpOnly"), "set_cookie opts no httponly")
+
+let del = http.delete_cookie(resp, "session", nil)
+let sc3 = del.headers["Set-Cookie"]
+assert(string.contains(sc3, "session="), "delete_cookie name")
+assert(string.contains(sc3, "Max-Age=0"), "delete_cookie max_age=0")
+
+# ─── html_escape ───
+
+assert(http.html_escape("hello") == "hello", "html_escape no-op")
+assert(http.html_escape("<script>") == "&lt;script&gt;", "html_escape tags")
+assert(http.html_escape("a & b") == "a &amp; b", "html_escape amp")
+assert(http.html_escape("\"hi\"") == "&quot;hi&quot;", "html_escape quotes")
+assert(http.html_escape("it's") == "it&#x27;s", "html_escape apos")
+assert(http.html_escape("<a href=\"x\">y&z</a>") == "&lt;a href=&quot;x&quot;&gt;y&amp;z&lt;/a&gt;", "html_escape mixed")
+
+# ─── Router ───
+
+let r = http.router()
+
+r.get("/", fn(req)
+  http.ok("home")
+end)
+
+r.get("/users/:id", fn(req)
+  http.ok("user:" + req.params.id)
+end)
+
+r.post("/users", fn(req)
+  http.ok("created user")
+end)
+
+r.get("/users/:id/posts/:post_id", fn(req)
+  http.ok(req.params.id + ":" + req.params.post_id)
+end)
+
+r.delete("/users/:id", fn(req)
+  http.ok("deleted:" + req.params.id)
+end)
+
+# Test route matching
+let m1 = r.match("GET", "/")
+assert(m1 != nil, "route / matches")
+let req1 = {method: "GET", path: "/", params: m1.params, query: {}, headers: {}, body: "", cookies: {}}
+let resp1 = m1.handler(req1)
+assert(resp1.body == "home", "route / handler")
+
+let m2 = r.match("GET", "/users/42")
+assert(m2 != nil, "route /users/:id matches")
+assert(m2.params.id == "42", "route param extraction")
+
+let m3 = r.match("GET", "/users/7/posts/99")
+assert(m3 != nil, "multi-param route matches")
+assert(m3.params.id == "7", "multi-param first")
+assert(m3.params.post_id == "99", "multi-param second")
+
+let m4 = r.match("GET", "/nonexistent")
+assert(m4 == nil, "no match returns nil")
+
+let m5 = r.match("POST", "/users")
+assert(m5 != nil, "POST route matches")
+
+let m6 = r.match("DELETE", "/users/5")
+assert(m6 != nil, "DELETE route matches")
+
+let m7 = r.match("POST", "/")
+assert(m7 == nil, "wrong method no match")
+
+# ─── Param URL decoding ───
+
+let m8 = r.match("GET", "/users/hello%20world")
+assert(m8 != nil, "url-encoded param matches")
+assert(m8.params.id == "hello world", "url-encoded param decoded")
+
+# ─── Summary ───
+
+print("")
+print("Results: {pass} passed, {fail} failed")
+if fail > 0
+  error("tests failed")
+end

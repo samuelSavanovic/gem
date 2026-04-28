@@ -1,0 +1,614 @@
+# std/http — HTTP/1.1 server with routing and keep-alive
+
+load "std/string"
+load "std/url"
+load "std/mime"
+load "std/json"
+load "std/time"
+
+# ─── Response builders ───
+
+fn response(status, headers, body)
+  {status: status, headers: headers, body: body}
+end
+
+fn ok(body, content_type)
+  let ct = content_type
+  if ct == nil
+    ct = "text/plain; charset=utf-8"
+  end
+  {status: 200, headers: {"Content-Type": ct}, body: body}
+end
+
+fn html(body)
+  {status: 200, headers: {"Content-Type": "text/html; charset=utf-8"}, body: body}
+end
+
+fn json_response(data)
+  {status: 200, headers: {"Content-Type": "application/json; charset=utf-8"}, body: json.encode(data)}
+end
+
+fn redirect(location, status)
+  let s = status
+  if s == nil
+    s = 302
+  end
+  {status: s, headers: {"Location": location, "Content-Type": "text/plain; charset=utf-8"}, body: ""}
+end
+
+fn not_found(body)
+  let b = body
+  if b == nil
+    b = "Not Found"
+  end
+  {status: 404, headers: {"Content-Type": "text/plain; charset=utf-8"}, body: b}
+end
+
+fn bad_request(body)
+  let b = body
+  if b == nil
+    b = "Bad Request"
+  end
+  {status: 400, headers: {"Content-Type": "text/plain; charset=utf-8"}, body: b}
+end
+
+fn server_error(body)
+  let b = body
+  if b == nil
+    b = "Internal Server Error"
+  end
+  {status: 500, headers: {"Content-Type": "text/plain; charset=utf-8"}, body: b}
+end
+
+# ─── Cookies ───
+
+fn set_cookie(resp, name, value, opts)
+  let buf = buf_new()
+  buf_push(buf, name + "=" + value)
+  let path = "/"
+  let http_only = true
+  let secure = false
+  let same_site = "Lax"
+  let max_age = nil
+  let expires = nil
+  if opts != nil
+    if opts.path != nil
+      path = opts.path
+    end
+    if opts.http_only != nil
+      http_only = opts.http_only
+    end
+    if opts.secure != nil
+      secure = opts.secure
+    end
+    if opts.same_site != nil
+      same_site = opts.same_site
+    end
+    if opts.max_age != nil
+      max_age = opts.max_age
+    end
+    if opts.expires != nil
+      expires = opts.expires
+    end
+  end
+  buf_push(buf, "; Path=" + path)
+  if max_age != nil
+    buf_push(buf, "; Max-Age=" + to_string(max_age))
+  end
+  if expires != nil
+    buf_push(buf, "; Expires=" + time.http_date(expires))
+  end
+  if http_only
+    buf_push(buf, "; HttpOnly")
+  end
+  if secure
+    buf_push(buf, "; Secure")
+  end
+  buf_push(buf, "; SameSite=" + same_site)
+  let cookie_str = buf_str(buf)
+
+  let new_headers = {}
+  let ks = keys(resp.headers)
+  let i = 0
+  while i < len(ks)
+    new_headers[ks[i]] = resp.headers[ks[i]]
+    i += 1
+  end
+
+  let existing = new_headers["Set-Cookie"]
+  if existing != nil
+    new_headers["Set-Cookie"] = existing + "\r\nSet-Cookie: " + cookie_str
+  else
+    new_headers["Set-Cookie"] = cookie_str
+  end
+
+  {status: resp.status, headers: new_headers, body: resp.body}
+end
+
+fn delete_cookie(resp, name, opts)
+  let del_opts = {max_age: 0, path: "/"}
+  if opts != nil
+    if opts.path != nil
+      del_opts.path = opts.path
+    end
+  end
+  set_cookie(resp, name, "", del_opts)
+end
+
+# ─── Cookie parsing ───
+
+fn parse_cookies(cookie_header)
+  let cookies = {}
+  if cookie_header == nil or cookie_header == ""
+    return cookies
+  end
+  let pairs = string.split(cookie_header, "; ")
+  let i = 0
+  while i < len(pairs)
+    let pair = pairs[i]
+    let eq = string.index_of(pair, "=")
+    if eq > 0
+      let name = string.trim(substr(pair, 0, eq))
+      let value = substr(pair, eq + 1, len(pair) - eq - 1)
+      cookies[name] = value
+    end
+    i += 1
+  end
+  cookies
+end
+
+# ─── Security ───
+
+fn html_escape(s)
+  let buf = buf_new()
+  let i = 0
+  let slen = len(s)
+  while i < slen
+    let c = ord(s, i)
+    if c == 38
+      buf_push(buf, "&amp;")
+    elif c == 60
+      buf_push(buf, "&lt;")
+    elif c == 62
+      buf_push(buf, "&gt;")
+    elif c == 34
+      buf_push(buf, "&quot;")
+    elif c == 39
+      buf_push(buf, "&#x27;")
+    else
+      buf_push(buf, chr(c))
+    end
+    i += 1
+  end
+  buf_str(buf)
+end
+
+# ─── Router ───
+
+fn match_route(pattern, path)
+  let pat_segs = string.split(pattern, "/")
+  let path_segs = string.split(path, "/")
+  if len(pat_segs) != len(path_segs)
+    return nil
+  end
+  let params = {}
+  let i = 0
+  while i < len(pat_segs)
+    let ps = pat_segs[i]
+    let us = path_segs[i]
+    if len(ps) > 0 and ord(ps, 0) == 58
+      params[substr(ps, 1, len(ps) - 1)] = url.decode(us)
+    elif ps != us
+      return nil
+    end
+    i += 1
+  end
+  params
+end
+
+fn normalize_path(p)
+  let segs = string.split(p, "/")
+  let result = []
+  let i = 0
+  while i < len(segs)
+    let s = segs[i]
+    if s == ".."
+      if len(result) > 0
+        pop(result)
+      end
+    elif s != "." and s != ""
+      push(result, s)
+    end
+    i += 1
+  end
+  "/" + string.join(result, "/")
+end
+
+fn router()
+  let routes = []
+
+  let add_route = fn(method, pattern, handler)
+    push(routes, {method: method, pattern: pattern, handler: handler})
+  end
+
+  let static_routes = []
+
+  let r = {}
+
+  r.get = fn(pattern, handler)
+    add_route("GET", pattern, handler)
+  end
+
+  r.post = fn(pattern, handler)
+    add_route("POST", pattern, handler)
+  end
+
+  r.put = fn(pattern, handler)
+    add_route("PUT", pattern, handler)
+  end
+
+  r.patch = fn(pattern, handler)
+    add_route("PATCH", pattern, handler)
+  end
+
+  r.delete = fn(pattern, handler)
+    add_route("DELETE", pattern, handler)
+  end
+
+  r.static = fn(url_prefix, dir_path)
+    push(static_routes, {prefix: url_prefix, dir: dir_path})
+  end
+
+  r.match = fn(method, path)
+    let i = 0
+    while i < len(routes)
+      let route = routes[i]
+      if route.method == method
+        let params = match_route(route.pattern, path)
+        if params != nil
+          return {handler: route.handler, params: params}
+        end
+      end
+      i += 1
+    end
+
+    if method == "GET"
+      let j = 0
+      while j < len(static_routes)
+        let sr = static_routes[j]
+        if string.starts_with(path, sr.prefix)
+          let rel = substr(path, len(sr.prefix), len(path) - len(sr.prefix))
+          if rel == "" or rel == "/"
+            rel = "/index.html"
+          end
+          let normalized = normalize_path(rel)
+          if string.starts_with(normalized, "/")
+            let file_path = sr.dir + normalized
+            if file_exists(file_path)
+              let content = read_file(file_path)
+              let ct = mime.lookup(file_path)
+              let handler = fn(req)
+                {status: 200, headers: {"Content-Type": ct, "Cache-Control": "public, max-age=3600"}, body: content}
+              end
+              return {handler: handler, params: {}}
+            end
+          end
+        end
+        j += 1
+      end
+    end
+
+    nil
+  end
+
+  r
+end
+
+# ─── HTTP parsing (buffered) ───
+
+fn find_header_end(buf_str_val)
+  let slen = len(buf_str_val)
+  let i = 0
+  while i < slen - 3
+    if ord(buf_str_val, i) == 13 and ord(buf_str_val, i + 1) == 10 and ord(buf_str_val, i + 2) == 13 and ord(buf_str_val, i + 3) == 10
+      return i
+    end
+    i += 1
+  end
+  -1
+end
+
+fn parse_request_line(line)
+  let sp1 = string.index_of(line, " ")
+  if sp1 < 0
+    return nil
+  end
+  let rest = substr(line, sp1 + 1, len(line) - sp1 - 1)
+  let sp2 = string.index_of(rest, " ")
+  if sp2 < 0
+    return nil
+  end
+  let method = substr(line, 0, sp1)
+  let raw_path = substr(rest, 0, sp2)
+  {method: method, raw_path: raw_path}
+end
+
+fn parse_headers(header_block)
+  let headers = {}
+  let lines = string.split(header_block, "\r\n")
+  let i = 0
+  while i < len(lines)
+    let line = lines[i]
+    let colon = string.index_of(line, ": ")
+    if colon > 0
+      let key = substr(line, 0, colon)
+      let value = substr(line, colon + 2, len(line) - colon - 2)
+      headers[key] = value
+    end
+    i += 1
+  end
+  headers
+end
+
+fn get_content_length(headers)
+  let cl = headers["Content-Length"]
+  if cl == nil
+    cl = headers["content-length"]
+  end
+  if cl == nil
+    return 0
+  end
+  to_int(cl)
+end
+
+# ─── Response serialization ───
+
+fn status_text(code)
+  if code == 200
+    return "OK"
+  elif code == 201
+    return "Created"
+  elif code == 204
+    return "No Content"
+  elif code == 301
+    return "Moved Permanently"
+  elif code == 302
+    return "Found"
+  elif code == 304
+    return "Not Modified"
+  elif code == 400
+    return "Bad Request"
+  elif code == 401
+    return "Unauthorized"
+  elif code == 403
+    return "Forbidden"
+  elif code == 404
+    return "Not Found"
+  elif code == 405
+    return "Method Not Allowed"
+  elif code == 500
+    return "Internal Server Error"
+  elif code == 502
+    return "Bad Gateway"
+  elif code == 503
+    return "Service Unavailable"
+  end
+  "Unknown"
+end
+
+fn serialize_response(resp, keep_alive)
+  let buf = buf_new()
+  let st = status_text(resp.status)
+  buf_push(buf, "HTTP/1.1 " + to_string(resp.status) + " " + st + "\r\n")
+
+  let body = resp.body
+  if body == nil
+    body = ""
+  end
+  buf_push(buf, "Content-Length: " + to_string(len(body)) + "\r\n")
+
+  if keep_alive
+    buf_push(buf, "Connection: keep-alive\r\n")
+  else
+    buf_push(buf, "Connection: close\r\n")
+  end
+
+  let ks = keys(resp.headers)
+  let i = 0
+  while i < len(ks)
+    let k = ks[i]
+    let v = resp.headers[k]
+    if k == "Set-Cookie" and string.contains(v, "\r\nSet-Cookie: ")
+      let parts = string.split(v, "\r\nSet-Cookie: ")
+      let j = 0
+      while j < len(parts)
+        buf_push(buf, "Set-Cookie: " + parts[j] + "\r\n")
+        j += 1
+      end
+    else
+      buf_push(buf, k + ": " + v + "\r\n")
+    end
+    i += 1
+  end
+
+  buf_push(buf, "\r\n")
+  buf_push(buf, body)
+  buf_str(buf)
+end
+
+# ─── Connection handler ───
+
+let IDLE_TIMEOUT_MS = 30000
+let READ_SIZE = 8192
+
+fn handle_connection(client_fd, router_ref)
+  let conn_buf = ""
+
+  while true
+    # Read data (with timeout for keep-alive)
+    let chunk = ""
+    if len(conn_buf) == 0
+      chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
+      if chunk == ""
+        break
+      end
+      conn_buf = chunk
+    end
+
+    # Buffer until we have complete headers
+    let header_end = find_header_end(conn_buf)
+    while header_end < 0
+      chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
+      if chunk == ""
+        break
+      end
+      conn_buf = conn_buf + chunk
+      header_end = find_header_end(conn_buf)
+    end
+    if header_end < 0
+      break
+    end
+
+    # Split headers from rest
+    let header_section = substr(conn_buf, 0, header_end)
+    let after_headers = substr(conn_buf, header_end + 4, len(conn_buf) - header_end - 4)
+
+    # Parse request line
+    let first_line_end = string.index_of(header_section, "\r\n")
+    let request_line = ""
+    let header_block = ""
+    if first_line_end < 0
+      request_line = header_section
+    else
+      request_line = substr(header_section, 0, first_line_end)
+      header_block = substr(header_section, first_line_end + 2, len(header_section) - first_line_end - 2)
+    end
+
+    let req_info = parse_request_line(request_line)
+    if req_info == nil
+      break
+    end
+
+    let headers = parse_headers(header_block)
+
+    # Read body if Content-Length present
+    let content_length = get_content_length(headers)
+    let body = ""
+    if content_length > 0
+      # We may have some body bytes already in after_headers
+      let body_buf = buf_new()
+      buf_push(body_buf, after_headers)
+      let have = len(after_headers)
+      while have < content_length
+        chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
+        if chunk == ""
+          break
+        end
+        buf_push(body_buf, chunk)
+        have = have + len(chunk)
+      end
+      let full_body = buf_str(body_buf)
+      if len(full_body) >= content_length
+        body = substr(full_body, 0, content_length)
+        conn_buf = substr(full_body, content_length, len(full_body) - content_length)
+      else
+        body = full_body
+        conn_buf = ""
+      end
+    else
+      conn_buf = after_headers
+    end
+
+    # Build request table
+    let parsed = url.parse(req_info.raw_path)
+    let cookies = parse_cookies(headers["Cookie"])
+
+    let req = {
+      method: req_info.method,
+      path: parsed.path,
+      query: parsed.query,
+      headers: headers,
+      body: body,
+      cookies: cookies,
+      params: {}
+    }
+
+    # Route match
+    let matched = router_ref.match(req.method, req.path)
+    let resp = nil
+    if matched != nil
+      req.params = matched.params
+      let result = pcall(fn()
+        matched.handler(req)
+      end)
+      if result.ok
+        resp = result.value
+      else
+        resp = server_error(nil)
+      end
+    else
+      resp = not_found(nil)
+    end
+
+    # Determine keep-alive
+    let connection_hdr = headers["Connection"]
+    if connection_hdr == nil
+      connection_hdr = headers["connection"]
+    end
+    let keep_alive = true
+    if connection_hdr != nil and string.lower(connection_hdr) == "close"
+      keep_alive = false
+    end
+
+    # Send response
+    let raw_resp = serialize_response(resp, keep_alive)
+    tcp_write(client_fd, raw_resp)
+
+    if not keep_alive
+      break
+    end
+  end
+
+  tcp_close(client_fd)
+end
+
+# ─── Server ───
+
+fn serve(router_ref, opts)
+  let port = 8080
+  let host = "0.0.0.0"
+  if opts != nil
+    if opts.port != nil
+      port = opts.port
+    end
+    if opts.host != nil
+      host = opts.host
+    end
+  end
+
+  let server_fd = tcp_listen(host, port)
+  let r = router_ref
+
+  let pid = spawn(fn()
+    while true
+      let client_fd = tcp_accept(server_fd)
+      let fd = client_fd
+      let rr = r
+      spawn(fn()
+        let result = pcall(fn()
+          handle_connection(fd, rr)
+        end)
+        if not result.ok
+          pcall(fn()
+            tcp_write(fd, serialize_response(server_error(nil), false))
+            tcp_close(fd)
+          end)
+        end
+      end)
+    end
+  end)
+
+  pid
+end
+
+export response, ok, html, json_response, redirect, not_found, bad_request, server_error, set_cookie, delete_cookie, html_escape, router, serve

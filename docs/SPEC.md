@@ -849,7 +849,7 @@ print(items[0])    # a
 
 `tcp_accept(socket)` — accepts an incoming connection on a listening socket. Returns the new connection's file descriptor as an integer. When called from a spawned process, yields to the scheduler on EAGAIN and resumes when a connection is ready. Raises an error on failure.
 
-`tcp_read(socket[, max_bytes])` — reads up to `max_bytes` bytes from a connected socket (default 4096). Returns the data as a string. Returns an empty string `""` when the remote end has closed the connection (EOF). When called from a spawned process, yields to the scheduler on EAGAIN and resumes when data is available.
+`tcp_read(socket[, max_bytes[, timeout_ms]])` — reads up to `max_bytes` bytes from a connected socket (default 4096). Returns the data as a string. Returns an empty string `""` when the remote end has closed the connection (EOF) or when the optional `timeout_ms` expires with no data available. When called from a spawned process, yields to the scheduler on EAGAIN and resumes when data is available or the timeout deadline is reached. The timeout is only supported from within spawned processes (the scheduler manages the deadline via the process's `deadline_ms` field).
 
 `tcp_write(socket, data)` — writes the string `data` to a connected socket. Writes all bytes (loops internally on partial writes). Returns the number of bytes written as an integer. When called from a spawned process, yields to the scheduler on EAGAIN and resumes when the socket is writable.
 
@@ -1039,6 +1039,41 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 - `sqlite.query(db, sql, params?)` — executes a parameterized query. `params` defaults to `[]`. Returns an array of row tables. Use `?` placeholders for bind parameters.
 - `sqlite.last_id(db)` — returns the last inserted row ID.
 - `sqlite.changes(db)` — returns the number of rows affected by the last mutation.
+
+`std/http` — exports `http` table. HTTP/1.1 server with routing and keep-alive. Depends on `std/string`, `std/url`, `std/mime`, `std/json`, `std/time`.
+
+**Response builders:**
+
+- `http.response(status, headers, body)` — generic response constructor. Returns `{status, headers, body}`.
+- `http.ok(body[, content_type])` — 200 response. Default content type: `"text/plain; charset=utf-8"`.
+- `http.html(body)` — 200 with `text/html; charset=utf-8`.
+- `http.json_response(data)` — 200 with `application/json`. Auto-encodes `data` via `json.encode`.
+- `http.redirect(url[, status])` — redirect response. Default status: 302.
+- `http.not_found([body])` — 404. Default body: `"Not Found"`.
+- `http.bad_request([body])` — 400. Default body: `"Bad Request"`.
+- `http.server_error([body])` — 500. Default body: `"Internal Server Error"`.
+
+**Router:**
+
+- `http.router()` — returns a router table with methods:
+  - `router.get(pattern, handler)`, `router.post(...)`, `router.put(...)`, `router.patch(...)`, `router.delete(...)` — register a route. Handler signature: `fn(req) → response table`.
+  - `router.static(url_prefix, dir_path)` — serve static files. Uses `std/mime` for content types. Prevents path traversal by normalizing paths and checking that they don't escape `dir_path`.
+- Route patterns: segments starting with `:` are parameters. `/users/:id` matches `/users/123` and sets `req.params.id = "123"`. First registered route wins.
+- Handler receives a request table: `{method, path, params, query, headers, body, cookies}`. `params` are extracted from route pattern, `query` is parsed from query string via `url.parse_query`, `cookies` are parsed from the `Cookie` header.
+
+**Cookies:**
+
+- `http.set_cookie(resp, name, value[, opts])` — returns new response with `Set-Cookie` header. `opts` table supports: `path` (default `"/"`), `http_only` (default `true`), `secure` (default `false`), `same_site` (default `"Lax"`), `max_age` (seconds), `expires` (epoch ms).
+- `http.delete_cookie(resp, name[, opts])` — sets cookie with `Max-Age=0`.
+
+**Security:**
+
+- `http.html_escape(str)` — escapes `&`, `<`, `>`, `"`, `'` to HTML entities. Use when interpolating user data into HTML.
+
+**Server:**
+
+- `http.serve(router[, opts])` — starts the HTTP server. Returns the acceptor pid. `opts` table: `port` (default 8080), `host` (default `"0.0.0.0"`).
+- Spawns one process per connection. Supports HTTP/1.1 keep-alive with a 30-second idle timeout (via `tcp_read` timeout). Handles `Connection: close`. Errors in handlers are caught by `pcall` and return 500.
 
 `std/supervisor` — exports `supervisor` table:
 
