@@ -415,70 +415,36 @@ let sig = crypto.hmac(secret, session_id)
 
 **Effort:** ~60 lines.
 
-## Phase 4: Demo Application
+## Phase 4: Demo Application -- DONE
 
-### HTMX CRUD App
+### Bookmark Manager (HTMX CRUD App)
 
-A todo-list (or contact book) app demonstrating the full stack.
+An HTMX-backed bookmark manager demonstrating the full Gem web stack.
 
 **Structure:**
 
 ```
-examples/crud_app/
+examples/bookmark_app/
   app.gem           # routes, handlers, server start
-  db.gem            # database setup, query helpers
   static/
-    index.html      # main page, loads HTMX
+    index.html      # main page, loads HTMX from CDN
     style.css       # minimal styling
 ```
 
 **Features:**
 
-- List all items (GET `/`)
-- Create item (POST `/items` via HTMX form)
-- Edit item inline (GET `/items/:id/edit` returns form fragment, PUT `/items/:id` saves)
-- Delete item (DELETE `/items/:id` via HTMX button)
-- SQLite persistence
-- HTML escaping on all user-provided content
-- Error handling (invalid input, missing items)
-- Request logging
+- List all bookmarks (GET `/bookmarks` returns HTML fragment)
+- Create bookmark (POST `/bookmarks` via HTMX form with `http.parse_form`)
+- Edit bookmark inline (GET `/bookmarks/:id/edit` returns edit form fragment, PUT `/bookmarks/:id` saves)
+- Delete bookmark (DELETE `/bookmarks/:id` via HTMX button)
+- Fetch title from URL (POST `/bookmarks/:id/fetch-title` via `std/request`, extracts `<title>` tag)
+- SQLite persistence with `created_at` timestamps
+- HTML escaping on all user-provided content via `http.html_escape`
+- Graceful error handling (bad URLs, missing bookmarks)
+- Request logging via `std/log`
+- Static file serving via `router.static`
 
-**app.gem sketch** (not real code, just to show the shape):
-
-```
-load "std/http"
-load "std/log"
-load "std/sqlite"
-
-let db = sqlite.open("todos.db")
-# ... create table ...
-
-let router = http.router()
-router.static("/static", "./static")
-
-router.get("/", fn(req)
-  let todos = sqlite.query(db, "SELECT * FROM todos ORDER BY id DESC")
-  http.html(render_todo_list(todos))
-end)
-
-router.post("/todos", fn(req)
-  let title = url.decode(req.body)  # form-encoded
-  sqlite.query(db, "INSERT INTO todos (title) VALUES (?)", [title])
-  let todos = sqlite.query(db, "SELECT * FROM todos ORDER BY id DESC")
-  http.html(render_todo_list(todos))
-end)
-
-router.delete("/todos/:id", fn(req)
-  sqlite.query(db, "DELETE FROM todos WHERE id = ?", [req.params.id])
-  http.ok("")
-end)
-
-http.serve(router, {port: 8080})
-```
-
-**index.html** loads HTMX from CDN, contains the initial page shell. All dynamic content is served as HTML fragments from Gem.
-
-**Effort:** ~200 lines Gem + ~50 lines HTML/CSS.
+**Dependencies:** `std/http`, `std/sqlite`, `std/request`, `std/url`, `std/json`, `std/log`, `std/time`, `std/string`.
 
 ## Summary
 

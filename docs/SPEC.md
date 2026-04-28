@@ -1095,6 +1095,10 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 - `http.set_cookie(resp, name, value[, opts])` — returns new response with `Set-Cookie` header. `opts` table supports: `path` (default `"/"`), `http_only` (default `true`), `secure` (default `false`), `same_site` (default `"Lax"`), `max_age` (seconds), `expires` (epoch ms).
 - `http.delete_cookie(resp, name[, opts])` — sets cookie with `Max-Age=0`.
 
+**Form parsing:**
+
+- `http.parse_form(body)` — parses a URL-encoded form body (`key=value&key=value`) into a table. Convenience wrapper around `url.parse_query(body)` — form-encoded bodies use the same percent-encoded format as query strings.
+
 **Security:**
 
 - `http.html_escape(str)` — escapes `&`, `<`, `>`, `"`, `'` to HTML entities. Use when interpolating user data into HTML.

@@ -139,6 +139,12 @@ fn parse_cookies(cookie_header)
   cookies
 end
 
+# ─── Form parsing ───
+
+fn parse_form(body)
+  url.parse_query(body)
+end
+
 # ─── Security ───
 
 fn html_escape(s)
@@ -587,4 +593,4 @@ fn serve(router_ref, opts = {})
 end
 
 export response, ok, html, json_response, redirect, not_found, bad_request,
-  server_error, set_cookie, delete_cookie, html_escape, router, serve
+  server_error, set_cookie, delete_cookie, parse_form, html_escape, router, serve

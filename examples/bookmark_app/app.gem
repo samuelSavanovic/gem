@@ -1,0 +1,230 @@
+# Bookmark Manager — HTMX-backed CRUD app demonstrating the Gem web stack
+
+load "std/http"
+load "std/sqlite"
+load "std/request"
+load "std/url"
+load "std/json"
+load "std/log"
+load "std/time"
+load "std/string"
+
+# ─── Database setup ───
+
+let db = sqlite.open("bookmarks.db")
+sqlite.exec(db, """
+  CREATE TABLE IF NOT EXISTS bookmarks (
+    id INTEGER PRIMARY KEY,
+    url TEXT NOT NULL,
+    title TEXT NOT NULL,
+    tags TEXT,
+    created_at INTEGER
+  )
+""")
+
+# ─── HTML rendering helpers ───
+
+let esc = fn(s)
+  if s == nil
+    return ""
+  end
+  http.html_escape(to_string(s))
+end
+
+let format_date = fn(ms)
+  if ms == nil
+    return ""
+  end
+  time.format(ms, "%Y-%m-%d %H:%M")
+end
+
+let render_bookmark_row = fn(b)
+  let buf = buf_new()
+  buf_push(buf, "<tr id='bookmark-" + to_string(b.id) + "'>")
+  buf_push(buf, "<td><a href='" + esc(b.url) + "' target='_blank'>" + esc(b.url) + "</a></td>")
+  buf_push(buf, "<td id='title-" + to_string(b.id) + "'>" + esc(b.title) + "</td>")
+  buf_push(buf, "<td>" + esc(b.tags) + "</td>")
+  buf_push(buf, "<td>" + format_date(b.created_at) + "</td>")
+  buf_push(buf, "<td class='actions'>")
+  buf_push(buf, "<button hx-post='/bookmarks/" + to_string(b.id) + "/fetch-title' hx-target='#title-" + to_string(b.id) + "' hx-swap='innerHTML'>Fetch Title</button>")
+  buf_push(buf, " <button hx-get='/bookmarks/" + to_string(b.id) + "/edit' hx-target='#bookmarks' hx-swap='innerHTML'>Edit</button>")
+  buf_push(buf, " <button hx-delete='/bookmarks/" + to_string(b.id) + "' hx-target='#bookmarks' hx-swap='innerHTML' hx-confirm='Delete this bookmark?'>Delete</button>")
+  buf_push(buf, "</td>")
+  buf_push(buf, "</tr>")
+  buf_str(buf)
+end
+
+let render_bookmark_list = fn(bookmarks)
+  let buf = buf_new()
+  buf_push(buf, "<table>")
+  buf_push(buf, "<thead><tr><th>URL</th><th>Title</th><th>Tags</th><th>Created</th><th>Actions</th></tr></thead>")
+  buf_push(buf, "<tbody>")
+  let i = 0
+  while i < len(bookmarks)
+    buf_push(buf, render_bookmark_row(bookmarks[i]))
+    i += 1
+  end
+  buf_push(buf, "</tbody></table>")
+  if len(bookmarks) == 0
+    buf_push(buf, "<p class='empty'>No bookmarks yet. Add one above!</p>")
+  end
+  buf_str(buf)
+end
+
+let render_edit_form = fn(b)
+  let tag_val = ""
+  if b.tags != nil
+    tag_val = esc(b.tags)
+  end
+  let buf = buf_new()
+  buf_push(buf, "<form hx-put='/bookmarks/" + to_string(b.id) + "' hx-target='#bookmarks' hx-swap='innerHTML' class='edit-form'>")
+  buf_push(buf, "<h3>Editing bookmark #" + to_string(b.id) + "</h3>")
+  buf_push(buf, "<label>URL <input type='text' name='url' value='" + esc(b.url) + "' required></label>")
+  buf_push(buf, "<label>Title <input type='text' name='title' value='" + esc(b.title) + "' required></label>")
+  buf_push(buf, "<label>Tags <input type='text' name='tags' value='" + tag_val + "' placeholder='comma-separated'></label>")
+  buf_push(buf, "<div class='edit-actions'><button type='submit'>Save</button> <button hx-get='/bookmarks' hx-target='#bookmarks' hx-swap='innerHTML'>Cancel</button></div>")
+  buf_push(buf, "</form>")
+  buf_str(buf)
+end
+
+let get_all_bookmarks = fn()
+  sqlite.query(db, "SELECT * FROM bookmarks ORDER BY created_at DESC", [])
+end
+
+# ─── Extract title from HTML ───
+
+let extract_title = fn(html_body)
+  let lower = string.lower(html_body)
+  let start = string.index_of(lower, "<title>")
+  if start < 0
+    return nil
+  end
+  let title_start = start + 7
+  let end_pos = string.index_of(lower, "</title>")
+  if end_pos < 0
+    return nil
+  end
+  if end_pos <= title_start
+    return nil
+  end
+  string.trim(substr(html_body, title_start, end_pos - title_start))
+end
+
+# ─── Routes ───
+
+let router = http.router()
+
+router.static("/static", "./static")
+
+router.get("/", fn(req)
+  log.info("{req.method} {req.path}")
+  let content = read_file("./static/index.html")
+  http.html(content)
+end)
+
+router.get("/bookmarks", fn(req)
+  log.info("{req.method} {req.path}")
+  let bookmarks = get_all_bookmarks()
+  http.html(render_bookmark_list(bookmarks))
+end)
+
+router.post("/bookmarks", fn(req)
+  log.info("{req.method} {req.path}")
+  let form = http.parse_form(req.body)
+  let bookmark_url = form.url
+  let title = form.title
+  let tags = form.tags
+  if bookmark_url == nil or bookmark_url == ""
+    return http.bad_request("URL is required")
+  end
+  if title == nil or title == ""
+    title = bookmark_url
+  end
+  if tags == nil
+    tags = ""
+  end
+  let now = epoch_ms()
+  sqlite.query(db, "INSERT INTO bookmarks (url, title, tags, created_at) VALUES (?, ?, ?, ?)", [bookmark_url, title, tags, now])
+  log.info("Created bookmark: {title}")
+  let bookmarks = get_all_bookmarks()
+  http.html(render_bookmark_list(bookmarks))
+end)
+
+router.get("/bookmarks/:id/edit", fn(req)
+  log.info("{req.method} {req.path}")
+  let id = to_int(req.params.id)
+  let rows = sqlite.query(db, "SELECT * FROM bookmarks WHERE id = ?", [id])
+  if len(rows) == 0
+    return http.not_found("Bookmark not found")
+  end
+  http.html(render_edit_form(rows[0]))
+end)
+
+router.put("/bookmarks/:id", fn(req)
+  log.info("{req.method} {req.path}")
+  let id = to_int(req.params.id)
+  let form = http.parse_form(req.body)
+  let bookmark_url = form.url
+  let title = form.title
+  let tags = form.tags
+  if bookmark_url == nil or bookmark_url == ""
+    return http.bad_request("URL is required")
+  end
+  if title == nil or title == ""
+    title = bookmark_url
+  end
+  if tags == nil
+    tags = ""
+  end
+  sqlite.query(db, "UPDATE bookmarks SET url = ?, title = ?, tags = ? WHERE id = ?", [bookmark_url, title, tags, id])
+  log.info("Updated bookmark {id}")
+  let bookmarks = get_all_bookmarks()
+  http.html(render_bookmark_list(bookmarks))
+end)
+
+router.delete("/bookmarks/:id", fn(req)
+  log.info("{req.method} {req.path}")
+  let id = to_int(req.params.id)
+  sqlite.query(db, "DELETE FROM bookmarks WHERE id = ?", [id])
+  log.info("Deleted bookmark {id}")
+  let bookmarks = get_all_bookmarks()
+  http.html(render_bookmark_list(bookmarks))
+end)
+
+router.post("/bookmarks/:id/fetch-title", fn(req)
+  log.info("{req.method} {req.path}")
+  let id = to_int(req.params.id)
+  let rows = sqlite.query(db, "SELECT * FROM bookmarks WHERE id = ?", [id])
+  if len(rows) == 0
+    return http.not_found("Bookmark not found")
+  end
+  let bookmark = rows[0]
+  let result = pcall(fn()
+    let resp = request.get(bookmark.url)
+    if resp.status >= 200 and resp.status < 400
+      let title = extract_title(resp.body)
+      if title != nil and len(title) > 0
+        sqlite.query(db, "UPDATE bookmarks SET title = ? WHERE id = ?", [title, id])
+        log.info("Fetched title for bookmark {id}: {title}")
+        return title
+      end
+    end
+    nil
+  end)
+  if result.ok and result.value != nil
+    http.html(esc(result.value))
+  else
+    log.warn("Could not fetch title for bookmark {id}")
+    http.html("<em>Could not fetch title</em>")
+  end
+end)
+
+# ─── Start server ───
+
+let port = 8080
+let server_pid = http.serve(router, {port: port})
+log.info("Bookmark manager listening on http://localhost:{port}")
+
+spawn(fn()
+  sleep(999999999)
+end)
