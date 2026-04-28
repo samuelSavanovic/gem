@@ -165,6 +165,7 @@ fn make_codegen(source_name)
     spawn_link: "gem_spawn_link_builtin",
     process_flag: "gem_process_flag_builtin",
     make_ref: "gem_make_ref_builtin",
+    sleep: "gem_sleep_builtin",
     send_after: "gem_send_after_builtin",
     cancel_timer: "gem_cancel_timer_builtin",
     process_info: "gem_process_info_builtin",
@@ -788,6 +789,29 @@ fn make_codegen(source_name)
 
   # ─── compile_table ──
 
+  let is_int_key = fn(s)
+    let slen = len(s)
+    if slen == 0
+      return false
+    end
+    let start = 0
+    if s[0] == "-"
+      start = 1
+      if slen == 1
+        return false
+      end
+    end
+    let i = start
+    while i < slen
+      let c = ord(s, i)
+      if c < 48 or c > 57
+        return false
+      end
+      i += 1
+    end
+    true
+  end
+
   compile_table = fn(node)
     let entries = node.entries
     let t = tmp()
@@ -795,9 +819,13 @@ fn make_codegen(source_name)
     buf_push(b, "    GemVal {t} = gem_table_new();\n")
     for entry in entries
       let val_r = compile_expr(entry.value)
-      let escaped = escape_c_string(entry.key)
       buf_push(b, val_r.setup)
-      buf_push(b, "    gem_table_set({t}, gem_string(\"{escaped}\"), {val_r.expr});\n")
+      if is_int_key(entry.key)
+        buf_push(b, "    gem_table_set({t}, gem_int({entry.key}), {val_r.expr});\n")
+      else
+        let escaped = escape_c_string(entry.key)
+        buf_push(b, "    gem_table_set({t}, gem_string(\"{escaped}\"), {val_r.expr});\n")
+      end
     end
     {expr: t, setup: buf_str(b)}
   end

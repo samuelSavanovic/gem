@@ -452,7 +452,9 @@ The existing `receive()` function call continues to work unchanged — it always
 
 **Process Control**
 
-`kill(pid, reason)` terminates a process immediately. The process is marked dead, its DOWN messages are delivered to monitors, and its registered name (if any) is removed. Returns `true` if the process was alive, `nil` otherwise.
+`kill(pid, reason)` sends an exit signal to a process. If the target has `trap_exit` enabled, an `{tag: "EXIT", pid: sender_pid, reason: reason}` message is delivered to its mailbox instead of terminating it. Otherwise, the process is terminated immediately: marked dead, DOWN messages delivered to monitors, registered name removed, and exit propagated to linked processes. Returns `true` if the process was alive, `nil` otherwise.
+
+`sleep(ms)` suspends the current process for `ms` milliseconds. Must be called inside a spawned process (not the main process). The scheduler resumes the process after the deadline expires.
 
 `time_ms()` returns the current monotonic time in milliseconds (int). Useful for timeouts, benchmarks, and restart intensity tracking. Not suitable for wall-clock formatting — use `epoch_ms()` for that.
 
@@ -756,6 +758,8 @@ print(items[0])    # a
 `spawn_link(fn)` — atomically spawns a new process and links it to the caller. No race window between spawn and link. Returns the new pid.
 
 `process_flag("trap_exit", bool)` — sets the `trap_exit` flag on the current process. Returns the previous value (bool). When `trap_exit` is `true`, exit signals from linked processes are converted to `{tag: "EXIT", pid: <pid>, reason: <reason>}` messages in the process's mailbox instead of killing the process.
+
+`sleep(ms)` — suspends the current process for `ms` milliseconds. Must be called inside a spawned process.
 
 `send_after(pid, msg, delay_ms)` — schedules `msg` to be delivered to `pid` after `delay_ms` milliseconds. Returns a unique ref identifying the timer. The timer fires from the scheduler, not the calling process. Messages to dead processes are silently dropped.
 

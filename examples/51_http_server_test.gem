@@ -54,12 +54,8 @@ spawn() do
   let pass = 0
   let fail = 0
 
-  http.serve(tr, {port: port})
-  send_after(self(), "go", 100)
-  receive
-  when msg
-    nil
-  end
+  let server_pid = http.serve(tr, {port: port})
+  sleep(100)
 
   # Helper to make HTTP requests
   let make_request = fn(method, path, body, extra_headers)
@@ -260,9 +256,9 @@ spawn() do
 
   # ─── Summary ───
 
+  kill(server_pid, "shutdown")
   print("Results: {pass} passed, {fail} failed")
   if fail > 0
     exit(1)
   end
-  exit(0)
 end

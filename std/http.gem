@@ -363,37 +363,29 @@ end
 
 # ─── Response serialization ───
 
+let STATUS_TEXT = {
+  200: "OK",
+  201: "Created",
+  204: "No Content",
+  301: "Moved Permanently",
+  302: "Found",
+  304: "Not Modified",
+  400: "Bad Request",
+  401: "Unauthorized",
+  403: "Forbidden",
+  404: "Not Found",
+  405: "Method Not Allowed",
+  500: "Internal Server Error",
+  502: "Bad Gateway",
+  503: "Service Unavailable"
+}
+
 fn status_text(code)
-  if code == 200
-    return "OK"
-  elif code == 201
-    return "Created"
-  elif code == 204
-    return "No Content"
-  elif code == 301
-    return "Moved Permanently"
-  elif code == 302
-    return "Found"
-  elif code == 304
-    return "Not Modified"
-  elif code == 400
-    return "Bad Request"
-  elif code == 401
-    return "Unauthorized"
-  elif code == 403
-    return "Forbidden"
-  elif code == 404
-    return "Not Found"
-  elif code == 405
-    return "Method Not Allowed"
-  elif code == 500
-    return "Internal Server Error"
-  elif code == 502
-    return "Bad Gateway"
-  elif code == 503
-    return "Service Unavailable"
+  let text = STATUS_TEXT[code]
+  if text == nil
+    return "Unknown"
   end
-  "Unknown"
+  text
 end
 
 fn serialize_response(resp, keep_alive)
@@ -611,4 +603,5 @@ fn serve(router_ref, opts)
   pid
 end
 
-export response, ok, html, json_response, redirect, not_found, bad_request, server_error, set_cookie, delete_cookie, html_escape, router, serve
+export response, ok, html, json_response, redirect, not_found, bad_request,
+  server_error, set_cookie, delete_cookie, html_escape, router, serve

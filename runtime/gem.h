@@ -431,6 +431,7 @@ GemVal gem_unlink_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_spawn_link_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_process_flag_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_make_ref_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_sleep_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_send_after_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_cancel_timer_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_process_info_builtin(void *_env, GemVal *args, int argc);

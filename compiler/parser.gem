@@ -750,6 +750,10 @@ fn make_parser(tokens, source, file)
         else_body = [parse_stmt()]
       elif peek().type == "else"
         advance()
+        if peek().type == "if"
+          let err_tok = peek()
+          compile_error(source, file, err_tok.line, err_tok.col, 2, "use 'elif' instead of 'else if'", "Gem uses 'elif' for chained conditions")
+        end
         else_body = parse_body()
       end
       # Only consume "end" for the outermost if (elif branches don't have their own end)
@@ -953,6 +957,7 @@ fn make_parser(tokens, source, file)
       let names = [expect("NAME").value]
       while peek().type == ","
         advance()
+        skip_nl()
         push(names, expect("NAME").value)
       end
       return make_export(names)

@@ -866,13 +866,22 @@ GemVal gem_process_flag_builtin(void *_env, GemVal *args, int argc) {
 GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2 || args[0].type != VAL_INT || args[1].type != VAL_STRING) {
-        gem_error("exit: expected (pid, reason)");
+        gem_error("kill: expected (pid, reason)");
     }
     int pid = (int)args[0].ival;
     const char *reason = args[1].sval;
     if (pid < 0 || pid >= GEM_MAX_PROCS) return GEM_NIL;
     GemProcess *proc = &gem_proc_table[pid];
     if (proc->state == GEM_PROC_DEAD || proc->state == GEM_PROC_FREE) return GEM_NIL;
+
+    if (proc->trap_exit) {
+        GemVal msg = gem_table_new();
+        gem_table_set(msg, gem_string("tag"), gem_string("EXIT"));
+        gem_table_set(msg, gem_string("pid"), gem_int(gem_current_pid));
+        gem_table_set(msg, gem_string("reason"), gem_string(reason));
+        gem_send_msg(pid, msg);
+        return gem_bool(1);
+    }
 
     proc->exit_reason = reason;
     if (proc->coro) {
@@ -884,6 +893,27 @@ GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
     gem_unregister_name_for_pid(pid);
     gem_propagate_exit(pid, reason);
     return gem_bool(1);
+}
+
+/* ─── Sleep ─── */
+
+GemVal gem_sleep_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_INT) {
+        gem_error("sleep: expected (ms)");
+    }
+    int64_t delay_ms = args[0].ival;
+    if (gem_current_pid < 0) {
+        gem_error("sleep: must be called inside a spawned process");
+    }
+    GemProcess *proc = &gem_proc_table[gem_current_pid];
+    proc->deadline_ms = gem_now_ms() + delay_ms;
+    proc->timed_out = 0;
+    proc->state = GEM_PROC_WAITING;
+    mco_yield(proc->coro);
+    proc->timed_out = 0;
+    proc->deadline_ms = -1;
+    return GEM_NIL;
 }
 
 /* ─── Timer API ─── */
