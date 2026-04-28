@@ -15,6 +15,8 @@ std/mime          std/url           C: time builtins
 
 C: sqlite builtins → std/sqlite
 C: crypto builtins → std/crypto
+
+std/url + TCP builtins → std/request
 ```
 
 Build order follows the DAG — leaves first, dependents after.
@@ -283,6 +285,62 @@ This is explicit, composable, and doesn't require framework machinery. A `http.u
 
 **Effort:** ~400 lines (up from ~300 — buffered reader + keep-alive loop + timeout handling).
 
+### std/request
+
+HTTP client for making outbound requests. Pure Gem, no new C builtins. Depends on: TCP builtins, `std/url`, `std/json` (exists).
+
+**Exports:**
+
+- `request.get(url, opts?)` → response table. `opts` table supports: `headers` (table of header name → value).
+- `request.post(url, opts?)` → response table. `opts` table supports: `headers`, `body` (string).
+- `request.put(url, opts?)` → response table. Same as post.
+- `request.patch(url, opts?)` → response table. Same as post.
+- `request.delete(url, opts?)` → response table. Same as get.
+- `request.request(method, url, opts?)` → response table. Generic method for full control.
+
+**Response table shape:** `{status: 200, headers: {"Content-Type": "application/json", ...}, body: "..."}`.
+
+**URL parsing:** split `http://host:port/path?query` into components. Default port 80. Only HTTP (no TLS — reverse proxy or external services on HTTP are fine for v1).
+
+**Request lifecycle:**
+
+1. Parse URL into host, port, path+query.
+2. `tcp_connect(host, port)`.
+3. Build HTTP/1.1 request: method, path, `Host` header, `Connection: close` (no keep-alive in v1), `Content-Length` if body present, user headers.
+4. `tcp_write` the request.
+5. Read response: buffer reads until `\r\n\r\n` (end of headers). Parse status line and headers. Read body based on `Content-Length` or read until connection close.
+6. `tcp_close`, return response table.
+
+**Chunked transfer encoding:** v1 sends `Connection: close` to avoid chunked responses from most servers. If a server sends chunked anyway, fall back to reading until EOF. Proper chunked parsing is a v2 concern (add to OPTIMIZATIONS.md).
+
+**No HTTPS:** TLS requires a crypto library (OpenSSL/LibreSSL). Out of scope. For APIs that require HTTPS, users can curl via `exec` or go through a local proxy. Document this limitation clearly.
+
+**Usage example:**
+
+```
+load "std/request"
+load "std/json"
+
+# Simple GET
+let resp = request.get("http://api.example.com/data")
+let data = json.decode(resp.body)
+
+# POST with JSON body
+let resp = request.post("http://api.example.com/items", {
+  headers: {"Content-Type": "application/json"},
+  body: json.encode({name: "widget", price: 9.99})
+})
+
+# Fetch weather, store in SQLite
+load "std/sqlite"
+let db = sqlite.open("weather.db")
+let weather = json.decode(request.get("http://api.weather.example/current").body)
+sqlite.query(db, "INSERT INTO readings (temp, humidity) VALUES (?, ?)",
+  [weather.temp, weather.humidity])
+```
+
+**Effort:** ~100 lines.
+
 ### std/sqlite -- DONE
 
 Thin Gem wrapper over the Phase 2 C builtins. Provides a slightly friendlier API.
@@ -435,9 +493,10 @@ http.serve(router, {port: 8080})
 | std/log | Pure Gem | std/time | ~50 | 3 |
 | std/http | Pure Gem | std/url, std/mime, std/json, std/time, std/string | ~400 | 3 |
 | std/sqlite | Pure Gem | sqlite builtins | ~40 | 3 |
+| std/request | Pure Gem | TCP builtins, std/url | ~100 | 3 |
 | std/crypto | Pure Gem | crypto builtins | ~60 | 3 |
 | CRUD demo | Gem + HTML | everything above | ~250 | 4 |
-| **Total** | | | **~1620** | |
+| **Total** | | | **~1720** | |
 
 ## Not in Scope (v2+)
 
