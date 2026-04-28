@@ -265,7 +265,7 @@ end
 Pattern rules:
 - `{key: pattern, ...}` — checks target is a table, each key exists, and recursively matches each value against its sub-pattern. Extra keys in the target are ignored (partial match).
 - `[p1, p2, ...]` — checks target is a table with `len(target) == N`, then recursively matches each element.
-- A literal (int, float, string, bool, nil) in pattern position matches by equality.
+- A literal (int, float, string, bool) in pattern position matches by equality. `nil` is also a literal — `when nil` matches only `nil`, it does not bind a variable.
 - A name in pattern position is a variable binding — always matches and binds the matched value.
 - A bare name after `when` (e.g., `when x`) is a catch-all that binds the entire match target.
 - Patterns compose recursively: `{users: [{name: n}]}` works.
@@ -276,6 +276,8 @@ Destructuring patterns desugar in the parser to condition checks + variable bind
 `elif` desugars to nested `if/else` at parse time — no new AST nodes. One `end` closes the entire chain.
 
 `break` exits the innermost loop (`while` or `for`). `continue` skips to the next iteration.
+
+**`break`, `continue`, and `return` inside blocks:** A `do`/`end` block is a closure (anonymous function). `return` inside a block returns from the block, not from the enclosing function — the iteration function receives the return value as the result of calling the block. `break` and `continue` inside a block only affect loops *within* the block itself; they cannot break or continue a loop in the caller.
 
 **For Loops**
 
@@ -336,6 +338,8 @@ loop(10000000, 0)         # works — would overflow without TCO
 ```
 
 TCO applies to named functions (`fn name(...)`) without rest or block parameters. Anonymous functions and mutual recursion are not optimized. Non-tail calls (where the result is used in a further expression, e.g. `n * f(n-1)`) remain normal recursive calls.
+
+**Important:** only direct self-recursion is optimized. If `fn A` calls `fn B` which calls `fn A`, neither call is a TCO candidate — both grow the stack. Write long-running loops as direct self-recursion or use `while`. Splitting a loop body into helper functions that recurse back to the main loop will leak stack frames under sustained load.
 
 **Green Threads and Message Passing**
 
@@ -435,6 +439,8 @@ let p = whereis("worker")  # returns pid or nil
 
 `register(name, pid)` associates a string name with a pid. Errors if the name is already taken. `whereis(name)` returns the pid for a name, or `nil` if not registered. `send` accepts either a pid (int) or a registered name (string). When a process dies, its name is automatically unregistered.
 
+`send` edge cases: sending to a dead pid silently drops the message. Sending to a registered name that does not exist raises an error.
+
 **Selective Receive**
 
 ```
@@ -531,6 +537,8 @@ extern include "stdio.h"
 `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `not`, `in`
 
 `x in tbl` — membership test. For arrays (integer-indexed tables with no string keys): returns `true` if `x` equals any value in the array (linear scan). For string-keyed tables: returns `true` if `x` is a key in the table (same as `has_key(tbl, x)`). Precedence is at the comparison level (same as `==`, `<`, etc.).
+
+**Equality semantics:** `==` compares by value for primitives (int, float, string, bool, nil) and by identity (reference) for tables, functions, and refs. Two distinct tables with identical contents are not equal: `{a: 1} == {a: 1}` is `false`. The same table reference compared to itself is `true`.
 
 **Assignment Operators**
 
@@ -642,6 +650,8 @@ print("wrapped: {wrap("inner")}")
 
 `error(msg)` prints the message with file and line info to stderr, followed by a call stack trace showing each Gem function frame, and halts (`exit(1)`). Runtime type errors (e.g. `1 + "a"`) also print a stack trace with the actual types involved (e.g. `type error in +: got string and int`). The compiler reports the first error and stops.
 
+**Inside spawned processes**, `error()` does not terminate the program. Each spawned process has an implicit error boundary — if an unhandled error occurs, the process dies but other processes continue. The error is captured, DOWN messages are delivered to monitors, EXIT signals propagate to linked processes, and the scheduler continues. `pcall` inside a spawned process still works — it catches errors locally before the process-level boundary. See Process Monitoring for details.
+
 **Compile-time error format**: the compiler produces Rust-style diagnostics to stderr with source context, caret highlighting, and optional hints:
 
 ```
@@ -703,7 +713,7 @@ end)
 
 `error(msg)` — prints the message with file and line info to stderr, prints a call stack trace, and halts (`exit(1)`).
 
-`len(v)` — returns the length of a string or the number of entries in a table.
+`len(v)` — returns the length of a string or the total number of entries in a table (both integer-keyed and string-keyed). `len({a: 1, b: 2})` returns 2. `len([10, 20, 30])` returns 3.
 
 `type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`, `"ref"`.
 
@@ -920,6 +930,8 @@ join(parts, ",")         # error — join was not imported
 ```
 
 All three `load` forms use the same two-step path resolution. When a module has already been loaded by the program, re-importing it skips re-parsing but still creates the requested bindings (table, alias, or selective).
+
+**Circular imports** are not detected — the compiler tracks loaded paths and reuses cached modules. If module A loads B and B loads A, the second load of A returns the cached (possibly incomplete) module. In practice this means circular dependencies may see missing exports. Avoid circular imports; restructure shared code into a third module.
 
 **Standard Library (std/)**
 
