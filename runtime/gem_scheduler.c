@@ -962,6 +962,22 @@ GemVal gem_cancel_timer_builtin(void *_env, GemVal *args, int argc) {
 
 /* ─── Process Introspection ─── */
 
+GemVal gem_processes_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env; (void)args; (void)argc;
+    GemVal list = gem_table_new();
+    GemTable *t = list.table;
+    for (int i = 0; i < GEM_MAX_PROCS; i++) {
+        if (gem_proc_table[i].state != GEM_PROC_FREE &&
+            gem_proc_table[i].state != GEM_PROC_DEAD) {
+            if (t->len >= t->cap) gem_table_grow(t);
+            t->keys[t->len] = gem_int(t->len);
+            t->vals[t->len] = gem_int(i);
+            t->len++;
+        }
+    }
+    return list;
+}
+
 GemVal gem_process_info_builtin(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1 || args[0].type != VAL_INT) {

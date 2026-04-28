@@ -168,6 +168,7 @@ fn make_codegen(source_name)
     sleep: "gem_sleep_builtin",
     send_after: "gem_send_after_builtin",
     cancel_timer: "gem_cancel_timer_builtin",
+    processes: "gem_processes_builtin",
     process_info: "gem_process_info_builtin",
     read_file: "gem_read_file_fn",
     write_file: "gem_write_file_fn",

@@ -788,6 +788,8 @@ print(items[0])    # a
 
 `cancel_timer(ref)` — cancels a pending timer by ref. Returns `true` if cancelled, `false` if already fired or not found.
 
+`processes()` — returns a list of all live process pids (excludes free and dead processes).
+
 `process_info(pid)` — returns a table with process metadata: `state`, `mailbox_len`, `links`, `monitors`, `trap_exit`, `exit_reason`. Returns `nil` for invalid/free pids.
 
 `read_file(path)` — reads the entire file at `path` and returns its contents as a string. Opens in binary mode (no newline translation). Raises an error if the file cannot be opened.
