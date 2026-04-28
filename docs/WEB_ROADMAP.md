@@ -121,7 +121,7 @@ Call `sodium_init()` once during runtime initialization (in `gem_init` or simila
 - `crypto_verify_password(hash, password)` → Bool. `extern blocking fn`. Verifies a password against a hash from `crypto_hash_password`. Wraps `crypto_pwhash_str_verify`. Timing-safe.
 - `crypto_hmac(key, message)` → String. `extern fn`. HMAC-SHA-512-256. Returns hex-encoded tag. Wraps `crypto_auth`. Key must be 64 hex chars (32 bytes).
 - `crypto_hmac_verify(key, message, tag)` → Bool. `extern fn`. Verifies HMAC tag. Timing-safe. Wraps `crypto_auth_verify`.
-- `crypto_generic_hash(message, key?)` → String. `extern fn`. BLAKE2b hash, returns hex. Optional key for keyed hashing. Wraps `crypto_generichash`.
+- `crypto_generic_hash(message, key = nil)` → String. `extern fn`. BLAKE2b hash, returns hex. Pass a key for keyed hashing. Wraps `crypto_generichash`.
 - `crypto_constant_time_eq(a, b)` → Bool. `extern fn`. Timing-safe string comparison. Wraps `sodium_memcmp`. Both strings must be equal length (returns false otherwise).
 - `crypto_base64_encode(hex_str)` → String. `extern fn`. Converts hex-encoded binary to base64. Wraps `sodium_hex2bin` + `sodium_bin2base64`.
 - `crypto_base64_decode(b64_str)` → String. `extern fn`. Converts base64 to hex-encoded binary. Wraps `sodium_base642bin` + `sodium_bin2hex`.
@@ -141,9 +141,9 @@ Higher-level time formatting built on the Phase 2 C builtins. Depends on: `forma
 - `time.now()` → Int. Alias for `epoch_ms()`. Wall-clock milliseconds since Unix epoch.
 - `time.format(ms, fmt)` → String. UTC formatting, wraps `format_time`.
 - `time.format_local(ms, fmt)` → String. Local time, wraps `format_time_local`.
-- `time.http_date(ms?)` → String. RFC 7231 format: `"Mon, 28 Apr 2026 14:30:00 GMT"`. Uses `ms` if given, otherwise `time_ms()`. Needed for HTTP `Date` header and cookie `Expires`.
-- `time.iso8601(ms?)` → String. `"2026-04-28T14:30:00Z"`. Default format for logging and APIs.
-- `time.date(ms?)` → String. `"2026-04-28"`. Calendar date only.
+- `time.http_date(ms = epoch_ms())` → String. RFC 7231 format: `"Mon, 28 Apr 2026 14:30:00 GMT"`. Defaults to current time. Needed for HTTP `Date` header and cookie `Expires`.
+- `time.iso8601(ms = epoch_ms())` → String. `"2026-04-28T14:30:00Z"`. Default format for logging and APIs.
+- `time.date(ms = epoch_ms())` → String. `"2026-04-28"`. Calendar date only.
 
 **Design decision:** `time.now()` returns wall-clock epoch ms (via `epoch_ms()`), not monotonic ms. `time_ms()` remains monotonic for timeouts and benchmarks. `format_time`/`format_time_local` require epoch ms, so `time.now()` gives the right value for formatting.
 
@@ -182,13 +182,13 @@ This absorbs and generalizes the existing `examples/http_server/server.gem` code
 **Exports — Response builders:**
 
 - `http.response(status, headers, body)` → response table. Generic response constructor. `headers` is a table of header name → value.
-- `http.ok(body, content_type?)` → 200 response. Default content type: `"text/plain"`.
+- `http.ok(body, content_type = "text/plain; charset=utf-8")` → 200 response.
 - `http.html(body)` → 200 with `text/html; charset=utf-8`.
 - `http.json(data)` → 200 with `application/json`. Auto-encodes `data` via `json.encode`.
-- `http.redirect(url, status?)` → 301/302 redirect. Default status: 302.
-- `http.not_found(body?)` → 404. Default body: `"Not Found"`.
-- `http.bad_request(body?)` → 400.
-- `http.error(body?)` → 500. Default body: `"Internal Server Error"`.
+- `http.redirect(url, status = 302)` → 301/302 redirect.
+- `http.not_found(body = "Not Found")` → 404.
+- `http.bad_request(body = "Bad Request")` → 400.
+- `http.server_error(body = "Internal Server Error")` → 500.
 
 **Response table shape:** `{status: 200, headers: {"Content-Type": "text/html"}, body: "<h1>Hello</h1>"}`. The server serializes this to HTTP/1.1 wire format. Users can also build this table manually for full control.
 
@@ -227,8 +227,8 @@ This absorbs and generalizes the existing `examples/http_server/server.gem` code
 
 **Exports — Cookies:**
 
-- `http.set_cookie(resp, name, value, opts?)` → new response with `Set-Cookie` header appended. `opts` table supports: `path` (string, default `"/"`), `http_only` (bool, default `true`), `secure` (bool, default `false` — reverse proxy handles TLS), `same_site` (string: `"Strict"`, `"Lax"`, `"None"`, default `"Lax"`), `max_age` (int, seconds), `expires` (int, epoch ms — formatted via `std/time`).
-- `http.delete_cookie(resp, name, opts?)` → sets cookie with `Max-Age=0`.
+- `http.set_cookie(resp, name, value, opts = {})` → new response with `Set-Cookie` header appended. `opts` table supports: `path` (string, default `"/"`), `http_only` (bool, default `true`), `secure` (bool, default `false` — reverse proxy handles TLS), `same_site` (string: `"Strict"`, `"Lax"`, `"None"`, default `"Lax"`), `max_age` (int, seconds), `expires` (int, epoch ms — formatted via `std/time`).
+- `http.delete_cookie(resp, name, opts = {})` → sets cookie with `Max-Age=0`.
 
 Cookie parsing (request side) is internal — the server parses the `Cookie` header and populates `req.cookies` automatically.
 
@@ -238,7 +238,7 @@ Cookie parsing (request side) is internal — the server parses the `Cookie` hea
 
 **Exports — Server:**
 
-- `http.serve(router, opts?)` → pid. Starts the HTTP server. Spawns an acceptor process that listens for connections and dispatches to the router. Returns the acceptor pid (supervisable). `opts` table: `port` (int, default 8080), `host` (string, default `"0.0.0.0"`), `max_connections` (int, default 1000).
+- `http.serve(router, opts = {})` → pid. Starts the HTTP server. Spawns an acceptor process that listens for connections and dispatches to the router. Returns the acceptor pid (supervisable). `opts` table: `port` (int, default 8080), `host` (string, default `"0.0.0.0"`), `max_connections` (int, default 1000).
 
 **Request lifecycle:**
 
@@ -291,12 +291,12 @@ HTTP client for making outbound requests. Pure Gem, no new C builtins. Depends o
 
 **Exports:**
 
-- `request.get(url, opts?)` → response table. `opts` table supports: `headers` (table of header name → value).
-- `request.post(url, opts?)` → response table. `opts` table supports: `headers`, `body` (string).
-- `request.put(url, opts?)` → response table. Same as post.
-- `request.patch(url, opts?)` → response table. Same as post.
-- `request.delete(url, opts?)` → response table. Same as get.
-- `request.request(method, url, opts?)` → response table. Generic method for full control.
+- `request.get(url, opts = {})` → response table. `opts` table supports: `headers` (table of header name → value).
+- `request.post(url, opts = {})` → response table. `opts` table supports: `headers`, `body` (string).
+- `request.put(url, opts = {})` → response table. Same as post.
+- `request.patch(url, opts = {})` → response table. Same as post.
+- `request.delete(url, opts = {})` → response table. Same as get.
+- `request.request(method, url, opts = {})` → response table. Generic method for full control.
 
 **Response table shape:** `{status: 200, headers: {"Content-Type": "application/json", ...}, body: "..."}`.
 
@@ -350,7 +350,7 @@ Thin Gem wrapper over the Phase 2 C builtins. Provides a slightly friendlier API
 - `sqlite.open(path)` → db handle.
 - `sqlite.close(db)` → nil.
 - `sqlite.exec(db, sql)` → nil. For DDL and statements without results.
-- `sqlite.query(db, sql, params?)` → array of row tables. `params` defaults to `[]`. Each row is a table: `{id: 1, name: "Alice", email: "alice@example.com"}`.
+- `sqlite.query(db, sql, params = [])` → array of row tables. Each row is a table: `{id: 1, name: "Alice", email: "alice@example.com"}`.
 - `sqlite.last_id(db)` → int. Last inserted row ID.
 - `sqlite.changes(db)` → int. Rows affected by last mutation.
 
@@ -379,13 +379,13 @@ Friendly Gem wrapper over the Phase 2 crypto C builtins. Depends on: crypto buil
 
 **Exports:**
 
-- `crypto.token(n?)` → String. Generate a random hex token. Default `n` = 32 bytes (64 hex chars). Good for session IDs, CSRF tokens.
+- `crypto.token(n = 32)` → String. Generate a random hex token of `n` bytes (64 hex chars at default). Good for session IDs, CSRF tokens.
 - `crypto.random_int(upper_bound)` → Int. Uniform random integer in `[0, upper_bound)`.
 - `crypto.hash_password(password)` → String. Argon2id hash suitable for database storage.
 - `crypto.verify_password(hash, password)` → Bool. Verify password against stored hash.
 - `crypto.hmac(key, message)` → String. HMAC-SHA-512-256, hex-encoded.
 - `crypto.hmac_verify(key, message, tag)` → Bool. Timing-safe HMAC verification.
-- `crypto.hash(message, key?)` → String. BLAKE2b, hex-encoded. Optional key for keyed hashing.
+- `crypto.hash(message, key = nil)` → String. BLAKE2b, hex-encoded. Pass a key for keyed hashing.
 - `crypto.constant_time_eq(a, b)` → Bool. Timing-safe string comparison.
 - `crypto.base64_encode(hex_str)` → String. Hex to base64.
 - `crypto.base64_decode(b64_str)` → String. Base64 to hex.

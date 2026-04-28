@@ -12,28 +12,16 @@ fn format_local(ms, fmt)
   format_time_local(ms, fmt)
 end
 
-fn http_date(ms)
-  let t = ms
-  if t == nil
-    t = epoch_ms()
-  end
-  format_time(t, "%a, %d %b %Y %H:%M:%S GMT")
+fn http_date(ms = epoch_ms())
+  format_time(ms, "%a, %d %b %Y %H:%M:%S GMT")
 end
 
-fn iso8601(ms)
-  let t = ms
-  if t == nil
-    t = epoch_ms()
-  end
-  format_time(t, "%Y-%m-%dT%H:%M:%SZ")
+fn iso8601(ms = epoch_ms())
+  format_time(ms, "%Y-%m-%dT%H:%M:%SZ")
 end
 
-fn date(ms)
-  let t = ms
-  if t == nil
-    t = epoch_ms()
-  end
-  format_time(t, "%Y-%m-%d")
+fn date(ms = epoch_ms())
+  format_time(ms, "%Y-%m-%d")
 end
 
 export now, format, format_local, http_date, iso8601, date

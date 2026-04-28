@@ -55,8 +55,15 @@ module.exports = grammar({
     ),
 
     _param: $ => choice(
+      $.default_param,
       $.identifier,
       $.spread_param,
+    ),
+
+    default_param: $ => seq(
+      field('name', $.identifier),
+      '=',
+      field('value', $._expression),
     ),
 
     spread_param: $ => seq('...', $.identifier),
@@ -287,7 +294,7 @@ module.exports = grammar({
       '}',
     ),
 
-    block_parameters: $ => seq('|', sep1($.identifier, ','), '|'),
+    block_parameters: $ => seq('|', sep1(choice($.default_param, $.identifier), ','), '|'),
 
     lambda: $ => seq(
       'fn',

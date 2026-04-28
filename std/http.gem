@@ -12,12 +12,8 @@ fn response(status, headers, body)
   {status: status, headers: headers, body: body}
 end
 
-fn ok(body, content_type)
-  let ct = content_type
-  if ct == nil
-    ct = "text/plain; charset=utf-8"
-  end
-  {status: 200, headers: {"Content-Type": ct}, body: body}
+fn ok(body, content_type = "text/plain; charset=utf-8")
+  {status: 200, headers: {"Content-Type": content_type}, body: body}
 end
 
 fn html(body)
@@ -28,41 +24,28 @@ fn json_response(data)
   {status: 200, headers: {"Content-Type": "application/json; charset=utf-8"}, body: json.encode(data)}
 end
 
-fn redirect(location, status)
-  let s = status
-  if s == nil
-    s = 302
-  end
-  {status: s, headers: {"Location": location, "Content-Type": "text/plain; charset=utf-8"}, body: ""}
+fn redirect(location, status = 302)
+  {status: status, headers: {"Location": location, "Content-Type": "text/plain; charset=utf-8"}, body: ""}
 end
 
-fn not_found(body)
-  let b = body
-  if b == nil
-    b = "Not Found"
-  end
-  {status: 404, headers: {"Content-Type": "text/plain; charset=utf-8"}, body: b}
+fn not_found(body = "Not Found")
+  {status: 404, headers: {"Content-Type": "text/plain; charset=utf-8"}, body: body}
 end
 
-fn bad_request(body)
-  let b = body
-  if b == nil
-    b = "Bad Request"
-  end
-  {status: 400, headers: {"Content-Type": "text/plain; charset=utf-8"}, body: b}
+fn bad_request(body = "Bad Request")
+  {status: 400, headers: {"Content-Type": "text/plain; charset=utf-8"}, body: body}
 end
 
-fn server_error(body)
-  let b = body
-  if b == nil
-    b = "Internal Server Error"
-  end
-  {status: 500, headers: {"Content-Type": "text/plain; charset=utf-8"}, body: b}
+fn server_error(body = "Internal Server Error")
+  {status: 500, headers: {"Content-Type": "text/plain; charset=utf-8"}, body: body}
 end
 
 # ─── Cookies ───
 
-fn set_cookie(resp, name, value, opts)
+fn set_cookie(resp, name, value, opts = {})
+  if opts == nil
+    opts = {}
+  end
   let buf = buf_new()
   buf_push(buf, name + "=" + value)
   let path = "/"
@@ -71,25 +54,23 @@ fn set_cookie(resp, name, value, opts)
   let same_site = "Lax"
   let max_age = nil
   let expires = nil
-  if opts != nil
-    if opts.path != nil
-      path = opts.path
-    end
-    if opts.http_only != nil
-      http_only = opts.http_only
-    end
-    if opts.secure != nil
-      secure = opts.secure
-    end
-    if opts.same_site != nil
-      same_site = opts.same_site
-    end
-    if opts.max_age != nil
-      max_age = opts.max_age
-    end
-    if opts.expires != nil
-      expires = opts.expires
-    end
+  if opts.path != nil
+    path = opts.path
+  end
+  if opts.http_only != nil
+    http_only = opts.http_only
+  end
+  if opts.secure != nil
+    secure = opts.secure
+  end
+  if opts.same_site != nil
+    same_site = opts.same_site
+  end
+  if opts.max_age != nil
+    max_age = opts.max_age
+  end
+  if opts.expires != nil
+    expires = opts.expires
   end
   buf_push(buf, "; Path=" + path)
   if max_age != nil
@@ -125,12 +106,13 @@ fn set_cookie(resp, name, value, opts)
   {status: resp.status, headers: new_headers, body: resp.body}
 end
 
-fn delete_cookie(resp, name, opts)
+fn delete_cookie(resp, name, opts = {})
+  if opts == nil
+    opts = {}
+  end
   let del_opts = {max_age: 0, path: "/"}
-  if opts != nil
-    if opts.path != nil
-      del_opts.path = opts.path
-    end
+  if opts.path != nil
+    del_opts.path = opts.path
   end
   set_cookie(resp, name, "", del_opts)
 end
@@ -566,16 +548,17 @@ end
 
 # ─── Server ───
 
-fn serve(router_ref, opts)
+fn serve(router_ref, opts = {})
+  if opts == nil
+    opts = {}
+  end
   let port = 8080
   let host = "0.0.0.0"
-  if opts != nil
-    if opts.port != nil
-      port = opts.port
-    end
-    if opts.host != nil
-      host = opts.host
-    end
+  if opts.port != nil
+    port = opts.port
+  end
+  if opts.host != nil
+    host = opts.host
   end
 
   let server_fd = tcp_listen(host, port)

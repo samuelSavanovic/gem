@@ -286,6 +286,13 @@ fn make_codegen(source_name)
         set_add(inner_defined, rest_param)
       end
       let inner_free = collect_free_vars(body, inner_defined)
+      if node.defaults != nil
+        for d in node.defaults
+          if d != nil
+            collect_free_node(d, inner_defined, inner_free)
+          end
+        end
+      end
       for ifk, _ in inner_free
         set_add(free, ifk)
       end
@@ -483,12 +490,14 @@ fn make_codegen(source_name)
       if rest_param != nil
         set_add(inner_defined, rest_param)
       end
-      # collect_free_vars accumulates free vars at arbitrary depth, including
-      # through nested closures. Intersecting with scope_vars finds everything
-      # captured by THIS or any nested closure that comes from our scope.
-      # Don't recurse further — that would pollute captured with vars from
-      # intermediate closures' local scopes.
       let free = collect_free_vars(body, inner_defined)
+      if node.defaults != nil
+        for d in node.defaults
+          if d != nil
+            collect_free_node(d, inner_defined, free)
+          end
+        end
+      end
       let inter = set_intersect(free, scope_vars)
       for ik, _ in inter
         set_add(captured, ik)
@@ -853,6 +862,13 @@ fn make_codegen(source_name)
       set_add(inner_defined, node.rest_param)
     end
     let free = collect_free_vars(node.body, inner_defined)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          collect_free_node(d, inner_defined, free)
+        end
+      end
+    end
     let captures = sort(keys(free))
 
     if len(captures) == 0
@@ -1744,14 +1760,33 @@ fn make_codegen(source_name)
 
   let emit_param_bindings = fn(node, params, cap_set)
     let b = buf_new()
-    # Bind required parameters
+    let defaults = node.defaults
+    if defaults == nil
+      defaults = []
+    end
     for i = 0, len(params)
       let mp = mangle(params[i])
-      if set_contains(cap_set, params[i])
-        buf_push(b, "    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));\n")
-        buf_push(b, "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
+      let has_def = i < len(defaults) and defaults[i] != nil
+      if has_def
+        let r = compile_expr(defaults[i])
+        if set_contains(cap_set, params[i])
+          buf_push(b, "    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));\n")
+          buf_push(b, "    if (argc > {i}) \{ *{mp} = args[{i}]; } else \{\n")
+          buf_push(b, r.setup)
+          buf_push(b, "    *{mp} = {r.expr};\n    }\n")
+        else
+          buf_push(b, "    GemVal {mp};\n")
+          buf_push(b, "    if (argc > {i}) \{ {mp} = args[{i}]; } else \{\n")
+          buf_push(b, r.setup)
+          buf_push(b, "    {mp} = {r.expr};\n    }\n")
+        end
       else
-        buf_push(b, "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
+        if set_contains(cap_set, params[i])
+          buf_push(b, "    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));\n")
+          buf_push(b, "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
+        else
+          buf_push(b, "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
+        end
       end
     end
 
@@ -1806,12 +1841,28 @@ fn make_codegen(source_name)
     local_names = scope_vars
 
     let captured = find_captured_in_scope(body, scope_vars)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          walk_captures_node(d, scope_vars, captured)
+        end
+      end
+    end
 
     boxed_vars = captured
     in_top_level = false
 
+    let has_defs = false
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          has_defs = true
+          break
+        end
+      end
+    end
     let use_tco = false
-    if node.rest_param == nil and not set_contains(scope_vars, name)
+    if node.rest_param == nil and not has_defs and not set_contains(scope_vars, name)
       use_tco = has_self_tail_call(name, body)
     end
     if use_tco
@@ -1886,6 +1937,13 @@ fn make_codegen(source_name)
     local_names = set_union(inner_scope, sorted_array_to_set(captures))
 
     let inner_captured = find_captured_in_scope(body, inner_scope)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          walk_captures_node(d, inner_scope, inner_captured)
+        end
+      end
+    end
 
     boxed_vars = set_union(inner_captured, sorted_array_to_set(captures))
     in_top_level = false

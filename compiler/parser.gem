@@ -103,31 +103,6 @@ fn make_parser(tokens, source, file)
     end
   end
 
-  # ── Parameter list ──
-  # Returns {params, rest_param}.
-  # params: required param names before the rest param (or all params if no rest).
-  # rest_param: the name after "...", or nil.
-
-  let parse_params = fn()
-    let params = []
-    let rest_param = nil
-
-    while peek().type == "NAME" or peek().type == "..."
-      if peek().type == "..."
-        advance()
-        rest_param = expect("NAME").value
-        break
-      end
-      push(params, advance().value)
-      if peek().type != ","
-        break
-      end
-      advance()
-    end
-
-    {params: params, rest_param: rest_param}
-  end
-
   # ── Forward declarations for mutual recursion ──
 
   let parse_expr = nil
@@ -135,6 +110,45 @@ fn make_parser(tokens, source, file)
   let parse_unary = nil
   let parse_not = nil
   let parse_pattern = nil
+
+  # ── Parameter list ──
+  # Returns {params, rest_param, defaults}.
+  # params: param names before the rest param (or all params if no rest).
+  # rest_param: the name after "...", or nil.
+  # defaults: array parallel to params — each entry is an AST expr or nil.
+
+  let parse_params = fn()
+    let params = []
+    let rest_param = nil
+    let defaults = []
+    let has_default = false
+
+    while peek().type == "NAME" or peek().type == "..."
+      if peek().type == "..."
+        advance()
+        rest_param = expect("NAME").value
+        break
+      end
+      let name_tok = advance()
+      push(params, name_tok.value)
+      if peek().type == "="
+        advance()
+        push(defaults, parse_expr())
+        has_default = true
+      else
+        if has_default
+          compile_error(source, file, name_tok.line, name_tok.col, len(name_tok.value), "required parameter after optional parameter", nil)
+        end
+        push(defaults, nil)
+      end
+      if peek().type != ","
+        break
+      end
+      advance()
+    end
+
+    {params: params, rest_param: rest_param, defaults: defaults}
+  end
 
   # ── Body parsers ──
   # parse_body: for if/while/when/else bodies
@@ -230,7 +244,7 @@ fn make_parser(tokens, source, file)
       let body = parse_fn_body()
       fn_depth -= 1
       expect("end")
-      return make_anon_fn(pr.params, pr.rest_param, body)
+      return make_anon_fn(pr.params, pr.rest_param, body, pr.defaults)
     end
 
     # Table literal: {key: val, ...}
@@ -291,7 +305,7 @@ fn make_parser(tokens, source, file)
     if t.type == "NAME" and t.value == "pcall" and peek_at(1).type != "("
       advance()
       let expr = parse_expr()
-      return make_call(make_var("pcall"), [make_anon_fn([], nil, [expr])], t.line)
+      return make_call(make_var("pcall"), [make_anon_fn([], nil, [expr], [])], t.line)
     end
 
     # Variable
@@ -330,18 +344,20 @@ fn make_parser(tokens, source, file)
           advance()
           let bparams = []
           let brest = nil
+          let bdefaults = []
           if peek().type == "|"
             advance()
             let bpr = parse_params()
             bparams = bpr.params
             brest = bpr.rest_param
+            bdefaults = bpr.defaults
             expect("|")
           end
           fn_depth += 1
           let body = parse_fn_body()
           fn_depth -= 1
           expect("end")
-          push(args, make_anon_fn(bparams, brest, body))
+          push(args, make_anon_fn(bparams, brest, body, bdefaults))
         else
           # Trailing brace block: {|params| expr} or {expr}
           # Distinguish from table literal by lookahead
@@ -358,16 +374,18 @@ fn make_parser(tokens, source, file)
               advance()
               let bparams = []
               let brest = nil
+              let bdefaults = []
               if peek().type == "|"
                 advance()
                 let bpr = parse_params()
                 bparams = bpr.params
                 brest = bpr.rest_param
+                bdefaults = bpr.defaults
                 expect("|")
               end
               let bexpr = parse_expr()
               expect("}")
-              push(args, make_anon_fn(bparams, brest, [bexpr]))
+              push(args, make_anon_fn(bparams, brest, [bexpr], bdefaults))
             end
           end
         end
@@ -732,7 +750,7 @@ fn make_parser(tokens, source, file)
       let body = parse_fn_body()
       fn_depth -= 1
       expect("end")
-      return make_fn_def(name, pr.params, pr.rest_param, body, line)
+      return make_fn_def(name, pr.params, pr.rest_param, body, line, pr.defaults)
     end
 
     # if / elif statement

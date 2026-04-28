@@ -12,10 +12,7 @@ fn exec(db, sql)
   sqlite_exec(db, sql)
 end
 
-fn query(db, sql, params)
-  if params == nil
-    params = []
-  end
+fn query(db, sql, params = [])
   sqlite_query(db, sql, params)
 end
 

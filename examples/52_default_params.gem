@@ -1,0 +1,95 @@
+# Test default parameter values
+
+# Basic default
+fn greet(name, greeting = "Hello")
+  print("{greeting}, {name}!")
+end
+greet("Alice")
+greet("Alice", "Hey")
+
+# Multiple defaults
+fn make_point(x = 0, y = 0, z = 0)
+  print("{x},{y},{z}")
+end
+make_point()
+make_point(1)
+make_point(1, 2)
+make_point(1, 2, 3)
+
+# Expression as default
+fn add_offset(val, offset = 10 + 5)
+  print(val + offset)
+end
+add_offset(1)
+add_offset(1, 100)
+
+# Default referencing earlier param
+fn repeat_str(s, n = len(s))
+  let result = ""
+  for i = 0, n
+    result = result + s
+  end
+  print(result)
+end
+repeat_str("ab")
+repeat_str("ab", 3)
+
+# Default with table
+fn config(name, opts = {})
+  if opts.verbose == nil
+    print("{name}: quiet")
+  else
+    print("{name}: verbose")
+  end
+end
+config("test1")
+config("test2", {verbose: true})
+
+# Default with nil explicit pass (nil should NOT trigger default)
+fn show(val = "default")
+  print(val)
+end
+show()
+show(nil)
+show("custom")
+
+# Mixed required and optional
+fn format(prefix, value, suffix = ".")
+  print("{prefix}{value}{suffix}")
+end
+format(">>", "hello")
+format(">>", "hello", "!")
+
+# Default in anonymous function
+let double_or = fn(x, factor = 2)
+  x * factor
+end
+print(double_or(5))
+print(double_or(5, 3))
+
+# Default in closure capturing outer variable
+let base = 100
+let add_base = fn(x, b = base)
+  x + b
+end
+print(add_base(5))
+print(add_base(5, 10))
+
+# Default with function call
+fn default_list(items = [])
+  push(items, "added")
+  print(len(items))
+end
+default_list()
+default_list([1, 2, 3])
+
+# Verify defaults are evaluated at call time, not definition time
+let counter = 0
+fn next_id(id = counter)
+  print(id)
+end
+counter = 10
+next_id()
+counter = 20
+next_id()
+next_id(99)

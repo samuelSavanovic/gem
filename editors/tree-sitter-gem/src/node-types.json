@@ -127,6 +127,10 @@
           "named": true
         },
         {
+          "type": "export_statement",
+          "named": true
+        },
+        {
           "type": "extern_declaration",
           "named": true
         },
@@ -735,6 +739,10 @@
       "required": true,
       "types": [
         {
+          "type": "default_param",
+          "named": true
+        },
+        {
           "type": "identifier",
           "named": true
         }
@@ -956,6 +964,108 @@
     }
   },
   {
+    "type": "default_param",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "call_expression",
+            "named": true
+          },
+          {
+            "type": "call_with_block",
+            "named": true
+          },
+          {
+            "type": "double_string",
+            "named": true
+          },
+          {
+            "type": "false",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "lambda",
+            "named": true
+          },
+          {
+            "type": "member_expression",
+            "named": true
+          },
+          {
+            "type": "nil",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "single_string",
+            "named": true
+          },
+          {
+            "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "table",
+            "named": true
+          },
+          {
+            "type": "triple_double_string",
+            "named": true
+          },
+          {
+            "type": "triple_single_string",
+            "named": true
+          },
+          {
+            "type": "true",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "do_block",
     "named": true,
     "fields": {},
@@ -997,6 +1107,10 @@
         },
         {
           "type": "double_string",
+          "named": true
+        },
+        {
+          "type": "export_statement",
           "named": true
         },
         {
@@ -1253,6 +1367,10 @@
           "named": true
         },
         {
+          "type": "export_statement",
+          "named": true
+        },
+        {
           "type": "extern_declaration",
           "named": true
         },
@@ -1396,6 +1514,10 @@
           "named": true
         },
         {
+          "type": "export_statement",
+          "named": true
+        },
+        {
           "type": "extern_declaration",
           "named": true
         },
@@ -1493,6 +1615,21 @@
         },
         {
           "type": "while_statement",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "export_statement",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "identifier",
           "named": true
         }
       ]
@@ -1904,6 +2041,10 @@
           "named": true
         },
         {
+          "type": "export_statement",
+          "named": true
+        },
+        {
           "type": "extern_declaration",
           "named": true
         },
@@ -2044,6 +2185,10 @@
           },
           {
             "type": "double_string",
+            "named": true
+          },
+          {
+            "type": "export_statement",
             "named": true
           },
           {
@@ -2306,6 +2451,10 @@
           "named": true
         },
         {
+          "type": "export_statement",
+          "named": true
+        },
+        {
           "type": "extern_declaration",
           "named": true
         },
@@ -2537,6 +2686,10 @@
         },
         {
           "type": "double_string",
+          "named": true
+        },
+        {
+          "type": "export_statement",
           "named": true
         },
         {
@@ -3000,6 +3153,10 @@
       "required": false,
       "types": [
         {
+          "type": "default_param",
+          "named": true
+        },
+        {
           "type": "identifier",
           "named": true
         },
@@ -3265,6 +3422,10 @@
         },
         {
           "type": "double_string",
+          "named": true
+        },
+        {
+          "type": "export_statement",
           "named": true
         },
         {
@@ -4044,6 +4205,10 @@
           "named": true
         },
         {
+          "type": "export_statement",
+          "named": true
+        },
+        {
           "type": "extern_declaration",
           "named": true
         },
@@ -4271,6 +4436,10 @@
         },
         {
           "type": "double_string",
+          "named": true
+        },
+        {
+          "type": "export_statement",
           "named": true
         },
         {
@@ -4560,6 +4729,10 @@
   {
     "type": "escape_sequence",
     "named": true
+  },
+  {
+    "type": "export",
+    "named": false
   },
   {
     "type": "extern",

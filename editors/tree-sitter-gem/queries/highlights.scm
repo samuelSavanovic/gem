@@ -83,6 +83,7 @@
 
 ; Parameters
 (parameter_list (identifier) @variable.parameter)
+(default_param name: (identifier) @variable.parameter)
 (spread_param (identifier) @variable.parameter)
 (typed_param name: (identifier) @variable.parameter)
 (block_parameters (identifier) @variable.parameter)

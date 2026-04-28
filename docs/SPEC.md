@@ -125,6 +125,29 @@ log("INFO", "started", "port 8080")
 
 Rest param packing happens inside the function body at the C level, so variadic functions also work when stored in a variable or passed as a callback — the packing is unconditional regardless of call form.
 
+**Default Parameters**
+
+Parameters can have default values with `= expr`. The default expression is evaluated at call time (not definition time) when the caller passes fewer arguments.
+
+```
+fn greet(name, greeting = "Hello")
+  print("{greeting}, {name}!")
+end
+
+greet("Alice")           # Hello, Alice!
+greet("Alice", "Hey")    # Hey, Alice!
+```
+
+Required parameters must come before optional ones — a required parameter after an optional one is a compile error. Default expressions can reference earlier parameters:
+
+```
+fn repeat(s, n = len(s))
+  ...
+end
+```
+
+Default parameters work in named functions, anonymous functions, and block parameters. Passing `nil` explicitly does *not* trigger the default — only omitting the argument does. Functions with default parameters are not eligible for tail call optimization.
+
 **Blocks**
 
 This is the core feature. Any function can accept a trailing block with `do`/`end`. The block is passed as the last argument as an `Fn` value.
@@ -323,7 +346,7 @@ end
 loop(10000000, 0)         # works — would overflow without TCO
 ```
 
-TCO applies to named functions (`fn name(...)`) without rest or block parameters. Anonymous functions and mutual recursion are not optimized. Non-tail calls (where the result is used in a further expression, e.g. `n * f(n-1)`) remain normal recursive calls.
+TCO applies to named functions (`fn name(...)`) without rest, default, or block parameters. Anonymous functions and mutual recursion are not optimized. Non-tail calls (where the result is used in a further expression, e.g. `n * f(n-1)`) remain normal recursive calls.
 
 **Important:** only direct self-recursion is optimized. If `fn A` calls `fn B` which calls `fn A`, neither call is a TCO candidate — both grow the stack. Write long-running loops as direct self-recursion or use `while`. Splitting a loop body into helper functions that recurse back to the main loop will leak stack frames under sustained load.
 

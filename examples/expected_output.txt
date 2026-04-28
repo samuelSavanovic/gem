@@ -962,3 +962,29 @@ false
 
 Results: 56 passed, 0 failed
 Results: 12 passed, 0 failed
+Hello, Alice!
+Hey, Alice!
+0,0,0
+1,0,0
+1,2,0
+1,2,3
+16
+101
+abab
+ababab
+test1: quiet
+test2: verbose
+default
+nil
+custom
+>>hello.
+>>hello!
+10
+15
+105
+15
+1
+4
+10
+20
+99
