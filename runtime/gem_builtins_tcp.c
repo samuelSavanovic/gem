@@ -192,10 +192,16 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
         timeout_ms = args[2].ival;
     }
 
-    char *buf = (char *)GC_MALLOC_ATOMIC(max_bytes + 1);
-
     if (gem_current_pid >= 0) {
         GemProcess *proc = &gem_proc_table[gem_current_pid];
+
+        /* Reuse a per-process read buffer instead of GC-allocating 4KB every call */
+        if (proc->read_buf_cap < max_bytes) {
+            proc->read_buf = (char *)GC_MALLOC_ATOMIC(max_bytes);
+            proc->read_buf_cap = max_bytes;
+        }
+        char *buf = proc->read_buf;
+
         if (timeout_ms > 0) {
             proc->deadline_ms = gem_now_ms() + timeout_ms;
             proc->timed_out = 0;
@@ -204,30 +210,29 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
             ssize_t n = read(fd, buf, max_bytes);
             if (n > 0) {
                 proc->deadline_ms = -1;
-                buf[n] = '\0';
-                GemVal r; r.type = VAL_STRING; r.sval = buf;
+                char *s = (char *)GC_MALLOC_ATOMIC(n + 1);
+                memcpy(s, buf, n);
+                s[n] = '\0';
+                GemVal r; r.type = VAL_STRING; r.sval = s;
                 return r;
             }
             if (n == 0) {
                 proc->deadline_ms = -1;
-                buf[0] = '\0';
-                GemVal r; r.type = VAL_STRING; r.sval = buf;
+                GemVal r; r.type = VAL_STRING; r.sval = "";
                 return r;
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 gem_io_yield(fd, 0);
                 if (proc->timed_out) {
                     proc->timed_out = 0;
-                    buf[0] = '\0';
-                    GemVal r; r.type = VAL_STRING; r.sval = buf;
+                    GemVal r; r.type = VAL_STRING; r.sval = "";
                     return r;
                 }
                 continue;
             }
             if (errno == ECONNRESET) {
                 proc->deadline_ms = -1;
-                buf[0] = '\0';
-                GemVal r; r.type = VAL_STRING; r.sval = buf;
+                GemVal r; r.type = VAL_STRING; r.sval = "";
                 return r;
             }
             proc->deadline_ms = -1;
@@ -237,6 +242,8 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
         }
     }
 
+    /* Non-process fallback (no scheduler running) */
+    char *buf = (char *)GC_MALLOC_ATOMIC(max_bytes + 1);
     ssize_t n = read(fd, buf, max_bytes);
     if (n < 0) {
         char errbuf[256];

@@ -63,6 +63,8 @@ static void gem_free_proc_slot(int pid) {
     proc->monitors = NULL;
     proc->links = NULL;
     proc->trap_exit = 0;
+    proc->read_buf = NULL;
+    proc->read_buf_cap = 0;
     proc->pcall_depth = 0;
     proc->pid = -1;
     if (gem_free_tail >= 0) {

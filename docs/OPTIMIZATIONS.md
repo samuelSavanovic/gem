@@ -16,8 +16,8 @@ requires groundwork, **P2** = nice to have or niche.
 
 ## GC / Memory (P0)
 
-### Reuse tcp_read buffer per process
-`tcp_read` allocates a 4KB `GC_MALLOC_ATOMIC` buffer on every call. With keep-alive connections processing thousands of requests, this generates ~240 MB/s of garbage under load. A per-process reusable read buffer (allocated once, stored on the process struct) would eliminate the single largest allocation source in the HTTP path.
+### ~~Reuse tcp_read buffer per process~~ ✓ Done
+`GemProcess` now has a `read_buf`/`read_buf_cap` pair. `tcp_read` allocates the read buffer once per process and reuses it across calls, copying only the actual bytes read into an exact-size GC string for the return value.
 
 ### String builder for response construction
 Every string concatenation (`+`) in the Gem HTTP handler allocates a new GC string. Building a 20-row HTML table concatenates ~100 intermediate strings per request. A `buf_new`/`buf_push`/`buf_str` pattern is available in std but the HTTP framework and app code use `+`. Compiler-level `x = x + y` → buffer optimization (see codegen section) would fix this globally. Until then, rewriting hot paths to use buffers is the manual fix.

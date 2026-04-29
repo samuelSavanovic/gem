@@ -342,6 +342,8 @@ typedef struct {
     int64_t deadline_ms;          /* -1 = no deadline; else absolute time in ms */
     int timed_out;                /* set to 1 by scheduler when deadline expires */
     int reductions;               /* reduction counter for preemptive yielding */
+    char *read_buf;               /* reusable tcp_read buffer (GC-allocated) */
+    size_t read_buf_cap;          /* capacity of read_buf in bytes */
     GemPcallFrame pcall_stack[GEM_MAX_PCALL_DEPTH];
     int pcall_depth;
 } GemProcess;
