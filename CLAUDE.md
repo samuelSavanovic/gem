@@ -139,6 +139,120 @@ make test-json     # run JSON parser stress test
 cd prototype && make run
 ```
 
+## Language Quick Reference
+
+Keep this section up to date when adding new syntax, keywords, builtins, or std modules.
+
+```gem
+# Variables
+let x = 10
+let {a, b} = tbl          # table destructuring
+let [first, second] = arr  # array destructuring
+
+# Functions — fn/end, last expression is implicit return
+fn add(a, b)
+  a + b
+end
+fn greet(name, greeting = "Hello")   # default params
+  print("{greeting}, {name}!")
+end
+fn log(level, ...msgs)               # variadic (rest param)
+end
+
+# Closures / anonymous functions
+let f = fn(x) x * 2 end
+
+# Blocks — trailing do/end or { } passed as last arg
+items.each do |item|
+  print(item)
+end
+items.each { |item| print(item) }
+
+# Control flow — end-terminated, elif (not else if)
+if cond then expr else expr end      # single-line
+if cond
+  body
+elif cond2
+  body
+else
+  body
+end
+
+while cond
+  body
+end
+
+for item in arr ... end              # array iteration
+for k, v in tbl ... end              # key-value iteration
+for i = 0, n ... end                 # range [0, n)
+
+match val
+when "a"
+  handle_a()
+when {ok: true, value: v}            # destructuring pattern
+  use(v)
+else
+  fallback()
+end
+
+# Modules — load (NOT import), export at end of file
+load "std/string"                    # => string.split(...)
+load "std/string" as str             # => str.split(...)
+load "std/string" (split, trim)      # => split(...) directly
+
+export my_fn, my_other_fn            # at end of module file
+
+# Strings — double-quoted: interpolation, single-quoted: literal
+"hello {name}"                       # interpolation with { }
+'no {interpolation} here'            # literal braces
+"""multi-line with {interpolation}"""
+'''multi-line literal'''
+
+# Operators — and/or/not (NOT &&/||/!), x in tbl
+# Tables — { key: val } or [1, 2, 3], dot access, bracket access
+# Logical — nil and false are falsy, everything else truthy
+
+# Concurrency
+let pid = spawn do ... end
+send(pid, msg)
+let msg = receive()                  # pop head
+receive                              # selective receive
+when {tag: "DOWN", pid: p}
+  handle(p)
+after 5000
+  timeout()
+end
+monitor(pid)
+link(pid)
+process_flag("trap_exit", true)
+register("name", self())
+
+# Error handling
+error("msg")                         # halt with stack trace
+let r = pcall some_fn()              # {ok: bool, value/error: ...}
+
+# Common builtins
+# print, len, type, to_string, to_int, to_float
+# push, pop, keys, values, sort, insert, delete, remove_at
+# str_replace, substr, chr, ord, has_key
+# buf_new, buf_push, buf_str
+# read_file, write_file, exec, sleep, self, spawn
+# tcp_listen, tcp_accept, tcp_read, tcp_write, tcp_close
+
+# Std library modules
+# std/string (split, join, trim, index_of, contains, ...)
+# std/table (each, map, filter, reduce, find, ...)
+# std/json (parse, encode)
+# std/http (router, serve, ok, html, json_response, ...)
+# std/sqlite (open, close, exec, query, ...)
+# std/math (min, max, clamp, assert)
+
+# C interop
+extern fn puts(s: String) -> Int
+extern blocking fn net_read(fd: Int) -> String
+extern include "header.h"
+```
+
 ## Git Conventions
 
 - Never add `Co-Authored-By` trailers to commit messages.
