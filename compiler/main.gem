@@ -471,20 +471,12 @@ else
   # Build cc command
   let runtime_dir = path_join(install_root, "runtime")
 
-  # Try pkg-config for GC flags, fall back to -lgc
-  let gc_flags = "-lgc"
-  let pkg_ret = exec("pkg-config --cflags --libs bdw-gc > /tmp/gem_gc_flags.txt 2>/dev/null")
-  if pkg_ret == 0
-    gc_flags = read_file("/tmp/gem_gc_flags.txt")
-    gc_flags = str_replace(gc_flags, "\n", "")
-  end
-
   let runtime_lib = path_join(install_root, "build/libgem_runtime.a")
   let cc_cmd = ""
   if file_exists(runtime_lib)
-    cc_cmd = "cc -o " + out_name + " " + tmp_c + " -I " + runtime_dir + " -std=c11 -O2 " + gc_flags + " -lm -pthread " + runtime_lib
+    cc_cmd = "cc -o " + out_name + " " + tmp_c + " -I " + runtime_dir + " -std=c11 -O2 -lm -pthread " + runtime_lib
   else
-    cc_cmd = "cc -o " + out_name + " " + tmp_c + " " + runtime_dir + "/gem_*.c " + runtime_dir + "/sqlite3.c -I " + runtime_dir + " -std=c11 -O2 " + gc_flags + " -lm -pthread"
+    cc_cmd = "cc -o " + out_name + " " + tmp_c + " " + runtime_dir + "/gem_*.c " + runtime_dir + "/sqlite3.c -I " + runtime_dir + " -std=c11 -O2 -lm -pthread"
   end
 
   let cc_ret = exec(cc_cmd)

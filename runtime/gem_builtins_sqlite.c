@@ -206,6 +206,7 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
                     memcpy(copy, blob, (size_t)bytes);
                     copy[bytes] = '\0';
                     val.type = VAL_STRING;
+                    val.magic = GEM_MAGIC;
                     val.sval = copy;
                     break;
                 }

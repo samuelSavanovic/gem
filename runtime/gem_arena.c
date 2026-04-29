@@ -1,6 +1,13 @@
 /*
  * gem_arena.c — Per-process bump allocator for Gem values.
+ *
+ * Blocks are mmap'd MAP_ANON pages: when a process exits and its arena is
+ * destroyed, munmap returns the pages to the OS so RSS drops immediately.
+ * (free() on macOS does not reliably return small malloc'd blocks.)
  */
+
+#include <sys/mman.h>
+#include <unistd.h>
 
 #include "gem.h"
 #include "stb_ds.h"
@@ -11,12 +18,28 @@ GemArena gem_global_arena;
 #define GEM_ARENA_MAX_BLOCK    (1024 * 1024)
 #define GEM_ARENA_ALIGN        16
 
+static size_t gem_arena_page_size(void) {
+    static size_t cached = 0;
+    if (cached == 0) {
+        long ps = sysconf(_SC_PAGESIZE);
+        cached = (ps > 0) ? (size_t)ps : 4096;
+    }
+    return cached;
+}
+
 static GemArenaBlock *gem_arena_new_block(size_t min_cap) {
     size_t cap = min_cap;
     if (cap < GEM_ARENA_INITIAL_BLOCK) cap = GEM_ARENA_INITIAL_BLOCK;
-    GemArenaBlock *block = (GemArenaBlock *)malloc(sizeof(GemArenaBlock) + cap);
-    if (!block) {
-        fprintf(stderr, "gem_arena: out of memory\n");
+    size_t total = sizeof(GemArenaBlock) + cap;
+    size_t ps = gem_arena_page_size();
+    total = (total + ps - 1) & ~(ps - 1);
+    cap = total - sizeof(GemArenaBlock);
+
+    GemArenaBlock *block = (GemArenaBlock *)mmap(
+        NULL, total, PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (block == MAP_FAILED) {
+        fprintf(stderr, "gem_arena: mmap failed (size=%zu)\n", total);
         exit(1);
     }
     block->next = NULL;
@@ -72,7 +95,9 @@ void *gem_arena_alloc(GemArena *arena, size_t size) {
     return ptr;
 }
 
-int gem_in_arena(const void *ptr, GemArena *arena) {
+int gem_in_main_arena(const void *ptr) {
+    if (gem_main_pid < 0) return 0;
+    GemArena *arena = &gem_proc_table[gem_main_pid].arena;
     const char *p = (const char *)ptr;
     if (p < arena->lo || p >= arena->hi) return 0;
     for (GemArenaBlock *block = arena->head; block; block = block->next) {
@@ -80,11 +105,6 @@ int gem_in_arena(const void *ptr, GemArena *arena) {
             return 1;
     }
     return 0;
-}
-
-int gem_in_main_arena(const void *ptr) {
-    if (gem_main_pid < 0) return 0;
-    return gem_in_arena(ptr, &gem_proc_table[gem_main_pid].arena);
 }
 
 void gem_arena_destroy(GemArena *arena) {
@@ -102,7 +122,8 @@ void gem_arena_destroy(GemArena *arena) {
     GemArenaBlock *block = arena->head;
     while (block) {
         GemArenaBlock *next = block->next;
-        free(block);
+        size_t total = sizeof(GemArenaBlock) + block->cap;
+        munmap(block, total);
         block = next;
     }
     arena->head = NULL;

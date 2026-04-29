@@ -21649,77 +21649,63 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
 #line 472 "compiler/main.gem"
     GemVal _t5012[] = {gem_v_install_root, gem_string("runtime")};
         GemVal gem_v_runtime_dir = gem_path_join_fn(NULL, _t5012, 2);
+#line 474 "compiler/main.gem"
+    GemVal _t5013[] = {gem_v_install_root, gem_string("build/libgem_runtime.a")};
+        GemVal gem_v_runtime_lib = gem_path_join_fn(NULL, _t5013, 2);
 #line 475 "compiler/main.gem"
-        GemVal gem_v_gc_flags = gem_string("-lgc");
+        GemVal gem_v_cc_cmd = gem_string("");
 #line 476 "compiler/main.gem"
-    GemVal _t5013[] = {gem_string("pkg-config --cflags --libs bdw-gc > /tmp/gem_gc_flags.txt 2>/dev/null")};
-        GemVal gem_v_pkg_ret = gem_exec_fn(NULL, _t5013, 1);
+    GemVal _t5014[] = {gem_v_runtime_lib};
+        if (gem_truthy(gem_file_exists_fn(NULL, _t5014, 1))) {
 #line 477 "compiler/main.gem"
-        if (gem_truthy(gem_eq(gem_v_pkg_ret, gem_int(0)))) {
-#line 478 "compiler/main.gem"
-    GemVal _t5014[] = {gem_string("/tmp/gem_gc_flags.txt")};
-            gem_v_gc_flags = gem_read_file_fn(NULL, _t5014, 1);
+            gem_v_cc_cmd = gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("cc -o "), gem_v_out_name), gem_string(" ")), gem_v_tmp_c), gem_string(" -I ")), gem_v_runtime_dir), gem_string(" -std=c11 -O2 -lm -pthread ")), gem_v_runtime_lib);
+        } else {
 #line 479 "compiler/main.gem"
-    GemVal _t5015[] = {gem_v_gc_flags, gem_string("\n"), gem_string("")};
-            gem_v_gc_flags = gem_str_replace_fn(NULL, _t5015, 3);
+            gem_v_cc_cmd = gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("cc -o "), gem_v_out_name), gem_string(" ")), gem_v_tmp_c), gem_string(" ")), gem_v_runtime_dir), gem_string("/gem_*.c ")), gem_v_runtime_dir), gem_string("/sqlite3.c -I ")), gem_v_runtime_dir), gem_string(" -std=c11 -O2 -lm -pthread"));
         }
 #line 482 "compiler/main.gem"
-    GemVal _t5016[] = {gem_v_install_root, gem_string("build/libgem_runtime.a")};
-        GemVal gem_v_runtime_lib = gem_path_join_fn(NULL, _t5016, 2);
+    GemVal _t5015[] = {gem_v_cc_cmd};
+        GemVal gem_v_cc_ret = gem_exec_fn(NULL, _t5015, 1);
 #line 483 "compiler/main.gem"
-        GemVal gem_v_cc_cmd = gem_string("");
-#line 484 "compiler/main.gem"
-    GemVal _t5017[] = {gem_v_runtime_lib};
-        if (gem_truthy(gem_file_exists_fn(NULL, _t5017, 1))) {
-#line 485 "compiler/main.gem"
-            gem_v_cc_cmd = gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("cc -o "), gem_v_out_name), gem_string(" ")), gem_v_tmp_c), gem_string(" -I ")), gem_v_runtime_dir), gem_string(" -std=c11 -O2 ")), gem_v_gc_flags), gem_string(" -lm -pthread ")), gem_v_runtime_lib);
-        } else {
-#line 487 "compiler/main.gem"
-            gem_v_cc_cmd = gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("cc -o "), gem_v_out_name), gem_string(" ")), gem_v_tmp_c), gem_string(" ")), gem_v_runtime_dir), gem_string("/gem_*.c ")), gem_v_runtime_dir), gem_string("/sqlite3.c -I ")), gem_v_runtime_dir), gem_string(" -std=c11 -O2 ")), gem_v_gc_flags), gem_string(" -lm -pthread"));
-        }
-#line 490 "compiler/main.gem"
-    GemVal _t5018[] = {gem_v_cc_cmd};
-        GemVal gem_v_cc_ret = gem_exec_fn(NULL, _t5018, 1);
-#line 491 "compiler/main.gem"
         if (gem_truthy(gem_neq(gem_v_cc_ret, gem_int(0)))) {
-#line 492 "compiler/main.gem"
-    GemVal _t5019[] = {gem_v_cc_ret};
-    GemVal _t5020[] = {gem_add(gem_add(gem_string("gem: compilation failed (cc exited with "), gem_to_string_fn(NULL, _t5019, 1)), gem_string(")"))};
-            (void)(gem_error_at_fn("compiler/main.gem", 492, _t5020, 1));
+#line 484 "compiler/main.gem"
+    GemVal _t5016[] = {gem_v_cc_ret};
+    GemVal _t5017[] = {gem_add(gem_add(gem_string("gem: compilation failed (cc exited with "), gem_to_string_fn(NULL, _t5016, 1)), gem_string(")"))};
+            (void)(gem_error_at_fn("compiler/main.gem", 484, _t5017, 1));
         }
-#line 497 "compiler/main.gem"
-    GemVal _t5021 = gem_v_cli;
+#line 489 "compiler/main.gem"
+    GemVal _t5018 = gem_v_cli;
     static GemICacheSlot _ic_772 = {0};
-        if (gem_truthy(gem_table_get_cached(_t5021, "run", &_ic_772))) {
-#line 498 "compiler/main.gem"
+        if (gem_truthy(gem_table_get_cached(_t5018, "run", &_ic_772))) {
+#line 490 "compiler/main.gem"
             GemVal gem_v_run_cmd = gem_v_out_name;
-#line 499 "compiler/main.gem"
+#line 491 "compiler/main.gem"
             GemVal gem_v_i = gem_int(0);
-#line 500 "compiler/main.gem"
+#line 492 "compiler/main.gem"
             while (1) {
                 gem_yield_check();
-                GemVal _t5022 = gem_v_cli;
+                GemVal _t5019 = gem_v_cli;
                 static GemICacheSlot _ic_773 = {0};
-                GemVal _t5023[] = {gem_table_get_cached(_t5022, "run_args", &_ic_773)};
-                if (!gem_truthy(gem_lt(gem_v_i, gem_len_fn(NULL, _t5023, 1)))) break;
-#line 501 "compiler/main.gem"
+                GemVal _t5020[] = {gem_table_get_cached(_t5019, "run_args", &_ic_773)};
+                if (!gem_truthy(gem_lt(gem_v_i, gem_len_fn(NULL, _t5020, 1)))) break;
+#line 493 "compiler/main.gem"
                 gem_string_append(&gem_v_run_cmd, gem_string(" "));
-    GemVal _t5024 = gem_v_cli;
+    GemVal _t5021 = gem_v_cli;
     static GemICacheSlot _ic_774 = {0};
-                gem_string_append(&gem_v_run_cmd, gem_table_get(gem_table_get_cached(_t5024, "run_args", &_ic_774), gem_v_i));
+                gem_string_append(&gem_v_run_cmd, gem_table_get(gem_table_get_cached(_t5021, "run_args", &_ic_774), gem_v_i));
 
-#line 502 "compiler/main.gem"
+#line 494 "compiler/main.gem"
                 gem_v_i = gem_add(gem_v_i, gem_int(1));
             }
             gem_v_run_cmd = gem_string_finish(gem_v_run_cmd);
-#line 504 "compiler/main.gem"
-    GemVal _t5025[] = {gem_v_run_cmd};
-            GemVal gem_v_run_ret = gem_exec_fn(NULL, _t5025, 1);
-#line 505 "compiler/main.gem"
+#line 496 "compiler/main.gem"
+    GemVal _t5022[] = {gem_v_run_cmd};
+            GemVal gem_v_run_ret = gem_exec_fn(NULL, _t5022, 1);
+#line 497 "compiler/main.gem"
             if (gem_truthy(gem_neq(gem_v_run_ret, gem_int(0)))) {
-#line 506 "compiler/main.gem"
-    GemVal _t5026[] = {gem_v_run_ret};
-                (void)(gem_exit_process_fn(NULL, _t5026, 1));
+#line 498 "compiler/main.gem"
+    GemVal _t5023[] = {gem_v_run_ret};
+                (void)(gem_exit_process_fn(NULL, _t5023, 1));
             }
         }
     }

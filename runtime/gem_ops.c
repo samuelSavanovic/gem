@@ -14,7 +14,7 @@ GemVal gem_add(GemVal a, GemVal b) {
         char *s = (char *)GC_MALLOC_ATOMIC(la + lb + 1);
         memcpy(s, a.sval, la);
         memcpy(s + la, b.sval, lb + 1);
-        GemVal r; r.type = VAL_STRING; r.sval = s; return r;
+        GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s; return r;
     }
     { char buf[128]; snprintf(buf, sizeof(buf), "type error in +: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }

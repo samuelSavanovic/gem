@@ -71,7 +71,6 @@ static void gem_free_proc_slot(int pid) {
     proc->read_buf = NULL;
     proc->read_buf_cap = 0;
     proc->pcall_depth = 0;
-    proc->initial_env = NULL;
     proc->pid = -1;
     if (gem_free_tail >= 0) {
         gem_proc_table[gem_free_tail].pid = pid;
@@ -82,17 +81,6 @@ static void gem_free_proc_slot(int pid) {
 }
 
 #define GEM_REDUCTION_LIMIT 4000
-#define GEM_COMPACT_THRESHOLD      (256 * 1024)
-#define GEM_COMPACT_THRESHOLD_MAIN (1024 * 1024)
-
-static void gem_maybe_compact(GemProcess *proc) {
-    size_t threshold = (proc->pid == gem_main_pid)
-        ? GEM_COMPACT_THRESHOLD_MAIN
-        : GEM_COMPACT_THRESHOLD;
-    if (proc->arena.bytes_allocated >= threshold) {
-        gem_arena_compact(proc->pid, proc->coro->stack_base, proc->coro->stack_size);
-    }
-}
 
 void gem_yield_check(void) {
     if (gem_current_pid < 0) return;
@@ -156,7 +144,6 @@ void gem_selective_yield(int64_t deadline_ms) {
         return;
     }
     GemProcess *proc = &gem_proc_table[gem_current_pid];
-    gem_maybe_compact(proc);
     proc->deadline_ms = deadline_ms;
     proc->timed_out = 0;
     proc->state = GEM_PROC_WAITING;
@@ -245,7 +232,6 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].timed_out = 0;
     gem_proc_table[pid].reductions = 0;
     gem_proc_table[pid].pcall_depth = 0;
-    gem_proc_table[pid].initial_env = ctx->env;
 
     if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
     return pid;
@@ -275,7 +261,6 @@ GemVal gem_receive_msg(void) {
     GemProcess *proc = &gem_proc_table[gem_current_pid];
 
     while (gem_mailbox_empty(&proc->mailbox)) {
-        gem_maybe_compact(proc);
         proc->state = GEM_PROC_WAITING;
         mco_yield(proc->coro);
     }
@@ -296,8 +281,6 @@ void gem_io_pool_yield(void) {
 
 void gem_io_yield(int fd, int for_write) {
     if (gem_current_pid < 0 || gem_current_pid >= GEM_MAX_PROCS) {
-        /* Not inside a coroutine — can't yield, just return and let
-           the caller retry with a blocking call or spin. */
         return;
     }
     GemProcess *proc = &gem_proc_table[gem_current_pid];
@@ -388,7 +371,6 @@ void gem_run_main(GemFnPtr fn, void *env) {
     gem_proc_table[pid].timed_out = 0;
     gem_proc_table[pid].reductions = 0;
     gem_proc_table[pid].pcall_depth = 0;
-    gem_proc_table[pid].initial_env = ctx->env;
 
     if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
     gem_run_scheduler();

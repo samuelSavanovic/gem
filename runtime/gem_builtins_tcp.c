@@ -213,26 +213,26 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
                 char *s = (char *)GC_MALLOC_ATOMIC(n + 1);
                 memcpy(s, buf, n);
                 s[n] = '\0';
-                GemVal r; r.type = VAL_STRING; r.sval = s;
+                GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s;
                 return r;
             }
             if (n == 0) {
                 proc->deadline_ms = -1;
-                GemVal r; r.type = VAL_STRING; r.sval = "";
+                GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = "";
                 return r;
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 gem_io_yield(fd, 0);
                 if (proc->timed_out) {
                     proc->timed_out = 0;
-                    GemVal r; r.type = VAL_STRING; r.sval = "";
+                    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = "";
                     return r;
                 }
                 continue;
             }
             if (errno == ECONNRESET) {
                 proc->deadline_ms = -1;
-                GemVal r; r.type = VAL_STRING; r.sval = "";
+                GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = "";
                 return r;
             }
             proc->deadline_ms = -1;
@@ -251,7 +251,7 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
         gem_error(errbuf);
     }
     buf[n] = '\0';
-    GemVal r; r.type = VAL_STRING; r.sval = buf;
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = buf;
     return r;
 }
 

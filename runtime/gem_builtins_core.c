@@ -126,7 +126,7 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
             char *s = (char *)GC_MALLOC_ATOMIC(b->len + 1);
             memcpy(s, b->data, b->len);
             s[b->len] = '\0';
-            GemVal r; r.type = VAL_STRING; r.sval = s;
+            GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s;
             return r;
         }
         case VAL_REF: snprintf(buf, sizeof(buf), "#Ref<%lld>", (long long)v.rval); return gem_string(buf);

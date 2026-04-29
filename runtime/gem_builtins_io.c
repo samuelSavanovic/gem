@@ -47,7 +47,7 @@ GemVal gem_read_file_fn(void *_env, GemVal *args, int argc) {
         memcpy(data, req->result_data, req->result_len);
         data[req->result_len] = '\0';
         gem_io_free_request(req);
-        GemVal r; r.type = VAL_STRING; r.sval = data;
+        GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = data;
         return r;
     }
 
@@ -62,7 +62,7 @@ GemVal gem_read_file_fn(void *_env, GemVal *args, int argc) {
     size_t nread = fread(data, 1, (size_t)flen, f);
     data[nread] = '\0';
     fclose(f);
-    GemVal r; r.type = VAL_STRING; r.sval = data;
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = data;
     return r;
 }
 
@@ -185,7 +185,7 @@ GemVal gem_path_join_fn(void *_env, GemVal *args, int argc) {
     strcpy(result, dir);
     if (dlen > 0 && dir[dlen-1] != '/') strcat(result, "/");
     strcat(result, file);
-    GemVal r; r.type = VAL_STRING; r.sval = result;
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = result;
     return r;
 }
 

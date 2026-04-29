@@ -45,7 +45,7 @@ GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc) {
         }
     }
     *dst = '\0';
-    GemVal r; r.type = VAL_STRING; r.sval = result;
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = result;
     return r;
 }
 
@@ -76,7 +76,7 @@ GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
     char *buf = (char *)GC_MALLOC_ATOMIC((size_t)count + 1);
     memcpy(buf, s + start, (size_t)count);
     buf[count] = '\0';
-    GemVal r; r.type = VAL_STRING; r.sval = buf;
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = buf;
     return r;
 }
 
@@ -146,6 +146,7 @@ GemVal gem_interp(int n, GemVal *parts) {
     s[len] = '\0';
     GemVal r;
     r.type = VAL_STRING;
+    r.magic = GEM_MAGIC;
     r.sval = s;
     return r;
 }
@@ -160,6 +161,7 @@ GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc) {
     b->data = (char *)GC_MALLOC_ATOMIC(b->cap);
     GemVal r;
     r.type = VAL_BUFFER;
+    r.magic = GEM_MAGIC;
     r.buffer = b;
     return r;
 }
@@ -202,6 +204,7 @@ GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc) {
     s[b->len] = '\0';
     GemVal r;
     r.type = VAL_STRING;
+    r.magic = GEM_MAGIC;
     r.sval = s;
     return r;
 }
@@ -211,6 +214,7 @@ GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc) {
 static GemVal build_string_add_fn(void *_env, GemVal *args, int argc) {
     GemVal buf_val;
     buf_val.type = VAL_BUFFER;
+    buf_val.magic = GEM_MAGIC;
     buf_val.buffer = (GemBuffer *)_env;
     for (int i = 0; i < argc; i++) {
         GemVal push_args[2] = {buf_val, args[i]};
@@ -230,6 +234,7 @@ GemVal gem_build_string_fn(void *_env, GemVal *args, int argc) {
     b->data = (char *)GC_MALLOC_ATOMIC(b->cap);
     GemVal add_fn;
     add_fn.type = VAL_FN;
+    add_fn.magic = GEM_MAGIC;
     add_fn.fn = build_string_add_fn;
     add_fn.env = b;
     GemVal block_args[1] = {add_fn};
@@ -239,6 +244,7 @@ GemVal gem_build_string_fn(void *_env, GemVal *args, int argc) {
     s[b->len] = '\0';
     GemVal r;
     r.type = VAL_STRING;
+    r.magic = GEM_MAGIC;
     r.sval = s;
     return r;
 }
