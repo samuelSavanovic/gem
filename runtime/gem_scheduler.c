@@ -339,6 +339,7 @@ void gem_run_main(GemFnPtr fn, void *env) {
 void gem_run_scheduler(void) {
     int active = 1;
     int completed_since_gc = 0;
+    int resumes_since_gc = 0;
 
     while (active) {
         active = 0;
@@ -359,6 +360,7 @@ void gem_run_scheduler(void) {
                 gem_current_pid = i;
                 proc->reductions = 0;
                 mco_resume(proc->coro);
+                resumes_since_gc++;
 
                 if (mco_status(proc->coro) == MCO_DEAD) {
                     mco_destroy(proc->coro);
@@ -405,9 +407,10 @@ void gem_run_scheduler(void) {
 
         /* Periodically collect garbage to bound heap growth under
            sustained spawn/die churn (e.g. HTTP request handlers). */
-        if (completed_since_gc >= 500) {
+        if (completed_since_gc >= 50 || resumes_since_gc >= 5000) {
             GC_gcollect();
             completed_since_gc = 0;
+            resumes_since_gc = 0;
         }
 
         /* If we ran at least one READY process, loop immediately —

@@ -224,6 +224,12 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
                 }
                 continue;
             }
+            if (errno == ECONNRESET) {
+                proc->deadline_ms = -1;
+                buf[0] = '\0';
+                GemVal r; r.type = VAL_STRING; r.sval = buf;
+                return r;
+            }
             proc->deadline_ms = -1;
             char errbuf[256];
             snprintf(errbuf, sizeof(errbuf), "tcp_read: read failed: %s", strerror(errno));
@@ -266,6 +272,9 @@ GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
                 gem_io_yield(fd, 1);
                 continue;
             }
+            if (errno == EPIPE || errno == ECONNRESET) {
+                return gem_int((int64_t)sent);
+            }
             char buf[256];
             snprintf(buf, sizeof(buf), "tcp_write: write failed: %s", strerror(errno));
             gem_error(buf);
@@ -277,6 +286,9 @@ GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
     while (sent < total) {
         ssize_t n = write(fd, data + sent, total - sent);
         if (n < 0) {
+            if (errno == EPIPE || errno == ECONNRESET) {
+                return gem_int((int64_t)sent);
+            }
             char buf[256];
             snprintf(buf, sizeof(buf), "tcp_write: write failed: %s", strerror(errno));
             gem_error(buf);

@@ -11,6 +11,7 @@
 #include "stb_ds.h"
 
 #include "gem.h"
+#include <signal.h>
 
 /* ─── Globals ─── */
 
@@ -43,6 +44,7 @@ void gem_init(int argc, char **argv) {
     gem_stored_argv = argv;
     gem_rng_state = (uint64_t)time(NULL) ^ ((uint64_t)clock() << 32);
     if (gem_rng_state == 0) gem_rng_state = 1;
+    signal(SIGPIPE, SIG_IGN);
 }
 
 /* ─── Single-character string cache ─── */

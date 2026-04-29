@@ -1,25 +1,47 @@
 # Optimization TODOs
 
 Future performance improvements. None are blocking — collect ideas here as they come up.
-Prioritize by real-world impact (the compiler is the benchmark).
 
-## Value Representation
+Priorities are informed by benchmark results from the bookmark CRUD app (2026-04-29):
+- GET /bookmarks (20 rows): p50=1.55ms, p99=27ms, 5.5k req/s
+- GET / (static HTML): p50=305us, p99=6ms, 28k req/s
+- Soak (5min, 4c): p50=540us, p99=32ms, 5.4k req/s, RSS stable at 1.46 GB
+- POST /bookmarks: p50=25ms, p99=89ms, 160 req/s
 
-### NaN boxing (high priority)
-GemVal is currently 16 bytes (4-byte type enum + 8-byte union + padding). NaN boxing packs type + value into a single 8-byte double by exploiting the NaN payload space. Halves memory per value, improves cache locality, eliminates the type field branch in hot paths. The payoff isn't just memory — every function call, table lookup, and arithmetic op passes GemVals, so halving their size compounds across the entire runtime. Requires rewriting every GemVal constructor and accessor. Major undertaking but large payoff.
+Key bottlenecks: GC pauses dominate p99 latency; per-request GC allocation rate drives RSS;
+string concatenation in HTML templates is the main allocation source.
 
-### Avoid hashing integers in tables
+Priority scale: **P0** = measurable impact on benchmark right now, **P1** = significant but
+requires groundwork, **P2** = nice to have or niche.
+
+## GC / Memory (P0)
+
+### Reuse tcp_read buffer per process
+`tcp_read` allocates a 4KB `GC_MALLOC_ATOMIC` buffer on every call. With keep-alive connections processing thousands of requests, this generates ~240 MB/s of garbage under load. A per-process reusable read buffer (allocated once, stored on the process struct) would eliminate the single largest allocation source in the HTTP path.
+
+### String builder for response construction
+Every string concatenation (`+`) in the Gem HTTP handler allocates a new GC string. Building a 20-row HTML table concatenates ~100 intermediate strings per request. A `buf_new`/`buf_push`/`buf_str` pattern is available in std but the HTTP framework and app code use `+`. Compiler-level `x = x + y` → buffer optimization (see codegen section) would fix this globally. Until then, rewriting hot paths to use buffers is the manual fix.
+
+### Reduce GC pause duration
+GC_gcollect() is stop-the-world. At ~5k req/s, pauses of 20-30ms cause the p99 spikes. Options: (a) `GC_enable_incremental()` for incremental collection (trade throughput for lower max pause), (b) tune `GC_set_free_space_divisor` to collect more frequently with shorter pauses, (c) reduce the root set by not registering idle coroutine stacks. Needs profiling to pick the right lever.
+
+## Value Representation (P1)
+
+### NaN boxing
+GemVal is currently 16 bytes (4-byte type enum + 8-byte union + padding). NaN boxing packs type + value into a single 8-byte double by exploiting the NaN payload space. Halves memory per value, improves cache locality, eliminates the type field branch in hot paths. The payoff isn't just memory — every function call, table lookup, and arithmetic op passes GemVals, so halving their size compounds across the entire runtime. Requires rewriting every GemVal constructor and accessor. Major undertaking but large payoff. Would also directly reduce GC pressure since every value, table entry, and function argument shrinks.
+
+### Avoid hashing integers in tables (P2)
 Integer keys currently fall through to a linear scan if they don't match the array-style fast path (sequential 0..n). A dedicated int hash map (parallel to `str_index`) would give O(1) lookup for sparse integer keys. Low priority — most integer keys follow the array pattern.
 
 ## Strings
 
-### String views / slices (defer)
+### String views / slices (P1)
 `substr` allocates a copy. A view (pointer + offset + length) into the original string would make substring extraction O(1). Requires changing the string representation in GemVal (add length field, stop assuming null-termination). Every string consumer (`strlen`, `strcmp`, `printf %s`) needs updating. Defer until profiling shows substring allocation as a real bottleneck — the C interop boundary assumes null-terminated strings throughout, and `substr`/`ord(s, i)` already cover the hot cases without changing the representation.
 
-### String interning for short strings
-Small strings (< 16 bytes) could be interned in a global table, turning equality checks into pointer comparison. Most table keys are short identifier strings — this would speed up every `gem_table_get`/`gem_table_set` with string keys. Trade-off: GC interaction (interned strings must be roots or use weak refs).
+### String interning for short strings (P1)
+Small strings (< 16 bytes) could be interned in a global table, turning equality checks into pointer comparison. Most table keys are short identifier strings — this would speed up every `gem_table_get`/`gem_table_set` with string keys. Trade-off: GC interaction (interned strings must be roots or use weak refs). Would also reduce GC allocation rate — repeated key lookups like `"tag"`, `"pid"`, `"url"` currently allocate a fresh string each time via `gem_string()`.
 
-### `gem_string()` copies unconditionally
+### `gem_string()` copies unconditionally (P2)
 `gem_string(const char *s)` always allocates + memcpy. Callers that already have a GC-allocated string (e.g. `buf_str`) pay for a redundant copy. A `gem_string_own(char *s)` variant that takes ownership would eliminate this.
 
 ## Codegen Output
@@ -27,11 +49,26 @@ Small strings (< 16 bytes) could be interned in a global table, turning equality
 ### ~~O(n²) string building in codegen~~ ✓ Done
 All heavy string accumulators in `compiler/codegen.gem` rewritten to use `buf_new`/`buf_push`/`buf_str`. Eliminated ~188 O(n²) concatenations.
 
-### `x = x + y` auto-optimization
-The compiler could detect the self-append pattern `assign(name, binary("+", var(name), expr))` and emit buffer operations instead of `gem_add`. Would fix O(n²) string building globally without requiring source changes. Non-trivial compiler change — needs tracking of which variables are in "append mode".
+### `x = x + y` auto-optimization (P0)
+The compiler could detect the self-append pattern `assign(name, binary("+", var(name), expr))` and emit buffer operations instead of `gem_add`. Would fix O(n²) string building globally without requiring source changes. Non-trivial compiler change — needs tracking of which variables are in "append mode". This is the highest-leverage compiler optimization for HTTP workloads where response bodies are built by repeated concatenation.
 
-### Redundant `gem_push_frame` / `gem_pop_frame`
-Every function call emits frame push/pop for stack traces. Leaf functions (no calls inside) could skip this. Requires analysis in the codegen to detect leaf status.
+### Redundant `gem_push_frame` / `gem_pop_frame` (P1)
+Every function call emits frame push/pop for stack traces. Leaf functions (no calls inside) could skip this. Requires analysis in the codegen to detect leaf status. Benchmark shows overhead in the hot path — eliminating frame tracking for leaf functions called per-request would help throughput.
+
+### Escape analysis for non-escaping closures (P1)
+Every `fn() ... end` heap-allocates a closure with its captured environment. Most closures never escape: `pcall(fn() ... end)`, `do ... end` blocks passed to iterators, `sort(arr, fn(a,b) ... end)`. If the compiler detects that a closure is only called within the local scope and never stored, it could stack-allocate or skip the closure allocation entirely. The pattern is syntactically detectable for the common cases (immediate call-site argument). Bigger lift but high frequency — closures are the primary abstraction mechanism. Directly reduces GC allocation rate.
+
+### Constant folding (P2)
+Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile time. The compiler already has all the information. Low value at current stage — the cases where humans write foldable constants are rare, and it doesn't affect compilation time.
+
+### Dead code elimination (P2)
+Unreachable code after `return`, `break`, `error()` could be stripped. Currently emitted as-is.
+
+### ~~Self-recursive tail call optimization~~ ✓ Done
+Codegen detects self-recursive calls in tail position (last expression in function body, propagating through if/else, match, receive, and block branches) and emits a `while(1)` loop with parameter reassignment + `continue` instead of a recursive call. `gem_push_frame` runs once on entry; `gem_yield_check` runs each iteration for cooperative scheduling. Multi-param reassignment uses temps to avoid ordering issues. Boxed (closure-captured) params reassign through the pointer. Functions with rest/block params or shadowed names skip TCO. Covers ~95% of OTP patterns (gen_server loops, supervisor restarts, recursive receive handlers).
+
+### Mutual tail call optimization (P2)
+Mutual recursion (A calls B in tail position, B calls A) could use trampolines or computed goto. Lower priority — rare in OTP patterns. Self-recursive TCO already covers the common case.
 
 ## Table Access
 
@@ -43,40 +80,20 @@ Desugaring now uses `__table_key_at` / `__table_val_at` to index directly into t
 
 ## Runtime Hot Paths
 
-### `gem_eq` for strings
+### `gem_eq` for strings (P2)
 Currently `strcmp`. If string interning lands, short strings become pointer equality. Even without interning, caching string length would let us short-circuit on length mismatch before comparing bytes.
 
-### `gem_add` for strings
-Every string `+` does `strlen` on both operands. If strings carried their length, this becomes a field read. Depends on string views/length-aware representation.
+### `gem_add` for strings (P1)
+Every string `+` does `strlen` on both operands. If strings carried their length, this becomes a field read. Depends on string views/length-aware representation. Directly impacts the HTML response building hot path.
 
-### `buf_push` specialization for non-strings
+### `buf_push` specialization for non-strings (P2)
 `buf_push` auto-coerces non-string values via `to_string`, allocating a temporary string. Specialized variants (`buf_push_int`, `buf_push_float`) that write directly into the buffer would skip the allocation. Small win per call but high frequency in formatting-heavy code.
 
-### Constructor return-by-value
-`gem_int()`, `gem_float()`, `gem_bool()`, `gem_string()` all return `GemVal` by value (16 bytes). With NaN boxing these become trivial bit operations returning 8 bytes. Without NaN boxing, the compiler could use static inline or macros for the trivial constructors.
+### Constructor return-by-value (P1)
+`gem_int()`, `gem_float()`, `gem_bool()`, `gem_string()` all return `GemVal` by value (16 bytes). With NaN boxing these become trivial bit operations returning 8 bytes. Without NaN boxing, the compiler could use static inline or macros for the trivial constructors. Blocked on NaN boxing for the full win.
 
-### Table grow strategy
+### Table grow strategy (P2)
 `gem_table_grow` doubles capacity. Could use a growth factor of 1.5 to reduce memory waste, or start with capacity 0 (no allocation) for tables that might stay empty.
-
-## Compiler
-
-### ~~String interpolation codegen~~ ✓ Done
-Codegen emits `gem_interp(N, parts)` — a single C call that buffers all parts with inline type coercion and produces one final string allocation. Replaces the previous O(N²) chained `gem_add` approach.
-
-### Escape analysis for non-escaping closures
-Every `fn() ... end` heap-allocates a closure with its captured environment. Most closures never escape: `pcall(fn() ... end)`, `do ... end` blocks passed to iterators, `sort(arr, fn(a,b) ... end)`. If the compiler detects that a closure is only called within the local scope and never stored, it could stack-allocate or skip the closure allocation entirely. The pattern is syntactically detectable for the common cases (immediate call-site argument). Bigger lift but high frequency — closures are the primary abstraction mechanism.
-
-### Constant folding (low priority)
-Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile time. The compiler already has all the information. Low value at current stage — the cases where humans write foldable constants are rare, and it doesn't affect compilation time.
-
-### Dead code elimination
-Unreachable code after `return`, `break`, `error()` could be stripped. Currently emitted as-is.
-
-### ~~Self-recursive tail call optimization~~ ✓ Done
-Codegen detects self-recursive calls in tail position (last expression in function body, propagating through if/else, match, receive, and block branches) and emits a `while(1)` loop with parameter reassignment + `continue` instead of a recursive call. `gem_push_frame` runs once on entry; `gem_yield_check` runs each iteration for cooperative scheduling. Multi-param reassignment uses temps to avoid ordering issues. Boxed (closure-captured) params reassign through the pointer. Functions with rest/block params or shadowed names skip TCO. Covers ~95% of OTP patterns (gen_server loops, supervisor restarts, recursive receive handlers).
-
-### Mutual tail call optimization
-Mutual recursion (A calls B in tail position, B calls A) could use trampolines or computed goto. Lower priority — rare in OTP patterns. Self-recursive TCO already covers the common case.
 
 ## Runtime I/O
 
@@ -98,22 +115,22 @@ The thread pool adds per-operation overhead: mutex lock → enqueue → cond sig
 
 **Lesson:** Thread pool is correct for file I/O and `exec` (where the kernel provides no readiness notification). For sockets, always use non-blocking + readiness notification (poll, kqueue, epoll).
 
-### Selective receive save-queue optimization
+### Selective receive save-queue optimization (P2)
 `receive ... when` scans the mailbox from oldest to newest on every wake. If a process accumulates many messages and the match is near the end, that's O(n) pattern matches per wake. Erlang's optimization: remember which messages were already tested against the current receive and skip them on re-scan, only testing newly arrived messages. Non-trivial but maps onto the existing mailbox structure — a "scan cursor" per process that advances as messages are rejected and resets when the receive shape changes or a new message arrives.
 
-### Timer min-heap
+### Timer min-heap (P2)
 Timers are stored in a fixed-size array (256 slots) with linear scan for insert, fire, cancel, and earliest-deadline lookup. Replace with a dynamic min-heap keyed by deadline. Insert and cancel become O(log n), `gem_fire_timers` pops expired entries from the front in O(log n) per fired timer, and `gem_earliest_timer_deadline` becomes O(1) (peek the root). Removes the 256-slot cap — unlimited concurrent timers without hitting "timer table full". Matters for applications with many gen_servers or heavy `send_after` usage.
 
-### kqueue/epoll for sockets (Phase 2)
+### kqueue/epoll for sockets (P2)
 The scheduler currently uses `poll()` for socket readiness. Replacing with **kqueue** (macOS/BSD) or **epoll** (Linux) would improve scalability at high connection counts (thousands of fds). `poll()` scans the entire fd set on each call — O(n) per wake. kqueue/epoll return only ready fds — O(ready). For the current HTTP server benchmark (~100 concurrent connections), `poll()` is not the bottleneck; this optimization matters when scaling to thousands of simultaneous connections.
 
 ## std/json
 
-### Null byte handling in strings
+### Null byte handling in strings (P2)
 C strings are null-terminated, so embedded `\x00` bytes are invisible to the parser. This causes one JSONTestSuite failure: `n_multidigit_number_then_00` (a number followed by a null byte parses as valid because the null truncates the input). Fixing this requires length-aware strings throughout the runtime — depends on the string views/slices work above. When strings carry their length, the scanner can detect unexpected null bytes and reject them.
 
-### Fast path for escape-free strings in parse
+### Fast path for escape-free strings in parse (P2)
 `parse_string` always allocates a buffer and pushes byte-by-byte. Most JSON strings contain no escapes. A fast path that scans for the closing `"` first (checking for `\` along the way) and uses `substr` when no escapes are found would avoid the buffer allocation entirely. 2-3x speedup on string-heavy JSON.
 
-### Scanner as plain table instead of closure
+### Scanner as plain table instead of closure (P2)
 The closure-based scanner (`{peek, advance, skip_ws}`) pays for hashmap lookup + closure call + captured variable access on every character. A flat table `{input, pos, length}` with module-level functions `peek(s)`, `advance(s)`, `skip_ws(s)` avoids closure overhead. More idiomatic for a language without methods.
