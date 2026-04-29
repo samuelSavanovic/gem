@@ -39,19 +39,19 @@ let format_date = fn(ms)
 end
 
 let render_bookmark_row = fn(b)
-  let buf = buf_new()
-  buf_push(buf, "<tr id='bookmark-" + to_string(b.id) + "'>")
-  buf_push(buf, "<td><a href='" + esc(b.url) + "' target='_blank'>" + esc(b.url) + "</a></td>")
-  buf_push(buf, "<td id='title-" + to_string(b.id) + "'>" + esc(b.title) + "</td>")
-  buf_push(buf, "<td>" + esc(b.tags) + "</td>")
-  buf_push(buf, "<td>" + format_date(b.created_at) + "</td>")
-  buf_push(buf, "<td class='actions'>")
-  buf_push(buf, "<button hx-post='/bookmarks/" + to_string(b.id) + "/fetch-title' hx-target='#title-" + to_string(b.id) + "' hx-swap='innerHTML'>Fetch Title</button>")
-  buf_push(buf, " <button hx-get='/bookmarks/" + to_string(b.id) + "/edit' hx-target='#bookmarks' hx-swap='innerHTML'>Edit</button>")
-  buf_push(buf, " <button hx-delete='/bookmarks/" + to_string(b.id) + "' hx-target='#bookmarks' hx-swap='innerHTML' hx-confirm='Delete this bookmark?'>Delete</button>")
-  buf_push(buf, "</td>")
-  buf_push(buf, "</tr>")
-  buf_str(buf)
+  """
+  <tr id='bookmark-{b.id}'>
+  <td><a href='{esc(b.url)}' target='_blank'>{esc(b.url)}</a></td>
+  <td id='title-{b.id}'>{esc(b.title)}</td>
+  <td>{esc(b.tags)}</td>
+  <td>{format_date(b.created_at)}</td>
+  <td class='actions'>
+  <button hx-post='/bookmarks/{b.id}/fetch-title' hx-target='#title-{b.id}' hx-swap='innerHTML'>Fetch Title</button>
+   <button hx-get='/bookmarks/{b.id}/edit' hx-target='#bookmarks' hx-swap='innerHTML'>Edit</button>
+   <button hx-delete='/bookmarks/{b.id}' hx-target='#bookmarks' hx-swap='innerHTML' hx-confirm='Delete this bookmark?'>Delete</button>
+  </td>
+  </tr>
+  """
 end
 
 let render_bookmark_list = fn(bookmarks)
@@ -76,15 +76,15 @@ let render_edit_form = fn(b)
   if b.tags != nil
     tag_val = esc(b.tags)
   end
-  let buf = buf_new()
-  buf_push(buf, "<form hx-put='/bookmarks/" + to_string(b.id) + "' hx-target='#bookmarks' hx-swap='innerHTML' class='edit-form'>")
-  buf_push(buf, "<h3>Editing bookmark #" + to_string(b.id) + "</h3>")
-  buf_push(buf, "<label>URL <input type='text' name='url' value='" + esc(b.url) + "' required></label>")
-  buf_push(buf, "<label>Title <input type='text' name='title' value='" + esc(b.title) + "' required></label>")
-  buf_push(buf, "<label>Tags <input type='text' name='tags' value='" + tag_val + "' placeholder='comma-separated'></label>")
-  buf_push(buf, "<div class='edit-actions'><button type='submit'>Save</button> <button hx-get='/bookmarks' hx-target='#bookmarks' hx-swap='innerHTML'>Cancel</button></div>")
-  buf_push(buf, "</form>")
-  buf_str(buf)
+  """
+  <form hx-put='/bookmarks/{b.id}' hx-target='#bookmarks' hx-swap='innerHTML' class='edit-form'>
+  <h3>Editing bookmark #{b.id}</h3>
+  <label>URL <input type='text' name='url' value='{esc(b.url)}' required></label>
+  <label>Title <input type='text' name='title' value='{esc(b.title)}' required></label>
+  <label>Tags <input type='text' name='tags' value='{tag_val}' placeholder='comma-separated'></label>
+  <div class='edit-actions'><button type='submit'>Save</button> <button hx-get='/bookmarks' hx-target='#bookmarks' hx-swap='innerHTML'>Cancel</button></div>
+  </form>
+  """
 end
 
 let get_all_bookmarks = fn()
