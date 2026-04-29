@@ -60,17 +60,17 @@ fn index_of(s, needle)
 end
 
 fn join(arr, delim)
-  let buf = buf_new()
-  let i = 0
-  let n = len(arr)
-  while i < n
-    if i > 0
-      buf_push(buf, delim)
+  build_string() do |add|
+    let i = 0
+    let n = len(arr)
+    while i < n
+      if i > 0
+        add(delim)
+      end
+      add(arr[i])
+      i += 1
     end
-    buf_push(buf, arr[i])
-    i += 1
   end
-  buf_str(buf)
 end
 
 fn trim(s)
@@ -114,29 +114,29 @@ fn ends_with(s, suffix)
 end
 
 fn upper(s)
-  let buf = buf_new()
-  for i = 0, len(s)
-    let c = ord(s, i)
-    if c >= 97 and c <= 122
-      buf_push(buf, chr(c - 32))
-    else
-      buf_push(buf, chr(c))
+  build_string() do |add|
+    for i = 0, len(s)
+      let c = ord(s, i)
+      if c >= 97 and c <= 122
+        add(chr(c - 32))
+      else
+        add(chr(c))
+      end
     end
   end
-  buf_str(buf)
 end
 
 fn lower(s)
-  let buf = buf_new()
-  for i = 0, len(s)
-    let c = ord(s, i)
-    if c >= 65 and c <= 90
-      buf_push(buf, chr(c + 32))
-    else
-      buf_push(buf, chr(c))
+  build_string() do |add|
+    for i = 0, len(s)
+      let c = ord(s, i)
+      if c >= 65 and c <= 90
+        add(chr(c + 32))
+      else
+        add(chr(c))
+      end
     end
   end
-  buf_str(buf)
 end
 
 fn contains(s, needle)
@@ -144,11 +144,11 @@ fn contains(s, needle)
 end
 
 fn repeat(s, n)
-  let buf = buf_new()
-  for i = 0, n
-    buf_push(buf, s)
+  build_string() do |add|
+    for i = 0, n
+      add(s)
+    end
   end
-  buf_str(buf)
 end
 
 export split, index_of, join, trim, starts_with, ends_with, upper, lower, contains, repeat

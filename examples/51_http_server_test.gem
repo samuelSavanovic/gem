@@ -60,26 +60,27 @@ spawn() do
   # Helper to make HTTP requests
   let make_request = fn(method, path, body, extra_headers)
     let fd = tcp_connect("127.0.0.1", port)
-    let buf = buf_new()
-    buf_push(buf, method + " " + path + " HTTP/1.1\r\n")
-    buf_push(buf, "Host: localhost\r\n")
-    buf_push(buf, "Connection: close\r\n")
-    if body != nil and len(body) > 0
-      buf_push(buf, "Content-Length: " + to_string(len(body)) + "\r\n")
-    end
-    if extra_headers != nil
-      let ks = keys(extra_headers)
-      let i = 0
-      while i < len(ks)
-        buf_push(buf, ks[i] + ": " + extra_headers[ks[i]] + "\r\n")
-        i += 1
+    let req_str = build_string() do |add|
+      add(method, " ", path, " HTTP/1.1\r\n")
+      add("Host: localhost\r\n")
+      add("Connection: close\r\n")
+      if body != nil and len(body) > 0
+        add("Content-Length: ", to_string(len(body)), "\r\n")
+      end
+      if extra_headers != nil
+        let ks = keys(extra_headers)
+        let i = 0
+        while i < len(ks)
+          add(ks[i], ": ", extra_headers[ks[i]], "\r\n")
+          i += 1
+        end
+      end
+      add("\r\n")
+      if body != nil
+        add(body)
       end
     end
-    buf_push(buf, "\r\n")
-    if body != nil
-      buf_push(buf, body)
-    end
-    tcp_write(fd, buf_str(buf))
+    tcp_write(fd, req_str)
 
     let resp_buf = buf_new()
     let reading = true

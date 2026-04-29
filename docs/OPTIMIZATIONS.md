@@ -19,8 +19,8 @@ requires groundwork, **P2** = nice to have or niche.
 ### ~~Reuse tcp_read buffer per process~~ ✓ Done
 `GemProcess` now has a `read_buf`/`read_buf_cap` pair. `tcp_read` allocates the read buffer once per process and reuses it across calls, copying only the actual bytes read into an exact-size GC string for the return value.
 
-### String builder for response construction
-Every string concatenation (`+`) in the Gem HTTP handler allocates a new GC string. Building a 20-row HTML table concatenates ~100 intermediate strings per request. A `buf_new`/`buf_push`/`buf_str` pattern is available in std but the HTTP framework and app code use `+`. Compiler-level `x = x + y` → buffer optimization (see codegen section) would fix this globally. Until then, rewriting hot paths to use buffers is the manual fix.
+### ~~String builder for response construction~~ ✓ Done
+`build_string` builtin added — creates a buffer, passes an `add` closure to the block, returns the finalized string. `push` and `to_string` now work on buffers. `std/http.gem` response serialization and `examples/bookmark_app/app.gem` HTML templates rewritten to use `build_string` blocks instead of `+` concatenation.
 
 ### Reduce GC pause duration
 GC_gcollect() is stop-the-world. At ~5k req/s, pauses of 20-30ms cause the p99 spikes. Options: (a) `GC_enable_incremental()` for incremental collection (trade throughput for lower max pause), (b) tune `GC_set_free_space_divisor` to collect more frequently with shorter pauses, (c) reduce the root set by not registering idle coroutine stacks. Needs profiling to pick the right lever.

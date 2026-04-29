@@ -81,26 +81,27 @@ fn do_request(method, raw_url, opts)
 
   let fd = tcp_connect(parsed.host, parsed.port)
 
-  let buf = buf_new()
-  buf_push(buf, method + " " + parsed.path + " HTTP/1.1\r\n")
-  buf_push(buf, "Host: " + parsed.host + "\r\n")
-  buf_push(buf, "Connection: close\r\n")
-  if len(body) > 0
-    buf_push(buf, "Content-Length: " + to_string(len(body)) + "\r\n")
-  end
+  let req_str = build_string() do |add|
+    add(method, " ", parsed.path, " HTTP/1.1\r\n")
+    add("Host: ", parsed.host, "\r\n")
+    add("Connection: close\r\n")
+    if len(body) > 0
+      add("Content-Length: ", to_string(len(body)), "\r\n")
+    end
 
-  let ks = keys(user_headers)
-  let i = 0
-  while i < len(ks)
-    buf_push(buf, ks[i] + ": " + user_headers[ks[i]] + "\r\n")
-    i += 1
-  end
+    let ks = keys(user_headers)
+    let i = 0
+    while i < len(ks)
+      add(ks[i], ": ", user_headers[ks[i]], "\r\n")
+      i += 1
+    end
 
-  buf_push(buf, "\r\n")
-  if len(body) > 0
-    buf_push(buf, body)
+    add("\r\n")
+    if len(body) > 0
+      add(body)
+    end
   end
-  tcp_write(fd, buf_str(buf))
+  tcp_write(fd, req_str)
 
   let resp_buf = buf_new()
   let reading = true

@@ -205,3 +205,40 @@ GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc) {
     r.sval = s;
     return r;
 }
+
+/* ─── build_string ─── */
+
+static GemVal build_string_add_fn(void *_env, GemVal *args, int argc) {
+    GemVal buf_val;
+    buf_val.type = VAL_BUFFER;
+    buf_val.buffer = (GemBuffer *)_env;
+    for (int i = 0; i < argc; i++) {
+        GemVal push_args[2] = {buf_val, args[i]};
+        gem_buf_push_fn(NULL, push_args, 2);
+    }
+    return GEM_NIL;
+}
+
+GemVal gem_build_string_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_FN) {
+        gem_error("build_string: expected a function argument");
+    }
+    GemBuffer *b = (GemBuffer *)GC_MALLOC(sizeof(GemBuffer));
+    b->cap = 256;
+    b->len = 0;
+    b->data = (char *)GC_MALLOC_ATOMIC(b->cap);
+    GemVal add_fn;
+    add_fn.type = VAL_FN;
+    add_fn.fn = build_string_add_fn;
+    add_fn.env = b;
+    GemVal block_args[1] = {add_fn};
+    args[0].fn(args[0].env, block_args, 1);
+    char *s = (char *)GC_MALLOC_ATOMIC(b->len + 1);
+    memcpy(s, b->data, b->len);
+    s[b->len] = '\0';
+    GemVal r;
+    r.type = VAL_STRING;
+    r.sval = s;
+    return r;
+}

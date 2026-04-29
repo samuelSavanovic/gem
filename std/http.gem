@@ -46,8 +46,6 @@ fn set_cookie(resp, name, value, opts = {})
   if opts == nil
     opts = {}
   end
-  let buf = buf_new()
-  buf_push(buf, name + "=" + value)
   let path = "/"
   let http_only = true
   let secure = false
@@ -72,21 +70,23 @@ fn set_cookie(resp, name, value, opts = {})
   if opts.expires != nil
     expires = opts.expires
   end
-  buf_push(buf, "; Path=" + path)
-  if max_age != nil
-    buf_push(buf, "; Max-Age=" + to_string(max_age))
+  let cookie_str = build_string() do |add|
+    add(name, "=", value)
+    add("; Path=", path)
+    if max_age != nil
+      add("; Max-Age=", to_string(max_age))
+    end
+    if expires != nil
+      add("; Expires=", time.http_date(expires))
+    end
+    if http_only
+      add("; HttpOnly")
+    end
+    if secure
+      add("; Secure")
+    end
+    add("; SameSite=", same_site)
   end
-  if expires != nil
-    buf_push(buf, "; Expires=" + time.http_date(expires))
-  end
-  if http_only
-    buf_push(buf, "; HttpOnly")
-  end
-  if secure
-    buf_push(buf, "; Secure")
-  end
-  buf_push(buf, "; SameSite=" + same_site)
-  let cookie_str = buf_str(buf)
 
   let new_headers = {}
   let ks = keys(resp.headers)
@@ -148,27 +148,27 @@ end
 # ─── Security ───
 
 fn html_escape(s)
-  let buf = buf_new()
-  let i = 0
-  let slen = len(s)
-  while i < slen
-    let c = ord(s, i)
-    if c == 38
-      buf_push(buf, "&amp;")
-    elif c == 60
-      buf_push(buf, "&lt;")
-    elif c == 62
-      buf_push(buf, "&gt;")
-    elif c == 34
-      buf_push(buf, "&quot;")
-    elif c == 39
-      buf_push(buf, "&#x27;")
-    else
-      buf_push(buf, chr(c))
+  build_string() do |add|
+    let i = 0
+    let slen = len(s)
+    while i < slen
+      let c = ord(s, i)
+      if c == 38
+        add("&amp;")
+      elif c == 60
+        add("&lt;")
+      elif c == 62
+        add("&gt;")
+      elif c == 34
+        add("&quot;")
+      elif c == 39
+        add("&#x27;")
+      else
+        add(chr(c))
+      end
+      i += 1
     end
-    i += 1
   end
-  buf_str(buf)
 end
 
 # ─── Router ───
@@ -377,43 +377,42 @@ fn status_text(code)
 end
 
 fn serialize_response(resp, keep_alive)
-  let buf = buf_new()
-  let st = status_text(resp.status)
-  buf_push(buf, "HTTP/1.1 " + to_string(resp.status) + " " + st + "\r\n")
-
   let body = resp.body
   if body == nil
     body = ""
   end
-  buf_push(buf, "Content-Length: " + to_string(len(body)) + "\r\n")
+  let st = status_text(resp.status)
+  build_string() do |add|
+    add("HTTP/1.1 ", to_string(resp.status), " ", st, "\r\n")
+    add("Content-Length: ", to_string(len(body)), "\r\n")
 
-  if keep_alive
-    buf_push(buf, "Connection: keep-alive\r\n")
-  else
-    buf_push(buf, "Connection: close\r\n")
-  end
-
-  let ks = keys(resp.headers)
-  let i = 0
-  while i < len(ks)
-    let k = ks[i]
-    let v = resp.headers[k]
-    if k == "Set-Cookie" and string.contains(v, "\r\nSet-Cookie: ")
-      let parts = string.split(v, "\r\nSet-Cookie: ")
-      let j = 0
-      while j < len(parts)
-        buf_push(buf, "Set-Cookie: " + parts[j] + "\r\n")
-        j += 1
-      end
+    if keep_alive
+      add("Connection: keep-alive\r\n")
     else
-      buf_push(buf, k + ": " + v + "\r\n")
+      add("Connection: close\r\n")
     end
-    i += 1
-  end
 
-  buf_push(buf, "\r\n")
-  buf_push(buf, body)
-  buf_str(buf)
+    let ks = keys(resp.headers)
+    let i = 0
+    while i < len(ks)
+      let k = ks[i]
+      let v = resp.headers[k]
+      if k == "Set-Cookie" and string.contains(v, "\r\nSet-Cookie: ")
+        let parts = string.split(v, "\r\nSet-Cookie: ")
+        let j = 0
+        while j < len(parts)
+          add("Set-Cookie: ", parts[j], "\r\n")
+          j += 1
+        end
+      else
+        add(k, ": ", v, "\r\n")
+      end
+      i += 1
+    end
+
+    add("\r\n")
+    add(body)
+  end
 end
 
 # ─── Connection handler ───

@@ -12,7 +12,8 @@ GemVal gem_push_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2) { gem_error("push: expected 2 arguments"); }
     GemVal tbl = args[0];
-    if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "push: expected table as first argument, got %s", gem_type_str(tbl)); gem_error(buf); }
+    if (tbl.type == VAL_BUFFER) return gem_buf_push_fn(_env, args, argc);
+    if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "push: expected table or buffer as first argument, got %s", gem_type_str(tbl)); gem_error(buf); }
     GemTable *t = tbl.table;
     GemVal val = args[1];
     if (t->len >= t->cap) gem_table_grow(t);

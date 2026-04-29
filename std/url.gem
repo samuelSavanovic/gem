@@ -25,46 +25,46 @@ fn hex_val(c)
 end
 
 fn encode(s)
-  let buf = buf_new()
-  let i = 0
-  let slen = len(s)
-  while i < slen
-    let c = ord(s, i)
-    if is_unreserved(c)
-      buf_push(buf, chr(c))
-    else
-      buf_push(buf, "%" + hex_digit(c / 16) + hex_digit(c % 16))
+  build_string() do |add|
+    let i = 0
+    let slen = len(s)
+    while i < slen
+      let c = ord(s, i)
+      if is_unreserved(c)
+        add(chr(c))
+      else
+        add("%", hex_digit(c / 16), hex_digit(c % 16))
+      end
+      i += 1
     end
-    i += 1
   end
-  buf_str(buf)
 end
 
 fn decode(s)
-  let buf = buf_new()
-  let i = 0
-  let slen = len(s)
-  while i < slen
-    let c = ord(s, i)
-    if c == 43
-      buf_push(buf, " ")
-      i += 1
-    elif c == 37 and i + 2 < slen
-      let hi = hex_val(ord(s, i + 1))
-      let lo = hex_val(ord(s, i + 2))
-      if hi >= 0 and lo >= 0
-        buf_push(buf, chr(hi * 16 + lo))
-        i += 3
+  build_string() do |add|
+    let i = 0
+    let slen = len(s)
+    while i < slen
+      let c = ord(s, i)
+      if c == 43
+        add(" ")
+        i += 1
+      elif c == 37 and i + 2 < slen
+        let hi = hex_val(ord(s, i + 1))
+        let lo = hex_val(ord(s, i + 2))
+        if hi >= 0 and lo >= 0
+          add(chr(hi * 16 + lo))
+          i += 3
+        else
+          add("%")
+          i += 1
+        end
       else
-        buf_push(buf, "%")
+        add(chr(c))
         i += 1
       end
-    else
-      buf_push(buf, chr(c))
-      i += 1
     end
   end
-  buf_str(buf)
 end
 
 fn parse_query(s)
@@ -103,21 +103,21 @@ fn parse_query(s)
 end
 
 fn build_query(tbl)
-  let buf = buf_new()
-  let ks = keys(tbl)
-  let i = 0
-  let first = true
-  while i < len(ks)
-    let k = ks[i]
-    let v = tbl[k]
-    if not first
-      buf_push(buf, "&")
+  build_string() do |add|
+    let ks = keys(tbl)
+    let i = 0
+    let first = true
+    while i < len(ks)
+      let k = ks[i]
+      let v = tbl[k]
+      if not first
+        add("&")
+      end
+      add(encode(to_string(k)), "=", encode(to_string(v)))
+      first = false
+      i += 1
     end
-    buf_push(buf, encode(to_string(k)) + "=" + encode(to_string(v)))
-    first = false
-    i += 1
   end
-  buf_str(buf)
 end
 
 fn parse(path_with_query)

@@ -56,14 +56,14 @@ end
 # ─── HTTP response helpers ───
 
 fn response(status, status_text, content_type, body)
-  let buf = buf_new()
-  buf_push(buf, "HTTP/1.1 {status} {status_text}\r\n")
-  buf_push(buf, "Content-Type: {content_type}\r\n")
-  buf_push(buf, "Content-Length: {len(body)}\r\n")
-  buf_push(buf, "Connection: close\r\n")
-  buf_push(buf, "\r\n")
-  buf_push(buf, body)
-  buf_str(buf)
+  build_string() do |add|
+    add("HTTP/1.1 {status} {status_text}\r\n")
+    add("Content-Type: {content_type}\r\n")
+    add("Content-Length: {len(body)}\r\n")
+    add("Connection: close\r\n")
+    add("\r\n")
+    add(body)
+  end
 end
 
 fn response_ok(body)
@@ -148,11 +148,12 @@ router.add("POST", "/echo", fn(req)
 end)
 
 router.add("GET", "/headers", fn(req)
-  let buf = buf_new()
-  for k, v in req.headers
-    buf_push(buf, "{k}: {v}\n")
+  let s = build_string() do |add|
+    for k, v in req.headers
+      add("{k}: {v}\n")
+    end
   end
-  response_ok(buf_str(buf))
+  response_ok(s)
 end)
 
 # ─── Connection handler ───

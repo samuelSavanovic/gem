@@ -150,6 +150,7 @@ fn make_codegen(source_name)
     buf_new: "gem_buf_new_fn",
     buf_push: "gem_buf_push_fn",
     buf_str: "gem_buf_str_fn",
+    build_string: "gem_build_string_fn",
     spawn: "gem_spawn_builtin",
     send: "gem_send_builtin",
     receive: "gem_receive_builtin",

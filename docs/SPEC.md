@@ -736,13 +736,13 @@ end)
 
 `type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`, `"ref"`.
 
-`to_string(v)` — converts any value to its string representation.
+`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string (equivalent to `buf_str`).
 
 `to_int(v)` — converts a value to an integer. Strings are parsed as decimal integers. Floats are truncated. Bools become 0/1. Errors on nil, tables, functions, or unparseable strings.
 
 `to_float(v)` — converts a value to a float. Strings are parsed as decimal floats. Ints are widened. Bools become 0.0/1.0. Errors on nil, tables, functions, or unparseable strings.
 
-`push(arr, val)` — appends `val` to the table at the next integer index. Mutates the table in place. Returns the pushed value.
+`push(target, val)` — if `target` is a table, appends `val` at the next integer index (mutates in place, returns `val`). If `target` is a buffer, appends `val` coerced to a string (same as `buf_push`; returns the buffer).
 
 ```
 let items = []
@@ -773,6 +773,18 @@ print(items[0])    # a
 `buf_push(buf, val)` — appends `val` to the buffer. Non-string values are auto-coerced to strings. Returns the buffer for chaining. Uses a doubling growth strategy internally — O(n) total for n appends vs O(n²) for repeated `+` concatenation.
 
 `buf_str(buf)` — finalizes the buffer into an immutable string. The buffer can still be used after this call.
+
+`build_string(block)` — creates a buffer, calls `block` with an `add` function that appends its arguments to the buffer, then returns the finalized string. Equivalent to `buf_new`/`buf_push`/`buf_str` but more concise:
+
+```
+let html = build_string() do |add|
+  add("<ul>")
+  for item in items
+    add("<li>{item}</li>")
+  end
+  add("</ul>")
+end
+```
 
 `make_ref()` — returns a unique opaque reference value. Type is `"ref"`. Refs are equal only to themselves (identity equality). Usable as table keys. Format: `#Ref<N>` where N is a monotonically increasing integer.
 

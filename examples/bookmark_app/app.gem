@@ -55,20 +55,20 @@ let render_bookmark_row = fn(b)
 end
 
 let render_bookmark_list = fn(bookmarks)
-  let buf = buf_new()
-  buf_push(buf, "<table>")
-  buf_push(buf, "<thead><tr><th>URL</th><th>Title</th><th>Tags</th><th>Created</th><th>Actions</th></tr></thead>")
-  buf_push(buf, "<tbody>")
-  let i = 0
-  while i < len(bookmarks)
-    buf_push(buf, render_bookmark_row(bookmarks[i]))
-    i += 1
+  build_string() do |add|
+    add("<table>")
+    add("<thead><tr><th>URL</th><th>Title</th><th>Tags</th><th>Created</th><th>Actions</th></tr></thead>")
+    add("<tbody>")
+    let i = 0
+    while i < len(bookmarks)
+      add(render_bookmark_row(bookmarks[i]))
+      i += 1
+    end
+    add("</tbody></table>")
+    if len(bookmarks) == 0
+      add("<p class='empty'>No bookmarks yet. Add one above!</p>")
+    end
   end
-  buf_push(buf, "</tbody></table>")
-  if len(bookmarks) == 0
-    buf_push(buf, "<p class='empty'>No bookmarks yet. Add one above!</p>")
-  end
-  buf_str(buf)
 end
 
 let render_edit_form = fn(b)

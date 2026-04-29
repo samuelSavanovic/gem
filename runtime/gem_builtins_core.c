@@ -121,7 +121,14 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
         case VAL_STRING: return v;
         case VAL_FN: return gem_string("<fn>");
         case VAL_TABLE: snprintf(buf, sizeof(buf), "<table:%d>", v.table->len); return gem_string(buf);
-        case VAL_BUFFER: snprintf(buf, sizeof(buf), "<buffer:%d>", v.buffer->len); return gem_string(buf);
+        case VAL_BUFFER: {
+            GemBuffer *b = v.buffer;
+            char *s = (char *)GC_MALLOC_ATOMIC(b->len + 1);
+            memcpy(s, b->data, b->len);
+            s[b->len] = '\0';
+            GemVal r; r.type = VAL_STRING; r.sval = s;
+            return r;
+        }
         case VAL_REF: snprintf(buf, sizeof(buf), "#Ref<%lld>", (long long)v.rval); return gem_string(buf);
     }
     return gem_string("");

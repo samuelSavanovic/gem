@@ -75,11 +75,11 @@
 ; Builtin functions
 ((call_expression
   function: (identifier) @function.builtin)
-  (#match? @function.builtin "^(print|error|len|type|to_string|to_int|to_float|push|pcall|keys|str_replace|has_key|substr|chr|ord|buf_new|buf_push|buf_str|spawn|send|receive|monitor|spawn_monitor|register|whereis|time_ms|kill|sleep|link|unlink|spawn_link|process_flag|make_ref|send_after|cancel_timer|processes|process_info|read_file|write_file|delete|pop|values|eprint|exit|argv|sort|floor|ceil|round|abs|pow|sqrt|random|append_file|getenv|input|insert|remove_at|band|bor|bxor|bnot|bshl|bshr|file_exists|dirname|path_join|normalize_path|remove_file|mkdir|list_dir|is_dir|exec|tcp_connect|tcp_listen|tcp_accept|tcp_read|tcp_write|tcp_close|epoch_ms|format_time|format_time_local|sqlite_open|sqlite_close|sqlite_exec|sqlite_query|sqlite_last_insert_id|sqlite_changes)$"))
+  (#match? @function.builtin "^(print|error|len|type|to_string|to_int|to_float|push|pcall|keys|str_replace|has_key|substr|chr|ord|buf_new|buf_push|buf_str|spawn|send|receive|monitor|spawn_monitor|register|whereis|time_ms|kill|sleep|link|unlink|spawn_link|process_flag|make_ref|send_after|cancel_timer|processes|process_info|read_file|write_file|delete|pop|values|eprint|exit|argv|sort|floor|ceil|round|abs|pow|sqrt|random|append_file|getenv|input|insert|remove_at|band|bor|bxor|bnot|bshl|bshr|file_exists|dirname|path_join|normalize_path|remove_file|mkdir|list_dir|is_dir|exec|tcp_connect|tcp_listen|tcp_accept|tcp_read|tcp_write|tcp_close|epoch_ms|format_time|format_time_local|sqlite_open|sqlite_close|sqlite_exec|sqlite_query|sqlite_last_insert_id|sqlite_changes|build_string)$"))
 
 ((call_with_block
   function: (identifier) @function.builtin)
-  (#match? @function.builtin "^(spawn|send|receive|monitor|spawn_monitor|register)$"))
+  (#match? @function.builtin "^(spawn|send|receive|monitor|spawn_monitor|register|build_string)$"))
 
 ; Parameters
 (parameter_list (identifier) @variable.parameter)

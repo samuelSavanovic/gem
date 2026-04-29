@@ -235,7 +235,14 @@ let r = pcall some_fn()              # {ok: bool, value/error: ...}
 # print, len, type, to_string, to_int, to_float
 # push, pop, keys, values, sort, insert, delete, remove_at
 # str_replace, substr, chr, ord, has_key
-# buf_new, buf_push, buf_str
+# buf_new, buf_push, buf_str, build_string
+# push/to_string work on buffers too
+
+# String building — build_string needs () before do block
+let s = build_string() do |add|
+  add("hello", " ", "world")           # multi-arg, no intermediate allocs
+end
+
 # read_file, write_file, exec, sleep, self, spawn
 # tcp_listen, tcp_accept, tcp_read, tcp_write, tcp_close
 
