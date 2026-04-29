@@ -99,6 +99,35 @@ GemVal gem_neg(GemVal a) {
     { char buf[128]; snprintf(buf, sizeof(buf), "type error in unary -: got %s", gem_type_str(a)); gem_error(buf); } return GEM_NIL;
 }
 
+void gem_string_append(GemVal *accum, GemVal rhs) {
+    if (accum->type == VAL_BUFFER) {
+        GemVal args[2] = {*accum, rhs};
+        gem_buf_push_fn(NULL, args, 2);
+    } else if (accum->type == VAL_STRING) {
+        GemBuffer *b = (GemBuffer *)GC_MALLOC(sizeof(GemBuffer));
+        b->cap = 64;
+        int slen = (int)strlen(accum->sval);
+        while (b->cap <= slen) b->cap *= 2;
+        b->data = (char *)GC_MALLOC_ATOMIC(b->cap);
+        memcpy(b->data, accum->sval, slen);
+        b->len = slen;
+        accum->type = VAL_BUFFER;
+        accum->buffer = b;
+        GemVal args[2] = {*accum, rhs};
+        gem_buf_push_fn(NULL, args, 2);
+    } else {
+        *accum = gem_add(*accum, rhs);
+    }
+}
+
+GemVal gem_string_finish(GemVal val) {
+    if (val.type == VAL_BUFFER) {
+        GemVal args[1] = {val};
+        return gem_buf_str_fn(NULL, args, 1);
+    }
+    return val;
+}
+
 GemVal gem_not(GemVal a) {
     return gem_bool(!gem_truthy(a));
 }

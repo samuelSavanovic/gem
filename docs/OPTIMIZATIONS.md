@@ -68,8 +68,8 @@ Small strings (< 16 bytes) could be interned in a global table, turning equality
 ### ~~O(n²) string building in codegen~~ ✓ Done
 All heavy string accumulators in `compiler/codegen.gem` rewritten to use `buf_new`/`buf_push`/`buf_str`. Eliminated ~188 O(n²) concatenations.
 
-### `x = x + y` auto-optimization (P0)
-The compiler could detect the self-append pattern `assign(name, binary("+", var(name), expr))` and emit buffer operations instead of `gem_add`. Would fix O(n²) string building globally without requiring source changes. Non-trivial compiler change — needs tracking of which variables are in "append mode". This is the highest-leverage compiler optimization for HTTP workloads where response bodies are built by repeated concatenation.
+### ~~`x = x + y` auto-optimization~~ ✓ Done
+The compiler detects the self-append pattern `assign(name, binary("+", var(name), expr))` inside `while`/`for` loop bodies and emits `gem_string_append`/`gem_string_finish` instead of `gem_add`. Eligible variables must only appear in append patterns within the loop body (no non-append reads). Handles chained concatenation (`x = x + a + b + c`), conditional appends inside `if`/`match`, and nested loops. Runtime fallback for non-string types (integers, floats) ensures correctness without static type information.
 
 ### Redundant `gem_push_frame` / `gem_pop_frame` (P1)
 Every function call emits frame push/pop for stack traces. Leaf functions (no calls inside) could skip this. Requires analysis in the codegen to detect leaf status. Benchmark shows overhead in the hot path — eliminating frame tracking for leaf functions called per-request would help throughput.
@@ -142,6 +142,11 @@ Timers are stored in a fixed-size array (256 slots) with linear scan for insert,
 
 ### kqueue/epoll for sockets (P2)
 The scheduler currently uses `poll()` for socket readiness. Replacing with **kqueue** (macOS/BSD) or **epoll** (Linux) would improve scalability at high connection counts (thousands of fds). `poll()` scans the entire fd set on each call — O(n) per wake. kqueue/epoll return only ready fds — O(ready). For the current HTTP server benchmark (~100 concurrent connections), `poll()` is not the bottleneck; this optimization matters when scaling to thousands of simultaneous connections.
+
+## Scheduler / Concurrency
+
+### Multi-threaded work-stealing scheduler (P2)
+The scheduler is single-threaded — one `while(1)` loop round-robining coroutines on one OS thread. N scheduler threads with per-thread run queues and work-stealing (Chase-Lev deque) would scale throughput ~linearly with cores. The per-process arena model already eliminates shared-heap contention. Hard parts: mailboxes need lock-free MPSC queues for cross-thread sends, shared globals (`gem_proc_table`, `gem_name_registry`, free list) need synchronization, each thread needs its own kqueue/epoll set, and process migration (stealing a coroutine between scheduler ticks) needs care. Erlang/BEAM does exactly this architecture. Nothing in the current design blocks it — isolated processes, message passing, and per-process memory are the right foundation.
 
 ## std/json
 

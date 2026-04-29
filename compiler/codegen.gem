@@ -237,6 +237,7 @@ fn make_codegen(source_name)
   let tco_fn_name = nil
   let tco_params = nil
   let tco_captured = nil
+  let append_buf_vars = {}
 
   # ─── Helpers ──
 
@@ -713,6 +714,260 @@ fn make_codegen(source_name)
     buf_str(b)
   end
 
+  # ─── append optimization helpers ──
+
+  let decompose_concat = nil
+  decompose_concat = fn(name, node)
+    if not is_node(node, "binop") or node.op != "+"
+      return nil
+    end
+    if is_node(node.left, "var") and node.left.name == name
+      return [node.right]
+    end
+    let left_parts = decompose_concat(name, node.left)
+    if left_parts != nil
+      push(left_parts, node.right)
+      return left_parts
+    end
+    nil
+  end
+
+  let expr_has_var = nil
+  expr_has_var = fn(node, name)
+    if node == nil
+      return false
+    end
+    if type(node) != "table"
+      return false
+    end
+    if node.tag == nil
+      return false
+    end
+    if node.tag == "var"
+      return node.name == name
+    end
+    if node.tag == "int" or node.tag == "float" or node.tag == "bool" or node.tag == "nil"
+      return false
+    end
+    if node.tag == "string"
+      return false
+    end
+    if node.tag == "interp"
+      if node.parts != nil
+        for p in node.parts
+          if expr_has_var(p, name)
+            return true
+          end
+        end
+      end
+      return false
+    end
+    if node.tag == "binop"
+      return expr_has_var(node.left, name) or expr_has_var(node.right, name)
+    end
+    if node.tag == "unop"
+      return expr_has_var(node.expr, name)
+    end
+    if node.tag == "call"
+      if expr_has_var(node.func, name)
+        return true
+      end
+      if node.args != nil
+        for a in node.args
+          if expr_has_var(a, name)
+            return true
+          end
+        end
+      end
+      return false
+    end
+    if node.tag == "dot"
+      return expr_has_var(node.object, name)
+    end
+    if node.tag == "index"
+      return expr_has_var(node.object, name) or expr_has_var(node.key, name)
+    end
+    if node.tag == "table"
+      if node.entries != nil
+        for e in node.entries
+          if expr_has_var(e.value, name)
+            return true
+          end
+        end
+      end
+      return false
+    end
+    if node.tag == "array"
+      if node.elements != nil
+        for e in node.elements
+          if expr_has_var(e, name)
+            return true
+          end
+        end
+      end
+      return false
+    end
+    if node.tag == "anon_fn"
+      return true
+    end
+    true
+  end
+
+  let stmts_have_non_append_ref = nil
+  let stmt_has_non_append_ref = nil
+
+  stmts_have_non_append_ref = fn(stmts, name)
+    for s in stmts
+      if stmt_has_non_append_ref(s, name)
+        return true
+      end
+    end
+    false
+  end
+
+  stmt_has_non_append_ref = fn(stmt, name)
+    if stmt == nil
+      return false
+    end
+    if type(stmt) != "table"
+      return false
+    end
+    if stmt.tag == "assign"
+      if stmt.name == name
+        let parts = decompose_concat(name, stmt.value)
+        if parts != nil
+          for p in parts
+            if expr_has_var(p, name)
+              return true
+            end
+          end
+          return false
+        end
+        return true
+      end
+      return expr_has_var(stmt.value, name)
+    end
+    if stmt.tag == "let"
+      return expr_has_var(stmt.value, name)
+    end
+    if stmt.tag == "dot_assign"
+      return expr_has_var(stmt.object, name) or expr_has_var(stmt.value, name)
+    end
+    if stmt.tag == "index_assign"
+      return expr_has_var(stmt.object, name) or expr_has_var(stmt.key, name) or expr_has_var(stmt.value, name)
+    end
+    if stmt.tag == "if"
+      if expr_has_var(stmt.cond, name)
+        return true
+      end
+      if stmts_have_non_append_ref(stmt.then, name)
+        return true
+      end
+      if stmt.else != nil
+        return stmts_have_non_append_ref(stmt.else, name)
+      end
+      return false
+    end
+    if stmt.tag == "while"
+      if expr_has_var(stmt.cond, name)
+        return true
+      end
+      return stmts_have_non_append_ref(stmt.body, name)
+    end
+    if stmt.tag == "match"
+      if expr_has_var(stmt.target, name)
+        return true
+      end
+      if stmt.whens != nil
+        for w in stmt.whens
+          if w.value != nil
+            if expr_has_var(w.value, name)
+              return true
+            end
+          end
+          if w.body != nil
+            if stmts_have_non_append_ref(w.body, name)
+              return true
+            end
+          end
+        end
+      end
+      if stmt.else != nil
+        return stmts_have_non_append_ref(stmt.else, name)
+      end
+      return false
+    end
+    if stmt.tag == "return"
+      if stmt.value != nil
+        return expr_has_var(stmt.value, name)
+      end
+      return false
+    end
+    if stmt.tag == "break" or stmt.tag == "continue" or stmt.tag == "fn_def"
+      return false
+    end
+    if stmt.tag == "block"
+      return stmts_have_non_append_ref(stmt.stmts, name)
+    end
+    if stmt.tag == "call"
+      return expr_has_var(stmt, name)
+    end
+    if stmt.tag == "receive_match"
+      return true
+    end
+    true
+  end
+
+  let scan_append_candidates = nil
+  scan_append_candidates = fn(stmts, candidates)
+    for s in stmts
+      if is_node(s, "assign")
+        let parts = decompose_concat(s.name, s.value)
+        if parts != nil
+          let safe = true
+          for p in parts
+            if expr_has_var(p, s.name)
+              safe = false
+            end
+          end
+          if safe
+            set_add(candidates, s.name)
+          end
+        end
+      elif is_node(s, "if")
+        scan_append_candidates(s.then, candidates)
+        if s.else != nil
+          scan_append_candidates(s.else, candidates)
+        end
+      elif is_node(s, "match")
+        if s.whens != nil
+          for w in s.whens
+            if w.body != nil
+              scan_append_candidates(w.body, candidates)
+            end
+          end
+        end
+        if s.else != nil
+          scan_append_candidates(s.else, candidates)
+        end
+      elif is_node(s, "block")
+        scan_append_candidates(s.stmts, candidates)
+      end
+    end
+  end
+
+  let find_append_vars = fn(body)
+    let candidates = {}
+    scan_append_candidates(body, candidates)
+    let eligible = {}
+    for name, _ in candidates
+      if not stmts_have_non_append_ref(body, name)
+        set_add(eligible, name)
+      end
+    end
+    eligible
+  end
+
   # ─── compile_expr ──
 
   compile_expr = fn(node)
@@ -1108,6 +1363,20 @@ fn make_codegen(source_name)
       end
       return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};"
     when {tag: "assign", name: name, value: value}
+      if set_contains(append_buf_vars, name)
+        let parts = decompose_concat(name, value)
+        if parts != nil
+          let mname = mangle(name)
+          let b = buf_new()
+          buf_push(b, line_dir)
+          for part in parts
+            let r = compile_expr(part)
+            buf_push(b, r.setup)
+            buf_push(b, "{p}gem_string_append(&{mname}, {r.expr});\n")
+          end
+          return buf_str(b)
+        end
+      end
       let r = compile_expr(value)
       let mname = mangle(name)
       if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name))
@@ -1265,6 +1534,25 @@ fn make_codegen(source_name)
   compile_while = fn(node, indent)
     let p = pad_for(indent)
     let cond_r = compile_expr(node.cond)
+
+    let eligible = find_append_vars(node.body)
+    for name, _ in eligible
+      if expr_has_var(node.cond, name)
+        delete(eligible, name)
+      end
+      if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name))
+        delete(eligible, name)
+      end
+    end
+
+    let saved_append = {}
+    for k, v in append_buf_vars
+      saved_append[k] = v
+    end
+    for name, _ in eligible
+      set_add(append_buf_vars, name)
+    end
+
     let b = buf_new()
     buf_push(b, "{p}while (1) \{\n")
     buf_push(b, "{p}    gem_yield_check();\n")
@@ -1274,6 +1562,13 @@ fn make_codegen(source_name)
     buf_push(b, "{p}    if (!gem_truthy({cond_r.expr})) break;\n")
     buf_push(b, compile_stmts(node.body, indent + 1))
     buf_push(b, "{p}}")
+
+    for name, _ in eligible
+      let mname = mangle(name)
+      buf_push(b, "\n{p}{mname} = gem_string_finish({mname});")
+    end
+
+    append_buf_vars = saved_append
     buf_str(b)
   end
 

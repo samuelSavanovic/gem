@@ -176,6 +176,8 @@ GemVal gem_le(GemVal a, GemVal b);
 GemVal gem_ge(GemVal a, GemVal b);
 GemVal gem_neg(GemVal a);
 GemVal gem_not(GemVal a);
+void gem_string_append(GemVal *accum, GemVal rhs);
+GemVal gem_string_finish(GemVal val);
 
 /* ─── Protected call (pcall) ─── */
 
