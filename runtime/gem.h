@@ -11,7 +11,6 @@
 #include <string.h>
 #include <stdint.h>
 #include <setjmp.h>
-#include <gc.h>
 
 /* minicoro forward declaration — full impl is in gem_scheduler.c.
    minicoro.h uses this same typedef, so guard against redefinition. */
@@ -19,10 +18,37 @@
 typedef struct mco_coro mco_coro;
 #endif
 
-/* ─── GC-aware allocators ─── */
+/* ─── Per-process arena allocator ─── */
 
-#define ALLOC(type) ((type *)GC_MALLOC(sizeof(type)))
-#define ALLOC_N(type, n) ((type *)GC_MALLOC(sizeof(type) * (n)))
+typedef struct GemArenaBlock {
+    struct GemArenaBlock *next;
+    size_t cap;
+    size_t used;
+    char data[];
+} GemArenaBlock;
+
+typedef struct GemTable GemTable;
+
+typedef struct {
+    GemArenaBlock *current;
+    GemArenaBlock *head;
+    GemTable *table_list;
+} GemArena;
+
+void gem_arena_init(GemArena *arena);
+void *gem_arena_alloc(GemArena *arena, size_t size);
+void gem_arena_destroy(GemArena *arena);
+
+extern GemArena gem_global_arena;
+
+GemArena *gem_current_arena(void);
+
+/* Compatibility shim — old stage0.c emits GC_INIT() in main() */
+#define GC_INIT() ((void)0)
+#define GC_MALLOC(size)        gem_arena_alloc(gem_current_arena(), (size))
+#define GC_MALLOC_ATOMIC(size) gem_arena_alloc(gem_current_arena(), (size))
+#define ALLOC(type)            ((type *)gem_arena_alloc(gem_current_arena(), sizeof(type)))
+#define ALLOC_N(type, n)       ((type *)gem_arena_alloc(gem_current_arena(), sizeof(type) * (n)))
 
 /* ─── Tagged value ─── */
 
@@ -32,8 +58,6 @@ typedef enum {
 
 typedef struct GemVal GemVal;
 typedef GemVal (*GemFnPtr)(void *env, GemVal *args, int argc);
-
-typedef struct GemTable GemTable;
 
 /* String builder — mutable buffer for O(n) string construction */
 typedef struct {
@@ -108,6 +132,7 @@ struct GemTable {
     int cap;
     GemStrIndex *str_index;  /* stb_ds string hash map (NULL until first string key) */
     uint32_t shape_id;       /* incremented on structural mutations (delete, pop, sort, etc.) */
+    GemTable *arena_next;    /* linked list in owning arena's table_list */
 };
 
 /* ─── Table operations ─── */
@@ -240,6 +265,12 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc);
 GemVal gem_sqlite_last_insert_id_fn(void *_env, GemVal *args, int argc);
 GemVal gem_sqlite_changes_fn(void *_env, GemVal *args, int argc);
 
+/* ─── Deep copy (for message passing between arenas) ─── */
+
+GemVal gem_deep_copy(GemVal val);
+GemVal gem_deep_copy_malloc(GemVal val);
+void gem_deep_free(GemVal val);
+
 /* ─── Runtime initialization (stores argc/argv, seeds RNG) ─── */
 
 void gem_init(int argc, char **argv);
@@ -343,10 +374,11 @@ typedef struct {
     int64_t deadline_ms;          /* -1 = no deadline; else absolute time in ms */
     int timed_out;                /* set to 1 by scheduler when deadline expires */
     int reductions;               /* reduction counter for preemptive yielding */
-    char *read_buf;               /* reusable tcp_read buffer (GC-allocated) */
+    char *read_buf;               /* reusable tcp_read buffer (arena-allocated) */
     size_t read_buf_cap;          /* capacity of read_buf in bytes */
     GemPcallFrame pcall_stack[GEM_MAX_PCALL_DEPTH];
     int pcall_depth;
+    GemArena arena;               /* per-process bump allocator */
 } GemProcess;
 
 #ifndef GEM_MAX_PROCS

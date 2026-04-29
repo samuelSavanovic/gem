@@ -22,25 +22,19 @@ int gem_free_tail = GEM_MAX_PROCS - 1;
 int gem_proc_hwm = 0;
 GemNameEntry *gem_name_registry = NULL;
 GemTimer gem_timers[GEM_MAX_TIMERS];
+static int gem_main_pid = -1;
 
 /* Pre-allocated poll scratch arrays (avoid malloc/free per scheduler idle) */
 static struct pollfd gem_poll_fds[GEM_MAX_PROCS];
 static int gem_poll_pids[GEM_MAX_PROCS];
 
-/* GC-aware stack allocator for minicoro coroutines.
-   malloc the stack, then register it as a GC root so Boehm
-   can scan coroutine stacks for heap pointers. */
 static void *gem_coro_stack_alloc(size_t size, void *udata) {
     (void)udata;
-    void *ptr = malloc(size);
-    if (!ptr) return NULL;
-    GC_add_roots(ptr, (char *)ptr + size);
-    return ptr;
+    return malloc(size);
 }
 
 static void gem_coro_stack_free(void *ptr, size_t size, void *udata) {
-    (void)udata;
-    GC_remove_roots(ptr, (char *)ptr + size);
+    (void)udata; (void)size;
     free(ptr);
 }
 
@@ -56,12 +50,23 @@ void gem_scheduler_init(void) {
 
 static void gem_free_proc_slot(int pid) {
     GemProcess *proc = &gem_proc_table[pid];
+
+    proc->mailbox = (GemMailbox){NULL, NULL};
+
+    GemLinkNode *l = proc->links;
+    while (l) { GemLinkNode *next = l->next; free(l); l = next; }
+    proc->links = NULL;
+
+    GemMonitorNode *m = proc->monitors;
+    while (m) { GemMonitorNode *next = m->next; free(m); m = next; }
+    proc->monitors = NULL;
+
+    if (pid != gem_main_pid)
+        gem_arena_destroy(&proc->arena);
+
     proc->state = GEM_PROC_FREE;
     proc->coro = NULL;
-    proc->mailbox = (GemMailbox){NULL, NULL};
     proc->io_request = NULL;
-    proc->monitors = NULL;
-    proc->links = NULL;
     proc->trap_exit = 0;
     proc->read_buf = NULL;
     proc->read_buf_cap = 0;
@@ -90,7 +95,7 @@ void gem_yield_check(void) {
 
 /* Mailbox operations */
 static void gem_mailbox_push(GemMailbox *mb, GemVal val) {
-    GemMsgNode *node = (GemMsgNode *)GC_MALLOC(sizeof(GemMsgNode));
+    GemMsgNode *node = ALLOC(GemMsgNode);
     node->value = val;
     node->next = NULL;
     if (mb->tail) {
@@ -162,7 +167,7 @@ static void gem_coro_entry(mco_coro *co) {
     if (setjmp(proc->proc_jmp) == 0) {
         /* Normal path */
         ctx->fn(ctx->env, NULL, 0);
-        proc->exit_reason = "normal";
+        proc->exit_reason = strdup("normal");
     }
     /* If longjmp landed here, exit_reason was already set by gem_raise_error */
 }
@@ -178,9 +183,28 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_free_head = gem_proc_table[pid].pid;
     if (gem_free_head < 0) gem_free_tail = -1;
 
-    GemCoroCtx *ctx = (GemCoroCtx *)GC_MALLOC(sizeof(GemCoroCtx));
+    if (gem_proc_table[pid].exit_reason) {
+        free((char *)gem_proc_table[pid].exit_reason);
+        gem_proc_table[pid].exit_reason = NULL;
+    }
+
+    gem_arena_init(&gem_proc_table[pid].arena);
+
+    int saved = gem_current_pid;
+    gem_current_pid = pid;
+
+    GemCoroCtx *ctx = ALLOC(GemCoroCtx);
     ctx->fn = fn;
-    ctx->env = env;
+    if (env) {
+        GemVal fn_val = gem_make_fn(fn, env);
+        GemVal copied = gem_deep_copy(fn_val);
+        ctx->fn = copied.fn;
+        ctx->env = copied.env;
+    } else {
+        ctx->env = NULL;
+    }
+
+    gem_current_pid = saved;
 
     mco_desc desc = mco_desc_init(gem_coro_entry, GEM_CORO_STACK_SIZE);
     desc.alloc_cb = gem_coro_stack_alloc;
@@ -190,6 +214,7 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     mco_coro *co;
     mco_result res = mco_create(&co, &desc);
     if (res != MCO_SUCCESS) {
+        gem_arena_destroy(&gem_proc_table[pid].arena);
         gem_error("spawn: coroutine creation failed");
         return -1;
     }
@@ -217,7 +242,11 @@ void gem_send_msg(int pid, GemVal val) {
     GemProcess *proc = &gem_proc_table[pid];
     if (proc->state == GEM_PROC_FREE || proc->state == GEM_PROC_DEAD) return;
 
-    gem_mailbox_push(&proc->mailbox, val);
+    int saved = gem_current_pid;
+    gem_current_pid = pid;
+    GemVal copied = gem_deep_copy(val);
+    gem_mailbox_push(&proc->mailbox, copied);
+    gem_current_pid = saved;
 
     if (proc->state == GEM_PROC_WAITING) {
         proc->state = GEM_PROC_READY;
@@ -276,6 +305,8 @@ static void gem_fire_timers(void) {
                     gem_send_msg(pid, gem_timers[i].msg);
                 }
             }
+            gem_deep_free(gem_timers[i].msg);
+            gem_timers[i].msg = GEM_NIL;
         }
     }
 }
@@ -304,9 +335,17 @@ void gem_run_main(GemFnPtr fn, void *env) {
     gem_free_head = gem_proc_table[pid].pid;
     if (gem_free_head < 0) gem_free_tail = -1;
 
-    GemCoroCtx *ctx = (GemCoroCtx *)GC_MALLOC(sizeof(GemCoroCtx));
+    gem_arena_init(&gem_proc_table[pid].arena);
+    gem_main_pid = pid;
+
+    int saved = gem_current_pid;
+    gem_current_pid = pid;
+
+    GemCoroCtx *ctx = ALLOC(GemCoroCtx);
     ctx->fn = fn;
     ctx->env = env;
+
+    gem_current_pid = saved;
 
     mco_desc desc = mco_desc_init(gem_coro_entry, GEM_MAIN_STACK_SIZE);
     desc.alloc_cb = gem_coro_stack_alloc;
@@ -316,6 +355,7 @@ void gem_run_main(GemFnPtr fn, void *env) {
     mco_coro *co;
     mco_result res = mco_create(&co, &desc);
     if (res != MCO_SUCCESS) {
+        gem_arena_destroy(&gem_proc_table[pid].arena);
         gem_error("gem_run_main: coroutine creation failed");
         return;
     }
@@ -340,8 +380,6 @@ void gem_run_main(GemFnPtr fn, void *env) {
 
 void gem_run_scheduler(void) {
     int active = 1;
-    int completed_since_gc = 0;
-    int resumes_since_gc = 0;
 
     while (active) {
         active = 0;
@@ -362,7 +400,6 @@ void gem_run_scheduler(void) {
                 gem_current_pid = i;
                 proc->reductions = 0;
                 mco_resume(proc->coro);
-                resumes_since_gc++;
 
                 if (mco_status(proc->coro) == MCO_DEAD) {
                     mco_destroy(proc->coro);
@@ -372,7 +409,6 @@ void gem_run_scheduler(void) {
                     gem_deliver_down_messages(i, reason);
                     gem_unregister_name_for_pid(i);
                     gem_propagate_exit(i, reason);
-                    completed_since_gc++;
                 }
             } else if (proc->state == GEM_PROC_WAITING) {
                 has_msg_wait = 1;
@@ -405,15 +441,6 @@ void gem_run_scheduler(void) {
                     has_fd_wait = 1;
                 }
             }
-        }
-
-        /* Collect garbage frequently to keep each STW pause short.
-           Smaller thresholds = less accumulated garbage per collection
-           = shorter pauses, at the cost of more frequent pauses. */
-        if (completed_since_gc >= 10 || resumes_since_gc >= 1000) {
-            GC_gcollect();
-            completed_since_gc = 0;
-            resumes_since_gc = 0;
         }
 
         /* If we ran at least one READY process, loop immediately —
@@ -524,13 +551,14 @@ void gem_deliver_down_messages(int pid, const char *reason) {
     GemProcess *proc = &gem_proc_table[pid];
     GemMonitorNode *mon = proc->monitors;
     while (mon) {
-        /* Build {tag: "DOWN", pid: <pid>, reason: <reason>} */
+        GemMonitorNode *next = mon->next;
         GemVal msg = gem_table_new();
         gem_table_set(msg, gem_string("tag"), gem_string("DOWN"));
         gem_table_set(msg, gem_string("pid"), gem_int(pid));
         gem_table_set(msg, gem_string("reason"), gem_string(reason));
         gem_send_msg(mon->pid, msg);
-        mon = mon->next;
+        free(mon);
+        mon = next;
     }
     proc->monitors = NULL;
 }
@@ -562,8 +590,7 @@ void gem_monitor_fn(int target_pid) {
         node = node->next;
     }
 
-    /* Add caller to target's monitor list */
-    GemMonitorNode *new_node = (GemMonitorNode *)GC_MALLOC(sizeof(GemMonitorNode));
+    GemMonitorNode *new_node = (GemMonitorNode *)malloc(sizeof(GemMonitorNode));
     new_node->pid = caller;
     new_node->next = target->monitors;
     target->monitors = new_node;
@@ -578,7 +605,7 @@ static void gem_link_add(GemProcess *proc, int pid) {
         if (node->pid == pid) return;
         node = node->next;
     }
-    GemLinkNode *new_node = (GemLinkNode *)GC_MALLOC(sizeof(GemLinkNode));
+    GemLinkNode *new_node = (GemLinkNode *)malloc(sizeof(GemLinkNode));
     new_node->pid = pid;
     new_node->next = proc->links;
     proc->links = new_node;
@@ -589,7 +616,9 @@ static void gem_link_remove(GemProcess *proc, int pid) {
     GemLinkNode **cur = &proc->links;
     while (*cur) {
         if ((*cur)->pid == pid) {
+            GemLinkNode *to_free = *cur;
             *cur = (*cur)->next;
+            free(to_free);
             return;
         }
         cur = &(*cur)->next;
@@ -674,11 +703,13 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
 
         GemProcess *proc = &gem_proc_table[pid];
         GemLinkNode *link = proc->links;
-        proc->links = NULL;  /* clear so repeated propagation is idempotent */
+        proc->links = NULL;
 
         while (link) {
             int lpid = link->pid;
-            link = link->next;
+            GemLinkNode *link_next = link->next;
+            free(link);
+            link = link_next;
             if (lpid < 0 || lpid >= GEM_MAX_PROCS) continue;
             GemProcess *lproc = &gem_proc_table[lpid];
             if (lproc->state == GEM_PROC_FREE || lproc->state == GEM_PROC_DEAD) continue;
@@ -701,10 +732,9 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
                    drained. The scheduler will propagate self's links after
                    its coroutine unwinds via gem_error below. */
                 self_kill_pending = 1;
-                self_kill_reason = r;
+                self_kill_reason = strdup(r);
             } else {
-                /* Kill the linked process with the same reason */
-                lproc->exit_reason = r;
+                lproc->exit_reason = strdup(r);
                 if (lproc->coro) {
                     mco_destroy(lproc->coro);
                     lproc->coro = NULL;
@@ -828,10 +858,10 @@ GemVal gem_spawn_monitor_builtin(void *_env, GemVal *args, int argc) {
     /* Atomically register monitor before the new process gets a chance to run */
     int caller = gem_current_pid;
     if (caller >= 0) {
-        GemMonitorNode *new_node = (GemMonitorNode *)GC_MALLOC(sizeof(GemMonitorNode));
-        new_node->pid = caller;
-        new_node->next = gem_proc_table[pid].monitors;
-        gem_proc_table[pid].monitors = new_node;
+        GemMonitorNode *mn = (GemMonitorNode *)malloc(sizeof(GemMonitorNode));
+        mn->pid = caller;
+        mn->next = gem_proc_table[pid].monitors;
+        gem_proc_table[pid].monitors = mn;
     }
 
     GemVal result = gem_table_new();
@@ -936,15 +966,15 @@ GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
         return gem_bool(1);
     }
 
-    proc->exit_reason = reason;
+    proc->exit_reason = strdup(reason);
     if (proc->coro) {
         mco_destroy(proc->coro);
         proc->coro = NULL;
     }
     proc->state = GEM_PROC_DEAD;
-    gem_deliver_down_messages(pid, reason);
+    gem_deliver_down_messages(pid, proc->exit_reason);
     gem_unregister_name_for_pid(pid);
-    gem_propagate_exit(pid, reason);
+    gem_propagate_exit(pid, proc->exit_reason);
     return gem_bool(1);
 }
 
@@ -993,7 +1023,7 @@ GemVal gem_send_after_builtin(void *_env, GemVal *args, int argc) {
     gem_timers[slot].active = 1;
     gem_timers[slot].ref = ref.rval;
     gem_timers[slot].target_pid = pid;
-    gem_timers[slot].msg = msg;
+    gem_timers[slot].msg = gem_deep_copy_malloc(msg);
     gem_timers[slot].deadline_ms = gem_now_ms() + delay_ms;
     return ref;
 }
@@ -1006,6 +1036,8 @@ GemVal gem_cancel_timer_builtin(void *_env, GemVal *args, int argc) {
     int64_t ref = args[0].rval;
     for (int i = 0; i < GEM_MAX_TIMERS; i++) {
         if (gem_timers[i].active && gem_timers[i].ref == ref) {
+            gem_deep_free(gem_timers[i].msg);
+            gem_timers[i].msg = GEM_NIL;
             gem_timers[i].active = 0;
             return gem_bool(1);
         }

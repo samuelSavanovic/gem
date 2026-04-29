@@ -10,13 +10,11 @@ The compiler is self-hosting — written in Gem, compiling itself. A checked-in 
 
 Compilation target is C source code. `gcc`/`clang` handles optimization and linking. This gives us free C interop since we're already in native land.
 
-C runtime is minimal glue code (~100–200 lines) wiring together three libraries:
+C runtime is minimal glue code wiring together two libraries plus a per-process arena allocator:
 
-- **Boehm GC** — conservative garbage collector, use `GC_malloc` instead of `malloc`, never free anything
+- **Per-process arena allocation** — each process (coroutine) gets its own arena (bump allocator). When a process spawns another, values are deep-copied into the new process's arena. When a process dies, its entire arena is freed at once. The main process arena persists for the lifetime of the program and holds module globals. Messages (`send`) are deep-copied into the target process's arena. No global GC pauses — memory is reclaimed per-process on exit.
 - **minicoro** — single-header stackful coroutines (libdill is abandoned, crashes on arm64 macOS — see `prototype/`). Runtime builds scheduler + channels on top (~150 lines)
 - **stb_ds.h** — single-header hash maps and dynamic arrays for table implementation
-
-**Boehm + coroutine integration: prototyped and working.** See `prototype/gc_coro_test.c`. The trick: provide minicoro a custom stack allocator that calls `malloc()` + `GC_add_roots()`, and on dealloc calls `GC_remove_roots()` + `free()`. This lets Boehm scan coroutine stacks for GC roots. Tested with 50 concurrent coroutines under heavy GC pressure.
 
 **Bootstrap Path** (all complete)
 
@@ -39,7 +37,7 @@ gem <file.gem> --run        # compile to a temp binary and run it immediately
 gem <file.gem> --run [args] # compile and run, passing args through to the program
 ```
 
-The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.c`, invokes `cc` to compile it to an executable, and produces `./<basename>`. GC flags are sourced from `pkg-config --cflags --libs bdw-gc` if available, falling back to `-lgc`.
+The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.c`, invokes `cc` to compile it to an executable, and produces `./<basename>`.
 
 `--emit-c` is the current-behavior flag — it prints C to stdout and exits. This is what the bootstrapping Makefile targets use.
 
@@ -535,7 +533,7 @@ puts("hello from C")
 
 The compiler auto-generates C forward declarations from `extern fn` type signatures, so no separate `.h` file is needed for function declarations. The type mapping: `Int` → `int64_t`, `Float` → `double`, `String` → `const char*` (params) / `char*` (returns), `Bool` → `int`, `Ptr` → `void*`, `Nil` → `void`, `Table` → `GemVal`. Auto-generation is skipped when `extern include` is present (the user manages declarations via headers).
 
-`extern blocking fn` declares a C function that may block (e.g. socket I/O, database calls, DNS lookups). When called from a coroutine (`spawn`), the call is submitted to a thread pool so the scheduler can continue running other coroutines. When called outside a coroutine, it calls directly (synchronous). The C function runs on a worker thread and must not call `GC_MALLOC` — for `String` returns, use `malloc`/`strdup` (the runtime copies to GC memory and frees the original).
+`extern blocking fn` declares a C function that may block (e.g. socket I/O, database calls, DNS lookups). When called from a coroutine (`spawn`), the call is submitted to a thread pool so the scheduler can continue running other coroutines. When called outside a coroutine, it calls directly (synchronous). The C function runs on a worker thread and must not allocate from process arenas — for `String` returns, use `malloc`/`strdup` (the runtime copies into the process's arena and frees the original).
 
 ```
 extern blocking fn net_accept(server_fd: Int) -> Int
@@ -1198,7 +1196,7 @@ Top-level `let` bindings (including std namespaces like `string`, `table`) compi
 
 **What the Compiler Needs to Emit**
 
-Every value is a tagged C union. The compiler emits C code that uses the runtime glue (~200–350 lines) which wires together Boehm GC, minicoro, and stb_ds.h. The generated C code calls `GC_malloc` for allocations (with coroutine stacks registered as GC roots via custom allocator), uses minicoro for coroutines with a built-in round-robin scheduler and mailbox channels, and stb_ds for table operations. The compiler emits C `#line` directives so that runtime errors report Gem source file and line numbers instead of C line numbers.
+Every value is a tagged C union. The compiler emits C code that uses the runtime glue which wires together per-process arenas, minicoro, and stb_ds.h. The generated C code allocates from the current process's arena (bump allocator), uses minicoro for coroutines with a built-in round-robin scheduler and mailbox channels, and stb_ds for table operations. The compiler emits C `#line` directives so that runtime errors report Gem source file and line numbers instead of C line numbers.
 
 **What's NOT in v0**
 

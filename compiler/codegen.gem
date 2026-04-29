@@ -883,6 +883,7 @@ fn make_codegen(source_name)
     let b = buf_new()
     let env_tmp = tmp()
     buf_push(b, "    struct {result.struct_name} *{env_tmp} = GC_MALLOC(sizeof(struct {result.struct_name}));\n")
+    buf_push(b, "    {env_tmp}->_num_captures = {len(captures)};\n")
     for cap in captures
       let mc = mangle(cap)
       if set_contains(boxed_vars, cap)
@@ -1954,6 +1955,7 @@ fn make_codegen(source_name)
     let struct_name = "_closure_{name}"
     let sb = buf_new()
     buf_push(sb, "struct {struct_name} \{\n")
+    buf_push(sb, "    intptr_t _num_captures;\n")
     for cap in captures
       buf_push(sb, "    GemVal *{mangle(cap)};\n")
     end
@@ -2069,7 +2071,6 @@ fn make_codegen(source_name)
     end
     buf_push(mb, "    gem_pop_frame();\n    return GEM_NIL;\n}\n\n")
     buf_push(mb, "int main(int argc, char **argv) \{\n")
-    buf_push(mb, "    GC_INIT();\n")
     buf_push(mb, "    gem_init(argc, argv);\n")
     buf_push(mb, "    gem_scheduler_init();\n")
     buf_push(mb, "    gem_run_main(gem_user_main, NULL);\n")

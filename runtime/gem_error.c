@@ -55,11 +55,7 @@ void gem_raise_error(const char *msg) {
                 proc->pcall_depth--;
                 gem_pcall_longjmp(&proc->pcall_stack[proc->pcall_depth], msg);
             }
-            /* No pcall — crash the process */
-            size_t len = strlen(msg) + 1;
-            char *saved_msg = (char *)GC_MALLOC_ATOMIC(len);
-            memcpy(saved_msg, msg, len);
-            proc->exit_reason = saved_msg;
+            proc->exit_reason = strdup(msg);
             gem_call_depth = 0;
             longjmp(proc->proc_jmp, 1);
         }

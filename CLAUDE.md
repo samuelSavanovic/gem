@@ -37,7 +37,6 @@ editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
 ## Setup
 
 ```bash
-brew install bdw-gc    # Boehm GC
 make build             # compiles bootstrap/stage0.c → build/gem
 ```
 
@@ -45,7 +44,6 @@ No Python, no external parser generators. The compiler is fully self-hosted.
 
 ## C Dependencies
 
-- **Boehm GC** (`bdw-gc`) — garbage collector
 - **minicoro** (`runtime/minicoro.h`) — single-header coroutine library, vendored
 - **stb_ds.h** (`runtime/stb_ds.h`) — single-header hash maps/arrays, vendored
 - **SQLite** (`runtime/sqlite3.c`, `runtime/sqlite3.h`) — amalgamation, vendored
@@ -104,7 +102,7 @@ After grammar.js changes: `tree-sitter generate` (requires node via mise), `hx -
 - Compilation target is C source code. `cc` handles optimization and linking.
 - The compiler is self-hosting: `build/gem` compiles `compiler/main.gem` → C → new binary.
 - `bootstrap/stage0.c` is the escape hatch — checked into git so any C compiler can rebuild from scratch.
-- Concurrency uses minicoro (stackful coroutines) with a round-robin scheduler. Each process gets a 16KB coroutine stack registered as a GC root via `GC_add_roots()`.
+- Concurrency uses minicoro (stackful coroutines) with a round-robin scheduler. Each process gets its own arena (bump allocator); values are deep-copied across process boundaries (spawn, send). Arenas are freed in bulk when a process exits.
 - Preemptive scheduling via reduction counter at loop back-edges (threshold: 4000).
 - TCP builtins use non-blocking sockets + `poll()` in the scheduler loop. Blocking operations (file I/O, exec, `extern blocking fn`) use a 4-thread worker pool.
 - Selective receive (`receive ... when ... end`) scans the mailbox and removes the first matching message, leaving others queued.
