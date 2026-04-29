@@ -1,0 +1,107 @@
+# Arena compaction stress test
+
+let main_pid = self()
+
+# Test 1: basic receive loop with allocations — triggers compaction
+let worker = spawn(fn()
+  let counter = 0
+  while true
+    let msg = receive()
+    if msg == "done"
+      send(main_pid, {tag: "result", count: counter})
+      return
+    end
+    let tmp = {x: counter, y: "hello " + to_string(counter), z: [1, 2, 3]}
+    counter = counter + 1
+  end
+end)
+
+for i = 0, 2000
+  send(worker, "tick")
+end
+send(worker, "done")
+let r1 = receive()
+print("test1: " + to_string(r1.count))
+
+# Test 2: closure captures survive compaction
+let worker2 = spawn(fn()
+  let acc = 0
+  let multiplier = 3
+
+  let add = fn(x)
+    acc = acc + x * multiplier
+  end
+
+  while true
+    let msg = receive()
+    if msg == "done"
+      send(main_pid, {tag: "result", value: acc})
+      return
+    end
+    add(msg)
+    let junk = {a: "padding" + to_string(acc), b: [1,2,3,4,5]}
+  end
+end)
+
+for i = 0, 2000
+  send(worker2, 1)
+end
+send(worker2, "done")
+let r2 = receive()
+print("test2: " + to_string(r2.value))
+
+# Test 3: selective receive with compaction
+let worker3 = spawn(fn()
+  let count = 0
+  for i = 0, 500
+    let junk = {data: "string" + to_string(i), items: [i, i+1, i+2]}
+    send(main_pid, {tag: "ping", n: i})
+    receive
+    when {tag: "pong"}
+      count = count + 1
+    end
+  end
+  send(main_pid, {tag: "done3", count: count})
+end)
+
+for i = 0, 500
+  receive
+  when {tag: "ping", n: _n}
+    send(worker3, {tag: "pong"})
+  end
+end
+
+let r3 = receive()
+print("test3: " + to_string(r3.count))
+
+# Test 4: multiple closures sharing captured variables
+let worker4 = spawn(fn()
+  let shared = 0
+
+  let inc = fn()
+    shared = shared + 1
+  end
+
+  let get = fn()
+    shared
+  end
+
+  while true
+    let msg = receive()
+    if msg == "done"
+      send(main_pid, {tag: "result", value: get()})
+      return
+    end
+    inc()
+    let junk = {x: "waste" + to_string(get())}
+  end
+end)
+
+for i = 0, 2000
+  send(worker4, "go")
+end
+send(worker4, "done")
+let r4 = receive()
+print("test4: " + to_string(r4.value))
+
+print("arena_compact: all tests passed")

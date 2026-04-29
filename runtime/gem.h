@@ -35,12 +35,15 @@ typedef struct {
     GemTable *table_list;
     char *lo;
     char *hi;
+    size_t bytes_allocated;
 } GemArena;
 
 void gem_arena_init(GemArena *arena);
 void *gem_arena_alloc(GemArena *arena, size_t size);
 void gem_arena_destroy(GemArena *arena);
 int gem_in_main_arena(const void *ptr);
+int gem_in_arena(const void *ptr, GemArena *arena);
+void gem_arena_compact(int pid, void *stack_base, size_t stack_size);
 
 extern GemArena gem_global_arena;
 extern int gem_main_pid;
@@ -384,6 +387,7 @@ typedef struct {
     int reductions;               /* reduction counter for preemptive yielding */
     char *read_buf;               /* reusable tcp_read buffer (arena-allocated) */
     size_t read_buf_cap;          /* capacity of read_buf in bytes */
+    void *initial_env;            /* closure env of process entry function (for compaction roots) */
     GemPcallFrame pcall_stack[GEM_MAX_PCALL_DEPTH];
     int pcall_depth;
     GemArena arena;               /* per-process bump allocator */

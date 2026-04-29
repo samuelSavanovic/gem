@@ -289,7 +289,7 @@ int gem_truthy(GemVal v) {
     return 1;
 }
 
-/* ─── Deep copy (arena-based, for message passing) ─── */
+/* ─── Deep copy (arena-based, for message passing + compaction) ─── */
 
 #define GEM_COPY_MAP_INLINE 16
 
@@ -299,25 +299,45 @@ typedef struct {
 } GemCopyEntry;
 
 typedef struct {
+    void *key;
+    void *value;
+} GemCopyHashEntry;
+
+typedef struct {
     GemCopyEntry inline_buf[GEM_COPY_MAP_INLINE];
     GemCopyEntry *entries;
+    GemCopyHashEntry *hash_map;
     int len;
     int cap;
-    int use_malloc;  /* 0 = arena, 1 = malloc */
+    int use_malloc;
+    GemArena *compact_arena;
 } GemCopyMap;
 
 static void gem_copy_map_init(GemCopyMap *map, int use_malloc) {
     map->entries = map->inline_buf;
+    map->hash_map = NULL;
     map->len = 0;
     map->cap = GEM_COPY_MAP_INLINE;
     map->use_malloc = use_malloc;
+    map->compact_arena = NULL;
+}
+
+static void gem_copy_map_init_compact(GemCopyMap *map, GemArena *old_arena) {
+    gem_copy_map_init(map, 0);
+    map->compact_arena = old_arena;
 }
 
 static void gem_copy_map_cleanup(GemCopyMap *map) {
     if (map->entries != map->inline_buf) free(map->entries);
+    if (map->hash_map) hmfree(map->hash_map);
 }
 
 static void *gem_copy_map_find(GemCopyMap *map, void *old) {
+    if (map->hash_map) {
+        ptrdiff_t idx = hmgeti(map->hash_map, old);
+        if (idx >= 0) return map->hash_map[idx].value;
+        return NULL;
+    }
     for (int i = 0; i < map->len; i++) {
         if (map->entries[i].old_ptr == old) return map->entries[i].new_ptr;
     }
@@ -336,6 +356,12 @@ static void gem_copy_map_add(GemCopyMap *map, void *old, void *new_ptr) {
     map->entries[map->len].old_ptr = old;
     map->entries[map->len].new_ptr = new_ptr;
     map->len++;
+    if (map->len > GEM_COPY_MAP_INLINE && !map->hash_map) {
+        for (int i = 0; i < map->len; i++)
+            hmput(map->hash_map, map->entries[i].old_ptr, map->entries[i].new_ptr);
+    } else if (map->hash_map) {
+        hmput(map->hash_map, old, new_ptr);
+    }
 }
 
 static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map);
@@ -368,6 +394,11 @@ static GemVal gem_deep_copy_table(GemTable *t, GemCopyMap *map) {
     nt->str_index = NULL;
     nt->shape_id = gem_shape_counter++;
     nt->arena_next = NULL;
+
+    if (map->compact_arena) {
+        gem_copy_map_add(map, t->keys, nt->keys);
+        gem_copy_map_add(map, t->vals, nt->vals);
+    }
 
     if (!map->use_malloc) {
         GemArena *a = gem_current_arena();
@@ -405,6 +436,8 @@ static GemVal gem_deep_copy_fn(GemVal fn_val, GemCopyMap *map) {
         GemVal *box = (GemVal *)gem_copy_alloc(map, sizeof(GemVal));
         *box = gem_deep_copy_internal(*old[i], map);
         new_fields[i] = box;
+        if (map->compact_arena)
+            gem_copy_map_add(map, old[i], box);
     }
     return (GemVal){.type = VAL_FN, .fn = fn_val.fn, .env = new_env};
 }
@@ -418,25 +451,39 @@ static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map) {
         case VAL_REF:
             return val;
         case VAL_STRING: {
-            if (!map->use_malloc && gem_in_main_arena(val.sval)) return val;
+            if (map->compact_arena) {
+                if (!gem_in_arena(val.sval, map->compact_arena)) return val;
+            } else if (!map->use_malloc && gem_in_main_arena(val.sval)) return val;
+            void *existing = gem_copy_map_find(map, val.sval);
+            if (existing) { GemVal r; r.type = VAL_STRING; r.sval = (char *)existing; return r; }
             GemVal r;
             r.type = VAL_STRING;
             r.sval = gem_copy_strdup(map, val.sval);
+            gem_copy_map_add(map, val.sval, r.sval);
             return r;
         }
         case VAL_TABLE:
-            if (!map->use_malloc && val.table->immutable) return val;
+            if (map->compact_arena) {
+                if (!gem_in_arena(val.table, map->compact_arena)) return val;
+            } else if (!map->use_malloc && val.table->immutable) return val;
             return gem_deep_copy_table(val.table, map);
         case VAL_BUFFER: {
+            if (map->compact_arena && !gem_in_arena(val.buffer, map->compact_arena)) return val;
+            void *bex = gem_copy_map_find(map, val.buffer);
+            if (bex) { GemVal r; r.type = VAL_BUFFER; r.buffer = (GemBuffer *)bex; return r; }
             GemBuffer *ob = val.buffer;
             GemBuffer *nb = (GemBuffer *)gem_copy_alloc(map, sizeof(GemBuffer));
+            gem_copy_map_add(map, ob, nb);
             nb->len = ob->len;
             nb->cap = ob->cap;
             nb->data = (char *)gem_copy_alloc(map, ob->cap);
             memcpy(nb->data, ob->data, ob->len);
+            if (map->compact_arena)
+                gem_copy_map_add(map, ob->data, nb->data);
             GemVal r; r.type = VAL_BUFFER; r.buffer = nb; return r;
         }
         case VAL_FN:
+            if (map->compact_arena && val.env && !gem_in_arena(val.env, map->compact_arena)) return val;
             return gem_deep_copy_fn(val, map);
     }
     return val;
@@ -456,6 +503,136 @@ GemVal gem_deep_copy_malloc(GemVal val) {
     GemVal result = gem_deep_copy_internal(val, &map);
     gem_copy_map_cleanup(&map);
     return result;
+}
+
+/* ─── Arena compaction ─── */
+
+void gem_arena_compact(int pid, void *stack_base, size_t stack_size) {
+    GemProcess *proc = &gem_proc_table[pid];
+
+    GemArena old_arena = proc->arena;
+    char *old_lo = old_arena.lo;
+    char *old_hi = old_arena.hi;
+
+    gem_arena_init(&proc->arena);
+
+    int saved_pid = gem_current_pid;
+    gem_current_pid = pid;
+
+    GemCopyMap map;
+    gem_copy_map_init_compact(&map, &old_arena);
+
+    /* Deep-copy initial_env (closure env of process entry function) */
+    if (proc->initial_env) {
+        GemVal dummy;
+        dummy.type = VAL_FN;
+        dummy.fn = NULL;
+        dummy.env = proc->initial_env;
+        GemVal result = gem_deep_copy_internal(dummy, &map);
+        proc->initial_env = result.env;
+    }
+
+    /* Pass 1: scan the coroutine stack for GemVal structs pointing into old arena */
+    char *scan = (char *)stack_base;
+    char *scan_end = scan + stack_size;
+    for (; scan + sizeof(GemVal) <= scan_end; scan += 8) {
+        GemType tag = *(GemType *)scan;
+        switch (tag) {
+            case VAL_STRING: {
+                GemVal *slot = (GemVal *)scan;
+                char *ptr = slot->sval;
+                if (ptr >= old_lo && ptr < old_hi) {
+                    *slot = gem_deep_copy_internal(*slot, &map);
+                }
+                break;
+            }
+            case VAL_TABLE: {
+                GemVal *slot = (GemVal *)scan;
+                char *ptr = (char *)slot->table;
+                if (ptr >= old_lo && ptr < old_hi) {
+                    *slot = gem_deep_copy_internal(*slot, &map);
+                }
+                break;
+            }
+            case VAL_BUFFER: {
+                GemVal *slot = (GemVal *)scan;
+                char *ptr = (char *)slot->buffer;
+                if (ptr >= old_lo && ptr < old_hi) {
+                    *slot = gem_deep_copy_internal(*slot, &map);
+                }
+                break;
+            }
+            case VAL_FN: {
+                GemVal *slot = (GemVal *)scan;
+                if (slot->env) {
+                    char *ptr = (char *)slot->env;
+                    if (ptr >= old_lo && ptr < old_hi) {
+                        *slot = gem_deep_copy_internal(*slot, &map);
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    /* Deep-copy mailbox into new arena */
+    GemMsgNode *old_node = proc->mailbox.head;
+    GemMsgNode *new_head = NULL;
+    GemMsgNode *new_tail = NULL;
+    while (old_node) {
+        GemMsgNode *nn = (GemMsgNode *)gem_arena_alloc(&proc->arena, sizeof(GemMsgNode));
+        nn->value = gem_deep_copy_internal(old_node->value, &map);
+        nn->next = NULL;
+        gem_copy_map_add(&map, old_node, nn);
+        if (new_tail) {
+            new_tail->next = nn;
+        } else {
+            new_head = nn;
+        }
+        new_tail = nn;
+        old_node = old_node->next;
+    }
+    proc->mailbox.head = new_head;
+    proc->mailbox.tail = new_tail;
+
+    /* Deep-copy pcall stack snapshots */
+    for (int i = 0; i < proc->pcall_depth; i++) {
+        GemPcallFrame *frame = &proc->pcall_stack[i];
+        frame->stack_snapshot = gem_deep_copy_internal(frame->stack_snapshot, &map);
+        if (frame->error_msg && (char *)frame->error_msg >= old_lo &&
+            (char *)frame->error_msg < old_hi) {
+            size_t elen = strlen(frame->error_msg) + 1;
+            char *new_msg = (char *)gem_arena_alloc(&proc->arena, elen);
+            memcpy(new_msg, frame->error_msg, elen);
+            gem_copy_map_add(&map, (void *)frame->error_msg, new_msg);
+            frame->error_msg = new_msg;
+        }
+    }
+
+    /* Pass 2: fixup raw pointers on the stack using the copy map */
+    scan = (char *)stack_base;
+    for (; scan + 8 <= scan_end; scan += 8) {
+        void *val = *(void **)scan;
+        if ((char *)val >= old_lo && (char *)val < old_hi) {
+            void *mapped = gem_copy_map_find(&map, val);
+            if (mapped) {
+                *(void **)scan = mapped;
+            }
+        }
+    }
+
+    /* Reset read_buf — safe at receive/selective_yield points */
+    proc->read_buf = NULL;
+    proc->read_buf_cap = 0;
+
+    gem_current_pid = saved_pid;
+
+    gem_copy_map_cleanup(&map);
+    gem_arena_destroy(&old_arena);
+
+    proc->arena.bytes_allocated = 0;
 }
 
 static void gem_deep_free_internal(GemVal val) {
