@@ -3,13 +3,13 @@
 Future performance improvements. None are blocking — collect ideas here as they come up.
 
 Priorities are informed by benchmark results from the bookmark CRUD app (2026-04-29):
-- GET /bookmarks (20 rows): p50=1.55ms, p99=27ms, 5.5k req/s
-- GET / (static HTML): p50=305us, p99=6ms, 28k req/s
-- Soak (5min, 4c): p50=540us, p99=32ms, 5.4k req/s, RSS stable at 1.46 GB
-- POST /bookmarks: p50=25ms, p99=89ms, 160 req/s
+- GET /bookmarks (20 rows): p50=1.60ms, p99=9.8ms, 5.3k req/s
+- GET / (static HTML): p50=313us, p99=3.4ms, 26.5k req/s
+- Soak (5min, 4c): p50=556us, p99=7.8ms, 5.2k req/s, RSS peak 790 MB
+- POST /bookmarks: p50=25ms, p99=70ms, 159 req/s
 
-Key bottlenecks: GC pauses dominate p99 latency; per-request GC allocation rate drives RSS;
-string concatenation in HTML templates is the main allocation source.
+Key bottlenecks: per-request GC allocation rate drives RSS; string concatenation patterns
+that escape `build_string` still allocate per-concat. GC pauses are now sub-10ms.
 
 Priority scale: **P0** = measurable impact on benchmark right now, **P1** = significant but
 requires groundwork, **P2** = nice to have or niche.
@@ -22,8 +22,8 @@ requires groundwork, **P2** = nice to have or niche.
 ### ~~String builder for response construction~~ ✓ Done
 `build_string` builtin added — creates a buffer, passes an `add` closure to the block, returns the finalized string. `push` and `to_string` now work on buffers. `std/http.gem` response serialization and `examples/bookmark_app/app.gem` HTML templates rewritten to use `build_string` blocks instead of `+` concatenation.
 
-### Reduce GC pause duration
-GC_gcollect() is stop-the-world. At ~5k req/s, pauses of 20-30ms cause the p99 spikes. Options: (a) `GC_enable_incremental()` for incremental collection (trade throughput for lower max pause), (b) tune `GC_set_free_space_divisor` to collect more frequently with shorter pauses, (c) reduce the root set by not registering idle coroutine stacks. Needs profiling to pick the right lever.
+### ~~Reduce GC pause duration~~ ✓ Done
+Tuned Boehm GC to collect more frequently with shorter pauses: `GC_set_free_space_divisor(6)` (was 3) triggers collection earlier, and the scheduler GC threshold was reduced to 10 completions / 1000 resumes (was 50/5000). Result: p99 dropped from 34ms to 7.8ms, RSS peak from 3.6 GB to 790 MB, at a 9% throughput cost. Incremental mode (`GC_enable_incremental`) was tested but its mprotect-based write barriers conflict with coroutine stack switching, tanking throughput by 40%.
 
 ## Value Representation (P1)
 

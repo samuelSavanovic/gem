@@ -1,0 +1,22 @@
+date: 2026-04-29
+hostname: samuels-MBP.fritz.box
+os: Darwin 25.4.0 arm64
+cpu: Apple M1 Pro
+cores: 10
+memory_gb: 16
+node: v25.9.0
+runtime: Node.js + better-sqlite3 (synchronous), http.createServer
+note: Equivalent bookmark CRUD app for baseline comparison against Gem.
+      Same wrk parameters as Gem benchmark suite.
+
+parameters:
+  warmup: 5s
+  burst_duration: 30s
+  burst_threads: 2
+  burst_connections: 10
+  soak_duration: 5m
+  soak_threads: 1
+  soak_connections: 4
+  write_burst_duration: 10s
+  write_burst_connections: 4
+  rss_interval: 0.5s

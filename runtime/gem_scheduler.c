@@ -407,9 +407,10 @@ void gem_run_scheduler(void) {
             }
         }
 
-        /* Periodically collect garbage to bound heap growth under
-           sustained spawn/die churn (e.g. HTTP request handlers). */
-        if (completed_since_gc >= 50 || resumes_since_gc >= 5000) {
+        /* Collect garbage frequently to keep each STW pause short.
+           Smaller thresholds = less accumulated garbage per collection
+           = shorter pauses, at the cost of more frequent pauses. */
+        if (completed_since_gc >= 10 || resumes_since_gc >= 1000) {
             GC_gcollect();
             completed_since_gc = 0;
             resumes_since_gc = 0;
