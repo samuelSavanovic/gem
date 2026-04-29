@@ -509,8 +509,8 @@ test4: supervisor crashed: max restart intensity reached
 test1: equal_self=true different=true
 test2: type=ref
 test3: r1=first r2=second
-test5: unique=true count=100
 test4: ref_equal=true
+test5: unique=true count=100
 test1: parent died: crash1
 test2: parent died: crash2
 test4: A died: chain-boom

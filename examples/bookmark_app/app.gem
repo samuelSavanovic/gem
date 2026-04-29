@@ -222,9 +222,5 @@ end)
 # ─── Start server ───
 
 let port = 8080
-let server_pid = http.serve(router, {port: port})
 log.info("Bookmark manager listening on http://localhost:{port}")
-
-spawn(fn()
-  sleep(999999999)
-end)
+http.serve(router, {port: port})

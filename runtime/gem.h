@@ -370,6 +370,7 @@ void gem_send_msg(int pid, GemVal val);
 GemVal gem_receive_msg(void);
 int gem_self_pid(void);
 void gem_run_scheduler(void);
+void gem_run_main(GemFnPtr fn, void *env);
 
 /* Selective receive: remove a specific node from the mailbox */
 void gem_mailbox_remove(GemMailbox *mb, GemMsgNode *prev, GemMsgNode *node);

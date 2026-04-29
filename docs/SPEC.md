@@ -366,6 +366,8 @@ send(pid, "world")
 
 `spawn`, `send`, `receive` are runtime functions, not keywords. Under the hood they use minicoro coroutines with a round-robin scheduler. Each spawned coroutine gets a mailbox (a simple queue). `receive` yields the coroutine if the mailbox is empty; the scheduler resumes it when a message arrives via `send`.
 
+The main process (top-level code) is itself a schedulable coroutine (PID 0). All concurrency primitives — `self()`, `send`, `receive`, `sleep`, `monitor`, `link` — work at the top level. The program exits when all processes have terminated; if spawned processes outlive main, the program continues running until they complete.
+
 **Preemptive Scheduling (Reduction-Based)**
 
 Processes are cooperatively scheduled but the compiler inserts automatic yield points so tight loops cannot starve the scheduler. Each process has a reduction counter that increments at loop back-edges (the top of every `while` body, including `for` loops which desugar to `while`). When the counter exceeds the threshold (currently 4000), the process yields and is immediately re-queued as READY. The counter resets to 0 each time the scheduler resumes a process.
@@ -477,7 +479,7 @@ The existing `receive()` function call continues to work unchanged — it always
 
 `kill(pid, reason)` sends an exit signal to a process. If the target has `trap_exit` enabled, an `{tag: "EXIT", pid: sender_pid, reason: reason}` message is delivered to its mailbox instead of terminating it. Otherwise, the process is terminated immediately: marked dead, DOWN messages delivered to monitors, registered name removed, and exit propagated to linked processes. Returns `true` if the process was alive, `nil` otherwise.
 
-`sleep(ms)` suspends the current process for `ms` milliseconds. Must be called inside a spawned process (not the main process). The scheduler resumes the process after the deadline expires.
+`sleep(ms)` suspends the current process for `ms` milliseconds. The scheduler resumes the process after the deadline expires.
 
 `time_ms()` returns the current monotonic time in milliseconds (int). Useful for timeouts, benchmarks, and restart intensity tracking. Not suitable for wall-clock formatting — use `epoch_ms()` for that.
 
@@ -884,7 +886,7 @@ print(items[0])    # a
 
 `tcp_close(socket)` — closes a socket file descriptor. Always synchronous. Returns `nil`.
 
-All six TCP builtins work both from the main process (synchronous/blocking) and from spawned processes (non-blocking via scheduler poll). Sockets are set non-blocking when inside a coroutine; the scheduler's `poll()` loop handles readiness notification with zero thread pool overhead.
+All TCP builtins use non-blocking sockets with scheduler poll integration. The scheduler's `poll()` loop handles readiness notification with zero thread pool overhead.
 
 **SQLite**
 
@@ -1105,7 +1107,8 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 
 **Server:**
 
-- `http.serve(router[, opts])` — starts the HTTP server. Returns the acceptor pid. `opts` table: `port` (default 8080), `host` (default `"0.0.0.0"`).
+- `http.serve(router[, opts])` — starts the HTTP server and blocks the caller. `opts` table: `port` (default 8080), `host` (default `"0.0.0.0"`). Blocks until the acceptor process dies.
+- `http.start(router[, opts])` — starts the HTTP server without blocking. Returns the acceptor pid. Same options as `serve`.
 - Spawns one process per connection. Supports HTTP/1.1 keep-alive with a 30-second idle timeout (via `tcp_read` timeout). Handles `Connection: close`. Errors in handlers are caught by `pcall` and return 500.
 
 `std/request` — exports `request` table. HTTP/1.1 client for outbound requests. Depends on `std/string`, TCP builtins.

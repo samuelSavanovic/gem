@@ -289,6 +289,53 @@ static int64_t gem_earliest_timer_deadline(void) {
     return earliest;
 }
 
+#ifndef GEM_MAIN_STACK_SIZE
+#define GEM_MAIN_STACK_SIZE (8 * 1024 * 1024)
+#endif
+
+void gem_run_main(GemFnPtr fn, void *env) {
+    if (gem_free_head < 0) {
+        gem_error("spawn: process table full");
+        return;
+    }
+    int pid = gem_free_head;
+    gem_free_head = gem_proc_table[pid].pid;
+    if (gem_free_head < 0) gem_free_tail = -1;
+
+    GemCoroCtx *ctx = (GemCoroCtx *)GC_MALLOC(sizeof(GemCoroCtx));
+    ctx->fn = fn;
+    ctx->env = env;
+
+    mco_desc desc = mco_desc_init(gem_coro_entry, GEM_MAIN_STACK_SIZE);
+    desc.alloc_cb = gem_coro_stack_alloc;
+    desc.dealloc_cb = gem_coro_stack_free;
+    desc.user_data = ctx;
+
+    mco_coro *co;
+    mco_result res = mco_create(&co, &desc);
+    if (res != MCO_SUCCESS) {
+        gem_error("gem_run_main: coroutine creation failed");
+        return;
+    }
+
+    gem_proc_table[pid].state = GEM_PROC_READY;
+    gem_proc_table[pid].coro = co;
+    gem_proc_table[pid].mailbox = (GemMailbox){NULL, NULL};
+    gem_proc_table[pid].pid = pid;
+    gem_proc_table[pid].io_request = NULL;
+    gem_proc_table[pid].monitors = NULL;
+    gem_proc_table[pid].links = NULL;
+    gem_proc_table[pid].trap_exit = 0;
+    gem_proc_table[pid].exit_reason = NULL;
+    gem_proc_table[pid].deadline_ms = -1;
+    gem_proc_table[pid].timed_out = 0;
+    gem_proc_table[pid].reductions = 0;
+    gem_proc_table[pid].pcall_depth = 0;
+
+    if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
+    gem_run_scheduler();
+}
+
 void gem_run_scheduler(void) {
     int active = 1;
     int completed_since_gc = 0;

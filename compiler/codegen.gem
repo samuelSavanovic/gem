@@ -2056,10 +2056,8 @@ fn make_codegen(source_name)
     end
 
     let mb = buf_new()
-    buf_push(mb, "int main(int argc, char **argv) \{\n")
-    buf_push(mb, "    GC_INIT();\n")
-    buf_push(mb, "    gem_init(argc, argv);\n")
-    buf_push(mb, "    gem_scheduler_init();\n")
+    buf_push(mb, "static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) \{\n")
+    buf_push(mb, "    (void)_env; (void)_args; (void)_argc;\n")
     buf_push(mb, "    gem_push_frame(\"main\", \"{escape_c_string(source_name)}\", 0);\n")
     if main_body != ""
       buf_push(mb, main_body)
@@ -2068,8 +2066,13 @@ fn make_codegen(source_name)
       buf_push(mb, "    GemVal _margs[1] = \{GEM_NIL};\n")
       buf_push(mb, "    gem_fn_main(NULL, _margs, 0);\n")
     end
-    buf_push(mb, "    gem_run_scheduler();\n")
-    buf_push(mb, "    gem_pop_frame();\n    return 0;\n}\n")
+    buf_push(mb, "    gem_pop_frame();\n    return GEM_NIL;\n}\n\n")
+    buf_push(mb, "int main(int argc, char **argv) \{\n")
+    buf_push(mb, "    GC_INIT();\n")
+    buf_push(mb, "    gem_init(argc, argv);\n")
+    buf_push(mb, "    gem_scheduler_init();\n")
+    buf_push(mb, "    gem_run_main(gem_user_main, NULL);\n")
+    buf_push(mb, "    return 0;\n}\n")
     let main_c = buf_str(mb)
 
     # Assemble

@@ -554,7 +554,7 @@ end
 
 # ─── Server ───
 
-fn serve(router_ref, opts = {})
+fn start(router_ref, opts = {})
   if opts == nil
     opts = {}
   end
@@ -592,5 +592,11 @@ fn serve(router_ref, opts = {})
   pid
 end
 
+fn serve(router_ref, opts = {})
+  let pid = start(router_ref, opts)
+  monitor(pid)
+  receive()
+end
+
 export response, ok, html, json_response, redirect, not_found, bad_request,
-  server_error, set_cookie, delete_cookie, parse_form, html_escape, router, serve
+  server_error, set_cookie, delete_cookie, parse_form, html_escape, router, start, serve

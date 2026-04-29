@@ -54,7 +54,7 @@ spawn() do
   let pass = 0
   let fail = 0
 
-  let server_pid = http.serve(tr, {port: port})
+  let server_pid = http.start(tr, {port: port})
   sleep(100)
 
   # Helper to make HTTP requests
