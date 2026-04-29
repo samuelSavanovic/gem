@@ -36,6 +36,8 @@ void gem_arena_init(GemArena *arena) {
     arena->current = block;
     arena->head = block;
     arena->table_list = NULL;
+    arena->lo = block->data;
+    arena->hi = block->data + block->cap;
 }
 
 void *gem_arena_alloc(GemArena *arena, size_t size) {
@@ -58,10 +60,26 @@ void *gem_arena_alloc(GemArena *arena, size_t size) {
     block->next = new_block;
     arena->current = new_block;
 
+    if (new_block->data < arena->lo) arena->lo = new_block->data;
+    char *end = new_block->data + new_block->cap;
+    if (end > arena->hi) arena->hi = end;
+
     void *ptr = new_block->data + new_block->used;
     new_block->used += size;
     memset(ptr, 0, size);
     return ptr;
+}
+
+int gem_in_main_arena(const void *ptr) {
+    if (gem_main_pid < 0) return 0;
+    GemArena *arena = &gem_proc_table[gem_main_pid].arena;
+    const char *p = (const char *)ptr;
+    if (p < arena->lo || p >= arena->hi) return 0;
+    for (GemArenaBlock *block = arena->head; block; block = block->next) {
+        if (p >= block->data && p < block->data + block->cap)
+            return 1;
+    }
+    return 0;
 }
 
 void gem_arena_destroy(GemArena *arena) {

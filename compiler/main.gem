@@ -276,7 +276,9 @@ fn transform_module(stmts, mod_name, export_node, load_node)
       let prefixed = prefix + ename
       push(entries, make_table_entry(ename, make_var(prefixed)))
     end
-    push(result, make_let(binding_name, make_table(entries), 0))
+    let mod_tbl = make_table(entries)
+    mod_tbl.frozen = true
+    push(result, make_let(binding_name, mod_tbl, 0))
   end
 
   result

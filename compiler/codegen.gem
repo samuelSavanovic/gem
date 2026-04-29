@@ -838,6 +838,9 @@ fn make_codegen(source_name)
         buf_push(b, "    gem_table_set({t}, gem_string(\"{escaped}\"), {val_r.expr});\n")
       end
     end
+    if node.frozen == true
+      buf_push(b, "    gem_table_freeze({t});\n")
+    end
     {expr: t, setup: buf_str(b)}
   end
 

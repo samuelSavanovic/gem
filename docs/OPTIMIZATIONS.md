@@ -32,8 +32,8 @@ Arenas only grow — dead objects (replaced table entries, overwritten variables
 ### Growable structure waste (P1)
 Tables and arrays allocated in arenas can't individually shrink or free their old backing arrays when they grow. Each `gem_table_grow` doubles capacity, leaving the old keys/vals arrays as dead space in the arena. For tables that grow incrementally (e.g. route tables, accumulators), this wastes up to 2x the live data. Copy-on-grow (allocate new backing in the arena, accept old waste) is the current approach. Compaction (above) would reclaim this.
 
-### Deep copy optimization for shared immutable data (P1)
-Every `spawn` and `send` deep-copies the entire transitive closure of values into the target arena. Module tables (string, json, http) are effectively immutable after initialization but are re-copied on every spawn. Copy-on-write or shared immutable references for values originating from the main process arena would eliminate redundant copies. Requires reference counting or epoch-based tracking to know when the source arena is freed.
+### ~~Deep copy optimization for shared immutable data~~ ✓ Done
+Module tables are marked immutable (`gem_table_freeze`) by the compiler after construction. `gem_deep_copy_internal` skips copying immutable tables, sharing them read-only across all processes. Strings from the main process arena are also shared (all strings are immutable; the main arena is never freed). User-created mutable tables are still deep-copied correctly. Bookmark app soak (60s, 4c, GET /bookmarks): p99 1.90ms → 1.45ms (−24%), throughput 4,816 → 4,986 req/s (+3.5%), RSS 1,511 → 1,236 MB (−18%).
 
 ### ~~Reuse tcp_read buffer per process~~ ✓ Done
 `GemProcess` now has a `read_buf`/`read_buf_cap` pair. `tcp_read` allocates the read buffer once per process and reuses it across calls, copying only the actual bytes read into an exact-size string for the return value.

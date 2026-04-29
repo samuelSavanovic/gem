@@ -33,13 +33,17 @@ typedef struct {
     GemArenaBlock *current;
     GemArenaBlock *head;
     GemTable *table_list;
+    char *lo;
+    char *hi;
 } GemArena;
 
 void gem_arena_init(GemArena *arena);
 void *gem_arena_alloc(GemArena *arena, size_t size);
 void gem_arena_destroy(GemArena *arena);
+int gem_in_main_arena(const void *ptr);
 
 extern GemArena gem_global_arena;
+extern int gem_main_pid;
 
 GemArena *gem_current_arena(void);
 
@@ -133,6 +137,7 @@ struct GemTable {
     GemStrIndex *str_index;  /* stb_ds string hash map (NULL until first string key) */
     uint32_t shape_id;       /* incremented on structural mutations (delete, pop, sort, etc.) */
     GemTable *arena_next;    /* linked list in owning arena's table_list */
+    uint8_t immutable;       /* set by gem_table_freeze — shared across processes without copy */
 };
 
 /* ─── Table operations ─── */
@@ -141,6 +146,7 @@ GemVal gem_table_new(void);
 void gem_table_set(GemVal tbl, GemVal key, GemVal val);
 GemVal gem_table_get(GemVal tbl, GemVal key);
 void gem_table_grow(GemTable *t);
+void gem_table_freeze(GemVal tbl);
 
 /* ─── Inline cache for .field access ─── */
 

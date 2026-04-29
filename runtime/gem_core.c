@@ -125,6 +125,10 @@ GemVal gem_table_new(void) {
     GemVal r; r.type = VAL_TABLE; r.table = t; return r;
 }
 
+void gem_table_freeze(GemVal tbl) {
+    if (tbl.type == VAL_TABLE) tbl.table->immutable = 1;
+}
+
 void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
     if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "index set on non-table: got %s", gem_type_str(tbl)); gem_error(buf); }
     GemTable *t = tbl.table;
@@ -414,12 +418,14 @@ static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map) {
         case VAL_REF:
             return val;
         case VAL_STRING: {
+            if (!map->use_malloc && gem_in_main_arena(val.sval)) return val;
             GemVal r;
             r.type = VAL_STRING;
             r.sval = gem_copy_strdup(map, val.sval);
             return r;
         }
         case VAL_TABLE:
+            if (!map->use_malloc && val.table->immutable) return val;
             return gem_deep_copy_table(val.table, map);
         case VAL_BUFFER: {
             GemBuffer *ob = val.buffer;

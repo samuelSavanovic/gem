@@ -22,7 +22,7 @@ int gem_free_tail = GEM_MAX_PROCS - 1;
 int gem_proc_hwm = 0;
 GemNameEntry *gem_name_registry = NULL;
 GemTimer gem_timers[GEM_MAX_TIMERS];
-static int gem_main_pid = -1;
+int gem_main_pid = -1;
 
 /* Pre-allocated poll scratch arrays (avoid malloc/free per scheduler idle) */
 static struct pollfd gem_poll_fds[GEM_MAX_PROCS];
