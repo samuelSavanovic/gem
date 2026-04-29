@@ -5,3 +5,4 @@ __pycache__/
 prototype/gc_coro_test
 prototype/scheduler_test
 build/
+*.log
