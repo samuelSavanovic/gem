@@ -11,3 +11,7 @@ build/
 *.db-wal
 node_modules/
 package-lock.json
+json_parser
+test_build_string
+test_push_buf
+examples/bookmark_app/app

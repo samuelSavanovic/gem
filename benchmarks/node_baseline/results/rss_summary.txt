@@ -1,0 +1,5 @@
+  Start:   65360 KB
+  End:     304768 KB
+  Peak:    309072 KB
+  Mean:    103957 KB
+  Growth:  239408 KB over 376s
