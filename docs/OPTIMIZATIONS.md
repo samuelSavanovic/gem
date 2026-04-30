@@ -166,6 +166,29 @@ A `while true` loop in a process-tail context now resets the per-process arena a
 
 **Result**: `examples/55_while_true_process_loop.gem` regression test runs 10000 iters × ~200 bytes/iter (≫1MB threshold) and completes with stable RSS. All 49 other examples + json_parser + bookmarks pass; bootstrap roundtrip clean; liveness gate (4 fns from `std/`) PASS.
 
+### Benchmark baseline: process-tail `while true` rescue+reset (2026-04-30)
+
+Canonical comparison point for the `while true` rescue+reset codegen vs. the pre-mechanism baseline. Use these as the reference going forward when judging codegen-level changes to the back-edge or liveness pass.
+
+- **Baseline**: `6b6999a` (pre-`while true` rescue path; depth-2 fence still in play). Logs: `benchmarks/logs/2026-04-30_baseline_quiet/`.
+- **HEAD at capture**: `16f49a0` (rescue+reset shipped, shadow-fix applied). Logs: `benchmarks/logs/2026-04-30_head_quiet/`.
+- **Conditions**: same M1 Pro, quiet machine, back-to-back runs. `bash benchmarks/run.sh` defaults (5s warmup, 30s read bursts c=10, 5min soak c=4, 10s POST burst c=4).
+
+Headline numbers:
+
+| Phase | metric | baseline `6b6999a` | HEAD `16f49a0` | Δ |
+|---|---|---|---|---|
+| burst GET /bookmarks | req/s | 5558 | 5197 | **−6.5%** |
+| burst GET /bookmarks | p50 / p99 | 1.55 ms / 28.89 ms | 2.07 ms / **4.80 ms** | p99 −6× |
+| burst GET / | req/s | 30 629 | 31 090 | +1.5% |
+| burst GET / | p50 / p99 | 279 µs / 5.63 ms | 287 µs / **662 µs** | p99 −8.5× |
+| soak GET /bookmarks (5min) | req/s | 5427 | 5209 | **−4.0%** |
+| soak GET /bookmarks (5min) | p50 / p99 | 530 µs / 33.95 ms | 756 µs / **1.73 ms** | p99 −20× |
+| burst POST /bookmarks | req/s, p99 | 159 / 97.4 ms | 157 / 81.3 ms | parity |
+| RSS over 5min soak | peak / growth | **3655 MB / 3636 MB** | **55 MB / 37 MB** | peak ÷66, growth ÷98 |
+
+**Known regression — read-path p50 throughput, −4 to −6.5%**. Outside the ±2% noise band on `/bookmarks`. `/` (cheap static handler) and POST (SQLite-bound) are unaffected. Plausible cause: per-iteration arena `rescue+reset` work emitted at the `while true`/TCO back-edge of the accept and per-connection handler loops — it runs on every iteration regardless of whether the threshold gates the actual reset. The check itself (`gem_current_pid >= 0 && bytes_allocated > GEM_ARENA_RESET_THRESHOLD`) plus root-set construction is non-zero work in a tight HTTP request loop. Trade is intentional and favorable: tail latency collapses ~6–20× and memory growth is no longer unbounded over a soak. Investigating only worth it if a workload demonstrates the p50 hit matters more than the tail/memory wins (P2). When investigating, look at: (a) lifting the threshold check to a precomputed pointer-hot-path, (b) hoisting root-set construction out of the per-iteration path when the live set is loop-invariant, (c) skipping the rescue entirely when the live set is empty.
+
 ### Constant folding (P2)
 Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile time. The compiler already has all the information. Low value at current stage — the cases where humans write foldable constants are rare, and it doesn't affect compilation time.
 
