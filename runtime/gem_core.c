@@ -618,11 +618,8 @@ void gem_arena_reset_with_roots(GemVal **roots, int n_roots) {
    Algorithm: rescue roots+mailbox into a side arena (so deep_copy can
    read the post-mark region while it's still mapped); truncate the main
    arena to the mark (free str_indexes for newer-than-mark tables, munmap
-   newer-than-mark blocks, reset mark.block->used); splice the side
-   arena's blocks onto the truncated main arena's tail (no second copy).
-   Trade-off: the slack between mark.used and mark.block->cap is stranded
-   until the next reset truncates past mark.block; bounded by allocation
-   rate, not unbounded. */
+   newer-than-mark blocks, reset mark.block->used); copy roots+mailbox
+   back from side into the truncated main arena; destroy side. */
 void gem_arena_reset_to_mark_with_roots(GemArenaMark mark, GemVal **roots, int n_roots) {
     GemArena *arena = gem_current_arena();
     GemProcess *proc = NULL;
@@ -708,43 +705,34 @@ void gem_arena_reset_to_mark_with_roots(GemArenaMark mark, GemVal **roots, int n
     }
 
     /* Phase 3: swap side out of the arena slot, swap truncated old back in,
-       then splice side's blocks/tables onto the truncated old. The roots
-       and mailbox already live in side's blocks; no copy-back needed. */
+       then deep-copy roots and mailbox from side into the truncated old. */
     GemArena side = *arena;
     *arena = old;
 
-    /* Splice side's block list onto mark.block->next. mark.block was set as
-       old.current with ->next = NULL during Phase 2, so it's the tail of the
-       truncated block list. The slack between mark.used and mark.block->cap
-       is intentionally stranded — the bump pointer skips ahead to side's
-       first block. */
-    if (side.head) {
-        if (mark.block) {
-            mark.block->next = side.head;
-        } else {
-            arena->head = side.head;
-        }
-        arena->current = side.current;
-        if (side.lo < arena->lo) arena->lo = side.lo;
-        if (side.hi > arena->hi) arena->hi = side.hi;
+    GemCopyMap to_main;
+    gem_copy_map_init(&to_main, 0);
+
+    for (int i = 0; i < n_roots; i++) {
+        *roots[i] = gem_deep_copy_internal(*roots[i], &to_main);
     }
 
-    arena->bytes_allocated = mark.bytes_allocated + side.bytes_allocated;
-
-    /* Splice side's table_list (newer, LIFO) in front of mark.table_list. */
-    if (side.table_list) {
-        GemTable *tail = side.table_list;
-        while (tail->arena_next) tail = tail->arena_next;
-        tail->arena_next = mark.table_list;
-        arena->table_list = side.table_list;
-    }
-
-    /* Install the side mailbox directly — its nodes live in side's blocks,
-       which are now part of the main arena. */
     if (proc) {
-        proc->mailbox = side_mailbox;
+        for (GemMsgNode *n = side_mailbox.head; n; n = n->next) {
+            GemVal v = gem_deep_copy_internal(n->value, &to_main);
+            GemMsgNode *node = ALLOC(GemMsgNode);
+            node->value = v;
+            node->next = NULL;
+            if (proc->mailbox.tail) {
+                proc->mailbox.tail->next = node;
+            } else {
+                proc->mailbox.head = node;
+            }
+            proc->mailbox.tail = node;
+        }
     }
 
-    /* Don't gem_arena_destroy(&side): its blocks and str_indexes now belong
-       to the main arena and will be released when the process exits. */
+    gem_copy_map_cleanup(&to_main);
+
+    /* Phase 4: tear down the side arena. */
+    gem_arena_destroy(&side);
 }
