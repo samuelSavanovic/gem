@@ -172,7 +172,7 @@ A `while true` loop in a process-tail context now resets the per-process arena a
 
 The mechanism ships, but several patterns common in real code still trip refusals or warnings. Items below are roughly in order of impact-to-effort. Each unblocks more user code without requiring users to think about the rescue mechanism — that's the bar (per `CLAUDE.md`: language must not leak runtime invariants onto users).
 
-1. **Dogfood: rewrite `std/http` accept/handle loops as `while true`** (P1, small). The std/http accept_loop and handle_connection_loop are still tail-recursive. With the spawn-arg liveness tightening they now satisfy the gate cleanly — converting them is a small change that validates parity in production. Codegen for `while true` rescue+reset and self-recursive TCO emit identical back-edge code, so perf should match the pinned `2026-04-30_head_quiet/` numbers within noise. Any divergence is a codegen bug worth investigating. Doesn't unlock new user patterns; it's the dogfooding pass that catches anything the targeted gate missed before we expand scope.
+1. **Dogfood: rewrite `std/http` accept/handle loops as `while true`** ✅ done (2026-04-30). Both `accept_loop` and `handle_connection_loop` now use `while true`. Compiles with no warnings; bench at parity with `2026-04-30_head_quiet/` (see `2026-04-30_std_http_while_true/` log entry above). Confirms the back-edge codegen is shape-equivalent on a real workload.
 
 2. **Hoist lets declared in nested `if`/`match` arms** (P1, mid). Today `collect_top_let_names` only sees lets at the function-body level; a name introduced in every arm of an `if`/`match` has no C local at the back-edge and trips the "declared in a nested if/match arm" refusal. This is a common pattern (`if c then let x = a else let x = b end; use(x)`). Two options: (a) detect names let'd in every arm and emit a hoisted C decl at the function-body level, or (b) lift the let to a pre-arm declaration in the AST. Care needed around shadowing and arms that don't all bind the name (the latter should still refuse — a use after the arm would read uninitialized memory).
 
@@ -190,6 +190,7 @@ Canonical comparison point for the `while true` rescue+reset codegen vs. the pre
 
 - **Baseline**: `6b6999a` (pre-`while true` rescue path; depth-2 fence still in play). Logs: `benchmarks/logs/2026-04-30_baseline_quiet/`.
 - **HEAD at capture**: `16f49a0` (rescue+reset shipped, shadow-fix applied). Logs: `benchmarks/logs/2026-04-30_head_quiet/`.
+- **std/http dogfood**: `std/http` accept/handle loops rewritten as `while true`. Logs: `benchmarks/logs/2026-04-30_std_http_while_true/`. Read throughput within −1.0% / −2.4% / −0.4% of `head_quiet` (burst /bookmarks, burst /, soak); p50/p99 within ±2%; POST parity. RSS peak 50 MB vs 56 MB and growth 28 MB vs 37 MB — slightly improved, well within run-to-run noise. Confirms `while true` rescue+reset and self-recursive TCO emit equivalent back-edge code on a real workload.
 - **Conditions**: same M1 Pro, quiet machine, back-to-back runs. `bash benchmarks/run.sh` defaults (5s warmup, 30s read bursts c=10, 5min soak c=4, 10s POST burst c=4).
 
 Headline numbers:

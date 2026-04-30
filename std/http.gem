@@ -545,45 +545,48 @@ fn process_one_request(client_fd, router_ref, conn_buf)
   next_buf
 end
 
-# Tail-recursive keep-alive loop. The arena resets at each tail call when
-# bytes_allocated crosses GEM_ARENA_RESET_THRESHOLD, so per-request garbage
-# (parsed headers, request bodies, etc.) doesn't accumulate.
+# Keep-alive loop. The arena resets at each back-edge when bytes_allocated
+# crosses GEM_ARENA_RESET_THRESHOLD, so per-request garbage (parsed headers,
+# request bodies, etc.) doesn't accumulate.
 fn handle_connection_loop(client_fd, router_ref, conn_buf)
-  let result = pcall(fn()
-    process_one_request(client_fd, router_ref, conn_buf)
-  end)
-  let next = false
-  if result.ok
-    next = result.value
-  else
-    pcall(fn()
-      tcp_write(client_fd, serialize_response(server_error(nil), false))
+  while true
+    let result = pcall(fn()
+      process_one_request(client_fd, router_ref, conn_buf)
     end)
+    let next = false
+    if result.ok
+      next = result.value
+    else
+      pcall(fn()
+        tcp_write(client_fd, serialize_response(server_error(nil), false))
+      end)
+    end
+    if next == false
+      tcp_close(client_fd)
+      return
+    end
+    if next == nil
+      tcp_close(client_fd)
+      return
+    end
+    conn_buf = next
   end
-  if next == false
-    tcp_close(client_fd)
-    return
-  end
-  if next == nil
-    tcp_close(client_fd)
-    return
-  end
-  handle_connection_loop(client_fd, router_ref, next)
 end
 
 # ─── Server ───
 
-# Tail-recursive accept loop. Spawned directly so it runs at depth 2 from
-# the process entry, the boundary at which TCO arena reset is allowed.
+# Accept loop. Spawned directly so it runs at depth 2 from the process
+# entry, the boundary at which arena rescue+reset is allowed.
 
 fn accept_loop(server_fd, router_ref)
-  let client_fd = tcp_accept(server_fd)
-  let fd = client_fd
-  let rr = router_ref
-  spawn(fn()
-    handle_connection_loop(fd, rr, "")
-  end)
-  accept_loop(server_fd, router_ref)
+  while true
+    let client_fd = tcp_accept(server_fd)
+    let fd = client_fd
+    let rr = router_ref
+    spawn(fn()
+      handle_connection_loop(fd, rr, "")
+    end)
+  end
 end
 
 fn start(router_ref, opts = {})
