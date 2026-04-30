@@ -1009,3 +1009,4 @@ false
 33
 hello world
 result: 10000
+result: 50000000

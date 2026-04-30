@@ -279,6 +279,15 @@ neg_assert("non-spawn-closure-still-bubbles",
   ["arg"],
   [])
 
+# Arm-merged let after the lift pre-pass: `let next = nil` hoisted before
+# the if; arm bodies become assigns. Liveness must see `carry` as the only
+# live param across the back-edge — `next` is killed by the consuming
+# `carry = next` assign, then re-defined inside both arms.
+neg_assert("arm-merged-lift-shape",
+  "fn f(carry)\n  while true\n    let next = nil\n    if carry == 0\n      next = 1\n    else\n      next = 2\n    end\n    carry = next\n  end\nend\n",
+  ["carry"],
+  ["next"])
+
 print("Negative tests: PASS={neg_pass} FAIL={neg_fail}")
 if neg_fail > 0
   print("Gate FAILED — negative tests detected over-approximation regression.")
