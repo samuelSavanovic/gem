@@ -118,9 +118,39 @@ A pre-codegen pass marks `anon_fn` nodes that appear as the immediate argument o
 
 Concrete payoff: `safe_handle_request` deleted from `std/http.gem` and inlined into `handle_connection_loop`, which now has unboxed params and a stack-allocated pcall env. The `accept_loop` `let fd = client_fd` aliasing is **kept** — it dodges the *spawn* closure capture, which is still escaping.
 
-Bench impact (c=50 t=4 30s, /bookmarks, 30 rows): 3380 → 3470 req/s (+2.7%) measured under the per-frame watermark, since reverted. Static path held: GET / c=4 26.2k req/s, c=100 27.1k req/s, RSS 50 MB.
-
 Scope deferred: block-syntax `each`/`map`/`filter`/`reduce` from std/table aren't allowlisted yet (their callee parses as `dot`, not `var`, and they're regular Gem fns rather than builtins where we can audit storage behavior). Same goes for `build_string`. Add to allowlist when a workload demands it.
+
+### TCO arena reset boundary — current state (2026-04-30)
+Process-loop arena resets fire at TCO back-edges when `gem_call_depth - entry_call_depth <= 2` (depth-2 fence). The fence prevents the reset from running deep inside a request handler where the arena holds live values from the caller — without it, the reset corrupts pointers held above the TCO frame.
+
+This is the shipping mechanism on `tco-watermark-revert-explore` (commits `fb8186c`, `40c29fd`, `354f4fa`). Two earlier attempts to remove the fence were reverted:
+- **Per-frame watermark** (`ef77df5`, reverted `40c29fd`) — moved the boundary inside each TCO frame via `gem_arena_mark()` on entry and `reset_to_mark` at the back-edge. Eliminated depth coupling but regressed `/bookmarks` 4041 → 3380 req/s because every TCO function paid for a mark + truncation pass on every iteration, and the rescue was a 2× deep_copy of mutable roots (notably `router_ref`).
+- **Single-copy splice** (`2eeda74`, reverted `fb8186c`) — eliminated the rescue's 2× by splicing the new arena block ahead of the surviving block instead of copying back. Recovered `/bookmarks` to ~3318 req/s and recovered the gen_server soak fully (217k → 235k ops/sec). Stranded `mark.block->cap - mark.used` bytes per reset (RSS bounded, VSZ grows).
+
+Alternating-pair re-bench on the revert branch (3 pairs c=50 t=4 30s on `/bookmarks`):
+
+| | revert (depth-2 + escape) | main (watermark + splice + escape) |
+|---|---|---|
+| Median req/s | 3120 | 3122 |
+| RSS median | 42–44 MB | 45–48 MB |
+
+Throughput identical within noise; revert wins ~3 MB on RSS (no stranded splice blocks). The watermark+splice machinery bought neither throughput nor memory on this workload.
+
+The 4041 baseline was on a different machine state — not a clean comparison point on the current machine.
+
+### Static process-tail analysis (P0, next)
+Replace the runtime depth-2 fence with a compile-time mark. A pre-codegen pass walks every TCO function and asks: is this function reachable only via tail calls from a process-entry boundary (`spawn`/`spawn_link`/`spawn_monitor` closure, or `main`)? If yes, mark it `process_tail` — the codegen emits an unconditional reset at the back-edge (drop the `gem_call_depth - entry_call_depth <= 2` runtime check). If no, emit a compile-time warning ("this loop won't reset because it's reachable from a non-tail context") and skip the reset.
+
+**Why this matters**: the depth-2 fence is a hidden runtime constraint. Today it works empirically (every long-running process loop *is* at depth 2 by construction), but any future user who structures a process as `spawn(fn() helper(); loop() end)` would hit a silent perf cliff with no diagnostic. Static analysis turns the silent constraint into either a guarantee or a compile-time warning.
+
+**Implementation sketch** (~80–120 LOC, modeled on the `mark_non_escaping` pass at `compiler/codegen.gem:674-718`):
+1. Build a call graph keyed by function name. For each call site, record (caller, callee, is_tail_position).
+2. Seed the worklist with: top-level statements in `main`, and every `anon_fn` body passed to `spawn`/`spawn_link`/`spawn_monitor`.
+3. BFS: from each seed, follow only tail-position edges. Mark every visited function `process_tail`.
+4. In `compile_tail_call`, if the enclosing function is `process_tail`, drop the depth check from the emitted reset.
+5. After analysis, walk the AST one more time and warn for any TCO function reachable from non-tail call sites only.
+
+Expected throughput impact: small (the depth check is one cmp + branch, predictable). The win is DX — the user-facing constraint disappears. After this lands, the depth fence is no longer the *mechanism* (the static mark is); the runtime check exists only as a belt-and-suspenders safety for cases the analysis can't prove (and emits a warning).
 
 ### Constant folding (P2)
 Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile time. The compiler already has all the information. Low value at current stage — the cases where humans write foldable constants are rare, and it doesn't affect compilation time.
