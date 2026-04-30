@@ -816,6 +816,12 @@ fn make_codegen(source_name)
   let top_level_boxed = {}
   let in_top_level = false
   let local_names = {}
+  # Subset of `local_names` whose names have an addressable C local at the
+  # current fn's top-level scope (params + top-of-body lets, or top-level
+  # vars at module scope). Used by `filter_live_for_rescue` to distinguish
+  # arm-lets (declared inside a nested if/match block — block-scoped, not
+  # addressable from the enclosing while's back-edge) from fn-scope locals.
+  let fn_scope_locals = {}
   let tco_fn_name = nil
   let tco_params = nil
   let tco_captured = nil
@@ -2989,6 +2995,9 @@ fn make_codegen(source_name)
         if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name))
           return {ok: false, reason: "live var `{name}` is captured by a closure (box lives in arena memory)"}
         end
+        if not set_contains(fn_scope_locals, name)
+          return {ok: false, reason: "live var `{name}` has no C local at this loop's back-edge (declared in a nested if/match arm?)"}
+        end
         push(roots, name)
       elif set_contains(builtins, name)
         # builtin name resolves to a fn pointer; no rescue needed.
@@ -3668,7 +3677,9 @@ fn make_codegen(source_name)
     let saved_boxed = boxed_vars
     let saved_top = in_top_level
     let saved_local = local_names
+    let saved_fn_scope = fn_scope_locals
     local_names = shadowed_locals
+    fn_scope_locals = scope_vars
 
     let captured = find_captured_in_scope(body, scope_vars)
     if node.defaults != nil
@@ -3758,6 +3769,7 @@ fn make_codegen(source_name)
     boxed_vars = saved_boxed
     in_top_level = saved_top
     local_names = saved_local
+    fn_scope_locals = saved_fn_scope
     buf_str(b)
   end
 
@@ -3781,7 +3793,9 @@ fn make_codegen(source_name)
     let saved_boxed = boxed_vars
     let saved_top = in_top_level
     let saved_local = local_names
+    let saved_fn_scope = fn_scope_locals
     local_names = set_union(shadowed_locals, sorted_array_to_set(captures))
+    fn_scope_locals = inner_scope
 
     let inner_captured = find_captured_in_scope(body, inner_scope)
     if node.defaults != nil
@@ -3840,6 +3854,7 @@ fn make_codegen(source_name)
     boxed_vars = saved_boxed
     in_top_level = saved_top
     local_names = saved_local
+    fn_scope_locals = saved_fn_scope
 
     # Add struct + function to functions list
     push(functions, struct_def + buf_str(fb))
@@ -3927,16 +3942,19 @@ fn make_codegen(source_name)
     # Build main
     let saved_boxed = boxed_vars
     let saved_local = local_names
+    let saved_fn_scope = fn_scope_locals
     boxed_vars = top_level_boxed
     in_top_level = true
     local_names = {}
     for k, _ in top_level_vars
       set_add(local_names, k)
     end
+    fn_scope_locals = local_names
     let main_body = compile_stmts(top_stmts, 1)
     in_top_level = false
     boxed_vars = saved_boxed
     local_names = saved_local
+    fn_scope_locals = saved_fn_scope
 
     let has_main = false
     for fd in fn_defs
