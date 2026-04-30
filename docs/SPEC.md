@@ -348,6 +348,39 @@ TCO applies to named functions (`fn name(...)`) without rest, default, or block 
 
 **Important:** only direct self-recursion is optimized. If `fn A` calls `fn B` which calls `fn A`, neither call is a TCO candidate — both grow the stack. Write long-running loops as direct self-recursion or use `while`. Splitting a loop body into helper functions that recurse back to the main loop will leak stack frames under sustained load.
 
+**Long-Running Processes — Use Tail Recursion, Not `while true`**
+
+Each process has its own arena (bump allocator). Allocations within the arena are freed in bulk only when the process exits. For short-lived processes (request handlers, one-shot tasks) this is ideal — no per-allocation free, no GC pauses.
+
+For long-lived processes (accept loops, keep-alive HTTP handlers, supervisors, gen_servers), this means a `while true` body that allocates per iteration grows the arena indefinitely.
+
+The runtime works around this by hooking arena reset into TCO. At every tail-recursive self-call, if the arena exceeds 16 MB the runtime deep-copies the call's arguments and the process mailbox to scratch memory, resets the arena, and copies them back. From the program's perspective the call is identical; the arena is now empty except for the live arguments and pending messages.
+
+This only fires for tail calls within two stack frames of the process entry point — deeper calls (called by a parent that holds arena pointers in its frame) cannot safely reset without invalidating the caller. In practice this means: write the top-level loop of each spawned process as a tail-recursive function.
+
+```
+# Good — tail recursive, arena resets every ~16 MB
+fn accept_loop(server_fd)
+  let client = tcp_accept(server_fd)
+  spawn(fn() handle(client) end)
+  accept_loop(server_fd)
+end
+
+spawn(fn() accept_loop(fd) end)
+```
+
+```
+# Bad — arena grows without bound; compiler will warn
+fn accept_loop(server_fd)
+  while true
+    let client = tcp_accept(server_fd)
+    spawn(fn() handle(client) end)
+  end
+end
+```
+
+The compiler emits a warning on every `while true` (and `while 1`) suggesting tail recursion. The warning is informational — `while true` still works. It is the right choice for short-lived processes, top-level scripts, or any loop guaranteed to exit. For indefinite loops in spawned processes, use tail recursion.
+
 **Green Threads and Message Passing**
 
 ```

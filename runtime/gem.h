@@ -43,6 +43,11 @@ void *gem_arena_alloc(GemArena *arena, size_t size);
 void gem_arena_destroy(GemArena *arena);
 int gem_in_main_arena(const void *ptr);
 
+/* Threshold (in bytes_allocated) at which TCO emits an arena reset. */
+#ifndef GEM_ARENA_RESET_THRESHOLD
+#define GEM_ARENA_RESET_THRESHOLD (16 * 1024 * 1024)
+#endif
+
 extern GemArena gem_global_arena;
 extern int gem_main_pid;
 
@@ -283,6 +288,13 @@ GemVal gem_deep_copy(GemVal val);
 GemVal gem_deep_copy_malloc(GemVal val);
 void gem_deep_free(GemVal val);
 
+/* Reset the current process's arena, preserving the given root values.
+   Used by TCO codegen at tail-call boundaries to bound long-lived process
+   memory. Roots are deep-copied to malloc scratch, the arena is torn down
+   and re-initialized, then the roots are deep-copied back into the fresh
+   arena. Mailbox contents are also preserved. No-op if pcall_depth > 0. */
+void gem_arena_reset_with_roots(GemVal **roots, int n_roots);
+
 /* ─── Runtime initialization (stores argc/argv, seeds RNG) ─── */
 
 void gem_init(int argc, char **argv);
@@ -390,6 +402,8 @@ typedef struct {
     size_t read_buf_cap;          /* capacity of read_buf in bytes */
     GemPcallFrame pcall_stack[GEM_MAX_PCALL_DEPTH];
     int pcall_depth;
+    int entry_call_depth;         /* gem_call_depth at coro entry — used to gate TCO arena reset */
+    int call_depth;               /* saved gem_call_depth at last yield (restored on resume) */
     GemArena arena;               /* per-process bump allocator */
 } GemProcess;
 

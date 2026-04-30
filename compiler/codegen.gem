@@ -698,6 +698,33 @@ fn make_codegen(source_name)
       buf_push(b, "{p}GemVal {t} = {r.expr};\n")
       push(arg_temps, t)
     end
+
+    # Arena reset at the tail-call boundary. Skipped if any param is captured
+    # (boxed in arena memory) — that would dangle the box pointer after reset.
+    let any_captured = false
+    for i = 0, len(tco_params)
+      if set_contains(tco_captured, tco_params[i])
+        any_captured = true
+      end
+    end
+    if not any_captured and len(arg_temps) > 0
+      # Reset only when this TCO function is at (or near) the process entry.
+      # Any deeper context may have callers holding arena pointers in their locals
+      # that the reset would invalidate. The +2 allowance covers the common pattern
+      # `spawn(fn() loop(state) end)` where there's an anon-closure frame above.
+      buf_push(b, "{p}if (gem_current_pid >= 0 && gem_call_depth - gem_proc_table[gem_current_pid].entry_call_depth <= 2 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
+      buf_push(b, "{p}    GemVal *_tco_roots[] = \{")
+      for i = 0, len(arg_temps)
+        if i > 0
+          buf_push(b, ", ")
+        end
+        buf_push(b, "&{arg_temps[i]}")
+      end
+      buf_push(b, "};\n")
+      buf_push(b, "{p}    gem_arena_reset_with_roots(_tco_roots, {len(arg_temps)});\n")
+      buf_push(b, "{p}}\n")
+    end
+
     for i = 0, len(tco_params)
       let mp = mangle(tco_params[i])
       let val = "GEM_NIL"
@@ -1533,6 +1560,13 @@ fn make_codegen(source_name)
 
   compile_while = fn(node, indent)
     let p = pad_for(indent)
+    if node.cond.tag == "bool" and node.cond.value == true
+      let line_str = "?"
+      if node.line != nil
+        line_str = to_string(node.line)
+      end
+      eprint("warning: {source_name}:{line_str}: `while true` indefinite loop — long-running processes should use tail recursion instead so the runtime can reset the per-process arena and bound memory (see docs/SPEC.md)\n")
+    end
     let cond_r = compile_expr(node.cond)
 
     let eligible = find_append_vars(node.body)

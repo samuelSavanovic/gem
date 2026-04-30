@@ -487,16 +487,36 @@ GemVal gem_deep_copy_malloc(GemVal val) {
     return result;
 }
 
-static void gem_deep_free_internal(GemVal val) {
+/* Track already-freed allocations so aliased structure (the same table reached
+   by two different roots) is freed only once. The visited set stores raw
+   pointers; types are inferred from the GemVal walk. NULL set means no aliasing
+   is possible — used by the public single-value entry point. */
+static int gem_freed_set_contains(GemCopyMap *visited, void *ptr) {
+    if (!visited) return 0;
+    return gem_copy_map_find(visited, ptr) != NULL;
+}
+
+static void gem_freed_set_add(GemCopyMap *visited, void *ptr) {
+    if (!visited) return;
+    /* Sentinel non-NULL value — gem_copy_map_find returns the value, we just
+       care about presence. */
+    gem_copy_map_add(visited, ptr, (void *)1);
+}
+
+static void gem_deep_free_internal(GemVal val, GemCopyMap *visited) {
     switch (val.type) {
         case VAL_STRING:
+            if (gem_freed_set_contains(visited, val.sval)) break;
+            gem_freed_set_add(visited, val.sval);
             free(val.sval);
             break;
         case VAL_TABLE: {
             GemTable *t = val.table;
+            if (gem_freed_set_contains(visited, t)) break;
+            gem_freed_set_add(visited, t);
             for (int i = 0; i < t->len; i++) {
-                gem_deep_free_internal(t->keys[i]);
-                gem_deep_free_internal(t->vals[i]);
+                gem_deep_free_internal(t->keys[i], visited);
+                gem_deep_free_internal(t->vals[i], visited);
             }
             if (t->str_index) shfree(t->str_index);
             free(t->keys);
@@ -506,16 +526,20 @@ static void gem_deep_free_internal(GemVal val) {
         }
         case VAL_BUFFER: {
             GemBuffer *b = val.buffer;
+            if (gem_freed_set_contains(visited, b)) break;
+            gem_freed_set_add(visited, b);
             free(b->data);
             free(b);
             break;
         }
         case VAL_FN: {
             if (!val.env) break;
+            if (gem_freed_set_contains(visited, val.env)) break;
+            gem_freed_set_add(visited, val.env);
             intptr_t n = *(intptr_t *)val.env;
             GemVal **fields = (GemVal **)((char *)val.env + sizeof(intptr_t));
             for (intptr_t i = 0; i < n; i++) {
-                gem_deep_free_internal(*fields[i]);
+                gem_deep_free_internal(*fields[i], visited);
                 free(fields[i]);
             }
             free(val.env);
@@ -527,5 +551,60 @@ static void gem_deep_free_internal(GemVal val) {
 }
 
 void gem_deep_free(GemVal val) {
-    gem_deep_free_internal(val);
+    gem_deep_free_internal(val, NULL);
+}
+
+/* Reset the current process's arena, copying roots and mailbox into a fresh
+   arena and munmapping the old blocks. Both arenas use mmap/munmap, so freed
+   pages return to the OS immediately (unlike malloc scratch, which the libc
+   allocator typically retains in process address space). */
+void gem_arena_reset_with_roots(GemVal **roots, int n_roots) {
+    GemArena *arena = gem_current_arena();
+    GemProcess *proc = NULL;
+    if (gem_current_pid >= 0) {
+        proc = &gem_proc_table[gem_current_pid];
+        /* Skip while inside a pcall — its stack_snapshot may reference the arena. */
+        if (proc->pcall_depth > 0) return;
+    }
+    /* Save old arena state and install a fresh arena in its place. The old
+       blocks remain mmapped and readable until we destroy them at the end —
+       deep_copy reads from them while the fresh arena receives the copies. */
+    GemArena old_arena = *arena;
+    gem_arena_init(arena);
+
+    GemMailbox old_mailbox = {NULL, NULL};
+    if (proc) {
+        old_mailbox = proc->mailbox;
+        proc->mailbox.head = NULL;
+        proc->mailbox.tail = NULL;
+        proc->read_buf = NULL;
+        proc->read_buf_cap = 0;
+    }
+
+    GemCopyMap to_arena;
+    gem_copy_map_init(&to_arena, 0);
+
+    for (int i = 0; i < n_roots; i++) {
+        *roots[i] = gem_deep_copy_internal(*roots[i], &to_arena);
+    }
+
+    if (proc) {
+        for (GemMsgNode *n = old_mailbox.head; n; n = n->next) {
+            GemVal v = gem_deep_copy_internal(n->value, &to_arena);
+            GemMsgNode *node = ALLOC(GemMsgNode);
+            node->value = v;
+            node->next = NULL;
+            if (proc->mailbox.tail) {
+                proc->mailbox.tail->next = node;
+            } else {
+                proc->mailbox.head = node;
+            }
+            proc->mailbox.tail = node;
+        }
+    }
+
+    gem_copy_map_cleanup(&to_arena);
+
+    /* munmap the old blocks now that nothing references them. */
+    gem_arena_destroy(&old_arena);
 }

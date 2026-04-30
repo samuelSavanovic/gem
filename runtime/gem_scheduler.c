@@ -164,6 +164,8 @@ static void gem_coro_entry(mco_coro *co) {
     int pid = gem_current_pid;
     GemProcess *proc = &gem_proc_table[pid];
 
+    proc->entry_call_depth = gem_call_depth;
+
     if (setjmp(proc->proc_jmp) == 0) {
         /* Normal path */
         ctx->fn(ctx->env, NULL, 0);
@@ -232,6 +234,7 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].timed_out = 0;
     gem_proc_table[pid].reductions = 0;
     gem_proc_table[pid].pcall_depth = 0;
+    gem_proc_table[pid].call_depth = 0;
 
     if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
     return pid;
@@ -371,6 +374,7 @@ void gem_run_main(GemFnPtr fn, void *env) {
     gem_proc_table[pid].timed_out = 0;
     gem_proc_table[pid].reductions = 0;
     gem_proc_table[pid].pcall_depth = 0;
+    gem_proc_table[pid].call_depth = 0;
 
     if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
     gem_run_scheduler();
@@ -397,7 +401,16 @@ void gem_run_scheduler(void) {
                 active = 1;
                 gem_current_pid = i;
                 proc->reductions = 0;
+                /* gem_call_depth is global but logically per-process — restore
+                   the proc's saved depth before resuming, save it back after.
+                   Without this, frames pushed by another proc that ran while
+                   this one was yielded would corrupt the depth (and break the
+                   TCO arena-reset gate, which compares depth to entry_call_depth). */
+                int saved_global_depth = gem_call_depth;
+                gem_call_depth = proc->call_depth;
                 mco_resume(proc->coro);
+                proc->call_depth = gem_call_depth;
+                gem_call_depth = saved_global_depth;
 
                 if (mco_status(proc->coro) == MCO_DEAD) {
                     mco_destroy(proc->coro);

@@ -420,138 +420,177 @@ end
 let IDLE_TIMEOUT_MS = 30000
 let READ_SIZE = 8192
 
-fn handle_connection(client_fd, router_ref)
-  let conn_buf = ""
-
-  while true
-    # Read data (with timeout for keep-alive)
-    let chunk = ""
-    if len(conn_buf) == 0
-      chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
-      if chunk == ""
-        break
-      end
-      conn_buf = chunk
+# Process one request from the connection. Returns the next conn_buf to carry
+# over (for keep-alive), or nil to signal the connection should close.
+fn process_one_request(client_fd, router_ref, conn_buf)
+  # Read data (with timeout for keep-alive)
+  let chunk = ""
+  if len(conn_buf) == 0
+    chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
+    if chunk == ""
+      return nil
     end
-
-    # Buffer until we have complete headers
-    let header_end = find_header_end(conn_buf)
-    while header_end < 0
-      chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
-      if chunk == ""
-        break
-      end
-      conn_buf = conn_buf + chunk
-      header_end = find_header_end(conn_buf)
-    end
-    if header_end < 0
-      break
-    end
-
-    # Split headers from rest
-    let header_section = substr(conn_buf, 0, header_end)
-    let after_headers = substr(conn_buf, header_end + 4, len(conn_buf) - header_end - 4)
-
-    # Parse request line
-    let first_line_end = string.index_of(header_section, "\r\n")
-    let request_line = ""
-    let header_block = ""
-    if first_line_end < 0
-      request_line = header_section
-    else
-      request_line = substr(header_section, 0, first_line_end)
-      header_block = substr(header_section, first_line_end + 2, len(header_section) - first_line_end - 2)
-    end
-
-    let req_info = parse_request_line(request_line)
-    if req_info == nil
-      break
-    end
-
-    let headers = parse_headers(header_block)
-
-    # Read body if Content-Length present
-    let content_length = get_content_length(headers)
-    let body = ""
-    if content_length > 0
-      # We may have some body bytes already in after_headers
-      let body_buf = buf_new()
-      buf_push(body_buf, after_headers)
-      let have = len(after_headers)
-      while have < content_length
-        chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
-        if chunk == ""
-          break
-        end
-        buf_push(body_buf, chunk)
-        have = have + len(chunk)
-      end
-      let full_body = buf_str(body_buf)
-      if len(full_body) >= content_length
-        body = substr(full_body, 0, content_length)
-        conn_buf = substr(full_body, content_length, len(full_body) - content_length)
-      else
-        body = full_body
-        conn_buf = ""
-      end
-    else
-      conn_buf = after_headers
-    end
-
-    # Build request table
-    let parsed = url.parse(req_info.raw_path)
-    let cookies = parse_cookies(headers["Cookie"])
-
-    let req = {
-      method: req_info.method,
-      path: parsed.path,
-      query: parsed.query,
-      headers: headers,
-      body: body,
-      cookies: cookies,
-      params: {}
-    }
-
-    # Route match
-    let matched = router_ref.match(req.method, req.path)
-    let resp = nil
-    if matched != nil
-      req.params = matched.params
-      let result = pcall(fn()
-        matched.handler(req)
-      end)
-      if result.ok
-        resp = result.value
-      else
-        resp = server_error(nil)
-      end
-    else
-      resp = not_found(nil)
-    end
-
-    # Determine keep-alive
-    let connection_hdr = headers["Connection"]
-    if connection_hdr == nil
-      connection_hdr = headers["connection"]
-    end
-    let keep_alive = true
-    if connection_hdr != nil and string.lower(connection_hdr) == "close"
-      keep_alive = false
-    end
-
-    # Send response
-    let raw_resp = serialize_response(resp, keep_alive)
-    tcp_write(client_fd, raw_resp)
-
-    if not keep_alive
-      break
-    end
+    conn_buf = chunk
   end
 
-  tcp_close(client_fd)
+  # Buffer until we have complete headers
+  let header_end = find_header_end(conn_buf)
+  while header_end < 0
+    chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
+    if chunk == ""
+      return nil
+    end
+    conn_buf = conn_buf + chunk
+    header_end = find_header_end(conn_buf)
+  end
+
+  # Split headers from rest
+  let header_section = substr(conn_buf, 0, header_end)
+  let after_headers = substr(conn_buf, header_end + 4, len(conn_buf) - header_end - 4)
+
+  # Parse request line
+  let first_line_end = string.index_of(header_section, "\r\n")
+  let request_line = ""
+  let header_block = ""
+  if first_line_end < 0
+    request_line = header_section
+  else
+    request_line = substr(header_section, 0, first_line_end)
+    header_block = substr(header_section, first_line_end + 2, len(header_section) - first_line_end - 2)
+  end
+
+  let req_info = parse_request_line(request_line)
+  if req_info == nil
+    return nil
+  end
+
+  let headers = parse_headers(header_block)
+
+  # Read body if Content-Length present
+  let content_length = get_content_length(headers)
+  let body = ""
+  let next_buf = ""
+  if content_length > 0
+    let body_buf = buf_new()
+    buf_push(body_buf, after_headers)
+    let have = len(after_headers)
+    while have < content_length
+      chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
+      if chunk == ""
+        return nil
+      end
+      buf_push(body_buf, chunk)
+      have = have + len(chunk)
+    end
+    let full_body = buf_str(body_buf)
+    if len(full_body) >= content_length
+      body = substr(full_body, 0, content_length)
+      next_buf = substr(full_body, content_length, len(full_body) - content_length)
+    else
+      body = full_body
+      next_buf = ""
+    end
+  else
+    next_buf = after_headers
+  end
+
+  # Build request table
+  let parsed = url.parse(req_info.raw_path)
+  let cookies = parse_cookies(headers["Cookie"])
+
+  let req = {
+    method: req_info.method,
+    path: parsed.path,
+    query: parsed.query,
+    headers: headers,
+    body: body,
+    cookies: cookies,
+    params: {}
+  }
+
+  # Route match
+  let matched = router_ref.match(req.method, req.path)
+  let resp = nil
+  if matched != nil
+    req.params = matched.params
+    let result = pcall(fn()
+      matched.handler(req)
+    end)
+    if result.ok
+      resp = result.value
+    else
+      resp = server_error(nil)
+    end
+  else
+    resp = not_found(nil)
+  end
+
+  # Determine keep-alive
+  let connection_hdr = headers["Connection"]
+  if connection_hdr == nil
+    connection_hdr = headers["connection"]
+  end
+  let keep_alive = true
+  if connection_hdr != nil and string.lower(connection_hdr) == "close"
+    keep_alive = false
+  end
+
+  # Send response
+  let raw_resp = serialize_response(resp, keep_alive)
+  tcp_write(client_fd, raw_resp)
+
+  if not keep_alive
+    return nil
+  end
+  next_buf
+end
+
+# Wrapper that catches errors and signals "close connection" by returning a
+# sentinel `false`. Kept separate from handle_connection_loop so that loop's
+# parameters are not captured by closures (capture would force boxing in
+# arena memory and prevent the TCO arena reset from firing).
+fn safe_handle_request(client_fd, router_ref, conn_buf)
+  let result = pcall(fn()
+    process_one_request(client_fd, router_ref, conn_buf)
+  end)
+  if result.ok
+    return result.value
+  end
+  pcall(fn()
+    tcp_write(client_fd, serialize_response(server_error(nil), false))
+  end)
+  false
+end
+
+# Tail-recursive keep-alive loop. The arena resets at each tail call when
+# bytes_allocated crosses GEM_ARENA_RESET_THRESHOLD, so per-request garbage
+# (parsed headers, request bodies, etc.) doesn't accumulate.
+fn handle_connection_loop(client_fd, router_ref, conn_buf)
+  let next = safe_handle_request(client_fd, router_ref, conn_buf)
+  if next == false
+    tcp_close(client_fd)
+    return
+  end
+  if next == nil
+    tcp_close(client_fd)
+    return
+  end
+  handle_connection_loop(client_fd, router_ref, next)
 end
 
 # ─── Server ───
+
+# Tail-recursive accept loop. Spawned directly so it runs at depth 2 from
+# the process entry, the boundary at which TCO arena reset is allowed.
+fn accept_loop(server_fd, router_ref)
+  let client_fd = tcp_accept(server_fd)
+  let fd = client_fd
+  let rr = router_ref
+  spawn(fn()
+    handle_connection_loop(fd, rr, "")
+  end)
+  accept_loop(server_fd, router_ref)
+end
 
 fn start(router_ref, opts = {})
   if opts == nil
@@ -570,22 +609,7 @@ fn start(router_ref, opts = {})
   let r = router_ref
 
   let pid = spawn(fn()
-    while true
-      let client_fd = tcp_accept(server_fd)
-      let fd = client_fd
-      let rr = r
-      spawn(fn()
-        let result = pcall(fn()
-          handle_connection(fd, rr)
-        end)
-        if not result.ok
-          pcall(fn()
-            tcp_write(fd, serialize_response(server_error(nil), false))
-            tcp_close(fd)
-          end)
-        end
-      end)
-    end
+    accept_loop(server_fd, r)
   end)
 
   pid
