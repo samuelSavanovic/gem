@@ -1194,6 +1194,210 @@ fn make_codegen(source_name)
     captured
   end
 
+  # ─── Mutation classification for captures ──
+  #
+  # For a body and its scope_vars, return the subset of scope_vars that any
+  # escaping anon_fn within body (or any anon_fn nested within those) writes
+  # to via a bare `name = value` assign. Captures not in this set are
+  # read-only-from-the-outer's-perspective and qualify for Route A: the env
+  # stores a `GemVal` snapshot rather than a `GemVal *`, and the outer frame
+  # need not box them.
+  #
+  # The same walker also handles the per-closure perspective: passing
+  # inside_anon=true treats the body itself as already inside a closure, so
+  # direct assigns to scope_vars at the body level (not inside a further
+  # nested anon_fn) also count. Used by compile_closure_fn to classify which
+  # of its incoming env captures it itself mutates.
+  #
+  # `dot_assign` / `index_assign` mutate the value, not the binding, so they
+  # do not count. `let` introduces a fresh local that shadows the outer name
+  # for subsequent statements in scope.
+  let walk_writes = nil
+  let walk_writes_node = nil
+
+  walk_writes_node = fn(node, scope_vars, defined, writes, inside_anon)
+    if node == nil
+      return nil
+    end
+    if type(node) != "table"
+      return nil
+    end
+    if node.tag == nil
+      return nil
+    end
+
+    match node
+    when {tag: "assign", name: name, value: value}
+      # A captured name needs boxing whenever it is reassigned anywhere in
+      # its lexical scope — whether the assign is inside a nested closure
+      # (closure mutates outer's binding) or outside (later closures must
+      # see the new value via the shared box, matching established
+      # closure-rebind-after-capture semantics).
+      if set_contains(scope_vars, name) and not set_contains(defined, name)
+        set_add(writes, name)
+      end
+      walk_writes_node(value, scope_vars, defined, writes, inside_anon)
+    when {tag: "let", value: value}
+      walk_writes_node(value, scope_vars, defined, writes, inside_anon)
+    when {tag: "anon_fn", params: params, rest_param: rest_param, body: body}
+      if node.non_escaping == true
+        # Non-escaping closures use stack-pointer semantics; their writes
+        # mutate the outer's local directly without forcing it to be boxed,
+        # so they don't contribute to the writes set we use to decide boxing.
+        return nil
+      end
+      # When transitioning from outside-any-closure into an anon_fn, reset
+      # `defined` to just this anon's params: the surrounding scope's lets
+      # are the *targets* of mutation analysis, not local shadows. When
+      # already inside an anon (anon-in-anon), carry the outer anon's locals
+      # forward — those do shadow further-out names from this inner anon's
+      # perspective.
+      let inner_def = nil
+      if inside_anon
+        inner_def = set_union(defined, sorted_array_to_set(params))
+      else
+        inner_def = sorted_array_to_set(params)
+      end
+      if rest_param != nil
+        set_add(inner_def, rest_param)
+      end
+      walk_writes(body, scope_vars, inner_def, writes, true)
+      if node.defaults != nil
+        for d in node.defaults
+          if d != nil
+            walk_writes_node(d, scope_vars, inner_def, writes, true)
+          end
+        end
+      end
+    when {tag: "fn_def"}
+      # Named fns are global — skip
+    when {tag: "if", cond: cond, then: thens, else: el}
+      walk_writes_node(cond, scope_vars, defined, writes, inside_anon)
+      walk_writes(thens, scope_vars, defined, writes, inside_anon)
+      if el != nil
+        walk_writes(el, scope_vars, defined, writes, inside_anon)
+      end
+    when {tag: "while", cond: cond, body: body}
+      walk_writes_node(cond, scope_vars, defined, writes, inside_anon)
+      walk_writes(body, scope_vars, defined, writes, inside_anon)
+    when {tag: "match", target: target, target_var: target_var, whens: whens, else: el}
+      walk_writes_node(target, scope_vars, defined, writes, inside_anon)
+      let match_def = set_union(defined, {})
+      if target_var != nil
+        set_add(match_def, target_var)
+      end
+      for i = 0, len(whens)
+        let w = whens[i]
+        walk_writes_node(w.value, scope_vars, match_def, writes, inside_anon)
+        let d = set_union(match_def, {})
+        if w.bindings != nil
+          for bi = 0, len(w.bindings)
+            walk_writes_node(w.bindings[bi], scope_vars, d, writes, inside_anon)
+            if is_node(w.bindings[bi], "let")
+              set_add(d, w.bindings[bi].name)
+            end
+          end
+        end
+        walk_writes(w.body, scope_vars, d, writes, inside_anon)
+      end
+      if el != nil
+        walk_writes(el, scope_vars, defined, writes, inside_anon)
+      end
+    when {tag: "receive_match", arms: rm_arms, after_ms: rm_after_ms, after_body: rm_after_body}
+      let recv_def = set_union(defined, {})
+      if node.recv_var != nil
+        set_add(recv_def, node.recv_var)
+      end
+      for i = 0, len(rm_arms)
+        let arm = rm_arms[i]
+        walk_writes_node(arm.pattern.condition, scope_vars, recv_def, writes, inside_anon)
+        let d = set_union(recv_def, {})
+        if arm.pattern.bindings != nil
+          for bi = 0, len(arm.pattern.bindings)
+            walk_writes_node(arm.pattern.bindings[bi], scope_vars, d, writes, inside_anon)
+            if is_node(arm.pattern.bindings[bi], "let")
+              set_add(d, arm.pattern.bindings[bi].name)
+            end
+          end
+        end
+        walk_writes(arm.body, scope_vars, d, writes, inside_anon)
+      end
+      if rm_after_ms != nil
+        walk_writes_node(rm_after_ms, scope_vars, recv_def, writes, inside_anon)
+      end
+      if rm_after_body != nil
+        walk_writes(rm_after_body, scope_vars, recv_def, writes, inside_anon)
+      end
+    when {tag: "table", entries: entries}
+      for i = 0, len(entries)
+        walk_writes_node(entries[i].value, scope_vars, defined, writes, inside_anon)
+      end
+    when {tag: "array", elements: elements}
+      for i = 0, len(elements)
+        walk_writes_node(elements[i], scope_vars, defined, writes, inside_anon)
+      end
+    when {tag: "block", stmts: stmts}
+      walk_writes(stmts, scope_vars, defined, writes, inside_anon)
+    when {tag: "return", value: value}
+      if value != nil
+        walk_writes_node(value, scope_vars, defined, writes, inside_anon)
+      end
+    else
+      # Generic recursion
+      for nk, v in node
+        if nk != "tag"
+          if type(v) == "table"
+            let vks = keys(v)
+            if len(vks) > 0 and type(vks[0]) == "int"
+              let vi = 0
+              while vi < len(v)
+                if type(v[vi]) == "table"
+                  walk_writes_node(v[vi], scope_vars, defined, writes, inside_anon)
+                end
+                vi += 1
+              end
+            else
+              walk_writes_node(v, scope_vars, defined, writes, inside_anon)
+            end
+          end
+        end
+      end
+    end
+  end
+
+  walk_writes = fn(stmts, scope_vars, defined, writes, inside_anon)
+    let sv = set_union(defined, {})
+    for i = 0, len(stmts)
+      walk_writes_node(stmts[i], scope_vars, sv, writes, inside_anon)
+      # Only growing `defined` when walking inside an anon: there, lets are
+      # locals that shadow scope_vars (outer captures). At the outer scope
+      # itself, lets are *the binding sites* of scope_vars — assigns that
+      # follow them target those same bindings and must count as writes.
+      if inside_anon
+        if is_node(stmts[i], "let")
+          set_add(sv, stmts[i].name)
+        end
+        collect_block_lets(stmts[i], sv)
+      end
+    end
+  end
+
+  # Outer-fn perspective: which scope_vars are written by any anon_fn within?
+  let find_capture_writes_in_scope = fn(body, scope_vars)
+    let writes = {}
+    walk_writes(body, scope_vars, {}, writes, false)
+    writes
+  end
+
+  # Closure-body perspective: which captures does this closure body itself
+  # (or any anon_fn nested within) write to? `defined` is the closure's own
+  # local scope (params + body lets) — assigns to those don't count.
+  let find_writes_in_closure_body = fn(body, captures_set, defined)
+    let writes = {}
+    walk_writes(body, captures_set, defined, writes, true)
+    writes
+  end
+
   # ─── Non-escaping closure detection ──
   #
   # Mark anon_fn nodes that appear as the immediate argument of a call to an
@@ -2353,7 +2557,12 @@ fn make_codegen(source_name)
       for cap in captures
         let mc = mangle(cap)
         let is_top_box = set_contains(top_level_vars, cap) and set_contains(top_level_boxed, cap) and not set_contains(local_names, cap)
-        if set_contains(boxed_vars, cap) or (in_top_level and set_contains(top_level_boxed, cap)) or is_top_box
+        let outer_is_box = set_contains(boxed_vars, cap) or (in_top_level and set_contains(top_level_boxed, cap)) or is_top_box
+        # Env field is always `GemVal *`. If outer holds a box ptr, copy it
+        # (closure shares the box). Otherwise outer's local is an unboxed
+        # `GemVal` — for a non-escaping closure we can take its address since
+        # the closure cannot outlive the C frame.
+        if outer_is_box
           buf_push(b, "    {env_tmp}.{mc} = {mc};\n")
         else
           buf_push(b, "    {env_tmp}.{mc} = &{mc};\n")
@@ -2366,10 +2575,18 @@ fn make_codegen(source_name)
     for cap in captures
       let mc = mangle(cap)
       let is_top_box = set_contains(top_level_vars, cap) and set_contains(top_level_boxed, cap) and not set_contains(local_names, cap)
-      if set_contains(boxed_vars, cap) or (in_top_level and set_contains(top_level_boxed, cap)) or is_top_box
+      let outer_is_box = set_contains(boxed_vars, cap) or (in_top_level and set_contains(top_level_boxed, cap)) or is_top_box
+      # Env field is always `GemVal *`. Outer-boxed → ptr copy. Outer-unboxed
+      # (no closure mutates this name, so outer skipped boxing) → allocate a
+      # fresh box snapshotting the current value, since this closure may
+      # outlive the frame.
+      if outer_is_box
         buf_push(b, "    {env_tmp}->{mc} = {mc};\n")
       else
-        buf_push(b, "    {env_tmp}->{mc} = &{mc};\n")
+        let box_tmp = tmp()
+        buf_push(b, "    GemVal *{box_tmp} = GC_MALLOC(sizeof(GemVal));\n")
+        buf_push(b, "    *{box_tmp} = {mc};\n")
+        buf_push(b, "    {env_tmp}->{mc} = {box_tmp};\n")
       end
     end
     {expr: "gem_make_fn({result.fn_name}, {env_tmp})", setup: buf_str(b)}
@@ -3462,7 +3679,18 @@ fn make_codegen(source_name)
       end
     end
 
-    boxed_vars = captured
+    # Mutation-aware boxing: only captures that some nested anon_fn writes
+    # need a heap box. Read-only captures (captured \ writes) live as plain
+    # locals; closure envs receive them as `GemVal` value snapshots.
+    let cap_writes = find_capture_writes_in_scope(body, scope_vars)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          walk_writes_node(d, scope_vars, {}, cap_writes, false)
+        end
+      end
+    end
+    boxed_vars = set_intersect(captured, cap_writes)
     in_top_level = false
 
     let has_defs = false
@@ -3492,7 +3720,7 @@ fn make_codegen(source_name)
       buf_push(b, "#line {node.line} \"{escape_c_string(source_name)}\"\n")
     end
 
-    buf_push(b, emit_param_bindings(node, params, captured))
+    buf_push(b, emit_param_bindings(node, params, boxed_vars))
 
     let fn_line = 0
     if node.line != nil
@@ -3564,7 +3792,22 @@ fn make_codegen(source_name)
       end
     end
 
-    boxed_vars = set_union(inner_captured, sorted_array_to_set(captures))
+    # Mutation-aware boxing for vars in this closure's local scope captured
+    # by nested anon_fns: only box those that those nested anons mutate.
+    let inner_writes = find_capture_writes_in_scope(body, inner_scope)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          walk_writes_node(d, inner_scope, {}, inner_writes, false)
+        end
+      end
+    end
+    let inner_boxed = set_intersect(inner_captured, inner_writes)
+
+    # Env captures are always passed in by `GemVal *` so the runtime's
+    # spawn deep-copy can walk them uniformly. The closure body therefore
+    # treats every capture as boxed (reads/writes deref via boxed_vars).
+    boxed_vars = set_union(inner_boxed, sorted_array_to_set(captures))
     in_top_level = false
 
     # Generate struct
@@ -3589,7 +3832,7 @@ fn make_codegen(source_name)
       end
     end
 
-    buf_push(fb, emit_param_bindings(node, params, inner_captured))
+    buf_push(fb, emit_param_bindings(node, params, inner_boxed))
     buf_push(fb, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", 0);\n")
     buf_push(fb, emit_fn_body(body))
     buf_push(fb, "}")
@@ -3662,9 +3905,14 @@ fn make_codegen(source_name)
       push(forward_decls, decl)
     end
 
-    # Collect top-level variable names and compute which are captured
+    # Collect top-level variable names and compute which are captured.
+    # Only captured-AND-mutated vars need a heap box at module load — pure
+    # read-only captures live as plain `GemVal` globals, with closures
+    # receiving value snapshots in their env.
     collect_top_let_names(top_stmts, top_level_vars)
-    top_level_boxed = find_captured_in_scope(top_stmts, {})
+    let top_captured = find_captured_in_scope(top_stmts, {})
+    let top_writes = find_capture_writes_in_scope(top_stmts, top_level_vars)
+    top_level_boxed = set_intersect(top_captured, top_writes)
 
     # Emit extern fn wrappers
     for ef in extern_fns_list

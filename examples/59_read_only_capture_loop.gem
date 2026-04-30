@@ -1,0 +1,48 @@
+# Regression: process-tail loop where the body's closure captures an outer
+# var read-only (config). Pre-Item-4, every closure-captured var was heap-
+# boxed regardless of whether the closure mutated it; the surrounding
+# `while true` loop refused arena rescue ("closure-captured live var") and
+# leaked memory across iterations. After mutation-aware boxing, `config` is
+# captured by value (no box), the rescue proceeds, and RSS stays bounded
+# across the 5000 iterations.
+
+let main_pid = self()
+
+fn loop(count, config)
+  while true
+    let msg = receive()
+    let n = 0
+    let scaled = []
+    let stop = false
+    match msg
+    when {tag: "tick", n: nv}
+      n = nv
+      let scale_one = fn(x) push(scaled, x * config.scale) end
+      let nums = [n, n + 1, n + 2]
+      for x in nums
+        scale_one(x)
+      end
+      count = count + 1
+    when {tag: "stop"}
+      stop = true
+    end
+    if stop
+      send(main_pid, {tag: "result", count: count})
+      return nil
+    end
+    let junk = "pad-" + to_string(n)
+  end
+end
+
+let worker = spawn(fn()
+  loop(0, {scale: 7})
+end)
+
+let total = 5000
+for i = 0, total
+  send(worker, {tag: "tick", n: i})
+end
+send(worker, {tag: "stop"})
+
+let r = receive()
+print("result: " + to_string(r.count))
