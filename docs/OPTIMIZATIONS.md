@@ -78,9 +78,11 @@ Before starting on single-copy arena reset, swept other workflows to confirm the
 | JSON stress (21 KB input × 500 iters under `pcall`) | 13.07s user | 13.09s user | flat |
 | Spawn storm (50k short-lived workers, 1 round-trip each) | ~152k spawns/sec, RSS 53 MB | ~150k spawns/sec, RSS 53 MB | flat |
 | /bookmarks @ 10k rows, c=4 t=2 20s (~6 MB response) | 6.54 req/s, p99 903ms | 6.54 req/s, p99 903ms | flat |
-| gen_server soak: 1000-entry KV state, 30s call/cast loop | **220.7k ops/sec, RSS 8.7 GB peak** | **205.7k ops/sec, RSS 7.2 GB peak** | **−6.8% throughput, −17% RSS** |
+| gen_server soak: 1000-entry KV state, 30s call/get-put loop (TCO driver) | **236k ops/sec, RSS 62 MB** | **220k ops/sec, RSS 62 MB** | **−6.7% throughput, RSS flat** |
 
-Only the gen_server soak regressed, and it's exactly the shape "Per-frame TCO arena watermarks" called out: a long-running TCO loop carrying a large mutable rescue root (1000-entry table) re-deep-copied at every back-edge. RSS actually *improved* (the watermark is doing its job — bounding memory), but the 2× deep_copy of the state table costs ~7% throughput. This is the workload P2 (single-copy reset) is designed to fix; proceed with P2 rather than reverting.
+Only the gen_server soak regressed, and it's exactly the shape "Per-frame TCO arena watermarks" called out: a long-running TCO loop carrying a large mutable rescue root (1000-entry table) re-deep-copied at every back-edge. The 2× deep_copy of the state table costs ~7% throughput; RSS is identical because both versions bound the driver and server arenas via the TCO watermark. This is the workload P2 (single-copy reset) is designed to fix; proceed with P2 rather than reverting.
+
+(First pass of this test used a `while`-loop driver, which is not TCO-eligible — its arena ballooned to 7–9 GB on both versions, contaminating the RSS comparison. Rewriting the driver as tail recursion (`fn drive(call_fn, pid, i, deadline) ... drive(call_fn, pid, i+1, deadline) end`) bounded driver RSS to ~25 MB and exposed the real per-iteration cost. Lesson: when benching anything that touches the watermark, the test harness itself must be TCO too.)
 
 JSON stress was flat because recursive descent isn't TCO-eligible — `parse_value` recurses non-tail through `parse_object`/`parse_array`, so the per-frame watermark mostly doesn't fire. The 1 MB threshold gates the top-level `while` loop's reset, and post-pcall live set is small.
 
