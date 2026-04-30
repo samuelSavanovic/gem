@@ -95,6 +95,16 @@ void *gem_arena_alloc(GemArena *arena, size_t size) {
     return ptr;
 }
 
+GemArenaMark gem_arena_mark(void) {
+    GemArena *a = gem_current_arena();
+    GemArenaMark m;
+    m.block = a->current;
+    m.used = a->current ? a->current->used : 0;
+    m.bytes_allocated = a->bytes_allocated;
+    m.table_list = a->table_list;
+    return m;
+}
+
 int gem_in_main_arena(const void *ptr) {
     if (gem_main_pid < 0) return 0;
     GemArena *arena = &gem_proc_table[gem_main_pid].arena;

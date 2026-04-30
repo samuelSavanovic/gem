@@ -59,6 +59,16 @@ requires groundwork, **P2** = nice to have or niche.
 
 ## Arena / Memory (P0)
 
+### ~~Per-frame TCO arena watermarks~~ ✓ Done (2026-04-30)
+Replaced the depth-2 fence with per-frame watermarks. On entry, every TCO-eligible function snapshots `{block, used, bytes_allocated, table_list}` via `gem_arena_mark()`. At each tail-call back-edge, `gem_arena_reset_to_mark_with_roots` truncates the arena back to the entry mark, rescuing roots+mailbox through a side arena. Removes the codegen depth fence — TCO loops nested arbitrarily deep (e.g. `accept_loop → handle_connection_loop`) now reset their own per-iteration garbage.
+
+Bench (c=50 t=4 30s, /bookmarks, 30 rows): 3380 req/s — ~16% lower than the 4041 req/s baseline at the same 1 MB threshold. Cause: the rescue does 2× deep_copy per reset (roots into side, then back into the truncated arena). GET / numbers held: c=4 26.5k req/s p99=329us RSS 20 MB; c=100 26.9k req/s; c=500 25.9k req/s RSS peak 340 MB / post-idle 171 MB. Closure-heavy paths like /bookmarks regressed because they reset frequently and carry larger root sets; static-HTML paths break even or improve.
+
+The /bookmarks regression has a known structural fix coming via the escape-analysis work (P1, below) — once non-escaping closures stop forcing param boxing, `safe_handle_request` collapses back into `handle_connection_loop` and the captured-param check stops disabling reset there. See "Single-copy arena reset" (P2) below for the alternative runtime-level fix if escape analysis is delayed.
+
+### Single-copy arena reset (P2)
+`gem_arena_reset_to_mark_with_roots` currently does 2× deep_copy per reset (rescue roots+mailbox into a side arena, truncate, copy back). Append the side arena's blocks to the truncated main arena instead of copying back, making the side block the new `current`. Recovers /bookmarks throughput. Trade-off: the leftover space in `mark.block` (up to ~1 MB at the current threshold) is sacrificed each reset, so steady-state memory grows. Worth measuring if the escape-analysis fix doesn't land soon, or if a workload appears where /bookmarks-style closure-heavy reset is the hot path.
+
 ### ~~Lower default `GEM_ARENA_RESET_THRESHOLD`~~ ✓ Done (2026-04-30)
 Default lowered from 16 MB to 1 MB. Threshold sweep at c100 on `/` showed 1 MB strictly dominates: same throughput (28.8k vs 28.9k req/s), p99 −3.6× (26.5ms → 7.3ms), peak RSS −14× (2.04 GB → 139 MB), idle RSS −10× (495 MB → 50 MB). `/bookmarks` validation at c50 (heavier per-request allocation) confirmed no regression: throughput unchanged (4041 vs 4007 req/s), p99 −15% (26.9ms → 23.0ms), peak RSS −14× (728 MB → 52 MB). The hypothesis "smaller threshold = more reset overhead" did not show up in numbers — live set after a request is tiny so reset cost is negligible.
 
@@ -115,6 +125,8 @@ Every function call emits frame push/pop for stack traces. Leaf functions (no ca
 
 ### Escape analysis for non-escaping closures (P1)
 Every `fn() ... end` heap-allocates a closure with its captured environment. Most closures never escape: `pcall(fn() ... end)`, `do ... end` blocks passed to iterators, `sort(arr, fn(a,b) ... end)`. If the compiler detects that a closure is only called within the local scope and never stored, it could stack-allocate or skip the closure allocation entirely. The pattern is syntactically detectable for the common cases (immediate call-site argument). Bigger lift but high frequency — closures are the primary abstraction mechanism. Directly reduces arena allocation rate.
+
+This is the remaining blocker for finishing the `std/http.gem` cleanup after the per-frame-watermark TCO work lands. With watermarks, `accept_loop` no longer needs to be spawned to land at depth 2, but `safe_handle_request` still has to exist as a separate function: the pcall closure inside `handle_connection_loop` would otherwise capture the loop params, forcing them to be boxed in the arena, and codegen.gem skips the TCO reset entirely when any param is captured (`any_captured` check). Scoping this initially to immediate-call-site closures (`pcall(fn() … end)`, `sort(arr, fn(a,b) … end)`, block-syntax `do |x| … end`) covers the cases that matter and is detectable purely at codegen time without flow analysis. Once landed, the third apologetic comment in `std/http.gem` can be deleted by inlining `safe_handle_request` back into `handle_connection_loop`.
 
 ### Constant folding (P2)
 Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile time. The compiler already has all the information. Low value at current stage — the cases where humans write foldable constants are rare, and it doesn't affect compilation time.

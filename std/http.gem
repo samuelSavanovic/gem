@@ -580,8 +580,6 @@ end
 
 # ─── Server ───
 
-# Tail-recursive accept loop. Spawned directly so it runs at depth 2 from
-# the process entry, the boundary at which TCO arena reset is allowed.
 fn accept_loop(server_fd, router_ref)
   let client_fd = tcp_accept(server_fd)
   let fd = client_fd
