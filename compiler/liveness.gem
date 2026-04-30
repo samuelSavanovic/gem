@@ -14,9 +14,14 @@
 #   {ok: true, live: {name: true, ...}}      — safe to reset, with live set
 #   {ok: false, reason: <string>}            — refuse: caller falls back
 #
-# Closure escapes are over-approximated: every var captured by ANY anon_fn
-# inside the loop body is added to the live set. This subsumes the
-# "escapes via spawn/register/return" cases without per-call-site analysis.
+# Closure escapes are over-approximated: every var captured by an anon_fn
+# inside the loop body is added to the live set, EXCEPT closures appearing
+# as arg[0] of `spawn` / `spawn_link` / `spawn_monitor`. The runtime
+# deep-copies a spawned closure's captures into the child process at the
+# call site (see runtime/gem_scheduler.c), so those captures don't need
+# to outlive the spawn call. They are still live AT the call site (via
+# `_uses_expr` on the anon_fn) — the tightening only stops them from
+# bubbling across the loop back-edge.
 
 # ─── Shared helpers ──────────────────────────────────────────────
 
@@ -673,7 +678,9 @@ fn compute_live_at_backedge(while_node)
 
   # Closure-capture over-approximation: collect every free var of every
   # anon_fn in the body, with the set of locally-defined names treated as
-  # not-free.
+  # not-free. Closures that appear as arg[0] of spawn/spawn_link/spawn_monitor
+  # are excluded — their captures are deep-copied at the call site and do not
+  # need to bubble past the back-edge (see file docstring).
   let body_defined = {}
   let closure_caps = {}
   collect_closure_captures_in_stmts(while_node.body, body_defined, closure_caps)
@@ -735,6 +742,19 @@ collect_closure_captures_in_node = fn(node, defined, caps)
   if node.tag == "fn_def"
     return nil
   end
+  # spawn(fn() ... end) deep-copies the closure body's captures into the
+  # child process at the call site. Those captures don't need to live past
+  # the spawn call, so skip arg[0] entirely (its body, including any nested
+  # anon_fns, runs in the child). Still recurse into func and remaining args.
+  if liveness_is_spawn_with_closure(node)
+    collect_closure_captures_in_node(node.func, defined, caps)
+    let i = 1
+    while i < len(node.args)
+      collect_closure_captures_in_node(node.args[i], defined, caps)
+      i += 1
+    end
+    return nil
+  end
   for nk, v in node
     if nk != "tag" and type(v) == "table"
       let vks = keys(v)
@@ -751,6 +771,29 @@ collect_closure_captures_in_node = fn(node, defined, caps)
       end
     end
   end
+end
+
+# Mirror of codegen.gem's is_spawn_callee_name. Keep in sync.
+fn liveness_is_spawn_callee_name(name)
+  name == "spawn" or name == "spawn_link" or name == "spawn_monitor"
+end
+
+# Recognize `spawn(fn() ... end)` (and spawn_link/spawn_monitor variants) —
+# a call to a spawn builtin whose first argument is an anon_fn literal.
+fn liveness_is_spawn_with_closure(node)
+  if not is_liveness_node(node, "call")
+    return false
+  end
+  if not is_liveness_node(node.func, "var")
+    return false
+  end
+  if not liveness_is_spawn_callee_name(node.func.name)
+    return false
+  end
+  if node.args == nil or len(node.args) == 0
+    return false
+  end
+  is_liveness_node(node.args[0], "anon_fn")
 end
 
 fn collect_closure_captures_in_stmts(stmts, defined, caps)

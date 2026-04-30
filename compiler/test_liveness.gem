@@ -254,6 +254,31 @@ neg_assert("write-only",
   ["state"],
   ["scratch"])
 
+# Spawn-arg closure: captures are deep-copied at the spawn call site, so
+# they don't need to bubble across the loop back-edge. The capture (`fd`)
+# is killed by the local `let fd = ...` above the spawn and must NOT be
+# in the live-at-back-edge set. `server_fd` is read every iteration so
+# remains live.
+neg_assert("spawn-closure-capture-dead",
+  "fn accept_loop(server_fd)\n  while true\n    let fd = server_fd + 1\n    spawn(fn()\n      let x = fd + 1\n      x\n    end)\n  end\nend\n",
+  ["server_fd"],
+  ["fd"])
+
+# Same shape, spawn_link.
+neg_assert("spawn_link-closure-capture-dead",
+  "fn accept_loop(server_fd)\n  while true\n    let fd = server_fd + 1\n    spawn_link(fn()\n      let x = fd + 1\n      x\n    end)\n  end\nend\n",
+  ["server_fd"],
+  ["fd"])
+
+# Counter-case: a closure NOT passed to spawn (here, assigned to an outer
+# var that escapes the loop) must still bubble its captures across the
+# back-edge — that's the over-approximation we deliberately keep. Without
+# bubbling, `arg` would be killed by `arg = 99` and reported dead.
+neg_assert("non-spawn-closure-still-bubbles",
+  "fn f(arg)\n  let h = nil\n  while true\n    arg = 99\n    h = fn() arg + 1 end\n  end\nend\n",
+  ["arg"],
+  [])
+
 print("Negative tests: PASS={neg_pass} FAIL={neg_fail}")
 if neg_fail > 0
   print("Gate FAILED — negative tests detected over-approximation regression.")
