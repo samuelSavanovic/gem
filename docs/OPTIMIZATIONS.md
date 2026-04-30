@@ -4,6 +4,23 @@ Future performance improvements. None are blocking — collect ideas here as the
 
 Priorities are informed by benchmark results from the bookmark CRUD app.
 
+TCO arena reset (2026-04-30, post commit 7c376ed, default 16 MB threshold):
+- GET / baseline (c4 t2 30s): p50=141us, p99=2.96ms, 25.6k req/s, RSS 50–88 MB / 37 MB idle
+- GET / c100 (t4 30s): p50=3.17ms, p99=26.5ms, 28.9k req/s, RSS peak 2.04 GB / 495 MB idle
+- GET / c500 (t8 30s): p50=16.7ms, p99=236ms, 26.4k req/s, RSS peak 5.83 GB / 2.39 GB idle
+- GET /bookmarks c50 (t4 30s, 30 rows): p50=11.3ms, p99=28.8ms, 4.0k req/s, RSS peak 3.10 GB
+- Soak GET / (c4 t2 5min, 7.5M req): p50=142us, p99=10.4ms, 25.0k req/s, RSS 54–82 MB throughout, returns to 37 MB idle — no drift
+- Mixed reads (c20) + writes (10/s POST, 60s): 27.4k req/s reads, p99=4.41ms, RSS peak 307 MB, 528 bookmarks created — SQLite write path bounded
+
+Threshold sweep at c100 t4 30s on GET /:
+| Threshold | RPS    | p50    | p99    | RSS peak | Post-idle |
+|-----------|--------|--------|--------|----------|-----------|
+| 1 MB      | 28.8k  | 3.23ms | 7.32ms | 139 MB   | 50 MB     |
+| 16 MB     | 28.9k  | 3.17ms | 26.5ms | 2.04 GB  | 495 MB    |
+| 64 MB     | 27.9k  | 3.24ms | 48.5ms | 5.90 GB  | 1.67 GB   |
+
+Throughput plateaus at ~26–29k req/s on `/` regardless of c=4/100/500 — single-threaded scheduler is the ceiling. Higher concurrency just queues. Per-connection process arenas dominate memory under load.
+
 Arena allocator (2026-04-29, post Boehm GC removal):
 - GET /bookmarks (20 rows): p50=758us, p99=3.26ms, 4.0k req/s
 - GET / (static HTML): p50=292us, p99=1.55ms, 30.3k req/s
@@ -25,6 +42,12 @@ Priority scale: **P0** = measurable impact on benchmark right now, **P1** = sign
 requires groundwork, **P2** = nice to have or niche.
 
 ## Arena / Memory (P0)
+
+### Lower default `GEM_ARENA_RESET_THRESHOLD` (P0)
+Threshold sweep at c100 (see baseline above) shows 1 MB strictly dominates 16 MB and 64 MB: same throughput (28.8k vs 28.9k req/s), p99 dropped 3.6× (26.5ms → 7.3ms), peak RSS dropped 14× (2.04 GB → 139 MB), idle RSS dropped 10× (495 MB → 50 MB). The hypothesis "smaller threshold = more reset overhead = lower throughput" doesn't show up in numbers — live set after a request is tiny so reset cost is negligible. Validate against `/bookmarks` (heavier per-request allocation) before flipping the default.
+
+### Investigate post-idle high-water at high concurrency (P1)
+After c=500 soak ends and wrk closes, RSS settles to 2.39 GB and stays there for 30+ s of full idle (vs 18 MB initial). No drift during soak — true memory leak ruled out — but per-process arenas of completed connection handlers don't fully release. Likely `madvise(DONTNEED)` happens but `munmap` doesn't, or process objects linger in the proc table until late cleanup. Worth tracing `gem_proc_exit` against actual mmap accounting under load.
 
 ### Arena compaction for long-running processes (P1)
 Arenas only grow — dead objects (replaced table entries, overwritten variables) waste space until the process exits. For long-running processes (gen_servers, accept loops), memory usage creeps up. Periodic compaction (copy live data into a fresh arena, swap, free old blocks) would reclaim this waste. Requires a root-scanning mechanism to find all live references from the coroutine stack and closure envs.
