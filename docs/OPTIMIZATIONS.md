@@ -69,6 +69,23 @@ Update (2026-04-30, post escape analysis): escape analysis landed and `safe_hand
 ### Single-copy arena reset (P2)
 `gem_arena_reset_to_mark_with_roots` currently does 2× deep_copy per reset (rescue roots+mailbox into a side arena, truncate, copy back). Append the side arena's blocks to the truncated main arena instead of copying back, making the side block the new `current`. Recovers /bookmarks throughput. Trade-off: the leftover space in `mark.block` (up to ~1 MB at the current threshold) is sacrificed each reset, so steady-state memory grows. Worth measuring if the escape-analysis fix doesn't land soon, or if a workload appears where /bookmarks-style closure-heavy reset is the hot path.
 
+### Workflow regression check (2026-04-30, pre-P2)
+Before starting on single-copy arena reset, swept other workflows to confirm the per-frame watermark + 1 MB threshold + escape-analysis combo hadn't quietly regressed something other than /bookmarks. Compared HEAD (`da6184d`) against pre-watermark `2bdaed4`.
+
+| Workflow | Baseline (`2bdaed4`) | HEAD (`da6184d`) | Δ |
+|----------|----------------------|------------------|---|
+| `make bootstrap` (first run, gem prebuilt) | 4.45s real / 3.67s user | 4.25s real / 3.78s user | flat |
+| JSON stress (21 KB input × 500 iters under `pcall`) | 13.07s user | 13.09s user | flat |
+| Spawn storm (50k short-lived workers, 1 round-trip each) | ~152k spawns/sec, RSS 53 MB | ~150k spawns/sec, RSS 53 MB | flat |
+| /bookmarks @ 10k rows, c=4 t=2 20s (~6 MB response) | 6.54 req/s, p99 903ms | 6.54 req/s, p99 903ms | flat |
+| gen_server soak: 1000-entry KV state, 30s call/cast loop | **220.7k ops/sec, RSS 8.7 GB peak** | **205.7k ops/sec, RSS 7.2 GB peak** | **−6.8% throughput, −17% RSS** |
+
+Only the gen_server soak regressed, and it's exactly the shape "Per-frame TCO arena watermarks" called out: a long-running TCO loop carrying a large mutable rescue root (1000-entry table) re-deep-copied at every back-edge. RSS actually *improved* (the watermark is doing its job — bounding memory), but the 2× deep_copy of the state table costs ~7% throughput. This is the workload P2 (single-copy reset) is designed to fix; proceed with P2 rather than reverting.
+
+JSON stress was flat because recursive descent isn't TCO-eligible — `parse_value` recurses non-tail through `parse_object`/`parse_array`, so the per-frame watermark mostly doesn't fire. The 1 MB threshold gates the top-level `while` loop's reset, and post-pcall live set is small.
+
+The /bookmarks-10k test renders ~6 MB HTML per request; per-request render time dominates over any per-iteration arena reset, so no cliff appears even though each request crosses the 1 MB threshold mid-render.
+
 ### ~~Lower default `GEM_ARENA_RESET_THRESHOLD`~~ ✓ Done (2026-04-30)
 Default lowered from 16 MB to 1 MB. Threshold sweep at c100 on `/` showed 1 MB strictly dominates: same throughput (28.8k vs 28.9k req/s), p99 −3.6× (26.5ms → 7.3ms), peak RSS −14× (2.04 GB → 139 MB), idle RSS −10× (495 MB → 50 MB). `/bookmarks` validation at c50 (heavier per-request allocation) confirmed no regression: throughput unchanged (4041 vs 4007 req/s), p99 −15% (26.9ms → 23.0ms), peak RSS −14× (728 MB → 52 MB). The hypothesis "smaller threshold = more reset overhead" did not show up in numbers — live set after a request is tiny so reset cost is negligible.
 
