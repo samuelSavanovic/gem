@@ -124,6 +124,115 @@ fn collect_top_let_names(stmts, result)
   end
 end
 
+# Collects all let-bound names anywhere in this fn body (descending through
+# control flow), but not into nested anon_fn or fn_def. Used by compile_fn
+# to over-approximate the set of locally-shadowed names — anything in here
+# must not be confused with a top-level boxed global of the same name.
+let collect_shadow_lets_in_node = nil
+let collect_shadow_lets_in_stmts = nil
+
+collect_shadow_lets_in_stmts = fn(stmts, result)
+  if stmts == nil
+    return nil
+  end
+  for i = 0, len(stmts)
+    collect_shadow_lets_in_node(stmts[i], result)
+  end
+end
+
+collect_shadow_lets_in_node = fn(node, result)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table"
+    return nil
+  end
+  if node.tag == nil
+    return nil
+  end
+  if node.tag == "anon_fn" or node.tag == "fn_def"
+    return nil
+  end
+  if node.tag == "let"
+    set_add(result, node.name)
+    return nil
+  end
+  if node.tag == "block"
+    collect_shadow_lets_in_stmts(node.stmts, result)
+    return nil
+  end
+  if node.tag == "if"
+    collect_shadow_lets_in_stmts(node.then, result)
+    if node.elifs != nil
+      for ei in node.elifs
+        collect_shadow_lets_in_stmts(ei.body, result)
+      end
+    end
+    collect_shadow_lets_in_stmts(node.else, result)
+    return nil
+  end
+  if node.tag == "while"
+    collect_shadow_lets_in_stmts(node.body, result)
+    return nil
+  end
+  if node.tag == "for" or node.tag == "for_kv" or node.tag == "for_range"
+    if node.var != nil
+      set_add(result, node.var)
+    end
+    if node.kvar != nil
+      set_add(result, node.kvar)
+    end
+    if node.vvar != nil
+      set_add(result, node.vvar)
+    end
+    if node.name != nil and (node.tag == "for" or node.tag == "for_range")
+      set_add(result, node.name)
+    end
+    collect_shadow_lets_in_stmts(node.body, result)
+    return nil
+  end
+  if node.tag == "match"
+    if node.whens != nil
+      for w in node.whens
+        if w.bindings != nil
+          for b in w.bindings
+            if type(b) == "table" and b.tag == "var" and b.name != nil
+              set_add(result, b.name)
+            end
+          end
+        end
+        collect_shadow_lets_in_stmts(w.body, result)
+      end
+    end
+    collect_shadow_lets_in_stmts(node.else, result)
+    return nil
+  end
+  if node.tag == "receive_match"
+    if node.arms != nil
+      for a in node.arms
+        if a.pattern != nil and a.pattern.bindings != nil
+          for b in a.pattern.bindings
+            if type(b) == "table" and b.tag == "var" and b.name != nil
+              set_add(result, b.name)
+            end
+          end
+        end
+        collect_shadow_lets_in_stmts(a.body, result)
+      end
+    end
+    if node.after_body != nil
+      collect_shadow_lets_in_stmts(node.after_body, result)
+    end
+    return nil
+  end
+  nil
+end
+
+let collect_shadow_lets_in_fn = nil
+collect_shadow_lets_in_fn = fn(stmts, result)
+  collect_shadow_lets_in_stmts(stmts, result)
+end
+
 # ─── Process-tail `while true` tagging ──────────────────────────
 #
 # Walks every fn_def body and the top-level program, tagging each
@@ -228,7 +337,8 @@ walk_for_tagging_node = fn(node, is_pt)
   nil
 end
 
-fn tag_process_tail_while_loops(fn_defs, top_stmts, process_tail_fns)
+let tag_process_tail_while_loops = nil
+tag_process_tail_while_loops = fn(fn_defs, top_stmts, process_tail_fns)
   for fd in fn_defs
     let is_pt = process_tail_fns[fd.name] == true
     walk_for_tagging_stmts(fd.body, is_pt)
@@ -1738,10 +1848,13 @@ fn make_codegen(source_name)
       end
       let mname = mangle(name)
       # A top-level boxed var (`gem_v_x` is `GemVal *`) must be dereffed at
-      # any read site, including inside fn_def bodies that reference it as a
-      # global. The previous in_top_level guard missed the fn_def case.
-      let is_top_box = set_contains(top_level_vars, name) and set_contains(top_level_boxed, name)
-      if set_contains(boxed_vars, name) or is_top_box
+      # any read site, including inside fn_def bodies that reference it as
+      # a global. Skip when the current scope has a let/param shadowing the
+      # name — that local is `GemVal`, not `GemVal *`. `local_names` is
+      # populated by collect_shadow_lets_in_fn, which descends through all
+      # control-flow constructs (but not into nested fns).
+      let is_top_box = set_contains(top_level_vars, name) and set_contains(top_level_boxed, name) and not set_contains(local_names, name)
+      if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name)) or is_top_box
         return {expr: "(*{mname})", setup: ""}
       end
       return {expr: mname, setup: ""}
@@ -2120,11 +2233,10 @@ fn make_codegen(source_name)
       end
       let r = compile_expr(value)
       let mname = mangle(name)
-      # Mirror the var-read fix at compile_var: a top-level boxed var
-      # (`gem_v_x` is `GemVal *`) must be dereffed at any write site, including
-      # inside fn_def bodies that mutate it as a global.
-      let is_top_box = set_contains(top_level_vars, name) and set_contains(top_level_boxed, name)
-      if set_contains(boxed_vars, name) or is_top_box
+      # Mirror compile_var: deref top-level boxed even from fn_def bodies,
+      # but skip when shadowed by a local in this scope.
+      let is_top_box = set_contains(top_level_vars, name) and set_contains(top_level_boxed, name) and not set_contains(local_names, name)
+      if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name)) or is_top_box
         return "{line_dir}{r.setup}{p}*{mname} = {r.expr};"
       end
       return "{line_dir}{r.setup}{p}{mname} = {r.expr};"
@@ -2957,10 +3069,15 @@ fn make_codegen(source_name)
     end
     collect_top_let_names(body, scope_vars)
 
+    # Build a separate set including lets nested in any control-flow arm,
+    # used to suppress top-level-boxed deref when a shadowing local exists.
+    let shadowed_locals = set_union(scope_vars, {})
+    collect_shadow_lets_in_fn(body, shadowed_locals)
+
     let saved_boxed = boxed_vars
     let saved_top = in_top_level
     let saved_local = local_names
-    local_names = scope_vars
+    local_names = shadowed_locals
 
     let captured = find_captured_in_scope(body, scope_vars)
     if node.defaults != nil
@@ -3055,10 +3172,14 @@ fn make_codegen(source_name)
     end
     collect_top_let_names(body, inner_scope)
 
+    # Build a shadowing-locals set including lets nested in control-flow.
+    let shadowed_locals = set_union(inner_scope, {})
+    collect_shadow_lets_in_fn(body, shadowed_locals)
+
     let saved_boxed = boxed_vars
     let saved_top = in_top_level
     let saved_local = local_names
-    local_names = set_union(inner_scope, sorted_array_to_set(captures))
+    local_names = set_union(shadowed_locals, sorted_array_to_set(captures))
 
     let inner_captured = find_captured_in_scope(body, inner_scope)
     if node.defaults != nil
