@@ -2,6 +2,18 @@
 
 A dynamically typed language that compiles to C with Erlang-style concurrency. See `docs/SPEC.md` for the full spec.
 
+## Design Philosophy
+
+**Gem the language must be simple to write.** The OTP model (supervisors, gen_servers, "let it crash", spawn/send/receive, recursion-as-iteration via TCO) is already the learnability tax — that's the cognitive ceiling. The language layer must not pile more on top.
+
+When evaluating a runtime or codegen mechanism, ask: *does this leak a concept the user has to track to write correct or performant code?* If yes, push the burden into the compiler (static analysis) or the runtime (uniform mechanism), not the user.
+
+Concretely:
+- No annotations like `@process_loop` to mark TCO-eligible loops. Auto-detect.
+- No "you must structure your code this way for X to work" runtime constraints (e.g. depth fences). Either auto-detect via static analysis or make the mechanism work uniformly.
+- Compiler warnings are OK when they surface a hidden constraint ("this loop won't reset because it's reachable from a non-tail context"). Silent perf cliffs are not.
+- Optimizations that introduce DX warts (depth fences, hand-inlined wrappers, manual aliasing tricks) are tolerable only as transient hacks with a structural fix on the roadmap.
+
 ## Project Structure
 
 ```
