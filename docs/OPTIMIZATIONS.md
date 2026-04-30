@@ -152,6 +152,26 @@ Replace the runtime depth-2 fence with a compile-time mark. A pre-codegen pass w
 
 Expected throughput impact: small (the depth check is one cmp + branch, predictable). The win is DX — the user-facing constraint disappears. After this lands, the depth fence is no longer the *mechanism* (the static mark is); the runtime check exists only as a belt-and-suspenders safety for cases the analysis can't prove (and emits a warning).
 
+### Eliminate user-visible recursion-as-iteration (P1, follow-on to static process-tail)
+**Goal**: a process loop is `while true ... end`, not a tail-recursive helper. Recursion stays in the language for state-machine patterns; it stops being *required* for long-running processes. This is the structural fix that closes the gap the depth-2 fence and the watermark were both trying to paper over.
+
+**Why it matters**: recursion-as-iteration is the steepest part of the OTP cognitive ramp. New users hit `while true` first (intuitive), then bounce off the warning telling them to rewrite as a tail-recursive helper. Even experienced Erlang users find it awkward — it's a runtime/codegen requirement leaking into syntax. Removing it means a Gem process loop reads like every other loop in every other language.
+
+**Mechanism**: the same arena-rescue-and-reset machinery that TCO uses today, lifted from "tail-call back-edge" to "loop back-edge". Requires:
+1. **Liveness analysis on `while` bodies** (~150 LOC, standard textbook pass) — at each back-edge, compute the live-out set: variables `read` on a later iteration. That's exactly what needs to survive arena reset.
+2. **Reuse the static process-tail mark** to identify which `while true` loops are at process scope (reachable only via tail calls from a `spawn` closure or `main`). Loops in non-process contexts don't get reset; they keep allocating into the parent arena (correct behavior).
+3. **Codegen at the back-edge** — emit `rescue(live_set); arena_reset; continue;` — identical to the TCO back-edge today, just driven by the syntactic loop boundary instead of a self-recursive call.
+4. **Refusal cases** — analysis must detect when a value escapes the loop body via mechanisms it can't track (e.g. `register("name", state)` where state is mutable + arena-allocated). For these, emit a compile-time warning identifying the escape and skip the reset for that loop. Same warning model as the static process-tail pass.
+
+**What stays the same**: TCO machinery, `spawn` closures, gen_server / supervisor patterns. Tail-recursive functions still work exactly as today — this just makes the simpler construct (`while true`) work too.
+
+**What changes for users**:
+- The current warning *"`while true` indefinite loop — long-running processes should use tail recursion instead so the runtime can reset the per-process arena"* gets replaced with a much narrower one that fires only when the loop has an unrescuable escape.
+- A user can now write a gen_server's main loop as a plain `while true` block. Recursion remains available for those who want it.
+- The spec's "long-running processes use tail recursion" rule becomes "long-running processes use `while true`; recursion is for state-machine transitions when convenient".
+
+**Bar to land**: liveness bugs = silent memory corruption (same risk class as the watermark had). The pass must be conservative-by-default — when in doubt about whether a value is live, treat it as live (over-rescue is wasteful, under-rescue is unsound). Test exhaustively against existing TCO process loops (their tail params are by construction the live set; the analysis must agree on every existing example before being trusted on new code).
+
 ### Constant folding (P2)
 Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile time. The compiler already has all the information. Low value at current stage — the cases where humans write foldable constants are rare, and it doesn't affect compilation time.
 
