@@ -295,26 +295,6 @@ void gem_deep_free(GemVal val);
    arena. Mailbox contents are also preserved. No-op if pcall_depth > 0. */
 void gem_arena_reset_with_roots(GemVal **roots, int n_roots);
 
-/* Snapshot of an arena's bump state. Taken at TCO function entry so the TCO
-   reset can roll the arena back to that point instead of all the way to zero,
-   removing the depth-2 fence on `gem_arena_reset_with_roots`. */
-typedef struct {
-    GemArenaBlock *block;     /* arena->current at the time of marking */
-    size_t used;              /* block->used at the time of marking */
-    size_t bytes_allocated;   /* arena->bytes_allocated at the time of marking */
-    GemTable *table_list;     /* arena->table_list at the time of marking */
-} GemArenaMark;
-
-GemArenaMark gem_arena_mark(void);
-
-/* Reset the current process's arena back to `mark`, preserving the given
-   roots and the mailbox. Blocks newer than mark.block are munmapped; the
-   mark block is truncated to mark.used; str_indexes for tables created
-   after the mark are freed and the table_list is trimmed. Pre-mark state
-   is left intact, so callers above the marked frame may safely hold
-   GemVals into the arena. No-op if pcall_depth > 0. */
-void gem_arena_reset_to_mark_with_roots(GemArenaMark mark, GemVal **roots, int n_roots);
-
 /* ─── Runtime initialization (stores argc/argv, seeds RNG) ─── */
 
 void gem_init(int argc, char **argv);

@@ -59,37 +59,6 @@ requires groundwork, **P2** = nice to have or niche.
 
 ## Arena / Memory (P0)
 
-### ~~Per-frame TCO arena watermarks~~ ✓ Done (2026-04-30)
-Replaced the depth-2 fence with per-frame watermarks. On entry, every TCO-eligible function snapshots `{block, used, bytes_allocated, table_list}` via `gem_arena_mark()`. At each tail-call back-edge, `gem_arena_reset_to_mark_with_roots` truncates the arena back to the entry mark, rescuing roots+mailbox through a side arena. Removes the codegen depth fence — TCO loops nested arbitrarily deep (e.g. `accept_loop → handle_connection_loop`) now reset their own per-iteration garbage.
-
-Bench (c=50 t=4 30s, /bookmarks, 30 rows): 3380 req/s — ~16% lower than the 4041 req/s baseline at the same 1 MB threshold. Cause: the rescue does 2× deep_copy per reset (roots into side, then back into the truncated arena). GET / numbers held: c=4 26.5k req/s p99=329us RSS 20 MB; c=100 26.9k req/s; c=500 25.9k req/s RSS peak 340 MB / post-idle 171 MB. Closure-heavy paths like /bookmarks regressed because they reset frequently and carry larger root sets; static-HTML paths break even or improve.
-
-Update (2026-04-30, post escape analysis): escape analysis landed and `safe_handle_request` was inlined back into `handle_connection_loop`; the per-frame watermark is now active there with unboxed params and a stack-allocated pcall env. `/bookmarks` recovered to 3470 req/s (+2.7% over 3380, still ~14% short of the 4041 pre-watermark baseline). The remaining gap is `gem_arena_reset_to_mark_with_roots`'s 2× deep_copy of the rescue root set — see "Single-copy arena reset" (P2) below for the runtime-level fix that would close it.
-
-Strategic note (2026-04-30): the per-frame watermark exists for **DX, not performance** — to keep Gem simple, TCO behavior must not be depth-dependent (the prior fence required users to keep TCO loops within ~2 frames of process entry, an invisible footgun). The watermark fixes that but introduced a /bookmarks perf regression and spawned a chain of compensating fixes (escape analysis, splice). Since the splice didn't move the headline meaningfully and the depth-coupling DX wart of the fence is unacceptable as a user-facing concept, the path forward is to revert the watermark + splice (escape analysis is an independent win, kept) and replace the runtime fence with **static process-tail analysis** in codegen — automatically detect TCO functions reachable via tail-call chains from spawn closures / `main`, emit unconditional reset for those, and fall back to no-reset (with a compiler note) for the rest. Eliminates the depth concept from the user model entirely.
-
-### Single-copy arena reset (P2)
-`gem_arena_reset_to_mark_with_roots` currently does 2× deep_copy per reset (rescue roots+mailbox into a side arena, truncate, copy back). Append the side arena's blocks to the truncated main arena instead of copying back, making the side block the new `current`. Recovers /bookmarks throughput. Trade-off: the leftover space in `mark.block` (up to ~1 MB at the current threshold) is sacrificed each reset, so steady-state memory grows. Worth measuring if the escape-analysis fix doesn't land soon, or if a workload appears where /bookmarks-style closure-heavy reset is the hot path.
-
-### Workflow regression check (2026-04-30, pre-P2)
-Before starting on single-copy arena reset, swept other workflows to confirm the per-frame watermark + 1 MB threshold + escape-analysis combo hadn't quietly regressed something other than /bookmarks. Compared HEAD (`da6184d`) against pre-watermark `2bdaed4`.
-
-| Workflow | Baseline (`2bdaed4`) | HEAD (`da6184d`) | Δ |
-|----------|----------------------|------------------|---|
-| `make bootstrap` (first run, gem prebuilt) | 4.45s real / 3.67s user | 4.25s real / 3.78s user | flat |
-| JSON stress (21 KB input × 500 iters under `pcall`) | 13.07s user | 13.09s user | flat |
-| Spawn storm (50k short-lived workers, 1 round-trip each) | ~152k spawns/sec, RSS 53 MB | ~150k spawns/sec, RSS 53 MB | flat |
-| /bookmarks @ 10k rows, c=4 t=2 20s (~6 MB response) | 6.54 req/s, p99 903ms | 6.54 req/s, p99 903ms | flat |
-| gen_server soak: 1000-entry KV state, 30s call/get-put loop (TCO driver) | **236k ops/sec, RSS 62 MB** | **220k ops/sec, RSS 62 MB** | **−6.7% throughput, RSS flat** |
-
-Only the gen_server soak regressed, and it's exactly the shape "Per-frame TCO arena watermarks" called out: a long-running TCO loop carrying a large mutable rescue root (1000-entry table) re-deep-copied at every back-edge. The 2× deep_copy of the state table costs ~7% throughput; RSS is identical because both versions bound the driver and server arenas via the TCO watermark. This is the workload P2 (single-copy reset) is designed to fix; proceed with P2 rather than reverting.
-
-(First pass of this test used a `while`-loop driver, which is not TCO-eligible — its arena ballooned to 7–9 GB on both versions, contaminating the RSS comparison. Rewriting the driver as tail recursion (`fn drive(call_fn, pid, i, deadline) ... drive(call_fn, pid, i+1, deadline) end`) bounded driver RSS to ~25 MB and exposed the real per-iteration cost. Lesson: when benching anything that touches the watermark, the test harness itself must be TCO too.)
-
-JSON stress was flat because recursive descent isn't TCO-eligible — `parse_value` recurses non-tail through `parse_object`/`parse_array`, so the per-frame watermark mostly doesn't fire. The 1 MB threshold gates the top-level `while` loop's reset, and post-pcall live set is small.
-
-The /bookmarks-10k test renders ~6 MB HTML per request; per-request render time dominates over any per-iteration arena reset, so no cliff appears even though each request crosses the 1 MB threshold mid-render.
-
 ### ~~Lower default `GEM_ARENA_RESET_THRESHOLD`~~ ✓ Done (2026-04-30)
 Default lowered from 16 MB to 1 MB. Threshold sweep at c100 on `/` showed 1 MB strictly dominates: same throughput (28.8k vs 28.9k req/s), p99 −3.6× (26.5ms → 7.3ms), peak RSS −14× (2.04 GB → 139 MB), idle RSS −10× (495 MB → 50 MB). `/bookmarks` validation at c50 (heavier per-request allocation) confirmed no regression: throughput unchanged (4041 vs 4007 req/s), p99 −15% (26.9ms → 23.0ms), peak RSS −14× (728 MB → 52 MB). The hypothesis "smaller threshold = more reset overhead" did not show up in numbers — live set after a request is tiny so reset cost is negligible.
 
@@ -147,9 +116,9 @@ Every function call emits frame push/pop for stack traces. Leaf functions (no ca
 ### ~~Escape analysis for non-escaping closures (P1, partial)~~ ✓ Done (2026-04-30)
 A pre-codegen pass marks `anon_fn` nodes that appear as the immediate argument of an allowlisted callee (`pcall`, `sort`) as `non_escaping`, provided the closure body contains no nested `anon_fn`s. Marked closures (a) skip contributing their captures to the enclosing function's `captured` set, so the enclosing params/locals stay unboxed, and (b) get a stack-allocated env in `compile_anon_fn` instead of `GC_MALLOC` from the arena. `spawn`/`spawn_link`/`spawn_monitor`/`send_after` deliberately stay off the allowlist — their closures run asynchronously in another coroutine and must keep the boxing-via-arena path. The conservative "no nested anon_fns" precondition sidesteps the case where an escaping inner closure could smuggle outer captures past the synchronous call boundary.
 
-Concrete payoff: `safe_handle_request` deleted from `std/http.gem` and inlined into `handle_connection_loop`, which now has unboxed params, stack-allocated pcall env, and the per-frame TCO arena watermark active again. The `accept_loop` `let fd = client_fd` aliasing is **kept** — it dodges the *spawn* closure capture, which is still escaping.
+Concrete payoff: `safe_handle_request` deleted from `std/http.gem` and inlined into `handle_connection_loop`, which now has unboxed params and a stack-allocated pcall env. The `accept_loop` `let fd = client_fd` aliasing is **kept** — it dodges the *spawn* closure capture, which is still escaping.
 
-Bench impact (c=50 t=4 30s, /bookmarks, 30 rows): 3380 → 3470 req/s (+2.7%). Static path held: GET / c=4 26.2k req/s, c=100 27.1k req/s, RSS 50 MB. The /bookmarks regression vs the pre-watermark 4041 baseline is **not fully recovered** — the residual cost is `gem_arena_reset_to_mark_with_roots`'s 2× deep_copy of the rescue root set, dominated by `router_ref` (a non-frozen user-built table re-copied each reset). Closing the rest of the gap belongs to "Single-copy arena reset" (P2 above) or freezing the router table at construction time.
+Bench impact (c=50 t=4 30s, /bookmarks, 30 rows): 3380 → 3470 req/s (+2.7%) measured under the per-frame watermark, since reverted. Static path held: GET / c=4 26.2k req/s, c=100 27.1k req/s, RSS 50 MB.
 
 Scope deferred: block-syntax `each`/`map`/`filter`/`reduce` from std/table aren't allowlisted yet (their callee parses as `dot`, not `var`, and they're regular Gem fns rather than builtins where we can audit storage behavior). Same goes for `build_string`. Add to allowlist when a workload demands it.
 

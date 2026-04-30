@@ -237,7 +237,6 @@ fn make_codegen(source_name)
   let tco_fn_name = nil
   let tco_params = nil
   let tco_captured = nil
-  let tco_use_arena_mark = false
   let append_buf_vars = {}
 
   # ─── Helpers ──
@@ -814,12 +813,18 @@ fn make_codegen(source_name)
 
     # Arena reset at the tail-call boundary. Skipped if any param is captured
     # (boxed in arena memory) — that would dangle the box pointer after reset.
-    if tco_use_arena_mark and len(arg_temps) > 0
-      # Threshold is bytes allocated since this function's entry (when the
-      # mark was taken). The reset rolls back to the entry mark, freeing only
-      # post-entry allocations, so callers above us can hold arena pointers
-      # without the depth fence the fresh-arena reset used to need.
-      buf_push(b, "{p}if (gem_current_pid >= 0 && gem_current_arena()->bytes_allocated - _entry_mark.bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
+    let any_captured = false
+    for i = 0, len(tco_params)
+      if set_contains(tco_captured, tco_params[i])
+        any_captured = true
+      end
+    end
+    if not any_captured and len(arg_temps) > 0
+      # Reset only when this TCO function is at (or near) the process entry.
+      # Any deeper context may have callers holding arena pointers in their locals
+      # that the reset would invalidate. The +2 allowance covers the common pattern
+      # `spawn(fn() loop(state) end)` where there's an anon-closure frame above.
+      buf_push(b, "{p}if (gem_current_pid >= 0 && gem_call_depth - gem_proc_table[gem_current_pid].entry_call_depth <= 2 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
       buf_push(b, "{p}    GemVal *_tco_roots[] = \{")
       for i = 0, len(arg_temps)
         if i > 0
@@ -828,7 +833,7 @@ fn make_codegen(source_name)
         buf_push(b, "&{arg_temps[i]}")
       end
       buf_push(b, "};\n")
-      buf_push(b, "{p}    gem_arena_reset_to_mark_with_roots(_entry_mark, _tco_roots, {len(arg_temps)});\n")
+      buf_push(b, "{p}    gem_arena_reset_with_roots(_tco_roots, {len(arg_temps)});\n")
       buf_push(b, "{p}}\n")
     end
 
@@ -2321,19 +2326,10 @@ fn make_codegen(source_name)
     if node.rest_param == nil and not has_defs and not set_contains(scope_vars, name)
       use_tco = has_self_tail_call(name, body)
     end
-    let use_arena_mark = false
     if use_tco
       tco_fn_name = name
       tco_params = params
       tco_captured = captured
-      let any_captured = false
-      for i = 0, len(params)
-        if set_contains(captured, params[i])
-          any_captured = true
-        end
-      end
-      use_arena_mark = not any_captured
-      tco_use_arena_mark = use_arena_mark
     end
 
     let b = buf_new()
@@ -2352,9 +2348,6 @@ fn make_codegen(source_name)
     buf_push(b, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", {fn_line});\n")
 
     if use_tco
-      if use_arena_mark
-        buf_push(b, "    GemArenaMark _entry_mark = gem_arena_mark();\n")
-      end
       buf_push(b, "    while(1) \{\n")
       buf_push(b, "        gem_yield_check();\n")
       if len(body) > 0
@@ -2378,7 +2371,6 @@ fn make_codegen(source_name)
       tco_fn_name = nil
       tco_params = nil
       tco_captured = nil
-      tco_use_arena_mark = false
     end
 
     boxed_vars = saved_boxed
