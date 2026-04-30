@@ -19,6 +19,14 @@ Threshold sweep at c100 t4 30s on GET /:
 | 16 MB     | 28.9k  | 3.17ms | 26.5ms | 2.04 GB  | 495 MB    |
 | 64 MB     | 27.9k  | 3.24ms | 48.5ms | 5.90 GB  | 1.67 GB   |
 
+`/bookmarks` validation at c50 t4 30s, 30 rows (heavier per-request allocation: SQLite query + HTML render):
+| Threshold | RPS    | p50     | p99     | RSS peak | Post-idle |
+|-----------|--------|---------|---------|----------|-----------|
+| 1 MB      | 4041   | 11.65ms | 22.98ms | 52 MB    | 22 MB     |
+| 16 MB     | 4007   | 11.40ms | 26.91ms | 728 MB   | 58 MB     |
+
+Same conclusion as `/`: no throughput regression, p99 −15%, RSS peak 14× lower. Default lowered to 1 MB.
+
 Throughput plateaus at ~26–29k req/s on `/` regardless of c=4/100/500 — single-threaded scheduler is the ceiling. Higher concurrency just queues. Per-connection process arenas dominate memory under load.
 
 Arena allocator (2026-04-29, post Boehm GC removal):
@@ -43,8 +51,8 @@ requires groundwork, **P2** = nice to have or niche.
 
 ## Arena / Memory (P0)
 
-### Lower default `GEM_ARENA_RESET_THRESHOLD` (P0)
-Threshold sweep at c100 (see baseline above) shows 1 MB strictly dominates 16 MB and 64 MB: same throughput (28.8k vs 28.9k req/s), p99 dropped 3.6× (26.5ms → 7.3ms), peak RSS dropped 14× (2.04 GB → 139 MB), idle RSS dropped 10× (495 MB → 50 MB). The hypothesis "smaller threshold = more reset overhead = lower throughput" doesn't show up in numbers — live set after a request is tiny so reset cost is negligible. Validate against `/bookmarks` (heavier per-request allocation) before flipping the default.
+### ~~Lower default `GEM_ARENA_RESET_THRESHOLD`~~ ✓ Done (2026-04-30)
+Default lowered from 16 MB to 1 MB. Threshold sweep at c100 on `/` showed 1 MB strictly dominates: same throughput (28.8k vs 28.9k req/s), p99 −3.6× (26.5ms → 7.3ms), peak RSS −14× (2.04 GB → 139 MB), idle RSS −10× (495 MB → 50 MB). `/bookmarks` validation at c50 (heavier per-request allocation) confirmed no regression: throughput unchanged (4041 vs 4007 req/s), p99 −15% (26.9ms → 23.0ms), peak RSS −14× (728 MB → 52 MB). The hypothesis "smaller threshold = more reset overhead" did not show up in numbers — live set after a request is tiny so reset cost is negligible.
 
 ### Investigate post-idle high-water at high concurrency (P1)
 After c=500 soak ends and wrk closes, RSS settles to 2.39 GB and stays there for 30+ s of full idle (vs 18 MB initial). No drift during soak — true memory leak ruled out — but per-process arenas of completed connection handlers don't fully release. Likely `madvise(DONTNEED)` happens but `munmap` doesn't, or process objects linger in the proc table until late cleanup. Worth tracing `gem_proc_exit` against actual mmap accounting under load.

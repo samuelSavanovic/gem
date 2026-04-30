@@ -45,7 +45,7 @@ int gem_in_main_arena(const void *ptr);
 
 /* Threshold (in bytes_allocated) at which TCO emits an arena reset. */
 #ifndef GEM_ARENA_RESET_THRESHOLD
-#define GEM_ARENA_RESET_THRESHOLD (16 * 1024 * 1024)
+#define GEM_ARENA_RESET_THRESHOLD (1 * 1024 * 1024)
 #endif
 
 extern GemArena gem_global_arena;
