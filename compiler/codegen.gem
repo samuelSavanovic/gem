@@ -1619,7 +1619,11 @@ fn make_codegen(source_name)
         end
       end
       let mname = mangle(name)
-      if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name))
+      # A top-level boxed var (`gem_v_x` is `GemVal *`) must be dereffed at
+      # any read site, including inside fn_def bodies that reference it as a
+      # global. The previous in_top_level guard missed the fn_def case.
+      let is_top_box = set_contains(top_level_vars, name) and set_contains(top_level_boxed, name)
+      if set_contains(boxed_vars, name) or is_top_box
         return {expr: "(*{mname})", setup: ""}
       end
       return {expr: mname, setup: ""}
