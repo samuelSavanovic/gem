@@ -64,10 +64,24 @@ Replaced the depth-2 fence with per-frame watermarks. On entry, every TCO-eligib
 
 Bench (c=50 t=4 30s, /bookmarks, 30 rows): 3380 req/s — ~16% lower than the 4041 req/s baseline at the same 1 MB threshold. Cause: the rescue does 2× deep_copy per reset (roots into side, then back into the truncated arena). GET / numbers held: c=4 26.5k req/s p99=329us RSS 20 MB; c=100 26.9k req/s; c=500 25.9k req/s RSS peak 340 MB / post-idle 171 MB. Closure-heavy paths like /bookmarks regressed because they reset frequently and carry larger root sets; static-HTML paths break even or improve.
 
-Update (2026-04-30, post escape analysis): escape analysis landed and `safe_handle_request` was inlined back into `handle_connection_loop`; the per-frame watermark is now active there with unboxed params and a stack-allocated pcall env. `/bookmarks` recovered to 3470 req/s (+2.7% over 3380, still ~14% short of the 4041 pre-watermark baseline). The remaining gap is `gem_arena_reset_to_mark_with_roots`'s 2× deep_copy of the rescue root set — see "Single-copy arena reset" (P2) below for the runtime-level fix that would close it.
+Update (2026-04-30, post escape analysis): escape analysis landed and `safe_handle_request` was inlined back into `handle_connection_loop`; the per-frame watermark is now active there with unboxed params and a stack-allocated pcall env. `/bookmarks` recovered to 3470 req/s (+2.7% over 3380, still ~14% short of the 4041 pre-watermark baseline). The remaining gap was hypothesized to be `gem_arena_reset_to_mark_with_roots`'s 2× deep_copy of the rescue root set — see "Single-copy arena reset" below.
 
-### Single-copy arena reset (P2)
-`gem_arena_reset_to_mark_with_roots` currently does 2× deep_copy per reset (rescue roots+mailbox into a side arena, truncate, copy back). Append the side arena's blocks to the truncated main arena instead of copying back, making the side block the new `current`. Recovers /bookmarks throughput. Trade-off: the leftover space in `mark.block` (up to ~1 MB at the current threshold) is sacrificed each reset, so steady-state memory grows. Worth measuring if the escape-analysis fix doesn't land soon, or if a workload appears where /bookmarks-style closure-heavy reset is the hot path.
+Update (2026-04-30, post single-copy splice): single-copy splice landed and recovered the gen_server soak fully (217k → 235k ops/sec, see below) but moved `/bookmarks` only within noise. The deep_copy hypothesis was right *in shape* (splice eliminates one full pass) but `/bookmarks`'s rescue root set (`router_ref` plus a few small captures) is too small for the savings to register at the headline. The remaining ~17% /bookmarks gap is somewhere else — most likely the per-iteration churn from the watermark's reset frequency itself (every ~200 reqs at the 1 MB threshold), not the deep_copy cost per reset. Next candidates: freeze `router_ref` at construction (skips the rescue copy entirely for the dominant root), or raise the reset threshold for closure-heavy paths.
+
+### ~~Single-copy arena reset~~ ✓ Done (2026-04-30)
+`gem_arena_reset_to_mark_with_roots` previously did 2× deep_copy per reset (rescue roots+mailbox into a side arena, truncate, copy back). Now the rescue copy is the only copy: side arena blocks are spliced onto `mark.block->next`, `arena->current` becomes side's `current`, `bytes_allocated` and `table_list` are reconciled, the side mailbox is installed directly. The side container is dropped without freeing its blocks (they belong to the main arena now). Trade-off: the slack between `mark.used` and `mark.block->cap` is stranded each reset, plus older mark.blocks are never reclaimed mid-process — bounded by allocation rate × max_block_size, plateaus in practice (verified by 5-min soak below).
+
+Bench impact:
+
+| Workload | Baseline (`173b960`) | Splice | Δ |
+|----------|---------------------:|-------:|---|
+| gen_server soak (1000-entry KV state, 30s, TCO driver, median of 4 runs) | 217k ops/sec | **235k ops/sec** | **+8.3%** (recovers 236k pre-watermark baseline) |
+| /bookmarks c=50 t=4 20s, 30 rows (median of 4 alternating pairs) | 3373 req/s | 3318 req/s | −1.6% (within noise) |
+| /bookmarks c=50 t=4 5m soak, 30 rows | 3357 req/s | 3275 req/s | −2.4% (within noise) |
+| Static / c=100 t=4 20s | 27.9k req/s | 27.8k req/s | flat |
+| RSS soak, /bookmarks c=50 t=4 5m | start 18.7 MB / peak 50.3 MB / end 43.7 MB | start 18.7 MB / peak 54.3 MB / end 44.2 MB | +4 MB peak (acceptable, plateaus) |
+
+Verdict: clear win on gen_server-shape workloads (large mutable rescue root). For /bookmarks the deep_copy savings are too small to lift the headline number — `router_ref` is a small table, so 2× → 1× doesn't move the needle there. Splice is safe to keep as the default reset path; the residual /bookmarks gap (still ~17% short of the 4041 pre-watermark baseline) belongs to a different fix — likely freezing the router table at `router.gem` construction time, which would skip the rescue copy entirely for the dominant root.
 
 ### Workflow regression check (2026-04-30, pre-P2)
 Before starting on single-copy arena reset, swept other workflows to confirm the per-frame watermark + 1 MB threshold + escape-analysis combo hadn't quietly regressed something other than /bookmarks. Compared HEAD (`da6184d`) against pre-watermark `2bdaed4`.
