@@ -27,6 +27,14 @@ Threshold sweep at c100 t4 30s on GET /:
 
 Same conclusion as `/`: no throughput regression, p99 −15%, RSS peak 14× lower. Default lowered to 1 MB.
 
+c=500 stress retest on GET / after the flip (t8 30s):
+| Threshold | RPS   | p50     | p99     | RSS peak | Post-idle |
+|-----------|-------|---------|---------|----------|-----------|
+| 16 MB     | 26.4k | 16.7ms  | 236ms   | 5.83 GB  | 2.39 GB   |
+| 1 MB      | 28.0k | 16.3ms  | 38.8ms  | 612 MB   | 174 MB    |
+
+Throughput +6%, p99 −6×, RSS peak −9.5×, post-idle high-water −14×.
+
 Throughput plateaus at ~26–29k req/s on `/` regardless of c=4/100/500 — single-threaded scheduler is the ceiling. Higher concurrency just queues. Per-connection process arenas dominate memory under load.
 
 Arena allocator (2026-04-29, post Boehm GC removal):
@@ -54,8 +62,8 @@ requires groundwork, **P2** = nice to have or niche.
 ### ~~Lower default `GEM_ARENA_RESET_THRESHOLD`~~ ✓ Done (2026-04-30)
 Default lowered from 16 MB to 1 MB. Threshold sweep at c100 on `/` showed 1 MB strictly dominates: same throughput (28.8k vs 28.9k req/s), p99 −3.6× (26.5ms → 7.3ms), peak RSS −14× (2.04 GB → 139 MB), idle RSS −10× (495 MB → 50 MB). `/bookmarks` validation at c50 (heavier per-request allocation) confirmed no regression: throughput unchanged (4041 vs 4007 req/s), p99 −15% (26.9ms → 23.0ms), peak RSS −14× (728 MB → 52 MB). The hypothesis "smaller threshold = more reset overhead" did not show up in numbers — live set after a request is tiny so reset cost is negligible.
 
-### Investigate post-idle high-water at high concurrency (P1)
-After c=500 soak ends and wrk closes, RSS settles to 2.39 GB and stays there for 30+ s of full idle (vs 18 MB initial). No drift during soak — true memory leak ruled out — but per-process arenas of completed connection handlers don't fully release. Likely `madvise(DONTNEED)` happens but `munmap` doesn't, or process objects linger in the proc table until late cleanup. Worth tracing `gem_proc_exit` against actual mmap accounting under load.
+### Investigate post-idle high-water at high concurrency (P2 — downgraded 2026-04-30)
+Originally reported at 2.39 GB stuck post-c=500 with the 16 MB threshold. After lowering the default threshold to 1 MB, post-idle RSS at c=500 dropped to 174 MB — flat across +0/+30/+90s probes, so it's still not draining, but the absolute waste is now an order of magnitude smaller and unlikely to matter for typical workloads. The underlying mechanism (per-process arenas of completed connection handlers not fully releasing — likely `madvise(DONTNEED)` happens but `munmap` doesn't, or proc-table objects linger until late cleanup) is unchanged. Downgrade P1 → P2: keep tracking but don't prioritize until a workload demonstrates the residual is a real problem. If revisited, trace `gem_proc_exit` against actual mmap accounting under load.
 
 ### Arena compaction for long-running processes (P1)
 Arenas only grow — dead objects (replaced table entries, overwritten variables) waste space until the process exits. For long-running processes (gen_servers, accept loops), memory usage creeps up. Periodic compaction (copy live data into a fresh arena, swap, free old blocks) would reclaim this waste. Requires a root-scanning mechanism to find all live references from the coroutine stack and closure envs.
