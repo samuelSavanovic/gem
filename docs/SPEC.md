@@ -348,18 +348,21 @@ TCO applies to named functions (`fn name(...)`) without rest, default, or block 
 
 **Important:** only direct self-recursion is optimized. If `fn A` calls `fn B` which calls `fn A`, neither call is a TCO candidate — both grow the stack. Write long-running loops as direct self-recursion or use `while`. Splitting a loop body into helper functions that recurse back to the main loop will leak stack frames under sustained load.
 
-**Long-Running Processes — Use Tail Recursion, Not `while true`**
+**Long-Running Processes — Per-Iteration Arena Reset**
 
 Each process has its own arena (bump allocator). Allocations within the arena are freed in bulk only when the process exits. For short-lived processes (request handlers, one-shot tasks) this is ideal — no per-allocation free, no GC pauses.
 
-For long-lived processes (accept loops, keep-alive HTTP handlers, supervisors, gen_servers), this means a `while true` body that allocates per iteration grows the arena indefinitely.
+For long-lived processes (accept loops, keep-alive HTTP handlers, supervisors, gen_servers), the runtime resets the per-process arena at the back-edge of the loop. When the arena exceeds 1 MB, the runtime deep-copies the live values into a fresh arena (along with the process mailbox), then frees the old arena's pages back to the OS. From the program's perspective the back-edge is unchanged; the arena is now empty except for what's live and pending.
 
-The runtime works around this by hooking arena reset into TCO. At every tail-recursive self-call, if the arena exceeds 16 MB the runtime deep-copies the call's arguments and the process mailbox to scratch memory, resets the arena, and copies them back. From the program's perspective the call is identical; the arena is now empty except for the live arguments and pending messages.
+Two loop forms qualify for the back-edge reset:
 
-This only fires for tail calls within two stack frames of the process entry point — deeper calls (called by a parent that holds arena pointers in its frame) cannot safely reset without invalidating the caller. In practice this means: write the top-level loop of each spawned process as a tail-recursive function.
+1. **Tail-recursive self-call.** A function calling itself in tail position becomes a `while(1) { ... }` with parameter reassignment. The reset fires at the call site, with the call's arguments as the live set.
+2. **`while true` loops.** A `while true` whose iterations cannot leak C-frame state to a non-tail caller gets the same reset treatment, with the loop's *live-at-back-edge* set (computed by a backward-dataflow pass) as the live set.
+
+Both forms only reset when the loop is statically reachable from a process root via tail calls only. Process roots are the top-level program (pid 0), the body of any anon_fn passed to `spawn`/`spawn_link`/`spawn_monitor`, and any function recursively reachable from those via tail calls. A function called non-tail-positionally from elsewhere — e.g. `let r = f(); g(r)` — leaks frame state to the caller and is excluded; resetting the arena there would invalidate `r`.
 
 ```
-# Good — tail recursive, arena resets every ~16 MB
+# Good — tail recursive, arena resets every ~1 MB
 fn accept_loop(server_fd)
   let client = tcp_accept(server_fd)
   spawn(fn() handle(client) end)
@@ -370,16 +373,28 @@ spawn(fn() accept_loop(fd) end)
 ```
 
 ```
-# Bad — arena grows without bound; compiler will warn
+# Equally good — `while true` body, arena resets every ~1 MB
 fn accept_loop(server_fd)
   while true
     let client = tcp_accept(server_fd)
     spawn(fn() handle(client) end)
   end
 end
+
+spawn(fn() accept_loop(fd) end)
 ```
 
-The compiler emits a warning on every `while true` (and `while 1`) suggesting tail recursion. The warning is informational — `while true` still works. It is the right choice for short-lived processes, top-level scripts, or any loop guaranteed to exit. For indefinite loops in spawned processes, use tail recursion.
+**When the back-edge reset cannot fire**
+
+The compiler emits a warning when it cannot prove a process-tail `while true` is safe to reset. Common causes:
+
+- A live var is captured by a closure (the closure's box lives in arena memory; resetting would dangle the box).
+- A live var is declared in a nested `if`/`match` arm rather than at the function or loop body level (the var has no addressable C local at the back-edge).
+- A `break` in the loop body (post-loop liveness is not yet supported; the analyser refuses).
+
+For TCO functions, the corresponding conditions are: a parameter captured by a nested closure (`any_captured` skip), or the function is not reachable from a process root via tail calls only (the compiler emits a `TCO function ... not reachable from a process root` warning).
+
+`while true` outside a process-tail context (e.g. a finite REPL loop with `break`, or a one-shot helper) is silent — no warning, no reset. It's the right choice when the loop terminates promptly.
 
 **Green Threads and Message Passing**
 

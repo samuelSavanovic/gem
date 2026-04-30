@@ -1008,3 +1008,4 @@ false
 84
 33
 hello world
+result: 10000

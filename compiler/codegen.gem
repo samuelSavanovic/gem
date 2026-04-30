@@ -2,6 +2,8 @@
 # Faithful port of bootstrap/gem.py CodeGen class.
 # Uses closure-based pattern: fn make_codegen() returns a table of methods.
 
+load "liveness" (compute_live_at_backedge)
+
 # ─── String helpers ─────────────────────────────────────────────
 
 fn escape_c_string(s)
@@ -120,6 +122,118 @@ fn collect_top_let_names(stmts, result)
     end
     collect_block_lets(s, result)
   end
+end
+
+# ─── Process-tail `while true` tagging ──────────────────────────
+#
+# Walks every fn_def body and the top-level program, tagging each
+# `while true` node that lies in a process-tail context with
+# `process_tail = true` directly on the AST node. The codegen
+# (`compile_while`) consults this flag to decide whether to emit the
+# arena rescue+reset at the back-edge.
+#
+# Process-tail context: directly inside a fn in `process_tail_fns`, inside
+# the top-level program, or inside the body of an anon_fn passed as
+# arg[0] to spawn / spawn_link / spawn_monitor (each a fresh process root).
+#
+# Walker semantics: descend through if/match/while/for/etc. preserving the
+# current is_pt flag; reset is_pt=false at anon_fn boundaries (a closure
+# invoked from a non-tail context holds caller-frame state); reset is_pt=true
+# when descending into a spawn-arg anon_fn body.
+
+fn is_spawn_callee_name(name)
+  name == "spawn" or name == "spawn_link" or name == "spawn_monitor"
+end
+
+let walk_for_tagging_node = nil
+let walk_for_tagging_stmts = nil
+
+walk_for_tagging_stmts = fn(stmts, is_pt)
+  if stmts == nil
+    return nil
+  end
+  for s in stmts
+    walk_for_tagging_node(s, is_pt)
+  end
+end
+
+walk_for_tagging_node = fn(node, is_pt)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table"
+    return nil
+  end
+  if node.tag == nil
+    return nil
+  end
+  if node.tag == "fn_def"
+    # Top-level fn_defs are walked separately by tag_process_tail_while_loops;
+    # parser disallows nested fn_def. Skip.
+    return nil
+  end
+  if node.tag == "anon_fn"
+    # Generic anon_fn (not at spawn arg[0]): not a process-tail context.
+    walk_for_tagging_stmts(node.body, false)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          walk_for_tagging_node(d, is_pt)
+        end
+      end
+    end
+    return nil
+  end
+  if node.tag == "while" and is_pt and is_node(node.cond, "bool") and node.cond.value == true
+    node.process_tail = true
+    walk_for_tagging_stmts(node.body, is_pt)
+    return nil
+  end
+  if node.tag == "call" and is_node(node.func, "var") and is_spawn_callee_name(node.func.name)
+    if node.args != nil and len(node.args) > 0 and is_node(node.args[0], "anon_fn")
+      let anon = node.args[0]
+      walk_for_tagging_stmts(anon.body, true)
+      if anon.defaults != nil
+        for d in anon.defaults
+          if d != nil
+            walk_for_tagging_node(d, is_pt)
+          end
+        end
+      end
+      let i = 1
+      while i < len(node.args)
+        walk_for_tagging_node(node.args[i], is_pt)
+        i += 1
+      end
+      return nil
+    end
+  end
+  # Generic recursion over child nodes/arrays.
+  for k, v in node
+    if k != "tag" and type(v) == "table"
+      let vks = keys(v)
+      if len(vks) > 0 and type(vks[0]) == "int"
+        let vi = 0
+        while vi < len(v)
+          if type(v[vi]) == "table"
+            walk_for_tagging_node(v[vi], is_pt)
+          end
+          vi += 1
+        end
+      else
+        walk_for_tagging_node(v, is_pt)
+      end
+    end
+  end
+  nil
+end
+
+fn tag_process_tail_while_loops(fn_defs, top_stmts, process_tail_fns)
+  for fd in fn_defs
+    let is_pt = process_tail_fns[fd.name] == true
+    walk_for_tagging_stmts(fd.body, is_pt)
+  end
+  walk_for_tagging_stmts(top_stmts, true)
 end
 
 fn make_codegen(source_name)
@@ -1256,6 +1370,10 @@ fn make_codegen(source_name)
         eprint("warning: {source_name}:{line_str}: TCO function `{fd.name}` not reachable from a process root via tail calls only — per-process arena will not reset at its back-edge. Restructure callers to call `{fd.name}` in tail position from a spawn closure or main.\n")
       end
     end
+
+    # Tag `while true` nodes inside process-tail contexts so compile_while can
+    # emit the back-edge arena rescue+reset (mirroring TCO's reset).
+    tag_process_tail_while_loops(fn_defs, top_stmts, process_tail_fns)
   end
 
   emit_tco_continue = fn(call_node, indent)
@@ -2002,7 +2120,11 @@ fn make_codegen(source_name)
       end
       let r = compile_expr(value)
       let mname = mangle(name)
-      if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name))
+      # Mirror the var-read fix at compile_var: a top-level boxed var
+      # (`gem_v_x` is `GemVal *`) must be dereffed at any write site, including
+      # inside fn_def bodies that mutate it as a global.
+      let is_top_box = set_contains(top_level_vars, name) and set_contains(top_level_boxed, name)
+      if set_contains(boxed_vars, name) or is_top_box
         return "{line_dir}{r.setup}{p}*{mname} = {r.expr};"
       end
       return "{line_dir}{r.setup}{p}{mname} = {r.expr};"
@@ -2154,15 +2276,67 @@ fn make_codegen(source_name)
 
   # ─── compile_while ──
 
+  # Filter the live-at-back-edge set for arena rescue: keep names that map to
+  # an addressable C local at the back-edge (`&gem_v_<name>` is a `GemVal *`),
+  # drop names whose values are stable across an arena reset (builtins, top-
+  # level fn refs, top-level globals read from a non-pid-0 process), and
+  # refuse when a name is captured-into-a-closure box (the box itself lives
+  # in the per-process arena and would dangle on reset) or when a name has
+  # no known C local declaration at this loop's back-edge (let in a nested
+  # if/match arm — `collect_top_let_names` does not descend through those).
+  let filter_live_for_rescue = fn(live_set)
+    let roots = []
+    let lk = keys(live_set)
+    for name in lk
+      if set_contains(local_names, name)
+        if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name))
+          return {ok: false, reason: "live var `{name}` is captured by a closure (box lives in arena memory)"}
+        end
+        push(roots, name)
+      elif set_contains(builtins, name)
+        # builtin name resolves to a fn pointer; no rescue needed.
+      elif set_contains(defined_fns, name)
+        # top-level user fn; fn pointer, no rescue needed.
+      elif set_contains(top_level_vars, name)
+        # global accessed from a non-top-level (spawned) scope — global lives
+        # in pid 0's arena, independent of the per-process arena reset here.
+      else
+        return {ok: false, reason: "live var `{name}` has no C local at this loop's back-edge (declared in a nested if/match arm?)"}
+      end
+    end
+    {ok: true, roots: roots}
+  end
+
   compile_while = fn(node, indent)
     let p = pad_for(indent)
-    if node.cond.tag == "bool" and node.cond.value == true
-      let line_str = "?"
-      if node.line != nil
-        line_str = to_string(node.line)
+    let cond_is_true = node.cond.tag == "bool" and node.cond.value == true
+    let is_pt_while = node.process_tail == true and cond_is_true
+
+    let do_rescue = false
+    let rescue_roots = []
+    let refuse_reason = nil
+    if is_pt_while
+      let lr = compute_live_at_backedge(node)
+      if lr.ok
+        let fr = filter_live_for_rescue(lr.live)
+        if fr.ok
+          do_rescue = true
+          rescue_roots = fr.roots
+        else
+          refuse_reason = fr.reason
+        end
+      else
+        refuse_reason = lr.reason
       end
-      eprint("warning: {source_name}:{line_str}: `while true` indefinite loop — long-running processes should use tail recursion instead so the runtime can reset the per-process arena and bound memory (see docs/SPEC.md)\n")
+      if not do_rescue
+        let line_str = "?"
+        if node.line != nil
+          line_str = to_string(node.line)
+        end
+        eprint("warning: {source_name}:{line_str}: cannot reset per-process arena at this loop's back-edge: {refuse_reason}. Memory will grow unbounded across iterations. Restructure or use a tail-recursive helper.\n")
+      end
     end
+
     let cond_r = compile_expr(node.cond)
 
     let eligible = find_append_vars(node.body)
@@ -2186,6 +2360,23 @@ fn make_codegen(source_name)
     let b = buf_new()
     buf_push(b, "{p}while (1) \{\n")
     buf_push(b, "{p}    gem_yield_check();\n")
+    if do_rescue
+      buf_push(b, "{p}    if (gem_current_pid >= 0 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
+      if len(rescue_roots) == 0
+        buf_push(b, "{p}        gem_arena_reset_with_roots(NULL, 0);\n")
+      else
+        buf_push(b, "{p}        GemVal *_loop_roots[] = \{")
+        for i = 0, len(rescue_roots)
+          if i > 0
+            buf_push(b, ", ")
+          end
+          buf_push(b, "&{mangle(rescue_roots[i])}")
+        end
+        buf_push(b, "};\n")
+        buf_push(b, "{p}        gem_arena_reset_with_roots(_loop_roots, {len(rescue_roots)});\n")
+      end
+      buf_push(b, "{p}    }\n")
+    end
     if cond_r.setup != ""
       buf_push(b, str_replace(cond_r.setup, "    ", "{p}    "))
     end

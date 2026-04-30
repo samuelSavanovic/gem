@@ -147,25 +147,24 @@ Replaced the runtime depth-2 fence with a compile-time `mark_process_tail` pass 
 
 **Follow-up (small)**: better warning cause-attribution. Today the warning fires on the demoted TCO function with a generic "reachable from non-tail context" message. Naming the offending non-tail call-site (file:line of the caller) would make the diagnostic actionable. Low priority — no demotions exist in the current codebase.
 
-### Eliminate user-visible recursion-as-iteration (P1, follow-on to static process-tail)
-**Goal**: a process loop is `while true ... end`, not a tail-recursive helper. Recursion stays in the language for state-machine patterns; it stops being *required* for long-running processes. This is the structural fix that closes the gap the depth-2 fence and the watermark were both trying to paper over.
+### ~~Eliminate user-visible recursion-as-iteration~~ ✓ Done (2026-04-30)
+A `while true` loop in a process-tail context now resets the per-process arena at its back-edge using the same machinery as TCO. Recursion-as-iteration is no longer required for long-running processes.
 
-**Why it matters**: recursion-as-iteration is the steepest part of the OTP cognitive ramp. New users hit `while true` first (intuitive), then bounce off the warning telling them to rewrite as a tail-recursive helper. Even experienced Erlang users find it awkward — it's a runtime/codegen requirement leaking into syntax. Removing it means a Gem process loop reads like every other loop in every other language.
+**Mechanism shipped**:
+1. **Liveness pass** (`compiler/liveness.gem`, ~770 LOC). Backward dataflow over `while true` bodies; returns `{ok: true, live}` or `{ok: false, reason}`. Closure captures over-approximated (every anon_fn's free vars unconditionally live across the back-edge). Refuses on `break` at this loop's level. Validation gate (`compiler/test_liveness.gem`) walks every TCO function in `std/` + `examples/`, synthesizes `while true { fn.body }`, and asserts `live ⊇ params` so no existing TCO loop would under-rescue if rewritten as `while true`.
+2. **Process-tail tagging** (`tag_process_tail_while_loops` in `compiler/codegen.gem`). After `mark_process_tail` finishes, a tree walk tags every `while true` node inside a process-tail context (a fn in `process_tail_fns`, the top-level program, or a spawn-arg anon_fn body) with `process_tail = true`. The walker stops at anon_fn / fn_def boundaries except when descending into spawn-arg anon bodies (treated as fresh process roots).
+3. **Codegen** (`compile_while`). When `node.process_tail == true` and `node.cond` is `bool true`, the back-edge emits `gem_arena_reset_with_roots(_loop_roots, N);` guarded by `gem_current_pid >= 0 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD`. The roots are the live set filtered against `local_names` ∖ `boxed_vars` ∖ globals/fn-names/builtins.
+4. **Narrowed warning**. The blanket *"use tail recursion instead"* warning is replaced by a refusal-only warning naming the specific blocker (closure-captured live var, declaration in nested if/match arm, `break` in body). Process-tail `while true` loops with a clean liveness result emit no warning.
 
-**Mechanism**: the same arena-rescue-and-reset machinery that TCO uses today, lifted from "tail-call back-edge" to "loop back-edge". Requires:
-1. **Liveness analysis on `while` bodies** (~150 LOC, standard textbook pass) — at each back-edge, compute the live-out set: variables `read` on a later iteration. That's exactly what needs to survive arena reset.
-2. **Reuse the static process-tail mark** (already shipped in `mark_process_tail`) to identify which `while true` loops are at process scope. The call-graph plumbing — `caller_records` keyed by id, tail-position propagation through `if`/`elif`/`else`/`match`/`receive`/`block`/`return`, the trivial-return rule, GFP demotion, and the seed set (`spawn` anon-fn bodies + top-level `<top>`) — transfers directly. Step 2 extends it: record `while true` blocks as nodes whose process-tail status is inherited from their containing function. Loops in non-process contexts don't get reset; they keep allocating into the parent arena (correct behavior).
-3. **Codegen at the back-edge** — emit `rescue(live_set); arena_reset; continue;` — identical to the TCO back-edge today, just driven by the syntactic loop boundary instead of a self-recursive call.
-4. **Refusal cases** — analysis must detect when a value escapes the loop body via mechanisms it can't track (e.g. `register("name", state)` where state is mutable + arena-allocated). For these, emit a compile-time warning identifying the escape and skip the reset for that loop. Same warning model as the static process-tail pass.
+**Refusal cases (today)**:
+- A live var is captured by a closure (`boxed_vars`/`top_level_boxed`) — the box itself lives in arena memory and would dangle on reset.
+- A live var has no declaration at the function-body level (declared in a nested `if`/`match` arm — `collect_top_let_names` does not descend through those).
+- `break` in the loop body (post-loop liveness not yet supported).
+- Liveness fixpoint failed to converge in 64 iters (pathological).
 
-**What stays the same**: TCO machinery, `spawn` closures, gen_server / supervisor patterns. Tail-recursive functions still work exactly as today — this just makes the simpler construct (`while true`) work too.
+**Known DX cliff**: closure-capture over-approximation in liveness conservatively unions every captured free var into the live set unconditionally. In practice this means `while true` loops that `spawn(fn() ... captured ... end)` per iteration get refused — the captured value is "live forever" in liveness's view. The user works around by passing captured values as named-fn `spawn` args (avoiding closure boxing) or by using a tail-recursive helper. Sharper escape analysis is the follow-up.
 
-**What changes for users**:
-- The current warning *"`while true` indefinite loop — long-running processes should use tail recursion instead so the runtime can reset the per-process arena"* gets replaced with a much narrower one that fires only when the loop has an unrescuable escape.
-- A user can now write a gen_server's main loop as a plain `while true` block. Recursion remains available for those who want it.
-- The spec's "long-running processes use tail recursion" rule becomes "long-running processes use `while true`; recursion is for state-machine transitions when convenient".
-
-**Bar to land**: liveness bugs = silent memory corruption (same risk class as the watermark had). The pass must be conservative-by-default — when in doubt about whether a value is live, treat it as live (over-rescue is wasteful, under-rescue is unsound). Test exhaustively against existing TCO process loops (their tail params are by construction the live set; the analysis must agree on every existing example before being trusted on new code).
+**Result**: `examples/55_while_true_process_loop.gem` regression test runs 10000 iters × ~200 bytes/iter (≫1MB threshold) and completes with stable RSS. All 49 other examples + json_parser + bookmarks pass; bootstrap roundtrip clean; liveness gate (4 fns from `std/`) PASS.
 
 ### Constant folding (P2)
 Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile time. The compiler already has all the information. Low value at current stage — the cases where humans write foldable constants are rare, and it doesn't affect compilation time.
