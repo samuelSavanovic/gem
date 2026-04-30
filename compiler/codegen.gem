@@ -490,6 +490,12 @@ fn make_codegen(source_name)
 
     match node
     when {tag: "anon_fn", params: params, rest_param: rest_param, body: body}
+      if node.non_escaping == true
+        # Marked as immediate-call arg of an allowlisted callee (pcall/sort)
+        # with no nested anon_fns. References to outer scope_vars don't
+        # force boxing in the enclosing frame.
+        return nil
+      end
       let inner_defined = sorted_array_to_set(params)
       if rest_param != nil
         set_add(inner_defined, rest_param)
@@ -603,6 +609,112 @@ fn make_codegen(source_name)
     let captured = {}
     walk_captures(body, scope_vars, captured)
     captured
+  end
+
+  # ─── Non-escaping closure detection ──
+  #
+  # Mark anon_fn nodes that appear as the immediate argument of a call to an
+  # allowlisted callee (currently `pcall`). Such closures are invoked
+  # synchronously and discarded — they cannot outlive the C frame holding
+  # their captures, so the enclosing function need not box those captures.
+  # Conservative: we only mark closures whose own body contains no nested
+  # anon_fns, sidestepping the case where a nested escaping closure could
+  # smuggle outer captures past the synchronous call.
+
+  let non_escape_callees = {}
+  set_add(non_escape_callees, "pcall")
+  set_add(non_escape_callees, "sort")
+
+  let contains_anon_fn = nil
+  contains_anon_fn = fn(node)
+    if node == nil
+      return false
+    end
+    if type(node) != "table"
+      return false
+    end
+    if node.tag == nil
+      return false
+    end
+    if node.tag == "anon_fn"
+      return true
+    end
+    for nk, v in node
+      if nk != "tag" and type(v) == "table"
+        let vks = keys(v)
+        if len(vks) > 0 and type(vks[0]) == "int"
+          let vi = 0
+          while vi < len(v)
+            if type(v[vi]) == "table"
+              if contains_anon_fn(v[vi])
+                return true
+              end
+            end
+            vi += 1
+          end
+        else
+          if contains_anon_fn(v)
+            return true
+          end
+        end
+      end
+    end
+    false
+  end
+
+  let body_has_anon_fn = fn(stmts)
+    for s in stmts
+      if contains_anon_fn(s)
+        return true
+      end
+    end
+    false
+  end
+
+  let mark_non_escaping = nil
+  mark_non_escaping = fn(node)
+    if node == nil
+      return nil
+    end
+    if type(node) != "table"
+      return nil
+    end
+    if node.tag == nil
+      return nil
+    end
+
+    if node.tag == "call" and node.func != nil and is_node(node.func, "var") and set_contains(non_escape_callees, node.func.name)
+      if node.args != nil
+        for a in node.args
+          if is_node(a, "anon_fn") and not body_has_anon_fn(a.body)
+            a.non_escaping = true
+          end
+        end
+      end
+    end
+
+    for nk, v in node
+      if nk != "tag" and type(v) == "table"
+        let vks = keys(v)
+        if len(vks) > 0 and type(vks[0]) == "int"
+          let vi = 0
+          while vi < len(v)
+            if type(v[vi]) == "table"
+              mark_non_escaping(v[vi])
+            end
+            vi += 1
+          end
+        else
+          mark_non_escaping(v)
+        end
+      end
+    end
+  end
+
+  let mark_non_escaping_stmts = fn(stmts)
+    for s in stmts
+      mark_non_escaping(s)
+    end
   end
 
   # ─── Compilation ──
@@ -1162,6 +1274,20 @@ fn make_codegen(source_name)
 
     let b = buf_new()
     let env_tmp = tmp()
+    if node.non_escaping == true
+      # Stack-allocate the env: the closure cannot outlive this C frame.
+      buf_push(b, "    struct {result.struct_name} {env_tmp};\n")
+      buf_push(b, "    {env_tmp}._num_captures = {len(captures)};\n")
+      for cap in captures
+        let mc = mangle(cap)
+        if set_contains(boxed_vars, cap)
+          buf_push(b, "    {env_tmp}.{mc} = {mc};\n")
+        else
+          buf_push(b, "    {env_tmp}.{mc} = &{mc};\n")
+        end
+      end
+      return {expr: "gem_make_fn({result.fn_name}, &{env_tmp})", setup: buf_str(b)}
+    end
     buf_push(b, "    struct {result.struct_name} *{env_tmp} = GC_MALLOC(sizeof(struct {result.struct_name}));\n")
     buf_push(b, "    {env_tmp}->_num_captures = {len(captures)};\n")
     for cap in captures
@@ -2350,6 +2476,14 @@ fn make_codegen(source_name)
         push(top_stmts, s)
       end
     end
+
+    # Mark non-escaping closures (immediate-call-site args to allowlisted
+    # callees like pcall/sort). Must run before any capture analysis below
+    # — find_captured_in_scope reads the non_escaping flag.
+    for fd in fn_defs
+      mark_non_escaping_stmts(fd.body)
+    end
+    mark_non_escaping_stmts(top_stmts)
 
     # Register extern fns as defined (callable)
     for ef in extern_fns_list

@@ -1,0 +1,91 @@
+# Non-escaping closure optimization: when a closure literal is the immediate
+# argument of pcall or sort, codegen skips boxing the captured params on the
+# enclosing function and stack-allocates the env. The closure body must still
+# observe its captures correctly, including mutations.
+
+# Test 1: pcall reads a captured param.
+fn read_capture(x)
+  let r = pcall(fn() x + 100 end)
+  r.value
+end
+print(read_capture(7))  # 107
+
+# Test 2: pcall mutates a captured local.
+fn mutate_capture()
+  let counter = 0
+  pcall(fn() counter = counter + 5 end)
+  pcall(fn() counter = counter * 2 end)
+  counter
+end
+print(mutate_capture())  # 10
+
+# Test 3: pcall propagates an error and the rest of the function continues.
+fn pcall_error_path(label)
+  let r = pcall(fn() error("boom from {label}") end)
+  r.ok
+end
+print(pcall_error_path("test3"))  # false
+
+# Test 4: sort with a capturing comparator (non-escaping).
+fn sort_with_threshold(arr, t)
+  sort(arr, fn(a, b)
+    let aa = a
+    let bb = b
+    if aa < t and bb >= t
+      return -1
+    end
+    if aa >= t and bb < t
+      return 1
+    end
+    if aa < bb then -1 elif aa > bb then 1 else 0 end
+  end)
+end
+let s = sort_with_threshold([5, 1, 8, 3, 7, 2], 4)
+for v in s
+  print(v)
+end
+# Expected: items < 4 first (1,2,3) then >=4 (5,7,8). Output: 1 2 3 5 7 8
+
+# Test 5: closure stored in a `let` still escapes (must keep working).
+fn escaping_let(x)
+  let f = fn() x + 1 end
+  f() + f()
+end
+print(escaping_let(10))  # 22
+
+# Test 6: closure returned from a function still escapes.
+fn make_adder(n)
+  fn(x) x + n end
+end
+let add3 = make_adder(3)
+print(add3(7))  # 10
+
+# Test 7: spawn closure must NOT be treated as non-escaping (runs async).
+fn spawn_capture()
+  let parent = self()
+  let value = 42
+  spawn(fn()
+    send(parent, value * 2)
+  end)
+  receive()
+end
+print(spawn_capture())  # 84
+
+# Test 8: nested pcalls sharing a captured local.
+fn nested_pcalls()
+  let x = 1
+  pcall(fn()
+    x = x + 10
+    pcall(fn() x = x * 3 end)
+  end)
+  x
+end
+print(nested_pcalls())  # 33
+
+# Test 9: pcall returning the captured value.
+fn pcall_returns_capture()
+  let payload = "hello"
+  let r = pcall(fn() payload + " world" end)
+  r.value
+end
+print(pcall_returns_capture())  # hello world

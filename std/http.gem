@@ -545,28 +545,21 @@ fn process_one_request(client_fd, router_ref, conn_buf)
   next_buf
 end
 
-# Wrapper that catches errors and signals "close connection" by returning a
-# sentinel `false`. Kept separate from handle_connection_loop so that loop's
-# parameters are not captured by closures (capture would force boxing in
-# arena memory and prevent the TCO arena reset from firing).
-fn safe_handle_request(client_fd, router_ref, conn_buf)
-  let result = pcall(fn()
-    process_one_request(client_fd, router_ref, conn_buf)
-  end)
-  if result.ok
-    return result.value
-  end
-  pcall(fn()
-    tcp_write(client_fd, serialize_response(server_error(nil), false))
-  end)
-  false
-end
-
 # Tail-recursive keep-alive loop. The arena resets at each tail call when
 # bytes_allocated crosses GEM_ARENA_RESET_THRESHOLD, so per-request garbage
 # (parsed headers, request bodies, etc.) doesn't accumulate.
 fn handle_connection_loop(client_fd, router_ref, conn_buf)
-  let next = safe_handle_request(client_fd, router_ref, conn_buf)
+  let result = pcall(fn()
+    process_one_request(client_fd, router_ref, conn_buf)
+  end)
+  let next = false
+  if result.ok
+    next = result.value
+  else
+    pcall(fn()
+      tcp_write(client_fd, serialize_response(server_error(nil), false))
+    end)
+  end
   if next == false
     tcp_close(client_fd)
     return
@@ -580,6 +573,10 @@ end
 
 # ─── Server ───
 
+# The spawn closure captures `fd` and `rr` (escaping to a new process), so
+# they get boxed in this frame. The aliasing keeps accept_loop's own params
+# (server_fd, router_ref) out of the capture set so the TCO arena reset
+# fires here too — escape analysis only covers pcall/sort, not spawn.
 fn accept_loop(server_fd, router_ref)
   let client_fd = tcp_accept(server_fd)
   let fd = client_fd
