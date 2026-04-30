@@ -644,7 +644,7 @@ walk_for_tagging_node = fn(node, is_pt)
     end
     return nil
   end
-  if node.tag == "while" and is_pt and is_node(node.cond, "bool") and node.cond.value == true
+  if node.tag == "while" and is_pt
     node.process_tail = true
     walk_for_tagging_stmts(node.body, is_pt)
     return nil
@@ -694,7 +694,14 @@ tag_process_tail_while_loops = fn(fn_defs, top_stmts, process_tail_fns)
     let is_pt = process_tail_fns[fd.name] == true
     walk_for_tagging_stmts(fd.body, is_pt)
   end
-  walk_for_tagging_stmts(top_stmts, true)
+  # Top-level statements run in `gem_main_pid`. The runtime shares strings
+  # allocated in main's arena across processes (`gem_in_main_arena` fast-path
+  # in `gem_deep_copy_internal`); resetting main's arena would dangle those
+  # cross-process references. Until that invariant is lifted, top-level loops
+  # are *not* PT roots. Long-running work belongs in spawned processes; loops
+  # at top level are the program's setup/teardown and are expected to be
+  # bounded.
+  walk_for_tagging_stmts(top_stmts, false)
 end
 
 fn make_codegen(source_name)
@@ -2782,8 +2789,7 @@ fn make_codegen(source_name)
 
   compile_while = fn(node, indent)
     let p = pad_for(indent)
-    let cond_is_true = node.cond.tag == "bool" and node.cond.value == true
-    let is_pt_while = node.process_tail == true and cond_is_true
+    let is_pt_while = node.process_tail == true
 
     let do_rescue = false
     let rescue_roots = []
@@ -2813,7 +2819,7 @@ fn make_codegen(source_name)
         if node.line != nil
           line_str = to_string(node.line)
         end
-        eprint("warning: {source_name}:{line_str}: cannot reset per-process arena at this loop's back-edge: {refuse_reason}. Memory will grow unbounded across iterations. Restructure or use a tail-recursive helper.\n")
+        eprint("warning: {source_name}:{line_str}: cannot reset per-process arena at this loop's back-edge: {refuse_reason}. Memory will grow unbounded across iterations. This pattern is not yet supported in long-running loops — please file an issue with your case if it blocks you.\n")
       end
     end
 

@@ -1,0 +1,34 @@
+# Regression: process loop using `while true` with `break` for graceful
+# shutdown. Post-loop liveness must let the rescue still apply (loop has a
+# break that falls through to send/return). With 5000 iterations × ~200
+# bytes/iter the per-process arena exceeds the 1MB reset threshold; a broken
+# rescue would either OOM, dangle, or miscount.
+
+let main_pid = self()
+
+fn loop(count)
+  while true
+    let msg = receive()
+    match msg
+    when {tag: "tick", n: n}
+      let junk = [n, n + 1, n + 2, n + 3, n + 4, n + 5, "pad-" + to_string(n)]
+      count = count + 1
+    when {tag: "stop"}
+      break
+    end
+  end
+  send(main_pid, {tag: "result", count: count})
+end
+
+let worker = spawn(fn()
+  loop(0)
+end)
+
+let total = 5000
+for i = 0, total
+  send(worker, {tag: "tick", n: i})
+end
+send(worker, {tag: "stop"})
+
+let r = receive()
+print("result: " + to_string(r.count))

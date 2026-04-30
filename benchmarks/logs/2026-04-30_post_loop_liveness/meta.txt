@@ -1,0 +1,22 @@
+date: 2026-04-30T20:47:51Z
+hostname: samuels-MBP.fritz.box
+os: Darwin 25.4.0 arm64
+cpu: Apple M1 Pro
+cores: 10
+memory_gb: 16
+wrk: wrk 4.2.0 [kqueue] Copyright (C) 2012 Will Glozer
+gem_commit: d65565d
+
+parameters:
+  warmup: 5s
+  burst_duration: 30s
+  burst_threads: 2
+  burst_connections: 10
+  soak_duration: 5m
+  soak_threads: 1
+  soak_connections: 4
+  write_burst_duration: 10s
+  write_burst_connections: 4
+  rss_interval: 0.5s
+
+note: working tree includes uncommitted 3b/3c (drop cond_is_true gates + warning copy)

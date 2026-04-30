@@ -1,0 +1,35 @@
+# Regression: process loop using a non-`true` cond (graceful shutdown via
+# a `running = false` assignment). The compiler must tag this `while running`
+# loop as process-tail, compute liveness with the post-loop set, and emit
+# arena rescue+reset at the back-edge — same as `while true` does. With 5000
+# iterations × ~200 bytes/iter the per-process arena exceeds the 1MB reset
+# threshold a few times; a broken rescue would OOM, dangle, or miscount.
+
+let main_pid = self()
+
+fn loop(count, running)
+  while running
+    let msg = receive()
+    match msg
+    when {tag: "tick", n: n}
+      let junk = [n, n + 1, n + 2, n + 3, n + 4, n + 5, "pad-" + to_string(n)]
+      count = count + 1
+    when {tag: "stop"}
+      running = false
+    end
+  end
+  send(main_pid, {tag: "result", count: count})
+end
+
+let worker = spawn(fn()
+  loop(0, true)
+end)
+
+let total = 5000
+for i = 0, total
+  send(worker, {tag: "tick", n: i})
+end
+send(worker, {tag: "stop"})
+
+let r = receive()
+print("result: " + to_string(r.count))
