@@ -138,19 +138,14 @@ Throughput identical within noise; revert wins ~3 MB on RSS (no stranded splice 
 
 The 4041 baseline was on a different machine state — not a clean comparison point on the current machine.
 
-### Static process-tail analysis (P0, next)
-Replace the runtime depth-2 fence with a compile-time mark. A pre-codegen pass walks every TCO function and asks: is this function reachable only via tail calls from a process-entry boundary (`spawn`/`spawn_link`/`spawn_monitor` closure, or `main`)? If yes, mark it `process_tail` — the codegen emits an unconditional reset at the back-edge (drop the `gem_call_depth - entry_call_depth <= 2` runtime check). If no, emit a compile-time warning ("this loop won't reset because it's reachable from a non-tail context") and skip the reset.
+### ~~Static process-tail analysis~~ ✓ Done
+Replaced the runtime depth-2 fence with a compile-time `mark_process_tail` pass (`compiler/codegen.gem`). A pre-codegen pass builds a call graph of `(caller_id, callee, is_tail_position)` records, seeds it with top-level statements and `anon_fn` bodies passed to `spawn`/`spawn_link`/`spawn_monitor`, then runs a greatest-fixed-point demotion: start with all candidates, demote any candidate whose incoming edge from a non-candidate non-seed caller isn't tail-position, repeat until stable. Final pass: BFS from seeds through candidates via tail edges to compute the actual `process_tail` set. Codegen at the TCO back-edge (line 827) drops the `gem_call_depth - entry_call_depth <= 2` check for `process_tail` functions; non-process-tail TCO functions get a compile-time warning and keep the depth check as a safety net.
 
-**Why this matters**: the depth-2 fence is a hidden runtime constraint. Today it works empirically (every long-running process loop *is* at depth 2 by construction), but any future user who structures a process as `spawn(fn() helper(); loop() end)` would hit a silent perf cliff with no diagnostic. Static analysis turns the silent constraint into either a guarantee or a compile-time warning.
+**Why GFP demotion instead of BFS**: naive BFS-from-seeds (the original sketch below) over-approximates — it would mark functions reachable via tail calls even if they're also called non-tail elsewhere, which is unsound. GFP demotion correctly handles self-recursion (sup_loop, gen_server `loop`) and mutual tail-call cycles. A "trivial return" rule (`f(); return nil` or `f(); return <const>`) treats early-exit patterns as tail-effective so supervisor / gen_server idioms get marked.
 
-**Implementation sketch** (~80–120 LOC, modeled on the `mark_non_escaping` pass at `compiler/codegen.gem:674-718`):
-1. Build a call graph keyed by function name. For each call site, record (caller, callee, is_tail_position).
-2. Seed the worklist with: top-level statements in `main`, and every `anon_fn` body passed to `spawn`/`spawn_link`/`spawn_monitor`.
-3. BFS: from each seed, follow only tail-position edges. Mark every visited function `process_tail`.
-4. In `compile_tail_call`, if the enclosing function is `process_tail`, drop the depth check from the emitted reset.
-5. After analysis, walk the AST one more time and warn for any TCO function reachable from non-tail call sites only.
+**Result**: zero TCO warnings on all 49 examples + bookmark_app + std modules; bootstrap roundtrip clean; bench parity on `/bookmarks` c=50 t=4 30s (median 3157 vs 3104 req/s, RSS equal). The depth-2 fence is no longer the mechanism; it's a belt-and-suspenders safety for the rare functions the analysis can't prove.
 
-Expected throughput impact: small (the depth check is one cmp + branch, predictable). The win is DX — the user-facing constraint disappears. After this lands, the depth fence is no longer the *mechanism* (the static mark is); the runtime check exists only as a belt-and-suspenders safety for cases the analysis can't prove (and emits a warning).
+**Follow-up (small)**: better warning cause-attribution. Today the warning fires on the demoted TCO function with a generic "reachable from non-tail context" message. Naming the offending non-tail call-site (file:line of the caller) would make the diagnostic actionable. Low priority — no demotions exist in the current codebase.
 
 ### Eliminate user-visible recursion-as-iteration (P1, follow-on to static process-tail)
 **Goal**: a process loop is `while true ... end`, not a tail-recursive helper. Recursion stays in the language for state-machine patterns; it stops being *required* for long-running processes. This is the structural fix that closes the gap the depth-2 fence and the watermark were both trying to paper over.
@@ -159,7 +154,7 @@ Expected throughput impact: small (the depth check is one cmp + branch, predicta
 
 **Mechanism**: the same arena-rescue-and-reset machinery that TCO uses today, lifted from "tail-call back-edge" to "loop back-edge". Requires:
 1. **Liveness analysis on `while` bodies** (~150 LOC, standard textbook pass) — at each back-edge, compute the live-out set: variables `read` on a later iteration. That's exactly what needs to survive arena reset.
-2. **Reuse the static process-tail mark** to identify which `while true` loops are at process scope (reachable only via tail calls from a `spawn` closure or `main`). Loops in non-process contexts don't get reset; they keep allocating into the parent arena (correct behavior).
+2. **Reuse the static process-tail mark** (already shipped in `mark_process_tail`) to identify which `while true` loops are at process scope. The call-graph plumbing — `caller_records` keyed by id, tail-position propagation through `if`/`elif`/`else`/`match`/`receive`/`block`/`return`, the trivial-return rule, GFP demotion, and the seed set (`spawn` anon-fn bodies + top-level `<top>`) — transfers directly. Step 2 extends it: record `while true` blocks as nodes whose process-tail status is inherited from their containing function. Loops in non-process contexts don't get reset; they keep allocating into the parent arena (correct behavior).
 3. **Codegen at the back-edge** — emit `rescue(live_set); arena_reset; continue;` — identical to the TCO back-edge today, just driven by the syntactic loop boundary instead of a self-recursive call.
 4. **Refusal cases** — analysis must detect when a value escapes the loop body via mechanisms it can't track (e.g. `register("name", state)` where state is mutable + arena-allocated). For these, emit a compile-time warning identifying the escape and skip the reset for that loop. Same warning model as the static process-tail pass.
 

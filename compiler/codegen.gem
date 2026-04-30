@@ -237,6 +237,8 @@ fn make_codegen(source_name)
   let tco_fn_name = nil
   let tco_params = nil
   let tco_captured = nil
+  let tco_is_process_tail = false
+  let process_tail_fns = {}
   let append_buf_vars = {}
 
   # ─── Helpers ──
@@ -798,6 +800,464 @@ fn make_codegen(source_name)
     is_self_tail_call(fn_name, stmts[-1])
   end
 
+  # ─── Static process-tail analysis ──
+  #
+  # A function `f` is "process_tail" iff every static call-site of `f` in the
+  # program is a tail call from another process_tail caller (or a process root).
+  # Process roots: the top-level program; the body of any anon_fn passed as
+  # arg[0] to spawn / spawn_link / spawn_monitor.
+  #
+  # When `f` is process_tail, the TCO arena reset at its self-tail back-edge
+  # is safe to fire unconditionally (no caller above with live arena state),
+  # so the runtime depth-2 fence at line ~830 is dropped for `f`.
+  #
+  # TCO functions not marked process_tail get a compile-time warning: their
+  # arena will not reset at the back-edge, so a long-running process loop
+  # that's not reachable via tail-only edges will not bound memory.
+
+  let spawn_callees = {}
+  set_add(spawn_callees, "spawn")
+  set_add(spawn_callees, "spawn_link")
+  set_add(spawn_callees, "spawn_monitor")
+
+  let mark_process_tail = fn(fn_defs, top_stmts)
+    # Reset accumulated state from any prior run.
+    let _pt_keys = keys(process_tail_fns)
+    for k in _pt_keys
+      delete(process_tail_fns, k)
+    end
+
+    let caller_records = {}
+    let name_to_fn = {}
+    for fd in fn_defs
+      name_to_fn[fd.name] = fd
+    end
+
+    let anon_id_counter = 0
+    let next_anon_id = fn()
+      let id = "anon:" + to_string(anon_id_counter)
+      anon_id_counter += 1
+      id
+    end
+
+    let new_caller_record = fn(caller_id, is_seed)
+      caller_records[caller_id] = {tail_callees: {}, non_tail_callees: {}, is_seed: is_seed}
+    end
+
+    # A `return` with a trivial constant (or no value) exits the enclosing
+    # function without reading any locals. A call immediately followed by such
+    # a return is therefore tail-effective: even though textually non-last,
+    # the C frame holds no live state at the point the call's reset would fire.
+    # This recognizes the common early-exit pattern `f(); return nil`.
+    let is_trivial_return = fn(s)
+      if not is_node(s, "return")
+        return false
+      end
+      if s.value == nil
+        return true
+      end
+      if is_node(s.value, "nil")
+        return true
+      end
+      if is_node(s.value, "int")
+        return true
+      end
+      if is_node(s.value, "float")
+        return true
+      end
+      if is_node(s.value, "bool")
+        return true
+      end
+      if is_node(s.value, "string")
+        return true
+      end
+      false
+    end
+
+    let collect_calls = nil
+    let collect_calls_in_body = nil
+
+    collect_calls = fn(node, is_tail_pos, caller_id)
+      if node == nil
+        return nil
+      end
+      if type(node) != "table"
+        return nil
+      end
+      if node.tag == nil
+        return nil
+      end
+
+      if node.tag == "call"
+        # Spawn-family with anon_fn arg[0]: that anon body is a fresh process root.
+        if is_node(node.func, "var") and set_contains(spawn_callees, node.func.name)
+          if node.args != nil and len(node.args) > 0 and is_node(node.args[0], "anon_fn")
+            let aid = next_anon_id()
+            new_caller_record(aid, true)
+            collect_calls_in_body(node.args[0].body, true, aid)
+            if node.args[0].defaults != nil
+              for d in node.args[0].defaults
+                if d != nil
+                  collect_calls(d, false, aid)
+                end
+              end
+            end
+            let i = 1
+            while i < len(node.args)
+              collect_calls(node.args[i], false, caller_id)
+              i += 1
+            end
+            return nil
+          end
+        end
+
+        # Regular call. Record edge if callee is a known fn_def name.
+        if is_node(node.func, "var") and name_to_fn[node.func.name] != nil
+          if is_tail_pos
+            set_add(caller_records[caller_id].tail_callees, node.func.name)
+          else
+            set_add(caller_records[caller_id].non_tail_callees, node.func.name)
+          end
+        else
+          collect_calls(node.func, false, caller_id)
+        end
+        if node.args != nil
+          for a in node.args
+            collect_calls(a, false, caller_id)
+          end
+        end
+        return nil
+      end
+
+      if node.tag == "anon_fn"
+        # Closure outside any spawn context — its body is a non-seed caller.
+        # Calls from it can never be tail-from-process_tail, so callees of this
+        # body get demoted (correct: the closure's invocation site holds C state).
+        let aid = next_anon_id()
+        new_caller_record(aid, false)
+        collect_calls_in_body(node.body, true, aid)
+        if node.defaults != nil
+          for d in node.defaults
+            if d != nil
+              collect_calls(d, false, aid)
+            end
+          end
+        end
+        return nil
+      end
+
+      if node.tag == "if"
+        collect_calls(node.cond, false, caller_id)
+        collect_calls_in_body(node.then, is_tail_pos, caller_id)
+        if node.else != nil
+          collect_calls_in_body(node.else, is_tail_pos, caller_id)
+        end
+        return nil
+      end
+
+      if node.tag == "while"
+        collect_calls(node.cond, false, caller_id)
+        collect_calls_in_body(node.body, false, caller_id)
+        return nil
+      end
+
+      if node.tag == "match"
+        collect_calls(node.target, false, caller_id)
+        for w in node.whens
+          collect_calls_in_body(w.body, is_tail_pos, caller_id)
+        end
+        if node.else != nil
+          collect_calls_in_body(node.else, is_tail_pos, caller_id)
+        end
+        return nil
+      end
+
+      if node.tag == "receive_match"
+        for arm in node.arms
+          collect_calls_in_body(arm.body, is_tail_pos, caller_id)
+        end
+        if node.after_body != nil
+          collect_calls_in_body(node.after_body, is_tail_pos, caller_id)
+        end
+        return nil
+      end
+
+      if node.tag == "return"
+        if node.value != nil
+          collect_calls(node.value, true, caller_id)
+        end
+        return nil
+      end
+
+      if node.tag == "block"
+        collect_calls_in_body(node.stmts, is_tail_pos, caller_id)
+        return nil
+      end
+
+      if node.tag == "let" or node.tag == "assign"
+        if node.value != nil
+          collect_calls(node.value, false, caller_id)
+        end
+        return nil
+      end
+
+      if node.tag == "dot_assign"
+        collect_calls(node.object, false, caller_id)
+        collect_calls(node.value, false, caller_id)
+        return nil
+      end
+
+      if node.tag == "index_assign"
+        collect_calls(node.object, false, caller_id)
+        collect_calls(node.key, false, caller_id)
+        collect_calls(node.value, false, caller_id)
+        return nil
+      end
+
+      if node.tag == "binop"
+        collect_calls(node.left, false, caller_id)
+        collect_calls(node.right, false, caller_id)
+        return nil
+      end
+
+      if node.tag == "unop"
+        collect_calls(node.expr, false, caller_id)
+        return nil
+      end
+
+      if node.tag == "dot"
+        collect_calls(node.object, false, caller_id)
+        return nil
+      end
+
+      if node.tag == "index"
+        collect_calls(node.object, false, caller_id)
+        collect_calls(node.key, false, caller_id)
+        return nil
+      end
+
+      if node.tag == "table"
+        if node.entries != nil
+          for e in node.entries
+            collect_calls(e.key, false, caller_id)
+            collect_calls(e.value, false, caller_id)
+          end
+        end
+        return nil
+      end
+
+      if node.tag == "array"
+        if node.elements != nil
+          for el in node.elements
+            collect_calls(el, false, caller_id)
+          end
+        end
+        return nil
+      end
+
+      if node.tag == "interp"
+        if node.parts != nil
+          for p in node.parts
+            collect_calls(p, false, caller_id)
+          end
+        end
+        return nil
+      end
+
+      # Leaf nodes: int float string bool nil var break continue load export
+      # extern_fn extern_include — no nested calls.
+      nil
+    end
+
+    collect_calls_in_body = fn(stmts, is_tail_pos, caller_id)
+      let n = len(stmts)
+      let i = 0
+      while i < n
+        let stmt_is_tail = false
+        if i == n - 1
+          stmt_is_tail = is_tail_pos
+        elif i + 1 < n and is_trivial_return(stmts[i + 1])
+          stmt_is_tail = true
+        end
+        collect_calls(stmts[i], stmt_is_tail, caller_id)
+        i += 1
+      end
+    end
+
+    # Walk every fn_def body
+    for fd in fn_defs
+      let cid = "fn:" + fd.name
+      new_caller_record(cid, false)
+      collect_calls_in_body(fd.body, true, cid)
+      if fd.defaults != nil
+        for d in fd.defaults
+          if d != nil
+            collect_calls(d, false, cid)
+          end
+        end
+      end
+    end
+
+    # Top-level program is a process root
+    new_caller_record("<top>", true)
+    collect_calls_in_body(top_stmts, true, "<top>")
+
+    # Build incoming edges per fn_def name
+    let incoming = {}
+    let cids = keys(caller_records)
+    for cid in cids
+      let r = caller_records[cid]
+      let tcs = keys(r.tail_callees)
+      for callee in tcs
+        if incoming[callee] == nil
+          incoming[callee] = []
+        end
+        push(incoming[callee], {caller: cid, is_tail: true})
+      end
+      let ncs = keys(r.non_tail_callees)
+      for callee in ncs
+        if incoming[callee] == nil
+          incoming[callee] = []
+        end
+        push(incoming[callee], {caller: cid, is_tail: false})
+      end
+    end
+
+    # Greatest-fixed-point demotion. Soundness condition: f is process_tail
+    # iff every C-stack chain from a process root to f's frame is all-tail.
+    # Equivalent dual: f is process_tail iff every incoming edge to f is a
+    # tail edge from a process_tail caller (or seed).
+    #
+    # We start with all called fns as candidates and demote any whose incoming
+    # edges violate the rule. Iterate until stable. This handles self-recursion
+    # and mutual tail-call cycles correctly: an isolated tail cycle survives
+    # demotion but is filtered out in the seed-reachability pass below.
+
+    let candidate_pt = {}
+    for fd in fn_defs
+      if incoming[fd.name] != nil and len(incoming[fd.name]) > 0
+        set_add(candidate_pt, fd.name)
+      end
+    end
+
+    # Step 1: demote candidates with any non-tail incoming edge (permanent).
+    for fd in fn_defs
+      if not set_contains(candidate_pt, fd.name)
+        continue
+      end
+      let inc = incoming[fd.name]
+      let bad = false
+      for e in inc
+        if not e.is_tail
+          bad = true
+          break
+        end
+      end
+      if bad
+        delete(candidate_pt, fd.name)
+      end
+    end
+
+    # Step 2: iteratively demote candidates whose incoming has a non-candidate
+    # non-seed caller. Cascades until stable.
+    let changed = true
+    while changed
+      changed = false
+      let cand_keys = keys(candidate_pt)
+      for fname in cand_keys
+        let inc = incoming[fname]
+        let bad = false
+        for e in inc
+          let cr = caller_records[e.caller]
+          if cr != nil and cr.is_seed
+            continue
+          end
+          # Caller must be a candidate fn_def to keep us viable.
+          if len(e.caller) >= 3
+            let prefix = substr(e.caller, 0, 3)
+            if prefix == "fn:"
+              let cname = substr(e.caller, 3, len(e.caller) - 3)
+              if not set_contains(candidate_pt, cname)
+                bad = true
+                break
+              end
+            else
+              # anon non-seed or any other non-fn caller — disqualifies.
+              bad = true
+              break
+            end
+          else
+            bad = true
+            break
+          end
+        end
+        if bad
+          delete(candidate_pt, fname)
+          changed = true
+        end
+      end
+    end
+
+    # Step 3: BFS from seeds via tail edges, traversing only candidates.
+    # Final process_tail_fns = candidates reachable from a seed.
+    let bfs_queue = []
+    let seed_cids = keys(caller_records)
+    for cid in seed_cids
+      if caller_records[cid].is_seed
+        push(bfs_queue, cid)
+      end
+    end
+    while len(bfs_queue) > 0
+      let head = bfs_queue[0]
+      let next_q = []
+      let qi = 1
+      while qi < len(bfs_queue)
+        push(next_q, bfs_queue[qi])
+        qi += 1
+      end
+      bfs_queue = next_q
+      let r = caller_records[head]
+      if r == nil
+        continue
+      end
+      let cs = keys(r.tail_callees)
+      for callee in cs
+        if set_contains(candidate_pt, callee) and not set_contains(process_tail_fns, callee)
+          set_add(process_tail_fns, callee)
+          push(bfs_queue, "fn:" + callee)
+        end
+      end
+    end
+
+    # Warn for TCO-eligible fns that didn't get marked
+    for fd in fn_defs
+      let scope_vars = sorted_array_to_set(fd.params)
+      if fd.rest_param != nil
+        set_add(scope_vars, fd.rest_param)
+      end
+      let has_defs = false
+      if fd.defaults != nil
+        for d in fd.defaults
+          if d != nil
+            has_defs = true
+            break
+          end
+        end
+      end
+      let has_tco = false
+      if fd.rest_param == nil and not has_defs and not set_contains(scope_vars, fd.name)
+        has_tco = has_self_tail_call(fd.name, fd.body)
+      end
+      if has_tco and not set_contains(process_tail_fns, fd.name)
+        let line_str = "?"
+        if fd.line != nil
+          line_str = to_string(fd.line)
+        end
+        eprint("warning: {source_name}:{line_str}: TCO function `{fd.name}` not reachable from a process root via tail calls only — per-process arena will not reset at its back-edge. Restructure callers to call `{fd.name}` in tail position from a spawn closure or main.\n")
+      end
+    end
+  end
+
   emit_tco_continue = fn(call_node, indent)
     let p = pad_for(indent)
     let b = buf_new()
@@ -820,11 +1280,17 @@ fn make_codegen(source_name)
       end
     end
     if not any_captured and len(arg_temps) > 0
-      # Reset only when this TCO function is at (or near) the process entry.
-      # Any deeper context may have callers holding arena pointers in their locals
-      # that the reset would invalidate. The +2 allowance covers the common pattern
-      # `spawn(fn() loop(state) end)` where there's an anon-closure frame above.
-      buf_push(b, "{p}if (gem_current_pid >= 0 && gem_call_depth - gem_proc_table[gem_current_pid].entry_call_depth <= 2 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
+      # Reset only when safe. For functions statically proven `process_tail`
+      # (every caller chain reaches this fn via tail calls only from a process
+      # root), no caller above holds live arena state — reset unconditionally.
+      # Otherwise fall back to the runtime depth-2 fence (covers cases where
+      # static analysis can't see the call graph, e.g. dot/dynamic dispatch);
+      # such fns also got a compile-time warning at codegen time.
+      if tco_is_process_tail
+        buf_push(b, "{p}if (gem_current_pid >= 0 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
+      else
+        buf_push(b, "{p}if (gem_current_pid >= 0 && gem_call_depth - gem_proc_table[gem_current_pid].entry_call_depth <= 2 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
+      end
       buf_push(b, "{p}    GemVal *_tco_roots[] = \{")
       for i = 0, len(arg_temps)
         if i > 0
@@ -2330,6 +2796,7 @@ fn make_codegen(source_name)
       tco_fn_name = name
       tco_params = params
       tco_captured = captured
+      tco_is_process_tail = set_contains(process_tail_fns, name)
     end
 
     let b = buf_new()
@@ -2371,6 +2838,7 @@ fn make_codegen(source_name)
       tco_fn_name = nil
       tco_params = nil
       tco_captured = nil
+      tco_is_process_tail = false
     end
 
     boxed_vars = saved_boxed
@@ -2476,6 +2944,11 @@ fn make_codegen(source_name)
       mark_non_escaping_stmts(fd.body)
     end
     mark_non_escaping_stmts(top_stmts)
+
+    # Static process-tail analysis: marks fns whose TCO back-edge can reset the
+    # arena unconditionally (skipping the runtime depth-2 fence). Fills
+    # `process_tail_fns`. Emits warnings for unmarked TCO fns.
+    mark_process_tail(fn_defs, top_stmts)
 
     # Register extern fns as defined (callable)
     for ef in extern_fns_list
