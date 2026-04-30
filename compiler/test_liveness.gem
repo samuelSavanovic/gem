@@ -13,7 +13,7 @@
 
 load "../std/string"
 load "parser" (parse_source)
-load "liveness" (compute_live_at_backedge, liveness_has_self_tail_call, sorted_params_to_set)
+load "liveness" (compute_live_at_backedge, compute_loop_live_at_backedge, liveness_has_self_tail_call, sorted_params_to_set)
 
 let install_root = dirname(dirname(argv()[0]))
 
@@ -287,6 +287,77 @@ neg_assert("arm-merged-lift-shape",
   "fn f(carry)\n  while true\n    let next = nil\n    if carry == 0\n      next = 1\n    else\n      next = 2\n    end\n    carry = next\n  end\nend\n",
   ["carry"],
   ["next"])
+
+# ─── Post-loop liveness (3a) ──────────────────────────────────
+# These exercise the parameterized worker `compute_loop_live_at_backedge`,
+# which accepts a synthesized post-loop set. Drives the post-loop union path
+# directly without depending on a surrounding fn body's structure.
+
+fn neg_assert_with_post(label, src, post_loop_arr, must_have, must_miss)
+  let pr = pcall parse_source(src, "<neg:{label}>")
+  if not pr.ok
+    eprint("NEG-FAIL {label}: parse error\n")
+    neg_fail += 1
+    return nil
+  end
+  let w = first_while_in(pr.value.stmts)
+  if w == nil
+    eprint("NEG-FAIL {label}: no while node\n")
+    neg_fail += 1
+    return nil
+  end
+  let post = {}
+  for n in post_loop_arr
+    post[n] = true
+  end
+  let r = compute_loop_live_at_backedge(w, post)
+  if not r.ok
+    eprint("NEG-FAIL {label}: liveness refused: {r.reason}\n")
+    neg_fail += 1
+    return nil
+  end
+  for n in must_have
+    if r.live[n] != true
+      eprint("NEG-FAIL {label}: expected `{n}` live, was not\n")
+      neg_fail += 1
+      return nil
+    end
+  end
+  for n in must_miss
+    if r.live[n] == true
+      let live_str = string.join(set_to_sorted_array(r.live), ", ")
+      eprint("NEG-FAIL {label}: expected `{n}` dead, was live (live: {live_str})\n")
+      neg_fail += 1
+      return nil
+    end
+  end
+  neg_pass += 1
+end
+
+# `while true` with break + non-empty post-loop set: post_var must transfer
+# through the back-edge so the rescue covers reads after the loop exits.
+neg_assert_with_post("break-exits-with-post-loop-set",
+  "fn f(state)\n  while true\n    if state == 0\n      break\n    end\n    state = state + 1\n  end\nend\n",
+  ["post_var"],
+  ["state", "post_var"],
+  [])
+
+# `while true` with break + empty post-loop set: vars assigned only in the
+# break-taking arm (and never read afterwards) must not be live at back-edge.
+neg_assert_with_post("break-with-no-post-use",
+  "fn f(state)\n  while true\n    if state == 0\n      let dead = 99\n      break\n    end\n    state = state + 1\n  end\nend\n",
+  [],
+  ["state"],
+  ["dead"])
+
+# `while cond` (non-true cond): cond's free vars live across back-edge, since
+# the cond is re-evaluated each iteration. With post-reachable propagation
+# enabled even when the post-loop set is empty.
+neg_assert_with_post("while-cond-tagged",
+  "fn f(running, x)\n  while running\n    x = x + 1\n  end\nend\n",
+  [],
+  ["running", "x"],
+  [])
 
 print("Negative tests: PASS={neg_pass} FAIL={neg_fail}")
 if neg_fail > 0

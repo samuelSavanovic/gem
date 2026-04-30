@@ -1,16 +1,23 @@
-# Liveness analysis for `while true` loop bodies.
+# Liveness analysis for process-tail `while` loop bodies.
 #
 # Used to determine which variables must be rescued across a per-process arena
-# reset emitted at the back-edge of a process-tail `while true` loop. The
-# rescue mechanism is the same as TCO's: deep-copy the live values into a
-# fresh arena via gem_arena_reset_with_roots before the next iteration.
+# reset emitted at the back-edge of a process-tail loop. The rescue mechanism
+# is the same as TCO's: deep-copy the live values into a fresh arena via
+# gem_arena_reset_with_roots before the next iteration.
 #
 # Soundness bar: under-rescue = silent memory corruption. The pass is
 # conservative — when in doubt, treat as live (over-rescue is wasteful but
-# safe). Refuses to optimize loops containing `break` at this loop's level
-# (post-loop liveness would be required for soundness; out of scope for v1).
+# safe). When a loop can fall through to a successor (any `while cond` with
+# non-true cond, or any loop containing `break`), the caller supplies the
+# post-loop live set; that set is unioned into live-at-back-edge so the
+# successor's reads are not silently dropped.
 #
-# Pure functions, no closure state. Returns either:
+# Pure functions, no shared closure state for the per-loop computation. The
+# fn-scope walker `compute_live_for_pt_loops_in_stmts` mutates AST while-nodes
+# with a `liveness_result` field — that is the side-effect channel codegen
+# reads at compile_while time.
+#
+# Per-loop result shape:
 #   {ok: true, live: {name: true, ...}}      — safe to reset, with live set
 #   {ok: false, reason: <string>}            — refuse: caller falls back
 #
@@ -656,26 +663,26 @@ _transfer_stmt = fn(s, live_out)
   end
 end
 
-# ─── compute_live_at_backedge ──────────────────────────────────
+# ─── compute_loop_live_at_backedge ─────────────────────────────
 
 # Compute the set of variables that must be rescued across the arena reset
-# at the back-edge of `while_node` (a `while true` loop).
+# at the back-edge of `while_node`, given the set `live_after_loop` that is
+# live at the program point immediately after the loop in the enclosing
+# context.
+#
+# `live_after_loop` is unioned into the live-at-back-edge set when the loop
+# can fall through to its successor — i.e. when the cond is non-true (the
+# false branch exits the loop) or the body contains a `break`. For `while
+# true` with no break, the successor is unreachable and the post-loop set
+# is ignored.
 #
 # Returns:
 #   {ok: true, live: <set>}        — safe to reset; live is the rescue set
 #   {ok: false, reason: <string>}  — refuse; caller should fall back
 #
-# The pass refuses when:
-#   - the loop body contains a `break` at this loop's level (post-loop liveness
-#     would be required for soundness; not implemented in v1).
-#
 # Closure captures: every var captured by any anon_fn in the loop body is
 # unioned into the live set unconditionally (escape over-approximation).
-fn compute_live_at_backedge(while_node)
-  if liveness_loop_has_break(while_node)
-    return {ok: false, reason: "loop body contains `break` (post-loop liveness not yet supported)"}
-  end
-
+fn compute_loop_live_at_backedge(while_node, live_after_loop)
   # Closure-capture over-approximation: collect every free var of every
   # anon_fn in the body, with the set of locally-defined names treated as
   # not-free. Closures that appear as arg[0] of spawn/spawn_link/spawn_monitor
@@ -685,11 +692,21 @@ fn compute_live_at_backedge(while_node)
   let closure_caps = {}
   collect_closure_captures_in_stmts(while_node.body, body_defined, closure_caps)
 
-  # Backward-dataflow fixpoint. live_out for the loop body iteration is
-  # live-at-top (back-edge target). For a `while true`, post-loop is
-  # unreachable (we refused if break exists), so live_after_loop = ∅.
+  let cond_is_true = is_liveness_node(while_node.cond, "bool") and while_node.cond.value == true
+  let has_break = liveness_loop_has_break(while_node)
+  let post_reachable = has_break or not cond_is_true
+
+  # Pre-merge live_after_loop into live_top when the successor is reachable.
+  # This serves two purposes: it propagates post-loop reads upward through
+  # the back-edge, and (combined with `_transfer_stmt`'s break = lset_copy(
+  # live_out) rule) carries those reads correctly across `break` statements
+  # within the body — same trick `_fixpoint_inner_loop` uses for nested loops.
   let live_top = {}
   lset_union_into(live_top, closure_caps)
+  if post_reachable
+    lset_union_into(live_top, live_after_loop)
+  end
+
   let prev = nil
   let iter = 0
   while iter < 64
@@ -699,6 +716,9 @@ fn compute_live_at_backedge(while_node)
     _uses_expr(while_node.cond, new_top)
     # Always include closure captures (escape over-approximation).
     lset_union_into(new_top, closure_caps)
+    if post_reachable
+      lset_union_into(new_top, live_after_loop)
+    end
     if prev != nil and lset_eq(new_top, prev)
       return {ok: true, live: new_top}
     end
@@ -708,6 +728,14 @@ fn compute_live_at_backedge(while_node)
   end
   # Fixpoint failed to converge in 64 iters — pathological. Refuse.
   {ok: false, reason: "liveness fixpoint did not converge"}
+end
+
+# Back-compat wrapper. Safe for `while true` loops with no `break` (the
+# post-loop point is unreachable, so an empty live_after_loop set is the
+# right input). For loops that can fall through, prefer the parameterized
+# entry point or use the fn-scope walker `compute_live_for_pt_loops_in_stmts`.
+fn compute_live_at_backedge(while_node)
+  compute_loop_live_at_backedge(while_node, {})
 end
 
 # Walk loop body stmts in forward order, accumulating "defined" (lets we've
@@ -812,4 +840,196 @@ fn collect_closure_captures_in_stmts(stmts, defined, caps)
   end
 end
 
-export compute_live_at_backedge, liveness_has_self_tail_call, liveness_loop_has_break, sorted_params_to_set, lset_eq, lset_copy
+# ─── compute_live_for_pt_loops_in_stmts ────────────────────────
+#
+# Walk a stmts array (a fn body or top-level program) backward, attaching a
+# `liveness_result` field to every `while` node whose `process_tail` flag is
+# set. The pass uses the surrounding live-after of each loop as input to
+# `compute_loop_live_at_backedge`, so post-loop reads reach the rescue set.
+#
+# Codegen runs this once per fn body (and once over top-level stmts) after
+# `tag_process_tail_while_loops`. compile_while then reads the attached
+# result instead of computing liveness on demand.
+#
+# Recursion strategy:
+#   - if/match/receive_match: each arm is walked with the surrounding stmt's
+#     live_out, since arms fall through to the same successor.
+#   - block: inlined; lets in blocks leak per existing language semantics.
+#   - while: the loop's live-at-back-edge (computed via the per-loop helper)
+#     seeds the body walk, so nested whiles inside body get the right
+#     live-after.
+#   - for/for_kv/for_range: body walked with live_out (matches existing
+#     liveness behavior — for-iteration is approximated via _transfer_stmt).
+#   - anon_fn: body walked as its own scope seeded with ∅ live-after. This
+#     covers PT whiles inside spawn-arg closures (the common process loop
+#     shape).
+
+let _attach_node = nil
+let _attach_stmts = nil
+let _scan_anons = nil
+
+_attach_stmts = fn(stmts, live_out)
+  let live = lset_copy(live_out)
+  let i = len(stmts) - 1
+  while i >= 0
+    live = _attach_node(stmts[i], live)
+    i -= 1
+  end
+  live
+end
+
+# Find every anon_fn nested in `node`'s expression context and walk its body
+# as a fresh scope (seed live_after = ∅). Skips fn_def — those are walked at
+# the top level by the codegen driver. Skips while/if/match/etc bodies that
+# the structured walker has already visited (callers pass only expression
+# subtrees here, not stmt-context children of structured nodes).
+_scan_anons = fn(node)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table" or node.tag == nil
+    return nil
+  end
+  if node.tag == "anon_fn"
+    _attach_stmts(node.body, {})
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          _scan_anons(d)
+        end
+      end
+    end
+    return nil
+  end
+  if node.tag == "fn_def"
+    return nil
+  end
+  for nk, v in node
+    if nk != "tag" and type(v) == "table"
+      let vks = keys(v)
+      if len(vks) > 0 and type(vks[0]) == "int"
+        let vi = 0
+        while vi < len(v)
+          if type(v[vi]) == "table"
+            _scan_anons(v[vi])
+          end
+          vi += 1
+        end
+      else
+        _scan_anons(v)
+      end
+    end
+  end
+end
+
+_attach_node = fn(s, live_out)
+  if s == nil
+    return live_out
+  end
+  if type(s) != "table" or s.tag == nil
+    return live_out
+  end
+
+  if s.tag == "while"
+    let r = compute_loop_live_at_backedge(s, live_out)
+    if s.process_tail == true
+      s.liveness_result = r
+    end
+    let body_live_after = nil
+    if r.ok
+      body_live_after = r.live
+    else
+      body_live_after = lset_copy(live_out)
+    end
+    _attach_stmts(s.body, body_live_after)
+    _scan_anons(s.cond)
+    if r.ok
+      return lset_copy(r.live)
+    end
+    return _transfer_stmt(s, live_out)
+  end
+
+  if s.tag == "if"
+    if s.then != nil
+      _attach_stmts(s.then, live_out)
+    end
+    if s.else != nil
+      _attach_stmts(s.else, live_out)
+    end
+    _scan_anons(s.cond)
+    return _transfer_stmt(s, live_out)
+  end
+
+  if s.tag == "match"
+    _scan_anons(s.target)
+    if s.whens != nil
+      for w in s.whens
+        _attach_stmts(w.body, live_out)
+        _scan_anons(w.value)
+        if w.bindings != nil
+          for b in w.bindings
+            _scan_anons(b)
+          end
+        end
+      end
+    end
+    if s.else != nil
+      _attach_stmts(s.else, live_out)
+    end
+    return _transfer_stmt(s, live_out)
+  end
+
+  if s.tag == "receive_match"
+    if s.arms != nil
+      for arm in s.arms
+        _attach_stmts(arm.body, live_out)
+        if arm.pattern != nil
+          if arm.pattern.condition != nil
+            _scan_anons(arm.pattern.condition)
+          end
+          if arm.pattern.bindings != nil
+            for b in arm.pattern.bindings
+              _scan_anons(b)
+            end
+          end
+        end
+      end
+    end
+    if s.after_ms != nil
+      _scan_anons(s.after_ms)
+    end
+    if s.after_body != nil
+      _attach_stmts(s.after_body, live_out)
+    end
+    return _transfer_stmt(s, live_out)
+  end
+
+  if s.tag == "block"
+    return _attach_stmts(s.stmts, live_out)
+  end
+
+  if s.tag == "for" or s.tag == "for_kv" or s.tag == "for_range"
+    if s.iter != nil
+      _scan_anons(s.iter)
+    end
+    if s.from != nil
+      _scan_anons(s.from)
+    end
+    if s.to != nil
+      _scan_anons(s.to)
+    end
+    _attach_stmts(s.body, live_out)
+    return _transfer_stmt(s, live_out)
+  end
+
+  # Catch-all: defer liveness transfer to existing _transfer_stmt; scan the
+  # whole stmt for any anon_fns hiding in expression contexts.
+  _scan_anons(s)
+  return _transfer_stmt(s, live_out)
+end
+
+fn compute_live_for_pt_loops_in_stmts(stmts)
+  _attach_stmts(stmts, {})
+end
+
+export compute_live_at_backedge, compute_loop_live_at_backedge, compute_live_for_pt_loops_in_stmts, liveness_has_self_tail_call, liveness_loop_has_break, sorted_params_to_set, lset_eq, lset_copy

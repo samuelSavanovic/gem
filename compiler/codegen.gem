@@ -2,7 +2,7 @@
 # Faithful port of bootstrap/gem.py CodeGen class.
 # Uses closure-based pattern: fn make_codegen() returns a table of methods.
 
-load "liveness" (compute_live_at_backedge)
+load "liveness" (compute_live_at_backedge, compute_live_for_pt_loops_in_stmts)
 
 # ─── String helpers ─────────────────────────────────────────────
 
@@ -1835,6 +1835,14 @@ fn make_codegen(source_name)
     # Tag `while true` nodes inside process-tail contexts so compile_while can
     # emit the back-edge arena rescue+reset (mirroring TCO's reset).
     tag_process_tail_while_loops(fn_defs, top_stmts, process_tail_fns)
+
+    # Attach per-loop liveness results to every PT-tagged while node, computed
+    # with the loop's actual post-loop set. compile_while reads node.liveness_result
+    # rather than recomputing on demand.
+    for fd in fn_defs
+      compute_live_for_pt_loops_in_stmts(fd.body)
+    end
+    compute_live_for_pt_loops_in_stmts(top_stmts)
   end
 
   emit_tco_continue = fn(call_node, indent)
@@ -2781,7 +2789,14 @@ fn make_codegen(source_name)
     let rescue_roots = []
     let refuse_reason = nil
     if is_pt_while
-      let lr = compute_live_at_backedge(node)
+      # Pre-pass `compute_live_for_pt_loops_in_stmts` attached the result during
+      # AST setup. Fall back to a cond-true / no-break recompute only if a node
+      # slipped past the pre-pass (defensive — keeps compile_while well-defined
+      # if a future caller forgets to invoke the pre-pass).
+      let lr = node.liveness_result
+      if lr == nil
+        lr = compute_live_at_backedge(node)
+      end
       if lr.ok
         let fr = filter_live_for_rescue(lr.live)
         if fr.ok
