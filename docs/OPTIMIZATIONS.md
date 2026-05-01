@@ -253,6 +253,14 @@ The arena rescue+reset mechanism is invisible to user code by design — `while 
 
 3. **Stdlib comments must not leak the mechanism.** A stdlib reader (or a user reading stdlib for examples) shouldn't have to know about `GEM_ARENA_RESET_THRESHOLD`, "back-edge", "PT tagging", or "rescue+reset". Comments should describe what a function does at the API level. Caught and removed two such comments in `std/http.gem` (commit `91bb6be`): `accept_loop`'s stale "depth 2 from process entry" fence, and `handle_connection_loop`'s `GEM_ARENA_RESET_THRESHOLD` reference. Future stdlib additions (and CLAUDE.md guidance) should keep this discipline. Not really an optimization — call it a documentation invariant.
 
+### TCO reset with pinned roots (P2)
+
+`emit_tco_continue` (`compiler/codegen.gem`) emits `gem_arena_reset_with_roots` at the self-tail-call back-edge with only the tail-call args as roots — no pinned-roots argument. To stay sound the reset is currently *skipped entirely* whenever the function has any malloc-boxed local (`gem_box_alloc`-allocated mutated capture). That's the conservative guard at line ~2420.
+
+The price: TCO functions that capture+mutate any local lose their per-iteration arena reset. Bounded loops are unaffected (no reset needed); long-running loops with mutated captures grow unbounded. No std/* or example trips this today, but it's a latent perf cliff for user code that mixes recursion with mutated closures.
+
+Fix: extend `emit_tco_continue` to filter `boxed_vars` into a `_tco_pinned_roots[]` array (mirroring how `compile_while` builds `_pinned_loop_roots` at line ~3518) and call `gem_arena_reset_with_roots_pinned` instead of the unpinned variant. Once done, drop the conservative guard and update the doc comment on `gem_arena_reset_with_roots` in `runtime/gem_core.c`.
+
 ### Constant folding (P2)
 Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile time. The compiler already has all the information. Low value at current stage — the cases where humans write foldable constants are rare, and it doesn't affect compilation time.
 

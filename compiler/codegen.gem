@@ -1157,6 +1157,7 @@ fn make_codegen(source_name)
   let tco_fn_name = nil
   let tco_params = nil
   let tco_captured = nil
+  let tco_boxed = nil
   let tco_is_process_tail = false
   let process_tail_fns = {}
   let append_buf_vars = {}
@@ -2407,15 +2408,17 @@ fn make_codegen(source_name)
       push(arg_temps, t)
     end
 
-    # Arena reset at the tail-call boundary. Skipped if any param is captured
-    # (boxed in arena memory) — that would dangle the box pointer after reset.
-    let any_captured = false
-    for i = 0, len(tco_params)
-      if set_contains(tco_captured, tco_params[i])
-        any_captured = true
-      end
-    end
-    if not any_captured and len(arg_temps) > 0
+    # Arena reset at the tail-call boundary. Skipped if the function has any
+    # malloc-boxed local (mutated capture, allocated via gem_box_alloc and
+    # tracked in the per-process pin-set). The reset path here passes only
+    # tail-call arg temps to gem_arena_reset_with_roots — it does NOT pass
+    # pinned roots — so a pin-set sweep would free any box not reachable
+    # through those args, dangling escaping closures that captured it.
+    # Covers both captured params and captured non-param locals.
+    # See docs/OPTIMIZATIONS.md "TCO reset with pinned roots" for the path
+    # that lifts this restriction.
+    let any_boxed = tco_boxed != nil and len(tco_boxed) > 0
+    if not any_boxed and len(arg_temps) > 0
       # Arena reset at the tail-call boundary. Process-tail fns reset
       # unconditionally — every caller chain reaches them via tail calls from
       # a process root, so no caller above holds live arena state. Non-PT
@@ -4183,6 +4186,7 @@ fn make_codegen(source_name)
       tco_fn_name = name
       tco_params = params
       tco_captured = captured
+      tco_boxed = boxed_vars
       tco_is_process_tail = set_contains(process_tail_fns, name)
     end
 
@@ -4225,6 +4229,7 @@ fn make_codegen(source_name)
       tco_fn_name = nil
       tco_params = nil
       tco_captured = nil
+      tco_boxed = nil
       tco_is_process_tail = false
     end
 

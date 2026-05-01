@@ -749,6 +749,18 @@ void gem_arena_reset_with_roots_pinned(GemVal **roots, int n_roots,
     gem_arena_destroy(&old_arena);
 }
 
+/* Unpinned-roots wrapper. Caller asserts that no malloc-backed pinned
+   box (gem_box_alloc) is reachable except through `roots[]` — any pinned
+   box not encountered during the env-walk will be swept and freed.
+   Two callers today:
+     - compile_while emits this with (NULL, 0) when liveness's rescue set
+       is empty: the loop body has no live locals and no pin-set entries
+       to migrate, so the call is just for the bulk-free side effect.
+     - emit_tco_continue emits this with the tail-call args as roots, but
+       only when the TCO function has zero malloc-boxed locals (guard at
+       codegen.gem:2420). For functions that DO capture+mutate locals, the
+       TCO reset is skipped entirely. Lifting that restriction is tracked
+       under "TCO reset with pinned roots" in docs/OPTIMIZATIONS.md. */
 void gem_arena_reset_with_roots(GemVal **roots, int n_roots) {
     gem_arena_reset_with_roots_pinned(roots, n_roots, NULL, 0);
 }
