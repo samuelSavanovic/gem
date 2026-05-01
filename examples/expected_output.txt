@@ -1017,3 +1017,6 @@ ok: 50
 25000
 count: 10000
 last: tick-9999
+received: 1000
+last_n: 999
+last_payload: iter-999

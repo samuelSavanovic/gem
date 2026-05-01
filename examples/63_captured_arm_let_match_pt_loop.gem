@@ -1,0 +1,63 @@
+# Regression: arm-let read-only-captured by spawn closure inside a
+# process-tail `while true` loop, with a match block (not just if/else)
+# and enough iterations to actually trip the per-process arena reset.
+# Verifies the liveness-driven arm-let hoist
+# (`lift_captured_arm_lets_in_fn`) lets `acc`/`payload` survive the
+# back-edge: the per-iter shadows die with the arena, the closure was
+# deep-copied into the spawned process at construction time, and the
+# fn-scope `let X = nil` placeholders make the rescue addressability
+# check pass.
+#
+# A buggy hoist that rewrote the arm-let to `assign` (turning the var
+# mutable) would re-trigger the secondary refusal — boxed_vars[X] = true
+# because of the loop-body assign — and the rescue would refuse with
+# "captured by a closure (box lives in arena memory)".
+
+let main_pid = self()
+
+fn worker(reply_to)
+  while true
+    let msg = receive()
+    match msg
+    when {tag: "stop"}
+      send(reply_to, {tag: "done"})
+      return nil
+    when {tag: "go", n: n}
+      let acc = reply_to
+      let payload = "iter-" + to_string(n)
+      let r = pcall(fn()
+        spawn(fn()
+          send(acc, {tag: "result", n: n, payload: payload})
+        end)
+      end)
+    end
+  end
+end
+
+let w = spawn(fn() worker(main_pid) end)
+let total = 1000
+for i = 0, total
+  send(w, {tag: "go", n: i})
+end
+send(w, {tag: "stop"})
+
+let received = 0
+let last_n = -1
+let last_payload = ""
+let done_seen = false
+while not (done_seen and received == total)
+  let r = receive()
+  match r
+  when {tag: "result", n: n, payload: p}
+    received += 1
+    if n > last_n
+      last_n = n
+      last_payload = p
+    end
+  when {tag: "done"}
+    done_seen = true
+  end
+end
+print("received: " + to_string(received))
+print("last_n: " + to_string(last_n))
+print("last_payload: " + last_payload)

@@ -584,6 +584,279 @@ fn lift_arm_lets_top_stmts(stmts)
   lift_arm_lets_stmts(stmts, {})
 end
 
+# ─── Liveness-driven arm-let hoist ────────────────────────────────
+#
+# After `mark_process_tail` runs liveness, every PT-while node carries a
+# `liveness_result` describing the names live at its back-edge. If any of
+# those names is declared as a `let` *only* inside an arm of a nested
+# if/match/receive_match in the loop body, `filter_live_for_rescue` refuses
+# the rescue (no addressable C local). The intersect-only `lift_arm_lets`
+# pass above only hoists names declared in EVERY arm of a single
+# if/match/receive — it can't reach this case (the let lives in one arm,
+# captured by an escaping closure that escapes the arm).
+#
+# This pass closes the gap. For each PT-while, it walks the loop body,
+# rewrites every `let X = expr` (where X ∈ live-at-back-edge and X is not
+# already in scope above the loop) to `assign X = expr`, and inserts a
+# `let X = nil` immediately before the while in the surrounding stmt list.
+# That gives X a stable C local that encloses the rescue check, making it
+# addressable as `&gem_v_X` at the back-edge. The pass is the load-bearing
+# piece that lets users write loop+spawn shapes without falling back to
+# recursion when the captured var is read-only-from-inside-the-arm.
+
+fn hoist_has_let(node, name)
+  if node == nil
+    return false
+  end
+  if type(node) != "table"
+    return false
+  end
+  let nks = keys(node)
+  if len(nks) > 0 and type(nks[0]) == "int"
+    for child in node
+      if type(child) == "table"
+        if hoist_has_let(child, name)
+          return true
+        end
+      end
+    end
+    return false
+  end
+  if node.tag == nil
+    return false
+  end
+  if node.tag == "anon_fn" or node.tag == "fn_def"
+    return false
+  end
+  if node.tag == "let" and node.name == name
+    return true
+  end
+  for k, v in node
+    if k != "tag" and type(v) == "table"
+      let vks = keys(v)
+      if len(vks) > 0 and type(vks[0]) == "int"
+        for child in v
+          if type(child) == "table"
+            if hoist_has_let(child, name)
+              return true
+            end
+          end
+        end
+      else
+        if hoist_has_let(v, name)
+          return true
+        end
+      end
+    end
+  end
+  false
+end
+
+let captured_arm_lets_node = nil
+let captured_arm_lets_stmts = nil
+
+# `scope` accumulates names known to be addressable above this stmt list:
+# enclosing fn params, lets in any ancestor block. We refuse to hoist a name
+# already in `scope` (would shadow the outer binding and silently change
+# semantics). `block_lets` is built up as we walk this stmt list — names
+# declared via `let` to its left of the current position.
+captured_arm_lets_stmts = fn(stmts, scope)
+  if stmts == nil
+    return nil
+  end
+  let block_lets = {}
+  for s in stmts
+    if is_node(s, "let") and s.name != nil
+      set_add(block_lets, s.name)
+    end
+  end
+
+  let i = 0
+  while i < len(stmts)
+    let s = stmts[i]
+    let merged = set_union(scope, block_lets)
+    captured_arm_lets_node(s, merged)
+
+    if is_node(s, "while") and s.process_tail == true and s.liveness_result != nil and s.liveness_result.ok == true
+      let live = s.liveness_result.live
+      let to_hoist = []
+      for n, _ in live
+        if not set_contains(merged, n)
+          if hoist_has_let(s.body, n)
+            push(to_hoist, n)
+          end
+        end
+      end
+      if len(to_hoist) > 0
+        # Insert `let X = nil` placeholders before the while. We deliberately
+        # do NOT rewrite the inner arm-lets to assigns: the per-iter `let`
+        # remains a fresh block-scoped shadow, the closure captures from
+        # that shadow (fresh box per iter, dies with the arm), and the
+        # placeholder exists only to satisfy `filter_live_for_rescue`'s
+        # fn-scope addressability check. The placeholder always holds nil,
+        # so the rescue copies a no-op and the inner shadow's box (per-iter
+        # arena) dies cleanly with the arena reset.
+        for n in to_hoist
+          insert(stmts, i, {tag: "let", name: n, value: {tag: "nil"}, line: s.line})
+          set_add(block_lets, n)
+          i += 1
+        end
+      end
+    end
+    i += 1
+  end
+end
+
+captured_arm_lets_node = fn(node, scope)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table"
+    return nil
+  end
+  if node.tag == nil
+    return nil
+  end
+  if node.tag == "anon_fn" or node.tag == "fn_def"
+    let inner_scope = {}
+    if node.params != nil
+      for p in node.params
+        set_add(inner_scope, p)
+      end
+    end
+    if node.rest_param != nil
+      set_add(inner_scope, node.rest_param)
+    end
+    captured_arm_lets_stmts(node.body, inner_scope)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          captured_arm_lets_node(d, scope)
+        end
+      end
+    end
+    return nil
+  end
+  if node.tag == "if"
+    captured_arm_lets_node(node.cond, scope)
+    captured_arm_lets_stmts(node.then, scope)
+    if node.elifs != nil
+      for ei in node.elifs
+        captured_arm_lets_stmts(ei.body, scope)
+      end
+    end
+    captured_arm_lets_stmts(node.else, scope)
+    return nil
+  end
+  if node.tag == "while"
+    captured_arm_lets_node(node.cond, scope)
+    captured_arm_lets_stmts(node.body, scope)
+    return nil
+  end
+  if node.tag == "for" or node.tag == "for_kv" or node.tag == "for_range"
+    let body_scope = set_union(scope, {})
+    if node.var != nil
+      set_add(body_scope, node.var)
+    end
+    if node.kvar != nil
+      set_add(body_scope, node.kvar)
+    end
+    if node.vvar != nil
+      set_add(body_scope, node.vvar)
+    end
+    if node.name != nil and (node.tag == "for" or node.tag == "for_range")
+      set_add(body_scope, node.name)
+    end
+    for k, v in node
+      if k != "tag" and k != "body" and type(v) == "table"
+        captured_arm_lets_node(v, scope)
+      end
+    end
+    captured_arm_lets_stmts(node.body, body_scope)
+    return nil
+  end
+  if node.tag == "match"
+    captured_arm_lets_node(node.target, scope)
+    if node.whens != nil
+      for w in node.whens
+        let arm_scope = set_union(scope, {})
+        if w.bindings != nil
+          for b in w.bindings
+            if type(b) == "table" and b.tag == "var" and b.name != nil
+              set_add(arm_scope, b.name)
+            end
+          end
+        end
+        captured_arm_lets_stmts(w.body, arm_scope)
+      end
+    end
+    captured_arm_lets_stmts(node.else, scope)
+    return nil
+  end
+  if node.tag == "receive_match"
+    if node.arms != nil
+      for a in node.arms
+        let arm_scope = set_union(scope, {})
+        if a.pattern != nil and a.pattern.bindings != nil
+          for b in a.pattern.bindings
+            if type(b) == "table" and b.tag == "var" and b.name != nil
+              set_add(arm_scope, b.name)
+            end
+          end
+        end
+        captured_arm_lets_stmts(a.body, arm_scope)
+      end
+    end
+    if node.after_body != nil
+      captured_arm_lets_stmts(node.after_body, scope)
+    end
+    return nil
+  end
+  if node.tag == "block"
+    captured_arm_lets_stmts(node.stmts, scope)
+    return nil
+  end
+  for k, v in node
+    if k != "tag" and type(v) == "table"
+      let vks = keys(v)
+      if len(vks) > 0 and type(vks[0]) == "int"
+        for child in v
+          if type(child) == "table"
+            captured_arm_lets_node(child, scope)
+          end
+        end
+      else
+        captured_arm_lets_node(v, scope)
+      end
+    end
+  end
+  nil
+end
+
+fn lift_captured_arm_lets_in_fn(fn_node)
+  let scope = {}
+  if fn_node.params != nil
+    for p in fn_node.params
+      set_add(scope, p)
+    end
+  end
+  if fn_node.rest_param != nil
+    set_add(scope, fn_node.rest_param)
+  end
+  captured_arm_lets_stmts(fn_node.body, scope)
+  if fn_node.defaults != nil
+    for d in fn_node.defaults
+      if d != nil
+        captured_arm_lets_node(d, scope)
+      end
+    end
+  end
+end
+
+fn lift_captured_arm_lets_top_stmts(stmts)
+  captured_arm_lets_stmts(stmts, {})
+end
+
 # ─── Process-tail `while true` tagging ──────────────────────────
 #
 # Walks every fn_def body and the top-level program, tagging each
@@ -4088,6 +4361,17 @@ fn make_codegen(source_name)
     # arena unconditionally (skipping the runtime depth-2 fence). Fills
     # `process_tail_fns`. Emits warnings for unmarked TCO fns.
     mark_process_tail(fn_defs, top_stmts)
+
+    # Liveness-driven hoist: for each PT-while, lift arm-lets whose names
+    # are live at the back-edge to the surrounding stmt list. Closes the
+    # rescue-refusal class for arm-lets captured by escaping closures
+    # (pcall, dead-letter wrappers, etc.). Must run AFTER mark_process_tail
+    # (which attaches `liveness_result` to PT-while nodes) and before
+    # codegen reads the AST.
+    for fd in fn_defs
+      lift_captured_arm_lets_in_fn(fd)
+    end
+    lift_captured_arm_lets_top_stmts(top_stmts)
 
     # Register extern fns as defined (callable)
     for ef in extern_fns_list

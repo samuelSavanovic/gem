@@ -1,11 +1,12 @@
 # Regression: arm-let read-only-captured by an escaping closure inside a
-# process-tail `while true` loop. Pre-fix, the rescue at the outer loop's
-# back-edge tried to address the arm-let (`&gem_v_n`) but the let lives
-# inside the match-arm's C block — invalid C. Post-fix,
-# `filter_live_for_rescue` refuses cleanly with "no C local at this
-# loop's back-edge", the program compiles and runs (the arena reset for
-# the outer loop is skipped — user can restructure by hoisting the let
-# to fn scope to recover it).
+# process-tail `while true` loop. Pre-fix, `filter_live_for_rescue` refused
+# the rescue with "no C local at this loop's back-edge" because `acc`/`n`
+# are declared inside the else-arm and have no fn-scope C local to address
+# at the back-edge. Post-fix, the liveness-driven arm-let hoist
+# (`lift_captured_arm_lets_in_fn`) inserts `let X = nil` placeholders at
+# fn scope before the while; the per-iter arm-lets remain block-scoped
+# shadows that the closure captures into a fresh per-iter box, the
+# placeholder satisfies the addressability check, and the rescue runs.
 
 let main_pid = self()
 
