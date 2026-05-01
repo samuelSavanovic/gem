@@ -1,38 +1,73 @@
-# Resume: extern fn / extern blocking fn soundness audit
+# Resume: runtime error message quality pass
 
-Branch: `main`. Last session cleared two of three queued items; this session is dedicated to item 3, which is a substantial read-the-code-and-write-up task in the same shape as the TCO reset analysis from two sessions ago.
+Branch: `main`. Last three sessions were audits (TCO reset, runtime cleanup, extern fn soundness). The runtime is in a healthy state. The next bottleneck for a real Gem user is **debuggability**: when something goes wrong, does the message tell them *what* and *where*?
+
+This session is open-ended quality work, not a soundness audit. Scope it tight.
 
 ## Last session in one screen
 
-Commits on `main`:
-- `b084374` — Log POST burst p99 regression in `docs/OPTIMIZATIONS.md` under Runtime Hot Paths (P2). Three cleanup-era bench runs show POST p99 at 263-525 ms vs 80 ms baseline, but throughput, p50/p75/p90, soak GET, RSS curve all unchanged. Only the deep tail (~15 worst POSTs out of ~1550) is affected. Ruled out: arena blowup, TCO guard (doesn't apply to http hot path — handlers are `while true`, not TCO), DB carry-over (run.sh wipes), app-log anomalies. Cause not identified; deferred. If revisited, bisect the four cleanup commits (`3919775`, `442d8ed`, `d658a45`, `9642aa8`) or run with `dtruss`/`sample` against the app PID during the POST burst.
-- `cef5645` — Remove `runtime/test_concurrency.c` and the `make test-concurrency` target. The hand-written C tests were written against the pre-arena runtime model; since `533f27b` (per-process arena migration), `gem_spawn_fn` deep-copies its env using the Gem closure layout `[intptr_t count; GemVal* slots[count]]`, and the tests' raw C struct envs are misread as that layout. Only the two tests that pass `env=NULL` actually worked. Recent GC_INIT() removal exposed it via segfault instead of silent UB. Examples/ already covers spawn/send/receive/selective-receive/monitoring/links/registry through real Gem programs.
+`726b0f1` — extern fn / extern blocking fn soundness audit. Fixed two bugs:
+- Ptr return constructed `GemVal` directly without setting `magic`. Routed both blocking and non-blocking paths through `gem_int()`.
+- Non-blocking String return crashed on NULL via `gem_string -> strlen(NULL)`. Now returns `GEM_NIL` on NULL, matching the blocking path.
 
-Validation gates after item 2: all four green (test, test-json, liveness 10/0+2/0, bootstrap roundtrip).
+Added `examples/74_extern_blocking.gem` — first in-tree caller of `extern blocking fn`. Exercises the thread-pool yield and malloc'd-string-return ownership contract via `usleep` + `strdup`.
 
-## This session — item 3 only
+Documented the String-return ownership asymmetry (non-blocking copies, blocking copies-and-frees), pointer lifetime across arena reset, and that `extern` does no boundary validation. Tracked deferred follow-ups (arity/type validation, ownership unification) under "C Interop Hardening" in `docs/OPTIMIZATIONS.md`.
 
-### C interop soundness audit — `extern fn` and `extern blocking fn` (P1)
+All four validation gates green.
 
-Gem treats C interop as unsafe by default, but the user is concerned about places where pointers/values can leak across the safety boundary in unintended ways. This is a **soundness audit**, similar in shape to the TCO reset analysis from two sessions ago: read the code, identify lifetime/aliasing bugs, document or fix.
+## This session — runtime error message quality
 
-Specifically check:
+Goal: when a Gem program errors at runtime, the user gets a message that tells them **what went wrong** and **where in their source** — not "type error in gem_add" with no line number.
 
-- **Lifetime**: arena-allocated values passed to C functions that hold pointers past the call. Next arena reset frees them. What happens if a C function stashes a `GemVal *` somewhere?
-- **Cross-process / threadpool**: `extern blocking fn` runs on a 4-thread worker pool (`runtime/gem_threadpool.c`). What can a worker thread see/touch in the calling process's arena? Race conditions on shape_id, pin-set, mailbox?
-- **Return values**: C strings returned via marshaling — who owns the storage, who frees, when does the arena it's copied into get reset?
-- **The marshaling boundary**: `extern fn puts(s: String) -> Int` — generated wrapper in `compiler/codegen.gem`. Audit each path (String, Int, Float, etc.) for assumptions that break under arena reset.
-- **`extern include`**: arbitrary C headers can declare types and functions. What's the trust model? Anything we're implicitly relying on (alignment, layout)?
+### Concrete starting point
 
-Files to read:
-- `runtime/gem_threadpool.c` — the blocking pool
-- `runtime/gem_scheduler.c` — how blocking fn calls suspend the coroutine
-- `compiler/codegen.gem` — search for `extern_fn`, `extern fn`, `blocking` to find marshaling code
-- Existing extern fns in `std/*` — patterns we already ship that should serve as reference
+1. **Survey the offenders.** Grep `gem_error(` across `runtime/` and triage. Worst categories likely:
+   - Type errors in built-ins (`gem_add`, `gem_eq`, table access) — often print "expected X, got Y" with no source line.
+   - Builtin arity/type errors — many use `gem_error("foo: expected ...")` with no call-site info.
+   - Table key errors — missing key access, wrong-type indexing.
+   - Some errors are just `gem_error("X")` with no formatting at all.
 
-**Deliverable shape**: a written-up list of what's safe vs what's a soundness risk, plus fixes (or `docs/OPTIMIZATIONS.md` entries for tracked follow-ups) for the risks. Same level of rigor as the TCO analysis last session.
+2. **Pick the top 5–10 by frequency-of-tripping**, not by ease-of-fixing. The print/len/type/push/index path is on every program; the math.atan2 edge is on none.
 
-## Validation gates (run after each commit)
+3. **Pattern**: the runtime already has `gem_call_stack` / `gem_push_frame` / `gem_pop_frame`. The stack trace printer (`gem_error.c`) uses these. The question is whether the *innermost* frame at the error site has the user's source location, or whether it's a runtime helper with no Gem-source mapping.
+
+4. **Codegen side**: every Gem call site emits `gem_push_frame(name, file, line)` before the call. So when a builtin errors, the top of the call stack has the call site. Verify this is being printed clearly when a builtin errors — and if not, fix it.
+
+### What good looks like
+
+A user who writes `let x = "hello" + 5` should see something like:
+
+```
+[Error] cannot add String and Int
+  at examples/foo.gem:3:13
+    let x = "hello" + 5
+                    ^
+```
+
+Not:
+
+```
+[Error] gem_add: type mismatch
+```
+
+The source-line + caret is the gold standard (we already do this for compile errors — check `compile_error` in `compiler/parser.gem` for the format). Reusing that machinery at runtime would be a meaningful upgrade.
+
+### Files to read
+
+- `runtime/gem_error.c` — error printing, stack trace
+- `runtime/gem_ops.c` — arithmetic/comparison error paths
+- `runtime/gem_builtins_*.c` — builtin error paths (consistent? caret? line?)
+- `compiler/codegen.gem` — `gem_push_frame` emission and what `file/line` it passes
+- `compiler/parser.gem` — `compile_error` for the format we already use at compile time
+
+### Out of scope
+
+- New error types or language-level changes (no `try/catch`, no `Result`).
+- Performance — push_frame/pop_frame overhead is its own item in OPTIMIZATIONS.md.
+- Stylistic rewrites of error wording in code that already shows source context.
+
+## Validation gates
 
 ```bash
 make test            # ALL EXAMPLES PASSED
@@ -41,11 +76,8 @@ make test-json       # === all tests passed ===
 ./build/gem compiler/test_liveness.gem --run   # 10/0 + 2/0
 ```
 
-`make test-concurrency` no longer exists.
+Existing example expected outputs may include error messages — touching error format will break those tests. Update `examples/expected_output.txt` deliberately, not blindly.
 
-## Out of scope
+## Deliverable shape
 
-- Re-running the bench (cleanup-era POST p99 already logged as P2; not blocking).
-- TCO reset option B (pinned roots in `emit_tco_continue`) — tracked in OPTIMIZATIONS.md, not urgent.
-- Refactoring `gem.h` — defer unless reading it actively confuses you during item 3.
-- New language features.
+A handful of focused commits, each addressing one error-quality issue, with a before/after example in the commit body. End-of-session: the most-tripped runtime errors have source location and (where feasible) a source-line + caret, matching the compile-error format.
