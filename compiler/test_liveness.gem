@@ -1,5 +1,5 @@
 # Liveness validation gate: for every TCO-eligible function in std/ and
-# examples/, run compute_live_at_backedge on the function's body treated as
+# examples/, run compute_loop_live_at_backedge on the function's body treated as
 # the body of a `while true` loop, and compare the resulting live set to the
 # function's parameter set.
 #
@@ -13,7 +13,7 @@
 
 load "../std/string"
 load "parser" (parse_source)
-load "liveness" (compute_live_at_backedge, compute_loop_live_at_backedge, liveness_has_self_tail_call, sorted_params_to_set)
+load "liveness" (compute_loop_live_at_backedge, liveness_has_self_tail_call, sorted_params_to_set)
 
 let install_root = dirname(dirname(argv()[0]))
 
@@ -120,7 +120,7 @@ let skipped_count = 0
 
 fn check_fn(file, fn_node, params_set)
   let synth = synth_while_true_node(fn_node.body)
-  let r = compute_live_at_backedge(synth)
+  let r = compute_loop_live_at_backedge(synth, {})
   if not r.ok
     eprint("REFUSED  {file}:{fn_node.line} fn `{fn_node.name}`: {r.reason}\n")
     refused_count += 1
@@ -212,7 +212,7 @@ fn neg_assert(label, src, must_have, must_miss)
     neg_fail += 1
     return nil
   end
-  let r = compute_live_at_backedge(w)
+  let r = compute_loop_live_at_backedge(w, {})
   if not r.ok
     eprint("NEG-FAIL {label}: liveness refused: {r.reason}\n")
     neg_fail += 1
