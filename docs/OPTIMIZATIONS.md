@@ -345,6 +345,22 @@ The scheduler currently uses `poll()` for socket readiness. Replacing with **kqu
 ### Multi-threaded work-stealing scheduler (P2)
 The scheduler is single-threaded — one `while(1)` loop round-robining coroutines on one OS thread. N scheduler threads with per-thread run queues and work-stealing (Chase-Lev deque) would scale throughput ~linearly with cores. The per-process arena model already eliminates shared-heap contention. Hard parts: mailboxes need lock-free MPSC queues for cross-thread sends, shared globals (`gem_proc_table`, `gem_name_registry`, free list) need synchronization, each thread needs its own kqueue/epoll set, and process migration (stealing a coroutine between scheduler ticks) needs care. Erlang/BEAM does exactly this architecture. Nothing in the current design blocks it — isolated processes, message passing, and per-process memory are the right foundation.
 
+## C Interop Hardening
+
+Findings from the 2026-05-01 `extern fn` / `extern blocking fn` soundness audit. Two unambiguous bugs (Ptr-return missing magic, NULL-string return crash) were fixed in-tree; the items below are tracked follow-ups.
+
+### Arity / type validation at extern boundary (P2)
+Generated `extern fn` wrappers read `args[i].sval` / `args[i].ival` directly without checking `argc` or `args[i].type`. A Gem-side mistake (wrong arity, wrong type) doesn't error — it reads garbage out of the union and passes it to C, where the result depends on the C function's tolerance. Built-ins (`read_file`, `tcp_*`, etc.) already do these checks and `gem_error` with a typed message. Bringing extern wrappers in line is a small codegen change in `compile_extern_fn` / `compile_blocking_extern_fn`. Trade-off: a few extra branches per call vs catching bugs at the boundary instead of in C.
+
+### String-return ownership convention is path-dependent (P2)
+`extern blocking fn` String returns are documented (SPEC §C Interop) to be `malloc`/`strdup`'d — the runtime copies into the arena and `free`s the original. `extern fn` (non-blocking) String returns are *not* freed: the runtime `gem_string`s the pointer (which copies) but the original is leaked if it was malloc'd, or fine if it was a static literal. Two reasonable behaviors with opposite ownership rules. Options: (a) document the asymmetry in SPEC, (b) unify on the blocking convention (always free), (c) introduce a `StringStatic` / `StringOwned` distinction. (a) is the cheapest; (b) is the most consistent but breaks the obvious `getenv`/`strerror`-style use case.
+
+### Pointer lifetime across arena reset (documentation only)
+A C function that stashes an arena-backed `String` or `Table` `GemVal` past the call (e.g. in a `static` cache) will dangle on the next arena reset (TCO loop, rescue+reset, or process exit). The marshaling layer can't enforce this — extern is unsafe by definition — but SPEC should call it out alongside the existing "extern is C, you own correctness" framing.
+
+### `extern blocking fn` with no callers in tree
+There are zero `extern blocking fn` declarations in `std/`, `examples/`, or `compiler/`. The codegen path is exercised only by ad-hoc test programs, not the test suite. If the convention churns (per the String-return point above), add at least one example that round-trips a malloc'd string through the thread pool to lock the contract in.
+
 ## std/json
 
 ### Null byte handling in strings (P2)

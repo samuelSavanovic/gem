@@ -3854,13 +3854,13 @@ fn make_codegen(source_name)
       buf_push(b, "    return gem_float(_ret);\n")
     elif ret_type == "String"
       buf_push(b, "    char* _ret = {call_expr};\n")
-      buf_push(b, "    return gem_string(_ret);\n")
+      buf_push(b, "    return _ret ? gem_string(_ret) : GEM_NIL;\n")
     elif ret_type == "Bool"
       buf_push(b, "    int _ret = {call_expr};\n")
       buf_push(b, "    return gem_bool(_ret);\n")
     elif ret_type == "Ptr"
       buf_push(b, "    void *_ret = {call_expr};\n")
-      buf_push(b, "    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n")
+      buf_push(b, "    return gem_int((int64_t)(intptr_t)_ret);\n")
     else
       buf_push(b, "    {call_expr};\n")
       buf_push(b, "    return GEM_NIL;\n")
@@ -4008,7 +4008,7 @@ fn make_codegen(source_name)
     elif ret_type == "Bool"
       buf_push(b, "        return gem_bool(_ret);\n")
     elif ret_type == "Ptr"
-      buf_push(b, "        GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n")
+      buf_push(b, "        return gem_int((int64_t)(intptr_t)_ret);\n")
     else
       buf_push(b, "        return GEM_NIL;\n")
     end
@@ -4041,7 +4041,7 @@ fn make_codegen(source_name)
       buf_push(b, "    return gem_bool(_ret);\n")
     elif ret_type == "Ptr"
       buf_push(b, "    void *_ret = {d_call};\n")
-      buf_push(b, "    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n")
+      buf_push(b, "    return gem_int((int64_t)(intptr_t)_ret);\n")
     else
       buf_push(b, "    {d_call};\n")
       buf_push(b, "    return GEM_NIL;\n")

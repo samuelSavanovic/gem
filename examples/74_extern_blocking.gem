@@ -1,0 +1,21 @@
+# Exercises `extern blocking fn` end-to-end. The worker process calls
+# `usleep` (yields the coroutine while the worker thread blocks) and
+# `strdup` (returns a malloc'd string that the runtime must copy into
+# the worker's arena and free). Locks in the documented String-return
+# ownership convention for the blocking path.
+
+extern include "unistd.h"
+extern include "string.h"
+
+extern blocking fn usleep(usec: Int) -> Int
+extern blocking fn strdup(s: String) -> String
+
+fn worker(parent)
+  usleep(1000)
+  let s = strdup("hello from worker")
+  send(parent, s)
+end
+
+let me = self()
+spawn(fn() worker(me) end)
+print(receive())

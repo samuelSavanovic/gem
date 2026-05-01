@@ -22616,7 +22616,7 @@ static GemVal _anon_79(void *_env, GemVal *args, int argc) {
     GemVal _t5539[] = {gem_v_b, gem_interp(3, _t5538)};
                         (void)(gem_buf_push_fn(NULL, _t5539, 2));
 #line 3857 "compiler/main.gem"
-    GemVal _t5540[] = {gem_v_b, gem_string("    return gem_string(_ret);\n")};
+    GemVal _t5540[] = {gem_v_b, gem_string("    return _ret ? gem_string(_ret) : GEM_NIL;\n")};
                         (void)(gem_buf_push_fn(NULL, _t5540, 2));
                     } else {
 #line 3858 "compiler/main.gem"
@@ -22636,7 +22636,7 @@ static GemVal _anon_79(void *_env, GemVal *args, int argc) {
     GemVal _t5545[] = {gem_v_b, gem_interp(3, _t5544)};
                                 (void)(gem_buf_push_fn(NULL, _t5545, 2));
 #line 3863 "compiler/main.gem"
-    GemVal _t5546[] = {gem_v_b, gem_string("    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n")};
+    GemVal _t5546[] = {gem_v_b, gem_string("    return gem_int((int64_t)(intptr_t)_ret);\n")};
                                 (void)(gem_buf_push_fn(NULL, _t5546, 2));
                             } else {
 #line 3865 "compiler/main.gem"
@@ -23063,7 +23063,7 @@ static GemVal _anon_80(void *_env, GemVal *args, int argc) {
 #line 4010 "compiler/main.gem"
                     if (gem_truthy(gem_eq(gem_v_ret_type, gem_string("Ptr")))) {
 #line 4011 "compiler/main.gem"
-    GemVal _t5638[] = {gem_v_b, gem_string("        GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n")};
+    GemVal _t5638[] = {gem_v_b, gem_string("        return gem_int((int64_t)(intptr_t)_ret);\n")};
                         (void)(gem_buf_push_fn(NULL, _t5638, 2));
                     } else {
 #line 4013 "compiler/main.gem"
@@ -23165,7 +23165,7 @@ static GemVal _anon_80(void *_env, GemVal *args, int argc) {
     GemVal _t5660[] = {gem_v_b, gem_interp(3, _t5659)};
                             (void)(gem_buf_push_fn(NULL, _t5660, 2));
 #line 4044 "compiler/main.gem"
-    GemVal _t5661[] = {gem_v_b, gem_string("    GemVal _r; _r.type = VAL_INT; _r.ival = (int64_t)(intptr_t)_ret; return _r;\n")};
+    GemVal _t5661[] = {gem_v_b, gem_string("    return gem_int((int64_t)(intptr_t)_ret);\n")};
                             (void)(gem_buf_push_fn(NULL, _t5661, 2));
                         } else {
 #line 4046 "compiler/main.gem"

@@ -595,6 +595,15 @@ extern include "math.h"
 extern include "stdio.h"
 ```
 
+**String-return ownership** differs by call kind, intentionally:
+
+- `extern fn` (non-blocking) — the runtime copies the returned `char*` into the calling process's arena via `gem_string` and **does not free the original**. Use this for static literals (`getenv`, `strerror`, etc.). A `malloc`'d return will leak.
+- `extern blocking fn` — the runtime copies into the arena and **frees the original** with `free`. The C function must return a `malloc`/`strdup`'d pointer; returning a static literal will crash on the free. NULL is allowed and yields an empty string in the blocking path, or `nil` in the non-blocking path.
+
+**Pointer lifetime.** `String` and `Table` arguments passed to a C function point into the calling process's arena. They are stable for the duration of the call but **not** across the next arena reset (which can happen at any TCO back-edge or process-tail loop iteration). C code must not stash these pointers — copy out with `strdup` or by value before retaining.
+
+`extern` is unsafe by definition: arity, type, and ABI are not validated at the boundary. A Gem-side mistake silently passes garbage to C.
+
 **Operators**
 
 `+` for both arithmetic and string concatenation. If types don't match (e.g. string + int), runtime error. No `..` operator — keep it simple.
