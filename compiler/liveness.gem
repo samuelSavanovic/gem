@@ -801,8 +801,7 @@ collect_closure_captures_in_node = fn(node, defined, caps)
   end
 end
 
-# Mirror of codegen.gem's is_spawn_callee_name. Keep in sync.
-fn liveness_is_spawn_callee_name(name)
+fn is_spawn_callee_name(name)
   name == "spawn" or name == "spawn_link" or name == "spawn_monitor"
 end
 
@@ -815,7 +814,7 @@ fn liveness_is_spawn_with_closure(node)
   if not is_liveness_node(node.func, "var")
     return false
   end
-  if not liveness_is_spawn_callee_name(node.func.name)
+  if not is_spawn_callee_name(node.func.name)
     return false
   end
   if node.args == nil or len(node.args) == 0
@@ -1032,4 +1031,4 @@ fn compute_live_for_pt_loops_in_stmts(stmts)
   _attach_stmts(stmts, {})
 end
 
-export compute_live_at_backedge, compute_loop_live_at_backedge, compute_live_for_pt_loops_in_stmts, liveness_has_self_tail_call, liveness_loop_has_break, sorted_params_to_set, lset_eq, lset_copy
+export compute_live_at_backedge, compute_loop_live_at_backedge, compute_live_for_pt_loops_in_stmts, liveness_has_self_tail_call, liveness_loop_has_break, sorted_params_to_set, lset_eq, lset_copy, is_spawn_callee_name

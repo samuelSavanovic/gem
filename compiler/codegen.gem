@@ -2,7 +2,7 @@
 # Faithful port of bootstrap/gem.py CodeGen class.
 # Uses closure-based pattern: fn make_codegen() returns a table of methods.
 
-load "liveness" (compute_live_at_backedge, compute_live_for_pt_loops_in_stmts)
+load "liveness" (compute_live_at_backedge, compute_live_for_pt_loops_in_stmts, is_spawn_callee_name)
 
 # ─── String helpers ─────────────────────────────────────────────
 
@@ -873,10 +873,6 @@ end
 # current is_pt flag; reset is_pt=false at anon_fn boundaries (a closure
 # invoked from a non-tail context holds caller-frame state); reset is_pt=true
 # when descending into a spawn-arg anon_fn body.
-
-fn is_spawn_callee_name(name)
-  name == "spawn" or name == "spawn_link" or name == "spawn_monitor"
-end
 
 let walk_for_tagging_node = nil
 let walk_for_tagging_stmts = nil
@@ -1869,6 +1865,7 @@ fn make_codegen(source_name)
   let compile_stmts = nil
   let compile_stmts_tail = nil
   let compile_if = nil
+  let build_rescue_roots = nil
   let compile_while = nil
   let compile_match = nil
   let compile_receive_match = nil
@@ -3415,6 +3412,59 @@ fn make_codegen(source_name)
     {ok: true, roots: roots, pinned_roots: pinned_roots}
   end
 
+  build_rescue_roots = fn(node, in_top_level, top_level_vars, source_name)
+    let do_rescue = false
+    let rescue_roots = []
+    let pinned_rescue_roots = []
+    let refuse_reason = nil
+    # Pre-pass `compute_live_for_pt_loops_in_stmts` attached the result during
+    # AST setup. Fall back to a cond-true / no-break recompute only if a node
+    # slipped past the pre-pass (defensive — keeps compile_while well-defined
+    # if a future caller forgets to invoke the pre-pass).
+    let lr = node.liveness_result
+    if lr == nil
+      lr = compute_live_at_backedge(node)
+    end
+    if lr.ok
+      let fr = filter_live_for_rescue(lr.live)
+      if fr.ok
+        do_rescue = true
+        rescue_roots = fr.roots
+        pinned_rescue_roots = fr.pinned_roots
+        # Top-level PT loop: indirect call chains from the loop body can
+        # read any top-level binding (e.g. `_is_stc`-style fwd-declared
+        # closures defined in a loaded module). Liveness only sees direct
+        # references, so splice in *every* remaining top-level var as a
+        # rescue root — boxed slots are BSS so this is cheap and uniformly
+        # correct.
+        if in_top_level
+          let already = {}
+          for n in rescue_roots
+            already[n] = true
+          end
+          let tlv = keys(top_level_vars)
+          for n in tlv
+            if not already[n] == true
+              push(rescue_roots, n)
+            end
+          end
+        end
+      else
+        refuse_reason = fr.reason
+      end
+    else
+      refuse_reason = lr.reason
+    end
+    if not do_rescue
+      let line_str = "?"
+      if node.line != nil
+        line_str = to_string(node.line)
+      end
+      eprint("warning: {source_name}:{line_str}: cannot reset per-process arena at this loop's back-edge: {refuse_reason}. Memory will grow unbounded across iterations. This pattern is not yet supported in long-running loops — please file an issue with your case if it blocks you.\n")
+    end
+    {do_rescue: do_rescue, rescue_roots: rescue_roots, pinned_rescue_roots: pinned_rescue_roots}
+  end
+
   compile_while = fn(node, indent)
     let p = pad_for(indent)
     let is_pt_while = node.process_tail == true
@@ -3422,53 +3472,11 @@ fn make_codegen(source_name)
     let do_rescue = false
     let rescue_roots = []
     let pinned_rescue_roots = []
-    let refuse_reason = nil
     if is_pt_while
-      # Pre-pass `compute_live_for_pt_loops_in_stmts` attached the result during
-      # AST setup. Fall back to a cond-true / no-break recompute only if a node
-      # slipped past the pre-pass (defensive — keeps compile_while well-defined
-      # if a future caller forgets to invoke the pre-pass).
-      let lr = node.liveness_result
-      if lr == nil
-        lr = compute_live_at_backedge(node)
-      end
-      if lr.ok
-        let fr = filter_live_for_rescue(lr.live)
-        if fr.ok
-          do_rescue = true
-          rescue_roots = fr.roots
-          pinned_rescue_roots = fr.pinned_roots
-          # Top-level PT loop: indirect call chains from the loop body can
-          # read any top-level binding (e.g. `_is_stc`-style fwd-declared
-          # closures defined in a loaded module). Liveness only sees direct
-          # references, so splice in *every* remaining top-level var as a
-          # rescue root — boxed slots are BSS so this is cheap and uniformly
-          # correct.
-          if in_top_level
-            let already = {}
-            for n in rescue_roots
-              already[n] = true
-            end
-            let tlv = keys(top_level_vars)
-            for n in tlv
-              if not already[n] == true
-                push(rescue_roots, n)
-              end
-            end
-          end
-        else
-          refuse_reason = fr.reason
-        end
-      else
-        refuse_reason = lr.reason
-      end
-      if not do_rescue
-        let line_str = "?"
-        if node.line != nil
-          line_str = to_string(node.line)
-        end
-        eprint("warning: {source_name}:{line_str}: cannot reset per-process arena at this loop's back-edge: {refuse_reason}. Memory will grow unbounded across iterations. This pattern is not yet supported in long-running loops — please file an issue with your case if it blocks you.\n")
-      end
+      let r = build_rescue_roots(node, in_top_level, top_level_vars, source_name)
+      do_rescue = r.do_rescue
+      rescue_roots = r.rescue_roots
+      pinned_rescue_roots = r.pinned_rescue_roots
     end
 
     let cond_r = compile_expr(node.cond)
