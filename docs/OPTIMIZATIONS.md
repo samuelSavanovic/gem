@@ -283,6 +283,19 @@ Desugaring now uses `__table_key_at` / `__table_val_at` to index directly into t
 
 ## Runtime Hot Paths
 
+### POST burst p99 regression after 2026-05-01 cleanup pass (P2 — investigate)
+After the runtime cleanup pass (commits `3919775` gem_alloc helper, `d658a45` TCO guard tightening, `9642aa8` gem_copy.c split), bookmark app POST burst p99 regressed from ~80 ms to 263–525 ms across three runs (vs baseline `2026-05-01_14-47-39/`). Throughput unchanged (155 req/s), p50/p75/p90 at parity or better, soak GET unchanged. Only the deepest tail is affected — the worst ~15 of ~1550 POSTs.
+
+Ruled out:
+- Arena blowup during soak (RSS curve identical to baseline, peak 55–56 MB).
+- `d658a45` TCO guard — `handle_connection_loop`/`accept_loop` are `while true` (not TCO); `gen_server.loop` is TCO but has no captured locals; bookmark app doesn't use gen_server.
+- DB carry-over (run.sh wipes db/db-shm/db-wal).
+- App-log anomalies (clean POST/Created lines, no errors/timeouts).
+
+Remaining hypotheses: subtle locality change from the gem_copy.c split (function placement → rare icache miss on the slow path), or amplified system noise on the worst-case fsync wait that wrk's 1500-sample p99 is too small to smooth over.
+
+Next step if revisited: run with `dtruss` or `sample` against the app PID during the POST burst to capture what the slow request is actually doing. Or bisect the four cleanup commits (`3919775`, `442d8ed`, `d658a45`, `9642aa8`) to localize the cause.
+
 ### `gem_eq` for strings (P2)
 Currently `strcmp`. If string interning lands, short strings become pointer equality. Even without interning, caching string length would let us short-circuit on length mismatch before comparing bytes.
 
