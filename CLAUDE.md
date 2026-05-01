@@ -135,6 +135,15 @@ After grammar.js changes: `tree-sitter generate`, `hx --grammar build`, then cop
 
 `docs/SPEC.md` is the source of truth for the language. After any change to syntax, semantics, or builtins, update it. If the spec disagrees with the code, fix the spec.
 
+## CLAUDE.md Maintenance
+
+Treat this file as living documentation, not a one-time onboarding doc.
+
+- **When something bites you** — a claim here turns out to be stale, a constant has drifted from the source, a workflow is missing a step, or you reach for a fact that should have been in Quick Reference but wasn't — fix it in the same change. The value of this file is being correct; a wrong claim is worse than a missing one.
+- **At the start of a non-trivial task** — skim Project Structure, Key Decisions, and the relevant maintenance section. If a section looks suspicious (vague hand-wave, fact you can't verify in 30s, references a file that no longer exists), grep the source to confirm before relying on it, and update what you find wrong.
+- **At the end of a change that touched a documented surface** — new keyword/builtin/syntax/std module, runtime constant, build target, project layout shift — check whether Project Structure, Key Decisions, or Quick Reference need a corresponding edit. Match the precision already there: pin to file paths and constants, not vague descriptions.
+- **What belongs here vs. SPEC.md** — SPEC.md describes the language to a reader who doesn't know it. CLAUDE.md captures *how to work in this repo*: where things live, what's load-bearing, which mechanisms are easy to break, and the workflows for adding/changing things. If a fact is purely about language semantics, it belongs in SPEC.md.
+
 ## Language Quick Reference
 
 Keep this section up to date when adding new syntax, keywords, builtins, or std modules.
