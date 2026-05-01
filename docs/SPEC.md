@@ -1079,6 +1079,14 @@ table.each(parts) { |item| print(item) }
 - `math.clamp(val, low, high)` — constrain `val` to the range `[low, high]`
 - `math.assert(cond[, msg])` — raise an error if `cond` is falsy. Optional `msg` is included in the error message.
 
+`std/test` — exports `test` table. Minimal harness for self-validating example programs. Cases register on import; nothing runs until `test.run()` is called.
+
+- `test.case(name, fn)` — register a test case. `fn` takes no arguments.
+- `test.assert(cond[, msg])` — raise an error if `cond` is falsy.
+- `test.assert_eq(actual, expected)` / `test.assert_neq(actual, expected)` — equality / inequality assertion. On failure the error message includes both formatted values.
+- `test.assert_throws(fn)` — assert that calling `fn()` raises an error.
+- `test.run()` — run every registered case under `pcall`, print one-line `PASS <name>` or `FAIL <name>: <reason>` per case, then a `<n> passed / <m> failed` summary, and `exit(1)` if any failed.
+
 The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`buf_str()`, and `substr()`. `split` and `index_of` are only available through `std/string` (not as bare builtins).
 
 `std/json` — exports `json` table:

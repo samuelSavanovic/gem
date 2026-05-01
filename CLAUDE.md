@@ -266,6 +266,7 @@ end
 # std/mime (lookup by extension)
 # std/sqlite (open, close, exec, query, ...)
 # std/supervisor, std/gen_server (OTP behaviors)
+# std/test (case, assert, assert_eq, assert_neq, assert_throws, run)
 
 # C interop
 extern fn puts(s: String) -> Int

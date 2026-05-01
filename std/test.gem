@@ -1,0 +1,78 @@
+# std/test — minimal test harness for self-validating example programs.
+#
+# Register cases with test.case(name, fn). Use assert_* helpers inside;
+# they raise via error() on failure. test.run() executes each registered
+# case under pcall, prints a one-line PASS/FAIL per case, prints a
+# summary, and exits non-zero if any case failed.
+
+let _cases = []
+let _count = 0
+
+fn case(name, body)
+  _cases[_count] = {name: name, body: body}
+  _count += 1
+end
+
+fn _format(v)
+  let t = type(v)
+  if t == "string"
+    return "\"" + v + "\""
+  end
+  if t == "nil"
+    return "nil"
+  end
+  to_string(v)
+end
+
+fn assert(cond, msg)
+  if not cond
+    if msg == nil
+      error("assertion failed")
+    else
+      error("assertion failed: {msg}")
+    end
+  end
+end
+
+fn assert_eq(actual, expected)
+  if actual != expected
+    error("assert_eq: expected " + _format(expected) + ", got " + _format(actual))
+  end
+end
+
+fn assert_neq(actual, expected)
+  if actual == expected
+    error("assert_neq: both values are " + _format(actual))
+  end
+end
+
+fn assert_throws(body)
+  let r = pcall(body)
+  if r.ok
+    error("assert_throws: expected error, but call returned normally")
+  end
+end
+
+fn run()
+  let passed = 0
+  let failed = 0
+  let i = 0
+  while i < _count
+    let c = _cases[i]
+    let r = pcall(c.body)
+    if r.ok
+      print("PASS " + c.name)
+      passed += 1
+    else
+      print("FAIL " + c.name + ": " + r.error)
+      failed += 1
+    end
+    i += 1
+  end
+  print(to_string(passed) + " passed / " + to_string(failed) + " failed")
+  if failed > 0
+    exit(1)
+  end
+end
+
+export case, assert, assert_eq, assert_neq, assert_throws, run
