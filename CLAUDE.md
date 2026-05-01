@@ -45,7 +45,6 @@ examples/             # 75 numbered tests + run_all.sh, plus json_parser, http_s
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 docs/OPTIMIZATIONS.md # tracked future performance improvements
 docs/LSP_ROADMAP.md   # sketch for a future Gem LSP
-prototype/            # C prototypes (Boehm GC + minicoro integration, scheduler + mailbox)
 editors/vscode/       # VS Code extension (TextMate grammar)
 editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
 ```
@@ -145,12 +144,6 @@ Write a `.gem` test file, compile and run it, verify output. For expected errors
 ```bash
 make test          # run all numbered examples against expected output
 make test-json     # run JSON parser stress test
-```
-
-## Running Prototypes
-
-```bash
-cd prototype && make run
 ```
 
 ## Language Quick Reference

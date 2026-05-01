@@ -1,10 +1,8 @@
-**Gem Language Spec v0.1**
+# Gem Language Spec v0.1
 
 _(working name, obviously)_
 
----
-
-**Implementation Strategy**
+## Implementation Strategy
 
 The compiler is self-hosting — written in Gem, compiling itself. A checked-in C file (`bootstrap/stage0.c`) serves as the bootstrap artifact so any C compiler can rebuild from scratch. No Python, no external parser generators.
 
@@ -13,21 +11,10 @@ Compilation target is C source code. `gcc`/`clang` handles optimization and link
 C runtime is minimal glue code wiring together two libraries plus a per-process arena allocator:
 
 - **Per-process arena allocation** — each process (coroutine) gets its own arena (bump allocator). When a process spawns another, values are deep-copied into the new process's arena. When a process dies, its entire arena is freed at once. The main process arena persists for the lifetime of the program and holds module globals. Messages (`send`) are deep-copied into the target process's arena. No global GC pauses — memory is reclaimed per-process on exit.
-- **minicoro** — single-header stackful coroutines (libdill is abandoned, crashes on arm64 macOS — see `prototype/`). Runtime builds scheduler + channels on top (~150 lines)
+- **minicoro** — single-header stackful coroutines (libdill is abandoned, crashes on arm64 macOS). Runtime builds scheduler + channels on top (~150 lines)
 - **stb_ds.h** — single-header hash maps and dynamic arrays for table implementation
 
-**Bootstrap Path** (all complete)
-
-1. ~~Prototype Boehm + coroutine integration~~ — done, see `prototype/`
-2. ~~Python bootstrap compiler~~ — done, deleted
-3. ~~C runtime glue~~ — done, `runtime/gem.c`
-4. ~~Write the real Gem compiler in Gem~~ — done, `compiler/`
-5. ~~New compiler compiles itself~~ — done, fixed-point verified
-6. ~~Delete the Python code forever~~ — done
-
----
-
-**Compiler CLI**
+## Compiler CLI
 
 ```
 gem <file.gem>              # compile to ./<basename> (e.g. foo.gem → ./foo)
@@ -43,13 +30,11 @@ The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.
 
 `--run` compiles to a temp file and immediately executes it, forwarding any additional arguments. The temp executable is left on disk after the run.
 
----
-
-**Values and Types**
+## Values and Types
 
 Nine types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`, `Ref`. All dynamically typed. Every value is a tagged C union. Yes this means primitives are boxed and slow — doesn't matter for v0. Future optimization: NaN-boxing to pack ints, bools, and nil into a double's NaN space, eliminating heap allocation for primitives.
 
-**Variables**
+## Variables
 
 ```
 let x = 10
@@ -69,7 +54,7 @@ let [first, second] = string.split(line, ",")
 
 Table destructuring extracts by name (`let {a, b} = expr` is `let a = expr.a; let b = expr.b`). Array destructuring extracts by index (`let [a, b] = expr` is `let a = expr[0]; let b = expr[1]`). The RHS is evaluated exactly once. Missing keys/indices produce `nil`. No renaming, nesting, rest/splat, or default values.
 
-**Functions**
+## Functions
 
 ```
 fn add(a, b)
@@ -92,7 +77,7 @@ let result = add(
 )
 ```
 
-**Variadic Functions**
+## Variadic Functions
 
 A `...name` rest parameter collects extra positional arguments into an array. It must be the last declared parameter.
 
@@ -123,7 +108,7 @@ log("INFO", "started", "port 8080")
 
 Rest param packing happens inside the function body at the C level, so variadic functions also work when stored in a variable or passed as a callback — the packing is unconditional regardless of call form.
 
-**Default Parameters**
+## Default Parameters
 
 Parameters can have default values with `= expr`. The default expression is evaluated at call time (not definition time) when the caller passes fewer arguments.
 
@@ -146,7 +131,7 @@ end
 
 Default parameters work in named functions, anonymous functions, and block parameters. Passing `nil` explicitly does *not* trigger the default — only omitting the argument does. Functions with default parameters are not eligible for tail call optimization.
 
-**Blocks**
+## Blocks
 
 This is the core feature. Any function can accept a trailing block with `do`/`end`. The block is passed as the last argument as an `Fn` value.
 
@@ -172,7 +157,7 @@ times(5) { |i| print(i) }
 
 This one rule lets std define `each`, `map`, `unless`, `until`, `with_file`, `loop`, etc. without compiler changes.
 
-**Tables**
+## Tables
 
 ```
 let point = { x: 10, y: 20 }
@@ -207,7 +192,7 @@ range(1, 10).each do |i|
 end
 ```
 
-**Control Flow**
+## Control Flow
 
 ```
 if x > 10
@@ -235,7 +220,7 @@ else
 end
 ```
 
-**Destructuring Patterns in Match**
+## Destructuring Patterns in Match
 
 When clauses support destructuring patterns that match on the shape of data and bind inner values to variables:
 
@@ -286,7 +271,7 @@ Destructuring patterns desugar in the parser to condition checks + variable bind
 
 **`break`, `continue`, and `return` inside blocks:** A `do`/`end` block is a closure (anonymous function). `return` inside a block returns from the block, not from the enclosing function — the iteration function receives the return value as the result of calling the block. `break` and `continue` inside a block only affect loops *within* the block itself; they cannot break or continue a loop in the caller.
 
-**For Loops**
+## For Loops
 
 Three forms, all desugared to `while` at parse time:
 
@@ -311,7 +296,7 @@ end
 
 The table form evaluates the RHS expression exactly once. It desugars to: store the table in a temp, call `keys()` on it, iterate by index, and look up each value by key inside the loop.
 
-**Closures**
+## Closures
 
 Functions capture their environment:
 
@@ -329,7 +314,7 @@ c()  # 1
 c()  # 2
 ```
 
-**Tail Call Optimization**
+## Tail Call Optimization
 
 Self-recursive functions in tail position are optimized into loops. The compiler detects when a named function calls itself as the last expression (including through `if`/`elif`/`else`, `match`, and `receive` branches) and replaces the recursive call with parameter reassignment and a loop restart. This means tail-recursive functions use constant stack space regardless of recursion depth.
 
@@ -348,7 +333,7 @@ TCO applies to named functions (`fn name(...)`) without rest, default, or block 
 
 **Important:** only direct self-recursion is optimized. If `fn A` calls `fn B` which calls `fn A`, neither call is a TCO candidate — both grow the stack. Write long-running loops as direct self-recursion or use `while`. Splitting a loop body into helper functions that recurse back to the main loop will leak stack frames under sustained load.
 
-**Long-Running Processes — Per-Iteration Arena Reset**
+## Long-Running Processes — Per-Iteration Arena Reset
 
 Each process has its own arena (bump allocator). Allocations within the arena are freed in bulk only when the process exits. For short-lived processes (request handlers, one-shot tasks) this is ideal — no per-allocation free, no GC pauses.
 
@@ -384,7 +369,7 @@ end
 spawn(fn() accept_loop(fd) end)
 ```
 
-**When the back-edge reset cannot fire**
+### When the back-edge reset cannot fire
 
 The compiler emits a warning when it cannot prove a process-tail `while true` is safe to reset. Common causes:
 
@@ -396,7 +381,7 @@ For TCO functions, the corresponding conditions are: a parameter captured by a n
 
 `while true` outside a process-tail context (e.g. a finite REPL loop with `break`, or a one-shot helper) is silent — no warning, no reset. It's the right choice when the loop terminates promptly.
 
-**Green Threads and Message Passing**
+## Green Threads and Message Passing
 
 ```
 let pid = spawn do
@@ -414,7 +399,7 @@ send(pid, "world")
 
 The main process (top-level code) is itself a schedulable coroutine (PID 0). All concurrency primitives — `self()`, `send`, `receive`, `sleep`, `monitor`, `link` — work at the top level. The program exits when all processes have terminated; if spawned processes outlive main, the program continues running until they complete.
 
-**Preemptive Scheduling (Reduction-Based)**
+## Preemptive Scheduling (Reduction-Based)
 
 Processes are cooperatively scheduled but the compiler inserts automatic yield points so tight loops cannot starve the scheduler. Each process has a reduction counter that increments at loop back-edges (the top of every `while` body, including `for` loops which desugar to `while`). When the counter exceeds the threshold (currently 4000), the process yields and is immediately re-queued as READY. The counter resets to 0 each time the scheduler resumes a process.
 
@@ -422,7 +407,7 @@ Yield checks are only inserted in user-written loops. Compiler-generated loops (
 
 The yield check is a no-op when running outside a spawned process (top-level code before the scheduler starts).
 
-**Process Monitoring**
+## Process Monitoring
 
 ```
 let child = spawn do
@@ -444,7 +429,7 @@ Monitoring a dead/invalid pid delivers the DOWN message immediately. Duplicate m
 
 Error isolation: a crashing spawned process does not kill other processes. The error is captured, DOWN messages are delivered, and the scheduler continues. `pcall` inside a monitored process still works — it catches errors locally before the process-level handler.
 
-**Links**
+## Links
 
 Links are bidirectional process monitors. When two processes are linked, an abnormal exit in one propagates to the other.
 
@@ -481,7 +466,7 @@ end
 
 `process_flag("trap_exit", bool)` sets the trap_exit flag on the current process and returns the previous value.
 
-**Named Processes**
+## Named Processes
 
 ```
 let pid = spawn do
@@ -498,7 +483,7 @@ let p = whereis("worker")  # returns pid or nil
 
 `send` edge cases: sending to a dead pid silently drops the message. Sending to a registered name that does not exist raises an error.
 
-**Selective Receive**
+## Selective Receive
 
 ```
 receive
@@ -521,7 +506,7 @@ The `receive` block can produce a value when used as the last statement of a fun
 
 The existing `receive()` function call continues to work unchanged — it always pops the head of the mailbox unconditionally.
 
-**Process Control**
+## Process Control
 
 `kill(pid, reason)` sends an exit signal to a process. If the target has `trap_exit` enabled, an `{tag: "EXIT", pid: sender_pid, reason: reason}` message is delivered to its mailbox instead of terminating it. Otherwise, the process is terminated immediately: marked dead, DOWN messages delivered to monitors, registered name removed, and exit propagated to linked processes. Returns `true` if the process was alive, `nil` otherwise.
 
@@ -535,7 +520,7 @@ The existing `receive()` function call continues to work unchanged — it always
 
 `format_time_local(epoch_ms, format_str)` — same as `format_time` but formats in the local timezone instead of UTC.
 
-**Timers**
+## Timers
 
 ```
 let ref = send_after(pid, "tick", 1000)
@@ -548,7 +533,7 @@ cancel_timer(ref)
 
 Timers are stored in a global fixed-size array (256 slots). An error is raised if the array is full.
 
-**Process Introspection**
+## Process Introspection
 
 ```
 let info = process_info(pid)
@@ -567,7 +552,7 @@ let info = process_info(pid)
 
 Returns `nil` if the pid is invalid or the slot is free.
 
-**C Interop**
+## C Interop
 
 ```
 extern fn puts(s: String) -> Int
@@ -604,7 +589,7 @@ extern include "stdio.h"
 
 `extern` is unsafe by definition: arity, type, and ABI are not validated at the boundary. A Gem-side mistake silently passes garbage to C.
 
-**Operators**
+## Operators
 
 `+` for both arithmetic and string concatenation. If types don't match (e.g. string + int), runtime error. No `..` operator — keep it simple.
 
@@ -614,11 +599,11 @@ extern include "stdio.h"
 
 **Equality semantics:** `==` compares by value for primitives (int, float, string, bool, nil) and by identity (reference) for tables, functions, and refs. Two distinct tables with identical contents are not equal: `{a: 1} == {a: 1}` is `false`. The same table reference compared to itself is `true`.
 
-**Assignment Operators**
+## Assignment Operators
 
 `=`, `+=`, `-=`, `*=`, `/=`
 
-**Strings**
+## Strings
 
 Two quote styles: double-quoted strings support interpolation, single-quoted strings do not.
 
@@ -648,7 +633,7 @@ print("it's fine")                 # it's fine
 print('say "hello"')               # say "hello"
 ```
 
-**Multi-line Strings**
+## Multi-line Strings
 
 Triple-quoted strings span multiple lines. `"""` supports interpolation and all escape sequences like regular `"` strings. `'''` has no interpolation and minimal escapes like regular `'` strings.
 
@@ -685,7 +670,7 @@ fn render()
 end
 ```
 
-**String Interpolation**
+## String Interpolation
 
 Expressions inside `{...}` in double-quoted string literals are evaluated and auto-coerced to strings via `to_string`:
 
@@ -710,17 +695,17 @@ print("val: {obj.field}")
 print("wrapped: {wrap("inner")}")
 ```
 
-**Nil and Truthiness**
+## Nil and Truthiness
 
 `nil` and `false` are falsy, everything else truthy.
 
-**Comments**
+## Comments
 
 ```
 # single line comment
 ```
 
-**Error Handling**
+## Error Handling
 
 `error(msg)` prints the message with file and line info to stderr, followed by a call stack trace showing each Gem function frame, and halts (`exit(1)`). Runtime type errors (e.g. `1 + "a"`) also print a stack trace with the actual types involved (e.g. `type error in +: got string and int`). The compiler reports the first error and stops.
 
@@ -781,7 +766,7 @@ end)
 - Nested `pcall` works — each level catches errors independently
 - To pass arguments to the called function, use a closure: `pcall(fn() f(x, y) end)`
 
-**Built-in Functions**
+## Built-in Functions
 
 `print(args...)` — prints values separated by spaces, followed by a newline.
 
@@ -939,7 +924,7 @@ end
 
 `exec(command)` — runs `command` via the system shell (`sh -c`). Blocks until the command exits. Returns the exit code as an integer (0 on success). The shell expands glob patterns and environment variables in `command`. Output goes to the process's stdout/stderr unless redirected inside `command`.
 
-**TCP Sockets**
+## TCP Sockets
 
 `tcp_listen(host, port)` — creates a TCP server socket bound to `host` (string) on `port` (int). Calls `socket`, `bind`, and `listen` with a backlog of 128. Sets `SO_REUSEADDR`. Returns the socket file descriptor as an integer. Raises an error on failure. Always synchronous (fast).
 
@@ -955,7 +940,7 @@ end
 
 All TCP builtins use non-blocking sockets with scheduler poll integration. The scheduler's `poll()` loop handles readiness notification with zero thread pool overhead.
 
-**SQLite**
+## SQLite
 
 `sqlite_open(path)` — opens (or creates) a SQLite database at `path`. Enables WAL mode and foreign keys by default. Returns an opaque database handle (stored as an int). Use `":memory:"` for an in-memory database. When called from a spawned process, runs on the thread pool (blocking fn). Raises on error.
 
@@ -975,7 +960,7 @@ SQLite is vendored as an amalgamation (`runtime/sqlite3.c` + `runtime/sqlite3.h`
 
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
-**Module System**
+## Module System
 
 **Load statement** — `load` brings another file's exported definitions into scope. Every loaded file must have an `export` statement declaring its public API. The compiler keeps a table of already-loaded file paths; re-importing a module skips re-parsing but still creates the requested import bindings.
 
@@ -1039,7 +1024,7 @@ All three `load` forms use the same two-step path resolution. When a module has 
 
 **Circular imports** are not detected — the compiler tracks loaded paths and reuses cached modules. If module A loads B and B loads A, the second load of A returns the cached (possibly incomplete) module. In practice this means circular dependencies may see missing exports. Avoid circular imports; restructure shared code into a third module.
 
-**Standard Library (std/)**
+## Standard Library (std/)
 
 Each std file uses `export` to expose a single namespace table. When loaded, the module table is bound to the basename (e.g., `string`, `table`, `math`).
 
@@ -1140,7 +1125,7 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 
 `std/http` — exports `http` table. HTTP/1.1 server with routing and keep-alive. Depends on `std/string`, `std/url`, `std/mime`, `std/json`, `std/time`.
 
-**Response builders:**
+### Response builders
 
 - `http.response(status, headers, body)` — generic response constructor. Returns `{status, headers, body}`.
 - `http.ok(body[, content_type])` — 200 response. Default content type: `"text/plain; charset=utf-8"`.
@@ -1151,7 +1136,7 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 - `http.bad_request([body])` — 400. Default body: `"Bad Request"`.
 - `http.server_error([body])` — 500. Default body: `"Internal Server Error"`.
 
-**Router:**
+### Router
 
 - `http.router()` — returns a router table with methods:
   - `router.get(pattern, handler)`, `router.post(...)`, `router.put(...)`, `router.patch(...)`, `router.delete(...)` — register a route. Handler signature: `fn(req) → response table`.
@@ -1159,20 +1144,20 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 - Route patterns: segments starting with `:` are parameters. `/users/:id` matches `/users/123` and sets `req.params.id = "123"`. First registered route wins.
 - Handler receives a request table: `{method, path, params, query, headers, body, cookies}`. `params` are extracted from route pattern, `query` is parsed from query string via `url.parse_query`, `cookies` are parsed from the `Cookie` header.
 
-**Cookies:**
+### Cookies
 
 - `http.set_cookie(resp, name, value[, opts])` — returns new response with `Set-Cookie` header. `opts` table supports: `path` (default `"/"`), `http_only` (default `true`), `secure` (default `false`), `same_site` (default `"Lax"`), `max_age` (seconds), `expires` (epoch ms).
 - `http.delete_cookie(resp, name[, opts])` — sets cookie with `Max-Age=0`.
 
-**Form parsing:**
+### Form parsing
 
 - `http.parse_form(body)` — parses a URL-encoded form body (`key=value&key=value`) into a table. Convenience wrapper around `url.parse_query(body)` — form-encoded bodies use the same percent-encoded format as query strings.
 
-**Security:**
+### Security
 
 - `http.html_escape(str)` — escapes `&`, `<`, `>`, `"`, `'` to HTML entities. Use when interpolating user data into HTML.
 
-**Server:**
+### Server
 
 - `http.serve(router[, opts])` — starts the HTTP server and blocks the caller. `opts` table: `port` (default 8080), `host` (default `"0.0.0.0"`). Blocks until the acceptor process dies.
 - `http.start(router[, opts])` — starts the HTTP server without blocking. Returns the acceptor pid. Same options as `serve`.
@@ -1251,11 +1236,11 @@ gen_server.cast(server, "reset")
 
 Top-level `let` bindings (including std namespaces like `string`, `table`) compile to C globals, so they are accessible from named `fn` declarations, closures, and top-level code alike.
 
-**What the Compiler Needs to Emit**
+## What the Compiler Needs to Emit
 
 Every value is a tagged C union. The compiler emits C code that uses the runtime glue which wires together per-process arenas, minicoro, and stb_ds.h. The generated C code allocates from the current process's arena (bump allocator), uses minicoro for coroutines with a built-in round-robin scheduler and mailbox channels, and stb_ds for table operations. The compiler emits C `#line` directives so that runtime errors report Gem source file and line numbers instead of C line numbers.
 
-**What's NOT in v0**
+## What's NOT in v0
 
 No classes. No inheritance. No exceptions (use `error()` to halt, `pcall()` for recovery). No type system. No operator overloading.
 
