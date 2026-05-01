@@ -545,9 +545,9 @@ fn process_one_request(client_fd, router_ref, conn_buf)
   next_buf
 end
 
-# Keep-alive loop. The arena resets at each back-edge when bytes_allocated
-# crosses GEM_ARENA_RESET_THRESHOLD, so per-request garbage (parsed headers,
-# request bodies, etc.) doesn't accumulate.
+# Keep-alive loop: serve requests on `client_fd` until the peer closes or
+# signals connection: close. `conn_buf` carries any bytes already read past
+# the previous request's boundary into the next iteration.
 fn handle_connection_loop(client_fd, router_ref, conn_buf)
   while true
     let result = pcall(fn()
@@ -575,9 +575,7 @@ end
 
 # ─── Server ───
 
-# Accept loop. Spawned directly so it runs at depth 2 from the process
-# entry, the boundary at which arena rescue+reset is allowed.
-
+# Accept loop: block on `tcp_accept`, spawn a worker per connection.
 fn accept_loop(server_fd, router_ref)
   while true
     let client_fd = tcp_accept(server_fd)
