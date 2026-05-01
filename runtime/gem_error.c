@@ -24,6 +24,43 @@ void gem_print_stack_trace(void) {
     }
 }
 
+/* Print the source line at file:line with a gutter, mirroring compile-error
+ * format. Silently no-op if the file can't be opened or the line doesn't exist. */
+static void gem_print_source_context(const char *file, int line) {
+    if (!file || line <= 0) return;
+    FILE *f = fopen(file, "r");
+    if (!f) return;
+    char buf[2048];
+    int cur = 1;
+    while (fgets(buf, sizeof(buf), f)) {
+        if (cur == line) {
+            size_t l = strlen(buf);
+            while (l > 0 && (buf[l-1] == '\n' || buf[l-1] == '\r')) buf[--l] = 0;
+            int gw = 1; int n = line; while (n >= 10) { gw++; n /= 10; }
+            fprintf(stderr, "  --> %s:%d\n", file, line);
+            fprintf(stderr, " %*s |\n", gw, "");
+            fprintf(stderr, " %d | %s\n", line, buf);
+            fprintf(stderr, " %*s |\n", gw, "");
+            fclose(f);
+            return;
+        }
+        cur++;
+    }
+    fclose(f);
+}
+
+void gem_print_runtime_error(const char *msg) {
+    fprintf(stderr, "\n[Runtime Error]: %s\n", msg);
+    if (gem_call_depth > 0) {
+        int top = (gem_call_depth <= GEM_MAX_CALL_DEPTH ? gem_call_depth : GEM_MAX_CALL_DEPTH) - 1;
+        gem_print_source_context(gem_call_stack[top].file, gem_call_stack[top].line);
+    }
+    if (gem_call_depth > 0) {
+        fprintf(stderr, "Stack trace:\n");
+        gem_print_stack_trace();
+    }
+}
+
 /* ─── Runtime error ─── */
 
 static void gem_pcall_longjmp(GemPcallFrame *frame, const char *msg) {
@@ -55,6 +92,13 @@ void gem_raise_error(const char *msg) {
                 proc->pcall_depth--;
                 gem_pcall_longjmp(&proc->pcall_stack[proc->pcall_depth], msg);
             }
+            /* Uncaught in the main user process: print and exit non-zero.
+             * Spawned processes still die silently per Erlang semantics —
+             * monitors/links surface the reason through DOWN/EXIT messages. */
+            if (gem_current_pid == gem_main_pid) {
+                gem_print_runtime_error(msg);
+                exit(1);
+            }
             proc->exit_reason = strdup(msg);
             gem_call_depth = 0;
             longjmp(proc->proc_jmp, 1);
@@ -67,8 +111,7 @@ void gem_raise_error(const char *msg) {
         gem_pcall_longjmp(&gem_pcall_stack[gem_pcall_depth], msg);
     }
 
-    fprintf(stderr, "error: %s\n", msg);
-    gem_print_stack_trace();
+    gem_print_runtime_error(msg);
     exit(1);
 }
 

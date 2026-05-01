@@ -211,6 +211,7 @@ extern int gem_pcall_depth;
 
 void gem_raise_error(const char *msg);
 void gem_print_stack_trace(void);
+void gem_print_runtime_error(const char *msg);
 
 /* ─── Built-in functions (GemFnPtr signature) ─── */
 
