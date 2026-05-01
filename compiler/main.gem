@@ -2,10 +2,11 @@
 # Reads a .gem source file, parses it, generates C, and compiles/runs.
 #
 # Usage:
-#   gem foo.gem              # compile to ./foo (default)
-#   gem foo.gem -o name      # compile to ./name
+#   gem foo.gem [args...]    # compile and run, passing args to the program
+#   gem foo.gem -c           # compile to ./foo, don't run
+#   gem foo.gem -o name      # compile to ./name (implies -c)
 #   gem foo.gem --emit-c     # print C to stdout (for bootstrapping)
-#   gem foo.gem --run [args] # compile and run immediately
+#   gem foo.gem --run        # accepted as a no-op (run is the default)
 
 load "../std/string"
 load "parser" (parse_source)
@@ -362,25 +363,23 @@ fn parse_args(args)
     src_path: nil,
     out_name: nil,
     emit_c: false,
-    run: false,
+    run: true,
+    compile_only: false,
     run_args: []
   }
 
   let argc = len(args)
   let i = 1
   let run_arg_count = 0
-  let found_run = false
 
   while i < argc
     let arg = args[i]
-    if found_run
-      result.run_args[run_arg_count] = arg
-      run_arg_count += 1
-    elif arg == "--emit-c"
+    if arg == "--emit-c"
       result.emit_c = true
     elif arg == "--run"
-      result.run = true
-      found_run = true
+      # no-op: run is the default. Accepted for back-compat.
+    elif arg == "-c" or arg == "--compile-only"
+      result.compile_only = true
     elif arg == "-o"
       i += 1
       if i >= argc
@@ -390,11 +389,15 @@ fn parse_args(args)
     elif result.src_path == nil
       result.src_path = arg
     else
-      # unknown flag — pass through as run arg if we ever run
+      # extra positional — passed to the program when running
       result.run_args[run_arg_count] = arg
       run_arg_count += 1
     end
     i += 1
+  end
+
+  if result.compile_only or result.out_name != nil or result.emit_c
+    result.run = false
   end
 
   result
@@ -429,13 +432,13 @@ end
 
 let argc = len(argv())
 if argc < 2
-  error("usage: gem <file.gem> [--emit-c | --run | -o <name>]")
+  error("usage: gem <file.gem> [args...] [-c | -o <name> | --emit-c]")
 end
 
 let cli = parse_args(argv())
 
 if cli.src_path == nil
-  error("usage: gem <file.gem> [--emit-c | --run | -o <name>]")
+  error("usage: gem <file.gem> [args...] [-c | -o <name> | --emit-c]")
 end
 
 let src_path = cli.src_path
@@ -459,10 +462,15 @@ else
   let base = basename_no_ext(src_path)
   let tmp_c = "/tmp/gem_" + base + ".c"
 
-  # Determine output name
+  # Determine output name. Default-to-run drops the binary in /tmp so the
+  # CWD doesn't get littered; compile-only writes to ./<base>.
   let out_name = cli.out_name
   if out_name == nil
-    out_name = "./" + base
+    if cli.run
+      out_name = "/tmp/gem_" + base + "_bin"
+    else
+      out_name = "./" + base
+    end
   end
 
   # Write C to temp file

@@ -17,18 +17,19 @@ C runtime is minimal glue code wiring together two libraries plus a per-process 
 ## Compiler CLI
 
 ```
-gem <file.gem>              # compile to ./<basename> (e.g. foo.gem → ./foo)
-gem <file.gem> -o <name>    # compile to <name>
+gem <file.gem>              # compile to a temp binary and run it
+gem <file.gem> [args...]    # run, passing extra args through to the program
+gem <file.gem> -c           # compile to ./<basename>, don't run
+gem <file.gem> -o <name>    # compile to <name>, don't run (implies -c)
 gem <file.gem> --emit-c     # print generated C to stdout (used for bootstrapping)
-gem <file.gem> --run        # compile to a temp binary and run it immediately
-gem <file.gem> --run [args] # compile and run, passing args through to the program
+gem <file.gem> --run        # accepted as a no-op; run is the default
 ```
 
-The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.c`, invokes `cc` to compile it to an executable, and produces `./<basename>`.
+The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.c`, compiles it to `/tmp/gem_<basename>_bin`, and runs it. Extra positional arguments after the source path are forwarded to the program via `argv()`.
 
-`--emit-c` is the current-behavior flag — it prints C to stdout and exits. This is what the bootstrapping Makefile targets use.
+`-c` (or `--compile-only`) keeps the artifact: compiles to `./<basename>` and exits without running. `-o <name>` does the same but lets you pick the path.
 
-`--run` compiles to a temp file and immediately executes it, forwarding any additional arguments. The temp executable is left on disk after the run.
+`--emit-c` prints C to stdout and exits. This is what the bootstrapping Makefile targets use.
 
 ## Values and Types
 
