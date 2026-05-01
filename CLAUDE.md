@@ -18,11 +18,12 @@ Concretely:
 
 ```
 compiler/             # self-hosting compiler (lexer, parser, AST, codegen, main)
-std/                  # standard library (string, table, math, supervisor, gen_server, sqlite, ...)
+std/                  # standard library (string, table, math, time, log, http, json, sqlite, mime, request, url, supervisor, gen_server)
 runtime/              # C runtime — split by category:
   gem.h               #   public API, tagged values, process table, scheduler decls
   gem_core.c          #   value constructors, table internals, equality
   gem_copy.c          #   deep copy, pin-set, arena reset (rescue+reset path)
+  gem_arena.c         #   per-process arena allocator
   gem_ops.c           #   arithmetic and comparison operators
   gem_error.c         #   error handling, stack trace printing
   gem_scheduler.c     #   coroutine scheduler, mailbox, process lifecycle, I/O polling
@@ -34,14 +35,16 @@ runtime/              # C runtime — split by category:
   gem_builtins_io.c          # file I/O, filesystem ops, exec
   gem_builtins_tcp.c         # TCP socket operations (non-blocking)
   gem_builtins_sqlite.c      # SQLite operations (open, close, exec, query, etc.)
+  gem_builtins_time.c        # time/clock builtins
   minicoro.h          #   single-header coroutine library (vendored)
   stb_ds.h            #   single-header hash maps/arrays (vendored)
   sqlite3.c/sqlite3.h #  SQLite amalgamation (vendored)
 bootstrap/stage0.c    # checked-in C output — bootstrap artifact for clean builds
 build/gem             # compiled compiler binary (gitignored, built from stage0.c)
-examples/             # 49 numbered tests + run_all.sh, plus json_parser, http_server, tcp_echo
+examples/             # 75 numbered tests + run_all.sh, plus json_parser, http_server, tcp_echo, bookmark_app
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 docs/OPTIMIZATIONS.md # tracked future performance improvements
+docs/LSP_ROADMAP.md   # sketch for a future Gem LSP
 prototype/            # C prototypes (Boehm GC + minicoro integration, scheduler + mailbox)
 editors/vscode/       # VS Code extension (TextMate grammar)
 editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
@@ -259,11 +262,17 @@ end
 
 # Std library modules
 # std/string (split, join, trim, index_of, contains, ...)
-# std/table (each, map, filter, reduce, find, ...)
+# std/table (each, map, filter, reduce, find, sort, slice, ...)
+# std/math (min, max, clamp, assert)
+# std/time (now, sleep, format, ...)
+# std/log (info, warn, error, debug)
 # std/json (parse, encode)
 # std/http (router, serve, ok, html, json_response, ...)
+# std/request (HTTP client)
+# std/url (parse, encode)
+# std/mime (lookup by extension)
 # std/sqlite (open, close, exec, query, ...)
-# std/math (min, max, clamp, assert)
+# std/supervisor, std/gen_server (OTP behaviors)
 
 # C interop
 extern fn puts(s: String) -> Int
