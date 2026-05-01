@@ -1,0 +1,22 @@
+# Item 8 stress: spawn target is the *return value* of a call, not a literal
+# `fn() … end`. Stage A behavior: compile-time warning at the spawn site, but
+# the program still runs. The closure's `while true` will not be PT-tagged
+# (silent-cliff fix is Stage B / closure-escape analysis); for this stress
+# test we exit after one message, so RSS growth is not exercised.
+
+fn make_loop(reply_to)
+  fn()
+    while true
+      let msg = receive()
+      if msg == "stop"
+        send(reply_to, "done")
+        return
+      end
+    end
+  end
+end
+
+let me = self()
+let w = spawn(make_loop(me))
+send(w, "stop")
+print(receive())

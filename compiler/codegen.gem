@@ -881,16 +881,16 @@ end
 let walk_for_tagging_node = nil
 let walk_for_tagging_stmts = nil
 
-walk_for_tagging_stmts = fn(stmts, is_pt)
+walk_for_tagging_stmts = fn(stmts, is_pt, source_name)
   if stmts == nil
     return nil
   end
   for s in stmts
-    walk_for_tagging_node(s, is_pt)
+    walk_for_tagging_node(s, is_pt, source_name)
   end
 end
 
-walk_for_tagging_node = fn(node, is_pt)
+walk_for_tagging_node = fn(node, is_pt, source_name)
   if node == nil
     return nil
   end
@@ -907,11 +907,11 @@ walk_for_tagging_node = fn(node, is_pt)
   end
   if node.tag == "anon_fn"
     # Generic anon_fn (not at spawn arg[0]): not a process-tail context.
-    walk_for_tagging_stmts(node.body, false)
+    walk_for_tagging_stmts(node.body, false, source_name)
     if node.defaults != nil
       for d in node.defaults
         if d != nil
-          walk_for_tagging_node(d, is_pt)
+          walk_for_tagging_node(d, is_pt, source_name)
         end
       end
     end
@@ -919,27 +919,39 @@ walk_for_tagging_node = fn(node, is_pt)
   end
   if node.tag == "while" and is_pt
     node.process_tail = true
-    walk_for_tagging_stmts(node.body, is_pt)
+    walk_for_tagging_stmts(node.body, is_pt, source_name)
     return nil
   end
   if node.tag == "call" and is_node(node.func, "var") and is_spawn_callee_name(node.func.name)
     if node.args != nil and len(node.args) > 0 and is_node(node.args[0], "anon_fn")
       let anon = node.args[0]
-      walk_for_tagging_stmts(anon.body, true)
+      walk_for_tagging_stmts(anon.body, true, source_name)
       if anon.defaults != nil
         for d in anon.defaults
           if d != nil
-            walk_for_tagging_node(d, is_pt)
+            walk_for_tagging_node(d, is_pt, source_name)
           end
         end
       end
       let i = 1
       while i < len(node.args)
-        walk_for_tagging_node(node.args[i], is_pt)
+        walk_for_tagging_node(node.args[i], is_pt, source_name)
         i += 1
       end
       return nil
     end
+    # Spawn target is not a literal `fn() … end`. The closure's body cannot be
+    # PT-tagged from here (we'd need closure-escape analysis to know which
+    # anon_fn ends up as args[0] at runtime), so any `while true` inside it
+    # runs without arena rescue and the receiver's RSS grows unbounded. Surface
+    # this as a compile-time warning — same DX bar as the "cannot reset" class.
+    let line_str = "?"
+    if node.line != nil
+      line_str = to_string(node.line)
+    end
+    eprint("warning: {source_name}:{line_str}: `{node.func.name}` target is not a literal `fn() … end`; any `while true` inside the spawned closure will not be process-tail-tagged and the receiver's per-process arena will not reset (silent perf cliff). Pass an anonymous fn directly: `{node.func.name}(fn() <body> end)`.\n")
+    # Fall through to generic recursion so nested spawns inside the args still
+    # get walked (e.g. `spawn(make_loop(spawn(fn() … end)))`).
   end
   # Generic recursion over child nodes/arrays.
   for k, v in node
@@ -949,12 +961,12 @@ walk_for_tagging_node = fn(node, is_pt)
         let vi = 0
         while vi < len(v)
           if type(v[vi]) == "table"
-            walk_for_tagging_node(v[vi], is_pt)
+            walk_for_tagging_node(v[vi], is_pt, source_name)
           end
           vi += 1
         end
       else
-        walk_for_tagging_node(v, is_pt)
+        walk_for_tagging_node(v, is_pt, source_name)
       end
     end
   end
@@ -1018,10 +1030,10 @@ fn body_has_pt_while(body)
 end
 
 let tag_process_tail_while_loops = nil
-tag_process_tail_while_loops = fn(fn_defs, top_stmts, process_tail_fns)
+tag_process_tail_while_loops = fn(fn_defs, top_stmts, process_tail_fns, source_name)
   for fd in fn_defs
     let is_pt = process_tail_fns[fd.name] == true
-    walk_for_tagging_stmts(fd.body, is_pt)
+    walk_for_tagging_stmts(fd.body, is_pt, source_name)
   end
   # Top-level statements run in `gem_main_pid` and are PT-tagged uniformly
   # with fn bodies. (Earlier the runtime shared strings allocated in main's
@@ -1029,7 +1041,7 @@ tag_process_tail_while_loops = fn(fn_defs, top_stmts, process_tail_fns)
   # would dangle if main's arena got reset; that fast-path is gone, so a
   # `while true` accept loop at top level resets main's arena like any other
   # PT loop.)
-  walk_for_tagging_stmts(top_stmts, true)
+  walk_for_tagging_stmts(top_stmts, true, source_name)
 end
 
 fn make_codegen(source_name)
@@ -2390,7 +2402,7 @@ fn make_codegen(source_name)
 
     # Tag `while true` nodes inside process-tail contexts so compile_while can
     # emit the back-edge arena rescue+reset (mirroring TCO's reset).
-    tag_process_tail_while_loops(fn_defs, top_stmts, process_tail_fns)
+    tag_process_tail_while_loops(fn_defs, top_stmts, process_tail_fns, source_name)
 
     # Attach per-loop liveness results to every PT-tagged while node, computed
     # with the loop's actual post-loop set. compile_while reads node.liveness_result
