@@ -2794,6 +2794,12 @@ fn make_codegen(source_name)
 
     match node
     when {tag: "let", name: name, value: value}
+      # Track dynamic C scope: this let's local is in scope for any nested
+      # process-tail loop's back-edge until its enclosing C `{}` closes.
+      # Snapshot/restore at C-scope boundaries (compile_while body,
+      # compile_if/match/receive_match arms, compile_stmt_return block) pops
+      # arm-local additions when the scope closes.
+      set_add(fn_scope_locals, name)
       let r = compile_expr(value)
       let mname = mangle(name)
       if in_top_level and set_contains(top_level_vars, name)
@@ -2900,6 +2906,7 @@ fn make_codegen(source_name)
 
     match node
     when {tag: "let", name: name, value: value}
+      set_add(fn_scope_locals, name)
       let r = compile_expr(value)
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
@@ -2932,6 +2939,7 @@ fn make_codegen(source_name)
     when {tag: "block", stmts: stmts}
       let b = buf_new()
       buf_push(b, "{p}\{\n")
+      let saved_block = set_union(fn_scope_locals, {})
       for i = 0, len(stmts) - 1
         buf_push(b, compile_stmt(stmts[i], indent + 1))
         buf_push(b, "\n")
@@ -2940,6 +2948,7 @@ fn make_codegen(source_name)
         buf_push(b, compile_stmt_return(stmts[-1], indent + 1))
         buf_push(b, "\n")
       end
+      fn_scope_locals = saved_block
       buf_push(b, "{p}}")
       return buf_str(b)
     when {tag: "dot_assign"}
@@ -2967,10 +2976,14 @@ fn make_codegen(source_name)
     let b = buf_new()
     buf_push(b, cond_r.setup)
     buf_push(b, "{p}if (gem_truthy({cond_r.expr})) \{\n")
+    let saved_then = set_union(fn_scope_locals, {})
     buf_push(b, compile_stmts_tail(node.then, indent + 1, return_pos))
+    fn_scope_locals = saved_then
     if node.else != nil
       buf_push(b, "{p}} else \{\n")
+      let saved_else = set_union(fn_scope_locals, {})
       buf_push(b, compile_stmts_tail(node.else, indent + 1, return_pos))
+      fn_scope_locals = saved_else
     elif return_pos
       buf_push(b, "{p}} else \{\n")
       buf_push(b, compile_stmts_tail([], indent + 1, true))
@@ -3128,7 +3141,9 @@ fn make_codegen(source_name)
       buf_push(b, str_replace(cond_r.setup, "    ", "{p}    "))
     end
     buf_push(b, "{p}    if (!gem_truthy({cond_r.expr})) break;\n")
+    let saved_while_scope = set_union(fn_scope_locals, {})
     buf_push(b, compile_stmts(node.body, indent + 1))
+    fn_scope_locals = saved_while_scope
     buf_push(b, "{p}}")
 
     for name, _ in eligible
@@ -3174,6 +3189,7 @@ fn make_codegen(source_name)
         buf_push(b, val_r.setup)
         buf_push(b, "{p}if (gem_truthy({val_r.expr})) \{\n")
       end
+      let saved_arm = set_union(fn_scope_locals, {})
       if w.bindings != nil
         for binding in w.bindings
           buf_push(b, compile_stmt(binding, indent + 1))
@@ -3181,10 +3197,13 @@ fn make_codegen(source_name)
         end
       end
       buf_push(b, compile_stmts_tail(w.body, indent + 1, return_pos))
+      fn_scope_locals = saved_arm
     end
     if node.else != nil
       buf_push(b, "{p}} else \{\n")
+      let saved_else = set_union(fn_scope_locals, {})
       buf_push(b, compile_stmts_tail(node.else, indent + 1, return_pos))
+      fn_scope_locals = saved_else
     elif return_pos
       buf_push(b, "{p}} else \{\n")
       buf_push(b, compile_stmts_tail([], indent + 1, true))
@@ -3289,6 +3308,7 @@ fn make_codegen(source_name)
       else
         buf_push(b, "{p}} else if ({matched_tmp} == {i}) \{\n")
       end
+      let saved_arm = set_union(fn_scope_locals, {})
       if arm.pattern.bindings != nil
         for binding in arm.pattern.bindings
           buf_push(b, compile_stmt(binding, indent + 1))
@@ -3296,13 +3316,16 @@ fn make_codegen(source_name)
         end
       end
       buf_push(b, compile_stmts_tail(arm.body, indent + 1, return_pos))
+      fn_scope_locals = saved_arm
     end
 
     # After clause
     if after_ms != nil
       buf_push(b, "{p}} else if ({matched_tmp} == -2) \{\n")
       if after_body != nil
+        let saved_after = set_union(fn_scope_locals, {})
         buf_push(b, compile_stmts_tail(after_body, indent + 1, return_pos))
+        fn_scope_locals = saved_after
       elif return_pos
         buf_push(b, compile_stmts_tail([], indent + 1, true))
       end
@@ -3980,11 +4003,22 @@ fn make_codegen(source_name)
     let saved_fn_scope = fn_scope_locals
     boxed_vars = top_level_boxed
     in_top_level = true
+    # local_names: over-approximation including arm-lets and nested-scope lets,
+    # used as the outer guard in `filter_live_for_rescue`. Mirrors what
+    # compile_fn does for user fns (shadow walk).
     local_names = {}
     for k, _ in top_level_vars
       set_add(local_names, k)
     end
-    fn_scope_locals = local_names
+    collect_shadow_lets_in_fn(top_stmts, local_names)
+    # fn_scope_locals: precise dynamic set tracking C locals addressable at the
+    # current point. Starts as top-level vars; compile_stmt adds lets; C-scope
+    # introducers (compile_while body, compile_if/match/receive_match arms,
+    # compile_stmt_return block) snapshot/restore around their bodies.
+    fn_scope_locals = {}
+    for k, _ in top_level_vars
+      set_add(fn_scope_locals, k)
+    end
     let main_body = compile_stmts(top_stmts, 1)
     in_top_level = false
     boxed_vars = saved_boxed
