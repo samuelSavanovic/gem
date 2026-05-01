@@ -417,7 +417,7 @@ typedef struct {
     size_t read_buf_cap;          /* capacity of read_buf in bytes */
     GemPcallFrame pcall_stack[GEM_MAX_PCALL_DEPTH];
     int pcall_depth;
-    int entry_call_depth;         /* gem_call_depth at coro entry — used to gate TCO arena reset */
+    int entry_call_depth;         /* gem_call_depth at coro entry — used to gate TCO arena reset for non-process-tail functions */
     int call_depth;               /* saved gem_call_depth at last yield (restored on resume) */
     GemArena arena;               /* per-process bump allocator */
     /* Pinned-box set: boxes for mutated-captured fn-local vars, allocated via

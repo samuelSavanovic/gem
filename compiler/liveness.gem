@@ -730,13 +730,6 @@ fn compute_loop_live_at_backedge(while_node, live_after_loop)
   {ok: false, reason: "liveness fixpoint did not converge"}
 end
 
-# Back-compat wrapper. Safe for `while true` loops with no `break` (the
-# post-loop point is unreachable, so an empty live_after_loop set is the
-# right input). For loops that can fall through, prefer the parameterized
-# entry point or use the fn-scope walker `compute_live_for_pt_loops_in_stmts`.
-fn compute_live_at_backedge(while_node)
-  compute_loop_live_at_backedge(while_node, {})
-end
 
 # Walk loop body stmts in forward order, accumulating "defined" (lets we've
 # seen so far) and collecting the free vars of every anon_fn encountered into
@@ -1031,4 +1024,4 @@ fn compute_live_for_pt_loops_in_stmts(stmts)
   _attach_stmts(stmts, {})
 end
 
-export compute_live_at_backedge, compute_loop_live_at_backedge, compute_live_for_pt_loops_in_stmts, liveness_has_self_tail_call, liveness_loop_has_break, sorted_params_to_set, lset_eq, lset_copy, is_spawn_callee_name
+export compute_loop_live_at_backedge, compute_live_for_pt_loops_in_stmts, liveness_has_self_tail_call, liveness_loop_has_break, sorted_params_to_set, lset_eq, lset_copy, is_spawn_callee_name

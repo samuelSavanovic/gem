@@ -320,7 +320,7 @@ typedef struct {
        pinned box) keeps pointing at that slot instead of being rebound to a
        fresh arena box. The arena's lo/hi span is *not* a contiguous range —
        blocks live at distinct mmap addresses with potential gaps — so we
-       walk the block list per query for soundness. */
+       walk the block list per pointer lookup (not by range comparison) for soundness. */
     int preserve_external;
     GemArena *old_arena;
 } GemCopyMap;
@@ -679,10 +679,7 @@ void gem_pin_free_all(GemProcess *proc) {
     proc->pinned_boxes = NULL;
 }
 
-/* Reset the current process's arena, copying roots and mailbox into a fresh
-   arena and munmapping the old blocks. Both arenas use mmap/munmap, so freed
-   pages return to the OS immediately (unlike malloc scratch, which the libc
-   allocator typically retains in process address space). */
+/* Reset the current process's arena, deep-copying `roots` and pinned-box `pinned_roots` into a fresh arena. See gem_arena.c file comment for the mmap/munmap rationale. */
 void gem_arena_reset_with_roots_pinned(GemVal **roots, int n_roots,
                                        GemVal **pinned_roots, int n_pinned) {
     GemArena *arena = gem_current_arena();

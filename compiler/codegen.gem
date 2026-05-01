@@ -2,7 +2,7 @@
 # Faithful port of bootstrap/gem.py CodeGen class.
 # Uses closure-based pattern: fn make_codegen() returns a table of methods.
 
-load "liveness" (compute_live_at_backedge, compute_live_for_pt_loops_in_stmts, is_spawn_callee_name)
+load "liveness" (compute_live_for_pt_loops_in_stmts, is_spawn_callee_name)
 
 # ─── String helpers ─────────────────────────────────────────────
 
@@ -586,23 +586,13 @@ end
 
 # ─── Liveness-driven arm-let hoist ────────────────────────────────
 #
-# After `mark_process_tail` runs liveness, every PT-while node carries a
-# `liveness_result` describing the names live at its back-edge. If any of
-# those names is declared as a `let` *only* inside an arm of a nested
-# if/match/receive_match in the loop body, `filter_live_for_rescue` refuses
-# the rescue (no addressable C local). The intersect-only `lift_arm_lets`
-# pass above only hoists names declared in EVERY arm of a single
-# if/match/receive — it can't reach this case (the let lives in one arm,
-# captured by an escaping closure that escapes the arm).
-#
-# This pass closes the gap. For each PT-while, it walks the loop body,
-# rewrites every `let X = expr` (where X ∈ live-at-back-edge and X is not
-# already in scope above the loop) to `assign X = expr`, and inserts a
-# `let X = nil` immediately before the while in the surrounding stmt list.
-# That gives X a stable C local that encloses the rescue check, making it
-# addressable as `&gem_v_X` at the back-edge. The pass is the load-bearing
-# piece that lets users write loop+spawn shapes without falling back to
-# recursion when the captured var is read-only-from-inside-the-arm.
+# Lifts `let X = expr` declarations inside if/match/receive arms of a
+# PT-while body to fn-top placeholders, rewriting the per-arm decl to an
+# assign. Required so X has an addressable C local enclosing the back-edge
+# rescue check (`&gem_v_X`) when X is live across that edge but declared
+# in only one arm. The intersect-only `lift_arm_lets` pass above handles
+# the case where a name appears in *every* arm; this pass handles single-
+# arm declarations whose values escape via a captured closure.
 
 fn hoist_has_let(node, name)
   if node == nil
@@ -1031,12 +1021,7 @@ tag_process_tail_while_loops = fn(fn_defs, top_stmts, process_tail_fns, source_n
     let is_pt = process_tail_fns[fd.name] == true
     walk_for_tagging_stmts(fd.body, is_pt, source_name)
   end
-  # Top-level statements run in `gem_main_pid` and are PT-tagged uniformly
-  # with fn bodies. (Earlier the runtime shared strings allocated in main's
-  # arena across processes via a fast-path in `gem_deep_copy_internal`, which
-  # would dangle if main's arena got reset; that fast-path is gone, so a
-  # `while true` accept loop at top level resets main's arena like any other
-  # PT loop.)
+  # Top-level statements run in `gem_main_pid` and are PT-tagged uniformly with fn bodies.
   walk_for_tagging_stmts(top_stmts, true, source_name)
 end
 
@@ -1161,7 +1146,7 @@ fn make_codegen(source_name)
   # Captures of the current `compile_closure_fn` body — env fields backed by
   # `_cls->gem_v_<name>` and relocatable via `_self_closure` on arena reset.
   # Disjoint from `inner_boxed` (lets/params captured by *nested* anons,
-  # which have no env-relocation path and remain a refusal).
+  # which have no env-relocation path and are refused by `filter_live_for_rescue` with a no-C-local message).
   let closure_captures = {}
   # When true, the enclosing closure body has a synthesized `_self_closure`
   # GemVal slot — `compile_while` may pass `&_self_closure` as a rescue root
@@ -1865,7 +1850,6 @@ fn make_codegen(source_name)
   let compile_stmts = nil
   let compile_stmts_tail = nil
   let compile_if = nil
-  let build_rescue_roots = nil
   let compile_while = nil
   let compile_match = nil
   let compile_receive_match = nil
@@ -1949,7 +1933,7 @@ fn make_codegen(source_name)
   #
   # When `f` is process_tail, the TCO arena reset at its self-tail back-edge
   # is safe to fire unconditionally (no caller above with live arena state),
-  # so the runtime depth-2 fence at line ~830 is dropped for `f`.
+  # so the depth-2 fence in `emit_tco_continue` is dropped for `f`.
   #
   # TCO functions not marked process_tail get a compile-time warning: their
   # arena will not reset at the back-edge, so a long-running process loop
@@ -2432,12 +2416,11 @@ fn make_codegen(source_name)
       end
     end
     if not any_captured and len(arg_temps) > 0
-      # Reset only when safe. For functions statically proven `process_tail`
-      # (every caller chain reaches this fn via tail calls only from a process
-      # root), no caller above holds live arena state — reset unconditionally.
-      # Otherwise fall back to the runtime depth-2 fence (covers cases where
-      # static analysis can't see the call graph, e.g. dot/dynamic dispatch);
-      # such fns also got a compile-time warning at codegen time.
+      # Arena reset at the tail-call boundary. Process-tail fns reset
+      # unconditionally — every caller chain reaches them via tail calls from
+      # a process root, so no caller above holds live arena state. Non-PT
+      # TCO fns guard with a runtime depth-2 fence (the static analysis
+      # could not prove all callers are tail; a non-tail caller would dangle).
       if tco_is_process_tail
         buf_push(b, "{p}if (gem_current_pid >= 0 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
       else
@@ -3379,13 +3362,9 @@ fn make_codegen(source_name)
           end
         elif set_contains(boxed_vars, name)
           # Mutated-captured fn-local: box is malloc-backed (gem_box_alloc),
-          # registered in the process's pin-set. We pass the box pointer
-          # directly to the runtime via _pinned_loop_roots[]; the runtime
-          # walks contents into the fresh arena and dedups against env-walk
-          # via the pin-set's mark bit. We must NOT route this through the
-          # regular roots list — `*r = deep_copy(*r)` would migrate the
-          # contents, but a later env-walk would mark+recurse on the
-          # already-migrated value, missing the copy_map and re-allocating.
+          # registered in the process's pin-set. Routed via pinned_roots[]
+          # rather than roots[] — see gem_arena_reset_with_roots_pinned in
+          # runtime/gem_core.c for the dedup contract with env-walk.
           push(pinned_roots, name)
         elif in_top_level and set_contains(top_level_boxed, name)
           # BSS-backed top-level box: the slot pointer (`gem_v_<name>`) is
@@ -3412,19 +3391,12 @@ fn make_codegen(source_name)
     {ok: true, roots: roots, pinned_roots: pinned_roots}
   end
 
-  build_rescue_roots = fn(node, in_top_level, top_level_vars, source_name)
+  let build_rescue_roots = fn(node, in_top_level, top_level_vars, source_name)
     let do_rescue = false
     let rescue_roots = []
     let pinned_rescue_roots = []
     let refuse_reason = nil
-    # Pre-pass `compute_live_for_pt_loops_in_stmts` attached the result during
-    # AST setup. Fall back to a cond-true / no-break recompute only if a node
-    # slipped past the pre-pass (defensive — keeps compile_while well-defined
-    # if a future caller forgets to invoke the pre-pass).
     let lr = node.liveness_result
-    if lr == nil
-      lr = compute_live_at_backedge(node)
-    end
     if lr.ok
       let fr = filter_live_for_rescue(lr.live)
       if fr.ok
@@ -4424,12 +4396,10 @@ fn make_codegen(source_name)
     # `process_tail_fns`. Emits warnings for unmarked TCO fns.
     mark_process_tail(fn_defs, top_stmts)
 
-    # Liveness-driven hoist: for each PT-while, lift arm-lets whose names
-    # are live at the back-edge to the surrounding stmt list. Closes the
-    # rescue-refusal class for arm-lets captured by escaping closures
-    # (pcall, dead-letter wrappers, etc.). Must run AFTER mark_process_tail
-    # (which attaches `liveness_result` to PT-while nodes) and before
-    # codegen reads the AST.
+    # Liveness-driven hoist: for PT-while nodes, lift arm-lets live at the
+    # back-edge to the surrounding stmt list so they have a stable C local.
+    # Must run AFTER mark_process_tail (which attaches `liveness_result`)
+    # and before codegen reads the AST.
     for fd in fn_defs
       lift_captured_arm_lets_in_fn(fd)
     end
