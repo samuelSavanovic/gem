@@ -61,6 +61,11 @@ static void gem_free_proc_slot(int pid) {
     while (m) { GemMonitorNode *next = m->next; free(m); m = next; }
     proc->monitors = NULL;
 
+    /* Free pinned boxes en masse before destroying the arena. Pinned-box
+       storage is malloc-backed and independent of arena memory, so order is
+       flexible — but conceptually they belong to the same process lifecycle. */
+    gem_pin_free_all(proc);
+
     if (pid != gem_main_pid)
         gem_arena_destroy(&proc->arena);
 
@@ -235,6 +240,7 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].reductions = 0;
     gem_proc_table[pid].pcall_depth = 0;
     gem_proc_table[pid].call_depth = 0;
+    gem_proc_table[pid].pinned_boxes = NULL;
 
     if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
     return pid;
@@ -375,6 +381,7 @@ void gem_run_main(GemFnPtr fn, void *env) {
     gem_proc_table[pid].reductions = 0;
     gem_proc_table[pid].pcall_depth = 0;
     gem_proc_table[pid].call_depth = 0;
+    gem_proc_table[pid].pinned_boxes = NULL;
 
     if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
     gem_run_scheduler();

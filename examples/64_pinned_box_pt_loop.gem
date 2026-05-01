@@ -1,0 +1,37 @@
+# Item 5b regression: fn-local mutated-captured box in a spawned PT-while
+# loop, with non-trivial box content (table) so the runtime mark+recurse
+# walk has to migrate nested allocations into the fresh arena. Without
+# pin-set + mark-and-recurse, `acc` would dangle on the first arena
+# reset (~512 iterations) and the final value would be corrupted.
+
+let main_pid = self()
+
+let w = spawn(fn()
+  let acc = {value: 0, label: "start", history: []}
+
+  let bump = fn(n)
+    acc.value = acc.value + n
+    acc.label = "iter-" + to_string(acc.value)
+    push(acc.history, n)
+  end
+
+  while true
+    let msg = receive()
+    if msg == "done"
+      send(main_pid, {tag: "result", value: acc.value, label: acc.label, hlen: len(acc.history)})
+      return
+    end
+    bump(msg)
+    let junk = {a: "padding-" + to_string(acc.value), b: [1,2,3,4,5,6,7,8]}
+  end
+end)
+
+let n = 10000
+for i = 0, n
+  send(w, 1)
+end
+send(w, "done")
+let r = receive()
+print("value: " + to_string(r.value))
+print("label: " + r.label)
+print("hlen: " + to_string(r.hlen))

@@ -314,13 +314,15 @@ typedef struct {
     int cap;
     int use_malloc;
     /* When `preserve_external` is set, gem_deep_copy_internal /
-       gem_deep_copy_fn leave alone any heap pointer that lies *outside*
-       [old_arena_lo, old_arena_hi). Used by gem_arena_reset_with_roots so a
-       closure env that captured a BSS-backed top-level box keeps pointing
-       at that BSS slot instead of being rebound to a fresh arena box. */
+       gem_deep_copy_fn leave alone any heap pointer that lies *outside* the
+       old arena's mmap blocks. Used by gem_arena_reset_with_roots so a
+       closure env that captured a BSS-backed top-level box (or a malloc'd
+       pinned box) keeps pointing at that slot instead of being rebound to a
+       fresh arena box. The arena's lo/hi span is *not* a contiguous range —
+       blocks live at distinct mmap addresses with potential gaps — so we
+       walk the block list per query for soundness. */
     int preserve_external;
-    const char *old_arena_lo;
-    const char *old_arena_hi;
+    GemArena *old_arena;
 } GemCopyMap;
 
 static void gem_copy_map_init(GemCopyMap *map, int use_malloc) {
@@ -330,14 +332,21 @@ static void gem_copy_map_init(GemCopyMap *map, int use_malloc) {
     map->cap = GEM_COPY_MAP_INLINE;
     map->use_malloc = use_malloc;
     map->preserve_external = 0;
-    map->old_arena_lo = NULL;
-    map->old_arena_hi = NULL;
+    map->old_arena = NULL;
+}
+
+static int gem_ptr_in_arena(GemArena *arena, const void *ptr) {
+    if (!arena) return 0;
+    const char *p = (const char *)ptr;
+    for (GemArenaBlock *b = arena->head; b; b = b->next) {
+        if (p >= b->data && p < b->data + b->cap) return 1;
+    }
+    return 0;
 }
 
 static int gem_copy_is_external(GemCopyMap *map, const void *ptr) {
     if (!map->preserve_external) return 0;
-    const char *p = (const char *)ptr;
-    return p < map->old_arena_lo || p >= map->old_arena_hi;
+    return !gem_ptr_in_arena(map->old_arena, ptr);
 }
 
 static void gem_copy_map_cleanup(GemCopyMap *map) {
@@ -441,12 +450,25 @@ static GemVal gem_deep_copy_fn(GemVal fn_val, GemCopyMap *map) {
     *(intptr_t *)new_env = n;
     GemVal **new_fields = (GemVal **)((char *)new_env + sizeof(intptr_t));
     for (intptr_t i = 0; i < n; i++) {
-        /* Preserve box pointers that live outside the old arena (BSS-backed
-           top-level boxes). The reset rescues those boxes' *contents* via
-           the roots list, so the env keeps observing the same slot main
-           writes through. */
+        /* Preserve box pointers that live outside the old arena. Two flavors:
+             - BSS-backed top-level boxes: their contents are migrated via
+               the rescue-roots list (the runtime caller passes the BSS slot
+               pointer); not in any pin-set, so the mark call below is a
+               no-op and we just preserve the pointer.
+             - malloc'd pinned boxes (gem_box_alloc, fn-local mutated-
+               captured): registered in the current process's pin-set.
+               If this is the first env field reaching the box this cycle,
+               mark+recurse migrates its contents. Subsequent encounters
+               (via other capturing closures) hit the "already walked"
+               short-circuit and just preserve the pointer. */
         if (gem_copy_is_external(map, old[i])) {
             new_fields[i] = old[i];
+            if (gem_current_pid >= 0) {
+                GemProcess *proc = &gem_proc_table[gem_current_pid];
+                if (gem_pin_mark_walked(proc, old[i])) {
+                    *old[i] = gem_deep_copy_internal(*old[i], map);
+                }
+            }
             continue;
         }
         GemVal *existing = (GemVal *)gem_copy_map_find(map, old[i]);
@@ -591,11 +613,78 @@ void gem_deep_free(GemVal val) {
     gem_deep_free_internal(val, NULL);
 }
 
+/* ─── Pinned-box set ─── */
+
+/* Boxes for fn-local mutated-captured vars are allocated via gem_box_alloc
+   (plain malloc) so they survive arena reset. Each is registered in the
+   current process's pin-set. At every reset:
+     1. Pre-pass: codegen passes the box pointers as `pinned_roots`. We
+        mark each as "walked" and deep-copy its contents into the fresh
+        arena. This handles boxes that are live via the function's local
+        even when no capturing closure is alive.
+     2. During the regular roots / mailbox walk, gem_deep_copy_fn's
+        external branch encounters env fields pointing at pinned boxes.
+        gem_pin_mark_walked dedups: if not yet walked, walk the contents
+        now; if already walked, just preserve the pointer.
+     3. Sweep: any pin-set entry not marked is unreachable — free it.
+        Surviving entries are reset to "untouched" for the next cycle.
+   On process exit, gem_pin_free_all releases everything in one shot. */
+
+GemVal *gem_box_alloc(void) {
+    GemVal *p = (GemVal *)calloc(1, sizeof(GemVal));
+    if (gem_current_pid >= 0) {
+        GemProcess *proc = &gem_proc_table[gem_current_pid];
+        GemPinEntry e = { .key = p, .value = 0 };
+        hmputs(proc->pinned_boxes, e);
+    }
+    return p;
+}
+
+int gem_pin_mark_walked(GemProcess *proc, void *p) {
+    if (!proc || !proc->pinned_boxes) return 0;
+    ptrdiff_t idx = hmgeti(proc->pinned_boxes, p);
+    if (idx < 0) return 0;
+    if (proc->pinned_boxes[idx].value) return 0;
+    proc->pinned_boxes[idx].value = 1;
+    return 1;
+}
+
+void gem_pin_sweep(GemProcess *proc) {
+    if (!proc || !proc->pinned_boxes) return;
+    /* Build the free-list first; hmdel rebalances and would invalidate
+       indices mid-iteration. */
+    void **to_free = NULL;
+    size_t n = hmlenu(proc->pinned_boxes);
+    for (size_t i = 0; i < n; i++) {
+        if (proc->pinned_boxes[i].value == 0) {
+            arrpush(to_free, proc->pinned_boxes[i].key);
+        } else {
+            proc->pinned_boxes[i].value = 0;
+        }
+    }
+    for (size_t i = 0; i < arrlenu(to_free); i++) {
+        hmdel(proc->pinned_boxes, to_free[i]);
+        free(to_free[i]);
+    }
+    arrfree(to_free);
+}
+
+void gem_pin_free_all(GemProcess *proc) {
+    if (!proc || !proc->pinned_boxes) return;
+    size_t n = hmlenu(proc->pinned_boxes);
+    for (size_t i = 0; i < n; i++) {
+        free(proc->pinned_boxes[i].key);
+    }
+    hmfree(proc->pinned_boxes);
+    proc->pinned_boxes = NULL;
+}
+
 /* Reset the current process's arena, copying roots and mailbox into a fresh
    arena and munmapping the old blocks. Both arenas use mmap/munmap, so freed
    pages return to the OS immediately (unlike malloc scratch, which the libc
    allocator typically retains in process address space). */
-void gem_arena_reset_with_roots(GemVal **roots, int n_roots) {
+void gem_arena_reset_with_roots_pinned(GemVal **roots, int n_roots,
+                                       GemVal **pinned_roots, int n_pinned) {
     GemArena *arena = gem_current_arena();
     GemProcess *proc = NULL;
     if (gem_current_pid >= 0) {
@@ -621,8 +710,18 @@ void gem_arena_reset_with_roots(GemVal **roots, int n_roots) {
     GemCopyMap to_arena;
     gem_copy_map_init(&to_arena, 0);
     to_arena.preserve_external = 1;
-    to_arena.old_arena_lo = old_arena.lo;
-    to_arena.old_arena_hi = old_arena.hi;
+    to_arena.old_arena = &old_arena;
+
+    /* Pinned-root pre-pass: walk-and-mark each pinned box. This migrates
+       contents into the fresh arena and seeds the copy_map so a later
+       env-walk encountering the same internal pointers reuses the
+       migrated copies instead of duplicating them. */
+    for (int i = 0; i < n_pinned; i++) {
+        GemVal *box = pinned_roots[i];
+        if (gem_pin_mark_walked(proc, box)) {
+            *box = gem_deep_copy_internal(*box, &to_arena);
+        }
+    }
 
     for (int i = 0; i < n_roots; i++) {
         *roots[i] = gem_deep_copy_internal(*roots[i], &to_arena);
@@ -644,6 +743,15 @@ void gem_arena_reset_with_roots(GemVal **roots, int n_roots) {
     }
     gem_copy_map_cleanup(&to_arena);
 
+    /* Sweep pin-set: any pinned box not marked this cycle is unreachable.
+       Surviving entries are reset to untouched. Order is independent of
+       arena destruction since pinned boxes are malloc-backed. */
+    if (proc) gem_pin_sweep(proc);
+
     /* munmap the old blocks now that nothing references them. */
     gem_arena_destroy(&old_arena);
+}
+
+void gem_arena_reset_with_roots(GemVal **roots, int n_roots) {
+    gem_arena_reset_with_roots_pinned(roots, n_roots, NULL, 0);
 }

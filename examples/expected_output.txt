@@ -1020,3 +1020,7 @@ last: tick-9999
 received: 1000
 last_n: 999
 last_payload: iter-999
+value: 10000
+label: iter-10000
+hlen: 10000
+total: 250000

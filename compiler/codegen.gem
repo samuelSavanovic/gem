@@ -3152,7 +3152,10 @@ fn make_codegen(source_name)
         return "{line_dir}{r.setup}{p}{mname} = {r.expr};"
       end
       if set_contains(boxed_vars, name)
-        return "{line_dir}{r.setup}{p}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{p}*{mname} = {r.expr};"
+        # Mutated-captured fn-local: pinned malloc'd box, registered in the
+        # current process's pin-set so it survives arena reset. Sweep at
+        # next reset frees it if no live root reaches the box.
+        return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};"
       end
       return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};"
     when {tag: "assign", name: name, value: value}
@@ -3250,7 +3253,7 @@ fn make_codegen(source_name)
       let r = compile_expr(value)
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return "{line_dir}{r.setup}{p}GemVal *{mname} = GC_MALLOC(sizeof(GemVal));\n{p}*{mname} = {r.expr};\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
+        return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
       end
       return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
     when {tag: "assign", name: name, value: value}
@@ -3344,6 +3347,7 @@ fn make_codegen(source_name)
   # if/match arm — `collect_top_let_names` does not descend through those).
   let filter_live_for_rescue = fn(live_set)
     let roots = []
+    let pinned_roots = []
     let added_self_closure = false
     let lk = keys(live_set)
     for name in lk
@@ -3364,8 +3368,22 @@ fn make_codegen(source_name)
             push(roots, "_self_closure")
             added_self_closure = true
           end
-        elif set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name))
-          return {ok: false, reason: "live var `{name}` is captured by a closure (box lives in arena memory)"}
+        elif set_contains(boxed_vars, name)
+          # Mutated-captured fn-local: box is malloc-backed (gem_box_alloc),
+          # registered in the process's pin-set. We pass the box pointer
+          # directly to the runtime via _pinned_loop_roots[]; the runtime
+          # walks contents into the fresh arena and dedups against env-walk
+          # via the pin-set's mark bit. We must NOT route this through the
+          # regular roots list — `*r = deep_copy(*r)` would migrate the
+          # contents, but a later env-walk would mark+recurse on the
+          # already-migrated value, missing the copy_map and re-allocating.
+          push(pinned_roots, name)
+        elif in_top_level and set_contains(top_level_boxed, name)
+          # BSS-backed top-level box: the slot pointer (`gem_v_<name>`) is
+          # already a `GemVal *`. The runtime migrates contents via the
+          # rescue-roots loop; not in any pin-set, so env-walk's pin mark
+          # is a no-op and the env keeps observing the BSS slot.
+          push(roots, name)
         elif not set_contains(fn_scope_locals, name)
           return {ok: false, reason: "live var `{name}` has no C local at this loop's back-edge (declared in a nested if/match arm?)"}
         else
@@ -3382,7 +3400,7 @@ fn make_codegen(source_name)
         return {ok: false, reason: "live var `{name}` has no C local at this loop's back-edge (declared in a nested if/match arm?)"}
       end
     end
-    {ok: true, roots: roots}
+    {ok: true, roots: roots, pinned_roots: pinned_roots}
   end
 
   compile_while = fn(node, indent)
@@ -3391,6 +3409,7 @@ fn make_codegen(source_name)
 
     let do_rescue = false
     let rescue_roots = []
+    let pinned_rescue_roots = []
     let refuse_reason = nil
     if is_pt_while
       # Pre-pass `compute_live_for_pt_loops_in_stmts` attached the result during
@@ -3406,6 +3425,7 @@ fn make_codegen(source_name)
         if fr.ok
           do_rescue = true
           rescue_roots = fr.roots
+          pinned_rescue_roots = fr.pinned_roots
           # Top-level PT loop: indirect call chains from the loop body can
           # read any top-level binding (e.g. `_is_stc`-style fwd-declared
           # closures defined in a loaded module). Liveness only sees direct
@@ -3464,34 +3484,56 @@ fn make_codegen(source_name)
     buf_push(b, "{p}    gem_yield_check();\n")
     if do_rescue
       buf_push(b, "{p}    if (gem_current_pid >= 0 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
-      if len(rescue_roots) == 0
+      let has_self_closure_root = false
+      let n_roots = len(rescue_roots)
+      let n_pinned = len(pinned_rescue_roots)
+      if n_roots == 0 and n_pinned == 0
         buf_push(b, "{p}        gem_arena_reset_with_roots(NULL, 0);\n")
       else
-        buf_push(b, "{p}        GemVal *_loop_roots[] = \{")
-        let has_self_closure_root = false
-        for i = 0, len(rescue_roots)
-          if i > 0
-            buf_push(b, ", ")
+        let roots_arg = "NULL"
+        let pinned_arg = "NULL"
+        if n_roots > 0
+          buf_push(b, "{p}        GemVal *_loop_roots[] = \{")
+          for i = 0, n_roots
+            if i > 0
+              buf_push(b, ", ")
+            end
+            let rname = rescue_roots[i]
+            # Sentinel: `_self_closure` is the synthesized closure-value slot
+            # (see `compile_closure_fn`). Passing `&_self_closure` to the
+            # runtime triggers env-struct relocation via `gem_deep_copy_fn`,
+            # which rewrites every capture box into the fresh arena.
+            if rname == "_self_closure"
+              buf_push(b, "&_self_closure")
+              has_self_closure_root = true
+            elif set_contains(top_level_boxed, rname)
+              # Boxed top-level vars: `gem_v_<name>` is already `GemVal *`
+              # (points at the BSS-backed `gem_box_<name>`); locals & non-boxed
+              # top-levels need the `&` to form a `GemVal *`.
+              buf_push(b, "{mangle(rname)}")
+            else
+              buf_push(b, "&{mangle(rname)}")
+            end
           end
-          let rname = rescue_roots[i]
-          # Sentinel: `_self_closure` is the synthesized closure-value slot
-          # (see `compile_closure_fn`). Passing `&_self_closure` to the
-          # runtime triggers env-struct relocation via `gem_deep_copy_fn`,
-          # which rewrites every capture box into the fresh arena.
-          if rname == "_self_closure"
-            buf_push(b, "&_self_closure")
-            has_self_closure_root = true
-          elif set_contains(top_level_boxed, rname)
-            # Boxed top-level vars: `gem_v_<name>` is already `GemVal *`
-            # (points at the BSS-backed `gem_box_<name>`); locals & non-boxed
-            # top-levels need the `&` to form a `GemVal *`.
-            buf_push(b, "{mangle(rname)}")
-          else
-            buf_push(b, "&{mangle(rname)}")
-          end
+          buf_push(b, "};\n")
+          roots_arg = "_loop_roots"
         end
-        buf_push(b, "};\n")
-        buf_push(b, "{p}        gem_arena_reset_with_roots(_loop_roots, {len(rescue_roots)});\n")
+        if n_pinned > 0
+          # Pinned-box roots: `gem_v_<name>` is already `GemVal *` from the
+          # gem_box_alloc emit, so we pass it bare. The runtime walks each
+          # box's contents into the fresh arena and marks the pin-set entry,
+          # deduping any later env-walk that reaches the same box.
+          buf_push(b, "{p}        GemVal *_pinned_loop_roots[] = \{")
+          for i = 0, n_pinned
+            if i > 0
+              buf_push(b, ", ")
+            end
+            buf_push(b, "{mangle(pinned_rescue_roots[i])}")
+          end
+          buf_push(b, "};\n")
+          pinned_arg = "_pinned_loop_roots"
+        end
+        buf_push(b, "{p}        gem_arena_reset_with_roots_pinned({roots_arg}, {n_roots}, {pinned_arg}, {n_pinned});\n")
         # Reload the closure env pointer + every capture local from the
         # relocated `_self_closure.env`. The runtime updates the slot to
         # point at the new env struct in the fresh arena; the C locals
@@ -4032,7 +4074,7 @@ fn make_codegen(source_name)
       if has_def
         let r = compile_expr(defaults[i])
         if set_contains(cap_set, params[i])
-          buf_push(b, "    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));\n")
+          buf_push(b, "    GemVal *{mp} = gem_box_alloc();\n")
           buf_push(b, "    if (argc > {i}) \{ *{mp} = args[{i}]; } else \{\n")
           buf_push(b, r.setup)
           buf_push(b, "    *{mp} = {r.expr};\n    }\n")
@@ -4044,7 +4086,7 @@ fn make_codegen(source_name)
         end
       else
         if set_contains(cap_set, params[i])
-          buf_push(b, "    GemVal *{mp} = GC_MALLOC(sizeof(GemVal));\n")
+          buf_push(b, "    GemVal *{mp} = gem_box_alloc();\n")
           buf_push(b, "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
         else
           buf_push(b, "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
@@ -4057,7 +4099,7 @@ fn make_codegen(source_name)
       let N = len(params)
       let mp_rest = mangle(node.rest_param)
       if set_contains(cap_set, node.rest_param)
-        buf_push(b, "    GemVal *{mp_rest} = GC_MALLOC(sizeof(GemVal));\n")
+        buf_push(b, "    GemVal *{mp_rest} = gem_box_alloc();\n")
         buf_push(b, "    *{mp_rest} = gem_table_new();\n")
         buf_push(b, "    for (int _ri = {N}; _ri < argc; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
       else

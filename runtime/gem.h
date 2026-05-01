@@ -294,6 +294,22 @@ void gem_deep_free(GemVal val);
    arena. Mailbox contents are also preserved. No-op if pcall_depth > 0. */
 void gem_arena_reset_with_roots(GemVal **roots, int n_roots);
 
+/* Variant that also migrates pinned-box rescue roots: fn-local mutated-
+   captured boxes allocated via gem_box_alloc. Each `pinned_roots[i]` is the
+   malloc'd box pointer (a `GemVal *`); contents are deep-copied into the
+   fresh arena. Pinned boxes also reachable via env fields are walked at most
+   once thanks to the per-process pin-set mark. After the walk, any pin-set
+   entry that was NOT marked is unreachable and freed. */
+void gem_arena_reset_with_roots_pinned(GemVal **roots, int n_roots,
+                                       GemVal **pinned_roots, int n_pinned);
+
+/* Allocate a new pinned box (sizeof(GemVal)) outside the per-process arena.
+   The caller is responsible for initializing *box. The pointer is registered
+   in the current process's pin-set; sweep at the next arena reset will free
+   it if no live root reaches it. */
+GemVal *gem_box_alloc(void);
+
+
 /* ─── Runtime initialization (stores argc/argv, seeds RNG) ─── */
 
 void gem_init(int argc, char **argv);
@@ -404,7 +420,24 @@ typedef struct {
     int entry_call_depth;         /* gem_call_depth at coro entry — used to gate TCO arena reset */
     int call_depth;               /* saved gem_call_depth at last yield (restored on resume) */
     GemArena arena;               /* per-process bump allocator */
+    /* Pinned-box set: boxes for mutated-captured fn-local vars, allocated via
+       gem_box_alloc (plain malloc) so they survive arena reset. Mark-and-sweep
+       at every reset; freed en masse on process exit. NULL == empty.
+       value: 0 = untouched this cycle, 1 = walked. */
+    struct GemPinEntry *pinned_boxes;
 } GemProcess;
+
+typedef struct GemPinEntry {
+    void *key;
+    char value;
+} GemPinEntry;
+
+/* Pin-set ops. gem_pin_mark_walked transitions a pin-set entry from
+   "untouched" to "walked" and returns 1 (caller should recurse into *p);
+   returns 0 if the pointer is not in the pin-set or is already walked. */
+int  gem_pin_mark_walked(GemProcess *proc, void *p);
+void gem_pin_sweep(GemProcess *proc);
+void gem_pin_free_all(GemProcess *proc);
 
 #ifndef GEM_MAX_PROCS
 #define GEM_MAX_PROCS 1024

@@ -1,0 +1,44 @@
+# Item 5b regression: validates that the pin-set sweep frees boxes
+# from short-lived calls. `make_counter` allocates a pinned box for
+# `n` (mutated by `inc`) and returns the final value. The closure
+# escapes scope on return — without sweep, every call would leave a
+# permanent pin-set entry, growing RSS linearly with iteration count.
+# With sweep, the pin set drops back to its live size at every reset.
+#
+# Functional check: each call returns 5 (1+1+1+1+1). For 50k calls
+# the spawned process accumulates 250000. RSS bounding is verified
+# manually via `/usr/bin/time -l` (not encoded in the diff harness).
+
+fn make_counter()
+  let n = 0
+  let inc = fn() n = n + 1 end
+  inc()
+  inc()
+  inc()
+  inc()
+  inc()
+  n
+end
+
+let main_pid = self()
+
+let w = spawn(fn()
+  let total = 0
+  while true
+    let msg = receive()
+    if msg == "done"
+      send(main_pid, {tag: "result", total: total})
+      return
+    end
+    total = total + make_counter()
+    let junk = {x: "pad-" + to_string(total), y: [1,2,3,4,5]}
+  end
+end)
+
+let n = 50000
+for i = 0, n
+  send(w, 1)
+end
+send(w, "done")
+let r = receive()
+print("total: " + to_string(r.total))
