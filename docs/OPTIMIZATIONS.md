@@ -65,11 +65,19 @@ Default lowered from 16 MB to 1 MB. Threshold sweep at c100 on `/` showed 1 MB s
 ### Investigate post-idle high-water at high concurrency (P2 — downgraded 2026-04-30)
 Originally reported at 2.39 GB stuck post-c=500 with the 16 MB threshold. After lowering the default threshold to 1 MB, post-idle RSS at c=500 dropped to 174 MB — flat across +0/+30/+90s probes, so it's still not draining, but the absolute waste is now an order of magnitude smaller and unlikely to matter for typical workloads. The underlying mechanism (per-process arenas of completed connection handlers not fully releasing — likely `madvise(DONTNEED)` happens but `munmap` doesn't, or proc-table objects linger until late cleanup) is unchanged. Downgrade P1 → P2: keep tracking but don't prioritize until a workload demonstrates the residual is a real problem. If revisited, trace `gem_proc_exit` against actual mmap accounting under load.
 
-### Arena compaction for long-running processes (P1)
-Arenas only grow — dead objects (replaced table entries, overwritten variables) waste space until the process exits. For long-running processes (gen_servers, accept loops), memory usage creeps up. Periodic compaction (copy live data into a fresh arena, swap, free old blocks) would reclaim this waste. Requires a root-scanning mechanism to find all live references from the coroutine stack and closure envs.
+### ~~Arena compaction for long-running processes~~ ✓ Done via a different mechanism (2026-04-30 → 2026-05-01)
+Original sketch: a runtime "periodic compaction" pass that walks roots from the coroutine stack and closure envs, copies live data to a fresh arena, frees old blocks. **That approach is unsound for Gem** — there is no precise GC root map, no stackmap on the C compiler's output, no way to safely walk a coroutine's spilled register state and identify which slots hold `GemVal` vs raw bytes. Adding any of that would be a major undertaking (full GC infrastructure on a language that explicitly chose arenas to avoid GC).
 
-### Growable structure waste (P1)
-Tables and arrays allocated in arenas can't individually shrink or free their old backing arrays when they grow. Each `gem_table_grow` doubles capacity, leaving the old keys/vals arrays as dead space in the arena. For tables that grow incrementally (e.g. route tables, accumulators), this wastes up to 2x the live data. Copy-on-grow (allocate new backing in the arena, accept old waste) is the current approach. Compaction (above) would reclaim this.
+What actually ships gives the same end-state — old blocks freed, live data preserved — driven by **compile-time liveness** rather than runtime scanning:
+
+- At every process-tail loop back-edge, codegen emits `gem_arena_reset_with_roots_pinned(roots, n, pinned, m)` guarded by a 1 MB threshold. The roots are the liveness pass's output filtered by `filter_live_for_rescue`; the runtime deep-copies live values into a fresh arena and `munmap`s the old blocks.
+- Mutated-captured fn-local boxes are pinned outside the arena (item 5b) and migrated by the same walk; the pin-set's mark-and-sweep frees boxes orphaned by short-lived calls.
+- Top-level boxed lets sit in BSS (item 7), so they survive resets directly.
+
+Effective compaction frequency: every ~1 MB of arena-allocated bytes. Bookmark soak benchmark validates: peak RSS stays bounded across 5-minute runs (vs. unbounded growth pre-mechanism). No runtime root scan, no stackmap, no GC pause.
+
+### ~~Growable structure waste~~ ✓ Done via the same mechanism
+Original concern: `gem_table_grow` doubles capacity in place, leaving the old keys/vals backing as dead space until process exit. The back-edge reset above reclaims this — when the arena resets, the table is deep-copied with `cap = current_cap` (no historical doubling overhead), and the old arena blocks (containing every prior backing array) are `munmap`'d. So a long-running gen_server's route table that grew 1→2→4→…→1024 entries pays the dead-backing cost only until the next reset, not for the lifetime of the process.
 
 ### ~~Deep copy optimization for shared immutable data~~ ✓ Done
 Module tables are marked immutable (`gem_table_freeze`) by the compiler after construction. `gem_deep_copy_internal` skips copying immutable tables, sharing them read-only across all processes. Strings from the main process arena are also shared (all strings are immutable; the main arena is never freed). User-created mutable tables are still deep-copied correctly. Bookmark app soak (60s, 4c, GET /bookmarks): p99 1.90ms → 1.45ms (−24%), throughput 4,816 → 4,986 req/s (+3.5%), RSS 1,511 → 1,236 MB (−18%).
