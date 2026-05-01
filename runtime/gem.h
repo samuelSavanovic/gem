@@ -120,6 +120,14 @@ static inline void gem_pop_frame(void) {
     if (gem_call_depth > 0) gem_call_depth--;
 }
 
+/* Update the top frame's line — emitted by codegen before each statement so
+ * runtime errors point at the offending expression, not the function header. */
+static inline void gem_set_line(int line) {
+    if (gem_call_depth > 0 && gem_call_depth <= GEM_MAX_CALL_DEPTH) {
+        gem_call_stack[gem_call_depth - 1].line = line;
+    }
+}
+
 /* ─── Constructors ─── */
 
 GemVal gem_int(int64_t v);

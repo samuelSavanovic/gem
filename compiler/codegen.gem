@@ -3124,7 +3124,7 @@ fn make_codegen(source_name)
     let p = pad_for(indent)
     let line_dir = ""
     if node.line != nil
-      line_dir = "#line {node.line} \"{escape_c_string(source_name)}\"\n"
+      line_dir = "#line {node.line} \"{escape_c_string(source_name)}\"\n{p}gem_set_line({node.line});\n"
     end
 
     match node
@@ -3230,7 +3230,7 @@ fn make_codegen(source_name)
     let p = pad_for(indent)
     let line_dir = ""
     if node.line != nil
-      line_dir = "#line {node.line} \"{escape_c_string(source_name)}\"\n"
+      line_dir = "#line {node.line} \"{escape_c_string(source_name)}\"\n{p}gem_set_line({node.line});\n"
     end
 
     if tco_fn_name != nil
