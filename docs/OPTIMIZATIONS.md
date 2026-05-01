@@ -120,24 +120,6 @@ Concrete payoff: `safe_handle_request` deleted from `std/http.gem` and inlined i
 
 Scope deferred: block-syntax `each`/`map`/`filter`/`reduce` from std/table aren't allowlisted yet (their callee parses as `dot`, not `var`, and they're regular Gem fns rather than builtins where we can audit storage behavior). Same goes for `build_string`. Add to allowlist when a workload demands it.
 
-### TCO arena reset boundary — current state (2026-04-30)
-Process-loop arena resets fire at TCO back-edges when `gem_call_depth - entry_call_depth <= 2` (depth-2 fence). The fence prevents the reset from running deep inside a request handler where the arena holds live values from the caller — without it, the reset corrupts pointers held above the TCO frame.
-
-This is the shipping mechanism on `tco-watermark-revert-explore` (commits `fb8186c`, `40c29fd`, `354f4fa`). Two earlier attempts to remove the fence were reverted:
-- **Per-frame watermark** (`ef77df5`, reverted `40c29fd`) — moved the boundary inside each TCO frame via `gem_arena_mark()` on entry and `reset_to_mark` at the back-edge. Eliminated depth coupling but regressed `/bookmarks` 4041 → 3380 req/s because every TCO function paid for a mark + truncation pass on every iteration, and the rescue was a 2× deep_copy of mutable roots (notably `router_ref`).
-- **Single-copy splice** (`2eeda74`, reverted `fb8186c`) — eliminated the rescue's 2× by splicing the new arena block ahead of the surviving block instead of copying back. Recovered `/bookmarks` to ~3318 req/s and recovered the gen_server soak fully (217k → 235k ops/sec). Stranded `mark.block->cap - mark.used` bytes per reset (RSS bounded, VSZ grows).
-
-Alternating-pair re-bench on the revert branch (3 pairs c=50 t=4 30s on `/bookmarks`):
-
-| | revert (depth-2 + escape) | main (watermark + splice + escape) |
-|---|---|---|
-| Median req/s | 3120 | 3122 |
-| RSS median | 42–44 MB | 45–48 MB |
-
-Throughput identical within noise; revert wins ~3 MB on RSS (no stranded splice blocks). The watermark+splice machinery bought neither throughput nor memory on this workload.
-
-The 4041 baseline was on a different machine state — not a clean comparison point on the current machine.
-
 ### ~~Static process-tail analysis~~ ✓ Done
 Replaced the runtime depth-2 fence with a compile-time `mark_process_tail` pass (`compiler/codegen.gem`). A pre-codegen pass builds a call graph of `(caller_id, callee, is_tail_position)` records, seeds it with top-level statements and `anon_fn` bodies passed to `spawn`/`spawn_link`/`spawn_monitor`, then runs a greatest-fixed-point demotion: start with all candidates, demote any candidate whose incoming edge from a non-candidate non-seed caller isn't tail-position, repeat until stable. Final pass: BFS from seeds through candidates via tail edges to compute the actual `process_tail` set. Codegen at the TCO back-edge (line 827) drops the `gem_call_depth - entry_call_depth <= 2` check for `process_tail` functions; non-process-tail TCO functions get a compile-time warning and keep the depth check as a safety net.
 
@@ -156,21 +138,16 @@ A `while true` loop in a process-tail context now resets the per-process arena a
 3. **Codegen** (`compile_while`). When `node.process_tail == true` and `node.cond` is `bool true`, the back-edge emits `gem_arena_reset_with_roots(_loop_roots, N);` guarded by `gem_current_pid >= 0 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD`. The roots are the live set filtered against `local_names` ∖ `boxed_vars` ∖ globals/fn-names/builtins.
 4. **Narrowed warning**. The blanket *"use tail recursion instead"* warning is replaced by a refusal-only warning naming the specific blocker (closure-captured live var, declaration in nested if/match arm, `break` in body). Process-tail `while true` loops with a clean liveness result emit no warning.
 
-**Refusal cases (today)**:
-- A live var is captured by a closure (`boxed_vars`/`top_level_boxed`) — the box itself lives in arena memory and would dangle on reset.
-- A live var has no declaration at the function-body level (declared in a nested `if`/`match` arm — `collect_top_let_names` does not descend through those).
-- `break` in the loop body (post-loop liveness not yet supported).
-- Liveness fixpoint failed to converge in 64 iters (pathological).
+**Refusal cases**: empty as of 2026-05-01. The four classes that originally refused (closure-captured live var, declaration in nested if/match arm, `break` in body, `pcall(fn() spawn(...) end)`-style escape) are all resolved (items 2, 3, 4(b), 5b in the work log below). Codebase scan finds zero `cannot reset` warnings. The one residual advisory is a TCO-reachability hint — `compiler/main.gem:109 rename_node` is a self-recursive helper called from a non-tail context, so its TCO loop won't reset at the back-edge. Different mechanism, different fix; not a refusal of the rescue path.
 
 **Closure-capture over-approximation (tightened 2026-04-30)**: liveness recognizes closures appearing as arg[0] of `spawn` / `spawn_link` / `spawn_monitor` and excludes their captures from the back-edge live set. Sound because the runtime deep-copies a spawned closure's captures into the child process at the call site (see `runtime/gem_scheduler.c`) — the parent's copies are dead after the call returns. Captures are still live AT the call site (via `_uses_expr` on the anon_fn), so any prior `let captured = ...` in the same iteration is correctly killed before the back-edge.
-  - Still over-approximated: closures escaping via assignment to outer-scope vars, returns, or non-spawn calls (e.g. `pcall(fn() ... end)`, `register("name", fn() ... end)`, `send(pid, fn() ... end)`). These keep the closure value alive in caller memory or another process's mailbox, so captures must remain live across the back-edge.
-  - Notable residual case in the wild: `examples/http_server/server.gem:198` wraps the spawn in `pcall(fn() spawn(fn() ... end) end)`. The outer pcall closure holds the captures, so the tightening does not apply. Extending to `pcall(fn() ... end)` where the outer closure escapes only synchronously is the natural follow-up.
+  - Still over-approximated: closures escaping via assignment to outer-scope vars, returns, or non-spawn calls. These keep the closure value alive in caller memory or another process's mailbox, so captures must remain live across the back-edge. Item 5b made this benign for the common case (mutated captures are now pin-rescued regardless of how the closure escapes), so the over-approximation no longer translates to a refusal.
 
 **Result**: `examples/55_while_true_process_loop.gem` regression test runs 10000 iters × ~200 bytes/iter (≫1MB threshold) and completes with stable RSS. All 49 other examples + json_parser + bookmarks pass; bootstrap roundtrip clean; liveness gate (4 fns from `std/`) PASS.
 
-### Next steps for `while true` adoption
+### `while true` adoption — work log
 
-The mechanism ships, but several patterns common in real code still trip refusals or warnings. Items below are roughly in order of impact-to-effort. Each unblocks more user code without requiring users to think about the rescue mechanism — that's the bar (per `CLAUDE.md`: language must not leak runtime invariants onto users).
+All items shipped. The mechanism is now sound for every refusal class observed in real code; users no longer need to think about the rescue path. Each entry below is kept for historical context (commit refs, design rationale, regression tests). Listed in shipping order — each unblocks more user code without requiring users to think about the rescue mechanism (per `CLAUDE.md`: language must not leak runtime invariants onto users).
 
 1. **Dogfood: rewrite `std/http` accept/handle loops as `while true`** ✅ done (2026-04-30). Both `accept_loop` and `handle_connection_loop` now use `while true`. Compiles with no warnings; bench at parity with `2026-04-30_head_quiet/` (see `2026-04-30_std_http_while_true/` log entry above). Confirms the back-edge codegen is shape-equivalent on a real workload.
 
@@ -196,7 +173,7 @@ The mechanism ships, but several patterns common in real code still trip refusal
 
     Regressions: `examples/64_pinned_box_pt_loop.gem` (10k-iter spawned PT-while with mutate-via-block accumulator holding a small table — exercises content migration across many resets) and `examples/65_pinned_box_many_calls.gem` (50k calls to a fn that allocates a pinned box and lets the closure go out of scope — RSS bounded at ~19 MB across 50k *and* 500k iterations, validating the sweep). All 54 examples + bootstrap roundtrip + json suite green.
 
-6. **Tighten pcall-wrapped spawn closures** (P3, small — *demoted*). `examples/http_server/server.gem:198` is the residual case from the 2026-04-30 spawn tightening: `pcall(fn() spawn(fn() ... end) end)`. The outer pcall closure captures synchronously and the inner spawn deep-copies — neither needs the captures past the call site. Extension is mechanical: recognise `pcall` as a non-escape callee in the same liveness path that already handles spawn, recurse into the closure body for further spawn-with-closure detection. Demoted because (4) subsumes it and lifts a much larger refusal class — only worth doing if (4) gets blocked or this specific file becomes user-visible pain before (4) lands.
+6. **Tighten pcall-wrapped spawn closures** ✅ subsumed by item 5b (2026-05-01). Was: `pcall(fn() spawn(fn() ... end) end)` — the outer pcall closure escapes captures synchronously; the liveness over-approximation kept them live across the back-edge → refusal. With item 5b's pin-set rescue, mutated captures survive reset regardless of how the closure escapes; read-only captures are already unboxed by item 4. The originally-planned codegen tightening (recognising `pcall` as a non-escape callee in liveness) is no longer needed to lift the refusal — it remains a possible future micro-optimisation if profiling ever shows the unnecessary live-across-backedge tracking is costly.
 
 7. **Lift the main-arena reset invariant** ✅ done (2026-05-01). Top-level `while` loops are now PT-tagged (`walk_for_tagging_stmts(top_stmts, true)` in `compiler/codegen.gem`); `tag_process_tail_while_loops` no longer scopes top-level out. The runtime invariants that previously blocked this:
 
@@ -210,17 +187,17 @@ The mechanism ships, but several patterns common in real code still trip refusal
 
     Regression: `examples/61_top_level_pt_loop.gem` (5000 iters of `string.split` at top level — exercises the frozen-module-table path and triggers ~4 arena resets at the 1 MB threshold). Bench vs `2026-04-30_post_loop_liveness/`: throughput at parity (+1–2% across read paths and POST burst), RSS peak 57.8 MB → 50.4 MB (−13%) and growth 29.2 → 18.9 MB (−35%). Logs: `benchmarks/logs/2026-05-01_main_arena_lifted/`.
 
-    The compile-time refusal class for top-level boxed lets is gone, and the silent perf cliff for top-level `while` loops is closed. Item 5 (box relocation on arena reset) remains the lever for the *non-top-level* mutate-via-block residual.
+    The compile-time refusal class for top-level boxed lets is gone, and the silent perf cliff for top-level `while` loops is closed. The non-top-level mutate-via-block residual was subsequently closed by item 5b (pinned boxes outside the arena, see above).
 
-    **Follow-up landed (2026-05-01)**: top-level for-loop iter vars (`i`, `_for_i_N`, `_for_len_N`) were spuriously refused as Class B "no C local at back-edge" because `local_names` at top level was populated only from `top_level_vars` (flat) — `collect_top_let_names` does not descend into while-bodies, so iter vars introduced by for-desugaring were missing. Top-level main now mirrors `compile_fn`: populates `local_names` via `collect_shadow_lets_in_fn(top_stmts, local_names)` (over-approximation) and tracks `fn_scope_locals` dynamically (`set_add` in compile_stmt's let arm, save/restore at C-`{}` introducers — `compile_while` body, `compile_if`/`match`/`receive_match` arms, `compile_stmt_return` block). 8 false positives gone (7 for-loop iter vars at the top level, plus `compiler/main.gem:492` and `examples/59_read_only_capture_loop.gem:22`). Class B now contains only the principled refusals: `examples/60_arm_let_in_pt_loop.gem:13` (regression test), `examples/http_server/server.gem:198,200` (acceptor arm-let pattern — fix (b) territory).
+    **Follow-up landed (2026-05-01)**: top-level for-loop iter vars (`i`, `_for_i_N`, `_for_len_N`) were spuriously refused as Class B "no C local at back-edge" because `local_names` at top level was populated only from `top_level_vars` (flat) — `collect_top_let_names` does not descend into while-bodies, so iter vars introduced by for-desugaring were missing. Top-level main now mirrors `compile_fn`: populates `local_names` via `collect_shadow_lets_in_fn(top_stmts, local_names)` (over-approximation) and tracks `fn_scope_locals` dynamically (`set_add` in compile_stmt's let arm, save/restore at C-`{}` introducers — `compile_while` body, `compile_if`/`match`/`receive_match` arms, `compile_stmt_return` block). 8 false positives gone (7 for-loop iter vars at the top level, plus `compiler/main.gem:492` and `examples/59_read_only_capture_loop.gem:22`). The remaining acceptor arm-let pattern (`examples/http_server/server.gem`) was subsequently closed by item 4(b) (`cfb1541`) — fn-top placeholders for arm-lets live across an enclosing PT-loop's back-edge.
 
 The roadmap above assumes the existing soundness bar (under-rescue = silent memory corruption). Every change must keep the param-superset gate green and the negative-test gate green (currently 10/0), plus pin a deterministic stress test against the new pattern (cf. `examples/55_while_true_process_loop.gem` … `examples/58_break_process_loop.gem`).
 
-#### Known follow-ups from item 4 (next session)
+#### Known follow-ups from item 4 — resolved
 
-1. **Rescue codegen references arm-let names not at fn scope** ✅ done via fix (a) (2026-05-01). Threaded a new `fn_scope_locals` set through `compile_fn` / `compile_closure_fn` / top-level alongside `local_names`. `filter_live_for_rescue` now refuses names that are in `local_names` but not in `fn_scope_locals` with the existing *"no C local at this loop's back-edge"* reason. `examples/http_server/server.gem` compiles end-to-end (warns on `acceptor`'s `fd`/`acc` arm-lets in the else-branch — user can recover the rescue by hoisting `let fd = client_fd` to fn scope). Regression `examples/60_arm_let_in_pt_loop.gem` (smaller `acceptor`-shape: pcall(spawn(closure)) inside else-arm, runs 50 ticks). Fix (b) (extend the arm-let hoist pre-pass to cover lets live across an enclosing PT-loop's back-edge) remains the principled DX-friendly follow-up.
+1. **Rescue codegen references arm-let names not at fn scope** ✅ done via fix (a) (2026-05-01); fix (b) (the principled DX-friendly version — extend the arm-let hoist pre-pass to cover lets live across an enclosing PT-loop's back-edge) shipped as item 4(b) (`cfb1541`). Threaded a new `fn_scope_locals` set through `compile_fn` / `compile_closure_fn` / top-level alongside `local_names`. `filter_live_for_rescue` refuses names that are in `local_names` but not in `fn_scope_locals` with the existing *"no C local at this loop's back-edge"* reason. Regression `examples/60_arm_let_in_pt_loop.gem`.
 
-2. **`std/supervisor.gem:137` `sup_name` refusal — not a bug, residual for item 5**. `sup_name` is reassigned in an `if` arm in `start_link` (the outer fn), so item 4 correctly classifies it as mutated → boxed. The spawn closure captures `sup_name` (read-only inside the spawn body, but uniform env layout still treats it as boxed inside the closure). Inside the spawn body, `for child_spec in child_specs` is process-tail, has `sup_name` live across the back-edge, refuses. This is exactly the residual class item 5 (box relocation on arena reset) targets — defer until item 5 lands.
+2. **`std/supervisor.gem:137` `sup_name` refusal** ✅ resolved by item 5b (`62816fd`). `sup_name` is mutated → boxed → captured by a spawn closure → live across the back-edge of a PT loop in the spawn body. With pin-set rescue, the box now survives reset and the refusal is gone.
 
 ### Benchmark baseline: process-tail `while true` rescue+reset (2026-04-30)
 
