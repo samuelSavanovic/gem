@@ -1,0 +1,44 @@
+# Item 5b stress #4: pin-set grows large between arena resets.
+#
+# Each outer iter calls `make_pinned()` 2000 times. Each call allocates
+# one pinned box (`n` captured-mutated by `inc`) plus a small closure
+# env. Box itself is 24B malloc; closure env adds ~32B to the arena.
+# 2000 iters × 32B ≈ 64 KB arena per outer iter. Outer threshold (1 MB)
+# trips every ~16 outer iters → pin-set holds ~30k entries before sweep.
+# Across n=200 outer iters: ~400k total pinned-box allocs, ~12 resets.
+# Validates stb_ds map handles tens of thousands of entries, sweep
+# does not show quadratic slowdown, and final value is correct.
+
+fn make_pinned()
+  let n = 0
+  let inc = fn() n = n + 1 end
+  inc()
+  n
+end
+
+let main_pid = self()
+
+let w = spawn(fn()
+  let total = 0
+  while true
+    let msg = receive()
+    if msg == "done"
+      send(main_pid, {tag: "result", total: total})
+      return
+    end
+    let i = 0
+    while i < 2000
+      total = total + make_pinned()
+      i = i + 1
+    end
+  end
+end)
+
+let n = 200
+for i = 0, n
+  send(w, 1)
+end
+send(w, "done")
+let r = receive()
+print("total: " + to_string(r.total))
+# expected: 200 outer × 2000 inner × 1 = 400000

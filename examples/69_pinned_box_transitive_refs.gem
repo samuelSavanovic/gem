@@ -1,0 +1,39 @@
+# Item 5b stress #5: pinned box transitively references another pinned box.
+#
+# Both `inner` and `outer_fn` are fn-local mutated-captured (pinned).
+# `outer_fn`'s value is a closure whose env field points at `inner`'s
+# pinned box. So at every reset, `inner`'s box is reachable two ways:
+#   - directly via pinned_roots[] (it's live at the back-edge)
+#   - transitively via outer_fn's contents → fn env → inner's box
+#
+# The pre-pass walks each pinned root in turn, marking it walked.
+# When `outer_fn`'s contents migrate (a fn value), deep_copy_fn's
+# env-walk hits the pinned box pointer for `inner` and short-circuits
+# via gem_pin_mark_walked (already walked from pinned_roots[]).
+# Verifies mark dedup works across pre-pass + transitive paths.
+
+let main_pid = self()
+
+let w = spawn(fn()
+  let inner = 0
+  let outer_fn = nil
+  outer_fn = fn() inner = inner + 1 end
+
+  while true
+    let msg = receive()
+    if msg == "stop"
+      send(main_pid, {tag: "result", inner: inner})
+      return
+    end
+    outer_fn()
+    let junk = {pad: "x" + to_string(inner), arr: [1,2,3,4,5,6,7,8]}
+  end
+end)
+
+let n = 5000
+for i = 0, n
+  send(w, "tick")
+end
+send(w, "stop")
+let r = receive()
+print("inner: " + to_string(r.inner))

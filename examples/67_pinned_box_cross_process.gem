@@ -1,0 +1,43 @@
+# Item 5b stress #6: cross-process closure transfer with mutated captures.
+#
+# `count` is a top-level box mutated by `bump` (defined in the parent).
+# Both `count` and `bump` are captured into the anon_fn spawned in
+# another process. Deep_copy at spawn must produce a fresh receiver-side
+# box for `count`; both env fields (`count` direct, and `count` inside
+# `bump`'s env) must alias to the SAME receiver box via the copy_map.
+#
+# The spawn'd fn is an anon_fn at spawn-arg[0], so its `while true`
+# is tagged process_tail and emits arena rescue. Each reset env-walks
+# from `_self_closure`, migrating count's arena box into the fresh
+# arena. Test verifies count reaches 5000 across many resets.
+#
+# OPTIMIZATIONS.md item 5b's risk-register entry called this scenario
+# "out of scope". If this test passes, the claim is overstated and
+# the docs need updating.
+
+let main_pid = self()
+let count = 0
+let bump = fn() count = count + 1 end
+
+let w = spawn(fn()
+  while true
+    let msg = receive()
+    if msg == "report"
+      send(main_pid, {tag: "count", count: count})
+    elif msg == "stop"
+      return
+    else
+      bump()
+    end
+    let junk = {pad: "x" + to_string(count), arr: [1,2,3,4,5,6,7]}
+  end
+end)
+
+let n = 5000
+for i = 0, n
+  send(w, "tick")
+end
+send(w, "report")
+let r = receive()
+send(w, "stop")
+print("count: " + to_string(r.count))

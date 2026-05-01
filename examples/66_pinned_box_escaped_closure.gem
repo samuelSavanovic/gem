@@ -1,0 +1,39 @@
+# Item 5b stress #3: closure escapes via spawn while box still locally live.
+#
+# `inc` captures+mutates `counter`, then `inc` is sent into another process
+# via spawn. After the spawn call, the parent has no live closure that
+# captures `counter`, but `counter` itself is still locally live (read in
+# the stop branch). The pinned box must survive arena resets via the
+# `_pinned_loop_roots[]` pre-pass — `filter_live_for_rescue` should route
+# `counter` to `pinned_roots` even though no live env in the parent
+# references it.
+#
+# Erlang semantics: the spawned process gets a deep-copied env; its
+# mutations of `counter` stay in its own copy. Parent's counter only
+# reflects parent-side mutations.
+
+let main_pid = self()
+
+let w = spawn(fn()
+  let counter = 0
+  let inc = fn() counter = counter + 1 end
+  spawn(fn() inc(); inc(); inc() end)   # inc escapes, not used below
+
+  while true
+    let msg = receive()
+    if msg == "stop"
+      send(main_pid, {tag: "result", counter: counter})
+      return
+    end
+    counter = counter + msg
+    let junk = {x: "pad-" + to_string(counter), y: [1,2,3,4,5,6,7,8]}
+  end
+end)
+
+let n = 5000
+for i = 0, n
+  send(w, 1)
+end
+send(w, "stop")
+let r = receive()
+print("counter: " + to_string(r.counter))

@@ -1,0 +1,50 @@
+# Item 5b stress #1: per-process pin-set isolation under heavy churn.
+#
+# Spawn 200 processes simultaneously. Each has its own mutated-captured
+# box that gets bumped a fixed number of times in a PT loop. Verify:
+#   - per-process pin-sets stay isolated (no cross-process leakage)
+#   - gem_pin_free_all releases each process's pin-set on death
+#   - no crash from concurrent allocation across many processes
+#
+# Each process bumps its own counter to ID, sends the result back, then
+# exits. Main collects all results and verifies sum = 200*199/2 = 19900.
+
+let main_pid = self()
+
+fn worker(id, reply_to)
+  let counter = 0
+  let bump = fn() counter = counter + 1 end
+  while true
+    let msg = receive()
+    if msg == "stop"
+      send(reply_to, {tag: "result", id: id, counter: counter})
+      return
+    end
+    bump()
+    let junk = {pad: "x" + to_string(counter), arr: [1,2,3,4,5]}
+  end
+end
+
+let n_procs = 200
+let pids = []
+for i = 0, n_procs
+  let id = i
+  push(pids, spawn(fn() worker(id, main_pid) end))
+end
+
+# Each worker `i` bumps counter `i` times.
+for i = 0, n_procs
+  let p = pids[i]
+  for j = 0, i
+    send(p, "tick")
+  end
+  send(p, "stop")
+end
+
+let total = 0
+for i = 0, n_procs
+  let r = receive()
+  total = total + r.counter
+end
+print("total: " + to_string(total))
+print("expected: " + to_string(n_procs * (n_procs - 1) / 2))

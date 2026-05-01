@@ -1024,3 +1024,14 @@ value: 10000
 label: iter-10000
 hlen: 10000
 total: 250000
+counter: 5000
+count: 5000
+a: 5000
+b: 5000
+c: 5000
+inner: 5000
+ok: true
+value: 5000
+total: 19900
+expected: 19900
+total: 400000

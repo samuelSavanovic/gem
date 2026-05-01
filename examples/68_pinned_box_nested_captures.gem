@@ -1,0 +1,49 @@
+# Item 5b stress #2: nested capture chains, three levels deep.
+#
+# `outer` mutates `a`, `middle` mutates `b`, `inner` mutates `c`. Each
+# closure also calls into the next inner one, so all three boxes are
+# bumped per `outer()` call. All three boxes are fn-local mutated-
+# captured (pinned), and all three closures stay live across the
+# back-edge.
+#
+# At each arena reset:
+#   - pinned_roots[] = {a, b, c} → pre-pass walks each box's contents
+#     and marks the pin-set entry walked.
+#   - regular roots include `outer` (and indirectly its env, which
+#     references all three boxes via `outer→middle→inner`). The env-
+#     walk encounters each box pointer; mark dedup short-circuits, so
+#     no double-walk and no re-allocation of contents.
+#
+# Verify: after 5000 iters, a == b == c == 5000. No crash, no
+# corruption.
+
+let main_pid = self()
+
+let w = spawn(fn()
+  let a = 0
+  let b = 0
+  let c = 0
+  let inner = fn() c = c + 1 end
+  let middle = fn() b = b + 1; inner() end
+  let outer = fn() a = a + 1; middle() end
+
+  while true
+    let msg = receive()
+    if msg == "stop"
+      send(main_pid, {tag: "result", a: a, b: b, c: c})
+      return
+    end
+    outer()
+    let junk = {pad: "x" + to_string(a), arr: [1,2,3,4,5,6,7,8]}
+  end
+end)
+
+let n = 5000
+for i = 0, n
+  send(w, "tick")
+end
+send(w, "stop")
+let r = receive()
+print("a: " + to_string(r.a))
+print("b: " + to_string(r.b))
+print("c: " + to_string(r.c))
