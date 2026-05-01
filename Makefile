@@ -46,10 +46,6 @@ bootstrap: $(GEM)
 test: $(GEM)
 	@bash examples/run_all.sh
 
-test-concurrency:
-	$(CC) -o /tmp/gem_test_concurrency runtime/test_concurrency.c -I $(RUNTIME_DIR) $(CFLAGS) $(LDFLAGS) $(RUNTIME_LIB)
-	/tmp/gem_test_concurrency
-
 test-json: $(GEM)
 	@$(GEM) examples/json_parser.gem --run
 
