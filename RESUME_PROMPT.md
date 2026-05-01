@@ -1,76 +1,94 @@
-# Resume: caret span for runtime errors
+# Resume: DX / quality-of-life pass
 
-Branch: `main`. Last session landed two commits on runtime error message quality:
+Branch: `main`. Last session closed out the POST burst p99 "regression" as bench noise (commit `6787bf3`) — `OPTIMIZATIONS.md` no longer carries an open investigation. Optimizations are paused for a while; the next sessions are about DX and writing example programs.
 
-- `d08bd44` — codegen emits `gem_set_line(N)` per statement; runtime errors now point at the offending line, not the function header.
-- `228e40a` — uncaught errors in the main process now print `[Runtime Error]` + `--> file:line` + source line + stack trace, mirroring the compile-error format. Previously they were silently swallowed by the scheduler (user main runs as a process; no monitor → exit_reason dropped on the floor).
+Audience for the work: yourself first, future Claude sessions second. Other people are not the target — don't optimize for newcomer onboarding at the expense of internal cleanliness.
 
-What's missing: the **caret**. Compile errors render `^^^^^^^^^` under the offending span; runtime errors don't, because the AST (and therefore `GemFrame`) only carries `line`, not `col` or `span_len`.
+## This session — two DX papercuts, in order
 
-## This session — column + span tracking
+### 1. Default `gem file.gem` to run mode
 
-### Concrete starting point
+Today `gem file.gem` compiles to a binary in CWD with no output, and you only realize when you re-read the source. `--run` is the flag for "actually run it." This bit me last session even knowing the codebase — I assumed the binary was broken for several minutes.
 
-1. **AST.** `compiler/ast.gem:46-121`. Every node constructor takes `line` only. Add `col` (and probably `span_len` or `end_col`) to constructors that error paths need most: `call`, `binop` (or whatever `+`/`-` use), `index`, `dot`, `let`, `assign`. Don't bother with nodes that can't trip a runtime error.
+**Goal**: `gem file.gem` runs the program. Compile-only and emit-c become opt-out.
 
-2. **Parser.** `compiler/parser.gem` produces these nodes. The lexer must already track column for the existing compile-error caret — find how `compile_error` gets its `col`/`span_len` (`compiler/errors.gem:31-65` is the printer; trace where the call sites compute span length). Reuse that.
+**Concrete starting point**:
 
-3. **GemFrame.** `runtime/gem.h:101-105`. Add `col` (and `span_len` if you went that way). Update `gem_push_frame`, `gem_set_line` → `gem_set_loc(line, col, span_len)`.
+- `compiler/main.gem:360` — `parse_args`. `result.run` defaults to `false`. Flip it: default `true`, add a `--no-run` (or rename `--run` to a no-op-for-back-compat and add `-c` / `--compile-only` to mean "stop after writing the binary"). Pick whatever flag set feels least surprising to you — I lean toward dropping `--run` entirely (becomes a no-op accepted for back-compat) and adding `-c` for compile-only.
+- `compiler/main.gem:489` — the `if cli.run` block at the bottom. With the new default, this runs unless `-c` was passed.
+- `examples/bookmark_app/` workflow today uses `gem app.gem -o app` then `./app`. With the change, `gem app.gem` would compile **and** run, which is correct for `make test` examples but wrong for the bookmark workflow that wants a persistent binary. Two options: (a) `-o <name>` implies compile-only (probably right — if you're naming an output, you want the artifact, not a one-shot); (b) require `-c` explicitly. Pick (a) — it's what you'd expect from `cc -o`.
+- Audit `make test`, `examples/run_all.sh`, `Makefile`, `bootstrap` target, and `benchmarks/run.sh` for any invocation that assumes compile-only-by-default. Update them.
+- Bootstrap target uses `--emit-c` (still opt-in) — unaffected.
 
-4. **Codegen.** `compiler/codegen.gem:3127, 3233`. Two `line_dir` emission sites. Currently emit `gem_set_line({node.line})`. Change to `gem_set_loc({node.line}, {node.col}, {node.span_len})`.
-
-5. **Printer.** `runtime/gem_error.c:gem_print_source_context`. Currently prints the source line with no caret. Add the caret row using `col` and `span_len`. Match `compiler/errors.gem` formatting exactly — same gutter width arithmetic, same caret character.
-
-### What good looks like
-
-```
-[Runtime Error]: type error in +: got int and string
-  --> file.gem:4:13
-   |
- 4 |   let c = 5 + "oops"
-   |             ^
-   |
-Stack trace:
-  at doit (file.gem:4)
-  at main (file.gem:8)
-```
-
-Caret position points at the operator (or the offending expression's start), span underlines the full expression. The exact "where to point" is a judgment call — pointing at the binary op's `+` is probably more useful than the whole expression. Decide as you go.
-
-### Bootstrap reminder
-
-Codegen output changes → `make bootstrap`'s built-in fixed-point check fails on first pass. Manual 3-stage:
+**What good looks like**:
 
 ```
-make build
-./build/gem compiler/main.gem --emit-c > /tmp/s1.c
-cc -o /tmp/s1 /tmp/s1.c -I runtime -I compiler -std=c11 -O2 -lm -pthread build/libgem_runtime.a
-/tmp/s1 compiler/main.gem --emit-c > /tmp/s2.c
-cc -o /tmp/s2 /tmp/s2.c -I runtime -I compiler -std=c11 -O2 -lm -pthread build/libgem_runtime.a
-/tmp/s2 compiler/main.gem --emit-c > /tmp/s3.c
-diff -q /tmp/s2.c /tmp/s3.c    # must be identical
-cp /tmp/s2.c bootstrap/stage0.c
-make build
-make bootstrap                  # now roundtrips clean
+$ gem hello.gem               # runs it, prints "hello world"
+$ gem hello.gem -o hello      # compiles to ./hello, doesn't run
+$ ./hello                     # runs it
+$ gem hello.gem --emit-c      # prints C to stdout (unchanged)
+$ gem hello.gem -c            # compiles to ./hello, doesn't run (alternative to -o for "compile only")
 ```
 
-### Out of scope
+Also update `error("usage: ...")` strings at `compiler/main.gem:432, 438` to reflect the new surface. Should be a small diff.
 
-- Rewriting individual `gem_error` message strings (separate quality pass).
-- Builtin arity validation (tracked under "C Interop Hardening" in `docs/OPTIMIZATIONS.md`).
-- Spawned-process crash visibility — current Erlang-style silent death is correct; only the main process prints.
+Run after: `make test`, `make bootstrap`, `make test-json`, plus a manual `./build/gem examples/01_basics.gem` to confirm it actually runs now.
+
+### 2. `std/test` module + assertion helpers
+
+Today the test harness is "print to stdout, diff against `expected_output.txt`." That's fine for compiler-shape regressions but awful for application code — every assertion has to be hand-converted into a print statement, and a single off-by-one in the expected output silently breaks the diff for everything below it.
+
+**Goal**: a `std/test` module that lets example programs self-validate. Roughly:
+
+```gem
+load "std/test"
+
+test.case("addition", fn()
+  test.assert_eq(2 + 2, 4)
+  test.assert_eq("a" + "b", "ab")
+end)
+
+test.case("error path", fn()
+  let r = pcall fn() error("boom") end
+  test.assert(not r.ok)
+  test.assert(r.error.contains("boom"))   # adjust to actual error shape
+end)
+
+test.run()   # prints summary, exits non-zero on failure
+```
+
+**Concrete starting point**:
+
+- New file `std/test.gem`. Module-level state: a list of registered cases (name + fn).
+- `test.case(name, fn)` pushes onto the list. Don't auto-run — a stdlib import shouldn't run tests as a side effect.
+- `test.assert(cond, msg = nil)` — error if `cond` is falsy. Default message includes the source line if achievable (probably skip line tracking for v1 — just take a `msg`).
+- `test.assert_eq(actual, expected)`, `test.assert_neq`, `test.assert_throws(fn)`. Keep the surface small at first; you'll know which helpers you actually want once you've written a few.
+- `test.run()` walks the registered cases, runs each in `pcall`, prints a one-line `PASS`/`FAIL <name>: <reason>`, ends with `n passed / m failed` and `exit(1)` on any failure.
+- Don't do parallelism, fixtures, before/after hooks, or tagging in v1. Resist scope creep — the bar is "better than diff'ing stdout."
+- Add `examples/74_test_demo.gem` (or next free slot — check `expected_output.txt` for the highest-numbered example) that uses `std/test` to validate something simple. Append its expected output to `expected_output.txt` for the diff harness.
+- Update `CLAUDE.md`'s std-library Quick Reference to list `std/test`.
+- Update both editor extensions (VS Code + tree-sitter) per the maintenance checklist in `CLAUDE.md` if `test.assert` etc. should be highlighted as builtins. Probably not — they're regular module functions.
+
+**What good looks like**: writing a new example with non-trivial logic doesn't require maintaining a `expected_output.txt` fixture by hand. You write `test.assert_eq(...)` and the program self-reports.
+
+### Out of scope this session
+
+- A `gem test` CLI subcommand that auto-discovers `_test.gem` files. v1 just gives you `std/test` to use inside any program. Subcommand discovery is a follow-up.
+- Caret span for runtime errors (was previous resume; still deferred — re-evaluate after writing a few example programs to see if it actually bites in practice).
+- Watch mode (`--watch`). Nice to have, separate session.
+- REPL. Big lift, separate effort.
 
 ## Validation gates
 
 ```bash
-make test            # ALL EXAMPLES PASSED
-make bootstrap       # roundtrip clean (after manual 3-stage seed)
+make test            # ALL EXAMPLES PASSED — run after #1 (CLI default flip will affect every example invocation)
+make bootstrap       # roundtrip clean — only needed if compiler/main.gem changes affect emitted code (they shouldn't for arg parsing)
 make test-json       # === all tests passed ===
-./build/gem compiler/test_liveness.gem --run   # 10/0 + 2/0
+./build/gem examples/01_basics.gem   # smoke-test that bare invocation runs after #1
 ```
-
-Existing expected outputs only reference `gem_error` strings via pcall (`expected_output.txt` lines 211, 389, 391, 393) — those are message text only and won't be affected by caret rendering, which only fires on the uncaught path.
 
 ## Deliverable shape
 
-One commit threading `col` (and `span_len`) through AST → frame → printer. End-of-session: a user who writes `5 + "oops"` sees a caret pointing at the offending operator, matching compile-error UX exactly.
+Two commits, one per item. #1 is the small, immediately-felt win — land it first. #2 is the foundation for the example programs you want to write next.
+
+After this session, the natural follow-up is *writing examples* — the kind of programs that exercise stdlib corners and surface DX gaps you don't currently see. Don't pre-list which examples; let them come from what you actually want to build.
