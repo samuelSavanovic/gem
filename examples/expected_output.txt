@@ -1037,3 +1037,48 @@ expected: 19900
 total: 400000
 done
 hello from worker
+true
+false
+true
+false
+false
+true
+false
+true
+false
+true
+true
+false
+true
+false
+true
+false
+
+math stdlib tests: 19 passed, 0 failed
+
+table stdlib tests: 49 passed, 0 failed
+epoch_ms: ok
+format_time: ok
+format_time http_date: ok
+format_time iso8601: ok
+format_time_local: ok
+time.now: ok
+time.format: ok
+time.format_local: ok
+time.http_date: ok
+time.iso8601: ok
+time.date: ok
+time.http_date() default: ok
+time.iso8601() default: ok
+time.date() default: ok
+
+[Runtime Error]: boom
+  --> examples/79_stack_trace.gem:2
+   |
+ 2 |   error("boom")
+   |
+Stack trace:
+  at c (examples/79_stack_trace.gem:2)
+  at b (examples/79_stack_trace.gem:6)
+  at a (examples/79_stack_trace.gem:10)
+  at main (examples/79_stack_trace.gem:13)

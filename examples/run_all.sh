@@ -13,10 +13,11 @@ if [[ ! -f "$COMPILER" ]]; then
     exit 1
 fi
 
-actual=$( for f in "$SCRIPT_DIR"/[0-9]*.gem; do
+cd "$ROOT"
+actual=$( for f in examples/[0-9]*.gem; do
     bin="/tmp/gem_$(basename "$f" .gem)"
     "$COMPILER" "$f" -o "$bin" 2>/dev/null
-    "$bin" 2>&1
+    "$bin" 2>&1 || true
 done )
 
 if diff -u "$EXPECTED" <(echo "$actual") > /dev/null 2>&1; then

@@ -16,3 +16,4 @@ test_build_string
 test_push_buf
 examples/bookmark_app/app
 benchmarks/logs/
+.DS_Store
