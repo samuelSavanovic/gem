@@ -4,21 +4,21 @@ A dynamically typed language that compiles to C with Erlang-style concurrency. S
 
 ## Design Philosophy
 
-**Gem the language must be simple to write.** The OTP model (supervisors, gen_servers, "let it crash", spawn/send/receive, recursion-as-iteration via TCO) is already the learnability tax — that's the cognitive ceiling. The language layer must not pile more on top.
+**Gem the language must be simple to write.** The OTP model (supervisors, gen_servers, "let it crash", spawn/send/receive) is already the learnability tax — that's the cognitive ceiling. The language layer must not pile more on top.
 
 When evaluating a runtime or codegen mechanism, ask: *does this leak a concept the user has to track to write correct or performant code?* If yes, push the burden into the compiler (static analysis) or the runtime (uniform mechanism), not the user.
 
 Concretely:
-- No annotations like `@process_loop` to mark TCO-eligible loops. Auto-detect.
-- No "you must structure your code this way for X to work" runtime constraints (e.g. depth fences). Either auto-detect via static analysis or make the mechanism work uniformly.
+- Long-running process loops are written naturally with `while true` (or self-recursion). The compiler does liveness analysis and emits per-iteration arena resets at the back-edge so memory does not grow. No `@process_loop` annotation, no rewriting code as recursion.
+- No "you must structure your code this way for X to work" runtime constraints. Either auto-detect via static analysis or make the mechanism work uniformly.
 - Compiler warnings are OK when they surface a hidden constraint ("this loop won't reset because it's reachable from a non-tail context"). Silent perf cliffs are not.
 - Optimizations that introduce DX warts (depth fences, hand-inlined wrappers, manual aliasing tricks) are tolerable only as transient hacks with a structural fix on the roadmap.
 
 ## Project Structure
 
 ```
-compiler/             # self-hosting compiler (lexer, parser, AST, codegen, main)
-std/                  # standard library (string, table, math, time, log, http, json, sqlite, mime, request, url, supervisor, gen_server)
+compiler/             # self-hosting compiler (lexer, parser, AST, liveness, codegen, main)
+std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, supervisor, gen_server)
 runtime/              # C runtime — split by category:
   gem.h               #   public API, tagged values, process table, scheduler decls
   gem_core.c          #   value constructors, table internals, equality
@@ -27,7 +27,7 @@ runtime/              # C runtime — split by category:
   gem_ops.c           #   arithmetic and comparison operators
   gem_error.c         #   error handling, stack trace printing
   gem_scheduler.c     #   coroutine scheduler, mailbox, process lifecycle, I/O polling
-  gem_threadpool.c    #   worker thread pool for blocking I/O
+  gem_threadpool.c    #   worker thread pool for blocking I/O (4 workers)
   gem_builtins_core.c #   print, error, len, type, conversions, pcall, argv, etc.
   gem_builtins_collection.c  # push, pop, keys, values, sort, insert, delete
   gem_builtins_string.c      # str_replace, substr, chr/ord, buf_* API
@@ -38,113 +38,102 @@ runtime/              # C runtime — split by category:
   gem_builtins_time.c        # time/clock builtins
   minicoro.h          #   single-header coroutine library (vendored)
   stb_ds.h            #   single-header hash maps/arrays (vendored)
-  sqlite3.c/sqlite3.h #  SQLite amalgamation (vendored)
+  sqlite3.c/sqlite3.h #   SQLite amalgamation (vendored)
 bootstrap/stage0.c    # checked-in C output — bootstrap artifact for clean builds
 build/gem             # compiled compiler binary (gitignored, built from stage0.c)
-examples/             # 75 numbered tests + run_all.sh, plus json_parser, http_server, tcp_echo, bookmark_app
+examples/             # numbered tests (01-80+) + run_all.sh; plus json_parser, http_server, tcp_echo, bookmark_app
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 docs/OPTIMIZATIONS.md # tracked future performance improvements
 docs/LSP_ROADMAP.md   # sketch for a future Gem LSP
 editors/vscode/       # VS Code extension (TextMate grammar)
 editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
+benchmarks/           # bench scripts (run.sh, wrk lua scripts) and node_baseline for comparison
 ```
 
-## Setup
+## Build, Test, Bootstrap
 
 ```bash
-make build             # compiles bootstrap/stage0.c → build/gem
-```
-
-No Python, no external parser generators. The compiler is fully self-hosted.
-
-## C Dependencies
-
-- **minicoro** (`runtime/minicoro.h`) — single-header coroutine library, vendored
-- **stb_ds.h** (`runtime/stb_ds.h`) — single-header hash maps/arrays, vendored
-- **SQLite** (`runtime/sqlite3.c`, `runtime/sqlite3.h`) — amalgamation, vendored
-
-## Building
-
-```bash
-make build             # stage0.c → build/gem (first time or after clean)
+make build             # compiles bootstrap/stage0.c → build/gem (first time or after clean)
 make bootstrap         # regenerate stage0.c from current compiler sources (verified roundtrip)
+make test              # run all numbered examples in examples/ against expected_output.txt
+make test-json         # run examples/json_parser.gem
+make test-json-suite   # run JSONTestSuite parser conformance (clones to /tmp on first run)
 make clean             # remove build/ and /tmp/gem_*
 ```
 
-After changing compiler sources, run `make bootstrap` to update `stage0.c`. The bootstrap target verifies the new stage0 can compile itself (fixed-point check) before replacing it.
+After changing compiler sources, run `make bootstrap` to update `stage0.c`. The bootstrap target verifies the new stage0 can compile itself (fixed-point check) before replacing it. If codegen output changes, the built-in roundtrip will fail on the first pass — do a manual 3-stage bootstrap (see `RESUME_PROMPT.md` for the exact commands).
+
+## Testing Discipline
+
+After any compiler change, run edge-case and adversarial tests before considering the work done:
+
+1. **Happy path** — basic programs that exercise the new feature.
+2. **Edge cases** — empty bodies, zero args, boundary values, nested constructs.
+3. **Adversarial inputs** — malformed source, missing tokens, type mismatches at runtime.
+4. **Regression** — `make test` to make sure nothing broke.
+
+Add a numbered example under `examples/` (next free slot) and append its stdout to `expected_output.txt`. For programs that exit non-zero (e.g. uncaught `error()` to test stack-trace output), `run_all.sh` tolerates non-zero exits and diffs by output. For expected compile-time errors, just verify by hand — those don't fit the diff harness.
 
 ## Adding a New Builtin
 
-1. Implement the C function in the appropriate `runtime/gem_builtins_*.c` file
-2. Add the declaration to `runtime/gem.h`
-3. Add the name → C function mapping in `compiler/codegen.gem` (`builtin_fns` table)
-4. Update `docs/SPEC.md`
-5. Update both editor extensions (see below)
-6. Write tests, run `make test`, run `make bootstrap`
+1. Implement the C function in the appropriate `runtime/gem_builtins_*.c` file.
+2. Add the declaration to `runtime/gem.h`.
+3. Add the name → C function mapping in `compiler/codegen.gem` (`builtin_fns` table around line 1037).
+4. Update `docs/SPEC.md`.
+5. Update both editor extensions (see below).
+6. Add a numbered example to `examples/`, append expected output, run `make test`, then `make bootstrap`.
+
+## Adding a Std Module
+
+1. Create `std/<name>.gem`. Use `load` for any std deps. End the file with `export <fn>, <fn>, ...`.
+2. Update `docs/SPEC.md` (Standard Library section) and the Quick Reference below.
+3. Add tests as a numbered example (e.g. `78_time_stdlib.gem`) so they run in `make test`.
+4. Update editor extensions if the module exposes new identifiers worth highlighting.
 
 ## Optimization Tracking
 
-`docs/OPTIMIZATIONS.md` tracks future performance improvements. When implementing something that has an obvious optimization opportunity (e.g. a new builtin that copies when it could use views, a hot path that could be specialized), add it there rather than implementing it immediately. Keep the file organized by category.
-
-## Spec Maintenance
-
-After any language change (new syntax, new builtin, changed semantics), update `docs/SPEC.md` to reflect the change. The spec is the source of truth — if it disagrees with the code, fix the spec.
+`docs/OPTIMIZATIONS.md` tracks future performance improvements. When you spot an obvious optimization (e.g. a new builtin that copies when it could use views, a hot path that could be specialized), add it there rather than implementing it immediately. Keep the file organized by category.
 
 ## Editor Extension Maintenance
 
-After any language change, update **both** editor extensions:
+After any language change, update **both** editor extensions.
 
 ### VS Code (`editors/vscode/syntaxes/gem.tmLanguage.json`)
 
-- **New keyword** — add it to the appropriate pattern in the `keyword` repository rule (`keyword.control.gem`, `keyword.other.gem`, or `keyword.declaration.function.gem`)
-- **New builtin function** — add it to the alternation in the `builtin` rule
-- **New syntax construct** — add a new repository rule and include it in the top-level `patterns` array at the right priority (before `#keyword` and `#identifier` if it needs to take precedence)
-- **New type annotation** (extern context) — add it to the alternation in `extern-type-annotation`
+- **New keyword** — add it to `keyword.control.gem`, `keyword.other.gem`, or `keyword.declaration.function.gem`.
+- **New builtin function** — add it to the alternation in the `builtin` rule.
+- **New syntax construct** — add a repository rule and include it in the top-level `patterns` array at the right priority.
+- **New type annotation** (extern context) — add it to the alternation in `extern-type-annotation`.
 
-The symlink at `~/.vscode/extensions/gem-language` → `editors/vscode` means changes take effect on VS Code reload with no reinstall needed.
+The symlink `~/.vscode/extensions/gem-language` → `editors/vscode` makes changes take effect on VS Code reload.
 
 ### Helix (`editors/tree-sitter-gem/`)
 
-- **New keyword** — tree-sitter picks it up automatically if it's a string literal in grammar.js; add a highlight query entry in `queries/highlights.scm`
-- **New builtin function** — add it to the `#match?` regex in highlights.scm (both `call_expression` and `call_with_block` patterns)
-- **New syntax construct** — add a rule in `grammar.js`, regenerate, and add highlight/indent/textobject queries as needed
-- **New type annotation** — add it to the `type` choice in grammar.js
+- **New keyword** — tree-sitter picks it up automatically if it's a string literal in `grammar.js`; add a highlight query entry in `queries/highlights.scm`.
+- **New builtin function** — add it to the `#match?` regex in highlights.scm (both `call_expression` and `call_with_block`).
+- **New syntax construct** — add a rule in `grammar.js`, regenerate, add highlight/indent/textobject queries.
+- **New type annotation** — add it to the `type` choice in `grammar.js`.
 
-After grammar.js changes: `tree-sitter generate` (requires node via mise), `hx --grammar build`, then copy `queries/highlights.scm` to `~/.config/helix/runtime/queries/gem/`. Test with `tree-sitter parse` on all `.gem` files to verify zero errors.
+After grammar.js changes: `tree-sitter generate`, `hx --grammar build`, then copy `queries/highlights.scm` to `~/.config/helix/runtime/queries/gem/`. Test with `tree-sitter parse` on all `.gem` files to verify zero errors.
 
 ## Key Decisions
 
 - Compilation target is C source code. `cc` handles optimization and linking.
-- The compiler is self-hosting: `build/gem` compiles `compiler/main.gem` → C → new binary.
-- `bootstrap/stage0.c` is the escape hatch — checked into git so any C compiler can rebuild from scratch.
-- Concurrency uses minicoro (stackful coroutines) with a round-robin scheduler. Each process gets its own arena (bump allocator); values are deep-copied across process boundaries (spawn, send). Arenas are freed in bulk when a process exits.
-- Preemptive scheduling via reduction counter at loop back-edges (threshold: 4000).
-- TCP builtins use non-blocking sockets + `poll()` in the scheduler loop. Blocking operations (file I/O, exec, `extern blocking fn`) use a 4-thread worker pool.
+- The compiler is self-hosting: `build/gem` compiles `compiler/main.gem` → C → new binary. `bootstrap/stage0.c` is the escape hatch — checked into git so any C compiler can rebuild from scratch.
+- Concurrency uses minicoro (stackful coroutines) with a round-robin scheduler. Each process gets its own arena (bump allocator); values are deep-copied across process boundaries (`spawn`, `send`). Arenas are freed in bulk when a process exits.
+- **Per-iteration arena reset**: long-running `while true` (or self-recursive) process loops emit a `gem_arena_reset_with_roots(...)` at the back-edge, after copying live vars into a pin set. Liveness analysis in `compiler/liveness.gem` decides eligibility; if the loop can't be proven safe (closure captures, vars not addressable at the back-edge, `break` in body), the compiler emits a warning and skips the reset. This is what lets server loops run forever without unbounded memory growth.
+- Preemptive scheduling via reduction counter at loop back-edges (`GEM_REDUCTION_LIMIT = 4000` in `runtime/gem_scheduler.c`).
+- TCP builtins use non-blocking sockets + `poll()` in the scheduler loop. Blocking operations (file I/O, `exec`, `extern blocking fn`) use a 4-worker thread pool.
 - Selective receive (`receive ... when ... end`) scans the mailbox and removes the first matching message, leaving others queued.
-- Process monitoring, linking, and `trap_exit` follow Erlang semantics.
-- Named processes via `register`/`whereis` with auto-cleanup on death.
+- Process monitoring, linking, and `trap_exit` follow Erlang semantics. Named processes via `register`/`whereis` with auto-cleanup on death.
 - Tail call optimization for self-recursive functions emits `while(1)` loops with parameter reassignment.
 - `extern fn` / `extern blocking fn` provide C interop with type marshaling.
 - No classes, static types, exceptions, or namespaces in v0 — by design. Tables with closures serve as objects, `error()`/`pcall()` for error handling.
-- libdill is dead (crashes on arm64 macOS). Don't use it.
+- libdill is dead (crashes on arm64 macOS). Don't reach for it.
 
-## Testing
+## Spec Maintenance
 
-After any compiler change, run edge-case and adversarial tests before considering the work done. This means:
-
-1. **Happy path** — basic programs that exercise the new feature
-2. **Edge cases** — empty bodies, zero args, boundary values, nested constructs
-3. **Adversarial inputs** — malformed source, missing tokens, type mismatches at runtime
-4. **Regression** — re-run previous features to make sure nothing broke
-
-Write a `.gem` test file, compile and run it, verify output. For expected errors (parse errors, runtime errors), confirm the compiler or program fails with a sensible message rather than crashing or silently producing wrong output.
-
-## Running Tests
-
-```bash
-make test          # run all numbered examples against expected output
-make test-json     # run JSON parser stress test
-```
+`docs/SPEC.md` is the source of truth for the language. After any change to syntax, semantics, or builtins, update it. If the spec disagrees with the code, fix the spec.
 
 ## Language Quick Reference
 
@@ -215,8 +204,8 @@ export my_fn, my_other_fn            # at end of module file
 """multi-line with {interpolation}"""
 '''multi-line literal'''
 
-# Operators — and/or/not (NOT &&/||/!), x in tbl
-# Tables — { key: val } or [1, 2, 3], dot access, bracket access
+# Operators — and/or/not (NOT &&/||/!), x in tbl, x in arr
+# Tables — { key: val } or [1, 2, 3], dot access, bracket access (negative indexing supported)
 # Logical — nil and false are falsy, everything else truthy
 
 # Concurrency
@@ -233,34 +222,36 @@ monitor(pid)
 link(pid)
 process_flag("trap_exit", true)
 register("name", self())
+whereis("name")                      # → pid or nil
 
 # Error handling
-error("msg")                         # halt with stack trace
+error("msg")                         # halt with stack trace; uncaught in main prints source context + caret
 let r = pcall some_fn()              # {ok: bool, value/error: ...}
 
 # Common builtins
-# print, len, type, to_string, to_int, to_float
+# print, eprint, len, type, to_string, to_int, to_float, exit
 # push, pop, keys, values, sort, insert, delete, remove_at
 # str_replace, substr, chr, ord, has_key
 # buf_new, buf_push, buf_str, build_string
-# push/to_string work on buffers too
+# read_file, write_file, append_file, file_exists, dirname, path_join, normalize_path
+# remove_file, mkdir, list_dir, is_dir, exec, sleep, getenv, input, argv
+# tcp_listen, tcp_accept, tcp_read, tcp_write, tcp_close
+# floor, ceil, round, abs, pow, sqrt, random
+# band, bor, bxor, bnot, bshl, bshr
 
 # String building — build_string needs () before do block
 let s = build_string() do |add|
   add("hello", " ", "world")           # multi-arg, no intermediate allocs
 end
 
-# read_file, write_file, exec, sleep, self, spawn
-# tcp_listen, tcp_accept, tcp_read, tcp_write, tcp_close
-
 # Std library modules
-# std/string (split, join, trim, index_of, contains, ...)
-# std/table (each, map, filter, reduce, find, sort, slice, ...)
+# std/string (split, join, trim, index_of, contains, starts_with, ends_with, ...)
+# std/table (each, map, filter, reduce, find, sort, slice, concat, copy, group_by, ...)
 # std/math (min, max, clamp, assert)
-# std/time (now, sleep, format, ...)
-# std/log (info, warn, error, debug)
+# std/time (now, sleep, format, iso8601, http_date, date, ...)
+# std/log (debug, info, warn, error, set_level)
 # std/json (parse, encode)
-# std/http (router, serve, ok, html, json_response, ...)
+# std/http (router, serve, ok, html, json_response, cookies, form parsing, ...)
 # std/request (HTTP client)
 # std/url (parse, encode)
 # std/mime (lookup by extension)
@@ -272,7 +263,3 @@ extern fn puts(s: String) -> Int
 extern blocking fn net_read(fd: Int) -> String
 extern include "header.h"
 ```
-
-## Git Conventions
-
-- Never add `Co-Authored-By` trailers to commit messages.
