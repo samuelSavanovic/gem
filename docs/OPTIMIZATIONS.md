@@ -283,18 +283,10 @@ Desugaring now uses `__table_key_at` / `__table_val_at` to index directly into t
 
 ## Runtime Hot Paths
 
-### POST burst p99 regression after 2026-05-01 cleanup pass (P2 — investigate)
-After the runtime cleanup pass (commits `3919775` gem_alloc helper, `d658a45` TCO guard tightening, `9642aa8` gem_copy.c split), bookmark app POST burst p99 regressed from ~80 ms to 263–525 ms across three runs (vs baseline `2026-05-01_14-47-39/`). Throughput unchanged (155 req/s), p50/p75/p90 at parity or better, soak GET unchanged. Only the deepest tail is affected — the worst ~15 of ~1550 POSTs.
+### ~~POST burst p99 regression after 2026-05-01 cleanup pass~~ ✓ Closed as noise (2026-05-01)
+The reported "regression" (80→263→525 ms across three runs) was below the noise floor of the bench. Re-ran three back-to-back 30s POST bursts at HEAD with the same app and got p99 = 75 ms / 264 ms / 562 ms — the original three numbers fall inside the same envelope. p50 stayed flat at 35–39 ms in all runs. SQLite fsync tail on macOS is bumpy enough at this sample size (~1500 samples → p99 = worst ~15) that ~6× swings on the deepest tail are baseline variance, not a code change.
 
-Ruled out:
-- Arena blowup during soak (RSS curve identical to baseline, peak 55–56 MB).
-- `d658a45` TCO guard — `handle_connection_loop`/`accept_loop` are `while true` (not TCO); `gen_server.loop` is TCO but has no captured locals; bookmark app doesn't use gen_server.
-- DB carry-over (run.sh wipes db/db-shm/db-wal).
-- App-log anomalies (clean POST/Created lines, no errors/timeouts).
-
-Remaining hypotheses: subtle locality change from the gem_copy.c split (function placement → rare icache miss on the slow path), or amplified system noise on the worst-case fsync wait that wrk's 1500-sample p99 is too small to smooth over.
-
-Next step if revisited: run with `dtruss` or `sample` against the app PID during the POST burst to capture what the slow request is actually doing. Or bisect the four cleanup commits (`3919775`, `442d8ed`, `d658a45`, `9642aa8`) to localize the cause.
+Lesson for future POST bench reads: don't trust a p99 swing on a 10s burst. Either lengthen `WRITE_BURST_DURATION` to 60s+ for smaller p99 sample noise, or run the burst 3+ times back-to-back and look at the variance band, not single numbers.
 
 ### `gem_eq` for strings (P2)
 Currently `strcmp`. If string interning lands, short strings become pointer equality. Even without interning, caching string length would let us short-circuit on length mismatch before comparing bytes.
