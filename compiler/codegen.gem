@@ -2907,7 +2907,7 @@ fn make_codegen(source_name)
       end
       return {expr: "gem_make_fn({result.fn_name}, &{env_tmp})", setup: buf_str(b)}
     end
-    buf_push(b, "    struct {result.struct_name} *{env_tmp} = GC_MALLOC(sizeof(struct {result.struct_name}));\n")
+    buf_push(b, "    struct {result.struct_name} *{env_tmp} = gem_alloc(sizeof(struct {result.struct_name}));\n")
     buf_push(b, "    {env_tmp}->_num_captures = {len(captures)};\n")
     for cap in captures
       let mc = mangle(cap)
@@ -2921,7 +2921,7 @@ fn make_codegen(source_name)
         buf_push(b, "    {env_tmp}->{mc} = {mc};\n")
       else
         let box_tmp = tmp()
-        buf_push(b, "    GemVal *{box_tmp} = GC_MALLOC(sizeof(GemVal));\n")
+        buf_push(b, "    GemVal *{box_tmp} = gem_alloc(sizeof(GemVal));\n")
         buf_push(b, "    *{box_tmp} = {mc};\n")
         buf_push(b, "    {env_tmp}->{mc} = {box_tmp};\n")
       end
@@ -3999,7 +3999,7 @@ fn make_codegen(source_name)
       buf_push(b, "        return gem_float(_ret);\n")
     elif ret_type == "String"
       buf_push(b, "        size_t _len = _raw ? strlen(_raw) : 0;\n")
-      buf_push(b, "        char *_gc = (char *)GC_MALLOC_ATOMIC(_len + 1);\n")
+      buf_push(b, "        char *_gc = (char *)gem_alloc(_len + 1);\n")
       buf_push(b, "        if (_raw) \{ memcpy(_gc, _raw, _len + 1); free(_raw); } else \{ _gc[0] = '\\0'; }\n")
       buf_push(b, "        return gem_string(_gc);\n")
     elif ret_type == "Bool"

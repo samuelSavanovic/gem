@@ -197,7 +197,7 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
 
         /* Reuse a per-process read buffer instead of GC-allocating 4KB every call */
         if (proc->read_buf_cap < max_bytes) {
-            proc->read_buf = (char *)GC_MALLOC_ATOMIC(max_bytes);
+            proc->read_buf = (char *)gem_alloc(max_bytes);
             proc->read_buf_cap = max_bytes;
         }
         char *buf = proc->read_buf;
@@ -210,7 +210,7 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
             ssize_t n = read(fd, buf, max_bytes);
             if (n > 0) {
                 proc->deadline_ms = -1;
-                char *s = (char *)GC_MALLOC_ATOMIC(n + 1);
+                char *s = (char *)gem_alloc(n + 1);
                 memcpy(s, buf, n);
                 s[n] = '\0';
                 GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s;
@@ -243,7 +243,7 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
     }
 
     /* Non-process fallback (no scheduler running) */
-    char *buf = (char *)GC_MALLOC_ATOMIC(max_bytes + 1);
+    char *buf = (char *)gem_alloc(max_bytes + 1);
     ssize_t n = read(fd, buf, max_bytes);
     if (n < 0) {
         char errbuf[256];

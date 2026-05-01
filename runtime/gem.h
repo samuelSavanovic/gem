@@ -52,12 +52,12 @@ extern int gem_main_pid;
 
 GemArena *gem_current_arena(void);
 
-/* Compatibility shim — old stage0.c emits GC_INIT() in main() */
-#define GC_INIT() ((void)0)
-#define GC_MALLOC(size)        gem_arena_alloc(gem_current_arena(), (size))
-#define GC_MALLOC_ATOMIC(size) gem_arena_alloc(gem_current_arena(), (size))
-#define ALLOC(type)            ((type *)gem_arena_alloc(gem_current_arena(), sizeof(type)))
-#define ALLOC_N(type, n)       ((type *)gem_arena_alloc(gem_current_arena(), sizeof(type) * (n)))
+static inline void *gem_alloc(size_t n) {
+    return gem_arena_alloc(gem_current_arena(), n);
+}
+
+#define ALLOC(type)      ((type *)gem_arena_alloc(gem_current_arena(), sizeof(type)))
+#define ALLOC_N(type, n) ((type *)gem_arena_alloc(gem_current_arena(), sizeof(type) * (n)))
 
 /* ─── Tagged value ─── */
 

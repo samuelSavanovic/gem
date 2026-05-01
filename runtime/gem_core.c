@@ -92,7 +92,7 @@ GemVal gem_string(const char *s) {
     r.type = VAL_STRING;
     r.magic = GEM_MAGIC;
     size_t len = strlen(s) + 1;
-    r.sval = (char *)GC_MALLOC_ATOMIC(len);
+    r.sval = (char *)gem_alloc(len);
     memcpy(r.sval, s, len);
     return r;
 }

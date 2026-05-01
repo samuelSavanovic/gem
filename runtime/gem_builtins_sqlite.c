@@ -202,7 +202,7 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
                 case SQLITE_BLOB: {
                     const void *blob = sqlite3_column_blob(stmt, c);
                     int bytes = sqlite3_column_bytes(stmt, c);
-                    char *copy = (char *)GC_MALLOC_ATOMIC((size_t)bytes + 1);
+                    char *copy = (char *)gem_alloc((size_t)bytes + 1);
                     memcpy(copy, blob, (size_t)bytes);
                     copy[bytes] = '\0';
                     val.type = VAL_STRING;

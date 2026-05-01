@@ -28,7 +28,7 @@ GemVal gem_format_time_fn(void *_env, GemVal *args, int argc) {
     char out[256];
     size_t n = strftime(out, sizeof(out), args[1].sval, &tm_buf);
     if (n == 0) return gem_string("");
-    char *result = (char *)GC_MALLOC_ATOMIC(n + 1);
+    char *result = (char *)gem_alloc(n + 1);
     memcpy(result, out, n + 1);
     return gem_string(result);
 }
@@ -48,7 +48,7 @@ GemVal gem_format_time_local_fn(void *_env, GemVal *args, int argc) {
     char out[256];
     size_t n = strftime(out, sizeof(out), args[1].sval, &tm_buf);
     if (n == 0) return gem_string("");
-    char *result = (char *)GC_MALLOC_ATOMIC(n + 1);
+    char *result = (char *)gem_alloc(n + 1);
     memcpy(result, out, n + 1);
     return gem_string(result);
 }

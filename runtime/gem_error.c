@@ -28,7 +28,7 @@ void gem_print_stack_trace(void) {
 
 static void gem_pcall_longjmp(GemPcallFrame *frame, const char *msg) {
     size_t len = strlen(msg) + 1;
-    char *saved_msg = (char *)GC_MALLOC_ATOMIC(len);
+    char *saved_msg = (char *)gem_alloc(len);
     memcpy(saved_msg, msg, len);
     frame->error_msg = saved_msg;
     GemVal stack_snapshot = gem_table_new();

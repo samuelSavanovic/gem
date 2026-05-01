@@ -123,7 +123,7 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
         case VAL_TABLE: snprintf(buf, sizeof(buf), "<table:%d>", v.table->len); return gem_string(buf);
         case VAL_BUFFER: {
             GemBuffer *b = v.buffer;
-            char *s = (char *)GC_MALLOC_ATOMIC(b->len + 1);
+            char *s = (char *)gem_alloc(b->len + 1);
             memcpy(s, b->data, b->len);
             s[b->len] = '\0';
             GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s;

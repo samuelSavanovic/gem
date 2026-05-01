@@ -90,7 +90,7 @@ static GemVal t2_proc(void *env, GemVal *args, int argc) {
 }
 
 static int test_send_receive(void) {
-    t2_ctx *ctx = (t2_ctx *)GC_MALLOC(sizeof(t2_ctx));
+    t2_ctx *ctx = (t2_ctx *)gem_alloc(sizeof(t2_ctx));
     ctx->got = 0;
     int pid = gem_spawn_fn(t2_proc, ctx);
     gem_send_msg(pid, gem_int(42));
@@ -131,8 +131,8 @@ static GemVal pong_proc(void *env, GemVal *args, int argc) {
 }
 
 static int test_ping_pong(void) {
-    pp_ctx *ping_ctx = (pp_ctx *)GC_MALLOC(sizeof(pp_ctx));
-    pp_ctx *pong_ctx = (pp_ctx *)GC_MALLOC(sizeof(pp_ctx));
+    pp_ctx *ping_ctx = (pp_ctx *)gem_alloc(sizeof(pp_ctx));
+    pp_ctx *pong_ctx = (pp_ctx *)gem_alloc(sizeof(pp_ctx));
     ping_ctx->count = 0;
     pong_ctx->count = 0;
 
@@ -178,12 +178,12 @@ static GemVal consumer_proc(void *env, GemVal *args, int argc) {
 }
 
 static int test_many_producers(void) {
-    cons_ctx *cctx = (cons_ctx *)GC_MALLOC(sizeof(cons_ctx));
+    cons_ctx *cctx = (cons_ctx *)gem_alloc(sizeof(cons_ctx));
     cctx->total = 0;
     int consumer_pid = gem_spawn_fn(consumer_proc, cctx);
 
     for (int i = 0; i < NUM_PRODUCERS; i++) {
-        prod_ctx *pctx = (prod_ctx *)GC_MALLOC(sizeof(prod_ctx));
+        prod_ctx *pctx = (prod_ctx *)gem_alloc(sizeof(prod_ctx));
         pctx->consumer_pid = consumer_pid;
         pctx->id = i;
         gem_spawn_fn(producer_proc, pctx);
@@ -207,7 +207,6 @@ static GemVal t5_sender(void *env, GemVal *args, int argc) {
         char buf[64];
         snprintf(buf, 64, "gc-msg-%d", i);
         gem_send_msg(ctx->consumer_pid, gem_string(buf));
-        GC_gcollect();
     }
     return GEM_NIL;
 }
@@ -218,7 +217,6 @@ static GemVal t5_consumer(void *env, GemVal *args, int argc) {
     ctx->passed = 1;
     for (int i = 0; i < 100; i++) {
         GemVal msg = gem_receive_msg();
-        GC_gcollect();
         char expected[64];
         snprintf(expected, 64, "gc-msg-%d", i);
         if (msg.type != VAL_STRING || strcmp(msg.sval, expected) != 0) {
@@ -230,11 +228,11 @@ static GemVal t5_consumer(void *env, GemVal *args, int argc) {
 }
 
 static int test_gc_messages(void) {
-    t5_cons_ctx *cctx = (t5_cons_ctx *)GC_MALLOC(sizeof(t5_cons_ctx));
+    t5_cons_ctx *cctx = (t5_cons_ctx *)gem_alloc(sizeof(t5_cons_ctx));
     cctx->passed = 0;
     int consumer_pid = gem_spawn_fn(t5_consumer, cctx);
 
-    t5_send_ctx *sctx = (t5_send_ctx *)GC_MALLOC(sizeof(t5_send_ctx));
+    t5_send_ctx *sctx = (t5_send_ctx *)gem_alloc(sizeof(t5_send_ctx));
     sctx->consumer_pid = consumer_pid;
     gem_spawn_fn(t5_sender, sctx);
 
@@ -266,7 +264,7 @@ static GemVal t6_sender(void *env, GemVal *args, int argc) {
 }
 
 static int test_receive_blocks(void) {
-    t6_ctx *ctx = (t6_ctx *)GC_MALLOC(sizeof(t6_ctx));
+    t6_ctx *ctx = (t6_ctx *)gem_alloc(sizeof(t6_ctx));
     ctx->count = 0;
 
     ctx->waiter_pid = gem_spawn_fn(t6_waiter, ctx);
@@ -293,7 +291,7 @@ static GemVal t7_proc(void *env, GemVal *args, int argc) {
 }
 
 static int test_self_pid(void) {
-    t7_ctx *ctx = (t7_ctx *)GC_MALLOC(sizeof(t7_ctx));
+    t7_ctx *ctx = (t7_ctx *)gem_alloc(sizeof(t7_ctx));
     ctx->reported_pid = -1;
     int pid = gem_spawn_fn(t7_proc, ctx);
     ctx->expected_pid = pid;
@@ -337,7 +335,7 @@ static GemVal t9_receiver(void *env, GemVal *args, int argc) {
 }
 
 static int test_all_value_types(void) {
-    t9_ctx *ctx = (t9_ctx *)GC_MALLOC(sizeof(t9_ctx));
+    t9_ctx *ctx = (t9_ctx *)gem_alloc(sizeof(t9_ctx));
     ctx->count = 0;
     int pid = gem_spawn_fn(t9_receiver, ctx);
 
@@ -382,7 +380,7 @@ static GemVal t10_parent(void *env, GemVal *args, int argc) {
 }
 
 static int test_nested_spawn(void) {
-    t10_ctx *ctx = (t10_ctx *)GC_MALLOC(sizeof(t10_ctx));
+    t10_ctx *ctx = (t10_ctx *)gem_alloc(sizeof(t10_ctx));
     ctx->child_ran = 0;
     ctx->child_pid = -1;
     gem_spawn_fn(t10_parent, ctx);
@@ -437,7 +435,7 @@ static int test_message_chain(void) {
 
     /* Create all processes */
     for (int i = 0; i < CHAIN_LEN; i++) {
-        ctxs[i] = (chain_ctx *)GC_MALLOC(sizeof(chain_ctx));
+        ctxs[i] = (chain_ctx *)gem_alloc(sizeof(chain_ctx));
         ctxs[i]->is_last = (i == CHAIN_LEN - 1);
         pids[i] = gem_spawn_fn(chain_proc, ctxs[i]);
     }
@@ -504,12 +502,12 @@ static GemVal stress_collector(void *env, GemVal *args, int argc) {
 }
 
 static int test_high_scale(void) {
-    stress_collector_ctx *coll = (stress_collector_ctx *)GC_MALLOC(sizeof(stress_collector_ctx));
+    stress_collector_ctx *coll = (stress_collector_ctx *)gem_alloc(sizeof(stress_collector_ctx));
     coll->total = 0;
     int coll_pid = gem_spawn_fn(stress_collector, coll);
 
     for (int i = 0; i < STRESS_PROCS; i++) {
-        stress_sender_ctx *ctx = (stress_sender_ctx *)GC_MALLOC(sizeof(stress_sender_ctx));
+        stress_sender_ctx *ctx = (stress_sender_ctx *)gem_alloc(sizeof(stress_sender_ctx));
         ctx->target_pid = coll_pid;
         ctx->id = i;
         int pid = gem_spawn_fn(stress_sender, ctx);
@@ -538,7 +536,6 @@ static GemVal gc_stress_proc(void *env, GemVal *args, int argc) {
         char buf[64];
         snprintf(buf, 64, "proc-%d-alloc-%d", ctx->id, i);
         gem_table_set(tbl, gem_int(i), gem_string(buf));
-        if (i % 20 == 0) GC_gcollect();
     }
 
     /* Verify all survived */
@@ -558,7 +555,7 @@ static GemVal gc_stress_proc(void *env, GemVal *args, int argc) {
 static int test_gc_pressure(void) {
     gc_stress_ctx *ctxs[GC_STRESS_PROCS];
     for (int i = 0; i < GC_STRESS_PROCS; i++) {
-        ctxs[i] = (gc_stress_ctx *)GC_MALLOC(sizeof(gc_stress_ctx));
+        ctxs[i] = (gc_stress_ctx *)gem_alloc(sizeof(gc_stress_ctx));
         ctxs[i]->id = i;
         ctxs[i]->passed = 0;
         gem_spawn_fn(gc_stress_proc, ctxs[i]);
@@ -587,7 +584,7 @@ static GemVal t15_proc(void *env, GemVal *args, int argc) {
 }
 
 static int test_multiple_scheduler_runs(void) {
-    t15_ctx *ctx = (t15_ctx *)GC_MALLOC(sizeof(t15_ctx));
+    t15_ctx *ctx = (t15_ctx *)gem_alloc(sizeof(t15_ctx));
     ctx->value = 0;
 
     /* Run scheduler multiple times with fresh processes each time */
@@ -612,7 +609,7 @@ static GemVal t16_proc(void *env, GemVal *args, int argc) {
 }
 
 static int test_no_messages(void) {
-    t16_ctx *ctx = (t16_ctx *)GC_MALLOC(sizeof(t16_ctx));
+    t16_ctx *ctx = (t16_ctx *)gem_alloc(sizeof(t16_ctx));
     ctx->ran = 0;
 
     /* Spawn 20 processes that don't use messaging at all */
@@ -642,7 +639,7 @@ static GemVal t17_receiver(void *env, GemVal *args, int argc) {
 }
 
 static int test_burst_send(void) {
-    t17_ctx *ctx = (t17_ctx *)GC_MALLOC(sizeof(t17_ctx));
+    t17_ctx *ctx = (t17_ctx *)gem_alloc(sizeof(t17_ctx));
     ctx->total = 0;
     int pid = gem_spawn_fn(t17_receiver, ctx);
 
@@ -673,7 +670,6 @@ static GemVal t18_sender(void *env, GemVal *args, int argc) {
     gem_table_set(tbl, gem_int(1), gem_string("second"));
 
     gem_send_msg(ctx->target_pid, tbl);
-    GC_gcollect();
     return GEM_NIL;
 }
 
@@ -681,7 +677,6 @@ static GemVal t18_receiver(void *env, GemVal *args, int argc) {
     (void)args; (void)argc;
     t18_ctx *ctx = (t18_ctx *)env;
     GemVal msg = gem_receive_msg();
-    GC_gcollect();
 
     ctx->passed = 1;
     if (msg.type != VAL_TABLE) { ctx->passed = 0; return GEM_NIL; }
@@ -705,11 +700,11 @@ static GemVal t18_receiver(void *env, GemVal *args, int argc) {
 }
 
 static int test_table_messages(void) {
-    t18_ctx *rctx = (t18_ctx *)GC_MALLOC(sizeof(t18_ctx));
+    t18_ctx *rctx = (t18_ctx *)gem_alloc(sizeof(t18_ctx));
     rctx->passed = 0;
     int recv_pid = gem_spawn_fn(t18_receiver, rctx);
 
-    t18_sender_ctx *sctx = (t18_sender_ctx *)GC_MALLOC(sizeof(t18_sender_ctx));
+    t18_sender_ctx *sctx = (t18_sender_ctx *)gem_alloc(sizeof(t18_sender_ctx));
     sctx->target_pid = recv_pid;
     gem_spawn_fn(t18_sender, sctx);
 
@@ -766,11 +761,11 @@ static GemVal client_proc(void *env, GemVal *args, int argc) {
 }
 
 static int test_request_reply(void) {
-    server_ctx *sctx = (server_ctx *)GC_MALLOC(sizeof(server_ctx));
+    server_ctx *sctx = (server_ctx *)gem_alloc(sizeof(server_ctx));
     sctx->rounds = 0;
     int srv_pid = gem_spawn_fn(server_proc, sctx);
 
-    client_ctx *cctx = (client_ctx *)GC_MALLOC(sizeof(client_ctx));
+    client_ctx *cctx = (client_ctx *)gem_alloc(sizeof(client_ctx));
     cctx->server_pid = srv_pid;
     cctx->success_count = 0;
     gem_spawn_fn(client_proc, cctx);
@@ -799,7 +794,7 @@ static GemVal t20_proc(void *_env, GemVal *args, int argc) {
 }
 
 static int test_builtin_wrappers(void) {
-    t20_ctx *ctx = (t20_ctx *)GC_MALLOC(sizeof(t20_ctx));
+    t20_ctx *ctx = (t20_ctx *)gem_alloc(sizeof(t20_ctx));
     ctx->ran = 0;
 
     /* Use spawn builtin */
@@ -834,7 +829,7 @@ static GemVal t21_looper(void *env, GemVal *args, int argc) {
 }
 
 static int test_deadlock_detection(void) {
-    t21_ctx *ctx = (t21_ctx *)GC_MALLOC(sizeof(t21_ctx));
+    t21_ctx *ctx = (t21_ctx *)gem_alloc(sizeof(t21_ctx));
     ctx->msgs_received = 0;
     int pid = gem_spawn_fn(t21_looper, ctx);
 
@@ -863,7 +858,7 @@ static GemVal t22_infinite_receiver(void *env, GemVal *args, int argc) {
 }
 
 static int test_scheduler_exits_on_deadlock(void) {
-    int *count = (int *)GC_MALLOC(sizeof(int));
+    int *count = (int *)gem_alloc(sizeof(int));
     *count = 0;
     int pid = gem_spawn_fn(t22_infinite_receiver, count);
 
@@ -881,8 +876,6 @@ static int test_scheduler_exits_on_deadlock(void) {
 /* ================================================================ */
 
 int main(void) {
-    GC_INIT();
-
     printf("=== Gem Concurrency Runtime — Stress Test Suite ===\n\n");
 
     RUN_TEST(test_spawn_basic);

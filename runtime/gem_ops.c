@@ -11,7 +11,7 @@ GemVal gem_add(GemVal a, GemVal b) {
     if (a.type == VAL_FLOAT && b.type == VAL_INT) return gem_float(a.fval + (double)b.ival);
     if (a.type == VAL_STRING && b.type == VAL_STRING) {
         size_t la = strlen(a.sval), lb = strlen(b.sval);
-        char *s = (char *)GC_MALLOC_ATOMIC(la + lb + 1);
+        char *s = (char *)gem_alloc(la + lb + 1);
         memcpy(s, a.sval, la);
         memcpy(s + la, b.sval, lb + 1);
         GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s; return r;
@@ -104,11 +104,11 @@ void gem_string_append(GemVal *accum, GemVal rhs) {
         GemVal args[2] = {*accum, rhs};
         gem_buf_push_fn(NULL, args, 2);
     } else if (accum->type == VAL_STRING) {
-        GemBuffer *b = (GemBuffer *)GC_MALLOC(sizeof(GemBuffer));
+        GemBuffer *b = (GemBuffer *)gem_alloc(sizeof(GemBuffer));
         b->cap = 64;
         int slen = (int)strlen(accum->sval);
         while (b->cap <= slen) b->cap *= 2;
-        b->data = (char *)GC_MALLOC_ATOMIC(b->cap);
+        b->data = (char *)gem_alloc(b->cap);
         memcpy(b->data, accum->sval, slen);
         b->len = slen;
         accum->type = VAL_BUFFER;

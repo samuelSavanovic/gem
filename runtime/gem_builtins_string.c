@@ -32,7 +32,7 @@ GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc) {
     if (count == 0) return args[0];
 
     size_t result_len = s_len + (size_t)count * (new_len - old_len);
-    char *result = (char *)GC_MALLOC_ATOMIC(result_len + 1);
+    char *result = (char *)gem_alloc(result_len + 1);
     char *dst = result;
     p = s;
     while (*p) {
@@ -73,7 +73,7 @@ GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
     }
     if (start + count > slen) count = slen - start;
 
-    char *buf = (char *)GC_MALLOC_ATOMIC((size_t)count + 1);
+    char *buf = (char *)gem_alloc((size_t)count + 1);
     memcpy(buf, s + start, (size_t)count);
     buf[count] = '\0';
     GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = buf;
@@ -111,7 +111,7 @@ GemVal gem_ord_fn(void *_env, GemVal *args, int argc) {
 static void interp_append(char **data, int *len, int *cap, const char *s, int slen) {
     while (*len + slen >= *cap) {
         int new_cap = *cap * 2;
-        char *new_data = (char *)GC_MALLOC_ATOMIC(new_cap);
+        char *new_data = (char *)gem_alloc(new_cap);
         memcpy(new_data, *data, *len);
         *data = new_data;
         *cap = new_cap;
@@ -122,7 +122,7 @@ static void interp_append(char **data, int *len, int *cap, const char *s, int sl
 
 GemVal gem_interp(int n, GemVal *parts) {
     int cap = 128, len = 0;
-    char *data = (char *)GC_MALLOC_ATOMIC(cap);
+    char *data = (char *)gem_alloc(cap);
     char tmp[64];
     for (int i = 0; i < n; i++) {
         const char *s;
@@ -141,7 +141,7 @@ GemVal gem_interp(int n, GemVal *parts) {
         }
         interp_append(&data, &len, &cap, s, slen);
     }
-    char *s = (char *)GC_MALLOC_ATOMIC(len + 1);
+    char *s = (char *)gem_alloc(len + 1);
     memcpy(s, data, len);
     s[len] = '\0';
     GemVal r;
@@ -155,10 +155,10 @@ GemVal gem_interp(int n, GemVal *parts) {
 
 GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc) {
     (void)_env; (void)args; (void)argc;
-    GemBuffer *b = (GemBuffer *)GC_MALLOC(sizeof(GemBuffer));
+    GemBuffer *b = (GemBuffer *)gem_alloc(sizeof(GemBuffer));
     b->cap = 64;
     b->len = 0;
-    b->data = (char *)GC_MALLOC_ATOMIC(b->cap);
+    b->data = (char *)gem_alloc(b->cap);
     GemVal r;
     r.type = VAL_BUFFER;
     r.magic = GEM_MAGIC;
@@ -185,7 +185,7 @@ GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc) {
     /* Grow buffer if needed */
     while (b->len + slen >= b->cap) {
         int new_cap = b->cap * 2;
-        char *new_data = (char *)GC_MALLOC_ATOMIC(new_cap);
+        char *new_data = (char *)gem_alloc(new_cap);
         memcpy(new_data, b->data, b->len);
         b->data = new_data;
         b->cap = new_cap;
@@ -199,7 +199,7 @@ GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1 || args[0].type != VAL_BUFFER) { char buf[128]; snprintf(buf, sizeof(buf), "buf_str: expected buffer, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
     GemBuffer *b = args[0].buffer;
-    char *s = (char *)GC_MALLOC_ATOMIC(b->len + 1);
+    char *s = (char *)gem_alloc(b->len + 1);
     memcpy(s, b->data, b->len);
     s[b->len] = '\0';
     GemVal r;
@@ -228,10 +228,10 @@ GemVal gem_build_string_fn(void *_env, GemVal *args, int argc) {
     if (argc < 1 || args[0].type != VAL_FN) {
         gem_error("build_string: expected a function argument");
     }
-    GemBuffer *b = (GemBuffer *)GC_MALLOC(sizeof(GemBuffer));
+    GemBuffer *b = (GemBuffer *)gem_alloc(sizeof(GemBuffer));
     b->cap = 256;
     b->len = 0;
-    b->data = (char *)GC_MALLOC_ATOMIC(b->cap);
+    b->data = (char *)gem_alloc(b->cap);
     GemVal add_fn;
     add_fn.type = VAL_FN;
     add_fn.magic = GEM_MAGIC;
@@ -239,7 +239,7 @@ GemVal gem_build_string_fn(void *_env, GemVal *args, int argc) {
     add_fn.env = b;
     GemVal block_args[1] = {add_fn};
     args[0].fn(args[0].env, block_args, 1);
-    char *s = (char *)GC_MALLOC_ATOMIC(b->len + 1);
+    char *s = (char *)gem_alloc(b->len + 1);
     memcpy(s, b->data, b->len);
     s[b->len] = '\0';
     GemVal r;

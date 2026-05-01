@@ -43,7 +43,7 @@ GemVal gem_read_file_fn(void *_env, GemVal *args, int argc) {
             gem_io_free_request(req);
             gem_error(buf);
         }
-        char *data = (char *)GC_MALLOC_ATOMIC(req->result_len + 1);
+        char *data = (char *)gem_alloc(req->result_len + 1);
         memcpy(data, req->result_data, req->result_len);
         data[req->result_len] = '\0';
         gem_io_free_request(req);
@@ -58,7 +58,7 @@ GemVal gem_read_file_fn(void *_env, GemVal *args, int argc) {
     fseek(f, 0, SEEK_END);
     long flen = ftell(f);
     rewind(f);
-    char *data = (char *)GC_MALLOC_ATOMIC((size_t)flen + 1);
+    char *data = (char *)gem_alloc((size_t)flen + 1);
     size_t nread = fread(data, 1, (size_t)flen, f);
     data[nread] = '\0';
     fclose(f);
@@ -181,7 +181,7 @@ GemVal gem_path_join_fn(void *_env, GemVal *args, int argc) {
     if (file[0] == '/') return gem_string(file);
     size_t dlen = strlen(dir);
     size_t flen = strlen(file);
-    char *result = (char *)GC_MALLOC_ATOMIC(dlen + 1 + flen + 1);
+    char *result = (char *)gem_alloc(dlen + 1 + flen + 1);
     strcpy(result, dir);
     if (dlen > 0 && dir[dlen-1] != '/') strcat(result, "/");
     strcat(result, file);
