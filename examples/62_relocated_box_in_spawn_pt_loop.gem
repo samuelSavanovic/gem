@@ -1,0 +1,46 @@
+# Item 5 stress: spawn-closure-captured boxed root in `while true` PT loop.
+#
+# Today: REFUSED by `filter_live_for_rescue` because the env field for `prefix`
+# is allocated in the spawned process's arena (uniform `GemVal*` env layout
+# + unconditional fresh box per env field in `gem_deep_copy_fn`). PT-loop
+# arena reset would dangle the pointer. Compile emits a warning; this loop
+# runs without rescue (memory grows but finishes for 10k iters at ~150 b/iter
+# = ~1.5MB).
+#
+# After item 5 (box relocation on arena reset): no warning, rescue runs each
+# time the per-process arena exceeds 1MB, `prefix` is relocated into the
+# fresh arena, and memory stays bounded.
+#
+# A buggy relocation (e.g. fails to rewrite the env-struct `GemVal *`) hits
+# a use-after-free on the very next read of `prefix` after the first reset —
+# either crashes or produces wrong `last` output. That's the regression
+# this test pins.
+
+let main_pid = self()
+let prefix = "tick-"
+
+let worker = spawn(fn()
+  let n = 0
+  while true
+    let msg = receive()
+    match msg
+    when {tag: "go"}
+      let payload = prefix + to_string(n)
+      let junk = [payload, payload, payload, payload, payload]
+      n = n + 1
+    when {tag: "stop"}
+      send(main_pid, {tag: "result", count: n, last: prefix + to_string(n - 1)})
+      return
+    end
+  end
+end)
+
+let total = 10000
+for i = 0, total
+  send(worker, {tag: "go"})
+end
+send(worker, {tag: "stop"})
+
+let r = receive()
+print("count: " + to_string(r.count))
+print("last: " + r.last)

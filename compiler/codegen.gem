@@ -688,6 +688,62 @@ walk_for_tagging_node = fn(node, is_pt)
   nil
 end
 
+# Body-walker — does any `while` node in `body` have `process_tail = true`,
+# without crossing into a nested anon_fn boundary? Used by `compile_closure_fn`
+# to decide whether to synthesize a `_self_closure` rescue slot. Walks the
+# generic node shape after `tag_process_tail_while_loops` has stamped flags.
+let has_pt_while_in_node = nil
+has_pt_while_in_node = fn(node)
+  if node == nil
+    return false
+  end
+  if type(node) != "table"
+    return false
+  end
+  if node.tag == nil
+    return false
+  end
+  if node.tag == "anon_fn"
+    # PT context resets at anon_fn boundary — nested closures own their own
+    # `_self_closure` decision.
+    return false
+  end
+  if node.tag == "while" and node.process_tail == true
+    return true
+  end
+  for k, v in node
+    if k != "tag" and type(v) == "table"
+      let vks = keys(v)
+      if len(vks) > 0 and type(vks[0]) == "int"
+        let vi = 0
+        while vi < len(v)
+          if type(v[vi]) == "table" and has_pt_while_in_node(v[vi])
+            return true
+          end
+          vi += 1
+        end
+      else
+        if has_pt_while_in_node(v)
+          return true
+        end
+      end
+    end
+  end
+  false
+end
+
+fn body_has_pt_while(body)
+  if body == nil
+    return false
+  end
+  for s in body
+    if has_pt_while_in_node(s)
+      return true
+    end
+  end
+  false
+end
+
 let tag_process_tail_while_loops = nil
 tag_process_tail_while_loops = fn(fn_defs, top_stmts, process_tail_fns)
   for fd in fn_defs
@@ -821,6 +877,17 @@ fn make_codegen(source_name)
   # arm-lets (declared inside a nested if/match block — block-scoped, not
   # addressable from the enclosing while's back-edge) from fn-scope locals.
   let fn_scope_locals = {}
+  # Captures of the current `compile_closure_fn` body — env fields backed by
+  # `_cls->gem_v_<name>` and relocatable via `_self_closure` on arena reset.
+  # Disjoint from `inner_boxed` (lets/params captured by *nested* anons,
+  # which have no env-relocation path and remain a refusal).
+  let closure_captures = {}
+  # When true, the enclosing closure body has a synthesized `_self_closure`
+  # GemVal slot — `compile_while` may pass `&_self_closure` as a rescue root
+  # to relocate the env on arena reset.
+  let has_self_closure_slot = false
+  let current_closure_struct_name = nil
+  let current_closure_captures = nil
   let tco_fn_name = nil
   let tco_params = nil
   let tco_captured = nil
@@ -3004,6 +3071,7 @@ fn make_codegen(source_name)
   # if/match arm — `collect_top_let_names` does not descend through those).
   let filter_live_for_rescue = fn(live_set)
     let roots = []
+    let added_self_closure = false
     let lk = keys(live_set)
     for name in lk
       if set_contains(local_names, name)
@@ -3014,6 +3082,15 @@ fn make_codegen(source_name)
         # them via `gem_v_<name>` (already a `GemVal *`) below.
         if in_top_level and set_contains(top_level_vars, name)
           push(roots, name)
+        elif has_self_closure_slot and set_contains(closure_captures, name)
+          # Capture of the current closure: env field, relocatable via the
+          # synthesized `_self_closure` slot. Add a single sentinel covering
+          # ALL captures — `compile_while` emits `&_self_closure` once and
+          # reloads `_cls` + every capture local from the new env.
+          if not added_self_closure
+            push(roots, "_self_closure")
+            added_self_closure = true
+          end
         elif set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name))
           return {ok: false, reason: "live var `{name}` is captured by a closure (box lives in arena memory)"}
         elif not set_contains(fn_scope_locals, name)
@@ -3118,15 +3195,23 @@ fn make_codegen(source_name)
         buf_push(b, "{p}        gem_arena_reset_with_roots(NULL, 0);\n")
       else
         buf_push(b, "{p}        GemVal *_loop_roots[] = \{")
+        let has_self_closure_root = false
         for i = 0, len(rescue_roots)
           if i > 0
             buf_push(b, ", ")
           end
           let rname = rescue_roots[i]
-          # Boxed top-level vars: `gem_v_<name>` is already `GemVal *`
-          # (points at the BSS-backed `gem_box_<name>`); locals & non-boxed
-          # top-levels need the `&` to form a `GemVal *`.
-          if set_contains(top_level_boxed, rname)
+          # Sentinel: `_self_closure` is the synthesized closure-value slot
+          # (see `compile_closure_fn`). Passing `&_self_closure` to the
+          # runtime triggers env-struct relocation via `gem_deep_copy_fn`,
+          # which rewrites every capture box into the fresh arena.
+          if rname == "_self_closure"
+            buf_push(b, "&_self_closure")
+            has_self_closure_root = true
+          elif set_contains(top_level_boxed, rname)
+            # Boxed top-level vars: `gem_v_<name>` is already `GemVal *`
+            # (points at the BSS-backed `gem_box_<name>`); locals & non-boxed
+            # top-levels need the `&` to form a `GemVal *`.
             buf_push(b, "{mangle(rname)}")
           else
             buf_push(b, "&{mangle(rname)}")
@@ -3134,6 +3219,18 @@ fn make_codegen(source_name)
         end
         buf_push(b, "};\n")
         buf_push(b, "{p}        gem_arena_reset_with_roots(_loop_roots, {len(rescue_roots)});\n")
+        # Reload the closure env pointer + every capture local from the
+        # relocated `_self_closure.env`. The runtime updates the slot to
+        # point at the new env struct in the fresh arena; the C locals
+        # `_cls` and each `gem_v_<cap>` (which are pointer values, not
+        # storage) still hold the dangling old-arena addresses.
+        if has_self_closure_root
+          buf_push(b, "{p}        _cls = (struct {current_closure_struct_name} *)_self_closure.env;\n")
+          for cap in current_closure_captures
+            let mc = mangle(cap)
+            buf_push(b, "{p}        {mc} = _cls->{mc};\n")
+          end
+        end
       end
       buf_push(b, "{p}    }\n")
     end
@@ -3852,6 +3949,10 @@ fn make_codegen(source_name)
     let saved_top = in_top_level
     let saved_local = local_names
     let saved_fn_scope = fn_scope_locals
+    let saved_closure_captures = closure_captures
+    let saved_has_self_closure_slot = has_self_closure_slot
+    let saved_current_closure_struct_name = current_closure_struct_name
+    let saved_current_closure_captures = current_closure_captures
     local_names = set_union(shadowed_locals, sorted_array_to_set(captures))
     fn_scope_locals = inner_scope
 
@@ -3896,13 +3997,31 @@ fn make_codegen(source_name)
     # Generate function
     let fb = buf_new()
     buf_push(fb, "static GemVal {name}(void *_env, GemVal *args, int argc) \{\n")
+    # When this closure body contains a process-tail `while` loop AND it
+    # captures vars from outer scope, synthesize a stack-local closure-value
+    # `_self_closure` so the loop's back-edge arena rescue can pass
+    # `&_self_closure` as a relocation root. The runtime's deep-copy walker
+    # rewrites the env-struct pointer + every capture box into the fresh
+    # arena; reload `_cls` and the capture locals from `_self_closure.env`
+    # after the reset (see `compile_while`).
+    let want_self_closure = len(captures) > 0 and body_has_pt_while(body)
     if len(captures) > 0
-      buf_push(fb, "    struct {struct_name} *_cls = (struct {struct_name} *)_env;\n")
+      if want_self_closure
+        buf_push(fb, "    GemVal _self_closure = gem_make_fn({name}, _env);\n")
+        buf_push(fb, "    struct {struct_name} *_cls = (struct {struct_name} *)_self_closure.env;\n")
+      else
+        buf_push(fb, "    struct {struct_name} *_cls = (struct {struct_name} *)_env;\n")
+      end
       for cap in captures
         let mc = mangle(cap)
         buf_push(fb, "    GemVal *{mc} = _cls->{mc};\n")
       end
     end
+
+    closure_captures = sorted_array_to_set(captures)
+    has_self_closure_slot = want_self_closure
+    current_closure_struct_name = struct_name
+    current_closure_captures = captures
 
     buf_push(fb, emit_param_bindings(node, params, inner_boxed))
     buf_push(fb, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", 0);\n")
@@ -3913,6 +4032,10 @@ fn make_codegen(source_name)
     in_top_level = saved_top
     local_names = saved_local
     fn_scope_locals = saved_fn_scope
+    closure_captures = saved_closure_captures
+    has_self_closure_slot = saved_has_self_closure_slot
+    current_closure_struct_name = saved_current_closure_struct_name
+    current_closure_captures = saved_current_closure_captures
 
     # Add struct + function to functions list
     push(functions, struct_def + buf_str(fb))
