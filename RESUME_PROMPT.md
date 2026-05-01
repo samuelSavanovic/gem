@@ -1,83 +1,76 @@
-# Resume: runtime error message quality pass
+# Resume: caret span for runtime errors
 
-Branch: `main`. Last three sessions were audits (TCO reset, runtime cleanup, extern fn soundness). The runtime is in a healthy state. The next bottleneck for a real Gem user is **debuggability**: when something goes wrong, does the message tell them *what* and *where*?
+Branch: `main`. Last session landed two commits on runtime error message quality:
 
-This session is open-ended quality work, not a soundness audit. Scope it tight.
+- `d08bd44` — codegen emits `gem_set_line(N)` per statement; runtime errors now point at the offending line, not the function header.
+- `228e40a` — uncaught errors in the main process now print `[Runtime Error]` + `--> file:line` + source line + stack trace, mirroring the compile-error format. Previously they were silently swallowed by the scheduler (user main runs as a process; no monitor → exit_reason dropped on the floor).
 
-## Last session in one screen
+What's missing: the **caret**. Compile errors render `^^^^^^^^^` under the offending span; runtime errors don't, because the AST (and therefore `GemFrame`) only carries `line`, not `col` or `span_len`.
 
-`726b0f1` — extern fn / extern blocking fn soundness audit. Fixed two bugs:
-- Ptr return constructed `GemVal` directly without setting `magic`. Routed both blocking and non-blocking paths through `gem_int()`.
-- Non-blocking String return crashed on NULL via `gem_string -> strlen(NULL)`. Now returns `GEM_NIL` on NULL, matching the blocking path.
-
-Added `examples/74_extern_blocking.gem` — first in-tree caller of `extern blocking fn`. Exercises the thread-pool yield and malloc'd-string-return ownership contract via `usleep` + `strdup`.
-
-Documented the String-return ownership asymmetry (non-blocking copies, blocking copies-and-frees), pointer lifetime across arena reset, and that `extern` does no boundary validation. Tracked deferred follow-ups (arity/type validation, ownership unification) under "C Interop Hardening" in `docs/OPTIMIZATIONS.md`.
-
-All four validation gates green.
-
-## This session — runtime error message quality
-
-Goal: when a Gem program errors at runtime, the user gets a message that tells them **what went wrong** and **where in their source** — not "type error in gem_add" with no line number.
+## This session — column + span tracking
 
 ### Concrete starting point
 
-1. **Survey the offenders.** Grep `gem_error(` across `runtime/` and triage. Worst categories likely:
-   - Type errors in built-ins (`gem_add`, `gem_eq`, table access) — often print "expected X, got Y" with no source line.
-   - Builtin arity/type errors — many use `gem_error("foo: expected ...")` with no call-site info.
-   - Table key errors — missing key access, wrong-type indexing.
-   - Some errors are just `gem_error("X")` with no formatting at all.
+1. **AST.** `compiler/ast.gem:46-121`. Every node constructor takes `line` only. Add `col` (and probably `span_len` or `end_col`) to constructors that error paths need most: `call`, `binop` (or whatever `+`/`-` use), `index`, `dot`, `let`, `assign`. Don't bother with nodes that can't trip a runtime error.
 
-2. **Pick the top 5–10 by frequency-of-tripping**, not by ease-of-fixing. The print/len/type/push/index path is on every program; the math.atan2 edge is on none.
+2. **Parser.** `compiler/parser.gem` produces these nodes. The lexer must already track column for the existing compile-error caret — find how `compile_error` gets its `col`/`span_len` (`compiler/errors.gem:31-65` is the printer; trace where the call sites compute span length). Reuse that.
 
-3. **Pattern**: the runtime already has `gem_call_stack` / `gem_push_frame` / `gem_pop_frame`. The stack trace printer (`gem_error.c`) uses these. The question is whether the *innermost* frame at the error site has the user's source location, or whether it's a runtime helper with no Gem-source mapping.
+3. **GemFrame.** `runtime/gem.h:101-105`. Add `col` (and `span_len` if you went that way). Update `gem_push_frame`, `gem_set_line` → `gem_set_loc(line, col, span_len)`.
 
-4. **Codegen side**: every Gem call site emits `gem_push_frame(name, file, line)` before the call. So when a builtin errors, the top of the call stack has the call site. Verify this is being printed clearly when a builtin errors — and if not, fix it.
+4. **Codegen.** `compiler/codegen.gem:3127, 3233`. Two `line_dir` emission sites. Currently emit `gem_set_line({node.line})`. Change to `gem_set_loc({node.line}, {node.col}, {node.span_len})`.
+
+5. **Printer.** `runtime/gem_error.c:gem_print_source_context`. Currently prints the source line with no caret. Add the caret row using `col` and `span_len`. Match `compiler/errors.gem` formatting exactly — same gutter width arithmetic, same caret character.
 
 ### What good looks like
 
-A user who writes `let x = "hello" + 5` should see something like:
-
 ```
-[Error] cannot add String and Int
-  at examples/foo.gem:3:13
-    let x = "hello" + 5
-                    ^
-```
-
-Not:
-
-```
-[Error] gem_add: type mismatch
+[Runtime Error]: type error in +: got int and string
+  --> file.gem:4:13
+   |
+ 4 |   let c = 5 + "oops"
+   |             ^
+   |
+Stack trace:
+  at doit (file.gem:4)
+  at main (file.gem:8)
 ```
 
-The source-line + caret is the gold standard (we already do this for compile errors — check `compile_error` in `compiler/parser.gem` for the format). Reusing that machinery at runtime would be a meaningful upgrade.
+Caret position points at the operator (or the offending expression's start), span underlines the full expression. The exact "where to point" is a judgment call — pointing at the binary op's `+` is probably more useful than the whole expression. Decide as you go.
 
-### Files to read
+### Bootstrap reminder
 
-- `runtime/gem_error.c` — error printing, stack trace
-- `runtime/gem_ops.c` — arithmetic/comparison error paths
-- `runtime/gem_builtins_*.c` — builtin error paths (consistent? caret? line?)
-- `compiler/codegen.gem` — `gem_push_frame` emission and what `file/line` it passes
-- `compiler/parser.gem` — `compile_error` for the format we already use at compile time
+Codegen output changes → `make bootstrap`'s built-in fixed-point check fails on first pass. Manual 3-stage:
+
+```
+make build
+./build/gem compiler/main.gem --emit-c > /tmp/s1.c
+cc -o /tmp/s1 /tmp/s1.c -I runtime -I compiler -std=c11 -O2 -lm -pthread build/libgem_runtime.a
+/tmp/s1 compiler/main.gem --emit-c > /tmp/s2.c
+cc -o /tmp/s2 /tmp/s2.c -I runtime -I compiler -std=c11 -O2 -lm -pthread build/libgem_runtime.a
+/tmp/s2 compiler/main.gem --emit-c > /tmp/s3.c
+diff -q /tmp/s2.c /tmp/s3.c    # must be identical
+cp /tmp/s2.c bootstrap/stage0.c
+make build
+make bootstrap                  # now roundtrips clean
+```
 
 ### Out of scope
 
-- New error types or language-level changes (no `try/catch`, no `Result`).
-- Performance — push_frame/pop_frame overhead is its own item in OPTIMIZATIONS.md.
-- Stylistic rewrites of error wording in code that already shows source context.
+- Rewriting individual `gem_error` message strings (separate quality pass).
+- Builtin arity validation (tracked under "C Interop Hardening" in `docs/OPTIMIZATIONS.md`).
+- Spawned-process crash visibility — current Erlang-style silent death is correct; only the main process prints.
 
 ## Validation gates
 
 ```bash
 make test            # ALL EXAMPLES PASSED
-make bootstrap       # roundtrip clean
+make bootstrap       # roundtrip clean (after manual 3-stage seed)
 make test-json       # === all tests passed ===
 ./build/gem compiler/test_liveness.gem --run   # 10/0 + 2/0
 ```
 
-Existing example expected outputs may include error messages — touching error format will break those tests. Update `examples/expected_output.txt` deliberately, not blindly.
+Existing expected outputs only reference `gem_error` strings via pcall (`expected_output.txt` lines 211, 389, 391, 393) — those are message text only and won't be affected by caret rendering, which only fires on the uncaught path.
 
 ## Deliverable shape
 
-A handful of focused commits, each addressing one error-quality issue, with a before/after example in the commit body. End-of-session: the most-tripped runtime errors have source location and (where feasible) a source-line + caret, matching the compile-error format.
+One commit threading `col` (and `span_len`) through AST → frame → printer. End-of-session: a user who writes `5 + "oops"` sees a caret pointing at the offending operator, matching compile-error UX exactly.
