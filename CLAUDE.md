@@ -22,6 +22,7 @@ std/                  # standard library (string, table, math, supervisor, gen_s
 runtime/              # C runtime — split by category:
   gem.h               #   public API, tagged values, process table, scheduler decls
   gem_core.c          #   value constructors, table internals, equality
+  gem_copy.c          #   deep copy, pin-set, arena reset (rescue+reset path)
   gem_ops.c           #   arithmetic and comparison operators
   gem_error.c         #   error handling, stack trace printing
   gem_scheduler.c     #   coroutine scheduler, mailbox, process lifecycle, I/O polling
