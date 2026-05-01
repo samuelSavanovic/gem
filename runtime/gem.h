@@ -41,7 +41,6 @@ typedef struct {
 void gem_arena_init(GemArena *arena);
 void *gem_arena_alloc(GemArena *arena, size_t size);
 void gem_arena_destroy(GemArena *arena);
-int gem_in_main_arena(const void *ptr);
 
 /* Threshold (in bytes_allocated) at which TCO emits an arena reset. */
 #ifndef GEM_ARENA_RESET_THRESHOLD

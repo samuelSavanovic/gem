@@ -95,17 +95,6 @@ void *gem_arena_alloc(GemArena *arena, size_t size) {
     return ptr;
 }
 
-int gem_in_main_arena(const void *ptr) {
-    if (gem_main_pid < 0) return 0;
-    GemArena *arena = &gem_proc_table[gem_main_pid].arena;
-    const char *p = (const char *)ptr;
-    if (p < arena->lo || p >= arena->hi) return 0;
-    for (GemArenaBlock *block = arena->head; block; block = block->next) {
-        if (p >= block->data && p < block->data + block->used)
-            return 1;
-    }
-    return 0;
-}
 
 void gem_arena_destroy(GemArena *arena) {
     GemTable *t = arena->table_list;

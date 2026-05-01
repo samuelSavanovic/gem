@@ -313,6 +313,14 @@ typedef struct {
     int len;
     int cap;
     int use_malloc;
+    /* When `preserve_external` is set, gem_deep_copy_internal /
+       gem_deep_copy_fn leave alone any heap pointer that lies *outside*
+       [old_arena_lo, old_arena_hi). Used by gem_arena_reset_with_roots so a
+       closure env that captured a BSS-backed top-level box keeps pointing
+       at that BSS slot instead of being rebound to a fresh arena box. */
+    int preserve_external;
+    const char *old_arena_lo;
+    const char *old_arena_hi;
 } GemCopyMap;
 
 static void gem_copy_map_init(GemCopyMap *map, int use_malloc) {
@@ -321,6 +329,15 @@ static void gem_copy_map_init(GemCopyMap *map, int use_malloc) {
     map->len = 0;
     map->cap = GEM_COPY_MAP_INLINE;
     map->use_malloc = use_malloc;
+    map->preserve_external = 0;
+    map->old_arena_lo = NULL;
+    map->old_arena_hi = NULL;
+}
+
+static int gem_copy_is_external(GemCopyMap *map, const void *ptr) {
+    if (!map->preserve_external) return 0;
+    const char *p = (const char *)ptr;
+    return p < map->old_arena_lo || p >= map->old_arena_hi;
 }
 
 static void gem_copy_map_cleanup(GemCopyMap *map) {
@@ -424,7 +441,21 @@ static GemVal gem_deep_copy_fn(GemVal fn_val, GemCopyMap *map) {
     *(intptr_t *)new_env = n;
     GemVal **new_fields = (GemVal **)((char *)new_env + sizeof(intptr_t));
     for (intptr_t i = 0; i < n; i++) {
+        /* Preserve box pointers that live outside the old arena (BSS-backed
+           top-level boxes). The reset rescues those boxes' *contents* via
+           the roots list, so the env keeps observing the same slot main
+           writes through. */
+        if (gem_copy_is_external(map, old[i])) {
+            new_fields[i] = old[i];
+            continue;
+        }
+        GemVal *existing = (GemVal *)gem_copy_map_find(map, old[i]);
+        if (existing) {
+            new_fields[i] = existing;
+            continue;
+        }
         GemVal *box = (GemVal *)gem_copy_alloc(map, sizeof(GemVal));
+        gem_copy_map_add(map, old[i], box);
         *box = gem_deep_copy_internal(*old[i], map);
         new_fields[i] = box;
     }
@@ -440,7 +471,7 @@ static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map) {
         case VAL_REF:
             return val;
         case VAL_STRING: {
-            if (!map->use_malloc && gem_in_main_arena(val.sval)) return val;
+            if (gem_copy_is_external(map, val.sval)) return val;
             void *existing = gem_copy_map_find(map, val.sval);
             if (existing) { GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = (char *)existing; return r; }
             GemVal r;
@@ -451,7 +482,13 @@ static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map) {
             return r;
         }
         case VAL_TABLE:
-            if (!map->use_malloc && val.table->immutable) return val;
+            /* Immutable tables are normally shared without copying — safe for
+               spawn/send (source arena outlives the receiver). Not safe during
+               arena reset: preserve_external means the source arena is about
+               to be destroyed, so we must migrate the table unless it lives
+               outside the arena bounds. */
+            if (gem_copy_is_external(map, val.table)) return val;
+            if (!map->use_malloc && !map->preserve_external && val.table->immutable) return val;
             return gem_deep_copy_table(val.table, map);
         case VAL_BUFFER: {
             void *bex = gem_copy_map_find(map, val.buffer);
@@ -583,6 +620,9 @@ void gem_arena_reset_with_roots(GemVal **roots, int n_roots) {
 
     GemCopyMap to_arena;
     gem_copy_map_init(&to_arena, 0);
+    to_arena.preserve_external = 1;
+    to_arena.old_arena_lo = old_arena.lo;
+    to_arena.old_arena_hi = old_arena.hi;
 
     for (int i = 0; i < n_roots; i++) {
         *roots[i] = gem_deep_copy_internal(*roots[i], &to_arena);
@@ -602,7 +642,6 @@ void gem_arena_reset_with_roots(GemVal **roots, int n_roots) {
             proc->mailbox.tail = node;
         }
     }
-
     gem_copy_map_cleanup(&to_arena);
 
     /* munmap the old blocks now that nothing references them. */

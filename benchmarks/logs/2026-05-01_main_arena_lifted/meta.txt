@@ -1,0 +1,29 @@
+date: 2026-05-01T00:59:12Z
+hostname: samuels-MBP.fritz.box
+os: Darwin 25.4.0 arm64
+cpu: Apple M1 Pro
+cores: 10
+memory_gb: 16
+wrk: wrk 4.2.0 [kqueue] Copyright (C) 2012 Will Glozer
+
+parameters:
+  warmup: 5s
+  burst_duration: 30s
+  burst_threads: 2
+  burst_connections: 10
+  soak_duration: 5m
+  soak_threads: 1
+  soak_connections: 4
+  write_burst_duration: 10s
+  write_burst_connections: 4
+  rss_interval: 0.5s
+
+note: top-level PT loops now reset main's per-process arena. Three runtime
+changes: (a) replace gem_in_main_arena fast-path with general external-pointer
+preservation in gem_deep_copy_internal (pointers outside [old_arena_lo, old_arena_hi)
+are preserved); (b) top-level boxed lets are BSS-backed (GemVal gem_box_<n>; GemVal
+*gem_v_<n> = &gem_box_<n>) so closure envs survive resets; (c) immutable-table
+shortcut in deep_copy is suspended when preserve_external is set, so frozen
+module tables (e.g. std/string) get migrated rather than dangling. Codegen
+flips walk_for_tagging_stmts(top_stmts, false) → true and rescues all
+top_level_vars at top-level back-edges. Regression: examples/61_top_level_pt_loop.gem.

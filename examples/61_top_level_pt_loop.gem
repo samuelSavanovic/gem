@@ -1,0 +1,18 @@
+# Regression: a process-tail `while` loop at the *top level* of a program
+# (no spawn wrapper) must reset main's per-process arena at the back-edge.
+# Pre-fix, top-level loops were excluded because cross-process string
+# sharing relied on main's arena never being reset; this version rescues
+# all top-level state at the back-edge instead. Loads `std/string` (which
+# becomes a frozen module table) to verify that immutable-table sharing
+# is correctly suspended during arena reset.
+
+load "std/string"
+
+let total = 0
+let i = 0
+while i < 5000
+  let parts = string.split("a,b,c,d,e", ",")
+  total = total + len(parts)
+  i = i + 1
+end
+print(total)
