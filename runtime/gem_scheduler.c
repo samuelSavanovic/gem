@@ -21,7 +21,55 @@ int gem_free_head = 0;
 int gem_free_tail = GEM_MAX_PROCS - 1;
 int gem_proc_hwm = 0;
 GemNameEntry *gem_name_registry = NULL;
-GemTimer gem_timers[GEM_MAX_TIMERS];
+GemTimer *gem_timers = NULL;
+int gem_timer_count = 0;
+static int gem_timer_cap = 0;
+
+static void gem_timer_heap_grow(void) {
+    int new_cap = gem_timer_cap == 0 ? 16 : gem_timer_cap * 2;
+    gem_timers = (GemTimer *)realloc(gem_timers, sizeof(GemTimer) * new_cap);
+    if (!gem_timers) gem_error("send_after: out of memory growing timer heap");
+    gem_timer_cap = new_cap;
+}
+
+static void gem_timer_sift_up(int i) {
+    while (i > 0) {
+        int parent = (i - 1) / 2;
+        if (gem_timers[i].deadline_ms < gem_timers[parent].deadline_ms) {
+            GemTimer tmp = gem_timers[i];
+            gem_timers[i] = gem_timers[parent];
+            gem_timers[parent] = tmp;
+            i = parent;
+        } else {
+            break;
+        }
+    }
+}
+
+static void gem_timer_sift_down(int i) {
+    for (;;) {
+        int l = 2 * i + 1, r = 2 * i + 2, smallest = i;
+        if (l < gem_timer_count && gem_timers[l].deadline_ms < gem_timers[smallest].deadline_ms) smallest = l;
+        if (r < gem_timer_count && gem_timers[r].deadline_ms < gem_timers[smallest].deadline_ms) smallest = r;
+        if (smallest == i) break;
+        GemTimer tmp = gem_timers[i];
+        gem_timers[i] = gem_timers[smallest];
+        gem_timers[smallest] = tmp;
+        i = smallest;
+    }
+}
+
+static void gem_timer_remove_at(int i) {
+    int last = gem_timer_count - 1;
+    if (i != last) {
+        gem_timers[i] = gem_timers[last];
+        gem_timer_count--;
+        gem_timer_sift_down(i);
+        gem_timer_sift_up(i);
+    } else {
+        gem_timer_count--;
+    }
+}
 int gem_main_pid = -1;
 
 /* Pre-allocated poll scratch arrays (avoid malloc/free per scheduler idle) */
@@ -301,32 +349,22 @@ void gem_io_yield(int fd, int for_write) {
 
 static void gem_fire_timers(void) {
     int64_t now = gem_now_ms();
-    for (int i = 0; i < GEM_MAX_TIMERS; i++) {
-        if (!gem_timers[i].active) continue;
-        if (now >= gem_timers[i].deadline_ms) {
-            gem_timers[i].active = 0;
-            int pid = gem_timers[i].target_pid;
-            if (pid >= 0 && pid < GEM_MAX_PROCS) {
-                GemProcess *proc = &gem_proc_table[pid];
-                if (proc->state != GEM_PROC_FREE && proc->state != GEM_PROC_DEAD) {
-                    gem_send_msg(pid, gem_timers[i].msg);
-                }
+    while (gem_timer_count > 0 && now >= gem_timers[0].deadline_ms) {
+        GemTimer t = gem_timers[0];
+        gem_timer_remove_at(0);
+        int pid = t.target_pid;
+        if (pid >= 0 && pid < GEM_MAX_PROCS) {
+            GemProcess *proc = &gem_proc_table[pid];
+            if (proc->state != GEM_PROC_FREE && proc->state != GEM_PROC_DEAD) {
+                gem_send_msg(pid, t.msg);
             }
-            gem_deep_free(gem_timers[i].msg);
-            gem_timers[i].msg = GEM_NIL;
         }
+        gem_deep_free(t.msg);
     }
 }
 
 static int64_t gem_earliest_timer_deadline(void) {
-    int64_t earliest = -1;
-    for (int i = 0; i < GEM_MAX_TIMERS; i++) {
-        if (!gem_timers[i].active) continue;
-        if (earliest < 0 || gem_timers[i].deadline_ms < earliest) {
-            earliest = gem_timers[i].deadline_ms;
-        }
-    }
-    return earliest;
+    return gem_timer_count > 0 ? gem_timers[0].deadline_ms : -1;
 }
 
 #ifndef GEM_MAIN_STACK_SIZE
@@ -1028,21 +1066,15 @@ GemVal gem_send_after_builtin(void *_env, GemVal *args, int argc) {
     GemVal msg = args[1];
     int64_t delay_ms = args[2].ival;
 
-    int slot = -1;
-    for (int i = 0; i < GEM_MAX_TIMERS; i++) {
-        if (!gem_timers[i].active) { slot = i; break; }
-    }
-    if (slot < 0) {
-        gem_error("send_after: timer table full");
-        return GEM_NIL;
-    }
+    if (gem_timer_count >= gem_timer_cap) gem_timer_heap_grow();
 
     GemVal ref = gem_make_ref();
-    gem_timers[slot].active = 1;
-    gem_timers[slot].ref = ref.rval;
-    gem_timers[slot].target_pid = pid;
-    gem_timers[slot].msg = gem_deep_copy_malloc(msg);
-    gem_timers[slot].deadline_ms = gem_now_ms() + delay_ms;
+    int i = gem_timer_count++;
+    gem_timers[i].ref = ref.rval;
+    gem_timers[i].target_pid = pid;
+    gem_timers[i].msg = gem_deep_copy_malloc(msg);
+    gem_timers[i].deadline_ms = gem_now_ms() + delay_ms;
+    gem_timer_sift_up(i);
     return ref;
 }
 
@@ -1052,11 +1084,10 @@ GemVal gem_cancel_timer_builtin(void *_env, GemVal *args, int argc) {
         gem_error("cancel_timer: expected ref argument");
     }
     int64_t ref = args[0].rval;
-    for (int i = 0; i < GEM_MAX_TIMERS; i++) {
-        if (gem_timers[i].active && gem_timers[i].ref == ref) {
+    for (int i = 0; i < gem_timer_count; i++) {
+        if (gem_timers[i].ref == ref) {
             gem_deep_free(gem_timers[i].msg);
-            gem_timers[i].msg = GEM_NIL;
-            gem_timers[i].active = 0;
+            gem_timer_remove_at(i);
             return gem_bool(1);
         }
     }

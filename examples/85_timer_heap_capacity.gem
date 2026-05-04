@@ -1,0 +1,34 @@
+# Many concurrent timers — verifies the timer min-heap has no fixed cap
+# and fires entries in deadline order.
+
+spawn(fn()
+  let me = self()
+  let n = 1000
+
+  # Schedule n timers with deadlines 1..n ms (insertion order is reverse of
+  # fire order, so this also exercises sift-up + ordered pop).
+  for i = 0, n
+    send_after(me, n - i, 1 + (n - i))
+  end
+
+  # Also schedule and cancel a batch — exercises remove-by-ref + sift.
+  let refs = []
+  for i = 0, 200
+    push(refs, send_after(me, "cancel-me", 5000))
+  end
+  let cancelled = 0
+  for i = 0, 200
+    if cancel_timer(refs[i]) then cancelled = cancelled + 1 end
+  end
+
+  # Drain the n real messages and verify ascending order.
+  let prev = 0
+  let in_order = true
+  for i = 0, n
+    let m = receive()
+    if m <= prev then in_order = false end
+    prev = m
+  end
+
+  print("count={prev} in_order={in_order} cancelled={cancelled}")
+end)

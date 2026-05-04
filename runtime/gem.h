@@ -375,18 +375,16 @@ typedef struct GemLinkNode {
     struct GemLinkNode *next;
 } GemLinkNode;
 
-/* Timer entry — global fixed-size array checked by the scheduler */
-#define GEM_MAX_TIMERS 256
-
+/* Timer entry — stored in a dynamic min-heap keyed by deadline_ms */
 typedef struct {
-    int active;
     int64_t ref;           /* make_ref() value identifying this timer */
     int target_pid;
     GemVal msg;
     int64_t deadline_ms;
 } GemTimer;
 
-extern GemTimer gem_timers[GEM_MAX_TIMERS];
+extern GemTimer *gem_timers;
+extern int gem_timer_count;
 
 /* ─── Thread pool I/O request ─── */
 
