@@ -1,0 +1,22 @@
+# Default print/to_string/interp render tables readably (no more `<table:N>`).
+let t = {name: "alice", age: 30}
+print(t)
+print(to_string(t))
+print("user: {t}")
+
+let arr = [10, 20, 30]
+print(arr)
+
+let nested = {users: [{name: "a"}, {name: "b"}], count: 2}
+print(nested)
+
+# Cycle detection
+let cyc = {x: 1}
+cyc.self = cyc
+print(cyc)
+
+# Keys that aren't bare identifiers get quoted
+let weird = {}
+weird["hello world"] = 1
+weird[42] = "answer"
+print(weird)

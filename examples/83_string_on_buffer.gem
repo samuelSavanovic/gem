@@ -1,0 +1,16 @@
+# `len`, `ord`, `substr` and the std/string functions accept buffers — buffers
+# are mutable strings, so byte-level operations work uniformly.
+load "std/string"
+
+let b = buf_new()
+buf_push(b, "Hello, world!")
+
+print(len(b))
+print(ord(b, 0))
+print(substr(b, 7, 5))
+print(string.index_of(b, "world"))
+print(string.contains(b, "Hello"))
+print(string.starts_with(b, "Hello"))
+print(string.ends_with(b, "!"))
+print(string.upper(b))
+print(string.split(b, ", ")[1])

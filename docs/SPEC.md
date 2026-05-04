@@ -385,7 +385,7 @@ For TCO functions, the corresponding conditions are: a parameter captured by a n
 ## Green Threads and Message Passing
 
 ```
-let pid = spawn do
+let pid = spawn() do
   loop do
     let msg = receive()
     print("got: " + msg)
@@ -411,7 +411,7 @@ The yield check is a no-op when running outside a spawned process (top-level cod
 ## Process Monitoring
 
 ```
-let child = spawn do
+let child = spawn() do
   error("crash")
 end
 monitor(child)
@@ -435,7 +435,7 @@ Error isolation: a crashing spawned process does not kill other processes. The e
 Links are bidirectional process monitors. When two processes are linked, an abnormal exit in one propagates to the other.
 
 ```
-let pid = spawn_link do
+let pid = spawn_link() do
   error("crash")
 end
 
@@ -455,7 +455,7 @@ Propagation is transitive: if A is linked to B and B is linked to C, and C crash
 ```
 # Trapping exits turns death signals into messages
 process_flag("trap_exit", true)
-let pid = spawn_link do
+let pid = spawn_link() do
   error("boom")
 end
 
@@ -470,7 +470,7 @@ end
 ## Named Processes
 
 ```
-let pid = spawn do
+let pid = spawn() do
   register("worker", self())
   let msg = receive()
   print(msg)
@@ -773,11 +773,11 @@ end)
 
 `error(msg)` — prints the message with file and line info to stderr, prints a call stack trace, and halts (`exit(1)`).
 
-`len(v)` — returns the length of a string or the total number of entries in a table (both integer-keyed and string-keyed). `len({a: 1, b: 2})` returns 2. `len([10, 20, 30])` returns 3.
+`len(v)` — returns the length of a string, the byte length of a buffer, or the total number of entries in a table (both integer-keyed and string-keyed). `len({a: 1, b: 2})` returns 2. `len([10, 20, 30])` returns 3.
 
 `type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`, `"ref"`.
 
-`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string (equivalent to `buf_str`).
+`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string. For tables and arrays, recursively renders a `{key: val, ...}` / `[v1, v2, ...]` form (cycles render as `<cycle>`; deep/wide structures truncate with `...`). Same repr is used by `print`, `eprint`, and `"{x}"` interpolation.
 
 `to_int(v)` — converts a value to an integer. Strings are parsed as decimal integers. Floats are truncated. Bools become 0/1. Errors on nil, tables, functions, or unparseable strings.
 
@@ -801,21 +801,21 @@ print(items[0])    # a
 
 `has_key(tbl, key)` — returns `true` if `key` exists in the table, `false` otherwise. Unlike `tbl[key] != nil`, correctly detects keys whose value is `nil`.
 
-`substr(s, start[, len])` — returns a substring of `s` starting at `start`. If `len` is provided, returns at most `len` characters; otherwise returns to the end of the string.
+`substr(s, start[, len])` — returns a substring of `s` starting at `start`. If `len` is provided, returns at most `len` characters; otherwise returns to the end of the string. Accepts buffers as well as strings (the result is always a fresh string).
 
 `chr(n)` — converts an integer (0–255) to a single-character string with that byte value.
 
-`ord(s)` — returns the byte value of the first character of string `s` as an integer.
+`ord(s)` — returns the byte value of the first character of string (or buffer) `s` as an integer.
 
-`ord(s, i)` — returns the byte value at index `i` in string `s` without allocating a temporary string. Equivalent to `ord(s[i])` but avoids the 1-char string allocation.
+`ord(s, i)` — returns the byte value at index `i` in string or buffer `s` without allocating a temporary string. Equivalent to `ord(s[i])` but avoids the 1-char string allocation.
 
 `buf_new()` — creates a new mutable string buffer. Returns a buffer value (type `"buffer"`).
 
 `buf_push(buf, val)` — appends `val` to the buffer. Non-string values are auto-coerced to strings. Returns the buffer for chaining. Uses a doubling growth strategy internally — O(n) total for n appends vs O(n²) for repeated `+` concatenation.
 
-`buf_str(buf)` — finalizes the buffer into an immutable string. The buffer can still be used after this call.
+To finalize a buffer into an immutable string, use `to_string(buf)` — the generic `to_string` builtin handles buffers. The buffer remains usable afterward.
 
-`build_string(block)` — creates a buffer, calls `block` with an `add` function that appends its arguments to the buffer, then returns the finalized string. Equivalent to `buf_new`/`buf_push`/`buf_str` but more concise:
+`build_string(block)` — creates a buffer, calls `block` with an `add` function that appends its arguments to the buffer, then returns the finalized string. Equivalent to `buf_new`/`buf_push`/`to_string` but more concise:
 
 ```
 let html = build_string() do |add|
@@ -1087,7 +1087,7 @@ table.each(parts) { |item| print(item) }
 - `test.assert_throws(fn)` — assert that calling `fn()` raises an error.
 - `test.run()` — run every registered case under `pcall`, print one-line `PASS <name>` or `FAIL <name>: <reason>` per case, then a `<n> passed / <m> failed` summary, and `exit(1)` if any failed.
 
-The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`buf_str()`, and `substr()`. `split` and `index_of` are only available through `std/string` (not as bare builtins).
+The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`to_string()`, and `substr()`. `split` and `index_of` are only available through `std/string` (not as bare builtins).
 
 `std/json` — exports `json` table:
 

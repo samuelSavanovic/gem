@@ -115,7 +115,7 @@ fn do_request(method, raw_url, opts)
   end
   tcp_close(fd)
 
-  parse_response(buf_str(resp_buf))
+  parse_response(to_string(resp_buf))
 end
 
 fn get(raw_url, opts = {})

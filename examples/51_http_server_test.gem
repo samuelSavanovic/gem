@@ -94,7 +94,7 @@ spawn() do
     end
     tcp_close(fd)
 
-    let raw = buf_str(resp_buf)
+    let raw = to_string(resp_buf)
     let hdr_end = string.index_of(raw, "\r\n\r\n")
     if hdr_end < 0
       return {status: 0, headers: {}, body: ""}
@@ -246,7 +246,7 @@ spawn() do
       buf_push(resp_buf, chunk)
     end
   end
-  let raw = buf_str(resp_buf)
+  let raw = to_string(resp_buf)
   if string.contains(raw, "200 OK") and string.contains(raw, "Hello, ka!")
     pass += 1
   else

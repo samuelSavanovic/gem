@@ -6,6 +6,165 @@
 #include "gem.h"
 #include <errno.h>
 
+/* ─── Value formatting ───
+ *
+ * Single shared repr used by print/eprint/to_string and string interpolation.
+ * Tables previously rendered as `<table:N>` which made print debugging useless;
+ * now they recurse into a `{k: v, ...}` (or `[v1, v2, ...]` for dense int-keyed)
+ * form with cycle detection and depth/breadth caps.
+ */
+
+#define GEM_FMT_MAX_DEPTH 8
+#define GEM_FMT_MAX_SEEN 32
+#define GEM_FMT_MAX_ENTRIES 64  /* per-table cap; overflow renders as `, ...` */
+
+typedef struct {
+    GemTable *stack[GEM_FMT_MAX_SEEN];
+    int len;
+} GemFmtSeen;
+
+static void fmt_buf_grow(GemBuffer *b, int need) {
+    while (b->len + need >= b->cap) {
+        int nc = b->cap * 2;
+        if (nc < b->len + need + 1) nc = b->len + need + 1;
+        char *nd = (char *)gem_alloc(nc);
+        memcpy(nd, b->data, b->len);
+        b->data = nd;
+        b->cap = nc;
+    }
+}
+
+static void fmt_buf_appendn(GemBuffer *b, const char *s, int n) {
+    fmt_buf_grow(b, n);
+    memcpy(b->data + b->len, s, n);
+    b->len += n;
+}
+
+static void fmt_buf_append(GemBuffer *b, const char *s) {
+    fmt_buf_appendn(b, s, (int)strlen(s));
+}
+
+/* Conservative bare-key check: identifier-shaped (NAME ::= [A-Za-z_][A-Za-z0-9_]*).
+ * Anything else gets quoted to keep output unambiguous. */
+static int fmt_is_bare_key(const char *s) {
+    if (!s || !*s) return 0;
+    unsigned char c = (unsigned char)*s;
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_')) return 0;
+    for (const char *p = s + 1; *p; p++) {
+        unsigned char d = (unsigned char)*p;
+        if (!((d >= 'a' && d <= 'z') || (d >= 'A' && d <= 'Z') ||
+              (d >= '0' && d <= '9') || d == '_')) return 0;
+    }
+    return 1;
+}
+
+static void fmt_quoted_string(GemBuffer *out, const char *s) {
+    fmt_buf_append(out, "\"");
+    for (const char *p = s; *p; p++) {
+        char c = *p;
+        switch (c) {
+            case '"':  fmt_buf_append(out, "\\\""); break;
+            case '\\': fmt_buf_append(out, "\\\\"); break;
+            case '\n': fmt_buf_append(out, "\\n"); break;
+            case '\t': fmt_buf_append(out, "\\t"); break;
+            case '\r': fmt_buf_append(out, "\\r"); break;
+            default:   fmt_buf_appendn(out, &c, 1); break;
+        }
+    }
+    fmt_buf_append(out, "\"");
+}
+
+static void fmt_value(GemVal v, GemBuffer *out, GemFmtSeen *seen, int depth, int as_repr) {
+    char tmp[64];
+    int n;
+    switch (v.type) {
+        case VAL_NIL:   fmt_buf_append(out, "nil"); return;
+        case VAL_BOOL:  fmt_buf_append(out, v.bval ? "true" : "false"); return;
+        case VAL_INT:
+            n = snprintf(tmp, sizeof(tmp), "%lld", (long long)v.ival);
+            fmt_buf_appendn(out, tmp, n); return;
+        case VAL_FLOAT:
+            n = snprintf(tmp, sizeof(tmp), "%g", v.fval);
+            fmt_buf_appendn(out, tmp, n); return;
+        case VAL_STRING:
+            if (as_repr) fmt_quoted_string(out, v.sval ? v.sval : "");
+            else fmt_buf_append(out, v.sval ? v.sval : "");
+            return;
+        case VAL_FN:    fmt_buf_append(out, "<fn>"); return;
+        case VAL_BUFFER:
+            n = snprintf(tmp, sizeof(tmp), "<buffer:%d>", v.buffer ? v.buffer->len : 0);
+            fmt_buf_appendn(out, tmp, n); return;
+        case VAL_REF:
+            n = snprintf(tmp, sizeof(tmp), "#Ref<%lld>", (long long)v.rval);
+            fmt_buf_appendn(out, tmp, n); return;
+        case VAL_TABLE: {
+            GemTable *t = v.table;
+            if (!t) { fmt_buf_append(out, "{}"); return; }
+            for (int i = 0; i < seen->len; i++) {
+                if (seen->stack[i] == t) { fmt_buf_append(out, "<cycle>"); return; }
+            }
+            if (depth >= GEM_FMT_MAX_DEPTH || seen->len >= GEM_FMT_MAX_SEEN) {
+                fmt_buf_append(out, "..."); return;
+            }
+            seen->stack[seen->len++] = t;
+
+            int is_array = (t->len > 0);
+            for (int i = 0; i < t->len; i++) {
+                if (t->keys[i].type != VAL_INT || t->keys[i].ival != (int64_t)i) {
+                    is_array = 0; break;
+                }
+            }
+
+            int limit = t->len < GEM_FMT_MAX_ENTRIES ? t->len : GEM_FMT_MAX_ENTRIES;
+            if (is_array) {
+                fmt_buf_append(out, "[");
+                for (int i = 0; i < limit; i++) {
+                    if (i > 0) fmt_buf_append(out, ", ");
+                    fmt_value(t->vals[i], out, seen, depth + 1, 1);
+                }
+                if (t->len > limit) fmt_buf_append(out, ", ...");
+                fmt_buf_append(out, "]");
+            } else {
+                fmt_buf_append(out, "{");
+                for (int i = 0; i < limit; i++) {
+                    if (i > 0) fmt_buf_append(out, ", ");
+                    GemVal k = t->keys[i];
+                    if (k.type == VAL_STRING && k.sval && fmt_is_bare_key(k.sval)) {
+                        fmt_buf_append(out, k.sval);
+                    } else {
+                        fmt_value(k, out, seen, depth + 1, 1);
+                    }
+                    fmt_buf_append(out, ": ");
+                    fmt_value(t->vals[i], out, seen, depth + 1, 1);
+                }
+                if (t->len > limit) fmt_buf_append(out, ", ...");
+                fmt_buf_append(out, "}");
+            }
+            seen->len--;
+            return;
+        }
+    }
+}
+
+void gem_format_value_to_buf(GemVal v, GemBuffer *out, int as_repr) {
+    GemFmtSeen seen; seen.len = 0;
+    fmt_value(v, out, &seen, 0, as_repr);
+}
+
+GemVal gem_format_value_string(GemVal v) {
+    GemBuffer b;
+    b.cap = 64;
+    b.len = 0;
+    b.data = (char *)gem_alloc(b.cap);
+    GemFmtSeen seen; seen.len = 0;
+    fmt_value(v, &b, &seen, 0, 0);
+    char *s = (char *)gem_alloc(b.len + 1);
+    memcpy(s, b.data, b.len);
+    s[b.len] = '\0';
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s;
+    return r;
+}
+
 /* ─── Built-in: print ─── */
 
 GemVal gem_print(void *_env, GemVal *args, int argc) {
@@ -20,7 +179,11 @@ GemVal gem_print(void *_env, GemVal *args, int argc) {
             case VAL_FLOAT: printf("%g", v.fval); break;
             case VAL_STRING: printf("%s", v.sval); break;
             case VAL_FN: printf("<fn>"); break;
-            case VAL_TABLE: printf("<table:%d>", v.table->len); break;
+            case VAL_TABLE: {
+                GemVal s = gem_format_value_string(v);
+                fputs(s.sval, stdout);
+                break;
+            }
             case VAL_BUFFER: printf("<buffer:%d>", v.buffer->len); break;
             case VAL_REF: printf("#Ref<%lld>", (long long)v.rval); break;
         }
@@ -77,7 +240,8 @@ GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
 GemVal gem_len_val(GemVal v) {
     if (v.type == VAL_STRING) return gem_int((int64_t)strlen(v.sval));
     if (v.type == VAL_TABLE) return gem_int((int64_t)v.table->len);
-    { char buf[128]; snprintf(buf, sizeof(buf), "len: expected string or table, got %s", gem_type_str(v)); gem_error(buf); }
+    if (v.type == VAL_BUFFER) return gem_int((int64_t)v.buffer->len);
+    { char buf[128]; snprintf(buf, sizeof(buf), "len: expected string, table, or buffer, got %s", gem_type_str(v)); gem_error(buf); }
     return GEM_NIL;
 }
 
@@ -120,7 +284,7 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
         case VAL_FLOAT: snprintf(buf, sizeof(buf), "%g", v.fval); return gem_string(buf);
         case VAL_STRING: return v;
         case VAL_FN: return gem_string("<fn>");
-        case VAL_TABLE: snprintf(buf, sizeof(buf), "<table:%d>", v.table->len); return gem_string(buf);
+        case VAL_TABLE: return gem_format_value_string(v);
         case VAL_BUFFER: {
             GemBuffer *b = v.buffer;
             char *s = (char *)gem_alloc(b->len + 1);
@@ -248,7 +412,11 @@ GemVal gem_eprint_fn(void *_env, GemVal *args, int argc) {
             case VAL_FLOAT: fprintf(stderr, "%g", v.fval); break;
             case VAL_STRING: fprintf(stderr, "%s", v.sval); break;
             case VAL_FN: fprintf(stderr, "<fn>"); break;
-            case VAL_TABLE: fprintf(stderr, "<table:%d>", v.table->len); break;
+            case VAL_TABLE: {
+                GemVal s = gem_format_value_string(v);
+                fputs(s.sval, stderr);
+                break;
+            }
             case VAL_BUFFER: fprintf(stderr, "<buffer:%d>", v.buffer->len); break;
             case VAL_REF: fprintf(stderr, "#Ref<%lld>", (long long)v.rval); break;
         }

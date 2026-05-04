@@ -1,6 +1,6 @@
 /*
  * gem_builtins_string.c — String builtins: str_replace, substr, chr, ord,
- *                          and the buffer API (buf_new, buf_push, buf_str).
+ *                          and the buffer API (buf_new, buf_push).
  */
 
 #include "gem.h"
@@ -54,12 +54,23 @@ GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2) { gem_error("substr: expected 2-3 arguments"); }
-    if (args[0].type != VAL_STRING || args[1].type != VAL_INT) {
-        char buf[128]; snprintf(buf, sizeof(buf), "substr: expected (string, int[, int]), got (%s, %s)", gem_type_str(args[0]), gem_type_str(args[1])); gem_error(buf);
+    /* Buffers are mutable strings; treat their byte slice the same way. */
+    const char *s;
+    int64_t slen;
+    if (args[0].type == VAL_STRING) {
+        s = args[0].sval;
+        slen = (int64_t)strlen(s);
+    } else if (args[0].type == VAL_BUFFER) {
+        s = args[0].buffer->data;
+        slen = (int64_t)args[0].buffer->len;
+    } else {
+        char buf[128]; snprintf(buf, sizeof(buf), "substr: expected (string|buffer, int[, int]), got (%s, %s)", gem_type_str(args[0]), gem_type_str(args[1])); gem_error(buf);
+        return GEM_NIL;
     }
-    const char *s = args[0].sval;
+    if (args[1].type != VAL_INT) {
+        char buf[128]; snprintf(buf, sizeof(buf), "substr: expected (string|buffer, int[, int]), got (%s, %s)", gem_type_str(args[0]), gem_type_str(args[1])); gem_error(buf);
+    }
     int64_t start = args[1].ival;
-    int64_t slen = (int64_t)strlen(s);
 
     if (start < 0) start = 0;
     if (start >= slen) return gem_string("");
@@ -93,17 +104,28 @@ GemVal gem_chr_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_ord_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 1 || args[0].type != VAL_STRING) { char buf[128]; snprintf(buf, sizeof(buf), "ord: expected string argument, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
+    if (argc < 1) { gem_error("ord: expected string|buffer argument, got nothing"); }
+    const char *data;
+    int64_t slen;
+    if (args[0].type == VAL_STRING) {
+        data = args[0].sval;
+        slen = (int64_t)strlen(data);
+    } else if (args[0].type == VAL_BUFFER) {
+        data = args[0].buffer->data;
+        slen = (int64_t)args[0].buffer->len;
+    } else {
+        char buf[128]; snprintf(buf, sizeof(buf), "ord: expected string|buffer argument, got %s", gem_type_str(args[0])); gem_error(buf);
+        return GEM_NIL;
+    }
     if (argc >= 2) {
         /* ord(s, i) — direct byte access by index, no allocation */
         if (args[1].type != VAL_INT) { gem_error("ord: index must be an integer"); }
         int64_t idx = args[1].ival;
-        int64_t slen = (int64_t)strlen(args[0].sval);
         if (idx < 0 || idx >= slen) { gem_error("ord: index out of bounds"); }
-        return gem_int((int64_t)(unsigned char)args[0].sval[idx]);
+        return gem_int((int64_t)(unsigned char)data[idx]);
     }
-    if (strlen(args[0].sval) == 0) { gem_error("ord: empty string"); }
-    return gem_int((int64_t)(unsigned char)args[0].sval[0]);
+    if (slen == 0) { gem_error("ord: empty string"); }
+    return gem_int((int64_t)(unsigned char)data[0]);
 }
 
 /* ─── String interpolation ─── */
@@ -133,7 +155,14 @@ GemVal gem_interp(int n, GemVal *parts) {
             case VAL_FLOAT: slen = snprintf(tmp, sizeof(tmp), "%g", parts[i].fval); s = tmp; break;
             case VAL_BOOL: s = parts[i].bval ? "true" : "false"; slen = parts[i].bval ? 4 : 5; break;
             case VAL_NIL: s = "nil"; slen = 3; break;
-            case VAL_TABLE: slen = snprintf(tmp, sizeof(tmp), "<table:%d>", parts[i].table->len); s = tmp; break;
+            case VAL_TABLE: {
+                /* Format table inline via the shared repr; build the result
+                 * into a fresh string and route through `s`/`slen`. */
+                GemVal fmt = gem_format_value_string(parts[i]);
+                s = fmt.sval;
+                slen = (int)strlen(s);
+                break;
+            }
             case VAL_FN: s = "<fn>"; slen = 4; break;
             case VAL_BUFFER: slen = snprintf(tmp, sizeof(tmp), "<buffer:%d>", parts[i].buffer->len); s = tmp; break;
             case VAL_REF: slen = snprintf(tmp, sizeof(tmp), "#Ref<%lld>", (long long)parts[i].rval); s = tmp; break;
@@ -151,7 +180,11 @@ GemVal gem_interp(int n, GemVal *parts) {
     return r;
 }
 
-/* ─── String builder (buf_new / buf_push / buf_str) ─── */
+/* ─── String builder (buf_new / buf_push) ───
+ *
+ * Buffers are finalized to a string via the generic `to_string` builtin
+ * (`gem_to_string_fn` handles VAL_BUFFER); there is no longer a dedicated
+ * `buf_str`. */
 
 GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc) {
     (void)_env; (void)args; (void)argc;
@@ -173,12 +206,17 @@ GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc) {
     /* Coerce second argument to string */
     const char *s;
     char tmp[64];
+    GemVal fmt_holder = GEM_NIL;
     switch (args[1].type) {
         case VAL_STRING: s = args[1].sval; break;
         case VAL_INT: snprintf(tmp, sizeof(tmp), "%lld", (long long)args[1].ival); s = tmp; break;
         case VAL_FLOAT: snprintf(tmp, sizeof(tmp), "%g", args[1].fval); s = tmp; break;
         case VAL_BOOL: s = args[1].bval ? "true" : "false"; break;
         case VAL_NIL: s = "nil"; break;
+        case VAL_TABLE:
+            fmt_holder = gem_format_value_string(args[1]);
+            s = fmt_holder.sval;
+            break;
         default: s = ""; break;
     }
     int slen = (int)strlen(s);
@@ -193,20 +231,6 @@ GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc) {
     memcpy(b->data + b->len, s, slen);
     b->len += slen;
     return args[0]; /* return buffer for chaining */
-}
-
-GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc) {
-    (void)_env;
-    if (argc < 1 || args[0].type != VAL_BUFFER) { char buf[128]; snprintf(buf, sizeof(buf), "buf_str: expected buffer, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
-    GemBuffer *b = args[0].buffer;
-    char *s = (char *)gem_alloc(b->len + 1);
-    memcpy(s, b->data, b->len);
-    s[b->len] = '\0';
-    GemVal r;
-    r.type = VAL_STRING;
-    r.magic = GEM_MAGIC;
-    r.sval = s;
-    return r;
 }
 
 /* ─── build_string ─── */

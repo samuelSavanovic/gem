@@ -234,9 +234,17 @@ GemVal gem_ord_fn(void *_env, GemVal *args, int argc);
 GemVal gem_to_int_fn(void *_env, GemVal *args, int argc);
 GemVal gem_to_float_fn(void *_env, GemVal *args, int argc);
 GemVal gem_interp(int n, GemVal *parts);
+
+/* ─── Value formatting (readable repr for print/to_string/interpolation) ─── */
+/* Appends a human-readable repr of `v` to `out`. Tables and arrays render
+ * recursively as `{key: val, ...}` / `[v1, v2, ...]`. Strings are quoted only
+ * when nested (`as_repr=1`). Cycles render as `<cycle>`; depth is capped to
+ * keep output bounded for huge structures. */
+void gem_format_value_to_buf(GemVal v, GemBuffer *out, int as_repr);
+/* Convenience: returns a fresh string with `gem_format_value_to_buf(v, _, 0)`. */
+GemVal gem_format_value_string(GemVal v);
 GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc);
 GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc);
-GemVal gem_buf_str_fn(void *_env, GemVal *args, int argc);
 GemVal gem_build_string_fn(void *_env, GemVal *args, int argc);
 GemVal gem_read_file_fn(void *_env, GemVal *args, int argc);
 GemVal gem_write_file_fn(void *_env, GemVal *args, int argc);

@@ -1088,3 +1088,19 @@ PASS plain assert
 PASS assert_throws catches errors
 FAIL intentional failure: assert_eq: expected 2, got 1
 4 passed / 1 failed
+{name: "alice", age: 30}
+{name: "alice", age: 30}
+user: {name: "alice", age: 30}
+[10, 20, 30]
+{users: [{name: "a"}, {name: "b"}], count: 2}
+{x: 1, self: <cycle>}
+{"hello world": 1, 42: "answer"}
+13
+72
+world
+7
+true
+true
+true
+HELLO, WORLD!
+world!

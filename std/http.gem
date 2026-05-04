@@ -482,7 +482,7 @@ fn process_one_request(client_fd, router_ref, conn_buf)
       buf_push(body_buf, chunk)
       have = have + len(chunk)
     end
-    let full_body = buf_str(body_buf)
+    let full_body = to_string(body_buf)
     if len(full_body) >= content_length
       body = substr(full_body, 0, content_length)
       next_buf = substr(full_body, content_length, len(full_body) - content_length)

@@ -489,7 +489,11 @@ else
 
   let cc_ret = exec(cc_cmd)
   if cc_ret != 0
-    error("gem: compilation failed (cc exited with " + to_string(cc_ret) + ")")
+    # Don't use error() here — cc has already printed its own diagnostics to
+    # stderr, and a Gem stack trace pointing at this driver line would be
+    # noise. Exit cleanly with cc's status.
+    eprint("gem: compilation failed (cc exited with " + to_string(cc_ret) + ")\n")
+    exit(cc_ret)
   end
 
   # ─── Run mode ───────────────────────────────────────────────

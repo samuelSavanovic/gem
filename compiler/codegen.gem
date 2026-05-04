@@ -27,7 +27,7 @@ fn escape_c_string(s)
       buf_push(b, ch)
     end
   end
-  buf_str(b)
+  to_string(b)
 end
 
 fn repeat_str(s, n)
@@ -35,7 +35,7 @@ fn repeat_str(s, n)
   for i = 0, n
     buf_push(b, s)
   end
-  buf_str(b)
+  to_string(b)
 end
 
 fn pad_for(indent)
@@ -192,11 +192,14 @@ collect_shadow_lets_in_node = fn(node, result)
     return nil
   end
   if node.tag == "match"
+    if node.target_var != nil
+      set_add(result, node.target_var)
+    end
     if node.whens != nil
       for w in node.whens
         if w.bindings != nil
           for b in w.bindings
-            if type(b) == "table" and b.tag == "var" and b.name != nil
+            if type(b) == "table" and b.name != nil and (b.tag == "let" or b.tag == "var")
               set_add(result, b.name)
             end
           end
@@ -208,11 +211,14 @@ collect_shadow_lets_in_node = fn(node, result)
     return nil
   end
   if node.tag == "receive_match"
+    if node.recv_var != nil
+      set_add(result, node.recv_var)
+    end
     if node.arms != nil
       for a in node.arms
         if a.pattern != nil and a.pattern.bindings != nil
           for b in a.pattern.bindings
-            if type(b) == "table" and b.tag == "var" and b.name != nil
+            if type(b) == "table" and b.name != nil and (b.tag == "let" or b.tag == "var")
               set_add(result, b.name)
             end
           end
@@ -1052,7 +1058,6 @@ fn make_codegen(source_name)
     to_float: "gem_to_float_fn",
     buf_new: "gem_buf_new_fn",
     buf_push: "gem_buf_push_fn",
-    buf_str: "gem_buf_str_fn",
     build_string: "gem_build_string_fn",
     spawn: "gem_spawn_builtin",
     send: "gem_send_builtin",
@@ -2454,7 +2459,7 @@ fn make_codegen(source_name)
       end
     end
     buf_push(b, "{p}continue;")
-    buf_str(b)
+    to_string(b)
   end
 
   # ─── append optimization helpers ──
@@ -2754,6 +2759,14 @@ fn make_codegen(source_name)
           return {expr: "gem_make_fn({builtin_fns[name]}, NULL)", setup: ""}
         elif set_contains(defined_fns, name)
           return {expr: "gem_make_fn(gem_fn_{name}, NULL)", setup: ""}
+        elif not set_contains(top_level_vars, name) and not set_contains(top_level_boxed, name)
+          # Name resolves nowhere — undeclared identifier (typo or missing
+          # let/load). Fail with a clean diagnostic rather than emitting
+          # `gem_v_<name>` and bottoming out at a cc error, and rather than
+          # letting downstream liveness rescue analysis complain about a
+          # phantom "live var with no C local".
+          eprint("\n[Compile Error]: undeclared identifier `{name}`\n  --> {source_name}\n")
+          exit(1)
         end
       end
       let mname = mangle(name)
@@ -2846,7 +2859,7 @@ fn make_codegen(source_name)
     if node.frozen == true
       buf_push(b, "    gem_table_freeze({t});\n")
     end
-    {expr: t, setup: buf_str(b)}
+    {expr: t, setup: to_string(b)}
   end
 
   # ─── compile_array ──
@@ -2861,7 +2874,7 @@ fn make_codegen(source_name)
       buf_push(b, elem_r.setup)
       buf_push(b, "    gem_table_set({t}, gem_int({i}), {elem_r.expr});\n")
     end
-    {expr: t, setup: buf_str(b)}
+    {expr: t, setup: to_string(b)}
   end
 
   # ─── compile_anon_fn ──
@@ -2908,7 +2921,7 @@ fn make_codegen(source_name)
           buf_push(b, "    {env_tmp}.{mc} = &{mc};\n")
         end
       end
-      return {expr: "gem_make_fn({result.fn_name}, &{env_tmp})", setup: buf_str(b)}
+      return {expr: "gem_make_fn({result.fn_name}, &{env_tmp})", setup: to_string(b)}
     end
     buf_push(b, "    struct {result.struct_name} *{env_tmp} = gem_alloc(sizeof(struct {result.struct_name}));\n")
     buf_push(b, "    {env_tmp}->_num_captures = {len(captures)};\n")
@@ -2929,7 +2942,7 @@ fn make_codegen(source_name)
         buf_push(b, "    {env_tmp}->{mc} = {box_tmp};\n")
       end
     end
-    {expr: "gem_make_fn({result.fn_name}, {env_tmp})", setup: buf_str(b)}
+    {expr: "gem_make_fn({result.fn_name}, {env_tmp})", setup: to_string(b)}
   end
 
   # ─── compile_args: compile an argument list into setup + array name ──
@@ -2945,14 +2958,14 @@ fn make_codegen(source_name)
     end
     let argc = len(args)
     if argc == 0
-      return {setup: buf_str(b), arr_name: nil, argc: 0}
+      return {setup: to_string(b), arr_name: nil, argc: 0}
     end
     let t = tmp()
     let arr = arg_exprs[0]
     for i = 1, argc
       arr = arr + ", " + arg_exprs[i]
     end
-    {setup: buf_str(b) + "    GemVal {t}[] = \{{arr}};\n", arr_name: t, argc: argc}
+    {setup: to_string(b) + "    GemVal {t}[] = \{{arr}};\n", arr_name: t, argc: argc}
   end
 
   # Emit a direct call: fn_name(env, args, argc)
@@ -3067,7 +3080,7 @@ fn make_codegen(source_name)
       end
       buf_push(b, "        {t} = {rc_r.expr};\n")
       buf_push(b, "    }\n")
-      return {expr: t, setup: buf_str(b)}
+      return {expr: t, setup: to_string(b)}
     elif op == "or"
       let rc_r = compile_expr(node.right)
       let t = tmp()
@@ -3082,7 +3095,7 @@ fn make_codegen(source_name)
       end
       buf_push(b, "        {t} = {rc_r.expr};\n")
       buf_push(b, "    }\n")
-      return {expr: t, setup: buf_str(b)}
+      return {expr: t, setup: to_string(b)}
     end
 
     error("unknown binary operator: {op}")
@@ -3096,7 +3109,7 @@ fn make_codegen(source_name)
       buf_push(b, compile_stmt(stmt, indent))
       buf_push(b, "\n")
     end
-    buf_str(b)
+    to_string(b)
   end
 
   compile_stmts_tail = fn(stmts, indent, return_pos)
@@ -3115,7 +3128,7 @@ fn make_codegen(source_name)
       let p = pad_for(indent)
       buf_push(b, "{p}gem_pop_frame();\n{p}return GEM_NIL;\n")
     end
-    buf_str(b)
+    to_string(b)
   end
 
   # ─── compile_stmt ──
@@ -3165,7 +3178,7 @@ fn make_codegen(source_name)
             buf_push(b, r.setup)
             buf_push(b, "{p}gem_string_append(&{mname}, {r.expr});\n")
           end
-          return buf_str(b)
+          return to_string(b)
         end
       end
       let r = compile_expr(value)
@@ -3217,7 +3230,7 @@ fn make_codegen(source_name)
         buf_push(b, compile_stmt(stmt, indent))
         buf_push(b, "\n")
       end
-      return buf_str(b)
+      return to_string(b)
     end
 
     let r = compile_expr(node)
@@ -3288,7 +3301,7 @@ fn make_codegen(source_name)
       end
       fn_scope_locals = saved_block
       buf_push(b, "{p}}")
-      return buf_str(b)
+      return to_string(b)
     when {tag: "dot_assign"}
       return "{compile_stmt(node, indent)}\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
     when {tag: "index_assign"}
@@ -3327,7 +3340,7 @@ fn make_codegen(source_name)
       buf_push(b, compile_stmts_tail([], indent + 1, true))
     end
     buf_push(b, "{p}}")
-    buf_str(b)
+    to_string(b)
   end
 
   # ─── compile_while ──
@@ -3387,8 +3400,15 @@ fn make_codegen(source_name)
       elif set_contains(top_level_vars, name)
         # global accessed from a non-top-level (spawned) scope — global lives
         # in pid 0's arena, independent of the per-process arena reset here.
+      elif set_contains(top_level_boxed, name)
+        # boxed top-level slot accessed from non-top-level scope; same.
       else
-        return {ok: false, reason: "live var `{name}` has no C local at this loop's back-edge (declared in a nested if/match arm?)"}
+        # Liveness is reporting a name that resolves nowhere — the source has
+        # an undeclared identifier (typo or missing let/load). Surface that
+        # directly instead of the misleading "no C local at back-edge" warning;
+        # compile_expr's var case will print the same diagnostic when reached.
+        eprint("\n[Compile Error]: undeclared identifier `{name}`\n  --> {source_name}\n")
+        exit(1)
       end
     end
     {ok: true, roots: roots, pinned_roots: pinned_roots}
@@ -3559,7 +3579,7 @@ fn make_codegen(source_name)
     end
 
     append_buf_vars = saved_append
-    buf_str(b)
+    to_string(b)
   end
 
   # ─── compile_match ──
@@ -3583,7 +3603,7 @@ fn make_codegen(source_name)
         buf_push(b, "{p}gem_pop_frame();\n{p}return GEM_NIL;\n")
       end
       buf_push(b, "{p}(void){t};")
-      return buf_str(b)
+      return to_string(b)
     end
     for i = 0, len(node.whens)
       let w = node.whens[i]
@@ -3619,7 +3639,7 @@ fn make_codegen(source_name)
     for i = 1, len(node.whens)
       buf_push(b, "\n{p}}")
     end
-    buf_str(b)
+    to_string(b)
   end
 
   # ─── compile_receive_match ──
@@ -3742,7 +3762,7 @@ fn make_codegen(source_name)
     end
 
     buf_push(b, "{p}}")
-    buf_str(b)
+    to_string(b)
   end
 
   # ─── compile_extern_fn ──
@@ -3871,7 +3891,7 @@ fn make_codegen(source_name)
     push(forward_decls, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
     emit_extern_c_decl(name, params, ret_type)
 
-    buf_str(b)
+    to_string(b)
   end
 
   # ─── compile_blocking_extern_fn ──
@@ -4052,7 +4072,7 @@ fn make_codegen(source_name)
     push(forward_decls, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
     emit_extern_c_decl(name, params, ret_type)
 
-    buf_str(b)
+    to_string(b)
   end
 
   # ─── emit_param_bindings: generate C code to bind params, rest, block ──
@@ -4102,7 +4122,7 @@ fn make_codegen(source_name)
         buf_push(b, "    for (int _ri = {N}; _ri < argc; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
       end
     end
-    buf_str(b)
+    to_string(b)
   end
 
   # ─── emit_fn_body: compile body stmts with implicit return ──
@@ -4119,7 +4139,7 @@ fn make_codegen(source_name)
     else
       buf_push(b, "    gem_pop_frame();\n    return GEM_NIL;\n")
     end
-    buf_str(b)
+    to_string(b)
   end
 
   # ─── compile_fn ──
@@ -4237,7 +4257,7 @@ fn make_codegen(source_name)
     in_top_level = saved_top
     local_names = saved_local
     fn_scope_locals = saved_fn_scope
-    buf_str(b)
+    to_string(b)
   end
 
   # ─── compile_closure_fn ──
@@ -4304,7 +4324,7 @@ fn make_codegen(source_name)
       buf_push(sb, "    GemVal *{mangle(cap)};\n")
     end
     buf_push(sb, "};\n")
-    let struct_def = buf_str(sb)
+    let struct_def = to_string(sb)
 
     # Generate function
     let fb = buf_new()
@@ -4350,7 +4370,7 @@ fn make_codegen(source_name)
     current_closure_captures = saved_current_closure_captures
 
     # Add struct + function to functions list
-    push(functions, struct_def + buf_str(fb))
+    push(functions, struct_def + to_string(fb))
 
     {fn_name: name, struct_name: struct_name, captures: captures}
   end
@@ -4493,7 +4513,7 @@ fn make_codegen(source_name)
     buf_push(mb, "    gem_scheduler_init();\n")
     buf_push(mb, "    gem_run_main(gem_user_main, NULL);\n")
     buf_push(mb, "    return 0;\n}\n")
-    let main_c = buf_str(mb)
+    let main_c = to_string(mb)
 
     # Assemble
     let ob = buf_new()
@@ -4547,7 +4567,7 @@ fn make_codegen(source_name)
     buf_push(ob, "\n\n")
 
     buf_push(ob, main_c)
-    buf_str(ob)
+    to_string(ob)
   end
 
   {compile: compile}

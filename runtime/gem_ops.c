@@ -123,7 +123,7 @@ void gem_string_append(GemVal *accum, GemVal rhs) {
 GemVal gem_string_finish(GemVal val) {
     if (val.type == VAL_BUFFER) {
         GemVal args[1] = {val};
-        return gem_buf_str_fn(NULL, args, 1);
+        return gem_to_string_fn(NULL, args, 1);
     }
     return val;
 }

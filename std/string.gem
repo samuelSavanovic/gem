@@ -27,7 +27,7 @@ fn split(s, delim)
   let i = 0
   while i < slen
     if str_eq_at(s, i, delim)
-      push(result, buf_str(buf))
+      push(result, to_string(buf))
       buf = buf_new()
       i += dlen
     else
@@ -35,7 +35,7 @@ fn split(s, delim)
       i += 1
     end
   end
-  push(result, buf_str(buf))
+  push(result, to_string(buf))
   result
 end
 

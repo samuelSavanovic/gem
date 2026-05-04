@@ -177,7 +177,7 @@ buf_push(deep_json, "1")
 for i = 0, 200
   buf_push(deep_json, "]")
 end
-let r6 = pcall json.parse(buf_str(deep_json))
+let r6 = pcall json.parse(to_string(deep_json))
 print(r6.ok)
 
 print("=== all json tests passed ===")

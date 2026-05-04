@@ -50,7 +50,7 @@ fn parse_request(raw)
     i += 1
   end
 
-  {method: method, path: path, version: version, headers: headers, body: buf_str(body_buf)}
+  {method: method, path: path, version: version, headers: headers, body: to_string(body_buf)}
 end
 
 # ─── HTTP response helpers ───

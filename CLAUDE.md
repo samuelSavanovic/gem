@@ -241,7 +241,7 @@ let r = pcall some_fn()              # {ok: bool, value/error: ...}
 # print, eprint, len, type, to_string, to_int, to_float, exit
 # push, pop, keys, values, sort, insert, delete, remove_at
 # str_replace, substr, chr, ord, has_key
-# buf_new, buf_push, buf_str, build_string
+# buf_new, buf_push, build_string  (finalize buffer with to_string)
 # read_file, write_file, append_file, file_exists, dirname, path_join, normalize_path
 # remove_file, mkdir, list_dir, is_dir, exec, sleep, getenv, input, argv
 # tcp_listen, tcp_accept, tcp_read, tcp_write, tcp_close

@@ -83,9 +83,9 @@ fn parse_query(s)
       c = ord(s, i)
     end
     if c == 38 or i == slen
-      let k = decode(buf_str(key_buf))
+      let k = decode(to_string(key_buf))
       if len(k) > 0
-        result[k] = decode(buf_str(val_buf))
+        result[k] = decode(to_string(val_buf))
       end
       key_buf = buf_new()
       val_buf = buf_new()

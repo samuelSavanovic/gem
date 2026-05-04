@@ -114,7 +114,7 @@ fn parse_string(s)
       buf_push(buf, ch)
     end
   end
-  buf_str(buf)
+  to_string(buf)
 end
 
 fn parse_number(s)
@@ -133,7 +133,7 @@ fn parse_number(s)
       buf_push(buf, s.advance())
     end
   end
-  let str = buf_str(buf)
+  let str = to_string(buf)
   if has_dot
     to_float(str)
   else
