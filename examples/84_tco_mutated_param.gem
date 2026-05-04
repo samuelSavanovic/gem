@@ -1,0 +1,27 @@
+# Regression: self-recursive TCO function with a param captured-and-mutated
+# by an inner closure must reset the per-process arena at the back-edge.
+# Before "TCO reset with pinned roots", emit_tco_continue skipped the reset
+# whenever the function had any malloc-boxed local — RSS would grow
+# unbounded. The fix pins boxed params via gem_arena_reset_with_roots_pinned
+# so the post-reset sweep keeps the box alive across the tail call.
+# 10000 iterations × ~200 bytes/iter exceed the 1 MB threshold several times.
+
+let main_pid = self()
+
+fn loop(count, n)
+  if n == 0
+    send(main_pid, {tag: "result", count: count})
+    return
+  end
+  let bump = fn() count = count + 1 end
+  bump()
+  let junk = [n, n + 1, n + 2, n + 3, n + 4, n + 5, n + 6, n + 7, n + 8, n + 9, "pad-" + to_string(n)]
+  loop(count, n - 1)
+end
+
+let worker = spawn(fn()
+  loop(0, 10000)
+end)
+
+let r = receive()
+print("result: " + to_string(r.count))

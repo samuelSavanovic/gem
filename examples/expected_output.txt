@@ -1104,3 +1104,4 @@ true
 true
 HELLO, WORLD!
 world!
+result: 10000

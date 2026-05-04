@@ -2413,22 +2413,30 @@ fn make_codegen(source_name)
       push(arg_temps, t)
     end
 
-    # Arena reset at the tail-call boundary. Skipped if the function has any
-    # malloc-boxed local (mutated capture, allocated via gem_box_alloc and
-    # tracked in the per-process pin-set). The reset path here passes only
-    # tail-call arg temps to gem_arena_reset_with_roots — it does NOT pass
-    # pinned roots — so a pin-set sweep would free any box not reachable
-    # through those args, dangling escaping closures that captured it.
-    # Covers both captured params and captured non-param locals.
-    # See docs/OPTIMIZATIONS.md "TCO reset with pinned roots" for the path
-    # that lifts this restriction.
-    let any_boxed = tco_boxed != nil and len(tco_boxed) > 0
-    if not any_boxed and len(arg_temps) > 0
-      # Arena reset at the tail-call boundary. Process-tail fns reset
-      # unconditionally — every caller chain reaches them via tail calls from
-      # a process root, so no caller above holds live arena state. Non-PT
-      # TCO fns guard with a runtime depth-2 fence (the static analysis
-      # could not prove all callers are tail; a non-tail caller would dangle).
+    # Arena reset at the tail-call boundary. Mutated-captured params live in
+    # malloc-backed pinned boxes (gem_box_alloc, tracked in the per-process
+    # pin-set); they MUST be passed as pinned_roots or the post-reset sweep
+    # frees the box before we write `*gem_v_<p> = arg_temps[i]` below.
+    # Body-let boxed locals don't need pinning here: top-level body lets are
+    # re-allocated each iteration (the next iter's `let x = gem_box_alloc()`
+    # overwrites `gem_v_x` before any use); inner-scope lets aren't visible
+    # at the tail-call point. Either way, if such a box is referenced via a
+    # closure passed in args, the deep-copy env-walk marks it and the sweep
+    # keeps it alive.
+    let pinned_param_names = []
+    if tco_boxed != nil and len(tco_boxed) > 0
+      for p in tco_params
+        if set_contains(tco_boxed, p)
+          push(pinned_param_names, p)
+        end
+      end
+    end
+    if len(arg_temps) > 0
+      # Process-tail fns reset unconditionally — every caller chain reaches
+      # them via tail calls from a process root, so no caller above holds
+      # live arena state. Non-PT TCO fns guard with a runtime depth-2 fence
+      # (static analysis could not prove all callers are tail; a non-tail
+      # caller would dangle).
       if tco_is_process_tail
         buf_push(b, "{p}if (gem_current_pid >= 0 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
       else
@@ -2442,7 +2450,21 @@ fn make_codegen(source_name)
         buf_push(b, "&{arg_temps[i]}")
       end
       buf_push(b, "};\n")
-      buf_push(b, "{p}    gem_arena_reset_with_roots(_tco_roots, {len(arg_temps)});\n")
+      let n_pinned = len(pinned_param_names)
+      if n_pinned > 0
+        buf_push(b, "{p}    GemVal *_tco_pinned_roots[] = \{")
+        for i = 0, n_pinned
+          if i > 0
+            buf_push(b, ", ")
+          end
+          # `gem_v_<param>` is already a `GemVal *` (from gem_box_alloc).
+          buf_push(b, "{mangle(pinned_param_names[i])}")
+        end
+        buf_push(b, "};\n")
+        buf_push(b, "{p}    gem_arena_reset_with_roots_pinned(_tco_roots, {len(arg_temps)}, _tco_pinned_roots, {n_pinned});\n")
+      else
+        buf_push(b, "{p}    gem_arena_reset_with_roots(_tco_roots, {len(arg_temps)});\n")
+      end
       buf_push(b, "{p}}\n")
     end
 
