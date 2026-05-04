@@ -44,6 +44,7 @@ build/gem             # compiled compiler binary (gitignored, built from stage0.
 examples/             # numbered tests (01-83+) + run_all.sh; plus json_parser, http_server, tcp_echo, bookmark_app
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 docs/OPTIMIZATIONS.md # tracked future performance improvements
+docs/ROADMAP.md       # future capabilities (features, not perf)
 docs/LSP_ROADMAP.md   # sketch for a future Gem LSP
 editors/vscode/       # VS Code extension (TextMate grammar)
 editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
@@ -93,6 +94,10 @@ Add a numbered example under `examples/` (next free slot) and append its stdout 
 ## Optimization Tracking
 
 `docs/OPTIMIZATIONS.md` tracks future performance improvements. When you spot an obvious optimization (e.g. a new builtin that copies when it could use views, a hot path that could be specialized), add it there rather than implementing it immediately. Keep the file organized by category.
+
+## Roadmap Tracking
+
+`docs/ROADMAP.md` tracks future *capabilities* — features the language doesn't have yet (distribution, hot code reload, etc.). When a discussion surfaces a capability worth pursuing later, add it there rather than letting it evaporate. Distinct from OPTIMIZATIONS.md (perf on existing features) and LSP_ROADMAP.md (tooling). Keep entries brief: motivation, what needs building, trade-offs.
 
 ## Editor Extension Maintenance
 
