@@ -31,8 +31,8 @@ fn make_let(name, value, line)
   {tag: "let", name: name, value: value, line: line}
 end
 
-fn make_var(name)
-  {tag: "var", name: name}
+fn make_var(name, line = nil)
+  {tag: "var", name: name, line: line}
 end
 
 fn make_table(entries)

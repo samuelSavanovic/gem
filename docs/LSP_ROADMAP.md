@@ -2,6 +2,26 @@
 
 A minimal language server for Gem, focused on the features that provide the most value for the least complexity. Dynamic typing puts a ceiling on static analysis, so the strategy is: handle the common patterns well, don't try to be omniscient.
 
+## Phase 0: Pre-LSP groundwork
+
+Land these before any LSP work — they're useful standalone and the LSP needs them anyway.
+
+### Diagnostic location coverage
+
+`compiler/main.gem`'s `--check` flag (already shipped) plus `efm-langserver` is enough to wire up red squiggles in any LSP-only editor (Helix, Neovim) without writing a real LSP. But two gaps make placement worse than it could be:
+
+1. **Cross-file errors point at the wrong file.** When a typo is in a loaded module (e.g. `std/foo.gem`), the AST node carries the line within that file but the codegen-emitted diagnostic uses the top-level entry file's name. Fix: tag each AST node with its source file in `resolve_loads` (`compiler/main.gem:290`), and use it instead of `source_name` in error formatters. ~30 lines.
+
+2. **Codegen errors lack caret context.** Parser errors render Rust-style with source line + `^^^` underline (via `compile_error()` in `compiler/errors.gem`). Codegen errors (undeclared identifier, etc.) print only `path:line` because `make_codegen()` doesn't carry source text. Fix: thread source text into the codegen closure, route the two `eprint("\n[Compile Error]:")` sites in `compiler/codegen.gem` (`:2768` and `:3410`) through `compile_error()`. ~50 lines including the source-text plumbing.
+
+These two together give every diagnostic the same shape and accuracy regardless of which compiler stage produced it.
+
+### Multi-error recovery
+
+Today the compiler bails at the first `error()` — 32 sites across lexer/parser/codegen, each terminal. Single-error is tolerable for `--check` in CI/save-hooks, but in an LSP loop it's the difference between "fix the file" and "fix one thing, save, fix the next thing, save, …".
+
+The work: parser sync points (statement boundaries, `end` keyword), AST stub nodes for partial parses, and threading an error list through lexer/parser/codegen instead of calling `error()` directly. Realistically 200–400 lines and a careful pass — not a quick fix. Defer until the single-error UX bites.
+
 ## Phase 1: Foundations (~2 days)
 
 ### LSP Scaffold

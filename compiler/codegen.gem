@@ -2765,7 +2765,11 @@ fn make_codegen(source_name)
           # `gem_v_<name>` and bottoming out at a cc error, and rather than
           # letting downstream liveness rescue analysis complain about a
           # phantom "live var with no C local".
-          eprint("\n[Compile Error]: undeclared identifier `{name}`\n  --> {source_name}\n")
+          let loc = source_name
+          if node.line != nil
+            loc = "{source_name}:{node.line}"
+          end
+          eprint("\n[Compile Error]: undeclared identifier `{name}`\n  --> {loc}\n")
           exit(1)
         end
       end
