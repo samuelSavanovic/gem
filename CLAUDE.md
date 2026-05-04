@@ -17,8 +17,8 @@ Concretely:
 ## Project Structure
 
 ```
-compiler/             # self-hosting compiler (lexer, parser, AST, liveness, codegen, main)
-std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, supervisor, gen_server)
+compiler/             # self-hosting compiler (lexer, parser, AST, errors, liveness, codegen, main)
+std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, supervisor, gen_server, test)
 runtime/              # C runtime — split by category:
   gem.h               #   public API, tagged values, process table, scheduler decls
   gem_core.c          #   value constructors, table internals, equality
@@ -41,7 +41,7 @@ runtime/              # C runtime — split by category:
   sqlite3.c/sqlite3.h #   SQLite amalgamation (vendored)
 bootstrap/stage0.c    # checked-in C output — bootstrap artifact for clean builds
 build/gem             # compiled compiler binary (gitignored, built from stage0.c)
-examples/             # numbered tests (01-80+) + run_all.sh; plus json_parser, http_server, tcp_echo, bookmark_app
+examples/             # numbered tests (01-83+) + run_all.sh; plus json_parser, http_server, tcp_echo, bookmark_app
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 docs/OPTIMIZATIONS.md # tracked future performance improvements
 docs/LSP_ROADMAP.md   # sketch for a future Gem LSP
@@ -78,7 +78,7 @@ Add a numbered example under `examples/` (next free slot) and append its stdout 
 
 1. Implement the C function in the appropriate `runtime/gem_builtins_*.c` file.
 2. Add the declaration to `runtime/gem.h`.
-3. Add the name → C function mapping in `compiler/codegen.gem` (`builtin_fns` table around line 1037).
+3. Add the name → C function mapping in `compiler/codegen.gem` (`builtin_fns` table around line 1043).
 4. Update `docs/SPEC.md`.
 5. Update both editor extensions (see below).
 6. Add a numbered example to `examples/`, append expected output, run `make test`, then `make bootstrap`.
@@ -244,7 +244,7 @@ let r = pcall some_fn()              # {ok: bool, value/error: ...}
 # buf_new, buf_push, build_string  (finalize buffer with to_string)
 # read_file, write_file, append_file, file_exists, dirname, path_join, normalize_path
 # remove_file, mkdir, list_dir, is_dir, exec, sleep, getenv, input, argv
-# tcp_listen, tcp_accept, tcp_read, tcp_write, tcp_close
+# tcp_listen, tcp_accept, tcp_connect, tcp_read, tcp_write, tcp_close
 # floor, ceil, round, abs, pow, sqrt, random
 # band, bor, bxor, bnot, bshl, bshr
 

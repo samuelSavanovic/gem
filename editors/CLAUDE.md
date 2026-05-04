@@ -26,7 +26,7 @@ tree-sitter generate
 for f in $(find examples compiler std -name '*.gem'); do tree-sitter parse "$f" 2>&1 | grep -q ERROR && echo "FAIL: $f"; done
 ```
 
-All 66+ `.gem` files should parse with zero errors. If a change introduces parse errors, fix them before committing.
+All `.gem` files (100+) should parse with zero errors. If a change introduces parse errors, fix them before committing.
 
 ### Helix Config
 
