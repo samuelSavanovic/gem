@@ -1,6 +1,7 @@
 CC ?= cc
-CFLAGS = -std=c11 -O2
-LDFLAGS = -lm -pthread
+CFLAGS = -std=gnu11 -O2
+LDFLAGS = -pthread
+LDLIBS = -lm
 
 RUNTIME_DIR = runtime
 RUNTIME_SRCS = $(wildcard $(RUNTIME_DIR)/gem_*.c)
@@ -31,13 +32,13 @@ $(RUNTIME_LIB): $(RUNTIME_OBJS) $(SQLITE_OBJ)
 
 $(GEM): $(STAGE0) $(RUNTIME_LIB)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) -o $@ $(STAGE0) -I $(RUNTIME_DIR) -I $(COMPILER_DIR) $(CFLAGS) $(LDFLAGS) $(RUNTIME_LIB)
+	$(CC) -o $@ $(STAGE0) -I $(RUNTIME_DIR) -I $(COMPILER_DIR) $(CFLAGS) $(LDFLAGS) $(RUNTIME_LIB) $(LDLIBS)
 
 # Regenerate stage0.c from current compiler sources (requires working build/gem)
 bootstrap: $(GEM)
 	$(GEM) $(COMPILER_DIR)/main.gem --emit-c > /tmp/gem_stage0_new.c
 	@# Verify the new stage0 can compile itself before replacing
-	$(CC) -o /tmp/gem_stage0_verify /tmp/gem_stage0_new.c -I $(RUNTIME_DIR) -I $(COMPILER_DIR) $(CFLAGS) $(LDFLAGS) $(RUNTIME_LIB)
+	$(CC) -o /tmp/gem_stage0_verify /tmp/gem_stage0_new.c -I $(RUNTIME_DIR) -I $(COMPILER_DIR) $(CFLAGS) $(LDFLAGS) $(RUNTIME_LIB) $(LDLIBS)
 	/tmp/gem_stage0_verify $(COMPILER_DIR)/main.gem --emit-c > /tmp/gem_stage0_roundtrip.c
 	@diff -q /tmp/gem_stage0_new.c /tmp/gem_stage0_roundtrip.c > /dev/null || (echo "FAILED: stage0.c does not roundtrip" && exit 1)
 	cp /tmp/gem_stage0_new.c $(STAGE0)

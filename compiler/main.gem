@@ -482,9 +482,9 @@ else
   let runtime_lib = path_join(install_root, "build/libgem_runtime.a")
   let cc_cmd = ""
   if file_exists(runtime_lib)
-    cc_cmd = "cc -o " + out_name + " " + tmp_c + " -I " + runtime_dir + " -std=c11 -O2 -lm -pthread " + runtime_lib
+    cc_cmd = "cc -o " + out_name + " " + tmp_c + " -I " + runtime_dir + " -std=gnu11 -O2 -pthread " + runtime_lib + " -lm"
   else
-    cc_cmd = "cc -o " + out_name + " " + tmp_c + " " + runtime_dir + "/gem_*.c " + runtime_dir + "/sqlite3.c -I " + runtime_dir + " -std=c11 -O2 -lm -pthread"
+    cc_cmd = "cc -o " + out_name + " " + tmp_c + " " + runtime_dir + "/gem_*.c " + runtime_dir + "/sqlite3.c -I " + runtime_dir + " -std=gnu11 -O2 -pthread -lm"
   end
 
   let cc_ret = exec(cc_cmd)

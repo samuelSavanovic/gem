@@ -41279,11 +41279,11 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
         if (gem_truthy(gem_file_exists_fn(NULL, _t8166, 1))) {
 #line 485 "compiler/main.gem"
             gem_set_line(485);
-            gem_v_cc_cmd = gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("cc -o "), gem_v_out_name), gem_string(" ")), gem_v_tmp_c), gem_string(" -I ")), gem_v_runtime_dir), gem_string(" -std=c11 -O2 -lm -pthread ")), gem_v_runtime_lib);
+            gem_v_cc_cmd = gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("cc -o "), gem_v_out_name), gem_string(" ")), gem_v_tmp_c), gem_string(" -I ")), gem_v_runtime_dir), gem_string(" -std=gnu11 -O2 -pthread ")), gem_v_runtime_lib), gem_string(" -lm"));
         } else {
 #line 487 "compiler/main.gem"
             gem_set_line(487);
-            gem_v_cc_cmd = gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("cc -o "), gem_v_out_name), gem_string(" ")), gem_v_tmp_c), gem_string(" ")), gem_v_runtime_dir), gem_string("/gem_*.c ")), gem_v_runtime_dir), gem_string("/sqlite3.c -I ")), gem_v_runtime_dir), gem_string(" -std=c11 -O2 -lm -pthread"));
+            gem_v_cc_cmd = gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_add(gem_string("cc -o "), gem_v_out_name), gem_string(" ")), gem_v_tmp_c), gem_string(" ")), gem_v_runtime_dir), gem_string("/gem_*.c ")), gem_v_runtime_dir), gem_string("/sqlite3.c -I ")), gem_v_runtime_dir), gem_string(" -std=gnu11 -O2 -pthread -lm"));
         }
 #line 490 "compiler/main.gem"
         gem_set_line(490);

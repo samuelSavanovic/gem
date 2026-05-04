@@ -306,7 +306,7 @@ GemVal gem_to_int_fn(void *_env, GemVal *args, int argc) {
     GemVal v = args[0];
     if (v.type == VAL_INT) return v;
     if (v.type == VAL_FLOAT) return gem_int((int64_t)v.fval);
-    if (v.type == VAL_BOOL) return gem_int(v.ival ? 1 : 0);
+    if (v.type == VAL_BOOL) return gem_int(v.bval ? 1 : 0);
     if (v.type == VAL_STRING) {
         const char *s = v.sval;
         char *end;
@@ -331,7 +331,7 @@ GemVal gem_to_float_fn(void *_env, GemVal *args, int argc) {
     GemVal v = args[0];
     if (v.type == VAL_FLOAT) return v;
     if (v.type == VAL_INT) return gem_float((double)v.ival);
-    if (v.type == VAL_BOOL) return gem_float(v.ival ? 1.0 : 0.0);
+    if (v.type == VAL_BOOL) return gem_float(v.bval ? 1.0 : 0.0);
     if (v.type == VAL_STRING) {
         const char *s = v.sval;
         char *end;
