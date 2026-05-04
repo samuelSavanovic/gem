@@ -2,8 +2,8 @@
 # Takes a token array from the lexer, returns an AST using constructors from ast.gem.
 # Produces the EXACT same AST shape as the bootstrap compiler.
 
-load "ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include)
-load "lexer" (tokenize, compile_error)
+load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include)
+load "./lexer" (tokenize, compile_error)
 
 # ─── Number conversion helpers ───────────────────────────────────
 

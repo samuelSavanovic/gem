@@ -1,0 +1,5 @@
+# gem project root marker.
+# `load "foo/bar"` (bare paths) resolve relative to the directory containing
+# this file. `load "./x"` / `load "../x"` are relative to the importing file.
+# `load "std/x"` is reserved for the standard library.
+name = "gem"

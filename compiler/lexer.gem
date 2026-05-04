@@ -2,7 +2,7 @@
 # Takes a source string, returns a flat array of token tables:
 #   {type: "NUMBER", value: "42", line: 3, col: 1}
 
-load "errors" (compile_error)
+load "./errors" (compile_error)
 #
 # Token types: NUMBER, STRING, NAME, NEWLINE, EOF,
 # keywords (fn, end, let, if, elif, else, then, while, for, in, return, break, continue,

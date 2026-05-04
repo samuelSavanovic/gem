@@ -2,7 +2,7 @@
 # Faithful port of bootstrap/gem.py CodeGen class.
 # Uses closure-based pattern: fn make_codegen() returns a table of methods.
 
-load "liveness" (compute_live_for_pt_loops_in_stmts, is_spawn_callee_name)
+load "./liveness" (compute_live_for_pt_loops_in_stmts, is_spawn_callee_name)
 
 # ─── String helpers ─────────────────────────────────────────────
 

@@ -973,12 +973,19 @@ load "compiler/parser"
 load "std/table"
 ```
 
-Two-step path resolution:
+Path resolution depends on the form of the load path:
 
-1. **Relative to the importing file** — `load "parser"` from `compiler/main.gem` finds `compiler/parser.gem`.
-2. **Relative to the install root** — if step 1 fails, try `<binary_dir>/../<path>.gem`. Since `build/gem` lives at `<project>/build/gem`, the install root is `<project>/`. So `load "std/string"` resolves to `<project>/std/string.gem` from any source file location.
+1. **`load "std/X"`** — reserved for the standard library. Resolves against the stdlib root (see below). Hard error if the file does not exist; never falls back to a local file.
+2. **`load "./X"` / `load "../X"`** — relative to the importing file's directory. Use this for sibling/cousin imports inside a project (e.g. `compiler/main.gem` doing `load "./parser"`).
+3. **`load "X"` or `load "X/Y"`** (bare path, no prefix) — relative to the **project root**, defined as the nearest ancestor directory of the entry source file containing a `gem.toml` marker. If no `gem.toml` is found, falls back to the importing file's directory.
 
-The first path that exists wins. This lets `load "std/string"` work without fragile relative paths like `../../std/string`.
+**Stdlib root** is resolved in this order:
+
+1. `$GEM_STDLIB` if set.
+2. The project root, if it contains a `std/` subdirectory (lets a project vendor or override the stdlib).
+3. The install root, computed as `dirname(dirname(argv()[0]))` — so a binary at `<project>/build/gem` finds `<project>/std/`.
+
+**Project root marker** — drop a `gem.toml` file at the root of your project to mark it. The file may be empty; its presence is what matters. Without it, bare-path loads behave like relative-to-importing-file (which is the safe default for single-file scripts).
 
 **Export declaration** — `export name1, name2, ...` declares which names a file exports. Placed at the end of the file.
 

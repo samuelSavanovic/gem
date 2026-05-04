@@ -9,13 +9,86 @@
 #   gem foo.gem --check      # parse + analyze, exit 0 on success, 1 on error
 #   gem foo.gem --run        # accepted as a no-op (run is the default)
 
-load "../std/string"
-load "parser" (parse_source)
-load "codegen" (make_codegen)
+load "std/string"
+load "./parser" (parse_source)
+load "./codegen" (make_codegen)
 
-# ─── Install root (for std/ resolution) ──────────────────────
+# ─── Install root (for runtime/, build/libgem_runtime.a) ──────
+# argv()[0] is typically <root>/build/gem, so install_root is <root>.
 
 let install_root = dirname(dirname(argv()[0]))
+
+# ─── Stdlib root (directory containing std/) ─────────────────
+# Override with $GEM_STDLIB; otherwise default to install_root.
+
+fn compute_stdlib_root(install_root, project_root)
+  let env_root = getenv("GEM_STDLIB")
+  if env_root != nil and env_root != ""
+    return env_root
+  end
+  # Prefer project-vendored std/ (handles dev where the binary may live
+  # outside the source tree, e.g. /tmp during bootstrap roundtrip).
+  if project_root != nil and is_dir(path_join(project_root, "std"))
+    return project_root
+  end
+  if is_dir(path_join(install_root, "std"))
+    return install_root
+  end
+  install_root
+end
+
+# ─── Project root (nearest gem.toml ancestor) ────────────────
+# Bare-path loads resolve relative to this directory. Returns nil if no
+# gem.toml is found walking up from start_dir.
+
+fn find_project_root(start_dir)
+  let dir = start_dir
+  if dir == "" then dir = "." end
+  while true
+    if file_exists(path_join(dir, "gem.toml"))
+      return dir
+    end
+    let parent = dirname(dir)
+    if parent == dir or parent == ""
+      return nil
+    end
+    dir = parent
+  end
+end
+
+# ─── Load-path resolution ────────────────────────────────────
+# Three forms:
+#   "std/X"        → stdlib_root/std/X.gem (reserved; hard error on miss)
+#   "./X" / "../X" → relative to base_dir (loading file's directory)
+#   "X" / "X/Y"    → relative to project_root if found, else base_dir
+
+fn resolve_load_path(raw_path, base_dir, project_root, stdlib_root)
+  let path = raw_path
+  if not string.ends_with(path, ".gem")
+    path = path + ".gem"
+  end
+
+  if string.starts_with(raw_path, "std/")
+    if stdlib_root == nil
+      error("gem: cannot resolve load \"" + raw_path + "\": stdlib root not found (set $GEM_STDLIB)")
+    end
+    let p = normalize_path(path_join(stdlib_root, path))
+    if not file_exists(p)
+      error("gem: stdlib module not found: " + raw_path + " (looked in " + stdlib_root + ")")
+    end
+    return p
+  end
+
+  if string.starts_with(raw_path, "./") or string.starts_with(raw_path, "../")
+    return normalize_path(path_join(base_dir, path))
+  end
+
+  let root = project_root
+  if root == nil
+    root = base_dir
+  end
+  return normalize_path(path_join(root, path))
+end
 
 # ─── AST helpers (defined locally to avoid shared module deps) ──
 
@@ -288,22 +361,12 @@ end
 
 # ─── Load resolution ──────────────────────────────────────────
 
-fn resolve_loads(ast, base_dir, loaded)
+fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded)
   let new_stmts = []
   let count = 0
   for stmt in ast.stmts
     if is_node(stmt, "load")
-      let path = stmt.path
-      if not string.ends_with(path, ".gem")
-        path = path + ".gem"
-      end
-
-      let full_path = path_join(base_dir, path)
-      if not file_exists(full_path)
-        full_path = path_join(install_root, path)
-      end
-
-      full_path = normalize_path(full_path)
+      let full_path = resolve_load_path(stmt.path, base_dir, project_root, stdlib_root)
 
       let cached = loaded[full_path]
       if cached != nil
@@ -335,7 +398,7 @@ fn resolve_loads(ast, base_dir, loaded)
       let source = read_file(full_path)
       let loaded_ast = parse_source(source, full_path)
       let loaded_dir = dirname(full_path)
-      let resolved = resolve_loads(loaded_ast, loaded_dir, loaded)
+      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded)
 
       let export_node = find_export_node(resolved.stmts)
       if export_node == nil
@@ -450,8 +513,10 @@ let source = read_file(src_path)
 
 let ast = parse_source(source, src_path)
 let base_dir = dirname(src_path)
+let project_root = find_project_root(base_dir)
+let stdlib_root = compute_stdlib_root(install_root, project_root)
 let loaded = {}
-let resolved_ast = resolve_loads(ast, base_dir, loaded)
+let resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded)
 
 let cg = make_codegen(src_path)
 let c_code = cg.compile(resolved_ast)
