@@ -1,0 +1,55 @@
+# Leaf functions (no calls in body) skip gem_push_frame/gem_pop_frame and
+# gem_set_line. The trace from a builtin error inside a leaf fn shows the
+# caller's frame at the call-site line — the leaf's name and per-stmt line
+# are not visible. Verify this attribution and that result values are
+# preserved across the elided path.
+
+fn add(a, b)
+  a + b
+end
+
+fn classify(x)
+  if x < 0
+    "neg"
+  elif x == 0
+    "zero"
+  else
+    "pos"
+  end
+end
+
+fn pick(t)
+  if t.kind == "ok"
+    t.val
+  else
+    -1
+  end
+end
+
+print(add(2, 3))
+print(classify(-7))
+print(classify(0))
+print(classify(42))
+print(pick({kind: "ok", val: 99}))
+print(pick({kind: "err", val: nil}))
+
+# Leaf inside leaf-friendly callers: still pushes the *caller's* frame.
+fn caller(n)
+  let s = 0
+  let i = 0
+  while i < n
+    s = add(s, classify_to_int(i))
+    i = i + 1
+  end
+  s
+end
+
+fn classify_to_int(x)
+  if x < 5
+    1
+  else
+    2
+  end
+end
+
+print(caller(10))

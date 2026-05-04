@@ -1106,3 +1106,10 @@ HELLO, WORLD!
 world!
 result: 10000
 count=1000 in_order=true cancelled=200
+5
+neg
+zero
+pos
+99
+-1
+15

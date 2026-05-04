@@ -1166,6 +1166,13 @@ fn make_codegen(source_name)
   let tco_is_process_tail = false
   let process_tail_fns = {}
   let append_buf_vars = {}
+  # Set when emitting a leaf function (no Gem-level calls in body): we elide
+  # `gem_push_frame`/`gem_pop_frame` and `gem_set_line` so the call doesn't
+  # cost frame bookkeeping. If the leaf raises via a builtin, the trace shows
+  # the caller's frame at the call-site line — the leaf's name and per-stmt
+  # line are not visible. Builtins don't push frames themselves, so this is
+  # consistent with how a non-Gem error already attributes.
+  let in_leaf_fn = false
 
   # ─── Helpers ──
 
@@ -1181,6 +1188,24 @@ fn make_codegen(source_name)
 
   let mangle = fn(name)
     "gem_v_{name}"
+  end
+
+  # Frame bookkeeping helpers — return empty strings inside leaf fns so the
+  # generated C drops the runtime call entirely. Every site that emits
+  # `gem_pop_frame()` or `gem_set_line(...)` must go through these.
+  let pop_str = fn(p)
+    if in_leaf_fn
+      ""
+    else
+      "{p}gem_pop_frame();\n"
+    end
+  end
+  let setline_str = fn(line, p)
+    if in_leaf_fn
+      ""
+    else
+      "{p}gem_set_line({line});\n"
+    end
   end
 
   # ─── Free variable analysis ──
@@ -1928,6 +1953,60 @@ fn make_codegen(source_name)
       return false
     end
     is_self_tail_call(fn_name, stmts[-1])
+  end
+
+  # ─── Leaf-function detection ──
+  #
+  # A function is a "leaf" iff its body invokes no other function: no `call`
+  # AST node, no `receive_match` (which can yield to other coroutines mid-call
+  # and re-enters scheduler bookkeeping). Builtins are *also* calls — every
+  # builtin invocation parses as `call(var(name), args)` — so any use of
+  # `print`, `len`, `error`, etc. disqualifies the fn as leaf. Restrictive on
+  # purpose: it makes elision trivially sound w.r.t. stack-trace correctness
+  # (no inner Gem fn pushes a frame whose attribution depends on us pushing
+  # one first; no builtin reaches `gem_error` whose trace would otherwise
+  # show our absent frame).
+  #
+  # Arithmetic, comparisons, table/array literals, var reads, dot access,
+  # interp, control flow — none of these are calls. So small predicates and
+  # accessors qualify; almost anything that touches `len()`, `print()`, etc.
+  # does not.
+  let node_has_calls = nil
+  node_has_calls = fn(node)
+    if node == nil
+      return false
+    end
+    if type(node) != "table"
+      return false
+    end
+    let tag = node.tag
+    if tag == "call" or tag == "receive_match"
+      return true
+    end
+    if tag == "anon_fn" or tag == "fn_def"
+      # Nested fn definition — its body is a separate compilation unit, not
+      # invoked by mere mention. Default-arg expressions DO run when the
+      # nested fn is later called, but not when this body runs, so they
+      # don't affect leaf-ness either. Don't descend.
+      return false
+    end
+    # Generic descent into all subfields. Skip primitive scalars.
+    for k, v in node
+      if type(v) == "table"
+        if node_has_calls(v)
+          return true
+        end
+      end
+    end
+    false
+  end
+  let body_is_leaf = fn(body)
+    for s in body
+      if node_has_calls(s)
+        return false
+      end
+    end
+    true
   end
 
   # ─── Static process-tail analysis ──
@@ -3152,7 +3231,7 @@ fn make_codegen(source_name)
       buf_push(b, "\n")
     else
       let p = pad_for(indent)
-      buf_push(b, "{p}gem_pop_frame();\n{p}return GEM_NIL;\n")
+      buf_push(b, "{pop_str(p)}{p}return GEM_NIL;\n")
     end
     to_string(b)
   end
@@ -3163,7 +3242,7 @@ fn make_codegen(source_name)
     let p = pad_for(indent)
     let line_dir = ""
     if node.line != nil
-      line_dir = "#line {node.line} \"{escape_c_string(source_name)}\"\n{p}gem_set_line({node.line});\n"
+      line_dir = "#line {node.line} \"{escape_c_string(source_name)}\"\n{setline_str(node.line, p)}"
     end
 
     match node
@@ -3242,9 +3321,9 @@ fn make_codegen(source_name)
       if value != nil
         let r = compile_expr(value)
         let t = tmp()
-        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}gem_pop_frame();\n{p}return {t};"
+        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{pop_str(p)}{p}return {t};"
       end
-      return "{line_dir}{p}gem_pop_frame();\n{p}return GEM_NIL;"
+      return "{line_dir}{pop_str(p)}{p}return GEM_NIL;"
     when {tag: "call"}
       let r = compile_expr(node)
       return "{line_dir}{r.setup}{p}(void)({r.expr});"
@@ -3269,7 +3348,7 @@ fn make_codegen(source_name)
     let p = pad_for(indent)
     let line_dir = ""
     if node.line != nil
-      line_dir = "#line {node.line} \"{escape_c_string(source_name)}\"\n{p}gem_set_line({node.line});\n"
+      line_dir = "#line {node.line} \"{escape_c_string(source_name)}\"\n{setline_str(node.line, p)}"
     end
 
     if tco_fn_name != nil
@@ -3287,28 +3366,28 @@ fn make_codegen(source_name)
       let r = compile_expr(value)
       let mname = mangle(name)
       if set_contains(boxed_vars, name)
-        return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
+        return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
       end
-      return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
+      return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
     when {tag: "assign", name: name, value: value}
       let r = compile_expr(value)
       let t = tmp()
       let mname = mangle(name)
       if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name))
-        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}*{mname} = {t};\n{p}gem_pop_frame();\n{p}return {t};"
+        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}*{mname} = {t};\n{pop_str(p)}{p}return {t};"
       end
-      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{mname} = {t};\n{p}gem_pop_frame();\n{p}return {t};"
+      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{mname} = {t};\n{pop_str(p)}{p}return {t};"
     when {tag: "return", value: value}
       if value != nil
         let r = compile_expr(value)
         let t = tmp()
-        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}gem_pop_frame();\n{p}return {t};"
+        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{pop_str(p)}{p}return {t};"
       end
-      return "{line_dir}{p}gem_pop_frame();\n{p}return GEM_NIL;"
+      return "{line_dir}{pop_str(p)}{p}return GEM_NIL;"
     when {tag: "if"}
       return "{line_dir}" + compile_if(node, indent, true)
     when {tag: "while"}
-      return "{line_dir}{compile_while(node, indent)}\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
+      return "{line_dir}{compile_while(node, indent)}\n{pop_str(p)}{p}return GEM_NIL;"
     when {tag: "match"}
       return "{line_dir}" + compile_match(node, indent, true)
     when {tag: "receive_match"}
@@ -3329,20 +3408,20 @@ fn make_codegen(source_name)
       buf_push(b, "{p}}")
       return to_string(b)
     when {tag: "dot_assign"}
-      return "{compile_stmt(node, indent)}\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
+      return "{compile_stmt(node, indent)}\n{pop_str(p)}{p}return GEM_NIL;"
     when {tag: "index_assign"}
-      return "{compile_stmt(node, indent)}\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
+      return "{compile_stmt(node, indent)}\n{pop_str(p)}{p}return GEM_NIL;"
     when {tag: "break"}
-      return "{compile_stmt(node, indent)}\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
+      return "{compile_stmt(node, indent)}\n{pop_str(p)}{p}return GEM_NIL;"
     when {tag: "continue"}
-      return "{compile_stmt(node, indent)}\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
+      return "{compile_stmt(node, indent)}\n{pop_str(p)}{p}return GEM_NIL;"
     when {tag: "fn_def"}
-      return "{compile_stmt(node, indent)}\n{p}gem_pop_frame();\n{p}return GEM_NIL;"
+      return "{compile_stmt(node, indent)}\n{pop_str(p)}{p}return GEM_NIL;"
     end
 
     let r = compile_expr(node)
     let t = tmp()
-    "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}gem_pop_frame();\n{p}return {t};"
+    "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{pop_str(p)}{p}return {t};"
   end
 
   # ─── compile_if ──
@@ -3626,7 +3705,7 @@ fn make_codegen(source_name)
       if node.else != nil
         buf_push(b, compile_stmts_tail(node.else, indent, return_pos))
       elif return_pos
-        buf_push(b, "{p}gem_pop_frame();\n{p}return GEM_NIL;\n")
+        buf_push(b, "{pop_str(p)}{p}return GEM_NIL;\n")
       end
       buf_push(b, "{p}(void){t};")
       return to_string(b)
@@ -4163,7 +4242,8 @@ fn make_codegen(source_name)
       buf_push(b, compile_stmt_return(body[-1], 1))
       buf_push(b, "\n")
     else
-      buf_push(b, "    gem_pop_frame();\n    return GEM_NIL;\n")
+      let pf = pop_str("    ")
+      buf_push(b, "{pf}    return GEM_NIL;\n")
     end
     to_string(b)
   end
@@ -4189,8 +4269,10 @@ fn make_codegen(source_name)
     let saved_top = in_top_level
     let saved_local = local_names
     let saved_fn_scope = fn_scope_locals
+    let saved_in_leaf = in_leaf_fn
     local_names = shadowed_locals
     fn_scope_locals = scope_vars
+    in_leaf_fn = body_is_leaf(body)
 
     let captured = find_captured_in_scope(body, scope_vars)
     if node.defaults != nil
@@ -4249,7 +4331,9 @@ fn make_codegen(source_name)
     if node.line != nil
       fn_line = node.line
     end
-    buf_push(b, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", {fn_line});\n")
+    if not in_leaf_fn
+      buf_push(b, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", {fn_line});\n")
+    end
 
     if use_tco
       buf_push(b, "    while(1) \{\n")
@@ -4262,7 +4346,8 @@ fn make_codegen(source_name)
         buf_push(b, compile_stmt_return(body[-1], 2))
         buf_push(b, "\n")
       else
-        buf_push(b, "        gem_pop_frame();\n        return GEM_NIL;\n")
+        let pf2 = pop_str("        ")
+        buf_push(b, "{pf2}        return GEM_NIL;\n")
       end
       buf_push(b, "    \}\n")
     else
@@ -4283,6 +4368,7 @@ fn make_codegen(source_name)
     in_top_level = saved_top
     local_names = saved_local
     fn_scope_locals = saved_fn_scope
+    in_leaf_fn = saved_in_leaf
     to_string(b)
   end
 
@@ -4311,8 +4397,10 @@ fn make_codegen(source_name)
     let saved_has_self_closure_slot = has_self_closure_slot
     let saved_current_closure_struct_name = current_closure_struct_name
     let saved_current_closure_captures = current_closure_captures
+    let saved_in_leaf = in_leaf_fn
     local_names = set_union(shadowed_locals, sorted_array_to_set(captures))
     fn_scope_locals = inner_scope
+    in_leaf_fn = body_is_leaf(body)
 
     let inner_captured = find_captured_in_scope(body, inner_scope)
     if node.defaults != nil
@@ -4382,7 +4470,9 @@ fn make_codegen(source_name)
     current_closure_captures = captures
 
     buf_push(fb, emit_param_bindings(node, params, inner_boxed))
-    buf_push(fb, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", 0);\n")
+    if not in_leaf_fn
+      buf_push(fb, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(source_name)}\", 0);\n")
+    end
     buf_push(fb, emit_fn_body(body))
     buf_push(fb, "}")
 
@@ -4394,6 +4484,7 @@ fn make_codegen(source_name)
     has_self_closure_slot = saved_has_self_closure_slot
     current_closure_struct_name = saved_current_closure_struct_name
     current_closure_captures = saved_current_closure_captures
+    in_leaf_fn = saved_in_leaf
 
     # Add struct + function to functions list
     push(functions, struct_def + to_string(fb))
