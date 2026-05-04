@@ -22,6 +22,7 @@ gem <file.gem> [args...]    # run, passing extra args through to the program
 gem <file.gem> -c           # compile to ./<basename>, don't run
 gem <file.gem> -o <name>    # compile to <name>, don't run (implies -c)
 gem <file.gem> --emit-c     # print generated C to stdout (used for bootstrapping)
+gem <file.gem> --check      # parse + analyze, exit 0 on success, 1 on error
 gem <file.gem> --run        # accepted as a no-op; run is the default
 ```
 
@@ -30,6 +31,8 @@ The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.
 `-c` (or `--compile-only`) keeps the artifact: compiles to `./<basename>` and exits without running. `-o <name>` does the same but lets you pick the path.
 
 `--emit-c` prints C to stdout and exits. This is what the bootstrapping Makefile targets use.
+
+`--check` runs the parser, load resolution, and codegen analysis but skips emitting C and invoking `cc`. Exits 0 silently on success; on failure, prints the same caret-context diagnostic that the normal compile path produces and exits 1. Intended for editor save hooks, pre-commit, and CI lint.
 
 ## Values and Types
 

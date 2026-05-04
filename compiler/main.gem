@@ -6,6 +6,7 @@
 #   gem foo.gem -c           # compile to ./foo, don't run
 #   gem foo.gem -o name      # compile to ./name (implies -c)
 #   gem foo.gem --emit-c     # print C to stdout (for bootstrapping)
+#   gem foo.gem --check      # parse + analyze, exit 0 on success, 1 on error
 #   gem foo.gem --run        # accepted as a no-op (run is the default)
 
 load "../std/string"
@@ -363,6 +364,7 @@ fn parse_args(args)
     src_path: nil,
     out_name: nil,
     emit_c: false,
+    check: false,
     run: true,
     compile_only: false,
     run_args: []
@@ -376,6 +378,8 @@ fn parse_args(args)
     let arg = args[i]
     if arg == "--emit-c"
       result.emit_c = true
+    elif arg == "--check"
+      result.check = true
     elif arg == "--run"
       # no-op: run is the default. Accepted for back-compat.
     elif arg == "-c" or arg == "--compile-only"
@@ -396,7 +400,7 @@ fn parse_args(args)
     i += 1
   end
 
-  if result.compile_only or result.out_name != nil or result.emit_c
+  if result.compile_only or result.out_name != nil or result.emit_c or result.check
     result.run = false
   end
 
@@ -451,6 +455,15 @@ let resolved_ast = resolve_loads(ast, base_dir, loaded)
 
 let cg = make_codegen(src_path)
 let c_code = cg.compile(resolved_ast)
+
+# ─── Check mode ───────────────────────────────────────────────
+# Parse + load resolution + codegen all succeeded — by here every error()
+# site has been satisfied. Exit 0 silently; failures already printed via
+# the existing caret-context error path.
+
+if cli.check
+  exit(0)
+end
 
 # ─── Emit C mode (used for bootstrapping) ─────────────────────
 
