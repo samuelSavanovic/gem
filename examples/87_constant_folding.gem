@@ -1,0 +1,43 @@
+# Constant folding pass — verifies arithmetic, comparisons, string concat,
+# unary, and short-circuit fold to the same values the runtime would compute.
+
+# Int arithmetic
+print(1 + 2)              # 3
+print(10 - 4)             # 6
+print(3 * 7)              # 21
+print(20 / 6)             # 3
+print(20 % 6)             # 2
+
+# Float / mixed
+print(1.5 + 2.5)          # 4.0
+print(1 + 2.5)            # 3.5
+print(10.0 / 4)           # 2.5
+
+# String concat
+print("hel" + "lo")       # hello
+print("a" + "b" + "c")    # abc (left-fold then right-fold)
+
+# Unary
+print(-5)                 # -5
+print(-3.5)               # -3.5
+print(not true)           # false
+print(not nil)            # true
+print(not 0)              # false (0 is truthy in Gem)
+
+# Comparisons
+print(1 < 2)              # true
+print(2.0 == 2)           # false (different types)
+print("a" < "b")          # true
+print(3 != 3)             # false
+
+# Short-circuit
+print(false and 1/0)      # false (rhs not evaluated, would error)
+print(true or 1/0)        # true
+print(true and "kept")    # kept
+print(nil or "fallback")  # fallback
+
+# Division by zero NOT folded — runtime should still error if forced.
+# Verify by guarding behind a runtime branch the folder can't see.
+let x = 0
+let r = pcall print(10 / x)
+print(r.ok)               # false

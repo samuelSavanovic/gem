@@ -1,0 +1,257 @@
+# Constant folding pass.
+#
+# Walks the AST after load resolution, before codegen. Replaces binop/unop
+# nodes whose operands are literals with the corresponding literal result,
+# matching runtime semantics in runtime/gem_ops.c.
+#
+# Soundness rules:
+# - Skip int / and int % when rhs is 0 (preserves runtime "division by zero").
+# - and/or short-circuit: a literal-truthy left of `and` returns the right
+#   subtree; a literal-falsy left of `or` returns the right subtree. Matches
+#   runtime gem_truthy + branch semantics, including dropping the right side
+#   when the left already determines the result.
+# - Type coercion mirrors gem_ops.c: int op float -> float; mixed comparisons
+#   coerce to float.
+# - Comparisons across incompatible types are NOT folded — runtime errors on
+#   `<` between e.g. int and bool, and we want to preserve that diagnostic.
+#   `==`/`!=` ARE folded across types (runtime returns false for type
+#   mismatch — see gem_eq).
+
+load "./ast" (make_int, make_float, make_string, make_bool, make_nil_node)
+
+fn is_node(n, tag)
+  type(n) == "table" and n.tag == tag
+end
+
+fn is_int_lit(n) is_node(n, "int") end
+fn is_float_lit(n) is_node(n, "float") end
+fn is_string_lit(n) is_node(n, "string") end
+fn is_bool_lit(n) is_node(n, "bool") end
+fn is_nil_lit(n) is_node(n, "nil") end
+fn is_num_lit(n) is_int_lit(n) or is_float_lit(n) end
+fn is_lit(n)
+  is_int_lit(n) or is_float_lit(n) or is_string_lit(n) or is_bool_lit(n) or is_nil_lit(n)
+end
+
+fn num_val(n)
+  if is_int_lit(n) then to_float(n.value) else n.value end
+end
+
+fn lit_truthy(n)
+  if is_nil_lit(n) then return false end
+  if is_bool_lit(n) then return n.value end
+  true
+end
+
+fn lit_eq(l, r)
+  if l.tag != r.tag then return false end
+  if is_nil_lit(l) then return true end
+  l.value == r.value
+end
+
+# ─── Try to fold a binop ──
+
+fn try_fold_binop(node)
+  let l = node.left
+  let r = node.right
+  let op = node.op
+
+  if op == "and"
+    if is_lit(l)
+      if lit_truthy(l) then return r end
+      return l
+    end
+    return node
+  elif op == "or"
+    if is_lit(l)
+      if lit_truthy(l) then return l end
+      return r
+    end
+    return node
+  end
+
+  if not is_lit(l) or not is_lit(r)
+    return node
+  end
+
+  if op == "+"
+    if is_int_lit(l) and is_int_lit(r) then return make_int(l.value + r.value) end
+    if is_num_lit(l) and is_num_lit(r) then return make_float(num_val(l) + num_val(r)) end
+    if is_string_lit(l) and is_string_lit(r) then return make_string(l.value + r.value) end
+  elif op == "-"
+    if is_int_lit(l) and is_int_lit(r) then return make_int(l.value - r.value) end
+    if is_num_lit(l) and is_num_lit(r) then return make_float(num_val(l) - num_val(r)) end
+  elif op == "*"
+    if is_int_lit(l) and is_int_lit(r) then return make_int(l.value * r.value) end
+    if is_num_lit(l) and is_num_lit(r) then return make_float(num_val(l) * num_val(r)) end
+  elif op == "/"
+    if is_int_lit(l) and is_int_lit(r)
+      if r.value == 0 then return node end
+      return make_int(l.value / r.value)
+    end
+    if is_num_lit(l) and is_num_lit(r)
+      let fb = num_val(r)
+      if fb == 0.0 then return node end
+      return make_float(num_val(l) / fb)
+    end
+  elif op == "%"
+    if is_int_lit(l) and is_int_lit(r)
+      if r.value == 0 then return node end
+      return make_int(l.value % r.value)
+    end
+  elif op == "=="
+    return make_bool(lit_eq(l, r))
+  elif op == "!="
+    return make_bool(not lit_eq(l, r))
+  elif op == "<"
+    if is_int_lit(l) and is_int_lit(r) then return make_bool(l.value < r.value) end
+    if is_num_lit(l) and is_num_lit(r) then return make_bool(num_val(l) < num_val(r)) end
+    if is_string_lit(l) and is_string_lit(r) then return make_bool(l.value < r.value) end
+  elif op == ">"
+    if is_int_lit(l) and is_int_lit(r) then return make_bool(l.value > r.value) end
+    if is_num_lit(l) and is_num_lit(r) then return make_bool(num_val(l) > num_val(r)) end
+    if is_string_lit(l) and is_string_lit(r) then return make_bool(l.value > r.value) end
+  elif op == "<="
+    if is_int_lit(l) and is_int_lit(r) then return make_bool(l.value <= r.value) end
+    if is_num_lit(l) and is_num_lit(r) then return make_bool(num_val(l) <= num_val(r)) end
+    if is_string_lit(l) and is_string_lit(r) then return make_bool(l.value <= r.value) end
+  elif op == ">="
+    if is_int_lit(l) and is_int_lit(r) then return make_bool(l.value >= r.value) end
+    if is_num_lit(l) and is_num_lit(r) then return make_bool(num_val(l) >= num_val(r)) end
+    if is_string_lit(l) and is_string_lit(r) then return make_bool(l.value >= r.value) end
+  end
+
+  node
+end
+
+# ─── Try to fold a unop ──
+
+fn try_fold_unop(node)
+  let e = node.expr
+  let op = node.op
+  if op == "-"
+    if is_int_lit(e) then return make_int(0 - e.value) end
+    if is_float_lit(e) then return make_float(e.value * -1.0) end
+  elif op == "not"
+    if is_lit(e) then return make_bool(not lit_truthy(e)) end
+  end
+  node
+end
+
+# ─── Recursive walk ──
+
+let fold = nil
+let fold_stmts = nil
+
+fold_stmts = fn(stmts)
+  if stmts == nil then return end
+  for i = 0, len(stmts)
+    stmts[i] = fold(stmts[i])
+  end
+end
+
+fold = fn(node)
+  if node == nil then return nil end
+  if type(node) != "table" then return node end
+  if node.tag == nil then return node end
+
+  match node
+  when {tag: "binop"}
+    node.left = fold(node.left)
+    node.right = fold(node.right)
+    return try_fold_binop(node)
+  when {tag: "unop"}
+    node.expr = fold(node.expr)
+    return try_fold_unop(node)
+  when {tag: "call"}
+    node.func = fold(node.func)
+    let args = node.args
+    for i = 0, len(args)
+      args[i] = fold(args[i])
+    end
+  when {tag: "dot"}
+    node.object = fold(node.object)
+  when {tag: "index"}
+    node.object = fold(node.object)
+    node.key = fold(node.key)
+  when {tag: "anon_fn"}
+    fold_stmts(node.body)
+    if node.defaults != nil
+      for i = 0, len(node.defaults)
+        if node.defaults[i] != nil
+          node.defaults[i] = fold(node.defaults[i])
+        end
+      end
+    end
+  when {tag: "table"}
+    for e in node.entries
+      e.value = fold(e.value)
+      if type(e.key) == "table" and e.key.tag != nil
+        e.key = fold(e.key)
+      end
+    end
+  when {tag: "array"}
+    let elems = node.elements
+    for i = 0, len(elems)
+      elems[i] = fold(elems[i])
+    end
+  when {tag: "interp"}
+    let parts = node.parts
+    for i = 0, len(parts)
+      parts[i] = fold(parts[i])
+    end
+  when {tag: "let"}
+    node.value = fold(node.value)
+  when {tag: "assign"}
+    node.value = fold(node.value)
+  when {tag: "dot_assign"}
+    node.object = fold(node.object)
+    node.value = fold(node.value)
+  when {tag: "index_assign"}
+    node.object = fold(node.object)
+    node.key = fold(node.key)
+    node.value = fold(node.value)
+  when {tag: "fn_def"}
+    fold_stmts(node.body)
+    if node.defaults != nil
+      for i = 0, len(node.defaults)
+        if node.defaults[i] != nil
+          node.defaults[i] = fold(node.defaults[i])
+        end
+      end
+    end
+  when {tag: "if"}
+    node.cond = fold(node.cond)
+    fold_stmts(node.then)
+    if node.else != nil then fold_stmts(node.else) end
+  when {tag: "while"}
+    node.cond = fold(node.cond)
+    fold_stmts(node.body)
+  when {tag: "match"}
+    node.target = fold(node.target)
+    for w in node.whens
+      w.value = fold(w.value)
+      fold_stmts(w.body)
+    end
+    if node.else != nil then fold_stmts(node.else) end
+  when {tag: "receive_match"}
+    for arm in node.arms
+      fold_stmts(arm.body)
+    end
+    if node.after_ms != nil then node.after_ms = fold(node.after_ms) end
+    if node.after_body != nil then fold_stmts(node.after_body) end
+  when {tag: "return"}
+    if node.value != nil then node.value = fold(node.value) end
+  when {tag: "program"}
+    fold_stmts(node.stmts)
+  end
+
+  node
+end
+
+fn fold_constants(ast)
+  fold(ast)
+  ast
+end
+
+export fold_constants

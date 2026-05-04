@@ -269,8 +269,12 @@ Body-let boxed locals don't need pinning: top-level body lets re-allocate their 
 
 Regression: `examples/84_tco_mutated_param.gem` (10000-iter TCO with a closure mutating a captured param). Stress at 200k iters holds RSS at 52 MB (would otherwise grow linearly with allocations).
 
-### Constant folding (P2)
-Expressions like `1 + 2` or `"hello" + " world"` could be evaluated at compile time. The compiler already has all the information. Low value at current stage — the cases where humans write foldable constants are rare, and it doesn't affect compilation time.
+### ~~Constant folding~~ ✓ Done (2026-05-04)
+`compiler/fold.gem` runs as a pre-codegen pass on the resolved AST (after load resolution, before `make_codegen`). Folds binop / unop where every operand is a literal: int/float/mixed arithmetic, string concat, all six comparisons, and `not`. `and`/`or` short-circuit on a literal-truthy / literal-falsy left even if the right is non-literal — matches runtime branch semantics.
+
+Soundness corners: skip int `/` and `%` when rhs is `0` so `pcall (1/x)` still errors at runtime when x is statically zero via a non-folded path; unary `-` on a float literal uses `e.value * -1.0` rather than `0.0 - e.value` to preserve IEEE signed zero (`-0.0` test in `examples/25_runtime_edge_cases.gem`); `==`/`!=` across incompatible literal types fold to `false`/`true` (matches `gem_eq`'s type-check), but ordering ops (`< > <= >=`) only fold same-type pairs so the runtime type-error is preserved. Float overflow / int wrap on multiplication: Gem's int64 arithmetic wraps the same as the C runtime, so folded values match.
+
+Pass shape: `fold(node)` recursively folds children first, then `try_fold_binop`/`try_fold_unop` on the parent. Walks into all expression-bearing nodes (call args, table values, array elements, interp parts, fn defaults, control-flow conds and bodies). Regression: `examples/87_constant_folding.gem`. Bootstrap roundtrip clean.
 
 ### Dead code elimination (P2)
 Unreachable code after `return`, `break`, `error()` could be stripped. Currently emitted as-is.
