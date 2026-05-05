@@ -758,6 +758,9 @@ fn make_parser(tokens, source, file)
       let line = t.line
       advance()
       let cond = parse_expr()
+      if cond.tag == "assign" or cond.tag == "dot_assign" or cond.tag == "index_assign"
+        compile_error(source, file, cond.line, 1, 1, "assignment is not allowed in condition; use '==' for comparison", nil)
+      end
       if peek().type == "then"
         advance()
       end
@@ -786,6 +789,9 @@ fn make_parser(tokens, source, file)
       let line = t.line
       advance()
       let cond = parse_expr()
+      if cond.tag == "assign" or cond.tag == "dot_assign" or cond.tag == "index_assign"
+        compile_error(source, file, cond.line, 1, 1, "assignment is not allowed in condition; use '==' for comparison", nil)
+      end
       let wbody = parse_body()
       expect("end")
       return make_while(cond, wbody, line)

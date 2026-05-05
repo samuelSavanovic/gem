@@ -76,3 +76,15 @@ Small change, big quality-of-life win for protocol/binary work that bridges to C
 ## Debugger / breakpoints (P2)
 
 Stack traces on `error()` are good; there's no interactive step-through, breakpoint, or variable-inspection story. Pairs with `LSP_ROADMAP.md` but is a separate capability — typically a DAP (Debug Adapter Protocol) server that the runtime cooperates with (instrumented `gem_set_line` callbacks, ability to pause a coroutine, mailbox/process inspection).
+
+## Compile-time errors point at user source, not compiler internals (P1)
+
+When the compiler hits unexpected user input, the error surfaces with the *compiler's* stack trace (`_anon_63 at compiler/main.gem:2921` etc.) instead of pointing back at the user's `.gem` file and offending line. Example: an unhandled AST node in codegen prints `unknown expression node: assign` with no clue *which* user expression triggered it.
+
+**What needs to be built:**
+
+- Codegen `error()` sites should carry the AST node's `.line` (and ideally `.col`/file) and surface it as a `[Compile Error]` with source context, not a runtime stack trace.
+- A generic "compiler bug" wrapper for cases where the codegen genuinely doesn't know what to do — show user source location *and* note that the compiler should have rejected this earlier (so the right fix is usually a parser/semantic guard, like the `if x = y` guard added recently).
+- Audit the ~dozen `error("unknown ... node: ...")` sites in `compiler/codegen.gem` and convert them.
+
+**Why P1:** every user-facing parse/codegen error today is a small papercut. The fix is mechanical but touches many call sites and benefits from a small helper (`codegen_error(node, msg)`) rather than ad-hoc threading.
