@@ -376,12 +376,15 @@ typedef struct GemLinkNode {
     struct GemLinkNode *next;
 } GemLinkNode;
 
-/* Timer entry — stored in a dynamic min-heap keyed by deadline_ms */
+/* Timer entry — stored in a dynamic min-heap keyed by (deadline_ms, seq).
+   seq is a monotonic insertion counter that breaks ties so same-deadline
+   timers fire in FIFO order rather than heap-position order. */
 typedef struct {
     int64_t ref;           /* make_ref() value identifying this timer */
     int target_pid;
     GemVal msg;
     int64_t deadline_ms;
+    uint64_t seq;
 } GemTimer;
 
 extern GemTimer *gem_timers;

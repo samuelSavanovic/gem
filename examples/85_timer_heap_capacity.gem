@@ -5,10 +5,13 @@ spawn(fn()
   let me = self()
   let n = 1000
 
-  # Schedule n timers with deadlines 1..n ms (insertion order is reverse of
-  # fire order, so this also exercises sift-up + ordered pop).
+  # Schedule n timers with deadlines spaced 2ms apart in reverse insertion
+  # order — exercises sift-up + ordered pop. Spacing exceeds the ms-resolution
+  # clock's per-iteration jitter so deadlines stay strictly ordered (the
+  # heap's FIFO tiebreaker is the wrong direction here since fire order is
+  # the reverse of insertion order).
   for i = 0, n
-    send_after(me, n - i, 1 + (n - i))
+    send_after(me, n - i, 1 + (n - i) * 2)
   end
 
   # Also schedule and cancel a batch — exercises remove-by-ref + sift.

@@ -24,6 +24,14 @@ GemNameEntry *gem_name_registry = NULL;
 GemTimer *gem_timers = NULL;
 int gem_timer_count = 0;
 static int gem_timer_cap = 0;
+static uint64_t gem_timer_next_seq = 0;
+
+/* Lex-compare on (deadline_ms, seq) — earlier deadline wins; same deadline
+   resolves to insertion order (FIFO). */
+static inline int gem_timer_lt(const GemTimer *a, const GemTimer *b) {
+    if (a->deadline_ms != b->deadline_ms) return a->deadline_ms < b->deadline_ms;
+    return a->seq < b->seq;
+}
 
 static void gem_timer_heap_grow(void) {
     int new_cap = gem_timer_cap == 0 ? 16 : gem_timer_cap * 2;
@@ -35,7 +43,7 @@ static void gem_timer_heap_grow(void) {
 static void gem_timer_sift_up(int i) {
     while (i > 0) {
         int parent = (i - 1) / 2;
-        if (gem_timers[i].deadline_ms < gem_timers[parent].deadline_ms) {
+        if (gem_timer_lt(&gem_timers[i], &gem_timers[parent])) {
             GemTimer tmp = gem_timers[i];
             gem_timers[i] = gem_timers[parent];
             gem_timers[parent] = tmp;
@@ -49,8 +57,8 @@ static void gem_timer_sift_up(int i) {
 static void gem_timer_sift_down(int i) {
     for (;;) {
         int l = 2 * i + 1, r = 2 * i + 2, smallest = i;
-        if (l < gem_timer_count && gem_timers[l].deadline_ms < gem_timers[smallest].deadline_ms) smallest = l;
-        if (r < gem_timer_count && gem_timers[r].deadline_ms < gem_timers[smallest].deadline_ms) smallest = r;
+        if (l < gem_timer_count && gem_timer_lt(&gem_timers[l], &gem_timers[smallest])) smallest = l;
+        if (r < gem_timer_count && gem_timer_lt(&gem_timers[r], &gem_timers[smallest])) smallest = r;
         if (smallest == i) break;
         GemTimer tmp = gem_timers[i];
         gem_timers[i] = gem_timers[smallest];
@@ -1074,6 +1082,7 @@ GemVal gem_send_after_builtin(void *_env, GemVal *args, int argc) {
     gem_timers[i].target_pid = pid;
     gem_timers[i].msg = gem_deep_copy_malloc(msg);
     gem_timers[i].deadline_ms = gem_now_ms() + delay_ms;
+    gem_timers[i].seq = gem_timer_next_seq++;
     gem_timer_sift_up(i);
     return ref;
 }

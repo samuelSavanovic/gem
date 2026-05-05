@@ -1,0 +1,25 @@
+# Same-deadline timers fire in insertion order (FIFO tiebreaker in the
+# timer heap). Without the tiebreaker, ties resolve to heap-position order,
+# which would arrive in arbitrary order.
+
+spawn(fn()
+  let me = self()
+  let n = 100
+
+  # All n timers share the same delay. Each gets deadline = now + 50ms,
+  # with possible 1-ms jitter across schedule iterations — but within any
+  # one ms-bucket, FIFO ordering must hold.
+  for i = 0, n
+    send_after(me, i, 50)
+  end
+
+  let in_order = true
+  let prev = -1
+  for i = 0, n
+    let m = receive()
+    if m != prev + 1 then in_order = false end
+    prev = m
+  end
+
+  print("count={prev + 1} in_order={in_order}")
+end)
