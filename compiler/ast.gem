@@ -47,8 +47,8 @@ fn make_call(func, args, line)
   {tag: "call", func: func, args: args, line: line}
 end
 
-fn make_dot(object, field)
-  {tag: "dot", object: object, field: field}
+fn make_dot(object, field, line = nil)
+  {tag: "dot", object: object, field: field, line: line}
 end
 
 fn make_index(object, key)

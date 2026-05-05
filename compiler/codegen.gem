@@ -99,6 +99,61 @@ fn sorted_array_to_set(arr)
   s
 end
 
+fn levenshtein(a, b)
+  let alen = len(a)
+  let blen = len(b)
+  if alen == 0 then return blen end
+  if blen == 0 then return alen end
+  let prev = []
+  let i = 0
+  while i <= blen
+    prev[i] = i
+    i += 1
+  end
+  let curr = []
+  i = 1
+  while i <= alen
+    curr[0] = i
+    let j = 1
+    while j <= blen
+      let cost = 1
+      if ord(a, i - 1) == ord(b, j - 1) then cost = 0 end
+      let del = prev[j] + 1
+      let ins = curr[j - 1] + 1
+      let sub = prev[j - 1] + cost
+      let m = del
+      if ins < m then m = ins end
+      if sub < m then m = sub end
+      curr[j] = m
+      j += 1
+    end
+    let tmp = prev
+    prev = curr
+    curr = tmp
+    i += 1
+  end
+  prev[blen]
+end
+
+fn find_closest_export(field, exports)
+  let best = nil
+  let best_d = 999
+  for ename in exports
+    let d = levenshtein(field, ename)
+    if d < best_d
+      best_d = d
+      best = ename
+    end
+  end
+  let flen = len(field)
+  let threshold = 2
+  if flen <= 4 then threshold = 1 end
+  if best_d <= threshold
+    return best
+  end
+  nil
+end
+
 fn is_node(node, tag)
   type(node) == "table" and node.tag == tag
 end
@@ -1032,7 +1087,10 @@ tag_process_tail_while_loops = fn(fn_defs, top_stmts, process_tail_fns, source_n
   walk_for_tagging_stmts(top_stmts, true, source_name)
 end
 
-fn make_codegen(source_name)
+fn make_codegen(source_name, module_bindings = nil)
+  if module_bindings == nil
+    module_bindings = {}
+  end
   let functions = []
   let forward_decls = []
   let extern_c_decls = []
@@ -2936,6 +2994,32 @@ fn make_codegen(source_name)
     when {tag: "array"}
       return compile_array(node)
     when {tag: "dot", object: object, field: field}
+      if is_node(object, "var") and has_key(module_bindings, object.name) and (in_top_level or not set_contains(local_names, object.name))
+        let exports = module_bindings[object.name]
+        let found = false
+        for ename in exports
+          if ename == field
+            found = true
+          end
+        end
+        if not found
+          let loc = source_name
+          let line = node.line
+          if line == nil
+            line = object.line
+          end
+          if line != nil
+            loc = "{source_name}:{line}"
+          end
+          let suggestion = find_closest_export(field, exports)
+          let hint = ""
+          if suggestion != nil
+            hint = "\n  did you mean `{suggestion}`?"
+          end
+          eprint("\n[Compile Error]: module `{object.name}` has no export `{field}`\n  --> {loc}{hint}\n")
+          exit(1)
+        end
+      end
       let r = compile_expr(object)
       let t = tmp()
       ic_counter += 1
@@ -3290,6 +3374,9 @@ fn make_codegen(source_name)
       # arm-local additions when the scope closes.
       set_add(fn_scope_locals, name)
       let r = compile_expr(value)
+      if in_top_level and has_key(module_bindings, name) and not (is_node(value, "table") and value.frozen == true)
+        delete(module_bindings, name)
+      end
       let mname = mangle(name)
       if in_top_level and set_contains(top_level_vars, name)
         if set_contains(boxed_vars, name)

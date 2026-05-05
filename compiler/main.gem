@@ -362,7 +362,7 @@ end
 
 # ─── Load resolution ──────────────────────────────────────────
 
-fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded)
+fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings)
   let new_stmts = []
   let count = 0
   for stmt in ast.stmts
@@ -387,8 +387,11 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded)
             for ename in cached.exported
               push(entries, make_table_entry(ename, make_var(prefix + ename)))
             end
-            new_stmts[count] = make_let(binding_name, make_table(entries), 0)
+            let mod_tbl = make_table(entries)
+            mod_tbl.frozen = true
+            new_stmts[count] = make_let(binding_name, mod_tbl, 0)
             count += 1
+            module_bindings[binding_name] = cached.exported
           end
         end
         continue
@@ -399,7 +402,7 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded)
       let source = read_file(full_path)
       let loaded_ast = parse_source(source, full_path)
       let loaded_dir = dirname(full_path)
-      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded)
+      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings)
 
       let export_node = find_export_node(resolved.stmts)
       if export_node == nil
@@ -409,6 +412,13 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded)
       let mod_name = module_name_from_path(stmt.path)
       loaded[full_path] = {mod_name: mod_name, exported: export_node.names}
       let mod_stmts = transform_module(resolved.stmts, mod_name, export_node, stmt)
+      if stmt.selective == nil
+        let bn = mod_name
+        if stmt.alias != nil
+          bn = stmt.alias
+        end
+        module_bindings[bn] = export_node.names
+      end
       for ms in mod_stmts
         new_stmts[count] = ms
         count += 1
@@ -517,10 +527,11 @@ let base_dir = dirname(src_path)
 let project_root = find_project_root(base_dir)
 let stdlib_root = compute_stdlib_root(install_root, project_root)
 let loaded = {}
-let resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded)
+let module_bindings = {}
+let resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings)
 fold_constants(resolved_ast)
 
-let cg = make_codegen(src_path)
+let cg = make_codegen(src_path, module_bindings)
 let c_code = cg.compile(resolved_ast)
 
 # ─── Check mode ───────────────────────────────────────────────

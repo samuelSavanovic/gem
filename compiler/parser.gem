@@ -404,7 +404,7 @@ fn make_parser(tokens, source, file)
           # Allow keywords as field names
           advance()
         end
-        node = make_dot(node, field_tok.value)
+        node = make_dot(node, field_tok.value, field_tok.line)
         continue
       end
 
