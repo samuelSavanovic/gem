@@ -360,6 +360,32 @@ fn transform_module(stmts, mod_name, export_node, load_node)
   result
 end
 
+# ─── Source-file tagging ─────────────────────────────────────
+# Stamp every AST node with the path of the source file it came from.
+# Lets cross-file diagnostics (loaded modules) point at the correct file
+# instead of the entry-point's source_name.
+
+fn tag_source_file(node, file)
+  if type(node) != "table" then return end
+  if node.tag != nil and node.file == nil
+    node.file = file
+  end
+  for k in keys(node)
+    let v = node[k]
+    if type(v) == "table"
+      if v.tag != nil
+        tag_source_file(v, file)
+      else
+        for elem in v
+          if type(elem) == "table"
+            tag_source_file(elem, file)
+          end
+        end
+      end
+    end
+  end
+end
+
 # ─── Load resolution ──────────────────────────────────────────
 
 fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings)
@@ -401,6 +427,7 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
 
       let source = read_file(full_path)
       let loaded_ast = parse_source(source, full_path)
+      tag_source_file(loaded_ast, full_path)
       let loaded_dir = dirname(full_path)
       let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings)
 
@@ -523,6 +550,7 @@ let src_path = cli.src_path
 let source = read_file(src_path)
 
 let ast = parse_source(source, src_path)
+tag_source_file(ast, src_path)
 let base_dir = dirname(src_path)
 let project_root = find_project_root(base_dir)
 let stdlib_root = compute_stdlib_root(install_root, project_root)

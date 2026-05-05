@@ -997,7 +997,9 @@ walk_for_tagging_node = fn(node, is_pt, source_name)
     if node.line != nil
       line_str = to_string(node.line)
     end
-    eprint("warning: {source_name}:{line_str}: `{node.func.name}` target is not a literal `fn() … end`; any `while true` inside the spawned closure will not be process-tail-tagged and the receiver's per-process arena will not reset (silent perf cliff). Pass an anonymous fn directly: `{node.func.name}(fn() <body> end)`.\n")
+    let f = source_name
+    if node.file != nil then f = node.file end
+    eprint("warning: {f}:{line_str}: `{node.func.name}` target is not a literal `fn() … end`; any `while true` inside the spawned closure will not be process-tail-tagged and the receiver's per-process arena will not reset (silent perf cliff). Pass an anonymous fn directly: `{node.func.name}(fn() <body> end)`.\n")
     # Fall through to generic recursion so nested spawns inside the args still
     # get walked (e.g. `spawn(make_loop(spawn(fn() … end)))`).
   end
@@ -1091,6 +1093,26 @@ fn make_codegen(source_name, module_bindings = nil)
   if module_bindings == nil
     module_bindings = {}
   end
+
+  # Diagnostic location helpers. Defined up front so any closure inside
+  # make_codegen that reports an error can capture them. Returns the source
+  # file of an AST node (set per-file by tag_source_file in main.gem), or
+  # source_name for entry-file / synthetic nodes.
+  let file_of = fn(node)
+    if node != nil and node.file != nil
+      return node.file
+    end
+    source_name
+  end
+
+  let loc_of = fn(node)
+    let f = file_of(node)
+    if node != nil and node.line != nil
+      return "{f}:{node.line}"
+    end
+    f
+  end
+
   let functions = []
   let forward_decls = []
   let extern_c_decls = []
@@ -2521,7 +2543,7 @@ fn make_codegen(source_name, module_bindings = nil)
         if fd.line != nil
           line_str = to_string(fd.line)
         end
-        eprint("warning: {source_name}:{line_str}: TCO function `{fd.name}` not reachable from a process root via tail calls only — per-process arena will not reset at its back-edge. Restructure callers to call `{fd.name}` in tail position from a spawn closure or main.\n")
+        eprint("warning: {file_of(fd)}:{line_str}: TCO function `{fd.name}` not reachable from a process root via tail calls only — per-process arena will not reset at its back-edge. Restructure callers to call `{fd.name}` in tail position from a spawn closure or main.\n")
       end
     end
 
@@ -2881,22 +2903,15 @@ fn make_codegen(source_name, module_bindings = nil)
   # `a = 3` (no prior `let`) emits `gem_v_a = ...` and bottoms out at a `cc`
   # error referencing the mangled name, which is opaque to the user.
   let codegen_error = fn(node, msg)
-    let loc = source_name
-    if node != nil and node.line != nil
-      loc = "{source_name}:{node.line}"
-    end
-    eprint("\n[Compiler Bug]: {msg}\n  --> {loc}\n  The compiler accepted source it does not know how to emit C for.\n  This is a bug in the compiler, not your code — please file an issue with a minimal repro.\n")
+    eprint("\n[Compiler Bug]: {msg}\n  --> {loc_of(node)}\n  The compiler accepted source it does not know how to emit C for.\n  This is a bug in the compiler, not your code — please file an issue with a minimal repro.\n")
     exit(1)
   end
 
-  let check_assign_target = fn(name, line)
+  let check_assign_target = fn(name, node)
     if set_contains(local_names, name) or set_contains(top_level_vars, name) or set_contains(top_level_boxed, name) or set_contains(boxed_vars, name)
       return nil
     end
-    let loc = source_name
-    if line != nil
-      loc = "{source_name}:{line}"
-    end
+    let loc = loc_of(node)
     if has_key(builtin_fns, name) or set_contains(defined_fns, name)
       eprint("\n[Compile Error]: cannot assign to function `{name}`\n  --> {loc}\n")
     else
@@ -2955,11 +2970,7 @@ fn make_codegen(source_name, module_bindings = nil)
           # `gem_v_<name>` and bottoming out at a cc error, and rather than
           # letting downstream liveness rescue analysis complain about a
           # phantom "live var with no C local".
-          let loc = source_name
-          if node.line != nil
-            loc = "{source_name}:{node.line}"
-          end
-          eprint("\n[Compile Error]: undeclared identifier `{name}`\n  --> {loc}\n")
+          eprint("\n[Compile Error]: undeclared identifier `{name}`\n  --> {loc_of(node)}\n")
           exit(1)
         end
       end
@@ -3003,14 +3014,11 @@ fn make_codegen(source_name, module_bindings = nil)
           end
         end
         if not found
-          let loc = source_name
-          let line = node.line
-          if line == nil
-            line = object.line
+          let loc_node = node
+          if loc_node.line == nil and object.line != nil
+            loc_node = object
           end
-          if line != nil
-            loc = "{source_name}:{line}"
-          end
+          let loc = loc_of(loc_node)
           let suggestion = find_closest_export(field, exports)
           let hint = ""
           if suggestion != nil
@@ -3395,7 +3403,7 @@ fn make_codegen(source_name, module_bindings = nil)
       end
       return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};"
     when {tag: "assign", name: name, value: value}
-      check_assign_target(name, node.line)
+      check_assign_target(name, node)
       if set_contains(append_buf_vars, name)
         let parts = decompose_concat(name, value)
         if parts != nil
@@ -3494,7 +3502,7 @@ fn make_codegen(source_name, module_bindings = nil)
       end
       return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
     when {tag: "assign", name: name, value: value}
-      check_assign_target(name, node.line)
+      check_assign_target(name, node)
       let r = compile_expr(value)
       let t = tmp()
       let mname = mangle(name)
@@ -3682,7 +3690,7 @@ fn make_codegen(source_name, module_bindings = nil)
       if node.line != nil
         line_str = to_string(node.line)
       end
-      eprint("warning: {source_name}:{line_str}: cannot reset per-process arena at this loop's back-edge: {refuse_reason}. Memory will grow unbounded across iterations. This pattern is not yet supported in long-running loops — please file an issue with your case if it blocks you.\n")
+      eprint("warning: {file_of(node)}:{line_str}: cannot reset per-process arena at this loop's back-edge: {refuse_reason}. Memory will grow unbounded across iterations. This pattern is not yet supported in long-running loops — please file an issue with your case if it blocks you.\n")
     end
     {do_rescue: do_rescue, rescue_roots: rescue_roots, pinned_rescue_roots: pinned_rescue_roots}
   end
@@ -4047,6 +4055,40 @@ fn make_codegen(source_name, module_bindings = nil)
     push(extern_c_decls, "{c_ret} {name}({c_params});")
   end
 
+  # Emit arity + per-argument type validation at the top of an extern wrapper.
+  # Matches the diagnostic style of runtime builtins (see runtime/gem_builtins_*.c):
+  # one snprintf'd error mentioning the arg index, declared type, and observed type.
+  # Without this, a Gem-side mistake (wrong arity, wrong type) reads garbage out of
+  # the GemVal union and passes it to C.
+  let emit_extern_validation = fn(b, name, params)
+    let n = len(params)
+    if n > 0
+      buf_push(b, "    if (argc < {n}) \{ char _eb[128]; snprintf(_eb, sizeof(_eb), \"{name}: expected {n} argument(s), got %d\", argc); gem_error(_eb); }\n")
+    end
+    for i = 0, n
+      let ptype = params[i]["type"]
+      let val_tag = nil
+      if ptype == "Int"
+        val_tag = "VAL_INT"
+      elif ptype == "Float"
+        val_tag = "VAL_FLOAT"
+      elif ptype == "String"
+        val_tag = "VAL_STRING"
+      elif ptype == "Bool"
+        val_tag = "VAL_BOOL"
+      elif ptype == "Ptr"
+        val_tag = "VAL_INT"
+      elif ptype == "Bytes"
+        val_tag = "VAL_STRING"
+      elif ptype == "Table"
+        val_tag = "VAL_TABLE"
+      end
+      if val_tag != nil
+        buf_push(b, "    if (args[{i}].type != {val_tag}) \{ char _eb[128]; snprintf(_eb, sizeof(_eb), \"{name}: arg {i} expected {ptype}, got %s\", gem_type_str(args[{i}])); gem_error(_eb); }\n")
+      end
+    end
+  end
+
   compile_extern_fn = fn(node)
     let {name, params, ret_type} = node
 
@@ -4056,6 +4098,7 @@ fn make_codegen(source_name, module_bindings = nil)
 
     let b = buf_new()
     buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
+    emit_extern_validation(b, name, params)
 
     let c_args = []
     for i = 0, len(params)
@@ -4204,6 +4247,7 @@ fn make_codegen(source_name, module_bindings = nil)
 
     # 3. Gem wrapper function
     buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
+    emit_extern_validation(b, name, params)
 
     # Extract args from GemVal
     for i = 0, len(params)

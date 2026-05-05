@@ -1,0 +1,20 @@
+# Extern fn arity / type validation at the Gem→C boundary.
+#
+# Generated `extern fn` wrappers check argc and each arg's GemVal type tag
+# before reading args[i].sval/ival. Without this, a Gem-side mistake (wrong
+# arity, wrong type) would read garbage out of the union and pass it to C —
+# resulting in a corrupt pointer or value, depending on the C function's
+# tolerance. The wrapper now errors at the boundary with a typed message,
+# matching the discipline runtime builtins already follow.
+
+extern include "string.h"
+extern fn strlen(s: String) -> Int
+
+let r1 = pcall strlen()
+print("missing:", r1.ok, r1.error)
+
+let r2 = pcall strlen(42)
+print("wrong type:", r2.ok, r2.error)
+
+let r3 = strlen("hello")
+print("ok:", r3)

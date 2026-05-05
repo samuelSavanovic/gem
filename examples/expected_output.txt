@@ -1152,3 +1152,6 @@ hibyeABCDXYZ
 s1 len=6 wrote=6
 s2 len=5 wrote=5
 s3 len=5 wrote=5
+missing: false strlen: expected 1 argument(s), got 0
+wrong type: false strlen: arg 0 expected String, got int
+ok: 5
