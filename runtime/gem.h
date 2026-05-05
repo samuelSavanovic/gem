@@ -340,6 +340,7 @@ const char *gem_type_str(GemVal v);
 GemVal gem_len_val(GemVal v);
 void gem_error(const char *msg);
 GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc);
+void gem_check_callable(GemVal v, const char *file, int line);
 GemVal gem_keys(GemVal tbl);
 
 /* ─── Concurrency: mailbox, process table, scheduler ─── */

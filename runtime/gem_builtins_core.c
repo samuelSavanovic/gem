@@ -235,6 +235,16 @@ GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
     return GEM_NIL;
 }
 
+/* ─── Callable check: error cleanly when calling a non-function value ─── */
+
+void gem_check_callable(GemVal v, const char *file, int line) {
+    if (v.type == VAL_FN) return;
+    char buf[128];
+    snprintf(buf, sizeof(buf), "attempt to call %s value", gem_type_str(v));
+    GemVal arg = gem_string(buf);
+    gem_error_at_fn(file, line, &arg, 1);
+}
+
 /* ─── Built-in: len ─── */
 
 GemVal gem_len_val(GemVal v) {

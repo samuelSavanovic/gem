@@ -3149,7 +3149,12 @@ fn make_codegen(source_name)
     let func_r = compile_expr(func)
     let ca = compile_args(args)
     let tmp_fn = tmp()
-    let setup = func_r.setup + ca.setup + "    GemVal {tmp_fn} = {func_r.expr};\n"
+    let line = node.line
+    if line == nil
+      line = 0
+    end
+    let escaped_file = escape_c_string(source_name)
+    let setup = func_r.setup + ca.setup + "    GemVal {tmp_fn} = {func_r.expr};\n    gem_check_callable({tmp_fn}, \"{escaped_file}\", {line});\n"
     if ca.argc == 0
       return {expr: "{tmp_fn}.fn({tmp_fn}.env, NULL, 0)", setup: setup}
     end

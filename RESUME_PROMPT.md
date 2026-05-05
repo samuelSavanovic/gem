@@ -92,3 +92,23 @@ make test-json       # === all tests passed ===
 Two commits, one per item. #1 is the small, immediately-felt win — land it first. #2 is the foundation for the example programs you want to write next.
 
 After this session, the natural follow-up is *writing examples* — the kind of programs that exercise stdlib corners and surface DX gaps you don't currently see. Don't pre-list which examples; let them come from what you actually want to build.
+
+## Next-session item: compile-time check for module member access
+
+Discovered while fixing the line-number bug: `string.foo()` (calling an unknown member on a loaded module) compiles silently. Today the runtime catches it with `gem_check_callable` (commit added in this session), so you get `attempt to call nil value` with a line — but this should fail at compile time.
+
+**The opportunity**: when a `dot` expression's object resolves to a `var` whose name was bound by `load "std/foo"` (or `load "..." as alias`), the compiler can validate the field against the module's exported names.
+
+**Concrete starting point**:
+- `compiler/main.gem` — `load` parsing already records the module path and binding name. Track exports per loaded module: parse the module's `export` statement and stash the set of exported identifiers keyed by the local binding (`string`, or the `as` alias).
+- `compiler/codegen.gem:2938` — `when {tag: "dot", ...}`. If `object` is a `{tag: "var", name: N}` and `N` is a known module binding, check `field` against the recorded exports. Mismatch → `[Compile Error]: module 'string' has no export 'foo'` with `node.line`. Bonus: did-you-mean suggestion via Levenshtein over exports.
+- Skip the check if the local name has been shadowed (let-rebound to a non-module value) — `local_names` / `set_contains` checks already exist nearby.
+- The selective-import form `load "std/string" (split, trim)` doesn't create a module-binding dot path, so it's unaffected.
+
+**Test cases**:
+- `string.foo()` → compile error with line + suggestion.
+- `let s = something_else_returning_table; s.foo()` → still allowed (no module binding for `s`).
+- `let string = {foo: fn() ... end}; string.foo()` after `load "std/string"` → allowed (local shadows module).
+- Aliased: `load "std/string" as str; str.foo()` → compile error.
+
+Don't remove the runtime `gem_check_callable` guard — it's still the right safety net for genuinely dynamic calls (table dispatch, closures from data).
