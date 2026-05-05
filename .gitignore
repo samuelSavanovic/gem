@@ -17,3 +17,4 @@ test_push_buf
 examples/bookmark_app/app
 benchmarks/logs/
 .DS_Store
+RESUME_PROMPT.md
