@@ -38,7 +38,7 @@ The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.
 
 Nine types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`, `Ref`. All dynamically typed. Every value is a tagged C union. Yes this means primitives are boxed and slow — doesn't matter for v0. Future optimization: NaN-boxing to pack ints, bools, and nil into a double's NaN space, eliminating heap allocation for primitives.
 
-Strings are binary-safe: they carry an explicit byte length, so `"\0"` is a 1-byte string, `len(s)` reports byte length (not strlen), and embedded NULs survive concatenation, indexing, equality, `build_string`, `tcp_write`, and `read_file`/`write_file` round-trips. Strings remain NUL-terminated for C interop convenience; the byte after the last content byte is always `\0`. **Caveat — `extern fn`:** when a Gem `String` is passed to an `extern fn ... -> ... s: String` parameter, it marshals as `const char *` and the C side will see only the bytes up to the first NUL. Use a `Buffer` if the C function needs binary data. A future `Bytes` extern type (see ROADMAP) will marshal as `(const char *, int)` to fix this.
+Strings are binary-safe: they carry an explicit byte length, so `"\0"` is a 1-byte string, `len(s)` reports byte length (not strlen), and embedded NULs survive concatenation, indexing, equality, `build_string`, `tcp_write`, and `read_file`/`write_file` round-trips. Strings remain NUL-terminated for C interop convenience; the byte after the last content byte is always `\0`. **Caveat — `extern fn`:** when a Gem `String` is passed to an `extern fn ... s: String` parameter, it marshals as `const char *` and the C side will see only the bytes up to the first NUL. Use the `Bytes` extern type (see C Interop) when the C function needs binary data — it marshals the byte length alongside the pointer.
 
 ## Variables
 
@@ -570,7 +570,70 @@ puts("hello from C")
 
 `extern fn` declares a C function. The compiler emits the call directly since we compile to C. Type annotations on extern declarations only — the rest of the language stays dynamically typed. `Ptr` is an opaque type for C pointers.
 
-The compiler auto-generates C forward declarations from `extern fn` type signatures, so no separate `.h` file is needed for function declarations. The type mapping: `Int` → `int64_t`, `Float` → `double`, `String` → `const char*` (params) / `char*` (returns), `Bool` → `int`, `Ptr` → `void*`, `Nil` → `void`, `Table` → `GemVal`. Auto-generation is skipped when `extern include` is present (the user manages declarations via headers).
+The compiler auto-generates C forward declarations from `extern fn` type signatures, so no separate `.h` file is needed for function declarations. The type mapping:
+
+| Gem extern type | C parameter        | C return        |
+|-----------------|--------------------|-----------------|
+| `Int`           | `int64_t`          | `int64_t`       |
+| `Float`         | `double`           | `double`        |
+| `String`        | `const char*`      | `char*`         |
+| `Bool`          | `int`              | `int`           |
+| `Ptr`           | `void*`            | `void*`         |
+| `Nil`           | —                  | `void`          |
+| `Table`         | `GemVal`           | `GemVal`        |
+| `Bytes`         | `const uint8_t*, int64_t` (two C parameters) | `GemBytes` (struct, see below) |
+
+Auto-generation is skipped when `extern include` is present (the user manages declarations via headers).
+
+### `Bytes` — binary-safe FFI
+
+`Bytes` is for binary data that may contain embedded NULs (compressed payloads, crypto blobs, length-framed protocols). Unlike `String`, which marshals as a NUL-terminated `const char *` and is implicitly truncated at the first `\0` on the C side, a `Bytes` parameter expands to **two** C parameters — pointer + length — so the C function knows the exact byte count.
+
+```
+extern fn write(fd: Int, buf: Bytes) -> Int          # POSIX write(int, const void*, size_t)
+extern fn sha256(data: Bytes, out: Bytes) -> Nil     # in-place hash
+```
+
+The first declaration generates the C call `write(fd, buf, buf_len)` — three C arguments from two Gem arguments. This matches POSIX `write` exactly.
+
+**Constructing a `Bytes` argument from Gem.** There is no separate `Bytes` type at the Gem level — a `Bytes` parameter accepts any Gem `String`. Strings are already binary-safe (`len(s)` is the byte length, embedded NULs are preserved), so any operation that produces a string produces a valid `Bytes` payload:
+
+```
+let s1 = "header\0\x01\x02data"          # literal with embedded NUL
+let s2 = read_file("/path/to/blob")      # raw file bytes
+let s3 = tcp_read(sock, 1024)            # raw socket bytes
+let s4 = build_string() do |add|         # assembled binary
+  add(magic_header)
+  add(chr(0))
+  add(payload)
+end
+write(fd, s4)                            # all four work as Bytes args
+```
+
+The `Bytes` annotation only changes how the value crosses the C boundary — it does not introduce a runtime type or require a conversion call.
+
+**Returning `Bytes` from C.** A `-> Bytes` return type expects the C function to return a `GemBytes` struct (defined in `gem.h`):
+
+```c
+typedef struct { const uint8_t *data; int64_t len; } GemBytes;
+
+GemBytes my_compress(const uint8_t *src, int64_t src_len) {
+    int64_t out_len;
+    uint8_t *out = compress_alloc(src, src_len, &out_len);
+    return gem_bytes(out, out_len);   // helper from gem.h
+}
+```
+
+The runtime copies `data[0..len)` into the calling process's arena via `gem_string_with_len`, producing a binary-safe Gem string. Ownership of the returned buffer follows the same rule as `String` returns:
+
+- `extern fn` (non-blocking): runtime does **not** free `data`. Use static storage, or accept the leak. For malloc'd returns, prefer `extern blocking fn`.
+- `extern blocking fn`: runtime **frees** `data` with `free()` after copying. The C function must return a malloc'd pointer (or `{NULL, 0}` for empty).
+
+Returning `{NULL, 0}` from a non-blocking `extern fn -> Bytes` yields `nil` on the Gem side; from a blocking variant it yields an empty string.
+
+**Why use `Bytes` instead of `String`?** `String` is the right choice when the C function only needs NUL-terminated text (`getenv`, `strerror`, `puts`). `Bytes` is the right choice when the function needs the exact byte count or may receive data containing `0x00`. Mixing them up is a common FFI bug — Gem's `String` is binary-safe internally but the C ABI for `const char *` is not.
+
+
 
 `extern blocking fn` declares a C function that may block (e.g. socket I/O, database calls, DNS lookups). When called from a coroutine (`spawn`), the call is submitted to a thread pool so the scheduler can continue running other coroutines. When called outside a coroutine, it calls directly (synchronous). The C function runs on a worker thread and must not allocate from process arenas — for `String` returns, use `malloc`/`strdup` (the runtime copies into the process's arena and frees the original).
 
@@ -591,7 +654,7 @@ extern include "stdio.h"
 - `extern fn` (non-blocking) — the runtime copies the returned `char*` into the calling process's arena via `gem_string` and **does not free the original**. Use this for static literals (`getenv`, `strerror`, etc.). A `malloc`'d return will leak.
 - `extern blocking fn` — the runtime copies into the arena and **frees the original** with `free`. The C function must return a `malloc`/`strdup`'d pointer; returning a static literal will crash on the free. NULL is allowed and yields an empty string in the blocking path, or `nil` in the non-blocking path.
 
-**Pointer lifetime.** `String` and `Table` arguments passed to a C function point into the calling process's arena. They are stable for the duration of the call but **not** across the next arena reset (which can happen at any TCO back-edge or process-tail loop iteration). C code must not stash these pointers — copy out with `strdup` or by value before retaining.
+**Pointer lifetime.** `String`, `Bytes`, and `Table` arguments passed to a C function point into the calling process's arena. They are stable for the duration of the call but **not** across the next arena reset (which can happen at any TCO back-edge or process-tail loop iteration). C code must not stash these pointers — copy out with `strdup`, `memcpy`, or by value before retaining.
 
 `extern` is unsafe by definition: arity, type, and ABI are not validated at the boundary. A Gem-side mistake silently passes garbage to C.
 

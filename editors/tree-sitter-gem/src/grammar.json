@@ -412,6 +412,10 @@
         {
           "type": "STRING",
           "value": "Fn"
+        },
+        {
+          "type": "STRING",
+          "value": "Bytes"
         }
       ]
     },

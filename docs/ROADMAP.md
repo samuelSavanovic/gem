@@ -60,18 +60,13 @@ Replace a module's compiled code in a running node without dropping state. Erlan
 
 `load` today resolves stdlib (`std/...`) and project-local paths. There is no story for depending on third-party Gem code — no manifest, no fetch, no version pinning, no lockfile. Becomes pressing the moment a second real Gem app wants to share code with the first. Likely shape: a `gem.toml` manifest, a `gem_modules/` (or `.gem/deps/`) cache, git-URL or registry-based resolution, lockfile for reproducibility. Design intentionally deferred until pull from real users.
 
-## `Bytes` extern type (P1)
+## ~~`Bytes` extern type~~ ✓ Done (2026-05-05)
 
-Gem strings are binary-safe internally (slen-tracked, embedded NULs preserved), but `extern fn foo(s: String)` marshals as `const char *` — the C side calls `strlen`/walks until NUL, so a Gem string with embedded NULs is silently truncated at the FFI boundary. Today the workaround is to pass a `Buffer`, but `Buffer` doesn't currently round-trip cleanly through `extern fn` either.
+`extern fn foo(b: Bytes) -> Bytes` now marshals binary-safe data across the FFI boundary. A `Bytes` parameter expands to two C parameters `(const uint8_t *data, int64_t len)`, sourced from `args[i].sval` and `args[i].slen` so embedded NULs survive. A `Bytes` return uses the small `GemBytes { data, len }` struct from `gem.h` (with a `gem_bytes(ptr, len)` helper); the runtime copies into the calling process's arena via `gem_string_with_len`.
 
-**What needs building:**
+Ownership of returned data mirrors `String`: non-blocking `extern fn` does not free the original (use static storage or accept the leak); `extern blocking fn` frees with `free()` after copying. The blocking path also `memcpy`s `Bytes` arguments into a malloc'd thread-safe buffer for the duration of the worker call.
 
-- A `Bytes` annotation in `extern fn` signatures that marshals as two C parameters: `const char *data, int len`. Mirrors how most C libraries take binary data.
-- Same on the return side — `-> Bytes` marshals as out-params or a small struct, decision TBD.
-- Codegen: extend `extern-type-annotation` in both editor grammars; update SPEC's C interop section.
-- Keep `String` extern marshaling as-is (NUL-terminated `const char *`) since most C string APIs want that.
-
-Small change, big quality-of-life win for protocol/binary work that bridges to C libs (compression, crypto, parsing). Pairs naturally with the binary-safe-string work already done.
+There is no separate Bytes type at the Gem level — a `Bytes` parameter accepts any Gem string (file contents, `tcp_read` output, `build_string` output), since strings are already binary-safe. The annotation only changes how the value crosses the C boundary. SPEC §C-Interop has the type mapping table, ownership rules, and construction recipes; `examples/90_bytes_extern.gem` is the regression. Editor grammars (VS Code, Helix tree-sitter) updated to recognise `Bytes` in extern type annotations.
 
 ## Debugger / breakpoints (P2)
 

@@ -1,0 +1,37 @@
+# Bytes extern type — binary-safe FFI marshaling.
+#
+# `extern fn ... buf: Bytes` expands `buf` to two C parameters
+# `(const uint8_t *buf, int64_t buf_len)`, so embedded NULs survive across
+# the C boundary. POSIX `write(int, const void*, size_t)` matches that
+# layout exactly.
+#
+# We construct binary-safe payloads three ways: a string literal with `\0`,
+# a buffer assembled via `buf_new`/`push`/`to_string`, and a `read_file`
+# round-trip. All three should report the true byte length on the C side.
+#
+# Note: `write` is unbuffered while `print` is line/full-buffered — the
+# binary write output appears at issue time; print output flushes at exit.
+# Embedded NULs are stripped by the test harness's bash command-substitution
+# capture, so the binary blobs render as `hibyeABCDXYZ` in the diff.
+
+extern fn write(fd: Int, buf: Bytes) -> Int
+
+let s1 = "hi\0bye"
+let n1 = write(1, s1)
+
+let b = buf_new()
+push(b, "AB")
+push(b, "\0")
+push(b, "CD")
+let s2 = to_string(b)
+let n2 = write(1, s2)
+
+write_file("/tmp/gem_bytes_test", "X\0Y\0Z")
+let s3 = read_file("/tmp/gem_bytes_test")
+let n3 = write(1, s3)
+remove_file("/tmp/gem_bytes_test")
+
+print("")
+print("s1 len={len(s1)} wrote={n1}")
+print("s2 len={len(s2)} wrote={n2}")
+print("s3 len={len(s3)} wrote={n3}")

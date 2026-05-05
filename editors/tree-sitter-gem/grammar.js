@@ -92,7 +92,7 @@ module.exports = grammar({
       field('type', $.type),
     ),
 
-    type: $ => choice('Int', 'Float', 'String', 'Bool', 'Nil', 'Ptr', 'Table', 'Fn'),
+    type: $ => choice('Int', 'Float', 'String', 'Bool', 'Nil', 'Ptr', 'Table', 'Fn', 'Bytes'),
 
     load_statement: $ => seq('load', $._string),
 

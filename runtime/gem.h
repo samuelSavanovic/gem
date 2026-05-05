@@ -136,6 +136,30 @@ GemVal gem_bool(int v);
 GemVal gem_string(const char *s);
 GemVal gem_string_with_len(const char *s, int len);  /* binary-safe; copies len bytes and appends a trailing '\0' */
 GemVal gem_make_fn(GemFnPtr f, void *env);
+
+/* ─── extern fn `Bytes` marshaling ───
+ *
+ * `extern fn foo(b: Bytes) -> Bytes` declares a parameter that is binary-safe
+ * across the C boundary. A `Bytes` parameter expands to TWO C parameters:
+ *     foo(const uint8_t *b, int64_t b_len)
+ * A `Bytes` return value is the small struct below; the runtime copies the
+ * data into the calling process's arena via gem_string_with_len().
+ *
+ * Ownership of the returned `data` mirrors `String`:
+ *   - non-blocking `extern fn`     : runtime does NOT free the original.
+ *                                    Use static storage or accept the leak.
+ *   - blocking `extern blocking fn`: runtime frees with free(); the C side
+ *                                    must return a malloc'd pointer (or
+ *                                    {NULL, 0} for empty).
+ */
+typedef struct {
+    const uint8_t *data;
+    int64_t len;
+} GemBytes;
+
+static inline GemBytes gem_bytes(const void *data, int64_t len) {
+    GemBytes b; b.data = (const uint8_t *)data; b.len = len; return b;
+}
 GemVal gem_make_ref(void);
 
 /* ─── Table internals (shared across runtime files) ─── */

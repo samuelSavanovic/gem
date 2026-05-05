@@ -4009,16 +4009,20 @@ fn make_codegen(source_name, module_bindings = nil)
       c_ret = "void*"
     elif ret_type == "Table"
       c_ret = "GemVal"
+    elif ret_type == "Bytes"
+      c_ret = "GemBytes"
     end
 
     let c_params = ""
     if len(params) == 0
       c_params = "void"
     else
+      let first = true
       for i = 0, len(params)
-        if i > 0
+        if not first
           c_params = c_params + ", "
         end
+        first = false
         let pt = params[i]["type"]
         if pt == "Int"
           c_params = c_params + "int64_t"
@@ -4032,6 +4036,8 @@ fn make_codegen(source_name, module_bindings = nil)
           c_params = c_params + "void*"
         elif pt == "Table"
           c_params = c_params + "GemVal"
+        elif pt == "Bytes"
+          c_params = c_params + "const uint8_t*, int64_t"
         else
           c_params = c_params + "GemVal"
         end
@@ -4070,6 +4076,11 @@ fn make_codegen(source_name, module_bindings = nil)
       elif ptype == "Ptr"
         buf_push(b, "    void* _p{i} = (void*)(intptr_t)args[{i}].ival;\n")
         push(c_args, "_p{i}")
+      elif ptype == "Bytes"
+        buf_push(b, "    const uint8_t* _p{i} = (const uint8_t*)args[{i}].sval;\n")
+        buf_push(b, "    int64_t _p{i}_len = (int64_t)args[{i}].slen;\n")
+        push(c_args, "_p{i}")
+        push(c_args, "_p{i}_len")
       elif ptype == "Table"
         push(c_args, "args[{i}]")
       else
@@ -4108,6 +4119,9 @@ fn make_codegen(source_name, module_bindings = nil)
     elif ret_type == "Ptr"
       buf_push(b, "    void *_ret = {call_expr};\n")
       buf_push(b, "    return gem_int((int64_t)(intptr_t)_ret);\n")
+    elif ret_type == "Bytes"
+      buf_push(b, "    GemBytes _ret = {call_expr};\n")
+      buf_push(b, "    return _ret.data ? gem_string_with_len((const char*)_ret.data, (int)_ret.len) : GEM_NIL;\n")
     else
       buf_push(b, "    {call_expr};\n")
       buf_push(b, "    return GEM_NIL;\n")
@@ -4142,6 +4156,9 @@ fn make_codegen(source_name, module_bindings = nil)
         buf_push(b, "    int _p{i};\n")
       elif ptype == "Ptr"
         buf_push(b, "    void *_p{i};\n")
+      elif ptype == "Bytes"
+        buf_push(b, "    uint8_t *_p{i};\n")
+        buf_push(b, "    int64_t _p{i}_len;\n")
       end
     end
     if ret_type == "Int"
@@ -4154,6 +4171,8 @@ fn make_codegen(source_name, module_bindings = nil)
       buf_push(b, "    int _result;\n")
     elif ret_type == "Ptr"
       buf_push(b, "    void *_result;\n")
+    elif ret_type == "Bytes"
+      buf_push(b, "    GemBytes _result;\n")
     end
     buf_push(b, "};\n\n")
 
@@ -4162,11 +4181,17 @@ fn make_codegen(source_name, module_bindings = nil)
     buf_push(b, "    struct _blk_{name}_args *a = (struct _blk_{name}_args *)_a;\n")
 
     let w_args = ""
+    let w_first = true
     for i = 0, len(params)
-      if i > 0
+      if not w_first
         w_args = w_args + ", "
       end
-      w_args = w_args + "a->_p{i}"
+      w_first = false
+      if params[i]["type"] == "Bytes"
+        w_args = w_args + "a->_p{i}, a->_p{i}_len"
+      else
+        w_args = w_args + "a->_p{i}"
+      end
     end
     let w_call = "{name}({w_args})"
 
@@ -4193,6 +4218,9 @@ fn make_codegen(source_name, module_bindings = nil)
         buf_push(b, "    int _p{i} = args[{i}].bval;\n")
       elif ptype == "Ptr"
         buf_push(b, "    void* _p{i} = (void*)(intptr_t)args[{i}].ival;\n")
+      elif ptype == "Bytes"
+        buf_push(b, "    const uint8_t* _p{i} = (const uint8_t*)args[{i}].sval;\n")
+        buf_push(b, "    int64_t _p{i}_len = (int64_t)args[{i}].slen;\n")
       end
     end
 
@@ -4200,11 +4228,15 @@ fn make_codegen(source_name, module_bindings = nil)
     buf_push(b, "    if (gem_current_pid >= 0) \{\n")
     buf_push(b, "        struct _blk_{name}_args *_ba = (struct _blk_{name}_args *)malloc(sizeof(struct _blk_{name}_args));\n")
 
-    # Copy args into struct (strdup strings for thread safety)
+    # Copy args into struct (strdup strings / memcpy bytes for thread safety)
     for i = 0, len(params)
       let ptype = params[i]["type"]
       if ptype == "String"
         buf_push(b, "        _ba->_p{i} = strdup(_p{i});\n")
+      elif ptype == "Bytes"
+        buf_push(b, "        _ba->_p{i} = (uint8_t*)malloc((size_t)_p{i}_len);\n")
+        buf_push(b, "        if (_p{i}_len > 0) memcpy(_ba->_p{i}, _p{i}, (size_t)_p{i}_len);\n")
+        buf_push(b, "        _ba->_p{i}_len = _p{i}_len;\n")
       else
         buf_push(b, "        _ba->_p{i} = _p{i};\n")
       end
@@ -4220,6 +4252,8 @@ fn make_codegen(source_name, module_bindings = nil)
     # Read result, free strdup'd strings, free args struct, free IO request
     if ret_type == "String"
       buf_push(b, "        char *_raw = _ba->_result;\n")
+    elif ret_type == "Bytes"
+      buf_push(b, "        GemBytes _raw = _ba->_result;\n")
     elif ret_type != "Nil"
       let c_type = "int64_t"
       if ret_type == "Float"
@@ -4232,9 +4266,10 @@ fn make_codegen(source_name, module_bindings = nil)
       buf_push(b, "        {c_type} _ret = _ba->_result;\n")
     end
 
-    # Free strdup'd string inputs
+    # Free strdup'd / memcpy'd inputs
     for i = 0, len(params)
-      if params[i]["type"] == "String"
+      let pt = params[i]["type"]
+      if pt == "String" or pt == "Bytes"
         buf_push(b, "        free(_ba->_p{i});\n")
       end
     end
@@ -4252,6 +4287,10 @@ fn make_codegen(source_name, module_bindings = nil)
       buf_push(b, "        char *_gc = (char *)gem_alloc(_len + 1);\n")
       buf_push(b, "        if (_raw) \{ memcpy(_gc, _raw, _len + 1); free(_raw); } else \{ _gc[0] = '\\0'; }\n")
       buf_push(b, "        return gem_string(_gc);\n")
+    elif ret_type == "Bytes"
+      buf_push(b, "        GemVal _gv = _raw.data ? gem_string_with_len((const char*)_raw.data, (int)_raw.len) : gem_string_with_len(\"\", 0);\n")
+      buf_push(b, "        if (_raw.data) free((void*)_raw.data);\n")
+      buf_push(b, "        return _gv;\n")
     elif ret_type == "Bool"
       buf_push(b, "        return gem_bool(_ret);\n")
     elif ret_type == "Ptr"
@@ -4263,11 +4302,17 @@ fn make_codegen(source_name, module_bindings = nil)
 
     # Direct call path (not in a coroutine)
     let d_args = ""
+    let d_first = true
     for i = 0, len(params)
-      if i > 0
+      if not d_first
         d_args = d_args + ", "
       end
-      d_args = d_args + "_p{i}"
+      d_first = false
+      if params[i]["type"] == "Bytes"
+        d_args = d_args + "_p{i}, _p{i}_len"
+      else
+        d_args = d_args + "_p{i}"
+      end
     end
     let d_call = "{name}({d_args})"
 
@@ -4289,6 +4334,11 @@ fn make_codegen(source_name, module_bindings = nil)
     elif ret_type == "Ptr"
       buf_push(b, "    void *_ret = {d_call};\n")
       buf_push(b, "    return gem_int((int64_t)(intptr_t)_ret);\n")
+    elif ret_type == "Bytes"
+      buf_push(b, "    GemBytes _ret = {d_call};\n")
+      buf_push(b, "    GemVal _gv = _ret.data ? gem_string_with_len((const char*)_ret.data, (int)_ret.len) : gem_string_with_len(\"\", 0);\n")
+      buf_push(b, "    if (_ret.data) free((void*)_ret.data);\n")
+      buf_push(b, "    return _gv;\n")
     else
       buf_push(b, "    {d_call};\n")
       buf_push(b, "    return GEM_NIL;\n")

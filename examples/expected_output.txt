@@ -1148,3 +1148,7 @@ false
 12
 true
 count=100 in_order=true
+hibyeABCDXYZ
+s1 len=6 wrote=6
+s2 len=5 wrote=5
+s3 len=5 wrote=5
