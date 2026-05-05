@@ -45,7 +45,7 @@ GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc) {
         }
     }
     *dst = '\0';
-    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = result;
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = result; r.slen = (int)(dst - result);
     return r;
 }
 
@@ -59,7 +59,7 @@ GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
     int64_t slen;
     if (args[0].type == VAL_STRING) {
         s = args[0].sval;
-        slen = (int64_t)strlen(s);
+        slen = (int64_t)args[0].slen;
     } else if (args[0].type == VAL_BUFFER) {
         s = args[0].buffer->data;
         slen = (int64_t)args[0].buffer->len;
@@ -87,7 +87,7 @@ GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
     char *buf = (char *)gem_alloc((size_t)count + 1);
     memcpy(buf, s + start, (size_t)count);
     buf[count] = '\0';
-    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = buf;
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = buf; r.slen = (int)count;
     return r;
 }
 
@@ -99,7 +99,7 @@ GemVal gem_chr_fn(void *_env, GemVal *args, int argc) {
     char buf[2];
     buf[0] = (char)(args[0].ival & 0xFF);
     buf[1] = '\0';
-    return gem_string(buf);
+    return gem_string_with_len(buf, 1);
 }
 
 GemVal gem_ord_fn(void *_env, GemVal *args, int argc) {
@@ -109,7 +109,7 @@ GemVal gem_ord_fn(void *_env, GemVal *args, int argc) {
     int64_t slen;
     if (args[0].type == VAL_STRING) {
         data = args[0].sval;
-        slen = (int64_t)strlen(data);
+        slen = (int64_t)args[0].slen;
     } else if (args[0].type == VAL_BUFFER) {
         data = args[0].buffer->data;
         slen = (int64_t)args[0].buffer->len;
@@ -150,7 +150,7 @@ GemVal gem_interp(int n, GemVal *parts) {
         const char *s;
         int slen;
         switch (parts[i].type) {
-            case VAL_STRING: s = parts[i].sval; slen = (int)strlen(s); break;
+            case VAL_STRING: s = parts[i].sval; slen = parts[i].slen; break;
             case VAL_INT: slen = snprintf(tmp, sizeof(tmp), "%lld", (long long)parts[i].ival); s = tmp; break;
             case VAL_FLOAT: slen = snprintf(tmp, sizeof(tmp), "%g", parts[i].fval); s = tmp; break;
             case VAL_BOOL: s = parts[i].bval ? "true" : "false"; slen = parts[i].bval ? 4 : 5; break;
@@ -160,7 +160,7 @@ GemVal gem_interp(int n, GemVal *parts) {
                  * into a fresh string and route through `s`/`slen`. */
                 GemVal fmt = gem_format_value_string(parts[i]);
                 s = fmt.sval;
-                slen = (int)strlen(s);
+                slen = fmt.slen;
                 break;
             }
             case VAL_FN: s = "<fn>"; slen = 4; break;
@@ -177,6 +177,7 @@ GemVal gem_interp(int n, GemVal *parts) {
     r.type = VAL_STRING;
     r.magic = GEM_MAGIC;
     r.sval = s;
+    r.slen = len;
     return r;
 }
 
@@ -205,21 +206,22 @@ GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc) {
     GemBuffer *b = args[0].buffer;
     /* Coerce second argument to string */
     const char *s;
+    int slen;
     char tmp[64];
     GemVal fmt_holder = GEM_NIL;
     switch (args[1].type) {
-        case VAL_STRING: s = args[1].sval; break;
-        case VAL_INT: snprintf(tmp, sizeof(tmp), "%lld", (long long)args[1].ival); s = tmp; break;
-        case VAL_FLOAT: snprintf(tmp, sizeof(tmp), "%g", args[1].fval); s = tmp; break;
-        case VAL_BOOL: s = args[1].bval ? "true" : "false"; break;
-        case VAL_NIL: s = "nil"; break;
+        case VAL_STRING: s = args[1].sval; slen = args[1].slen; break;
+        case VAL_INT: slen = snprintf(tmp, sizeof(tmp), "%lld", (long long)args[1].ival); s = tmp; break;
+        case VAL_FLOAT: slen = snprintf(tmp, sizeof(tmp), "%g", args[1].fval); s = tmp; break;
+        case VAL_BOOL: s = args[1].bval ? "true" : "false"; slen = args[1].bval ? 4 : 5; break;
+        case VAL_NIL: s = "nil"; slen = 3; break;
         case VAL_TABLE:
             fmt_holder = gem_format_value_string(args[1]);
             s = fmt_holder.sval;
+            slen = fmt_holder.slen;
             break;
-        default: s = ""; break;
+        default: s = ""; slen = 0; break;
     }
-    int slen = (int)strlen(s);
     /* Grow buffer if needed */
     while (b->len + slen >= b->cap) {
         int new_cap = b->cap * 2;
@@ -270,5 +272,6 @@ GemVal gem_build_string_fn(void *_env, GemVal *args, int argc) {
     r.type = VAL_STRING;
     r.magic = GEM_MAGIC;
     r.sval = s;
+    r.slen = b->len;
     return r;
 }

@@ -83,7 +83,7 @@ struct GemVal {
     union {
         int64_t ival;
         double fval;
-        char *sval;
+        struct { char *sval; int slen; };  /* slen tracks byte length so strings are binary-safe (may contain embedded NULs); sval[slen] == '\0' is maintained as an invariant for C interop. */
         int bval;
         struct { GemFnPtr fn; void *env; };
         GemTable *table;
@@ -134,6 +134,7 @@ GemVal gem_int(int64_t v);
 GemVal gem_float(double v);
 GemVal gem_bool(int v);
 GemVal gem_string(const char *s);
+GemVal gem_string_with_len(const char *s, int len);  /* binary-safe; copies len bytes and appends a trailing '\0' */
 GemVal gem_make_fn(GemFnPtr f, void *env);
 GemVal gem_make_ref(void);
 

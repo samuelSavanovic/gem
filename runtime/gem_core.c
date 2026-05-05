@@ -65,6 +65,7 @@ void gem_init_char_cache(void) {
         gem_char_cache[i].type = VAL_STRING;
         gem_char_cache[i].magic = GEM_MAGIC;
         gem_char_cache[i].sval = s;
+        gem_char_cache[i].slen = 1;
     }
     gem_char_cache_ready = 1;
 }
@@ -91,9 +92,21 @@ GemVal gem_string(const char *s) {
     GemVal r;
     r.type = VAL_STRING;
     r.magic = GEM_MAGIC;
-    size_t len = strlen(s) + 1;
-    r.sval = (char *)gem_alloc(len);
-    memcpy(r.sval, s, len);
+    size_t len = strlen(s);
+    r.sval = (char *)gem_alloc(len + 1);
+    memcpy(r.sval, s, len + 1);
+    r.slen = (int)len;
+    return r;
+}
+
+GemVal gem_string_with_len(const char *s, int len) {
+    GemVal r;
+    r.type = VAL_STRING;
+    r.magic = GEM_MAGIC;
+    r.sval = (char *)gem_alloc((size_t)len + 1);
+    if (len > 0) memcpy(r.sval, s, (size_t)len);
+    r.sval[len] = '\0';
+    r.slen = len;
     return r;
 }
 
@@ -195,7 +208,7 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
     if (tbl.type == VAL_STRING) {
         if (key.type != VAL_INT) { char buf[128]; snprintf(buf, sizeof(buf), "string index must be int, got %s", gem_type_str(key)); gem_error(buf); }
         int64_t idx = key.ival;
-        int64_t slen = (int64_t)strlen(tbl.sval);
+        int64_t slen = (int64_t)tbl.slen;
         if (idx < 0) idx = slen + idx;
         if (idx < 0 || idx >= slen) { gem_error("string index out of bounds"); }
         return gem_char_cache[(unsigned char)tbl.sval[idx]];

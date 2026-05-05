@@ -213,26 +213,26 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
                 char *s = (char *)gem_alloc(n + 1);
                 memcpy(s, buf, n);
                 s[n] = '\0';
-                GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s;
+                GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s; r.slen = (int)n;
                 return r;
             }
             if (n == 0) {
                 proc->deadline_ms = -1;
-                GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = "";
+                GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = ""; r.slen = 0;
                 return r;
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 gem_io_yield(fd, 0);
                 if (proc->timed_out) {
                     proc->timed_out = 0;
-                    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = "";
+                    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = ""; r.slen = 0;
                     return r;
                 }
                 continue;
             }
             if (errno == ECONNRESET) {
                 proc->deadline_ms = -1;
-                GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = "";
+                GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = ""; r.slen = 0;
                 return r;
             }
             proc->deadline_ms = -1;
@@ -251,7 +251,7 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
         gem_error(errbuf);
     }
     buf[n] = '\0';
-    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = buf;
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = buf; r.slen = (int)n;
     return r;
 }
 
@@ -259,12 +259,19 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 2 || args[0].type != VAL_INT || args[1].type != VAL_STRING) {
-        gem_error("tcp_write: expected (int socket_fd, string data)");
+    if (argc < 2 || args[0].type != VAL_INT || (args[1].type != VAL_STRING && args[1].type != VAL_BUFFER)) {
+        gem_error("tcp_write: expected (int socket_fd, string|buffer data)");
     }
     int fd = (int)args[0].ival;
-    const char *data = args[1].sval;
-    size_t total = strlen(data);
+    const char *data;
+    size_t total;
+    if (args[1].type == VAL_STRING) {
+        data = args[1].sval;
+        total = (size_t)args[1].slen;
+    } else {
+        data = args[1].buffer->data;
+        total = (size_t)args[1].buffer->len;
+    }
 
     if (gem_current_pid >= 0) {
         size_t sent = 0;

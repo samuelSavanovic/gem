@@ -38,6 +38,8 @@ The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.
 
 Nine types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`, `Ref`. All dynamically typed. Every value is a tagged C union. Yes this means primitives are boxed and slow — doesn't matter for v0. Future optimization: NaN-boxing to pack ints, bools, and nil into a double's NaN space, eliminating heap allocation for primitives.
 
+Strings are binary-safe: they carry an explicit byte length, so `"\0"` is a 1-byte string, `len(s)` reports byte length (not strlen), and embedded NULs survive concatenation, indexing, equality, `build_string`, `tcp_write`, and `read_file`/`write_file` round-trips. Strings remain NUL-terminated for C interop convenience; the byte after the last content byte is always `\0`. **Caveat — `extern fn`:** when a Gem `String` is passed to an `extern fn ... -> ... s: String` parameter, it marshals as `const char *` and the C side will see only the bytes up to the first NUL. Use a `Buffer` if the C function needs binary data. A future `Bytes` extern type (see ROADMAP) will marshal as `(const char *, int)` to fix this.
+
 ## Variables
 
 ```

@@ -10,11 +10,12 @@ GemVal gem_add(GemVal a, GemVal b) {
     if (a.type == VAL_INT && b.type == VAL_FLOAT) return gem_float((double)a.ival + b.fval);
     if (a.type == VAL_FLOAT && b.type == VAL_INT) return gem_float(a.fval + (double)b.ival);
     if (a.type == VAL_STRING && b.type == VAL_STRING) {
-        size_t la = strlen(a.sval), lb = strlen(b.sval);
+        size_t la = (size_t)a.slen, lb = (size_t)b.slen;
         char *s = (char *)gem_alloc(la + lb + 1);
         memcpy(s, a.sval, la);
-        memcpy(s + la, b.sval, lb + 1);
-        GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s; return r;
+        memcpy(s + la, b.sval, lb);
+        s[la + lb] = '\0';
+        GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s; r.slen = (int)(la + lb); return r;
     }
     { char buf[128]; snprintf(buf, sizeof(buf), "type error in +: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
@@ -68,7 +69,7 @@ GemVal gem_eq(GemVal a, GemVal b) {
         case VAL_BOOL: return gem_bool(a.bval == b.bval);
         case VAL_INT: return gem_bool(a.ival == b.ival);
         case VAL_FLOAT: return gem_bool(a.fval == b.fval);
-        case VAL_STRING: return gem_bool(strcmp(a.sval, b.sval) == 0);
+        case VAL_STRING: return gem_bool(a.slen == b.slen && memcmp(a.sval, b.sval, (size_t)a.slen) == 0);
         case VAL_REF: return gem_bool(a.rval == b.rval);
         default: return gem_bool(0);
     }
@@ -106,7 +107,7 @@ void gem_string_append(GemVal *accum, GemVal rhs) {
     } else if (accum->type == VAL_STRING) {
         GemBuffer *b = (GemBuffer *)gem_alloc(sizeof(GemBuffer));
         b->cap = 64;
-        int slen = (int)strlen(accum->sval);
+        int slen = accum->slen;
         while (b->cap <= slen) b->cap *= 2;
         b->data = (char *)gem_alloc(b->cap);
         memcpy(b->data, accum->sval, slen);

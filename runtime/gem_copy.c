@@ -123,10 +123,10 @@ static void *gem_copy_alloc(GemCopyMap *map, size_t size) {
     return gem_arena_alloc(gem_current_arena(), size);
 }
 
-static char *gem_copy_strdup(GemCopyMap *map, const char *s) {
-    size_t len = strlen(s) + 1;
-    char *copy = (char *)gem_copy_alloc(map, len);
-    memcpy(copy, s, len);
+static char *gem_copy_strdup(GemCopyMap *map, const char *s, int slen) {
+    char *copy = (char *)gem_copy_alloc(map, (size_t)slen + 1);
+    memcpy(copy, s, (size_t)slen);
+    copy[slen] = '\0';
     return copy;
 }
 
@@ -225,11 +225,12 @@ static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map) {
         case VAL_STRING: {
             if (gem_copy_is_external(map, val.sval)) return val;
             void *existing = gem_copy_map_find(map, val.sval);
-            if (existing) { GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = (char *)existing; return r; }
+            if (existing) { GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = (char *)existing; r.slen = val.slen; return r; }
             GemVal r;
             r.type = VAL_STRING;
             r.magic = GEM_MAGIC;
-            r.sval = gem_copy_strdup(map, val.sval);
+            r.sval = gem_copy_strdup(map, val.sval, val.slen);
+            r.slen = val.slen;
             gem_copy_map_add(map, val.sval, r.sval);
             return r;
         }

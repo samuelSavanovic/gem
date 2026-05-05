@@ -60,6 +60,19 @@ Replace a module's compiled code in a running node without dropping state. Erlan
 
 `load` today resolves stdlib (`std/...`) and project-local paths. There is no story for depending on third-party Gem code — no manifest, no fetch, no version pinning, no lockfile. Becomes pressing the moment a second real Gem app wants to share code with the first. Likely shape: a `gem.toml` manifest, a `gem_modules/` (or `.gem/deps/`) cache, git-URL or registry-based resolution, lockfile for reproducibility. Design intentionally deferred until pull from real users.
 
+## `Bytes` extern type (P1)
+
+Gem strings are binary-safe internally (slen-tracked, embedded NULs preserved), but `extern fn foo(s: String)` marshals as `const char *` — the C side calls `strlen`/walks until NUL, so a Gem string with embedded NULs is silently truncated at the FFI boundary. Today the workaround is to pass a `Buffer`, but `Buffer` doesn't currently round-trip cleanly through `extern fn` either.
+
+**What needs building:**
+
+- A `Bytes` annotation in `extern fn` signatures that marshals as two C parameters: `const char *data, int len`. Mirrors how most C libraries take binary data.
+- Same on the return side — `-> Bytes` marshals as out-params or a small struct, decision TBD.
+- Codegen: extend `extern-type-annotation` in both editor grammars; update SPEC's C interop section.
+- Keep `String` extern marshaling as-is (NUL-terminated `const char *`) since most C string APIs want that.
+
+Small change, big quality-of-life win for protocol/binary work that bridges to C libs (compression, crypto, parsing). Pairs naturally with the binary-safe-string work already done.
+
 ## Debugger / breakpoints (P2)
 
 Stack traces on `error()` are good; there's no interactive step-through, breakpoint, or variable-inspection story. Pairs with `LSP_ROADMAP.md` but is a separate capability — typically a DAP (Debug Adapter Protocol) server that the runtime cooperates with (instrumented `gem_set_line` callbacks, ability to pause a coroutine, mailbox/process inspection).

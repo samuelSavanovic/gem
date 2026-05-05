@@ -161,7 +161,7 @@ GemVal gem_format_value_string(GemVal v) {
     char *s = (char *)gem_alloc(b.len + 1);
     memcpy(s, b.data, b.len);
     s[b.len] = '\0';
-    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s;
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s; r.slen = b.len;
     return r;
 }
 
@@ -238,7 +238,7 @@ GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
 /* ─── Built-in: len ─── */
 
 GemVal gem_len_val(GemVal v) {
-    if (v.type == VAL_STRING) return gem_int((int64_t)strlen(v.sval));
+    if (v.type == VAL_STRING) return gem_int((int64_t)v.slen);
     if (v.type == VAL_TABLE) return gem_int((int64_t)v.table->len);
     if (v.type == VAL_BUFFER) return gem_int((int64_t)v.buffer->len);
     { char buf[128]; snprintf(buf, sizeof(buf), "len: expected string, table, or buffer, got %s", gem_type_str(v)); gem_error(buf); }
@@ -290,7 +290,7 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
             char *s = (char *)gem_alloc(b->len + 1);
             memcpy(s, b->data, b->len);
             s[b->len] = '\0';
-            GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s;
+            GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s; r.slen = b->len;
             return r;
         }
         case VAL_REF: snprintf(buf, sizeof(buf), "#Ref<%lld>", (long long)v.rval); return gem_string(buf);

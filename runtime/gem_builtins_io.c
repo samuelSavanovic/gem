@@ -43,11 +43,12 @@ GemVal gem_read_file_fn(void *_env, GemVal *args, int argc) {
             gem_io_free_request(req);
             gem_error(buf);
         }
-        char *data = (char *)gem_alloc(req->result_len + 1);
-        memcpy(data, req->result_data, req->result_len);
-        data[req->result_len] = '\0';
+        size_t rlen = req->result_len;
+        char *data = (char *)gem_alloc(rlen + 1);
+        memcpy(data, req->result_data, rlen);
+        data[rlen] = '\0';
         gem_io_free_request(req);
-        GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = data;
+        GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = data; r.slen = (int)rlen;
         return r;
     }
 
@@ -62,7 +63,7 @@ GemVal gem_read_file_fn(void *_env, GemVal *args, int argc) {
     size_t nread = fread(data, 1, (size_t)flen, f);
     data[nread] = '\0';
     fclose(f);
-    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = data;
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = data; r.slen = (int)nread;
     return r;
 }
 
@@ -75,7 +76,7 @@ GemVal gem_write_file_fn(void *_env, GemVal *args, int argc) {
     }
     const char *path = args[0].sval;
     const char *content = args[1].sval;
-    size_t len = strlen(content);
+    size_t len = (size_t)args[1].slen;
 
     if (gem_current_pid >= 0) {
         GemIORequest *req = gem_io_submit(GEM_IO_WRITE_FILE, path, content, len);
@@ -116,7 +117,7 @@ GemVal gem_append_file_fn(void *_env, GemVal *args, int argc) {
     }
     const char *path = args[0].sval;
     const char *content = args[1].sval;
-    size_t len = strlen(content);
+    size_t len = (size_t)args[1].slen;
 
     if (gem_current_pid >= 0) {
         GemIORequest *req = gem_io_submit(GEM_IO_APPEND_FILE, path, content, len);
@@ -185,7 +186,7 @@ GemVal gem_path_join_fn(void *_env, GemVal *args, int argc) {
     strcpy(result, dir);
     if (dlen > 0 && dir[dlen-1] != '/') strcat(result, "/");
     strcat(result, file);
-    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = result;
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = result; r.slen = (int)strlen(result);
     return r;
 }
 

@@ -1,0 +1,36 @@
+# Strings carry an explicit byte length, so embedded NUL bytes survive
+# round-trips through build_string, len, substr, ==, and string concat.
+
+let s = build_string() do |add|
+  add("hello")
+  add("\0")
+  add("world")
+  add("\0")
+end
+
+print(len(s))                    # 12
+print(ord(s, 5))                 # 0
+print(ord(s, 11))                # 0
+
+# substr preserves embedded NULs
+let mid = substr(s, 5, 6)
+print(len(mid))                  # 6
+print(ord(mid, 0))               # 0
+
+# Equality compares full byte range, not strcmp
+let a = build_string() do |add| add("x\0y") end
+let b = build_string() do |add| add("x\0y") end
+let c = build_string() do |add| add("x\0z") end
+print(a == b)                    # true
+print(a == c)                    # false
+
+# String concat preserves embedded NULs
+let cat = a + "\0tail"
+print(len(cat))                  # 8
+
+# Round-trip through write_file/read_file preserves NULs
+write_file("/tmp/gem_binsafe.bin", s)
+let back = read_file("/tmp/gem_binsafe.bin")
+print(len(back))                 # 12
+print(back == s)                 # true
+remove_file("/tmp/gem_binsafe.bin")

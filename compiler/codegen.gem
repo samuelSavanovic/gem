@@ -22,7 +22,8 @@ fn escape_c_string(s)
     elif ch == "\t"
       buf_push(b, "\\t")
     elif ord(ch) == 0
-      buf_push(b, "\\0")
+      # 3-digit octal so a following digit char isn't absorbed into the escape.
+      buf_push(b, "\\000")
     else
       buf_push(b, ch)
     end
@@ -2827,7 +2828,8 @@ fn make_codegen(source_name)
       return {expr: "gem_float({format_float(value)})", setup: ""}
     when {tag: "string", value: value}
       let escaped = escape_c_string(value)
-      return {expr: "gem_string(\"{escaped}\")", setup: ""}
+      # Use _with_len so embedded NULs survive — len(value) reads slen.
+      return {expr: "gem_string_with_len(\"{escaped}\", {len(value)})", setup: ""}
     when {tag: "interp", parts: parts}
       if len(parts) == 0
         return {expr: "gem_string(\"\")", setup: ""}
