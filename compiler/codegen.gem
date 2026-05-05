@@ -2822,6 +2822,15 @@ fn make_codegen(source_name)
   # a local, a top-level var, or a captured/boxed name. Without this check,
   # `a = 3` (no prior `let`) emits `gem_v_a = ...` and bottoms out at a `cc`
   # error referencing the mangled name, which is opaque to the user.
+  let codegen_error = fn(node, msg)
+    let loc = source_name
+    if node != nil and node.line != nil
+      loc = "{source_name}:{node.line}"
+    end
+    eprint("\n[Compiler Bug]: {msg}\n  --> {loc}\n  The compiler accepted source it does not know how to emit C for.\n  This is a bug in the compiler, not your code — please file an issue with a minimal repro.\n")
+    exit(1)
+  end
+
   let check_assign_target = fn(name, line)
     if set_contains(local_names, name) or set_contains(top_level_vars, name) or set_contains(top_level_boxed, name) or set_contains(boxed_vars, name)
       return nil
@@ -2919,7 +2928,7 @@ fn make_codegen(source_name)
       elif op == "not"
         return {expr: "gem_not({r.expr})", setup: r.setup}
       end
-      error("unknown unary operator: {op}")
+      codegen_error(node, "unknown unary operator: {op}")
     when {tag: "anon_fn"}
       return compile_anon_fn(node)
     when {tag: "table"}
@@ -2940,7 +2949,7 @@ fn make_codegen(source_name)
       return {expr: "gem_table_get({obj_r.expr}, {key_r.expr})", setup: obj_r.setup + key_r.setup}
     end
 
-    error("unknown expression node: {node.tag}")
+    codegen_error(node, "unknown expression node: {node.tag}")
   end
 
   # ─── compile_table ──
@@ -3225,7 +3234,7 @@ fn make_codegen(source_name)
       return {expr: t, setup: to_string(b)}
     end
 
-    error("unknown binary operator: {op}")
+    codegen_error(node, "unknown binary operator: {op}")
   end
 
   # ─── compile_stmts ──

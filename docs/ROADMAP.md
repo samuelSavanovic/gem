@@ -77,14 +77,8 @@ Small change, big quality-of-life win for protocol/binary work that bridges to C
 
 Stack traces on `error()` are good; there's no interactive step-through, breakpoint, or variable-inspection story. Pairs with `LSP_ROADMAP.md` but is a separate capability — typically a DAP (Debug Adapter Protocol) server that the runtime cooperates with (instrumented `gem_set_line` callbacks, ability to pause a coroutine, mailbox/process inspection).
 
-## Compile-time errors point at user source, not compiler internals (P1)
+## ~~Compile-time errors point at user source, not compiler internals~~ ✓ Done (2026-05-05)
 
-When the compiler hits unexpected user input, the error surfaces with the *compiler's* stack trace (`_anon_63 at compiler/main.gem:2921` etc.) instead of pointing back at the user's `.gem` file and offending line. Example: an unhandled AST node in codegen prints `unknown expression node: assign` with no clue *which* user expression triggered it.
+The three `error("unknown ... node/operator: ...")` sites in `compiler/codegen.gem` (unary op, binary op, expression dispatch) now route through a `codegen_error(node, msg)` helper inside `make_codegen` that captures `source_name`, reads `node.line`, and prints `[Compiler Bug]: <msg>\n  --> <file>:<line>` plus a "this is a compiler bug, not your code" note before exiting. Frames these as compiler bugs (not user errors) because the parser shouldn't produce shapes codegen can't handle — when one of these fires, the right fix is a parser/semantic guard upstream (cf. the `if x = y` guard from `79fb217`), and the diagnostic now gives a usable `.gem:line` to start from instead of the compiler's own stack trace.
 
-**What needs to be built:**
-
-- Codegen `error()` sites should carry the AST node's `.line` (and ideally `.col`/file) and surface it as a `[Compile Error]` with source context, not a runtime stack trace.
-- A generic "compiler bug" wrapper for cases where the codegen genuinely doesn't know what to do — show user source location *and* note that the compiler should have rejected this earlier (so the right fix is usually a parser/semantic guard, like the `if x = y` guard added recently).
-- Audit the ~dozen `error("unknown ... node: ...")` sites in `compiler/codegen.gem` and convert them.
-
-**Why P1:** every user-facing parse/codegen error today is a small papercut. The fix is mechanical but touches many call sites and benefits from a small helper (`codegen_error(node, msg)`) rather than ad-hoc threading.
+Smaller scope than the original audit anticipated: there are exactly 3 such sites in codegen, not ~dozen. Other `[Compile Error]` paths in codegen (undeclared identifier, assign-to-fn) already had source-location formatting.
