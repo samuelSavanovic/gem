@@ -28,18 +28,14 @@ Run Gem across multiple OS processes (same box or across the network), with `sen
 
 **Trade-off:** cross-node sends pay serialization cost vs. a memcpy. Negligible for shared-nothing request/response workloads; matters for chatty cross-node protocols.
 
-## TLS for sockets / HTTPS (P1)
+## TLS for sockets / HTTPS — deferred indefinitely
 
-`std/http`, `std/request`, and the `tcp_*` builtins are plain TCP only. For a language aimed at servers this is the most obvious real-world gap — most production deployments need to terminate TLS somewhere, and outbound HTTPS is needed even for trivial integrations.
+`std/http`, `std/request`, and the `tcp_*` builtins are plain TCP only. Rather than pull a TLS stack into the runtime, the deployment story is:
 
-**Likely shape:**
+- **Inbound (servers):** terminate TLS at a reverse proxy (Caddy, nginx, or a cloud LB) in front of `std/http.serve`. This is what most Go and Node deployments do anyway — the edge gets free ACME cert rotation, HTTP/2, and a much larger crypto-bug audit surface than a vendored libtls would. Document this as the recommended deployment recipe.
+- **Outbound (`std/request` against `https://`):** link libcurl and expose its easy API as an `extern blocking fn`, routed through the existing 4-worker thread pool (`gem_threadpool.c`). libcurl is on every mainstream system (macOS and the major Linux distros ship it), battle-tested for TLS/cert handling, and the easy API is blocking — which is exactly what `extern blocking fn` is designed for, so no scheduler changes are needed. `std/request` becomes a thin wrapper that hands URL/method/headers/body to a single C function returning status + headers + body bytes. No process-spawn cost, real error codes, binary-safe responses via the `Bytes` extern type.
 
-- Link libtls (LibreSSL) or BoringSSL into the runtime; vendor as a single amalgamation if feasible (matches the SQLite precedent).
-- Add `tls_listen` / `tls_accept` / `tls_connect` / `tls_read` / `tls_write` / `tls_close` builtins paralleling the `tcp_*` shape, integrating with the same non-blocking + `poll()` readiness path so the scheduler model is unchanged.
-- Extend `std/http.serve` with a TLS variant (cert/key paths) and `std/request` to accept `https://` URLs.
-- Certificate verification on by default; an explicit insecure flag for dev.
-
-Could initially be prototyped via `extern fn` against libtls before being promoted to first-class builtins.
+Reasons to revisit (i.e. actually vendor a TLS stack): someone wants a single self-contained Gem binary that serves HTTPS directly with no reverse proxy, or a workload where libcurl's blocking-call-per-request ergonomics become limiting (e.g. needing thousands of concurrent outbound requests, where the multi API + scheduler `poll()` integration would start to pay off). Until then, the integration cost (vendoring LibreSSL, threading TLS_WANT_POLLIN/OUT through the non-blocking path, handshake-as-coroutine-yield) buys very little over the recipe above.
 
 ## Hot code reload (P2)
 
