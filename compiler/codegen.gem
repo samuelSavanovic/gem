@@ -3542,11 +3542,8 @@ fn make_codegen(source_name)
         # boxed top-level slot accessed from non-top-level scope; same.
       else
         # Liveness is reporting a name that resolves nowhere — the source has
-        # an undeclared identifier (typo or missing let/load). Surface that
-        # directly instead of the misleading "no C local at back-edge" warning;
-        # compile_expr's var case will print the same diagnostic when reached.
-        eprint("\n[Compile Error]: undeclared identifier `{name}`\n  --> {source_name}\n")
-        exit(1)
+        # an undeclared identifier (typo or missing let/load). Skip it here so
+        # compile_expr's var case surfaces the diagnostic with a line number.
       end
     end
     {ok: true, roots: roots, pinned_roots: pinned_roots}
