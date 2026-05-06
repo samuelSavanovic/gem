@@ -16,6 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache runtime objects
+        id: cache-runtime
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: build-${{ matrix.runner }}-${{ hashFiles('runtime/**', 'bootstrap/stage0.c', 'Makefile') }}
+
+      - name: Refresh cached object mtimes
+        if: steps.cache-runtime.outputs.cache-hit == 'true'
+        run: find build -type f -exec touch {} +
+
       - name: Build compiler from stage0
         run: make build
 
