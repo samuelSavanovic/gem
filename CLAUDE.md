@@ -136,6 +136,7 @@ After grammar.js changes: `tree-sitter generate`, `hx --grammar build`, then cop
 - **Binary-safe strings**: `VAL_STRING` carries an explicit `slen` (gem.h:80) — `len(s)` returns slen, not strlen, so embedded NULs survive. The trailing `\0` terminator is maintained as an invariant for cheap C interop. When adding a new builtin that returns or accepts a string, set/use `.slen` (not `strlen`). I/O sinks (`tcp_write`, `write_file`, `append_file`) read `slen` to send the full byte range. Codegen emits `gem_string_with_len("...", N)` for string literals; embedded NUL escapes use `\000` (3-digit octal) in the C output to avoid digit absorption.
 - No classes, static types, exceptions, or namespaces in v0 — by design. Tables with closures serve as objects, `error()`/`pcall()` for error handling.
 - libdill is dead (crashes on arm64 macOS). Don't reach for it.
+- Emitted `#line` directives and `gem_push_frame` paths are project-root-relative (codegen.gem `rel_path`, fed `project_root` from `compiler/main.gem`). Keeps `bootstrap/stage0.c` reproducible across machines and avoids leaking developer paths into compiled binaries. Out-of-tree files compiled by absolute path keep their absolute path.
 
 ## Spec Maintenance
 

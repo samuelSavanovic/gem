@@ -1089,9 +1089,26 @@ tag_process_tail_while_loops = fn(fn_defs, top_stmts, process_tail_fns, source_n
   walk_for_tagging_stmts(top_stmts, true, source_name)
 end
 
-fn make_codegen(source_name, module_bindings = nil)
+fn make_codegen(source_name, module_bindings = nil, project_root = nil)
   if module_bindings == nil
     module_bindings = {}
+  end
+
+  # Strip project_root prefix so emitted #line / gem_push_frame paths are
+  # reproducible across machines. Files outside the project root keep their
+  # absolute path. No-op when project_root is nil.
+  let rel_path = fn(p)
+    if project_root == nil or p == nil
+      return p
+    end
+    let rlen = len(project_root)
+    if len(p) <= rlen
+      return p
+    end
+    if substr(p, 0, rlen) == project_root and p[rlen] == "/"
+      return substr(p, rlen + 1, len(p) - rlen - 1)
+    end
+    p
   end
 
   # Diagnostic location helpers. Defined up front so any closure inside
@@ -3224,7 +3241,7 @@ fn make_codegen(source_name, module_bindings = nil)
         if line == nil
           line = 0
         end
-        let escaped_file = escape_c_string(file_of(node))
+        let escaped_file = escape_c_string(rel_path(file_of(node)))
         let ca = compile_args(args)
         if ca.argc == 0
           return {expr: "gem_error_at_fn(\"{escaped_file}\", {line}, NULL, 0)", setup: ca.setup}
@@ -3245,7 +3262,7 @@ fn make_codegen(source_name, module_bindings = nil)
     if line == nil
       line = 0
     end
-    let escaped_file = escape_c_string(file_of(node))
+    let escaped_file = escape_c_string(rel_path(file_of(node)))
     let setup = func_r.setup + ca.setup + "    GemVal {tmp_fn} = {func_r.expr};\n    gem_check_callable({tmp_fn}, \"{escaped_file}\", {line});\n"
     if ca.argc == 0
       return {expr: "{tmp_fn}.fn({tmp_fn}.env, NULL, 0)", setup: setup}
@@ -3370,7 +3387,7 @@ fn make_codegen(source_name, module_bindings = nil)
     let p = pad_for(indent)
     let line_dir = ""
     if node.line != nil
-      line_dir = "#line {node.line} \"{escape_c_string(file_of(node))}\"\n{setline_str(node.line, p)}"
+      line_dir = "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n{setline_str(node.line, p)}"
     end
 
     match node
@@ -3480,7 +3497,7 @@ fn make_codegen(source_name, module_bindings = nil)
     let p = pad_for(indent)
     let line_dir = ""
     if node.line != nil
-      line_dir = "#line {node.line} \"{escape_c_string(file_of(node))}\"\n{setline_str(node.line, p)}"
+      line_dir = "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n{setline_str(node.line, p)}"
     end
 
     if tco_fn_name != nil
@@ -4538,7 +4555,7 @@ fn make_codegen(source_name, module_bindings = nil)
     buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
 
     if node.line != nil
-      buf_push(b, "#line {node.line} \"{escape_c_string(file_of(node))}\"\n")
+      buf_push(b, "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n")
     end
 
     buf_push(b, emit_param_bindings(node, params, boxed_vars))
@@ -4548,7 +4565,7 @@ fn make_codegen(source_name, module_bindings = nil)
       fn_line = node.line
     end
     if not in_leaf_fn
-      buf_push(b, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(file_of(node))}\", {fn_line});\n")
+      buf_push(b, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(rel_path(file_of(node)))}\", {fn_line});\n")
     end
 
     if use_tco
@@ -4687,7 +4704,7 @@ fn make_codegen(source_name, module_bindings = nil)
 
     buf_push(fb, emit_param_bindings(node, params, inner_boxed))
     if not in_leaf_fn
-      buf_push(fb, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(file_of(node))}\", 0);\n")
+      buf_push(fb, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(rel_path(file_of(node)))}\", 0);\n")
     end
     buf_push(fb, emit_fn_body(body))
     buf_push(fb, "}")
@@ -4832,7 +4849,7 @@ fn make_codegen(source_name, module_bindings = nil)
     let mb = buf_new()
     buf_push(mb, "static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) \{\n")
     buf_push(mb, "    (void)_env; (void)_args; (void)_argc;\n")
-    buf_push(mb, "    gem_push_frame(\"main\", \"{escape_c_string(source_name)}\", 0);\n")
+    buf_push(mb, "    gem_push_frame(\"main\", \"{escape_c_string(rel_path(source_name))}\", 0);\n")
     if main_body != ""
       buf_push(mb, main_body)
     end

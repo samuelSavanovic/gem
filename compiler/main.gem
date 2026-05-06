@@ -553,13 +553,16 @@ let ast = parse_source(source, src_path)
 tag_source_file(ast, src_path)
 let base_dir = dirname(src_path)
 let project_root = find_project_root(base_dir)
+if project_root != nil
+  project_root = normalize_path(project_root)
+end
 let stdlib_root = compute_stdlib_root(install_root, project_root)
 let loaded = {}
 let module_bindings = {}
 let resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings)
 fold_constants(resolved_ast)
 
-let cg = make_codegen(src_path, module_bindings)
+let cg = make_codegen(src_path, module_bindings, project_root)
 let c_code = cg.compile(resolved_ast)
 
 # ─── Check mode ───────────────────────────────────────────────
