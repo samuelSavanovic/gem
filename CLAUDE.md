@@ -8,7 +8,7 @@ A dynamically typed language that compiles to C with Erlang-style concurrency. S
 
 When evaluating a runtime or codegen mechanism, ask: *does this leak a concept the user has to track to write correct or performant code?* If yes, push the burden into the compiler (static analysis) or the runtime (uniform mechanism), not the user.
 
-Concretely:
+For example:
 - Long-running process loops are written naturally with `while true` (or self-recursion). The compiler does liveness analysis and emits per-iteration arena resets at the back-edge so memory does not grow. No `@process_loop` annotation, no rewriting code as recursion.
 - No "you must structure your code this way for X to work" runtime constraints. Either auto-detect via static analysis or make the mechanism work uniformly.
 - Compiler warnings are OK when they surface a hidden constraint ("this loop won't reset because it's reachable from a non-tail context"). Silent perf cliffs are not.
@@ -87,7 +87,7 @@ Add a numbered example under `examples/` (next free slot) and append its stdout 
 ## Adding a Std Module
 
 1. Create `std/<name>.gem`. Use `load` for any std deps. End the file with `export <fn>, <fn>, ...`.
-2. Update `docs/SPEC.md` (Standard Library section) and the Quick Reference below.
+2. Update `docs/SPEC.md` (Standard Library section) and `docs/CHEATSHEET.md`.
 3. Add tests as a numbered example (e.g. `78_time_stdlib.gem`) so they run in `make test`.
 4. Update editor extensions if the module exposes new identifiers worth highlighting.
 
@@ -142,141 +142,11 @@ After grammar.js changes: `tree-sitter generate`, `hx --grammar build`, then cop
 
 `docs/SPEC.md` is the source of truth for the language. After any change to syntax, semantics, or builtins, update it. If the spec disagrees with the code, fix the spec.
 
-## CLAUDE.md Maintenance
+## Documentation Maintenance
 
-Treat this file as living documentation, not a one-time onboarding doc.
-
-- **When something bites you** — a claim here turns out to be stale, a constant has drifted from the source, a workflow is missing a step, or you reach for a fact that should have been in Quick Reference but wasn't — fix it in the same change. The value of this file is being correct; a wrong claim is worse than a missing one.
-- **At the start of a non-trivial task** — skim Project Structure, Key Decisions, and the relevant maintenance section. If a section looks suspicious (vague hand-wave, fact you can't verify in 30s, references a file that no longer exists), grep the source to confirm before relying on it, and update what you find wrong.
-- **At the end of a change that touched a documented surface** — new keyword/builtin/syntax/std module, runtime constant, build target, project layout shift — check whether Project Structure, Key Decisions, or Quick Reference need a corresponding edit. Match the precision already there: pin to file paths and constants, not vague descriptions.
-- **What belongs here vs. SPEC.md** — SPEC.md describes the language to a reader who doesn't know it. CLAUDE.md captures *how to work in this repo*: where things live, what's load-bearing, which mechanisms are easy to break, and the workflows for adding/changing things. If a fact is purely about language semantics, it belongs in SPEC.md.
+Treat this file as living documentation: when a claim here turns out stale, a constant has drifted, or a workflow is missing a step, fix it in the same change — a wrong claim is worse than a missing one. SPEC.md describes the language; CLAUDE.md captures how to work in this repo (where things live, what's load-bearing, the workflows for adding/changing things). If a fact is purely about language semantics, it belongs in SPEC.md.
 
 ## Language Quick Reference
 
-Keep this section up to date when adding new syntax, keywords, builtins, or std modules.
+See [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md) for a one-page summary of syntax, builtins, and std modules.
 
-```gem
-# Variables
-let x = 10
-let {a, b} = tbl          # table destructuring
-let [first, second] = arr  # array destructuring
-
-# Functions — fn/end, last expression is implicit return
-fn add(a, b)
-  a + b
-end
-fn greet(name, greeting = "Hello")   # default params
-  print("{greeting}, {name}!")
-end
-fn log(level, ...msgs)               # variadic (rest param)
-end
-
-# Closures / anonymous functions
-let f = fn(x) x * 2 end
-
-# Blocks — trailing do/end or { } passed as last arg
-items.each do |item|
-  print(item)
-end
-items.each { |item| print(item) }
-
-# Control flow — end-terminated, elif (not else if)
-if cond then expr else expr end      # single-line
-if cond
-  body
-elif cond2
-  body
-else
-  body
-end
-
-while cond
-  body
-end
-
-for item in arr ... end              # array iteration
-for k, v in tbl ... end              # key-value iteration
-for i = 0, n ... end                 # range [0, n)
-
-match val
-when "a"
-  handle_a()
-when {ok: true, value: v}            # destructuring pattern
-  use(v)
-else
-  fallback()
-end
-
-# Modules — load (NOT import), export at end of file
-load "std/string"                    # => string.split(...)
-load "std/string" as str             # => str.split(...)
-load "std/string" (split, trim)      # => split(...) directly
-
-export my_fn, my_other_fn            # at end of module file
-
-# Strings — double-quoted: interpolation, single-quoted: literal
-"hello {name}"                       # interpolation with { }
-'no {interpolation} here'            # literal braces
-"""multi-line with {interpolation}"""
-'''multi-line literal'''
-
-# Operators — and/or/not (NOT &&/||/!), x in tbl, x in arr
-# Tables — { key: val } or [1, 2, 3], dot access, bracket access (negative indexing supported)
-# Logical — nil and false are falsy, everything else truthy
-
-# Concurrency
-let pid = spawn do ... end
-send(pid, msg)
-let msg = receive()                  # pop head
-receive                              # selective receive
-when {tag: "DOWN", pid: p}
-  handle(p)
-after 5000
-  timeout()
-end
-monitor(pid)
-link(pid)
-process_flag("trap_exit", true)
-register("name", self())
-whereis("name")                      # → pid or nil
-
-# Error handling
-error("msg")                         # halt with stack trace; uncaught in main prints source context + caret
-let r = pcall some_fn()              # {ok: bool, value/error: ...}
-
-# Common builtins
-# print, eprint, len, type, to_string, to_int, to_float, exit
-# push, pop, keys, values, sort, insert, delete, remove_at
-# str_replace, substr, chr, ord, has_key
-# buf_new, buf_push, build_string  (finalize buffer with to_string)
-# read_file, write_file, append_file, file_exists, dirname, path_join, normalize_path
-# remove_file, mkdir, list_dir, is_dir, exec, sleep, getenv, input, argv
-# tcp_listen, tcp_accept, tcp_connect, tcp_read, tcp_write, tcp_close
-# floor, ceil, round, abs, pow, sqrt, random
-# band, bor, bxor, bnot, bshl, bshr
-
-# String building — build_string needs () before do block
-let s = build_string() do |add|
-  add("hello", " ", "world")           # multi-arg, no intermediate allocs
-end
-
-# Std library modules
-# std/string (split, join, trim, index_of, contains, starts_with, ends_with, ...)
-# std/table (each, map, filter, reduce, find, sort, slice, concat, copy, group_by, ...)
-# std/math (min, max, clamp, assert)
-# std/time (now, sleep, format, iso8601, http_date, date, ...)
-# std/log (debug, info, warn, error, set_level)
-# std/json (parse, encode)
-# std/http (router, serve, ok, html, json_response, cookies, form parsing, ...)
-# std/request (HTTP client)
-# std/url (parse, encode)
-# std/mime (lookup by extension)
-# std/sqlite (open, close, exec, query, ...)
-# std/supervisor, std/gen_server (OTP behaviors)
-# std/test (case, assert, assert_eq, assert_neq, assert_throws, run)
-
-# C interop
-extern fn puts(s: String) -> Int
-extern blocking fn net_read(fd: Int) -> String
-extern include "header.h"
-```
