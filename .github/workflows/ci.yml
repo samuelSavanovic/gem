@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    name: build + test (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build compiler from stage0
+        run: make build
+
+      - name: Run examples
+        run: make test
+
+      - name: Verify stage0.c is in sync (bootstrap fixed point)
+        run: |
+          make bootstrap
+          if ! git diff --exit-code -- bootstrap/stage0.c; then
+            echo "::error::bootstrap/stage0.c is out of sync with compiler sources."
+            echo "Run 'make bootstrap' locally and commit the regenerated stage0.c."
+            exit 1
+          fi
