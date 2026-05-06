@@ -48,7 +48,7 @@ docs/ROADMAP.md       # future capabilities (features, not perf)
 docs/LSP_ROADMAP.md   # sketch for a future Gem LSP
 editors/vscode/       # VS Code extension (TextMate grammar)
 editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
-benchmarks/           # bench scripts (run.sh, wrk lua scripts) and node_baseline for comparison
+benchmarks/           # wrk harness for examples/bookmark_app (run.sh) + node_baseline reference impl
 ```
 
 ## Build, Test, Bootstrap
