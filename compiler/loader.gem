@@ -1,0 +1,72 @@
+# compiler/loader.gem — load-path resolution shared between the compiler
+# driver and the LSP. Pulled out of compiler/main.gem so lsp/symbols.gem
+# can resolve `load` nodes to absolute file paths without forking.
+#
+# resolve_load_path: three forms — "std/X" (stdlib), "./X"/"../X"
+# (relative to the loading file), bare "X" (relative to project_root if
+# found, else base_dir). Always appends ".gem" if absent.
+#
+# find_project_root walks up from start_dir looking for gem.toml.
+# compute_stdlib_root prefers $GEM_STDLIB, then a project-vendored std/,
+# then the install root.
+
+load "std/string"
+
+fn resolve_load_path(raw_path, base_dir, project_root, stdlib_root)
+  let path = raw_path
+  if not string.ends_with(path, ".gem")
+    path = path + ".gem"
+  end
+
+  if string.starts_with(raw_path, "std/")
+    if stdlib_root == nil
+      error("gem: cannot resolve load \"" + raw_path + "\": stdlib root not found (set $GEM_STDLIB)")
+    end
+    let p = normalize_path(path_join(stdlib_root, path))
+    if not file_exists(p)
+      error("gem: stdlib module not found: " + raw_path + " (looked in " + stdlib_root + ")")
+    end
+    return p
+  end
+
+  if string.starts_with(raw_path, "./") or string.starts_with(raw_path, "../")
+    return normalize_path(path_join(base_dir, path))
+  end
+
+  let root = project_root
+  if root == nil
+    root = base_dir
+  end
+  return normalize_path(path_join(root, path))
+end
+
+fn find_project_root(start_dir)
+  let dir = start_dir
+  if dir == "" then dir = "." end
+  while true
+    if file_exists(path_join(dir, "gem.toml"))
+      return dir
+    end
+    let parent = dirname(dir)
+    if parent == dir or parent == ""
+      return nil
+    end
+    dir = parent
+  end
+end
+
+fn compute_stdlib_root(install_root, project_root)
+  let env_root = getenv("GEM_STDLIB")
+  if env_root != nil and env_root != ""
+    return env_root
+  end
+  if project_root != nil and is_dir(path_join(project_root, "std"))
+    return project_root
+  end
+  if is_dir(path_join(install_root, "std"))
+    return install_root
+  end
+  install_root
+end
+
+export resolve_load_path, find_project_root, compute_stdlib_root

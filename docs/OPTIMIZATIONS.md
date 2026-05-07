@@ -285,6 +285,42 @@ Codegen detects self-recursive calls in tail position (last expression in functi
 ### Mutual tail call optimization (P2)
 Mutual recursion (A calls B in tail position, B calls A) could use trampolines or computed goto. Lower priority — rare in OTP patterns. Self-recursive TCO already covers the common case.
 
+### Tighten "TCO function not reachable from process root" warning (P2)
+
+The warning at `compiler/codegen.gem:2584` fires when a TCO-eligible self-recursive fn is not in `process_tail_fns` — i.e. some caller invokes it from a non-tail context, so the TCO loop's back-edge can't safely arena-reset (the non-tail caller's frame may hold pointers into the arena). It currently fires for two functions in-tree:
+
+- `compiler/main.gem` `rename_node` — module-rename tree walker. One-shot, runs during compilation.
+- `lsp/symbols.gem` `walk_node` — symbol-table tree walker. Runs once per `didOpen` / `didChange` in the LSP doc process.
+
+Both are bounded structural recursions over an AST. Per-iteration allocation inside the TCO loop is O(AST size × scope-list size) — a small bounded peak (~50 KB on `std/http.gem`'s 13.4 KB source for `walk_node`). The **outer** loop catches everything when the call returns: `compiler main` exits with the arena, and `doc_loop` resets per iteration. So the warning is correct in mechanism (the inner reset does not fire) but the practical consequence in both current cases is zero — no leak across edits, no leak across compilations.
+
+The wart: the warning is meant to flag the pattern it's actually dangerous for — a long-running loop with **unbounded** inner recursion under it, where allocations would accumulate within a single outer iteration. Today the warning fires 2/2 times on bounded structural recursion (false positives) and 0/0 times on the dangerous pattern (no true positives in-tree). Two-noise-out-of-two erodes the signal; if a real leak case lands later the warning still fires and is still actionable, but the boy-cried-wolf cost goes up with each new bounded walker (parser-as-walker, formatter, lint passes are plausible additions over the next few PRs).
+
+Options for tightening, by approach:
+
+| Approach | Where | LOC | Soundness |
+|---|---|---|---|
+| A. Suppress when every reachable caller is itself in `process_tail_fns` (or under one) — an outer arena-reset boundary always exists above the call site | `compiler/codegen.gem` analysis (extends `mark_process_tail` substrate) | ~80–120 | Sound for bounded inner work; **unsound** if the inner recursion is itself unbounded under the outer reset. Closes both current cases. |
+| B. Add a structural-decrease termination check on top of A — verify each self-call passes a strict subterm of at least one parameter | same place | +150–200 | Fully sound: bounded recursion + outer reset = bounded allocation per outer iteration. Misses non-structural termination patterns; those keep the warning (conservative but correct). |
+| C. Worklist rewrite — convert each tree walker into a single while-loop with an explicit work-stack | user code (~300/fn) | 0 in compiler | Sound, but exactly the DX wart `CLAUDE.md` calls out — pushes runtime invariants onto user code, ugly post-order encoding via sentinels, ~2× LOC per walker. Not aligned with project philosophy. |
+| D. `@no_arena_reset` annotation that suppresses the warning | spec + parser | ~20 | Sound but leaks the runtime concept onto the user. Same DX-wart objection as C. |
+| E. Split the warning text — "inner reset disabled (probably fine, outer reset above)" vs. "inner reset disabled (probably leak)" without changing the analysis | `compiler/codegen.gem` warning emit only | ~30 | No soundness change; just separates signal from noise in the current diagnostic. Cheap stopgap if A/B aren't ready. |
+
+Cross-cutting considerations:
+
+- A is the cheapest silencing path but is a heuristic; the unsoundness gap (unbounded inner recursion under an outer reset would silently leak within one outer iteration) is real, even if no in-tree case currently hits it. Worth grepping for tail-call-from-non-tail patterns and inspecting before committing.
+- B is the principled extension. The simplest structural-decrease check — "self-call argument is `x.field` / `x[lit]` of a param `x`" — is cheap to implement and would catch every tree walker we've written. Termination analysis has other uses (catching accidental infinite recursion at compile time), so it might earn its keep beyond just gating this one warning.
+- C and D shift the burden to user code or annotations. Inconsistent with the design philosophy: optimizations that introduce DX warts are "tolerable only as transient hacks with a structural fix on the roadmap" (`CLAUDE.md`). The structural fix here lives in the compiler, not in user code.
+- E is a stopgap that buys time without committing to the analysis work. Useful as a holdover if the proper fix waits for the count of bounded walkers to grow.
+
+Open questions before deciding:
+
+- How often do bounded tree walkers end up in long-running PT loops? Today: twice. The LSP roadmap (formatter, lint passes, more cache-driven walks) plausibly adds more — all bounded structural. If the count grows, A's value goes up; if it plateaus, E may be enough.
+- Is structural-decrease worth landing on its own? It has uses beyond this warning (compile-time infinite-recursion detection, termination guarantees for trusted code paths). A fixed-point sketch with its own diagnostic might be more valuable than gating one warning.
+- Are there in-tree call patterns where the inner recursion is genuinely unbounded under an outer reset, and option A would silence a real leak? Need a sweep of the call graph before committing to A.
+
+Soundness bar for any change here: the rescue mechanism's whole purpose was to make memory bounded under load (item 1 in the work log above) — a regression here would re-pay that work. Don't ship A without a written soundness argument; B, E, or "do nothing for now" are all defensible while the question is open.
+
 ## Table Access
 
 ### ~~Inline caching for `.field` access~~ ✓ Done

@@ -20,7 +20,7 @@ A minimal language server for Gem, focused on the features that provide the most
 | #7 | `lsp/phase-0a-codegen-caret` | Phase 0a — route codegen errors through `compile_error()` for caret context | ✓ Done (2026-05-07) | ~50 |
 | #8 | `lsp/phase-0b-multi-error` | Phase 0b — multi-error recovery in lexer/parser/codegen | ✓ Done (2026-05-07) | ~430 |
 | #9 | `lsp/phase-1a-scaffold` | Phase 1a — `gem lsp` subcommand, JSON-RPC framing, lifecycle, didOpen/didChange | ✓ Done (2026-05-07) | ~400 |
-| #10 | `lsp/phase-1b-symbols` | Phase 1b — symbol table pass, per-doc AST cache | Pending | ~250 |
+| #10 | `lsp/phase-1b-symbols` | Phase 1b — symbol table pass, per-doc AST cache | ✓ Done (2026-05-07) | ~250 |
 | #11 | `lsp/phase-2a-features` | Phase 2a — goto-def + completion (table fields, identifiers, builtins) | Pending | ~300 |
 | #12 | `lsp/phase-2b-diagnostics` | Phase 2b — diagnostics integration (consumes Phase 0b error list) | Pending | ~100 |
 | #13 | `lsp/phase-3-format` | Phase 3 — minimal AST formatter + format-on-save | Pending | ~600 |
@@ -89,6 +89,18 @@ This is the core data structure everything else queries.
 **Scope rules:** Gem has function scope + top-level scope. No block scope (if/for don't create scopes). Closures capture outer variables. Track scope nesting to resolve which definition a name refers to.
 
 **Effort:** ~200 lines.
+
+**Deviations from the locked plan (filled in 2026-05-07, PR #10):**
+
+- **Resolver extracted to `compiler/loader.gem`.** `resolve_load_path`, `find_project_root`, and `compute_stdlib_root` moved out of `compiler/main.gem` into a shared module. Both the compiler driver and `lsp/symbols.gem` import from it, so the LSP doesn't fork the resolver.
+- **Per-param positions not yet plumbed.** The parser stores params as bare strings, so every param entry inherits the enclosing fn's `line` (col=0). Acceptable for v1; PR #11 plumbs real per-param spans if goto-def precision needs them.
+- **`anon_fn` has no `line` stamp.** The parser doesn't set a line on anon_fn nodes themselves. The let-binding (`let foo = fn() ... end`) carries the line; raw inline anons get `line: nil`. Same fix path as the param spans above.
+- **URI→path is `substr(uri, 7, …)` (no percent-decoding).** First workspace path with spaces or unicode will trip; revisit when it actually shows up.
+- **Synchronous `doc.open` handshake.** The LSP main loop blocks on stdin and never yields, so a request following `didOpen` on the same input frame would race the spawned doc process. `open()` now sends a `doc_ready` reply from inside the spawn and the caller waits for it (5s timeout). This vanishes once `read_stdin` routes through the I/O thread pool and the dispatcher spawns workers per request (PR #11/#12 trigger).
+- **`gem/debug/symbols` debug method.** Internal-only LSP method gated on `$GEM_LSP_DEBUG`; emits `{functions, vars, imports}` for the smoke test. PR #11 surfaces the same data through real `textDocument/documentSymbol` (lifted from "Not in Scope" to v2 once a real workload demands it).
+- **Desugar gensyms filtered.** The parser introduces `_pdestr<N>`, `_d<N>`, `_for_<role>_<N>` for destructuring + `for` desugar. `is_gensym(name)` in `lsp/symbols.gem` keeps these out of the symbol table so completion/outline never surfaces them. Real user names starting with `_` (e.g. `_data`) survive — only the digit-suffixed gensym pattern is filtered.
+- **Debounce stays deferred.** Parse + symbol-build on the largest std module (`std/http.gem`, 574 lines, 13.4KB) measured at 9ms avg locally — well under the 50ms threshold. Mailbox serialization at the doc process makes back-to-back `didChange`s natural already. Reopen the debounce question when this number grows.
+- **`walk_node` TCO warning.** Mirrors `compiler/main.gem`'s pre-existing `rename_node` warning — bounded recursion over an AST, so arena pressure is bounded inside one call and the doc-loop back-edge resets between edits. No action needed.
 
 ## Phase 2: Core Features (~3 days)
 

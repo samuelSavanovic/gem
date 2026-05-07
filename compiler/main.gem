@@ -14,84 +14,13 @@ load "./parser" (parse_source)
 load "./codegen" (make_codegen)
 load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
+load "./loader" (resolve_load_path, find_project_root, compute_stdlib_root)
 load "../lsp/main" (run_lsp)
 
 # ─── Install root (for runtime/, build/libgem_runtime.a) ──────
 # argv()[0] is typically <root>/build/gem, so install_root is <root>.
 
 let install_root = dirname(dirname(argv()[0]))
-
-# ─── Stdlib root (directory containing std/) ─────────────────
-# Override with $GEM_STDLIB; otherwise default to install_root.
-
-fn compute_stdlib_root(install_root, project_root)
-  let env_root = getenv("GEM_STDLIB")
-  if env_root != nil and env_root != ""
-    return env_root
-  end
-  # Prefer project-vendored std/ (handles dev where the binary may live
-  # outside the source tree, e.g. /tmp during bootstrap roundtrip).
-  if project_root != nil and is_dir(path_join(project_root, "std"))
-    return project_root
-  end
-  if is_dir(path_join(install_root, "std"))
-    return install_root
-  end
-  install_root
-end
-
-# ─── Project root (nearest gem.toml ancestor) ────────────────
-# Bare-path loads resolve relative to this directory. Returns nil if no
-# gem.toml is found walking up from start_dir.
-
-fn find_project_root(start_dir)
-  let dir = start_dir
-  if dir == "" then dir = "." end
-  while true
-    if file_exists(path_join(dir, "gem.toml"))
-      return dir
-    end
-    let parent = dirname(dir)
-    if parent == dir or parent == ""
-      return nil
-    end
-    dir = parent
-  end
-end
-
-# ─── Load-path resolution ────────────────────────────────────
-# Three forms:
-#   "std/X"        → stdlib_root/std/X.gem (reserved; hard error on miss)
-#   "./X" / "../X" → relative to base_dir (loading file's directory)
-#   "X" / "X/Y"    → relative to project_root if found, else base_dir
-
-fn resolve_load_path(raw_path, base_dir, project_root, stdlib_root)
-  let path = raw_path
-  if not string.ends_with(path, ".gem")
-    path = path + ".gem"
-  end
-
-  if string.starts_with(raw_path, "std/")
-    if stdlib_root == nil
-      error("gem: cannot resolve load \"" + raw_path + "\": stdlib root not found (set $GEM_STDLIB)")
-    end
-    let p = normalize_path(path_join(stdlib_root, path))
-    if not file_exists(p)
-      error("gem: stdlib module not found: " + raw_path + " (looked in " + stdlib_root + ")")
-    end
-    return p
-  end
-
-  if string.starts_with(raw_path, "./") or string.starts_with(raw_path, "../")
-    return normalize_path(path_join(base_dir, path))
-  end
-
-  let root = project_root
-  if root == nil
-    root = base_dir
-  end
-  return normalize_path(path_join(root, path))
-end
 
 # ─── AST helpers (defined locally to avoid shared module deps) ──
 
