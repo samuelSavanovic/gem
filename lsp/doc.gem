@@ -17,15 +17,16 @@ load "../compiler/parser" (parse_source)
 load "../compiler/errors" (make_error_sink)
 load "../compiler/loader" (find_project_root, compute_stdlib_root)
 
-# install_root is set once at server startup and reused across all docs.
-# Empty string means "not yet computed"; first doc to open fills it in.
-let _install_root_cache = ""
+# Computed at module load time so the string lives in the main process's
+# arena (which is never freed and shareable across processes). Lazy init
+# from inside a spawned doc process would allocate the cached path in
+# *that* process's arena; the next arena reset would free it underneath
+# the BSS-backed top-level box, and subsequent reads would dangle. macOS
+# malloc tolerates that UAF; Linux glibc trips realloc heap canaries.
+let _install_root_path = dirname(dirname(argv()[0]))
 
 fn install_root()
-  if _install_root_cache == ""
-    _install_root_cache = dirname(dirname(argv()[0]))
-  end
-  _install_root_cache
+  _install_root_path
 end
 
 # file:///abs/path/foo.gem → /abs/path/foo.gem. No percent-decoding for
