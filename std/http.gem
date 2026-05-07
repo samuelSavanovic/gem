@@ -42,34 +42,7 @@ end
 
 # ─── Cookies ───
 
-fn set_cookie(resp, name, value, opts = {})
-  if opts == nil
-    opts = {}
-  end
-  let path = "/"
-  let http_only = true
-  let secure = false
-  let same_site = "Lax"
-  let max_age = nil
-  let expires = nil
-  if opts.path != nil
-    path = opts.path
-  end
-  if opts.http_only != nil
-    http_only = opts.http_only
-  end
-  if opts.secure != nil
-    secure = opts.secure
-  end
-  if opts.same_site != nil
-    same_site = opts.same_site
-  end
-  if opts.max_age != nil
-    max_age = opts.max_age
-  end
-  if opts.expires != nil
-    expires = opts.expires
-  end
+fn set_cookie(resp, name, value, {path = "/", http_only = true, secure = false, same_site = "Lax", max_age = nil, expires = nil} = {})
   let cookie_str = build_string() do |add|
     add(name, "=", value)
     add("; Path=", path)
@@ -106,15 +79,8 @@ fn set_cookie(resp, name, value, opts = {})
   {status: resp.status, headers: new_headers, body: resp.body}
 end
 
-fn delete_cookie(resp, name, opts = {})
-  if opts == nil
-    opts = {}
-  end
-  let del_opts = {max_age: 0, path: "/"}
-  if opts.path != nil
-    del_opts.path = opts.path
-  end
-  set_cookie(resp, name, "", del_opts)
+fn delete_cookie(resp, name, {path = "/"} = {})
+  set_cookie(resp, name, "", {max_age: 0, path: path})
 end
 
 # ─── Cookie parsing ───
@@ -587,19 +553,7 @@ fn accept_loop(server_fd, router_ref)
   end
 end
 
-fn start(router_ref, opts = {})
-  if opts == nil
-    opts = {}
-  end
-  let port = 8080
-  let host = "0.0.0.0"
-  if opts.port != nil
-    port = opts.port
-  end
-  if opts.host != nil
-    host = opts.host
-  end
-
+fn start(router_ref, {port = 8080, host = "0.0.0.0"} = {})
   let server_fd = tcp_listen(host, port)
   let r = router_ref
 

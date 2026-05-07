@@ -87,6 +87,8 @@
 (spread_param (identifier) @variable.parameter)
 (typed_param name: (identifier) @variable.parameter)
 (block_parameters (identifier) @variable.parameter)
+(destructure_param (table_destructure (identifier) @variable.parameter))
+(destructure_param (table_destructure (destructure_default name: (identifier) @variable.parameter)))
 
 "..." @punctuation.special
 
