@@ -33,7 +33,13 @@ fn compile_error(source, file, line, col, span_len, msg, hint)
     file = "<input>"
   end
   if source == nil or line == nil
-    eprint("\n[Compile Error]: " + msg + "\n")
+    let loc = ""
+    if file != nil and line != nil
+      loc = "\n  --> " + file + ":" + to_string(line)
+    elif file != nil
+      loc = "\n  --> " + file
+    end
+    eprint("\n[Compile Error]: " + msg + loc + "\n")
     exit(1)
   end
   if col == nil or col < 1
