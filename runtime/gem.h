@@ -290,6 +290,8 @@ GemVal gem_random_fn(void *_env, GemVal *args, int argc);
 GemVal gem_append_file_fn(void *_env, GemVal *args, int argc);
 GemVal gem_getenv_fn(void *_env, GemVal *args, int argc);
 GemVal gem_input_fn(void *_env, GemVal *args, int argc);
+GemVal gem_read_stdin_fn(void *_env, GemVal *args, int argc);
+GemVal gem_write_stdout_fn(void *_env, GemVal *args, int argc);
 GemVal gem_insert_fn(void *_env, GemVal *args, int argc);
 GemVal gem_remove_at_fn(void *_env, GemVal *args, int argc);
 GemVal gem_band_fn(void *_env, GemVal *args, int argc);

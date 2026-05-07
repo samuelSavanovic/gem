@@ -1,0 +1,25 @@
+# lsp/server.gem — main loop. Reads stdin frames via rpc, dispatches each
+# through handlers.dispatch.
+#
+# v1 keeps the loop synchronous: rpc.read_message blocks the OS thread
+# (fgets/fread on stdin), so spawning per-request workers wouldn't actually
+# run concurrently with the next read. Doc-process send/receive still
+# yields cooperatively, so registered doc processes get scheduled between
+# frames. Cancellation-grade concurrency (cancel mid-completion) is a
+# follow-up — see LSP_ROADMAP §1a Caveats.
+
+load "./rpc"
+load "./handlers"
+
+fn run()
+  let d = handlers.make_dispatcher()
+  while true
+    let msg = rpc.read_message()
+    if msg == nil
+      exit(0)
+    end
+    d.dispatch(msg)
+  end
+end
+
+export run

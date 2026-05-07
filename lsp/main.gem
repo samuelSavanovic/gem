@@ -1,0 +1,12 @@
+# lsp/main.gem — entry for `gem lsp`. Dispatched from compiler/main.gem
+# when argv[1] == "lsp". Hands off to lsp/server.gem; the function exists
+# as a thin wrapper so the load + dispatch site in compiler/main.gem stays
+# trivial and the lsp tree owns its own startup sequence.
+
+load "./server"
+
+fn run_lsp()
+  server.run()
+end
+
+export run_lsp

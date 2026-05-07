@@ -18,6 +18,7 @@ For example:
 
 ```
 compiler/             # self-hosting compiler (lexer, parser, AST, errors, liveness, codegen, main)
+lsp/                  # language server: main (entry), rpc (framing+types), server (loop), handlers (lifecycle+textDocument), doc (per-uri process). Dispatched from compiler/main.gem when argv[1] == "lsp"
 std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, supervisor, gen_server, test)
 runtime/              # C runtime — split by category:
   gem.h               #   public API, tagged values, process table, scheduler decls
@@ -59,6 +60,7 @@ make bootstrap         # regenerate stage0.c from current compiler sources (veri
 make test              # run all numbered examples in examples/ against expected_output.txt
 make test-json         # run examples/json_parser.gem
 make test-json-suite   # run JSONTestSuite parser conformance (clones to /tmp on first run)
+make test-lsp          # smoke-test the `gem lsp` subcommand (canned initialize/didOpen/shutdown session)
 make clean             # remove build/ and /tmp/gem_*
 ```
 
