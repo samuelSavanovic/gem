@@ -1,0 +1,9 @@
+# Missing `end` for the inner `if`. Two consecutive top-level fns means
+# the parser will eventually run out of `end`s and report multiple errors.
+fn foo()
+  if true
+    print("a")
+
+fn bar()
+  print("b")
+end

@@ -13,6 +13,7 @@ load "std/string"
 load "./parser" (parse_source)
 load "./codegen" (make_codegen)
 load "./fold" (fold_constants)
+load "./errors" (make_error_sink, print_all_errors)
 
 # ─── Install root (for runtime/, build/libgem_runtime.a) ──────
 # argv()[0] is typically <root>/build/gem, so install_root is <root>.
@@ -388,7 +389,7 @@ end
 
 # ─── Load resolution ──────────────────────────────────────────
 
-fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file)
+fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
   let new_stmts = []
   let count = 0
   for stmt in ast.stmts
@@ -427,10 +428,10 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
 
       let source = read_file(full_path)
       sources_by_file[full_path] = source
-      let loaded_ast = parse_source(source, full_path)
+      let loaded_ast = parse_source(source, full_path, sink)
       tag_source_file(loaded_ast, full_path)
       let loaded_dir = dirname(full_path)
-      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file)
+      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
 
       let export_node = find_export_node(resolved.stmts)
       if export_node == nil
@@ -550,7 +551,9 @@ end
 let src_path = cli.src_path
 let source = read_file(src_path)
 
-let ast = parse_source(source, src_path)
+let sink = make_error_sink()
+
+let ast = parse_source(source, src_path, sink)
 tag_source_file(ast, src_path)
 let base_dir = dirname(src_path)
 let project_root = find_project_root(base_dir)
@@ -562,16 +565,37 @@ let loaded = {}
 let module_bindings = {}
 let sources_by_file = {}
 sources_by_file[src_path] = source
-let resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file)
+
+# If lex/parse already failed, skip load resolution + codegen entirely.
+# `resolve_loads` runs the parser on dependent files, and a parse-failed
+# AST may not have well-formed `load` nodes. The driver bails to a single
+# print_all_errors pass either way.
+let resolved_ast = nil
+if not sink.has_any()
+  resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
+end
+
+if sink.has_any()
+  print_all_errors(sink)
+  exit(1)
+end
+
 fold_constants(resolved_ast)
 
-let cg = make_codegen(src_path, module_bindings, project_root, sources_by_file)
+let cg = make_codegen(src_path, module_bindings, project_root, sources_by_file, sink)
 let c_code = cg.compile(resolved_ast)
 
+# Codegen may have surfaced semantic errors (undeclared identifier,
+# missing module export, etc.). One last pass before we run cc / write
+# output: print everything and exit non-zero if anything fired.
+if sink.has_any()
+  print_all_errors(sink)
+  exit(1)
+end
+
 # ─── Check mode ───────────────────────────────────────────────
-# Parse + load resolution + codegen all succeeded — by here every error()
-# site has been satisfied. Exit 0 silently; failures already printed via
-# the existing caret-context error path.
+# Zero diagnostics means parse + load resolution + codegen all succeeded.
+# In --check we exit 0 here, before writing C or invoking cc.
 
 if cli.check
   exit(0)

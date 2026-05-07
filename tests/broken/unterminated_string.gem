@@ -1,0 +1,4 @@
+# Unterminated string. Lexer reports one error and the parser is skipped.
+let x = "hello
+let y = 3
+print(x)

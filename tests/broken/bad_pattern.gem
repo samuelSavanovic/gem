@@ -1,0 +1,9 @@
+# Two unexpected characters in pattern position. Lexer L15 recovery
+# (skip the byte, continue) lets the second error surface in the same pass.
+let v = 1
+match v
+when @
+  print("a")
+when $
+  print("b")
+end

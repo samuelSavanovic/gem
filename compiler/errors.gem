@@ -1,4 +1,11 @@
 # Error reporting — Rust-style compile error diagnostics.
+#
+# Two reporting paths:
+#   compile_error(...) — terminal: render and exit(1). Used by compiler-bug
+#     sentinels and any caller that must abort immediately.
+#   sink.report(...) → print_all_errors(sink) — accumulating: callers in the
+#     lexer/parser/codegen funnel through a shared sink so that one pass
+#     surfaces every diagnostic before the driver exits non-zero.
 
 fn get_source_line(source, line_num)
   let current = 1
@@ -28,7 +35,10 @@ fn repeat_char(ch, n)
   result
 end
 
-fn compile_error(source, file, line, col, span_len, msg, hint)
+# Render one error to stderr without exiting. `source` may be nil (degrades
+# to message-only output, used for compiler-bug paths where we have no line
+# context).
+fn print_one_error(source, file, line, col, span_len, msg, hint)
   if file == nil
     file = "<input>"
   end
@@ -40,7 +50,7 @@ fn compile_error(source, file, line, col, span_len, msg, hint)
       loc = "\n  --> " + file
     end
     eprint("\n[Compile Error]: " + msg + loc + "\n")
-    exit(1)
+    return
   end
   if col == nil or col < 1
     col = 1
@@ -68,7 +78,65 @@ fn compile_error(source, file, line, col, span_len, msg, hint)
   end
 
   eprint(out)
+end
+
+fn compile_error(source, file, line, col, span_len, msg, hint)
+  print_one_error(source, file, line, col, span_len, msg, hint)
   exit(1)
 end
 
-export compile_error
+# ─── Error sink ──────────────────────────────────────────────────
+# Closure-captured accumulator threaded through the parser, lexer, and
+# codegen so a single pass can surface every diagnostic. Each record stores
+# its own source text so cross-file errors (loaded modules) render with the
+# correct caret context. 20-error cap matches the cascade-defense strategy
+# in the LSP_PHASE_0B plan §7.1 — past 20 is almost always cascade noise.
+
+let ERROR_CAP = 20
+
+fn make_error_sink()
+  let errors = []
+  let count = 0
+  let suppressed = false
+  let dedup = {}
+
+  let report = fn(source, file, line, col, span_len, msg, hint)
+    if count >= ERROR_CAP
+      suppressed = true
+      return
+    end
+    let kfile = file
+    if kfile == nil then kfile = "<input>" end
+    let kline = "0"
+    if line != nil then kline = to_string(line) end
+    let kcol = "0"
+    if col != nil then kcol = to_string(col) end
+    let key = kfile + ":" + kline + ":" + kcol + ":" + msg
+    if has_key(dedup, key)
+      return
+    end
+    dedup[key] = true
+    push(errors, {source: source, file: file, line: line, col: col,
+                  span: span_len, msg: msg, hint: hint})
+    count += 1
+  end
+
+  let has_any = fn() count > 0 end
+  let drain = fn() errors end
+  let count_fn = fn() count end
+  let was_suppressed = fn() suppressed end
+
+  {report: report, has_any: has_any, drain: drain, count: count_fn,
+   suppressed: was_suppressed}
+end
+
+fn print_all_errors(sink)
+  for e in sink.drain()
+    print_one_error(e.source, e.file, e.line, e.col, e.span, e.msg, e.hint)
+  end
+  if sink.suppressed()
+    eprint("\n[Compile Error]: too many errors; further diagnostics suppressed\n")
+  end
+end
+
+export compile_error, print_one_error, make_error_sink, print_all_errors

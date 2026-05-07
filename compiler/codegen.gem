@@ -3,7 +3,7 @@
 # Uses closure-based pattern: fn make_codegen() returns a table of methods.
 
 load "./liveness" (compute_live_for_pt_loops_in_stmts, is_spawn_callee_name)
-load "./errors" (compile_error)
+load "./errors" (make_error_sink)
 
 # ─── String helpers ─────────────────────────────────────────────
 
@@ -1090,12 +1090,15 @@ tag_process_tail_while_loops = fn(fn_defs, top_stmts, process_tail_fns, source_n
   walk_for_tagging_stmts(top_stmts, true, source_name)
 end
 
-fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_by_file = nil)
+fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_by_file = nil, sink = nil)
   if module_bindings == nil
     module_bindings = {}
   end
   if sources_by_file == nil
     sources_by_file = {}
+  end
+  if sink == nil
+    sink = make_error_sink()
   end
 
   # Strip project_root prefix so emitted #line / gem_push_frame paths are
@@ -1134,10 +1137,10 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     f
   end
 
-  # Source text for the file containing `node`, used by compile_error()
-  # to render the offending line + caret. Falls back to the entry source
-  # when a loaded file's text isn't available; compile_error() degrades to
-  # message-only output when source is nil.
+  # Source text for the file containing `node`, used by sink.report() so
+  # diagnostics render the offending line + caret. Falls back to nil when
+  # a loaded file's text isn't available; print_one_error degrades to
+  # message-only output in that case.
   let source_of = fn(node)
     let f = file_of(node)
     if has_key(sources_by_file, f)
@@ -2945,9 +2948,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       return nil
     end
     if has_key(builtin_fns, name) or set_contains(defined_fns, name)
-      compile_error(source_of(node), file_of(node), node.line, node.col, len(name), "cannot assign to function `{name}`", nil)
+      sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "cannot assign to function `{name}`", nil)
     else
-      compile_error(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", "use `let {name} = ...` to declare")
+      sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", "use `let {name} = ...` to declare")
     end
   end
 
@@ -2997,11 +3000,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
           return {expr: "gem_make_fn(gem_fn_{name}, NULL)", setup: ""}
         elif not set_contains(top_level_vars, name) and not set_contains(top_level_boxed, name)
           # Name resolves nowhere — undeclared identifier (typo or missing
-          # let/load). Fail with a clean diagnostic rather than emitting
-          # `gem_v_<name>` and bottoming out at a cc error, and rather than
-          # letting downstream liveness rescue analysis complain about a
-          # phantom "live var with no C local".
-          compile_error(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", nil)
+          # let/load). Report and emit GEM_NIL so codegen continues; the
+          # driver gates final emission on sink.has_any() so this never
+          # reaches `cc`.
+          sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", nil)
+          return {expr: "GEM_NIL", setup: ""}
         end
       end
       let mname = mangle(name)
@@ -3053,7 +3056,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
           if suggestion != nil
             hint = "did you mean `{suggestion}`?"
           end
-          compile_error(source_of(loc_node), file_of(loc_node), loc_node.line, loc_node.col, len(field), "module `{object.name}` has no export `{field}`", hint)
+          sink.report(source_of(loc_node), file_of(loc_node), loc_node.line, loc_node.col, len(field), "module `{object.name}` has no export `{field}`", hint)
         end
       end
       let r = compile_expr(object)
