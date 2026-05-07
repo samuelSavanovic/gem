@@ -1,0 +1,317 @@
+# lsp/symbols.gem — build a symbol table from a parsed Gem AST.
+#
+# Shape: {functions, vars, imports}. Each entry is at minimum
+#   {name, file, line, col, scope}
+# where scope is the enclosing-fn chain as a list, e.g. ["top-level"]
+# for top-level definitions or ["top-level", "outer_fn"] for a binding
+# inside outer_fn. Anon fns push "<anon>" onto the chain since the parser
+# doesn't allow named fns inside fn bodies — every nested fn is anon.
+#
+# Functions: only top-level `fn_def` and `extern fn` declarations. Anon
+# fns that happen to be let-bound show up in `vars` via their let binding;
+# PR #11 (goto-def / completion) can look-through if needed.
+#
+# Vars: every `let` (including destructuring), every fn param, every
+# `match` arm binding, every `receive` arm binding. Per Gem's function
+# scoping, all of these live in the enclosing function's scope.
+#
+# Imports: every `load` node, with the resolved absolute path when
+# resolution succeeds (resolve_load_path can throw on missing-stdlib;
+# that's swallowed here so a typo doesn't crash the LSP).
+#
+# Col is 0 for `let`/`fn_def` because the parser only stamps line on
+# those node tags. PR #11 can plumb through real columns when it needs
+# them for go-to-definition precision.
+
+load "std/string"
+load "../compiler/loader" (resolve_load_path)
+
+# Names the desugar layer (param destructuring, let destructuring, for
+# loops) introduces. They aren't user-visible — keep them out of the
+# symbol table so completion / outline never surfaces them. The gensym
+# convention is `_pdestr<N>`, `_d<N>`, `_for_<role>_<N>`; we filter the
+# prefix plus a digit to avoid hiding ordinary user names like `_data`.
+fn is_gensym(name)
+  if string.starts_with(name, "_pdestr")
+    return true
+  end
+  if string.starts_with(name, "_for_")
+    return true
+  end
+  if string.starts_with(name, "_d") and len(name) >= 3
+    let c = ord(name, 2)
+    if c >= 48 and c <= 57
+      return true
+    end
+  end
+  false
+end
+
+fn module_name_from_path(path)
+  let plen = len(path)
+  let last_slash = -1
+  let i = 0
+  while i < plen
+    if ord(path, i) == 47
+      last_slash = i
+    end
+    i += 1
+  end
+  let name_start = last_slash + 1
+  let name_len = plen - name_start
+  let name = substr(path, name_start, name_len)
+  let nlen = len(name)
+  if nlen > 4
+    let suffix = substr(name, nlen - 4, 4)
+    if suffix == ".gem"
+      name = substr(name, 0, nlen - 4)
+    end
+  end
+  name
+end
+
+fn extend_scope(scope, name)
+  let out = []
+  for s in scope
+    push(out, s)
+  end
+  push(out, name)
+  out
+end
+
+fn build_symbols(ast, file, base_dir, project_root, stdlib_root)
+  let acc = {
+    functions: [],
+    vars: [],
+    imports: [],
+    file: file,
+    base_dir: base_dir,
+    project_root: project_root,
+    stdlib_root: stdlib_root
+  }
+  if ast == nil or ast.tag != "program"
+    return {functions: acc.functions, vars: acc.vars, imports: acc.imports}
+  end
+  walk_stmts(ast.stmts, ["top-level"], acc)
+  {functions: acc.functions, vars: acc.vars, imports: acc.imports}
+end
+
+fn walk_stmts(stmts, scope, acc)
+  for stmt in stmts
+    walk_node(stmt, scope, acc)
+  end
+end
+
+fn walk_node(node, scope, acc)
+  if node == nil then return end
+  if type(node) != "table" then return end
+  if node.tag == nil then return end
+
+  match node
+  when {tag: "fn_def", name: name, params: params, body: body, line: line}
+    push(acc.functions, {
+      name: name,
+      file: acc.file,
+      line: line,
+      col: 0,
+      scope: scope,
+      params: params,
+      rest_param: node.rest_param,
+      kind: "fn"
+    })
+    let inner = extend_scope(scope, name)
+    record_params(params, node.rest_param, line, inner, acc)
+    walk_stmts(body, inner, acc)
+
+  when {tag: "anon_fn", params: params, body: body}
+    let inner = extend_scope(scope, "<anon>")
+    record_params(params, node.rest_param, nil, inner, acc)
+    walk_stmts(body, inner, acc)
+
+  when {tag: "extern_fn", name: name, params: params}
+    push(acc.functions, {
+      name: name,
+      file: acc.file,
+      line: nil,
+      col: 0,
+      scope: scope,
+      params: params,
+      rest_param: nil,
+      kind: "extern"
+    })
+
+  when {tag: "let", name: name, value: value, line: line}
+    if not is_gensym(name)
+      push(acc.vars, {
+        name: name,
+        file: acc.file,
+        line: line,
+        col: 0,
+        scope: scope,
+        kind: "let"
+      })
+    end
+    walk_node(value, scope, acc)
+
+  when {tag: "assign", value: value}
+    walk_node(value, scope, acc)
+
+  when {tag: "dot_assign", object: object, value: value}
+    walk_node(object, scope, acc)
+    walk_node(value, scope, acc)
+
+  when {tag: "index_assign", object: object, key: key, value: value}
+    walk_node(object, scope, acc)
+    walk_node(key, scope, acc)
+    walk_node(value, scope, acc)
+
+  when {tag: "if", cond: cond}
+    walk_node(cond, scope, acc)
+    walk_stmts(node.then, scope, acc)
+    if node.else != nil
+      walk_stmts(node.else, scope, acc)
+    end
+
+  when {tag: "while", cond: cond, body: body}
+    walk_node(cond, scope, acc)
+    walk_stmts(body, scope, acc)
+
+  when {tag: "match", target: target, whens: whens}
+    walk_node(target, scope, acc)
+    for w in whens
+      walk_node(w.value, scope, acc)
+      if w.bindings != nil
+        for b in w.bindings
+          record_match_binding(b, scope, acc)
+        end
+      end
+      walk_stmts(w.body, scope, acc)
+    end
+    if node.else != nil
+      walk_stmts(node.else, scope, acc)
+    end
+
+  when {tag: "receive_match", arms: arms}
+    for arm in arms
+      walk_node(arm.pattern.condition, scope, acc)
+      if arm.pattern.bindings != nil
+        for b in arm.pattern.bindings
+          record_match_binding(b, scope, acc)
+        end
+      end
+      walk_stmts(arm.body, scope, acc)
+    end
+    if node.after_ms != nil
+      walk_node(node.after_ms, scope, acc)
+    end
+    if node.after_body != nil
+      walk_stmts(node.after_body, scope, acc)
+    end
+
+  when {tag: "return", value: value}
+    if value != nil
+      walk_node(value, scope, acc)
+    end
+
+  when {tag: "call", func: func, args: args}
+    walk_node(func, scope, acc)
+    for a in args
+      walk_node(a, scope, acc)
+    end
+
+  when {tag: "binop", left: left, right: right}
+    walk_node(left, scope, acc)
+    walk_node(right, scope, acc)
+
+  when {tag: "unop", expr: expr}
+    walk_node(expr, scope, acc)
+
+  when {tag: "dot", object: object}
+    walk_node(object, scope, acc)
+
+  when {tag: "index", object: object, key: key}
+    walk_node(object, scope, acc)
+    walk_node(key, scope, acc)
+
+  when {tag: "table", entries: entries}
+    for e in entries
+      walk_node(e.value, scope, acc)
+    end
+
+  when {tag: "array", elements: elements}
+    for e in elements
+      walk_node(e, scope, acc)
+    end
+
+  when {tag: "interp", parts: parts}
+    for p in parts
+      walk_node(p, scope, acc)
+    end
+
+  when {tag: "block", stmts: stmts}
+    walk_stmts(stmts, scope, acc)
+
+  when {tag: "load", path: path}
+    let resolved = nil
+    let res = pcall(fn()
+      resolved = resolve_load_path(path, acc.base_dir, acc.project_root, acc.stdlib_root)
+    end)
+    let binding_name = node.alias
+    if binding_name == nil
+      binding_name = module_name_from_path(path)
+    end
+    push(acc.imports, {
+      name: binding_name,
+      file: acc.file,
+      line: nil,
+      col: 0,
+      scope: scope,
+      path: path,
+      resolved_path: resolved,
+      alias: node.alias,
+      selective: node.selective
+    })
+  end
+end
+
+fn record_params(params, rest_param, line, scope, acc)
+  for p in params
+    if not is_gensym(p)
+      push(acc.vars, {
+        name: p,
+        file: acc.file,
+        line: line,
+        col: 0,
+        scope: scope,
+        kind: "param"
+      })
+    end
+  end
+  if rest_param != nil and not is_gensym(rest_param)
+    push(acc.vars, {
+      name: rest_param,
+      file: acc.file,
+      line: line,
+      col: 0,
+      scope: scope,
+      kind: "rest_param"
+    })
+  end
+end
+
+fn record_match_binding(b, scope, acc)
+  if b == nil then return end
+  if type(b) != "table" then return end
+  if b.tag == "var"
+    push(acc.vars, {
+      name: b.name,
+      file: acc.file,
+      line: b.line,
+      col: b.col,
+      scope: scope,
+      kind: "match_binding"
+    })
+  end
+end
+
+export build_symbols

@@ -13,6 +13,16 @@
 load "./rpc"
 load "./doc"
 
+# `gem/debug/symbols` is an internal probe for the symbols smoke test.
+# Gated on $GEM_LSP_DEBUG so external editors can't peek at internal
+# state by guessing the method name. It's not a real LSP method —
+# textDocument/documentSymbol lands in v2 once we surface symbols
+# through proper LSP types.
+fn debug_enabled()
+  let v = getenv("GEM_LSP_DEBUG")
+  v != nil and v != "" and v != "0"
+end
+
 fn server_capabilities()
   {
     capabilities: {
@@ -90,6 +100,16 @@ fn make_dispatcher()
 
     if method == "textDocument/didClose"
       doc.close(params.textDocument)
+      return
+    end
+
+    if method == "gem/debug/symbols" and debug_enabled()
+      let syms = doc.get_symbols(params.uri)
+      if syms == nil
+        rpc.write_message(rpc.make_error_response(id, rpc.ERR_INVALID_PARAMS, "doc not open: " + params.uri))
+      else
+        rpc.write_message(rpc.make_response(id, syms))
+      end
       return
     end
 

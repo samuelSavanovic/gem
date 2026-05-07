@@ -1,21 +1,74 @@
 # lsp/doc.gem — per-document state, modeled as one registered process per
-# open URI. Holds the current text + version. Phase 1b will add the parsed
-# AST and a debounced reparse; for now state queries just echo the text.
+# open URI. Holds the current text + version, the parsed AST, the error
+# sink that produced it, and the precomputed symbol table.
 #
 # Process name format: "lsp_doc:" + uri. send/whereis use that name; when
 # the doc closes, the process exits and the registration auto-cleans.
+#
+# Every set_text reparses with a fresh sink (Phase 0b sinks are
+# closure-captured and non-resettable). Symbol-table construction reuses
+# the AST as-is — a partial AST from a recovered parse is fine, we just
+# walk whatever is there.
 
+load "std/string"
 load "./rpc"
+load "./symbols" (build_symbols)
+load "../compiler/parser" (parse_source)
+load "../compiler/errors" (make_error_sink)
+load "../compiler/loader" (find_project_root, compute_stdlib_root)
 
-fn doc_loop(uri, text, version)
+# install_root is set once at server startup and reused across all docs.
+# Empty string means "not yet computed"; first doc to open fills it in.
+let _install_root_cache = ""
+
+fn install_root()
+  if _install_root_cache == ""
+    _install_root_cache = dirname(dirname(argv()[0]))
+  end
+  _install_root_cache
+end
+
+# file:///abs/path/foo.gem → /abs/path/foo.gem. No percent-decoding for
+# v1; revisit if a real workspace path contains spaces or unicode.
+fn uri_to_path(uri)
+  if string.starts_with(uri, "file://")
+    return substr(uri, 7, len(uri) - 7)
+  end
+  uri
+end
+
+# Reparse + rebuild the symbol table for `text` at `uri`. Always returns
+# a populated cache table; on lex failure parse_source returns an empty
+# program and we get an empty symbol table, which is the right behavior
+# (no symbols to surface until the user fixes the lex error).
+fn analyze(uri, text)
+  let path = uri_to_path(uri)
+  let base_dir = dirname(path)
+  let project_root = find_project_root(base_dir)
+  if project_root != nil
+    project_root = normalize_path(project_root)
+  end
+  let stdlib_root = compute_stdlib_root(install_root(), project_root)
+  let sink = make_error_sink()
+  let ast = parse_source(text, path, sink)
+  let syms = build_symbols(ast, path, base_dir, project_root, stdlib_root)
+  {ast: ast, sink: sink, symbols: syms,
+   base_dir: base_dir, project_root: project_root, stdlib_root: stdlib_root}
+end
+
+fn doc_loop(uri, text, version, cache)
   receive
   when {tag: "set_text", text: new_text, version: new_version}
-    doc_loop(uri, new_text, new_version)
+    let new_cache = analyze(uri, new_text)
+    doc_loop(uri, new_text, new_version, new_cache)
   when {tag: "close"}
     return
   when {tag: "get_text", from: from}
     send(from.pid, {tag: "doc_reply", ref: from.ref, text: text})
-    doc_loop(uri, text, version)
+    doc_loop(uri, text, version, cache)
+  when {tag: "get_symbols", from: from}
+    send(from.pid, {tag: "doc_reply", ref: from.ref, symbols: cache.symbols})
+    doc_loop(uri, text, version, cache)
   end
 end
 
@@ -25,11 +78,27 @@ fn open(td)
     # Re-open of an already-open doc: replace contents in place rather
     # than spawning a duplicate. Clients shouldn't do this, but be lenient.
     send(name, {tag: "set_text", text: td.text, version: td.version})
-  else
-    spawn(fn()
-      register(name, self())
-      doc_loop(td.uri, td.text, td.version)
-    end)
+    return nil
+  end
+  # Synchronous registration: the LSP main loop blocks on stdin reads,
+  # which never yield, so the spawned doc process needs a hand-off
+  # before the dispatcher returns. Otherwise a request that follows
+  # didOpen on the same input frame would whereis() the doc before it
+  # has registered. Receiving doc_ready forces a scheduler turn that
+  # lets the spawn run register() + analyze() before we return.
+  let parent_pid = self()
+  let ref = make_ref()
+  spawn(fn()
+    register(name, self())
+    let cache = analyze(td.uri, td.text)
+    send(parent_pid, {tag: "doc_ready", ref: ref})
+    doc_loop(td.uri, td.text, td.version, cache)
+  end)
+  receive
+  when {tag: "doc_ready", ref: r}
+    nil
+  after 5000
+    nil
   end
   nil
 end
@@ -80,6 +149,23 @@ fn get_text(uri)
   result
 end
 
+fn get_symbols(uri)
+  let name = "lsp_doc:" + uri
+  if whereis(name) == nil
+    return nil
+  end
+  let ref = make_ref()
+  send(name, {tag: "get_symbols", from: {pid: self(), ref: ref}})
+  let result = nil
+  receive
+  when {tag: "doc_reply", ref: r, symbols: syms}
+    result = syms
+  after 5000
+    result = nil
+  end
+  result
+end
+
 fn publish_diagnostics(uri, diagnostics)
   rpc.write_message(rpc.make_notification(
     "textDocument/publishDiagnostics",
@@ -88,4 +174,4 @@ fn publish_diagnostics(uri, diagnostics)
   nil
 end
 
-export open, change, close, get_text, publish_diagnostics
+export open, change, close, get_text, get_symbols, publish_diagnostics

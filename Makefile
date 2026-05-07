@@ -55,6 +55,7 @@ test-corpus: $(GEM)
 
 test-lsp: $(GEM)
 	@bash tests/lsp/smoke.sh
+	@bash tests/lsp/smoke_symbols.sh
 
 test-json: $(GEM)
 	@$(GEM) examples/json_parser.gem --run
