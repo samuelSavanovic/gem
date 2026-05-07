@@ -1,0 +1,5 @@
+# Two parse errors on adjacent lines. parse_atom should report each and
+# advance, surfacing both before exit.
+let x = 1 + ;
+let y = ;
+print(x + y)

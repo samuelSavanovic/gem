@@ -1,0 +1,8 @@
+# Stylistic: `else if` should be `elif`. One reported error, recovery
+# continues with the rest of the file.
+let a = 1
+if a == 1
+  print("one")
+else if a == 2
+  print("two")
+end

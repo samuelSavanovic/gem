@@ -18,7 +18,7 @@ A minimal language server for Gem, focused on the features that provide the most
 |---|---|---|---|---|
 | #6 | `lsp/plan` | Lock LSP implementation plan + Phase 0b design | ✓ Done (2026-05-07, commit `21b9623`) | — |
 | #7 | `lsp/phase-0a-codegen-caret` | Phase 0a — route codegen errors through `compile_error()` for caret context | ✓ Done (2026-05-07) | ~50 |
-| #8 | `lsp/phase-0b-multi-error` | Phase 0b — multi-error recovery in lexer/parser/codegen | Pending (planning in `docs/LSP_PHASE_0B_PLAN.md`) | ~300–400 |
+| #8 | `lsp/phase-0b-multi-error` | Phase 0b — multi-error recovery in lexer/parser/codegen | ✓ Done (2026-05-07) | ~430 |
 | #9 | `lsp/phase-1a-scaffold` | Phase 1a — `gem lsp` subcommand, JSON-RPC framing, lifecycle, didOpen/didChange | Pending | ~400 |
 | #10 | `lsp/phase-1b-symbols` | Phase 1b — symbol table pass, per-doc AST cache | Pending | ~250 |
 | #11 | `lsp/phase-2a-features` | Phase 2a — goto-def + completion (table fields, identifiers, builtins) | Pending | ~300 |
@@ -45,9 +45,9 @@ These two together give every diagnostic the same shape and accuracy regardless 
 
 ### Multi-error recovery
 
-Today the compiler bails at the first `error()` — 32 sites across lexer/parser/codegen, each terminal. Single-error is tolerable for `--check` in CI/save-hooks, but in an LSP loop it's the difference between "fix the file" and "fix one thing, save, fix the next thing, save, …".
+✓ Done (2026-05-07, PR #8). The compiler now accumulates every diagnostic in one pass via a closure-captured error sink (`make_error_sink` in `compiler/errors.gem`) threaded through lexer, parser, codegen, and `resolve_loads`. The lexer recovers from unexpected characters and missing newlines after `"""`/`'''`; unterminated-string variants emit one error and stop scanning. The parser's `expect()` reports without consuming and returns a synthetic token, with a per-loop `force_progress` watchdog at every `while peek().type != X` site (table/array/interp/destructure) and a top-level guard in `parse()`. Garbage in expression or pattern position returns `error_expr` / a never-matching pattern stub; codegen's four user-facing sites (assign-to-fn, undeclared identifier in assign, undeclared identifier in var ref, missing module export) report-and-continue with `GEM_NIL` placeholders. The driver gates each phase on `sink.has_any()` so codegen output is byte-identical for valid programs (bootstrap roundtrip verified). Tooling: `tests/broken/*.gem` corpus (8 files) plus `tests/check_broken.sh` (min/max error-count bounds, catches both regression and cascade) and `tests/check_corpus.sh` (`--check` over compiler+std+examples), both wired into `make test`. Sink dedupes by `file:line:col:msg` and caps at 20 errors with a "too many errors; further diagnostics suppressed" trailer.
 
-The work: parser sync points (statement boundaries, `end` keyword), AST stub nodes for partial parses, and threading an error list through lexer/parser/codegen instead of calling `error()` directly. Realistically 300–400 lines and a careful pass — not a quick fix. Lands as PR #8 (per the locked plan above); detailed design in `docs/LSP_PHASE_0B_PLAN.md` while the work is in flight.
+Deferred from the plan to a follow-up PR (per §3.3 Option B): no codegen-side AST tolerance for `error_expr`/`error_stmt` — they never reach codegen because main.gem skips it once the parser has reported. Adding tolerance would let codegen surface semantic errors on the same pass as parse errors; not worth the audit cost yet.
 
 ## Phase 1: Foundations (~2 days)
 

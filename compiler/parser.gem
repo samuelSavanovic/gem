@@ -2,8 +2,9 @@
 # Takes a token array from the lexer, returns an AST using constructors from ast.gem.
 # Produces the EXACT same AST shape as the bootstrap compiler.
 
-load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include)
-load "./lexer" (tokenize, compile_error)
+load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
+load "./lexer" (tokenize)
+load "./errors" (make_error_sink)
 
 # ─── Number conversion helpers ───────────────────────────────────
 
@@ -55,15 +56,27 @@ end
 
 # ─── Helpers ─────────────────────────────────────────────────────
 
-fn parse_source(source, file)
-  let tokens = tokenize(source, file)
-  let p = make_parser(tokens, source, file)
+fn parse_source(source, file, sink)
+  if sink == nil
+    sink = make_error_sink()
+  end
+  let tokens = tokenize(source, file, sink)
+  # If the lexer reported errors, skip the parser entirely — the token
+  # stream past an unterminated string is meaningless and parser cascades
+  # would just spam the user with derivative diagnostics.
+  if sink.has_any()
+    return make_program([])
+  end
+  let p = make_parser(tokens, source, file, sink)
   p.parse()
 end
 
 # ─── Parser constructor ─────────────────────────────────────────
 
-fn make_parser(tokens, source, file)
+fn make_parser(tokens, source, file, sink)
+  if sink == nil
+    sink = make_error_sink()
+  end
   let pos = 0
   let gensym_counter = 0
   let fn_depth = 0
@@ -88,13 +101,33 @@ fn make_parser(tokens, source, file)
     tokens[pos].type == "EOF"
   end
 
+  # Report a parser error at the given location.
+  let report = fn(line, col, span, msg, hint)
+    sink.report(source, file, line, col, span, msg, hint)
+  end
+
+  # `expect` is non-fatal: on mismatch it reports and returns a synthetic
+  # token of the expected type *without consuming*. Loops that depend on
+  # advancement past a missing terminator must also use the per-loop
+  # progress guard (see parse_body / parse_fn_body / each `while peek...`).
   let expect = fn(tp)
     let t = tokens[pos]
     if t.type != tp
-      compile_error(source, file, t.line, t.col, len(t.value), "expected '{tp}' but got '{t.type}'", nil)
+      report(t.line, t.col, len(t.value), "expected '{tp}' but got '{t.type}'", nil)
+      return {type: tp, value: tp, line: t.line, col: t.col, synthetic: true}
     end
     pos += 1
     t
+  end
+
+  # Force-advance one token if the loop body produced no progress this
+  # iteration. Used inside every `while peek().type != X` to guarantee
+  # forward motion even when expect() returns a synthetic and leaves the
+  # offending token in the stream.
+  let force_progress = fn(last_pos)
+    if pos == last_pos and tokens[pos].type != "EOF"
+      pos += 1
+    end
   end
 
   let skip_nl = fn()
@@ -141,7 +174,8 @@ fn make_parser(tokens, source, file)
         skip_nl()
         let dnames = []
         let ddflts = []
-        while peek().type != "}"
+        while peek().type != "}" and not at_end()
+          let _lp = pos
           let field_tok = peek()
           advance()
           push(dnames, field_tok.value)
@@ -158,6 +192,7 @@ fn make_parser(tokens, source, file)
             advance()
             skip_nl()
           end
+          force_progress(_lp)
         end
         expect("}")
 
@@ -182,7 +217,7 @@ fn make_parser(tokens, source, file)
           ))
         else
           if has_default
-            compile_error(source, file, dline, dcol, 1, "required parameter after optional parameter", nil)
+            report(dline, dcol, 1, "required parameter after optional parameter", nil)
           end
           push(defaults, nil)
         end
@@ -224,7 +259,7 @@ fn make_parser(tokens, source, file)
         has_default = true
       else
         if has_default
-          compile_error(source, file, name_tok.line, name_tok.col, len(name_tok.value), "required parameter after optional parameter", nil)
+          report(name_tok.line, name_tok.col, len(name_tok.value), "required parameter after optional parameter", nil)
         end
         push(defaults, nil)
       end
@@ -260,8 +295,10 @@ fn make_parser(tokens, source, file)
     let stmts = []
     skip_nl()
     while peek().type != "end" and peek().type != "elif" and peek().type != "else" and peek().type != "when" and peek().type != "after" and peek().type != "then" and not at_end()
+      let _lp = pos
       push(stmts, parse_stmt())
       skip_nl()
+      force_progress(_lp)
     end
     stmts
   end
@@ -273,8 +310,10 @@ fn make_parser(tokens, source, file)
     let stmts = []
     skip_nl()
     while peek().type != "end" and not at_end()
+      let _lp = pos
       push(stmts, parse_stmt())
       skip_nl()
+      force_progress(_lp)
     end
     stmts
   end
@@ -305,7 +344,8 @@ fn make_parser(tokens, source, file)
       advance()
       let parts = []
       skip_nl()
-      while peek().type != "INTERP_END"
+      while peek().type != "INTERP_END" and not at_end()
+        let _lp = pos
         if peek().type == "STRING"
           let sval = advance().value
           if len(sval) > 0
@@ -315,6 +355,7 @@ fn make_parser(tokens, source, file)
           push(parts, parse_expr())
         end
         skip_nl()
+        force_progress(_lp)
       end
       expect("INTERP_END")
       return make_interp(parts)
@@ -355,7 +396,8 @@ fn make_parser(tokens, source, file)
       advance()
       skip_nl()
       let entries = []
-      while peek().type != "}"
+      while peek().type != "}" and not at_end()
+        let _lp = pos
         let key_tok = peek()
         if key_tok.type == "NAME"
           advance()
@@ -363,7 +405,9 @@ fn make_parser(tokens, source, file)
           # Keyword in key position — allow it
           advance()
         else
-          compile_error(source, file, key_tok.line, key_tok.col, len(key_tok.value), "expected '}' or table key but got '{key_tok.type}'", nil)
+          report(key_tok.line, key_tok.col, len(key_tok.value), "expected '}' or table key but got '{key_tok.type}'", nil)
+          force_progress(_lp)
+          continue
         end
         expect(":")
         let val = parse_expr()
@@ -373,6 +417,7 @@ fn make_parser(tokens, source, file)
           advance()
           skip_nl()
         end
+        force_progress(_lp)
       end
       expect("}")
       return make_table(entries)
@@ -383,13 +428,15 @@ fn make_parser(tokens, source, file)
       advance()
       skip_nl()
       let elements = []
-      while peek().type != "]"
+      while peek().type != "]" and not at_end()
+        let _lp = pos
         push(elements, parse_expr())
         skip_nl()
         if peek().type == ","
           advance()
           skip_nl()
         end
+        force_progress(_lp)
       end
       expect("]")
       return make_array(elements)
@@ -416,7 +463,13 @@ fn make_parser(tokens, source, file)
       return make_var(t.value, t.line, t.col)
     end
 
-    compile_error(source, file, t.line, t.col, len(t.value), "unexpected token '{t.type}' (expected expression)", nil)
+    # P5: garbage in expression position. Report, consume the offending
+    # token so the surrounding loop makes progress, return an error stub.
+    report(t.line, t.col, len(t.value), "unexpected token '{t.type}' (expected expression)", nil)
+    if not at_end()
+      advance()
+    end
+    make_error_expr(t.line, t.col)
   end
 
   # call: atom followed by postfix ops (calls, dot, index)
@@ -620,7 +673,8 @@ fn make_parser(tokens, source, file)
       if lhs.tag == "index"
         return make_index_assign(lhs.object, lhs.key, value, start_line)
       end
-      compile_error(source, file, start_line, 1, 1, "invalid assignment target (expected variable, field, or index)", nil)
+      report(start_line, 1, 1, "invalid assignment target (expected variable, field, or index)", nil)
+      return make_error_stmt(start_line, 1)
     end
 
     # Compound assignment: var += expr, etc. (desugars to assign + binop)
@@ -629,7 +683,8 @@ fn make_parser(tokens, source, file)
       let base_op = op_tok.value[0]
       let value = parse_expr()
       if lhs.tag != "var"
-        compile_error(source, file, op_tok.line, op_tok.col, len(op_tok.value), "compound assignment requires variable target", nil)
+        report(op_tok.line, op_tok.col, len(op_tok.value), "compound assignment requires variable target", nil)
+        return make_error_stmt(op_tok.line, op_tok.col)
       end
       return make_assign(lhs.name, make_binop(base_op, make_var(lhs.name), value), start_line)
     end
@@ -661,7 +716,8 @@ fn make_parser(tokens, source, file)
       skip_nl()
       let conditions = [make_binop("==", make_call(make_var("type"), [target_expr], 0), make_string("table"))]
       let bindings = []
-      while peek().type != "}"
+      while peek().type != "}" and not at_end()
+        let _lp = pos
         let key_tok = peek()
         if key_tok.type == "NAME"
           advance()
@@ -669,7 +725,9 @@ fn make_parser(tokens, source, file)
           # keyword as key
           advance()
         else
-          compile_error(source, file, key_tok.line, key_tok.col, len(key_tok.value), "expected key name in table pattern", nil)
+          report(key_tok.line, key_tok.col, len(key_tok.value), "expected key name in table pattern", nil)
+          force_progress(_lp)
+          continue
         end
         let key_name = key_tok.value
         let key_str = make_string(key_name)
@@ -694,6 +752,7 @@ fn make_parser(tokens, source, file)
           advance()
           skip_nl()
         end
+        force_progress(_lp)
       end
       expect("}")
       return {condition: and_chain(conditions), bindings: bindings}
@@ -705,7 +764,8 @@ fn make_parser(tokens, source, file)
       skip_nl()
       let sub_patterns = []
       let idx = 0
-      while peek().type != "]"
+      while peek().type != "]" and not at_end()
+        let _lp = pos
         let sub = parse_pattern(make_index(target_expr, make_int(idx)))
         push(sub_patterns, sub)
         idx += 1
@@ -714,6 +774,7 @@ fn make_parser(tokens, source, file)
           advance()
           skip_nl()
         end
+        force_progress(_lp)
       end
       expect("]")
       let conditions = [make_binop("==", make_call(make_var("type"), [target_expr], 0), make_string("table"))]
@@ -765,7 +826,14 @@ fn make_parser(tokens, source, file)
       return {condition: make_bool(true), bindings: [make_let(t.value, target_expr, 0)]}
     end
 
-    compile_error(source, file, t.line, t.col, len(t.value), "expected pattern but got '{t.type}'", nil)
+    # P9: garbage in pattern position. Report, consume the bad token, and
+    # return a never-matching pattern so the surrounding match arm builds
+    # an inert {condition: false, bindings: []} record.
+    report(t.line, t.col, len(t.value), "expected pattern but got '{t.type}'", nil)
+    if not at_end()
+      advance()
+    end
+    {condition: make_bool(false), bindings: []}
   end
 
   # ── Statement parsing ──
@@ -784,7 +852,8 @@ fn make_parser(tokens, source, file)
         let names = []
         let dflts = []
         skip_nl()
-        while peek().type != "}"
+        while peek().type != "}" and not at_end()
+          let _lp = pos
           let field_tok = peek()
           # NAME or keyword as field name
           advance()
@@ -802,6 +871,7 @@ fn make_parser(tokens, source, file)
             advance()
             skip_nl()
           end
+          force_progress(_lp)
         end
         expect("}")
         expect("=")
@@ -829,7 +899,8 @@ fn make_parser(tokens, source, file)
         let names = []
         let dflts = []
         skip_nl()
-        while peek().type != "]"
+        while peek().type != "]" and not at_end()
+          let _lp = pos
           push(names, expect("NAME").value)
           skip_nl()
           if peek().type == "="
@@ -844,6 +915,7 @@ fn make_parser(tokens, source, file)
             advance()
             skip_nl()
           end
+          force_progress(_lp)
         end
         expect("]")
         expect("=")
@@ -877,7 +949,7 @@ fn make_parser(tokens, source, file)
       advance()
       let name = expect("NAME").value
       if fn_depth > 0
-        compile_error(source, file, line, 1, len(name) + 3, "named fn inside function body is not supported", "use: let {name} = fn(...) ... end")
+        report(line, 1, len(name) + 3, "named fn inside function body is not supported", "use: let {name} = fn(...) ... end")
       end
       expect("(")
       let pr = parse_params()
@@ -895,7 +967,7 @@ fn make_parser(tokens, source, file)
       advance()
       let cond = parse_expr()
       if cond.tag == "assign" or cond.tag == "dot_assign" or cond.tag == "index_assign"
-        compile_error(source, file, cond.line, 1, 1, "assignment is not allowed in condition; use '==' for comparison", nil)
+        report(cond.line, 1, 1, "assignment is not allowed in condition; use '==' for comparison", nil)
       end
       if peek().type == "then"
         advance()
@@ -909,7 +981,7 @@ fn make_parser(tokens, source, file)
         advance()
         if peek().type == "if"
           let err_tok = peek()
-          compile_error(source, file, err_tok.line, err_tok.col, 2, "use 'elif' instead of 'else if'", "Gem uses 'elif' for chained conditions")
+          report(err_tok.line, err_tok.col, 2, "use 'elif' instead of 'else if'", "Gem uses 'elif' for chained conditions")
         end
         else_body = parse_body()
       end
@@ -926,7 +998,7 @@ fn make_parser(tokens, source, file)
       advance()
       let cond = parse_expr()
       if cond.tag == "assign" or cond.tag == "dot_assign" or cond.tag == "index_assign"
-        compile_error(source, file, cond.line, 1, 1, "assignment is not allowed in condition; use '==' for comparison", nil)
+        report(cond.line, 1, 1, "assignment is not allowed in condition; use '==' for comparison", nil)
       end
       let wbody = parse_body()
       expect("end")
@@ -1022,7 +1094,16 @@ fn make_parser(tokens, source, file)
           while_node
         ]}
       else
-        compile_error(source, file, peek().line, peek().col, len(peek().value), "expected 'in' or '=' after for variable", nil)
+        let bad = peek()
+        report(bad.line, bad.col, len(bad.value), "expected 'in' or '=' after for variable", nil)
+        # Sync to the matching `end` so the surrounding body resumes.
+        while not at_end() and peek().type != "end"
+          advance()
+        end
+        if peek().type == "end"
+          advance()
+        end
+        return make_error_stmt(line, 1)
       end
     end
 
@@ -1161,7 +1242,9 @@ fn make_parser(tokens, source, file)
         let path = expect("STRING").value
         return make_extern_include(path)
       else
-        compile_error(source, file, peek().line, peek().col, len(peek().value), "expected 'fn' after 'extern blocking'", nil)
+        let bad = peek()
+        report(bad.line, bad.col, len(bad.value), "expected 'fn' after 'extern blocking'", nil)
+        return make_error_stmt(bad.line, bad.col)
       end
     end
 
@@ -1223,8 +1306,12 @@ fn make_parser(tokens, source, file)
     let stmts = []
     skip_nl()
     while not at_end()
+      let _lp = pos
       push(stmts, parse_stmt())
       skip_nl()
+      # Top-level watchdog: if parse_stmt didn't advance, force one token
+      # forward so a single bad token can't spin the parser forever.
+      force_progress(_lp)
     end
     make_program(stmts)
   end

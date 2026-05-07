@@ -2,7 +2,7 @@
 # Takes a source string, returns a flat array of token tables:
 #   {type: "NUMBER", value: "42", line: 3, col: 1}
 
-load "./errors" (compile_error)
+load "./errors" (make_error_sink)
 #
 # Token types: NUMBER, STRING, NAME, NEWLINE, EOF,
 # keywords (fn, end, let, if, elif, else, then, while, for, in, return, break, continue,
@@ -86,7 +86,10 @@ fn build_keyword_set()
   t
 end
 
-fn tokenize(source, file)
+fn tokenize(source, file, sink)
+  if sink == nil
+    sink = make_error_sink()
+  end
   let kw = build_keyword_set()
   let tokens = []
   let pos = 0
@@ -184,12 +187,18 @@ fn tokenize(source, file)
         while pos < length and (source[pos] == " " or source[pos] == "\t")
           pos += 1
         end
-        if pos >= length or source[pos] != "\n"
-          compile_error(source, file, line, pos - line_start + 1, 1, "triple-quoted string must be followed by a newline", nil)
+        if pos >= length
+          sink.report(source, file, line, pos - line_start + 1, 1, "triple-quoted string must be followed by a newline", nil)
+          push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+          return tokens
+        elif source[pos] != "\n"
+          sink.report(source, file, line, pos - line_start + 1, 1, "triple-quoted string must be followed by a newline", nil)
+          # Recover: continue scan as if the newline were present.
+        else
+          line += 1
+          line_start = pos + 1
+          pos += 1
         end
-        line += 1
-        line_start = pos + 1
-        pos += 1
 
         # Pre-scan: find the indentation of the closing """
         let tq_scan = pos
@@ -214,7 +223,9 @@ fn tokenize(source, file)
           end
         end
         if not tq_found
-          compile_error(source, file, line, pos - line_start + 1, 1, "unterminated triple-quoted string", nil)
+          sink.report(source, file, line, pos - line_start + 1, 1, "unterminated triple-quoted string", nil)
+          push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+          return tokens
         end
         triple_dq_indent = tq_bi
 
@@ -254,7 +265,9 @@ fn tokenize(source, file)
           if tqc == "\\"
             pos += 1
             if pos >= length
-              compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+              sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+              push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+              return tokens
             end
             let tqe = source[pos]
             let esc_result = apply_escape(tqe, "dq")
@@ -294,7 +307,9 @@ fn tokenize(source, file)
         if source[pos] == "\\"
           pos += 1
           if pos >= length
-            compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+            sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+            push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+            return tokens
           end
           let esc = source[pos]
           let esc_result = apply_escape(esc, "dq")
@@ -321,7 +336,9 @@ fn tokenize(source, file)
       end
       if not hit_interp
         if pos >= length
-          compile_error(source, file, line, tstart - line_start + 1, 1, "unterminated string", "this string is never closed")
+          sink.report(source, file, line, tstart - line_start + 1, 1, "unterminated string", "this string is never closed")
+          push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+          return tokens
         end
         pos += 1
         push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
@@ -340,12 +357,18 @@ fn tokenize(source, file)
         while pos < length and (source[pos] == " " or source[pos] == "\t")
           pos += 1
         end
-        if pos >= length or source[pos] != "\n"
-          compile_error(source, file, line, pos - line_start + 1, 1, "triple-quoted string must be followed by a newline", nil)
+        if pos >= length
+          sink.report(source, file, line, pos - line_start + 1, 1, "triple-quoted string must be followed by a newline", nil)
+          push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+          return tokens
+        elif source[pos] != "\n"
+          sink.report(source, file, line, pos - line_start + 1, 1, "triple-quoted string must be followed by a newline", nil)
+          # Recover: continue scan as if the newline were present.
+        else
+          line += 1
+          line_start = pos + 1
+          pos += 1
         end
-        line += 1
-        line_start = pos + 1
-        pos += 1
 
         # Pre-scan: find the indentation of the closing '''
         let sq_scan = pos
@@ -370,7 +393,9 @@ fn tokenize(source, file)
           end
         end
         if not sq_found
-          compile_error(source, file, line, pos - line_start + 1, 1, "unterminated triple-quoted string", nil)
+          sink.report(source, file, line, pos - line_start + 1, 1, "unterminated triple-quoted string", nil)
+          push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+          return tokens
         end
 
         # Real scan: collect content with dedent (no interpolation)
@@ -408,7 +433,9 @@ fn tokenize(source, file)
           if sqc == "\\"
             pos += 1
             if pos >= length
-              compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+              sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+              push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+              return tokens
             end
             let sqe = source[pos]
             let esc_result = apply_escape(sqe, "sq")
@@ -434,7 +461,9 @@ fn tokenize(source, file)
         if source[pos] == "\\"
           pos += 1
           if pos >= length
-            compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+            sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+            push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+            return tokens
           end
           let esc = source[pos]
           let esc_result = apply_escape(esc, "sq")
@@ -450,7 +479,9 @@ fn tokenize(source, file)
         pos += 1
       end
       if pos >= length
-        compile_error(source, file, line, tstart - line_start + 1, 1, "unterminated string", "this string is never closed")
+        sink.report(source, file, line, tstart - line_start + 1, 1, "unterminated string", "this string is never closed")
+        push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+        return tokens
       end
       pos += 1
       push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
@@ -592,7 +623,9 @@ fn tokenize(source, file)
           if tqrc == "\\"
             pos += 1
             if pos >= length
-              compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+              sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+              push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+              return tokens
             end
             let tqre = source[pos]
             let esc_result = apply_escape(tqre, "dq")
@@ -620,7 +653,9 @@ fn tokenize(source, file)
 
         if not hit_interp
           if pos >= length
-            compile_error(source, file, line, pos - line_start + 1, 1, "unterminated triple-quoted string interpolation", nil)
+            sink.report(source, file, line, pos - line_start + 1, 1, "unterminated triple-quoted string interpolation", nil)
+            push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+            return tokens
           end
           push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
           push(tokens, {type: "INTERP_END", value: "", line: line, col: tstart - line_start + 1})
@@ -635,7 +670,9 @@ fn tokenize(source, file)
         if source[pos] == "\\"
           pos += 1
           if pos >= length
-            compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+            sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+            push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+            return tokens
           end
           let esc = source[pos]
           let esc_result = apply_escape(esc, "dq")
@@ -662,7 +699,9 @@ fn tokenize(source, file)
       end
       if not hit_interp
         if pos >= length
-          compile_error(source, file, line, pos - line_start + 1, 1, "unterminated string interpolation", nil)
+          sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string interpolation", nil)
+          push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+          return tokens
         end
         push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
         push(tokens, {type: "INTERP_END", value: "", line: line, col: tstart - line_start + 1})
@@ -687,11 +726,12 @@ fn tokenize(source, file)
       continue
     end
 
-    compile_error(source, file, line, pos - line_start + 1, 1, "unexpected character: '{ch}'", nil)
+    sink.report(source, file, line, pos - line_start + 1, 1, "unexpected character: '{ch}'", nil)
+    pos += 1
   end
 
   push(tokens, {type: "EOF", value: "", line: line, col: tstart - line_start + 1})
   tokens
 end
 
-export tokenize, compile_error
+export tokenize
