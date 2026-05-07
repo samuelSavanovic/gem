@@ -490,7 +490,18 @@ void gem_pin_free_all(GemProcess *proc);
 #endif
 
 #ifndef GEM_CORO_STACK_SIZE
-#define GEM_CORO_STACK_SIZE (16 * 1024)
+/* 256 KB. Each spawned process owns a malloc'd coroutine stack of this
+ * size — there's no lazy paging, so the cost is paid up front per
+ * process. The original 16 KB choice was tuned for OTP-style processes
+ * that mostly receive messages and tail-recurse; it is far too small
+ * to run anything compiler-grade (lexer + parser + AST walks) inside
+ * a spawn. The LSP doc process surfaced the overflow on Linux glibc
+ * (heap canary trip / SIGSEGV); macOS happened to silently tolerate
+ * the overrun. Bookmark soak peaks ~55 MB at c=100, ~612 MB at c=500;
+ * bumping by 240 KB/process adds ~24 MB and ~120 MB respectively —
+ * well within the existing memory envelope. Switching to mmap'd stacks
+ * for lazy paging is tracked as a follow-up in OPTIMIZATIONS.md. */
+#define GEM_CORO_STACK_SIZE (256 * 1024)
 #endif
 
 extern GemProcess gem_proc_table[GEM_MAX_PROCS];
