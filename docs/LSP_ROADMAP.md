@@ -2,6 +2,32 @@
 
 A minimal language server for Gem, focused on the features that provide the most value for the least complexity. Dynamic typing puts a ceiling on static analysis, so the strategy is: handle the common patterns well, don't try to be omniscient.
 
+## Status & Plan (locked 2026-05-07)
+
+**Decisions:**
+
+- **Implementation language: Gem.** The roadmap originally leaned TypeScript (fastest scaffold via `vscode-languageserver`), but the AST-reuse argument flipped the call: every feature past diagnostics needs the parsed AST, and `load "compiler/parser"` from a Gem LSP is materially cheaper than reimplementing the parser in TS (drift forever) or shelling out `gem --dump-ast --json` per request (sluggish completion). The actor model also fits LSP semantics — document state as a registered process per file, request workers as spawned coroutines, cancellation as `exit(worker, kill)`. Cost: ~300–400 lines of JSON-RPC framing + LSP type table-shapes that we'd get for free in the npm ecosystem. Worth it.
+- **Binary shape: `gem lsp` subcommand.** Single artifact, single bootstrap surface, parser reuse is literally the same compiled code. Dispatched from `compiler/main.gem`. Avoids "two binaries that must agree on parser semantics" forever.
+- **Repo layout:** `lsp/` at repo root, sibling to `compiler/`, `runtime/`, `std/`. Modules: `lsp/main.gem` (entrypoint), `lsp/{rpc,server,doc,symbols,handlers}.gem`. The compiler imports nothing from `lsp/`; the LSP imports from `compiler/`.
+- **Format-on-save: in scope** for v1, with a minimal AST-driven pretty-printer (no source-preservation; comments reattached heuristically, some may move). Lifted out of "Not in Scope" below. Source-preserving formatter (CST or token-level) deferred to v2.
+- **Phase 0 first.** Multi-error recovery is the single biggest UX cliff between "useful LSP" and "annoying LSP" — without it every save shows one error at a time. Land before any LSP work.
+
+**PR plan:**
+
+| PR | Branch | Scope | Status | Lines |
+|---|---|---|---|---|
+| #6 | `lsp/phase-0a-codegen-caret` | Phase 0a — route codegen errors through `compile_error()` for caret context | Pending | ~50 |
+| #7 | `lsp/phase-0b-multi-error` | Phase 0b — multi-error recovery in lexer/parser/codegen | Pending (planning in `docs/LSP_PHASE_0B_PLAN.md`) | ~300–400 |
+| #8 | `lsp/phase-1a-scaffold` | Phase 1a — `gem lsp` subcommand, JSON-RPC framing, lifecycle, didOpen/didChange | Pending | ~400 |
+| #9 | `lsp/phase-1b-symbols` | Phase 1b — symbol table pass, per-doc AST cache | Pending | ~250 |
+| #10 | `lsp/phase-2a-features` | Phase 2a — goto-def + completion (table fields, identifiers, builtins) | Pending | ~300 |
+| #11 | `lsp/phase-2b-diagnostics` | Phase 2b — diagnostics integration (consumes Phase 0b error list) | Pending | ~100 |
+| #12 | `lsp/phase-3-format` | Phase 3 — minimal AST formatter + format-on-save | Pending | ~600 |
+
+Each PR ships independently. After merge, mark `✓ Done (date, commit-sha)` here and append any deviations from the plan in the relevant phase section below. Per-PR planning docs (e.g. `LSP_PHASE_0B_PLAN.md`) live alongside this file during implementation, get deleted once the PR lands (the work is in the code; the plan doc becomes noise).
+
+**Out of scope for v1** (deferred, not rejected): hover, document symbols, find references, rename, signature help, semantic tokens, source-preserving formatter. Land once core is real and a real workload demands them.
+
 ## Phase 0: Pre-LSP groundwork
 
 Land these before any LSP work — they're useful standalone and the LSP needs them anyway.
@@ -20,25 +46,28 @@ These two together give every diagnostic the same shape and accuracy regardless 
 
 Today the compiler bails at the first `error()` — 32 sites across lexer/parser/codegen, each terminal. Single-error is tolerable for `--check` in CI/save-hooks, but in an LSP loop it's the difference between "fix the file" and "fix one thing, save, fix the next thing, save, …".
 
-The work: parser sync points (statement boundaries, `end` keyword), AST stub nodes for partial parses, and threading an error list through lexer/parser/codegen instead of calling `error()` directly. Realistically 200–400 lines and a careful pass — not a quick fix. Defer until the single-error UX bites.
+The work: parser sync points (statement boundaries, `end` keyword), AST stub nodes for partial parses, and threading an error list through lexer/parser/codegen instead of calling `error()` directly. Realistically 300–400 lines and a careful pass — not a quick fix. Lands as PR #7 (per the locked plan above); detailed design in `docs/LSP_PHASE_0B_PLAN.md` while the work is in flight.
 
 ## Phase 1: Foundations (~2 days)
 
 ### LSP Scaffold
 
-Set up the LSP binary with JSON-RPC over stdio. Handle lifecycle (`initialize`, `shutdown`, `exit`) and document sync (`textDocument/didOpen`, `textDocument/didChange`, `textDocument/didClose`).
+Set up the `gem lsp` subcommand with JSON-RPC over stdio. Handle lifecycle (`initialize`, `shutdown`, `exit`) and document sync (`textDocument/didOpen`, `textDocument/didChange`, `textDocument/didClose`).
 
-**Implementation language:** TBD. Options:
-- **Gem** — dogfooding, but no LSP library support, would need to implement JSON-RPC from scratch.
-- **TypeScript** — `vscode-languageserver` library handles all protocol plumbing. Fastest to ship.
-- **Rust** — `tower-lsp` crate. More work than TS, but single binary, no runtime dependency.
-- **C** — closest to the existing codebase, but most boilerplate.
+**Implementation language: Gem** (locked — see Status & Plan above). Modules:
 
-Recommend TypeScript for v1 (ship fast, iterate), consider Rust rewrite if performance matters later.
+- `lsp/rpc.gem` — Content-Length framing, JSON encode/decode (uses `std/json`), request/response/notification dispatch.
+- `lsp/server.gem` — main loop, request routing, lifecycle handlers.
+- `lsp/doc.gem` — per-document state (text + cached AST), incremental edit application.
+- `lsp/handlers.gem` — request handlers (`textDocument/definition`, `completion`, `publishDiagnostics`, …).
 
-**Document store:** keep full text of open files in memory. Re-parse on every change (debounced). Gem files are small — full reparse is fine for v1.
+**Process model.** Main loop reads stdin frames, dispatches each request as a spawned worker process. Per-document state lives in registered processes (one per open file) — workers query them via `send`/`receive`. Cancellation = `exit(worker, kill)`. Mailboxes serialize edits naturally.
 
-**Effort:** ~150 lines (with vscode-languageserver).
+**Document store:** keep full text of open files in memory. Re-parse on every change (debounced ~200ms). Gem files are small — full reparse is fine for v1.
+
+**LSP type plumbing:** define table-shape constructors (`lsp_position(line, char)`, `lsp_range(start, end)`, `lsp_diagnostic(...)`, etc.) in `lsp/rpc.gem` rather than freeform tables, to keep handler call sites self-documenting. UTF-16-vs-UTF-8 column conversion happens at the rpc boundary, not in handlers.
+
+**Effort:** ~400 lines (PR #8).
 
 ### Symbol Table
 
@@ -124,27 +153,37 @@ Given a symbol, find all locations where it's used. Inverse of go-to-definition 
 
 **Effort:** ~80 lines.
 
+## Phase 3: Format-on-save (PR #12)
+
+Minimal AST-driven pretty-printer + LSP `textDocument/formatting` integration. Scope:
+
+- **Formatter as a library** (`lsp/format.gem` or `compiler/format.gem`) consuming the resolved AST and emitting canonical source. Drives off node shapes (no token stream), so comments are not source-preserving — they get reattached heuristically to the nearest following node, and some edge-case placements may shift. Acceptable trade for v1; revisit if it bites.
+- **Style:** 2-space indent, trailing comma on multi-line collections, `if` / `match` / `receive` arms one per line, function bodies on their own lines. Pin a small set of canonical examples in `examples/format/` so behavior changes are diffable.
+- **CLI hook:** `gem fmt <file>` reads source, parses, formats, writes back. Same artifact as `gem lsp`. Lets users format outside the LSP and gives the LSP an obvious place to call into.
+- **LSP integration:** handler calls the formatter on `textDocument/formatting`, returns a single `TextEdit` replacing the whole document range. Cheap, correct, and editor-agnostic.
+
+Source-preserving formatter (CST or token-level rewriting, ~1000–1500 lines) deferred to v2 — only worth building if comment placement turns out to bite real users.
+
 ## Not in Scope (v2+)
 
 - **Rename symbol** — needs reliable reference finding across files first.
 - **Type inference** — beyond simple table field tracking. Would need flow analysis.
 - **Signature help** — showing parameter hints as you type function arguments.
-- **Formatting** — auto-formatter for Gem source. Separate tool, not LSP-specific.
+- **Source-preserving formatter** — see Phase 3 above; v1 is AST-driven.
 - **Code actions** — auto-import, extract function, etc.
 - **Semantic tokens** — LSP-driven syntax highlighting (tree-sitter handles this already).
 
 ## Summary
 
-| Feature | LSP Method | Effort | Phase |
+| Feature | LSP Method | Effort | PR |
 |---|---|---|---|
-| LSP scaffold + document sync | lifecycle, didOpen/didChange | ~150 lines | 1 |
-| Symbol table | (internal) | ~200 lines | 1 |
-| Go to definition | textDocument/definition | ~100 lines | 2 |
-| Completion (table fields, identifiers, builtins) | textDocument/completion | ~200 lines | 2 |
-| Diagnostics | textDocument/publishDiagnostics | ~50-100 lines | 2 |
-| Hover | textDocument/hover | ~100 lines | 3 |
-| Document symbols | textDocument/documentSymbol | ~50 lines | 3 |
-| Find references | textDocument/references | ~80 lines | 3 |
-| **Total** | | **~950-1000 lines** | |
+| Codegen errors → caret context | (internal) | ~50 lines | #6 |
+| Multi-error recovery | (internal) | ~300–400 lines | #7 |
+| LSP scaffold + document sync | lifecycle, didOpen/didChange | ~400 lines | #8 |
+| Symbol table | (internal) | ~250 lines | #9 |
+| Go to definition + Completion | textDocument/definition, /completion | ~300 lines | #10 |
+| Diagnostics | textDocument/publishDiagnostics | ~100 lines | #11 |
+| Format-on-save | textDocument/formatting + `gem fmt` | ~600 lines | #12 |
+| **Total** | | **~2000 lines** | |
 
-Phases 1-2 (the useful core) are ~700 lines and ~5 days. Phase 3 is polish.
+Hover, document symbols, and find references deferred to v2 (see *Not in Scope*).
