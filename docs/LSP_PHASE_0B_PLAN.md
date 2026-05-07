@@ -1,7 +1,7 @@
 # LSP Phase 0b — Multi-error recovery in the compiler
 
-**Status:** plan only, pre-PR #7. No code yet.
-**Predecessor:** PR #6 (Phase 0a, codegen caret context — threads `source` into `make_codegen`, routes the four `eprint("\n[Compile Error]:")` sites through `compile_error()`).
+**Status:** plan only, pre-PR #8. No code yet.
+**Predecessor:** PR #7 (Phase 0a, codegen caret context — threads `source` into `make_codegen`, routes the four `eprint("\n[Compile Error]:")` sites through `compile_error()`).
 **Goal:** collect *all* compile-time errors and report them in one pass before exiting non-zero. Applies uniformly to `gem foo.gem` and `gem --check foo.gem` — same error model, same output format. `--check` only differs in skipping codegen + cc when there are zero errors.
 **Non-goal:** changing AST shape for valid programs, or producing different C for valid programs. Bootstrap roundtrip must still pass.
 
@@ -430,7 +430,7 @@ done
 [ $fails -eq 0 ]
 ```
 
-Hook into `make test` or `make check`. **Required to pass for PR #7 to merge.**
+Hook into `make test` or `make check`. **Required to pass for PR #8 to merge.**
 
 ### 6.2 Negative test: broken-program corpus
 
@@ -489,7 +489,7 @@ A single missing `end` triggers parser-state confusion: `parse_body` keeps consu
 - Heuristic at `expect("end")` mismatch: if the next token is `fn`/top-level, **silently accept the missing end** (don't consume), report once, and let the outer parser see the `fn` start. This is the "indent-aware end inference" trick; it works because Gem's grammar is statement-keyword-led.
 - Track `last_error_pos` — if the parser hasn't advanced since the last report, force-advance one token. Prevents tight loops at a single bad token from spamming the sink.
 
-**Reality check:** doing this *well* in a hand-rolled recursive-descent parser is the genuinely ugly part of this PR. yacc/ANTLR have FIRST-set machinery that does this for you; we don't. Expect the cascade-suppression heuristics to need iteration after first contact with real broken programs in `tests/broken/`. Budget time accordingly. **Honest assessment: this is the part of the work most likely to be revisited after PR #7 ships.**
+**Reality check:** doing this *well* in a hand-rolled recursive-descent parser is the genuinely ugly part of this PR. yacc/ANTLR have FIRST-set machinery that does this for you; we don't. Expect the cascade-suppression heuristics to need iteration after first contact with real broken programs in `tests/broken/`. Budget time accordingly. **Honest assessment: this is the part of the work most likely to be revisited after PR #8 ships.**
 
 ### 7.2 Error stubs in binary expressions
 
@@ -523,7 +523,7 @@ Plus a global watchdog: at the top of the main parse loop, track `last_pos`. If 
 
 ### 7.6 Module loading
 
-`resolve_loads` in `main.gem` happens between parse and codegen. It can fail (file not found, etc.). Should eventually report-and-continue (treat the missing module's exports as empty so downstream `module.field` references error out cleanly via the existing C5 code path), but errors are at file granularity rather than source position so the caret-rendering shape differs. Out of scope for PR #7; defer. Today it exits hard, which remains acceptable for v1 — load resolution failures are typically immediate-fix bugs (missing file, typo in path) rather than the kind of error you want to see alongside others.
+`resolve_loads` in `main.gem` happens between parse and codegen. It can fail (file not found, etc.). Should eventually report-and-continue (treat the missing module's exports as empty so downstream `module.field` references error out cleanly via the existing C5 code path), but errors are at file granularity rather than source position so the caret-rendering shape differs. Out of scope for PR #8; defer. Today it exits hard, which remains acceptable for v1 — load resolution failures are typically immediate-fix bugs (missing file, typo in path) rather than the kind of error you want to see alongside others.
 
 ### 7.7 Lexer error stubs in token stream
 
@@ -565,27 +565,27 @@ Parser errors emerge in source order naturally (the parser walks the file linear
 
 If scope creeps, here are the natural cut points:
 
-**PR #7a (preliminary): error sink scaffolding + lexer.** ~120 LOC.
+**PR #8a (preliminary): error sink scaffolding + lexer.** ~120 LOC.
 - `make_error_sink`, `print_all_errors`, refactored `compile_error`.
 - Thread sink through lexer; replace `compile_error()` sites with `sink.report()`.
 - Add lexer recovery for L15 (unexpected character) and L1/L6 (missing newline).
-- Driver in `main.gem`: after lex, if `sink.has_any()`, print and exit 1 (no parser yet — temporary gate, lifted in 7b).
+- Driver in `main.gem`: after lex, if `sink.has_any()`, print and exit 1 (no parser yet — temporary gate, lifted in 8b).
 - Bootstrap roundtrip + corpus check still passes (no AST changes for valid programs).
 - **User-visible change**: a file with multiple lexer errors now prints all of them; previously it printed one and exited. Single-error files: identical to today. Sets up the infrastructure for the real PR.
 
-**PR #7b (main): parser recovery.** ~250 LOC.
+**PR #8b (main): parser recovery.** ~250 LOC.
 - `expect()` redesign, `expect_loop`, sync helpers.
 - Thread sink through parser, `error_expr` / `error_stmt` constructors.
 - Codegen gate (Option A): if parser errors, skip codegen.
 - `tests/broken/*` and gate script.
 - **Ships the user-visible win**: multi-error output in `--check` mode.
 
-**PR #7c (follow-up, optional): codegen recovery (Option B).** ~80 LOC.
+**PR #8c (follow-up, optional): codegen recovery (Option B).** ~80 LOC.
 - Tolerant `compile_expr` / `compile_stmt` for error stubs.
 - Thread the four C2–C5 sites through `sink.report()`.
 - `tests/broken/multi_undeclared.gem` upgraded to verify codegen multi-error.
 
-**Recommendation:** ship as 7a + 7b together (roughly the original "PR #7"), with 7c deferred until needed. 7a alone is too inert to be worth a separate review pass, and it lacks tests. 7b without 7a is a single mega-PR; awkward but doable.
+**Recommendation:** ship as 8a + 8b together (roughly the original "PR #8"), with 8c deferred until needed. 8a alone is too inert to be worth a separate review pass, and it lacks tests. 8b without 8a is a single mega-PR; awkward but doable.
 
 ### 8.3 Open questions for the implementer
 
@@ -594,11 +594,11 @@ If scope creeps, here are the natural cut points:
 - Should we deduplicate errors? E.g. if the same `(file, line, col, msg)` is reported twice (which can happen on cascade), suppress duplicates. **Recommendation: yes, in `print_all_errors`. ~5 lines.**
 - Lexer interaction: if the lexer emits a synthesized `EOF` after an unterminated string, the parser will see a truncated token stream and may produce a few "expected X but got EOF" errors that are not useful. Suppress those if any lexer errors were reported. ~5 lines in `print_all_errors`.
 
-### 8.4 Sequencing relative to PR #6
+### 8.4 Sequencing relative to PR #7
 
-PR #6 (Phase 0a) threads `source` text into `make_codegen` and routes the codegen `[Compile Error]` sites through `compile_error()`. **This PR's codegen changes (§1.3 sites C2–C5) are direct continuations of that work** — once `compile_error()` is the codegen error path, replacing `compile_error()` with `sink.report()` is a one-token change per site.
+PR #7 (Phase 0a) threads `source` text into `make_codegen` and routes the codegen `[Compile Error]` sites through `compile_error()`. **This PR's codegen changes (§1.3 sites C2–C5) are direct continuations of that work** — once `compile_error()` is the codegen error path, replacing `compile_error()` with `sink.report()` is a one-token change per site.
 
-So PR #7 is unblocked the moment PR #6 lands, and the diffs don't conflict structurally.
+So PR #8 is unblocked the moment PR #7 lands, and the diffs don't conflict structurally.
 
 ---
 

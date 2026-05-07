@@ -3,6 +3,7 @@
 # Uses closure-based pattern: fn make_codegen() returns a table of methods.
 
 load "./liveness" (compute_live_for_pt_loops_in_stmts, is_spawn_callee_name)
+load "./errors" (compile_error)
 
 # ─── String helpers ─────────────────────────────────────────────
 
@@ -1089,9 +1090,12 @@ tag_process_tail_while_loops = fn(fn_defs, top_stmts, process_tail_fns, source_n
   walk_for_tagging_stmts(top_stmts, true, source_name)
 end
 
-fn make_codegen(source_name, module_bindings = nil, project_root = nil)
+fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_by_file = nil)
   if module_bindings == nil
     module_bindings = {}
+  end
+  if sources_by_file == nil
+    sources_by_file = {}
   end
 
   # Strip project_root prefix so emitted #line / gem_push_frame paths are
@@ -1128,6 +1132,18 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil)
       return "{f}:{node.line}"
     end
     f
+  end
+
+  # Source text for the file containing `node`, used by compile_error()
+  # to render the offending line + caret. Falls back to the entry source
+  # when a loaded file's text isn't available; compile_error() degrades to
+  # message-only output when source is nil.
+  let source_of = fn(node)
+    let f = file_of(node)
+    if has_key(sources_by_file, f)
+      return sources_by_file[f]
+    end
+    nil
   end
 
   let functions = []
@@ -2928,13 +2944,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil)
     if set_contains(local_names, name) or set_contains(top_level_vars, name) or set_contains(top_level_boxed, name) or set_contains(boxed_vars, name)
       return nil
     end
-    let loc = loc_of(node)
     if has_key(builtin_fns, name) or set_contains(defined_fns, name)
-      eprint("\n[Compile Error]: cannot assign to function `{name}`\n  --> {loc}\n")
+      compile_error(source_of(node), file_of(node), node.line, node.col, len(name), "cannot assign to function `{name}`", nil)
     else
-      eprint("\n[Compile Error]: undeclared identifier `{name}` (use `let {name} = ...` to declare)\n  --> {loc}\n")
+      compile_error(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", "use `let {name} = ...` to declare")
     end
-    exit(1)
   end
 
   # ─── compile_expr ──
@@ -2987,8 +3001,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil)
           # `gem_v_<name>` and bottoming out at a cc error, and rather than
           # letting downstream liveness rescue analysis complain about a
           # phantom "live var with no C local".
-          eprint("\n[Compile Error]: undeclared identifier `{name}`\n  --> {loc_of(node)}\n")
-          exit(1)
+          compile_error(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", nil)
         end
       end
       let mname = mangle(name)
@@ -3035,14 +3048,12 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil)
           if loc_node.line == nil and object.line != nil
             loc_node = object
           end
-          let loc = loc_of(loc_node)
           let suggestion = find_closest_export(field, exports)
-          let hint = ""
+          let hint = nil
           if suggestion != nil
-            hint = "\n  did you mean `{suggestion}`?"
+            hint = "did you mean `{suggestion}`?"
           end
-          eprint("\n[Compile Error]: module `{object.name}` has no export `{field}`\n  --> {loc}{hint}\n")
-          exit(1)
+          compile_error(source_of(loc_node), file_of(loc_node), loc_node.line, loc_node.col, len(field), "module `{object.name}` has no export `{field}`", hint)
         end
       end
       let r = compile_expr(object)

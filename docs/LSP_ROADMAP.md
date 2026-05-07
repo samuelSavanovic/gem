@@ -16,13 +16,14 @@ A minimal language server for Gem, focused on the features that provide the most
 
 | PR | Branch | Scope | Status | Lines |
 |---|---|---|---|---|
-| #6 | `lsp/phase-0a-codegen-caret` | Phase 0a — route codegen errors through `compile_error()` for caret context | Pending | ~50 |
-| #7 | `lsp/phase-0b-multi-error` | Phase 0b — multi-error recovery in lexer/parser/codegen | Pending (planning in `docs/LSP_PHASE_0B_PLAN.md`) | ~300–400 |
-| #8 | `lsp/phase-1a-scaffold` | Phase 1a — `gem lsp` subcommand, JSON-RPC framing, lifecycle, didOpen/didChange | Pending | ~400 |
-| #9 | `lsp/phase-1b-symbols` | Phase 1b — symbol table pass, per-doc AST cache | Pending | ~250 |
-| #10 | `lsp/phase-2a-features` | Phase 2a — goto-def + completion (table fields, identifiers, builtins) | Pending | ~300 |
-| #11 | `lsp/phase-2b-diagnostics` | Phase 2b — diagnostics integration (consumes Phase 0b error list) | Pending | ~100 |
-| #12 | `lsp/phase-3-format` | Phase 3 — minimal AST formatter + format-on-save | Pending | ~600 |
+| #6 | `lsp/plan` | Lock LSP implementation plan + Phase 0b design | ✓ Done (2026-05-07, commit `21b9623`) | — |
+| #7 | `lsp/phase-0a-codegen-caret` | Phase 0a — route codegen errors through `compile_error()` for caret context | ✓ Done (2026-05-07) | ~50 |
+| #8 | `lsp/phase-0b-multi-error` | Phase 0b — multi-error recovery in lexer/parser/codegen | Pending (planning in `docs/LSP_PHASE_0B_PLAN.md`) | ~300–400 |
+| #9 | `lsp/phase-1a-scaffold` | Phase 1a — `gem lsp` subcommand, JSON-RPC framing, lifecycle, didOpen/didChange | Pending | ~400 |
+| #10 | `lsp/phase-1b-symbols` | Phase 1b — symbol table pass, per-doc AST cache | Pending | ~250 |
+| #11 | `lsp/phase-2a-features` | Phase 2a — goto-def + completion (table fields, identifiers, builtins) | Pending | ~300 |
+| #12 | `lsp/phase-2b-diagnostics` | Phase 2b — diagnostics integration (consumes Phase 0b error list) | Pending | ~100 |
+| #13 | `lsp/phase-3-format` | Phase 3 — minimal AST formatter + format-on-save | Pending | ~600 |
 
 Each PR ships independently. After merge, mark `✓ Done (date, commit-sha)` here and append any deviations from the plan in the relevant phase section below. Per-PR planning docs (e.g. `LSP_PHASE_0B_PLAN.md`) live alongside this file during implementation, get deleted once the PR lands (the work is in the code; the plan doc becomes noise).
 
@@ -38,7 +39,7 @@ Land these before any LSP work — they're useful standalone and the LSP needs t
 
 1. ~~**Cross-file errors point at the wrong file.**~~ ✓ Done (2026-05-05). `tag_source_file` (`compiler/main.gem`) walks the parsed AST after `parse_source` and stamps `node.file = <full_path>` on every AST node — both the entry file and each loaded module. `make_codegen` exposes `file_of(node)` / `loc_of(node)` helpers (defined up front so they're capturable by every nested closure that reports a diagnostic) which prefer `node.file` over the entry-file `source_name` fallback. All `[Compile Error]`, `[Compiler Bug]`, and `cannot reset` / TCO / spawn-target warnings now point at the originating file, so a typo in `std/foo.gem` surfaces as `std/foo.gem:42` instead of `main.gem:1`. Verified: a synthetic `load`-then-undeclared-identifier program now reports `--> /path/to/loaded.gem:N`. Runtime stack-trace plumbing (`#line` directives, `gem_push_frame` calls, `gem_error_at_fn` / `gem_check_callable` file args) also routes through `file_of(node)`, so an `error()` raised inside a loaded module shows the module's path in the trace rather than the entry file's. The synthetic top-level `gem_user_main` frame keeps the entry-file `source_name` since it has no AST node of its own.
 
-2. **Codegen errors lack caret context.** Parser errors render Rust-style with source line + `^^^` underline (via `compile_error()` in `compiler/errors.gem`). Codegen errors (undeclared identifier, etc.) print only `path:line` because `make_codegen()` doesn't carry source text. Fix: thread source text into the codegen closure, route the two `eprint("\n[Compile Error]:")` sites in `compiler/codegen.gem` (`:2768` and `:3410`) through `compile_error()`. ~50 lines including the source-text plumbing.
+2. ~~**Codegen errors lack caret context.**~~ ✓ Done (2026-05-07). `make_codegen` now takes a `sources_by_file` map (`{path → source text}`) populated in `compiler/main.gem` for the entry file and by `resolve_loads` for every loaded module. The four user-facing `[Compile Error]` sites in `compiler/codegen.gem` (cannot-assign-to-function, undeclared-identifier in assign target, undeclared-identifier in var ref, module-has-no-export) now route through `compile_error()` in `compiler/errors.gem`, producing Rust-style output with source line + `^^^` caret. The `[Compiler Bug]` sentinels and unknown-op paths stay terminal — they're unreachable on a valid parse and exit with the bug-template message intentionally. Carets render correctly for errors in loaded files because `source_of(node)` looks up by `file_of(node)`.
 
 These two together give every diagnostic the same shape and accuracy regardless of which compiler stage produced it.
 
@@ -46,7 +47,7 @@ These two together give every diagnostic the same shape and accuracy regardless 
 
 Today the compiler bails at the first `error()` — 32 sites across lexer/parser/codegen, each terminal. Single-error is tolerable for `--check` in CI/save-hooks, but in an LSP loop it's the difference between "fix the file" and "fix one thing, save, fix the next thing, save, …".
 
-The work: parser sync points (statement boundaries, `end` keyword), AST stub nodes for partial parses, and threading an error list through lexer/parser/codegen instead of calling `error()` directly. Realistically 300–400 lines and a careful pass — not a quick fix. Lands as PR #7 (per the locked plan above); detailed design in `docs/LSP_PHASE_0B_PLAN.md` while the work is in flight.
+The work: parser sync points (statement boundaries, `end` keyword), AST stub nodes for partial parses, and threading an error list through lexer/parser/codegen instead of calling `error()` directly. Realistically 300–400 lines and a careful pass — not a quick fix. Lands as PR #8 (per the locked plan above); detailed design in `docs/LSP_PHASE_0B_PLAN.md` while the work is in flight.
 
 ## Phase 1: Foundations (~2 days)
 
@@ -67,7 +68,7 @@ Set up the `gem lsp` subcommand with JSON-RPC over stdio. Handle lifecycle (`ini
 
 **LSP type plumbing:** define table-shape constructors (`lsp_position(line, char)`, `lsp_range(start, end)`, `lsp_diagnostic(...)`, etc.) in `lsp/rpc.gem` rather than freeform tables, to keep handler call sites self-documenting. UTF-16-vs-UTF-8 column conversion happens at the rpc boundary, not in handlers.
 
-**Effort:** ~400 lines (PR #8).
+**Effort:** ~400 lines (PR #9).
 
 ### Symbol Table
 
@@ -153,7 +154,7 @@ Given a symbol, find all locations where it's used. Inverse of go-to-definition 
 
 **Effort:** ~80 lines.
 
-## Phase 3: Format-on-save (PR #12)
+## Phase 3: Format-on-save (PR #13)
 
 Minimal AST-driven pretty-printer + LSP `textDocument/formatting` integration. Scope:
 
@@ -177,13 +178,13 @@ Source-preserving formatter (CST or token-level rewriting, ~1000–1500 lines) d
 
 | Feature | LSP Method | Effort | PR |
 |---|---|---|---|
-| Codegen errors → caret context | (internal) | ~50 lines | #6 |
-| Multi-error recovery | (internal) | ~300–400 lines | #7 |
-| LSP scaffold + document sync | lifecycle, didOpen/didChange | ~400 lines | #8 |
-| Symbol table | (internal) | ~250 lines | #9 |
-| Go to definition + Completion | textDocument/definition, /completion | ~300 lines | #10 |
-| Diagnostics | textDocument/publishDiagnostics | ~100 lines | #11 |
-| Format-on-save | textDocument/formatting + `gem fmt` | ~600 lines | #12 |
+| Codegen errors → caret context | (internal) | ~50 lines | #7 |
+| Multi-error recovery | (internal) | ~300–400 lines | #8 |
+| LSP scaffold + document sync | lifecycle, didOpen/didChange | ~400 lines | #9 |
+| Symbol table | (internal) | ~250 lines | #10 |
+| Go to definition + Completion | textDocument/definition, /completion | ~300 lines | #11 |
+| Diagnostics | textDocument/publishDiagnostics | ~100 lines | #12 |
+| Format-on-save | textDocument/formatting + `gem fmt` | ~600 lines | #13 |
 | **Total** | | **~2000 lines** | |
 
 Hover, document symbols, and find references deferred to v2 (see *Not in Scope*).

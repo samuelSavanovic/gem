@@ -31,8 +31,8 @@ fn make_nil_node()
   {tag: "nil"}
 end
 
-fn make_var(name, line = nil)
-  {tag: "var", name: name, line: line}
+fn make_var(name, line = nil, col = nil)
+  {tag: "var", name: name, line: line, col: col}
 end
 
 fn make_binop(op, left, right)

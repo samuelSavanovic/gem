@@ -413,7 +413,7 @@ fn make_parser(tokens, source, file)
     # Variable
     if t.type == "NAME"
       advance()
-      return make_var(t.value, t.line)
+      return make_var(t.value, t.line, t.col)
     end
 
     compile_error(source, file, t.line, t.col, len(t.value), "unexpected token '{t.type}' (expected expression)", nil)

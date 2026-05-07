@@ -1,0 +1,8 @@
+# Codegen error: reference to an identifier that was never declared.
+# Phase 0a (PR #7) seed for the broken-program corpus that Phase 0b
+# (PR #8) will harness with `tests/check_broken.sh`. For now, run by
+# hand: `build/gem --check tests/broken/undeclared.gem` should print a
+# Rust-style caret pointing at `mystery_value` and exit 1.
+
+let known = 1
+print(known + mystery_value)

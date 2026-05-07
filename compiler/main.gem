@@ -105,8 +105,8 @@ fn make_let(name, value, line)
   {tag: "let", name: name, value: value, line: line}
 end
 
-fn make_var(name, line = nil)
-  {tag: "var", name: name, line: line}
+fn make_var(name, line = nil, col = nil)
+  {tag: "var", name: name, line: line, col: col}
 end
 
 fn make_table(entries)
@@ -388,7 +388,7 @@ end
 
 # ─── Load resolution ──────────────────────────────────────────
 
-fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings)
+fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file)
   let new_stmts = []
   let count = 0
   for stmt in ast.stmts
@@ -426,10 +426,11 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       loaded[full_path] = {exported: nil}
 
       let source = read_file(full_path)
+      sources_by_file[full_path] = source
       let loaded_ast = parse_source(source, full_path)
       tag_source_file(loaded_ast, full_path)
       let loaded_dir = dirname(full_path)
-      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings)
+      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file)
 
       let export_node = find_export_node(resolved.stmts)
       if export_node == nil
@@ -559,10 +560,12 @@ end
 let stdlib_root = compute_stdlib_root(install_root, project_root)
 let loaded = {}
 let module_bindings = {}
-let resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings)
+let sources_by_file = {}
+sources_by_file[src_path] = source
+let resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file)
 fold_constants(resolved_ast)
 
-let cg = make_codegen(src_path, module_bindings, project_root)
+let cg = make_codegen(src_path, module_bindings, project_root, sources_by_file)
 let c_code = cg.compile(resolved_ast)
 
 # ─── Check mode ───────────────────────────────────────────────
