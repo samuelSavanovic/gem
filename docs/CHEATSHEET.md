@@ -7,8 +7,9 @@ Keep this file up to date when adding new syntax, keywords, builtins, or std mod
 ```gem
 # Variables
 let x = 10
-let {a, b} = tbl          # table destructuring
-let [first, second] = arr  # array destructuring
+let {a, b} = tbl                     # table destructuring
+let [first, second] = arr            # array destructuring
+let {port = 8080, host = "0.0.0.0"} = opts   # field defaults (fire on missing or nil)
 
 # Functions — fn/end, last expression is implicit return
 fn add(a, b)
@@ -19,6 +20,8 @@ fn greet(name, greeting = "Hello")   # default params
 end
 fn log(level, ...msgs)               # variadic (rest param)
 end
+fn server({port = 8080, host = "0.0.0.0"} = {})   # destructured params
+end                                                # `= {}` makes the bag optional / nil-tolerant
 
 # Closures / anonymous functions
 let f = fn(x) x * 2 end

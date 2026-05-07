@@ -25,10 +25,7 @@ fn sup_loop(state)
     end
 
     let spec = specs[found]
-    let restart = "permanent"
-    if has_key(spec, "restart")
-      restart = spec.restart
-    end
+    let {restart = "permanent"} = spec
 
     let should_restart = false
     if restart == "permanent"
@@ -101,36 +98,15 @@ fn handle_which_children(state, reply_to)
   for i = 0, len(state.children)
     let child = state.children[i]
     let spec = state.specs[i]
-    let restart = "permanent"
-    if has_key(spec, "restart")
-      restart = spec.restart
-    end
+    let {restart = "permanent"} = spec
     push(result, {id: spec.id, pid: child.pid, restart: restart})
   end
   send(reply_to, {tag: "supervisor_children", children: result})
 end
 
-fn start(spec)
-  let strategy = "one_for_one"
-  if has_key(spec, "strategy")
-    strategy = spec.strategy
-  end
-
-  let max_restarts = 3
-  if has_key(spec, "max_restarts")
-    max_restarts = spec.max_restarts
-  end
-
-  let max_seconds = 5000
-  if has_key(spec, "max_seconds")
-    max_seconds = spec.max_seconds
-  end
-
-  let child_specs = spec.children
-  let sup_name = nil
-  if has_key(spec, "name")
-    sup_name = spec.name
-  end
+fn start({strategy = "one_for_one", max_restarts = 3, max_seconds = 5000, children, name = nil})
+  let child_specs = children
+  let sup_name = name
 
   let sup_pid = spawn(fn()
     let children = []

@@ -1,0 +1,83 @@
+# Destructuring defaults — both let-bindings and function parameters.
+# Defaults fire when the field is absent OR explicitly nil.
+
+# ─── let-table-destructure with field defaults ───
+let opts = {strategy: "one_for_all"}
+let {strategy = "one_for_one", max_restarts = 3, name = nil} = opts
+print("let-table: strategy={strategy} max_restarts={max_restarts} name={name}")
+
+# nil values trigger defaults
+let {x = 7, y = 9} = {x: nil, y: 42}
+print("let-nil: x={x} y={y}")
+
+# Forward reference: later default may use earlier names
+let {a = 5, b = a * 2} = {}
+print("let-fwd: a={a} b={b}")
+
+# Extra keys ignored
+let {p = 1} = {p: 10, q: 20, r: 30}
+print("let-extra: p={p}")
+
+# ─── let-array-destructure with index defaults ───
+let [first, second = 99, third = 100] = [1, 2]
+print("let-array: first={first} second={second} third={third}")
+
+let [u, v = 5] = [10, nil]
+print("let-array-nil: u={u} v={v}")
+
+# ─── fn param destructuring (required arg) ───
+fn add({x = 0, y = 0})
+  x + y
+end
+print("fn-req: {add({})} {add({x: 5})} {add({x: 5, y: 3})}")
+
+# ─── fn param destructuring with outer-default = {} ───
+fn server({port = 8080, host = "0.0.0.0", name = nil} = {})
+  "{host}:{port}/{name}"
+end
+print(server())                                    # all defaults
+print(server(nil))                                 # nil-coerced to {}
+print(server({}))                                  # empty
+print(server({port: 9000}))                        # only port
+print(server({port: 7000, host: "::1", x: "ig"}))  # extras ignored
+
+# ─── Mixing regular params with destructure params ───
+fn cookie(name, value, {path = "/", secure = false} = {})
+  "{name}={value};Path={path};Secure={secure}"
+end
+print(cookie("sid", "abc"))
+print(cookie("sid", "abc", nil))
+print(cookie("sid", "abc", {secure: true}))
+
+# ─── Anonymous fn / block param destructuring ───
+let f = fn({x = 1, y = 2}) x + y end
+print("anon: {f({})} {f({x: 10, y: 20})}")
+
+let times = fn(n, body)
+  let i = 0
+  while i < n
+    body({i: i, doubled: i * 2})
+    i = i + 1
+  end
+end
+times(3) do |{i, doubled = -1}|
+  print("block: i={i} doubled={doubled}")
+end
+
+# ─── Closure captures destructured locals ───
+fn make_counter({start = 0, step = 1} = {})
+  fn()
+    let v = start
+    start = start + step
+    v
+  end
+end
+let c = make_counter({start: 10, step: 5})
+print("closure: {c()} {c()} {c()}")
+
+# ─── Mutating a destructured local in body ───
+fn count({initial = 0} = {})
+  initial = initial + 1
+  initial
+end
+print("mut: {count()} {count({initial: 100})}")

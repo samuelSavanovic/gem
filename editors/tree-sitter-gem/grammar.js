@@ -58,6 +58,7 @@ module.exports = grammar({
       $.default_param,
       $.identifier,
       $.spread_param,
+      $.destructure_param,
     ),
 
     default_param: $ => seq(
@@ -67,6 +68,11 @@ module.exports = grammar({
     ),
 
     spread_param: $ => seq('...', $.identifier),
+
+    destructure_param: $ => seq(
+      $.table_destructure,
+      optional(seq('=', field('default', $._expression))),
+    ),
 
     extern_declaration: $ => choice(
       $.extern_include,
@@ -109,8 +115,19 @@ module.exports = grammar({
       field('value', $._expression),
     ),
 
-    table_destructure: $ => seq('{', optional(sep1($.identifier, ',')), '}'),
-    array_destructure: $ => seq('[', optional(sep1($.identifier, ',')), ']'),
+    table_destructure: $ => seq('{', optional(sep1($._destructure_field, ',')), '}'),
+    array_destructure: $ => seq('[', optional(sep1($._destructure_field, ',')), ']'),
+
+    _destructure_field: $ => choice(
+      $.identifier,
+      $.destructure_default,
+    ),
+
+    destructure_default: $ => seq(
+      field('name', $.identifier),
+      '=',
+      field('default', $._expression),
+    ),
 
     // Control flow
 
@@ -294,7 +311,7 @@ module.exports = grammar({
       '}',
     ),
 
-    block_parameters: $ => seq('|', sep1(choice($.default_param, $.identifier), ','), '|'),
+    block_parameters: $ => seq('|', sep1(choice($.default_param, $.destructure_param, $.identifier), ','), '|'),
 
     lambda: $ => seq(
       'fn',

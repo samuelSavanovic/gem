@@ -333,6 +333,10 @@
       "required": false,
       "types": [
         {
+          "type": "destructure_default",
+          "named": true
+        },
+        {
           "type": "identifier",
           "named": true
         }
@@ -743,6 +747,10 @@
           "named": true
         },
         {
+          "type": "destructure_param",
+          "named": true
+        },
+        {
           "type": "identifier",
           "named": true
         }
@@ -1063,6 +1071,210 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "destructure_default",
+    "named": true,
+    "fields": {
+      "default": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "call_expression",
+            "named": true
+          },
+          {
+            "type": "call_with_block",
+            "named": true
+          },
+          {
+            "type": "double_string",
+            "named": true
+          },
+          {
+            "type": "false",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "lambda",
+            "named": true
+          },
+          {
+            "type": "member_expression",
+            "named": true
+          },
+          {
+            "type": "nil",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "single_string",
+            "named": true
+          },
+          {
+            "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "table",
+            "named": true
+          },
+          {
+            "type": "triple_double_string",
+            "named": true
+          },
+          {
+            "type": "triple_single_string",
+            "named": true
+          },
+          {
+            "type": "true",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "destructure_param",
+    "named": true,
+    "fields": {
+      "default": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "call_expression",
+            "named": true
+          },
+          {
+            "type": "call_with_block",
+            "named": true
+          },
+          {
+            "type": "double_string",
+            "named": true
+          },
+          {
+            "type": "false",
+            "named": true
+          },
+          {
+            "type": "float",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "integer",
+            "named": true
+          },
+          {
+            "type": "lambda",
+            "named": true
+          },
+          {
+            "type": "member_expression",
+            "named": true
+          },
+          {
+            "type": "nil",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "single_string",
+            "named": true
+          },
+          {
+            "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "table",
+            "named": true
+          },
+          {
+            "type": "triple_double_string",
+            "named": true
+          },
+          {
+            "type": "triple_single_string",
+            "named": true
+          },
+          {
+            "type": "true",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "table_destructure",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -3157,6 +3369,10 @@
           "named": true
         },
         {
+          "type": "destructure_param",
+          "named": true
+        },
+        {
           "type": "identifier",
           "named": true
         },
@@ -3876,6 +4092,10 @@
       "multiple": true,
       "required": false,
       "types": [
+        {
+          "type": "destructure_default",
+          "named": true
+        },
         {
           "type": "identifier",
           "named": true

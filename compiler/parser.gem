@@ -112,23 +112,110 @@ fn make_parser(tokens, source, file)
   let parse_pattern = nil
 
   # ── Parameter list ──
-  # Returns {params, rest_param, defaults}.
+  # Returns {params, rest_param, defaults, prelude}.
   # params: param names before the rest param (or all params if no rest).
   # rest_param: the name after "...", or nil.
   # defaults: array parallel to params — each entry is an AST expr or nil.
+  # prelude: array of statements desugared from destructuring params, to be
+  #          prepended to the function body by the caller.
 
   let parse_params = fn()
     let params = []
     let rest_param = nil
     let defaults = []
+    let prelude = []
     let has_default = false
 
-    while peek().type == "NAME" or peek().type == "..."
+    while peek().type == "NAME" or peek().type == "..." or peek().type == "\{"
       if peek().type == "..."
         advance()
         rest_param = expect("NAME").value
         break
       end
+
+      # Destructuring param: {name [= expr], ...} [= outer_default]
+      if peek().type == "\{"
+        let dline = peek().line
+        let dcol = peek().col
+        advance()
+        skip_nl()
+        let dnames = []
+        let ddflts = []
+        while peek().type != "}"
+          let field_tok = peek()
+          advance()
+          push(dnames, field_tok.value)
+          skip_nl()
+          if peek().type == "="
+            advance()
+            skip_nl()
+            push(ddflts, parse_expr())
+          else
+            push(ddflts, nil)
+          end
+          skip_nl()
+          if peek().type == ","
+            advance()
+            skip_nl()
+          end
+        end
+        expect("}")
+
+        gensym_counter += 1
+        let pname = "_pdestr{gensym_counter}"
+        push(params, pname)
+
+        let any_default = false
+        if peek().type == "="
+          advance()
+          let outer_default = parse_expr()
+          # Use the existing param-default machinery for missing-arg case,
+          # then *also* coerce explicit nil to the same default at body start.
+          push(defaults, outer_default)
+          has_default = true
+          any_default = true
+          push(prelude, make_if(
+            make_binop("==", make_var(pname), make_nil_node()),
+            [make_assign(pname, outer_default, dline)],
+            [],
+            dline
+          ))
+        else
+          if has_default
+            compile_error(source, file, dline, dcol, 1, "required parameter after optional parameter", nil)
+          end
+          push(defaults, nil)
+        end
+
+        # Bind each named field as a local. Per-field defaults fire when the
+        # extracted value is nil (key missing or value explicitly nil).
+        for di = 0, len(dnames)
+          push(prelude, make_let(dnames[di], make_dot(make_var(pname), dnames[di]), dline))
+          if ddflts[di] != nil
+            any_default = true
+            push(prelude, make_if(
+              make_binop("==", make_var(dnames[di]), make_nil_node()),
+              [make_assign(dnames[di], ddflts[di], dline)],
+              [],
+              dline
+            ))
+          end
+        end
+
+        # Force has_defs = true in codegen so TCO is suppressed for fns with
+        # destructured-param defaults — same constraint as regular defaults.
+        if any_default and defaults[len(defaults) - 1] == nil
+          defaults[len(defaults) - 1] = make_nil_node()
+        end
+
+        if peek().type != ","
+          break
+        end
+        advance()
+        skip_nl()
+        continue
+      end
+
       let name_tok = advance()
       push(params, name_tok.value)
       if peek().type == "="
@@ -147,7 +234,22 @@ fn make_parser(tokens, source, file)
       advance()
     end
 
-    {params: params, rest_param: rest_param, defaults: defaults}
+    {params: params, rest_param: rest_param, defaults: defaults, prelude: prelude}
+  end
+
+  # Prepend a destructure-param prelude (binding lets/ifs) to a function body.
+  let with_prelude = fn(prelude, body)
+    if len(prelude) == 0
+      return body
+    end
+    let full = []
+    for s in prelude
+      push(full, s)
+    end
+    for s in body
+      push(full, s)
+    end
+    full
   end
 
   # ── Body parsers ──
@@ -244,7 +346,7 @@ fn make_parser(tokens, source, file)
       let body = parse_fn_body()
       fn_depth -= 1
       expect("end")
-      return make_anon_fn(pr.params, pr.rest_param, body, pr.defaults)
+      return make_anon_fn(pr.params, pr.rest_param, with_prelude(pr.prelude, body), pr.defaults)
     end
 
     # Table literal: {key: val, ...}
@@ -345,19 +447,21 @@ fn make_parser(tokens, source, file)
           let bparams = []
           let brest = nil
           let bdefaults = []
+          let bprelude = []
           if peek().type == "|"
             advance()
             let bpr = parse_params()
             bparams = bpr.params
             brest = bpr.rest_param
             bdefaults = bpr.defaults
+            bprelude = bpr.prelude
             expect("|")
           end
           fn_depth += 1
           let body = parse_fn_body()
           fn_depth -= 1
           expect("end")
-          push(args, make_anon_fn(bparams, brest, body, bdefaults))
+          push(args, make_anon_fn(bparams, brest, with_prelude(bprelude, body), bdefaults))
         else
           # Trailing brace block: {|params| expr} or {expr}
           # Distinguish from table literal by lookahead
@@ -375,17 +479,19 @@ fn make_parser(tokens, source, file)
               let bparams = []
               let brest = nil
               let bdefaults = []
+              let bprelude = []
               if peek().type == "|"
                 advance()
                 let bpr = parse_params()
                 bparams = bpr.params
                 brest = bpr.rest_param
                 bdefaults = bpr.defaults
+                bprelude = bpr.prelude
                 expect("|")
               end
               let bexpr = parse_expr()
               expect("}")
-              push(args, make_anon_fn(bparams, brest, [bexpr], bdefaults))
+              push(args, make_anon_fn(bparams, brest, with_prelude(bprelude, [bexpr]), bdefaults))
             end
           end
         end
@@ -672,20 +778,25 @@ fn make_parser(tokens, source, file)
       let line = t.line
       advance()
 
-      # Table destructuring: let {a, b, c} = expr
+      # Table destructuring: let {a, b [= default], c} = expr
       if peek().type == "\{"
         advance()
         let names = []
+        let dflts = []
         skip_nl()
         while peek().type != "}"
           let field_tok = peek()
-          if field_tok.type == "NAME"
-            advance()
-          else
-            # Allow keywords as field names
-            advance()
-          end
+          # NAME or keyword as field name
+          advance()
           push(names, field_tok.value)
+          skip_nl()
+          if peek().type == "="
+            advance()
+            skip_nl()
+            push(dflts, parse_expr())
+          else
+            push(dflts, nil)
+          end
           skip_nl()
           if peek().type == ","
             advance()
@@ -700,17 +811,34 @@ fn make_parser(tokens, source, file)
         let stmts = [make_let(tmp, rhs, line)]
         for di = 0, len(names)
           push(stmts, make_let(names[di], make_dot(make_var(tmp), names[di]), line))
+          if dflts[di] != nil
+            push(stmts, make_if(
+              make_binop("==", make_var(names[di]), make_nil_node()),
+              [make_assign(names[di], dflts[di], line)],
+              [],
+              line
+            ))
+          end
         end
         return {tag: "block", stmts: stmts}
       end
 
-      # Array destructuring: let [a, b, c] = expr
+      # Array destructuring: let [a, b [= default], c] = expr
       if peek().type == "["
         advance()
         let names = []
+        let dflts = []
         skip_nl()
         while peek().type != "]"
           push(names, expect("NAME").value)
+          skip_nl()
+          if peek().type == "="
+            advance()
+            skip_nl()
+            push(dflts, parse_expr())
+          else
+            push(dflts, nil)
+          end
           skip_nl()
           if peek().type == ","
             advance()
@@ -725,6 +853,14 @@ fn make_parser(tokens, source, file)
         let stmts = [make_let(tmp, rhs, line)]
         for di = 0, len(names)
           push(stmts, make_let(names[di], make_index(make_var(tmp), make_int(di)), line))
+          if dflts[di] != nil
+            push(stmts, make_if(
+              make_binop("==", make_var(names[di]), make_nil_node()),
+              [make_assign(names[di], dflts[di], line)],
+              [],
+              line
+            ))
+          end
         end
         return {tag: "block", stmts: stmts}
       end
@@ -750,7 +886,7 @@ fn make_parser(tokens, source, file)
       let body = parse_fn_body()
       fn_depth -= 1
       expect("end")
-      return make_fn_def(name, pr.params, pr.rest_param, body, line, pr.defaults)
+      return make_fn_def(name, pr.params, pr.rest_param, with_prelude(pr.prelude, body), line, pr.defaults)
     end
 
     # if / elif statement
