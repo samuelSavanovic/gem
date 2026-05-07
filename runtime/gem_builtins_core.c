@@ -482,6 +482,41 @@ GemVal gem_input_fn(void *_env, GemVal *args, int argc) {
     return gem_string(buf);
 }
 
+/* ─── Built-in: write_stdout (write raw bytes + flush) ─── */
+/* Binary-safe (uses slen, not strlen). No trailing newline. Flushes
+ * immediately so framed protocols (e.g. LSP over stdio) see complete
+ * frames. Returns nil. */
+
+GemVal gem_write_stdout_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "write_stdout: expected string, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    fwrite(args[0].sval, 1, (size_t)args[0].slen, stdout);
+    fflush(stdout);
+    return GEM_NIL;
+}
+
+/* ─── Built-in: read_stdin (read exactly N bytes from stdin) ─── */
+/* Binary-safe; intended for LSP-style framed I/O where the message body
+ * length is known up-front from a header. Returns "" on EOF before any
+ * bytes were read; returns a short string if EOF interrupts mid-read. */
+
+GemVal gem_read_stdin_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_INT) {
+        char buf[128]; snprintf(buf, sizeof(buf), "read_stdin: expected int, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    int64_t n = args[0].ival;
+    if (n < 0) { gem_error("read_stdin: negative length"); }
+    if (n == 0) { GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = gem_alloc(1); r.sval[0] = '\0'; r.slen = 0; return r; }
+    char *data = (char *)gem_alloc((size_t)n + 1);
+    size_t got = fread(data, 1, (size_t)n, stdin);
+    data[got] = '\0';
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = data; r.slen = (int)got;
+    return r;
+}
+
 /* ─── Built-in: make_ref ─── */
 
 GemVal gem_make_ref_builtin(void *_env, GemVal *args, int argc) {

@@ -14,6 +14,7 @@ load "./parser" (parse_source)
 load "./codegen" (make_codegen)
 load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
+load "../lsp/main" (run_lsp)
 
 # ─── Install root (for runtime/, build/libgem_runtime.a) ──────
 # argv()[0] is typically <root>/build/gem, so install_root is <root>.
@@ -540,6 +541,14 @@ end
 let argc = len(argv())
 if argc < 2
   error("usage: gem <file.gem> [args...] [-c | -o <name> | --emit-c]")
+end
+
+# `gem lsp` subcommand. Hand off to the LSP entry before parse_args runs;
+# the LSP doesn't take a source-file argument and exits via the server's
+# own lifecycle (exit notification or stdin EOF).
+if argv()[1] == "lsp"
+  run_lsp()
+  exit(0)
 end
 
 let cli = parse_args(argv())

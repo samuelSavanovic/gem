@@ -19,7 +19,7 @@ A minimal language server for Gem, focused on the features that provide the most
 | #6 | `lsp/plan` | Lock LSP implementation plan + Phase 0b design | ✓ Done (2026-05-07, commit `21b9623`) | — |
 | #7 | `lsp/phase-0a-codegen-caret` | Phase 0a — route codegen errors through `compile_error()` for caret context | ✓ Done (2026-05-07) | ~50 |
 | #8 | `lsp/phase-0b-multi-error` | Phase 0b — multi-error recovery in lexer/parser/codegen | ✓ Done (2026-05-07) | ~430 |
-| #9 | `lsp/phase-1a-scaffold` | Phase 1a — `gem lsp` subcommand, JSON-RPC framing, lifecycle, didOpen/didChange | Pending | ~400 |
+| #9 | `lsp/phase-1a-scaffold` | Phase 1a — `gem lsp` subcommand, JSON-RPC framing, lifecycle, didOpen/didChange | ✓ Done (2026-05-07) | ~400 |
 | #10 | `lsp/phase-1b-symbols` | Phase 1b — symbol table pass, per-doc AST cache | Pending | ~250 |
 | #11 | `lsp/phase-2a-features` | Phase 2a — goto-def + completion (table fields, identifiers, builtins) | Pending | ~300 |
 | #12 | `lsp/phase-2b-diagnostics` | Phase 2b — diagnostics integration (consumes Phase 0b error list) | Pending | ~100 |
@@ -69,6 +69,13 @@ Set up the `gem lsp` subcommand with JSON-RPC over stdio. Handle lifecycle (`ini
 **LSP type plumbing:** define table-shape constructors (`lsp_position(line, char)`, `lsp_range(start, end)`, `lsp_diagnostic(...)`, etc.) in `lsp/rpc.gem` rather than freeform tables, to keep handler call sites self-documenting. UTF-16-vs-UTF-8 column conversion happens at the rpc boundary, not in handlers.
 
 **Effort:** ~400 lines (PR #9).
+
+**Deviations from the locked plan (filled in 2026-05-07):**
+
+- **Synchronous main loop instead of spawn-per-request.** `rpc.read_message` calls `input()` and `read_stdin(N)`, both of which block the OS thread (they don't yield via the I/O thread pool). Spawning a worker per request wouldn't actually run concurrently with the next stdin read in v1, so `lsp/server.gem` dispatches each frame synchronously. Per-document `register`ed processes still get scheduled cooperatively between frames (any handler that does `send`/`receive` to a doc process yields). Cancellation-grade concurrency (cancel mid-completion via `kill(worker, …)`) is the upgrade trigger — when a request handler grows large enough that we want it cancellable, route stdin reads through a yielding builtin and switch to spawn-per-request. Tracked as the first item to revisit in PR #11/#12.
+- **New runtime builtins** for binary-safe stdio: `read_stdin(n) -> String` (exactly N bytes via `fread`) and `write_stdout(s)` (raw bytes, no trailing `\n`, `fflush` after each call so frames hit the wire immediately). Documented in SPEC §C / Builtins. Both are blocking; promoting them to thread-pool yielding is the same upgrade as the bullet above.
+- **`load "../lsp/main"` from `compiler/main.gem`** is the dispatch wire-up. The LSP code becomes part of the compiled `gem` binary (and `bootstrap/stage0.c`), gated by `if argv()[1] == "lsp"` before `parse_args`. Compiling a normal user program reads zero LSP code — LSP modules aren't reachable from any user `load`.
+- **Smoke test** at `tests/lsp/smoke.sh` (wired into `make test` via the `test-lsp` target). Pipes a canned `initialize → didOpen → didChange → didClose → shutdown → exit` session and asserts the framed responses (capabilities echo, two `publishDiagnostics` notifications, `id:2 result:null` for shutdown). `publishDiagnostics` is stubbed to `[]`; PR #12 wires it to the Phase 0b error sink.
 
 ### Symbol Table
 

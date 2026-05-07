@@ -1,0 +1,148 @@
+# lsp/rpc.gem — JSON-RPC framing, message constructors, position encoding.
+#
+# Reading and writing LSP frames is byte-oriented: headers are CRLF-terminated
+# ASCII, the body is exactly Content-Length bytes of UTF-8 JSON. We use the
+# blocking builtins read_stdin/write_stdout because the LSP main loop has no
+# other work to do while waiting for the next frame.
+
+load "std/string"
+load "std/json"
+
+# ─── Reading frames ──────────────────────────────────────────────
+# Returns the JSON-decoded message as a Gem table, or nil on EOF / malformed
+# header. The caller is responsible for closing the loop on nil.
+
+fn read_message()
+  let length = -1
+  while true
+    let line = input()
+    if line == nil
+      return nil
+    end
+    if line == ""
+      break
+    end
+    if string.starts_with(line, "Content-Length:")
+      let value_str = string.trim(substr(line, 15, len(line) - 15))
+      length = to_int(value_str)
+    end
+  end
+  if length < 0
+    return nil
+  end
+  let body = read_stdin(length)
+  json.parse(body)
+end
+
+# ─── Writing frames ──────────────────────────────────────────────
+# Single fwrite + flush to keep the header and body in one frame on the wire.
+
+fn write_message(msg)
+  let body = json.encode(msg)
+  let header = "Content-Length: " + to_string(len(body)) + "\r\n\r\n"
+  write_stdout(header + body)
+end
+
+# ─── JSON-RPC message constructors ───────────────────────────────
+
+fn make_response(id, result)
+  {jsonrpc: "2.0", id: id, result: result}
+end
+
+fn make_error_response(id, code, message)
+  {jsonrpc: "2.0", id: id, error: {code: code, message: message}}
+end
+
+fn make_notification(method, params)
+  {jsonrpc: "2.0", method: method, params: params}
+end
+
+# Standard JSON-RPC error codes that handlers reach for.
+let ERR_PARSE = -32700
+let ERR_INVALID_REQUEST = -32600
+let ERR_METHOD_NOT_FOUND = -32601
+let ERR_INVALID_PARAMS = -32602
+let ERR_INTERNAL = -32603
+let ERR_SERVER_NOT_INITIALIZED = -32002
+
+# ─── LSP type constructors ───────────────────────────────────────
+# Use these instead of freeform tables so handler call sites stay
+# self-documenting and field names cannot drift.
+
+fn make_position(line, character)
+  {line: line, character: character}
+end
+
+fn make_range(start_pos, end_pos)
+  {start: start_pos, end: end_pos}
+end
+
+# severity: 1=Error, 2=Warning, 3=Info, 4=Hint (per LSP spec)
+fn make_diagnostic(range, severity, message, source)
+  {range: range, severity: severity, message: message, source: source}
+end
+
+# ─── UTF-16 ↔ UTF-8 column conversion ────────────────────────────
+# LSP positions are UTF-16 code units. Gem strings are UTF-8 bytes. For
+# pure-ASCII source the two coincide, but handlers must convert at the
+# rpc boundary so internal code can treat columns as byte offsets.
+#
+# UTF-8 bytes in [0x00, 0x7F]   → one UTF-16 code unit (BMP, ASCII).
+# UTF-8 bytes in [0xC0, 0xDF]   → two-byte sequence  → one UTF-16 unit.
+# UTF-8 bytes in [0xE0, 0xEF]   → three-byte sequence → one UTF-16 unit.
+# UTF-8 bytes in [0xF0, 0xF7]   → four-byte sequence  → surrogate pair (2).
+
+fn utf16_col_to_byte_col(line_text, utf16_col)
+  let blen = len(line_text)
+  let byte = 0
+  let units = 0
+  while byte < blen and units < utf16_col
+    let b = ord(line_text, byte)
+    if b < 128
+      byte += 1
+      units += 1
+    elif b < 224
+      byte += 2
+      units += 1
+    elif b < 240
+      byte += 3
+      units += 1
+    else
+      byte += 4
+      units += 2
+    end
+  end
+  byte
+end
+
+fn byte_col_to_utf16_col(line_text, byte_col)
+  let blen = len(line_text)
+  let limit = byte_col
+  if limit > blen then limit = blen end
+  let byte = 0
+  let units = 0
+  while byte < limit
+    let b = ord(line_text, byte)
+    if b < 128
+      byte += 1
+      units += 1
+    elif b < 224
+      byte += 2
+      units += 1
+    elif b < 240
+      byte += 3
+      units += 1
+    else
+      byte += 4
+      units += 2
+    end
+  end
+  units
+end
+
+export read_message, write_message,
+       make_response, make_error_response, make_notification,
+       make_position, make_range, make_diagnostic,
+       utf16_col_to_byte_col, byte_col_to_utf16_col,
+       ERR_PARSE, ERR_INVALID_REQUEST, ERR_METHOD_NOT_FOUND,
+       ERR_INVALID_PARAMS, ERR_INTERNAL, ERR_SERVER_NOT_INITIALIZED

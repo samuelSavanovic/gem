@@ -1215,6 +1215,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     append_file: "gem_append_file_fn",
     getenv: "gem_getenv_fn",
     input: "gem_input_fn",
+    read_stdin: "gem_read_stdin_fn",
+    write_stdout: "gem_write_stdout_fn",
     insert: "gem_insert_fn",
     remove_at: "gem_remove_at_fn",
     band: "gem_band_fn",

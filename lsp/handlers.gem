@@ -1,0 +1,106 @@
+# lsp/handlers.gem — dispatch + lifecycle + textDocument/* handlers.
+#
+# State (initialized / shutdown_requested) lives in a closure returned by
+# make_dispatcher() so the server loop can be a plain `while true { … }`.
+# Per LSP spec:
+#   - Before `initialize`, only `initialize` and `exit` are valid; all
+#     other requests reply with -32002 Server not initialized, and
+#     notifications are dropped.
+#   - After `shutdown`, the server stops accepting new requests; any
+#     non-`exit` traffic gets -32600 Invalid request.
+#   - `exit` notification: 0 if shutdown was acknowledged, 1 otherwise.
+
+load "./rpc"
+load "./doc"
+
+fn server_capabilities()
+  {
+    capabilities: {
+      # TextDocumentSyncKind.Full = 1. Incremental sync (= 2) deferred to
+      # Phase 1b once we measure full-reparse cost on real files.
+      textDocumentSync: 1,
+      # Advertise no goto/completion yet — those land in PR #11.
+      definitionProvider: false,
+      completionProvider: nil
+    },
+    serverInfo: {name: "gem-lsp", version: "0.1.0"}
+  }
+end
+
+fn make_dispatcher()
+  let initialized = false
+  let shutdown_requested = false
+
+  let dispatch = fn(msg)
+    let method = msg.method
+    let id = msg.id
+    let params = msg.params
+
+    # Lifecycle: initialize / initialized / shutdown / exit
+    if method == "initialize"
+      rpc.write_message(rpc.make_response(id, server_capabilities()))
+      initialized = true
+      return
+    end
+
+    if method == "initialized"
+      return
+    end
+
+    if method == "exit"
+      if shutdown_requested
+        exit(0)
+      else
+        exit(1)
+      end
+    end
+
+    if not initialized
+      if id != nil
+        rpc.write_message(rpc.make_error_response(id, rpc.ERR_SERVER_NOT_INITIALIZED, "Server not initialized"))
+      end
+      return
+    end
+
+    if shutdown_requested
+      if id != nil
+        rpc.write_message(rpc.make_error_response(id, rpc.ERR_INVALID_REQUEST, "Server is shutting down"))
+      end
+      return
+    end
+
+    if method == "shutdown"
+      shutdown_requested = true
+      rpc.write_message(rpc.make_response(id, nil))
+      return
+    end
+
+    # textDocument/* notifications
+    if method == "textDocument/didOpen"
+      doc.open(params.textDocument)
+      doc.publish_diagnostics(params.textDocument.uri, [])
+      return
+    end
+
+    if method == "textDocument/didChange"
+      doc.change(params.textDocument, params.contentChanges)
+      doc.publish_diagnostics(params.textDocument.uri, [])
+      return
+    end
+
+    if method == "textDocument/didClose"
+      doc.close(params.textDocument)
+      return
+    end
+
+    # Anything else: reject requests with method-not-found, drop unknown
+    # notifications silently (per the LSP spec).
+    if id != nil
+      rpc.write_message(rpc.make_error_response(id, rpc.ERR_METHOD_NOT_FOUND, "Method not found: " + method))
+    end
+  end
+
+  {dispatch: dispatch}
+end
+
+export make_dispatcher

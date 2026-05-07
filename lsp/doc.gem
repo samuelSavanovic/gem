@@ -1,0 +1,91 @@
+# lsp/doc.gem — per-document state, modeled as one registered process per
+# open URI. Holds the current text + version. Phase 1b will add the parsed
+# AST and a debounced reparse; for now state queries just echo the text.
+#
+# Process name format: "lsp_doc:" + uri. send/whereis use that name; when
+# the doc closes, the process exits and the registration auto-cleans.
+
+load "./rpc"
+
+fn doc_loop(uri, text, version)
+  receive
+  when {tag: "set_text", text: new_text, version: new_version}
+    doc_loop(uri, new_text, new_version)
+  when {tag: "close"}
+    return
+  when {tag: "get_text", from: from}
+    send(from.pid, {tag: "doc_reply", ref: from.ref, text: text})
+    doc_loop(uri, text, version)
+  end
+end
+
+fn open(td)
+  let name = "lsp_doc:" + td.uri
+  if whereis(name) != nil
+    # Re-open of an already-open doc: replace contents in place rather
+    # than spawning a duplicate. Clients shouldn't do this, but be lenient.
+    send(name, {tag: "set_text", text: td.text, version: td.version})
+  else
+    spawn(fn()
+      register(name, self())
+      doc_loop(td.uri, td.text, td.version)
+    end)
+  end
+  nil
+end
+
+fn change(td, content_changes)
+  # Full-text sync (TextDocumentSyncKind.Full == 1): exactly one change with
+  # the entire new text. Phase 1a advertises Full sync so we don't have to
+  # apply per-range edits yet — that lands when incremental sync becomes a
+  # measurable win on real file sizes.
+  if len(content_changes) > 0
+    let new_text = content_changes[0].text
+    let name = "lsp_doc:" + td.uri
+    if whereis(name) != nil
+      send(name, {tag: "set_text", text: new_text, version: td.version})
+    end
+  end
+  nil
+end
+
+fn close(td)
+  let name = "lsp_doc:" + td.uri
+  if whereis(name) != nil
+    send(name, {tag: "close"})
+  end
+  nil
+end
+
+# Synchronous query for handlers that need the current text. Returns nil if
+# the doc isn't open. Yields via send/receive so the doc process gets to
+# run between the request and the reply. The result var + post-receive read
+# is intentional — making the receive block the function's tail expression
+# trips a -Wreturn-type warning in the emitted C because cc can't see that
+# the receive's selector is exhaustive.
+fn get_text(uri)
+  let name = "lsp_doc:" + uri
+  if whereis(name) == nil
+    return nil
+  end
+  let ref = make_ref()
+  send(name, {tag: "get_text", from: {pid: self(), ref: ref}})
+  let result = nil
+  receive
+  when {tag: "doc_reply", ref: r, text: text}
+    result = text
+  after 5000
+    result = nil
+  end
+  result
+end
+
+fn publish_diagnostics(uri, diagnostics)
+  rpc.write_message(rpc.make_notification(
+    "textDocument/publishDiagnostics",
+    {uri: uri, diagnostics: diagnostics}
+  ))
+  nil
+end
+
+export open, change, close, get_text, publish_diagnostics
