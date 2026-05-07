@@ -377,6 +377,15 @@ The thread pool adds per-operation overhead: mutex lock → enqueue → cond sig
 ### Timer min-heap (DONE)
 Replaced the 256-slot fixed timer array with a dynamic min-heap keyed by `deadline_ms` in `runtime/gem_scheduler.c`. Insert is O(log n), `gem_fire_timers` pops expired entries from the root in O(log n) per fired timer, and `gem_earliest_timer_deadline` is O(1) (peek root). The 256-slot cap and "timer table full" failure mode are gone. Cancel-by-ref is still an O(n) linear scan to locate the ref before a heap remove (sift-down + sift-up); a side index ref→heap-pos would make it O(log n) if cancel ever becomes hot. Verified by `examples/85_timer_heap_capacity.gem` (1000 concurrent timers, in-order fire, 200 cancels).
 
+### Lazy-paged coroutine stacks via mmap (P2)
+`GEM_CORO_STACK_SIZE` is currently 256 KB, allocated via plain `malloc` in `gem_coro_stack_alloc` (`runtime/gem_scheduler.c:87`). malloc'd stacks pay the full physical commit up front, so every spawned process pays 256 KB regardless of how deep its call chain actually gets. Bookmark soak at c=500 spends ~120 MB on stack memory alone with the current setting; an HTTP handler that uses 8 KB of stack pays the same as the LSP doc process that uses 200 KB.
+
+mmap-backed stacks (with `MAP_ANON | MAP_PRIVATE`) are zero-filled lazy-paged: virtual size is reserved up front but physical pages only commit when the stack actually touches them. Bumping the virtual size to 1 MB or 2 MB becomes free for stacks that don't use it, and a deep one-off pays only what it needs. Per-iteration cost is one extra `mmap` + `munmap` syscall per spawn/exit instead of `malloc`/`free`; both are page-aligned and fast.
+
+Two implementation considerations: (a) ASan's allocator dislikes mmap'd stacks unless they're registered via `__asan_handle_no_return`; the malloc path is friendlier under instrumented builds, so an `#ifdef __SANITIZE_ADDRESS__` fallback is probably needed. (b) macOS and Linux differ slightly on guard pages — `mmap` + `mprotect(NONE)` for the bottom page catches stack overflows cleanly, whereas malloc'd stacks today silently corrupt adjacent heap. Adding a guard page is a small bonus alongside the lazy-paging change.
+
+Trigger: re-bench bookmark app at c=500 and the LSP under load. If stack memory shows up as a meaningful fraction of RSS, ship this. If the existing 256 KB envelope is fine, defer.
+
 ### kqueue/epoll for sockets (P2)
 The scheduler currently uses `poll()` for socket readiness. Replacing with **kqueue** (macOS/BSD) or **epoll** (Linux) would improve scalability at high connection counts (thousands of fds). `poll()` scans the entire fd set on each call — O(n) per wake. kqueue/epoll return only ready fds — O(ready). For the current HTTP server benchmark (~100 concurrent connections), `poll()` is not the bottleneck; this optimization matters when scaling to thousands of simultaneous connections.
 
