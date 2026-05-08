@@ -82,6 +82,30 @@ fn make_diagnostic(range, severity, message, source)
   {range: range, severity: severity, message: message, source: source}
 end
 
+fn make_location(uri, range)
+  {uri: uri, range: range}
+end
+
+# CompletionItemKind constants (per LSP spec). Only the kinds we actually
+# emit are listed — extend as new completion sources land.
+let CIK_TEXT = 1
+let CIK_METHOD = 2
+let CIK_FUNCTION = 3
+let CIK_FIELD = 5
+let CIK_VARIABLE = 6
+let CIK_MODULE = 9
+let CIK_KEYWORD = 14
+
+fn make_completion_item(label, kind, detail)
+  {label: label, kind: kind, detail: detail}
+end
+
+# Always reply with isIncomplete=false for now: we recompute the full set
+# every request, no need for the client to re-trigger.
+fn make_completion_list(items)
+  {isIncomplete: false, items: items}
+end
+
 # ─── UTF-16 ↔ UTF-8 column conversion ────────────────────────────
 # LSP positions are UTF-16 code units. Gem strings are UTF-8 bytes. For
 # pure-ASCII source the two coincide, but handlers must convert at the
@@ -143,6 +167,9 @@ end
 export read_message, write_message,
        make_response, make_error_response, make_notification,
        make_position, make_range, make_diagnostic,
+       make_location, make_completion_item, make_completion_list,
        utf16_col_to_byte_col, byte_col_to_utf16_col,
        ERR_PARSE, ERR_INVALID_REQUEST, ERR_METHOD_NOT_FOUND,
-       ERR_INVALID_PARAMS, ERR_INTERNAL, ERR_SERVER_NOT_INITIALIZED
+       ERR_INVALID_PARAMS, ERR_INTERNAL, ERR_SERVER_NOT_INITIALIZED,
+       CIK_TEXT, CIK_METHOD, CIK_FUNCTION, CIK_FIELD,
+       CIK_VARIABLE, CIK_MODULE, CIK_KEYWORD

@@ -1,0 +1,359 @@
+# lsp/completion.gem — textDocument/completion handler.
+#
+# Three completion sources, in priority order: table fields after a `.`,
+# identifiers in scope, and builtin functions. The cursor's surrounding
+# text decides which mode we're in — the AST is often partial / mid-edit
+# during typing, so completion drives off the source text + tokens, not
+# a fully resolved AST.
+#
+# v1 deliberately keeps the data flow flat: we re-walk the doc AST for
+# each request to collect table-literal fields and dot-assign fields.
+# Symbol-table caching (PR #10) handles the bulk of the work; everything
+# here is a single linear pass over the AST.
+
+load "./rpc"
+load "./doc"
+load "./workspace"
+load "./position"
+load "../compiler/builtins" (BUILTIN_NAMES)
+
+# Maximum items returned per request. Keeps wire payloads tame; clients
+# typically display ≤30 anyway. `isIncomplete: false` (in rpc) tells the
+# client not to re-trigger — that's a small lie when we truncate, but
+# every truncation comes from prefix-filtered results so a few keystrokes
+# narrows the set further.
+let MAX_ITEMS = 200
+
+# ─── Module export discovery ─────────────────────────────────────
+# A module's public surface is the `export A, B, C` statement (always
+# the trailing top-level node by convention; `find_export_node` in
+# compiler/main.gem walks bottom-up). We mirror it here rather than
+# importing from compiler/main.gem because the LSP only ever needs the
+# names list, not the full driver wiring.
+fn find_export_names(ast)
+  if ast == nil or ast.tag != "program"
+    return []
+  end
+  let i = len(ast.stmts) - 1
+  while i >= 0
+    if ast.stmts[i].tag == "export"
+      return ast.stmts[i].names
+    end
+    i -= 1
+  end
+  []
+end
+
+# ─── Table-field discovery for local vars ────────────────────────
+# Walks the AST collecting fields the user has assigned to a given var.
+# Two sources: the table literal at `let X = {a: 1, b: 2}` (initial
+# fields) and any later `X.f = …` dot_assign (mutation-time fields).
+# We don't trace through aliases (`let Y = X; Y.f = …`) — that's flow
+# analysis territory.
+
+fn collect_table_literal_keys(node)
+  let keys = []
+  if node == nil or type(node) != "table" then return keys end
+  if node.tag == "table"
+    for entry in node.entries
+      push(keys, entry.key)
+    end
+  end
+  keys
+end
+
+fn walk_for_fields(node, target_name, acc)
+  if node == nil then return end
+  if type(node) != "table" then return end
+  if node.tag == nil then return end
+  match node
+  when {tag: "let", name: name, value: value}
+    if name == target_name
+      for k in collect_table_literal_keys(value)
+        acc[k] = true
+      end
+    end
+    walk_for_fields(value, target_name, acc)
+  when {tag: "dot_assign", object: object, field: field, value: value}
+    if object != nil and object.tag == "var" and object.name == target_name
+      acc[field] = true
+    end
+    walk_for_fields(object, target_name, acc)
+    walk_for_fields(value, target_name, acc)
+  when {tag: "fn_def", body: body}
+    for s in body
+      walk_for_fields(s, target_name, acc)
+    end
+  when {tag: "anon_fn", body: body}
+    for s in body
+      walk_for_fields(s, target_name, acc)
+    end
+  when {tag: "if", cond: cond}
+    walk_for_fields(cond, target_name, acc)
+    for s in node.then
+      walk_for_fields(s, target_name, acc)
+    end
+    if node.else != nil
+      for s in node.else
+        walk_for_fields(s, target_name, acc)
+      end
+    end
+  when {tag: "while", cond: cond, body: body}
+    walk_for_fields(cond, target_name, acc)
+    for s in body
+      walk_for_fields(s, target_name, acc)
+    end
+  when {tag: "match", target: target, whens: whens}
+    walk_for_fields(target, target_name, acc)
+    for w in whens
+      for s in w.body
+        walk_for_fields(s, target_name, acc)
+      end
+    end
+    if node.else != nil
+      for s in node.else
+        walk_for_fields(s, target_name, acc)
+      end
+    end
+  when {tag: "receive_match", arms: arms}
+    for arm in arms
+      for s in arm.body
+        walk_for_fields(s, target_name, acc)
+      end
+    end
+    if node.after_body != nil
+      for s in node.after_body
+        walk_for_fields(s, target_name, acc)
+      end
+    end
+  when {tag: "return", value: value}
+    walk_for_fields(value, target_name, acc)
+  when {tag: "call", func: func, args: args}
+    walk_for_fields(func, target_name, acc)
+    for a in args
+      walk_for_fields(a, target_name, acc)
+    end
+  when {tag: "binop", left: left, right: right}
+    walk_for_fields(left, target_name, acc)
+    walk_for_fields(right, target_name, acc)
+  when {tag: "unop", expr: expr}
+    walk_for_fields(expr, target_name, acc)
+  when {tag: "dot", object: object}
+    walk_for_fields(object, target_name, acc)
+  when {tag: "index", object: object, key: key}
+    walk_for_fields(object, target_name, acc)
+    walk_for_fields(key, target_name, acc)
+  when {tag: "table", entries: entries}
+    for e in entries
+      walk_for_fields(e.value, target_name, acc)
+    end
+  when {tag: "array", elements: elements}
+    for e in elements
+      walk_for_fields(e, target_name, acc)
+    end
+  when {tag: "interp", parts: parts}
+    for p in parts
+      walk_for_fields(p, target_name, acc)
+    end
+  end
+end
+
+fn collect_local_fields(ast, recv)
+  let acc = {}
+  if ast == nil or ast.tag != "program" then return acc end
+  for s in ast.stmts
+    walk_for_fields(s, recv, acc)
+  end
+  acc
+end
+
+# ─── Resolution helpers ──────────────────────────────────────────
+
+fn find_first_by_name(list, name)
+  for entry in list
+    if entry.name == name
+      return entry
+    end
+  end
+  nil
+end
+
+fn file_uri(path)
+  "file://" + path
+end
+
+fn module_data_for_path(path)
+  let cache = doc.get_cache(file_uri(path))
+  if cache != nil
+    return {ast: cache.ast, symbols: cache.symbols}
+  end
+  let entry = workspace.lookup(path)
+  if entry == nil
+    return nil
+  end
+  {ast: entry.ast, symbols: entry.symbols}
+end
+
+# ─── Field completion ────────────────────────────────────────────
+# `recv.<prefix>` cursor: figure out what `recv` is and produce its
+# fields. Three sources, tried in order:
+#   1. Module imports → the imported module's exports list.
+#   2. Local var bound to a table literal or mutated via dot_assign.
+#   3. Nothing — return empty list (the editor will show no popup).
+
+fn fields_for_module_import(imp)
+  if imp.resolved_path == nil
+    return []
+  end
+  let mod = module_data_for_path(imp.resolved_path)
+  if mod == nil
+    return []
+  end
+  let exports = find_export_names(mod.ast)
+  let items = []
+  # Annotate with kind: prefer "function" for export names that resolve
+  # to a top-level fn_def, "field" otherwise. Surfaces useful icons in
+  # the client.
+  let fn_set = {}
+  for f in mod.symbols.functions
+    if f.scope != nil and len(f.scope) == 1
+      fn_set[f.name] = true
+    end
+  end
+  for name in exports
+    let kind = rpc.CIK_FIELD
+    if has_key(fn_set, name)
+      kind = rpc.CIK_FUNCTION
+    end
+    push(items, rpc.make_completion_item(name, kind, "from " + imp.path))
+  end
+  items
+end
+
+fn fields_for_local_var(ast, recv)
+  let fields = collect_local_fields(ast, recv)
+  let items = []
+  for k, _ in fields
+    push(items, rpc.make_completion_item(k, rpc.CIK_FIELD, nil))
+  end
+  items
+end
+
+fn complete_fields(cache, recv)
+  let imp = find_first_by_name(cache.symbols.imports, recv)
+  if imp != nil and imp.kind == "module"
+    return fields_for_module_import(imp)
+  end
+  fields_for_local_var(cache.ast, recv)
+end
+
+# ─── Identifier completion ───────────────────────────────────────
+# v1: union of vars + functions + imports (all scopes — we don't filter
+# by reachability) + builtins. Filtered by typed prefix client-side
+# anyway; sending the full set is the usual LSP convention.
+
+fn starts_with(s, prefix)
+  let plen = len(prefix)
+  if plen == 0 then return true end
+  if len(s) < plen then return false end
+  substr(s, 0, plen) == prefix
+end
+
+fn complete_identifiers(symbols, prefix)
+  let seen = {}
+  let items = []
+  let push_unique = fn(name, kind, detail)
+    if has_key(seen, name) then return nil end
+    if not starts_with(name, prefix) then return nil end
+    seen[name] = true
+    push(items, rpc.make_completion_item(name, kind, detail))
+    nil
+  end
+  for f in symbols.functions
+    push_unique(f.name, rpc.CIK_FUNCTION, nil)
+  end
+  for v in symbols.vars
+    if v.kind == "param"
+      push_unique(v.name, rpc.CIK_VARIABLE, "parameter")
+    else
+      push_unique(v.name, rpc.CIK_VARIABLE, nil)
+    end
+  end
+  for imp in symbols.imports
+    if imp.kind == "module"
+      push_unique(imp.name, rpc.CIK_MODULE, imp.path)
+    else
+      push_unique(imp.name, rpc.CIK_FUNCTION, "from " + imp.path)
+    end
+  end
+  for name in BUILTIN_NAMES
+    push_unique(name, rpc.CIK_FUNCTION, "builtin")
+  end
+  items
+end
+
+# ─── Top-level handler ───────────────────────────────────────────
+
+fn handle(params)
+  let uri = params.textDocument.uri
+  let pos = params.position
+  let cache = doc.get_cache(uri)
+  if cache == nil
+    return rpc.make_completion_list([])
+  end
+  # Convert UTF-16 char → byte col via the cursor's line text. Same
+  # mechanic as definition.gem — extracted into position.line_col_to_offset
+  # but completion needs both an offset (for prefix walking) and a byte
+  # col (for token lookup), so we compute them once here.
+  let blen = len(cache.text)
+  let line = 0
+  let line_start = 0
+  let i = 0
+  while i < blen and line < pos.line
+    if ord(cache.text, i) == 10
+      line += 1
+      line_start = i + 1
+    end
+    i += 1
+  end
+  let line_end = line_start
+  while line_end < blen and ord(cache.text, line_end) != 10
+    line_end += 1
+  end
+  let line_text = substr(cache.text, line_start, line_end - line_start)
+  let byte_col = rpc.utf16_col_to_byte_col(line_text, pos.character)
+  let cursor_offset = line_start + byte_col
+  if cursor_offset > blen then cursor_offset = blen end
+  let ctx = position.prefix_at(cache.text, cursor_offset)
+  let items = []
+  if ctx.kind == "field"
+    items = complete_fields(cache, ctx.recv)
+    # Apply the typed prefix filter on field names too — most clients
+    # filter client-side, but a few don't, and an over-eager dropdown
+    # is worse than a slightly-narrowed one.
+    if len(ctx.prefix) > 0
+      let filtered = []
+      for it in items
+        if starts_with(it.label, ctx.prefix)
+          push(filtered, it)
+        end
+      end
+      items = filtered
+    end
+  else
+    items = complete_identifiers(cache.symbols, ctx.prefix)
+  end
+  if len(items) > MAX_ITEMS
+    let trimmed = []
+    let n = 0
+    for it in items
+      if n >= MAX_ITEMS then break end
+      push(trimmed, it)
+      n += 1
+    end
+    items = trimmed
+  end
+  rpc.make_completion_list(items)
+end
+
+export handle

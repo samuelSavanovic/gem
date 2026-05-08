@@ -12,20 +12,20 @@ A minimal language server for Gem, focused on the features that provide the most
 - **Format-on-save: in scope** for v1, with a minimal AST-driven pretty-printer (no source-preservation; comments reattached heuristically, some may move). Lifted out of "Not in Scope" below. Source-preserving formatter (CST or token-level) deferred to v2.
 - **Phase 0 first.** Multi-error recovery is the single biggest UX cliff between "useful LSP" and "annoying LSP" — without it every save shows one error at a time. Land before any LSP work.
 
-**PR plan:**
+**Phase plan:**
 
-| PR | Branch | Scope | Status | Lines |
-|---|---|---|---|---|
-| #6 | `lsp/plan` | Lock LSP implementation plan + Phase 0b design | ✓ Done (2026-05-07, commit `21b9623`) | — |
-| #7 | `lsp/phase-0a-codegen-caret` | Phase 0a — route codegen errors through `compile_error()` for caret context | ✓ Done (2026-05-07) | ~50 |
-| #8 | `lsp/phase-0b-multi-error` | Phase 0b — multi-error recovery in lexer/parser/codegen | ✓ Done (2026-05-07) | ~430 |
-| #9 | `lsp/phase-1a-scaffold` | Phase 1a — `gem lsp` subcommand, JSON-RPC framing, lifecycle, didOpen/didChange | ✓ Done (2026-05-07) | ~400 |
-| #10 | `lsp/phase-1b-symbols` | Phase 1b — symbol table pass, per-doc AST cache | ✓ Done (2026-05-07) | ~250 |
-| #11 | `lsp/phase-2a-features` | Phase 2a — goto-def + completion (table fields, identifiers, builtins) | Pending | ~300 |
-| #12 | `lsp/phase-2b-diagnostics` | Phase 2b — diagnostics integration (consumes Phase 0b error list) | Pending | ~100 |
-| #13 | `lsp/phase-3-format` | Phase 3 — minimal AST formatter + format-on-save | Pending | ~600 |
+| Branch | Scope | Status | Lines |
+|---|---|---|---|
+| `lsp/plan` | Lock LSP implementation plan + Phase 0b design | ✓ Done (2026-05-07, commit `21b9623`) | — |
+| `lsp/phase-0a-codegen-caret` | Phase 0a — route codegen errors through `compile_error()` for caret context | ✓ Done (2026-05-07) | ~50 |
+| `lsp/phase-0b-multi-error` | Phase 0b — multi-error recovery in lexer/parser/codegen | ✓ Done (2026-05-07) | ~430 |
+| `lsp/phase-1a-scaffold` | Phase 1a — `gem lsp` subcommand, JSON-RPC framing, lifecycle, didOpen/didChange | ✓ Done (2026-05-07) | ~400 |
+| `lsp/phase-1b-symbols` | Phase 1b — symbol table pass, per-doc AST cache | ✓ Done (2026-05-07) | ~250 |
+| `lsp/phase-2a-features` | Phase 2a — goto-def + completion (table fields, identifiers, builtins) | Pending | ~470 |
+| `lsp/phase-2b-diagnostics` | Phase 2b — diagnostics integration (consumes Phase 0b error list) | Pending | ~100 |
+| `lsp/phase-3-format` | Phase 3 — minimal AST formatter + format-on-save | Pending | ~600 |
 
-Each PR ships independently. After merge, mark `✓ Done (date, commit-sha)` here and append any deviations from the plan in the relevant phase section below. Per-PR planning docs (e.g. `LSP_PHASE_0B_PLAN.md`) live alongside this file during implementation, get deleted once the PR lands (the work is in the code; the plan doc becomes noise).
+Phases ship as independent PRs. The PR# column was dropped 2026-05-08 because GitHub PR numbers diverged from the roadmap labels (PR #11 ended up being a Phase 1b doc follow-up, not Phase 2a) and the bookkeeping cost compounded with each merge. Branch names + phase labels are the durable identifiers; check `git log` for the merge SHA. After merge, mark `✓ Done (date, commit-sha)` here and append any deviations from the plan in the relevant phase section below. Per-phase planning docs (e.g. `LSP_PHASE_0B_PLAN.md`) live alongside this file during implementation, get deleted once the phase lands (the work is in the code; the plan doc becomes noise).
 
 **Out of scope for v1** (deferred, not rejected): hover, document symbols, find references, rename, signature help, semantic tokens, source-preserving formatter. Land once core is real and a real workload demands them.
 
@@ -198,15 +198,15 @@ Source-preserving formatter (CST or token-level rewriting, ~1000–1500 lines) d
 
 ## Summary
 
-| Feature | LSP Method | Effort | PR |
+| Feature | LSP Method | Effort | Phase |
 |---|---|---|---|
-| Codegen errors → caret context | (internal) | ~50 lines | #7 |
-| Multi-error recovery | (internal) | ~300–400 lines | #8 |
-| LSP scaffold + document sync | lifecycle, didOpen/didChange | ~400 lines | #9 |
-| Symbol table | (internal) | ~250 lines | #10 |
-| Go to definition + Completion | textDocument/definition, /completion | ~300 lines | #11 |
-| Diagnostics | textDocument/publishDiagnostics | ~100 lines | #12 |
-| Format-on-save | textDocument/formatting + `gem fmt` | ~600 lines | #13 |
-| **Total** | | **~2000 lines** | |
+| Codegen errors → caret context | (internal) | ~50 lines | 0a |
+| Multi-error recovery | (internal) | ~300–400 lines | 0b |
+| LSP scaffold + document sync | lifecycle, didOpen/didChange | ~400 lines | 1a |
+| Symbol table | (internal) | ~250 lines | 1b |
+| Go to definition + Completion | textDocument/definition, /completion | ~470 lines | 2a |
+| Diagnostics | textDocument/publishDiagnostics | ~100 lines | 2b |
+| Format-on-save | textDocument/formatting + `gem fmt` | ~600 lines | 3 |
+| **Total** | | **~2200 lines** | |
 
 Hover, document symbols, and find references deferred to v2 (see *Not in Scope*).

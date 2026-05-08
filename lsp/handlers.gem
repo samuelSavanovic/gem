@@ -12,6 +12,8 @@
 
 load "./rpc"
 load "./doc"
+load "./definition"
+load "./completion"
 
 # `gem/debug/symbols` is an internal probe for the symbols smoke test.
 # Gated on $GEM_LSP_DEBUG so external editors can't peek at internal
@@ -29,9 +31,10 @@ fn server_capabilities()
       # TextDocumentSyncKind.Full = 1. Incremental sync (= 2) deferred to
       # Phase 1b once we measure full-reparse cost on real files.
       textDocumentSync: 1,
-      # Advertise no goto/completion yet — those land in PR #11.
-      definitionProvider: false,
-      completionProvider: nil
+      definitionProvider: true,
+      # `.` is the only contextual trigger; identifier completion fires
+      # on invocation (typically `<C-x><C-o>` or `<C-Space>`).
+      completionProvider: {triggerCharacters: ["."]}
     },
     serverInfo: {name: "gem-lsp", version: "0.1.0"}
   }
@@ -110,6 +113,16 @@ fn make_dispatcher()
       else
         rpc.write_message(rpc.make_response(id, syms))
       end
+      return
+    end
+
+    if method == "textDocument/definition"
+      rpc.write_message(rpc.make_response(id, definition.handle(params)))
+      return
+    end
+
+    if method == "textDocument/completion"
+      rpc.write_message(rpc.make_response(id, completion.handle(params)))
       return
     end
 

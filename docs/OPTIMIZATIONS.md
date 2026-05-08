@@ -285,16 +285,19 @@ Codegen detects self-recursive calls in tail position (last expression in functi
 ### Mutual tail call optimization (P2)
 Mutual recursion (A calls B in tail position, B calls A) could use trampolines or computed goto. Lower priority — rare in OTP patterns. Self-recursive TCO already covers the common case.
 
-### Tighten "TCO function not reachable from process root" warning (P2)
+### Tighten "TCO function not reachable from process root" warning (P1, was P2)
 
-The warning at `compiler/codegen.gem:2584` fires when a TCO-eligible self-recursive fn is not in `process_tail_fns` — i.e. some caller invokes it from a non-tail context, so the TCO loop's back-edge can't safely arena-reset (the non-tail caller's frame may hold pointers into the arena). It currently fires for two functions in-tree:
+The warning at `compiler/codegen.gem:2584` fires when a TCO-eligible self-recursive fn is not in `process_tail_fns` — i.e. some caller invokes it from a non-tail context, so the TCO loop's back-edge can't safely arena-reset (the non-tail caller's frame may hold pointers into the arena). It currently fires for three functions in-tree:
 
 - `compiler/main.gem` `rename_node` — module-rename tree walker. One-shot, runs during compilation.
 - `lsp/symbols.gem` `walk_node` — symbol-table tree walker. Runs once per `didOpen` / `didChange` in the LSP doc process.
+- `lsp/completion.gem` `walk_for_fields` — collects table-literal keys + `t.x = …` assignments for a given var, called per `textDocument/completion` request. Same shape as `walk_node`: bounded structural recursion over the AST, called from inside the doc-process loop.
 
-Both are bounded structural recursions over an AST. Per-iteration allocation inside the TCO loop is O(AST size × scope-list size) — a small bounded peak (~50 KB on `std/http.gem`'s 13.4 KB source for `walk_node`). The **outer** loop catches everything when the call returns: `compiler main` exits with the arena, and `doc_loop` resets per iteration. So the warning is correct in mechanism (the inner reset does not fire) but the practical consequence in both current cases is zero — no leak across edits, no leak across compilations.
+All three are bounded structural recursions over an AST. Per-iteration allocation inside the TCO loop is O(AST size × scope-list size) — a small bounded peak (~50 KB on `std/http.gem`'s 13.4 KB source for `walk_node`). The **outer** loop catches everything when the call returns: `compiler main` exits with the arena, and `doc_loop` resets per iteration. So the warning is correct in mechanism (the inner reset does not fire) but the practical consequence in all three current cases is zero — no leak across edits, no leak across compilations.
 
-The wart: the warning is meant to flag the pattern it's actually dangerous for — a long-running loop with **unbounded** inner recursion under it, where allocations would accumulate within a single outer iteration. Today the warning fires 2/2 times on bounded structural recursion (false positives) and 0/0 times on the dangerous pattern (no true positives in-tree). Two-noise-out-of-two erodes the signal; if a real leak case lands later the warning still fires and is still actionable, but the boy-cried-wolf cost goes up with each new bounded walker (parser-as-walker, formatter, lint passes are plausible additions over the next few PRs).
+**Priority bump 2026-05-08 (P2 → P1):** Phase 2a added the third bounded walker (`walk_for_fields`) and the LSP roadmap has more on deck (formatter in Phase 3 will need at least one walker; per-feature walkers — hover type-inference, references — are likely v2 additions). The signal-to-noise ratio on the warning is now 0/3 true-positive vs. false-positive, and growing. Each new walker also adds a deviation note in `LSP_ROADMAP.md` justifying why the warning is benign — that bookkeeping is starting to compound. Worth landing one of options A/B/E below before the count hits five.
+
+The wart: the warning is meant to flag the pattern it's actually dangerous for — a long-running loop with **unbounded** inner recursion under it, where allocations would accumulate within a single outer iteration. Today the warning fires 3/3 times on bounded structural recursion (false positives) and 0/0 times on the dangerous pattern (no true positives in-tree). Three-noise-out-of-three erodes the signal; if a real leak case lands later the warning still fires and is still actionable, but the boy-cried-wolf cost goes up with each new bounded walker (parser-as-walker, formatter, lint passes are plausible additions over the next few PRs).
 
 Options for tightening, by approach:
 
@@ -315,7 +318,7 @@ Cross-cutting considerations:
 
 Open questions before deciding:
 
-- How often do bounded tree walkers end up in long-running PT loops? Today: twice. The LSP roadmap (formatter, lint passes, more cache-driven walks) plausibly adds more — all bounded structural. If the count grows, A's value goes up; if it plateaus, E may be enough.
+- How often do bounded tree walkers end up in long-running PT loops? Today: three (added `lsp/completion.gem` `walk_for_fields` in Phase 2a, 2026-05-08). The LSP roadmap (formatter, lint passes, more cache-driven walks) plausibly adds more — all bounded structural. The count is now growing per-PR, so A's value is going up; E is still defensible as a same-PR stopgap.
 - Is structural-decrease worth landing on its own? It has uses beyond this warning (compile-time infinite-recursion detection, termination guarantees for trusted code paths). A fixed-point sketch with its own diagnostic might be more valuable than gating one warning.
 - Are there in-tree call patterns where the inner recursion is genuinely unbounded under an outer reset, and option A would silence a real leak? Need a sweep of the call graph before committing to A.
 
