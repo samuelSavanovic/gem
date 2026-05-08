@@ -1,0 +1,130 @@
+# lsp/workspace.gem — cross-file AST/symbol cache.
+#
+# Goto-def can land on a name defined in a module the LSP hasn't been
+# asked to `didOpen` (typically `std/*.gem`). The workspace process owns
+# a map of {absolute_path → {ast, symbols}} for those cold-loaded files.
+# Open documents have their own per-doc process — handlers should check
+# `whereis("lsp_doc:file://" + path)` first and only fall back to the
+# workspace for files the editor hasn't opened.
+#
+# Lifetime: spawned + registered as "lsp_workspace" from `lsp/server.gem`
+# at startup, before the dispatcher loop runs. Spawning from main matters
+# for two reasons learned in PR #10:
+#   1. Top-level mutable lets that the workspace touches must not have
+#      been written from a non-main process. We don't write any here, but
+#      the reverse rule (this process must be created from main so its
+#      arena is the spawn's, not some doc-process arena) holds either way.
+#   2. The workspace recursively walks parsed ASTs (build_symbols), so it
+#      shares the same 256 KB stack-size dependency as the doc process.
+#
+# Invalidation: not implemented in v1. If a user edits a loaded module
+# outside the editor and the LSP doesn't restart, the cache will be
+# stale. Open files always go through their doc process (which reparses
+# on every didChange), so this only affects truly-cold modules. Tracked
+# as a follow-up — add when someone reports it.
+
+load "./symbols" (build_symbols)
+load "../compiler/parser" (parse_source)
+load "../compiler/lexer" (tokenize)
+load "../compiler/errors" (make_error_sink)
+load "../compiler/loader" (find_project_root, compute_stdlib_root)
+
+# Shared with lsp/doc.gem — see the rationale comment there.
+let _install_root_path = dirname(dirname(argv()[0]))
+
+fn install_root()
+  _install_root_path
+end
+
+# Parse a single file from disk and build its symbol table. Returns
+# {ast, tokens, symbols, text} or nil if the file can't be read.
+fn parse_file(path)
+  let pres = pcall(fn()
+    return read_file(path)
+  end)
+  if not pres.ok
+    return nil
+  end
+  let text = pres.value
+  let base_dir = dirname(path)
+  let project_root = find_project_root(base_dir)
+  if project_root != nil
+    project_root = normalize_path(project_root)
+  end
+  let stdlib_root = compute_stdlib_root(install_root(), project_root)
+  let sink = make_error_sink()
+  let token_sink = make_error_sink()
+  let tokens = tokenize(text, path, token_sink)
+  let ast = parse_source(text, path, sink)
+  let syms = build_symbols(ast, path, base_dir, project_root, stdlib_root)
+  {ast: ast, tokens: tokens, symbols: syms, text: text}
+end
+
+fn workspace_loop(cache)
+  receive
+  when {tag: "lookup", path: path, from: from}
+    let entry = nil
+    if has_key(cache, path)
+      entry = cache[path]
+    else
+      entry = parse_file(path)
+      if entry != nil
+        cache[path] = entry
+      end
+    end
+    send(from.pid, {tag: "ws_reply", ref: from.ref, entry: entry})
+    workspace_loop(cache)
+  when {tag: "invalidate", path: path}
+    if has_key(cache, path)
+      delete(cache, path)
+    end
+    workspace_loop(cache)
+  when {tag: "stop"}
+    return
+  end
+end
+
+# Synchronous startup: spawn + register, wait for ready handshake. Same
+# pattern as doc.open() — main loop never yields on its own, so a request
+# arriving on the same input frame as workspace startup needs the
+# registration to be visible before we return.
+fn start()
+  if whereis("lsp_workspace") != nil
+    return nil
+  end
+  let parent_pid = self()
+  let ref = make_ref()
+  spawn(fn()
+    register("lsp_workspace", self())
+    send(parent_pid, {tag: "ws_ready", ref: ref})
+    workspace_loop({})
+  end)
+  receive
+  when {tag: "ws_ready", ref: r}
+    nil
+  after 5000
+    nil
+  end
+  nil
+end
+
+# Synchronous lookup helper. Returns the cache entry or nil if the file
+# couldn't be read. Caller-side timeout matches the rest of the LSP's
+# 5-second envelope; if a parse takes that long there's a bigger problem.
+fn lookup(path)
+  if whereis("lsp_workspace") == nil
+    return nil
+  end
+  let ref = make_ref()
+  send("lsp_workspace", {tag: "lookup", path: path, from: {pid: self(), ref: ref}})
+  let result = nil
+  receive
+  when {tag: "ws_reply", ref: r, entry: e}
+    result = e
+  after 5000
+    result = nil
+  end
+  result
+end
+
+export start, lookup

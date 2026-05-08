@@ -14,6 +14,7 @@ load "std/string"
 load "./rpc"
 load "./symbols" (build_symbols)
 load "../compiler/parser" (parse_source)
+load "../compiler/lexer" (tokenize)
 load "../compiler/errors" (make_error_sink)
 load "../compiler/loader" (find_project_root, compute_stdlib_root)
 
@@ -42,6 +43,12 @@ end
 # a populated cache table; on lex failure parse_source returns an empty
 # program and we get an empty symbol table, which is the right behavior
 # (no symbols to surface until the user fixes the lex error).
+#
+# Tokens are cached so handlers can resolve cursor → identifier without
+# re-lexing on every request. Lexing twice (once here, once inside
+# parse_source) costs ~1-2ms on std/http.gem-sized files, well under
+# the 50ms LSP "feels instant" bar; revisit if the doubling stops being
+# negligible (or expose a lex+parse combined entry from compiler/parser).
 fn analyze(uri, text)
   let path = uri_to_path(uri)
   let base_dir = dirname(path)
@@ -51,9 +58,11 @@ fn analyze(uri, text)
   end
   let stdlib_root = compute_stdlib_root(install_root(), project_root)
   let sink = make_error_sink()
+  let token_sink = make_error_sink()
+  let tokens = tokenize(text, path, token_sink)
   let ast = parse_source(text, path, sink)
   let syms = build_symbols(ast, path, base_dir, project_root, stdlib_root)
-  {ast: ast, sink: sink, symbols: syms,
+  {ast: ast, tokens: tokens, sink: sink, symbols: syms, text: text,
    base_dir: base_dir, project_root: project_root, stdlib_root: stdlib_root}
 end
 
@@ -69,6 +78,14 @@ fn doc_loop(uri, text, version, cache)
     doc_loop(uri, text, version, cache)
   when {tag: "get_symbols", from: from}
     send(from.pid, {tag: "doc_reply", ref: from.ref, symbols: cache.symbols})
+    doc_loop(uri, text, version, cache)
+  # `get_cache` returns the whole cache bundle (ast/tokens/symbols/text/
+  # roots) in one round-trip so goto-def and completion don't have to
+  # send three messages back to the doc process. Each is a deep copy on
+  # the send boundary, but that's already the case for `get_text` and
+  # `get_symbols` separately, so net work is the same.
+  when {tag: "get_cache", from: from}
+    send(from.pid, {tag: "doc_reply", ref: from.ref, cache: cache})
     doc_loop(uri, text, version, cache)
   end
 end
@@ -167,6 +184,26 @@ fn get_symbols(uri)
   result
 end
 
+# Returns the full cache bundle (ast, tokens, symbols, text, roots) for
+# `uri`, or nil if the doc isn't open. Used by goto-def + completion,
+# which need several pieces of cache state in lockstep.
+fn get_cache(uri)
+  let name = "lsp_doc:" + uri
+  if whereis(name) == nil
+    return nil
+  end
+  let ref = make_ref()
+  send(name, {tag: "get_cache", from: {pid: self(), ref: ref}})
+  let result = nil
+  receive
+  when {tag: "doc_reply", ref: r, cache: c}
+    result = c
+  after 5000
+    result = nil
+  end
+  result
+end
+
 fn publish_diagnostics(uri, diagnostics)
   rpc.write_message(rpc.make_notification(
     "textDocument/publishDiagnostics",
@@ -175,4 +212,4 @@ fn publish_diagnostics(uri, diagnostics)
   nil
 end
 
-export open, change, close, get_text, get_symbols, publish_diagnostics
+export open, change, close, get_text, get_symbols, get_cache, publish_diagnostics, uri_to_path

@@ -252,25 +252,50 @@ fn walk_node(node, scope, acc)
     walk_stmts(stmts, scope, acc)
 
   when {tag: "load", path: path}
+    # Resolve the path; swallow failures (missing-stdlib in a workspace
+    # without a project root, typo'd path, etc.) — the LSP shouldn't
+    # crash on a single bad load. node.line is set by tag_source_file
+    # when the entry-file driver runs, but the LSP parses standalone, so
+    # we fall back to nil and live with imprecise import locations.
     let resolved = nil
     let res = pcall(fn()
       resolved = resolve_load_path(path, acc.base_dir, acc.project_root, acc.stdlib_root)
     end)
-    let binding_name = node.alias
-    if binding_name == nil
-      binding_name = module_name_from_path(path)
+    if node.selective != nil
+      # `load "p" (a, b)` binds each name individually in the current
+      # scope. Goto-def on `a` should follow `resolved_path` and look
+      # up `a` there — the binding is opaque to the importer.
+      for sel_name in node.selective
+        push(acc.imports, {
+          name: sel_name,
+          file: acc.file,
+          line: nil,
+          col: 0,
+          scope: scope,
+          path: path,
+          resolved_path: resolved,
+          kind: "selective",
+          imported_name: sel_name
+        })
+      end
+    else
+      # `load "p"` or `load "p" as alias` binds the module table.
+      let binding_name = node.alias
+      if binding_name == nil
+        binding_name = module_name_from_path(path)
+      end
+      push(acc.imports, {
+        name: binding_name,
+        file: acc.file,
+        line: nil,
+        col: 0,
+        scope: scope,
+        path: path,
+        resolved_path: resolved,
+        kind: "module",
+        alias: node.alias
+      })
     end
-    push(acc.imports, {
-      name: binding_name,
-      file: acc.file,
-      line: nil,
-      col: 0,
-      scope: scope,
-      path: path,
-      resolved_path: resolved,
-      alias: node.alias,
-      selective: node.selective
-    })
   end
 end
 

@@ -10,8 +10,15 @@
 
 load "./rpc"
 load "./handlers"
+load "./workspace"
 
 fn run()
+  # Spawn the workspace process from main before the dispatcher loop.
+  # It owns a cross-file AST/symbol cache for goto-def + completion;
+  # spawning here (rather than lazily from a doc handler) avoids the
+  # PR #10 footgun where a non-main writer could leave dangling state
+  # behind a top-level box. See lsp/workspace.gem header for details.
+  workspace.start()
   let d = handlers.make_dispatcher()
   while true
     let msg = rpc.read_message()
