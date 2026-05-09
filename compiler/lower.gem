@@ -1,0 +1,444 @@
+# Lowering pass — runs between parse and codegen.
+#
+# Rewrites structural AST nodes the parser preserves verbatim into the
+# simpler shapes codegen expects:
+#
+#   for_in / for_range  →  block of let / while / assign
+#   match (with match_arm) → match (with when_clause)
+#   receive_match (with match_arm) → receive_match (with when_clause)
+#
+# The structural forms exist so future tooling (formatters, refactors,
+# pattern-aware completion) can read what the user wrote. Codegen never
+# sees them — by the time fold_constants runs, every for / pattern has
+# been desugared.
+#
+# Pre-lower shape:
+#   for_in:   {tag, var_name, val_name (or nil), items, body, line}
+#   for_range:{tag, var_name, start, end_, body, line}
+#   match_arm:{tag, pattern (or nil), expr (or nil), body}
+#   pat_table:{tag, entries: [{key, value (or nil)}]}
+#   pat_array:{tag, elements: [pat, ...]}
+#   pat_literal:{tag, literal: <int|float|string|bool|nil node>}
+#   pat_name: {tag, name}
+#
+# Post-lower: same as today's parser output (block / when_clause / etc.).
+
+load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
+
+# ─── Driver ──────────────────────────────────────────────────────
+
+fn lower(ast)
+  let state = {gensym: 0}
+  lower_node(ast, state)
+end
+
+# Propagate `file` from the originating structural node onto the
+# generated subtree. Only fills in nodes that don't already carry a
+# file (mirrors tag_source_file in compiler/main.gem). Without this,
+# codegen #line directives for lowered for/match constructs drift to
+# whatever happens to be the codegen-time current_file, breaking
+# bootstrap roundtrip and runtime stack traces.
+fn tag_file(node, file)
+  if file == nil
+    return nil
+  end
+  if type(node) != "table"
+    return nil
+  end
+  if node.tag != nil and node.file == nil
+    node.file = file
+  end
+  for k in keys(node)
+    let v = node[k]
+    if type(v) == "table"
+      if v.tag != nil
+        tag_file(v, file)
+      else
+        for elem in v
+          if type(elem) == "table"
+            tag_file(elem, file)
+          end
+        end
+      end
+    end
+  end
+  nil
+end
+
+# ─── Walker ─────────────────────────────────────────────────────
+# lower_node returns a (possibly new) node with all structural forms
+# desugared. The walker is conservative: any unknown tag is returned
+# as-is so error_expr / error_stmt / future node types pass through.
+
+fn lower_node(node, state)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table"
+    return node
+  end
+  let tag = node.tag
+  if tag == nil
+    return node
+  end
+
+  # ── Structural rewrites — produce new subtrees, copy `file` ──
+
+  if tag == "for_in"
+    return lower_for_in(node, state)
+  end
+  if tag == "for_range"
+    return lower_for_range(node, state)
+  end
+  if tag == "match"
+    return lower_match(node, state)
+  end
+  if tag == "receive_match"
+    return lower_receive(node, state)
+  end
+
+  # ── Pass-through: recurse in place so metadata (`file`, `line`,
+  # `col`, etc.) attached by tag_source_file or future passes is
+  # preserved. Rebuilding via constructors loses fields that aren't
+  # part of the constructor signature, which broke #line attribution
+  # for loaded modules during PR #15 bootstrap.
+
+  if tag == "program"
+    node.stmts = lower_stmts(node.stmts, state)
+    return node
+  end
+  if tag == "binop"
+    node.left = lower_node(node.left, state)
+    node.right = lower_node(node.right, state)
+    return node
+  end
+  if tag == "unop"
+    node.expr = lower_node(node.expr, state)
+    return node
+  end
+  if tag == "call"
+    node.func = lower_node(node.func, state)
+    node.args = lower_nodes(node.args, state)
+    return node
+  end
+  if tag == "dot"
+    node.object = lower_node(node.object, state)
+    return node
+  end
+  if tag == "index"
+    node.object = lower_node(node.object, state)
+    node.key = lower_node(node.key, state)
+    return node
+  end
+  if tag == "anon_fn"
+    node.body = lower_stmts(node.body, state)
+    node.defaults = lower_nodes(node.defaults, state)
+    return node
+  end
+  if tag == "fn_def"
+    node.body = lower_stmts(node.body, state)
+    node.defaults = lower_nodes(node.defaults, state)
+    return node
+  end
+  if tag == "table"
+    for e in node.entries
+      e.key = lower_node(e.key, state)
+      e.value = lower_node(e.value, state)
+    end
+    return node
+  end
+  if tag == "array"
+    node.elements = lower_nodes(node.elements, state)
+    return node
+  end
+  if tag == "interp"
+    node.parts = lower_nodes(node.parts, state)
+    return node
+  end
+  if tag == "let"
+    node.value = lower_node(node.value, state)
+    return node
+  end
+  if tag == "assign"
+    node.value = lower_node(node.value, state)
+    return node
+  end
+  if tag == "dot_assign"
+    node.object = lower_node(node.object, state)
+    node.value = lower_node(node.value, state)
+    return node
+  end
+  if tag == "index_assign"
+    node.object = lower_node(node.object, state)
+    node.key = lower_node(node.key, state)
+    node.value = lower_node(node.value, state)
+    return node
+  end
+  if tag == "if"
+    node.cond = lower_node(node.cond, state)
+    node.then = lower_stmts(node.then, state)
+    if node.else != nil
+      node.else = lower_stmts(node.else, state)
+    end
+    return node
+  end
+  if tag == "while"
+    node.cond = lower_node(node.cond, state)
+    node.body = lower_stmts(node.body, state)
+    return node
+  end
+  if tag == "return"
+    node.value = lower_node(node.value, state)
+    return node
+  end
+  if tag == "block"
+    node.stmts = lower_stmts(node.stmts, state)
+    return node
+  end
+
+  # Leaf or pass-through (int, float, string, bool, nil, var, break,
+  # continue, load, export, extern_fn, extern_include, error_expr,
+  # error_stmt, when_clause already-lowered, etc.).
+  node
+end
+
+fn lower_nodes(nodes, state)
+  if nodes == nil
+    return nil
+  end
+  let out = []
+  for n in nodes
+    push(out, lower_node(n, state))
+  end
+  out
+end
+
+fn lower_stmts(stmts, state)
+  if stmts == nil
+    return nil
+  end
+  let out = []
+  for s in stmts
+    push(out, lower_node(s, state))
+  end
+  out
+end
+
+fn lower_stmts_or_nil(stmts, state)
+  if stmts == nil
+    return nil
+  end
+  lower_stmts(stmts, state)
+end
+
+# ─── for_in / for_range ─────────────────────────────────────────
+
+fn lower_for_in(node, state)
+  let line = node.line
+  let body = lower_stmts(node.body, state)
+  if node.val_name != nil
+    # for k, v in tbl ... end
+    state.gensym = state.gensym + 1
+    let g = state.gensym
+    let tbl_var = "_for_tbl_{g}"
+    let len_var = "_for_len_{g}"
+    let idx_var = "_for_i_{g}"
+    let inner = []
+    push(inner, make_let(node.var_name, make_call(make_var("__table_key_at"), [make_var(tbl_var), make_var(idx_var)], 0), line))
+    push(inner, make_let(node.val_name, make_call(make_var("__table_val_at"), [make_var(tbl_var), make_var(idx_var)], 0), line))
+    push(inner, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
+    for s in body
+      push(inner, s)
+    end
+    let while_node = make_while(
+      make_binop("<", make_var(idx_var), make_var(len_var)),
+      inner,
+      line
+    )
+    let result = {tag: "block", stmts: [
+      make_let(tbl_var, lower_node(node.items, state), line),
+      make_let(len_var, make_call(make_var("len"), [make_var(tbl_var)], 0), line),
+      make_let(idx_var, make_int(0), line),
+      while_node
+    ]}
+    tag_file(result, node.file)
+    return result
+  end
+  # for x in items ... end
+  state.gensym = state.gensym + 1
+  let g = state.gensym
+  let items_var = "_for_items_{g}"
+  let idx_var = "_for_i_{g}"
+  let inner = []
+  push(inner, make_let(node.var_name, make_index(make_var(items_var), make_var(idx_var)), line))
+  push(inner, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
+  for s in body
+    push(inner, s)
+  end
+  let while_node = make_while(
+    make_binop("<", make_var(idx_var), make_call(make_var("len"), [make_var(items_var)], 0)),
+    inner,
+    line
+  )
+  let result = {tag: "block", stmts: [
+    make_let(items_var, lower_node(node.items, state), line),
+    make_let(idx_var, make_int(0), line),
+    while_node
+  ]}
+  tag_file(result, node.file)
+  result
+end
+
+fn lower_for_range(node, state)
+  let line = node.line
+  let body = lower_stmts(node.body, state)
+  state.gensym = state.gensym + 1
+  let g = state.gensym
+  let idx_var = "_for_i_{g}"
+  let limit_var = "_for_limit_{g}"
+  let inner = []
+  push(inner, make_let(node.var_name, make_var(idx_var), line))
+  push(inner, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
+  for s in body
+    push(inner, s)
+  end
+  let while_node = make_while(
+    make_binop("<", make_var(idx_var), make_var(limit_var)),
+    inner,
+    line
+  )
+  let result = {tag: "block", stmts: [
+    make_let(idx_var, lower_node(node.start, state), line),
+    make_let(limit_var, lower_node(node.end_, state), line),
+    while_node
+  ]}
+  tag_file(result, node.file)
+  result
+end
+
+# ─── match / receive ────────────────────────────────────────────
+
+fn lower_match(node, state)
+  state.gensym = state.gensym + 1
+  let match_var = "_match_{state.gensym}"
+  let target_var_expr = make_var(match_var)
+  let target_lowered = lower_node(node.target, state)
+  let whens = []
+  for arm in node.whens
+    push(whens, lower_arm(arm, target_var_expr, state))
+  end
+  let else_body = lower_stmts_or_nil(node.else, state)
+  let result = make_match(target_lowered, whens, else_body, node.line, match_var)
+  tag_file(result, node.file)
+  result
+end
+
+fn lower_receive(node, state)
+  state.gensym = state.gensym + 1
+  let recv_var = "_recv_{state.gensym}"
+  let recv_var_expr = make_var(recv_var)
+  let arms = []
+  for arm in node.arms
+    let lowered = lower_arm(arm, recv_var_expr, state)
+    # receive_match expects {pattern: {condition, bindings}, body}
+    push(arms, {pattern: {condition: lowered.value, bindings: lowered.bindings}, body: lowered.body})
+  end
+  let after_ms = nil
+  if node.after_ms != nil
+    after_ms = lower_node(node.after_ms, state)
+  end
+  let after_body = lower_stmts_or_nil(node.after_body, state)
+  let result = make_receive_match(arms, after_ms, after_body, node.line, recv_var)
+  tag_file(result, node.file)
+  result
+end
+
+# Lower one match_arm into a when_clause shape.
+# Pattern arm: condition + bindings come from the pattern.
+# Expression arm: condition is `target == expr`, no bindings.
+fn lower_arm(arm, target_var_expr, state)
+  let body = lower_stmts(arm.body, state)
+  if arm.pattern != nil
+    let pc = pattern_to_cond(arm.pattern, target_var_expr, state)
+    return make_when(pc.condition, body, pc.bindings)
+  end
+  # Expression arm
+  let wval = lower_node(arm.expr, state)
+  make_when(make_binop("==", target_var_expr, wval), body, [])
+end
+
+# ─── Pattern → condition + bindings ─────────────────────────────
+
+fn and_chain(conditions)
+  if len(conditions) == 0
+    return make_bool(true)
+  end
+  let result = conditions[0]
+  for i = 1, len(conditions)
+    result = make_binop("and", result, conditions[i])
+  end
+  result
+end
+
+fn is_trivially_true(cond)
+  type(cond) == "table" and cond.tag == "bool" and cond.value == true
+end
+
+fn pattern_to_cond(pat, target_expr, state)
+  let tag = pat.tag
+
+  if tag == "pat_table"
+    let conditions = [make_binop("==", make_call(make_var("type"), [target_expr], 0), make_string("table"))]
+    let bindings = []
+    for entry in pat.entries
+      let key_str = make_string(entry.key)
+      push(conditions, make_call(make_var("has_key"), [target_expr, key_str], 0))
+      let sub_target = make_index(target_expr, key_str)
+      if entry.value == nil
+        # Shorthand: {name} binds the field value to a variable
+        push(bindings, make_let(entry.key, sub_target, 0))
+      else
+        let sub = pattern_to_cond(entry.value, sub_target, state)
+        if not is_trivially_true(sub.condition)
+          push(conditions, sub.condition)
+        end
+        for b in sub.bindings
+          push(bindings, b)
+        end
+      end
+    end
+    return {condition: and_chain(conditions), bindings: bindings}
+  end
+
+  if tag == "pat_array"
+    let conditions = [make_binop("==", make_call(make_var("type"), [target_expr], 0), make_string("table"))]
+    push(conditions, make_binop("==", make_call(make_var("len"), [target_expr], 0), make_int(len(pat.elements))))
+    let bindings = []
+    let i = 0
+    for sub_pat in pat.elements
+      let sub_target = make_index(target_expr, make_int(i))
+      let sub = pattern_to_cond(sub_pat, sub_target, state)
+      if not is_trivially_true(sub.condition)
+        push(conditions, sub.condition)
+      end
+      for b in sub.bindings
+        push(bindings, b)
+      end
+      i += 1
+    end
+    return {condition: and_chain(conditions), bindings: bindings}
+  end
+
+  if tag == "pat_literal"
+    return {condition: make_binop("==", target_expr, pat.literal), bindings: []}
+  end
+
+  if tag == "pat_name"
+    return {condition: make_bool(true), bindings: [make_let(pat.name, target_expr, 0)]}
+  end
+
+  # Unknown pattern (parse error fallback) — never matches.
+  {condition: make_bool(false), bindings: []}
+end
+
+export lower

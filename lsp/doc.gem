@@ -15,6 +15,7 @@ load "./rpc"
 load "./symbols" (build_symbols)
 load "../compiler/parser" (parse_source)
 load "../compiler/lexer" (tokenize)
+load "../compiler/lower" (lower)
 load "../compiler/errors" (make_error_sink)
 load "../compiler/loader" (find_project_root, compute_stdlib_root)
 
@@ -60,7 +61,13 @@ fn analyze(uri, text)
   let sink = make_error_sink()
   let token_sink = make_error_sink()
   let tokens = tokenize(text, path, token_sink)
-  let ast = parse_source(text, path, sink)
+  # Lower structural for/match/pattern forms before symbols/definition/
+  # completion walk the AST — those modules expect the desugared shape
+  # (block-of-while, when_clause with concrete value/bindings). Future
+  # LSP features that want pattern-aware behavior should expose the
+  # pre-lower AST through a separate accessor here rather than walk the
+  # cached one.
+  let ast = lower(parse_source(text, path, sink))
   let syms = build_symbols(ast, path, base_dir, project_root, stdlib_root)
   {ast: ast, tokens: tokens, sink: sink, symbols: syms, text: text,
    base_dir: base_dir, project_root: project_root, stdlib_root: stdlib_root}

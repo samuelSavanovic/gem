@@ -113,6 +113,57 @@ fn make_when(value, body, bindings)
   {tag: "when_clause", value: value, body: body, bindings: bindings}
 end
 
+# ─── Pre-lower forms ─────────────────────────────────────────────
+# The parser emits these structural nodes; compiler/lower.gem
+# rewrites them into the simpler shapes above before fold_constants
+# and codegen run. They preserve syntactic intent (a `for x in items`
+# stays a `for`, not a synthetic block-of-while) so future tooling
+# — formatters, refactors, richer LSP features — can read the
+# original program shape.
+
+# `for x in items ... end` (val_name = nil)
+# `for k, v in tbl ... end` (val_name = "v")
+fn make_for_in(var_name, val_name, items_expr, body, line)
+  {tag: "for_in", var_name: var_name, val_name: val_name, items: items_expr, body: body, line: line}
+end
+
+# `for i = start, end_ ... end` (numeric range, end_ exclusive)
+fn make_for_range(var_name, start_expr, end_expr, body, line)
+  {tag: "for_range", var_name: var_name, start: start_expr, end_: end_expr, body: body, line: line}
+end
+
+# A single `when` arm in a match. Exactly one of {pattern, expr} is
+# non-nil:
+#   - pattern arm: `when {a, b}` / `when [x, y]` / `when name` / `when 42`
+#   - expr arm:    `when some_expr` (equality with the match target)
+fn make_match_arm(pattern, expr, body)
+  {tag: "match_arm", pattern: pattern, expr: expr, body: body}
+end
+
+# Pattern nodes — consumed by the lowering pass to build the
+# condition expression and bindings for a `when_clause`.
+fn make_pat_table(entries)
+  {tag: "pat_table", entries: entries}
+end
+
+# Entry for pat_table: {key: "name", value: <pattern_node | nil>}
+# value == nil means shorthand `{name}` (binds name to the field).
+fn make_pat_table_entry(key, value)
+  {key: key, value: value}
+end
+
+fn make_pat_array(elements)
+  {tag: "pat_array", elements: elements}
+end
+
+fn make_pat_literal(literal)
+  {tag: "pat_literal", literal: literal}
+end
+
+fn make_pat_name(name)
+  {tag: "pat_name", name: name}
+end
+
 fn make_receive_match(arms, after_ms, after_body, line, recv_var)
   {tag: "receive_match", arms: arms, after_ms: after_ms, after_body: after_body, line: line, recv_var: recv_var}
 end
@@ -163,4 +214,4 @@ fn make_error_stmt(line, col)
   {tag: "error_stmt", line: line, col: col}
 end
 
-export make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_receive_match, make_return, make_break, make_continue, make_load, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt
+export make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_for_in, make_for_range, make_match_arm, make_pat_table, make_pat_table_entry, make_pat_array, make_pat_literal, make_pat_name, make_receive_match, make_return, make_break, make_continue, make_load, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt

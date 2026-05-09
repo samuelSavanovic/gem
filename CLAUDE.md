@@ -17,7 +17,7 @@ For example:
 ## Project Structure
 
 ```
-compiler/             # self-hosting compiler (lexer, parser, AST, errors, liveness, codegen, main)
+compiler/             # self-hosting compiler (lexer, parser, AST, errors, liveness, lower, fold, codegen, loader, main)
 lsp/                  # language server: main (entry), rpc (framing+types), server (loop), handlers (lifecycle+textDocument), doc (per-uri process). Dispatched from compiler/main.gem when argv[1] == "lsp"
 std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, supervisor, gen_server, test)
 runtime/              # C runtime — split by category:
@@ -139,6 +139,7 @@ After grammar.js changes: `tree-sitter generate`, `hx --grammar build`, then cop
 - No classes, static types, exceptions, or namespaces in v0 — by design. Tables with closures serve as objects, `error()`/`pcall()` for error handling.
 - libdill is dead (crashes on arm64 macOS). Don't reach for it.
 - Emitted `#line` directives and `gem_push_frame` paths are project-root-relative (codegen.gem `rel_path`, fed `project_root` from `compiler/main.gem`). Keeps `bootstrap/stage0.c` reproducible across machines and avoids leaking developer paths into compiled binaries. Out-of-tree files compiled by absolute path keep their absolute path.
+- **Lowering pass** (`compiler/lower.gem`): runs between `resolve_loads` and `fold_constants`. The parser emits structural nodes for `for_in` / `for_range` / `match` / `receive_match` (with `match_arm` + `pat_*` children) verbatim; `lower()` rewrites them into the desugared shapes codegen consumes (block-of-while; `when_clause` with concrete `value`/`bindings`). Gensyms for `_for_*_N` / `_match_N` / `_recv_N` are produced here, not in the parser. Phase ordering matters: any tree-walking pass that runs **before** lower (`tag_source_file`, `rename_node` in compiler/main.gem) needs to know about the structural tags; everything **after** lower (fold, codegen, liveness) only ever sees the desugared shapes. The LSP modules (`lsp/doc.gem`, `lsp/workspace.gem`) call `lower()` before walking so their consumers (symbols / definition / completion) see the post-lower form. Future LSP features that want pattern-aware behavior should expose the pre-lower AST as a separate accessor — don't add a second copy of the post-lower walk.
 
 ## Spec Maintenance
 

@@ -23,7 +23,8 @@ A minimal language server for Gem, focused on the features that provide the most
 | `lsp/phase-1b-symbols` | Phase 1b — symbol table pass, per-doc AST cache | ✓ Done (2026-05-07) | ~250 |
 | `lsp/phase-2a-features` | Phase 2a — goto-def + completion (table fields, identifiers, builtins) | ✓ Done (2026-05-08) | ~470 |
 | `lsp/phase-2b-diagnostics` | Phase 2b — diagnostics integration (consumes Phase 0b error list) | ✓ Done (2026-05-09) | ~110 |
-| `lsp/phase-3-format` | Phase 3 — minimal AST formatter + format-on-save | Pending | ~600 |
+| `lsp/phase-3-format` | Phase 3 — minimal AST formatter + format-on-save | **Deferred** — see "Phase 3: deferral" below | ~600 |
+| `lsp/phase-3-prep-structural-ast` | Compiler prep — structural for/match AST + lowering pass (PR A only, formatter deferred) | ✓ Done (2026-05-09) | ~350 |
 
 Phases ship as independent PRs. The PR# column was dropped 2026-05-08 because GitHub PR numbers diverged from the roadmap labels (PR #11 ended up being a Phase 1b doc follow-up, not Phase 2a) and the bookkeeping cost compounded with each merge. Branch names + phase labels are the durable identifiers; check `git log` for the merge SHA. After merge, mark `✓ Done (date, commit-sha)` here and append any deviations from the plan in the relevant phase section below. Per-phase planning docs (e.g. `LSP_PHASE_0B_PLAN.md`) live alongside this file during implementation, get deleted once the phase lands (the work is in the code; the plan doc becomes noise).
 
@@ -185,16 +186,34 @@ Given a symbol, find all locations where it's used. Inverse of go-to-definition 
 
 **Effort:** ~80 lines.
 
-## Phase 3: Format-on-save (PR #13)
+## Phase 3: deferral (decided 2026-05-09)
 
-Minimal AST-driven pretty-printer + LSP `textDocument/formatting` integration. Scope:
+Format-on-save is **deferred** until comment preservation is implementable. Background:
 
-- **Formatter as a library** (`lsp/format.gem` or `compiler/format.gem`) consuming the resolved AST and emitting canonical source. Drives off node shapes (no token stream), so comments are not source-preserving — they get reattached heuristically to the nearest following node, and some edge-case placements may shift. Acceptable trade for v1; revisit if it bites.
-- **Style:** 2-space indent, trailing comma on multi-line collections, `if` / `match` / `receive` arms one per line, function bodies on their own lines. Pin a small set of canonical examples in `examples/format/` so behavior changes are diffable.
-- **CLI hook:** `gem fmt <file>` reads source, parses, formats, writes back. Same artifact as `gem lsp`. Lets users format outside the LSP and gives the LSP an obvious place to call into.
-- **LSP integration:** handler calls the formatter on `textDocument/formatting`, returns a single `TextEdit` replacing the whole document range. Cheap, correct, and editor-agnostic.
+When Phase 3 was originally scoped, the assumption was "AST-driven pretty-printer over `parse_source` output, ~600 LOC." Investigation surfaced three structural problems with that plan:
 
-Source-preserving formatter (CST or token-level rewriting, ~1000–1500 lines) deferred to v2 — only worth building if comment placement turns out to bite real users.
+1. **The parser was lossy.** `for` loops and `match` patterns desugared eagerly inside the parser — `for x in items ... end` became a `block` of `let _for_items_N=…, while …` with gensym names; `when {a, b: x}` became a `binop("and", call(type,…), call(has_key,…))` chain plus `[let b = _match_N["b"]]` bindings. An AST-driven formatter run over that output would emit a `while` loop with synthetic `_for_items_N` names where the user wrote `for`. Not a formatter — a destructive rewrite.
+2. **Comments were dropped at the lexer.** `#` to end-of-line never reached the token stream. Round-tripping requires either (a) re-lexing and stitching tokens to AST nodes — bleeds into the source-preserving v2 work — or (b) shipping v1 without comment preservation, which makes format-on-save unusable for any comment-heavy file.
+3. **String literals lost their original style.** The lexer decoded `"…"` / `'…'` / `"""…"""` / `'''…'''` into a single string body; the formatter would have to guess which to re-emit.
+
+(1) was groundwork the language needed regardless — any tooling consumer (formatter, refactorer, coverage instrumenter, future pattern-aware completion) wants the structural AST. **(1) landed in 2026-05-09** as a standalone change: structural `for_in` / `for_range` / `match_arm` / `pat_*` AST nodes, plus `compiler/lower.gem` which runs after `resolve_loads` and rewrites them into the desugared shapes codegen consumes. The LSP modules (`lsp/doc.gem`, `lsp/workspace.gem`) call `lower()` before walking, so symbols / definition / completion behavior is unchanged. The parser is now gensym-free for these constructs.
+
+**(2) and (3) are the actual blockers for the formatter.** Without comment preservation, format-on-save is the kind of feature people enable once, lose a comment, and turn off forever. That's worse than not shipping it. Pursuing AST-driven format anyway would mean either (i) saving 600 LOC of formatter work that's gated on comment preservation we haven't built, or (ii) shipping a formatter people don't trust.
+
+### Re-entering Phase 3
+
+When format-on-save comes back on the table, the work splits into:
+
+- **Comment-attachment in the lexer/parser** (~200–400 LOC). Lex `#` comments as their own token type; the parser attaches preceding-line comments as `leading_comments` on the next node and trailing comments as `trailing_comment` on the current node. The lowering pass propagates them through structural rewrites. (For `for`/`match` this is straightforward because lower() copies fields like `file` already.)
+- **Quote-style preservation** (~50 LOC). Tag string tokens with their quote style (`"dq"` / `"sq"` / `"tdq"` / `"tsq"`), thread through to `make_string`. Interpolated strings already keep their `parts`; the quote flag covers the rest.
+- **Formatter library** (`compiler/format.gem`, ~600 LOC). AST-driven, consumes structural nodes (post-parser, pre-lower) so `for` / `match` patterns render as the user wrote them. Style: 2-space indent, trailing comma on multi-line, `if` / `match` / `receive` arms one per line, fn bodies on their own lines. Width threshold ~80 cols for single- vs. multi-line collection layout.
+- **CLI hook** (`gem fmt <file>` and `--check`, ~50 LOC). Same dispatch shape as `gem lsp`.
+- **LSP integration** (~50 LOC). `textDocument/formatting` returns one full-document `TextEdit`. No range/onTypeFormatting in v1.
+- **Test corpus + idempotence harness** (`examples/format/` + `tests/check_format.sh`, ~50 LOC). Every fixture must satisfy `format(format(x)) == format(x)`.
+
+Estimated total: ~1000–1100 LOC across the stack, of which (1) — the structural AST — is already done. The remaining work bundles into a single PR (or two: comments first, then formatter) and is best taken as a focused project once the LSP has stabilized through more real use.
+
+Source-preserving formatter (CST or token-level rewriting, ~1000–1500 LOC on top of all the above) remains a v2 option — only worth building if AST-driven comment attachment turns out to misplace comments in ways users actually report.
 
 ## Not in Scope (v2+)
 
@@ -215,7 +234,8 @@ Source-preserving formatter (CST or token-level rewriting, ~1000–1500 lines) d
 | Symbol table | (internal) | ~250 lines | 1b |
 | Go to definition + Completion | textDocument/definition, /completion | ~470 lines | 2a |
 | Diagnostics | textDocument/publishDiagnostics | ~100 lines | 2b |
-| Format-on-save | textDocument/formatting + `gem fmt` | ~600 lines | 3 |
+| Structural AST + lowering pass (formatter prep) | (internal) | ~350 lines | 3-prep |
+| Format-on-save (deferred — needs comment preservation first) | textDocument/formatting + `gem fmt` | ~700 lines remaining | 3 (deferred) |
 | **Total** | | **~2200 lines** | |
 
 Hover, document symbols, and find references deferred to v2 (see *Not in Scope*).
