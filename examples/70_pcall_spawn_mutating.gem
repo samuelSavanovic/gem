@@ -1,6 +1,6 @@
 # Item 5b stress #7: pcall(fn() spawn(fn() ... end) end) with mutated captures.
 #
-# Pattern from old OPTIMIZATIONS.md item 6 (subsumed by 5b). Outer pcall
+# Pattern from OPTIMIZATIONS_LOG.md item 6 (subsumed by 5b). Outer pcall
 # closure captures `counter` and `bump`. The inner spawn closure also
 # captures them. Pre-5b liveness over-approximation kept these live
 # across any back-edge inside the outer pcall closure → compile-time
