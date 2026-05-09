@@ -11,7 +11,7 @@
 # from `_self_closure`, migrating count's arena box into the fresh
 # arena. Test verifies count reaches 5000 across many resets.
 #
-# OPTIMIZATIONS.md item 5b's risk-register entry called this scenario
+# OPTIMIZATIONS_LOG.md item 5b's risk-register entry called this scenario
 # "out of scope". If this test passes, the claim is overstated and
 # the docs need updating.
 

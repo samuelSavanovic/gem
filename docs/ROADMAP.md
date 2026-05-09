@@ -68,20 +68,6 @@ Today, wrapping a C library that uses small structs by value (raylib's `Vector2`
 
 `load` today resolves stdlib (`std/...`) and project-local paths. There is no story for depending on third-party Gem code — no manifest, no fetch, no version pinning, no lockfile. Becomes pressing the moment a second real Gem app wants to share code with the first. Likely shape: a `gem.toml` manifest, a `gem_modules/` (or `.gem/deps/`) cache, git-URL or registry-based resolution, lockfile for reproducibility. Design intentionally deferred until pull from real users.
 
-## ~~`Bytes` extern type~~ ✓ Done (2026-05-05)
-
-`extern fn foo(b: Bytes) -> Bytes` now marshals binary-safe data across the FFI boundary. A `Bytes` parameter expands to two C parameters `(const uint8_t *data, int64_t len)`, sourced from `args[i].sval` and `args[i].slen` so embedded NULs survive. A `Bytes` return uses the small `GemBytes { data, len }` struct from `gem.h` (with a `gem_bytes(ptr, len)` helper); the runtime copies into the calling process's arena via `gem_string_with_len`.
-
-Ownership of returned data mirrors `String`: non-blocking `extern fn` does not free the original (use static storage or accept the leak); `extern blocking fn` frees with `free()` after copying. The blocking path also `memcpy`s `Bytes` arguments into a malloc'd thread-safe buffer for the duration of the worker call.
-
-There is no separate Bytes type at the Gem level — a `Bytes` parameter accepts any Gem string (file contents, `tcp_read` output, `build_string` output), since strings are already binary-safe. The annotation only changes how the value crosses the C boundary. SPEC §C-Interop has the type mapping table, ownership rules, and construction recipes; `examples/90_bytes_extern.gem` is the regression. Editor grammars (VS Code, Helix tree-sitter) updated to recognise `Bytes` in extern type annotations.
-
 ## Debugger / breakpoints (P2)
 
 Stack traces on `error()` are good; there's no interactive step-through, breakpoint, or variable-inspection story. Pairs with `LSP_ROADMAP.md` but is a separate capability — typically a DAP (Debug Adapter Protocol) server that the runtime cooperates with (instrumented `gem_set_line` callbacks, ability to pause a coroutine, mailbox/process inspection).
-
-## ~~Compile-time errors point at user source, not compiler internals~~ ✓ Done (2026-05-05)
-
-The three `error("unknown ... node/operator: ...")` sites in `compiler/codegen.gem` (unary op, binary op, expression dispatch) now route through a `codegen_error(node, msg)` helper inside `make_codegen` that captures `source_name`, reads `node.line`, and prints `[Compiler Bug]: <msg>\n  --> <file>:<line>` plus a "this is a compiler bug, not your code" note before exiting. Frames these as compiler bugs (not user errors) because the parser shouldn't produce shapes codegen can't handle — when one of these fires, the right fix is a parser/semantic guard upstream (cf. the `if x = y` guard from `79fb217`), and the diagnostic now gives a usable `.gem:line` to start from instead of the compiler's own stack trace.
-
-Smaller scope than the original audit anticipated: there are exactly 3 such sites in codegen, not ~dozen. Other `[Compile Error]` paths in codegen (undeclared identifier, assign-to-fn) already had source-location formatting.

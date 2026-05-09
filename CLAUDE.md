@@ -44,9 +44,10 @@ bootstrap/stage0.c    # checked-in C output — bootstrap artifact for clean bui
 build/gem             # compiled compiler binary (gitignored, built from stage0.c)
 examples/             # numbered tests (01-83+) + run_all.sh; plus json_parser, http_server, tcp_echo, bookmark_app
 docs/SPEC.md          # language spec (source of truth for all language decisions)
-docs/OPTIMIZATIONS.md # tracked future performance improvements
-docs/ROADMAP.md       # future capabilities (features, not perf)
-docs/LSP_ROADMAP.md   # sketch for a future Gem LSP
+docs/OPTIMIZATIONS.md     # tracked future performance improvements
+docs/OPTIMIZATIONS_LOG.md # shipped optimizations + work logs + benchmark anchors
+docs/ROADMAP.md           # future capabilities (features, not perf)
+docs/LSP_ROADMAP.md       # Gem LSP plan + deferred v2 features
 editors/vscode/       # VS Code extension (TextMate grammar)
 editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
 benchmarks/           # wrk harness for examples/bookmark_app (run.sh) + node_baseline reference impl
@@ -95,7 +96,7 @@ Add a numbered example under `examples/` (next free slot) and append its stdout 
 
 ## Optimization Tracking
 
-`docs/OPTIMIZATIONS.md` tracks future performance improvements. When you spot an obvious optimization (e.g. a new builtin that copies when it could use views, a hot path that could be specialized), add it there rather than implementing it immediately. Keep the file organized by category.
+`docs/OPTIMIZATIONS.md` tracks future performance improvements. When you spot an obvious optimization (e.g. a new builtin that copies when it could use views, a hot path that could be specialized), add it there rather than implementing it immediately. Keep the file organized by category. When an optimization ships, move its write-up to `docs/OPTIMIZATIONS_LOG.md` (under the same category heading) — keep the active doc focused on what's still TODO.
 
 ## Roadmap Tracking
 

@@ -36,7 +36,7 @@ Land these before any LSP work — they're useful standalone and the LSP needs t
 
 ### Diagnostic location coverage
 
-`compiler/main.gem`'s `--check` flag (already shipped) plus `efm-langserver` is enough to wire up red squiggles in any LSP-only editor (Helix, Neovim) without writing a real LSP. But two gaps make placement worse than it could be:
+Two gaps in compiler diagnostic placement, both now closed. Land before any LSP work since `publishDiagnostics` reuses the same plumbing.
 
 1. ~~**Cross-file errors point at the wrong file.**~~ ✓ Done (2026-05-05). `tag_source_file` (`compiler/main.gem`) walks the parsed AST after `parse_source` and stamps `node.file = <full_path>` on every AST node — both the entry file and each loaded module. `make_codegen` exposes `file_of(node)` / `loc_of(node)` helpers (defined up front so they're capturable by every nested closure that reports a diagnostic) which prefer `node.file` over the entry-file `source_name` fallback. All `[Compile Error]`, `[Compiler Bug]`, and `cannot reset` / TCO / spawn-target warnings now point at the originating file, so a typo in `std/foo.gem` surfaces as `std/foo.gem:42` instead of `main.gem:1`. Verified: a synthetic `load`-then-undeclared-identifier program now reports `--> /path/to/loaded.gem:N`. Runtime stack-trace plumbing (`#line` directives, `gem_push_frame` calls, `gem_error_at_fn` / `gem_check_callable` file args) also routes through `file_of(node)`, so an `error()` raised inside a loaded module shows the module's path in the trace rather than the entry file's. The synthetic top-level `gem_user_main` frame keeps the entry-file `source_name` since it has no AST node of its own.
 
@@ -50,9 +50,9 @@ These two together give every diagnostic the same shape and accuracy regardless 
 
 Deferred from the plan to a follow-up PR (per §3.3 Option B): no codegen-side AST tolerance for `error_expr`/`error_stmt` — they never reach codegen because main.gem skips it once the parser has reported. Adding tolerance would let codegen surface semantic errors on the same pass as parse errors; not worth the audit cost yet.
 
-## Phase 1: Foundations (~2 days)
+## Phase 1: Foundations
 
-### LSP Scaffold
+### Phase 1a — LSP Scaffold
 
 Set up the `gem lsp` subcommand with JSON-RPC over stdio. Handle lifecycle (`initialize`, `shutdown`, `exit`) and document sync (`textDocument/didOpen`, `textDocument/didChange`, `textDocument/didClose`).
 
@@ -78,7 +78,7 @@ Set up the `gem lsp` subcommand with JSON-RPC over stdio. Handle lifecycle (`ini
 - **`load "../lsp/main"` from `compiler/main.gem`** is the dispatch wire-up. The LSP code becomes part of the compiled `gem` binary (and `bootstrap/stage0.c`), gated by `if argv()[1] == "lsp"` before `parse_args`. Compiling a normal user program reads zero LSP code — LSP modules aren't reachable from any user `load`.
 - **Smoke test** at `tests/lsp/smoke.sh` (wired into `make test` via the `test-lsp` target). Pipes a canned `initialize → didOpen → didChange → didClose → shutdown → exit` session and asserts the framed responses (capabilities echo, two `publishDiagnostics` notifications, `id:2 result:null` for shutdown). `publishDiagnostics` is stubbed to `[]`; PR #12 wires it to the Phase 0b error sink.
 
-### Symbol Table
+### Phase 1b — Symbol Table
 
 On each parse, walk the AST and build a symbol table:
 - **Functions** — name, location (file + line + column), parameters.
@@ -106,9 +106,9 @@ This is the core data structure everything else queries.
   1. **Top-level mutable `let` written from a spawned process.** `lsp/doc.gem` originally lazily filled `_install_root_cache` from inside `analyze()` (which runs in the spawned doc process). The string `dirname(dirname(argv()[0]))` allocated in the spawn's arena, but the BSS-backed top-level box outlives that arena — once the doc-loop back-edge reset fired, the box dangled. macOS malloc tolerated the UAF; Linux glibc tripped `realloc(): invalid next size`. Fixed by computing the path at module load time so it lives in the main arena (never freed). General lesson: **top-level boxed lets must only be written from main**, since their box is shared globally but the value's arena follows whoever wrote last.
   2. **`GEM_CORO_STACK_SIZE = 16 KB` was too small to run the lexer + parser inside a spawned coroutine.** Every spawn before PR #10 was an HTTP handler / supervisor / gen_server doing small per-message work; the LSP is the first place a tree-walking parser ran inside a spawn. The 16 KB stack overflowed in `lexer.tokenize`, with the same Linux-vs-macOS asymmetry: macOS happened to map adjacent memory writable, Linux glibc detected the corruption. Bumped to 256 KB; bookmark soak peaks gain ~24 MB at c=100 / ~120 MB at c=500, well within the existing memory envelope. mmap'd lazy-paged stacks tracked as a P2 in `OPTIMIZATIONS.md`. General lesson: **assume any new spawn target may want compiler-grade stack**, and revisit the constant if a workload pushes harder.
 
-## Phase 2: Core Features (~3 days)
+## Phase 2: Core Features
 
-### Go to Definition (`textDocument/definition`)
+### Phase 2a — Go to Definition (`textDocument/definition`)
 
 Given a cursor position, find the symbol under the cursor, look it up in the symbol table, return its definition location.
 
@@ -124,7 +124,7 @@ Given a cursor position, find the symbol under the cursor, look it up in the sym
 
 **Effort:** ~100 lines.
 
-### Completion (`textDocument/completion`)
+### Phase 2a — Completion (`textDocument/completion`)
 
 Three kinds of completion, in priority order:
 
@@ -144,15 +144,11 @@ Complete from the known builtin list (same list as `compiler/codegen.gem`'s `bui
 
 **Effort:** ~200 lines.
 
-### Diagnostics (`textDocument/publishDiagnostics`)
+### Phase 2b — Diagnostics (`textDocument/publishDiagnostics`)
 
-Run the Gem compiler in a check mode (or parse-only mode) on save, report errors as diagnostics. This gives red squiggles for syntax errors.
+Parse-only, in-process: `lsp/doc.gem`'s `analyze()` runs the lexer + parser with a closure-captured `make_error_sink`, and Phase 2b routes that sink into `textDocument/publishDiagnostics`. No `--check` shell-out, no separate process.
 
-**Options:**
-- Add a `--check` flag to the compiler that parses + analyzes but doesn't emit C. Cleanest.
-- Shell out to `build/gem` and parse stderr. Quick and dirty but works.
-
-**Effort:** ~50 lines (shelling out) or ~100 lines (check mode in compiler).
+**Effort:** ~110 lines (Phase 2b shipped 2026-05-09).
 
 **Deviations from the locked plan (filled in 2026-05-09):**
 
@@ -163,30 +159,7 @@ Run the Gem compiler in a check mode (or parse-only mode) on save, report errors
 - **Entries with `line == nil` are dropped.** These come from compiler-bug paths that don't reach a parse-only LSP today; if they ever do, fall back to a (0,0)–(0,1) range rather than crashing the convert step.
 - **Smoke at `tests/lsp/smoke_diagnostics.sh`** opens a fixture missing its `end`, asserts the `publishDiagnostics` payload carries severity=1, source="gem", a non-empty message, and a 0-indexed range with `line >= 1`. A follow-up `didChange` with the fixed source must produce an empty `diagnostics` array on the same URI (clear-after-fix). Wired into `make test-lsp`.
 
-## Phase 3: Quality of Life (~2 days)
-
-### Hover (`textDocument/hover`)
-
-Show type/signature info on hover:
-- **Functions:** show parameter names and count.
-- **Builtins:** show a short doc string (maintain a static table of builtin docs).
-- **Variables:** show inferred "type" if known (e.g., `table`, `function`, `string`).
-
-**Effort:** ~100 lines.
-
-### Document Symbols (`textDocument/documentSymbol`)
-
-List all top-level functions and variable definitions for the outline view / breadcrumb bar.
-
-**Effort:** ~50 lines.
-
-### Find References (`textDocument/references`)
-
-Given a symbol, find all locations where it's used. Inverse of go-to-definition — scan the symbol table for all occurrences of the name in the same scope chain.
-
-**Effort:** ~80 lines.
-
-## Phase 3: deferral (decided 2026-05-09)
+## Phase 3: Format-on-save — deferred (decided 2026-05-09)
 
 Format-on-save is **deferred** until comment preservation is implementable. Background:
 
@@ -215,12 +188,17 @@ Estimated total: ~1000–1100 LOC across the stack, of which (1) — the structu
 
 Source-preserving formatter (CST or token-level rewriting, ~1000–1500 LOC on top of all the above) remains a v2 option — only worth building if AST-driven comment attachment turns out to misplace comments in ways users actually report.
 
-## Not in Scope (v2+)
+## Deferred to v2 (sketched, not rejected)
 
+Land once core is real and a real workload demands them.
+
+- **Hover** (`textDocument/hover`, ~100 lines). Functions: show parameter names and count. Builtins: short doc string from a static table. Variables: inferred "type" if known (`table`, `function`, `string`).
+- **Document symbols** (`textDocument/documentSymbol`, ~50 lines). Top-level functions and variable definitions for the outline / breadcrumb. Internal `gem/debug/symbols` already exposes the same data.
+- **Find references** (`textDocument/references`, ~80 lines). Inverse of goto-def — scan the symbol table for all occurrences in the same scope chain.
 - **Rename symbol** — needs reliable reference finding across files first.
 - **Type inference** — beyond simple table field tracking. Would need flow analysis.
-- **Signature help** — showing parameter hints as you type function arguments.
-- **Source-preserving formatter** — see Phase 3 above; v1 is AST-driven.
+- **Signature help** — parameter hints as you type function arguments.
+- **Source-preserving formatter** — see Phase 3 above; v1 plan is AST-driven.
 - **Code actions** — auto-import, extract function, etc.
 - **Semantic tokens** — LSP-driven syntax highlighting (tree-sitter handles this already).
 
@@ -238,4 +216,4 @@ Source-preserving formatter (CST or token-level rewriting, ~1000–1500 LOC on t
 | Format-on-save (deferred — needs comment preservation first) | textDocument/formatting + `gem fmt` | ~700 lines remaining | 3 (deferred) |
 | **Total** | | **~2200 lines** | |
 
-Hover, document symbols, and find references deferred to v2 (see *Not in Scope*).
+Hover, document symbols, find references, and the rest deferred to v2 (see *Deferred to v2*).
