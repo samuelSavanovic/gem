@@ -2070,6 +2070,78 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       name_to_fn[fd.name] = fd
     end
 
+    # Module loads desugar at the top level into either:
+    #   (a) selective: `let foo = _mod_mod_foo` (one let per imported name).
+    #   (b) whole-module: `let mod = {fn_a: _mod_mod_fn_a, fn_b: …}`
+    #       (frozen table, one entry per export).
+    # Calls in the importing module then use `foo(…)` or `mod.fn_a(…)`,
+    # neither of which lex as a direct call to `_mod_…_…`. Without
+    # resolution those edges are dropped from the call graph and
+    # `mark_process_tail` can't reason about them. Build two maps:
+    #   alias_to_fn[name]            → fn_def name (case a)
+    #   module_dot_to_fn[mod][field] → fn_def name (case b)
+    let alias_to_fn = {}
+    let module_dot_to_fn = {}
+    for s in top_stmts
+      if is_node(s, "let") and s.value != nil
+        if is_node(s.value, "var")
+          if name_to_fn[s.value.name] != nil
+            alias_to_fn[s.name] = s.value.name
+          end
+        elif is_node(s.value, "table") and s.value.entries != nil
+          let mod_map = {}
+          let any = false
+          for e in s.value.entries
+            if e.value != nil and is_node(e.value, "var") and name_to_fn[e.value.name] != nil
+              # Entry key may be either a raw string (when synthesized by
+              # main.gem's `make_table_entry`) or a string AST node (when
+              # parsed from user source).
+              let key_str = nil
+              if type(e.key) == "string"
+                key_str = e.key
+              elif e.key != nil and is_node(e.key, "string")
+                key_str = e.key.value
+              end
+              if key_str != nil
+                mod_map[key_str] = e.value.name
+                any = true
+              end
+            end
+          end
+          if any
+            module_dot_to_fn[s.name] = mod_map
+          end
+        end
+      end
+    end
+
+    # Resolve a call-target var name to its fn_def name (or nil if not a
+    # known fn). Handles direct fn-name calls and selective-load aliases.
+    let resolve_callee = fn(name)
+      if name_to_fn[name] != nil
+        return name
+      end
+      let aliased = alias_to_fn[name]
+      if aliased != nil
+        return aliased
+      end
+      nil
+    end
+
+    # Resolve a `mod.field`-style callee (whole-module loads) to its
+    # fn_def name, or nil if not a known module export.
+    let resolve_dot_callee = fn(mod_name, field_name)
+      let m = module_dot_to_fn[mod_name]
+      if m == nil
+        return nil
+      end
+      let f = m[field_name]
+      if f == nil
+        return nil
+      end
+      f
+    end
+
     let anon_id_counter = 0
     let next_anon_id = fn()
       let id = "anon:" + to_string(anon_id_counter)
@@ -2080,6 +2152,13 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     let new_caller_record = fn(caller_id, is_seed)
       caller_records[caller_id] = {tail_callees: {}, non_tail_callees: {}, is_seed: is_seed}
     end
+
+    # Lexical parent of each anon caller cid (i.e. the caller_id that
+    # contained the `anon_fn` expression at AST construction time). Lets
+    # the upward outer-reset BFS hop from a closure body to the fn that
+    # built it — without this, all closure-mediated call chains terminate
+    # at the anon and lose the connection to any PT context above.
+    let anon_parent = {}
 
     # A `return` with a trivial constant (or no value) exits the enclosing
     # function without reading any locals. A call immediately followed by such
@@ -2131,6 +2210,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
           if node.args != nil and len(node.args) > 0 and is_node(node.args[0], "anon_fn")
             let aid = next_anon_id()
             new_caller_record(aid, true)
+            anon_parent[aid] = caller_id
             collect_calls_in_body(node.args[0].body, true, aid)
             if node.args[0].defaults != nil
               for d in node.args[0].defaults
@@ -2148,12 +2228,20 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
           end
         end
 
-        # Regular call. Record edge if callee is a known fn_def name.
-        if is_node(node.func, "var") and name_to_fn[node.func.name] != nil
+        # Regular call. Record edge if callee resolves to a known fn_def
+        # name (directly, via a selective-load alias, or via a
+        # whole-module dot access like `mod.fn(...)`).
+        let resolved_callee = nil
+        if is_node(node.func, "var")
+          resolved_callee = resolve_callee(node.func.name)
+        elif is_node(node.func, "dot") and node.func.object != nil and is_node(node.func.object, "var")
+          resolved_callee = resolve_dot_callee(node.func.object.name, node.func.field)
+        end
+        if resolved_callee != nil
           if is_tail_pos
-            set_add(caller_records[caller_id].tail_callees, node.func.name)
+            set_add(caller_records[caller_id].tail_callees, resolved_callee)
           else
-            set_add(caller_records[caller_id].non_tail_callees, node.func.name)
+            set_add(caller_records[caller_id].non_tail_callees, resolved_callee)
           end
         else
           collect_calls(node.func, false, caller_id)
@@ -2172,6 +2260,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         # body get demoted (correct: the closure's invocation site holds C state).
         let aid = next_anon_id()
         new_caller_record(aid, false)
+        anon_parent[aid] = caller_id
         collect_calls_in_body(node.body, true, aid)
         if node.defaults != nil
           for d in node.defaults
@@ -2466,7 +2555,88 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
     end
 
-    # Warn for TCO-eligible fns that didn't get marked
+    # Warn for TCO-eligible fns that didn't get marked.
+    #
+    # The warning splits in two based on whether an *outer* reset boundary
+    # exists above the demoted fn:
+    #   - benign: some caller chain reaches a process root (top-level or
+    #     spawn-anon — process exit resets) or a `process_tail_fns` member
+    #     (its TCO/while back-edge resets per outer iteration). Inner
+    #     allocation is bounded per outer iteration. Emitted as a `note:`.
+    #   - probably-leak: no outer reset boundary above. The full `warning:`.
+    # Heuristic only — soundness for the benign case still requires bounded
+    # inner recursion (tracked as the structural-decrease check in
+    # OPTIMIZATIONS.md "Tighten ... warning"). Conservative: anon-only
+    # caller chains terminate the upward walk → fall through to `warning:`.
+    # Resolve a caller cid up the anon-parent chain until it hits something
+    # we can act on: a seed (process root), a `fn:NAME` cid, or `<top>`.
+    # Each hop is purely lexical (closure body → fn that built it).
+    let walk_to_actionable = fn(start_cid)
+      let cid = start_cid
+      let hops = 0
+      while cid != nil and hops < 1024
+        let cr = caller_records[cid]
+        if cr != nil and cr.is_seed
+          return cid
+        end
+        if len(cid) >= 3 and substr(cid, 0, 3) == "fn:"
+          return cid
+        end
+        if cid == "<top>"
+          return cid
+        end
+        # Anon non-seed: hop to its lexical parent.
+        let parent = anon_parent[cid]
+        if parent == nil
+          return nil
+        end
+        cid = parent
+        hops += 1
+      end
+      nil
+    end
+
+    let caller_has_outer_reset = fn(target_fn_name)
+      let visited = {}
+      let queue = [target_fn_name]
+      while len(queue) > 0
+        let head = queue[0]
+        let next_q = []
+        let qi = 1
+        while qi < len(queue)
+          push(next_q, queue[qi])
+          qi += 1
+        end
+        queue = next_q
+        if set_contains(visited, head)
+          continue
+        end
+        set_add(visited, head)
+        let inc = incoming[head]
+        if inc == nil
+          continue
+        end
+        for e in inc
+          let cid = walk_to_actionable(e.caller)
+          if cid == nil
+            continue
+          end
+          let cr = caller_records[cid]
+          if cr != nil and cr.is_seed
+            return true
+          end
+          if len(cid) >= 3 and substr(cid, 0, 3) == "fn:"
+            let cname = substr(cid, 3, len(cid) - 3)
+            if set_contains(process_tail_fns, cname)
+              return true
+            end
+            push(queue, cname)
+          end
+        end
+      end
+      false
+    end
+
     for fd in fn_defs
       let scope_vars = sorted_array_to_set(fd.params)
       if fd.rest_param != nil
@@ -2490,7 +2660,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         if fd.line != nil
           line_str = to_string(fd.line)
         end
-        eprint("warning: {file_of(fd)}:{line_str}: TCO function `{fd.name}` not reachable from a process root via tail calls only — per-process arena will not reset at its back-edge. Restructure callers to call `{fd.name}` in tail position from a spawn closure or main.\n")
+        if caller_has_outer_reset(fd.name)
+          eprint("note: {file_of(fd)}:{line_str}: TCO function `{fd.name}` will not arena-reset at its own back-edge (caller chain has a non-tail edge), but an outer reset boundary above (process exit, PT loop, or PT TCO back-edge) caps allocation per outer iteration. Likely benign for bounded recursion; if `{fd.name}` recurs unboundedly, restructure callers to call it in tail position from a spawn closure or main.\n")
+        else
+          eprint("warning: {file_of(fd)}:{line_str}: TCO function `{fd.name}` not reachable from any process root or process-tail context — per-process arena will not reset at its back-edge, and no outer reset boundary caps allocation. Restructure callers to call `{fd.name}` in tail position from a spawn closure or main.\n")
+        end
       end
     end
 
