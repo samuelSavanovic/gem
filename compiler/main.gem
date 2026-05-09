@@ -12,6 +12,7 @@
 load "std/string"
 load "./parser" (parse_source)
 load "./codegen" (make_codegen)
+load "./lower" (lower)
 load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
 load "./loader" (resolve_load_path, find_project_root, compute_stdlib_root)
@@ -193,25 +194,24 @@ fn rename_node(node, rmap, shadowed)
     rename_stmts(body, rmap, shadowed)
   when {tag: "match", target: target, whens: whens}
     rename_node(target, rmap, shadowed)
-    for w in whens
-      rename_node(w.value, rmap, shadowed)
-      if w.bindings != nil
-        for b in w.bindings
-          rename_node(b, rmap, shadowed)
-        end
+    # Match arms are structural (`match_arm` with pattern/expr/body) at
+    # this point — rename runs inside resolve_loads, before lower().
+    # Patterns themselves carry only literals and binding-names, so they
+    # have no module-level var refs to rewrite; just walk the expr arm
+    # and the body.
+    for arm in whens
+      if arm.expr != nil
+        rename_node(arm.expr, rmap, shadowed)
       end
-      rename_stmts(w.body, rmap, shadowed)
+      rename_stmts(arm.body, rmap, shadowed)
     end
     if node.else != nil
       rename_stmts(node.else, rmap, shadowed)
     end
   when {tag: "receive_match", arms: arms}
     for arm in arms
-      rename_node(arm.pattern.condition, rmap, shadowed)
-      if arm.pattern.bindings != nil
-        for b in arm.pattern.bindings
-          rename_node(b, rmap, shadowed)
-        end
+      if arm.expr != nil
+        rename_node(arm.expr, rmap, shadowed)
       end
       rename_stmts(arm.body, rmap, shadowed)
     end
@@ -221,6 +221,20 @@ fn rename_node(node, rmap, shadowed)
     if node.after_body != nil
       rename_stmts(node.after_body, rmap, shadowed)
     end
+  when {tag: "for_in", items: items, body: body}
+    rename_node(items, rmap, shadowed)
+    let inner = copy_set(shadowed)
+    inner[node.var_name] = true
+    if node.val_name != nil
+      inner[node.val_name] = true
+    end
+    rename_stmts(body, rmap, inner)
+  when {tag: "for_range", start: start, end_: end_, body: body}
+    rename_node(start, rmap, shadowed)
+    rename_node(end_, rmap, shadowed)
+    let inner = copy_set(shadowed)
+    inner[node.var_name] = true
+    rename_stmts(body, rmap, inner)
   when {tag: "return", value: value}
     if value != nil
       rename_node(value, rmap, shadowed)
@@ -517,6 +531,11 @@ if sink.has_any()
   print_all_errors(sink)
   exit(1)
 end
+
+# Lower structural forms (for_in / for_range / match patterns) into the
+# desugared shapes codegen consumes. Runs after resolve_loads so loaded
+# modules' for/match are also rewritten in the merged AST.
+resolved_ast = lower(resolved_ast)
 
 fold_constants(resolved_ast)
 

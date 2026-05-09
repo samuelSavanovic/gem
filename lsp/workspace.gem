@@ -26,6 +26,7 @@
 load "./symbols" (build_symbols)
 load "../compiler/parser" (parse_source)
 load "../compiler/lexer" (tokenize)
+load "../compiler/lower" (lower)
 load "../compiler/errors" (make_error_sink)
 load "../compiler/loader" (find_project_root, compute_stdlib_root)
 
@@ -55,7 +56,8 @@ fn parse_file(path)
   let sink = make_error_sink()
   let token_sink = make_error_sink()
   let tokens = tokenize(text, path, token_sink)
-  let ast = parse_source(text, path, sink)
+  # Same lowering rationale as lsp/doc.gem.analyze().
+  let ast = lower(parse_source(text, path, sink))
   let syms = build_symbols(ast, path, base_dir, project_root, stdlib_root)
   {ast: ast, tokens: tokens, symbols: syms, text: text}
 end

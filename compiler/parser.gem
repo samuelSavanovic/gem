@@ -2,7 +2,7 @@
 # Takes a token array from the lexer, returns an AST using constructors from ast.gem.
 # Produces the EXACT same AST shape as the bootstrap compiler.
 
-load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
+load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_for_in, make_for_range, make_match_arm, make_pat_table, make_pat_table_entry, make_pat_array, make_pat_literal, make_pat_name, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
 load "./lexer" (tokenize)
 load "./errors" (make_error_sink)
 
@@ -697,25 +697,20 @@ fn make_parser(tokens, source, file, sink)
 
   # ── Pattern parsing (for match destructuring) ──
 
-  parse_pattern = fn(target_expr)
-    let and_chain = fn(conditions)
-      if len(conditions) == 0
-        return make_bool(true)
-      end
-      let result = conditions[0]
-      for i = 1, len(conditions)
-        result = make_binop("and", result, conditions[i])
-      end
-      result
-    end
+  # parse_pattern returns a structural pattern node (pat_table /
+  # pat_array / pat_literal / pat_name). compiler/lower.gem turns
+  # the pattern into the concrete condition expression + bindings
+  # for the match target. Keeping the structural form in the AST
+  # lets future tooling (formatters, refactors, completion inside
+  # `when` arms) read what the user wrote.
+  parse_pattern = fn()
     let t = peek()
 
-    # Table pattern: {key: pattern, ...}
+    # Table pattern: {key: pattern, ...} or {key} (shorthand bind)
     if t.type == "\{"
       advance()
       skip_nl()
-      let conditions = [make_binop("==", make_call(make_var("type"), [target_expr], 0), make_string("table"))]
-      let bindings = []
+      let entries = []
       while peek().type != "}" and not at_end()
         let _lp = pos
         let key_tok = peek()
@@ -730,23 +725,13 @@ fn make_parser(tokens, source, file, sink)
           continue
         end
         let key_name = key_tok.value
-        let key_str = make_string(key_name)
-        push(conditions, make_call(make_var("has_key"), [target_expr, key_str], 0))
-        let sub_target = make_index(target_expr, key_str)
+        let sub_pat = nil
         if peek().type == ":"
           advance()
           skip_nl()
-          let sub = parse_pattern(sub_target)
-          if sub.condition.tag != "bool" or sub.condition.value != true
-            push(conditions, sub.condition)
-          end
-          for b in sub.bindings
-            push(bindings, b)
-          end
-        else
-          # Shorthand: {name} means {name: name} — bind value to variable
-          push(bindings, make_let(key_name, sub_target, 0))
+          sub_pat = parse_pattern()
         end
+        push(entries, make_pat_table_entry(key_name, sub_pat))
         skip_nl()
         if peek().type == ","
           advance()
@@ -755,20 +740,17 @@ fn make_parser(tokens, source, file, sink)
         force_progress(_lp)
       end
       expect("}")
-      return {condition: and_chain(conditions), bindings: bindings}
+      return make_pat_table(entries)
     end
 
     # Array pattern: [pattern, ...]
     if t.type == "["
       advance()
       skip_nl()
-      let sub_patterns = []
-      let idx = 0
+      let elements = []
       while peek().type != "]" and not at_end()
         let _lp = pos
-        let sub = parse_pattern(make_index(target_expr, make_int(idx)))
-        push(sub_patterns, sub)
-        idx += 1
+        push(elements, parse_pattern())
         skip_nl()
         if peek().type == ","
           advance()
@@ -777,19 +759,7 @@ fn make_parser(tokens, source, file, sink)
         force_progress(_lp)
       end
       expect("]")
-      let conditions = [make_binop("==", make_call(make_var("type"), [target_expr], 0), make_string("table"))]
-      push(conditions, make_binop("==", make_call(make_var("len"), [target_expr], 0), make_int(idx)))
-      let bindings = []
-      for i = 0, len(sub_patterns)
-        let sub = sub_patterns[i]
-        if sub.condition.tag != "bool" or sub.condition.value != true
-          push(conditions, sub.condition)
-        end
-        for b in sub.bindings
-          push(bindings, b)
-        end
-      end
-      return {condition: and_chain(conditions), bindings: bindings}
+      return make_pat_array(elements)
     end
 
     # Literal patterns: number, string, bool, nil — equality match
@@ -801,39 +771,39 @@ fn make_parser(tokens, source, file, sink)
       else
         lit = make_int(str_to_int(t.value))
       end
-      return {condition: make_binop("==", target_expr, lit), bindings: []}
+      return make_pat_literal(lit)
     end
     if t.type == "STRING"
       advance()
-      return {condition: make_binop("==", target_expr, make_string(t.value)), bindings: []}
+      return make_pat_literal(make_string(t.value))
     end
     if t.type == "true"
       advance()
-      return {condition: make_binop("==", target_expr, make_bool(true)), bindings: []}
+      return make_pat_literal(make_bool(true))
     end
     if t.type == "false"
       advance()
-      return {condition: make_binop("==", target_expr, make_bool(false)), bindings: []}
+      return make_pat_literal(make_bool(false))
     end
     if t.type == "nil"
       advance()
-      return {condition: make_binop("==", target_expr, make_nil_node()), bindings: []}
+      return make_pat_literal(make_nil_node())
     end
 
     # Name pattern: variable binding (catch-all)
     if t.type == "NAME"
       advance()
-      return {condition: make_bool(true), bindings: [make_let(t.value, target_expr, 0)]}
+      return make_pat_name(t.value)
     end
 
-    # P9: garbage in pattern position. Report, consume the bad token, and
-    # return a never-matching pattern so the surrounding match arm builds
-    # an inert {condition: false, bindings: []} record.
+    # P9: garbage in pattern position. Report, consume the bad token,
+    # and return a never-matching literal (false) so lowering builds
+    # an inert when_clause that never fires.
     report(t.line, t.col, len(t.value), "expected pattern but got '{t.type}'", nil)
     if not at_end()
       advance()
     end
-    {condition: make_bool(false), bindings: []}
+    make_pat_literal(make_bool(false))
   end
 
   # ── Statement parsing ──
@@ -1005,94 +975,39 @@ fn make_parser(tokens, source, file, sink)
       return make_while(cond, wbody, line)
     end
 
-    # for..in statement (desugars to while)
+    # for..in / for..= statement
+    # Emits structural for_in / for_range nodes; compiler/lower.gem
+    # rewrites them into block-of-while before codegen.
     if t.type == "for"
       let line = t.line
       advance()
       let var_name = expect("NAME").value
 
       if peek().type == "," and peek_at(1).type == "NAME"
-        # for k, v in table ... end → direct iteration over table storage
+        # for k, v in table ... end
         advance()  # consume ","
         let val_name = expect("NAME").value
         expect("in")
         let tbl_expr = parse_expr()
-        gensym_counter += 1
-        let tbl_var = "_for_tbl_{gensym_counter}"
-        let len_var = "_for_len_{gensym_counter}"
-        let idx_var = "_for_i_{gensym_counter}"
         let fbody = parse_body()
         expect("end")
-        let inner_stmts = []
-        push(inner_stmts, make_let(var_name, make_call(make_var("__table_key_at"), [make_var(tbl_var), make_var(idx_var)], 0), line))
-        push(inner_stmts, make_let(val_name, make_call(make_var("__table_val_at"), [make_var(tbl_var), make_var(idx_var)], 0), line))
-        push(inner_stmts, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
-        for bi = 0, len(fbody)
-          push(inner_stmts, fbody[bi])
-        end
-        let while_node = make_while(
-          make_binop("<", make_var(idx_var), make_var(len_var)),
-          inner_stmts,
-          line
-        )
-        return {tag: "block", stmts: [
-          make_let(tbl_var, tbl_expr, line),
-          make_let(len_var, make_call(make_var("len"), [make_var(tbl_var)], 0), line),
-          make_let(idx_var, make_int(0), line),
-          while_node
-        ]}
+        return make_for_in(var_name, val_name, tbl_expr, fbody, line)
       elif peek().type == "in"
-        # for x in items ... end → let _items=items; let _i=0; while _i<len(_items) ...
+        # for x in items ... end
         advance()
         let items_expr = parse_expr()
-        gensym_counter += 1
-        let items_var = "_for_items_{gensym_counter}"
-        let idx_var = "_for_i_{gensym_counter}"
         let fbody = parse_body()
         expect("end")
-        let inner_stmts = []
-        push(inner_stmts, make_let(var_name, make_index(make_var(items_var), make_var(idx_var)), line))
-        push(inner_stmts, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
-        for bi = 0, len(fbody)
-          push(inner_stmts, fbody[bi])
-        end
-        let while_node = make_while(
-          make_binop("<", make_var(idx_var), make_call(make_var("len"), [make_var(items_var)], 0)),
-          inner_stmts,
-          line
-        )
-        return {tag: "block", stmts: [
-          make_let(items_var, items_expr, line),
-          make_let(idx_var, make_int(0), line),
-          while_node
-        ]}
+        return make_for_in(var_name, nil, items_expr, fbody, line)
       elif peek().type == "="
-        # for i = start, end ... end → let i=start; let _limit=end; while i<_limit ...
+        # for i = start, end ... end
         advance()
         let start_expr = parse_expr()
         expect(",")
         let end_expr = parse_expr()
         let fbody = parse_body()
         expect("end")
-        gensym_counter += 1
-        let idx_var = "_for_i_{gensym_counter}"
-        let limit_var = "_for_limit_{gensym_counter}"
-        let inner_stmts = []
-        push(inner_stmts, make_let(var_name, make_var(idx_var), line))
-        push(inner_stmts, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
-        for bi = 0, len(fbody)
-          push(inner_stmts, fbody[bi])
-        end
-        let while_node = make_while(
-          make_binop("<", make_var(idx_var), make_var(limit_var)),
-          inner_stmts,
-          line
-        )
-        return {tag: "block", stmts: [
-          make_let(idx_var, start_expr, line),
-          make_let(limit_var, end_expr, line),
-          while_node
-        ]}
+        return make_for_range(var_name, start_expr, end_expr, fbody, line)
       else
         let bad = peek()
         report(bad.line, bad.col, len(bad.value), "expected 'in' or '=' after for variable", nil)
@@ -1108,34 +1023,33 @@ fn make_parser(tokens, source, file, sink)
     end
 
     # match statement
+    # Each arm is a structural match_arm; compiler/lower.gem rewrites
+    # the patterns into when_clauses with concrete condition/bindings,
+    # and assigns the gensym match-target name.
     if t.type == "match"
       let line = t.line
       advance()
       let target = parse_expr()
       skip_nl()
-      gensym_counter += 1
-      let match_var = "_match_{gensym_counter}"
-      let target_var_expr = make_var(match_var)
-      let whens = []
+      let arms = []
       while peek().type == "when"
         advance()
-        # Check if this is a destructuring pattern ({, [) or bare name catch-all
+        # Destructuring pattern ({, [) or bare-name catch-all → pattern arm.
+        # Anything else → expression arm (equality with the match target).
         let pt = peek().type
         let next = peek_at(1).type
         if pt == "\{" or pt == "["
-          let pat = parse_pattern(target_var_expr)
+          let pat = parse_pattern()
           let wbody = parse_body()
-          push(whens, make_when(pat.condition, wbody, pat.bindings))
+          push(arms, make_match_arm(pat, nil, wbody))
         elif pt == "NAME" and (next == "NEWLINE" or next == "EOF" or next == "end" or next == "else" or next == "when")
-          # Bare name — catch-all with binding
-          let pat = parse_pattern(target_var_expr)
+          let pat = parse_pattern()
           let wbody = parse_body()
-          push(whens, make_when(pat.condition, wbody, pat.bindings))
+          push(arms, make_match_arm(pat, nil, wbody))
         else
-          # Regular expression match (literal, variable expression, etc.)
           let wval = parse_expr()
           let wbody = parse_body()
-          push(whens, make_when(make_binop("==", target_var_expr, wval), wbody, []))
+          push(arms, make_match_arm(nil, wval, wbody))
         end
         skip_nl()
       end
@@ -1145,7 +1059,9 @@ fn make_parser(tokens, source, file, sink)
         else_body = parse_body()
       end
       expect("end")
-      return make_match(target, whens, else_body, line, match_var)
+      # target_var (gensym name) is filled in by lower(); leave nil here
+      # so the parser stays gensym-free.
+      return make_match(target, arms, else_body, line, nil)
     end
 
     # return statement
@@ -1258,26 +1174,23 @@ fn make_parser(tokens, source, file, sink)
         let rline = t.line
         advance()
         skip_nl()
-        gensym_counter += 1
-        let recv_var = "_recv_{gensym_counter}"
-        let recv_var_expr = make_var(recv_var)
         let rarms = []
         while peek().type == "when"
           advance()
           let rpt = peek().type
           let rnext = peek_at(1).type
           if rpt == "\{" or rpt == "["
-            let rpat = parse_pattern(recv_var_expr)
+            let rpat = parse_pattern()
             let rwbody = parse_body()
-            push(rarms, {pattern: rpat, body: rwbody})
+            push(rarms, make_match_arm(rpat, nil, rwbody))
           elif rpt == "NAME" and (rnext == "NEWLINE" or rnext == "EOF" or rnext == "end" or rnext == "else" or rnext == "when" or rnext == "after")
-            let rpat = parse_pattern(recv_var_expr)
+            let rpat = parse_pattern()
             let rwbody = parse_body()
-            push(rarms, {pattern: rpat, body: rwbody})
+            push(rarms, make_match_arm(rpat, nil, rwbody))
           else
             let rwval = parse_expr()
             let rwbody = parse_body()
-            push(rarms, {pattern: {condition: make_binop("==", recv_var_expr, rwval), bindings: []}, body: rwbody})
+            push(rarms, make_match_arm(nil, rwval, rwbody))
           end
           skip_nl()
         end
@@ -1289,7 +1202,9 @@ fn make_parser(tokens, source, file, sink)
           rafter_body = parse_body()
         end
         expect("end")
-        return make_receive_match(rarms, rafter_ms, rafter_body, rline, recv_var)
+        # recv_var (gensym name) is filled in by lower(); structural
+        # arms here use the same match_arm shape as `match` statements.
+        return make_receive_match(rarms, rafter_ms, rafter_body, rline, nil)
       end
     end
 
