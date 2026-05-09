@@ -139,4 +139,5 @@ fn print_all_errors(sink)
   end
 end
 
-export compile_error, print_one_error, make_error_sink, print_all_errors
+export compile_error, print_one_error, make_error_sink, print_all_errors,
+       get_source_line

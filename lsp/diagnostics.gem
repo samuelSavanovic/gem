@@ -1,0 +1,126 @@
+# lsp/diagnostics.gem — convert Phase 0b error sink entries into LSP
+# Diagnostic notifications, grouped by source file URI.
+#
+# The sink (compiler/errors.gem) records every lex+parse error from one
+# analyze() pass. Each entry is {source, file, line, col, span, msg, hint}
+# where `source` is the *text of the file the error was raised against*
+# (so cross-file errors carry their own caret context).
+#
+# Today analyze() in lsp/doc.gem only runs lex+parse on the entry file,
+# so every entry has file == that file. We still group by file for
+# forward compatibility: when load resolution joins the LSP analyze
+# pipeline, the same builder will fan diagnostics out to every loaded
+# file's URI without changes here.
+#
+# Severity mapping: Phase 0b only emits errors, so everything is severity
+# 1 (Error). Codegen warnings (TCO can't tail-call, cannot reset) come
+# from the full compile pipeline which the LSP doesn't run; they'll land
+# when the LSP grows a real --check pass.
+
+load "./rpc"
+load "../compiler/errors" (get_source_line)
+
+let DIAGNOSTIC_SOURCE = "gem"
+
+fn path_to_uri(path)
+  "file://" + path
+end
+
+# Build the LSP range for one sink entry. byte columns (1-indexed in the
+# sink) → 0-indexed utf16 via rpc.byte_col_to_utf16_col against the line
+# text from the entry's own source.
+fn entry_range(e)
+  let line = e.line
+  if line == nil
+    line = 1
+  end
+  let col = e.col
+  if col == nil or col < 1
+    col = 1
+  end
+  let span = e.span
+  if span == nil or span < 1
+    span = 1
+  end
+
+  let line_text = ""
+  if e.source != nil
+    line_text = get_source_line(e.source, line)
+  end
+
+  let start_byte = col - 1
+  let end_byte = start_byte + span
+  let line_bytes = len(line_text)
+  if end_byte > line_bytes
+    end_byte = line_bytes
+  end
+  if end_byte < start_byte
+    end_byte = start_byte
+  end
+  let start_u16 = rpc.byte_col_to_utf16_col(line_text, start_byte)
+  let end_u16 = rpc.byte_col_to_utf16_col(line_text, end_byte)
+  if end_u16 <= start_u16
+    end_u16 = start_u16 + 1
+  end
+
+  rpc.make_range(rpc.make_position(line - 1, start_u16),
+                 rpc.make_position(line - 1, end_u16))
+end
+
+fn entry_message(e)
+  if e.hint != nil and e.hint != ""
+    return e.msg + "\nhint: " + e.hint
+  end
+  e.msg
+end
+
+fn entry_to_diagnostic(e)
+  rpc.make_diagnostic(entry_range(e), 1, entry_message(e), DIAGNOSTIC_SOURCE)
+end
+
+# Returns a list of {uri, diagnostics} payloads — one per distinct file
+# in the sink, plus an empty payload for `entry_uri` if it isn't already
+# represented (so prior squiggles on the open doc clear). `cache` may be
+# nil (e.g. doc not open / analyze not run); in that case we just clear.
+fn build_publishes(entry_uri, cache)
+  if cache == nil or cache.sink == nil
+    return [{uri: entry_uri, diagnostics: []}]
+  end
+
+  # Group entries by their `file` field (path), preserving insertion order
+  # so squiggles render top-to-bottom.
+  let by_file = {}
+  let order = []
+  for e in cache.sink.drain()
+    if e.line == nil
+      # No location → can't draw a squiggle. Skip for v1; these are
+      # compiler-bug paths and shouldn't surface from a parse-only LSP.
+      continue
+    end
+    let path = e.file
+    if path == nil
+      path = ""
+    end
+    if not has_key(by_file, path)
+      by_file[path] = []
+      push(order, path)
+    end
+    push(by_file[path], entry_to_diagnostic(e))
+  end
+
+  let publishes = []
+  let saw_entry = false
+  for path in order
+    let uri = path_to_uri(path)
+    if uri == entry_uri
+      saw_entry = true
+    end
+    push(publishes, {uri: uri, diagnostics: by_file[path]})
+  end
+  if not saw_entry
+    push(publishes, {uri: entry_uri, diagnostics: []})
+  end
+  publishes
+end
+
+export build_publishes, path_to_uri
