@@ -3,7 +3,9 @@
 # Pipes a canned LSP session (initialize → didOpen → didChange → shutdown
 # → exit) into the server and asserts the wire output. Catches: framing,
 # JSON encode/decode, lifecycle gating, didOpen/didChange dispatch, and
-# the publishDiagnostics empty-array stub the Phase 2b PR will replace.
+# that publishDiagnostics fires on every doc lifecycle event. The clean
+# fixture used here parses without errors, so both publishes carry
+# `diagnostics: []`; non-empty diagnostics live in smoke_diagnostics.sh.
 
 set -e
 

@@ -21,8 +21,8 @@ A minimal language server for Gem, focused on the features that provide the most
 | `lsp/phase-0b-multi-error` | Phase 0b — multi-error recovery in lexer/parser/codegen | ✓ Done (2026-05-07) | ~430 |
 | `lsp/phase-1a-scaffold` | Phase 1a — `gem lsp` subcommand, JSON-RPC framing, lifecycle, didOpen/didChange | ✓ Done (2026-05-07) | ~400 |
 | `lsp/phase-1b-symbols` | Phase 1b — symbol table pass, per-doc AST cache | ✓ Done (2026-05-07) | ~250 |
-| `lsp/phase-2a-features` | Phase 2a — goto-def + completion (table fields, identifiers, builtins) | Pending | ~470 |
-| `lsp/phase-2b-diagnostics` | Phase 2b — diagnostics integration (consumes Phase 0b error list) | Pending | ~100 |
+| `lsp/phase-2a-features` | Phase 2a — goto-def + completion (table fields, identifiers, builtins) | ✓ Done (2026-05-08) | ~470 |
+| `lsp/phase-2b-diagnostics` | Phase 2b — diagnostics integration (consumes Phase 0b error list) | ✓ Done (2026-05-09) | ~110 |
 | `lsp/phase-3-format` | Phase 3 — minimal AST formatter + format-on-save | Pending | ~600 |
 
 Phases ship as independent PRs. The PR# column was dropped 2026-05-08 because GitHub PR numbers diverged from the roadmap labels (PR #11 ended up being a Phase 1b doc follow-up, not Phase 2a) and the bookkeeping cost compounded with each merge. Branch names + phase labels are the durable identifiers; check `git log` for the merge SHA. After merge, mark `✓ Done (date, commit-sha)` here and append any deviations from the plan in the relevant phase section below. Per-phase planning docs (e.g. `LSP_PHASE_0B_PLAN.md`) live alongside this file during implementation, get deleted once the phase lands (the work is in the code; the plan doc becomes noise).
@@ -152,6 +152,15 @@ Run the Gem compiler in a check mode (or parse-only mode) on save, report errors
 - Shell out to `build/gem` and parse stderr. Quick and dirty but works.
 
 **Effort:** ~50 lines (shelling out) or ~100 lines (check mode in compiler).
+
+**Deviations from the locked plan (filled in 2026-05-09):**
+
+- **Parse-only, in-process — no `--check` shell-out.** `lsp/doc.gem`'s `analyze()` already runs the lexer + parser with a closure-captured `make_error_sink`; Phase 2b just routes that sink into `textDocument/publishDiagnostics`. New module `lsp/diagnostics.gem` (~95 lines) converts sink entries → LSP `Diagnostic`, groups by file path, and returns a list of `{uri, diagnostics}` payloads — one per distinct file, plus an always-present empty payload for the entry URI so prior squiggles clear after a clean reparse. `lsp/handlers.gem` calls `publish_for(uri)` on every `didOpen`/`didChange` instead of the old `publish_diagnostics(uri, [])` stub.
+- **Range conversion goes through Phase 1a's `byte_col_to_utf16_col`.** Sink entries store byte columns (from the lexer/parser); LSP wants UTF-16. `entry_range()` looks up the line text via `errors.get_source_line(e.source, e.line)` (newly exported) and converts both the start and end byte columns. `e.source` carries the originating file's text per-entry, so cross-file ranges will work correctly when load resolution joins the analyze pipeline.
+- **Severity is always 1 (Error).** Phase 0b only emits errors into the sink. Codegen warnings (TCO can't reset, cannot reset boundary) come from the full compile pipeline, which the parse-only LSP doesn't run; surfacing them needs a future `--check`-equivalent pass that walks codegen without writing C. Tracked, not blocking.
+- **Cross-file fan-out is general but unexercised today.** `analyze()` doesn't call `resolve_loads`, so every entry's `file` is the entry doc and every publish lands on one URI. The builder still groups by file so the cross-file path Just Works once `analyze()` widens — most clients silently drop diagnostics for files they haven't opened, so emitting them eagerly is safe.
+- **Entries with `line == nil` are dropped.** These come from compiler-bug paths that don't reach a parse-only LSP today; if they ever do, fall back to a (0,0)–(0,1) range rather than crashing the convert step.
+- **Smoke at `tests/lsp/smoke_diagnostics.sh`** opens a fixture missing its `end`, asserts the `publishDiagnostics` payload carries severity=1, source="gem", a non-empty message, and a 0-indexed range with `line >= 1`. A follow-up `didChange` with the fixed source must produce an empty `diagnostics` array on the same URI (clear-after-fix). Wired into `make test-lsp`.
 
 ## Phase 3: Quality of Life (~2 days)
 

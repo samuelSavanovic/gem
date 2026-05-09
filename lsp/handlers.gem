@@ -14,6 +14,7 @@ load "./rpc"
 load "./doc"
 load "./definition"
 load "./completion"
+load "./diagnostics"
 
 # `gem/debug/symbols` is an internal probe for the symbols smoke test.
 # Gated on $GEM_LSP_DEBUG so external editors can't peek at internal
@@ -23,6 +24,18 @@ load "./completion"
 fn debug_enabled()
   let v = getenv("GEM_LSP_DEBUG")
   v != nil and v != "" and v != "0"
+end
+
+# Pull the doc cache, convert its sink into LSP diagnostics, and emit
+# one publishDiagnostics notification per distinct file. Always emits at
+# least one notification for `entry_uri` (with diagnostics: []) so prior
+# squiggles clear after a clean reparse.
+fn publish_for(entry_uri)
+  let cache = doc.get_cache(entry_uri)
+  let publishes = diagnostics.build_publishes(entry_uri, cache)
+  for p in publishes
+    doc.publish_diagnostics(p.uri, p.diagnostics)
+  end
 end
 
 fn server_capabilities()
@@ -91,13 +104,13 @@ fn make_dispatcher()
     # textDocument/* notifications
     if method == "textDocument/didOpen"
       doc.open(params.textDocument)
-      doc.publish_diagnostics(params.textDocument.uri, [])
+      publish_for(params.textDocument.uri)
       return
     end
 
     if method == "textDocument/didChange"
       doc.change(params.textDocument, params.contentChanges)
-      doc.publish_diagnostics(params.textDocument.uri, [])
+      publish_for(params.textDocument.uri)
       return
     end
 
