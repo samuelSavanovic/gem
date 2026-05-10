@@ -47,6 +47,9 @@ void gem_init(int argc, char **argv) {
     gem_rng_state = (uint64_t)time(NULL) ^ ((uint64_t)clock() << 32);
     if (gem_rng_state == 0) gem_rng_state = 1;
     signal(SIGPIPE, SIG_IGN);
+    /* Force stdout line-buffered (vs. block-buffered when redirected to a
+     * pipe/file) so long-running processes don't lose output on SIGKILL. */
+    setvbuf(stdout, NULL, _IOLBF, 0);
 
     gem_arena_init(&gem_global_arena);
     gem_init_char_cache();

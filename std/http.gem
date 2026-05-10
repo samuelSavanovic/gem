@@ -393,7 +393,8 @@ fn process_one_request(client_fd, router_ref, conn_buf)
   let chunk = ""
   if len(conn_buf) == 0
     chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
-    if chunk == ""
+    # nil = idle timeout, "" = EOF/closed; both close the keep-alive connection.
+    if chunk == nil or chunk == ""
       return nil
     end
     conn_buf = chunk
@@ -403,7 +404,7 @@ fn process_one_request(client_fd, router_ref, conn_buf)
   let header_end = find_header_end(conn_buf)
   while header_end < 0
     chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
-    if chunk == ""
+    if chunk == nil or chunk == ""
       return nil
     end
     conn_buf = conn_buf + chunk
@@ -442,7 +443,7 @@ fn process_one_request(client_fd, router_ref, conn_buf)
     let have = len(after_headers)
     while have < content_length
       chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
-      if chunk == ""
+      if chunk == nil or chunk == ""
         return nil
       end
       buf_push(body_buf, chunk)

@@ -18,6 +18,7 @@ fi
 expected=(
   "bad_pattern:2:4"
   "cascade_braces:2:5"
+  "dotdot_concat:1:1"
   "double_typo:2:4"
   "missing_end:2:8"
   "missing_then_branches:1:4"

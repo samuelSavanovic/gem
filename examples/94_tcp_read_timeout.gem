@@ -1,0 +1,42 @@
+# tcp_read distinguishes timeout (nil) from EOF ("").
+
+let port = 9126
+let main_pid = self()
+
+let server_pid = spawn() do
+  let server = tcp_listen("0.0.0.0", port)
+  send(main_pid, "listening")
+  let conn = tcp_accept(server)
+  # Hold connection open silently until told to close.
+  receive
+  when "close_now"
+    nil
+  end
+  tcp_close(conn)
+  tcp_close(server)
+end
+
+receive
+when "listening"
+  nil
+end
+
+let sock = tcp_connect("127.0.0.1", port)
+
+# Server is silent. Short timeout → nil.
+let r1 = tcp_read(sock, 1024, 50)
+if r1 == nil
+  print("timeout: nil")
+else
+  print("timeout: unexpected", type(r1))
+end
+
+# Ask server to close, then block for EOF → "".
+send(server_pid, "close_now")
+let r2 = tcp_read(sock, 1024)
+if r2 == ""
+  print("eof: empty-string")
+else
+  print("eof: unexpected", type(r2))
+end
+tcp_close(sock)

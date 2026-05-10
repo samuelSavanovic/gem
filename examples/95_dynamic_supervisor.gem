@@ -1,0 +1,72 @@
+# dynamic_supervisor — on-demand children, restart with original args.
+load "std/dynamic_supervisor"
+
+# A worker that signals start, optionally crashes on the second loop iteration,
+# then accepts "stop" to exit normally.
+fn make_worker(args, parent)
+  spawn(fn()
+    send(parent, {tag: "started", id: args.id, pid: self()})
+    let crashed_once = false
+    while true
+      receive
+      when {tag: "crash"}
+        if not crashed_once
+          crashed_once = true
+          error("boom")
+        end
+      when {tag: "stop"}
+        return nil
+      end
+    end
+  end)
+end
+
+let me = self()
+
+let dsup = dynamic_supervisor.start({
+  child: {
+    start: fn(args) make_worker(args, me) end,
+    restart: "permanent"
+  }
+})
+
+# ─── Test 1: start_child returns a live pid ─────────
+let p1 = dynamic_supervisor.start_child(dsup, {id: "alpha"})
+let p2 = dynamic_supervisor.start_child(dsup, {id: "beta"})
+
+let started = []
+while len(started) < 2
+  receive
+  when {tag: "started", id: id, pid: pid}
+    push(started, id)
+  end
+end
+sort(started)
+print("test1: started", started[0], started[1])
+
+# ─── Test 2: which_children lists both ─────────────
+let kids = dynamic_supervisor.which_children(dsup)
+print("test2: count", len(kids))
+
+# ─── Test 3: permanent restart replays with original args ─────
+send(p1, {tag: "crash"})
+# Wait for the restart's "started" notification.
+receive
+when {tag: "started", id: id}
+  print("test3: restarted id", id)
+end
+
+# After restart, the child count is unchanged and a NEW pid is in place.
+let kids2 = dynamic_supervisor.which_children(dsup)
+print("test3: count after crash", len(kids2))
+
+# ─── Test 4: terminate_child removes a child cleanly ──
+let term_ok = dynamic_supervisor.terminate_child(dsup, p2)
+print("test4: terminate_child ok", term_ok)
+sleep(20)
+let kids3 = dynamic_supervisor.which_children(dsup)
+print("test4: count after terminate", len(kids3))
+
+# ─── Test 5: terminate_child on unknown pid returns false ──
+let bogus = dynamic_supervisor.terminate_child(dsup, 999999)
+print("test5: bogus terminate ok", bogus)

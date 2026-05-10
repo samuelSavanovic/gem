@@ -572,8 +572,6 @@ false
 false
 false
 55
-this goes to stderr
-stderr multi: 42 true nil
 delete removed: 2
 delete len: 2
 delete has_key b: false
@@ -589,6 +587,8 @@ pop single: 42
 pop empty len: 0
 values len: 3
 values arr: 10 20 30
+this goes to stderr
+stderr multi: 42 true nil
 sort nums: 1 2 3 4 5
 sort strings: apple banana cherry
 sort desc: 5 4 3 2 1
@@ -1188,3 +1188,12 @@ true
 7
 true
 7
+timeout: nil
+eof: empty-string
+test1: started alpha beta
+test2: count 2
+test3: restarted id alpha
+test3: count after crash 2
+test4: terminate_child ok true
+test4: count after terminate 1
+test5: bogus terminate ok false
