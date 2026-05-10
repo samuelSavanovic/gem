@@ -1,0 +1,12 @@
+load "./broker.gem"
+
+let port = 61613
+let listener = tcp_listen("0.0.0.0", port)
+write_stdout("STOMP broker listening on port " + to_string(port) + "\n")
+
+broker.start(listener)
+
+# Park the main process forever — the broker runs in spawned children.
+while true
+  sleep(60000)
+end

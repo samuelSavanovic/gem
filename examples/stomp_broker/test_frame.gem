@@ -1,0 +1,48 @@
+load "./frame.gem"
+
+# ─── parse: happy path ──────────────────────────────────────
+let f = frame.parse_frame("CONNECT\naccept-version:1.2\nhost:localhost\n\n")
+let v = f.headers["accept-version"]
+let h = f.headers["host"]
+print("parse1: cmd={f.command} v={v} host={h} body_len={len(f.body)}")
+
+# ─── parse: with body ───────────────────────────────────────
+let f2 = frame.parse_frame("SEND\ndestination:/topic/foo\n\nhello world")
+let dest2 = f2.headers["destination"]
+print("parse2: cmd={f2.command} dest={dest2} body={f2.body}")
+
+# ─── parse: empty body ──────────────────────────────────────
+let f3 = frame.parse_frame("DISCONNECT\nreceipt:77\n\n")
+let rcpt = f3.headers["receipt"]
+print("parse3: cmd={f3.command} receipt={rcpt} body_empty={len(f3.body) == 0}")
+
+# ─── parse: malformed ───────────────────────────────────────
+let bad1 = frame.parse_frame("")
+print("bad1: nil={bad1 == nil}")
+let bad2 = frame.parse_frame("nope no double newline")
+print("bad2: nil={bad2 == nil}")
+let bad3 = frame.parse_frame("CMD\nbadheader\n\nbody")
+print("bad3: nil={bad3 == nil}")
+
+# ─── unescape ───────────────────────────────────────────────
+let raw = "SEND\ndestination:/topic/a\\cb\n\n"
+let f4 = frame.parse_frame(raw)
+let dest4 = f4.headers["destination"]
+print("unesc: dest={dest4}")
+
+# ─── render roundtrip ───────────────────────────────────────
+let original = {command: "MESSAGE", headers: {destination: "/topic/foo", "message-id": "1"}, body: "hi"}
+let rendered = frame.render_frame(original)
+# strip trailing NUL before re-parsing (parser expects raw without \0)
+let parsed = frame.parse_frame(substr(rendered, 0, len(rendered) - 1))
+let pdest = parsed.headers["destination"]
+let pmid = parsed.headers["message-id"]
+print("rt: cmd={parsed.command} dest={pdest} mid={pmid} body={parsed.body}")
+
+# ─── render escapes round-trip a colon + newline in a header ────
+let with_special = {command: "MESSAGE", headers: {note: "a:b\nc"}, body: ""}
+let r2 = frame.render_frame(with_special)
+let p2 = frame.parse_frame(substr(r2, 0, len(r2) - 1))
+let note = p2.headers["note"]
+let want = "a:b\nc"
+print("esc_rt: note_eq={note == want}")

@@ -1,0 +1,242 @@
+load "std/string"
+load "std/gen_server"
+load "./frame.gem"
+load "./registry.gem"
+
+# Per-connection: a reader process (blocks on tcp_read, parses frames, pipes
+# them to the writer) plus a writer process (owns the fd for writes, runs
+# the state machine, talks to destinations). Splitting them lets the writer
+# block on `receive` for both wire frames and MESSAGE deliveries from
+# destinations without ever competing for tcp_read.
+#
+# Both processes link each other: an abnormal exit on either side
+# cascades, while a normal exit (clean DISCONNECT, EOF) does not.
+
+# ─── Reader ────────────────────────────────────────────────────
+
+fn reader_loop(fd, writer_pid, buf)
+  let chunk = tcp_read(fd, 4096)
+  if len(chunk) == 0
+    # EOF — remote closed.
+    send(writer_pid, {tag: "eof"})
+    return nil
+  end
+  let new_buf = buf + chunk
+  new_buf = drain_frames(new_buf, writer_pid)
+  if new_buf == nil
+    # Bad frame — already signaled the writer; exit normally.
+    return nil
+  end
+  reader_loop(fd, writer_pid, new_buf)
+end
+
+fn drain_frames(buf, writer_pid)
+  while true
+    # STOMP heart-beat: a bare \n (or \r\n) between frames is just a
+    # keepalive. Strip leading newlines before looking for a frame.
+    let stripped = strip_heartbeat(buf)
+    if stripped != buf
+      buf = stripped
+    end
+
+    let nul = string.index_of(buf, "\0")
+    if nul == -1
+      return buf
+    end
+
+    let raw = substr(buf, 0, nul)
+    buf = substr(buf, nul + 1, len(buf))
+
+    let parsed = frame.parse_frame(raw)
+    if parsed == nil
+      send(writer_pid, {tag: "bad_frame"})
+      return nil
+    end
+    send(writer_pid, {tag: "frame", frame: parsed})
+  end
+end
+
+fn strip_heartbeat(buf)
+  let i = 0
+  let blen = len(buf)
+  while i < blen
+    let c = ord(buf, i)
+    if c == 10 or c == 13
+      i += 1
+    else
+      break
+    end
+  end
+  if i == 0
+    return buf
+  end
+  substr(buf, i, blen)
+end
+
+# ─── Writer ────────────────────────────────────────────────────
+
+fn make_state(fd, conn_id)
+  {
+    fd: fd,
+    id: conn_id,
+    mode: "awaiting_connect",
+    subs: {}
+  }
+end
+
+fn writer_loop(state)
+  receive
+  when {tag: "frame", frame: f}
+    handle_frame(state, f)
+  when {tag: "deliver", frame: f}
+    # MESSAGE pushed by a destination. Just write it.
+    write_frame(state.fd, f)
+    writer_loop(state)
+  when {tag: "eof"}
+    cleanup(state)
+    return nil
+  when {tag: "bad_frame"}
+    write_frame(state.fd, {
+      command: "ERROR",
+      headers: {message: "malformed frame"},
+      body: ""
+    })
+    cleanup(state)
+    return nil
+  when {tag: "EXIT", reason: r}
+    # Linked reader died abnormally. trap_exit isn't on, so we won't see
+    # this — but if someone enables it, fall through gracefully.
+    cleanup(state)
+    return nil
+  when other
+    writer_loop(state)
+  end
+end
+
+fn handle_frame(state, f)
+  if state.mode == "awaiting_connect"
+    if f.command == "CONNECT" or f.command == "STOMP"
+      handle_connect(state, f)
+    else
+      send_error(state.fd, "expected CONNECT, got {f.command}")
+      cleanup(state)
+      return nil
+    end
+  else
+    if f.command == "SUBSCRIBE"
+      handle_subscribe(state, f)
+    elif f.command == "UNSUBSCRIBE"
+      handle_unsubscribe(state, f)
+    elif f.command == "SEND"
+      handle_send(state, f)
+    elif f.command == "DISCONNECT"
+      handle_disconnect(state, f)
+      return nil
+    else
+      send_error(state.fd, "unknown command: {f.command}")
+      cleanup(state)
+      return nil
+    end
+  end
+end
+
+fn handle_connect(state, f)
+  # Minimal: ignore version negotiation. Any 1.x is fine for v0.
+  let session = "{state.id}"
+  write_frame(state.fd, {
+    command: "CONNECTED",
+    headers: {version: "1.2", session: session, "heart-beat": "0,0"},
+    body: ""
+  })
+  state.mode = "connected"
+  writer_loop(state)
+end
+
+fn handle_subscribe(state, f)
+  let dest = f.headers["destination"]
+  let sub_id = f.headers["id"]
+  if dest == nil or sub_id == nil
+    send_error(state.fd, "SUBSCRIBE requires destination and id headers")
+    cleanup(state)
+    return nil
+  end
+  let dest_pid = registry.lookup_or_create(dest)
+  gen_server.cast(dest_pid, {op: "subscribe", conn_pid: self(), sub_id: sub_id})
+  state.subs[sub_id] = dest_pid
+  writer_loop(state)
+end
+
+fn handle_unsubscribe(state, f)
+  let sub_id = f.headers["id"]
+  if sub_id == nil
+    send_error(state.fd, "UNSUBSCRIBE requires id header")
+    cleanup(state)
+    return nil
+  end
+  let dest_pid = state.subs[sub_id]
+  if dest_pid != nil
+    gen_server.cast(dest_pid, {op: "unsubscribe", conn_pid: self(), sub_id: sub_id})
+    delete(state.subs, sub_id)
+  end
+  writer_loop(state)
+end
+
+fn handle_send(state, f)
+  let dest = f.headers["destination"]
+  if dest == nil
+    send_error(state.fd, "SEND requires destination header")
+    cleanup(state)
+    return nil
+  end
+  let dest_pid = registry.lookup_or_create(dest)
+  gen_server.cast(dest_pid, {op: "publish", body: f.body, headers: f.headers})
+  writer_loop(state)
+end
+
+fn handle_disconnect(state, f)
+  let receipt = f.headers["receipt"]
+  if receipt != nil
+    write_frame(state.fd, {
+      command: "RECEIPT",
+      headers: {"receipt-id": receipt},
+      body: ""
+    })
+  end
+  cleanup(state)
+end
+
+# ─── Helpers ──────────────────────────────────────────────────
+
+fn write_frame(fd, f)
+  let bytes = frame.render_frame(f)
+  let r = pcall(fn() tcp_write(fd, bytes) end)
+  # Ignore write errors here — caller decides whether to bail.
+  r.ok
+end
+
+fn send_error(fd, msg)
+  write_frame(fd, {command: "ERROR", headers: {message: msg}, body: ""})
+end
+
+fn cleanup(state)
+  tcp_close(state.fd)
+  nil
+end
+
+# ─── Entry point: spawn writer + reader for an accepted fd ─────
+
+let next_conn_id = 0
+
+fn start(fd)
+  next_conn_id = next_conn_id + 1
+  let conn_id = next_conn_id
+  spawn(fn()
+    let me = self()
+    # spawn_link from inside the writer pairs reader<->writer atomically;
+    # if either dies abnormally, the other is killed.
+    spawn_link(fn() reader_loop(fd, me, "") end)
+    writer_loop(make_state(fd, conn_id))
+  end)
+end
+
+export start
