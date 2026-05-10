@@ -40,6 +40,15 @@ die() { echo "FATAL: $*" >&2; exit 1; }
 [[ -f "$BROKER_SRC" ]] || die "broker source missing"
 command -v "$PYTHON" >/dev/null || die "$PYTHON not found"
 
+# Compile broker once up-front so each phase can run the binary directly.
+# This (a) means $BROKER_PID IS the broker process — wait captures its
+# own exit status / signal cleanly — and (b) lets atexit handlers
+# (gem_diag) reach broker.log without the gem launcher muddying the output.
+BROKER_BIN="$RUN_DIR/stomp_broker"
+echo "compiling broker → $BROKER_BIN"
+"$GEM_BIN" -o "$BROKER_BIN" "$BROKER_SRC" 2>&1 | tail -5
+[[ -x "$BROKER_BIN" ]] || die "broker compile failed"
+
 start_broker() {
   local label="$1"
   local stdout_log="$RUN_DIR/${label}.broker.log"
@@ -49,7 +58,7 @@ start_broker() {
     die "port $PORT already in use"
   fi
 
-  "$GEM_BIN" "$BROKER_SRC" > "$stdout_log" 2>&1 &
+  GEM_DIAG=1 "$BROKER_BIN" > "$stdout_log" 2>&1 &
   BROKER_PID=$!
   echo "broker pid: $BROKER_PID (log: $stdout_log)"
 
@@ -81,8 +90,29 @@ start_broker() {
 stop_broker() {
   [[ -n "$RSS_PID" ]] && kill "$RSS_PID" 2>/dev/null || true
   RSS_PID=""
-  if [[ -n "$BROKER_PID" ]] && kill -0 "$BROKER_PID" 2>/dev/null; then
-    kill -9 "$BROKER_PID" 2>/dev/null || true
+  # If the broker died on its own (signal or exit), reap its status before
+  # we send SIGKILL on top — otherwise wait returns the SIGKILL we just sent
+  # and we lose the original signal.
+  BROKER_EXIT_STATUS=""
+  if [[ -n "$BROKER_PID" ]]; then
+    if kill -0 "$BROKER_PID" 2>/dev/null; then
+      kill -9 "$BROKER_PID" 2>/dev/null || true
+      wait "$BROKER_PID" 2>/dev/null
+      BROKER_EXIT_STATUS="killed-by-driver"
+    else
+      set +e
+      wait "$BROKER_PID" 2>/dev/null
+      local wstatus=$?
+      set -e
+      if (( wstatus > 128 )); then
+        local sig=$(( wstatus - 128 ))
+        local signame
+        signame=$(kill -l $sig 2>/dev/null || echo $sig)
+        BROKER_EXIT_STATUS="signal=$sig($signame)"
+      else
+        BROKER_EXIT_STATUS="exit=$wstatus"
+      fi
+    fi
   fi
   BROKER_PID=""
   # Kill anything still bound to the port (orphaned gem temp binaries).
@@ -131,10 +161,18 @@ phase() {
   if [ $rc -ne 0 ]; then
     echo "  !! harness exited with $rc"
   fi
+  local alive="yes"
   if ! kill -0 "$BROKER_PID" 2>/dev/null; then
+    alive="DIED"
     echo "  !! broker died during phase $label"
   fi
   stop_broker
+  echo "broker status: alive_at_phase_end=$alive  $BROKER_EXIT_STATUS"
+  # gem_diag atexit line — only present when broker exited cleanly enough
+  # for atexit (signal-killed coroutines do not fire it).
+  local diag_line
+  diag_line=$(grep -m1 '^gem_diag:' "$RUN_DIR/${label}.broker.log" 2>/dev/null || echo "")
+  [[ -n "$diag_line" ]] && echo "$diag_line"
   echo
   echo "rss summary for $label:"
   rss_summary "$RUN_DIR/${label}.rss.csv" "$RUN_DIR/${label}.rss.summary.txt"
