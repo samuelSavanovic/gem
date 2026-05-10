@@ -1,0 +1,49 @@
+load "std/supervisor"
+load "./registry.gem"
+load "./connection.gem"
+
+# Top-level supervision tree. Two permanent children:
+#
+#   registry — owns the destination namespace. Restarting it would lose
+#     all destination registrations, but since destinations auto-register
+#     on creation, the next SUBSCRIBE/SEND on a topic just re-creates it.
+#     For v0 it should never crash anyway (it has no per-frame logic).
+#
+#   acceptor — drives the per-connection spawn. If this crashes we lose
+#     the ability to accept new connections; restart is the right call.
+#     Existing connection processes are independent and survive.
+#
+# Connection processes are *not* supervised: STOMP without persistence
+# promises nothing across reconnect, and a crashed connection is exactly
+# the case where the client should reconnect on its own. They die quietly
+# and the supervisor is unaware.
+#
+# Destination processes are *not* statically supervised either: they're
+# lazy-spawned on demand by the registry. A destination crash drops its
+# subscribers (acceptable for v0 — STOMP has no replay guarantees), and
+# the next op re-creates it. Adding dynamic supervision would require a
+# DynamicSupervisor analogue that std/supervisor.gem doesn't have.
+
+fn acceptor_loop(listener)
+  while true
+    let fd = tcp_accept(listener)
+    connection.start(fd)
+  end
+end
+
+fn start_acceptor(listener)
+  spawn(fn() acceptor_loop(listener) end)
+end
+
+fn start(listener)
+  supervisor.start({
+    strategy: "one_for_one",
+    name: "stomp_broker_sup",
+    children: [
+      {id: "registry", start: registry.start},
+      {id: "acceptor", start: fn() start_acceptor(listener) end}
+    ]
+  })
+end
+
+export start

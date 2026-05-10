@@ -1,0 +1,119 @@
+load "std/string"
+
+# STOMP 1.2 header value escapes:
+#   \r -> CR (13)
+#   \n -> LF (10)
+#   \c -> ':' (58)
+#   \\ -> '\' (92)
+# Unknown escapes are passed through untouched.
+
+fn unescape_header(s)
+  let slen = len(s)
+  build_string() do |add|
+    let i = 0
+    while i < slen
+      let c = ord(s, i)
+      if c == 92 and i + 1 < slen
+        let next = ord(s, i + 1)
+        if next == 110
+          add(chr(10))
+          i += 2
+        elif next == 114
+          add(chr(13))
+          i += 2
+        elif next == 99
+          add(chr(58))
+          i += 2
+        elif next == 92
+          add(chr(92))
+          i += 2
+        else
+          add(chr(c))
+          i += 1
+        end
+      else
+        add(chr(c))
+        i += 1
+      end
+    end
+  end
+end
+
+fn escape_header(s)
+  let slen = len(s)
+  build_string() do |add|
+    let i = 0
+    while i < slen
+      let c = ord(s, i)
+      if c == 13
+        add("\\r")
+      elif c == 10
+        add("\\n")
+      elif c == 58
+        add("\\c")
+      elif c == 92
+        add("\\\\")
+      else
+        add(chr(c))
+      end
+      i += 1
+    end
+  end
+end
+
+# raw is one frame without the trailing NUL byte. Returns
+# {command, headers, body} or nil on malformed input.
+fn parse_frame(raw)
+  if len(raw) == 0
+    return nil
+  end
+
+  let sep = string.index_of(raw, "\n\n")
+  if sep == -1
+    return nil
+  end
+
+  let head = substr(raw, 0, sep)
+  let body = substr(raw, sep + 2, len(raw))
+
+  let lines = string.split(head, "\n")
+  if len(lines) == 0
+    return nil
+  end
+
+  let command = lines[0]
+  if len(command) == 0
+    return nil
+  end
+
+  # STOMP 1.2: first occurrence of a header key wins (later duplicates ignored).
+  let headers = {}
+  let i = 1
+  while i < len(lines)
+    let line = lines[i]
+    let colon = string.index_of(line, ":")
+    if colon == -1
+      return nil
+    end
+    let key = unescape_header(substr(line, 0, colon))
+    let val = unescape_header(substr(line, colon + 1, len(line)))
+    if not has_key(headers, key)
+      headers[key] = val
+    end
+    i += 1
+  end
+
+  {command: command, headers: headers, body: body}
+end
+
+fn render_frame(frame)
+  build_string() do |add|
+    add(frame.command, "\n")
+    for k, v in frame.headers
+      add(escape_header(k), ":", escape_header(v), "\n")
+    end
+    add("\n", frame.body, "\0")
+  end
+end
+
+export parse_frame, render_frame, escape_header, unescape_header

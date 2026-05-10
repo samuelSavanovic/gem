@@ -1,0 +1,49 @@
+load "std/gen_server"
+load "std/string"
+load "./destination.gem"
+
+# The registry serializes destination creation. Two SUBSCRIBEs to the same
+# new topic could otherwise both check `whereis`, both see nil, and both
+# `register` — the second would error. Routing the lookup-or-create through
+# this gen_server's mailbox eliminates the race for free.
+#
+# We rely on the runtime's auto-unregister-on-death for cleanup; the registry
+# does not track destinations beyond `whereis`.
+
+fn classify(name)
+  if string.starts_with(name, "/queue/")
+    return "queue"
+  end
+  "topic"
+end
+
+let module = {
+  init: fn() nil end,
+  handle_call: fn(msg, from, state)
+    match msg
+    when {op: "lookup_or_create", name: name}
+      let existing = whereis(name)
+      if existing != nil
+        {reply: existing, state: state}
+      else
+        let kind = classify(name)
+        let pid = destination.start(name, kind)
+        {reply: pid, state: state}
+      end
+    end
+  end,
+  handle_cast: fn(msg, state) {state: state} end,
+  handle_info: fn(msg, state) {state: state} end
+}
+
+fn start()
+  let result = gen_server.start(module)
+  register("stomp_registry", result.pid)
+  result.pid
+end
+
+fn lookup_or_create(name)
+  gen_server.call("stomp_registry", {op: "lookup_or_create", name: name})
+end
+
+export start, lookup_or_create
