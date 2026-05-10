@@ -536,6 +536,39 @@ void gem_run_scheduler(void) {
             }
         }
 
+        /* Non-blocking poll: surface fd-readiness even when other procs
+           are READY. Without this, a continuously-READY proc (e.g. a
+           broker reader draining a never-empty TCP buffer) starves any
+           proc IO_WAIT'ing on a different fd — the scheduler never
+           reaches the blocking poll() below. Discovered via the STOMP
+           M6 slow-consumer trace: a broker writer's POLLOUT wait wedged
+           permanently after the slow client's kernel buffer first
+           filled, because the publisher's reader stayed READY and we
+           never polled. The cost is one syscall per scheduler scan
+           when any proc is fd-waiting; the build/mark loops are O(hwm)
+           but already cheap relative to the proc-scan above. */
+        if (has_ready && has_fd_wait) {
+            int nfds = 0;
+            for (int i = 0; i < gem_proc_hwm; i++) {
+                if (gem_proc_table[i].state == GEM_PROC_IO_WAIT &&
+                    gem_proc_table[i].io_request == NULL) {
+                    gem_poll_fds[nfds].fd = gem_proc_table[i].wait_fd;
+                    gem_poll_fds[nfds].events = gem_proc_table[i].wait_write ? POLLOUT : POLLIN;
+                    gem_poll_fds[nfds].revents = 0;
+                    gem_poll_pids[nfds] = i;
+                    nfds++;
+                }
+            }
+            if (nfds > 0 && poll(gem_poll_fds, (nfds_t)nfds, 0) > 0) {
+                for (int j = 0; j < nfds; j++) {
+                    if (gem_poll_fds[j].revents & (POLLIN | POLLOUT | POLLERR | POLLHUP)) {
+                        if (gem_proc_table[gem_poll_pids[j]].state == GEM_PROC_IO_WAIT)
+                            gem_proc_table[gem_poll_pids[j]].state = GEM_PROC_READY;
+                    }
+                }
+            }
+        }
+
         /* If we ran at least one READY process, loop immediately —
            the resumed coroutines may have enqueued messages or spawned
            new work. */

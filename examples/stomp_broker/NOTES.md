@@ -606,3 +606,238 @@ unrelated cliff first. That's the next experiment.
 - **Mailbox cap.** Unchanged from second-pass writeup: per-subscriber
   drop policy + `process_info(pid).mailbox_len` introspection. Now
   reachable to test for real.
+
+## Fourth pass: the slow-consumer trace, plus a scheduler fairness bug
+
+Three passes of M6 deferred the slow-consumer scenario for unrelated
+reasons (writer-cycle stack overflow → registry dangling pointer →
+both fixed). With those gone, the original M6 prompt — `1 fast pub ×
+1 slow sub × 60 s × 4 KB body, slow sub ack ~200 ms` — is finally the
+limiting factor on its own and worth running for real.
+
+### Diagnostics ported into `run.sh`
+
+`run.sh`'s slow phase already had an RSS sampler. Ported the rest of
+the third-pass diagnostic kit:
+
+- **Compile broker once up-front** to a binary (`stomp_broker` under
+  the run dir). Each phase runs the binary directly so `wait $BPID`
+  captures the broker's own exit status, and `atexit` handlers in the
+  runtime reach the per-phase log without the gem launcher's diag
+  line muddying things.
+- **`GEM_DIAG=1`** in the launch env, surfacing the
+  `spawn_overflow=N proc_hwm=M max_procs=K` atexit line. Gated, so
+  default tests stay quiet.
+- **Exit-status capture in `stop_broker`** — distinguishes
+  `signal=11(SEGV)` from `exit=0` from `killed-by-driver`, surfaced
+  in the per-phase summary alongside the RSS curve.
+
+Same shape as `sweep.sh`, lifted with no behavior change on
+fanout/queue cells.
+
+### What the trace looks like (pre-fix)
+
+Single 60s slow run (1 fast + 1 slow, 4 KB body, 200 ms slow ack):
+
+```
+publish_msgs_per_s: 2535
+fast_subs_msgs:    [152239]   # all delivered
+slow_subs_msgs:    [131]
+publisher_blocked_at_s: null  # never
+```
+
+RSS climbs strictly linearly at ~16 MB/s during the 60 s publish
+window — 17 MB → 950 MB. After publishing stops there's a sharp
+post-publish spike to ~1.78 GB in 5 s, then `stop_broker`'s SIGKILL
+fires. Broker is alive throughout. Shape #1 (linear unbounded
+mailbox, broker survives until OS OOM-kill) confirmed.
+
+A 120 s repeat extends the curve identically (peaks at ~2.74 GB, same
+slope, broker still alive at end). On a 16 GB Mac the OS doesn't OOM
+in any plausible test-window timeframe; the broker would just keep
+climbing. Linear-OOM is the correct shape, but the cliff is "OS
+patience" rather than anything Gem-shaped.
+
+### The 131 anomaly
+
+What was *not* expected: the slow subscriber received exactly **131
+MESSAGE frames in every run**, regardless of duration:
+
+| duration_s | publishes | slow_sub got | expected at 5/sec |
+|-----------:|----------:|-------------:|------------------:|
+|         30 |    75 990 |          132 |               150 |
+|         60 |   152 239 |          131 |               300 |
+|        120 |   301 669 |          131 |               600 |
+
+If the slow sub were genuinely paced by its own 200 ms ack delay,
+the count would scale with duration (~5 msg/s × runtime). It
+doesn't. The slow sub's TCP read stream goes silent after ~26 s of
+real work, and *no further messages arrive* even though the broker
+is alive and the destination is happily fanning out to the fast sub.
+
+That's a hidden mechanism, not the unbounded mailbox shape we came
+here to characterise — and the kind of fourth-pass cliff worth
+following.
+
+### Diagnostic that confirmed the hypothesis
+
+If the cause were Python-side or kernel-side, slowing the publisher
+shouldn't change the slow sub's receive count. So: re-ran with
+`--publish-pause-s 0.01` (10 ms gap between publishes), publisher
+rate dropped from 2535 → 72 msg/s. Slow sub got **171 messages in
+30 s** — i.e., ~5/s sustained. The exact rate the slow sub was *meant*
+to drain at.
+
+So the cliff is *triggered by the publisher's rate*, not by anything
+inherent to the consumer. When the publisher is fast enough to keep
+some other broker process continuously busy, the slow writer wedges.
+When the publisher is slow enough to leave the broker idle
+intermittently, the slow writer drains fine.
+
+### Root cause: scheduler poll-fairness
+
+`runtime/gem_scheduler.c` runs the proc table once per loop
+iteration: every `READY` proc gets a slice; `WAITING` and `IO_WAIT`
+procs are tallied. After the scan, the existing logic is roughly:
+
+```c
+if (has_ready) continue;                  // re-scan immediately
+if (has_fd_wait || has_pool_wait) {
+    poll(...);  // build set, blocking, mark ready
+}
+```
+
+`poll()` is only called when **no** proc is ready. Under sustained
+input the publisher's broker-side reader is *always* ready (its
+TCP buffer never empties; tcp_read returns immediately, parse +
+cast, loop). So the scheduler never reaches the blocking poll,
+and any IO_WAIT proc waiting on POLLOUT/POLLIN on a different
+fd is starved.
+
+In the slow-consumer test, the slow writer's first ~131 `tcp_write`s
+fill the kernel send buffer (~128 KB autotuned up to ~557 KB on this
+Mac, ÷ 4250-byte frames ≈ 130). After that, `tcp_write` returns
+EAGAIN, the writer calls `gem_io_yield(fd, 1)` → IO_WAIT, and never
+wakes. The destination keeps fanning out into the writer's mailbox;
+the mailbox grows linearly forever; the writer's `tcp_write` queue
+sits at 0 progress.
+
+So the wedge isn't "broker doesn't have CPU for the slow writer" —
+it's "scheduler never re-checks the slow writer's fd readiness."
+A real bug, not a design corner. Same flavour as the third-pass
+strdup-fix in shape (a runtime-correctness problem the trace
+surfaces), just on the scheduler side instead of the registry.
+
+### The fix
+
+One change to `gem_run_scheduler`: before the existing
+`if (has_ready) continue` short-circuit, run a **non-blocking**
+`poll(timeout=0)` over the IO_WAIT set when `has_fd_wait` is true.
+~25 lines, no new state, builds the same poll set the blocking
+branch does. The blocking branch (when nothing is ready) is
+unchanged.
+
+Cost: one syscall per scheduler scan when any proc is fd-waiting,
+plus an O(hwm) loop to build the set. Negligible relative to the
+proc-scan it sits inside; verified by re-running the third-pass
+fanout cell post-fix:
+
+| cell                  | third-pass    | fourth-pass post-fix |
+|-----------------------|---------------|----------------------|
+| 500 subs × 50 × 256 B | 62k msg/s     | **66k msg/s**        |
+
+Fanout throughput is within run-to-run noise; the cell that was the
+canary (delivered=50000/50000 after the strdup fix) still passes.
+
+### Post-fix slow-consumer behavior
+
+Bounded re-run (30 000 publishes capped, 60 s drain, fresh broker):
+
+```
+publish_msgs_per_s: 2239        # ~12% slower; one extra poll(0)/scan
+fast_subs_msgs:    [30000]
+slow_subs_msgs:    [220]        # 220 / 73 s ≈ 3 msg/s sustained
+peak RSS:          ~450 MB
+broker exit:       killed-by-driver (alive throughout)
+```
+
+Slow sub now drains time-proportionally — the wedge is gone. Peak
+RSS during draining is still substantial (mailbox holds the 30 000
+publishes minus what the slow sub has chewed through), and an
+unbounded publisher would still grow the mailbox without bound,
+just at `(publish_rate − consume_rate)` instead of `publish_rate`.
+The OOM scenario the milestone asks about *is* the actual shape now,
+not an artefact of a starved writer.
+
+The 12% drop in publisher rate is the cost of the extra non-blocking
+poll. Acceptable for the correctness it buys; no smaller fix is
+obvious without changing the IO_WAIT model entirely (e.g. an epoll
+fd that the scheduler reads only when something has changed).
+
+### Status of the M6 backpressure question
+
+Now that mailbox growth reflects the actual publish/consume gap, the
+mailbox-cap design is finally worth doing. The shape from the
+second-pass writeup still fits:
+
+1. **Selective drop on the writer.** Cheapest, but loses messages.
+2. **`gen_server.call` instead of `cast` for SEND fan-out.** Slowest
+   subscriber throttles the whole topic — wrong default for STOMP.
+3. **Per-subscriber drop policy with a SUBSCRIBE-time flag.** Client
+   declares lossy-or-blocking; broker enforces.
+4. **`process_info(pid).mailbox_len` on the writer.** Already exists
+   in the runtime; destination reads it before each fan-out and
+   skips writers whose mailbox exceeds a soft cap.
+
+#3 + #4 is still the preference: the *client* knows whether
+dropping is acceptable, and #4 is the broker-side mechanism that
+makes #3 enforceable without per-message synchronous round-trips.
+With the scheduler bug fixed, a 5-msg/s drain is now visible to
+`mailbox_len` polling, so a destination *can* skip a writer that's
+falling behind without false positives from a wedged writer.
+
+Sketch only this pass, per session scope. The implementation is its
+own PR — STOMP doesn't have a `prefetch` / `mailbox-cap` header in
+1.2, so the SUBSCRIBE flag is a custom extension; the destination
+side needs to thread mailbox_len checks into `deliver()` without
+making the per-publish path much more expensive; and the lossy-mode
+metric (drop count per subscriber) wants surfacing somewhere
+reachable. Those design choices want a focused conversation, not a
+hurried add-on to this one.
+
+### Updated "things I'd want from the language/runtime"
+
+- ~~**Scheduler poll-fairness.**~~ Shipped this PR. The non-blocking
+  poll-on-every-scan is the minimal correct shape; a future epoll
+  conversion would let it be free instead of just cheap.
+- **Surfaceable stack-overflow as a Gem error.** Still wanted (P3 on
+  ROADMAP). Not surfaced this pass — every cliff in this run was a
+  scheduler/runtime correctness issue rather than a stack one.
+- **Mailbox cap.** Now genuinely the next M6 step. Sketch above; full
+  design + impl in a follow-up PR.
+- **`process_info(pid).mailbox_len`** still the introspection
+  primitive the destination needs for any non-trivial backpressure
+  policy. Already present, not yet exercised by the broker.
+
+### How to reproduce the fourth pass
+
+```sh
+# Pre-fix shape (linear OOM, slow sub stuck at ~131):
+git checkout 015624b
+make build
+PHASES=slow SLOW_FAST=1 SLOW_SLOW=1 SLOW_DELAY_MS=200 \
+  SLOW_DURATION=60 SLOW_BODY=4096 bash benchmarks/stomp/run.sh
+
+# Post-fix shape (slow sub drains time-proportionally):
+git checkout HEAD     # this PR
+make build
+PHASES=slow SLOW_FAST=1 SLOW_SLOW=1 SLOW_DELAY_MS=200 \
+  SLOW_DURATION=60 SLOW_BODY=4096 bash benchmarks/stomp/run.sh
+```
+
+Note: the unbounded post-fix run can stretch past `duration_s` when
+the publisher's `disconnect()` blocks on a full kernel buffer (12%
+slower broker reader → publisher TCP backpressure → DISCONNECT
+waits up to its 120 s socket timeout). The bounded variant
+(`--max-publishes 30000`, drain extended) avoids this and is the
+shape used to verify the fix in this writeup.
