@@ -14,6 +14,20 @@ int gem_call_depth = 0;
 GemPcallFrame gem_pcall_stack[GEM_MAX_PCALL_DEPTH];
 int gem_pcall_depth = 0;
 
+/* ─── Mutual-TCO trampoline scratch ───
+ *
+ * Used by the codegen's SCC-trampoline scheme: an SCC member's body sets
+ * these globals at an intra-SCC tail-call site and returns; the wrapper
+ * loop in gem_fn_<name> reads them, dispatches the next body, and clears
+ * the marker. Single-global is safe because the scheduler is co-operative
+ * and yields only happen inside bodies — never between a body's TLB-set
+ * and its return, and never between the wrapper's TLB-read and dispatch.
+ */
+GemFnPtr gem_tail_fn = NULL;
+void *gem_tail_env = NULL;
+int gem_tail_argc = 0;
+GemVal gem_tail_args[GEM_MAX_TAIL_ARGS];
+
 void gem_print_stack_trace(void) {
     int max = gem_call_depth < GEM_MAX_CALL_DEPTH ? gem_call_depth : GEM_MAX_CALL_DEPTH;
     for (int i = max - 1; i >= 0; i--) {
