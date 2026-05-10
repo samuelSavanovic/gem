@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <time.h>
+#include <stdlib.h>
 
 #include "gem.h"
 #include "stb_ds.h"
@@ -80,6 +81,25 @@ static void gem_timer_remove_at(int i) {
 }
 int gem_main_pid = -1;
 
+/* Diagnostic counters — printed on process exit via atexit handler.
+   Used to disambiguate proc-table exhaustion vs other failure modes
+   under load (see benchmarks/stomp/sweep.sh). */
+static uint64_t gem_spawn_overflow_count = 0;
+
+static void gem_diag_print_on_exit(void) {
+    /* Always emit when GEM_DIAG=1, otherwise only when something
+       interesting happened. Keeps default test runs quiet but lets
+       benchmark drivers force a baseline line. */
+    const char *force = getenv("GEM_DIAG");
+    int interesting = gem_spawn_overflow_count > 0;
+    if (!interesting && !(force && force[0] == '1')) return;
+    fprintf(stderr,
+            "gem_diag: spawn_overflow=%llu proc_hwm=%d max_procs=%d\n",
+            (unsigned long long)gem_spawn_overflow_count,
+            gem_proc_hwm, GEM_MAX_PROCS);
+    fflush(stderr);
+}
+
 /* Pre-allocated poll scratch arrays (avoid malloc/free per scheduler idle) */
 static struct pollfd gem_poll_fds[GEM_MAX_PROCS];
 static int gem_poll_pids[GEM_MAX_PROCS];
@@ -101,7 +121,15 @@ void gem_scheduler_init(void) {
     gem_proc_table[GEM_MAX_PROCS - 1].pid = -1;
     gem_free_head = 0;
     gem_free_tail = GEM_MAX_PROCS - 1;
+    /* The name registry receives strings from arbitrary process arenas
+       (e.g. a destination gen_server registers `name` where `name` lives
+       in the *registry* process's arena, then the registry's per-iteration
+       arena reset frees that memory). Default stb_ds mode stores the
+       caller's pointer verbatim — so we'd be left with dangling keys.
+       Use strdup mode so the table owns its keys; shdel frees them. */
+    sh_new_strdup(gem_name_registry);
     gem_threadpool_init();
+    atexit(gem_diag_print_on_exit);
 }
 
 static void gem_free_proc_slot(int pid) {
@@ -239,6 +267,7 @@ static void gem_coro_entry(mco_coro *co) {
 
 int gem_spawn_fn(GemFnPtr fn, void *env) {
     if (gem_free_head < 0) {
+        gem_spawn_overflow_count++;
         gem_error("spawn: process table full");
         return -1;
     }

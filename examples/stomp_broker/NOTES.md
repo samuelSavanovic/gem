@@ -503,3 +503,106 @@ The compiler change is in `compiler/codegen.gem`
 `runtime/gem_error.c`. Direct self-tail recursion still uses the
 existing `while(1) { ... continue; }` shape in the body — only
 *cross*-fn intra-SCC tail calls go through the trampoline.
+
+## Third pass: the cliff under mutual-TCO was a dangling-pointer SEGV
+
+After mutual-TCO landed, two cells still died: `s500x100x256`
+(delivered 26,999/50,000) and `s10x1000x256` (5,439/10,000). The
+shape was *silent exit* — no `coroutine stack overflow`, no Gem
+runtime error, no SIGSEGV message in `broker.log`. So I added two
+small diagnostics to `benchmarks/stomp/sweep.sh`:
+
+1. **RSS sampler** (ported from `run.sh`): per-cell CSV, summarised
+   inline as `rss start/peak/end kB`.
+2. **`gem_diag` atexit line** in the runtime (`gem_scheduler.c`):
+   prints `spawn_overflow=N proc_hwm=M max_procs=K` when the broker
+   exits cleanly. Counter bumps every time `gem_spawn_fn` returns -1
+   on a full proc table. Gated on `GEM_DIAG=1` so default test
+   runs stay quiet.
+
+I also restructured `sweep.sh` to compile the broker once up front
+and run the binary directly, so `wait $bpid` captures the broker's
+own exit status instead of the Gem launcher's. That instantly
+disambiguated the failure mode:
+
+```
+s500x100x256 ... broker=DIED  signal=11(SEGV)  rss peak=102 MB
+s10x1000x256 ... broker=DIED  signal=11(SEGV)  rss peak=18 MB
+```
+
+So: not mailbox bloat (10×1000 peaks at 18 MB), not the proc table
+(no `gem_diag` line means atexit didn't fire — signal-killed before
+cleanup; even if a spawn had overflowed, `gem_error("spawn: process
+table full")` exits via `exit(1)` which *does* fire atexit). It's
+a third mechanism — a real runtime crash.
+
+`lldb -b` on the dying cell gave the backtrace immediately:
+
+```
+frame #0 _platform_strcmp +12
+frame #1 stbds_is_key_equal (i=2)
+frame #5 gem_whereis_name(name="/topic/load_fanout_…")
+frame #7 _anon_20 at registry.gem:27   # `let existing = whereis(name)`
+frame #8 gen_server.loop
+```
+
+The bug: `gem_register_name` stored `args[0].sval` directly in
+`gem_name_registry` — and stb_ds in default mode keeps the caller's
+pointer verbatim, no strdup. The destination name (e.g.
+`/topic/load_fanout_…`) lives in the *registry* gen_server's arena
+(it arrived as a deep-copied `lookup_or_create` message). Once the
+registry's per-iteration arena reset fired (>1MB allocated at the
+back-edge), every key in stb_ds became a dangling pointer. The next
+`whereis` walked them and segfaulted in strcmp.
+
+The fanout cells route 50k publishes through the registry
+(`registry.lookup_or_create` runs on every SEND in `connection.gem`,
+not just SUBSCRIBE), so the registry's arena reset trips well within
+each cell.
+
+The fix is one line in `gem_scheduler_init`:
+
+```c
+sh_new_strdup(gem_name_registry);
+```
+
+Now stb_ds owns the keys; `shdel` frees them on auto-unregister.
+The same pattern in tables (`t->str_index`) is fine — the keys are
+the same `GemVal`s stored in `t->keys[]`, so they share an arena
+and die together; only the global registry takes strings from
+foreign arenas.
+
+Regression: `examples/97_register_arena_reset.gem` registers names
+built by string concatenation, then forces an arena reset by pushing
+~2 MB into a buffer between iterations of a tail-recursive loop.
+With the fix removed, that example exits with signal 11; with the
+fix in, it returns nil for both names (auto-unregistered cleanly)
+and prints `ok`.
+
+Post-fix sweep — all eleven cells deliver 100%:
+
+```
+s500x100x256   delivered=50000/50000   fanout=62524 msg/s   peak=492 MB
+s10x1000x256   delivered=10000/10000   fanout=18463 msg/s   peak=30 MB
+```
+
+So the original M6 mailbox-cap question is back on the table — none
+of the *current* sweep cells stress mailbox growth (every cell
+delivers fully), but the slow-consumer scenario from the M6 prompt
+(1 fast pub × 1 slow sub × 60s) is now reachable without hitting an
+unrelated cliff first. That's the next experiment.
+
+### Updated "things I'd want from the language/runtime"
+
+- ~~**Mutual-tail-call elimination.**~~ Shipped (PR #22).
+- ~~**Disambiguate broker-silent-death.**~~ Shipped this PR. RSS
+  sampler + `gem_diag` atexit + broker-binary launch in `sweep.sh`
+  + the strdup fix it surfaced.
+- **Surfaceable stack-overflow as a Gem error.** Still wanted. The
+  diagnostic-disambiguation path here was straightforward because
+  the failure was reachable under lldb; a stack-overflow flavour of
+  silent death (P3 on the roadmap) would benefit from the same kind
+  of runtime-level signal.
+- **Mailbox cap.** Unchanged from second-pass writeup: per-subscriber
+  drop policy + `process_info(pid).mailbox_len` introspection. Now
+  reachable to test for real.

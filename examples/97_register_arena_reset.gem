@@ -1,0 +1,54 @@
+# Regression: the global name registry must own its key memory.
+#
+# Before fix: gem_register_name stored the caller's `args[0].sval`
+# pointer verbatim in stb_ds. When the registering process's arena
+# subsequently reset (per-iteration reset on a long-running tail
+# loop, triggered past ~1MB of allocation), the stored key pointer
+# became dangling, and the next whereis/register/shdel strcmp would
+# segfault. This is what killed the STOMP broker on sweep cells with
+# 25k+ messages routed through the registry.
+#
+# This test registers a name built from string concatenation (so it
+# lives in arena memory, not as a static literal) and forces an arena
+# reset by allocating well past the threshold on each tail back-edge.
+# Without the runtime fix, `whereis` after the back-edge would strcmp
+# a freed key and crash; the auto-unregister path on process death
+# would also walk the same dangling keys.
+
+fn registrar(remaining)
+  if remaining == 0
+    return
+  end
+  let name = "regtest_" + to_string(remaining)
+  register(name, self())
+  # Allocate well past the per-process arena reset threshold (~1MB) on
+  # each iteration so the back-edge of this tail recursion clears the
+  # arena. buf_push is amortized O(1).
+  let buf = buf_new()
+  let j = 0
+  while j < 8192
+    buf_push(buf, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+    j = j + 1
+  end
+  registrar(remaining - 1)
+end
+
+let registrar_pid = spawn(fn() registrar(2) end)
+
+# Block until the registrar dies so its auto-unregister has run.
+let parent = self()
+spawn(fn()
+  let ref = monitor(registrar_pid)
+  receive
+  when {tag: "DOWN"}
+    send(parent, "down")
+  end
+end)
+let _ = receive()
+
+# After death, all four names must be cleared. Without the fix, the
+# unregister path would have already crashed; with it, whereis returns
+# nil cleanly.
+print(whereis("regtest_4"))
+print(whereis("regtest_1"))
+print("ok")
