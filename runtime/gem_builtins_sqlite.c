@@ -170,7 +170,7 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
             switch (v.type) {
                 case VAL_INT:    sqlite3_bind_int64(stmt, idx, v.ival); break;
                 case VAL_FLOAT:  sqlite3_bind_double(stmt, idx, v.fval); break;
-                case VAL_STRING: sqlite3_bind_text(stmt, idx, v.sval, -1, SQLITE_TRANSIENT); break;
+                case VAL_STRING: sqlite3_bind_text(stmt, idx, v.sval, v.slen, SQLITE_TRANSIENT); break;
                 case VAL_BOOL:   sqlite3_bind_int64(stmt, idx, v.bval ? 1 : 0); break;
                 case VAL_NIL:    sqlite3_bind_null(stmt, idx); break;
                 default:         sqlite3_bind_null(stmt, idx); break;

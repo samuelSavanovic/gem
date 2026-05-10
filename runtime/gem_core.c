@@ -275,7 +275,7 @@ int gem_val_eq(GemVal a, GemVal b) {
         case VAL_BOOL: return a.bval == b.bval;
         case VAL_INT: return a.ival == b.ival;
         case VAL_FLOAT: return a.fval == b.fval;
-        case VAL_STRING: return strcmp(a.sval, b.sval) == 0;
+        case VAL_STRING: return a.slen == b.slen && memcmp(a.sval, b.sval, (size_t)a.slen) == 0;
         case VAL_REF: return a.rval == b.rval;
         default: return 0;
     }

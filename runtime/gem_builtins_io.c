@@ -179,14 +179,24 @@ GemVal gem_path_join_fn(void *_env, GemVal *args, int argc) {
     }
     const char *dir = args[0].sval;
     const char *file = args[1].sval;
-    if (file[0] == '/') return gem_string(file);
-    size_t dlen = strlen(dir);
-    size_t flen = strlen(file);
-    char *result = (char *)gem_alloc(dlen + 1 + flen + 1);
-    strcpy(result, dir);
-    if (dlen > 0 && dir[dlen-1] != '/') strcat(result, "/");
-    strcat(result, file);
-    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = result; r.slen = (int)strlen(result);
+    size_t dlen = (size_t)args[0].slen;
+    size_t flen = (size_t)args[1].slen;
+    if (flen > 0 && file[0] == '/') {
+        char *copy = (char *)gem_alloc(flen + 1);
+        memcpy(copy, file, flen);
+        copy[flen] = '\0';
+        GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = copy; r.slen = (int)flen;
+        return r;
+    }
+    int needs_sep = (dlen > 0 && dir[dlen-1] != '/');
+    size_t total = dlen + (needs_sep ? 1 : 0) + flen;
+    char *result = (char *)gem_alloc(total + 1);
+    memcpy(result, dir, dlen);
+    size_t pos = dlen;
+    if (needs_sep) result[pos++] = '/';
+    memcpy(result + pos, file, flen);
+    result[total] = '\0';
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = result; r.slen = (int)total;
     return r;
 }
 

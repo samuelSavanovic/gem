@@ -1176,3 +1176,15 @@ block: i=1 doubled=2
 block: i=2 doubled=4
 closure: 10 15 20
 mut: 1 101
+3
+3
+false
+true
+false
+true
+false
+true
+true
+7
+true
+7

@@ -217,7 +217,11 @@ static int gem_default_cmp(const void *a, const void *b) {
         return (va.fval > vb.fval) - (va.fval < vb.fval);
     }
     if (va.type == VAL_STRING && vb.type == VAL_STRING) {
-        return strcmp(va.sval, vb.sval);
+        size_t la = (size_t)va.slen, lb = (size_t)vb.slen;
+        size_t n = la < lb ? la : lb;
+        int cmp = memcmp(va.sval, vb.sval, n);
+        if (cmp != 0) return cmp;
+        return (la > lb) - (la < lb);
     }
     if ((va.type == VAL_INT || va.type == VAL_FLOAT) &&
         (vb.type == VAL_INT || vb.type == VAL_FLOAT)) {
