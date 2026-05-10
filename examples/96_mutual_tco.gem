@@ -1,0 +1,71 @@
+# Mutual tail-call elimination: two-, three-, and broker-shaped cycles
+# must run past the 256 KB minicoro stack ceiling without overflowing.
+
+# 2-cycle (the textbook even/odd).
+fn is_even(n)
+  if n == 0
+    return true
+  end
+  is_odd(n - 1)
+end
+
+fn is_odd(n)
+  if n == 0
+    return false
+  end
+  is_even(n - 1)
+end
+
+print(is_even(20000))
+print(is_odd(20001))
+
+# 3-cycle, broker-shaped: a "loop" node, a dispatcher, and a handler that
+# loops back. Each round-trip pre-fix consumed C stack; with mutual TCO,
+# 50_000 round-trips run at constant depth.
+fn loop_node(n)
+  if n == 0
+    return "ok"
+  end
+  dispatch(n - 1, n)
+end
+
+fn dispatch(n, tag)
+  if tag % 2 == 0
+    handle_even(n)
+  else
+    handle_odd(n)
+  end
+end
+
+fn handle_even(n)
+  loop_node(n)
+end
+
+fn handle_odd(n)
+  loop_node(n)
+end
+
+print(loop_node(50000))
+
+# Mixed: SCC member with an additional direct self-tail call. The body's
+# own while(1) handles the self-recursion; the trampoline handles the
+# cross-fn cycle. Both should compose.
+fn pingA(n, acc)
+  if n == 0
+    return acc
+  end
+  if n % 2 == 0
+    pingA(n - 1, acc + 1)
+  else
+    pingB(n, acc)
+  end
+end
+
+fn pingB(n, acc)
+  if n == 0
+    return acc
+  end
+  pingA(n - 1, acc + 1)
+end
+
+print(pingA(10000, 0))

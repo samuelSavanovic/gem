@@ -416,3 +416,90 @@ build/gem benchmarks/stomp/microbench_gen_server.gem
 Logs land under `benchmarks/stomp/logs/<run-id>/` (one
 subdir per invocation; `meta.txt`, per-phase JSON, per-phase
 broker stdout, per-phase RSS CSV).
+
+---
+
+## Milestone 6, second pass: with mutual TCO
+
+The compiler now eliminates tail calls across functions in the same SCC,
+not just direct self-recursion (see `compiler/codegen.gem` §"Mutual-tail-
+call SCC detection"). The broker's `writer_loop ↔ handle_frame ↔
+handle_<command>` 7-function cycle survived viability filtering and is
+emitted as `gem_fn_<name>_body` + thin trampoline-loop wrappers. Re-ran
+the sweep and the cells where the *previous* cliff was the limiting
+factor jumped from "DEAD at delivered ≈ N×175" to "fully delivered."
+Cells that hit a *different* failure mode (memory or scheduler-shape
+saturation) still fall over, but later and with a different signature.
+
+### What changed
+
+| cell                  | old result                | new result            |
+|-----------------------|---------------------------|-----------------------|
+| 500 subs × 10 msgs    | 5,000 ✓                  | 5,000 ✓              |
+| 500 subs × 20 msgs    | 10,000 ✓                 | 10,000 ✓             |
+| 500 subs × 50 msgs    | 25,000 ✓                 | 25,000 ✓             |
+| 500 subs × 50 msgs (1KB body) | 25,000 ✓         | 25,000 ✓             |
+| **100 subs × 200 msgs** | DEAD at 17,499         | **20,000 ✓**          |
+| **50 subs × 500 msgs** | DEAD at 8,749           | **25,000 ✓**          |
+| **50 subs × 500 msgs (1KB)** | DEAD                | **25,000 ✓**          |
+| **200 subs × 100 msgs** | DEAD                   | **20,000 ✓**          |
+| 500 subs × 100 msgs   | DEAD at 26,999            | DEAD at 26,999        |
+| 10 subs × 1000 msgs   | DEAD at 1,749             | DEAD at 5,439         |
+
+The only cells that still die are ones where the death point was *not*
+the writer-cycle ceiling. The 500×100 cell still bottoms out at
+`delivered=26999/50000` — same number as before. The 10×1000 cell now
+gets to 5,439 (3× further) but still bottoms out before completion.
+Both fail silently: no `coroutine stack overflow` line in the broker
+log, no Gem error, no stack trace. The broker process simply exits
+during the run and `kill -0 $bpid` from the sweep harness reports
+"DIED" after the harness gives up.
+
+### What the *new* cliff is
+
+Two suspects, both anticipated by the original M6 writeup:
+
+1. **Mailbox unboundedness.** When publish rate >> consumer rate,
+   each subscriber's writer process accumulates `{tag: "deliver", ...}`
+   frames in its mailbox without bound. With 5 KB per frame (256 B body
+   + table + headers) and 50,000 deliveries pending, that's ~250 MB
+   of resident state across the broker — single-process budgets are
+   fine, but each subscriber's writer arena grows past its 1 MB
+   reset-threshold too fast for the per-iteration reset to keep up.
+2. **Process-table pressure.** 500 subscribers + 1 publisher = 501
+   connections × 2 procs each = 1002 procs, plus destinations,
+   acceptor, registry, broker supervisor → ~1010 procs against
+   `GEM_MAX_PROCS = 1024`. Headroom is thin; a transient spike of
+   short-lived processes (a connection retry, an exit-trap closure)
+   could push past the cap.
+
+The test that would distinguish these — slow consumer + fast publisher
+holding for 60s+ to actually OOM — wasn't run this pass. With the
+cliff lifted, it's the right next experiment.
+
+### Updated "things I'd want from the language/runtime"
+
+- ~~**Mutual-tail-call elimination.**~~ Shipped. The original cliff is gone.
+- **Surfaceable stack-overflow as a Gem error.** Still wanted. The new
+  failure mode ("broker silently dies") is exactly the symptom this
+  would diagnose. If we'd had it during this pass, we'd already know
+  whether the second-pass deaths are stack-related or not.
+- **Mailbox cap with a `gen_server.cast` overflow signal.** Now that
+  mutual TCO doesn't mask it, the slow-consumer mailbox-growth scenario
+  is the next-most-disruptive language gap. Per-subscriber drop policy
+  (option #3 in the original writeup) plus mailbox introspection
+  (option #4) is still my preferred shape.
+
+### How to reproduce the second pass
+
+```sh
+bash benchmarks/stomp/sweep.sh   # same script; numbers above are the run output
+```
+
+The compiler change is in `compiler/codegen.gem`
+`find_tail_call_sccs` (Tarjan over fn_def→fn_def tail edges) +
+`scc_wrapper_for` (trampoline). The runtime side is the
+`gem_tail_fn` / `gem_tail_args` TLB in `runtime/gem.h` and
+`runtime/gem_error.c`. Direct self-tail recursion still uses the
+existing `while(1) { ... continue; }` shape in the body — only
+*cross*-fn intra-SCC tail calls go through the trampoline.

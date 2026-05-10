@@ -1197,3 +1197,7 @@ test3: count after crash 2
 test4: terminate_child ok true
 test4: count after terminate 1
 test5: bogus terminate ok false
+true
+true
+ok
+10000

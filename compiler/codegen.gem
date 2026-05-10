@@ -1193,6 +1193,22 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   let tco_boxed = nil
   let tco_is_process_tail = false
   let process_tail_fns = {}
+  # ─── Mutual-tail-call SCC bookkeeping ───
+  # `scc_member_to_id[name]` (int) when `name` is a top-level fn_def in a
+  # tail-cycle SCC of size >= 2 that survived viability filtering. Set
+  # alongside `process_tail_fns` by `find_tail_call_sccs`.
+  # `scc_id_to_members[id]` is a sorted array of member names (used to
+  # generate stable C identifiers and to seed cross-SCC tail-call detection).
+  # `scc_id_is_pt[id]` mirrors `process_tail_fns`-membership for any one
+  # member (in a viable SCC, all members share PT status).
+  let scc_member_to_id = {}
+  let scc_id_to_members = {}
+  let scc_id_is_pt = {}
+  let scc_counter = 0
+  # Set inside the body of an SCC member during compile_fn — gives
+  # compile_stmt_return a way to recognize "tail call to a sibling in my SCC"
+  # and emit the trampoline marker instead of a regular call.
+  let current_scc_id = nil
   let append_buf_vars = {}
   # Set when emitting a leaf function (no Gem-level calls in body): we elide
   # `gem_push_frame`/`gem_pop_frame` and `gem_set_line` so the call doesn't
@@ -1924,6 +1940,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   let is_self_tail_call = nil
   let has_self_tail_call = nil
   let emit_tco_continue = nil
+  let find_tail_call_sccs = nil
+  let emit_scc_tail_call = nil
+  let scc_wrapper_for = nil
 
   # ─── TCO (tail call optimization) ──
 
@@ -2679,6 +2698,229 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       compute_live_for_pt_loops_in_stmts(fd.body)
     end
     compute_live_for_pt_loops_in_stmts(top_stmts)
+
+    # ─── Mutual-tail-call SCC detection ───
+    #
+    # Direct self-recursion is TCO'd by `is_self_tail_call` + the `while(1)`
+    # in compile_fn. Mutual cycles (X→tail Y, Y→tail X — possibly through 3+
+    # functions) are not, so each round-trip eats a C frame and saturates the
+    # 256 KB minicoro stack after ~175 frames. Find SCCs in the tail-edge
+    # subgraph; if every member is viable, mark them so compile_fn emits a
+    # `gem_fn_<name>_body` + thin trampoline-loop wrapper, and intra-SCC tail
+    # calls become a TLB write + return rather than a real C call.
+    find_tail_call_sccs(fn_defs, caller_records, name_to_fn)
+  end
+
+  # ─── Tail-edge SCC discovery (Tarjan) ───
+  #
+  # Operates only on fn_def→fn_def tail edges; non-tail edges and edges
+  # through closures don't form a recursive cycle worth merging. Result is
+  # populated into `scc_member_to_id` / `scc_id_to_members` / `scc_id_is_pt`.
+  find_tail_call_sccs = fn(fn_defs, caller_records, name_to_fn)
+    # Reset accumulated state from any prior run.
+    for k in keys(scc_member_to_id)
+      delete(scc_member_to_id, k)
+    end
+    for k in keys(scc_id_to_members)
+      delete(scc_id_to_members, k)
+    end
+    for k in keys(scc_id_is_pt)
+      delete(scc_id_is_pt, k)
+    end
+    scc_counter = 0
+
+    let name_set = {}
+    for fd in fn_defs
+      set_add(name_set, fd.name)
+    end
+
+    # Adjacency: name → array of tail-callee names, restricted to known fn_defs.
+    let tail_succs = {}
+    for fd in fn_defs
+      let cid = "fn:" + fd.name
+      let r = caller_records[cid]
+      let succs = []
+      if r != nil
+        for callee, _ in r.tail_callees
+          if set_contains(name_set, callee)
+            push(succs, callee)
+          end
+        end
+      end
+      tail_succs[fd.name] = succs
+    end
+
+    # Tarjan's SCC algorithm.
+    let idx_counter = 0
+    let indices = {}
+    let lowlinks = {}
+    let stack = []
+    let on_stack = {}
+    let raw_sccs = []
+
+    let strongconnect = nil
+    strongconnect = fn(v)
+      indices[v] = idx_counter
+      lowlinks[v] = idx_counter
+      idx_counter += 1
+      push(stack, v)
+      set_add(on_stack, v)
+      let succs = tail_succs[v]
+      if succs != nil
+        for w in succs
+          if indices[w] == nil
+            strongconnect(w)
+            if lowlinks[w] < lowlinks[v]
+              lowlinks[v] = lowlinks[w]
+            end
+          elif set_contains(on_stack, w)
+            if indices[w] < lowlinks[v]
+              lowlinks[v] = indices[w]
+            end
+          end
+        end
+      end
+      if lowlinks[v] == indices[v]
+        let comp = []
+        while true
+          let w = stack[-1]
+          pop(stack)
+          delete(on_stack, w)
+          push(comp, w)
+          if w == v
+            break
+          end
+        end
+        push(raw_sccs, comp)
+      end
+    end
+
+    for fd in fn_defs
+      if indices[fd.name] == nil
+        strongconnect(fd.name)
+      end
+    end
+
+    # Viability filter: every member must be merge-eligible. If any member
+    # disqualifies, the whole SCC is left as separate fn_defs (stack cliff
+    # remains for that SCC, but the broker case has none of these warts).
+    for comp in raw_sccs
+      if len(comp) < 2
+        continue
+      end
+      let viable = true
+      let why = ""
+      for name in comp
+        let fd = name_to_fn[name]
+        if fd == nil
+          viable = false
+          why = "missing fn_def"
+          break
+        end
+        if fd.rest_param != nil
+          viable = false
+          why = "{name} has a rest parameter"
+          break
+        end
+        if fd.defaults != nil
+          for d in fd.defaults
+            if d != nil
+              viable = false
+              why = "{name} has default arguments"
+              break
+            end
+          end
+        end
+        if not viable
+          break
+        end
+        # Mirrors GEM_MAX_TAIL_ARGS in runtime/gem.h. Hardcoded here to keep
+        # the compiler self-hosting without parsing C; bump both if needed.
+        if len(fd.params) > 16
+          viable = false
+          why = "{name} has more than 16 parameters"
+          break
+        end
+        # Mutated-captured params live in malloc-backed boxes that the body
+        # creates per-iteration. Trampolining across two such boxes would
+        # leak. Bail conservatively — none of the broker's writer/handle_*
+        # fns box their params, so this matters only for an unusual closure
+        # pattern across a tail cycle.
+        let scope_vars = sorted_array_to_set(fd.params)
+        let cap_writes = find_capture_writes_in_scope(fd.body, scope_vars)
+        let any_boxed = false
+        for p in fd.params
+          if set_contains(cap_writes, p)
+            any_boxed = true
+            break
+          end
+        end
+        if any_boxed
+          viable = false
+          why = "{name} has a parameter captured-and-mutated by an inner closure"
+          break
+        end
+        # Direct-TCO already bails when the fn name is in its own body's
+        # scope_vars (a `let foo = ...` shadowing). For SCC merging we keep
+        # the same restriction so the wrapper's name stays callable.
+        if set_contains(scope_vars, fd.name)
+          viable = false
+          why = "{name} shadows itself in its body"
+          break
+        end
+      end
+      if not viable
+        # Conservative: skip silently for now. (Future: surface as a note
+        # so users can refactor an SCC into mergeable shape.)
+        continue
+      end
+      let sid = scc_counter
+      scc_counter += 1
+      # Stable sort: emit in source order. comp from Tarjan is in
+      # post-order; sort by appearance in fn_defs for determinism.
+      let comp_set = {}
+      for name in comp
+        set_add(comp_set, name)
+      end
+      let order = {}
+      let i = 0
+      for fd in fn_defs
+        if set_contains(comp_set, fd.name)
+          order[fd.name] = i
+        end
+        i += 1
+      end
+      let members = []
+      for name in comp
+        push(members, name)
+      end
+      # Insertion sort by `order[name]`.
+      let n = len(members)
+      let j = 1
+      while j < n
+        let cur = members[j]
+        let cur_order = order[cur]
+        let k = j - 1
+        while k >= 0 and order[members[k]] > cur_order
+          members[k + 1] = members[k]
+          k -= 1
+        end
+        members[k + 1] = cur
+        j += 1
+      end
+      scc_id_to_members[sid] = members
+      let any_pt = false
+      for name in members
+        scc_member_to_id[name] = sid
+        if set_contains(process_tail_fns, name)
+          any_pt = true
+        end
+      end
+      # Process-tail analysis is uniform across an all-tail cycle reachable
+      # from a seed (mark_process_tail's BFS visits every member). So
+      # any_pt ⇒ all_pt. Cache the bit on the SCC for the wrapper emitter.
+      scc_id_is_pt[sid] = any_pt
+    end
   end
 
   emit_tco_continue = fn(call_node, indent)
@@ -2762,6 +3004,80 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
     end
     buf_push(b, "{p}continue;")
+    to_string(b)
+  end
+
+  # ─── SCC mutual-TCO trampoline emit ───
+  #
+  # Replaces what would be a real C call to a sibling SCC member at a
+  # tail-position site. Compiles the args, writes them into the global
+  # TLB, sets `gem_tail_fn = gem_fn_<target>_body`, pops the body's
+  # frame (pushed at body entry, balanced here), and returns GEM_NIL.
+  # The wrapper around the body sees the non-NULL marker and dispatches
+  # the next body — collapsing the C-stack growth that would otherwise
+  # accumulate per intra-SCC tail call.
+  emit_scc_tail_call = fn(call_node, target_name, indent)
+    let p = pad_for(indent)
+    let b = buf_new()
+    let args = call_node.args
+    let arg_temps = []
+    for i = 0, len(args)
+      let r = compile_expr(args[i])
+      let t = tmp()
+      buf_push(b, r.setup)
+      buf_push(b, "{p}GemVal {t} = {r.expr};\n")
+      push(arg_temps, t)
+    end
+    for i = 0, len(arg_temps)
+      buf_push(b, "{p}gem_tail_args[{i}] = {arg_temps[i]};\n")
+    end
+    buf_push(b, "{p}gem_tail_argc = {len(arg_temps)};\n")
+    buf_push(b, "{p}gem_tail_env = NULL;\n")
+    buf_push(b, "{p}gem_tail_fn = gem_fn_{target_name}_body;\n")
+    buf_push(b, pop_str(p))
+    buf_push(b, "{p}return GEM_NIL;")
+    to_string(b)
+  end
+
+  # ─── SCC wrapper emit ───
+  #
+  # Emits the trampoline wrapper as `gem_fn_<name>` for an SCC member.
+  # The wrapper does not push a frame (the body pushes its own); on each
+  # iteration it calls the next body via the TLB-set fn pointer. Between
+  # iterations it arena-resets and yields, mirroring direct-TCO's per-
+  # back-edge reset semantics.
+  scc_wrapper_for = fn(node, sid)
+    let name = node.name
+    let is_pt = scc_id_is_pt[sid] == true
+    let b = buf_new()
+    buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
+    buf_push(b, "    GemFnPtr _next_fn = gem_fn_{name}_body;\n")
+    buf_push(b, "    void *_next_env = _env;\n")
+    buf_push(b, "    GemVal *_next_args = args;\n")
+    buf_push(b, "    int _next_argc = argc;\n")
+    buf_push(b, "    GemVal _result;\n")
+    buf_push(b, "    while (1) \{\n")
+    buf_push(b, "        gem_tail_fn = NULL;\n")
+    buf_push(b, "        _result = _next_fn(_next_env, _next_args, _next_argc);\n")
+    buf_push(b, "        if (gem_tail_fn == NULL) break;\n")
+    buf_push(b, "        _next_fn = gem_tail_fn;\n")
+    buf_push(b, "        _next_env = gem_tail_env;\n")
+    buf_push(b, "        _next_argc = gem_tail_argc;\n")
+    buf_push(b, "        _next_args = gem_tail_args;\n")
+    if is_pt
+      buf_push(b, "        if (gem_current_pid >= 0 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
+    else
+      buf_push(b, "        if (gem_current_pid >= 0 && gem_call_depth - gem_proc_table[gem_current_pid].entry_call_depth <= 2 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
+    end
+    buf_push(b, "            GemVal *_roots[GEM_MAX_TAIL_ARGS];\n")
+    buf_push(b, "            int _n = _next_argc < GEM_MAX_TAIL_ARGS ? _next_argc : GEM_MAX_TAIL_ARGS;\n")
+    buf_push(b, "            for (int _i = 0; _i < _n; _i++) _roots[_i] = &gem_tail_args[_i];\n")
+    buf_push(b, "            gem_arena_reset_with_roots(_roots, _n);\n")
+    buf_push(b, "        }\n")
+    buf_push(b, "        gem_yield_check();\n")
+    buf_push(b, "    }\n")
+    buf_push(b, "    return _result;\n")
+    buf_push(b, "}")
     to_string(b)
   end
 
@@ -3605,6 +3921,29 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
       if is_node(node, "return") and node.value != nil and is_node(node.value, "call") and is_node(node.value.func, "var") and node.value.func.name == tco_fn_name and not set_contains(local_names, tco_fn_name)
         return line_dir + emit_tco_continue(node.value, indent)
+      end
+    end
+
+    # Mutual-TCO: if we're inside an SCC member's body and this is a tail
+    # call to a sibling member (not shadowed locally), trampoline it via
+    # the global TLB instead of emitting a real C call. The wrapper around
+    # gem_fn_<name>_body sees the marker and dispatches the next body.
+    if current_scc_id != nil
+      let scc_call_target = nil
+      if is_node(node, "call") and is_node(node.func, "var")
+        scc_call_target = node.func.name
+      elif is_node(node, "return") and node.value != nil and is_node(node.value, "call") and is_node(node.value.func, "var")
+        scc_call_target = node.value.func.name
+      end
+      if scc_call_target != nil and not set_contains(local_names, scc_call_target)
+        let target_sid = scc_member_to_id[scc_call_target]
+        if target_sid == current_scc_id and scc_call_target != tco_fn_name
+          let call_node = node
+          if is_node(node, "return")
+            call_node = node.value
+          end
+          return line_dir + emit_scc_tail_call(call_node, scc_call_target, indent)
+        end
       end
     end
 
@@ -4650,8 +4989,22 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       tco_is_process_tail = set_contains(process_tail_fns, name)
     end
 
+    # ─── SCC member detection ───
+    # If `name` is in a viable mutual-TCO SCC, emit the body as
+    # `gem_fn_<name>_body` and a thin trampoline wrapper as the
+    # public `gem_fn_<name>`. Direct-self TCO inside the body still
+    # works (faster than trampolining); only intra-SCC tail calls to
+    # SIBLINGS go through the trampoline marker.
+    let scc_id = scc_member_to_id[name]
+    let saved_scc = current_scc_id
+    let body_fn_name = "gem_fn_{name}"
+    if scc_id != nil
+      current_scc_id = scc_id
+      body_fn_name = "gem_fn_{name}_body"
+    end
+
     let b = buf_new()
-    buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
+    buf_push(b, "static GemVal {body_fn_name}(void *_env, GemVal *args, int argc) \{\n")
 
     if node.line != nil
       buf_push(b, "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n")
@@ -4694,6 +5047,18 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       tco_captured = nil
       tco_boxed = nil
       tco_is_process_tail = false
+    end
+
+    # ─── SCC trampoline wrapper ───
+    # Public `gem_fn_<name>` calls `gem_fn_<name>_body` in a loop, redispatching
+    # whenever the body exits via the mutual-TCO TLB marker. The body pushes/pops
+    # its own frame, so traces attribute correctly to the currently-executing
+    # member. Per-iteration arena reset mirrors the direct-TCO reset, gated the
+    # same way (unconditional for process_tail SCCs, depth-2 fenced otherwise).
+    if scc_id != nil
+      buf_push(b, "\n\n")
+      buf_push(b, scc_wrapper_for(node, scc_id))
+      current_scc_id = saved_scc
     end
 
     boxed_vars = saved_boxed
@@ -4889,6 +5254,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       set_add(defined_fns, fd.name)
       let decl = "static GemVal gem_fn_{fd.name}(void *_env, GemVal *args, int argc);"
       push(forward_decls, decl)
+      # SCC members get an extra `_body` decl so the wrapper and other SCC
+      # members' marker emissions can reference the body directly.
+      if scc_member_to_id[fd.name] != nil
+        push(forward_decls, "static GemVal gem_fn_{fd.name}_body(void *_env, GemVal *args, int argc);")
+      end
     end
 
     # Collect top-level variable names and compute which are captured.

@@ -145,6 +145,23 @@ Replaced the runtime depth-2 fence with a compile-time `mark_process_tail` pass 
 
 **Follow-up**: better warning cause-attribution. Today the warning fires on the demoted TCO function with a generic "reachable from non-tail context" message. Naming the offending non-tail call-site (file:line of the caller) would make the diagnostic actionable. Low priority — no demotions exist in the current codebase.
 
+### Mutual TCO via tail-edge SCC trampoline ✓ Done (2026-05-10)
+Direct self-recursive tail calls were already collapsed into `while(1) { ... continue; }` by `is_self_tail_call`. Mutual cycles — `a → tail b → tail a`, possibly through 3+ functions — were not, so the broker's `writer_loop ↔ handle_frame ↔ handle_<command>` 7-fn cycle hit a deterministic 175-frame ceiling per connection (see `examples/stomp_broker/NOTES.md` "Milestone 6: lived experience"). Compiler now finds these cycles statically and emits a tiny runtime trampoline.
+
+**Mechanism**:
+1. **SCC detection** (`find_tail_call_sccs` in `compiler/codegen.gem`). Reuses `mark_process_tail`'s already-built tail-edge graph (`caller_records[fn:NAME].tail_callees`), restricts to fn_def→fn_def edges, runs Tarjan's SCC. Components of size ≥ 2 are candidates; size-1 stays under the existing direct-self path.
+2. **Viability filter**. Per SCC, every member must have: no `rest_param`, no defaults, no boxed (mutated-captured) params, no name-shadow with its own body, and ≤ `GEM_MAX_TAIL_ARGS` (16) parameters. Conservative — bails the whole SCC silently if any member disqualifies. The broker case clears all conditions.
+3. **Body + wrapper emission** (`compile_fn`, `scc_wrapper_for`). For each viable SCC member, the body emits as `gem_fn_<name>_body` with the original direct-self TCO `while(1)` intact. The public `gem_fn_<name>` is replaced with a thin trampoline loop: `while (1) { _gem_tail_fn = NULL; _r = _next(env, args, argc); if (!_gem_tail_fn) break; _next = _gem_tail_fn; ... arena reset ... gem_yield_check(); }`.
+4. **Trampoline marker** (`emit_scc_tail_call`). At an intra-SCC tail call site, instead of a real C call, the body writes `gem_tail_fn`, `gem_tail_env`, `gem_tail_args[]`, `gem_tail_argc` (single global TLB in `runtime/gem_error.c`), pops its own frame, and returns `GEM_NIL`. The wrapper sees the non-NULL marker and dispatches the next body. Direct self-tail and out-of-SCC tail calls take the existing paths.
+5. **Single-global TLB safety**. The scheduler is cooperative; yields only happen inside body code. The TLB is set at the very last statement before return — there is no yield between TLB-set and return, and no yield between wrapper-read and dispatch. So a single global is sound; no per-process or per-coroutine TLB needed.
+6. **Per-iteration arena reset**. The wrapper's between-iteration reset mirrors `emit_tco_continue`'s gating: unconditional for SCCs whose members are all `process_tail` (every member of an all-tail cycle reachable from a seed is auto-marked PT by `mark_process_tail`); depth-2 fenced otherwise. Roots are `&gem_tail_args[0..argc]`.
+
+**Stack-trace fidelity**: the body — not the wrapper — pushes/pops its own frame. Across an intra-SCC trampoline transition, the previous body's frame pops before the next body's frame pushes, so the active top-of-stack frame always names the currently-executing member (unlike the merged-function-with-goto alternative I considered first, which would have shown the entry function for the entire cycle).
+
+**Result**: broker writer cycle iterates at constant stack depth. Sweep cells that previously died at delivered ≈ N×175 (`100×200 → 17,499 dead`, `50×500 → 8,749 dead`, `200×100 → dead`) now complete at the expected `100% delivered`. Cells that hit a *different* cliff (memory or scheduler-shape: `500×100 → still 26,999/50,000 dead`, `10×1000 → 5,439/10,000 dead`) survive 3× longer but still fall over — those are the next-tier bottleneck (mailbox unboundedness or process-table pressure), confirmed not the recursion ceiling. Full numbers in `examples/stomp_broker/NOTES.md` "Milestone 6, second pass". Bootstrap roundtrip clean on first pass; all 124 examples + LSP smokes green.
+
+**Bail-out telemetry**: silent today (the SCC simply isn't merged). Adding a "note: SCC `[a, b, c]` not merged because <reason>" diagnostic would help future users refactor toward mergeable shape. Deferred until a real SCC fails viability — the broker doesn't, and synthetic cases haven't surfaced.
+
 ### Eliminate user-visible recursion-as-iteration ✓ Done (2026-04-30)
 A `while true` loop in a process-tail context now resets the per-process arena at its back-edge using the same machinery as TCO. Recursion-as-iteration is no longer required for long-running processes.
 

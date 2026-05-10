@@ -107,6 +107,25 @@ typedef struct {
 extern GemFrame gem_call_stack[GEM_MAX_CALL_DEPTH];
 extern int gem_call_depth;
 
+/* ─── Mutual-TCO trampoline TLB ───
+ *
+ * The codegen-emitted body of an SCC member, when it makes an intra-SCC
+ * tail call, writes (gem_tail_fn, gem_tail_env, gem_tail_args, gem_tail_argc)
+ * and returns; the wrapper around the body loops while gem_tail_fn != NULL,
+ * dispatching the next body. A single global is safe because the scheduler
+ * is cooperative — yields only happen inside bodies, never between a
+ * tail-set and its return, never between the wrapper's read and dispatch.
+ *
+ * GEM_MAX_TAIL_ARGS sets a hard ceiling on parameter count for SCC merging;
+ * if any SCC member has more params, the SCC is left as-is (regular calls).
+ */
+#define GEM_MAX_TAIL_ARGS 16
+
+extern GemFnPtr gem_tail_fn;
+extern void *gem_tail_env;
+extern int gem_tail_argc;
+extern GemVal gem_tail_args[GEM_MAX_TAIL_ARGS];
+
 static inline void gem_push_frame(const char *name, const char *file, int line) {
     if (gem_call_depth < GEM_MAX_CALL_DEPTH) {
         gem_call_stack[gem_call_depth].name = name;
