@@ -22,6 +22,16 @@ RUN_DIR="$LOGS_DIR/$RUN_ID"
 mkdir -p "$RUN_DIR"
 echo "logs: $RUN_DIR"
 
+# Compile broker once up-front so each cell can run the binary directly.
+# Running the binary (instead of `gem broker.gem`) means $bpid IS the broker
+# process — `wait $bpid` then captures its exit status / signal cleanly,
+# and atexit handlers in the broker reach broker.log without the gem
+# launcher's diag line muddying the output.
+BROKER_BIN="$RUN_DIR/stomp_broker"
+echo "compiling broker → $BROKER_BIN"
+"$GEM_BIN" -o "$BROKER_BIN" "$BROKER_SRC" 2>&1 | tail -5
+[[ -x "$BROKER_BIN" ]] || { echo "broker compile failed"; exit 1; }
+
 cleanup_port() {
   lsof -ti :$PORT 2>/dev/null | xargs -r kill -9 2>/dev/null || true
   sleep 1
@@ -30,13 +40,27 @@ cleanup_port() {
 run_cell() {
   local label="$1" subs="$2" msgs="$3" body="$4" pause="$5"
   cleanup_port
-  "$GEM_BIN" "$BROKER_SRC" > "$RUN_DIR/${label}.broker.log" 2>&1 &
+  GEM_DIAG=1 "$BROKER_BIN" > "$RUN_DIR/${label}.broker.log" 2>&1 &
   local bpid=$!
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     nc -z localhost $PORT 2>/dev/null && break
     sleep 0.2
   done
   sleep 0.5
+
+  # RSS sampler — runs while broker is alive, writes CSV next to broker log.
+  local rss_csv="$RUN_DIR/${label}.rss.csv"
+  (
+    echo "elapsed_s,rss_kb"
+    start=$(date +%s)
+    while kill -0 "$bpid" 2>/dev/null; do
+      now=$(date +%s)
+      rss=$(ps -o rss= -p "$bpid" 2>/dev/null | tr -d ' ') || break
+      [[ -n "$rss" ]] && echo "$((now - start)),${rss}"
+      sleep 0.5
+    done
+  ) > "$rss_csv" &
+  local rss_pid=$!
 
   set +e
   "$PYTHON" "$HARNESS" fanout \
@@ -47,8 +71,40 @@ run_cell() {
   set -e
 
   local alive="yes"
-  kill -0 $bpid 2>/dev/null || alive="DIED"
+  local exit_status=""
+  if ! kill -0 $bpid 2>/dev/null; then
+    alive="DIED"
+    set +e
+    wait $bpid
+    local wstatus=$?
+    set -e
+    if (( wstatus > 128 )); then
+      local sig=$(( wstatus - 128 ))
+      local signame
+      signame=$(kill -l $sig 2>/dev/null || echo $sig)
+      exit_status="signal=$sig($signame)"
+    else
+      exit_status="exit=$wstatus"
+    fi
+  fi
   kill -9 $bpid 2>/dev/null || true
+  kill $rss_pid 2>/dev/null || true
+  wait $rss_pid 2>/dev/null || true
+
+  # RSS summary: peak + final sample (informative when broker dies mid-cell).
+  local rss_summary
+  rss_summary=$(awk -F, 'NR<=1{next}
+    NR==2{first=$2}
+    {if($2>peak)peak=$2; last=$2}
+    END {
+      if (NR<=1) { print "rss=(no samples)" }
+      else printf "rss start=%d peak=%d end=%d kB", first, peak, last
+    }' "$rss_csv" 2>/dev/null)
+
+  # gem_diag line (atexit) — captured into broker.log. Only present when
+  # the broker exited normally (atexit doesn't fire on signal-kill).
+  local diag_line
+  diag_line=$(grep -m1 '^gem_diag:' "$RUN_DIR/${label}.broker.log" 2>/dev/null || echo "")
 
   # Parse summary
   local summary
@@ -61,8 +117,8 @@ try:
 except Exception as e:
   print(f'(no result: {e})')
 ")
-  printf '  %-30s subs=%4s msgs=%4s body=%-5s pause=%5s  %s  broker=%s\n' \
-    "$label" "$subs" "$msgs" "$body" "$pause" "$summary" "$alive"
+  printf '  %-30s subs=%4s msgs=%4s body=%-5s pause=%5s  %s  broker=%s  %s  %s  %s\n' \
+    "$label" "$subs" "$msgs" "$body" "$pause" "$summary" "$alive" "$exit_status" "$rss_summary" "$diag_line"
 }
 
 echo "Sweep:"
