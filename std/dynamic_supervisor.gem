@@ -1,0 +1,161 @@
+# std/dynamic_supervisor — supervises anonymous, on-demand-spawned children.
+# Mirrors Erlang `simple_one_for_one` / Elixir `DynamicSupervisor`: every child
+# is started from the same template; the supervisor restarts crashed children
+# by replaying `template.start(args)` with the original args.
+
+fn check_intensity(state)
+  let now = time_ms()
+  push(state.restart_times, now)
+  let count = 0
+  for t in state.restart_times
+    if now - t <= state.max_seconds
+      count += 1
+    end
+  end
+  if count > state.max_restarts
+    error("max restart intensity reached")
+  end
+end
+
+fn find_child_index(children, pid)
+  for i = 0, len(children)
+    if children[i].pid == pid
+      return i
+    end
+  end
+  -1
+end
+
+fn dsup_loop(state)
+  receive
+  when {tag: "start_child", args: a, reply_to: rt, ref: r}
+    let pid = state.template.start(a)
+    monitor(pid)
+    push(state.children, {pid: pid, args: a})
+    send(rt, {tag: "child_started", ref: r, pid: pid})
+    dsup_loop(state)
+  when {tag: "terminate_child", pid: target_pid, reply_to: rt, ref: r}
+    let idx = find_child_index(state.children, target_pid)
+    if idx == -1
+      send(rt, {tag: "child_terminated", ref: r, ok: false})
+      dsup_loop(state)
+      return nil
+    end
+    # Remove first so the eventual DOWN is treated as already-handled and
+    # the main DOWN arm skips restart (find_child_index returns -1).
+    delete(state.children, idx)
+    kill(target_pid, "shutdown")
+    send(rt, {tag: "child_terminated", ref: r, ok: true})
+    dsup_loop(state)
+  when {tag: "DOWN", pid: dead_pid, reason: reason}
+    let idx = find_child_index(state.children, dead_pid)
+    if idx == -1
+      # Already removed (terminate_child path) or unknown pid.
+      dsup_loop(state)
+      return nil
+    end
+    let child = state.children[idx]
+    let restart = state.template.restart
+    let should_restart = false
+    if restart == "permanent"
+      should_restart = true
+    elif restart == "transient"
+      if reason != "normal" and reason != "shutdown"
+        should_restart = true
+      end
+    end
+    if not should_restart
+      delete(state.children, idx)
+      dsup_loop(state)
+      return nil
+    end
+    check_intensity(state)
+    let new_pid = state.template.start(child.args)
+    monitor(new_pid)
+    state.children[idx] = {pid: new_pid, args: child.args}
+    dsup_loop(state)
+  when {tag: "which_children", reply_to: rt, ref: r}
+    let result = []
+    for c in state.children
+      push(result, {pid: c.pid, args: c.args})
+    end
+    send(rt, {tag: "children_list", ref: r, children: result})
+    dsup_loop(state)
+  end
+end
+
+fn start({child, max_restarts = 3, max_seconds = 5000, name = nil})
+  let template = child
+  let mr = max_restarts
+  let ms = max_seconds
+  let sup_name = name
+
+  let restart_kind = "permanent"
+  if has_key(template, "restart")
+    restart_kind = template.restart
+  end
+  let resolved_template = {start: template.start, restart: restart_kind}
+
+  let sup_pid = spawn(fn()
+    if sup_name != nil
+      register(sup_name, self())
+    end
+    let state = {
+      template: resolved_template,
+      children: [],
+      max_restarts: mr,
+      max_seconds: ms,
+      restart_times: []
+    }
+    dsup_loop(state)
+  end)
+
+  {pid: sup_pid}
+end
+
+fn start_child(target, args)
+  let r = make_ref()
+  let pid = nil
+  if type(target) == "table"
+    pid = target.pid
+  else
+    pid = target
+  end
+  send(pid, {tag: "start_child", args: args, reply_to: self(), ref: r})
+  receive
+  when {tag: "child_started", pid: child_pid}
+    child_pid
+  end
+end
+
+fn terminate_child(target, child_pid)
+  let r = make_ref()
+  let pid = nil
+  if type(target) == "table"
+    pid = target.pid
+  else
+    pid = target
+  end
+  send(pid, {tag: "terminate_child", pid: child_pid, reply_to: self(), ref: r})
+  receive
+  when {tag: "child_terminated", ok: ok}
+    ok
+  end
+end
+
+fn which_children(target)
+  let r = make_ref()
+  let pid = nil
+  if type(target) == "table"
+    pid = target.pid
+  else
+    pid = target
+  end
+  send(pid, {tag: "which_children", reply_to: self(), ref: r})
+  receive
+  when {tag: "children_list", children: children}
+    children
+  end
+end
+
+export start, start_child, terminate_child, which_children

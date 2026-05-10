@@ -19,7 +19,7 @@ For example:
 ```
 compiler/             # self-hosting compiler (lexer, parser, AST, errors, liveness, lower, fold, codegen, loader, main)
 lsp/                  # language server: main (entry), rpc (framing+types), server (loop), handlers (lifecycle+textDocument), doc (per-uri process). Dispatched from compiler/main.gem when argv[1] == "lsp"
-std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, supervisor, gen_server, test)
+std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, supervisor, dynamic_supervisor, gen_server, test)
 runtime/              # C runtime — split by category:
   gem.h               #   public API, tagged values, process table, scheduler decls
   gem_core.c          #   value constructors, table internals, equality

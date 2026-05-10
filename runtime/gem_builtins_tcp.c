@@ -225,8 +225,8 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
                 gem_io_yield(fd, 0);
                 if (proc->timed_out) {
                     proc->timed_out = 0;
-                    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = ""; r.slen = 0;
-                    return r;
+                    /* nil distinguishes timeout from EOF (which returns ""). */
+                    return GEM_NIL;
                 }
                 continue;
             }

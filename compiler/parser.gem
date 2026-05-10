@@ -555,14 +555,29 @@ fn make_parser(tokens, source, file, sink)
 
       # Dot access: node.field (field can be a name or keyword)
       if peek().type == "."
+        let dot_tok = tokens[pos]
         advance()
         let field_tok = peek()
-        if field_tok.type == "NAME"
-          advance()
-        else
-          # Allow keywords as field names
-          advance()
+        # Field name must be a NAME or an alphabetic keyword (e.g. obj.match,
+        # from.ref). Reject punctuation/operator tokens — most importantly the
+        # second '.' in '..', which currently silently parses as `obj.<.>` and
+        # crashes at runtime ("field access on non-table").
+        let c0 = ""
+        if len(field_tok.type) > 0
+          c0 = field_tok.type[0]
         end
+        let is_keyword_tok = c0 >= "a" and c0 <= "z"
+        if field_tok.type != "NAME" and not is_keyword_tok
+          if field_tok.type == "."
+            report(dot_tok.line, dot_tok.col, 2, "'..' is not an operator", "Gem uses '+' for both arithmetic and string concatenation")
+          else
+            report(field_tok.line, field_tok.col, len(field_tok.value), "expected field name after '.', got '{field_tok.type}'", nil)
+          end
+          advance()
+          node = make_dot(node, "", field_tok.line)
+          continue
+        end
+        advance()
         node = make_dot(node, field_tok.value, field_tok.line)
         continue
       end

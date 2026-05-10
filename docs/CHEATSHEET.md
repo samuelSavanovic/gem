@@ -133,6 +133,7 @@ end
 # std/mime       lookup, ext
 # std/sqlite     open, close, exec, query, last_id, changes  (wraps sqlite_* builtins)
 # std/supervisor start, which_children
+# std/dynamic_supervisor  start, start_child, terminate_child, which_children
 # std/gen_server start, call, cast, reply
 # std/test       case, assert, assert_eq, assert_neq, assert_throws, run
 

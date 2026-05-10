@@ -870,7 +870,7 @@ end)
 
 ## Built-in Functions
 
-`print(args...)` — prints values separated by spaces, followed by a newline.
+`print(args...)` — prints values separated by spaces, followed by a newline. Stdout is line-buffered, so each `print` flushes — long-running processes don't lose output on `SIGKILL` even when stdout is redirected to a pipe or file.
 
 `error(msg)` — prints the message with file and line info to stderr, prints a call stack trace, and halts (`exit(1)`).
 
@@ -1038,7 +1038,7 @@ end
 
 `tcp_accept(socket)` — accepts an incoming connection on a listening socket. Returns the new connection's file descriptor as an integer. When called from a spawned process, yields to the scheduler on EAGAIN and resumes when a connection is ready. Raises an error on failure.
 
-`tcp_read(socket[, max_bytes[, timeout_ms]])` — reads up to `max_bytes` bytes from a connected socket (default 4096). Returns the data as a string. Returns an empty string `""` when the remote end has closed the connection (EOF) or when the optional `timeout_ms` expires with no data available. When called from a spawned process, yields to the scheduler on EAGAIN and resumes when data is available or the timeout deadline is reached. The timeout is only supported from within spawned processes (the scheduler manages the deadline via the process's `deadline_ms` field).
+`tcp_read(socket[, max_bytes[, timeout_ms]])` — reads up to `max_bytes` bytes from a connected socket (default 4096). Returns the data as a string on success, `""` when the remote end has closed the connection (EOF or `ECONNRESET`), or `nil` when the optional `timeout_ms` expires with no data available. Callers without a timeout never see `nil`. When called from a spawned process, yields to the scheduler on EAGAIN and resumes when data is available or the timeout deadline is reached. The timeout is only supported from within spawned processes (the scheduler manages the deadline via the process's `deadline_ms` field).
 
 `tcp_write(socket, data)` — writes the string `data` to a connected socket. Writes all bytes (loops internally on partial writes). Returns the number of bytes written as an integer. When called from a spawned process, yields to the scheduler on EAGAIN and resumes when the socket is writable.
 
@@ -1304,6 +1304,13 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
   - `max_seconds` — time window in milliseconds for restart intensity (default 5000).
   - `name` — optional string name to register the supervisor process.
 - `supervisor.which_children(pid_or_name)` — query a supervisor for its children. Returns an array of `{id, pid, restart}` tables. Must be called from a spawned process (uses `receive`).
+
+`std/dynamic_supervisor` — exports `dynamic_supervisor` table. For workloads where children are spawned on demand from a single template (worker pools, per-connection processes, lazily-created topic actors), instead of being declared up front. Restart policies and intensity (`max_restarts` / `max_seconds`) match `std/supervisor`. Strategy is fixed at one-for-one; failed children restart with their original `args`.
+
+- `dynamic_supervisor.start({child, max_restarts, max_seconds, name})` — start a dynamic supervisor. Returns `{pid: <pid>}`. The `child` template is `{start: <fn>, restart: <string>}` where `start` takes one argument (the per-child args, packed into a table or any value the caller chose) and must spawn-and-return a pid; `restart` is `"permanent"` (default), `"transient"`, or `"temporary"`.
+- `dynamic_supervisor.start_child(target, args)` — ask the supervisor to spawn a child by calling `template.start(args)`. The supervisor monitors the child and stores `args` so it can replay the start on crash. Returns the new child pid.
+- `dynamic_supervisor.terminate_child(target, pid)` — stop the named child cleanly (`kill(pid, "shutdown")`) and remove it from the supervisor's child set. Returns `true` if the child was known, `false` otherwise.
+- `dynamic_supervisor.which_children(target)` — returns an array of `{pid, args}` tables, one per live child.
 
 `std/gen_server` — exports `gen_server` table. OTP-style synchronous server abstraction. Load with `load "std/gen_server"`.
 
