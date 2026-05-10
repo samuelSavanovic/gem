@@ -86,7 +86,13 @@ GemVal gem_lt(GemVal a, GemVal b) {
         double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
         return gem_bool(fa < fb);
     }
-    if (a.type == VAL_STRING && b.type == VAL_STRING) return gem_bool(strcmp(a.sval, b.sval) < 0);
+    if (a.type == VAL_STRING && b.type == VAL_STRING) {
+        size_t la = (size_t)a.slen, lb = (size_t)b.slen;
+        size_t n = la < lb ? la : lb;
+        int cmp = memcmp(a.sval, b.sval, n);
+        if (cmp != 0) return gem_bool(cmp < 0);
+        return gem_bool(la < lb);
+    }
     { char buf[128]; snprintf(buf, sizeof(buf), "type error in <: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
 

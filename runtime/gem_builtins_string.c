@@ -16,32 +16,34 @@ GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc) {
     const char *s = args[0].sval;
     const char *old = args[1].sval;
     const char *new_s = args[2].sval;
-    size_t s_len = strlen(s);
-    size_t old_len = strlen(old);
-    size_t new_len = strlen(new_s);
+    size_t s_len = (size_t)args[0].slen;
+    size_t old_len = (size_t)args[1].slen;
+    size_t new_len = (size_t)args[2].slen;
 
     if (old_len == 0) return args[0]; /* empty pattern — return original */
 
-    /* Count occurrences to pre-allocate */
+    /* Count occurrences (binary-safe; non-overlapping). */
     int count = 0;
-    const char *p = s;
-    while ((p = strstr(p, old)) != NULL) {
-        count++;
-        p += old_len;
+    size_t i = 0;
+    while (i + old_len <= s_len) {
+        if (memcmp(s + i, old, old_len) == 0) { count++; i += old_len; }
+        else { i++; }
     }
     if (count == 0) return args[0];
 
+    /* Modular arithmetic in size_t: when new_len < old_len, the subtraction
+     * wraps but the final sum lands at the correct non-negative result. */
     size_t result_len = s_len + (size_t)count * (new_len - old_len);
     char *result = (char *)gem_alloc(result_len + 1);
     char *dst = result;
-    p = s;
-    while (*p) {
-        if (strncmp(p, old, old_len) == 0) {
+    i = 0;
+    while (i < s_len) {
+        if (i + old_len <= s_len && memcmp(s + i, old, old_len) == 0) {
             memcpy(dst, new_s, new_len);
             dst += new_len;
-            p += old_len;
+            i += old_len;
         } else {
-            *dst++ = *p++;
+            *dst++ = s[i++];
         }
     }
     *dst = '\0';

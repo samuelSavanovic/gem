@@ -1,0 +1,39 @@
+# Binary-safe string operations across embedded NULs.
+# Regression test for VAL_STRING ops that previously used strlen/strcmp/strstr
+# and silently truncated at the first \0:
+#   - gem_val_eq, gem_lt (gem_core / gem_ops)
+#   - sort default cmp (gem_builtins_collection)
+#   - str_replace, path_join (gem_builtins_string / gem_builtins_io)
+
+let nul = chr(0)
+let a = "x" + nul + "y"
+let b = "x" + nul + "z"
+
+# Length is byte count (slen), not strlen.
+print(len(a))                                   # 3
+print(len(b))                                   # 3
+
+# Equality must look past the NUL.
+print(a == "x")                                 # false
+print(a == ("x" + nul + "y"))                   # true
+print(a == b)                                   # false
+
+# Ordering must look past the NUL.
+print(a < b)                                    # true
+print(b < a)                                    # false
+
+# sort: two strings differing only after an embedded NUL must order correctly.
+let xs = [b, a]
+sort(xs)
+print(xs[0] == a)                               # true
+print(xs[1] == b)                               # true
+
+# str_replace where the pattern itself contains a NUL.
+let s = "aa" + nul + "bb" + nul + "cc"
+let r = str_replace(s, "a" + nul, "X")
+print(len(r))                                   # 7  ("aXbb\0cc")
+print(substr(r, 2) == ("bb" + nul + "cc"))      # true
+
+# path_join must not truncate either side at an embedded NUL.
+let p = path_join("d" + nul + "x", "f" + nul + "y")
+print(len(p))                                   # 7  "d\0x" + "/" + "f\0y"
