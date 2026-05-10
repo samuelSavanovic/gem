@@ -71,3 +71,16 @@ Today, wrapping a C library that uses small structs by value (raylib's `Vector2`
 ## Debugger / breakpoints (P2)
 
 Stack traces on `error()` are good; there's no interactive step-through, breakpoint, or variable-inspection story. Pairs with `LSP_ROADMAP.md` but is a separate capability — typically a DAP (Debug Adapter Protocol) server that the runtime cooperates with (instrumented `gem_set_line` callbacks, ability to pause a coroutine, mailbox/process inspection).
+
+## Deep non-tail recursion ceiling (P2)
+
+Every Gem process runs on a fixed-size minicoro stack (currently 256KB, bumped from 16KB for LSP). Only **direct** self-recursive tail calls are TCO'd into `while(1)` loops by the compiler (`is_self_tail_call` in `compiler/codegen.gem` keys on `fn_name == callee.name`). Everything else consumes stack: mutual recursion (`a` tail-calls `b` tail-calls `a` — common in recursive-descent parsers split across helpers), recursion-in-expression-position, and deep visitor patterns over user data. On overflow the program segfaults rather than throwing a catchable error. The 256KB budget is comfortable for typical code but is a real cliff: a recursive descent over a pathologically nested input (deep JSON, a deeply nested AST) can hit it.
+
+Two options worth considering when this becomes pressing:
+
+- **Compiler-side detection.** Flow-analyze functions for non-tail recursive calls; warn when a call chain is recursive and not in tail position. Cheap to add (we already do liveness analysis), surfaces the cliff at compile time, doesn't change runtime behavior. Doesn't help when the recursion depth is data-dependent.
+- **Growable stacks.** Replace fixed-size minicoro stacks with a guard-page + SIGSEGV-handler scheme that mmap's more pages on overflow, or a segmented/split-stack scheme. Eliminates the cliff entirely; cost is per-process complexity (signal handler reentrancy, vm_map churn) and minicoro doesn't ship with this — would need a custom allocator or a fork.
+
+A catchable stack-overflow error (raise via `error()` from the SIGSEGV handler when a guard page faults) is a middle option: cheaper than growable stacks, lets `pcall` recover, but still bounds depth at whatever the reservation is.
+
+**Why P2:** no user has hit this yet, TCO + 256KB headroom covers anything written so far. Becomes interesting if/when the compiler or std grows a recursive descent over untrusted input, or if Gem programs start being driven by user-supplied recursive data structures.
