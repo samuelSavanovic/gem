@@ -51,6 +51,7 @@ docs/LSP_ROADMAP.md       # Gem LSP plan + deferred v2 features
 editors/vscode/       # VS Code extension (TextMate grammar)
 editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
 benchmarks/           # wrk harness for examples/bookmark_app (run.sh) + node_baseline reference impl
+                      #   stomp/                 — Python STOMP load harness for examples/stomp_broker (M6 lived-experience numbers)
 ```
 
 ## Build, Test, Bootstrap

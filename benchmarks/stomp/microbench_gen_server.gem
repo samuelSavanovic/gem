@@ -1,0 +1,40 @@
+load "std/gen_server"
+
+# Probe: does a bare gen_server overflow its coroutine stack after N casts?
+#
+# The STOMP broker dies after ~175 publishes processed by the destination
+# gen_server, with minicoro printing "coroutine stack overflow" to stderr.
+# This script isolates that — no TCP, no destinations, no fanout, just a
+# gen_server that counts cast() messages. If the bug is in gen_server.loop
+# itself (TCO not collapsing the C stack across iterations), this will
+# reproduce.
+
+let mod = {
+  init: fn() {count: 0} end,
+  handle_call: fn(msg, from, state) {reply: state.count, state: state} end,
+  handle_cast: fn(msg, state)
+    let new_count = state.count + 1
+    if new_count % 25 == 0
+      write_stdout("server got cast #" + to_string(new_count) + "\n")
+    end
+    {state: {count: new_count}}
+  end,
+  handle_info: fn(msg, state) {state: state} end
+}
+
+let result = gen_server.start(mod)
+let pid = result.pid
+
+let n = 500
+write_stdout("sending " + to_string(n) + " casts to pid " + to_string(pid) + "\n")
+
+let i = 0
+while i < n
+  gen_server.cast(pid, {tick: i})
+  i += 1
+end
+
+write_stdout("all casts sent. polling count via call.\n")
+sleep(2000)
+let final = gen_server.call(pid, "get")
+write_stdout("final count: " + to_string(final) + "\n")

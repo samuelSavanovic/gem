@@ -1,0 +1,86 @@
+
+# Microbench: cost of fanning out one MESSAGE-shaped table to N receivers.
+#
+# What we measure:
+#   - end-to-end time to send the same N-byte body in a frame-shaped
+#     table to K target processes via send().
+#   - per-send cost (= total / K), which exposes the deep-copy overhead.
+#
+# Each target is a tiny "drain" process that receives messages forever.
+# The publisher does a tight `for` loop over their pids and `send()`s
+# the same value to each. send() does a deep-copy into the target's
+# arena, so this isolates the copy cost from any wire I/O.
+
+fn drain_loop(count)
+  receive
+  when m
+    drain_loop(count + 1)
+  end
+end
+
+fn make_drains(k)
+  let pids = []
+  let i = 0
+  while i < k
+    push(pids, spawn(fn() drain_loop(0) end))
+    i += 1
+  end
+  pids
+end
+
+fn make_body(n)
+  build_string() do |add|
+    let i = 0
+    while i < n
+      add("x")
+      i += 1
+    end
+  end
+end
+
+fn one_run(k, body_size, n_msgs)
+  let pids = make_drains(k)
+  let body = make_body(body_size)
+
+  # MESSAGE-shaped frame, similar to what the broker puts on the wire.
+  let frame = {
+    command: "MESSAGE",
+    headers: {destination: "/topic/bench", "message-id": "1", subscription: "s0"},
+    body: body
+  }
+
+  let t0 = epoch_ms()
+  let m = 0
+  while m < n_msgs
+    let i = 0
+    while i < k
+      send(pids[i], {tag: "deliver", frame: frame})
+      i += 1
+    end
+    m += 1
+  end
+  let dt_ms = epoch_ms() - t0
+
+  let total_sends = k * n_msgs
+  let per_send_us = (dt_ms * 1000) / total_sends
+  let per_msg_us = (dt_ms * 1000) / n_msgs
+  write_stdout("k=" + to_string(k) + " body=" + to_string(body_size) + " n_msgs=" + to_string(n_msgs) + " elapsed_ms=" + to_string(dt_ms) + " total_sends=" + to_string(total_sends) + " per_send_us=" + to_string(per_send_us) + " per_msg_us=" + to_string(per_msg_us) + "\n")
+end
+
+# Warmup
+one_run(10, 256, 50)
+
+write_stdout("--- sweep ---\n")
+
+# Vary K with fixed body
+one_run(  10, 256, 200)
+one_run(  50, 256, 200)
+one_run( 100, 256, 200)
+one_run( 200, 256, 200)
+one_run( 500, 256, 200)
+
+# Vary body with fixed K
+one_run( 100,  64, 200)
+one_run( 100, 256, 200)
+one_run( 100, 1024, 200)
+one_run( 100, 4096, 200)

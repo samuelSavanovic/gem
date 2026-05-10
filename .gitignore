@@ -16,5 +16,6 @@ test_build_string
 test_push_buf
 examples/bookmark_app/app
 benchmarks/logs/
+benchmarks/stomp/logs/
 .DS_Store
 RESUME_PROMPT.md

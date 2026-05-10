@@ -1,0 +1,71 @@
+# microbench_fanout_one — one config per run, given via argv.
+#
+# Usage: gem microbench_fanout_one.gem <k> <body_size> <n_msgs>
+
+fn drain_loop()
+  receive
+  when m
+    drain_loop()
+  end
+end
+
+fn make_drains(k)
+  let pids = []
+  let i = 0
+  while i < k
+    push(pids, spawn(fn() drain_loop() end))
+    i += 1
+  end
+  pids
+end
+
+fn make_body(n)
+  build_string() do |add|
+    let i = 0
+    while i < n
+      add("x")
+      i += 1
+    end
+  end
+end
+
+let args = argv()
+if len(args) < 4
+  write_stdout("usage: <gem> microbench_fanout_one.gem <k> <body> <n_msgs>\n")
+  return nil
+end
+
+let k = to_int(args[1])
+let body_size = to_int(args[2])
+let n_msgs = to_int(args[3])
+
+let pids = make_drains(k)
+let body = make_body(body_size)
+let frame = {
+  command: "MESSAGE",
+  headers: {destination: "/topic/bench", "message-id": "1", subscription: "s0"},
+  body: body
+}
+
+# Warmup: one round
+let i = 0
+while i < k
+  send(pids[i], {tag: "deliver", frame: frame})
+  i += 1
+end
+
+let t0 = epoch_ms()
+let m = 0
+while m < n_msgs
+  i = 0
+  while i < k
+    send(pids[i], {tag: "deliver", frame: frame})
+    i += 1
+  end
+  m += 1
+end
+let dt_ms = epoch_ms() - t0
+let total_sends = k * n_msgs
+let per_msg_us = (dt_ms * 1000) / n_msgs
+let per_send_us = (dt_ms * 1000) / total_sends
+write_stdout("k=" + to_string(k) + " body=" + to_string(body_size) + " n=" + to_string(n_msgs) + " ms=" + to_string(dt_ms) + " per_send_us=" + to_string(per_send_us) + " per_msg_us=" + to_string(per_msg_us) + "\n")
