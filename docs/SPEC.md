@@ -139,7 +139,7 @@ fn repeat(s, n = len(s))
 end
 ```
 
-Default parameters work in named functions, anonymous functions, and block parameters. Passing `nil` explicitly does *not* trigger the default — only omitting the argument does. Functions with default parameters are not eligible for tail call optimization.
+Default parameters work in named functions, anonymous functions, and block parameters. Passing `nil` explicitly does *not* trigger the default — only omitting the argument does. A default is evaluated at call time, each time the argument is omitted, and may refer to earlier parameters.
 
 ## Destructuring Parameters
 
@@ -166,7 +166,7 @@ set_cookie(resp, "sid", "abc", nil)      # same — nil is coerced to {}
 set_cookie(resp, "sid", "abc", {secure: true})
 ```
 
-Extra fields in the caller's table are ignored (partial match). Patterns are flat (no nested destructuring) and table-only — array-destructured parameters are not supported. Param destructuring composes with regular and rest parameters; functions using it are not TCO-eligible (same as default parameters).
+Extra fields in the caller's table are ignored (partial match). Patterns are flat (no nested destructuring) and table-only — array-destructured parameters are not supported. Param destructuring composes with regular and rest parameters, and with tail call optimization.
 
 ## Blocks
 
@@ -390,9 +390,9 @@ end
 loop(10000000, 0)         # works — would overflow without TCO
 ```
 
-TCO applies to named functions (`fn name(...)`) without rest, default, or block parameters. Anonymous functions and mutual recursion are not optimized. Non-tail calls (where the result is used in a further expression, e.g. `n * f(n-1)`) remain normal recursive calls.
+TCO applies to every named function (`fn name(...)`), including ones with default, rest, or destructured parameters. A self tail call behaves exactly like a real call: an omitted argument evaluates its default (seeing the new values of earlier parameters), extra arguments go into a fresh rest table, and a closure created in one iteration keeps that iteration's parameter bindings. Anonymous functions are not optimized. Non-tail calls (where the result is used in a further expression, e.g. `n * f(n-1)`) remain normal recursive calls.
 
-**Important:** only direct self-recursion is optimized. If `fn A` calls `fn B` which calls `fn A`, neither call is a TCO candidate — both grow the stack. Write long-running loops as direct self-recursion or use `while`. Splitting a loop body into helper functions that recurse back to the main loop will leak stack frames under sustained load.
+Mutual tail recursion between named functions (`fn A` tail-calls `fn B`, which tail-calls `fn A`, through any number of functions) is also run at constant stack depth, as long as no function in the cycle has rest or default parameters, a parameter that a nested closure assigns to, or more than 16 parameters. A cycle that does not qualify grows the stack on every call; write such a loop as direct self-recursion or use `while`.
 
 ## Long-Running Processes — Per-Iteration Arena Reset
 
@@ -438,7 +438,7 @@ The compiler emits a warning when it cannot prove a process-tail `while true` is
 - A live var is declared in a nested `if`/`match` arm rather than at the function or loop body level (the var has no addressable C local at the back-edge).
 - A `break` in the loop body (post-loop liveness is not yet supported; the analyser refuses).
 
-For TCO functions, the corresponding conditions are: a parameter captured by a nested closure (`any_captured` skip), or the function is not reachable from a process root via tail calls only (the compiler emits a `TCO function ... not reachable from a process root` warning).
+For TCO functions, the corresponding condition is that the function is not reachable from a process root via tail calls only (the compiler emits a `TCO function ... not reachable from a process root` warning).
 
 `while true` outside a process-tail context (e.g. a finite REPL loop with `break`, or a one-shot helper) is silent — no warning, no reset. It's the right choice when the loop terminates promptly.
 

@@ -256,7 +256,6 @@ fn make_parser(tokens, source, file, sink)
         let pname = "_pdestr{gensym_counter}"
         push(params, pname)
 
-        let any_default = false
         if peek().type == "="
           advance()
           let outer_default = parse_expr()
@@ -264,7 +263,6 @@ fn make_parser(tokens, source, file, sink)
           # then *also* coerce explicit nil to the same default at body start.
           push(defaults, outer_default)
           has_default = true
-          any_default = true
           push(prelude, make_if(
             make_binop("==", make_var(pname), make_nil_node()),
             [make_assign(pname, outer_default, dline)],
@@ -283,7 +281,6 @@ fn make_parser(tokens, source, file, sink)
         for di = 0, len(dnames)
           push(prelude, make_let(dnames[di], make_dot(make_var(pname), dnames[di]), dline))
           if ddflts[di] != nil
-            any_default = true
             push(prelude, make_if(
               make_binop("==", make_var(dnames[di]), make_nil_node()),
               [make_assign(dnames[di], ddflts[di], dline)],
@@ -293,11 +290,9 @@ fn make_parser(tokens, source, file, sink)
           end
         end
 
-        # Force has_defs = true in codegen so TCO is suppressed for fns with
-        # destructured-param defaults — same constraint as regular defaults.
-        if any_default and defaults[len(defaults) - 1] == nil
-          defaults[len(defaults) - 1] = make_nil_node()
-        end
+        # The prelude is part of the body, so it reruns on every iteration of
+        # a TCO'd self tail call; an outer `= <default>` goes through the
+        # regular param-default path, which TCO also handles.
 
         if peek().type != ","
           break

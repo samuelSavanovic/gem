@@ -1,0 +1,240 @@
+# Self-tail-call optimization for functions with default, rest, and
+# destructured parameters. A TCO'd self tail call behaves exactly like a real
+# call: an omitted argument evaluates its default at call time (in parameter
+# order, seeing this call's earlier parameters), an explicit nil does not
+# trigger a plain default, and extra arguments land in a fresh rest table.
+
+# ── Defaults ──
+
+# Deep recursion with a default param (used to overflow the C stack).
+fn count(n, acc = 0)
+  if n == 0 then return acc end
+  count(n - 1, acc + 1)
+end
+print(count(1000000))
+
+# An omitted argument re-evaluates its default on every tail call.
+fn countdown(n, acc = 100)
+  if n == 0 then return acc end
+  countdown(n - 1)
+end
+print(countdown(5, 7), countdown(0, 7))
+
+# A default may reference earlier params (this call's values); explicit nil
+# does not trigger it.
+fn steps(log, a, b = a * 10)
+  push(log, [a, b])
+  if a == 0 then return log end
+  if a == 2 then return steps(log, a - 1, nil) end
+  steps(log, a - 1)
+end
+print(steps([], 4))
+
+# A table default is a fresh table on every call.
+fn tables(keep, n, t = {})
+  push(keep, t)
+  t.n = n
+  if n == 0 then return keep end
+  tables(keep, n - 1)
+end
+let ns = []
+for t in tables([], 3)
+  push(ns, t.n)
+end
+print(ns)
+
+# Defaults are evaluated once per call, only when the arg is omitted.
+let hits = [0]
+let bump = fn()
+  hits[0] = hits[0] + 1
+  hits[0]
+end
+fn with_effect(n, f, v = f())
+  if n == 0 then return v end
+  with_effect(n - 1, f)
+end
+print(with_effect(3, bump), hits[0])
+print(with_effect(2, bump, "given"), hits[0])
+
+# All args omitted / zero-arg tail call.
+fn zz(a = 5, b = a + 1)
+  if a == 5 then return [a, b] end
+  zz()
+end
+print(zz(1, 1), zz(), zz(9))
+
+# Extra args with no rest param are evaluated (side effects) and dropped.
+fn extra(n, acc = 0)
+  if n == 0 then return acc end
+  extra(n - 1, acc + 1, bump())
+end
+hits[0] = 0
+print(extra(4), hits[0])
+
+# ── Rest params ──
+
+# 0, 1 and many extras; each iteration gets its own rest table.
+fn rests(log, n, ...xs)
+  push(log, xs)
+  push(xs, n)
+  if n == 0 then return log end
+  if n == 3 then return rests(log, n - 1) end
+  if n == 2 then return rests(log, n - 1, "a") end
+  rests(log, n - 1, "b", "c")
+end
+print(rests([], 4, "x", "y", "z"))
+
+fn sum_rest(n, acc, ...extra)
+  if n == 0 then return acc + len(extra) end
+  sum_rest(n - 1, acc + 1, n, n)
+end
+print(sum_rest(1000000, 0))
+
+# Default + rest together.
+fn mix(log, n, b = n * 2, ...r)
+  push(log, [n, b, len(r)])
+  if n == 0 then return log end
+  if n == 2 then return mix(log, n - 1) end
+  mix(log, n - 1, nil, "e1", "e2")
+end
+print(mix([], 3))
+
+# ── Destructured params ──
+
+fn dwalk(n, acc, {step = 1, mult = 1} = {})
+  if n <= 0 then return acc end
+  dwalk(n - step, acc + mult)
+end
+print(dwalk(1000000, 0))
+print(dwalk(10, 0, {step: 2, mult: 5}), dwalk(3, 0, nil), dwalk(9, 0, {step: 3}))
+
+# Bag passed as {}, nil, partial, full, and omitted across tail calls.
+fn dlog(log, n, {a = "A", b = "B"} = {})
+  push(log, a + b)
+  if n == 0 then return log end
+  if n == 4 then return dlog(log, n - 1) end
+  if n == 3 then return dlog(log, n - 1, nil) end
+  if n == 2 then return dlog(log, n - 1, {a: "x"}) end
+  if n == 1 then return dlog(log, n - 1, {a: "p", b: "q"}) end
+  dlog(log, n - 1, {})
+end
+print(dlog([], 5, {b: "z"}))
+
+# Destructured bag with per-field defaults but no outer default.
+fn fields({x = 0, y = 0}, n)
+  if n == 0 then return x + y end
+  fields({x: x + 1}, n - 1)
+end
+print(fields({y: 10}, 5))
+
+# ── Closures over defaulted / rest params ──
+
+fn capd(fs, n, k = n + 100)
+  push(fs, {get: fn() k end, inc: fn() k = k + 1000 end})
+  if n == 0 then return fs end
+  capd(fs, n - 1)
+end
+let cms = capd([], 2)
+cms[1].inc()
+print(cms[0].get(), cms[1].get(), cms[2].get())
+
+fn rbox(fs, n, ...r)
+  push(fs, {get: fn() r end, set: fn() r = ["set{n}"] end})
+  if n == 0 then return fs end
+  rbox(fs, n - 1, n)
+end
+let rb = rbox([], 2, "first")
+rb[0].set()
+print(rb[0].get(), rb[1].get(), rb[2].get())
+
+# ── Errors inside a default during a TCO iteration ──
+
+fn bad(n, d = error("boom at {n}"))
+  if n == 0 then return d end
+  bad(n - 1)
+end
+let r = pcall(fn() bad(3, "ok") end)
+print(r.ok, r.error)
+
+# ── Interactions ──
+
+# Mutual tail cycle where one member has defaults: the cycle is not merged,
+# but direct self TCO still applies.
+fn ping(n, acc = 0)
+  if n == 0 then return acc end
+  if n % 2 == 0 then return pong(n - 1, acc + 1) end
+  ping(n - 1, acc + 1)
+end
+fn pong(n, acc)
+  ping(n, acc)
+end
+print(ping(1000))
+
+# A rest-param member in a cycle.
+fn r1(n, ...xs)
+  if n == 0 then return len(xs) end
+  if n % 3 == 0 then return r2(n - 1) end
+  r1(n - 1, n, n)
+end
+fn r2(n)
+  r1(n, 1)
+end
+print(r1(999))
+
+# Tail calls inside match / receive arms.
+fn m(n, acc = [])
+  match n
+  when 0
+    return acc
+  else
+    push(acc, n)
+    m(n - 1, acc)
+  end
+end
+print(m(3))
+
+fn rx(count, total = 0)
+  if count == 0 then return total end
+  match receive()
+  when {v: v}
+    rx(count - 1, total + v)
+  end
+end
+let me = self()
+send(me, {v: 1})
+send(me, {v: 2})
+send(me, {v: 3})
+print(rx(3))
+
+# A default that names a global sees the global, not a body let that
+# shadows it.
+let limit = 7
+fn shadow(n, k = limit)
+  let limit = 100
+  if n == 0 then return [k, limit] end
+  shadow(n - 1)
+end
+print(shadow(3, 1))
+
+# A default that is a closure capturing an earlier param.
+fn closer(n, f = fn() n * 2 end)
+  if n == 0 then return f() end
+  if n == 1 then return f() end
+  closer(n - 1)
+end
+print(closer(5))
+
+# ── Inside a spawned process ──
+
+spawn do
+  # Copy the captured pid into a local before the deep calls: a spawn
+  # closure's captured env does not yet survive an arena reset at a
+  # callee's TCO back-edge (known issue, independent of this feature).
+  let parent = me
+  let a = count(1000000)
+  let b = sum_rest(1000000, 0)
+  let c = dwalk(1000000, 0)
+  let d = len(rests([], 4))
+  send(parent, [a, b, c, d])
+end
+print(receive())

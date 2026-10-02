@@ -1191,6 +1191,12 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   let tco_params = nil
   let tco_boxed = nil
   let tco_is_process_tail = false
+  # Rebind mode: the TCO fn has default or rest params, so a self tail call
+  # stores its args in `_tco_argv` and jumps to the loop's rebind block,
+  # which binds params exactly like function entry does (defaults for
+  # omitted args, a fresh rest table). `tco_argv_max` sizes `_tco_argv`.
+  let tco_rebind = false
+  let tco_argv_max = 0
   let process_tail_fns = {}
   # ─── Mutual-tail-call SCC bookkeeping ───
   # `scc_member_to_id[name]` (int) when `name` is a top-level fn_def in a
@@ -2001,6 +2007,22 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     is_self_tail_call(fn_name, stmts[-1])
   end
 
+  # Whether compile_fn turns a named fn's self tail calls into a loop: it has
+  # one, and no param, rest param or body-level let shadows the fn's name.
+  # Default, rest and destructured params are all supported (rebind mode in
+  # emit_tco_continue / compile_fn).
+  let fn_def_is_tco = fn(fd)
+    let scope_vars = sorted_array_to_set(fd.params)
+    if fd.rest_param != nil
+      set_add(scope_vars, fd.rest_param)
+    end
+    collect_top_let_names(fd.body, scope_vars)
+    if set_contains(scope_vars, fd.name)
+      return false
+    end
+    has_self_tail_call(fd.name, fd.body)
+  end
+
   # ─── Leaf-function detection ──
   #
   # A function is a "leaf" iff its body invokes no other function: no `call`
@@ -2656,24 +2678,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
 
     for fd in fn_defs
-      let scope_vars = sorted_array_to_set(fd.params)
-      if fd.rest_param != nil
-        set_add(scope_vars, fd.rest_param)
-      end
-      let has_defs = false
-      if fd.defaults != nil
-        for d in fd.defaults
-          if d != nil
-            has_defs = true
-            break
-          end
-        end
-      end
-      let has_tco = false
-      if fd.rest_param == nil and not has_defs and not set_contains(scope_vars, fd.name)
-        has_tco = has_self_tail_call(fd.name, fd.body)
-      end
-      if has_tco and not set_contains(process_tail_fns, fd.name)
+      if fn_def_is_tco(fd) and not set_contains(process_tail_fns, fd.name)
         let line_str = "?"
         if fd.line != nil
           line_str = to_string(fd.line)
@@ -2968,6 +2973,23 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       buf_push(b, "};\n")
       buf_push(b, "{p}    gem_arena_reset_with_roots(_tco_roots, {len(arg_temps)});\n")
       buf_push(b, "{p}}\n")
+    end
+
+    if tco_rebind
+      # Defaults and the rest table are built by the rebind block at the
+      # loop's bottom, after the reset above, from the stored args — the
+      # same code function entry runs, so omitted args evaluate their
+      # defaults in parameter order against this call's new values.
+      if len(arg_temps) > tco_argv_max
+        tco_argv_max = len(arg_temps)
+      end
+      for i = 0, len(arg_temps)
+        buf_push(b, "{p}_tco_argv[{i}] = {arg_temps[i]};\n")
+      end
+      buf_push(b, "{p}args = _tco_argv;\n")
+      buf_push(b, "{p}argc = {len(arg_temps)};\n")
+      buf_push(b, "{p}goto _tco_rebind;")
+      return to_string(b)
     end
 
     for i = 0, len(tco_params)
@@ -4839,11 +4861,22 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
   # ─── emit_param_bindings: generate C code to bind params, rest, block ──
 
-  let emit_param_bindings = fn(node, params, cap_set)
+  # `rebind` = false: declare and bind at function entry.
+  # `rebind` = true: re-assign the already-declared params from the current
+  # `args`/`argc` (the TCO rebind block). Boxed params get a fresh box, so a
+  # closure from an earlier iteration keeps its own binding, as with a real
+  # call.
+  let emit_param_bindings_impl = fn(node, params, cap_set, rebind)
     let b = buf_new()
     let defaults = node.defaults
     if defaults == nil
       defaults = []
+    end
+    let decl_box = "GemVal *"
+    let decl_val = "GemVal "
+    if rebind
+      decl_box = ""
+      decl_val = ""
     end
     for i = 0, len(params)
       let mp = mangle(params[i])
@@ -4851,22 +4884,24 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       if has_def
         let r = compile_expr(defaults[i])
         if set_contains(cap_set, params[i])
-          buf_push(b, "    GemVal *{mp} = gem_box_alloc();\n")
+          buf_push(b, "    {decl_box}{mp} = gem_box_alloc();\n")
           buf_push(b, "    if (argc > {i}) \{ *{mp} = args[{i}]; } else \{\n")
           buf_push(b, r.setup)
           buf_push(b, "    *{mp} = {r.expr};\n    }\n")
         else
-          buf_push(b, "    GemVal {mp};\n")
+          if not rebind
+            buf_push(b, "    GemVal {mp};\n")
+          end
           buf_push(b, "    if (argc > {i}) \{ {mp} = args[{i}]; } else \{\n")
           buf_push(b, r.setup)
           buf_push(b, "    {mp} = {r.expr};\n    }\n")
         end
       else
         if set_contains(cap_set, params[i])
-          buf_push(b, "    GemVal *{mp} = gem_box_alloc();\n")
+          buf_push(b, "    {decl_box}{mp} = gem_box_alloc();\n")
           buf_push(b, "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
         else
-          buf_push(b, "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
+          buf_push(b, "    {decl_val}{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
         end
       end
     end
@@ -4876,15 +4911,19 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       let N = len(params)
       let mp_rest = mangle(node.rest_param)
       if set_contains(cap_set, node.rest_param)
-        buf_push(b, "    GemVal *{mp_rest} = gem_box_alloc();\n")
+        buf_push(b, "    {decl_box}{mp_rest} = gem_box_alloc();\n")
         buf_push(b, "    *{mp_rest} = gem_table_new();\n")
         buf_push(b, "    for (int _ri = {N}; _ri < argc; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
       else
-        buf_push(b, "    GemVal {mp_rest} = gem_table_new();\n")
+        buf_push(b, "    {decl_val}{mp_rest} = gem_table_new();\n")
         buf_push(b, "    for (int _ri = {N}; _ri < argc; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
       end
     end
     to_string(b)
+  end
+
+  let emit_param_bindings = fn(node, params, cap_set)
+    emit_param_bindings_impl(node, params, cap_set, false)
   end
 
   # ─── emit_fn_body: compile body stmts with implicit return ──
@@ -4963,15 +5002,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         end
       end
     end
-    let use_tco = false
-    if node.rest_param == nil and not has_defs and not set_contains(scope_vars, name)
-      use_tco = has_self_tail_call(name, body)
-    end
+    let use_tco = fn_def_is_tco(node)
     if use_tco
       tco_fn_name = name
       tco_params = params
       tco_boxed = boxed_vars
       tco_is_process_tail = set_contains(process_tail_fns, name)
+      tco_rebind = has_defs or node.rest_param != nil
+      tco_argv_max = 0
     end
 
     # ─── SCC member detection ───
@@ -5005,7 +5043,39 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       buf_push(b, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(rel_path(file_of(node)))}\", {fn_line});\n")
     end
 
-    if use_tco
+    if use_tco and tco_rebind
+      # Rebind mode (default / rest params). The body runs in its own C
+      # block so its locals are out of scope at `_tco_rebind`; a self tail
+      # call stores its args in `_tco_argv` and jumps there, and the rebind
+      # block binds params the way function entry does. The rebind code is
+      # compiled before the body so it sees the entry scope state.
+      let rebind_c = emit_param_bindings_impl(node, params, boxed_vars, true)
+      let bb = buf_new()
+      if len(body) > 0
+        for i = 0, len(body) - 1
+          buf_push(bb, compile_stmt(body[i], 3))
+          buf_push(bb, "\n")
+        end
+        buf_push(bb, compile_stmt_return(body[-1], 3))
+        buf_push(bb, "\n")
+      else
+        let pf3 = pop_str("            ")
+        buf_push(bb, "{pf3}            return GEM_NIL;\n")
+      end
+      let argv_n = tco_argv_max
+      if argv_n < 1
+        argv_n = 1
+      end
+      buf_push(b, "    GemVal _tco_argv[{argv_n}];\n")
+      buf_push(b, "    while(1) \{\n")
+      buf_push(b, "        gem_yield_check();\n")
+      buf_push(b, "        \{\n")
+      buf_push(b, to_string(bb))
+      buf_push(b, "        \}\n")
+      buf_push(b, "    _tco_rebind: ;\n")
+      buf_push(b, rebind_c)
+      buf_push(b, "    \}\n")
+    elif use_tco
       buf_push(b, "    while(1) \{\n")
       buf_push(b, "        gem_yield_check();\n")
       if len(body) > 0
@@ -5031,6 +5101,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       tco_params = nil
       tco_boxed = nil
       tco_is_process_tail = false
+      tco_rebind = false
+      tco_argv_max = 0
     end
 
     # ─── SCC trampoline wrapper ───
