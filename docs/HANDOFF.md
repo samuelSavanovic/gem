@@ -32,7 +32,7 @@ with the maintainer:
 | Branch | What | State |
 |---|---|---|
 | `main` | includes #26: stack overflow contained to its process, 8 MB mmap'd stacks with guard pages | merged |
-| `arena-reset-safety` | `compiler-fixes` (TCO for default/rest/destructured params, captured-param fixes) + per-process module globals + region-based arena resets, merged with `main`; examples renumbered 112–119 | PR open, see below; needs macOS check |
+| `arena-reset-safety` | `compiler-fixes` (TCO for default/rest/destructured params, captured-param fixes) + per-process module globals + region-based arena resets + iterative deep copy/free, merged with `main`; examples 112–120 | **PR #27** open; needs the maintainer's macOS check (108, 111, 118 reads `/proc`, 120 peaks ~1.7 GB) |
 | `std-modernize` | `docs/BEST_PRACTICES.md` draft (3 review rounds), CLAUDE.md attribution rule, this file | needs the doc update below, then a PR |
 
 `compiler-fixes` must not merge alone: on its own it routes default-param
@@ -55,6 +55,9 @@ segfault. It is fully contained in `arena-reset-safety`.
   deep copy of its parent's module state; writes stay local; closures read
   live values. The compiler prints a `note:` for writes to module state
   in code reachable from a spawn.
+- **Deep copy and free are iterative** (one worklist copier for send,
+  spawn and resets), so deep data can't overflow the stack. Guard-page
+  tests trigger overflow via `examples/support/native_recursion.h`.
 - **Measured before → after:**
   - top-level 5,000-row build: 17 s → 6 ms;
   - gen_server holding 5,000 records: 6 s → 14 ms per 1,000 calls;
@@ -64,8 +67,9 @@ segfault. It is fully contained in `arena-reset-safety`.
 
 ## Next steps for the new session
 
-1. **Land the reset PR.** Once the maintainer has run it on macOS, check
-   CI and merge it (squash, matching repo history).
+1. **Land PR #27.** Once the maintainer has run it on macOS, check CI and
+   merge it (squash, matching repo history). If example 118 fails on
+   macOS because it reads `/proc`, make it skip the RSS check there.
 2. **Update the doc** on `std-modernize`: merge `main` first, then
    rewrite against the merged compiler:
    - Delete or rewrite every rule marked **(bug)** whose bug is fixed:
