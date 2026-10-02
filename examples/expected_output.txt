@@ -2095,6 +2095,22 @@ timeout
 timeout old style
 timeout multiline
 pinned recv 5
+2 3
+1 1
+[1, 2, 3]
+99
+3
+local
+[1, 2, 3]
+[100, 20, 300]
+first
+42 -1
+kept
+8 9
+7
+14 after
+3
+42
 118
 10
 11
@@ -2145,22 +2161,6 @@ called param
 local err
 real error
 42
-from sleeper
-from timer
-receive timed out
-child timed out
-exec finished
-got DOWN
-child exits without sending
-
-[Runtime Error]: deadlock: main process is waiting in receive and no other process can send to it
-  --> examples/136_main_receive_deadlock.gem:80
-    |
- 80 |   receive
-    |
-Stack trace:
-  at wait_for_reply (examples/136_main_receive_deadlock.gem:80)
-  at main (examples/136_main_receive_deadlock.gem:85)
 child total: 2, child hits: 1
 parent total: 0, parent hits: 0
 
@@ -2242,19 +2242,27 @@ Stack trace:
   at anonymous fn (examples/135_spawn_crash_report.gem:86)
 test6: stack overflow in depth
 done
-2 3
-1 1
-[1, 2, 3]
-99
-3
-local
-[1, 2, 3]
-[100, 20, 300]
-first
-42 -1
-kept
-8 9
-7
-14 after
-3
-42
+from sleeper
+from timer
+receive timed out
+child timed out
+exec finished
+
+[Runtime Error in process 4]: crashed
+  --> examples/136_main_receive_deadlock.gem:61
+    |
+ 61 |   error("crashed")
+    |
+Stack trace:
+  at anonymous fn (examples/136_main_receive_deadlock.gem:61)
+got DOWN
+child exits without sending
+
+[Runtime Error]: deadlock: main process is waiting in receive and no other process can send to it
+  --> examples/136_main_receive_deadlock.gem:80
+    |
+ 80 |   receive
+    |
+Stack trace:
+  at wait_for_reply (examples/136_main_receive_deadlock.gem:80)
+  at main (examples/136_main_receive_deadlock.gem:85)
