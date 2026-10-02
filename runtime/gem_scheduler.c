@@ -166,6 +166,7 @@ static int gem_poll_pids[GEM_MAX_PROCS];
  */
 
 #include <sys/mman.h>
+#include <pthread.h>
 #include <signal.h>
 #include <unistd.h>
 #if defined(__APPLE__)
@@ -200,11 +201,16 @@ static size_t gem_round_up(size_t n, size_t to) {
    mmap + mprotect + munmap per spawn more than doubles the cost of a
    short-lived process. A cached stack keeps its guard; everything below its
    top GEM_STACK_KEEP_BYTES is handed back to the OS on release, so a cached
-   stack holds at most a few pages however deep its last owner went. */
+   stack holds at most a few pages however deep its last owner went. The
+   cache can never hold more stacks than were alive at once, and each is
+   trimmed on release, so sizing it to the process table costs address
+   space, not memory. */
 #ifndef GEM_STACK_CACHE_MAX
-#define GEM_STACK_CACHE_MAX 128
+#define GEM_STACK_CACHE_MAX GEM_MAX_PROCS
 #endif
 #define GEM_STACK_KEEP_BYTES (16 * 1024)
+/* How far below the kept region to look for touched pages before trimming. */
+#define GEM_STACK_PROBE_BYTES (64 * 1024)
 static void *gem_stack_cache[GEM_STACK_CACHE_MAX];
 static int gem_stack_cache_len = 0;
 static size_t gem_stack_cache_block = 0;  /* mapping length the cache holds */
@@ -230,13 +236,40 @@ static void *gem_coro_stack_alloc(size_t size, void *udata) {
     return p;
 }
 
+/* Whether any page in the GEM_STACK_PROBE_BYTES just below `keep` is
+   resident. A stack is touched downward from its top, so if none is,
+   nothing deeper was touched either, and the madvise (which costs several
+   microseconds over 8 MB on macOS even when nothing is resident) can be
+   skipped. A C frame larger than the probe that skipped all of it could
+   leave deeper pages resident; they then stay in the cached stack until it
+   is reused, which costs memory, not correctness. */
+static int gem_stack_pages_resident(char *lo, char *keep) {
+    char *from = keep - GEM_STACK_PROBE_BYTES;
+    if (from < lo) from = lo;
+    size_t npages = (size_t)(keep - from) / gem_page_size;
+    unsigned char vec[GEM_STACK_PROBE_BYTES / 4096];
+    if (npages == 0) return 0;
+    if (npages > sizeof vec) npages = sizeof vec;
+    if (mincore(keep - npages * gem_page_size, npages * gem_page_size, (void *)vec) != 0)
+        return 1;  /* can't tell: trim as before */
+    for (size_t i = 0; i < npages; i++)
+        if (vec[i] & 1) return 1;
+    return 0;
+}
+
 static void gem_coro_stack_free(void *ptr, size_t size, void *udata) {
     size_t len = gem_round_up(size, gem_page_size);
     size_t guard_off = (size_t)udata;
     if (len == gem_stack_cache_block && guard_off == gem_stack_cache_guard_off &&
         gem_stack_cache_len < GEM_STACK_CACHE_MAX) {
         char *lo = (char *)ptr + guard_off + gem_guard_size;
-        char *keep = (char *)ptr + len - GEM_STACK_KEEP_BYTES;
+        /* Measure from the stack top, not the end of the mapping: the
+           mapping has a trailing page beyond the stack (minicoro's +16),
+           and on 16 KB-page systems that page alone would fill the kept
+           region. */
+        char *top = lo + gem_round_up(GEM_CORO_STACK_SIZE, gem_page_size);
+        char *keep = top - gem_round_up(GEM_STACK_KEEP_BYTES, gem_page_size);
+        if (keep > lo && !gem_stack_pages_resident(lo, keep)) keep = lo;
         if (keep > lo) {
 #if defined(__APPLE__) && defined(MADV_FREE_REUSABLE)
             madvise(lo, (size_t)(keep - lo), MADV_FREE_REUSABLE);
@@ -344,11 +377,16 @@ static int gem_redirect_to_rescue(void *uctx_v) {
 #endif
 }
 
-static __thread int gem_is_sched_thread = 0;
+/* The scheduler thread, saved at startup. Compared with pthread_self()
+   instead of reading a __thread flag: on Darwin the first TLS access from a
+   thread can allocate, and the handler may run on a pool worker that
+   faulted inside malloc. */
+static pthread_t gem_sched_thread;
+static volatile int gem_sched_thread_set = 0;
 
 static void gem_fault_handler(int sig, siginfo_t *si, void *uctx) {
     int slot = gem_running_slot;
-    if (gem_is_sched_thread && slot >= 0) {
+    if (gem_sched_thread_set && pthread_equal(pthread_self(), gem_sched_thread) && slot >= 0) {
         GemProcess *proc = &gem_proc_table[slot];
         uintptr_t addr = (uintptr_t)si->si_addr;
         uintptr_t lo = (uintptr_t)proc->stack_lo;
@@ -377,7 +415,8 @@ static void gem_install_overflow_handler(void) {
     gem_page_size = (size_t)sysconf(_SC_PAGESIZE);
     if (gem_page_size == 0 || gem_page_size == (size_t)-1) gem_page_size = 4096;
     gem_guard_size = gem_round_up(GEM_STACK_GUARD_BYTES, gem_page_size);
-    gem_is_sched_thread = 1;
+    gem_sched_thread = pthread_self();
+    gem_sched_thread_set = 1;
     /* Mirror gem_coro_create's sizing for a spawned process's block. */
     gem_stack_cache_guard_off = gem_round_up(GEM_CORO_HEADER_BYTES, gem_page_size);
     gem_stack_cache_block = gem_round_up(gem_stack_cache_guard_off + gem_guard_size +
