@@ -139,6 +139,13 @@ Stack trace:
   at fail_after_yield (examples/101_process_stack_traces.gem:12)
   at main_entry (examples/101_process_stack_traces.gem:15)
   at main (examples/101_process_stack_traces.gem:21)
+same table: true true
+equal contents: false
+same fn: true; other fn: false
+same buffer: true; other buffer: false type=buffer
+table in array: true; copy in array: false
+table key: len=1 value=second other=nil
+message copy: false 1
 apple
 banana
 cherry
