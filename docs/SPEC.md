@@ -862,7 +862,7 @@ print("wrapped: {wrap("inner")}")
 
 `error(msg)` prints the message with file and line info to stderr, followed by a call stack trace showing each Gem function frame, and halts (`exit(1)`). Runtime type errors (e.g. `1 + "a"`) also print a stack trace with the actual types involved (e.g. `type error in +: got string and int`). The compiler reports the first error and stops.
 
-**Inside spawned processes**, `error()` does not terminate the program. Each spawned process has an implicit error boundary — if an unhandled error occurs, the process dies but other processes continue. The error is captured, DOWN messages are delivered to monitors, EXIT signals propagate to linked processes, and the scheduler continues. `pcall` inside a spawned process still works — it catches errors locally before the process-level boundary. See Process Monitoring for details.
+**Inside spawned processes**, `error()` does not terminate the program. Each spawned process has an implicit error boundary — if an unhandled error occurs, the process dies but other processes continue. The error is captured, DOWN messages are delivered to monitors, EXIT signals propagate to linked processes, and the scheduler continues. `pcall` inside a spawned process still works — it catches errors locally before the process-level boundary. This boundary covers running out of stack too (see Stack depth below). See Process Monitoring for details.
 
 **Compile-time error format**: the compiler produces Rust-style diagnostics to stderr with source context, caret highlighting, and optional hints:
 
@@ -918,6 +918,23 @@ end)
 - `pcall` catches both user `error()` calls and runtime type errors (e.g. `1 + "hello"`)
 - Nested `pcall` works — each level catches errors independently
 - To pass arguments to the called function, use a closure: `pcall(fn() f(x, y) end)`
+
+### Stack depth
+
+Every process, the main process and each spawned one alike, has an 8 MB call stack. It is reserved address space: a process pays only for the stack it actually uses. Tail calls do not use stack (see Tail Call Optimization). Non-tail recursion can go roughly 30,000 calls deep for a small function, less for functions with many locals.
+
+Running out of stack is an ordinary runtime error, not a crash:
+
+- A call that would exhaust the stack raises `"stack overflow in <fn>"`, where `<fn>` is the function being called (`anonymous fn` for a `fn` literal). `pcall` catches it like any other error, so a request handler can turn runaway recursion into an error response and keep serving:
+
+  ```
+  let r = pcall walk(untrusted_tree)
+  if not r.ok then reply(500, r.error) end   # "stack overflow in walk"
+  ```
+
+- Uncaught in a spawned process, it ends that process with that reason. Monitors receive `{tag: "DOWN", pid: p, reason: "stack overflow in walk"}`, links propagate it like any other exit reason, and every other process keeps running.
+- Uncaught in the main process, it is reported like any other uncaught runtime error: the message and a stack trace go to stderr, and the program exits with status 1. In the trace, a run of identical frames is shown once, followed by `... same frame repeated N more times`, and `... (deeper frames not recorded)` marks a trace cut short (only the outermost 256 frames are recorded).
+- A builtin that recurses over its argument can itself run out of stack. Deep-copying a value nested millions of levels deep for `send` is one example. That ends the process with reason `"stack overflow in native code called from <fn>"`, and `pcall` does **not** catch it, because the builtin was interrupted midway. In the main process it is reported as an uncaught error (exit status 1).
 
 ## Built-in Functions
 

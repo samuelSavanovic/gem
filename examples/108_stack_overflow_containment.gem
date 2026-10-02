@@ -1,0 +1,108 @@
+# A stack overflow in a spawned process is an ordinary process failure: that
+# process dies with reason "stack overflow in <fn>", monitors get DOWN, links
+# propagate, and every other process keeps running.
+
+let main = self()
+
+fn depth(n)
+  if n == 0 then return 0 end
+  1 + depth(n - 1)
+end
+
+# Waits for a DOWN from `pid` and returns its reason.
+fn down_reason(pid)
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: r}
+    r
+  end
+end
+
+# ─── Test 1: monitor sees DOWN with the overflow reason ───
+let p1 = spawn do
+  depth(100000000)
+end
+monitor(p1)
+print("test1: {down_reason(p1)}")
+
+# ─── Test 2: processes blocked in receive are unaffected ───
+let workers = []
+for i = 0, 3
+  push(workers, spawn do
+    let m = receive()
+    send(main, "worker {i} got {m}")
+  end)
+end
+let p2 = spawn do
+  depth(100000000)
+end
+monitor(p2)
+print("test2: {down_reason(p2)}")
+for w in workers
+  send(w, "ping")
+end
+let replies = []
+for i = 0, 3
+  push(replies, receive())
+end
+print("test2: {sort(replies)}")
+
+# ─── Test 3: links propagate the reason; trap_exit turns it into EXIT ───
+process_flag("trap_exit", true)
+let p3 = spawn_link() do
+  depth(100000000)
+end
+receive
+when {tag: "EXIT", pid: ^p3, reason: r}
+  print("test3: EXIT {r}")
+end
+process_flag("trap_exit", false)
+
+# A non-trapping linked process dies with the same reason.
+let p4 = spawn do
+  let inner = spawn_link() do
+    depth(100000000)
+  end
+  receive()
+end
+monitor(p4)
+print("test3: linked {down_reason(p4)}")
+
+# ─── Test 4: many overflows in sequence, each one clean ───
+let reasons = {}
+for i = 0, 20
+  let p = spawn do
+    depth(100000000)
+  end
+  monitor(p)
+  let r = down_reason(p)
+  reasons[r] = (reasons[r] or 0) + 1
+end
+print("test4: {reasons}")
+
+# ─── Test 5: overflow inside C runtime code (copying a deeply nested value
+# in send) hits the guard page; the process dies, the reason naming the
+# Gem function that made the call ───
+fn nest(n)
+  let l = [0]
+  for i = 0, n
+    l = [l]
+  end
+  l
+end
+let p5 = spawn do
+  let deep = nest(2000000)
+  send(main, deep)
+end
+monitor(p5)
+print("test5: {down_reason(p5)}")
+let p6 = spawn do
+  send(main, nest(2000000))
+end
+monitor(p6)
+print("test5: again {down_reason(p6)}")
+
+# ─── Test 6: the scheduler is healthy afterwards ───
+let p7 = spawn do
+  send(main, depth(10000))
+end
+print("test6: {receive()}")
