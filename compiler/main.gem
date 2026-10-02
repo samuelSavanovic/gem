@@ -372,14 +372,21 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
 
       let source = read_file(full_path)
       sources_by_file[full_path] = source
+      let errors_before = sink.count()
       let loaded_ast = parse_source(source, full_path, sink)
+      let parse_failed = sink.count() > errors_before or sink.suppressed()
       tag_source_file(loaded_ast, full_path)
       let loaded_dir = dirname(full_path)
       let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
 
       let export_node = find_export_node(resolved.stmts)
       if export_node == nil
-        error("gem: loaded file has no export statement: " + full_path)
+        # A file that failed to parse has already reported why; a missing
+        # export on top of that is a cascade, not a separate problem.
+        if not parse_failed
+          sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "loaded file has no export statement: {stmt.path}", "end the module with `export name, ...`")
+        end
+        continue
       end
 
       let mod_name = module_name_from_path(stmt.path)
