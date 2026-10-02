@@ -6,7 +6,8 @@
 
 /* ─── Call stack ─── */
 
-GemFrame gem_call_stack[GEM_MAX_CALL_DEPTH];
+static GemFrame gem_root_call_stack[GEM_MAX_CALL_DEPTH];
+GemFrame *gem_call_stack = gem_root_call_stack;
 int gem_call_depth = 0;
 
 /* ─── pcall jump buffer stack ─── */

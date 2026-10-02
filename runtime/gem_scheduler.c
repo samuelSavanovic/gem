@@ -483,16 +483,19 @@ void gem_run_scheduler(void) {
                 active = 1;
                 gem_current_pid = i;
                 proc->reductions = 0;
-                /* gem_call_depth is global but logically per-process — restore
-                   the proc's saved depth before resuming, save it back after.
-                   Without this, frames pushed by another proc that ran while
-                   this one was yielded would corrupt the depth (and break the
-                   TCO arena-reset gate, which compares depth to entry_call_depth). */
+                /* gem_call_stack / gem_call_depth are globals but logically
+                   per-process — point them at this proc's frames and saved
+                   depth before resuming, save the depth back after. The TCO
+                   arena-reset gate compares depth to entry_call_depth, and
+                   stack traces read the frames. */
                 int saved_global_depth = gem_call_depth;
+                GemFrame *saved_global_stack = gem_call_stack;
                 gem_call_depth = proc->call_depth;
+                gem_call_stack = proc->call_stack;
                 mco_resume(proc->coro);
                 proc->call_depth = gem_call_depth;
                 gem_call_depth = saved_global_depth;
+                gem_call_stack = saved_global_stack;
 
                 if (mco_status(proc->coro) == MCO_DEAD) {
                     mco_destroy(proc->coro);

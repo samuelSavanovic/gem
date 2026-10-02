@@ -129,6 +129,16 @@ true
 nil
 42
 5
+
+[Runtime Error]: main failed
+  --> examples/101_process_stack_traces.gem:12
+    |
+ 12 |   error("main failed")
+    |
+Stack trace:
+  at fail_after_yield (examples/101_process_stack_traces.gem:12)
+  at main_entry (examples/101_process_stack_traces.gem:15)
+  at main (examples/101_process_stack_traces.gem:21)
 apple
 banana
 cherry
