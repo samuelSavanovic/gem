@@ -1,0 +1,136 @@
+# Mutual tail-call cycles running in several processes at once. The
+# trampoline hands args from one body to the next through a process-global
+# slot; every way control can leave a process mid-cycle (preemption at the
+# trampoline back-edge, a yield inside a body, receive, an error unwinding
+# through pcall, an arena reset at the back-edge) must leave the other
+# processes' cycles untouched.
+
+# Plain integer ping/pong. Each process uses its own step so a result
+# computed with another process's args shows up as a wrong sum.
+fn ping(n, acc, step)
+  if n == 0
+    return acc
+  end
+  pong(n - 1, acc + step, step)
+end
+
+fn pong(n, acc, step)
+  if n == 0
+    return acc
+  end
+  ping(n - 1, acc + step * 2, step)
+end
+
+# Heap args: a fresh string and table every step, so the trampoline's
+# back-edge arena reset relocates the args while other processes run.
+fn walk_a(n, tag, box)
+  if n == 0
+    return "{tag}:{box.count}:{box.tag}"
+  end
+  walk_b(n - 1, tag, {count: box.count + 1, tag: tag + ""})
+end
+
+fn walk_b(n, tag, box)
+  if n == 0
+    return "{tag}:{box.count}:{box.tag}"
+  end
+  walk_a(n - 1, tag, {count: box.count + 1, tag: "" + tag})
+end
+
+# A cycle whose bodies block in receive: two processes trade a token,
+# each taking one trampoline step per message.
+fn relay_send(n, peer, sum)
+  if n == 0
+    return sum
+  end
+  send(peer, n)
+  relay_recv(n - 1, peer, sum)
+end
+
+fn relay_recv(n, peer, sum)
+  let got = receive()
+  relay_send(n, peer, sum + got)
+end
+
+# A cycle that raises at the bottom, caught by pcall in the caller; the
+# process then runs a fresh cycle that must start clean.
+fn boom_a(n)
+  if n == 0
+    error("bottom")
+  end
+  boom_b(n - 1)
+end
+
+fn boom_b(n)
+  boom_a(n - 1)
+end
+
+# A body that makes a non-tail call into another cycle (nested
+# trampolines in one process), interleaved with the plain cycles above.
+fn outer_a(n, acc)
+  if n == 0
+    return acc
+  end
+  outer_b(n - 1, acc + ping(10, 0, 1))
+end
+
+fn outer_b(n, acc)
+  if n == 0
+    return acc
+  end
+  outer_a(n - 1, acc)
+end
+
+let me = self()
+
+fn run(name, f)
+  spawn do
+    send(me, [name, f()])
+  end
+end
+
+run("ping1", fn() ping(1000000, 0, 1) end)
+run("ping3", fn() ping(3000000, 0, 3) end)
+run("ping5", fn() ping(500001, 0, 5) end)
+run("walkx", fn() walk_a(300000, "x", {count: 0, tag: "x"}) end)
+run("walky", fn() walk_b(300001, "y", {count: 0, tag: "y"}) end)
+run("outer", fn() outer_a(100000, 0) end)
+run("boom", fn()
+  let r = pcall(fn() boom_a(400000) end)
+  [r.ok, r.error, ping(200000, 0, 7)]
+end)
+
+let p1 = spawn do
+  let peer = receive()
+  send(me, ["relay1", relay_send(20000, peer, 0)])
+end
+let p2 = spawn do
+  let peer = receive()
+  send(me, ["relay2", relay_send(20000, peer, 0)])
+end
+send(p1, p2)
+send(p2, p1)
+
+# A process that dies (or deadlocks) shows up as a timeout, not a hang.
+let r = {}
+let got = 0
+while got < 9
+  receive
+  when [name, value]
+    r[name] = value
+    got += 1
+  after 30000
+    print("timeout after", got, "results:", keys(r))
+    exit(1)
+  end
+end
+
+# ping(n, 0, s) with n even: n/2 steps of s and n/2 of 2s.
+print(r.ping1, r.ping1 == 500000 * 3)
+print(r.ping3, r.ping3 == 1500000 * 9)
+print(r.ping5, r.ping5 == 250000 * 15 + 5)
+print(r.walkx)
+print(r.walky)
+print(r.outer, r.outer == 50000 * 15)
+print(r.boom[0], r.boom[1], r.boom[2], r.boom[2] == 100000 * 21)
+print(r.relay1, r.relay2, r.relay1 == 200010000)
