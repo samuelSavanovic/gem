@@ -60,11 +60,13 @@ fn parse_source(source, file, sink)
   if sink == nil
     sink = make_error_sink()
   end
+  let errors_before = sink.count()
   let tokens = tokenize(source, file, sink)
-  # If the lexer reported errors, skip the parser entirely — the token
-  # stream past an unterminated string is meaningless and parser cascades
-  # would just spam the user with derivative diagnostics.
-  if sink.has_any()
+  # If the lexer reported errors for this file, skip the parser entirely —
+  # the token stream past an unterminated string is meaningless and parser
+  # cascades would just spam the user with derivative diagnostics. The sink
+  # is shared across loaded files, so compare against the count on entry.
+  if sink.count() > errors_before or sink.suppressed()
     return make_program([])
   end
   let p = make_parser(tokens, source, file, sink)
@@ -1120,7 +1122,7 @@ fn make_parser(tokens, source, file, sink)
         end
         expect(")")
       end
-      return {tag: "load", path: path, alias: alias_name, selective: selective}
+      return {tag: "load", path: path, alias: alias_name, selective: selective, line: t.line, col: t.col}
     end
 
     # export name, name, ...
