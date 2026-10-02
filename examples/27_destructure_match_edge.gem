@@ -103,3 +103,15 @@ when [x]
 else
   print("10: nil fell through")
 end
+
+# Test 11: negative number literals in patterns
+match [-1, 2.5]
+when [-1, -2.5]
+  print("11: FAIL - sign ignored")
+when [-1, f]
+  print("11: negative int matched, f={f}")
+end
+match {t: -0.5}
+when {t: -0.5}
+  print("11: negative float matched")
+end

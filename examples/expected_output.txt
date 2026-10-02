@@ -487,6 +487,8 @@ abc
 8b: inner
 9: zero count
 10: nil fell through
+11: negative int matched, f=2.5
+11: negative float matched
 test3: got pid=int
 test6: healthy process completed
 test7: pcall ok=false error=caught locally

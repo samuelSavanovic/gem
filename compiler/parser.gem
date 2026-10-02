@@ -804,14 +804,24 @@ fn make_parser(tokens, source, file, sink)
       return make_pat_array(elements)
     end
 
-    # Literal patterns: number, string, bool, nil — equality match
-    if t.type == "NUMBER"
+    # Literal patterns: number (optionally negative), string, bool, nil —
+    # equality match
+    if t.type == "NUMBER" or (t.type == "-" and peek_at(1).type == "NUMBER")
+      let negative = t.type == "-"
+      if negative
+        advance()
+      end
+      let nt = peek()
       advance()
       let lit = nil
-      if contains_dot(t.value)
-        lit = make_float(atof(t.value))
+      if contains_dot(nt.value)
+        let f = atof(nt.value)
+        if negative then f = 0.0 - f end
+        lit = make_float(f)
       else
-        lit = make_int(str_to_int(t.value))
+        let n = str_to_int(nt.value)
+        if negative then n = 0 - n end
+        lit = make_int(n)
       end
       return make_pat_literal(lit)
     end
