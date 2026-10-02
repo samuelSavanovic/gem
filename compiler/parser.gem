@@ -396,17 +396,38 @@ fn make_parser(tokens, source, file, sink)
     # String interpolation
     if t.type == "INTERP_START"
       advance()
+      # The lexer emits INTERP_START, then text and expression tokens
+      # alternating, each text segment an INTERP_TEXT token (possibly
+      # empty): INTERP_TEXT expr INTERP_TEXT ... INTERP_TEXT INTERP_END.
+      # Text segments have their own token type so an expression that
+      # starts with a string literal (`"{"a" in t}"`) parses as one.
       let parts = []
+      let want_text = true
       skip_nl()
       while peek().type != "INTERP_END" and not at_end()
         let _lp = pos
-        if peek().type == "STRING"
-          let sval = advance().value
-          if len(sval) > 0
-            push(parts, make_string(sval))
+        let it = peek()
+        if it.type == "INTERP_TEXT"
+          if not want_text
+            # Two text segments in a row: an empty `{}`.
+            report(it.line, it.col, 1, "empty string interpolation", "put an expression between '\{' and '}', or write '\\\{' for a literal brace")
           end
+          advance()
+          if len(it.value) > 0
+            push(parts, make_string(it.value))
+          end
+          want_text = false
         else
           push(parts, parse_expr())
+          skip_nl()
+          let nt = peek()
+          if nt.type != "INTERP_TEXT" and nt.type != "INTERP_END" and nt.type != "EOF"
+            report(nt.line, nt.col, len(nt.value), "unexpected '{nt.type}' in string interpolation", "expected '}' to close the interpolation")
+            while peek().type != "INTERP_TEXT" and peek().type != "INTERP_END" and not at_end()
+              advance()
+            end
+          end
+          want_text = true
         end
         skip_nl()
         force_progress(_lp)
@@ -519,6 +540,12 @@ fn make_parser(tokens, source, file, sink)
 
     # P5: garbage in expression position. Report, consume the offending
     # token so the surrounding loop makes progress, return an error stub.
+    # The '}' closing an interpolation (the INTERP_TEXT/INTERP_END after
+    # it) is left for the interpolation loop to consume.
+    if t.type == "INTERP_TEXT" or t.type == "INTERP_END"
+      report(t.line, t.col, 1, "expected expression before '}' in string interpolation", nil)
+      return make_error_expr(t.line, t.col)
+    end
     report(t.line, t.col, len(t.value), "unexpected token '{t.type}' (expected expression)", nil)
     if not at_end()
       advance()

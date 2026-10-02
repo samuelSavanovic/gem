@@ -847,7 +847,11 @@ Interpolation supports arbitrary expressions including function calls, table acc
 print("len: {len(arr)}")
 print("val: {obj.field}")
 print("wrapped: {wrap("inner")}")
+print("{"a" in t}")             # an expression may start with a string literal
+print("{"{x}!"}")               # strings inside an interpolation may interpolate too
 ```
+
+The interpolation ends at the `}` that balances its `{` (braces of table literals inside it are counted; braces inside nested strings are not). An empty interpolation `{}` and an unclosed one are compile errors.
 
 ## Nil and Truthiness
 
