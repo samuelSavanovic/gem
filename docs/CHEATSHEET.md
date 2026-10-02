@@ -116,6 +116,7 @@ let [x, y] = task.await_all([t1, t2], 5000)
 
 # Error handling
 error("msg")                         # halt with stack trace; uncaught in main prints source line + stack trace
+                                     # uncaught in a spawned process: that process dies, same report on stderr ("[Runtime Error in process <pid>]")
 let r = pcall some_fn()              # {ok: bool, value/error: ...}
 # Stack: 8 MB per process; overflow raises "stack overflow in <fn>" (pcall-catchable, kills only that process)
 

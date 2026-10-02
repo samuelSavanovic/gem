@@ -319,12 +319,6 @@ static mco_result gem_coro_create(mco_coro **out, size_t stack_size, void *user_
 }
 
 /* Raised by gem_push_frame when a call would enter the red zone. */
-/* Codegen names fn literals with a gensym; don't show it to users. */
-static const char *gem_user_fn_name(const char *name) {
-    if (!name || strncmp(name, "_anon_", 6) == 0) return "anonymous fn";
-    return name;
-}
-
 void gem_stack_overflow(const char *name) {
     /* The error path below is plain C (no gem_push_frame), and it runs
        inside the red zone, which exists to leave it room. gem_raise_error
@@ -623,6 +617,7 @@ static void gem_coro_entry(mco_coro *co) {
                 gem_print_runtime_error(msg);
                 exit(1);
             }
+            gem_report_process_crash(gem_current_pid, msg);
             if (proc->exit_reason) free((char *)proc->exit_reason);
             proc->exit_reason = strdup(msg);
             proc->pcall_depth = 0;
@@ -1330,6 +1325,26 @@ void gem_unregister_name_for_pid(int pid) {
             shdel(gem_name_registry, gem_name_registry[i].key);
         }
     }
+}
+
+/* Crash report for a spawned process dying from an uncaught error (the
+   error logger's job in Erlang): the main process's error format, with a
+   header naming the process by pid and registered name. Called before the
+   process unwinds, so the stack trace is still its own. Exits through
+   `kill`/`exit`, linked exit signals and normal returns are not reported. */
+void gem_report_process_crash(int slot, const char *msg) {
+    char head[192];
+    const char *name = NULL;
+    for (int i = 0; i < (int)shlen(gem_name_registry); i++) {
+        if (gem_name_registry[i].value == slot) { name = gem_name_registry[i].key; break; }
+    }
+    if (name)
+        snprintf(head, sizeof head, "Runtime Error in process %lld \"%.100s\"",
+                 (long long)gem_pid_of_slot(slot), name);
+    else
+        snprintf(head, sizeof head, "Runtime Error in process %lld",
+                 (long long)gem_pid_of_slot(slot));
+    gem_print_runtime_error_as(head, msg);
 }
 
 /* Built-in function wrappers for use from compiled Gem code */
