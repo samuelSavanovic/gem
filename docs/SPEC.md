@@ -1135,6 +1135,13 @@ SQLite is vendored as an amalgamation (`runtime/sqlite3.c` + `runtime/sqlite3.h`
 
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
+**Builtin names are not reserved.** Builtins live in the outermost scope, so any binding with a builtin's name shadows the builtin wherever that binding is in scope, and every call or reference there reaches the binding:
+
+- A top-level `fn` or `let` (a destructuring `let` or a selective import such as `load "std/log" (error)` included) shadows the builtin for the whole file it is in, whether that is the program's entry file or a loaded module. It does not leak into modules that file loads, or into files that load it: `std/log` defines and exports `error`, and `log.error(msg)` logs while a bare `error(msg)` elsewhere still raises.
+- A parameter, `let` local, loop variable or pattern binding shadows it for its scope (`fn f(len) len + 1 end` is fine).
+
+`for` loops and `match` patterns keep working inside such a scope: they never call a user binding named `len`, `type` or `has_key`.
+
 ## Module System
 
 **Load statement** — `load` brings another file's exported definitions into scope. Every loaded file must have an `export` statement declaring its public API. The compiler keeps a table of already-loaded file paths; re-importing a module skips re-parsing but still creates the requested import bindings.

@@ -128,6 +128,7 @@ let r = pcall some_fn()              # {ok: bool, value/error: ...}
 # Time:          time_ms, epoch_ms, format_time, format_time_local
 # SQLite:        sqlite_open, sqlite_close, sqlite_exec, sqlite_query, sqlite_last_insert_id, sqlite_changes
 # Math:          floor, ceil, round, abs, pow, sqrt, random
+# Builtin names aren't reserved: a fn/let/param of the same name shadows the builtin in its scope (a top-level one: that file only)
 # Bitwise:       band, bor, bxor, bnot, bshl, bshr
 
 # String building

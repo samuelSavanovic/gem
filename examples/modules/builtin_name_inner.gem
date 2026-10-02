@@ -1,0 +1,8 @@
+# Loaded by builtin_name_outer.gem. Uses the `len` builtin: the outer
+# module's own `fn len` must not capture this call.
+
+fn inner_len(t)
+  len(t)
+end
+
+export inner_len

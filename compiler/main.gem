@@ -16,6 +16,7 @@ load "./lower" (lower)
 load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
 load "./loader" (resolve_load_path, find_project_root, compute_stdlib_root)
+load "./builtins" (BUILTIN_FNS)
 load "../lsp/main" (run_lsp)
 
 # ─── Install root (for runtime/, build/libgem_runtime.a) ──────
@@ -327,19 +328,69 @@ fn rename_stmts(stmts, rmap, shadowed)
   end
 end
 
+fn is_from_load(stmt)
+  type(stmt) == "table" and stmt.from_load == true
+end
+
+# A top-level binding in the entry file whose name is a builtin's (a fn,
+# a let, a selective import) shadows the builtin for the whole entry file,
+# like it does in a loaded module, where transform_module prefixes it. The
+# entry file's top-level names are not prefixed, so rename just the ones
+# that collide with a builtin to `_main_<name>`. Statements spliced in from
+# loads are skipped: their free names mean the builtin. Runs before
+# lower(), so the `len`/`type`/... calls lower synthesizes are untouched.
+fn shadow_entry_builtins(stmts, module_bindings)
+  let own = []
+  for stmt in stmts
+    if not is_from_load(stmt)
+      push(own, stmt)
+    end
+  end
+  let rmap = {}
+  let any = false
+  for name, _ in collect_module_top_names(own)
+    if has_key(BUILTIN_FNS, name)
+      rmap[name] = "_main_" + name
+      any = true
+    end
+  end
+  if not any
+    return nil
+  end
+  let scope = {}
+  for stmt in own
+    rename_stmt_in_scope(stmt, rmap, scope, true)
+  end
+  for name, renamed in rmap
+    if has_key(module_bindings, name)
+      module_bindings[renamed] = module_bindings[name]
+      delete(module_bindings, name)
+    end
+  end
+end
+
 fn transform_module(stmts, mod_name, export_node, load_node)
   let prefix = "_mod_" + mod_name + "_"
   let top_names = collect_module_top_names(stmts)
   let rmap = build_rename_map(top_names, prefix)
 
+  # Statements spliced in from this module's own loads (`from_load`) are
+  # already renamed into their module's prefix. Their free names are
+  # builtins (or undeclared), never this module's bindings, so they are
+  # left alone: a module's `fn len` must not capture `len` in a module it
+  # loads.
   let module_scope = {}
   for stmt in stmts
-    rename_stmt_in_scope(stmt, rmap, module_scope, true)
+    if not is_from_load(stmt)
+      rename_stmt_in_scope(stmt, rmap, module_scope, true)
+    end
   end
 
+  # Everything but the binding lets pushed below belongs to this module.
   let result = []
   for stmt in stmts
     if not is_node(stmt, "export")
+      stmt.from_load = true
       push(result, stmt)
     end
   end
@@ -606,6 +657,7 @@ end
 # Lower structural forms (for_in / for_range / match patterns) into the
 # desugared shapes codegen consumes. Runs after resolve_loads so loaded
 # modules' for/match are also rewritten in the merged AST.
+shadow_entry_builtins(resolved_ast.stmts, module_bindings)
 resolved_ast = lower(resolved_ast)
 
 fold_constants(resolved_ast)

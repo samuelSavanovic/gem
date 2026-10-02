@@ -262,7 +262,7 @@ fn lower_for_in(node, state)
     )
     let result = {tag: "block", stmts: [
       make_let(tbl_var, lower_node(node.items, state), line),
-      make_let(len_var, make_call(make_var("len"), [make_var(tbl_var)], 0), line),
+      make_let(len_var, make_call(make_var("__len"), [make_var(tbl_var)], 0), line),
       make_let(idx_var, make_int(0), line),
       while_node
     ]}
@@ -281,7 +281,7 @@ fn lower_for_in(node, state)
     push(inner, s)
   end
   let while_node = make_while(
-    make_binop("<", make_var(idx_var), make_call(make_var("len"), [make_var(items_var)], 0)),
+    make_binop("<", make_var(idx_var), make_call(make_var("__len"), [make_var(items_var)], 0)),
     inner,
     line
   )
@@ -393,11 +393,11 @@ fn pattern_to_cond(pat, target_expr, state)
   let tag = pat.tag
 
   if tag == "pat_table"
-    let conditions = [make_binop("==", make_call(make_var("type"), [target_expr], 0), make_string("table"))]
+    let conditions = [make_binop("==", make_call(make_var("__type"), [target_expr], 0), make_string("table"))]
     let bindings = []
     for entry in pat.entries
       let key_str = make_string(entry.key)
-      push(conditions, make_call(make_var("has_key"), [target_expr, key_str], 0))
+      push(conditions, make_call(make_var("__has_key"), [target_expr, key_str], 0))
       let sub_target = make_index(target_expr, key_str)
       if entry.value == nil
         # Shorthand: {name} binds the field value to a variable
@@ -416,8 +416,8 @@ fn pattern_to_cond(pat, target_expr, state)
   end
 
   if tag == "pat_array"
-    let conditions = [make_binop("==", make_call(make_var("type"), [target_expr], 0), make_string("table"))]
-    push(conditions, make_binop("==", make_call(make_var("len"), [target_expr], 0), make_int(len(pat.elements))))
+    let conditions = [make_binop("==", make_call(make_var("__type"), [target_expr], 0), make_string("table"))]
+    push(conditions, make_binop("==", make_call(make_var("__len"), [target_expr], 0), make_int(len(pat.elements))))
     let bindings = []
     let i = 0
     for sub_pat in pat.elements

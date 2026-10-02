@@ -1375,6 +1375,18 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   for k, _ in builtin_fns
     builtins[k] = true
   end
+  # The name to show the user for a binding: an entry-file binding that
+  # shadows a builtin is renamed `_main_<name>` (shadow_entry_builtins in
+  # compiler/main.gem), shown as `<name>` in messages and stack traces.
+  let display_name = fn(name)
+    if len(name) > 6 and substr(name, 0, 6) == "_main_"
+      let orig = substr(name, 6, len(name) - 6)
+      if has_key(builtin_fns, orig)
+        return orig
+      end
+    end
+    name
+  end
   let boxed_vars = {}
   let top_level_vars = {}
   # Whole-module loads: binding name -> {export: top-level name it holds}
@@ -2203,6 +2215,41 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     false
   end
 
+  # True when `name` is bound anywhere under `node` (a let — lowered
+  # for-loop vars and pattern bindings included — or a parameter). A
+  # call to such a name may reach the user's binding instead of the
+  # builtin, so mark_non_escaping must not trust it.
+  let binds_name = nil
+  binds_name = fn(node, name)
+    if type(node) != "table"
+      return false
+    end
+    if node.tag == "let" and node.name == name
+      return true
+    end
+    if node.tag == "fn_def" or node.tag == "anon_fn"
+      if node.rest_param == name
+        return true
+      end
+      if node.params != nil
+        for p in node.params
+          if p == name
+            return true
+          end
+        end
+      end
+    end
+    for _, v in node
+      if type(v) == "table" and binds_name(v, name)
+        return true
+      end
+    end
+    false
+  end
+
+  # Allowlisted callees a binding in the scope being marked shadows.
+  let shadowed_non_escape = {}
+
   let mark_non_escaping = nil
   mark_non_escaping = fn(node)
     if node == nil
@@ -2215,7 +2262,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       return nil
     end
 
-    if node.tag == "call" and node.func != nil and is_node(node.func, "var") and set_contains(non_escape_callees, node.func.name)
+    if node.tag == "call" and node.func != nil and is_node(node.func, "var") and set_contains(non_escape_callees, node.func.name) and not set_contains(shadowed_non_escape, node.func.name)
       if node.args != nil
         for a in node.args
           if is_node(a, "anon_fn") and not body_has_anon_fn(a.body)
@@ -2243,7 +2290,16 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
   end
 
-  let mark_non_escaping_stmts = fn(stmts)
+  # `scope` is the fn_def (or the top-level statement list) being marked.
+  # Conservative: a builtin name bound anywhere in it disables the
+  # allowlist entry for all of it.
+  let mark_non_escaping_stmts = fn(stmts, scope)
+    shadowed_non_escape = {}
+    for callee, _ in non_escape_callees
+      if binds_name(scope, callee)
+        set_add(shadowed_non_escape, callee)
+      end
+    end
     for s in stmts
       mark_non_escaping(s)
     end
@@ -2945,7 +3001,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
             if spawn_node.line != nil
               sline = to_string(spawn_node.line)
             end
-            eprint("note: {file_of(n)}:{line_str}: this changes module-level `{w.name}` in code that runs in a spawned process (spawn at {file_of(spawn_node)}:{sline}); each process has its own copy of module state, so the change is visible only in that process.\n")
+            eprint("note: {file_of(n)}:{line_str}: this changes module-level `{display_name(w.name)}` in code that runs in a spawned process (spawn at {file_of(spawn_node)}:{sline}); each process has its own copy of module state, so the change is visible only in that process.\n")
           end
         end
       end
@@ -3586,7 +3642,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       return nil
     end
     if has_key(builtin_fns, name) or set_contains(defined_fns, name)
-      sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "cannot assign to function `{name}`", nil)
+      let shown = display_name(name)
+      sink.report(source_of(node), file_of(node), node.line, node.col, len(shown), "cannot assign to function `{shown}`", nil)
     else
       sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", "use `let {name} = ...` to declare")
     end
@@ -3694,7 +3751,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
           if suggestion != nil
             hint = "did you mean `{suggestion}`?"
           end
-          sink.report(source_of(loc_node), file_of(loc_node), loc_node.line, loc_node.col, len(field), "module `{object.name}` has no export `{field}`", hint)
+          sink.report(source_of(loc_node), file_of(loc_node), loc_node.line, loc_node.col, len(field), "module `{display_name(object.name)}` has no export `{field}`", hint)
         end
       end
       let r = compile_expr(object)
@@ -3894,7 +3951,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     if func.tag == "var"
       let name = func.name
 
-      if name == "error"
+      if name == "error" and not set_contains(local_names, name)
         let line = node.line
         if line == nil
           line = 0
@@ -5219,7 +5276,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       fn_line = node.line
     end
     if not in_leaf_fn
-      buf_push(b, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(rel_path(file_of(node)))}\", {fn_line});\n")
+      buf_push(b, "    gem_push_frame(\"{escape_c_string(display_name(name))}\", \"{escape_c_string(rel_path(file_of(node)))}\", {fn_line});\n")
     end
 
     if use_tco and tco_rebind
@@ -5477,9 +5534,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     # callees like pcall/sort). Must run before any capture analysis below
     # — find_captured_in_scope reads the non_escaping flag.
     for fd in fn_defs
-      mark_non_escaping_stmts(fd.body)
+      mark_non_escaping_stmts(fd.body, fd)
     end
-    mark_non_escaping_stmts(top_stmts)
+    mark_non_escaping_stmts(top_stmts, top_stmts)
 
     # Call graph (for mutual-TCO SCCs and the module-state note), loop
     # tagging and per-loop liveness.
