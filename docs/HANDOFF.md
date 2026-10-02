@@ -120,12 +120,18 @@ segfault. It is fully contained in `arena-reset-safety`.
 
 Move these to ROADMAP.md / OPTIMIZATIONS.md or fix them as separate PRs:
 
-- **Parameter shadowing:** `let n = n - 1` on a parameter is a C
-  "redefinition" error in normal functions, and reads nil in TCO
-  functions.
-- **Closure-written global as last statement:** assigning such a global
-  as a function's last statement gives a C type error. Check whether
-  per-process globals fixed it.
+- **`let` redeclaration** (fix after #27 lands, in a subagent, own PR):
+  a second `let` of the same name in one function (a parameter, or a
+  local: `let a = 1` then `let a = a + 1`) is a C "redefinition" error,
+  and reads nil in TCO functions. Agreed fix: shadowing. The second
+  `let` makes a new variable; closures made before it keep the old one.
+  Drop the **(bug)** rule in BEST_PRACTICES when it lands.
+- **One-line `when` arms** (fix after #27 lands, own PR): `when x nil end`
+  in `match`/`receive` reports "undeclared identifier `x`" (sometimes a
+  C error); `when x then nil end` is rejected. Leaning towards supporting
+  `when <pat> then <body>` like one-line `if ... then`; confirm with the
+  maintainer before building it (else: a clear Gem error). New syntax
+  means SPEC, CHEATSHEET and both editor grammars.
 - **Undefined names in closure bodies** surface as C "undeclared" errors,
   not Gem diagnostics.
 - **`break`/`continue` inside a `do` block** are caught only by the C
