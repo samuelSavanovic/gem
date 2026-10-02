@@ -29,13 +29,27 @@ void *gem_tail_env = NULL;
 int gem_tail_argc = 0;
 GemVal gem_tail_args[GEM_MAX_TAIL_ARGS];
 
+static int gem_frame_same(const GemFrame *a, const GemFrame *b) {
+    return a->line == b->line && strcmp(a->name, b->name) == 0 && strcmp(a->file, b->file) == 0;
+}
+
 void gem_print_stack_trace(void) {
     int max = gem_call_depth < GEM_MAX_CALL_DEPTH ? gem_call_depth : GEM_MAX_CALL_DEPTH;
+    /* Only the outermost GEM_MAX_CALL_DEPTH frames are recorded. */
+    if (gem_call_depth > GEM_MAX_CALL_DEPTH)
+        fprintf(stderr, "  ... (deeper frames not recorded)\n");
     for (int i = max - 1; i >= 0; i--) {
         fprintf(stderr, "  at %s (%s:%d)\n",
             gem_call_stack[i].name,
             gem_call_stack[i].file,
             gem_call_stack[i].line);
+        /* Collapse a run of identical frames (deep recursion) to one line. */
+        int j = i;
+        while (j > 0 && gem_frame_same(&gem_call_stack[j - 1], &gem_call_stack[i])) j--;
+        if (i - j > 1) {
+            fprintf(stderr, "  ... same frame repeated %d more times\n", i - j);
+            i = j;
+        }
     }
 }
 

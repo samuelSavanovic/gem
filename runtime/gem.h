@@ -128,7 +128,27 @@ extern void *gem_tail_env;
 extern int gem_tail_argc;
 extern GemVal gem_tail_args[GEM_MAX_TAIL_ARGS];
 
+/* Soft stack limit of the running process: the lowest address a Gem
+ * function's frame may sit at before calls start failing with a catchable
+ * "stack overflow" error. The scheduler sets it to the process's stack floor
+ * plus GEM_STACK_RED_ZONE on every resume and clears it to 0 (no check) while
+ * it runs on the OS stack itself. The red zone below the limit leaves room
+ * for the error path and for C runtime code called near the limit; deep
+ * recursion inside C runtime code runs into the guard page instead (see
+ * gem_scheduler.c, "Process stacks"). */
+extern uintptr_t gem_stack_limit;
+#if defined(__GNUC__)
+__attribute__((noreturn, cold))
+#endif
+void gem_stack_overflow(const char *name);
+
 static inline void gem_push_frame(const char *name, const char *file, int line) {
+#if defined(__GNUC__)
+    if (__builtin_expect((uintptr_t)__builtin_frame_address(0) < gem_stack_limit, 0))
+        gem_stack_overflow(name);
+#else
+    { char probe; if ((uintptr_t)&probe < gem_stack_limit) gem_stack_overflow(name); }
+#endif
     if (gem_call_depth < GEM_MAX_CALL_DEPTH) {
         gem_call_stack[gem_call_depth].name = name;
         gem_call_stack[gem_call_depth].file = file;
@@ -484,6 +504,8 @@ typedef struct {
     GemLinkNode *links;           /* linked list of pids linked to this process */
     int trap_exit;                /* if true, exit signals become EXIT messages */
     jmp_buf proc_jmp;             /* process-level error handler (crash isolation) */
+    char *stack_lo;               /* lowest usable byte of the coroutine stack; the guard sits just below */
+    int stack_overflowed;         /* set when the guard page caught an overflow (exit reason "stack overflow") */
     const char *exit_reason;      /* NULL while alive, set on exit/crash */
     int64_t deadline_ms;          /* -1 = no deadline; else absolute time in ms */
     int timed_out;                /* set to 1 by scheduler when deadline expires */
@@ -522,18 +544,21 @@ void gem_pin_free_all(GemProcess *proc);
 #endif
 
 #ifndef GEM_CORO_STACK_SIZE
-/* 256 KB. Each spawned process owns a malloc'd coroutine stack of this
- * size — there's no lazy paging, so the cost is paid up front per
- * process. The original 16 KB choice was tuned for OTP-style processes
- * that mostly receive messages and tail-recurse; it is far too small
- * to run anything compiler-grade (lexer + parser + AST walks) inside
- * a spawn. The LSP doc process surfaced the overflow on Linux glibc
- * (heap canary trip / SIGSEGV); macOS happened to silently tolerate
- * the overrun. Bookmark soak peaks ~55 MB at c=100, ~612 MB at c=500;
- * bumping by 240 KB/process adds ~24 MB and ~120 MB respectively —
- * well within the existing memory envelope. Switching to mmap'd stacks
- * for lazy paging is tracked as a follow-up in OPTIMIZATIONS.md. */
-#define GEM_CORO_STACK_SIZE (256 * 1024)
+/* 8 MB, the same as the main process and a default OS thread stack, so a
+ * function recurses as deep in a spawned process as in main. Stacks are
+ * mmap'd (gem_scheduler.c, "Process stacks"): this is reserved address
+ * space, and only the pages a process actually touches cost memory (an
+ * idle process touches a few KB). 1024 processes reserve 8 GB of virtual
+ * address space, which 64-bit Linux and macOS hand out freely. */
+#define GEM_CORO_STACK_SIZE (8 * 1024 * 1024)
+#endif
+
+#ifndef GEM_STACK_RED_ZONE
+/* Bytes at the bottom of every process stack that Gem function calls may
+ * not enter: a call whose frame would land there raises "stack overflow"
+ * (catchable by pcall) instead. Leaves room for the error path itself and
+ * for C runtime code (and libc) called by the deepest Gem frame. */
+#define GEM_STACK_RED_ZONE (256 * 1024)
 #endif
 
 extern GemProcess gem_proc_table[GEM_MAX_PROCS];

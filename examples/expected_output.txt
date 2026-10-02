@@ -1301,3 +1301,50 @@ test3: ref returned: ref, cancel: false
 test4: ["first", "second", "third"]
 test4: timer for live process cancels: true
 test5: from beyond
+test1: stack overflow in depth
+test2: stack overflow in depth
+test2: ["worker 0 got ping", "worker 1 got ping", "worker 2 got ping"]
+test3: EXIT stack overflow in depth
+test3: linked stack overflow in depth
+test4: {"stack overflow in depth": 20}
+test5: stack overflow in native code called from anonymous fn
+test5: again stack overflow in native code called from anonymous fn
+test6: 10000
+test1: spawned depth 20000
+test1: main depth 20000
+test2: ok=false error=stack overflow in depth
+test2: still running, depth 1000
+test2: again ok=false error=stack overflow in depth
+test3: stack overflow in is_even
+test3: closure ok=false error=stack overflow in anonymous fn deep=true
+test4: main ok=false error=stack overflow in depth
+test5: depth 63 ok=true error=nil
+test5: depth 100 ok=true error=nil
+test5: depth 1000 ok=false error=JSON nesting too deep (max 128)
+test6: 200 10
+test6: 500 stack overflow in depth
+test6: 200 20
+test6: 500 stack overflow in depth
+test6: 200 30
+before
+
+[Runtime Error]: stack overflow in depth
+  --> examples/110_main_stack_overflow.gem:6
+   |
+ 6 |   if n == 0 then return 0 end
+   |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/110_main_stack_overflow.gem:6)
+  ... same frame repeated 253 more times
+  at start (examples/110_main_stack_overflow.gem:11)
+  at main (examples/110_main_stack_overflow.gem:15)
+built
+
+[Runtime Error]: stack overflow in native code called from main
+  --> examples/111_main_guard_overflow.gem:16
+    |
+ 16 | send(self(), deep)
+    |
+Stack trace:
+  at main (examples/111_main_guard_overflow.gem:16)

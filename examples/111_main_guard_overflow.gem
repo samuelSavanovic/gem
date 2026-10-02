@@ -1,0 +1,17 @@
+# Overflowing the stack inside C runtime code (here: copying a two-million-
+# deep nested list for send) runs into the guard page below the stack. In the
+# main process that prints a "stack overflow" runtime error and exits 1,
+# rather than crashing with SIGSEGV.
+
+fn nest(n)
+  let l = [0]
+  for i = 0, n
+    l = [l]
+  end
+  l
+end
+
+let deep = nest(2000000)
+print("built")
+send(self(), deep)
+print("unreachable")
