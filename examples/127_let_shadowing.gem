@@ -1,0 +1,332 @@
+# A second `let` of a name already in scope makes a new variable that
+# shadows the old one (its initializer reads the old one; closures made
+# before keep the old one; a shadow in a nested block ends with the block).
+# a second let of a param / local in the same block
+fn f(n)
+  let n = n - 1
+  n
+end
+fn gt(n)
+  if n == 0 then return 0 end
+  let n = n - 1
+  gt(n)
+end
+fn h()
+  let a = 1
+  let a = a + 1
+  a
+end
+print(f(5))
+print(gt(3))
+print(h())
+
+# TCO with default + rest params
+fn countdown(n, acc = 0)
+  if n == 0 then return acc end
+  let acc = acc + n
+  let n = n - 1
+  countdown(n, acc)
+end
+print(countdown(100000))
+
+fn rest_sum(n, ...xs)
+  if n == 0 then return len(xs) end
+  let n = n - 1
+  rest_sum(n, 1, 2)
+end
+print(rest_sum(50000))
+
+# mutual TCO
+fn ev(n)
+  if n == 0 then return true end
+  let n = n - 1
+  od(n)
+end
+fn od(n)
+  if n == 0 then return false end
+  let n = n - 1
+  ev(n)
+end
+print(ev(100001))
+
+# closures made before vs after the shadow
+fn clos()
+  let x = 1
+  let before = fn() x end
+  let x = x + 10
+  let aft = fn() x end
+  x = x + 100
+  print(before(), aft(), x)
+end
+clos()
+
+# boxed: captured AND mutated, then shadowed
+fn boxed()
+  let n = 0
+  let inc = fn() n = n + 1 end
+  inc()
+  inc()
+  let n = n * 10
+  inc()
+  let get_new = fn() n end
+  n = n + 5
+  let bump = fn() n = n + 1 end
+  bump()
+  print(n, get_new())
+end
+boxed()
+
+# shadow captured in a closure that mutates it
+fn boxed2()
+  let c = 1
+  let c = c + 1
+  let f = fn() c = c * 3 end
+  f()
+  print(c)
+end
+boxed2()
+
+# closure param and body lets
+fn inner()
+  let y = 5
+  let f = fn(y)
+    let y = y * 2
+    y
+  end
+  let g = fn()
+    let y = y + 1
+    y
+  end
+  print(f(3), g(), y)
+end
+inner()
+
+# loops: each iteration starts from outer value
+fn loops()
+  let x = 1
+  let i = 0
+  while i < 3
+    let x = x + i
+    print("w", x)
+    i += 1
+  end
+  for x in [10, 20]
+    let x = x + 1
+    print("f", x)
+  end
+  for i = 0, 3
+    let x = x * 100 + i
+    print("r", x)
+  end
+  for k, v in {a: 1}
+    let x = v + x
+    print("kv", k, x)
+  end
+  print(x, i)
+end
+loops()
+
+# match arm bindings shadow
+fn m(v)
+  let a = "outer"
+  match v
+  when [a, b]
+    print("arm", a, b)
+  when {a}
+    let a = a + 1
+    print("tbl", a)
+  else
+    print("else", a)
+  end
+  print("after", a)
+end
+m([1, 2])
+m({a: 41})
+m(3)
+
+# receive arm bindings shadow
+fn r()
+  let msg = "outer"
+  send(self(), {msg: "hi"})
+  receive
+  when {msg}
+    let msg = msg + "!"
+    print("recv", msg)
+  end
+  print("after", msg)
+end
+r()
+
+# module global shadowed
+let g = 10
+fn k()
+  let g = g + 1
+  g = g * 2
+  g
+end
+print(k(), g)
+
+# assignment after a shadow targets the new variable; outer unchanged after the block
+fn assigns(n)
+  if n > 0
+    let n = n + 1
+    n = n * 2
+    print("inner", n)
+  end
+  n
+end
+print(assigns(3))
+
+# shadowing a named fn
+fn twice(x) x * 2 end
+fn usef()
+  let twice = twice(4)
+  twice
+end
+print(usef())
+
+# destructuring shadow
+fn ds(p)
+  let a = 1
+  let [a, b] = [a + 1, a + 2]
+  let {c} = {c: a + b}
+  let {c} = {c: c * 2}
+  print(a, b, c)
+end
+ds(0)
+
+# param shadowed in nested ifs
+fn nest(n)
+  if true
+    let n = n + 1
+    if true
+      let n = n * 10
+      print(n)
+    end
+    print(n)
+  end
+  n
+end
+print(nest(1))
+
+# top-level blocks shadowing non-global block lets
+let base = 1
+if true
+  let y = base + 1
+  if true
+    let y = y * 10
+    print("inner y", y)
+  end
+  print("outer y", y)
+  let fs = []
+  let kk = 0
+  while kk < 3
+    let y = y + kk
+    push(fs, fn() y end)
+    kk += 1
+  end
+  print(fs[0](), fs[1](), fs[2](), y)
+end
+for base in [5, 6]
+  let base = base * 2
+  print("for", base)
+end
+print("base", base)
+match {base: 7}
+when {base}
+  let base = base + 1
+  print("match", base)
+end
+print("base", base)
+# module-level re-let rebinds the module binding (named fns see it)
+let mm = 1
+fn read_mm() mm end
+let mm = mm + 1
+print(mm, read_mm())
+# empty bodies, zero-arg closures
+fn empty(n)
+  let n = n
+  n
+end
+print(empty(nil))
+let z = fn()
+  let z = 3
+  z
+end
+print(z())
+# pcall non-escaping closure assigning a shadowed local
+fn pc()
+  let v = 1
+  let v = v + 1
+  pcall(fn() v = v + 40 end)
+  v
+end
+print(pc())
+# spawn capturing shadowed value
+fn sp()
+  let v = "old"
+  let v = v + "new"
+  let me = self()
+  spawn(fn() send(me, v) end)
+  receive
+  when x
+    print("got", x)
+  end
+end
+sp()
+
+# per-iteration arena resets with shadowed names in long loops
+fn build(n)
+  let t = {items: [], total: 0}
+  let i = 0
+  while i < n
+    let outer = t
+    let t = {s: "item-{i}-" + "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", n: i}
+    let s = t.s
+    if i % 25000 == 0
+      push(outer.items, s)
+      outer.total = outer.total + t.n
+    end
+    i += 1
+  end
+  t
+end
+let rr = build(120000)
+print(len(rr.items), rr.total)
+
+fn build2(n)
+  let acc = []
+  let total = 0
+  let i = 0
+  while i < n
+    let acc2 = acc
+    let total = total + i
+    let acc = "s{i}:" + "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+    if i % 30000 == 0
+      push(acc2, acc)
+      print(total)
+    end
+    i += 1
+  end
+  print(total, len(acc), acc[0], acc[3])
+end
+build2(130000)
+
+fn proc_loop(n, t)
+  if n == 0 then return t end
+  let t = {count: t.count + 1, s: "v{n}" + "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"}
+  proc_loop(n - 1, t)
+end
+let pr = proc_loop(150000, {count: 0, s: ""})
+print(pr.count, pr.s)
+
+let tbl = {n: 0, log: []}
+let j = 0
+while j < 110000
+  let tbl = {n: j, s: "t{j}" + "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"}
+  if j % 50000 == 0
+    print(tbl.s)
+  end
+  j += 1
+end
+print(tbl.n, len(tbl.log))

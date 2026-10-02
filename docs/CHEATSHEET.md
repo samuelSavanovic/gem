@@ -10,6 +10,7 @@ let x = 10
 let {a, b} = tbl                     # table destructuring
 let [first, second] = arr            # array destructuring
 let {port = 8080, host = "0.0.0.0"} = opts   # field defaults (fire on missing or nil)
+let x = x + 1                        # in a fn/block: new variable shadowing the old x (to block end)
 
 # Functions — fn/end, last expression is implicit return
 fn add(a, b)

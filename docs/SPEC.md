@@ -48,6 +48,33 @@ let name = "hello"
 x = 20
 ```
 
+### Shadowing
+
+A `let` always declares a new variable. If a variable of the same name is already visible (a parameter, an earlier `let` in the same or an enclosing block, a captured local of an enclosing function, a module-level binding, a named function), the new one **shadows** it:
+
+- The initializer is evaluated before the new variable exists, so it reads the old one: `let n = n - 1` reads the previous `n`.
+- Later code, including assignments (`n = …`, `n += 1`), refers to the new variable. The old one is not changed.
+- Closures created before the shadowing `let` keep the old variable; closures created after it see the new one.
+- A shadow made inside a nested block (`if`/`elif`/`else`, `while` and `for` bodies, `match`/`receive` arms, closure bodies) ends with that block: after it the outer variable is visible again, unchanged. In a loop body every iteration starts from the outer variable.
+- `for` loop variables and `match`/`receive` pattern bindings are lets of their body and shadow the same way.
+
+```
+fn f(n)
+  let before = fn() n end
+  let n = n - 1        # new n, initialized from the parameter
+  if n > 0
+    let n = n * 10     # shadows until `end`
+    print(n)           # 40
+  end
+  print(n, before())   # 4 5
+end
+f(5)
+```
+
+The exception is a `let` directly in a file's top-level code: that declares the module-level binding of the name (see below), of which there is one per name. A second top-level `let` of the same name rebinds that module-level binding, as an assignment would; named functions and closures, which always read module-level bindings live, see the new value.
+
+### Destructuring
+
 Destructuring extracts fields from tables or elements from arrays:
 
 ```

@@ -182,31 +182,40 @@ fn collect_top_let_names(stmts, result)
   end
 end
 
-# ─── Block-scoped lets in top-level code ─────────────────────────
+# ─── Shadowing lets ──────────────────────────────────────────────
 #
-# A `let` in the module's own statement list (or directly in a top-level
-# `block`, the shape of a lowered `for` header or a destructuring `let`) is
-# a module-level binding: a per-process slot keyed by name
-# (`top_level_vars`). A `let` nested in a top-level `if` / `while` / `for`
-# body / `match` or `receive` arm is block-scoped, like a `let` in a fn
-# body. When such a nested let reuses a module-level name it shadows the
-# slot until its block ends; it must not write the slot, and a closure
-# created in the block must capture the block's binding rather than read
-# the slot live.
+# A `let` always makes a new variable. When its name is already visible
+# (a parameter, an earlier `let` in this or an enclosing block, a captured
+# local, a module-level binding or a named fn) the new variable shadows the
+# old one: its initializer still reads the old one, closures created
+# before it keep the old one, and a shadow made in a nested block ends with
+# that block. Codegen, liveness, capture and boxing analysis are all keyed
+# by name, and C does not allow `GemVal gem_v_n = gem_v_n - 1` (a
+# redefinition in the same C block; in a nested block the initializer reads
+# the new, uninitialized variable). So this pass alpha-renames every
+# shadowing let (and the references and assignments it scopes) to a fresh
+# `_sh<N>_<name>`. After it no let reuses a name visible at that point, and
+# every later pass sees distinct variables.
 #
-# Codegen keys module-slot status by name, so this pass alpha-renames
-# every such shadowing let (and the references it scopes) to a fresh
-# `_sh<N>_<name>`. After it, top-level block lets never share a name with
-# a module slot and compile exactly like a fn's block lets (C local,
-# per-iteration capture, boxed when captured and mutated). Runs on the
-# post-lower AST, before any analysis keyed on names (capture, liveness,
-# process-tail tagging).
+# The one exception is a `let` in the module's own statement list (or
+# directly in a top-level `block`, the shape of a lowered `for` header or a
+# destructuring `let`): that is a module-level binding, a per-process slot
+# keyed by name (`top_level_vars`), which named fns and closures read live.
+# A second module-level `let` of a name rebinds that same slot. A `let`
+# nested in a top-level `if` / `while` / `for` body / `match` or `receive`
+# arm is block-scoped, like a `let` in a fn body, and is renamed when it
+# reuses a module-level name, so it never writes the slot and a closure
+# created in the block captures the block's binding.
 #
-# `env` maps a module-level name to the fresh name that shadows it in the
-# current scope. `mode` is "module" (module-scope statement list: lets are
-# slots), "block" (nested top-level scope: lets of module names are
-# renamed) or "fn" (inside a closure body: lets are real fn locals and
-# only hide outer renames).
+# Runs on the post-lower AST, before any analysis keyed on names (capture,
+# liveness, process-tail tagging).
+#
+# `env` maps every name visible in the current scope (params, lets) to the
+# name it compiles to (itself, or its fresh `_sh<N>_` name). `mode` is
+# "module" (module-scope statement list: lets are slots), "block" (nested
+# top-level scope) or "fn" (inside a fn or closure body). Module-level
+# bindings and named fns count as visible everywhere outside module scope
+# (`ctx.globals`, `ctx.fns`), wherever they are declared.
 
 fn copy_scope_env(env)
   let r = {}
@@ -216,23 +225,23 @@ fn copy_scope_env(env)
   r
 end
 
-let shadow_top_node = nil
-let shadow_top_stmt = nil
-let shadow_top_stmts = nil
-let shadow_top_children = nil
+let shadow_node = nil
+let shadow_stmt = nil
+let shadow_stmts = nil
+let shadow_children = nil
 
-fn shadow_top_bind(let_node, env, mode, ctx)
+fn shadow_bind(let_node, env, mode, ctx)
   let name = let_node.name
   if name == nil
     return nil
   end
-  if mode == "block" and set_contains(ctx.globals, name)
+  if mode != "module" and (has_key(env, name) or set_contains(ctx.globals, name) or set_contains(ctx.fns, name))
     ctx.n = ctx.n + 1
     let fresh = "_sh{ctx.n}_{name}"
     let_node.name = fresh
     env[name] = fresh
-  elif has_key(env, name)
-    delete(env, name)
+  else
+    env[name] = name
   end
 end
 
@@ -243,47 +252,68 @@ fn shadow_child_mode(mode)
   mode
 end
 
-shadow_top_stmts = fn(stmts, env, mode, ctx)
+# A fn or closure: its params are new C params, visible as themselves in
+# the body (hiding any outer binding of the same name).
+fn shadow_fn(node, env, ctx)
+  let inner = copy_scope_env(env)
+  if node.params != nil
+    for p in node.params
+      inner[p] = p
+    end
+  end
+  if node.rest_param != nil
+    inner[node.rest_param] = node.rest_param
+  end
+  if node.defaults != nil
+    for d in node.defaults
+      shadow_node(d, inner, "fn", ctx)
+    end
+  end
+  shadow_stmts(node.body, inner, "fn", ctx)
+end
+
+shadow_stmts = fn(stmts, env, mode, ctx)
   if stmts == nil
     return nil
   end
   let scope = copy_scope_env(env)
   for s in stmts
-    shadow_top_stmt(s, scope, mode, ctx)
+    shadow_stmt(s, scope, mode, ctx)
   end
 end
 
 # A statement in a list whose scope is `env` (mutated: lets bind into it).
 # `block` is transparent: its lets belong to the enclosing list's scope.
-shadow_top_stmt = fn(s, env, mode, ctx)
+shadow_stmt = fn(s, env, mode, ctx)
   if is_node(s, "let")
-    shadow_top_node(s.value, env, mode, ctx)
-    shadow_top_bind(s, env, mode, ctx)
+    shadow_node(s.value, env, mode, ctx)
+    shadow_bind(s, env, mode, ctx)
   elif is_node(s, "block")
     for c in s.stmts
-      shadow_top_stmt(c, env, mode, ctx)
+      shadow_stmt(c, env, mode, ctx)
     end
   else
-    shadow_top_node(s, env, mode, ctx)
+    shadow_node(s, env, mode, ctx)
   end
 end
 
 # Arm bindings (`when` / `receive` patterns) are lets scoped to the arm.
-fn shadow_top_arm(cond, bindings, body, env, mode, ctx)
+fn shadow_arm(cond, bindings, body, env, mode, ctx)
   let arm = copy_scope_env(env)
-  shadow_top_node(cond, arm, mode, ctx)
+  let cm = shadow_child_mode(mode)
+  shadow_node(cond, arm, mode, ctx)
   if bindings != nil
     for b in bindings
       if is_node(b, "let")
-        shadow_top_node(b.value, arm, mode, ctx)
-        shadow_top_bind(b, arm, shadow_child_mode(mode), ctx)
+        shadow_node(b.value, arm, mode, ctx)
+        shadow_bind(b, arm, cm, ctx)
       end
     end
   end
-  shadow_top_stmts(body, arm, shadow_child_mode(mode), ctx)
+  shadow_stmts(body, arm, cm, ctx)
 end
 
-shadow_top_node = fn(node, env, mode, ctx)
+shadow_node = fn(node, env, mode, ctx)
   if node == nil or type(node) != "table" or node.tag == nil
     return nil
   end
@@ -294,53 +324,39 @@ shadow_top_node = fn(node, env, mode, ctx)
       node.name = env[node.name]
     end
   elif tag == "assign"
-    shadow_top_node(node.value, env, mode, ctx)
+    shadow_node(node.value, env, mode, ctx)
     if has_key(env, node.name)
       node.name = env[node.name]
     end
   elif tag == "let" or tag == "block"
     # Only reachable as a statement; route through the list walker.
-    shadow_top_stmt(node, env, mode, ctx)
+    shadow_stmt(node, env, mode, ctx)
   elif tag == "fn_def"
     # Named fns are module-level and never see block locals.
-    nil
+    shadow_fn(node, {}, ctx)
   elif tag == "anon_fn"
-    let inner = copy_scope_env(env)
-    if node.params != nil
-      for p in node.params
-        delete(inner, p)
-      end
-    end
-    if node.rest_param != nil
-      delete(inner, node.rest_param)
-    end
-    if node.defaults != nil
-      for d in node.defaults
-        shadow_top_node(d, inner, "fn", ctx)
-      end
-    end
-    shadow_top_stmts(node.body, inner, "fn", ctx)
+    shadow_fn(node, env, ctx)
   elif tag == "if"
-    shadow_top_node(node.cond, env, mode, ctx)
-    shadow_top_stmts(node.then, env, cm, ctx)
+    shadow_node(node.cond, env, mode, ctx)
+    shadow_stmts(node.then, env, cm, ctx)
     if node.elifs != nil
       for ei in node.elifs
-        shadow_top_node(ei.cond, env, mode, ctx)
-        shadow_top_stmts(ei.body, env, cm, ctx)
+        shadow_node(ei.cond, env, mode, ctx)
+        shadow_stmts(ei.body, env, cm, ctx)
       end
     end
-    shadow_top_stmts(node.else, env, cm, ctx)
+    shadow_stmts(node.else, env, cm, ctx)
   elif tag == "while"
-    shadow_top_node(node.cond, env, mode, ctx)
-    shadow_top_stmts(node.body, env, cm, ctx)
+    shadow_node(node.cond, env, mode, ctx)
+    shadow_stmts(node.body, env, cm, ctx)
   elif tag == "match"
-    shadow_top_node(node.target, env, mode, ctx)
+    shadow_node(node.target, env, mode, ctx)
     if node.whens != nil
       for w in node.whens
-        shadow_top_arm(w.value, w.bindings, w.body, env, mode, ctx)
+        shadow_arm(w.value, w.bindings, w.body, env, mode, ctx)
       end
     end
-    shadow_top_stmts(node.else, env, cm, ctx)
+    shadow_stmts(node.else, env, cm, ctx)
   elif tag == "receive_match"
     if node.arms != nil
       for a in node.arms
@@ -350,15 +366,15 @@ shadow_top_node = fn(node, env, mode, ctx)
           cond = a.pattern.condition
           bindings = a.pattern.bindings
         end
-        shadow_top_arm(cond, bindings, a.body, env, mode, ctx)
+        shadow_arm(cond, bindings, a.body, env, mode, ctx)
       end
     end
-    shadow_top_node(node.after_ms, env, mode, ctx)
-    shadow_top_stmts(node.after_body, env, cm, ctx)
+    shadow_node(node.after_ms, env, mode, ctx)
+    shadow_stmts(node.after_body, env, cm, ctx)
   else
     for k, v in node
       if k != "tag" and type(v) == "table"
-        shadow_top_children(v, env, mode, ctx)
+        shadow_children(v, env, mode, ctx)
       end
     end
   end
@@ -367,25 +383,32 @@ end
 
 # Expression children: a node, or a tagless container (arg list, table
 # entries `{key, value}`) holding nodes.
-shadow_top_children = fn(v, env, mode, ctx)
+shadow_children = fn(v, env, mode, ctx)
   if v.tag != nil
-    shadow_top_node(v, env, mode, ctx)
+    shadow_node(v, env, mode, ctx)
     return nil
   end
   for _, c in v
     if type(c) == "table"
-      shadow_top_children(c, env, mode, ctx)
+      shadow_children(c, env, mode, ctx)
     end
   end
 end
 
-fn scope_top_level_lets(top_stmts)
+fn scope_shadowing_lets(fn_defs, top_stmts)
   let globals = {}
   collect_top_let_names(top_stmts, globals)
-  let ctx = {globals: globals, n: 0}
+  let fns = {}
+  for fd in fn_defs
+    set_add(fns, fd.name)
+  end
+  let ctx = {globals: globals, fns: fns, n: 0}
   let env = {}
   for s in top_stmts
-    shadow_top_stmt(s, env, "module", ctx)
+    shadow_stmt(s, env, "module", ctx)
+  end
+  for fd in fn_defs
+    shadow_fn(fd, {}, ctx)
   end
 end
 
@@ -5468,10 +5491,10 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
     lift_arm_lets_top_stmts(top_stmts)
 
-    # Give block-scoped lets in top-level code that reuse a module-level
-    # name their own fresh name, so they shadow the slot instead of
-    # writing it (see scope_top_level_lets).
-    scope_top_level_lets(top_stmts)
+    # Give every let that shadows a visible name (param, outer local,
+    # module binding, named fn) its own fresh name, so it is a new variable
+    # (see scope_shadowing_lets).
+    scope_shadowing_lets(fn_defs, top_stmts)
 
     # Mark non-escaping closures (immediate-call-site args to allowlisted
     # callees like pcall/sort). Must run before any capture analysis below
@@ -5518,7 +5541,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     collect_top_let_names(top_stmts, top_level_vars)
     # A rescue placeholder that lift_captured_arm_lets put in the module's
     # statement list is main's own local, as in a fn body: it never names a
-    # module binding (scope_top_level_lets renamed every nested let of a
+    # module binding (scope_shadowing_lets renamed every nested let of a
     # module name), and as a slot the block-scoped lets it stands in for
     # would compile to writes of that slot.
     for n in top_rescue_placeholders(top_stmts)
