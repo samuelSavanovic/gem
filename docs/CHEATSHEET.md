@@ -61,6 +61,7 @@ when {ok: true, value: v}            # destructuring pattern
   use(v)
 when {id: ^wanted}                   # ^pin: equals existing var `wanted`, no binding
   mine()
+when 0 then zero()                   # one-line arm: `then` (as in `if ... then`)
 else
   fallback()
 end
@@ -95,8 +96,9 @@ let msg = receive()                  # pop head
 receive                              # selective receive
 when {tag: "DOWN", pid: p}
   handle(p)
+when {tag: "ping"} then pong()       # one-line arm
 after 5000
-  timeout()
+  timeout()                          # or: after 5000 then timeout()
 end
 monitor(pid)                         # → true; DOWN message on exit
 link(pid); unlink(pid)

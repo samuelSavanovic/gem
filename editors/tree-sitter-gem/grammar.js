@@ -187,15 +187,18 @@ module.exports = grammar({
       'end',
     ),
 
+    // `then` starts a one-line arm: `when 0 then "zero"`
     when_clause: $ => seq(
       'when',
       field('pattern', $.pattern),
+      optional('then'),
       repeat($._statement),
     ),
 
     after_clause: $ => seq(
       'after',
       field('timeout', $._expression),
+      optional('then'),
       repeat($._statement),
     ),
 

@@ -38,6 +38,8 @@ expected=(
   "stray_do:4:4"
   "undeclared:1:1"
   "unterminated_string:1:1"
+  "when_no_then:1:1"
+  "when_no_then_arms:6:6"
 )
 
 fails=0

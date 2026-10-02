@@ -320,7 +320,16 @@ when "call"
 else
   error("unknown: " + tag)
 end
+
+# One-line arms: 'then' after the pattern, as with 'if ... then'
+match n
+when 0 then "zero"
+when 1 then "one"
+else "many"
+end
 ```
+
+A `when` arm's body starts either on the line after the pattern or, after `then`, on the same line (`then` must be on the pattern's line, like `if <cond> then`; the body may continue onto further lines). Anything else on the pattern's line is a compile error: `when x nil` reports "expected `then` or a newline after the `when` pattern". This holds for `match` and `receive` arms alike. A `receive`'s `after <ms>` clause also accepts an optional `then` (`after 100 then retry()`).
 
 ## Destructuring Patterns in Match
 

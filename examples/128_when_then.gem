@@ -1,0 +1,98 @@
+# One-line `when <pattern> then <body>` arms in match and receive.
+let classify = fn(v)
+  match v
+  when 0 then "zero"
+  when "s" then "string s"
+  when nil then "nil"
+  when true then "true"
+  when [a, b] then "pair {a} {b}"
+  when {kind: "pt", x: x, y: y} then "pt {x},{y}"
+  when -1 then "minus one"
+  when x then "other {x}"
+  end
+end
+print(classify(0))
+print(classify("s"))
+print(classify(nil))
+print(classify(true))
+print(classify([1, 2]))
+print(classify({kind: "pt", x: 3, y: 4}))
+print(classify(-1))
+print(classify(99))
+
+let want = 7
+match 7
+when ^want then print("pinned")
+else print("nope")
+end
+
+match 3
+when 1 + 2 then print("expr arm")
+end
+
+match 5
+when _ then print("underscore")
+end
+
+match 1
+when 1 then
+  print("then + newline")
+  print("two statements")
+when 2
+  print("multi")
+end
+
+match 1
+when 1 then print("a")
+end
+
+match [1, [2, 3]]
+when [a, inner] then match inner
+  when [b, c] then print("nested {a} {b} {c}")
+  end
+end
+
+match 1
+when 1 then match 2 when 2 then print("nested one-line") end
+end
+
+
+match 9
+when 1 then print("one") when 9 then print("nine") end
+
+match 2
+when 1 then
+when 2 then print("empty arm before")
+end
+
+send(self(), {tag: "hi", n: 1})
+send(self(), 42)
+send(self(), "str")
+receive
+when {tag: "hi", n: n} then print("recv hi {n}")
+end
+receive
+when 42 then print("recv 42")
+end
+receive
+when m then print("recv {m}")
+end
+receive
+when {tag: "never"} then print("never")
+after 10 then print("timeout")
+end
+receive
+when {tag: "never"} then print("never")
+after 10 print("timeout old style")
+end
+receive
+when x then print("got {x}")
+after 10
+  print("timeout multiline")
+end
+
+let want2 = "ref1"
+send(self(), {ref: "ref1", v: 5})
+receive
+when {ref: ^want2, v: v} then print("pinned recv {v}")
+end
