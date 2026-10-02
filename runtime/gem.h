@@ -253,7 +253,7 @@ struct GemTable {
     GemStrIndex *str_index;  /* stb_ds string hash map (NULL until first string key) */
     uint32_t shape_id;       /* incremented on structural mutations (delete, pop, sort, etc.) */
     GemTable *arena_next;    /* linked list in owning arena's table_list */
-    uint8_t immutable;       /* set by gem_table_freeze — shared across processes without copy */
+    uint8_t immutable;       /* frozen module namespace table (gem_table_freeze); copies keep the flag */
     uint8_t rem_flag;        /* scratch bit for a reset's remembered-log compaction */
     uint8_t index_stale;     /* str_index not built yet (deep copies build it on first string-key use) */
     uint64_t mut_seq;        /* gem_mut_clock at creation or the last logged write (see gem_table_written) */
@@ -297,7 +297,28 @@ GemVal gem_table_new(void);
 void gem_table_set(GemVal tbl, GemVal key, GemVal val);
 GemVal gem_table_get(GemVal tbl, GemVal key);
 void gem_table_grow(GemTable *t);
+/* Freeze a module namespace table: its own entries can no longer be
+   changed (the values it holds stay as mutable as they were). The table is
+   an ordinary per-process value: spawn, send and resets copy it like any
+   other table, and the copy stays frozen. */
 void gem_table_freeze(GemVal tbl);
+/* After a module reassigns exported binding `field`: store its new value
+   in namespace table `ns` (frozen, so user code cannot). No-op unless `ns`
+   is a frozen table holding `field`. */
+void gem_ns_refresh(GemVal ns, const char *field, GemVal val);
+/* Older generated code (bootstrap/stage0.c until it is regenerated) calls
+   this; it freezes `tbl` in place and returns it. */
+GemVal gem_table_freeze_static(GemVal tbl);
+
+/* Every runtime path that changes a table's entries (store, append, insert,
+   delete, pop, sort, remove_at) calls this first. */
+#if defined(__GNUC__)
+__attribute__((noreturn, cold))
+#endif
+void gem_table_frozen_error(void);
+static inline void gem_table_check_mutable(GemTable *t) {
+    if (__builtin_expect(t->immutable, 0)) gem_table_frozen_error();
+}
 
 /* ─── Inline cache for .field access ─── */
 
@@ -467,10 +488,6 @@ GemVal *gem_globals_alloc(void);
 /* Deep-copy `*fn_val`'s env and the `n` slots of `src` into the current
    arena with one shared copy map; results in *fn_val and dst. */
 void gem_spawn_copy(GemVal *fn_val, GemVal *dst, const GemVal *src, int n);
-/* Copy `tbl` (a frozen module namespace table) into immortal malloc memory,
-   so every process can share it without copying and no arena reset or
-   process exit can free it. */
-GemVal gem_table_freeze_static(GemVal tbl);
 
 /* Allocate a new pinned box (sizeof(GemVal)) outside the per-process arena.
    The caller is responsible for initializing *box. The pointer is registered

@@ -68,7 +68,7 @@ Table destructuring extracts by name (`let {a, b} = expr` is `let a = expr.a; le
 
 A `let` at the top level of a file (including loaded modules' private `let`s and the namespace tables `load` creates) is a module-level binding, visible from every function and closure in the file. Module state follows the Erlang model — there is no memory shared between processes:
 
-- Every process has its own copy of the module-level bindings. `spawn` gives the child a deep copy of the parent's current values (one copy for the whole set, so two bindings that refer to the same table still do in the child). Namespace tables (`string`, `log`, …) are immutable (setting a field raises `cannot modify a module table`) and shared without copying.
+- Every process has its own copy of the module-level bindings. `spawn` gives the child a deep copy of the parent's current values (one copy for the whole set, so two bindings that refer to the same table still do in the child). Namespace tables (`string`, `log`, …) are per-process like every other binding, and frozen: changing their own entries (`m.x = …`, `push(m, …)`, `delete(m, …)`, `insert`, `pop`, `sort`, `remove_at`) raises `cannot modify a module table`. Copies of a namespace (spawn, send) stay frozen.
 - A write to a module-level binding — `x = …`, `x.field = …`, `push(x, …)` — changes only the running process's copy. Other processes, including the parent, never see it; a child spawned later starts from the parent's values at that time.
 - Named functions, closures and top-level code all read the current value of the running process's copy. Closures do not snapshot module-level bindings when they are created.
 
@@ -1184,6 +1184,8 @@ string._helper("x")           # error — _helper is not exported
 ```
 
 Loading a file without an `export` statement is a compile error.
+
+`m.x` is the module's own binding `x` in the running process, not a copy: `m.add("a"); len(m.items)` sees the item `add` pushed onto the module's `items`, and after the module reassigns `items`, `m.items` is the new value. This also holds when the namespace is used as a value (`let ns = m; ns.items`). The values a namespace exports stay as mutable as they are inside the module (`push(m.items, x)` changes the module's `items` in this process); only the namespace table's own entries are frozen.
 
 **Module aliasing** — `load "path" as name` binds the module table to a custom name instead of the basename:
 

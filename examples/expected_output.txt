@@ -1433,3 +1433,25 @@ main built [2000000, 1999999000000]
 walker got [2000000, 1999999000000]
 ["child extra 1988890", "walked [2000000, 1999999000000]"]
 captured [200000, 19999900000]
+identity: 1 1 1
+push via namespace: 2 ["a", "b"]
+label: relabeled
+after reset: 0 0
+first-class: 2 true 2
+child: [4, 4, true, ["c", "d", "child", "child2"]]
+main after child: 2 ["c", "d"]
+busy child saw: 12
+main still: 2 ["c", "d"]
+holder child: {i: 99000, label: "v99000"}
+holder main: main value
+frozen delete false cannot modify a module table
+frozen dot_set false cannot modify a module table
+frozen index_set false cannot modify a module table
+frozen insert false cannot modify a module table
+frozen pop false cannot modify a module table
+frozen push false cannot modify a module table
+frozen remove_at false cannot modify a module table
+frozen sort false cannot modify a module table
+unchanged: 2 fn
+frozen in child: cannot modify a module table
+sent copy: 2 cannot modify a module table

@@ -110,8 +110,7 @@ typedef struct {
     int use_malloc;
     /* When `preserve_external` is set (arena resets), only objects inside
        `region` -- the memory about to be freed -- are copied; any pointer
-       outside it (older arena memory, malloc'd pinned boxes, immortal
-       module tables) is kept as is, so its identity is preserved. */
+       outside it (older arena memory, malloc'd pinned boxes) is kept as is, so its identity is preserved. */
     int preserve_external;
     const GemRegion *region;
 } GemCopyMap;
@@ -271,12 +270,8 @@ static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
             return r;
         }
         case VAL_TABLE: {
-            /* Immutable tables are shared without copying by spawn/send (module
-               namespace tables are immortal). An arena reset copies any table
-               inside its region. */
             GemTable *t = val.table;
             if (gem_copy_is_external(map, t)) return val;
-            if (!map->use_malloc && !map->preserve_external && t->immutable) return val;
             void *existing = gem_copy_map_find(map, t);
             if (existing) { GemVal r; r.type = VAL_TABLE; r.magic = GEM_MAGIC; r.table = (GemTable *)existing; return r; }
             GemTable *nt = (GemTable *)gem_copy_alloc(map, sizeof(GemTable));
@@ -287,6 +282,7 @@ static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
             nt->vals = (GemVal *)gem_copy_alloc(map, sizeof(GemVal) * t->cap);
             nt->str_index = NULL;
             nt->shape_id = gem_shape_counter++;
+            nt->immutable = t->immutable;  /* a frozen namespace stays frozen */
             nt->arena_next = NULL;
             /* The string-key index is built on first use (gem_table_index): many
                copies (spawned module state, messages) are never looked up by key. */
@@ -579,7 +575,7 @@ void gem_pin_free_all(GemProcess *proc) {
  *      strings are immutable, so older ones cannot point into the region.
  *   4. Process state: module slots (proc->globals), the mailbox, read_buf.
  *   5. Other processes never hold pointers into this arena (spawn and send
- *      deep-copy; frozen module tables are immortal malloc copies).
+ *      deep-copy).
  *
  * Nested loops nest their marks: a reset only frees memory newer than its
  * own mark, so marks held by enclosing loops (all older) stay valid.
