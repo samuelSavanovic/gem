@@ -916,6 +916,19 @@ The interpolation ends at the `}` that balances its `{` (braces of table literal
 
 **Inside spawned processes**, `error()` does not terminate the program. Each spawned process has an implicit error boundary — if an unhandled error occurs, the process dies but other processes continue. The error is captured, DOWN messages are delivered to monitors, EXIT signals propagate to linked processes, and the scheduler continues. `pcall` inside a spawned process still works — it catches errors locally before the process-level boundary. This boundary covers running out of stack too (see Stack depth below). See Process Monitoring for details.
 
+A process that dies this way is reported on stderr, like Erlang's error logger: the same message, source line and stack trace an uncaught error in the main process prints, under a header naming the process by pid (and registered name, if any). Its monitors and links see the error message as the exit reason, as before. Nothing is printed when a process returns normally, is ended by `kill` (including `kill(self(), reason)`), or dies because a linked process died; only the process whose error went uncaught is reported. Processes under a supervisor are reported too.
+
+```
+[Runtime Error in process 4 "logger"]: boom
+  --> app.gem:10
+    |
+ 10 |   error("boom")
+    |
+Stack trace:
+  at handle (app.gem:10)
+  at anonymous fn (app.gem:21)
+```
+
 **Compile-time error format**: the compiler produces Rust-style diagnostics to stderr with source context, caret highlighting, and optional hints:
 
 ```
@@ -984,7 +997,7 @@ Running out of stack is an ordinary runtime error, not a crash:
   if not r.ok then reply(500, r.error) end   # "stack overflow in walk"
   ```
 
-- Uncaught in a spawned process, it ends that process with that reason. Monitors receive `{tag: "DOWN", pid: p, reason: "stack overflow in walk"}`, links propagate it like any other exit reason, and every other process keeps running.
+- Uncaught in a spawned process, it ends that process with that reason. Monitors receive `{tag: "DOWN", pid: p, reason: "stack overflow in walk"}`, links propagate it like any other exit reason, and every other process keeps running. The process is reported on stderr like any other uncaught error in a spawned process (see Error Handling).
 - Uncaught in the main process, it is reported like any other uncaught runtime error: the message and a stack trace go to stderr, and the program exits with status 1. In the trace, a run of identical frames is shown once, followed by `... same frame repeated N more times`, and `... (deeper frames not recorded)` marks a trace cut short (only the outermost 256 frames are recorded).
 - Native code that runs out of stack on its own — a recursive C function reached through `extern fn` — ends the process with reason `"stack overflow in native code called from <fn>"`, and `pcall` does **not** catch it, because the C code was interrupted midway. In the main process it is reported as an uncaught error (exit status 1). The runtime's own work on values never gets there: copying for `send`, `spawn` and arena resets is iterative, so a list nested millions of levels deep can be built, kept live in a loop, sent and received.
 
