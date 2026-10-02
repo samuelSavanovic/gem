@@ -63,16 +63,7 @@ GemVal gem_mod(GemVal a, GemVal b) {
 }
 
 GemVal gem_eq(GemVal a, GemVal b) {
-    if (a.type != b.type) return gem_bool(0);
-    switch (a.type) {
-        case VAL_NIL: return gem_bool(1);
-        case VAL_BOOL: return gem_bool(a.bval == b.bval);
-        case VAL_INT: return gem_bool(a.ival == b.ival);
-        case VAL_FLOAT: return gem_bool(a.fval == b.fval);
-        case VAL_STRING: return gem_bool(a.slen == b.slen && memcmp(a.sval, b.sval, (size_t)a.slen) == 0);
-        case VAL_REF: return gem_bool(a.rval == b.rval);
-        default: return gem_bool(0);
-    }
+    return gem_bool(gem_val_eq(a, b));
 }
 
 GemVal gem_neq(GemVal a, GemVal b) {

@@ -1,0 +1,23 @@
+# Tables, functions and string buffers compare by identity: a value equals
+# itself and nothing else, whatever its contents.
+let t = {a: 1}
+let alias = t
+let f = fn() 1 end
+
+print("same table: {t == t} {t == alias}")
+print("equal contents: {t == {a: 1}}")
+print("same fn: {f == f}; other fn: {f == fn() 1 end}")
+let b = buf_new()
+print("same buffer: {b == b}; other buffer: {b == buf_new()} type={type(b)}")
+print("table in array: {t in [1, t]}; copy in array: {{a: 1} in [t]}")
+
+# A table works as a key, looked up by identity.
+let m = {}
+m[t] = "first"
+m[t] = "second"
+print("table key: len={len(m)} value={m[t]} other={m[{a: 1}]}")
+
+# A copy sent through a message is a different table.
+send(self(), t)
+let copy = receive()
+print("message copy: {copy == t} {copy.a}")

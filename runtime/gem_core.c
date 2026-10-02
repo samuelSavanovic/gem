@@ -280,6 +280,9 @@ int gem_val_eq(GemVal a, GemVal b) {
         case VAL_FLOAT: return a.fval == b.fval;
         case VAL_STRING: return a.slen == b.slen && memcmp(a.sval, b.sval, (size_t)a.slen) == 0;
         case VAL_REF: return a.rval == b.rval;
+        case VAL_TABLE: return a.table == b.table;
+        case VAL_BUFFER: return a.buffer == b.buffer;
+        case VAL_FN: return a.fn == b.fn && a.env == b.env;
         default: return 0;
     }
 }
