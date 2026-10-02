@@ -1,0 +1,6 @@
+# A file that loads itself is a load cycle, reported at that `load`.
+load "./load_self"
+fn f()
+  1
+end
+export f

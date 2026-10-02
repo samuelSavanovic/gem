@@ -1206,7 +1206,7 @@ join(parts, ",")         # error — join was not imported
 
 All three `load` forms use the same two-step path resolution. When a module has already been loaded by the program, re-importing it skips re-parsing but still creates the requested bindings (table, alias, or selective).
 
-**Circular imports** are not detected — the compiler tracks loaded paths and reuses cached modules. If module A loads B and B loads A, the second load of A returns the cached (possibly incomplete) module. In practice this means circular dependencies may see missing exports. Avoid circular imports; restructure shared code into a third module.
+**Circular imports** are a compile error. If module A loads B and B loads A (or a longer chain closes back on a file still being loaded, the entry file included, or a file loads itself), the compiler reports one error at the `load` that closes the cycle, naming the chain with project-relative paths: `load cycle: a.gem → b.gem → a.gem`. Move the code the modules share into a module that loads none of them. A diamond (A loads B and C, both load D) is not a cycle: D is loaded once and reused.
 
 ## Standard Library (std/)
 
