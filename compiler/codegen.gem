@@ -5151,6 +5151,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     let saved_current_closure_struct_name = current_closure_struct_name
     let saved_current_closure_captures = current_closure_captures
     let saved_in_leaf = in_leaf_fn
+    # A tail call inside this closure is the closure's own tail call, not
+    # the enclosing named fn's: suspend that fn's self-TCO and mutual-TCO
+    # rewrites (they would emit `continue`/`goto`/a TLB return in a
+    # different C function).
+    let saved_tco_fn_name = tco_fn_name
+    let saved_scc_id = current_scc_id
+    tco_fn_name = nil
+    current_scc_id = nil
     local_names = set_union(shadowed_locals, sorted_array_to_set(captures))
     fn_scope_locals = inner_scope
     in_leaf_fn = body_is_leaf(body)
@@ -5238,6 +5246,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     current_closure_struct_name = saved_current_closure_struct_name
     current_closure_captures = saved_current_closure_captures
     in_leaf_fn = saved_in_leaf
+    tco_fn_name = saved_tco_fn_name
+    current_scc_id = saved_scc_id
 
     # Add struct + function to functions list
     push(functions, struct_def + to_string(fb))
