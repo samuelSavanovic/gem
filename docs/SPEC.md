@@ -10,7 +10,7 @@ Compilation target is C source code. `gcc`/`clang` handles optimization and link
 
 C runtime is minimal glue code wiring together two libraries plus a per-process arena allocator:
 
-- **Per-process arena allocation** — each process (coroutine) gets its own arena (bump allocator). When a process spawns another, values are deep-copied into the new process's arena. When a process dies, its entire arena is freed at once. The main process arena persists for the lifetime of the program and holds module globals. Messages (`send`) are deep-copied into the target process's arena. No global GC pauses — memory is reclaimed per-process on exit.
+- **Per-process arena allocation** — each process (coroutine) gets its own arena (bump allocator). When a process spawns another, values are deep-copied into the new process's arena. When a process dies, its entire arena is freed at once. Messages (`send`) are deep-copied into the target process's arena, and so is the parent's module state at `spawn` (each process has its own copy of the module-level bindings, see Variables). No global GC pauses — memory is reclaimed per-process on exit, and loops reclaim their own garbage as they run (see Long-Running Processes).
 - **minicoro** — single-header stackful coroutines (libdill is abandoned, crashes on arm64 macOS). Runtime builds scheduler + channels on top (~150 lines)
 - **stb_ds.h** — single-header hash maps and dynamic arrays for table implementation
 
@@ -63,6 +63,27 @@ let [head, tail = []] = parts
 ```
 
 Table destructuring extracts by name (`let {a, b} = expr` is `let a = expr.a; let b = expr.b`). Array destructuring extracts by index (`let [a, b] = expr` is `let a = expr[0]; let b = expr[1]`). The RHS is evaluated exactly once. Missing keys/indices produce `nil`. Per-field defaults (`name = expr`) substitute when the extracted value is `nil` (i.e. the key was absent or its value was nil); the default is only evaluated in that case and may reference earlier names in the same destructure. Patterns are flat — no renaming, nesting, or rest/splat. Match/receive patterns are stricter and do **not** accept defaults; defaults are a binding-context feature only (let, fn params).
+
+### Module-level bindings are per-process
+
+A `let` at the top level of a file (including loaded modules' private `let`s and the namespace tables `load` creates) is a module-level binding, visible from every function and closure in the file. Module state follows the Erlang model — there is no memory shared between processes:
+
+- Every process has its own copy of the module-level bindings. `spawn` gives the child a deep copy of the parent's current values (one copy for the whole set, so two bindings that refer to the same table still do in the child). Namespace tables (`string`, `log`, …) are immutable (setting a field raises `cannot modify a module table`) and shared without copying.
+- A write to a module-level binding — `x = …`, `x.field = …`, `push(x, …)` — changes only the running process's copy. Other processes, including the parent, never see it; a child spawned later starts from the parent's values at that time.
+- Named functions, closures and top-level code all read the current value of the running process's copy. Closures do not snapshot module-level bindings when they are created.
+
+```
+let count = 0
+fn bump() count += 1 end
+bump()                       # main: count == 1
+spawn do
+  bump()                     # this process: count == 2
+  print(count)               # 2
+end
+print(count)                 # 1 — the child's write stayed in the child
+```
+
+To share state between processes, put it in a process and talk to it with messages (`gen_server`, `register`). The compiler prints a `note:` at each write to module state in code reachable from a `spawn` body, as a reminder that the write is process-local.
 
 ## Functions
 
@@ -396,30 +417,27 @@ Mutual tail recursion between named functions (`fn A` tail-calls `fn B`, which t
 
 ## Long-Running Processes — Per-Iteration Arena Reset
 
-Each process has its own arena (bump allocator). Allocations within the arena are freed in bulk only when the process exits. For short-lived processes (request handlers, one-shot tasks) this is ideal — no per-allocation free, no GC pauses.
+Each process has its own arena (bump allocator), freed in bulk when the process exits. For short-lived processes (request handlers, one-shot tasks) that is all there is — no per-allocation free, no GC pauses.
 
-For long-lived processes (accept loops, keep-alive HTTP handlers, supervisors, gen_servers), the runtime resets the per-process arena at the back-edge of the loop. When the arena exceeds 1 MB, the runtime deep-copies the live values into a fresh arena (along with the process mailbox), then frees the old arena's pages back to the OS. From the program's perspective the back-edge is unchanged; the arena is now empty except for what's live and pending.
+Loops reclaim their own garbage as they run, so long-lived processes (accept loops, keep-alive HTTP handlers, supervisors, gen_servers) and long computations stay at bounded memory. Every loop gets the treatment:
 
-Two loop forms qualify for the back-edge reset:
+1. **`while` loops**, including `for` loops and `while true`.
+2. **Self tail calls** (TCO, see above), with any number of arguments — including none — and any kind of parameter.
+3. **Mutual tail calls** that the compiler turns into a trampoline.
 
-1. **Tail-recursive self-call.** A function calling itself in tail position becomes a `while(1) { ... }` with parameter reassignment. The reset fires at the call site, with the call's arguments as the live set.
-2. **`while true` loops.** A `while true` whose iterations cannot leak C-frame state to a non-tail caller gets the same reset treatment, with the loop's *live-at-back-edge* set (computed by a backward-dataflow pass) as the live set.
+When a loop starts, the runtime remembers how much of the arena is in use. At the loop's back-edge, once the loop has allocated enough (at least 1 MB), the runtime copies the values that are still reachable from what was allocated since the loop started — the loop's live variables (computed by the compiler's liveness analysis), the process's module state and mailbox, and anything stored into older tables or buffers — into fresh memory, and returns the rest to the OS. Memory allocated before the loop started is never moved or freed by the loop, which is what makes this safe wherever the loop runs: called from any position, at any depth, inside `pcall`, in a spawned closure or in the main program. From the program's perspective nothing happens.
 
-Both forms only reset when the loop is statically reachable from a process root via tail calls only. Process roots are the top-level program (pid 0), the body of any anon_fn passed to `spawn`/`spawn_link`/`spawn_monitor`, and any function recursively reachable from those via tail calls. A function called non-tail-positionally from elsewhere — e.g. `let r = f(); g(r)` — leaks frame state to the caller and is excluded; resetting the arena there would invalidate `r`.
+The cost of a reset is proportional to the data it keeps, and the next reset waits until the loop has allocated at least twice that much again, so the total reset work stays proportional to the memory the loop allocates — a loop that builds a large table, or a server holding a large state, does not slow down as its live data grows.
 
 ```
-# Good — tail recursive, arena resets every ~1 MB
+# tail recursive: memory stays bounded however long it runs
 fn accept_loop(server_fd)
   let client = tcp_accept(server_fd)
   spawn(fn() handle(client) end)
   accept_loop(server_fd)
 end
 
-spawn(fn() accept_loop(fd) end)
-```
-
-```
-# Equally good — `while true` body, arena resets every ~1 MB
+# `while true`: same
 fn accept_loop(server_fd)
   while true
     let client = tcp_accept(server_fd)
@@ -430,17 +448,11 @@ end
 spawn(fn() accept_loop(fd) end)
 ```
 
+Garbage made outside any loop (straight-line code, or before a loop starts) is freed when an enclosing loop resets or when the process exits.
+
 ### When the back-edge reset cannot fire
 
-The compiler emits a warning when it cannot prove a process-tail `while true` is safe to reset. Common causes:
-
-- A live var is captured by a closure (the closure's box lives in arena memory; resetting would dangle the box).
-- A live var is declared in a nested `if`/`match` arm rather than at the function or loop body level (the var has no addressable C local at the back-edge).
-- A `break` in the loop body (post-loop liveness is not yet supported; the analyser refuses).
-
-For TCO functions, the corresponding condition is that the function is not reachable from a process root via tail calls only (the compiler emits a `TCO function ... not reachable from a process root` warning).
-
-`while true` outside a process-tail context (e.g. a finite REPL loop with `break`, or a one-shot helper) is silent — no warning, no reset. It's the right choice when the loop terminates promptly.
+The reset needs an addressable home for every value live at the back-edge. When the liveness analysis cannot provide one — a live variable declared in a nested `if`/`match` arm that the compiler could not hoist, or a liveness computation that does not converge — the loop runs without resetting. For a `while true` loop the compiler then prints a warning (`cannot reset per-process arena at this loop's back-edge`), since its memory would grow without bound; a loop that terminates is silent (its garbage is reclaimed by an enclosing loop or at process exit).
 
 ## Green Threads and Message Passing
 
@@ -726,7 +738,7 @@ extern include "stdio.h"
 - `extern fn` (non-blocking) — the runtime copies the returned `char*` into the calling process's arena via `gem_string` and **does not free the original**. Use this for static literals (`getenv`, `strerror`, etc.). A `malloc`'d return will leak.
 - `extern blocking fn` — the runtime copies into the arena and **frees the original** with `free`. The C function must return a `malloc`/`strdup`'d pointer; returning a static literal will crash on the free. NULL is allowed and yields an empty string from an `extern blocking fn`, or `nil` from an `extern fn`.
 
-**Pointer lifetime.** `String`, `Bytes`, and `Table` arguments passed to an `extern fn` point into the calling process's arena. They are stable for the duration of the call but **not** across the next arena reset (which can happen at any TCO back-edge or process-tail loop iteration). An `extern blocking fn` receives malloc'd copies of its `String` and `Bytes` arguments instead, which the runtime frees once the call is over. In both cases C code must not stash these pointers — copy out with `strdup`, `memcpy`, or by value before retaining.
+**Pointer lifetime.** `String`, `Bytes`, and `Table` arguments passed to an `extern fn` point into the calling process's arena. They are stable for the duration of the call but **not** across the next arena reset (which can happen at the back-edge of any loop or self tail call). An `extern blocking fn` receives malloc'd copies of its `String` and `Bytes` arguments instead, which the runtime frees once the call is over. In both cases C code must not stash these pointers — copy out with `strdup`, `memcpy`, or by value before retaining.
 
 `extern` is unsafe by definition: arity, type, and ABI are not validated at the boundary. A Gem-side mistake silently passes garbage to C.
 
@@ -1424,7 +1436,7 @@ gen_server.call(server, "get")    # 2
 gen_server.cast(server, "reset")
 ```
 
-Top-level `let` bindings (including std namespaces like `string`, `table`) compile to C globals, so they are accessible from named `fn` declarations, closures, and top-level code alike.
+Top-level `let` bindings (including std namespaces like `string`, `table`) are module-level bindings, accessible from named `fn` declarations, closures, and top-level code alike. Each process has its own copy (see Variables).
 
 ## What the Compiler Needs to Emit
 

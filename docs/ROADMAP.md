@@ -84,6 +84,12 @@ TCP sockets and SQLite handles are plain ints. A process that crashes or is kill
 
 What needs building: a per-process resource list filled by `tcp_listen`/`tcp_accept`/`tcp_connect`/`sqlite_open` and closed in `gem_free_proc_slot`; for `exec`, `posix_spawn` + `waitpid` so the child can be signalled. Trade-off: a handle passed to another process (an acceptor handing a socket to a handler) needs ownership to move with it. Making the user transfer ownership explicitly would add a concept to the language, so the transfer should happen implicitly, e.g. on `send` or `spawn` capture.
 
+## Shared read-mostly data between processes (P2)
+
+Module-level bindings are per-process (SPEC "Module-level bindings are per-process"): every process has its own copy, writes stay local, and `spawn` copies the parent's module state. Sharing mutable state means a process plus messages, which is the right default but makes large read-mostly data (a config tree, a routing table, a lookup cache) cost a copy per spawn or a message round-trip per read.
+
+What needs building: an ETS-like store owned by a process, whose entries live outside any arena (immortal or refcounted copies) and can be read from any process without a round-trip, written only through its owner. Trade-offs: a new concept to learn (keep it a std module, not syntax), copy-on-read vs. handing out immutable shared values (needs an immutability flag on tables, which namespace tables already have), and freeing entries that are overwritten while another process still reads them.
+
 ## Deep non-tail recursion ceiling (P3)
 
 Each spawned process runs on a fixed-size minicoro stack (`GEM_CORO_STACK_SIZE`, 256 KB, in `runtime/gem.h`); the main process gets `GEM_MAIN_STACK_SIZE` (8 MB, in `runtime/gem_scheduler.c`). Recursing past that crashes the whole program with a signal (SIGBUS on arm64 macOS), with no message, rather than raising a catchable error in the offending process.

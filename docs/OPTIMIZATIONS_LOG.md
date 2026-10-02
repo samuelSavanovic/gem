@@ -81,6 +81,21 @@ Canonical comparison point for the `while true` rescue+reset codegen vs. the pre
 
 ## Arena / Memory
 
+### Region resets: sound in any call context, with hysteresis ✓ Done (2026-10-02)
+
+Replaced the whole-arena reset (sound only for loops reachable from a process root through tail calls, guarded elsewhere by a runtime "depth-2 fence") with region resets. Each loop (`while`, TCO fn, mutual-TCO trampoline) takes a `GemArenaMark` at entry; its back-edge reset copies what is reachable from the memory allocated since the mark and unmaps the rest. Older memory is never moved, so callers' frames stay valid; older tables written since the mark are found through a write barrier + remembered log and fixed up in place, old buffers / pinned boxes / module slots / mailbox likewise. The process-tail analysis, the depth fence, the pcall skip and the "TCO function not reachable from a process root" warnings are gone; zero-arg tail calls reset too. Next reset waits for max(1 MB, 2 × copied + scanned) bytes.
+
+Supersedes "Tighten TCO function not reachable from process root warning (structural decrease)" and "Indirect-spawn PT tagging Stage B" (nothing left to warn about or tag).
+
+Before → after (Linux x86-64, same machine):
+- top-level loop pushing 5000 rows once live data > 1 MB: 18.3 s → 12 ms; 1.5 MB `buf_push` at top level: 67.7 s → 14 ms; top-level 5000 rows of 3 fields (review top1): 12.2 s → 9 ms.
+- gen_server-style store with 5000-entry state, 1000 calls: 6.35 s → 14 ms.
+- `while true` server loop in a spawned process called from a non-tail position (and, before, *any* caller once a non-tail call site existed): ~1 GB/s growth (4.9 GB after 5 s) → 7.9 MB flat; tail-called variant unchanged at 7.9 MB.
+- zero-arg receive loop, 400k messages: 160 MB → 7 MB peak.
+- 50/100/200 queued 1 MB messages draining through a reset loop: quadratic (0.75/3.2/14.4 s) → linear (200 msgs: 0.13 s).
+- self-hosting compile of `compiler/main.gem`: 3.1 s / 1.36 GB peak → 3.8 s / 117 MB peak (1,300 resets, 0.84 s of reset work).
+- spawn of 100k short processes with `std/http`, `std/json`, `std/log` loaded: 18 µs → 22 µs per spawn (module state copy; see OPTIMIZATIONS.md).
+
 ### Lower default `GEM_ARENA_RESET_THRESHOLD` ✓ Done (2026-04-30)
 Default lowered from 16 MB to 1 MB. Threshold sweep at c100 on `/` showed 1 MB strictly dominates: same throughput (28.8k vs 28.9k req/s), p99 −3.6× (26.5ms → 7.3ms), peak RSS −14× (2.04 GB → 139 MB), idle RSS −10× (495 MB → 50 MB). `/bookmarks` validation at c50 (heavier per-request allocation) confirmed no regression: throughput unchanged (4041 vs 4007 req/s), p99 −15% (26.9ms → 23.0ms), peak RSS −14× (728 MB → 52 MB). The hypothesis "smaller threshold = more reset overhead" did not show up in numbers — live set after a request is tiny so reset cost is negligible.
 
