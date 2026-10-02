@@ -1518,3 +1518,28 @@ y:300001:y
 750000 true
 false bottom 2100000 true
 200010000 200010000 true
+zero
+string s
+nil
+true
+pair 1 2
+pt 3,4
+minus one
+other 99
+pinned
+expr arm
+underscore
+then + newline
+two statements
+a
+nested 1 2 3
+nested one-line
+nine
+empty arm before
+recv hi 1
+recv 42
+recv str
+timeout
+timeout old style
+timeout multiline
+pinned recv 5

@@ -965,6 +965,47 @@ fn make_parser(tokens, source, file, sink)
     pat
   end
 
+  # True when a token of type `tp` ends a `when` arm's head: `then`
+  # (one-line arm) or the start of the next line / arm / clause.
+  let ends_arm_head = fn(tp)
+    tp == "then" or tp == "NEWLINE" or tp == "EOF" or tp == "end" or tp == "else" or tp == "when" or tp == "after"
+  end
+
+  # The body of a `when` arm. `then` starts a body on the same line, like
+  # `if <cond> then`; without it the body starts on the next line. Anything
+  # else on the pattern's line is an error.
+  let parse_arm_body = fn()
+    let nt = peek()
+    if nt.type == "then"
+      advance()
+    elif not ends_arm_head(nt.type)
+      report(nt.line, nt.col, len(to_string(nt.value)), "expected `then` or a newline after the `when` pattern", "write `when <pattern> then <body>` for a one-line arm")
+    end
+    parse_body()
+  end
+
+  # One `when` arm of a `match` or `receive` (the `when` already consumed).
+  # Destructuring pattern ({, [, ^) or bare-name catch-all → pattern arm.
+  # Anything else → expression arm (equality with the match target).
+  let parse_when_arm = fn()
+    let pt = peek().type
+    if pt == "\{" or pt == "[" or pt == "^"
+      let pat = parse_arm_pattern()
+      return make_match_arm(pat, nil, parse_arm_body())
+    end
+    if pt == "NAME" and ends_arm_head(peek_at(1).type)
+      let pat = parse_arm_pattern()
+      return make_match_arm(pat, nil, parse_arm_body())
+    end
+    let wval = parse_expr()
+    if wval.tag == "var" and not ends_arm_head(peek().type)
+      # `when x foo`: report the missing `then` once, and keep `x` a
+      # binding so its uses in the body don't also report as undeclared.
+      return make_match_arm(make_pat_name(wval.name), nil, parse_arm_body())
+    end
+    make_match_arm(nil, wval, parse_arm_body())
+  end
+
   # ── Statement parsing ──
 
   let parse_stmt_fn = fn()
@@ -1193,23 +1234,7 @@ fn make_parser(tokens, source, file, sink)
       let arms = []
       while peek().type == "when"
         advance()
-        # Destructuring pattern ({, [, ^) or bare-name catch-all → pattern arm.
-        # Anything else → expression arm (equality with the match target).
-        let pt = peek().type
-        let next = peek_at(1).type
-        if pt == "\{" or pt == "[" or pt == "^"
-          let pat = parse_arm_pattern()
-          let wbody = parse_body()
-          push(arms, make_match_arm(pat, nil, wbody))
-        elif pt == "NAME" and (next == "NEWLINE" or next == "EOF" or next == "end" or next == "else" or next == "when")
-          let pat = parse_arm_pattern()
-          let wbody = parse_body()
-          push(arms, make_match_arm(pat, nil, wbody))
-        else
-          let wval = parse_expr()
-          let wbody = parse_body()
-          push(arms, make_match_arm(nil, wval, wbody))
-        end
+        push(arms, parse_when_arm())
         skip_nl()
       end
       let else_body = nil
@@ -1336,21 +1361,7 @@ fn make_parser(tokens, source, file, sink)
         let rarms = []
         while peek().type == "when"
           advance()
-          let rpt = peek().type
-          let rnext = peek_at(1).type
-          if rpt == "\{" or rpt == "[" or rpt == "^"
-            let rpat = parse_arm_pattern()
-            let rwbody = parse_body()
-            push(rarms, make_match_arm(rpat, nil, rwbody))
-          elif rpt == "NAME" and (rnext == "NEWLINE" or rnext == "EOF" or rnext == "end" or rnext == "else" or rnext == "when" or rnext == "after")
-            let rpat = parse_arm_pattern()
-            let rwbody = parse_body()
-            push(rarms, make_match_arm(rpat, nil, rwbody))
-          else
-            let rwval = parse_expr()
-            let rwbody = parse_body()
-            push(rarms, make_match_arm(nil, rwval, rwbody))
-          end
+          push(rarms, parse_when_arm())
           skip_nl()
         end
         let rafter_ms = nil
@@ -1358,6 +1369,11 @@ fn make_parser(tokens, source, file, sink)
         if peek().type == "after"
           advance()
           rafter_ms = parse_expr()
+          # `after <ms> then <body>` mirrors one-line `when` arms; a
+          # same-line body without `then` stays accepted here.
+          if peek().type == "then"
+            advance()
+          end
           rafter_body = parse_body()
         end
         expect("end")
