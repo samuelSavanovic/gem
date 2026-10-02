@@ -1518,3 +1518,14 @@ y:300001:y
 750000 true
 false bottom 2100000 true
 200010000 200010000 true
+118
+10
+11
+47
+a+b
+4
+6
+{ok: true, value: 4}
+[3, 2, 1]
+hi 11
+int

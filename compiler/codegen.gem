@@ -3792,9 +3792,12 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
     end
     # Module slots are read live through gem_cur_globals, never captured.
+    # A free name the enclosing scope doesn't bind is undeclared (typo or
+    # missing let/load): leave it uncaptured so the closure body reports it
+    # (compile_expr's var case / check_assign_target), as in a named fn.
     let captures = []
     for cap in sort(keys(free))
-      if not is_global_ref(cap)
+      if not is_global_ref(cap) and set_contains(local_names, cap)
         push(captures, cap)
       end
     end

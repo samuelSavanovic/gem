@@ -1,0 +1,105 @@
+# Closures capture every name their enclosing scope binds. (A name that
+# resolves nowhere is a compile error, "undeclared identifier", in every
+# closure form; see tests/broken/closure_undeclared*.gem.)
+load "std/string" as string
+
+let counter = 10
+
+fn apply(f, x)
+  f(x)
+end
+
+fn each_n(n, f)
+  for i = 0, n
+    f(i)
+  end
+end
+
+# Outer locals, params, module globals, later fns, builtins, closure params.
+fn make_adder(a)
+  let b = 2
+  fn(c) a + b + c + counter + later_fn(0) + len("xy") end
+end
+print(make_adder(1)(3))
+
+fn later_fn(x)
+  x + 100
+end
+
+# Assigning outer locals and module globals from closures and do-blocks.
+fn sum_to(n)
+  let total = 0
+  each_n(n) do |i|
+    total = total + i
+  end
+  total
+end
+print(sum_to(5))
+
+let bump = fn()
+  counter = counter + 1
+end
+bump()
+print(counter)
+
+# Nested closures reading an outer-outer local and a middle param.
+fn nest(a)
+  let h = fn(b)
+    let k = fn() a * 10 + b end
+    k()
+  end
+  h(7)
+end
+print(nest(4))
+
+# Rest params, defaults, loaded module names.
+let joiner = fn(sep = "-", ...rest)
+  string.join(rest, sep)
+end
+print(joiner("+", "a", "b"))
+
+# Loop vars, match bindings and pattern lets captured.
+let fs = []
+for i = 0, 3
+  push(fs, fn() i * i end)
+end
+print(apply(fn(f) f() end, fs[2]))
+
+let r = nil
+match {k: 5}
+when {k: v}
+  r = fn() v + 1 end
+end
+print(r())
+
+# pcall over a closure body and sort comparators reading outer locals.
+let base = 3
+let res = pcall apply(fn(x) x + base end, 1)
+print(res)
+let desc = true
+print(sort([3, 1, 2], fn(a, b)
+  if desc
+    return b - a
+  end
+  a - b
+end))
+
+# spawn bodies reading parent locals and module globals.
+let parent = self()
+let msg = "hi"
+spawn do
+  send(parent, msg + " {counter}")
+end
+receive
+  when m
+    print(m)
+end
+
+# Top-level do-block reading a later top-level fn and a builtin.
+each_n(1) do |i|
+  print(type(late_top(i)))
+end
+
+fn late_top(x)
+  x
+end

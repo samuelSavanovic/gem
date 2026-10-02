@@ -1,0 +1,30 @@
+# Undeclared names read inside every closure form. Each use is reported once
+# as a Gem error (not a cc error about `gem_v_<name>`), nested closures
+# included.
+fn each_n(n, f)
+  for i = 0, n
+    f(i)
+  end
+end
+
+let f = fn() typo_a end
+each_n(2) do |i|
+  print(i + typo_b)
+end
+spawn do
+  print(typo_c)
+end
+let r = pcall each_n(typo_d, nil)
+
+fn outer(a)
+  let h = fn(b)
+    let k = fn()
+      a + b + typo_e
+    end
+    k() + typo_f
+  end
+  each_n(1) do |i|
+    print(typo_g)
+  end
+  h(1)
+end
