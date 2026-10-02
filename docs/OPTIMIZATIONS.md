@@ -31,7 +31,15 @@ Integer keys currently fall through to a linear scan if they don't match the arr
 ## Strings
 
 ### String views / slices (P1)
-`substr` allocates a copy. A view (pointer + offset + length) into the original string would make substring extraction O(1). Requires changing the string representation in GemVal (add length field, stop assuming null-termination). Every string consumer (`strlen`, `strcmp`, `printf %s`) needs updating. Defer until profiling shows substring allocation as a real bottleneck — the C interop boundary assumes null-terminated strings throughout, and `substr`/`ord(s, i)` already cover the hot cases without changing the representation.
+`substr` allocates a copy. A view (pointer + offset + length) into the original string would make substring extraction O(1). Strings already carry their length (`slen`), but every consumer that relies on the trailing NUL (C interop, `printf %s`) would need to copy or check views first. Defer until profiling shows substring allocation as a real bottleneck — the C interop boundary assumes null-terminated strings throughout, and `substr`/`ord(s, i)` already cover the hot cases without changing the representation.
+
+### Search and scan builtins so std string loops run in C (P1)
+Byte-at-a-time loops written in Gem (`ord(s, i)` per byte, plus a reduction check at every back-edge) are much slower than the same loop in C, and std leans on them: `std/string`'s `index_of`, `contains`, `split`, `starts_with` and `ends_with` all compare byte by byte through `str_eq_at`, and `std/http`'s `html_escape` dispatches on every byte. `split` also builds each piece with `buf_push(buf, chr(ord(s, i)))`, allocating a one-byte string per input byte. Two general builtins would move the inner loops into C:
+
+- `find(s, needle, start)` — `memmem`-backed; index of the first match at or after `start`, or -1. `index_of` and `contains` become one call, `split` becomes `find` plus one `substr` per piece, and `std/http`'s search for the `\r\n\r\n` header terminator (one `ord` comparison per byte) becomes one call.
+- `find_any(s, chars, start)` — index of the first byte at or after `start` that is in the set `chars`, or -1. `html_escape`, `std/url`'s percent-encoding and tokenizers like the `std/json` scanner scan to the next special byte, then copy the whole run before it. `trim` needs the inverse (skip bytes that *are* in the set, like `strspn`), so give it a negate flag or a sibling `skip_any`.
+
+The range copy already exists: `substr(s, start, count)` is one `memcpy`. The std loops just don't use it; `starts_with`/`ends_with` need no new builtin at all, since `substr(s, pos, len(x)) == x` is one copy plus one compare. `upper`/`lower` also allocate a string per byte (`add(chr(c))`) but need a byte-mapping builtin rather than either of these.
 
 ### String interning for short strings (P1)
 Small strings (< 16 bytes) could be interned in a global table, turning equality checks into pointer comparison. Most table keys are short identifier strings — this would speed up every `gem_table_get`/`gem_table_set` with string keys. Trade-off: interned strings must live in a shared arena or be reference-counted so they outlive individual process arenas. Would also reduce per-process allocation rate — repeated key lookups like `"tag"`, `"pid"`, `"url"` currently allocate a fresh string each time via `gem_string()`.
@@ -103,22 +111,14 @@ The scheduler currently uses `poll()` for socket readiness. Replacing with **kqu
 ## Scheduler / Concurrency
 
 ### Multi-threaded work-stealing scheduler (P2)
-The scheduler is single-threaded — one `while(1)` loop round-robining coroutines on one OS thread. N scheduler threads with per-thread run queues and work-stealing (Chase-Lev deque) would scale throughput ~linearly with cores. The per-process arena model already eliminates shared-heap contention. Hard parts: mailboxes need lock-free MPSC queues for cross-thread sends, shared globals (`gem_proc_table`, `gem_name_registry`, free list) need synchronization, each thread needs its own kqueue/epoll set, and process migration (stealing a coroutine between scheduler ticks) needs care. Erlang/BEAM does exactly this architecture. Nothing in the current design blocks it — isolated processes, message passing, and per-process memory are the right foundation.
+The scheduler is single-threaded — one scheduler loop round-robining coroutines on one OS thread. N scheduler threads with per-thread run queues and work-stealing (Chase-Lev deque) would scale throughput ~linearly with cores. The per-process arena model already eliminates shared-heap contention. Hard parts: mailboxes need lock-free MPSC queues for cross-thread sends, shared globals (`gem_proc_table`, `gem_name_registry`, free list) need synchronization, each thread needs its own kqueue/epoll set, and process migration (stealing a coroutine between scheduler ticks) needs care. Erlang/BEAM does exactly this architecture. Nothing in the current design blocks it — isolated processes, message passing, and per-process memory are the right foundation.
 
 ## C Interop Hardening
 
-Findings from the 2026-05-01 `extern fn` / `extern blocking fn` soundness audit. Two unambiguous bugs (Ptr-return missing magic, NULL-string return crash) were fixed in-tree; the items below are tracked follow-ups.
-
 ### String-return ownership convention is path-dependent (P2)
-`extern blocking fn` String returns are documented (SPEC §C Interop) to be `malloc`/`strdup`'d — the runtime copies into the arena and `free`s the original. `extern fn` (non-blocking) String returns are *not* freed: the runtime `gem_string`s the pointer (which copies) but the original is leaked if it was malloc'd, or fine if it was a static literal. Two reasonable behaviors with opposite ownership rules. Options: (a) document the asymmetry in SPEC, (b) unify on the blocking convention (always free), (c) introduce a `StringStatic` / `StringOwned` distinction. (a) is the cheapest; (b) is the most consistent but breaks the obvious `getenv`/`strerror`-style use case.
-
-### Pointer lifetime across arena reset (documentation only)
-A C function that stashes an arena-backed `String` or `Table` `GemVal` past the call (e.g. in a `static` cache) will dangle on the next arena reset (TCO loop, rescue+reset, or process exit). The marshaling layer can't enforce this — extern is unsafe by definition — but SPEC should call it out alongside the existing "extern is C, you own correctness" framing.
+`extern blocking fn` String returns are documented (SPEC §C Interop) to be `malloc`/`strdup`'d — the runtime copies into the arena and `free`s the original. `extern fn` (non-blocking) String returns are *not* freed: the runtime `gem_string`s the pointer (which copies) but the original is leaked if it was malloc'd, or fine if it was a static literal. Two reasonable behaviors with opposite ownership rules, documented in SPEC ("String-return ownership"). Options for removing the asymmetry: (a) unify on the blocking convention (always free), which is the most consistent but breaks the obvious `getenv`/`strerror`-style use case; (b) introduce a `StringStatic` / `StringOwned` distinction.
 
 ## std/json
-
-### Null byte handling in strings (P2)
-C strings are null-terminated, so embedded `\x00` bytes are invisible to the parser. This causes one JSONTestSuite failure: `n_multidigit_number_then_00` (a number followed by a null byte parses as valid because the null truncates the input). Fixing this requires length-aware strings throughout the runtime — depends on the string views/slices work above. When strings carry their length, the scanner can detect unexpected null bytes and reject them.
 
 ### Fast path for escape-free strings in parse (P2)
 `parse_string` always allocates a buffer and pushes byte-by-byte. Most JSON strings contain no escapes. A fast path that scans for the closing `"` first (checking for `\` along the way) and uses `substr` when no escapes are found would avoid the buffer allocation entirely. 2-3x speedup on string-heavy JSON.
@@ -128,7 +128,7 @@ The closure-based scanner (`{peek, advance, skip_ws}`) pays for hashmap lookup +
 
 ## Known DX warts of the rescue+reset mechanism (P2)
 
-The arena rescue+reset mechanism is invisible to user code by design — `while true` Just Works and resets at the back-edge once the threshold trips. This list captures the residual DX warts that remain even with everything currently shipped. None forces users to write code differently; all are observable by users in some form (jitter, throughput, mystery RSS) but not explainable from the source alone. Kept here so we don't pretend the trade-offs aren't there.
+The arena rescue+reset mechanism is invisible to user code by design — `while true` Just Works and resets at the back-edge once the threshold trips. This list captures the DX warts the mechanism has. None forces users to write code differently; all are observable by users in some form (jitter, throughput, mystery RSS) but not explainable from the source alone.
 
 1. **Latency cliff at threshold crossings.** With a 1 MB threshold, most iterations of a tight loop pay only the gate check; every Nth iteration pays a full sweep+rescue (proportional to live-set size). Visible as p99 jitter on hot HTTP loops — see `OPTIMIZATIONS_LOG.md` for headline numbers. Post-rescue p99 is ~6–20× better than the unbounded-RSS baseline, but the floor isn't flat. Mitigation idea: adaptive threshold based on observed allocation rate, or a hint mechanism per loop. Both edge into "language tax" territory (CLAUDE.md), so probably never worth shipping unless a real workload demands it. Document, don't fix.
 

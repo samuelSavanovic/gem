@@ -1,6 +1,6 @@
 # std/json — JSON parser and encoder for Gem
-# Passes 282/283 of https://github.com/nst/JSONTestSuite (99.6%)
-# Sole failure: embedded null bytes are invisible to C strings.
+# Passes all 283 required cases of https://github.com/nst/JSONTestSuite
+# (`make test-json-suite`).
 
 # ─── Scanner ──────────────────────────────────────────────────────
 

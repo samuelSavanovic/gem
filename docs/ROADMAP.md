@@ -72,11 +72,23 @@ Today, wrapping a C library that uses small structs by value (raylib's `Vector2`
 
 Stack traces on `error()` are good; there's no interactive step-through, breakpoint, or variable-inspection story. Pairs with `LSP_ROADMAP.md` but is a separate capability — typically a DAP (Debug Adapter Protocol) server that the runtime cooperates with (instrumented `gem_set_line` callbacks, ability to pause a coroutine, mailbox/process inspection).
 
-## Deep non-tail recursion ceiling (P3, was P1)
+## `demonitor`, and dropping a dead watcher's monitors (P1)
 
-Every Gem process runs on a fixed-size minicoro stack (currently 256KB, bumped from 16KB for LSP). On overflow minicoro logs `coroutine stack overflow, try increasing the stack size` to stderr and the program segfaults shortly after, rather than throwing a catchable error.
+`monitor(target)` adds the caller's pid to the target's monitor list (`gem_monitor_fn` in `runtime/gem_scheduler.c`), and the entry is freed only when the target exits. When the watcher exits first, its entry stays, so a long-lived process monitored by many short-lived ones accumulates one entry per watcher for as long as it lives, and each `monitor` call walks that list for its duplicate check. There is also no `demonitor`, so a live watcher cannot drop a monitor it no longer needs.
 
-**Mutual-tail-call elimination shipped** (see `OPTIMIZATIONS_LOG.md` §"Mutual TCO via tail-edge SCC trampoline"): the compiler builds the fn_def→fn_def tail-edge graph, runs Tarjan's SCC, and emits each viable SCC member as a `gem_fn_<name>_body` plus a thin trampoline-loop wrapper. Intra-SCC tail calls go through a global TLB instead of a real C call, so the broker's 7-function `writer_loop ↔ handle_frame ↔ handle_<command>` cycle (and any STOMP-shaped state machine) now iterates at constant stack depth. The 175-frame cliff documented in `examples/stomp_broker/NOTES.md` "Milestone 6: lived experience" is gone (see "Milestone 6, second pass" in the same file for the new sweep numbers).
+What needs building: a per-process list of the targets it monitors, so an exiting process can remove its entries from each live target in time proportional to its own monitors; then `demonitor(pid)` on top of the same list. Trade-off: one more list per process, maintained on every `monitor`.
+
+## Process-owned resources closed on exit (P2)
+
+TCP sockets and SQLite handles are plain ints. A process that crashes or is killed without closing them leaks the file descriptor or connection; Erlang ties a port to an owning process and closes it when the owner exits. Likewise a command started by `exec` keeps running after its process is killed, because `system()` does not expose the child's pid.
+
+What needs building: a per-process resource list filled by `tcp_listen`/`tcp_accept`/`tcp_connect`/`sqlite_open` and closed in `gem_free_proc_slot`; for `exec`, `posix_spawn` + `waitpid` so the child can be signalled. Trade-off: a handle passed to another process (an acceptor handing a socket to a handler) needs ownership to move with it. Making the user transfer ownership explicitly would add a concept to the language, so the transfer should happen implicitly, e.g. on `send` or `spawn` capture.
+
+## Deep non-tail recursion ceiling (P3)
+
+Each spawned process runs on a fixed-size minicoro stack (`GEM_CORO_STACK_SIZE`, 256 KB, in `runtime/gem.h`); the main process gets `GEM_MAIN_STACK_SIZE` (8 MB, in `runtime/gem_scheduler.c`). Recursing past that crashes the whole program with a signal (SIGBUS on arm64 macOS), with no message, rather than raising a catchable error in the offending process.
+
+Tail calls do not consume stack: self-recursive tail calls compile to loops, and mutual tail calls between functions in one tail-call cycle go through a trampoline (see `OPTIMIZATIONS_LOG.md` §"Mutual TCO via tail-edge SCC trampoline"). The broker's 6-function `writer_loop ↔ handle_frame ↔ handle_<command>` cycle runs at constant stack depth this way; `examples/stomp_broker/NOTES.md` "Milestone 6, second pass" has the sweep numbers.
 
 What's left at P3:
 
