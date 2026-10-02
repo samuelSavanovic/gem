@@ -1424,14 +1424,16 @@ non-tail spawn 800000 cleanup
 pcall depth 3 true [800000]
 zero-arg row-400000
 sink done
-top-level builds 30000 3000000 3000000 true
 store 14890 2000 true
 backlog drained 13107200
+top-level builds 20000 3000000 3000000 true
 peak memory bounded true
 workers 32 checksum 409600 bad 0 pongs <= workers true
-main built [2000000, 1999999000000]
-walker got [2000000, 1999999000000]
-["child extra 1988890", "walked [2000000, 1999999000000]"]
+main built [400000, 79999800000]
+walker got [400000, 79999800000]
+walker got via timer [400000, 79999800000]
+timer cancelled true
+["child extra 1988890", "walked [400000, 79999800000]"]
 captured [200000, 19999900000]
 1 spawn global: {n: 100000, s: "x100000"}
 2 spawn local: {n: 100000, s: "x100000"}
@@ -1471,3 +1473,11 @@ spawn {p: "proc100000"}
 13: 41 42 x=5
 14: iter 0:0 iter 2:4 msg=global total=4
 15: [10, 20, "block-z", "mod-loop", 1, "mod-z", "mod-a", "mod-b"] x=5 y=main-y z=3 a=main-a
+1500000 true
+13500000 true
+3750005 true
+x:300000:x
+y:300001:y
+750000 true
+false bottom 2100000 true
+200010000 200010000 true

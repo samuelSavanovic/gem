@@ -1370,8 +1370,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # `find_tail_call_sccs`.
   # `scc_id_to_members[id]` is a sorted array of member names (used to
   # generate stable C identifiers and to seed cross-SCC tail-call detection).
+  # `scc_id_max_params[id]` is the largest parameter count among the members:
+  # the wrapper copies that many TLB slots, since no body reads more.
   let scc_member_to_id = {}
   let scc_id_to_members = {}
+  let scc_id_max_params = {}
   let scc_counter = 0
   # Set inside the body of an SCC member during compile_fn — gives
   # compile_stmt_return a way to recognize "tail call to a sibling in my SCC"
@@ -2871,6 +2874,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     for k in keys(scc_id_to_members)
       delete(scc_id_to_members, k)
     end
+    for k in keys(scc_id_max_params)
+      delete(scc_id_max_params, k)
+    end
     scc_counter = 0
 
     let name_set = {}
@@ -3053,9 +3059,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         j += 1
       end
       scc_id_to_members[sid] = members
+      let max_params = 0
       for name in members
         scc_member_to_id[name] = sid
+        if len(name_to_fn[name].params) > max_params
+          max_params = len(name_to_fn[name].params)
+        end
       end
+      scc_id_max_params[sid] = max_params
     end
   end
 
@@ -3177,25 +3188,37 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(b, "    void *_next_env = _env;\n")
     buf_push(b, "    GemVal *_next_args = args;\n")
     buf_push(b, "    int _next_argc = argc;\n")
+    buf_push(b, "    GemVal _tail_args[GEM_MAX_TAIL_ARGS];\n")
     buf_push(b, "    GemVal _result;\n")
     buf_push(b, "    GemArenaMark _mk;\n")
     buf_push(b, "    gem_arena_mark(&_mk);\n")
     buf_push(b, "    while (1) \{\n")
-    buf_push(b, "        gem_tail_fn = NULL;\n")
     buf_push(b, "        _result = _next_fn(_next_env, _next_args, _next_argc);\n")
     buf_push(b, "        if (gem_tail_fn == NULL) break;\n")
+    # The TLB is process-global and other processes use it while this one
+    # is suspended (the reset and yield below, or any yield inside the next
+    # body). Consume it here, before anything can switch processes: copy
+    # the args into this wrapper's frame and clear gem_tail_fn, so the TLB
+    # is only ever set between a body's tail-set and this read.
     buf_push(b, "        _next_fn = gem_tail_fn;\n")
+    buf_push(b, "        gem_tail_fn = NULL;\n")
     buf_push(b, "        _next_env = gem_tail_env;\n")
-    buf_push(b, "        _next_argc = gem_tail_argc;\n")
-    buf_push(b, "        _next_args = gem_tail_args;\n")
+    # Copy a fixed count (the SCC's largest arity) so the copy unrolls; a
+    # call with fewer args leaves slots the next body never reads, and one
+    # with more passes args no body reads, so argc is clamped to the count.
+    let nargs = scc_id_max_params[sid]
+    buf_push(b, "        _next_argc = gem_tail_argc < {nargs} ? gem_tail_argc : {nargs};\n")
+    for i = 0, nargs
+      buf_push(b, "        _tail_args[{i}] = gem_tail_args[{i}];\n")
+    end
+    buf_push(b, "        _next_args = _tail_args;\n")
     # SOUNDNESS: the mark is taken on entry, before the first body runs, so
     # the callers hold only older values; between bodies the previous body
-    # has returned and the TLB args are the only live values.
+    # has returned and the copied tail args are the only live values.
     buf_push(b, "        if (gem_arena_reset_due(&_mk)) \{\n")
     buf_push(b, "            GemVal *_roots[GEM_MAX_TAIL_ARGS];\n")
-    buf_push(b, "            int _n = _next_argc < GEM_MAX_TAIL_ARGS ? _next_argc : GEM_MAX_TAIL_ARGS;\n")
-    buf_push(b, "            for (int _i = 0; _i < _n; _i++) _roots[_i] = &gem_tail_args[_i];\n")
-    buf_push(b, "            gem_arena_reset_region(&_mk, _roots, _n, NULL, 0);\n")
+    buf_push(b, "            for (int _i = 0; _i < _next_argc; _i++) _roots[_i] = &_tail_args[_i];\n")
+    buf_push(b, "            gem_arena_reset_region(&_mk, _roots, _next_argc, NULL, 0);\n")
     buf_push(b, "        }\n")
     buf_push(b, "        gem_yield_check();\n")
     buf_push(b, "    }\n")
@@ -4043,11 +4066,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
       if scc_call_target != nil and not set_contains(local_names, scc_call_target)
         let target_sid = scc_member_to_id[scc_call_target]
-        if target_sid == current_scc_id and scc_call_target != tco_fn_name
-          let call_node = node
-          if is_node(node, "return")
-            call_node = node.value
-          end
+        let call_node = node
+        if is_node(node, "return")
+          call_node = node.value
+        end
+        # A call site passing more args than the TLB holds (GEM_MAX_TAIL_ARGS,
+        # 16) stays a plain call: the members have at most 16 params, but
+        # the extra args must still be evaluated and must not overrun the TLB.
+        if target_sid == current_scc_id and scc_call_target != tco_fn_name and len(call_node.args) <= 16
           return line_dir + emit_scc_tail_call(call_node, scc_call_target, indent)
         end
       end

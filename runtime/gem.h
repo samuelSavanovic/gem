@@ -148,9 +148,13 @@ extern int gem_call_depth;
  * The codegen-emitted body of an SCC member, when it makes an intra-SCC
  * tail call, writes (gem_tail_fn, gem_tail_env, gem_tail_args, gem_tail_argc)
  * and returns; the wrapper around the body loops while gem_tail_fn != NULL,
- * dispatching the next body. A single global is safe because the scheduler
- * is cooperative — yields only happen inside bodies, never between a
- * tail-set and its return, never between the wrapper's read and dispatch.
+ * dispatching the next body. The TLB is shared by all processes, so it is
+ * only valid between a body's tail-set and the wrapper's read, a window with
+ * no yield point: the wrapper consumes it straight away, copying the args
+ * into its own frame and clearing gem_tail_fn, before the back-edge reset
+ * and yield check (or any yield inside the next body) can let another
+ * process write it. gem_tail_fn is therefore NULL whenever a process is
+ * suspended, so a body that returns normally always reads NULL.
  *
  * GEM_MAX_TAIL_ARGS sets a hard ceiling on parameter count for SCC merging;
  * if any SCC member has more params, the SCC is left as-is (regular calls).

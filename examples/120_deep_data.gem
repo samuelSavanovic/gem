@@ -1,7 +1,13 @@
-# Deeply linked data (a two-million-deep list) survives everything the
-# runtime copies: arena resets in a loop that keeps it live, `send` to
-# another process, and capture by a spawned closure. Copies never recurse
-# in C, so the depth of the data does not matter.
+# Deeply linked data (a 400k-deep list) survives everything the runtime
+# copies or frees: arena resets in a loop that keeps it live, `send` to
+# another process, a send_after timer's malloc'd copy (freed when the timer
+# fires or is cancelled), and capture by a spawned closure. Copies and
+# frees never recurse in C, so the depth of the data does not matter.
+#
+# Sizing: a recursive copy overflowed an 8 MB stack at 30k-100k levels
+# (send, spawn capture, reset), a recursive free (one ~32-byte frame per
+# level) at about 265k. 400k overflows all of them with margin; the
+# captured list (200k) only goes through the spawn copy.
 
 # Builds the list one level per iteration while allocating garbage, so the
 # loop's arena resets run many times with the growing list live.
@@ -28,7 +34,7 @@ fn walk(l)
   [depth, sum]
 end
 
-let N = 2000000
+let N = 400000
 let me = self()
 
 # A process that walks whatever list it receives and reports back.
@@ -48,9 +54,16 @@ let deep = grow(N)
 print("main built", walk(deep))
 send(walker, {list: deep, from: me})
 print("walker got", receive().walked)
+
+# 2. The same list through a timer: send_after keeps a malloc'd copy of the
+#    message, freed when the timer fires and when it is cancelled.
+send_after(walker, {list: deep, from: me}, 0)
+print("walker got via timer", receive().walked)
+let timer = send_after(walker, {list: deep, from: me}, 60000)
+print("timer cancelled", cancel_timer(timer))
 deep = nil
 
-# 2. A spawned process builds its own, keeps it live across a second
+# 3. A spawned process builds its own, keeps it live across a second
 #    resetting loop, then sends it on.
 spawn do
   let mine = grow(N)
@@ -73,7 +86,7 @@ for i = 0, 2
 end
 print(sort(replies))
 
-# 3. A spawned closure that captures a deep list (copied at spawn).
+# 4. A spawned closure that captures a deep list (copied at spawn).
 let shallower = grow(200000)
 spawn do
   send(me, {captured: walk(shallower)})
