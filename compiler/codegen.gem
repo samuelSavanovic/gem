@@ -1106,9 +1106,17 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # addressable from the enclosing while's back-edge) from fn-scope locals.
   let fn_scope_locals = {}
   # Captures of the current `compile_closure_fn` body — env fields backed by
-  # `_cls->gem_v_<name>`. The env predates any loop mark in the body, so
-  # `filter_live_for_rescue` never roots them.
+  # `_cls->gem_v_<name>`, each a `GemVal *` to the capture's storage.
+  # `filter_live_for_rescue` roots a live capture through that pointer.
   let closure_captures = {}
+  # Captures the current closure body assigns when that closure is
+  # non-escaping (stack env, `mark_non_escaping`): its env fields point at
+  # the creator's unboxed C locals, so an assign stores a value allocated
+  # after this body's loop marks into a frame older than those marks. Every
+  # loop in the body roots them at its back-edge whether or not liveness
+  # finds them live (any statement can raise back to the creator, which
+  # then reads them). Empty outside a non-escaping closure.
+  let stack_env_writes = {}
   let current_closure_struct_name = nil
   let current_closure_captures = nil
   let tco_fn_name = nil
@@ -1650,10 +1658,16 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     when {tag: "let", value: value}
       walk_writes_node(value, scope_vars, defined, writes, inside_anon)
     when {tag: "anon_fn", params: params, rest_param: rest_param, body: body}
-      if node.non_escaping == true
+      if node.non_escaping == true and not inside_anon
         # Non-escaping closures use stack-pointer semantics; their writes
         # mutate the outer's local directly without forcing it to be boxed,
         # so they don't contribute to the writes set we use to decide boxing.
+        # Inside an escaping closure they do count: there the name is a
+        # capture of that closure, and an unmutated capture gets a
+        # write-once snapshot box, which the non-escaping closure would
+        # then assign (the write would be lost to the creator, and the
+        # snapshot box, older than any loop mark, would point into a reset
+        # region).
         return nil
       end
       # When transitioning from outside-any-closure into an anon_fn, reset
@@ -3951,7 +3965,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     let refuse_reason = nil
     let lr = node.liveness_result
     if lr.ok
-      let fr = filter_live_for_rescue(lr.live)
+      let live = lr.live
+      if len(stack_env_writes) > 0
+        live = set_union(live, stack_env_writes)
+      end
+      let fr = filter_live_for_rescue(live)
       if fr.ok
         do_rescue = true
         rescue_roots = fr.roots
@@ -4951,6 +4969,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     let saved_closure_captures = closure_captures
     let saved_current_closure_struct_name = current_closure_struct_name
     let saved_current_closure_captures = current_closure_captures
+    let saved_stack_env_writes = stack_env_writes
     let saved_in_leaf = in_leaf_fn
     # A tail call inside this closure is the closure's own tail call, not
     # the enclosing named fn's: suspend that fn's self-TCO and mutual-TCO
@@ -5019,6 +5038,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     closure_captures = sorted_array_to_set(captures)
     current_closure_struct_name = struct_name
     current_closure_captures = captures
+    stack_env_writes = {}
+    if node.non_escaping == true and len(captures) > 0
+      let own = sorted_array_to_set(params)
+      if node.rest_param != nil
+        set_add(own, node.rest_param)
+      end
+      stack_env_writes = find_writes_in_closure_body(body, closure_captures, own)
+    end
 
     buf_push(fb, emit_param_bindings(node, params, inner_boxed))
     if not in_leaf_fn
@@ -5034,6 +5061,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     closure_captures = saved_closure_captures
     current_closure_struct_name = saved_current_closure_struct_name
     current_closure_captures = saved_current_closure_captures
+    stack_env_writes = saved_stack_env_writes
     in_leaf_fn = saved_in_leaf
     tco_fn_name = saved_tco_fn_name
     current_scc_id = saved_scc_id
