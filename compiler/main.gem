@@ -93,6 +93,14 @@ fn collect_module_top_names(stmts)
       if not string.starts_with(stmt.name, "_mod_")
         names[stmt.name] = true
       end
+    elif is_node(stmt, "block")
+      # Destructuring `let {a, b} = …` at module scope: a block of lets
+      # (temp + one per name), all module-level bindings.
+      for s in stmt.stmts
+        if is_node(s, "let") and not string.starts_with(s.name, "_mod_")
+          names[s.name] = true
+        end
+      end
     end
   end
   names
@@ -290,13 +298,32 @@ fn rename_node(node, rmap, shadowed)
   end
 end
 
-fn rename_stmts(stmts, rmap, shadowed)
-  let current = copy_set(shadowed)
-  for stmt in stmts
+# One statement of a list whose scope is `current` (mutated: a nested `let`
+# binds into it). At the module's top level (`top`), a `let` of a module
+# name is the module binding itself and is renamed with it. In a nested
+# block a `let` is block-scoped: it shadows the module name for the rest of
+# the block and keeps its own name. A `block` (destructuring `let`) is
+# transparent: its lets belong to the enclosing list.
+fn rename_stmt_in_scope(stmt, rmap, current, top)
+  if is_node(stmt, "block")
+    for s in stmt.stmts
+      rename_stmt_in_scope(s, rmap, current, top)
+    end
+  elif is_node(stmt, "let") and not top
+    rename_node(stmt.value, rmap, current)
+    current[stmt.name] = true
+  else
     rename_node(stmt, rmap, current)
     if is_node(stmt, "let") and not has_key(rmap, stmt.name)
       current[stmt.name] = true
     end
+  end
+end
+
+fn rename_stmts(stmts, rmap, shadowed)
+  let current = copy_set(shadowed)
+  for stmt in stmts
+    rename_stmt_in_scope(stmt, rmap, current, false)
   end
 end
 
@@ -305,7 +332,10 @@ fn transform_module(stmts, mod_name, export_node, load_node)
   let top_names = collect_module_top_names(stmts)
   let rmap = build_rename_map(top_names, prefix)
 
-  rename_stmts(stmts, rmap, {})
+  let module_scope = {}
+  for stmt in stmts
+    rename_stmt_in_scope(stmt, rmap, module_scope, true)
+  end
 
   let result = []
   for stmt in stmts

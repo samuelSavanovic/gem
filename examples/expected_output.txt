@@ -460,7 +460,7 @@ abc
 6: other
 7: 404 matched
 8: inner
-8b: inner
+8b: outer
 9: zero count
 10: nil fell through
 11: negative int matched, f=2.5
@@ -1433,3 +1433,18 @@ main built [2000000, 1999999000000]
 walker got [2000000, 1999999000000]
 ["child extra 1988890", "walked [2000000, 1999999000000]"]
 captured [200000, 19999900000]
+1: 10 20 x=1
+2: 0 1 2 i=100
+3: p=1 q=2 k=K v=V
+4: 10 100 1 20 200 2 x=1
+5: 10 100 20 200
+6: 43 z=3
+7: x=5
+8: b w=g
+9: 1 2 2 i=100
+10: inner msg name=outer
+11: get_x=5 x=99
+12: 8 8 3
+13: 41 42 x=5
+14: iter 0:0 iter 2:4 msg=global total=4
+15: [10, 20, "block-z", "mod-loop", 1, "mod-z", "mod-a", "mod-b"] x=5 y=main-y z=3 a=main-a
