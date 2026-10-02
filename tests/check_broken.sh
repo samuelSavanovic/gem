@@ -31,6 +31,8 @@ expected=(
   "interp_unterminated:1:1"
   "load_no_export:1:1"
   "load_parse_error:1:1"
+  "load_cycle:1:1"
+  "load_self:1:1"
   "double_typo:2:4"
   "missing_end:2:8"
   "missing_then_branches:1:4"

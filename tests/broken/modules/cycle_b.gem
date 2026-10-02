@@ -1,0 +1,9 @@
+# Part of tests/broken/load_cycle.gem: this load closes the cycle.
+load "./clean"
+load "./cycle_a"
+
+fn h()
+  cycle_a.f() + clean.g()
+end
+
+export h

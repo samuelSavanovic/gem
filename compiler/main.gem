@@ -448,6 +448,53 @@ end
 
 # ─── Load resolution ──────────────────────────────────────────
 
+# Path for diagnostics: relative to `root` when it is under it.
+fn display_path(p, root)
+  if root == nil
+    return p
+  end
+  let rlen = len(root)
+  if len(p) > rlen and substr(p, 0, rlen) == root and p[rlen] == "/"
+    return substr(p, rlen + 1, len(p) - rlen - 1)
+  end
+  p
+end
+
+# `stmt` loads `full_path`, which is still being resolved further up the
+# load stack: report the cycle at this `load`, with the chain of files
+# from `full_path` back around to it. The `parent` links of the files on
+# the stack lead from stmt's file back to `full_path`, and on to the
+# entry file, whose directory is the display root when the project has
+# no gem.toml.
+fn report_load_cycle(stmt, full_path, project_root, loaded, sources_by_file, sink)
+  let chain = [full_path]
+  let cur = normalize_path(stmt.file)
+  while cur != full_path and cur != nil
+    insert(chain, 1, cur)
+    cur = loaded[cur].parent
+  end
+  let root = project_root
+  if root == nil
+    let top = cur
+    while top != nil and loaded[top] != nil and loaded[top].parent != nil
+      top = loaded[top].parent
+    end
+    if top != nil
+      root = dirname(top)
+    end
+  end
+  let msg = "load cycle: "
+  for p in chain
+    msg = msg + display_path(p, root) + " → "
+  end
+  msg = msg + display_path(full_path, root)
+  let hint = "move the code these modules share into a module that loads none of them"
+  if len(chain) == 1
+    hint = "a file cannot load itself; remove this `load`"
+  end
+  sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
+end
+
 fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
   let new_stmts = []
   let count = 0
@@ -456,6 +503,10 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       let full_path = resolve_load_path(stmt.path, base_dir, project_root, stdlib_root)
 
       let cached = loaded[full_path]
+      if cached != nil and cached.loading
+        report_load_cycle(stmt, full_path, project_root, loaded, sources_by_file, sink)
+        continue
+      end
       if cached != nil
         if cached.exported != nil
           let prefix = "_mod_" + cached.mod_name + "_"
@@ -483,7 +534,10 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
         continue
       end
 
-      loaded[full_path] = {exported: nil}
+      # `loading` marks the file as on the current load stack; `parent` is
+      # the file whose `load` brought it in, so a cycle can be walked back.
+      let entry = {exported: nil, loading: true, parent: normalize_path(stmt.file)}
+      loaded[full_path] = entry
 
       let source = read_file(full_path)
       sources_by_file[full_path] = source
@@ -493,6 +547,8 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       tag_source_file(loaded_ast, full_path)
       let loaded_dir = dirname(full_path)
       let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
+
+      entry.loading = false
 
       let export_node = find_export_node(resolved.stmts)
       if export_node == nil
@@ -657,6 +713,8 @@ let loaded = {}
 let module_bindings = {}
 let sources_by_file = {}
 sources_by_file[src_path] = source
+# The entry file is on the load stack too, so a module loading it back is a cycle.
+loaded[normalize_path(src_path)] = {exported: nil, loading: true, parent: nil}
 
 # If lex/parse already failed, skip load resolution + codegen entirely.
 # `resolve_loads` runs the parser on dependent files, and a parse-failed
