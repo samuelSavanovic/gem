@@ -1,0 +1,146 @@
+# Strict block scoping: a `let` is visible from its declaration to the end
+# of its block. Using it after the block is a compile error (see
+# tests/broken/block_let_*.gem); these are the valid shapes around that
+# rule.
+
+# Declare before the block, assign inside: visible after it.
+fn declare_before(c)
+  let x = nil
+  if c then x = 2 else x = 3 end
+  x
+end
+print(declare_before(true), declare_before(false))
+
+# A let in every branch shadows an outer `x` only inside its branch.
+fn outer_wins(c)
+  let x = 1
+  if c then let x = 2 else let x = 3 end
+  x
+end
+print(outer_wins(true), outer_wins(false))
+
+# Sibling blocks may each declare the same name, and a later let at the
+# outer level is a new variable.
+fn siblings()
+  let out = []
+  if true then let a = 1; push(out, a) end
+  if true then let a = 2; push(out, a) end
+  let a = 3
+  push(out, a)
+  out
+end
+print(siblings())
+
+# A block let named like a builtin or a named fn hides it only inside the
+# block.
+fn hides_builtin()
+  if true
+    let len = 99
+    print(len)
+  end
+  len([1, 2, 3])
+end
+print(hides_builtin())
+
+fn hides_fn()
+  if true
+    let siblings = "local"
+    print(siblings)
+  end
+  siblings()
+end
+print(hides_fn())
+
+# A let in each branch inside a loop is a fresh variable per iteration:
+# closures made in different iterations keep their own value.
+fn per_iteration()
+  let fs = []
+  for i in [1, 2, 3]
+    if i % 2 == 0
+      let v = i * 10
+      push(fs, fn() v end)
+    else
+      let v = i * 100
+      push(fs, fn() v end)
+    end
+  end
+  let out = []
+  for f in fs
+    push(out, f())
+  end
+  out
+end
+print(per_iteration())
+
+# Loop state that must survive iterations is declared before the loop.
+fn carried()
+  let i = 0
+  let last = nil
+  while i < 3
+    if i == 0 then last = "first" end
+    if i == 2 then print(last) end
+    i = i + 1
+  end
+end
+carried()
+
+# Match / receive arm bindings and lets end with their arm.
+fn arms(v)
+  let r = nil
+  match v
+  when {a}
+    let doubled = a * 2
+    r = doubled
+  else
+    let doubled = -1
+    r = doubled
+  end
+  r
+end
+print(arms({a: 21}), arms(5))
+
+# A closure created inside the block keeps the block's variable.
+fn closure_in_block()
+  let get = nil
+  if true
+    let secret = "kept"
+    get = fn() secret end
+  end
+  get()
+end
+print(closure_in_block())
+
+# Top level: a let nested in a block is block-scoped; a let directly in
+# the file is module-level and visible to fns declared anywhere.
+let m = 7
+if true
+  let m = 8
+  let only_here = m + 1
+  print(m, only_here)
+end
+print(m)
+
+let total = 0
+for k in [1, 2, 3]
+  let sq = k * k
+  total += sq
+end
+let k = "after"
+print(total, k)
+
+let {p, q} = {p: 1, q: 2}
+fn read_module()
+  p + q
+end
+print(read_module())
+
+let me = self()
+let pid = spawn do
+  receive
+  when {n: n}
+    let doubled = n * 2
+    send(me, doubled)
+  end
+end
+send(pid, {n: 21})
+print(receive())

@@ -847,7 +847,9 @@ fn make_parser(tokens, source, file, sink)
       advance()
       let value = parse_expr()
       if lhs.tag == "var"
-        return make_assign(lhs.name, value, start_line)
+        let a = make_assign(lhs.name, value, start_line)
+        a.col = lhs.col
+        return a
       end
       if lhs.tag == "dot"
         return make_dot_assign(lhs.object, lhs.field, value, start_line)
@@ -868,7 +870,11 @@ fn make_parser(tokens, source, file, sink)
         report(op_tok.line, op_tok.col, len(op_tok.value), "compound assignment requires variable target", nil)
         return make_error_stmt(op_tok.line, op_tok.col)
       end
-      return make_assign(lhs.name, make_binop(base_op, make_var(lhs.name), value), start_line)
+      # The assignment and the read of the target share the target's
+      # position, so a diagnostic about the name is reported once.
+      let a = make_assign(lhs.name, make_binop(base_op, make_var(lhs.name, lhs.line, lhs.col), value), start_line)
+      a.col = lhs.col
+      return a
     end
 
     lhs

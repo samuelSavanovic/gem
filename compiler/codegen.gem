@@ -186,10 +186,10 @@ end
 #
 # A `let` always makes a new variable. When its name is already visible
 # (a parameter, an earlier `let` in this or an enclosing block, a captured
-# local, a module-level binding or a named fn) the new variable shadows the
-# old one: its initializer still reads the old one, closures created
-# before it keep the old one, and a shadow made in a nested block ends with
-# that block. Codegen, liveness, capture and boxing analysis are all keyed
+# local, a module-level binding, a named or extern fn, a builtin) the new
+# variable shadows the old one: its initializer still reads the old one,
+# closures created before it keep the old one, and a shadow made in a
+# nested block ends with that block. Codegen, liveness, capture and boxing analysis are all keyed
 # by name, and C does not allow `GemVal gem_v_n = gem_v_n - 1` (a
 # redefinition in the same C block; in a nested block the initializer reads
 # the new, uninitialized variable). So this pass alpha-renames every
@@ -207,6 +207,15 @@ end
 # reuses a module-level name, so it never writes the slot and a closure
 # created in the block captures the block's binding.
 #
+# Scoping is strict: a `let` (or a `for` variable or pattern binding) is
+# visible from its declaration to the end of its block and nowhere else.
+# The pass also reports every use (read or assignment) of a name after the
+# block that declared it ended, or before its `let` (outside closures),
+# unless an outer binding of the name is visible there
+# (`shadow_check_use`). Without the check such a use would
+# reach C as an undeclared or stale `gem_v_<name>` (codegen's local set
+# is fn-wide).
+#
 # Runs on the post-lower AST, before any analysis keyed on names (capture,
 # liveness, process-tail tagging).
 #
@@ -215,7 +224,9 @@ end
 # "module" (module-scope statement list: lets are slots), "block" (nested
 # top-level scope) or "fn" (inside a fn or closure body). Module-level
 # bindings and named fns count as visible everywhere outside module scope
-# (`ctx.globals`, `ctx.fns`), wherever they are declared.
+# (`ctx.globals`, `ctx.fns`), wherever they are declared; extern fns and
+# builtins everywhere. `ctx.ended` maps a name some ended block declared to
+# its declaration line (reset per named fn).
 
 fn copy_scope_env(env)
   let r = {}
@@ -235,7 +246,7 @@ fn shadow_bind(let_node, env, mode, ctx)
   if name == nil
     return nil
   end
-  if mode != "module" and (has_key(env, name) or set_contains(ctx.globals, name) or set_contains(ctx.fns, name))
+  if mode != "module" and (has_key(env, name) or set_contains(ctx.globals, name) or set_contains(ctx.fns, name) or set_contains(ctx.externs, name) or has_key(ctx.builtins, name))
     ctx.n = ctx.n + 1
     let fresh = "_sh{ctx.n}_{name}"
     let_node.name = fresh
@@ -243,6 +254,87 @@ fn shadow_bind(let_node, env, mode, ctx)
   else
     env[name] = name
   end
+  # Pattern bindings come from lowering without a line of their own.
+  let line = let_node.line
+  if line == 0
+    line = nil
+  end
+  ctx.lines[env[name]] = line
+end
+
+# A block whose scope was `inner` ends; `outer` is the enclosing scope.
+# Every name it declared (or re-declared as a shadow) goes out of scope:
+# remember where it was declared, for the error at a later use.
+fn shadow_end_scope(inner, outer, ctx)
+  for k, v in inner
+    if not has_key(outer, k) or outer[k] != v
+      ctx.ended[k] = ctx.lines[v]
+    end
+  end
+end
+
+# A use (read or assignment) of `name` where no binding of it is visible.
+# A name a block declared is visible only to the end of that block, so a
+# use after it is an error. Names that never were declared are left to
+# codegen's undeclared-identifier check (same message, deduplicated by
+# the sink).
+#
+# The same holds for a use before the declaration when it is not inside a
+# block of the declaration's scope, e.g. a `while` condition reading a
+# `let` of the loop body (`ctx.later`: every let of the current named fn
+# or top-level code outside closures). Inside a closure such a use (a
+# closure calling itself through the let it initializes, or a let made
+# after it) is left to codegen.
+fn shadow_check_use(node, name, env, ctx)
+  if has_key(env, name)
+    return nil
+  end
+  if set_contains(ctx.globals, name) or set_contains(ctx.fns, name) or set_contains(ctx.externs, name) or has_key(ctx.builtins, name)
+    return nil
+  end
+  if has_key(ctx.ended, name)
+    ctx.report(node, name, "ended", ctx.ended[name])
+  elif ctx.closure_depth == 0 and has_key(ctx.later, name)
+    ctx.report(node, name, "later", ctx.later[name])
+  end
+end
+
+# Every name a `let` (incl. `for` variables and pattern bindings) declares
+# in `node`, outside nested fns and closures, with its first line (nil
+# when unknown).
+let shadow_collect_lets = nil
+shadow_collect_lets = fn(node, out)
+  if node == nil or type(node) != "table"
+    return nil
+  end
+  if node.tag == "anon_fn" or node.tag == "fn_def"
+    return nil
+  end
+  if node.tag == "let" and node.name != nil and not has_key(out, node.name)
+    let line = node.line
+    if line == 0
+      line = nil
+    end
+    out[node.name] = line
+  end
+  for k, v in node
+    if k != "tag" and type(v) == "table"
+      shadow_collect_lets(v, out)
+    end
+  end
+end
+
+# A named fn (or the top-level code): its own scope-tracking state.
+fn shadow_named_fn(node, ctx)
+  let saved = {ended: ctx.ended, later: ctx.later, depth: ctx.closure_depth}
+  ctx.ended = {}
+  ctx.later = {}
+  shadow_collect_lets(node.body, ctx.later)
+  ctx.closure_depth = 0
+  shadow_fn(node, {}, ctx)
+  ctx.ended = saved.ended
+  ctx.later = saved.later
+  ctx.closure_depth = saved.depth
 end
 
 fn shadow_child_mode(mode)
@@ -280,6 +372,7 @@ shadow_stmts = fn(stmts, env, mode, ctx)
   for s in stmts
     shadow_stmt(s, scope, mode, ctx)
   end
+  shadow_end_scope(scope, env, ctx)
 end
 
 # A statement in a list whose scope is `env` (mutated: lets bind into it).
@@ -311,6 +404,7 @@ fn shadow_arm(cond, bindings, body, env, mode, ctx)
     end
   end
   shadow_stmts(body, arm, cm, ctx)
+  shadow_end_scope(arm, env, ctx)
 end
 
 shadow_node = fn(node, env, mode, ctx)
@@ -320,11 +414,13 @@ shadow_node = fn(node, env, mode, ctx)
   let tag = node.tag
   let cm = shadow_child_mode(mode)
   if tag == "var"
+    shadow_check_use(node, node.name, env, ctx)
     if has_key(env, node.name)
       node.name = env[node.name]
     end
   elif tag == "assign"
     shadow_node(node.value, env, mode, ctx)
+    shadow_check_use(node, node.name, env, ctx)
     if has_key(env, node.name)
       node.name = env[node.name]
     end
@@ -333,9 +429,11 @@ shadow_node = fn(node, env, mode, ctx)
     shadow_stmt(node, env, mode, ctx)
   elif tag == "fn_def"
     # Named fns are module-level and never see block locals.
-    shadow_fn(node, {}, ctx)
+    shadow_named_fn(node, ctx)
   elif tag == "anon_fn"
+    ctx.closure_depth = ctx.closure_depth + 1
     shadow_fn(node, env, ctx)
+    ctx.closure_depth = ctx.closure_depth - 1
   elif tag == "if"
     shadow_node(node.cond, env, mode, ctx)
     shadow_stmts(node.then, env, cm, ctx)
@@ -395,20 +493,32 @@ shadow_children = fn(v, env, mode, ctx)
   end
 end
 
-fn scope_shadowing_lets(fn_defs, top_stmts)
+# `builtins` and `externs` are names that resolve without a binding;
+# `report(node, name, kind, decl_line)` reports a use of a name whose
+# `let` is not visible there: kind "ended" (its block ended) or "later"
+# (declared after the use, outside any block containing it).
+fn scope_shadowing_lets(fn_defs, top_stmts, builtins, externs, report)
   let globals = {}
   collect_top_let_names(top_stmts, globals)
   let fns = {}
   for fd in fn_defs
     set_add(fns, fd.name)
   end
-  let ctx = {globals: globals, fns: fns, n: 0}
+  let ctx = {globals: globals, fns: fns, builtins: builtins, n: 0,
+             externs: {}, lines: {}, ended: {}, later: {}, closure_depth: 0,
+             report: report}
+  for e in externs
+    set_add(ctx.externs, e)
+  end
+  for s in top_stmts
+    shadow_collect_lets(s, ctx.later)
+  end
   let env = {}
   for s in top_stmts
     shadow_stmt(s, env, "module", ctx)
   end
   for fd in fn_defs
-    shadow_fn(fd, {}, ctx)
+    shadow_named_fn(fd, ctx)
   end
 end
 
@@ -580,366 +690,13 @@ collect_shadow_lets_in_fn = fn(stmts, result)
   collect_shadow_lets_in_stmts(stmts, result)
 end
 
-# ─── Arm-merged let lift pre-pass ──────────────────────────────
-#
-# Rewrites
-#
-#   if c then let X = a else let X = b end
-#   ... use(X)
-#
-# to
-#
-#   let X = nil
-#   if c then X = a else X = b end
-#   ... use(X)
-#
-# The transform makes a name introduced at the top of EVERY arm of an
-# `if` / `match` / `receive_match` visible after the construct, with a
-# stable C local that the process-tail rescue can address by name.
-#
-# Conditions for a hoist:
-#   - The construct's "exit arms" all top-level-declare X. For `if`, that's
-#     the then arm AND the else arm (no lift on else-less if). For `match`,
-#     all `when` arms (and the `else` arm if present). For `receive_match`,
-#     all arms (and `after_body` if present — `after_ms` defines a real
-#     timeout path).
-#   - X is not already in the enclosing scope (params or sibling lets in
-#     this block). We over-skip on shadowing rather than risk mutating the
-#     wrong binding.
-#
-# Walk is bottom-up: arms are lifted before the enclosing construct, so a
-# nested `if`/`match` whose lift inserts a top-level `let X = nil` into an
-# arm becomes visible to the outer intersection check.
-
-fn arm_top_let_names(stmts)
-  let r = {}
-  if stmts == nil
-    return r
-  end
-  for s in stmts
-    if is_node(s, "let") and s.name != nil
-      r[s.name] = true
-    end
-  end
-  r
-end
-
-fn arm_intersect_if_node(node)
-  if node.else == nil
-    return {}
-  end
-  let merged = arm_top_let_names(node.then)
-  if node.elifs != nil
-    for ei in node.elifs
-      merged = set_intersect(merged, arm_top_let_names(ei.body))
-    end
-  end
-  set_intersect(merged, arm_top_let_names(node.else))
-end
-
-fn arm_intersect_match_node(node)
-  if node.whens == nil or len(node.whens) == 0
-    if node.else != nil
-      return arm_top_let_names(node.else)
-    end
-    return {}
-  end
-  let merged = arm_top_let_names(node.whens[0].body)
-  let i = 1
-  while i < len(node.whens)
-    merged = set_intersect(merged, arm_top_let_names(node.whens[i].body))
-    i += 1
-  end
-  if node.else != nil
-    merged = set_intersect(merged, arm_top_let_names(node.else))
-  end
-  merged
-end
-
-fn arm_intersect_receive_node(node)
-  let arms = node.arms
-  if arms == nil or len(arms) == 0
-    if node.after_body != nil
-      return arm_top_let_names(node.after_body)
-    end
-    return {}
-  end
-  let merged = arm_top_let_names(arms[0].body)
-  let i = 1
-  while i < len(arms)
-    merged = set_intersect(merged, arm_top_let_names(arms[i].body))
-    i += 1
-  end
-  if node.after_body != nil
-    merged = set_intersect(merged, arm_top_let_names(node.after_body))
-  end
-  merged
-end
-
-# Convert top-level `let X = expr` inside `stmts` to `assign X = expr` for
-# each X in `names`. Mutates the AST node tag in place.
-fn rewrite_arm_lets_to_assigns(stmts, names)
-  if stmts == nil
-    return nil
-  end
-  for s in stmts
-    if is_node(s, "let") and s.name != nil and names[s.name] == true
-      s.tag = "assign"
-    end
-  end
-end
-
-let lift_arm_lets_node = nil
-let lift_arm_lets_stmts = nil
-
-lift_arm_lets_stmts = fn(stmts, scope)
-  if stmts == nil
-    return nil
-  end
-  # Block-level scope: parent scope plus all top-level lets currently in
-  # this block (a name declared anywhere in this block is "taken"). This
-  # blocks hoists that would shadow a sibling let or duplicate a name.
-  let block_scope = set_union(scope, {})
-  for s in stmts
-    if is_node(s, "let") and s.name != nil
-      set_add(block_scope, s.name)
-    end
-  end
-
-  let i = 0
-  while i < len(stmts)
-    let s = stmts[i]
-    # Recurse into children FIRST. Bottom-up lifting lets a nested
-    # if/match insert a top-level `let X = nil` into an arm, which then
-    # makes the outer construct intersect-eligible for X.
-    lift_arm_lets_node(s, block_scope)
-
-    let intersect = nil
-    if is_node(s, "if")
-      intersect = arm_intersect_if_node(s)
-    elif is_node(s, "match")
-      intersect = arm_intersect_match_node(s)
-    elif is_node(s, "receive_match")
-      intersect = arm_intersect_receive_node(s)
-    end
-
-    if intersect != nil
-      let to_hoist = []
-      for n, _ in intersect
-        if not set_contains(block_scope, n)
-          push(to_hoist, n)
-        end
-      end
-      if len(to_hoist) > 0
-        let hoist_set = {}
-        for n in to_hoist
-          set_add(hoist_set, n)
-        end
-        if is_node(s, "if")
-          rewrite_arm_lets_to_assigns(s.then, hoist_set)
-          if s.elifs != nil
-            for ei in s.elifs
-              rewrite_arm_lets_to_assigns(ei.body, hoist_set)
-            end
-          end
-          rewrite_arm_lets_to_assigns(s.else, hoist_set)
-        elif is_node(s, "match")
-          if s.whens != nil
-            for w in s.whens
-              rewrite_arm_lets_to_assigns(w.body, hoist_set)
-            end
-          end
-          rewrite_arm_lets_to_assigns(s.else, hoist_set)
-        else
-          if s.arms != nil
-            for a in s.arms
-              rewrite_arm_lets_to_assigns(a.body, hoist_set)
-            end
-          end
-          if s.after_body != nil
-            rewrite_arm_lets_to_assigns(s.after_body, hoist_set)
-          end
-        end
-        for n in to_hoist
-          insert(stmts, i, {tag: "let", name: n, value: {tag: "nil"}, line: s.line})
-          set_add(block_scope, n)
-          i += 1
-        end
-      end
-    end
-    i += 1
-  end
-end
-
-lift_arm_lets_node = fn(node, scope)
-  if node == nil
-    return nil
-  end
-  if type(node) != "table"
-    return nil
-  end
-  if node.tag == nil
-    return nil
-  end
-  if node.tag == "anon_fn" or node.tag == "fn_def"
-    let params = node.params
-    let inner_scope = {}
-    if params != nil
-      for p in params
-        set_add(inner_scope, p)
-      end
-    end
-    if node.rest_param != nil
-      set_add(inner_scope, node.rest_param)
-    end
-    lift_arm_lets_stmts(node.body, inner_scope)
-    if node.defaults != nil
-      for d in node.defaults
-        if d != nil
-          lift_arm_lets_node(d, scope)
-        end
-      end
-    end
-    return nil
-  end
-  if node.tag == "if"
-    lift_arm_lets_node(node.cond, scope)
-    lift_arm_lets_stmts(node.then, scope)
-    if node.elifs != nil
-      for ei in node.elifs
-        lift_arm_lets_stmts(ei.body, scope)
-      end
-    end
-    lift_arm_lets_stmts(node.else, scope)
-    return nil
-  end
-  if node.tag == "while"
-    lift_arm_lets_node(node.cond, scope)
-    lift_arm_lets_stmts(node.body, scope)
-    return nil
-  end
-  if node.tag == "for" or node.tag == "for_kv" or node.tag == "for_range"
-    let body_scope = set_union(scope, {})
-    if node.var != nil
-      set_add(body_scope, node.var)
-    end
-    if node.kvar != nil
-      set_add(body_scope, node.kvar)
-    end
-    if node.vvar != nil
-      set_add(body_scope, node.vvar)
-    end
-    if node.name != nil and (node.tag == "for" or node.tag == "for_range")
-      set_add(body_scope, node.name)
-    end
-    # Recurse into iter expressions / range bounds (may contain anon_fns).
-    for k, v in node
-      if k != "tag" and k != "body" and type(v) == "table"
-        lift_arm_lets_node(v, scope)
-      end
-    end
-    lift_arm_lets_stmts(node.body, body_scope)
-    return nil
-  end
-  if node.tag == "match"
-    lift_arm_lets_node(node.target, scope)
-    if node.whens != nil
-      for w in node.whens
-        let arm_scope = set_union(scope, {})
-        if w.bindings != nil
-          for b in w.bindings
-            if type(b) == "table" and b.tag == "var" and b.name != nil
-              set_add(arm_scope, b.name)
-            end
-          end
-        end
-        lift_arm_lets_stmts(w.body, arm_scope)
-      end
-    end
-    lift_arm_lets_stmts(node.else, scope)
-    return nil
-  end
-  if node.tag == "receive_match"
-    if node.arms != nil
-      for a in node.arms
-        let arm_scope = set_union(scope, {})
-        if a.pattern != nil and a.pattern.bindings != nil
-          for b in a.pattern.bindings
-            if type(b) == "table" and b.tag == "var" and b.name != nil
-              set_add(arm_scope, b.name)
-            end
-          end
-        end
-        lift_arm_lets_stmts(a.body, arm_scope)
-      end
-    end
-    if node.after_body != nil
-      lift_arm_lets_stmts(node.after_body, scope)
-    end
-    return nil
-  end
-  if node.tag == "block"
-    lift_arm_lets_stmts(node.stmts, scope)
-    return nil
-  end
-  # Generic recursion for non-control-flow nodes (lets, assigns, calls,
-  # expressions). Catches anon_fns embedded in expression positions.
-  for k, v in node
-    if k != "tag" and type(v) == "table"
-      let vks = keys(v)
-      if len(vks) > 0 and type(vks[0]) == "int"
-        for child in v
-          if type(child) == "table"
-            lift_arm_lets_node(child, scope)
-          end
-        end
-      else
-        lift_arm_lets_node(v, scope)
-      end
-    end
-  end
-  nil
-end
-
-fn lift_arm_lets_in_fn(fn_node)
-  let scope = {}
-  if fn_node.params != nil
-    for p in fn_node.params
-      set_add(scope, p)
-    end
-  end
-  if fn_node.rest_param != nil
-    set_add(scope, fn_node.rest_param)
-  end
-  lift_arm_lets_stmts(fn_node.body, scope)
-  if fn_node.defaults != nil
-    for d in fn_node.defaults
-      if d != nil
-        lift_arm_lets_node(d, scope)
-      end
-    end
-  end
-end
-
-# Top-level wrapper so callers from inside nested closures (compile()) can
-# invoke the lift pass via a plain fn_def (gem_fn_*) rather than capturing
-# the mutually-recursive `lift_arm_lets_stmts` / `lift_arm_lets_node` lets.
-# The latter are boxed at module scope (mutual fwd-decls), and capturing a
-# module-level boxed var from inside a non-top-level closure tickles a
-# pre-existing bug in the `&` capture path.
-fn lift_arm_lets_top_stmts(stmts)
-  lift_arm_lets_stmts(stmts, {})
-end
-
 # ─── Liveness-driven arm-let hoist ────────────────────────────────
 #
 # Lifts `let X = expr` declarations inside if/match/receive arms of a
 # PT-while body to fn-top placeholders, rewriting the per-arm decl to an
 # assign. Required so X has an addressable C local enclosing the back-edge
 # rescue check (`&gem_v_X`) when X is live across that edge but declared
-# in only one arm. The intersect-only `lift_arm_lets` pass above handles
-# the case where a name appears in *every* arm; this pass handles single-
-# arm declarations whose values escape via a captured closure.
+# in only one arm.
 
 fn hoist_has_let(node, name)
   if node == nil
@@ -5568,20 +5325,26 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
     end
 
-    # Lift arm-merged lets to the enclosing block so that names introduced
-    # in every arm of an `if`/`match`/`receive_match` have a stable C local
-    # at the back-edge of any enclosing process-tail loop. Must run before
-    # any analysis pass that walks the AST (collect_top_let_names,
-    # find_captured_in_scope, mark_process_tail, liveness, …).
-    for fd in fn_defs
-      lift_arm_lets_in_fn(fd)
-    end
-    lift_arm_lets_top_stmts(top_stmts)
-
     # Give every let that shadows a visible name (param, outer local,
-    # module binding, named fn) its own fresh name, so it is a new variable
-    # (see scope_shadowing_lets).
-    scope_shadowing_lets(fn_defs, top_stmts)
+    # module binding, named fn) its own fresh name, so it is a new variable,
+    # and report uses of a block's lets after the block ended (see
+    # scope_shadowing_lets).
+    let extern_names = []
+    for ef in extern_fns_list
+      push(extern_names, ef.name)
+    end
+    let report_out_of_scope = fn(node, name, kind, decl_line)
+      let at = ""
+      if decl_line != nil
+        at = " at line {decl_line},"
+      end
+      let hint = "`{name}` is declared{at} inside a block that has ended; declare it before that block (`let {name} = nil`) and assign it inside"
+      if kind == "later"
+        hint = "`{name}` is declared{at} after this use or in a block that does not contain it; a `let` is visible from its declaration to the end of its block"
+      end
+      sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", hint)
+    end
+    scope_shadowing_lets(fn_defs, top_stmts, builtin_fns, extern_names, report_out_of_scope)
 
     # Mark non-escaping closures (immediate-call-site args to allowlisted
     # callees like pcall/sort). Must run before any capture analysis below
