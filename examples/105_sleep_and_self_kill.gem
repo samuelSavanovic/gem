@@ -1,0 +1,62 @@
+# sleep(ms) lasts its full duration even when messages arrive meanwhile, and
+# a process can kill itself.
+
+# ─── Test 1: messages don't cut a sleep short ───
+let parent = self()
+let sleeper = spawn do
+  let start = time_ms()
+  sleep(100)
+  send(parent, {slept: time_ms() - start})
+end
+sleep(10)
+send(sleeper, "wake up")
+send(sleeper, "wake up again")
+receive
+when {slept: ms}
+  print("test1: slept the full time: {ms >= 100}")
+end
+
+# ─── Test 2: sleep(0) yields to other processes ───
+spawn do
+  send(parent, "other ran")
+end
+sleep(0)
+send(parent, "parent continued")
+print("test2: {receive()}, then {receive()}")
+
+# ─── Test 3: kill(self(), reason) ends the process with that reason ───
+let victim = spawn do
+  kill(self(), "goodbye")
+  send(parent, "test3: should not print")
+end
+monitor(victim)
+receive
+when {tag: "DOWN", pid: ^victim, reason: r}
+  print("test3: DOWN reason={r}")
+end
+
+# ─── Test 4: pcall does not catch a self-kill ───
+let stubborn = spawn do
+  let r = pcall kill(self(), "no escape")
+  send(parent, "test4: should not print {r}")
+end
+monitor(stubborn)
+receive
+when {tag: "DOWN", pid: ^stubborn, reason: r}
+  print("test4: DOWN reason={r}")
+end
+
+# ─── Test 5: kill(other) that brings the caller down through a link ───
+let doomed = spawn do
+  let partner = spawn do
+    receive()
+  end
+  link(partner)
+  let r = pcall kill(partner, "chain")
+  send(parent, "test5: should not print {r}")
+end
+monitor(doomed)
+receive
+when {tag: "DOWN", pid: ^doomed, reason: r}
+  print("test5: DOWN reason={r}")
+end

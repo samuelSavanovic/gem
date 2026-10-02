@@ -185,6 +185,11 @@ same buffer: true; other buffer: false type=buffer
 table in array: true; copy in array: false
 table key: len=1 value=second other=nil
 message copy: false 1
+test1: slept the full time: true
+test2: other ran, then parent continued
+test3: DOWN reason=goodbye
+test4: DOWN reason=no escape
+test5: DOWN reason=chain
 apple
 banana
 cherry
