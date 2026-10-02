@@ -110,6 +110,13 @@ fn make_parser(tokens, source, file, sink)
   # taken there, so `x do` / `f() do` is reported as a stray Lua/Ruby-style
   # `do` instead of parsed as a block call.
   let header_depth = 0
+  # Loops enclosing the current statement, counted up to the innermost
+  # function boundary, and the kind of that boundary: nil (top level or a
+  # named fn), "fn" (anonymous fn), "do" (do block), "spawn" (`spawn do`).
+  # A closure is a separate C function, so `break` / `continue` can't reach
+  # a loop outside it; parse_stmt reports them when loop_depth is 0.
+  let loop_depth = 0
+  let closure_kind = nil
 
   # ── Token access ──
 
@@ -134,6 +141,34 @@ fn make_parser(tokens, source, file, sink)
   # Report a parser error at the given location.
   let report = fn(line, col, span, msg, hint)
     sink.report(source, file, line, col, span, msg, hint)
+  end
+
+  # Enter a function body (kind as for closure_kind); returns the state
+  # leave_fn_body restores.
+  let enter_fn_body = fn(kind)
+    let saved = {depth: loop_depth, kind: closure_kind}
+    loop_depth = 0
+    closure_kind = kind
+    saved
+  end
+
+  let leave_fn_body = fn(saved)
+    loop_depth = saved.depth
+    closure_kind = saved.kind
+  end
+
+  # `break` / `continue` token `t` outside any loop of its function body.
+  let report_loop_exit = fn(t)
+    let kw = "`{t.type}`"
+    if closure_kind == "do"
+      report(t.line, t.col, len(t.type), "{kw} inside a `do` block; use a `for` loop", "a `do` block is a closure, so {kw} can't reach a loop in the caller; `return` leaves the block")
+    elif closure_kind == "spawn"
+      report(t.line, t.col, len(t.type), "{kw} inside a `spawn do` block, outside any loop", "a process body is not a loop; `return` ends the process")
+    elif closure_kind == "fn"
+      report(t.line, t.col, len(t.type), "{kw} inside a `fn` closure, outside any loop", "a closure is a separate function, so {kw} can't reach a loop outside it; `return` leaves the closure")
+    else
+      report(t.line, t.col, len(t.type), "{kw} outside a loop", nil)
+    end
   end
 
   # `expect` is non-fatal: on mismatch it reports and returns a synthetic
@@ -438,7 +473,9 @@ fn make_parser(tokens, source, file, sink)
       let pr = parse_params()
       expect(")")
       fn_depth += 1
+      let saved_loops = enter_fn_body("fn")
       let body = parse_fn_body()
+      leave_fn_body(saved_loops)
       fn_depth -= 1
       expect("end")
       return make_anon_fn(pr.params, pr.rest_param, with_prelude(pr.prelude, body), pr.defaults)
@@ -538,11 +575,18 @@ fn make_parser(tokens, source, file, sink)
   end
 
   # `do [|params|] body end` → anonymous fn
-  let parse_do_block = fn()
+  # `is_spawn`: the block is the body of `spawn do ... end`.
+  let parse_do_block = fn(is_spawn = false)
     expect("do")
     let bp = parse_block_params()
     fn_depth += 1
+    let kind = "do"
+    if is_spawn
+      kind = "spawn"
+    end
+    let saved_loops = enter_fn_body(kind)
     let body = parse_fn_body()
+    leave_fn_body(saved_loops)
     fn_depth -= 1
     expect("end")
     make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, body), bp.defaults)
@@ -590,7 +634,8 @@ fn make_parser(tokens, source, file, sink)
       if node.tag == "var" or node.tag == "dot"
         let call_line = peek().line
         if peek().type == "do" and header_depth == 0
-          node = make_call(node, [parse_do_block()], call_line)
+          let is_spawn = node.tag == "var" and node.name == "spawn"
+          node = make_call(node, [parse_do_block(is_spawn)], call_line)
           continue
         end
         if peek().type == "\{" and peek_at(1).type == "|"
@@ -621,7 +666,7 @@ fn make_parser(tokens, source, file, sink)
 
         # Trailing do block (must be on same line — no NEWLINE between ) and do)
         if peek().type == "do" and header_depth == 0
-          push(args, parse_do_block())
+          push(args, parse_do_block(node.tag == "var" and node.name == "spawn"))
         else
           # Trailing brace block: {|params| expr} or {expr}
           # Distinguish from table literal by lookahead
@@ -1084,7 +1129,9 @@ fn make_parser(tokens, source, file, sink)
       let pr = parse_params()
       expect(")")
       fn_depth += 1
+      let saved_loops = enter_fn_body(nil)
       let body = parse_fn_body()
+      leave_fn_body(saved_loops)
       fn_depth -= 1
       expect("end")
       return make_fn_def(name, pr.params, pr.rest_param, with_prelude(pr.prelude, body), line, pr.defaults)
@@ -1129,7 +1176,9 @@ fn make_parser(tokens, source, file, sink)
       if cond.tag == "assign" or cond.tag == "dot_assign" or cond.tag == "index_assign"
         report(cond.line, 1, 1, "assignment is not allowed in condition; use '==' for comparison", nil)
       end
+      loop_depth += 1
       let wbody = parse_body()
+      loop_depth -= 1
       expect("end")
       return make_while(cond, wbody, line)
     end
@@ -1148,14 +1197,18 @@ fn make_parser(tokens, source, file, sink)
         let val_name = expect("NAME").value
         expect("in")
         let tbl_expr = parse_header_expr("for")
+        loop_depth += 1
         let fbody = parse_body()
+        loop_depth -= 1
         expect("end")
         return make_for_in(var_name, val_name, tbl_expr, fbody, line)
       elif peek().type == "in"
         # for x in items ... end
         advance()
         let items_expr = parse_header_expr("for")
+        loop_depth += 1
         let fbody = parse_body()
+        loop_depth -= 1
         expect("end")
         return make_for_in(var_name, nil, items_expr, fbody, line)
       elif peek().type == "="
@@ -1164,7 +1217,9 @@ fn make_parser(tokens, source, file, sink)
         let start_expr = parse_header_expr("for")
         expect(",")
         let end_expr = parse_header_expr("for")
+        loop_depth += 1
         let fbody = parse_body()
+        loop_depth -= 1
         expect("end")
         return make_for_range(var_name, start_expr, end_expr, fbody, line)
       else
@@ -1237,12 +1292,18 @@ fn make_parser(tokens, source, file, sink)
     # break
     if t.type == "break"
       advance()
+      if loop_depth == 0
+        report_loop_exit(t)
+      end
       return make_break()
     end
 
     # continue
     if t.type == "continue"
       advance()
+      if loop_depth == 0
+        report_loop_exit(t)
+      end
       return make_continue()
     end
 

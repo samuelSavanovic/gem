@@ -354,6 +354,8 @@ Each pattern compiles to a condition check plus variable bindings; the bindings 
 
 **`break`, `continue`, and `return` inside blocks:** A `do`/`end` block is a closure (anonymous function). `return` inside a block returns from the block, not from the enclosing function — the iteration function receives the return value as the result of calling the block. `break` and `continue` inside a block only affect loops *within* the block itself; they cannot break or continue a loop in the caller.
 
+`break` or `continue` with no loop around it inside its own function body is a compile error. That covers top-level code and named functions (`` `break` outside a loop``), and also a `do` block, an anonymous `fn` closure or a `spawn do` body even when the closure itself sits inside a loop, because the closure is a separate function (`` `break` inside a `do` block; use a `for` loop``). To stop iterating early, write a `for` loop instead of a block-taking call; `return` leaves the block.
+
 ## For Loops
 
 Three forms, all desugared to `while` at parse time:
