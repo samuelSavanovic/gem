@@ -55,6 +55,20 @@ building a `keys()` array, so it is never slower. It can't forget the
 increment, and `continue` works in it. `for k, v in tbl` visits keys in
 `keys(tbl)` order.
 
+### Don't `delete` from a table while iterating it **(trap)**
+
+`for k, v in tbl` reads the length once, and `delete` moves the last entry
+into the hole, so deleting during the loop skips entries and visits `nil`.
+Iterate over a snapshot instead:
+
+```gem
+for k in keys(sessions)
+  if expired(sessions[k])
+    delete(sessions, k)
+  end
+end
+```
+
 ### Use `while` for scanners, but prefer builtins to byte loops
 
 A `while` with a cursor is right when the step varies or the loop looks
@@ -62,16 +76,17 @@ ahead: tokenizers, frame parsers. Read bytes with `ord(s, i)`, which doesn't
 allocate.
 
 Before writing a byte loop, check whether a builtin does the job:
-`str_replace`, `substr` and `string.index_of` run in C. Escaping 800 KB took
-82 ms with a per-byte `add(chr(c))` loop and 4 ms with chained
-`str_replace`. When you must loop, copy unchanged *runs* with `substr`
-instead of single bytes.
+`str_replace` and `substr` run in C. Escaping 800 KB took about 100 ms with
+a per-byte loop and about 10 ms with chained `str_replace`. `string.split`
+and `string.index_of` are Gem byte loops themselves, so they cost about the
+same as writing the loop by hand.
 
 ### Use `for`, not `table.each`, when you need `return` or `break`
 
 A `do` block is a closure. `return` inside it returns from the *block*, so
-`table.each` carries on with the next element. `break` inside a `do` block
-fails in the C compiler, with an error pointing at the wrong file. Use
+`table.each` carries on with the next element. `break` or `continue` inside
+a `do` block is reported by the C compiler, not by Gem, at an approximate
+line. Use
 `table.each`/`map`/`filter` for straight-through transforms; use `for` when
 you need to stop early.
 
@@ -253,11 +268,17 @@ end
 
 ### Don't reuse builtin or module names **(trap)**
 
-A module that defines `fn error` (or `print`, `len`...) silently replaces
-the builtin everywhere in that module: `error("bad")` stops raising. A
-local or parameter named `string`, `table`, `json` or `time` hides the
-module and fails only at runtime (`field access on non-table`). Pick
-another name.
+Defining `fn error` (or `print`, `len`...) does something different
+depending on the file, and neither is reported. In a loaded module it
+replaces the builtin everywhere in that module, so `error("bad")` stops
+raising. In the program's entry file your definition is ignored. A local
+or parameter named `string`, `table`, `json` or `time` hides the module
+and fails only at runtime (`field access on non-table`). Pick another name.
+
+### `fn main` runs automatically
+
+If the entry file defines `fn main`, the compiler calls it after the
+top-level code. Don't also call it yourself, or it runs twice.
 
 ---
 
@@ -307,6 +328,9 @@ An empty array and an empty record can't be told apart, so `json.encode({})`
 gives `[]`, and so does a record emptied with `delete`. When an empty object
 matters on the wire, handle it explicitly.
 
+`json.encode` writes keys in insertion order, so two equal records built in
+different orders encode differently.
+
 ---
 
 ## Numbers
@@ -314,8 +338,8 @@ matters on the wire, handle it explicitly.
 ### Don't compare ints and floats with `==` **(trap)**
 
 `2.0 == 2` is `false`, `when 2` doesn't match `2.0`, and `t[1]` and
-`t[1.0]` are different keys. JSON numbers with a decimal point parse as
-floats. Convert first (`to_int`, `floor`) when values may come from either.
+`t[1.0]` are different keys. JSON numbers with a decimal point or an
+exponent (`1e2`) parse as floats. Convert first (`to_int`, `floor`) when values may come from either.
 
 ### Integer arithmetic follows C
 
@@ -347,8 +371,9 @@ Inside a loop, `s = s + piece` (or `s += piece`) is compiled into an
 in-place append, so it is fast, **as long as the loop doesn't read `s`
 until it is done**. A loop that tests `len(s)` or compares `s` each time
 round, or a string threaded through recursion as an argument, copies the
-whole string every iteration and is quadratic (200 KB: 1.8 s). For anything
-non-trivial, use `build_string`, which has no such conditions:
+whole string every iteration and is quadratic (200 KB: 1.5–6 s). Also see
+[Build large values off the process loop](#build-large-values-off-the-process-loop-trap-bug).
+For anything non-trivial, use `build_string`, which has no such conditions:
 
 ```gem
 let out = build_string do |add|
@@ -395,8 +420,12 @@ Inside a spawned process, an uncaught error kills only that process, and
 its monitors and links find out. That is the recovery mechanism. Put
 `pcall` where a failure must not escape, such as an HTTP handler that has
 to answer 500, a test runner, or a parser fed user input. Don't wrap every
-call, and never wrap a long-running loop in it (see
-[Reach long-running loops through tail calls](#reach-long-running-loops-through-tail-calls-only-trap-bug)).
+call, and never wrap a long-running loop in it: wrap one iteration's work
+inside the loop instead (see
+[How memory is reclaimed](#how-memory-is-reclaimed)).
+
+Re-raising a caught error with `error(r.error)` reports the stack of the
+re-raise, not the original. Log `r.stack` first if you need it.
 
 ---
 
@@ -406,16 +435,15 @@ call, and never wrap a long-running loop in it (see
 
 Top-level `let` bindings are C globals shared by every process, but memory
 belongs to the process that allocated it. A spawned process must not write
-to a global, or to anything reachable from one, if the write allocates:
-assigning a string, pushing onto a global array (even integers, once the
-array grows), or storing a string in a field of a global table. When the
-process exits, the global points into freed memory and the program
-segfaults later. Writing an integer into an existing slot happens to work;
-don't rely on it.
+to a global, or to anything reachable from one: assigning a string,
+pushing onto a global array, or storing a value in a field of a global
+table. When the process exits, the global points into freed memory and the
+program segfaults later.
 
-Top-level closures are inconsistent too: a top-level `spawn do ... end`
-block, or a top-level closure, sees the values top-level names had when it
-was created, not their current values.
+What a process *sees* is also inconsistent. A `spawn do ... end` block gets
+a deep copy of everything it captures, taken at the `spawn` call, so its
+reads are a snapshot and its writes are silently lost. Named functions
+called from the same process read and write the real global.
 
 ```gem
 # Prefer: state lives in a process
@@ -438,22 +466,29 @@ Configuration that main sets once, before spawning anything, is fine. Name
 constants in `UPPER_SNAKE` (`READ_SIZE`, `STATUS_TEXT`) so it's obvious they
 never change.
 
+(Being fixed: each process will get its own copy of module state at spawn,
+Erlang-style. This section changes when that lands.)
+
 ### How memory is reclaimed
 
 Each process allocates from its own arena, freed in one go when the process
 exits. A process that loops forever relies on the compiler's **back-edge
-reset**: at the end of each iteration of a `while true` loop, or at each
-self-tail call, once the arena is over 1 MB the runtime copies the values
-still in use into a fresh arena and frees the rest. The three rules below
-keep that working.
+reset**: once the arena is over 1 MB, at the end of a loop iteration (or at
+a self-tail call) the runtime copies the values still in use into a fresh
+arena and frees the rest. The rules below are about keeping that working,
+and about its costs. All of them are marked **(bug)**: the reset is being
+reworked so that none of this needs to be known.
 
-### Reach long-running loops through tail calls only **(trap) (bug)**
+### Keep long-running loops reachable by tail calls, outside `pcall` **(trap) (bug)**
 
-The reset happens only in a loop that is reached, all the way from a
-`spawn` literal or from top-level code, by tail calls. If the loop's
-function is called anywhere in a non-tail position, the reset is switched
-off for **every** call site, silently, and memory grows at up to gigabytes
-per second:
+When the reset is off, a loop that allocates grows at up to about 1 GB per
+second. It is off in these cases:
+
+- A `while` loop whose function is called in a non-tail position *anywhere*
+  in the program, even in code that never runs. Nothing is printed.
+- A self-tail-recursive loop more than two calls below the process's entry
+  (for example, reached through a wrapper function).
+- Any loop running inside `pcall`.
 
 ```gem
 spawn do
@@ -464,39 +499,55 @@ spawn do
   serve(conn)
   tcp_close(conn)          # Not fine: serve is no longer in tail position
 end
-let r = pcall serve(conn)  # Not fine either, anywhere in the program
+let r = pcall serve(conn)  # Not fine: inside pcall, and non-tail
 ```
 
-Put cleanup and `pcall` *inside* the loop (`std/http`'s
-`handle_connection_loop` wraps each request in `pcall`), and have the loop
-function close its own resources before it returns.
+Put `pcall` *inside* the loop, around one iteration's work (`std/http`'s
+`handle_connection_loop` does this), and have the loop function close its
+own resources before it returns.
 
-The compiler signals some of these cases. Treat all three messages as
-errors for any loop that runs unbounded:
+The compiler signals some of these cases. Treat all of them as errors for a
+loop that runs unbounded:
 
 - `warning: cannot reset per-process arena at this loop's back-edge`
 - `warning: spawn target is not a literal fn() … end`
 - `warning/note: TCO function ... not reachable from any process root` /
-  `will not arena-reset at its own back-edge` (the note calls it "likely
-  benign"; it isn't for an unbounded loop)
+  `will not arena-reset at its own back-edge` (the note says "likely
+  benign"; for an unbounded loop it isn't)
 
 ### Keep a looping process's live data under 1 MB **(trap) (bug)**
 
 Once the data a loop keeps alive across iterations passes 1 MB, the reset
 copies all of it on *every* iteration. A `gen_server` whose state holds
-5,000 small records takes 6 s for 1,000 calls instead of milliseconds. Keep
-large data in sqlite (`":memory:"` works) or split it across processes.
+5,000 small records takes 6 s for 1,000 calls instead of milliseconds. The
+mailbox is copied too, so a process with a large backlog drains it in
+quadratic time. Keep large data in sqlite (`":memory:"` works) or split it
+across processes.
 
-Top-level code counts as a loop too, and every top-level variable is kept
-alive by it. A top-level `for` loop that builds 5,000 rows takes 17 s; the
-same loop inside a function takes 3 ms. Put scripts in a function:
+### Build large values off the process loop **(trap) (bug)**
+
+The reset doesn't apply only to `while true`. Every loop, including a
+`for`, resets when it runs in top-level code, directly in a `spawn` block,
+or in a function reached from those by tail calls. So a loop that *builds*
+something over 1 MB there copies it on every iteration: a top-level loop
+pushing 30,000 short strings took 84 s, and a `buf_push` loop to 2 MB in a
+`spawn` block took 30 s. Moving the loop into `fn main` doesn't help, since
+`main` is reached by a tail call.
+
+Build large values in a helper whose result you use, so the call is not in
+tail position, or with `build_string`:
 
 ```gem
-fn main()
-  ...
+fn load_rows(path)
+  let rows = []
+  for line in string.split(read_file(path), "\n")
+    push(rows, parse_row(line))
+  end
+  rows
 end
 
-main()
+let rows = load_rows("data.csv")   # non-tail call: fast
+report(rows)
 ```
 
 ### Mutate state in place when it's safe
@@ -507,11 +558,12 @@ followed by `loop(state)` is fine and cheaper than rebuilding the table.
 ### Recursion depth is small in spawned processes **(trap) (bug)**
 
 A spawned process has a 256 KB stack: about 900 simple non-tail frames,
-or about 60 levels of nesting in `json.parse`. Overflowing it is a segfault
-that kills the **whole program**; `pcall` can't catch it. A web handler
-that parses JSON from the request body can be killed by a 130-byte request.
-Write recursive walkers over untrusted data (JSON, user trees) with an
-explicit stack, or cap the depth well below these limits.
+about 60 levels of nesting in `json.parse` (54 for objects) and about 170
+in `json.encode`. Overflowing it is a segfault that kills the **whole
+program**; `pcall` can't catch it. `json.parse`'s own depth limit (128) is
+above the crash point. A web handler that parses JSON from the request body
+can be killed by a 130-byte request. Write recursive walkers over untrusted
+data with an explicit stack, or cap the depth well below these limits.
 
 ---
 
@@ -534,7 +586,7 @@ spawn do                       # Prefer (or spawn(fn() ... end))
 end
 
 let body = fn() serve(conn) end
-spawn(body)                    # Over: the compiler warns, and the arena never resets
+spawn(body)                    # Over: the compiler warns, and `while` loops in it never reset
 ```
 
 ### Closures capture variables, not values
@@ -587,8 +639,9 @@ end
   model: it monitors, matches `{tag: "DOWN", pid: ^pid}`, and flushes the
   `DOWN` when it's done. There is no `demonitor`, so monitor short-lived
   targets, not long-lived servers called thousands of times.
-- After a timeout, a reply may still arrive and sit in the mailbox. Drop
-  late replies the way `task` does (`receive when {ref: ^ref} ... after 0`).
+- After a timeout, the reply may still arrive later. The pin makes it
+  harmless to *this* wait, but it sits in the mailbox until something
+  removes it; the process's main-loop catch-all (below) is what drops it.
 
 ### Keep mailboxes clean
 
@@ -606,8 +659,8 @@ with an empty mailbox and 1 s with 1,000 stale messages in it.
 
 - `monitor`: "tell me when it dies" (clients, callers, observers).
 - `spawn_link`: "we live and die together" (a reader/writer pair).
-- `trap_exit`: only in processes whose job is to handle deaths
-  (supervisors).
+- `process_flag("trap_exit", true)`: only in processes whose job is to
+  handle deaths (supervisors).
 
 ### Messages are deep copies
 
@@ -620,8 +673,9 @@ structure, and never fan a big message out to many processes.
 
 ### There are at most 1024 processes
 
-`spawn` raises `spawn: process table full` past the limit (`GEM_MAX_PROCS`).
-A reader/writer pair per connection uses two. An acceptor that spawns per
+`spawn` raises `spawn: process table full` past the limit (`GEM_MAX_PROCS`);
+main uses one slot, so 1,023 spawned processes can be alive at once. A
+reader/writer pair per connection uses two. An acceptor that spawns per
 connection should catch that error and close the connection, or cap the
 number of connections; otherwise one burst kills the acceptor.
 
@@ -636,8 +690,10 @@ The scheduler is cooperative: a builtin that blocks the OS thread stops
 
 | Yields to other processes | Blocks everything |
 |---|---|
-| `tcp_*`, `sleep`, `receive` | `sqlite_query`, `sqlite_exec` |
-| `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, `extern blocking fn` (4-thread pool) | plain `extern fn`, `input`, `read_stdin` |
+| `tcp_*` (except name lookup, see right), `sleep`, `receive` | `tcp_connect` to a host *name* (DNS lookup runs inline) |
+| `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, `extern blocking fn` (4-thread pool) | `sqlite_query`, `sqlite_exec` |
+| | `file_exists`, `is_dir`, `list_dir`, `mkdir`, `remove_file` |
+| | plain `extern fn`, `input`, `read_stdin` |
 
 Keep sqlite queries short and indexed. Use `extern blocking fn` for any C
 call that can take more than about a millisecond. The pool has 4 workers,
@@ -646,12 +702,13 @@ so four long `exec` calls delay every file read behind them.
 ### The process that opens a handle closes it, on every path
 
 Sockets and sqlite handles are not closed when the process that owns them
-dies. A crash between open and close leaks the descriptor. Close in the
-same function that opened it, with the risky part in `pcall`:
+dies. A crash between open and close leaks the descriptor. For a short
+exchange, close in the same function that opened it, with the risky part in
+`pcall`:
 
 ```gem
 let fd = tcp_connect(host, port)
-let r = pcall talk(fd)
+let r = pcall request_once(fd)
 tcp_close(fd)
 if not r.ok
   error(r.error)
@@ -659,13 +716,20 @@ end
 r.value
 ```
 
+Don't do this around a long-running connection loop (`pcall` turns off the
+memory reset). There, `pcall` each iteration inside the loop and close the
+socket when the loop ends, as `std/http` does.
+
 ### Pass timeouts to reads, check writes
 
 - `tcp_read(fd, n, timeout_ms)` returns `""` at end of stream and `nil` on
   timeout. Library code should always pass a timeout; without one, a silent
-  peer blocks the caller forever.
+  peer blocks the caller forever. A timeout of `0` means *no* timeout.
 - `tcp_write` returns the number of bytes written and does not raise when
-  the peer has gone. Treat `tcp_write(fd, s) < len(s)` as "connection lost".
+  the peer has gone. Treat `tcp_write(fd, s) < len(s)` as "connection lost",
+  but expect the first write after a disconnect to still report success;
+  only later writes show it. `tcp_write` has no timeout, so a peer that
+  stops reading blocks the writer.
 
 ---
 
@@ -697,8 +761,10 @@ export make, use
 - `load "./sibling"` inside a project, `load "std/x"` for the standard
   library. Prefer the module namespace (`string.split`) over a selective
   import, unless a name is used often enough to be noise.
-- Avoid modules that load each other in a cycle: one of them may see the
-  other's exports missing. Move shared code into a third module.
+- Avoid modules that load each other in a cycle. Functions calling across
+  the cycle work, but a top-level `let` that uses the other module while it
+  loads finds its namespace `nil`, and the error points at the entry file.
+  Move shared code into a third module.
 
 ### Accept a pid or a `{pid}` handle in one place
 
@@ -712,7 +778,9 @@ Some std APIs predate these rules: `http.start` returns a bare pid;
 `gen_server.call` and `supervisor.which_children` reject the `{pid}` handle
 their own `start` returns; several private message tags (`"gs_reply"`,
 `"start_child"`) have no `_` prefix; `supervisor.which_children` and the
-`dynamic_supervisor` calls wait with no `after`. These are being fixed.
+`dynamic_supervisor` calls wait with no `after`; `http`'s acceptor doesn't
+catch a full process table; `std/test` keeps its cases in module globals
+and uses index-append and `_` prefixes. These are being fixed.
 
 ---
 
@@ -736,8 +804,9 @@ their own `start` returns; several private message tags (`"gs_reply"`,
   stdout appended to `expected_output.txt`. `make test` runs them all.
 - For library code, use `std/test` (`test.case`, `test.assert_eq`,
   `test.run()`) for checks that verify themselves. `assert_eq` compares
-  tables by identity, so compare primitives, or compare `json.encode` of
-  both sides.
+  tables by identity, so compare primitives or individual fields.
+  (Comparing `json.encode` output works only when both sides were built in
+  the same key order.)
 - Cover the edges as well as the happy path: empty input, a single element,
   `nil` where a table is expected, deep nesting, timeouts, and a process
   dying mid-request.
@@ -761,22 +830,26 @@ their own `start` returns; several private message tags (`"gs_reply"`,
 
 | Trap | What happens | Do instead |
 |---|---|---|
-| Spawned process allocates into a global | segfault later | keep state in a process |
-| Loop fn also called in non-tail position anywhere | arena reset off everywhere; GB of memory | reach loops by tail calls; `pcall` inside |
-| Live loop data over 1 MB, or a top-level loop | every iteration copies everything (17 s vs 3 ms) | keep state small; put scripts in `main()` |
+| Spawned process writes into a global | segfault later | keep state in a process |
+| Loop fn called non-tail anywhere, or inside `pcall` | reset off; memory grows ~1 GB/s | reach loops by tail calls; `pcall` inside the loop |
+| Live loop data over 1 MB | every iteration copies everything | keep state small; sqlite for bulk |
+| Building > 1 MB in a top-level or spawn-block loop | quadratic (84 s for 30k rows) | build in a non-tail helper, or `build_string` |
 | Deep recursion in a spawned process | whole program segfaults (~900 frames, ~60 JSON levels) | explicit stack or depth cap |
 | Default / destructured / `...rest` param on a tail-recursive fn | no TCO; segfault | plain params on loop fns |
 | Closure captures a param of a tail-recursive fn | C compile error | copy to a local first |
 | `delete(arr, i)` | hole in the array; `for` misses the last element | `remove_at(arr, i)` |
+| `delete` inside `for k, v in tbl` | skips entries, visits `nil` | iterate `keys(tbl)` |
 | String accumulator read inside its loop | quadratic | `build_string` |
 | `match` with no arm matching | yields `nil` silently | add an `else` |
 | `error(non_string)` | message becomes `"error"` | string message or result table |
-| `spawn(variable)` | arena never resets | `spawn do ... end` |
+| `spawn(variable)` | `while` loops in it never reset | `spawn do ... end` |
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Reply pattern without `^ref` | takes a stale reply | `ref: ^ref` |
 | `2.0 == 2` | `false` | convert first |
-| Function named `error`, `print`... | builtin silently replaced | another name |
-| Blocking call (`sqlite_query`, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
+| Function named `error`, `print`... | replaces the builtin in a module, ignored in the entry file | another name |
+| Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
+| Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
 | Handle opened, process crashes | fd leak | close on every path |
-| `spawn` past 1024 processes | raises; unguarded acceptor dies | catch it or cap connections |
+| `tcp_read` with no timeout, or `0` | blocks forever on a silent peer | pass a timeout |
+| `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |
 | `t.f += 1` | compile error | `t.f = t.f + 1` |
