@@ -1473,6 +1473,43 @@ spawn {p: "proc100000"}
 13: 41 42 x=5
 14: iter 0:0 iter 2:4 msg=global total=4
 15: [10, 20, "block-z", "mod-loop", 1, "mod-z", "mod-a", "mod-b"] x=5 y=main-y z=3 a=main-a
+identity: 1 1 1
+push via namespace: 2 ["a", "b"]
+label: relabeled
+after reset: 0 0
+first-class: 2 true 2
+child: [4, 4, true, ["c", "d", "child", "child2"]]
+main after child: 2 ["c", "d"]
+busy child saw: 12
+main still: 2 ["c", "d"]
+holder child: {i: 99000, label: "v99000"}
+holder main: main value
+frozen delete false cannot modify a module table
+frozen dot_set false cannot modify a module table
+frozen index_set false cannot modify a module table
+frozen insert false cannot modify a module table
+frozen pop false cannot modify a module table
+frozen push false cannot modify a module table
+frozen remove_at false cannot modify a module table
+frozen sort false cannot modify a module table
+unchanged: 2 fn
+frozen in child: cannot modify a module table
+sent copy: 2 cannot modify a module table
+1 child: [5, 0, 0, "a", ["x"], "short", 200, "one", 1, 0]
+1 main: [6, 100, 100, "b", nil, "changed", 7, "onetwo", 2, 1]
+2 aliasing: [true, "child", true]
+3 rows at spawn: 6
+3 rows at spawn: 6
+3 rows at spawn: 7
+4 merged: via extra
+5 ["grandchild of quiet child", "b", 7]
+5 ["grandchild of busy child", "set by child", 8, 77]
+6 child: [7, 214] main rows: 11
+7 child: [1749996, 15, "n75000"] main rows: 11
+8 sum: 48
+9 300 spawns with 100k-entry module array under 1500 ms: true
+9 child: [100000, "item 99999"] 100001
+10 capture: ["through capture", -1, true] main 100
 1500000 true
 13500000 true
 3750005 true

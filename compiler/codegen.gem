@@ -389,6 +389,59 @@ fn scope_top_level_lets(top_stmts)
   end
 end
 
+# Whole-module load bindings (`let m = <frozen namespace table>`, from
+# resolve_loads in main.gem) whose name is never rebound or assigned:
+# out[m] = {export: "_mod_<mod>_<export>"}. Codegen compiles `m.export`
+# straight to that binding, so it is the module's own value in the
+# running process.
+# `assigned`: names assigned (`name = …`) anywhere in the program.
+fn collect_module_namespaces(top_stmts, assigned, out)
+  let rebound = assigned
+  for s in top_stmts
+    if is_node(s, "let")
+      if is_node(s.value, "table") and s.value.frozen == true
+        let fields = {}
+        for e in s.value.entries
+          if type(e.key) == "string" and is_node(e.value, "var")
+            fields[e.key] = e.value.name
+          end
+        end
+        let prev = out[s.name]
+        if prev != nil
+          # The same module loaded again under the same name is fine; a
+          # different one is a rebinding.
+          let same = len(keys(prev)) == len(keys(fields))
+          for k, v in fields
+            if prev[k] != v
+              same = false
+            end
+          end
+          if not same
+            set_add(rebound, s.name)
+          end
+        end
+        out[s.name] = fields
+      else
+        set_add(rebound, s.name)
+      end
+    end
+  end
+  # A let directly in a top-level block (a lowered `for` header or a
+  # destructuring let) also writes a module slot.
+  for s in top_stmts
+    if is_node(s, "block")
+      for b in s.stmts
+        if is_node(b, "let")
+          set_add(rebound, b.name)
+        end
+      end
+    end
+  end
+  for name, _ in rebound
+    delete(out, name)
+  end
+end
+
 # Collects all let-bound names anywhere in this fn body (descending through
 # control flow), but not into nested anon_fn or fn_def. Used by compile_fn
 # to over-approximate the set of locally-shadowed names — anything in here
@@ -1324,6 +1377,13 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   end
   let boxed_vars = {}
   let top_level_vars = {}
+  # Whole-module loads: binding name -> {export: top-level name it holds}
+  # (`_mod_<mod>_<export>`), for module bindings never rebound (see
+  # collect_module_namespaces). `m.x` compiles straight to that slot or fn.
+  let module_ns = {}
+  # Reverse of module_ns: "_mod_<mod>_<export>" -> [{binding, field}], the
+  # namespace entries that hold that binding's value.
+  let ns_targets = {}
   let in_top_level = false
   let local_names = {}
   # Subset of `local_names` whose names have an addressable C local at the
@@ -1408,8 +1468,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # ─── Module globals ──
   #
   # Top-level bindings (`top_level_vars`) are per-process module slots:
-  # `gem_g_<name>` is `#define`d to `gem_cur_globals[<index>]`, the running
-  # process's copy (runtime/gem.h). A name refers to the module slot when it
+  # `gem_gi_<name>` is `#define`d to the slot index and `gem_g_<name>` to
+  # `gem_global_get(<index>)`, a read of the running process's slot
+  # (runtime/gem.h). Writes go through `gem_global_set` (plain assignment)
+  # or `gem_global_ref` (read-modify-write lvalue); both tell the runtime
+  # the slot changed, which lazy module copy at spawn relies on. A name refers to the module slot when it
   # is a top-level var and the current scope has no local of that name:
   # in top-level code every top-level var name is the slot; inside a fn or
   # closure, a param/let/capture of the same name shadows it. Module slots
@@ -1427,6 +1490,10 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
   let gmangle = fn(name)
     "gem_g_{name}"
+  end
+
+  let gindex = fn(name)
+    "gem_gi_{name}"
   end
 
   let join_c = fn(items)
@@ -1458,15 +1525,39 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     to_string(b)
   end
 
+  # After a write to an exported module binding: update the namespace
+  # tables that hold it (`let ns = m; ns.x` stays the module's live `x`;
+  # `m.x` itself compiles straight to the binding). Empty for anything else.
+  let ns_refresh = fn(name, p)
+    if ns_targets[name] == nil or not is_global_ref(name)
+      return ""
+    end
+    let out = ""
+    for t in ns_targets[name]
+      if set_contains(top_level_vars, t.binding)
+        out = out + "{p}gem_ns_refresh({gmangle(t.binding)}, \"{escape_c_string(t.field)}\", {gmangle(name)});\n"
+      end
+    end
+    out
+  end
+
   # C lvalue for variable `name` in the current scope.
   let var_lvalue = fn(name)
     if is_global_ref(name)
-      return gmangle(name)
+      return "(*gem_global_ref({gindex(name)}))"
     end
     if set_contains(boxed_vars, name)
       return "(*{mangle(name)})"
     end
     mangle(name)
+  end
+
+  # C statement storing `expr` into variable `name` (no trailing newline).
+  let var_store = fn(name, expr)
+    if is_global_ref(name)
+      return "gem_global_set({gindex(name)}, {expr});"
+    end
+    "{var_lvalue(name)} = {expr};"
   end
 
   # Frame bookkeeping helpers — return empty strings inside leaf fns so the
@@ -3554,6 +3645,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
           return {expr: "GEM_NIL", setup: ""}
         end
       end
+      if is_global_ref(name)
+        return {expr: gmangle(name), setup: ""}
+      end
       return {expr: var_lvalue(name), setup: ""}
     when {tag: "call"}
       return compile_call(node)
@@ -3574,6 +3668,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     when {tag: "array"}
       return compile_array(node)
     when {tag: "dot", object: object, field: field}
+      # `m.x` on a module binding reads the module's own binding `x` (this
+      # process's slot, live), not a copy held in the namespace table.
+      if is_node(object, "var") and has_key(module_ns, object.name) and has_key(module_bindings, object.name) and is_global_ref(object.name)
+        let target = module_ns[object.name][field]
+        if target != nil and (set_contains(top_level_vars, target) or set_contains(defined_fns, target))
+          return compile_expr({tag: "var", name: target, line: node.line, col: node.col, file: node.file})
+        end
+      end
       if is_node(object, "var") and has_key(module_bindings, object.name) and (in_top_level or not set_contains(local_names, object.name))
         let exports = module_bindings[object.name]
         let found = false
@@ -3652,9 +3754,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
     end
     if node.frozen == true
-      # Module namespace table: an immortal malloc copy every process
-      # shares (spawn/send/reset never copy or free it).
-      buf_push(b, "    {t} = gem_table_freeze_static({t});\n")
+      # Module namespace table: an ordinary per-process table whose own
+      # entries cannot be changed.
+      buf_push(b, "    gem_table_freeze({t});\n")
     end
     {expr: t, setup: to_string(b)}
   end
@@ -3961,7 +4063,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       let mname = mangle(name)
       if in_top_level and set_contains(top_level_vars, name)
         # Module-level binding: this process's slot.
-        return "{line_dir}{r.setup}{p}{gmangle(name)} = {r.expr};"
+        return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});"
       end
       if set_contains(boxed_vars, name)
         # Mutated-captured fn-local: pinned malloc'd box, registered in the
@@ -3987,7 +4089,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         end
       end
       let r = compile_expr(value)
-      return "{line_dir}{r.setup}{p}{var_lvalue(name)} = {r.expr};"
+      let refresh = ns_refresh(name, p)
+      if refresh != ""
+        return "{line_dir}{r.setup}{p}{var_store(name, r.expr)}\n{substr(refresh, 0, len(refresh) - 1)}"
+      end
+      return "{line_dir}{r.setup}{p}{var_store(name, r.expr)}"
     when {tag: "dot_assign", object: object, value: value, field: field}
       let obj_r = compile_expr(object)
       let val_r = compile_expr(value)
@@ -4085,7 +4191,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       let r = compile_expr(value)
       let mname = mangle(name)
       if in_top_level and set_contains(top_level_vars, name)
-        return "{line_dir}{r.setup}{p}{gmangle(name)} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
+        return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});\n{pop_str(p)}{p}return GEM_NIL;"
       end
       if set_contains(boxed_vars, name)
         return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
@@ -4095,7 +4201,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       check_assign_target(name, node)
       let r = compile_expr(value)
       let t = tmp()
-      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_lvalue(name)} = {t};\n{pop_str(p)}{p}return {t};"
+      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_store(name, t)}\n{ns_refresh(name, p)}{pop_str(p)}{p}return {t};"
     when {tag: "return", value: value}
       if value != nil
         let r = compile_expr(value)
@@ -4317,6 +4423,10 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     for name, _ in eligible
       let mname = var_lvalue(name)
       buf_push(b, "\n{p}{mname} = gem_string_finish({mname});")
+      let refresh = ns_refresh(name, p)
+      if refresh != ""
+        buf_push(b, "\n" + substr(refresh, 0, len(refresh) - 1))
+      end
     end
 
     append_buf_vars = saved_append
@@ -5414,6 +5524,25 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     for n in top_rescue_placeholders(top_stmts)
       delete(top_level_vars, n)
     end
+    # Every `name = …` in the program, from mark_process_tail's call graph
+    # (it visits every fn, closure and top-level statement).
+    let assigned = {}
+    for _, r in pt_caller_records
+      for w in r.writes
+        if is_node(w.node, "assign")
+          set_add(assigned, w.name)
+        end
+      end
+    end
+    collect_module_namespaces(top_stmts, assigned, module_ns)
+    for binding, fields in module_ns
+      for field, target in fields
+        if ns_targets[target] == nil
+          ns_targets[target] = []
+        end
+        push(ns_targets[target], {binding: binding, field: field})
+      end
+    end
     note_spawn_global_writes()
     let top_captured = find_captured_in_scope(top_stmts, {})
     # Module-level bindings are slots, never captured. Main's other locals
@@ -5485,7 +5614,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(mb, "    gem_pop_frame();\n    return GEM_NIL;\n}\n\n")
     buf_push(mb, "int main(int argc, char **argv) \{\n")
     buf_push(mb, "    gem_init(argc, argv);\n")
-    buf_push(mb, "    gem_globals_init({len(keys(top_level_vars))});\n")
+    buf_push(mb, "    gem_globals_init_lazy({len(keys(top_level_vars))});\n")
     buf_push(mb, "    gem_scheduler_init();\n")
     buf_push(mb, "    gem_run_main(gem_user_main, NULL);\n")
     buf_push(mb, "    return 0;\n}\n")
@@ -5520,7 +5649,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     # gem_cur_globals array (see is_global_ref).
     let tlv_keys = sort(keys(top_level_vars))
     for i = 0, len(tlv_keys)
-      buf_push(ob, "#define gem_g_{tlv_keys[i]} (gem_cur_globals[{i}])\n")
+      buf_push(ob, "#define gem_gi_{tlv_keys[i]} {i}\n#define gem_g_{tlv_keys[i]} gem_global_get({i})\n")
     end
     buf_push(ob, "\n")
 

@@ -1,0 +1,102 @@
+# `m.x` on a loaded module is the module's own binding `x` in the running
+# process: the same object the module's functions use, live after the
+# module reassigns it, and private to each process.
+load "./modules/ns_items" as m
+load "./modules/ns_items" as again
+load "./modules/ns_holder" as hm
+
+# 1. The namespace sees the module's own table.
+m.add("a")
+print("identity:", len(m.items), m.count(), len(again.items))
+push(m.items, "b")
+print("push via namespace:", m.count(), m.items)
+
+# 2. Reassignments inside the module are seen through the namespace.
+m.relabel("relabeled")
+print("label:", m.label)
+m.reset()
+print("after reset:", len(m.items), m.count())
+m.add("c")
+
+# 3. The namespace as a first-class value.
+let ns = m
+fn via(mod)
+  mod.add("d")
+  len(mod.items)
+end
+print("first-class:", via(ns), ns.items == m.items, m.count())
+
+# 4. A child's writes stay in the child, including pushes into the
+#    exported table, and the child sees the same object both ways.
+let me = self()
+spawn do
+  push(m.items, "child")
+  m.add("child2")
+  send(me, [m.count(), len(ns.items), ns.items == m.items, m.items])
+end
+print("child:", receive())
+print("main after child:", m.count(), m.items)
+
+# 5. A child that writes the exported table many times while allocating
+#    (region resets) and exits: the parent is unaffected.
+let done = spawn do
+  let i = 0
+  while i < 50000
+    let junk = {n: i, s: "x{i}"}
+    if i % 5000 == 0
+      push(m.items, junk)
+    end
+    i += 1
+  end
+  send(me, len(m.items))
+end
+print("busy child saw:", receive())
+let k = 0
+while k < 50000
+  let junk = {n: k}
+  k += 1
+end
+print("main still:", m.count(), m.items)
+
+# 6. Exported closures over a mutated capture, written from a spawned loop
+#    that allocates heavily.
+hm.h.put("main value")
+spawn do
+  let i = 0
+  while i < 100000
+    let junk = {n: i, s: "x{i}", arr: [i, i + 1]}
+    if i % 1000 == 0
+      hm.h.put({i: i, label: "v{i}"})
+    end
+    i += 1
+  end
+  send(me, hm.h.get())
+end
+print("holder child:", receive())
+print("holder main:", hm.h.get())
+
+# 7. The namespace table itself is frozen: every mutator refuses it.
+let ops = {
+  dot_set: fn() m.items = [] end,
+  index_set: fn() ns["x"] = 1 end,
+  push: fn() push(ns, 1) end,
+  insert: fn() insert(ns, 0, 1) end,
+  delete: fn() delete(ns, "items") end,
+  pop: fn() pop(ns) end,
+  sort: fn() sort(ns) end,
+  remove_at: fn() remove_at(ns, 0) end,
+}
+for name in sort(keys(ops))
+  let r = pcall(ops[name])
+  print("frozen", name, r.ok, r.error)
+end
+print("unchanged:", m.count(), type(ns.add))
+
+# 8. Copies of the namespace (send, spawn) stay frozen.
+spawn do
+  send(me, pcall(fn() delete(ns, "add") end).error)
+end
+print("frozen in child:", receive())
+send(me, ns)
+let got = receive()
+print("sent copy:", len(got.items), pcall(fn() pop(got) end).error)

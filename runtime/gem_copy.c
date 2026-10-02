@@ -110,14 +110,30 @@ typedef struct {
     int use_malloc;
     /* When `preserve_external` is set (arena resets), only objects inside
        `region` -- the memory about to be freed -- are copied; any pointer
-       outside it (older arena memory, malloc'd pinned boxes, immortal
-       module tables) is kept as is, so its identity is preserved. */
+       outside it (older arena memory, malloc'd pinned boxes) is kept as is, so its identity is preserved. */
     int preserve_external;
     const GemRegion *region;
     /* Process whose values are being copied (-1: none, e.g. a timer's
        malloc'd message). Its pin-set tells which capture boxes are pinned
        (see gem_copy_box_is_pinned). */
     int src_pid;
+    /* Building a module snapshot unit (gem_mod_build_units): stamp every
+       source table with the unit's gen, and note whether the copy holds
+       anything that can change without a table write (buffers, pinned
+       capture boxes of `snap_src`), which makes the unit single-use. */
+    uint32_t stamp_gen;
+    GemProcess *snap_src;
+    int saw_mutable;
+    /* Copying out of a snapshot unit into the process that references it:
+       strings are immutable and the unit outlives the process's use of
+       them, so they are shared, not copied. */
+    int share_strings;
+    /* Copying a spawned closure's env (gem_spawn_module_state): collect the
+       snapshot gens of the source tables it reaches, so the module slots
+       sharing them are copied with this same map. */
+    int probe;
+    uint32_t *probe_gens;
+    int probe_n, probe_cap;
 } GemCopyMap;
 
 static void gem_copy_map_init(GemCopyMap *map, int use_malloc) {
@@ -132,6 +148,13 @@ static void gem_copy_map_init(GemCopyMap *map, int use_malloc) {
     map->preserve_external = 0;
     map->region = NULL;
     map->src_pid = -1;
+    map->stamp_gen = 0;
+    map->snap_src = NULL;
+    map->saw_mutable = 0;
+    map->share_strings = 0;
+    map->probe = 0;
+    map->probe_gens = NULL;
+    map->probe_n = map->probe_cap = 0;
 }
 
 static int gem_copy_is_external(GemCopyMap *map, const void *ptr) {
@@ -140,6 +163,7 @@ static int gem_copy_is_external(GemCopyMap *map, const void *ptr) {
 }
 
 static void gem_copy_map_cleanup(GemCopyMap *map) {
+    free(map->probe_gens);
     free(map->table);
     if (map->tasks != map->task_buf) free(map->tasks);
 }
@@ -264,6 +288,7 @@ static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
         case VAL_REF:
             return val;
         case VAL_STRING: {
+            if (map->share_strings) return val;
             if (gem_copy_is_external(map, val.sval)) return val;
             void *existing = gem_copy_map_find(map, val.sval);
             if (existing) { GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = (char *)existing; r.slen = val.slen; return r; }
@@ -276,12 +301,21 @@ static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
             return r;
         }
         case VAL_TABLE: {
-            /* Immutable tables are shared without copying by spawn/send (module
-               namespace tables are immortal). An arena reset copies any table
-               inside its region. */
             GemTable *t = val.table;
             if (gem_copy_is_external(map, t)) return val;
-            if (!map->use_malloc && !map->preserve_external && t->immutable) return val;
+            if (map->stamp_gen) t->snap_gen = map->stamp_gen;
+            if (map->probe && t->snap_gen) {
+                int seen = 0;
+                for (int k = 0; k < map->probe_n; k++) if (map->probe_gens[k] == t->snap_gen) { seen = 1; break; }
+                if (!seen) {
+                    if (map->probe_n == map->probe_cap) {
+                        map->probe_cap = map->probe_cap ? map->probe_cap * 2 : 8;
+                        map->probe_gens = (uint32_t *)realloc(map->probe_gens, sizeof(uint32_t) * (size_t)map->probe_cap);
+                        if (!map->probe_gens) { fprintf(stderr, "gem: out of memory (spawn)\n"); exit(1); }
+                    }
+                    map->probe_gens[map->probe_n++] = t->snap_gen;
+                }
+            }
             void *existing = gem_copy_map_find(map, t);
             if (existing) { GemVal r; r.type = VAL_TABLE; r.magic = GEM_MAGIC; r.table = (GemTable *)existing; return r; }
             GemTable *nt = (GemTable *)gem_copy_alloc(map, sizeof(GemTable));
@@ -292,6 +326,10 @@ static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
             nt->vals = (GemVal *)gem_copy_alloc(map, sizeof(GemVal) * t->cap);
             nt->str_index = NULL;
             nt->shape_id = gem_shape_counter++;
+            nt->immutable = t->immutable;  /* a frozen namespace stays frozen */
+            /* A reset moves the table within its process: it stays part of
+               the snapshot unit it was copied into. */
+            if (map->preserve_external) nt->snap_gen = t->snap_gen;
             nt->arena_next = NULL;
             /* The string-key index is built on first use (gem_table_index): many
                copies (spawned module state, messages) are never looked up by key. */
@@ -307,6 +345,7 @@ static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
         }
         case VAL_BUFFER: {
             if (gem_copy_is_external(map, val.buffer)) return val;
+            map->saw_mutable = 1;
             void *bex = gem_copy_map_find(map, val.buffer);
             if (bex) { GemVal r; r.type = VAL_BUFFER; r.magic = GEM_MAGIC; r.buffer = (GemBuffer *)bex; return r; }
             GemBuffer *ob = val.buffer;
@@ -344,7 +383,7 @@ static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
 }
 
 /* Pinned boxes in malloc'd copies (gem_deep_copy_malloc: timer messages,
-   frozen module tables). They belong to no process, so this set records
+   module snapshot units). They belong to no process, so this set records
    which of their boxes stand for pinned ones; gem_deep_free drops them. */
 static GemPinEntry *gem_malloc_pinned = NULL;
 
@@ -402,6 +441,9 @@ static void gem_copy_fill_env(void *env, void *new_env, GemCopyMap *map) {
             new_fields[i] = existing;
             continue;
         }
+        if (map->snap_src && map->snap_src->pinned_boxes &&
+            hmgeti(map->snap_src->pinned_boxes, (void *)old[i]) >= 0)
+            map->saw_mutable = 1;
         GemVal *box = gem_copy_new_box(map, old[i]);
         gem_copy_map_add(map, old[i], box);
         *box = gem_copy_shallow(*old[i], map);
@@ -453,6 +495,10 @@ GemVal gem_deep_copy_malloc(GemVal val) {
    pending values) so deep data cannot overflow the C stack; a visited set
    frees aliased structure once. */
 void gem_deep_free(GemVal val) {
+    gem_deep_free_n(&val, 1);
+}
+
+void gem_deep_free_n(const GemVal *vals, int nvals) {
     GemCopyMap visited;
     gem_copy_map_init(&visited, 1);
     GemVal *stack = NULL;
@@ -461,7 +507,7 @@ void gem_deep_free(GemVal val) {
         if (n == cap) { cap = cap ? cap * 2 : 64; stack = (GemVal *)realloc(stack, sizeof(GemVal) * cap); \
                         if (!stack) { fprintf(stderr, "gem: out of memory (free)\n"); exit(1); } } \
         stack[n++] = (v); } while (0)
-    GEM_FREE_PUSH(val);
+    for (int vi = 0; vi < nvals; vi++) GEM_FREE_PUSH(vals[vi]);
     while (n > 0) {
         GemVal v = stack[--n];
         switch (v.type) {
@@ -621,9 +667,8 @@ void gem_pin_free_all(GemProcess *proc) {
  *      strings are immutable, so older ones cannot point into the region.
  *   4. Process state: module slots (proc->globals), the mailbox, read_buf.
  *   5. Other processes never hold pointers into this arena (spawn and send
- *      deep-copy; frozen module tables are immortal malloc copies). A
- *      pinned box reaching this process by a copy is a new pinned box of
- *      this process (gem_copy_new_box), so case 3 covers it.
+ *      deep-copy). A pinned box reaching this process by a copy is a new
+ *      pinned box of this process (gem_copy_new_box), so case 3 covers it.
  *
  * Nested loops nest their marks: a reset only frees memory newer than its
  * own mark, so marks held by enclosing loops (all older) stay valid.
@@ -860,27 +905,397 @@ void gem_arena_reset_region(GemArenaMark *mark, GemVal **roots, int n_roots,
     if (gem_diag_state > 0) gem_diag_t_total += gem_diag_now() - t0;
 }
 
-/* ─── Module globals ─── */
+/* ─── Module globals ───────────────────────────────────────────────
+ *
+ * Per-process module slots with lazy, per-slot copy at spawn (overview in
+ * gem.h, "Module globals").
+ *
+ * Snapshot units. A unit is an immutable malloc deep copy of a set of a
+ * parent's slots that share structure (an aliasing component: slots whose
+ * values reach a common table, buffer, closure env or capture box), made
+ * with one copy map. It is refcounted: one reference per out[] entry of the
+ * parent and per in[] entry of each child (or grandchild) holding it.
+ *
+ * Parent side. At a spawn the parent (gem_mod_build_units) snapshots every
+ * slot holding a heavy value that has no unit yet: it walks those values
+ * to find the components, then copies each into a new unit, stamping every
+ * source table with the unit's gen. Units stay valid, and are reused by
+ * later spawns, until the parent changes them:
+ *   - a write to a slot (gem_global_set / gem_global_ref) drops that slot's
+ *     unit (gem_global_unshare);
+ *   - a change to a stamped table (gem_table_check_mutable, called by every
+ *     table mutator) drops the unit with that gen (gem_table_mutate_slow);
+ *   - a unit holding a buffer or a pinned capture box (mutable without any
+ *     table write) is used by one spawn only.
+ * Old arena memory is moved by region resets but keeps its stamp (reset
+ * copies carry snap_gen). If the walk of a changed slot reaches a table of a
+ * still-valid unit (it was stored there since), that unit is dropped and
+ * rebuilt together with it, so components stay disjoint. Light slot values
+ * (no unit) are copied at every spawn; a write of a light value over a
+ * light value touches no unit.
+ *
+ * Child side. A heavy slot starts as VAL_LAZY with in[i] = the unit. The
+ * first gem_global_get / gem_global_ref of any slot of that unit copies all
+ * of the unit's slots that are still lazy in this process (gem_global_fault)
+ * into the arena with one copy map. Strings are shared with the unit, which
+ * the process references until it exits. A slot still lazy when the process
+ * spawns is passed to the grandchild as the same unit (no copy at all).
+ *
+ * Region resets root all slots: VAL_LAZY slots and unit strings are not in
+ * any region, so a reset leaves them as they are. Process exit drops the
+ * process's unit references (gem_globals_free). */
 
 GemVal *gem_cur_globals = NULL;
 int gem_n_globals = 0;
+static uint32_t gem_mod_gen_counter = 0;
+
+struct GemModUnit {
+    int refs;          /* one per out[] / in[] entry pointing at it */
+    uint32_t gen;      /* stamp on the parent's tables copied into it */
+    int shareable;     /* 0: holds a buffer or pinned box, used by one spawn only */
+    int n;
+    int *slots;        /* slot indices, ascending */
+    GemVal *vals;      /* their values, one malloc copy */
+};
+
+static const GemVal GEM_LAZY_VAL = { .type = VAL_LAZY, .magic = GEM_MAGIC };
+
+/* Code generated before lazy module copy (the checked-in stage0.c until it
+   is regenerated) reads and writes gem_cur_globals[i] directly: it calls
+   gem_globals_init, and spawn then copies every unit into the child at once
+   and keeps none for later spawns. Current codegen calls
+   gem_globals_init_lazy. */
+static int gem_mod_lazy = 0;
 
 void gem_globals_init(int n) {
     gem_n_globals = n;
 }
 
+void gem_globals_init_lazy(int n) {
+    gem_n_globals = n;
+    gem_mod_lazy = 1;
+}
+
 GemVal *gem_globals_alloc(void) {
-    GemVal *g = (GemVal *)malloc(sizeof(GemVal) * (size_t)(gem_n_globals > 0 ? gem_n_globals : 1));
+    size_t n = (size_t)(gem_n_globals > 0 ? gem_n_globals : 1);
+    GemVal *g = (GemVal *)calloc(1, n * sizeof(GemVal) + 2 * n * sizeof(GemModUnit *));
+    if (!g) { fprintf(stderr, "gem: out of memory (module slots)\n"); exit(1); }
     for (int i = 0; i < gem_n_globals; i++) g[i] = GEM_NIL;
     return g;
 }
 
-void gem_spawn_copy(GemVal *fn_val, GemVal *dst, const GemVal *src, int n, int src_pid) {
-    GemCopyMap map;
-    gem_copy_map_init(&map, 0);
-    map.src_pid = src_pid;
-    if (fn_val) *fn_val = gem_deep_copy_internal(*fn_val, &map);
-    for (int i = 0; i < n; i++) dst[i] = gem_deep_copy_internal(src[i], &map);
-    gem_copy_map_cleanup(&map);
+/* Worth a unit: values whose copy costs more than a few bytes. */
+static int gem_mod_heavy(GemVal v) {
+    switch (v.type) {
+        case VAL_TABLE:
+        case VAL_BUFFER: return 1;
+        case VAL_FN: return v.env != NULL;
+        case VAL_STRING: return v.slen > GEM_MOD_LIGHT_STRING;
+        default: return 0;
+    }
 }
 
+static void gem_mod_unit_release(GemModUnit *u) {
+    if (--u->refs > 0) return;
+    gem_deep_free_n(u->vals, u->n);
+    free(u->slots);
+    free(u->vals);
+    free(u);
+}
+
+static int gem_mod_unit_index(const GemModUnit *u, int slot) {
+    int lo = 0, hi = u->n - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (u->slots[mid] < slot) lo = mid + 1;
+        else if (u->slots[mid] > slot) hi = mid - 1;
+        else return mid;
+    }
+    return -1;
+}
+
+/* Stop sharing unit u from process p with future children. */
+static void gem_mod_unshare(GemProcess *p, GemModUnit *u) {
+    for (int k = 0; k < p->mod_live_n; k++) {
+        if (p->mod_live[k] == u) {
+            p->mod_live[k] = p->mod_live[--p->mod_live_n];
+            break;
+        }
+    }
+    GemModUnit **out = GEM_GLOBALS_OUT(p->globals);
+    u->refs++;  /* hold u while dropping the slot references */
+    for (int k = 0; k < u->n; k++) {
+        int s = u->slots[k];
+        if (out[s] == u) {
+            out[s] = NULL;
+            gem_mod_unit_release(u);
+        }
+    }
+    gem_mod_unit_release(u);
+}
+
+static GemModUnit *gem_mod_live_find(GemProcess *p, uint32_t gen) {
+    for (int k = 0; k < p->mod_live_n; k++)
+        if (p->mod_live[k]->gen == gen) return p->mod_live[k];
+    return NULL;
+}
+
+void gem_global_unshare(int i) {
+    GemProcess *p = &gem_proc_table[gem_current_pid];
+    GemModUnit *u = GEM_GLOBALS_OUT(p->globals)[i];
+    if (u) gem_mod_unshare(p, u);
+}
+
+void gem_table_mutate_slow(GemTable *t) {
+    if (t->immutable) {
+        gem_error("cannot modify a module table");
+        abort();
+    }
+    uint32_t gen = t->snap_gen;
+    t->snap_gen = 0;
+    if (gem_current_pid < 0) return;
+    GemProcess *p = &gem_proc_table[gem_current_pid];
+    if (!p->globals) return;
+    GemModUnit *u = gem_mod_live_find(p, gen);
+    if (u) gem_mod_unshare(p, u);
+}
+
+GemVal gem_global_fault(int i) {
+    GemVal *g = gem_cur_globals;
+    GemModUnit **in = GEM_GLOBALS_IN(g);
+    GemModUnit *u = in[i];
+    if (!u) { g[i] = GEM_NIL; return g[i]; }  /* not reached: a lazy slot has a unit */
+    GemCopyMap map;
+    gem_copy_map_init(&map, 0);
+    map.share_strings = 1;
+    for (int k = 0; k < u->n; k++) {
+        int s = u->slots[k];
+        if (g[s].type == VAL_LAZY && in[s] == u)
+            g[s] = gem_deep_copy_internal(u->vals[k], &map);
+    }
+    gem_copy_map_cleanup(&map);
+    return g[i];
+}
+
+static int gem_uf_find(int *uf, int x) {
+    while (uf[x] != x) { uf[x] = uf[uf[x]]; x = uf[x]; }
+    return x;
+}
+
+static void gem_uf_union(int *uf, int a, int b) {
+    a = gem_uf_find(uf, a);
+    b = gem_uf_find(uf, b);
+    if (a != b) uf[a < b ? b : a] = a < b ? a : b;
+}
+
+static int gem_int_cmp(const void *a, const void *b) {
+    int x = *(const int *)a, y = *(const int *)b;
+    return (x > y) - (x < y);
+}
+
+/* Snapshot every heavy slot of p that has no unit (see the overview). */
+static void gem_mod_build_units(GemProcess *p) {
+    int n = gem_n_globals;
+    GemVal *g = p->globals;
+    GemModUnit **out = GEM_GLOBALS_OUT(g);
+    int *R = NULL;
+    char *inR = NULL;
+    int nr = 0;
+    for (int i = 0; i < n; i++) {
+        if (g[i].type == VAL_LAZY || out[i] || !gem_mod_heavy(g[i])) continue;
+        if (!R) {
+            R = (int *)malloc(sizeof(int) * (size_t)n);
+            inR = (char *)calloc((size_t)n, 1);
+            if (!R || !inR) { fprintf(stderr, "gem: out of memory (spawn)\n"); exit(1); }
+        }
+        R[nr++] = i;
+        inR[i] = 1;
+    }
+    if (nr == 0) return;
+
+    /* 1. Components: walk the values; an object reached from two slots
+       unites them. A table of a still-valid unit pulls that unit in. */
+    int *uf = (int *)malloc(sizeof(int) * (size_t)n);
+    for (int i = 0; i < n; i++) uf[i] = i;
+    GemCopyMap owner;  /* object -> first slot that reached it, +1 */
+    gem_copy_map_init(&owner, 1);
+    GemVal *stack = NULL;
+    size_t sn = 0, scap = 0;
+#define GEM_MOD_PUSH(v) do { GemVal _v = (v); \
+        if (_v.type == VAL_TABLE || _v.type == VAL_BUFFER || (_v.type == VAL_FN && _v.env)) { \
+            if (sn == scap) { scap = scap ? scap * 2 : 64; stack = (GemVal *)realloc(stack, sizeof(GemVal) * scap); \
+                              if (!stack) { fprintf(stderr, "gem: out of memory (spawn)\n"); exit(1); } } \
+            stack[sn++] = _v; } } while (0)
+    for (int ri = 0; ri < nr; ri++) {
+        int i = R[ri];
+        GEM_MOD_PUSH(g[i]);
+        while (sn > 0) {
+            GemVal v = stack[--sn];
+            void *key = v.type == VAL_TABLE ? (void *)v.table
+                      : v.type == VAL_BUFFER ? (void *)v.buffer : v.env;
+            void *o = gem_copy_map_find(&owner, key);
+            if (o) { gem_uf_union(uf, i, (int)(intptr_t)o - 1); continue; }
+            gem_copy_map_add(&owner, key, (void *)(intptr_t)(i + 1));
+            if (v.type == VAL_TABLE) {
+                GemTable *t = v.table;
+                if (t->snap_gen) {
+                    GemModUnit *u = gem_mod_live_find(p, t->snap_gen);
+                    if (u) {
+                        for (int k = 0; k < u->n; k++) {
+                            int s = u->slots[k];
+                            if (out[s] == u && !inR[s]) { R[nr++] = s; inR[s] = 1; }
+                        }
+                        gem_mod_unshare(p, u);
+                    }
+                }
+                for (int j = 0; j < t->len; j++) {
+                    GEM_MOD_PUSH(t->keys[j]);
+                    GEM_MOD_PUSH(t->vals[j]);
+                }
+            } else if (v.type == VAL_FN) {
+                intptr_t nf = *(intptr_t *)v.env;
+                GemVal **fields = (GemVal **)((char *)v.env + sizeof(intptr_t));
+                for (intptr_t f = 0; f < nf; f++) {
+                    void *ob = gem_copy_map_find(&owner, fields[f]);
+                    if (ob) { gem_uf_union(uf, i, (int)(intptr_t)ob - 1); continue; }
+                    gem_copy_map_add(&owner, fields[f], (void *)(intptr_t)(i + 1));
+                    GEM_MOD_PUSH(*fields[f]);
+                }
+            }
+        }
+    }
+#undef GEM_MOD_PUSH
+    free(stack);
+    gem_copy_map_cleanup(&owner);
+
+    /* 2. One unit per component, slots ascending. */
+    qsort(R, (size_t)nr, sizeof(int), gem_int_cmp);
+    int *cnt = (int *)calloc((size_t)n, sizeof(int));
+    GemModUnit **unit_of = (GemModUnit **)calloc((size_t)n, sizeof(GemModUnit *));
+    for (int ri = 0; ri < nr; ri++) cnt[gem_uf_find(uf, R[ri])]++;
+    for (int ri = 0; ri < nr; ri++) {
+        int r = gem_uf_find(uf, R[ri]);
+        GemModUnit *u = unit_of[r];
+        if (!u) {
+            u = (GemModUnit *)calloc(1, sizeof(GemModUnit));
+            u->slots = (int *)malloc(sizeof(int) * (size_t)cnt[r]);
+            u->vals = (GemVal *)malloc(sizeof(GemVal) * (size_t)cnt[r]);
+            unit_of[r] = u;
+        }
+        u->slots[u->n++] = R[ri];
+    }
+
+    /* 3. Copy each unit, stamping its source tables. */
+    for (int ri = 0; ri < nr; ri++) {
+        GemModUnit *u = unit_of[gem_uf_find(uf, R[ri])];
+        if (u->gen) continue;
+        if (++gem_mod_gen_counter == 0) ++gem_mod_gen_counter;
+        u->gen = gem_mod_gen_counter;
+        GemCopyMap map;
+        gem_copy_map_init(&map, 1);
+        map.stamp_gen = u->gen;
+        map.snap_src = p;
+        map.src_pid = (int)(p - gem_proc_table);
+        for (int k = 0; k < u->n; k++) u->vals[k] = gem_deep_copy_internal(g[u->slots[k]], &map);
+        u->shareable = !map.saw_mutable;
+        gem_copy_map_cleanup(&map);
+        for (int k = 0; k < u->n; k++) {
+            out[u->slots[k]] = u;
+            u->refs++;
+        }
+        if (p->mod_live_n == p->mod_live_cap) {
+            p->mod_live_cap = p->mod_live_cap ? p->mod_live_cap * 2 : 16;
+            p->mod_live = (GemModUnit **)realloc(p->mod_live, sizeof(GemModUnit *) * (size_t)p->mod_live_cap);
+            if (!p->mod_live) { fprintf(stderr, "gem: out of memory (spawn)\n"); exit(1); }
+        }
+        p->mod_live[p->mod_live_n++] = u;
+    }
+    free(cnt);
+    free(unit_of);
+    free(uf);
+    free(R);
+    free(inR);
+}
+
+void gem_spawn_module_state(GemVal *fn_val, GemVal *cg, int parent) {
+    GemProcess *p = NULL;
+    if (parent >= 0 && gem_n_globals > 0 && gem_proc_table[parent].globals) {
+        p = &gem_proc_table[parent];
+        gem_mod_build_units(p);
+    }
+    GemVal *pg = p ? p->globals : NULL;
+    GemModUnit **cin = GEM_GLOBALS_IN(cg);
+    char *eager = NULL;
+    if (fn_val) {
+        /* The closure env and the module slots it shares structure with are
+           copied with one map, so a captured local that refers to a module
+           table is still that table in the child. Those units are valid, so
+           the parent's slots equal their snapshot and are copied directly. */
+        GemCopyMap map;
+        gem_copy_map_init(&map, 0);
+        map.probe = p != NULL;
+        map.src_pid = parent;
+        *fn_val = gem_deep_copy_internal(*fn_val, &map);
+        for (int gi = 0; gi < map.probe_n; gi++) {
+            GemModUnit *u = gem_mod_live_find(p, map.probe_gens[gi]);
+            if (!u) continue;  /* a stale stamp */
+            if (!eager) eager = (char *)calloc((size_t)gem_n_globals, 1);
+            for (int k = 0; k < u->n; k++) {
+                int s = u->slots[k];
+                if (eager[s]) continue;
+                eager[s] = 1;
+                cg[s] = gem_deep_copy_internal(pg[s], &map);  /* may add gens */
+            }
+        }
+        gem_copy_map_cleanup(&map);
+    }
+    if (!p) { free(eager); return; }
+    GemModUnit **pout = GEM_GLOBALS_OUT(pg), **pin = GEM_GLOBALS_IN(pg);
+    for (int i = 0; i < gem_n_globals; i++) {
+        if (eager && eager[i]) continue;
+        GemVal v = pg[i];
+        if (v.type == VAL_LAZY) {
+            cg[i] = v;
+            cin[i] = pin[i];
+            pin[i]->refs++;
+        } else if (gem_mod_heavy(v)) {
+            GemModUnit *u = pout[i];
+            GemVal uv = u->vals[gem_mod_unit_index(u, i)];
+            cg[i] = uv.type == VAL_STRING ? uv : GEM_LAZY_VAL;
+            cin[i] = u;
+            u->refs++;
+        } else if (v.type == VAL_STRING) {
+            cg[i] = gem_string_with_len(v.sval, v.slen);  /* child's arena */
+        } else {
+            cg[i] = v;
+        }
+    }
+    free(eager);
+    for (int k = 0; k < p->mod_live_n; ) {
+        GemModUnit *u = p->mod_live[k];
+        if (!u->shareable || !gem_mod_lazy) gem_mod_unshare(p, u);  /* removes it from mod_live */
+        else k++;
+    }
+    if (!gem_mod_lazy) {
+        GemVal *saved = gem_cur_globals;
+        gem_cur_globals = cg;
+        for (int i = 0; i < gem_n_globals; i++)
+            if (cg[i].type == VAL_LAZY) gem_global_fault(i);
+        gem_cur_globals = saved;
+    }
+}
+
+void gem_globals_free(GemProcess *p) {
+    if (!p->globals) return;
+    while (p->mod_live_n > 0) gem_mod_unshare(p, p->mod_live[0]);
+    GemModUnit **out = GEM_GLOBALS_OUT(p->globals), **in = GEM_GLOBALS_IN(p->globals);
+    for (int i = 0; i < gem_n_globals; i++) {
+        if (out[i]) { gem_mod_unit_release(out[i]); out[i] = NULL; }  /* not reached: unshared above */
+        if (in[i]) { gem_mod_unit_release(in[i]); in[i] = NULL; }
+    }
+    free(p->mod_live);
+    p->mod_live = NULL;
+    p->mod_live_cap = 0;
+    free(p->globals);
+    p->globals = NULL;
+}

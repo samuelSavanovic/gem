@@ -92,6 +92,11 @@ static inline void *gem_alloc(size_t n) {
 
 typedef enum {
     VAL_NIL, VAL_BOOL, VAL_INT, VAL_FLOAT, VAL_STRING, VAL_FN, VAL_TABLE, VAL_BUFFER, VAL_REF,
+    /* Only in a module slot of a spawned process that has not touched it
+       yet: the value is in the slot's snapshot unit (see "Module globals").
+       Reading the slot through gem_global_get copies it in. Never a value
+       user code sees. */
+    VAL_LAZY,
 } GemType;
 
 #define GEM_MAGIC 0x47454D56
@@ -257,9 +262,10 @@ struct GemTable {
     GemStrIndex *str_index;  /* stb_ds string hash map (NULL until first string key) */
     uint32_t shape_id;       /* incremented on structural mutations (delete, pop, sort, etc.) */
     GemTable *arena_next;    /* linked list in owning arena's table_list */
-    uint8_t immutable;       /* set by gem_table_freeze — shared across processes without copy */
+    uint8_t immutable;       /* frozen module namespace table (gem_table_freeze); copies keep the flag */
     uint8_t rem_flag;        /* scratch bit for a reset's remembered-log compaction */
     uint8_t index_stale;     /* str_index not built yet (deep copies build it on first string-key use) */
+    uint32_t snap_gen;       /* module snapshot unit this table was copied into (0: none); see gem_table_check_mutable */
     uint64_t mut_seq;        /* gem_mut_clock at creation or the last logged write (see gem_table_written) */
 };
 
@@ -301,7 +307,28 @@ GemVal gem_table_new(void);
 void gem_table_set(GemVal tbl, GemVal key, GemVal val);
 GemVal gem_table_get(GemVal tbl, GemVal key);
 void gem_table_grow(GemTable *t);
+/* Freeze a module namespace table: its own entries can no longer be
+   changed (the values it holds stay as mutable as they were). The table is
+   an ordinary per-process value: spawn, send and resets copy it like any
+   other table, and the copy stays frozen. */
 void gem_table_freeze(GemVal tbl);
+/* After a module reassigns exported binding `field`: store its new value
+   in namespace table `ns` (frozen, so user code cannot). No-op unless `ns`
+   is a frozen table holding `field`. */
+void gem_ns_refresh(GemVal ns, const char *field, GemVal val);
+/* Older generated code (bootstrap/stage0.c until it is regenerated) calls
+   this; it freezes `tbl` in place and returns it. */
+GemVal gem_table_freeze_static(GemVal tbl);
+
+/* Every runtime path that changes a table's entries (store, append, insert,
+   delete, pop, sort, remove_at) calls this first. It refuses a frozen
+   namespace table, and when the table is part of a module snapshot unit
+   this process still shares with future children (snap_gen), it drops that
+   unit, so the next spawn snapshots the changed state. */
+void gem_table_mutate_slow(GemTable *t);
+static inline void gem_table_check_mutable(GemTable *t) {
+    if (__builtin_expect(t->immutable | (t->snap_gen != 0), 0)) gem_table_mutate_slow(t);
+}
 
 /* ─── Inline cache for .field access ─── */
 
@@ -450,6 +477,9 @@ GemVal gem_deep_copy(GemVal val, int src_pid);
    stay marked as pinned, so a later gem_deep_copy pins them again. */
 GemVal gem_deep_copy_malloc(GemVal val);
 void gem_deep_free(GemVal val);
+/* Free n values built by one gem_deep_copy_malloc-style copy (shared
+   structure is freed once). */
+void gem_deep_free_n(const GemVal *vals, int n);
 
 /* Region reset (see GemArenaMark): if the arena has passed the mark's
    trigger, copy everything allocated since `mark` that is still reachable
@@ -463,25 +493,68 @@ void gem_arena_reset_region(GemArenaMark *mark, GemVal **roots, int n_roots,
 
 /* ─── Module globals (per-process module state) ───
  *
- * Top-level `let` bindings compile to slots gem_cur_globals[i]. Every
- * process owns a copy: spawn deep-copies the parent's slots into the
- * child's arena (sharing one copy map with the closure env, so aliasing is
- * preserved), and the scheduler points gem_cur_globals at the running
- * process's slots. */
+ * Top-level `let` bindings compile to slots gem_cur_globals[i], read with
+ * gem_global_get, written with gem_global_set (gem_global_ref for
+ * read-modify-write). Every process owns its slots; the scheduler points
+ * gem_cur_globals at the running process's array. Writes stay in the
+ * process.
+ *
+ * Spawn copies module state lazily, per slot (runtime/gem_copy.c, "Module
+ * globals"). A child must see its parent's module state as of the spawn.
+ * Light values (nil, numbers, bools, refs, fns without env, strings up to
+ * GEM_MOD_LIGHT_STRING bytes) are copied into the child at spawn. Every
+ * other slot value lives in a snapshot unit: an immutable, refcounted malloc
+ * copy of the parent's slots that share structure (one aliasing component).
+ * The child's slot holds VAL_LAZY and a reference to the unit; its first
+ * read copies the whole unit into the child's arena with one copy map, so
+ * aliasing between slots survives. A parent keeps its units for later
+ * spawns until it changes them: a slot write (gem_global_set) or a change
+ * to a table in the unit (gem_table_check_mutable, via the snap_gen stamp)
+ * drops the unit; the next spawn rebuilds just that one. A slot the child
+ * never touched is handed on to its own children by reference.
+ *
+ * Array layout (one malloc): GemVal slots[n], then GemModUnit *out[n]
+ * (unit this process shares slot i through, for later spawns), then
+ * GemModUnit *in[n] (unit a VAL_LAZY slot i comes from). */
+typedef struct GemModUnit GemModUnit;
 extern GemVal *gem_cur_globals;
 extern int gem_n_globals;
-/* Called by generated main() before gem_run_main. */
+#define GEM_MOD_LIGHT_STRING 64
+#define GEM_GLOBALS_OUT(g) ((GemModUnit **)((g) + gem_n_globals))
+#define GEM_GLOBALS_IN(g)  (GEM_GLOBALS_OUT(g) + gem_n_globals)
+/* Called by generated main() before gem_run_main (gem_globals_init: code
+   generated before lazy module copy, see gem_copy.c). */
+void gem_globals_init_lazy(int n);
 void gem_globals_init(int n);
-/* malloc'd array of gem_n_globals slots, all nil. */
+/* malloc'd array of gem_n_globals slots (all nil) plus the unit arrays. */
 GemVal *gem_globals_alloc(void);
-/* Deep-copy `*fn_val`'s env and the `n` slots of `src` into the current
-   arena with one shared copy map; results in *fn_val and dst. `src_pid` is
-   the parent (see gem_deep_copy for pinned boxes). */
-void gem_spawn_copy(GemVal *fn_val, GemVal *dst, const GemVal *src, int n, int src_pid);
-/* Copy `tbl` (a frozen module namespace table) into immortal malloc memory,
-   so every process can share it without copying and no arena reset or
-   process exit can free it. */
-GemVal gem_table_freeze_static(GemVal tbl);
+/* Give the child (the current process) the module state of `parent` and its
+   own copy of the closure value `*fn_val` (env may be NULL). */
+void gem_spawn_module_state(GemVal *fn_val, GemVal *child_globals, int parent);
+#if defined(__GNUC__)
+__attribute__((cold))
+#endif
+GemVal gem_global_fault(int i);
+#if defined(__GNUC__)
+__attribute__((cold))
+#endif
+void gem_global_unshare(int i);
+static inline GemVal gem_global_get(int i) {
+    /* Test the tag in place, then copy the slot whole: copying first and
+       testing the copy makes gcc patch the copy's tag and reload it, a
+       store-forwarding stall on every read. */
+    if (__builtin_expect(gem_cur_globals[i].type == VAL_LAZY, 0)) return gem_global_fault(i);
+    return gem_cur_globals[i];
+}
+static inline void gem_global_set(int i, GemVal v) {
+    if (__builtin_expect(GEM_GLOBALS_OUT(gem_cur_globals)[i] != NULL, 0)) gem_global_unshare(i);
+    gem_cur_globals[i] = v;
+}
+static inline GemVal *gem_global_ref(int i) {
+    if (__builtin_expect(gem_cur_globals[i].type == VAL_LAZY, 0)) gem_global_fault(i);
+    if (__builtin_expect(GEM_GLOBALS_OUT(gem_cur_globals)[i] != NULL, 0)) gem_global_unshare(i);
+    return &gem_cur_globals[i];
+}
 
 /* Allocate a new pinned box (sizeof(GemVal)) outside the per-process arena.
    The caller is responsible for initializing *box. The pointer is registered
@@ -619,10 +692,18 @@ typedef struct {
        at every reset; freed en masse on process exit. NULL == empty.
        value: 0 = untouched this cycle, 1 = walked. */
     struct GemPinEntry *pinned_boxes;
-    /* This process's copy of the module-level bindings (gem_n_globals slots,
-       malloc'd). gem_cur_globals points here while the process runs. */
+    /* This process's module-level bindings (gem_globals_alloc layout:
+       slots, then out/in snapshot units). gem_cur_globals points here while
+       the process runs. */
     GemVal *globals;
+    /* Snapshot units this process still shares with future children (its
+       out units, each once), searched by gem_table_mutate_slow. */
+    GemModUnit **mod_live;
+    int mod_live_n, mod_live_cap;
 } GemProcess;
+
+/* Drop a process's module slots and its snapshot unit references. */
+void gem_globals_free(GemProcess *proc);
 
 typedef struct GemPinEntry {
     void *key;
