@@ -192,7 +192,23 @@ Single-expression blocks use braces:
 times(5) { |i| print(i) }
 ```
 
-This one rule lets std define `each`, `map`, `unless`, `until`, `with_file`, `loop`, etc. without compiler changes.
+When the block is the only argument, the parentheses can be dropped. A brace block then needs its `|params|` (use `||` for none), so it is not read as a table literal:
+
+```
+let pid = spawn do
+  serve()
+end
+let r = pcall do
+  risky()
+end
+apply { |x| x * 2 }
+```
+
+The `do` or `{` must be on the same line as the call.
+
+A trailing block cannot follow a call anywhere in an `if`, `elif`, `while` or `for` header, and a header takes no `do`: `while running do` is reported as an error. To pass a block to a call there, assign the call's result to a variable first.
+
+This one rule lets std define `each`, `map`, `filter` and friends without compiler changes.
 
 ## Tables
 
@@ -429,8 +445,8 @@ For TCO functions, the corresponding conditions are: a parameter captured by a n
 ## Green Threads and Message Passing
 
 ```
-let pid = spawn() do
-  loop do
+let pid = spawn do
+  while true
     let msg = receive()
     print("got: " + msg)
   end

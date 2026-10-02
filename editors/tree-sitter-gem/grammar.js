@@ -177,6 +177,9 @@ module.exports = grammar({
       'end',
     ),
 
+    // `receive()` — pop the head of the mailbox
+    receive_call: $ => seq('receive', '(', ')'),
+
     receive_block: $ => seq(
       'receive',
       repeat1($.when_clause),
@@ -234,6 +237,7 @@ module.exports = grammar({
       $.unary_expression,
       $.call_expression,
       $.call_with_block,
+      $.receive_call,
       $.member_expression,
       $.subscript_expression,
       $.lambda,
@@ -279,7 +283,7 @@ module.exports = grammar({
       '(',
       optional(sep1($._expression, ',')),
       ')',
-      optional(field('block', $.do_block)),
+      optional(field('block', choice($.do_block, $.brace_block))),
     )),
 
     member_expression: $ => prec.left(9, seq(
@@ -296,9 +300,19 @@ module.exports = grammar({
     )),
 
     call_with_block: $ => prec.left(8, seq(
-      field('function', $.identifier),
-      $.do_block,
+      field('function', choice($.identifier, $.member_expression)),
+      choice($.do_block, $.param_brace_block),
     )),
+
+    // Without parens, a brace block needs |params|; lexing `{ |` as one
+    // token keeps it apart from a table literal.
+    param_brace_block: $ => seq(
+      alias(token(seq('{', /[ \t]*/, '|')), '{|'),
+      optional(sep1(choice($.default_param, $.destructure_param, $.identifier), ',')),
+      '|',
+      repeat1($._statement),
+      '}',
+    ),
 
     do_block: $ => seq(
       'do',
@@ -307,14 +321,14 @@ module.exports = grammar({
       'end',
     ),
 
-    brace_block: $ => seq(
+    brace_block: $ => prec.dynamic(-1, seq(
       '{',
       optional($.block_parameters),
       repeat1($._statement),
       '}',
-    ),
+    )),
 
-    block_parameters: $ => seq('|', sep1(choice($.default_param, $.destructure_param, $.identifier), ','), '|'),
+    block_parameters: $ => seq('|', optional(sep1(choice($.default_param, $.destructure_param, $.identifier), ',')), '|'),
 
     lambda: $ => seq(
       'fn',

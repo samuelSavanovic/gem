@@ -139,6 +139,16 @@ Stack trace:
   at fail_after_yield (examples/101_process_stack_traces.gem:12)
   at main_entry (examples/101_process_stack_traces.gem:15)
   at main (examples/101_process_stack_traces.gem:21)
+test1: 10
+test1: 11
+test2: 30
+test2: 7
+test3: [2, 4, 6]
+test3: spawned with a block
+test4: ok=false error=boom
+test4: abc
+test5: 2
+test5: 3
 slot reused, new pid differs: true
 stale process_info: nil
 stale kill: nil
