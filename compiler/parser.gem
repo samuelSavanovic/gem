@@ -106,6 +106,10 @@ fn make_parser(tokens, source, file, sink)
   let pos = 0
   let gensym_counter = 0
   let fn_depth = 0
+  # > 0 while parsing an if / while / for header. No trailing block is
+  # taken there, so `x do` / `f() do` is reported as a stray Lua/Ruby-style
+  # `do` instead of parsed as a block call.
+  let header_depth = 0
 
   # ── Token access ──
 
@@ -333,6 +337,8 @@ fn make_parser(tokens, source, file, sink)
   # Terminates at: end, EOF
 
   let parse_fn_body = fn()
+    let saved_header_depth = header_depth
+    header_depth = 0
     let stmts = []
     skip_nl()
     while peek().type != "end" and not at_end()
@@ -341,6 +347,7 @@ fn make_parser(tokens, source, file, sink)
       skip_nl()
       force_progress(_lp)
     end
+    header_depth = saved_header_depth
     stmts
   end
 
@@ -477,7 +484,7 @@ fn make_parser(tokens, source, file, sink)
     end
 
     # pcall expression: pcall <expr> desugars to pcall(fn() <expr> end)
-    if t.type == "NAME" and t.value == "pcall" and peek_at(1).type != "("
+    if t.type == "NAME" and t.value == "pcall" and peek_at(1).type != "(" and peek_at(1).type != "do"
       advance()
       let expr = parse_expr()
       return make_call(make_var("pcall"), [make_anon_fn([], nil, [expr], [])], t.line)
@@ -498,11 +505,82 @@ fn make_parser(tokens, source, file, sink)
     make_error_expr(t.line, t.col)
   end
 
+  # Optional `|params|` at the start of a block.
+  let parse_block_params = fn()
+    let r = {params: [], rest_param: nil, defaults: [], prelude: []}
+    if peek().type == "|"
+      advance()
+      r = parse_params()
+      expect("|")
+    end
+    r
+  end
+
+  # `do [|params|] body end` → anonymous fn
+  let parse_do_block = fn()
+    expect("do")
+    let bp = parse_block_params()
+    fn_depth += 1
+    let body = parse_fn_body()
+    fn_depth -= 1
+    expect("end")
+    make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, body), bp.defaults)
+  end
+
+  # `{ [|params|] expr }` → anonymous fn
+  let parse_brace_block = fn()
+    expect("\{")
+    let bp = parse_block_params()
+    let bexpr = parse_expr()
+    expect("}")
+    make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, [bexpr]), bp.defaults)
+  end
+
+  let report_header_block = fn(tok)
+    report(tok.line, tok.col, 1, "a trailing block can't be used in an if / while / for header", "assign the call's result to a variable before the header")
+  end
+
+  # An expression in an if / while / for header. A `do` after it is
+  # reported and skipped: these headers take no `do`.
+  let parse_header_expr = fn(keyword)
+    header_depth += 1
+    let e = parse_expr()
+    header_depth -= 1
+    if peek().type == "do" and peek_at(1).type == "|"
+      # `f() do |x| ... end`: a block with params, not a stray `do`.
+      report_header_block(peek())
+      parse_do_block()
+    elif peek().type == "do"
+      let d = peek()
+      report(d.line, d.col, 2, "'{keyword}' does not take 'do'", "start the body on the next line")
+      advance()
+    end
+    e
+  end
+
   # call: atom followed by postfix ops (calls, dot, index)
   let parse_call = fn()
     let node = parse_atom()
 
     while true
+      # Block call without parens: `f do ... end`, `m.f { |x| ... }`. The
+      # block is the only argument. A brace block needs `|params|` here so
+      # it can't be mistaken for a table literal.
+      if node.tag == "var" or node.tag == "dot"
+        let call_line = peek().line
+        if peek().type == "do" and header_depth == 0
+          node = make_call(node, [parse_do_block()], call_line)
+          continue
+        end
+        if peek().type == "\{" and peek_at(1).type == "|"
+          if header_depth > 0
+            report_header_block(peek())
+          end
+          node = make_call(node, [parse_brace_block()], call_line)
+          continue
+        end
+      end
+
       # Function call: node(args) [trailing_block]
       if peek().type == "("
         let call_line = peek().line
@@ -521,26 +599,8 @@ fn make_parser(tokens, source, file, sink)
         expect(")")
 
         # Trailing do block (must be on same line — no NEWLINE between ) and do)
-        if peek().type == "do"
-          advance()
-          let bparams = []
-          let brest = nil
-          let bdefaults = []
-          let bprelude = []
-          if peek().type == "|"
-            advance()
-            let bpr = parse_params()
-            bparams = bpr.params
-            brest = bpr.rest_param
-            bdefaults = bpr.defaults
-            bprelude = bpr.prelude
-            expect("|")
-          end
-          fn_depth += 1
-          let body = parse_fn_body()
-          fn_depth -= 1
-          expect("end")
-          push(args, make_anon_fn(bparams, brest, with_prelude(bprelude, body), bdefaults))
+        if peek().type == "do" and header_depth == 0
+          push(args, parse_do_block())
         else
           # Trailing brace block: {|params| expr} or {expr}
           # Distinguish from table literal by lookahead
@@ -554,23 +614,11 @@ fn make_parser(tokens, source, file, sink)
               is_block = true
             end
             if is_block
-              advance()
-              let bparams = []
-              let brest = nil
-              let bdefaults = []
-              let bprelude = []
-              if peek().type == "|"
-                advance()
-                let bpr = parse_params()
-                bparams = bpr.params
-                brest = bpr.rest_param
-                bdefaults = bpr.defaults
-                bprelude = bpr.prelude
-                expect("|")
+              let brace_tok = peek()
+              if header_depth > 0
+                report_header_block(brace_tok)
               end
-              let bexpr = parse_expr()
-              expect("}")
-              push(args, make_anon_fn(bparams, brest, with_prelude(bprelude, [bexpr]), bdefaults))
+              push(args, parse_brace_block())
             end
           end
         end
@@ -1025,7 +1073,7 @@ fn make_parser(tokens, source, file, sink)
     if t.type == "if" or t.type == "elif"
       let line = t.line
       advance()
-      let cond = parse_expr()
+      let cond = parse_header_expr(t.value)
       if cond.tag == "assign" or cond.tag == "dot_assign" or cond.tag == "index_assign"
         report(cond.line, 1, 1, "assignment is not allowed in condition; use '==' for comparison", nil)
       end
@@ -1056,7 +1104,7 @@ fn make_parser(tokens, source, file, sink)
     if t.type == "while"
       let line = t.line
       advance()
-      let cond = parse_expr()
+      let cond = parse_header_expr("while")
       if cond.tag == "assign" or cond.tag == "dot_assign" or cond.tag == "index_assign"
         report(cond.line, 1, 1, "assignment is not allowed in condition; use '==' for comparison", nil)
       end
@@ -1078,23 +1126,23 @@ fn make_parser(tokens, source, file, sink)
         advance()  # consume ","
         let val_name = expect("NAME").value
         expect("in")
-        let tbl_expr = parse_expr()
+        let tbl_expr = parse_header_expr("for")
         let fbody = parse_body()
         expect("end")
         return make_for_in(var_name, val_name, tbl_expr, fbody, line)
       elif peek().type == "in"
         # for x in items ... end
         advance()
-        let items_expr = parse_expr()
+        let items_expr = parse_header_expr("for")
         let fbody = parse_body()
         expect("end")
         return make_for_in(var_name, nil, items_expr, fbody, line)
       elif peek().type == "="
         # for i = start, end ... end
         advance()
-        let start_expr = parse_expr()
+        let start_expr = parse_header_expr("for")
         expect(",")
-        let end_expr = parse_expr()
+        let end_expr = parse_header_expr("for")
         let fbody = parse_body()
         expect("end")
         return make_for_range(var_name, start_expr, end_expr, fbody, line)

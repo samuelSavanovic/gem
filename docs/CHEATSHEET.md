@@ -26,11 +26,14 @@ end                                                # `= {}` makes the bag option
 # Closures / anonymous functions
 let f = fn(x) x * 2 end
 
-# Blocks — trailing do/end or { } passed as last arg
-items.each do |item|
+# Blocks — trailing do/end or { } passed as the last arg
+table.each(items) do |item|
   print(item)
 end
-items.each { |item| print(item) }
+table.map(items) { |x| x * 2 }
+spawn do ... end                     # block is the only arg: () optional
+f { |x| x + 1 }                      # brace block without (): needs |params| (|| for none)
+# if/while/for headers take no do and no trailing blocks — `while x do` is an error
 
 # Control flow — end-terminated, elif (not else if)
 if cond then expr else expr end      # single-line
@@ -115,8 +118,8 @@ let r = pcall some_fn()              # {ok: bool, value/error: ...}
 # Math:          floor, ceil, round, abs, pow, sqrt, random
 # Bitwise:       band, bor, bxor, bnot, bshl, bshr
 
-# String building — build_string needs () before do block
-let s = build_string() do |add|
+# String building
+let s = build_string do |add|
   add("hello", " ", "world")           # multi-arg, no intermediate allocs
 end
 

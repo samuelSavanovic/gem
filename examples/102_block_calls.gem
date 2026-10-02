@@ -1,0 +1,46 @@
+# Trailing blocks: `f() do ... end`, `f do ... end`, `f { |x| expr }`.
+load "std/table"
+
+# The block is passed as the last argument.
+fn apply_to(x, f)
+  f(x)
+end
+fn apply(f)
+  f(10)
+end
+
+# ─── Test 1: with and without parens ───
+print("test1: {apply_to(5) do |x| x * 2 end}")
+print("test1: {apply do |x| x + 1 end}")
+
+# ─── Test 2: brace blocks need |params| without parens ───
+print("test2: {apply { |x| x * 3 }}")
+print("test2: {apply() { 7 }}")
+
+# ─── Test 3: module functions and builtins ───
+let doubled = table.map([1, 2, 3]) do |x|
+  x * 2
+end
+print("test3: {doubled}")
+let parent = self()
+spawn do
+  send(parent, "test3: spawned with a block")
+end
+print(receive())
+
+# ─── Test 4: pcall and build_string take blocks ───
+let r = pcall do
+  error("boom")
+end
+print("test4: ok={r.ok} error={r.error}")
+let s = build_string do |add|
+  add("a", "b", "c")
+end
+print("test4: {s}")
+
+# ─── Test 5: a block call's result used by a loop header ───
+let items = [1, 2, 3]
+let big = table.filter(items) do |v| v > 1 end
+for x in big
+  print("test5: {x}")
+end
