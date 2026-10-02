@@ -473,6 +473,13 @@ send(pid, "world")
 
 The main process (top-level code) is itself a schedulable coroutine (PID 0). All concurrency primitives — `self()`, `send`, `receive`, `sleep`, `monitor`, `link` — work at the top level. The program exits when all processes have terminated; if spawned processes outlive main, the program continues running until they complete.
 
+**Deadlock.** When every process that is still alive is waiting in a `receive` without `after` (or `receive()`), and nothing else can wake any of them — no `sleep` or `receive ... after` deadline, no pending `send_after` timer, no process waiting on a socket or on thread-pool work (`read_file`, `exec`, an `extern blocking fn`, …) — no message can ever arrive. What happens then depends on main:
+
+- If main is one of the waiting processes, the runtime reports a deadlock like an uncaught error in main: `deadlock: main process is waiting in receive and no other process can send to it` (or `... and the other N processes are also waiting in receive`) with main's stack trace, pointing at the `receive`, goes to stderr, and the program exits with status 1. `pcall` does not catch it.
+- If main has already finished, the program ends normally (status 0); the processes still waiting in `receive` are abandoned.
+
+A process blocked on I/O counts as able to send, so a server whose main waits in `receive` while another process loops on `tcp_accept` keeps running.
+
 A pid is an int that names one process for good: after that process exits, its pid never refers to another process, even though the runtime reuses process slots. Messages sent to it are dropped, `kill` returns `nil`, `process_info` returns `nil`, `monitor` delivers `DOWN` with reason `"noproc"`, and `link` fails with `"noproc"`.
 
 ## Preemptive Scheduling (Reduction-Based)
