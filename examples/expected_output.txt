@@ -1429,9 +1429,11 @@ backlog drained 13107200
 top-level builds 20000 3000000 3000000 true
 peak memory bounded true
 workers 32 checksum 409600 bad 0 pongs <= workers true
-main built [2000000, 1999999000000]
-walker got [2000000, 1999999000000]
-["child extra 1988890", "walked [2000000, 1999999000000]"]
+main built [400000, 79999800000]
+walker got [400000, 79999800000]
+walker got via timer [400000, 79999800000]
+timer cancelled true
+["child extra 1988890", "walked [400000, 79999800000]"]
 captured [200000, 19999900000]
 1500000 true
 13500000 true
