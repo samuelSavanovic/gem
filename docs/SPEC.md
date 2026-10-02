@@ -1334,6 +1334,29 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 - URL format: `http://host[:port]/path[?query]`. Default port 80. HTTP only (no TLS).
 - Sends `Connection: close` — no keep-alive. Reads response until EOF.
 
+`std/task` — exports `task` table. Runs a function in its own process and waits for its result; the simplest way to do several things at once. Load with `load "std/task"`.
+
+- `task.async(f)` — spawns a process that calls `f()` and returns a task handle `{pid, ref, owner, done}`.
+- `task.await(t)` / `task.await(t, timeout_ms)` — waits for the task and returns `f`'s value. If `f` raised an error, `await` raises the same message in the caller. On timeout, the task is killed and `await` raises `"task.await timeout"`. If the task process is killed before it produces a result, `await` raises `"task exited: <reason>"`; for reason `"normal"` the message instead says the task exited before its result was received and that a catch-all receive may have taken the result. With no timeout, `await` waits until the task finishes.
+- `task.await_all(tasks)` / `task.await_all(tasks, timeout_ms)` — awaits every task and returns their values in the order of `tasks`. The timeout covers the whole call. If any task fails or the timeout expires, the tasks not yet awaited are killed and the error is raised.
+
+Rules:
+- Only the process that called `async` can await the task, and each task can be awaited once. Breaking either rule — including passing the same task to `await_all` twice — raises an error.
+- A task whose function sets `process_flag("trap_exit", true)` is not killed by a timeout or an `await_all` failure: it runs on, and its result and `DOWN` later arrive in the owner's mailbox.
+- The result reaches the awaiting process as a message, and each task is monitored by its owner. `await` consumes both the result and the task's `DOWN`, so nothing is left in the mailbox. Selective `receive ... when` arms leave these messages alone unless a pattern matches `{tag: "_task_result"}` or the task's `DOWN`; a catch-all `receive()` can take them first, and `await` then raises an error that says so instead of waiting.
+
+```
+load "std/task"
+
+let a = task.async do
+  fetch(url_a)
+end
+let b = task.async do
+  fetch(url_b)
+end
+let pages = task.await_all([a, b], 5000)
+```
+
 `std/supervisor` — exports `supervisor` table:
 
 - `supervisor.start(spec)` — start a supervisor process. Returns `{pid: <pid>}`. The spec table supports:

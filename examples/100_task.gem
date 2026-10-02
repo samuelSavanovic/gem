@@ -1,0 +1,165 @@
+# std/task: async/await on top of spawn, send, receive and monitor.
+load "std/task"
+
+fn mailbox_len()
+  process_info(self()).mailbox_len
+end
+
+fn alive(pid)
+  let info = process_info(pid)
+  info != nil and info.state != "dead"
+end
+
+# ─── Test 1: tasks run concurrently; await order is independent of finish order ───
+let start = time_ms()
+let slow = task.async do
+  sleep(100)
+  "slow"
+end
+let fast = task.async do
+  sleep(20)
+  "fast"
+end
+print("test1: {task.await(slow)} {task.await(fast)} concurrent={time_ms() - start < 150}")
+
+# ─── Test 2: any value comes back — nil, false, tables ───
+let n = task.async(fn() nil end)
+let f = task.async(fn() false end)
+let tbl = task.async(fn() {name: "gem", tags: ["a", "b"]} end)
+let tv = task.await(tbl)
+print("test2: {task.await(n)} {task.await(f)} {tv.name} {len(tv.tags)}")
+
+# ─── Test 3: an error in the task is raised by await ───
+let boom = task.async(fn() error("boom") end)
+let r = pcall task.await(boom)
+print("test3: ok={r.ok} error={r.error}")
+
+# ─── Test 4: timeout raises and kills the task ───
+let stuck = task.async(fn() sleep(10000) end)
+let r4 = pcall task.await(stuck, 30)
+print("test4: ok={r4.ok} error={r4.error} task_alive={alive(stuck.pid)}")
+
+# ─── Test 5: a task killed from outside makes await raise instead of hang ───
+let victim = task.async(fn() sleep(10000) end)
+kill(victim.pid, "external")
+let r5 = pcall task.await(victim)
+print("test5: ok={r5.ok} error={r5.error}")
+
+# ─── Test 6: awaiting twice is an error ───
+let once = task.async(fn() 1 end)
+task.await(once)
+let r6 = pcall task.await(once)
+print("test6: {r6.error}")
+
+# ─── Test 7: only the starting process can await ───
+let parent = self()
+let mine = task.async(fn() 7 end)
+spawn(fn()
+  let r = pcall task.await(mine)
+  send(parent, {t7: "test7: {r.error}"})
+end)
+receive
+when {t7: msg}
+  print(msg)
+end
+print("test7: owner still gets {task.await(mine)}")
+
+# ─── Test 8: await_all keeps input order ───
+let ts = []
+for i = 0, 5
+  let k = i
+  push(ts, task.async(fn() sleep(50 - k * 10) k * k end))
+end
+let squares = task.await_all(ts)
+print("test8: {squares[0]} {squares[1]} {squares[2]} {squares[3]} {squares[4]}")
+print("test8: await_all([]) len={len(task.await_all([]))}")
+
+# ─── Test 9: await_all failure kills the remaining tasks ───
+let mixed = [
+  task.async(fn() error("first fails") end),
+  task.async(fn() sleep(10000) end)
+]
+let r9 = pcall task.await_all(mixed)
+print("test9: ok={r9.ok} error={r9.error} second_alive={alive(mixed[1].pid)} mailbox={mailbox_len()}")
+
+# ─── Test 9b: cancelling a task that already exited leaves its reused pid alone ───
+let early = task.async(fn() 1 end)
+let failing = task.async(fn() sleep(20) error("late failure") end)
+sleep(5)
+# `early` has exited; spawn processes until one reuses its process slot
+# (pid modulo the default process-table size of 1024).
+let bystander = nil
+let extras = []
+for i = 0, 2000
+  let p = spawn(fn() sleep(10000) end)
+  if p % 1024 == early.pid % 1024
+    bystander = p
+    break
+  end
+  push(extras, p)
+end
+for p in extras
+  kill(p, "cleanup")
+end
+let r9b = pcall task.await_all([failing, early])
+print("test9b: ok={r9b.ok} error={r9b.error} slot_reused={bystander != nil} new_pid={bystander != early.pid} bystander_alive={bystander != nil and alive(bystander)}")
+if bystander != nil
+  kill(bystander, "cleanup")
+end
+
+# ─── Test 10: await_all shared timeout ───
+let r10 = pcall task.await_all([task.async(fn() sleep(10) 1 end), task.async(fn() sleep(10000) end)], 50)
+print("test10: ok={r10.ok} error={r10.error}")
+
+# ─── Test 11: tasks inside tasks ───
+let outer = task.async do
+  let inner = [task.async { || 2 }, task.async { || 3 }]
+  let vals = task.await_all(inner)
+  vals[0] * vals[1]
+end
+print("test11: {task.await(outer)}")
+
+# ─── Test 12: many tasks ───
+let many = []
+for i = 0, 500
+  let k = i
+  push(many, task.async(fn() k end))
+end
+let total = 0
+for v in task.await_all(many)
+  total += v
+end
+print("test12: total={total}")
+
+# ─── Test 13: a catch-all receive that takes the result is reported ───
+let stolen = task.async(fn() "result" end)
+sleep(10)
+let taken = receive()
+let r13 = pcall task.await(stolen)
+print("test13: took {taken.tag}; await error={r13.error}")
+
+# ─── Test 14: unrelated messages are left alone ───
+send(self(), "unrelated")
+let t13 = task.async(fn() "done" end)
+print("test14: {task.await(t13)} mailbox={mailbox_len()} msg={receive()}")
+
+# ─── Test 15: result and DOWN both taken by catch-all receives ───
+let both = task.async(fn() "result" end)
+sleep(10)
+receive()
+receive()
+let r15 = pcall task.await(both)
+print("test15: {r15.error}")
+
+# ─── Test 16: the same task twice in await_all ───
+let twice = task.async(fn() 1 end)
+let r16 = pcall task.await_all([twice, twice])
+print("test16: {r16.error}")
+print("test16: still awaitable: {task.await(twice)}")
+
+# ─── Test 17: task killed with reason "normal" ───
+let quiet = task.async(fn() sleep(10000) end)
+kill(quiet.pid, "normal")
+let r17 = pcall task.await(quiet)
+print("test17: {r17.error}")
+print("final mailbox={mailbox_len()}")

@@ -129,6 +129,28 @@ true
 nil
 42
 5
+test1: slow fast concurrent=true
+test2: nil false gem 2
+test3: ok=false error=boom
+test4: ok=false error=task.await timeout task_alive=false
+test5: ok=false error=task exited: external
+test6: task.await: task was already awaited
+test7: task.await: only the process that started a task can await it
+test7: owner still gets 7
+test8: 0 1 4 9 16
+test8: await_all([]) len=0
+test9: ok=false error=first fails second_alive=false mailbox=0
+test9b: ok=false error=late failure slot_reused=true new_pid=true bystander_alive=true
+test10: ok=false error=task.await timeout
+test11: 6
+test12: total=124750
+test13: took _task_result; await error=task exited with reason "normal" before its result was received; a catch-all receive may have taken the result
+test14: done mailbox=1 msg=unrelated
+test15: task exited and its result is no longer in the mailbox; a catch-all receive may have taken it
+test16: task.await_all: the same task appears more than once
+test16: still awaitable: 1
+test17: task exited with reason "normal" before its result was received; a catch-all receive may have taken the result
+final mailbox=0
 
 [Runtime Error]: main failed
   --> examples/101_process_stack_traces.gem:12
