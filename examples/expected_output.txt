@@ -139,6 +139,13 @@ Stack trace:
   at fail_after_yield (examples/101_process_stack_traces.gem:12)
   at main_entry (examples/101_process_stack_traces.gem:15)
   at main (examples/101_process_stack_traces.gem:21)
+slot reused, new pid differs: true
+stale process_info: nil
+stale kill: nil
+bystander alive: true
+bystander mailbox: 0
+stale monitor: DOWN noproc for the stale pid: true
+heir got no DOWN
 same table: true true
 equal contents: false
 same fn: true; other fn: false
@@ -490,7 +497,7 @@ test2: tag=DOWN reason=boom
 test3: tag=DOWN reason=normal
 test4a: tag=DOWN reason=normal
 test4b: tag=DOWN reason=normal
-test5: tag=DOWN reason=normal
+test5: tag=DOWN reason=noproc
 test6: crasher reason=kaboom
 test7: tag=DOWN reason=normal
 test11: after death whereis=nil
@@ -533,7 +540,7 @@ test2: parent died: crash2
 test4: A died: chain-boom
 test3: parent died: normal
 test5: parent died: normal
-test6: parent died: already-gone
+test6: parent died: noproc
 test1: prev_flag=false
 test3: prev_seq=false true false
 test1: got EXIT reason=boom

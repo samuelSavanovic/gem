@@ -160,6 +160,7 @@ static void gem_free_proc_slot(int pid) {
     proc->read_buf = NULL;
     proc->read_buf_cap = 0;
     proc->pcall_depth = 0;
+    proc->gen++;
     proc->pid = -1;
     if (gem_free_tail >= 0) {
         gem_proc_table[gem_free_tail].pid = pid;
@@ -366,6 +367,19 @@ int gem_self_pid(void) {
     return gem_current_pid;
 }
 
+int64_t gem_pid_of_slot(int slot) {
+    return (int64_t)slot + gem_proc_table[slot].gen * GEM_MAX_PROCS;
+}
+
+int gem_slot_of_pid(int64_t pid) {
+    if (pid < 0) return -1;
+    int slot = (int)(pid % GEM_MAX_PROCS);
+    GemProcess *proc = &gem_proc_table[slot];
+    if (proc->gen != pid / GEM_MAX_PROCS) return -1;
+    if (proc->state == GEM_PROC_FREE) return -1;
+    return slot;
+}
+
 void gem_io_pool_yield(void) {
     if (gem_current_pid < 0 || gem_current_pid >= GEM_MAX_PROCS) return;
     GemProcess *proc = &gem_proc_table[gem_current_pid];
@@ -389,8 +403,8 @@ static void gem_fire_timers(void) {
     while (gem_timer_count > 0 && now >= gem_timers[0].deadline_ms) {
         GemTimer t = gem_timers[0];
         gem_timer_remove_at(0);
-        int pid = t.target_pid;
-        if (pid >= 0 && pid < GEM_MAX_PROCS) {
+        int pid = gem_slot_of_pid(t.target_pid);
+        if (pid >= 0) {
             GemProcess *proc = &gem_proc_table[pid];
             if (proc->state != GEM_PROC_FREE && proc->state != GEM_PROC_DEAD) {
                 gem_send_msg(pid, t.msg);
@@ -683,27 +697,29 @@ void gem_deliver_down_messages(int pid, const char *reason) {
         GemMonitorNode *next = mon->next;
         GemVal msg = gem_table_new();
         gem_table_set(msg, gem_string("tag"), gem_string("DOWN"));
-        gem_table_set(msg, gem_string("pid"), gem_int(pid));
+        gem_table_set(msg, gem_string("pid"), gem_int(gem_pid_of_slot(pid)));
         gem_table_set(msg, gem_string("reason"), gem_string(reason));
-        gem_send_msg(mon->pid, msg);
+        int watcher = gem_slot_of_pid(mon->pid);
+        if (watcher >= 0) gem_send_msg(watcher, msg);
         free(mon);
         mon = next;
     }
     proc->monitors = NULL;
 }
 
-void gem_monitor_fn(int target_pid) {
-    if (target_pid < 0 || target_pid >= GEM_MAX_PROCS) return;
+void gem_monitor_fn(int64_t target_pid) {
     int caller = gem_current_pid;
     if (caller < 0) {
         gem_error("monitor: not inside a spawned process");
         return;
     }
-    GemProcess *target = &gem_proc_table[target_pid];
+    int target_slot = gem_slot_of_pid(target_pid);
 
-    /* If target is already dead, deliver DOWN immediately */
-    if (target->state == GEM_PROC_DEAD || target->state == GEM_PROC_FREE) {
-        const char *reason = target->exit_reason ? target->exit_reason : "noproc";
+    /* If target is already gone, deliver DOWN immediately */
+    if (target_slot < 0 || gem_proc_table[target_slot].state == GEM_PROC_DEAD) {
+        const char *reason = "noproc";
+        if (target_slot >= 0 && gem_proc_table[target_slot].exit_reason)
+            reason = gem_proc_table[target_slot].exit_reason;
         GemVal msg = gem_table_new();
         gem_table_set(msg, gem_string("tag"), gem_string("DOWN"));
         gem_table_set(msg, gem_string("pid"), gem_int(target_pid));
@@ -712,15 +728,18 @@ void gem_monitor_fn(int target_pid) {
         return;
     }
 
+    GemProcess *target = &gem_proc_table[target_slot];
+    int64_t caller_pid = gem_pid_of_slot(caller);
+
     /* Deduplicate: check if caller is already monitoring target */
     GemMonitorNode *node = target->monitors;
     while (node) {
-        if (node->pid == caller) return;  /* already monitoring */
+        if (node->pid == caller_pid) return;  /* already monitoring */
         node = node->next;
     }
 
     GemMonitorNode *new_node = (GemMonitorNode *)malloc(sizeof(GemMonitorNode));
-    new_node->pid = caller;
+    new_node->pid = caller_pid;
     new_node->next = target->monitors;
     target->monitors = new_node;
 }
@@ -754,21 +773,22 @@ static void gem_link_remove(GemProcess *proc, int pid) {
     }
 }
 
-void gem_link_fn(int target_pid) {
-    if (target_pid < 0 || target_pid >= GEM_MAX_PROCS) return;
+void gem_link_fn(int64_t target_pid) {
     int caller = gem_current_pid;
     if (caller < 0) {
         gem_error("link: not inside a spawned process");
         return;
     }
-    if (caller == target_pid) return;  /* don't link to self */
+    int target_slot = gem_slot_of_pid(target_pid);
+    if (target_slot == caller) return;  /* don't link to self */
 
-    GemProcess *target = &gem_proc_table[target_pid];
     GemProcess *self = &gem_proc_table[caller];
 
-    /* If target is already dead, deliver exit signal immediately */
-    if (target->state == GEM_PROC_DEAD || target->state == GEM_PROC_FREE) {
-        const char *reason = target->exit_reason ? target->exit_reason : "noproc";
+    /* If target is already gone, deliver exit signal immediately */
+    if (target_slot < 0 || gem_proc_table[target_slot].state == GEM_PROC_DEAD) {
+        const char *reason = "noproc";
+        if (target_slot >= 0 && gem_proc_table[target_slot].exit_reason)
+            reason = gem_proc_table[target_slot].exit_reason;
         if (self->trap_exit) {
             GemVal msg = gem_table_new();
             gem_table_set(msg, gem_string("tag"), gem_string("EXIT"));
@@ -783,20 +803,18 @@ void gem_link_fn(int target_pid) {
         return;
     }
 
-    gem_link_add(self, target_pid);
-    gem_link_add(target, caller);
+    gem_link_add(self, target_slot);
+    gem_link_add(&gem_proc_table[target_slot], caller);
 }
 
-void gem_unlink_fn(int target_pid) {
-    if (target_pid < 0 || target_pid >= GEM_MAX_PROCS) return;
+void gem_unlink_fn(int64_t target_pid) {
     int caller = gem_current_pid;
     if (caller < 0) return;
+    int target_slot = gem_slot_of_pid(target_pid);
+    if (target_slot < 0) return;
 
-    gem_link_remove(&gem_proc_table[caller], target_pid);
-    GemProcess *target = &gem_proc_table[target_pid];
-    if (target->state != GEM_PROC_FREE) {
-        gem_link_remove(target, caller);
-    }
+    gem_link_remove(&gem_proc_table[caller], target_slot);
+    gem_link_remove(&gem_proc_table[target_slot], caller);
 }
 
 /* Propagate an exit signal from `dead_pid` to all its linked processes.
@@ -850,7 +868,7 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
                 /* Deliver EXIT message; do not kill */
                 GemVal msg = gem_table_new();
                 gem_table_set(msg, gem_string("tag"), gem_string("EXIT"));
-                gem_table_set(msg, gem_string("pid"), gem_int(pid));
+                gem_table_set(msg, gem_string("pid"), gem_int(gem_pid_of_slot(pid)));
                 gem_table_set(msg, gem_string("reason"), gem_string(r));
                 gem_send_msg(lpid, msg);
             } else if (strcmp(r, "normal") == 0) {
@@ -929,7 +947,7 @@ GemVal gem_spawn_builtin(void *_env, GemVal *args, int argc) {
         gem_error("spawn: expected function argument");
     }
     int pid = gem_spawn_fn(args[0].fn, args[0].env);
-    return gem_int(pid);
+    return gem_int(gem_pid_of_slot(pid));
 }
 
 GemVal gem_send_builtin(void *_env, GemVal *args, int argc) {
@@ -939,7 +957,8 @@ GemVal gem_send_builtin(void *_env, GemVal *args, int argc) {
     }
     int pid;
     if (args[0].type == VAL_INT) {
-        pid = (int)args[0].ival;
+        pid = gem_slot_of_pid(args[0].ival);
+        if (pid < 0) return GEM_NIL;  /* process is gone: drop */
     } else if (args[0].type == VAL_STRING) {
         pid = gem_whereis_name(args[0].sval);
         if (pid < 0) {
@@ -965,7 +984,7 @@ GemVal gem_self_builtin(void *_env, GemVal *args, int argc) {
     (void)_env;
     (void)args;
     (void)argc;
-    return gem_int(gem_self_pid());
+    return gem_int(gem_pid_of_slot(gem_self_pid()));
 }
 
 GemVal gem_monitor_builtin(void *_env, GemVal *args, int argc) {
@@ -973,7 +992,7 @@ GemVal gem_monitor_builtin(void *_env, GemVal *args, int argc) {
     if (argc < 1 || args[0].type != VAL_INT) {
         gem_error("monitor: expected pid (int) argument");
     }
-    gem_monitor_fn((int)args[0].ival);
+    gem_monitor_fn(args[0].ival);
     return gem_bool(1);
 }
 
@@ -988,13 +1007,13 @@ GemVal gem_spawn_monitor_builtin(void *_env, GemVal *args, int argc) {
     int caller = gem_current_pid;
     if (caller >= 0) {
         GemMonitorNode *mn = (GemMonitorNode *)malloc(sizeof(GemMonitorNode));
-        mn->pid = caller;
+        mn->pid = gem_pid_of_slot(caller);
         mn->next = gem_proc_table[pid].monitors;
         gem_proc_table[pid].monitors = mn;
     }
 
     GemVal result = gem_table_new();
-    gem_table_set(result, gem_string("pid"), gem_int(pid));
+    gem_table_set(result, gem_string("pid"), gem_int(gem_pid_of_slot(pid)));
     return result;
 }
 
@@ -1003,7 +1022,9 @@ GemVal gem_register_builtin(void *_env, GemVal *args, int argc) {
     if (argc < 2 || args[0].type != VAL_STRING || args[1].type != VAL_INT) {
         gem_error("register: expected (name, pid)");
     }
-    gem_register_name(args[0].sval, (int)args[1].ival);
+    int slot = gem_slot_of_pid(args[1].ival);
+    if (slot < 0) gem_error("register: invalid pid");
+    gem_register_name(args[0].sval, slot);
     return gem_bool(1);
 }
 
@@ -1014,7 +1035,7 @@ GemVal gem_whereis_builtin(void *_env, GemVal *args, int argc) {
     }
     int pid = gem_whereis_name(args[0].sval);
     if (pid < 0) return GEM_NIL;
-    return gem_int(pid);
+    return gem_int(gem_pid_of_slot(pid));
 }
 
 GemVal gem_time_ms_builtin(void *_env, GemVal *args, int argc) {
@@ -1027,7 +1048,7 @@ GemVal gem_link_builtin(void *_env, GemVal *args, int argc) {
     if (argc < 1 || args[0].type != VAL_INT) {
         gem_error("link: expected pid (int) argument");
     }
-    gem_link_fn((int)args[0].ival);
+    gem_link_fn(args[0].ival);
     return gem_bool(1);
 }
 
@@ -1036,7 +1057,7 @@ GemVal gem_unlink_builtin(void *_env, GemVal *args, int argc) {
     if (argc < 1 || args[0].type != VAL_INT) {
         gem_error("unlink: expected pid (int) argument");
     }
-    gem_unlink_fn((int)args[0].ival);
+    gem_unlink_fn(args[0].ival);
     return gem_bool(1);
 }
 
@@ -1053,7 +1074,7 @@ GemVal gem_spawn_link_builtin(void *_env, GemVal *args, int argc) {
         gem_link_add(&gem_proc_table[caller], pid);
         gem_link_add(&gem_proc_table[pid], caller);
     }
-    return gem_int(pid);
+    return gem_int(gem_pid_of_slot(pid));
 }
 
 GemVal gem_process_flag_builtin(void *_env, GemVal *args, int argc) {
@@ -1080,16 +1101,16 @@ GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
     if (argc < 2 || args[0].type != VAL_INT || args[1].type != VAL_STRING) {
         gem_error("kill: expected (pid, reason)");
     }
-    int pid = (int)args[0].ival;
+    int pid = gem_slot_of_pid(args[0].ival);
     const char *reason = args[1].sval;
-    if (pid < 0 || pid >= GEM_MAX_PROCS) return GEM_NIL;
+    if (pid < 0) return GEM_NIL;
     GemProcess *proc = &gem_proc_table[pid];
     if (proc->state == GEM_PROC_DEAD || proc->state == GEM_PROC_FREE) return GEM_NIL;
 
     if (proc->trap_exit) {
         GemVal msg = gem_table_new();
         gem_table_set(msg, gem_string("tag"), gem_string("EXIT"));
-        gem_table_set(msg, gem_string("pid"), gem_int(gem_current_pid));
+        gem_table_set(msg, gem_string("pid"), gem_int(gem_pid_of_slot(gem_current_pid)));
         gem_table_set(msg, gem_string("reason"), gem_string(reason));
         gem_send_msg(pid, msg);
         return gem_bool(1);
@@ -1135,7 +1156,7 @@ GemVal gem_send_after_builtin(void *_env, GemVal *args, int argc) {
     if (argc < 3 || args[0].type != VAL_INT || args[2].type != VAL_INT) {
         gem_error("send_after: expected (pid, msg, delay_ms)");
     }
-    int pid = (int)args[0].ival;
+    int64_t pid = args[0].ival;
     GemVal msg = args[1];
     int64_t delay_ms = args[2].ival;
 
@@ -1179,7 +1200,7 @@ GemVal gem_processes_builtin(void *_env, GemVal *args, int argc) {
             gem_proc_table[i].state != GEM_PROC_DEAD) {
             if (t->len >= t->cap) gem_table_grow(t);
             t->keys[t->len] = gem_int(t->len);
-            t->vals[t->len] = gem_int(i);
+            t->vals[t->len] = gem_int(gem_pid_of_slot(i));
             t->len++;
         }
     }
@@ -1191,11 +1212,10 @@ GemVal gem_process_info_builtin(void *_env, GemVal *args, int argc) {
     if (argc < 1 || args[0].type != VAL_INT) {
         gem_error("process_info: expected pid (int) argument");
     }
-    int pid = (int)args[0].ival;
-    if (pid < 0 || pid >= GEM_MAX_PROCS) return GEM_NIL;
+    int pid = gem_slot_of_pid(args[0].ival);
+    if (pid < 0) return GEM_NIL;
 
     GemProcess *proc = &gem_proc_table[pid];
-    if (proc->state == GEM_PROC_FREE) return GEM_NIL;
 
     GemVal info = gem_table_new();
 
@@ -1221,7 +1241,7 @@ GemVal gem_process_info_builtin(void *_env, GemVal *args, int argc) {
     GemLinkNode *lnode = proc->links;
     int li = 0;
     while (lnode) {
-        gem_table_set(links, gem_int(li++), gem_int(lnode->pid));
+        gem_table_set(links, gem_int(li++), gem_int(gem_pid_of_slot(lnode->pid)));
         lnode = lnode->next;
     }
     gem_table_set(info, gem_string("links"), links);

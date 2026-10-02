@@ -414,13 +414,13 @@ typedef enum {
 
 /* Monitor list node */
 typedef struct GemMonitorNode {
-    int pid;                      /* pid of the monitoring process */
+    int64_t pid;                  /* Gem-visible pid of the monitoring process (see gem_pid_of_slot) */
     struct GemMonitorNode *next;
 } GemMonitorNode;
 
 /* Link list node — bidirectional */
 typedef struct GemLinkNode {
-    int pid;                      /* pid of the linked process */
+    int pid;                      /* slot of the linked process (links are removed on exit) */
     struct GemLinkNode *next;
 } GemLinkNode;
 
@@ -429,7 +429,7 @@ typedef struct GemLinkNode {
    timers fire in FIFO order rather than heap-position order. */
 typedef struct {
     int64_t ref;           /* make_ref() value identifying this timer */
-    int target_pid;
+    int64_t target_pid;    /* Gem-visible pid (see gem_pid_of_slot) */
     GemVal msg;
     int64_t deadline_ms;
     uint64_t seq;
@@ -486,6 +486,7 @@ typedef struct {
     int pcall_depth;
     int entry_call_depth;         /* gem_call_depth at coro entry — used to gate TCO arena reset for non-process-tail functions */
     int call_depth;               /* saved gem_call_depth at last yield (restored on resume) */
+    int64_t gen;                  /* slot generation; advanced when the slot is freed */
     GemFrame call_stack[GEM_MAX_CALL_DEPTH];  /* this process's frames for stack traces */
     GemArena arena;               /* per-process bump allocator */
     /* Pinned-box set: boxes for mutated-captured fn-local vars, allocated via
@@ -541,6 +542,14 @@ int gem_spawn_fn(GemFnPtr fn, void *env);
 void gem_send_msg(int pid, GemVal val);
 GemVal gem_receive_msg(void);
 int gem_self_pid(void);
+/* Runtime code addresses processes by slot index into gem_proc_table. Gem
+ * code sees pids of the form slot + generation * GEM_MAX_PROCS; a slot's
+ * generation advances when the slot is freed, so a pid never refers to a
+ * later process that reuses its slot. */
+int64_t gem_pid_of_slot(int slot);
+/* Slot for a Gem-visible pid, or -1 when the pid is malformed or its process
+ * no longer occupies the slot. */
+int gem_slot_of_pid(int64_t pid);
 void gem_run_scheduler(void);
 void gem_run_main(GemFnPtr fn, void *env);
 
@@ -576,12 +585,12 @@ int gem_whereis_name(const char *name);        /* returns pid or -1 */
 void gem_unregister_name_for_pid(int pid);     /* auto-cleanup on death */
 
 /* Monitor API */
-void gem_monitor_fn(int target_pid);
+void gem_monitor_fn(int64_t target_pid);
 void gem_deliver_down_messages(int pid, const char *reason);
 
 /* Link API */
-void gem_link_fn(int target_pid);
-void gem_unlink_fn(int target_pid);
+void gem_link_fn(int64_t target_pid);
+void gem_unlink_fn(int64_t target_pid);
 /* Propagate an exit signal from `pid` (with `reason`) to all linked processes.
    For each link: if trap_exit is set, deliver an EXIT message; otherwise mark
    the linked process DEAD and recursively propagate. Caller must mark `pid`
