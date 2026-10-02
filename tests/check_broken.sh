@@ -19,6 +19,8 @@ expected=(
   "bad_extern_type:4:4"
   "bad_pattern:2:4"
   "bad_pin:3:3"
+  "block_let_after_block:11:11"
+  "block_let_toplevel:7:7"
   "cascade_braces:2:5"
   "dotdot_concat:1:1"
   "header_block:3:3"

@@ -48,9 +48,30 @@ let name = "hello"
 x = 20
 ```
 
+### Scope
+
+A variable declared with `let` is visible from its declaration to the end of the block that contains the `let`, and nowhere else. Blocks are function and closure bodies (including `do` blocks), `if`/`elif`/`else` branches, `while` and `for` bodies, and `match`/`receive` arms (including `after`). `for` loop variables are scoped to the loop body and `match`/`receive` pattern bindings to their arm.
+
+Using a name where none of its declarations is visible — after the block that declared it ended, or before its `let` (for example in a `while` condition, reading a `let` of the loop body) — is a compile error (`undeclared identifier`). That holds even when every branch of an `if` declares the name, and in a loop, where a `let` from an earlier iteration is gone. To use a value after a block, declare the variable before it and assign it inside:
+
+```
+fn sign(n)
+  let s = nil          # declared before the if: visible after it
+  if n < 0 then s = "-" else s = "+" end
+  s
+end
+
+fn broken(n)
+  if n < 0 then let s = "-" else let s = "+" end
+  s                    # error: undeclared identifier `s` (each `s` ended with its branch)
+end
+```
+
+If an outer variable of the same name is visible, a use after the block refers to that outer variable (see Shadowing). A `let` directly in a file's top-level code is a module-level binding, visible to all of the file's code (see below); a `let` nested in a top-level block is block-scoped like any other.
+
 ### Shadowing
 
-A `let` always declares a new variable. If a variable of the same name is already visible (a parameter, an earlier `let` in the same or an enclosing block, a captured local of an enclosing function, a module-level binding, a named function), the new one **shadows** it:
+A `let` always declares a new variable. If a variable of the same name is already visible (a parameter, an earlier `let` in the same or an enclosing block, a captured local of an enclosing function, a module-level binding, a named function, a builtin), the new one **shadows** it:
 
 - The initializer is evaluated before the new variable exists, so it reads the old one: `let n = n - 1` reads the previous `n`.
 - Later code, including assignments (`n = …`, `n += 1`), refers to the new variable. The old one is not changed.
