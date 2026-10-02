@@ -14,7 +14,9 @@ if [[ ! -f "$COMPILER" ]]; then
 fi
 
 cd "$ROOT"
-actual=$( for f in examples/[0-9]*.gem; do
+# Numeric order (09, 10, ..., 99, 100), independent of the locale's collation.
+examples=$(printf '%s\n' examples/[0-9]*.gem | LC_ALL=C sort -t/ -k2,2n)
+actual=$( for f in $examples; do
     bin="/tmp/gem_$(basename "$f" .gem)"
     "$COMPILER" "$f" -o "$bin" 2>/dev/null
     "$bin" 2>&1 || true

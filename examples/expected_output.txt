@@ -129,85 +129,6 @@ true
 nil
 42
 5
-test1: slow fast concurrent=true
-test2: nil false gem 2
-test3: ok=false error=boom
-test4: ok=false error=task.await timeout task_alive=false
-test5: ok=false error=task exited: external
-test6: task.await: task was already awaited
-test7: task.await: only the process that started a task can await it
-test7: owner still gets 7
-test8: 0 1 4 9 16
-test8: await_all([]) len=0
-test9: ok=false error=first fails second_alive=false mailbox=0
-test9b: ok=false error=late failure slot_reused=true new_pid=true bystander_alive=true
-test10: ok=false error=task.await timeout
-test11: 6
-test12: total=124750
-test13: took _task_result; await error=task exited with reason "normal" before its result was received; a catch-all receive may have taken the result
-test14: done mailbox=1 msg=unrelated
-test15: task exited and its result is no longer in the mailbox; a catch-all receive may have taken it
-test16: task.await_all: the same task appears more than once
-test16: still awaitable: 1
-test17: task exited with reason "normal" before its result was received; a catch-all receive may have taken the result
-final mailbox=0
-
-[Runtime Error]: main failed
-  --> examples/101_process_stack_traces.gem:12
-    |
- 12 |   error("main failed")
-    |
-Stack trace:
-  at fail_after_yield (examples/101_process_stack_traces.gem:12)
-  at main_entry (examples/101_process_stack_traces.gem:15)
-  at main (examples/101_process_stack_traces.gem:21)
-test1: 10
-test1: 11
-test2: 30
-test2: 7
-test3: [2, 4, 6]
-test3: spawned with a block
-test4: ok=false error=boom
-test4: abc
-test5: 2
-test5: 3
-slot reused, new pid differs: true
-stale process_info: nil
-stale kill: nil
-bystander alive: true
-bystander mailbox: 0
-stale monitor: DOWN noproc for the stale pid: true
-heir got no DOWN
-same table: true true
-equal contents: false
-same fn: true; other fn: false
-same buffer: true; other buffer: false type=buffer
-table in array: true; copy in array: false
-table key: len=1 value=second other=nil
-message copy: false 1
-test1: slept the full time: true
-test2: other ran, then parent continued
-test3: DOWN reason=goodbye
-test4: DOWN reason=no escape
-test5: DOWN reason=chain
-read_file: kill returned true, DOWN reason=killed
-write_file: kill returned true, DOWN reason=killed
-append_file: kill returned true, DOWN reason=killed
-exec: kill returned true, DOWN reason=killed
-sqlite_open: kill returned true, DOWN reason=killed
-extern Int: kill returned true, DOWN reason=killed
-extern String: kill returned true, DOWN reason=killed
-stress: killed 100 of 100 while waiting
-file: fine, still
-exec: 0
-sqlite: row
-extern: 0 copied
-test1: cancel after kill: false false
-test2: cancel after normal exit: false
-test3: ref returned: ref, cancel: false
-test4: ["first", "second", "third"]
-test4: timer for live process cancels: true
-test5: from beyond
 apple
 banana
 cherry
@@ -1301,3 +1222,82 @@ test8: loop done 20000
 slow call: ok=false error=gen_server.call timeout
 next call: fast result
 leftover messages: 1
+test1: slow fast concurrent=true
+test2: nil false gem 2
+test3: ok=false error=boom
+test4: ok=false error=task.await timeout task_alive=false
+test5: ok=false error=task exited: external
+test6: task.await: task was already awaited
+test7: task.await: only the process that started a task can await it
+test7: owner still gets 7
+test8: 0 1 4 9 16
+test8: await_all([]) len=0
+test9: ok=false error=first fails second_alive=false mailbox=0
+test9b: ok=false error=late failure slot_reused=true new_pid=true bystander_alive=true
+test10: ok=false error=task.await timeout
+test11: 6
+test12: total=124750
+test13: took _task_result; await error=task exited with reason "normal" before its result was received; a catch-all receive may have taken the result
+test14: done mailbox=1 msg=unrelated
+test15: task exited and its result is no longer in the mailbox; a catch-all receive may have taken it
+test16: task.await_all: the same task appears more than once
+test16: still awaitable: 1
+test17: task exited with reason "normal" before its result was received; a catch-all receive may have taken the result
+final mailbox=0
+
+[Runtime Error]: main failed
+  --> examples/101_process_stack_traces.gem:12
+    |
+ 12 |   error("main failed")
+    |
+Stack trace:
+  at fail_after_yield (examples/101_process_stack_traces.gem:12)
+  at main_entry (examples/101_process_stack_traces.gem:15)
+  at main (examples/101_process_stack_traces.gem:21)
+test1: 10
+test1: 11
+test2: 30
+test2: 7
+test3: [2, 4, 6]
+test3: spawned with a block
+test4: ok=false error=boom
+test4: abc
+test5: 2
+test5: 3
+slot reused, new pid differs: true
+stale process_info: nil
+stale kill: nil
+bystander alive: true
+bystander mailbox: 0
+stale monitor: DOWN noproc for the stale pid: true
+heir got no DOWN
+same table: true true
+equal contents: false
+same fn: true; other fn: false
+same buffer: true; other buffer: false type=buffer
+table in array: true; copy in array: false
+table key: len=1 value=second other=nil
+message copy: false 1
+test1: slept the full time: true
+test2: other ran, then parent continued
+test3: DOWN reason=goodbye
+test4: DOWN reason=no escape
+test5: DOWN reason=chain
+read_file: kill returned true, DOWN reason=killed
+write_file: kill returned true, DOWN reason=killed
+append_file: kill returned true, DOWN reason=killed
+exec: kill returned true, DOWN reason=killed
+sqlite_open: kill returned true, DOWN reason=killed
+extern Int: kill returned true, DOWN reason=killed
+extern String: kill returned true, DOWN reason=killed
+stress: killed 100 of 100 while waiting
+file: fine, still
+exec: 0
+sqlite: row
+extern: 0 copied
+test1: cancel after kill: false false
+test2: cancel after normal exit: false
+test3: ref returned: ref, cancel: false
+test4: ["first", "second", "third"]
+test4: timer for live process cancels: true
+test5: from beyond
