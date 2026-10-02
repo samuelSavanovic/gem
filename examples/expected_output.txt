@@ -1338,3 +1338,46 @@ false boom at 2
 10
 closure saw false
 true
+["before", 1988895, "after"] kept
+kept-too [1, 2, 3]
+["before", "t:23893", "t:1988896", "after"] 30000 row-29999
+["before", "tick-300000", "after"]
+false true after
+["child-1", 1988895]
+true ["w2", ["w1", ["x49999", "x99999", "x149999", "x199999"]]]
+{done: 3, last: "x149999"}
+main after bump: 1 1 ["a"]
+child saw: {counter: 2, closure: 2, names: ["a", "b"], mode: "replaced"}
+main still: 1 1 ["a"] main main
+aliasing: {same: true, second: 99, top: 99}
+spawned at 10, main moved to 20: {counter: 10} 20
+std in child: {doc: "{\"ok\":true,\"n\":3}", parts: ["a", "b", "c"]}
+children: [22, 22, 22] main: 20 1
+shadow: ["module", "local"] module
+fill 20000 row0 row19999
+index 2 40000 1554 true false
+buffer 208890 chunk0;chunk1;ch
+boxes ["value-29999", 30000]
+pcall [true, "acc-29999", "acc-29999"]
+nested cur-29999
+globals entry-29900 entry-29999 t29999 100
+chain 2000
+sort 0 1 3000
+build_string 108890 0,1,2,3,4,
+mailbox 126640
+mutual ["before", false, true, "after"] kept
+default [40100, "state-0", "d1000", "d"]
+rest [40100, 2, "m1"]
+destructured [40100, "bag1"]
+boxed [40100, 100001]
+state intact 40100 state-0 d1000
+tail spawn 800000
+non-tail spawn 800000 cleanup
+pcall depth 3 true [800000]
+zero-arg row-400000
+sink done
+top-level builds 30000 3000000 3000000 true
+store 14890 2000 true
+backlog drained 13107200
+peak memory bounded true
+workers 32 checksum 409600 bad 0 pongs <= workers true

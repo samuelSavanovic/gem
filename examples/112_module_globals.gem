@@ -1,0 +1,89 @@
+# Module-level bindings are per-process: a spawned process starts with a
+# copy of its parent's module state, and its writes stay in that process.
+load "std/log"
+load "std/json"
+load "std/string"
+
+let counter = 0
+let names = []
+let config = {mode: "main"}
+let shared_row = {id: 1}
+let pair = [shared_row, shared_row]
+
+fn bump(name)
+  counter += 1
+  push(names, name)
+end
+
+# Closures read the live value of a module binding, also when a named fn
+# (not the closure's creator) changes it.
+let get_counter = fn() counter end
+let get_mode = fn() config.mode end
+bump("a")
+print("main after bump:", counter, get_counter(), names)
+
+# 1. The child starts from a copy of main's state at spawn time.
+let me = self()
+spawn do
+  bump("b")
+  config.mode = "child"
+  config = {mode: "replaced"}
+  send(me, {counter: counter, closure: get_counter(), names: names, mode: get_mode()})
+end
+print("child saw:", receive())
+
+# 2. The child's writes did not reach main.
+print("main still:", counter, get_counter(), names, config.mode, get_mode())
+
+# 3. Aliasing within a process is preserved by the copy.
+spawn do
+  pair[0].id = 99
+  send(me, {same: pair[0] == pair[1], second: pair[1].id, top: shared_row.id})
+end
+print("aliasing:", receive())
+
+# 4. Main writes made before a spawn are visible to that child; later ones
+#    are not.
+counter = 10
+let late = spawn do
+  receive
+  when "go"
+    send(me, {counter: counter})
+  end
+end
+counter = 20
+send(late, "go")
+print("spawned at 10, main moved to 20:", receive(), counter)
+
+# 5. std modules work in children, and module state set in main before a
+#    spawn (here the log level) applies to that child.
+log.set_level("error")
+spawn do
+  log.info("this info line must not appear")
+  let doc = json.encode({ok: true, n: 3})
+  send(me, {doc: doc, parts: string.split("a,b,c", ",")})
+end
+print("std in child:", receive())
+log.set_level("info")
+
+# 6. Each process has its own counter: children bump independently.
+let results = []
+for i = 0, 3
+  spawn do
+    bump("c{i}")
+    bump("d{i}")
+    send(me, counter)
+  end
+  push(results, receive())
+end
+print("children:", results, "main:", counter, len(names))
+
+# 7. A module binding read before a same-named local is declared still
+#    reads the module slot.
+let level = "module"
+fn shadow_later()
+  let before = level
+  let level = "local"
+  [before, level]
+end
+print("shadow:", shadow_later(), level)

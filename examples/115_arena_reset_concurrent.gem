@@ -1,0 +1,70 @@
+# Many processes resetting their arenas concurrently while messages, module
+# state and shared module tables flow between them.
+load "std/string"
+
+let LABELS = {even: "E", odd: "O"}
+let workers = 32
+let rounds = 40
+
+fn label(i)
+  if i % 2 == 0 then return LABELS.even end
+  LABELS.odd
+end
+
+# Each worker keeps > 1 MB of live state, allocates garbage every
+# iteration, and answers pings in between.
+fn worker(id, parent, state, round, sum)
+  if round == rounds
+    send(parent, {id: id, sum: sum, size: len(state), first: state[0], last: state[-1]})
+    return nil
+  end
+  for i = 0, 400
+    let g = string.repeat("g", 40) + to_string(i)
+    sum += len(g) % 3
+  end
+  push(state, "{label(round)}{id}-{round}")
+  receive
+  when {ping: n, from: from}
+    send(from, {pong: n + id})
+  after 0
+    nil
+  end
+  worker(id, parent, state, round + 1, sum)
+end
+
+let me = self()
+let pids = []
+for id = 0, workers
+  let pid = spawn do
+    let state = []
+    for k = 0, 20000
+      push(state, "init-{k}")
+    end
+    worker(id, me, state, 0, 0)
+  end
+  push(pids, pid)
+end
+
+# Ping every worker while they run; a worker that already finished simply
+# never answers, so count what comes back without waiting on it.
+for pid in pids
+  send(pid, {ping: 1000, from: me})
+end
+
+let done = 0
+let total = 0
+let pongs = 0
+let bad = 0
+while done < workers
+  receive
+  when {pong: n}
+    pongs += 1
+  when {id: id, sum: s, size: size, first: f, last: l}
+    done += 1
+    total += s
+    if size != 20000 + rounds or f != "init-0" or l != "{label(rounds - 1)}{id}-{rounds - 1}"
+      bad += 1
+    end
+  end
+end
+print("workers", done, "checksum", total, "bad", bad, "pongs <= workers", pongs <= workers)
