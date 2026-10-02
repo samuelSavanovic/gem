@@ -603,6 +603,7 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
     /* Pinned boxes older than the mark may be reachable from callers. */
     if (proc->pinned_boxes) {
         size_t n = hmlenu(proc->pinned_boxes);
+        scanned += n * sizeof(GemPinEntry);
         for (size_t i = 0; i < n; i++) {
             if (proc->pinned_boxes[i].seq < mark->pin_seq && !proc->pinned_boxes[i].value) {
                 proc->pinned_boxes[i].value = 1;
