@@ -261,7 +261,21 @@ static void gem_coro_entry(mco_coro *co) {
         ctx->fn(ctx->env, NULL, 0);
         proc->exit_reason = strdup("normal");
     }
-    /* If longjmp landed here, exit_reason was already set by gem_raise_error */
+    /* If longjmp landed here, exit_reason was already set by gem_raise_error
+       or gem_exit_self */
+}
+
+void gem_exit_self(const char *reason) {
+    /* The main process ending abnormally is reported like an uncaught error. */
+    if (gem_current_pid == gem_main_pid && strcmp(reason, "normal") != 0) {
+        gem_print_runtime_error(reason);
+        exit(1);
+    }
+    GemProcess *proc = &gem_proc_table[gem_current_pid];
+    proc->exit_reason = strdup(reason);
+    proc->pcall_depth = 0;
+    gem_call_depth = 0;
+    longjmp(proc->proc_jmp, 1);
 }
 
 /* Core API */
@@ -825,9 +839,10 @@ void gem_unlink_fn(int64_t target_pid) {
    Special case: if the propagation would kill the currently-running process
    (e.g. kill(other) from the running coro, where the current process is
    linked to `other`), the current coro must not be destroyed mid-flight.
-   We defer that until the rest of the propagation is done, then raise an
-   error so the coro's setjmp handler unwinds; the scheduler will pick up
-   the death and propagate this process's links normally. */
+   We defer that until the rest of the propagation is done, then end it with
+   gem_exit_self, which unwinds to the coro's setjmp handler past any pcall;
+   the scheduler will pick up the death and propagate this process's links
+   normally. */
 static int gem_exit_worklist[GEM_MAX_PROCS];
 static const char *gem_exit_reasons[GEM_MAX_PROCS];
 
@@ -877,9 +892,9 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
             } else if (lpid == self_pid) {
                 /* Defer killing the active coroutine until the worklist is
                    drained. The scheduler will propagate self's links after
-                   its coroutine unwinds via gem_error below. */
+                   its coroutine unwinds via gem_exit_self below. */
                 self_kill_pending = 1;
-                self_kill_reason = strdup(r);
+                self_kill_reason = r;
             } else {
                 lproc->exit_reason = strdup(r);
                 if (lproc->coro) {
@@ -904,7 +919,7 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
     }
 
     if (self_kill_pending) {
-        gem_error(self_kill_reason);
+        gem_exit_self(self_kill_reason);
     }
 }
 
@@ -1116,6 +1131,9 @@ GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
         return gem_bool(1);
     }
 
+    /* The running coroutine can't be destroyed from inside itself. */
+    if (pid == gem_current_pid) gem_exit_self(reason);
+
     proc->exit_reason = strdup(reason);
     if (proc->coro) {
         mco_destroy(proc->coro);
@@ -1140,10 +1158,16 @@ GemVal gem_sleep_builtin(void *_env, GemVal *args, int argc) {
         gem_error("sleep: must be called inside a spawned process");
     }
     GemProcess *proc = &gem_proc_table[gem_current_pid];
-    proc->deadline_ms = gem_now_ms() + delay_ms;
-    proc->timed_out = 0;
-    proc->state = GEM_PROC_WAITING;
-    mco_yield(proc->coro);
+    /* A message arriving while the process is WAITING makes it READY
+       (gem_send_msg), so park again until the deadline has passed. The
+       do-while always yields at least once, so sleep(0) yields. */
+    int64_t deadline = gem_now_ms() + delay_ms;
+    do {
+        proc->deadline_ms = deadline;
+        proc->timed_out = 0;
+        proc->state = GEM_PROC_WAITING;
+        mco_yield(proc->coro);
+    } while (gem_now_ms() < deadline);
     proc->timed_out = 0;
     proc->deadline_ms = -1;
     return GEM_NIL;

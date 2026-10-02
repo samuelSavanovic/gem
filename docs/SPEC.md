@@ -584,9 +584,9 @@ The `receive()` function call always pops the head of the mailbox unconditionall
 
 ## Process Control
 
-`kill(pid, reason)` sends an exit signal to a process. If the target has `trap_exit` enabled, an `{tag: "EXIT", pid: sender_pid, reason: reason}` message is delivered to its mailbox instead of terminating it. Otherwise, the process is terminated immediately: marked dead, DOWN messages delivered to monitors, registered name removed, and exit propagated to linked processes. Returns `true` if the process was alive, `nil` otherwise.
+`kill(pid, reason)` sends an exit signal to a process. If the target has `trap_exit` enabled, an `{tag: "EXIT", pid: sender_pid, reason: reason}` message is delivered to its mailbox instead of terminating it. Otherwise, the process is terminated immediately: marked dead, DOWN messages delivered to monitors, registered name removed, and exit propagated to linked processes. Returns `true` if the process was alive, `nil` otherwise. A process can kill itself: `kill(self(), reason)` ends it at once with that reason (unless it traps exits), and `pcall` does not catch it. Likewise, when a `kill` brings down the caller through a link, the caller dies at once; `pcall` does not catch that either. If the process ending this way is the main process and the reason is not `"normal"`, the reason is printed as a runtime error and the program exits with status 1.
 
-`sleep(ms)` suspends the current process for `ms` milliseconds. The scheduler resumes the process after the deadline expires.
+`sleep(ms)` suspends the current process for `ms` milliseconds. The scheduler resumes the process after the deadline expires; messages that arrive meanwhile wait in the mailbox and do not end the sleep early. `sleep(0)` yields to other ready processes and returns.
 
 `time_ms()` returns the current monotonic time in milliseconds (int). Useful for timeouts, benchmarks, and restart intensity tracking. Not suitable for wall-clock formatting — use `epoch_ms()` for that.
 

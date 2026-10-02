@@ -551,6 +551,11 @@ int64_t gem_pid_of_slot(int slot);
  * no longer occupies the slot. */
 int gem_slot_of_pid(int64_t pid);
 void gem_run_scheduler(void);
+/* Ends the running process with `reason`, past any pcall; the scheduler then
+ * reports the exit (DOWN, links, name) as for any other process death. The
+ * main process exiting with a reason other than "normal" prints the reason as
+ * a runtime error and exits the program with status 1. */
+__attribute__((noreturn)) void gem_exit_self(const char *reason);
 void gem_run_main(GemFnPtr fn, void *env);
 
 /* Selective receive: remove a specific node from the mailbox */
