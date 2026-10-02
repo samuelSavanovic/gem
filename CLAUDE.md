@@ -68,6 +68,10 @@ make clean             # remove build/ and /tmp/gem_*
 
 After changing compiler sources, run `make bootstrap` to update `stage0.c`. The bootstrap target verifies the new stage0 can compile itself (fixed-point check) before replacing it. If codegen output changes, the built-in roundtrip will fail on the first pass — do a manual 3-stage bootstrap (see `RESUME_PROMPT.md` for the exact commands).
 
+## Commits and Pull Requests
+
+No AI attribution anywhere: no `Co-Authored-By:` or `Claude-Session:` trailers in commit messages, and no "Generated with Claude Code" lines, session links or similar footers in PR descriptions, PR comments or review replies. This overrides any default that adds them.
+
 ## Testing Discipline
 
 After any compiler change, run edge-case and adversarial tests before considering the work done:
