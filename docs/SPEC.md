@@ -436,6 +436,8 @@ send(pid, "world")
 
 The main process (top-level code) is itself a schedulable coroutine (PID 0). All concurrency primitives — `self()`, `send`, `receive`, `sleep`, `monitor`, `link` — work at the top level. The program exits when all processes have terminated; if spawned processes outlive main, the program continues running until they complete.
 
+A pid is an int that names one process for good: after that process exits, its pid never refers to another process, even though the runtime reuses process slots. Messages sent to it are dropped, `kill` returns `nil`, `process_info` returns `nil`, `monitor` delivers `DOWN` with reason `"noproc"`, and `link` fails with `"noproc"`.
+
 ## Preemptive Scheduling (Reduction-Based)
 
 Processes are cooperatively scheduled but the compiler inserts automatic yield points so tight loops cannot starve the scheduler. Each process has a reduction counter that increments at loop back-edges (the top of every `while` body, including `for` loops which desugar to `while`). When the counter exceeds the threshold (currently 4000), the process yields and is immediately re-queued as READY. The counter resets to 0 each time the scheduler resumes a process.
@@ -460,7 +462,7 @@ let msg = receive()
 - `{tag: "DOWN", pid: <target_pid>, reason: "normal"}` — clean exit
 - `{tag: "DOWN", pid: <target_pid>, reason: "<error message>"}` — crash
 
-Monitoring a dead/invalid pid delivers the DOWN message immediately. Duplicate monitors are deduplicated. Returns `true`.
+Monitoring a pid whose process no longer exists delivers the DOWN message immediately, with reason `"noproc"`. Duplicate monitors are deduplicated. Returns `true`.
 
 `spawn_monitor(fn)` atomically spawns and monitors a process. Returns `{pid: <pid>}`.
 
@@ -930,7 +932,7 @@ end
 
 `make_ref()` — returns a unique opaque reference value. Type is `"ref"`. Refs are equal only to themselves (identity equality). Usable as table keys. Format: `#Ref<N>` where N is a monotonically increasing integer.
 
-`link(pid)` — creates a bidirectional link between the calling process and the target process. If the target is already dead with a non-normal reason and the caller does not trap exits, the caller dies. Returns `true`.
+`link(pid)` — creates a bidirectional link between the calling process and the target process. If the target no longer exists, `link` raises an error with message `"noproc"` in the caller (catchable with `pcall`); a caller that traps exits receives `{tag: "EXIT", pid: <pid>, reason: "noproc"}` instead. Returns `true`.
 
 `unlink(pid)` — removes the bidirectional link between the calling process and the target. Returns `true`.
 
