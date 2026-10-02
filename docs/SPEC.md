@@ -71,6 +71,7 @@ A `let` at the top level of a file (including loaded modules' private `let`s and
 - Every process has its own copy of the module-level bindings. `spawn` gives the child a deep copy of the parent's current values (one copy for the whole set, so two bindings that refer to the same table still do in the child). Namespace tables (`string`, `log`, …) are immutable (setting a field raises `cannot modify a module table`) and shared without copying.
 - A write to a module-level binding — `x = …`, `x.field = …`, `push(x, …)` — changes only the running process's copy. Other processes, including the parent, never see it; a child spawned later starts from the parent's values at that time.
 - Named functions, closures and top-level code all read the current value of the running process's copy. Closures do not snapshot module-level bindings when they are created.
+- Only a `let` directly in the file's top-level code (a destructuring `let` included) declares a module-level binding. A `let`, `for` loop variable or pattern binding inside a top-level `if`, `while`, `for`, `match` or `receive` is block-scoped, exactly as inside a function: it shadows a module-level binding of the same name until its block ends and never changes it, and a closure created in the block captures the block's binding (in a loop, a fresh one per iteration). Named functions always see the module-level binding.
 
 ```
 let count = 0

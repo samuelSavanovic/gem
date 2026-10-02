@@ -182,6 +182,213 @@ fn collect_top_let_names(stmts, result)
   end
 end
 
+# ─── Block-scoped lets in top-level code ─────────────────────────
+#
+# A `let` in the module's own statement list (or directly in a top-level
+# `block`, the shape of a lowered `for` header or a destructuring `let`) is
+# a module-level binding: a per-process slot keyed by name
+# (`top_level_vars`). A `let` nested in a top-level `if` / `while` / `for`
+# body / `match` or `receive` arm is block-scoped, like a `let` in a fn
+# body. When such a nested let reuses a module-level name it shadows the
+# slot until its block ends; it must not write the slot, and a closure
+# created in the block must capture the block's binding rather than read
+# the slot live.
+#
+# Codegen keys module-slot status by name, so this pass alpha-renames
+# every such shadowing let (and the references it scopes) to a fresh
+# `_sh<N>_<name>`. After it, top-level block lets never share a name with
+# a module slot and compile exactly like a fn's block lets (C local,
+# per-iteration capture, boxed when captured and mutated). Runs on the
+# post-lower AST, before any analysis keyed on names (capture, liveness,
+# process-tail tagging).
+#
+# `env` maps a module-level name to the fresh name that shadows it in the
+# current scope. `mode` is "module" (module-scope statement list: lets are
+# slots), "block" (nested top-level scope: lets of module names are
+# renamed) or "fn" (inside a closure body: lets are real fn locals and
+# only hide outer renames).
+
+fn copy_scope_env(env)
+  let r = {}
+  for k, v in env
+    r[k] = v
+  end
+  r
+end
+
+let shadow_top_node = nil
+let shadow_top_stmt = nil
+let shadow_top_stmts = nil
+let shadow_top_children = nil
+
+fn shadow_top_bind(let_node, env, mode, ctx)
+  let name = let_node.name
+  if name == nil
+    return nil
+  end
+  if mode == "block" and set_contains(ctx.globals, name)
+    ctx.n = ctx.n + 1
+    let fresh = "_sh{ctx.n}_{name}"
+    let_node.name = fresh
+    env[name] = fresh
+  elif has_key(env, name)
+    delete(env, name)
+  end
+end
+
+fn shadow_child_mode(mode)
+  if mode == "module"
+    return "block"
+  end
+  mode
+end
+
+shadow_top_stmts = fn(stmts, env, mode, ctx)
+  if stmts == nil
+    return nil
+  end
+  let scope = copy_scope_env(env)
+  for s in stmts
+    shadow_top_stmt(s, scope, mode, ctx)
+  end
+end
+
+# A statement in a list whose scope is `env` (mutated: lets bind into it).
+# `block` is transparent: its lets belong to the enclosing list's scope.
+shadow_top_stmt = fn(s, env, mode, ctx)
+  if is_node(s, "let")
+    shadow_top_node(s.value, env, mode, ctx)
+    shadow_top_bind(s, env, mode, ctx)
+  elif is_node(s, "block")
+    for c in s.stmts
+      shadow_top_stmt(c, env, mode, ctx)
+    end
+  else
+    shadow_top_node(s, env, mode, ctx)
+  end
+end
+
+# Arm bindings (`when` / `receive` patterns) are lets scoped to the arm.
+fn shadow_top_arm(cond, bindings, body, env, mode, ctx)
+  let arm = copy_scope_env(env)
+  shadow_top_node(cond, arm, mode, ctx)
+  if bindings != nil
+    for b in bindings
+      if is_node(b, "let")
+        shadow_top_node(b.value, arm, mode, ctx)
+        shadow_top_bind(b, arm, shadow_child_mode(mode), ctx)
+      end
+    end
+  end
+  shadow_top_stmts(body, arm, shadow_child_mode(mode), ctx)
+end
+
+shadow_top_node = fn(node, env, mode, ctx)
+  if node == nil or type(node) != "table" or node.tag == nil
+    return nil
+  end
+  let tag = node.tag
+  let cm = shadow_child_mode(mode)
+  if tag == "var"
+    if has_key(env, node.name)
+      node.name = env[node.name]
+    end
+  elif tag == "assign"
+    shadow_top_node(node.value, env, mode, ctx)
+    if has_key(env, node.name)
+      node.name = env[node.name]
+    end
+  elif tag == "let" or tag == "block"
+    # Only reachable as a statement; route through the list walker.
+    shadow_top_stmt(node, env, mode, ctx)
+  elif tag == "fn_def"
+    # Named fns are module-level and never see block locals.
+    nil
+  elif tag == "anon_fn"
+    let inner = copy_scope_env(env)
+    if node.params != nil
+      for p in node.params
+        delete(inner, p)
+      end
+    end
+    if node.rest_param != nil
+      delete(inner, node.rest_param)
+    end
+    if node.defaults != nil
+      for d in node.defaults
+        shadow_top_node(d, inner, "fn", ctx)
+      end
+    end
+    shadow_top_stmts(node.body, inner, "fn", ctx)
+  elif tag == "if"
+    shadow_top_node(node.cond, env, mode, ctx)
+    shadow_top_stmts(node.then, env, cm, ctx)
+    if node.elifs != nil
+      for ei in node.elifs
+        shadow_top_node(ei.cond, env, mode, ctx)
+        shadow_top_stmts(ei.body, env, cm, ctx)
+      end
+    end
+    shadow_top_stmts(node.else, env, cm, ctx)
+  elif tag == "while"
+    shadow_top_node(node.cond, env, mode, ctx)
+    shadow_top_stmts(node.body, env, cm, ctx)
+  elif tag == "match"
+    shadow_top_node(node.target, env, mode, ctx)
+    if node.whens != nil
+      for w in node.whens
+        shadow_top_arm(w.value, w.bindings, w.body, env, mode, ctx)
+      end
+    end
+    shadow_top_stmts(node.else, env, cm, ctx)
+  elif tag == "receive_match"
+    if node.arms != nil
+      for a in node.arms
+        let cond = nil
+        let bindings = nil
+        if a.pattern != nil
+          cond = a.pattern.condition
+          bindings = a.pattern.bindings
+        end
+        shadow_top_arm(cond, bindings, a.body, env, mode, ctx)
+      end
+    end
+    shadow_top_node(node.after_ms, env, mode, ctx)
+    shadow_top_stmts(node.after_body, env, cm, ctx)
+  else
+    for k, v in node
+      if k != "tag" and type(v) == "table"
+        shadow_top_children(v, env, mode, ctx)
+      end
+    end
+  end
+  nil
+end
+
+# Expression children: a node, or a tagless container (arg list, table
+# entries `{key, value}`) holding nodes.
+shadow_top_children = fn(v, env, mode, ctx)
+  if v.tag != nil
+    shadow_top_node(v, env, mode, ctx)
+    return nil
+  end
+  for _, c in v
+    if type(c) == "table"
+      shadow_top_children(c, env, mode, ctx)
+    end
+  end
+end
+
+fn scope_top_level_lets(top_stmts)
+  let globals = {}
+  collect_top_let_names(top_stmts, globals)
+  let ctx = {globals: globals, n: 0}
+  let env = {}
+  for s in top_stmts
+    shadow_top_stmt(s, env, "module", ctx)
+  end
+end
+
 # Collects all let-bound names anywhere in this fn body (descending through
 # control flow), but not into nested anon_fn or fn_def. Used by compile_fn
 # to over-approximate the set of locally-shadowed names — anything in here
@@ -751,7 +958,7 @@ captured_arm_lets_stmts = fn(stmts, scope)
         # so the rescue copies a no-op and the inner shadow's box (per-iter
         # arena) dies cleanly with the arena reset.
         for n in to_hoist
-          insert(stmts, i, {tag: "let", name: n, value: {tag: "nil"}, line: s.line})
+          insert(stmts, i, {tag: "let", name: n, value: {tag: "nil"}, line: s.line, rescue_placeholder: true})
           set_add(block_lets, n)
           i += 1
         end
@@ -909,6 +1116,26 @@ end
 
 fn lift_captured_arm_lets_top_stmts(stmts)
   captured_arm_lets_stmts(stmts, {})
+end
+
+# Names of the rescue placeholders above that landed at module scope: in
+# the top-level statement list, or directly in a top-level `block` (the
+# header of a lowered `for`), the positions collect_top_let_names treats
+# as module bindings.
+fn top_rescue_placeholders(stmts)
+  let out = []
+  for s in stmts
+    if is_node(s, "let") and s.rescue_placeholder == true
+      push(out, s.name)
+    elif is_node(s, "block")
+      for c in s.stmts
+        if is_node(c, "let") and c.rescue_placeholder == true
+          push(out, c.name)
+        end
+      end
+    end
+  end
+  out
 end
 
 # ─── Loop tagging for the back-edge arena reset ─────────────────
@@ -5105,6 +5332,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
     lift_arm_lets_top_stmts(top_stmts)
 
+    # Give block-scoped lets in top-level code that reuse a module-level
+    # name their own fresh name, so they shadow the slot instead of
+    # writing it (see scope_top_level_lets).
+    scope_top_level_lets(top_stmts)
+
     # Mark non-escaping closures (immediate-call-site args to allowlisted
     # callees like pcall/sort). Must run before any capture analysis below
     # — find_captured_in_scope reads the non_escaping flag.
@@ -5148,6 +5380,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     # read-only captures live as plain `GemVal` globals, with closures
     # receiving value snapshots in their env.
     collect_top_let_names(top_stmts, top_level_vars)
+    # A rescue placeholder that lift_captured_arm_lets put in the module's
+    # statement list is main's own local, as in a fn body: it never names a
+    # module binding (scope_top_level_lets renamed every nested let of a
+    # module name), and as a slot the block-scoped lets it stands in for
+    # would compile to writes of that slot.
+    for n in top_rescue_placeholders(top_stmts)
+      delete(top_level_vars, n)
+    end
     note_spawn_global_writes()
     let top_captured = find_captured_in_scope(top_stmts, {})
     # Module-level bindings are slots, never captured. Main's other locals
