@@ -1,6 +1,6 @@
 # Gem Language Cheatsheet
 
-A one-page summary of Gem syntax, builtins, and standard library modules. For full semantics see [`SPEC.md`](SPEC.md).
+A one-page summary of Gem syntax, builtins, and standard library modules. For full semantics see [`SPEC.md`](SPEC.md); for idioms and traps see [`BEST_PRACTICES.md`](BEST_PRACTICES.md).
 
 Keep this file up to date when adding new syntax, keywords, builtins, or std modules.
 

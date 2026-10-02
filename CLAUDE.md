@@ -44,6 +44,7 @@ bootstrap/stage0.c    # checked-in C output — bootstrap artifact for clean bui
 build/gem             # compiled compiler binary (gitignored, built from stage0.c)
 examples/             # numbered tests (01-83+) + run_all.sh; plus json_parser, http_server, tcp_echo, bookmark_app
 docs/SPEC.md          # language spec (source of truth for all language decisions)
+docs/BEST_PRACTICES.md    # how to write Gem: idioms, traps, std conventions (new code follows it)
 docs/OPTIMIZATIONS.md     # tracked future performance improvements
 docs/OPTIMIZATIONS_LOG.md # shipped optimizations + work logs + benchmark anchors
 docs/ROADMAP.md           # future capabilities (features, not perf)
@@ -160,5 +161,5 @@ Treat this file as living documentation: when a claim here turns out stale, a co
 
 ## Language Quick Reference
 
-See [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md) for a one-page summary of syntax, builtins, and std modules.
+See [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md) for a one-page summary of syntax, builtins, and std modules, and [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md) for how to write Gem (idioms and traps). New code in `std/`, `examples/`, `compiler/` and `lsp/` follows BEST_PRACTICES. When a fix removes the bug behind a rule marked **(bug)**, delete that rule in the same change.
 
