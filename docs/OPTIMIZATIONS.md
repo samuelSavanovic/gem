@@ -115,9 +115,6 @@ Findings from the 2026-05-01 `extern fn` / `extern blocking fn` soundness audit.
 ### Pointer lifetime across arena reset (documentation only)
 A C function that stashes an arena-backed `String` or `Table` `GemVal` past the call (e.g. in a `static` cache) will dangle on the next arena reset (TCO loop, rescue+reset, or process exit). The marshaling layer can't enforce this — extern is unsafe by definition — but SPEC should call it out alongside the existing "extern is C, you own correctness" framing.
 
-### `extern blocking fn` with no callers in tree
-There are zero `extern blocking fn` declarations in `std/`, `examples/`, or `compiler/`. The codegen path is exercised only by ad-hoc test programs, not the test suite. If the convention churns (per the String-return point above), add at least one example that round-trips a malloc'd string through the thread pool to lock the contract in.
-
 ## std/json
 
 ### Null byte handling in strings (P2)

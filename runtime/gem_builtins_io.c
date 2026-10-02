@@ -12,16 +12,6 @@
 #include <unistd.h>
 #include <libgen.h>
 
-/* ─── I/O request cleanup ─── */
-
-void gem_io_free_request(GemIORequest *req) {
-    if (req->path) free(req->path);
-    if (req->content) free(req->content);
-    if (req->result_data) free(req->result_data);
-    if (req->error_msg) free(req->error_msg);
-    free(req);
-}
-
 /* ─── Built-in: read_file ─── */
 
 GemVal gem_read_file_fn(void *_env, GemVal *args, int argc) {
@@ -40,14 +30,14 @@ GemVal gem_read_file_fn(void *_env, GemVal *args, int argc) {
         proc->io_request = NULL;
         if (req->error_msg) {
             char buf[512]; snprintf(buf, sizeof(buf), "read_file: %s", req->error_msg);
-            gem_io_free_request(req);
+            gem_io_release(req);
             gem_error(buf);
         }
         size_t rlen = req->result_len;
         char *data = (char *)gem_alloc(rlen + 1);
         memcpy(data, req->result_data, rlen);
         data[rlen] = '\0';
-        gem_io_free_request(req);
+        gem_io_release(req);
         GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = data; r.slen = (int)rlen;
         return r;
     }
@@ -87,10 +77,10 @@ GemVal gem_write_file_fn(void *_env, GemVal *args, int argc) {
         proc->io_request = NULL;
         if (req->error_msg) {
             char buf[512]; snprintf(buf, sizeof(buf), "write_file: %s", req->error_msg);
-            gem_io_free_request(req);
+            gem_io_release(req);
             gem_error(buf);
         }
-        gem_io_free_request(req);
+        gem_io_release(req);
         return GEM_NIL;
     }
 
@@ -128,10 +118,10 @@ GemVal gem_append_file_fn(void *_env, GemVal *args, int argc) {
         proc->io_request = NULL;
         if (req->error_msg) {
             char buf[512]; snprintf(buf, sizeof(buf), "append_file: %s", req->error_msg);
-            gem_io_free_request(req);
+            gem_io_release(req);
             gem_error(buf);
         }
-        gem_io_free_request(req);
+        gem_io_release(req);
         return GEM_NIL;
     }
 
@@ -287,7 +277,7 @@ GemVal gem_exec_fn(void *_env, GemVal *args, int argc) {
         gem_io_pool_yield();
         proc->io_request = NULL;
         int code = req->exit_code;
-        gem_io_free_request(req);
+        gem_io_release(req);
         return gem_int(code);
     }
 
