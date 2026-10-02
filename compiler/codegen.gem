@@ -4436,9 +4436,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       fn_scope_locals = saved_arm
     end
 
-    # After clause
+    # After clause. The scan loop only exits with an arm index or -2, so
+    # the timeout branch is a plain `else`; that also lets the C compiler
+    # see every path through a return-position receive return a value.
     if after_ms != nil
-      buf_push(b, "{p}} else if ({matched_tmp} == -2) \{\n")
+      buf_push(b, "{p}} else \{\n")
       if after_body != nil
         let saved_after = set_union(fn_scope_locals, {})
         buf_push(b, compile_stmts_tail(after_body, indent + 1, return_pos))
