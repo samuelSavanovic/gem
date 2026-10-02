@@ -862,6 +862,32 @@ void gem_run_main(GemFnPtr fn, void *env) {
     gem_run_scheduler();
 }
 
+/* Main waits in a receive (no `after`) and nothing can ever send to it.
+   Print main's stack (the receive's location is its top frame) and exit
+   like an uncaught error in main. */
+static void gem_report_main_deadlock(void) {
+    GemProcess *mp = &gem_proc_table[gem_main_pid];
+    int others = 0;
+    for (int i = 0; i < gem_proc_hwm; i++)
+        if (i != gem_main_pid && gem_proc_table[i].state == GEM_PROC_WAITING) others++;
+    gem_current_pid = gem_main_pid;
+    gem_call_stack = mp->call_stack;
+    gem_call_depth = mp->call_depth;
+    char msg[192];
+    if (others > 0)
+        snprintf(msg, sizeof msg,
+                 "deadlock: main process is waiting in receive and the other %d "
+                 "process%s %s also waiting in receive",
+                 others, others == 1 ? "" : "es", others == 1 ? "is" : "are");
+    else
+        snprintf(msg, sizeof msg,
+                 "deadlock: main process is waiting in receive and no other "
+                 "process can send to it");
+    fflush(stdout);
+    gem_print_runtime_error(msg);
+    exit(1);
+}
+
 void gem_run_scheduler(void) {
     int active = 1;
 
@@ -1062,7 +1088,18 @@ void gem_run_scheduler(void) {
             if (timer_dl >= 0 && (earliest < 0 || timer_dl < earliest)) {
                 earliest = timer_dl;
             }
-            if (earliest < 0) break;  /* true deadlock — no deadlines */
+            if (earliest < 0) {
+                /* True deadlock: every live process waits in a receive
+                   without `after`, and no timer, fd or pool job can wake
+                   any of them. If main is one of them the program can
+                   never finish: report it. If main already finished,
+                   the remaining receivers are abandoned and the program
+                   ends normally. */
+                if (gem_main_pid >= 0 &&
+                    gem_proc_table[gem_main_pid].state == GEM_PROC_WAITING)
+                    gem_report_main_deadlock();
+                break;
+            }
             /* Sleep until earliest deadline */
             int64_t now = gem_now_ms();
             int64_t wait_ms = earliest - now;

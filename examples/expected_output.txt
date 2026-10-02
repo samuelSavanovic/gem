@@ -1654,3 +1654,19 @@ called param
 local err
 real error
 42
+from sleeper
+from timer
+receive timed out
+child timed out
+exec finished
+got DOWN
+child exits without sending
+
+[Runtime Error]: deadlock: main process is waiting in receive and no other process can send to it
+  --> examples/136_main_receive_deadlock.gem:80
+    |
+ 80 |   receive
+    |
+Stack trace:
+  at wait_for_reply (examples/136_main_receive_deadlock.gem:80)
+  at main (examples/136_main_receive_deadlock.gem:85)
