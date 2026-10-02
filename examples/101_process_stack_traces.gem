@@ -1,0 +1,21 @@
+# Stack traces belong to the process that raised: frames pushed by other
+# processes while this one was suspended never appear in them.
+fn sleeper_inner()
+  sleep(10000)
+end
+fn sleeper_outer()
+  sleeper_inner()
+end
+
+fn fail_after_yield()
+  sleep(20)
+  error("main failed")
+end
+fn main_entry()
+  fail_after_yield()
+end
+
+spawn(fn()
+  sleeper_outer()
+end)
+main_entry()

@@ -104,7 +104,9 @@ typedef struct {
     int line;
 } GemFrame;
 
-extern GemFrame gem_call_stack[GEM_MAX_CALL_DEPTH];
+/* Frames of the running process. Each process owns its frames
+ * (GemProcess.call_stack); the scheduler points this at them on resume. */
+extern GemFrame *gem_call_stack;
 extern int gem_call_depth;
 
 /* ─── Mutual-TCO trampoline TLB ───
@@ -484,6 +486,7 @@ typedef struct {
     int pcall_depth;
     int entry_call_depth;         /* gem_call_depth at coro entry — used to gate TCO arena reset for non-process-tail functions */
     int call_depth;               /* saved gem_call_depth at last yield (restored on resume) */
+    GemFrame call_stack[GEM_MAX_CALL_DEPTH];  /* this process's frames for stack traces */
     GemArena arena;               /* per-process bump allocator */
     /* Pinned-box set: boxes for mutated-captured fn-local vars, allocated via
        gem_box_alloc (plain malloc) so they survive arena reset. Mark-and-sweep
