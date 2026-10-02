@@ -55,6 +55,8 @@ when "a"
   handle_a()
 when {ok: true, value: v}            # destructuring pattern
   use(v)
+when {id: ^wanted}                   # ^pin: equals existing var `wanted`, no binding
+  mine()
 else
   fallback()
 end

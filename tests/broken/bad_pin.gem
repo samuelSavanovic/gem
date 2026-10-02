@@ -1,0 +1,12 @@
+# `^` must be followed by a plain variable name that the same pattern does
+# not bind. Each arm reports once; recovery skips the bad operand so no
+# cascade follows.
+let x = {y: 1}
+match 1
+when {k: ^5}
+  print("a")
+when ^x.y
+  print("b")
+when [a, ^a]
+  print("c")
+end

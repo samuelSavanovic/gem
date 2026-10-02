@@ -1228,3 +1228,15 @@ ok
 nil
 nil
 ok
+test1: a -> A
+test1: b -> B
+test2: top-level pin
+test2: array pin
+test2: mismatch falls through
+test3: nil pin
+test4: no match, mailbox_len=1
+test5: sentinel, nested sentinel, other
+test6: child got 2
+test7: sum=3
+test7: noise left=300
+test8: loop done 20000

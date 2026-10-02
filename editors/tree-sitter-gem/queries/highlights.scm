@@ -104,6 +104,7 @@
 (unary_expression operator: _ @operator)
 (assignment operator: _ @operator)
 "->" @operator
+(pin_pattern "^" @operator)
 
 ; Punctuation
 "(" @punctuation.bracket

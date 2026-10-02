@@ -720,7 +720,7 @@ fn tokenize(source, file, sink)
       pos += 3
       continue
     end
-    if ch == "." or ch == "," or ch == ":" or ch == "|"
+    if ch == "." or ch == "," or ch == ":" or ch == "|" or ch == "^"
       push(tokens, {type: ch, value: ch, line: line, col: tstart - line_start + 1})
       pos += 1
       continue

@@ -205,8 +205,11 @@ module.exports = grammar({
     pattern: $ => choice(
       prec.dynamic(2, $.table_pattern),
       prec.dynamic(2, $.array_pattern),
+      prec.dynamic(2, $.pin_pattern),
       $._expression,
     ),
+
+    pin_pattern: $ => seq('^', field('name', $.identifier)),
 
     table_pattern: $ => seq('{', sep1($.pattern_pair, ','), '}'),
     pattern_pair: $ => seq(field('key', $.identifier), ':', field('value', $.pattern)),

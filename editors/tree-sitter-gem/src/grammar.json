@@ -1137,8 +1137,33 @@
           }
         },
         {
+          "type": "PREC_DYNAMIC",
+          "value": 2,
+          "content": {
+            "type": "SYMBOL",
+            "name": "pin_pattern"
+          }
+        },
+        {
           "type": "SYMBOL",
           "name": "_expression"
+        }
+      ]
+    },
+    "pin_pattern": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "^"
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          }
         }
       ]
     },
