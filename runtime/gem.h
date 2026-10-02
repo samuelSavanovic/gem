@@ -448,19 +448,27 @@ typedef enum {
     GEM_IO_EXTERN,
 } GemIOOp;
 
+/* A request is shared by the worker thread and the requesting process. Each
+   side calls gem_io_release once when it is finished with it, and the second
+   release frees the request and everything it owns. If the requester is
+   killed while waiting, gem_free_proc_slot releases on its behalf. Every
+   field below is malloc-owned, never arena memory, so the request outlives
+   the requester's arena. */
 typedef struct {
     GemIOOp op;
     int requester_pid;
-    char *path;            /* strdup'd input (freed after completion) */
-    char *content;         /* strdup'd input for write/append */
+    char *path;            /* strdup'd input (command line for exec) */
+    char *content;         /* malloc'd input for write/append */
     size_t content_len;
     char *result_data;     /* malloc'd output from worker (read_file result) */
     size_t result_len;
     char *error_msg;       /* malloc'd error string, or NULL on success */
     int exit_code;         /* output for exec */
     void (*extern_fn)(void *);  /* for GEM_IO_EXTERN: worker calls this */
-    void *extern_args;          /* for GEM_IO_EXTERN: opaque args struct */
-    volatile int done;     /* set to 1 by worker thread */
+    void *extern_args;          /* for GEM_IO_EXTERN: malloc'd args struct */
+    void (*free_extern)(void *); /* frees extern_args and whatever it still owns */
+    int refs;              /* outstanding releases; 2 at submit */
+    int done;              /* set to 1 by worker thread (atomic release/acquire) */
 } GemIORequest;
 
 /* Process slot */
@@ -630,8 +638,12 @@ void gem_threadpool_init(void);
 void gem_threadpool_shutdown(void);
 GemIORequest *gem_io_submit(GemIOOp op, const char *path,
                             const char *content, size_t content_len);
-GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args);
-void gem_io_free_request(GemIORequest *req);
+/* Takes ownership of `args`: on success it is freed by `free_args` when the
+   request is released for the last time; if the queue is full, `free_args`
+   runs before NULL is returned. */
+GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args,
+                                   void (*free_args)(void *));
+void gem_io_release(GemIORequest *req);
 void gem_io_check_completions(void);
 int gem_io_wake_fd(void);
 

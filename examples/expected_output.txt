@@ -190,6 +190,18 @@ test2: other ran, then parent continued
 test3: DOWN reason=goodbye
 test4: DOWN reason=no escape
 test5: DOWN reason=chain
+read_file: kill returned true, DOWN reason=killed
+write_file: kill returned true, DOWN reason=killed
+append_file: kill returned true, DOWN reason=killed
+exec: kill returned true, DOWN reason=killed
+sqlite_open: kill returned true, DOWN reason=killed
+extern Int: kill returned true, DOWN reason=killed
+extern String: kill returned true, DOWN reason=killed
+stress: killed 100 of 100 while waiting
+file: fine, still
+exec: 0
+sqlite: row
+extern: 0 copied
 apple
 banana
 cherry

@@ -1,0 +1,88 @@
+# A process killed while it waits on thread-pool I/O (read_file, write_file,
+# exec, sqlite_open, an `extern blocking fn`) dies cleanly: its monitor gets
+# DOWN, and later I/O keeps working.
+
+extern include "unistd.h"
+extern include "string.h"
+
+extern blocking fn usleep(usec: Int) -> Int
+extern blocking fn strdup(s: String) -> String
+
+let dir = "/tmp/gem_106_pool_io"
+exec("rm -rf {dir}")
+mkdir(dir)
+write_file("{dir}/in.txt", "some input")
+
+# Spawns `work`, waits until it has started its request, kills it, and
+# returns the reason from its DOWN message. `send` does not yield, so the
+# child has submitted its request before the main process runs again.
+fn kill_mid_request(work)
+  let me = self()
+  let p = spawn do
+    send(me, {tag: "started", pid: self()})
+    work()
+    send(me, {tag: "finished", pid: self()})
+  end
+  monitor(p)
+  receive
+  when {tag: "started", pid: ^p}
+    nil
+  end
+  let alive = kill(p, "killed")
+  receive
+  when {tag: "DOWN", pid: ^p, reason: r}
+    "kill returned {alive}, DOWN reason={r}"
+  end
+end
+
+# ─── Test 1: one kill per kind of request ───
+print("read_file: " + kill_mid_request(fn() read_file("{dir}/in.txt") end))
+print("write_file: " + kill_mid_request(fn() write_file("{dir}/out.txt", "x") end))
+print("append_file: " + kill_mid_request(fn() append_file("{dir}/log.txt", "x") end))
+print("exec: " + kill_mid_request(fn() exec("sleep 0.2") end))
+print("sqlite_open: " + kill_mid_request(fn() sqlite_open("{dir}/a.db") end))
+print("extern Int: " + kill_mid_request(fn() usleep(200000) end))
+print("extern String: " + kill_mid_request(fn() strdup("orphaned") end))
+
+# ─── Test 2: many kills in flight at once ───
+let main = self()
+let victims = []
+for i = 0, 100
+  let k = i % 4
+  push(victims, spawn do
+    send(main, "started")
+    if k == 0
+      read_file("{dir}/in.txt")
+    elif k == 1
+      usleep(5000)
+    elif k == 2
+      strdup("orphaned {i}")
+    else
+      sqlite_open("{dir}/b.db")
+    end
+  end)
+end
+for _ in victims
+  receive
+  when "started"
+    nil
+  end
+end
+let killed = 0
+for p in victims
+  if kill(p, "killed") then killed = killed + 1 end
+end
+print("stress: killed {killed} of {len(victims)} while waiting")
+
+# ─── Test 3: I/O still works afterwards ───
+write_file("{dir}/after.txt", "fine")
+append_file("{dir}/after.txt", ", still")
+print("file: {read_file("{dir}/after.txt")}")
+print("exec: {exec("true")}")
+let db = sqlite_open("{dir}/a.db")
+sqlite_exec(db, "CREATE TABLE t (v TEXT)")
+sqlite_exec(db, "INSERT INTO t VALUES ('row')")
+print("sqlite: {sqlite_query(db, "SELECT v FROM t")[0].v}")
+sqlite_close(db)
+print("extern: {usleep(1000)} {strdup("copied")}")
+exec("rm -rf {dir}")

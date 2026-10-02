@@ -153,6 +153,10 @@ static void gem_free_proc_slot(int pid) {
     if (pid != gem_main_pid)
         gem_arena_destroy(&proc->arena);
 
+    /* A process killed while waiting on the thread pool still holds its
+       reference to the request, so release it on the process's behalf. */
+    if (proc->io_request) gem_io_release(proc->io_request);
+
     proc->state = GEM_PROC_FREE;
     proc->coro = NULL;
     proc->io_request = NULL;

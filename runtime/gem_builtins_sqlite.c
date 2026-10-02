@@ -28,6 +28,16 @@ static void gem_sqlite_open_worker(void *arg) {
     sqlite3_exec(a->db, "PRAGMA foreign_keys=ON", NULL, NULL, NULL);
 }
 
+/* Closes the connection if the requester did not take it, which happens when
+   the requester was killed before it resumed. */
+static void gem_sqlite_open_free(void *arg) {
+    GemSqliteOpenArgs *a = (GemSqliteOpenArgs *)arg;
+    if (a->db) sqlite3_close(a->db);
+    free(a->path);
+    free(a->error);
+    free(a);
+}
+
 /* ─── Thread pool args for sqlite_close ─── */
 
 typedef struct {
@@ -37,6 +47,10 @@ typedef struct {
 static void gem_sqlite_close_worker(void *arg) {
     GemSqliteCloseArgs *a = (GemSqliteCloseArgs *)arg;
     sqlite3_close(a->db);
+}
+
+static void gem_sqlite_close_free(void *arg) {
+    free(arg);
 }
 
 /* ─── Built-in: sqlite_open ─── */
@@ -54,26 +68,22 @@ GemVal gem_sqlite_open_fn(void *_env, GemVal *args, int argc) {
         a->db = NULL;
         a->error = NULL;
 
-        GemIORequest *req = gem_io_submit_extern(gem_sqlite_open_worker, a);
-        if (!req) { free(a->path); free(a); gem_error("sqlite_open: I/O queue full"); }
+        GemIORequest *req = gem_io_submit_extern(gem_sqlite_open_worker, a, gem_sqlite_open_free);
+        if (!req) { gem_error("sqlite_open: I/O queue full"); }
         GemProcess *proc = &gem_proc_table[gem_current_pid];
         proc->io_request = req;
         gem_io_pool_yield();
         proc->io_request = NULL;
 
         sqlite3 *db = a->db;
-        char *error = a->error;
-        free(a->path);
-        gem_io_free_request(req);
-
-        if (error) {
+        a->db = NULL;
+        if (a->error) {
             char buf[512];
-            snprintf(buf, sizeof(buf), "sqlite_open: %s", error);
-            free(error);
-            free(a);
+            snprintf(buf, sizeof(buf), "sqlite_open: %s", a->error);
+            gem_io_release(req);
             gem_error(buf);
         }
-        free(a);
+        gem_io_release(req);
 
         GemVal r; r.type = VAL_INT; r.ival = (int64_t)(intptr_t)db;
         return r;
@@ -107,15 +117,14 @@ GemVal gem_sqlite_close_fn(void *_env, GemVal *args, int argc) {
         GemSqliteCloseArgs *a = (GemSqliteCloseArgs *)malloc(sizeof(GemSqliteCloseArgs));
         a->db = db;
 
-        GemIORequest *req = gem_io_submit_extern(gem_sqlite_close_worker, a);
-        if (!req) { free(a); gem_error("sqlite_close: I/O queue full"); }
+        GemIORequest *req = gem_io_submit_extern(gem_sqlite_close_worker, a, gem_sqlite_close_free);
+        if (!req) { gem_error("sqlite_close: I/O queue full"); }
         GemProcess *proc = &gem_proc_table[gem_current_pid];
         proc->io_request = req;
         gem_io_pool_yield();
         proc->io_request = NULL;
 
-        gem_io_free_request(req);
-        free(a);
+        gem_io_release(req);
         return GEM_NIL;
     }
 

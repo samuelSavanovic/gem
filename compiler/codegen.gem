@@ -4702,7 +4702,26 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
     buf_push(b, "}\n\n")
 
-    # 3. Gem wrapper function
+    # 3. Free callback, passed to gem_io_submit_extern, which owns the struct
+    # from then on: frees the copied inputs, any malloc'd String/Bytes result
+    # still in the struct, and the struct itself.
+    buf_push(b, "static void _blk_{name}_free(void *_a) \{\n")
+    buf_push(b, "    struct _blk_{name}_args *a = (struct _blk_{name}_args *)_a;\n")
+    for i = 0, len(params)
+      let pt = params[i]["type"]
+      if pt == "String" or pt == "Bytes"
+        buf_push(b, "    free(a->_p{i});\n")
+      end
+    end
+    if ret_type == "String"
+      buf_push(b, "    free(a->_result);\n")
+    elif ret_type == "Bytes"
+      buf_push(b, "    free((void *)a->_result.data);\n")
+    end
+    buf_push(b, "    free(a);\n")
+    buf_push(b, "}\n\n")
+
+    # 4. Gem wrapper function
     buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
     emit_extern_validation(b, name, params)
 
@@ -4727,7 +4746,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
     # Blocking path: submit to thread pool, yield, resume with result
     buf_push(b, "    if (gem_current_pid >= 0) \{\n")
-    buf_push(b, "        struct _blk_{name}_args *_ba = (struct _blk_{name}_args *)malloc(sizeof(struct _blk_{name}_args));\n")
+    buf_push(b, "        struct _blk_{name}_args *_ba = (struct _blk_{name}_args *)calloc(1, sizeof(struct _blk_{name}_args));\n")
 
     # Copy args into struct (strdup strings / memcpy bytes for thread safety)
     for i = 0, len(params)
@@ -4743,61 +4762,45 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
     end
 
-    buf_push(b, "        GemIORequest *_req = gem_io_submit_extern(_blk_{name}_worker, _ba);\n")
-    buf_push(b, "        if (!_req) \{ free(_ba); gem_error(\"{name}: I/O queue full\"); }\n")
+    buf_push(b, "        GemIORequest *_req = gem_io_submit_extern(_blk_{name}_worker, _ba, _blk_{name}_free);\n")
+    buf_push(b, "        if (!_req) gem_error(\"{name}: I/O queue full\");\n")
     buf_push(b, "        GemProcess *_proc = &gem_proc_table[gem_current_pid];\n")
     buf_push(b, "        _proc->io_request = _req;\n")
     buf_push(b, "        gem_io_pool_yield();\n")
     buf_push(b, "        _proc->io_request = NULL;\n")
 
-    # Read result, free strdup'd strings, free args struct, free IO request
+    # Copy the result out of the args struct, then release the request
     if ret_type == "String"
       buf_push(b, "        char *_raw = _ba->_result;\n")
-    elif ret_type == "Bytes"
-      buf_push(b, "        GemBytes _raw = _ba->_result;\n")
-    elif ret_type != "Nil"
-      let c_type = "int64_t"
-      if ret_type == "Float"
-        c_type = "double"
-      elif ret_type == "Bool"
-        c_type = "int"
-      elif ret_type == "Ptr"
-        c_type = "void *"
-      end
-      buf_push(b, "        {c_type} _ret = _ba->_result;\n")
-    end
-
-    # Free strdup'd / memcpy'd inputs
-    for i = 0, len(params)
-      let pt = params[i]["type"]
-      if pt == "String" or pt == "Bytes"
-        buf_push(b, "        free(_ba->_p{i});\n")
-      end
-    end
-
-    buf_push(b, "        free(_ba);\n")
-    buf_push(b, "        gem_io_free_request(_req);\n")
-
-    # Return result
-    if ret_type == "Int"
-      buf_push(b, "        return gem_int(_ret);\n")
-    elif ret_type == "Float"
-      buf_push(b, "        return gem_float(_ret);\n")
-    elif ret_type == "String"
       buf_push(b, "        size_t _len = _raw ? strlen(_raw) : 0;\n")
       buf_push(b, "        char *_gc = (char *)gem_alloc(_len + 1);\n")
-      buf_push(b, "        if (_raw) \{ memcpy(_gc, _raw, _len + 1); free(_raw); } else \{ _gc[0] = '\\0'; }\n")
+      buf_push(b, "        if (_raw) memcpy(_gc, _raw, _len + 1); else _gc[0] = '\\0';\n")
+      buf_push(b, "        gem_io_release(_req);\n")
       buf_push(b, "        return gem_string(_gc);\n")
     elif ret_type == "Bytes"
+      buf_push(b, "        GemBytes _raw = _ba->_result;\n")
       buf_push(b, "        GemVal _gv = _raw.data ? gem_string_with_len((const char*)_raw.data, (int)_raw.len) : gem_string_with_len(\"\", 0);\n")
-      buf_push(b, "        if (_raw.data) free((void*)_raw.data);\n")
+      buf_push(b, "        gem_io_release(_req);\n")
       buf_push(b, "        return _gv;\n")
-    elif ret_type == "Bool"
-      buf_push(b, "        return gem_bool(_ret);\n")
-    elif ret_type == "Ptr"
-      buf_push(b, "        return gem_int((int64_t)(intptr_t)_ret);\n")
-    else
+    elif ret_type == "Nil"
+      buf_push(b, "        gem_io_release(_req);\n")
       buf_push(b, "        return GEM_NIL;\n")
+    else
+      let c_type = "int64_t"
+      let ret_val = "gem_int(_ret)"
+      if ret_type == "Float"
+        c_type = "double"
+        ret_val = "gem_float(_ret)"
+      elif ret_type == "Bool"
+        c_type = "int"
+        ret_val = "gem_bool(_ret)"
+      elif ret_type == "Ptr"
+        c_type = "void *"
+        ret_val = "gem_int((int64_t)(intptr_t)_ret)"
+      end
+      buf_push(b, "        {c_type} _ret = _ba->_result;\n")
+      buf_push(b, "        gem_io_release(_req);\n")
+      buf_push(b, "        return {ret_val};\n")
     end
     buf_push(b, "    }\n")
 

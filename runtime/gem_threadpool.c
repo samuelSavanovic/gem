@@ -1,9 +1,11 @@
 /*
- * gem_threadpool.c — Worker thread pool for non-blocking file I/O.
+ * gem_threadpool.c — Worker thread pool for blocking operations.
  *
- * When a coroutine calls read_file/write_file/append_file/exec, the operation
- * is handed to a worker thread so the scheduler can continue running other
- * coroutines. A wake-pipe notifies the scheduler when work completes.
+ * When a coroutine calls read_file/write_file/append_file/exec,
+ * sqlite_open/sqlite_close or an `extern blocking fn`, the operation is handed
+ * to a worker thread so the scheduler can continue running other coroutines. A wake-pipe notifies the scheduler when work completes.
+ * Each worker releases its request after signalling the wake-pipe; see
+ * GemIORequest in gem.h for the ownership rules.
  */
 
 #include "gem.h"
@@ -91,11 +93,10 @@ static void *gem_io_worker_fn(void *arg) {
             case GEM_IO_EXTERN:      req->extern_fn(req->extern_args); break;
         }
 
-        __sync_synchronize();
-        req->done = 1;
-        __sync_synchronize();
+        __atomic_store_n(&req->done, 1, __ATOMIC_RELEASE);
         char c = 1;
         (void)write(gem_io_wake_pipe_fds[1], &c, 1);
+        gem_io_release(req);
     }
     return NULL;
 }
@@ -127,11 +128,22 @@ void gem_threadpool_shutdown(void) {
     gem_io_wake_pipe_fds[0] = gem_io_wake_pipe_fds[1] = -1;
 }
 
+void gem_io_release(GemIORequest *req) {
+    if (__sync_sub_and_fetch(&req->refs, 1) != 0) return;
+    free(req->path);
+    free(req->content);
+    free(req->result_data);
+    free(req->error_msg);
+    if (req->free_extern) req->free_extern(req->extern_args);
+    free(req);
+}
+
 GemIORequest *gem_io_submit(GemIOOp op, const char *path,
                             const char *content, size_t content_len) {
     GemIORequest *req = (GemIORequest *)calloc(1, sizeof(GemIORequest));
     req->op = op;
     req->requester_pid = gem_current_pid;
+    req->refs = 2;
     req->path = strdup(path);
     if (content && content_len > 0) {
         req->content = (char *)malloc(content_len);
@@ -155,16 +167,20 @@ GemIORequest *gem_io_submit(GemIOOp op, const char *path,
     return req;
 }
 
-GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args) {
+GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args,
+                                   void (*free_args)(void *)) {
     GemIORequest *req = (GemIORequest *)calloc(1, sizeof(GemIORequest));
     req->op = GEM_IO_EXTERN;
     req->requester_pid = gem_current_pid;
+    req->refs = 2;
     req->extern_fn = fn;
     req->extern_args = args;
+    req->free_extern = free_args;
 
     pthread_mutex_lock(&gem_io_mutex);
     if (gem_io_q_count >= GEM_IO_QUEUE_CAP) {
         pthread_mutex_unlock(&gem_io_mutex);
+        if (free_args) free_args(args);
         free(req);
         return NULL;
     }
@@ -184,8 +200,7 @@ void gem_io_check_completions(void) {
     for (int i = 0; i < gem_proc_hwm; i++) {
         GemProcess *proc = &gem_proc_table[i];
         if (proc->state == GEM_PROC_IO_WAIT && proc->io_request != NULL) {
-            __sync_synchronize();
-            if (proc->io_request->done) {
+            if (__atomic_load_n(&proc->io_request->done, __ATOMIC_ACQUIRE)) {
                 proc->state = GEM_PROC_READY;
             }
         }
