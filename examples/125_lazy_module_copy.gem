@@ -1,0 +1,199 @@
+# A spawned process sees its parent's module state as of the spawn, copied
+# lazily: a slot is copied the first time the child touches it.
+load "./modules/ns_items" as m
+load "std/string"
+
+let me = self()
+let rows = []
+for i = 0, 5
+  push(rows, {id: i})
+end
+let cfg = {mode: "a", tags: ["x"]}
+let first = rows[0]          # aliases rows[0]
+let both = [cfg, rows]       # aliases cfg and rows
+let label = "short"
+let long_text = string.repeat("L", 200)
+let buf = buf_new()
+buf_push(buf, "one")
+
+fn make_counter()
+  let n = 0
+  {inc: fn() n += 1 end, get: fn() n end}
+end
+let counter = make_counter()
+counter.inc()
+
+fn waiter()
+  spawn do
+    let go = receive()
+    send(me, go(nil))
+  end
+end
+
+# 1. The parent changes everything after the spawn, in place and by
+#    reassignment; the child still sees the state at its spawn.
+let c1 = waiter()
+push(rows, {id: 99})
+rows[0].id = 100
+cfg.mode = "b"
+push(cfg.tags, "y")
+delete(cfg, "tags")
+sort(rows, fn(a, b) b.id - a.id end)
+label = "changed"
+long_text = "changed"
+buf_push(buf, "two")
+counter.inc()
+m.add("late")
+send(c1, fn(_)
+  [len(rows), rows[0].id, first.id, cfg.mode, cfg.tags, label, len(long_text), to_string(buf), counter.get(), m.count()]
+end)
+print("1 child:", receive())
+print("1 main:", [len(rows), rows[0].id, first.id, cfg.mode, cfg.tags, label, len(long_text), to_string(buf), counter.get(), m.count()])
+
+# 2. Aliasing between module bindings survives the copy, in whichever order
+#    the child touches them.
+let c2 = waiter()
+send(c2, fn(_)
+  first.id = 7
+  let a = both[1][len(both[1]) - 1] == first or both[1][0] == first
+  cfg.mode = "child"
+  [a, both[0].mode, rows == both[1]]
+end)
+print("2 aliasing:", receive())
+
+# 3. Consecutive spawns with no change in between, then a change: each child
+#    sees the state at its own spawn.
+let k1 = waiter()
+let k2 = waiter()
+push(rows, {id: 5})
+let k3 = waiter()
+for k in [k1, k2, k3]
+  send(k, fn(_) len(rows) end)
+  print("3 rows at spawn:", receive())
+end
+
+# 4. A table stored into another module binding after an earlier spawn keeps
+#    its identity in later children.
+let extra = {}
+extra.cfg = cfg
+let c4 = waiter()
+send(c4, fn(_)
+  extra.cfg.mode = "via extra"
+  cfg.mode
+end)
+print("4 merged:", receive())
+
+# 5. Spawn chains: a child that never touched module state passes it on as
+#    is; one that changed it passes its own state on.
+let c5 = waiter()
+cfg.mode = "after c5"
+send(c5, fn(_)
+  let quiet = spawn do
+    send(me, ["grandchild of quiet child", cfg.mode, len(rows)])
+  end
+  receive()
+end)
+print("5", receive())
+let c6 = waiter()
+send(c6, fn(_)
+  cfg.mode = "set by child"
+  push(rows, {id: 77})
+  spawn do
+    send(me, ["grandchild of busy child", cfg.mode, len(rows), rows[len(rows) - 1].id])
+  end
+  receive()
+end)
+print("5", receive())
+cfg.mode = "main"
+
+# 6. The parent allocates heavily (region resets) and keeps changing a module
+#    table while a child that has not read it yet waits.
+let c7 = waiter()
+let j = 0
+while j < 200000
+  let junk = {n: j, s: "x{j}"}
+  if j % 50000 == 0
+    push(rows, junk)
+  end
+  j += 1
+end
+send(c7, fn(_)
+  let total = 0
+  for r in rows
+    total += r.id
+  end
+  [len(rows), total]
+end)
+print("6 child:", receive(), "main rows:", len(rows))
+
+# 7. A child reading module state inside a loop that allocates (resets in
+#    the child after its lazy copy).
+let c8 = waiter()
+send(c8, fn(_)
+  let i = 0
+  let seen = 0
+  while i < 100000
+    let tmp = [i, "y{i}"]
+    seen += len(rows) + len(cfg.mode)
+    if i % 25000 == 0
+      push(rows, {id: i, note: "n{i}"})
+    end
+    i += 1
+  end
+  [seen, len(rows), rows[len(rows) - 1].note]
+end)
+print("7 child:", receive(), "main rows:", len(rows))
+
+# 8. Many short children, most never touching module state.
+let count = 0
+for i = 0, 200
+  spawn do
+    if i % 50 == 0
+      send(me, len(rows) + len(cfg))
+    else
+      send(me, 0)
+    end
+  end
+  count += receive()
+end
+print("8 sum:", count)
+
+# 9. Large module state: spawning stays cheap when children do not read it.
+let big = []
+for i = 0, 100000
+  push(big, "item {i}")
+end
+let t0 = time_ms()
+let pids = []
+for i = 0, 300
+  push(pids, spawn do
+    receive()
+    send(me, 1)
+  end)
+end
+for p in pids
+  send(p, "go")
+end
+for p in pids
+  receive()
+end
+let elapsed = time_ms() - t0
+print("9 300 spawns with 100k-entry module array under 1500 ms:", elapsed < 1500)
+let c9 = waiter()
+push(big, "last")
+send(c9, fn(_) [len(big), big[99999]] end)
+print("9 child:", receive(), len(big))
+
+# 10. A spawned closure that captures a local referring to module state:
+#     the capture and the module binding are still one table in the child.
+fn spawn_with_local()
+  let local_cfg = cfg
+  let local_row = rows[0]
+  spawn do
+    local_cfg.mode = "through capture"
+    local_row.id = -1
+    send(me, [cfg.mode, rows[0].id, local_cfg == cfg])
+  end
+  receive()
+end
+print("10 capture:", spawn_with_local(), cfg.mode, rows[0].id)

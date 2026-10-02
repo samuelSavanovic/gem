@@ -481,10 +481,7 @@ static void gem_free_proc_slot(int pid) {
        flexible — but conceptually they belong to the same process lifecycle. */
     gem_pin_free_all(proc);
 
-    if (pid != gem_main_pid) {
-        free(proc->globals);
-        proc->globals = NULL;
-    }
+    if (pid != gem_main_pid) gem_globals_free(proc);
 
     if (proc->pending_timers > 0) gem_timer_drop_for_slot(pid);
 
@@ -665,20 +662,21 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     }
 
     gem_arena_init(&gem_proc_table[pid].arena);
+    /* Before the copy below, which registers pinned boxes in the child. */
+    gem_proc_table[pid].pinned_boxes = NULL;
 
     int saved = gem_current_pid;
     gem_current_pid = pid;
 
     GemCoroCtx *ctx = ALLOC(GemCoroCtx);
-    /* The child gets its own copy of the closure env and of the parent's
-       module slots, copied with one shared map so aliasing between them
-       is preserved. */
+    /* The child gets its own copy of the closure env, and the parent's
+       module state as of now: light slots copied, the rest as references to
+       snapshot units it copies from on first use (gem_copy.c, "Module
+       globals"). */
     GemVal fn_val = gem_make_fn(fn, env);
     GemVal *child_globals = gem_globals_alloc();
-    gem_spawn_copy(env ? &fn_val : NULL, child_globals,
-                   saved >= 0 ? gem_proc_table[saved].globals : NULL,
-                   saved >= 0 && gem_proc_table[saved].globals ? gem_n_globals : 0);
     gem_proc_table[pid].globals = child_globals;
+    gem_spawn_module_state(env ? &fn_val : NULL, child_globals, saved);
     ctx->fn = fn_val.fn;
     ctx->env = fn_val.env;
 
@@ -689,8 +687,8 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     mco_result res = gem_coro_create(&co, GEM_CORO_STACK_SIZE, ctx, &stack_lo);
     if (res != MCO_SUCCESS) {
         gem_arena_destroy(&gem_proc_table[pid].arena);
-        free(gem_proc_table[pid].globals);
-        gem_proc_table[pid].globals = NULL;
+        gem_pin_free_all(&gem_proc_table[pid]);
+        gem_globals_free(&gem_proc_table[pid]);
         /* Put the slot back on the free list before raising. */
         gem_proc_table[pid].pid = gem_free_head;
         gem_free_head = pid;
@@ -715,7 +713,6 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].reductions = 0;
     gem_proc_table[pid].pcall_depth = 0;
     gem_proc_table[pid].call_depth = 0;
-    gem_proc_table[pid].pinned_boxes = NULL;
 
     if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
     return pid;
@@ -728,7 +725,7 @@ void gem_send_msg(int pid, GemVal val) {
 
     int saved = gem_current_pid;
     gem_current_pid = pid;
-    GemVal copied = gem_deep_copy(val);
+    GemVal copied = gem_deep_copy(val, saved);
     gem_mailbox_push(&proc->mailbox, copied);
     gem_current_pid = saved;
 

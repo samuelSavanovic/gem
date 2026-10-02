@@ -460,7 +460,7 @@ abc
 6: other
 7: 404 matched
 8: inner
-8b: inner
+8b: outer
 9: zero count
 10: nil fell through
 11: negative int matched, f=2.5
@@ -1424,12 +1424,97 @@ non-tail spawn 800000 cleanup
 pcall depth 3 true [800000]
 zero-arg row-400000
 sink done
-top-level builds 30000 3000000 3000000 true
 store 14890 2000 true
 backlog drained 13107200
+top-level builds 20000 3000000 3000000 true
 peak memory bounded true
 workers 32 checksum 409600 bad 0 pongs <= workers true
-main built [2000000, 1999999000000]
-walker got [2000000, 1999999000000]
-["child extra 1988890", "walked [2000000, 1999999000000]"]
+main built [400000, 79999800000]
+walker got [400000, 79999800000]
+walker got via timer [400000, 79999800000]
+timer cancelled true
+["child extra 1988890", "walked [400000, 79999800000]"]
 captured [200000, 19999900000]
+1 spawn global: {n: 100000, s: "x100000"}
+2 spawn local: {n: 100000, s: "x100000"}
+3 send: {n: 100000, s: "x100000"}
+4 send_after: {n: 100000, s: "x100000"}
+5 nested: {n: 100000, s: "x100000"}
+6 deep: {n: 100000, s: "x100000"}
+7 shared boxes: [{v: "y60000"}, {v: "x50000"}] via a: [{v: "y60000"}, {v: "x50000"}]
+8 many resets: {n: 5, s: "x5"}
+9 independent: child=child parent=parent
+10 sent back: {n: 100000, s: "back100000"}
+while {n: 100000, s: "w100000"}
+for ["range", "r100000"] ["in", "v100000"]
+nested {i: 200, j: 250, s: "n200-250"}
+do/error first0 {e: "e199999"} false
+return ret100000
+sort [1, 2, 3] {cmp: "c20000"} true
+concat <0><40000><80000><120000><160000>
+inside heap {z: "z100000"} {y: "y100000"}
+pcall in pcall {pp: "p100000"}
+caller loop [{r: 0, s: "b0"}, {r: 1, s: "b1"}, {r: 2, s: "b2"}, {r: 3, s: "b3"}] {caller: "c100000"}
+tco ["t5", "t4", "t3", "t2", "t1"]
+shadow outer
+spawn {p: "proc100000"}
+1: 10 20 x=1
+2: 0 1 2 i=100
+3: p=1 q=2 k=K v=V
+4: 10 100 1 20 200 2 x=1
+5: 10 100 20 200
+6: 43 z=3
+7: x=5
+8: b w=g
+9: 1 2 2 i=100
+10: inner msg name=outer
+11: get_x=5 x=99
+12: 8 8 3
+13: 41 42 x=5
+14: iter 0:0 iter 2:4 msg=global total=4
+15: [10, 20, "block-z", "mod-loop", 1, "mod-z", "mod-a", "mod-b"] x=5 y=main-y z=3 a=main-a
+identity: 1 1 1
+push via namespace: 2 ["a", "b"]
+label: relabeled
+after reset: 0 0
+first-class: 2 true 2
+child: [4, 4, true, ["c", "d", "child", "child2"]]
+main after child: 2 ["c", "d"]
+busy child saw: 12
+main still: 2 ["c", "d"]
+holder child: {i: 99000, label: "v99000"}
+holder main: main value
+frozen delete false cannot modify a module table
+frozen dot_set false cannot modify a module table
+frozen index_set false cannot modify a module table
+frozen insert false cannot modify a module table
+frozen pop false cannot modify a module table
+frozen push false cannot modify a module table
+frozen remove_at false cannot modify a module table
+frozen sort false cannot modify a module table
+unchanged: 2 fn
+frozen in child: cannot modify a module table
+sent copy: 2 cannot modify a module table
+1 child: [5, 0, 0, "a", ["x"], "short", 200, "one", 1, 0]
+1 main: [6, 100, 100, "b", nil, "changed", 7, "onetwo", 2, 1]
+2 aliasing: [true, "child", true]
+3 rows at spawn: 6
+3 rows at spawn: 6
+3 rows at spawn: 7
+4 merged: via extra
+5 ["grandchild of quiet child", "b", 7]
+5 ["grandchild of busy child", "set by child", 8, 77]
+6 child: [7, 214] main rows: 11
+7 child: [1749996, 15, "n75000"] main rows: 11
+8 sum: 48
+9 300 spawns with 100k-entry module array under 1500 ms: true
+9 child: [100000, "item 99999"] 100001
+10 capture: ["through capture", -1, true] main 100
+1500000 true
+13500000 true
+3750005 true
+x:300000:x
+y:300001:y
+750000 true
+false bottom 2100000 true
+200010000 200010000 true

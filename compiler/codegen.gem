@@ -182,6 +182,266 @@ fn collect_top_let_names(stmts, result)
   end
 end
 
+# ─── Block-scoped lets in top-level code ─────────────────────────
+#
+# A `let` in the module's own statement list (or directly in a top-level
+# `block`, the shape of a lowered `for` header or a destructuring `let`) is
+# a module-level binding: a per-process slot keyed by name
+# (`top_level_vars`). A `let` nested in a top-level `if` / `while` / `for`
+# body / `match` or `receive` arm is block-scoped, like a `let` in a fn
+# body. When such a nested let reuses a module-level name it shadows the
+# slot until its block ends; it must not write the slot, and a closure
+# created in the block must capture the block's binding rather than read
+# the slot live.
+#
+# Codegen keys module-slot status by name, so this pass alpha-renames
+# every such shadowing let (and the references it scopes) to a fresh
+# `_sh<N>_<name>`. After it, top-level block lets never share a name with
+# a module slot and compile exactly like a fn's block lets (C local,
+# per-iteration capture, boxed when captured and mutated). Runs on the
+# post-lower AST, before any analysis keyed on names (capture, liveness,
+# process-tail tagging).
+#
+# `env` maps a module-level name to the fresh name that shadows it in the
+# current scope. `mode` is "module" (module-scope statement list: lets are
+# slots), "block" (nested top-level scope: lets of module names are
+# renamed) or "fn" (inside a closure body: lets are real fn locals and
+# only hide outer renames).
+
+fn copy_scope_env(env)
+  let r = {}
+  for k, v in env
+    r[k] = v
+  end
+  r
+end
+
+let shadow_top_node = nil
+let shadow_top_stmt = nil
+let shadow_top_stmts = nil
+let shadow_top_children = nil
+
+fn shadow_top_bind(let_node, env, mode, ctx)
+  let name = let_node.name
+  if name == nil
+    return nil
+  end
+  if mode == "block" and set_contains(ctx.globals, name)
+    ctx.n = ctx.n + 1
+    let fresh = "_sh{ctx.n}_{name}"
+    let_node.name = fresh
+    env[name] = fresh
+  elif has_key(env, name)
+    delete(env, name)
+  end
+end
+
+fn shadow_child_mode(mode)
+  if mode == "module"
+    return "block"
+  end
+  mode
+end
+
+shadow_top_stmts = fn(stmts, env, mode, ctx)
+  if stmts == nil
+    return nil
+  end
+  let scope = copy_scope_env(env)
+  for s in stmts
+    shadow_top_stmt(s, scope, mode, ctx)
+  end
+end
+
+# A statement in a list whose scope is `env` (mutated: lets bind into it).
+# `block` is transparent: its lets belong to the enclosing list's scope.
+shadow_top_stmt = fn(s, env, mode, ctx)
+  if is_node(s, "let")
+    shadow_top_node(s.value, env, mode, ctx)
+    shadow_top_bind(s, env, mode, ctx)
+  elif is_node(s, "block")
+    for c in s.stmts
+      shadow_top_stmt(c, env, mode, ctx)
+    end
+  else
+    shadow_top_node(s, env, mode, ctx)
+  end
+end
+
+# Arm bindings (`when` / `receive` patterns) are lets scoped to the arm.
+fn shadow_top_arm(cond, bindings, body, env, mode, ctx)
+  let arm = copy_scope_env(env)
+  shadow_top_node(cond, arm, mode, ctx)
+  if bindings != nil
+    for b in bindings
+      if is_node(b, "let")
+        shadow_top_node(b.value, arm, mode, ctx)
+        shadow_top_bind(b, arm, shadow_child_mode(mode), ctx)
+      end
+    end
+  end
+  shadow_top_stmts(body, arm, shadow_child_mode(mode), ctx)
+end
+
+shadow_top_node = fn(node, env, mode, ctx)
+  if node == nil or type(node) != "table" or node.tag == nil
+    return nil
+  end
+  let tag = node.tag
+  let cm = shadow_child_mode(mode)
+  if tag == "var"
+    if has_key(env, node.name)
+      node.name = env[node.name]
+    end
+  elif tag == "assign"
+    shadow_top_node(node.value, env, mode, ctx)
+    if has_key(env, node.name)
+      node.name = env[node.name]
+    end
+  elif tag == "let" or tag == "block"
+    # Only reachable as a statement; route through the list walker.
+    shadow_top_stmt(node, env, mode, ctx)
+  elif tag == "fn_def"
+    # Named fns are module-level and never see block locals.
+    nil
+  elif tag == "anon_fn"
+    let inner = copy_scope_env(env)
+    if node.params != nil
+      for p in node.params
+        delete(inner, p)
+      end
+    end
+    if node.rest_param != nil
+      delete(inner, node.rest_param)
+    end
+    if node.defaults != nil
+      for d in node.defaults
+        shadow_top_node(d, inner, "fn", ctx)
+      end
+    end
+    shadow_top_stmts(node.body, inner, "fn", ctx)
+  elif tag == "if"
+    shadow_top_node(node.cond, env, mode, ctx)
+    shadow_top_stmts(node.then, env, cm, ctx)
+    if node.elifs != nil
+      for ei in node.elifs
+        shadow_top_node(ei.cond, env, mode, ctx)
+        shadow_top_stmts(ei.body, env, cm, ctx)
+      end
+    end
+    shadow_top_stmts(node.else, env, cm, ctx)
+  elif tag == "while"
+    shadow_top_node(node.cond, env, mode, ctx)
+    shadow_top_stmts(node.body, env, cm, ctx)
+  elif tag == "match"
+    shadow_top_node(node.target, env, mode, ctx)
+    if node.whens != nil
+      for w in node.whens
+        shadow_top_arm(w.value, w.bindings, w.body, env, mode, ctx)
+      end
+    end
+    shadow_top_stmts(node.else, env, cm, ctx)
+  elif tag == "receive_match"
+    if node.arms != nil
+      for a in node.arms
+        let cond = nil
+        let bindings = nil
+        if a.pattern != nil
+          cond = a.pattern.condition
+          bindings = a.pattern.bindings
+        end
+        shadow_top_arm(cond, bindings, a.body, env, mode, ctx)
+      end
+    end
+    shadow_top_node(node.after_ms, env, mode, ctx)
+    shadow_top_stmts(node.after_body, env, cm, ctx)
+  else
+    for k, v in node
+      if k != "tag" and type(v) == "table"
+        shadow_top_children(v, env, mode, ctx)
+      end
+    end
+  end
+  nil
+end
+
+# Expression children: a node, or a tagless container (arg list, table
+# entries `{key, value}`) holding nodes.
+shadow_top_children = fn(v, env, mode, ctx)
+  if v.tag != nil
+    shadow_top_node(v, env, mode, ctx)
+    return nil
+  end
+  for _, c in v
+    if type(c) == "table"
+      shadow_top_children(c, env, mode, ctx)
+    end
+  end
+end
+
+fn scope_top_level_lets(top_stmts)
+  let globals = {}
+  collect_top_let_names(top_stmts, globals)
+  let ctx = {globals: globals, n: 0}
+  let env = {}
+  for s in top_stmts
+    shadow_top_stmt(s, env, "module", ctx)
+  end
+end
+
+# Whole-module load bindings (`let m = <frozen namespace table>`, from
+# resolve_loads in main.gem) whose name is never rebound or assigned:
+# out[m] = {export: "_mod_<mod>_<export>"}. Codegen compiles `m.export`
+# straight to that binding, so it is the module's own value in the
+# running process.
+# `assigned`: names assigned (`name = …`) anywhere in the program.
+fn collect_module_namespaces(top_stmts, assigned, out)
+  let rebound = assigned
+  for s in top_stmts
+    if is_node(s, "let")
+      if is_node(s.value, "table") and s.value.frozen == true
+        let fields = {}
+        for e in s.value.entries
+          if type(e.key) == "string" and is_node(e.value, "var")
+            fields[e.key] = e.value.name
+          end
+        end
+        let prev = out[s.name]
+        if prev != nil
+          # The same module loaded again under the same name is fine; a
+          # different one is a rebinding.
+          let same = len(keys(prev)) == len(keys(fields))
+          for k, v in fields
+            if prev[k] != v
+              same = false
+            end
+          end
+          if not same
+            set_add(rebound, s.name)
+          end
+        end
+        out[s.name] = fields
+      else
+        set_add(rebound, s.name)
+      end
+    end
+  end
+  # A let directly in a top-level block (a lowered `for` header or a
+  # destructuring let) also writes a module slot.
+  for s in top_stmts
+    if is_node(s, "block")
+      for b in s.stmts
+        if is_node(b, "let")
+          set_add(rebound, b.name)
+        end
+      end
+    end
+  end
+  for name, _ in rebound
+    delete(out, name)
+  end
+end
+
 # Collects all let-bound names anywhere in this fn body (descending through
 # control flow), but not into nested anon_fn or fn_def. Used by compile_fn
 # to over-approximate the set of locally-shadowed names — anything in here
@@ -751,7 +1011,7 @@ captured_arm_lets_stmts = fn(stmts, scope)
         # so the rescue copies a no-op and the inner shadow's box (per-iter
         # arena) dies cleanly with the arena reset.
         for n in to_hoist
-          insert(stmts, i, {tag: "let", name: n, value: {tag: "nil"}, line: s.line})
+          insert(stmts, i, {tag: "let", name: n, value: {tag: "nil"}, line: s.line, rescue_placeholder: true})
           set_add(block_lets, n)
           i += 1
         end
@@ -909,6 +1169,26 @@ end
 
 fn lift_captured_arm_lets_top_stmts(stmts)
   captured_arm_lets_stmts(stmts, {})
+end
+
+# Names of the rescue placeholders above that landed at module scope: in
+# the top-level statement list, or directly in a top-level `block` (the
+# header of a lowered `for`), the positions collect_top_let_names treats
+# as module bindings.
+fn top_rescue_placeholders(stmts)
+  let out = []
+  for s in stmts
+    if is_node(s, "let") and s.rescue_placeholder == true
+      push(out, s.name)
+    elif is_node(s, "block")
+      for c in s.stmts
+        if is_node(c, "let") and c.rescue_placeholder == true
+          push(out, c.name)
+        end
+      end
+    end
+  end
+  out
 end
 
 # ─── Loop tagging for the back-edge arena reset ─────────────────
@@ -1097,6 +1377,13 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   end
   let boxed_vars = {}
   let top_level_vars = {}
+  # Whole-module loads: binding name -> {export: top-level name it holds}
+  # (`_mod_<mod>_<export>`), for module bindings never rebound (see
+  # collect_module_namespaces). `m.x` compiles straight to that slot or fn.
+  let module_ns = {}
+  # Reverse of module_ns: "_mod_<mod>_<export>" -> [{binding, field}], the
+  # namespace entries that hold that binding's value.
+  let ns_targets = {}
   let in_top_level = false
   let local_names = {}
   # Subset of `local_names` whose names have an addressable C local at the
@@ -1106,9 +1393,17 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # addressable from the enclosing while's back-edge) from fn-scope locals.
   let fn_scope_locals = {}
   # Captures of the current `compile_closure_fn` body — env fields backed by
-  # `_cls->gem_v_<name>`. The env predates any loop mark in the body, so
-  # `filter_live_for_rescue` never roots them.
+  # `_cls->gem_v_<name>`, each a `GemVal *` to the capture's storage.
+  # `filter_live_for_rescue` roots a live capture through that pointer.
   let closure_captures = {}
+  # Captures the current closure body assigns when that closure is
+  # non-escaping (stack env, `mark_non_escaping`): its env fields point at
+  # the creator's unboxed C locals, so an assign stores a value allocated
+  # after this body's loop marks into a frame older than those marks. Every
+  # loop in the body roots them at its back-edge whether or not liveness
+  # finds them live (any statement can raise back to the creator, which
+  # then reads them). Empty outside a non-escaping closure.
+  let stack_env_writes = {}
   let current_closure_struct_name = nil
   let current_closure_captures = nil
   let tco_fn_name = nil
@@ -1135,8 +1430,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # `find_tail_call_sccs`.
   # `scc_id_to_members[id]` is a sorted array of member names (used to
   # generate stable C identifiers and to seed cross-SCC tail-call detection).
+  # `scc_id_max_params[id]` is the largest parameter count among the members:
+  # the wrapper copies that many TLB slots, since no body reads more.
   let scc_member_to_id = {}
   let scc_id_to_members = {}
+  let scc_id_max_params = {}
   let scc_counter = 0
   # Set inside the body of an SCC member during compile_fn — gives
   # compile_stmt_return a way to recognize "tail call to a sibling in my SCC"
@@ -1170,8 +1468,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # ─── Module globals ──
   #
   # Top-level bindings (`top_level_vars`) are per-process module slots:
-  # `gem_g_<name>` is `#define`d to `gem_cur_globals[<index>]`, the running
-  # process's copy (runtime/gem.h). A name refers to the module slot when it
+  # `gem_gi_<name>` is `#define`d to the slot index and `gem_g_<name>` to
+  # `gem_global_get(<index>)`, a read of the running process's slot
+  # (runtime/gem.h). Writes go through `gem_global_set` (plain assignment)
+  # or `gem_global_ref` (read-modify-write lvalue); both tell the runtime
+  # the slot changed, which lazy module copy at spawn relies on. A name refers to the module slot when it
   # is a top-level var and the current scope has no local of that name:
   # in top-level code every top-level var name is the slot; inside a fn or
   # closure, a param/let/capture of the same name shadows it. Module slots
@@ -1189,6 +1490,10 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
   let gmangle = fn(name)
     "gem_g_{name}"
+  end
+
+  let gindex = fn(name)
+    "gem_gi_{name}"
   end
 
   let join_c = fn(items)
@@ -1220,15 +1525,39 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     to_string(b)
   end
 
+  # After a write to an exported module binding: update the namespace
+  # tables that hold it (`let ns = m; ns.x` stays the module's live `x`;
+  # `m.x` itself compiles straight to the binding). Empty for anything else.
+  let ns_refresh = fn(name, p)
+    if ns_targets[name] == nil or not is_global_ref(name)
+      return ""
+    end
+    let out = ""
+    for t in ns_targets[name]
+      if set_contains(top_level_vars, t.binding)
+        out = out + "{p}gem_ns_refresh({gmangle(t.binding)}, \"{escape_c_string(t.field)}\", {gmangle(name)});\n"
+      end
+    end
+    out
+  end
+
   # C lvalue for variable `name` in the current scope.
   let var_lvalue = fn(name)
     if is_global_ref(name)
-      return gmangle(name)
+      return "(*gem_global_ref({gindex(name)}))"
     end
     if set_contains(boxed_vars, name)
       return "(*{mangle(name)})"
     end
     mangle(name)
+  end
+
+  # C statement storing `expr` into variable `name` (no trailing newline).
+  let var_store = fn(name, expr)
+    if is_global_ref(name)
+      return "gem_global_set({gindex(name)}, {expr});"
+    end
+    "{var_lvalue(name)} = {expr};"
   end
 
   # Frame bookkeeping helpers — return empty strings inside leaf fns so the
@@ -1650,10 +1979,16 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     when {tag: "let", value: value}
       walk_writes_node(value, scope_vars, defined, writes, inside_anon)
     when {tag: "anon_fn", params: params, rest_param: rest_param, body: body}
-      if node.non_escaping == true
+      if node.non_escaping == true and not inside_anon
         # Non-escaping closures use stack-pointer semantics; their writes
         # mutate the outer's local directly without forcing it to be boxed,
         # so they don't contribute to the writes set we use to decide boxing.
+        # Inside an escaping closure they do count: there the name is a
+        # capture of that closure, and an unmutated capture gets a
+        # write-once snapshot box, which the non-escaping closure would
+        # then assign (the write would be lost to the creator, and the
+        # snapshot box, older than any loop mark, would point into a reset
+        # region).
         return nil
       end
       # When transitioning from outside-any-closure into an anon_fn, reset
@@ -2630,6 +2965,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     for k in keys(scc_id_to_members)
       delete(scc_id_to_members, k)
     end
+    for k in keys(scc_id_max_params)
+      delete(scc_id_max_params, k)
+    end
     scc_counter = 0
 
     let name_set = {}
@@ -2812,9 +3150,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         j += 1
       end
       scc_id_to_members[sid] = members
+      let max_params = 0
       for name in members
         scc_member_to_id[name] = sid
+        if len(name_to_fn[name].params) > max_params
+          max_params = len(name_to_fn[name].params)
+        end
       end
+      scc_id_max_params[sid] = max_params
     end
   end
 
@@ -2936,25 +3279,37 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(b, "    void *_next_env = _env;\n")
     buf_push(b, "    GemVal *_next_args = args;\n")
     buf_push(b, "    int _next_argc = argc;\n")
+    buf_push(b, "    GemVal _tail_args[GEM_MAX_TAIL_ARGS];\n")
     buf_push(b, "    GemVal _result;\n")
     buf_push(b, "    GemArenaMark _mk;\n")
     buf_push(b, "    gem_arena_mark(&_mk);\n")
     buf_push(b, "    while (1) \{\n")
-    buf_push(b, "        gem_tail_fn = NULL;\n")
     buf_push(b, "        _result = _next_fn(_next_env, _next_args, _next_argc);\n")
     buf_push(b, "        if (gem_tail_fn == NULL) break;\n")
+    # The TLB is process-global and other processes use it while this one
+    # is suspended (the reset and yield below, or any yield inside the next
+    # body). Consume it here, before anything can switch processes: copy
+    # the args into this wrapper's frame and clear gem_tail_fn, so the TLB
+    # is only ever set between a body's tail-set and this read.
     buf_push(b, "        _next_fn = gem_tail_fn;\n")
+    buf_push(b, "        gem_tail_fn = NULL;\n")
     buf_push(b, "        _next_env = gem_tail_env;\n")
-    buf_push(b, "        _next_argc = gem_tail_argc;\n")
-    buf_push(b, "        _next_args = gem_tail_args;\n")
+    # Copy a fixed count (the SCC's largest arity) so the copy unrolls; a
+    # call with fewer args leaves slots the next body never reads, and one
+    # with more passes args no body reads, so argc is clamped to the count.
+    let nargs = scc_id_max_params[sid]
+    buf_push(b, "        _next_argc = gem_tail_argc < {nargs} ? gem_tail_argc : {nargs};\n")
+    for i = 0, nargs
+      buf_push(b, "        _tail_args[{i}] = gem_tail_args[{i}];\n")
+    end
+    buf_push(b, "        _next_args = _tail_args;\n")
     # SOUNDNESS: the mark is taken on entry, before the first body runs, so
     # the callers hold only older values; between bodies the previous body
-    # has returned and the TLB args are the only live values.
+    # has returned and the copied tail args are the only live values.
     buf_push(b, "        if (gem_arena_reset_due(&_mk)) \{\n")
     buf_push(b, "            GemVal *_roots[GEM_MAX_TAIL_ARGS];\n")
-    buf_push(b, "            int _n = _next_argc < GEM_MAX_TAIL_ARGS ? _next_argc : GEM_MAX_TAIL_ARGS;\n")
-    buf_push(b, "            for (int _i = 0; _i < _n; _i++) _roots[_i] = &gem_tail_args[_i];\n")
-    buf_push(b, "            gem_arena_reset_region(&_mk, _roots, _n, NULL, 0);\n")
+    buf_push(b, "            for (int _i = 0; _i < _next_argc; _i++) _roots[_i] = &_tail_args[_i];\n")
+    buf_push(b, "            gem_arena_reset_region(&_mk, _roots, _next_argc, NULL, 0);\n")
     buf_push(b, "        }\n")
     buf_push(b, "        gem_yield_check();\n")
     buf_push(b, "    }\n")
@@ -3290,6 +3645,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
           return {expr: "GEM_NIL", setup: ""}
         end
       end
+      if is_global_ref(name)
+        return {expr: gmangle(name), setup: ""}
+      end
       return {expr: var_lvalue(name), setup: ""}
     when {tag: "call"}
       return compile_call(node)
@@ -3310,6 +3668,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     when {tag: "array"}
       return compile_array(node)
     when {tag: "dot", object: object, field: field}
+      # `m.x` on a module binding reads the module's own binding `x` (this
+      # process's slot, live), not a copy held in the namespace table.
+      if is_node(object, "var") and has_key(module_ns, object.name) and has_key(module_bindings, object.name) and is_global_ref(object.name)
+        let target = module_ns[object.name][field]
+        if target != nil and (set_contains(top_level_vars, target) or set_contains(defined_fns, target))
+          return compile_expr({tag: "var", name: target, line: node.line, col: node.col, file: node.file})
+        end
+      end
       if is_node(object, "var") and has_key(module_bindings, object.name) and (in_top_level or not set_contains(local_names, object.name))
         let exports = module_bindings[object.name]
         let found = false
@@ -3388,9 +3754,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
     end
     if node.frozen == true
-      # Module namespace table: an immortal malloc copy every process
-      # shares (spawn/send/reset never copy or free it).
-      buf_push(b, "    {t} = gem_table_freeze_static({t});\n")
+      # Module namespace table: an ordinary per-process table whose own
+      # entries cannot be changed.
+      buf_push(b, "    gem_table_freeze({t});\n")
     end
     {expr: t, setup: to_string(b)}
   end
@@ -3697,7 +4063,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       let mname = mangle(name)
       if in_top_level and set_contains(top_level_vars, name)
         # Module-level binding: this process's slot.
-        return "{line_dir}{r.setup}{p}{gmangle(name)} = {r.expr};"
+        return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});"
       end
       if set_contains(boxed_vars, name)
         # Mutated-captured fn-local: pinned malloc'd box, registered in the
@@ -3723,7 +4089,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         end
       end
       let r = compile_expr(value)
-      return "{line_dir}{r.setup}{p}{var_lvalue(name)} = {r.expr};"
+      let refresh = ns_refresh(name, p)
+      if refresh != ""
+        return "{line_dir}{r.setup}{p}{var_store(name, r.expr)}\n{substr(refresh, 0, len(refresh) - 1)}"
+      end
+      return "{line_dir}{r.setup}{p}{var_store(name, r.expr)}"
     when {tag: "dot_assign", object: object, value: value, field: field}
       let obj_r = compile_expr(object)
       let val_r = compile_expr(value)
@@ -3802,11 +4172,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
       if scc_call_target != nil and not set_contains(local_names, scc_call_target)
         let target_sid = scc_member_to_id[scc_call_target]
-        if target_sid == current_scc_id and scc_call_target != tco_fn_name
-          let call_node = node
-          if is_node(node, "return")
-            call_node = node.value
-          end
+        let call_node = node
+        if is_node(node, "return")
+          call_node = node.value
+        end
+        # A call site passing more args than the TLB holds (GEM_MAX_TAIL_ARGS,
+        # 16) stays a plain call: the members have at most 16 params, but
+        # the extra args must still be evaluated and must not overrun the TLB.
+        if target_sid == current_scc_id and scc_call_target != tco_fn_name and len(call_node.args) <= 16
           return line_dir + emit_scc_tail_call(call_node, scc_call_target, indent)
         end
       end
@@ -3818,7 +4191,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       let r = compile_expr(value)
       let mname = mangle(name)
       if in_top_level and set_contains(top_level_vars, name)
-        return "{line_dir}{r.setup}{p}{gmangle(name)} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
+        return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});\n{pop_str(p)}{p}return GEM_NIL;"
       end
       if set_contains(boxed_vars, name)
         return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
@@ -3828,7 +4201,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       check_assign_target(name, node)
       let r = compile_expr(value)
       let t = tmp()
-      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_lvalue(name)} = {t};\n{pop_str(p)}{p}return {t};"
+      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_store(name, t)}\n{ns_refresh(name, p)}{pop_str(p)}{p}return {t};"
     when {tag: "return", value: value}
       if value != nil
         let r = compile_expr(value)
@@ -3951,7 +4324,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     let refuse_reason = nil
     let lr = node.liveness_result
     if lr.ok
-      let fr = filter_live_for_rescue(lr.live)
+      let live = lr.live
+      if len(stack_env_writes) > 0
+        live = set_union(live, stack_env_writes)
+      end
+      let fr = filter_live_for_rescue(live)
       if fr.ok
         do_rescue = true
         rescue_roots = fr.roots
@@ -4046,6 +4423,10 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     for name, _ in eligible
       let mname = var_lvalue(name)
       buf_push(b, "\n{p}{mname} = gem_string_finish({mname});")
+      let refresh = ns_refresh(name, p)
+      if refresh != ""
+        buf_push(b, "\n" + substr(refresh, 0, len(refresh) - 1))
+      end
     end
 
     append_buf_vars = saved_append
@@ -4951,6 +5332,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     let saved_closure_captures = closure_captures
     let saved_current_closure_struct_name = current_closure_struct_name
     let saved_current_closure_captures = current_closure_captures
+    let saved_stack_env_writes = stack_env_writes
     let saved_in_leaf = in_leaf_fn
     # A tail call inside this closure is the closure's own tail call, not
     # the enclosing named fn's: suspend that fn's self-TCO and mutual-TCO
@@ -5019,6 +5401,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     closure_captures = sorted_array_to_set(captures)
     current_closure_struct_name = struct_name
     current_closure_captures = captures
+    stack_env_writes = {}
+    if node.non_escaping == true and len(captures) > 0
+      let own = sorted_array_to_set(params)
+      if node.rest_param != nil
+        set_add(own, node.rest_param)
+      end
+      stack_env_writes = find_writes_in_closure_body(body, closure_captures, own)
+    end
 
     buf_push(fb, emit_param_bindings(node, params, inner_boxed))
     if not in_leaf_fn
@@ -5034,6 +5424,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     closure_captures = saved_closure_captures
     current_closure_struct_name = saved_current_closure_struct_name
     current_closure_captures = saved_current_closure_captures
+    stack_env_writes = saved_stack_env_writes
     in_leaf_fn = saved_in_leaf
     tco_fn_name = saved_tco_fn_name
     current_scc_id = saved_scc_id
@@ -5076,6 +5467,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       lift_arm_lets_in_fn(fd)
     end
     lift_arm_lets_top_stmts(top_stmts)
+
+    # Give block-scoped lets in top-level code that reuse a module-level
+    # name their own fresh name, so they shadow the slot instead of
+    # writing it (see scope_top_level_lets).
+    scope_top_level_lets(top_stmts)
 
     # Mark non-escaping closures (immediate-call-site args to allowlisted
     # callees like pcall/sort). Must run before any capture analysis below
@@ -5120,6 +5516,33 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     # read-only captures live as plain `GemVal` globals, with closures
     # receiving value snapshots in their env.
     collect_top_let_names(top_stmts, top_level_vars)
+    # A rescue placeholder that lift_captured_arm_lets put in the module's
+    # statement list is main's own local, as in a fn body: it never names a
+    # module binding (scope_top_level_lets renamed every nested let of a
+    # module name), and as a slot the block-scoped lets it stands in for
+    # would compile to writes of that slot.
+    for n in top_rescue_placeholders(top_stmts)
+      delete(top_level_vars, n)
+    end
+    # Every `name = …` in the program, from mark_process_tail's call graph
+    # (it visits every fn, closure and top-level statement).
+    let assigned = {}
+    for _, r in pt_caller_records
+      for w in r.writes
+        if is_node(w.node, "assign")
+          set_add(assigned, w.name)
+        end
+      end
+    end
+    collect_module_namespaces(top_stmts, assigned, module_ns)
+    for binding, fields in module_ns
+      for field, target in fields
+        if ns_targets[target] == nil
+          ns_targets[target] = []
+        end
+        push(ns_targets[target], {binding: binding, field: field})
+      end
+    end
     note_spawn_global_writes()
     let top_captured = find_captured_in_scope(top_stmts, {})
     # Module-level bindings are slots, never captured. Main's other locals
@@ -5191,7 +5614,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(mb, "    gem_pop_frame();\n    return GEM_NIL;\n}\n\n")
     buf_push(mb, "int main(int argc, char **argv) \{\n")
     buf_push(mb, "    gem_init(argc, argv);\n")
-    buf_push(mb, "    gem_globals_init({len(keys(top_level_vars))});\n")
+    buf_push(mb, "    gem_globals_init_lazy({len(keys(top_level_vars))});\n")
     buf_push(mb, "    gem_scheduler_init();\n")
     buf_push(mb, "    gem_run_main(gem_user_main, NULL);\n")
     buf_push(mb, "    return 0;\n}\n")
@@ -5226,7 +5649,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     # gem_cur_globals array (see is_global_ref).
     let tlv_keys = sort(keys(top_level_vars))
     for i = 0, len(tlv_keys)
-      buf_push(ob, "#define gem_g_{tlv_keys[i]} (gem_cur_globals[{i}])\n")
+      buf_push(ob, "#define gem_gi_{tlv_keys[i]} {i}\n#define gem_g_{tlv_keys[i]} gem_global_get({i})\n")
     end
     buf_push(ob, "\n")
 

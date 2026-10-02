@@ -1,0 +1,159 @@
+# Block-scoped lets in top-level code shadow module-level bindings of the
+# same name. A loop variable, a `let` in an `if`/`while` body or a pattern
+# binding that reuses a top-level name gets its own binding: closures made
+# in the block capture it (one per iteration), and the module-level binding
+# is left untouched.
+
+let y = "main-y"
+let a = "main-a"
+load "./modules/toplevel_shadow" (shadow_report)
+
+# 1. for-in: each closure sees its own iteration's value
+let x = 1
+let fs = []
+for x in [10, 20]
+  push(fs, fn() x end)
+end
+print("1: {fs[0]()} {fs[1]()} x={x}")
+
+# 2. for range
+let i = 100
+let rs = []
+for i = 0, 3
+  push(rs, fn() i end)
+end
+print("2: {rs[0]()} {rs[1]()} {rs[2]()} i={i}")
+
+# 3. for k, v
+let k = "K"
+let v = "V"
+let kvs = []
+for k, v in {p: 1, q: 2}
+  push(kvs, fn() "{k}={v}" end)
+end
+print("3: {kvs[0]()} {kvs[1]()} k={k} v={v}")
+
+# 4. nested loops, both shadowing the same name
+let ns = []
+for x in [1, 2]
+  for x in [x * 10, x * 100]
+    push(ns, fn() x end)
+  end
+  push(ns, fn() x end)
+end
+print("4: {ns[0]()} {ns[1]()} {ns[2]()} {ns[3]()} {ns[4]()} {ns[5]()} x={x}")
+
+# 5. nested loops over fresh names (no shadowing)
+let gs = []
+for p in [1, 2]
+  for q in [p * 10, p * 100]
+    push(gs, fn() q end)
+  end
+end
+print("5: {gs[0]()} {gs[1]()} {gs[2]()} {gs[3]()}")
+
+# 6. let in an if body shadows; the initializer reads the outer binding
+let z = 1
+if true
+  let z = z + 41
+  z += 1
+  push(fs, fn() z end)
+end
+z = 3
+print("6: {fs[2]()} z={z}")
+
+# 7. assigning the outer binding before shadowing it in the same block
+if true
+  x = 5
+  let x = 6
+  x = 7
+end
+print("7: x={x}")
+
+# 8. elif / else arms, while body
+let w = "g"
+if false
+  let w = "a"
+elif true
+  let w = "b"
+  push(fs, fn() w end)
+else
+  let w = "c"
+end
+let n = 0
+while n < 2
+  let w = "loop {n}"
+  n += 1
+end
+print("8: {fs[3]()} w={w}")
+
+# 9. captured and mutated loop variable: one box per iteration
+let cs = []
+for i = 0, 2
+  push(cs, fn()
+    i += 1
+    i
+  end)
+end
+let c1 = cs[0]()
+let c2 = cs[0]()
+let c3 = cs[1]()
+print("9: {c1} {c2} {c3} i={i}")
+
+# 10. match and receive bindings are scoped to their arm
+let name = "outer"
+match {name: "inner"}
+when {name: name}
+  push(fs, fn() name end)
+end
+send(self(), {name: "msg"})
+receive
+when {name: name}
+  push(fs, fn() name end)
+end
+print("10: {fs[4]()} {fs[5]()} name={name}")
+
+# 11. named functions read the module binding, not a block shadow
+fn get_x() x end
+for x in [99]
+  print("11: get_x={get_x()} x={x}")
+end
+
+# 12. closure params and closure-body lets inside a shadowing block
+for x in [3]
+  let dbl = fn(x) x * 2 end
+  let eight = fn()
+    let x = 8
+    x
+  end
+  print("12: {dbl(4)} {eight()} {x}")
+end
+
+# 13. spawned processes capture the loop variable
+let me = self()
+for x in [41, 42]
+  spawn do send(me, x) end
+end
+let got = sort([receive(), receive()])
+print("13: {got[0]} {got[1]} x={x}")
+
+# 14. a long-running loop whose body shadows top-level names
+let msg = "global"
+let total = 0
+let keep = []
+let m = 0
+while true
+  let msg = "iter {m}"
+  if m % 2 == 0
+    let total = m * 2
+    push(keep, fn() "{msg}:{total}" end)
+  end
+  total += 1
+  m += 1
+  if m == 4 then break end
+end
+print("14: {keep[0]()} {keep[1]()} msg={msg} total={total}")
+
+# 15. a loaded module's top-level code: its block lets shadow its own
+# module names and do not touch this file's `x`, `y`, `z` or `a`
+print("15: {shadow_report()} x={x} y={y} z={z} a={a}")
