@@ -63,7 +63,7 @@ fn call(target, msg, ...rest)
   let ref = make_ref()
   send(target, {tag: "call", from: {pid: self(), ref: ref}, msg: msg})
   receive
-  when {tag: "gs_reply", ref: r, value: v}
+  when {tag: "gs_reply", ref: ^ref, value: v}
     v
   after timeout_ms
     error("gen_server.call timeout")

@@ -87,13 +87,13 @@ fn sup_loop(state)
     else
       error("unknown supervisor strategy: {strategy}")
     end
-  when {tag: "supervisor_which_children", reply_to: reply_to}
-    handle_which_children(state, reply_to)
+  when {tag: "supervisor_which_children", reply_to: reply_to, ref: ref}
+    handle_which_children(state, reply_to, ref)
     sup_loop(state)
   end
 end
 
-fn handle_which_children(state, reply_to)
+fn handle_which_children(state, reply_to, ref)
   let result = []
   for i = 0, len(state.children)
     let child = state.children[i]
@@ -101,7 +101,7 @@ fn handle_which_children(state, reply_to)
     let {restart = "permanent"} = spec
     push(result, {id: spec.id, pid: child.pid, restart: restart})
   end
-  send(reply_to, {tag: "supervisor_children", children: result})
+  send(reply_to, {tag: "supervisor_children", ref: ref, children: result})
 end
 
 fn start({strategy = "one_for_one", max_restarts = 3, max_seconds = 5000, children, name = nil})
@@ -135,9 +135,10 @@ fn start({strategy = "one_for_one", max_restarts = 3, max_seconds = 5000, childr
 end
 
 fn which_children(target)
-  send(target, {tag: "supervisor_which_children", reply_to: self()})
+  let ref = make_ref()
+  send(target, {tag: "supervisor_which_children", reply_to: self(), ref: ref})
   receive
-  when {tag: "supervisor_children", children: children}
+  when {tag: "supervisor_children", ref: ^ref, children: children}
     children
   end
 end

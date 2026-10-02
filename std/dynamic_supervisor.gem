@@ -123,7 +123,7 @@ fn start_child(target, args)
   end
   send(pid, {tag: "start_child", args: args, reply_to: self(), ref: r})
   receive
-  when {tag: "child_started", pid: child_pid}
+  when {tag: "child_started", ref: ^r, pid: child_pid}
     child_pid
   end
 end
@@ -138,7 +138,7 @@ fn terminate_child(target, child_pid)
   end
   send(pid, {tag: "terminate_child", pid: child_pid, reply_to: self(), ref: r})
   receive
-  when {tag: "child_terminated", ok: ok}
+  when {tag: "child_terminated", ref: ^r, ok: ok}
     ok
   end
 end
@@ -153,7 +153,7 @@ fn which_children(target)
   end
   send(pid, {tag: "which_children", reply_to: self(), ref: r})
   receive
-  when {tag: "children_list", children: children}
+  when {tag: "children_list", ref: ^r, children: children}
     children
   end
 end

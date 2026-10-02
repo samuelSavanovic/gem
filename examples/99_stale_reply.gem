@@ -1,0 +1,24 @@
+# A reply that arrives after its call timed out must not be returned by the
+# next call — replies are matched to their request by ref.
+load "std/gen_server"
+
+let slow_server = {
+  init: fn() 0 end,
+  handle_call: fn(msg, from, state)
+    if msg == "slow"
+      sleep(100)
+      return {reply: "slow result", state: state}
+    end
+    {reply: "fast result", state: state}
+  end,
+  handle_cast: fn(msg, state) {state: state} end,
+  handle_info: fn(msg, state) {state: state} end
+}
+
+let server = gen_server.start(slow_server)
+let timed_out = pcall gen_server.call(server.pid, "slow", 20)
+print("slow call: ok={timed_out.ok} error={timed_out.error}")
+sleep(150)
+print("next call: {gen_server.call(server.pid, "fast")}")
+print("leftover messages: {process_info(self()).mailbox_len}")
+kill(server.pid, "stop")
