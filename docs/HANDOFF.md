@@ -1,160 +1,204 @@
-# Handoff: correctness fixes, best-practices doc, std modernization
+# Handoff: compiler bug fixes, then best-practices doc, then std
 
 Notes for the next session. Delete this file once its work is done.
 
-## Goal
+## Plan agreed with the maintainer
 
-Modernize `std/` against a verified best-practices guide. Order agreed
-with the maintainer:
-
-1. Land the compiler and runtime fixes on `main`.
-2. Bring `docs/BEST_PRACTICES.md` up to date with the fixed behavior,
-   review it until clean, and merge it to `main`.
-3. Then (fresh session) modernize std module by module.
+1. **This session (autonomous; the maintainer is away):** fix the compiler
+   bugs listed below, merge the fixes into one branch, and open **one PR**
+   to `main`. Don't merge it: the maintainer reviews it and runs the macOS
+   check.
+2. **Next session:** update `docs/BEST_PRACTICES.md` against the fixed
+   compiler, review it until clean, and open a PR.
+3. **After that:** modernize `std/` against the merged doc.
 
 ## Ground rules from the maintainer
 
-- **Don't trust docs, including SPEC.md.** Several of its claims were
-  stale. Verify behavior by running code against `build/gem`.
-- **No AI attribution** in commits, PR descriptions or comments (see
-  CLAUDE.md "Commits and Pull Requests"). GitHub may append its own footer
-  to comments; that's accepted.
-- **Fix bugs in subagents** without inherited context, in their own git
-  worktree, one branch per fix, each going to `main` as its own PR.
-- **Review docs adversarially:** after each revision, spawn a fresh
-  subagent with no context to verify every claim by running code. Repeat
-  until it finds nothing substantive.
-- **macOS check:** the maintainer runs `make test` on macOS arm64 before
-  merging runtime changes. CI covers only Linux x86_64 and arm64.
+- **Don't trust docs, including SPEC.md.** Verify behavior by running code
+  against `build/gem`.
+- **No AI attribution** in commits, PR descriptions or comments (CLAUDE.md
+  "Commits and Pull Requests"). Check the PR body before creating it.
+- **Fix bugs in subagents** without inherited context, each in its own git
+  worktree off `origin/main`, one branch per fix (`fix/<name>`). Give each
+  agent the bug, a complete repro, the agreed semantics, and the build
+  steps below. They commit locally and don't push.
+- **Then integrate:** merge every fix branch into `integrate/compiler-fixes`
+  (off `origin/main`), resolve conflicts, regenerate `stage0.c` once, run
+  everything, push, and open the PR.
+- **Testing discipline** (CLAUDE.md): happy path, edge cases, adversarial
+  input, `make test`. Each fix adds a numbered example (next free slot is
+  127; give agents distinct numbers up front so merges don't collide).
+- **macOS:** CI covers Linux x86_64 and arm64 only. The maintainer runs
+  `make test` on macOS arm64 before merging; say in the PR what needs a
+  look there.
+- **Don't widen scope.** Bugs found along the way go into the PR's
+  follow-up list (or ROADMAP.md / OPTIMIZATIONS.md), not into the fix.
+
+## Build and test recipe (tested; give it to every agent)
+
+- `make build` builds `build/gem` from `bootstrap/stage0.c`.
+- After changing `compiler/*.gem`: `build/gem compiler/main.gem -o
+  build/gem1`, then `build/gem1 compiler/main.gem -o build/gem2`. Keep
+  them in `build/`, because the binary finds the runtime relative to
+  itself. Check the fixed point: `--emit-c` output of `compiler/main.gem`
+  must be identical from gem1 and gem2.
+- To run `make test` with a new compiler: `cp build/gem2 build/gem && touch
+  build/gem`. `make` rebuilds `build/gem` from stage0 whenever
+  `runtime/gem.h` is newer, silently discarding the copy, so touch it again
+  after editing gem.h.
+- Fix branches must **not** commit `bootstrap/stage0.c`. The integration
+  branch regenerates it once (`make bootstrap` with the merged gem2 as
+  `build/gem`), then rebuilds from it (`rm -rf build && make build`) and
+  checks `build/gem compiler/main.gem --emit-c | cmp - bootstrap/stage0.c`.
+- `examples/run_all.sh` writes binaries to the shared `/tmp/gem_<name>`, so
+  don't run `make test` in two worktrees at once.
+- `expected_output.txt` must stay in numeric example order. When merging
+  branches that each appended output, put the hunks in example order.
+
+## The fixes
+
+Repros were run on `main` after #27. Re-verify each before fixing.
+
+### 1. `let` redeclaration → shadowing (agreed)
+
+A second `let` of a name already in scope fails:
+
+```gem
+fn f(n)
+  let n = n - 1        # C: redefinition of 'gem_v_n'
+  n
+end
+fn g(n)
+  if n == 0 then return 0 end
+  let n = n - 1        # tail-recursive: right-hand n reads nil
+  g(n)
+end
+fn h()
+  let a = 1
+  let a = a + 1        # C: redefinition
+  a
+end
+```
+
+Also: a parameter shadowed inside an `if` block reads `nil`; an outer
+local shadowed in a nested block reads an uninitialized value (`type error
+in +: got unknown and int`); a module global shadowed inside a function
+reads `nil`.
+
+**Semantics:** the second `let` makes a new variable. Its initializer sees
+the old one, and closures made before it keep the old one. Cover TCO and
+mutual-TCO functions, closures, boxed (captured and mutated) variables,
+loops, and `match`/`receive` bindings.
+
+### 2. One-line `when` arms → `when <pat> then <body>` (recommended; confirm in the PR)
+
+`when x nil end` in `match`/`receive` reports "undeclared identifier `x`"
+(sometimes a C error), and `when x then nil end` is rejected. Add `when
+<pat> then <body>` for one-line arms, mirroring one-line `if ... then
+... end`, and make `when x nil` without `then` a clear Gem error. The
+maintainer leaned towards `then` but didn't confirm, so call it out at the
+top of the PR body. New syntax means updating SPEC, CHEATSHEET and both
+editor grammars (CLAUDE.md "Editor Extension Maintenance"). You can't run
+Helix here: run `tree-sitter generate` and `tree-sitter parse` if
+tree-sitter is installable, otherwise note it in the PR.
+
+### 3. Reading a block `let` outside its block → Gem error
+
+`if c then let x = 2 end; print(x)` is a C "`gem_v_x` undeclared" error,
+at top level and in functions. Declared in one branch of an `if` inside a
+loop and read in a later iteration, it compiles and silently reads `nil`.
+Both should be a Gem "undeclared identifier" error at the read. A `let`
+declared in **every** branch and read after the `if` currently works
+inside functions; decide whether to keep that, and document the choice in
+SPEC.
+
+### 4. Undeclared names inside closures → Gem error
+
+A typo inside `fn() ... end`, a `do` block, a `spawn do` body or `pcall
+f(x)` (which wraps a closure) gives a C `'gem_v_<name>' undeclared` error
+at an approximate line. In a named function the same typo gets a proper
+Gem error. Assigning an undeclared name inside a closure fails the same
+way.
+
+### 5. Interpolation starting with a string literal
+
+`"{"a" in t}"`, `"{"a" + "b"}"` and `"{"a" == "a"}"` fail with
+`unexpected token`. `"{"a"}"`, `"{x + "b"}"` and `"{("a" in t)}"` work.
+Fix the lexer/parser.
+
+### 6. `break` / `continue` inside a `do` block → Gem error
+
+These are caught only by the C compiler, at an approximate line. Report a
+Gem error at the statement: "`break` inside a `do` block; use a `for`
+loop".
+
+### 7. Defining a builtin's name
+
+`fn error(...)` in a loaded module silently replaces the builtin for that
+module; in the entry file it is silently ignored. Make this one behavior.
+Recommendation: a Gem compile error, "`error` is a builtin; pick another
+name", which is the least surprising. If you find it's used intentionally
+somewhere in the repo, make it consistent shadowing instead and say so in
+the PR.
+
+### Lower priority: do them only if the above are done and green
+
+- The `note:` about module writes in spawned code prints mangled names
+  (`_mod_counter_count`) and absolute paths; print `counter.count` and a
+  project-relative path.
+- A spawned process that dies with an uncaught runtime error prints
+  nothing.
+- Main blocked in `receive` with no possible sender exits 0 silently.
+- A module-load cycle reports its error at the entry file.
+
+Leave these for later and list them in the PR: `keys` is O(n²) on
+string-keyed tables; `read_file` on procfs returns `""`; `build_string`'s
+`add` closure can't be sent or captured in a spawn; exit reasons leak on
+the kill/link paths; stack traces show the wrong line for an implicit
+return.
 
 ## State of branches
 
-| Branch | What | State |
-|---|---|---|
-| `main` | includes #26: stack overflow contained to its process, 8 MB mmap'd stacks with guard pages | merged |
-| `arena-reset-safety` | `compiler-fixes` (TCO for default/rest/destructured params, captured-param fixes) + per-process module globals + region-based arena resets + iterative deep copy/free, merged with `main`; examples 112–120 | **PR #27** open; needs the maintainer's macOS check (108, 111, 118 reads `/proc`, 120 peaks ~1.7 GB) |
-| `std-modernize` | `docs/BEST_PRACTICES.md` draft (3 review rounds), CLAUDE.md attribution rule, this file | needs the doc update below, then a PR |
+| Branch | What |
+|---|---|
+| `main` | includes #26 (contained stack overflow) and #27 (region resets, per-process module globals copied lazily, iterative deep copy, TCO for every param kind, the macOS review fixes; examples 112–126) |
+| `std-modernize` | `docs/BEST_PRACTICES.md` (one review round applied after #27; still needs the spawn-cost rewrite and a second round), the CLAUDE.md attribution rule, the BEST_PRACTICES links in CLAUDE.md and CHEATSHEET, this file. Up to date with `main`. |
 
-`compiler-fixes` must not merge alone: on its own it routes default-param
-functions through the old, unsafe reset and makes a working program
-segfault. It is fully contained in `arena-reset-safety`.
+## For the doc session (step 2), so it isn't lost
 
-## What `arena-reset-safety` changes (verify, don't trust)
+- The rules marked **(bug)** that the fixes above remove: delete them.
+- "Module-level `let`": large module state no longer costs every spawn,
+  because copies are lazy per slot. A child pays only for the slots it
+  reads, on first read. Re-measure and rewrite.
+- "Declare before the `if`, assign inside": #27 fixed the top-level half
+  (block lets now shadow), and fix 3 should fix the rest.
+- Round-1 review findings were applied. Run fresh adversarial review
+  rounds until clean.
 
-- **Region resets.** Every loop (`while`, `for`), TCO function and
-  mutual-TCO trampoline takes an arena mark when it starts. At its
-  back-edge it copies only what is reachable from memory allocated since
-  the mark. Soundness rests on a write barrier: any runtime path that
-  stores into an existing table must call `gem_table_written` (recorded in
-  CLAUDE.md). The process-tail analysis, the depth-2 fence and the pcall
-  skip are gone.
-- **Hysteresis.** The next reset waits for max(1 MB, 2 × copied +
-  scanned) bytes, so large live state no longer gets copied on every
-  iteration.
-- **Per-process module globals (Erlang-style).** A spawned process gets a
-  deep copy of its parent's module state; writes stay local; closures read
-  live values. The compiler prints a `note:` for writes to module state
-  in code reachable from a spawn.
-- **Deep copy and free are iterative** (one worklist copier for send,
-  spawn and resets), so deep data can't overflow the stack. Guard-page
-  tests trigger overflow via `examples/support/native_recursion.h`.
-- **Measured before → after:**
-  - top-level 5,000-row build: 17 s → 6 ms;
-  - gen_server holding 5,000 records: 6 s → 14 ms per 1,000 calls;
-  - non-tail or pcall-wrapped server loop: GBs → about 8 MB;
-  - self-compile: 3.1 s → 3.8 s, but peak memory 1.36 GB → 117 MB;
-  - spawn: about +4 µs when std modules are loaded.
+## For std modernization (step 3)
 
-## Next steps for the new session
-
-1. **Land PR #27.** Once the maintainer has run it on macOS, check CI and
-   merge it (squash, matching repo history). If example 118 fails on
-   macOS because it reads `/proc`, make it skip the RSS check there.
-2. **Update the doc** on `std-modernize`: merge `main` first, then
-   rewrite against the merged compiler:
-   - Delete or rewrite every rule marked **(bug)** whose bug is fixed:
-     TCO with default/rest/destructured params, capturing a param of a
-     tail-recursive fn, the whole "How memory is reclaimed" group
-     (non-tail calls, pcall, 1 MB live data, building in top-level loops),
-     stack depth in spawned processes (now 8 MB, overflow is a catchable
-     error), module globals (now per-process).
-   - Rewrite "Module-level `let`" for per-process semantics. Shared
-     *mutable* state still belongs in a process (gen_server), since a
-     write is now invisible to other processes.
-   - Update the trap index to match.
-   - Re-measure any number you keep.
-   - Then run fresh adversarial reviews until clean, and open a PR to
-     `main` for the doc + CLAUDE.md. Link the doc from CLAUDE.md and
-     `docs/CHEATSHEET.md`.
-3. **Modernize std** (fresh session) against the merged doc. Known std
-   bugs and gaps to fix there:
-   - `dynamic_supervisor`: `delete(state.children, idx)` leaves a hole in
-     the array, so `terminate_child` of any child but the last crashes the
-     supervisor and hangs the caller. Use `remove_at`.
-   - `json`: `max_depth` was 128; now that stacks are 8 MB, check it is
-     still a sensible cap (parse depth ~2,000 is safe now).
-   - `test.assert_eq` compares tables by identity, so equal arrays fail.
-     Add deep equality.
-   - `request`: reads with no timeout; an fd leaks if `tcp_write` raises.
-   - `http`: `start` returns a bare pid while other `start`s return
-     `{pid}`; the acceptor doesn't catch "process table full"; the
-     `let fd = client_fd` / `let rr = router_ref` copies before spawn
-     should go.
-   - `gen_server.call` and `supervisor.which_children` reject the `{pid}`
-     handle their own `start` returns. `gen_server.call` to a dead server
-     waits the full timeout; monitor the target like `std/task` does.
-     `call` takes `...rest` for its timeout, which should be a default
-     param.
-   - `supervisor.which_children` and the `dynamic_supervisor` calls wait
-     with no `after`.
-   - Private message tags without a `_` prefix (`gs_reply`,
-     `start_child`, ...) land in user mailboxes.
-   - `std/test` keeps cases in module globals with index-append and `_`
-     prefixes.
-   - Index loops over `keys()` throughout `http`, `url`, `mime`,
-     `request`, `string`, `json`; `+` chains instead of interpolation.
-   - `string.split` and `string.index_of` are Gem byte loops; consider C
-     builtins (log in OPTIMIZATIONS.md first).
-
-## Known compiler and runtime issues (not fixed, not blocking)
-
-Move these to ROADMAP.md / OPTIMIZATIONS.md or fix them as separate PRs:
-
-- **`let` redeclaration** (fix after #27 lands, in a subagent, own PR):
-  a second `let` of the same name in one function (a parameter, or a
-  local: `let a = 1` then `let a = a + 1`) is a C "redefinition" error,
-  and reads nil in TCO functions. Agreed fix: shadowing. The second
-  `let` makes a new variable; closures made before it keep the old one.
-  Drop the **(bug)** rule in BEST_PRACTICES when it lands.
-- **One-line `when` arms** (fix after #27 lands, own PR): `when x nil end`
-  in `match`/`receive` reports "undeclared identifier `x`" (sometimes a
-  C error); `when x then nil end` is rejected. Leaning towards supporting
-  `when <pat> then <body>` like one-line `if ... then`; confirm with the
-  maintainer before building it (else: a clear Gem error). New syntax
-  means SPEC, CHEATSHEET and both editor grammars.
-- **Undefined names in closure bodies** surface as C "undeclared" errors,
-  not Gem diagnostics.
-- **`break`/`continue` inside a `do` block** are caught only by the C
-  compiler.
-- **Defining a builtin name** (`fn error`, `fn len`) silently replaces
-  the builtin in a loaded module and is silently ignored in the entry
-  file.
-- **Stack traces** show the wrong line for a function's implicit-return
-  last expression.
-- **Exit reasons** are overwritten without being freed on the kill/link
-  paths (small leak).
-- **`keys` is O(n²)** on string-keyed tables (`gem_table_set` scans for
-  an integer key equal to len).
-- **`read_file` on procfs** returns `""`, because the file reports
-  size 0.
-- **`build_string`'s `add` closure** has a raw buffer env: sending it or
-  capturing it in a spawn crashes the deep copy.
-- **`fn main` runs automatically**; calling `main()` as well runs it
-  twice. Consider a warning.
-- **Mailbox backlogs** briefly double their memory during a reset; a
-  separate message arena is written up in OPTIMIZATIONS.md.
-- **Stomp broker connection ids:** `next_conn_id` lives in module state
-  and would restart from its copied value if the acceptor were restarted.
-- **SPEC.md** still had stale claims at last check (`tcp_read` timeouts
-  "only from spawned processes", `tcp_write` "writes all bytes"); verify
-  the rest of SPEC as you touch each area.
+- `dynamic_supervisor`: `delete(state.children, idx)` leaves a hole, so
+  `terminate_child` of any child but the last crashes the supervisor and
+  hangs the caller. Use `remove_at`.
+- `json`: `max_depth` is 128, and arrays one deeper parse (off by one).
+  With 8 MB stacks, parse depth around 2,000 is safe. `json.encode` has no
+  cap and overflows at a few thousand levels.
+- `test.assert_eq` compares tables by identity; add deep equality.
+- `request`: reads with no timeout; an fd leaks if `tcp_write` raises.
+- `http`: `start` returns a bare pid while other `start`s return `{pid}`;
+  the acceptor doesn't catch "process table full"; drop the `let fd =
+  client_fd` / `let rr = router_ref` copies before spawn.
+- `gen_server.call` and `supervisor.which_children` reject the `{pid}`
+  handle their own `start` returns. `gen_server.call` to a dead server
+  waits the full timeout: monitor the target as `std/task` does. `call`
+  takes `...rest` for its timeout; use a default param.
+- `supervisor.which_children` and the `dynamic_supervisor` calls wait with
+  no `after`.
+- Private message tags without a `_` prefix (`gs_reply`, `start_child`,
+  ...) land in user mailboxes.
+- `std/test` keeps cases in module globals with index-append and `_`
+  prefixes.
+- Index loops over `keys()` throughout `http`, `url`, `mime`, `request`,
+  `string`, `json`; `+` chains instead of interpolation.
+- `string.split` and `string.index_of` are Gem byte loops; consider C
+  builtins (log in OPTIMIZATIONS.md first).
