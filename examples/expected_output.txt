@@ -1670,3 +1670,5 @@ child exits without sending
 Stack trace:
   at wait_for_reply (examples/136_main_receive_deadlock.gem:80)
   at main (examples/136_main_receive_deadlock.gem:85)
+child total: 2, child hits: 1
+parent total: 0, parent hits: 0

@@ -111,7 +111,7 @@ end
 print(count)                 # 1 — the child's write stayed in the child
 ```
 
-To share state between processes, put it in a process and talk to it with messages (`gen_server`, `register`). The compiler prints a `note:` at each write to module state in code reachable from a `spawn` body, as a reminder that the write is process-local.
+To share state between processes, put it in a process and talk to it with messages (`gen_server`, `register`). The compiler prints a `note:` at each write to module state in code reachable from a `spawn` body, as a reminder that the write is process-local. The note names the binding as you write it in source (`count` in the entry file, `counter.count` for the top-level `count` of module `counter.gem`, even when it is loaded with an alias), with project-relative paths.
 
 ## Functions
 
