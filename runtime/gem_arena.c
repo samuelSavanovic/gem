@@ -59,9 +59,44 @@ void gem_arena_init(GemArena *arena) {
     arena->current = block;
     arena->head = block;
     arena->table_list = NULL;
+    arena->buffer_list = NULL;
     arena->lo = block->data;
     arena->hi = block->data + block->cap;
     arena->bytes_allocated = 0;
+    arena->rem = NULL;
+    arena->rem_len = 0;
+    arena->rem_cap = 0;
+    arena->pin_seq = 0;
+}
+
+/* Fresh block chained after `after` and made current; used by region resets
+   as the copy destination. */
+GemArenaBlock *gem_arena_append_block(GemArena *arena, GemArenaBlock *after, size_t min_cap) {
+    GemArenaBlock *nb = gem_arena_new_block(min_cap);
+    after->next = nb;
+    arena->current = nb;
+    if (nb->data < arena->lo) arena->lo = nb->data;
+    if (nb->data + nb->cap > arena->hi) arena->hi = nb->data + nb->cap;
+    return nb;
+}
+
+void gem_arena_free_blocks(GemArenaBlock *block) {
+    while (block) {
+        GemArenaBlock *next = block->next;
+        munmap(block, sizeof(GemArenaBlock) + block->cap);
+        block = next;
+    }
+}
+
+GemBuffer *gem_buffer_alloc(int cap) {
+    GemArena *a = gem_current_arena();
+    GemBuffer *b = (GemBuffer *)gem_arena_alloc(a, sizeof(GemBuffer));
+    b->cap = cap;
+    b->len = 0;
+    b->data = (char *)gem_arena_alloc(a, (size_t)cap);
+    b->arena_next = a->buffer_list;
+    a->buffer_list = b;
+    return b;
 }
 
 void *gem_arena_alloc(GemArena *arena, size_t size) {
@@ -107,14 +142,12 @@ void gem_arena_destroy(GemArena *arena) {
         t = next;
     }
     arena->table_list = NULL;
+    arena->buffer_list = NULL;
+    free(arena->rem);
+    arena->rem = NULL;
+    arena->rem_len = arena->rem_cap = 0;
 
-    GemArenaBlock *block = arena->head;
-    while (block) {
-        GemArenaBlock *next = block->next;
-        size_t total = sizeof(GemArenaBlock) + block->cap;
-        munmap(block, total);
-        block = next;
-    }
+    gem_arena_free_blocks(arena->head);
     arena->head = NULL;
     arena->current = NULL;
 }

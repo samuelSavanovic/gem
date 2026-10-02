@@ -1,0 +1,14 @@
+# Native code that recurses past the end of the main process's stack runs
+# into the guard page below it. In the main process that prints a "stack
+# overflow" runtime error and exits 1, rather than crashing with SIGSEGV.
+#
+# The runtime's own copying (send, spawn, arena resets) is iterative, so deep
+# data cannot get there (see 120_deep_data); the native code here is a small
+# recursive C helper reached through `extern fn` (examples/support).
+
+extern include "../examples/support/native_recursion.h"
+extern fn gem_example_native_recurse(n: Int) -> Int
+
+print("shallow", gem_example_native_recurse(10))
+gem_example_native_recurse(100000000)
+print("unreachable")

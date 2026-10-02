@@ -1301,3 +1301,135 @@ test3: ref returned: ref, cancel: false
 test4: ["first", "second", "third"]
 test4: timer for live process cancels: true
 test5: from beyond
+test1: stack overflow in depth
+test2: stack overflow in depth
+test2: ["worker 0 got ping", "worker 1 got ping", "worker 2 got ping"]
+test3: EXIT stack overflow in depth
+test3: linked stack overflow in depth
+test4: {"stack overflow in depth": 20}
+test5: stack overflow in native code called from anonymous fn
+test5: shallow call returned 5
+test5: again stack overflow in native code called from anonymous fn
+test6: 10000
+test1: spawned depth 20000
+test1: main depth 20000
+test2: ok=false error=stack overflow in depth
+test2: still running, depth 1000
+test2: again ok=false error=stack overflow in depth
+test3: stack overflow in is_even
+test3: closure ok=false error=stack overflow in anonymous fn deep=true
+test4: main ok=false error=stack overflow in depth
+test5: depth 63 ok=true error=nil
+test5: depth 100 ok=true error=nil
+test5: depth 1000 ok=false error=JSON nesting too deep (max 128)
+test6: 200 10
+test6: 500 stack overflow in depth
+test6: 200 20
+test6: 500 stack overflow in depth
+test6: 200 30
+before
+
+[Runtime Error]: stack overflow in depth
+  --> examples/110_main_stack_overflow.gem:6
+   |
+ 6 |   if n == 0 then return 0 end
+   |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/110_main_stack_overflow.gem:6)
+  ... same frame repeated 253 more times
+  at start (examples/110_main_stack_overflow.gem:11)
+  at main (examples/110_main_stack_overflow.gem:15)
+shallow 5
+
+[Runtime Error]: stack overflow in native code called from main
+  --> examples/111_main_guard_overflow.gem:13
+    |
+ 13 | gem_example_native_recurse(100000000)
+    |
+Stack trace:
+  at main (examples/111_main_guard_overflow.gem:13)
+5000050000
+[3, 2, 1, 0]
+[203, 102, 101, 100]
+9
+[2999998, 250000]
+[2999998, 250000]
+[nil, nil]
+1000000
+100 7
+[[4, 40], [3, 30], [2, 20], [1, nil], [0, 0]]
+[3, 2, 1, 0]
+4 4
+6 6
+[5, 6] [5, 6] [5, 6]
+4 4
+[["x", "y", "z", 4], ["b", "c", 3], [2], ["a", 1], ["b", "c", 0]]
+1000002
+[[3, 6, 0], [2, nil, 2], [1, 2, 0], [0, nil, 2]]
+1000000
+13 3 7
+["Az", "AB", "AB", "AB", "xB", "pq"]
+5
+102 1101 100
+["set2"] [2] [1]
+false boom at 2
+1000
+2
+[3, 2, 1]
+6
+[7, 100]
+2
+[1000000, 1000002, 1000000, 5]
+[5, 4, 3, 2, 1, 0]
+[5, 4, 3, 2, 1, 0]
+10
+closure saw false
+true
+["before", 1988895, "after"] kept
+kept-too [1, 2, 3]
+["before", "t:23893", "t:1988896", "after"] 30000 row-29999
+["before", "tick-300000", "after"]
+false true after
+["child-1", 1988895]
+true ["w2", ["w1", ["x49999", "x99999", "x149999", "x199999"]]]
+{done: 3, last: "x149999"}
+main after bump: 1 1 ["a"]
+child saw: {counter: 2, closure: 2, names: ["a", "b"], mode: "replaced"}
+main still: 1 1 ["a"] main main
+aliasing: {same: true, second: 99, top: 99}
+spawned at 10, main moved to 20: {counter: 10} 20
+std in child: {doc: "{\"ok\":true,\"n\":3}", parts: ["a", "b", "c"]}
+children: [22, 22, 22] main: 20 1
+shadow: ["module", "local"] module
+fill 20000 row0 row19999
+index 2 40000 1554 true false
+buffer 208890 chunk0;chunk1;ch
+boxes ["value-29999", 30000]
+pcall [true, "acc-29999", "acc-29999"]
+nested cur-29999
+globals entry-29900 entry-29999 t29999 100
+chain 2000
+sort 0 1 3000
+build_string 108890 0,1,2,3,4,
+mailbox 126640
+mutual ["before", false, true, "after"] kept
+default [40100, "state-0", "d1000", "d"]
+rest [40100, 2, "m1"]
+destructured [40100, "bag1"]
+boxed [40100, 100001]
+state intact 40100 state-0 d1000
+tail spawn 800000
+non-tail spawn 800000 cleanup
+pcall depth 3 true [800000]
+zero-arg row-400000
+sink done
+top-level builds 30000 3000000 3000000 true
+store 14890 2000 true
+backlog drained 13107200
+peak memory bounded true
+workers 32 checksum 409600 bad 0 pongs <= workers true
+main built [2000000, 1999999000000]
+walker got [2000000, 1999999000000]
+["child extra 1988890", "walked [2000000, 1999999000000]"]
+captured [200000, 19999900000]

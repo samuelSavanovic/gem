@@ -1,0 +1,98 @@
+# Running out of stack in Gem code raises an ordinary runtime error,
+# "stack overflow in <fn>", which pcall catches like any other. Spawned
+# processes get the same stack depth as main, so deep-but-finite recursion
+# works in either.
+load "std/json"
+
+let main = self()
+
+fn depth(n)
+  if n == 0 then return 0 end
+  1 + depth(n - 1)
+end
+
+fn is_even(n)
+  if n == 0 then return true end
+  not is_odd(n - 1)
+end
+fn is_odd(n)
+  if n == 0 then return false end
+  not is_even(n - 1)
+end
+
+# ─── Test 1: deep but finite recursion succeeds in a spawned process ───
+spawn do
+  send(main, depth(20000))
+end
+print("test1: spawned depth {receive()}")
+print("test1: main depth {depth(20000)}")
+
+# ─── Test 2: pcall inside a process catches the overflow; the process
+# carries on, and can overflow and recover again ───
+spawn do
+  let r = pcall depth(100000000)
+  send(main, "test2: ok={r.ok} error={r.error}")
+  send(main, "test2: still running, depth {depth(1000)}")
+  let r2 = pcall depth(100000000)
+  send(main, "test2: again ok={r2.ok} error={r2.error}")
+end
+print(receive())
+print(receive())
+print(receive())
+
+# ─── Test 3: the error names the function that overflowed ───
+spawn do
+  let r = pcall is_even(100000001)
+  send(main, "test3: {r.error}")
+end
+print(receive())
+let walker = {count: 0}
+walker.walk = fn(n)
+  walker.count = walker.count + 1
+  walker.walk(n + 1) + 1
+end
+let r3 = pcall walker.walk(0)
+print("test3: closure ok={r3.ok} error={r3.error} deep={walker.count > 10000}")
+
+# ─── Test 4: pcall in main catches it too ───
+let r4 = pcall depth(100000000)
+print("test4: main ok={r4.ok} error={r4.error}")
+
+# ─── Test 5: a parser handling untrusted input in its own process ───
+fn nested(d)
+  build_string do |add|
+    for i = 0, d
+      add("[")
+    end
+    for i = 0, d
+      add("]")
+    end
+  end
+end
+for d in [63, 100, 1000]
+  let pid = spawn do
+    let r = pcall json.parse(nested(d))
+    send(main, "test5: depth {d} ok={r.ok} error={r.error}")
+  end
+  print(receive())
+end
+
+# ─── Test 6: a handler that returns an error instead of dying ───
+fn handle(req)
+  let r = pcall depth(req)
+  if r.ok then
+    "200 {r.value}"
+  else
+    "500 {r.error}"
+  end
+end
+let server = spawn do
+  while true
+    let m = receive()
+    send(m.from, handle(m.n))
+  end
+end
+for n in [10, 100000000, 20, 100000000, 30]
+  send(server, {from: main, n: n})
+  print("test6: {receive()}")
+end

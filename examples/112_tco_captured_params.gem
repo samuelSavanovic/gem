@@ -1,0 +1,84 @@
+# Self-tail-call optimization for functions whose parameters are captured by
+# closures: read-only captures (plain locals) and captured-and-mutated ones
+# (heap boxes). Each closure must keep the binding from its own iteration,
+# exactly as with a real (non-TCO) call.
+
+# Read-only capture of a param in a TCO loop.
+fn sum_via_closure(n, acc)
+  let f = fn() n end
+  if n == 0 then return acc end
+  sum_via_closure(n - 1, acc + f())
+end
+print(sum_via_closure(100000, 0))
+
+# Each closure sees its own iteration's value.
+fn collect_readers(n, acc)
+  push(acc, fn() n end)
+  if n == 0 then return acc end
+  collect_readers(n - 1, acc)
+end
+let readers = collect_readers(3, [])
+let seen = []
+for r in readers
+  push(seen, r())
+end
+print(seen)
+
+# Captured AND mutated param: every iteration gets its own box.
+fn collect_counters(n, fns)
+  let inc = fn() n = n + 100 end
+  let get = fn() n end
+  push(fns, {inc: inc, get: get})
+  if n == 0 then return fns end
+  collect_counters(n - 1, fns)
+end
+let counters = collect_counters(3, [])
+for c in counters
+  c.inc()
+end
+counters[0].inc()
+let vals = []
+for c in counters
+  push(vals, c.get())
+end
+print(vals)
+
+# Mutation inside the body is visible to the tail-call args of that iteration.
+fn bump_loop(n, steps)
+  let bump = fn() n = n - 1 end
+  bump()
+  if n <= 0 then return steps end
+  bump_loop(n, steps + 1)
+end
+print(bump_loop(10, 0))
+
+# Two captured params, one read-only and one mutated, deep recursion
+# (exercises the arena reset at the back-edge).
+fn deep(n, total, last)
+  let get_n = fn() n end
+  let add = fn(x) total = total + x end
+  add(get_n() % 7)
+  let s = "s" + to_string(n)
+  if n == 0 then return [total, last()] end
+  if n % 250000 == 0
+    last = get_n
+  end
+  deep(n - 1, total + len(s) - len(s), last)
+end
+print(deep(1000000, 0, nil))
+
+# Same inside a spawned process.
+let me = self()
+spawn do
+  let parent = me
+  send(parent, deep(1000000, 0, nil))
+end
+print(receive())
+
+# Zero-arg tail call to a param-capturing function: params become nil.
+fn zero(a, b)
+  let f = fn() [a, b] end
+  if a == nil then return f() end
+  zero()
+end
+print(zero(1, 2))

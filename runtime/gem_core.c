@@ -115,6 +115,15 @@ GemVal gem_string_with_len(const char *s, int len) {
 
 /* ─── Table operations ─── */
 
+void gem_table_rebuild_index(GemTable *t) {
+    t->index_stale = 0;
+    if (t->str_index) shfree(t->str_index);
+    t->str_index = NULL;
+    for (int i = 0; i < t->len; i++) {
+        if (t->keys[i].type == VAL_STRING) shput(t->str_index, t->keys[i].sval, i);
+    }
+}
+
 void gem_table_grow(GemTable *t) {
     int new_cap = t->cap * 2;
     GemVal *new_keys = ALLOC_N(GemVal, new_cap);
@@ -124,10 +133,13 @@ void gem_table_grow(GemTable *t) {
     t->keys = new_keys;
     t->vals = new_vals;
     t->cap = new_cap;
+    gem_table_written(t);
 }
 
 /* Shared with gem_copy.c (gem_deep_copy_table stamps fresh shape ids). */
 uint32_t gem_shape_counter = 1;
+
+uint64_t gem_mut_clock = 1;
 
 GemVal gem_table_new(void) {
     GemTable *t = ALLOC(GemTable);
@@ -141,6 +153,7 @@ GemVal gem_table_new(void) {
     GemArena *a = gem_current_arena();
     t->arena_next = a->table_list;
     a->table_list = t;
+    t->mut_seq = gem_mut_clock;  /* new in this epoch: nothing older can need it logged */
 
     GemVal r; r.type = VAL_TABLE; r.magic = GEM_MAGIC; r.table = t; return r;
 }
@@ -149,9 +162,19 @@ void gem_table_freeze(GemVal tbl) {
     if (tbl.type == VAL_TABLE) tbl.table->immutable = 1;
 }
 
+GemVal gem_table_freeze_static(GemVal tbl) {
+    if (tbl.type != VAL_TABLE) return tbl;
+    GemVal r = gem_deep_copy_malloc(tbl);
+    r.table->immutable = 1;
+    return r;
+}
+
 void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
     if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "index set on non-table: got %s", gem_type_str(tbl)); gem_error(buf); }
     GemTable *t = tbl.table;
+    if (t->immutable) gem_error("cannot modify a module table");
+    gem_table_written(t);
+    gem_table_index(t);
 
     /* String key: use hash index for O(1) lookup */
     if (key.type == VAL_STRING) {
@@ -219,6 +242,7 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
 
     if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "index get on non-table: got %s", gem_type_str(tbl)); gem_error(buf); }
     GemTable *t = tbl.table;
+    gem_table_index(t);
 
     /* String key: use hash index */
     if (key.type == VAL_STRING) {
@@ -255,6 +279,7 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
 /* ─── Inline cache miss path ─── */
 
 GemVal gem_table_get_ic_miss(GemTable *t, const char *key, GemICacheSlot *cache) {
+    gem_table_index(t);
     if (t->str_index != NULL) {
         ptrdiff_t idx = shgeti(t->str_index, key);
         if (idx >= 0) {

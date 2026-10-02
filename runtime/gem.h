@@ -29,23 +29,52 @@ typedef struct GemArenaBlock {
 
 typedef struct GemTable GemTable;
 
+struct GemBuffer;
+
 typedef struct {
     GemArenaBlock *current;
     GemArenaBlock *head;
     GemTable *table_list;
+    struct GemBuffer *buffer_list;  /* every GemBuffer allocated here, newest first */
     char *lo;
     char *hi;
-    size_t bytes_allocated;
+    size_t bytes_allocated;         /* monotonic count of bytes handed out */
+    struct GemRemEntry *rem;             /* remembered log: tables written per clock epoch (see gem_table_written) */
+    size_t rem_len, rem_cap;
+    uint64_t pin_seq;               /* stamp for the next pinned box (see GemPinEntry.seq) */
 } GemArena;
 
 void gem_arena_init(GemArena *arena);
 void *gem_arena_alloc(GemArena *arena, size_t size);
 void gem_arena_destroy(GemArena *arena);
+GemArenaBlock *gem_arena_append_block(GemArena *arena, GemArenaBlock *after, size_t min_cap);
+void gem_arena_free_blocks(GemArenaBlock *block);  /* munmap a block chain */
 
-/* Threshold (in bytes_allocated) at which TCO emits an arena reset. */
+/* Minimum bytes a loop allocates between two arena resets. The actual
+   distance grows with the cost of the previous reset (hysteresis, see
+   gem_arena_reset_region in gem_copy.c), so reset work stays amortized
+   O(1) per allocated byte however much data is live. */
 #ifndef GEM_ARENA_RESET_THRESHOLD
 #define GEM_ARENA_RESET_THRESHOLD (1 * 1024 * 1024)
 #endif
+
+/* ─── Region marks (per-iteration arena reset) ───
+ *
+ * Codegen takes a mark where a loop starts (a `while` loop's entry, a TCO
+ * function's entry, a mutual-TCO trampoline's entry) and at the loop's
+ * back-edge calls gem_arena_reset_region with the values live there. A
+ * region reset frees only memory allocated AFTER the mark; everything
+ * allocated before it -- which is everything the callers' C frames can
+ * hold -- stays where it is. Soundness argument: gem_copy.c. */
+typedef struct {
+    GemArenaBlock *block;      /* arena->current at mark time */
+    size_t used;               /* block->used at mark time */
+    GemTable *tables;          /* arena->table_list at mark time */
+    struct GemBuffer *buffers; /* arena->buffer_list at mark time */
+    uint64_t pin_seq;          /* arena->pin_seq at mark time */
+    uint64_t clock;            /* gem_mut_clock value this mark started (see GEM_TABLE_WRITTEN) */
+    size_t trigger;            /* reset once bytes_allocated exceeds this */
+} GemArenaMark;
 
 extern GemArena gem_global_arena;
 extern int gem_main_pid;
@@ -71,11 +100,16 @@ typedef struct GemVal GemVal;
 typedef GemVal (*GemFnPtr)(void *env, GemVal *args, int argc);
 
 /* String builder — mutable buffer for O(n) string construction */
-typedef struct {
+typedef struct GemBuffer {
     char *data;
     int len;
     int cap;
+    struct GemBuffer *arena_next;  /* owning arena's buffer_list (unused for stack buffers) */
 } GemBuffer;
+
+/* Allocate a buffer (struct + `cap` data bytes) in the current arena and
+   track it in the arena's buffer_list, which region resets scan. */
+GemBuffer *gem_buffer_alloc(int cap);
 
 struct GemVal {
     GemType type;
@@ -128,7 +162,27 @@ extern void *gem_tail_env;
 extern int gem_tail_argc;
 extern GemVal gem_tail_args[GEM_MAX_TAIL_ARGS];
 
+/* Soft stack limit of the running process: the lowest address a Gem
+ * function's frame may sit at before calls start failing with a catchable
+ * "stack overflow" error. The scheduler sets it to the process's stack floor
+ * plus GEM_STACK_RED_ZONE on every resume and clears it to 0 (no check) while
+ * it runs on the OS stack itself. The red zone below the limit leaves room
+ * for the error path and for C runtime code called near the limit; deep
+ * recursion inside native code (extern fns) runs into the guard page instead (see
+ * gem_scheduler.c, "Process stacks"). */
+extern uintptr_t gem_stack_limit;
+#if defined(__GNUC__)
+__attribute__((noreturn, cold))
+#endif
+void gem_stack_overflow(const char *name);
+
 static inline void gem_push_frame(const char *name, const char *file, int line) {
+#if defined(__GNUC__)
+    if (__builtin_expect((uintptr_t)__builtin_frame_address(0) < gem_stack_limit, 0))
+        gem_stack_overflow(name);
+#else
+    { char probe; if ((uintptr_t)&probe < gem_stack_limit) gem_stack_overflow(name); }
+#endif
     if (gem_call_depth < GEM_MAX_CALL_DEPTH) {
         gem_call_stack[gem_call_depth].name = name;
         gem_call_stack[gem_call_depth].file = file;
@@ -200,9 +254,44 @@ struct GemTable {
     uint32_t shape_id;       /* incremented on structural mutations (delete, pop, sort, etc.) */
     GemTable *arena_next;    /* linked list in owning arena's table_list */
     uint8_t immutable;       /* set by gem_table_freeze — shared across processes without copy */
+    uint8_t rem_flag;        /* scratch bit for a reset's remembered-log compaction */
+    uint8_t index_stale;     /* str_index not built yet (deep copies build it on first string-key use) */
+    uint64_t mut_seq;        /* gem_mut_clock at creation or the last logged write (see gem_table_written) */
 };
 
+/* ─── Write barrier for region resets ───
+ *
+ * gem_mut_clock advances at every gem_arena_mark. Every runtime path that
+ * stores a value into a table, or reallocates its key/val arrays, calls
+ * gem_table_written(t): on the first such write in the current clock epoch
+ * it appends (t, clock) to the owning arena's remembered log. The log is
+ * therefore sorted by epoch, and the tables written since mark M -- the only
+ * tables older than M that can point into M's reset region -- are found in
+ * the log's suffix with epoch >= M.clock. Paths that only permute values
+ * already in the table (sort, delete, pop, remove_at) need no barrier. */
+extern uint64_t gem_mut_clock;
+
+typedef struct GemRemEntry {
+    GemTable *t;
+    uint64_t epoch;
+} GemRemEntry;
+
+void gem_remember_table(GemTable *t);
+
+static inline void gem_table_written(GemTable *t) {
+    if (t->mut_seq != gem_mut_clock) {
+        t->mut_seq = gem_mut_clock;
+        gem_remember_table(t);
+    }
+}
+
 /* ─── Table operations ─── */
+
+void gem_table_rebuild_index(GemTable *t);
+/* Call before touching t->str_index. */
+static inline void gem_table_index(GemTable *t) {
+    if (t->index_stale) gem_table_rebuild_index(t);
+}
 
 GemVal gem_table_new(void);
 void gem_table_set(GemVal tbl, GemVal key, GemVal val);
@@ -352,21 +441,36 @@ GemVal gem_deep_copy(GemVal val);
 GemVal gem_deep_copy_malloc(GemVal val);
 void gem_deep_free(GemVal val);
 
-/* Reset the current process's arena, preserving the given root values.
-   Used by TCO codegen at tail-call boundaries to bound long-lived process
-   memory. Roots are deep-copied to malloc scratch, the arena is torn down
-   and re-initialized, then the roots are deep-copied back into the fresh
-   arena. Mailbox contents are also preserved. No-op if pcall_depth > 0. */
-void gem_arena_reset_with_roots(GemVal **roots, int n_roots);
+/* Region reset (see GemArenaMark): if the arena has passed the mark's
+   trigger, copy everything allocated since `mark` that is still reachable
+   from `roots`, `pinned_roots` (malloc'd boxes from gem_box_alloc, whose
+   contents are copied), the process's module slots, its mailbox,
+   pinned boxes older than the mark, and tables/buffers older than the mark,
+   into fresh blocks, then free the rest of the post-mark memory. Values
+   allocated before the mark are never moved or freed. */
+void gem_arena_reset_region(GemArenaMark *mark, GemVal **roots, int n_roots,
+                            GemVal **pinned_roots, int n_pinned);
 
-/* Variant that also migrates pinned-box rescue roots: fn-local mutated-
-   captured boxes allocated via gem_box_alloc. Each `pinned_roots[i]` is the
-   malloc'd box pointer (a `GemVal *`); contents are deep-copied into the
-   fresh arena. Pinned boxes also reachable via env fields are walked at most
-   once thanks to the per-process pin-set mark. After the walk, any pin-set
-   entry that was NOT marked is unreachable and freed. */
-void gem_arena_reset_with_roots_pinned(GemVal **roots, int n_roots,
-                                       GemVal **pinned_roots, int n_pinned);
+/* ─── Module globals (per-process module state) ───
+ *
+ * Top-level `let` bindings compile to slots gem_cur_globals[i]. Every
+ * process owns a copy: spawn deep-copies the parent's slots into the
+ * child's arena (sharing one copy map with the closure env, so aliasing is
+ * preserved), and the scheduler points gem_cur_globals at the running
+ * process's slots. */
+extern GemVal *gem_cur_globals;
+extern int gem_n_globals;
+/* Called by generated main() before gem_run_main. */
+void gem_globals_init(int n);
+/* malloc'd array of gem_n_globals slots, all nil. */
+GemVal *gem_globals_alloc(void);
+/* Deep-copy `*fn_val`'s env and the `n` slots of `src` into the current
+   arena with one shared copy map; results in *fn_val and dst. */
+void gem_spawn_copy(GemVal *fn_val, GemVal *dst, const GemVal *src, int n);
+/* Copy `tbl` (a frozen module namespace table) into immortal malloc memory,
+   so every process can share it without copying and no arena reset or
+   process exit can free it. */
+GemVal gem_table_freeze_static(GemVal tbl);
 
 /* Allocate a new pinned box (sizeof(GemVal)) outside the per-process arena.
    The caller is responsible for initializing *box. The pointer is registered
@@ -484,6 +588,8 @@ typedef struct {
     GemLinkNode *links;           /* linked list of pids linked to this process */
     int trap_exit;                /* if true, exit signals become EXIT messages */
     jmp_buf proc_jmp;             /* process-level error handler (crash isolation) */
+    char *stack_lo;               /* lowest usable byte of the coroutine stack; the guard sits just below */
+    int stack_overflowed;         /* set when the guard page caught an overflow (exit reason "stack overflow") */
     const char *exit_reason;      /* NULL while alive, set on exit/crash */
     int64_t deadline_ms;          /* -1 = no deadline; else absolute time in ms */
     int timed_out;                /* set to 1 by scheduler when deadline expires */
@@ -492,7 +598,6 @@ typedef struct {
     size_t read_buf_cap;          /* capacity of read_buf in bytes */
     GemPcallFrame pcall_stack[GEM_MAX_PCALL_DEPTH];
     int pcall_depth;
-    int entry_call_depth;         /* gem_call_depth at coro entry — used to gate TCO arena reset for non-process-tail functions */
     int call_depth;               /* saved gem_call_depth at last yield (restored on resume) */
     int64_t gen;                  /* slot generation; advanced when the slot is freed */
     int pending_timers;           /* send_after timers that target this process */
@@ -503,11 +608,15 @@ typedef struct {
        at every reset; freed en masse on process exit. NULL == empty.
        value: 0 = untouched this cycle, 1 = walked. */
     struct GemPinEntry *pinned_boxes;
+    /* This process's copy of the module-level bindings (gem_n_globals slots,
+       malloc'd). gem_cur_globals points here while the process runs. */
+    GemVal *globals;
 } GemProcess;
 
 typedef struct GemPinEntry {
     void *key;
     char value;
+    uint64_t seq;  /* arena pin_seq at allocation; a box older than a mark outlives that mark's resets */
 } GemPinEntry;
 
 /* Pin-set ops. gem_pin_mark_walked transitions a pin-set entry from
@@ -522,18 +631,21 @@ void gem_pin_free_all(GemProcess *proc);
 #endif
 
 #ifndef GEM_CORO_STACK_SIZE
-/* 256 KB. Each spawned process owns a malloc'd coroutine stack of this
- * size — there's no lazy paging, so the cost is paid up front per
- * process. The original 16 KB choice was tuned for OTP-style processes
- * that mostly receive messages and tail-recurse; it is far too small
- * to run anything compiler-grade (lexer + parser + AST walks) inside
- * a spawn. The LSP doc process surfaced the overflow on Linux glibc
- * (heap canary trip / SIGSEGV); macOS happened to silently tolerate
- * the overrun. Bookmark soak peaks ~55 MB at c=100, ~612 MB at c=500;
- * bumping by 240 KB/process adds ~24 MB and ~120 MB respectively —
- * well within the existing memory envelope. Switching to mmap'd stacks
- * for lazy paging is tracked as a follow-up in OPTIMIZATIONS.md. */
-#define GEM_CORO_STACK_SIZE (256 * 1024)
+/* 8 MB, the same as the main process and a default OS thread stack, so a
+ * function recurses as deep in a spawned process as in main. Stacks are
+ * mmap'd (gem_scheduler.c, "Process stacks"): this is reserved address
+ * space, and only the pages a process actually touches cost memory (an
+ * idle process touches a few KB). 1024 processes reserve 8 GB of virtual
+ * address space, which 64-bit Linux and macOS hand out freely. */
+#define GEM_CORO_STACK_SIZE (8 * 1024 * 1024)
+#endif
+
+#ifndef GEM_STACK_RED_ZONE
+/* Bytes at the bottom of every process stack that Gem function calls may
+ * not enter: a call whose frame would land there raises "stack overflow"
+ * (catchable by pcall) instead. Leaves room for the error path itself and
+ * for C runtime code (and libc) called by the deepest Gem frame. */
+#define GEM_STACK_RED_ZONE (256 * 1024)
 #endif
 
 extern GemProcess gem_proc_table[GEM_MAX_PROCS];
@@ -663,6 +775,28 @@ static inline GemVal gem_table_get_cached(GemVal tbl, const char *key, GemICache
         return t->vals[cache->val_index];
     }
     return gem_table_get_ic_miss(t, key, cache);
+}
+
+/* ─── Region marks: hot-path helpers (emitted at every loop entry/back-edge) ─── */
+
+static inline GemArena *gem_arena_of_current(void) {
+    return gem_current_pid >= 0 ? &gem_proc_table[gem_current_pid].arena : &gem_global_arena;
+}
+
+static inline void gem_arena_mark(GemArenaMark *m) {
+    GemArena *a = gem_arena_of_current();
+    m->block = a->current;
+    m->used = a->current->used;
+    m->tables = a->table_list;
+    m->buffers = a->buffer_list;
+    m->pin_seq = a->pin_seq;
+    m->clock = ++gem_mut_clock;
+    m->trigger = a->bytes_allocated + GEM_ARENA_RESET_THRESHOLD;
+}
+
+static inline int gem_arena_reset_due(const GemArenaMark *m) {
+    return gem_current_pid >= 0 &&
+           gem_proc_table[gem_current_pid].arena.bytes_allocated > m->trigger;
 }
 
 #endif /* GEM_H */

@@ -1,0 +1,83 @@
+# Deeply linked data (a two-million-deep list) survives everything the
+# runtime copies: arena resets in a loop that keeps it live, `send` to
+# another process, and capture by a spawned closure. Copies never recurse
+# in C, so the depth of the data does not matter.
+
+# Builds the list one level per iteration while allocating garbage, so the
+# loop's arena resets run many times with the growing list live.
+fn grow(n)
+  let l = nil
+  let i = 0
+  while i < n
+    l = [i, l]
+    let junk = "garbage-{i}"
+    i += 1
+  end
+  l
+end
+
+# Walks the list iteratively: [depth, sum of the values].
+fn walk(l)
+  let depth = 0
+  let sum = 0
+  while l != nil
+    depth += 1
+    sum += l[0]
+    l = l[1]
+  end
+  [depth, sum]
+end
+
+let N = 2000000
+let me = self()
+
+# A process that walks whatever list it receives and reports back.
+let walker = spawn do
+  while true
+    receive
+    when {list: l, from: from}
+      send(from, {walked: walk(l)})
+    when "stop"
+      return nil
+    end
+  end
+end
+
+# 1. Main builds the list (resets with it live), sends it to the walker.
+let deep = grow(N)
+print("main built", walk(deep))
+send(walker, {list: deep, from: me})
+print("walker got", receive().walked)
+deep = nil
+
+# 2. A spawned process builds its own, keeps it live across a second
+#    resetting loop, then sends it on.
+spawn do
+  let mine = grow(N)
+  let extra = 0
+  for i = 0, 300000
+    let junk = {i: i, s: "x{i}"}
+    extra += len(junk.s)
+  end
+  send(walker, {list: mine, from: me})
+  send(me, {child_extra: extra})
+end
+let replies = []
+for i = 0, 2
+  receive
+  when {walked: w}
+    push(replies, "walked {w}")
+  when {child_extra: e}
+    push(replies, "child extra {e}")
+  end
+end
+print(sort(replies))
+
+# 3. A spawned closure that captures a deep list (copied at spawn).
+let shallower = grow(200000)
+spawn do
+  send(me, {captured: walk(shallower)})
+end
+print("captured", receive().captured)
+
+send(walker, "stop")

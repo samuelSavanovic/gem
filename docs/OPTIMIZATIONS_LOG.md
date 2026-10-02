@@ -81,6 +81,21 @@ Canonical comparison point for the `while true` rescue+reset codegen vs. the pre
 
 ## Arena / Memory
 
+### Region resets: sound in any call context, with hysteresis ✓ Done (2026-10-02)
+
+Replaced the whole-arena reset (sound only for loops reachable from a process root through tail calls, guarded elsewhere by a runtime "depth-2 fence") with region resets. Each loop (`while`, TCO fn, mutual-TCO trampoline) takes a `GemArenaMark` at entry; its back-edge reset copies what is reachable from the memory allocated since the mark and unmaps the rest. Older memory is never moved, so callers' frames stay valid; older tables written since the mark are found through a write barrier + remembered log and fixed up in place, old buffers / pinned boxes / module slots / mailbox likewise. The process-tail analysis, the depth fence, the pcall skip and the "TCO function not reachable from a process root" warnings are gone; zero-arg tail calls reset too. Next reset waits for max(1 MB, 2 × copied + scanned) bytes.
+
+Supersedes "Tighten TCO function not reachable from process root warning (structural decrease)" and "Indirect-spawn PT tagging Stage B" (nothing left to warn about or tag).
+
+Before → after (Linux x86-64, same machine):
+- top-level loop pushing 5000 rows once live data > 1 MB: 18.3 s → 12 ms; 1.5 MB `buf_push` at top level: 67.7 s → 14 ms; top-level 5000 rows of 3 fields (review top1): 12.2 s → 9 ms.
+- gen_server-style store with 5000-entry state, 1000 calls: 6.35 s → 14 ms.
+- `while true` server loop in a spawned process called from a non-tail position (and, before, *any* caller once a non-tail call site existed): ~1 GB/s growth (4.9 GB after 5 s) → 7.9 MB flat; tail-called variant unchanged at 7.9 MB.
+- zero-arg receive loop, 400k messages: 160 MB → 7 MB peak.
+- 50/100/200 queued 1 MB messages draining through a reset loop: quadratic (0.75/3.2/14.4 s) → linear (200 msgs: 0.13 s).
+- self-hosting compile of `compiler/main.gem`: 3.1 s / 1.36 GB peak → 3.8 s / 117 MB peak (1,300 resets, 0.84 s of reset work).
+- spawn of 100k short processes with `std/http`, `std/json`, `std/log` loaded: 18 µs → 22 µs per spawn (module state copy; see OPTIMIZATIONS.md).
+
 ### Lower default `GEM_ARENA_RESET_THRESHOLD` ✓ Done (2026-04-30)
 Default lowered from 16 MB to 1 MB. Threshold sweep at c100 on `/` showed 1 MB strictly dominates: same throughput (28.8k vs 28.9k req/s), p99 −3.6× (26.5ms → 7.3ms), peak RSS −14× (2.04 GB → 139 MB), idle RSS −10× (495 MB → 50 MB). `/bookmarks` validation at c50 (heavier per-request allocation) confirmed no regression: throughput unchanged (4041 vs 4007 req/s), p99 −15% (26.9ms → 23.0ms), peak RSS −14× (728 MB → 52 MB). The hypothesis "smaller threshold = more reset overhead" did not show up in numbers — live set after a request is tiny so reset cost is negligible.
 
@@ -319,6 +334,19 @@ The thread pool adds per-operation overhead: mutex lock → enqueue → cond sig
 
 ### Timer min-heap ✓ Done
 Replaced the 256-slot fixed timer array with a dynamic min-heap keyed by `deadline_ms` in `runtime/gem_scheduler.c`. Insert is O(log n), `gem_fire_timers` pops expired entries from the root in O(log n) per fired timer, and `gem_earliest_timer_deadline` is O(1) (peek root). The 256-slot cap and "timer table full" failure mode are gone. Cancel-by-ref is still an O(n) linear scan to locate the ref before a heap remove (sift-down + sift-up); a side index ref→heap-pos would make it O(log n) if cancel ever becomes hot. Verified by `examples/85_timer_heap_capacity.gem` (1000 concurrent timers, in-order fire, 200 cancels).
+
+### Lazy-paged coroutine stacks via mmap ✓ Done (2026-10-02)
+Shipped together with stack-overflow containment (SPEC §"Stack depth"; `runtime/gem_scheduler.c` "Process stacks"). Every process stack, main included, is now an mmap'd block with a 64 KB `PROT_NONE` guard between minicoro's header and the stack, and `GEM_CORO_STACK_SIZE` went from 256 KB to 8 MB, the same as main. The old entry assumed malloc'd stacks were committed up front. On Linux glibc they were not: 256 KB is above the mmap threshold, so they were lazily paged too. Measured on Linux x86_64 with `VmRSS`, 1000 idle processes take 22.6 MB both before and after (≈16.5 KB per process, mostly arena and the stack's top pages). What changed is reserved address space: 8 GB with all 1024 slots in use, against 256 MB before. That is free on 64-bit Linux (`MAP_NORESERVE`, default overcommit) and macOS. Under `vm.overcommit_memory=2` it is charged in full, and spawn fails with a catchable "coroutine creation failed" once the commit limit is hit. Build with a smaller `-DGEM_CORO_STACK_SIZE` there.
+
+Spawn cost: mapping, guarding and unmapping a stack per spawn made spawn+exit about 2.3x slower (200k spawn/exit: 1.5 s before, 3.5 s after). Released stacks go to a LIFO cache (`gem_stack_cache`) sized to the process table, `GEM_MAX_PROCS`. The cache can't hold more stacks than were alive at once, and each is trimmed on release, so the size costs address space, not memory. An earlier cap of 128 made every exit an 8 MB `munmap` and every spawn an `mmap` + `mprotect` once more than 128 processes churned: 200k spawn/exit with 1000 alive took 3.2 s on macOS and 3.7 s on Linux, against 0.8 s and 1.8 s on main.
+
+On release, everything below the top 16 KB of the *stack* (not of the mapping, which has a trailing page beyond the stack; on 16 KB-page macOS that page alone filled the kept region, so the real top page was discarded and re-faulted on every spawn) is handed back with `madvise` (`MADV_DONTNEED`, or `MADV_FREE_REUSABLE` on macOS, the only one of the three that lowers `phys_footprint` there). `madvise` over 8 MB costs several microseconds on macOS even when nothing in the range is resident, so a single `mincore` over the 64 KB below the kept region decides first: stacks are touched from the top down, so if none of those pages is resident, nothing deeper is either and the `madvise` is skipped. A C frame larger than 64 KB that skipped the probed pages could leave deeper pages resident in the cached stack until it is reused; that costs memory, not correctness.
+
+Measured after these fixes, 200k spawn/exit: macOS arm64 1.80 / 0.78 / 0.99 s with 1 / 100 / 1000 alive (main: 1.70 / 0.66 / 0.82 s); Linux x86_64 3.7 / 1.3 / 1.5 s (main: 3.7 / 1.6 / 1.8 s). Memory stays bounded: on Linux, four rounds of 128 processes recursing 20,000 deep, then 2000 small spawns, end at 14 MB RSS; on macOS, four rounds of 128 processes recursing about 6 MB deep, then 2000 small spawns, end at 27 MB `phys_footprint`.
+
+On macOS, `ps` and `top` report RSS well above `phys_footprint` after deep processes exit (381 MB against 21 MB in the test above). That is how `MADV_FREE_REUSABLE` works: the pages are reclaimable but stay counted until the system needs them. Use `phys_footprint` (`footprint` or Activity Monitor's Memory column), not RSS, when looking for a stack leak on macOS. Call overhead of the soft limit check in `gem_push_frame` (one load and one compare) is within noise: fib(35) 1.07 s before vs 1.11 s after, averaged over 5 runs with ±10% run-to-run spread; self-compile of `compiler/main.gem` was 3.0–3.3 s in both.
+
+Not done: ASan builds. ASan's own SIGSEGV reporting is replaced by the overflow handler, which hands non-guard faults to the default action, and minicoro's ASan fiber hooks were not exercised with the mmap'd stacks.
 
 ## C Interop Hardening
 

@@ -1,0 +1,102 @@
+# Arena resets inside a loop must never free values that the loop's
+# callers still hold. Each case below runs a loop that allocates well past
+# the 1 MB reset threshold while some caller has live values in its frame.
+
+# A self-tail-recursive fn that allocates every iteration.
+fn spin(n, acc)
+  if n == 0 then return acc end
+  let s = "x{n}"
+  spin(n - 1, acc + len(s))
+end
+
+# 1. Caller temporaries around a call to a resetting loop.
+let t = {name: "kept"}
+print(["before", spin(300000, 0), "after"], t.name)
+
+# 2. Module-level values survive resets in the main process.
+let cfg = {name: "kept-too", list: [1, 2, 3]}
+spin(300000, 0)
+print(cfg.name, cfg.list)
+
+# 3. Default parameters (the TCO rebind path).
+fn spin_d(n, acc = 0, tag = "t")
+  if n == 0 then return "{tag}:{acc}" end
+  let s = "y{n}"
+  spin_d(n - 1, acc + len(s))
+end
+fn make_big()
+  let big = []
+  for i = 0, 30000
+    push(big, "row-{i}")
+  end
+  big
+end
+let big = make_big()
+print(["before", spin_d(5000), spin_d(300000, 1, "z"), "after"], len(big), big[29999])
+
+# 4. Zero-argument self tail calls reset too.
+let ticks = 0
+fn tick()
+  ticks += 1
+  let s = "tick-{ticks}"
+  if ticks == 300000 then return s end
+  tick()
+end
+print(["before", tick(), "after"])
+
+# 5. Mutual tail recursion; the first argument is computed before the
+#    second call resets.
+fn even(n)
+  if n == 0 then return true end
+  let s = "e{n}"
+  odd(n - 1)
+end
+fn odd(n)
+  if n == 0 then return false end
+  let s = "o{n}"
+  even(n - 1)
+end
+print(even(7), even(300000), "after")
+
+# 6. A spawned process: the closure's captured env and the values the body
+#    holds across the call stay valid.
+let me = self()
+spawn do
+  let label = "child-{1}"
+  let r = spin(300000, 0)
+  send(me, [label, r])
+end
+print(receive())
+
+# 7. A `while true` loop in a fn called from a non-tail position, three
+#    frames deep, inside pcall.
+fn serve(limit)
+  let total = 0
+  let seen = []
+  while true
+    let row = {name: "x{total}", n: total}
+    total += 1
+    if total % 50000 == 0 then push(seen, row.name) end
+    if total == limit then return seen end
+  end
+end
+fn wrap1(limit)
+  let before = "w1"
+  let r = serve(limit)
+  [before, r]
+end
+fn wrap2(limit)
+  let before = {tag: "w2"}
+  let r = wrap1(limit)
+  [before.tag, r]
+end
+let res = pcall(fn() wrap2(200000) end)
+print(res.ok, res.value)
+
+# 8. A loop in a spawned process whose result is used after the call.
+spawn do
+  let parent = me
+  let r = serve(150000)
+  send(parent, {done: len(r), last: r[-1]})
+end
+print(receive())

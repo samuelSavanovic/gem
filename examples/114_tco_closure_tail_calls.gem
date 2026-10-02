@@ -1,0 +1,50 @@
+# A closure defined inside a tail-call-optimized fn may itself call that fn
+# (or a sibling in a mutual tail cycle) in its own tail position. That is a
+# real call from the closure, not a loop restart of the enclosing fn.
+
+# Direct self-TCO fn.
+fn walk(n, log)
+  let again = fn() walk(n - 1, log) end
+  push(log, n)
+  if n <= 0 then return log end
+  if n == 3 then return again() end
+  walk(n - 1, log)
+end
+print(walk(5, []))
+
+# Same with a default param (rebind-mode TCO).
+fn walkd(n, log = [])
+  let again = fn() walkd(n - 1, log) end
+  push(log, n)
+  if n <= 0 then return log end
+  if n == 3 then return again() end
+  walkd(n - 1, log)
+end
+print(walkd(5))
+
+# The closure's result is used by the enclosing fn (not in tail position).
+fn twice(n)
+  let next = fn() twice(n - 1) end
+  if n <= 0 then return 0 end
+  if n == 2 then return 10 + next() end
+  twice(n - 1)
+end
+print(twice(4))
+
+# Mutual tail cycle (trampolined): a closure in one member tail-calls the
+# other member, and its result is used.
+fn even(n)
+  if n == 0 then return true end
+  let f = fn() odd(n - 1) end
+  if n == 3
+    let r = f()
+    return "closure saw {r}"
+  end
+  odd(n - 1)
+end
+fn odd(n)
+  if n == 0 then return false end
+  even(n - 1)
+end
+print(even(7))
+print(even(100000))

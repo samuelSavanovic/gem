@@ -911,22 +911,15 @@ fn lift_captured_arm_lets_top_stmts(stmts)
   captured_arm_lets_stmts(stmts, {})
 end
 
-# ─── Process-tail `while true` tagging ──────────────────────────
+# ─── Loop tagging for the back-edge arena reset ─────────────────
 #
-# Walks every fn_def body and the top-level program, tagging each
-# `while true` node that lies in a process-tail context with
+# Walks every fn_def body, closure body and the top-level program, tagging
+# each `while` node (including lowered `for` loops) with
 # `process_tail = true` directly on the AST node. The codegen
-# (`compile_while`) consults this flag to decide whether to emit the
-# arena rescue+reset at the back-edge.
-#
-# Process-tail context: directly inside a fn in `process_tail_fns`, inside
-# the top-level program, or inside the body of an anon_fn passed as
-# arg[0] to spawn / spawn_link / spawn_monitor (each a fresh process root).
-#
-# Walker semantics: descend through if/match/while/for/etc. preserving the
-# current is_pt flag; reset is_pt=false at anon_fn boundaries (a closure
-# invoked from a non-tail context holds caller-frame state); reset is_pt=true
-# when descending into a spawn-arg anon_fn body.
+# (`compile_while`) emits a region mark + back-edge reset for every tagged
+# loop whose live set liveness can root. (The name is historical: resets
+# used to be limited to loops reachable from a process root by tail calls
+# only. Region resets are sound in any call context, see compile_while.)
 
 let walk_for_tagging_node = nil
 let walk_for_tagging_stmts = nil
@@ -956,8 +949,9 @@ walk_for_tagging_node = fn(node, is_pt, source_name)
     return nil
   end
   if node.tag == "anon_fn"
-    # Generic anon_fn (not at spawn arg[0]): not a process-tail context.
-    walk_for_tagging_stmts(node.body, false, source_name)
+    # Region resets are sound in any context (see compile_while), so every
+    # closure body is tagged too.
+    walk_for_tagging_stmts(node.body, is_pt, source_name)
     if node.defaults != nil
       for d in node.defaults
         if d != nil
@@ -990,18 +984,6 @@ walk_for_tagging_node = fn(node, is_pt, source_name)
       end
       return nil
     end
-    # Spawn target is not a literal `fn() … end`. The closure's body cannot be
-    # PT-tagged from here (we'd need closure-escape analysis to know which
-    # anon_fn ends up as args[0] at runtime), so any `while true` inside it
-    # runs without arena rescue and the receiver's RSS grows unbounded. Surface
-    # this as a compile-time warning — same DX bar as the "cannot reset" class.
-    let line_str = "?"
-    if node.line != nil
-      line_str = to_string(node.line)
-    end
-    let f = source_name
-    if node.file != nil then f = node.file end
-    eprint("warning: {f}:{line_str}: `{node.func.name}` target is not a literal `fn() … end`; any `while true` inside the spawned closure will not be process-tail-tagged and the receiver's per-process arena will not reset (silent perf cliff). Pass an anonymous fn directly: `{node.func.name}(fn() <body> end)`.\n")
     # Fall through to generic recursion so nested spawns inside the args still
     # get walked (e.g. `spawn(make_loop(spawn(fn() … end)))`).
   end
@@ -1025,67 +1007,14 @@ walk_for_tagging_node = fn(node, is_pt, source_name)
   nil
 end
 
-# Body-walker — does any `while` node in `body` have `process_tail = true`,
-# without crossing into a nested anon_fn boundary? Used by `compile_closure_fn`
-# to decide whether to synthesize a `_self_closure` rescue slot. Walks the
-# generic node shape after `tag_process_tail_while_loops` has stamped flags.
-let has_pt_while_in_node = nil
-has_pt_while_in_node = fn(node)
-  if node == nil
-    return false
-  end
-  if type(node) != "table"
-    return false
-  end
-  if node.tag == nil
-    return false
-  end
-  if node.tag == "anon_fn"
-    # PT context resets at anon_fn boundary — nested closures own their own
-    # `_self_closure` decision.
-    return false
-  end
-  if node.tag == "while" and node.process_tail == true
-    return true
-  end
-  for k, v in node
-    if k != "tag" and type(v) == "table"
-      let vks = keys(v)
-      if len(vks) > 0 and type(vks[0]) == "int"
-        let vi = 0
-        while vi < len(v)
-          if type(v[vi]) == "table" and has_pt_while_in_node(v[vi])
-            return true
-          end
-          vi += 1
-        end
-      else
-        if has_pt_while_in_node(v)
-          return true
-        end
-      end
-    end
-  end
-  false
-end
-
-fn body_has_pt_while(body)
-  if body == nil
-    return false
-  end
-  for s in body
-    if has_pt_while_in_node(s)
-      return true
-    end
-  end
-  false
-end
-
 let tag_process_tail_while_loops = nil
-tag_process_tail_while_loops = fn(fn_defs, top_stmts, process_tail_fns, source_name)
+tag_process_tail_while_loops = fn(fn_defs, top_stmts, source_name)
+  # Every loop is a reset candidate: a region reset frees only memory
+  # allocated after the loop started, so it is sound whatever the call
+  # context (see compile_while). `process_tail` now just means "emit the
+  # back-edge reset if liveness can root the live set".
   for fd in fn_defs
-    let is_pt = process_tail_fns[fd.name] == true
-    walk_for_tagging_stmts(fd.body, is_pt, source_name)
+    walk_for_tagging_stmts(fd.body, true, source_name)
   end
   # Top-level statements run in `gem_main_pid` and are PT-tagged uniformly with fn bodies.
   walk_for_tagging_stmts(top_stmts, true, source_name)
@@ -1154,6 +1083,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   let forward_decls = []
   let extern_c_decls = []
   let tmp_counter = 0
+  let mark_counter = 0
   let ic_counter = 0
   let ic_init = chr(123) + "0" + chr(125)
   let anon_counter = 0
@@ -1167,7 +1097,6 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   end
   let boxed_vars = {}
   let top_level_vars = {}
-  let top_level_boxed = {}
   let in_top_level = false
   let local_names = {}
   # Subset of `local_names` whose names have an addressable C local at the
@@ -1177,33 +1106,37 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # addressable from the enclosing while's back-edge) from fn-scope locals.
   let fn_scope_locals = {}
   # Captures of the current `compile_closure_fn` body — env fields backed by
-  # `_cls->gem_v_<name>` and relocatable via `_self_closure` on arena reset.
-  # Disjoint from `inner_boxed` (lets/params captured by *nested* anons,
-  # which have no env-relocation path and are refused by `filter_live_for_rescue` with a no-C-local message).
+  # `_cls->gem_v_<name>`. The env predates any loop mark in the body, so
+  # `filter_live_for_rescue` never roots them.
   let closure_captures = {}
-  # When true, the enclosing closure body has a synthesized `_self_closure`
-  # GemVal slot — `compile_while` may pass `&_self_closure` as a rescue root
-  # to relocate the env on arena reset.
-  let has_self_closure_slot = false
   let current_closure_struct_name = nil
   let current_closure_captures = nil
   let tco_fn_name = nil
   let tco_params = nil
-  let tco_captured = nil
   let tco_boxed = nil
-  let tco_is_process_tail = false
-  let process_tail_fns = {}
+  # Rebind mode: the TCO fn has default or rest params, so a self tail call
+  # stores its args in `_tco_argv` and jumps to the loop's rebind block,
+  # which binds params exactly like function entry does (defaults for
+  # omitted args, a fresh rest table). `tco_argv_max` sizes `_tco_argv`.
+  let tco_rebind = false
+  let tco_argv_max = 0
+  # Call graph saved by mark_process_tail for note_spawn_global_writes.
+  let pt_caller_records = {}
+  let pt_anon_parent = {}
+  let pt_anon_nodes = {}
+  let pt_name_to_fn = {}
+  let mutating_builtins = {}
+  for mb_name in ["push", "pop", "insert", "delete", "remove_at", "sort"]
+    set_add(mutating_builtins, mb_name)
+  end
   # ─── Mutual-tail-call SCC bookkeeping ───
   # `scc_member_to_id[name]` (int) when `name` is a top-level fn_def in a
-  # tail-cycle SCC of size >= 2 that survived viability filtering. Set
-  # alongside `process_tail_fns` by `find_tail_call_sccs`.
+  # tail-cycle SCC of size >= 2 that survived viability filtering. Set by
+  # `find_tail_call_sccs`.
   # `scc_id_to_members[id]` is a sorted array of member names (used to
   # generate stable C identifiers and to seed cross-SCC tail-call detection).
-  # `scc_id_is_pt[id]` mirrors `process_tail_fns`-membership for any one
-  # member (in a viable SCC, all members share PT status).
   let scc_member_to_id = {}
   let scc_id_to_members = {}
-  let scc_id_is_pt = {}
   let scc_counter = 0
   # Set inside the body of an SCC member during compile_fn — gives
   # compile_stmt_return a way to recognize "tail call to a sibling in my SCC"
@@ -1232,6 +1165,70 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
   let mangle = fn(name)
     "gem_v_{name}"
+  end
+
+  # ─── Module globals ──
+  #
+  # Top-level bindings (`top_level_vars`) are per-process module slots:
+  # `gem_g_<name>` is `#define`d to `gem_cur_globals[<index>]`, the running
+  # process's copy (runtime/gem.h). A name refers to the module slot when it
+  # is a top-level var and the current scope has no local of that name:
+  # in top-level code every top-level var name is the slot; inside a fn or
+  # closure, a param/let/capture of the same name shadows it. Module slots
+  # are never captured by closures (every reader sees the live value) and
+  # never passed as reset roots (the runtime roots all slots).
+  let is_global_ref = fn(name)
+    if not set_contains(top_level_vars, name)
+      return false
+    end
+    if in_top_level
+      return true
+    end
+    not set_contains(fn_scope_locals, name) and not set_contains(closure_captures, name)
+  end
+
+  let gmangle = fn(name)
+    "gem_g_{name}"
+  end
+
+  let join_c = fn(items)
+    let out = ""
+    for i = 0, len(items)
+      if i > 0
+        out = out + ", "
+      end
+      out = out + items[i]
+    end
+    out
+  end
+
+  let emit_region_reset = fn(p, mark, roots, pinned)
+    let b = buf_new()
+    buf_push(b, "{p}if (gem_arena_reset_due(&{mark})) \{\n")
+    let roots_arg = "NULL"
+    let pinned_arg = "NULL"
+    if len(roots) > 0
+      buf_push(b, "{p}    GemVal *_rr[] = \{{join_c(roots)}};\n")
+      roots_arg = "_rr"
+    end
+    if len(pinned) > 0
+      buf_push(b, "{p}    GemVal *_rp[] = \{{join_c(pinned)}};\n")
+      pinned_arg = "_rp"
+    end
+    buf_push(b, "{p}    gem_arena_reset_region(&{mark}, {roots_arg}, {len(roots)}, {pinned_arg}, {len(pinned)});\n")
+    buf_push(b, "{p}}\n")
+    to_string(b)
+  end
+
+  # C lvalue for variable `name` in the current scope.
+  let var_lvalue = fn(name)
+    if is_global_ref(name)
+      return gmangle(name)
+    end
+    if set_contains(boxed_vars, name)
+      return "(*{mangle(name)})"
+    end
+    mangle(name)
   end
 
   # Frame bookkeeping helpers — return empty strings inside leaf fns so the
@@ -2002,6 +1999,22 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     is_self_tail_call(fn_name, stmts[-1])
   end
 
+  # Whether compile_fn turns a named fn's self tail calls into a loop: it has
+  # one, and no param, rest param or body-level let shadows the fn's name.
+  # Default, rest and destructured params are all supported (rebind mode in
+  # emit_tco_continue / compile_fn).
+  let fn_def_is_tco = fn(fd)
+    let scope_vars = sorted_array_to_set(fd.params)
+    if fd.rest_param != nil
+      set_add(scope_vars, fd.rest_param)
+    end
+    collect_top_let_names(fd.body, scope_vars)
+    if set_contains(scope_vars, fd.name)
+      return false
+    end
+    has_self_tail_call(fd.name, fd.body)
+  end
+
   # ─── Leaf-function detection ──
   #
   # A function is a "leaf" iff its body invokes no other function: no `call`
@@ -2056,20 +2069,15 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     true
   end
 
-  # ─── Static process-tail analysis ──
+  # ─── Call graph ──
   #
-  # A function `f` is "process_tail" iff every static call-site of `f` in the
-  # program is a tail call from another process_tail caller (or a process root).
-  # Process roots: the top-level program; the body of any anon_fn passed as
-  # arg[0] to spawn / spawn_link / spawn_monitor.
-  #
-  # When `f` is process_tail, the TCO arena reset at its self-tail back-edge
-  # is safe to fire unconditionally (no caller above with live arena state),
-  # so the depth-2 fence in `emit_tco_continue` is dropped for `f`.
-  #
-  # TCO functions not marked process_tail get a compile-time warning: their
-  # arena will not reset at the back-edge, so a long-running process loop
-  # that's not reachable via tail-only edges will not bound memory.
+  # `mark_process_tail` records, per caller (each fn_def, each closure body,
+  # each spawn body, and the top-level program), its tail and non-tail
+  # callees and the writes it makes. Consumers: mutual-TCO SCC detection
+  # (tail edges) and the module-state note (note_spawn_global_writes). It
+  # also tags loops and attaches liveness. (Historically it decided which
+  # functions were "process-tail", i.e. allowed to reset the arena; region
+  # resets made that unnecessary.)
 
   let spawn_callees = {}
   set_add(spawn_callees, "spawn")
@@ -2077,12 +2085,6 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   set_add(spawn_callees, "spawn_monitor")
 
   let mark_process_tail = fn(fn_defs, top_stmts)
-    # Reset accumulated state from any prior run.
-    let _pt_keys = keys(process_tail_fns)
-    for k in _pt_keys
-      delete(process_tail_fns, k)
-    end
-
     let caller_records = {}
     let name_to_fn = {}
     for fd in fn_defs
@@ -2169,7 +2171,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
 
     let new_caller_record = fn(caller_id, is_seed)
-      caller_records[caller_id] = {tail_callees: {}, non_tail_callees: {}, is_seed: is_seed}
+      caller_records[caller_id] = {tail_callees: {}, non_tail_callees: {}, is_seed: is_seed, writes: []}
+    end
+
+    # Sites that write a variable binding (`x = ...`) or mutate the value a
+    # variable holds (`x.f = ...`, `x[k] = ...`, `push(x, ...)`, ...), for
+    # the module-state note (note_spawn_global_writes).
+    let record_write = fn(caller_id, name, node)
+      push(caller_records[caller_id].writes, {name: name, node: node})
     end
 
     # Lexical parent of each anon caller cid (i.e. the caller_id that
@@ -2230,6 +2239,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
             let aid = next_anon_id()
             new_caller_record(aid, true)
             anon_parent[aid] = caller_id
+            pt_anon_nodes[aid] = {fn: node.args[0], spawn: node}
             collect_calls_in_body(node.args[0].body, true, aid)
             if node.args[0].defaults != nil
               for d in node.args[0].defaults
@@ -2245,6 +2255,10 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
             end
             return nil
           end
+        end
+
+        if is_node(node.func, "var") and set_contains(mutating_builtins, node.func.name) and node.args != nil and len(node.args) > 0 and is_node(node.args[0], "var")
+          record_write(caller_id, node.args[0].name, node)
         end
 
         # Regular call. Record edge if callee resolves to a known fn_def
@@ -2280,6 +2294,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         let aid = next_anon_id()
         new_caller_record(aid, false)
         anon_parent[aid] = caller_id
+        pt_anon_nodes[aid] = {fn: node, spawn: nil}
         collect_calls_in_body(node.body, true, aid)
         if node.defaults != nil
           for d in node.defaults
@@ -2340,6 +2355,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
 
       if node.tag == "let" or node.tag == "assign"
+        if node.tag == "assign"
+          record_write(caller_id, node.name, node)
+        end
         if node.value != nil
           collect_calls(node.value, false, caller_id)
         end
@@ -2347,12 +2365,18 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
 
       if node.tag == "dot_assign"
+        if is_node(node.object, "var")
+          record_write(caller_id, node.object.name, node)
+        end
         collect_calls(node.object, false, caller_id)
         collect_calls(node.value, false, caller_id)
         return nil
       end
 
       if node.tag == "index_assign"
+        if is_node(node.object, "var")
+          record_write(caller_id, node.object.name, node)
+        end
         collect_calls(node.object, false, caller_id)
         collect_calls(node.key, false, caller_id)
         collect_calls(node.value, false, caller_id)
@@ -2447,249 +2471,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     new_caller_record("<top>", true)
     collect_calls_in_body(top_stmts, true, "<top>")
 
-    # Build incoming edges per fn_def name
-    let incoming = {}
-    let cids = keys(caller_records)
-    for cid in cids
-      let r = caller_records[cid]
-      let tcs = keys(r.tail_callees)
-      for callee in tcs
-        if incoming[callee] == nil
-          incoming[callee] = []
-        end
-        push(incoming[callee], {caller: cid, is_tail: true})
-      end
-      let ncs = keys(r.non_tail_callees)
-      for callee in ncs
-        if incoming[callee] == nil
-          incoming[callee] = []
-        end
-        push(incoming[callee], {caller: cid, is_tail: false})
-      end
-    end
-
-    # Greatest-fixed-point demotion. Soundness condition: f is process_tail
-    # iff every C-stack chain from a process root to f's frame is all-tail.
-    # Equivalent dual: f is process_tail iff every incoming edge to f is a
-    # tail edge from a process_tail caller (or seed).
-    #
-    # We start with all called fns as candidates and demote any whose incoming
-    # edges violate the rule. Iterate until stable. This handles self-recursion
-    # and mutual tail-call cycles correctly: an isolated tail cycle survives
-    # demotion but is filtered out in the seed-reachability pass below.
-
-    let candidate_pt = {}
-    for fd in fn_defs
-      if incoming[fd.name] != nil and len(incoming[fd.name]) > 0
-        set_add(candidate_pt, fd.name)
-      end
-    end
-
-    # Step 1: demote candidates with any non-tail incoming edge (permanent).
-    for fd in fn_defs
-      if not set_contains(candidate_pt, fd.name)
-        continue
-      end
-      let inc = incoming[fd.name]
-      let bad = false
-      for e in inc
-        if not e.is_tail
-          bad = true
-          break
-        end
-      end
-      if bad
-        delete(candidate_pt, fd.name)
-      end
-    end
-
-    # Step 2: iteratively demote candidates whose incoming has a non-candidate
-    # non-seed caller. Cascades until stable.
-    let changed = true
-    while changed
-      changed = false
-      let cand_keys = keys(candidate_pt)
-      for fname in cand_keys
-        let inc = incoming[fname]
-        let bad = false
-        for e in inc
-          let cr = caller_records[e.caller]
-          if cr != nil and cr.is_seed
-            continue
-          end
-          # Caller must be a candidate fn_def to keep us viable.
-          if len(e.caller) >= 3
-            let prefix = substr(e.caller, 0, 3)
-            if prefix == "fn:"
-              let cname = substr(e.caller, 3, len(e.caller) - 3)
-              if not set_contains(candidate_pt, cname)
-                bad = true
-                break
-              end
-            else
-              # anon non-seed or any other non-fn caller — disqualifies.
-              bad = true
-              break
-            end
-          else
-            bad = true
-            break
-          end
-        end
-        if bad
-          delete(candidate_pt, fname)
-          changed = true
-        end
-      end
-    end
-
-    # Step 3: BFS from seeds via tail edges, traversing only candidates.
-    # Final process_tail_fns = candidates reachable from a seed.
-    let bfs_queue = []
-    let seed_cids = keys(caller_records)
-    for cid in seed_cids
-      if caller_records[cid].is_seed
-        push(bfs_queue, cid)
-      end
-    end
-    while len(bfs_queue) > 0
-      let head = bfs_queue[0]
-      let next_q = []
-      let qi = 1
-      while qi < len(bfs_queue)
-        push(next_q, bfs_queue[qi])
-        qi += 1
-      end
-      bfs_queue = next_q
-      let r = caller_records[head]
-      if r == nil
-        continue
-      end
-      let cs = keys(r.tail_callees)
-      for callee in cs
-        if set_contains(candidate_pt, callee) and not set_contains(process_tail_fns, callee)
-          set_add(process_tail_fns, callee)
-          push(bfs_queue, "fn:" + callee)
-        end
-      end
-    end
-
-    # Warn for TCO-eligible fns that didn't get marked.
-    #
-    # The warning splits in two based on whether an *outer* reset boundary
-    # exists above the demoted fn:
-    #   - benign: some caller chain reaches a process root (top-level or
-    #     spawn-anon — process exit resets) or a `process_tail_fns` member
-    #     (its TCO/while back-edge resets per outer iteration). Inner
-    #     allocation is bounded per outer iteration. Emitted as a `note:`.
-    #   - probably-leak: no outer reset boundary above. The full `warning:`.
-    # Heuristic only — soundness for the benign case still requires bounded
-    # inner recursion (tracked as the structural-decrease check in
-    # OPTIMIZATIONS.md "Tighten ... warning"). Conservative: anon-only
-    # caller chains terminate the upward walk → fall through to `warning:`.
-    # Resolve a caller cid up the anon-parent chain until it hits something
-    # we can act on: a seed (process root), a `fn:NAME` cid, or `<top>`.
-    # Each hop is purely lexical (closure body → fn that built it).
-    let walk_to_actionable = fn(start_cid)
-      let cid = start_cid
-      let hops = 0
-      while cid != nil and hops < 1024
-        let cr = caller_records[cid]
-        if cr != nil and cr.is_seed
-          return cid
-        end
-        if len(cid) >= 3 and substr(cid, 0, 3) == "fn:"
-          return cid
-        end
-        if cid == "<top>"
-          return cid
-        end
-        # Anon non-seed: hop to its lexical parent.
-        let parent = anon_parent[cid]
-        if parent == nil
-          return nil
-        end
-        cid = parent
-        hops += 1
-      end
-      nil
-    end
-
-    let caller_has_outer_reset = fn(target_fn_name)
-      let visited = {}
-      let queue = [target_fn_name]
-      while len(queue) > 0
-        let head = queue[0]
-        let next_q = []
-        let qi = 1
-        while qi < len(queue)
-          push(next_q, queue[qi])
-          qi += 1
-        end
-        queue = next_q
-        if set_contains(visited, head)
-          continue
-        end
-        set_add(visited, head)
-        let inc = incoming[head]
-        if inc == nil
-          continue
-        end
-        for e in inc
-          let cid = walk_to_actionable(e.caller)
-          if cid == nil
-            continue
-          end
-          let cr = caller_records[cid]
-          if cr != nil and cr.is_seed
-            return true
-          end
-          if len(cid) >= 3 and substr(cid, 0, 3) == "fn:"
-            let cname = substr(cid, 3, len(cid) - 3)
-            if set_contains(process_tail_fns, cname)
-              return true
-            end
-            push(queue, cname)
-          end
-        end
-      end
-      false
-    end
-
-    for fd in fn_defs
-      let scope_vars = sorted_array_to_set(fd.params)
-      if fd.rest_param != nil
-        set_add(scope_vars, fd.rest_param)
-      end
-      let has_defs = false
-      if fd.defaults != nil
-        for d in fd.defaults
-          if d != nil
-            has_defs = true
-            break
-          end
-        end
-      end
-      let has_tco = false
-      if fd.rest_param == nil and not has_defs and not set_contains(scope_vars, fd.name)
-        has_tco = has_self_tail_call(fd.name, fd.body)
-      end
-      if has_tco and not set_contains(process_tail_fns, fd.name)
-        let line_str = "?"
-        if fd.line != nil
-          line_str = to_string(fd.line)
-        end
-        if caller_has_outer_reset(fd.name)
-          eprint("note: {file_of(fd)}:{line_str}: TCO function `{fd.name}` will not arena-reset at its own back-edge (caller chain has a non-tail edge), but an outer reset boundary above (process exit, PT loop, or PT TCO back-edge) caps allocation per outer iteration. Likely benign for bounded recursion; if `{fd.name}` recurs unboundedly, restructure callers to call it in tail position from a spawn closure or main.\n")
-        else
-          eprint("warning: {file_of(fd)}:{line_str}: TCO function `{fd.name}` not reachable from any process root or process-tail context — per-process arena will not reset at its back-edge, and no outer reset boundary caps allocation. Restructure callers to call `{fd.name}` in tail position from a spawn closure or main.\n")
-        end
-      end
-    end
-
-    # Tag `while true` nodes inside process-tail contexts so compile_while can
-    # emit the back-edge arena rescue+reset (mirroring TCO's reset).
-    tag_process_tail_while_loops(fn_defs, top_stmts, process_tail_fns, source_name)
+    # Tag every `while` so compile_while emits the back-edge region reset
+    # where liveness can root the live set.
+    tag_process_tail_while_loops(fn_defs, top_stmts, source_name)
 
     # Attach per-loop liveness results to every PT-tagged while node, computed
     # with the loop's actual post-loop set. compile_while reads node.liveness_result
@@ -2709,13 +2493,135 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     # `gem_fn_<name>_body` + thin trampoline-loop wrapper, and intra-SCC tail
     # calls become a TLB write + return rather than a real C call.
     find_tail_call_sccs(fn_defs, caller_records, name_to_fn)
+
+    pt_caller_records = caller_records
+    pt_anon_parent = anon_parent
+    pt_name_to_fn = name_to_fn
+  end
+
+  # ─── Module state written from spawned processes (note) ──
+  #
+  # Module-level bindings are per-process (see is_global_ref): a write made
+  # by a spawned process is visible only in that process. That is the
+  # intended semantics, but easy to miss, so point at every write to module
+  # state in code reachable from a `spawn` body: the body itself, named fns
+  # it calls (transitively), and closures created in reachable code.
+  # Code reachable only from main stays quiet. Runs after top_level_vars is
+  # known; reuses mark_process_tail's call graph.
+  let note_spawn_global_writes = fn()
+    let records = pt_caller_records
+    let children = {}
+    for aid, parent in pt_anon_parent
+      if children[parent] == nil
+        children[parent] = []
+      end
+      push(children[parent], aid)
+    end
+    # cid -> the spawn node it is reachable from (first found)
+    let reached = {}
+    let queue = []
+    for aid, info in pt_anon_nodes
+      if info.spawn != nil
+        reached[aid] = info.spawn
+        push(queue, aid)
+      end
+    end
+    let qi = 0
+    while qi < len(queue)
+      let cid = queue[qi]
+      qi += 1
+      let r = records[cid]
+      if r == nil
+        continue
+      end
+      let next = []
+      for callee, _ in r.tail_callees
+        push(next, "fn:" + callee)
+      end
+      for callee, _ in r.non_tail_callees
+        push(next, "fn:" + callee)
+      end
+      if children[cid] != nil
+        for c in children[cid]
+          push(next, c)
+        end
+      end
+      for n in next
+        if reached[n] == nil
+          reached[n] = reached[cid]
+          push(queue, n)
+        end
+      end
+    end
+    # Names local to a caller: its own params/lets plus, for a closure,
+    # every enclosing scope's (closures capture them).
+    let local_cache = {}
+    let locals_of = nil
+    locals_of = fn(cid)
+      if local_cache[cid] != nil
+        return local_cache[cid]
+      end
+      let s = {}
+      if len(cid) >= 3 and substr(cid, 0, 3) == "fn:"
+        let fd = pt_name_to_fn[substr(cid, 3, len(cid) - 3)]
+        if fd != nil
+          for p in fd.params
+            set_add(s, p)
+          end
+          if fd.rest_param != nil
+            set_add(s, fd.rest_param)
+          end
+          collect_shadow_lets_in_fn(fd.body, s)
+        end
+      elif pt_anon_nodes[cid] != nil
+        let an = pt_anon_nodes[cid].fn
+        for p in an.params
+          set_add(s, p)
+        end
+        if an.rest_param != nil
+          set_add(s, an.rest_param)
+        end
+        collect_shadow_lets_in_fn(an.body, s)
+        let parent = pt_anon_parent[cid]
+        if parent != nil and parent != "<top>"
+          s = set_union(s, locals_of(parent))
+        end
+      end
+      local_cache[cid] = s
+      s
+    end
+    let seen = {}
+    for cid, spawn_node in reached
+      let r = records[cid]
+      if r == nil
+        continue
+      end
+      for w in r.writes
+        if set_contains(top_level_vars, w.name) and not set_contains(locals_of(cid), w.name)
+          let n = w.node
+          let line_str = "?"
+          if n.line != nil
+            line_str = to_string(n.line)
+          end
+          let key = "{file_of(n)}:{line_str}:{w.name}"
+          if seen[key] == nil
+            seen[key] = true
+            let sline = "?"
+            if spawn_node.line != nil
+              sline = to_string(spawn_node.line)
+            end
+            eprint("note: {file_of(n)}:{line_str}: this changes module-level `{w.name}` in code that runs in a spawned process (spawn at {file_of(spawn_node)}:{sline}); each process has its own copy of module state, so the change is visible only in that process.\n")
+          end
+        end
+      end
+    end
   end
 
   # ─── Tail-edge SCC discovery (Tarjan) ───
   #
   # Operates only on fn_def→fn_def tail edges; non-tail edges and edges
   # through closures don't form a recursive cycle worth merging. Result is
-  # populated into `scc_member_to_id` / `scc_id_to_members` / `scc_id_is_pt`.
+  # populated into `scc_member_to_id` / `scc_id_to_members`.
   find_tail_call_sccs = fn(fn_defs, caller_records, name_to_fn)
     # Reset accumulated state from any prior run.
     for k in keys(scc_member_to_id)
@@ -2723,9 +2629,6 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
     for k in keys(scc_id_to_members)
       delete(scc_id_to_members, k)
-    end
-    for k in keys(scc_id_is_pt)
-      delete(scc_id_is_pt, k)
     end
     scc_counter = 0
 
@@ -2909,17 +2812,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         j += 1
       end
       scc_id_to_members[sid] = members
-      let any_pt = false
       for name in members
         scc_member_to_id[name] = sid
-        if set_contains(process_tail_fns, name)
-          any_pt = true
-        end
       end
-      # Process-tail analysis is uniform across an all-tail cycle reachable
-      # from a seed (mark_process_tail's BFS visits every member). So
-      # any_pt ⇒ all_pt. Cache the bit on the SCC for the wrapper emitter.
-      scc_id_is_pt[sid] = any_pt
     end
   end
 
@@ -2936,59 +2831,45 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       push(arg_temps, t)
     end
 
-    # Arena reset at the tail-call boundary. Mutated-captured params live in
-    # malloc-backed pinned boxes (gem_box_alloc, tracked in the per-process
-    # pin-set); they MUST be passed as pinned_roots or the post-reset sweep
-    # frees the box before we write `*gem_v_<p> = arg_temps[i]` below.
-    # Body-let boxed locals don't need pinning here: top-level body lets are
-    # re-allocated each iteration (the next iter's `let x = gem_box_alloc()`
-    # overwrites `gem_v_x` before any use); inner-scope lets aren't visible
-    # at the tail-call point. Either way, if such a box is referenced via a
-    # closure passed in args, the deep-copy env-walk marks it and the sweep
-    # keeps it alive.
-    let pinned_param_names = []
-    if tco_boxed != nil and len(tco_boxed) > 0
-      for p in tco_params
-        if set_contains(tco_boxed, p)
-          push(pinned_param_names, p)
-        end
-      end
+    # Arena reset at the tail-call boundary (region reset against the mark
+    # `_tco_mk` taken at function entry, see compile_fn).
+    #
+    # SOUNDNESS: every caller frame was suspended before `_tco_mk` was
+    # taken, so it holds only values older than the mark, which the reset
+    # never moves or frees. This frame's only live values here are the arg
+    # temps: params are rebound below, body locals are dead at a tail call,
+    # and closure envs / pinned boxes are reached through the args. Older
+    # objects mutated since the mark, module slots, the mailbox and old
+    # pinned boxes are fixed up by the runtime (gem_copy.c, "Region reset").
+    #
+    # Mutated-captured params (`tco_boxed`) live in malloc-backed pinned
+    # boxes (gem_box_alloc). A real call gives every invocation its own box,
+    # so a closure made in iteration k keeps seeing iteration k's binding;
+    # the back-edge mirrors that by allocating a fresh box below instead of
+    # overwriting the old one. The old box is therefore not a root: if a
+    # closure in the args still references it, the env-walk marks it and
+    # the sweep keeps it; otherwise the sweep frees it.
+    let tco_roots = []
+    for t in arg_temps
+      push(tco_roots, "&{t}")
     end
-    if len(arg_temps) > 0
-      # Process-tail fns reset unconditionally — every caller chain reaches
-      # them via tail calls from a process root, so no caller above holds
-      # live arena state. Non-PT TCO fns guard with a runtime depth-2 fence
-      # (static analysis could not prove all callers are tail; a non-tail
-      # caller would dangle).
-      if tco_is_process_tail
-        buf_push(b, "{p}if (gem_current_pid >= 0 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
-      else
-        buf_push(b, "{p}if (gem_current_pid >= 0 && gem_call_depth - gem_proc_table[gem_current_pid].entry_call_depth <= 2 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
+    buf_push(b, emit_region_reset(p, "_tco_mk", tco_roots, []))
+
+    if tco_rebind
+      # Defaults and the rest table are built by the rebind block at the
+      # loop's bottom, after the reset above, from the stored args — the
+      # same code function entry runs, so omitted args evaluate their
+      # defaults in parameter order against this call's new values.
+      if len(arg_temps) > tco_argv_max
+        tco_argv_max = len(arg_temps)
       end
-      buf_push(b, "{p}    GemVal *_tco_roots[] = \{")
       for i = 0, len(arg_temps)
-        if i > 0
-          buf_push(b, ", ")
-        end
-        buf_push(b, "&{arg_temps[i]}")
+        buf_push(b, "{p}_tco_argv[{i}] = {arg_temps[i]};\n")
       end
-      buf_push(b, "};\n")
-      let n_pinned = len(pinned_param_names)
-      if n_pinned > 0
-        buf_push(b, "{p}    GemVal *_tco_pinned_roots[] = \{")
-        for i = 0, n_pinned
-          if i > 0
-            buf_push(b, ", ")
-          end
-          # `gem_v_<param>` is already a `GemVal *` (from gem_box_alloc).
-          buf_push(b, "{mangle(pinned_param_names[i])}")
-        end
-        buf_push(b, "};\n")
-        buf_push(b, "{p}    gem_arena_reset_with_roots_pinned(_tco_roots, {len(arg_temps)}, _tco_pinned_roots, {n_pinned});\n")
-      else
-        buf_push(b, "{p}    gem_arena_reset_with_roots(_tco_roots, {len(arg_temps)});\n")
-      end
-      buf_push(b, "{p}}\n")
+      buf_push(b, "{p}args = _tco_argv;\n")
+      buf_push(b, "{p}argc = {len(arg_temps)};\n")
+      buf_push(b, "{p}goto _tco_rebind;")
+      return to_string(b)
     end
 
     for i = 0, len(tco_params)
@@ -2997,7 +2878,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       if i < len(arg_temps)
         val = arg_temps[i]
       end
-      if set_contains(tco_captured, tco_params[i])
+      if set_contains(tco_boxed, tco_params[i])
+        buf_push(b, "{p}{mp} = gem_box_alloc();\n")
         buf_push(b, "{p}*{mp} = {val};\n")
       else
         buf_push(b, "{p}{mp} = {val};\n")
@@ -3048,7 +2930,6 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # back-edge reset semantics.
   scc_wrapper_for = fn(node, sid)
     let name = node.name
-    let is_pt = scc_id_is_pt[sid] == true
     let b = buf_new()
     buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
     buf_push(b, "    GemFnPtr _next_fn = gem_fn_{name}_body;\n")
@@ -3056,6 +2937,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(b, "    GemVal *_next_args = args;\n")
     buf_push(b, "    int _next_argc = argc;\n")
     buf_push(b, "    GemVal _result;\n")
+    buf_push(b, "    GemArenaMark _mk;\n")
+    buf_push(b, "    gem_arena_mark(&_mk);\n")
     buf_push(b, "    while (1) \{\n")
     buf_push(b, "        gem_tail_fn = NULL;\n")
     buf_push(b, "        _result = _next_fn(_next_env, _next_args, _next_argc);\n")
@@ -3064,15 +2947,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(b, "        _next_env = gem_tail_env;\n")
     buf_push(b, "        _next_argc = gem_tail_argc;\n")
     buf_push(b, "        _next_args = gem_tail_args;\n")
-    if is_pt
-      buf_push(b, "        if (gem_current_pid >= 0 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
-    else
-      buf_push(b, "        if (gem_current_pid >= 0 && gem_call_depth - gem_proc_table[gem_current_pid].entry_call_depth <= 2 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
-    end
+    # SOUNDNESS: the mark is taken on entry, before the first body runs, so
+    # the callers hold only older values; between bodies the previous body
+    # has returned and the TLB args are the only live values.
+    buf_push(b, "        if (gem_arena_reset_due(&_mk)) \{\n")
     buf_push(b, "            GemVal *_roots[GEM_MAX_TAIL_ARGS];\n")
     buf_push(b, "            int _n = _next_argc < GEM_MAX_TAIL_ARGS ? _next_argc : GEM_MAX_TAIL_ARGS;\n")
     buf_push(b, "            for (int _i = 0; _i < _n; _i++) _roots[_i] = &gem_tail_args[_i];\n")
-    buf_push(b, "            gem_arena_reset_with_roots(_roots, _n);\n")
+    buf_push(b, "            gem_arena_reset_region(&_mk, _roots, _n, NULL, 0);\n")
     buf_push(b, "        }\n")
     buf_push(b, "        gem_yield_check();\n")
     buf_push(b, "    }\n")
@@ -3345,7 +3227,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   end
 
   let check_assign_target = fn(name, node)
-    if set_contains(local_names, name) or set_contains(top_level_vars, name) or set_contains(top_level_boxed, name) or set_contains(boxed_vars, name)
+    if set_contains(local_names, name) or set_contains(top_level_vars, name) or set_contains(boxed_vars, name)
       return nil
     end
     if has_key(builtin_fns, name) or set_contains(defined_fns, name)
@@ -3399,7 +3281,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
           return {expr: "gem_make_fn({builtin_fns[name]}, NULL)", setup: ""}
         elif set_contains(defined_fns, name)
           return {expr: "gem_make_fn(gem_fn_{name}, NULL)", setup: ""}
-        elif not set_contains(top_level_vars, name) and not set_contains(top_level_boxed, name)
+        elif not set_contains(top_level_vars, name)
           # Name resolves nowhere — undeclared identifier (typo or missing
           # let/load). Report and emit GEM_NIL so codegen continues; the
           # driver gates final emission on sink.has_any() so this never
@@ -3408,18 +3290,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
           return {expr: "GEM_NIL", setup: ""}
         end
       end
-      let mname = mangle(name)
-      # A top-level boxed var (`gem_v_x` is `GemVal *`) must be dereffed at
-      # any read site, including inside fn_def bodies that reference it as
-      # a global. Skip when the current scope has a let/param shadowing the
-      # name — that local is `GemVal`, not `GemVal *`. `local_names` is
-      # populated by collect_shadow_lets_in_fn, which descends through all
-      # control-flow constructs (but not into nested fns).
-      let is_top_box = set_contains(top_level_vars, name) and set_contains(top_level_boxed, name) and not set_contains(local_names, name)
-      if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name)) or is_top_box
-        return {expr: "(*{mname})", setup: ""}
-      end
-      return {expr: mname, setup: ""}
+      return {expr: var_lvalue(name), setup: ""}
     when {tag: "call"}
       return compile_call(node)
     when {tag: "binop"}
@@ -3517,7 +3388,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
     end
     if node.frozen == true
-      buf_push(b, "    gem_table_freeze({t});\n")
+      # Module namespace table: an immortal malloc copy every process
+      # shares (spawn/send/reset never copy or free it).
+      buf_push(b, "    {t} = gem_table_freeze_static({t});\n")
     end
     {expr: t, setup: to_string(b)}
   end
@@ -3552,7 +3425,13 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         end
       end
     end
-    let captures = sort(keys(free))
+    # Module slots are read live through gem_cur_globals, never captured.
+    let captures = []
+    for cap in sort(keys(free))
+      if not is_global_ref(cap)
+        push(captures, cap)
+      end
+    end
 
     if len(captures) == 0
       let result = compile_closure_fn(node, [])
@@ -3569,8 +3448,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       buf_push(b, "    {env_tmp}._num_captures = {len(captures)};\n")
       for cap in captures
         let mc = mangle(cap)
-        let is_top_box = set_contains(top_level_vars, cap) and set_contains(top_level_boxed, cap) and not set_contains(local_names, cap)
-        let outer_is_box = set_contains(boxed_vars, cap) or (in_top_level and set_contains(top_level_boxed, cap)) or is_top_box
+        let outer_is_box = set_contains(boxed_vars, cap)
         # Env field is always `GemVal *`. If outer holds a box ptr, copy it
         # (closure shares the box). Otherwise outer's local is an unboxed
         # `GemVal` — for a non-escaping closure we can take its address since
@@ -3587,8 +3465,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(b, "    {env_tmp}->_num_captures = {len(captures)};\n")
     for cap in captures
       let mc = mangle(cap)
-      let is_top_box = set_contains(top_level_vars, cap) and set_contains(top_level_boxed, cap) and not set_contains(local_names, cap)
-      let outer_is_box = set_contains(boxed_vars, cap) or (in_top_level and set_contains(top_level_boxed, cap)) or is_top_box
+      let outer_is_box = set_contains(boxed_vars, cap)
       # Env field is always `GemVal *`. Outer-boxed → ptr copy. Outer-unboxed
       # (no closure mutates this name, so outer skipped boxing) → allocate a
       # fresh box snapshotting the current value, since this closure may
@@ -3819,13 +3696,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
       let mname = mangle(name)
       if in_top_level and set_contains(top_level_vars, name)
-        if set_contains(boxed_vars, name)
-          # Box storage is BSS-backed (declared at file scope as `gem_box_<name>`
-          # with `gem_v_<name>` pre-initialised to its address). Just write the
-          # initial value into the box.
-          return "{line_dir}{r.setup}{p}*{mname} = {r.expr};"
-        end
-        return "{line_dir}{r.setup}{p}{mname} = {r.expr};"
+        # Module-level binding: this process's slot.
+        return "{line_dir}{r.setup}{p}{gmangle(name)} = {r.expr};"
       end
       if set_contains(boxed_vars, name)
         # Mutated-captured fn-local: pinned malloc'd box, registered in the
@@ -3839,7 +3711,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       if set_contains(append_buf_vars, name)
         let parts = decompose_concat(name, value)
         if parts != nil
-          let mname = mangle(name)
+          let mname = var_lvalue(name)
           let b = buf_new()
           buf_push(b, line_dir)
           for part in parts
@@ -3851,14 +3723,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         end
       end
       let r = compile_expr(value)
-      let mname = mangle(name)
-      # Mirror compile_var: deref top-level boxed even from fn_def bodies,
-      # but skip when shadowed by a local in this scope.
-      let is_top_box = set_contains(top_level_vars, name) and set_contains(top_level_boxed, name) and not set_contains(local_names, name)
-      if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name)) or is_top_box
-        return "{line_dir}{r.setup}{p}*{mname} = {r.expr};"
-      end
-      return "{line_dir}{r.setup}{p}{mname} = {r.expr};"
+      return "{line_dir}{r.setup}{p}{var_lvalue(name)} = {r.expr};"
     when {tag: "dot_assign", object: object, value: value, field: field}
       let obj_r = compile_expr(object)
       let val_r = compile_expr(value)
@@ -3952,6 +3817,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       set_add(fn_scope_locals, name)
       let r = compile_expr(value)
       let mname = mangle(name)
+      if in_top_level and set_contains(top_level_vars, name)
+        return "{line_dir}{r.setup}{p}{gmangle(name)} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
+      end
       if set_contains(boxed_vars, name)
         return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
       end
@@ -3960,11 +3828,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       check_assign_target(name, node)
       let r = compile_expr(value)
       let t = tmp()
-      let mname = mangle(name)
-      if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name))
-        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}*{mname} = {t};\n{pop_str(p)}{p}return {t};"
-      end
-      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{mname} = {t};\n{pop_str(p)}{p}return {t};"
+      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_lvalue(name)} = {t};\n{pop_str(p)}{p}return {t};"
     when {tag: "return", value: value}
       if value != nil
         let r = compile_expr(value)
@@ -4038,63 +3902,39 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
   # ─── compile_while ──
 
-  # Filter the live-at-back-edge set for arena rescue: keep names that map to
-  # an addressable C local at the back-edge (`&gem_v_<name>` is a `GemVal *`),
-  # drop names whose values are stable across an arena reset (builtins, top-
-  # level fn refs, top-level globals read from a non-pid-0 process), and
-  # refuse when a name is captured-into-a-closure box (the box itself lives
-  # in the per-process arena and would dangle on reset) or when a name has
-  # no known C local declaration at this loop's back-edge (let in a nested
-  # if/match arm — `collect_top_let_names` does not descend through those).
+  # Filter the live-at-back-edge set into reset roots, as C expressions of
+  # type `GemVal *`: `&gem_v_<name>` for a C local, `gem_v_<name>` for a
+  # capture of the enclosing closure (the env field already points at the
+  # storage: a pinned box, a write-once arena box, or for a non-escaping
+  # closure the outer frame's C local, which the closure may assign).
+  # Pinned boxes of this frame go to `pinned_roots`. Dropped: builtins,
+  # top-level fn refs and module slots (the runtime roots every slot).
+  # Refuse when a name has no C local declaration at this loop's back-edge
+  # (let in a nested if/match arm — `collect_top_let_names` does not descend
+  # through those).
   let filter_live_for_rescue = fn(live_set)
     let roots = []
     let pinned_roots = []
-    let added_self_closure = false
     let lk = keys(live_set)
     for name in lk
-      if set_contains(local_names, name)
-        # In top-level scope, top_level_vars are mirrored into local_names
-        # (see compile main setup). Boxed top-level vars are BSS-backed at
-        # file scope, so the "box lives in arena" refusal does not apply —
-        # those slots survive arena reset directly. The rescue list emits
-        # them via `gem_v_<name>` (already a `GemVal *`) below.
-        if in_top_level and set_contains(top_level_vars, name)
-          push(roots, name)
-        elif has_self_closure_slot and set_contains(closure_captures, name)
-          # Capture of the current closure: env field, relocatable via the
-          # synthesized `_self_closure` slot. Add a single sentinel covering
-          # ALL captures — `compile_while` emits `&_self_closure` once and
-          # reloads `_cls` + every capture local from the new env.
-          if not added_self_closure
-            push(roots, "_self_closure")
-            added_self_closure = true
-          end
+      if is_global_ref(name)
+        # module slot, rooted by the runtime
+      elif set_contains(local_names, name)
+        if set_contains(closure_captures, name)
+          push(roots, mangle(name))
         elif set_contains(boxed_vars, name)
-          # Mutated-captured fn-local: box is malloc-backed (gem_box_alloc),
-          # registered in the process's pin-set. Routed via pinned_roots[]
-          # rather than roots[] — see gem_arena_reset_with_roots_pinned in
-          # runtime/gem_core.c for the dedup contract with env-walk.
-          push(pinned_roots, name)
-        elif in_top_level and set_contains(top_level_boxed, name)
-          # BSS-backed top-level box: the slot pointer (`gem_v_<name>`) is
-          # already a `GemVal *`. The runtime migrates contents via the
-          # rescue-roots loop; not in any pin-set, so env-walk's pin mark
-          # is a no-op and the env keeps observing the BSS slot.
-          push(roots, name)
+          # Mutated-captured local: malloc'd pinned box (gem_box_alloc).
+          # Routed via pinned_roots[] so the runtime walks its contents.
+          push(pinned_roots, mangle(name))
         elif not set_contains(fn_scope_locals, name)
           return {ok: false, reason: "live var `{name}` has no C local at this loop's back-edge (declared in a nested if/match arm?)"}
         else
-          push(roots, name)
+          push(roots, "&{mangle(name)}")
         end
       elif set_contains(builtins, name)
         # builtin name resolves to a fn pointer; no rescue needed.
       elif set_contains(defined_fns, name)
         # top-level user fn; fn pointer, no rescue needed.
-      elif set_contains(top_level_vars, name)
-        # global accessed from a non-top-level (spawned) scope — global lives
-        # in pid 0's arena, independent of the per-process arena reset here.
-      elif set_contains(top_level_boxed, name)
-        # boxed top-level slot accessed from non-top-level scope; same.
       else
         # Liveness is reporting a name that resolves nowhere — the source has
         # an undeclared identifier (typo or missing let/load). Skip it here so
@@ -4104,7 +3944,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     {ok: true, roots: roots, pinned_roots: pinned_roots}
   end
 
-  let build_rescue_roots = fn(node, in_top_level, top_level_vars, source_name)
+  let build_rescue_roots = fn(node)
     let do_rescue = false
     let rescue_roots = []
     let pinned_rescue_roots = []
@@ -4116,31 +3956,17 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         do_rescue = true
         rescue_roots = fr.roots
         pinned_rescue_roots = fr.pinned_roots
-        # Top-level PT loop: indirect call chains from the loop body can
-        # read any top-level binding (e.g. `_is_stc`-style fwd-declared
-        # closures defined in a loaded module). Liveness only sees direct
-        # references, so splice in *every* remaining top-level var as a
-        # rescue root — boxed slots are BSS so this is cheap and uniformly
-        # correct.
-        if in_top_level
-          let already = {}
-          for n in rescue_roots
-            already[n] = true
-          end
-          let tlv = keys(top_level_vars)
-          for n in tlv
-            if not already[n] == true
-              push(rescue_roots, n)
-            end
-          end
-        end
       else
         refuse_reason = fr.reason
       end
     else
       refuse_reason = lr.reason
     end
-    if not do_rescue
+    # Only an infinite loop is worth a warning: a loop that terminates
+    # frees its garbage at the next reset of an enclosing loop, or at
+    # process exit.
+    let infinite = is_node(node.cond, "bool") and node.cond.value == true
+    if not do_rescue and infinite
       let line_str = "?"
       if node.line != nil
         line_str = to_string(node.line)
@@ -4150,15 +3976,19 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     {do_rescue: do_rescue, rescue_roots: rescue_roots, pinned_rescue_roots: pinned_rescue_roots}
   end
 
+  # Emits `if (gem_arena_reset_due(&mark)) { ... reset ... }` for a loop
+  # back-edge. `roots` are C expressions of type `GemVal *`.
   compile_while = fn(node, indent)
     let p = pad_for(indent)
+    # Every loop whose live set liveness can root gets a region mark and a
+    # back-edge reset; see emit_region_reset / gem_arena_reset_region.
     let is_pt_while = node.process_tail == true
 
     let do_rescue = false
     let rescue_roots = []
     let pinned_rescue_roots = []
     if is_pt_while
-      let r = build_rescue_roots(node, in_top_level, top_level_vars, source_name)
+      let r = build_rescue_roots(node)
       do_rescue = r.do_rescue
       rescue_roots = r.rescue_roots
       pinned_rescue_roots = r.pinned_rescue_roots
@@ -4171,7 +4001,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       if expr_has_var(node.cond, name)
         delete(eligible, name)
       end
-      if set_contains(boxed_vars, name) or (in_top_level and set_contains(top_level_boxed, name))
+      if set_contains(boxed_vars, name)
         delete(eligible, name)
       end
     end
@@ -4185,74 +4015,24 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
 
     let b = buf_new()
+    let mark = nil
+    if do_rescue
+      # SOUNDNESS: the mark is taken before the loop's first iteration, so
+      # everything the enclosing frames hold predates it and is never moved
+      # or freed by this loop's resets. At the back-edge the only values
+      # allocated since the mark that this frame can still reach are the
+      # live locals passed as roots (liveness.gem); older objects mutated
+      # since the mark, module slots, the mailbox and pinned boxes are
+      # handled by the runtime (gem_copy.c, "Region reset").
+      mark_counter += 1
+      mark = "_mk{mark_counter}"
+      buf_push(b, "{p}GemArenaMark {mark};\n")
+      buf_push(b, "{p}gem_arena_mark(&{mark});\n")
+    end
     buf_push(b, "{p}while (1) \{\n")
     buf_push(b, "{p}    gem_yield_check();\n")
     if do_rescue
-      buf_push(b, "{p}    if (gem_current_pid >= 0 && gem_current_arena()->bytes_allocated > GEM_ARENA_RESET_THRESHOLD) \{\n")
-      let has_self_closure_root = false
-      let n_roots = len(rescue_roots)
-      let n_pinned = len(pinned_rescue_roots)
-      if n_roots == 0 and n_pinned == 0
-        buf_push(b, "{p}        gem_arena_reset_with_roots(NULL, 0);\n")
-      else
-        let roots_arg = "NULL"
-        let pinned_arg = "NULL"
-        if n_roots > 0
-          buf_push(b, "{p}        GemVal *_loop_roots[] = \{")
-          for i = 0, n_roots
-            if i > 0
-              buf_push(b, ", ")
-            end
-            let rname = rescue_roots[i]
-            # Sentinel: `_self_closure` is the synthesized closure-value slot
-            # (see `compile_closure_fn`). Passing `&_self_closure` to the
-            # runtime triggers env-struct relocation via `gem_deep_copy_fn`,
-            # which rewrites every capture box into the fresh arena.
-            if rname == "_self_closure"
-              buf_push(b, "&_self_closure")
-              has_self_closure_root = true
-            elif set_contains(top_level_boxed, rname)
-              # Boxed top-level vars: `gem_v_<name>` is already `GemVal *`
-              # (points at the BSS-backed `gem_box_<name>`); locals & non-boxed
-              # top-levels need the `&` to form a `GemVal *`.
-              buf_push(b, "{mangle(rname)}")
-            else
-              buf_push(b, "&{mangle(rname)}")
-            end
-          end
-          buf_push(b, "};\n")
-          roots_arg = "_loop_roots"
-        end
-        if n_pinned > 0
-          # Pinned-box roots: `gem_v_<name>` is already `GemVal *` from the
-          # gem_box_alloc emit, so we pass it bare. The runtime walks each
-          # box's contents into the fresh arena and marks the pin-set entry,
-          # deduping any later env-walk that reaches the same box.
-          buf_push(b, "{p}        GemVal *_pinned_loop_roots[] = \{")
-          for i = 0, n_pinned
-            if i > 0
-              buf_push(b, ", ")
-            end
-            buf_push(b, "{mangle(pinned_rescue_roots[i])}")
-          end
-          buf_push(b, "};\n")
-          pinned_arg = "_pinned_loop_roots"
-        end
-        buf_push(b, "{p}        gem_arena_reset_with_roots_pinned({roots_arg}, {n_roots}, {pinned_arg}, {n_pinned});\n")
-        # Reload the closure env pointer + every capture local from the
-        # relocated `_self_closure.env`. The runtime updates the slot to
-        # point at the new env struct in the fresh arena; the C locals
-        # `_cls` and each `gem_v_<cap>` (which are pointer values, not
-        # storage) still hold the dangling old-arena addresses.
-        if has_self_closure_root
-          buf_push(b, "{p}        _cls = (struct {current_closure_struct_name} *)_self_closure.env;\n")
-          for cap in current_closure_captures
-            let mc = mangle(cap)
-            buf_push(b, "{p}        {mc} = _cls->{mc};\n")
-          end
-        end
-      end
-      buf_push(b, "{p}    }\n")
+      buf_push(b, emit_region_reset("{p}    ", mark, rescue_roots, pinned_rescue_roots))
     end
     if cond_r.setup != ""
       buf_push(b, str_replace(cond_r.setup, "    ", "{p}    "))
@@ -4264,7 +4044,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(b, "{p}}")
 
     for name, _ in eligible
-      let mname = mangle(name)
+      let mname = var_lvalue(name)
       buf_push(b, "\n{p}{mname} = gem_string_finish({mname});")
     end
 
@@ -4859,34 +4639,56 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
   # ─── emit_param_bindings: generate C code to bind params, rest, block ──
 
-  let emit_param_bindings = fn(node, params, cap_set)
+  # `rebind` = false: declare and bind at function entry.
+  # `rebind` = true: re-assign the already-declared params from the current
+  # `args`/`argc` (the TCO rebind block). Boxed params get a fresh box, so a
+  # closure from an earlier iteration keeps its own binding, as with a real
+  # call.
+  let emit_param_bindings_impl = fn(node, params, cap_set, rebind)
     let b = buf_new()
     let defaults = node.defaults
     if defaults == nil
       defaults = []
     end
+    let decl_box = "GemVal *"
+    let decl_val = "GemVal "
+    if rebind
+      decl_box = ""
+      decl_val = ""
+    end
+    # Defaults run before the body: a body let must not shadow a module
+    # global (or anything else) they name. Only params and captures are
+    # in scope.
+    let saved_local_names = local_names
+    let entry_scope = set_union(sorted_array_to_set(params), closure_captures)
+    if node.rest_param != nil
+      set_add(entry_scope, node.rest_param)
+    end
+    local_names = set_intersect(local_names, entry_scope)
     for i = 0, len(params)
       let mp = mangle(params[i])
       let has_def = i < len(defaults) and defaults[i] != nil
       if has_def
         let r = compile_expr(defaults[i])
         if set_contains(cap_set, params[i])
-          buf_push(b, "    GemVal *{mp} = gem_box_alloc();\n")
+          buf_push(b, "    {decl_box}{mp} = gem_box_alloc();\n")
           buf_push(b, "    if (argc > {i}) \{ *{mp} = args[{i}]; } else \{\n")
           buf_push(b, r.setup)
           buf_push(b, "    *{mp} = {r.expr};\n    }\n")
         else
-          buf_push(b, "    GemVal {mp};\n")
+          if not rebind
+            buf_push(b, "    GemVal {mp};\n")
+          end
           buf_push(b, "    if (argc > {i}) \{ {mp} = args[{i}]; } else \{\n")
           buf_push(b, r.setup)
           buf_push(b, "    {mp} = {r.expr};\n    }\n")
         end
       else
         if set_contains(cap_set, params[i])
-          buf_push(b, "    GemVal *{mp} = gem_box_alloc();\n")
+          buf_push(b, "    {decl_box}{mp} = gem_box_alloc();\n")
           buf_push(b, "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
         else
-          buf_push(b, "    GemVal {mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
+          buf_push(b, "    {decl_val}{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
         end
       end
     end
@@ -4896,15 +4698,20 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       let N = len(params)
       let mp_rest = mangle(node.rest_param)
       if set_contains(cap_set, node.rest_param)
-        buf_push(b, "    GemVal *{mp_rest} = gem_box_alloc();\n")
+        buf_push(b, "    {decl_box}{mp_rest} = gem_box_alloc();\n")
         buf_push(b, "    *{mp_rest} = gem_table_new();\n")
         buf_push(b, "    for (int _ri = {N}; _ri < argc; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
       else
-        buf_push(b, "    GemVal {mp_rest} = gem_table_new();\n")
+        buf_push(b, "    {decl_val}{mp_rest} = gem_table_new();\n")
         buf_push(b, "    for (int _ri = {N}; _ri < argc; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
       end
     end
+    local_names = saved_local_names
     to_string(b)
+  end
+
+  let emit_param_bindings = fn(node, params, cap_set)
+    emit_param_bindings_impl(node, params, cap_set, false)
   end
 
   # ─── emit_fn_body: compile body stmts with implicit return ──
@@ -4948,7 +4755,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     let saved_fn_scope = fn_scope_locals
     let saved_in_leaf = in_leaf_fn
     local_names = shadowed_locals
-    fn_scope_locals = scope_vars
+    # Flow-sensitive: params now, each let as compile_stmt reaches it (so a
+    # read of a module global before a same-named let still hits the slot).
+    fn_scope_locals = sorted_array_to_set(params)
+    if node.rest_param != nil
+      set_add(fn_scope_locals, node.rest_param)
+    end
+    let saved_fn_closure_captures = closure_captures
+    closure_captures = {}
     in_leaf_fn = body_is_leaf(body)
 
     let captured = find_captured_in_scope(body, scope_vars)
@@ -4963,7 +4777,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     # Mutation-aware boxing: only captures that some nested anon_fn writes
     # need a heap box. Read-only captures (captured \ writes) live as plain
     # locals; closure envs receive them as `GemVal` value snapshots.
-    let cap_writes = find_capture_writes_in_scope(body, scope_vars)
+    # Writes are classified over every local of the body (nested-block lets
+    # too): a closure that assigns a capture must share a box with the
+    # outer frame, never write into its own snapshot box (arena reset
+    # treats arena capture boxes as write-once).
+    let cap_writes = find_capture_writes_in_scope(body, shadowed_locals)
     if node.defaults != nil
       for d in node.defaults
         if d != nil
@@ -4983,16 +4801,13 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         end
       end
     end
-    let use_tco = false
-    if node.rest_param == nil and not has_defs and not set_contains(scope_vars, name)
-      use_tco = has_self_tail_call(name, body)
-    end
+    let use_tco = fn_def_is_tco(node)
     if use_tco
       tco_fn_name = name
       tco_params = params
-      tco_captured = captured
       tco_boxed = boxed_vars
-      tco_is_process_tail = set_contains(process_tail_fns, name)
+      tco_rebind = has_defs or node.rest_param != nil
+      tco_argv_max = 0
     end
 
     # ─── SCC member detection ───
@@ -5026,7 +4841,43 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       buf_push(b, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(rel_path(file_of(node)))}\", {fn_line});\n")
     end
 
-    if use_tco
+    if use_tco and tco_rebind
+      # Rebind mode (default / rest params). The body runs in its own C
+      # block so its locals are out of scope at `_tco_rebind`; a self tail
+      # call stores its args in `_tco_argv` and jumps there, and the rebind
+      # block binds params the way function entry does. The rebind code is
+      # compiled before the body so it sees the entry scope state.
+      let rebind_c = emit_param_bindings_impl(node, params, boxed_vars, true)
+      let bb = buf_new()
+      if len(body) > 0
+        for i = 0, len(body) - 1
+          buf_push(bb, compile_stmt(body[i], 3))
+          buf_push(bb, "\n")
+        end
+        buf_push(bb, compile_stmt_return(body[-1], 3))
+        buf_push(bb, "\n")
+      else
+        let pf3 = pop_str("            ")
+        buf_push(bb, "{pf3}            return GEM_NIL;\n")
+      end
+      let argv_n = tco_argv_max
+      if argv_n < 1
+        argv_n = 1
+      end
+      buf_push(b, "    GemVal _tco_argv[{argv_n}];\n")
+      buf_push(b, "    GemArenaMark _tco_mk;\n")
+      buf_push(b, "    gem_arena_mark(&_tco_mk);\n")
+      buf_push(b, "    while(1) \{\n")
+      buf_push(b, "        gem_yield_check();\n")
+      buf_push(b, "        \{\n")
+      buf_push(b, to_string(bb))
+      buf_push(b, "        \}\n")
+      buf_push(b, "    _tco_rebind: ;\n")
+      buf_push(b, rebind_c)
+      buf_push(b, "    \}\n")
+    elif use_tco
+      buf_push(b, "    GemArenaMark _tco_mk;\n")
+      buf_push(b, "    gem_arena_mark(&_tco_mk);\n")
       buf_push(b, "    while(1) \{\n")
       buf_push(b, "        gem_yield_check();\n")
       if len(body) > 0
@@ -5050,9 +4901,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     if use_tco
       tco_fn_name = nil
       tco_params = nil
-      tco_captured = nil
       tco_boxed = nil
-      tco_is_process_tail = false
+      tco_rebind = false
+      tco_argv_max = 0
     end
 
     # ─── SCC trampoline wrapper ───
@@ -5071,6 +4922,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     in_top_level = saved_top
     local_names = saved_local
     fn_scope_locals = saved_fn_scope
+    closure_captures = saved_fn_closure_captures
     in_leaf_fn = saved_in_leaf
     to_string(b)
   end
@@ -5097,12 +4949,22 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     let saved_local = local_names
     let saved_fn_scope = fn_scope_locals
     let saved_closure_captures = closure_captures
-    let saved_has_self_closure_slot = has_self_closure_slot
     let saved_current_closure_struct_name = current_closure_struct_name
     let saved_current_closure_captures = current_closure_captures
     let saved_in_leaf = in_leaf_fn
+    # A tail call inside this closure is the closure's own tail call, not
+    # the enclosing named fn's: suspend that fn's self-TCO and mutual-TCO
+    # rewrites (they would emit `continue`/`goto`/a TLB return in a
+    # different C function).
+    let saved_tco_fn_name = tco_fn_name
+    let saved_scc_id = current_scc_id
+    tco_fn_name = nil
+    current_scc_id = nil
     local_names = set_union(shadowed_locals, sorted_array_to_set(captures))
-    fn_scope_locals = inner_scope
+    fn_scope_locals = sorted_array_to_set(params)
+    if node.rest_param != nil
+      set_add(fn_scope_locals, node.rest_param)
+    end
     in_leaf_fn = body_is_leaf(body)
 
     let inner_captured = find_captured_in_scope(body, inner_scope)
@@ -5116,7 +4978,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
     # Mutation-aware boxing for vars in this closure's local scope captured
     # by nested anon_fns: only box those that those nested anons mutate.
-    let inner_writes = find_capture_writes_in_scope(body, inner_scope)
+    let inner_writes = find_capture_writes_in_scope(body, shadowed_locals)
     if node.defaults != nil
       for d in node.defaults
         if d != nil
@@ -5146,21 +5008,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     # Generate function
     let fb = buf_new()
     buf_push(fb, "static GemVal {name}(void *_env, GemVal *args, int argc) \{\n")
-    # When this closure body contains a process-tail `while` loop AND it
-    # captures vars from outer scope, synthesize a stack-local closure-value
-    # `_self_closure` so the loop's back-edge arena rescue can pass
-    # `&_self_closure` as a relocation root. The runtime's deep-copy walker
-    # rewrites the env-struct pointer + every capture box into the fresh
-    # arena; reload `_cls` and the capture locals from `_self_closure.env`
-    # after the reset (see `compile_while`).
-    let want_self_closure = len(captures) > 0 and body_has_pt_while(body)
     if len(captures) > 0
-      if want_self_closure
-        buf_push(fb, "    GemVal _self_closure = gem_make_fn({name}, _env);\n")
-        buf_push(fb, "    struct {struct_name} *_cls = (struct {struct_name} *)_self_closure.env;\n")
-      else
-        buf_push(fb, "    struct {struct_name} *_cls = (struct {struct_name} *)_env;\n")
-      end
+      buf_push(fb, "    struct {struct_name} *_cls = (struct {struct_name} *)_env;\n")
       for cap in captures
         let mc = mangle(cap)
         buf_push(fb, "    GemVal *{mc} = _cls->{mc};\n")
@@ -5168,7 +5017,6 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
 
     closure_captures = sorted_array_to_set(captures)
-    has_self_closure_slot = want_self_closure
     current_closure_struct_name = struct_name
     current_closure_captures = captures
 
@@ -5184,10 +5032,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     local_names = saved_local
     fn_scope_locals = saved_fn_scope
     closure_captures = saved_closure_captures
-    has_self_closure_slot = saved_has_self_closure_slot
     current_closure_struct_name = saved_current_closure_struct_name
     current_closure_captures = saved_current_closure_captures
     in_leaf_fn = saved_in_leaf
+    tco_fn_name = saved_tco_fn_name
+    current_scc_id = saved_scc_id
 
     # Add struct + function to functions list
     push(functions, struct_def + to_string(fb))
@@ -5236,9 +5085,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
     mark_non_escaping_stmts(top_stmts)
 
-    # Static process-tail analysis: marks fns whose TCO back-edge can reset the
-    # arena unconditionally (skipping the runtime depth-2 fence). Fills
-    # `process_tail_fns`. Emits warnings for unmarked TCO fns.
+    # Call graph (for mutual-TCO SCCs and the module-state note), loop
+    # tagging and per-loop liveness.
     mark_process_tail(fn_defs, top_stmts)
 
     # Liveness-driven hoist: for PT-while nodes, lift arm-lets live at the
@@ -5272,9 +5120,17 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     # read-only captures live as plain `GemVal` globals, with closures
     # receiving value snapshots in their env.
     collect_top_let_names(top_stmts, top_level_vars)
+    note_spawn_global_writes()
     let top_captured = find_captured_in_scope(top_stmts, {})
-    let top_writes = find_capture_writes_in_scope(top_stmts, top_level_vars)
-    top_level_boxed = set_intersect(top_captured, top_writes)
+    # Module-level bindings are slots, never captured. Main's other locals
+    # (lets nested in top-level loops/ifs) box like a fn's locals.
+    let main_locals = {}
+    collect_shadow_lets_in_fn(top_stmts, main_locals)
+    for k, _ in top_level_vars
+      delete(main_locals, k)
+    end
+    let top_writes = find_capture_writes_in_scope(top_stmts, main_locals)
+    let main_boxed = set_intersect(set_intersect(top_captured, top_writes), main_locals)
 
     # Emit extern fn wrappers
     for ef in extern_fns_list
@@ -5290,7 +5146,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     let saved_boxed = boxed_vars
     let saved_local = local_names
     let saved_fn_scope = fn_scope_locals
-    boxed_vars = top_level_boxed
+    boxed_vars = main_boxed
     in_top_level = true
     # local_names: over-approximation including arm-lets and nested-scope lets,
     # used as the outer guard in `filter_live_for_rescue`. Mirrors what
@@ -5335,6 +5191,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(mb, "    gem_pop_frame();\n    return GEM_NIL;\n}\n\n")
     buf_push(mb, "int main(int argc, char **argv) \{\n")
     buf_push(mb, "    gem_init(argc, argv);\n")
+    buf_push(mb, "    gem_globals_init({len(keys(top_level_vars))});\n")
     buf_push(mb, "    gem_scheduler_init();\n")
     buf_push(mb, "    gem_run_main(gem_user_main, NULL);\n")
     buf_push(mb, "    return 0;\n}\n")
@@ -5365,20 +5222,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
     buf_push(ob, "\n")
 
-    # Top-level variable globals. Boxed vars get their backing GemVal in
-    # static storage (BSS) with `gem_v_<name>` pointing at it; the pointer
-    # never changes, so closures that captured it observe assignments from
-    # main even after a top-level PT loop's arena reset (the reset rescues
-    # the BSS slot's *contents* via the roots list).
-    let tlv_keys = keys(top_level_vars)
+    # Module-level bindings: one slot each in the running process's
+    # gem_cur_globals array (see is_global_ref).
+    let tlv_keys = sort(keys(top_level_vars))
     for i = 0, len(tlv_keys)
-      let vname = tlv_keys[i]
-      if set_contains(top_level_boxed, vname)
-        buf_push(ob, "GemVal gem_box_{vname};\n")
-        buf_push(ob, "GemVal *gem_v_{vname} = &gem_box_{vname};\n")
-      else
-        buf_push(ob, "GemVal gem_v_{vname};\n")
-      end
+      buf_push(ob, "#define gem_g_{tlv_keys[i]} (gem_cur_globals[{i}])\n")
     end
     buf_push(ob, "\n")
 
