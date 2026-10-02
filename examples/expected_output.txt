@@ -1243,3 +1243,6 @@ test6: child got 2
 test7: sum=3
 test7: noise left=300
 test8: loop done 20000
+slow call: ok=false error=gen_server.call timeout
+next call: fast result
+leftover messages: 1

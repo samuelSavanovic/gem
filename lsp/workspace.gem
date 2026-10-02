@@ -102,7 +102,7 @@ fn start()
     workspace_loop({})
   end)
   receive
-  when {tag: "ws_ready", ref: r}
+  when {tag: "ws_ready", ref: ^ref}
     nil
   after 5000
     nil
@@ -119,14 +119,12 @@ fn lookup(path)
   end
   let ref = make_ref()
   send("lsp_workspace", {tag: "lookup", path: path, from: {pid: self(), ref: ref}})
-  let result = nil
   receive
-  when {tag: "ws_reply", ref: r, entry: e}
-    result = e
+  when {tag: "ws_reply", ref: ^ref, entry: e}
+    e
   after 5000
-    result = nil
+    nil
   end
-  result
 end
 
 export start, lookup

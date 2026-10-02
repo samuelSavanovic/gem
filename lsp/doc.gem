@@ -120,7 +120,7 @@ fn open(td)
     doc_loop(td.uri, td.text, td.version, cache)
   end)
   receive
-  when {tag: "doc_ready", ref: r}
+  when {tag: "doc_ready", ref: ^ref}
     nil
   after 5000
     nil
@@ -153,10 +153,7 @@ end
 
 # Synchronous query for handlers that need the current text. Returns nil if
 # the doc isn't open. Yields via send/receive so the doc process gets to
-# run between the request and the reply. The result var + post-receive read
-# is intentional — making the receive block the function's tail expression
-# trips a -Wreturn-type warning in the emitted C because cc can't see that
-# the receive's selector is exhaustive.
+# run between the request and the reply.
 fn get_text(uri)
   let name = "lsp_doc:" + uri
   if whereis(name) == nil
@@ -164,14 +161,12 @@ fn get_text(uri)
   end
   let ref = make_ref()
   send(name, {tag: "get_text", from: {pid: self(), ref: ref}})
-  let result = nil
   receive
-  when {tag: "doc_reply", ref: r, text: text}
-    result = text
+  when {tag: "doc_reply", ref: ^ref, text: text}
+    text
   after 5000
-    result = nil
+    nil
   end
-  result
 end
 
 fn get_symbols(uri)
@@ -181,14 +176,12 @@ fn get_symbols(uri)
   end
   let ref = make_ref()
   send(name, {tag: "get_symbols", from: {pid: self(), ref: ref}})
-  let result = nil
   receive
-  when {tag: "doc_reply", ref: r, symbols: syms}
-    result = syms
+  when {tag: "doc_reply", ref: ^ref, symbols: syms}
+    syms
   after 5000
-    result = nil
+    nil
   end
-  result
 end
 
 # Returns the full cache bundle (ast, tokens, symbols, text, roots) for
@@ -201,14 +194,12 @@ fn get_cache(uri)
   end
   let ref = make_ref()
   send(name, {tag: "get_cache", from: {pid: self(), ref: ref}})
-  let result = nil
   receive
-  when {tag: "doc_reply", ref: r, cache: c}
-    result = c
+  when {tag: "doc_reply", ref: ^ref, cache: c}
+    c
   after 5000
-    result = nil
+    nil
   end
-  result
 end
 
 fn publish_diagnostics(uri, diagnostics)
