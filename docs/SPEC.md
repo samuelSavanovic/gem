@@ -607,7 +607,7 @@ cancel_timer(ref)
 
 `cancel_timer(ref)` cancels a pending timer by ref. Returns `true` if cancelled, `false` if it already fired, was dropped because its target exited, or is not found.
 
-Timers are stored in a global fixed-size array (256 slots). An error is raised if the array is full.
+Pending timers are kept in a min-heap ordered by deadline that grows as needed; timers with the same deadline fire in the order they were created.
 
 ## Process Introspection
 
@@ -977,7 +977,7 @@ end
 
 `process_flag("trap_exit", bool)` — sets the `trap_exit` flag on the current process. Returns the previous value (bool). When `trap_exit` is `true`, exit signals from linked processes are converted to `{tag: "EXIT", pid: <pid>, reason: <reason>}` messages in the process's mailbox instead of killing the process.
 
-`sleep(ms)` — suspends the current process for `ms` milliseconds. Must be called inside a spawned process.
+`sleep(ms)` — suspends the current process for `ms` milliseconds. Works in any process, including the main program.
 
 `send_after(pid, msg, delay_ms)` — schedules `msg` to be delivered to `pid` after `delay_ms` milliseconds. Returns a unique ref identifying the timer. The timer fires from the scheduler, not the calling process. Timers for a process are dropped when it exits, and none is scheduled for a pid that has already exited.
 
