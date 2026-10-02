@@ -671,6 +671,7 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
     if (gem_diag_state > 0) gem_diag_t_walk += gem_diag_now() - tw0;
     /* Buffers older than the mark. */
     for (GemBuffer *b = mark->buffers; b; b = b->arena_next) {
+        scanned += sizeof(GemBuffer);
         if (gem_region_contains(&region, b->data)) {
             char *nd = (char *)gem_arena_alloc(arena, (size_t)b->cap);
             memcpy(nd, b->data, (size_t)b->len);
