@@ -5,7 +5,8 @@
 #
 #   for_in / for_range  →  block of let / while / assign
 #   match (with match_arm) → match (with when_clause)
-#   receive_match (with match_arm) → receive_match (with when_clause)
+#   receive_match (with match_arm) → receive_match (arms are
+#                                    {pattern: {condition, bindings}, body})
 #
 # The structural forms exist so future tooling (formatters, refactors,
 # pattern-aware completion) can read what the user wrote. Codegen never
@@ -23,7 +24,9 @@
 #   pat_pin:  {tag, var: <var node>}
 #   pat_error:{tag}  (pattern that failed to parse)
 #
-# Post-lower: same as today's parser output (block / when_clause / etc.).
+# Post-lower: no for_in / for_range / match_arm / pat_* nodes remain; loops
+# are block / let / while, match arms are when_clause, and receive arms are
+# {pattern: {condition, bindings}, body}.
 
 load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
 
@@ -101,9 +104,9 @@ fn lower_node(node, state)
 
   # ── Pass-through: recurse in place so metadata (`file`, `line`,
   # `col`, etc.) attached by tag_source_file or future passes is
-  # preserved. Rebuilding via constructors loses fields that aren't
-  # part of the constructor signature, which broke #line attribution
-  # for loaded modules during PR #15 bootstrap.
+  # preserved. Rebuilding via constructors would drop fields that aren't
+  # part of the constructor signature, such as the `file` that #line
+  # directives for loaded modules come from.
 
   if tag == "program"
     node.stmts = lower_stmts(node.stmts, state)

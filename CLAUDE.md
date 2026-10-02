@@ -83,7 +83,7 @@ Add a numbered example under `examples/` (next free slot) and append its stdout 
 
 1. Implement the C function in the appropriate `runtime/gem_builtins_*.c` file.
 2. Add the declaration to `runtime/gem.h`.
-3. Add the name → C function mapping in `compiler/codegen.gem` (`builtin_fns` table around line 1043).
+3. Add the name → C function mapping to the `BUILTIN_FNS` table in `compiler/builtins.gem`.
 4. Update `docs/SPEC.md`.
 5. Update both editor extensions (see below).
 6. Add a numbered example to `examples/`, append expected output, run `make test`, then `make bootstrap`.
