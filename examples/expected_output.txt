@@ -1433,3 +1433,13 @@ main built [2000000, 1999999000000]
 walker got [2000000, 1999999000000]
 ["child extra 1988890", "walked [2000000, 1999999000000]"]
 captured [200000, 19999900000]
+1 spawn global: {n: 100000, s: "x100000"}
+2 spawn local: {n: 100000, s: "x100000"}
+3 send: {n: 100000, s: "x100000"}
+4 send_after: {n: 100000, s: "x100000"}
+5 nested: {n: 100000, s: "x100000"}
+6 deep: {n: 100000, s: "x100000"}
+7 shared boxes: [{v: "y60000"}, {v: "x50000"}] via a: [{v: "y60000"}, {v: "x50000"}]
+8 many resets: {n: 5, s: "x5"}
+9 independent: child=child parent=parent
+10 sent back: {n: 100000, s: "back100000"}

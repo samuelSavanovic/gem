@@ -437,7 +437,13 @@ GemVal gem_sqlite_changes_fn(void *_env, GemVal *args, int argc);
 
 /* ─── Deep copy (for message passing between arenas) ─── */
 
-GemVal gem_deep_copy(GemVal val);
+/* Copy `val` into the current arena. `src_pid` is the process that owns
+   `val` (-1 if none): its pinned capture boxes are copied as pinned boxes
+   of the current process, so closures that assign a capture still share
+   one box that the current process's resets keep alive. */
+GemVal gem_deep_copy(GemVal val, int src_pid);
+/* Copy `val` into malloc'd memory (from the current process). Pinned boxes
+   stay marked as pinned, so a later gem_deep_copy pins them again. */
 GemVal gem_deep_copy_malloc(GemVal val);
 void gem_deep_free(GemVal val);
 
@@ -465,8 +471,9 @@ void gem_globals_init(int n);
 /* malloc'd array of gem_n_globals slots, all nil. */
 GemVal *gem_globals_alloc(void);
 /* Deep-copy `*fn_val`'s env and the `n` slots of `src` into the current
-   arena with one shared copy map; results in *fn_val and dst. */
-void gem_spawn_copy(GemVal *fn_val, GemVal *dst, const GemVal *src, int n);
+   arena with one shared copy map; results in *fn_val and dst. `src_pid` is
+   the parent (see gem_deep_copy for pinned boxes). */
+void gem_spawn_copy(GemVal *fn_val, GemVal *dst, const GemVal *src, int n, int src_pid);
 /* Copy `tbl` (a frozen module namespace table) into immortal malloc memory,
    so every process can share it without copying and no arena reset or
    process exit can free it. */

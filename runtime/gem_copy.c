@@ -114,6 +114,10 @@ typedef struct {
        module tables) is kept as is, so its identity is preserved. */
     int preserve_external;
     const GemRegion *region;
+    /* Process whose values are being copied (-1: none, e.g. a timer's
+       malloc'd message). Its pin-set tells which capture boxes are pinned
+       (see gem_copy_box_is_pinned). */
+    int src_pid;
 } GemCopyMap;
 
 static void gem_copy_map_init(GemCopyMap *map, int use_malloc) {
@@ -127,6 +131,7 @@ static void gem_copy_map_init(GemCopyMap *map, int use_malloc) {
     map->use_malloc = use_malloc;
     map->preserve_external = 0;
     map->region = NULL;
+    map->src_pid = -1;
 }
 
 static int gem_copy_is_external(GemCopyMap *map, const void *ptr) {
@@ -338,6 +343,40 @@ static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
     return val;
 }
 
+/* Pinned boxes in malloc'd copies (gem_deep_copy_malloc: timer messages,
+   frozen module tables). They belong to no process, so this set records
+   which of their boxes stand for pinned ones; gem_deep_free drops them. */
+static GemPinEntry *gem_malloc_pinned = NULL;
+
+/* Is `box` a pinned box (a mutated capture, shared by every closure that
+   assigns it)? Pinned boxes are malloc'd and listed in their process's
+   pin-set, or, in a malloc'd copy, in gem_malloc_pinned. */
+static int gem_copy_box_is_pinned(GemCopyMap *map, GemVal *box) {
+    if (map->src_pid >= 0) {
+        GemProcess *sp = &gem_proc_table[map->src_pid];
+        if (sp->pinned_boxes && hmgeti(sp->pinned_boxes, (void *)box) >= 0) return 1;
+    }
+    return gem_malloc_pinned && hmgeti(gem_malloc_pinned, (void *)box) >= 0;
+}
+
+/* A fresh box for the copy of capture box `old`. A pinned source gets a
+   pinned copy: closures keep writing it after the copy, and only a pinned
+   box (pin-set: walked by every reset of the destination process) keeps the
+   values stored into it alive. Arena boxes are write-once, so a plain
+   arena box is enough for them. */
+static GemVal *gem_copy_new_box(GemCopyMap *map, GemVal *old) {
+    if (!map->preserve_external && gem_copy_box_is_pinned(map, old)) {
+        if (map->use_malloc) {
+            GemVal *b = (GemVal *)calloc(1, sizeof(GemVal));
+            GemPinEntry e = { .key = b, .value = 0, .seq = 0 };
+            hmputs(gem_malloc_pinned, e);
+            return b;
+        }
+        return gem_box_alloc();  /* registers in the destination's pin-set */
+    }
+    return (GemVal *)gem_copy_alloc(map, sizeof(GemVal));
+}
+
 static void gem_copy_fill_env(void *env, void *new_env, GemCopyMap *map) {
     intptr_t n = *(intptr_t *)env;
     GemVal **old = (GemVal **)((char *)env + sizeof(intptr_t));
@@ -363,7 +402,7 @@ static void gem_copy_fill_env(void *env, void *new_env, GemCopyMap *map) {
             new_fields[i] = existing;
             continue;
         }
-        GemVal *box = (GemVal *)gem_copy_alloc(map, sizeof(GemVal));
+        GemVal *box = gem_copy_new_box(map, old[i]);
         gem_copy_map_add(map, old[i], box);
         *box = gem_copy_shallow(*old[i], map);
         new_fields[i] = box;
@@ -392,9 +431,10 @@ static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map) {
     return r;
 }
 
-GemVal gem_deep_copy(GemVal val) {
+GemVal gem_deep_copy(GemVal val, int src_pid) {
     GemCopyMap map;
     gem_copy_map_init(&map, 0);
+    map.src_pid = src_pid;
     GemVal result = gem_deep_copy_internal(val, &map);
     gem_copy_map_cleanup(&map);
     return result;
@@ -403,6 +443,7 @@ GemVal gem_deep_copy(GemVal val) {
 GemVal gem_deep_copy_malloc(GemVal val) {
     GemCopyMap map;
     gem_copy_map_init(&map, 1);
+    map.src_pid = gem_current_pid;
     GemVal result = gem_deep_copy_internal(val, &map);
     gem_copy_map_cleanup(&map);
     return result;
@@ -462,6 +503,7 @@ void gem_deep_free(GemVal val) {
                     if (gem_copy_map_find(&visited, fields[i])) continue;
                     gem_copy_map_add(&visited, fields[i], (void *)1);
                     GEM_FREE_PUSH(*fields[i]);
+                    if (gem_malloc_pinned) (void)hmdel(gem_malloc_pinned, (void *)fields[i]);
                     free(fields[i]);
                 }
                 free(v.env);
@@ -579,7 +621,9 @@ void gem_pin_free_all(GemProcess *proc) {
  *      strings are immutable, so older ones cannot point into the region.
  *   4. Process state: module slots (proc->globals), the mailbox, read_buf.
  *   5. Other processes never hold pointers into this arena (spawn and send
- *      deep-copy; frozen module tables are immortal malloc copies).
+ *      deep-copy; frozen module tables are immortal malloc copies). A
+ *      pinned box reaching this process by a copy is a new pinned box of
+ *      this process (gem_copy_new_box), so case 3 covers it.
  *
  * Nested loops nest their marks: a reset only frees memory newer than its
  * own mark, so marks held by enclosing loops (all older) stay valid.
@@ -831,9 +875,10 @@ GemVal *gem_globals_alloc(void) {
     return g;
 }
 
-void gem_spawn_copy(GemVal *fn_val, GemVal *dst, const GemVal *src, int n) {
+void gem_spawn_copy(GemVal *fn_val, GemVal *dst, const GemVal *src, int n, int src_pid) {
     GemCopyMap map;
     gem_copy_map_init(&map, 0);
+    map.src_pid = src_pid;
     if (fn_val) *fn_val = gem_deep_copy_internal(*fn_val, &map);
     for (int i = 0; i < n; i++) dst[i] = gem_deep_copy_internal(src[i], &map);
     gem_copy_map_cleanup(&map);

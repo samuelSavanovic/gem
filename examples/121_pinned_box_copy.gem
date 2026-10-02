@@ -1,0 +1,160 @@
+# Closures that assign a captured variable share a pinned box. Copying them
+# to another process (spawn, send, send_after) must give the copy a pinned
+# box too, shared by all the copied closures, so values stored through it
+# survive the receiving process's arena resets.
+
+fn make_holder()
+  let held = nil
+  {put: fn(v) held = v end, get: fn() held end}
+end
+
+# Store a fresh value through `h` midway through an allocating loop that
+# resets its arena many times, then read it back.
+fn stress(h, n, at)
+  let i = 0
+  while i < n
+    if i == at
+      h.put({n: i, s: "x{i}"})
+    end
+    let junk = {a: "junk{i}", b: [1, 2, 3]}
+    i += 1
+  end
+  h.get()
+end
+
+let me = self()
+
+# 1. Captured by a spawned closure via a module-level binding.
+let g = make_holder()
+spawn(fn()
+  print("1 spawn global: {stress(g, 200000, 100000)}")
+  send(me, "done")
+end)
+receive()
+
+# 2. Captured by a spawned closure via a local.
+fn spawn_local()
+  let h = make_holder()
+  spawn(fn()
+    print("2 spawn local: {stress(h, 200000, 100000)}")
+    send(me, "done")
+  end)
+end
+spawn_local()
+receive()
+
+# 3. Sent in a message.
+let p3 = spawn(fn()
+  let h = receive()
+  print("3 send: {stress(h, 200000, 100000)}")
+  send(me, "done")
+end)
+send(p3, make_holder())
+receive()
+
+# 4. Delivered by a timer.
+spawn(fn()
+  send_after(self(), make_holder(), 10)
+  let h = receive()
+  print("4 send_after: {stress(h, 200000, 100000)}")
+  send(me, "done")
+end)
+receive()
+
+# 5. Nested holders: the inner holder lives in the outer one's box.
+let outer = make_holder()
+outer.put(make_holder())
+spawn(fn()
+  print("5 nested: {stress(outer.get(), 200000, 100000)}")
+  send(me, "done")
+end)
+receive()
+
+# 6. A holder inside a table inside a table.
+let p6 = spawn(fn()
+  let msg = receive()
+  print("6 deep: {stress(msg.a.b.h, 200000, 100000)}")
+  send(me, "done")
+end)
+send(p6, {a: {b: {h: make_holder()}}})
+receive()
+
+# 7. Several closures sharing several boxes; each copy keeps the sharing.
+fn make_pair()
+  let x = 0
+  let y = 0
+  {
+    set_x: fn(v) x = v end,
+    set_y: fn(v) y = v end,
+    swap: fn()
+      let t = x
+      x = y
+      y = t
+    end,
+    get: fn() [x, y] end
+  }
+end
+let p7 = spawn(fn()
+  let m = receive()
+  let a = m.p
+  let b = m.again
+  let i = 0
+  while i < 200000
+    if i == 50000
+      a.set_x({v: "x{i}"})
+    end
+    if i == 60000
+      b.set_y({v: "y{i}"})
+    end
+    if i == 70000
+      a.swap()
+    end
+    let junk = "junk{i}"
+    i += 1
+  end
+  print("7 shared boxes: {b.get()} via a: {a.get()}")
+  send(me, "done")
+end)
+let pr = make_pair()
+send(p7, {p: pr, again: pr})
+receive()
+
+# 8. Copied within one process (send to self), written early, then many
+#    resets.
+spawn(fn()
+  let h = make_holder()
+  let hs = [h]
+  send(self(), hs)
+  let copy = receive()[0]
+  print("8 many resets: {stress(copy, 600000, 5)}")
+  send(me, "done")
+end)
+receive()
+
+# 9. The copy is independent of the original.
+let orig = make_holder()
+orig.put("parent")
+let p9 = spawn(fn()
+  let h = receive()
+  h.put("child")
+  send(me, h.get())
+end)
+send(p9, orig)
+print("9 independent: child={receive()} parent={orig.get()}")
+
+# 10. Copied back to the parent, which then resets.
+let p10 = spawn(fn()
+  let h = make_holder()
+  h.put("from child")
+  send(me, h)
+end)
+let back = receive()
+let i = 0
+while i < 200000
+  if i == 100000
+    back.put({n: i, s: "back{i}"})
+  end
+  let junk = {a: "junk{i}"}
+  i += 1
+end
+print("10 sent back: {back.get()}")
