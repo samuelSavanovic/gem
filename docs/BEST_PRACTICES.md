@@ -77,7 +77,7 @@ allocate.
 
 Before writing a byte loop, check whether a builtin does the job:
 `str_replace` and `substr` run in C. Escaping 800 KB took about 100 ms with
-a per-byte loop and about 10 ms with chained `str_replace`. `string.split`
+a per-byte loop and about 20 ms with chained `str_replace`. `string.split`
 and `string.index_of` are Gem byte loops themselves, so they cost about the
 same as writing the loop by hand.
 
@@ -86,8 +86,7 @@ same as writing the loop by hand.
 A `do` block is a closure. `return` inside it returns from the *block*, so
 `table.each` carries on with the next element. `break` or `continue` inside
 a `do` block is reported by the C compiler, not by Gem, at an approximate
-line. Use
-`table.each`/`map`/`filter` for straight-through transforms; use `for` when
+line **(bug)**. Use `table.each`/`map`/`filter` for straight-through transforms; use `for` when
 you need to stop early.
 
 ```gem
@@ -105,12 +104,13 @@ end
 
 ## Control flow
 
-### `if` and `match` are statements
+### `if`, `match` and `receive` are statements
 
-`let x = if ...`, `let x = match ...` and `return match ...` don't parse. A
-`match` or `if` yields a value only as the last statement of a function,
-closure or block (including inside the last branch of an `if`). When you
-need a value, put the `match` in a small function:
+`let x = if ...`, `let x = match ...`, `let x = receive ...` and
+`return match ...` don't parse. A `match` or `if` yields a value only as the
+last statement of a function, closure or block (including inside any branch
+of a final `if`). When you need a value, put the `match` in a small
+function:
 
 ```gem
 # Prefer
@@ -131,6 +131,16 @@ if n > 100
   label = "big"
 end
 ```
+
+### Declare before the `if`, assign inside **(bug)**
+
+Don't declare a variable with `let` inside a branch and use it after the
+`if`. Depending on the shape it works, is a C "undeclared" error, or reads
+`nil` with no error (declared in one branch of an `if` inside a loop, read
+in a later iteration). In top-level code, a `let` inside a block overwrites
+an outer variable of the same name instead of shadowing it. Declare the
+variable before the `if` and assign it in the branches, as `label` does
+above.
 
 ### `match` on shape instead of `if` chains on fields
 
@@ -217,12 +227,12 @@ The trailing `= {}` makes the bag optional and turns an explicit `nil` into
 the field is missing or `nil`. Destructured names are ordinary locals that
 closures and `spawn` bodies can capture.
 
-### Don't redeclare a parameter with `let` **(bug)**
+### Don't redeclare a name that is already in scope **(bug)**
 
-`let n = n - 1` where `n` is a parameter fails: in most functions the C
-compiler reports `redefinition of 'gem_v_n'`, and in a tail-recursive
-function the right-hand `n` reads `nil` at runtime. Assign instead
-(`n = n - 1`), or pick a new name.
+`let x = ...x...`, when an `x` is already in scope (a parameter, an outer
+local or a module global), fails in one of three ways depending on where it
+is: a C `redefinition of 'gem_v_x'` error, a `nil` read, or a read of an
+uninitialized value. Assign instead (`n = n - 1`), or pick a new name.
 
 ### `+=` works only on variables
 
@@ -232,11 +242,18 @@ function the right-hand `n` reads `nil` at runtime. Assign instead
 ### Don't reuse builtin or module names **(trap)**
 
 Defining `fn error` (or `print`, `len`...) does something different
-depending on the file, and neither is reported. In a loaded module it
+depending on the file, and neither is reported **(bug)**. In a loaded module it
 replaces the builtin everywhere in that module, so `error("bad")` stops
 raising. In the program's entry file your definition is ignored. A local
 or parameter named `string`, `table`, `json` or `time` hides the module
 and fails only at runtime (`field access on non-table`). Pick another name.
+
+### Typos inside closures reach the C compiler **(bug)**
+
+An undeclared name in a named function is a Gem error. Inside a closure
+(`fn() ... end`, a `do` block, a `spawn do` body, or `pcall f(x)`, which
+wraps one) it is a C `'gem_v_<name>' undeclared` error at an approximate
+line. Read it as a misspelled variable.
 
 ### `fn main` runs automatically
 
@@ -302,7 +319,9 @@ different orders encode differently.
 
 `2.0 == 2` is `false`, `when 2` doesn't match `2.0`, and `t[1]` and
 `t[1.0]` are different keys. JSON numbers with a decimal point or an
-exponent (`1e2`) parse as floats. Convert first (`to_int`, `floor`) when values may come from either.
+exponent (`1e2`) parse as floats. Convert first (`to_int`, `floor`) when
+values may come from either. `print(2.0)` and `"{2.0}"` both show `2`, so
+check with `type(x)` when a comparison fails for no visible reason.
 
 ### Integer arithmetic follows C
 
@@ -325,8 +344,10 @@ params, query strings, form fields) in `pcall`, or a bad id becomes a 500.
 ```
 
 Interpolation calls `to_string` for you. Use single quotes for text with
-literal braces, such as `'{"key": 1}'`. `in` doesn't parse inside `{...}`;
-compute it into a variable first.
+literal braces, such as `'{"key": 1}'`. An interpolation that starts with a
+double-quoted string followed by an operator (`"{"a" in t}"`,
+`"{"a" + b}"`) doesn't parse **(bug)**; wrap it in parentheses or compute it
+into a variable first.
 
 ### Building strings
 
@@ -352,7 +373,8 @@ single block, such as a read loop that collects chunks.
 ### Strings are bytes
 
 `len` is the byte count, `s[i]` is a 1-byte string, and `ord(s, i)` is the
-byte value. Strings may contain `\0`. Use `substr` to slice.
+byte value. Strings may contain `\0`, but `print` stops at the first one;
+use `write_stdout` for binary output. Use `substr` to slice.
 
 ---
 
@@ -455,8 +477,8 @@ followed by `loop(state)` is fine and cheaper than rebuilding the table.
 
 ### Deep recursion raises an error
 
-Every process, main included, has an 8 MB stack: about 28,000 simple
-non-tail frames. Past that, the call raises `stack overflow in <fn>`, which
+Every process, main included, has an 8 MB stack: roughly 15,000 to 35,000
+non-tail frames, depending on the function. Past that, the call raises `stack overflow in <fn>`, which
 `pcall` catches like any error. `json.parse` refuses nesting deeper than
 128; `json.encode` has no cap and raises `stack overflow` at a few thousand
 levels. For recursive walkers over untrusted input, cap the depth or use an
@@ -542,8 +564,10 @@ end
 - When the target may die, monitor it and add a `DOWN` arm, so a dead
   server fails at once instead of after the full timeout. `std/task` is the
   model: it monitors, matches `{tag: "DOWN", pid: ^pid}`, and flushes the
-  `DOWN` when it's done. There is no `demonitor`, so monitor short-lived
-  targets, not long-lived servers called thousands of times.
+  `DOWN` when it's done. There is no `demonitor`, and a monitor from a
+  process that has exited stays on the target's list until the target
+  dies. So don't monitor a long-lived server from many short-lived
+  processes, such as per-connection handlers.
 - After a timeout, the reply may still arrive later. The pin makes it
   harmless to *this* wait, but it sits in the mailbox until something
   removes it; the process's main-loop catch-all (below) is what drops it.
@@ -560,6 +584,12 @@ with an empty mailbox and 0.8 s with 1,000 stale messages in it.
   would take messages that belong to someone else, such as a task result or
   another call's reply.
 
+### The program waits for every process
+
+The program doesn't exit when main's code ends: it waits until every
+process has exited. A server loop left running keeps it alive. Call
+`exit()` to end the program from anywhere.
+
 ### Monitor, link, trap
 
 - `monitor`: "tell me when it dies" (clients, callers, observers).
@@ -572,7 +602,7 @@ with an empty mailbox and 0.8 s with 1,000 stale messages in it.
 `send` and `spawn` copy their values into the receiving process. Changing a
 received table doesn't affect the sender. The copy costs time proportional
 to the whole message, strings included: 2,000 round trips take 8 ms with a
-10 B body and 0.9 s with a 1 MB body. A closure passed to `spawn` copies
+10 B request body and 0.9 s with a 1 MB request body. A closure passed to `spawn` copies
 everything it captures. Send what the receiver needs, not a large shared
 structure, and never fan a big message out to many processes.
 
@@ -580,6 +610,11 @@ structure, and never fan a big message out to many processes.
 
 `spawn` raises `spawn: process table full` past the limit (`GEM_MAX_PROCS`);
 main uses one slot, so 1,023 spawned processes can be alive at once. A
+loop that spawns quick tasks can still hit it: `spawn` doesn't let the
+children run, so `for i = 0, 5000` spawning a one-line task fails at the
+1,024th. Batch the work, or cap how many are in flight (a `sleep(0)` in the
+loop lets finished children exit). `task.async` over a long list has the
+same limit. A
 reader/writer pair per connection uses two. An acceptor that spawns per
 connection should catch that error and close the connection, or cap the
 number of connections; otherwise one burst kills the acceptor.
@@ -590,8 +625,9 @@ number of connections; otherwise one burst kills the acceptor.
 
 ### Know what blocks every process
 
-The scheduler is cooperative: a builtin that blocks the OS thread stops
-**all** processes.
+Gem code is preempted at loop back-edges, so a busy loop doesn't starve
+other processes. But a builtin that blocks the OS thread stops **all**
+processes.
 
 | Yields to other processes | Blocks everything |
 |---|---|
@@ -624,6 +660,11 @@ r.value
 The same shape works around a long-running connection loop. To keep the
 connection open after a bad request, `pcall` each iteration inside the loop
 instead, as `std/http` does.
+
+### `tcp_listen` takes an IP address
+
+`tcp_listen("localhost", port)` raises `invalid address`; pass
+`"127.0.0.1"` or `"0.0.0.0"`. `tcp_connect` accepts host names.
 
 ### Pass timeouts to reads, check writes
 
@@ -668,7 +709,8 @@ export make, use
   import, unless a name is used often enough to be noise.
 - Avoid modules that load each other in a cycle. Functions calling across
   the cycle work, but a top-level `let` that uses the other module while it
-  loads finds its namespace `nil`, and the error points at the entry file.
+  loads finds its namespace `nil`, and the error points at the entry file
+  **(bug)**.
   Move shared code into a third module.
 
 ### Accept a pid or a `{pid}` handle in one place
@@ -697,7 +739,8 @@ and uses index-append and `_` prefixes. These are being fixed.
   process. Declare slow calls `extern blocking fn`.
 - Returned strings: a plain `extern fn` must return static memory (the
   runtime copies it and does not free it); an `extern blocking fn` must
-  return `malloc`'d memory (the runtime frees it).
+  return `malloc`'d memory (the runtime frees it). A `NULL` return is
+  `nil` from a plain `extern fn` but `""` from an `extern blocking fn`.
 - Don't keep pointers to Gem strings or tables on the C side after the call
   returns; the next arena reset moves them.
 
@@ -737,7 +780,8 @@ and uses index-append and `_` prefixes. These are being fixed.
 |---|---|---|
 | Module-level `let` used as shared state | each process changes only its own copy | keep shared state in a process |
 | `warning: cannot reset ... back-edge` on a `while true` | memory grows without bound | restructure the loop |
-| `let p = p ...` on a parameter `p` | C compile error, or `nil` in a tail-recursive fn | assign, or use a new name |
+| `let x = ...x...` with an `x` already in scope | C error, `nil`, or garbage | assign, or use a new name |
+| `let` in an `if` branch, used after the `if` | C error or silent `nil` | declare before, assign inside |
 | `delete(arr, i)` | hole in the array; `for` misses the last element | `remove_at(arr, i)` |
 | `delete` inside `for k, v in tbl` | skips entries, visits `nil` | iterate `keys(tbl)` |
 | String accumulator read inside its loop | quadratic | `build_string` |
@@ -746,10 +790,10 @@ and uses index-append and `_` prefixes. These are being fixed.
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Reply pattern without `^ref` | takes a stale reply | `ref: ^ref` |
 | `2.0 == 2` | `false` | convert first |
-| Function named `error`, `print`... | replaces the builtin in a module, ignored in the entry file | another name |
+| Function named `error`, `print`..., or a local named `json`, `string`... | builtin replaced in a module, ignored in the entry file; module hidden | another name |
 | Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_read` with no timeout, or `0` | blocks forever on a silent peer | pass a timeout |
 | `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |
-| `t.f += 1` | compile error | `t.f = t.f + 1` |
+| Spawning thousands of quick tasks in a loop | `process table full` | batch, or cap in-flight tasks |
