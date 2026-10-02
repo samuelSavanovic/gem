@@ -707,7 +707,7 @@ Returning `{NULL, 0}` from a non-blocking `extern fn -> Bytes` yields `nil` on t
 
 
 
-`extern blocking fn` declares a C function that may block (e.g. socket I/O, database calls, DNS lookups). When called from a coroutine (`spawn`), the call is submitted to a thread pool so the scheduler can continue running other coroutines. When called outside a coroutine, it calls directly (synchronous). The C function runs on a worker thread and must not allocate from process arenas — for `String` returns, use `malloc`/`strdup` (the runtime copies into the process's arena and frees the original). If the calling process is killed while the call is in flight, the C function still runs to completion; the runtime then frees its copies of the arguments and a `String` or `Bytes` result, but not a `Ptr` result, which it has no way to release.
+`extern blocking fn` declares a C function that may block (e.g. socket I/O, database calls, DNS lookups). Every call, including one from the main program (which runs as a process too), is submitted to a thread pool so the scheduler can keep running other processes while the calling process waits. The C function runs on a worker thread and must not allocate from process arenas — for `String` returns, use `malloc`/`strdup` (the runtime copies into the process's arena and frees the original). If the calling process is killed while the call is in flight, the C function still runs to completion; the runtime then frees its copies of the arguments and a `String` or `Bytes` result, but not a `Ptr` result, which it has no way to release.
 
 ```
 extern blocking fn net_accept(server_fd: Int) -> Int
@@ -721,12 +721,12 @@ extern include "math.h"
 extern include "stdio.h"
 ```
 
-**String-return ownership** differs by call kind, intentionally:
+**String-return ownership** differs by call kind:
 
 - `extern fn` (non-blocking) — the runtime copies the returned `char*` into the calling process's arena via `gem_string` and **does not free the original**. Use this for static literals (`getenv`, `strerror`, etc.). A `malloc`'d return will leak.
-- `extern blocking fn` — the runtime copies into the arena and **frees the original** with `free`. The C function must return a `malloc`/`strdup`'d pointer; returning a static literal will crash on the free. NULL is allowed and yields an empty string in the blocking path, or `nil` in the non-blocking path.
+- `extern blocking fn` — the runtime copies into the arena and **frees the original** with `free`. The C function must return a `malloc`/`strdup`'d pointer; returning a static literal will crash on the free. NULL is allowed and yields an empty string from an `extern blocking fn`, or `nil` from an `extern fn`.
 
-**Pointer lifetime.** `String`, `Bytes`, and `Table` arguments passed to a C function point into the calling process's arena. They are stable for the duration of the call but **not** across the next arena reset (which can happen at any TCO back-edge or process-tail loop iteration). C code must not stash these pointers — copy out with `strdup`, `memcpy`, or by value before retaining.
+**Pointer lifetime.** `String`, `Bytes`, and `Table` arguments passed to an `extern fn` point into the calling process's arena. They are stable for the duration of the call but **not** across the next arena reset (which can happen at any TCO back-edge or process-tail loop iteration). An `extern blocking fn` receives malloc'd copies of its `String` and `Bytes` arguments instead, which the runtime frees once the call is over. In both cases C code must not stash these pointers — copy out with `strdup`, `memcpy`, or by value before retaining.
 
 `extern` is unsafe by definition: arity, type, and ABI are not validated at the boundary. A Gem-side mistake silently passes garbage to C.
 

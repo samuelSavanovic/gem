@@ -4748,7 +4748,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(b, "    if (gem_current_pid >= 0) \{\n")
     buf_push(b, "        struct _blk_{name}_args *_ba = (struct _blk_{name}_args *)calloc(1, sizeof(struct _blk_{name}_args));\n")
 
-    # Copy args into struct (strdup strings / memcpy bytes for thread safety)
+    # Copy String/Bytes args out of the arena (strdup / memcpy): the worker
+    # may still read them after a killed requester's arena is destroyed
     for i = 0, len(params)
       let ptype = params[i]["type"]
       if ptype == "String"
@@ -4771,12 +4772,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
     # Copy the result out of the args struct, then release the request
     if ret_type == "String"
-      buf_push(b, "        char *_raw = _ba->_result;\n")
-      buf_push(b, "        size_t _len = _raw ? strlen(_raw) : 0;\n")
-      buf_push(b, "        char *_gc = (char *)gem_alloc(_len + 1);\n")
-      buf_push(b, "        if (_raw) memcpy(_gc, _raw, _len + 1); else _gc[0] = '\\0';\n")
+      buf_push(b, "        GemVal _gv = gem_string(_ba->_result ? _ba->_result : \"\");\n")
       buf_push(b, "        gem_io_release(_req);\n")
-      buf_push(b, "        return gem_string(_gc);\n")
+      buf_push(b, "        return _gv;\n")
     elif ret_type == "Bytes"
       buf_push(b, "        GemBytes _raw = _ba->_result;\n")
       buf_push(b, "        GemVal _gv = _raw.data ? gem_string_with_len((const char*)_raw.data, (int)_raw.len) : gem_string_with_len(\"\", 0);\n")
@@ -4804,7 +4802,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
     buf_push(b, "    }\n")
 
-    # Direct call path (not in a coroutine)
+    # Direct call path, for a call made outside any process. Results are
+    # owned the same way as on the pool path.
     let d_args = ""
     let d_first = true
     for i = 0, len(params)
@@ -4831,7 +4830,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       buf_push(b, "    return gem_float(_ret);\n")
     elif ret_type == "String"
       buf_push(b, "    char* _ret = {d_call};\n")
-      buf_push(b, "    return gem_string(_ret);\n")
+      buf_push(b, "    GemVal _gv = gem_string(_ret ? _ret : \"\");\n")
+      buf_push(b, "    free(_ret);\n")
+      buf_push(b, "    return _gv;\n")
     elif ret_type == "Bool"
       buf_push(b, "    int _ret = {d_call};\n")
       buf_push(b, "    return gem_bool(_ret);\n")

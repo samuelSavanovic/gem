@@ -150,6 +150,32 @@ fn make_parser(tokens, source, file, sink)
     t
   end
 
+  # Parse the type name of an extern parameter (`is_ret` false) or return
+  # (`is_ret` true) and report it if it is not a marshalable extern type.
+  let expect_extern_type = fn(is_ret, is_blocking)
+    let t = expect("NAME")
+    let ty = t.value
+    if t.synthetic == true
+      return ty
+    end
+    let known = ty == "Int" or ty == "Float" or ty == "String" or ty == "Bool" or ty == "Ptr" or ty == "Bytes" or ty == "Table"
+    if is_ret and ty == "Nil"
+      known = true
+    end
+    if not known
+      let allowed = "Int, Float, String, Bool, Ptr, Bytes, Table"
+      if is_ret
+        allowed = allowed + ", Nil"
+      end
+      report(t.line, t.col, len(ty), "unknown extern type '{ty}'", "expected one of {allowed}")
+    elif is_blocking and ty == "Table" and is_ret
+      report(t.line, t.col, len(ty), "extern blocking fn cannot return a Table", "the C function runs on a worker thread, which cannot allocate in the calling process's memory; return Bytes or Ptr instead")
+    elif is_blocking and ty == "Table"
+      report(t.line, t.col, len(ty), "extern blocking fn cannot take a Table", "a Table points into the calling process's memory, which is freed if the process is killed mid-call; pass its fields as separate arguments")
+    end
+    ty
+  end
+
   # Force-advance one token if the loop body produced no progress this
   # iteration. Used inside every `while peek().type != X` to guarantee
   # forward motion even when expect() returns a synthetic and leaves the
@@ -1274,13 +1300,13 @@ fn make_parser(tokens, source, file, sink)
         if peek().type != ")"
           let pname = expect("NAME").value
           expect(":")
-          let ptype = expect("NAME").value
+          let ptype = expect_extern_type(false, is_blocking)
           push(eparams, make_extern_param(pname, ptype))
           while peek().type == ","
             advance()
             let pn2 = expect("NAME").value
             expect(":")
-            let pt2 = expect("NAME").value
+            let pt2 = expect_extern_type(false, is_blocking)
             push(eparams, make_extern_param(pn2, pt2))
           end
         end
@@ -1288,7 +1314,7 @@ fn make_parser(tokens, source, file, sink)
         let ret_type = "Nil"
         if peek().type == "->"
           advance()
-          ret_type = expect("NAME").value
+          ret_type = expect_extern_type(true, is_blocking)
         end
         return make_extern_fn(name, eparams, ret_type, is_blocking)
       elif not is_blocking and peek().type == "NAME" and peek().value == "include"
