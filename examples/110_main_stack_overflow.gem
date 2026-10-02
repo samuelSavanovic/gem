@@ -1,0 +1,16 @@
+# An uncaught stack overflow in the main process is reported like any other
+# uncaught runtime error: message, stack trace (runs of identical frames
+# collapsed), exit status 1.
+
+fn depth(n)
+  if n == 0 then return 0 end
+  1 + depth(n - 1)
+end
+
+fn start()
+  depth(100000000)
+end
+
+print("before")
+start()
+print("unreachable")

@@ -2,6 +2,11 @@
  * gem_scheduler.c — Concurrency: scheduler, coroutines, mailbox, spawn/send/receive.
  */
 
+/* REG_RIP / REG_RSP in <ucontext.h> (stack-overflow rescue) need _GNU_SOURCE. */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #define MINICORO_IMPL
 #include "minicoro.h"
 
@@ -126,14 +131,277 @@ static void gem_diag_print_on_exit(void) {
 static struct pollfd gem_poll_fds[GEM_MAX_PROCS];
 static int gem_poll_pids[GEM_MAX_PROCS];
 
+/* ─── Process stacks ───
+ *
+ * Every process (main included) runs on a minicoro stack that we map
+ * ourselves. minicoro lays a coroutine out as one block,
+ *     [mco_coro | _mco_context | storage | stack]
+ * with the stack growing down toward the header, so an overflow used to
+ * scribble over the coroutine's own bookkeeping and then whatever malloc
+ * put next to it. We map the block with mmap instead and pad the (unused)
+ * storage area so that it ends in a PROT_NONE guard region directly below
+ * the stack:
+ *
+ *     [header page(s) | guard (GEM_STACK_GUARD_BYTES) | stack ............]
+ *     ^ mco_coro        ^ storage tail                ^ stack_lo     top ^
+ *
+ * mmap'd memory is only committed when touched, so a large stack costs
+ * address space, not RAM. Overflow is handled at two levels:
+ *
+ *   1. Soft: gem_push_frame (gem.h) compares the frame address against
+ *      gem_stack_limit = stack_lo + GEM_STACK_RED_ZONE and calls
+ *      gem_stack_overflow, which raises an ordinary runtime error. pcall
+ *      catches it; uncaught, the process dies with that reason.
+ *   2. Hard: C code that recurses on its own (deep_copy of deeply nested
+ *      data, say) can run through the red zone into the guard. The
+ *      SIGSEGV/SIGBUS handler, on an alternate signal stack, checks that the
+ *      fault address is in the running process's guard, then rewrites the
+ *      interrupted context to resume in gem_stack_overflow_rescue on a
+ *      separate rescue stack. Returning from the handler that way restores
+ *      the signal mask and the kernel's alternate-stack state normally. The
+ *      rescue longjmps to the process's proc_jmp, so the process dies with
+ *      reason "stack overflow" (main prints it and exits 1). The C code that
+ *      was interrupted is abandoned midway, so this path is never offered to
+ *      pcall. Faults anywhere else get the default action, as before.
+ */
+
+#include <sys/mman.h>
+#include <signal.h>
+#include <unistd.h>
+#if defined(__APPLE__)
+#include <sys/ucontext.h>
+#else
+#include <ucontext.h>
+#endif
+
+#ifndef GEM_STACK_GUARD_BYTES
+/* Larger than one page so a C frame of a few KB that steps over the first
+   guard page still lands in the guard rather than in the header below it. */
+#define GEM_STACK_GUARD_BYTES (64 * 1024)
+#endif
+
+uintptr_t gem_stack_limit = 0;
+static int gem_running_slot = -1;   /* slot whose coroutine is running, else -1 */
+static size_t gem_page_size = 0;
+static size_t gem_guard_size = 0;   /* GEM_STACK_GUARD_BYTES rounded up to pages */
+
+static size_t gem_round_up(size_t n, size_t to) {
+    return (n + to - 1) / to * to;
+}
+
+#if defined(MCO_USE_ASM) || defined(MCO_USE_UCONTEXT)
+#define GEM_CORO_HEADER_BYTES \
+    (_mco_align_forward(sizeof(mco_coro), 16) + _mco_align_forward(sizeof(_mco_context), 16))
+#else
+#error "gem: process stacks assume minicoro's asm or ucontext backend"
+#endif
+
+/* Released stacks of the standard spawned-process size, kept for reuse:
+   mmap + mprotect + munmap per spawn more than doubles the cost of a
+   short-lived process. A cached stack keeps its guard; everything below its
+   top GEM_STACK_KEEP_BYTES is handed back to the OS on release, so a cached
+   stack holds at most a few pages however deep its last owner went. */
+#ifndef GEM_STACK_CACHE_MAX
+#define GEM_STACK_CACHE_MAX 128
+#endif
+#define GEM_STACK_KEEP_BYTES (16 * 1024)
+static void *gem_stack_cache[GEM_STACK_CACHE_MAX];
+static int gem_stack_cache_len = 0;
+static size_t gem_stack_cache_block = 0;  /* mapping length the cache holds */
+static size_t gem_stack_cache_guard_off = 0;
+
+/* allocator_data carries the offset of the guard from the block start. */
 static void *gem_coro_stack_alloc(size_t size, void *udata) {
-    (void)udata;
-    return malloc(size);
+    size_t guard_off = (size_t)udata;
+    size_t len = gem_round_up(size, gem_page_size);
+    if (len == gem_stack_cache_block && guard_off == gem_stack_cache_guard_off &&
+        gem_stack_cache_len > 0)
+        return gem_stack_cache[--gem_stack_cache_len];
+    int flags = MAP_PRIVATE | MAP_ANON;
+#ifdef MAP_NORESERVE
+    flags |= MAP_NORESERVE;
+#endif
+    void *p = mmap(NULL, len, PROT_READ | PROT_WRITE, flags, -1, 0);
+    if (p == MAP_FAILED) return NULL;
+    if (mprotect((char *)p + guard_off, gem_guard_size, PROT_NONE) != 0) {
+        munmap(p, len);
+        return NULL;
+    }
+    return p;
 }
 
 static void gem_coro_stack_free(void *ptr, size_t size, void *udata) {
-    (void)udata; (void)size;
-    free(ptr);
+    size_t len = gem_round_up(size, gem_page_size);
+    size_t guard_off = (size_t)udata;
+    if (len == gem_stack_cache_block && guard_off == gem_stack_cache_guard_off &&
+        gem_stack_cache_len < GEM_STACK_CACHE_MAX) {
+        char *lo = (char *)ptr + guard_off + gem_guard_size;
+        char *keep = (char *)ptr + len - GEM_STACK_KEEP_BYTES;
+        if (keep > lo) {
+#if defined(__APPLE__) && defined(MADV_FREE_REUSABLE)
+            madvise(lo, (size_t)(keep - lo), MADV_FREE_REUSABLE);
+#else
+            madvise(lo, (size_t)(keep - lo), MADV_DONTNEED);
+#endif
+        }
+        gem_stack_cache[gem_stack_cache_len++] = ptr;
+        return;
+    }
+    munmap(ptr, len);
+}
+
+static void gem_coro_entry(mco_coro *co);
+
+/* Create a coroutine whose stack has `stack_size` usable bytes above a
+   guard region. Stores the stack floor in *stack_lo. */
+static mco_result gem_coro_create(mco_coro **out, size_t stack_size, void *user_data,
+                                  char **stack_lo) {
+    size_t hdr = GEM_CORO_HEADER_BYTES;
+    size_t guard_off = gem_round_up(hdr, gem_page_size);
+    stack_size = gem_round_up(stack_size, gem_page_size);
+    mco_desc desc = mco_desc_init(gem_coro_entry, stack_size);
+    /* minicoro puts the stack right after the storage area; size storage so
+       it runs to the end of the guard. Both terms are multiples of 16, which
+       keeps minicoro's own 16-byte rounding from moving the stack. */
+    desc.storage_size = guard_off + gem_guard_size - hdr;
+    desc.stack_size = stack_size;
+    desc.coro_size = hdr + desc.storage_size + stack_size + 16;
+    desc.alloc_cb = gem_coro_stack_alloc;
+    desc.dealloc_cb = gem_coro_stack_free;
+    desc.allocator_data = (void *)guard_off;
+    desc.user_data = user_data;
+    mco_result res = mco_create(out, &desc);
+    if (res != MCO_SUCCESS) return res;
+    char *expect = (char *)*out + guard_off + gem_guard_size;
+    if ((char *)(*out)->stack_base != expect) {
+        /* minicoro's layout changed under us; refuse rather than run
+           without a guard. */
+        mco_destroy(*out);
+        *out = NULL;
+        return MCO_INVALID_ARGUMENTS;
+    }
+    *stack_lo = expect;
+    return MCO_SUCCESS;
+}
+
+/* Raised by gem_push_frame when a call would enter the red zone. */
+/* Codegen names fn literals with a gensym; don't show it to users. */
+static const char *gem_user_fn_name(const char *name) {
+    if (!name || strncmp(name, "_anon_", 6) == 0) return "anonymous fn";
+    return name;
+}
+
+void gem_stack_overflow(const char *name) {
+    /* The error path below is plain C (no gem_push_frame), and it runs
+       inside the red zone, which exists to leave it room. gem_raise_error
+       unwinds to a pcall frame in this process or ends the process, so the
+       limit stays armed throughout. */
+    char msg[256];
+    snprintf(msg, sizeof msg, "stack overflow in %s", gem_user_fn_name(name));
+    gem_raise_error(msg);
+    abort(); /* unreachable */
+}
+
+/* Rescue stack for the hard path. Static storage, not mmap: glibc's
+   fortified longjmp refuses to jump to a lower stack address unless it runs
+   on the signal stack, and .bss sits below every mmap'd process stack. */
+static _Alignas(16) char gem_rescue_stack[64 * 1024];
+static volatile int gem_rescue_slot = -1;
+
+static void gem_stack_overflow_rescue(void) {
+    int slot = gem_rescue_slot;
+    GemProcess *proc = &gem_proc_table[slot];
+    gem_current_pid = slot;
+    gem_stack_limit = 0;
+    proc->stack_overflowed = 1;
+    longjmp(proc->proc_jmp, 1);
+}
+
+/* Point the interrupted context at gem_stack_overflow_rescue on the rescue
+   stack. Returns 0 when this platform has no known layout. */
+static int gem_redirect_to_rescue(void *uctx_v) {
+    uintptr_t top = (uintptr_t)(gem_rescue_stack + sizeof gem_rescue_stack) & ~(uintptr_t)15;
+    ucontext_t *uc = (ucontext_t *)uctx_v;
+    (void)uc; (void)top;
+#if defined(__APPLE__) && defined(__x86_64__)
+    uc->uc_mcontext->__ss.__rip = (uint64_t)(uintptr_t)gem_stack_overflow_rescue;
+    uc->uc_mcontext->__ss.__rsp = (uint64_t)(top - 8);  /* as if called */
+    return 1;
+#elif defined(__APPLE__) && defined(__aarch64__) && defined(__darwin_arm_thread_state64_set_sp)
+    __darwin_arm_thread_state64_set_pc_fptr(uc->uc_mcontext->__ss, gem_stack_overflow_rescue);
+    __darwin_arm_thread_state64_set_sp(uc->uc_mcontext->__ss, top);
+    return 1;
+#elif defined(__linux__) && defined(__x86_64__) && defined(REG_RIP)
+    uc->uc_mcontext.gregs[REG_RIP] = (greg_t)(uintptr_t)gem_stack_overflow_rescue;
+    uc->uc_mcontext.gregs[REG_RSP] = (greg_t)(top - 8);  /* as if called */
+    return 1;
+#elif defined(__linux__) && defined(__aarch64__)
+    uc->uc_mcontext.pc = (uint64_t)(uintptr_t)gem_stack_overflow_rescue;
+    uc->uc_mcontext.sp = (uint64_t)top;
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+static __thread int gem_is_sched_thread = 0;
+
+static void gem_fault_handler(int sig, siginfo_t *si, void *uctx) {
+    int slot = gem_running_slot;
+    if (gem_is_sched_thread && slot >= 0) {
+        GemProcess *proc = &gem_proc_table[slot];
+        uintptr_t addr = (uintptr_t)si->si_addr;
+        uintptr_t lo = (uintptr_t)proc->stack_lo;
+        if (lo && addr < lo && addr >= lo - gem_guard_size) {
+            gem_rescue_slot = slot;
+            if (gem_redirect_to_rescue(uctx)) return;
+            /* Unknown platform: longjmp straight out of the handler. Unblock
+               the signal first, since setjmp may not have saved the mask. */
+            sigset_t set;
+            sigemptyset(&set);
+            sigaddset(&set, sig);
+            sigprocmask(SIG_UNBLOCK, &set, NULL);
+            gem_stack_overflow_rescue();
+        }
+    }
+    /* Not a process stack overflow: fall back to the default action. The
+       faulting instruction re-executes and the signal kills the program. */
+    struct sigaction dfl;
+    memset(&dfl, 0, sizeof dfl);
+    dfl.sa_handler = SIG_DFL;
+    sigemptyset(&dfl.sa_mask);
+    sigaction(sig, &dfl, NULL);
+}
+
+static void gem_install_overflow_handler(void) {
+    gem_page_size = (size_t)sysconf(_SC_PAGESIZE);
+    if (gem_page_size == 0 || gem_page_size == (size_t)-1) gem_page_size = 4096;
+    gem_guard_size = gem_round_up(GEM_STACK_GUARD_BYTES, gem_page_size);
+    gem_is_sched_thread = 1;
+    /* Mirror gem_coro_create's sizing for a spawned process's block. */
+    gem_stack_cache_guard_off = gem_round_up(GEM_CORO_HEADER_BYTES, gem_page_size);
+    gem_stack_cache_block = gem_round_up(gem_stack_cache_guard_off + gem_guard_size +
+                                         gem_round_up(GEM_CORO_STACK_SIZE, gem_page_size) + 16,
+                                         gem_page_size);
+
+    stack_t ss;
+    size_t alt = 64 * 1024;
+#ifdef SIGSTKSZ
+    if ((size_t)SIGSTKSZ > alt) alt = (size_t)SIGSTKSZ;
+#endif
+    ss.ss_sp = malloc(alt);
+    ss.ss_size = alt;
+    ss.ss_flags = 0;
+    if (!ss.ss_sp || sigaltstack(&ss, NULL) != 0) return;
+
+    struct sigaction sa;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_sigaction = gem_fault_handler;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGSEGV, &sa, NULL);
+    /* macOS reports some guard-page hits as SIGBUS. */
+    sigaction(SIGBUS, &sa, NULL);
 }
 
 void gem_scheduler_init(void) {
@@ -149,6 +417,7 @@ void gem_scheduler_init(void) {
        arena reset frees that memory). Default stb_ds mode stores the
        caller's pointer verbatim — so we'd be left with dangling keys.
        Use strdup mode so the table owns its keys; shdel frees them. */
+    gem_install_overflow_handler();
     sh_new_strdup(gem_name_registry);
     gem_threadpool_init();
     atexit(gem_diag_print_on_exit);
@@ -183,6 +452,8 @@ static void gem_free_proc_slot(int pid) {
 
     proc->state = GEM_PROC_FREE;
     proc->coro = NULL;
+    proc->stack_lo = NULL;
+    proc->stack_overflowed = 0;
     proc->io_request = NULL;
     proc->trap_exit = 0;
     proc->read_buf = NULL;
@@ -289,9 +560,35 @@ static void gem_coro_entry(mco_coro *co) {
         /* Normal path */
         ctx->fn(ctx->env, NULL, 0);
         proc->exit_reason = strdup("normal");
+    } else {
+        /* longjmp landed here: exit_reason was set by gem_raise_error or
+           gem_exit_self, except after a guard-page overflow (the rescue
+           path cannot allocate). Re-read the process: locals are not
+           reliable after longjmp. */
+        proc = &gem_proc_table[gem_current_pid];
+        if (proc->stack_overflowed) {
+            proc->stack_overflowed = 0;
+            /* Name the innermost recorded Gem frame: the guard is reached
+               by C code (a builtin or extern fn) that it called. */
+            char msg[256];
+            if (gem_call_depth > 0) {
+                int top = (gem_call_depth <= GEM_MAX_CALL_DEPTH ? gem_call_depth
+                                                                : GEM_MAX_CALL_DEPTH) - 1;
+                snprintf(msg, sizeof msg, "stack overflow in native code called from %s",
+                         gem_user_fn_name(gem_call_stack[top].name));
+            } else {
+                snprintf(msg, sizeof msg, "stack overflow");
+            }
+            if (gem_current_pid == gem_main_pid) {
+                gem_print_runtime_error(msg);
+                exit(1);
+            }
+            if (proc->exit_reason) free((char *)proc->exit_reason);
+            proc->exit_reason = strdup(msg);
+            proc->pcall_depth = 0;
+            gem_call_depth = 0;
+        }
     }
-    /* If longjmp landed here, exit_reason was already set by gem_raise_error
-       or gem_exit_self */
 }
 
 void gem_exit_self(const char *reason) {
@@ -342,18 +639,20 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
 
     gem_current_pid = saved;
 
-    mco_desc desc = mco_desc_init(gem_coro_entry, GEM_CORO_STACK_SIZE);
-    desc.alloc_cb = gem_coro_stack_alloc;
-    desc.dealloc_cb = gem_coro_stack_free;
-    desc.user_data = ctx;
-
     mco_coro *co;
-    mco_result res = mco_create(&co, &desc);
+    char *stack_lo;
+    mco_result res = gem_coro_create(&co, GEM_CORO_STACK_SIZE, ctx, &stack_lo);
     if (res != MCO_SUCCESS) {
         gem_arena_destroy(&gem_proc_table[pid].arena);
+        /* Put the slot back on the free list before raising. */
+        gem_proc_table[pid].pid = gem_free_head;
+        gem_free_head = pid;
+        if (gem_free_tail < 0) gem_free_tail = pid;
         gem_error("spawn: coroutine creation failed");
         return -1;
     }
+    gem_proc_table[pid].stack_lo = stack_lo;
+    gem_proc_table[pid].stack_overflowed = 0;
 
     gem_proc_table[pid].state = GEM_PROC_READY;
     gem_proc_table[pid].coro = co;
@@ -487,18 +786,16 @@ void gem_run_main(GemFnPtr fn, void *env) {
 
     gem_current_pid = saved;
 
-    mco_desc desc = mco_desc_init(gem_coro_entry, GEM_MAIN_STACK_SIZE);
-    desc.alloc_cb = gem_coro_stack_alloc;
-    desc.dealloc_cb = gem_coro_stack_free;
-    desc.user_data = ctx;
-
     mco_coro *co;
-    mco_result res = mco_create(&co, &desc);
+    char *stack_lo;
+    mco_result res = gem_coro_create(&co, GEM_MAIN_STACK_SIZE, ctx, &stack_lo);
     if (res != MCO_SUCCESS) {
         gem_arena_destroy(&gem_proc_table[pid].arena);
         gem_error("gem_run_main: coroutine creation failed");
         return;
     }
+    gem_proc_table[pid].stack_lo = stack_lo;
+    gem_proc_table[pid].stack_overflowed = 0;
 
     gem_proc_table[pid].state = GEM_PROC_READY;
     gem_proc_table[pid].coro = co;
@@ -550,7 +847,11 @@ void gem_run_scheduler(void) {
                 GemFrame *saved_global_stack = gem_call_stack;
                 gem_call_depth = proc->call_depth;
                 gem_call_stack = proc->call_stack;
+                gem_running_slot = i;
+                gem_stack_limit = (uintptr_t)proc->stack_lo + GEM_STACK_RED_ZONE;
                 mco_resume(proc->coro);
+                gem_stack_limit = 0;
+                gem_running_slot = -1;
                 proc->call_depth = gem_call_depth;
                 gem_call_depth = saved_global_depth;
                 gem_call_stack = saved_global_stack;
