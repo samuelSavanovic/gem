@@ -103,6 +103,13 @@ let timer = send_after(pid, msg, 1000); cancel_timer(timer)
 processes()                          # → array of live pids
 process_info(pid)                    # → table or nil
 
+# Run work concurrently and collect results (std/task)
+let t = task.async do
+  fetch(url)
+end
+let body = task.await(t)               # value, or re-raises the task's error
+let [x, y] = task.await_all([t1, t2], 5000)
+
 # Error handling
 error("msg")                         # halt with stack trace; uncaught in main prints source context + caret
 let r = pcall some_fn()              # {ok: bool, value/error: ...}
@@ -139,6 +146,7 @@ end
 # std/sqlite     open, close, exec, query, last_id, changes  (wraps sqlite_* builtins)
 # std/supervisor start, which_children
 # std/dynamic_supervisor  start, start_child, terminate_child, which_children
+# std/task       async, await, await_all
 # std/gen_server start, call, cast, reply
 # std/test       case, assert, assert_eq, assert_neq, assert_throws, run
 
