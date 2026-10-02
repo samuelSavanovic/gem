@@ -495,6 +495,7 @@ typedef struct {
     int entry_call_depth;         /* gem_call_depth at coro entry — used to gate TCO arena reset for non-process-tail functions */
     int call_depth;               /* saved gem_call_depth at last yield (restored on resume) */
     int64_t gen;                  /* slot generation; advanced when the slot is freed */
+    int pending_timers;           /* send_after timers that target this process */
     GemFrame call_stack[GEM_MAX_CALL_DEPTH];  /* this process's frames for stack traces */
     GemArena arena;               /* per-process bump allocator */
     /* Pinned-box set: boxes for mutated-captured fn-local vars, allocated via

@@ -603,9 +603,9 @@ let ref = send_after(pid, "tick", 1000)
 cancel_timer(ref)
 ```
 
-`send_after(pid, msg, delay_ms)` schedules `msg` to be delivered to `pid` after `delay_ms` milliseconds. Returns a unique ref identifying the timer. The timer fires from the scheduler loop, not from the calling process, so it works even if the caller is blocked. If the target process is dead when the timer fires, the message is silently dropped.
+`send_after(pid, msg, delay_ms)` schedules `msg` to be delivered to `pid` after `delay_ms` milliseconds. Returns a unique ref identifying the timer. The timer fires from the scheduler loop, not from the calling process, so it works even if the caller is blocked or has exited. When the target process exits, its pending timers are dropped; a timer for a pid that has already exited is never scheduled. A pending timer keeps the program running until it fires or is cancelled.
 
-`cancel_timer(ref)` cancels a pending timer by ref. Returns `true` if cancelled, `false` if already fired or not found.
+`cancel_timer(ref)` cancels a pending timer by ref. Returns `true` if cancelled, `false` if it already fired, was dropped because its target exited, or is not found.
 
 Timers are stored in a global fixed-size array (256 slots). An error is raised if the array is full.
 
@@ -979,9 +979,9 @@ end
 
 `sleep(ms)` — suspends the current process for `ms` milliseconds. Must be called inside a spawned process.
 
-`send_after(pid, msg, delay_ms)` — schedules `msg` to be delivered to `pid` after `delay_ms` milliseconds. Returns a unique ref identifying the timer. The timer fires from the scheduler, not the calling process. Messages to dead processes are silently dropped.
+`send_after(pid, msg, delay_ms)` — schedules `msg` to be delivered to `pid` after `delay_ms` milliseconds. Returns a unique ref identifying the timer. The timer fires from the scheduler, not the calling process. Timers for a process are dropped when it exits, and none is scheduled for a pid that has already exited.
 
-`cancel_timer(ref)` — cancels a pending timer by ref. Returns `true` if cancelled, `false` if already fired or not found.
+`cancel_timer(ref)` — cancels a pending timer by ref. Returns `true` if cancelled, `false` if it already fired, was dropped because its target exited, or is not found.
 
 `processes()` — returns a list of all live process pids (excludes free and dead processes).
 

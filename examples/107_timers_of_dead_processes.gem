@@ -1,0 +1,67 @@
+# A send_after timer is dropped when its target process exits, so it neither
+# delivers nor keeps the program running. Timers for other processes are
+# unaffected and still fire in deadline order.
+
+let main = self()
+
+fn idle()
+  spawn do
+    while true
+      receive()
+    end
+  end
+end
+
+# ─── Test 1: killing the target cancels its timers ───
+let victim = idle()
+let t1 = send_after(victim, "late", 50)
+let t2 = send_after(victim, "later", 5000)
+kill(victim, "killed")
+print("test1: cancel after kill: {cancel_timer(t1)} {cancel_timer(t2)}")
+
+# ─── Test 2: a target that exits normally loses its timers too ───
+let quick = spawn do
+  receive()
+end
+monitor(quick)
+let t3 = send_after(quick, "too late", 5000)
+send(quick, "go")
+receive
+when {tag: "DOWN", pid: ^quick, reason: "normal"}
+  nil
+end
+print("test2: cancel after normal exit: {cancel_timer(t3)}")
+
+# ─── Test 3: a timer for a pid that is already gone is never scheduled ───
+let t4 = send_after(victim, "nobody home", 5000)
+print("test3: ref returned: {type(t4)}, cancel: {cancel_timer(t4)}")
+
+# ─── Test 4: the remaining timers still fire, in deadline order ───
+let a = idle()
+let b = idle()
+send_after(main, "third", 60)
+send_after(a, "x", 20)
+send_after(main, "first", 10)
+send_after(b, "y", 30)
+send_after(main, "second", 40)
+send_after(a, "z", 5000)
+kill(a, "killed")
+let got = []
+for _ = 0, 3
+  push(got, receive())
+end
+print("test4: {got}")
+let still_pending = send_after(b, "w", 5000)
+print("test4: timer for live process cancels: {cancel_timer(still_pending)}")
+kill(b, "done")
+
+# ─── Test 5: a timer created by a process outlives its creator ───
+let creator = spawn do
+  send_after(main, "from beyond", 20)
+end
+monitor(creator)
+receive
+when {tag: "DOWN", pid: ^creator}
+  nil
+end
+print("test5: {receive()}")

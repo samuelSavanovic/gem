@@ -202,6 +202,12 @@ file: fine, still
 exec: 0
 sqlite: row
 extern: 0 copied
+test1: cancel after kill: false false
+test2: cancel after normal exit: false
+test3: ref returned: ref, cancel: false
+test4: ["first", "second", "third"]
+test4: timer for live process cancels: true
+test5: from beyond
 apple
 banana
 cherry
