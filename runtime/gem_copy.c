@@ -18,7 +18,7 @@
 #include "gem.h"
 #include "stb_ds.h"
 
-/* gem_shape_counter is defined in gem_core.c — used by gem_deep_copy_table to
+/* gem_shape_counter is defined in gem_core.c — used by gem_copy_shallow to
    stamp fresh shape ids on copied tables. */
 extern uint32_t gem_shape_counter;
 
@@ -83,9 +83,28 @@ static void gem_region_build(GemRegion *rg, const char *first_lo, const char *fi
 
 /* Old -> new pointer map: a linear inline buffer for small copies, then an
    open-addressing hash table (power-of-two capacity, linear probing). */
+/* Deferred work of an iterative copy: fill the already-allocated copy
+   `dst` of table / closure env `src`. Copies never recurse in C, so the
+   depth of the data (a two-million-deep list, say) does not matter. */
+typedef struct {
+    void *src;
+    void *dst;
+    int is_env;
+} GemCopyTask;
+
+#define GEM_COPY_TASKS_INLINE 32
+/* Shells are filled right away (bounded C recursion) up to this nesting
+   depth; deeper ones go through the worklist. Keeps small messages off the
+   worklist without letting data depth reach the C stack. */
+#define GEM_COPY_INLINE_DEPTH 16
+
 typedef struct {
     GemCopyEntry inline_buf[GEM_COPY_MAP_INLINE];
     GemCopyEntry *table;   /* NULL while len <= GEM_COPY_MAP_INLINE */
+    GemCopyTask task_buf[GEM_COPY_TASKS_INLINE];
+    GemCopyTask *tasks;    /* task_buf, or a malloc'd stack once it outgrows it */
+    size_t ntasks, taskcap;
+    int depth;             /* current inline fill nesting (< GEM_COPY_INLINE_DEPTH) */
     size_t tcap;
     int len;
     int use_malloc;
@@ -101,6 +120,10 @@ static void gem_copy_map_init(GemCopyMap *map, int use_malloc) {
     map->table = NULL;
     map->tcap = 0;
     map->len = 0;
+    map->tasks = map->task_buf;
+    map->ntasks = 0;
+    map->taskcap = GEM_COPY_TASKS_INLINE;
+    map->depth = 0;
     map->use_malloc = use_malloc;
     map->preserve_external = 0;
     map->region = NULL;
@@ -113,6 +136,23 @@ static int gem_copy_is_external(GemCopyMap *map, const void *ptr) {
 
 static void gem_copy_map_cleanup(GemCopyMap *map) {
     free(map->table);
+    if (map->tasks != map->task_buf) free(map->tasks);
+}
+
+static void gem_copy_push_task(GemCopyMap *map, void *src, void *dst, int is_env) {
+    if (map->ntasks == map->taskcap) {
+        size_t ncap = map->taskcap * 2;
+        GemCopyTask *nt = (GemCopyTask *)malloc(sizeof(GemCopyTask) * ncap);
+        if (!nt) { fprintf(stderr, "gem: out of memory (copy worklist)\n"); exit(1); }
+        memcpy(nt, map->tasks, sizeof(GemCopyTask) * map->ntasks);
+        if (map->tasks != map->task_buf) free(map->tasks);
+        map->tasks = nt;
+        map->taskcap = ncap;
+    }
+    map->tasks[map->ntasks].src = src;
+    map->tasks[map->ntasks].dst = dst;
+    map->tasks[map->ntasks].is_env = is_env;
+    map->ntasks++;
 }
 
 static inline size_t gem_copy_hash(const void *p, size_t mask) {
@@ -173,8 +213,6 @@ static void gem_copy_map_add(GemCopyMap *map, void *old, void *new_ptr) {
     map->len++;
 }
 
-static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map);
-
 static void *gem_copy_alloc(GemCopyMap *map, size_t size) {
     if (map->use_malloc) return calloc(1, size);
     return gem_arena_alloc(gem_current_arena(), size);
@@ -187,95 +225,32 @@ static char *gem_copy_strdup(GemCopyMap *map, const char *s, int slen) {
     return copy;
 }
 
-static GemVal gem_deep_copy_table(GemTable *t, GemCopyMap *map) {
-    void *existing = gem_copy_map_find(map, t);
-    if (existing) {
-        GemVal r; r.type = VAL_TABLE; r.magic = GEM_MAGIC; r.table = (GemTable *)existing; return r;
+/* ─── Iterative deep copy ───
+ *
+ * gem_copy_shallow returns the copy of `val`: strings and buffers are copied
+ * whole; a table or closure env gets its new shell allocated and recorded in
+ * the copy map (so aliasing and cycles are preserved), then filled -- right
+ * away while the inline nesting is below GEM_COPY_INLINE_DEPTH, otherwise
+ * through a task on the map's worklist, which gem_copy_drain runs until none
+ * are left. C recursion is therefore bounded by GEM_COPY_INLINE_DEPTH, not by
+ * the depth of the data. */
+
+static void gem_copy_fill_table(GemTable *t, GemTable *nt, GemCopyMap *map);
+static void gem_copy_fill_env(void *env, void *new_env, GemCopyMap *map);
+
+/* Fill a new shell now if the inline depth allows, else defer it. */
+static inline void gem_copy_fill(void *src, void *dst, int is_env, GemCopyMap *map) {
+    if (map->depth < GEM_COPY_INLINE_DEPTH) {
+        map->depth++;
+        if (is_env) gem_copy_fill_env(src, dst, map);
+        else gem_copy_fill_table((GemTable *)src, (GemTable *)dst, map);
+        map->depth--;
+    } else {
+        gem_copy_push_task(map, src, dst, is_env);
     }
-
-    GemTable *nt = (GemTable *)gem_copy_alloc(map, sizeof(GemTable));
-    gem_copy_map_add(map, t, nt);
-
-    nt->len = t->len;
-    nt->cap = t->cap;
-    nt->keys = (GemVal *)gem_copy_alloc(map, sizeof(GemVal) * t->cap);
-    nt->vals = (GemVal *)gem_copy_alloc(map, sizeof(GemVal) * t->cap);
-    nt->str_index = NULL;
-    nt->shape_id = gem_shape_counter++;
-    nt->arena_next = NULL;
-
-    if (!map->use_malloc) {
-        GemArena *a = gem_current_arena();
-        nt->arena_next = a->table_list;
-        a->table_list = nt;
-        nt->mut_seq = gem_mut_clock;
-    }
-
-    for (int i = 0; i < t->len; i++) {
-        nt->keys[i] = gem_deep_copy_internal(t->keys[i], map);
-        nt->vals[i] = gem_deep_copy_internal(t->vals[i], map);
-    }
-    /* The string-key index is built on first use (gem_table_index): many
-       copies (spawned module state, messages) are never looked up by key. */
-    nt->index_stale = (t->str_index != NULL || t->index_stale);
-
-    GemVal r; r.type = VAL_TABLE; r.magic = GEM_MAGIC; r.table = nt; return r;
 }
 
-static GemVal gem_deep_copy_fn(GemVal fn_val, GemCopyMap *map) {
-    if (!fn_val.env) return fn_val;
-    /* An env outside the reset region was built before the mark, so its box
-       pointers (set once at closure creation) also predate it: keep it. */
-    if (gem_copy_is_external(map, fn_val.env)) return fn_val;
-
-    void *existing = gem_copy_map_find(map, fn_val.env);
-    if (existing) {
-        return (GemVal){.type = VAL_FN, .magic = GEM_MAGIC, .fn = fn_val.fn, .env = existing};
-    }
-
-    intptr_t n = *(intptr_t *)fn_val.env;
-    GemVal **old = (GemVal **)((char *)fn_val.env + sizeof(intptr_t));
-    size_t env_size = sizeof(intptr_t) + sizeof(GemVal *) * n;
-    void *new_env = gem_copy_alloc(map, env_size);
-    gem_copy_map_add(map, fn_val.env, new_env);
-    *(intptr_t *)new_env = n;
-    GemVal **new_fields = (GemVal **)((char *)new_env + sizeof(intptr_t));
-    for (intptr_t i = 0; i < n; i++) {
-        /* Preserve box pointers that live outside the old arena. Two flavors:
-             - BSS-backed top-level boxes: their contents are migrated via
-               the rescue-roots list (the runtime caller passes the BSS slot
-               pointer); not in any pin-set, so the mark call below is a
-               no-op and we just preserve the pointer.
-             - malloc'd pinned boxes (gem_box_alloc, fn-local mutated-
-               captured): registered in the current process's pin-set.
-               If this is the first env field reaching the box this cycle,
-               mark+recurse migrates its contents. Subsequent encounters
-               (via other capturing closures) hit the "already walked"
-               short-circuit and just preserve the pointer. */
-        if (gem_copy_is_external(map, old[i])) {
-            new_fields[i] = old[i];
-            if (gem_current_pid >= 0) {
-                GemProcess *proc = &gem_proc_table[gem_current_pid];
-                if (gem_pin_mark_walked(proc, old[i])) {
-                    *old[i] = gem_deep_copy_internal(*old[i], map);
-                }
-            }
-            continue;
-        }
-        GemVal *existing = (GemVal *)gem_copy_map_find(map, old[i]);
-        if (existing) {
-            new_fields[i] = existing;
-            continue;
-        }
-        GemVal *box = (GemVal *)gem_copy_alloc(map, sizeof(GemVal));
-        gem_copy_map_add(map, old[i], box);
-        *box = gem_deep_copy_internal(*old[i], map);
-        new_fields[i] = box;
-    }
-    return (GemVal){.type = VAL_FN, .magic = GEM_MAGIC, .fn = fn_val.fn, .env = new_env};
-}
-
-static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map) {
+static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
     switch (val.type) {
         case VAL_NIL:
         case VAL_BOOL:
@@ -295,15 +270,36 @@ static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map) {
             gem_copy_map_add(map, val.sval, r.sval);
             return r;
         }
-        case VAL_TABLE:
-            /* Immutable tables are normally shared without copying — safe for
-               spawn/send (source arena outlives the receiver). Not safe during
-               arena reset: preserve_external means the source arena is about
-               to be destroyed, so we must migrate the table unless it lives
-               outside the arena bounds. */
-            if (gem_copy_is_external(map, val.table)) return val;
-            if (!map->use_malloc && !map->preserve_external && val.table->immutable) return val;
-            return gem_deep_copy_table(val.table, map);
+        case VAL_TABLE: {
+            /* Immutable tables are shared without copying by spawn/send (module
+               namespace tables are immortal). An arena reset copies any table
+               inside its region. */
+            GemTable *t = val.table;
+            if (gem_copy_is_external(map, t)) return val;
+            if (!map->use_malloc && !map->preserve_external && t->immutable) return val;
+            void *existing = gem_copy_map_find(map, t);
+            if (existing) { GemVal r; r.type = VAL_TABLE; r.magic = GEM_MAGIC; r.table = (GemTable *)existing; return r; }
+            GemTable *nt = (GemTable *)gem_copy_alloc(map, sizeof(GemTable));
+            gem_copy_map_add(map, t, nt);
+            nt->len = t->len;
+            nt->cap = t->cap;
+            nt->keys = (GemVal *)gem_copy_alloc(map, sizeof(GemVal) * t->cap);
+            nt->vals = (GemVal *)gem_copy_alloc(map, sizeof(GemVal) * t->cap);
+            nt->str_index = NULL;
+            nt->shape_id = gem_shape_counter++;
+            nt->arena_next = NULL;
+            /* The string-key index is built on first use (gem_table_index): many
+               copies (spawned module state, messages) are never looked up by key. */
+            nt->index_stale = (t->str_index != NULL || t->index_stale);
+            if (!map->use_malloc) {
+                GemArena *a = gem_current_arena();
+                nt->arena_next = a->table_list;
+                a->table_list = nt;
+                nt->mut_seq = gem_mut_clock;
+            }
+            if (t->len > 0) gem_copy_fill(t, nt, 0, map);
+            GemVal r; r.type = VAL_TABLE; r.magic = GEM_MAGIC; r.table = nt; return r;
+        }
         case VAL_BUFFER: {
             if (gem_copy_is_external(map, val.buffer)) return val;
             void *bex = gem_copy_map_find(map, val.buffer);
@@ -323,10 +319,77 @@ static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map) {
             memcpy(nb->data, ob->data, ob->len);
             GemVal r; r.type = VAL_BUFFER; r.magic = GEM_MAGIC; r.buffer = nb; return r;
         }
-        case VAL_FN:
-            return gem_deep_copy_fn(val, map);
+        case VAL_FN: {
+            if (!val.env) return val;
+            /* An env outside the reset region was built before the mark, so its
+               box pointers (set once at closure creation) also predate it. */
+            if (gem_copy_is_external(map, val.env)) return val;
+            void *existing = gem_copy_map_find(map, val.env);
+            if (existing) return (GemVal){.type = VAL_FN, .magic = GEM_MAGIC, .fn = val.fn, .env = existing};
+            intptr_t n = *(intptr_t *)val.env;
+            size_t env_size = sizeof(intptr_t) + sizeof(GemVal *) * n;
+            void *new_env = gem_copy_alloc(map, env_size);
+            gem_copy_map_add(map, val.env, new_env);
+            *(intptr_t *)new_env = n;
+            if (n > 0) gem_copy_fill(val.env, new_env, 1, map);
+            return (GemVal){.type = VAL_FN, .magic = GEM_MAGIC, .fn = val.fn, .env = new_env};
+        }
     }
     return val;
+}
+
+static void gem_copy_fill_env(void *env, void *new_env, GemCopyMap *map) {
+    intptr_t n = *(intptr_t *)env;
+    GemVal **old = (GemVal **)((char *)env + sizeof(intptr_t));
+    GemVal **new_fields = (GemVal **)((char *)new_env + sizeof(intptr_t));
+    for (intptr_t i = 0; i < n; i++) {
+        /* Box pointers outside the reset region are kept: malloc'd pinned
+           boxes (gem_box_alloc, mutated captures) and older arena boxes. A
+           pinned box is registered in the process's pin-set; the first env
+           field to reach it this cycle migrates its contents (in place),
+           later ones just keep the pointer. */
+        if (gem_copy_is_external(map, old[i])) {
+            new_fields[i] = old[i];
+            if (gem_current_pid >= 0) {
+                GemProcess *proc = &gem_proc_table[gem_current_pid];
+                if (gem_pin_mark_walked(proc, old[i])) {
+                    *old[i] = gem_copy_shallow(*old[i], map);
+                }
+            }
+            continue;
+        }
+        GemVal *existing = (GemVal *)gem_copy_map_find(map, old[i]);
+        if (existing) {
+            new_fields[i] = existing;
+            continue;
+        }
+        GemVal *box = (GemVal *)gem_copy_alloc(map, sizeof(GemVal));
+        gem_copy_map_add(map, old[i], box);
+        *box = gem_copy_shallow(*old[i], map);
+        new_fields[i] = box;
+    }
+}
+
+static void gem_copy_fill_table(GemTable *t, GemTable *nt, GemCopyMap *map) {
+    for (int i = 0; i < t->len; i++) {
+        nt->keys[i] = gem_copy_shallow(t->keys[i], map);
+        nt->vals[i] = gem_copy_shallow(t->vals[i], map);
+    }
+}
+
+static void gem_copy_drain(GemCopyMap *map) {
+    while (map->ntasks > 0) {
+        GemCopyTask task = map->tasks[--map->ntasks];
+        /* depth is 0 here: a task starts a fresh inline budget */
+        if (task.is_env) gem_copy_fill_env(task.src, task.dst, map);
+        else gem_copy_fill_table((GemTable *)task.src, (GemTable *)task.dst, map);
+    }
+}
+
+static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map) {
+    GemVal r = gem_copy_shallow(val, map);
+    gem_copy_drain(map);
+    return r;
 }
 
 GemVal gem_deep_copy(GemVal val) {
@@ -345,71 +408,72 @@ GemVal gem_deep_copy_malloc(GemVal val) {
     return result;
 }
 
-/* Track already-freed allocations so aliased structure (the same table reached
-   by two different roots) is freed only once. The visited set stores raw
-   pointers; types are inferred from the GemVal walk. NULL set means no aliasing
-   is possible — used by the public single-value entry point. */
-static int gem_freed_set_contains(GemCopyMap *visited, void *ptr) {
-    if (!visited) return 0;
-    return gem_copy_map_find(visited, ptr) != NULL;
-}
-
-static void gem_freed_set_add(GemCopyMap *visited, void *ptr) {
-    if (!visited) return;
-    /* Sentinel non-NULL value — gem_copy_map_find returns the value, we just
-       care about presence. */
-    gem_copy_map_add(visited, ptr, (void *)1);
-}
-
-static void gem_deep_free_internal(GemVal val, GemCopyMap *visited) {
-    switch (val.type) {
-        case VAL_STRING:
-            if (gem_freed_set_contains(visited, val.sval)) break;
-            gem_freed_set_add(visited, val.sval);
-            free(val.sval);
-            break;
-        case VAL_TABLE: {
-            GemTable *t = val.table;
-            if (gem_freed_set_contains(visited, t)) break;
-            gem_freed_set_add(visited, t);
-            for (int i = 0; i < t->len; i++) {
-                gem_deep_free_internal(t->keys[i], visited);
-                gem_deep_free_internal(t->vals[i], visited);
-            }
-            if (t->str_index) shfree(t->str_index);
-            free(t->keys);
-            free(t->vals);
-            free(t);
-            break;
-        }
-        case VAL_BUFFER: {
-            GemBuffer *b = val.buffer;
-            if (gem_freed_set_contains(visited, b)) break;
-            gem_freed_set_add(visited, b);
-            free(b->data);
-            free(b);
-            break;
-        }
-        case VAL_FN: {
-            if (!val.env) break;
-            if (gem_freed_set_contains(visited, val.env)) break;
-            gem_freed_set_add(visited, val.env);
-            intptr_t n = *(intptr_t *)val.env;
-            GemVal **fields = (GemVal **)((char *)val.env + sizeof(intptr_t));
-            for (intptr_t i = 0; i < n; i++) {
-                gem_deep_free_internal(*fields[i], visited);
-                free(fields[i]);
-            }
-            free(val.env);
-            break;
-        }
-        default:
-            break;
-    }
-}
-
+/* Free a value built by gem_deep_copy_malloc. Iterative (an explicit stack of
+   pending values) so deep data cannot overflow the C stack; a visited set
+   frees aliased structure once. */
 void gem_deep_free(GemVal val) {
-    gem_deep_free_internal(val, NULL);
+    GemCopyMap visited;
+    gem_copy_map_init(&visited, 1);
+    GemVal *stack = NULL;
+    size_t n = 0, cap = 0;
+#define GEM_FREE_PUSH(v) do { \
+        if (n == cap) { cap = cap ? cap * 2 : 64; stack = (GemVal *)realloc(stack, sizeof(GemVal) * cap); \
+                        if (!stack) { fprintf(stderr, "gem: out of memory (free)\n"); exit(1); } } \
+        stack[n++] = (v); } while (0)
+    GEM_FREE_PUSH(val);
+    while (n > 0) {
+        GemVal v = stack[--n];
+        switch (v.type) {
+            case VAL_STRING:
+                if (gem_copy_map_find(&visited, v.sval)) break;
+                gem_copy_map_add(&visited, v.sval, (void *)1);
+                free(v.sval);
+                break;
+            case VAL_TABLE: {
+                GemTable *t = v.table;
+                if (gem_copy_map_find(&visited, t)) break;
+                gem_copy_map_add(&visited, t, (void *)1);
+                for (int i = 0; i < t->len; i++) {
+                    GEM_FREE_PUSH(t->keys[i]);
+                    GEM_FREE_PUSH(t->vals[i]);
+                }
+                if (t->str_index) shfree(t->str_index);
+                /* keys/vals were copied onto the stack above */
+                free(t->keys);
+                free(t->vals);
+                free(t);
+                break;
+            }
+            case VAL_BUFFER: {
+                GemBuffer *b = v.buffer;
+                if (gem_copy_map_find(&visited, b)) break;
+                gem_copy_map_add(&visited, b, (void *)1);
+                free(b->data);
+                free(b);
+                break;
+            }
+            case VAL_FN: {
+                if (!v.env) break;
+                if (gem_copy_map_find(&visited, v.env)) break;
+                gem_copy_map_add(&visited, v.env, (void *)1);
+                intptr_t nf = *(intptr_t *)v.env;
+                GemVal **fields = (GemVal **)((char *)v.env + sizeof(intptr_t));
+                for (intptr_t i = 0; i < nf; i++) {
+                    if (gem_copy_map_find(&visited, fields[i])) continue;
+                    gem_copy_map_add(&visited, fields[i], (void *)1);
+                    GEM_FREE_PUSH(*fields[i]);
+                    free(fields[i]);
+                }
+                free(v.env);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+#undef GEM_FREE_PUSH
+    free(stack);
+    gem_copy_map_cleanup(&visited);
 }
 
 /* ─── Pinned-box set ─── */
@@ -421,7 +485,7 @@ void gem_deep_free(GemVal val) {
         mark each as "walked" and deep-copy its contents into the fresh
         arena. This handles boxes that are live via the function's local
         even when no capturing closure is alive.
-     2. During the regular roots / mailbox walk, gem_deep_copy_fn's
+     2. During the regular roots / mailbox walk, gem_copy_fill_env
         external branch encounters env fields pointing at pinned boxes.
         gem_pin_mark_walked dedups: if not yet walked, walk the contents
         now; if already walked, just preserve the pointer.

@@ -152,8 +152,9 @@ static int gem_poll_pids[GEM_MAX_PROCS];
  *      gem_stack_limit = stack_lo + GEM_STACK_RED_ZONE and calls
  *      gem_stack_overflow, which raises an ordinary runtime error. pcall
  *      catches it; uncaught, the process dies with that reason.
- *   2. Hard: C code that recurses on its own (deep_copy of deeply nested
- *      data, say) can run through the red zone into the guard. The
+ *   2. Hard: C code that recurses on its own (a recursive C function
+ *      behind an `extern fn`; the runtime's value copies are iterative)
+ *      can run through the red zone into the guard. The
  *      SIGSEGV/SIGBUS handler, on an alternate signal stack, checks that the
  *      fault address is in the running process's guard, then rewrites the
  *      interrupted context to resume in gem_stack_overflow_rescue on a

@@ -168,7 +168,7 @@ extern GemVal gem_tail_args[GEM_MAX_TAIL_ARGS];
  * plus GEM_STACK_RED_ZONE on every resume and clears it to 0 (no check) while
  * it runs on the OS stack itself. The red zone below the limit leaves room
  * for the error path and for C runtime code called near the limit; deep
- * recursion inside C runtime code runs into the guard page instead (see
+ * recursion inside native code (extern fns) runs into the guard page instead (see
  * gem_scheduler.c, "Process stacks"). */
 extern uintptr_t gem_stack_limit;
 #if defined(__GNUC__)

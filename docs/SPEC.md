@@ -934,7 +934,7 @@ Running out of stack is an ordinary runtime error, not a crash:
 
 - Uncaught in a spawned process, it ends that process with that reason. Monitors receive `{tag: "DOWN", pid: p, reason: "stack overflow in walk"}`, links propagate it like any other exit reason, and every other process keeps running.
 - Uncaught in the main process, it is reported like any other uncaught runtime error: the message and a stack trace go to stderr, and the program exits with status 1. In the trace, a run of identical frames is shown once, followed by `... same frame repeated N more times`, and `... (deeper frames not recorded)` marks a trace cut short (only the outermost 256 frames are recorded).
-- A builtin that recurses over its argument can itself run out of stack. Deep-copying a value nested millions of levels deep for `send` is one example. That ends the process with reason `"stack overflow in native code called from <fn>"`, and `pcall` does **not** catch it, because the builtin was interrupted midway. In the main process it is reported as an uncaught error (exit status 1).
+- Native code that runs out of stack on its own — a recursive C function reached through `extern fn` — ends the process with reason `"stack overflow in native code called from <fn>"`, and `pcall` does **not** catch it, because the C code was interrupted midway. In the main process it is reported as an uncaught error (exit status 1). The runtime's own work on values never gets there: copying for `send`, `spawn` and arena resets is iterative, so a list nested millions of levels deep can be built, kept live in a loop, sent and received.
 
 ## Built-in Functions
 

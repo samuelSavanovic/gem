@@ -1308,6 +1308,7 @@ test3: EXIT stack overflow in depth
 test3: linked stack overflow in depth
 test4: {"stack overflow in depth": 20}
 test5: stack overflow in native code called from anonymous fn
+test5: shallow call returned 5
 test5: again stack overflow in native code called from anonymous fn
 test6: 10000
 test1: spawned depth 20000
@@ -1339,15 +1340,15 @@ Stack trace:
   ... same frame repeated 253 more times
   at start (examples/110_main_stack_overflow.gem:11)
   at main (examples/110_main_stack_overflow.gem:15)
-built
+shallow 5
 
 [Runtime Error]: stack overflow in native code called from main
-  --> examples/111_main_guard_overflow.gem:16
+  --> examples/111_main_guard_overflow.gem:13
     |
- 16 | send(self(), deep)
+ 13 | gem_example_native_recurse(100000000)
     |
 Stack trace:
-  at main (examples/111_main_guard_overflow.gem:16)
+  at main (examples/111_main_guard_overflow.gem:13)
 5000050000
 [3, 2, 1, 0]
 [203, 102, 101, 100]
@@ -1428,3 +1429,7 @@ store 14890 2000 true
 backlog drained 13107200
 peak memory bounded true
 workers 32 checksum 409600 bad 0 pongs <= workers true
+main built [2000000, 1999999000000]
+walker got [2000000, 1999999000000]
+["child extra 1988890", "walked [2000000, 1999999000000]"]
+captured [200000, 19999900000]
