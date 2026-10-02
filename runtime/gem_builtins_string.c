@@ -191,10 +191,7 @@ GemVal gem_interp(int n, GemVal *parts) {
 
 GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc) {
     (void)_env; (void)args; (void)argc;
-    GemBuffer *b = (GemBuffer *)gem_alloc(sizeof(GemBuffer));
-    b->cap = 64;
-    b->len = 0;
-    b->data = (char *)gem_alloc(b->cap);
+    GemBuffer *b = gem_buffer_alloc(64);
     GemVal r;
     r.type = VAL_BUFFER;
     r.magic = GEM_MAGIC;
@@ -256,10 +253,7 @@ GemVal gem_build_string_fn(void *_env, GemVal *args, int argc) {
     if (argc < 1 || args[0].type != VAL_FN) {
         gem_error("build_string: expected a function argument");
     }
-    GemBuffer *b = (GemBuffer *)gem_alloc(sizeof(GemBuffer));
-    b->cap = 256;
-    b->len = 0;
-    b->data = (char *)gem_alloc(b->cap);
+    GemBuffer *b = gem_buffer_alloc(256);
     GemVal add_fn;
     add_fn.type = VAL_FN;
     add_fn.magic = GEM_MAGIC;
