@@ -1189,7 +1189,6 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   let current_closure_captures = nil
   let tco_fn_name = nil
   let tco_params = nil
-  let tco_captured = nil
   let tco_boxed = nil
   let tco_is_process_tail = false
   let process_tail_fns = {}
@@ -2936,24 +2935,18 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       push(arg_temps, t)
     end
 
-    # Arena reset at the tail-call boundary. Mutated-captured params live in
-    # malloc-backed pinned boxes (gem_box_alloc, tracked in the per-process
-    # pin-set); they MUST be passed as pinned_roots or the post-reset sweep
-    # frees the box before we write `*gem_v_<p> = arg_temps[i]` below.
-    # Body-let boxed locals don't need pinning here: top-level body lets are
-    # re-allocated each iteration (the next iter's `let x = gem_box_alloc()`
-    # overwrites `gem_v_x` before any use); inner-scope lets aren't visible
-    # at the tail-call point. Either way, if such a box is referenced via a
-    # closure passed in args, the deep-copy env-walk marks it and the sweep
-    # keeps it alive.
-    let pinned_param_names = []
-    if tco_boxed != nil and len(tco_boxed) > 0
-      for p in tco_params
-        if set_contains(tco_boxed, p)
-          push(pinned_param_names, p)
-        end
-      end
-    end
+    # Arena reset at the tail-call boundary. Only the arg temps are live
+    # across it: params are rebound below, body locals are dead at a tail
+    # call, and anything else reachable (closure envs, pinned boxes they
+    # reference) is reached through the args' deep-copy walk.
+    #
+    # Mutated-captured params (`tco_boxed`) live in malloc-backed pinned
+    # boxes (gem_box_alloc). A real call gives every invocation its own box,
+    # so a closure made in iteration k keeps seeing iteration k's binding;
+    # the back-edge mirrors that by allocating a fresh box below instead of
+    # overwriting the old one. The old box is therefore not a root: if a
+    # closure in the args still references it, the env-walk marks it and
+    # the sweep keeps it; otherwise the sweep frees it.
     if len(arg_temps) > 0
       # Process-tail fns reset unconditionally — every caller chain reaches
       # them via tail calls from a process root, so no caller above holds
@@ -2973,21 +2966,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         buf_push(b, "&{arg_temps[i]}")
       end
       buf_push(b, "};\n")
-      let n_pinned = len(pinned_param_names)
-      if n_pinned > 0
-        buf_push(b, "{p}    GemVal *_tco_pinned_roots[] = \{")
-        for i = 0, n_pinned
-          if i > 0
-            buf_push(b, ", ")
-          end
-          # `gem_v_<param>` is already a `GemVal *` (from gem_box_alloc).
-          buf_push(b, "{mangle(pinned_param_names[i])}")
-        end
-        buf_push(b, "};\n")
-        buf_push(b, "{p}    gem_arena_reset_with_roots_pinned(_tco_roots, {len(arg_temps)}, _tco_pinned_roots, {n_pinned});\n")
-      else
-        buf_push(b, "{p}    gem_arena_reset_with_roots(_tco_roots, {len(arg_temps)});\n")
-      end
+      buf_push(b, "{p}    gem_arena_reset_with_roots(_tco_roots, {len(arg_temps)});\n")
       buf_push(b, "{p}}\n")
     end
 
@@ -2997,7 +2976,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       if i < len(arg_temps)
         val = arg_temps[i]
       end
-      if set_contains(tco_captured, tco_params[i])
+      if set_contains(tco_boxed, tco_params[i])
+        buf_push(b, "{p}{mp} = gem_box_alloc();\n")
         buf_push(b, "{p}*{mp} = {val};\n")
       else
         buf_push(b, "{p}{mp} = {val};\n")
@@ -4990,7 +4970,6 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     if use_tco
       tco_fn_name = name
       tco_params = params
-      tco_captured = captured
       tco_boxed = boxed_vars
       tco_is_process_tail = set_contains(process_tail_fns, name)
     end
@@ -5050,7 +5029,6 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     if use_tco
       tco_fn_name = nil
       tco_params = nil
-      tco_captured = nil
       tco_boxed = nil
       tco_is_process_tail = false
     end

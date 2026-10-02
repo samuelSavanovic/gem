@@ -1301,3 +1301,10 @@ test3: ref returned: ref, cancel: false
 test4: ["first", "second", "third"]
 test4: timer for live process cancels: true
 test5: from beyond
+5000050000
+[3, 2, 1, 0]
+[203, 102, 101, 100]
+9
+[2999998, 250000]
+[2999998, 250000]
+[nil, nil]
