@@ -1,0 +1,28 @@
+# `break` / `continue` outside any loop: at top level, in a named fn, in an
+# anonymous `fn` closure and in a `spawn do` body (the last two also when
+# the closure sits inside a loop). Expect exactly 5 errors: lines 7, 10,
+# 16, 19 and 22. The loop inside the closure (lines 24-28) is fine.
+
+if true
+  break
+end
+fn f()
+  continue
+end
+
+let k = 0
+while k < 2
+  let g = fn()
+    break
+  end
+  k += 1
+  let h = fn() continue end
+end
+spawn do
+  continue
+  let n = 0
+  while n < 1
+    n += 1
+    break
+  end
+end

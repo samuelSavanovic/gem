@@ -19,6 +19,8 @@ expected=(
   "bad_extern_type:4:4"
   "bad_pattern:2:4"
   "bad_pin:3:3"
+  "break_in_do:4:4"
+  "break_outside_loop:5:5"
   "cascade_braces:2:5"
   "closure_undeclared:7:7"
   "closure_undeclared_assign:3:3"
