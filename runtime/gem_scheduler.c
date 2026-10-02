@@ -79,6 +79,28 @@ static void gem_timer_remove_at(int i) {
         gem_timer_count--;
     }
 }
+
+/* Account for a timer leaving the heap (fired or cancelled). */
+static void gem_timer_untrack(const GemTimer *t) {
+    int slot = gem_slot_of_pid(t->target_pid);
+    if (slot >= 0) gem_proc_table[slot].pending_timers--;
+}
+
+/* Drop every pending timer that targets the process in `slot`. */
+static void gem_timer_drop_for_slot(int slot) {
+    int64_t pid = gem_pid_of_slot(slot);
+    int kept = 0;
+    for (int i = 0; i < gem_timer_count; i++) {
+        if (gem_timers[i].target_pid == pid) {
+            gem_deep_free(gem_timers[i].msg);
+        } else {
+            gem_timers[kept++] = gem_timers[i];
+        }
+    }
+    gem_timer_count = kept;
+    for (int i = kept / 2 - 1; i >= 0; i--) gem_timer_sift_down(i);
+    gem_proc_table[slot].pending_timers = 0;
+}
 int gem_main_pid = -1;
 
 /* Diagnostic counters — printed on process exit via atexit handler.
@@ -150,6 +172,8 @@ static void gem_free_proc_slot(int pid) {
        flexible — but conceptually they belong to the same process lifecycle. */
     gem_pin_free_all(proc);
 
+    if (proc->pending_timers > 0) gem_timer_drop_for_slot(pid);
+
     if (pid != gem_main_pid)
         gem_arena_destroy(&proc->arena);
 
@@ -164,6 +188,7 @@ static void gem_free_proc_slot(int pid) {
     proc->read_buf = NULL;
     proc->read_buf_cap = 0;
     proc->pcall_depth = 0;
+    proc->pending_timers = 0;
     proc->gen++;
     proc->pid = -1;
     if (gem_free_tail >= 0) {
@@ -420,6 +445,7 @@ static void gem_fire_timers(void) {
     int64_t now = gem_now_ms();
     while (gem_timer_count > 0 && now >= gem_timers[0].deadline_ms) {
         GemTimer t = gem_timers[0];
+        gem_timer_untrack(&t);
         gem_timer_remove_at(0);
         int pid = gem_slot_of_pid(t.target_pid);
         if (pid >= 0) {
@@ -1191,6 +1217,10 @@ GemVal gem_send_after_builtin(void *_env, GemVal *args, int argc) {
     if (gem_timer_count >= gem_timer_cap) gem_timer_heap_grow();
 
     GemVal ref = gem_make_ref();
+    /* A timer for a process that has already exited would never deliver. */
+    int slot = gem_slot_of_pid(pid);
+    if (slot < 0 || gem_proc_table[slot].state == GEM_PROC_DEAD) return ref;
+    gem_proc_table[slot].pending_timers++;
     int i = gem_timer_count++;
     gem_timers[i].ref = ref.rval;
     gem_timers[i].target_pid = pid;
@@ -1209,6 +1239,7 @@ GemVal gem_cancel_timer_builtin(void *_env, GemVal *args, int argc) {
     int64_t ref = args[0].rval;
     for (int i = 0; i < gem_timer_count; i++) {
         if (gem_timers[i].ref == ref) {
+            gem_timer_untrack(&gem_timers[i]);
             gem_deep_free(gem_timers[i].msg);
             gem_timer_remove_at(i);
             return gem_bool(1);
