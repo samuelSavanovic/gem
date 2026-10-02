@@ -1,0 +1,295 @@
+# A closure passed to pcall / sort (or a pcall do-block) gets a stack env
+# whose fields point at the caller's own locals, so an assign in the
+# closure stores straight into the caller's frame. When that assign runs
+# inside a loop of the closure, the stored value is younger than the loop's
+# arena mark: the loop's back-edge resets must root it even though the loop
+# never reads it again, or the caller reads freed memory after the call.
+# Each case writes mid-loop and keeps allocating garbage afterwards.
+
+let N = 200000
+let HALF = 100000
+
+fn churn(i)
+  {a: "junk{i}", b: [i, i + 1, "x{i}"]}
+end
+
+# while loop, capture assigned but never read in the loop
+fn case_while()
+  let last = nil
+  pcall(fn()
+    let i = 0
+    while i < N
+      if i == HALF
+        last = {n: i, s: "w{i}"}
+      end
+      let junk = churn(i)
+      i = i + 1
+    end
+  end)
+  print("while", last)
+end
+
+# for-range and for-in loops
+fn case_for()
+  let a = nil
+  let b = nil
+  pcall(fn()
+    for i = 0, N
+      if i == HALF
+        a = ["range", "r{i}"]
+      end
+      let junk = churn(i)
+    end
+  end)
+  let items = []
+  for i = 0, N
+    push(items, i)
+  end
+  pcall(fn()
+    for x in items
+      if x == HALF
+        b = ["in", "v{x}"]
+      end
+      let junk = churn(x)
+    end
+  end)
+  print("for", a, b)
+end
+
+# the write happens in an inner loop; neither loop reads it
+fn case_nested()
+  let last = nil
+  pcall(fn()
+    let i = 0
+    while i < 400
+      let j = 0
+      while j < 500
+        if i == 200 and j == 250
+          last = {i: i, j: j, s: "n{i}-{j}"}
+        end
+        let junk = churn(j)
+        j = j + 1
+      end
+      i = i + 1
+    end
+  end)
+  print("nested", last)
+end
+
+# pcall do-block, the loop only exits through error()
+fn case_do_error()
+  let last = nil
+  let first = nil
+  let r = pcall do
+    let i = 0
+    while true
+      if i == 0
+        first = "first{i}"
+      end
+      last = {e: "e{i}"}
+      let junk = churn(i)
+      i = i + 1
+      if i == N
+        error("stop")
+      end
+    end
+  end
+  print("do/error", first, last, r.ok)
+end
+
+# early return out of an infinite loop
+fn case_return()
+  let last = nil
+  pcall(fn()
+    let i = 0
+    while true
+      if i == HALF
+        last = "ret{i}"
+      end
+      let junk = churn(i)
+      i = i + 1
+      if i == N
+        return nil
+      end
+    end
+  end)
+  print("return", last)
+end
+
+# sort comparator with its own loop
+fn case_sort()
+  let note = nil
+  let calls = 0
+  let arr = sort([3, 1, 2], fn(x, y)
+    let k = 0
+    while k < 40000
+      if k == 20000 and calls == 0
+        note = {cmp: "c{k}"}
+      end
+      let junk = churn(k)
+      k = k + 1
+    end
+    calls = calls + 1
+    x - y
+  end)
+  print("sort", arr, note, calls > 0)
+end
+
+# string built up on a capture inside the closure loop (read there, so
+# live anyway; covers the capture-append path)
+fn case_concat()
+  let s = ""
+  pcall(fn()
+    let i = 0
+    while i < N
+      if i % 40000 == 0
+        s = s + "<{i}>"
+      end
+      let junk = churn(i)
+      i = i + 1
+    end
+  end)
+  print("concat", s)
+end
+
+# pcall closure inside an escaping closure: assigns both the escaping
+# closure's capture and its own local
+fn case_inside_heap()
+  let y = nil
+  let h = fn()
+    let z = nil
+    pcall(fn()
+      let i = 0
+      while i < N
+        if i == HALF
+          y = {y: "y{i}"}
+          z = {z: "z{i}"}
+        end
+        let junk = churn(i)
+        i = i + 1
+      end
+    end)
+    z
+  end
+  print("inside heap", h(), y)
+end
+
+# pcall inside pcall: the outer closure is an escaping (heap) closure
+fn case_pcall_in_pcall()
+  let u = nil
+  pcall(fn()
+    pcall(fn()
+      let i = 0
+      while i < N
+        if i == HALF
+          u = {pp: "p{i}"}
+        end
+        let junk = churn(i)
+        i = i + 1
+      end
+    end)
+  end)
+  print("pcall in pcall", u)
+end
+
+# the caller resets too: its loop calls the closure every iteration
+fn case_caller_loop()
+  let found = []
+  let r = 0
+  while r < 4
+    let cur = nil
+    pcall(fn()
+      let i = 0
+      while i < 60000
+        if i == 30000
+          cur = {r: r, s: "b{r}"}
+        end
+        let junk = churn(i)
+        i = i + 1
+      end
+    end)
+    push(found, cur)
+    let junk2 = churn(r)
+    r = r + 1
+  end
+  let last = nil
+  let i = 0
+  while i < N
+    pcall(fn()
+      if i == HALF
+        last = {caller: "c{i}"}
+      end
+    end)
+    let junk = churn(i)
+    i = i + 1
+  end
+  print("caller loop", found, last)
+end
+
+# a self-tail-recursive caller
+fn case_tco(n, acc)
+  if n == 0
+    return acc
+  end
+  let got = nil
+  pcall(fn()
+    let k = 0
+    while k < 20000
+      if k == 10000
+        got = "t{n}"
+      end
+      let junk = churn(k)
+      k = k + 1
+    end
+  end)
+  push(acc, got)
+  case_tco(n - 1, acc)
+end
+
+# a let in the closure shadowing the captured name
+fn case_shadow()
+  let last = "outer"
+  pcall(fn()
+    let i = 0
+    while i < N
+      let last = {s: "inner{i}"}
+      let junk = churn(i)
+      i = i + 1
+    end
+  end)
+  print("shadow", last)
+end
+
+# the same inside a spawned process
+fn case_spawn()
+  let parent = self()
+  spawn(fn()
+    let last = nil
+    pcall(fn()
+      let i = 0
+      while i < N
+        if i == HALF
+          last = {p: "proc{i}"}
+        end
+        let junk = churn(i)
+        i = i + 1
+      end
+    end)
+    send(parent, last)
+  end)
+  print("spawn", receive())
+end
+
+case_while()
+case_for()
+case_nested()
+case_do_error()
+case_return()
+case_sort()
+case_concat()
+case_inside_heap()
+case_pcall_in_pcall()
+case_caller_loop()
+print("tco", case_tco(5, []))
+case_shadow()
+case_spawn()

@@ -1443,3 +1443,16 @@ captured [200000, 19999900000]
 8 many resets: {n: 5, s: "x5"}
 9 independent: child=child parent=parent
 10 sent back: {n: 100000, s: "back100000"}
+while {n: 100000, s: "w100000"}
+for ["range", "r100000"] ["in", "v100000"]
+nested {i: 200, j: 250, s: "n200-250"}
+do/error first0 {e: "e199999"} false
+return ret100000
+sort [1, 2, 3] {cmp: "c20000"} true
+concat <0><40000><80000><120000><160000>
+inside heap {z: "z100000"} {y: "y100000"}
+pcall in pcall {pp: "p100000"}
+caller loop [{r: 0, s: "b0"}, {r: 1, s: "b1"}, {r: 2, s: "b2"}, {r: 3, s: "b3"}] {caller: "c100000"}
+tco ["t5", "t4", "t3", "t2", "t1"]
+shadow outer
+spawn {p: "proc100000"}
