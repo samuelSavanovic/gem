@@ -17,9 +17,6 @@ Key bottlenecks under the current arena + region-reset mechanism:
 
 ## Arena / Memory
 
-### Spawn copies the parent's module state (P2)
-Module-level bindings are per-process, so `spawn` deep-copies every module slot (namespace tables are immortal and shared, so they cost nothing). A program loading `std/http`, `std/json` and `std/log` pays ~4 µs extra per spawn (22 µs vs 18 µs for 100k short processes), mostly copying `STATUS_TEXT`, mime tables and similar constant data. Options: share slots whose values are immutable after module init (needs a "never written after init" analysis, or freezing literal tables that nothing mutates), or copy lazily on first access per slot. Only worth it if spawn-heavy workloads show it.
-
 ### Garbage allocated before a loop starts is kept by that loop (P2)
 A region reset frees only what the loop allocated since its mark. Garbage from straight-line code before the loop (e.g. main's startup work before a top-level `while true` server loop) stays until an enclosing loop resets or the process exits. It is a constant, not growth. For loops at depth 0 of the main program the mark could sit at the start of the arena (main has no caller frames and its module slots are roots), reclaiming startup garbage too; spawned bodies would need their env rooted.
 

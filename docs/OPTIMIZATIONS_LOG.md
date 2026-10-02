@@ -94,7 +94,18 @@ Before → after (Linux x86-64, same machine):
 - zero-arg receive loop, 400k messages: 160 MB → 7 MB peak.
 - 50/100/200 queued 1 MB messages draining through a reset loop: quadratic (0.75/3.2/14.4 s) → linear (200 msgs: 0.13 s).
 - self-hosting compile of `compiler/main.gem`: 3.1 s / 1.36 GB peak → 3.8 s / 117 MB peak (1,300 resets, 0.84 s of reset work).
-- spawn of 100k short processes with `std/http`, `std/json`, `std/log` loaded: 18 µs → 22 µs per spawn (module state copy; see OPTIMIZATIONS.md).
+- spawn of 100k short processes with `std/http`, `std/json`, `std/log` loaded: 18 µs → 22 µs per spawn (module state copy; fixed by "Lazy per-slot module copy at spawn" below).
+
+### Lazy per-slot module copy at spawn ✓ Done (2026-10-02)
+Module-level bindings are per-process, and `spawn` used to deep-copy every slot of the parent into the child, used or not. A 10k- or 100k-entry top-level table cost every spawn its full size (and `std/http` spawns per connection). Now a spawn copies only light slot values (numbers, short strings, fns without env); every other slot value lives in a **snapshot unit**: an immutable, refcounted malloc copy of the parent's slots that share structure (one aliasing component, found by walking the values). The child's slot holds `VAL_LAZY` plus a reference to the unit; its first read (`gem_global_get`, an inline tag test) copies all of the unit's still-lazy slots into the child's arena with one copy map, so aliasing between bindings survives, and shares the unit's strings. The parent reuses a unit for later spawns until it changes it: a slot write (`gem_global_set`/`gem_global_ref`) or a change to a table copied into it (tables carry the unit's `snap_gen` stamp; every table mutator calls `gem_table_check_mutable`, which already refused frozen namespaces) drops just that unit, and the next spawn rebuilds just that unit. Units holding buffers or pinned capture boxes (which change without a table write) are used by one spawn only. A child that never touched a slot hands the same unit on to its own children. A spawned closure's env is copied with the same map as the units it reaches, so a captured local referring to a module table is still that table in the child. Runtime in `runtime/gem_copy.c` ("Module globals"), codegen emits `gem_global_get`/`gem_global_set`/`gem_global_ref` and `gem_globals_init_lazy`.
+
+Before → after (Linux x86-64, same machine, median of 3):
+- 200 live children, parent holding a 10k-entry top-level array of strings, children never reading it: 317 ms / 199 MB peak → 7 ms / 12.7 MB.
+- same with 100k entries: 4.1 s / 1.57 GB → 26 ms / 36 MB.
+- same with 100k entries, every child reading the array once (`len(big)`): 4.1 s / 1.57 GB → 0.83 s / 41 MB (strings shared with the unit, one unit for all children).
+- spawn + reply of 100k short processes with `std/http`, `std/json`, `std/log` loaded: 29 µs → 24 µs per spawn, the same as with no modules loaded (24–25 µs).
+- tight loop reading a module binding (50M iterations): 1.94 s → 1.92 s; `fib(32)`: 270 ms → 275 ms (identical code, noise).
+- self-hosting compile of `compiler/main.gem` (`--emit-c`): 4.13 s → 4.29 s mean of 8 (noise-level; 0.26% more instructions under callgrind for the same compiler source, 0.4% including the namespace pass); peak RSS 118 MB → 119 MB.
 
 ### Lower default `GEM_ARENA_RESET_THRESHOLD` ✓ Done (2026-04-30)
 Default lowered from 16 MB to 1 MB. Threshold sweep at c100 on `/` showed 1 MB strictly dominates: same throughput (28.8k vs 28.9k req/s), p99 −3.6× (26.5ms → 7.3ms), peak RSS −14× (2.04 GB → 139 MB), idle RSS −10× (495 MB → 50 MB). `/bookmarks` validation at c50 (heavier per-request allocation) confirmed no regression: throughput unchanged (4041 vs 4007 req/s), p99 −15% (26.9ms → 23.0ms), peak RSS −14× (728 MB → 52 MB). The hypothesis "smaller threshold = more reset overhead" did not show up in numbers — live set after a request is tiny so reset cost is negligible.

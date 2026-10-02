@@ -182,27 +182,14 @@ fn collect_top_let_names(stmts, result)
   end
 end
 
-# Names assigned (`name = …`) anywhere under `node`, nested fns included.
-fn collect_assigned_names(node, out)
-  if type(node) != "table" then return end
-  if node.tag == "assign" and type(node.name) == "string"
-    set_add(out, node.name)
-  end
-  for k in keys(node)
-    let v = node[k]
-    if type(v) == "table"
-      collect_assigned_names(v, out)
-    end
-  end
-end
-
 # Whole-module load bindings (`let m = <frozen namespace table>`, from
 # resolve_loads in main.gem) whose name is never rebound or assigned:
 # out[m] = {export: "_mod_<mod>_<export>"}. Codegen compiles `m.export`
 # straight to that binding, so it is the module's own value in the
 # running process.
-fn collect_module_namespaces(top_stmts, fn_defs, out)
-  let rebound = {}
+# `assigned`: names assigned (`name = …`) anywhere in the program.
+fn collect_module_namespaces(top_stmts, assigned, out)
+  let rebound = assigned
   for s in top_stmts
     if is_node(s, "let")
       if is_node(s.value, "table") and s.value.frozen == true
@@ -232,8 +219,6 @@ fn collect_module_namespaces(top_stmts, fn_defs, out)
       end
     end
   end
-  collect_assigned_names(top_stmts, rebound)
-  collect_assigned_names(fn_defs, rebound)
   for name, _ in rebound
     delete(out, name)
   end
@@ -1234,8 +1219,11 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # ─── Module globals ──
   #
   # Top-level bindings (`top_level_vars`) are per-process module slots:
-  # `gem_g_<name>` is `#define`d to `gem_cur_globals[<index>]`, the running
-  # process's copy (runtime/gem.h). A name refers to the module slot when it
+  # `gem_gi_<name>` is `#define`d to the slot index and `gem_g_<name>` to
+  # `gem_global_get(<index>)`, a read of the running process's slot
+  # (runtime/gem.h). Writes go through `gem_global_set` (plain assignment)
+  # or `gem_global_ref` (read-modify-write lvalue); both tell the runtime
+  # the slot changed, which lazy module copy at spawn relies on. A name refers to the module slot when it
   # is a top-level var and the current scope has no local of that name:
   # in top-level code every top-level var name is the slot; inside a fn or
   # closure, a param/let/capture of the same name shadows it. Module slots
@@ -1253,6 +1241,10 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
   let gmangle = fn(name)
     "gem_g_{name}"
+  end
+
+  let gindex = fn(name)
+    "gem_gi_{name}"
   end
 
   let join_c = fn(items)
@@ -1303,12 +1295,20 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # C lvalue for variable `name` in the current scope.
   let var_lvalue = fn(name)
     if is_global_ref(name)
-      return gmangle(name)
+      return "(*gem_global_ref({gindex(name)}))"
     end
     if set_contains(boxed_vars, name)
       return "(*{mangle(name)})"
     end
     mangle(name)
+  end
+
+  # C statement storing `expr` into variable `name` (no trailing newline).
+  let var_store = fn(name, expr)
+    if is_global_ref(name)
+      return "gem_global_set({gindex(name)}, {expr});"
+    end
+    "{var_lvalue(name)} = {expr};"
   end
 
   # Frame bookkeeping helpers — return empty strings inside leaf fns so the
@@ -3370,6 +3370,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
           return {expr: "GEM_NIL", setup: ""}
         end
       end
+      if is_global_ref(name)
+        return {expr: gmangle(name), setup: ""}
+      end
       return {expr: var_lvalue(name), setup: ""}
     when {tag: "call"}
       return compile_call(node)
@@ -3785,7 +3788,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       let mname = mangle(name)
       if in_top_level and set_contains(top_level_vars, name)
         # Module-level binding: this process's slot.
-        return "{line_dir}{r.setup}{p}{gmangle(name)} = {r.expr};"
+        return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});"
       end
       if set_contains(boxed_vars, name)
         # Mutated-captured fn-local: pinned malloc'd box, registered in the
@@ -3813,9 +3816,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       let r = compile_expr(value)
       let refresh = ns_refresh(name, p)
       if refresh != ""
-        return "{line_dir}{r.setup}{p}{var_lvalue(name)} = {r.expr};\n{substr(refresh, 0, len(refresh) - 1)}"
+        return "{line_dir}{r.setup}{p}{var_store(name, r.expr)}\n{substr(refresh, 0, len(refresh) - 1)}"
       end
-      return "{line_dir}{r.setup}{p}{var_lvalue(name)} = {r.expr};"
+      return "{line_dir}{r.setup}{p}{var_store(name, r.expr)}"
     when {tag: "dot_assign", object: object, value: value, field: field}
       let obj_r = compile_expr(object)
       let val_r = compile_expr(value)
@@ -3910,7 +3913,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       let r = compile_expr(value)
       let mname = mangle(name)
       if in_top_level and set_contains(top_level_vars, name)
-        return "{line_dir}{r.setup}{p}{gmangle(name)} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
+        return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});\n{pop_str(p)}{p}return GEM_NIL;"
       end
       if set_contains(boxed_vars, name)
         return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
@@ -3920,7 +3923,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       check_assign_target(name, node)
       let r = compile_expr(value)
       let t = tmp()
-      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_lvalue(name)} = {t};\n{ns_refresh(name, p)}{pop_str(p)}{p}return {t};"
+      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_store(name, t)}\n{ns_refresh(name, p)}{pop_str(p)}{p}return {t};"
     when {tag: "return", value: value}
       if value != nil
         let r = compile_expr(value)
@@ -5216,7 +5219,17 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     # read-only captures live as plain `GemVal` globals, with closures
     # receiving value snapshots in their env.
     collect_top_let_names(top_stmts, top_level_vars)
-    collect_module_namespaces(top_stmts, fn_defs, module_ns)
+    # Every `name = …` in the program, from mark_process_tail's call graph
+    # (it visits every fn, closure and top-level statement).
+    let assigned = {}
+    for _, r in pt_caller_records
+      for w in r.writes
+        if is_node(w.node, "assign")
+          set_add(assigned, w.name)
+        end
+      end
+    end
+    collect_module_namespaces(top_stmts, assigned, module_ns)
     for binding, fields in module_ns
       for field, target in fields
         if ns_targets[target] == nil
@@ -5296,7 +5309,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(mb, "    gem_pop_frame();\n    return GEM_NIL;\n}\n\n")
     buf_push(mb, "int main(int argc, char **argv) \{\n")
     buf_push(mb, "    gem_init(argc, argv);\n")
-    buf_push(mb, "    gem_globals_init({len(keys(top_level_vars))});\n")
+    buf_push(mb, "    gem_globals_init_lazy({len(keys(top_level_vars))});\n")
     buf_push(mb, "    gem_scheduler_init();\n")
     buf_push(mb, "    gem_run_main(gem_user_main, NULL);\n")
     buf_push(mb, "    return 0;\n}\n")
@@ -5331,7 +5344,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     # gem_cur_globals array (see is_global_ref).
     let tlv_keys = sort(keys(top_level_vars))
     for i = 0, len(tlv_keys)
-      buf_push(ob, "#define gem_g_{tlv_keys[i]} (gem_cur_globals[{i}])\n")
+      buf_push(ob, "#define gem_gi_{tlv_keys[i]} {i}\n#define gem_g_{tlv_keys[i]} gem_global_get({i})\n")
     end
     buf_push(ob, "\n")
 

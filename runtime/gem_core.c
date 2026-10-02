@@ -172,6 +172,11 @@ void gem_ns_refresh(GemVal ns, const char *field, GemVal val) {
     GemTable *t = ns.table;
     for (int i = 0; i < t->len; i++) {
         if (t->keys[i].type == VAL_STRING && strcmp(t->keys[i].sval, field) == 0) {
+            if (t->snap_gen) {           /* gem_table_check_mutable minus the freeze */
+                t->immutable = 0;
+                gem_table_mutate_slow(t);
+                t->immutable = 1;
+            }
             gem_table_written(t);
             t->vals[i] = val;
             return;
@@ -179,10 +184,6 @@ void gem_ns_refresh(GemVal ns, const char *field, GemVal val) {
     }
 }
 
-void gem_table_frozen_error(void) {
-    gem_error("cannot modify a module table");
-    abort();
-}
 
 void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
     if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "index set on non-table: got %s", gem_type_str(tbl)); gem_error(buf); }
