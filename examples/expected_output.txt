@@ -1579,3 +1579,14 @@ t0qqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
 t50000qqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
 t100000qqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
 0 0
+118
+10
+11
+47
+a+b
+4
+6
+{ok: true, value: 4}
+[3, 2, 1]
+hi 11
+int

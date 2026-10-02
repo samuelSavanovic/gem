@@ -1,0 +1,22 @@
+# Assigning a name with no `let` inside a closure, a do block and a nested
+# closure in a named fn: one Gem error per assignment.
+fn each_n(n, f)
+  f(0)
+end
+
+let f = fn()
+  y = 1
+end
+each_n(1) do |i|
+  z = i
+end
+
+fn outer()
+  let h = fn()
+    let k = fn()
+      w = 3
+    end
+    k()
+  end
+  h()
+end

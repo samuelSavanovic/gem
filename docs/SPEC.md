@@ -424,6 +424,8 @@ c()  # 1
 c()  # 2
 ```
 
+A closure body (`fn() ... end`, a `do` block, a `spawn do` body, `pcall <expr>`) resolves names exactly like a named function body: reading or assigning a name that no enclosing scope declares (no `let`, parameter, function, builtin or `load`) is a compile error, `undeclared identifier`, at the use.
+
 ## Tail Call Optimization
 
 Self-recursive functions in tail position are optimized into loops. The compiler detects when a named function calls itself as the last expression (including through `if`/`elif`/`else`, `match`, and `receive` branches) and replaces the recursive call with parameter reassignment and a loop restart. This means tail-recursive functions use constant stack space regardless of recursion depth.
