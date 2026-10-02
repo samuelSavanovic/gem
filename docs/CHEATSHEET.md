@@ -74,8 +74,12 @@ export my_fn, my_other_fn            # at end of module file
 # Strings — double-quoted: interpolation, single-quoted: literal
 "hello {name}"                       # interpolation with { }
 'no {interpolation} here'            # literal braces
-"""multi-line with {interpolation}"""
-'''multi-line literal'''
+"""
+multi-line with {interpolation}
+"""                                  # opening quotes end their line
+'''
+multi-line literal
+'''
 
 # Operators — and/or/not (NOT &&/||/!), x in tbl, x in arr
 # Tables — { key: val } or [1, 2, 3], dot access, bracket access (negative indexing supported)
@@ -84,7 +88,7 @@ export my_fn, my_other_fn            # at end of module file
 # Concurrency
 let pid = spawn do ... end
 let pid = spawn_link do ... end       # spawn + link atomically
-let {pid, ref} = spawn_monitor do ... end
+let {pid} = spawn_monitor do ... end
 send(pid, msg)
 let msg = receive()                  # pop head
 receive                              # selective receive
@@ -93,7 +97,7 @@ when {tag: "DOWN", pid: p}
 after 5000
   timeout()
 end
-monitor(pid)                         # → ref
+monitor(pid)                         # → true; DOWN message on exit
 link(pid); unlink(pid)
 process_flag("trap_exit", true)
 register("name", self())
@@ -111,7 +115,7 @@ let body = task.await(t)               # value, or re-raises the task's error
 let [x, y] = task.await_all([t1, t2], 5000)
 
 # Error handling
-error("msg")                         # halt with stack trace; uncaught in main prints source context + caret
+error("msg")                         # halt with stack trace; uncaught in main prints source line + stack trace
 let r = pcall some_fn()              # {ok: bool, value/error: ...}
 
 # Common builtins

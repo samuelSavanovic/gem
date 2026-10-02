@@ -322,9 +322,9 @@ Pattern rules:
 - `^name` (a pin) matches by equality with the current value of the variable `name`; it binds nothing. The pinned name must already be in scope, and only a plain variable name can be pinned — bind an expression like `t.ref` to a local first. `when ^x` works at the top of a `match` or `receive` arm as well as inside table and array patterns. The comparison is `==`, so a pinned table matches only that same table — never a copy received in a message. Pin primitives and refs.
 - A bare name after `when` (e.g., `when x`) is a catch-all that binds the entire match target.
 - Patterns compose recursively: `{users: [{name: n}]}` works.
-- Regular expression whens (e.g., `when some_var + 1`) still work alongside destructuring patterns.
+- Any other expression after `when` (e.g., `when some_var + 1`, `when 42`) is an expression arm: it matches when the target equals the expression's value. Expression arms and pattern arms can be mixed in one `match`.
 
-Destructuring patterns desugar in the parser to condition checks + variable bindings. The codegen sees normal if/else chains with let statements — no new AST node types are needed.
+Each pattern compiles to a condition check plus variable bindings; the bindings are in scope only inside that arm's body.
 
 `elif` desugars to nested `if/else` at parse time — no new AST nodes. One `end` closes the entire chain.
 
@@ -580,7 +580,7 @@ The `after <ms>` clause is optional. If present and the timeout elapses with no 
 
 The `receive` block can produce a value when used as the last statement of a function (implicit return), just like `match`.
 
-The existing `receive()` function call continues to work unchanged — it always pops the head of the mailbox unconditionally.
+The `receive()` function call always pops the head of the mailbox unconditionally, whatever the message is.
 
 ## Process Control
 

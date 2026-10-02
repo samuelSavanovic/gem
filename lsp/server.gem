@@ -1,12 +1,13 @@
 # lsp/server.gem — main loop. Reads stdin frames via rpc, dispatches each
-# through handlers.dispatch.
+# through the dispatcher returned by handlers.make_dispatcher().
 #
-# v1 keeps the loop synchronous: rpc.read_message blocks the OS thread
-# (fgets/fread on stdin), so spawning per-request workers wouldn't actually
-# run concurrently with the next read. Doc-process send/receive still
-# yields cooperatively, so registered doc processes get scheduled between
-# frames. Cancellation-grade concurrency (cancel mid-completion) is a
-# follow-up — see LSP_ROADMAP §1a Caveats.
+# The loop is synchronous: rpc.read_message blocks the OS thread
+# (fgets/fread on stdin), so spawning per-request workers wouldn't run
+# concurrently with the next read. Doc-process send/receive yields
+# cooperatively, so registered doc processes get scheduled between frames.
+# A request cannot be cancelled mid-flight; docs/LSP_ROADMAP.md
+# ("Synchronous main loop instead of spawn-per-request") describes what
+# that would take.
 
 load "./rpc"
 load "./handlers"
@@ -14,10 +15,7 @@ load "./workspace"
 
 fn run()
   # Spawn the workspace process from main before the dispatcher loop.
-  # It owns a cross-file AST/symbol cache for goto-def + completion;
-  # spawning here (rather than lazily from a doc handler) avoids the
-  # PR #10 footgun where a non-main writer could leave dangling state
-  # behind a top-level box. See lsp/workspace.gem header for details.
+  # It owns a cross-file AST/symbol cache for goto-def + completion.
   workspace.start()
   let d = handlers.make_dispatcher()
   while true

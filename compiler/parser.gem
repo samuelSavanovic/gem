@@ -634,8 +634,8 @@ fn make_parser(tokens, source, file, sink)
         let field_tok = peek()
         # Field name must be a NAME or an alphabetic keyword (e.g. obj.match,
         # from.ref). Reject punctuation/operator tokens — most importantly the
-        # second '.' in '..', which currently silently parses as `obj.<.>` and
-        # crashes at runtime ("field access on non-table").
+        # second '.' in '..', which would otherwise parse as `obj.<.>` and
+        # fail at runtime ("field access on non-table").
         let c0 = ""
         if len(field_tok.type) > 0
           c0 = field_tok.type[0]

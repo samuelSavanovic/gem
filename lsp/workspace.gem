@@ -2,26 +2,20 @@
 #
 # Goto-def can land on a name defined in a module the LSP hasn't been
 # asked to `didOpen` (typically `std/*.gem`). The workspace process owns
-# a map of {absolute_path → {ast, symbols}} for those cold-loaded files.
+# a map of {absolute_path → {ast, tokens, symbols, text}} for those
+# cold-loaded files.
 # Open documents have their own per-doc process — handlers should check
 # `whereis("lsp_doc:file://" + path)` first and only fall back to the
 # workspace for files the editor hasn't opened.
 #
 # Lifetime: spawned + registered as "lsp_workspace" from `lsp/server.gem`
-# at startup, before the dispatcher loop runs. Spawning from main matters
-# for two reasons learned in PR #10:
-#   1. Top-level mutable lets that the workspace touches must not have
-#      been written from a non-main process. We don't write any here, but
-#      the reverse rule (this process must be created from main so its
-#      arena is the spawn's, not some doc-process arena) holds either way.
-#   2. The workspace recursively walks parsed ASTs (build_symbols), so it
-#      shares the same 256 KB stack-size dependency as the doc process.
+# at startup, before the dispatcher loop runs.
 #
-# Invalidation: not implemented in v1. If a user edits a loaded module
-# outside the editor and the LSP doesn't restart, the cache will be
-# stale. Open files always go through their doc process (which reparses
-# on every didChange), so this only affects truly-cold modules. Tracked
-# as a follow-up — add when someone reports it.
+# Invalidation: entries are never refreshed. The workspace loop handles an
+# `invalidate` message, but nothing sends one, so a cached module stays as
+# first parsed until the LSP restarts — including after it is opened,
+# edited, saved and closed in the editor. While a file is open, handlers
+# use its doc process (which reparses on every didChange) instead.
 
 load "./symbols" (build_symbols)
 load "../compiler/parser" (parse_source)
