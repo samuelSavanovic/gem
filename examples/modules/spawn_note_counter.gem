@@ -1,0 +1,18 @@
+# Module state written from a spawned process (examples/134_spawn_note_names.gem).
+# Underscores in both the module name and the binding names check that the
+# compiler's note maps `_mod_spawn_note_counter_hit_count` back to
+# `spawn_note_counter.hit_count` without guessing where to split.
+let hit_count = 0
+let by_kind = {}
+
+fn bump(kind)
+  hit_count = hit_count + 1
+  by_kind[kind] = hit_count
+  hit_count
+end
+
+fn total()
+  hit_count
+end
+
+export bump, total

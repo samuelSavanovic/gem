@@ -1300,9 +1300,12 @@ tag_process_tail_while_loops = fn(fn_defs, top_stmts, source_name)
   walk_for_tagging_stmts(top_stmts, true, source_name)
 end
 
-fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_by_file = nil, sink = nil)
+fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_by_file = nil, sink = nil, global_display = nil)
   if module_bindings == nil
     module_bindings = {}
+  end
+  if global_display == nil
+    global_display = {}
   end
   if sources_by_file == nil
     sources_by_file = {}
@@ -1326,6 +1329,29 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       return substr(p, rlen + 1, len(p) - rlen - 1)
     end
     p
+  end
+
+  # The name a user wrote for a compiler-mangled binding, for messages:
+  # drops `_sh<N>_` shadow renames (scope_top_level_lets), then maps a
+  # module slot `_mod_<mod>_<name>` to `<mod>.<name>` via global_display
+  # (built from the loaded-module table in main.gem). Other names pass
+  # through. Extend here for any new mangling scheme.
+  let user_var_name = fn(name)
+    let n = name
+    while len(n) > 4 and substr(n, 0, 3) == "_sh"
+      let i = 3
+      while i < len(n) and ord(n, i) >= 48 and ord(n, i) <= 57
+        i += 1
+      end
+      if i == 3 or i >= len(n) or n[i] != "_"
+        break
+      end
+      n = substr(n, i + 1, len(n) - i - 1)
+    end
+    if global_display[n] != nil
+      return global_display[n]
+    end
+    n
   end
 
   # Diagnostic location helpers. Defined up front so any closure inside
@@ -2945,7 +2971,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
             if spawn_node.line != nil
               sline = to_string(spawn_node.line)
             end
-            eprint("note: {file_of(n)}:{line_str}: this changes module-level `{w.name}` in code that runs in a spawned process (spawn at {file_of(spawn_node)}:{sline}); each process has its own copy of module state, so the change is visible only in that process.\n")
+            eprint("note: {rel_path(file_of(n))}:{line_str}: this changes module-level `{user_var_name(w.name)}` in code that runs in a spawned process (spawn at {rel_path(file_of(spawn_node))}:{sline}); each process has its own copy of module state, so the change is visible only in that process.\n")
           end
         end
       end

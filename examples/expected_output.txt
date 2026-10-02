@@ -1518,3 +1518,5 @@ y:300001:y
 750000 true
 false bottom 2100000 true
 200010000 200010000 true
+child total: 2, child hits: 1
+parent total: 0, parent hits: 0

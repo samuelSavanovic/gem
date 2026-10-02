@@ -454,7 +454,9 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       end
 
       let mod_name = module_name_from_path(stmt.path)
-      loaded[full_path] = {mod_name: mod_name, exported: export_node.names}
+      # top_names: the module-scope names transform_module prefixes with
+      # `_mod_<mod_name>_`; build_global_display maps them back for messages.
+      loaded[full_path] = {mod_name: mod_name, exported: export_node.names, top_names: collect_module_top_names(resolved.stmts)}
       let mod_stmts = transform_module(resolved.stmts, mod_name, export_node, stmt)
       if stmt.selective == nil
         let bn = mod_name
@@ -473,6 +475,22 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
     end
   end
   make_program(new_stmts)
+end
+
+# Mangled module-slot name -> the name a user writes: `_mod_<mod>_<name>`
+# -> `<mod>.<name>`, from the loaded-module table (no string splitting, so
+# underscores in module or binding names stay unambiguous). Codegen uses it
+# in diagnostics that name module state.
+fn build_global_display(loaded)
+  let display = {}
+  for _, info in loaded
+    if info.top_names != nil
+      for name, _ in info.top_names
+        display["_mod_" + info.mod_name + "_" + name] = info.mod_name + "." + name
+      end
+    end
+  end
+  display
 end
 
 # ─── CLI argument parsing ──────────────────────────────────────
@@ -610,7 +628,7 @@ resolved_ast = lower(resolved_ast)
 
 fold_constants(resolved_ast)
 
-let cg = make_codegen(src_path, module_bindings, project_root, sources_by_file, sink)
+let cg = make_codegen(src_path, module_bindings, project_root, sources_by_file, sink, build_global_display(loaded))
 let c_code = cg.compile(resolved_ast)
 
 # Codegen may have surfaced semantic errors (undeclared identifier,
