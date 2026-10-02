@@ -289,6 +289,13 @@ match event
 when {type: "click", pos: [x, y]}
   handle_click(x, y)
 end
+
+# Pin — compare against an existing variable instead of binding
+let expected = "admin"
+match user
+when {role: ^expected}
+  grant()
+end
 ```
 
 Pattern rules:
@@ -296,6 +303,7 @@ Pattern rules:
 - `[p1, p2, ...]` — checks target is a table with `len(target) == N`, then recursively matches each element.
 - A literal (int, float, string, bool) in pattern position matches by equality. `nil` is also a literal — `when nil` matches only `nil`, it does not bind a variable.
 - A name in pattern position is a variable binding — always matches and binds the matched value.
+- `^name` (a pin) matches by equality with the current value of the variable `name`; it binds nothing. The pinned name must already be in scope, and only a plain variable name can be pinned — bind an expression like `t.ref` to a local first. `when ^x` works at the top of a `match` or `receive` arm as well as inside table and array patterns. The comparison is `==`, so a pinned table matches only that same table — never a copy received in a message. Pin primitives and refs.
 - A bare name after `when` (e.g., `when x`) is a catch-all that binds the entire match target.
 - Patterns compose recursively: `{users: [{name: n}]}` works.
 - Regular expression whens (e.g., `when some_var + 1`) still work alongside destructuring patterns.
@@ -538,6 +546,19 @@ end
 `receive ... when ... end` is a syntactic form (not a function call) for Erlang-style selective receive. The process scans its mailbox from oldest to newest, testing each message against the `when` arms in order using the same destructuring patterns as `match`. When a pattern matches, that message is removed from the mailbox (even if it's not the head), pattern variables are bound, and the arm body executes. Non-matching messages remain in the mailbox in their original order.
 
 If no arm matches any message, the process yields. When new messages arrive, it re-scans from the oldest unmatched message.
+
+Pin patterns (`^name`, see Destructuring Patterns in Match) select a message by a value only known at runtime. This is how a request/reply exchange picks out the reply to *its* request when several replies may be queued:
+
+```
+let ref = make_ref()
+send(server, {tag: "get", from: self(), ref: ref})
+receive
+when {tag: "reply", ref: ^ref, value: v}
+  v
+end
+```
+
+Without the `^`, `ref: ref` would bind whatever ref the first reply carries.
 
 The `after <ms>` clause is optional. If present and the timeout elapses with no matching message, the `after` body executes. `after 0` means "check once, don't block." Omitting `after` means block forever (like `receive()`).
 

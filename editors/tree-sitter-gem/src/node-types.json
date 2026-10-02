@@ -3539,6 +3539,10 @@
           "named": true
         },
         {
+          "type": "pin_pattern",
+          "named": true
+        },
+        {
           "type": "single_string",
           "named": true
         },
@@ -3593,6 +3597,22 @@
         "types": [
           {
             "type": "pattern",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pin_pattern",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
             "named": true
           }
         ]
@@ -4907,6 +4927,10 @@
   },
   {
     "type": "]",
+    "named": false
+  },
+  {
+    "type": "^",
     "named": false
   },
   {

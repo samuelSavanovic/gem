@@ -20,6 +20,8 @@
 #   pat_array:{tag, elements: [pat, ...]}
 #   pat_literal:{tag, literal: <int|float|string|bool|nil node>}
 #   pat_name: {tag, name}
+#   pat_pin:  {tag, var: <var node>}
+#   pat_error:{tag}  (pattern that failed to parse)
 #
 # Post-lower: same as today's parser output (block / when_clause / etc.).
 
@@ -433,11 +435,15 @@ fn pattern_to_cond(pat, target_expr, state)
     return {condition: make_binop("==", target_expr, pat.literal), bindings: []}
   end
 
+  if tag == "pat_pin"
+    return {condition: make_binop("==", target_expr, pat.var), bindings: []}
+  end
+
   if tag == "pat_name"
     return {condition: make_bool(true), bindings: [make_let(pat.name, target_expr, 0)]}
   end
 
-  # Unknown pattern (parse error fallback) — never matches.
+  # pat_error, or any tag not handled above — never matches.
   {condition: make_bool(false), bindings: []}
 end
 

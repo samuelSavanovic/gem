@@ -2,7 +2,7 @@
 # Takes a token array from the lexer, returns an AST using constructors from ast.gem.
 # Produces the EXACT same AST shape as the bootstrap compiler.
 
-load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_for_in, make_for_range, make_match_arm, make_pat_table, make_pat_table_entry, make_pat_array, make_pat_literal, make_pat_name, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
+load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_for_in, make_for_range, make_match_arm, make_pat_table, make_pat_table_entry, make_pat_array, make_pat_literal, make_pat_name, make_pat_pin, make_pat_error, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
 load "./lexer" (tokenize)
 load "./errors" (make_error_sink)
 
@@ -71,6 +71,30 @@ fn parse_source(source, file, sink)
   end
   let p = make_parser(tokens, source, file, sink)
   p.parse()
+end
+
+# Pattern names split into the ones the pattern binds and the `^` pins.
+fn collect_pattern_names(pat, bound, pins)
+  if pat == nil
+    return nil
+  end
+  if pat.tag == "pat_name"
+    bound[pat.name] = true
+  elif pat.tag == "pat_pin"
+    push(pins, pat.var)
+  elif pat.tag == "pat_table"
+    for e in pat.entries
+      if e.value == nil
+        bound[e.key] = true
+      else
+        collect_pattern_names(e.value, bound, pins)
+      end
+    end
+  elif pat.tag == "pat_array"
+    for el in pat.elements
+      collect_pattern_names(el, bound, pins)
+    end
+  end
 end
 
 # ─── Parser constructor ─────────────────────────────────────────
@@ -715,7 +739,8 @@ fn make_parser(tokens, source, file, sink)
   # ── Pattern parsing (for match destructuring) ──
 
   # parse_pattern returns a structural pattern node (pat_table /
-  # pat_array / pat_literal / pat_name). compiler/lower.gem turns
+  # pat_array / pat_literal / pat_name / pat_pin, or pat_error after a
+  # reported parse error). compiler/lower.gem turns
   # the pattern into the concrete condition expression + bindings
   # for the match target. Keeping the structural form in the AST
   # lets future tooling (formatters, refactors, completion inside
@@ -807,20 +832,58 @@ fn make_parser(tokens, source, file, sink)
       return make_pat_literal(make_nil_node())
     end
 
+    # Pin pattern: ^name — equality with an existing variable
+    if t.type == "^"
+      advance()
+      let nt = peek()
+      if nt.type != "NAME"
+        report(nt.line, nt.col, len(nt.value), "expected variable name after '^' but got '{nt.type}'", nil)
+        let nty = nt.type
+        if not at_end() and nty != "NEWLINE" and nty != "}" and nty != "]" and nty != ","
+          advance()
+        end
+        return make_pat_error()
+      end
+      advance()
+      let pin_next = peek()
+      if pin_next.type == "." or pin_next.type == "[" or pin_next.type == "("
+        report(pin_next.line, pin_next.col, len(pin_next.value), "'^' pins a plain variable name", "bind the expression to a local variable first, then pin that variable")
+        while not at_end() and peek().type != "NEWLINE" and peek().type != "}" and peek().type != "]" and peek().type != ","
+          advance()
+        end
+        return make_pat_error()
+      end
+      return make_pat_pin(nt.value, nt.line, nt.col)
+    end
+
     # Name pattern: variable binding (catch-all)
     if t.type == "NAME"
       advance()
       return make_pat_name(t.value)
     end
 
-    # P9: garbage in pattern position. Report, consume the bad token,
-    # and return a never-matching literal (false) so lowering builds
-    # an inert when_clause that never fires.
+    # Garbage in pattern position. Report, consume the bad token, and
+    # return a placeholder pattern that never matches.
     report(t.line, t.col, len(t.value), "expected pattern but got '{t.type}'", nil)
     if not at_end()
       advance()
     end
-    make_pat_literal(make_bool(false))
+    make_pat_error()
+  end
+
+  # A `when` arm pattern. A pin may not name a variable the same pattern
+  # binds: the pin compares against the value from before the pattern.
+  let parse_arm_pattern = fn()
+    let pat = parse_pattern()
+    let bound = {}
+    let pins = []
+    collect_pattern_names(pat, bound, pins)
+    for v in pins
+      if has_key(bound, v.name)
+        report(v.line, v.col, len(v.name), "`^{v.name}` pins `{v.name}`, which this same pattern binds", "a pin compares against a variable bound before the pattern; rename the binding")
+      end
+    end
+    pat
   end
 
   # ── Statement parsing ──
@@ -1051,16 +1114,16 @@ fn make_parser(tokens, source, file, sink)
       let arms = []
       while peek().type == "when"
         advance()
-        # Destructuring pattern ({, [) or bare-name catch-all → pattern arm.
+        # Destructuring pattern ({, [, ^) or bare-name catch-all → pattern arm.
         # Anything else → expression arm (equality with the match target).
         let pt = peek().type
         let next = peek_at(1).type
-        if pt == "\{" or pt == "["
-          let pat = parse_pattern()
+        if pt == "\{" or pt == "[" or pt == "^"
+          let pat = parse_arm_pattern()
           let wbody = parse_body()
           push(arms, make_match_arm(pat, nil, wbody))
         elif pt == "NAME" and (next == "NEWLINE" or next == "EOF" or next == "end" or next == "else" or next == "when")
-          let pat = parse_pattern()
+          let pat = parse_arm_pattern()
           let wbody = parse_body()
           push(arms, make_match_arm(pat, nil, wbody))
         else
@@ -1196,12 +1259,12 @@ fn make_parser(tokens, source, file, sink)
           advance()
           let rpt = peek().type
           let rnext = peek_at(1).type
-          if rpt == "\{" or rpt == "["
-            let rpat = parse_pattern()
+          if rpt == "\{" or rpt == "[" or rpt == "^"
+            let rpat = parse_arm_pattern()
             let rwbody = parse_body()
             push(rarms, make_match_arm(rpat, nil, rwbody))
           elif rpt == "NAME" and (rnext == "NEWLINE" or rnext == "EOF" or rnext == "end" or rnext == "else" or rnext == "when" or rnext == "after")
-            let rpat = parse_pattern()
+            let rpat = parse_arm_pattern()
             let rwbody = parse_body()
             push(rarms, make_match_arm(rpat, nil, rwbody))
           else
@@ -1251,4 +1314,4 @@ fn make_parser(tokens, source, file, sink)
   {parse: parse}
 end
 
-export parse_source
+export parse_source, collect_pattern_names

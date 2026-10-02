@@ -1,0 +1,16 @@
+# Module-level variable pinned inside a function — exercises renaming of
+# `^name` when the module is loaded under a prefix.
+let sentinel = "S"
+
+fn classify(v)
+  match v
+  when ^sentinel
+    "sentinel"
+  when {k: ^sentinel}
+    "nested sentinel"
+  else
+    "other"
+  end
+end
+
+export classify

@@ -134,8 +134,8 @@ end
 
 # A single `when` arm in a match. Exactly one of {pattern, expr} is
 # non-nil:
-#   - pattern arm: `when {a, b}` / `when [x, y]` / `when name` / `when 42`
-#   - expr arm:    `when some_expr` (equality with the match target)
+#   - pattern arm: `when {a, b}` / `when [x, y]` / `when name` / `when ^v`
+#   - expr arm:    `when 42` / `when some_expr` (equality with the match target)
 fn make_match_arm(pattern, expr, body)
   {tag: "match_arm", pattern: pattern, expr: expr, body: body}
 end
@@ -162,6 +162,17 @@ end
 
 fn make_pat_name(name)
   {tag: "pat_name", name: name}
+end
+
+# `^name` — matches when the target equals the current value of `name`.
+fn make_pat_pin(name, line = nil, col = nil)
+  {tag: "pat_pin", var: make_var(name, line, col)}
+end
+
+# Placeholder for a pattern that failed to parse; lowers to a condition
+# that never matches.
+fn make_pat_error()
+  {tag: "pat_error"}
 end
 
 fn make_receive_match(arms, after_ms, after_body, line, recv_var)
@@ -214,4 +225,4 @@ fn make_error_stmt(line, col)
   {tag: "error_stmt", line: line, col: col}
 end
 
-export make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_for_in, make_for_range, make_match_arm, make_pat_table, make_pat_table_entry, make_pat_array, make_pat_literal, make_pat_name, make_receive_match, make_return, make_break, make_continue, make_load, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt
+export make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_for_in, make_for_range, make_match_arm, make_pat_table, make_pat_table_entry, make_pat_array, make_pat_literal, make_pat_name, make_pat_pin, make_pat_error, make_receive_match, make_return, make_break, make_continue, make_load, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt

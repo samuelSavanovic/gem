@@ -114,6 +114,26 @@ fn copy_set(s)
   result
 end
 
+fn rename_pattern(pat, rmap, shadowed)
+  if pat == nil
+    return nil
+  end
+  match pat
+  when {tag: "pat_pin", var: v}
+    rename_node(v, rmap, shadowed)
+  when {tag: "pat_table", entries: entries}
+    for e in entries
+      rename_pattern(e.value, rmap, shadowed)
+    end
+  when {tag: "pat_array", elements: elements}
+    for el in elements
+      rename_pattern(el, rmap, shadowed)
+    end
+  else
+    nil
+  end
+end
+
 fn rename_node(node, rmap, shadowed)
   if node == nil
     return nil
@@ -196,10 +216,9 @@ fn rename_node(node, rmap, shadowed)
     rename_node(target, rmap, shadowed)
     # Match arms are structural (`match_arm` with pattern/expr/body) at
     # this point — rename runs inside resolve_loads, before lower().
-    # Patterns themselves carry only literals and binding-names, so they
-    # have no module-level var refs to rewrite; just walk the expr arm
-    # and the body.
+    # The only var refs inside a pattern are `^name` pins.
     for arm in whens
+      rename_pattern(arm.pattern, rmap, shadowed)
       if arm.expr != nil
         rename_node(arm.expr, rmap, shadowed)
       end
@@ -210,6 +229,7 @@ fn rename_node(node, rmap, shadowed)
     end
   when {tag: "receive_match", arms: arms}
     for arm in arms
+      rename_pattern(arm.pattern, rmap, shadowed)
       if arm.expr != nil
         rename_node(arm.expr, rmap, shadowed)
       end

@@ -258,6 +258,10 @@
           "match": "\\|"
         },
         {
+          "name": "keyword.operator.pin.gem",
+          "match": "\\^"
+        },
+        {
           "name": "keyword.operator.arithmetic.gem",
           "match": "[+\\-*/%]"
         }

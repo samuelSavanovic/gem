@@ -17,6 +17,7 @@ fi
 # basename : min : max
 expected=(
   "bad_pattern:2:4"
+  "bad_pin:3:3"
   "cascade_braces:2:5"
   "dotdot_concat:1:1"
   "load_no_export:1:1"
