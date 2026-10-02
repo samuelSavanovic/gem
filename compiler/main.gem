@@ -10,7 +10,7 @@
 #   gem foo.gem --run        # accepted as a no-op (run is the default)
 
 load "std/string"
-load "./parser" (parse_source)
+load "./parser" (parse_source, collect_pattern_names)
 load "./codegen" (make_codegen)
 load "./lower" (lower)
 load "./fold" (fold_constants)
@@ -134,6 +134,20 @@ fn rename_pattern(pat, rmap, shadowed)
   end
 end
 
+# Names bound by a `when` arm's pattern shadow module-level names in its body.
+fn arm_shadowed(arm, shadowed)
+  if arm.pattern == nil
+    return shadowed
+  end
+  let bound = {}
+  collect_pattern_names(arm.pattern, bound, [])
+  let inner = copy_set(shadowed)
+  for name, _ in bound
+    inner[name] = true
+  end
+  inner
+end
+
 fn rename_node(node, rmap, shadowed)
   if node == nil
     return nil
@@ -222,7 +236,7 @@ fn rename_node(node, rmap, shadowed)
       if arm.expr != nil
         rename_node(arm.expr, rmap, shadowed)
       end
-      rename_stmts(arm.body, rmap, shadowed)
+      rename_stmts(arm.body, rmap, arm_shadowed(arm, shadowed))
     end
     if node.else != nil
       rename_stmts(node.else, rmap, shadowed)
@@ -233,7 +247,7 @@ fn rename_node(node, rmap, shadowed)
       if arm.expr != nil
         rename_node(arm.expr, rmap, shadowed)
       end
-      rename_stmts(arm.body, rmap, shadowed)
+      rename_stmts(arm.body, rmap, arm_shadowed(arm, shadowed))
     end
     if node.after_ms != nil
       rename_node(node.after_ms, rmap, shadowed)

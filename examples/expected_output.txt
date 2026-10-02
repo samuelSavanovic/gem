@@ -1236,6 +1236,7 @@ test2: mismatch falls through
 test3: nil pin
 test4: no match, mailbox_len=1
 test5: sentinel, nested sentinel, other
+test5: binding shadows module var: bound
 test6: child got 2
 test7: sum=3
 test7: noise left=300
