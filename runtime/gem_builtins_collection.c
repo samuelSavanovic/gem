@@ -16,7 +16,9 @@ GemVal gem_push_fn(void *_env, GemVal *args, int argc) {
     if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "push: expected table or buffer as first argument, got %s", gem_type_str(tbl)); gem_error(buf); }
     GemTable *t = tbl.table;
     GemVal val = args[1];
+    gem_table_check_mutable(t);
     if (t->len >= t->cap) gem_table_grow(t);
+    gem_table_written(t);
     t->keys[t->len] = gem_int(t->len);
     t->vals[t->len] = val;
     t->len++;
@@ -74,6 +76,7 @@ GemVal gem_has_key_fn(void *_env, GemVal *args, int argc) {
     if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "has_key: expected table as first argument, got %s", gem_type_str(args[0])); gem_error(buf); }
     GemTable *t = args[0].table;
     GemVal key = args[1];
+    gem_table_index(t);
 
     /* String key: use hash index */
     if (key.type == VAL_STRING) {
@@ -107,6 +110,7 @@ GemVal gem_in_fn(void *_env, GemVal *args, int argc) {
     if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "in: expected table as first argument, got %s", gem_type_str(args[0])); gem_error(buf); }
     GemTable *t = args[0].table;
     GemVal needle = args[1];
+    gem_table_index(t);
 
     /* Array (no string keys): scan values for membership */
     if (t->str_index == NULL) {
@@ -138,6 +142,8 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
     GemTable *t = args[0].table;
     GemVal key = args[1];
     int pos = -1;
+    gem_table_check_mutable(t);
+    gem_table_index(t);
 
     if (key.type == VAL_STRING) {
         if (t->str_index != NULL) {
@@ -178,7 +184,9 @@ GemVal gem_pop_fn(void *_env, GemVal *args, int argc) {
     if (argc < 1) { gem_error("pop: expected 1 argument"); }
     if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "pop: expected table, got %s", gem_type_str(args[0])); gem_error(buf); }
     GemTable *t = args[0].table;
+    gem_table_check_mutable(t);
     if (t->len == 0) { gem_error("pop: empty table"); }
+    gem_table_index(t);
     t->len--;
     GemVal removed = t->vals[t->len];
     GemVal removed_key = t->keys[t->len];
@@ -248,6 +256,7 @@ GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
     if (argc < 1) { gem_error("sort: expected 1-2 arguments"); }
     if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "sort: expected table, got %s", gem_type_str(args[0])); gem_error(buf); }
     GemTable *t = args[0].table;
+    gem_table_check_mutable(t);
     if (t->len <= 1) return args[0];
 
     if (argc >= 2 && args[1].type == VAL_FN) {
@@ -271,10 +280,12 @@ GemVal gem_insert_fn(void *_env, GemVal *args, int argc) {
     if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "insert: expected table, got %s", gem_type_str(args[0])); gem_error(buf); }
     if (args[1].type != VAL_INT) { gem_error("insert: index must be an integer"); }
     GemTable *t = args[0].table;
+    gem_table_check_mutable(t);
     int64_t idx = args[1].ival;
     if (idx < 0 || idx > t->len) { gem_error("insert: index out of bounds"); }
     if (t->len >= t->cap) gem_table_grow(t);
     int pos = (int)idx;
+    gem_table_written(t);
     memmove(&t->vals[pos + 1], &t->vals[pos], ((size_t)(t->len - pos)) * sizeof(GemVal));
     t->vals[pos] = args[2];
     t->len++;
@@ -293,6 +304,7 @@ GemVal gem_remove_at_fn(void *_env, GemVal *args, int argc) {
     if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "remove_at: expected table, got %s", gem_type_str(args[0])); gem_error(buf); }
     if (args[1].type != VAL_INT) { gem_error("remove_at: index must be an integer"); }
     GemTable *t = args[0].table;
+    gem_table_check_mutable(t);
     int64_t idx = args[1].ival;
     if (idx < 0 || idx >= t->len) { gem_error("remove_at: index out of bounds"); }
     int pos = (int)idx;

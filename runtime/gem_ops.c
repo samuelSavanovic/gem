@@ -102,11 +102,10 @@ void gem_string_append(GemVal *accum, GemVal rhs) {
         GemVal args[2] = {*accum, rhs};
         gem_buf_push_fn(NULL, args, 2);
     } else if (accum->type == VAL_STRING) {
-        GemBuffer *b = (GemBuffer *)gem_alloc(sizeof(GemBuffer));
-        b->cap = 64;
         int slen = accum->slen;
-        while (b->cap <= slen) b->cap *= 2;
-        b->data = (char *)gem_alloc(b->cap);
+        int cap = 64;
+        while (cap <= slen) cap *= 2;
+        GemBuffer *b = gem_buffer_alloc(cap);
         memcpy(b->data, accum->sval, slen);
         b->len = slen;
         accum->type = VAL_BUFFER;

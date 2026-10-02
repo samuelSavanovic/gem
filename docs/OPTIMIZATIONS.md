@@ -10,12 +10,21 @@ Priority scale: **P0** = measurable impact on benchmark right now, **P1** = sign
 
 Single-threaded scheduler ceiling on M1 Pro is ~26–29k req/s on `/` (static HTML) regardless of c=4/100/500 — higher concurrency just queues. Full benchmark history is in `OPTIMIZATIONS_LOG.md`.
 
-Key bottlenecks under the current arena+rescue mechanism:
-- Per-process arena allocation eliminates GC pauses but arenas only grow during a process's lifetime; the back-edge rescue mechanism caps growth at 1 MB live-set per reset.
+Key bottlenecks under the current arena + region-reset mechanism:
+- Per-process arena allocation eliminates GC pauses; every loop resets the region it allocated once it passes max(1 MB, 2 × the last reset's cost), so memory is bounded at roughly 3× a loop's live data plus whatever was allocated before the loop started.
 - String concatenation patterns that escape `build_string` still allocate per-concat.
-- Per-iteration arena rescue work runs at every `while true` / TCO back-edge, contributing a measurable read-path p50 cost (see `OPTIMIZATIONS_LOG.md` "while true rescue+reset benchmark anchor").
+- Every loop entry takes a region mark and every back-edge checks the trigger (a load and a compare); the reset itself is amortized O(1) per allocated byte (see `OPTIMIZATIONS_LOG.md` "Region resets").
 
 ## Arena / Memory
+
+### Garbage allocated before a loop starts is kept by that loop (P2)
+A region reset frees only what the loop allocated since its mark. Garbage from straight-line code before the loop (e.g. main's startup work before a top-level `while true` server loop) stays until an enclosing loop resets or the process exits. It is a constant, not growth. For loops at depth 0 of the main program the mark could sit at the start of the arena (main has no caller frames and its module slots are roots), reclaiming startup garbage too; spawned bodies would need their env rooted.
+
+### Remembered log instead of a per-table walk for buffers (P2)
+Region resets find old tables written since the mark through a write barrier and a remembered log, but still walk every buffer older than the mark (cost charged to the hysteresis budget). A barrier in `buf_push`/`gem_string_append` growth would make the walk proportional to the buffers actually grown.
+
+### Mailbox messages are copied by each reset that finds them in the region (P2)
+Messages are deep-copied into the receiver's arena by the sender, so a backlog that arrives during a loop is part of that loop's region and is copied at each reset until it is consumed. Hysteresis keeps the total linear (300 × 100 KB messages drain in linear time), but a large backlog doubles its memory while a reset runs. Allocating message bodies in a separate per-process message arena that a reset never scans (freed when the message is received and dropped) would avoid both; the cost is a second allocator and a copy (or ownership transfer) when the message is received.
 
 ### Investigate post-idle high-water at high concurrency (P2)
 Originally reported at 2.39 GB stuck post-c=500 with the 16 MB threshold. After lowering the default threshold to 1 MB, post-idle RSS at c=500 dropped to 174 MB — flat across +0/+30/+90s probes, so it's still not draining, but the absolute waste is now an order of magnitude smaller and unlikely to matter for typical workloads. The underlying mechanism (per-process arenas of completed connection handlers not fully releasing — likely `madvise(DONTNEED)` happens but `munmap` doesn't, or proc-table objects linger until late cleanup) is unchanged. Keep tracking but don't prioritize until a workload demonstrates the residual is a real problem. If revisited, trace `gem_proc_exit` against actual mmap accounting under load.
@@ -49,30 +58,8 @@ Small strings (< 16 bytes) could be interned in a global table, turning equality
 
 ## Codegen Output
 
-### Tighten "TCO function not reachable from process root" warning — structural-decrease (P1)
-
-A stopgap (option E) shipped 2026-05-09 that splits the diagnostic into `note:` (benign — outer reset boundary caps allocation) and `warning:` (genuinely dangerous). See `OPTIMIZATIONS_LOG.md` for the substrate. Still TODO is the principled fix:
-
-**Structural-decrease termination check (option B from the original options table).** Verify each self-call passes a strict subterm of at least one parameter (`x.field`, `x[lit]`, etc.) so the recursion is provably bounded. Combined with the outer-reset detection from the stopgap, this would let the analysis emit zero diagnostics on the bounded-walker pattern and reserve `warning:` strictly for the unbounded case.
-
-Why it's still worth doing despite E being landed:
-- Termination analysis has uses beyond gating this one warning (compile-time infinite-recursion detection, termination guarantees for trusted code paths).
-- The `note:` is still noise once the user has read it once. A walker the analysis can prove bounded should be silent.
-- Estimated +150–200 LOC on top of the `mark_process_tail` substrate; the simplest version ("self-call arg is `x.field` / `x[lit]` of a param `x`") catches every tree walker we've written and is cheap to implement.
-
-Soundness bar for B: the rescue mechanism's whole purpose was to make memory bounded under load — a regression here would re-pay that work. A self-call to `g(x)` (same param, no destructuring) must not pass the check.
-
-### Indirect-spawn PT tagging — Stage B (P2)
-
-Stage A (compile-time warning when `spawn(...)` arg[0] is not a literal `anon_fn`) shipped 2026-05-01. Stage B is closure-escape analysis: tag every `while true` that's the top-level statement of any `anon_fn` whose only escape paths are spawn-like calls. Soundness: a closure invoked from a non-spawn context retains the caller's frame state, so its inner `while true` is **not** process-tail. Escape analysis must conservatively refuse to tag if any non-spawn escape exists. Punted unless Stage A's warning becomes noisy in practice — at landing time the bootstrap'd compiler and `std/` emit zero such warnings.
-
-Workaround for users (also recommended in the warning text): write `spawn(fn() inner_closure(args) end)` — the wrapper is a literal `anon_fn` at spawn-arg[0]. PT-tagging only fires for `while true` *literally inside* the spawn-arg `anon_fn`, so this workaround applies when the long-running loop can live in the wrapper.
-
 ### Dead code elimination (P2)
 Unreachable code after `return`, `break`, `error()` could be stripped. Currently emitted as-is.
-
-### Mutual tail call optimization (P2)
-Mutual recursion (A calls B in tail position, B calls A) could use trampolines or computed goto. Lower priority — rare in OTP patterns. Self-recursive TCO already covers the common case.
 
 ## Runtime Hot Paths
 
@@ -87,6 +74,9 @@ Every string `+` does `strlen` on both operands. If strings carried their length
 
 ### Constructor return-by-value (P1)
 `gem_int()`, `gem_float()`, `gem_bool()`, `gem_string()` all return `GemVal` by value (16 bytes). With NaN boxing these become trivial bit operations returning 8 bytes. Without NaN boxing, the compiler could use static inline or macros for the trivial constructors. Blocked on NaN boxing for the full win.
+
+### Integer-key append in `gem_table_set` scans every key (P1)
+`gem_table_set(t, int k, v)` with `k == len(t)` (append by index) falls through to the linear "find existing key" scan before appending, so building an array by index — and the `keys` builtin, which builds its result that way — is O(n²): `keys` of a 20000-entry table takes ~1.8 s. Fix: an append fast path when every key so far is array-shaped (track a flag on the table, cleared by any non-array key), or have `keys`/`values` push directly.
 
 ### Table grow strategy (P2)
 `gem_table_grow` doubles capacity. Could use a growth factor of 1.5 to reduce memory waste, or start with capacity 0 (no allocation) for tables that might stay empty.
@@ -119,10 +109,10 @@ The closure-based scanner (`{peek, advance, skip_ws}`) pays for hashmap lookup +
 
 ## Known DX warts of the rescue+reset mechanism (P2)
 
-The arena rescue+reset mechanism is invisible to user code by design — `while true` Just Works and resets at the back-edge once the threshold trips. This list captures the DX warts the mechanism has. None forces users to write code differently; all are observable by users in some form (jitter, throughput, mystery RSS) but not explainable from the source alone.
+The arena reset mechanism is invisible to user code by design — `while true` Just Works and resets at the back-edge once the threshold trips. This list captures the DX warts the mechanism has. None forces users to write code differently; all are observable by users in some form (jitter, throughput, mystery RSS) but not explainable from the source alone.
 
 1. **Latency cliff at threshold crossings.** With a 1 MB threshold, most iterations of a tight loop pay only the gate check; every Nth iteration pays a full sweep+rescue (proportional to live-set size). Visible as p99 jitter on hot HTTP loops — see `OPTIMIZATIONS_LOG.md` for headline numbers. Post-rescue p99 is ~6–20× better than the unbounded-RSS baseline, but the floor isn't flat. Mitigation idea: adaptive threshold based on observed allocation rate, or a hint mechanism per loop. Both edge into "language tax" territory (CLAUDE.md), so probably never worth shipping unless a real workload demands it. Document, don't fix.
 
-2. **Rescue set is invisible.** A user who accidentally captures a 10 MB value across the back-edge gets a 10 MB copy on every reset, with no way to see it. There is no introspection — no `--explain-rescue`, no runtime log, no per-loop accounting. Cheap mitigation: a `GEM_DEBUG_RESETS=1` env var that logs `[reset pid=N at line X: rescued K values, M bytes, took T µs]`. Surfaces the cost on demand without leaking it into everyone's mental model.
+2. **Rescue set is invisible.** A user who keeps a 10 MB value live across the back-edge pays for copying it at resets (amortized by the hysteresis, but visible as memory and jitter), with no way to see which loop it is. `GEM_DIAG=1` prints whole-program reset totals (count, bytes copied/scanned/freed, time) at exit; there is still no per-loop accounting. Next step: a `GEM_DEBUG_RESETS=1` that logs `[reset pid=N at line X: rescued K bytes, took T µs]`.
 
 3. **Stdlib comments must not leak the mechanism.** A stdlib reader (or a user reading stdlib for examples) shouldn't have to know about `GEM_ARENA_RESET_THRESHOLD`, "back-edge", "PT tagging", or "rescue+reset". Comments should describe what a function does at the API level. Caught and removed two such comments in `std/http.gem` (commit `91bb6be`): `accept_loop`'s stale "depth 2 from process entry" fence, and `handle_connection_loop`'s `GEM_ARENA_RESET_THRESHOLD` reference. Future stdlib additions (and CLAUDE.md guidance) should keep this discipline. Not really an optimization — call it a documentation invariant.

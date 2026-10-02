@@ -152,8 +152,9 @@ static int gem_poll_pids[GEM_MAX_PROCS];
  *      gem_stack_limit = stack_lo + GEM_STACK_RED_ZONE and calls
  *      gem_stack_overflow, which raises an ordinary runtime error. pcall
  *      catches it; uncaught, the process dies with that reason.
- *   2. Hard: C code that recurses on its own (deep_copy of deeply nested
- *      data, say) can run through the red zone into the guard. The
+ *   2. Hard: C code that recurses on its own (a recursive C function
+ *      behind an `extern fn`; the runtime's value copies are iterative)
+ *      can run through the red zone into the guard. The
  *      SIGSEGV/SIGBUS handler, on an alternate signal stack, checks that the
  *      fault address is in the running process's guard, then rewrites the
  *      interrupted context to resume in gem_stack_overflow_rescue on a
@@ -480,6 +481,8 @@ static void gem_free_proc_slot(int pid) {
        flexible — but conceptually they belong to the same process lifecycle. */
     gem_pin_free_all(proc);
 
+    if (pid != gem_main_pid) gem_globals_free(proc);
+
     if (proc->pending_timers > 0) gem_timer_drop_for_slot(pid);
 
     if (pid != gem_main_pid)
@@ -593,8 +596,6 @@ static void gem_coro_entry(mco_coro *co) {
     int pid = gem_current_pid;
     GemProcess *proc = &gem_proc_table[pid];
 
-    proc->entry_call_depth = gem_call_depth;
-
     if (setjmp(proc->proc_jmp) == 0) {
         /* Normal path */
         ctx->fn(ctx->env, NULL, 0);
@@ -661,20 +662,23 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     }
 
     gem_arena_init(&gem_proc_table[pid].arena);
+    /* Before the copy below, which registers pinned boxes in the child. */
+    gem_proc_table[pid].pinned_boxes = NULL;
 
     int saved = gem_current_pid;
     gem_current_pid = pid;
 
     GemCoroCtx *ctx = ALLOC(GemCoroCtx);
-    ctx->fn = fn;
-    if (env) {
-        GemVal fn_val = gem_make_fn(fn, env);
-        GemVal copied = gem_deep_copy(fn_val);
-        ctx->fn = copied.fn;
-        ctx->env = copied.env;
-    } else {
-        ctx->env = NULL;
-    }
+    /* The child gets its own copy of the closure env, and the parent's
+       module state as of now: light slots copied, the rest as references to
+       snapshot units it copies from on first use (gem_copy.c, "Module
+       globals"). */
+    GemVal fn_val = gem_make_fn(fn, env);
+    GemVal *child_globals = gem_globals_alloc();
+    gem_proc_table[pid].globals = child_globals;
+    gem_spawn_module_state(env ? &fn_val : NULL, child_globals, saved);
+    ctx->fn = fn_val.fn;
+    ctx->env = fn_val.env;
 
     gem_current_pid = saved;
 
@@ -683,6 +687,8 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     mco_result res = gem_coro_create(&co, GEM_CORO_STACK_SIZE, ctx, &stack_lo);
     if (res != MCO_SUCCESS) {
         gem_arena_destroy(&gem_proc_table[pid].arena);
+        gem_pin_free_all(&gem_proc_table[pid]);
+        gem_globals_free(&gem_proc_table[pid]);
         /* Put the slot back on the free list before raising. */
         gem_proc_table[pid].pid = gem_free_head;
         gem_free_head = pid;
@@ -707,7 +713,6 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].reductions = 0;
     gem_proc_table[pid].pcall_depth = 0;
     gem_proc_table[pid].call_depth = 0;
-    gem_proc_table[pid].pinned_boxes = NULL;
 
     if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
     return pid;
@@ -720,7 +725,7 @@ void gem_send_msg(int pid, GemVal val) {
 
     int saved = gem_current_pid;
     gem_current_pid = pid;
-    GemVal copied = gem_deep_copy(val);
+    GemVal copied = gem_deep_copy(val, saved);
     gem_mailbox_push(&proc->mailbox, copied);
     gem_current_pid = saved;
 
@@ -815,6 +820,7 @@ void gem_run_main(GemFnPtr fn, void *env) {
 
     gem_arena_init(&gem_proc_table[pid].arena);
     gem_main_pid = pid;
+    gem_proc_table[pid].globals = gem_globals_alloc();
 
     int saved = gem_current_pid;
     gem_current_pid = pid;
@@ -879,13 +885,14 @@ void gem_run_scheduler(void) {
                 proc->reductions = 0;
                 /* gem_call_stack / gem_call_depth are globals but logically
                    per-process — point them at this proc's frames and saved
-                   depth before resuming, save the depth back after. The TCO
-                   arena-reset gate compares depth to entry_call_depth, and
-                   stack traces read the frames. */
+                   depth before resuming, save the depth back after. Stack
+                   traces read the frames. gem_cur_globals likewise points
+                   at the running process's module slots. */
                 int saved_global_depth = gem_call_depth;
                 GemFrame *saved_global_stack = gem_call_stack;
                 gem_call_depth = proc->call_depth;
                 gem_call_stack = proc->call_stack;
+                gem_cur_globals = proc->globals;
                 gem_running_slot = i;
                 gem_stack_limit = (uintptr_t)proc->stack_lo + GEM_STACK_RED_ZONE;
                 mco_resume(proc->coro);
@@ -894,6 +901,7 @@ void gem_run_scheduler(void) {
                 proc->call_depth = gem_call_depth;
                 gem_call_depth = saved_global_depth;
                 gem_call_stack = saved_global_stack;
+                gem_cur_globals = NULL;
 
                 if (mco_status(proc->coro) == MCO_DEAD) {
                     mco_destroy(proc->coro);

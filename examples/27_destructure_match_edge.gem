@@ -80,9 +80,8 @@ match t8
 when {name: name}
   print("8: {name}")
 end
-# After the match, name should still be "outer" if bindings are scoped
-# Actually in Gem, let creates a new variable in the current scope
-# so 'name' inside the when body is the bound value
+# Pattern bindings are scoped to the arm (top level included): after the
+# match, name is still "outer"
 print("8b: {name}")
 
 # 9. Pattern with numeric key in table

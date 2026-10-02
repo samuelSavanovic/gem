@@ -1,0 +1,26 @@
+# Loaded by 123_toplevel_for_capture.gem. Block-scoped lets in a module's
+# top-level code that reuse a module name (or a name the loading program
+# uses at its top level) must shadow, not write either slot.
+let x = 1
+let fs = []
+for x in [10, 20]
+  push(fs, fn() x end)
+end
+let z = "mod-z"
+if true
+  let z = "block-z"
+  push(fs, fn() z end)
+end
+for y in ["mod-loop"]
+  push(fs, fn() y end)
+end
+
+# Destructuring at module scope binds module names (prefixed), so two
+# modules may destructure the same names without colliding.
+let {a, b} = {a: "mod-a", b: "mod-b"}
+
+fn shadow_report()
+  [fs[0](), fs[1](), fs[2](), fs[3](), x, z, a, b]
+end
+
+export shadow_report

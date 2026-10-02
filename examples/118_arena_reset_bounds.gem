@@ -1,0 +1,175 @@
+# Long-running loops stay at bounded memory wherever they are called from,
+# and reset work stays proportional to allocation (no quadratic cliffs once
+# live data passes 1 MB). Each section allocates far more than the memory
+# bound checked at the end. Peak with this ordering: about 45 MB on Linux
+# (VmHWM), against a 96 MB bound.
+
+# Peak memory of this process, checked against `limit_kb`. The shell that
+# `exec` starts is our child, so $PPID is us. Linux: VmHWM (peak RSS) from
+# /proc/<pid>/status. macOS: "Physical footprint (peak)" from vmmap, whose
+# value carries a K/M/G suffix. Exit status: 0 within the limit, 1 over it
+# (the peak goes to stderr), 2 when this OS has no measurement here.
+fn peak_check(limit_kb)
+  let cmd = "kb=; if [ -r /proc/$PPID/status ]; then "
+  cmd = cmd + "kb=$(awk '/^VmHWM:/\{print $2}' /proc/$PPID/status); "
+  cmd = cmd + "elif [ \"$(uname)\" = Darwin ]; then "
+  cmd = cmd + "kb=$(vmmap -summary $PPID 2>/dev/null | awk '/^Physical footprint [(]peak[)]:/\{"
+  cmd = cmd + "v = $NF; u = substr(v, length(v)); n = substr(v, 1, length(v) - 1) + 0; "
+  cmd = cmd + "if (u == \"G\") n = n * 1048576; else if (u == \"M\") n = n * 1024; "
+  cmd = cmd + "else if (u != \"K\") n = v / 1024; printf \"%d\", n}'); fi; "
+  cmd = cmd + "[ -n \"$kb\" ] || exit 2; [ \"$kb\" -lt {limit_kb} ] && exit 0; "
+  cmd = cmd + "echo \"peak memory $kb kB, limit {limit_kb} kB\" >&2; exit 1"
+  let rc = exec(cmd)
+  if rc == 0 then return true end
+  if rc == 2
+    # Fail loudly rather than pass: run_all.sh diffs stdout and stderr
+    # together, so this line shows up as a mismatch until a measurement
+    # for this OS is added above.
+    eprint("118: no peak-memory measurement on this OS; add one to peak_check")
+    return "unmeasured"
+  end
+  false
+end
+
+fn row_for(i)
+  {name: "row-{i}", tags: ["a{i}", "b{i}"], n: i}
+end
+
+# A server-shaped loop: `while true` that allocates per iteration.
+fn serve(limit)
+  let total = 0
+  while true
+    let row = row_for(total)
+    total += len(row.tags)
+    if total >= limit then return total end
+  end
+end
+
+# The same loop as self-recursion with no arguments.
+let zero_count = 0
+fn serve0()
+  zero_count += 1
+  let row = row_for(zero_count)
+  if zero_count == 400000 then return row.name end
+  serve0()
+end
+
+let me = self()
+
+# 1. Called in tail position from a spawn body.
+spawn do
+  send(me, serve(800000))
+end
+print("tail spawn", receive())
+
+# 2. Called from a non-tail position, with work after it.
+spawn do
+  let r = serve(800000)
+  send(me, "non-tail spawn {r} cleanup")
+end
+print(receive())
+
+# 3. Three frames deep, inside pcall.
+fn wrap(limit)
+  let r = serve(limit)
+  [r]
+end
+fn wrap2(limit)
+  let r = wrap(limit)
+  r
+end
+let p = pcall(fn() wrap2(800000) end)
+print("pcall depth 3", p.ok, p.value)
+
+# 4. Zero-arg self tail call.
+print("zero-arg", serve0())
+
+# 5. A receive loop with no arguments fed 100k messages.
+fn sink()
+  let msg = receive()
+  if msg == "stop" then return 1 end
+  let s = "abcdefghijklmnopqrstuvwxyz" + to_string(msg)
+  let t = [s, s, s, s]
+  sink()
+end
+let p5 = spawn do
+  sink()
+  send(me, "sink done")
+end
+for i = 0, 100000
+  send(p5, i)
+  if i % 1000 == 0 then sleep(0) end
+end
+send(p5, "stop")
+print(receive())
+
+# 6. A gen_server-style loop holding a 5000-entry state.
+fn store(state, served)
+  receive
+  when {tag: "put", i: i, from: from}
+    state["k{i % 5000}"] = {name: "upd-{i}", n: i}
+    send(from, len(state["k{i % 5000}"].name))
+    store(state, served + 1)
+  when {tag: "stop", from: from}
+    send(from, served)
+  end
+end
+let srv = spawn do
+  let st = {}
+  for i = 0, 5000
+    st["k{i}"] = {name: "item-{i}", n: i}
+  end
+  store(st, 0)
+end
+let t1 = time_ms()
+let acc = 0
+for i = 0, 2000
+  send(srv, {tag: "put", i: i, from: me})
+  acc += receive()
+end
+send(srv, {tag: "stop", from: me})
+print("store", acc, receive(), time_ms() - t1 < 5000)
+
+# 7. A backlog of large messages drained by a resetting loop.
+let body = "x"
+while len(body) < 100000
+  body = body + body
+end
+let drain = spawn do
+  let n = 0
+  let bytes = 0
+  while n < 100
+    receive
+    when {body: m}
+      bytes += len(m)
+      n += 1
+    end
+  end
+  send(me, bytes)
+end
+for i = 0, 100
+  send(drain, {body: body})
+end
+print("backlog drained", receive())
+
+# 8. Top-level loops with > 1 MB live data (about 10 MB of rows, then a
+# 3 MB string and a 3 MB buffer): near-linear time. Last, because `rows`,
+# `s` and `b` are module bindings of main that stay live (and in main's
+# arena) to the end: a section after this one would add its peak to theirs.
+let t0 = time_ms()
+let rows = []
+for i = 0, 20000
+  push(rows, {id: i, name: "user{i}", email: "u{i}@example.com"})
+end
+let s = ""
+for i = 0, 300000
+  s = s + "0123456789"
+end
+let b = buf_new()
+for i = 0, 300000
+  buf_push(b, "0123456789")
+end
+let elapsed = time_ms() - t0
+print("top-level builds", len(rows), len(s), len(to_string(b)), elapsed < 5000)
+
+print("peak memory bounded", peak_check(98304))

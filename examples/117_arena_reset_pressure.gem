@@ -1,0 +1,215 @@
+# Arena resets under memory pressure: every place a value allocated inside
+# a resetting loop can end up must survive the reset.
+
+fn junk(i)
+  # ~200 bytes of garbage per call
+  let s = "garbage-{i}-" + to_string(i * 7)
+  [s, s + "!", {k: s}]
+end
+
+# 1. A table created before the loop, filled inside it (old object pointing
+#    at new memory).
+fn fill(rows, n)
+  let i = 0
+  while i < n
+    push(rows, {id: i, name: "row{i}"})
+    junk(i)
+    i += 1
+  end
+  rows
+end
+let rows = fill([], 20000)
+print("fill", len(rows), rows[0].name, rows[19999].name)
+
+# 2. String keys added to an old table (its key index must be rebuilt).
+fn index(t, n)
+  if n == 0 then return t end
+  t["key{n}"] = n * 2
+  junk(n)
+  index(t, n - 1)
+end
+let idx = index({}, 20000)
+print("index", idx["key1"], idx["key20000"], idx.key777, has_key(idx, "key5"), has_key(idx, "key0"))
+
+# 3. An old buffer grown inside the loop.
+fn grow(b, n)
+  for i = 0, n
+    buf_push(b, "chunk{i};")
+    junk(i)
+  end
+  to_string(b)
+end
+let s = grow(buf_new(), 20000)
+print("buffer", len(s), substr(s, 0, 16))
+
+# 4. Closure-mutated locals (pinned boxes) written inside a loop.
+fn boxes(n)
+  let last = ""
+  let count = 0
+  let set = fn(v)
+    last = v
+    count += 1
+  end
+  let i = 0
+  while i < n
+    set("value-{i}")
+    junk(i)
+    i += 1
+  end
+  [last, count]
+end
+print("boxes", boxes(30000))
+
+# 5. A loop inside a pcall'd closure writing the enclosing fn's local.
+fn in_pcall(n)
+  let acc = "none"
+  let r = pcall(fn()
+    let i = 0
+    while i < n
+      acc = "acc-{i}"
+      junk(i)
+      i += 1
+    end
+    acc
+  end)
+  [r.ok, r.value, acc]
+end
+print("pcall", in_pcall(30000))
+
+# 6. A closure assigning a let declared in a nested block.
+fn nested(n)
+  let out = nil
+  if n > 0
+    let cur = "start"
+    let bump = fn(i) cur = "cur-{i}" end
+    for i = 0, n
+      bump(i)
+      junk(i)
+    end
+    out = cur
+  end
+  out
+end
+print("nested", nested(30000))
+
+# 7. Module state written inside loops.
+let registry = {}
+let latest = nil
+fn record(n)
+  for i = 0, n
+    registry["r{i % 100}"] = "entry-{i}"
+    latest = {n: i, tag: "t{i}"}
+    junk(i)
+  end
+end
+record(30000)
+print("globals", registry.r0, registry.r99, latest.tag, len(keys(registry)))
+
+# 8. Closures carried through TCO args.
+fn chain(f, n)
+  if n == 0 then return f() end
+  let prev = f
+  junk(n)
+  chain(fn() prev() + 1 end, n - 1)
+end
+print("chain", chain(fn() 0 end, 2000))
+
+# 9. A sort comparator that allocates heavily (loops inside a callback).
+fn heavy_cmp(a, b)
+  for i = 0, 3
+    junk(i)
+  end
+  a - b
+end
+let nums = []
+for i = 0, 3000
+  push(nums, (i * 7919) % 3001)
+end
+sort(nums, heavy_cmp)
+print("sort", nums[0], nums[1], nums[2999])
+
+# 10. build_string with a resetting loop inside the block.
+let built = build_string do |add|
+  for i = 0, 20000
+    add("{i},")
+    junk(i)
+  end
+end
+print("build_string", len(built), substr(built, 0, 10))
+
+# 11. A mailbox that fills while the receiver loops.
+let me = self()
+let worker = spawn do
+  let parent = me
+  let total = 0
+  let got = 0
+  while got < 500
+    for i = 0, 50
+      junk(i)
+    end
+    receive
+    when {n: n, pad: pad}
+      total += n + len(pad)
+      got += 1
+    end
+  end
+  send(parent, {total: total})
+end
+for i = 0, 500
+  send(worker, {n: i, pad: "p{i}"})
+end
+receive
+when {total: t}
+  print("mailbox", t)
+end
+
+# 12. Mutual tail recursion keeping the caller's temporaries.
+fn even(n, pad)
+  if n == 0 then return true end
+  odd(n - 1, "e{n}")
+end
+fn odd(n, pad)
+  if n == 0 then return false end
+  even(n - 1, "o{n}")
+end
+let t = {name: "kept"}
+print("mutual", ["before", even(7, ""), even(300000, ""), "after"], t.name)
+
+# 13. Deep TCO loops with every parameter kind, carrying > 1 MB of live
+#     state through the resets.
+let base_state = []
+for i = 0, 40000
+  push(base_state, "state-{i}")
+end
+
+fn with_default(n, acc, extra = "d")
+  if n == 0 then return [len(acc), acc[0], acc[-1], extra] end
+  junk(n)
+  if n % 1000 == 0 then push(acc, "{extra}{n}") end
+  with_default(n - 1, acc)
+end
+print("default", with_default(100000, base_state))
+
+fn with_rest(n, acc, ...more)
+  if n == 0 then return [len(acc), len(more), more[0]] end
+  junk(n)
+  with_rest(n - 1, acc, "m{n}", "x")
+end
+print("rest", with_rest(100000, base_state, "first"))
+
+fn with_bag(n, acc, {step = 1, tag = "bag"} = {})
+  if n <= 0 then return [len(acc), tag] end
+  junk(n)
+  with_bag(n - step, acc, {step: 2, tag: "bag{n % 7}"})
+end
+print("destructured", with_bag(100000, base_state))
+
+fn with_boxed(n, acc, hits)
+  let note = fn(v) hits = hits + v end
+  note(1)
+  junk(n)
+  if n == 0 then return [len(acc), hits] end
+  with_boxed(n - 1, acc, hits)
+end
+print("boxed", with_boxed(100000, base_state, 0))
+print("state intact", len(base_state), base_state[0], base_state[40099])

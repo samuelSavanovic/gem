@@ -1,0 +1,10 @@
+# Exported closure pair over a mutated capture, for
+# 124_module_namespace_identity.
+fn make_holder()
+  let held = nil
+  {put: fn(v) held = v end, get: fn() held end}
+end
+
+let h = make_holder()
+
+export h

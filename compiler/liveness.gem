@@ -1,9 +1,9 @@
-# Liveness analysis for process-tail `while` loop bodies.
+# Liveness analysis for `while` loop bodies.
 #
-# Used to determine which variables must be rescued across a per-process arena
-# reset emitted at the back-edge of a process-tail loop. The rescue mechanism
-# is the same as TCO's: deep-copy the live values into a fresh arena via
-# gem_arena_reset_with_roots before the next iteration.
+# Used to determine which variables must be rescued across the per-process
+# arena reset emitted at a loop's back-edge (region reset, see compile_while
+# in codegen.gem): the live values are the roots passed to
+# gem_arena_reset_region before the next iteration.
 #
 # Soundness bar: under-rescue = silent memory corruption. The pass is
 # conservative — when in doubt, treat as live (over-rescue is wasteful but
