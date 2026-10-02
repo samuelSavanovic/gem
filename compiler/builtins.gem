@@ -104,15 +104,19 @@ let BUILTIN_FNS = {
   sqlite_query: "gem_sqlite_query_fn",
   sqlite_last_insert_id: "gem_sqlite_last_insert_id_fn",
   sqlite_changes: "gem_sqlite_changes_fn",
+  __len: "gem_len_fn",
+  __type: "gem_type_fn",
+  __has_key: "gem_has_key_fn",
   __table_key_at: "gem_table_key_at_fn",
   __table_val_at: "gem_table_val_at_fn"
 }
 
 # User-visible builtin names, sorted lexicographically. The double-underscore
-# entries (`__table_key_at`, `__table_val_at`) are codegen-internal — the
-# parser doesn't rewrite them; users would have to type the underscores
-# themselves to reference them. They're filtered out so completion doesn't
-# offer them.
+# entries (`__table_key_at`, `__len`, ...) are compiler-internal: lower()
+# emits them in desugared for-loops and match patterns, so a user binding
+# named `len`, `type` or `has_key` can't capture those calls. Users would
+# have to type the underscores themselves to reference them. They're
+# filtered out so completion doesn't offer them.
 fn user_builtin_names()
   let out = []
   for k, _ in BUILTIN_FNS
