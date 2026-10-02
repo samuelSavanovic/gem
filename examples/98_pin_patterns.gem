@@ -54,6 +54,7 @@ let _drained = receive()
 
 # ─── Test 5: pinned module-level variable ───
 print("test5: {pin_sentinel.classify("S")}, {pin_sentinel.classify({k: "S"})}, {pin_sentinel.classify("x")}")
+print("test5: binding shadows module var: {pin_sentinel.unwrap({k: "bound"})}")
 
 # ─── Test 6: pin captured by a spawned closure ───
 let parent = self()

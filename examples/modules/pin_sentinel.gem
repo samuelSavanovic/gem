@@ -13,4 +13,13 @@ fn classify(v)
   end
 end
 
-export classify
+# A pattern binding named like a module-level variable refers to the bound
+# value inside its arm.
+fn unwrap(v)
+  match v
+  when {k: sentinel}
+    sentinel
+  end
+end
+
+export classify, unwrap
