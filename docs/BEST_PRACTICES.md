@@ -180,7 +180,7 @@ with no warning. The compiler warns only in one case: a `let` in a `while`
 body that hides a variable the loop's condition reads.
 
 Shadowing on purpose is fine. The new variable's initializer still sees the
-old one, so `let n = n - 1` and `let line = trim(line)` work, and a closure
+old one, so `let n = n - 1` and `let line = string.trim(line)` work, and a closure
 created before the second `let` keeps the old variable.
 
 ### Declare before the block, assign inside
@@ -664,7 +664,7 @@ for floats too.
 
 ### `to_int` and `to_float` raise on bad input
 
-`to_int("12abc")` is an error, and so is `to_int("12\n")`: `trim` lines
+`to_int("12abc")` is an error, and so is `to_int("12\n")`: `string.trim` lines
 read from files first. Wrap conversions of user input (route params,
 query strings, form fields) in `pcall` and answer a 400, or a bad id
 becomes a 500.
@@ -897,9 +897,11 @@ Some std APIs don't follow this doc yet. Until they are fixed:
   return `{pid: pid}`, but `gen_server.call`, `gen_server.cast` and
   `supervisor.which_children` take a bare pid or a registered name: pass
   `handle.pid`. `http.start` returns a bare pid.
-- Every gen_server callback must return a table with `state` (and
-  `reply` for `handle_call`); anything else, such as the `nil` of a
-  `match` with no `else`, crashes the server.
+- A gen_server callback that returns `nil` or a non-table (such as the
+  `nil` of a `match` with no `else`) crashes the server. `handle_call`
+  returns `{reply: v, state: s}` (or `{noreply: s}`), the others
+  `{state: s}`; a `handle_call` result with neither `reply` nor `noreply`
+  silently sets the state to `nil`.
 - `gen_server.call` waits its full timeout (5 s by default) when the
   server is dead; `supervisor.which_children` and the `dynamic_supervisor`
   calls wait with no timeout at all.
@@ -907,10 +909,11 @@ Some std APIs don't follow this doc yet. Until they are fixed:
   `start: fn() gen_server.start(m).pid end` **(bug)**.
 - `supervisor.start` with `name:` registers the name only after the
   children start, so use the returned pid right after `start` **(bug)**.
-- `dynamic_supervisor.terminate_child` of any child but the last one
-  `which_children` lists crashes the supervisor, and a dynamic supervisor
-  overflows its stack after a few thousand temporary or transient child
-  exits **(bug)**.
+- A dynamic supervisor crashes when it removes any child but the last one
+  `which_children` lists: through `terminate_child`, or when a temporary
+  or transient child exits. It also overflows its stack after about 2,000
+  temporary or transient child exits **(bug)**. Don't use it for pools of
+  short-lived workers yet.
 - `std/http` answers a handler error (or a handler that doesn't return a
   response table) with an empty 500 and logs nothing **(bug)**: catch and
   log errors in the handler while debugging. Request header names keep
@@ -1004,6 +1007,8 @@ end
   process that has exited stays on the target's list until the target
   dies, so don't monitor a long-lived server from many short-lived
   processes, such as per-connection handlers.
+- A `receive` needs at least one `when` arm: an `after`-only `receive`
+  doesn't parse **(bug)**. To wait, use `sleep(ms)`.
 - `after` restarts each time a `receive` is entered, and a message that
   matches another arm ends the wait, so `after` in a server loop that keeps
   getting messages may never fire. For periodic work, send yourself a
@@ -1282,7 +1287,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `loop(state)` followed by more statements | stack and memory grow until overflow | self call as the last expression |
 | `warning: cannot reset ... back-edge` on a `while true` | memory grows without bound | restructure the loop |
 | `{pid}` handle passed to `gen_server.call` | raises | `handle.pid` |
-| gen_server callback returning `nil` | server crashes | `else` arm returning `{state: ...}` |
+| gen_server callback returning `nil` | server crashes | `else` arm returning a result table |
 | `self()` inside `spawn do ... end` to mean the parent | it's the child | `let parent = self()` before |
 | `spawn(f, x)` | `f` called with no arguments | `spawn do f(x) end` |
 | `link` to a process that may have exited | caller dies with `noproc` | `spawn_link` |

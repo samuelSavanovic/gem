@@ -131,12 +131,13 @@ mangle the name or report a Gem error at the `load`.
 
 ```gem
 load "std/string"
-load "./mods/string"           # a user module also called string
+load "./mods/string"           # exports only `upper2`
 string.upper("a")              # module `string` has no export `upper`
 ```
 
 The namespace is named after the file's base name, and the later `load`
-silently wins. A module loaded indirectly counts too: with a user
+silently wins (if both modules export the same name, cc fails with
+`redefinition of 'gem_fn__mod_string_upper'` instead). A module loaded indirectly counts too: with a user
 `./json.gem` exporting `parse`, `load "std/http"` (which loads std/json)
 plus `load "./json"` fails in the C compiler (`redefinition of
 'gem_fn__mod_json_parse'`). It should be a compile error at the second
@@ -175,6 +176,19 @@ print((pcall t[0]).stack)    # [{name: "anonymous fn", file: ..., line: 0}]
 The same for `pcall 1 / 0` and `pcall 1 < "a"` at top level; inside a
 function the line is right. The closure the expression form desugars to
 has no line for an operator or index expression.
+
+### A `receive` with only an `after` clause doesn't parse
+
+```gem
+receive
+after 10 then nil
+end
+```
+
+reports `unexpected token 'after'`. SPEC says the `after` clause is
+optional but never that a `when` arm is required, and Erlang's
+`receive after N -> ok end` is a common way to wait. Accept a `receive`
+with no arms (it waits `after` ms, leaving the mailbox alone).
 
 ### An array pattern matches a record of the same size
 
@@ -288,7 +302,7 @@ Raise `expected 1 argument(s), got 2` for too many too.
 
 ## Standard library
 
-### `dynamic_supervisor` crashes after terminating a child that isn't the last
+### `dynamic_supervisor` crashes after removing a child that isn't the last
 
 ```gem
 load "std/dynamic_supervisor"
@@ -305,7 +319,9 @@ The supervisor dies with `field access on non-table: got nil`
 has no `after`, deadlocks main. `dsup_loop` removes children with
 `delete(state.children, idx)` on an array (the hole trap); use
 `remove_at`. The DOWN path for temporary and transient children has the
-same `delete`.
+same `delete`, so the exit of such a child that isn't last in the list
+crashes the supervisor too (three `restart: "temporary"` children; stop
+the first, then the second).
 
 ### The supervisors' loops are not tail calls
 
@@ -315,7 +331,7 @@ Some paths of `sup_loop` (std/supervisor) and `dsup_loop`
 stack frame: the exit of a temporary or transient child, `terminate_child`
 and `which_children` in the dynamic supervisor. (Restarts are tail calls.)
 A dynamic supervisor with `restart: "temporary"` children that exit at
-once dies with `stack overflow in <fn>` after about 1,750 child exits.
+once dies with `stack overflow in <fn>` after 1,750 to 2,000 child exits.
 Make the self call the last expression.
 
 ### `http.serve` returns when the caller gets any message
