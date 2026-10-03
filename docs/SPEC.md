@@ -24,7 +24,11 @@ gem <file.gem> -o <name>    # compile to <name>, don't run (implies -c)
 gem <file.gem> --emit-c     # print generated C to stdout (used for bootstrapping)
 gem <file.gem> --check      # parse + analyze, exit 0 on success, 1 on error
 gem <file.gem> --run        # accepted as a no-op; run is the default
+gem --help                  # print usage (also -h), exit 0
+gem lsp                     # start the language server on stdin/stdout
 ```
+
+Options can come before or after the source path. Before it, an argument starting with `-` that is not one of the options above is a usage error: `gem` prints a short message and the usage line on stderr and exits 2 (as for a missing source path or `-o` without a name). After the source path, an unknown argument is passed to the program, so `gem prog.gem --help` gives `--help` to `prog.gem`.
 
 The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.c`, compiles it to `/tmp/gem_<basename>_bin`, and runs it. Extra positional arguments after the source path are forwarded to the program via `argv()`.
 
@@ -78,6 +82,7 @@ A `let` always declares a new variable. If a variable of the same name is alread
 - Closures created before the shadowing `let` keep the old variable; closures created after it see the new one.
 - A shadow made inside a nested block (`if`/`elif`/`else`, `while` and `for` bodies, `match`/`receive` arms, closure bodies) ends with that block: after it the outer variable is visible again, unchanged. In a loop body every iteration starts from the outer variable.
 - `for` loop variables and `match`/`receive` pattern bindings are lets of their body and shadow the same way.
+- **Warning:** a `let` in a `while` body (at any depth, not inside a closure) that shadows a variable the loop's condition reads, when nothing in the loop body assigns that name (`x = …` or `x += …`, closures included), gets a compile-time warning on stderr. The condition reads the outer variable, which then can't change through it: `while i < n` with `let i = i + 1` in the body never ends. To advance the counter, assign it: `i = i + 1`. Any assignment to the name in the body turns the warning off, as does renaming the new variable.
 
 ```
 fn f(n)
@@ -875,7 +880,7 @@ let json = '''
 Rules:
 - The opening `"""` or `'''` must be immediately followed by a newline (optional trailing whitespace before the newline is allowed). Content starts on the next line.
 - The closing `"""` or `'''` must appear on its own line with only leading whitespace before it.
-- **Dedent**: the indentation of the closing delimiter (number of leading spaces) is the base indentation. That many leading spaces are stripped from every content line. Extra indentation beyond the base is preserved.
+- **Dedent**: the indentation of the closing delimiter (number of leading spaces) is the base indentation. That many leading spaces are stripped from every content line. Extra indentation beyond the base is preserved. A `"""` string inside an interpolation has its own closing line and its own dedent; it does not change the outer string's.
 - The final newline before the closing delimiter is stripped, so the resulting string does not end with a trailing `\n`.
 - `"""` supports `{expr}` interpolation and escape sequences identical to regular `"` strings.
 - `'''` has no interpolation; `{` is a literal character. Escape sequences are identical to regular `'` strings.

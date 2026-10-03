@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Compare the compiler's stderr notes (e.g. module state written from a
-# spawned process) against tests/notes/<name>.expected. Each entry compiles
+# Compare the compiler's stderr notes and warnings (e.g. module state written from a
+# spawned process, a shadowed loop condition) against
+# tests/notes/<name>.expected. Each entry compiles
 # examples/<name>.gem with --check, once by relative and once by absolute
 # path: both must print project-root-relative paths.
 #

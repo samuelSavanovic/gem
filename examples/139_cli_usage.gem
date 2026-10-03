@@ -1,0 +1,17 @@
+# `gem --help` / `-h` print usage on stdout and exit 0. An unknown option
+# before the source file, a missing source file and `-o` with no name are
+# usage errors: a short message on stderr, exit status 2, no stack trace.
+# Options after the source file that gem doesn't know go to the program.
+# (Runs the compiler from the repo root, as `make test` does.)
+
+let gem = "build/gem"
+let quiet = " > /dev/null 2>&1"
+
+print("--help exit: {exec(gem + " --help" + quiet)}")
+print("-h exit: {exec(gem + " -h" + quiet)}")
+print("--help shows usage: {exec(gem + " --help | grep -q '^usage: gem <file.gem>'")}")
+print("unknown option exit: {exec(gem + " --bogus examples/01_basics.gem" + quiet)}")
+print("no source exit: {exec(gem + quiet)}")
+print("-o without name exit: {exec(gem + " examples/01_basics.gem -o" + quiet)}")
+print("no stack trace: {exec(gem + " --bogus 2>&1 | grep -q 'Runtime Error'")}")
+print("flag after source: {exec(gem + " --check examples/01_basics.gem --help" + quiet)}")

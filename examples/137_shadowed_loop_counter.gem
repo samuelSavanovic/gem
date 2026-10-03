@@ -1,0 +1,41 @@
+# A `let` in a `while` body that shadows a variable the condition reads,
+# when nothing in the loop assigns that variable, gets a compile-time
+# warning (tests/notes/137_shadowed_loop_counter.expected): the condition
+# can't change through it. Assigning the variable anywhere in the loop
+# turns the warning off. The program itself runs normally.
+
+let n = 3
+
+# Warned (line 13): the outer `i` never changes; only `break` ends this.
+let i = 0
+let steps = 0
+while i < n
+  let i = i + 1
+  steps += 1
+  if steps == 5 then break end
+end
+print("shadowed: i = {i}, steps = {steps}")
+
+# Not warned: the counter is assigned, no `let`.
+let j = 0
+while j < n
+  j = j + 1
+end
+print("assigned: j = {j}")
+
+# Not warned: the outer `k` is assigned too, so the shadow is deliberate.
+let k = 0
+while k < n
+  k += 1
+  let k = "inner"
+  if k != "inner" then print("unreachable") end
+end
+print("assigned and shadowed: k = {k}")
+
+# Not warned: a `let` in a closure body is the closure's own variable.
+let m = 0
+while m < n
+  let f = fn() let m = 100; m end
+  m = m + f() - 99
+end
+print("closure: m = {m}")

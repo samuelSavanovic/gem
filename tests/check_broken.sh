@@ -21,6 +21,7 @@ expected=(
   "bad_pin:3:3"
   "break_in_do:4:4"
   "break_outside_loop:5:5"
+  "brace_block_recovery:2:2"
   "block_let_after_block:11:11"
   "block_let_toplevel:7:7"
   "cascade_braces:2:5"
