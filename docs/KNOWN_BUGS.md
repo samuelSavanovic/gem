@@ -8,55 +8,13 @@ in `docs/OPTIMIZATIONS.md`, missing features in `docs/ROADMAP.md`.
 
 ## Compiler diagnostics
 
-### Shadowed loop counter loops forever, silently
+### A missing source file prints a stack trace into the driver
 
-```gem
-let n = 3
-let i = 0
-while i < n
-  let i = i + 1      # new variable; the outer `i` never changes
-end
-```
-
-The loop never ends and nothing is reported. A second `let` shadows by
-design, so the code is "correct", but this is a silent cliff. A warning
-when a `while` body `let` shadows a name the condition reads, and the outer
-variable is never assigned in the loop, would surface it.
-
-### Spurious "`break` outside a loop" after a parse error
-
-```gem
-fn times(n, f) f(1) end
-for x in [1, 2]
-  times(1) { |i| if i then 1 + end }
-  break
-end
-```
-
-Besides the real parse errors on line 3, the compiler reports "`break`
-outside a loop" for line 4, which is inside the `for`. Parser error
-recovery loses the loop context (the check lives in the parser, see #28
-fix 6).
-
-### `"""` nested in a `"""` interpolation takes the wrong dedent width
-
-```gem
-let s = """
-    outer {"""
-      inner
-      """}
-    tail
-    """
-```
-
-The outer string's dedent width comes from the inner closing `"""` line:
-the lexer's pre-scan (compiler/lexer.gem) finds the inner one first.
-
-### `gem --help` is read as a source path
-
-`gem --help` prints `[Runtime Error]: read_file: cannot open '--help'` with
-a stack trace into compiler/main.gem. Unknown `--` flags should be a usage
-error, and `--help` should print usage.
+`gem missing.gem` prints `[Runtime Error]: read_file: cannot open
+'missing.gem'` with a caret line and stack trace in compiler/main.gem
+(`let source = read_file(src_path)`), exit 1. It should be a one-line
+`gem: cannot open 'missing.gem'` like the other usage errors
+(`usage_error` in compiler/main.gem).
 
 ## Names and paths in reports
 

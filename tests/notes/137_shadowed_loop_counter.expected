@@ -1,0 +1,1 @@
+warning: examples/137_shadowed_loop_counter.gem:13: `let i` declares a new `i` that hides the one this loop's condition reads (while at line 12); nothing in the loop assigns the outer `i`, so the condition can't change through it. To update it, write `i = ...` without `let`.

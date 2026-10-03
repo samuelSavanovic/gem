@@ -1,13 +1,8 @@
 # Main driver for the Gem self-hosting compiler.
 # Reads a .gem source file, parses it, generates C, and compiles/runs.
 #
-# Usage:
-#   gem foo.gem [args...]    # compile and run, passing args to the program
-#   gem foo.gem -c           # compile to ./foo, don't run
-#   gem foo.gem -o name      # compile to ./name (implies -c)
-#   gem foo.gem --emit-c     # print C to stdout (for bootstrapping)
-#   gem foo.gem --check      # parse + analyze, exit 0 on success, 1 on error
-#   gem foo.gem --run        # accepted as a no-op (run is the default)
+# Usage: see USAGE below (`gem --help`). `--emit-c` is what the bootstrap
+# uses; `gem lsp` starts the language server.
 
 load "std/string"
 load "./parser" (parse_source, collect_pattern_names)
@@ -446,6 +441,87 @@ fn tag_source_file(node, file)
   end
 end
 
+# ─── Shadowed loop-condition warning ──────────────────────────
+# `while i < n` whose body declares `let i = ...` reads the outer `i` in
+# its condition and the new one after the `let`. When nothing in the loop
+# assigns `i` (no `i = ...` or `i += ...` anywhere in the body, closures
+# included), the condition can't change through it: usually a counter
+# that never advances, so the loop never ends. Shadowing is legal, so
+# this is a warning on stderr, not an error. Runs on each file's AST as
+# parsed (before lower and the module renames), so names are the user's.
+
+# Calls visit(child, in_fn) for every AST node below `node`; `in_fn` is
+# true once the walk is inside a function body (fn_def / anon_fn).
+fn walk_ast(node, in_fn, visit)
+  for k in keys(node)
+    let v = node[k]
+    if type(v) == "table"
+      if v.tag != nil
+        let child_in_fn = in_fn or v.tag == "fn_def" or v.tag == "anon_fn"
+        visit(v, child_in_fn)
+        walk_ast(v, child_in_fn, visit)
+      else
+        for elem in v
+          if type(elem) == "table" and elem.tag != nil
+            let child_in_fn = in_fn or elem.tag == "fn_def" or elem.tag == "anon_fn"
+            visit(elem, child_in_fn)
+            walk_ast(elem, child_in_fn, visit)
+          end
+        end
+      end
+    end
+  end
+end
+
+fn warn_shadowed_loop_conds(ast, file, project_root)
+  let warned = {}
+  # Messages by line, printed in line order once the walk is done.
+  let by_line = {}
+  let lines = []
+  let check_while = fn(w)
+    let reads = {}
+    walk_ast({tag: "wrap", cond: w.cond}, false, fn(n, in_fn)
+      if n.tag == "var"
+        reads[n.name] = true
+      end
+    end)
+    let assigned = {}
+    let shadows = {}
+    walk_ast({tag: "wrap", body: w.body}, false, fn(n, in_fn)
+      if n.tag == "assign"
+        assigned[n.name] = true
+      elif n.tag == "let" and not in_fn and reads[n.name] == true
+        let prev = shadows[n.name]
+        if prev == nil or (n.line != nil and prev.line != nil and n.line < prev.line)
+          shadows[n.name] = n
+        end
+      end
+    end)
+    for name in sort(keys(shadows))
+      let l = shadows[name]
+      let key = "{l.line}:{name}"
+      if assigned[name] == nil and warned[key] == nil
+        warned[key] = true
+        if by_line[l.line] == nil
+          by_line[l.line] = []
+          push(lines, l.line)
+        end
+        push(by_line[l.line], "warning: {display_path(file, project_root)}:{l.line}: `let {name}` declares a new `{name}` that hides the one this loop's condition reads (while at line {w.line}); nothing in the loop assigns the outer `{name}`, so the condition can't change through it. To update it, write `{name} = ...` without `let`.")
+      end
+    end
+  end
+  walk_ast(ast, false, fn(n, in_fn)
+    if n.tag == "while"
+      check_while(n)
+    end
+  end)
+  for ln in sort(lines)
+    for msg in by_line[ln]
+      eprint(msg)
+    end
+  end
+end
+
 # ─── Load resolution ──────────────────────────────────────────
 
 # Path for diagnostics: relative to `root` when it is under it.
@@ -545,6 +621,9 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       let loaded_ast = parse_source(source, full_path, sink)
       let parse_failed = sink.count() > errors_before or sink.suppressed()
       tag_source_file(loaded_ast, full_path)
+      if not parse_failed
+        warn_shadowed_loop_conds(loaded_ast, full_path, project_root)
+      end
       let loaded_dir = dirname(full_path)
       let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
 
@@ -602,6 +681,32 @@ end
 
 # ─── CLI argument parsing ──────────────────────────────────────
 
+let USAGE = """
+  usage: gem <file.gem> [options] [args...]
+         gem lsp
+
+  Compiles <file.gem> to C, builds it with cc and runs it. Arguments after
+  the file that are not options below are passed to the program.
+
+  options:
+    -c, --compile-only   compile to ./<file>, don't run
+    -o <name>            compile to <name> (implies -c)
+    --emit-c             print the generated C to stdout
+    --check              parse and analyze only; exit 1 on errors
+    --run                run after compiling (the default)
+    -h, --help           print this help
+  subcommands:
+    lsp                  start the language server on stdin/stdout
+  """
+
+# A command-line mistake: a short message and the usage line on stderr,
+# exit status 2. No stack trace: the error is the user's, not the driver's.
+fn usage_error(msg)
+  eprint("gem: " + msg)
+  eprint("usage: gem <file.gem> [options] [args...]   (gem --help for more)")
+  exit(2)
+end
+
 fn parse_args(args)
   let result = {
     src_path: nil,
@@ -630,9 +735,16 @@ fn parse_args(args)
     elif arg == "-o"
       i += 1
       if i >= argc
-        error("gem: -o requires an argument")
+        usage_error("-o requires an argument")
       end
       result.out_name = args[i]
+    elif result.src_path == nil and (arg == "-h" or arg == "--help")
+      print(USAGE)
+      exit(0)
+    elif result.src_path == nil and len(arg) > 1 and substr(arg, 0, 1) == "-"
+      # Before the source file, an unknown flag is a mistake, not a path.
+      # After it, the program gets it like any other argument.
+      usage_error("unknown option '" + arg + "'")
     elif result.src_path == nil
       result.src_path = arg
     else
@@ -679,7 +791,7 @@ end
 
 let argc = len(argv())
 if argc < 2
-  error("usage: gem <file.gem> [args...] [-c | -o <name> | --emit-c]")
+  usage_error("no source file given")
 end
 
 # `gem lsp` subcommand. Hand off to the LSP entry before parse_args runs;
@@ -693,7 +805,7 @@ end
 let cli = parse_args(argv())
 
 if cli.src_path == nil
-  error("usage: gem <file.gem> [args...] [-c | -o <name> | --emit-c]")
+  usage_error("no source file given")
 end
 
 let src_path = cli.src_path
@@ -722,6 +834,7 @@ loaded[normalize_path(src_path)] = {exported: nil, loading: true, parent: nil}
 # print_all_errors pass either way.
 let resolved_ast = nil
 if not sink.has_any()
+  warn_shadowed_loop_conds(ast, src_path, project_root)
   resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
 end
 

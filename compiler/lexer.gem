@@ -52,6 +52,130 @@ fn apply_escape(esc, mode)
   nil
 end
 
+# ─── Triple-quoted closer pre-scan ───────────────────────────────
+# A `"""` string's dedent width is the indentation of its own closing
+# `"""` line. The pre-scan must skip anything inside an interpolation,
+# where a nested `"""` string has a closing line of its own. These helpers
+# follow the lexer's rules just far enough to find where each string and
+# interpolation ends; positions are byte offsets, -1 means unterminated.
+
+fn tq_is_triple(source, p, q)
+  p + 2 < len(source) and source[p] == q and source[p + 1] == q and source[p + 2] == q
+end
+
+# Past the opening `"""` / `'''` (at p): skip to the start of the body,
+# i.e. past the newline that must follow (the lexer reports a missing one
+# and goes on as if it were there).
+fn tq_body_start(source, p)
+  let n = len(source)
+  while p < n and (source[p] == " " or source[p] == "\t")
+    p += 1
+  end
+  if p < n and source[p] == "\n"
+    p += 1
+  end
+  p
+end
+
+# Body of a triple-quoted string starting at p (after the opening line).
+# Returns {pos: just past the closing delimiter, indent: its column}, or
+# nil when unterminated. `interp` is true for `"""` (which interpolates).
+fn tq_scan_body(source, p, q, interp)
+  let n = len(source)
+  let at_line_start = true
+  while p < n
+    if at_line_start
+      at_line_start = false
+      let ind = 0
+      while p < n and source[p] == " "
+        ind += 1
+        p += 1
+      end
+      if tq_is_triple(source, p, q)
+        return {pos: p + 3, indent: ind}
+      end
+      continue
+    end
+    let c = source[p]
+    if c == "\n"
+      at_line_start = true
+      p += 1
+    elif c == "\\"
+      p += 2
+    elif c == "\{" and interp
+      p = tq_skip_interp(source, p + 1)
+      if p < 0
+        return nil
+      end
+    else
+      p += 1
+    end
+  end
+  nil
+end
+
+# Interpolation code starting at p (just past its `{`). Returns the
+# position just past the matching `}`.
+fn tq_skip_interp(source, p)
+  let n = len(source)
+  let depth = 0
+  while p < n
+    let c = source[p]
+    if c == "}"
+      if depth == 0
+        return p + 1
+      end
+      depth -= 1
+      p += 1
+    elif c == "\{"
+      depth += 1
+      p += 1
+    elif c == "#"
+      while p < n and source[p] != "\n"
+        p += 1
+      end
+    elif c == "\"" or c == "'"
+      if tq_is_triple(source, p, c)
+        let r = tq_scan_body(source, tq_body_start(source, p + 3), c, c == "\"")
+        if r == nil
+          return -1
+        end
+        p = r.pos
+      else
+        p = tq_skip_quoted(source, p + 1, c)
+        if p < 0
+          return -1
+        end
+      end
+    else
+      p += 1
+    end
+  end
+  -1
+end
+
+# A one-quote string body starting at p (just past its opening quote q).
+# Returns the position just past the closing quote.
+fn tq_skip_quoted(source, p, q)
+  let n = len(source)
+  while p < n
+    let c = source[p]
+    if c == q
+      return p + 1
+    elif c == "\\"
+      p += 2
+    elif c == "\{" and q == "\""
+      p = tq_skip_interp(source, p + 1)
+      if p < 0
+        return -1
+      end
+    else
+      p += 1
+    end
+  end
+  -1
+end
+
 # ─── Tokenizer ───────────────────────────────────────────────────
 
 fn build_keyword_set()
@@ -206,34 +330,20 @@ fn tokenize(source, file, sink)
           pos += 1
         end
 
-        # Pre-scan: find the indentation of the closing """
-        let tq_scan = pos
-        let tq_bi = 0
-        let tq_found = false
-        while tq_scan < length and not tq_found
-          let tq_ind = 0
-          while tq_scan < length and source[tq_scan] == " "
-            tq_ind += 1
-            tq_scan += 1
-          end
-          if tq_scan + 2 < length and source[tq_scan] == "\"" and source[tq_scan + 1] == "\"" and source[tq_scan + 2] == "\""
-            tq_bi = tq_ind
-            tq_found = true
-          else
-            while tq_scan < length and source[tq_scan] != "\n"
-              tq_scan += 1
-            end
-            if tq_scan < length
-              tq_scan += 1
-            end
-          end
+        # Pre-scan: find the indentation of the closing """ (skipping
+        # interpolations, which may hold """ strings of their own)
+        let tq_close = tq_scan_body(source, pos, "\"", true)
+        if tq_close == nil
+          # A broken interpolation: take the first closing line, so the
+          # error is reported where the interpolation goes wrong.
+          tq_close = tq_scan_body(source, pos, "\"", false)
         end
-        if not tq_found
+        if tq_close == nil
           sink.report(source, file, line, pos - line_start + 1, 1, "unterminated triple-quoted string", nil)
           push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
           return tokens
         end
-        triple_dq_indent = tq_bi
+        triple_dq_indent = tq_close.indent
 
         # Real scan: collect content with dedent and interpolation
         let val = ""

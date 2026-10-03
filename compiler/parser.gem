@@ -636,7 +636,27 @@ fn make_parser(tokens, source, file, sink)
     expect("\{")
     let bp = parse_block_params()
     let bexpr = parse_expr()
-    expect("}")
+    if peek().type == "}"
+      advance()
+    else
+      expect("}")
+      # Recovery: drop the rest of the block up to its `}` on this line,
+      # so the tokens after a bad body don't end the enclosing statement
+      # (a `for` body would end early, and a `break` in it later be
+      # reported as outside a loop).
+      let depth = 0
+      while not at_end() and peek().type != "NEWLINE"
+        let bt = advance().type
+        if bt == "\{"
+          depth += 1
+        elif bt == "}"
+          if depth == 0
+            break
+          end
+          depth -= 1
+        end
+      end
+    end
     make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, [bexpr]), bp.defaults)
   end
 

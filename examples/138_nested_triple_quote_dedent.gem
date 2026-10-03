@@ -1,0 +1,29 @@
+# A `"""` string's dedent width comes from its own closing `"""` line,
+# also when an interpolation inside it holds another `"""` string whose
+# closing line is indented differently.
+
+let s = """
+    outer {"""
+      inner
+      """}
+    tail
+    """
+print(s)
+
+let name = "gem"
+let t = """
+  a {"""
+          deep {name}
+          """} b
+    c {"x" + '}'} \{literal}
+  """
+print(t)
+
+fn wrap(body)
+  """
+    <p>{"""
+      {body}
+      """}</p>
+    """
+end
+print(wrap("hi"))

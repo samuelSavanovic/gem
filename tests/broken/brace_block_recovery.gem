@@ -1,0 +1,9 @@
+# A bad body in a brace block inside a `for`: recovery skips to the
+# block's `}`, so the `for` body goes on and the `break` below is still
+# inside the loop. Two errors, both on line 7 (`if` is not an expression,
+# then the missing `}` where the expression ended).
+fn times(n, f) f(1) end
+for x in [1, 2]
+  times(1) { |i| if i then 1 + end }
+  break
+end

@@ -2274,6 +2274,23 @@ child exits without sending
 Stack trace:
   at wait_for_reply (examples/136_main_receive_deadlock.gem:80)
   at main (examples/136_main_receive_deadlock.gem:85)
+shadowed: i = 0, steps = 5
+assigned: j = 3
+assigned and shadowed: k = 3
+closure: m = 3
+outer inner
+tail
+a deep gem b
+  c x} {literal}
+<p>hi</p>
+--help exit: 0
+-h exit: 0
+--help shows usage: 0
+unknown option exit: 2
+no source exit: 2
+-o without name exit: 2
+no stack trace: 1
+flag after source: 0
 spawn: false build_string: `add` can only be called by the process that created it
 s1 = ab
 message: false build_string: `add` can only be called by the process that created it
