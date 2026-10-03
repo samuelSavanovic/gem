@@ -1079,6 +1079,12 @@ itself is stuck that way, the runtime reports `deadlock: main process is
 waiting in receive ...` and exits with status 1. Call `exit()` to end the
 program from anywhere.
 
+Keep main alive while a long-running process tree works: after main
+ends, the process that gets main's slot (about every 1,024th spawn) is
+taken for main, and its crash or `exit` ends the program **(bug)**. End
+`main` with `http.serve(...)` or a `receive` that waits for the tree's
+`DOWN` instead of returning.
+
 A spawned process that crashes prints its error on stderr but doesn't
 change the program's exit status: if main finishes normally, the program
 exits 0. When a failure must fail the program (a test, a batch job),
@@ -1326,6 +1332,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `after` in a busy server loop | never fires | `send_after` ticks |
 | Calling or monitoring a server from a long-lived process | its `DOWN` arrives when the server dies | catch-all or `DOWN` arm in the loop |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
+| Main returns while a process tree keeps running **(bug)** | after ~1,024 spawns a process is taken for main; its crash ends the program | keep main waiting (`serve`, or `receive` the tree's `DOWN`) |
 | `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |
 | Spawning thousands of quick tasks in a loop | `process table full` | batch, or cap in-flight tasks |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |

@@ -223,6 +223,35 @@ columns are read back with `gem_string` (strlen), so a string with an
 embedded NUL is cut short; use `sqlite3_column_bytes`.
 runtime/gem_builtins_sqlite.c.
 
+### After main ends, the process that reuses its slot counts as main
+
+```gem
+spawn do
+  sleep(20)                 # main has ended and freed slot 0
+  let p = 1
+  while p % 1024 != 0       # spawn until a process lands in slot 0
+    p = spawn(fn()
+      sleep(1)
+      error("child failed")
+    end)
+  end
+end
+print("main ends")
+```
+
+prints 1,022 ordinary crash reports, then `[Runtime Error]: child failed`
+for the process in slot 0 and exits with status 1. `gem_main_pid` stays 0
+after main's slot is freed (`gem_propagate_exit` → `gem_free_proc_slot`
+in runtime/gem_scheduler.c), so every `== gem_main_pid` check fires for
+whichever process gets slot 0 next (about every 1,024th spawn): its
+uncaught error or `exit` ends the program, a `kill` or link death of it is
+reported as "main process killed", the deadlock check reports a false
+deadlock, and its arena and globals are never freed (about 1 MB per
+reuse). It hits the "start a supervisor tree and let main end" pattern
+(examples/http_server/server.gem): a restarting child ends the program
+after about 1,022 restarts. Clear `gem_main_pid` (or mark main finished)
+when main's slot is freed.
+
 ### `sort` keeps the comparator in a global shared by all processes
 
 ```gem
