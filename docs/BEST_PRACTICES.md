@@ -901,7 +901,8 @@ Some std APIs don't follow this doc yet. Until they are fixed:
   `nil` of a `match` with no `else`) crashes the server. `handle_call`
   returns `{reply: v, state: s}` (or `{noreply: s}`), the others
   `{state: s}`; a `handle_call` result with neither `reply` nor `noreply`
-  silently sets the state to `nil`.
+  sets the state to `nil` and leaves the caller waiting until its
+  timeout.
 - `gen_server.call` waits its full timeout (5 s by default) when the
   server is dead; `supervisor.which_children` and the `dynamic_supervisor`
   calls wait with no timeout at all.
