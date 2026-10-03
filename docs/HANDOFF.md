@@ -50,7 +50,7 @@ Notes for the next session. Delete this file once its work is done.
       Requests").
 4. **Next: compiler and runtime fix pass** (agreed after the doc review
    found many bugs). Fix every `docs/KNOWN_BUGS.md` entry outside
-   "Standard library": the sections "Compiler diagnostics", "Runtime",
+   "Standard library": the sections "Compiler", "Runtime",
    "C interop" and "Editor grammars" (the param-named-like-a-fn capture,
    float literal precision and `1e-06.0`, float `%g` formatting,
    integer-literal overflow, renaming destructuring, bad module names and

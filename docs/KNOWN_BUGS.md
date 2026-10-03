@@ -6,7 +6,7 @@ its entry in the same change, along with any **(bug)** rule in
 `docs/BEST_PRACTICES.md` that exists because of it. Performance problems go in
 `docs/OPTIMIZATIONS.md`, missing features in `docs/ROADMAP.md`.
 
-## Compiler diagnostics
+## Compiler
 
 ### A missing source file prints a stack trace into the driver
 
