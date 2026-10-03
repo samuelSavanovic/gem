@@ -637,7 +637,6 @@ let p = whereis("worker")  # returns pid or nil
 
 `register(name, pid)` associates a string name with a pid. Errors if the name is already taken. `whereis(name)` returns the pid for a name, or `nil` if not registered. `send` accepts either a pid (int) or a registered name (string). When a process dies, its name is automatically unregistered. Sending to a dead pid silently drops the message, but sending to a name that is not registered (including the name of a process that has died) raises `send: no process registered with that name`. Register from the parent, as above: a child that calls `register(name, self())` itself may not have run yet when the parent sends.
 
-`send` edge cases: sending to a dead pid silently drops the message. Sending to a registered name that does not exist raises an error.
 
 ## Selective Receive
 
@@ -1273,8 +1272,8 @@ Path resolution depends on the form of the load path:
 **Stdlib root** is resolved in this order:
 
 1. `$GEM_STDLIB` if set: the directory that *contains* `std/` (not `std/` itself).
-2. The project root, if it contains a `std/` subdirectory (lets a project vendor or override the stdlib).
-3. The install root, computed as `dirname(dirname(argv()[0]))` — so a binary at `<project>/build/gem` finds `<project>/std/`. `argv()[0]` is taken as typed, so a symlink to the binary on `PATH` finds neither `std/` nor `runtime/` (see `docs/KNOWN_BUGS.md`); call the binary by its real path, or set `GEM_STDLIB`.
+2. The project root, if it contains a `std/` subdirectory (lets a project vendor or override the stdlib). It replaces the whole stdlib: a `load "std/x"` that isn't in the project's `std/` fails, with no fallback to the installed one.
+3. The install root, computed as `dirname(dirname(argv()[0]))` — so a binary at `<project>/build/gem` finds `<project>/std/`. `argv()[0]` is taken as typed, so a symlink to the binary on `PATH` finds neither `std/` nor `runtime/` (see `docs/KNOWN_BUGS.md`); call the binary by its real path (`GEM_STDLIB` finds `std/` but not `runtime/`, so the C compile still fails).
 
 **Project root marker** — drop a `gem.toml` file at the root of your project to mark it. The file may be empty; its presence is what matters. Without it, bare-path loads behave like relative-to-importing-file (which is the safe default for single-file scripts).
 
@@ -1538,7 +1537,7 @@ The caller provides a module table with callback functions: `init`, `handle_call
 Module callback return values:
 
 - `handle_call(msg, from, state)` — must return `{reply: <value>, state: <new_state>}` to reply immediately, or `{noreply: <new_state>}` to defer the reply (use `gen_server.reply(from, value)` later). May include `timeout: <ms>` to schedule an idle timeout.
-- `handle_cast(msg, state)` — must return `{state: <new_state>}`. May include `timeout: <ms>`.
+- `handle_cast(msg, state)` — must return `{state: <new_state>}`. May include `timeout: <ms>`. A callback that returns anything else (a `match` with no matching arm returns `nil`) crashes the server, so give its `match` an `else`.
 - `handle_info(msg, state)` — handles any message not from `call`/`cast` (e.g. DOWN messages, EXIT messages, `"timeout"`). Must return `{state: <new_state>}`. May include `timeout: <ms>`.
 
 When any callback returns a `timeout` field, a timer is scheduled: after `timeout` milliseconds with no other message, `handle_info` is called with the string `"timeout"` as the message. Each new timeout cancels the previous pending one. Omitting `timeout` (or setting it to `nil`) cancels any pending timeout without scheduling a new one.
@@ -1562,6 +1561,8 @@ let counter_mod = {
     match msg
     when "reset"
       {state: 0}
+    else
+      {state: state}
     end
   end,
   handle_info: fn(msg, state)

@@ -740,6 +740,11 @@ A closure given to `spawn` is different: the child gets a copy of what it
 captures, taken at the `spawn`, and later changes on either side are not
 shared.
 
+Inside a `spawn` body, `self()` is the child. Take the parent's pid
+before spawning (`let parent = self()`) to send results back. Pass a
+child its arguments through the closure, `spawn do worker(5) end`:
+`spawn(worker, 5)` calls `worker()` with no arguments.
+
 ### Messages are tables with a `tag`
 
 ```gem
@@ -851,7 +856,9 @@ work, or cap how many are in flight (a `sleep(0)` in the loop lets finished
 children exit). `task.async` over a long list has the same limit. A
 reader/writer pair per connection uses two. An acceptor that spawns per
 connection should catch that error and close the connection, or cap the
-number of connections; otherwise one burst kills the acceptor.
+number of connections; otherwise one burst kills the acceptor. (A run
+that hit the limit prints a `gem_diag: spawn_overflow=...` line on stderr
+at exit.)
 
 ---
 
@@ -873,7 +880,9 @@ processes.
 | | plain `extern fn`, `input`, `read_stdin`; `print`, `eprint`, `write_stdout` to a slow pipe |
 
 Keep sqlite queries short and indexed: a one-second query stalls every
-process for that second. Use `extern blocking fn` for any C call that can
+process for that second. A handle is a raw pointer: a wrong or
+already-closed one crashes the program, which `pcall` can't catch
+**(bug)**. Use `extern blocking fn` for any C call that can
 take more than about a millisecond. The pool has 4 workers, so four long
 `exec` calls delay every file read behind them.
 
@@ -949,9 +958,11 @@ export make, use
   import, unless a name is used often enough to be noise.
 - Name module files in `snake_case`: a file name that isn't a C
   identifier (`my-utils.gem`) fails in the C compiler **(bug)**. Don't name
-  a module after a std module you also load (`log.gem`, `test.gem`): the
-  namespace is the file's base name, and the later `load` silently
-  replaces the other **(bug)**.
+  a module like any std module (`log.gem`, `json.gem`): the namespace is
+  the file's base name, and a module of the same name loaded anywhere in
+  the program, by you or by std (`std/http` loads `string`, `url`,
+  `mime`, `json` and `time`), replaces it or breaks the C compile
+  **(bug)**.
 - Modules can't load each other in a cycle: the compiler reports
   `load cycle: a.gem → b.gem → a.gem`. Move shared code into a third
   module.
@@ -983,9 +994,14 @@ Some std APIs predate these rules, and are being fixed:
 - Supervisor child `start` functions must return a bare pid, so
   `start: fn() gen_server.start(m) end` kills the supervisor **(bug)**; use
   `fn() gen_server.start(m).pid end`.
-- `dynamic_supervisor.terminate_child` of any child but the newest crashes
-  the supervisor, and both supervisors' loops overflow the stack after a
-  few thousand child exits **(bug)**.
+- `dynamic_supervisor.terminate_child` of any child but the last one
+  `which_children` lists crashes the supervisor, and a dynamic supervisor
+  overflows its stack after a few thousand temporary or transient child
+  exits **(bug)**.
+- `std/http` keeps request header names in the client's case
+  (`req.headers["Content-Type"]` misses `content-type`) **(bug)**.
+- A gen_server callback that returns anything but a `{state: ...}` table
+  (a `match` with no `else` returns `nil`) crashes the server.
 - `supervisor.start` with `name:` registers the name only after the
   children start, so the name may not be there yet right after `start`
   **(bug)**; use the returned `pid`.
@@ -1105,6 +1121,9 @@ Some std APIs predate these rules, and are being fixed:
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
 | Monitoring a long-lived server from many short-lived processes | monitor list grows | monitor only when needed |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
+| `self()` inside `spawn do ... end` to mean the parent | it's the child | `let parent = self()` before |
+| `spawn(f, x)` | `f` called with no arguments | `spawn do f(x) end` |
+| Bad or closed sqlite handle **(bug)** | segfault, not catchable | close once, in the owning process |
 | `after` in a busy server loop | never fires | `send_after` ticks |
 | `link` to a process that may have exited | caller dies with `noproc` | `spawn_link` |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |

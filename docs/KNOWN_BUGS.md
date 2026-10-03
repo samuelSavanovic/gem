@@ -136,7 +136,11 @@ string.upper("a")              # module `string` has no export `upper`
 ```
 
 The namespace is named after the file's base name, and the later `load`
-silently wins. It should be a compile error at the second `load`.
+silently wins. A module loaded indirectly counts too: with a user
+`./json.gem` exporting `parse`, `load "std/http"` (which loads std/json)
+plus `load "./json"` fails in the C compiler (`redefinition of
+'gem_fn__mod_json_parse'`). It should be a compile error at the second
+`load`, or modules should be named by path.
 
 ### The project root is not found when the entry path has no directory
 
@@ -152,8 +156,9 @@ absolute first.
 
 With a symlink to `build/gem` on `PATH`, `gem prog.gem` fails with
 `gem: stdlib module not found: std/string (looked in .)`: the install root
-is computed from `argv()[0]` as typed. Resolve the executable's real path
-(`/proc/self/exe`, `realpath`) first.
+is computed from `argv()[0]` as typed. `GEM_STDLIB` finds `std/` but not
+`runtime/`, so the C compile still fails (`gem.h: No such file`). Resolve
+the executable's real path (`/proc/self/exe`, `realpath`) first.
 
 ### Integer literals out of range wrap silently
 
@@ -304,11 +309,14 @@ same `delete`.
 
 ### The supervisors' loops are not tail calls
 
-`std/supervisor` and `std/dynamic_supervisor` loop with
-`sup_loop(state)` / `dsup_loop(state)` followed by `return nil`, which is
-a non-tail call: each handled message adds a stack frame. A dynamic supervisor with `restart: "temporary"`
-children that exit at once dies with `stack overflow in anonymous fn`
-after about 1,750 child exits. Make the self call the last expression.
+Some paths of `sup_loop` (std/supervisor) and `dsup_loop`
+(std/dynamic_supervisor) recurse with `sup_loop(state)` /
+`dsup_loop(state)` followed by `return nil`, a non-tail call that adds a
+stack frame: the exit of a temporary or transient child, `terminate_child`
+and `which_children` in the dynamic supervisor. (Restarts are tail calls.)
+A dynamic supervisor with `restart: "temporary"` children that exit at
+once dies with `stack overflow in <fn>` after about 1,750 child exits.
+Make the self call the last expression.
 
 ### `http.serve` returns when the caller gets any message
 
@@ -371,6 +379,23 @@ server blocks the caller forever; a parse error leaks the socket; a
 chunked response comes back with the chunk framing in `body`; a status
 line with no reason phrase (`HTTP/1.1 204`) or an `https://` URL raises
 `to_int: cannot convert "" to int`.
+
+### A bad sqlite handle crashes the program
+
+`print(pcall sqlite_query(12345, "select 1", []))` dies with a segmentation
+fault (exit 139); `pcall` can't catch it. A handle is a raw `sqlite3 *`
+stored as an int: using one after `sqlite_close` is a use-after-free, and
+closing twice returns `nil`. Keep a table of open handles in
+runtime/gem_builtins_sqlite.c and raise on an unknown one.
+
+### `std/http` request headers keep the client's case
+
+`req.headers["content-type"]` is `nil` when the client sent
+`Content-Type`, and the other way round; `Cookie` is looked up in that
+exact case only, so `cookie: a=1` gives empty `req.cookies`. A header
+written without a space after the colon (`Host:x`, valid HTTP) is
+dropped. `parse_headers` in std/http.gem splits on `": "`. Lowercase the
+names, trim optional whitespace, and document the `req.headers` keys.
 
 ### `sqlite_query` doesn't check its parameters
 
