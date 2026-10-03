@@ -29,7 +29,7 @@ load "../compiler/loader" (resolve_load_path)
 # Names the desugar layer (param destructuring, let destructuring, for
 # loops) introduces. They aren't user-visible — keep them out of the
 # symbol table so completion / outline never surfaces them. The gensym
-# convention is `_pdestr<N>`, `_d<N>`, `_for_<role>_<N>`; we filter the
+# convention is `_pdestr<N>`, `_d<N>`, `_d<N>v`, `_for_<role>_<N>`; we filter the
 # prefix plus a digit to avoid hiding ordinary user names like `_data`.
 fn is_gensym(name)
   if string.starts_with(name, "_pdestr")

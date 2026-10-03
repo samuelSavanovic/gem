@@ -27,6 +27,7 @@ expected=(
   "closure_undeclared:7:7"
   "closure_undeclared_assign:3:3"
   "closure_later_let:2:2"
+  "closure_body_later:3:3"
   "dotdot_concat:1:1"
   "header_block:3:3"
   "interp_bad_expr:2:2"

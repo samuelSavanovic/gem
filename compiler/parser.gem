@@ -105,6 +105,26 @@ fn make_parser(tokens, source, file, sink)
   end
   let pos = 0
   let gensym_counter = 0
+  # One destructured binding `name = value` with an optional default that
+  # fires when the value is nil. The default is evaluated into a temp
+  # before `let name`, so a default reading `name` sees the binding it
+  # shadows (as any `let` initializer does), and only when it is needed.
+  let push_destructured = fn(stmts, name, value, dflt, line)
+    if dflt == nil
+      push(stmts, make_let(name, value, line))
+      return nil
+    end
+    gensym_counter += 1
+    let tmp = "_d{gensym_counter}v"
+    push(stmts, make_let(tmp, value, line))
+    push(stmts, make_if(
+      make_binop("==", make_var(tmp), make_nil_node()),
+      [make_assign(tmp, dflt, line)],
+      [],
+      line
+    ))
+    push(stmts, make_let(name, make_var(tmp), line))
+  end
   let fn_depth = 0
   # > 0 while parsing an if / while / for header. No trailing block is
   # taken there, so `x do` / `f() do` is reported as a stray Lua/Ruby-style
@@ -314,15 +334,7 @@ fn make_parser(tokens, source, file, sink)
         # Bind each named field as a local. Per-field defaults fire when the
         # extracted value is nil (key missing or value explicitly nil).
         for di = 0, len(dnames)
-          push(prelude, make_let(dnames[di], make_dot(make_var(pname), dnames[di]), dline))
-          if ddflts[di] != nil
-            push(prelude, make_if(
-              make_binop("==", make_var(dnames[di]), make_nil_node()),
-              [make_assign(dnames[di], ddflts[di], dline)],
-              [],
-              dline
-            ))
-          end
+          push_destructured(prelude, dnames[di], make_dot(make_var(pname), dnames[di]), ddflts[di], dline)
         end
 
         # The prelude is part of the body, so it reruns on every iteration of
@@ -1128,15 +1140,7 @@ fn make_parser(tokens, source, file, sink)
         let tmp = "_d{gensym_counter}"
         let stmts = [make_let(tmp, rhs, line)]
         for di = 0, len(names)
-          push(stmts, make_let(names[di], make_dot(make_var(tmp), names[di]), line))
-          if dflts[di] != nil
-            push(stmts, make_if(
-              make_binop("==", make_var(names[di]), make_nil_node()),
-              [make_assign(names[di], dflts[di], line)],
-              [],
-              line
-            ))
-          end
+          push_destructured(stmts, names[di], make_dot(make_var(tmp), names[di]), dflts[di], line)
         end
         return {tag: "block", stmts: stmts}
       end
@@ -1172,15 +1176,7 @@ fn make_parser(tokens, source, file, sink)
         let tmp = "_d{gensym_counter}"
         let stmts = [make_let(tmp, rhs, line)]
         for di = 0, len(names)
-          push(stmts, make_let(names[di], make_index(make_var(tmp), make_int(di)), line))
-          if dflts[di] != nil
-            push(stmts, make_if(
-              make_binop("==", make_var(names[di]), make_nil_node()),
-              [make_assign(names[di], dflts[di], line)],
-              [],
-              line
-            ))
-          end
+          push_destructured(stmts, names[di], make_index(make_var(tmp), make_int(di)), dflts[di], line)
         end
         return {tag: "block", stmts: stmts}
       end

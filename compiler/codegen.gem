@@ -288,9 +288,10 @@ end
 #
 # The same holds for a use before the declaration when it is not inside a
 # block of the declaration's scope, e.g. a `while` condition reading a
-# `let` of the loop body (`ctx.later`: every let of the current named fn
-# or top-level code outside closures). Inside a closure such a use (a
-# closure calling itself through the let it initializes, or reading a let
+# `let` of the loop body (`ctx.later`: every let of the body being walked,
+# the current named fn, closure or top-level code, outside nested
+# closures). A closure's use of a let of an enclosing body (`ctx.outer_later`:
+# a closure calling itself through the let it initializes, or reading a let
 # made after it) is reported too, as "later_closure": the closure's env is
 # built when it is created, before the let exists.
 fn shadow_check_use(node, name, env, ctx)
@@ -303,11 +304,9 @@ fn shadow_check_use(node, name, env, ctx)
   if has_key(ctx.ended, name)
     ctx.report(node, name, "ended", ctx.ended[name])
   elif has_key(ctx.later, name)
-    if ctx.closure_depth == 0
-      ctx.report(node, name, "later", ctx.later[name])
-    else
-      ctx.report(node, name, "later_closure", ctx.later[name])
-    end
+    ctx.report(node, name, "later", ctx.later[name])
+  elif has_key(ctx.outer_later, name)
+    ctx.report(node, name, "later_closure", ctx.outer_later[name])
   end
 end
 
@@ -334,14 +333,16 @@ end
 
 # A named fn (or the top-level code): its own scope-tracking state.
 fn shadow_named_fn(node, ctx)
-  let saved = {ended: ctx.ended, later: ctx.later, depth: ctx.closure_depth}
+  let saved = {ended: ctx.ended, later: ctx.later, outer_later: ctx.outer_later, depth: ctx.closure_depth}
   ctx.ended = {}
   ctx.later = {}
+  ctx.outer_later = {}
   shadow_collect_lets(node.body, ctx.later)
   ctx.closure_depth = 0
   shadow_fn(node, {}, ctx)
   ctx.ended = saved.ended
   ctx.later = saved.later
+  ctx.outer_later = saved.outer_later
   ctx.closure_depth = saved.depth
 end
 
@@ -439,9 +440,22 @@ shadow_node = fn(node, env, mode, ctx)
     # Named fns are module-level and never see block locals.
     shadow_named_fn(node, ctx)
   elif tag == "anon_fn"
+    # The closure body's own lets are its `later`; the enclosing bodies'
+    # lets become `outer_later`.
+    let saved_later = ctx.later
+    let saved_outer = ctx.outer_later
+    let outer = copy_scope_env(saved_outer)
+    for k, v in saved_later
+      outer[k] = v
+    end
+    ctx.outer_later = outer
+    ctx.later = {}
+    shadow_collect_lets(node.body, ctx.later)
     ctx.closure_depth = ctx.closure_depth + 1
     shadow_fn(node, env, ctx)
     ctx.closure_depth = ctx.closure_depth - 1
+    ctx.later = saved_later
+    ctx.outer_later = saved_outer
   elif tag == "if"
     shadow_node(node.cond, env, mode, ctx)
     shadow_stmts(node.then, env, cm, ctx)
@@ -515,7 +529,7 @@ fn scope_shadowing_lets(fn_defs, top_stmts, builtins, externs, report)
     set_add(fns, fd.name)
   end
   let ctx = {globals: globals, fns: fns, builtins: builtins, n: 0,
-             externs: {}, lines: {}, ended: {}, later: {}, closure_depth: 0,
+             externs: {}, lines: {}, ended: {}, later: {}, outer_later: {}, closure_depth: 0,
              report: report}
   for e in externs
     set_add(ctx.externs, e)

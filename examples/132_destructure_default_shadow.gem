@@ -1,0 +1,41 @@
+# Destructuring defaults: a default that reads the name it binds sees the
+# binding it shadows (a param or module global), like any `let` initializer.
+# The default is evaluated only when the value is nil, and a later field's
+# default sees the earlier fields.
+
+fn bump_port(port)
+  let {port = port + 1} = {}
+  port
+end
+print(bump_port(8080))
+
+fn bump_n(n)
+  let [n = n + 1] = []
+  n
+end
+print(bump_n(41))
+
+let scale = 5
+fn scaled({scale = scale * 2})
+  scale
+end
+print(scaled({}))
+print(scaled({scale: 3}))
+
+fn pair({a, b = a + 1})
+  [a, b]
+end
+print(pair({a: 1}))
+print(pair({a: 1, b: 9}))
+
+let {a, b = a * 10, c = 7} = {a: 2, c: nil}
+print(a, b, c)
+
+let calls = 0
+fn fallback()
+  calls += 1
+  99
+end
+let {q = fallback()} = {q: 1}
+let {r = fallback()} = {}
+print(q, r, calls)

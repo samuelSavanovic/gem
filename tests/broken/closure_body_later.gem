@@ -1,0 +1,26 @@
+# A use before a `let` of the same closure body is an error, as in a named
+# fn body (3 errors): a read before the let, a `while` condition reading a
+# let of the loop body inside a process body, and a closure in a process
+# body calling itself through the let it initializes.
+fn m()
+  let outer = fn()
+    print(z)
+    let z = 5
+    z
+  end
+  outer()
+end
+m()
+
+let p = spawn do
+  let i = 0
+  while w == nil and i < 3
+    i += 1
+    let w = 1
+  end
+  let fact = fn(n)
+    if n == 0 then return 1 end
+    n * fact(n - 1)
+  end
+  print(fact(i))
+end
