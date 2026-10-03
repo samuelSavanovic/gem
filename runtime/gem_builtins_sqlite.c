@@ -190,15 +190,38 @@ GemVal gem_sqlite_exec_fn(void *_env, GemVal *args, int argc) {
     if (argc < 2 || args[1].type != VAL_STRING) {
         gem_error("sqlite_exec: expected (db, sql)");
     }
+    /* Runs the statements one at a time, like sqlite3_exec, but refuses one
+       with placeholders: sqlite_exec has nothing to bind them to, and
+       sqlite would run it with NULLs. Statements before a failing one have
+       run. */
     const char *sql = args[1].sval;
-
-    char *errmsg = NULL;
-    int rc = sqlite3_exec(db, sql, NULL, NULL, &errmsg);
-    if (rc != SQLITE_OK) {
-        char buf[512];
-        snprintf(buf, sizeof(buf), "sqlite_exec: %s", errmsg ? errmsg : "unknown error");
-        sqlite3_free(errmsg);
-        gem_error(buf);
+    const char *end = sql + args[1].slen;
+    int n = 0;
+    while (sql < end) {
+        sqlite3_stmt *stmt = NULL;
+        const char *tail = NULL;
+        int rc = sqlite3_prepare_v2(db, sql, (int)(end - sql), &stmt, &tail);
+        if (rc != SQLITE_OK) {
+            char buf[512];
+            snprintf(buf, sizeof(buf), "sqlite_exec: %s", sqlite3_errmsg(db));
+            gem_error(buf);
+        }
+        if (stmt == NULL) break;   /* only whitespace or comments left */
+        n++;
+        if (sqlite3_bind_parameter_count(stmt) > 0) {
+            char buf[160];
+            snprintf(buf, sizeof(buf), "sqlite_exec: statement %d has parameters; use sqlite_query to bind them", n);
+            sqlite3_finalize(stmt);
+            gem_error(buf);
+        }
+        while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {}
+        sqlite3_finalize(stmt);
+        if (rc != SQLITE_DONE) {
+            char buf[512];
+            snprintf(buf, sizeof(buf), "sqlite_exec: %s", sqlite3_errmsg(db));
+            gem_error(buf);
+        }
+        sql = tail;
     }
     return GEM_NIL;
 }
@@ -212,13 +235,27 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
         gem_error("sqlite_query: expected (db, sql[, params])");
     }
     const char *sql = args[1].sval;
+    const char *end = sql + args[1].slen;
 
-    sqlite3_stmt *stmt;
-    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    sqlite3_stmt *stmt = NULL;
+    const char *tail = NULL;
+    int rc = sqlite3_prepare_v2(db, sql, (int)(end - sql), &stmt, &tail);
     if (rc != SQLITE_OK) {
         char buf[512];
         snprintf(buf, sizeof(buf), "sqlite_query: %s", sqlite3_errmsg(db));
         gem_error(buf);
+    }
+    /* One statement only: the parameters are for it, and sqlite would
+       silently skip the rest. Anything but whitespace and comments after it
+       is refused before anything runs. */
+    if (stmt != NULL && tail != NULL && tail < end) {
+        sqlite3_stmt *next = NULL;
+        int rc2 = sqlite3_prepare_v2(db, tail, (int)(end - tail), &next, NULL);
+        if (rc2 != SQLITE_OK || next != NULL) {
+            if (next) sqlite3_finalize(next);
+            sqlite3_finalize(stmt);
+            gem_error("sqlite_query: expected one SQL statement, got several (sqlite_exec runs several, without parameters)");
+        }
     }
 
     /* Bind the parameters. Every error path finalizes the statement before
@@ -232,7 +269,8 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
         sqlite3_finalize(stmt);
         gem_error(buf);
     }
-    int want = sqlite3_bind_parameter_count(stmt);
+    /* Empty or comment-only SQL: no statement, no rows. */
+    int want = stmt ? sqlite3_bind_parameter_count(stmt) : 0;
     int got = params ? params->len : 0;
     if (want != got) {
         char buf[128];
@@ -281,6 +319,7 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
     }
 
     GemVal result = gem_table_new();
+    if (stmt == NULL) return result;
     int row_idx = 0;
     int col_count = sqlite3_column_count(stmt);
 
@@ -299,7 +338,12 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
                     val = gem_float(sqlite3_column_double(stmt, c));
                     break;
                 case SQLITE_TEXT:
-                    val = gem_string((const char *)sqlite3_column_text(stmt, c));
+                {
+                    /* column_bytes after column_text: the text's length,
+                       NULs included. */
+                    const char *text = (const char *)sqlite3_column_text(stmt, c);
+                    val = gem_string_with_len(text, sqlite3_column_bytes(stmt, c));
+                }
                     break;
                 case SQLITE_BLOB: {
                     const void *blob = sqlite3_column_blob(stmt, c);

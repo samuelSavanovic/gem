@@ -109,11 +109,7 @@ GemVal gem_has_key_fn(void *_env, GemVal *args, int argc) {
 
     /* String key: use hash index */
     if (key.type == VAL_STRING) {
-        if (t->str_index != NULL) {
-            ptrdiff_t idx = shgeti(t->str_index, key.sval);
-            if (idx >= 0) return gem_bool(1);
-        }
-        return gem_bool(0);
+        return gem_bool(gem_str_index_get(t->str_index, key.sval, key.slen) >= 0);
     }
 
     /* Integer key: try direct array indexing */
@@ -170,8 +166,7 @@ GemVal gem_in_fn(void *_env, GemVal *args, int argc) {
 
     /* String-keyed table: check if needle is a key */
     if (needle.type == VAL_STRING) {
-        ptrdiff_t idx = shgeti(t->str_index, needle.sval);
-        return gem_bool(idx >= 0);
+        return gem_bool(gem_str_index_get(t->str_index, needle.sval, needle.slen) >= 0);
     }
 
     /* Fallback: linear scan of keys */
@@ -194,10 +189,7 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
     gem_table_index(t);
 
     if (key.type == VAL_STRING) {
-        if (t->str_index != NULL) {
-            ptrdiff_t idx = shgeti(t->str_index, key.sval);
-            if (idx >= 0) pos = t->str_index[idx].value;
-        }
+        pos = gem_str_index_get(t->str_index, key.sval, key.slen);
     } else {
         for (int i = 0; i < t->len; i++) {
             if (gem_val_eq(t->keys[i], key)) { pos = i; break; }
@@ -207,9 +199,7 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
     if (pos < 0) return GEM_NIL;
     GemVal removed = t->vals[pos];
 
-    if (key.type == VAL_STRING && t->str_index != NULL) {
-        shdel(t->str_index, key.sval);
-    }
+    if (key.type == VAL_STRING) gem_str_index_del(t->str_index, key.sval, key.slen);
 
     int last = t->len - 1;
     if (pos < last) {
@@ -217,7 +207,7 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
         t->keys[pos] = moved_key;
         t->vals[pos] = t->vals[last];
         if (moved_key.type == VAL_STRING && t->str_index != NULL) {
-            shput(t->str_index, moved_key.sval, pos);
+            gem_str_index_put(&t->str_index, moved_key.sval, moved_key.slen, pos);
         }
     }
     t->len--;
@@ -238,9 +228,7 @@ GemVal gem_pop_fn(void *_env, GemVal *args, int argc) {
     t->len--;
     GemVal removed = t->vals[t->len];
     GemVal removed_key = t->keys[t->len];
-    if (removed_key.type == VAL_STRING && t->str_index != NULL) {
-        shdel(t->str_index, removed_key.sval);
-    }
+    if (removed_key.type == VAL_STRING) gem_str_index_del(t->str_index, removed_key.sval, removed_key.slen);
     t->shape_id++;
     return removed;
 }
@@ -260,8 +248,6 @@ GemVal gem_values_fn(void *_env, GemVal *args, int argc) {
 }
 
 /* ─── Built-in: sort (in-place, optional comparator) ─── */
-
-static GemVal gem_sort_cmp_fn_global;
 
 static int gem_default_cmp(const void *a, const void *b) {
     GemVal va = *(const GemVal *)a;
@@ -288,15 +274,55 @@ static int gem_default_cmp(const void *a, const void *b) {
     return (int)va.type - (int)vb.type;
 }
 
-static int gem_custom_cmp(const void *a, const void *b) {
-    GemVal cmp_args[2] = {*(const GemVal *)a, *(const GemVal *)b};
-    GemVal result = gem_sort_cmp_fn_global.fn(gem_sort_cmp_fn_global.env, cmp_args, 2);
+/* A user comparator runs Gem code, which can sort again (a nested sort) or
+   yield to another process that sorts (at a loop back-edge), so its state
+   lives in this call's C frame, never in a global. It can also raise, which
+   longjmps out of the sort: the merge sort below works on an arena copy and
+   only writes the table back once it is done, so an error leaves the table
+   as it was, and the arena copy needs no freeing. */
+static int gem_call_cmp(GemVal cmp, GemVal a, GemVal b) {
+    GemVal cmp_args[2] = {a, b};
+    GemVal result = cmp.fn(cmp.env, cmp_args, 2);
     if (result.type == VAL_INT) {
         int64_t v = result.ival;
         return (v > 0) - (v < 0);
     }
     if (result.type == VAL_FLOAT) return (result.fval > 0) - (result.fval < 0);
     return 0;
+}
+
+/* Stable merge sort of src[0..n) into dst (both n long; src is clobbered). */
+static void gem_merge_sort(GemVal cmp, GemVal *src, GemVal *dst, int n) {
+    /* Insertion-sort runs of 8 in src, then merge runs back and forth. */
+    const int RUN = 8;
+    for (int lo = 0; lo < n; lo += RUN) {
+        int hi = lo + RUN < n ? lo + RUN : n;
+        for (int i = lo + 1; i < hi; i++) {
+            GemVal v = src[i];
+            int j = i;
+            while (j > lo && gem_call_cmp(cmp, src[j - 1], v) > 0) {
+                src[j] = src[j - 1];
+                j--;
+            }
+            src[j] = v;
+        }
+    }
+    GemVal *from = src, *to = dst;
+    for (int width = RUN; width < n; width *= 2) {
+        for (int lo = 0; lo < n; lo += 2 * width) {
+            int mid = lo + width < n ? lo + width : n;
+            int hi = lo + 2 * width < n ? lo + 2 * width : n;
+            int i = lo, j = mid, k = lo;
+            while (i < mid && j < hi) {
+                if (gem_call_cmp(cmp, from[j], from[i]) < 0) to[k++] = from[j++];
+                else to[k++] = from[i++];
+            }
+            while (i < mid) to[k++] = from[i++];
+            while (j < hi) to[k++] = from[j++];
+        }
+        GemVal *t = from; from = to; to = t;
+    }
+    if (from != dst) memcpy(dst, from, (size_t)n * sizeof(GemVal));
 }
 
 GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
@@ -308,8 +334,14 @@ GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
     if (t->len <= 1) return args[0];
 
     if (argc >= 2 && args[1].type == VAL_FN) {
-        gem_sort_cmp_fn_global = args[1];
-        qsort(t->vals, (size_t)t->len, sizeof(GemVal), gem_custom_cmp);
+        int n = t->len;
+        GemVal *buf = (GemVal *)gem_alloc((size_t)n * 2 * sizeof(GemVal));
+        memcpy(buf, t->vals, (size_t)n * sizeof(GemVal));
+        gem_merge_sort(args[1], buf, buf + n, n);
+        /* The comparator may have resized the table meanwhile. */
+        if (t->len != n) gem_error("sort: the comparator changed the length of the table being sorted");
+        memcpy(t->vals, buf + n, (size_t)n * sizeof(GemVal));
+        gem_table_written(t);
     } else {
         qsort(t->vals, (size_t)t->len, sizeof(GemVal), gem_default_cmp);
     }

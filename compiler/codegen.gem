@@ -3676,7 +3676,12 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(b, "    gem_table_set({t}, gem_int({c_int_literal(entry.int_key)}), {val_r.expr});\n")
       else
         let escaped = escape_c_string(entry.key)
-        buf_push(b, "    gem_table_set({t}, gem_string(\"{escaped}\"), {val_r.expr});\n")
+        let key_c = "gem_string(\"{escaped}\")"
+        if len(str_replace(entry.key, "\0", "")) != len(entry.key)
+          # gem_string stops at the first NUL.
+          key_c = "gem_string_with_len(\"{escaped}\", {len(entry.key)})"
+        end
+        buf_push(b, "    gem_table_set({t}, {key_c}, {val_r.expr});\n")
       end
     end
     if node.frozen == true
@@ -4445,7 +4450,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     if after_ms != nil
       let ms_r = compile_expr(after_ms)
       buf_push(b, ms_r.setup)
-      buf_push(b, "{p}int64_t {deadline_tmp} = gem_now_ms() + (int64_t)({ms_r.expr}).ival;\n")
+      buf_push(b, "{p}int64_t {deadline_tmp} = gem_after_deadline({ms_r.expr});\n")
     end
 
     buf_push(b, "{p}while (1) \{\n")

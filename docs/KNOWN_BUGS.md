@@ -153,154 +153,19 @@ because of it.
 
 ## Runtime
 
-### `INT64_MIN / -1` kills the program on x86-64
+### Int `+`, `-` and `*` overflow is undefined behaviour in C
 
 ```gem
-let m = -9223372036854775807 - 1
-let d = -1
-print(m / d)      # x86-64: Floating point exception, exit 136
+let m = 9223372036854775807
+print(m + 1)      # -9223372036854775808 in practice
 ```
 
-`%` does the same. The constant folder hits it too: on x86-64, compiling
-`print(-9223372036854775808 / -1)` crashes the compiler (exit 136). On
-arm64 nothing traps (AArch64 `sdiv` doesn't): `/` gives `INT64_MIN` and
-`%` gives `0`. Either way it is undefined behaviour in C. `gem_div`/
-`gem_mod` in runtime/gem_ops.c and `try_fold_binop` in compiler/fold.gem
-should raise (or wrap) instead. Relatedly, int `+`, `-` and `*` overflow
-is signed-overflow undefined behaviour in C (no `-fwrapv`); it wraps in
-practice.
-
-### A non-integer `after` timeout is read as raw bits; a huge one expires at once
-
-```gem
-receive
-after nil then print("no wait")
-end
-```
-
-runs at once instead of raising: the timeout's `.ival` is read with no
-type check (`compile_receive_match` in compiler/codegen.gem), so the
-value's raw payload is taken as milliseconds. `nil` waits 0 ms and `true`
-1 ms; a float waits its bit pattern read as an int (`1.5` is about
-4.6e18 ms, i.e. forever; `0.0` is 0); a string or a table waits its
-pointer value, which in practice is forever (`after "abc"` still waits
-when another process exits). A non-integer timeout should raise.
-
-An int timeout close to `INT64_MAX` times out at once instead of waiting
-(practically) forever:
-
-```gem
-let t0 = time_ms()
-receive
-when "never" then nil
-after 9223372036854775807 then print("timed out after", time_ms() - t0, "ms")
-end
-```
-
-prints `timed out after 0 ms`: the deadline is computed as
-`gem_now_ms() + (int64_t)ms` (`compile_receive_match` in
-compiler/codegen.gem), which overflows to a negative time already past.
-The runtime does the same for `send_after(pid, msg, ms)` (delivered at
-once; `gem_send_after_builtin` in runtime/gem_scheduler.c) and `sleep(ms)`
-(the deadline goes negative, which reads as "no deadline", so a lone main
-process reports a deadlock; `gem_sleep_builtin`). The std timeouts built
-on them (`gen_server.call`, `task.await`, `task.await_all`, the
-`supervisor` and `dynamic_supervisor` requests and `stop`, a gen_server
-callback's `timeout`) inherit it: a timeout this large raises `...:
-timeout` at once. Use `nil` (no timeout) to wait forever. The deadline
-should saturate at `INT64_MAX`.
-
-### `s = s + x` in a loop skips the `+` type check
-
-```gem
-fn f()
-  let s = ""
-  let i = 0
-  while i < 3
-    s = s + i
-    i += 1
-  end
-  s
-end
-print(f())        # 012, but "" + 1 raises a type error elsewhere
-```
-
-Codegen turns `s = s + x` inside a loop into `gem_string_append`
-(`decompose_concat`/`find_append_vars` in compiler/codegen.gem,
-runtime/gem_ops.c), which appends any value's `to_string` form instead
-of raising like `+`.
-
-### Printing a table cuts strings at an embedded NUL
-
-`let t = ["a\0b"]` / `print(len(t[0]), t)` prints `3 ["a"]`. `fmt_value`
-in runtime/gem_builtins_core.c (used by `print`, `to_string` and
-interpolation of tables) writes strings with `strlen`, not `slen`.
-
-### sqlite: empty SQL, placeholders in `sqlite_exec`, several statements
-
-```gem
-let db = sqlite_open(":memory:")
-pcall(fn() sqlite_query(db, "", []) end)         # error "sqlite_query: not an error"
-sqlite_exec(db, "CREATE TABLE t(x)")
-sqlite_exec(db, "INSERT INTO t VALUES (?)")      # inserts NULL, no error
-sqlite_query(db, "INSERT INTO t VALUES (1); INSERT INTO t VALUES (2)", [])
-print(sqlite_query(db, "SELECT count(*) AS n FROM t", []))   # [{n: 2}]: the 2nd INSERT never ran
-```
-
-Empty or comment-only SQL should return `[]`; `sqlite_exec` should raise
-on a statement with parameters; `sqlite_query` should run (or reject)
-the text after the first statement. runtime/gem_builtins_sqlite.c.
-
-### sqlite: TEXT values stop at a NUL
-
-```gem
-let db = sqlite_open(":memory:")
-let r = sqlite_query(db, "SELECT ? AS s", ["x\0y"])
-print(len(r[0].s))                                 # 1, not 3
-```
-
-TEXT columns are read back with `gem_string` (strlen), so a string with an
-embedded NUL is cut short; use `sqlite3_column_bytes`.
-runtime/gem_builtins_sqlite.c.
-
-### `sort` keeps the comparator in a global shared by all processes
-
-```gem
-let groups = [[3, 1], [9, 8], [5, 4]]
-sort(groups, fn(a, b)
-  sort(a, fn(x, y) x - y end)
-  a[0] - b[0]
-end)
-print(groups)
-```
-
-fails with `type error in -: got table and table` at the inner
-comparator: the `sort` builtin stores the comparator in `static GemVal
-gem_sort_cmp_fn_global` (runtime/gem_builtins_collection.c) and calls
-`qsort`, so a nested sort replaces it and the outer `qsort` goes on
-calling the inner comparator. Two processes sorting at once do the same
-when a comparator has a loop (the scheduler can switch processes at its
-back-edge): the array comes back unsorted, with no error. Keep the
-comparator per call (`qsort_r`, or a sort of our own that passes it
-along), saved and restored across a yield.
-
-### String table keys stop at the first NUL
-
-```gem
-let t = {}
-t["a\0b"] = 1
-t["a\0c"] = 2
-print(len(t), t["a\0zzz"], t["a"])   # 1 2 2
-```
-
-The string-key index of a table (`shput`/`shgeti` in runtime/gem_core.c)
-is stb_ds's C-string hash map, which hashes and compares with
-`strlen`/`strcmp`, while `==` compares `slen` bytes. Keys that differ only
-after a NUL are the same key, so `table.unique`, `table.group_by`,
-`url.parse_query`, `mime.lookup` and `json.parse` (object keys with
-`\u0000`) merge them, and `test.assert_eq` calls two tables equal whose
-keys differ only after a NUL (`mime.lookup("x.html\0")`
-is `text/html`). Hash and compare string keys by `slen`.
+`gem_add`/`gem_sub`/`gem_mul` in runtime/gem_ops.c (and the constant
+folder, compiler/fold.gem, which runs them) overflow signed 64-bit ints
+with no `-fwrapv`, so the wrap SPEC promises is what the C compilers do in
+practice, not what C guarantees; an optimizer may assume it never
+happens. Compute in `uint64_t` and convert back, as `gem_div` does for
+`INT64_MIN / -1`.
 
 ## Standard library
 

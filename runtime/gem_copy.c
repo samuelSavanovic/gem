@@ -524,7 +524,7 @@ void gem_deep_free_n(const GemVal *vals, int nvals) {
                     GEM_FREE_PUSH(t->keys[i]);
                     GEM_FREE_PUSH(t->vals[i]);
                 }
-                if (t->str_index) shfree(t->str_index);
+                gem_str_index_free(&t->str_index);
                 /* keys/vals were copied onto the stack above */
                 free(t->keys);
                 free(t->vals);
@@ -804,7 +804,7 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
         }
         if (rekey && (t->str_index || t->index_stale)) {
             /* str_index stores key pointers: rebuild it on next use. */
-            if (t->str_index) shfree(t->str_index);
+            gem_str_index_free(&t->str_index);
             t->str_index = NULL;
             t->index_stale = 1;
         }
@@ -862,10 +862,7 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
     /* Region tables are garbage now (live ones were copied): free their
        malloc'd string indexes, then unmap the region's blocks. */
     for (GemTable *t = post_tables; t && t != mark->tables; t = t->arena_next) {
-        if (t->str_index) {
-            shfree(t->str_index);
-            t->str_index = NULL;
-        }
+        gem_str_index_free(&t->str_index);
     }
     (void)post_buffers;
     size_t region_bytes = 0;

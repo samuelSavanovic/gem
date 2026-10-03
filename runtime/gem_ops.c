@@ -43,6 +43,8 @@ GemVal gem_mul(GemVal a, GemVal b) {
 GemVal gem_div(GemVal a, GemVal b) {
     if (a.type == VAL_INT && b.type == VAL_INT) {
         if (b.ival == 0) gem_error("division by zero");
+        /* INT64_MIN / -1 overflows (a trap on x86-64): wrap, like + - *. */
+        if (b.ival == -1) return gem_int((int64_t)(0 - (uint64_t)a.ival));
         return gem_int(a.ival / b.ival);
     }
     if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
@@ -57,6 +59,7 @@ GemVal gem_div(GemVal a, GemVal b) {
 GemVal gem_mod(GemVal a, GemVal b) {
     if (a.type == VAL_INT && b.type == VAL_INT) {
         if (b.ival == 0) gem_error("division by zero");
+        if (b.ival == -1) return gem_int(0);   /* INT64_MIN % -1 traps on x86-64 */
         return gem_int(a.ival % b.ival);
     }
     { char buf[128]; snprintf(buf, sizeof(buf), "type error in %%: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
@@ -98,6 +101,13 @@ GemVal gem_neg(GemVal a) {
 }
 
 void gem_string_append(GemVal *accum, GemVal rhs) {
+    /* `s = s + x` with s a string: x must be a string too, as for `+`
+       (the accumulator is a buffer only while it stands for a string). */
+    if ((accum->type == VAL_BUFFER || accum->type == VAL_STRING) && rhs.type != VAL_STRING) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "type error in +: got string and %s", gem_type_str(rhs));
+        gem_error(buf);
+    }
     if (accum->type == VAL_BUFFER) {
         GemVal args[2] = {*accum, rhs};
         gem_buf_push_fn(NULL, args, 2);

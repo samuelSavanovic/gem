@@ -690,7 +690,7 @@ end
 
 Without the `^`, `ref: ref` would bind whatever ref the first reply carries.
 
-The `after <ms>` clause is optional. If present and the timeout elapses with no matching message, the `after` body executes. `after 0` means "check once, don't block." Omitting `after` means block forever (like `receive()`).
+The `after <ms>` clause is optional. If present and the timeout elapses with no matching message, the `after` body executes. `after 0` means "check once, don't block" (so does a negative timeout). The timeout must be an int; anything else (`nil` included) raises `receive: after expects an int (milliseconds), got <type>`. A timeout too large for the clock (up to `9223372036854775807`) waits forever, as do `sleep` and `send_after` with such a delay. Omitting `after` means block forever (like `receive()`).
 
 A `receive` may have an `after` clause and no `when` arms: it takes no message and leaves the mailbox as it is, waits `<ms>` milliseconds (messages that arrive meanwhile stay queued for a later `receive`), then evaluates to the `after` body. `after 0` returns at once. A `receive` with neither `when` arms nor `after` (`receive` directly followed by `end`) is a compile error.
 
@@ -868,7 +868,7 @@ The wrapper checks the Gem-level type of each argument and that enough arguments
 
 `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `not`, `in`
 
-`%` takes integers only (a float operand raises). Integer division and `%` by zero raise `division by zero`, and so does float division by zero (no `inf`). `<`, `<=`, `>`, `>=` compare an int with a float numerically, but `==` never equates them (`2 == 2.0` is `false`).
+`%` takes integers only (a float operand raises). Integer division and `%` by zero raise `division by zero`, and so does float division by zero (no `inf`). Integer arithmetic wraps on overflow (two's complement), division included: `INT64_MIN / -1` is `INT64_MIN`, and `INT64_MIN % -1` is `0`. `<`, `<=`, `>`, `>=` compare an int with a float numerically, but `==` never equates them (`2 == 2.0` is `false`).
 
 `x in tbl` — membership test. For tables with no string keys (arrays, and int-keyed tables such as `seen[5] = true`): returns `true` if `x` equals any value (linear scan), so use `has_key` to test an int key. For string-keyed tables: returns `true` if `x` is a key in the table (same as `has_key(tbl, x)`). Precedence is at the comparison level (same as `==`, `<`, etc.).
 
@@ -1089,7 +1089,7 @@ Running out of stack is an ordinary runtime error, not a crash:
 
 `type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`, `"ref"`, `"buffer"`.
 
-`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string. For tables and arrays, recursively renders a `{key: val, ...}` / `[v1, v2, ...]` form (cycles render as `<cycle>`; deep/wide structures truncate with `...`). Same repr is used by `print`, `eprint`, and `"{x}"` interpolation, except for buffers, which those show as `<buffer:N>` (N is the length); call `to_string(buf)` for the contents. Floats are formatted as described under "Numbers" in Values and Types (`to_string(2.0)` is `"2.0"`, `to_string(1234567.89)` is `"1234567.89"`); `buf_push` and `build_string`'s `add` format them the same way.
+`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string. For tables and arrays, recursively renders a `{key: val, ...}` / `[v1, v2, ...]` form (cycles render as `<cycle>`; deep/wide structures truncate with `...`). Strings inside render quoted, with `"`, `\\`, newline, tab, CR and NUL escaped (`["a\0b"]`), and every byte kept; a string key that is a plain identifier renders bare. Same repr is used by `print`, `eprint`, and `"{x}"` interpolation, except for buffers, which those show as `<buffer:N>` (N is the length); call `to_string(buf)` for the contents. Floats are formatted as described under "Numbers" in Values and Types (`to_string(2.0)` is `"2.0"`, `to_string(1234567.89)` is `"1234567.89"`); `buf_push` and `build_string`'s `add` format them the same way.
 
 `to_int(v)` — converts a value to an integer. Strings are parsed as decimal integers; leading spaces are skipped, but trailing whitespace (a `\n` from a file line included) is an error, so `trim` first. Floats are truncated. Bools become 0/1. Errors on nil, tables, functions, or unparseable strings.
 
@@ -1181,7 +1181,7 @@ end
 
 `sort(arr)` — sorts an array table in place using the default ordering (numbers < strings, within type: numeric/lexicographic). Returns the table. Renumbers keys to 0..n-1.
 
-`sort(arr, cmp)` — sorts with a custom comparator function. `cmp(a, b)` must return a negative number if a < b, 0 if equal, positive if a > b.
+`sort(arr, cmp)` — sorts with a custom comparator function. `cmp(a, b)` must return a negative number if a < b, 0 if equal, positive if a > b. The sort is stable (elements the comparator calls equal keep their order). A comparator may sort other arrays itself, and may run while other processes sort. If it raises, the error propagates and the array is left as it was; one that changes the length of the array being sorted raises `sort: the comparator changed the length of the table being sorted`.
 
 `floor(x)` — returns the largest integer ≤ x. Returns the value unchanged if already an integer.
 
@@ -1267,9 +1267,9 @@ All TCP builtins use non-blocking sockets with scheduler poll integration. The s
 
 Every `sqlite_*` builtin that takes a handle raises a catchable error prefixed with its name when the handle is not an int (`sqlite_query: expected a database handle, got string`) or is not an open handle: never returned by `sqlite_open`, or already closed, a second `sqlite_close` included (`sqlite_close: not an open database handle`).
 
-`sqlite_exec(db, sql)` — executes SQL that returns no rows (DDL, INSERT without RETURNING, etc.). Inline execution (no thread pool). Raises on error.
+`sqlite_exec(db, sql)` — executes SQL that returns no rows (DDL, INSERT without RETURNING, etc.). `sql` may hold several statements, run in order (rows a statement returns are dropped); empty or comment-only SQL does nothing. A statement with placeholders raises `sqlite_exec: statement <n> has parameters; use sqlite_query to bind them`, since there is nothing to bind them to. Inline execution (no thread pool). Raises on error; the statements before the failing one have run.
 
-`sqlite_query(db, sql, params)` — executes a parameterized query. `params` is an array of bind values matching the placeholders in `sql` (`?`, `?N`, `:name`, ...): element `i` binds parameter `i + 1` (a `:name` placeholder's number is its position among the statement's parameters), whatever order the elements were added in. It may be omitted or `nil` when the statement has none. A table with any key other than `0..n-1` raises (`sqlite_query: params must be an array, got a string key`, `sqlite_query: params must be an array (keys 0..1), got key 5`). The number of values must equal the statement's parameter count (the highest placeholder index, so `?1` used twice counts once), and each value must be nil, a bool (bound as 1/0), an int, a float or a string; otherwise `sqlite_query` raises, e.g. `sqlite_query: statement has 2 parameter(s), got 1` or `sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string`. Returns an array of row tables, where each row is a string-keyed table (e.g., `{id: 1, name: "Alice"}`). Column type mapping: INTEGER → Int, REAL → Float, TEXT → String, NULL → Nil, BLOB → String (raw bytes). Inline execution (no thread pool). Raises on error.
+`sqlite_query(db, sql, params)` — executes a parameterized query. `params` is an array of bind values matching the placeholders in `sql` (`?`, `?N`, `:name`, ...): element `i` binds parameter `i + 1` (a `:name` placeholder's number is its position among the statement's parameters), whatever order the elements were added in. It may be omitted or `nil` when the statement has none. A table with any key other than `0..n-1` raises (`sqlite_query: params must be an array, got a string key`, `sqlite_query: params must be an array (keys 0..1), got key 5`). The number of values must equal the statement's parameter count (the highest placeholder index, so `?1` used twice counts once), and each value must be nil, a bool (bound as 1/0), an int, a float or a string; otherwise `sqlite_query` raises, e.g. `sqlite_query: statement has 2 parameter(s), got 1` or `sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string`. `sql` is one statement (a trailing `;`, whitespace and comments are fine); more raises `sqlite_query: expected one SQL statement, got several (sqlite_exec runs several, without parameters)` before anything runs. Empty or comment-only SQL returns `[]`. Returns an array of row tables, where each row is a string-keyed table (e.g., `{id: 1, name: "Alice"}`). Column type mapping: INTEGER → Int, REAL → Float, TEXT → String (embedded NULs kept), NULL → Nil, BLOB → String (raw bytes). Inline execution (no thread pool). Raises on error.
 
 `sqlite_last_insert_id(db)` — returns `sqlite3_last_insert_rowid` as an int.
 

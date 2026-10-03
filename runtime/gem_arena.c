@@ -135,10 +135,7 @@ void gem_arena_destroy(GemArena *arena) {
     GemTable *t = arena->table_list;
     while (t) {
         GemTable *next = t->arena_next;
-        if (t->str_index) {
-            shfree(t->str_index);
-            t->str_index = NULL;
-        }
+        gem_str_index_free(&t->str_index);
         t = next;
     }
     arena->table_list = NULL;
