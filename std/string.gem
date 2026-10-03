@@ -171,18 +171,17 @@ fn join(arr, delim)
     error("string.join: arr must be an array, got {type(arr)}")
   end
   delim = text("join", "delim", delim)
-  for k, _ in arr
-    if type(k) != "int"
-      error("string.join: arr must be an array, got a table with key {k}")
-    end
-    break
-  end
   build_string() do |add|
+    let n = 0
     for i, x in arr
-      if i > 0
+      if i != n
+        error("string.join: arr must be an array, got a table with key {i}")
+      end
+      if n > 0
         add(delim)
       end
       add(x)
+      n += 1
     end
   end
 end

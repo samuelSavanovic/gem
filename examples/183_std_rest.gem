@@ -133,3 +133,14 @@ let arr_copy = table.copy([3, 4])
 push(arr_copy, 5)
 print("copy array", arr_copy, len(arr_copy))
 show("join record", pcall string.join({a: 1}, ","))
+
+# unique keys values by a hashed string; copy stays linear on arrays
+let big = []
+for i = 0, 40000
+  push(big, i)
+end
+print("unique big", len(table.unique(big)), len(table.copy(big)))
+let same = {}
+print("unique mixed", table.unique([1, 1.0, "1", -1, -1, 0.0, -0.0, nil, nil, true, false, same, same, {}]))
+show("sort non-table", pcall table.sort("abc"))
+show("join int keys", pcall string.join({5: "a", 7: "b"}, ","))

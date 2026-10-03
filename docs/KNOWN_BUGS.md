@@ -244,6 +244,22 @@ back-edge): the array comes back unsorted, with no error. Keep the
 comparator per call (`qsort_r`, or a sort of our own that passes it
 along), saved and restored across a yield.
 
+### String table keys stop at the first NUL
+
+```gem
+let t = {}
+t["a\0b"] = 1
+t["a\0c"] = 2
+print(len(t), t["a\0zzz"], t["a"])   # 1 2 2
+```
+
+The string-key index of a table (`shput`/`shgeti` in runtime/gem_core.c)
+is stb_ds's C-string hash map, which hashes and compares with
+`strlen`/`strcmp`, while `==` compares `slen` bytes. Keys that differ only
+after a NUL are the same key, so `table.unique`, `table.group_by`,
+`url.parse_query` and `mime.lookup` merge them (`mime.lookup("x.html\0")`
+is `text/html`). Hash and compare string keys by `slen`.
+
 ## Standard library
 
 ### A `one_for_all` restart hangs on a child that traps exits

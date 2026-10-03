@@ -3181,6 +3181,10 @@ copy int keys {10: "ten", 20: "twenty"}
 copy mixed {0: 1, 1: 2, name: "x"}
 copy array [3, 4, 5] 3
 join record raises: string.join: arr must be an array, got a table with key a
+unique big 40000 40000
+unique mixed [1, 1.0, "1", -1, 0.0, nil, true, false, {}, {}]
+sort non-table raises: table.sort: arr must be an array, got string
+join int keys raises: string.join: arr must be an array, got a table with key 5
 -- 1. calls to a dead server leave one DOWN, with the real reason
 0
 gen_server.call: server exited: boom

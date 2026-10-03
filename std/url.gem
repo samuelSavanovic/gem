@@ -96,7 +96,11 @@ fn unescape(s)
       if hi >= 0 and lo >= 0
         add(substr(t, start, at - start), chr(hi * 16 + lo))
         start = at + 3
-        at = string.index_of(t, "%", start)
+        if start < tlen and ord(t, start) == 37    # adjacent `%XX`: skip the search
+          at = start
+        else
+          at = string.index_of(t, "%", start)
+        end
       else
         at = string.index_of(t, "%", at + 1)
       end

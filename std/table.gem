@@ -7,8 +7,14 @@
 #   table.sort(users, fn(a, b) a.age - b.age end)
 #
 # Only `sort` changes its argument; the others build new tables. They
-# take arrays (`copy` takes records too): on a record, `for x in t` sees
+# take arrays (`copy` takes any table): on a record, `for x in t` sees
 # `nil` for every entry, so pass `keys(t)` or `values(t)`.
+
+# The identity of a table as an int (runtime/gem_core.c), so `unique` can
+# key tables by a hashed string. Stable during `unique`'s loop: the items
+# are older than the loop, and a region reset only moves what the loop
+# allocated.
+extern fn gem_table_id(t: Table) -> Int
 
 # True when `t` holds array entries. An empty table counts as neither.
 fn is_array(t)
@@ -151,7 +157,12 @@ end
 fn copy(tbl)
   let result = {}
   for k, v in tbl
-    result[k] = v
+    # push keeps an array's copy linear (a new int key is otherwise a scan)
+    if type(k) == "int" and k == len(result)
+      push(result, v)
+    else
+      result[k] = v
+    end
   end
   result
 end
@@ -200,21 +211,46 @@ end
 
 # Drops repeated values, keeping the first. Values are the same when `==`
 # says so: `1`, `1.0` and `"1"` all differ, and tables compare by identity.
+# A string key that stands for `item` under `==` (only string keys are
+# hashed; other keys are found by a linear scan), or nil for values that
+# need the scan: functions and NaN.
+fn unique_key(item)
+  let t = type(item)
+  if t == "string"
+    return "s{item}"
+  elif t == "int"
+    return "i{item}"
+  elif t == "float"
+    if item != item
+      return nil
+    end
+    if item == 0.0
+      return "f0"
+    end
+    return "f{item}"
+  elif t == "table"
+    return "t{gem_table_id(item)}"
+  elif t == "bool" or t == "nil"
+    return "{t}{item}"
+  end
+  nil
+end
+
 fn unique(arr)
   let seen = {}
-  # A negative int indexes from the end instead of being a key, so
-  # negative ints go by their text.
-  let seen_neg = {}
+  let others = []
   let result = []
   for item in arr
-    if type(item) == "int" and item < 0
-      let key = "{item}"
-      if not has_key(seen_neg, key)
-        seen_neg[key] = true
+    let key = unique_key(item)
+    if key == nil
+      if item == item and not contains(others, item)
+        push(others, item)
+        push(result, item)
+      elif item != item
         push(result, item)
       end
-    elif not has_key(seen, item)
-      seen[item] = true
+    elif not has_key(seen, key)
+      seen[key] = true
       push(result, item)
     end
   end
@@ -243,6 +279,9 @@ end
 # the first two elements first and raises if it isn't a number. A `let`,
 # not a `fn`, so that its body still reaches the `sort` builtin.
 let sort = fn(arr, cmp = nil)
+  if type(arr) != "table"
+    error("table.sort: arr must be an array, got {type(arr)}")
+  end
   if cmp == nil
     return sort(arr)
   end
