@@ -5422,7 +5422,68 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   # ─── compile (top-level) ──
 
-  let compile = fn(ast)
+  # `extern include "<path>"` lines. A relative path names a file next to
+  # the .gem file containing the include (each loaded module relative to
+  # its own file): when that file exists it is emitted by its absolute
+  # path, since the C file is compiled from /tmp, and only once however
+  # many files include it. Otherwise the path is
+  # left to cc's search (system headers such as "string.h", and "gem.h" on
+  # the runtime include path). A path that can only mean a file of the
+  # user's (absolute, or starting with ./ or ../) and isn't there is a
+  # compile error at the include. When `c_file` (the C file cc compiles)
+  # is known, a `#line` before each header left to cc's search makes cc
+  # report a missing one at the .gem line, and a `#line` after the block
+  # points the rest of the output back at the C file.
+  let emit_extern_includes = fn(ob, includes, c_file)
+    let phys = 0
+    let redirected = false
+    let seen = {}
+    for ei in includes
+      let path = ei.path
+      let line = ei.line
+      if line == nil then line = 0 end
+      let col = ei.col
+      if col == nil then col = 0 end
+      let span = len(path) + 2
+      if path == "" or str_replace(path, "\"", "") != path or str_replace(path, "\n", "") != path
+        sink.report(source_of(ei), file_of(ei), line, col, span, "invalid header path in extern include: \"{escape_c_string(path)}\"", nil)
+        continue
+      end
+      let is_abs = substr(path, 0, 1) == "/"
+      let candidate = path_join(dirname(file_of(ei)), path)
+      if file_exists(candidate) and not is_dir(candidate)
+        let full = path
+        if not is_abs
+          full = normalize_path(candidate)
+        end
+        # Two files including the same header get it once.
+        if not has_key(seen, full)
+          seen[full] = true
+          buf_push(ob, "#include \"{full}\"\n")
+          phys += 1
+        end
+      elif is_abs or substr(path, 0, 2) == "./" or substr(path, 0, 3) == "../"
+        if is_abs
+          sink.report(source_of(ei), file_of(ei), line, col, span, "header not found: {path}", nil)
+        else
+          sink.report(source_of(ei), file_of(ei), line, col, span, "header not found: {path} (looked in {dirname(rel_path(file_of(ei)))}/)", "a relative path is resolved against the directory of the .gem file that contains the extern include")
+        end
+      else
+        if c_file != nil and line > 0
+          buf_push(ob, "#line {line} \"{escape_c_string(rel_path(file_of(ei)))}\"\n")
+          phys += 1
+          redirected = true
+        end
+        buf_push(ob, "#include \"{path}\"\n")
+        phys += 1
+      end
+    end
+    if redirected
+      buf_push(ob, "#line {phys + 2} \"{escape_c_string(c_file)}\"\n")
+    end
+  end
+
+  let compile = fn(ast, c_file)
     # Separate different statement types
     let fn_defs = []
     let extern_fns_list = []
@@ -5625,9 +5686,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     # Assemble
     let ob = buf_new()
-    for ei in extern_includes
-      buf_push(ob, "#include \"{ei.path}\"\n")
-    end
+    emit_extern_includes(ob, extern_includes, c_file)
     buf_push(ob, "#include \"gem.h\"\n")
 
     # Extern C forward declarations (auto-generated from extern fn signatures)

@@ -5,8 +5,7 @@
  * "stack overflow in native code" process failure.
  *
  * The examples reach this file as `extern include
- * "../examples/support/native_recursion.h"`: the compiler passes
- * `-I <install root>/runtime`, and the path is resolved against that. */
+ * "support/native_recursion.h"`, resolved against their own directory. */
 
 #include <stdint.h>
 

@@ -31,6 +31,7 @@ expected=(
   "closure_body_later:3:3"
   "destructure_rename:6:6"
   "dotdot_concat:1:1"
+  "extern_include_missing:3:3"
   "header_block:3:3"
   "interp_bad_expr:2:2"
   "interp_empty:2:2"

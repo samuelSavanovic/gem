@@ -1096,7 +1096,13 @@ resolved_ast = lower(resolved_ast)
 fold_constants(resolved_ast)
 
 let cg = make_codegen(src_path, module_bindings, show_path, sources_by_file, sink, build_global_display(loaded))
-let c_code = cg.compile(resolved_ast)
+# The C file cc compiles in compile mode (codegen points `#line` at it
+# after the extern includes); nil for --check and --emit-c.
+let c_file = nil
+if not cli.check and not cli.emit_c
+  c_file = "/tmp/gem_" + basename_no_ext(src_path) + ".c"
+end
+let c_code = cg.compile(resolved_ast, c_file)
 
 # Codegen may have surfaced semantic errors (undeclared identifier,
 # missing module export, etc.). One last pass before we run cc / write
@@ -1122,7 +1128,7 @@ else
   # ─── Compile mode ─────────────────────────────────────────────
 
   let base = basename_no_ext(src_path)
-  let tmp_c = "/tmp/gem_" + base + ".c"
+  let tmp_c = c_file
 
   # Determine output name. Default-to-run drops the binary in /tmp so the
   # CWD doesn't get littered; compile-only writes to ./<base>.

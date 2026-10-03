@@ -1642,8 +1642,11 @@ fn make_parser(tokens, source, file, sink)
         return make_extern_fn(name, eparams, ret_type, is_blocking)
       elif not is_blocking and peek().type == "NAME" and peek().value == "include"
         advance()
-        let path = expect("STRING").value
-        return make_extern_include(path)
+        let path_tok = expect("STRING")
+        let inc = make_extern_include(path_tok.value)
+        inc.line = path_tok.line
+        inc.col = path_tok.col
+        return inc
       else
         let bad = peek()
         report(bad.line, bad.col, len(bad.value), "expected 'fn' after 'extern blocking'", nil)

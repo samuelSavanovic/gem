@@ -2633,3 +2633,6 @@ fn
 ["x", "y", "z"] 3
 [mod] hello
 my floor 2.5
+entry header: 40
+module header: 407
+system header: 3

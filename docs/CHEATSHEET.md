@@ -174,7 +174,7 @@ end
 # std/test       case, assert, assert_eq, assert_neq, assert_throws, run
 
 # C interop
-extern include "stdio.h"                 # a libc fn needs its header; your own header: absolute path
+extern include "stdio.h"                 # a libc fn needs its header; your own: path relative to the .gem file
 extern fn puts(s: String) -> Int
 extern blocking fn net_read(fd: Int) -> String
 ```

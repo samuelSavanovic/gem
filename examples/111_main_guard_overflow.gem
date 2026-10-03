@@ -6,7 +6,7 @@
 # data cannot get there (see 120_deep_data); the native code here is a small
 # recursive C helper reached through `extern fn` (examples/support).
 
-extern include "../examples/support/native_recursion.h"
+extern include "support/native_recursion.h"
 extern fn gem_example_native_recurse(n: Int) -> Int
 
 print("shallow", gem_example_native_recurse(10))

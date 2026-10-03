@@ -1175,11 +1175,11 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 ## C interop
 
 - Put the C code in a header of `static` functions and write
-  `extern include "<path>"` before the `extern fn` declarations. Give
-  your own header as an absolute path **(bug)**: a relative path is not
-  looked up next to the `.gem` file. The header comes before `gem.h`, so
-  include `"gem.h"` in it if it uses `GemVal` or `GemBytes`. The program
-  links only libc, libm and pthreads.
+  `extern include "<path>"` before the `extern fn` declarations, with
+  the path relative to the `.gem` file (`"support/helpers.h"`; in a
+  loaded module, relative to the module). The header comes before
+  `gem.h`, so include `"gem.h"` in it if it uses `GemVal` or `GemBytes`.
+  The program links only libc, libm and pthreads.
 - For a libc function, `extern include` its header (`"stdio.h"` for
   `puts`). Without any `extern include`, the compiler writes its own
   prototype from the extern types, which clashes with libc's.

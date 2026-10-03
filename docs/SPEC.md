@@ -848,7 +848,7 @@ extern include "math.h"
 extern include "stdio.h"
 ```
 
-The line is emitted as `#include "<path>"` into the generated C file, which is compiled in a temporary directory with the runtime directory on the include path; so system headers work by name, and a header of your own needs an absolute path (a relative one is not looked up next to the `.gem` file; see `docs/KNOWN_BUGS.md`). Put your own C functions in the header as `static` functions. The header is included before `gem.h`, so one that uses `GemVal`, `GemBytes` or `gem_bytes` must `#include "gem.h"` itself. The program is linked against libc, libm and pthreads only.
+A relative path is resolved against the directory of the `.gem` file that contains the `extern include` (in a loaded module, the module's own directory): if that file exists, it is included by its absolute path, once however many files include it. Otherwise the line is emitted as `#include "<path>"` and left to the C compiler's search, which has the runtime directory on its include path; so system headers (`"string.h"`, `"sys/socket.h"`) work by name, and a missing one is reported by the C compiler at the `extern include` line. A path that can only name a file of your own, an absolute one or one starting with `./` or `../`, is a compile error when the file doesn't exist. The C file itself is compiled from a temporary directory, so the generated C (`--emit-c` too) holds the absolute path of your header. Put your own C functions in the header as `static` functions. The header is included before `gem.h`, so one that uses `GemVal`, `GemBytes` or `gem_bytes` must `#include "gem.h"` itself. The program is linked against libc, libm and pthreads only.
 
 **String-return ownership** differs by call kind:
 
