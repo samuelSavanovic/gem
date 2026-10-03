@@ -67,10 +67,19 @@ fn bad_result(callback, result, expected)
   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
 end
 
+# A `timeout` in a callback result must be an int (milliseconds) or nil.
+fn check_result_timeout(callback, result)
+  let t = result.timeout
+  if t != nil and type(t) != "int"
+    error("gen_server: {callback} returned a timeout that is {describe(t)}, expected an int (milliseconds) or nil")
+  end
+end
+
 fn check_state_result(callback, result)
   if type(result) != "table" or not has_key(result, "state")
     bad_result(callback, result, "\{state: state\}")
   end
+  check_result_timeout(callback, result)
 end
 
 fn check_call_result(result)
@@ -79,9 +88,11 @@ fn check_call_result(result)
       if has_key(result, "reply")
         bad_result("handle_call", result, "\{reply: value, state: state\} or \{noreply: state\}, not both")
       end
+      check_result_timeout("handle_call", result)
       return nil
     end
     if has_key(result, "reply") and has_key(result, "state")
+      check_result_timeout("handle_call", result)
       return nil
     end
   end
@@ -126,6 +137,7 @@ fn start(module)
     let pending = nil
     if type(init_result) == "table" and has_key(init_result, "state")
       initial_state = init_result.state
+      check_result_timeout("init", init_result)
       if has_key(init_result, "timeout")
         pending = set_timeout(nil, init_result.timeout)
       end

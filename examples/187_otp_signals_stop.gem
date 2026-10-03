@@ -1,0 +1,182 @@
+# Supervisor exit signals from children, terminate_child of a child that
+# traps exits, transient children gone before they are monitored, stop,
+# and argument checks in supervisor / dynamic_supervisor / task / gen_server.
+load "std/supervisor"
+load "std/dynamic_supervisor"
+load "std/gen_server"
+load "std/task"
+
+fn idle()
+  spawn do
+    receive
+    when {tag: "never"} then nil
+    end
+  end
+end
+
+# A child that sends its supervisor an exit signal when asked, then waits
+# (or exits at once with `then_exit`).
+fn signaller()
+  spawn do
+    receive
+    when {tag: "signal", sup: s, reason: r, then_exit: then_exit}
+      kill(s, r)
+      if not then_exit
+        receive
+        when {tag: "never"} then nil
+        end
+      end
+    end
+  end
+end
+
+fn alive(pid)
+  process_info(pid) != nil
+end
+
+print("-- kill(sup, reason) from a child")
+let s1 = supervisor.start({children: [{id: "w", start: signaller}, {id: "i", start: idle}]})
+let k1 = supervisor.which_children(s1)
+send(k1[0].pid, {tag: "signal", sup: s1.pid, reason: "shutdown", then_exit: false})
+sleep(20)
+print("supervisor alive: {alive(s1.pid)}, children alive: {alive(k1[0].pid)} {alive(k1[1].pid)}")
+
+let s2 = supervisor.start({children: [{id: "w", start: signaller}]})
+let k2 = supervisor.which_children(s2)
+send(k2[0].pid, {tag: "signal", sup: s2.pid, reason: "shutdown", then_exit: true})
+sleep(20)
+print("signal then exit: supervisor alive: {alive(s2.pid)}")
+
+let s3 = supervisor.start({children: [{id: "w", start: signaller}]})
+let k3 = supervisor.which_children(s3)
+send(k3[0].pid, {tag: "signal", sup: s3.pid, reason: "normal", then_exit: false})
+sleep(20)
+print("normal signal ignored: {alive(s3.pid)} {supervisor.which_children(s3)[0].pid == k3[0].pid}")
+# A child's own death is still a child exit: restarted, not a signal.
+kill(k3[0].pid, "boom")
+sleep(20)
+let k3b = supervisor.which_children(s3)
+print("restarted after crash: {alive(s3.pid)} {k3b[0].pid != k3[0].pid}")
+
+let d1 = dynamic_supervisor.start({child: {start: fn(a) signaller() end}})
+let dk = dynamic_supervisor.start_child(d1, 1)
+let dk2 = dynamic_supervisor.start_child(d1, 2)
+send(dk, {tag: "signal", sup: d1.pid, reason: "shutdown", then_exit: false})
+sleep(20)
+print("dynamic: supervisor alive: {alive(d1.pid)}, children alive: {alive(dk)} {alive(dk2)}")
+
+print("-- terminate_child of a child that traps exits")
+# Ignores the first exit signal, exits on the second one.
+fn stubborn(a)
+  spawn do
+    process_flag("trap_exit", true)
+    let seen = 0
+    while seen < a.ignore + 1
+      receive
+      when {tag: "EXIT"} then seen += 1
+      end
+    end
+  end
+end
+let d2 = dynamic_supervisor.start({child: {start: stubborn}})
+let p0 = dynamic_supervisor.start_child(d2, {ignore: 0})
+print("graceful: {dynamic_supervisor.terminate_child(d2, p0)} alive after: {alive(p0)}")
+let p1 = dynamic_supervisor.start_child(d2, {ignore: 1})
+print((pcall dynamic_supervisor.terminate_child(d2, p1, 50)).error)
+print("still running: {alive(p1)}, listed: {len(dynamic_supervisor.which_children(d2))}")
+print("again: {dynamic_supervisor.terminate_child(d2, p1)} alive after: {alive(p1)}")
+print("unknown: {dynamic_supervisor.terminate_child(d2, p1)}")
+print("children left: {len(dynamic_supervisor.which_children(d2))}")
+let d2b = dynamic_supervisor.start({child: {start: fn(a) idle() end}})
+let plain = dynamic_supervisor.start_child(d2b, nil)
+print("plain child: {dynamic_supervisor.terminate_child(d2b, plain)} alive after: {alive(plain)}")
+
+print("-- transient child gone before it is monitored")
+let me = self()
+fn quick_job()
+  let p = spawn do
+    send(me, {tag: "ran"})
+  end
+  sleep(5)
+  p
+end
+fn count_runs()
+  let n = 0
+  let more = true
+  while more
+    receive
+    when {tag: "ran"} then n += 1
+    after 0 then more = false
+    end
+  end
+  n
+end
+let s4 = supervisor.start({children: [{id: "job", restart: "transient", start: quick_job}]})
+sleep(50)
+print("job ran {count_runs()} time(s), pid {supervisor.which_children(s4)[0].pid}")
+let d3 = dynamic_supervisor.start({child: {restart: "transient", start: fn(a) quick_job() end}})
+dynamic_supervisor.start_child(d3, nil)
+sleep(50)
+print("dynamic job ran {count_runs()} time(s), children {len(dynamic_supervisor.which_children(d3))}")
+
+print("-- stop")
+let s5 = supervisor.start({name: "sup187", children: [{id: "i", start: idle}]})
+let k5 = supervisor.which_children("sup187")[0].pid
+print(supervisor.stop("sup187"))
+print("stopped: {alive(s5.pid)} {alive(k5)} {whereis("sup187")}")
+let s5b = supervisor.start({name: "sup187", children: [{id: "i", start: idle}]})
+print("name free again: {whereis("sup187") == s5b.pid}")
+print(supervisor.stop(s5b))
+print("stop a stopped supervisor: {supervisor.stop(s5b)}")
+# A supervisor that hasn't run yet stops too.
+print(supervisor.stop(supervisor.start({children: [{id: "i", start: idle}]})))
+let d4 = dynamic_supervisor.start({name: "dsup187", child: {start: fn(a) idle() end}})
+let dk4 = dynamic_supervisor.start_child(d4, nil)
+print(dynamic_supervisor.stop("dsup187"))
+print("stopped: {alive(d4.pid)} {alive(dk4)} {whereis("dsup187")}")
+print((pcall supervisor.stop(s5b, "x")).error)
+print((pcall dynamic_supervisor.stop("nobody187")).error)
+print((pcall supervisor.stop(1.5)).error)
+
+print("-- argument checks")
+print((pcall supervisor.start({name: 5})).error)
+print((pcall dynamic_supervisor.start({child: {start: fn(a) idle() end}, name: 5})).error)
+print((pcall supervisor.start({children: [{id: "x"}]})).error)
+print((pcall supervisor.start({children: [{id: "x", start: 3}]})).error)
+print((pcall supervisor.start({children: [{start: idle}]})).error)
+print((pcall supervisor.start({children: [{id: "x", start: idle}, {id: "x", start: idle}]})).error)
+print((pcall supervisor.start({children: ["x"]})).error)
+print((pcall supervisor.start({children: "abc"})).error)
+print((pcall supervisor.start({max_restarts: "3"})).error)
+print((pcall supervisor.start({max_seconds: 1.5})).error)
+print((pcall dynamic_supervisor.start({child: {start: fn(a) idle() end}, max_restarts: 2.5})).error)
+print((pcall dynamic_supervisor.start({child: {start: fn(a) idle() end}, max_seconds: "5"})).error)
+
+let t1 = task.async(fn() 1 end)
+print((pcall task.await(t1, "50")).error)
+print((pcall task.await(t1, 0.5)).error)
+print("still awaitable: {task.await(t1, nil)}")
+let t2 = task.async(fn() 2 end)
+print((pcall task.await_all([t2], "x")).error)
+print(task.await_all([t2], 1000))
+
+let srv = gen_server.start({
+  init: fn() 0 end,
+  handle_call: fn(msg, from, s)
+    if msg == "bad"
+      return {reply: "never sent", state: s, timeout: "10"}
+    end
+    {reply: s, state: s, timeout: nil}
+  end,
+  handle_cast: fn(m, s) {state: s} end,
+  handle_info: fn(m, s) {state: s} end
+})
+print(gen_server.call(srv, "ok"))
+print((pcall gen_server.call(srv, "bad")).error)
+let srv2 = gen_server.start({
+  init: fn() {state: 0, timeout: 1.5} end,
+  handle_call: fn(msg, from, s) {reply: s, state: s} end,
+  handle_cast: fn(m, s) {state: s} end,
+  handle_info: fn(m, s) {state: s} end
+})
+print((pcall gen_server.call(srv2, "x")).error)

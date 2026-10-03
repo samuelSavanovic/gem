@@ -107,8 +107,8 @@ The scheduler currently uses `poll()` for socket readiness. Replacing with **kqu
 ### Multi-threaded work-stealing scheduler (P2)
 The scheduler is single-threaded — one scheduler loop round-robining coroutines on one OS thread. N scheduler threads with per-thread run queues and work-stealing (Chase-Lev deque) would scale throughput ~linearly with cores. The per-process arena model already eliminates shared-heap contention. Hard parts: mailboxes need lock-free MPSC queues for cross-thread sends, shared globals (`gem_proc_table`, `gem_name_registry`, free list) need synchronization, each thread needs its own kqueue/epoll set, and process migration (stealing a coroutine between scheduler ticks) needs care. Erlang/BEAM does exactly this architecture. Nothing in the current design blocks it — isolated processes, message passing, and per-process memory are the right foundation.
 
-### `std/supervisor` keeps every restart time (P2)
-`restart` pushes the time of each restart onto `state.restart_times` and scans the whole array to count the ones inside `max_seconds`, never dropping old entries, so restarts are O(n²) in the supervisor's lifetime restart count and its memory grows without bound: 8,000 restarts of a permanent child took 2.9 s. Drop entries older than `max_seconds` when counting (step 5 of docs/HANDOFF.md, std modernization).
+### Supervisor restart bookkeeping is O(restarts in window) per restart (P2)
+`std/supervisor` (`note_restart`) and `std/dynamic_supervisor` (`check_intensity`) rebuild `state.restart_times` on every restart, keeping the times inside `max_seconds` (at most `max_restarts + 1` of them, since one more crashes the supervisor). A restart therefore costs O(restarts in the window): 8,000 restarts of a permanent child took 394 ms with a 1 ms window and 7.2 s with a 100 s window and a huge `max_restarts`. The times are pushed in order, so a queue that drops expired entries from the front (a head index into the array, compacted now and then) makes each restart amortized O(1). Only matters for supervisors configured to tolerate thousands of restarts per window.
 
 ## C Interop Hardening
 

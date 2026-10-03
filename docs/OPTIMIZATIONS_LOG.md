@@ -364,6 +364,11 @@ Not done: ASan builds. ASan's own SIGSEGV reporting is replaced by the overflow 
 ### Fast path for escape-free strings in parse ✓ Done (2026-10-03)
 `read_string` (std/json.gem, scanner) first scans for the closing `"`, checking for `\` and control bytes on the way, and returns one `substr` when the string has no escapes; only a string with an escape gets a buffer, which then copies whole runs between escapes instead of pushing byte by byte. Parsing a 2.5 MB string-heavy document (20,000 records of four short strings and a three-string array, best of 5): 514 ms with the fast path disabled, 371 ms with it (1.4x); 940 ms with the parser as it was before the rewrite in commit a6d6942, which pushed every byte into a buffer.
 
+## Scheduler / Concurrency
+
+### `std/supervisor` keeps every restart time ✓ Done (std modernization)
+`restart` used to push the time of each restart onto `state.restart_times` and never drop old entries, so restarts were O(n²) in the supervisor's lifetime restart count and its memory grew without bound (8,000 restarts of a permanent child: 2.9 s). Restart times outside `max_seconds` are now dropped at each restart (`note_restart` in std/supervisor, `check_intensity` in std/dynamic_supervisor); what remains (O(restarts in the window) per restart) is tracked in OPTIMIZATIONS.md.
+
 ## C Interop Hardening
 
 ### Arity / type validation at extern boundary ✓ Done (2026-05-05)

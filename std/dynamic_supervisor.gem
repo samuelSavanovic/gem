@@ -11,7 +11,10 @@
 # The supervisor traps exits and links each child, so when the supervisor
 # exits (restart intensity reached, or a `kill` from its own supervisor) its
 # children go down with it. The restart signal is the child's DOWN; the
-# EXIT a child's death also sends is dropped.
+# EXIT a child's death also sends is dropped. The runtime queues a dead
+# process's DOWN before its EXIT, so the EXIT is always dropped right after
+# its DOWN is taken, and any EXIT the main loop sees is an exit signal (a
+# `kill` of the supervisor, from a child as well as from anyone else).
 
 let RESTARTS = {permanent: true, transient: true, temporary: true}
 
@@ -31,6 +34,18 @@ fn pid_of(t)
   nil
 end
 
+# As pid_of, but raises `<caller>: ...` instead of returning nil.
+fn target_pid(target, caller)
+  let pid = pid_of(target)
+  if pid == nil
+    if type(target) == "string"
+      error("{caller}: no process registered as \"{target}\"")
+    end
+    error("{caller}: expected a pid, a \{pid\} handle or a registered name, got {type(target)}")
+  end
+  pid
+end
+
 # The pid a child's `start` returned, which may be a `{pid}` handle.
 fn started_pid(v)
   let pid = v
@@ -47,16 +62,17 @@ fn start_from_template(state, args)
   let pid = started_pid(state.template.start(args))
   monitor(pid)
   # A child that has already exited gives an EXIT "noproc" here (the
-  # supervisor traps exits) next to its DOWN "noproc".
+  # supervisor traps exits) after its DOWN "noproc".
   link(pid)
   pid
 end
 
-# Drops the EXIT of `pid` if it is queued. A child's death queues its DOWN
-# and its EXIT together, so this runs once the DOWN has been taken.
-fn drop_exit(pid)
+# Drops the EXIT that the death of `pid` (with `reason`) queued right after
+# its DOWN, which the caller has just taken. Matching the reason leaves an
+# exit signal the child sent before it died (`kill(sup, r)`) in the mailbox.
+fn drop_exit(pid, reason)
   receive
-  when {tag: "EXIT", pid: ^pid}
+  when {tag: "EXIT", pid: ^pid, reason: ^reason}
     nil
   after 0
     nil
@@ -79,10 +95,10 @@ end
 
 # The index of the child `pid` in `children`, or -1. Children that
 # terminate_child stopped stay in the list, marked `stopping`, until their
-# DOWN arrives; `include_stopping` says whether to find those too.
-fn find_child_index(children, pid, include_stopping)
+# DOWN arrives.
+fn find_child_index(children, pid)
   for i, c in children
-    if c.pid == pid and (include_stopping or not c.stopping)
+    if c.pid == pid
       return i
     end
   end
@@ -96,45 +112,55 @@ end
 fn handle_start_child(state, args, to, ref)
   let res = pcall(fn() start_from_template(state, args) end)
   if res.ok
-    push(state.children, {pid: res.value, args: args, stopping: false})
+    push(state.children, {pid: res.value, args: args, stopping: false, waiters: []})
   end
   reply(to, ref, res)
 end
 
+# Sends the child the exit signal "shutdown" and answers once its DOWN
+# arrives (handle_down). A child that traps exits gets an EXIT message
+# instead, and keeps running until it exits by itself: the request then
+# times out on the caller's side, and the child stays in the list, marked
+# `stopping`, so another terminate_child sends the signal again.
 fn handle_terminate_child(state, pid, to, ref)
-  let idx = find_child_index(state.children, pid, false)
+  let idx = find_child_index(state.children, pid)
   if idx == -1
     reply(to, ref, {ok: true, value: false})
     return nil
   end
-  # Mark it first, so its DOWN removes it instead of restarting it. It stays
-  # in the list until then, so its EXIT (which may come later, if the child
-  # traps exits) is known as a child's.
+  # Mark it first, so its DOWN removes it instead of restarting it.
   state.children[idx].stopping = true
+  push(state.children[idx].waiters, {to: to, ref: ref})
   kill(pid, "shutdown")
-  reply(to, ref, {ok: true, value: true})
 end
 
+# A child that was already gone when the supervisor monitored it gives
+# "noproc": its real exit reason is unknown, and a transient child is taken
+# to have exited normally.
 fn should_restart(restart, reason)
   if restart == "permanent"
     return true
   end
-  restart == "transient" and reason != "normal" and reason != "shutdown"
+  restart == "transient" and reason != "normal" and reason != "shutdown" and reason != "noproc"
 end
 
 fn handle_down(state, pid, reason)
-  let idx = find_child_index(state.children, pid, true)
+  let idx = find_child_index(state.children, pid)
   if idx == -1
     return nil
   end
-  drop_exit(pid)
-  if state.children[idx].stopping or not should_restart(state.template.restart, reason)
+  drop_exit(pid, reason)
+  let child = state.children[idx]
+  if child.stopping or not should_restart(state.template.restart, reason)
+    for w in child.waiters
+      reply(w.to, w.ref, {ok: true, value: true})
+    end
     remove_at(state.children, idx)
     return nil
   end
   check_intensity(state)
   let args = state.children[idx].args
-  state.children[idx] = {pid: start_from_template(state, args), args: args, stopping: false}
+  state.children[idx] = {pid: start_from_template(state, args), args: args, stopping: false, waiters: []}
 end
 
 fn handle_which_children(state, to, ref)
@@ -157,11 +183,11 @@ fn dsup_loop(state)
     handle_down(state, pid, reason)
   when {tag: "_dsup_which_children", reply_to: to, ref: ref}
     handle_which_children(state, to, ref)
-  when {tag: "EXIT", pid: from, reason: reason}
-    if find_child_index(state.children, from, true) == -1 and reason != "normal"
-      # An exit signal from outside (`kill(sup, "shutdown")`, or a linked
-      # parent that died): exit with that reason, which takes the linked
-      # children down too.
+  when {tag: "EXIT", reason: reason}
+    if reason != "normal"
+      # An exit signal (`kill(sup, "shutdown")`, from a child or anyone
+      # else, or a linked parent that died; see the top of the file): exit
+      # with that reason, which takes the linked children down too.
       process_flag("trap_exit", false)
       kill(self(), reason)
     end
@@ -181,6 +207,15 @@ fn start({child, max_restarts = 3, max_seconds = 5000, name = nil})
   let {start, restart = "permanent"} = child
   if not has_key(RESTARTS, restart)
     error("dynamic_supervisor.start: unknown restart \"{restart}\"")
+  end
+  if type(max_restarts) != "int"
+    error("dynamic_supervisor.start: max_restarts must be an int, got {type(max_restarts)}")
+  end
+  if type(max_seconds) != "int"
+    error("dynamic_supervisor.start: max_seconds must be an int (milliseconds), got {type(max_seconds)}")
+  end
+  if name != nil and type(name) != "string"
+    error("dynamic_supervisor.start: name must be a string, got {type(name)}")
   end
   let template = {start: start, restart: restart}
   let pid = spawn do
@@ -251,13 +286,7 @@ end
 # dead or dies, when `timeout_ms` passes, or with the error the request
 # failed with.
 fn request(target, msg, caller, timeout_ms)
-  let pid = pid_of(target)
-  if pid == nil
-    if type(target) == "string"
-      error("{caller}: no process registered as \"{target}\"")
-    end
-    error("{caller}: expected a pid, a \{pid\} handle or a registered name, got {type(target)}")
-  end
+  let pid = target_pid(target, caller)
   check_timeout(timeout_ms, caller)
   let ref = make_ref()
   msg.reply_to = self()
@@ -296,4 +325,26 @@ fn which_children(target, timeout_ms = 5000)
   request(target, {tag: "_dsup_which_children"}, "dynamic_supervisor.which_children", timeout_ms)
 end
 
-export start, start_child, terminate_child, which_children
+# Stops the supervisor with an exit signal "shutdown" (which takes its
+# children down with it) and waits for its DOWN.
+fn stop(target, timeout_ms = 5000)
+  let pid = target_pid(target, "dynamic_supervisor.stop")
+  check_timeout(timeout_ms, "dynamic_supervisor.stop")
+  monitor(pid)
+  kill(pid, "shutdown")
+  if timeout_ms == nil
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    end
+  else
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    after timeout_ms
+      error("dynamic_supervisor.stop: the supervisor did not stop within {timeout_ms} ms")
+    end
+  end
+end
+
+export start, start_child, terminate_child, which_children, stop

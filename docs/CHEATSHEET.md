@@ -172,8 +172,8 @@ end
 # std/url        encode, decode, parse, parse_query, build_query
 # std/mime       lookup, ext
 # std/sqlite     open, close, exec, query, last_id, changes  (wraps sqlite_* builtins)
-# std/supervisor start, which_children
-# std/dynamic_supervisor  start, start_child, terminate_child, which_children
+# std/supervisor start, which_children, stop
+# std/dynamic_supervisor  start, start_child, terminate_child, which_children, stop
 # std/task       async, await, await_all
 # std/gen_server start, call, cast, reply
 # std/test       case, assert, assert_eq, assert_neq, assert_throws, run  (assert_eq is deep; run exits 1 on failure)

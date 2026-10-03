@@ -323,6 +323,31 @@ The same goes for a supervisor's own death: its children are linked to it
 and exit with it, except a child that traps exits, which gets an `EXIT`
 message and keeps running.
 
+`dynamic_supervisor.terminate_child` has the same limit: it sends the
+child `kill(pid, "shutdown")` and waits for its `DOWN`, so a child that
+traps exits and doesn't exit on the `EXIT` message makes it raise
+`dynamic_supervisor.terminate_child: timeout`, and the child keeps running
+(left out of `which_children`, not restarted; another `terminate_child`
+sends the signal again):
+
+```gem
+load "std/dynamic_supervisor"
+fn trapper(a)
+  spawn do
+    process_flag("trap_exit", true)
+    while true
+      receive
+      when other then nil
+      end
+    end
+  end
+end
+let d = dynamic_supervisor.start({child: {start: trapper}})
+let p = dynamic_supervisor.start_child(d, nil)
+print(pcall dynamic_supervisor.terminate_child(d, p, 100))   # timeout
+print(process_info(p) != nil)                                 # true
+```
+
 ### `std/http` route params decode `+` as a space
 
 ```gem

@@ -907,7 +907,11 @@ stack, so a hostile input gets a clear error instead of a stack overflow.
 One std limitation remains:
 
 - A `one_for_all` supervisor hangs when it restarts a child that traps
-  exits **(bug)**: supervise such children `one_for_one`.
+  exits, and `dynamic_supervisor.terminate_child` times out on one that
+  doesn't exit on the `EXIT` message, leaving it running **(bug)**:
+  supervise such children `one_for_one`, and have a child that traps exits
+  return when it gets `{tag: "EXIT", reason: "shutdown"}` from its
+  supervisor.
 
 ### A gen_server state with a `state` key goes in `{state: ...}` **(trap)**
 
@@ -980,6 +984,22 @@ To stop another process, `kill` it with a reason other than `"normal"`
 (`"shutdown"` is the convention). As in Erlang, a `"normal"` exit signal
 from another process is ignored unless the target traps exits;
 `kill(self(), "normal")` does end the caller.
+
+A process that traps exits (a supervisor, an http server) handles a
+`kill` when it next reads its mailbox, so it is still alive, and its name
+still registered, when `kill` returns. To stop one and know it is gone,
+monitor it and wait for its `DOWN`, which is what `supervisor.stop`,
+`dynamic_supervisor.stop` and `http.stop` do:
+
+```gem
+let pid = sup.pid
+monitor(pid)
+kill(pid, "shutdown")
+receive
+when {tag: "DOWN", pid: ^pid} then nil
+after 5000 then error("supervisor did not stop")
+end
+```
 
 ### Request/reply: a ref, a pin, a timeout, and a monitor
 

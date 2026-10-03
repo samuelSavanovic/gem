@@ -80,6 +80,12 @@ fn receive_result(ref, pid, timeout_ms, caller)
   end
 end
 
+fn check_timeout(timeout_ms, caller)
+  if timeout_ms != nil and type(timeout_ms) != "int"
+    error("{caller}: timeout must be an int (milliseconds) or nil, got {type(timeout_ms)}")
+  end
+end
+
 fn check_owner(t, caller)
   if type(t) != "table" or not has_key(t, "ref")
     error("{caller}: expected a task from task.async, got {type(t)}")
@@ -137,6 +143,7 @@ end
 
 fn await(t, timeout_ms = nil)
   check_owner(t, "task.await")
+  check_timeout(timeout_ms, "task.await")
   let res = collect(t, timeout_ms, "task.await")
   if not res.ok
     error(res.error)
@@ -151,6 +158,7 @@ fn await_all(tasks, timeout_ms = nil)
   if type(tasks) != "table"
     error("task.await_all: expected an array of tasks, got {type(tasks)}")
   end
+  check_timeout(timeout_ms, "task.await_all")
   let seen = {}
   for t in tasks
     check_owner(t, "task.await_all")
