@@ -350,7 +350,10 @@ restart intensity reached): it kills each child with its exit reason and
 waits for the child's `DOWN`, but a child that traps exits gets an `EXIT`
 message, so the supervisor waits out its whole shutdown wait (4000 ms,
 `SHUTDOWN_MS` in std/supervisor and std/dynamic_supervisor), then exits
-and leaves the child running.
+and leaves the child running. The window is shared by all children, so the
+siblings killed after such a child get no wait: a sibling that is itself
+a supervisor may still be shutting down, and holding its names, when the
+parent's `DOWN` arrives.
 
 `dynamic_supervisor.terminate_child` has the same limit: it sends the
 child `kill(pid, "shutdown")` and waits for its `DOWN`, so a child that
