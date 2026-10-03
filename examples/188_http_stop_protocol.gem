@@ -216,6 +216,15 @@ fn run_serve_killed()
   http.stop(again.value)
 end
 
+# A `+` in a path segment is a literal plus, not a space.
+fn run_route_plus()
+  let app = http.router()
+  app.get("/tags/:name", fn(req) http.ok("[{req.params.name}]") end)
+  let server = http.start(app, {port: PORT + 9, host: "127.0.0.1"})
+  print("route param +:", request.get("http://127.0.0.1:{PORT + 9}/tags/c++%2B").body)
+  http.stop(server)
+end
+
 fn main()
   let server = http.start(app, {port: PORT, host: "127.0.0.1"})
   run_heads()
@@ -226,4 +235,5 @@ fn main()
   http.stop(server)
   run_trap()
   run_serve_killed()
+  run_route_plus()
 end

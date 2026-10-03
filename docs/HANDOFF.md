@@ -64,10 +64,11 @@ Notes for the next session. Delete this file once its work is done.
 6. **Next (proposal, confirm with the maintainer):** the remaining
    `docs/KNOWN_BUGS.md` entries (compiler: default params in loaded
    modules, destructuring `let` of builtin names, `0..n`, CRLF, ...;
-   runtime: sqlite statement handling, NUL in printed tables, `INT64_MIN /
+   runtime: main-slot reuse after main ends, the `sort` comparator
+   global, NUL bytes in table keys, sqlite statement handling, `INT64_MIN /
    -1`; std: `one_for_all` with exit-trapping children, which needs an
-   untrappable exit signal, and `+` in http route params), and the
-   ROADMAP items std now leans on (`demonitor`, `http.stop`).
+   untrappable exit signal), and the ROADMAP items std now leans on
+   (`demonitor`, a write timeout for `tcp_write`).
 
 ## Ground rules from the maintainer
 

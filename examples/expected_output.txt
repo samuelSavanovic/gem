@@ -3530,6 +3530,7 @@ rebind: true
 HTTP/1.1 200 OK | Content-Length: 18 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=served
 connect after the kill: false
 rebind: true
+route param +: [c+++]
 1 after stop: nil nil nil
 1 reports: ["inner.r:shutdown"]
 1 restart same name: int

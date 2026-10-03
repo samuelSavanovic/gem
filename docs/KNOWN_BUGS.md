@@ -376,21 +376,3 @@ let p = dynamic_supervisor.start_child(d, nil)
 print(pcall dynamic_supervisor.terminate_child(d, p, 100))   # timeout
 print(process_info(p) != nil)                                 # true
 ```
-
-### `std/http` route params decode `+` as a space
-
-```gem
-load "std/http"
-load "std/request"
-let r = http.router()
-r.get("/tags/:name", fn(req) http.ok("[{req.params.name}]") end)
-http.start(r, {port: 19882})
-sleep(100)
-print(request.get("http://127.0.0.1:19882/tags/c++").body)
-exit(0)
-```
-
-prints `[c  ]` instead of `[c++]`. `match_route` in std/http.gem decodes
-path segments with `url.decode`, which follows form encoding (`+` is a
-space); in a path `+` is a literal plus. Decode path segments with
-`url.decode(str_replace(seg, "+", "%2B"))` or a path-specific decoder.

@@ -262,7 +262,7 @@ fn match_route(pattern, path)
   for i, ps in pat_segs
     let us = path_segs[i]
     if len(ps) > 0 and ord(ps, 0) == 58
-      params[substr(ps, 1, len(ps) - 1)] = url.decode(us)
+      params[substr(ps, 1, len(ps) - 1)] = url.decode(str_replace(us, "+", "%2B"))   # `+` is literal in a path
     elif ps != us
       return nil
     end

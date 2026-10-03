@@ -153,7 +153,7 @@ end
   which here is the handler.
 - User input goes through `pcall` and a type check before it is trusted.
 - A handler that raises, or returns something other than a valid
-  response (an int status from 100 to 999, no CR or LF in a header),
+  response (an int status from 200 to 999, no CR or LF in a header),
   answers 500; std/http prints the error and its stack on stderr.
   Request header names arrive lowercased: `req.headers["content-type"]`.
 - `task.async` takes a closure; `task.await_all` waits for all of them,
@@ -911,7 +911,7 @@ stack, so a hostile input gets a clear error instead of a stack overflow.
 
 ### Working around std today
 
-One std limitation remains:
+One supervision limitation remains:
 
 - A `one_for_all` supervisor hangs when it restarts a child that traps
   exits, `dynamic_supervisor.terminate_child` times out on one that
