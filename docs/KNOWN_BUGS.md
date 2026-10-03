@@ -387,8 +387,11 @@ print(rec)            # [1, 2]: the keys are gone
 
 The `sort` builtin (runtime/gem_builtins_collection.c) accepts any table
 and rewrites its values as entries 0 .. n-1; `table.sort` (std/table.gem)
-only checks that `arr` is a table, so it does the same. Both should raise
-for a table that isn't an array.
+only checks that `arr` is a table, so it does the same. With a comparator,
+`table.sort` first checks `cmp(arr[0], arr[1])`, which on a record is
+`cmp(nil, nil)`, so a typical `a - b` comparator raises `type error in -: got
+nil and nil` from the caller's code instead. Both should raise for a table
+that isn't an array.
 
 ### `log.set_level` returns the internal level number
 
@@ -443,7 +446,10 @@ per-process meaning the module documents.
 load "std/http"
 let app = http.router()
 app.get("/n") do |req|
-  http.response(200, {"X-Nil": nil, "X-T": {a: 1}}, "x")   # sent as "X-Nil: nil", "X-T: nil"
+  let h = {}
+  h["X-Nil"] = nil
+  h["X-T"] = {a: 1}
+  http.response(200, h, "x")   # sent as "X-Nil: nil" and "X-T: nil"
 end
 app.get("/c") do |req|
   http.set_cookie(http.ok("x"), "a", nil)                  # sent as "Set-Cookie: a=nil; ..."
