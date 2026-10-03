@@ -1424,11 +1424,12 @@ table.each(parts) { |item| print(item) }
 
 `std/test` — exports `test` table. Minimal harness for self-validating example programs. Cases register on import; nothing runs until `test.run()` is called.
 
-- `test.case(name, fn)` — register a test case. `fn` takes no arguments.
-- `test.assert(cond[, msg])` — raise an error if `cond` is falsy.
-- `test.assert_eq(actual, expected)` / `test.assert_neq(actual, expected)` — equality / inequality assertion. On failure the error message includes both formatted values.
-- `test.assert_throws(fn)` — assert that calling `fn()` raises an error.
-- `test.run()` — run every registered case under `pcall`, print one-line `PASS <name>` or `FAIL <name>: <reason>` per case, then a `<n> passed / <m> failed` summary, and `exit(1)` if any failed.
+- `test.case(name, fn)` — register a test case. `fn` takes no arguments. The case list is module state, so it is per process: `test.run()` runs only the cases registered by the process that calls it.
+- `test.assert(cond[, msg])` — raise `test.assert: assertion failed[: <msg>]` if `cond` is falsy.
+- `test.assert_eq(actual, expected)` — raise unless `actual` deeply equals `expected`. Two tables are equal when they have the same keys and deeply equal values, in any insertion order (so `[]` equals `{}`); the walk uses an explicit stack, so any nesting depth works, and a pair of tables that repeats a pair already being compared further up the path counts as equal, so cyclic tables compare without looping. Other values compare with `==`: `1` and `1.0` differ, functions, buffers and refs compare by identity. The message shows both values and, for tables, the path to the first difference, with the types when they differ: `test.assert_eq: expected {a: [1, 2]}, got {a: [1, 2.0]}: at .a[1], expected 2 (int), got 2.0 (float)`, `test.assert_eq: expected 1 (int), got 1.0 (float)`; a missing or extra key reads `actual is missing key .b` / `actual has extra key .b`.
+- `test.assert_neq(actual, expected)` — raise `test.assert_neq: both values are <v>` if `actual` deeply equals `expected` (the same equality as `assert_eq`).
+- `test.assert_throws(fn)` — assert that calling `fn()` raises an error, and return the error message; raises `test.assert_throws: expected an error, but the call returned normally` otherwise.
+- `test.run()` — run every registered case under `pcall`, print one-line `PASS <name>` or `FAIL <name>: <reason>` per case, then a `<n> passed / <m> failed` summary, and `exit(1)` if any failed (ending the whole program with status 1, from any process); otherwise it returns `nil`.
 
 The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`to_string()`, and `substr()`. `split` and `index_of` are only available through `std/string` (not as bare builtins).
 

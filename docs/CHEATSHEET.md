@@ -173,7 +173,7 @@ end
 # std/dynamic_supervisor  start, start_child, terminate_child, which_children
 # std/task       async, await, await_all
 # std/gen_server start, call, cast, reply
-# std/test       case, assert, assert_eq, assert_neq, assert_throws, run
+# std/test       case, assert, assert_eq, assert_neq, assert_throws, run  (assert_eq is deep; run exits 1 on failure)
 
 # C interop
 extern include "stdio.h"                 # a libc fn needs its header; your own: path relative to the .gem file

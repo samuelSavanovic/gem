@@ -590,7 +590,8 @@ object (`{"0":"z","name":"n"}`).
 
 `{a: 1} == {a: 1}` and `[] == []` are `false`. Compare fields, or compare a
 primitive key such as an id. The same applies to pinned patterns (pin
-strings, numbers and refs, never tables) and to `test.assert_eq`.
+strings, numbers and refs, never tables). `test.assert_eq` is the
+exception: it compares tables by structure.
 
 ### Tables and JSON
 
@@ -1189,10 +1190,20 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 ## Tests
 
 - Use `std/test` (`test.case`, `test.assert`, `test.assert_eq`,
-  `test.assert_throws`, `test.run()`) for checks that verify themselves.
-  `assert_eq` compares with `==`, so tables compare by identity and `1`
-  doesn't equal `1.0` (the failure reads `expected 1, got 1`): compare
-  primitives or individual fields.
+  `test.assert_neq`, `test.assert_throws`, `test.run()`) for checks that
+  verify themselves. `assert_eq` compares tables by structure (same keys,
+  equal values, any insertion order; cycles and deep nesting are fine) and
+  everything else with `==`, so `1` doesn't equal `1.0`. A failure shows
+  both values, the path to the first difference, and the types when they
+  differ: `expected {a: [1, 2]}, got {a: [1, 2.0]}: at .a[1], expected 2
+  (int), got 2.0 (float)`. `assert_throws` returns the error message, so
+  check it with `assert_eq` when it matters.
+- Register cases with `test.case` at the top level (or from `main`), in
+  the process that calls `test.run()`. The case list is a module-level
+  variable, so a case registered inside a spawned process lands in that
+  process's copy and never runs (the compiler prints a `note:`).
+  `test.run()` calls `exit(1)` when a case fails, which ends the whole
+  program with status 1, so nothing after it runs.
 - A test that spawns a process should `spawn_monitor` it (or use `task`)
   and check the result or `DOWN`. With `spawn_link`, a crashing child kills
   the test runner, and the remaining cases never run.
