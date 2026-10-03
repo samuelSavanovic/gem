@@ -57,8 +57,11 @@ fn magnitude_below_one(text)
     if neg or ord(text, i) == 43
       i += 1
     end
-    # More than 18 exponent digits can't be a float in range either way;
-    # clamp so to_int can't fail.
+    # Skip leading zeros; more than 18 significant exponent digits can't
+    # be a float in range either way, so clamp so to_int can't fail.
+    while i < n - 1 and ord(text, i) == 48
+      i += 1
+    end
     let digits = substr(text, i, n - i)
     let x = 1000000000000000000
     if len(digits) < 19

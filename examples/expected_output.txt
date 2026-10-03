@@ -3384,3 +3384,5 @@ ERR json.parse: number out of range at byte 0
 "\ud800\u0041": ERR json.parse: lone surrogate in unicode escape at byte 1
 "\ud800\ud800": ERR json.parse: lone surrogate in unicode escape at byte 1
 "\ud83d\ude00": ok string 😀
+padded 1e399: json.parse: number out of range at byte 0
+padded 1e-400: 0.0

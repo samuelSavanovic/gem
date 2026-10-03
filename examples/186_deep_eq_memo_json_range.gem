@@ -111,3 +111,12 @@ for src in ["\"\\ude00\"", "\"ab\\udfff\"", "\"\\ud800\"", "\"\\ud800x\"", "\"\\
             "\"\\ud800\\ud800\"", "\"\\ud83d\\ude00\""]
   print("{src}: {show(pcall json.parse(src))}")
 end
+
+# a zero-padded exponent doesn't flip overflow and underflow
+let zeros400 = build_string do |add|
+  for i = 0, 400
+    add("0")
+  end
+end
+print("padded 1e399:", (pcall json.parse("1{zeros400}e-0000000000000000001")).error)
+print("padded 1e-400:", json.parse("0.{zeros400}1e+0000000000000000001"))
