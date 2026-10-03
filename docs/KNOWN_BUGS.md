@@ -8,17 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### `pcall <expr>` at top level records line 0
-
-```gem
-let t = nil
-print((pcall t[0]).stack)    # [{name: "anonymous fn", file: ..., line: 0}]
-```
-
-The same for `pcall 1 / 0` and `pcall 1 < "a"` at top level; inside a
-function the line is right. The closure the expression form desugars to
-has no line for an operator or index expression.
-
 ### A `receive` with only an `after` clause doesn't parse
 
 ```gem

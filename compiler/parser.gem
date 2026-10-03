@@ -607,7 +607,7 @@ fn make_parser(tokens, source, file, sink)
       leave_fn_body(saved_loops)
       fn_depth -= 1
       expect("end")
-      return make_anon_fn(pr.params, pr.rest_param, with_prelude(pr.prelude, body), pr.defaults)
+      return make_anon_fn(pr.params, pr.rest_param, with_prelude(pr.prelude, body), pr.defaults, t.line)
     end
 
     # Table literal: {key: val, ...}
@@ -674,7 +674,7 @@ fn make_parser(tokens, source, file, sink)
     if t.type == "NAME" and t.value == "pcall" and peek_at(1).type != "(" and peek_at(1).type != "do"
       advance()
       let expr = parse_expr()
-      return make_call(make_var("pcall"), [make_anon_fn([], nil, [expr], [])], t.line)
+      return make_call(make_var("pcall"), [make_anon_fn([], nil, [expr], [], t.line)], t.line)
     end
 
     # Variable
@@ -712,6 +712,7 @@ fn make_parser(tokens, source, file, sink)
   # `do [|params|] body end` → anonymous fn
   # `is_spawn`: the block is the body of `spawn do ... end`.
   let parse_do_block = fn(is_spawn = false)
+    let do_line = peek().line
     expect("do")
     let bp = parse_block_params()
     fn_depth += 1
@@ -724,11 +725,12 @@ fn make_parser(tokens, source, file, sink)
     leave_fn_body(saved_loops)
     fn_depth -= 1
     expect("end")
-    make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, body), bp.defaults)
+    make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, body), bp.defaults, do_line)
   end
 
   # `{ [|params|] expr }` → anonymous fn
   let parse_brace_block = fn()
+    let brace_line = peek().line
     expect("\{")
     let bp = parse_block_params()
     let bexpr = parse_expr()
@@ -753,7 +755,7 @@ fn make_parser(tokens, source, file, sink)
         end
       end
     end
-    make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, [bexpr]), bp.defaults)
+    make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, [bexpr]), bp.defaults, brace_line)
   end
 
   let report_header_block = fn(tok)
@@ -879,10 +881,10 @@ fn make_parser(tokens, source, file, sink)
 
       # Index access: node[key]
       if peek().type == "["
-        advance()
+        let index_line = advance().line
         let key = parse_expr()
         expect("]")
-        node = make_index(node, key)
+        node = make_index(node, key, index_line)
         continue
       end
 
@@ -907,41 +909,44 @@ fn make_parser(tokens, source, file, sink)
           return make_int(int64_min())
         end
       end
-      advance()
-      return make_unop("-", parse_unary())
+      let minus_line = advance().line
+      return make_unop("-", parse_unary(), minus_line)
     end
     parse_call()
   end
 
   # mul: unary (* | / | % unary)*
   let parse_mul = fn()
+    let start_line = peek().line
     let left = parse_unary()
     while peek().type == "*" or peek().type == "/" or peek().type == "%"
       let op = advance().type
       let right = parse_unary()
-      left = make_binop(op, left, right)
+      left = make_binop(op, left, right, start_line)
     end
     left
   end
 
   # add: mul (+ | - mul)*
   let parse_add = fn()
+    let start_line = peek().line
     let left = parse_mul()
     while peek().type == "+" or peek().type == "-"
       let op = advance().type
       let right = parse_mul()
-      left = make_binop(op, left, right)
+      left = make_binop(op, left, right, start_line)
     end
     left
   end
 
   # compare: add (comp_op add)*
   let parse_compare = fn()
+    let start_line = peek().line
     let left = parse_add()
     while peek().type == "==" or peek().type == "!=" or peek().type == "<" or peek().type == ">" or peek().type == "<=" or peek().type == ">=" or peek().type == "in"
       let op = advance().type
       let right = parse_add()
-      left = make_binop(op, left, right)
+      left = make_binop(op, left, right, start_line)
     end
     left
   end
@@ -949,30 +954,32 @@ fn make_parser(tokens, source, file, sink)
   # not: "not" not | compare
   parse_not = fn()
     if peek().type == "not"
-      advance()
-      return make_unop("not", parse_not())
+      let not_line = advance().line
+      return make_unop("not", parse_not(), not_line)
     end
     parse_compare()
   end
 
   # and: not ("and" not)*
   let parse_and = fn()
+    let start_line = peek().line
     let left = parse_not()
     while peek().type == "and"
       advance()
       let right = parse_not()
-      left = make_binop("and", left, right)
+      left = make_binop("and", left, right, start_line)
     end
     left
   end
 
   # or: and ("or" and)*
   let parse_or = fn()
+    let start_line = peek().line
     let left = parse_and()
     while peek().type == "or"
       advance()
       let right = parse_and()
-      left = make_binop("or", left, right)
+      left = make_binop("or", left, right, start_line)
     end
     left
   end
@@ -1679,10 +1686,9 @@ fn make_parser(tokens, source, file, sink)
       end
     end
 
-    # Default: expression statement. Most expression nodes (binops, index,
-    # literals) carry no line; give the statement its first token's line so
-    # codegen emits a line update for it (runtime errors in `x + y` as a
-    # statement, e.g. a fn's implicit return, point at it).
+    # Default: expression statement. Operator, index, call and fn nodes
+    # carry their line, literals don't; give a lineless statement its first
+    # token's line so codegen emits a line update for it.
     let e = parse_expr()
     if type(e) == "table" and e.line == nil
       e.line = t.line

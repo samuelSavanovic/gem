@@ -1001,7 +1001,7 @@ Tokens carry line and column information from the lexer, so the caret points to 
 
 **Recoverable errors** use `pcall` (protected call), which catches any error instead of halting. Two forms:
 
-**Expression form** — `pcall <expr>` wraps a single expression. The parser desugars it to `pcall(fn() <expr> end)`:
+**Expression form** — `pcall <expr>` wraps a single expression. The parser desugars it to `pcall(fn() <expr> end)`; an error raised by the expression itself shows as an `anonymous fn` frame at the expression's line (the `pcall` line):
 
 ```
 let result = pcall error("boom")

@@ -2501,3 +2501,18 @@ int
 min
 max
 other
+index [14]
+divide [15]
+compare [16]
+field [17]
+negate [18]
+not then add [19]
+logic [20]
+call [21]
+nested inner [22]
+nested outer [23]
+multi-line [24]
+in fn [28]
+fn literal [35]
+brace block [40, 40]
+do block [46, 53, 45]

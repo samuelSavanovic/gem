@@ -1,0 +1,55 @@
+# `pcall <expr>` records the expression's line (the `pcall` line) for the
+# anonymous fn it desugars to, whatever kind of expression it wraps.
+
+fn lines(r)
+  let out = []
+  for f in r.stack
+    push(out, f.line)
+  end
+  out
+end
+
+let t = nil
+let s = "a"
+print("index", lines(pcall t[0]))
+print("divide", lines(pcall 1 / 0))
+print("compare", lines(pcall 1 < "a"))
+print("field", lines(pcall t.x))
+print("negate", lines(pcall -s))
+print("not then add", lines(pcall not s + 1))
+print("logic", lines(pcall true and s + 1))
+print("call", lines(pcall error("boom")))
+print("nested inner", lines((pcall pcall t[0]).value))
+print("nested outer", lines(pcall lines(pcall t[0])[5] + 1))
+print("multi-line", lines(pcall [1,
+  2][0] + "x"))
+
+fn inside(v)
+  let r = pcall v[0]
+  lines(r)
+end
+print("in fn", inside(nil))
+
+let r = pcall(fn()
+  let u = [3, 1].missing
+  s * 2 + u
+end)
+print("fn literal", lines(r))
+
+let r2 = pcall(fn()
+  sort([{x: 1}, {x: "a"}]) { |a, b| a.x < b.x }
+end)
+print("brace block", lines(r2))
+
+let r3 = pcall(fn()
+  each_item([1]) do |x|
+    x + nil
+  end
+end)
+print("do block", lines(r3))
+
+fn each_item(items, f)
+  for x in items
+    f(x)
+  end
+end
