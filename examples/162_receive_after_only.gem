@@ -1,0 +1,78 @@
+# A `receive` with only an `after` clause: waits, takes no message, and
+# evaluates to the after body.
+
+fn wait_then(ms)
+  receive
+  after ms then "waited {ms}"
+  end
+end
+
+fn wait_block(ms)
+  receive
+  after ms
+    let x = 40
+    x + 2
+  end
+end
+
+fn wait_nil()
+  receive
+  after 1
+  end
+end
+
+let t0 = time_ms()
+print(wait_then(30))
+print("elapsed >= 30:", time_ms() - t0 >= 30)
+print(wait_block(0))
+print(wait_nil())
+
+# Messages that arrive during the wait stay queued.
+let me = self()
+spawn(fn()
+  send(me, {tag: "a"})
+  send(me, "b")
+end)
+receive
+after 20 then nil
+end
+print(receive())
+print(receive())
+
+# `after 0` returns at once and leaves a queued message alone.
+send(self(), 7)
+let t1 = time_ms()
+receive
+after 0
+  print("after 0")
+end
+print("fast:", time_ms() - t1 < 5)
+print(receive())
+
+# In a loop, and as a self tail call in a spawned process.
+let n = 0
+while n < 3
+  receive
+  after 1 then n += 1
+  end
+end
+print("loop", n)
+
+fn tick(k)
+  if k == 0
+    return "ticked"
+  end
+  receive
+  after 0 then tick(k - 1)
+  end
+end
+print(tick(10000))
+
+let child = spawn(fn()
+  receive
+  after 5 then send(me, "child done")
+  end
+end)
+receive
+when "child done" then print("child done")
+end

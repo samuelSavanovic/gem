@@ -4478,7 +4478,13 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     buf_push(b, "{p2}GemMsgNode *{prev_tmp} = NULL;\n")
     buf_push(b, "{p2}GemMsgNode *{cur_tmp} = {proc_tmp}->mailbox.head;\n")
     buf_push(b, "{p2}{matched_tmp} = -1;\n")
-    buf_push(b, "{p2}while ({cur_tmp}) \{\n")
+    # An `after`-only receive (no arms) takes no message: skip the scan
+    # and just wait for the deadline, leaving the mailbox as it is.
+    let scan_open = "{p2}while ({cur_tmp}) \{\n"
+    if len(arms) == 0
+      scan_open = "{p2}while (0) \{\n"
+    end
+    buf_push(b, scan_open)
     let p3 = pad_for(indent + 2)
     buf_push(b, "{p3}{recv_tmp} = {cur_tmp}->value;\n")
 
@@ -4553,7 +4559,12 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     # the timeout branch is a plain `else`; that also lets the C compiler
     # see every path through a return-position receive return a value.
     if after_ms != nil
-      buf_push(b, "{p}} else \{\n")
+      # No arms: the timeout branch is the only one.
+      if len(arms) == 0
+        buf_push(b, "{p}\{\n")
+      else
+        buf_push(b, "{p}} else \{\n")
+      end
       if after_body != nil
         let saved_after = set_union(fn_scope_locals, {})
         buf_push(b, compile_stmts_tail(after_body, indent + 1, return_pos))

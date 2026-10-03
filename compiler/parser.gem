@@ -1651,13 +1651,27 @@ fn make_parser(tokens, source, file, sink)
       end
     end
 
-    # receive block: receive when ... end
+    # receive block: receive [when ...] [after ...] end
     if t.type == "NAME" and t.value == "receive"
       let rla = 1
       while peek_at(rla).type == "NEWLINE"
         rla += 1
       end
-      if peek_at(rla).type == "when"
+      let rnext = peek_at(rla).type
+      if rnext == "end"
+        # `receive` straight followed by `end`: a receive with nothing to
+        # wait for, not a bare reference to the `receive` builtin.
+        report(t.line, t.col, len(t.value), "a `receive` block needs at least one `when` arm or an `after` clause", "add `after <ms>` to wait, or `when <pattern>` arms to take a message")
+        advance()
+        # Take the `end` as this receive's when it is indented like it;
+        # one further out most likely closes an enclosing block.
+        if peek_at(rla - 1).col >= t.col
+          skip_nl()
+          advance()
+        end
+        return make_error_stmt(t.line, t.col)
+      end
+      if rnext == "when" or rnext == "after"
         let rline = t.line
         advance()
         skip_nl()

@@ -681,6 +681,14 @@ Without the `^`, `ref: ref` would bind whatever ref the first reply carries.
 
 The `after <ms>` clause is optional. If present and the timeout elapses with no matching message, the `after` body executes. `after 0` means "check once, don't block." Omitting `after` means block forever (like `receive()`).
 
+A `receive` may have an `after` clause and no `when` arms: it takes no message and leaves the mailbox as it is, waits `<ms>` milliseconds (messages that arrive meanwhile stay queued for a later `receive`), then evaluates to the `after` body. `after 0` returns at once. A `receive` with neither `when` arms nor `after` (`receive` directly followed by `end`) is a compile error.
+
+```
+receive
+after 100 then nil                   # wait 100 ms, mailbox untouched
+end
+```
+
 The `receive` block can produce a value when used as the last statement of a function (implicit return), just like `match`.
 
 The `receive()` function call always pops the head of the mailbox unconditionally, whatever the message is.

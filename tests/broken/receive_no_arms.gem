@@ -1,0 +1,14 @@
+# A `receive` with neither `when` arms nor `after`: one error each, no cascade.
+receive
+end
+
+fn f()
+  receive
+end
+
+fn g()
+  receive
+  end
+end
+
+print("unreachable")

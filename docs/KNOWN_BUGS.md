@@ -8,19 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### A `receive` with only an `after` clause doesn't parse
-
-```gem
-receive
-after 10 then nil
-end
-```
-
-reports `unexpected token 'after'`. SPEC says the `after` clause is
-optional but never that a `when` arm is required, and Erlang's
-`receive after N -> ok end` is a common way to wait. Accept a `receive`
-with no arms (it waits `after` ms, leaving the mailbox alone).
-
 ### An array pattern matches a record of the same size
 
 ```gem

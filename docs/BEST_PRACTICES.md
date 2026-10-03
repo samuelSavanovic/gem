@@ -987,8 +987,9 @@ end
   process that has exited stays on the target's list until the target
   dies, so don't monitor a long-lived server from many short-lived
   processes, such as per-connection handlers.
-- A `receive` needs at least one `when` arm: an `after`-only `receive`
-  doesn't parse **(bug)**. To wait, use `sleep(ms)`.
+- A `receive` with only an `after` clause waits that long and takes no
+  message: anything that arrives meanwhile stays queued. It is the same as
+  `sleep(ms)`; use whichever reads better.
 - `after` restarts each time a `receive` is entered, and a message that
   matches another arm ends the wait, so `after` in a server loop that keeps
   getting messages may never fire. For periodic work, send yourself a

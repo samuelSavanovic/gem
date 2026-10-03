@@ -107,6 +107,9 @@ when {tag: "ping"} then pong()       # one-line arm
 after 5000
   timeout()                          # or: after 5000 then timeout()
 end
+receive                              # arms optional: just wait, mailbox untouched
+after 100 then nil
+end
 monitor(pid)                         # → true; DOWN message on exit
 link(pid); unlink(pid)
 process_flag("trap_exit", true)

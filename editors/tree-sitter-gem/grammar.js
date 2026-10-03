@@ -182,8 +182,10 @@ module.exports = grammar({
 
     receive_block: $ => seq(
       'receive',
-      repeat1($.when_clause),
-      optional($.after_clause),
+      choice(
+        seq(repeat1($.when_clause), optional($.after_clause)),
+        $.after_clause,
+      ),
       'end',
     ),
 

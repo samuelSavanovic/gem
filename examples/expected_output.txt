@@ -2516,3 +2516,15 @@ in fn [28]
 fn literal [35]
 brace block [40, 40]
 do block [46, 53, 45]
+waited 30
+elapsed >= 30: true
+42
+nil
+{tag: "a"}
+b
+after 0
+fast: true
+7
+loop 3
+ticked
+child done

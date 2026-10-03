@@ -51,6 +51,7 @@ expected=(
   "double_typo:2:4"
   "missing_end:2:8"
   "missing_then_branches:1:4"
+  "receive_no_arms:3:3"
   "multi_undeclared:3:5"
   "nested_extern:3:3"
   "nested_fn_toplevel:13:13"
