@@ -958,6 +958,11 @@ Match on `tag` in `receive`. Prefix tags that are private to a module with
 `pcall` doesn't catch a `kill` or a link's exit: those end the process at
 once.
 
+To stop another process, `kill` it with a reason other than `"normal"`
+(`"shutdown"` is the convention). As in Erlang, a `"normal"` exit signal
+from another process is ignored unless the target traps exits;
+`kill(self(), "normal")` does end the caller.
+
 ### Request/reply: a ref, a pin, a timeout, and a monitor
 
 When you write the request side yourself (instead of using

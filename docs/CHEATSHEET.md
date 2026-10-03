@@ -114,6 +114,8 @@ end
 monitor(pid)                         # → true; DOWN message on exit
 link(pid); unlink(pid)
 process_flag("trap_exit", true)
+kill(pid, "shutdown")                # → true if alive; EXIT msg if pid traps exits
+                                     #   reason "normal" is ignored unless pid == self()
 register("name", self())
 whereis("name")                      # → pid or nil
 let ref = make_ref()

@@ -1602,7 +1602,10 @@ GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
 
     /* The running coroutine can't be destroyed from inside itself. */
     if (pid == gem_current_pid) gem_exit_self(reason);
-    if (pid == gem_main_pid && strcmp(reason, "normal") != 0)
+    /* As in Erlang, a "normal" exit signal from another process is ignored
+       by a process that doesn't trap exits. */
+    if (strcmp(reason, "normal") == 0) return gem_bool(1);
+    if (pid == gem_main_pid)
         gem_report_main_killed(gem_pid_of_slot(gem_current_pid), reason, 0);
 
     proc->exit_reason = strdup(reason);

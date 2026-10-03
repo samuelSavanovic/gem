@@ -18,22 +18,6 @@ directory to print the `-->` source line. A binary run from any other
 directory prints the trace without the source line, silently.
 `gem_print_source_context` in runtime/gem_error.c.
 
-### `kill(pid, "normal")` kills a process that doesn't trap exits
-
-```gem
-let m = self()
-spawn do
-  kill(m, "normal")
-end
-sleep(50)
-print("not reached")    # main is gone; the program exits 0 silently
-```
-
-In Erlang, an exit signal with reason `normal` is ignored by a process
-that doesn't trap exits; here it ends the target (main included, with no
-report). `gem_exit_builtin` in runtime/gem_scheduler.c. Decide which
-semantics Gem wants and document it in SPEC.md (`kill`).
-
 ### `buf_push` and `build_string`'s `add` drop buffers, functions and refs
 
 ```gem

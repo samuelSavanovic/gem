@@ -2576,3 +2576,14 @@ blank: [x\n\ny]
 interp: [hi gem\n  inner done]
 single: [{literal}\n\tdeeper]
 spaces: [plain\n  indented]
+kill main normal -> true
+main survives
+kill normal -> true
+child still alive
+kill shutdown -> true
+DOWN shutdown
+kill trapper -> true
+trapper got EXIT normal
+self DOWN normal
+linked partner alive: true
+dead -> nil
