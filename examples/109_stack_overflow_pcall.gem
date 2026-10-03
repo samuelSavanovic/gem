@@ -69,7 +69,7 @@ fn nested(d)
     end
   end
 end
-for d in [63, 100, 1000]
+for d in [63, 1000, 1001]
   let pid = spawn do
     let r = pcall json.parse(nested(d))
     send(main, "test5: depth {d} ok={r.ok} error={r.error}")

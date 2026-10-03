@@ -206,26 +206,6 @@ defaults are `"Not Found"` and `"Internal Server Error"`: std/http calls
 doesn't apply the default. Log the caught error, and call the builders
 with no argument.
 
-### `json.encode` drops entries of tables with non-sequential int keys
-
-```gem
-let ids = {}
-ids[42] = "x"
-print(json.encode(ids))         # [null]
-let m = ["z"]
-m.name = "n"
-print(json.encode(m))           # ["z",null]
-```
-
-`is_array` in std/json looks only at the first key's type. A table whose
-keys aren't exactly `0 .. n-1` should encode as an object (with string
-keys), or raise.
-
-### `json.parse` can't parse integers beyond 64 bits
-
-`json.parse("12345678901234567890")` raises `to_int: cannot convert ...`
-(std/json `parse_number`). Parse them as floats.
-
 ### A `one_for_all` restart hangs on a child that traps exits
 
 ```gem

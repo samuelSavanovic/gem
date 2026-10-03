@@ -578,8 +578,9 @@ Assigning `nil` doesn't remove a key: after `t.x = nil`, `x` is still in
 
 ### Don't mix string keys into arrays
 
-A table is either an array or a record. Mixing them makes `len`, `in`,
-`for` and `json.encode` unpredictable.
+A table is either an array or a record. Mixing them makes `len`, `in`
+and `for` unpredictable, and `json.encode` writes the whole table as an
+object (`{"0":"z","name":"n"}`).
 
 ### Tables compare by identity
 
@@ -594,11 +595,14 @@ gives `[]`, and so does a record emptied with `delete`. When an empty
 object matters on the wire, write that part of the JSON yourself (`'{}'`).
 
 `json.encode` writes keys in insertion order, so two equal records built in
-different orders encode differently. It decides "array or object" from
-the first key alone, so a table with int keys that aren't exactly
-`0 .. n-1` (`by_id[row.id] = row`) loses entries **(bug)**: key `42` alone
-encodes as `[null]`. Key such tables by string (`by_id["{row.id}"]`)
-before encoding.
+different orders encode differently. A table is a JSON array only when its
+keys are exactly `0 .. n-1`; anything else is an object, with int keys
+written as strings: `by_id[42] = "x"` encodes as `{"42":"x"}`, and parses
+back with the string key `"42"`. Other key types (floats, bools) raise.
+
+`json.parse` reads an integer too big for 64 bits as a float, which loses
+digits past about 16 (`12345678901234567890` becomes
+`1.2345678901234567e+19`). Send ids that big as strings.
 
 `json.parse` raises on malformed input; wrap it in `pcall` when the input
 comes from outside.
@@ -847,8 +851,8 @@ old contents.
 Every process has an 8 MB stack: from a few thousand non-tail frames
 (functions with a large `match` or `receive`) to about 30,000 (small
 ones). Past that, the call raises `stack overflow in <fn>`, which `pcall`
-catches like any error. `json.parse` refuses nesting deeper than about 128
-levels; `json.encode` has no cap and overflows at about 5,000. For
+catches like any error. `json.parse` and `json.encode` refuse nesting
+deeper than 1,000 levels (and `json.encode` so stops on a cyclic table). For
 recursive walkers over untrusted input, cap the depth or use an explicit
 stack, so a hostile input gets a clear error instead of a stack overflow.
 
@@ -1249,7 +1253,6 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `id in seen` on an int-keyed set | scans values | `has_key(seen, id)` |
 | Boolean `sort` comparator | array left unsorted | return `a - b` |
 | `json.encode({})` | `[]` | write `'{}'` yourself |
-| Int-keyed table (not `0 .. n-1`) to `json.encode` **(bug)** | entries lost | string keys |
 | `match` with no arm matching | yields `nil` silently | add an `else` |
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |
 | `when x > 5`, `when "a" or "b"` | compares with a bool / one value | `if` chain |

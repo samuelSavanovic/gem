@@ -160,7 +160,8 @@ end
 # std/math       min, max, clamp, assert
 # std/time       now, format, format_local, iso8601, http_date, date
 # std/log        set_level, debug, info, warn, error
-# std/json       parse, encode
+# std/json       parse, encode   (array = keys 0..n-1, else object with int keys as "42";
+#                nesting > 1000 raises; ints past 64 bits parse as floats)
 # std/http       response, ok, html, json_response, redirect, not_found, bad_request, server_error,
 #                set_cookie, delete_cookie, parse_form, html_escape, router, start, serve
 # std/request    get, post, put, patch, delete, request

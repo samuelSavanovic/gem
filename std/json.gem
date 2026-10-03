@@ -1,24 +1,37 @@
 # std/json — JSON parser and encoder for Gem
 # Passes all 283 required cases of https://github.com/nst/JSONTestSuite
 # (`make test-json-suite`).
+#
+# Limits (see SPEC): both directions refuse nesting deeper than 1,000
+# arrays/objects with a `json.parse: ` / `json.encode: ` error, well inside
+# the 8 MB process stack. The encoder's cap also stops cyclic tables.
+
+let max_parse_depth = 1000
+let max_encode_depth = 1000
 
 # ─── Scanner ──────────────────────────────────────────────────────
+# Byte-level cursor over the input. Bytes are compared as numbers
+# (`ord`), never as 1-byte strings, and string/number tokens are cut out
+# with `substr`, so the hot loops don't allocate per byte.
 
 fn make_scanner(input)
   let pos = 0
   let length = len(input)
 
+  let fail = fn(msg)
+    error("json.parse: {msg} at byte {pos}")
+  end
+
+  # Current byte, or -1 at the end of the input.
   let peek = fn()
     if pos >= length
-      return ""
+      return -1
     end
-    input[pos]
+    ord(input, pos)
   end
 
   let advance = fn()
-    let ch = peek()
     pos += 1
-    ch
   end
 
   let skip_ws = fn()
@@ -31,298 +44,308 @@ fn make_scanner(input)
     end
   end
 
-  {peek: peek, advance: advance, skip_ws: skip_ws}
-end
-
-# ─── Helpers ──────────────────────────────────────────────────────
-
-fn is_digit(ch)
-  if ch == ""
-    return false
+  let at_end = fn()
+    pos >= length
   end
-  let c = ord(ch)
-  c >= 48 and c <= 57
-end
 
-fn hex_char(n)
-  if n < 10
-    chr(48 + n)
-  else
-    chr(55 + n)
-  end
-end
-
-fn hex_byte(n)
-  hex_char(n / 16) + hex_char(n % 16)
-end
-
-fn hex_digit_value(ch)
-  let c = ord(ch)
-  if c >= 48 and c <= 57
-    return c - 48
-  end
-  if c >= 65 and c <= 70
-    return c - 55
-  end
-  if c >= 97 and c <= 102
-    return c - 87
-  end
-  -1
-end
-
-fn parse_hex4(s)
-  let code = 0
-  let j = 0
-  while j < 4
-    let hex_ch = s.advance()
-    if hex_ch == ""
-      error("unterminated unicode escape")
+  let literal = fn(text, value)
+    if substr(input, pos, len(text)) != text
+      fail("expected '{text}'")
     end
-    let v = hex_digit_value(hex_ch)
-    if v < 0
-      error("invalid hex digit in unicode escape: " + hex_ch)
-    end
-    code = code * 16 + v
-    j += 1
+    pos += len(text)
+    value
   end
-  code
+
+  let hex4 = fn()
+    if pos + 4 > length
+      fail("unterminated unicode escape")
+    end
+    let code = 0
+    for i = 0, 4
+      let c = ord(input, pos)
+      let v = -1
+      if c >= 48 and c <= 57
+        v = c - 48
+      elif c >= 65 and c <= 70
+        v = c - 55
+      elif c >= 97 and c <= 102
+        v = c - 87
+      end
+      if v < 0
+        fail("invalid hex digit in unicode escape")
+      end
+      code = code * 16 + v
+      pos += 1
+    end
+    code
+  end
+
+  # Appends one `\uXXXX` escape (a surrogate pair counts as one) as UTF-8.
+  let unicode_escape = fn(buf)
+    let code = hex4()
+    if code >= 55296 and code <= 56319
+      if substr(input, pos, 2) != "\\u"
+        fail("expected low surrogate after high surrogate")
+      end
+      pos += 2
+      let lo = hex4()
+      if lo < 56320 or lo > 57343
+        fail("invalid low surrogate")
+      end
+      code = (code - 55296) * 1024 + (lo - 56320) + 65536
+    end
+    if code < 128
+      buf_push(buf, chr(code))
+    elif code < 2048
+      buf_push(buf, chr(192 + code / 64))
+      buf_push(buf, chr(128 + code % 64))
+    elif code < 65536
+      buf_push(buf, chr(224 + code / 4096))
+      buf_push(buf, chr(128 + (code / 64) % 64))
+      buf_push(buf, chr(128 + code % 64))
+    else
+      buf_push(buf, chr(240 + code / 262144))
+      buf_push(buf, chr(128 + (code / 4096) % 64))
+      buf_push(buf, chr(128 + (code / 64) % 64))
+      buf_push(buf, chr(128 + code % 64))
+    end
+  end
+
+  # The cursor is on the opening quote.
+  let read_string = fn()
+    pos += 1
+    let start = pos
+    # Fast path: no escapes, the string is one substr.
+    while pos < length
+      let c = ord(input, pos)
+      if c == 34
+        pos += 1
+        return substr(input, start, pos - 1 - start)
+      end
+      if c == 92
+        break
+      end
+      if c < 32
+        fail("unescaped control character in string")
+      end
+      pos += 1
+    end
+    let buf = buf_new()
+    buf_push(buf, substr(input, start, pos - start))
+    while true
+      if pos >= length
+        fail("unterminated string")
+      end
+      let c = ord(input, pos)
+      if c == 34
+        pos += 1
+        break
+      end
+      if c == 92
+        pos += 1
+        if pos >= length
+          fail("unterminated escape sequence")
+        end
+        let e = ord(input, pos)
+        pos += 1
+        if e == 110
+          buf_push(buf, "\n")
+        elif e == 116
+          buf_push(buf, "\t")
+        elif e == 114
+          buf_push(buf, "\r")
+        elif e == 92
+          buf_push(buf, "\\")
+        elif e == 34
+          buf_push(buf, "\"")
+        elif e == 47
+          buf_push(buf, "/")
+        elif e == 98
+          buf_push(buf, chr(8))
+        elif e == 102
+          buf_push(buf, chr(12))
+        elif e == 117
+          unicode_escape(buf)
+        else
+          pos -= 1
+          fail("invalid escape sequence")
+        end
+      elif c < 32
+        fail("unescaped control character in string")
+      else
+        let run = pos
+        while pos < length
+          let d = ord(input, pos)
+          if d == 34 or d == 92 or d < 32
+            break
+          end
+          pos += 1
+        end
+        buf_push(buf, substr(input, run, pos - run))
+      end
+    end
+    to_string(buf)
+  end
+
+  let skip_digits = fn()
+    let start = pos
+    while pos < length
+      let c = ord(input, pos)
+      if c < 48 or c > 57
+        break
+      end
+      pos += 1
+    end
+    pos - start
+  end
+
+  # The cursor is on `-` or a digit. Integers that don't fit in 64 bits
+  # parse as floats.
+  let read_number = fn()
+    let start = pos
+    if peek() == 45
+      pos += 1
+    end
+    let int_digits = 0
+    if peek() == 48
+      pos += 1
+      int_digits = 1
+    else
+      int_digits = skip_digits()
+      if int_digits == 0
+        fail("expected digit")
+      end
+    end
+    let is_float = false
+    if peek() == 46
+      is_float = true
+      pos += 1
+      if skip_digits() == 0
+        fail("expected digit after decimal point")
+      end
+    end
+    let c = peek()
+    if c == 101 or c == 69
+      is_float = true
+      pos += 1
+      let sign = peek()
+      if sign == 43 or sign == 45
+        pos += 1
+      end
+      if skip_digits() == 0
+        fail("expected digit in exponent")
+      end
+    end
+    let text = substr(input, start, pos - start)
+    if is_float
+      return to_float(text)
+    end
+    if int_digits < 19
+      return to_int(text)
+    end
+    let r = pcall to_int(text)
+    if r.ok
+      return r.value
+    end
+    to_float(text)
+  end
+
+  {peek: peek, advance: advance, skip_ws: skip_ws, at_end: at_end, fail: fail,
+   literal: literal, read_string: read_string, read_number: read_number}
 end
 
 # ─── Parser ───────────────────────────────────────────────────────
 
-let max_depth = 128
-
 fn parse_value(s, depth)
-  if depth > max_depth
-    error("JSON nesting too deep (max 128)")
-  end
   s.skip_ws()
-  let ch = s.peek()
-
-  if ch == ""
-    error("unexpected end of input")
+  let c = s.peek()
+  if c == 34
+    return s.read_string()
   end
-  if ch == "\""
-    return parse_string(s)
+  if c == 123
+    return parse_object(s, depth + 1)
   end
-  if ch == '{'
-    return parse_object(s, depth)
+  if c == 91
+    return parse_array(s, depth + 1)
   end
-  if ch == "["
-    return parse_array(s, depth)
+  if c == 45 or (c >= 48 and c <= 57)
+    return s.read_number()
   end
-  if ch == "t"
-    return parse_literal(s, "true", true)
+  if c == 116
+    return s.literal("true", true)
   end
-  if ch == "f"
-    return parse_literal(s, "false", false)
+  if c == 102
+    return s.literal("false", false)
   end
-  if ch == "n"
-    return parse_literal(s, "null", nil)
+  if c == 110
+    return s.literal("null", nil)
   end
-  if ch == "-" or is_digit(ch)
-    return parse_number(s)
+  if c < 0
+    s.fail("unexpected end of input")
   end
-  error("unexpected character: " + ch)
+  s.fail("unexpected character '{chr(c)}'")
 end
 
-fn parse_literal(s, text, value)
-  let i = 0
-  while i < len(text)
-    let ch = s.advance()
-    if ch != text[i]
-      error("expected '" + text + "'")
-    end
-    i += 1
-  end
-  value
-end
-
-fn parse_string(s)
-  s.advance()
-  let buf = buf_new()
-  while true
-    let ch = s.advance()
-    if ch == ""
-      error("unterminated string")
-    end
-    if ch == "\""
-      break
-    end
-    let c = ord(ch)
-    if c < 32
-      error("unescaped control character in string (U+" + hex_byte(c) + ")")
-    end
-    if ch == "\\"
-      let esc = s.advance()
-      if esc == ""
-        error("unterminated escape sequence")
-      end
-      match esc
-      when "n"
-        buf_push(buf, "\n")
-      when "t"
-        buf_push(buf, "\t")
-      when "r"
-        buf_push(buf, "\r")
-      when "\\"
-        buf_push(buf, "\\")
-      when "\""
-        buf_push(buf, "\"")
-      when "/"
-        buf_push(buf, "/")
-      when "b"
-        buf_push(buf, chr(8))
-      when "f"
-        buf_push(buf, chr(12))
-      when "u"
-        let code = parse_hex4(s)
-        if code >= 55296 and code <= 56319
-          let hi = code
-          let b1 = s.advance()
-          let b2 = s.advance()
-          if b1 != "\\" or b2 != "u"
-            error("expected low surrogate after high surrogate")
-          end
-          let lo = parse_hex4(s)
-          if lo < 56320 or lo > 57343
-            error("invalid low surrogate")
-          end
-          code = (hi - 55296) * 1024 + (lo - 56320) + 65536
-        end
-        if code < 128
-          buf_push(buf, chr(code))
-        elif code < 2048
-          buf_push(buf, chr(192 + code / 64))
-          buf_push(buf, chr(128 + code % 64))
-        elif code < 65536
-          buf_push(buf, chr(224 + code / 4096))
-          buf_push(buf, chr(128 + (code / 64) % 64))
-          buf_push(buf, chr(128 + code % 64))
-        else
-          buf_push(buf, chr(240 + code / 262144))
-          buf_push(buf, chr(128 + (code / 4096) % 64))
-          buf_push(buf, chr(128 + (code / 64) % 64))
-          buf_push(buf, chr(128 + code % 64))
-        end
-      else
-        error("invalid escape sequence: \\" + esc)
-      end
-    else
-      buf_push(buf, ch)
-    end
-  end
-  to_string(buf)
-end
-
-fn parse_number(s)
-  let buf = buf_new()
-  if s.peek() == "-"
-    buf_push(buf, s.advance())
-  end
-
-  if s.peek() == "0"
-    buf_push(buf, s.advance())
-  else
-    if not is_digit(s.peek())
-      error("expected digit")
-    end
-    while is_digit(s.peek())
-      buf_push(buf, s.advance())
-    end
-  end
-
-  let is_float = false
-  if s.peek() == "."
-    is_float = true
-    buf_push(buf, s.advance())
-    if not is_digit(s.peek())
-      error("expected digit after decimal point")
-    end
-    while is_digit(s.peek())
-      buf_push(buf, s.advance())
-    end
-  end
-
-  let ch = s.peek()
-  if ch == "e" or ch == "E"
-    is_float = true
-    buf_push(buf, s.advance())
-    let sign = s.peek()
-    if sign == "+" or sign == "-"
-      buf_push(buf, s.advance())
-    end
-    if not is_digit(s.peek())
-      error("expected digit in exponent")
-    end
-    while is_digit(s.peek())
-      buf_push(buf, s.advance())
-    end
-  end
-
-  let str = to_string(buf)
-  if is_float
-    to_float(str)
-  else
-    to_int(str)
+# `depth` is the nesting level of this object/array (1 for the outermost).
+fn check_depth(s, depth)
+  if depth > max_parse_depth
+    s.fail("nesting deeper than {max_parse_depth} levels")
   end
 end
 
 fn parse_object(s, depth)
+  check_depth(s, depth)
   s.advance()
   s.skip_ws()
   let obj = {}
-  if s.peek() == '}'
+  if s.peek() == 125
     s.advance()
     return obj
   end
-
   while true
     s.skip_ws()
-    if s.peek() != "\""
-      error("expected string key in object")
+    if s.peek() != 34
+      s.fail("expected string key in object")
     end
-    let key = parse_string(s)
+    let key = s.read_string()
     s.skip_ws()
-    let colon = s.advance()
-    if colon != ":"
-      error("expected ':' in object, got: " + colon)
+    if s.peek() != 58
+      s.fail("expected ':' in object")
     end
-    let val = parse_value(s, depth + 1)
-    obj[key] = val
-
+    s.advance()
+    obj[key] = parse_value(s, depth)
     s.skip_ws()
-    let next = s.advance()
-    if next == '}'
+    let next = s.peek()
+    if next != 44 and next != 125
+      s.fail("expected ',' or '}' in object")
+    end
+    s.advance()
+    if next == 125
       break
-    end
-    if next != ","
-      error('expected comma or } in object, got: ' + next)
     end
   end
   obj
 end
 
 fn parse_array(s, depth)
+  check_depth(s, depth)
   s.advance()
   s.skip_ws()
   let arr = []
-  if s.peek() == "]"
+  if s.peek() == 93
     s.advance()
     return arr
   end
-
   while true
-    let val = parse_value(s, depth + 1)
-    push(arr, val)
-
+    push(arr, parse_value(s, depth))
     s.skip_ws()
-    let next = s.advance()
-    if next == "]"
-      break
+    let next = s.peek()
+    if next != 44 and next != 93
+      s.fail("expected ',' or ']' in array")
     end
-    if next != ","
-      error("expected ',' or ']' in array, got: " + next)
+    s.advance()
+    if next == 93
+      break
     end
   end
   arr
@@ -331,115 +354,157 @@ end
 # ─── Public API: parse ────────────────────────────────────────────
 
 fn parse(input)
+  if type(input) != "string"
+    error("json.parse: expected a string, got {type(input)}")
+  end
   let s = make_scanner(input)
   let val = parse_value(s, 0)
   s.skip_ws()
-  if s.peek() != ""
-    error("unexpected data after JSON value")
+  if not s.at_end()
+    s.fail("unexpected data after JSON value")
   end
   val
 end
 
 # ─── Encoder ──────────────────────────────────────────────────────
 
-fn encode_string(s, buf)
+let hex_digits = "0123456789abcdef"
+
+# Appends `str` as a JSON string literal. Runs of bytes that need no
+# escape go into the buffer as one piece.
+fn encode_string(str, buf)
   buf_push(buf, "\"")
-  let slen = len(s)
+  let n = len(str)
+  let run = 0
   let i = 0
-  while i < slen
-    let c = ord(s, i)
+  while i < n
+    let c = ord(str, i)
+    if c >= 32 and c != 34 and c != 92
+      i += 1
+      continue
+    end
+    if i > run
+      buf_push(buf, substr(str, run, i - run))
+    end
     if c == 34
       buf_push(buf, "\\\"")
     elif c == 92
       buf_push(buf, "\\\\")
-    elif c == 8
-      buf_push(buf, "\\b")
-    elif c == 12
-      buf_push(buf, "\\f")
     elif c == 10
       buf_push(buf, "\\n")
     elif c == 13
       buf_push(buf, "\\r")
     elif c == 9
       buf_push(buf, "\\t")
-    elif c < 32
-      buf_push(buf, "\\u00")
-      let hi = c / 16
-      let lo = c % 16
-      if hi < 10
-        buf_push(buf, chr(48 + hi))
-      else
-        buf_push(buf, chr(87 + hi))
-      end
-      if lo < 10
-        buf_push(buf, chr(48 + lo))
-      else
-        buf_push(buf, chr(87 + lo))
-      end
+    elif c == 8
+      buf_push(buf, "\\b")
+    elif c == 12
+      buf_push(buf, "\\f")
     else
-      buf_push(buf, chr(c))
+      buf_push(buf, "\\u00")
+      buf_push(buf, hex_digits[c / 16])
+      buf_push(buf, hex_digits[c % 16])
     end
     i += 1
+    run = i
+  end
+  if run == 0
+    buf_push(buf, str)
+  elif run < n
+    buf_push(buf, substr(str, run, n - run))
   end
   buf_push(buf, "\"")
 end
 
-fn is_array(val)
-  let ks = keys(val)
-  let n = len(ks)
-  if n == 0
-    return true
+# A table is a JSON array when its keys are exactly 0 .. n-1 (in any
+# order; keys are distinct, so "all ints in range" is enough). Returns
+# "array" (keys in place, `t[i]` is direct), "unordered" (a permutation of
+# 0 .. n-1) or "object". One pass, no allocation.
+fn table_kind(t)
+  let n = len(t)
+  let i = 0
+  let in_place = true
+  for k, v in t
+    if type(k) != "int" or k < 0 or k >= n
+      return "object"
+    end
+    if k != i
+      in_place = false
+    end
+    i += 1
   end
-  type(ks[0]) == "int"
+  if in_place
+    return "array"
+  end
+  "unordered"
 end
 
-fn encode_value(val, buf)
-  let t = type(val)
-  if t == "nil"
-    buf_push(buf, "null")
-  elif t == "bool"
-    if val
-      buf_push(buf, "true")
-    else
-      buf_push(buf, "false")
-    end
-  elif t == "int"
-    buf_push(buf, to_string(val))
-  elif t == "float"
-    buf_push(buf, to_string(val))
-  elif t == "string"
-    encode_string(val, buf)
-  elif t == "table"
-    if is_array(val)
-      buf_push(buf, "[")
-      let n = len(val)
-      let i = 0
-      while i < n
-        if i > 0
-          buf_push(buf, ",")
-        end
-        encode_value(val[i], buf)
-        i += 1
-      end
-      buf_push(buf, "]")
-    else
-      buf_push(buf, '{')
-      let ks = keys(val)
-      let n = len(ks)
-      let i = 0
-      while i < n
-        if i > 0
-          buf_push(buf, ",")
-        end
-        encode_string(ks[i], buf)
-        buf_push(buf, ":")
-        encode_value(val[ks[i]], buf)
-        i += 1
-      end
-      buf_push(buf, '}')
-    end
+fn encode_key(k, buf)
+  let kt = type(k)
+  if kt == "string"
+    encode_string(k, buf)
+  elif kt == "int"
+    buf_push(buf, "\"")
+    buf_push(buf, k)
+    buf_push(buf, "\"")
   else
-    error("cannot encode " + t + " to JSON")
+    error("json.encode: cannot encode a {kt} table key (only string and int keys)")
+  end
+end
+
+fn encode_table(t, buf, depth)
+  if depth > max_encode_depth
+    error("json.encode: nesting deeper than {max_encode_depth} levels (or a cyclic table)")
+  end
+  let kind = table_kind(t)
+  if kind == "object"
+    buf_push(buf, '{')
+    let first = true
+    for k, v in t
+      if not first
+        buf_push(buf, ",")
+      end
+      first = false
+      encode_key(k, buf)
+      buf_push(buf, ":")
+      encode_value(v, buf, depth)
+    end
+    buf_push(buf, '}')
+    return nil
+  end
+  let items = t
+  if kind == "unordered"
+    # Put the values in index order first, so the walk below stays linear.
+    items = []
+    for i = 0, len(t)
+      push(items, nil)
+    end
+    for k, v in t
+      items[k] = v
+    end
+  end
+  buf_push(buf, "[")
+  for i = 0, len(items)
+    if i > 0
+      buf_push(buf, ",")
+    end
+    encode_value(items[i], buf, depth)
+  end
+  buf_push(buf, "]")
+end
+
+fn encode_value(val, buf, depth)
+  let t = type(val)
+  if t == "string"
+    encode_string(val, buf)
+  elif t == "nil"
+    buf_push(buf, "null")
+  elif t == "int" or t == "float" or t == "bool"
+    buf_push(buf, val)
+  elif t == "table"
+    encode_table(val, buf, depth + 1)
+  else
+    error("json.encode: cannot encode a {t}")
   end
 end
 
@@ -447,7 +512,7 @@ end
 
 fn encode(val)
   let buf = buf_new()
-  encode_value(val, buf)
+  encode_value(val, buf, 0)
   to_string(buf)
 end
 
