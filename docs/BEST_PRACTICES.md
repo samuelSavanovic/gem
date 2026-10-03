@@ -33,7 +33,7 @@ Contents: [Before you start](#before-you-start) ·
 **Running.** `gem prog.gem` compiles and runs a program; `gem prog.gem -o
 prog` only builds the binary; `gem --check prog.gem` only checks it (and
 prints the compiler's `note:` and `warning:` lines). `argv()` returns the
-program's command-line arguments and `getenv(name)` reads the environment.
+command-line arguments, with the program name at `argv()[0]`, and `getenv(name)` reads the environment.
 
 **Builtins and std modules.** Builtins such as `print`, `len`, `push`,
 `keys`, `sort`, `spawn`, `send` and `str_replace` are always there (the
@@ -179,9 +179,11 @@ With `let total = total + x` inside the loop, each iteration makes a new
 with no warning. The compiler warns only in one case: a `let` in a `while`
 body that hides a variable the loop's condition reads.
 
-Shadowing on purpose is fine. The new variable's initializer still sees the
-old one, so `let n = n - 1` and `let line = string.trim(line)` work, and a closure
-created before the second `let` keeps the old variable.
+Shadowing on purpose is fine. The new variable's initializer still sees
+the old one, so `let n = n - 1` and `let line = string.trim(line)` work,
+and inside a function a closure created before the second `let` keeps the
+old variable. (At module level a second `let` rebinds instead; see
+below.)
 
 ### Declare before the block, assign inside
 
@@ -514,7 +516,8 @@ later as a `nil` somewhere else.
 
 Any variable named `string`, `table`, `json`, `time` (or like any module
 the file loads) hides the module, and `json.encode(x)` then fails only at
-runtime (`field access on non-table`). A module-level `let` of that name
+runtime (`field access on non-table`, or `attempt to call nil value` if
+the variable holds a table). A module-level `let` of that name
 hides it for the whole file, functions defined above the `let` included.
 Pick another name.
 
@@ -866,7 +869,7 @@ old contents.
 ### Deep recursion raises an error
 
 Every process has an 8 MB stack: from a few thousand non-tail frames
-(functions with a large `match` or `receive`) to about 35,000 (small
+(functions with a large `match` or `receive`) to about 30,000 (small
 ones). Past that, the call raises `stack overflow in <fn>`, which `pcall`
 catches like any error. `json.parse` refuses nesting deeper than about 128
 levels; `json.encode` has no cap and overflows at about 5,000. For
@@ -969,7 +972,8 @@ Match on `tag` in `receive`. Prefix tags that are private to a module with
   `spawn` followed by `link`: linking to a process that has already
   exited, even normally, kills the caller with reason `noproc`, and
   `pcall` can't catch that.
-- `spawn_monitor(f)`: spawn and monitor in one step.
+- `spawn_monitor(f)`: spawn and monitor in one step. It returns
+  `{pid: pid}`, not a bare pid.
 - `process_flag("trap_exit", true)`: turns the death of a linked process
   into a message, `{tag: "EXIT", pid: pid, reason: reason}`, instead of
   killing this process. Only for processes whose job is to handle deaths
@@ -1161,9 +1165,10 @@ export make, use
 
 - `load "./thing"` loads `thing.gem` from the loading file's directory and
   binds its exports as `thing.make`, `thing.use`. `load "std/x"` loads a
-  std module. `load "std/string" (split, trim)` also binds `split` and
-  `trim` directly; prefer the namespace (`string.split`) unless a name is
-  used often enough to be noise.
+  std module. `load "std/string" (split, trim)` binds only `split` and
+  `trim`, with no `string.` namespace; prefer the plain `load` and the
+  namespace (`string.split`) unless a name is used often enough to be
+  noise.
 - The `export` list decides what is public. Private functions don't need a
   `_` prefix.
 - Name module files in `snake_case`: a file name that isn't a C
