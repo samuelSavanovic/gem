@@ -82,6 +82,18 @@ its symbol. Modules hit it too: `a` with `f`↔`g` next to a module `a_f`
 with `fn body` (`module_mangle` in compiler/main.gem doesn't account for
 the `_body` suffix). Give the helper a name no user fn can have.
 
+### A float key in a table literal becomes a string key
+
+```gem
+let t = {1.5: "e"}
+print(has_key(t, "1.5"), has_key(t, 1.5))   # true false
+```
+
+The parser keeps a NUMBER key's text, and `compile_table` emits it as a
+string key; a pattern `{1.5: x}` does the same (compiler/parser.gem
+`parse_int_key` handles only ints). It should be a float key or a
+compile error.
+
 ## Runtime
 
 ### `INT64_MIN / -1` kills the program on x86-64

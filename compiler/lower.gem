@@ -17,7 +17,7 @@
 #   for_in:   {tag, var_name, val_name (or nil), items, body, line}
 #   for_range:{tag, var_name, start, end_, body, line}
 #   match_arm:{tag, pattern (or nil), expr (or nil), body}
-#   pat_table:{tag, entries: [{key, value (or nil)}]}
+#   pat_table:{tag, entries: [{key, value (or nil), int_key (an int key's value, else nil)}]}
 #   pat_array:{tag, elements: [pat, ...]}
 #   pat_literal:{tag, literal: <int|float|string|bool|nil node>}
 #   pat_name: {tag, name}
@@ -397,6 +397,7 @@ fn pattern_to_cond(pat, target_expr, state)
     let bindings = []
     for entry in pat.entries
       let key_str = make_string(entry.key)
+      if entry.int_key != nil then key_str = make_int(entry.int_key) end
       push(conditions, make_call(make_var("__has_key"), [target_expr, key_str], 0))
       let sub_target = make_index(target_expr, key_str)
       if entry.value == nil

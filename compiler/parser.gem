@@ -229,6 +229,42 @@ fn make_parser(tokens, source, file, sink)
     report(t.line, t.col, len(t.value), "integer literal out of range (max 9223372036854775807)", "ints are 64-bit signed: -9223372036854775808 to 9223372036854775807")
   end
 
+  # An int key in a table literal or table pattern: when the tokens at the
+  # cursor are `NUMBER :` with an integer NUMBER, consumes them up to the
+  # `:` and returns the key's value, read like any int literal (decimal,
+  # leading zeros ignored, range-checked: an out-of-range key is reported
+  # and reads as 0). `- NUMBER :` is reported: a negative int indexes from
+  # the end and is never a key. Otherwise consumes nothing and returns nil.
+  let parse_int_key = fn()
+    let negative = peek().type == "-"
+    let off = 0
+    if negative then off = 1 end
+    let nt = peek_at(off)
+    if nt.type != "NUMBER" or contains_dot(nt.value) or peek_at(off + 1).type != ":"
+      return nil
+    end
+    let first = advance()
+    if negative
+      advance()
+      report(first.line, first.col, nt.col + len(nt.value) - first.col, "a negative int can't be a table key", "a negative int indexes from the end of an array (`t[-1]` is the last element); key the entry with a string")
+      return 0
+    end
+    if int_literal_range(nt.value) != "ok"
+      report_int_range(nt)
+      return 0
+    end
+    str_to_int(nt.value)
+  end
+
+  # Table (or table pattern) entry `entry` gets the int key `n`: its `key`
+  # is the decimal text and `int_key` the int, which codegen and the
+  # pattern lowering use. A key written as a string stays a string.
+  let set_int_key = fn(entry, n)
+    entry.key = to_string(n)
+    entry.int_key = n
+    entry
+  end
+
   # Enter a function body (kind as for closure_kind); returns the state
   # leave_fn_body restores.
   let enter_fn_body = fn(kind)
@@ -611,7 +647,8 @@ fn make_parser(tokens, source, file, sink)
     end
 
     # Table literal: {key: val, ...}
-    # Keys can be names or keywords (else, end, when, match, etc.)
+    # Keys can be names, keywords (else, end, when, match, etc.), strings
+    # or non-negative ints.
     if t.type == "\{"
       advance()
       skip_nl()
@@ -619,19 +656,24 @@ fn make_parser(tokens, source, file, sink)
       while peek().type != "}" and not at_end()
         let _lp = pos
         let key_tok = peek()
-        if key_tok.type == "NAME"
-          advance()
-        elif not at_end() and peek_at(1).type == ":"
-          # Keyword in key position — allow it
-          advance()
-        else
-          report(key_tok.line, key_tok.col, len(key_tok.value), "expected '}' or table key but got '{key_tok.type}'", nil)
-          force_progress(_lp)
-          continue
+        let int_key = parse_int_key()
+        if int_key == nil
+          if key_tok.type == "NAME"
+            advance()
+          elif not at_end() and peek_at(1).type == ":"
+            # Keyword (or string) in key position — allow it
+            advance()
+          else
+            report(key_tok.line, key_tok.col, len(key_tok.value), "expected '}' or table key but got '{key_tok.type}'", nil)
+            force_progress(_lp)
+            continue
+          end
         end
         expect(":")
         let val = parse_expr()
-        push(entries, make_table_entry(key_tok.value, val))
+        let entry = make_table_entry(key_tok.value, val)
+        if int_key != nil then set_int_key(entry, int_key) end
+        push(entries, entry)
         skip_nl()
         if peek().type == ","
           advance()
@@ -1050,15 +1092,18 @@ fn make_parser(tokens, source, file, sink)
       while peek().type != "}" and not at_end()
         let _lp = pos
         let key_tok = peek()
-        if key_tok.type == "NAME"
-          advance()
-        elif peek_at(1).type == ":"
-          # keyword as key
-          advance()
-        else
-          report(key_tok.line, key_tok.col, len(key_tok.value), "expected key name in table pattern", nil)
-          force_progress(_lp)
-          continue
+        let int_key = parse_int_key()
+        if int_key == nil
+          if key_tok.type == "NAME"
+            advance()
+          elif peek_at(1).type == ":"
+            # keyword (or string) as key
+            advance()
+          else
+            report(key_tok.line, key_tok.col, len(key_tok.value), "expected key name in table pattern", nil)
+            force_progress(_lp)
+            continue
+          end
         end
         let key_name = key_tok.value
         let sub_pat = nil
@@ -1067,7 +1112,9 @@ fn make_parser(tokens, source, file, sink)
           skip_nl()
           sub_pat = parse_pattern()
         end
-        push(entries, make_pat_table_entry(key_name, sub_pat))
+        let entry = make_pat_table_entry(key_name, sub_pat)
+        if int_key != nil then set_int_key(entry, int_key) end
+        push(entries, entry)
         skip_nl()
         if peek().type == ","
           advance()

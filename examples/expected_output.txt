@@ -2651,3 +2651,17 @@ error: sqlite_query: parameter 2 is a fn; expected nil, bool, int, float or stri
 error: sqlite_query: params must be a table, got int
 sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string
 [{v: "ok"}]
+{10: "ten", "5": "five", "09": "nine", 7: "seven", 9223372036854775807: "max", 0: "zero"}
+ten
+false
+true
+false
+nine
+max
+{1: "b", 0: "a", 2: "c"}
+3
+int 20
+string s
+int lead
+none
+seven five zero

@@ -13,5 +13,13 @@ fn g(v)
   else 3
   end
 end
+# ... and as an int key in a table literal or pattern
+let t = {99999999999999999999: 1, 9223372036854775808: 2}
+fn h(v)
+  match v
+  when {9223372036854775808: x} then x
+  else 0
+  end
+end
 
 # expect: integer literal out of range

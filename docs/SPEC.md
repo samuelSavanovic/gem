@@ -313,7 +313,7 @@ let list = [1, 2, 3]
 list[0]
 ```
 
-`{ }` with keys is a table. `[ ]` is sugar for an integer-keyed table. Dot access is sugar for string key lookup. Keywords are allowed as table keys and dot fields: `{else: body}`, `node.else`.
+`{ }` with keys is a table. `[ ]` is sugar for an integer-keyed table. Dot access is sugar for string key lookup. Keywords are allowed as table keys and dot fields: `{else: body}`, `node.else`. A literal key is a name or keyword (a string key), a string (`{"x y": 1}`; `{"5": 1}` has the string key `"5"`), or a non-negative int literal (`{0: "a", 10: "b"}`), which reads like any int literal: `{010: x}` has the key `10`, and a key outside the int range is a compile error. A negative int key (`{-1: x}`) is a compile error, since negative ints index from the end (see Negative array indexing). Table patterns take the same keys: `when {1: x}` matches a table with the int key `1`, `when {"1": x}` one with the string key `"1"`.
 
 Tables can have methods via closures:
 
