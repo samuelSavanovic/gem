@@ -244,6 +244,16 @@ sqlite's parser stops at a NUL even when given the full length, so
 see a second statement after one. Both should raise on SQL containing a
 NUL (runtime/gem_builtins_sqlite.c).
 
+### `sort` doesn't renumber the keys of a table with one entry
+
+```gem
+print(sort({a: 5}), sort({a: 5, b: 1}))   # {a: 5} [1, 5]
+```
+
+SPEC says `sort` renumbers keys to `0..n-1`, but `gem_sort_fn`
+(runtime/gem_builtins_collection.c) returns early when the table has at
+most one entry, so `{a: 5}` keeps its string key.
+
 ## Standard library
 
 

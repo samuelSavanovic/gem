@@ -1181,7 +1181,7 @@ end
 
 `sort(arr)` — sorts an array table in place using the default ordering (numbers < strings, within type: numeric/lexicographic). Returns the table. Renumbers keys to 0..n-1.
 
-`sort(arr, cmp)` — sorts with a custom comparator function. `cmp(a, b)` must return a negative number if a < b, 0 if equal, positive if a > b. The sort is stable (elements the comparator calls equal keep their order). A comparator may sort other arrays itself, and may run while other processes sort. The comparator sees the array as it was before the sort, and changes it makes to the array's elements are lost: the sorted result is written back at the end. If it raises, the error propagates and the array is left as it was; one that changes the length of the array being sorted raises `sort: the comparator changed the length of the table being sorted`.
+`sort(arr, cmp)` — sorts with a custom comparator function. `cmp(a, b)` must return a negative number if a < b, 0 if equal, positive if a > b. The sort is stable (elements the comparator calls equal keep their order). A comparator may sort other arrays itself, and may run while other processes sort. The comparator sees the array as it was before the sort, and what it stores into the array's slots (`arr[i] = x`) is lost (changes inside an element table are kept): the sorted result is written back at the end. If it raises, the error propagates and the array is left as it was; one that changes the length of the array being sorted raises `sort: the comparator changed the length of the table being sorted`.
 
 `floor(x)` — returns the largest integer ≤ x. Returns the value unchanged if already an integer.
 
