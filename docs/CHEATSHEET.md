@@ -164,7 +164,8 @@ end
 #                nesting > 1000 raises; ints past 64 bits parse as floats)
 # std/http       response, ok, html, json_response, redirect, not_found, bad_request, server_error,
 #                set_cookie, delete_cookie, parse_form, html_escape, router, start, serve
-# std/request    get, post, put, patch, delete, request
+# std/request    get, post, put, patch, delete, request  (http:// only; opts {body, headers, timeout_ms = 30000};
+#                returns {status, headers (lowercase names), body (chunked decoded)})
 # std/url        encode, decode, parse, parse_query, build_query
 # std/mime       lookup, ext
 # std/sqlite     open, close, exec, query, last_id, changes  (wraps sqlite_* builtins)

@@ -2882,6 +2882,58 @@ parse "{1: 2}": error json.parse: expected string key in object at byte 1
 parse non-string: error json.parse: expected a string, got int
 encode fn: error json.encode: cannot encode a fn
 encode ref: error json.encode: cannot encode a ref
+chunked: 200 {"transfer-encoding": "chunked"} hello, world
+chunked split: 200 {"transfer-encoding": "chunked"} abc0123456789abcdef
+chunk ext + trailer: 200 {"transfer-encoding": "chunked", "x-checksum": "abc", "x-other": "1"} Wikipedia in a
+chunked no final CRLF: 200 {"transfer-encoding": "chunked"} ok
+chunked empty: 200 {"transfer-encoding": "chunked"} 
+bad chunk size: error: request.get: malformed chunked body: bad chunk size "zz"
+chunk too long: error: request.get: malformed chunked body: chunk data not followed by CRLF
+chunked truncated: error: request.get: malformed chunked body: connection closed inside a chunk
+chunked no last chunk: error: request.get: malformed chunked body: connection closed before the last chunk
+no reason: 204 {} 
+no reason + body: 200 {"content-length": "2"} hi
+long reason: 404 {} gone
+lowercase names: 200 {"content-type": "text/plain", "x-mixed-case": "padded", "set-cookie": "a=1, b=2", "content-length": "0"} 
+bare LF: 200 {"content-length": "3"} abc
+100 continue: 201 {"content-length": "4"} done
+content-length stops: 200 {"content-length": "3"} abc
+read to eof: 200 {} until close
+bad status: error: request.get: malformed status line "SSH-2.0-OpenSSH"
+bad code: error: request.get: malformed status line "HTTP/1.1 2x0 OK"
+bad header: error: request.get: malformed response header line "no colon here"
+bad content-length: error: request.get: invalid Content-Length "-1"
+short body: error: request.get: connection closed before the end of the body (10 bytes expected)
+empty reply: error: request.get: connection closed before a response arrived
+closed in headers: error: request.get: connection closed inside the response headers
+silent: error: request.get: timed out after 100 ms waiting for http://127.0.0.1:19815/
+silent took about 100 ms: true
+slow body: error: request.get: timed out after 100 ms waiting for http://127.0.0.1:19816/
+in time: 200 {"content-length": "2"} ok
+no timeout: 200 {"content-length": "2"} ok
+bad timeout: request.get: timeout_ms must be an int, got string
+echo: 200 {"content-length": "73"} GET / HTTP/1.1|Host: 127.0.0.1:19819|Connection: close|X-Token: t1||
+host has port: true
+POST /?q=1 HTTP/1.1|Connection: close|Content-Length: 3|Host: example.test||abc
+true
+https: request.get: https is not supported (Gem has no TLS): https://example.com/
+ftp: request.get: unsupported URL scheme "ftp" (only http:// is supported)
+no scheme: request.get: URL must start with http:// (got "example.com/x")
+no host: request.get: URL has no host: http:///x
+bad port: request.get: invalid port "abc" in URL http://127.0.0.1:abc/
+port range: request.get: invalid port "70000" in URL http://127.0.0.1:70000/
+userinfo: request.get: credentials in the URL are not supported: http://u:p@127.0.0.1/
+space: request.get: invalid character (byte 32) in URL
+crlf: request.get: invalid character (byte 13) in URL
+not a string: request.get: URL must be a string, got int
+header inject: request.get: invalid character (byte 13) in value of header X-A
+bad body: request.post: body must be a string, got int
+bad method: request.request: invalid character (byte 32) in method
+refused: request.get: cannot connect to 127.0.0.1:1: tcp_connect: connect failed: Connection refused
+leak check bad status: error: request.get: malformed status line "garbage"
+leak check timeout: error: request.get: timed out after 50 ms waiting for http://127.0.0.1:19823/
+leak check refused: request.get: cannot connect to 127.0.0.1:1: tcp_connect: connect failed: Connection refused
+fds leaked: false
 sqlite_query: not an open database handle
 sqlite_exec: not an open database handle
 sqlite_last_insert_id: not an open database handle

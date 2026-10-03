@@ -166,7 +166,7 @@ spawn() do
 
   # Redirect (no follow - should return 302)
   let resp11 = request.get(base + "/redirect")
-  if resp11.status == 302 and resp11.headers["Location"] == "/target"
+  if resp11.status == 302 and resp11.headers["location"] == "/target"
     pass += 1
   else
     print("FAIL: redirect - status={resp11.status}")

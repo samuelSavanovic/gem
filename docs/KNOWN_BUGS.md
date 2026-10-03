@@ -232,11 +232,3 @@ To restart all children, the supervisor sends each running child
 dying, so the supervisor waits forever. Erlang waits a shutdown timeout
 and then sends the untrappable `kill`; Gem has no untrappable exit signal,
 so that needs one in the runtime (`kill` in runtime/gem_scheduler.c).
-
-### `std/request` has no timeout and doesn't decode chunked bodies
-
-`request` reads with `tcp_read(fd, READ_SIZE)` and no timeout, so a silent
-server blocks the caller forever; a parse error leaks the socket; a
-chunked response comes back with the chunk framing in `body`; a status
-line with no reason phrase (`HTTP/1.1 204`) or an `https://` URL raises
-`to_int: cannot convert "" to int`.

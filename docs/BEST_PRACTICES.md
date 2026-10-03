@@ -882,7 +882,6 @@ Some std APIs don't follow this doc yet. Until they are fixed:
 
 - A `one_for_all` supervisor hangs when it restarts a child that traps
   exits **(bug)**: supervise such children `one_for_one`.
-- `std/request` reads with no timeout **(bug)**.
 
 ### Spawning
 

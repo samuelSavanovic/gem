@@ -1519,14 +1519,13 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 
 `std/request` — exports `request` table. HTTP/1.1 client for outbound requests. Depends on `std/string`, TCP builtins.
 
-- `request.get(url[, opts])` — GET request. Returns `{status, headers, body}`.
-- `request.post(url[, opts])` — POST request. `opts` supports `body` (string) and `headers` (table).
-- `request.put(url[, opts])` — PUT request. Same opts as post.
-- `request.patch(url[, opts])` — PATCH request. Same opts as post.
-- `request.delete(url[, opts])` — DELETE request. Same opts as get.
-- `request.request(method, url[, opts])` — generic method for full control.
-- URL format: `http://host[:port]/path[?query]`. Default port 80. HTTP only (no TLS).
-- Sends `Connection: close` — no keep-alive. Reads response until EOF.
+- `request.get(url[, opts])`, `request.post(url[, opts])`, `request.put(url[, opts])`, `request.patch(url[, opts])`, `request.delete(url[, opts])` — send that method. Return `{status, headers, body}`.
+- `request.request(method, url[, opts])` — any other method (`"HEAD"`, `"OPTIONS"`, ...). A `HEAD` response's body is `""`.
+- `opts` (all optional; `nil` means the default): `body` (string, default `""`; a non-empty body gets a `Content-Length` header), `headers` (table of request header name → value, sent as given), `timeout_ms` (int, default `30000`). `timeout_ms` is one deadline for the whole call, counted from before the connect until the response has been read: each read waits only for what is left of it, and when it runs out the call raises `"request.<fn>: timed out after <ms> ms waiting for <url>"`. `0` or less means no timeout. Connecting and writing the request can't be interrupted (see `tcp_connect`, `tcp_write`), so the deadline cuts short only the reads.
+- `status` is the int status code; the reason phrase is optional (`HTTP/1.1 204` works) and not returned. `headers` maps **lowercase** header names to values with surrounding whitespace trimmed (`resp.headers["content-type"]`); a header sent more than once has its values joined with `", "`. `body` is the decoded body: `Transfer-Encoding: chunked` is decoded (chunk extensions ignored, trailer fields added to `headers`; the `transfer-encoding` header stays), `Content-Length` is read exactly, and anything else is read until the server closes. Other transfer codings (gzip) are not decoded. Interim `1xx` responses (other than `101`) are skipped.
+- URL format: `http://host[:port][/path][?query][#fragment]`. Default port 80; the fragment is not sent; a path that is missing becomes `/`. `https://` raises `"request.<fn>: https is not supported (Gem has no TLS): <url>"` (see ROADMAP.md); other schemes, a URL without `http://`, a missing host, a bad port, credentials (`user:pass@`), IPv6 literals, and spaces or control bytes in the URL raise a `request.<fn>: ` error too. Control bytes (CR, LF) in a method, header name or header value also raise, so a value can't inject a header.
+- Sends `Host` (with the port when it isn't 80), `Connection: close` and `Content-Length` unless `headers` sets that name (in any case). No keep-alive, no redirects followed (a `302` comes back as is).
+- Every error is a string prefixed with the function called: `request.get: ...`, `request.request: ...`. A connect failure is `"request.<fn>: cannot connect to <host>:<port>: <tcp_connect error>"`; a malformed response (bad status line, header line, `Content-Length` or chunk framing) or a connection closed early raises one. The socket is closed on every path.
 
 `std/task` — exports `task` table. Runs a function in its own process and waits for its result; the simplest way to do several things at once. Load with `load "std/task"`.
 

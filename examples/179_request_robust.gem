@@ -1,0 +1,158 @@
+# std/request against crafted raw-TCP servers: chunked bodies, missing
+# reason phrases, timeouts, malformed responses and URLs, socket cleanup.
+
+load "std/request"
+load "std/string"
+
+let BASE_PORT = 19790
+
+# Reads one request head (and nothing past it).
+fn read_request(c)
+  let got = ""
+  while string.index_of(got, "\r\n\r\n") < 0
+    let piece = tcp_read(c, 4096, 1000)
+    if piece == nil or piece == ""
+      return got
+    end
+    got = got + piece
+  end
+  got
+end
+
+# Serves one connection on `port`: sends `pieces` (with a short pause
+# between them) and closes; or, with `hold_ms`, sends nothing and keeps
+# the connection open that long first; `linger_ms` keeps it open after the
+# pieces. A piece "<echo>" sends back the request.
+fn serve_once(port, pieces, hold_ms = 0, linger_ms = 0)
+  let lfd = tcp_listen("127.0.0.1", port)
+  spawn do
+    let c = tcp_accept(lfd)
+    let req = read_request(c)
+    if hold_ms > 0
+      sleep(hold_ms)
+    end
+    for piece in pieces
+      if piece == "<echo>"
+        tcp_write(c, "HTTP/1.1 200 OK\r\nContent-Length: {len(req)}\r\n\r\n{req}")
+      else
+        tcp_write(c, piece)
+        sleep(5)
+      end
+    end
+    if linger_ms > 0
+      sleep(linger_ms)
+    end
+    tcp_close(c)
+    tcp_close(lfd)
+  end
+end
+
+let next_port = BASE_PORT
+
+fn url_for(port, path = "/")
+  "http://127.0.0.1:{port}{path}"
+end
+
+# Runs a request against a fresh server and prints the outcome.
+fn try_get(label, pieces, opts = {}, hold_ms = 0, linger_ms = 0)
+  next_port = next_port + 1
+  serve_once(next_port, pieces, hold_ms, linger_ms)
+  let r = pcall request.get(url_for(next_port), opts)
+  if r.ok
+    let body = str_replace(r.value.body, "\r\n", "|")
+    print("{label}: {r.value.status} {r.value.headers} {body}")
+  else
+    print("{label}: error: {r.error}")
+  end
+  r
+end
+
+# Open descriptors of this program (/dev/fd works on Linux and macOS).
+fn open_fds()
+  len(list_dir("/dev/fd"))
+end
+
+fn try_url(label, f)
+  let r = pcall f()
+  print("{label}: {r.error}")
+end
+
+# ─── Chunked bodies ───
+
+try_get("chunked", ["HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n7\r\n, world\r\n0\r\n\r\n"])
+try_get("chunked split", ["HTTP/1.1 200 OK\r\nTransfer-Enc", "oding: chunked\r\n\r\n3\r", "\nabc\r\n1", "0\r\n0123456789abcdef\r\n0\r\n\r\n"])
+try_get("chunk ext + trailer", ["HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4;name=val\r\nWiki\r\nA ; x\r\npedia in a\r\n0\r\nX-Checksum: abc\r\nX-Other: 1\r\n\r\n"])
+try_get("chunked no final CRLF", ["HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n0\r\n"])
+try_get("chunked empty", ["HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n"])
+try_get("bad chunk size", ["HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nzz\r\nhello\r\n0\r\n\r\n"])
+try_get("chunk too long", ["HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhello\r\n0\r\n\r\n"])
+try_get("chunked truncated", ["HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n10\r\nshort"])
+try_get("chunked no last chunk", ["HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n"])
+
+# ─── Status lines and headers ───
+
+try_get("no reason", ["HTTP/1.1 204\r\n\r\n"])
+try_get("no reason + body", ["HTTP/1.1 200\r\nContent-Length: 2\r\n\r\nhi"])
+try_get("long reason", ["HTTP/1.0 404 Not Found Here\r\n\r\ngone"])
+try_get("lowercase names", ["HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nX-Mixed-CASE:  padded  \r\nSet-Cookie: a=1\r\nset-cookie: b=2\r\nContent-Length: 0\r\n\r\n"])
+try_get("bare LF", ["HTTP/1.1 200 OK\nContent-Length: 3\n\nabc"])
+try_get("100 continue", ["HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 201 Created\r\nContent-Length: 4\r\n\r\ndone"])
+try_get("content-length stops", ["HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabcEXTRA"])
+try_get("read to eof", ["HTTP/1.1 200 OK\r\n\r\nuntil ", "close"])
+try_get("bad status", ["SSH-2.0-OpenSSH\r\n\r\n"])
+try_get("bad code", ["HTTP/1.1 2x0 OK\r\n\r\n"])
+try_get("bad header", ["HTTP/1.1 200 OK\r\nno colon here\r\n\r\n"])
+try_get("bad content-length", ["HTTP/1.1 200 OK\r\nContent-Length: -1\r\n\r\n"])
+try_get("short body", ["HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nabc"])
+try_get("empty reply", [])
+try_get("closed in headers", ["HTTP/1.1 200 OK\r\nContent-Le"])
+
+# ─── Timeouts ───
+
+let t0 = time_ms()
+try_get("silent", [], {timeout_ms: 100}, 600)
+let took = time_ms() - t0
+print("silent took about 100 ms: {took >= 95 and took < 600}")
+try_get("slow body", ["HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\npartial"], {timeout_ms: 100}, 0, 250)
+try_get("in time", ["HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"], {timeout_ms: 1000}, 30)
+try_get("no timeout", ["HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"], {timeout_ms: 0}, 30)
+try_url("bad timeout", fn() request.get(url_for(1), {timeout_ms: "soon"}) end)
+
+# ─── What is sent ───
+
+let echoed = try_get("echo", ["<echo>"], {headers: {"X-Token": "t1"}}).value.body
+print("host has port: {string.contains(echoed, "Host: 127.0.0.1:{next_port}\r\n")}")
+next_port = next_port + 1
+serve_once(next_port, ["<echo>"])
+let posted = request.post(url_for(next_port, "?q=1#frag"), {body: "abc", headers: {Host: "example.test"}}).body
+print(str_replace(posted, "\r\n", "|"))
+next_port = next_port + 1
+serve_once(next_port, ["<echo>"])
+print(request.request("HEAD", url_for(next_port, "/h")).body == "")
+
+# ─── Bad input to the client ───
+
+try_url("https", fn() request.get("https://example.com/") end)
+try_url("ftp", fn() request.get("ftp://example.com/") end)
+try_url("no scheme", fn() request.get("example.com/x") end)
+try_url("no host", fn() request.get("http:///x") end)
+try_url("bad port", fn() request.get("http://127.0.0.1:abc/") end)
+try_url("port range", fn() request.get("http://127.0.0.1:70000/") end)
+try_url("userinfo", fn() request.get("http://u:p@127.0.0.1/") end)
+try_url("space", fn() request.get("http://127.0.0.1/a b") end)
+try_url("crlf", fn() request.get("http://127.0.0.1/a\r\nX: y") end)
+try_url("not a string", fn() request.get(42) end)
+try_url("header inject", fn() request.get(url_for(1), {headers: {"X-A": "v\r\nX-B: w"}}) end)
+try_url("bad body", fn() request.post(url_for(1), {body: 12}) end)
+try_url("bad method", fn() request.request("GET /", url_for(1)) end)
+try_url("refused", fn() request.get("http://127.0.0.1:1/") end)
+
+# ─── No socket leaks ───
+
+sleep(300)
+let before = open_fds()
+try_get("leak check bad status", ["garbage\r\n\r\n"])
+try_get("leak check timeout", [], {timeout_ms: 50}, 100)
+try_url("leak check refused", fn() request.get("http://127.0.0.1:1/") end)
+sleep(300)
+print("fds leaked: {open_fds() > before}")
