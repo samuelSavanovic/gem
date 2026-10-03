@@ -554,7 +554,7 @@ Processes are cooperatively scheduled but the compiler inserts automatic yield p
 
 Yield checks are only inserted in user-written loops. Compiler-generated loops (e.g. the mailbox scan in selective receive) do not get yield checks, since yielding mid-scan would break the selective receive contract.
 
-The yield check is a no-op when running outside a spawned process (top-level code before the scheduler starts).
+The main program runs as a process too (PID 0), so its loops yield the same way.
 
 ## Process Monitoring
 
@@ -809,6 +809,8 @@ extern include "math.h"
 extern include "stdio.h"
 ```
 
+The line is emitted as `#include "<path>"` into the generated C file, which is compiled in a temporary directory with the runtime directory on the include path; so system headers work by name, and a header of your own needs an absolute path (a relative one is not looked up next to the `.gem` file; see `docs/KNOWN_BUGS.md`). Put your own C functions in the header as `static` functions. The program is linked against libc, libm and pthreads only.
+
 **String-return ownership** differs by call kind:
 
 - `extern fn` (non-blocking) — the runtime copies the returned `char*` into the calling process's arena via `gem_string` and **does not free the original**. Use this for static literals (`getenv`, `strerror`, etc.). A `malloc`'d return will leak.
@@ -816,7 +818,7 @@ extern include "stdio.h"
 
 **Pointer lifetime.** `String`, `Bytes`, and `Table` arguments passed to an `extern fn` point into the calling process's arena. They are stable for the duration of the call but **not** across the next arena reset (which can happen at the back-edge of any loop or self tail call). An `extern blocking fn` receives malloc'd copies of its `String` and `Bytes` arguments instead, which the runtime frees once the call is over. In both cases C code must not stash these pointers — copy out with `strdup`, `memcpy`, or by value before retaining.
 
-`extern` is unsafe by definition: arity, type, and ABI are not validated at the boundary. A Gem-side mistake silently passes garbage to C.
+The wrapper checks arity and the Gem-level type of each argument (see above), but not the declaration itself: a signature that doesn't match the real C function passes wrong values or crashes, and nothing checks what the C code does with its pointers.
 
 ## Operators
 
@@ -1199,13 +1201,13 @@ end
 
 `tcp_listen(host, port)` — creates a TCP server socket bound to `host` (string) on `port` (int). Calls `socket`, `bind`, and `listen` with a backlog of 128. Sets `SO_REUSEADDR`. Returns the socket file descriptor as an integer. Raises an error on failure. Always synchronous (fast).
 
-`tcp_connect(host, port)` — opens a TCP connection to `host:port`. Returns the connected socket file descriptor as an integer. Raises an error if the connection fails or the host cannot be resolved. Supports both IP addresses and hostnames. When called from a spawned process, uses a non-blocking connect and yields to the scheduler until the connection completes.
+`tcp_connect(host, port)` — opens a TCP connection to `host:port`. Returns the connected socket file descriptor as an integer. Raises an error if the connection fails or the host cannot be resolved. Supports both IP addresses and hostnames. The connect itself is non-blocking: the calling process (main included) yields to the scheduler until it completes. Resolving a host name is not: `gethostbyname` runs inline and blocks every process.
 
-`tcp_accept(socket)` — accepts an incoming connection on a listening socket. Returns the new connection's file descriptor as an integer. When called from a spawned process, yields to the scheduler on EAGAIN and resumes when a connection is ready. Raises an error on failure.
+`tcp_accept(socket)` — accepts an incoming connection on a listening socket. Returns the new connection's file descriptor as an integer. The calling process (main included) yields to the scheduler until a connection is ready. Raises an error on failure.
 
-`tcp_read(socket[, max_bytes[, timeout_ms]])` — reads up to `max_bytes` bytes from a connected socket (default 4096). Returns the data as a string on success, `""` when the remote end has closed the connection (EOF or `ECONNRESET`), or `nil` when the optional `timeout_ms` expires with no data available. Callers without a timeout never see `nil`. When called from a spawned process, yields to the scheduler on EAGAIN and resumes when data is available or the timeout deadline is reached. The timeout is only supported from within spawned processes (the scheduler manages the deadline via the process's `deadline_ms` field).
+`tcp_read(socket[, max_bytes[, timeout_ms]])` — reads up to `max_bytes` bytes from a connected socket (default 4096). Returns the data as a string on success, `""` when the remote end has closed the connection (EOF or `ECONNRESET`), or `nil` when the optional `timeout_ms` expires with no data available. Callers without a timeout never see `nil`. While no data is available the calling process (main included) yields to the scheduler, and resumes when data arrives or the timeout deadline is reached. A `timeout_ms` of `0` or less means no timeout.
 
-`tcp_write(socket, data)` — writes the string `data` to a connected socket. Writes all bytes (loops internally on partial writes). Returns the number of bytes written as an integer. When called from a spawned process, yields to the scheduler on EAGAIN and resumes when the socket is writable.
+`tcp_write(socket, data)` — writes the string `data` to a connected socket. Writes all bytes (loops internally on partial writes). Returns the number of bytes written as an integer. The calling process yields to the scheduler while the socket is not writable; there is no timeout. Writing to a peer that has closed the connection does not raise: the first write usually still reports success and later ones return `0`.
 
 `tcp_close(socket)` — closes a socket file descriptor. Always synchronous. Returns `nil`.
 

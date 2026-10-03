@@ -76,6 +76,28 @@ that doesn't trap exits; here it ends the target (main included, with no
 report). `gem_exit_builtin` in runtime/gem_scheduler.c. Decide which
 semantics Gem wants and document it in SPEC.md (`kill`).
 
+## C interop
+
+### `extern include` with a relative path is not found next to the source
+
+```gem
+extern include "helpers.h"           # helpers.h sits next to this file
+extern fn twice(x: Int) -> Int
+print(twice(21))
+```
+
+fails in the C compiler with `fatal error: helpers.h: No such file or
+directory`. The line is copied as `#include "helpers.h"` into
+`/tmp/gem_<name>.c`, which `cc` compiles with only the runtime directory
+on its include path (the cc command in compiler/main.gem), so a relative
+path resolves against `/tmp` and `runtime/`, not the `.gem` file. The
+examples work around it with `"../examples/support/..."`, which resolves
+from `runtime/`. Expected: resolve a relative path against the directory
+of the file that contains the `extern include` (or add that directory with
+`-I`), and report a missing header as a Gem error at the line.
+`docs/BEST_PRACTICES.md` (C interop) says to use an absolute path until
+this is fixed.
+
 ## Editor grammars
 
 ### tree-sitter grammar gaps
