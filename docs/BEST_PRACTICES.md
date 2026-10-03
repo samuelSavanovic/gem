@@ -260,22 +260,6 @@ A closure given to `spawn` is the exception: the new process gets a copy
 of what the closure captures, taken at the `spawn`, and later changes on
 either side are not shared.
 
-### Don't name a parameter like a top-level `fn` of the same file **(bug)**
-
-Inside a closure, a parameter (plain, defaulted or rest) named like a
-top-level `fn` reads the function instead of the argument:
-
-```gem
-fn item() "FN" end
-fn show(item)
-  let f = fn() item end
-  f()                          # <fn>, not the argument
-end
-```
-
-A `let`, a `for` variable or a destructured parameter of that name is not
-affected. Rename the parameter.
-
 ---
 
 ## Loops
@@ -1268,7 +1252,6 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | Module-level variable read before its `let` runs | `nil` | module-level `let`s at the top |
 | Module-level `let` used as shared state | each process changes only its own copy | keep shared state in a process |
 | Module-level state written from an `http` handler | per-connection copy, no `note:` | keep state in a process |
-| Parameter named like a top-level `fn`, used in a closure **(bug)** | reads the fn | rename the parameter |
 | A variable named `json`, `string`, `table`... | module hidden; runtime error | another name |
 | Expression continued on the next line | parse error, or a silent separate statement | named `let`s |
 | `delete(arr, i)` | hole in the array; `for` misses the last element | `remove_at(arr, i)` |

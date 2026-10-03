@@ -2443,3 +2443,18 @@ child before
 hi from child
 child status 2
 read back: captured
+plain 5
+defaulted 7 8
+rest 3
+destructured d
+closure param 9
+do block [10, 20]
+boxed 12
+tco 5000050000
+mutual tco 100000
+tco rest 2
+spawn sent
+pcall [42, 22, 20]
+extern param 4
+fns FN FN fn label 1
+lexical FN

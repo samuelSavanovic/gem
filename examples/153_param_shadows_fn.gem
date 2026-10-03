@@ -1,0 +1,150 @@
+# A parameter named like a top-level fn shadows the fn in its whole scope,
+# closures and `do` blocks included.
+
+fn item() "FN" end
+fn count() "FN" end
+fn step() "FN" end
+fn acc() "FN" end
+fn label(x) "fn label {x}" end
+
+extern fn labs(n: Int) -> Int
+
+# Plain param read by a closure.
+fn plain(item)
+  let f = fn() item end
+  f()
+end
+print("plain", plain(5))
+
+# Defaulted param.
+fn defaulted(item = 7)
+  let f = fn() item end
+  f()
+end
+print("defaulted", defaulted(), defaulted(8))
+
+# Rest param.
+fn rest(...item)
+  let f = fn() len(item) end
+  f()
+end
+print("rest", rest(1, 2, 3))
+
+# Destructured param.
+fn destructured({item})
+  let f = fn() item end
+  f()
+end
+print("destructured", destructured({item: "d"}))
+
+# A closure's own param named like a fn, and a nested closure reading it.
+let g = fn(item)
+  let h = fn() fn() item end end
+  h()()
+end
+print("closure param", g(9))
+
+# A `do` block reads the param; the param is also called.
+fn calls(label)
+  let out = []
+  for x in [1, 2]
+    push(out, x)
+  end
+  let r = table_map(out) do |x|
+    label(x)
+  end
+  r
+end
+fn table_map(arr, f)
+  let r = []
+  for x in arr
+    push(r, f(x))
+  end
+  r
+end
+print("do block", calls(fn(x) x * 10 end))
+
+# Captured and mutated (boxed) param.
+fn boxed(count)
+  let inc = fn() count += 1 end
+  inc()
+  inc()
+  count
+end
+print("boxed", boxed(10))
+
+# Self tail recursion with a closure reading the param.
+fn tco(step, acc)
+  if step == 0
+    return acc
+  end
+  let f = fn() step end
+  tco(step - 1, acc + f())
+end
+print("tco", tco(100000, 0))
+
+# Mutual tail recursion.
+fn ping(item, n)
+  if n == 0
+    let f = fn() item end
+    return f()
+  end
+  pong(item + 1, n - 1)
+end
+fn pong(item, n)
+  ping(item, n)
+end
+print("mutual tco", ping(0, 100000))
+
+# Self tail call through defaults and rest.
+fn tco_rest(step = 3, ...acc)
+  if step == 0
+    let f = fn() len(acc) end
+    return f()
+  end
+  tco_rest(step - 1, 1, 2)
+end
+print("tco rest", tco_rest())
+
+# spawn do reads the param.
+fn spawner(item)
+  let me = self()
+  spawn do
+    send(me, item)
+  end
+  receive
+  when v
+    v
+  end
+end
+print("spawn", spawner("sent"))
+
+# pcall f(x), pcall do and pcall with a closure, reading the param.
+fn double(x) x * 2 end
+fn checked(item)
+  let a = pcall double(item)
+  let b = pcall do
+    item + 1
+  end
+  let c = pcall(fn() item - 1 end)
+  [a.value, b.value, c.value]
+end
+print("pcall", checked(21))
+
+# Param named like an extern fn.
+fn ext(labs)
+  let f = fn() labs end
+  f()
+end
+print("extern", ext("param"), labs(-4))
+
+# The fns themselves are still reachable where no param shadows them.
+let fns = fn() item() end
+print("fns", item(), fns(), label(1))
+
+# A closure created where the name is the fn, called inside a fn whose
+# param has the name: it keeps the fn.
+fn outer(item)
+  fns()
+end
+print("lexical", outer(3))

@@ -8,24 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### A parameter named like a top-level `fn` reads the fn inside closures
-
-```gem
-fn item() "FN" end
-fn c(item)
-  let f = fn() item end
-  f()
-end
-print(c(5))          # <fn>, expected 5
-```
-
-A closure (or `do` block) that uses a parameter (plain, defaulted or
-rest) of its enclosing function, or of itself, gets the module-level `fn`
-of the same name instead. A `let`, a `for` variable or a destructured
-parameter of that name is fine, and so is a parameter named like a builtin or a module
-`let`. The capture resolution in compiler/codegen.gem prefers the named
-fn to the parameter. `docs/BEST_PRACTICES.md` has a **(bug)** rule for it.
-
 ### Float literals keep only six significant digits; some don't compile
 
 ```gem

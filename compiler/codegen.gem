@@ -195,7 +195,8 @@ end
 # the new, uninitialized variable). So this pass alpha-renames every
 # shadowing let (and the references and assignments it scopes) to a fresh
 # `_sh<N>_<name>`. After it no let reuses a name visible at that point, and
-# every later pass sees distinct variables.
+# every later pass sees distinct variables. A parameter named like a named
+# or extern fn is renamed the same way (`shadow_param_name`).
 #
 # The one exception is a `let` in the module's own statement list (or
 # directly in a top-level `block`, the shape of a lowered `for` header or a
@@ -353,17 +354,35 @@ fn shadow_child_mode(mode)
   mode
 end
 
-# A fn or closure: its params are new C params, visible as themselves in
-# the body (hiding any outer binding of the same name).
+# A param named like a named or extern fn: codegen resolves such a name
+# to the fn wherever it is not a local of the fn being compiled (a closure
+# capturing the param, a `do` block), so the param gets a fresh name.
+fn shadow_param_name(p, ctx)
+  if set_contains(ctx.fns, p) or set_contains(ctx.externs, p)
+    ctx.n = ctx.n + 1
+    return "_sh{ctx.n}_{p}"
+  end
+  p
+end
+
+# A fn or closure: its params are new C params, visible in the body
+# (hiding any outer binding of the same name). A param keeps its name,
+# except one named like a named or extern fn (`shadow_param_name`).
 fn shadow_fn(node, env, ctx)
   let inner = copy_scope_env(env)
   if node.params != nil
+    let params = []
     for p in node.params
-      inner[p] = p
+      let c = shadow_param_name(p, ctx)
+      inner[p] = c
+      push(params, c)
     end
+    node.params = params
   end
   if node.rest_param != nil
-    inner[node.rest_param] = node.rest_param
+    let c = shadow_param_name(node.rest_param, ctx)
+    inner[node.rest_param] = c
+    node.rest_param = c
   end
   if node.defaults != nil
     for d in node.defaults
