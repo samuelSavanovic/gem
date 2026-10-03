@@ -8,16 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### The project root is not found when the entry path has no directory
-
-With `p/gem.toml`, `p/lib/util.gem` and `p/app/main.gem` containing
-`load "lib/util"`, `cd p/app && gem main.gem` fails with
-`read_file: cannot open './lib/util.gem'` and a compiler stack trace;
-`cd p && gem app/main.gem` and an absolute path work. `find_project_root`
-in compiler/loader.gem starts at `dirname("main.gem")`, which is `"."`,
-and stops because `dirname(".")` is `"."`. Make the start directory
-absolute first.
-
 ### A symlinked `gem` binary finds neither `std/` nor `runtime/`
 
 With a symlink to `build/gem` on `PATH`, `gem prog.gem` fails with

@@ -9,7 +9,8 @@
 # load_target_problem says why a resolved path can't be loaded (missing,
 # or a directory), as {msg, hint}, or nil when the file exists.
 #
-# find_project_root walks up from start_dir looking for gem.toml.
+# find_project_root walks up from start_dir (made absolute first) looking
+# for gem.toml; returns the normalized absolute root or nil.
 # compute_stdlib_root prefers $GEM_STDLIB, then a project-vendored std/,
 # then the install root.
 
@@ -78,6 +79,9 @@ end
 fn find_project_root(start_dir)
   let dir = start_dir
   if dir == "" then dir = "." end
+  # Absolute first (normalize_path resolves against the cwd), so a
+  # relative start such as "." (entry `gem main.gem`) can walk up.
+  dir = normalize_path(dir)
   while true
     if file_exists(path_join(dir, "gem.toml"))
       return dir
