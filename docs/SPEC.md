@@ -175,6 +175,8 @@ Table and array literals may span lines the same way. Other expressions may not:
 
 A call with more arguments than the function declares drops the extra ones, and missing arguments are `nil` (or the parameter's default); neither is an error. Calling a non-function value is a runtime error.
 
+Evaluation runs left to right: the callee, then each argument in order (a field access or a call inside one included), then the call. The same holds for the two operands of a binary operator (`f() + g()` calls `f` first), the parts of an interpolated string, a table index (`t[k()]` evaluates `t` before `k()`), and an assignment to a field or index (object, key, then value). `and` and `or` evaluate their left operand once, and the right one only when needed.
+
 A named function is a module-level binding: two `fn`s of the same name in one file, or a `fn` and a top-level `let` or `extern fn` of the same name, are a compile error at the second one (see Shadowing). A `let` of that name inside a function or block shadows the function as usual.
 
 If the entry file defines `fn main()`, the compiler calls it with no arguments after the file's top-level code has run. Don't also call it yourself, or it runs twice. Use `argv()` for command-line arguments.
@@ -313,7 +315,7 @@ let list = [1, 2, 3]
 list[0]
 ```
 
-`{ }` with keys is a table. `[ ]` is sugar for an integer-keyed table. Dot access is sugar for string key lookup. Keywords are allowed as table keys and dot fields: `{else: body}`, `node.else`. A literal key is a name or keyword (a string key), a string (`{"x y": 1}`; `{"5": 1}` has the string key `"5"`), or a non-negative int literal (`{0: "a", 10: "b"}`), which reads like any int literal: `{010: x}` has the key `10`, and a key outside the int range is a compile error. A negative int key (`{-1: x}`) is a compile error, since negative ints index from the end (see Negative array indexing). Table patterns take the same keys: `when {1: x}` matches a table with the int key `1`, `when {"1": x}` one with the string key `"1"`.
+`{ }` with keys is a table. `[ ]` is sugar for an integer-keyed table. Dot access is sugar for string key lookup. Keywords are allowed as table keys and dot fields: `{else: body}`, `node.else`. A literal key is a name or keyword (a string key), a string (`{"x y": 1}`; `{"5": 1}` has the string key `"5"`), or a non-negative int literal (`{0: "a", 10: "b"}`), which reads like any int literal: `{010: x}` has the key `10`, and a key outside the int range is a compile error. A negative int key (`{-1: x}`) is a compile error, since negative ints index from the end (see Negative array indexing). A float literal key (`{1.5: x}`) is a compile error too; set a float key with an index (`t[1.5] = x`). Table patterns take the same keys: `when {1: x}` matches a table with the int key `1`, `when {"1": x}` one with the string key `"1"`.
 
 Tables can have methods via closures:
 
@@ -869,7 +871,7 @@ The wrapper checks the Gem-level type of each argument and that enough arguments
 
 ## Operators
 
-`+` for both arithmetic and string concatenation. If types don't match (e.g. string + int), runtime error. No `..` operator — keep it simple.
+`+` for both arithmetic and string concatenation. If types don't match (e.g. string + int), runtime error. No `..` operator — keep it simple: `a .. b` and `0..n` are compile errors (a range loop is `for i = start, stop`).
 
 `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `not`, `in`
 
@@ -887,6 +889,8 @@ The wrapper checks the Gem-level type of each argument and that enough arguments
 variable: `t.n += 1` and `a[0] += 1` are compile errors (`compound assignment requires variable target`);
 write `t.n = t.n + 1`.
 
+An assignment is a statement, not an expression: it has no value, so one where a value is expected (`f(a = 1)`, `let b = a = 1`, `(a = 1)`, `return a = 1`, an `if`, `while` or `for` header) is a compile error at its `=`. A `do` / `{ |x| ... }` block body or a `pcall` body may be an assignment, since it is a statement.
+
 ## Strings
 
 Two quote styles: double-quoted strings support interpolation, single-quoted strings do not.
@@ -900,6 +904,8 @@ s + " world"
 ```
 
 Double-quoted strings support the escape sequences `\n`, `\r`, `\t`, `\0`, `\\`, `\"`, `\{` and `\}` (the last two escape interpolation braces). `\0` produces a null byte (0x00). Any other backslash sequence is kept as written (`"\x41"` is the four characters `\x41`); there are no `\x` or `\u` escapes, so build other bytes with `chr(n)`.
+
+A raw line break inside either kind of quoted string is part of the string (`"a` / `b"` is `"a\nb"`), and line numbers in errors count it.
 
 Note: `\0` in single-quoted strings produces the literal characters `\0` (two chars), not a null byte — single-quoted strings only process `\n`, `\r`, `\t`, `\\`, and `\'`.
 
@@ -986,6 +992,10 @@ The interpolation ends at the `}` that balances its `{` (braces of table literal
 ## Nil and Truthiness
 
 `nil` and `false` are falsy, everything else truthy.
+
+## Source files
+
+A CRLF line ending reads as LF everywhere in a source file, string literals included, so a file saved with Windows line endings compiles like the same file with LF endings. A lone CR is an ordinary character (an `unexpected character` outside a string).
 
 ## Comments
 
@@ -1327,7 +1337,7 @@ The install root also holds what every compile needs besides the stdlib: `runtim
 
 **Project root marker** — drop a `gem.toml` file at the root of your project to mark it. The file may be empty; its presence is what matters. Without it, bare-path loads behave like relative-to-importing-file (which is the safe default for single-file scripts).
 
-**Export declaration** — `export name1, name2, ...` declares which names a file exports. Placed at the end of the file.
+**Export declaration** — `export name1, name2, ...` declares which names a file exports. By convention it is placed at the end of the file; a file may have several `export` statements, and they all count (as one list).
 
 Each exported name must be bound at the module's top level: a `fn`, `extern fn` or `let` (a destructuring `let` and the bindings of the module's own `load`s included, so a module can re-export a name it imports or a namespace it loads). A name the module doesn't define, or one listed twice, is a compile error at that name in the `export` list.
 

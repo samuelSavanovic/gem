@@ -146,15 +146,31 @@ fn module_mangle(full_path, mod_name, top_names, registry)
   cand
 end
 
+# A module's exports: every top-level `export` statement counts, in order
+# (a name listed twice, in one or in two statements, is reported by
+# checked_exports). nil when there is none.
 fn find_export_node(stmts)
-  let i = len(stmts) - 1
-  while i >= 0
-    if is_node(stmts[i], "export")
-      return stmts[i]
+  let found = []
+  for stmt in stmts
+    if is_node(stmt, "export")
+      push(found, stmt)
     end
-    i -= 1
   end
-  nil
+  if len(found) == 0
+    return nil
+  elif len(found) == 1
+    return found[0]
+  end
+  let merged = {tag: "export", names: [], name_pos: [], line: found[0].line, col: found[0].col}
+  for node in found
+    for name in node.names
+      push(merged.names, name)
+    end
+    for pos in node.name_pos
+      push(merged.name_pos, pos)
+    end
+  end
+  merged
 end
 
 fn collect_module_top_names(stmts)
@@ -209,6 +225,18 @@ fn fn_body_scope(shadowed)
     end
   end
   result
+end
+
+# A fn's param defaults run in the fn's scope (its params visible).
+fn rename_defaults(defaults, rmap, inner)
+  if defaults == nil
+    return nil
+  end
+  for d in defaults
+    if d != nil
+      rename_node(d, rmap, inner)
+    end
+  end
 end
 
 fn rename_pattern(pat, rmap, shadowed)
@@ -272,6 +300,7 @@ fn rename_node(node, rmap, shadowed)
     if node.rest_param != nil
       inner[node.rest_param] = true
     end
+    rename_defaults(node.defaults, rmap, inner)
     rename_stmts(body, rmap, inner)
   when {tag: "extern_fn", name: name}
     # The binding is renamed like a fn's; the C function it calls keeps
@@ -290,6 +319,7 @@ fn rename_node(node, rmap, shadowed)
     if node.rest_param != nil
       inner[node.rest_param] = true
     end
+    rename_defaults(node.defaults, rmap, inner)
     rename_stmts(body, rmap, inner)
   when {tag: "let", name: name, value: value}
     rename_node(value, rmap, shadowed)
@@ -403,7 +433,32 @@ end
 # the block and keeps its own name. A `block` (destructuring `let`) is
 # transparent: its lets belong to the enclosing list.
 fn rename_stmt_in_scope(stmt, rmap, current, top)
-  if is_node(stmt, "block")
+  if is_node(stmt, "block") and top
+    # A module-scope destructuring `let`: the initializer (in the block's
+    # first `let`), closures in it included, still calls each builtin the
+    # block binds, as for a plain `let` of a builtin's name.
+    let pending = []
+    for s in stmt.stmts
+      if is_node(s, "let") and current[s.name] == "pending"
+        push(pending, s.name)
+      end
+    end
+    let init_scope = copy_set(current)
+    for name in pending
+      init_scope[name] = true
+    end
+    for s in stmt.stmts
+      if is_node(s, "let") and current[s.name] == "pending"
+        rename_node(s.value, rmap, init_scope)
+        s.name = rmap[s.name]
+      else
+        rename_stmt_in_scope(s, rmap, init_scope, top)
+      end
+    end
+    for name in pending
+      delete(current, name)
+    end
+  elif is_node(stmt, "block")
     for s in stmt.stmts
       rename_stmt_in_scope(s, rmap, current, top)
     end

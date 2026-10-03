@@ -67,6 +67,10 @@ expected=(
   "unterminated_string:1:1"
   "when_no_then:1:1"
   "when_no_then_arms:6:6"
+  "assign_as_value:7:7"
+  "number_dotdot:1:1"
+  "destructure_field_name:4:4"
+  "table_float_key:3:3"
 )
 
 fails=0

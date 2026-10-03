@@ -25,23 +25,24 @@ load "../compiler/builtins" (BUILTIN_NAMES)
 let MAX_ITEMS = 200
 
 # ─── Module export discovery ─────────────────────────────────────
-# A module's public surface is the `export A, B, C` statement (always
-# the trailing top-level node by convention; `find_export_node` in
-# compiler/main.gem walks bottom-up). We mirror it here rather than
-# importing from compiler/main.gem because the LSP only ever needs the
-# names list, not the full driver wiring.
+# A module's public surface is its `export A, B, C` statements (every
+# top-level one counts, as `find_export_node` in compiler/main.gem merges
+# them). We mirror it here rather than importing from compiler/main.gem
+# because the LSP only ever needs the names list, not the full driver
+# wiring.
 fn find_export_names(ast)
   if ast == nil or ast.tag != "program"
     return []
   end
-  let i = len(ast.stmts) - 1
-  while i >= 0
-    if ast.stmts[i].tag == "export"
-      return ast.stmts[i].names
+  let names = []
+  for stmt in ast.stmts
+    if stmt.tag == "export"
+      for name in stmt.names
+        push(names, name)
+      end
     end
-    i -= 1
   end
-  []
+  names
 end
 
 # ─── Table-field discovery for local vars ────────────────────────

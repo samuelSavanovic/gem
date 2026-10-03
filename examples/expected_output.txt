@@ -3835,3 +3835,25 @@ nil nil [1, 2]
 1 {a: 1, 1: 7, 2: 2}
 [5] nil
 -9223372036854775808 9223372036854775807 -2 -9223372036854775808 -9223372036854775808
+1 {v: 2} 3
+[1, 2, 3]
+3 false [1, 2, 3, 4]
+false right [false, nil, "right"]
+arg
+v
+{key: "val"} ["callee", "arg", "k", "key", "val"]
+1-2-3 [1, 2, 3]
+3 0
+[1, 5, 7, 6] 5
+done own body
+a
+b c
+d
+
+[Runtime Error]: reported at line 77
+  --> examples/194_compiler_known_bugs.gem:77
+    |
+ 77 | error("reported at line 77")
+    |
+Stack trace:
+  at main (examples/194_compiler_known_bugs.gem:77)

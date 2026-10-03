@@ -1,0 +1,77 @@
+# Compiler known-bugs batch: evaluation order, destructuring of a
+# builtin's name, several `export`s, module param defaults, line numbers
+# after a multi-line string.
+
+load "./modules/kb_split_export" as kb
+
+let log = []
+fn f(x)
+  push(log, x)
+  {v: x}
+end
+fn g(x)
+  push(log, x)
+  x
+end
+
+# Arguments run left to right, a field access among them included.
+print(f(1).v, f(2), f(3).v)
+print(log)
+
+# Both operands of a binary operator run left to right.
+log = []
+let sum = g(1) + g(2)
+let same = g(3) == g(4)
+print(sum, same, log)
+
+# `and` / `or` evaluate the left operand once.
+log = []
+let a = g(false) and g("never")
+let o = g(nil) or g("right")
+print(a, o, log)
+
+# Callee before arguments; index object before key; assignment target,
+# key, then value.
+log = []
+let fns = {id: fn(x) x end}
+let pick = fn()
+  push(log, "callee")
+  fns.id
+end
+print(pick()(g("arg")))
+let t = {k: "v"}
+print(t[g("k")])
+let u = {}
+u[g("key")] = g("val")
+print(u, log)
+
+# Interpolation parts run left to right.
+log = []
+print("{g(1)}-{f(2).v}-{g(3)}", log)
+
+# A closure in a destructuring `let` of a builtin's name still sees the
+# builtin, like a plain `let len = ...` does.
+let [len, size] = [fn(x) 0 end, fn(x) len(x) end]
+print(size("abc"), len("abc"))
+
+# Every `export` statement counts; defaults see the module's lets.
+print(kb.with_defaults(1), kb.anon_default())
+
+# A fn named `<f>_body` next to a mutual tail-call cycle through `f`.
+fn ping(n)
+  if n == 0 then return "done" end
+  pong(n - 1)
+end
+fn pong(n)
+  ping(n)
+end
+fn ping_body() "own body" end
+print(ping(3), ping_body())
+
+# A newline inside a "..." or '...' string counts as a line.
+let s = "a
+b"
+let q = 'c
+d'
+print(s, q)
+error("reported at line 77")

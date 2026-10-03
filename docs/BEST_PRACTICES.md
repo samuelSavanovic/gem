@@ -499,18 +499,6 @@ A call with too many arguments drops the extras, and missing arguments are
 later as a `nil` somewhere else. An `extern fn` is the exception: it
 raises unless the count matches exactly.
 
-### Don't rely on argument order for side effects **(bug)**
-
-Arguments run left to right, except a field access: in
-`print(monitor(p), process_info(p).monitors)` the `process_info` call
-runs first, so the list doesn't show the new monitor. When arguments have
-side effects that later ones depend on, give them their own statements:
-
-```gem
-let added = monitor(p)
-print(added, process_info(p).monitors)
-```
-
 ### `+=` works only on variables
 
 `t.count += 1` and `t[k] += 1` are compile errors. Write
@@ -1461,7 +1449,6 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |
 | `when x > 5`, `when "a" or "b"` | compares with a bool / one value | `if` chain |
 | `nil` passed for a defaulted parameter | parameter is `nil` | leave the argument out |
-| Call arguments with side effects, one a field access like `f(x).y` **(bug)** | the field access's object runs before the arguments left of it | separate statements |
 | `pcall fn() ... end`, `pcall(f, x)`, `pcall(f(x))` | runs nothing / drops `x` / doesn't catch | `pcall f(x)`, `pcall do ... end` |
 | Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
 | `2.0 == 2` | `false` | convert first |

@@ -1,0 +1,13 @@
+# An assignment is a statement: where a value is expected it is reported
+# at its `=`, not passed to codegen.
+# expect: an assignment is a statement, not a value
+fn f(x) x end
+let a = nil
+let t = {}
+print(f(a = 1))
+let b = (a = 2)
+let c = a = 3
+print(f(t.x = 1), f(t[1] = 2), f(a += 1))
+for x in a = [1]
+  print(x)
+end
