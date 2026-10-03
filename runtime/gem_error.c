@@ -29,6 +29,12 @@ void *gem_tail_env = NULL;
 int gem_tail_argc = 0;
 GemVal gem_tail_args[GEM_MAX_TAIL_ARGS];
 
+/* Codegen names fn literals with a gensym; don't show it to users. */
+const char *gem_user_fn_name(const char *name) {
+    if (!name || strncmp(name, "_anon_", 6) == 0) return "anonymous fn";
+    return name;
+}
+
 static int gem_frame_same(const GemFrame *a, const GemFrame *b) {
     return a->line == b->line && strcmp(a->name, b->name) == 0 && strcmp(a->file, b->file) == 0;
 }
@@ -40,7 +46,7 @@ void gem_print_stack_trace(void) {
         fprintf(stderr, "  ... (deeper frames not recorded)\n");
     for (int i = max - 1; i >= 0; i--) {
         fprintf(stderr, "  at %s (%s:%d)\n",
-            gem_call_stack[i].name,
+            gem_user_fn_name(gem_call_stack[i].name),
             gem_call_stack[i].file,
             gem_call_stack[i].line);
         /* Collapse a run of identical frames (deep recursion) to one line. */
@@ -78,8 +84,12 @@ static void gem_print_source_context(const char *file, int line) {
     fclose(f);
 }
 
-void gem_print_runtime_error(const char *msg) {
-    fprintf(stderr, "\n[Runtime Error]: %s\n", msg);
+/* Print an uncaught error: "[Runtime Error]: msg" (or the header `head`
+ * when given, e.g. naming a spawned process), the source line of the
+ * innermost frame and the stack trace of the current process. */
+void gem_print_runtime_error_as(const char *head, const char *msg) {
+    fflush(stdout);
+    fprintf(stderr, "\n[%s]: %s\n", head ? head : "Runtime Error", msg);
     if (gem_call_depth > 0) {
         int top = (gem_call_depth <= GEM_MAX_CALL_DEPTH ? gem_call_depth : GEM_MAX_CALL_DEPTH) - 1;
         gem_print_source_context(gem_call_stack[top].file, gem_call_stack[top].line);
@@ -88,6 +98,11 @@ void gem_print_runtime_error(const char *msg) {
         fprintf(stderr, "Stack trace:\n");
         gem_print_stack_trace();
     }
+    fflush(stderr);
+}
+
+void gem_print_runtime_error(const char *msg) {
+    gem_print_runtime_error_as(NULL, msg);
 }
 
 /* ─── Runtime error ─── */
@@ -122,12 +137,14 @@ void gem_raise_error(const char *msg) {
                 gem_pcall_longjmp(&proc->pcall_stack[proc->pcall_depth], msg);
             }
             /* Uncaught in the main user process: print and exit non-zero.
-             * Spawned processes still die silently per Erlang semantics —
-             * monitors/links surface the reason through DOWN/EXIT messages. */
+             * A spawned process gets a crash report (like Erlang's error
+             * logger) and dies; monitors/links still see the message as
+             * the exit reason through DOWN/EXIT messages. */
             if (gem_current_pid == gem_main_pid) {
                 gem_print_runtime_error(msg);
                 exit(1);
             }
+            gem_report_process_crash(gem_current_pid, msg);
             proc->exit_reason = strdup(msg);
             gem_call_depth = 0;
             longjmp(proc->proc_jmp, 1);

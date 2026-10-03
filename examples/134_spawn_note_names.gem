@@ -1,0 +1,31 @@
+# Writes to module state from a spawned process are per-process, and the
+# compiler prints a `note:` for each one. The note names the binding as the
+# user wrote it (`spawn_note_counter.hit_count`, `local_hits`) with
+# project-relative paths; tests/check_notes.sh checks the note text, this
+# file checks the per-process semantics.
+load "./modules/spawn_note_counter" as counter
+
+let local_hits = 0
+let parent = self()
+
+spawn do
+  counter.bump("a")
+  counter.bump("b")
+  local_hits = local_hits + 1
+  send(parent, {child_total: counter.total(), child_hits: local_hits})
+end
+
+let msg = receive()
+print("child total: {msg.child_total}, child hits: {msg.child_hits}")
+
+# Shadowing a module-level name in a top-level block is renamed by the
+# compiler (`_sh<N>_local_hits`); a spawn writing that block binding is not
+# module state, so it gets no note.
+for i in [1, 2]
+  let local_hits = i
+  spawn do
+    local_hits = local_hits + 10
+  end
+end
+
+print("parent total: {counter.total()}, parent hits: {local_hits}")

@@ -378,6 +378,9 @@ extern int gem_pcall_depth;
 void gem_raise_error(const char *msg);
 void gem_print_stack_trace(void);
 void gem_print_runtime_error(const char *msg);
+const char *gem_user_fn_name(const char *name);
+void gem_print_runtime_error_as(const char *head, const char *msg);
+void gem_report_process_crash(int slot, const char *msg);
 
 /* ─── Built-in functions (GemFnPtr signature) ─── */
 

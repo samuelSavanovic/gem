@@ -105,11 +105,38 @@ fn make_parser(tokens, source, file, sink)
   end
   let pos = 0
   let gensym_counter = 0
+  # One destructured binding `name = value` with an optional default that
+  # fires when the value is nil. The default is evaluated into a temp
+  # before `let name`, so a default reading `name` sees the binding it
+  # shadows (as any `let` initializer does), and only when it is needed.
+  let push_destructured = fn(stmts, name, value, dflt, line)
+    if dflt == nil
+      push(stmts, make_let(name, value, line))
+      return nil
+    end
+    gensym_counter += 1
+    let tmp = "_d{gensym_counter}v"
+    push(stmts, make_let(tmp, value, line))
+    push(stmts, make_if(
+      make_binop("==", make_var(tmp), make_nil_node()),
+      [make_assign(tmp, dflt, line)],
+      [],
+      line
+    ))
+    push(stmts, make_let(name, make_var(tmp), line))
+  end
   let fn_depth = 0
   # > 0 while parsing an if / while / for header. No trailing block is
   # taken there, so `x do` / `f() do` is reported as a stray Lua/Ruby-style
   # `do` instead of parsed as a block call.
   let header_depth = 0
+  # Loops enclosing the current statement, counted up to the innermost
+  # function boundary, and the kind of that boundary: nil (top level or a
+  # named fn), "fn" (anonymous fn), "do" (do block), "spawn" (`spawn do`).
+  # A closure is a separate C function, so `break` / `continue` can't reach
+  # a loop outside it; parse_stmt reports them when loop_depth is 0.
+  let loop_depth = 0
+  let closure_kind = nil
 
   # ── Token access ──
 
@@ -134,6 +161,34 @@ fn make_parser(tokens, source, file, sink)
   # Report a parser error at the given location.
   let report = fn(line, col, span, msg, hint)
     sink.report(source, file, line, col, span, msg, hint)
+  end
+
+  # Enter a function body (kind as for closure_kind); returns the state
+  # leave_fn_body restores.
+  let enter_fn_body = fn(kind)
+    let saved = {depth: loop_depth, kind: closure_kind}
+    loop_depth = 0
+    closure_kind = kind
+    saved
+  end
+
+  let leave_fn_body = fn(saved)
+    loop_depth = saved.depth
+    closure_kind = saved.kind
+  end
+
+  # `break` / `continue` token `t` outside any loop of its function body.
+  let report_loop_exit = fn(t)
+    let kw = "`{t.type}`"
+    if closure_kind == "do"
+      report(t.line, t.col, len(t.type), "{kw} inside a `do` block; use a `for` loop", "a `do` block is a closure, so {kw} can't reach a loop in the caller; `return` leaves the block")
+    elif closure_kind == "spawn"
+      report(t.line, t.col, len(t.type), "{kw} inside a `spawn do` block, outside any loop", "a process body is not a loop; `return` ends the process")
+    elif closure_kind == "fn"
+      report(t.line, t.col, len(t.type), "{kw} inside a `fn` closure, outside any loop", "a closure is a separate function, so {kw} can't reach a loop outside it; `return` leaves the closure")
+    else
+      report(t.line, t.col, len(t.type), "{kw} outside a loop", nil)
+    end
   end
 
   # `expect` is non-fatal: on mismatch it reports and returns a synthetic
@@ -279,15 +334,7 @@ fn make_parser(tokens, source, file, sink)
         # Bind each named field as a local. Per-field defaults fire when the
         # extracted value is nil (key missing or value explicitly nil).
         for di = 0, len(dnames)
-          push(prelude, make_let(dnames[di], make_dot(make_var(pname), dnames[di]), dline))
-          if ddflts[di] != nil
-            push(prelude, make_if(
-              make_binop("==", make_var(dnames[di]), make_nil_node()),
-              [make_assign(dnames[di], ddflts[di], dline)],
-              [],
-              dline
-            ))
-          end
+          push_destructured(prelude, dnames[di], make_dot(make_var(pname), dnames[di]), ddflts[di], dline)
         end
 
         # The prelude is part of the body, so it reruns on every iteration of
@@ -396,17 +443,38 @@ fn make_parser(tokens, source, file, sink)
     # String interpolation
     if t.type == "INTERP_START"
       advance()
+      # The lexer emits INTERP_START, then text and expression tokens
+      # alternating, each text segment an INTERP_TEXT token (possibly
+      # empty): INTERP_TEXT expr INTERP_TEXT ... INTERP_TEXT INTERP_END.
+      # Text segments have their own token type so an expression that
+      # starts with a string literal (`"{"a" in t}"`) parses as one.
       let parts = []
+      let want_text = true
       skip_nl()
       while peek().type != "INTERP_END" and not at_end()
         let _lp = pos
-        if peek().type == "STRING"
-          let sval = advance().value
-          if len(sval) > 0
-            push(parts, make_string(sval))
+        let it = peek()
+        if it.type == "INTERP_TEXT"
+          if not want_text
+            # Two text segments in a row: an empty `{}`.
+            report(it.line, it.col, 1, "empty string interpolation", "put an expression between '\{' and '}', or write '\\\{' for a literal brace")
           end
+          advance()
+          if len(it.value) > 0
+            push(parts, make_string(it.value))
+          end
+          want_text = false
         else
           push(parts, parse_expr())
+          skip_nl()
+          let nt = peek()
+          if nt.type != "INTERP_TEXT" and nt.type != "INTERP_END" and nt.type != "EOF"
+            report(nt.line, nt.col, len(nt.value), "unexpected '{nt.type}' in string interpolation", "expected '}' to close the interpolation")
+            while peek().type != "INTERP_TEXT" and peek().type != "INTERP_END" and not at_end()
+              advance()
+            end
+          end
+          want_text = true
         end
         skip_nl()
         force_progress(_lp)
@@ -438,7 +506,9 @@ fn make_parser(tokens, source, file, sink)
       let pr = parse_params()
       expect(")")
       fn_depth += 1
+      let saved_loops = enter_fn_body("fn")
       let body = parse_fn_body()
+      leave_fn_body(saved_loops)
       fn_depth -= 1
       expect("end")
       return make_anon_fn(pr.params, pr.rest_param, with_prelude(pr.prelude, body), pr.defaults)
@@ -519,6 +589,12 @@ fn make_parser(tokens, source, file, sink)
 
     # P5: garbage in expression position. Report, consume the offending
     # token so the surrounding loop makes progress, return an error stub.
+    # The '}' closing an interpolation (the INTERP_TEXT/INTERP_END after
+    # it) is left for the interpolation loop to consume.
+    if t.type == "INTERP_TEXT" or t.type == "INTERP_END"
+      report(t.line, t.col, 1, "expected expression before '}' in string interpolation", nil)
+      return make_error_expr(t.line, t.col)
+    end
     report(t.line, t.col, len(t.value), "unexpected token '{t.type}' (expected expression)", nil)
     if not at_end()
       advance()
@@ -538,11 +614,18 @@ fn make_parser(tokens, source, file, sink)
   end
 
   # `do [|params|] body end` → anonymous fn
-  let parse_do_block = fn()
+  # `is_spawn`: the block is the body of `spawn do ... end`.
+  let parse_do_block = fn(is_spawn = false)
     expect("do")
     let bp = parse_block_params()
     fn_depth += 1
+    let kind = "do"
+    if is_spawn
+      kind = "spawn"
+    end
+    let saved_loops = enter_fn_body(kind)
     let body = parse_fn_body()
+    leave_fn_body(saved_loops)
     fn_depth -= 1
     expect("end")
     make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, body), bp.defaults)
@@ -590,7 +673,8 @@ fn make_parser(tokens, source, file, sink)
       if node.tag == "var" or node.tag == "dot"
         let call_line = peek().line
         if peek().type == "do" and header_depth == 0
-          node = make_call(node, [parse_do_block()], call_line)
+          let is_spawn = node.tag == "var" and node.name == "spawn"
+          node = make_call(node, [parse_do_block(is_spawn)], call_line)
           continue
         end
         if peek().type == "\{" and peek_at(1).type == "|"
@@ -621,7 +705,7 @@ fn make_parser(tokens, source, file, sink)
 
         # Trailing do block (must be on same line — no NEWLINE between ) and do)
         if peek().type == "do" and header_depth == 0
-          push(args, parse_do_block())
+          push(args, parse_do_block(node.tag == "var" and node.name == "spawn"))
         else
           # Trailing brace block: {|params| expr} or {expr}
           # Distinguish from table literal by lookahead
@@ -775,7 +859,9 @@ fn make_parser(tokens, source, file, sink)
       advance()
       let value = parse_expr()
       if lhs.tag == "var"
-        return make_assign(lhs.name, value, start_line)
+        let a = make_assign(lhs.name, value, start_line)
+        a.col = lhs.col
+        return a
       end
       if lhs.tag == "dot"
         return make_dot_assign(lhs.object, lhs.field, value, start_line)
@@ -796,7 +882,11 @@ fn make_parser(tokens, source, file, sink)
         report(op_tok.line, op_tok.col, len(op_tok.value), "compound assignment requires variable target", nil)
         return make_error_stmt(op_tok.line, op_tok.col)
       end
-      return make_assign(lhs.name, make_binop(base_op, make_var(lhs.name), value), start_line)
+      # The assignment and the read of the target share the target's
+      # position, so a diagnostic about the name is reported once.
+      let a = make_assign(lhs.name, make_binop(base_op, make_var(lhs.name, lhs.line, lhs.col), value), start_line)
+      a.col = lhs.col
+      return a
     end
 
     lhs
@@ -965,6 +1055,47 @@ fn make_parser(tokens, source, file, sink)
     pat
   end
 
+  # True when a token of type `tp` ends a `when` arm's head: `then`
+  # (one-line arm) or the start of the next line / arm / clause.
+  let ends_arm_head = fn(tp)
+    tp == "then" or tp == "NEWLINE" or tp == "EOF" or tp == "end" or tp == "else" or tp == "when" or tp == "after"
+  end
+
+  # The body of a `when` arm. `then` starts a body on the same line, like
+  # `if <cond> then`; without it the body starts on the next line. Anything
+  # else on the pattern's line is an error.
+  let parse_arm_body = fn()
+    let nt = peek()
+    if nt.type == "then"
+      advance()
+    elif not ends_arm_head(nt.type)
+      report(nt.line, nt.col, len(to_string(nt.value)), "expected `then` or a newline after the `when` pattern", "write `when <pattern> then <body>` for a one-line arm")
+    end
+    parse_body()
+  end
+
+  # One `when` arm of a `match` or `receive` (the `when` already consumed).
+  # Destructuring pattern ({, [, ^) or bare-name catch-all → pattern arm.
+  # Anything else → expression arm (equality with the match target).
+  let parse_when_arm = fn()
+    let pt = peek().type
+    if pt == "\{" or pt == "[" or pt == "^"
+      let pat = parse_arm_pattern()
+      return make_match_arm(pat, nil, parse_arm_body())
+    end
+    if pt == "NAME" and ends_arm_head(peek_at(1).type)
+      let pat = parse_arm_pattern()
+      return make_match_arm(pat, nil, parse_arm_body())
+    end
+    let wval = parse_expr()
+    if wval.tag == "var" and not ends_arm_head(peek().type)
+      # `when x foo`: report the missing `then` once, and keep `x` a
+      # binding so its uses in the body don't also report as undeclared.
+      return make_match_arm(make_pat_name(wval.name), nil, parse_arm_body())
+    end
+    make_match_arm(nil, wval, parse_arm_body())
+  end
+
   # ── Statement parsing ──
 
   let parse_stmt_fn = fn()
@@ -1009,15 +1140,7 @@ fn make_parser(tokens, source, file, sink)
         let tmp = "_d{gensym_counter}"
         let stmts = [make_let(tmp, rhs, line)]
         for di = 0, len(names)
-          push(stmts, make_let(names[di], make_dot(make_var(tmp), names[di]), line))
-          if dflts[di] != nil
-            push(stmts, make_if(
-              make_binop("==", make_var(names[di]), make_nil_node()),
-              [make_assign(names[di], dflts[di], line)],
-              [],
-              line
-            ))
-          end
+          push_destructured(stmts, names[di], make_dot(make_var(tmp), names[di]), dflts[di], line)
         end
         return {tag: "block", stmts: stmts}
       end
@@ -1053,15 +1176,7 @@ fn make_parser(tokens, source, file, sink)
         let tmp = "_d{gensym_counter}"
         let stmts = [make_let(tmp, rhs, line)]
         for di = 0, len(names)
-          push(stmts, make_let(names[di], make_index(make_var(tmp), make_int(di)), line))
-          if dflts[di] != nil
-            push(stmts, make_if(
-              make_binop("==", make_var(names[di]), make_nil_node()),
-              [make_assign(names[di], dflts[di], line)],
-              [],
-              line
-            ))
-          end
+          push_destructured(stmts, names[di], make_index(make_var(tmp), make_int(di)), dflts[di], line)
         end
         return {tag: "block", stmts: stmts}
       end
@@ -1084,7 +1199,9 @@ fn make_parser(tokens, source, file, sink)
       let pr = parse_params()
       expect(")")
       fn_depth += 1
+      let saved_loops = enter_fn_body(nil)
       let body = parse_fn_body()
+      leave_fn_body(saved_loops)
       fn_depth -= 1
       expect("end")
       return make_fn_def(name, pr.params, pr.rest_param, with_prelude(pr.prelude, body), line, pr.defaults)
@@ -1129,7 +1246,9 @@ fn make_parser(tokens, source, file, sink)
       if cond.tag == "assign" or cond.tag == "dot_assign" or cond.tag == "index_assign"
         report(cond.line, 1, 1, "assignment is not allowed in condition; use '==' for comparison", nil)
       end
+      loop_depth += 1
       let wbody = parse_body()
+      loop_depth -= 1
       expect("end")
       return make_while(cond, wbody, line)
     end
@@ -1148,14 +1267,18 @@ fn make_parser(tokens, source, file, sink)
         let val_name = expect("NAME").value
         expect("in")
         let tbl_expr = parse_header_expr("for")
+        loop_depth += 1
         let fbody = parse_body()
+        loop_depth -= 1
         expect("end")
         return make_for_in(var_name, val_name, tbl_expr, fbody, line)
       elif peek().type == "in"
         # for x in items ... end
         advance()
         let items_expr = parse_header_expr("for")
+        loop_depth += 1
         let fbody = parse_body()
+        loop_depth -= 1
         expect("end")
         return make_for_in(var_name, nil, items_expr, fbody, line)
       elif peek().type == "="
@@ -1164,7 +1287,9 @@ fn make_parser(tokens, source, file, sink)
         let start_expr = parse_header_expr("for")
         expect(",")
         let end_expr = parse_header_expr("for")
+        loop_depth += 1
         let fbody = parse_body()
+        loop_depth -= 1
         expect("end")
         return make_for_range(var_name, start_expr, end_expr, fbody, line)
       else
@@ -1193,23 +1318,7 @@ fn make_parser(tokens, source, file, sink)
       let arms = []
       while peek().type == "when"
         advance()
-        # Destructuring pattern ({, [, ^) or bare-name catch-all → pattern arm.
-        # Anything else → expression arm (equality with the match target).
-        let pt = peek().type
-        let next = peek_at(1).type
-        if pt == "\{" or pt == "[" or pt == "^"
-          let pat = parse_arm_pattern()
-          let wbody = parse_body()
-          push(arms, make_match_arm(pat, nil, wbody))
-        elif pt == "NAME" and (next == "NEWLINE" or next == "EOF" or next == "end" or next == "else" or next == "when")
-          let pat = parse_arm_pattern()
-          let wbody = parse_body()
-          push(arms, make_match_arm(pat, nil, wbody))
-        else
-          let wval = parse_expr()
-          let wbody = parse_body()
-          push(arms, make_match_arm(nil, wval, wbody))
-        end
+        push(arms, parse_when_arm())
         skip_nl()
       end
       let else_body = nil
@@ -1237,12 +1346,18 @@ fn make_parser(tokens, source, file, sink)
     # break
     if t.type == "break"
       advance()
+      if loop_depth == 0
+        report_loop_exit(t)
+      end
       return make_break()
     end
 
     # continue
     if t.type == "continue"
       advance()
+      if loop_depth == 0
+        report_loop_exit(t)
+      end
       return make_continue()
     end
 
@@ -1336,21 +1451,7 @@ fn make_parser(tokens, source, file, sink)
         let rarms = []
         while peek().type == "when"
           advance()
-          let rpt = peek().type
-          let rnext = peek_at(1).type
-          if rpt == "\{" or rpt == "[" or rpt == "^"
-            let rpat = parse_arm_pattern()
-            let rwbody = parse_body()
-            push(rarms, make_match_arm(rpat, nil, rwbody))
-          elif rpt == "NAME" and (rnext == "NEWLINE" or rnext == "EOF" or rnext == "end" or rnext == "else" or rnext == "when" or rnext == "after")
-            let rpat = parse_arm_pattern()
-            let rwbody = parse_body()
-            push(rarms, make_match_arm(rpat, nil, rwbody))
-          else
-            let rwval = parse_expr()
-            let rwbody = parse_body()
-            push(rarms, make_match_arm(nil, rwval, rwbody))
-          end
+          push(rarms, parse_when_arm())
           skip_nl()
         end
         let rafter_ms = nil
@@ -1358,6 +1459,11 @@ fn make_parser(tokens, source, file, sink)
         if peek().type == "after"
           advance()
           rafter_ms = parse_expr()
+          # `after <ms> then <body>` mirrors one-line `when` arms; a
+          # same-line body without `then` stays accepted here.
+          if peek().type == "then"
+            advance()
+          end
           rafter_body = parse_body()
         end
         expect("end")

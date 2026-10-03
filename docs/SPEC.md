@@ -48,6 +48,54 @@ let name = "hello"
 x = 20
 ```
 
+### Scope
+
+A variable declared with `let` is visible from its declaration to the end of the block that contains the `let`, and nowhere else. Blocks are function and closure bodies (including `do` blocks), `if`/`elif`/`else` branches, `while` and `for` bodies, and `match`/`receive` arms (including `after`). `for` loop variables are scoped to the loop body and `match`/`receive` pattern bindings to their arm.
+
+Using a name where none of its declarations is visible — after the block that declared it ended, or before its `let` (for example in a `while` condition, reading a `let` of the loop body) — is a compile error (`undeclared identifier`). That holds even when every branch of an `if` declares the name, and in a loop, where a `let` from an earlier iteration is gone. To use a value after a block, declare the variable before it and assign it inside:
+
+```
+fn sign(n)
+  let s = nil          # declared before the if: visible after it
+  if n < 0 then s = "-" else s = "+" end
+  s
+end
+
+fn broken(n)
+  if n < 0 then let s = "-" else let s = "+" end
+  s                    # error: undeclared identifier `s` (each `s` ended with its branch)
+end
+```
+
+If an outer variable of the same name is visible, a use after the block refers to that outer variable (see Shadowing). A `let` directly in a file's top-level code is a module-level binding, visible to all of the file's code (see below); a `let` nested in a top-level block is block-scoped like any other.
+
+### Shadowing
+
+A `let` always declares a new variable. If a variable of the same name is already visible (a parameter, an earlier `let` in the same or an enclosing block, a captured local of an enclosing function, a module-level binding, a named function, a builtin), the new one **shadows** it:
+
+- The initializer is evaluated before the new variable exists, so it reads the old one: `let n = n - 1` reads the previous `n`.
+- Later code, including assignments (`n = …`, `n += 1`), refers to the new variable. The old one is not changed.
+- Closures created before the shadowing `let` keep the old variable; closures created after it see the new one.
+- A shadow made inside a nested block (`if`/`elif`/`else`, `while` and `for` bodies, `match`/`receive` arms, closure bodies) ends with that block: after it the outer variable is visible again, unchanged. In a loop body every iteration starts from the outer variable.
+- `for` loop variables and `match`/`receive` pattern bindings are lets of their body and shadow the same way.
+
+```
+fn f(n)
+  let before = fn() n end
+  let n = n - 1        # new n, initialized from the parameter
+  if n > 0
+    let n = n * 10     # shadows until `end`
+    print(n)           # 40
+  end
+  print(n, before())   # 4 5
+end
+f(5)
+```
+
+The exception is a `let` directly in a file's top-level code: that declares the module-level binding of the name (see below), of which there is one per name. A second top-level `let` of the same name rebinds that module-level binding, as an assignment would; named functions and closures, which always read module-level bindings live, see the new value.
+
+### Destructuring
+
 Destructuring extracts fields from tables or elements from arrays:
 
 ```
@@ -62,7 +110,7 @@ let {strategy = "one_for_one", max_restarts = 3} = spec
 let [head, tail = []] = parts
 ```
 
-Table destructuring extracts by name (`let {a, b} = expr` is `let a = expr.a; let b = expr.b`). Array destructuring extracts by index (`let [a, b] = expr` is `let a = expr[0]; let b = expr[1]`). The RHS is evaluated exactly once. Missing keys/indices produce `nil`. Per-field defaults (`name = expr`) substitute when the extracted value is `nil` (i.e. the key was absent or its value was nil); the default is only evaluated in that case and may reference earlier names in the same destructure. Patterns are flat — no renaming, nesting, or rest/splat. Match/receive patterns are stricter and do **not** accept defaults; defaults are a binding-context feature only (let, fn params).
+Table destructuring extracts by name (`let {a, b} = expr` is `let a = expr.a; let b = expr.b`). Array destructuring extracts by index (`let [a, b] = expr` is `let a = expr[0]; let b = expr[1]`). The RHS is evaluated exactly once. Missing keys/indices produce `nil`. Per-field defaults (`name = expr`) substitute when the extracted value is `nil` (i.e. the key was absent or its value was nil); the default is only evaluated in that case and may reference earlier names in the same destructure. Like any `let` initializer, a default that names the field it binds sees the binding it shadows: in `fn f(port) let {port = port + 1} = {} ... end`, the default reads the parameter. Patterns are flat — no renaming, nesting, or rest/splat. Match/receive patterns are stricter and do **not** accept defaults; defaults are a binding-context feature only (let, fn params).
 
 ### Module-level bindings are per-process
 
@@ -84,7 +132,7 @@ end
 print(count)                 # 1 — the child's write stayed in the child
 ```
 
-To share state between processes, put it in a process and talk to it with messages (`gen_server`, `register`). The compiler prints a `note:` at each write to module state in code reachable from a `spawn` body, as a reminder that the write is process-local.
+To share state between processes, put it in a process and talk to it with messages (`gen_server`, `register`). The compiler prints a `note:` at each write to module state in code reachable from a `spawn` body, as a reminder that the write is process-local. The note names the binding as you write it in source (`count` in the entry file, `counter.count` for the top-level `count` of module `counter.gem`, even when it is loaded with an alias), with project-relative paths.
 
 ## Functions
 
@@ -293,7 +341,16 @@ when "call"
 else
   error("unknown: " + tag)
 end
+
+# One-line arms: 'then' after the pattern, as with 'if ... then'
+match n
+when 0 then "zero"
+when 1 then "one"
+else "many"
+end
 ```
+
+A `when` arm's body starts either on the line after the pattern or, after `then`, on the same line (`then` must be on the pattern's line, like `if <cond> then`; the body may continue onto further lines). Anything else on the pattern's line is a compile error: `when x nil` reports "expected `then` or a newline after the `when` pattern". This holds for `match` and `receive` arms alike. A `receive`'s `after <ms>` clause also accepts an optional `then` (`after 100 then retry()`).
 
 ## Destructuring Patterns in Match
 
@@ -354,6 +411,8 @@ Each pattern compiles to a condition check plus variable bindings; the bindings 
 
 **`break`, `continue`, and `return` inside blocks:** A `do`/`end` block is a closure (anonymous function). `return` inside a block returns from the block, not from the enclosing function — the iteration function receives the return value as the result of calling the block. `break` and `continue` inside a block only affect loops *within* the block itself; they cannot break or continue a loop in the caller.
 
+`break` or `continue` with no loop around it inside its own function body is a compile error. That covers top-level code and named functions (`` `break` outside a loop``), and also a `do` block, an anonymous `fn` closure or a `spawn do` body even when the closure itself sits inside a loop, because the closure is a separate function (`` `break` inside a `do` block; use a `for` loop``). To stop iterating early, write a `for` loop instead of a block-taking call; `return` leaves the block.
+
 ## For Loops
 
 Three forms, all desugared to `while` at parse time:
@@ -396,6 +455,8 @@ let c = counter(0)
 c()  # 1
 c()  # 2
 ```
+
+A closure body (`fn() ... end`, a `do` block, a `spawn do` body, `pcall <expr>`) resolves names exactly like a named function body: reading or assigning a name that no enclosing scope declares (no `let`, parameter, function, builtin or `load`) is a compile error, `undeclared identifier`, at the use. A closure sees only the variables declared before it is created, so a closure that reads a `let` written after it, or calls itself through the `let` it initializes, is the same error; declare the variable first (`let fact = nil`) and assign the closure to it (`fact = fn(n) ... fact(n - 1) ... end`).
 
 ## Tail Call Optimization
 
@@ -472,6 +533,13 @@ send(pid, "world")
 `spawn`, `send`, `receive` are runtime functions, not keywords. Under the hood they use minicoro coroutines with a round-robin scheduler. Each spawned coroutine gets a mailbox (a simple queue). `receive` yields the coroutine if the mailbox is empty; the scheduler resumes it when a message arrives via `send`.
 
 The main process (top-level code) is itself a schedulable coroutine (PID 0). All concurrency primitives — `self()`, `send`, `receive`, `sleep`, `monitor`, `link` — work at the top level. The program exits when all processes have terminated; if spawned processes outlive main, the program continues running until they complete.
+
+**Deadlock.** When every process that is still alive is waiting in a `receive` without `after` (or `receive()`), and nothing else can wake any of them — no `sleep` or `receive ... after` deadline, no pending `send_after` timer, no process waiting on a socket or on thread-pool work (`read_file`, `exec`, an `extern blocking fn`, …) — no message can ever arrive. What happens then depends on main:
+
+- If main is one of the waiting processes, the runtime reports a deadlock like an uncaught error in main: `deadlock: main process is waiting in receive and no other process can send to it` (or `... and the other N processes are also waiting in receive`) with main's stack trace, pointing at the `receive`, goes to stderr, and the program exits with status 1. `pcall` does not catch it.
+- If main has already finished, the program ends normally (status 0); the processes still waiting in `receive` are abandoned.
+
+A process blocked on I/O counts as able to send, so a server whose main waits in `receive` while another process loops on `tcp_accept` keeps running.
 
 A pid is an int that names one process for good: after that process exits, its pid never refers to another process, even though the runtime reuses process slots. Messages sent to it are dropped, `kill` returns `nil`, `process_info` returns `nil`, `monitor` delivers `DOWN` with reason `"noproc"`, and `link` fails with `"noproc"`.
 
@@ -847,7 +915,11 @@ Interpolation supports arbitrary expressions including function calls, table acc
 print("len: {len(arr)}")
 print("val: {obj.field}")
 print("wrapped: {wrap("inner")}")
+print("{"a" in t}")             # an expression may start with a string literal
+print("{"{x}!"}")               # strings inside an interpolation may interpolate too
 ```
+
+The interpolation ends at the `}` that balances its `{` (braces of table literals inside it are counted; braces inside nested strings are not). An empty interpolation `{}` and an unclosed one are compile errors.
 
 ## Nil and Truthiness
 
@@ -864,6 +936,19 @@ print("wrapped: {wrap("inner")}")
 `error(msg)` prints the message with file and line info to stderr, followed by a call stack trace showing each Gem function frame, and halts (`exit(1)`). Runtime type errors (e.g. `1 + "a"`) also print a stack trace with the actual types involved (e.g. `type error in +: got string and int`). The compiler reports the first error and stops.
 
 **Inside spawned processes**, `error()` does not terminate the program. Each spawned process has an implicit error boundary — if an unhandled error occurs, the process dies but other processes continue. The error is captured, DOWN messages are delivered to monitors, EXIT signals propagate to linked processes, and the scheduler continues. `pcall` inside a spawned process still works — it catches errors locally before the process-level boundary. This boundary covers running out of stack too (see Stack depth below). See Process Monitoring for details.
+
+A process that dies this way is reported on stderr, like Erlang's error logger: the same message, source line and stack trace an uncaught error in the main process prints, under a header naming the process by pid (and registered name, if any). Its monitors and links see the error message as the exit reason, as before. Nothing is printed when a process returns normally, is ended by `kill` (including `kill(self(), reason)`), or dies because a linked process died; only the process whose error went uncaught is reported. Processes under a supervisor are reported too.
+
+```
+[Runtime Error in process 4 "logger"]: boom
+  --> app.gem:10
+    |
+ 10 |   error("boom")
+    |
+Stack trace:
+  at handle (app.gem:10)
+  at anonymous fn (app.gem:21)
+```
 
 **Compile-time error format**: the compiler produces Rust-style diagnostics to stderr with source context, caret highlighting, and optional hints:
 
@@ -933,7 +1018,7 @@ Running out of stack is an ordinary runtime error, not a crash:
   if not r.ok then reply(500, r.error) end   # "stack overflow in walk"
   ```
 
-- Uncaught in a spawned process, it ends that process with that reason. Monitors receive `{tag: "DOWN", pid: p, reason: "stack overflow in walk"}`, links propagate it like any other exit reason, and every other process keeps running.
+- Uncaught in a spawned process, it ends that process with that reason. Monitors receive `{tag: "DOWN", pid: p, reason: "stack overflow in walk"}`, links propagate it like any other exit reason, and every other process keeps running. The process is reported on stderr like any other uncaught error in a spawned process (see Error Handling).
 - Uncaught in the main process, it is reported like any other uncaught runtime error: the message and a stack trace go to stderr, and the program exits with status 1. In the trace, a run of identical frames is shown once, followed by `... same frame repeated N more times`, and `... (deeper frames not recorded)` marks a trace cut short (only the outermost 256 frames are recorded).
 - Native code that runs out of stack on its own — a recursive C function reached through `extern fn` — ends the process with reason `"stack overflow in native code called from <fn>"`, and `pcall` does **not** catch it, because the C code was interrupted midway. In the main process it is reported as an uncaught error (exit status 1). The runtime's own work on values never gets there: copying for `send`, `spawn` and arena resets is iterative, so a list nested millions of levels deep can be built, kept live in a loop, sent and received.
 
@@ -1135,6 +1220,13 @@ SQLite is vendored as an amalgamation (`runtime/sqlite3.c` + `runtime/sqlite3.h`
 
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
+**Builtin names are not reserved.** Builtins live in the outermost scope, so any binding with a builtin's name shadows the builtin wherever that binding is in scope, and every call or reference there reaches the binding:
+
+- A top-level `fn` or `let` (a destructuring `let` or a selective import such as `load "std/log" (error)` included) shadows the builtin for the whole file it is in, whether that is the program's entry file or a loaded module. It does not leak into modules that file loads, or into files that load it: `std/log` defines and exports `error`, and `log.error(msg)` logs while a bare `error(msg)` elsewhere still raises.
+- A parameter, `let` local, loop variable or pattern binding shadows it for its scope (`fn f(len) len + 1 end` is fine).
+
+`for` loops and `match` patterns keep working inside such a scope: they never call a user binding named `len`, `type` or `has_key`.
+
 ## Module System
 
 **Load statement** — `load` brings another file's exported definitions into scope. Every loaded file must have an `export` statement declaring its public API. The compiler keeps a table of already-loaded file paths; re-importing a module skips re-parsing but still creates the requested import bindings.
@@ -1206,7 +1298,7 @@ join(parts, ",")         # error — join was not imported
 
 All three `load` forms use the same two-step path resolution. When a module has already been loaded by the program, re-importing it skips re-parsing but still creates the requested bindings (table, alias, or selective).
 
-**Circular imports** are not detected — the compiler tracks loaded paths and reuses cached modules. If module A loads B and B loads A, the second load of A returns the cached (possibly incomplete) module. In practice this means circular dependencies may see missing exports. Avoid circular imports; restructure shared code into a third module.
+**Circular imports** are a compile error. If module A loads B and B loads A (or a longer chain closes back on a file still being loaded, the entry file included, or a file loads itself), the compiler reports one error at the `load` that closes the cycle, naming the chain with project-relative paths: `load cycle: a.gem → b.gem → a.gem`. Move the code the modules share into a module that loads none of them. A diamond (A loads B and C, both load D) is not a cycle: D is loaded once and reused.
 
 ## Standard Library (std/)
 

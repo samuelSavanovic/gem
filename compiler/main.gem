@@ -16,6 +16,7 @@ load "./lower" (lower)
 load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
 load "./loader" (resolve_load_path, find_project_root, compute_stdlib_root)
+load "./builtins" (BUILTIN_FNS)
 load "../lsp/main" (run_lsp)
 
 # ─── Install root (for runtime/, build/libgem_runtime.a) ──────
@@ -327,19 +328,69 @@ fn rename_stmts(stmts, rmap, shadowed)
   end
 end
 
+fn is_from_load(stmt)
+  type(stmt) == "table" and stmt.from_load == true
+end
+
+# A top-level binding in the entry file whose name is a builtin's (a fn,
+# a let, a selective import) shadows the builtin for the whole entry file,
+# like it does in a loaded module, where transform_module prefixes it. The
+# entry file's top-level names are not prefixed, so rename just the ones
+# that collide with a builtin to `_main_<name>`. Statements spliced in from
+# loads are skipped: their free names mean the builtin. Runs before
+# lower(), so the `len`/`type`/... calls lower synthesizes are untouched.
+fn shadow_entry_builtins(stmts, module_bindings)
+  let own = []
+  for stmt in stmts
+    if not is_from_load(stmt)
+      push(own, stmt)
+    end
+  end
+  let rmap = {}
+  let any = false
+  for name, _ in collect_module_top_names(own)
+    if has_key(BUILTIN_FNS, name)
+      rmap[name] = "_main_" + name
+      any = true
+    end
+  end
+  if not any
+    return nil
+  end
+  let scope = {}
+  for stmt in own
+    rename_stmt_in_scope(stmt, rmap, scope, true)
+  end
+  for name, renamed in rmap
+    if has_key(module_bindings, name)
+      module_bindings[renamed] = module_bindings[name]
+      delete(module_bindings, name)
+    end
+  end
+end
+
 fn transform_module(stmts, mod_name, export_node, load_node)
   let prefix = "_mod_" + mod_name + "_"
   let top_names = collect_module_top_names(stmts)
   let rmap = build_rename_map(top_names, prefix)
 
+  # Statements spliced in from this module's own loads (`from_load`) are
+  # already renamed into their module's prefix. Their free names are
+  # builtins (or undeclared), never this module's bindings, so they are
+  # left alone: a module's `fn len` must not capture `len` in a module it
+  # loads.
   let module_scope = {}
   for stmt in stmts
-    rename_stmt_in_scope(stmt, rmap, module_scope, true)
+    if not is_from_load(stmt)
+      rename_stmt_in_scope(stmt, rmap, module_scope, true)
+    end
   end
 
+  # Everything but the binding lets pushed below belongs to this module.
   let result = []
   for stmt in stmts
     if not is_node(stmt, "export")
+      stmt.from_load = true
       push(result, stmt)
     end
   end
@@ -397,6 +448,53 @@ end
 
 # ─── Load resolution ──────────────────────────────────────────
 
+# Path for diagnostics: relative to `root` when it is under it.
+fn display_path(p, root)
+  if root == nil
+    return p
+  end
+  let rlen = len(root)
+  if len(p) > rlen and substr(p, 0, rlen) == root and p[rlen] == "/"
+    return substr(p, rlen + 1, len(p) - rlen - 1)
+  end
+  p
+end
+
+# `stmt` loads `full_path`, which is still being resolved further up the
+# load stack: report the cycle at this `load`, with the chain of files
+# from `full_path` back around to it. The `parent` links of the files on
+# the stack lead from stmt's file back to `full_path`, and on to the
+# entry file, whose directory is the display root when the project has
+# no gem.toml.
+fn report_load_cycle(stmt, full_path, project_root, loaded, sources_by_file, sink)
+  let chain = [full_path]
+  let cur = normalize_path(stmt.file)
+  while cur != full_path and cur != nil
+    insert(chain, 1, cur)
+    cur = loaded[cur].parent
+  end
+  let root = project_root
+  if root == nil
+    let top = cur
+    while top != nil and loaded[top] != nil and loaded[top].parent != nil
+      top = loaded[top].parent
+    end
+    if top != nil
+      root = dirname(top)
+    end
+  end
+  let msg = "load cycle: "
+  for p in chain
+    msg = msg + display_path(p, root) + " → "
+  end
+  msg = msg + display_path(full_path, root)
+  let hint = "move the code these modules share into a module that loads none of them"
+  if len(chain) == 1
+    hint = "a file cannot load itself; remove this `load`"
+  end
+  sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
+end
+
 fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
   let new_stmts = []
   let count = 0
@@ -405,6 +503,10 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       let full_path = resolve_load_path(stmt.path, base_dir, project_root, stdlib_root)
 
       let cached = loaded[full_path]
+      if cached != nil and cached.loading
+        report_load_cycle(stmt, full_path, project_root, loaded, sources_by_file, sink)
+        continue
+      end
       if cached != nil
         if cached.exported != nil
           let prefix = "_mod_" + cached.mod_name + "_"
@@ -432,7 +534,10 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
         continue
       end
 
-      loaded[full_path] = {exported: nil}
+      # `loading` marks the file as on the current load stack; `parent` is
+      # the file whose `load` brought it in, so a cycle can be walked back.
+      let entry = {exported: nil, loading: true, parent: normalize_path(stmt.file)}
+      loaded[full_path] = entry
 
       let source = read_file(full_path)
       sources_by_file[full_path] = source
@@ -442,6 +547,8 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       tag_source_file(loaded_ast, full_path)
       let loaded_dir = dirname(full_path)
       let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
+
+      entry.loading = false
 
       let export_node = find_export_node(resolved.stmts)
       if export_node == nil
@@ -454,7 +561,9 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       end
 
       let mod_name = module_name_from_path(stmt.path)
-      loaded[full_path] = {mod_name: mod_name, exported: export_node.names}
+      # top_names: the module-scope names transform_module prefixes with
+      # `_mod_<mod_name>_`; build_global_display maps them back for messages.
+      loaded[full_path] = {mod_name: mod_name, exported: export_node.names, top_names: collect_module_top_names(resolved.stmts)}
       let mod_stmts = transform_module(resolved.stmts, mod_name, export_node, stmt)
       if stmt.selective == nil
         let bn = mod_name
@@ -473,6 +582,22 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
     end
   end
   make_program(new_stmts)
+end
+
+# Mangled module-slot name -> the name a user writes: `_mod_<mod>_<name>`
+# -> `<mod>.<name>`, from the loaded-module table (no string splitting, so
+# underscores in module or binding names stay unambiguous). Codegen uses it
+# in diagnostics that name module state.
+fn build_global_display(loaded)
+  let display = {}
+  for _, info in loaded
+    if info.top_names != nil
+      for name, _ in info.top_names
+        display["_mod_" + info.mod_name + "_" + name] = info.mod_name + "." + name
+      end
+    end
+  end
+  display
 end
 
 # ─── CLI argument parsing ──────────────────────────────────────
@@ -588,6 +713,8 @@ let loaded = {}
 let module_bindings = {}
 let sources_by_file = {}
 sources_by_file[src_path] = source
+# The entry file is on the load stack too, so a module loading it back is a cycle.
+loaded[normalize_path(src_path)] = {exported: nil, loading: true, parent: nil}
 
 # If lex/parse already failed, skip load resolution + codegen entirely.
 # `resolve_loads` runs the parser on dependent files, and a parse-failed
@@ -606,11 +733,12 @@ end
 # Lower structural forms (for_in / for_range / match patterns) into the
 # desugared shapes codegen consumes. Runs after resolve_loads so loaded
 # modules' for/match are also rewritten in the merged AST.
+shadow_entry_builtins(resolved_ast.stmts, module_bindings)
 resolved_ast = lower(resolved_ast)
 
 fold_constants(resolved_ast)
 
-let cg = make_codegen(src_path, module_bindings, project_root, sources_by_file, sink)
+let cg = make_codegen(src_path, module_bindings, project_root, sources_by_file, sink, build_global_display(loaded))
 let c_code = cg.compile(resolved_ast)
 
 # Codegen may have surfaced semantic errors (undeclared identifier,

@@ -1,0 +1,9 @@
+# Part of tests/broken/load_cycle.gem.
+load "./clean"
+load "./cycle_b"
+
+fn f()
+  cycle_b.h() + clean.g()
+end
+
+export f

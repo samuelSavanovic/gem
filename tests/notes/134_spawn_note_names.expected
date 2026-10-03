@@ -1,0 +1,6 @@
+note: examples/134_spawn_note_names.gem:14: this changes module-level `local_hits` in code that runs in a spawned process (spawn at examples/134_spawn_note_names.gem:11); each process has its own copy of module state, so the change is visible only in that process.
+
+note: examples/modules/spawn_note_counter.gem:9: this changes module-level `spawn_note_counter.hit_count` in code that runs in a spawned process (spawn at examples/134_spawn_note_names.gem:11); each process has its own copy of module state, so the change is visible only in that process.
+
+note: examples/modules/spawn_note_counter.gem:10: this changes module-level `spawn_note_counter.by_kind` in code that runs in a spawned process (spawn at examples/134_spawn_note_names.gem:11); each process has its own copy of module state, so the change is visible only in that process.
+

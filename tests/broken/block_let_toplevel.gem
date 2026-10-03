@@ -1,0 +1,28 @@
+# Top-level code scopes block lets the same way fns do: only lets directly
+# in the file's statement list are module-level bindings. One error per
+# use of a block let after its block.
+
+let c = true
+if c then let x = 2 end
+print(x)                                    # 1
+
+if c then let y = 2 else let y = 3 end
+print(y)                                    # 2
+
+let flag = true
+while flag
+  let once = 1
+  flag = false
+end
+print(once)                                 # 3
+
+let f = fn()
+  let inner = 1
+  inner
+end
+print(inner)                                # 4
+
+if c then let w = 1 end
+let g = fn() w end                          # 5
+let h = fn() w = 2 end                      # 6
+print("{w}")                                # 7

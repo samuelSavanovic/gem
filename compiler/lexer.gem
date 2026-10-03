@@ -100,7 +100,13 @@ fn tokenize(source, file, sink)
   let interp_brace = {}
   let CR = chr(13)
   let NUL = chr(0)
-  let in_triple_dq = false
+  # Per open interpolation (indexed like interp_brace): whether the string
+  # it sits in is triple-quoted, and that string's dedent width. A stack,
+  # not one flag, so a string nested inside an interpolation expression
+  # resumes as its own kind.
+  let interp_triple = {}
+  let interp_indent = {}
+  let interp_open = {}
   let triple_dq_indent = 0
   let tstart = 0
 
@@ -281,12 +287,14 @@ fn tokenize(source, file, sink)
           end
           if tqc == "\{"
             push(tokens, {type: "INTERP_START", value: "", line: line, col: tstart - line_start + 1})
-            push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
+            push(tokens, {type: "INTERP_TEXT", value: val, line: line, col: tstart - line_start + 1})
             val = ""
             pos += 1
             interp_brace[interp_depth] = 0
+            interp_open[interp_depth] = {line: line, col: pos - line_start}
+            interp_triple[interp_depth] = true
+            interp_indent[interp_depth] = triple_dq_indent
             interp_depth += 1
-            in_triple_dq = true
             hit_interp = true
             break
           end
@@ -323,10 +331,12 @@ fn tokenize(source, file, sink)
         end
         if source[pos] == "\{"
           push(tokens, {type: "INTERP_START", value: "", line: line, col: tstart - line_start + 1})
-          push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
+          push(tokens, {type: "INTERP_TEXT", value: val, line: line, col: tstart - line_start + 1})
           val = ""
           pos += 1
           interp_brace[interp_depth] = 0
+          interp_open[interp_depth] = {line: line, col: pos - line_start}
+          interp_triple[interp_depth] = false
           interp_depth += 1
           hit_interp = true
           break
@@ -587,8 +597,8 @@ fn tokenize(source, file, sink)
       pos += 1
 
       # Resume inside a triple-double-quoted string
-      if in_triple_dq
-        in_triple_dq = false
+      if interp_triple[interp_depth]
+        triple_dq_indent = interp_indent[interp_depth]
         let val = ""
         let hit_interp = false
         let tqr_als = false
@@ -638,12 +648,14 @@ fn tokenize(source, file, sink)
             continue
           end
           if tqrc == "\{"
-            push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
+            push(tokens, {type: "INTERP_TEXT", value: val, line: line, col: tstart - line_start + 1})
             val = ""
             pos += 1
             interp_brace[interp_depth] = 0
+            interp_open[interp_depth] = {line: line, col: pos - line_start}
+            interp_triple[interp_depth] = true
+            interp_indent[interp_depth] = triple_dq_indent
             interp_depth += 1
-            in_triple_dq = true
             hit_interp = true
             break
           end
@@ -657,7 +669,7 @@ fn tokenize(source, file, sink)
             push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
             return tokens
           end
-          push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
+          push(tokens, {type: "INTERP_TEXT", value: val, line: line, col: tstart - line_start + 1})
           push(tokens, {type: "INTERP_END", value: "", line: line, col: tstart - line_start + 1})
         end
         continue
@@ -686,10 +698,12 @@ fn tokenize(source, file, sink)
         end
         if source[pos] == "\{"
           # Another interpolation expression
-          push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
+          push(tokens, {type: "INTERP_TEXT", value: val, line: line, col: tstart - line_start + 1})
           val = ""
           pos += 1
           interp_brace[interp_depth] = 0
+          interp_open[interp_depth] = {line: line, col: pos - line_start}
+          interp_triple[interp_depth] = false
           interp_depth += 1
           hit_interp = true
           break
@@ -703,7 +717,7 @@ fn tokenize(source, file, sink)
           push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
           return tokens
         end
-        push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
+        push(tokens, {type: "INTERP_TEXT", value: val, line: line, col: tstart - line_start + 1})
         push(tokens, {type: "INTERP_END", value: "", line: line, col: tstart - line_start + 1})
         pos += 1
       end
@@ -730,6 +744,10 @@ fn tokenize(source, file, sink)
     pos += 1
   end
 
+  if interp_depth > 0
+    let op = interp_open[interp_depth - 1]
+    sink.report(source, file, op.line, op.col, 1, "unterminated string interpolation", "this '\{' is never closed by '}'")
+  end
   push(tokens, {type: "EOF", value: "", line: line, col: tstart - line_start + 1})
   tokens
 end

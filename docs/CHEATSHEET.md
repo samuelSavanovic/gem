@@ -10,6 +10,10 @@ let x = 10
 let {a, b} = tbl                     # table destructuring
 let [first, second] = arr            # array destructuring
 let {port = 8080, host = "0.0.0.0"} = opts   # field defaults (fire on missing or nil)
+let x = x + 1                        # in a fn/block: new variable shadowing the old x (to block end)
+                                     # a let is visible only to the end of its block (if/loop body/arm):
+let s = nil                          #   declare before the if to use the value after it
+if c then s = 1 else s = 2 end
 
 # Functions — fn/end, last expression is implicit return
 fn add(a, b)
@@ -60,6 +64,7 @@ when {ok: true, value: v}            # destructuring pattern
   use(v)
 when {id: ^wanted}                   # ^pin: equals existing var `wanted`, no binding
   mine()
+when 0 then zero()                   # one-line arm: `then` (as in `if ... then`)
 else
   fallback()
 end
@@ -94,8 +99,9 @@ let msg = receive()                  # pop head
 receive                              # selective receive
 when {tag: "DOWN", pid: p}
   handle(p)
+when {tag: "ping"} then pong()       # one-line arm
 after 5000
-  timeout()
+  timeout()                          # or: after 5000 then timeout()
 end
 monitor(pid)                         # → true; DOWN message on exit
 link(pid); unlink(pid)
@@ -116,6 +122,7 @@ let [x, y] = task.await_all([t1, t2], 5000)
 
 # Error handling
 error("msg")                         # halt with stack trace; uncaught in main prints source line + stack trace
+                                     # uncaught in a spawned process: that process dies, same report on stderr ("[Runtime Error in process <pid>]")
 let r = pcall some_fn()              # {ok: bool, value/error: ...}
 # Stack: 8 MB per process; overflow raises "stack overflow in <fn>" (pcall-catchable, kills only that process)
 
@@ -128,6 +135,7 @@ let r = pcall some_fn()              # {ok: bool, value/error: ...}
 # Time:          time_ms, epoch_ms, format_time, format_time_local
 # SQLite:        sqlite_open, sqlite_close, sqlite_exec, sqlite_query, sqlite_last_insert_id, sqlite_changes
 # Math:          floor, ceil, round, abs, pow, sqrt, random
+# Builtin names aren't reserved: a fn/let/param of the same name shadows the builtin in its scope (a top-level one: that file only)
 # Bitwise:       band, bor, bxor, bnot, bshl, bshr
 
 # String building

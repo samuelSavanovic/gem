@@ -1,0 +1,4 @@
+# Same-line arm bodies need `then`; `when x nil` once read `x` as an
+# undeclared expression instead of a binding.
+match 5
+when x nil end

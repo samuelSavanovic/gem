@@ -1,0 +1,46 @@
+# String interpolation whose expression starts with a string literal,
+# plus nested strings, braces and escapes inside interpolations.
+
+let t = {a: 1}
+let x = "x"
+
+# Expressions starting with a string literal
+print("{"a" in t}")
+print("{"b" in t}")
+print("{"a" + "b"}")
+print("{"a" == "a"}")
+print("{"a"}")
+print("{x + "b"}")
+print("{("a" in t)}")
+print("n={len("abc") + 1}")
+
+# Strings with braces and escaped quotes inside the expression
+print("{"}"}")
+print("{"\{"} and {"\""}")
+print("<{"\{" + "\}"}>")
+
+# Nested interpolation
+print("{"{x}"}")
+print("{"<{"{x}!"}>"}")
+
+# Several interpolations, adjacent ones, literal braces
+print("[{x}{x}{"a"}{1 + 2}]")
+print("{"a"}{"b"}")
+print("\{literal\} {x}")
+
+# Table literal inside an interpolation
+print("{ {k: "v"}.k }")
+
+# Triple-quoted strings, with nested regular and triple-quoted strings
+let s = """
+  a {"b" + "c"} d
+  e {"""
+    inner {x}
+    """} f
+  g {"h{x}i"} j
+  """
+print(s)
+
+# Interpolation expression spanning a newline
+print("{"a"
+}")

@@ -1,0 +1,26 @@
+# Defines functions named like builtins (`len`, `error`): they shadow the
+# builtins for this file only (see examples/133_builtin_name.gem).
+
+load "./builtin_name_inner"
+
+fn len(t)
+  "outer len"
+end
+
+fn error(msg)
+  "outer error: {msg}"
+end
+
+fn outer_len(t)
+  len(t)
+end
+
+fn outer_error()
+  error("x")
+end
+
+fn via_inner(t)
+  builtin_name_inner.inner_len(t)
+end
+
+export outer_len, outer_error, via_inner, error

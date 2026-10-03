@@ -1,0 +1,86 @@
+# When main waits in a receive (no `after`) and nothing can ever send to
+# it, the runtime reports a deadlock and exits non-zero instead of ending
+# the program silently. Anything that could still wake a process keeps the
+# program running: a sleeping process, a pending send_after timer, a
+# receive ... after timeout, thread-pool I/O, a monitor's DOWN message.
+
+let main = self()
+
+# A sleeping child sends later.
+spawn(fn()
+  sleep(20)
+  send(main, "from sleeper")
+end)
+receive
+  when x
+    print(x)
+end
+
+# A pending timer.
+send_after(main, "from timer", 10)
+receive
+  when x
+    print(x)
+end
+
+# receive ... after with no other process alive.
+receive
+  when x
+    print("unexpected {x}")
+  after 10
+    print("receive timed out")
+end
+
+# A child waiting in receive ... after, then sending.
+spawn(fn()
+  receive
+    when x
+      print("unexpected {x}")
+    after 10
+      send(main, "child timed out")
+  end
+end)
+receive
+  when x
+    print(x)
+end
+
+# Thread-pool I/O in a child.
+spawn(fn()
+  let r = exec("true")
+  send(main, "exec finished")
+end)
+receive
+  when x
+    print(x)
+end
+
+# A monitored child that crashes delivers DOWN.
+let c = spawn(fn()
+  sleep(5)
+  error("crashed")
+end)
+monitor(c)
+receive
+  when {tag: "DOWN", reason: r}
+    print("got DOWN")
+end
+
+# A cancelled timer no longer counts.
+cancel_timer(send_after(main, "never", 10))
+
+# The child exits without sending, and main waits for a message that
+# matches nothing in its mailbox: deadlock.
+spawn(fn()
+  print("child exits without sending")
+end)
+send(main, "unmatched")
+
+fn wait_for_reply()
+  receive
+    when ["reply", v]
+      print(v)
+  end
+end
+wait_for_reply()
+print("not reached")
