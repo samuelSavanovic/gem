@@ -678,8 +678,8 @@ let out = build_string do |add|
 end
 ```
 
-`add` takes any number of values and converts each with `to_string`,
-except a buffer, which it drops **(bug)**: pass `to_string(buf)`. Use a
+`add` takes any number of values and appends each as `to_string` would
+(a buffer appends its contents, as `buf_push` does). Use a
 buffer (`buf_new()`, `buf_push(buf, s)`, `to_string(buf)`) when the text
 has to be built across several functions or loop iterations that a single
 block can't hold, such as a read loop that collects chunks. `print(buf)`

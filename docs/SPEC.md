@@ -1118,11 +1118,11 @@ print(items[0])    # a
 
 `buf_new()` — creates a new mutable string buffer. Returns a buffer value (type `"buffer"`).
 
-`buf_push(buf, val)` — appends `val` to the buffer. Non-string values are auto-coerced to strings. Returns the buffer for chaining. Uses a doubling growth strategy internally — O(n) total for n appends vs O(n²) for repeated `+` concatenation.
+`buf_push(buf, val)` — appends `val` to the buffer. A string appends its bytes, a buffer its current contents (pushing a buffer into itself appends a copy of what it held), and any other value appends exactly what `to_string(val)` gives (`nil`, `true`, `42`, `<fn>`, `#Ref<3>`, `{a: 1}`). Returns the buffer for chaining. Uses a doubling growth strategy internally — O(n) total for n appends vs O(n²) for repeated `+` concatenation.
 
 To finalize a buffer into an immutable string, use `to_string(buf)` — the generic `to_string` builtin handles buffers. The buffer remains usable afterward.
 
-`build_string(block)` — creates a buffer, calls `block` with an `add` function that appends its arguments to the buffer, then returns the finalized string. Equivalent to `buf_new`/`buf_push`/`to_string` but more concise:
+`build_string(block)` — creates a buffer, calls `block` with an `add` function that appends each of its arguments to the buffer as `buf_push` does, then returns the finalized string. Equivalent to `buf_new`/`buf_push`/`to_string` but more concise:
 
 ```
 let html = build_string() do |add|

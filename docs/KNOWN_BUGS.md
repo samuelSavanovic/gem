@@ -18,21 +18,6 @@ directory to print the `-->` source line. A binary run from any other
 directory prints the trace without the source line, silently.
 `gem_print_source_context` in runtime/gem_error.c.
 
-### `buf_push` and `build_string`'s `add` drop buffers, functions and refs
-
-```gem
-let b = buf_new()
-buf_push(b, "hi")
-let c = buf_new()
-buf_push(c, b)
-print(len(to_string(c)))                         # 0
-print(build_string do |add| add("[", b, "]") end) # []
-```
-
-`gem_buf_push_fn` in runtime/gem_builtins_string.c turns any value it has
-no case for into `""`. A buffer should append its contents, and other
-values their `to_string` form.
-
 ### A top-level `let` named like a builtin can't read the builtin
 
 ```gem

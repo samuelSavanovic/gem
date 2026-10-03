@@ -97,7 +97,7 @@ GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_chr_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 1 || args[0].type != VAL_INT) { char buf[128]; snprintf(buf, sizeof(buf), "chr: expected int argument, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
+    if (argc < 1 || args[0].type != VAL_INT) { char buf[128]; snprintf(buf, sizeof(buf), "chr: expected int argument, got %s", gem_type_str(args[0])); gem_error(buf); }
     char buf[2];
     buf[0] = (char)(args[0].ival & 0xFF);
     buf[1] = '\0';
@@ -199,38 +199,51 @@ GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc) {
     return r;
 }
 
-GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc) {
-    (void)_env;
-    if (argc < 2 || args[0].type != VAL_BUFFER) { char buf[128]; snprintf(buf, sizeof(buf), "buf_push: expected buffer as first argument, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
-    GemBuffer *b = args[0].buffer;
-    /* Coerce second argument to string */
-    const char *s;
-    int slen;
-    char tmp[64];
-    GemVal fmt_holder = GEM_NIL;
-    switch (args[1].type) {
-        case VAL_STRING: s = args[1].sval; slen = args[1].slen; break;
-        case VAL_INT: slen = snprintf(tmp, sizeof(tmp), "%lld", (long long)args[1].ival); s = tmp; break;
-        case VAL_FLOAT: slen = gem_format_float(args[1].fval, tmp); s = tmp; break;
-        case VAL_BOOL: s = args[1].bval ? "true" : "false"; slen = args[1].bval ? 4 : 5; break;
-        case VAL_NIL: s = "nil"; slen = 3; break;
-        case VAL_TABLE:
-            fmt_holder = gem_format_value_string(args[1]);
-            s = fmt_holder.sval;
-            slen = fmt_holder.slen;
-            break;
-        default: s = ""; slen = 0; break;
-    }
-    /* Grow buffer if needed */
-    while (b->len + slen >= b->cap) {
-        int new_cap = b->cap * 2;
+/* Appends `n` bytes at `src` to `b`, growing it in the arena. `src` may
+ * point into `b->data` itself: the old block is copied, not freed. */
+static void buf_append_bytes(GemBuffer *b, const char *src, int n) {
+    if (n <= 0) return;
+    if (b->len + n >= b->cap) {
+        int new_cap = b->cap > 16 ? b->cap : 16;
+        while (b->len + n >= new_cap) new_cap *= 2;
         char *new_data = (char *)gem_alloc(new_cap);
         memcpy(new_data, b->data, b->len);
         b->data = new_data;
         b->cap = new_cap;
     }
-    memcpy(b->data + b->len, s, slen);
-    b->len += slen;
+    memcpy(b->data + b->len, src, n);
+    b->len += n;
+}
+
+GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) gem_error("buf_push: expected 2 arguments (buffer, value)");
+    if (args[0].type != VAL_BUFFER) { char buf[128]; snprintf(buf, sizeof(buf), "buf_push: expected buffer as first argument, got %s", gem_type_str(args[0])); gem_error(buf); }
+    GemBuffer *b = args[0].buffer;
+    GemVal v = args[1];
+    switch (v.type) {
+        case VAL_STRING:
+            buf_append_bytes(b, v.sval, v.slen);
+            break;
+        case VAL_BUFFER:
+            /* Its current contents. `buf_append_bytes` reads the source
+             * before it replaces `b->data`, and the old block stays valid
+             * (arena memory is not freed mid-call), so pushing a buffer into
+             * itself appends a snapshot. */
+            buf_append_bytes(b, v.buffer->data, v.buffer->len);
+            break;
+        case VAL_FLOAT: {
+            /* Exactly what to_string gives (floats have one formatter). */
+            GemVal s = gem_to_string_fn(NULL, &v, 1);
+            buf_append_bytes(b, s.sval, s.slen);
+            break;
+        }
+        default:
+            /* nil, bool, int (pids too), fn, ref, table: the shared repr
+             * to_string uses, written straight into the buffer. */
+            gem_format_value_to_buf(v, b, 0);
+            break;
+    }
     return args[0]; /* return buffer for chaining */
 }
 

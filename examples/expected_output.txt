@@ -2587,3 +2587,25 @@ trapper got EXIT normal
 self DOWN normal
 linked partner alive: true
 dead -> nil
+<hi>
+abababab
+4
+80
+6
+nil: true
+bool: true
+bool: true
+int: true
+int: true
+float: true
+fn: true
+ref: true
+int: true
+table: true
+table: true
+string: true
+nil true <fn> {a: 1}
+true
+[hi]1nil<fn>true
+true
+hi<fn>

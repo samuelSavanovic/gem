@@ -1,0 +1,82 @@
+# buf_push and build_string's `add` append a buffer's contents and every
+# other value exactly as to_string formats it.
+
+let inner = buf_new()
+buf_push(inner, "hi")
+
+let outer = buf_new()
+buf_push(outer, "<")
+buf_push(outer, inner)
+buf_push(outer, ">")
+print(to_string(outer))                       # <hi>
+
+# Pushing a buffer into itself appends a snapshot of its contents.
+let twice = buf_new()
+buf_push(twice, "ab")
+buf_push(twice, twice)
+buf_push(twice, twice)
+print(to_string(twice))                       # abababab
+
+# An empty buffer appends nothing.
+let empty = buf_new()
+buf_push(outer, empty)
+print(len(to_string(outer)))                  # 4
+
+# Growth across the initial capacity, and self-push past it.
+let big = buf_new()
+for i = 0, 40
+  buf_push(big, "x")
+end
+buf_push(big, big)
+print(len(to_string(big)))                    # 80
+
+# Binary-safe: embedded NULs survive a buffer push.
+let bin = buf_new()
+buf_push(bin, "a\0b")
+let bin2 = buf_new()
+buf_push(bin2, bin)
+buf_push(bin2, bin)
+print(len(to_string(bin2)))                   # 6
+
+# Every other value matches to_string.
+let f = fn(x) x end
+let r = make_ref()
+let values = [nil, true, false, 42, -7, 1.5, f, r, self(), {a: 1, b: [1, 2]}, [], "s"]
+for v in values
+  let b = buf_new()
+  buf_push(b, v)
+  print("{type(v)}: {to_string(b) == to_string(v)}")
+end
+let shown = buf_new()
+buf_push(shown, nil)
+buf_push(shown, " ")
+buf_push(shown, true)
+buf_push(shown, " ")
+buf_push(shown, f)
+buf_push(shown, " ")
+buf_push(shown, {a: 1})
+print(to_string(shown))                       # nil true <fn> {a: 1}
+
+# A table holding a buffer shows it as to_string does.
+let tb = buf_new()
+buf_push(tb, {k: inner})
+print(to_string(tb) == to_string({k: inner}))  # true
+
+# build_string's add with several arguments of mixed types.
+let s = build_string do |add|
+  add("[", inner, "]", 1, nil, f)
+  add()
+  add(true)
+end
+print(s)                                      # [hi]1nil<fn>true
+
+let refs = build_string do |add|
+  add(r, " ", 2.25)
+end
+print(refs == to_string(r) + " " + to_string(2.25))   # true
+
+# push on a buffer goes through the same path.
+let p = buf_new()
+push(p, inner)
+push(p, f)
+print(to_string(p))                           # hi<fn>
