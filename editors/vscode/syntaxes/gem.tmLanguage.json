@@ -23,8 +23,10 @@
   "repository": {
 
     "comment": {
-      "name": "comment.line.number-sign.gem",
-      "match": "#.*$"
+      "patterns": [
+        { "name": "comment.line.documentation.gem", "match": "##.*$" },
+        { "name": "comment.line.number-sign.gem", "match": "#.*$" }
+      ]
     },
 
     "number": {

@@ -981,7 +981,10 @@ The interpolation ends at the `}` that balances its `{` (braces of table literal
 
 ```
 # single line comment
+## doc comment
 ```
+
+A comment runs from `#` to the end of the line. A comment starting with `##` is a *doc comment*: the compiler treats it like any other comment, but by convention it documents the public API for callers (the module header, and the block directly above each exported function), and tooling reads only `##` lines. Plain `#` comments are for whoever maintains the code. See BEST_PRACTICES.md, "Document the public API with `##`".
 
 ## Error Handling
 
