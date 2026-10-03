@@ -1,0 +1,47 @@
+# A named fn is a top-level definition only. Nested in any top-level block
+# (if/elif/else arms, while/for bodies, match/receive arms, nested blocks)
+# it is an error at the definition (one per fn), as it is in a fn or do
+# body. Top-level fns stay fine.
+
+fn top() 0 end
+
+if true
+  fn a1() 1 end
+else
+  fn a2() 2 end
+end
+while false
+  fn w() 1 end
+end
+for i = 0, 1
+  fn f1() 1 end
+end
+for x in [1]
+  fn f2() 1 end
+end
+match 1
+  when 1 then fn m1() 1 end
+  when 2
+    fn m2() 2 end
+end
+receive
+  when x
+    fn r1() 1 end
+after 0
+  fn r2() 1 end
+end
+if true
+  if true
+    fn deep() 1 end
+  end
+elif false
+  fn el() 1 end
+end
+let g = fn()
+  fn inner() 1 end
+end
+spawn do
+  fn sp() 1 end
+end
+
+top()

@@ -8,19 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### A named `fn` inside a top-level block is dropped
-
-```gem
-if true
-  fn helper() print("nested") end
-  helper()
-end
-```
-
-reports undeclared identifier `helper` at the call. Inside a fn body
-the same code gets a clear "named fn inside function body is not
-supported" error; at the top level the definition silently disappears.
-
 ### A module-level `let` and `fn` with the same name are both accepted
 
 ```gem

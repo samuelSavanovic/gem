@@ -1,0 +1,19 @@
+# extern declarations are top-level only: nested in a top-level block or a
+# fn body each one is an error at the `extern` (three here).
+
+extern fn labs(x: Int) -> Int
+
+if true
+  extern fn llabs(x: Int) -> Int
+end
+
+fn f()
+  extern blocking fn usleep(us: Int) -> Int
+  labs(-1)
+end
+
+while false
+  extern include "stdio.h"
+end
+
+f()

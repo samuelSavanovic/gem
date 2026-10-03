@@ -16,7 +16,7 @@ let x = x + 1                        # in a fn/block: new variable shadowing the
 let s = nil                          #   declare before the if to use the value after it
 if c then s = 1 else s = 2 end
 
-# Functions — fn/end, last expression is implicit return
+# Functions — fn/end, last expression is implicit return; named fns only at top level
 fn add(a, b)
   a + b
 end
@@ -29,7 +29,7 @@ fn server({port = 8080, host = "0.0.0.0"} = {})   # destructured params
 end                                                # `= {}` makes the bag optional / nil-tolerant
 
 # Closures / anonymous functions
-let f = fn(x) x * 2 end
+let f = fn(x) x * 2 end              # inside a fn or block: let helper = fn() ... end
 
 # Blocks — trailing do/end or { } passed as the last arg
 table.each(items) do |item|

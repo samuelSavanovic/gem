@@ -126,6 +126,10 @@ fn make_parser(tokens, source, file, sink)
     push(stmts, make_let(name, make_var(tmp), line))
   end
   let fn_depth = 0
+  # Nesting of the statement being parsed: 1 for a statement directly in
+  # the file's top-level code, more inside any block (if/while/for/match/
+  # receive arms, fn and do bodies). Named fns and externs live only at 1.
+  let stmt_depth = 0
   # > 0 while parsing an if / while / for header. No trailing block is
   # taken there, so `x do` / `f() do` is reported as a stray Lua/Ruby-style
   # `do` instead of parsed as a block call.
@@ -1214,6 +1218,8 @@ fn make_parser(tokens, source, file, sink)
       let name = expect("NAME").value
       if fn_depth > 0
         report(line, 1, len(name) + 3, "named fn inside function body is not supported", "use: let {name} = fn(...) ... end")
+      elif stmt_depth > 1
+        report(line, t.col, len(name) + 3, "named fn inside a block is not supported", "define it at the top level, or use: let {name} = fn(...) ... end")
       end
       expect("(")
       let pr = parse_params()
@@ -1416,6 +1422,9 @@ fn make_parser(tokens, source, file, sink)
 
     # extern fn / extern blocking fn / extern include
     if t.type == "extern"
+      if stmt_depth > 1
+        report(t.line, t.col, 6, "extern declaration must be at the top level", "move it out of the enclosing block or function")
+      end
       advance()
       let is_blocking = false
       if peek().type == "blocking"
@@ -1505,7 +1514,12 @@ fn make_parser(tokens, source, file, sink)
   end
 
   # Wire up forward declaration
-  parse_stmt = parse_stmt_fn
+  parse_stmt = fn()
+    stmt_depth += 1
+    let s = parse_stmt_fn()
+    stmt_depth -= 1
+    s
+  end
 
   # ── Top-level parse ──
 

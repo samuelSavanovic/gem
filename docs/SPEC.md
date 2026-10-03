@@ -155,6 +155,8 @@ end
 
 Last expression is implicit return. Explicit `return` also works.
 
+A named `fn` is a definition in a file's top-level code only. One inside a function or `do` body, or inside a top-level `if`, `while`, `for`, `match` or `receive` block, is a compile error; bind an anonymous function instead (`let helper = fn() ... end`), or move the definition to the top level.
+
 Function call argument lists allow newlines inside the parentheses — after `(`, after each `,`, and before `)`:
 
 ```
@@ -738,7 +740,7 @@ Include the C header of a library function (`extern include`, below). Without on
 
 `extern fn` declares a C function. The compiler emits the call directly since we compile to C. Type annotations on extern declarations only — the rest of the language stays dynamically typed. `Ptr` is an opaque type for C pointers.
 
-An `extern fn` is a binding like a top-level `fn`: one named like a builtin (`extern fn sqrt(x: Float) -> Float`) shadows the builtin in its own file, and one in a loaded module can be exported and called as `module.name`. The C function it calls is always the declared name.
+`extern fn`, `extern blocking fn` and `extern include` go directly in a file's top-level code; inside any block or function body they are a compile error. An `extern fn` is a binding like a top-level `fn`: one named like a builtin (`extern fn sqrt(x: Float) -> Float`) shadows the builtin in its own file, and one in a loaded module can be exported and called as `module.name`. The C function it calls is always the declared name.
 
 The generated wrapper validates `argc` and each argument's runtime type tag before reading the `GemVal` union, so a Gem-side mistake (wrong arity, wrong type) raises a Gem-level error at the boundary instead of passing garbage to C. Errors mention the declared Gem-level type name (e.g. `foo: arg 0 expected String, got int`). Types are not converted: a `Float` parameter rejects an int (`sqrt(2)` raises; pass `2.0` or `to_float(n)`). Too few arguments raise; extra arguments are currently ignored (see `docs/KNOWN_BUGS.md`). A `Ptr` is an int on the Gem side, and `NULL` comes back as `0`, not `nil`.
 

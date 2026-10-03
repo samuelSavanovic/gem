@@ -44,6 +44,8 @@ expected=(
   "missing_end:2:8"
   "missing_then_branches:1:4"
   "multi_undeclared:3:5"
+  "nested_extern:3:3"
+  "nested_fn_toplevel:13:13"
   "stray_do:4:4"
   "undeclared:1:1"
   "unterminated_string:1:1"
