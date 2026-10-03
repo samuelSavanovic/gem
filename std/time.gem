@@ -1,40 +1,59 @@
-# time — wall-clock time as epoch milliseconds, and formatting it.
-#
-#   let started = time.now()
-#   print("up since {time.iso8601(started)}")     # 2026-04-28T14:30:00Z
-#   print(time.format(started, "%H:%M:%S"))
-#
-# Times are ints: milliseconds since 1970-01-01T00:00:00Z (negative before
-# it). Formatting drops the milliseconds, rounding down. `fmt` takes
-# `strftime` specifiers (`%Y-%m-%d %H:%M:%S`). For measuring durations
-# use the `time_ms()` builtin, which a change of the system clock can't
-# move.
+## time — wall-clock time as epoch milliseconds, and formatting it.
+##
+##   load "std/time"
+##   let started = time.now()
+##   print("up since {time.iso8601(started)}")    # 2026-04-28T14:30:00Z
+##   print(time.format(started, "%H:%M:%S"))
+##
+## Times are ints: milliseconds since 1970-01-01T00:00:00Z (negative
+## before it). Formatting drops the milliseconds, rounding down. `fmt`
+## takes `strftime` specifiers (`%Y-%m-%d %H:%M:%S`). A float time or a
+## non-string `fmt` raises `format_time: expected (int, string), ...`.
+## For measuring durations use the `time_ms()` builtin, which a change
+## of the system clock can't move. Where `ms` defaults to now, passing
+## `nil` raises the same `format_time:` error: leave `ms` out instead.
+## There is no parser (nothing turns an ISO 8601 or HTTP date back into
+## ms), and `fmt` has no milliseconds specifier.
 
+## Returns the current wall-clock time in epoch milliseconds, the same as
+## the `epoch_ms()` builtin.
 fn now()
   epoch_ms()
 end
 
-# `ms` formatted in UTC.
+## Returns `ms` formatted with `fmt`, in UTC.
+##
+##   time.format(1777386600123, "%H:%M:%S")    # "14:30:00"
 fn format(ms, fmt)
   format_time(ms, fmt)
 end
 
-# `ms` formatted in the machine's local time zone.
+## Returns `ms` formatted with `fmt`, in the machine's local time zone
+## (the `TZ` environment variable, when set).
+##
+##   time.format_local(1777386600123, "%H:%M %Z")    # "16:30 CEST" in Paris
 fn format_local(ms, fmt)
   format_time_local(ms, fmt)
 end
 
-# "Tue, 28 Apr 2026 14:30:00 GMT" (RFC 7231, for HTTP headers).
+## Returns `ms` (default: now) as an RFC 7231 date, for HTTP headers.
+##
+##   time.http_date(1777386600123)    # "Tue, 28 Apr 2026 14:30:00 GMT"
 fn http_date(ms = epoch_ms())
   format_time(ms, "%a, %d %b %Y %H:%M:%S GMT")
 end
 
-# "2026-04-28T14:30:00Z"
+## Returns `ms` (default: now) as an ISO 8601 UTC timestamp, to the
+## second.
+##
+##   time.iso8601(1777386600123)    # "2026-04-28T14:30:00Z"
 fn iso8601(ms = epoch_ms())
   format_time(ms, "%Y-%m-%dT%H:%M:%SZ")
 end
 
-# "2026-04-28"
+## Returns the UTC date of `ms` (default: now) as YYYY-MM-DD.
+##
+##   time.date(1777386600123)    # "2026-04-28"
 fn date(ms = epoch_ms())
   format_time(ms, "%Y-%m-%d")
 end

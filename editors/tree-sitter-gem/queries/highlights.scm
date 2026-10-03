@@ -102,7 +102,10 @@
 (let_declaration
   name: (identifier) @variable)
 
-; Comments
+; Comments. `##` doc comments get their own scope; Helix takes the first
+; pattern that matches, so this one comes first.
+((comment) @comment.line.documentation
+  (#match? @comment.line.documentation "^##"))
 (comment) @comment.line
 
 ; Operators

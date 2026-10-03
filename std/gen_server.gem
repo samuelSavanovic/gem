@@ -1,16 +1,27 @@
-# std/gen_server — OTP-style synchronous server with state.
-#
-#   let counter = gen_server.start({
-#     init: fn() {state: 0} end,
-#     handle_call: fn(msg, from, n) {reply: n, state: n} end,
-#     handle_cast: fn(msg, n) {state: n + 1} end,
-#     handle_info: fn(msg, n) {state: n} end
-#   })
-#   gen_server.cast(counter, "incr")
-#   gen_server.call(counter, "get")    # 1
-#
-# `call` and `cast` take the `{pid}` handle `start` returns, a bare pid or a
-# registered name.
+## gen_server — a process that holds state and answers requests.
+##
+##   let counter = gen_server.start({
+##     init: fn() {state: 0} end,
+##     handle_call: fn(msg, from, n) {reply: n, state: n} end,
+##     handle_cast: fn(msg, n) {state: n + 1} end,
+##     handle_info: fn(msg, n) {state: n} end
+##   })
+##   gen_server.cast(counter, "incr")
+##   gen_server.call(counter, "get")    # 1
+##
+## `call` and `cast` take the `{pid}` handle `start` returns, a bare pid or
+## a registered name; a name nobody holds (also once its server has died)
+## raises `gen_server.<fn>: no process registered as "<name>"`. Errors start
+## with `gen_server.<fn>: `. Callbacks run in the server process. One that
+## raises kills the server; so does a result of the wrong shape, with
+## `gen_server: <callback> returned ..., expected ...`, which a pending
+## `call` raises as `gen_server.call: server exited: gen_server: ...`.
+## Extra keys in a result are ignored (`{stop: ...}` does nothing).
+##
+## There is no stop: end a server with `kill(h.pid, reason)`, or run it
+## under a supervisor and stop that. `start` takes no name: to call by
+## name, `register(name, h.pid)`; under a supervisor, do it in the child's
+## `start` fn so a restart registers the new server.
 
 # The pid for a `{pid}` handle, a bare pid or a registered name.
 fn target_pid(target, caller)
@@ -146,6 +157,27 @@ fn check_module(module)
   end
 end
 
+## Spawns a server running `module` and returns its handle `{pid}`.
+##
+## `module` is a table of four fns: `init()` returns `{state}`;
+## `handle_call(msg, from, state)` returns `{reply, state}`, or `{noreply:
+## state}` to answer later with `reply` (`from` is `{pid, ref}`:
+## `from.pid` is the caller; pass `from` itself to `reply`);
+## `handle_cast(msg, state)` and `handle_info(msg, state)` return
+## `{state}`. Any result may add `timeout: ms`: if no message comes within
+## that long, `handle_info` gets `"timeout"`. It covers only the next
+## wait: return it from every callback to keep it. A plain `"timeout"`
+## message looks the same to `handle_info`. `handle_info` gets every
+## message that isn't a call or a cast, such as the `DOWN` of a process
+## the server monitors.
+##
+## Raises, and starts nothing, if `module` is not a table or a callback is
+## not a fn.
+##
+## Returns at once: `init` runs later, in the server. The server is
+## neither linked to nor monitored by the caller, so either can die
+## without taking the other along; a server whose `init` raises dies, and
+## the next `call` raises `gen_server.call: server exited: <error>`.
 fn start(module)
   check_module(module)
   let pid = spawn(fn()
@@ -207,12 +239,28 @@ fn await_reply_for(pid, ref, timeout_ms)
   end
 end
 
-# Sends `msg` to the server and waits for its reply (forever when
-# `timeout_ms` is nil). The caller monitors the server for the length of the
-# call, so a server that is dead, or dies before replying, fails the call at
-# once. The call leaves no monitor and no DOWN behind, except that a monitor
-# the caller set up itself stays, and still gets its DOWN.
+## Sends `msg` to the server's `handle_call` and returns its reply.
+##
+## Waits at most `timeout_ms` (nil: until the reply comes), then raises
+## `gen_server.call: timeout`. Raises `gen_server.call: server exited:
+## <reason>` at once when the server is dead (reason `"noproc"`) or dies
+## before replying, and raises when `target` is not a handle, pid or
+## registered name (see the header for a name nobody holds).
+##
+##   gen_server.call(counter, "get")          # 1
+##   gen_server.call("counter", "get", nil)   # by name, no timeout
+##
+## Blocks the caller. It monitors the server only for the call and leaves
+## no monitor and no `DOWN` behind; a monitor the caller set up itself
+## stays and still gets its `DOWN`. After a timeout the server may still
+## reply: the late `{tag: "_gs_reply"}` lands in the caller's mailbox, and
+## no later `call` takes it, so a long-lived caller needs a catch-all arm.
+## A caller that dies mid-call doesn't affect the server. Don't call a
+## server from its own callbacks: that call waits out its timeout, then
+## the server dies with `gen_server.call: timeout`.
 fn call(target, msg, timeout_ms = 5000)
+  # The monitor makes a dead server fail the call at once; `added` says
+  # whether the call owns it (a process monitors a target at most once).
   let pid = target_pid(target, "gen_server.call")
   check_timeout(timeout_ms, "gen_server.call")
   let ref = make_ref()
@@ -236,11 +284,26 @@ fn call(target, msg, timeout_ms = 5000)
   res.value
 end
 
+## Sends `msg` to the server's `handle_cast` and returns nil without
+## waiting.
+##
+##   gen_server.cast(counter, "incr")    # nil
+##
+## A cast through a pid or handle to a dead server is dropped silently;
+## through a registered name it raises, as the header says.
 fn cast(target, msg)
   send(target_pid(target, "gen_server.cast"), {tag: "_gs_cast", msg: msg})
   nil
 end
 
+## Answers a call that `handle_call` deferred with `{noreply: state}`;
+## `from` is the one `handle_call` got. Returns nil.
+##
+## Works from any process, so the server can hand `from` to a worker. A
+## reply to a caller that has given up (timed out or died) is dropped or
+## left in its mailbox, as in `call`. Call `reply` once per `from`: a
+## second reply, or a `reply` followed by a `{reply: ...}` result, leaves
+## an extra `{tag: "_gs_reply"}` in the caller's mailbox.
 fn reply(from, value)
   send(from.pid, {tag: "_gs_reply", ref: from.ref, value: value})
   nil

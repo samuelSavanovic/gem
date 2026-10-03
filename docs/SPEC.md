@@ -372,6 +372,11 @@ else "many"
 end
 ```
 
+`if`, `match` and `receive` are statements, not expressions: `let x = if ...`, `print(if ...)` and
+`return match ...` don't parse. One yields a value only as the last statement of a function, closure or
+block, where the taken branch's last expression is the result (`fn size(x) if x > 10 then "big" else
+"small" end end`).
+
 A `when` arm's body starts either on the line after the pattern or, after `then`, on the same line (`then` must be on the pattern's line, like `if <cond> then`; the body may continue onto further lines). Anything else on the pattern's line is a compile error: `when x nil` reports "expected `then` or a newline after the `when` pattern". This holds for `match` and `receive` arms alike. A `receive`'s `after <ms>` clause also accepts an optional `then` (`after 100 then retry()`).
 
 ## Destructuring Patterns in Match
@@ -877,6 +882,10 @@ The wrapper checks the Gem-level type of each argument and that enough arguments
 
 `=`, `+=`, `-=`, `*=`, `/=`
 
+`=` assigns to a variable, a field (`t.x = v`) or an index (`a[i] = v`). The compound forms take only a
+variable: `t.n += 1` and `a[0] += 1` are compile errors (`compound assignment requires variable target`);
+write `t.n = t.n + 1`.
+
 ## Strings
 
 Two quote styles: double-quoted strings support interpolation, single-quoted strings do not.
@@ -981,7 +990,10 @@ The interpolation ends at the `}` that balances its `{` (braces of table literal
 
 ```
 # single line comment
+## doc comment
 ```
+
+A comment runs from `#` to the end of the line. A comment starting with `##` is a *doc comment*: the compiler treats it like any other comment, but by convention it documents the public API for callers (the module header, and the block directly above each exported function), and tooling reads only `##` lines. Plain `#` comments are for whoever maintains the code. See BEST_PRACTICES.md, "Document the public API with `##`".
 
 ## Error Handling
 

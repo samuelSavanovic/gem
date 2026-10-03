@@ -1,32 +1,52 @@
-# std/http — HTTP/1.1 server with routing and keep-alive.
-#
-#   let app = http.router()
-#   app.get("/hello/:name") do |req|
-#     http.ok("hello {req.params.name}")
-#   end
-#   http.serve(app, {port: 8080})        # or: let server = http.start(app, ...)
-#                                        #     ... http.stop(server)
-#
-# Each connection runs in its own process. A handler that raises (or returns
-# something that isn't a valid response) gets a 500, and the error and its
-# stack go to stderr. Request header names are lowercased.
-#
-# `start` spawns a server process (the pid in the handle it returns). It
-# spawns the acceptor, linked, and monitors every connection process (the
-# acceptor registers each one right after spawning it), so it closes the
-# socket of one that dies without closing it (the connection tells it
-# before closing its socket itself, so it never closes an fd number that
-# may have been reused). Killing the server process, as `stop` does, kills
-# the acceptor and the connections and closes every socket. A connection
-# whose handler traps exits gets an EXIT message instead; it closes its
-# own socket after that request. `serve` has the server monitor its
-# caller, so killing the caller stops the server.
+## http — HTTP/1.1 server with routing, keep-alive and static files.
+##
+##   load "std/http"
+##   let app = http.router()
+##   app.get("/hello/:name") do |req|
+##     http.ok("hello {req.params.name}")
+##   end
+##   http.serve(app, {port: 8080})    # blocks; or http.start, later http.stop
+##
+## A handler gets a request table and returns a response table {status,
+## headers, body}; the builders below make one. The request has just
+## these keys (no client address, no raw query string): `method` ("HEAD"
+## when a HEAD runs a GET route); `path`, raw (not percent-decoded),
+## without the query; `query`, as by `url.parse_query` ({} when none; a
+## repeated key keeps its last value); `params` (see `router`);
+## `headers`, lowercase names, a repeated header's values joined with
+## ", " ("; " for Cookie); `cookies`, names to raw values (decode with
+## `url.decode`; a pair without `=` is dropped); `body`, "" when none.
+##
+## A handler that raises or returns an invalid response (see `response`)
+## gets a 500, its error and stack go to stderr, and the server keeps
+## running. An unmatched request gets a 404, a malformed one a 400, a
+## too-big body a 413; each has its status text as a plain-text body
+## ("Not Found").
+##
+## Each connection runs in its own process, so handlers run in parallel,
+## and module-level state a handler changes is that connection's copy:
+## keep shared state in a process. Stopping the server kills the
+## connection processes and cuts off requests in flight.
 
 load "std/string"
 load "std/url"
 load "std/mime"
 load "std/json"
 load "std/time"
+
+# Processes and sockets. `start` spawns a server process (the pid in the
+# handle it returns). It traps exits, spawns the acceptor linked, and
+# monitors every connection process: the acceptor registers each one
+# (`_http_conn`) right after spawning it, so a connection accepted just
+# before a stop is still killed. The server closes the socket of a
+# connection that dies without closing it; a connection tells the server
+# (`_http_closing`) before closing its socket itself, so the server never
+# closes an fd number that may have been reused. Killing the server
+# process (as `stop` and a supervisor do) arrives as an EXIT: it kills the
+# acceptor and the connections, closes every socket, then exits with that
+# reason. A connection whose handler traps exits gets an EXIT message
+# instead; it closes its own socket after that request. `serve` has the
+# server monitor its caller, so killing the caller stops the server.
 
 # Runtime helpers, one C pass each (a Gem loop over `ord` costs about
 # 50 ns a byte): the length of the prefix of `s` made of bytes from
@@ -118,34 +138,76 @@ let STATUS_TEXT = {
 
 # ─── Response builders ───
 
+## Returns the response table {status, headers, body}, adding no
+## headers (no Content-Type).
+##
+## A handler's response is valid when `status` is an int from 200 to 999,
+## `body` is nil or a string, and `headers` is nil or a table of name to
+## value. Names must be HTTP tokens, and values must hold no CR or LF. A
+## value is sent as `"{value}"`, an array as one line per element; a nil
+## value or a non-array table is sent as the text "nil". The server
+## writes Content-Length and Connection and drops the handler's own and
+## any Transfer-Encoding, but a Connection header listing `close` still
+## closes the connection. 204 and 304 responses go without a body. The
+## builders check none of this; the server does when the handler returns.
+##
+##   http.response(201, {"Location": "/items/7"}, "")
 fn response(status, headers, body)
   {status: status, headers: headers, body: body}
 end
 
+## Returns a 200 response with `body` and the Content-Type
+## `content_type` (default plain UTF-8 text).
+##
+##   http.ok("hi")                         # text/plain; charset=utf-8
+##   http.ok(csv, "text/csv")
 fn ok(body, content_type = "text/plain; charset=utf-8")
   {status: 200, headers: {"Content-Type": content_type}, body: body}
 end
 
+## Returns a 200 response with `body` as `text/html; charset=utf-8`.
+## Escape user data in it with `html_escape`.
 fn html(body)
   {status: 200, headers: {"Content-Type": "text/html; charset=utf-8"}, body: body}
 end
 
+## Returns a 200 response with `data` encoded by `json.encode`, as
+## `application/json; charset=utf-8`.
+##
+##   http.json_response({id: 7, tags: ["a"]})    # body {"id":7,"tags":["a"]}
+##
+## For another status, build it with `response`:
+##
+##   http.response(201, {"Content-Type": "application/json; charset=utf-8"}, json.encode(data))
+##
+## Raises what `json.encode` raises for data it can't encode (a fn, for
+## one); in a handler that is a 500.
 fn json_response(data)
   {status: 200, headers: {"Content-Type": "application/json; charset=utf-8"}, body: json.encode(data)}
 end
 
+## Returns a redirect to `location` with an empty plain-text body;
+## `status` is 302 unless given. It isn't checked: pass 301, 303, 307 or
+## 308.
+##
+##   http.redirect("/login")
+##   http.redirect("/new-home", 301)
 fn redirect(location, status = 302)
   {status: status, headers: {"Location": location, "Content-Type": TEXT_PLAIN}, body: ""}
 end
 
+## Returns a 404 plain-text response; `body` defaults to "Not Found".
 fn not_found(body = "Not Found")
   {status: 404, headers: {"Content-Type": TEXT_PLAIN}, body: body}
 end
 
+## Returns a 400 plain-text response; `body` defaults to "Bad Request".
 fn bad_request(body = "Bad Request")
   {status: 400, headers: {"Content-Type": TEXT_PLAIN}, body: body}
 end
 
+## Returns a 500 plain-text response; `body` defaults to
+## "Internal Server Error".
 fn server_error(body = "Internal Server Error")
   {status: 500, headers: {"Content-Type": TEXT_PLAIN}, body: body}
 end
@@ -226,10 +288,33 @@ fn add_set_cookie(resp, cookie_str)
   {status: resp.status, headers: new_headers, body: resp.body}
 end
 
+## Returns a copy of `resp` with one more Set-Cookie header; `resp` is
+## left unchanged and its `headers` may be nil. Each cookie is sent as its
+## own Set-Cookie line.
+##
+## Options: `path` (default "/"), `http_only` (default true), `secure`
+## (default false), `same_site` (default "Lax"), `max_age` (seconds, int)
+## and `expires` (epoch ms, int); nil leaves an attribute out. A nil
+## `value` is sent as the text "nil" (`sid=nil`).
+##
+##   http.set_cookie(http.ok("hi"), "sid", token, {max_age: 3600})
+##   # Set-Cookie: sid=<token>; Path=/; Max-Age=3600; HttpOnly; SameSite=Lax
+##
+## Raises `http.set_cookie: invalid cookie <name|value|path|same_site>
+## "..." (...)` when one of those holds `;`, `,`, whitespace or a control
+## byte, or the name is empty or has `=` (encode arbitrary data first with
+## `url.encode`; a handler reads it back from `req.cookies` with
+## `url.decode`); also when `max_age` or `expires` isn't an int.
 fn set_cookie(resp, name, value, {path = "/", http_only = true, secure = false, same_site = "Lax", max_age = nil, expires = nil} = {})
   add_set_cookie(resp, cookie_line("http.set_cookie", name, value, path, http_only, secure, same_site, max_age, expires))
 end
 
+## Returns a copy of `resp` with a Set-Cookie header that deletes cookie
+## `name` (empty value, `Max-Age=0`). Give the same `path` the cookie was
+## set with (default "/"). Raises like `set_cookie`, with
+## `http.delete_cookie: `.
+##
+##   http.delete_cookie(http.redirect("/"), "sid")
 fn delete_cookie(resp, name, {path = "/"} = {})
   add_set_cookie(resp, cookie_line("http.delete_cookie", name, "", path, true, false, "Lax", 0, nil))
 end
@@ -253,12 +338,29 @@ end
 
 # ─── Form parsing ───
 
+## Returns the fields of a URL-encoded form body (`a=1&b=x+y`) as a
+## table of strings, decoded as by `url.parse_query`: `+` is a space, a
+## key without `=` gets "", and a repeated key keeps its last value.
+##
+##   http.parse_form("name=Ann+Lee&age=30")    # {name: "Ann Lee", age: "30"}
+##   http.parse_form(req.body)
+##
+## Raises `url.parse_query: s must be a string, got <type>` for a
+## non-string `body`.
 fn parse_form(body)
   url.parse_query(body)
 end
 
 # ─── Security ───
 
+## Returns `s` with `&`, `<`, `>`, `"` and `'` replaced by HTML entities,
+## safe to put in HTML text or a quoted attribute.
+##
+##   http.html_escape("<b>\"Tom\" & 'Jerry'</b>")
+##   # "&lt;b&gt;&quot;Tom&quot; &amp; &#x27;Jerry&#x27;&lt;/b&gt;"
+##
+## Raises `str_replace: all arguments must be strings, ...` when `s`
+## isn't a string (convert numbers with "{n}").
 fn html_escape(s)
   let out = str_replace(s, "&", "&amp;")
   out = str_replace(out, "<", "&lt;")
@@ -333,6 +435,38 @@ fn match_static(static_routes, path)
   nil
 end
 
+## Returns a new, empty router. Register routes on it, then pass it to
+## `start` or `serve`:
+##
+##   app.get(pattern, handler)     # also app.post, put, patch, delete
+##   app.static(url_prefix, dir)   # GET files under dir
+##   app.match(method, path)       # {handler, params} or nil
+##
+## A pattern segment starting with `:` matches any one segment, also an
+## empty one (`/users/` matches `/users/:id` with id ""), and puts it,
+## percent-decoded (`%XX` only: `+` stays `+`, unlike `url.decode`), in
+## `req.params`; other segments match literally. Trailing slashes are
+## not normalized: `/users/42/` doesn't match `/users/:id`.
+## The first matching route registered wins. A HEAD request runs the GET
+## route and gets its headers without the body. An unmatched method gets
+## a 404 (no 405). `match` takes a path without its query string and
+## doesn't fall back from HEAD to GET.
+##
+##   app.get("/users/:id") do |req|
+##     http.ok("user {req.params.id}")    # GET /users/42 -> "user 42"
+##   end
+##
+## `static` serves `dir`'s files for GETs of `url_prefix` and below, with
+## Content-Type from `std/mime`. The prefix matches whole segments
+## (`/static` serves `/static/a.css`, not `/staticx`), the prefix itself
+## gives `index.html`, `..` can't leave `dir`, and a directory or missing
+## file is a 404. `dir` is relative to the current directory, not the
+## source file; a missing `dir` just gives 404s. The path is not
+## percent-decoded before the lookup, so a file whose name needs encoding
+## (a space, say) can't be served. Routes are tried before static dirs.
+## Each request reads the whole file, so don't serve huge files this way.
+## Files are sent with `Cache-Control: public, max-age=3600`, so browsers
+## may show a stale copy for up to an hour.
 fn router()
   let routes = []
   let static_routes = []
@@ -1537,13 +1671,35 @@ fn check_int(caller, name, v, min)
   end
 end
 
-# Starts the server and returns {pid}, the server process's pid.
+## Starts a server for `router_ref` without blocking and returns
+## `{pid}`, the server process.
+##
+## Options: `port` (default 8080; not range-checked, so keep it in
+## 1..65535; 0 binds a free port but nothing tells you which), `host`
+## (an IP address, default "0.0.0.0"; "127.0.0.1" for local only),
+## `max_body` (bytes, default 8 MB; a bigger body gets 413),
+## `idle_timeout_ms` (default 30000: the longest wait for each read, also
+## for the next request on a kept-alive connection) and
+## `request_timeout_ms` (default 30000: a request's head and body must
+## arrive within it). A timeout of nil means no limit; past one, the
+## connection is closed without a response. Other keys are ignored.
+## `opts` must be a table: nil raises an unprefixed `field access on
+## non-table` error.
+##
+##   let server = http.start(app, {port: 8080, host: "127.0.0.1"})
+##   ...
+##   http.stop(server)
+##
+## Raises `http.start: ...` when the port can't be bound (in use, bad
+## host), for a first argument that isn't from `router()`, or for a bad
+## option. The server isn't linked to the caller: it keeps running after
+## the caller exits, until `stop` or an exit signal (any reason but
+## "normal") kills it, so it can be a supervisor child. Killing it closes
+## the port and every connection.
 fn start(router_ref, opts = {})
   launch("http.start", router_ref, nil, opts)
 end
 
-# `start`, with the server watching `watch` (nil: nobody); errors start
-# with `caller`.
 # A timeout option: its default when left out, nil (no limit) when given
 # as nil, else an int > 0.
 fn timeout_opt(caller, opts, name, value)
@@ -1558,6 +1714,8 @@ fn timeout_opt(caller, opts, name, value)
   value
 end
 
+# `start`, with the server watching `watch` (nil: nobody); errors start
+# with `caller`.
 fn launch(caller, router_ref, watch, opts)
   let {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS} = opts
   check_int(caller, "max_body", max_body, 0)
@@ -1615,9 +1773,19 @@ fn return_down(pid, added, reason)
   nil
 end
 
-# Runs the server and blocks until its process exits: returns nil when it
-# was stopped or killed with "shutdown", raises otherwise. The server
-# watches the caller and shuts down when it is killed.
+## Starts a server like `start` (same options and errors, prefixed
+## `http.serve: `) and blocks until it exits.
+##
+## The caller can't get the server's pid, so `serve` doesn't return while
+## the server runs. To stop it, kill the process that called `serve` with
+## an exit signal (any reason but "normal"): that process dies, and the
+## server notices and shuts down. If that process traps exits, the signal
+## is only a message and the server keeps running. To stop a server and
+## carry on, use `start` and `stop` instead. Other messages to the caller
+## stay in its mailbox.
+##
+## Raises `http.serve: server died: <reason>` if the server dies on its
+## own.
 fn serve(router_ref, opts = {})
   let pid = launch("http.serve", router_ref, self(), opts).pid
   monitor(pid)
@@ -1646,9 +1814,20 @@ fn target_pid(t, caller)
   error("{caller}: expected a server pid, \{pid\} handle or registered name, got {t}")
 end
 
-# Stops the server: kills its process with "shutdown" and waits until it
-# has closed the listening socket and every connection's. Returns nil; a
-# server that already stopped is fine.
+## Stops a server and returns nil once its listening socket and every
+## connection are closed, so the port can be bound again at once. Stopping
+## a server that already stopped returns nil too.
+##
+## `server` is the handle from `start`, the server pid, or a name the pid
+## was registered under; any process given is killed, server or not.
+## Requests in flight are cut off (also the one whose handler calls
+## `stop`; `stop` doesn't return to it). Waits at most `timeout_ms` (nil:
+## no limit).
+##
+## Raises `http.stop: the server did not stop within <ms> ms`, and for a
+## `server` that is none of the above (`no process registered as "..."`).
+## The caller's own monitor of the server still gets its DOWN; `stop`
+## leaves nothing else in the mailbox.
 fn stop(server, timeout_ms = 5000)
   if timeout_ms != nil and type(timeout_ms) != "int"
     error("http.stop: timeout_ms must be an int (milliseconds) or nil, got {type(timeout_ms)}")
