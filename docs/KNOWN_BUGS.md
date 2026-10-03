@@ -286,7 +286,9 @@ The string-key index of a table (`shput`/`shgeti` in runtime/gem_core.c)
 is stb_ds's C-string hash map, which hashes and compares with
 `strlen`/`strcmp`, while `==` compares `slen` bytes. Keys that differ only
 after a NUL are the same key, so `table.unique`, `table.group_by`,
-`url.parse_query` and `mime.lookup` merge them (`mime.lookup("x.html\0")`
+`url.parse_query`, `mime.lookup` and `json.parse` (object keys with
+`\u0000`) merge them, and `test.assert_eq` calls two tables equal whose
+keys differ only after a NUL (`mime.lookup("x.html\0")`
 is `text/html`). Hash and compare string keys by `slen`.
 
 ## Standard library
