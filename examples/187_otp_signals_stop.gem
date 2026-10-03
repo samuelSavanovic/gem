@@ -78,12 +78,15 @@ fn stubborn(a)
     end
   end
 end
-let d2 = dynamic_supervisor.start({child: {start: stubborn}})
+# Its budget is 100 ms: a request timeout below that raises, but the
+# supervisor still kills the child when the budget runs out and removes it.
+let d2 = dynamic_supervisor.start({child: {start: stubborn, shutdown: 100}})
 let p0 = dynamic_supervisor.start_child(d2, {ignore: 0})
 print("graceful: {dynamic_supervisor.terminate_child(d2, p0)} alive after: {alive(p0)}")
 let p1 = dynamic_supervisor.start_child(d2, {ignore: 1})
 print((pcall dynamic_supervisor.terminate_child(d2, p1, 50)).error)
-print("still running: {alive(p1)}, listed: {len(dynamic_supervisor.which_children(d2))}")
+let listed = len(dynamic_supervisor.which_children(d2))
+print("still running: {alive(p1)}, listed: {listed}")
 print("again: {dynamic_supervisor.terminate_child(d2, p1)} alive after: {alive(p1)}")
 print("unknown: {dynamic_supervisor.terminate_child(d2, p1)}")
 print("children left: {len(dynamic_supervisor.which_children(d2))}")

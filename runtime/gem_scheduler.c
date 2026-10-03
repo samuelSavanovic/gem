@@ -1639,7 +1639,13 @@ GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
     GemProcess *proc = &gem_proc_table[pid];
     if (proc->state == GEM_PROC_DEAD || proc->state == GEM_PROC_FREE) return GEM_NIL;
 
-    if (proc->trap_exit) {
+    /* As in Erlang, the reason "kill" can't be trapped: the target dies
+       with "killed", which is what its monitors and links see (links pass
+       "killed" on as an ordinary, trappable reason). */
+    int untrappable = strcmp(reason, "kill") == 0;
+    if (untrappable) reason = "killed";
+
+    if (proc->trap_exit && !untrappable) {
         GemVal msg = gem_table_new();
         gem_table_set(msg, gem_string("tag"), gem_string("EXIT"));
         gem_table_set(msg, gem_string("pid"), gem_int(gem_pid_of_slot(gem_current_pid)));

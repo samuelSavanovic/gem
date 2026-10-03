@@ -1,0 +1,262 @@
+# The untrappable kill: `kill(pid, "kill")` ends a process that traps
+# exits, with reason "killed", which then travels through links as an
+# ordinary reason. Supervisors use it after each child's `shutdown` budget:
+# a one_for_all restart, a supervisor's own shutdown and
+# dynamic_supervisor.terminate_child no longer hang on a child that traps
+# exits and ignores the EXIT.
+load "std/supervisor"
+load "std/dynamic_supervisor"
+
+let me = self()
+
+fn err(r)
+  r.error
+end
+
+# Traps exits and ignores every message: only "kill" ends it.
+fn stubborn()
+  spawn do
+    process_flag("trap_exit", true)
+    while true
+      receive
+      when other then nil
+      end
+    end
+  end
+end
+
+# Traps exits; on an EXIT from its supervisor it takes `ms` to clean up,
+# then reports and returns.
+fn slow_cleanup(name, ms)
+  let sup = self()
+  spawn do
+    process_flag("trap_exit", true)
+    receive
+    when {tag: "EXIT", pid: ^sup, reason: reason}
+      sleep(ms)
+      send(me, {tag: "cleaned", name: name, reason: reason})
+    end
+  end
+end
+
+fn crasher()
+  spawn do
+    receive
+    when {tag: "crash"} then error("boom")
+    end
+  end
+end
+
+fn down_of(pid)
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: r} then r
+  after 2000 then "no DOWN"
+  end
+end
+
+fn alive(pid)
+  process_info(pid) != nil
+end
+
+# A process only traps exits once it has run `process_flag`: the tests
+# below let each new process run (`settle`) before they signal it.
+fn settle()
+  sleep(20)
+end
+
+# ── kill(pid, "kill") ──
+print("-- kill --")
+let s = stubborn()
+monitor(s)
+settle()
+kill(s, "shutdown")
+kill(s, "killed")                # an ordinary reason: trapped too
+sleep(10)
+print("alive after shutdown and killed:", alive(s))
+print("kill returns:", kill(s, "kill"))
+print("DOWN:", down_of(s))
+print("kill of a dead pid:", kill(s, "kill"))
+
+# kill(self(), "kill") ends a process that traps exits, past pcall.
+let selfk = spawn do
+  process_flag("trap_exit", true)
+  pcall(fn() kill(self(), "kill") end)
+  print("not reached")
+end
+monitor(selfk)
+print("self kill:", down_of(selfk))
+
+# A process waiting on the thread pool dies at once.
+let pooled = spawn do
+  process_flag("trap_exit", true)
+  exec("sleep 0.3")
+  print("not reached")
+end
+monitor(pooled)
+sleep(20)
+let t0 = time_ms()
+kill(pooled, "kill")
+print("pool wait:", down_of(pooled), time_ms() - t0 < 100)
+
+# ── "killed" through links ──
+# trapper (traps) ─ mid (doesn't) ─ leaf (doesn't); `kill(leaf, "kill")`
+# kills mid with "killed", and trapper gets an EXIT "killed" from mid.
+print("-- links --")
+let trapper = spawn do
+  process_flag("trap_exit", true)
+  let mid = spawn_link(fn()
+    let leaf = spawn_link(fn()
+      receive when x then nil end
+    end)
+    send(me, {tag: "leaf", pid: leaf})
+    receive when x then nil end
+  end)
+  send(me, {tag: "mid", pid: mid})
+  receive
+  when {tag: "EXIT", pid: ^mid, reason: r}
+    send(me, {tag: "trapper_got", reason: r})
+  end
+  receive when x then nil end
+end
+let mid = nil
+let leaf = nil
+receive when {tag: "mid", pid: p} then mid = p end
+receive when {tag: "leaf", pid: p} then leaf = p end
+monitor(mid)
+monitor(trapper)
+kill(leaf, "kill")
+print("mid DOWN:", down_of(mid))
+receive
+when {tag: "trapper_got", reason: r} then print("trapper EXIT:", r)
+after 1000 then print("trapper got nothing")
+end
+print("trapper alive:", alive(trapper))
+kill(trapper, "kill")
+print("trapper DOWN:", down_of(trapper))
+
+# ── one_for_all restart with a stubborn child (the old hang) ──
+print("-- one_for_all --")
+let h = supervisor.start({strategy: "one_for_all", children: [
+  {id: "t", start: stubborn, shutdown: 50},
+  {id: "c", start: crasher}
+]})
+let before = supervisor.which_children(h)
+settle()
+send(before[1].pid, {tag: "crash"})
+sleep(10)
+let after_restart = supervisor.which_children(h, 1000)
+print("restarted both:", after_restart[0].pid != before[0].pid, after_restart[1].pid != before[1].pid)
+print("old stubborn child gone:", not alive(before[0].pid))
+supervisor.stop(h)
+print("stopped; new stubborn child gone:", not alive(after_restart[0].pid))
+
+# ── a supervisor's own shutdown: one budget per child ──
+# Last started first: "b" (stubborn, killed after 100 ms), then "a" (cleans
+# up in 50 ms, within its budget). The old single 4000 ms budget left "a"
+# no time after a stubborn sibling.
+print("-- shutdown budgets --")
+let sup = supervisor.start({children: [
+  {id: "a", start: fn() slow_cleanup("a", 50) end, shutdown: 1000},
+  {id: "b", start: stubborn, shutdown: 100}
+]})
+let kids = supervisor.which_children(sup)
+settle()
+monitor(kids[1].pid)
+t0 = time_ms()
+supervisor.stop(sup)
+let took = time_ms() - t0
+receive
+when {tag: "cleaned", name: n, reason: r} then print("cleaned:", n, r)
+after 0 then print("a did not clean up")
+end
+print("b:", down_of(kids[1].pid))
+print("took 150..1000 ms:", took >= 150 and took < 1000)
+
+# `shutdown: nil` waits for the child however long it takes; a handle with
+# its own `shutdown` key sets the budget when the spec doesn't.
+let waited = supervisor.start({children: [
+  {id: "slow", start: fn() slow_cleanup("slow", 300) end, shutdown: nil},
+  {id: "handle", start: fn() {pid: stubborn(), shutdown: 30} end}
+]})
+supervisor.which_children(waited)
+settle()
+t0 = time_ms()
+supervisor.stop(waited)
+took = time_ms() - t0
+receive
+when {tag: "cleaned", name: n} then print("cleaned:", n)
+after 0 then print("slow was killed")
+end
+print("took 330..1500 ms:", took >= 330 and took < 1500)
+
+# Supervisor handles ask for no limit, so a nested supervisor finishes its
+# own ordered shutdown (here a grandchild that takes 200 ms) before the
+# parent goes on.
+let handle = supervisor.start({children: []})
+print("handle shutdown key:", has_key(handle, "shutdown"), handle.shutdown)
+supervisor.stop(handle)
+let outer = supervisor.start({children: [
+  {id: "inner", start: fn()
+    supervisor.start({children: [{id: "g", start: fn() slow_cleanup("g", 200) end, shutdown: nil}]})
+  end},
+  {id: "s", start: stubborn, shutdown: 20}
+]})
+supervisor.which_children(supervisor.which_children(outer)[0].pid)
+settle()
+supervisor.stop(outer)
+receive
+when {tag: "cleaned", name: n} then print("cleaned:", n)
+after 0 then print("g was killed")
+end
+
+# ── transient children and "killed" ──
+print("-- transient --")
+let tr = supervisor.start({children: [{id: "w", restart: "transient", start: stubborn, shutdown: 20}]})
+let w1 = supervisor.which_children(tr)[0].pid
+settle()
+kill(w1, "kill")
+sleep(10)
+let w2 = supervisor.which_children(tr)[0].pid
+print("killed transient restarted:", w2 != -1 and w2 != w1)
+supervisor.stop(tr)
+
+# ── dynamic_supervisor ──
+print("-- dynamic_supervisor --")
+let d = dynamic_supervisor.start({child: {start: fn(a) stubborn() end, shutdown: 50}})
+let p1 = dynamic_supervisor.start_child(d, 1)
+let p2 = dynamic_supervisor.start_child(d, 2)
+settle()
+monitor(p1)
+print("terminate_child:", dynamic_supervisor.terminate_child(d, p1))
+print("p1:", down_of(p1))
+print("children left:", len(dynamic_supervisor.which_children(d)))
+print("terminate again:", dynamic_supervisor.terminate_child(d, p1))
+# A request timeout shorter than the budget raises, but the child is still
+# stopped and removed.
+print(err(pcall dynamic_supervisor.terminate_child(d, p2, 10)))
+sleep(100)
+print("p2 gone:", not alive(p2), len(dynamic_supervisor.which_children(d)))
+let p3 = dynamic_supervisor.start_child(d, 3)
+settle()
+dynamic_supervisor.stop(d)
+print("stop killed p3:", not alive(p3))
+
+# A dynamic child whose handle has a bad shutdown fails start_child only.
+let bad = dynamic_supervisor.start({child: {start: fn(a) {pid: stubborn(), shutdown: "soon"} end}})
+print(err(pcall dynamic_supervisor.start_child(bad, nil)))
+dynamic_supervisor.stop(bad)
+
+# ── argument checks ──
+print("-- checks --")
+print(err(pcall supervisor.start({children: [{id: "x", start: stubborn, shutdown: "5s"}]})))
+print(err(pcall dynamic_supervisor.start({child: {start: stubborn, shutdown: 1.5}})))
+
+# ── kill(main, "kill"): main dies even though it traps exits ──
+print("-- main --")
+process_flag("trap_exit", true)
+spawn do
+  kill(me, "kill")
+end
+receive
+when {tag: "EXIT"} then print("not reached")
+end

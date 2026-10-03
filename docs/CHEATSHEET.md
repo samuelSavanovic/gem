@@ -117,6 +117,7 @@ link(pid); unlink(pid)
 process_flag("trap_exit", true)
 kill(pid, "shutdown")                # → true if alive; EXIT msg if pid traps exits
                                      #   reason "normal" is ignored unless pid == self()
+kill(pid, "kill")                    # untrappable: pid dies with reason "killed"
 register("name", self())
 whereis("name")                      # → pid or nil
 let ref = make_ref()
@@ -175,6 +176,8 @@ end
 # std/mime       lookup, ext
 # std/sqlite     open, close, exec, query, last_id, changes  (wraps sqlite_* builtins)
 # std/supervisor start, which_children, stop
+#   child spec {id, start, restart, shutdown}: on stop, "shutdown", then "kill"
+#   after `shutdown` ms (default 5000; nil = wait; a supervisor child: nil)
 # std/dynamic_supervisor  start, start_child, terminate_child, which_children, stop
 # std/task       async, await, await_all
 # std/gen_server start, call, cast, reply
