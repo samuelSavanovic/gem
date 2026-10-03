@@ -148,7 +148,7 @@ should raise (or wrap) instead. Relatedly, int `+`, `-` and `*` overflow
 is signed-overflow undefined behaviour in C (no `-fwrapv`); it wraps in
 practice.
 
-### A non-integer `after` timeout is taken as 0
+### A non-integer `after` timeout is read as raw bits
 
 ```gem
 receive
@@ -157,8 +157,12 @@ end
 ```
 
 runs at once instead of raising: the timeout's `.ival` is read with no
-type check (`compile_receive_match` in compiler/codegen.gem). A
-non-integer timeout should raise.
+type check (`compile_receive_match` in compiler/codegen.gem), so the
+value's raw payload is taken as milliseconds. `nil` waits 0 ms and `true`
+1 ms; a float waits its bit pattern read as an int (`1.5` is about
+4.6e18 ms, i.e. forever; `0.0` is 0); a string or a table waits its
+pointer value, which in practice is forever (`after "abc"` still waits
+when another process exits). A non-integer timeout should raise.
 
 ### `s = s + x` in a loop skips the `+` type check
 
@@ -270,6 +274,9 @@ To restart all children, the supervisor sends each running child
 dying, so the supervisor waits forever. Erlang waits a shutdown timeout
 and then sends the untrappable `kill`; Gem has no untrappable exit signal,
 so that needs one in the runtime (`kill` in runtime/gem_scheduler.c).
+The same goes for a supervisor's own death: its children are linked to it
+and exit with it, except a child that traps exits, which gets an `EXIT`
+message and keeps running.
 
 ### `std/http` route params decode `+` as a space
 

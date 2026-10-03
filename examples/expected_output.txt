@@ -613,15 +613,15 @@ Stack trace:
   at anonymous fn (examples/30_supervisor.gem:13)
 
 [Runtime Error in process 10]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:67
+  --> std/supervisor.gem:95
     |
- 67 |     error("supervisor: max restart intensity reached")
+ 95 |     error("supervisor: max restart intensity reached")
     |
 Stack trace:
-  at supervisor.note_restart (std/supervisor.gem:67)
-  at supervisor.handle_down (std/supervisor.gem:105)
-  at supervisor.sup_loop (std/supervisor.gem:127)
-  at anonymous fn (std/supervisor.gem:149)
+  at supervisor.note_restart (std/supervisor.gem:95)
+  at supervisor.handle_down (std/supervisor.gem:142)
+  at supervisor.sup_loop (std/supervisor.gem:163)
+  at anonymous fn (std/supervisor.gem:201)
 test4: supervisor crashed: supervisor: max restart intensity reached
 test1: equal_self=true different=true
 test2: type=ref
@@ -721,8 +721,8 @@ test5: parent died: now-fatal
     |
 Stack trace:
   at anonymous fn (examples/34_gen_server.gem:97)
-  at gen_server.loop (std/gen_server.gem:86)
-  at anonymous fn (std/gen_server.gem:120)
+  at gen_server.loop (std/gen_server.gem:94)
+  at anonymous fn (std/gen_server.gem:133)
 test1: after incr 10 = 10
 test3: count=2 first=raw1 second=raw2
 test4: ok=false err=gen_server.call: server exited: kaboom from server
@@ -2723,63 +2723,63 @@ dynamic_supervisor.start_child: supervisor exited: boom
 5: own monitor reason=stop extra=0
 
 [Runtime Error in process 5]: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
-  --> std/gen_server.gem:62
+  --> std/gen_server.gem:67
     |
- 62 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:62)
-  at gen_server.check_call_result (std/gen_server.gem:80)
-  at gen_server.loop (std/gen_server.gem:87)
-  at anonymous fn (std/gen_server.gem:120)
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_call_result (std/gen_server.gem:88)
+  at gen_server.loop (std/gen_server.gem:95)
+  at anonymous fn (std/gen_server.gem:133)
 6: gen_server.call: server exited: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 6]: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
-  --> std/gen_server.gem:62
+  --> std/gen_server.gem:67
     |
- 62 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:62)
-  at gen_server.check_call_result (std/gen_server.gem:80)
-  at gen_server.loop (std/gen_server.gem:87)
-  at anonymous fn (std/gen_server.gem:120)
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_call_result (std/gen_server.gem:88)
+  at gen_server.loop (std/gen_server.gem:95)
+  at anonymous fn (std/gen_server.gem:133)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 7]: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
-  --> std/gen_server.gem:62
+  --> std/gen_server.gem:67
     |
- 62 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:62)
-  at gen_server.check_call_result (std/gen_server.gem:80)
-  at gen_server.loop (std/gen_server.gem:87)
-  at anonymous fn (std/gen_server.gem:120)
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_call_result (std/gen_server.gem:88)
+  at gen_server.loop (std/gen_server.gem:95)
+  at anonymous fn (std/gen_server.gem:133)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 8]: gen_server: handle_cast returned nil, expected {state: state}
-  --> std/gen_server.gem:62
+  --> std/gen_server.gem:67
     |
- 62 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:62)
-  at gen_server.check_state_result (std/gen_server.gem:67)
-  at gen_server.loop (std/gen_server.gem:96)
-  at anonymous fn (std/gen_server.gem:120)
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_state_result (std/gen_server.gem:72)
+  at gen_server.loop (std/gen_server.gem:104)
+  at anonymous fn (std/gen_server.gem:133)
 6: cast nil -> gen_server: handle_cast returned nil, expected {state: state}
 
 [Runtime Error in process 9]: gen_server: handle_info returned an int, expected {state: state}
-  --> std/gen_server.gem:62
+  --> std/gen_server.gem:67
     |
- 62 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:62)
-  at gen_server.check_state_result (std/gen_server.gem:67)
-  at gen_server.loop (std/gen_server.gem:104)
-  at anonymous fn (std/gen_server.gem:120)
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_state_result (std/gen_server.gem:72)
+  at gen_server.loop (std/gen_server.gem:117)
+  at anonymous fn (std/gen_server.gem:133)
 6: info int -> gen_server: handle_info returned an int, expected {state: state}
 7: info saw ["call", "cast", "gs_reply"]
 8: monitors after 300 callers=1
@@ -3181,3 +3181,110 @@ copy int keys {10: "ten", 20: "twenty"}
 copy mixed {0: 1, 1: 2, name: "x"}
 copy array [3, 4, 5] 3
 join record raises: string.join: arr must be an array, got a table with key a
+-- 1. calls to a dead server leave one DOWN, with the real reason
+0
+gen_server.call: server exited: boom
+gen_server.call: server exited: boom
+gen_server.call: server exited: boom
+gen_server.call: server exited: boom
+  DOWN boom
+DOWNs: 1
+gen_server.call: server exited: noproc
+gen_server.call: server exited: noproc
+  DOWN noproc
+DOWNs: 1
+supervisor.which_children: supervisor exited: noproc
+supervisor.which_children: supervisor exited: noproc
+supervisor.which_children: supervisor exited: noproc
+  DOWN noproc
+DOWNs: 1
+dynamic_supervisor.which_children: supervisor exited: noproc
+dynamic_supervisor.which_children: supervisor exited: noproc
+dynamic_supervisor.which_children: supervisor exited: noproc
+  DOWN noproc
+DOWNs: 1
+-- 2. an idle timeout cancelled by a callback does not fire
+0
+no timeout
+0
+armed timeout fired
+1
+-- 3. a supervisor's children go down with it
+inner links its children: 3 true
+
+[Runtime Error in process 6]: supervisor: max restart intensity reached
+  --> std/supervisor.gem:95
+    |
+ 95 |     error("supervisor: max restart intensity reached")
+    |
+Stack trace:
+  at supervisor.note_restart (std/supervisor.gem:95)
+  at supervisor.handle_down (std/supervisor.gem:142)
+  at supervisor.sup_loop (std/supervisor.gem:163)
+  at anonymous fn (std/supervisor.gem:201)
+inner restarted: true
+old db dead: true
+new db: true 0
+outer, inner, children dead: true true true true nil
+one_for_all restarted inner: true true true
+
+[Runtime Error in process 22]: dynamic_supervisor: max restart intensity reached
+  --> std/dynamic_supervisor.gem:76
+    |
+ 76 |     error("dynamic_supervisor: max restart intensity reached")
+    |
+Stack trace:
+  at dynamic_supervisor.check_intensity (std/dynamic_supervisor.gem:76)
+  at dynamic_supervisor.handle_down (std/dynamic_supervisor.gem:135)
+  at dynamic_supervisor.dsup_loop (std/dynamic_supervisor.gem:157)
+  at anonymous fn (std/dynamic_supervisor.gem:188)
+dsup and its children dead: true true
+ignores a normal exit signal: true
+dsup killed, child dead: true true
+true {}
+trapper gone, dsup alive: true true {}
+trapping child outlives its supervisor: true true
+-- 4. one_for_all restarts only what would be restarted
+q exited normally: -1
+started again: {} t: -1 q: -1 c restarted: true
+-- 5. a transient child killed with shutdown stays down
+-1
+oops restarted: true
+-- 6. handle_call returning both reply and noreply
+
+[Runtime Error in process 41]: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
+  --> std/gen_server.gem:67
+    |
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_call_result (std/gen_server.gem:80)
+  at gen_server.loop (std/gen_server.gem:95)
+  at anonymous fn (std/gen_server.gem:133)
+gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
+  DOWN gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
+-- 7. init returning a table with a state field
+{state: "idle", count: 0}
+-- 8. cast to a dead server
+nil
+gen_server.cast: no process registered as "srv184"
+-- 9. process_info lists live monitors only
+{}
+1 true
+-- 10. timeouts
+0
+gen_server.call: timeout
+gen_server.call: timeout must be an int (milliseconds) or nil, got string
+gen_server.call: timeout must be an int (milliseconds) or nil, got float
+1
+supervisor.which_children: timeout must be an int (milliseconds) or nil, got bool
+true
+true
+dynamic_supervisor.start_child: timeout must be an int (milliseconds) or nil, got string
+dynamic_supervisor.which_children: timeout must be an int (milliseconds) or nil, got table
+gen_server.call: server exited: stopped
+dynamic_supervisor.start: expected a child template {start, restart}, got nil
+dynamic_supervisor.start: the child template's start must be a fn, got nil
+dynamic_supervisor.start: unknown restart "sometimes"
+supervisor.start: unknown restart "always" for child "x"

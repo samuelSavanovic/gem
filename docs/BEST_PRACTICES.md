@@ -899,6 +899,18 @@ One std limitation remains:
 - A `one_for_all` supervisor hangs when it restarts a child that traps
   exits **(bug)**: supervise such children `one_for_one`.
 
+### A gen_server state with a `state` key goes in `{state: ...}` **(trap)**
+
+`init` may return the state itself or `{state: s, timeout: ms}`, and any
+table with a `state` key is taken for the second form. A state machine
+whose state is `{state: "idle", count: 0}` returned bare starts with the
+state `"idle"`. When the state is a table that may have a `state` key,
+always wrap it:
+
+```gem
+init: fn() {state: {state: "idle", count: 0}} end
+```
+
 ### Spawning
 
 ```gem
@@ -985,15 +997,19 @@ end
   model: it monitors, matches `{tag: "DOWN", pid: ^pid}`, and removes the
   `DOWN` when it's done. Monitoring a long-lived server from many
   short-lived processes, such as per-connection handlers, is fine: a
-  monitor ends with the process that set it up (20,000 callers in turn
-  leave the server with 1 entry on its monitor list).
-- There is no `demonitor`, and a process monitors a target at most once
-  (a second `monitor` adds nothing, and the death sends one `DOWN`). A
-  long-lived process that monitors a server therefore gets its `DOWN`
-  whenever the server dies, possibly long after the request. Drop it only
-  when the target always exits (as a task does); otherwise leave it for
-  the caller's loop, since it may be the `DOWN` of a monitor the caller
-  set up itself. `gen_server.call` works this way.
+  monitor ends with the process that set it up (after 20,000 callers in
+  turn, `process_info(server).monitors` is empty and the runtime's list
+  holds at most one stale entry).
+- There is no `demonitor`, and a process monitors a live target at most
+  once (a second `monitor` adds nothing, and the death sends one `DOWN`).
+  A dead target is different: every `monitor` of it sends another
+  `DOWN` (`"noproc"`), so a wait that retries on a dead server must drop
+  the extra ones. A long-lived process that monitors a server therefore
+  gets its `DOWN` whenever the server dies, possibly long after the
+  request. Drop it only when the target always exits (as a task does);
+  otherwise leave exactly one for the caller's loop, since it may be the
+  `DOWN` of a monitor the caller set up itself. `gen_server.call` works
+  this way.
 - A `receive` with only an `after` clause waits that long and takes no
   message: anything that arrives meanwhile stays queued. It is the same as
   `sleep(ms)`; use whichever reads better.
@@ -1282,6 +1298,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `loop(state)` followed by more statements | stack and memory grow until overflow | self call as the last expression |
 | `warning: cannot reset ... back-edge` on a `while true` | memory grows without bound | restructure the loop |
 | gen_server callback returning `nil` | server dies, the `call` raises | `else` arm returning a result table |
+| gen_server `init` returning a table with a `state` key | only that field becomes the state | return `{state: s}` |
 | `self()` inside `spawn do ... end` to mean the parent | it's the child | `let parent = self()` before |
 | `spawn(f, x)` | `f` called with no arguments | `spawn do f(x) end` |
 | `link` to a process that may have exited | caller dies with `noproc` | `spawn_link` |

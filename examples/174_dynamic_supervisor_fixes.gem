@@ -119,7 +119,9 @@ let slow = dynamic_supervisor.start({child: {start: fn(ms) sleep(ms); idle(ms) e
 print(error_of(fn() dynamic_supervisor.start_child(slow, 200, 20) end))
 kill(slow.pid, "shutdown")
 print(error_of(fn() dynamic_supervisor.start_child(slow, 0) end))
-let doomed = dynamic_supervisor.start({child: {start: fn(ms) sleep(ms); idle(ms) end}})
+# The supervisor traps exits, so a kill reaches it only once it reads its
+# mailbox; this child start turns that off to let it die mid-call.
+let doomed = dynamic_supervisor.start({child: {start: fn(ms) process_flag("trap_exit", false); sleep(ms); idle(ms) end}})
 spawn do
   sleep(20)
   kill(doomed.pid, "boom")

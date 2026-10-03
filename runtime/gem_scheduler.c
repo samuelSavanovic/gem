@@ -1761,12 +1761,16 @@ GemVal gem_process_info_builtin(void *_env, GemVal *args, int argc) {
     }
     gem_table_set(info, gem_string("links"), links);
 
-    /* monitors — array of pids */
+    /* monitors — array of the pids of live monitoring processes. The list
+       keeps the nodes of monitoring processes that have exited until the
+       next monitor() of this process walks it; leave those out. */
     GemVal monitors = gem_table_new();
     GemMonitorNode *mnode = proc->monitors;
     int mi = 0;
     while (mnode) {
-        gem_table_set(monitors, gem_int(mi++), gem_int(mnode->pid));
+        int watcher = gem_slot_of_pid(mnode->pid);
+        if (watcher >= 0 && gem_proc_table[watcher].state != GEM_PROC_DEAD)
+            gem_table_set(monitors, gem_int(mi++), gem_int(mnode->pid));
         mnode = mnode->next;
     }
     gem_table_set(info, gem_string("monitors"), monitors);

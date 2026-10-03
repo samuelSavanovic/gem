@@ -7,6 +7,13 @@
 #   let pid = dynamic_supervisor.start_child(ds, {id: 1})
 #   dynamic_supervisor.which_children(ds)    # [{pid, args}]
 #   dynamic_supervisor.terminate_child(ds, pid)
+#
+# The supervisor traps exits and links each child, so when the supervisor
+# exits (restart intensity reached, or a `kill` from its own supervisor) its
+# children go down with it. The restart signal is the child's DOWN; the
+# EXIT a child's death also sends is dropped.
+
+let RESTARTS = {permanent: true, transient: true, temporary: true}
 
 # A bare pid, a `{pid}` handle or a registered name → pid; nil for a name
 # nobody holds or anything else.
@@ -39,7 +46,21 @@ end
 fn start_from_template(state, args)
   let pid = started_pid(state.template.start(args))
   monitor(pid)
+  # A child that has already exited gives an EXIT "noproc" here (the
+  # supervisor traps exits) next to its DOWN "noproc".
+  link(pid)
   pid
+end
+
+# Drops the EXIT of `pid` if it is queued. A child's death queues its DOWN
+# and its EXIT together, so this runs once the DOWN has been taken.
+fn drop_exit(pid)
+  receive
+  when {tag: "EXIT", pid: ^pid}
+    nil
+  after 0
+    nil
+  end
 end
 
 fn check_intensity(state)
@@ -56,9 +77,12 @@ fn check_intensity(state)
   end
 end
 
-fn find_child_index(children, pid)
+# The index of the child `pid` in `children`, or -1. Children that
+# terminate_child stopped stay in the list, marked `stopping`, until their
+# DOWN arrives; `include_stopping` says whether to find those too.
+fn find_child_index(children, pid, include_stopping)
   for i, c in children
-    if c.pid == pid
+    if c.pid == pid and (include_stopping or not c.stopping)
       return i
     end
   end
@@ -72,19 +96,21 @@ end
 fn handle_start_child(state, args, to, ref)
   let res = pcall(fn() start_from_template(state, args) end)
   if res.ok
-    push(state.children, {pid: res.value, args: args})
+    push(state.children, {pid: res.value, args: args, stopping: false})
   end
   reply(to, ref, res)
 end
 
 fn handle_terminate_child(state, pid, to, ref)
-  let idx = find_child_index(state.children, pid)
+  let idx = find_child_index(state.children, pid, false)
   if idx == -1
     reply(to, ref, {ok: true, value: false})
     return nil
   end
-  # Remove first, so the child's DOWN finds no entry and doesn't restart it.
-  remove_at(state.children, idx)
+  # Mark it first, so its DOWN removes it instead of restarting it. It stays
+  # in the list until then, so its EXIT (which may come later, if the child
+  # traps exits) is known as a child's.
+  state.children[idx].stopping = true
   kill(pid, "shutdown")
   reply(to, ref, {ok: true, value: true})
 end
@@ -97,24 +123,26 @@ fn should_restart(restart, reason)
 end
 
 fn handle_down(state, pid, reason)
-  let idx = find_child_index(state.children, pid)
+  let idx = find_child_index(state.children, pid, true)
   if idx == -1
-    # Removed by terminate_child, or not a child.
     return nil
   end
-  if not should_restart(state.template.restart, reason)
+  drop_exit(pid)
+  if state.children[idx].stopping or not should_restart(state.template.restart, reason)
     remove_at(state.children, idx)
     return nil
   end
   check_intensity(state)
   let args = state.children[idx].args
-  state.children[idx] = {pid: start_from_template(state, args), args: args}
+  state.children[idx] = {pid: start_from_template(state, args), args: args, stopping: false}
 end
 
 fn handle_which_children(state, to, ref)
   let result = []
   for c in state.children
-    push(result, {pid: c.pid, args: c.args})
+    if not c.stopping
+      push(result, {pid: c.pid, args: c.args})
+    end
   end
   reply(to, ref, {ok: true, value: result})
 end
@@ -129,6 +157,14 @@ fn dsup_loop(state)
     handle_down(state, pid, reason)
   when {tag: "_dsup_which_children", reply_to: to, ref: ref}
     handle_which_children(state, to, ref)
+  when {tag: "EXIT", pid: from, reason: reason}
+    if find_child_index(state.children, from, true) == -1 and reason != "normal"
+      # An exit signal from outside (`kill(sup, "shutdown")`, or a linked
+      # parent that died): exit with that reason, which takes the linked
+      # children down too.
+      process_flag("trap_exit", false)
+      kill(self(), reason)
+    end
   when other
     nil
   end
@@ -136,9 +172,19 @@ fn dsup_loop(state)
 end
 
 fn start({child, max_restarts = 3, max_seconds = 5000, name = nil})
+  if type(child) != "table"
+    error("dynamic_supervisor.start: expected a child template \{start, restart\}, got {type(child)}")
+  end
+  if type(child.start) != "fn"
+    error("dynamic_supervisor.start: the child template's start must be a fn, got {type(child.start)}")
+  end
   let {start, restart = "permanent"} = child
+  if not has_key(RESTARTS, restart)
+    error("dynamic_supervisor.start: unknown restart \"{restart}\"")
+  end
   let template = {start: start, restart: restart}
   let pid = spawn do
+    process_flag("trap_exit", true)
     dsup_loop({
       template: template,
       children: [],
@@ -154,9 +200,56 @@ fn start({child, max_restarts = 3, max_seconds = 5000, name = nil})
   {pid: pid}
 end
 
-# Sends `msg` to the supervisor `target` and waits for its reply. Raises
-# `<caller>: ...` when the supervisor is dead or dies, when `timeout_ms`
-# passes, or with the error the request failed with.
+fn check_timeout(timeout_ms, caller)
+  if timeout_ms != nil and type(timeout_ms) != "int"
+    error("{caller}: timeout must be an int (milliseconds) or nil, got {type(timeout_ms)}")
+  end
+end
+
+# Takes the DOWN of `pid` that the caller just matched (with `reason`) plus
+# any further DOWN for `pid` already queued (each `monitor` of a dead process
+# queues another one, with reason "noproc"), and puts back exactly one, with
+# the first reason: the caller's own monitor of the supervisor, if any, is
+# this same monitor (monitors are per process pair).
+fn keep_one_down(pid, reason)
+  let more = true
+  while more
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    after 0
+      more = false
+    end
+  end
+  send(self(), {tag: "DOWN", pid: pid, reason: reason})
+end
+
+# Waits for the reply to `ref` or the DOWN of `pid`: {result} or {down}.
+fn await_reply(pid, ref)
+  receive
+  when {tag: "_dsup_reply", ref: ^ref, result: res}
+    {result: res}
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    {down: reason}
+  end
+end
+
+# As await_reply, or nil after `timeout_ms`.
+fn await_reply_for(pid, ref, timeout_ms)
+  receive
+  when {tag: "_dsup_reply", ref: ^ref, result: res}
+    {result: res}
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    {down: reason}
+  after timeout_ms
+    nil
+  end
+end
+
+# Sends `msg` to the supervisor `target` and waits for its reply (forever
+# when `timeout_ms` is nil). Raises `<caller>: ...` when the supervisor is
+# dead or dies, when `timeout_ms` passes, or with the error the request
+# failed with.
 fn request(target, msg, caller, timeout_ms)
   let pid = pid_of(target)
   if pid == nil
@@ -165,25 +258,30 @@ fn request(target, msg, caller, timeout_ms)
     end
     error("{caller}: expected a pid, a \{pid\} handle or a registered name, got {type(target)}")
   end
+  check_timeout(timeout_ms, caller)
   let ref = make_ref()
   msg.reply_to = self()
   msg.ref = ref
   monitor(pid)
   send(pid, msg)
-  receive
-  when {tag: "_dsup_reply", ref: ^ref, result: res}
-    if not res.ok
-      error("{caller}: {res.error}")
-    end
-    res.value
-  when {tag: "DOWN", pid: ^pid, reason: reason}
-    # Put the DOWN back: the caller's own monitor of the supervisor, if any,
-    # is this same monitor (monitors are per process pair).
-    send(self(), {tag: "DOWN", pid: pid, reason: reason})
-    error("{caller}: supervisor exited: {reason}")
-  after timeout_ms
+  let r = nil
+  if timeout_ms == nil
+    r = await_reply(pid, ref)
+  else
+    r = await_reply_for(pid, ref, timeout_ms)
+  end
+  if r == nil
     error("{caller}: timeout")
   end
+  if has_key(r, "down")
+    keep_one_down(pid, r.down)
+    error("{caller}: supervisor exited: {r.down}")
+  end
+  let res = r.result
+  if not res.ok
+    error("{caller}: {res.error}")
+  end
+  res.value
 end
 
 fn start_child(target, args, timeout_ms = 5000)

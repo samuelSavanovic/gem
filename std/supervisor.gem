@@ -12,8 +12,14 @@
 #
 # A child's `start` spawns the child and returns its pid or a `{pid}`
 # handle. A child that is not running shows pid -1 in `which_children`.
+#
+# The supervisor traps exits and links each child, so when the supervisor
+# exits (restart intensity reached, or a `kill` from its own supervisor) its
+# children go down with it. The restart signal is the child's DOWN; the
+# EXIT a child's death also sends is dropped.
 
 let STRATEGIES = {one_for_one: true, one_for_all: true}
+let RESTARTS = {permanent: true, transient: true, temporary: true}
 
 # Turns a bare pid, a `{pid}` handle or a registered name into a pid.
 fn target_pid(t, caller)
@@ -35,7 +41,21 @@ end
 fn start_child(spec)
   let pid = target_pid(spec.start(), "supervisor: start of child \"{spec.id}\"")
   monitor(pid)
+  # A child that has already exited gives an EXIT "noproc" here (the
+  # supervisor traps exits) next to its DOWN "noproc".
+  link(pid)
   pid
+end
+
+# Drops the EXIT of `pid` if it is queued. A child's death queues its DOWN
+# and its EXIT together, so this runs once the DOWN has been taken.
+fn drop_exit(pid)
+  receive
+  when {tag: "EXIT", pid: ^pid}
+    nil
+  after 0
+    nil
+  end
 end
 
 fn find_child(children, pid)
@@ -47,9 +67,17 @@ fn find_child(children, pid)
   -1
 end
 
-fn should_restart(spec, reason)
+fn restart_of(spec)
   let {restart = "permanent"} = spec
-  restart == "permanent" or (restart == "transient" and reason != "normal")
+  restart
+end
+
+fn should_restart(spec, reason)
+  let restart = restart_of(spec)
+  if restart == "permanent"
+    return true
+  end
+  restart == "transient" and reason != "normal" and reason != "shutdown"
 end
 
 # Records a restart at `now`, dropping restarts older than the window, and
@@ -69,12 +97,17 @@ fn note_restart(state, now)
 end
 
 # Stops every running child but the one at `dead_idx`, waits for the DOWN
-# of each child it stopped, then starts all children again in order.
+# of each child it stopped, then starts again, in order, the dead child and
+# every child it stopped except temporary ones. A child that was not
+# running stays down.
 fn restart_all(state, dead_idx)
   let children = state.children
+  let specs = state.specs
   let killed = []
+  let revive = []
   for i = 0, len(children)
     let pid = children[i].pid
+    push(revive, i == dead_idx or (pid != -1 and restart_of(specs[i]) != "temporary"))
     if i != dead_idx and pid != -1
       kill(pid, "shutdown")
       push(killed, pid)
@@ -83,12 +116,15 @@ fn restart_all(state, dead_idx)
   for pid in killed
     receive
     when {tag: "DOWN", pid: ^pid}
-      nil
+      drop_exit(pid)
     end
   end
-  let specs = state.specs
   for i = 0, len(specs)
-    children[i] = {id: specs[i].id, pid: start_child(specs[i])}
+    let pid = -1
+    if revive[i]
+      pid = start_child(specs[i])
+    end
+    children[i] = {id: specs[i].id, pid: pid}
   end
 end
 
@@ -97,6 +133,7 @@ fn handle_down(state, dead_pid, reason)
   if idx == -1
     return state
   end
+  drop_exit(dead_pid)
   let spec = state.specs[idx]
   if not should_restart(spec, reason)
     state.children[idx] = {id: spec.id, pid: -1}
@@ -115,8 +152,7 @@ fn children_info(state)
   let result = []
   for i = 0, len(state.children)
     let spec = state.specs[i]
-    let {restart = "permanent"} = spec
-    push(result, {id: spec.id, pid: state.children[i].pid, restart: restart})
+    push(result, {id: spec.id, pid: state.children[i].pid, restart: restart_of(spec)})
   end
   result
 end
@@ -127,6 +163,15 @@ fn sup_loop(state)
     sup_loop(handle_down(state, dead_pid, reason))
   when {tag: "_sup_which_children", from: from, ref: ref}
     send(from, {tag: "_sup_children", ref: ref, children: children_info(state)})
+    sup_loop(state)
+  when {tag: "EXIT", pid: from, reason: reason}
+    if find_child(state.children, from) == -1 and reason != "normal"
+      # An exit signal from outside (`kill(sup, "shutdown")`, or a linked
+      # parent that died): exit with that reason, which takes the linked
+      # children down too.
+      process_flag("trap_exit", false)
+      kill(self(), reason)
+    end
     sup_loop(state)
   when other
     sup_loop(state)
@@ -140,8 +185,15 @@ fn start({strategy = "one_for_one", max_restarts = 3, max_seconds = 5000, childr
   if name != nil and whereis(name) != nil
     error("supervisor.start: name \"{name}\" is already registered")
   end
+  for spec in children
+    let restart = restart_of(spec)
+    if not has_key(RESTARTS, restart)
+      error("supervisor.start: unknown restart \"{restart}\" for child \"{spec.id}\"")
+    end
+  end
   let specs = children
   let pid = spawn(fn()
+    process_flag("trap_exit", true)
     let running = []
     for spec in specs
       push(running, {id: spec.id, pid: start_child(spec)})
@@ -163,22 +215,72 @@ fn start({strategy = "one_for_one", max_restarts = 3, max_seconds = 5000, childr
   {pid: pid}
 end
 
+fn check_timeout(timeout_ms, caller)
+  if timeout_ms != nil and type(timeout_ms) != "int"
+    error("{caller}: timeout must be an int (milliseconds) or nil, got {type(timeout_ms)}")
+  end
+end
+
+# Takes the DOWN of `pid` that the caller just matched (with `reason`) plus
+# any further DOWN for `pid` already queued (each `monitor` of a dead process
+# queues another one, with reason "noproc"), and puts back exactly one, with
+# the first reason: the caller's own monitor of the supervisor, if any, is
+# this same monitor (monitors are per process pair).
+fn keep_one_down(pid, reason)
+  let more = true
+  while more
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    after 0
+      more = false
+    end
+  end
+  send(self(), {tag: "DOWN", pid: pid, reason: reason})
+end
+
+# Waits for the answer to `ref` or the DOWN of `pid`: {children} or {down}.
+fn await_children(pid, ref)
+  receive
+  when {tag: "_sup_children", ref: ^ref, children: children}
+    {children: children}
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    {down: reason}
+  end
+end
+
+# As await_children, or nil after `timeout_ms`.
+fn await_children_for(pid, ref, timeout_ms)
+  receive
+  when {tag: "_sup_children", ref: ^ref, children: children}
+    {children: children}
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    {down: reason}
+  after timeout_ms
+    nil
+  end
+end
+
 fn which_children(target, timeout_ms = 5000)
   let pid = target_pid(target, "supervisor.which_children")
+  check_timeout(timeout_ms, "supervisor.which_children")
   let ref = make_ref()
   monitor(pid)
   send(pid, {tag: "_sup_which_children", from: self(), ref: ref})
-  receive
-  when {tag: "_sup_children", ref: ^ref, children: children}
-    children
-  when {tag: "DOWN", pid: ^pid, reason: reason}
-    # Put the DOWN back: the caller's own monitor of the supervisor, if any,
-    # is this same monitor (monitors are per process pair).
-    send(self(), {tag: "DOWN", pid: pid, reason: reason})
-    error("supervisor.which_children: supervisor exited: {reason}")
-  after timeout_ms
+  let res = nil
+  if timeout_ms == nil
+    res = await_children(pid, ref)
+  else
+    res = await_children_for(pid, ref, timeout_ms)
+  end
+  if res == nil
     error("supervisor.which_children: timeout")
   end
+  if has_key(res, "down")
+    keep_one_down(pid, res.down)
+    error("supervisor.which_children: supervisor exited: {res.down}")
+  end
+  res.children
 end
 
 export start, which_children
