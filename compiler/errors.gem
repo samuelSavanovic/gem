@@ -130,9 +130,16 @@ fn make_error_sink()
    suppressed: was_suppressed}
 end
 
-fn print_all_errors(sink)
+# show_path maps a record's file to the path printed in its `-->` line
+# (make_show_path in compiler/loader.gem); records keep the full path,
+# which the LSP needs.
+fn print_all_errors(sink, show_path = nil)
   for e in sink.drain()
-    print_one_error(e.source, e.file, e.line, e.col, e.span, e.msg, e.hint)
+    let file = e.file
+    if show_path != nil
+      file = show_path(file)
+    end
+    print_one_error(e.source, file, e.line, e.col, e.span, e.msg, e.hint)
   end
   if sink.suppressed()
     eprint("\n[Compile Error]: too many errors; further diagnostics suppressed\n")

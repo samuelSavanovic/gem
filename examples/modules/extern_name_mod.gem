@@ -1,0 +1,13 @@
+# Used by examples/141_extern_builtin_name.gem: an `extern fn` in a loaded
+# module, named like a builtin (`floor`), used inside the module and
+# exported.
+extern include "math.h"
+extern fn floor(x: Float) -> Float
+extern include "string.h"
+extern fn strlen(s: String) -> Int
+
+fn floor_twice(x)
+  floor(x) * 2.0
+end
+
+export floor, floor_twice, strlen

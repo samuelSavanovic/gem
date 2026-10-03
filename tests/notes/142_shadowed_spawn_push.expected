@@ -1,0 +1,2 @@
+note: examples/142_shadowed_spawn_push.gem:42: this changes module-level `counter` in code that runs in a spawned process (spawn at examples/142_shadowed_spawn_push.gem:41); each process has its own copy of module state, so the change is visible only in that process.
+

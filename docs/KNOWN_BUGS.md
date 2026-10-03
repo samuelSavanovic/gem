@@ -58,34 +58,49 @@ the lexer's pre-scan (compiler/lexer.gem) finds the inner one first.
 a stack trace into compiler/main.gem. Unknown `--` flags should be a usage
 error, and `--help` should print usage.
 
-## Names and paths in reports
-
-### `pcall` result `stack` keeps raw `_anon_N` names
+### Loading a missing file crashes the compiler
 
 ```gem
-let f = fn() error("x") end
-let r = pcall f()
-print(r.stack)       # [{name: "_anon_1", ...}, ...]
+load "mods/nope"
 ```
 
-Printed traces say `anonymous fn`; the `stack` table should match.
+prints `[Runtime Error]: read_file: cannot open 'mods/nope.gem'` with a
+stack trace of the compiler itself (`at resolve_loads (compiler/main.gem:…)`)
+instead of a compile error at the `load`. `resolve_loads` in
+compiler/main.gem reads the file without checking it exists.
 
-### Loaded-module functions show mangled names and absolute paths
+### A named `fn` inside a top-level block is dropped
 
-A runtime error in a function of a loaded module `k8m` prints
-`at _mod_k8m_inner (/abs/path/mods/k8m.gem:1)`, and a compile error in a
-loaded module prints an absolute path in the `-->` line. Expected:
-`k8m.inner` and a project-relative path, as the spawn `note:` already does
-(#28).
+```gem
+if true
+  fn helper() print("nested") end
+  helper()
+end
+```
 
-### Name-keyed codegen analyses treat locals as builtins
+reports undeclared identifier `helper` at the call. Inside a fn body
+the same code gets a clear "named fn inside function body is not
+supported" error; at the top level the definition silently disappears.
 
-`spawn_callees` and `mutating_builtins` (compiler/codegen.gem) match call
-names, so a param or local named `spawn`, `push`, ... is treated as the
-builtin. `extern fn` declarations named like a builtin (`extern fn
-len(s: String) -> Int`) are accepted without any check.
+### A module-level `let` and `fn` with the same name are both accepted
+
+```gem
+let helper = 1
+fn helper() print("fn") end
+helper()             # attempt to call int value
+```
+
+No error at the second definition; the `let` silently wins.
 
 ## Runtime
+
+### Runtime traces lose the source line when run from another directory
+
+Trace paths are project-relative (or relative to where the program was
+compiled from), and the runtime opens them relative to the current
+directory to print the `-->` source line. A binary run from any other
+directory prints the trace without the source line, silently.
+`gem_print_source_context` in runtime/gem_error.c.
 
 ### Main killed through a link exits 0 with no report
 

@@ -29,12 +29,6 @@ void *gem_tail_env = NULL;
 int gem_tail_argc = 0;
 GemVal gem_tail_args[GEM_MAX_TAIL_ARGS];
 
-/* Codegen names fn literals with a gensym; don't show it to users. */
-const char *gem_user_fn_name(const char *name) {
-    if (!name || strncmp(name, "_anon_", 6) == 0) return "anonymous fn";
-    return name;
-}
-
 static int gem_frame_same(const GemFrame *a, const GemFrame *b) {
     return a->line == b->line && strcmp(a->name, b->name) == 0 && strcmp(a->file, b->file) == 0;
 }
@@ -46,7 +40,7 @@ void gem_print_stack_trace(void) {
         fprintf(stderr, "  ... (deeper frames not recorded)\n");
     for (int i = max - 1; i >= 0; i--) {
         fprintf(stderr, "  at %s (%s:%d)\n",
-            gem_user_fn_name(gem_call_stack[i].name),
+            gem_call_stack[i].name,
             gem_call_stack[i].file,
             gem_call_stack[i].line);
         /* Collapse a run of identical frames (deep recursion) to one line. */

@@ -1,0 +1,46 @@
+# A param or local named like a builtin (`push`, `spawn`, ...) is not the
+# builtin. The compiler's note about module state written from spawned
+# code must not treat a call through it as the builtin: `record(push)`
+# does not mutate `counter`, and `run_now(spawn)` does not start a
+# process. tests/notes/142_shadowed_spawn_push.expected holds the notes
+# (only the real `push` at the end); this file checks the semantics.
+let counter = []
+let hits = [0]
+
+fn record(push)
+  push(counter)
+end
+
+fn run_now(spawn)
+  spawn(fn() hits[0] = 1 end)
+end
+
+let parent = self()
+spawn do
+  record(fn(t) send(parent, "record saw {len(t)} item(s)") end)
+end
+print(receive())
+
+run_now(fn(f) f() end)
+print("hits after run_now: {hits[0]}")
+
+let call_with = fn(push, x)
+  push(counter, x)
+end
+call_with(fn(t, x) print("own push: {x}") end, 7)
+print("counter: {len(counter)}")
+
+if true
+  let spawn = fn(f) f() end
+  spawn(fn() hits[0] = 2 end)
+end
+print("hits after block spawn: {hits[0]}")
+
+# The real builtin: each process changes its own copy, and the note
+# points at this line.
+spawn do
+  push(counter, 1)
+  send(parent, "child counter: {len(counter)}")
+end
+print(receive())
+print("main counter: {len(counter)}")

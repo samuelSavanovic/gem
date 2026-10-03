@@ -15,7 +15,7 @@ load "./codegen" (make_codegen)
 load "./lower" (lower)
 load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
-load "./loader" (resolve_load_path, find_project_root, compute_stdlib_root)
+load "./loader" (resolve_load_path, find_project_root, compute_stdlib_root, make_show_path)
 load "./builtins" (BUILTIN_FNS)
 load "../lsp/main" (run_lsp)
 
@@ -86,7 +86,7 @@ end
 fn collect_module_top_names(stmts)
   let names = {}
   for stmt in stmts
-    if is_node(stmt, "fn_def")
+    if is_node(stmt, "fn_def") or is_node(stmt, "extern_fn")
       if not string.starts_with(stmt.name, "_mod_")
         names[stmt.name] = true
       end
@@ -185,6 +185,15 @@ fn rename_node(node, rmap, shadowed)
       inner[node.rest_param] = true
     end
     rename_stmts(body, rmap, inner)
+  when {tag: "extern_fn", name: name}
+    # The binding is renamed like a fn's; the C function it calls keeps
+    # the declared name.
+    if has_key(rmap, name)
+      if node.c_name == nil
+        node.c_name = name
+      end
+      node.name = rmap[name]
+    end
   when {tag: "anon_fn", params: params, body: body}
     let inner = copy_set(shadowed)
     for p in params
@@ -448,46 +457,23 @@ end
 
 # ─── Load resolution ──────────────────────────────────────────
 
-# Path for diagnostics: relative to `root` when it is under it.
-fn display_path(p, root)
-  if root == nil
-    return p
-  end
-  let rlen = len(root)
-  if len(p) > rlen and substr(p, 0, rlen) == root and p[rlen] == "/"
-    return substr(p, rlen + 1, len(p) - rlen - 1)
-  end
-  p
-end
-
 # `stmt` loads `full_path`, which is still being resolved further up the
 # load stack: report the cycle at this `load`, with the chain of files
 # from `full_path` back around to it. The `parent` links of the files on
-# the stack lead from stmt's file back to `full_path`, and on to the
-# entry file, whose directory is the display root when the project has
-# no gem.toml.
-fn report_load_cycle(stmt, full_path, project_root, loaded, sources_by_file, sink)
+# the stack lead from stmt's file back to `full_path`. Paths are shown as
+# everywhere else (make_show_path).
+fn report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
   let chain = [full_path]
   let cur = normalize_path(stmt.file)
   while cur != full_path and cur != nil
     insert(chain, 1, cur)
     cur = loaded[cur].parent
   end
-  let root = project_root
-  if root == nil
-    let top = cur
-    while top != nil and loaded[top] != nil and loaded[top].parent != nil
-      top = loaded[top].parent
-    end
-    if top != nil
-      root = dirname(top)
-    end
-  end
   let msg = "load cycle: "
   for p in chain
-    msg = msg + display_path(p, root) + " → "
+    msg = msg + show_path(p) + " → "
   end
-  msg = msg + display_path(full_path, root)
+  msg = msg + show_path(full_path)
   let hint = "move the code these modules share into a module that loads none of them"
   if len(chain) == 1
     hint = "a file cannot load itself; remove this `load`"
@@ -495,7 +481,7 @@ fn report_load_cycle(stmt, full_path, project_root, loaded, sources_by_file, sin
   sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
 end
 
-fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
+fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path)
   let new_stmts = []
   let count = 0
   for stmt in ast.stmts
@@ -504,7 +490,7 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
 
       let cached = loaded[full_path]
       if cached != nil and cached.loading
-        report_load_cycle(stmt, full_path, project_root, loaded, sources_by_file, sink)
+        report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
         continue
       end
       if cached != nil
@@ -546,7 +532,7 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       let parse_failed = sink.count() > errors_before or sink.suppressed()
       tag_source_file(loaded_ast, full_path)
       let loaded_dir = dirname(full_path)
-      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
+      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path)
 
       entry.loading = false
 
@@ -709,6 +695,7 @@ if project_root != nil
   project_root = normalize_path(project_root)
 end
 let stdlib_root = compute_stdlib_root(install_root, project_root)
+let show_path = make_show_path(src_path, project_root)
 let loaded = {}
 let module_bindings = {}
 let sources_by_file = {}
@@ -722,11 +709,11 @@ loaded[normalize_path(src_path)] = {exported: nil, loading: true, parent: nil}
 # print_all_errors pass either way.
 let resolved_ast = nil
 if not sink.has_any()
-  resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
+  resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path)
 end
 
 if sink.has_any()
-  print_all_errors(sink)
+  print_all_errors(sink, show_path)
   exit(1)
 end
 
@@ -738,14 +725,14 @@ resolved_ast = lower(resolved_ast)
 
 fold_constants(resolved_ast)
 
-let cg = make_codegen(src_path, module_bindings, project_root, sources_by_file, sink, build_global_display(loaded))
+let cg = make_codegen(src_path, module_bindings, show_path, sources_by_file, sink, build_global_display(loaded))
 let c_code = cg.compile(resolved_ast)
 
 # Codegen may have surfaced semantic errors (undeclared identifier,
 # missing module export, etc.). One last pass before we run cc / write
 # output: print everything and exit non-zero if anything fired.
 if sink.has_any()
-  print_all_errors(sink)
+  print_all_errors(sink, show_path)
   exit(1)
 end
 
