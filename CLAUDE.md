@@ -74,6 +74,17 @@ After changing compiler sources, run `make bootstrap` to update `stage0.c`. The 
 
 No AI attribution anywhere: no `Co-Authored-By:` or `Claude-Session:` trailers in commit messages, and no "Generated with Claude Code" lines, session links or similar footers in PR descriptions, PR comments or review replies. This overrides any default that adds them.
 
+## Writing Gem Code
+
+Any Gem you write (`std/`, `examples/`, `compiler/`, `lsp/`, benchmarks, test programs) follows [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md). Read it before writing Gem in a session, and keep it correct as you go, in the same change:
+
+- **A rule turns out wrong or incomplete** (a program that follows it still fails, a sample doesn't run, a number is off by more than ~2x): fix the rule. Check the new wording by running a program with `build/gem`; never write a rule or sample you haven't run.
+- **You hit a trap the doc doesn't list** (something that fails silently, crashes, or is far slower than it looks): add a rule under the right section, marked **(trap)**, and a row in the trap index.
+- **The trap exists because of a bug**: add the bug to `docs/KNOWN_BUGS.md` (see below) and mark the rule **(bug)**. A fix deletes the **(bug)** rule and its trap-index row in the same change.
+- **A change to the language, runtime or std changes what a rule says** (a new builtin, a fixed bug, different performance): update the rule with the change, as with SPEC.md.
+
+Keep it a doc of what to reach for and what to avoid, not a second SPEC: one rule per trap, a short sample, the measured cost when it is about performance.
+
 ## Testing Discipline
 
 After any compiler change, run edge-case and adversarial tests before considering the work done:
@@ -166,5 +177,5 @@ Treat this file as living documentation: when a claim here turns out stale, a co
 
 ## Language Quick Reference
 
-See [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md) for a one-page summary of syntax, builtins, and std modules, and [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md) for how to write Gem (idioms and traps). New code in `std/`, `examples/`, `compiler/` and `lsp/` follows BEST_PRACTICES. When a fix removes the bug behind a rule marked **(bug)**, delete that rule in the same change.
+See [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md) for a one-page summary of syntax, builtins, and std modules, and [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md) for how to write Gem (idioms and traps). See "Writing Gem Code" above for how to keep it current.
 
