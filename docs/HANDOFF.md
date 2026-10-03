@@ -231,6 +231,11 @@ branch is merged into `main`, merge `main` here, and update the doc
 against it (BEST_PRACTICES rules that mention these become stale). What is
 left, plus bugs found while fixing, is in `docs/KNOWN_BUGS.md`.
 
+When merging `main` here, put the BEST_PRACTICES clause back (dropped in
+#29 review because the file wasn't on `main` yet): in CLAUDE.md "Known Bugs
+Tracking" and the intro of `docs/KNOWN_BUGS.md`, a fix also deletes any
+**(bug)** rule in `docs/BEST_PRACTICES.md` that exists because of it.
+
 ## For std modernization (step 3)
 
 - `dynamic_supervisor`: `delete(state.children, idx)` leaves a hole, so
