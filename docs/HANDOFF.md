@@ -1,13 +1,13 @@
-# Handoff: compiler bug fixes, then best-practices doc, then std
+# Handoff: best-practices doc, then std (compiler fixes done)
 
 Notes for the next session. Delete this file once its work is done.
 
 ## Plan agreed with the maintainer
 
-1. **This session (autonomous; the maintainer is away):** fix the compiler
-   bugs listed below, merge the fixes into one branch, and open **one PR**
-   to `main`. Don't merge it: the maintainer reviews it and runs the macOS
-   check.
+1. **Done.** Fix the compiler bugs listed below, merge the fixes into one
+   branch, and open one PR to `main`: PR #28, squash-merged into `main` as
+   8b482c2 and merged into `std-modernize`. "Ground rules", "Build and test
+   recipe" and "The fixes" below are kept as a record.
 2. **Next session:** update `docs/BEST_PRACTICES.md` against the fixed
    compiler, review it until clean, and open a PR.
 3. **After that:** modernize `std/` against the merged doc.
@@ -161,19 +161,120 @@ return.
 
 | Branch | What |
 |---|---|
-| `main` | includes #26 (contained stack overflow) and #27 (region resets, per-process module globals copied lazily, iterative deep copy, TCO for every param kind, the macOS review fixes; examples 112–126) |
-| `std-modernize` | `docs/BEST_PRACTICES.md` (one review round applied after #27; still needs the spawn-cost rewrite and a second round), the CLAUDE.md attribution rule, the BEST_PRACTICES links in CLAUDE.md and CHEATSHEET, this file. Up to date with `main`. |
+| `main` | includes #26 (contained stack overflow), #27 (region resets, per-process module globals copied lazily, iterative deep copy, TCO for every param kind; examples 112–126) and #28 (the compiler fixes above; examples 127–131 and 133–136, `tests/broken/*`, `tests/check_notes.sh`) |
+| `std-modernize` | `docs/BEST_PRACTICES.md` (one review round applied after #27; still needs the spawn-cost rewrite, the #28 updates below and a second round), the CLAUDE.md attribution rule, the BEST_PRACTICES links in CLAUDE.md and CHEATSHEET, this file. Up to date with `main` (8b482c2 merged). |
 
 ## For the doc session (step 2), so it isn't lost
 
-- The rules marked **(bug)** that the fixes above remove: delete them.
+What #28 changed, each checked by running `build/gem` on small programs
+after the merge:
+
+- **Delete the rules #28 removed.** These **(bug)** rules in
+  BEST_PRACTICES.md are fixed: "Declare before the `if`, assign inside"
+  (keep the advice, drop the bug framing, see below); "Don't redeclare a
+  name that is already in scope" (now shadowing); "Typos inside closures
+  reach the C compiler"; the `break`/`continue` in a `do` block sentence
+  under "Use `for`, not `table.each`"; the interpolation that starts with a
+  string literal (`"{"a" in t}"` works); the load-cycle sentence in the
+  module section (now a compile error); the "neither is reported" half of
+  "Don't reuse builtin or module names". Update the matching rows of the
+  trap index.
+- **Shadowing.** A second `let` makes a new variable. Its initializer and
+  any destructuring default see the shadowed binding (`let n = n - 1` gives
+  4 for `n = 5`; `let {x = x + 1} = {}` sees the outer `x`). Closures made
+  before it keep the old variable. A second `let` directly at module scope
+  still rebinds the module slot (a fn reading it sees the new value).
+- **Strict block scope.** A `let` is visible to the end of its block. A use
+  after the block (including when every branch of an `if` declares it),
+  before the `let`, or from a closure created before the `let` is a compile
+  error `undeclared identifier`, with a hint. To use a value after a block:
+  `let x = nil` before it, assign inside. Self-recursive local closures:
+  `let f = nil`, then `f = fn(...) ... f(...) end`. "Declare before the
+  `if`, assign inside" is now the rule, not a workaround.
+- **One-line arms:** `when <pat> then <body>` (decided). A same-line arm
+  body without `then` is a compile error ("expected `then` or a newline
+  after the `when` pattern"). `after <ms> then <body>` works too.
+- **Builtin names:** a binding named like a builtin shadows it in its own
+  file, the same in the entry file and in loaded modules (std does this on
+  purpose, e.g. `log.error`, `std/sqlite` `exec`). It no longer leaks into
+  modules the file loads. The "module name hidden by a local" half of the
+  trap (`let json = ...`) is unchanged.
+- **Compile errors that used to be C errors:** typos (reads and
+  assignments) inside closures, `do` blocks, `spawn do` bodies and
+  `pcall f(x)`; `break`/`continue` outside a loop of their own fn (e.g.
+  "`break` inside a `do` block; use a `for` loop"); `"{}"`, `"{1 +}"` and
+  an unclosed `{` in interpolation.
+- **Runtime:** a spawned process dying from an uncaught error prints a crash
+  report with stack trace on stderr (`[Runtime Error in process <pid>]`;
+  pcall-caught errors, `kill` and link deaths stay silent). Main blocked in
+  `receive` with nothing able to send prints `deadlock: main process is
+  waiting in receive ...` and exits 1. Load cycles are compile errors at
+  the closing `load` (`load cycle: a.gem → b.gem → a.gem`).
 - "Module-level `let`": large module state no longer costs every spawn,
   because copies are lazy per slot. A child pays only for the slots it
   reads, on first read. Re-measure and rewrite.
-- "Declare before the `if`, assign inside": #27 fixed the top-level half
-  (block lets now shadow), and fix 3 should fix the rest.
 - Round-1 review findings were applied. Run fresh adversarial review
   rounds until clean.
+
+## Known bugs (found during #28, not fixed)
+
+Each repro was re-run on `std-modernize` after merging 8b482c2.
+
+- **Shadowed loop counter loops forever.** `while i < n` … `let i = i + 1`
+  in the body never changes the outer `i`, so the loop never ends, with no
+  warning. A warning when a body `let` shadows a name the condition reads
+  (and the outer one is never assigned in the loop) would fit CLAUDE.md's
+  "no silent cliffs".
+- **Spurious `break` error after a parse error.** A parse error inside a
+  brace block in a `for` body also reports "`break` outside a loop" for a
+  later `break` in the loop body:
+  `for x in xs` / `times(1) { |i| if i then 1 + end }` / `break` / `end`.
+- **`pcall` stack names.** The `stack` table in a `pcall` result keeps raw
+  `_anon_N` names (printed traces say `anonymous fn`).
+- **Nested `"""` dedent.** `"""` nested in a `"""` interpolation: the outer
+  string's dedent width comes from the inner closing `"""` line (lexer
+  pre-scan, compiler/lexer.gem).
+- **Main killed through a link** by a crashing process (`spawn_link do
+  error("x") end`, then `sleep`) exits 0 with no report for main; only the
+  child's report prints.
+- **`link()` to a dead process** raises an ordinary pcall-catchable error
+  (`noproc`, `gem_link_fn` in runtime/gem_scheduler.c), and uncaught it is
+  reported as a crash; probably should be `gem_exit_self(reason)`.
+- **Leaf-function crashes lose their location.** A crash in a leaf closure
+  run directly by `spawn` (`spawn(fn() 1 + "a" end)`) prints only the
+  message: no source line, no stack trace. A crash in any leaf function
+  called from elsewhere is reported at the caller's line, with no frame for
+  the leaf (leaf fns skip `gem_push_frame`).
+- **Loaded-module names and paths.** Loaded-module functions show mangled
+  names in stack traces (`_mod_<mod>_<fn>`, e.g. `_mod_supervisor_sup_loop`),
+  and runtime traces and compile errors in loaded modules show absolute
+  paths.
+- **Name-keyed codegen analyses** (`spawn_callees`, `mutating_builtins` in
+  compiler/codegen.gem) treat a param/local named `spawn`/`push`/… as the
+  builtin; `extern fn` declarations named like builtins (`extern fn
+  len(...)`) are accepted without any check.
+- `exec("echo hi")` in a spawned process passes the command's stdout
+  through (may be intended).
+- `gem --help` treats `--help` as a source path and prints `read_file:
+  cannot open '--help'` with a stack trace.
+- **tree-sitter grammar** (editors/tree-sitter-gem): no `;` statement
+  separator; ~21 repo files already parse with ERROR nodes (e.g.
+  examples/06_blocks.gem, 115–126, std/http.gem, compiler/*.gem `load ...
+  (names)`); `"""` nested in a `"""` interpolation is an ERROR node there,
+  and probably ends the outer string early in the VS Code grammar. (From
+  #28; tree-sitter isn't installed here, so not re-run.)
+- **Still open from the original handoff:**
+  - `keys` is O(n²) on string-keyed tables (20 calls on a 20k-key table
+    take 32 s).
+  - `read_file` on procfs returns `""` (`/proc/self/status` has length 0).
+  - `build_string`'s `add` closure can't be sent or captured in a spawn;
+    capturing it in a `spawn do` body aborts the program with `gem_arena:
+    mmap failed (size=...)`.
+  - Exit reasons leak on the kill/link paths (not re-checked; no simple
+    repro).
+  - Stack traces show the wrong line for an implicit return: an error in a
+    fn's last expression is reported at the line before it, and that trace
+    also lacks the `at main` frame.
 
 ## For std modernization (step 3)
 
