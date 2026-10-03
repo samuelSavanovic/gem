@@ -10,14 +10,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Runtime
 
-### Runtime traces lose the source line when run from another directory
-
-Trace paths are project-relative (or relative to where the program was
-compiled from), and the runtime opens them relative to the current
-directory to print the `-->` source line. A binary run from any other
-directory prints the trace without the source line, silently.
-`gem_print_source_context` in runtime/gem_error.c.
-
 ### A top-level `let` named like a builtin can't read the builtin
 
 ```gem

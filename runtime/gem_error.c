@@ -58,29 +58,128 @@ void gem_print_stack_trace(void) {
     }
 }
 
-/* Print the source line at file:line with a gutter, mirroring compile-error
- * format. Silently no-op if the file can't be opened or the line doesn't exist. */
-static void gem_print_source_context(const char *file, int line) {
-    if (!file || line <= 0) return;
-    FILE *f = fopen(file, "r");
-    if (!f) return;
-    char buf[2048];
-    int cur = 1;
-    while (fgets(buf, sizeof(buf), f)) {
+/* ─── Source context for traces ───
+ *
+ * Trace paths are project-relative (or relative to the directory the
+ * program was compiled from), never absolute developer paths, so a binary
+ * run from another directory can't open them from the cwd alone. To find
+ * the source we try, in order, and take the first file that has the line:
+ *   1. $GEM_SOURCE_ROOT/<path>, when that variable is set;
+ *   2. <path> from the cwd;
+ *   3. <path> under the executable's directory and each of its ancestors
+ *      (a binary built into <project>/build/ or <project>/bin/);
+ *   4. <path> under each ancestor of the cwd.
+ * An absolute path is only opened as is. A candidate too short to have the
+ * line is skipped, so a different file of the same name is not printed.
+ * Nothing found: no source line, as before. Buffers are static (this runs
+ * once per uncaught error, maybe on a nearly exhausted process stack). */
+
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+#include <unistd.h>
+#include <limits.h>
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
+static char gem_src_line[2048];
+static char gem_src_cand[PATH_MAX];
+static char gem_src_dir[PATH_MAX];
+
+/* Read line `line` of `path` into gem_src_line (newline stripped).
+ * Returns 1 if the file opened and has that line. */
+static int gem_read_source_line(const char *path, int line) {
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    int cur = 1, found = 0;
+    while (fgets(gem_src_line, sizeof(gem_src_line), f)) {
+        size_t l = strlen(gem_src_line);
+        int whole = l > 0 && gem_src_line[l-1] == '\n';
         if (cur == line) {
-            size_t l = strlen(buf);
-            while (l > 0 && (buf[l-1] == '\n' || buf[l-1] == '\r')) buf[--l] = 0;
-            int gw = 1; int n = line; while (n >= 10) { gw++; n /= 10; }
-            fprintf(stderr, "  --> %s:%d\n", file, line);
-            fprintf(stderr, " %*s |\n", gw, "");
-            fprintf(stderr, " %d | %s\n", line, buf);
-            fprintf(stderr, " %*s |\n", gw, "");
-            fclose(f);
-            return;
+            while (l > 0 && (gem_src_line[l-1] == '\n' || gem_src_line[l-1] == '\r'))
+                gem_src_line[--l] = 0;
+            found = 1;
+            break;
         }
-        cur++;
+        /* A line longer than the buffer spans several reads: count it once. */
+        if (whole) cur++;
     }
     fclose(f);
+    return found;
+}
+
+/* Try `dir`/`file`. */
+static int gem_try_source_in(const char *dir, const char *file, int line) {
+    int n = snprintf(gem_src_cand, sizeof(gem_src_cand), "%s%s%s", dir,
+        (dir[0] && dir[strlen(dir) - 1] == '/') ? "" : "/", file);
+    if (n < 0 || (size_t)n >= sizeof(gem_src_cand)) return 0;
+    return gem_read_source_line(gem_src_cand, line);
+}
+
+/* Try `file` under `dir` (an absolute directory, modified in place) and
+ * each of its ancestors up to the filesystem root. */
+static int gem_try_source_upward(char *dir, const char *file, int line) {
+    for (;;) {
+        if (gem_try_source_in(dir, file, line)) return 1;
+        char *slash = strrchr(dir, '/');
+        if (!slash || (slash == dir && dir[1] == 0)) return 0;
+        if (slash == dir) dir[1] = 0; else *slash = 0;
+    }
+}
+
+/* The directory holding the running executable, into gem_src_dir.
+ * Returns 0 where it can't be determined. */
+static int gem_exe_dir(void) {
+    char *slash;
+#if defined(__linux__)
+    ssize_t n = readlink("/proc/self/exe", gem_src_dir, sizeof(gem_src_dir) - 1);
+    if (n <= 0) return 0;
+    gem_src_dir[n] = 0;
+#elif defined(__APPLE__)
+    uint32_t size = sizeof(gem_src_cand);
+    if (_NSGetExecutablePath(gem_src_cand, &size) != 0) return 0;
+    if (!realpath(gem_src_cand, gem_src_dir)) return 0;
+#else
+    return 0;
+#endif
+    slash = strrchr(gem_src_dir, '/');
+    if (!slash) return 0;
+    if (slash == gem_src_dir) slash[1] = 0; else *slash = 0;
+    return 1;
+}
+
+/* Find `file` (a trace path) and read line `line` of it into gem_src_line. */
+static int gem_find_source_line(const char *file, int line) {
+    if (file[0] == '/') return gem_read_source_line(file, line);
+    const char *root = getenv("GEM_SOURCE_ROOT");
+    if (root && root[0] && gem_try_source_in(root, file, line)) return 1;
+    if (gem_read_source_line(file, line)) return 1;
+    if (gem_exe_dir() && gem_try_source_upward(gem_src_dir, file, line)) return 1;
+    if (getcwd(gem_src_dir, sizeof(gem_src_dir)) && gem_src_dir[0] == '/') {
+        /* The cwd itself was tried above; start at its parent. */
+        char *slash = strrchr(gem_src_dir, '/');
+        if (slash == gem_src_dir) {
+            if (gem_src_dir[1] == 0) return 0;
+            gem_src_dir[1] = 0;
+        } else {
+            *slash = 0;
+        }
+        if (gem_try_source_upward(gem_src_dir, file, line)) return 1;
+    }
+    return 0;
+}
+
+/* Print the source line at file:line with a gutter, mirroring compile-error
+ * format. Silently no-op if the source can't be found (see above). */
+static void gem_print_source_context(const char *file, int line) {
+    if (!file || !file[0] || line <= 0) return;
+    if (!gem_find_source_line(file, line)) return;
+    int gw = 1; int n = line; while (n >= 10) { gw++; n /= 10; }
+    fprintf(stderr, "  --> %s:%d\n", file, line);
+    fprintf(stderr, " %*s |\n", gw, "");
+    fprintf(stderr, " %d | %s\n", line, gem_src_line);
+    fprintf(stderr, " %*s |\n", gw, "");
 }
 
 /* Print an uncaught error: "[Runtime Error]: msg" (or the header `head`
