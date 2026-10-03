@@ -8,7 +8,7 @@ Notes for the next session. Delete this file once its work is done.
    branch, and open one PR to `main`: PR #28, squash-merged into `main` as
    8b482c2 and merged into `std-modernize`. "Ground rules", "Build and test
    recipe" and "The fixes" below are kept as a record.
-2. **Done.** Known-bugs fixes: PR #29 (squash-merged into `main`). Most of
+2. **Done.** Known-bugs fixes: PR #29, squash-merged into `main` as ccb251d. Most of
    the list below moved to `docs/KNOWN_BUGS.md` and was fixed there.
 3. **Next session (fresh): rewrite `docs/BEST_PRACTICES.md`.**
    1. Rebase `std-modernize` onto `origin/main` (the maintainer asked for a
@@ -186,8 +186,8 @@ return.
 
 | Branch | What |
 |---|---|
-| `main` | includes #26 (contained stack overflow), #27 (region resets, per-process module globals copied lazily, iterative deep copy, TCO for every param kind; examples 112–126) and #28 (the compiler fixes above; examples 127–131 and 133–136, `tests/broken/*`, `tests/check_notes.sh`) |
-| `std-modernize` | `docs/BEST_PRACTICES.md` (one review round applied after #27; still needs the spawn-cost rewrite, the #28 updates below and a second round), the CLAUDE.md attribution rule, the BEST_PRACTICES links in CLAUDE.md and CHEATSHEET, this file. Up to date with `main` (8b482c2 merged). |
+| `main` | includes #26, #27, #28 (compiler fixes; 8b482c2) and #29 (known-bugs fixes, `docs/KNOWN_BUGS.md`; ccb251d) |
+| `std-modernize` | `docs/BEST_PRACTICES.md` (needs the rewrite in step 3), the CLAUDE.md attribution rule, the BEST_PRACTICES links in CLAUDE.md and CHEATSHEET, this file. Contains #28 but **not #29**: rebase it onto `main` first (step 3.1). |
 
 ## For the doc session (step 2), so it isn't lost
 
@@ -257,20 +257,11 @@ after the merge:
 
 ## Known bugs
 
-The list that was here moved to `docs/KNOWN_BUGS.md`, tracked under a new
-CLAUDE.md rule ("Known Bugs Tracking"). Most entries were fixed on branch
-`integrate/known-bugs` (off `main`; not yet merged): main killed through a
-link now reports and exits 1, `link()` to a dead pid sends `noproc`, leaf
-fns and last expressions report the right line, frame names are user
-names (`anonymous fn`, `module.fn`) in traces and the pcall `stack`,
-paths shown to the user are project-relative, a warning for a `while`
-counter shadowed by a body `let`, `gem --help`, nested `"""` dedent,
-`build_string`'s `add` across processes, `read_file` on procfs. Once that
-branch is merged into `main`, merge `main` here, and update the doc
-against it (BEST_PRACTICES rules that mention these become stale). What is
-left, plus bugs found while fixing, is in `docs/KNOWN_BUGS.md`.
+The list that was here moved to `docs/KNOWN_BUGS.md` (on `main`), tracked
+under the CLAUDE.md rule "Known Bugs Tracking". #29 fixed most of it; what
+is left, plus bugs found while fixing, is in that file.
 
-When merging `main` here, put the BEST_PRACTICES clause back (dropped in
+When rebasing onto `main`, put the BEST_PRACTICES clause back (dropped in
 #29 review because the file wasn't on `main` yet): in CLAUDE.md "Known Bugs
 Tracking" and the intro of `docs/KNOWN_BUGS.md`, a fix also deletes any
 **(bug)** rule in `docs/BEST_PRACTICES.md` that exists because of it.
