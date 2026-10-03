@@ -56,6 +56,7 @@ end
 
 for item in arr ... end              # array iteration
 for k, v in tbl ... end              # key-value iteration
+for i, ch in str ... end             # bytes: 0-based index, 1-byte string
 for i = 0, n ... end                 # range [0, n)
 
 match val

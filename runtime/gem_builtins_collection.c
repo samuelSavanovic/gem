@@ -25,14 +25,39 @@ GemVal gem_push_fn(void *_env, GemVal *args, int argc) {
     return val;
 }
 
-/* ─── Built-in: __table_key_at / __table_val_at (direct table iteration) ─── */
+/* ─── Built-in: __for_len / __table_key_at / __table_val_at ───
+ * The `for` loop lowering (compiler/lower.gem) iterates by index:
+ * `__for_len` gives the entry count of a table or the byte count of a
+ * string, and raises a `for:` error for anything else; the two-variable
+ * form reads entry idx with `__table_key_at` / `__table_val_at` (on a
+ * string: the byte index and the one-byte string, which `s[i]` takes
+ * from the runtime's char cache, so no allocation per iteration). */
+
+static void gem_for_type_error(GemVal v) {
+    char buf[128];
+    snprintf(buf, sizeof(buf), "for: expected a table or string to iterate, got %s", gem_type_str(v));
+    gem_error(buf);
+}
+
+GemVal gem_for_len_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("__for_len: expected 1 argument"); return GEM_NIL; }
+    if (args[0].type == VAL_TABLE) return gem_int((int64_t)args[0].table->len);
+    if (args[0].type == VAL_STRING) return gem_int((int64_t)args[0].slen);
+    gem_for_type_error(args[0]);
+    return GEM_NIL;
+}
 
 GemVal gem_table_key_at_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2) { gem_error("__table_key_at: expected 2 arguments"); return GEM_NIL; }
-    if (args[0].type != VAL_TABLE) { gem_error("__table_key_at: expected table"); return GEM_NIL; }
+    int64_t idx = args[1].ival;
+    if (args[0].type == VAL_STRING) {
+        if (idx < 0 || idx >= (int64_t)args[0].slen) return GEM_NIL;
+        return gem_int(idx);
+    }
+    if (args[0].type != VAL_TABLE) { gem_for_type_error(args[0]); return GEM_NIL; }
     GemTable *t = args[0].table;
-    int idx = (int)args[1].ival;
     if (idx < 0 || idx >= t->len) return GEM_NIL;
     return t->keys[idx];
 }
@@ -40,9 +65,13 @@ GemVal gem_table_key_at_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_table_val_at_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2) { gem_error("__table_val_at: expected 2 arguments"); return GEM_NIL; }
-    if (args[0].type != VAL_TABLE) { gem_error("__table_val_at: expected table"); return GEM_NIL; }
+    int64_t idx = args[1].ival;
+    if (args[0].type == VAL_STRING) {
+        if (idx < 0 || idx >= (int64_t)args[0].slen) return GEM_NIL;
+        return gem_table_get(args[0], gem_int(idx));   /* cached one-byte string */
+    }
+    if (args[0].type != VAL_TABLE) { gem_for_type_error(args[0]); return GEM_NIL; }
     GemTable *t = args[0].table;
-    int idx = (int)args[1].ival;
     if (idx < 0 || idx >= t->len) return GEM_NIL;
     return t->vals[idx];
 }

@@ -2547,3 +2547,25 @@ other
 pair 1 2
 got pair 3 4
 got record 1 2
+0 a
+1 b
+2 c
+empty: 0
+["0:1:97", "1:1:0", "2:1:195", "3:1:169"]
+consistent: true
+0=h
+2=l
+first[0] = a
+first[1] = b
+second[0] = c
+count: 4
+for: expected a table or string to iterate, got int
+for: expected a table or string to iterate, got int
+for: expected a table or string to iterate, got nil
+for: expected a table or string to iterate, got nil
+for: expected a table or string to iterate, got float
+for: expected a table or string to iterate, got float
+for: expected a table or string to iterate, got bool
+for: expected a table or string to iterate, got bool
+for: expected a table or string to iterate, got buffer
+for: expected a table or string to iterate, got buffer

@@ -262,7 +262,7 @@ fn lower_for_in(node, state)
     )
     let result = {tag: "block", stmts: [
       make_let(tbl_var, lower_node(node.items, state), line),
-      make_let(len_var, make_call(make_var("__len"), [make_var(tbl_var)], 0), line),
+      make_let(len_var, make_call(make_var("__for_len"), [make_var(tbl_var)], 0), line),
       make_let(idx_var, make_int(0), line),
       while_node
     ]}
@@ -281,7 +281,7 @@ fn lower_for_in(node, state)
     push(inner, s)
   end
   let while_node = make_while(
-    make_binop("<", make_var(idx_var), make_call(make_var("__len"), [make_var(items_var)], 0)),
+    make_binop("<", make_var(idx_var), make_call(make_var("__for_len"), [make_var(items_var)], 0)),
     inner,
     line
   )

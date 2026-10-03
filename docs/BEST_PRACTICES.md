@@ -688,7 +688,8 @@ and `"{buf}"` show `<buffer:N>`, not the contents.
 ### Strings are bytes
 
 `len` is the byte count (`len("é")` is `2`), `s[i]` is a 1-byte string,
-and `ord(s, i)` is the byte value. Use `substr(s, start, count)` to slice;
+and `ord(s, i)` is the byte value. `for ch in s` walks the bytes as
+1-byte strings, and `for i, ch in s` adds the 0-based byte index. Use `substr(s, start, count)` to slice;
 unlike `s[-1]`, a negative `start` counts as `0`. Double-quoted strings
 have no `\x` or `\u` escapes (an unknown escape is kept as written); use
 `chr(n)` for other bytes. Strings may contain `\0`, but `print` stops at

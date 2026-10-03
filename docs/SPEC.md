@@ -451,6 +451,14 @@ for key, value in table
   print("{key} = {value}")
 end
 
+# String iteration (bytes)
+for ch in "abc"
+  print(ch)            # "a", "b", "c"
+end
+for i, ch in "abc"
+  print("{i} {ch}")    # 0 a, 1 b, 2 c
+end
+
 # Range iteration (0 to n-1)
 for i = 0, n
   print(i)
@@ -459,7 +467,7 @@ end
 
 `break` and `continue` work inside `for` loops. The iterator increment happens before the user body, so `continue` correctly advances to the next element.
 
-The range form evaluates its bound once, before the loop, and assigning the loop variable in the body doesn't change the next iteration. The table form evaluates the RHS expression exactly once. It walks the table's entries in `keys()` order without building a `keys()` array, reading the entry count once before the loop: an entry added during the loop is not visited, and a `delete` during the loop (which moves the last entry into the hole) makes it skip entries and then visit `nil`. The single-variable form is for arrays: it re-reads `len` every iteration, so `push` during the loop extends it and `remove_at` makes it skip elements; on a string-keyed table it yields `nil` for each entry (use `for k, v` or `values(t)`).
+The range form evaluates its bound once, before the loop, and assigning the loop variable in the body doesn't change the next iteration. The table form evaluates the RHS expression exactly once. It walks the table's entries in `keys()` order without building a `keys()` array, reading the entry count once before the loop: an entry added during the loop is not visited, and a `delete` during the loop (which moves the last entry into the hole) makes it skip entries and then visit `nil`. The single-variable form is for arrays: it re-reads `len` every iteration, so `push` during the loop extends it and `remove_at` makes it skip elements; on a string-keyed table it yields `nil` for each entry (use `for k, v` or `values(t)`). Over a string, both forms walk the bytes: `ch` is the one-byte string `s[i]` (a multi-byte UTF-8 character comes out as several bytes), and the two-variable form also gives the 0-based byte index `i`. Iterating anything other than a table or a string (an int, `nil`, a buffer, …) raises `for: expected a table or string to iterate, got <type>`, in either form.
 
 ## Closures
 

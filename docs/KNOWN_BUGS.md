@@ -14,13 +14,6 @@ A triple-quoted string whose closing `"""` is indented with tabs reports
 `unterminated triple-quoted string`; with spaces it works. SPEC says
 "only leading whitespace".
 
-### `for i, ch in "abc"` reports an internal name
-
-`for ch in "abc"` iterates the bytes, but the two-variable form fails at
-runtime with `__table_key_at: expected table` (the lowered loop's helper).
-Either support strings there or report `for k, v` over a string at the
-`for`.
-
 ## Runtime
 
 ### Runtime traces lose the source line when run from another directory
