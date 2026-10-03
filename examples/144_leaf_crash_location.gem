@@ -1,0 +1,60 @@
+# Errors in leaf functions (bodies with no calls, which push no frame) are
+# reported at the leaf's own line, with the leaf as the innermost frame.
+
+# A one-line spawned leaf.
+spawn(fn() 1 + "a" end)
+sleep(10)
+
+# A leaf called from a non-leaf in a spawned process.
+fn add_one(x)
+  let y = x
+  y + 1
+end
+fn caller(v)
+  let w = v
+  add_one(w)
+end
+spawn do
+  caller("s")
+end
+sleep(10)
+
+# pcall's stack starts with the leaf frame.
+let r = pcall add_one(nil)
+print(r.ok, r.error)
+print(r.stack[0].name, r.stack[0].line)
+
+# A leaf left through an early return leaves no trace behind.
+fn early(x)
+  if x then
+    return 1
+  end
+  x + 1
+end
+print(early(true))
+let r2 = pcall error("plain")
+print(len(r2.stack), r2.stack[0].line)
+
+# A leaf preempted in its loop keeps its location: two processes run the
+# same leaf, one fails after the loop.
+fn spin(n, extra)
+  let i = 0
+  let s = 0
+  while i < n
+    s = s + i
+    i += 1
+  end
+  s + extra
+end
+let me = self()
+spawn do
+  send(me, spin(100000, 1))
+end
+spawn do
+  spin(150000, "x")
+end
+print(receive())
+sleep(20)
+
+# Uncaught in main: leaf frame on top of the caller's.
+caller([])

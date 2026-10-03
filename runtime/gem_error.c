@@ -9,6 +9,8 @@
 static GemFrame gem_root_call_stack[GEM_MAX_CALL_DEPTH];
 GemFrame *gem_call_stack = gem_root_call_stack;
 int gem_call_depth = 0;
+const GemLeafSite *gem_leaf_site = NULL;
+int gem_leaf_line = 0;
 
 /* ─── pcall jump buffer stack ─── */
 
@@ -40,6 +42,9 @@ static int gem_frame_same(const GemFrame *a, const GemFrame *b) {
 }
 
 void gem_print_stack_trace(void) {
+    if (gem_leaf_site)
+        fprintf(stderr, "  at %s (%s:%d)\n",
+            gem_user_fn_name(gem_leaf_site->name), gem_leaf_site->file, gem_leaf_line);
     int max = gem_call_depth < GEM_MAX_CALL_DEPTH ? gem_call_depth : GEM_MAX_CALL_DEPTH;
     /* Only the outermost GEM_MAX_CALL_DEPTH frames are recorded. */
     if (gem_call_depth > GEM_MAX_CALL_DEPTH)
@@ -90,11 +95,13 @@ static void gem_print_source_context(const char *file, int line) {
 void gem_print_runtime_error_as(const char *head, const char *msg) {
     fflush(stdout);
     fprintf(stderr, "\n[%s]: %s\n", head ? head : "Runtime Error", msg);
-    if (gem_call_depth > 0) {
+    if (gem_leaf_site) {
+        gem_print_source_context(gem_leaf_site->file, gem_leaf_line);
+    } else if (gem_call_depth > 0) {
         int top = (gem_call_depth <= GEM_MAX_CALL_DEPTH ? gem_call_depth : GEM_MAX_CALL_DEPTH) - 1;
         gem_print_source_context(gem_call_stack[top].file, gem_call_stack[top].line);
     }
-    if (gem_call_depth > 0) {
+    if (gem_leaf_site || gem_call_depth > 0) {
         fprintf(stderr, "Stack trace:\n");
         gem_print_stack_trace();
     }
@@ -115,7 +122,16 @@ static void gem_pcall_longjmp(GemPcallFrame *frame, const char *msg) {
     GemVal stack_snapshot = gem_table_new();
     int max = gem_call_depth < GEM_MAX_CALL_DEPTH ? gem_call_depth : GEM_MAX_CALL_DEPTH;
     int saved = frame->saved_call_depth;
-    for (int i = max - 1, idx = 0; i >= saved; i--, idx++) {
+    int idx = 0;
+    if (gem_leaf_site) {
+        GemVal f = gem_table_new();
+        gem_table_set(f, gem_string("name"), gem_string(gem_leaf_site->name));
+        gem_table_set(f, gem_string("file"), gem_string(gem_leaf_site->file));
+        gem_table_set(f, gem_string("line"), gem_int(gem_leaf_line));
+        gem_table_set(stack_snapshot, gem_int(idx++), f);
+        gem_leaf_site = NULL;
+    }
+    for (int i = max - 1; i >= saved; i--, idx++) {
         GemVal f = gem_table_new();
         gem_table_set(f, gem_string("name"), gem_string(gem_call_stack[i].name));
         gem_table_set(f, gem_string("file"), gem_string(gem_call_stack[i].file));

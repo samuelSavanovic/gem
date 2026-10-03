@@ -1473,8 +1473,15 @@ fn make_parser(tokens, source, file, sink)
       end
     end
 
-    # Default: expression statement
-    parse_expr()
+    # Default: expression statement. Most expression nodes (binops, index,
+    # literals) carry no line; give the statement its first token's line so
+    # codegen emits a line update for it (runtime errors in `x + y` as a
+    # statement, e.g. a fn's implicit return, point at it).
+    let e = parse_expr()
+    if type(e) == "table" and e.line == nil
+      e.line = t.line
+    end
+    e
   end
 
   # Wire up forward declaration

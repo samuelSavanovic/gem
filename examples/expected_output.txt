@@ -669,14 +669,6 @@ Stack trace:
 test1: parent died: crash1
 test2: parent died: crash2
 test4: A died: chain-boom
-
-[Runtime Error in process 14]: noproc
-  --> examples/32_links.gem:117
-     |
- 117 |     link(dead)
-     |
-Stack trace:
-  at anonymous fn (examples/32_links.gem:117)
 test3: parent died: normal
 test5: parent died: normal
 test6: parent died: noproc
@@ -1514,271 +1506,271 @@ test4: timer for live process cancels: true
 test5: from beyond
 
 [Runtime Error in process 1]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:25)
 test1: stack overflow in depth
 
 [Runtime Error in process 5]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:39)
 test2: stack overflow in depth
 test2: ["worker 0 got ping", "worker 1 got ping", "worker 2 got ping"]
 
 [Runtime Error in process 6]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:55)
 test3: EXIT stack overflow in depth
 
 [Runtime Error in process 8]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:66)
 test3: linked stack overflow in depth
 
 [Runtime Error in process 9]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 10]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 11]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 12]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 13]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 14]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 15]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 16]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 17]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 18]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 19]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 20]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 21]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 22]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 23]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 24]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 25]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 26]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 27]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 
 [Runtime Error in process 28]: stack overflow in depth
-  --> examples/108_stack_overflow_containment.gem:11
+  --> examples/108_stack_overflow_containment.gem:12
     |
- 11 |   if n == 0 then return 0 end
+ 12 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/108_stack_overflow_containment.gem:11)
+  at depth (examples/108_stack_overflow_containment.gem:12)
   ... same frame repeated 254 more times
   at anonymous fn (examples/108_stack_overflow_containment.gem:77)
 test4: {"stack overflow in depth": 20}
@@ -1821,13 +1813,13 @@ test6: 200 30
 before
 
 [Runtime Error]: stack overflow in depth
-  --> examples/110_main_stack_overflow.gem:6
+  --> examples/110_main_stack_overflow.gem:7
    |
- 6 |   if n == 0 then return 0 end
+ 7 |   1 + depth(n - 1)
    |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/110_main_stack_overflow.gem:6)
+  at depth (examples/110_main_stack_overflow.gem:7)
   ... same frame repeated 253 more times
   at start (examples/110_main_stack_overflow.gem:11)
   at main (examples/110_main_stack_overflow.gem:15)
@@ -2239,13 +2231,13 @@ Stack trace:
 test5: trapped EXIT boom 6
 
 [Runtime Error in process 13]: stack overflow in depth
-  --> examples/135_spawn_crash_report.gem:18
+  --> examples/135_spawn_crash_report.gem:19
     |
- 18 |   if n == 0 then return 0 end
+ 19 |   1 + depth(n - 1)
     |
 Stack trace:
   ... (deeper frames not recorded)
-  at depth (examples/135_spawn_crash_report.gem:18)
+  at depth (examples/135_spawn_crash_report.gem:19)
   ... same frame repeated 254 more times
   at anonymous fn (examples/135_spawn_crash_report.gem:86)
 test6: stack overflow in depth
@@ -2274,3 +2266,87 @@ child exits without sending
 Stack trace:
   at wait_for_reply (examples/136_main_receive_deadlock.gem:80)
   at main (examples/136_main_receive_deadlock.gem:85)
+normal link ok
+
+[Runtime Error in process 2]: trapped crash
+  --> examples/143_main_link_exit.gem:14
+    |
+ 14 |   error("trapped crash")
+    |
+Stack trace:
+  at anonymous fn (examples/143_main_link_exit.gem:14)
+main trapped: trapped crash
+main trapped link: noproc
+child DOWN: noproc
+
+[Runtime Error in process 5]: deep crash
+  --> examples/143_main_link_exit.gem:41
+    |
+ 41 |     error("deep crash")
+    |
+Stack trace:
+  at anonymous fn (examples/143_main_link_exit.gem:41)
+
+[Runtime Error]: main process killed by linked process 4: deep crash
+  --> examples/143_main_link_exit.gem:45
+    |
+ 45 | sleep(100)
+    |
+Stack trace:
+  at main (examples/143_main_link_exit.gem:45)
+
+[Runtime Error in process 1]: type error in +: got int and string
+  --> examples/144_leaf_crash_location.gem:5
+   |
+ 5 | spawn(fn() 1 + "a" end)
+   |
+Stack trace:
+  at anonymous fn (examples/144_leaf_crash_location.gem:5)
+
+[Runtime Error in process 2]: type error in +: got string and int
+  --> examples/144_leaf_crash_location.gem:11
+    |
+ 11 |   y + 1
+    |
+Stack trace:
+  at add_one (examples/144_leaf_crash_location.gem:11)
+  at caller (examples/144_leaf_crash_location.gem:15)
+  at anonymous fn (examples/144_leaf_crash_location.gem:18)
+false type error in +: got nil and int
+add_one 11
+1
+1 35
+4999950001
+
+[Runtime Error in process 4]: type error in +: got int and string
+  --> examples/144_leaf_crash_location.gem:47
+    |
+ 47 |   s + extra
+    |
+Stack trace:
+  at spin (examples/144_leaf_crash_location.gem:47)
+  at anonymous fn (examples/144_leaf_crash_location.gem:54)
+
+[Runtime Error]: type error in +: got table and int
+  --> examples/144_leaf_crash_location.gem:11
+    |
+ 11 |   y + 1
+    |
+Stack trace:
+  at add_one (examples/144_leaf_crash_location.gem:11)
+  at caller (examples/144_leaf_crash_location.gem:15)
+  at main (examples/144_leaf_crash_location.gem:60)
+in tail_expr
+type error in +: got string and int tail_expr 9
+in mid_expr
+type error in +: got nil and int mid_expr 14
+in tail_expr
+
+[Runtime Error]: type error in +: got string and int
+  --> examples/145_last_expr_line.gem:9
+   |
+ 9 |   x + y
+   |
+Stack trace:
+  at tail_expr (examples/145_last_expr_line.gem:9)
+  at main (examples/145_last_expr_line.gem:23)

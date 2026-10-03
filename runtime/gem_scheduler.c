@@ -605,7 +605,10 @@ static void gem_coro_entry(mco_coro *co) {
             /* Name the innermost recorded Gem frame: the guard is reached
                by C code (a builtin or extern fn) that it called. */
             char msg[256];
-            if (gem_call_depth > 0) {
+            if (gem_leaf_site) {
+                snprintf(msg, sizeof msg, "stack overflow in native code called from %s",
+                         gem_user_fn_name(gem_leaf_site->name));
+            } else if (gem_call_depth > 0) {
                 int top = (gem_call_depth <= GEM_MAX_CALL_DEPTH ? gem_call_depth
                                                                 : GEM_MAX_CALL_DEPTH) - 1;
                 snprintf(msg, sizeof msg, "stack overflow in native code called from %s",
@@ -708,6 +711,7 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].reductions = 0;
     gem_proc_table[pid].pcall_depth = 0;
     gem_proc_table[pid].call_depth = 0;
+    gem_proc_table[pid].leaf_site = NULL;
 
     if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
     return pid;
@@ -851,6 +855,7 @@ void gem_run_main(GemFnPtr fn, void *env) {
     gem_proc_table[pid].reductions = 0;
     gem_proc_table[pid].pcall_depth = 0;
     gem_proc_table[pid].call_depth = 0;
+    gem_proc_table[pid].leaf_site = NULL;
     gem_proc_table[pid].pinned_boxes = NULL;
 
     if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
@@ -879,6 +884,29 @@ static void gem_report_main_deadlock(void) {
                  "deadlock: main process is waiting in receive and no other "
                  "process can send to it");
     fflush(stdout);
+    gem_print_runtime_error(msg);
+    exit(1);
+}
+
+/* Main dies from an exit signal: a linked process exited abnormally
+   (`linked`), or another process called kill/exit on it. The program ends
+   with main, as for any abnormal exit of main: report it like an uncaught
+   error in main, with main's stack (where it was when the signal arrived),
+   and exit 1. `from_pid` is the user-visible pid of the sender. */
+void gem_report_main_killed(int64_t from_pid, const char *reason, int linked) {
+    GemProcess *mp = &gem_proc_table[gem_main_pid];
+    if (gem_running_slot != gem_main_pid) {
+        /* Main is suspended: its frames are the saved ones. */
+        gem_current_pid = gem_main_pid;
+        gem_call_stack = mp->call_stack;
+        gem_call_depth = mp->call_depth;
+        gem_leaf_site = mp->leaf_site;
+        gem_leaf_line = mp->leaf_line;
+    }
+    size_t n = strlen(reason) + 96;
+    char *msg = (char *)malloc(n);
+    snprintf(msg, n, "main process killed by %sprocess %lld: %s",
+             linked ? "linked " : "", (long long)from_pid, reason);
     gem_print_runtime_error(msg);
     exit(1);
 }
@@ -913,6 +941,8 @@ void gem_run_scheduler(void) {
                 GemFrame *saved_global_stack = gem_call_stack;
                 gem_call_depth = proc->call_depth;
                 gem_call_stack = proc->call_stack;
+                gem_leaf_site = proc->leaf_site;
+                gem_leaf_line = proc->leaf_line;
                 gem_cur_globals = proc->globals;
                 gem_running_slot = i;
                 gem_stack_limit = (uintptr_t)proc->stack_lo + GEM_STACK_RED_ZONE;
@@ -920,6 +950,9 @@ void gem_run_scheduler(void) {
                 gem_stack_limit = 0;
                 gem_running_slot = -1;
                 proc->call_depth = gem_call_depth;
+                proc->leaf_site = gem_leaf_site;
+                proc->leaf_line = gem_leaf_line;
+                gem_leaf_site = NULL;
                 gem_call_depth = saved_global_depth;
                 gem_call_stack = saved_global_stack;
                 gem_cur_globals = NULL;
@@ -1208,21 +1241,21 @@ void gem_link_fn(int64_t target_pid) {
 
     GemProcess *self = &gem_proc_table[caller];
 
-    /* If target is already gone, deliver exit signal immediately */
+    /* Target is gone (Erlang semantics): the caller gets an exit signal
+       with reason "noproc", as if the target had just exited with it. A
+       caller that traps exits receives the EXIT message; any other caller
+       dies with that reason (not catchable: it is an exit, not an error). */
     if (target_slot < 0 || gem_proc_table[target_slot].state == GEM_PROC_DEAD) {
-        const char *reason = "noproc";
-        if (target_slot >= 0 && gem_proc_table[target_slot].exit_reason)
-            reason = gem_proc_table[target_slot].exit_reason;
         if (self->trap_exit) {
             GemVal msg = gem_table_new();
             gem_table_set(msg, gem_string("tag"), gem_string("EXIT"));
             gem_table_set(msg, gem_string("pid"), gem_int(target_pid));
-            gem_table_set(msg, gem_string("reason"), gem_string(reason));
+            gem_table_set(msg, gem_string("reason"), gem_string("noproc"));
             gem_send_msg(caller, msg);
-        } else if (strcmp(reason, "normal") != 0) {
-            /* Caller will die when it next runs; raise now via gem_error path.
-               Mark caller's reason and let the outer error machinery handle it. */
-            gem_error(reason);
+        } else if (caller == gem_main_pid) {
+            gem_report_main_killed(target_pid, "noproc", 1);
+        } else {
+            gem_exit_self("noproc");
         }
         return;
     }
@@ -1267,6 +1300,7 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
     int self_pid = gem_current_pid;
     int self_kill_pending = 0;
     const char *self_kill_reason = NULL;
+    int64_t self_kill_from = -1;
 
     while (wl_head < wl_tail) {
         int pid = worklist[wl_head];
@@ -1305,6 +1339,9 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
                    its coroutine unwinds via gem_exit_self below. */
                 self_kill_pending = 1;
                 self_kill_reason = r;
+                self_kill_from = gem_pid_of_slot(pid);
+            } else if (lpid == gem_main_pid) {
+                gem_report_main_killed(gem_pid_of_slot(pid), r, 1);
             } else {
                 lproc->exit_reason = strdup(r);
                 if (lproc->coro) {
@@ -1329,6 +1366,8 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
     }
 
     if (self_kill_pending) {
+        if (self_pid == gem_main_pid)
+            gem_report_main_killed(self_kill_from, self_kill_reason, 1);
         gem_exit_self(self_kill_reason);
     }
 }
@@ -1563,6 +1602,8 @@ GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
 
     /* The running coroutine can't be destroyed from inside itself. */
     if (pid == gem_current_pid) gem_exit_self(reason);
+    if (pid == gem_main_pid && strcmp(reason, "normal") != 0)
+        gem_report_main_killed(gem_pid_of_slot(gem_current_pid), reason, 0);
 
     proc->exit_reason = strdup(reason);
     if (proc->coro) {

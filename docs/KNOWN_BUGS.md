@@ -87,53 +87,6 @@ len(s: String) -> Int`) are accepted without any check.
 
 ## Runtime
 
-### Main killed through a link exits 0 with no report
-
-```gem
-spawn_link do
-  error("child dies")
-end
-sleep(100)
-print("not reached")
-```
-
-The child's crash report prints, then main dies silently with exit
-status 0. Main should report why it died and exit non-zero.
-
-### `link()` to a dead process raises a catchable error
-
-`pcall link(dead_pid)` returns `{ok: false, error: "noproc"}`; uncaught, it
-is reported as an ordinary crash. Erlang semantics would exit the caller
-with reason `noproc` (`gem_exit_self(reason)`), which `trap_exit` can
-observe. `gem_link_fn` in runtime/gem_scheduler.c.
-
-### Crashes in leaf functions lose their location
-
-```gem
-spawn(fn() 1 + "a" end)
-sleep(20)
-```
-
-prints only `[Runtime Error in process 1]: type error in +: got int and
-string`: no source line, no stack trace. A crash in a leaf function called
-from elsewhere is reported at the caller's line, with no frame for the
-leaf. Leaf fns skip `gem_push_frame` for speed, so the fix must stay cheap.
-
-### Wrong line for an error in a fn's last expression
-
-```gem
-fn g() 1 end
-fn f(x)
-  let y = g()
-  print("hi")
-  x + y              # error is here
-end
-f("a")
-```
-
-The report points at line 4 (`print("hi")`), and the trace has no
-`at main` frame.
-
 ### `build_string`'s `add` captured in a spawn aborts the program
 
 ```gem
@@ -154,6 +107,22 @@ builder's arena), but it must fail as a Gem error, not corrupt memory.
 `read_file("/proc/self/status")` returns an empty string: the file size is
 taken from `fseek`/`ftell`, which give 0 for procfs files
 (runtime/gem_builtins_io.c, runtime/gem_threadpool.c). Read until EOF instead.
+
+### `kill(pid, "normal")` kills a process that doesn't trap exits
+
+```gem
+let m = self()
+spawn do
+  kill(m, "normal")
+end
+sleep(50)
+print("not reached")    # main is gone; the program exits 0 silently
+```
+
+In Erlang, an exit signal with reason `normal` is ignored by a process
+that doesn't trap exits; here it ends the target (main included, with no
+report). `gem_exit_builtin` in runtime/gem_scheduler.c. Decide which
+semantics Gem wants and document it in SPEC.md (`kill`).
 
 ### Exit reasons leak on the kill/link paths
 

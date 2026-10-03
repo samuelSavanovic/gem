@@ -1,0 +1,23 @@
+# An error in a function's last expression (its implicit return), or in any
+# expression statement, is reported at that expression's line.
+
+fn g() 1 end
+
+fn tail_expr(x)
+  let y = g()
+  print("in tail_expr")
+  x + y
+end
+
+fn mid_expr(t)
+  print("in mid_expr")
+  t[0] + 1
+  "unreached"
+end
+
+let r = pcall tail_expr("a")
+print(r.error, r.stack[0].name, r.stack[0].line)
+let r2 = pcall mid_expr([nil])
+print(r2.error, r2.stack[0].name, r2.stack[0].line)
+
+tail_expr("a")
