@@ -94,6 +94,9 @@ The scheduler currently uses `poll()` for socket readiness. Replacing with **kqu
 ### Multi-threaded work-stealing scheduler (P2)
 The scheduler is single-threaded — one scheduler loop round-robining coroutines on one OS thread. N scheduler threads with per-thread run queues and work-stealing (Chase-Lev deque) would scale throughput ~linearly with cores. The per-process arena model already eliminates shared-heap contention. Hard parts: mailboxes need lock-free MPSC queues for cross-thread sends, shared globals (`gem_proc_table`, `gem_name_registry`, free list) need synchronization, each thread needs its own kqueue/epoll set, and process migration (stealing a coroutine between scheduler ticks) needs care. Erlang/BEAM does exactly this architecture. Nothing in the current design blocks it — isolated processes, message passing, and per-process memory are the right foundation.
 
+### `std/supervisor` keeps every restart time (P2)
+`restart` pushes the time of each restart onto `state.restart_times` and scans the whole array to count the ones inside `max_seconds`, never dropping old entries, so restarts are O(n²) in the supervisor's lifetime restart count and its memory grows without bound: 8,000 restarts of a permanent child took 2.9 s. Drop entries older than `max_seconds` when counting (step 5 of docs/HANDOFF.md, std modernization).
+
 ## C Interop Hardening
 
 ### String-return ownership convention is path-dependent (P2)

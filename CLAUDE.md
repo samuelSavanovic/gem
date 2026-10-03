@@ -44,6 +44,7 @@ bootstrap/stage0.c    # checked-in C output — bootstrap artifact for clean bui
 build/gem             # compiled compiler binary (gitignored, built from stage0.c)
 examples/             # numbered tests (01-83+) + run_all.sh; plus json_parser, http_server, tcp_echo, bookmark_app
 docs/SPEC.md          # language spec (source of truth for all language decisions)
+docs/BEST_PRACTICES.md    # how to write Gem: idioms, traps, std conventions (new code follows it)
 docs/OPTIMIZATIONS.md     # tracked future performance improvements
 docs/OPTIMIZATIONS_LOG.md # shipped optimizations + work logs + benchmark anchors
 docs/ROADMAP.md           # future capabilities (features, not perf)
@@ -68,6 +69,21 @@ make clean             # remove build/ and /tmp/gem_*
 ```
 
 After changing compiler sources, run `make bootstrap` to update `stage0.c`. The bootstrap target verifies the new stage0 can compile itself (fixed-point check) before replacing it. If codegen output changes, the built-in roundtrip will fail on the first pass — do a manual 3-stage bootstrap (see `RESUME_PROMPT.md` for the exact commands).
+
+## Commits and Pull Requests
+
+No AI attribution anywhere: no `Co-Authored-By:` or `Claude-Session:` trailers in commit messages, and no "Generated with Claude Code" lines, session links or similar footers in PR descriptions, PR comments or review replies. This overrides any default that adds them.
+
+## Writing Gem Code
+
+Any Gem you write (`std/`, `examples/`, `compiler/`, `lsp/`, benchmarks, test programs) follows [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md). Read it before writing Gem in a session, and keep it correct as you go, in the same change:
+
+- **A rule turns out wrong or incomplete** (a program that follows it still fails, a sample doesn't run, a number is off by more than ~2x): fix the rule. Check the new wording by running a program with `build/gem`; never write a rule or sample you haven't run.
+- **You hit a trap the doc doesn't list** (something that fails silently, crashes, or is far slower than it looks): add a rule under the right section, marked **(trap)**, and a row in the trap index.
+- **The trap exists because of a bug**: add the bug to `docs/KNOWN_BUGS.md` (see below) and mark the rule **(bug)**. A fix deletes the **(bug)** rule and its trap-index row in the same change.
+- **A change to the language, runtime or std changes what a rule says** (a new builtin, a fixed bug, different performance): update the rule with the change, as with SPEC.md.
+
+Keep it a doc of what to reach for and what to avoid, not a second SPEC: one rule per trap, a short sample, the measured cost when it is about performance.
 
 ## Testing Discipline
 
@@ -106,7 +122,7 @@ Add a numbered example under `examples/` (next free slot) and append its stdout 
 
 ## Known Bugs Tracking
 
-`docs/KNOWN_BUGS.md` tracks bugs that were found and not fixed. When you find a bug outside the scope of the current change, add it there instead of fixing it on the side or leaving it in a PR description: a minimal repro checked against `build/gem`, what goes wrong, and where the code is. A fix deletes its entry in the same change. Before working on an entry, re-run its repro; if it no longer reproduces, delete the entry. Performance problems go in OPTIMIZATIONS.md and missing features in ROADMAP.md, not here.
+`docs/KNOWN_BUGS.md` tracks bugs that were found and not fixed. When you find a bug outside the scope of the current change, add it there instead of fixing it on the side or leaving it in a PR description: a minimal repro checked against `build/gem`, what goes wrong, and where the code is. A fix deletes its entry in the same change, along with any **(bug)** rule in `docs/BEST_PRACTICES.md` that exists because of it. Before working on an entry, re-run its repro; if it no longer reproduces, delete the entry. Performance problems go in OPTIMIZATIONS.md and missing features in ROADMAP.md, not here.
 
 ## Editor Extension Maintenance
 
@@ -161,5 +177,5 @@ Treat this file as living documentation: when a claim here turns out stale, a co
 
 ## Language Quick Reference
 
-See [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md) for a one-page summary of syntax, builtins, and std modules.
+See [`docs/CHEATSHEET.md`](docs/CHEATSHEET.md) for a one-page summary of syntax, builtins, and std modules, and [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md) for how to write Gem (idioms and traps). See "Writing Gem Code" above for how to keep it current.
 
