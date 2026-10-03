@@ -172,17 +172,14 @@ fn request(target, msg, caller, timeout_ms)
   send(pid, msg)
   receive
   when {tag: "_dsup_reply", ref: ^ref, result: res}
-    receive
-    when {tag: "DOWN", pid: ^pid}
-      nil
-    after 0
-      nil
-    end
     if not res.ok
       error("{caller}: {res.error}")
     end
     res.value
   when {tag: "DOWN", pid: ^pid, reason: reason}
+    # Put the DOWN back: the caller's own monitor of the supervisor, if any,
+    # is this same monitor (monitors are per process pair).
+    send(self(), {tag: "DOWN", pid: pid, reason: reason})
     error("{caller}: supervisor exited: {reason}")
   after timeout_ms
     error("{caller}: timeout")

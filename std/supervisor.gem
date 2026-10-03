@@ -170,16 +170,11 @@ fn which_children(target, timeout_ms = 5000)
   send(pid, {tag: "_sup_which_children", from: self(), ref: ref})
   receive
   when {tag: "_sup_children", ref: ^ref, children: children}
-    # The monitor stays (there is no demonitor); drop a DOWN that has
-    # already arrived.
-    receive
-    when {tag: "DOWN", pid: ^pid}
-      nil
-    after 0
-      nil
-    end
     children
   when {tag: "DOWN", pid: ^pid, reason: reason}
+    # Put the DOWN back: the caller's own monitor of the supervisor, if any,
+    # is this same monitor (monitors are per process pair).
+    send(self(), {tag: "DOWN", pid: pid, reason: reason})
     error("supervisor.which_children: supervisor exited: {reason}")
   after timeout_ms
     error("supervisor.which_children: timeout")

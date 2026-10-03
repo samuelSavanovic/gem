@@ -888,7 +888,7 @@ stack, so a hostile input gets a clear error instead of a stack overflow.
 
 ### Working around std today
 
-Some std APIs don't follow this doc yet. Until they are fixed:
+One std limitation remains:
 
 - A `one_for_all` supervisor hangs when it restarts a child that traps
   exits **(bug)**: supervise such children `one_for_one`.
