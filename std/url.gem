@@ -167,10 +167,12 @@ fn parse_query(s)
 end
 
 ## Returns the query string (without a `?`) for the pairs of `tbl`, in
-## the table's iteration order.
+## insertion order.
 ##
 ## Keys and values are converted with `to_string`, then `encode`d. Pairs
-## whose value is nil are left out; an empty table gives "".
+## whose value is nil are left out; an empty table gives "". There is no
+## multi-value form: a table value is sent as its `to_string` text
+## (`{tags: ["a"]}` gives `tags=%5B%22a%22%5D`); repeat the key yourself.
 ##
 ##   url.build_query({q: "a b", page: 2})    # "q=a%20b&page=2"
 ##   url.build_query({x: nil, y: true})      # "y=true"

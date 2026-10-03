@@ -452,8 +452,8 @@ end
 ## and so is an integer too big for 64 bits. A number too small for a
 ## float reads as 0.0. Escapes, `\uXXXX` surrogate pairs included,
 ## become UTF-8. A repeated object key keeps its last value. A JSON
-## `null` reads as nil, so an object member that is null reads like a
-## missing one.
+## `null` reads as nil; a null object member keeps its key (`has_key` is
+## true) but `o.a` is nil, the same as for a missing key.
 ##
 ##   json.parse('[1, 2.5, null]')     # [1, 2.5, nil]
 ##   json.parse('{"a":1,"a":2}')      # {a: 2}
@@ -461,7 +461,7 @@ end
 ##
 ## Raises `json.parse: <what> at byte <offset>` on invalid JSON (trailing
 ## data, a lone surrogate, a number too large for a float included), and
-## if `input` is not a string (a buffer too).
+## if `input` is not a string. A buffer raises too: pass `to_string(buf)`.
 fn parse(input)
   if type(input) != "string"
     error("json.parse: expected a string, got {type(input)}")
@@ -625,8 +625,11 @@ end
 ## too) becomes an array; any other table becomes an object, its int keys
 ## written as strings and its members in the table's iteration order. A
 ## key whose value is nil is written as `null`. Strings are written byte
-## for byte: `"`, `\` and control bytes are escaped, other bytes (UTF-8
-## or not) are not.
+## for byte: `"`, `\` and bytes below 0x20 are escaped, other bytes (DEL,
+## UTF-8 or not) are not.
+##
+## So an empty object doesn't round-trip:
+## `json.encode(json.parse('{}'))` is `"[]"`.
 ##
 ##   json.encode({a: 1, b: [1, nil]})    # '{"a":1,"b":[1,null]}'
 ##   json.encode({})                     # "[]"
@@ -637,8 +640,8 @@ end
 ## is not valid JSON.
 ##
 ## Raises for a fn, buffer or other value with no JSON form, for a table
-## key that is not a string or int, and for nesting deeper than 1,000
-## levels, which includes any cyclic table.
+## key of any type but string or int (a computed float key too), and for
+## nesting deeper than 1,000 levels, which includes any cyclic table.
 fn encode(val)
   let buf = buf_new()
   encode_value(val, buf, 0)

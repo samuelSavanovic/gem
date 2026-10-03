@@ -1331,23 +1331,23 @@ static GemVal _anon_1(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_arr = _cls->gem_v_arr;
     GemVal *gem_v_delim = _cls->gem_v_delim;
     GemVal gem_v_add = (argc > 0) ? args[0] : GEM_NIL;
-    gem_push_frame("anonymous fn", "std/string.gem", 203);
-#line 204 "std/string.gem"
-    gem_set_line(204);
+    gem_push_frame("anonymous fn", "std/string.gem", 204);
+#line 205 "std/string.gem"
+    gem_set_line(205);
     GemVal gem_v_n = gem_int(0);
     {
-#line 205 "std/string.gem"
-        gem_set_line(205);
+#line 206 "std/string.gem"
+        gem_set_line(206);
         GemVal gem_v__for_tbl_3 = (*gem_v_arr);
-#line 205 "std/string.gem"
-        gem_set_line(205);
+#line 206 "std/string.gem"
+        gem_set_line(206);
     GemVal _t81[] = {gem_v__for_tbl_3};
         GemVal gem_v__for_len_3 = gem_for_len_fn(NULL, _t81, 1);
-#line 205 "std/string.gem"
-        gem_set_line(205);
+#line 206 "std/string.gem"
+        gem_set_line(206);
         GemVal gem_v__for_i_3 = gem_int(0);
-#line 205 "std/string.gem"
-        gem_set_line(205);
+#line 206 "std/string.gem"
+        gem_set_line(206);
         GemArenaMark _mk6;
         gem_arena_mark(&_mk6);
         while (1) {
@@ -1357,44 +1357,44 @@ static GemVal _anon_1(void *_env, GemVal *args, int argc) {
                 gem_arena_reset_region(&_mk6, _rr, 6, NULL, 0);
             }
             if (!gem_truthy(gem_lt(gem_v__for_i_3, gem_v__for_len_3))) break;
-#line 205 "std/string.gem"
-            gem_set_line(205);
-    GemVal _t82[] = {gem_v__for_tbl_3, gem_v__for_i_3};
-            GemVal gem_v_i = gem_table_key_at_fn(NULL, _t82, 2);
-#line 205 "std/string.gem"
-            gem_set_line(205);
-    GemVal _t83[] = {gem_v__for_tbl_3, gem_v__for_i_3};
-            GemVal gem_v_x = gem_table_val_at_fn(NULL, _t83, 2);
-#line 205 "std/string.gem"
-            gem_set_line(205);
-            gem_v__for_i_3 = gem_add(gem_v__for_i_3, gem_int(1));
 #line 206 "std/string.gem"
             gem_set_line(206);
-            if (gem_truthy(gem_neq(gem_v_i, gem_v_n))) {
+    GemVal _t82[] = {gem_v__for_tbl_3, gem_v__for_i_3};
+            GemVal gem_v_i = gem_table_key_at_fn(NULL, _t82, 2);
+#line 206 "std/string.gem"
+            gem_set_line(206);
+    GemVal _t83[] = {gem_v__for_tbl_3, gem_v__for_i_3};
+            GemVal gem_v_x = gem_table_val_at_fn(NULL, _t83, 2);
+#line 206 "std/string.gem"
+            gem_set_line(206);
+            gem_v__for_i_3 = gem_add(gem_v__for_i_3, gem_int(1));
 #line 207 "std/string.gem"
-                gem_set_line(207);
+            gem_set_line(207);
+            if (gem_truthy(gem_neq(gem_v_i, gem_v_n))) {
+#line 208 "std/string.gem"
+                gem_set_line(208);
     GemVal _t84[] = {gem_string_with_len("string.join: arr must be an array, got a table with key ", 56), gem_v_i};
     GemVal _t85[] = {gem_interp(2, _t84)};
-                (void)(gem_error_at_fn("std/string.gem", 207, _t85, 1));
+                (void)(gem_error_at_fn("std/string.gem", 208, _t85, 1));
             }
-#line 209 "std/string.gem"
-            gem_set_line(209);
-            if (gem_truthy(gem_gt(gem_v_n, gem_int(0)))) {
 #line 210 "std/string.gem"
-                gem_set_line(210);
+            gem_set_line(210);
+            if (gem_truthy(gem_gt(gem_v_n, gem_int(0)))) {
+#line 211 "std/string.gem"
+                gem_set_line(211);
     GemVal _t86[] = {(*gem_v_delim)};
     GemVal _t87 = gem_v_add;
-    gem_check_callable(_t87, "std/string.gem", 210);
+    gem_check_callable(_t87, "std/string.gem", 211);
                 (void)(_t87.fn(_t87.env, _t86, 1));
             }
-#line 212 "std/string.gem"
-            gem_set_line(212);
-    GemVal _t88[] = {gem_v_x};
-    GemVal _t89 = gem_v_add;
-    gem_check_callable(_t89, "std/string.gem", 212);
-            (void)(_t89.fn(_t89.env, _t88, 1));
 #line 213 "std/string.gem"
             gem_set_line(213);
+    GemVal _t88[] = {gem_v_x};
+    GemVal _t89 = gem_v_add;
+    gem_check_callable(_t89, "std/string.gem", 213);
+            (void)(_t89.fn(_t89.env, _t88, 1));
+#line 214 "std/string.gem"
+            gem_set_line(214);
             gem_v_n = gem_add(gem_v_n, gem_int(1));
         }
         gem_pop_frame();
@@ -1403,28 +1403,28 @@ static GemVal _anon_1(void *_env, GemVal *args, int argc) {
 }
 
 static GemVal gem_fn__mod_string_join(void *_env, GemVal *args, int argc) {
-#line 198 "std/string.gem"
+#line 199 "std/string.gem"
     GemVal gem_v_arr = (argc > 0) ? args[0] : GEM_NIL;
     GemVal *gem_v_delim = gem_box_alloc();
     *gem_v_delim = (argc > 1) ? args[1] : GEM_NIL;
-    gem_push_frame("string.join", "std/string.gem", 198);
-#line 199 "std/string.gem"
-    gem_set_line(199);
+    gem_push_frame("string.join", "std/string.gem", 199);
+#line 200 "std/string.gem"
+    gem_set_line(200);
     GemVal _t76[] = {gem_v_arr};
     if (gem_truthy(gem_neq(gem_type_fn(NULL, _t76, 1), gem_string_with_len("table", 5)))) {
-#line 200 "std/string.gem"
-        gem_set_line(200);
+#line 201 "std/string.gem"
+        gem_set_line(201);
     GemVal _t77[] = {gem_v_arr};
     GemVal _t78[] = {gem_string_with_len("string.join: arr must be an array, got ", 39), gem_type_fn(NULL, _t77, 1)};
     GemVal _t79[] = {gem_interp(2, _t78)};
-        (void)(gem_error_at_fn("std/string.gem", 200, _t79, 1));
+        (void)(gem_error_at_fn("std/string.gem", 201, _t79, 1));
     }
-#line 202 "std/string.gem"
-    gem_set_line(202);
-    GemVal _t80[] = {gem_string_with_len("join", 4), gem_string_with_len("delim", 5), (*gem_v_delim)};
-    (*gem_v_delim) = gem_fn__mod_string_text(NULL, _t80, 3);
 #line 203 "std/string.gem"
     gem_set_line(203);
+    GemVal _t80[] = {gem_string_with_len("join", 4), gem_string_with_len("delim", 5), (*gem_v_delim)};
+    (*gem_v_delim) = gem_fn__mod_string_text(NULL, _t80, 3);
+#line 204 "std/string.gem"
+    gem_set_line(204);
     struct _closure__anon_1 *_t90 = gem_alloc(sizeof(struct _closure__anon_1));
     _t90->_num_captures = 2;
     GemVal *_t91 = gem_alloc(sizeof(GemVal));
@@ -1438,22 +1438,22 @@ static GemVal gem_fn__mod_string_join(void *_env, GemVal *args, int argc) {
 }
 
 static GemVal gem_fn__mod_string_trim(void *_env, GemVal *args, int argc) {
-#line 222 "std/string.gem"
-    GemVal gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
-    gem_push_frame("string.trim", "std/string.gem", 222);
 #line 223 "std/string.gem"
-    gem_set_line(223);
-    GemVal _t94[] = {gem_string_with_len("trim", 4), gem_string_with_len("s", 1), gem_v_s};
-    gem_v_s = gem_fn__mod_string_text(NULL, _t94, 3);
+    GemVal gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
+    gem_push_frame("string.trim", "std/string.gem", 223);
 #line 224 "std/string.gem"
     gem_set_line(224);
-    GemVal _t95[] = {gem_v_s};
-    GemVal gem_v_slen = gem_len_fn(NULL, _t95, 1);
+    GemVal _t94[] = {gem_string_with_len("trim", 4), gem_string_with_len("s", 1), gem_v_s};
+    gem_v_s = gem_fn__mod_string_text(NULL, _t94, 3);
 #line 225 "std/string.gem"
     gem_set_line(225);
-    GemVal gem_v_start = gem_int(0);
+    GemVal _t95[] = {gem_v_s};
+    GemVal gem_v_slen = gem_len_fn(NULL, _t95, 1);
 #line 226 "std/string.gem"
     gem_set_line(226);
+    GemVal gem_v_start = gem_int(0);
+#line 227 "std/string.gem"
+    gem_set_line(227);
     GemArenaMark _mk7;
     gem_arena_mark(&_mk7);
     while (1) {
@@ -1471,15 +1471,15 @@ static GemVal gem_fn__mod_string_trim(void *_env, GemVal *args, int argc) {
                 _t98 = gem_fn__mod_string_is_space(NULL, _t97, 1);
         }
         if (!gem_truthy(_t98)) break;
-#line 227 "std/string.gem"
-        gem_set_line(227);
+#line 228 "std/string.gem"
+        gem_set_line(228);
         gem_v_start = gem_add(gem_v_start, gem_int(1));
     }
-#line 229 "std/string.gem"
-    gem_set_line(229);
-    GemVal gem_v_stop = gem_v_slen;
 #line 230 "std/string.gem"
     gem_set_line(230);
+    GemVal gem_v_stop = gem_v_slen;
+#line 231 "std/string.gem"
+    gem_set_line(231);
     GemArenaMark _mk8;
     gem_arena_mark(&_mk8);
     while (1) {
@@ -1497,12 +1497,12 @@ static GemVal gem_fn__mod_string_trim(void *_env, GemVal *args, int argc) {
                 _t101 = gem_fn__mod_string_is_space(NULL, _t100, 1);
         }
         if (!gem_truthy(_t101)) break;
-#line 231 "std/string.gem"
-        gem_set_line(231);
+#line 232 "std/string.gem"
+        gem_set_line(232);
         gem_v_stop = gem_sub(gem_v_stop, gem_int(1));
     }
-#line 233 "std/string.gem"
-    gem_set_line(233);
+#line 234 "std/string.gem"
+    gem_set_line(234);
     GemVal _t102;
     if (!gem_truthy(gem_eq(gem_v_start, gem_int(0)))) {
         _t102 = gem_eq(gem_v_start, gem_int(0));
@@ -1510,14 +1510,14 @@ static GemVal gem_fn__mod_string_trim(void *_env, GemVal *args, int argc) {
         _t102 = gem_eq(gem_v_stop, gem_v_slen);
     }
     if (gem_truthy(_t102)) {
-#line 234 "std/string.gem"
-        gem_set_line(234);
+#line 235 "std/string.gem"
+        gem_set_line(235);
         GemVal _t103 = gem_v_s;
         gem_pop_frame();
         return _t103;
     }
-#line 236 "std/string.gem"
-    gem_set_line(236);
+#line 237 "std/string.gem"
+    gem_set_line(237);
     GemVal _t104[] = {gem_v_s, gem_v_start, gem_sub(gem_v_stop, gem_v_start)};
     GemVal _t105 = gem_substr_fn(NULL, _t104, 3);
     gem_pop_frame();
@@ -1525,24 +1525,24 @@ static GemVal gem_fn__mod_string_trim(void *_env, GemVal *args, int argc) {
 }
 
 static GemVal gem_fn__mod_string_starts_with(void *_env, GemVal *args, int argc) {
-#line 242 "std/string.gem"
+#line 243 "std/string.gem"
     GemVal gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_prefix = (argc > 1) ? args[1] : GEM_NIL;
-    gem_push_frame("string.starts_with", "std/string.gem", 242);
-#line 243 "std/string.gem"
-    gem_set_line(243);
-    GemVal _t106[] = {gem_string_with_len("starts_with", 11), gem_string_with_len("s", 1), gem_v_s};
-    gem_v_s = gem_fn__mod_string_text(NULL, _t106, 3);
+    gem_push_frame("string.starts_with", "std/string.gem", 243);
 #line 244 "std/string.gem"
     gem_set_line(244);
-    GemVal _t107[] = {gem_string_with_len("starts_with", 11), gem_string_with_len("prefix", 6), gem_v_prefix};
-    gem_v_prefix = gem_fn__mod_string_text(NULL, _t107, 3);
+    GemVal _t106[] = {gem_string_with_len("starts_with", 11), gem_string_with_len("s", 1), gem_v_s};
+    gem_v_s = gem_fn__mod_string_text(NULL, _t106, 3);
 #line 245 "std/string.gem"
     gem_set_line(245);
-    GemVal _t108[] = {gem_v_prefix};
-    GemVal gem_v_plen = gem_len_fn(NULL, _t108, 1);
+    GemVal _t107[] = {gem_string_with_len("starts_with", 11), gem_string_with_len("prefix", 6), gem_v_prefix};
+    gem_v_prefix = gem_fn__mod_string_text(NULL, _t107, 3);
 #line 246 "std/string.gem"
     gem_set_line(246);
+    GemVal _t108[] = {gem_v_prefix};
+    GemVal gem_v_plen = gem_len_fn(NULL, _t108, 1);
+#line 247 "std/string.gem"
+    gem_set_line(247);
     GemVal _t109[] = {gem_v_s};
     GemVal _t111;
     if (!gem_truthy(gem_le(gem_v_plen, gem_len_fn(NULL, _t109, 1)))) {
@@ -1557,24 +1557,24 @@ static GemVal gem_fn__mod_string_starts_with(void *_env, GemVal *args, int argc)
 }
 
 static GemVal gem_fn__mod_string_ends_with(void *_env, GemVal *args, int argc) {
-#line 252 "std/string.gem"
+#line 253 "std/string.gem"
     GemVal gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_suffix = (argc > 1) ? args[1] : GEM_NIL;
-    gem_push_frame("string.ends_with", "std/string.gem", 252);
-#line 253 "std/string.gem"
-    gem_set_line(253);
-    GemVal _t113[] = {gem_string_with_len("ends_with", 9), gem_string_with_len("s", 1), gem_v_s};
-    gem_v_s = gem_fn__mod_string_text(NULL, _t113, 3);
+    gem_push_frame("string.ends_with", "std/string.gem", 253);
 #line 254 "std/string.gem"
     gem_set_line(254);
-    GemVal _t114[] = {gem_string_with_len("ends_with", 9), gem_string_with_len("suffix", 6), gem_v_suffix};
-    gem_v_suffix = gem_fn__mod_string_text(NULL, _t114, 3);
+    GemVal _t113[] = {gem_string_with_len("ends_with", 9), gem_string_with_len("s", 1), gem_v_s};
+    gem_v_s = gem_fn__mod_string_text(NULL, _t113, 3);
 #line 255 "std/string.gem"
     gem_set_line(255);
-    GemVal _t115[] = {gem_v_suffix};
-    GemVal gem_v_plen = gem_len_fn(NULL, _t115, 1);
+    GemVal _t114[] = {gem_string_with_len("ends_with", 9), gem_string_with_len("suffix", 6), gem_v_suffix};
+    gem_v_suffix = gem_fn__mod_string_text(NULL, _t114, 3);
 #line 256 "std/string.gem"
     gem_set_line(256);
+    GemVal _t115[] = {gem_v_suffix};
+    GemVal gem_v_plen = gem_len_fn(NULL, _t115, 1);
+#line 257 "std/string.gem"
+    gem_set_line(257);
     GemVal _t116[] = {gem_v_s};
     GemVal _t119;
     if (!gem_truthy(gem_le(gem_v_plen, gem_len_fn(NULL, _t116, 1)))) {
@@ -1607,15 +1607,15 @@ static GemVal _anon_2(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_s = _cls->gem_v_s;
     GemVal *gem_v_slen = _cls->gem_v_slen;
     GemVal gem_v_add = (argc > 0) ? args[0] : GEM_NIL;
-    gem_push_frame("anonymous fn", "std/string.gem", 263);
-#line 264 "std/string.gem"
-    gem_set_line(264);
+    gem_push_frame("anonymous fn", "std/string.gem", 264);
+#line 265 "std/string.gem"
+    gem_set_line(265);
     GemVal gem_v__for_i_4 = gem_int(0);
-#line 264 "std/string.gem"
-    gem_set_line(264);
+#line 265 "std/string.gem"
+    gem_set_line(265);
     GemVal gem_v__for_limit_4 = (*gem_v_slen);
-#line 264 "std/string.gem"
-    gem_set_line(264);
+#line 265 "std/string.gem"
+    gem_set_line(265);
     GemArenaMark _mk9;
     gem_arena_mark(&_mk9);
     while (1) {
@@ -1625,18 +1625,18 @@ static GemVal _anon_2(void *_env, GemVal *args, int argc) {
             gem_arena_reset_region(&_mk9, _rr, 9, NULL, 0);
         }
         if (!gem_truthy(gem_lt(gem_v__for_i_4, gem_v__for_limit_4))) break;
-#line 264 "std/string.gem"
-        gem_set_line(264);
-        GemVal gem_v_i = gem_v__for_i_4;
-#line 264 "std/string.gem"
-        gem_set_line(264);
-        gem_v__for_i_4 = gem_add(gem_v__for_i_4, gem_int(1));
 #line 265 "std/string.gem"
         gem_set_line(265);
-    GemVal _t122[] = {(*gem_v_s), gem_v_i};
-        GemVal gem_v_c = gem_ord_fn(NULL, _t122, 2);
+        GemVal gem_v_i = gem_v__for_i_4;
+#line 265 "std/string.gem"
+        gem_set_line(265);
+        gem_v__for_i_4 = gem_add(gem_v__for_i_4, gem_int(1));
 #line 266 "std/string.gem"
         gem_set_line(266);
+    GemVal _t122[] = {(*gem_v_s), gem_v_i};
+        GemVal gem_v_c = gem_ord_fn(NULL, _t122, 2);
+#line 267 "std/string.gem"
+        gem_set_line(267);
     GemVal _t123;
     if (!gem_truthy(gem_ge(gem_v_c, (*gem_v_lo)))) {
         _t123 = gem_ge(gem_v_c, (*gem_v_lo));
@@ -1644,32 +1644,32 @@ static GemVal _anon_2(void *_env, GemVal *args, int argc) {
         _t123 = gem_le(gem_v_c, (*gem_v_hi));
     }
         if (gem_truthy(_t123)) {
-#line 267 "std/string.gem"
-            gem_set_line(267);
-            if (gem_truthy(gem_gt(gem_v_i, (*gem_v_run)))) {
 #line 268 "std/string.gem"
-                gem_set_line(268);
+            gem_set_line(268);
+            if (gem_truthy(gem_gt(gem_v_i, (*gem_v_run)))) {
+#line 269 "std/string.gem"
+                gem_set_line(269);
     GemVal _t124[] = {(*gem_v_s), (*gem_v_run), gem_sub(gem_v_i, (*gem_v_run))};
     GemVal _t125[] = {gem_substr_fn(NULL, _t124, 3)};
     GemVal _t126 = gem_v_add;
-    gem_check_callable(_t126, "std/string.gem", 268);
+    gem_check_callable(_t126, "std/string.gem", 269);
                 (void)(_t126.fn(_t126.env, _t125, 1));
             }
-#line 270 "std/string.gem"
-            gem_set_line(270);
+#line 271 "std/string.gem"
+            gem_set_line(271);
     GemVal _t127[] = {gem_add(gem_v_c, (*gem_v_delta))};
     GemVal _t128[] = {gem_chr_fn(NULL, _t127, 1)};
     GemVal _t129 = gem_v_add;
-    gem_check_callable(_t129, "std/string.gem", 270);
+    gem_check_callable(_t129, "std/string.gem", 271);
             (void)(_t129.fn(_t129.env, _t128, 1));
-#line 271 "std/string.gem"
-            gem_set_line(271);
+#line 272 "std/string.gem"
+            gem_set_line(272);
             (*gem_v_run) = gem_add(gem_v_i, gem_int(1));
         }
     }
 
-#line 274 "std/string.gem"
-    gem_set_line(274);
+#line 275 "std/string.gem"
+    gem_set_line(275);
     GemVal _t130;
     if (!gem_truthy(gem_gt((*gem_v_run), gem_int(0)))) {
         _t130 = gem_gt((*gem_v_run), gem_int(0));
@@ -1677,12 +1677,12 @@ static GemVal _anon_2(void *_env, GemVal *args, int argc) {
         _t130 = gem_lt((*gem_v_run), (*gem_v_slen));
     }
     if (gem_truthy(_t130)) {
-#line 275 "std/string.gem"
-        gem_set_line(275);
+#line 276 "std/string.gem"
+        gem_set_line(276);
     GemVal _t131[] = {(*gem_v_s), (*gem_v_run), gem_sub((*gem_v_slen), (*gem_v_run))};
     GemVal _t132[] = {gem_substr_fn(NULL, _t131, 3)};
     GemVal _t133 = gem_v_add;
-    gem_check_callable(_t133, "std/string.gem", 275);
+    gem_check_callable(_t133, "std/string.gem", 276);
         GemVal _t134 = _t133.fn(_t133.env, _t132, 1);
         gem_pop_frame();
         return _t134;
@@ -1693,22 +1693,22 @@ static GemVal _anon_2(void *_env, GemVal *args, int argc) {
 }
 
 static GemVal gem_fn__mod_string_shift_range(void *_env, GemVal *args, int argc) {
-#line 260 "std/string.gem"
+#line 261 "std/string.gem"
     GemVal gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_lo = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_hi = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_delta = (argc > 3) ? args[3] : GEM_NIL;
-    gem_push_frame("string.shift_range", "std/string.gem", 260);
-#line 261 "std/string.gem"
-    gem_set_line(261);
-    GemVal _t121[] = {gem_v_s};
-    GemVal gem_v_slen = gem_len_fn(NULL, _t121, 1);
+    gem_push_frame("string.shift_range", "std/string.gem", 261);
 #line 262 "std/string.gem"
     gem_set_line(262);
-    GemVal *gem_v_run = gem_box_alloc();
-    *gem_v_run = gem_int(0);
+    GemVal _t121[] = {gem_v_s};
+    GemVal gem_v_slen = gem_len_fn(NULL, _t121, 1);
 #line 263 "std/string.gem"
     gem_set_line(263);
+    GemVal *gem_v_run = gem_box_alloc();
+    *gem_v_run = gem_int(0);
+#line 264 "std/string.gem"
+    gem_set_line(264);
     struct _closure__anon_2 *_t135 = gem_alloc(sizeof(struct _closure__anon_2));
     _t135->_num_captures = 6;
     GemVal *_t136 = gem_alloc(sizeof(GemVal));
@@ -1729,32 +1729,32 @@ static GemVal gem_fn__mod_string_shift_range(void *_env, GemVal *args, int argc)
     _t135->gem_v_slen = _t140;
     GemVal _t141[] = {gem_make_fn(_anon_2, _t135)};
     GemVal gem_v_out = gem_build_string_fn(NULL, _t141, 1);
-#line 278 "std/string.gem"
-    gem_set_line(278);
-    if (gem_truthy(gem_eq((*gem_v_run), gem_int(0)))) {
 #line 279 "std/string.gem"
-        gem_set_line(279);
+    gem_set_line(279);
+    if (gem_truthy(gem_eq((*gem_v_run), gem_int(0)))) {
+#line 280 "std/string.gem"
+        gem_set_line(280);
         GemVal _t142 = gem_v_s;
         gem_pop_frame();
         return _t142;
     }
-#line 281 "std/string.gem"
-    gem_set_line(281);
+#line 282 "std/string.gem"
+    gem_set_line(282);
     GemVal _t143 = gem_v_out;
     gem_pop_frame();
     return _t143;
 }
 
 static GemVal gem_fn__mod_string_upper(void *_env, GemVal *args, int argc) {
-#line 288 "std/string.gem"
-    GemVal gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
-    gem_push_frame("string.upper", "std/string.gem", 288);
 #line 289 "std/string.gem"
-    gem_set_line(289);
-    GemVal _t144[] = {gem_string_with_len("upper", 5), gem_string_with_len("s", 1), gem_v_s};
-    gem_v_s = gem_fn__mod_string_text(NULL, _t144, 3);
+    GemVal gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
+    gem_push_frame("string.upper", "std/string.gem", 289);
 #line 290 "std/string.gem"
     gem_set_line(290);
+    GemVal _t144[] = {gem_string_with_len("upper", 5), gem_string_with_len("s", 1), gem_v_s};
+    gem_v_s = gem_fn__mod_string_text(NULL, _t144, 3);
+#line 291 "std/string.gem"
+    gem_set_line(291);
     GemVal _t145[] = {gem_v_s, gem_int(97), gem_int(122), gem_int(-32)};
     GemVal _t146 = gem_fn__mod_string_shift_range(NULL, _t145, 4);
     gem_pop_frame();
@@ -1762,15 +1762,15 @@ static GemVal gem_fn__mod_string_upper(void *_env, GemVal *args, int argc) {
 }
 
 static GemVal gem_fn__mod_string_lower(void *_env, GemVal *args, int argc) {
-#line 297 "std/string.gem"
-    GemVal gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
-    gem_push_frame("string.lower", "std/string.gem", 297);
 #line 298 "std/string.gem"
-    gem_set_line(298);
-    GemVal _t147[] = {gem_string_with_len("lower", 5), gem_string_with_len("s", 1), gem_v_s};
-    gem_v_s = gem_fn__mod_string_text(NULL, _t147, 3);
+    GemVal gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
+    gem_push_frame("string.lower", "std/string.gem", 298);
 #line 299 "std/string.gem"
     gem_set_line(299);
+    GemVal _t147[] = {gem_string_with_len("lower", 5), gem_string_with_len("s", 1), gem_v_s};
+    gem_v_s = gem_fn__mod_string_text(NULL, _t147, 3);
+#line 300 "std/string.gem"
+    gem_set_line(300);
     GemVal _t148[] = {gem_v_s, gem_int(65), gem_int(90), gem_int(32)};
     GemVal _t149 = gem_fn__mod_string_shift_range(NULL, _t148, 4);
     gem_pop_frame();
@@ -1787,16 +1787,16 @@ static GemVal _anon_3(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_n = _cls->gem_v_n;
     GemVal *gem_v_s = _cls->gem_v_s;
     GemVal gem_v_add = (argc > 0) ? args[0] : GEM_NIL;
-    gem_push_frame("anonymous fn", "std/string.gem", 312);
+    gem_push_frame("anonymous fn", "std/string.gem", 313);
     {
-#line 313 "std/string.gem"
-        gem_set_line(313);
+#line 314 "std/string.gem"
+        gem_set_line(314);
         GemVal gem_v__for_i_5 = gem_int(0);
-#line 313 "std/string.gem"
-        gem_set_line(313);
+#line 314 "std/string.gem"
+        gem_set_line(314);
         GemVal gem_v__for_limit_5 = (*gem_v_n);
-#line 313 "std/string.gem"
-        gem_set_line(313);
+#line 314 "std/string.gem"
+        gem_set_line(314);
         GemArenaMark _mk10;
         gem_arena_mark(&_mk10);
         while (1) {
@@ -1806,17 +1806,17 @@ static GemVal _anon_3(void *_env, GemVal *args, int argc) {
                 gem_arena_reset_region(&_mk10, _rr, 4, NULL, 0);
             }
             if (!gem_truthy(gem_lt(gem_v__for_i_5, gem_v__for_limit_5))) break;
-#line 313 "std/string.gem"
-            gem_set_line(313);
-            GemVal gem_v_i = gem_v__for_i_5;
-#line 313 "std/string.gem"
-            gem_set_line(313);
-            gem_v__for_i_5 = gem_add(gem_v__for_i_5, gem_int(1));
 #line 314 "std/string.gem"
             gem_set_line(314);
+            GemVal gem_v_i = gem_v__for_i_5;
+#line 314 "std/string.gem"
+            gem_set_line(314);
+            gem_v__for_i_5 = gem_add(gem_v__for_i_5, gem_int(1));
+#line 315 "std/string.gem"
+            gem_set_line(315);
     GemVal _t155[] = {(*gem_v_s)};
     GemVal _t156 = gem_v_add;
-    gem_check_callable(_t156, "std/string.gem", 314);
+    gem_check_callable(_t156, "std/string.gem", 315);
             (void)(_t156.fn(_t156.env, _t155, 1));
         }
         gem_pop_frame();
@@ -1825,28 +1825,28 @@ static GemVal _anon_3(void *_env, GemVal *args, int argc) {
 }
 
 static GemVal gem_fn__mod_string_repeat(void *_env, GemVal *args, int argc) {
-#line 307 "std/string.gem"
+#line 308 "std/string.gem"
     GemVal *gem_v_s = gem_box_alloc();
     *gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_n = (argc > 1) ? args[1] : GEM_NIL;
-    gem_push_frame("string.repeat", "std/string.gem", 307);
-#line 308 "std/string.gem"
-    gem_set_line(308);
-    GemVal _t150[] = {gem_string_with_len("repeat", 6), gem_string_with_len("s", 1), (*gem_v_s)};
-    (*gem_v_s) = gem_fn__mod_string_text(NULL, _t150, 3);
+    gem_push_frame("string.repeat", "std/string.gem", 308);
 #line 309 "std/string.gem"
     gem_set_line(309);
+    GemVal _t150[] = {gem_string_with_len("repeat", 6), gem_string_with_len("s", 1), (*gem_v_s)};
+    (*gem_v_s) = gem_fn__mod_string_text(NULL, _t150, 3);
+#line 310 "std/string.gem"
+    gem_set_line(310);
     GemVal _t151[] = {gem_v_n};
     if (gem_truthy(gem_neq(gem_type_fn(NULL, _t151, 1), gem_string_with_len("int", 3)))) {
-#line 310 "std/string.gem"
-        gem_set_line(310);
+#line 311 "std/string.gem"
+        gem_set_line(311);
     GemVal _t152[] = {gem_v_n};
     GemVal _t153[] = {gem_string_with_len("string.repeat: n must be an int, got ", 37), gem_type_fn(NULL, _t152, 1)};
     GemVal _t154[] = {gem_interp(2, _t153)};
-        (void)(gem_error_at_fn("std/string.gem", 310, _t154, 1));
+        (void)(gem_error_at_fn("std/string.gem", 311, _t154, 1));
     }
-#line 312 "std/string.gem"
-    gem_set_line(312);
+#line 313 "std/string.gem"
+    gem_set_line(313);
     struct _closure__anon_3 *_t157 = gem_alloc(sizeof(struct _closure__anon_3));
     _t157->_num_captures = 2;
     GemVal *_t158 = gem_alloc(sizeof(GemVal));
@@ -51160,18 +51160,18 @@ static GemVal gem_fn__mod_json_encode_value(void *_env, GemVal *args, int argc) 
 }
 
 static GemVal gem_fn__mod_json_encode(void *_env, GemVal *args, int argc) {
-#line 642 "std/json.gem"
+#line 645 "std/json.gem"
     GemVal gem_v_val = (argc > 0) ? args[0] : GEM_NIL;
-    gem_push_frame("json.encode", "std/json.gem", 642);
-#line 643 "std/json.gem"
-    gem_set_line(643);
+    gem_push_frame("json.encode", "std/json.gem", 645);
+#line 646 "std/json.gem"
+    gem_set_line(646);
     GemVal gem_v_buf = gem_buf_new_fn(NULL, NULL, 0);
-#line 644 "std/json.gem"
-    gem_set_line(644);
+#line 647 "std/json.gem"
+    gem_set_line(647);
     GemVal _t9471[] = {gem_v_val, gem_v_buf, gem_int(0)};
     (void)(gem_fn__mod_json_encode_value(NULL, _t9471, 3));
-#line 645 "std/json.gem"
-    gem_set_line(645);
+#line 648 "std/json.gem"
+    gem_set_line(648);
     GemVal _t9472[] = {gem_v_buf};
     GemVal _t9473 = gem_to_string_fn(NULL, _t9472, 1);
     gem_pop_frame();

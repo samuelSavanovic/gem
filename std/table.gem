@@ -10,8 +10,11 @@
 ## An array is a table with keys 0 .. n-1. Only `sort` changes its
 ## argument; the others return new tables. They take arrays (`copy` takes
 ## any table): on a record, `for x in t` sees `nil` for every entry, so
-## pass `keys(t)` or `values(t)`. Values are compared with `==`: `1` and
-## `1.0` differ, and tables are equal only when they are the same table.
+## pass `keys(t)` or `values(t)`. They don't check: a record, a string, or
+## a table mixing int and string keys gives `nil` entries or a wrong result,
+## not an error (`table.map({a: 1}, f)` is `[nil]`). Values are compared
+## with `==`: `1` and `1.0` differ, and tables are equal only when they are
+## the same table.
 
 # The identity of a table as an int (runtime/gem_core.c), so `unique` can
 # key tables by a hashed string. Stable during `unique`'s loop: the items
@@ -74,6 +77,9 @@ end
 ## Returns the first element for which `f(item)` is truthy, or nil.
 ##
 ##   table.find([1, 2, 3], fn(x) x > 1 end)    # 2
+##
+## A found `nil` looks the same as no match; use `index_of` or `any` to
+## tell them apart.
 fn find(arr, f)
   for item in arr
     if f(item)
@@ -319,7 +325,8 @@ fn unique(arr)
 end
 
 ## Returns a table mapping each key `f(item)` to the array of elements
-## that gave it, in order.
+## that gave it, in order. A key can be any value except a negative int
+## (a table key matches only that same table).
 ##
 ##   table.group_by(["apple", "avocado", "banana"], fn(s) substr(s, 0, 1) end)
 ##   # {a: ["apple", "avocado"], b: ["banana"]}
@@ -340,15 +347,22 @@ fn group_by(arr, f)
   groups
 end
 
-## Sorts `arr` in place and returns it. Without `cmp`, numbers sort
-## ascending and strings by byte order. `cmp(a, b)` returns a negative
-## number when `a` comes first, zero when they tie, and a positive number
-## otherwise.
+## Sorts the array `arr` in place and returns it. Not guaranteed stable.
+## Without `cmp`, numbers sort ascending and strings by byte order; mixed
+## types go nil, bools, numbers, strings, fns, tables (bools, fns and
+## tables tie among themselves, in no set order). `cmp(a, b)` returns a
+## negative number when `a` comes first, zero when they tie, and a
+## positive number otherwise.
 ##
 ##   table.sort(users, fn(a, b) a.age - b.age end)
 ##
+## On a record, it sorts the values and replaces the keys with 0 .. n-1:
+## the record is lost.
+##
 ## Raises if `arr` is not a table, or if `cmp` returns something other
-## than a number (a bool, say) for the first two elements.
+## than a number (a bool, say) for the first two elements. Only that first
+## call is checked: a non-number later counts as a tie and silently
+## mis-sorts.
 let sort = fn(arr, cmp = nil)
   # The `sort` builtin leaves the array unsorted, with no error, when the
   # comparator returns a bool, so this checks what `cmp` returns for the

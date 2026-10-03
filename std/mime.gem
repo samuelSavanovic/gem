@@ -88,9 +88,10 @@ end
 ## Returns the content type for a path's extension, or for a bare
 ## extension: "index.html", ".html" and "html" all give the same type.
 ##
-## Text types (text/*, JSON, JavaScript, XML) get "; charset=utf-8". An
-## unknown or missing extension gives "application/octet-stream". Only
-## the last `.` of the last path segment counts.
+## Text types (text/*, JSON, JavaScript, application/xml) get
+## "; charset=utf-8"; image/svg+xml doesn't. An unknown or missing
+## extension gives "application/octet-stream". Only the last `.` of the
+## last path segment counts.
 ##
 ##   mime.lookup("site/index.HTML")    # "text/html; charset=utf-8"
 ##   mime.lookup("a/b.tar.gz")         # "application/gzip"

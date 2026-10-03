@@ -13,7 +13,9 @@
 ##   supervisor.stop(sup)
 ##
 ## A supervisor is named by the `{pid}` handle `start` returns, a bare pid
-## or a registered name. Errors start with `supervisor.<fn>: `.
+## or a registered name. Errors start with `supervisor.<fn>: `. A name
+## nobody holds, also that of a supervisor that has stopped, raises
+## `supervisor.<fn>: no process registered as "<name>"`.
 
 # Design. The supervisor traps exits and monitors and links each child.
 # The restart signal is the child's DOWN; the EXIT a child's death also
@@ -296,14 +298,20 @@ end
 ## returns its handle `{pid}`.
 ##
 ## `spec` takes `children`: an array of `{id, start, restart}` specs, where
-## `start` spawns the child and returns its pid or `{pid}` handle, and
-## `restart` is `"permanent"` (the default: always restart), `"transient"`
-## (restart unless it exits with `"normal"` or `"shutdown"`) or
-## `"temporary"` (never). `strategy` is `"one_for_one"` (the default:
+## `start` spawns the child and returns the pid, `{pid}` handle or
+## registered name of the process it spawned (any int is trusted as a
+## pid), and `restart` is `"permanent"` (the default: always restart),
+## `"transient"` (restart unless it exits with `"normal"` or `"shutdown"`)
+## or `"temporary"` (never). `strategy` is `"one_for_one"` (the default:
 ## restart the dead child) or `"one_for_all"` (stop the others, then start
 ## them all again). The supervisor gives up and exits when more than
-## `max_restarts` (default 3) restarts fall within `max_seconds` ms
-## (default 5000). `name` registers it.
+## `max_restarts` (default 3) restarts fall within `max_seconds`
+## MILLISECONDS, despite the name (default 5000, i.e. 5 s). `name`
+## registers it.
+##
+## A restart runs `start` again from scratch: no state carries over. It
+## happens in the supervisor, after the child's death, so for a moment a
+## call by the child's registered name raises `no process registered`.
 ##
 ## Raises, and starts nothing, for a bad spec or a name that is taken.
 ##
@@ -315,7 +323,9 @@ end
 ## `"shutdown"`, last first, waiting up to 4 s in all for them to go.
 ## `kill(sup, reason)` is handled when it next reads its mailbox; use
 ## `stop` to know it is gone. A child that traps exits must exit on an
-## `EXIT` from the supervisor, or a `one_for_all` restart hangs.
+## `EXIT` from the supervisor: otherwise a `one_for_all` restart hangs for
+## good, the supervisor stops answering, and `which_children` and `stop`
+## time out (`stop` with a nil timeout never returns).
 fn start(spec)
   if type(spec) != "table"
     error("supervisor.start: expected a spec table \{strategy, children, ...\}, got {type(spec)}")
@@ -446,16 +456,19 @@ fn which_children(target, timeout_ms = 5000)
   res.children
 end
 
-## Stops the supervisor and waits until it and every process below it
-## have exited, then returns nil (also for one that was already gone).
+## Stops the supervisor, waits until it has exited, and returns nil (also
+## for one already gone, given by pid or handle; by name see the header).
 ##
-## Raises `supervisor.stop: the supervisor did not stop within <ms> ms`
-## after `timeout_ms` (nil: no limit).
+## The supervisor gives its children up to 4 s in all to exit, then exits
+## anyway: a child that traps exits and ignores the `EXIT` is still
+## running when `stop` returns, and keeps any name it registered. Raises
+## `supervisor.stop: the supervisor did not stop within <ms> ms` after
+## `timeout_ms` (nil: no limit).
 ##
-## Blocks the caller. Sends the exit signal `"shutdown"`, so names
-## registered in the tree are free once `stop` returns. Takes the
-## supervisor's `DOWN`, unless the caller monitors it itself: that monitor
-## still gets it.
+## Blocks the caller. Sends the exit signal `"shutdown"`; once `stop`
+## returns, the names of the supervisor and of the children that exited
+## are free. Takes the supervisor's `DOWN`, unless the caller monitors it
+## itself: that monitor still gets it.
 fn stop(target, timeout_ms = 5000)
   let pid = target_pid(target, "supervisor.stop")
   check_timeout(timeout_ms, "supervisor.stop")

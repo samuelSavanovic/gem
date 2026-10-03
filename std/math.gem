@@ -7,7 +7,8 @@
 ## The math builtins (`floor`, `sqrt`, `abs`...) need no load. `min`,
 ## `max` and `clamp` take any values `<` can order: ints and floats,
 ## mixed, or strings. Values `<` can't compare (an int and a string,
-## `nil`) raise the operator's type error.
+## `nil`) raise the operator's type error. With a NaN, `min` and `max`
+## return their second argument, so the result depends on argument order.
 
 ## Returns the smaller of `a` and `b`, or `b` when they tie.
 ##

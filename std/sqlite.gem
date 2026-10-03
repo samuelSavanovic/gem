@@ -7,11 +7,15 @@
 ##   let rows = sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [sqlite.last_id(db)])
 ##   sqlite.close(db)
 ##
-## A handle `db` is an int. Every function raises on an SQLite error as
-## `sqlite_<op>: <SQLite's message>`, and on a closed or unknown handle
-## as `sqlite_<op>: not an open database handle`. `exec` and `query` stall
-## every process while they run, so keep queries short and indexed. A
-## handle is not closed when its process dies: close it on every path.
+## A handle `db` is an int. Errors start with the name of the builtin
+## underneath (`sqlite_open`, `sqlite_close`, `sqlite_exec`,
+## `sqlite_query`, `sqlite_last_insert_id`, `sqlite_changes`): an SQLite
+## error raises `sqlite_query: <SQLite's message>`, a closed or unknown
+## handle `...: not an open database handle`, and a handle that is not an
+## int `...: expected a database handle, got <type>`. `exec` and `query`
+## run on the scheduler thread without yielding, so they stall every
+## process while they run: keep queries short and indexed. A handle is
+## not closed when its process dies: close it on every path.
 
 # open and close run on the I/O thread pool; exec, query, last_id and
 # changes run inline on the scheduler thread without yielding. Handles are
@@ -19,7 +23,8 @@
 # never reused after a close.
 
 ## Opens (creating if needed) the database file at `path` and returns its
-## handle. ":memory:" opens a private in-memory database.
+## handle. ":memory:" opens a private in-memory database. Foreign keys are
+## enforced, and a file database uses WAL journaling.
 ##
 ## Raises if the file can't be opened. Blocks only the calling process
 ## while the file opens.
@@ -36,7 +41,8 @@ end
 
 ## Runs `sql`, which takes no parameters, and returns nil. Several
 ## statements separated by `;` all run; rows they return are discarded.
-## Use it for DDL, PRAGMA and migration scripts.
+## Use it for DDL, PRAGMA and migration scripts. A `?` in `sql` is not
+## an error: it binds NULL. Use `query` to pass parameters.
 ##
 ##   sqlite.exec(db, "CREATE TABLE a(x); CREATE TABLE b(y)")
 fn exec(db, sql)
@@ -46,19 +52,21 @@ end
 ## Runs one statement with its `?` placeholders bound, in order, from the
 ## array `params`, and returns its rows: an array of records keyed by
 ## column name (an empty table when there are none, as for INSERT, UPDATE
-## and DELETE).
+## and DELETE). `?N` takes the Nth param, and each `:name` the next one
+## in order of first use. `params` may be nil (no params).
 ##
 ## Params may be nil, bools (stored as 1 and 0), ints, floats or strings.
-## Columns come back as ints, floats, strings or nil. A string with a NUL
-## byte comes back cut at the first NUL. When two columns share a name the
-## last one wins; name them with `AS`. Only the first statement in `sql`
+## Columns come back as ints, floats, strings or nil. A string param is
+## stored only up to its first NUL byte; a BLOB column comes back with
+## every byte. When two columns share a name the last one wins; name them
+## with `AS`. Only the first statement in `sql`
 ## runs: text after it is ignored, even if it is not valid SQL.
 ##
 ##   sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [1])
 ##   # [{id: 1, text: "hi"}]
 ##
-## Raises if the number of params differs from the number of
-## placeholders, or a param is of another type.
+## Raises if `params` is not a table, if the number of params differs
+## from the number of placeholders, or if a param is of another type.
 fn query(db, sql, params = [])
   sqlite_query(db, sql, params)
 end

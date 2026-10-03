@@ -7,12 +7,19 @@
 ##   end
 ##   http.serve(app, {port: 8080})    # blocks; or http.start, later http.stop
 ##
-## A handler gets a request table {method, path, params, query, headers,
-## body, cookies} and returns a response table {status, headers, body};
-## the builders below make one. `req.headers` names are lowercase. A
-## handler that raises, or returns something that isn't a valid response
-## (see `response`), gets a 500 and its error and stack go to stderr; the
-## server keeps running. A request no route matches gets a 404.
+## A handler gets a request table and returns a response table {status,
+## headers, body}; the builders below make one. In the request:
+## `method` ("HEAD" when a HEAD runs a GET route); `path`, raw (not
+## percent-decoded) and without the query string; `query`, the query
+## string as by `url.parse_query` ({} when none); `params`, decoded (see
+## `router`); `headers`, with lowercase names; `cookies`, names to raw
+## values (decode with `url.decode`), {} when none; `body`, "" when none.
+##
+## A handler that raises or returns an invalid response (see `response`)
+## gets a 500, its error and stack go to stderr, and the server keeps
+## running. An unmatched request gets a 404, a malformed one a 400, a
+## too-big body a 413; each has its status text as a plain-text body
+## ("Not Found").
 ##
 ## Each connection runs in its own process, so handlers run in parallel,
 ## and module-level state a handler changes is that connection's copy:
@@ -167,6 +174,10 @@ end
 ##
 ##   http.json_response({id: 7, tags: ["a"]})    # body {"id":7,"tags":["a"]}
 ##
+## For another status, build it with `response`:
+##
+##   http.response(201, {"Content-Type": "application/json; charset=utf-8"}, json.encode(data))
+##
 ## Raises what `json.encode` raises for data it can't encode (a fn, for
 ## one); in a handler that is a 500.
 fn json_response(data)
@@ -285,11 +296,11 @@ end
 ##   http.set_cookie(http.ok("hi"), "sid", token, {max_age: 3600})
 ##   # Set-Cookie: sid=<token>; Path=/; Max-Age=3600; HttpOnly; SameSite=Lax
 ##
-## Raises `http.set_cookie: invalid cookie value "..." (...)` when the
-## name, value, `path` or `same_site` holds `;`, `,`, whitespace or a
-## control byte, or the name is empty or has `=` (encode arbitrary data
-## first, e.g. `url.encode(v)`); also when `max_age` or `expires` isn't an
-## int.
+## Raises `http.set_cookie: invalid cookie <name|value|path|same_site>
+## "..." (...)` when one of those holds `;`, `,`, whitespace or a control
+## byte, or the name is empty or has `=` (encode arbitrary data first with
+## `url.encode`; a handler reads it back from `req.cookies` with
+## `url.decode`); also when `max_age` or `expires` isn't an int.
 fn set_cookie(resp, name, value, {path = "/", http_only = true, secure = false, same_site = "Lax", max_age = nil, expires = nil} = {})
   add_set_cookie(resp, cookie_line("http.set_cookie", name, value, path, http_only, secure, same_site, max_age, expires))
 end
@@ -329,6 +340,9 @@ end
 ##
 ##   http.parse_form("name=Ann+Lee&age=30")    # {name: "Ann Lee", age: "30"}
 ##   http.parse_form(req.body)
+##
+## Raises `url.parse_query: s must be a string, got <type>` for a
+## non-string `body`.
 fn parse_form(body)
   url.parse_query(body)
 end
@@ -341,7 +355,8 @@ end
 ##   http.html_escape("<b>\"Tom\" & 'Jerry'</b>")
 ##   # "&lt;b&gt;&quot;Tom&quot; &amp; &#x27;Jerry&#x27;&lt;/b&gt;"
 ##
-## Raises when `s` isn't a string (convert numbers with "{n}").
+## Raises `str_replace: all arguments must be strings, ...` when `s`
+## isn't a string (convert numbers with "{n}").
 fn html_escape(s)
   let out = str_replace(s, "&", "&amp;")
   out = str_replace(out, "<", "&lt;")
@@ -423,11 +438,14 @@ end
 ##   app.static(url_prefix, dir)   # GET files under dir
 ##   app.match(method, path)       # {handler, params} or nil
 ##
-## A pattern segment starting with `:` matches any one segment and puts it,
-## URL-decoded, in `req.params`; other segments match literally. The first
-## matching route registered wins. A HEAD request runs the GET route and
-## gets its headers without the body. An unmatched method gets a 404 (no
-## 405).
+## A pattern segment starting with `:` matches any one segment, also an
+## empty one (`/users/` matches `/users/:id` with id ""), and puts it,
+## URL-decoded, in `req.params`; other segments match literally. Trailing
+## slashes are not normalized: `/users/42/` doesn't match `/users/:id`.
+## The first matching route registered wins. A HEAD request runs the GET
+## route and gets its headers without the body. An unmatched method gets
+## a 404 (no 405). `match` takes a path without its query string and
+## doesn't fall back from HEAD to GET.
 ##
 ##   app.get("/users/:id") do |req|
 ##     http.ok("user {req.params.id}")    # GET /users/42 -> "user 42"
@@ -437,9 +455,12 @@ end
 ## Content-Type from `std/mime`. The prefix matches whole segments
 ## (`/static` serves `/static/a.css`, not `/staticx`), the prefix itself
 ## gives `index.html`, `..` can't leave `dir`, and a directory or missing
-## file is a 404. Routes are tried before static dirs. Each request reads
-## the whole file, so changes show at once; don't serve huge files this
-## way.
+## file is a 404. `dir` is resolved against the current directory on each
+## request, not the source file's; a missing `dir` is no error, its URLs
+## are 404s. The path is not percent-decoded before the lookup, so a file
+## whose name needs encoding (a space, say) can't be served. Routes are
+## tried before static dirs. Each request reads the whole file, so
+## changes show at once; don't serve huge files this way.
 fn router()
   let routes = []
   let static_routes = []
@@ -1647,13 +1668,15 @@ end
 ## Starts a server for `router_ref` without blocking and returns
 ## `{pid}`, the server process.
 ##
-## Options: `port` (default 8080), `host` (an IP address, default
-## "0.0.0.0"; "127.0.0.1" for local only), `max_body` (bytes, default
-## 8 MB; a bigger body gets 413), `idle_timeout_ms` (default 30000: the
-## longest wait for each read, also for the next request on a kept-alive
-## connection) and `request_timeout_ms` (default 30000: a request's head
-## and body must arrive within it). A timeout of nil means no limit; past
-## one, the connection is closed without a response.
+## Options: `port` (default 8080; not range-checked, so keep it in
+## 1..65535; 0 binds a free port but nothing tells you which), `host`
+## (an IP address, default "0.0.0.0"; "127.0.0.1" for local only),
+## `max_body` (bytes, default 8 MB; a bigger body gets 413),
+## `idle_timeout_ms` (default 30000: the longest wait for each read, also
+## for the next request on a kept-alive connection) and
+## `request_timeout_ms` (default 30000: a request's head and body must
+## arrive within it). A timeout of nil means no limit; past one, the
+## connection is closed without a response. Other keys are ignored.
 ##
 ##   let server = http.start(app, {port: 8080, host: "127.0.0.1"})
 ##   ...
@@ -1745,12 +1768,16 @@ end
 ## Starts a server like `start` (same options and errors, prefixed
 ## `http.serve: `) and blocks until it exits.
 ##
-## Returns nil when the server was stopped (`stop` or an exit signal
-## "shutdown"), and raises `http.serve: server died: <reason>` for any
-## other reason. The caller can't get the server's pid, so another process
-## stops it with an exit signal or by killing the caller: the server
-## watches the caller of `serve` and shuts down when it dies. Other
-## messages to the caller stay in its mailbox.
+## The caller can't get the server's pid, so `serve` doesn't return while
+## the server runs. To stop it, kill the process that called `serve` with
+## an exit signal (any reason but "normal"): that process dies, and the
+## server notices and shuts down. If that process traps exits, the signal
+## is only a message and the server keeps running. To stop a server and
+## carry on, use `start` and `stop` instead. Other messages to the caller
+## stay in its mailbox.
+##
+## Raises `http.serve: server died: <reason>` if the server dies on its
+## own.
 fn serve(router_ref, opts = {})
   let pid = launch("http.serve", router_ref, self(), opts).pid
   monitor(pid)

@@ -8,9 +8,10 @@
 ##
 ## The assert functions raise with `error()` on failure, with a message
 ## that starts `test.<fn>: `. `run` catches that per case. Cases are
-## module state, so they are per process: `run` runs only the cases the
-## calling process registered. Register cases at the top level (or from
-## main) and call `run` there.
+## module state, so they are per process: a spawned process starts with a
+## copy of the cases its parent had registered at the spawn, and cases it
+## registers stay in that process. Register cases at the top level (or
+## from main) and call `run` there.
 
 let cases = []
 
@@ -292,6 +293,9 @@ end
 ## case can check it. Raises if `body` returns normally.
 ##
 ##   let msg = test.assert_throws(fn() error("bad") end)    # "bad"
+##
+## An error raised with a non-string value comes back as pcall reports
+## it: `error({code: 1})` gives the string "error".
 fn assert_throws(body)
   let r = pcall body()
   if r.ok
@@ -302,7 +306,8 @@ end
 
 ## Runs every registered case, prints `PASS <name>` or
 ## `FAIL <name>: <error>` for each and then `<n> passed / <m> failed` on
-## stdout, and exits the program with status 1 if any case failed.
+## stdout, and exits the program with status 1 if any case failed (the
+## whole program, even when called from a spawned process).
 ## Otherwise it returns nil; the cases stay registered, so a second call
 ## runs them again.
 fn run()

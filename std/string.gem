@@ -194,7 +194,8 @@ end
 ##   string.join(["a", "b"], ", ")      # "a, b"
 ##   string.join(["a", 1, nil], "-")    # "a-1-nil"
 ##
-## Raises if `arr` is not an array.
+## Raises if `arr` is not an array: a table whose keys are exactly
+## 0 .. n-1, added in that order (as `push` and `[...]` literals do).
 fn join(arr, delim)
   if type(arr) != "table"
     error("string.join: arr must be an array, got {type(arr)}")

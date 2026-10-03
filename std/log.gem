@@ -6,7 +6,9 @@
 ##   log.error("db: {r.error}")
 ##
 ## Each line is a UTC timestamp, the level in capitals, and the message
-## converted as string interpolation does. The level is module state, so
+## converted as string interpolation does (a buffer shows as
+## `<buffer:N>`; pass `to_string(buf)`). A `\n` in the message starts a
+## line with no timestamp or level. The level is module state, so
 ## it is per process: a spawned process starts with the level its parent
 ## had at the spawn. Set it in main before spawning (before
 ## `http.start`), or in the process that logs.

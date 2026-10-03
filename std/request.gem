@@ -559,14 +559,19 @@ end
 ## `raw_url` and returns `{status, headers, body}`.
 ##
 ## `raw_url` is `http://host[:port][/path][?query][#fragment]`: port 80
-## by default, a missing path is `/`, the fragment is not sent.
+## by default, a missing path is `/`, the fragment is not sent. It is
+## sent as given: a space raises (`invalid character (byte 32) in URL`),
+## so encode path segments and query values with `url.encode` (or build
+## the query with `url.build_query`).
 ##
-## `opts`, all optional (nil means the default, except for `timeout_ms`):
+## `opts` must be a table (anything else, nil included, raises an
+## unprefixed `field access on non-table` error). Its keys, all optional
+## (nil means the default, except for `timeout_ms`):
 ## - `body`: a string, default "". A non-empty one is sent with a
 ##   Content-Length.
-## - `headers`: a table of name → value, sent as given. `Host`,
-##   `Connection: close` and `Content-Length` are added unless `headers`
-##   sets them (in any case).
+## - `headers`: a table of name → value; a value is sent as its text
+##   (`"{value}"`), so an int is fine. `Host`, `Connection: close` and
+##   `Content-Length` are added unless `headers` sets them (in any case).
 ## - `timeout_ms`: an int > 0, default 30000, or nil for no limit. One
 ##   deadline for the whole call, not per read. Connecting and sending
 ##   the request are not cut short by it, only waiting for the response.

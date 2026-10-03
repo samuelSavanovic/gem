@@ -10,9 +10,11 @@
 ## takes `strftime` specifiers (`%Y-%m-%d %H:%M:%S`). A float time or a
 ## non-string `fmt` raises `format_time: expected (int, string), ...`.
 ## For measuring durations use the `time_ms()` builtin, which a change
-## of the system clock can't move.
+## of the system clock can't move. Where `ms` defaults to now, passing
+## `nil` raises the same `format_time:` error: leave `ms` out instead.
 
-## Returns the current wall-clock time in epoch milliseconds.
+## Returns the current wall-clock time in epoch milliseconds, the same as
+## the `epoch_ms()` builtin.
 fn now()
   epoch_ms()
 end

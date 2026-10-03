@@ -10,9 +10,18 @@
 ##   gen_server.call(counter, "get")    # 1
 ##
 ## `call` and `cast` take the `{pid}` handle `start` returns, a bare pid or
-## a registered name. Errors start with `gen_server.<fn>: `. Callbacks run
-## in the server process; one that raises, or returns the wrong shape,
-## kills the server (SPEC.md lists every callback and result).
+## a registered name; a name nobody holds (also once its server has died)
+## raises `gen_server.<fn>: no process registered as "<name>"`. Errors start
+## with `gen_server.<fn>: `. Callbacks run in the server process. One that
+## raises kills the server; so does a result of the wrong shape, with
+## `gen_server: <callback> returned ..., expected ...`, which a pending
+## `call` raises as `gen_server.call: server exited: gen_server: ...`.
+## Extra keys in a result are ignored (`{stop: ...}` does nothing).
+##
+## There is no stop: end a server with `kill(h.pid, reason)`, or run it
+## under a supervisor and stop that. `start` takes no name: to call by
+## name, `register(name, h.pid)`; under a supervisor, do it in the child's
+## `start` fn so a restart registers the new server.
 
 # The pid for a `{pid}` handle, a bare pid or a registered name.
 fn target_pid(target, caller)
@@ -154,8 +163,10 @@ end
 ## `handle_call(msg, from, state)` returns `{reply, state}`, or
 ## `{noreply: state}` to answer later with `reply`; `handle_cast(msg,
 ## state)` and `handle_info(msg, state)` return `{state}`. Any result may
-## add `timeout: ms`: after that long with no message, `handle_info` gets
-## `"timeout"`. `handle_info` gets every message that isn't a call or a
+## add `timeout: ms`: if no message comes within that long, `handle_info`
+## gets `"timeout"`. It covers only the next wait: return it from every
+## callback to keep it. A plain `"timeout"` message looks the same to
+## `handle_info`. `handle_info` gets every message that isn't a call or a
 ## cast, such as the `DOWN` of a process the server monitors.
 ##
 ## Raises, and starts nothing, if `module` is not a table or a callback is
@@ -232,7 +243,7 @@ end
 ## `gen_server.call: timeout`. Raises `gen_server.call: server exited:
 ## <reason>` at once when the server is dead (reason `"noproc"`) or dies
 ## before replying, and raises when `target` is not a handle, pid or
-## registered name.
+## registered name (see the header for a name nobody holds).
 ##
 ##   gen_server.call(counter, "get")          # 1
 ##   gen_server.call("counter", "get", nil)   # by name, no timeout
@@ -274,9 +285,8 @@ end
 ##
 ##   gen_server.cast(counter, "incr")    # nil
 ##
-## A cast through a pid or handle to a dead server is dropped silently; a
-## cast through a registered name raises `gen_server.cast: no process
-## registered as "<name>"` once the server has died.
+## A cast through a pid or handle to a dead server is dropped silently;
+## through a registered name it raises, as the header says.
 fn cast(target, msg)
   send(target_pid(target, "gen_server.cast"), {tag: "_gs_cast", msg: msg})
   nil

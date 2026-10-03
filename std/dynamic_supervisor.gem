@@ -7,7 +7,9 @@
 ##   dynamic_supervisor.terminate_child(ds, pid)    # true
 ##
 ## A supervisor is named by the `{pid}` handle `start` returns, a bare pid
-## or a registered name. Every call but `start` blocks the caller, and
+## or a registered name; a name nobody holds, also that of a supervisor
+## that has stopped, raises `dynamic_supervisor.<fn>: no process
+## registered as "<name>"`. Every call but `start` blocks the caller, and
 ## `start_child`, `terminate_child` and `which_children` raise
 ## `dynamic_supervisor.<fn>: supervisor exited: <reason>` at once when it
 ## is dead or dies first, and `...: timeout` after `timeout_ms` (nil: no
@@ -284,12 +286,14 @@ end
 ## `{pid}`.
 ##
 ## `opts.child` is the template `{start, restart}`: `start(args)` spawns a
-## child and returns its pid or `{pid}` handle; `restart` is
+## child and returns its pid or `{pid}` handle (not a registered name, as
+## `supervisor` allows); `restart` is
 ## `"permanent"` (the default: always restart), `"transient"` (restart
 ## unless it exits with `"normal"` or `"shutdown"`) or `"temporary"`
 ## (never). The supervisor gives up and exits when more than
 ## `opts.max_restarts` (default 3) restarts fall within `opts.max_seconds`
-## ms (default 5000). `opts.name` registers it.
+## MILLISECONDS, despite the name (default 5000, i.e. 5 s). `opts.name`
+## registers it.
 ##
 ## Raises, and starts nothing, for bad options or a name that is taken.
 ##
@@ -437,7 +441,9 @@ end
 ## `args` is any value; a restart passes the same `args` again. Raises
 ## `dynamic_supervisor.start_child: <error>` when `start` raises or
 ## returns something other than a pid or handle; the supervisor keeps
-## running.
+## running. That holds for this first start only: if `start` raises when
+## the supervisor restarts the child, the supervisor exits with that
+## error and kills its other children.
 fn start_child(target, args, timeout_ms = 5000)
   request(target, {tag: "_dsup_start_child", args: args}, "dynamic_supervisor.start_child", timeout_ms)
 end
@@ -462,11 +468,14 @@ fn which_children(target, timeout_ms = 5000)
   request(target, {tag: "_dsup_which_children"}, "dynamic_supervisor.which_children", timeout_ms)
 end
 
-## Stops the supervisor and waits until it and its children have exited,
-## then returns nil (also for one that was already gone).
+## Stops the supervisor, waits until it has exited, and returns nil (also
+## for one already gone, given by pid or handle; by name see the header).
 ##
-## Raises `dynamic_supervisor.stop: the supervisor did not stop within
-## <ms> ms` after `timeout_ms` (nil: no limit).
+## The supervisor gives its children up to 4 s in all to exit, then exits
+## anyway: a child that traps exits and ignores the `EXIT` is still
+## running when `stop` returns. Raises `dynamic_supervisor.stop: the
+## supervisor did not stop within <ms> ms` after `timeout_ms` (nil: no
+## limit).
 ##
 ## Sends the exit signal `"shutdown"`. Takes the supervisor's `DOWN`,
 ## unless the caller monitors it itself: that monitor still gets it.
