@@ -4,3 +4,6 @@
 load "std/string" (upper, nosuch)
 load "./modules/private_fn" (pub, priv)
 print(upper("a"), nosuch, pub(), priv())
+
+# expect: module `private_fn` has no export `priv`
+# expect: module `string` has no export `nosuch`

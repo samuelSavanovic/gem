@@ -17,3 +17,5 @@ while false
 end
 
 f()
+
+# expect: extern declaration must be at the top level

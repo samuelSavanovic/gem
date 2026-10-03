@@ -97,7 +97,7 @@ GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_chr_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 1 || args[0].type != VAL_INT) { char buf[128]; snprintf(buf, sizeof(buf), "chr: expected int argument, got %s", gem_type_str(args[0])); gem_error(buf); }
+    if (argc < 1 || args[0].type != VAL_INT) { char buf[128]; snprintf(buf, sizeof(buf), "chr: expected int argument, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
     char buf[2];
     buf[0] = (char)(args[0].ival & 0xFF);
     buf[1] = '\0';

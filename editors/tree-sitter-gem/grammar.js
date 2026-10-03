@@ -20,6 +20,7 @@ module.exports = grammar({
     $._binary_minus,
     $._block_brace_open,
     $._pcall_prefix,
+    $._load_as,
     $._triple_string_content,
     $._error_sentinel,
   ],
@@ -117,12 +118,14 @@ module.exports = grammar({
     type: $ => choice('Int', 'Float', 'String', 'Bool', 'Nil', 'Ptr', 'Table', 'Fn', 'Bytes'),
 
     // load "path" | load "path" as name | load "path" (name, ...)
+    // The `as` and the `(` must be on the `load` line, as in
+    // compiler/parser.gem: on the next line they start a new statement.
     load_statement: $ => prec.right(seq(
       'load',
       field('path', $._string),
       optional(choice(
-        seq('as', field('alias', $.identifier)),
-        seq('(', sep1(field('name', $.identifier), ','), ')'),
+        seq(alias($._load_as, 'as'), field('alias', $.identifier)),
+        seq(alias($._call_open, '('), sep1(field('name', $.identifier), ','), ')'),
       )),
     )),
 

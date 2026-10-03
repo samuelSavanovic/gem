@@ -22,7 +22,7 @@ T=$(mktemp -d /tmp/gem_trace_src.XXXXXX)
 trap 'rm -rf "$T"' EXIT
 
 mkdir -p "$T/proj/src" "$T/proj/lib" "$T/proj/build" "$T/proj/src/deep/er" \
-         "$T/elsewhere" "$T/decoy/lib" "$T/flat"
+         "$T/elsewhere" "$T/decoy/lib" "$T/flat" "$T/proj/src/near/lib"
 touch "$T/proj/gem.toml"
 cat > "$T/proj/lib/util.gem" <<'GEM'
 # helper module
@@ -48,6 +48,9 @@ end
 f(3)
 GEM
 echo "# one line" > "$T/decoy/lib/util.gem"
+# A short same-name file found first (in the cwd), the real one later (in a
+# cwd ancestor): the short one must be skipped.
+echo "# one line" > "$T/proj/src/near/lib/util.gem"
 
 (cd "$T/proj" && "$GEM" src/app.gem -o build/app) || { echo "FAIL: compile"; exit 1; }
 cp "$T/proj/build/app" "$T/elsewhere/app"
@@ -83,7 +86,7 @@ check "from outside (exe dir parent)" yes "$SRC" "$T"               "$T/proj/bui
 check "from /"                        yes "$SRC" /                  "$T/proj/build/app"
 check "copied binary, cwd ancestor"   yes "$SRC" "$T/proj/src/deep/er" "$T/elsewhere/app"
 check "copied binary, no source"      no  "$SRC" "$T"               "$T/elsewhere/app"
-check "short decoy is skipped"        no  "$SRC" "$T/decoy"         "$T/elsewhere/app"
+check "short decoy is skipped"        yes "$SRC" "$T/proj/src/near" "$T/elsewhere/app"
 check "GEM_SOURCE_ROOT"               yes "$SRC" /  env GEM_SOURCE_ROOT="$T/proj" "$T/elsewhere/app"
 check "GEM_SOURCE_ROOT wins over decoy" yes "$SRC" "$T/decoy" env GEM_SOURCE_ROOT="$T/proj" "$T/elsewhere/app"
 check "absolute path, from /"         yes "  --> $T/flat/app.gem:2" / "$T/flat/app"

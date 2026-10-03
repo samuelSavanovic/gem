@@ -1526,6 +1526,9 @@ fn make_parser(tokens, source, file, sink)
 
     # load "path" [as name | (name, ...)]
     if t.type == "load"
+      if stmt_depth > 1
+        report(t.line, t.col, 4, "`load` must be at the top level", "move it out of the enclosing block or function")
+      end
       let at_top = pos == top_stmt_pos
       advance()
       let path_tok = expect("STRING")
@@ -1579,6 +1582,9 @@ fn make_parser(tokens, source, file, sink)
 
     # export name, name, ...
     if t.type == "export"
+      if stmt_depth > 1
+        report(t.line, t.col, 6, "`export` must be at the top level", "move it out of the enclosing block or function")
+      end
       advance()
       # name_pos[i]: where names[i] is written, for errors about a name
       # the module doesn't define.

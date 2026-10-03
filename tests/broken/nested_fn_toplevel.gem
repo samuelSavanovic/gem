@@ -45,3 +45,6 @@ spawn do
 end
 
 top()
+
+# expect: named fn inside a block is not supported
+# expect: named fn inside function body is not supported

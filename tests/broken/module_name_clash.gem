@@ -5,3 +5,5 @@ load "std/string"
 load "./modules/string"
 load "./modules/string" as my_string
 print(string.upper("a"), my_string.upper2("b"))
+
+# expect: module name `string` is already used by `load "std/string"`

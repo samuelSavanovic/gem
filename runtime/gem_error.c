@@ -69,10 +69,11 @@ void gem_print_stack_trace(void) {
  *   3. <path> under the executable's directory and each of its ancestors
  *      (a binary built into <project>/build/ or <project>/bin/);
  *   4. <path> under each ancestor of the cwd.
- * An absolute path is only opened as is. A candidate too short to have the
- * line is skipped, so a different file of the same name is not printed.
- * Nothing found: no source line, as before. Buffers are static (this runs
- * once per uncaught error, maybe on a nearly exhausted process stack). */
+ * An absolute path is only opened as is. The only check on a candidate is
+ * its length: one too short to have the line is skipped, but a longer,
+ * unrelated file at the same relative path is printed. Nothing found: no
+ * source line. Buffers are static (this runs once per uncaught error, maybe
+ * on a nearly exhausted process stack). */
 
 #include <unistd.h>
 #include <limits.h>

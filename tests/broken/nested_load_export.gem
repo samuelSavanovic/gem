@@ -1,0 +1,25 @@
+# load and export are top-level only: nested in a top-level block or a fn
+# body each one is an error at the keyword (four here).
+# expect: `load` must be at the top level
+# expect: `export` must be at the top level
+
+load "std/string"
+
+if true
+  load "std/string"
+end
+
+fn f()
+  load "./modules/clean"
+  1
+end
+
+while false
+  export f
+end
+
+match 1
+when 1 then export f
+end
+
+print(f())

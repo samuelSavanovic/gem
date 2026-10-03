@@ -17,7 +17,7 @@ if [ ! -x "$GEM" ]; then
   echo "FAIL: $GEM not built — run 'make build' first" >&2
   exit 2
 fi
-GEM="$(pwd)/$GEM"
+case $GEM in /*) ;; *) GEM="$(pwd)/$GEM" ;; esac
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT

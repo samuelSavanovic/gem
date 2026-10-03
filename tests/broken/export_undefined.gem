@@ -4,3 +4,5 @@
 load "./modules/export_undefined"
 load "./modules/export_undefined" (b)
 print(export_undefined.a(), export_undefined.b, b)
+
+# expect: exports `b`, which it doesn't define

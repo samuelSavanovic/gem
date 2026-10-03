@@ -1,7 +1,14 @@
 # A load of a file that doesn't exist is a compile error at each such load:
-# relative, project-root and std forms, and a directory, one error each.
+# relative, project-root and std forms, a directory, and a module path that
+# is itself a directory, one error each.
+# expect: cannot find module `./modules/nope`
+# expect: cannot find module `modules/also_nope`
+# expect: cannot find module `std/nope`
+# expect: is a directory; load a module inside it
+# expect: cannot load `./modules/a_dir`
 load "./modules/nope"
 load "modules/also_nope"
 load "std/nope"
 load "./modules"
+load "./modules/a_dir"
 print(1)

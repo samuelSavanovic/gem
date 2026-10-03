@@ -3,3 +3,5 @@
 load "./modules/loads_missing"
 load "./modules/loads_missing" (f)
 print(loads_missing.f())
+
+# expect: cannot find module `./nope`

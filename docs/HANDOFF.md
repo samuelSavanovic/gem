@@ -10,7 +10,8 @@ Notes for the next session. Delete this file once its work is done.
    recipe" and "The fixes" below are kept as a record.
 2. **Done.** Known-bugs fixes: PR #29, squash-merged into `main` as ccb251d. Most of
    the list below moved to `docs/KNOWN_BUGS.md` and was fixed there.
-3. **Done once its PR merges: rewrite `docs/BEST_PRACTICES.md`.** The
+3. **Done.** Rewrite of `docs/BEST_PRACTICES.md`: PR #30, squash-merged into
+   `main` as e76042b. The
    review rounds found ~25 new bugs, now in `docs/KNOWN_BUGS.md`.
    Steps, kept as a record:
    1. Rebase `std-modernize` onto `origin/main` (the maintainer asked for a
@@ -212,8 +213,8 @@ return.
 
 | Branch | What |
 |---|---|
-| `main` | includes #26, #27, #28 (compiler fixes; 8b482c2) and #29 (known-bugs fixes, `docs/KNOWN_BUGS.md`; ccb251d) |
-| `std-modernize` | rebased onto `main` (ccb251d); the rewritten `docs/BEST_PRACTICES.md`, the SPEC/CHEATSHEET/README fixes and new `docs/KNOWN_BUGS.md` entries from the doc review, the CLAUDE.md attribution rule and BEST_PRACTICES links, this file. Goes to `main` as the step 3 PR. |
+| `main` | includes #26, #27, #28 (compiler fixes; 8b482c2), #29 (known-bugs fixes, `docs/KNOWN_BUGS.md`; ccb251d) and #30 (the `docs/BEST_PRACTICES.md` rewrite; e76042b) |
+| `ccr-f506c768-naje0w` | step 4, the compiler and runtime fix pass: PR #31 |
 
 ## For the doc session (step 2), so it isn't lost
 

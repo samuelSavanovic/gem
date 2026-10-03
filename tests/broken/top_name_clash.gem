@@ -32,3 +32,8 @@ if true
   let twice = 3
   print(twice)
 end
+
+# expect: (a `load`)
+# expect: (a `let`)
+# expect: (an `extern fn`)
+# expect: (a `fn`)

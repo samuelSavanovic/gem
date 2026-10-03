@@ -815,6 +815,15 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
         report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
         continue
       end
+      # A missing file is reported as missing, before any check that
+      # assumes it is a module (its namespace name).
+      if cached == nil
+        let problem = load_target_problem(stmt.path, full_path, show_path)
+        if problem != nil
+          sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), problem.msg, problem.hint)
+          continue
+        end
+      end
       if not check_namespace_name(stmt, full_path, ns_seen, sources_by_file, sink)
         continue
       end
@@ -825,12 +834,6 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
             count += 1
           end
         end
-        continue
-      end
-
-      let problem = load_target_problem(stmt.path, full_path, show_path)
-      if problem != nil
-        sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), problem.msg, problem.hint)
         continue
       end
 

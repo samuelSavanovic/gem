@@ -12,3 +12,5 @@ fn g()
 end
 
 print("unreachable")
+
+# expect: needs at least one `when` arm or an `after` clause

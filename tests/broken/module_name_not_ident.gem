@@ -4,3 +4,5 @@ load "./modules/bad-name"
 load "./modules/bad-name" as bad_name
 load "./modules/bad-name" (f)
 print(bad_name.f(), f())
+
+# expect: module file name `bad-name` is not an identifier

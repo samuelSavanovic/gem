@@ -12,6 +12,10 @@
 // (`f(x) { x + 1 }`) unless it reads as a table literal: `{}` or `{name:`.
 // A `{ |` block comes from the internal lexer as one `{|` token.
 //
+// A `load`'s import list `(names)` uses the call `(`, and its `as name`
+// uses LOAD_AS, an `as` on the `load` line: compiler/parser.gem reads
+// both only there.
+//
 // It also lexes:
 //   - the `pcall` of the `pcall <expr>` form (an identifier `pcall` not
 //     followed by `(` or `do`), and
@@ -28,6 +32,7 @@ enum TokenType {
   BINARY_MINUS,
   BLOCK_BRACE_OPEN,
   PCALL_PREFIX,
+  LOAD_AS,
   TRIPLE_STRING_CONTENT,
   ERROR_SENTINEL,
 };
@@ -101,7 +106,7 @@ bool tree_sitter_gem_external_scanner_scan(void *payload, TSLexer *lexer, const 
 
   bool want_postfix = valid_symbols[CALL_OPEN] || valid_symbols[SUBSCRIPT_OPEN] ||
                       valid_symbols[BINARY_MINUS] || valid_symbols[BLOCK_BRACE_OPEN];
-  if (!want_postfix && !valid_symbols[PCALL_PREFIX]) return false;
+  if (!want_postfix && !valid_symbols[PCALL_PREFIX] && !valid_symbols[LOAD_AS]) return false;
 
   bool separated = false;
   for (;;) {
@@ -149,6 +154,13 @@ bool tree_sitter_gem_external_scanner_scan(void *payload, TSLexer *lexer, const 
       lexer->result_symbol = BLOCK_BRACE_OPEN;
       return true;
     }
+  }
+
+  if (!separated && valid_symbols[LOAD_AS] && lexer->lookahead == 'a') {
+    if (!scan_word(lexer, "as")) return false;
+    lexer->mark_end(lexer);
+    lexer->result_symbol = LOAD_AS;
+    return true;
   }
 
   // `pcall <expr>`: `pcall` followed, on the same line, by anything but

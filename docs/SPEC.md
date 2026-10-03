@@ -1002,7 +1002,7 @@ Stack trace:
 
 A stack frame names its function as you write it: `handle` for `fn handle`, `anonymous fn` for a `fn` literal, and `counter.bump` for the top-level `fn bump` of a loaded module `counter.gem` (whatever alias it is loaded under). File paths in traces, compile errors and notes are relative to the project root (the directory holding `gem.toml`); without a `gem.toml`, a file in or below the entry file's directory is shown under that directory as you typed it on the command line (`gem app.gem` shows `lib/util.gem`, `gem /src/app.gem` shows `/src/lib/util.gem`). Other files keep their full path.
 
-The `-->` source line of a runtime error is read from the source file when the error is printed. Since trace paths are relative, a program run from another directory looks for the file, in order: under `$GEM_SOURCE_ROOT` if that environment variable is set, from the current directory, under the directory of the executable and each of its ancestors (so a binary built into `<project>/build/` or `<project>/bin/` finds `<project>/src/app.gem`), then under each ancestor of the current directory. The first file found that has the line is shown; a file too short to have it is skipped. If no source is found (the program was deployed without it), the trace is printed without the source line. A full path is opened as is.
+The `-->` source line of a runtime error is read from the source file when the error is printed. Since trace paths are relative, a program run from another directory looks for the file, in order: under `$GEM_SOURCE_ROOT` if that environment variable is set, from the current directory, under the directory of the executable and each of its ancestors (so a binary built into `<project>/build/` or `<project>/bin/` finds `<project>/src/app.gem`), then under each ancestor of the current directory. The first file found that has the line is shown. A file too short to have the line is skipped, but nothing else is checked, so an unrelated longer file at the same relative path is shown. If no source is found (the program was deployed without it), the trace is printed without the source line. A full path is opened as is.
 
 **Compile-time error format**: the compiler produces Rust-style diagnostics to stderr with source context, caret highlighting, and optional hints:
 
@@ -1285,7 +1285,7 @@ All builtins are first-class values — they can be stored in variables and pass
 
 ## Module System
 
-**Load statement** — `load` brings another file's exported definitions into scope. Every loaded file must have an `export` statement declaring its public API. The compiler keeps a table of already-loaded file paths; re-importing a module skips re-parsing but still creates the requested import bindings.
+**Load statement** — `load` brings another file's exported definitions into scope. Every loaded file must have an `export` statement declaring its public API. The compiler keeps a table of already-loaded file paths; re-importing a module skips re-parsing but still creates the requested import bindings. `load` and `export` are statements of a file's top-level code only; one inside a function body or a top-level block (`if`, `while`, `for`, `match`, `receive`, `do`) is a compile error.
 
 ```
 load "compiler/parser"

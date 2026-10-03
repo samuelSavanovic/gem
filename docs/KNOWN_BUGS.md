@@ -61,22 +61,45 @@ function body is not supported" at column 1 instead of the `fn` token.
 `print(ok.priv())`, where module `ok` doesn't export `priv`, reports "has
 no export" at column 1 with the span of `print`, not at `priv`.
 
+### A fn named `<f>_body` clashes with a mutual-recursion helper
+
+```gem
+fn f(n)
+  if n == 0 then return 0 end
+  g(n - 1)
+end
+fn g(n)
+  f(n)
+end
+fn f_body() 1 end
+print(f(3), f_body())
+```
+
+fails in cc with `redefinition of 'gem_fn_f_body'`: each fn of a mutual
+tail-call cycle gets a C helper `gem_fn_<name>_body` (`scc_wrapper_for` in
+compiler/codegen.gem), which a user fn named `<name>_body` also gets as
+its symbol. Modules hit it too: `a` with `f`↔`g` next to a module `a_f`
+with `fn body` (`module_mangle` in compiler/main.gem doesn't account for
+the `_body` suffix). Give the helper a name no user fn can have.
+
 ## Runtime
 
-### `INT64_MIN / -1` kills the program
+### `INT64_MIN / -1` kills the program on x86-64
 
 ```gem
 let m = -9223372036854775807 - 1
 let d = -1
-print(m / d)      # Floating point exception, exit 136
+print(m / d)      # x86-64: Floating point exception, exit 136
 ```
 
-`%` does the same. The constant folder hits it too: compiling
-`print(-9223372036854775808 / -1)` crashes the compiler (exit 136).
-`gem_div`/`gem_mod` in runtime/gem_ops.c and `try_fold_binop` in
-compiler/fold.gem should raise (or wrap) instead. Relatedly, int `+`,
-`-` and `*` overflow is signed-overflow undefined behaviour in C (no
-`-fwrapv`); it wraps in practice.
+`%` does the same. The constant folder hits it too: on x86-64, compiling
+`print(-9223372036854775808 / -1)` crashes the compiler (exit 136). On
+arm64 nothing traps (AArch64 `sdiv` doesn't): `/` gives `INT64_MIN` and
+`%` gives `0`. Either way it is undefined behaviour in C. `gem_div`/
+`gem_mod` in runtime/gem_ops.c and `try_fold_binop` in compiler/fold.gem
+should raise (or wrap) instead. Relatedly, int `+`, `-` and `*` overflow
+is signed-overflow undefined behaviour in C (no `-fwrapv`); it wraps in
+practice.
 
 ### A non-integer `after` timeout is taken as 0
 
@@ -130,6 +153,24 @@ print(sqlite_query(db, "SELECT count(*) AS n FROM t", []))   # [{n: 2}]: the 2nd
 Empty or comment-only SQL should return `[]`; `sqlite_exec` should raise
 on a statement with parameters; `sqlite_query` should run (or reject)
 the text after the first statement. runtime/gem_builtins_sqlite.c.
+
+### sqlite: named parameters bind by position; TEXT values stop at a NUL
+
+```gem
+let db = sqlite_open(":memory:")
+sqlite_exec(db, "CREATE TABLE t(a, b)")
+sqlite_query(db, "INSERT INTO t VALUES (:b, :a)", {a: 10, b: 20})
+print(sqlite_query(db, "SELECT a, b FROM t", []))  # [{a: 10, b: 20}]: :b got 10
+let r = sqlite_query(db, "SELECT ? AS s", ["x\0y"])
+print(len(r[0].s))                                 # 1, not 3
+```
+
+`sqlite_query` binds the params table's values in insertion order and
+ignores its keys, so `:name` placeholders get the wrong values; a record
+of params should bind by name (`sqlite3_bind_parameter_index`). TEXT
+columns are read back with `gem_string` (strlen), so a string with an
+embedded NUL is cut short; use `sqlite3_column_bytes`.
+runtime/gem_builtins_sqlite.c.
 
 ## Standard library
 

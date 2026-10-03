@@ -485,7 +485,12 @@
                     "type": "SEQ",
                     "members": [
                       {
-                        "type": "STRING",
+                        "type": "ALIAS",
+                        "content": {
+                          "type": "SYMBOL",
+                          "name": "_load_as"
+                        },
+                        "named": false,
                         "value": "as"
                       },
                       {
@@ -502,7 +507,12 @@
                     "type": "SEQ",
                     "members": [
                       {
-                        "type": "STRING",
+                        "type": "ALIAS",
+                        "content": {
+                          "type": "SYMBOL",
+                          "name": "_call_open"
+                        },
+                        "named": false,
                         "value": "("
                       },
                       {
@@ -2858,6 +2868,10 @@
     {
       "type": "SYMBOL",
       "name": "_pcall_prefix"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_load_as"
     },
     {
       "type": "SYMBOL",

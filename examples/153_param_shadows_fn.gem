@@ -7,6 +7,7 @@ fn step() "FN" end
 fn acc() "FN" end
 fn label(x) "fn label {x}" end
 
+extern include "stdlib.h"
 extern fn labs(n: Int) -> Int
 
 # Plain param read by a closure.
