@@ -248,7 +248,9 @@ fn cookie_line(caller, name, value, path, http_only, secure, same_site, max_age,
   end
   build_string() do |add|
     add(n, "=", v)
-    add("; Path=", path)
+    if path != nil
+      add("; Path=", path)
+    end
     if max_age != nil
       add("; Max-Age=", max_age)
     end
@@ -261,7 +263,9 @@ fn cookie_line(caller, name, value, path, http_only, secure, same_site, max_age,
     if secure
       add("; Secure")
     end
-    add("; SameSite=", same_site)
+    if same_site != nil
+      add("; SameSite=", same_site)
+    end
   end
 end
 

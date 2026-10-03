@@ -3868,6 +3868,10 @@ Stack trace:
 3: http.start: write_timeout_ms must be an int > 0 (milliseconds) or nil, got 0
 4: request.post: timed out after 300 ms waiting for http://127.0.0.1:18295/up
 4: within the deadline: true
+5: wrote all: true
+5: peer got all: true
+sid=v; HttpOnly
+sid=; Max-Age=0; HttpOnly; SameSite=Lax
 [{id: 1}]
 [{text: "there"}]
 [{text: "none"}]

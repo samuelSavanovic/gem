@@ -167,7 +167,7 @@ end
 #                nesting > 1000 raises; ints past 64 bits parse as floats)
 # std/http       response, ok, html, json_response, redirect, not_found, bad_request, server_error,
 #                set_cookie, delete_cookie, parse_form, html_escape, router, start, serve, stop
-#                (start opts {port, host, max_body = 8 MB, idle_timeout_ms, request_timeout_ms = 30000, nil: none};
+#                (start opts {port, host, max_body = 8 MB, idle_timeout_ms, request_timeout_ms, write_timeout_ms = 30000, nil: none};
 #                start returns {pid}; stop(server) closes every socket; HEAD uses the GET route;
 #                set_cookie raises on ; , whitespace or control bytes: url.encode values)
 # std/request    get, post, put, patch, delete, request  (http:// only; opts {body, headers, timeout_ms = 30000, nil: none};

@@ -301,10 +301,12 @@ GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
 
     if (gem_current_pid >= 0) {
         GemProcess *proc = &gem_proc_table[gem_current_pid];
-        if (has_timeout && timeout_ms > 0) {
-            proc->deadline_ms = gem_now_ms() + timeout_ms;
-            proc->timed_out = 0;
-        }
+        /* Start from a clean slate: a `receive ... after` can leave a
+           deadline or a timed_out flag behind, which must not cut this
+           write short. Only a deadline set here counts. */
+        int own_deadline = has_timeout && timeout_ms > 0;
+        proc->deadline_ms = own_deadline ? gem_now_ms() + timeout_ms : -1;
+        proc->timed_out = 0;
         size_t sent = 0;
         while (sent < total) {
             ssize_t n = write(fd, data + sent, total - sent);
@@ -316,10 +318,11 @@ GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 if (has_timeout && timeout_ms <= 0) break;
                 gem_io_yield(fd, 1);
-                if (proc->timed_out) {
+                if (own_deadline && proc->timed_out) {
                     proc->timed_out = 0;
                     break;
                 }
+                proc->timed_out = 0;
                 continue;
             }
             proc->deadline_ms = -1;

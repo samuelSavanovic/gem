@@ -13,6 +13,9 @@ its entry in the same change, along with any **(bug)** rule in
 ```gem
 fn h(x = x) x end
 print(h())             # prints whatever the C local held (nil here)
+```
+
+```gem
 fn k(a = b, b = 1) a end
 print(k())             # cc fails: 'gem_v_b' undeclared
 ```
@@ -27,6 +30,35 @@ compiler/codegen.gem (the `if (argc > i) ... else` prelude); the scope
 check belongs in `scope_shadowing_lets`.
 
 ## Runtime
+
+### A `receive ... after` that timed out makes the next `tcp_read` with no timeout return nil
+
+```gem
+let l = tcp_listen("127.0.0.1", 18299)
+spawn do
+  let c = tcp_accept(l)
+  sleep(300)
+  tcp_write(c, "late")
+  sleep(100)
+  tcp_close(c)
+end
+let fd = tcp_connect("127.0.0.1", 18299)
+receive
+when "never" then nil
+after 10 then nil
+end
+print(tcp_read(fd, 100))         # nil, not "late"
+```
+
+A `receive ... after` that times out leaves the process's `timed_out` flag
+set (and one that matched a message after yielding leaves `deadline_ms`
+set, which the scheduler can fire later). `gem_tcp_read_fn`
+(runtime/gem_builtins_tcp.c) checks `proc->timed_out` after every
+`gem_io_yield` even when the call set no deadline, so it reports a
+timeout that never happened. `tcp_write` clears both on entry and only
+honours a deadline it set itself; `tcp_read` should do the same, or
+`gem_selective_yield`'s callers should clear the flag once they have
+read it.
 
 ### `in` answers differently on a copy of a table whose string keys were deleted
 
