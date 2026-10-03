@@ -172,42 +172,57 @@ end
 print("b:", down_of(kids[1].pid))
 print("took 150..1000 ms:", took >= 150 and took < 1000)
 
-# `shutdown: nil` waits for the child however long it takes; a handle with
-# its own `shutdown` key sets the budget when the spec doesn't.
-let waited = supervisor.start({children: [
-  {id: "slow", start: fn() slow_cleanup("slow", 300) end, shutdown: nil},
-  {id: "handle", start: fn() {pid: stubborn(), shutdown: 30} end}
-]})
-supervisor.which_children(waited)
+# A handle with its own `shutdown` key sets the budget when the spec
+# doesn't (30 ms here, not 5000).
+let hb = supervisor.start({children: [{id: "handle", start: fn() {pid: stubborn(), shutdown: 30} end}]})
+supervisor.which_children(hb)
 settle()
 t0 = time_ms()
-supervisor.stop(waited)
-took = time_ms() - t0
-receive
-when {tag: "cleaned", name: n} then print("cleaned:", n)
-after 0 then print("slow was killed")
-end
-print("took 330..1500 ms:", took >= 330 and took < 1500)
-
-# Supervisor handles ask for no limit, so a nested supervisor finishes its
-# own ordered shutdown (here a grandchild that takes 200 ms) before the
-# parent goes on.
+supervisor.stop(hb)
+print("handle budget under 1000 ms:", time_ms() - t0 < 1000)
 let handle = supervisor.start({children: []})
-print("handle shutdown key:", has_key(handle, "shutdown"), handle.shutdown)
+print("supervisor handle:", has_key(handle, "shutdown"), handle.shutdown)
 supervisor.stop(handle)
-let outer = supervisor.start({children: [
-  {id: "inner", start: fn()
-    supervisor.start({children: [{id: "g", start: fn() slow_cleanup("g", 200) end, shutdown: nil}]})
-  end},
-  {id: "s", start: stubborn, shutdown: 20}
+
+# `nil` budgets wait past the 5000 ms default: an explicit `shutdown: nil`
+# in a spec, a nested supervisor (its handle's `shutdown: nil`) whose child
+# takes that long, and a dynamic template's `shutdown: nil`. Each child
+# cleans up in 5200 ms; the three stops run at once. A child killed at
+# 5000 ms would show DOWN "killed".
+print("-- nil budgets --")
+let CLEANUP_MS = 5200
+let s1 = supervisor.start({children: [
+  {id: "n1", start: fn() slow_cleanup("spec nil", CLEANUP_MS) end, shutdown: nil}
 ]})
-supervisor.which_children(supervisor.which_children(outer)[0].pid)
+let s2 = supervisor.start({children: [
+  {id: "inner", start: fn()
+    supervisor.start({children: [{id: "g", start: fn() slow_cleanup("nested", CLEANUP_MS) end, shutdown: 6000}]})
+  end}
+]})
+let s3 = dynamic_supervisor.start({child: {start: fn(a) slow_cleanup("template nil", CLEANUP_MS) end, shutdown: nil}})
+let n1 = supervisor.which_children(s1)[0].pid
+let inner = supervisor.which_children(s2)[0].pid
+supervisor.which_children(inner)
+let n3 = dynamic_supervisor.start_child(s3, nil)
 settle()
-supervisor.stop(outer)
-receive
-when {tag: "cleaned", name: n} then print("cleaned:", n)
-after 0 then print("g was killed")
+monitor(n1)
+monitor(inner)
+monitor(n3)
+spawn do supervisor.stop(s1) end
+spawn do supervisor.stop(s2) end
+spawn do dynamic_supervisor.terminate_child(s3, n3) end
+let cleaned = []
+for i = 0, 3
+  receive
+  when {tag: "cleaned", name: n} then push(cleaned, n)
+  after 7000 then push(cleaned, "none")
+  end
 end
+print("cleaned:", sort(cleaned))
+print("spec nil child:", down_of(n1))
+print("nested supervisor:", down_of(inner))
+print("template nil child:", down_of(n3))
+dynamic_supervisor.stop(s3)
 
 # ── transient children and "killed" ──
 print("-- transient --")
@@ -241,9 +256,17 @@ settle()
 dynamic_supervisor.stop(d)
 print("stop killed p3:", not alive(p3))
 
-# A dynamic child whose handle has a bad shutdown fails start_child only.
-let bad = dynamic_supervisor.start({child: {start: fn(a) {pid: stubborn(), shutdown: "soon"} end}})
+# A dynamic child whose handle has a bad shutdown fails start_child only,
+# and is killed rather than left running unsupervised.
+let bad_child = nil
+let bad = dynamic_supervisor.start({child: {start: fn(a)
+  let c = stubborn()
+  send(me, {tag: "bad_child", pid: c})
+  {pid: c, shutdown: "soon"}
+end}})
 print(err(pcall dynamic_supervisor.start_child(bad, nil)))
+receive when {tag: "bad_child", pid: p} then bad_child = p end
+print("bad child killed:", not alive(bad_child))
 dynamic_supervisor.stop(bad)
 
 # ── argument checks ──

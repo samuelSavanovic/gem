@@ -23,7 +23,8 @@
 #
 # The supervisor traps exits and links each child. When it exits (an exit
 # signal from anyone, `stop`, restart intensity reached, or any error in
-# the supervisor), it first shuts its children down, OTP-style: it stops
+# the supervisor, but not the untrappable "kill", which ends it at once),
+# it first shuts its children down, OTP-style: it stops
 # each running child as above, last started first; then it exits. A nested
 # supervisor does the same, so the whole tree is down when it exits. The
 # restart signal is the child's DOWN; the EXIT a child's death also sends
@@ -58,13 +59,15 @@ end
 
 # A child's shutdown budget: its spec's `shutdown`, else the one the handle
 # its `start` returned asks for, else DEFAULT_SHUTDOWN_MS.
-fn shutdown_of(spec, handle)
+fn shutdown_of(spec, handle, pid)
   if has_key(spec, "shutdown")
     return spec.shutdown
   end
   if type(handle) == "table" and has_key(handle, "shutdown")
     let s = handle.shutdown
     if s != nil and type(s) != "int"
+      # Not supervised yet: don't leave it running.
+      kill(pid, "kill")
       error("supervisor: start of child \"{spec.id}\" returned a handle whose shutdown is a {type(s)}, not an int (milliseconds) or nil")
     end
     return s
@@ -76,7 +79,7 @@ end
 fn start_child(spec)
   let handle = spec.start()
   let pid = target_pid(handle, "supervisor: start of child \"{spec.id}\"")
-  let shutdown = shutdown_of(spec, handle)
+  let shutdown = shutdown_of(spec, handle, pid)
   monitor(pid)
   # A child that has already exited gives an EXIT "noproc" here (the
   # supervisor traps exits) after its DOWN "noproc".

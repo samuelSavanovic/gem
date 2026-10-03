@@ -985,7 +985,8 @@ from another process is ignored unless the target traps exits;
 
 A process that traps exits (a supervisor, an http server) handles a
 `kill` when it next reads its mailbox, so it is still alive, and its name
-still registered, when `kill` returns. To stop one and know it is gone,
+still registered, when `kill` returns (except for `kill(pid, "kill")`,
+below, which also skips its cleanup). To stop one and know it is gone,
 monitor it and wait for its `DOWN`, which is what `supervisor.stop`,
 `dynamic_supervisor.stop` and `http.stop` do:
 
@@ -1037,8 +1038,8 @@ supervisor.start({children: [{id: "w", start: start_worker, shutdown: 2000}]})
 
 Set `shutdown:` to how long the child's cleanup can take. Only give
 `nil` to a child that is sure to exit: one that never does keeps its
-supervisor, and `supervisor.stop` (which waits with no limit by default),
-waiting for good.
+supervisor waiting for good, and with it `supervisor.stop`, which waits
+with no limit by default.
 
 ### Request/reply: a ref, a pin, a timeout, and a monitor
 
