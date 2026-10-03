@@ -924,8 +924,8 @@ let json = '''
 
 Rules:
 - The opening `"""` or `'''` must be immediately followed by a newline (optional trailing whitespace before the newline is allowed). Content starts on the next line.
-- The closing `"""` or `'''` must appear on its own line with only leading whitespace before it.
-- **Dedent**: the indentation of the closing delimiter (number of leading spaces) is the base indentation. That many leading spaces are stripped from every content line. Extra indentation beyond the base is preserved. A `"""` string inside an interpolation has its own closing line and its own dedent; it does not change the outer string's.
+- The closing `"""` or `'''` must appear on its own line with only leading whitespace (spaces, tabs, or any mix) before it.
+- **Dedent**: the whitespace before the closing delimiter is the base indentation. It is stripped byte for byte from the start of every content line, so a tab matches only a tab and a space only a space. Extra indentation beyond the base is preserved. A content line that does not start with the whole base (a blank line, a shorter indent, or tabs where the closing line has spaces) loses only its longest leading part that matches the start of the base, and keeps the rest: with a base of two tabs, a line starting with one tab loses that tab, and a line starting with spaces keeps them. A `"""` string inside an interpolation has its own closing line and its own dedent; it does not change the outer string's.
 - The final newline before the closing delimiter is stripped, so the resulting string does not end with a trailing `\n`.
 - `"""` supports `{expr}` interpolation and escape sequences identical to regular `"` strings.
 - `'''` has no interpolation; `{` is a literal character. Escape sequences are identical to regular `'` strings.

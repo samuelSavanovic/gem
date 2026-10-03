@@ -2569,3 +2569,10 @@ for: expected a table or string to iterate, got bool
 for: expected a table or string to iterate, got bool
 for: expected a table or string to iterate, got buffer
 for: expected a table or string to iterate, got buffer
+tabs: [hello\n\tnested]
+mixed: [one\n  two]
+mismatch: [    spaces\ntab-only\nfull]
+blank: [x\n\ny]
+interp: [hi gem\n  inner done]
+single: [{literal}\n\tdeeper]
+spaces: [plain\n  indented]

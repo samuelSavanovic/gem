@@ -53,14 +53,27 @@ fn apply_escape(esc, mode)
 end
 
 # ─── Triple-quoted closer pre-scan ───────────────────────────────
-# A `"""` string's dedent width is the indentation of its own closing
-# `"""` line. The pre-scan must skip anything inside an interpolation,
+# A `"""` string's dedent prefix is the indentation (spaces and tabs) of
+# its own closing `"""` line. The pre-scan must skip anything inside an interpolation,
 # where a nested `"""` string has a closing line of its own. These helpers
 # follow the lexer's rules just far enough to find where each string and
 # interpolation ends; positions are byte offsets, -1 means unterminated.
 
 fn tq_is_triple(source, p, q)
   p + 2 < len(source) and source[p] == q and source[p + 1] == q and source[p + 2] == q
+end
+
+# Dedent one content line starting at p: skip the longest prefix of it that
+# is also a prefix of `indent` (the closing line's whitespace), byte for
+# byte. Returns the position after it.
+fn tq_dedent(source, p, indent)
+  let n = len(source)
+  let k = 0
+  while k < len(indent) and p < n and source[p] == indent[k]
+    k += 1
+    p += 1
+  end
+  p
 end
 
 # Past the opening `"""` / `'''` (at p): skip to the start of the body,
@@ -78,21 +91,20 @@ fn tq_body_start(source, p)
 end
 
 # Body of a triple-quoted string starting at p (after the opening line).
-# Returns {pos: just past the closing delimiter, indent: its column}, or
-# nil when unterminated. `interp` is true for `"""` (which interpolates).
+# Returns {pos: just past the closing delimiter, indent: the whitespace
+# before it on its line, as a string}, or nil when unterminated. `interp` is true for `"""` (which interpolates).
 fn tq_scan_body(source, p, q, interp)
   let n = len(source)
   let at_line_start = true
   while p < n
     if at_line_start
       at_line_start = false
-      let ind = 0
-      while p < n and source[p] == " "
-        ind += 1
+      let ls = p
+      while p < n and (source[p] == " " or source[p] == "\t")
         p += 1
       end
       if tq_is_triple(source, p, q)
-        return {pos: p + 3, indent: ind}
+        return {pos: p + 3, indent: substr(source, ls, p - ls)}
       end
       continue
     end
@@ -231,7 +243,7 @@ fn tokenize(source, file, sink)
   let interp_triple = {}
   let interp_indent = {}
   let interp_open = {}
-  let triple_dq_indent = 0
+  let triple_dq_indent = ""
   let tstart = 0
 
   while pos < length
@@ -353,11 +365,7 @@ fn tokenize(source, file, sink)
         while pos < length
           if tq_als
             tq_als = false
-            let tq_skip = 0
-            while tq_skip < triple_dq_indent and pos < length and source[pos] == " "
-              pos += 1
-              tq_skip += 1
-            end
+            pos = tq_dedent(source, pos, triple_dq_indent)
             # Check for closing """
             if pos + 2 < length and source[pos] == "\"" and source[pos + 1] == "\"" and source[pos + 2] == "\""
               pos += 3
@@ -492,16 +500,15 @@ fn tokenize(source, file, sink)
 
         # Pre-scan: find the indentation of the closing '''
         let sq_scan = pos
-        let sq_bi = 0
+        let sq_bi = ""
         let sq_found = false
         while sq_scan < length and not sq_found
-          let sq_ind = 0
-          while sq_scan < length and source[sq_scan] == " "
-            sq_ind += 1
+          let sq_ls = sq_scan
+          while sq_scan < length and (source[sq_scan] == " " or source[sq_scan] == "\t")
             sq_scan += 1
           end
           if sq_scan + 2 < length and source[sq_scan] == "'" and source[sq_scan + 1] == "'" and source[sq_scan + 2] == "'"
-            sq_bi = sq_ind
+            sq_bi = substr(source, sq_ls, sq_scan - sq_ls)
             sq_found = true
           else
             while sq_scan < length and source[sq_scan] != "\n"
@@ -525,11 +532,7 @@ fn tokenize(source, file, sink)
         while pos < length
           if sq_als
             sq_als = false
-            let sq_skip = 0
-            while sq_skip < sq_bi and pos < length and source[pos] == " "
-              pos += 1
-              sq_skip += 1
-            end
+            pos = tq_dedent(source, pos, sq_bi)
             # Check for closing '''
             if pos + 2 < length and source[pos] == "'" and source[pos + 1] == "'" and source[pos + 2] == "'"
               pos += 3
@@ -716,11 +719,7 @@ fn tokenize(source, file, sink)
         while pos < length
           if tqr_als
             tqr_als = false
-            let tqr_skip = 0
-            while tqr_skip < triple_dq_indent and pos < length and source[pos] == " "
-              pos += 1
-              tqr_skip += 1
-            end
+            pos = tq_dedent(source, pos, triple_dq_indent)
             # Check for closing """
             if pos + 2 < length and source[pos] == "\"" and source[pos + 1] == "\"" and source[pos + 2] == "\""
               pos += 3

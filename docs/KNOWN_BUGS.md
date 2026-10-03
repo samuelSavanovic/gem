@@ -8,12 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### A tab before a closing `"""` is not accepted
-
-A triple-quoted string whose closing `"""` is indented with tabs reports
-`unterminated triple-quoted string`; with spaces it works. SPEC says
-"only leading whitespace".
-
 ## Runtime
 
 ### Runtime traces lose the source line when run from another directory
