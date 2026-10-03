@@ -240,11 +240,3 @@ server blocks the caller forever; a parse error leaks the socket; a
 chunked response comes back with the chunk framing in `body`; a status
 line with no reason phrase (`HTTP/1.1 204`) or an `https://` URL raises
 `to_int: cannot convert "" to int`.
-
-### A bad sqlite handle crashes the program
-
-`print(pcall sqlite_query(12345, "select 1", []))` dies with a segmentation
-fault (exit 139); `pcall` can't catch it. A handle is a raw `sqlite3 *`
-stored as an int: using one after `sqlite_close` is a use-after-free, and
-closing twice returns `nil`. Keep a table of open handles in
-runtime/gem_builtins_sqlite.c and raise on an unknown one.

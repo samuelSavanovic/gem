@@ -1063,9 +1063,7 @@ processes.
 | | plain `extern fn`, `input`, `read_stdin`; `print`, `eprint`, `write_stdout` to a slow pipe |
 
 Keep sqlite queries short and indexed: a one-second query stalls every
-process for that second. A sqlite handle is a raw pointer: a wrong or
-already-closed one crashes the program, which `pcall` can't catch
-**(bug)**. Use `extern blocking fn` for any C call that can take more than
+process for that second. Use `extern blocking fn` for any C call that can take more than
 about a millisecond. The pool has 4 workers, so four long `exec` calls
 delay every file read behind them.
 
@@ -1270,7 +1268,6 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |
 | Spawning thousands of quick tasks in a loop | `process table full` | batch, or cap in-flight tasks |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
-| Bad or closed sqlite handle **(bug)** | segfault, not catchable | close once, in the owning process |
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_listen("localhost", ...)` | raises | `"127.0.0.1"` |
 | `tcp_read` with no timeout, or `0` | blocks forever on a silent peer | pass a timeout |

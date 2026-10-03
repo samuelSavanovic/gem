@@ -7,6 +7,58 @@
 #include "gem.h"
 #include "sqlite3.h"
 
+/* ─── Handle registry ───
+   A Gem handle is a small opaque int id, never a pointer: ids count up from 1
+   and are never reused, so a closed handle stays invalid instead of naming a
+   later connection. The registry is only read and written on the scheduler
+   thread (in the builtins themselves, never in the pool workers or the
+   request free functions), so it needs no lock:
+   - sqlite_open registers the connection after its worker is done and the
+     requester has resumed; a requester killed mid-open never resumes, and
+     gem_sqlite_open_free closes the connection with no entry made.
+   - sqlite_close removes the entry as soon as the close is queued, before any
+     worker can free the connection, so no process can reach it afterwards.
+   Queries run inline on the scheduler thread without yielding, so none is in
+   progress on a connection when a close is queued. */
+
+static sqlite3 **gem_sqlite_handles = NULL;  /* index id - 1; NULL = closed */
+static int64_t gem_sqlite_handle_count = 0;
+static int64_t gem_sqlite_handle_cap = 0;
+
+static int64_t gem_sqlite_register(sqlite3 *db) {
+    if (gem_sqlite_handle_count == gem_sqlite_handle_cap) {
+        int64_t cap = gem_sqlite_handle_cap ? gem_sqlite_handle_cap * 2 : 16;
+        sqlite3 **h = (sqlite3 **)realloc(gem_sqlite_handles, (size_t)cap * sizeof(sqlite3 *));
+        if (!h) {
+            sqlite3_close(db);
+            gem_error("sqlite_open: out of memory");
+        }
+        gem_sqlite_handles = h;
+        gem_sqlite_handle_cap = cap;
+    }
+    gem_sqlite_handles[gem_sqlite_handle_count++] = db;
+    return gem_sqlite_handle_count;
+}
+
+/* The open connection behind args[0], or raises "<fn>: ..." (pcall-catchable). */
+static sqlite3 *gem_sqlite_handle(const char *fn, GemVal *args, int argc) {
+    char buf[160];
+    if (argc < 1) {
+        snprintf(buf, sizeof(buf), "%s: expected a database handle", fn);
+        gem_error(buf);
+    }
+    if (args[0].type != VAL_INT) {
+        snprintf(buf, sizeof(buf), "%s: expected a database handle, got %s", fn, gem_type_str(args[0]));
+        gem_error(buf);
+    }
+    int64_t id = args[0].ival;
+    if (id < 1 || id > gem_sqlite_handle_count || !gem_sqlite_handles[id - 1]) {
+        snprintf(buf, sizeof(buf), "%s: not an open database handle", fn);
+        gem_error(buf);
+    }
+    return gem_sqlite_handles[id - 1];
+}
+
 /* ─── Thread pool args for sqlite_open ─── */
 
 typedef struct {
@@ -85,8 +137,7 @@ GemVal gem_sqlite_open_fn(void *_env, GemVal *args, int argc) {
         }
         gem_io_release(req);
 
-        GemVal r; r.type = VAL_INT; r.ival = (int64_t)(intptr_t)db;
-        return r;
+        return gem_int(gem_sqlite_register(db));
     }
 
     sqlite3 *db;
@@ -100,18 +151,15 @@ GemVal gem_sqlite_open_fn(void *_env, GemVal *args, int argc) {
     sqlite3_exec(db, "PRAGMA journal_mode=WAL", NULL, NULL, NULL);
     sqlite3_exec(db, "PRAGMA foreign_keys=ON", NULL, NULL, NULL);
 
-    GemVal r; r.type = VAL_INT; r.ival = (int64_t)(intptr_t)db;
-    return r;
+    return gem_int(gem_sqlite_register(db));
 }
 
 /* ─── Built-in: sqlite_close ─── */
 
 GemVal gem_sqlite_close_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 1 || args[0].type != VAL_INT) {
-        gem_error("sqlite_close: expected db handle");
-    }
-    sqlite3 *db = (sqlite3 *)(intptr_t)args[0].ival;
+    sqlite3 *db = gem_sqlite_handle("sqlite_close", args, argc);
+    int64_t id = args[0].ival;
 
     if (gem_current_pid >= 0) {
         GemSqliteCloseArgs *a = (GemSqliteCloseArgs *)malloc(sizeof(GemSqliteCloseArgs));
@@ -119,6 +167,7 @@ GemVal gem_sqlite_close_fn(void *_env, GemVal *args, int argc) {
 
         GemIORequest *req = gem_io_submit_extern(gem_sqlite_close_worker, a, gem_sqlite_close_free);
         if (!req) { gem_error("sqlite_close: I/O queue full"); }
+        gem_sqlite_handles[id - 1] = NULL;  /* queued: unreachable from now on */
         GemProcess *proc = &gem_proc_table[gem_current_pid];
         proc->io_request = req;
         gem_io_pool_yield();
@@ -128,6 +177,7 @@ GemVal gem_sqlite_close_fn(void *_env, GemVal *args, int argc) {
         return GEM_NIL;
     }
 
+    gem_sqlite_handles[id - 1] = NULL;
     sqlite3_close(db);
     return GEM_NIL;
 }
@@ -136,10 +186,10 @@ GemVal gem_sqlite_close_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_sqlite_exec_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 2 || args[0].type != VAL_INT || args[1].type != VAL_STRING) {
+    sqlite3 *db = gem_sqlite_handle("sqlite_exec", args, argc);
+    if (argc < 2 || args[1].type != VAL_STRING) {
         gem_error("sqlite_exec: expected (db, sql)");
     }
-    sqlite3 *db = (sqlite3 *)(intptr_t)args[0].ival;
     const char *sql = args[1].sval;
 
     char *errmsg = NULL;
@@ -157,10 +207,10 @@ GemVal gem_sqlite_exec_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 2 || args[0].type != VAL_INT || args[1].type != VAL_STRING) {
+    sqlite3 *db = gem_sqlite_handle("sqlite_query", args, argc);
+    if (argc < 2 || args[1].type != VAL_STRING) {
         gem_error("sqlite_query: expected (db, sql[, params])");
     }
-    sqlite3 *db = (sqlite3 *)(intptr_t)args[0].ival;
     const char *sql = args[1].sval;
 
     sqlite3_stmt *stmt;
@@ -272,10 +322,7 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_sqlite_last_insert_id_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 1 || args[0].type != VAL_INT) {
-        gem_error("sqlite_last_insert_id: expected db handle");
-    }
-    sqlite3 *db = (sqlite3 *)(intptr_t)args[0].ival;
+    sqlite3 *db = gem_sqlite_handle("sqlite_last_insert_id", args, argc);
     return gem_int(sqlite3_last_insert_rowid(db));
 }
 
@@ -283,9 +330,6 @@ GemVal gem_sqlite_last_insert_id_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_sqlite_changes_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 1 || args[0].type != VAL_INT) {
-        gem_error("sqlite_changes: expected db handle");
-    }
-    sqlite3 *db = (sqlite3 *)(intptr_t)args[0].ival;
+    sqlite3 *db = gem_sqlite_handle("sqlite_changes", args, argc);
     return gem_int(sqlite3_changes(db));
 }

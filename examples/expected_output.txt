@@ -2882,3 +2882,29 @@ parse "{1: 2}": error json.parse: expected string key in object at byte 1
 parse non-string: error json.parse: expected a string, got int
 encode fn: error json.encode: cannot encode a fn
 encode ref: error json.encode: cannot encode a ref
+sqlite_query: not an open database handle
+sqlite_exec: not an open database handle
+sqlite_last_insert_id: not an open database handle
+sqlite_changes: not an open database handle
+sqlite_close: not an open database handle
+sqlite_query: expected a database handle, got string
+sqlite_close: expected a database handle, got nil
+sqlite_changes: expected a database handle, got table
+sqlite_exec: expected a database handle, got float
+int
+1
+1
+child saw 2 rows, last 8
+2
+nil
+sqlite_query: not an open database handle
+sqlite_exec: not an open database handle
+sqlite_last_insert_id: not an open database handle
+sqlite_changes: not an open database handle
+sqlite_close: not an open database handle
+sqlite_close: not an open database handle
+true
+42
+child closed db2
+sqlite_query: not an open database handle
+one close succeeded: true

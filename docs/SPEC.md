@@ -1258,9 +1258,11 @@ All TCP builtins use non-blocking sockets with scheduler poll integration. The s
 
 ## SQLite
 
-`sqlite_open(path)` — opens (or creates) a SQLite database at `path`. Enables WAL mode and foreign keys by default. Returns an opaque database handle (stored as an int). Use `":memory:"` for an in-memory database. Runs on the thread pool in every process, main included, so other processes keep running. Raises on error.
+`sqlite_open(path)` — opens (or creates) a SQLite database at `path`. Enables WAL mode and foreign keys by default. Returns an opaque database handle: a small int id, valid in every process until it is closed (ids are never reused). Use `":memory:"` for an in-memory database. Runs on the thread pool in every process, main included, so other processes keep running. Raises on error.
 
-`sqlite_close(db)` — closes the database handle. Runs on the thread pool, like `sqlite_open`. Returns `nil`.
+`sqlite_close(db)` — closes the database handle. Runs on the thread pool, like `sqlite_open`. Returns `nil`. The handle is invalid from the moment the close starts, in every process.
+
+Every `sqlite_*` builtin that takes a handle raises a catchable error prefixed with its name when the handle is not an int (`sqlite_query: expected a database handle, got string`) or is not an open handle: never returned by `sqlite_open`, or already closed, a second `sqlite_close` included (`sqlite_close: not an open database handle`).
 
 `sqlite_exec(db, sql)` — executes SQL that returns no rows (DDL, INSERT without RETURNING, etc.). Inline execution (no thread pool). Raises on error.
 
