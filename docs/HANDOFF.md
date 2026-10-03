@@ -8,9 +8,34 @@ Notes for the next session. Delete this file once its work is done.
    branch, and open one PR to `main`: PR #28, squash-merged into `main` as
    8b482c2 and merged into `std-modernize`. "Ground rules", "Build and test
    recipe" and "The fixes" below are kept as a record.
-2. **Next session:** update `docs/BEST_PRACTICES.md` against the fixed
-   compiler, review it until clean, and open a PR.
-3. **After that:** modernize `std/` against the merged doc.
+2. **Done.** Known-bugs fixes: PR #29 (squash-merged into `main`). Most of
+   the list below moved to `docs/KNOWN_BUGS.md` and was fixed there.
+3. **Next session (fresh): rewrite `docs/BEST_PRACTICES.md`.**
+   1. Rebase `std-modernize` onto `origin/main` (the maintainer asked for a
+      rebase here, not a merge; the branch is only theirs and the doc
+      sessions', so push with `--force-with-lease`). The branch's own
+      commits are the BEST_PRACTICES doc, the CLAUDE.md attribution rule and
+      links, and this file; the merge commits of `main` drop out. Expect
+      conflicts in CLAUDE.md. Then put the BEST_PRACTICES clause back into
+      CLAUDE.md "Known Bugs Tracking" and the intro of `docs/KNOWN_BUGS.md`
+      (see "Known bugs" below). `make build && make test` before pushing.
+   2. Rewrite the doc against the current compiler: verify every rule and
+      every code sample by running it with `build/gem`; delete the **(bug)**
+      rules #28 and #29 fixed; check the remaining ones against
+      `docs/KNOWN_BUGS.md` (see "For the doc session" below).
+   3. **Adversarial review passes** until one comes back clean: fresh
+      subagents (no inherited context) that try to break each rule: a
+      program that follows the rule and still fails, a sample that doesn't
+      compile or prints something else, a rule that contradicts SPEC or
+      another rule, a missing trap. Fix, then run a new round.
+   4. **Then a blind-reader pass:** a fresh subagent playing a competent
+      developer who has never seen Gem reads the doc cold (only the doc, not
+      SPEC or the code) and reports what is unclear, assumed, out of order
+      or missing for writing their first real program. Fix what it finds.
+      If the fixes are large, run one more adversarial round.
+   5. Open a PR to `main` (no AI attribution, CLAUDE.md "Commits and Pull
+      Requests").
+4. **After that:** modernize `std/` against the merged doc.
 
 ## Ground rules from the maintainer
 
@@ -210,6 +235,20 @@ after the merge:
   `receive` with nothing able to send prints `deadlock: main process is
   waiting in receive ...` and exits 1. Load cycles are compile errors at
   the closing `load` (`load cycle: a.gem → b.gem → a.gem`).
+- **What #29 changed** (check each against the doc):
+  - a `while` body `let` that shadows a name the condition reads warns at
+    compile time, unless the loop assigns it or (for a module-level name)
+    a named fn of the file does;
+  - main killed by another process (link or `kill`) prints a report and
+    exits 1; `link()` to a dead process exits the caller with `noproc`
+    (an `EXIT` message if it traps exits), not a catchable error;
+  - traces and the pcall `stack` use `anonymous fn` and `module.fn`, the
+    right line for leaf fns and last expressions, project-relative paths;
+  - `build_string`'s `add` called from another process is a catchable
+    error; `read_file` works on procfs/pipes and errors on a directory;
+    `exec` output goes to the program's stdout in every process;
+  - `gem --help`; options after the source path go to the program;
+  - `extern fn` named like a builtin shadows it.
 - "Module-level `let`": large module state no longer costs every spawn,
   because copies are lazy per slot. A child pays only for the slots it
   reads, on first read. Re-measure and rewrite.
