@@ -28,9 +28,12 @@ load "std/mime"
 load "std/json"
 load "std/time"
 
-# The length of the prefix of `s` made of bytes from `accept` (runtime
-# helper, one C pass: much faster than a loop over `ord`).
+# Runtime helpers, one C pass each (a Gem loop over `ord` costs about
+# 50 ns a byte): the length of the prefix of `s` made of bytes from
+# `accept`, and the offset of the first `needle` in `s` at or after
+# `from` (-1 when there is none).
 extern fn gem_bytes_span(s: Bytes, accept: Bytes) -> Int
+extern fn gem_bytes_find(s: Bytes, needle: Bytes, from: Int) -> Int
 
 let READ_SIZE = 8192
 let MAX_HEADER_BYTES = 65536
@@ -61,8 +64,19 @@ end
 # Bytes allowed in a request line or header field line: HTAB, SP, visible
 # ASCII and obs-text (RFC 9112 §2.2, §5.5).
 let FIELD_BYTES = "\t{byte_range(32, 126)}{byte_range(128, 255)}"
+# Bytes allowed in a request header name: field bytes but whitespace and
+# `:` (the span of these from a line's start ends at its colon).
+let NAME_BYTES = "{byte_range(33, 126, ":")}{byte_range(128, 255)}"
+# The same, uppercase letters excluded (a name made of these needs no
+# lowercasing).
+let LOWER_NAME_BYTES = "{byte_range(33, 126, ":ABCDEFGHIJKLMNOPQRSTUVWXYZ")}{byte_range(128, 255)}"
 # Bytes of an HTTP token (header names).
 let TOKEN_BYTES = "!#$%&'*+-.^_`|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+# A token without uppercase letters (a Connection value that is one
+# lowercase token, the common case, needs no splitting).
+let LOWER_TOKEN_BYTES = "!#$%&'*+-.^_`|~0123456789abcdefghijklmnopqrstuvwxyz"
+# Every byte but CR and LF.
+let NO_CRLF_BYTES = "{byte_range(0, 9)}{byte_range(11, 12)}{byte_range(14, 255)}"
 # Bytes allowed in a cookie name, value or attribute: no `;`, `,`,
 # whitespace or control bytes.
 let COOKIE_BYTES = "{byte_range(33, 126, ";,")}{byte_range(128, 255)}"
@@ -165,6 +179,9 @@ fn cookie_line(caller, name, value, path, http_only, secure, same_site, max_age,
   if max_age != nil and type(max_age) != "int"
     error("{caller}: max_age must be an int or nil, got {type(max_age)} {max_age}")
   end
+  if expires != nil and type(expires) != "int"
+    error("{caller}: expires must be an int (epoch ms), got {type(expires)}")
+  end
   build_string() do |add|
     add(n, "=", v)
     add("; Path=", path)
@@ -252,9 +269,10 @@ end
 
 # ─── Router ───
 
-fn match_route(pattern, path)
-  let pat_segs = string.split(pattern, "/")
-  let path_segs = string.split(path, "/")
+# The params of `path` for a route pattern with parameters (split into
+# `pat_segs`), or nil when it doesn't match. `path_segs` is the path split
+# at "/".
+fn match_route(pat_segs, path_segs)
   if len(pat_segs) != len(path_segs)
     return nil
   end
@@ -284,12 +302,20 @@ fn normalize_path(p)
   "/{string.join(result, "/")}"
 end
 
+# True when `prefix` (plen bytes, a prefix of `path`) ends at a segment
+# boundary of `path`: `/static` matches `/static` and `/static/x`, not
+# `/staticx`.
+fn at_segment(path, prefix, plen)
+  plen == 0 or len(path) == plen or ord(path, plen) == 47 or ord(prefix, plen - 1) == 47
+end
+
 # The static file under one of `static_routes` for a GET of `path`, as a
 # match result, or nil.
 fn match_static(static_routes, path)
   for sr in static_routes
-    if string.starts_with(path, sr.prefix)
-      let rel = substr(path, len(sr.prefix), len(path) - len(sr.prefix))
+    let plen = len(sr.prefix)
+    if string.starts_with(path, sr.prefix) and at_segment(path, sr.prefix, plen)
+      let rel = substr(path, plen, len(path) - plen)
       if rel == "" or rel == "/"
         rel = "/index.html"
       end
@@ -311,8 +337,14 @@ fn router()
   let routes = []
   let static_routes = []
 
+  # A pattern without parameters matches its own text only: `segs` is nil
+  # and no split is needed.
   let add_route = fn(method, pattern, handler)
-    push(routes, {method: method, pattern: pattern, handler: handler})
+    let segs = nil
+    if has_text(pattern, ":")
+      segs = string.split(pattern, "/")
+    end
+    push(routes, {method: method, pattern: pattern, segs: segs, handler: handler})
   end
 
   let r = {}
@@ -342,11 +374,21 @@ fn router()
   end
 
   r.match = fn(method, path)
+    let path_segs = nil
     for route in routes
       if route.method == method
-        let params = match_route(route.pattern, path)
-        if params != nil
-          return {handler: route.handler, params: params}
+        if route.segs == nil
+          if route.pattern == path
+            return {handler: route.handler, params: {}}
+          end
+        else
+          if path_segs == nil
+            path_segs = string.split(path, "/")
+          end
+          let params = match_route(route.segs, path_segs)
+          if params != nil
+            return {handler: route.handler, params: params}
+          end
         end
       end
     end
@@ -402,17 +444,18 @@ fn read_more(rd)
   chunk
 end
 
-# Appends the next bytes to the reader; false when there are none.
+# Appends the next bytes to the reader; false when there are none. (For
+# short lines: read_exact takes big bodies without copying them here.)
 fn fill(rd)
   let chunk = read_more(rd)
   if chunk == nil
     return false
   end
-  if rd.pos > 0
-    rd.data = substr(rd.data, rd.pos, len(rd.data) - rd.pos)
-    rd.pos = 0
+  if rd.pos < len(rd.data)
+    chunk = "{substr(rd.data, rd.pos, len(rd.data) - rd.pos)}{chunk}"
   end
-  rd.data = "{rd.data}{chunk}"
+  rd.data = chunk
+  rd.pos = 0
   true
 end
 
@@ -429,7 +472,18 @@ end
 # in a buffer and only the new bytes are scanned, so a peer sending one
 # byte at a time costs linear time.
 fn read_head(rd)
-  let found = string.index_of(rd.data, "\r\n\r\n", rd.pos)
+  let found = gem_bytes_find(rd.data, "\r\n\r\n", rd.pos)
+  if found < 0 and rd.pos == len(rd.data)
+    # Nothing pending (the usual case): one read mostly brings the whole
+    # head, and then needs no buffer.
+    let chunk = read_more(rd)
+    if chunk == nil
+      return nil
+    end
+    rd.data = chunk
+    rd.pos = 0
+    found = gem_bytes_find(chunk, "\r\n\r\n", 0)
+  end
   if found < 0
     let acc = buf_new()
     let rest = substr(rd.data, rd.pos, len(rd.data) - rd.pos)
@@ -442,7 +496,7 @@ fn read_head(rd)
         return nil
       end
       let window = "{tail}{chunk}"
-      let at = string.index_of(window, "\r\n\r\n")
+      let at = gem_bytes_find(window, "\r\n\r\n", 0)
       if at >= 0
         found = have - len(tail) + at
       end
@@ -465,24 +519,36 @@ fn read_head(rd)
 end
 
 # Exactly n bytes; nil when the peer closed or the time ran out first.
+# Each chunk read goes straight into the result (only the part past the
+# n bytes is kept in the reader).
 fn read_exact(rd, n)
+  let have = pending(rd)
+  if have >= n
+    let s = substr(rd.data, rd.pos, n)
+    rd.pos = rd.pos + n
+    return s
+  end
   let out = buf_new()
-  let have = 0
-  while true
-    let take = pending(rd)
-    if take > n - have
-      take = n - have
-    end
-    buf_push(out, substr(rd.data, rd.pos, take))
-    rd.pos = rd.pos + take
-    have += take
-    if have == n
-      return to_string(out)
-    end
-    if not fill(rd)
+  buf_push(out, substr(rd.data, rd.pos, have))
+  rd.data = ""
+  rd.pos = 0
+  while have < n
+    let chunk = read_more(rd)
+    if chunk == nil
       return nil
     end
+    let need = n - have
+    if len(chunk) > need
+      buf_push(out, substr(chunk, 0, need))
+      rd.data = chunk
+      rd.pos = need
+      have = n
+    else
+      buf_push(out, chunk)
+      have += len(chunk)
+    end
   end
+  to_string(out)
 end
 
 # The next CRLF-terminated line (for chunked bodies): {line}, {closed: true}
@@ -491,7 +557,7 @@ end
 fn read_line(rd)
   let scan = rd.pos
   while true
-    let nl = string.index_of(rd.data, "\n", scan)
+    let nl = gem_bytes_find(rd.data, "\n", scan)
     if nl >= 0
       if nl == rd.pos or ord(rd.data, nl - 1) != 13 or nl - rd.pos - 1 > MAX_LINE
         return {bad: true}
@@ -561,7 +627,7 @@ fn read_chunked(rd, max_body)
     if not line_bytes_ok(size_str)
       return {status: 400}
     end
-    let semi = string.index_of(size_str, ";")
+    let semi = gem_bytes_find(size_str, ";", 0)
     if semi >= 0
       size_str = substr(size_str, 0, semi)
     end
@@ -618,14 +684,6 @@ fn line_bytes_ok(line)
   gem_bytes_span(line, FIELD_BYTES) == len(line)
 end
 
-# False when the head has a control byte other than HTAB, or a CR or LF
-# that isn't part of a CRLF (RFC 9112 §2.2: a bare CR or LF could make
-# another parser see a different set of header lines).
-fn head_bytes_ok(head)
-  let lines = str_replace(head, "\r\n", "")
-  gem_bytes_span(lines, FIELD_BYTES) == len(lines)
-end
-
 fn is_digit(c)
   c >= 48 and c <= 57
 end
@@ -634,17 +692,20 @@ end
 # reject it with: 400 when malformed, 505 for an HTTP version other than
 # 1.0 and 1.1.
 fn parse_request_line(line)
-  let sp1 = string.index_of(line, " ")
+  if not line_bytes_ok(line)
+    return 400
+  end
+  let sp1 = gem_bytes_find(line, " ", 0)
   if sp1 <= 0
     return 400
   end
-  let sp2 = string.index_of(line, " ", sp1 + 1)
+  let sp2 = gem_bytes_find(line, " ", sp1 + 1)
   if sp2 <= sp1 + 1 or len(line) - sp2 - 1 != 8
     return 400
   end
   let version = substr(line, sp2 + 1, 8)
   if version != "HTTP/1.1" and version != "HTTP/1.0"
-    if string.starts_with(version, "HTTP/") and is_digit(ord(version, 5)) and ord(version, 6) == 46 and is_digit(ord(version, 7))
+    if substr(version, 0, 5) == "HTTP/" and is_digit(ord(version, 5)) and ord(version, 6) == 46 and is_digit(ord(version, 7))
       return 505
     end
     return 400
@@ -657,57 +718,122 @@ fn has_text(s, t)
   len(str_replace(s, t, "")) != len(s)
 end
 
-# Header names are lowercased and values trimmed. A repeated header's
-# values are joined with ", " (cookies with "; "). nil when a line has no
-# name, or whitespace in its name.
-fn parse_headers(header_block)
-  let headers = {}
-  if header_block == ""
-    return headers
+# A header name in lowercase (ASCII letters only); the name itself when it
+# has no uppercase letter.
+fn lower_name(name)
+  let n = len(name)
+  let i = gem_bytes_span(name, LOWER_NAME_BYTES)
+  if i == n
+    return name
   end
-  for line in string.split(header_block, "\r\n")
-    let colon = string.index_of(line, ":")
-    if colon <= 0
-      return nil
+  let out = buf_new()
+  let run = 0                     # the bytes from here on aren't copied yet
+  while i < n
+    # name[i] is an uppercase letter
+    if i > run
+      buf_push(out, substr(name, run, i - run))
     end
-    let name = substr(line, 0, colon)
-    if has_text(name, " ") or has_text(name, "\t")
-      return nil
-    end
-    let key = string.lower(name)
-    let value = string.trim(substr(line, colon + 1, len(line) - colon - 1))
-    let prev = headers[key]
-    if prev == nil
-      headers[key] = value
-    elif key == "cookie"
-      headers[key] = "{prev}; {value}"
-    else
-      headers[key] = "{prev}, {value}"
+    buf_push(out, chr(ord(name, i) + 32))
+    run = i + 1
+    # The next one, 32 bytes at a time (linear, also for a long name).
+    i = run
+    while i < n
+      let w = n - i
+      if w > 32
+        w = 32
+      end
+      let k = gem_bytes_span(substr(name, i, w), LOWER_NAME_BYTES)
+      i += k
+      if k < w
+        break
+      end
     end
   end
-  headers
+  if run < n
+    buf_push(out, substr(name, run, n - run))
+  end
+  to_string(out)
+end
+
+fn is_ows(c)
+  c == 32 or c == 9
+end
+
+# `s` from `from` on, without leading and trailing spaces and tabs (the
+# only whitespace a checked header line can hold).
+fn trimmed_from(s, from)
+  let stop = len(s)
+  let start = from + gem_bytes_span(substr(s, from, stop - from), " \t")
+  while stop > start and is_ows(ord(s, stop - 1))
+    stop -= 1
+  end
+  substr(s, start, stop - start)
 end
 
 # The request head as {method, target, http10, headers}, or the status to
-# reject it with.
+# reject it with (400 for a malformed request line or header line, or a
+# control byte other than HTAB anywhere: lines are split at CRLF, so a CR
+# or LF left in a line is bare, and RFC 9112 §2.2 makes a bare one a
+# smuggling risk). One pass over the lines. Header names are lowercased
+# and values trimmed; a repeated header's values are joined with ", "
+# (cookies with "; "), once at the end. A header line needs a name
+# without whitespace before its colon.
 fn parse_head(head)
-  if not head_bytes_ok(head)
-    return 400
+  let n = len(head)
+  let eol = gem_bytes_find(head, "\r\n", 0)
+  if eol < 0
+    eol = n
   end
-  let request_line = head
-  let header_block = ""
-  let first_line_end = string.index_of(head, "\r\n")
-  if first_line_end >= 0
-    request_line = substr(head, 0, first_line_end)
-    header_block = substr(head, first_line_end + 2, len(head) - first_line_end - 2)
-  end
-  let info = parse_request_line(request_line)
+  let info = parse_request_line(substr(head, 0, eol))
   if type(info) == "int"
+    # A bad byte anywhere in the head makes it a 400, not a 505.
+    if info == 505
+      let lines = str_replace(head, "\r\n", "")
+      if gem_bytes_span(lines, FIELD_BYTES) != len(lines)
+        return 400
+      end
+    end
     return info
   end
-  let headers = parse_headers(header_block)
-  if headers == nil
-    return 400
+  let headers = {}
+  let repeated = nil              # key -> its values, for repeated headers
+  let pos = eol + 2
+  while pos <= n
+    let stop = gem_bytes_find(head, "\r\n", pos)
+    if stop < 0
+      stop = n
+    end
+    let line = substr(head, pos, stop - pos)
+    pos = stop + 2
+    let colon = gem_bytes_span(line, NAME_BYTES)
+    if colon == 0 or colon == len(line) or ord(line, colon) != 58 or not line_bytes_ok(line)
+      return 400
+    end
+    let key = lower_name(substr(line, 0, colon))
+    let value = trimmed_from(line, colon + 1)
+    let prev = headers[key]
+    if prev == nil
+      headers[key] = value
+    else
+      if repeated == nil
+        repeated = {}
+      end
+      let parts = repeated[key]
+      if parts == nil
+        parts = [prev]
+        repeated[key] = parts
+      end
+      push(parts, value)
+    end
+  end
+  if repeated != nil
+    for key, parts in repeated
+      let sep = ", "
+      if key == "cookie"
+        sep = "; "
+      end
+      headers[key] = string.join(parts, sep)
+    end
   end
   info.headers = headers
   info
@@ -719,14 +845,8 @@ fn content_length(value)
   if value == nil
     return 0
   end
-  if len(value) == 0 or len(value) > 15
+  if len(value) == 0 or len(value) > 15 or gem_bytes_span(value, "0123456789") != len(value)
     return nil
-  end
-  for i = 0, len(value)
-    let c = ord(value, i)
-    if c < 48 or c > 57
-      return nil
-    end
   end
   to_int(value)
 end
@@ -736,6 +856,11 @@ end
 fn token_list(value)
   let out = []
   if value == nil
+    return out
+  end
+  let n = len(value)
+  if n > 0 and gem_bytes_span(value, LOWER_TOKEN_BYTES) == n
+    push(out, value)              # one lowercase token: nothing to split
     return out
   end
   for part in string.split(value, ",")
@@ -759,6 +884,9 @@ end
 # ─── Responses ───
 
 fn status_text(code)
+  if code == 200
+    return "OK"                   # no read of STATUS_TEXT: in a new
+  end                             # process, that copies the table first
   let text = STATUS_TEXT[code]
   if text == nil
     return "Unknown"
@@ -772,12 +900,12 @@ fn is_framing_header(name)
   if l != 10 and l != 14 and l != 17
     return false
   end
-  let n = string.lower(name)
+  let n = lower_name(name)
   n == "content-length" or n == "transfer-encoding" or n == "connection"
 end
 
 fn has_cr_or_lf(s)
-  has_text(s, "\r") or has_text(s, "\n")
+  gem_bytes_span(s, NO_CRLF_BYTES) != len(s)
 end
 
 # True for an HTTP token (a header name): letters, digits and
@@ -874,7 +1002,7 @@ fn response_closes(resp)
     return false
   end
   for k, v in resp.headers
-    if len(k) == 10 and string.lower(k) == "connection" and has_token(token_list("{v}"), "close")
+    if len(k) == 10 and lower_name(k) == "connection" and has_token(token_list("{v}"), "close")
       return true
     end
   end
@@ -883,17 +1011,50 @@ end
 
 # ─── Error reporting ───
 
-# The frames of `stack` above the handler call: std/http's own frames
-# (those of the server below the handler, and those of a builder such as
-# `set_cookie` that raised) and the closure `pcall` wraps the call in are
-# cut.
+# The directory part of a frame's file ("" when it has none).
+fn dir_of(file)
+  let i = len(file) - 1
+  while i >= 0 and ord(file, i) != 47
+    i -= 1
+  end
+  substr(file, 0, i + 1)
+end
+
+fn probe()
+  error("probe")
+end
+
+# The directory of std/http's own file as stack frames show it (std/http's
+# path depends on the install root and the project layout), or nil.
+fn std_dir()
+  let r = pcall probe()
+  if r.ok or len(r.stack) == 0 or type(r.stack[0].file) != "string"
+    return nil
+  end
+  let d = dir_of(r.stack[0].file)
+  if d == ""
+    return nil
+  end
+  d
+end
+
+# The frames of `stack` (a handler's error, from the pcall around the
+# call) without the closure `pcall` wraps the call in and without the
+# std frames on top: a builder such as `set_cookie` that raised, and the
+# std functions it called, such as `json.encode` in `json_response`. A
+# std frame is one whose file is in std/http's directory (when that can't
+# be found, one of an `http.` function).
 fn handler_frames(stack)
+  let dir = std_dir()
   let frames = []
   for f in stack
-    if f.name == "http.call_handler"
-      break
+    let std_frame = false
+    if dir == nil
+      std_frame = string.starts_with(f.name, "http.")
+    else
+      std_frame = type(f.file) == "string" and string.starts_with(f.file, dir)
     end
-    if len(frames) > 0 or not string.starts_with(f.name, "http.")
+    if len(frames) > 0 or not std_frame
       push(frames, f)
     end
   end
@@ -1077,6 +1238,15 @@ fn origin_target(target)
   "/"
 end
 
+# The path and query of an origin-form target, as url.parse gives them
+# (without its byte loop for the usual target with no `?` or `#`).
+fn parse_target(target)
+  if gem_bytes_find(target, "?", 0) < 0 and gem_bytes_find(target, "#", 0) < 0
+    return {path: target, query: {}}
+  end
+  url.parse(target)
+end
+
 # After a handler ran: when it turned on trap_exit, turns it off again (a
 # connection process doesn't trap exits, so `stop` can kill it between
 # requests) and returns true when the server asked it to exit meanwhile
@@ -1117,7 +1287,7 @@ fn process_one_request(rd, cfg)
   end
   let head_only = head.method == "HEAD"
   let headers = head.headers
-  let parsed = url.parse(origin_target(head.target))
+  let parsed = parse_target(origin_target(head.target))
   let req = {
     method: head.method,
     path: parsed.path,
@@ -1217,32 +1387,70 @@ fn accept_loop(listen_fd, cfg)
   end
 end
 
-# A connection's message to the server process: start tracking it
-# ("_http_conn"), stop tracking it ("_http_closing": it closes its own
-# socket next), or its "DOWN" (close its socket if it still holds one).
-fn track_connection(conns, tag, pid, fd = nil)
-  let key = "{pid}"
+# A message to the server process, from a connection or the runtime:
+# start tracking a connection ("_http_conn", from the acceptor), stop
+# tracking it ("_http_closing": it closes its own socket next), its
+# "DOWN" (close its socket if it still holds one), or an "EXIT". `conns`
+# maps each tracked connection's pid to its socket. A new connection is
+# monitored at once when `unwatched` is nil, else its pid is pushed there
+# for `watch_new` (see server_main). Returns the reason to shut down for,
+# or nil. One catch-all receive and a dispatch on the tag cost less per
+# message than a pattern per kind, and anything else sent to the server
+# is dropped instead of piling up.
+fn server_message(conns, msg, acceptor, watch, unwatched = nil)
+  if type(msg) != "table" or type(msg.pid) != "int"
+    return nil
+  end
+  let tag = msg.tag
   if tag == "_http_conn"
-    monitor(pid)
-    conns[key] = {pid: pid, fd: fd}
-  elif tag == "_http_closing"
-    delete(conns, key)
-  else
-    let c = conns[key]
-    if c != nil
-      tcp_close(c.fd)
-      delete(conns, key)
+    conns[msg.pid] = msg.fd
+    if unwatched == nil
+      monitor(msg.pid)
+    else
+      push(unwatched, msg.pid)
     end
+  elif tag == "_http_closing"
+    delete(conns, msg.pid)
+  elif tag == "DOWN"
+    if watch != nil and msg.pid == watch
+      return "shutdown"
+    end
+    let fd = delete(conns, msg.pid)
+    if fd != nil
+      tcp_close(fd)
+    end
+  elif tag == "EXIT"
+    if msg.pid == acceptor
+      eprint("http: acceptor died: {msg.reason}")
+      return "acceptor died: {msg.reason}"
+    elif msg.reason != "normal"
+      return msg.reason
+    end
+  end
+  nil
+end
+
+# Monitors the connections in `unwatched` that are still tracked (not
+# closed meanwhile), and empties it. Monitoring one that has died already
+# queues its DOWN at once, so the delay loses nothing.
+fn watch_new(conns, unwatched)
+  for pid in unwatched
+    if conns[pid] != nil
+      monitor(pid)
+    end
+  end
+  while len(unwatched) > 0
+    pop(unwatched)
   end
 end
 
 # Kills the acceptor and every connection and closes their sockets. A
 # connection that traps exits isn't killed; it closes its own socket.
-fn shut_down(listen_fd, acceptor, conns)
+fn shut_down(listen_fd, acceptor, conns, watch)
   kill(acceptor, "shutdown")
   tcp_close(listen_fd)
-  for c in values(conns)
-    kill(c.pid, "shutdown")
+  for pid in keys(conns)
+    kill(pid, "shutdown")
   end
   # The DOWN of each connection killed above is queued by now. A
   # connection spawned just before the acceptor died may still be
@@ -1250,13 +1458,11 @@ fn shut_down(listen_fd, acceptor, conns)
   let more = true
   while more
     receive
-    when {tag: "_http_conn", pid: pid, fd: fd}
-      track_connection(conns, "_http_conn", pid, fd)
-      kill(pid, "shutdown")
-    when {tag: "_http_closing", pid: pid}
-      track_connection(conns, "_http_closing", pid)
-    when {tag: "DOWN", pid: pid}
-      track_connection(conns, "DOWN", pid)
+    when msg
+      server_message(conns, msg, nil, watch)    # nil: the acceptor's EXIT is expected now
+      if type(msg) == "table" and msg.tag == "_http_conn"
+        kill(msg.pid, "shutdown")
+      end
     after 0
       more = false
     end
@@ -1283,50 +1489,62 @@ fn server_main(listen_fd, cfg, starter, ref, watch)
   end
   let acceptor = a.value
   send(starter, {tag: "_http_started", ref: ref, error: nil})
+  # A short connection has usually finished by the time the server runs:
+  # its "_http_closing" is queued right behind its "_http_conn". So the
+  # server takes every queued message before it monitors the connections
+  # registered meanwhile, and one that has closed needs no monitor (and
+  # sends no DOWN).
   let conns = {}
+  let unwatched = []
   let reason = nil
   while reason == nil
     receive
-    when {tag: "_http_conn", pid: pid, fd: fd}
-      track_connection(conns, "_http_conn", pid, fd)
-    when {tag: "_http_closing", pid: pid}
-      track_connection(conns, "_http_closing", pid)
-    when {tag: "DOWN", pid: ^watch}
-      reason = "shutdown"
-    when {tag: "DOWN", pid: pid}
-      track_connection(conns, "DOWN", pid)
-    when {tag: "EXIT", pid: pid, reason: why}
-      if pid == acceptor
-        eprint("http: acceptor died: {why}")
-        reason = "acceptor died: {why}"
-      elif why != "normal"
-        reason = why
+    when msg
+      reason = server_message(conns, msg, acceptor, watch, unwatched)
+    end
+    let more = reason == nil
+    while more
+      receive
+      when msg
+        reason = server_message(conns, msg, acceptor, watch, unwatched)
+        more = reason == nil
+      after 0
+        more = false
       end
     end
+    watch_new(conns, unwatched)
   end
-  shut_down(listen_fd, acceptor, conns)
+  shut_down(listen_fd, acceptor, conns, watch)
   process_flag("trap_exit", false)
   kill(self(), reason)
 end
 
-fn check_int(name, v, min)
+fn check_int(caller, name, v, min)
   if type(v) != "int" or v < min
-    error("http.start: {name} must be an int >= {min}, got {v}")
+    error("{caller}: {name} must be an int >= {min}, got {v}")
   end
 end
 
 # Starts the server and returns {pid}, the server process's pid.
 fn start(router_ref, opts = {})
-  launch(router_ref, nil, opts)
+  launch("http.start", router_ref, nil, opts)
 end
 
-# `start`, with the server watching `watch` (nil: nobody).
-fn launch(router_ref, watch, {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS} = {})
-  check_int("max_body", max_body, 0)
-  check_int("idle_timeout_ms", idle_timeout_ms, 0)
-  check_int("request_timeout_ms", request_timeout_ms, 0)
+# `start`, with the server watching `watch` (nil: nobody); errors start
+# with `caller`.
+fn launch(caller, router_ref, watch, {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS} = {})
+  check_int(caller, "max_body", max_body, 0)
+  check_int(caller, "idle_timeout_ms", idle_timeout_ms, 0)
+  check_int(caller, "request_timeout_ms", request_timeout_ms, 0)
+  if type(router_ref) != "table" or type(router_ref.match) != "fn"
+    error("{caller}: expected a router from http.router(), got {type(router_ref)}")
+  end
   let cfg = {router: router_ref, max_body: max_body, idle_ms: idle_timeout_ms, request_ms: request_timeout_ms, server: nil}
-  let listen_fd = tcp_listen(host, port)
+  let l = pcall tcp_listen(host, port)
+  if not l.ok
+    error("{caller}: {l.error}")
+  end
+  let listen_fd = l.value
   let me = self()
   let ref = make_ref()
   let s = pcall spawn(fn()
@@ -1334,15 +1552,15 @@ fn launch(router_ref, watch, {port = 8080, host = "0.0.0.0", max_body = DEFAULT_
   end)
   if not s.ok
     tcp_close(listen_fd)
-    error("http.start: {s.error}")
+    error("{caller}: {s.error}")
   end
   receive
   when {tag: "_http_started", ref: ^ref, error: e}
     if e != nil
-      error("http.start: {e}")
+      error("{caller}: {e}")
     end
   after STOP_TIMEOUT_MS
-    error("http.start: the server process did not start")
+    error("{caller}: the server process did not start")
   end
   {pid: s.value}
 end
@@ -1351,7 +1569,7 @@ end
 # was stopped or killed with "shutdown", raises otherwise. The server
 # watches the caller and shuts down when it is killed.
 fn serve(router_ref, opts = {})
-  let pid = launch(router_ref, self(), opts).pid
+  let pid = launch("http.serve", router_ref, self(), opts).pid
   monitor(pid)
   receive
   when {tag: "DOWN", pid: ^pid, reason: reason}
@@ -1382,6 +1600,9 @@ end
 # has closed the listening socket and every connection's. Returns nil; a
 # server that already stopped is fine.
 fn stop(server, timeout_ms = 5000)
+  if type(timeout_ms) != "int"
+    error("http.stop: timeout_ms must be an int (milliseconds), got {type(timeout_ms)}")
+  end
   let pid = target_pid(server, "http.stop")
   monitor(pid)
   kill(pid, "shutdown")

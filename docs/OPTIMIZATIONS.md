@@ -8,7 +8,7 @@ Priority scale: **P0** = measurable impact on benchmark right now, **P1** = sign
 
 ## Current performance reference
 
-Single-threaded scheduler ceiling on M1 Pro is ~26–29k req/s on `/` (static HTML) regardless of c=4/100/500 — higher concurrency just queues. Full benchmark history is in `OPTIMIZATIONS_LOG.md`.
+Single-threaded scheduler ceiling on M1 Pro was ~26–29k req/s on the bookmark app's `/` (static HTML, April 2026, before the std/http hardening) regardless of c=4/100/500 — higher concurrency just queues. The hardened std/http is back at its pre-hardening throughput in its own load test on Linux x86_64 (`OPTIMIZATIONS_LOG.md`, "std/http"); the bookmark-app figure has not been re-measured since. Full benchmark history is in `OPTIMIZATIONS_LOG.md`.
 
 Key bottlenecks under the current arena + region-reset mechanism:
 - Per-process arena allocation eliminates GC pauses; every loop resets the region it allocated once it passes max(1 MB, 2 × the last reset's cost), so memory is bounded at roughly 3× a loop's live data plus whatever was allocated before the loop started.
@@ -55,7 +55,7 @@ A byte loop written in Gem (`ord(s, i)` per byte, plus a reduction check and a r
 
 The dense `split` stays slow: the Gem scan alone is about 55 ms and the 100,000 `substr` + `push` about 45 ms; a C `find` would leave only the latter. The workaround also copies each chunk it tests, and does about 2× the C work of one `memmem` pass. Two general builtins would retire it:
 
-- `find(s, needle, start)` — `memmem`-backed; index of the first match at or after `start`, or -1. `string.index_of`/`contains` become one call, `split` becomes `find` plus one `substr` per piece, and `std/http`'s search for the `\r\n\r\n` header terminator (one `ord` comparison per byte) becomes one call.
+- `find(s, needle, start)` — `memmem`-backed; index of the first match at or after `start`, or -1. `string.index_of`/`contains` become one call, `split` becomes `find` plus one `substr` per piece. std/http already uses a runtime extern helper of this shape, `gem_bytes_find` (and `gem_bytes_span` for spans over a byte set), reached through `extern fn` because there is no builtin; std/string's `find` could switch to it today, and a public builtin would retire both helpers.
 - `find_any(s, chars, start)` — index of the first byte at or after `start` that is in the set `chars`, or -1. `html_escape`, `url.encode` (1 MB with a reserved byte every 10: 215 ms), `url.parse_query` and tokenizers like the `std/json` scanner scan to the next special byte, then copy the whole run before it. `trim` needs the inverse (skip bytes that *are* in the set, like `strspn`), so give it a negate flag or a sibling `skip_any`.
 
 `upper`/`lower` copy unchanged runs with `substr` but still allocate a string per changed byte (`add(chr(c))`): `string.upper` of 1 MB of mostly lowercase text takes 160 ms, `lower` of the same text 80 ms. They need a byte-mapping builtin rather than either of these.

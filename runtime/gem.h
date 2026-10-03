@@ -373,10 +373,16 @@ int gem_val_eq(GemVal a, GemVal b);
 int64_t gem_table_id(GemVal v);
 /* The length of the longest prefix of `s` (n bytes) made only of bytes
    that occur in `accept` (accept_n bytes), like strspn but binary-safe.
-   std/http reaches it through `extern fn` (Bytes params) to validate
-   request heads, header names and cookies in one C pass instead of a
-   Gem loop over `ord`. */
+   std/http and std/request reach it through `extern fn` (Bytes params)
+   to validate request heads, header names and cookies in one C pass
+   instead of a Gem loop over `ord`; the tables of the last few byte sets
+   are cached. */
 int64_t gem_bytes_span(const uint8_t *s, int64_t n, const uint8_t *accept, int64_t accept_n);
+/* The offset of the first occurrence of `needle` (nn bytes) in `s` (n
+   bytes) at or after `from` (clamped to 0), or -1; an empty needle is
+   found at `from` when from <= n. Binary-safe, like memmem. std/http
+   uses it (extern fn, Bytes params) to split request heads in C. */
+int64_t gem_bytes_find(const uint8_t *s, int64_t n, const uint8_t *needle, int64_t nn, int64_t from);
 int gem_truthy(GemVal v);
 
 /* ─── Arithmetic / operators ─── */

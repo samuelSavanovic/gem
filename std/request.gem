@@ -6,6 +6,10 @@
 #   resp.body                        # chunked bodies come back decoded
 #   request.post(url, {body: json.encode(x), headers: {"Content-Type": "application/json"}, timeout_ms: 5000})
 #
+# Header names must be HTTP tokens and values non-nil, without CR, LF or
+# other control bytes. A body gets a Content-Length (`0` for an empty
+# POST, PUT or PATCH).
+#
 # Each call opens a connection, sends `Connection: close`, reads one
 # response and closes the socket, also when it raises; a caller killed
 # mid-request leaks it. `timeout_ms` (default 30000, `0` or less for
@@ -16,10 +20,16 @@
 
 load "std/string"
 
+# Runtime helper (one C pass): the length of the prefix of `s` made of
+# bytes from `accept`.
+extern fn gem_bytes_span(s: Bytes, accept: Bytes) -> Int
+
 let READ_SIZE = 8192
 let DEFAULT_TIMEOUT_MS = 30000
 let MAX_LINE = 65536
 let MAX_HEADER_LINES = 1000
+# Bytes of an HTTP token (a header name).
+let TOKEN_BYTES = "!#$%&'*+-.^_`|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 # ─── URLs ───
 
@@ -395,10 +405,22 @@ end
 
 # ─── Requests ───
 
+# Methods whose requests carry a body: one sends `Content-Length: 0` when
+# it is empty (RFC 9110 §8.6; some servers answer 411 without it).
+fn expects_body(method)
+  method == "POST" or method == "PUT" or method == "PATCH"
+end
+
 fn build_request(name, method, parsed, headers, body)
   let given = {}
   for key, value in headers
     check_text(name, "header name", "{key}", false)
+    if type(key) != "string" or key == "" or gem_bytes_span(key, TOKEN_BYTES) != len(key)
+      error("{name}: invalid header name \"{key}\" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)")
+    end
+    if value == nil
+      error("{name}: header {key} has a nil value")
+    end
     check_text(name, "value of header {key}", "{value}", true)
     let lower = string.lower("{key}")
     if lower == "transfer-encoding"
@@ -418,7 +440,7 @@ fn build_request(name, method, parsed, headers, body)
     if not has_key(given, "connection")
       add("Connection: close\r\n")
     end
-    if len(body) > 0 and not has_key(given, "content-length")
+    if (len(body) > 0 or expects_body(method)) and not has_key(given, "content-length")
       add("Content-Length: ", len(body), "\r\n")
     end
     for key, value in headers

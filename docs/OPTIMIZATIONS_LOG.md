@@ -364,6 +364,29 @@ Not done: ASan builds. ASan's own SIGSEGV reporting is replaced by the overflow 
 ### Fast path for escape-free strings in parse ✓ Done (2026-10-03)
 `read_string` (std/json.gem, scanner) first scans for the closing `"`, checking for `\` and control bytes on the way, and returns one `substr` when the string has no escapes; only a string with an escape gets a buffer, which then copies whole runs between escapes instead of pushing byte by byte. Parsing a 2.5 MB string-heavy document (20,000 records of four short strings and a three-string array, best of 5): 514 ms with the fast path disabled, 371 ms with it (1.4x); 940 ms with the parser as it was before the rewrite in commit a6d6942, which pushed every byte into a buffer.
 
+## std/http
+
+### Hardened server back to origin/main's throughput ✓ Done (2026-10-03)
+The round-2 hardening of std/http (request validation, deadlines, connection tracking by the server process) cost a quarter to a third of the throughput: `parse_head` alone was about 58k instructions for a 2-line head, spent in std/string's Gem byte loops (`index_of`, `split`, `lower`, `trim`) and in per-request checks. What brought it back:
+- A runtime extern helper `gem_bytes_find(s, needle, from)` (memchr + memcmp, `runtime/gem_builtins_string.c`), next to `gem_bytes_span`, for every search in std/http (head terminator, line ends, request line, chunk lines). `gem_bytes_span` keeps the lookup tables of its last 8 byte sets (a memcmp of the set instead of rebuilding a 256-byte table per call).
+- `parse_head` makes one pass over the lines: per line a find, a span to the colon (which also rejects whitespace in the name), a span check for control bytes (which replaces the whole-head `str_replace` check), a lowercase only when the name has an uppercase letter, and a trim by span. Repeated headers are collected per name and joined once at the end (was `"{prev}, {value}"` per repeat, O(n²)).
+- A route pattern without `:` parameters is matched by string equality, and the path is split at most once per match. A target without `?` or `#` skips `url.parse`'s byte loop. `status_text(200)` doesn't read `STATUS_TEXT` (which copies the table into each new connection process on first read). A Connection value that is one lowercase token skips the split.
+- Request bodies: `read_exact` pushes each `tcp_read` chunk straight into the result buffer; `fill` used to copy every 8 KB chunk twice (`substr`, then `"{rd.data}{chunk}"`).
+- Server bookkeeping: one catch-all receive with a dispatch on the tag (the patterns built a string literal per comparison: 41 per connection), int pid keys instead of `"{pid}"`, and the server takes every queued message before it monitors the connections registered meanwhile: a short connection's `_http_closing` is usually queued right behind its `_http_conn`, so it needs no monitor and sends no DOWN.
+
+Measured on Linux x86_64 (4 cores, shared with other jobs, so ±10%), a minimal app answering `GET /x` with `http.ok("hello")`; `bench.c` load generator with 16 connections, 4 s per run, mean of 3 alternating runs; callgrind on a fixed 2,000 requests:
+
+| | origin/main (pre-hardening) | hardened, before | after |
+|---|---|---|---|
+| keep-alive, req/s | 14.0k | 10.6k | 14.3k |
+| connection per request, req/s | 8.7k | 5.7k | 8.4k |
+| keep-alive, instructions/request | 115k | 160k | 79k |
+| connection per request, instructions/request | 221k | 339k | 187k |
+| 8 MB POST body (Content-Length) | 75 ms | 120 ms | 57 ms |
+| 12,000 repeated header lines (60 KB head) | 55 ms | 530 ms | 15 ms |
+
+What is left per connection is mostly runtime work: the spawn (copying the closure env with the router, and the module slots: about 23k instructions), the server process's wakeup, and the arena teardown at exit.
+
 ## Scheduler / Concurrency
 
 ### `std/supervisor` keeps every restart time ✓ Done (std modernization)

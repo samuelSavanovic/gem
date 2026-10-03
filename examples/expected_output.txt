@@ -3598,3 +3598,69 @@ Stack trace:
 8 supervisor.start: the name "taken" is already registered
 8 dynamic_supervisor.start: the name "taken" is already registered
 9 transient noproc pid: -1
+-- heads
+200 connection=[close] host=[h] x-empty=[] x-lower=[v] x-mixed-case=[padded value]
+200 a=[1, 2, 3] connection=[close] cookie=[x=1; y=2]
+200 29998
+repeats fast: true
+431 Request Header Fields Too Large
+400 Bad Request
+400 Bad Request
+400 Bad Request
+400 Bad Request
+400 Bad Request
+505 HTTP Version Not Supported
+400 Bad Request
+400 Bad Request
+200 /q 1
+200 /q nil
+200 user 7 post x y
+200 me
+404 Not Found
+-- bodies
+200 300000:zzzzz / 200 3:abc / 200 me
+200 10:hello
+200 1000:abcde / 200 me
+-- static
+200 index
+200 index
+200 a file
+404 Not Found
+404 Not Found
+404 Not Found
+-- cookies
+expires string: error http.set_cookie: expires must be an int (epoch ms), got string
+expires float: error http.set_cookie: expires must be an int (epoch ms), got float
+n=v; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax
+http: GET /expires: http.set_cookie: expires must be an int (epoch ms), got string
+Stack trace:
+  at anonymous fn (examples/190_http_perf_fixes.gem:40)
+500 Internal Server Error
+http: GET /json_fn: json.encode: cannot encode a fn
+Stack trace:
+  at anonymous fn (examples/190_http_perf_fixes.gem:43)
+500 Internal Server Error
+-- start / stop
+start nil: error http.start: expected a router from http.router(), got nil
+start string: error http.start: expected a router from http.router(), got string
+start table: error http.start: expected a router from http.router(), got table
+serve nil: error http.serve: expected a router from http.router(), got nil
+serve bad opt: error http.serve: max_body must be an int >= 0, got -1
+port in use: error http.start: tcp_listen: bind failed on port 18190: Address already in use
+bad host: error http.start: tcp_listen: invalid address 'nowhere'
+stop timeout: error http.stop: timeout_ms must be an int (milliseconds), got string
+stop nil timeout: error http.stop: timeout_ms must be an int (milliseconds), got nil
+-- request
+POST /p HTTP/1.1|Host: 127.0.0.1:18192|Connection: close|Content-Length: 0||
+PUT /p HTTP/1.1|Host: 127.0.0.1:18193|Connection: close|Content-Length: 0||
+PATCH /p HTTP/1.1|Host: 127.0.0.1:18194|Connection: close|Content-Length: 0||
+POST /p HTTP/1.1|Host: 127.0.0.1:18195|Connection: close|content-length: 0||
+GET /p HTTP/1.1|Host: 127.0.0.1:18196|Connection: close||
+DELETE /p HTTP/1.1|Host: 127.0.0.1:18197|Connection: close||
+POST /p HTTP/1.1|Host: 127.0.0.1:18198|Connection: close|Content-Length: 3||abc
+name with space: error request.get: invalid character (byte 32) in header name
+name with colon: error request.get: invalid header name "X-A:b" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)
+empty name: error request.get: invalid header name "" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)
+name with CRLF: error request.get: invalid character (byte 13) in header name
+int name: error request.get: invalid header name "5" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)
+nil value: error request.post: header X-N has a nil value
