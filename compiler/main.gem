@@ -10,7 +10,7 @@ load "./codegen" (make_codegen)
 load "./lower" (lower)
 load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
-load "./loader" (resolve_load_path, find_project_root, compute_stdlib_root, make_show_path)
+load "./loader" (resolve_load_path, load_target_problem, find_project_root, compute_stdlib_root, make_show_path)
 load "./builtins" (BUILTIN_FNS)
 load "../lsp/main" (run_lsp)
 
@@ -613,12 +613,26 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
         continue
       end
 
+      let problem = load_target_problem(stmt.path, full_path, show_path)
+      if problem != nil
+        sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), problem.msg, problem.hint)
+        continue
+      end
+
       # `loading` marks the file as on the current load stack; `parent` is
       # the file whose `load` brought it in, so a cycle can be walked back.
       let entry = {exported: nil, loading: true, parent: normalize_path(stmt.file)}
       loaded[full_path] = entry
 
-      let source = read_file(full_path)
+      # Unreadable despite existing (permissions, a race): still an error
+      # at the `load`, not a crash of the compiler.
+      let read_res = pcall read_file(full_path)
+      if not read_res.ok
+        entry.loading = false
+        sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "cannot read module `{stmt.path}` ({show_path(full_path)})", nil)
+        continue
+      end
+      let source = read_res.value
       sources_by_file[full_path] = source
       let errors_before = sink.count()
       let loaded_ast = parse_source(source, full_path, sink)

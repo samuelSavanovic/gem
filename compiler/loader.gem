@@ -6,11 +6,28 @@
 # (relative to the loading file), bare "X" (relative to project_root if
 # found, else base_dir). Always appends ".gem" if absent.
 #
+# load_target_problem says why a resolved path can't be loaded (missing,
+# or a directory), as {msg, hint}, or nil when the file exists.
+#
 # find_project_root walks up from start_dir looking for gem.toml.
 # compute_stdlib_root prefers $GEM_STDLIB, then a project-vendored std/,
 # then the install root.
 
 load "std/string"
+
+# normalize_path (realpath) leaves a path that doesn't exist as typed
+# (`././mods/nope.gem`). Normalize its longest existing prefix instead, so
+# a missing module's path is shown, and keyed, like a present one's.
+fn normalize_load_path(p)
+  if file_exists(p) or is_dir(p)
+    return normalize_path(p)
+  end
+  let d = dirname(p)
+  if d == p or d == "" or len(d) >= len(p)
+    return p
+  end
+  path_join(normalize_load_path(d), substr(p, len(d) + 1, len(p) - len(d) - 1))
+end
 
 fn resolve_load_path(raw_path, base_dir, project_root, stdlib_root)
   let path = raw_path
@@ -22,22 +39,40 @@ fn resolve_load_path(raw_path, base_dir, project_root, stdlib_root)
     if stdlib_root == nil
       error("gem: cannot resolve load \"" + raw_path + "\": stdlib root not found (set $GEM_STDLIB)")
     end
-    let p = normalize_path(path_join(stdlib_root, path))
-    if not file_exists(p)
-      error("gem: stdlib module not found: " + raw_path + " (looked in " + stdlib_root + ")")
-    end
-    return p
+    return normalize_load_path(path_join(stdlib_root, path))
   end
 
   if string.starts_with(raw_path, "./") or string.starts_with(raw_path, "../")
-    return normalize_path(path_join(base_dir, path))
+    return normalize_load_path(path_join(base_dir, path))
   end
 
   let root = project_root
   if root == nil
     root = base_dir
   end
-  return normalize_path(path_join(root, path))
+  return normalize_load_path(path_join(root, path))
+end
+
+# Why the file a `load` resolved to can't be loaded as a module: {msg,
+# hint} for a compile error at the `load`, or nil when it is a file.
+# Paths in the message go through `show_path` (make_show_path). Shared by
+# the compiler's resolve_loads and the LSP's diagnostics.
+fn load_target_problem(raw_path, full_path, show_path)
+  if is_dir(full_path)
+    return {msg: "cannot load `{raw_path}`: {show_path(full_path)} is a directory", hint: "load a module file inside it"}
+  end
+  if file_exists(full_path)
+    return nil
+  end
+  let msg = "cannot find module `{raw_path}` (no file {show_path(full_path)})"
+  let hint = nil
+  if string.ends_with(full_path, ".gem")
+    let bare = substr(full_path, 0, len(full_path) - 4)
+    if is_dir(bare)
+      hint = "{show_path(bare)} is a directory; load a module inside it, e.g. `load \"{raw_path}/<name>\"`"
+    end
+  end
+  {msg: msg, hint: hint}
 end
 
 fn find_project_root(start_dir)
@@ -108,4 +143,4 @@ fn make_show_path(entry_path, project_root)
   end
 end
 
-export resolve_load_path, find_project_root, compute_stdlib_root, make_show_path
+export resolve_load_path, load_target_problem, find_project_root, compute_stdlib_root, make_show_path

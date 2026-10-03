@@ -1,0 +1,5 @@
+# A missing load inside a loaded module is reported at that module's load
+# line, once, even when the module is loaded twice.
+load "./modules/loads_missing"
+load "./modules/loads_missing" (f)
+print(loads_missing.f())

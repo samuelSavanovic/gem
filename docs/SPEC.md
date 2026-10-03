@@ -1267,9 +1267,11 @@ load "std/table"
 
 Path resolution depends on the form of the load path:
 
-1. **`load "std/X"`** — reserved for the standard library. Resolves against the stdlib root (see below). Hard error if the file does not exist; never falls back to a local file.
+1. **`load "std/X"`** — reserved for the standard library. Resolves against the stdlib root (see below). A compile error if the file does not exist; never falls back to a local file.
 2. **`load "./X"` / `load "../X"`** — relative to the importing file's directory. Use this for sibling/cousin imports inside a project (e.g. `compiler/main.gem` doing `load "./parser"`).
 3. **`load "X"` or `load "X/Y"`** (bare path, no prefix) — relative to the **project root**, defined as the nearest ancestor directory of the entry source file containing a `gem.toml` marker. If no `gem.toml` is found, falls back to the importing file's directory.
+
+A `load` whose file does not exist is a compile error at that `load`, naming the path it looked for (shown like other paths in compile errors): `` cannot find module `mods/nope` (no file mods/nope.gem) ``. The same holds in a loaded module, where the error points at the module's own `load` line, and for a path that names a directory (`` cannot load `./d`: d.gem is a directory ``; loading `./mods` when `mods/` is a directory hints at loading a module inside it). `gem lsp` reports the same error for the open file's loads.
 
 **Stdlib root** is resolved in this order:
 

@@ -65,6 +65,7 @@ test-lsp: $(GEM)
 	@bash tests/lsp/smoke_definition.sh
 	@bash tests/lsp/smoke_completion.sh
 	@bash tests/lsp/smoke_diagnostics.sh
+	@bash tests/lsp/smoke_load_diagnostics.sh
 
 test-json: $(GEM)
 	@$(GEM) examples/json_parser.gem --run

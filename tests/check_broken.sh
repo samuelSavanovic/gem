@@ -37,6 +37,8 @@ expected=(
   "load_no_export:1:1"
   "load_parse_error:1:1"
   "load_cycle:1:1"
+  "load_missing:4:4"
+  "load_missing_nested:1:1"
   "load_self:1:1"
   "double_typo:2:4"
   "missing_end:2:8"

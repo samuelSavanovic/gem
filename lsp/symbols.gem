@@ -16,8 +16,9 @@
 # scoping, all of these live in the enclosing function's scope.
 #
 # Imports: every `load` node, with the resolved absolute path when
-# resolution succeeds (resolve_load_path can throw on missing-stdlib;
-# that's swallowed here so a typo doesn't crash the LSP).
+# resolution succeeds (resolve_load_path throws when there is no stdlib
+# root; that's swallowed here). The path may name a missing file; the
+# workspace lookup returns nil for it.
 #
 # Col is 0 for `let`/`fn_def` because the parser only stamps line on
 # those node tags. PR #11 can plumb through real columns when it needs

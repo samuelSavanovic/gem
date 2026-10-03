@@ -8,17 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### Loading a missing file crashes the compiler
-
-```gem
-load "mods/nope"
-```
-
-prints `[Runtime Error]: read_file: cannot open 'mods/nope.gem'` with a
-stack trace of the compiler itself (`at resolve_loads (compiler/main.gem:…)`)
-instead of a compile error at the `load`. `resolve_loads` in
-compiler/main.gem reads the file without checking it exists.
-
 ### A named `fn` inside a top-level block is dropped
 
 ```gem
