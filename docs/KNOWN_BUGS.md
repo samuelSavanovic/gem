@@ -151,6 +151,21 @@ module's top-level names in fn bodies but never walks the param defaults
 `_mod_lib_D`. std/http writes `ok`'s default content type out as a literal
 because of it.
 
+### A newline inside a `"..."` or `'...'` string isn't counted in line numbers
+
+```gem
+let s = "a
+  b"
+print(1)
+error("x")        # reported at line 3, shows the line `print(1)`
+```
+
+Compile errors (`unexpected character`, `undeclared identifier`) and runtime
+error locations after such a string are one line early per newline inside
+it. Triple-quoted strings count correctly. The single- and double-quoted
+string branches of the lexer (compiler/lexer.gem, from `if ch == "\""`) step
+over a raw `\n` without incrementing `line` or resetting `line_start`.
+
 ## Runtime
 
 ### `INT64_MIN / -1` kills the program on x86-64
