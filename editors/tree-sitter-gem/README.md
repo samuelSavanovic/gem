@@ -29,8 +29,8 @@ Indent and textobject queries live in `~/.config/helix/runtime/queries/gem/` (no
 ```bash
 # Parse all .gem files — should be zero errors
 cd /path/to/gem
-for f in $(find examples compiler std -name '*.gem'); do
-  tree-sitter parse "$f" 2>&1 | grep -q ERROR && echo "FAIL: $f"
+for f in $(find examples std compiler lsp tests benchmarks editors -name '*.gem' -not -path 'tests/broken/*'); do
+  (cd editors/tree-sitter-gem && tree-sitter parse "../../$f" 2>&1) | grep -q 'ERROR\|MISSING' && echo "FAIL: $f"
 done
 
 # Check Helix sees everything

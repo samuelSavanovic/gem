@@ -17,7 +17,7 @@ load "../compiler/parser" (parse_source)
 load "../compiler/lexer" (tokenize)
 load "../compiler/lower" (lower)
 load "../compiler/errors" (make_error_sink)
-load "../compiler/loader" (find_project_root, compute_stdlib_root)
+load "../compiler/loader" (find_project_root, find_install_root, compute_stdlib_root, resolve_load_path, load_target_problem, make_show_path)
 
 # Computed at module load time so the string lives in the main process's
 # arena (which is never freed and shareable across processes). Lazy init
@@ -25,7 +25,7 @@ load "../compiler/loader" (find_project_root, compute_stdlib_root)
 # *that* process's arena; the next arena reset would free it underneath
 # the BSS-backed top-level box, and subsequent reads would dangle. macOS
 # malloc tolerates that UAF; Linux glibc trips realloc heap canaries.
-let _install_root_path = dirname(dirname(argv()[0]))
+let _install_root_path = find_install_root()
 
 fn install_root()
   _install_root_path
@@ -50,6 +50,27 @@ end
 # parse_source) costs ~1-2ms on std/http.gem-sized files, well under
 # the 50ms LSP "feels instant" bar; revisit if the doubling stops being
 # negligible (or expose a lex+parse combined entry from compiler/parser).
+# Report each top-level `load` whose target is missing (or a directory)
+# into `sink`, with the compiler's message, at the `load` — the compiler
+# resolves only top-level loads too. Modules that do exist are not
+# opened here: their own problems surface when the editor opens them.
+fn report_load_problems(ast, text, path, base_dir, project_root, stdlib_root, sink)
+  let show_path = make_show_path(path, project_root)
+  for stmt in ast.stmts
+    if type(stmt) != "table" or stmt.tag != "load"
+      continue
+    end
+    let res = pcall resolve_load_path(stmt.path, base_dir, project_root, stdlib_root)
+    if not res.ok
+      continue
+    end
+    let problem = load_target_problem(stmt.path, res.value, show_path)
+    if problem != nil
+      sink.report(text, path, stmt.line, stmt.col, len("load"), problem.msg, problem.hint)
+    end
+  end
+end
+
 fn analyze(uri, text)
   let path = uri_to_path(uri)
   let base_dir = dirname(path)
@@ -68,6 +89,7 @@ fn analyze(uri, text)
   # pre-lower AST through a separate accessor here rather than walk the
   # cached one.
   let ast = lower(parse_source(text, path, sink))
+  report_load_problems(ast, text, path, base_dir, project_root, stdlib_root, sink)
   let syms = build_symbols(ast, path, base_dir, project_root, stdlib_root)
   {ast: ast, tokens: tokens, sink: sink, symbols: syms, text: text,
    base_dir: base_dir, project_root: project_root, stdlib_root: stdlib_root}

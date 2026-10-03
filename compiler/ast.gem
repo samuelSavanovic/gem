@@ -35,12 +35,12 @@ fn make_var(name, line = nil, col = nil)
   {tag: "var", name: name, line: line, col: col}
 end
 
-fn make_binop(op, left, right)
-  {tag: "binop", op: op, left: left, right: right}
+fn make_binop(op, left, right, line = nil)
+  {tag: "binop", op: op, left: left, right: right, line: line}
 end
 
-fn make_unop(op, expr)
-  {tag: "unop", op: op, expr: expr}
+fn make_unop(op, expr, line = nil)
+  {tag: "unop", op: op, expr: expr, line: line}
 end
 
 fn make_call(func, args, line)
@@ -51,12 +51,12 @@ fn make_dot(object, field, line = nil)
   {tag: "dot", object: object, field: field, line: line}
 end
 
-fn make_index(object, key)
-  {tag: "index", object: object, key: key}
+fn make_index(object, key, line = nil)
+  {tag: "index", object: object, key: key, line: line}
 end
 
-fn make_anon_fn(params, rest_param, body, defaults)
-  {tag: "anon_fn", params: params, rest_param: rest_param, defaults: defaults, body: body}
+fn make_anon_fn(params, rest_param, body, defaults, line = nil)
+  {tag: "anon_fn", params: params, rest_param: rest_param, defaults: defaults, body: body, line: line}
 end
 
 fn make_table(entries)

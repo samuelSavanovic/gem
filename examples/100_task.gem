@@ -157,9 +157,8 @@ let r16 = pcall task.await_all([twice, twice])
 print("test16: {r16.error}")
 print("test16: still awaitable: {task.await(twice)}")
 
-# ─── Test 17: task killed with reason "normal" ───
-let quiet = task.async(fn() sleep(10000) end)
-kill(quiet.pid, "normal")
+# ─── Test 17: task ends with reason "normal" before sending its result ───
+let quiet = task.async(fn() kill(self(), "normal") end)
 let r17 = pcall task.await(quiet)
 print("test17: {r17.error}")
 print("final mailbox={mailbox_len()}")

@@ -1,0 +1,36 @@
+# An int key in a table literal or table pattern reads like any int
+# literal: decimal (leading zeros don't make it octal) and range-checked
+# (tests/broken/int_literal_range.gem). A key written as a string stays a
+# string, even when it looks like a number. Negative ints index from the
+# end, so they are not keys (tests/broken/table_negative_key.gem).
+
+let t = {010: "ten", "5": "five", "09": "nine", 7: "seven", 9223372036854775807: "max", 0: "zero"}
+print(t)
+print(t[10])
+print(has_key(t, 8))
+print(has_key(t, "5"))
+print(has_key(t, 5))
+print(t["09"])
+print(t[9223372036854775807])
+
+# 002 is the key 2
+let a = {1: "b", 0: "a", 002: "c"}
+print(a)
+print(len(a))
+
+# patterns: an int key matches the int key, a string key the string key
+fn which(v)
+  match v
+  when {1: x} then "int {x}"
+  when {"1": x} then "string {x}"
+  else "none"
+  end
+end
+print(which([10, 20]))
+print(which({"1": "s"}))
+print(which({01: "lead"}))
+print(which({}))
+
+match t
+when {7: s, "5": f, 00: z} then print("{s} {f} {z}")
+end

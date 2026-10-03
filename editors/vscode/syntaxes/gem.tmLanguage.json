@@ -187,7 +187,7 @@
 
     "interpolation": {
       "comment": "String interpolation: {expr}",
-      "begin": "(?<!\\\\)\\{",
+      "begin": "\\{",
       "end": "\\}",
       "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.gem" } },
       "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.gem" } },

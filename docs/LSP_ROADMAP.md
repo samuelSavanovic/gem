@@ -158,6 +158,7 @@ Parse-only, in-process: `lsp/doc.gem`'s `analyze()` runs the lexer + parser with
 - **Cross-file fan-out is general but unexercised today.** `analyze()` doesn't call `resolve_loads`, so every entry's `file` is the entry doc and every publish lands on one URI. The builder still groups by file so the cross-file path Just Works once `analyze()` widens — most clients silently drop diagnostics for files they haven't opened, so emitting them eagerly is safe.
 - **Entries with `line == nil` are dropped.** These come from compiler-bug paths that don't reach a parse-only LSP today; if they ever do, fall back to a (0,0)–(0,1) range rather than crashing the convert step.
 - **Smoke at `tests/lsp/smoke_diagnostics.sh`** opens a fixture missing its `end`, asserts the `publishDiagnostics` payload carries severity=1, source="gem", a non-empty message, and a 0-indexed range with `line >= 1`. A follow-up `didChange` with the fixed source must produce an empty `diagnostics` array on the same URI (clear-after-fix). Wired into `make test-lsp`.
+- **Missing loads.** `analyze()` checks each top-level `load` of the open file with the compiler's `resolve_load_path` + `load_target_problem` (compiler/loader.gem) and reports a missing module or a directory at the `load`, with the compiler's message. It does not open the loaded modules. Smoke: `tests/lsp/smoke_load_diagnostics.sh`.
 
 ## Phase 3: Format-on-save — deferred (decided 2026-05-09)
 

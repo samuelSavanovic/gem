@@ -17,7 +17,7 @@
 #   for_in:   {tag, var_name, val_name (or nil), items, body, line}
 #   for_range:{tag, var_name, start, end_, body, line}
 #   match_arm:{tag, pattern (or nil), expr (or nil), body}
-#   pat_table:{tag, entries: [{key, value (or nil)}]}
+#   pat_table:{tag, entries: [{key, value (or nil), int_key (an int key's value, else nil)}]}
 #   pat_array:{tag, elements: [pat, ...]}
 #   pat_literal:{tag, literal: <int|float|string|bool|nil node>}
 #   pat_name: {tag, name}
@@ -262,7 +262,7 @@ fn lower_for_in(node, state)
     )
     let result = {tag: "block", stmts: [
       make_let(tbl_var, lower_node(node.items, state), line),
-      make_let(len_var, make_call(make_var("__len"), [make_var(tbl_var)], 0), line),
+      make_let(len_var, make_call(make_var("__for_len"), [make_var(tbl_var)], 0), line),
       make_let(idx_var, make_int(0), line),
       while_node
     ]}
@@ -281,7 +281,7 @@ fn lower_for_in(node, state)
     push(inner, s)
   end
   let while_node = make_while(
-    make_binop("<", make_var(idx_var), make_call(make_var("__len"), [make_var(items_var)], 0)),
+    make_binop("<", make_var(idx_var), make_call(make_var("__for_len"), [make_var(items_var)], 0)),
     inner,
     line
   )
@@ -397,6 +397,7 @@ fn pattern_to_cond(pat, target_expr, state)
     let bindings = []
     for entry in pat.entries
       let key_str = make_string(entry.key)
+      if entry.int_key != nil then key_str = make_int(entry.int_key) end
       push(conditions, make_call(make_var("__has_key"), [target_expr, key_str], 0))
       let sub_target = make_index(target_expr, key_str)
       if entry.value == nil
@@ -416,8 +417,9 @@ fn pattern_to_cond(pat, target_expr, state)
   end
 
   if tag == "pat_array"
-    let conditions = [make_binop("==", make_call(make_var("__type"), [target_expr], 0), make_string("table"))]
-    push(conditions, make_binop("==", make_call(make_var("__len"), [target_expr], 0), make_int(len(pat.elements))))
+    # A table of exactly n entries keyed 0 .. n-1 (a record of n keys is not
+    # an array); `[]` matches any empty table.
+    let conditions = [make_call(make_var("__is_array_n"), [target_expr, make_int(len(pat.elements))], 0)]
     let bindings = []
     let i = 0
     for sub_pat in pat.elements

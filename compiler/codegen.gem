@@ -45,12 +45,28 @@ fn pad_for(indent)
   repeat_str("    ", indent)
 end
 
+# An int as a C constant. INT64_MIN has no literal of its own in C
+# (`-9223372036854775808` negates an out-of-range constant), so spell it.
+fn c_int_literal(n)
+  if n == 0 - 9223372036854775807 - 1 then return "INT64_MIN" end
+  to_string(n)
+end
+
 fn format_float(val)
+  # to_string gives the shortest text that reads back to the same double
+  # ("0.1", "2.0", "1e-05", "1e+16"), which is also a valid C double literal,
+  # except for the non-finite values (constant folding can produce inf).
   let s = to_string(val)
-  # Ensure the string has a decimal point
+  if s == "inf"
+    return "__builtin_inf()"
+  elif s == "-inf"
+    return "(-__builtin_inf())"
+  elif s == "nan"
+    return "__builtin_nan(\"\")"
+  end
   let has_dot = false
   for i = 0, len(s)
-    if s[i] == "."
+    if s[i] == "." or s[i] == "e"
       has_dot = true
     end
   end
@@ -195,7 +211,8 @@ end
 # the new, uninitialized variable). So this pass alpha-renames every
 # shadowing let (and the references and assignments it scopes) to a fresh
 # `_sh<N>_<name>`. After it no let reuses a name visible at that point, and
-# every later pass sees distinct variables.
+# every later pass sees distinct variables. A parameter named like a named
+# or extern fn is renamed the same way (`shadow_param_name`).
 #
 # The one exception is a `let` in the module's own statement list (or
 # directly in a top-level `block`, the shape of a lowered `for` header or a
@@ -353,17 +370,35 @@ fn shadow_child_mode(mode)
   mode
 end
 
-# A fn or closure: its params are new C params, visible as themselves in
-# the body (hiding any outer binding of the same name).
+# A param named like a named or extern fn: codegen resolves such a name
+# to the fn wherever it is not a local of the fn being compiled (a closure
+# capturing the param, a `do` block), so the param gets a fresh name.
+fn shadow_param_name(p, ctx)
+  if set_contains(ctx.fns, p) or set_contains(ctx.externs, p)
+    ctx.n = ctx.n + 1
+    return "_sh{ctx.n}_{p}"
+  end
+  p
+end
+
+# A fn or closure: its params are new C params, visible in the body
+# (hiding any outer binding of the same name). A param keeps its name,
+# except one named like a named or extern fn (`shadow_param_name`).
 fn shadow_fn(node, env, ctx)
   let inner = copy_scope_env(env)
   if node.params != nil
+    let params = []
     for p in node.params
-      inner[p] = p
+      let c = shadow_param_name(p, ctx)
+      inner[p] = c
+      push(params, c)
     end
+    node.params = params
   end
   if node.rest_param != nil
-    inner[node.rest_param] = node.rest_param
+    let c = shadow_param_name(node.rest_param, ctx)
+    inner[node.rest_param] = c
+    node.rest_param = c
   end
   if node.defaults != nil
     for d in node.defaults
@@ -3511,7 +3546,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   compile_expr = fn(node)
     match node
     when {tag: "int", value: value}
-      return {expr: "gem_int({value})", setup: ""}
+      return {expr: "gem_int({c_int_literal(value)})", setup: ""}
     when {tag: "float", value: value}
       return {expr: "gem_float({format_float(value)})", setup: ""}
     when {tag: "string", value: value}
@@ -3629,29 +3664,6 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   # ─── compile_table ──
 
-  let is_int_key = fn(s)
-    let slen = len(s)
-    if slen == 0
-      return false
-    end
-    let start = 0
-    if s[0] == "-"
-      start = 1
-      if slen == 1
-        return false
-      end
-    end
-    let i = start
-    while i < slen
-      let c = ord(s, i)
-      if c < 48 or c > 57
-        return false
-      end
-      i += 1
-    end
-    true
-  end
-
   compile_table = fn(node)
     let entries = node.entries
     let t = tmp()
@@ -3660,8 +3672,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     for entry in entries
       let val_r = compile_expr(entry.value)
       buf_push(b, val_r.setup)
-      if is_int_key(entry.key)
-        buf_push(b, "    gem_table_set({t}, gem_int({entry.key}), {val_r.expr});\n")
+      if entry.int_key != nil
+        buf_push(b, "    gem_table_set({t}, gem_int({c_int_literal(entry.int_key)}), {val_r.expr});\n")
       else
         let escaped = escape_c_string(entry.key)
         buf_push(b, "    gem_table_set({t}, gem_string(\"{escaped}\"), {val_r.expr});\n")
@@ -4443,7 +4455,13 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     buf_push(b, "{p2}GemMsgNode *{prev_tmp} = NULL;\n")
     buf_push(b, "{p2}GemMsgNode *{cur_tmp} = {proc_tmp}->mailbox.head;\n")
     buf_push(b, "{p2}{matched_tmp} = -1;\n")
-    buf_push(b, "{p2}while ({cur_tmp}) \{\n")
+    # An `after`-only receive (no arms) takes no message: skip the scan
+    # and just wait for the deadline, leaving the mailbox as it is.
+    let scan_open = "{p2}while ({cur_tmp}) \{\n"
+    if len(arms) == 0
+      scan_open = "{p2}while (0) \{\n"
+    end
+    buf_push(b, scan_open)
     let p3 = pad_for(indent + 2)
     buf_push(b, "{p3}{recv_tmp} = {cur_tmp}->value;\n")
 
@@ -4518,7 +4536,12 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     # the timeout branch is a plain `else`; that also lets the C compiler
     # see every path through a return-position receive return a value.
     if after_ms != nil
-      buf_push(b, "{p}} else \{\n")
+      # No arms: the timeout branch is the only one.
+      if len(arms) == 0
+        buf_push(b, "{p}\{\n")
+      else
+        buf_push(b, "{p}} else \{\n")
+      end
       if after_body != nil
         let saved_after = set_union(fn_scope_locals, {})
         buf_push(b, compile_stmts_tail(after_body, indent + 1, return_pos))
@@ -4596,10 +4619,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # Without this, a Gem-side mistake (wrong arity, wrong type) reads garbage out of
   # the GemVal union and passes it to C.
   let emit_extern_validation = fn(b, name, params)
+    # Arity counts Gem arguments (a `Bytes` param is one Gem arg, two C args).
+    # Too many raises like too few: an extern has no rest params to absorb them.
     let n = len(params)
-    if n > 0
-      buf_push(b, "    if (argc < {n}) \{ char _eb[128]; snprintf(_eb, sizeof(_eb), \"{name}: expected {n} argument(s), got %d\", argc); gem_error(_eb); }\n")
-    end
+    buf_push(b, "    if (argc != {n}) \{ char _eb[128]; snprintf(_eb, sizeof(_eb), \"{name}: expected {n} argument(s), got %d\", argc); gem_error(_eb); }\n")
     for i = 0, n
       let ptype = params[i]["type"]
       let val_tag = nil
@@ -5376,7 +5399,68 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   # ─── compile (top-level) ──
 
-  let compile = fn(ast)
+  # `extern include "<path>"` lines. A relative path names a file next to
+  # the .gem file containing the include (each loaded module relative to
+  # its own file): when that file exists it is emitted by its absolute
+  # path, since the C file is compiled from /tmp, and only once however
+  # many files include it. Otherwise the path is
+  # left to cc's search (system headers such as "string.h", and "gem.h" on
+  # the runtime include path). A path that can only mean a file of the
+  # user's (absolute, or starting with ./ or ../) and isn't there is a
+  # compile error at the include. When `c_file` (the C file cc compiles)
+  # is known, a `#line` before each header left to cc's search makes cc
+  # report a missing one at the .gem line, and a `#line` after the block
+  # points the rest of the output back at the C file.
+  let emit_extern_includes = fn(ob, includes, c_file)
+    let phys = 0
+    let redirected = false
+    let seen = {}
+    for ei in includes
+      let path = ei.path
+      let line = ei.line
+      if line == nil then line = 0 end
+      let col = ei.col
+      if col == nil then col = 0 end
+      let span = len(path) + 2
+      if path == "" or str_replace(path, "\"", "") != path or str_replace(path, "\n", "") != path
+        sink.report(source_of(ei), file_of(ei), line, col, span, "invalid header path in extern include: \"{escape_c_string(path)}\"", nil)
+        continue
+      end
+      let is_abs = substr(path, 0, 1) == "/"
+      let candidate = path_join(dirname(file_of(ei)), path)
+      if file_exists(candidate) and not is_dir(candidate)
+        let full = path
+        if not is_abs
+          full = normalize_path(candidate)
+        end
+        # Two files including the same header get it once.
+        if not has_key(seen, full)
+          seen[full] = true
+          buf_push(ob, "#include \"{full}\"\n")
+          phys += 1
+        end
+      elif is_abs or substr(path, 0, 2) == "./" or substr(path, 0, 3) == "../"
+        if is_abs
+          sink.report(source_of(ei), file_of(ei), line, col, span, "header not found: {path}", nil)
+        else
+          sink.report(source_of(ei), file_of(ei), line, col, span, "header not found: {path} (looked in {dirname(rel_path(file_of(ei)))}/)", "a relative path is resolved against the directory of the .gem file that contains the extern include")
+        end
+      else
+        if c_file != nil and line > 0
+          buf_push(ob, "#line {line} \"{escape_c_string(rel_path(file_of(ei)))}\"\n")
+          phys += 1
+          redirected = true
+        end
+        buf_push(ob, "#include \"{path}\"\n")
+        phys += 1
+      end
+    end
+    if redirected
+      buf_push(ob, "#line {phys + 2} \"{escape_c_string(c_file)}\"\n")
+    end
+  end
+
+  let compile = fn(ast, c_file)
     # Separate different statement types
     let fn_defs = []
     let extern_fns_list = []
@@ -5579,9 +5663,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     # Assemble
     let ob = buf_new()
-    for ei in extern_includes
-      buf_push(ob, "#include \"{ei.path}\"\n")
-    end
+    emit_extern_includes(ob, extern_includes, c_file)
     buf_push(ob, "#include \"gem.h\"\n")
 
     # Extern C forward declarations (auto-generated from extern fn signatures)

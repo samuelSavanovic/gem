@@ -3,9 +3,26 @@
 module.exports = grammar({
   name: 'gem',
 
+  // `;` separates statements like a newline does.
   extras: $ => [
     /\s/,
+    ';',
     $.comment,
+  ],
+
+  // Tokens that depend on what precedes them on the line (src/scanner.c).
+  // A call's `(`, a subscript's `[`, a binary `-` and a block's `{` after a
+  // call must be on the same line as the expression they continue, as in
+  // compiler/parser.gem. See the comment at the top of the scanner.
+  externals: $ => [
+    $._call_open,
+    $._subscript_open,
+    $._binary_minus,
+    $._block_brace_open,
+    $._pcall_prefix,
+    $._load_as,
+    $._triple_string_content,
+    $._error_sentinel,
   ],
 
   word: $ => $.identifier,
@@ -100,7 +117,17 @@ module.exports = grammar({
 
     type: $ => choice('Int', 'Float', 'String', 'Bool', 'Nil', 'Ptr', 'Table', 'Fn', 'Bytes'),
 
-    load_statement: $ => seq('load', $._string),
+    // load "path" | load "path" as name | load "path" (name, ...)
+    // The `as` and the `(` must be on the `load` line, as in
+    // compiler/parser.gem: on the next line they start a new statement.
+    load_statement: $ => prec.right(seq(
+      'load',
+      field('path', $._string),
+      optional(choice(
+        seq(alias($._load_as, 'as'), field('alias', $.identifier)),
+        seq(alias($._call_open, '('), sep1(field('name', $.identifier), ','), ')'),
+      )),
+    )),
 
     export_statement: $ => seq('export', sep1($.identifier, ',')),
 
@@ -172,7 +199,7 @@ module.exports = grammar({
     match_statement: $ => seq(
       'match',
       field('subject', $._expression),
-      repeat1($.when_clause),
+      repeat($.when_clause),
       optional($.else_clause),
       'end',
     ),
@@ -182,8 +209,10 @@ module.exports = grammar({
 
     receive_block: $ => seq(
       'receive',
-      repeat1($.when_clause),
-      optional($.after_clause),
+      choice(
+        seq(repeat1($.when_clause), optional($.after_clause)),
+        $.after_clause,
+      ),
       'end',
     ),
 
@@ -218,7 +247,11 @@ module.exports = grammar({
     pin_pattern: $ => seq('^', field('name', $.identifier)),
 
     table_pattern: $ => seq('{', sep1($.pattern_pair, ','), '}'),
-    pattern_pair: $ => seq(field('key', $.identifier), ':', field('value', $.pattern)),
+    // `{key}` binds the field to a variable of the same name.
+    pattern_pair: $ => seq(
+      field('key', $.identifier),
+      optional(seq(':', field('value', $.pattern))),
+    ),
     array_pattern: $ => seq('[', sep1($.pattern, ','), ']'),
 
     // Assignment
@@ -241,6 +274,7 @@ module.exports = grammar({
       $.call_expression,
       $.call_with_block,
       $.receive_call,
+      $.pcall_expression,
       $.member_expression,
       $.subscript_expression,
       $.lambda,
@@ -262,7 +296,7 @@ module.exports = grammar({
         [2, 'and'],
         [3, choice('==', '!=')],
         [4, choice('<', '>', '<=', '>=', 'in')],
-        [5, choice('+', '-')],
+        [5, choice('+', alias($._binary_minus, '-'))],
         [6, choice('*', '/', '%')],
       ];
       return choice(
@@ -283,10 +317,16 @@ module.exports = grammar({
 
     call_expression: $ => prec.left(8, seq(
       field('function', $._expression),
-      '(',
+      alias($._call_open, '('),
       optional(sep1($._expression, ',')),
       ')',
-      optional(field('block', choice($.do_block, $.brace_block))),
+      optional(field('block', choice($.do_block, $.param_brace_block, $.brace_block))),
+    )),
+
+    // `pcall <expr>` is `pcall(fn() <expr> end)`.
+    pcall_expression: $ => prec.right(-2, seq(
+      alias($._pcall_prefix, 'pcall'),
+      field('body', $._expression),
     )),
 
     member_expression: $ => prec.left(9, seq(
@@ -297,7 +337,7 @@ module.exports = grammar({
 
     subscript_expression: $ => prec.left(9, seq(
       field('object', $._expression),
-      '[',
+      alias($._subscript_open, '['),
       field('index', $._expression),
       ']',
     )),
@@ -324,12 +364,12 @@ module.exports = grammar({
       'end',
     ),
 
-    brace_block: $ => prec.dynamic(-1, seq(
-      '{',
-      optional($.block_parameters),
-      repeat1($._statement),
+    // `f(x) { expr }`: a block without params after a call's parens.
+    brace_block: $ => seq(
+      alias($._block_brace_open, '{'),
+      $._expression,
       '}',
-    )),
+    ),
 
     block_parameters: $ => seq('|', optional(sep1(choice($.default_param, $.destructure_param, $.identifier), ',')), '|'),
 
@@ -349,7 +389,7 @@ module.exports = grammar({
     ),
 
     table_pair: $ => seq(
-      field('key', choice($.identifier, $._string)),
+      field('key', choice($.identifier, $._string, $.integer)),
       ':',
       field('value', $._expression),
     ),
@@ -401,16 +441,17 @@ module.exports = grammar({
       "'''",
     )),
 
-    triple_double_string: $ => token(seq(
+    // Interpolates like a double-quoted string; an interpolation may hold
+    // a `"""` string of its own.
+    triple_double_string: $ => seq(
       '"""',
       repeat(choice(
-        /[^"\\]/,
-        seq('\\', /./),
-        seq('"', /[^"]/),
-        seq('""', /[^"]/),
+        alias($._triple_string_content, $.string_content),
+        $.escape_sequence,
+        $.interpolation,
       )),
       '"""',
-    )),
+    ),
 
     string_content: $ => token.immediate(prec(1, /[^"\\{]+/)),
     _single_string_content: $ => token.immediate(prec(1, /[^'\\]+/)),
@@ -421,7 +462,8 @@ module.exports = grammar({
       '}',
     ),
 
-    escape_sequence: $ => token.immediate(seq('\\', /[nrt0\\'"{}]/)),
+    // An unknown escape is kept verbatim (compiler/lexer.gem apply_escape).
+    escape_sequence: $ => token.immediate(seq('\\', /[^\r\n]/)),
 
     float: $ => token(seq(/[0-9]+/, '.', /[0-9]+/)),
     integer: $ => /[0-9]+/,

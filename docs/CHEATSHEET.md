@@ -16,7 +16,7 @@ let x = x + 1                        # in a fn/block: new variable shadowing the
 let s = nil                          #   declare before the if to use the value after it
 if c then s = 1 else s = 2 end
 
-# Functions — fn/end, last expression is implicit return
+# Functions — fn/end, last expression is implicit return; named fns only at top level
 fn add(a, b)
   a + b
 end
@@ -29,7 +29,7 @@ fn server({port = 8080, host = "0.0.0.0"} = {})   # destructured params
 end                                                # `= {}` makes the bag optional / nil-tolerant
 
 # Closures / anonymous functions
-let f = fn(x) x * 2 end
+let f = fn(x) x * 2 end              # inside a fn or block: let helper = fn() ... end
 
 # Blocks — trailing do/end or { } passed as the last arg
 table.each(items) do |item|
@@ -56,6 +56,7 @@ end
 
 for item in arr ... end              # array iteration
 for k, v in tbl ... end              # key-value iteration
+for i, ch in str ... end             # bytes: 0-based index, 1-byte string
 for i = 0, n ... end                 # range [0, n)
 
 match val
@@ -71,7 +72,7 @@ else
 end
 
 # Modules — load (NOT import), export at end of file
-load "std/string"                    # => string.split(...)
+load "std/string"                    # => string.split(...)  (namespace = file base name)
 load "std/string" as str             # => str.split(...)
 load "std/string" (split, trim)      # => split(...) directly
 
@@ -86,6 +87,9 @@ multi-line with {interpolation}
 '''
 multi-line literal
 '''
+
+# Numbers — 42 is an int, 2.0 a float (no exponent literals; to_float("1e-7")); 2 == 2.0 is false
+# Floats print as the shortest text that reads back exactly: 0.1, 2.0, -0.0, 1e-05, 1e+16, inf, nan
 
 # Operators — and/or/not (NOT &&/||/!), x in tbl, x in arr
 # Tables — { key: val } or [1, 2, 3], dot access, bracket access (negative indexing supported; arr[i] past the end is nil, a string index out of range raises)
@@ -104,9 +108,14 @@ when {tag: "ping"} then pong()       # one-line arm
 after 5000
   timeout()                          # or: after 5000 then timeout()
 end
+receive                              # arms optional: just wait, mailbox untouched
+after 100 then nil
+end
 monitor(pid)                         # → true; DOWN message on exit
 link(pid); unlink(pid)
 process_flag("trap_exit", true)
+kill(pid, "shutdown")                # → true if alive; EXIT msg if pid traps exits
+                                     #   reason "normal" is ignored unless pid == self()
 register("name", self())
 whereis("name")                      # → pid or nil
 let ref = make_ref()
@@ -165,7 +174,7 @@ end
 # std/test       case, assert, assert_eq, assert_neq, assert_throws, run
 
 # C interop
-extern include "stdio.h"                 # a libc fn needs its header; your own header: absolute path
+extern include "stdio.h"                 # a libc fn needs its header; your own: path relative to the .gem file
 extern fn puts(s: String) -> Int
 extern blocking fn net_read(fd: Int) -> String
 ```

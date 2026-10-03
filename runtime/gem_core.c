@@ -4,6 +4,8 @@
 
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
+#include <float.h>
 
 #define STB_DS_IMPLEMENTATION
 #define STBDS_REALLOC(c, p, s) realloc((p), (s))
@@ -77,6 +79,64 @@ void gem_init_char_cache(void) {
 
 GemVal gem_int(int64_t v) { return (GemVal){VAL_INT, GEM_MAGIC, {.ival = v}}; }
 GemVal gem_float(double v) { GemVal r; r.type = VAL_FLOAT; r.magic = GEM_MAGIC; r.fval = v; return r; }
+
+int gem_format_float(double v, char *out) {
+    if (isnan(v)) { memcpy(out, "nan", 4); return 3; }
+    if (isinf(v)) {
+        if (v < 0) { memcpy(out, "-inf", 5); return 4; }
+        memcpy(out, "inf", 4); return 3;
+    }
+    /* Shortest of 15/16/17 significant digits that round-trips (any
+     * shorter decimal that round-trips is a prefix of the 15-digit form,
+     * so stripping its trailing zeros below finds it). A subnormal has
+     * fewer than 15 significant digits of precision: try from 1. */
+    char tmp[GEM_FLOAT_BUF];
+    int start = (v != 0.0 && fabs(v) < DBL_MIN) ? 1 : 15;
+    for (int prec = start; prec <= 17; prec++) {
+        snprintf(tmp, sizeof(tmp), "%.*e", prec - 1, v);
+        if (prec == 17 || strtod(tmp, NULL) == v) break;
+    }
+    /* tmp is [-]d.ddddde[+-]xx: split into sign, digits, exponent. */
+    const char *p = tmp;
+    int neg = 0;
+    if (*p == '-') { neg = 1; p++; }
+    char digits[24];
+    int nd = 0;
+    while (*p && *p != 'e') {
+        if (*p != '.') digits[nd++] = *p;
+        p++;
+    }
+    int exp10 = atoi(p + 1);
+    while (nd > 1 && digits[nd - 1] == '0') nd--;
+    int n = 0;
+    if (neg) out[n++] = '-';
+    if (exp10 >= -4 && exp10 < 16) {
+        if (exp10 >= 0) {
+            for (int i = 0; i <= exp10; i++) out[n++] = i < nd ? digits[i] : '0';
+            out[n++] = '.';
+            if (nd > exp10 + 1) {
+                for (int i = exp10 + 1; i < nd; i++) out[n++] = digits[i];
+            } else {
+                out[n++] = '0';
+            }
+        } else {
+            out[n++] = '0';
+            out[n++] = '.';
+            for (int i = 0; i < -exp10 - 1; i++) out[n++] = '0';
+            for (int i = 0; i < nd; i++) out[n++] = digits[i];
+        }
+        out[n] = '\0';
+    } else {
+        out[n++] = digits[0];
+        if (nd > 1) {
+            out[n++] = '.';
+            for (int i = 1; i < nd; i++) out[n++] = digits[i];
+        }
+        n += snprintf(out + n, GEM_FLOAT_BUF - n, "e%c%02d", exp10 < 0 ? '-' : '+', exp10 < 0 ? -exp10 : exp10);
+    }
+    return n;
+}
+
 GemVal gem_bool(int v) { GemVal r; r.type = VAL_BOOL; r.magic = GEM_MAGIC; r.bval = v; return r; }
 GemVal gem_make_fn(GemFnPtr f, void *env) { GemVal r; r.type = VAL_FN; r.magic = GEM_MAGIC; r.fn = f; r.env = env; return r; }
 

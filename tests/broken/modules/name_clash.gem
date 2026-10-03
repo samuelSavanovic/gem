@@ -1,0 +1,4 @@
+# Loaded by load_name_clash.gem: a `fn` after a module-level `let`.
+let scale = 2
+fn scale(x) x * 2 end
+export scale

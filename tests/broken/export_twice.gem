@@ -1,0 +1,6 @@
+# A module that lists a name twice in its `export`: one error, at the
+# second one.
+load "./modules/export_twice"
+print(export_twice.a())
+
+# expect: exports `a` twice

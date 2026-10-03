@@ -1,0 +1,11 @@
+# A user module named like std/time (157_module_names), which std/log
+# loads too: the two are different modules.
+fn now()
+  "user time"
+end
+
+fn boom()
+  error("boom")
+end
+
+export now, boom

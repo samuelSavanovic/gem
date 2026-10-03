@@ -1,0 +1,12 @@
+# A negative int indexes from the end, so it is never a table key: each
+# is a compile error at the key, in a literal and in a pattern.
+let a = {-1: "x"}
+let b = {a: 1, -9223372036854775808: 2}
+fn f(v)
+  match v
+  when {-1: y} then y
+  else 0
+  end
+end
+
+# expect: a negative int can't be a table key

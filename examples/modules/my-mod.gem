@@ -1,0 +1,7 @@
+# A module whose file name isn't an identifier (157_module_names): it
+# can be loaded with `as` or selectively, not as a plain namespace.
+fn hello()
+  "hello from my-mod"
+end
+
+export hello

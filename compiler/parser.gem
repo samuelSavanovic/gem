@@ -45,6 +45,27 @@ fn str_to_int(s)
   result
 end
 
+# Where a decimal integer literal's digits fall against the int64 range:
+# "ok" (at most 9223372036854775807), "min" (exactly 9223372036854775808,
+# which only `-` may take, giving INT64_MIN) or "over".
+fn int_literal_range(s)
+  let start = 0
+  while start < len(s) - 1 and s[start] == "0"
+    start += 1
+  end
+  let digits = len(s) - start
+  if digits < 19 then return "ok" end
+  if digits > 19 then return "over" end
+  let d = substr(s, start, 19)
+  if d <= "9223372036854775807" then return "ok" end
+  if d == "9223372036854775808" then return "min" end
+  "over"
+end
+
+fn int64_min()
+  0 - 9223372036854775807 - 1
+end
+
 fn contains_dot(s)
   for i = 0, len(s)
     if s[i] == "."
@@ -126,6 +147,10 @@ fn make_parser(tokens, source, file, sink)
     push(stmts, make_let(name, make_var(tmp), line))
   end
   let fn_depth = 0
+  # Nesting of the statement being parsed: 1 for a statement directly in
+  # the file's top-level code, more inside any block (if/while/for/match/
+  # receive arms, fn and do bodies). Named fns and externs live only at 1.
+  let stmt_depth = 0
   # > 0 while parsing an if / while / for header. No trailing block is
   # taken there, so `x do` / `f() do` is reported as a stray Lua/Ruby-style
   # `do` instead of parsed as a block call.
@@ -137,6 +162,14 @@ fn make_parser(tokens, source, file, sink)
   # a loop outside it; parse_stmt reports them when loop_depth is 0.
   let loop_depth = 0
   let closure_kind = nil
+  # Position of the statement parse() is parsing at the file's top level,
+  # so parse_stmt can tell a module-scope `let` / `fn` / `extern fn` from a
+  # nested one.
+  let top_stmt_pos = -1
+  # Module-scope names declared so far: name -> {kind, line}. Each name has
+  # one module-level definition: a `fn`, an `extern fn` or `let`s (a second
+  # `let` rebinds the slot). Any other pair is reported at the second one.
+  let top_names = {}
 
   # ── Token access ──
 
@@ -161,6 +194,75 @@ fn make_parser(tokens, source, file, sink)
   # Report a parser error at the given location.
   let report = fn(line, col, span, msg, hint)
     sink.report(source, file, line, col, span, msg, hint)
+  end
+
+  # A module-scope binding of `tok`'s name (kind "let", "load", "fn" or
+  # "extern fn"), clashing with an earlier one unless both are lets or
+  # loads (the bindings a `load` makes are lets). `span` overrides the
+  # underline width.
+  let note_top_name = fn(tok, kind, span = nil)
+    if tok.synthetic == true or type(tok.value) != "string"
+      return nil
+    end
+    let name = tok.value
+    let prev = top_names[name]
+    if prev == nil
+      top_names[name] = {kind: kind, line: tok.line}
+      return nil
+    end
+    let rebindable = {let: true, load: true}
+    if rebindable[prev.kind] and rebindable[kind]
+      return nil
+    end
+    let article = "a"
+    if prev.kind == "extern fn"
+      article = "an"
+    end
+    if span == nil
+      span = len(name)
+    end
+    report(tok.line, tok.col, span, "`{name}` is already defined at line {prev.line} ({article} `{prev.kind}`)", "pick another name; a module-level name has one definition (only a `let` can be repeated, and it rebinds the name)")
+  end
+
+  # NUMBER token `t` holds an integer literal that doesn't fit in an int.
+  let report_int_range = fn(t)
+    report(t.line, t.col, len(t.value), "integer literal out of range (max 9223372036854775807)", "ints are 64-bit signed: -9223372036854775808 to 9223372036854775807")
+  end
+
+  # An int key in a table literal or table pattern: when the tokens at the
+  # cursor are `NUMBER :` with an integer NUMBER, consumes them up to the
+  # `:` and returns the key's value, read like any int literal (decimal,
+  # leading zeros ignored, range-checked: an out-of-range key is reported
+  # and reads as 0). `- NUMBER :` is reported: a negative int indexes from
+  # the end and is never a key. Otherwise consumes nothing and returns nil.
+  let parse_int_key = fn()
+    let negative = peek().type == "-"
+    let off = 0
+    if negative then off = 1 end
+    let nt = peek_at(off)
+    if nt.type != "NUMBER" or contains_dot(nt.value) or peek_at(off + 1).type != ":"
+      return nil
+    end
+    let first = advance()
+    if negative
+      advance()
+      report(first.line, first.col, nt.col + len(nt.value) - first.col, "a negative int can't be a table key", "a negative int indexes from the end of an array (`t[-1]` is the last element); key the entry with a string")
+      return 0
+    end
+    if int_literal_range(nt.value) != "ok"
+      report_int_range(nt)
+      return 0
+    end
+    str_to_int(nt.value)
+  end
+
+  # Table (or table pattern) entry `entry` gets the int key `n`: its `key`
+  # is the decimal text and `int_key` the int, which codegen and the
+  # pattern lowering use. A key written as a string stays a string.
+  let set_int_key = fn(entry, n)
+    entry.key = to_string(n)
+    entry.int_key = n
+    entry
   end
 
   # Enter a function body (kind as for closure_kind); returns the state
@@ -255,6 +357,31 @@ fn make_parser(tokens, source, file, sink)
   let parse_not = nil
   let parse_pattern = nil
 
+  # In a destructuring pattern (`let {..} =`, a `{..}` fn param), after the
+  # field name: `{key: name}` is renaming, which only match/receive patterns
+  # have. Report it at the field and skip the rest of the entry.
+  let reject_destructure_rename = fn(field_tok, example)
+    if peek().type != ":"
+      return nil
+    end
+    let f = field_tok.value
+    report(field_tok.line, field_tok.col, len(f), "destructuring can't rename `{f}`: write `{example}` and use `{f}`", nil)
+    advance()
+    let depth = 0
+    while not at_end()
+      let tp = peek().type
+      if depth == 0 and (tp == "," or tp == "}" or tp == ")")
+        break
+      end
+      if tp == "\{" or tp == "[" or tp == "("
+        depth += 1
+      elif tp == "}" or tp == "]" or tp == ")"
+        depth -= 1
+      end
+      advance()
+    end
+  end
+
   # ── Parameter list ──
   # Returns {params, rest_param, defaults, prelude}.
   # params: param names before the rest param (or all params if no rest).
@@ -290,6 +417,7 @@ fn make_parser(tokens, source, file, sink)
           let field_tok = peek()
           advance()
           push(dnames, field_tok.value)
+          reject_destructure_rename(field_tok, "\{" + field_tok.value + "\}")
           skip_nl()
           if peek().type == "="
             advance()
@@ -431,6 +559,10 @@ fn make_parser(tokens, source, file, sink)
       if contains_dot(t.value)
         return make_float(atof(t.value))
       end
+      if int_literal_range(t.value) != "ok"
+        report_int_range(t)
+        return make_int(0)
+      end
       return make_int(str_to_int(t.value))
     end
 
@@ -511,11 +643,12 @@ fn make_parser(tokens, source, file, sink)
       leave_fn_body(saved_loops)
       fn_depth -= 1
       expect("end")
-      return make_anon_fn(pr.params, pr.rest_param, with_prelude(pr.prelude, body), pr.defaults)
+      return make_anon_fn(pr.params, pr.rest_param, with_prelude(pr.prelude, body), pr.defaults, t.line)
     end
 
     # Table literal: {key: val, ...}
-    # Keys can be names or keywords (else, end, when, match, etc.)
+    # Keys can be names, keywords (else, end, when, match, etc.), strings
+    # or non-negative ints.
     if t.type == "\{"
       advance()
       skip_nl()
@@ -523,19 +656,24 @@ fn make_parser(tokens, source, file, sink)
       while peek().type != "}" and not at_end()
         let _lp = pos
         let key_tok = peek()
-        if key_tok.type == "NAME"
-          advance()
-        elif not at_end() and peek_at(1).type == ":"
-          # Keyword in key position — allow it
-          advance()
-        else
-          report(key_tok.line, key_tok.col, len(key_tok.value), "expected '}' or table key but got '{key_tok.type}'", nil)
-          force_progress(_lp)
-          continue
+        let int_key = parse_int_key()
+        if int_key == nil
+          if key_tok.type == "NAME"
+            advance()
+          elif not at_end() and peek_at(1).type == ":"
+            # Keyword (or string) in key position — allow it
+            advance()
+          else
+            report(key_tok.line, key_tok.col, len(key_tok.value), "expected '}' or table key but got '{key_tok.type}'", nil)
+            force_progress(_lp)
+            continue
+          end
         end
         expect(":")
         let val = parse_expr()
-        push(entries, make_table_entry(key_tok.value, val))
+        let entry = make_table_entry(key_tok.value, val)
+        if int_key != nil then set_int_key(entry, int_key) end
+        push(entries, entry)
         skip_nl()
         if peek().type == ","
           advance()
@@ -578,7 +716,7 @@ fn make_parser(tokens, source, file, sink)
     if t.type == "NAME" and t.value == "pcall" and peek_at(1).type != "(" and peek_at(1).type != "do"
       advance()
       let expr = parse_expr()
-      return make_call(make_var("pcall"), [make_anon_fn([], nil, [expr], [])], t.line)
+      return make_call(make_var("pcall"), [make_anon_fn([], nil, [expr], [], t.line)], t.line)
     end
 
     # Variable
@@ -616,6 +754,7 @@ fn make_parser(tokens, source, file, sink)
   # `do [|params|] body end` → anonymous fn
   # `is_spawn`: the block is the body of `spawn do ... end`.
   let parse_do_block = fn(is_spawn = false)
+    let do_line = peek().line
     expect("do")
     let bp = parse_block_params()
     fn_depth += 1
@@ -628,11 +767,12 @@ fn make_parser(tokens, source, file, sink)
     leave_fn_body(saved_loops)
     fn_depth -= 1
     expect("end")
-    make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, body), bp.defaults)
+    make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, body), bp.defaults, do_line)
   end
 
   # `{ [|params|] expr }` → anonymous fn
   let parse_brace_block = fn()
+    let brace_line = peek().line
     expect("\{")
     let bp = parse_block_params()
     let bexpr = parse_expr()
@@ -657,7 +797,7 @@ fn make_parser(tokens, source, file, sink)
         end
       end
     end
-    make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, [bexpr]), bp.defaults)
+    make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, [bexpr]), bp.defaults, brace_line)
   end
 
   let report_header_block = fn(tok)
@@ -783,10 +923,10 @@ fn make_parser(tokens, source, file, sink)
 
       # Index access: node[key]
       if peek().type == "["
-        advance()
+        let index_line = advance().line
         let key = parse_expr()
         expect("]")
-        node = make_index(node, key)
+        node = make_index(node, key, index_line)
         continue
       end
 
@@ -799,41 +939,56 @@ fn make_parser(tokens, source, file, sink)
   # unary: -expr | call
   parse_unary = fn()
     if peek().type == "-"
-      advance()
-      return make_unop("-", parse_unary())
+      # `-9223372036854775808` is INT64_MIN: the one literal whose digits
+      # don't fit unless negated. Not when a postfix follows (`-N.x` is
+      # `-(N.x)`); then the bare literal reports out of range.
+      let nt = peek_at(1)
+      if nt.type == "NUMBER" and not contains_dot(nt.value) and int_literal_range(nt.value) == "min"
+        let follow = peek_at(2).type
+        if follow != "(" and follow != "." and follow != "["
+          advance()
+          advance()
+          return make_int(int64_min())
+        end
+      end
+      let minus_line = advance().line
+      return make_unop("-", parse_unary(), minus_line)
     end
     parse_call()
   end
 
   # mul: unary (* | / | % unary)*
   let parse_mul = fn()
+    let start_line = peek().line
     let left = parse_unary()
     while peek().type == "*" or peek().type == "/" or peek().type == "%"
       let op = advance().type
       let right = parse_unary()
-      left = make_binop(op, left, right)
+      left = make_binop(op, left, right, start_line)
     end
     left
   end
 
   # add: mul (+ | - mul)*
   let parse_add = fn()
+    let start_line = peek().line
     let left = parse_mul()
     while peek().type == "+" or peek().type == "-"
       let op = advance().type
       let right = parse_mul()
-      left = make_binop(op, left, right)
+      left = make_binop(op, left, right, start_line)
     end
     left
   end
 
   # compare: add (comp_op add)*
   let parse_compare = fn()
+    let start_line = peek().line
     let left = parse_add()
     while peek().type == "==" or peek().type == "!=" or peek().type == "<" or peek().type == ">" or peek().type == "<=" or peek().type == ">=" or peek().type == "in"
       let op = advance().type
       let right = parse_add()
-      left = make_binop(op, left, right)
+      left = make_binop(op, left, right, start_line)
     end
     left
   end
@@ -841,30 +996,32 @@ fn make_parser(tokens, source, file, sink)
   # not: "not" not | compare
   parse_not = fn()
     if peek().type == "not"
-      advance()
-      return make_unop("not", parse_not())
+      let not_line = advance().line
+      return make_unop("not", parse_not(), not_line)
     end
     parse_compare()
   end
 
   # and: not ("and" not)*
   let parse_and = fn()
+    let start_line = peek().line
     let left = parse_not()
     while peek().type == "and"
       advance()
       let right = parse_not()
-      left = make_binop("and", left, right)
+      left = make_binop("and", left, right, start_line)
     end
     left
   end
 
   # or: and ("or" and)*
   let parse_or = fn()
+    let start_line = peek().line
     let left = parse_and()
     while peek().type == "or"
       advance()
       let right = parse_and()
-      left = make_binop("or", left, right)
+      left = make_binop("or", left, right, start_line)
     end
     left
   end
@@ -935,15 +1092,18 @@ fn make_parser(tokens, source, file, sink)
       while peek().type != "}" and not at_end()
         let _lp = pos
         let key_tok = peek()
-        if key_tok.type == "NAME"
-          advance()
-        elif peek_at(1).type == ":"
-          # keyword as key
-          advance()
-        else
-          report(key_tok.line, key_tok.col, len(key_tok.value), "expected key name in table pattern", nil)
-          force_progress(_lp)
-          continue
+        let int_key = parse_int_key()
+        if int_key == nil
+          if key_tok.type == "NAME"
+            advance()
+          elif peek_at(1).type == ":"
+            # keyword (or string) as key
+            advance()
+          else
+            report(key_tok.line, key_tok.col, len(key_tok.value), "expected key name in table pattern", nil)
+            force_progress(_lp)
+            continue
+          end
         end
         let key_name = key_tok.value
         let sub_pat = nil
@@ -952,7 +1112,9 @@ fn make_parser(tokens, source, file, sink)
           skip_nl()
           sub_pat = parse_pattern()
         end
-        push(entries, make_pat_table_entry(key_name, sub_pat))
+        let entry = make_pat_table_entry(key_name, sub_pat)
+        if int_key != nil then set_int_key(entry, int_key) end
+        push(entries, entry)
         skip_nl()
         if peek().type == ","
           advance()
@@ -998,9 +1160,17 @@ fn make_parser(tokens, source, file, sink)
         if negative then f = 0.0 - f end
         lit = make_float(f)
       else
-        let n = str_to_int(nt.value)
-        if negative then n = 0 - n end
-        lit = make_int(n)
+        let range = int_literal_range(nt.value)
+        if range == "min" and negative
+          lit = make_int(int64_min())
+        elif range != "ok"
+          report_int_range(nt)
+          lit = make_int(0)
+        else
+          let n = str_to_int(nt.value)
+          if negative then n = 0 - n end
+          lit = make_int(n)
+        end
       end
       return make_pat_literal(lit)
     end
@@ -1124,6 +1294,7 @@ fn make_parser(tokens, source, file, sink)
     # let declaration
     if t.type == "let"
       let line = t.line
+      let at_top = pos == top_stmt_pos
       advance()
 
       # Table destructuring: let {a, b [= default], c} = expr
@@ -1138,6 +1309,10 @@ fn make_parser(tokens, source, file, sink)
           # NAME or keyword as field name
           advance()
           push(names, field_tok.value)
+          reject_destructure_rename(field_tok, "let \{" + field_tok.value + "\} = ...")
+          if at_top
+            note_top_name(field_tok, "let")
+          end
           skip_nl()
           if peek().type == "="
             advance()
@@ -1173,7 +1348,11 @@ fn make_parser(tokens, source, file, sink)
         skip_nl()
         while peek().type != "]" and not at_end()
           let _lp = pos
-          push(names, expect("NAME").value)
+          let name_tok = expect("NAME")
+          push(names, name_tok.value)
+          if at_top
+            note_top_name(name_tok, "let")
+          end
           skip_nl()
           if peek().type == "="
             advance()
@@ -1201,7 +1380,11 @@ fn make_parser(tokens, source, file, sink)
         return {tag: "block", stmts: stmts}
       end
 
-      let name = expect("NAME").value
+      let name_tok = expect("NAME")
+      let name = name_tok.value
+      if at_top
+        note_top_name(name_tok, "let")
+      end
       expect("=")
       let value = parse_expr()
       return make_let(name, value, line)
@@ -1210,10 +1393,17 @@ fn make_parser(tokens, source, file, sink)
     # fn definition: fn NAME(params) body end
     if t.type == "fn" and peek_at(1).type == "NAME"
       let line = t.line
+      let at_top = pos == top_stmt_pos
       advance()
-      let name = expect("NAME").value
+      let name_tok = expect("NAME")
+      let name = name_tok.value
+      if at_top
+        note_top_name(name_tok, "fn")
+      end
       if fn_depth > 0
         report(line, 1, len(name) + 3, "named fn inside function body is not supported", "use: let {name} = fn(...) ... end")
+      elif stmt_depth > 1
+        report(line, t.col, len(name) + 3, "named fn inside a block is not supported", "define it at the top level, or use: let {name} = fn(...) ... end")
       end
       expect("(")
       let pr = parse_params()
@@ -1383,39 +1573,91 @@ fn make_parser(tokens, source, file, sink)
 
     # load "path" [as name | (name, ...)]
     if t.type == "load"
+      if stmt_depth > 1
+        report(t.line, t.col, 4, "`load` must be at the top level", "move it out of the enclosing block or function")
+      end
+      let at_top = pos == top_stmt_pos
       advance()
-      let path = expect("STRING").value
+      let path_tok = expect("STRING")
+      let path = path_tok.value
       let alias_name = nil
       let selective = nil
+      let selective_pos = nil
       if peek().type == "NAME" and peek().value == "as"
         advance()
-        alias_name = expect("NAME").value
+        let alias_tok = expect("NAME")
+        alias_name = alias_tok.value
+        if at_top
+          note_top_name(alias_tok, "load")
+        end
       elif peek().type == "("
         advance()
-        selective = [expect("NAME").value]
+        # selective_pos[i]: where selective[i] is written, for errors
+        # about a name the module doesn't export.
+        let nt = expect("NAME")
+        selective = [nt.value]
+        selective_pos = [{line: nt.line, col: nt.col}]
+        if at_top
+          note_top_name(nt, "load")
+        end
         while peek().type == ","
           advance()
-          push(selective, expect("NAME").value)
+          nt = expect("NAME")
+          push(selective, nt.value)
+          push(selective_pos, {line: nt.line, col: nt.col})
+          if at_top
+            note_top_name(nt, "load")
+          end
         end
         expect(")")
+      elif at_top and path_tok.synthetic != true
+        # The namespace binding is named after the file's base name.
+        let start = 0
+        for i = 0, len(path)
+          if ord(path, i) == 47
+            start = i + 1
+          end
+        end
+        let base = substr(path, start, len(path) - start)
+        if len(base) > 4 and substr(base, len(base) - 4, 4) == ".gem"
+          base = substr(base, 0, len(base) - 4)
+        end
+        note_top_name({type: "NAME", value: base, line: path_tok.line, col: path_tok.col}, "load", len(path) + 2)
       end
-      return {tag: "load", path: path, alias: alias_name, selective: selective, line: t.line, col: t.col}
+      return {tag: "load", path: path, alias: alias_name, selective: selective, selective_pos: selective_pos, line: t.line, col: t.col}
     end
 
     # export name, name, ...
     if t.type == "export"
+      if stmt_depth > 1
+        report(t.line, t.col, 6, "`export` must be at the top level", "move it out of the enclosing block or function")
+      end
       advance()
-      let names = [expect("NAME").value]
+      # name_pos[i]: where names[i] is written, for errors about a name
+      # the module doesn't define.
+      let nt = expect("NAME")
+      let names = [nt.value]
+      let name_pos = [{line: nt.line, col: nt.col}]
       while peek().type == ","
         advance()
         skip_nl()
-        push(names, expect("NAME").value)
+        nt = expect("NAME")
+        push(names, nt.value)
+        push(name_pos, {line: nt.line, col: nt.col})
       end
-      return make_export(names)
+      let node = make_export(names)
+      node.name_pos = name_pos
+      node.line = t.line
+      node.col = t.col
+      return node
     end
 
     # extern fn / extern blocking fn / extern include
     if t.type == "extern"
+      if stmt_depth > 1
+        report(t.line, t.col, 6, "extern declaration must be at the top level", "move it out of the enclosing block or function")
+      end
+      let at_top = pos == top_stmt_pos
       advance()
       let is_blocking = false
       if peek().type == "blocking"
@@ -1424,7 +1666,11 @@ fn make_parser(tokens, source, file, sink)
       end
       if peek().type == "fn"
         advance()
-        let name = expect("NAME").value
+        let name_tok = expect("NAME")
+        let name = name_tok.value
+        if at_top
+          note_top_name(name_tok, "extern fn")
+        end
         expect("(")
         let eparams = []
         if peek().type != ")"
@@ -1449,8 +1695,11 @@ fn make_parser(tokens, source, file, sink)
         return make_extern_fn(name, eparams, ret_type, is_blocking)
       elif not is_blocking and peek().type == "NAME" and peek().value == "include"
         advance()
-        let path = expect("STRING").value
-        return make_extern_include(path)
+        let path_tok = expect("STRING")
+        let inc = make_extern_include(path_tok.value)
+        inc.line = path_tok.line
+        inc.col = path_tok.col
+        return inc
       else
         let bad = peek()
         report(bad.line, bad.col, len(bad.value), "expected 'fn' after 'extern blocking'", nil)
@@ -1458,13 +1707,27 @@ fn make_parser(tokens, source, file, sink)
       end
     end
 
-    # receive block: receive when ... end
+    # receive block: receive [when ...] [after ...] end
     if t.type == "NAME" and t.value == "receive"
       let rla = 1
       while peek_at(rla).type == "NEWLINE"
         rla += 1
       end
-      if peek_at(rla).type == "when"
+      let rnext = peek_at(rla).type
+      if rnext == "end"
+        # `receive` straight followed by `end`: a receive with nothing to
+        # wait for, not a bare reference to the `receive` builtin.
+        report(t.line, t.col, len(t.value), "a `receive` block needs at least one `when` arm or an `after` clause", "add `after <ms>` to wait, or `when <pattern>` arms to take a message")
+        advance()
+        # Take the `end` as this receive's when it is indented like it;
+        # one further out most likely closes an enclosing block.
+        if peek_at(rla - 1).col >= t.col
+          skip_nl()
+          advance()
+        end
+        return make_error_stmt(t.line, t.col)
+      end
+      if rnext == "when" or rnext == "after"
         let rline = t.line
         advance()
         skip_nl()
@@ -1493,10 +1756,9 @@ fn make_parser(tokens, source, file, sink)
       end
     end
 
-    # Default: expression statement. Most expression nodes (binops, index,
-    # literals) carry no line; give the statement its first token's line so
-    # codegen emits a line update for it (runtime errors in `x + y` as a
-    # statement, e.g. a fn's implicit return, point at it).
+    # Default: expression statement. Operator, index, call and fn nodes
+    # carry their line, literals don't; give a lineless statement its first
+    # token's line so codegen emits a line update for it.
     let e = parse_expr()
     if type(e) == "table" and e.line == nil
       e.line = t.line
@@ -1505,7 +1767,12 @@ fn make_parser(tokens, source, file, sink)
   end
 
   # Wire up forward declaration
-  parse_stmt = parse_stmt_fn
+  parse_stmt = fn()
+    stmt_depth += 1
+    let s = parse_stmt_fn()
+    stmt_depth -= 1
+    s
+  end
 
   # ── Top-level parse ──
 
@@ -1514,6 +1781,7 @@ fn make_parser(tokens, source, file, sink)
     skip_nl()
     while not at_end()
       let _lp = pos
+      top_stmt_pos = pos
       push(stmts, parse_stmt())
       skip_nl()
       # Top-level watchdog: if parse_stmt didn't advance, force one token

@@ -2,6 +2,9 @@
 # Verify that intentionally malformed programs produce the expected number of
 # errors. Each entry: file_basename:min:max — the compiler must emit at least
 # `min` errors and no more than `max` (the upper bound catches cascade noise).
+# A `# expect: <text>` line in the file names a message that must appear in
+# the output (a fixed substring), so a different error of the same count
+# doesn't pass.
 #
 # Run from the repo root: tests/check_broken.sh
 
@@ -29,20 +32,37 @@ expected=(
   "closure_undeclared_assign:3:3"
   "closure_later_let:2:2"
   "closure_body_later:3:3"
+  "destructure_rename:6:6"
   "dotdot_concat:1:1"
+  "extern_include_missing:3:3"
   "header_block:3:3"
   "interp_bad_expr:2:2"
   "interp_empty:2:2"
   "interp_unterminated:1:1"
+  "int_literal_range:11:11"
   "load_no_export:1:1"
+  "export_undefined:1:1"
+  "export_twice:1:1"
+  "import_no_export:2:2"
   "load_parse_error:1:1"
   "load_cycle:1:1"
+  "load_missing:5:5"
+  "load_missing_nested:1:1"
   "load_self:1:1"
+  "load_name_clash:1:1"
+  "module_name_clash:1:1"
+  "module_name_not_ident:1:1"
   "double_typo:2:4"
   "missing_end:2:8"
   "missing_then_branches:1:4"
+  "receive_no_arms:3:3"
   "multi_undeclared:3:5"
+  "nested_extern:3:3"
+  "nested_fn_toplevel:13:13"
+  "nested_load_export:4:4"
   "stray_do:4:4"
+  "table_negative_key:3:3"
+  "top_name_clash:7:7"
   "undeclared:1:1"
   "unterminated_string:1:1"
   "when_no_then:1:1"
@@ -59,9 +79,20 @@ for entry in "${expected[@]}"; do
     fails=$((fails + 1))
     continue
   fi
-  count=$("$GEM" --check "$src" 2>&1 | grep -c "^\[Compile Error\]")
+  out=$("$GEM" --check "$src" 2>&1)
+  count=$(printf '%s\n' "$out" | grep -c "^\[Compile Error\]")
+  missing=""
+  while IFS= read -r want; do
+    if ! printf '%s\n' "$out" | grep -qF -- "$want"; then
+      missing="$want"
+      break
+    fi
+  done < <(sed -n 's/^# expect: //p' "$src")
   if [ "$count" -lt "$min" ] || [ "$count" -gt "$max" ]; then
     echo "FAIL: $name produced $count errors, expected [$min..$max]"
+    fails=$((fails + 1))
+  elif [ -n "$missing" ]; then
+    echo "FAIL: $name: no message containing: $missing"
     fails=$((fails + 1))
   else
     echo "OK:   $name ($count errors, in [$min..$max])"

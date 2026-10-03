@@ -1,0 +1,9 @@
+fn pub()
+  priv()
+end
+
+fn priv()
+  1
+end
+
+export pub

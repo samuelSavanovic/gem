@@ -1,0 +1,55 @@
+# kill(pid, "normal"): ignored by a process that does not trap exits (Erlang semantics)
+# 1. another process sends "normal" to main: ignored
+let m = self()
+let r = spawn do
+  send(m, {tag: "res", v: kill(m, "normal")})
+end
+receive when {tag: "res", v: v} then print("kill main normal -> {v}") end
+print("main survives")
+
+# 2. non-trapping child ignores "normal", dies on "shutdown"
+let c = spawn do
+  receive when {tag: "ping", from: f} then send(f, {tag: "pong"}) end
+end
+monitor(c)
+print("kill normal -> {kill(c, "normal")}")
+send(c, {tag: "ping", from: self()})
+receive when {tag: "pong"} then print("child still alive") end
+let c2 = spawn do receive() end
+monitor(c2)
+print("kill shutdown -> {kill(c2, "shutdown")}")
+receive when {tag: "DOWN", pid: ^c2, reason: rr} then print("DOWN {rr}") end
+
+# 3. trapping child gets EXIT normal
+let t = spawn do
+  process_flag("trap_exit", true)
+  receive when {tag: "EXIT", reason: rr} then send(m, {tag: "got", r: rr}) end
+end
+sleep(10)
+print("kill trapper -> {kill(t, "normal")}")
+receive when {tag: "got", r: rr} then print("trapper got EXIT {rr}") end
+
+# 4. kill(self(), "normal") ends the caller with reason normal
+let s = spawn do
+  kill(self(), "normal")
+  print("not reached")
+end
+monitor(s)
+receive when {tag: "DOWN", pid: ^s, reason: rr} then print("self DOWN {rr}") end
+
+# 5. a linked partner of a process that ignored "normal" stays alive
+let p = spawn do
+  let q = spawn_link(fn() receive() end)
+  kill(q, "normal")
+  send(m, {tag: "alive", q: process_info(q) != nil})
+end
+receive when {tag: "alive", q: q} then print("linked partner alive: {q}") end
+
+# 6. dead pid
+let d = spawn(fn() nil end)
+sleep(10)
+print("dead -> {kill(d, "normal")}")
+
+# 7. main kills itself normally
+kill(self(), "normal")
+print("not reached either")

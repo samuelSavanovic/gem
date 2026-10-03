@@ -1,0 +1,8 @@
+# A module that exports a name it doesn't define: one error, at the name
+# in the module's `export` line. Importing that name or using it through
+# the namespace doesn't add another.
+load "./modules/export_undefined"
+load "./modules/export_undefined" (b)
+print(export_undefined.a(), export_undefined.b, b)
+
+# expect: exports `b`, which it doesn't define

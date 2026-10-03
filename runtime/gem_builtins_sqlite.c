@@ -171,19 +171,47 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
         gem_error(buf);
     }
 
+    /* Bind the parameters. Every error path finalizes the statement before
+       gem_error longjmps out. */
+    GemTable *params = NULL;
     if (argc >= 3 && args[2].type == VAL_TABLE) {
-        GemTable *params = args[2].table;
-        for (int i = 0; i < params->len; i++) {
-            GemVal v = params->vals[i];
-            int idx = i + 1;
-            switch (v.type) {
-                case VAL_INT:    sqlite3_bind_int64(stmt, idx, v.ival); break;
-                case VAL_FLOAT:  sqlite3_bind_double(stmt, idx, v.fval); break;
-                case VAL_STRING: sqlite3_bind_text(stmt, idx, v.sval, v.slen, SQLITE_TRANSIENT); break;
-                case VAL_BOOL:   sqlite3_bind_int64(stmt, idx, v.bval ? 1 : 0); break;
-                case VAL_NIL:    sqlite3_bind_null(stmt, idx); break;
-                default:         sqlite3_bind_null(stmt, idx); break;
+        params = args[2].table;
+    } else if (argc >= 3 && args[2].type != VAL_NIL) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "sqlite_query: params must be a table, got %s", gem_type_str(args[2]));
+        sqlite3_finalize(stmt);
+        gem_error(buf);
+    }
+    int want = sqlite3_bind_parameter_count(stmt);
+    int got = params ? params->len : 0;
+    if (want != got) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "sqlite_query: statement has %d parameter(s), got %d", want, got);
+        sqlite3_finalize(stmt);
+        gem_error(buf);
+    }
+    for (int i = 0; i < got; i++) {
+        GemVal v = params->vals[i];
+        int idx = i + 1;
+        switch (v.type) {
+            case VAL_INT:    rc = sqlite3_bind_int64(stmt, idx, v.ival); break;
+            case VAL_FLOAT:  rc = sqlite3_bind_double(stmt, idx, v.fval); break;
+            case VAL_STRING: rc = sqlite3_bind_text(stmt, idx, v.sval, v.slen, SQLITE_TRANSIENT); break;
+            case VAL_BOOL:   rc = sqlite3_bind_int64(stmt, idx, v.bval ? 1 : 0); break;
+            case VAL_NIL:    rc = sqlite3_bind_null(stmt, idx); break;
+            default: {
+                char buf[160];
+                snprintf(buf, sizeof(buf), "sqlite_query: parameter %d is a %s; expected nil, bool, int, float or string",
+                         idx, gem_type_str(v));
+                sqlite3_finalize(stmt);
+                gem_error(buf);
             }
+        }
+        if (rc != SQLITE_OK) {
+            char buf[512];
+            snprintf(buf, sizeof(buf), "sqlite_query: parameter %d: %s", idx, sqlite3_errmsg(db));
+            sqlite3_finalize(stmt);
+            gem_error(buf);
         }
     }
 

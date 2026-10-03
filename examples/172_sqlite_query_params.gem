@@ -1,0 +1,42 @@
+# sqlite_query checks its parameters: the count must match the statement's
+# placeholders, and each one must be nil, a bool, an int, a float or a string.
+
+let db = sqlite_open(":memory:")
+
+fn try_query(sql, params)
+  let r = pcall(fn() sqlite_query(db, sql, params) end)
+  if r.ok
+    print(r.value)
+  else
+    print("error: {r.error}")
+  end
+end
+
+# Matching counts work, for every bindable type
+try_query("SELECT ? AS a, ? AS b, ? AS c, ? AS d, ? AS e", [nil, true, 2, 1.5, "s"])
+try_query("SELECT 1 AS one", [])
+try_query("SELECT 1 AS one", nil)
+print(sqlite_query(db, "SELECT 2 AS two"))
+
+# Numbered and named placeholders: the count is the highest index
+try_query("SELECT ?1 AS a, ?1 AS b", [7])
+try_query("SELECT :x AS x, :y AS y", ["p", "q"])
+
+# Too few, too many
+try_query("SELECT ? AS a, ? AS b", [1])
+try_query("SELECT ? AS a", [1, 2])
+try_query("SELECT ? AS a", [])
+try_query("SELECT 1 AS one", [1])
+
+# Values that can't be bound
+try_query("SELECT ? AS a", [[1]])
+try_query("SELECT ? AS a, ? AS b", [1, fn() 1 end])
+try_query("SELECT ? AS a", 5)
+
+# The failed statements left nothing behind: the connection still works
+sqlite_exec(db, "CREATE TABLE t (v TEXT)")
+let insert = pcall(fn() sqlite_query(db, "INSERT INTO t (v) VALUES (?)", [{x: 1}]) end)
+print(insert.error)
+sqlite_query(db, "INSERT INTO t (v) VALUES (?)", ["ok"])
+print(sqlite_query(db, "SELECT v FROM t"))
+sqlite_close(db)

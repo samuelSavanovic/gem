@@ -2,7 +2,7 @@
 # process dies with reason "stack overflow in <fn>", monitors get DOWN, links
 # propagate, and every other process keeps running.
 
-extern include "../examples/support/native_recursion.h"
+extern include "support/native_recursion.h"
 extern fn gem_example_native_recurse(n: Int) -> Int
 
 let main = self()

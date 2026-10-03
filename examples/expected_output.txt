@@ -5,7 +5,7 @@
 1
 -10
 3.14
-4.14
+4.140000000000001
 hello world
 5
 w
@@ -394,16 +394,16 @@ division by zero
 false
 false
 false
-3
-3
+3.0
+3.0
 7.5
 1.5
-6
-6
+6.0
+6.0
 3
 3.5
 0
--0
+-0.0
 false
 true
 c
@@ -758,9 +758,9 @@ test3: for loop preempted
 99
 3.14
 -2.5
-0
-42
-1
+0.0
+42.0
+1.0
 1.5
 123
 3.14
@@ -792,7 +792,7 @@ sort desc: 5 4 3 2 1
 sort empty: 0
 sort single: 42
 sort returns same: 1 1
-sort mixed: 1 2 2.5 3
+sort mixed: 1 2 2.5 3.0
 argv type: table
 argv len >= 1: true
 floor 3.7: 3
@@ -812,10 +812,10 @@ abs -3.14: 3.14
 abs 2.7: 2.7
 pow 2 10: 1024
 pow 3 0: 1
-pow 2.0 0.5: 1.41421
-sqrt 4: 2
+pow 2.0 0.5: 1.4142135623730951
+sqrt 4: 2.0
 sqrt 2: true
-sqrt 0: 0
+sqrt 0: 0.0
 random float: true
 random int: true
 random range: true
@@ -845,7 +845,7 @@ ceil 0.0: 0
 round 0.0: 0
 abs min int: 1
 pow neg exp: 0.5
-sqrt 1: 1
+sqrt 1: 1.0
 sqrt neg: true
 random 1: true
 random 0: true
@@ -976,9 +976,9 @@ BC
 0
 123
 1.5
-100
-150
-100
+100.0
+150.0
+100.0
 -0.15
 === parse whitespace ===
 1
@@ -1133,13 +1133,13 @@ a?b
 2
 Alice
 alice@example.com
-99
+99.0
 Bob
 nil
-80
+80.0
 1
 Alice
-99
+99.0
 0
 nil
 int
@@ -1315,7 +1315,7 @@ pos
 21
 3
 2
-4
+4.0
 3.5
 2.5
 hello
@@ -2319,15 +2319,15 @@ Stack trace:
   at stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:12)
   at len (examples/140_stack_frame_names.gem:11)
   at main (examples/140_stack_frame_names.gem:36)
-4
+4.0
 false sqrt: arg 0 expected Float, got int
 1.5
-2
-4
+2.0
+4.0
 false floor: arg 0 expected Float, got int
 5
 3
-3
+3.0
 false ceil: arg 0 expected Float, got int
 record saw 0 item(s)
 hits after run_now: 1
@@ -2443,3 +2443,225 @@ child before
 hi from child
 child status 2
 read back: captured
+plain 5
+defaulted 7 8
+rest 3
+destructured d
+closure param 9
+do block [10, 20]
+boxed 12
+tco 5000050000
+mutual tco 100000
+tco rest 2
+spawn sent
+pcall [42, 22, 20]
+extern param 4
+fns FN FN fn label 1
+lexical FN
+3.14159265358979
+false
+0.1 0.5 1.0 2.0 100.0 0.0 -0.0 -2.5
+0.30000000000000004
+1e-06
+1000000.0
+0.0001 1e-05
+1000000.0
+1e-06
+0.3333333333333333
+-0.1
+1000000000000000.0
+1e+16
+1.2345678901234567e+19
+0.00015
+1.5e-06
+1234567.5 1234567.5 1234567.5 1234567.5 1234567.5 1234567.5
+[1.5, 2.0, {k: 0.25}]
+[2.0,-0.0,1e+300,1.5e-07]
+true
+8
+10
+1 9
+ABC
+xyz
+42 10 OK
+user time
+boom time.boom
+hello from my-mod hello from my-mod
+mn.pre_f mn_pre.f
+2 2
+9223372036854775807
+-9223372036854775807
+-9223372036854775808
+true
+int
+42
+-9223372036854775808
+-9223372036854775808
+-9223372036854775807
+min
+max
+other
+index [14]
+divide [15]
+compare [16]
+field [17]
+negate [18]
+not then add [19]
+logic [20]
+call [21]
+nested inner [22]
+nested outer [23]
+multi-line [24]
+in fn [28]
+fn literal [35]
+brace block [40, 40]
+do block [46, 53, 45]
+waited 30
+elapsed >= 30: true
+42
+nil
+{tag: "a"}
+b
+after 0
+fast: true
+7
+loop 3
+ticked
+child done
+empty
+empty
+one 7
+pair 1 2
+record 1 2
+other
+nested 1234
+pair [1, 2] {a: 3, b: 4}
+triple 1 2 3
+other
+other
+other
+other
+pair a b
+other
+other
+pair 1 2
+got pair 3 4
+got record 1 2
+0 a
+1 b
+2 c
+empty: 0
+["0:1:97", "1:1:0", "2:1:195", "3:1:169"]
+consistent: true
+0=h
+2=l
+first[0] = a
+first[1] = b
+second[0] = c
+count: 4
+for: expected a table or string to iterate, got int
+for: expected a table or string to iterate, got int
+for: expected a table or string to iterate, got nil
+for: expected a table or string to iterate, got nil
+for: expected a table or string to iterate, got float
+for: expected a table or string to iterate, got float
+for: expected a table or string to iterate, got bool
+for: expected a table or string to iterate, got bool
+for: expected a table or string to iterate, got buffer
+for: expected a table or string to iterate, got buffer
+tabs: [hello\n\tnested]
+mixed: [one\n  two]
+mismatch: [    spaces\ntab-only\nfull]
+blank: [x\n\ny]
+interp: [hi gem\n  inner done]
+single: [{literal}\n\tdeeper]
+spaces: [plain\n  indented]
+kill main normal -> true
+main survives
+kill normal -> true
+child still alive
+kill shutdown -> true
+DOWN shutdown
+kill trapper -> true
+trapper got EXIT normal
+self DOWN normal
+linked partner alive: true
+dead -> nil
+<hi>
+abababab
+4
+80
+6
+nil: true
+bool: true
+bool: true
+int: true
+int: true
+float: true
+fn: true
+ref: true
+int: true
+table: true
+table: true
+string: true
+nil true <fn> {a: 1}
+true
+[hi]1nil<fn>true
+true
+hi<fn>
+2
+fn
+["a", "b"]
+2 ["a", "b"]
+12
+[1, 3]
+3
+["x", "y", "z"] 3
+[mod] hello
+my floor 2.5
+entry header: 40
+module header: 407
+system header: 3
+strlen exact: ok 3
+strlen extra: error strlen: expected 1 argument(s), got 2
+strlen none: error strlen: expected 1 argument(s), got 0
+getpid exact: ok true
+getpid extra: error getpid: expected 0 argument(s), got 1
+write extra: error write: expected 2 argument(s), got 3
+write few: error write: expected 2 argument(s), got 1
+usleep exact: ok 0
+usleep extra: error usleep: expected 1 argument(s), got 2
+getppid exact: ok true
+getppid extra: error getppid: expected 0 argument(s), got 1
+value extra: error strlen: expected 1 argument(s), got 3
+call1 extra: error getpid: expected 0 argument(s), got 1
+call1 exact: ok 5
+[{a: nil, b: 1, c: 2, d: 1.5, e: "s"}]
+[{one: 1}]
+[{one: 1}]
+[{two: 2}]
+[{a: 7, b: 7}]
+[{x: "p", y: "q"}]
+error: sqlite_query: statement has 2 parameter(s), got 1
+error: sqlite_query: statement has 1 parameter(s), got 2
+error: sqlite_query: statement has 1 parameter(s), got 0
+error: sqlite_query: statement has 0 parameter(s), got 1
+error: sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string
+error: sqlite_query: parameter 2 is a fn; expected nil, bool, int, float or string
+error: sqlite_query: params must be a table, got int
+sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string
+[{v: "ok"}]
+{10: "ten", "5": "five", "09": "nine", 7: "seven", 9223372036854775807: "max", 0: "zero"}
+ten
+false
+true
+false
+nine
+max
+{1: "b", 0: "a", 2: "c"}
+3
+int 20
+string s
+int lead
+none
+seven five zero

@@ -209,7 +209,9 @@ the function is defined, but its value exists only once the `let` has run:
 read before that (by top-level code above it, or by a function called from
 there), it is `nil`, with no error. Put module-level `let`s at the top of
 the file. A second `let` of the same name at module level rebinds that
-variable instead of making a new one.
+variable instead of making a new one. A `fn` or `extern fn` can't share a name
+with a module-level `let` or another `fn` of the file: that is a compile
+error.
 
 Each process has its own copy of module-level variables (see
 [State and memory](#state-and-memory)), so they are for constants and
@@ -257,22 +259,6 @@ end
 A closure given to `spawn` is the exception: the new process gets a copy
 of what the closure captures, taken at the `spawn`, and later changes on
 either side are not shared.
-
-### Don't name a parameter like a top-level `fn` of the same file **(bug)**
-
-Inside a closure, a parameter (plain, defaulted or rest) named like a
-top-level `fn` reads the function instead of the argument:
-
-```gem
-fn item() "FN" end
-fn show(item)
-  let f = fn() item end
-  f()                          # <fn>, not the argument
-end
-```
-
-A `let`, a `for` variable or a destructured parameter of that name is not
-affected. Rename the parameter.
 
 ---
 
@@ -431,9 +417,7 @@ end
 Literals (`when 200`, `when "get"`) compare by value without a pin.
 There are no guards or alternatives: `when v > 5` and `when "a" or "b"`
 compile, but compare the target with the *value* of `v > 5` or `"a" or
-"b"`. Use an `if` chain, or one arm per value. An array pattern `[x, y]`
-also matches a record with two keys **(bug)**, so put array arms after
-record arms when both can arrive.
+"b"`. Use an `if` chain, or one arm per value.
 
 ### Give `match` an `else` when no arm should be skipped **(trap)**
 
@@ -505,7 +489,8 @@ locals that closures and `spawn` bodies can capture.
 
 A call with too many arguments drops the extras, and missing arguments are
 `nil` (or their default). Neither is an error, so a wrong call shows up
-later as a `nil` somewhere else.
+later as a `nil` somewhere else. An `extern fn` is the exception: it
+raises unless the count matches exactly.
 
 ### `+=` works only on variables
 
@@ -523,9 +508,10 @@ Pick another name.
 
 Naming a function or variable like a builtin (`fn error`, `let len = 3`)
 is allowed: it hides the builtin in that file only, and modules the file
-loads keep the builtin. A module-level one hides it in the whole file,
-functions above it included, and `let keys = keys(t)` at module level
-fails because its own initializer no longer reaches the builtin **(bug)**.
+loads keep the builtin. A module-level `fn` hides it in the whole file.
+A module-level `let` hides it in every function and closure of the file,
+those above it included, and in top-level code from the `let` on: its
+own initializer still reaches the builtin (`let keys = keys(t)` works).
 Do it only when the name is the module's API (`log.error`); elsewhere pick
 another name.
 
@@ -645,19 +631,8 @@ sort(people, fn(a, b) a.age - b.age end)
 `t[1.0]` are different keys. JSON numbers with a decimal point or an
 exponent (`1e2`) parse as floats. Convert first (`to_int`, `floor`) when
 values may come from either. `<` and the other orderings do compare ints
-with floats numerically; only equality doesn't. `print(2.0)` and `"{2.0}"`
-both show `2`, and `json.encode(1.0)` writes `1`, so check with `type(x)`
-when a comparison fails for no visible reason.
-
-### Floats keep six significant digits in text **(bug)** **(trap)**
-
-`print`, interpolation, `to_string` and `json.encode` write floats with six
-significant digits (`1234567.89` becomes `1.23457e+06`). A float literal in
-source is rounded the same way (after `let pi = 3.14159265358979`,
-`pi == 3.14159` is `true`), and a literal like `0.000001` or `1000000.0`
-doesn't compile at all. Keep money and ids in integers (cents, not
-dollars), and don't round-trip floats through text when precision
-matters.
+with floats numerically; only equality doesn't. A float always prints with a
+decimal point or an exponent (`2.0`, `1e+16`), an int never does.
 
 ### Integer arithmetic follows C
 
@@ -705,8 +680,8 @@ let out = build_string do |add|
 end
 ```
 
-`add` takes any number of values and converts each with `to_string`,
-except a buffer, which it drops **(bug)**: pass `to_string(buf)`. Use a
+`add` takes any number of values and appends each as `to_string` would
+(a buffer appends its contents, as `buf_push` does). Use a
 buffer (`buf_new()`, `buf_push(buf, s)`, `to_string(buf)`) when the text
 has to be built across several functions or loop iterations that a single
 block can't hold, such as a read loop that collects chunks. `print(buf)`
@@ -715,7 +690,8 @@ and `"{buf}"` show `<buffer:N>`, not the contents.
 ### Strings are bytes
 
 `len` is the byte count (`len("é")` is `2`), `s[i]` is a 1-byte string,
-and `ord(s, i)` is the byte value. Use `substr(s, start, count)` to slice;
+and `ord(s, i)` is the byte value. `for ch in s` walks the bytes as
+1-byte strings, and `for i, ch in s` adds the 0-based byte index. Use `substr(s, start, count)` to slice;
 unlike `s[-1]`, a negative `start` counts as `0`. Double-quoted strings
 have no `\x` or `\u` escapes (an unknown escape is kept as written); use
 `chr(n)` for other bytes. Strings may contain `\0`, but `print` stops at
@@ -984,6 +960,11 @@ Match on `tag` in `receive`. Prefix tags that are private to a module with
 `pcall` doesn't catch a `kill` or a link's exit: those end the process at
 once.
 
+To stop another process, `kill` it with a reason other than `"normal"`
+(`"shutdown"` is the convention). As in Erlang, a `"normal"` exit signal
+from another process is ignored unless the target traps exits;
+`kill(self(), "normal")` does end the caller.
+
 ### Request/reply: a ref, a pin, a timeout, and a monitor
 
 When you write the request side yourself (instead of using
@@ -1012,8 +993,9 @@ end
   process that has exited stays on the target's list until the target
   dies, so don't monitor a long-lived server from many short-lived
   processes, such as per-connection handlers.
-- A `receive` needs at least one `when` arm: an `after`-only `receive`
-  doesn't parse **(bug)**. To wait, use `sleep(ms)`.
+- A `receive` with only an `after` clause waits that long and takes no
+  message: anything that arrives meanwhile stays queued. It is the same as
+  `sleep(ms)`; use whichever reads better.
 - `after` restarts each time a `receive` is entered, and a message that
   matches another arm ends the wait, so `after` in a server loop that keeps
   getting messages may never fire. For periodic work, send yourself a
@@ -1171,13 +1153,13 @@ export make, use
   noise.
 - The `export` list decides what is public. Private functions don't need a
   `_` prefix.
-- Name module files in `snake_case`: a file name that isn't a C
-  identifier (`my-utils.gem`) fails in the C compiler **(bug)**. Don't name
-  a module like any std module (`log.gem`, `json.gem`): the namespace is
-  the file's base name, and a module of the same name loaded anywhere in
-  the program, by you or by std (`std/http` loads `string`, `url`,
-  `mime`, `json` and `time`), replaces it or breaks the C compile
-  **(bug)**.
+- Name module files in `snake_case`: the namespace is the file's base
+  name, so `load "./my-utils"` is a compile error (``module file name
+  `my-utils` is not an identifier``); `load "./my-utils" as my_utils`
+  works. A module named like a std module (`json.gem`) is fine, even when
+  std loads its own (`std/http` loads `std/json`): they are different
+  modules. Only one file loading both is an error (``module name `json`
+  is already used by ...``); load one of them with `as`.
 - Modules can't load each other in a cycle: the compiler reports
   `load cycle: a.gem → b.gem → a.gem`. Move shared code into a third
   module.
@@ -1193,18 +1175,18 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 ## C interop
 
 - Put the C code in a header of `static` functions and write
-  `extern include "<path>"` before the `extern fn` declarations. Give
-  your own header as an absolute path **(bug)**: a relative path is not
-  looked up next to the `.gem` file. The header comes before `gem.h`, so
-  include `"gem.h"` in it if it uses `GemVal` or `GemBytes`. The program
-  links only libc, libm and pthreads.
+  `extern include "<path>"` before the `extern fn` declarations, with
+  the path relative to the `.gem` file (`"support/helpers.h"`; in a
+  loaded module, relative to the module). The header comes before
+  `gem.h`, so include `"gem.h"` in it if it uses `GemVal` or `GemBytes`.
+  The program links only libc, libm and pthreads.
 - For a libc function, `extern include` its header (`"stdio.h"` for
   `puts`). Without any `extern include`, the compiler writes its own
   prototype from the extern types, which clashes with libc's.
 - Types are checked, not converted: a `Float` parameter rejects `2` (pass
-  `2.0` or `to_float(n)`). Too few arguments raise; extra ones are ignored
-  **(bug)**. A `Ptr` is an int in Gem, and `NULL` comes back as `0`, not
-  `nil`. `extern blocking fn` can't take or return a `Table`.
+  `2.0` or `to_float(n)`). The argument count must match exactly: too few
+  or too many raise. A `Ptr` is an int in Gem, and `NULL` comes back as
+  `0`, not `nil`. `extern blocking fn` can't take or return a `Table`.
 - `String` parameters arrive as `const char *` and stop at the first `\0`.
   Use `Bytes` for binary data.
 - A plain `extern fn` runs on the scheduler thread and blocks every
@@ -1266,7 +1248,6 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | Module-level variable read before its `let` runs | `nil` | module-level `let`s at the top |
 | Module-level `let` used as shared state | each process changes only its own copy | keep shared state in a process |
 | Module-level state written from an `http` handler | per-connection copy, no `note:` | keep state in a process |
-| Parameter named like a top-level `fn`, used in a closure **(bug)** | reads the fn | rename the parameter |
 | A variable named `json`, `string`, `table`... | module hidden; runtime error | another name |
 | Expression continued on the next line | parse error, or a silent separate statement | named `let`s |
 | `delete(arr, i)` | hole in the array; `for` misses the last element | `remove_at(arr, i)` |
@@ -1285,7 +1266,6 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `pcall fn() ... end`, `pcall(f, x)` | runs nothing / drops `x` | `pcall f(x)`, `pcall do ... end` |
 | Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
 | `2.0 == 2` | `false` | convert first |
-| Floats through `print`, interpolation, `json.encode` **(bug)** | six significant digits | integers (cents), not floats |
 | `to_int` on user input or a file line | raises | `trim`, then `pcall` |
 | String accumulator read inside its loop | quadratic | `build_string` |
 | `error(non_string)` | message becomes `"error"` | string message or result table |

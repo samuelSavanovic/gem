@@ -1,4 +1,4 @@
-# Handoff: best-practices doc, then std (compiler fixes done)
+# Handoff: std modernization next (compiler and runtime fixes done)
 
 Notes for the next session. Delete this file once its work is done.
 
@@ -10,7 +10,8 @@ Notes for the next session. Delete this file once its work is done.
    recipe" and "The fixes" below are kept as a record.
 2. **Done.** Known-bugs fixes: PR #29, squash-merged into `main` as ccb251d. Most of
    the list below moved to `docs/KNOWN_BUGS.md` and was fixed there.
-3. **Done once its PR merges: rewrite `docs/BEST_PRACTICES.md`.** The
+3. **Done.** Rewrite of `docs/BEST_PRACTICES.md`: PR #30, squash-merged into
+   `main` as e76042b. The
    review rounds found ~25 new bugs, now in `docs/KNOWN_BUGS.md`.
    Steps, kept as a record:
    1. Rebase `std-modernize` onto `origin/main` (the maintainer asked for a
@@ -48,23 +49,12 @@ Notes for the next session. Delete this file once its work is done.
       If the fixes are large, run one more adversarial round.
    6. Open a PR to `main` (no AI attribution, CLAUDE.md "Commits and Pull
       Requests").
-4. **Next: compiler and runtime fix pass** (agreed after the doc review
-   found many bugs). Fix every `docs/KNOWN_BUGS.md` entry outside
-   "Standard library": the sections "Compiler", "Runtime",
-   "C interop" and "Editor grammars" (the param-named-like-a-fn capture,
-   float literal precision and `1e-06.0`, float `%g` formatting,
-   integer-literal overflow, renaming destructuring, bad module names and
-   same-basename modules, project root and symlinked-binary lookup,
-   mangled export/import errors, `pcall` line 0, `extern include` paths,
-   extern extra args, plus the older entries). `sqlite_query`'s parameter
-   checks are runtime C, so they belong here too even though the entry
-   sits under "Standard library". Same setup as #28/#29 ("Ground rules",
-   "Build and test recipe"): one subagent per fix in its own worktree off
-   `origin/main`, an integration branch, one PR. Each fix deletes its
-   KNOWN_BUGS entry **and** its **(bug)** rule or trap-index row in
-   `docs/BEST_PRACTICES.md`, and fixes SPEC where it describes the bug
-   (e.g. `to_string` floats, `http.serve`, extern arity).
-5. **Then: modernize `std/`** against the merged doc, fixing the
+4. **Done once its PR merges: compiler and runtime fix pass.** Every
+   `docs/KNOWN_BUGS.md` entry outside "Standard library" plus the
+   `sqlite_query` parameter checks, one fix branch per entry
+   (`fix/<name>`), squashed onto one integration branch, one PR. The bugs
+   the fixers found along the way are new `docs/KNOWN_BUGS.md` entries.
+5. **Next: modernize `std/`** against the merged doc, fixing the
    "Standard library" entries of `docs/KNOWN_BUGS.md` as part of it
    (dynamic_supervisor `delete`, non-tail supervisor loops, `http.serve`
    and silent handler errors, `json.encode` int keys and big ints,
@@ -86,7 +76,7 @@ Notes for the next session. Delete this file once its work is done.
   everything, push, and open the PR.
 - **Testing discipline** (CLAUDE.md): happy path, edge cases, adversarial
   input, `make test`. Each fix adds a numbered example (next free slot is
-  127; give agents distinct numbers up front so merges don't collide).
+  173; give agents distinct numbers up front so merges don't collide).
 - **macOS:** CI covers Linux x86_64 and arm64 only. The maintainer runs
   `make test` on macOS arm64 before merging; say in the PR what needs a
   look there.
@@ -109,8 +99,11 @@ Notes for the next session. Delete this file once its work is done.
   branch regenerates it once (`make bootstrap` with the merged gem2 as
   `build/gem`), then rebuilds from it (`rm -rf build && make build`) and
   checks `build/gem compiler/main.gem --emit-c | cmp - bootstrap/stage0.c`.
-- `examples/run_all.sh` writes binaries to the shared `/tmp/gem_<name>`, so
-  don't run `make test` in two worktrees at once.
+- The compiler writes `/tmp/gem_<base>.c` and `examples/run_all.sh` writes
+  binaries to `/tmp/gem_<name>`, so two worktrees can't build or test at
+  once with a shared `/tmp`. On Linux as root, give each one a private
+  `/tmp`: `unshare -m bash -c 'mount --bind /var/tmp/iso_<name> /tmp &&
+  make test'` (the step 4 pass did this, five agents at a time).
 - `expected_output.txt` must stay in numeric example order. When merging
   branches that each appended output, put the hunks in example order.
 
@@ -220,8 +213,8 @@ return.
 
 | Branch | What |
 |---|---|
-| `main` | includes #26, #27, #28 (compiler fixes; 8b482c2) and #29 (known-bugs fixes, `docs/KNOWN_BUGS.md`; ccb251d) |
-| `std-modernize` | rebased onto `main` (ccb251d); the rewritten `docs/BEST_PRACTICES.md`, the SPEC/CHEATSHEET/README fixes and new `docs/KNOWN_BUGS.md` entries from the doc review, the CLAUDE.md attribution rule and BEST_PRACTICES links, this file. Goes to `main` as the step 3 PR. |
+| `main` | includes #26, #27, #28 (compiler fixes; 8b482c2), #29 (known-bugs fixes, `docs/KNOWN_BUGS.md`; ccb251d) and #30 (the `docs/BEST_PRACTICES.md` rewrite; e76042b) |
+| `ccr-f506c768-naje0w` | step 4, the compiler and runtime fix pass: PR #31 |
 
 ## For the doc session (step 2), so it isn't lost
 

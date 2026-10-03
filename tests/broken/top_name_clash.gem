@@ -1,0 +1,39 @@
+# A module-level name has one definition: a `fn`, an `extern fn`, or `let`s
+# (and the bindings `load` makes). Every clash is reported at the second
+# definition, naming the first.
+let helper = 1
+fn helper() "fn" end           # error: a `let` first
+
+fn tool() "fn" end
+let tool = 2                   # error: a `fn` first
+
+fn twice() 1 end
+fn twice() 2 end               # error: two fns
+
+extern fn labs(x: Int) -> Int
+fn labs(x) x end               # error: an `extern fn` first
+let labs = 3                   # error
+
+let {pair_a, pair_b} = {pair_a: 1, pair_b: 2}
+fn pair_b() nil end            # error: a destructured `let` first
+
+load "./modules/clean"
+fn clean() nil end             # error: the namespace binding of the load
+
+# Not errors: a second module-level `let` rebinds, and a `let` inside a fn
+# or a block shadows.
+let count = 1
+let count = 2
+fn user()
+  let tool = 5
+  tool
+end
+if true
+  let twice = 3
+  print(twice)
+end
+
+# expect: (a `load`)
+# expect: (a `let`)
+# expect: (an `extern fn`)
+# expect: (a `fn`)

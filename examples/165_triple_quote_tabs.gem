@@ -1,0 +1,66 @@
+# Triple-quoted strings: the closing delimiter may be indented with tabs,
+# spaces or a mix. Its exact whitespace prefix is stripped from each content
+# line; a line that does not start with it loses only the part that matches.
+
+# Prints tabs and newlines visibly.
+fn show(label, s)
+  let t = str_replace(str_replace(s, "\t", "\\t"), "\n", "\\n")
+  print("{label}: [{t}]")
+end
+
+fn tabs()
+	let a = """
+		hello
+			nested
+		"""
+	a
+end
+show("tabs", tabs())
+
+# Mixed: tab then two spaces
+let b = """
+	  one
+	    two
+	  """
+show("mixed", b)
+
+# A content line that does not start with the closing prefix: only the
+# matching part is stripped (here none of it, then the first tab of "\t\t").
+let c = """
+    spaces
+	tab-only
+		full
+		"""
+show("mismatch", c)
+
+# Blank line inside: nothing to strip
+let d = """
+	x
+
+	y
+	"""
+show("blank", d)
+
+# Interpolation, including a nested tab-indented string
+let name = "gem"
+let e = """
+	hi {name}
+	  {"""
+		inner
+		"""} done
+	"""
+show("interp", e)
+
+# ''' strings follow the same rule
+let f = '''
+		{literal}
+			deeper
+		'''
+show("single", f)
+
+# Spaces-only closer still works as before
+let g = """
+    plain
+      indented
+    """
+show("spaces", g)

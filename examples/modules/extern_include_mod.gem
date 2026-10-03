@@ -1,0 +1,12 @@
+# Loaded by 170_extern_include_relative: its includes resolve against this
+# file's directory (examples/modules/), not the entry file's.
+extern include "ei_helpers.h"
+extern include "./ei_sub/ei_offset.h"
+extern fn ei_scale100(x: Int) -> Int
+extern fn ei_offset(x: Int) -> Int
+
+fn scaled(x)
+  ei_offset(ei_scale100(x))
+end
+
+export scaled

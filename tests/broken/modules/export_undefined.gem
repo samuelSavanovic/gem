@@ -1,0 +1,7 @@
+fn a()
+  1
+end
+
+# `b` is a typo or was removed: reported here, not at the load.
+export a,
+  b

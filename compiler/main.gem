@@ -10,14 +10,18 @@ load "./codegen" (make_codegen)
 load "./lower" (lower)
 load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
-load "./loader" (resolve_load_path, find_project_root, compute_stdlib_root, make_show_path)
+load "./loader" (resolve_load_path, load_target_problem, find_project_root, find_install_root, compute_stdlib_root, make_show_path)
 load "./builtins" (BUILTIN_FNS)
+load "./lexer" (build_keyword_set)
 load "../lsp/main" (run_lsp)
 
 # ─── Install root (for runtime/, build/libgem_runtime.a) ──────
-# argv()[0] is typically <root>/build/gem, so install_root is <root>.
+# The binary's real path is <root>/build/gem, so install_root is <root>
+# (symlinks and PATH lookups resolved; see compiler/loader.gem).
 
-let install_root = dirname(dirname(argv()[0]))
+let install_root = find_install_root()
+
+let KEYWORDS = build_keyword_set()
 
 # ─── AST helpers (defined locally to avoid shared module deps) ──
 
@@ -31,6 +35,10 @@ end
 
 fn make_let(name, value, line)
   {tag: "let", name: name, value: value, line: line}
+end
+
+fn make_nil_node()
+  {tag: "nil"}
 end
 
 fn make_var(name, line = nil, col = nil)
@@ -65,6 +73,77 @@ fn module_name_from_path(path)
     end
   end
   name
+end
+
+# A module's namespace binding is its file's base name, so that name must
+# lex as an identifier (`my-utils` doesn't) and not be a keyword.
+fn is_identifier_name(name)
+  if name == "" or KEYWORDS[name] == true
+    return false
+  end
+  let i = 0
+  while i < len(name)
+    let c = ord(name, i)
+    let alpha = (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or c == 95
+    if not alpha and (i == 0 or c < 48 or c > 57)
+      return false
+    end
+    i += 1
+  end
+  true
+end
+
+# `name` with every byte outside [A-Za-z0-9_] replaced by `_`.
+fn c_safe_name(name)
+  let parts = []
+  for i = 0, len(name)
+    let c = ord(name, i)
+    if (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or (c >= 48 and c <= 57) or c == 95
+      push(parts, chr(c))
+    else
+      push(parts, "_")
+    end
+  end
+  string.join(parts, "")
+end
+
+# The internal name of the module in `full_path`, used in its C symbols
+# (`_mod_<mangle>_<name>`): its base name through c_safe_name, plus `_2`,
+# `_3`, ... when another file already uses that name or one of the
+# module's symbols would equal another module's (`a` + `b_c` vs `a_b` + `c`). A std module loaded before any
+# clash keeps `_mod_<base>_`. Users never see the mangle: messages and
+# stack traces show `<base>.<name>` (build_global_display).
+# `registry`: {prefixes: mangle -> path, symbols: symbol -> path}, shared
+# by every load of the program.
+fn module_mangle(full_path, mod_name, top_names, registry)
+  let base = c_safe_name(mod_name)
+  if base == ""
+    base = "m"
+  end
+  let cand = base
+  let n = 1
+  while true
+    let ok = registry.prefixes[cand] == nil
+    if ok
+      for name, _ in top_names
+        let owner = registry.symbols["_mod_" + cand + "_" + name]
+        if owner != nil and owner != full_path
+          ok = false
+          break
+        end
+      end
+    end
+    if ok
+      break
+    end
+    n += 1
+    cand = base + "_" + to_string(n)
+  end
+  registry.prefixes[cand] = full_path
+  for name, _ in top_names
+    registry.symbols["_mod_" + cand + "_" + name] = full_path
+  end
+  cand
 end
 
 fn find_export_node(stmts)
@@ -114,6 +193,20 @@ fn copy_set(s)
   let result = {}
   for k, v in s
     result[k] = v
+  end
+  result
+end
+
+# The scope a fn body (named or anonymous) starts from. A module-scope
+# `let` of a builtin's name marked "pending" (not reached yet) leaves the
+# name meaning the builtin in the module's own statements before it; a fn
+# body runs later and sees the module binding, like any module-level name.
+fn fn_body_scope(shadowed)
+  let result = {}
+  for k, v in shadowed
+    if v != "pending"
+      result[k] = v
+    end
   end
   result
 end
@@ -172,7 +265,7 @@ fn rename_node(node, rmap, shadowed)
     if has_key(rmap, name)
       node.name = rmap[name]
     end
-    let inner = copy_set(shadowed)
+    let inner = fn_body_scope(shadowed)
     for p in params
       inner[p] = true
     end
@@ -190,7 +283,7 @@ fn rename_node(node, rmap, shadowed)
       node.name = rmap[name]
     end
   when {tag: "anon_fn", params: params, body: body}
-    let inner = copy_set(shadowed)
+    let inner = fn_body_scope(shadowed)
     for p in params
       inner[p] = true
     end
@@ -317,12 +410,51 @@ fn rename_stmt_in_scope(stmt, rmap, current, top)
   elif is_node(stmt, "let") and not top
     rename_node(stmt.value, rmap, current)
     current[stmt.name] = true
+  elif is_node(stmt, "let") and current[stmt.name] == "pending"
+    # The first module-scope `let` of a builtin's name: its initializer
+    # (closures in it included) and every statement before it still call
+    # the builtin.
+    let init_scope = copy_set(current)
+    init_scope[stmt.name] = true
+    rename_node(stmt.value, rmap, init_scope)
+    delete(current, stmt.name)
+    stmt.name = rmap[stmt.name]
   else
     rename_node(stmt, rmap, current)
     if is_node(stmt, "let") and not has_key(rmap, stmt.name)
       current[stmt.name] = true
     end
   end
+end
+
+# The starting scope for renaming a module's own top-level statements:
+# each builtin's name that the module binds with a `let` (not a fn or an
+# extern fn, which bind it for the whole module) is "pending" until that
+# `let`, so the module's statements before it, and its initializer, call
+# the builtin, as for a shadowing `let` anywhere else.
+fn pending_builtin_lets(stmts, rmap)
+  let lets = {}
+  let fns = {}
+  for stmt in stmts
+    if is_node(stmt, "fn_def") or is_node(stmt, "extern_fn")
+      fns[stmt.name] = true
+    elif is_node(stmt, "let")
+      lets[stmt.name] = true
+    elif is_node(stmt, "block")
+      for s in stmt.stmts
+        if is_node(s, "let")
+          lets[s.name] = true
+        end
+      end
+    end
+  end
+  let scope = {}
+  for name, _ in lets
+    if has_key(rmap, name) and has_key(BUILTIN_FNS, name) and not has_key(fns, name)
+      scope[name] = "pending"
+    end
+  end
+  scope
 end
 
 fn rename_stmts(stmts, rmap, shadowed)
@@ -337,8 +469,11 @@ fn is_from_load(stmt)
 end
 
 # A top-level binding in the entry file whose name is a builtin's (a fn,
-# a let, a selective import) shadows the builtin for the whole entry file,
-# like it does in a loaded module, where transform_module prefixes it. The
+# a let, a selective import) shadows the builtin in the entry file, like
+# it does in a loaded module, where transform_module prefixes it: a fn for
+# the whole file, a `let` from that `let` on (its initializer and the
+# top-level statements before it call the builtin; fn bodies see the
+# binding, see pending_builtin_lets). The
 # entry file's top-level names are not prefixed, so rename just the ones
 # that collide with a builtin to `_main_<name>`. Statements spliced in from
 # loads are skipped: their free names mean the builtin. Runs before
@@ -361,7 +496,7 @@ fn shadow_entry_builtins(stmts, module_bindings)
   if not any
     return nil
   end
-  let scope = {}
+  let scope = pending_builtin_lets(own, rmap)
   for stmt in own
     rename_stmt_in_scope(stmt, rmap, scope, true)
   end
@@ -373,9 +508,8 @@ fn shadow_entry_builtins(stmts, module_bindings)
   end
 end
 
-fn transform_module(stmts, mod_name, export_node, load_node)
-  let prefix = "_mod_" + mod_name + "_"
-  let top_names = collect_module_top_names(stmts)
+fn transform_module(stmts, mangle, top_names)
+  let prefix = "_mod_" + mangle + "_"
   let rmap = build_rename_map(top_names, prefix)
 
   # Statements spliced in from this module's own loads (`from_load`) are
@@ -383,14 +517,21 @@ fn transform_module(stmts, mod_name, export_node, load_node)
   # builtins (or undeclared), never this module's bindings, so they are
   # left alone: a module's `fn len` must not capture `len` in a module it
   # loads.
-  let module_scope = {}
+  let own = []
+  for stmt in stmts
+    if not is_from_load(stmt)
+      push(own, stmt)
+    end
+  end
+  let module_scope = pending_builtin_lets(own, rmap)
   for stmt in stmts
     if not is_from_load(stmt)
       rename_stmt_in_scope(stmt, rmap, module_scope, true)
     end
   end
 
-  # Everything but the binding lets pushed below belongs to this module.
+  # Everything here belongs to this module; the loader's bindings
+  # (import_bindings) come after.
   let result = []
   for stmt in stmts
     if not is_node(stmt, "export")
@@ -398,13 +539,66 @@ fn transform_module(stmts, mod_name, export_node, load_node)
       push(result, stmt)
     end
   end
+  result
+end
 
-  let exported = export_node.names
+# The names of a module's `export` that it can export: each reported if
+# the module doesn't define it at module scope or lists it twice, then
+# left out, so a use of it reports "has no export" rather than an
+# undeclared mangled slot (a selective import of it reports nothing more:
+# `bad` collects the names left out). A module that failed to parse has
+# already reported why; its missing names are dropped without another error.
+fn checked_exports(export_node, top_names, mod_name, file, parse_failed, sources_by_file, sink, bad)
+  let result = []
+  let seen = {}
+  let i = 0
+  for name in export_node.names
+    let pos = export_node.name_pos[i]
+    i += 1
+    if seen[name] != nil
+      sink.report(sources_by_file[file], file, pos.line, pos.col, len(name), "module `{mod_name}` exports `{name}` twice", "remove the second `{name}` from the `export` list")
+    elif top_names[name] == nil
+      if not parse_failed
+        sink.report(sources_by_file[file], file, pos.line, pos.col, len(name), "module `{mod_name}` exports `{name}`, which it doesn't define", "define `{name}` at the top level of the module, or remove it from the `export` list")
+      end
+      bad[name] = true
+    else
+      push(result, name)
+    end
+    seen[name] = true
+  end
+  result
+end
 
+# The bindings a `load` creates in the loading file: a `let` per name of
+# a selective import, or the module's frozen namespace table. A selective
+# name the module doesn't export is reported at the `load` and bound to
+# nil, so its uses don't each report an undeclared name. A name in `bad`
+# (listed in the module's `export` but not defined) was reported there.
+fn import_bindings(load_node, mod_name, mangle, exported, bad, module_bindings, sources_by_file, sink)
+  let prefix = "_mod_" + mangle + "_"
+  let result = []
   if load_node.selective != nil
+    let is_exported = {}
+    for ename in exported
+      is_exported[ename] = true
+    end
+    let i = 0
     for sel_name in load_node.selective
-      let prefixed = prefix + sel_name
-      push(result, make_let(sel_name, make_var(prefixed), 0))
+      let pos = load_node.selective_pos[i]
+      i += 1
+      if is_exported[sel_name] != nil
+        push(result, make_let(sel_name, make_var(prefix + sel_name), 0))
+      else
+        if bad[sel_name] == nil
+          let hint = nil
+          if len(exported) > 0
+            hint = "the module exports: " + string.join(exported, ", ")
+          end
+          sink.report(sources_by_file[load_node.file], load_node.file, pos.line, pos.col, len(sel_name), "module `{mod_name}` has no export `{sel_name}`", hint)
+        end
+        push(result, make_let(sel_name, make_nil_node(), 0))
+      end
     end
   else
     let binding_name = mod_name
@@ -413,14 +607,13 @@ fn transform_module(stmts, mod_name, export_node, load_node)
     end
     let entries = []
     for ename in exported
-      let prefixed = prefix + ename
-      push(entries, make_table_entry(ename, make_var(prefixed)))
+      push(entries, make_table_entry(ename, make_var(prefix + ename)))
     end
     let mod_tbl = make_table(entries)
     mod_tbl.frozen = true
     push(result, make_let(binding_name, mod_tbl, 0))
+    module_bindings[binding_name] = exported
   end
-
   result
 end
 
@@ -574,9 +767,45 @@ fn report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
   sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
 end
 
-fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path)
+# The namespace a whole-module `load` binds in its file: the alias, or the
+# file's base name, which must then be an identifier. Two different modules
+# can't share a namespace name in one file (`seen`: name -> {path, stmt} of
+# the first load binding it). Reports the problem at `stmt` and returns
+# false when the load can't bind its namespace.
+fn check_namespace_name(stmt, full_path, seen, sources_by_file, sink)
+  if stmt.selective != nil
+    return true
+  end
+  let ns = stmt.alias
+  if ns == nil
+    ns = module_name_from_path(stmt.path)
+    if not is_identifier_name(ns)
+      let msg = "module file name `{ns}` is not an identifier, so it can't name the module's namespace"
+      let hint = "rename it to {c_safe_name(ns)}.gem, or load it with `load \"{stmt.path}\" as name`"
+      if KEYWORDS[ns] == true
+        msg = "module file name `{ns}` is a keyword, so it can't name the module's namespace"
+        hint = "rename the file, or load it with `load \"{stmt.path}\" as name`"
+      end
+      sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
+      return false
+    end
+  end
+  let prev = seen[ns]
+  if prev != nil and prev.path != full_path
+    sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "module name `{ns}` is already used by `load \"{prev.stmt.path}\"` at line {prev.stmt.line}", "rename one of the files, or load one with `load \"{stmt.path}\" as name`")
+    return false
+  end
+  if prev == nil
+    seen[ns] = {path: full_path, stmt: stmt}
+  end
+  true
+end
+
+fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, registry)
   let new_stmts = []
   let count = 0
+  # Namespace names bound by this file's loads (check_namespace_name).
+  let ns_seen = {}
   for stmt in ast.stmts
     if is_node(stmt, "load")
       let full_path = resolve_load_path(stmt.path, base_dir, project_root, stdlib_root)
@@ -586,28 +815,23 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
         report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
         continue
       end
+      # A missing file is reported as missing, before any check that
+      # assumes it is a module (its namespace name).
+      if cached == nil
+        let problem = load_target_problem(stmt.path, full_path, show_path)
+        if problem != nil
+          sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), problem.msg, problem.hint)
+          continue
+        end
+      end
+      if not check_namespace_name(stmt, full_path, ns_seen, sources_by_file, sink)
+        continue
+      end
       if cached != nil
         if cached.exported != nil
-          let prefix = "_mod_" + cached.mod_name + "_"
-          if stmt.selective != nil
-            for sel_name in stmt.selective
-              new_stmts[count] = make_let(sel_name, make_var(prefix + sel_name), 0)
-              count += 1
-            end
-          else
-            let binding_name = cached.mod_name
-            if stmt.alias != nil
-              binding_name = stmt.alias
-            end
-            let entries = []
-            for ename in cached.exported
-              push(entries, make_table_entry(ename, make_var(prefix + ename)))
-            end
-            let mod_tbl = make_table(entries)
-            mod_tbl.frozen = true
-            new_stmts[count] = make_let(binding_name, mod_tbl, 0)
+          for b in import_bindings(stmt, cached.mod_name, cached.mangle, cached.exported, cached.bad_exports, module_bindings, sources_by_file, sink)
+            new_stmts[count] = b
             count += 1
-            module_bindings[binding_name] = cached.exported
           end
         end
         continue
@@ -618,7 +842,15 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       let entry = {exported: nil, loading: true, parent: normalize_path(stmt.file)}
       loaded[full_path] = entry
 
-      let source = read_file(full_path)
+      # Unreadable despite existing (permissions, a race): still an error
+      # at the `load`, not a crash of the compiler.
+      let read_res = pcall read_file(full_path)
+      if not read_res.ok
+        entry.loading = false
+        sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "cannot read module `{stmt.path}` ({show_path(full_path)})", nil)
+        continue
+      end
+      let source = read_res.value
       sources_by_file[full_path] = source
       let errors_before = sink.count()
       let loaded_ast = parse_source(source, full_path, sink)
@@ -628,7 +860,7 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
         warn_shadowed_loop_conds(loaded_ast, full_path, show_path)
       end
       let loaded_dir = dirname(full_path)
-      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path)
+      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, registry)
 
       entry.loading = false
 
@@ -644,15 +876,16 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
 
       let mod_name = module_name_from_path(stmt.path)
       # top_names: the module-scope names transform_module prefixes with
-      # `_mod_<mod_name>_`; build_global_display maps them back for messages.
-      loaded[full_path] = {mod_name: mod_name, exported: export_node.names, top_names: collect_module_top_names(resolved.stmts)}
-      let mod_stmts = transform_module(resolved.stmts, mod_name, export_node, stmt)
-      if stmt.selective == nil
-        let bn = mod_name
-        if stmt.alias != nil
-          bn = stmt.alias
-        end
-        module_bindings[bn] = export_node.names
+      # `_mod_<mangle>_`; build_global_display maps them back to
+      # `<mod_name>.<name>` for messages and stack traces.
+      let top_names = collect_module_top_names(resolved.stmts)
+      let mangle = module_mangle(full_path, mod_name, top_names, registry)
+      let bad_exports = {}
+      let exported = checked_exports(export_node, top_names, mod_name, full_path, parse_failed, sources_by_file, sink, bad_exports)
+      loaded[full_path] = {mod_name: mod_name, mangle: mangle, exported: exported, bad_exports: bad_exports, top_names: top_names}
+      let mod_stmts = transform_module(resolved.stmts, mangle, top_names)
+      for b in import_bindings(stmt, mod_name, mangle, exported, bad_exports, module_bindings, sources_by_file, sink)
+        push(mod_stmts, b)
       end
       for ms in mod_stmts
         new_stmts[count] = ms
@@ -666,8 +899,8 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
   make_program(new_stmts)
 end
 
-# Mangled module-slot name -> the name a user writes: `_mod_<mod>_<name>`
-# -> `<mod>.<name>`, from the loaded-module table (no string splitting, so
+# Mangled module-slot name -> the name a user writes: `_mod_<mangle>_<name>`
+# -> `<mod>.<name>` (the file's base name, never the mangle), from the loaded-module table (no string splitting, so
 # underscores in module or binding names stay unambiguous). Codegen uses it
 # in diagnostics that name module state.
 fn build_global_display(loaded)
@@ -675,7 +908,7 @@ fn build_global_display(loaded)
   for _, info in loaded
     if info.top_names != nil
       for name, _ in info.top_names
-        display["_mod_" + info.mod_name + "_" + name] = info.mod_name + "." + name
+        display["_mod_" + info.mangle + "_" + name] = info.mod_name + "." + name
       end
     end
   end
@@ -812,6 +1045,16 @@ if cli.src_path == nil
 end
 
 let src_path = cli.src_path
+# An unreadable source path is the user's mistake too: one line, exit 1,
+# no stack trace of the driver.
+if is_dir(src_path)
+  eprint("gem: '" + src_path + "' is a directory, not a source file")
+  exit(1)
+end
+if not file_exists(src_path)
+  eprint("gem: cannot open '" + src_path + "'")
+  exit(1)
+end
 let source = read_file(src_path)
 
 let sink = make_error_sink()
@@ -839,7 +1082,7 @@ loaded[normalize_path(src_path)] = {exported: nil, loading: true, parent: nil}
 let resolved_ast = nil
 if not sink.has_any()
   warn_shadowed_loop_conds(ast, src_path, show_path)
-  resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path)
+  resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, {prefixes: {}, symbols: {}})
 end
 
 if sink.has_any()
@@ -856,7 +1099,13 @@ resolved_ast = lower(resolved_ast)
 fold_constants(resolved_ast)
 
 let cg = make_codegen(src_path, module_bindings, show_path, sources_by_file, sink, build_global_display(loaded))
-let c_code = cg.compile(resolved_ast)
+# The C file cc compiles in compile mode (codegen points `#line` at it
+# after the extern includes); nil for --check and --emit-c.
+let c_file = nil
+if not cli.check and not cli.emit_c
+  c_file = "/tmp/gem_" + basename_no_ext(src_path) + ".c"
+end
+let c_code = cg.compile(resolved_ast, c_file)
 
 # Codegen may have surfaced semantic errors (undeclared identifier,
 # missing module export, etc.). One last pass before we run cc / write
@@ -882,7 +1131,7 @@ else
   # ─── Compile mode ─────────────────────────────────────────────
 
   let base = basename_no_ext(src_path)
-  let tmp_c = "/tmp/gem_" + base + ".c"
+  let tmp_c = c_file
 
   # Determine output name. Default-to-run drops the binary in /tmp so the
   # CWD doesn't get littered; compile-only writes to ./<base>.

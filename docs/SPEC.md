@@ -30,6 +30,8 @@ gem lsp                     # start the language server on stdin/stdout
 
 Options can come before or after the source path. Before it, an argument starting with `-` that is not one of the options above is a usage error: `gem` prints a short message and the usage line on stderr and exits 2 (as for a missing source path or `-o` without a name). After the source path, an unknown argument is passed to the program, so `gem prog.gem --help` gives `--help` to `prog.gem`.
 
+A source path that cannot be read prints one line on stderr and exits 1: `gem: cannot open 'missing.gem'`, or `gem: 'src' is a directory, not a source file`.
+
 The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.c`, compiles it to `/tmp/gem_<basename>_bin`, and runs it. Extra positional arguments after the source path are forwarded to the program via `argv()`.
 
 `-c` (or `--compile-only`) keeps the artifact: compiles to `./<basename>` and exits without running. `-o <name>` does the same but lets you pick the path.
@@ -41,6 +43,10 @@ The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.
 ## Values and Types
 
 Nine types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`, `Ref`. All dynamically typed. Every value is a tagged C union. Yes this means primitives are boxed and slow — doesn't matter for v0. Future optimization: NaN-boxing to pack ints, bools, and nil into a double's NaN space, eliminating heap allocation for primitives.
+
+**Numbers.** An `Int` is a signed 64-bit integer, from -9223372036854775808 to 9223372036854775807; a `Float` is an IEEE 754 double. Integer literals are decimal digits (`42`, `007` is `7`; no hex, binary, octal or `_` separators), and a literal outside that range is a compile error at the literal (`integer literal out of range`). The literal `9223372036854775808` is accepted only right after a unary `-`, so `-9223372036854775808` writes the smallest int; `x - 9223372036854775808` is still an error. A number literal with a decimal point is a float (`2.0`, `0.000001`, `3.14159265358979`). There is no exponent syntax in literals (`1e6` does not lex as a number); `to_float("1e6")` parses one. A float literal keeps every digit: it compiles to the nearest double, as in C.
+
+A float turns into text (`to_string`, `print`, `eprint`, interpolation, `buf_push`, `build_string`'s `add`, and so `json.encode`) as the shortest decimal that reads back to the same double, so `to_float(to_string(x)) == x` for every finite `x`. An integral float keeps a decimal point (`2.0`, `-0.0`, `100.0`), so a float never prints like an int. Magnitudes below `1e-4` or from `1e16` up use exponent form with a signed, at least two-digit exponent (`1e-05`, `1.5e-07`, `1e+16`, `1.2345678901234567e+19`); this is also valid JSON. The non-finite values (from overflow, e.g. `to_float("1e308") * 10.0`) print as `inf`, `-inf` and `nan`; `to_float` reads those back, but `json.encode` writes them as is, which is not valid JSON.
 
 Strings are binary-safe: they carry an explicit byte length, so `"\0"` is a 1-byte string, `len(s)` reports byte length (not strlen), and embedded NULs survive concatenation, indexing, equality, `build_string`, `tcp_write`, and `read_file`/`write_file` round-trips. Strings remain NUL-terminated for C interop convenience; the byte after the last content byte is always `\0`. **Caveat — `extern fn`:** when a Gem `String` is passed to an `extern fn ... s: String` parameter, it marshals as `const char *` and the C side will see only the bytes up to the first NUL. Use the `Bytes` extern type (see C Interop) when the C function needs binary data — it marshals the byte length alongside the pointer.
 
@@ -82,6 +88,7 @@ A `let` always declares a new variable. If a variable of the same name is alread
 - Closures created before the shadowing `let` keep the old variable; closures created after it see the new one.
 - A shadow made inside a nested block (`if`/`elif`/`else`, `while` and `for` bodies, `match`/`receive` arms, closure bodies) ends with that block: after it the outer variable is visible again, unchanged. In a loop body every iteration starts from the outer variable.
 - `for` loop variables and `match`/`receive` pattern bindings are lets of their body and shadow the same way.
+- A parameter (plain, defaulted, rest or destructured) shadows an outer variable, a module-level binding, a named or `extern` function or a builtin of the same name in the whole function body, closures and `do` blocks in it included: in `fn show(item) fn() item end end` the closure reads the argument even when a top-level `fn item` exists.
 - **Warning:** a `let` in a `while` body (at any depth, not inside a closure) that shadows a variable the loop's condition reads, when nothing in the loop body assigns that name (`x = …` or `x += …`, closures included), gets a compile-time warning on stderr. The condition reads the outer variable, which then can't change through it: `while i < n` with `let i = i + 1` in the body never ends. To advance the counter, assign it: `i = i + 1`. Any assignment to the name in the body turns the warning off, as does renaming the new variable. A module-level variable that a named function of the same file assigns is not warned about, since a call in the loop can change it.
 
 ```
@@ -97,7 +104,7 @@ end
 f(5)
 ```
 
-The exception is a `let` directly in a file's top-level code: that declares the module-level binding of the name (see below), of which there is one per name. A second top-level `let` of the same name rebinds that module-level binding, as an assignment would; named functions and closures, which always read module-level bindings live, see the new value.
+The exception is a `let` directly in a file's top-level code: that declares the module-level binding of the name (see below), of which there is one per name. A second top-level `let` of the same name rebinds that module-level binding, as an assignment would; named functions and closures, which always read module-level bindings live, see the new value. A module-level name has one kind of definition: a `fn`, an `extern fn`, or `let`s (the names a `load` binds count as `let`s). A `fn` or `extern fn` with the name of another module-level `let`, `load` binding, `fn` or `extern fn` in the same file, in either order, is a compile error at the second definition (`` `helper` is already defined at line 1 (a `let`)``).
 
 ### Destructuring
 
@@ -115,7 +122,7 @@ let {strategy = "one_for_one", max_restarts = 3} = spec
 let [head, tail = []] = parts
 ```
 
-Table destructuring extracts by name (`let {a, b} = expr` is `let a = expr.a; let b = expr.b`). Array destructuring extracts by index (`let [a, b] = expr` is `let a = expr[0]; let b = expr[1]`). The RHS is evaluated exactly once. Missing keys/indices produce `nil`. Per-field defaults (`name = expr`) substitute when the extracted value is `nil` (i.e. the key was absent or its value was nil); the default is only evaluated in that case and may reference earlier names in the same destructure. Like any `let` initializer, a default that names the field it binds sees the binding it shadows: in `fn f(port) let {port = port + 1} = {} ... end`, the default reads the parameter. Patterns are flat — no renaming, nesting, or rest/splat. Match/receive patterns are stricter and do **not** accept defaults; defaults are a binding-context feature only (let, fn params).
+Table destructuring extracts by name (`let {a, b} = expr` is `let a = expr.a; let b = expr.b`). Array destructuring extracts by index (`let [a, b] = expr` is `let a = expr[0]; let b = expr[1]`). The RHS is evaluated exactly once. Missing keys/indices produce `nil`. Per-field defaults (`name = expr`) substitute when the extracted value is `nil` (i.e. the key was absent or its value was nil); the default is only evaluated in that case and may reference earlier names in the same destructure. Like any `let` initializer, a default that names the field it binds sees the binding it shadows: in `fn f(port) let {port = port + 1} = {} ... end`, the default reads the parameter. Patterns are flat — no renaming, nesting, or rest/splat; a `{key: name}` entry in a `let` or fn-param pattern is a compile error (only match/receive patterns take `key: pattern`). Match/receive patterns are stricter and do **not** accept defaults; defaults are a binding-context feature only (let, fn params).
 
 ### Module-level bindings are per-process
 
@@ -153,6 +160,8 @@ end
 
 Last expression is implicit return. Explicit `return` also works.
 
+A named `fn` is a definition in a file's top-level code only. One inside a function or `do` body, or inside a top-level `if`, `while`, `for`, `match` or `receive` block, is a compile error; bind an anonymous function instead (`let helper = fn() ... end`), or move the definition to the top level.
+
 Function call argument lists allow newlines inside the parentheses — after `(`, after each `,`, and before `)`:
 
 ```
@@ -165,6 +174,8 @@ let result = add(
 Table and array literals may span lines the same way. Other expressions may not: a line break after a binary operator or inside parentheses ends the statement (`let t = (1 +` followed by `2)` on the next line is a parse error), and a line that starts with `-` is a new statement (`let x = 1` followed by `- 2` on the next line leaves `x` at `1`). Parameter lists in a `fn` definition must fit on one line. Split a long condition into named `let`s.
 
 A call with more arguments than the function declares drops the extra ones, and missing arguments are `nil` (or the parameter's default); neither is an error. Calling a non-function value is a runtime error.
+
+A named function is a module-level binding: two `fn`s of the same name in one file, or a `fn` and a top-level `let` or `extern fn` of the same name, are a compile error at the second one (see Shadowing). A `let` of that name inside a function or block shadows the function as usual.
 
 If the entry file defines `fn main()`, the compiler calls it with no arguments after the file's top-level code has run. Don't also call it yourself, or it runs twice. Use `argv()` for command-line arguments.
 
@@ -302,7 +313,7 @@ let list = [1, 2, 3]
 list[0]
 ```
 
-`{ }` with keys is a table. `[ ]` is sugar for an integer-keyed table. Dot access is sugar for string key lookup. Keywords are allowed as table keys and dot fields: `{else: body}`, `node.else`.
+`{ }` with keys is a table. `[ ]` is sugar for an integer-keyed table. Dot access is sugar for string key lookup. Keywords are allowed as table keys and dot fields: `{else: body}`, `node.else`. A literal key is a name or keyword (a string key), a string (`{"x y": 1}`; `{"5": 1}` has the string key `"5"`), or a non-negative int literal (`{0: "a", 10: "b"}`), which reads like any int literal: `{010: x}` has the key `10`, and a key outside the int range is a compile error. A negative int key (`{-1: x}`) is a compile error, since negative ints index from the end (see Negative array indexing). Table patterns take the same keys: `when {1: x}` matches a table with the int key `1`, `when {"1": x}` one with the string key `"1"`.
 
 Tables can have methods via closures:
 
@@ -376,7 +387,7 @@ when {ok: false, error: msg}
   print("failed: " + msg)
 end
 
-# Array pattern — match on length and bind positional elements
+# Array pattern — match an array of exactly N elements and bind them by position
 match point
 when [x, y, 0]
   print("2D point")
@@ -406,7 +417,7 @@ end
 
 Pattern rules:
 - `{key: pattern, ...}` — checks target is a table, each key exists, and recursively matches each value against its sub-pattern. Extra keys in the target are ignored (partial match).
-- `[p1, p2, ...]` — checks target is a table with `len(target) == N`, then recursively matches each element. A record with N keys passes the length check too (see `docs/KNOWN_BUGS.md`), so put array arms after record arms when both can occur.
+- `[p1, p2, ...]` — checks target is a table with exactly N entries whose keys are the ints `0 .. N-1`, then recursively matches each element. A record with N string keys, or an array with an extra string key, does not match. `[]` matches any empty table (`{}` and `[]` are the same value). There is no rest element: `[x, y]` never matches a 3-element array.
 - There are no guards or alternatives: `when v > 5` and `when "a" or "b"` are expression arms that compare the target with the value of `v > 5` or `"a" or "b"`. Use an `if` chain, or one arm per value.
 - A literal (int, float, string, bool) in pattern position matches by equality. `nil` is also a literal — `when nil` matches only `nil`, it does not bind a variable.
 - A name in pattern position is a variable binding — always matches and binds the matched value.
@@ -440,6 +451,14 @@ for key, value in table
   print("{key} = {value}")
 end
 
+# String iteration (bytes)
+for ch in "abc"
+  print(ch)            # "a", "b", "c"
+end
+for i, ch in "abc"
+  print("{i} {ch}")    # 0 a, 1 b, 2 c
+end
+
 # Range iteration (0 to n-1)
 for i = 0, n
   print(i)
@@ -448,7 +467,7 @@ end
 
 `break` and `continue` work inside `for` loops. The iterator increment happens before the user body, so `continue` correctly advances to the next element.
 
-The range form evaluates its bound once, before the loop, and assigning the loop variable in the body doesn't change the next iteration. The table form evaluates the RHS expression exactly once. It walks the table's entries in `keys()` order without building a `keys()` array, reading the entry count once before the loop: an entry added during the loop is not visited, and a `delete` during the loop (which moves the last entry into the hole) makes it skip entries and then visit `nil`. The single-variable form is for arrays: it re-reads `len` every iteration, so `push` during the loop extends it and `remove_at` makes it skip elements; on a string-keyed table it yields `nil` for each entry (use `for k, v` or `values(t)`).
+The range form evaluates its bound once, before the loop, and assigning the loop variable in the body doesn't change the next iteration. The table form evaluates the RHS expression exactly once. It walks the table's entries in `keys()` order without building a `keys()` array, reading the entry count once before the loop: an entry added during the loop is not visited, and a `delete` during the loop (which moves the last entry into the hole) makes it skip entries and then visit `nil`. The single-variable form is for arrays: it re-reads `len` every iteration, so `push` during the loop extends it and `remove_at` makes it skip elements; on a string-keyed table it yields `nil` for each entry (use `for k, v` or `values(t)`). Over a string, both forms walk the bytes: `ch` is the one-byte string `s[i]` (a multi-byte UTF-8 character comes out as several bytes), and the two-variable form also gives the 0-based byte index `i`. Iterating anything other than a table or a string (an int, `nil`, a buffer, …) raises `for: expected a table or string to iterate, got <type>`, in either form.
 
 ## Closures
 
@@ -670,13 +689,21 @@ Without the `^`, `ref: ref` would bind whatever ref the first reply carries.
 
 The `after <ms>` clause is optional. If present and the timeout elapses with no matching message, the `after` body executes. `after 0` means "check once, don't block." Omitting `after` means block forever (like `receive()`).
 
+A `receive` may have an `after` clause and no `when` arms: it takes no message and leaves the mailbox as it is, waits `<ms>` milliseconds (messages that arrive meanwhile stay queued for a later `receive`), then evaluates to the `after` body. `after 0` returns at once. A `receive` with neither `when` arms nor `after` (`receive` directly followed by `end`) is a compile error.
+
+```
+receive
+after 100 then nil                   # wait 100 ms, mailbox untouched
+end
+```
+
 The `receive` block can produce a value when used as the last statement of a function (implicit return), just like `match`.
 
 The `receive()` function call always pops the head of the mailbox unconditionally, whatever the message is.
 
 ## Process Control
 
-`kill(pid, reason)` sends an exit signal to a process. If the target has `trap_exit` enabled, an `{tag: "EXIT", pid: sender_pid, reason: reason}` message is delivered to its mailbox instead of terminating it. Otherwise, the process is terminated immediately: marked dead, DOWN messages delivered to monitors, registered name removed, and exit propagated to linked processes. Returns `true` if the process was alive, `nil` otherwise. A process can kill itself: `kill(self(), reason)` ends it at once with that reason (unless it traps exits), and `pcall` does not catch it. Likewise, when a `kill` brings down the caller through a link, the caller dies at once; `pcall` does not catch that either. If the process ending this way is the main process and the reason is not `"normal"`, the reason is printed as a runtime error and the program exits with status 1; when another process kills main, or main dies through a link, the message names the sender: `main process killed by process <pid>: <reason>` or `main process killed by linked process <pid>: <reason>`, followed by main's stack trace (where main was when the signal arrived). A process killed while it waits on the thread pool (`read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, an `extern blocking fn`) dies at once, but the operation itself still runs to completion on its worker thread: a write still lands, a command started by `exec` keeps running, and once the worker is done the runtime frees the result (closing the connection an abandoned `sqlite_open` opened), except a `Ptr` returned by an `extern blocking fn`.
+`kill(pid, reason)` sends an exit signal to a process. If the target has `trap_exit` enabled, an `{tag: "EXIT", pid: sender_pid, reason: reason}` message is delivered to its mailbox instead of terminating it. Otherwise, a signal with reason `"normal"` from another process is ignored (as in Erlang: `"normal"` means "nothing went wrong", so it never ends a process that doesn't trap exits); with any other reason, the process is terminated immediately: marked dead, DOWN messages delivered to monitors, registered name removed, and exit propagated to linked processes. Returns `true` if the process was alive, `nil` otherwise. A process can kill itself: `kill(self(), reason)` ends it at once with that reason, `"normal"` included (unless it traps exits), and `pcall` does not catch it. Likewise, when a `kill` brings down the caller through a link, the caller dies at once; `pcall` does not catch that either. If the process ending this way is the main process and the reason is not `"normal"`, the reason is printed as a runtime error and the program exits with status 1; when another process kills main, or main dies through a link, the message names the sender: `main process killed by process <pid>: <reason>` or `main process killed by linked process <pid>: <reason>`, followed by main's stack trace (where main was when the signal arrived). A process killed while it waits on the thread pool (`read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, an `extern blocking fn`) dies at once, but the operation itself still runs to completion on its worker thread: a write still lands, a command started by `exec` keeps running, and once the worker is done the runtime frees the result (closing the connection an abandoned `sqlite_open` opened), except a `Ptr` returned by an `extern blocking fn`.
 
 `sleep(ms)` suspends the current process for `ms` milliseconds. The scheduler resumes the process after the deadline expires; messages that arrive meanwhile wait in the mailbox and do not end the sleep early. `sleep(0)` yields to other ready processes and returns.
 
@@ -736,9 +763,9 @@ Include the C header of a library function (`extern include`, below). Without on
 
 `extern fn` declares a C function. The compiler emits the call directly since we compile to C. Type annotations on extern declarations only — the rest of the language stays dynamically typed. `Ptr` is an opaque type for C pointers.
 
-An `extern fn` is a binding like a top-level `fn`: one named like a builtin (`extern fn sqrt(x: Float) -> Float`) shadows the builtin in its own file, and one in a loaded module can be exported and called as `module.name`. The C function it calls is always the declared name.
+`extern fn`, `extern blocking fn` and `extern include` go directly in a file's top-level code; inside any block or function body they are a compile error. An `extern fn` is a binding like a top-level `fn`: one named like a builtin (`extern fn sqrt(x: Float) -> Float`) shadows the builtin in its own file, and one in a loaded module can be exported and called as `module.name`. The C function it calls is always the declared name.
 
-The generated wrapper validates `argc` and each argument's runtime type tag before reading the `GemVal` union, so a Gem-side mistake (wrong arity, wrong type) raises a Gem-level error at the boundary instead of passing garbage to C. Errors mention the declared Gem-level type name (e.g. `foo: arg 0 expected String, got int`). Types are not converted: a `Float` parameter rejects an int (`sqrt(2)` raises; pass `2.0` or `to_float(n)`). Too few arguments raise; extra arguments are currently ignored (see `docs/KNOWN_BUGS.md`). A `Ptr` is an int on the Gem side, and `NULL` comes back as `0`, not `nil`.
+The generated wrapper validates `argc` and each argument's runtime type tag before reading the `GemVal` union, so a Gem-side mistake (wrong arity, wrong type) raises a Gem-level error at the boundary instead of passing garbage to C. Errors mention the declared Gem-level type name (e.g. `foo: arg 0 expected String, got int`). Types are not converted: a `Float` parameter rejects an int (`sqrt(2)` raises; pass `2.0` or `to_float(n)`). The argument count must match the declaration exactly: too few or too many raise `<name>: expected N argument(s), got M` (unlike a Gem fn, which ignores extra arguments). Arity counts Gem arguments, so a `Bytes` parameter counts once. A `Ptr` is an int on the Gem side, and `NULL` comes back as `0`, not `nil`.
 
 The compiler auto-generates C forward declarations from `extern fn` type signatures, so no separate `.h` file is needed for function declarations. The type mapping:
 
@@ -821,7 +848,7 @@ extern include "math.h"
 extern include "stdio.h"
 ```
 
-The line is emitted as `#include "<path>"` into the generated C file, which is compiled in a temporary directory with the runtime directory on the include path; so system headers work by name, and a header of your own needs an absolute path (a relative one is not looked up next to the `.gem` file; see `docs/KNOWN_BUGS.md`). Put your own C functions in the header as `static` functions. The header is included before `gem.h`, so one that uses `GemVal`, `GemBytes` or `gem_bytes` must `#include "gem.h"` itself. The program is linked against libc, libm and pthreads only.
+A relative path is resolved against the directory of the `.gem` file that contains the `extern include` (in a loaded module, the module's own directory): if that file exists, it is included by its absolute path, once however many files include it. Otherwise the line is emitted as `#include "<path>"` and left to the C compiler's search, which has the runtime directory on its include path; so system headers (`"string.h"`, `"sys/socket.h"`) work by name, and a missing one is reported by the C compiler at the `extern include` line. A path that can only name a file of your own, an absolute one or one starting with `./` or `../`, is a compile error when the file doesn't exist. The C file itself is compiled from a temporary directory, so the generated C (`--emit-c` too) holds the absolute path of your header. Put your own C functions in the header as `static` functions. The header is included before `gem.h`, so one that uses `GemVal`, `GemBytes` or `gem_bytes` must `#include "gem.h"` itself. The program is linked against libc, libm and pthreads only.
 
 **String-return ownership** differs by call kind:
 
@@ -897,8 +924,8 @@ let json = '''
 
 Rules:
 - The opening `"""` or `'''` must be immediately followed by a newline (optional trailing whitespace before the newline is allowed). Content starts on the next line.
-- The closing `"""` or `'''` must appear on its own line with only leading whitespace before it.
-- **Dedent**: the indentation of the closing delimiter (number of leading spaces) is the base indentation. That many leading spaces are stripped from every content line. Extra indentation beyond the base is preserved. A `"""` string inside an interpolation has its own closing line and its own dedent; it does not change the outer string's.
+- The closing `"""` or `'''` must appear on its own line with only leading whitespace (spaces, tabs, or any mix) before it.
+- **Dedent**: the whitespace before the closing delimiter is the base indentation. It is stripped byte for byte from the start of every content line, so a tab matches only a tab and a space only a space. Extra indentation beyond the base is preserved. A content line that does not start with the whole base (a blank line, a shorter indent, or tabs where the closing line has spaces) loses only its longest leading part that matches the start of the base, and keeps the rest: with a base of two tabs, a line starting with one tab loses that tab, and a line starting with spaces keeps them. A `"""` string inside an interpolation has its own closing line and its own dedent; it does not change the outer string's.
 - The final newline before the closing delimiter is stripped, so the resulting string does not end with a trailing `\n`.
 - `"""` supports `{expr}` interpolation and escape sequences identical to regular `"` strings.
 - `'''` has no interpolation; `{` is a literal character. Escape sequences are identical to regular `'` strings.
@@ -975,6 +1002,8 @@ Stack trace:
 
 A stack frame names its function as you write it: `handle` for `fn handle`, `anonymous fn` for a `fn` literal, and `counter.bump` for the top-level `fn bump` of a loaded module `counter.gem` (whatever alias it is loaded under). File paths in traces, compile errors and notes are relative to the project root (the directory holding `gem.toml`); without a `gem.toml`, a file in or below the entry file's directory is shown under that directory as you typed it on the command line (`gem app.gem` shows `lib/util.gem`, `gem /src/app.gem` shows `/src/lib/util.gem`). Other files keep their full path.
 
+The `-->` source line of a runtime error is read from the source file when the error is printed. Since trace paths are relative, a program run from another directory looks for the file, in order: under `$GEM_SOURCE_ROOT` if that environment variable is set, from the current directory, under the directory of the executable and each of its ancestors (so a binary built into `<project>/build/` or `<project>/bin/` finds `<project>/src/app.gem`), then under each ancestor of the current directory. The first file found that has the line is shown. A file too short to have the line is skipped, but nothing else is checked, so an unrelated longer file at the same relative path is shown. If no source is found (the program was deployed without it), the trace is printed without the source line. A full path is opened as is.
+
 **Compile-time error format**: the compiler produces Rust-style diagnostics to stderr with source context, caret highlighting, and optional hints:
 
 ```
@@ -990,7 +1019,7 @@ Tokens carry line and column information from the lexer, so the caret points to 
 
 **Recoverable errors** use `pcall` (protected call), which catches any error instead of halting. Two forms:
 
-**Expression form** — `pcall <expr>` wraps a single expression. The parser desugars it to `pcall(fn() <expr> end)`:
+**Expression form** — `pcall <expr>` wraps a single expression. The parser desugars it to `pcall(fn() <expr> end)`; an error raised by the expression itself shows as an `anonymous fn` frame at the expression's line (the `pcall` line):
 
 ```
 let result = pcall error("boom")
@@ -1057,11 +1086,11 @@ Running out of stack is an ordinary runtime error, not a crash:
 
 `type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`, `"ref"`, `"buffer"`.
 
-`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string. For tables and arrays, recursively renders a `{key: val, ...}` / `[v1, v2, ...]` form (cycles render as `<cycle>`; deep/wide structures truncate with `...`). Same repr is used by `print`, `eprint`, and `"{x}"` interpolation, except for buffers, which those show as `<buffer:N>` (N is the length); call `to_string(buf)` for the contents. Floats are formatted with C's `%g`: six significant digits, and no decimal point for integral values (`to_string(2.0)` is `"2"`, `to_string(1234567.89)` is `"1.23457e+06"`); see `docs/KNOWN_BUGS.md`.
+`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string. For tables and arrays, recursively renders a `{key: val, ...}` / `[v1, v2, ...]` form (cycles render as `<cycle>`; deep/wide structures truncate with `...`). Same repr is used by `print`, `eprint`, and `"{x}"` interpolation, except for buffers, which those show as `<buffer:N>` (N is the length); call `to_string(buf)` for the contents. Floats are formatted as described under "Numbers" in Values and Types (`to_string(2.0)` is `"2.0"`, `to_string(1234567.89)` is `"1234567.89"`); `buf_push` and `build_string`'s `add` format them the same way.
 
 `to_int(v)` — converts a value to an integer. Strings are parsed as decimal integers; leading spaces are skipped, but trailing whitespace (a `\n` from a file line included) is an error, so `trim` first. Floats are truncated. Bools become 0/1. Errors on nil, tables, functions, or unparseable strings.
 
-`to_float(v)` — converts a value to a float. Strings are parsed as decimal floats. Ints are widened. Bools become 0.0/1.0. Errors on nil, tables, functions, or unparseable strings.
+`to_float(v)` — converts a value to a float. Strings are parsed as decimal floats, with an optional exponent (`"1.5e-7"`); `"inf"` and `"nan"` are accepted, and a value too large for a double, or so small it would read as zero, is an error (subnormals are kept). Ints are widened. Bools become 0.0/1.0. Errors on nil, tables, functions, or unparseable strings.
 
 `push(target, val)` — if `target` is a table, appends `val` at the next integer index (mutates in place, returns `val`). If `target` is a buffer, appends `val` coerced to a string (same as `buf_push`; returns the buffer).
 
@@ -1091,11 +1120,11 @@ print(items[0])    # a
 
 `buf_new()` — creates a new mutable string buffer. Returns a buffer value (type `"buffer"`).
 
-`buf_push(buf, val)` — appends `val` to the buffer. Non-string values are auto-coerced to strings. Returns the buffer for chaining. Uses a doubling growth strategy internally — O(n) total for n appends vs O(n²) for repeated `+` concatenation.
+`buf_push(buf, val)` — appends `val` to the buffer. A string appends its bytes, a buffer its current contents (pushing a buffer into itself appends a copy of what it held), and any other value appends exactly what `to_string(val)` gives (`nil`, `true`, `42`, `<fn>`, `#Ref<3>`, `{a: 1}`). Returns the buffer for chaining. Uses a doubling growth strategy internally — O(n) total for n appends vs O(n²) for repeated `+` concatenation.
 
 To finalize a buffer into an immutable string, use `to_string(buf)` — the generic `to_string` builtin handles buffers. The buffer remains usable afterward.
 
-`build_string(block)` — creates a buffer, calls `block` with an `add` function that appends its arguments to the buffer, then returns the finalized string. Equivalent to `buf_new`/`buf_push`/`to_string` but more concise:
+`build_string(block)` — creates a buffer, calls `block` with an `add` function that appends each of its arguments to the buffer as `buf_push` does, then returns the finalized string. Equivalent to `buf_new`/`buf_push`/`to_string` but more concise:
 
 ```
 let html = build_string() do |add|
@@ -1235,7 +1264,7 @@ All TCP builtins use non-blocking sockets with scheduler poll integration. The s
 
 `sqlite_exec(db, sql)` — executes SQL that returns no rows (DDL, INSERT without RETURNING, etc.). Inline execution (no thread pool). Raises on error.
 
-`sqlite_query(db, sql, params)` — executes a parameterized query. `params` is an array of bind values matching `?` placeholders in `sql`. Returns an array of row tables, where each row is a string-keyed table (e.g., `{id: 1, name: "Alice"}`). Column type mapping: INTEGER → Int, REAL → Float, TEXT → String, NULL → Nil, BLOB → String (raw bytes). Inline execution (no thread pool). Raises on error.
+`sqlite_query(db, sql, params)` — executes a parameterized query. `params` is an array of bind values matching the placeholders in `sql` (`?`, `?N`, `:name`, ...), bound in order; it may be omitted or `nil` when the statement has none. The number of values must equal the statement's parameter count (the highest placeholder index, so `?1` used twice counts once), and each value must be nil, a bool (bound as 1/0), an int, a float or a string; otherwise `sqlite_query` raises, e.g. `sqlite_query: statement has 2 parameter(s), got 1` or `sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string`. Returns an array of row tables, where each row is a string-keyed table (e.g., `{id: 1, name: "Alice"}`). Column type mapping: INTEGER → Int, REAL → Float, TEXT → String, NULL → Nil, BLOB → String (raw bytes). Inline execution (no thread pool). Raises on error.
 
 `sqlite_last_insert_id(db)` — returns `sqlite3_last_insert_rowid` as an int.
 
@@ -1249,14 +1278,14 @@ All builtins are first-class values — they can be stored in variables and pass
 
 **Builtin names are not reserved.** Builtins live in the outermost scope, so any binding with a builtin's name shadows the builtin wherever that binding is in scope, and every call or reference there reaches the binding:
 
-- A top-level `fn`, `extern fn` or `let` (a destructuring `let` or a selective import such as `load "std/log" (error)` included) shadows the builtin for the whole file it is in, whether that is the program's entry file or a loaded module. It does not leak into modules that file loads, or into files that load it: `std/log` defines and exports `error`, and `log.error(msg)` logs while a bare `error(msg)` elsewhere still raises.
+- A top-level `fn`, `extern fn` or `let` (a destructuring `let` or a selective import such as `load "std/log" (error)` included) shadows the builtin in the file it is in, whether that is the program's entry file or a loaded module: a `fn` or `extern fn` for the whole file; a `let` in every function and closure of the file (as for any module-level binding) and in the top-level code from that `let` on. Like any shadowing `let`, its initializer, closures in it included, still sees the builtin, as does top-level code before it: `let keys = keys(t)` binds the keys of `t`, and `let print = fn(x) print("> " + x) end` wraps the builtin. It does not leak into modules that file loads, or into files that load it: `std/log` defines and exports `error`, and `log.error(msg)` logs while a bare `error(msg)` elsewhere still raises.
 - A parameter, `let` local, loop variable or pattern binding shadows it for its scope (`fn f(len) len + 1 end` is fine).
 
 `for` loops and `match` patterns keep working inside such a scope: they never call a user binding named `len`, `type` or `has_key`.
 
 ## Module System
 
-**Load statement** — `load` brings another file's exported definitions into scope. Every loaded file must have an `export` statement declaring its public API. The compiler keeps a table of already-loaded file paths; re-importing a module skips re-parsing but still creates the requested import bindings.
+**Load statement** — `load` brings another file's exported definitions into scope. Every loaded file must have an `export` statement declaring its public API. The compiler keeps a table of already-loaded file paths; re-importing a module skips re-parsing but still creates the requested import bindings. `load` and `export` are statements of a file's top-level code only; one inside a function body or a top-level block (`if`, `while`, `for`, `match`, `receive`, `do`) is a compile error.
 
 ```
 load "compiler/parser"
@@ -1265,19 +1294,25 @@ load "std/table"
 
 Path resolution depends on the form of the load path:
 
-1. **`load "std/X"`** — reserved for the standard library. Resolves against the stdlib root (see below). Hard error if the file does not exist; never falls back to a local file.
+1. **`load "std/X"`** — reserved for the standard library. Resolves against the stdlib root (see below). A compile error if the file does not exist; never falls back to a local file.
 2. **`load "./X"` / `load "../X"`** — relative to the importing file's directory. Use this for sibling/cousin imports inside a project (e.g. `compiler/main.gem` doing `load "./parser"`).
-3. **`load "X"` or `load "X/Y"`** (bare path, no prefix) — relative to the **project root**, defined as the nearest ancestor directory of the entry source file containing a `gem.toml` marker. If no `gem.toml` is found, falls back to the importing file's directory.
+3. **`load "X"` or `load "X/Y"`** (bare path, no prefix) — relative to the **project root**, defined as the nearest ancestor directory of the entry source file containing a `gem.toml` marker (searched from the entry file's real location, so `gem main.gem` run inside a subdirectory of the project finds it too). If no `gem.toml` is found, falls back to the importing file's directory.
+
+A `load` whose file does not exist is a compile error at that `load`, naming the path it looked for (shown like other paths in compile errors): `` cannot find module `mods/nope` (no file mods/nope.gem) ``. The same holds in a loaded module, where the error points at the module's own `load` line, and for a path that names a directory (`` cannot load `./d`: d.gem is a directory ``; loading `./mods` when `mods/` is a directory hints at loading a module inside it). `gem lsp` reports the same error for the open file's loads.
 
 **Stdlib root** is resolved in this order:
 
 1. `$GEM_STDLIB` if set: the directory that *contains* `std/` (not `std/` itself).
 2. The project root, if it contains a `std/` subdirectory (lets a project vendor or override the stdlib). It replaces the whole stdlib: a `load "std/x"` that isn't in the project's `std/` fails, with no fallback to the installed one.
-3. The install root, computed as `dirname(dirname(argv()[0]))` — so a binary at `<project>/build/gem` finds `<project>/std/`. `argv()[0]` is taken as typed, so a symlink to the binary on `PATH` finds neither `std/` nor `runtime/` (see `docs/KNOWN_BUGS.md`); call the binary by its real path (`GEM_STDLIB` finds `std/` but not `runtime/`, so the C compile still fails).
+3. The install root: the directory two levels above the `gem` binary's real path, so a binary at `<root>/build/gem` finds `<root>/std/`. The real path is the operating system's answer (`/proc/self/exe` on Linux, `_NSGetExecutablePath` on macOS), else `argv()[0]` looked up on `PATH` when it has no `/`; symlinks are resolved either way. So a symlink to the binary on `PATH`, a chain of symlinks, a bare `gem` found on `PATH` and a relative path all find the checkout's `std/`.
+
+The install root also holds what every compile needs besides the stdlib: `runtime/` (headers) and `build/libgem_runtime.a`. Those always come from the install root; `$GEM_STDLIB` moves only the stdlib, so a binary copied out of its checkout (not symlinked) cannot compile.
 
 **Project root marker** — drop a `gem.toml` file at the root of your project to mark it. The file may be empty; its presence is what matters. Without it, bare-path loads behave like relative-to-importing-file (which is the safe default for single-file scripts).
 
 **Export declaration** — `export name1, name2, ...` declares which names a file exports. Placed at the end of the file.
+
+Each exported name must be bound at the module's top level: a `fn`, `extern fn` or `let` (a destructuring `let` and the bindings of the module's own `load`s included, so a module can re-export a name it imports or a namespace it loads). A name the module doesn't define, or one listed twice, is a compile error at that name in the `export` list.
 
 ```
 # std/string.gem
@@ -1295,7 +1330,9 @@ export split, join, trim, index_of, starts_with, ends_with, upper, lower, contai
 When a file has an `export` statement, `load` treats it as a module:
 
 - The file's code is scoped — non-exported names are private and not accessible from outside.
-- The exported names are collected into a table named after the file's basename.
+- The exported names are collected into a table named after the file's basename (`load "std/string"` binds `string`), so that name must be an identifier and not a keyword: `load "./my-utils"` is a compile error at the `load` (rename the file to `my_utils.gem`, or use `as` or a selective import, which don't bind the basename).
+- Two different files loaded by one file can't bind the same namespace name: `load "std/string"` then `load "./lib/string"` is a compile error at the second `load`; load one of them with `as`. Loading the same file again (under any path that resolves to it) is fine.
+- Modules are distinct by file, not by name: a module and one with the same basename loaded elsewhere in the program (a user `json.gem` while `std/http` loads `std/json`) are separate modules with separate state, and each file sees the one it loaded. Stack traces and messages name a module's bindings `<basename>.<name>`.
 
 ```
 load "std/string"
@@ -1322,6 +1359,8 @@ split("a,b,c", ",")     # OK — imported directly
 trim("  hello  ")        # OK — imported directly
 join(parts, ",")         # error — join was not imported
 ```
+
+Naming a name the module doesn't export (one it doesn't define, or a private one) is a compile error at that name in the `load`: `module string has no export nosuch`.
 
 All three `load` forms use the same two-step path resolution. When a module has already been loaded by the program, re-importing it skips re-parsing but still creates the requested bindings (table, alias, or selective).
 
@@ -1488,7 +1527,7 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 `std/task` — exports `task` table. Runs a function in its own process and waits for its result; the simplest way to do several things at once. Load with `load "std/task"`.
 
 - `task.async(f)` — spawns a process that calls `f()` and returns a task handle `{pid, ref, owner, done}`.
-- `task.await(t)` / `task.await(t, timeout_ms)` — waits for the task and returns `f`'s value. If `f` raised an error, `await` raises the same message in the caller. On timeout, the task is killed and `await` raises `"task.await timeout"`. If the task process is killed before it produces a result, `await` raises `"task exited: <reason>"`; for reason `"normal"` the message instead says the task exited before its result was received and that a catch-all receive may have taken the result. With no timeout, `await` waits until the task finishes.
+- `task.await(t)` / `task.await(t, timeout_ms)` — waits for the task and returns `f`'s value. If `f` raised an error, `await` raises the same message in the caller. On timeout, the task is killed and `await` raises `"task.await timeout"`. If the task process ends before it produces a result (killed, or `kill(self(), reason)` in `f`), `await` raises `"task exited: <reason>"`; for reason `"normal"` the message instead says the task exited before its result was received and that a catch-all receive may have taken the result. With no timeout, `await` waits until the task finishes.
 - `task.await_all(tasks)` / `task.await_all(tasks, timeout_ms)` — awaits every task and returns their values in the order of `tasks`. The timeout covers the whole call. If any task fails or the timeout expires, the tasks not yet awaited are killed and the error is raised.
 
 Rules:

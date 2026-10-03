@@ -1,0 +1,12 @@
+# A header path that can only name a file of the user's (./, ../ or
+# absolute) and doesn't exist is a compile error at the include. A bare
+# name that isn't next to the file is left to cc (it may be a system header).
+extern include "./no_such_header.h"
+extern include "../no_such_dir/no_such_header.h"
+extern include "/no_such_dir/no_such_header.h"
+extern include "string.h"
+extern fn strlen(s: String) -> Int
+print(strlen("x"))
+
+# expect: header not found: ./no_such_header.h
+# expect: header not found: /no_such_dir/no_such_header.h

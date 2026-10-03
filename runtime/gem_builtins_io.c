@@ -1,7 +1,8 @@
 /*
  * gem_builtins_io.c — File I/O and filesystem builtins: read_file, write_file,
  *                      append_file, file_exists, dirname, path_join,
- *                      normalize_path, remove_file, mkdir, list_dir, is_dir, exec.
+ *                      normalize_path, remove_file, mkdir, list_dir, is_dir, exec;
+ *                      plus gem_exe_path (the running binary's real path).
  */
 
 #include "gem.h"
@@ -11,6 +12,10 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <libgen.h>
+#include <limits.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 
 /* ─── Built-in: read_file ─── */
 
@@ -204,6 +209,64 @@ GemVal gem_normalize_path_fn(void *_env, GemVal *args, int argc) {
         return r;
     }
     return gem_string(args[0].sval);
+}
+
+/* ─── gem_exe_path: canonical path of the running executable ───
+ *
+ * Not a builtin: the compiler and the LSP call it through
+ * `extern fn gem_exe_path() -> String` (compiler/loader.gem) to find the
+ * install root (std/, runtime/, build/libgem_runtime.a) two levels above
+ * the binary, whatever name it was started by (a symlink, a bare name
+ * found on PATH, a relative path). Order: the OS's own answer
+ * (/proc/self/exe on Linux, _NSGetExecutablePath on macOS), then argv[0]
+ * (taken relative to the cwd when it has a '/', else looked up on PATH
+ * like execvp does), each passed through realpath so symlinks resolve.
+ * When nothing resolves it returns argv[0] as typed. The result is a
+ * static buffer, computed once; it is never NULL. */
+
+static int exe_path_try(const char *p, char *out) {
+    struct stat st;
+    if (!p || !*p) return 0;
+    if (!realpath(p, out)) return 0;
+    if (stat(out, &st) != 0 || !S_ISREG(st.st_mode)) return 0;
+    return 1;
+}
+
+char *gem_exe_path(void) {
+    static char resolved[PATH_MAX];
+    static int done = 0;
+    if (done) return resolved;
+    char cand[PATH_MAX];
+    const char *argv0 = (gem_stored_argc > 0 && gem_stored_argv) ? gem_stored_argv[0] : NULL;
+    int ok = 0;
+#if defined(__linux__)
+    ok = exe_path_try("/proc/self/exe", resolved);
+#elif defined(__APPLE__)
+    uint32_t sz = (uint32_t)sizeof(cand);
+    if (_NSGetExecutablePath(cand, &sz) == 0) ok = exe_path_try(cand, resolved);
+#endif
+    if (!ok && argv0 && *argv0) {
+        if (strchr(argv0, '/')) {
+            ok = exe_path_try(argv0, resolved);
+        } else {
+            const char *path = getenv("PATH");
+            const char *p = path ? path : "";
+            while (!ok && p) {
+                const char *colon = strchr(p, ':');
+                size_t dlen = colon ? (size_t)(colon - p) : strlen(p);
+                /* An empty PATH entry means the current directory. */
+                int n = dlen == 0
+                    ? snprintf(cand, sizeof(cand), "./%s", argv0)
+                    : snprintf(cand, sizeof(cand), "%.*s/%s", (int)dlen, p, argv0);
+                if (n > 0 && (size_t)n < sizeof(cand) && access(cand, X_OK) == 0)
+                    ok = exe_path_try(cand, resolved);
+                p = colon ? colon + 1 : NULL;
+            }
+        }
+    }
+    if (!ok) snprintf(resolved, sizeof(resolved), "%s", argv0 ? argv0 : "");
+    done = 1;
+    return resolved;
 }
 
 /* ─── Built-in: remove_file ─── */
