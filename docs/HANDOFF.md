@@ -246,8 +246,27 @@ The maintainer wants a decision, not a silent choice.
 - **Don't trust docs, including SPEC.md.** Verify by running code. Every
   rule or sample you write in BEST_PRACTICES must be run first.
 - **Testing discipline** (CLAUDE.md): happy path, edge cases, adversarial
-  input, `make test`. Then adversarial review rounds by fresh subagents
-  (no inherited context) until one comes back clean.
+  input, `make test`.
+- **Adversarial review: bounded, not "until clean".** A reviewer can
+  always find something, so the stopping rule is fixed up front:
+  - **At most 3 rounds** of fresh subagents with no inherited context.
+    Give each round the diff, the agreed design and the build recipe, and
+    split it by area (runtime, std, docs) with one reviewer per area.
+  - **Each finding gets triaged:**
+    - **Blocking:** a bug in what this PR changes (wrong behavior, crash,
+      hang, leak, a test that doesn't test what it claims), or a doc,
+      SPEC or BEST_PRACTICES claim the PR makes that is false. Fix it, and
+      re-verify by running code.
+    - **Not blocking:** a pre-existing bug, a problem outside the PR's
+      scope, a performance idea or a style nit. Log it (KNOWN_BUGS with a
+      repro, OPTIMIZATIONS, ROADMAP) or drop it. Never widen the PR for
+      one.
+  - **Stop** after the first round with no blocking findings, or after
+    round 3, whichever comes first. A later round reviews only what the
+    previous round's fixes touched, not the whole PR again.
+  - **The PR body** says how many rounds ran, what they fixed, and any
+    blocking finding still open after round 3, with why. The maintainer
+    decides whether that blocks the merge.
 
 ## Build and test recipe (tested)
 
