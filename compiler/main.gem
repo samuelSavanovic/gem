@@ -456,12 +456,17 @@ fn rename_stmt_in_scope(stmt, rmap, current, top)
       elif is_node(s, "let") and current[s.name] == "pending"
         rename_stmt_in_scope(s, rmap, current, top)
       else
+        # A default's statements (`let _dMv = ...`, the `if`) belong to the
+        # next field let that reads the temp (`let name = _dMv`, a var).
         let scope = current
         let j = k + 1
         while j < len(stmts)
-          if is_node(stmts[j], "let") and current[stmts[j].name] == "pending"
-            scope = copy_set(current)
-            scope[stmts[j].name] = true
+          let f = stmts[j]
+          if is_node(f, "let") and is_node(f.value, "var")
+            if current[f.name] == "pending"
+              scope = copy_set(current)
+              scope[f.name] = true
+            end
             break
           end
           j += 1

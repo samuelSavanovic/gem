@@ -72,6 +72,9 @@ print(from_keys)
 # A closure in a field's default naming that field calls the builtin.
 let {values = fn(t) "v:" + to_string(values(t)) end} = {}
 print(values({a: 1}))
+# ...and one naming a later field reads that field, as for separate lets.
+let {later = fn() to_string(sort([2, 1])) end, sort = fn(a) "S" end} = {}
+print(later())
 
 # Every `export` statement counts; defaults see the module's lets.
 print(kb.with_defaults(1), kb.anon_default())
@@ -93,4 +96,4 @@ b"
 let q = 'c
 d'
 print(s, q)
-error("reported at line 96")
+error("reported at line 99")
