@@ -46,11 +46,20 @@ fn pad_for(indent)
 end
 
 fn format_float(val)
+  # to_string gives the shortest text that reads back to the same double
+  # ("0.1", "2.0", "1e-05", "1e+16"), which is also a valid C double literal,
+  # except for the non-finite values (constant folding can produce inf).
   let s = to_string(val)
-  # Ensure the string has a decimal point
+  if s == "inf"
+    return "__builtin_inf()"
+  elif s == "-inf"
+    return "(-__builtin_inf())"
+  elif s == "nan"
+    return "__builtin_nan(\"\")"
+  end
   let has_dot = false
   for i = 0, len(s)
-    if s[i] == "."
+    if s[i] == "." or s[i] == "e"
       has_dot = true
     end
   end

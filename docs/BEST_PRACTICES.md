@@ -631,19 +631,8 @@ sort(people, fn(a, b) a.age - b.age end)
 `t[1.0]` are different keys. JSON numbers with a decimal point or an
 exponent (`1e2`) parse as floats. Convert first (`to_int`, `floor`) when
 values may come from either. `<` and the other orderings do compare ints
-with floats numerically; only equality doesn't. `print(2.0)` and `"{2.0}"`
-both show `2`, and `json.encode(1.0)` writes `1`, so check with `type(x)`
-when a comparison fails for no visible reason.
-
-### Floats keep six significant digits in text **(bug)** **(trap)**
-
-`print`, interpolation, `to_string` and `json.encode` write floats with six
-significant digits (`1234567.89` becomes `1.23457e+06`). A float literal in
-source is rounded the same way (after `let pi = 3.14159265358979`,
-`pi == 3.14159` is `true`), and a literal like `0.000001` or `1000000.0`
-doesn't compile at all. Keep money and ids in integers (cents, not
-dollars), and don't round-trip floats through text when precision
-matters.
+with floats numerically; only equality doesn't. A float always prints with a
+decimal point or an exponent (`2.0`, `1e+16`), an int never does.
 
 ### Integer arithmetic follows C
 
@@ -1270,7 +1259,6 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `pcall fn() ... end`, `pcall(f, x)` | runs nothing / drops `x` | `pcall f(x)`, `pcall do ... end` |
 | Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
 | `2.0 == 2` | `false` | convert first |
-| Floats through `print`, interpolation, `json.encode` **(bug)** | six significant digits | integers (cents), not floats |
 | `to_int` on user input or a file line | raises | `trim`, then `pcall` |
 | String accumulator read inside its loop | quadratic | `build_string` |
 | `error(non_string)` | message becomes `"error"` | string message or result table |

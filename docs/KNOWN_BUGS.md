@@ -8,37 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### Float literals keep only six significant digits; some don't compile
-
-```gem
-let a = 3.14159265358979
-print(a == 3.14159)                   # true
-print(0.000001)                       # C error: invalid suffix ".0"
-```
-
-`format_float` in compiler/codegen.gem emits a float literal through
-`to_string`, which uses `%g` (six significant digits), so the literal is
-rounded at compile time. When the `%g` form has an exponent and no dot
-(`1e-06`, `1e+06`), codegen appends `.0` and the C compiler rejects
-`1e-06.0`; constant folding hits it too (`1000000 * 1.0`). Emit literals
-with `%.17g` (and add `.0` only to a form with no `.` or `e`).
-
-### Floats print, interpolate and JSON-encode with six significant digits
-
-```gem
-load "std/json"
-let x = to_float("1234567.5")
-print(x, "{x}", json.encode(x))      # 1.23457e+06 three times
-print(to_float(to_string(x)) == x)   # false
-```
-
-`to_string` (and `print`, interpolation, `buf_push`, `build_string`'s
-`add`) formats floats with `%g` (runtime/gem_builtins_core.c,
-runtime/gem_builtins_string.c), and `std/json` encodes floats with
-`to_string`, so a float loses precision on every round trip through text.
-Integral floats also print without a decimal point (`2.0` prints `2`).
-Use the shortest representation that reads back to the same double.
-
 ### A renaming destructuring pattern reaches the C compiler
 
 ```gem

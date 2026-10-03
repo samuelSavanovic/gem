@@ -5,7 +5,7 @@
 1
 -10
 3.14
-4.14
+4.140000000000001
 hello world
 5
 w
@@ -394,16 +394,16 @@ division by zero
 false
 false
 false
-3
-3
+3.0
+3.0
 7.5
 1.5
-6
-6
+6.0
+6.0
 3
 3.5
 0
--0
+-0.0
 false
 true
 c
@@ -758,9 +758,9 @@ test3: for loop preempted
 99
 3.14
 -2.5
-0
-42
-1
+0.0
+42.0
+1.0
 1.5
 123
 3.14
@@ -792,7 +792,7 @@ sort desc: 5 4 3 2 1
 sort empty: 0
 sort single: 42
 sort returns same: 1 1
-sort mixed: 1 2 2.5 3
+sort mixed: 1 2 2.5 3.0
 argv type: table
 argv len >= 1: true
 floor 3.7: 3
@@ -812,10 +812,10 @@ abs -3.14: 3.14
 abs 2.7: 2.7
 pow 2 10: 1024
 pow 3 0: 1
-pow 2.0 0.5: 1.41421
-sqrt 4: 2
+pow 2.0 0.5: 1.4142135623730951
+sqrt 4: 2.0
 sqrt 2: true
-sqrt 0: 0
+sqrt 0: 0.0
 random float: true
 random int: true
 random range: true
@@ -845,7 +845,7 @@ ceil 0.0: 0
 round 0.0: 0
 abs min int: 1
 pow neg exp: 0.5
-sqrt 1: 1
+sqrt 1: 1.0
 sqrt neg: true
 random 1: true
 random 0: true
@@ -976,9 +976,9 @@ BC
 0
 123
 1.5
-100
-150
-100
+100.0
+150.0
+100.0
 -0.15
 === parse whitespace ===
 1
@@ -1133,13 +1133,13 @@ a?b
 2
 Alice
 alice@example.com
-99
+99.0
 Bob
 nil
-80
+80.0
 1
 Alice
-99
+99.0
 0
 nil
 int
@@ -1315,7 +1315,7 @@ pos
 21
 3
 2
-4
+4.0
 3.5
 2.5
 hello
@@ -2319,15 +2319,15 @@ Stack trace:
   at stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:12)
   at len (examples/140_stack_frame_names.gem:11)
   at main (examples/140_stack_frame_names.gem:36)
-4
+4.0
 false sqrt: arg 0 expected Float, got int
 1.5
-2
-4
+2.0
+4.0
 false floor: arg 0 expected Float, got int
 5
 3
-3
+3.0
 false ceil: arg 0 expected Float, got int
 record saw 0 item(s)
 hits after run_now: 1
@@ -2458,3 +2458,23 @@ pcall [42, 22, 20]
 extern param 4
 fns FN FN fn label 1
 lexical FN
+3.14159265358979
+false
+0.1 0.5 1.0 2.0 100.0 0.0 -0.0 -2.5
+0.30000000000000004
+1e-06
+1000000.0
+0.0001 1e-05
+1000000.0
+1e-06
+0.3333333333333333
+-0.1
+1000000000000000.0
+1e+16
+1.2345678901234567e+19
+0.00015
+1.5e-06
+1234567.5 1234567.5 1234567.5 1234567.5 1234567.5 1234567.5
+[1.5, 2.0, {k: 0.25}]
+[2.0,-0.0,1e+300,1.5e-07]
+true

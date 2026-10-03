@@ -87,6 +87,9 @@ multi-line with {interpolation}
 multi-line literal
 '''
 
+# Numbers — 42 is an int, 2.0 a float (no exponent literals; to_float("1e-7")); 2 == 2.0 is false
+# Floats print as the shortest text that reads back exactly: 0.1, 2.0, -0.0, 1e-05, 1e+16, inf, nan
+
 # Operators — and/or/not (NOT &&/||/!), x in tbl, x in arr
 # Tables — { key: val } or [1, 2, 3], dot access, bracket access (negative indexing supported; arr[i] past the end is nil, a string index out of range raises)
 # Logical — nil and false are falsy, everything else truthy

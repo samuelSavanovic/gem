@@ -154,7 +154,7 @@ GemVal gem_interp(int n, GemVal *parts) {
         switch (parts[i].type) {
             case VAL_STRING: s = parts[i].sval; slen = parts[i].slen; break;
             case VAL_INT: slen = snprintf(tmp, sizeof(tmp), "%lld", (long long)parts[i].ival); s = tmp; break;
-            case VAL_FLOAT: slen = snprintf(tmp, sizeof(tmp), "%g", parts[i].fval); s = tmp; break;
+            case VAL_FLOAT: slen = gem_format_float(parts[i].fval, tmp); s = tmp; break;
             case VAL_BOOL: s = parts[i].bval ? "true" : "false"; slen = parts[i].bval ? 4 : 5; break;
             case VAL_NIL: s = "nil"; slen = 3; break;
             case VAL_TABLE: {
@@ -211,7 +211,7 @@ GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc) {
     switch (args[1].type) {
         case VAL_STRING: s = args[1].sval; slen = args[1].slen; break;
         case VAL_INT: slen = snprintf(tmp, sizeof(tmp), "%lld", (long long)args[1].ival); s = tmp; break;
-        case VAL_FLOAT: slen = snprintf(tmp, sizeof(tmp), "%g", args[1].fval); s = tmp; break;
+        case VAL_FLOAT: slen = gem_format_float(args[1].fval, tmp); s = tmp; break;
         case VAL_BOOL: s = args[1].bval ? "true" : "false"; slen = args[1].bval ? 4 : 5; break;
         case VAL_NIL: s = "nil"; slen = 3; break;
         case VAL_TABLE:

@@ -44,6 +44,10 @@ The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.
 
 Nine types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`, `Ref`. All dynamically typed. Every value is a tagged C union. Yes this means primitives are boxed and slow — doesn't matter for v0. Future optimization: NaN-boxing to pack ints, bools, and nil into a double's NaN space, eliminating heap allocation for primitives.
 
+**Numbers.** An `Int` is a signed 64-bit integer, a `Float` an IEEE 754 double. A number literal with a decimal point is a float (`2.0`, `0.000001`, `3.14159265358979`); without one it is an int. There is no exponent syntax in literals (`1e6` does not lex as a number); `to_float("1e6")` parses one. A float literal keeps every digit: it compiles to the nearest double, as in C.
+
+A float turns into text (`to_string`, `print`, `eprint`, interpolation, `buf_push`, `build_string`'s `add`, and so `json.encode`) as the shortest decimal that reads back to the same double, so `to_float(to_string(x)) == x` for every finite `x`. An integral float keeps a decimal point (`2.0`, `-0.0`, `100.0`), so a float never prints like an int. Magnitudes below `1e-4` or from `1e16` up use exponent form with a signed, at least two-digit exponent (`1e-05`, `1.5e-07`, `1e+16`, `1.2345678901234567e+19`); this is also valid JSON. The non-finite values (from overflow, e.g. `to_float("1e308") * 10.0`) print as `inf`, `-inf` and `nan`; `to_float` reads those back, but `json.encode` writes them as is, which is not valid JSON.
+
 Strings are binary-safe: they carry an explicit byte length, so `"\0"` is a 1-byte string, `len(s)` reports byte length (not strlen), and embedded NULs survive concatenation, indexing, equality, `build_string`, `tcp_write`, and `read_file`/`write_file` round-trips. Strings remain NUL-terminated for C interop convenience; the byte after the last content byte is always `\0`. **Caveat — `extern fn`:** when a Gem `String` is passed to an `extern fn ... s: String` parameter, it marshals as `const char *` and the C side will see only the bytes up to the first NUL. Use the `Bytes` extern type (see C Interop) when the C function needs binary data — it marshals the byte length alongside the pointer.
 
 ## Variables
@@ -1064,11 +1068,11 @@ Running out of stack is an ordinary runtime error, not a crash:
 
 `type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`, `"ref"`, `"buffer"`.
 
-`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string. For tables and arrays, recursively renders a `{key: val, ...}` / `[v1, v2, ...]` form (cycles render as `<cycle>`; deep/wide structures truncate with `...`). Same repr is used by `print`, `eprint`, and `"{x}"` interpolation, except for buffers, which those show as `<buffer:N>` (N is the length); call `to_string(buf)` for the contents. Floats are formatted with C's `%g`: six significant digits, and no decimal point for integral values (`to_string(2.0)` is `"2"`, `to_string(1234567.89)` is `"1.23457e+06"`); see `docs/KNOWN_BUGS.md`.
+`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string. For tables and arrays, recursively renders a `{key: val, ...}` / `[v1, v2, ...]` form (cycles render as `<cycle>`; deep/wide structures truncate with `...`). Same repr is used by `print`, `eprint`, and `"{x}"` interpolation, except for buffers, which those show as `<buffer:N>` (N is the length); call `to_string(buf)` for the contents. Floats are formatted as described under "Numbers" in Values and Types (`to_string(2.0)` is `"2.0"`, `to_string(1234567.89)` is `"1234567.89"`); `buf_push` and `build_string`'s `add` format them the same way.
 
 `to_int(v)` — converts a value to an integer. Strings are parsed as decimal integers; leading spaces are skipped, but trailing whitespace (a `\n` from a file line included) is an error, so `trim` first. Floats are truncated. Bools become 0/1. Errors on nil, tables, functions, or unparseable strings.
 
-`to_float(v)` — converts a value to a float. Strings are parsed as decimal floats. Ints are widened. Bools become 0.0/1.0. Errors on nil, tables, functions, or unparseable strings.
+`to_float(v)` — converts a value to a float. Strings are parsed as decimal floats, with an optional exponent (`"1.5e-7"`); `"inf"` and `"nan"` are accepted, and a value too large for a double, or so small it would read as zero, is an error (subnormals are kept). Ints are widened. Bools become 0.0/1.0. Errors on nil, tables, functions, or unparseable strings.
 
 `push(target, val)` — if `target` is a table, appends `val` at the next integer index (mutates in place, returns `val`). If `target` is a buffer, appends `val` coerced to a string (same as `buf_push`; returns the buffer).
 

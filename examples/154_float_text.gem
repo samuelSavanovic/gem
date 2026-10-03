@@ -1,0 +1,54 @@
+# Floats as text: the shortest form that reads back to the same double,
+# a decimal point on integral values, exponent form outside 1e-4..1e16.
+load "std/json"
+
+# Literals keep every digit
+let pi = 3.14159265358979
+print(pi)
+print(pi == 3.14159)
+print(0.1, 0.5, 1.0, 2.0, 100.0, 0.0, -0.0, -2.5)
+print(0.1 + 0.2)
+
+# Forms that used to reach C as `1e-06.0`
+print(0.000001)
+print(1000000.0)
+print(0.0001, 0.00001)
+
+# Constant folding emits exact literals too
+print(1000000 * 1.0)
+print(0.000001 * 1.0)
+print(1.0 / 3.0)
+print(-(0.1))
+
+# Exponent thresholds
+print(1000000000000000.0)
+print(10000000000000000.0)
+print(12345678901234567890.0)
+print(0.00015)
+print(0.0000015)
+
+# Every text path agrees
+let x = to_float("1234567.5")
+let b = buf_new()
+buf_push(b, x)
+let built = build_string do |add|
+  add(x)
+end
+print(x, "{x}", to_string(x), to_string(b), built, json.encode(x))
+print(to_string([1.5, 2.0, {k: 0.25}]))
+print(json.encode([2.0, -0.0, to_float("1e300"), to_float("1.5e-7")]))
+
+# Round trip through text
+let vals = [0.1, 1.0 / 3.0, 123456789.123, to_float("1e300"), to_float("5e-324"), to_float("1.7976931348623157e308"), to_float("2.2250738585072014e-308")]
+let ok = true
+for v in vals
+  if to_float(to_string(v)) != v
+    ok = false
+    print("mismatch", v)
+  end
+  if json.parse(json.encode(v)) != v
+    ok = false
+    print("json mismatch", v)
+  end
+end
+print(ok)

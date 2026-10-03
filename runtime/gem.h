@@ -231,6 +231,13 @@ static inline void gem_set_line(int line) {
 
 GemVal gem_int(int64_t v);
 GemVal gem_float(double v);
+/* Float -> text: the shortest digits that read back (strtod) to the same
+ * double, with a decimal point on integral values ("2.0", "-0.0") and
+ * exponent form outside 1e-4 <= |v| < 1e16 ("1e+16", "1.5e-07"); "inf",
+ * "-inf", "nan" for the non-finite values. Writes a NUL-terminated string
+ * of at most GEM_FLOAT_BUF - 1 bytes to `out` and returns its length. */
+#define GEM_FLOAT_BUF 40
+int gem_format_float(double v, char *out);
 GemVal gem_bool(int v);
 GemVal gem_string(const char *s);
 GemVal gem_string_with_len(const char *s, int len);  /* binary-safe; copies len bytes and appends a trailing '\0' */

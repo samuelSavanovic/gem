@@ -5,6 +5,7 @@
 
 #include "gem.h"
 #include <errno.h>
+#include <math.h>
 
 /* ─── Value formatting ───
  *
@@ -84,7 +85,7 @@ static void fmt_value(GemVal v, GemBuffer *out, GemFmtSeen *seen, int depth, int
             n = snprintf(tmp, sizeof(tmp), "%lld", (long long)v.ival);
             fmt_buf_appendn(out, tmp, n); return;
         case VAL_FLOAT:
-            n = snprintf(tmp, sizeof(tmp), "%g", v.fval);
+            n = gem_format_float(v.fval, tmp);
             fmt_buf_appendn(out, tmp, n); return;
         case VAL_STRING:
             if (as_repr) fmt_quoted_string(out, v.sval ? v.sval : "");
@@ -176,7 +177,7 @@ GemVal gem_print(void *_env, GemVal *args, int argc) {
             case VAL_NIL: printf("nil"); break;
             case VAL_BOOL: printf("%s", v.bval ? "true" : "false"); break;
             case VAL_INT: printf("%lld", (long long)v.ival); break;
-            case VAL_FLOAT: printf("%g", v.fval); break;
+            case VAL_FLOAT: { char fb[GEM_FLOAT_BUF]; gem_format_float(v.fval, fb); fputs(fb, stdout); break; }
             case VAL_STRING: printf("%s", v.sval); break;
             case VAL_FN: printf("<fn>"); break;
             case VAL_TABLE: {
@@ -291,7 +292,7 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
         case VAL_NIL: return gem_string("nil");
         case VAL_BOOL: return gem_string(v.bval ? "true" : "false");
         case VAL_INT: snprintf(buf, sizeof(buf), "%lld", (long long)v.ival); return gem_string(buf);
-        case VAL_FLOAT: snprintf(buf, sizeof(buf), "%g", v.fval); return gem_string(buf);
+        case VAL_FLOAT: gem_format_float(v.fval, buf); return gem_string(buf);
         case VAL_STRING: return v;
         case VAL_FN: return gem_string("<fn>");
         case VAL_TABLE: return gem_format_value_string(v);
@@ -347,7 +348,11 @@ GemVal gem_to_float_fn(void *_env, GemVal *args, int argc) {
         char *end;
         errno = 0;
         double val = strtod(s, &end);
-        if (end == s || *end != '\0' || errno == ERANGE) {
+        /* ERANGE on a nonzero finite result is a subnormal (gradual
+         * underflow), which is exact enough to keep: to_string of a
+         * subnormal must read back. Overflow and underflow to zero fail. */
+        int range_err = errno == ERANGE && (val == 0.0 || isinf(val));
+        if (end == s || *end != '\0' || range_err) {
             char buf[256];
             snprintf(buf, sizeof(buf), "to_float: cannot convert \"%s\" to float", s);
             gem_error(buf);
@@ -419,7 +424,7 @@ GemVal gem_eprint_fn(void *_env, GemVal *args, int argc) {
             case VAL_NIL: fprintf(stderr, "nil"); break;
             case VAL_BOOL: fprintf(stderr, "%s", v.bval ? "true" : "false"); break;
             case VAL_INT: fprintf(stderr, "%lld", (long long)v.ival); break;
-            case VAL_FLOAT: fprintf(stderr, "%g", v.fval); break;
+            case VAL_FLOAT: { char fb[GEM_FLOAT_BUF]; gem_format_float(v.fval, fb); fputs(fb, stderr); break; }
             case VAL_STRING: fprintf(stderr, "%s", v.sval); break;
             case VAL_FN: fprintf(stderr, "<fn>"); break;
             case VAL_TABLE: {
