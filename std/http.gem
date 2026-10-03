@@ -42,7 +42,8 @@ load "std/time"
 # connection that dies without closing it; a connection tells the server
 # (`_http_closing`) before closing its socket itself, so the server never
 # closes an fd number that may have been reused. Killing the server
-# process (as `stop` and a supervisor do) arrives as an EXIT: it kills the
+# process (as `stop` and a supervisor do; not with the untrappable "kill",
+# which ends it at once with its sockets open) arrives as an EXIT: it kills the
 # acceptor and the connections, closes every socket, then exits with that
 # reason. A connection whose handler traps exits gets an EXIT message
 # instead; it closes its own socket after that request. `serve` has the

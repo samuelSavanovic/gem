@@ -173,14 +173,105 @@ GemVal gem_string_with_len(const char *s, int len) {
     return r;
 }
 
+/* ─── String key index ─── */
+
+static uint64_t gem_str_hash(const char *key, int64_t len) {
+    /* FNV-1a, then a final mix so the low bits used for the slot spread. */
+    uint64_t h = 1469598103934665603ULL;
+    for (int64_t i = 0; i < len; i++) {
+        h ^= (unsigned char)key[i];
+        h *= 1099511628211ULL;
+    }
+    h ^= h >> 33;
+    h *= 0xff51afd7ed558ccdULL;
+    h ^= h >> 33;
+    return h;
+}
+
+/* The slot holding `key`, or -1. */
+static int gem_str_index_find(const GemStrIndex *ix, const char *key, int64_t len, uint64_t h) {
+    int mask = ix->cap - 1;
+    for (int i = (int)(h & (uint64_t)mask);; i = (i + 1) & mask) {
+        const GemStrSlot *sl = &ix->slots[i];
+        if (sl->key == NULL) return -1;
+        if (sl->value >= 0 && sl->hash == h && sl->len == len &&
+            (sl->key == key || memcmp(sl->key, key, (size_t)len) == 0))
+            return i;
+    }
+}
+
+int gem_str_index_get(const GemStrIndex *ix, const char *key, int64_t len) {
+    if (ix == NULL) return -1;
+    int i = gem_str_index_find(ix, key, len, gem_str_hash(key, len));
+    return i < 0 ? -1 : ix->slots[i].value;
+}
+
+static GemStrIndex *gem_str_index_alloc(int cap) {
+    GemStrIndex *ix = (GemStrIndex *)calloc(1, sizeof(GemStrIndex) + (size_t)cap * sizeof(GemStrSlot));
+    if (ix == NULL) { fprintf(stderr, "gem: out of memory (string key index)\n"); exit(1); }
+    ix->cap = cap;
+    return ix;
+}
+
+static void gem_str_index_insert_new(GemStrIndex *ix, const char *key, int64_t len, uint64_t h, int pos) {
+    int mask = ix->cap - 1;
+    int i = (int)(h & (uint64_t)mask);
+    while (ix->slots[i].key != NULL) i = (i + 1) & mask;
+    ix->slots[i] = (GemStrSlot){key, len, h, pos};
+    ix->used++;
+}
+
+void gem_str_index_put(GemStrIndex **ixp, const char *key, int64_t len, int pos) {
+    GemStrIndex *ix = *ixp;
+    uint64_t h = gem_str_hash(key, len);
+    if (ix != NULL) {
+        int i = gem_str_index_find(ix, key, len, h);
+        if (i >= 0) {
+            ix->slots[i].key = key;
+            ix->slots[i].value = pos;
+            return;
+        }
+    }
+    /* Keep the load (deleted slots included) at most 3/4; rehash drops the
+       deleted ones. */
+    if (ix == NULL || (ix->used + 1) * 4 > ix->cap * 3) {
+        int live = 0;
+        if (ix) for (int i = 0; i < ix->cap; i++) if (ix->slots[i].key && ix->slots[i].value >= 0) live++;
+        int cap = 8;
+        while ((live + 1) * 2 > cap) cap *= 2;
+        GemStrIndex *nix = gem_str_index_alloc(cap);
+        if (ix) {
+            for (int i = 0; i < ix->cap; i++) {
+                GemStrSlot *sl = &ix->slots[i];
+                if (sl->key && sl->value >= 0) gem_str_index_insert_new(nix, sl->key, sl->len, sl->hash, sl->value);
+            }
+            free(ix);
+        }
+        ix = nix;
+        *ixp = ix;
+    }
+    gem_str_index_insert_new(ix, key, len, h, pos);
+}
+
+void gem_str_index_del(GemStrIndex *ix, const char *key, int64_t len) {
+    if (ix == NULL) return;
+    int i = gem_str_index_find(ix, key, len, gem_str_hash(key, len));
+    if (i >= 0) ix->slots[i].value = -1;   /* a tombstone keeps probe chains intact */
+}
+
+void gem_str_index_free(GemStrIndex **ixp) {
+    free(*ixp);
+    *ixp = NULL;
+}
+
 /* ─── Table operations ─── */
 
 void gem_table_rebuild_index(GemTable *t) {
     t->index_stale = 0;
-    if (t->str_index) shfree(t->str_index);
-    t->str_index = NULL;
+    gem_str_index_free(&t->str_index);
     for (int i = 0; i < t->len; i++) {
-        if (t->keys[i].type == VAL_STRING) shput(t->str_index, t->keys[i].sval, i);
+        if (t->keys[i].type == VAL_STRING)
+            gem_str_index_put(&t->str_index, t->keys[i].sval, t->keys[i].slen, i);
     }
 }
 
@@ -254,12 +345,10 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
 
     /* String key: use hash index for O(1) lookup */
     if (key.type == VAL_STRING) {
-        if (t->str_index != NULL) {
-            ptrdiff_t idx = shgeti(t->str_index, key.sval);
-            if (idx >= 0) {
-                t->vals[t->str_index[idx].value] = val;
-                return;
-            }
+        int found = gem_str_index_get(t->str_index, key.sval, key.slen);
+        if (found >= 0) {
+            t->vals[found] = val;
+            return;
         }
         /* Not found — append */
         if (t->len >= t->cap) gem_table_grow(t);
@@ -267,7 +356,7 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
         t->keys[pos] = key;
         t->vals[pos] = val;
         t->len++;
-        shput(t->str_index, key.sval, pos);
+        gem_str_index_put(&t->str_index, key.sval, key.slen, pos);
         return;
     }
 
@@ -322,10 +411,8 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
 
     /* String key: use hash index */
     if (key.type == VAL_STRING) {
-        if (t->str_index != NULL) {
-            ptrdiff_t idx = shgeti(t->str_index, key.sval);
-            if (idx >= 0) return t->vals[t->str_index[idx].value];
-        }
+        int found = gem_str_index_get(t->str_index, key.sval, key.slen);
+        if (found >= 0) return t->vals[found];
         return (GemVal){VAL_NIL, GEM_MAGIC, {0}};
     }
 
@@ -356,10 +443,10 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
 
 GemVal gem_table_get_ic_miss(GemTable *t, const char *key, GemICacheSlot *cache) {
     gem_table_index(t);
-    if (t->str_index != NULL) {
-        ptrdiff_t idx = shgeti(t->str_index, key);
-        if (idx >= 0) {
-            int vi = t->str_index[idx].value;
+    {
+        /* A field name from the source: no NUL inside. */
+        int vi = gem_str_index_get(t->str_index, key, (int64_t)strlen(key));
+        if (vi >= 0) {
             cache->table = t;
             cache->shape_id = t->shape_id;
             cache->val_index = vi;

@@ -58,8 +58,10 @@ end
 
 ## Runs `sql`, which takes no parameters, and returns nil. Several
 ## statements separated by `;` all run; rows they return are discarded.
-## Use it for DDL, PRAGMA and migration scripts. A `?` in `sql` is not
-## an error: it binds NULL. Use `query` to pass parameters.
+## Use it for DDL, PRAGMA and migration scripts. A statement with a
+## placeholder raises `sqlite_exec: statement <n> has parameters; use
+## sqlite_query to bind them`, after the statements before it have run.
+## Use `query` to pass parameters.
 ##
 ##   sqlite.exec(db, "CREATE TABLE a(x); CREATE TABLE b(y)")
 fn exec(db, sql)
@@ -74,16 +76,18 @@ end
 ##
 ## Params may be nil, bools (stored as 1 and 0), ints, floats or strings.
 ## Columns come back as ints, floats, strings or nil; a NULL column is
-## still a key of the record, holding nil. A string param is
-## stored only up to its first NUL byte; a BLOB column comes back with
-## every byte. When two columns share a name the last one wins; name them
-## with `AS`. Only the first statement in `sql`
-## runs: text after it is ignored, even if it is not valid SQL.
+## still a key of the record, holding nil. Strings keep every byte, NULs
+## included, both ways; a BLOB column comes back as a string too. When two
+## columns share a name the last one wins; name them with `AS`. Empty or
+## comment-only `sql` returns an empty table.
 ##
 ##   sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [1])
 ##   # [{id: 1, text: "hi"}]
 ##
-## Raises if `params` is not a table, if the number of params differs
+## Raises `sqlite_query: expected one SQL statement, got several ...`,
+## before anything runs, when `sql` holds more than one statement (a
+## trailing `;`, whitespace and comments are fine). Raises if `params` is
+## not a table, if the number of params differs
 ## from the statement's parameter count (the highest `?N`; a reused `?N` or
 ## `:name` counts once), or if a param is of another type.
 fn query(db, sql, params = [])

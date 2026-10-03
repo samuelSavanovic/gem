@@ -182,154 +182,63 @@ already has the right location.
 
 ## Runtime
 
-### `INT64_MIN / -1` kills the program on x86-64
+### `in` answers differently on a copy of a table whose string keys were deleted
 
 ```gem
-let m = -9223372036854775807 - 1
-let d = -1
-print(m / d)      # x86-64: Floating point exception, exit 136
-```
-
-`%` does the same. The constant folder hits it too: on x86-64, compiling
-`print(-9223372036854775808 / -1)` crashes the compiler (exit 136). On
-arm64 nothing traps (AArch64 `sdiv` doesn't): `/` gives `INT64_MIN` and
-`%` gives `0`. Either way it is undefined behaviour in C. `gem_div`/
-`gem_mod` in runtime/gem_ops.c and `try_fold_binop` in compiler/fold.gem
-should raise (or wrap) instead. Relatedly, int `+`, `-` and `*` overflow
-is signed-overflow undefined behaviour in C (no `-fwrapv`); it wraps in
-practice.
-
-### A non-integer `after` timeout is read as raw bits; a huge one expires at once
-
-```gem
+let t = {}
+t.a = 1
+delete(t, "a")
+push(t, "a")
+let me = self()
+spawn do
+  send(me, t)
+end
 receive
-after nil then print("no wait")
+when c then print("a" in t, "a" in c)   # false true
 end
 ```
 
-runs at once instead of raising: the timeout's `.ival` is read with no
-type check (`compile_receive_match` in compiler/codegen.gem), so the
-value's raw payload is taken as milliseconds. `nil` waits 0 ms and `true`
-1 ms; a float waits its bit pattern read as an int (`1.5` is about
-4.6e18 ms, i.e. forever; `0.0` is 0); a string or a table waits its
-pointer value, which in practice is forever (`after "abc"` still waits
-when another process exits). A non-integer timeout should raise.
+`gem_in_fn` (runtime/gem_builtins_collection.c) treats a table as an
+array, and looks for the value, when its string-key index is `NULL`, and
+as a map, looking for the key, otherwise. Deleting the last string key
+leaves an empty index; a copy rebuilds the index lazily and gets `NULL`.
+Decide on the table's keys, not on the index.
 
-An int timeout close to `INT64_MAX` times out at once instead of waiting
-(practically) forever:
+### A buffer passed as `s` to `s = s + x` in a loop is changed in place
 
 ```gem
-let t0 = time_ms()
-receive
-when "never" then nil
-after 9223372036854775807 then print("timed out after", time_ms() - t0, "ms")
-end
-```
-
-prints `timed out after 0 ms`: the deadline is computed as
-`gem_now_ms() + (int64_t)ms` (`compile_receive_match` in
-compiler/codegen.gem), which overflows to a negative time already past.
-The runtime does the same for `send_after(pid, msg, ms)` (delivered at
-once; `gem_send_after_builtin` in runtime/gem_scheduler.c) and `sleep(ms)`
-(the deadline goes negative, which reads as "no deadline", so a lone main
-process reports a deadlock; `gem_sleep_builtin`). The std timeouts built
-on them (`gen_server.call`, `task.await`, `task.await_all`, the
-`supervisor` and `dynamic_supervisor` requests and `stop`, a gen_server
-callback's `timeout`) inherit it: a timeout this large raises `...:
-timeout` at once. Use `nil` (no timeout) to wait forever. The deadline
-should saturate at `INT64_MAX`.
-
-### `s = s + x` in a loop skips the `+` type check
-
-```gem
-fn f()
-  let s = ""
+fn f(s, xs)
   let i = 0
-  while i < 3
-    s = s + i
+  while i < len(xs)
+    s = s + xs[i]
     i += 1
   end
   s
 end
-print(f())        # 012, but "" + 1 raises a type error elsewhere
+let b = buf_new()
+buf_push(b, "pre")
+print(type(f(b, ["a", "b"])), to_string(b))   # string preab
 ```
 
-Codegen turns `s = s + x` inside a loop into `gem_string_append`
-(`decompose_concat`/`find_append_vars` in compiler/codegen.gem,
-runtime/gem_ops.c), which appends any value's `to_string` form instead
-of raising like `+`.
+`b + "a"` raises (`type error in +: got buffer and string`), but inside the
+loop codegen turns `s = s + x` into `gem_string_append`
+(`find_append_vars` in compiler/codegen.gem, runtime/gem_ops.c), which
+can't tell the caller's buffer from the buffer it builds a string in: it
+appends to the caller's buffer and returns a string.
 
-### Printing a table cuts strings at an embedded NUL
-
-`let t = ["a\0b"]` / `print(len(t[0]), t)` prints `3 ["a"]`. `fmt_value`
-in runtime/gem_builtins_core.c (used by `print`, `to_string` and
-interpolation of tables) writes strings with `strlen`, not `slen`.
-
-### sqlite: empty SQL, placeholders in `sqlite_exec`, several statements
+### sqlite: SQL after an embedded NUL is ignored
 
 ```gem
 let db = sqlite_open(":memory:")
-pcall(fn() sqlite_query(db, "", []) end)         # error "sqlite_query: not an error"
-sqlite_exec(db, "CREATE TABLE t(x)")
-sqlite_exec(db, "INSERT INTO t VALUES (?)")      # inserts NULL, no error
-sqlite_query(db, "INSERT INTO t VALUES (1); INSERT INTO t VALUES (2)", [])
-print(sqlite_query(db, "SELECT count(*) AS n FROM t", []))   # [{n: 2}]: the 2nd INSERT never ran
+sqlite_exec(db, "CREATE TABLE a(x)")
+sqlite_exec(db, "INSERT INTO a VALUES (1);\0INSERT INTO a VALUES (2)")
+print(sqlite_query(db, "SELECT count(*) AS n FROM a", []))   # [{n: 1}]
 ```
 
-Empty or comment-only SQL should return `[]`; `sqlite_exec` should raise
-on a statement with parameters; `sqlite_query` should run (or reject)
-the text after the first statement. runtime/gem_builtins_sqlite.c.
-
-### sqlite: TEXT values stop at a NUL
-
-```gem
-let db = sqlite_open(":memory:")
-let r = sqlite_query(db, "SELECT ? AS s", ["x\0y"])
-print(len(r[0].s))                                 # 1, not 3
-```
-
-TEXT columns are read back with `gem_string` (strlen), so a string with an
-embedded NUL is cut short; use `sqlite3_column_bytes`.
-runtime/gem_builtins_sqlite.c.
-
-### `sort` keeps the comparator in a global shared by all processes
-
-```gem
-let groups = [[3, 1], [9, 8], [5, 4]]
-sort(groups, fn(a, b)
-  sort(a, fn(x, y) x - y end)
-  a[0] - b[0]
-end)
-print(groups)
-```
-
-fails with `type error in -: got table and table` at the inner
-comparator: the `sort` builtin stores the comparator in `static GemVal
-gem_sort_cmp_fn_global` (runtime/gem_builtins_collection.c) and calls
-`qsort`, so a nested sort replaces it and the outer `qsort` goes on
-calling the inner comparator. Two processes sorting at once do the same
-when a comparator has a loop (the scheduler can switch processes at its
-back-edge): the array comes back unsorted, with no error. Keep the
-comparator per call (`qsort_r`, or a sort of our own that passes it
-along), saved and restored across a yield.
-
-### String table keys stop at the first NUL
-
-```gem
-let t = {}
-t["a\0b"] = 1
-t["a\0c"] = 2
-print(len(t), t["a\0zzz"], t["a"])   # 1 2 2
-```
-
-The string-key index of a table (`shput`/`shgeti` in runtime/gem_core.c)
-is stb_ds's C-string hash map, which hashes and compares with
-`strlen`/`strcmp`, while `==` compares `slen` bytes. Keys that differ only
-after a NUL are the same key, so `table.unique`, `table.group_by`,
-`url.parse_query`, `mime.lookup` and `json.parse` (object keys with
-`\u0000`) merge them, and `test.assert_eq` calls two tables equal whose
-keys differ only after a NUL (`mime.lookup("x.html\0")`
-is `text/html`). Hash and compare string keys by `slen`.
+sqlite's parser stops at a NUL even when given the full length, so
+`sqlite_exec` runs only what comes before it, and `sqlite_query` doesn't
+see a second statement after one. Both should raise on SQL containing a
+NUL (runtime/gem_builtins_sqlite.c).
 
 ## Standard library
 
@@ -489,66 +398,3 @@ print(pcall string.join(t, ","))         # error: arr must be an array, got a ta
 while `table.*`, `json.encode` and array patterns accept any table whose keys
 are exactly 0 .. n-1. std should share one definition of an array; the error
 also names a valid key.
-
-### A `one_for_all` restart hangs on a child that traps exits
-
-```gem
-load "std/supervisor"
-fn trapper()
-  spawn do
-    process_flag("trap_exit", true)
-    while true
-      receive
-      when other then nil
-      end
-    end
-  end
-end
-fn crasher() spawn do receive when {tag: "crash"} then error("boom") end end end
-let h = supervisor.start({strategy: "one_for_all",
-  children: [{id: "t", start: trapper}, {id: "c", start: crasher}]})
-send(supervisor.which_children(h)[1].pid, {tag: "crash"})
-sleep(50)
-print(pcall supervisor.which_children(h, 300))   # timeout
-```
-
-To restart all children, the supervisor sends each running child
-`kill(pid, "shutdown")` and waits for its `DOWN` (std/supervisor
-`restart_all`). A child that traps exits gets an `EXIT` message instead of
-dying, so the supervisor waits forever. Erlang waits a shutdown timeout
-and then sends the untrappable `kill`; Gem has no untrappable exit signal,
-so that needs one in the runtime (`kill` in runtime/gem_scheduler.c).
-The same goes for a supervisor's own exit (`stop`, an exit signal,
-restart intensity reached): it kills each child with its exit reason and
-waits for the child's `DOWN`, but a child that traps exits gets an `EXIT`
-message, so the supervisor waits out its whole shutdown wait (4000 ms,
-`SHUTDOWN_MS` in std/supervisor and std/dynamic_supervisor), then exits
-and leaves the child running. The window is shared by all children, so the
-siblings killed after such a child get no wait: a sibling that is itself
-a supervisor may still be shutting down, and holding its names, when the
-parent's `DOWN` arrives.
-
-`dynamic_supervisor.terminate_child` has the same limit: it sends the
-child `kill(pid, "shutdown")` and waits for its `DOWN`, so a child that
-traps exits and doesn't exit on the `EXIT` message makes it raise
-`dynamic_supervisor.terminate_child: timeout`, and the child keeps running
-(left out of `which_children`, not restarted; another `terminate_child`
-sends the signal again):
-
-```gem
-load "std/dynamic_supervisor"
-fn trapper(a)
-  spawn do
-    process_flag("trap_exit", true)
-    while true
-      receive
-      when other then nil
-      end
-    end
-  end
-end
-let d = dynamic_supervisor.start({child: {start: trapper}})
-let p = dynamic_supervisor.start_child(d, nil)
-print(pcall dynamic_supervisor.terminate_child(d, p, 100))   # timeout
-print(process_info(p) != nil)                                 # true
-```

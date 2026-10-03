@@ -270,18 +270,35 @@ GemVal gem_make_ref(void);
 
 /* ─── Table internals (shared across runtime files) ─── */
 
-/* String key -> index mapping for O(1) lookup (stb_ds) */
+/* String key -> position in keys/vals, for O(1) lookup. Open addressing,
+   malloc-backed (gem_core.c "String key index"). Keys are hashed and
+   compared by their `slen` bytes, so keys that differ only after a NUL are
+   different keys. The entries point at the key strings in `keys`, which the
+   table owns; a reset that moves them drops the index (gem_copy.c). */
 typedef struct {
-    char *key;       /* stb_ds uses this field name */
-    int value;       /* index into keys/vals arrays */
+    const char *key;   /* NULL: empty slot */
+    int64_t len;
+    uint64_t hash;
+    int value;         /* position in keys/vals; -1: deleted slot */
+} GemStrSlot;
+
+typedef struct {
+    int cap;           /* power of two */
+    int used;          /* live + deleted slots */
+    GemStrSlot slots[];
 } GemStrIndex;
+
+int gem_str_index_get(const GemStrIndex *ix, const char *key, int64_t len);
+void gem_str_index_put(GemStrIndex **ix, const char *key, int64_t len, int pos);
+void gem_str_index_del(GemStrIndex *ix, const char *key, int64_t len);
+void gem_str_index_free(GemStrIndex **ix);
 
 struct GemTable {
     GemVal *keys;
     GemVal *vals;
     int len;
     int cap;
-    GemStrIndex *str_index;  /* stb_ds string hash map (NULL until first string key) */
+    GemStrIndex *str_index;  /* string key index (NULL until first string key) */
     uint32_t shape_id;       /* incremented on structural mutations (delete, pop, sort, etc.) */
     GemTable *arena_next;    /* linked list in owning arena's table_list */
     uint8_t immutable;       /* frozen module namespace table (gem_table_freeze); copies keep the flag */
@@ -834,6 +851,8 @@ void gem_mailbox_remove(GemMailbox *mb, GemMsgNode *prev, GemMsgNode *node);
 /* Selective receive: yield until new messages arrive or deadline expires.
    Sets deadline_ms on the process. Pass -1 for no timeout. */
 void gem_selective_yield(int64_t deadline_ms);
+int64_t gem_deadline_in(int64_t ms);
+int64_t gem_after_deadline(GemVal ms);
 
 /* Get current monotonic time in milliseconds */
 int64_t gem_now_ms(void);

@@ -47,28 +47,31 @@ static void fmt_buf_append(GemBuffer *b, const char *s) {
 
 /* Conservative bare-key check: identifier-shaped (NAME ::= [A-Za-z_][A-Za-z0-9_]*).
  * Anything else gets quoted to keep output unambiguous. */
-static int fmt_is_bare_key(const char *s) {
-    if (!s || !*s) return 0;
+static int fmt_is_bare_key(const char *s, int64_t len) {
+    if (!s || len == 0) return 0;
     unsigned char c = (unsigned char)*s;
     if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_')) return 0;
-    for (const char *p = s + 1; *p; p++) {
-        unsigned char d = (unsigned char)*p;
+    for (int64_t i = 1; i < len; i++) {
+        unsigned char d = (unsigned char)s[i];
         if (!((d >= 'a' && d <= 'z') || (d >= 'A' && d <= 'Z') ||
               (d >= '0' && d <= '9') || d == '_')) return 0;
     }
     return 1;
 }
 
-static void fmt_quoted_string(GemBuffer *out, const char *s) {
+/* Strings are written by their `slen` bytes: an embedded NUL is kept (as
+   `\0` when quoted), not taken for the end. */
+static void fmt_quoted_string(GemBuffer *out, const char *s, int64_t len) {
     fmt_buf_append(out, "\"");
-    for (const char *p = s; *p; p++) {
-        char c = *p;
+    for (int64_t i = 0; i < len; i++) {
+        char c = s[i];
         switch (c) {
             case '"':  fmt_buf_append(out, "\\\""); break;
             case '\\': fmt_buf_append(out, "\\\\"); break;
             case '\n': fmt_buf_append(out, "\\n"); break;
             case '\t': fmt_buf_append(out, "\\t"); break;
             case '\r': fmt_buf_append(out, "\\r"); break;
+            case '\0': fmt_buf_append(out, "\\0"); break;
             default:   fmt_buf_appendn(out, &c, 1); break;
         }
     }
@@ -88,8 +91,9 @@ static void fmt_value(GemVal v, GemBuffer *out, GemFmtSeen *seen, int depth, int
             n = gem_format_float(v.fval, tmp);
             fmt_buf_appendn(out, tmp, n); return;
         case VAL_STRING:
-            if (as_repr) fmt_quoted_string(out, v.sval ? v.sval : "");
-            else fmt_buf_append(out, v.sval ? v.sval : "");
+            if (!v.sval) { if (as_repr) fmt_buf_append(out, "\"\""); return; }
+            if (as_repr) fmt_quoted_string(out, v.sval, v.slen);
+            else fmt_buf_appendn(out, v.sval, (int)v.slen);
             return;
         case VAL_FN:    fmt_buf_append(out, "<fn>"); return;
         case VAL_BUFFER:
@@ -130,8 +134,8 @@ static void fmt_value(GemVal v, GemBuffer *out, GemFmtSeen *seen, int depth, int
                 for (int i = 0; i < limit; i++) {
                     if (i > 0) fmt_buf_append(out, ", ");
                     GemVal k = t->keys[i];
-                    if (k.type == VAL_STRING && k.sval && fmt_is_bare_key(k.sval)) {
-                        fmt_buf_append(out, k.sval);
+                    if (k.type == VAL_STRING && k.sval && fmt_is_bare_key(k.sval, k.slen)) {
+                        fmt_buf_appendn(out, k.sval, (int)k.slen);
                     } else {
                         fmt_value(k, out, seen, depth + 1, 1);
                     }

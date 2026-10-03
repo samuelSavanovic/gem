@@ -73,6 +73,15 @@ Unreachable code after `return`, `break`, `error()` could be stripped. Currently
 
 ## Runtime Hot Paths
 
+### Hash string table keys faster (P2)
+
+The string-key index (`gem_str_index_*` in runtime/gem_core.c) hashes the
+key's `slen` bytes with byte-wise FNV-1a on every lookup. Measured on
+macOS arm64 with 200k keys: 1M lookups take 95 ms against 84 ms with the
+old stb_ds index (about +13%), while insert/delete churn got faster.
+Cache the hash on the string (strings are immutable), or use a
+word-at-a-time hash.
+
 ### `gem_eq` for strings (P2)
 Currently `strcmp`. If string interning lands, short strings become pointer equality. Even without interning, caching string length would let us short-circuit on length mismatch before comparing bytes.
 

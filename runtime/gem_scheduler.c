@@ -16,6 +16,7 @@
 #include <time.h>
 #include <stdlib.h>
 
+#include <limits.h>
 #include "gem.h"
 #include "stb_ds.h"
 
@@ -570,6 +571,25 @@ int64_t gem_now_ms(void) {
     return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
+/* The time `ms` milliseconds from now: saturates at INT64_MAX (a deadline
+   that never comes) instead of overflowing; a delay <= 0 is due now. */
+int64_t gem_deadline_in(int64_t ms) {
+    int64_t now = gem_now_ms();
+    if (ms <= 0) return now;
+    if (ms > INT64_MAX - now) return INT64_MAX;
+    return now + ms;
+}
+
+/* The deadline of `receive ... after ms`. */
+int64_t gem_after_deadline(GemVal ms) {
+    if (ms.type != VAL_INT) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "receive: after expects an int (milliseconds), got %s", gem_type_str(ms));
+        gem_error(buf);
+    }
+    return gem_deadline_in(ms.ival);
+}
+
 /* Yield for selective receive — sets deadline and transitions to WAITING */
 void gem_selective_yield(int64_t deadline_ms) {
     if (gem_current_pid < 0 || gem_current_pid >= GEM_MAX_PROCS) {
@@ -1089,6 +1109,7 @@ void gem_run_scheduler(void) {
             if (earliest >= 0) {
                 int64_t now = gem_now_ms();
                 int64_t wait_ms = earliest - now;
+                if (wait_ms > INT_MAX) wait_ms = INT_MAX;   /* poll again then */
                 poll_timeout = (wait_ms > 0) ? (int)wait_ms : 0;
             }
 
@@ -1639,7 +1660,13 @@ GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
     GemProcess *proc = &gem_proc_table[pid];
     if (proc->state == GEM_PROC_DEAD || proc->state == GEM_PROC_FREE) return GEM_NIL;
 
-    if (proc->trap_exit) {
+    /* As in Erlang, the reason "kill" can't be trapped: the target dies
+       with "killed", which is what its monitors and links see (links pass
+       "killed" on as an ordinary, trappable reason). */
+    int untrappable = strcmp(reason, "kill") == 0;
+    if (untrappable) reason = "killed";
+
+    if (proc->trap_exit && !untrappable) {
         GemVal msg = gem_table_new();
         gem_table_set(msg, gem_string("tag"), gem_string("EXIT"));
         gem_table_set(msg, gem_string("pid"), gem_int(gem_pid_of_slot(gem_current_pid)));
@@ -1683,7 +1710,7 @@ GemVal gem_sleep_builtin(void *_env, GemVal *args, int argc) {
     /* A message arriving while the process is WAITING makes it READY
        (gem_send_msg), so park again until the deadline has passed. The
        do-while always yields at least once, so sleep(0) yields. */
-    int64_t deadline = gem_now_ms() + delay_ms;
+    int64_t deadline = gem_deadline_in(delay_ms);
     do {
         proc->deadline_ms = deadline;
         proc->timed_out = 0;
@@ -1717,7 +1744,7 @@ GemVal gem_send_after_builtin(void *_env, GemVal *args, int argc) {
     gem_timers[i].ref = ref.rval;
     gem_timers[i].target_pid = pid;
     gem_timers[i].msg = gem_deep_copy_malloc(msg);
-    gem_timers[i].deadline_ms = gem_now_ms() + delay_ms;
+    gem_timers[i].deadline_ms = gem_deadline_in(delay_ms);
     gem_timers[i].seq = gem_timer_next_seq++;
     gem_timer_sift_up(i);
     return ref;

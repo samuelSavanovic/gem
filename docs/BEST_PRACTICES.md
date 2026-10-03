@@ -674,12 +674,6 @@ Sort only arrays **(bug)**: `sort` and `table.sort` on a record don't
 raise; they replace its keys with 0 .. n-1, so `{b: 2, a: 1}` becomes
 `[1, 2]`. Sort `keys(t)` or `values(t)` instead.
 
-Keep comparators short and loop-free, and don't sort inside one **(bug)**:
-the comparator lives in one global for all processes, so a sort inside a
-comparator, or a comparator with a loop (where the scheduler can switch
-to another process that sorts), makes the outer sort call the wrong
-comparator. Compute sort keys first, then sort on them.
-
 ---
 
 ## Numbers
@@ -927,38 +921,6 @@ stack, so a hostile input gets a clear error instead of a stack overflow.
 [A first program](#a-first-program) shows `gen_server` and `task`;
 [`SPEC.md`](SPEC.md) documents every callback and option.
 
-### Working around std today
-
-One supervision limitation remains:
-
-- A `one_for_all` supervisor hangs when it restarts a child that traps
-  exits, `dynamic_supervisor.terminate_child` times out on one that
-  doesn't exit on the `EXIT` message, leaving it running, and a supervisor
-  that exits waits 4 s for such a child, then leaves it running **(bug)**:
-  supervise such children `one_for_one`, and have a child that traps exits
-  return on any `EXIT` from its supervisor whose reason is not `"normal"`
-  (`"shutdown"` from `stop`, but the supervisor's error message when it
-  reached its restart intensity). The child spec's `start` runs in the
-  supervisor, so `self()` there is the supervisor's pid:
-
-  ```gem
-  fn start_worker()
-    let sup = self()                 # `start` runs in the supervisor
-    spawn do
-      process_flag("trap_exit", true)
-      let running = true
-      while running
-        receive
-        when {tag: "EXIT", pid: ^sup, reason: reason}
-          running = reason == "normal"
-        when other
-          handle(other)
-        end
-      end
-    end
-  end
-  ```
-
 ### Spawning
 
 ```gem
@@ -1023,7 +985,8 @@ from another process is ignored unless the target traps exits;
 
 A process that traps exits (a supervisor, an http server) handles a
 `kill` when it next reads its mailbox, so it is still alive, and its name
-still registered, when `kill` returns. To stop one and know it is gone,
+still registered, when `kill` returns (except for `kill(pid, "kill")`,
+below, which also skips its cleanup). To stop one and know it is gone,
 monitor it and wait for its `DOWN`, which is what `supervisor.stop`,
 `dynamic_supervisor.stop` and `http.stop` do:
 
@@ -1036,6 +999,68 @@ when {tag: "DOWN", pid: ^pid} then nil
 after 5000 then error("supervisor did not stop")
 end
 ```
+
+### A process that traps exits: `"shutdown"` first, `"kill"` last
+
+`kill(pid, "kill")` can't be trapped: the target dies at once with reason
+`"killed"`, which its monitors and links see (a link passes `"killed"` on
+as an ordinary reason, so a linked process that traps exits gets an
+`EXIT`). Give a process the chance to clean up first: send `"shutdown"`,
+wait for its `DOWN` with a deadline, then `"kill"`. Supervisors do that
+for you, with each child's `shutdown` budget (5000 ms unless the child
+spec says otherwise; a nested supervisor waits with no limit, since its
+handle carries `shutdown: nil`).
+
+A supervised child that traps exits should return on the `EXIT` from its
+supervisor with reason `"shutdown"`; otherwise it is killed when its
+budget runs out. The child spec's `start` runs in the supervisor, so
+`self()` there is the supervisor's pid:
+
+```gem
+fn start_worker()
+  let sup = self()                 # `start` runs in the supervisor
+  spawn do
+    process_flag("trap_exit", true)
+    let running = true
+    while running
+      receive
+      when {tag: "EXIT", pid: ^sup, reason: reason}
+        running = reason == "normal"   # flush, close files, then return
+      when other
+        handle(other)
+      end
+    end
+  end
+end
+
+supervisor.start({children: [{id: "w", start: start_worker, shutdown: 2000}]})
+```
+
+Set `shutdown:` to how long the child's cleanup can take. Only give
+`nil` to a child that is sure to exit: one that never does keeps its
+supervisor waiting for good, and with it `supervisor.stop`, which waits
+with no limit by default.
+
+### Don't pass an option's `shutdown` through as `nil` **(trap)**
+
+In a child spec, a missing `shutdown` key means the 5000 ms default, but
+`shutdown: nil` means no limit, like `timeout_ms: nil` elsewhere in std.
+`{id: id, start: s, shutdown: opts.shutdown}` sets the key to `nil` when
+`opts` has no `shutdown`, so a stubborn child keeps its supervisor waiting
+for good. Copy the key only when it is there:
+
+```gem
+fn worker_spec(id, opts)
+  let spec = {id: id, start: start_worker}
+  if has_key(opts, "shutdown")      # not `shutdown: opts.shutdown`
+    spec.shutdown = opts.shutdown
+  end
+  spec
+end
+```
+
+(A destructuring default, `let {shutdown = 5000} = opts`, goes the other
+way: it turns an explicit `nil` into 5000.)
 
 ### Request/reply: a ref, a pin, a timeout, and a monitor
 
@@ -1431,7 +1456,6 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | Boolean `sort` comparator | array left unsorted | return `a - b` |
 | `sort` on a record **(bug)** | keys replaced by 0 .. n-1 | sort `keys(t)` or `values(t)` |
 | `test.assert_throws(x)` with a non-fn `x` **(bug)** | the assert passes | pass `fn() ... end` |
-| `sort` inside a comparator, or a comparator with a loop **(bug)** | wrong comparator called; unsorted or a type error | precompute keys; short comparators |
 | `json.encode({})` | `[]` | write `'{}'` yourself |
 | `match` with no arm matching | yields `nil` silently | add an `else` |
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |
@@ -1455,9 +1479,9 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
 | `after` in a busy server loop | never fires | `send_after` ticks |
+| `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
 | Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
-| Supervised child that traps exits **(bug)** | `one_for_all` restart hangs; the child outlives its supervisor | return on any non-`"normal"` `EXIT` from the supervisor |
 | `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |
 | Spawning thousands of quick tasks in a loop | `process table full` | batch, or cap in-flight tasks |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |

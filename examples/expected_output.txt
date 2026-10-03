@@ -613,13 +613,13 @@ Stack trace:
   at anonymous fn (examples/30_supervisor.gem:13)
 
 [Runtime Error in process 10]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:263
+  --> std/supervisor.gem:310
      |
- 263 |     error(res.error)
+ 310 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:263)
-  at anonymous fn (std/supervisor.gem:361)
+  at supervisor.sup_main (std/supervisor.gem:310)
+  at anonymous fn (std/supervisor.gem:417)
 test4: supervisor crashed: supervisor: max restart intensity reached
 test1: equal_self=true different=true
 test2: type=ref
@@ -3212,13 +3212,13 @@ armed timeout fired
 inner links its children: 3 true
 
 [Runtime Error in process 6]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:263
+  --> std/supervisor.gem:310
      |
- 263 |     error(res.error)
+ 310 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:263)
-  at anonymous fn (std/supervisor.gem:361)
+  at supervisor.sup_main (std/supervisor.gem:310)
+  at anonymous fn (std/supervisor.gem:417)
 inner restarted: true
 old db dead: true
 new db: true 0
@@ -3226,13 +3226,13 @@ outer, inner, children dead: true true true true nil
 one_for_all restarted inner: true true true
 
 [Runtime Error in process 22]: dynamic_supervisor: max restart intensity reached
-  --> std/dynamic_supervisor.gem:280
+  --> std/dynamic_supervisor.gem:317
      |
- 280 |     error(res.error)
+ 317 |     error(res.error)
      |
 Stack trace:
-  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:280)
-  at anonymous fn (std/dynamic_supervisor.gem:340)
+  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:317)
+  at anonymous fn (std/dynamic_supervisor.gem:387)
 dsup and its children dead: true true
 ignores a normal exit signal: true
 dsup killed, child dead: true true
@@ -3278,7 +3278,7 @@ true
 dynamic_supervisor.start_child: timeout must be an int (milliseconds) or nil, got string
 dynamic_supervisor.which_children: timeout must be an int (milliseconds) or nil, got table
 gen_server.call: server exited: stopped
-dynamic_supervisor.start: expected a child template {start, restart}, got nil
+dynamic_supervisor.start: expected a child template {start, restart, shutdown}, got nil
 dynamic_supervisor.start: the child template's start must be a fn, got nil
 dynamic_supervisor.start: unknown restart "sometimes"
 supervisor.start: unknown restart "always" for child "x"
@@ -3392,8 +3392,8 @@ dynamic: supervisor alive: false, children alive: false false
 -- terminate_child of a child that traps exits
 graceful: true alive after: false
 dynamic_supervisor.terminate_child: timeout
-still running: true, listed: 0
-again: true alive after: false
+killed after its budget: true, listed: 0
+again (unknown now): false alive after: false
 unknown: false
 children left: 0
 plain child: true alive after: false
@@ -3550,13 +3550,13 @@ Stack trace:
   at anonymous fn (examples/189_otp_shutdown.gem:102)
 
 [Runtime Error in process 12]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:263
+  --> std/supervisor.gem:310
      |
- 263 |     error(res.error)
+ 310 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:263)
-  at anonymous fn (std/supervisor.gem:361)
+  at supervisor.sup_main (std/supervisor.gem:310)
+  at anonymous fn (std/supervisor.gem:417)
 3 down: supervisor: max restart intensity reached true ["t:shutdown"]
 
 [Runtime Error in process 18]: boom
@@ -3573,17 +3573,17 @@ Stack trace:
 6 reports: ["z:shutdown", "y:shutdown", "x:shutdown"]
 supervisor: exiting on an error raised at:
   at bad_start (examples/189_otp_shutdown.gem:151)
-  at supervisor.start_child (std/supervisor.gem:59)
-  at anonymous fn (std/supervisor.gem:252)
+  at supervisor.start_child (std/supervisor.gem:81)
+  at anonymous fn (std/supervisor.gem:299)
 
 [Runtime Error in process 33]: start broke
-  --> std/supervisor.gem:263
+  --> std/supervisor.gem:310
      |
- 263 |     error(res.error)
+ 310 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:263)
-  at anonymous fn (std/supervisor.gem:361)
+  at supervisor.sup_main (std/supervisor.gem:310)
+  at anonymous fn (std/supervisor.gem:417)
 7 down: start broke ["a:shutdown"]
 8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got nil
 8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got string
@@ -3725,3 +3725,113 @@ http.start: request_timeout_ms must be an int > 0 (milliseconds) or nil, got str
 -- 9. main's slot is not reused after main ends
 main ends
 1200 processes exited after main ended
+-- kill --
+alive after shutdown and killed: true
+kill returns: true
+DOWN: killed
+kill of a dead pid: nil
+self kill: killed
+pool wait: killed true
+-- links --
+mid DOWN: killed
+trapper EXIT: killed
+trapper alive: true
+trapper DOWN: killed
+-- one_for_all --
+
+[Runtime Error in process 9]: boom
+  --> examples/192_untrappable_kill.gem:49
+    |
+ 49 |     when {tag: "crash"} then error("boom")
+    |
+Stack trace:
+  at anonymous fn (examples/192_untrappable_kill.gem:49)
+restarted both: true true
+old stubborn child gone: true
+stopped; new stubborn child gone: true
+-- shutdown budgets --
+cleaned: a shutdown
+b: killed
+took 150..1000 ms: true
+handle budget under 1000 ms: true
+supervisor handle: true nil
+-- nil budgets --
+cleaned: ["nested", "spec nil", "template nil"]
+spec nil child: normal
+nested supervisor: shutdown
+template nil child: normal
+-- transient --
+killed transient restarted: true
+-- dynamic_supervisor --
+terminate_child: true
+p1: killed
+children left: 1
+terminate again: false
+dynamic_supervisor.terminate_child: timeout
+p2 gone: true 0
+stop killed p3: true
+object handle supervised: true
+object handle stopped: true
+dynamic object handle: true 1
+dynamic object handle stopped: true
+-- checks --
+supervisor.start: shutdown of child "x" must be an int (milliseconds) or nil, got string
+dynamic_supervisor.start: the child template's shutdown must be an int (milliseconds) or nil, got float
+-- main --
+
+[Runtime Error]: main process killed by process 39: killed
+  --> examples/192_untrappable_kill.gem:293
+     |
+ 293 | receive
+     |
+Stack trace:
+  at main (examples/192_untrappable_kill.gem:293)
+-- sort --
+nested: [[1, 3], [5, 4], [8, 9]]
+concurrent: [true, true]
+stable: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
+error: type error in -: got int and string [3, 1, "x", 2]
+sort: the comparator changed the length of the table being sorted
+small: {} [1] [1, 2]
+-- keys --
+2 1 2 nil nil
+3 3 false true
+2 nil 2 3
+2 1 2
+copied: 2 2
+many keys: true
+-- division --
+-9223372036854775808 0 -7 0
+-9223372036854775808 0
+-3 -1 -3 1
+-- after --
+receive: after expects an int (milliseconds), got nil
+receive: after expects an int (milliseconds), got bool
+receive: after expects an int (milliseconds), got float
+receive: after expects an int (milliseconds), got string
+huge after: waited for the message
+huge send_after: pending
+huge sleep: sleeping
+negative after: no wait
+-- sqlite --
+{} {}
+sqlite_query: statement has 0 parameter(s), got 1
+sqlite_exec: statement 2 has parameters; use sqlite_query to bind them
+[{n: 1}]
+sqlite_query: expected one SQL statement, got several (sqlite_exec runs several, without parameters)
+[{n: 1}]
+3 true
+sqlite_exec: no such table: nope
+-- append --
+type error in +: got string and int
+x0x1x2
+-- print --
+3 ["a\0b"]
+{"a\0b": 1, ok: "x\0y"}
+8 true
+-- renumber --
+nil nil [9, 3, 1]
+nil nil [1, 2]
+1 {a: 1, 1: 7, 2: 2}
+[5] nil
+-9223372036854775808 9223372036854775807 -2 -9223372036854775808 -9223372036854775808

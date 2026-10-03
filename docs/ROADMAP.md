@@ -123,6 +123,8 @@ What needs building: Erlang-style refs (`monitor` returns a ref, `demonitor(ref)
 
 TCP sockets and SQLite handles are plain ints. A process that crashes or is killed without closing them leaks the file descriptor or connection; Erlang ties a port to an owning process and closes it when the owner exits. Likewise a command started by `exec` keeps running after its process is killed, because `system()` does not expose the child's pid.
 
+Supervisors make this more pressing: they kill a child with the untrappable `"kill"` once its `shutdown` budget runs out, as a routine last resort. A child that holds a listening socket and overruns its budget leaves the port bound, so its restart fails with `EADDRINUSE`, the supervisor reaches its restart intensity and the tree goes down.
+
 What needs building: a per-process resource list filled by `tcp_listen`/`tcp_accept`/`tcp_connect`/`sqlite_open` and closed in `gem_free_proc_slot`; for `exec`, `posix_spawn` + `waitpid` so the child can be signalled. Trade-off: a handle passed to another process (an acceptor handing a socket to a handler) needs ownership to move with it. Making the user transfer ownership explicitly would add a concept to the language, so the transfer should happen implicitly, e.g. on `send` or `spawn` capture.
 
 ## Write timeout for `tcp_write` (P2)
