@@ -23,17 +23,28 @@ Notes for the next session. Delete this file once its work is done.
       every code sample by running it with `build/gem`; delete the **(bug)**
       rules #28 and #29 fixed; check the remaining ones against
       `docs/KNOWN_BUGS.md` (see "For the doc session" below).
-   3. **Adversarial review passes** until one comes back clean: fresh
+   3. **Fix the other docs as you go.** The maintainer isn't sure how
+      accurate SPEC.md, CHEATSHEET.md and the rest are. Whenever writing or
+      checking the doc turns up a claim in `docs/SPEC.md`,
+      `docs/CHEATSHEET.md`, `CLAUDE.md`, `README.md` or a doc comment that
+      disagrees with what `build/gem` does, decide which side is wrong:
+      if the doc is wrong, fix it in the same PR; if the code is wrong (it
+      contradicts the design or is clearly a bug), add a `docs/KNOWN_BUGS.md`
+      entry with a repro and describe the current behavior in the doc only
+      if users can rely on it. Keep a list of what changed for the PR body.
+      Give the adversarial and blind-reader agents the same brief: report a
+      wrong SPEC/CHEATSHEET claim like a wrong BEST_PRACTICES rule.
+   4. **Adversarial review passes** until one comes back clean: fresh
       subagents (no inherited context) that try to break each rule: a
       program that follows the rule and still fails, a sample that doesn't
       compile or prints something else, a rule that contradicts SPEC or
       another rule, a missing trap. Fix, then run a new round.
-   4. **Then a blind-reader pass:** a fresh subagent playing a competent
+   5. **Then a blind-reader pass:** a fresh subagent playing a competent
       developer who has never seen Gem reads the doc cold (only the doc, not
       SPEC or the code) and reports what is unclear, assumed, out of order
       or missing for writing their first real program. Fix what it finds.
       If the fixes are large, run one more adversarial round.
-   5. Open a PR to `main` (no AI attribution, CLAUDE.md "Commits and Pull
+   6. Open a PR to `main` (no AI attribution, CLAUDE.md "Commits and Pull
       Requests").
 4. **After that:** modernize `std/` against the merged doc.
 
