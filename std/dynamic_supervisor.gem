@@ -2,160 +2,203 @@
 # Mirrors Erlang `simple_one_for_one` / Elixir `DynamicSupervisor`: every child
 # is started from the same template; the supervisor restarts crashed children
 # by replaying `template.start(args)` with the original args.
+#
+#   let ds = dynamic_supervisor.start({child: {start: fn(args) worker(args) end}})
+#   let pid = dynamic_supervisor.start_child(ds, {id: 1})
+#   dynamic_supervisor.which_children(ds)    # [{pid, args}]
+#   dynamic_supervisor.terminate_child(ds, pid)
+
+# A bare pid, a `{pid}` handle or a registered name → pid; nil for a name
+# nobody holds or anything else.
+fn pid_of(t)
+  let kind = type(t)
+  if kind == "int"
+    return t
+  end
+  if kind == "string"
+    return whereis(t)
+  end
+  if kind == "table" and type(t.pid) == "int"
+    return t.pid
+  end
+  nil
+end
+
+# The pid a child's `start` returned, which may be a `{pid}` handle.
+fn started_pid(v)
+  let pid = v
+  if type(v) == "table"
+    pid = v.pid
+  end
+  if type(pid) != "int"
+    error("child start must return a pid or a \{pid\} handle, got {type(v)}")
+  end
+  pid
+end
+
+fn start_from_template(state, args)
+  let pid = started_pid(state.template.start(args))
+  monitor(pid)
+  pid
+end
 
 fn check_intensity(state)
   let now = time_ms()
-  push(state.restart_times, now)
-  let count = 0
+  let recent = [now]
   for t in state.restart_times
     if now - t <= state.max_seconds
-      count += 1
+      push(recent, t)
     end
   end
-  if count > state.max_restarts
+  state.restart_times = recent
+  if len(recent) > state.max_restarts
     error("max restart intensity reached")
   end
 end
 
 fn find_child_index(children, pid)
-  for i = 0, len(children)
-    if children[i].pid == pid
+  for i, c in children
+    if c.pid == pid
       return i
     end
   end
   -1
 end
 
+fn reply(to, ref, res)
+  send(to, {tag: "_dsup_reply", ref: ref, result: res})
+end
+
+fn handle_start_child(state, args, to, ref)
+  let res = pcall(fn() start_from_template(state, args) end)
+  if res.ok
+    push(state.children, {pid: res.value, args: args})
+  end
+  reply(to, ref, res)
+end
+
+fn handle_terminate_child(state, pid, to, ref)
+  let idx = find_child_index(state.children, pid)
+  if idx == -1
+    reply(to, ref, {ok: true, value: false})
+    return nil
+  end
+  # Remove first, so the child's DOWN finds no entry and doesn't restart it.
+  remove_at(state.children, idx)
+  kill(pid, "shutdown")
+  reply(to, ref, {ok: true, value: true})
+end
+
+fn should_restart(restart, reason)
+  if restart == "permanent"
+    return true
+  end
+  restart == "transient" and reason != "normal" and reason != "shutdown"
+end
+
+fn handle_down(state, pid, reason)
+  let idx = find_child_index(state.children, pid)
+  if idx == -1
+    # Removed by terminate_child, or not a child.
+    return nil
+  end
+  if not should_restart(state.template.restart, reason)
+    remove_at(state.children, idx)
+    return nil
+  end
+  check_intensity(state)
+  let args = state.children[idx].args
+  state.children[idx] = {pid: start_from_template(state, args), args: args}
+end
+
+fn handle_which_children(state, to, ref)
+  let result = []
+  for c in state.children
+    push(result, {pid: c.pid, args: c.args})
+  end
+  reply(to, ref, {ok: true, value: result})
+end
+
 fn dsup_loop(state)
   receive
-  when {tag: "start_child", args: a, reply_to: rt, ref: r}
-    let pid = state.template.start(a)
-    monitor(pid)
-    push(state.children, {pid: pid, args: a})
-    send(rt, {tag: "child_started", ref: r, pid: pid})
-    dsup_loop(state)
-  when {tag: "terminate_child", pid: target_pid, reply_to: rt, ref: r}
-    let idx = find_child_index(state.children, target_pid)
-    if idx == -1
-      send(rt, {tag: "child_terminated", ref: r, ok: false})
-      dsup_loop(state)
-      return nil
-    end
-    # Remove first so the eventual DOWN is treated as already-handled and
-    # the main DOWN arm skips restart (find_child_index returns -1).
-    delete(state.children, idx)
-    kill(target_pid, "shutdown")
-    send(rt, {tag: "child_terminated", ref: r, ok: true})
-    dsup_loop(state)
-  when {tag: "DOWN", pid: dead_pid, reason: reason}
-    let idx = find_child_index(state.children, dead_pid)
-    if idx == -1
-      # Already removed (terminate_child path) or unknown pid.
-      dsup_loop(state)
-      return nil
-    end
-    let child = state.children[idx]
-    let restart = state.template.restart
-    let should_restart = false
-    if restart == "permanent"
-      should_restart = true
-    elif restart == "transient"
-      if reason != "normal" and reason != "shutdown"
-        should_restart = true
-      end
-    end
-    if not should_restart
-      delete(state.children, idx)
-      dsup_loop(state)
-      return nil
-    end
-    check_intensity(state)
-    let new_pid = state.template.start(child.args)
-    monitor(new_pid)
-    state.children[idx] = {pid: new_pid, args: child.args}
-    dsup_loop(state)
-  when {tag: "which_children", reply_to: rt, ref: r}
-    let result = []
-    for c in state.children
-      push(result, {pid: c.pid, args: c.args})
-    end
-    send(rt, {tag: "children_list", ref: r, children: result})
-    dsup_loop(state)
+  when {tag: "_dsup_start_child", args: args, reply_to: to, ref: ref}
+    handle_start_child(state, args, to, ref)
+  when {tag: "_dsup_terminate_child", pid: pid, reply_to: to, ref: ref}
+    handle_terminate_child(state, pid, to, ref)
+  when {tag: "DOWN", pid: pid, reason: reason}
+    handle_down(state, pid, reason)
+  when {tag: "_dsup_which_children", reply_to: to, ref: ref}
+    handle_which_children(state, to, ref)
+  when other
+    nil
   end
+  dsup_loop(state)
 end
 
 fn start({child, max_restarts = 3, max_seconds = 5000, name = nil})
-  let template = child
-  let mr = max_restarts
-  let ms = max_seconds
-  let sup_name = name
-
-  let restart_kind = "permanent"
-  if has_key(template, "restart")
-    restart_kind = template.restart
-  end
-  let resolved_template = {start: template.start, restart: restart_kind}
-
-  let sup_pid = spawn(fn()
-    if sup_name != nil
-      register(sup_name, self())
-    end
-    let state = {
-      template: resolved_template,
+  let {start, restart = "permanent"} = child
+  let template = {start: start, restart: restart}
+  let pid = spawn do
+    dsup_loop({
+      template: template,
       children: [],
-      max_restarts: mr,
-      max_seconds: ms,
+      max_restarts: max_restarts,
+      max_seconds: max_seconds,
       restart_times: []
-    }
-    dsup_loop(state)
-  end)
-
-  {pid: sup_pid}
+    })
+  end
+  if name != nil and not pcall(fn() register(name, pid) end).ok
+    kill(pid, "shutdown")
+    error("dynamic_supervisor.start: the name \"{name}\" is already registered")
+  end
+  {pid: pid}
 end
 
-fn start_child(target, args)
-  let r = make_ref()
-  let pid = nil
-  if type(target) == "table"
-    pid = target.pid
-  else
-    pid = target
+# Sends `msg` to the supervisor `target` and waits for its reply. Raises
+# `<caller>: ...` when the supervisor is dead or dies, when `timeout_ms`
+# passes, or with the error the request failed with.
+fn request(target, msg, caller, timeout_ms)
+  let pid = pid_of(target)
+  if pid == nil
+    if type(target) == "string"
+      error("{caller}: no process registered as \"{target}\"")
+    end
+    error("{caller}: expected a pid, a \{pid\} handle or a registered name, got {type(target)}")
   end
-  send(pid, {tag: "start_child", args: args, reply_to: self(), ref: r})
+  let ref = make_ref()
+  msg.reply_to = self()
+  msg.ref = ref
+  monitor(pid)
+  send(pid, msg)
   receive
-  when {tag: "child_started", ref: ^r, pid: child_pid}
-    child_pid
+  when {tag: "_dsup_reply", ref: ^ref, result: res}
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    after 0
+      nil
+    end
+    if not res.ok
+      error("{caller}: {res.error}")
+    end
+    res.value
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    error("{caller}: supervisor exited: {reason}")
+  after timeout_ms
+    error("{caller}: timeout")
   end
 end
 
-fn terminate_child(target, child_pid)
-  let r = make_ref()
-  let pid = nil
-  if type(target) == "table"
-    pid = target.pid
-  else
-    pid = target
-  end
-  send(pid, {tag: "terminate_child", pid: child_pid, reply_to: self(), ref: r})
-  receive
-  when {tag: "child_terminated", ref: ^r, ok: ok}
-    ok
-  end
+fn start_child(target, args, timeout_ms = 5000)
+  request(target, {tag: "_dsup_start_child", args: args}, "dynamic_supervisor.start_child", timeout_ms)
 end
 
-fn which_children(target)
-  let r = make_ref()
-  let pid = nil
-  if type(target) == "table"
-    pid = target.pid
-  else
-    pid = target
-  end
-  send(pid, {tag: "which_children", reply_to: self(), ref: r})
-  receive
-  when {tag: "children_list", ref: ^r, children: children}
-    children
-  end
+fn terminate_child(target, child, timeout_ms = 5000)
+  request(target, {tag: "_dsup_terminate_child", pid: pid_of(child)}, "dynamic_supervisor.terminate_child", timeout_ms)
+end
+
+fn which_children(target, timeout_ms = 5000)
+  request(target, {tag: "_dsup_which_children"}, "dynamic_supervisor.which_children", timeout_ms)
 end
 
 export start, start_child, terminate_child, which_children

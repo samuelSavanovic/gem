@@ -2665,3 +2665,25 @@ string s
 int lead
 none
 seven five zero
+terminate first: true
+left: ["b", "c"]
+terminate again: false
+terminate by handle: true
+left: ["c"]
+temporary left: [2, 4]
+temporary after crash: [4]
+transient left: ["y", "z"] y restarted: true
+after 5000 exits: 0
+handle child pid is int: int
+handle child replies: 10
+handle child restarted: true 10
+dynamic_supervisor.start_child: no luck
+dynamic_supervisor.start_child: child start must return a pid or a {pid} handle, got nil
+bad still up: 0
+by name: ["n1"]
+dynamic_supervisor.which_children: no process registered as "nobody"
+dynamic_supervisor.which_children: expected a pid, a {pid} handle or a registered name, got nil
+dynamic_supervisor.start: the name "pool" is already registered
+dynamic_supervisor.start_child: timeout
+dynamic_supervisor.start_child: supervisor exited: shutdown
+dynamic_supervisor.start_child: supervisor exited: boom

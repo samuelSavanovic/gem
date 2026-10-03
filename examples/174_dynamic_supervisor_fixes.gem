@@ -1,0 +1,127 @@
+# dynamic_supervisor: removing any child, many child exits, timeouts and a
+# dead supervisor, `{pid}` handles from `start`, registered names.
+load "std/dynamic_supervisor"
+load "std/gen_server"
+
+fn idle(args)
+  spawn do
+    while true
+      receive
+      when {tag: "stop"}
+        return nil
+      when other
+        nil
+      end
+    end
+  end
+end
+
+fn ids(ds)
+  let out = []
+  for c in dynamic_supervisor.which_children(ds)
+    push(out, c.args)
+  end
+  out
+end
+
+fn error_of(f)
+  let r = pcall(f)
+  if r.ok
+    return "no error"
+  end
+  r.error
+end
+
+# ─── terminate_child of a child that isn't the last ─────
+let ds = dynamic_supervisor.start({child: {start: idle}})
+let a = dynamic_supervisor.start_child(ds, "a")
+let b = dynamic_supervisor.start_child(ds, "b")
+dynamic_supervisor.start_child(ds, "c")
+print("terminate first:", dynamic_supervisor.terminate_child(ds, a))
+print("left:", ids(ds))
+print("terminate again:", dynamic_supervisor.terminate_child(ds, a))
+# A `{pid}` handle names the child too.
+print("terminate by handle:", dynamic_supervisor.terminate_child(ds, {pid: b}))
+print("left:", ids(ds))
+
+# ─── temporary children that exit, first and middle ─────
+let tmp = dynamic_supervisor.start({child: {start: idle, restart: "temporary"}})
+let t1 = dynamic_supervisor.start_child(tmp, 1)
+let t2 = dynamic_supervisor.start_child(tmp, 2)
+let t3 = dynamic_supervisor.start_child(tmp, 3)
+let t4 = dynamic_supervisor.start_child(tmp, 4)
+send(t1, {tag: "stop"})
+sleep(10)
+send(t3, {tag: "stop"})
+sleep(10)
+print("temporary left:", ids(tmp))
+kill(t2, "crash")
+sleep(10)
+print("temporary after crash:", ids(tmp))
+
+# ─── transient: a normal exit removes, a crash restarts ─
+let tr = dynamic_supervisor.start({child: {start: idle, restart: "transient"}})
+let r1 = dynamic_supervisor.start_child(tr, "x")
+let r2 = dynamic_supervisor.start_child(tr, "y")
+dynamic_supervisor.start_child(tr, "z")
+send(r1, {tag: "stop"})
+kill(r2, "crash")
+sleep(10)
+let after_tr = dynamic_supervisor.which_children(tr)
+print("transient left:", ids(tr), "y restarted:", after_tr[0].pid != r2)
+
+# ─── 5,000 temporary children that exit at once ─────────
+fn quick(n)
+  spawn do
+    nil
+  end
+end
+let many = dynamic_supervisor.start({child: {start: quick, restart: "temporary"}})
+for i = 0, 5000
+  dynamic_supervisor.start_child(many, i)
+end
+sleep(10)
+print("after 5000 exits:", len(dynamic_supervisor.which_children(many)))
+
+# ─── a child `start` that returns a `{pid}` handle ──────
+fn counter(start_at)
+  {
+    init: fn() {state: start_at} end,
+    handle_call: fn(msg, from, n) {reply: n, state: n + 1} end
+  }
+end
+let gs = dynamic_supervisor.start({child: {start: fn(n) gen_server.start(counter(n)) end}})
+let g = dynamic_supervisor.start_child(gs, 10)
+print("handle child pid is int:", type(g))
+print("handle child replies:", gen_server.call(g, "next"))
+kill(g, "crash")
+sleep(10)
+let g2 = dynamic_supervisor.which_children(gs)[0].pid
+print("handle child restarted:", g2 != g, gen_server.call(g2, "next"))
+
+# ─── a bad `start` fails the call, not the supervisor ───
+let bad = dynamic_supervisor.start({child: {start: fn(x) if x then error("no {x}") end end}})
+print(error_of(fn() dynamic_supervisor.start_child(bad, "luck") end))
+print(error_of(fn() dynamic_supervisor.start_child(bad, false) end))
+send(bad.pid, {tag: "unrelated"})
+print("bad still up:", len(dynamic_supervisor.which_children(bad)))
+
+# ─── registered name ────────────────────────────────────
+dynamic_supervisor.start({child: {start: idle}, name: "pool"})
+dynamic_supervisor.start_child("pool", "n1")
+print("by name:", ids("pool"))
+print(error_of(fn() dynamic_supervisor.which_children("nobody") end))
+print(error_of(fn() dynamic_supervisor.which_children(nil) end))
+print(error_of(fn() dynamic_supervisor.start({child: {start: idle}, name: "pool"}) end))
+
+# ─── timeout, dead supervisor, supervisor dying mid-call ─
+let slow = dynamic_supervisor.start({child: {start: fn(ms) sleep(ms); idle(ms) end}})
+print(error_of(fn() dynamic_supervisor.start_child(slow, 200, 20) end))
+kill(slow.pid, "shutdown")
+print(error_of(fn() dynamic_supervisor.start_child(slow, 0) end))
+let doomed = dynamic_supervisor.start({child: {start: fn(ms) sleep(ms); idle(ms) end}})
+spawn do
+  sleep(20)
+  kill(doomed.pid, "boom")
+end
+print(error_of(fn() dynamic_supervisor.start_child(doomed, 500) end))

@@ -186,37 +186,11 @@ runtime/gem_builtins_sqlite.c.
 
 ## Standard library
 
-### `dynamic_supervisor` crashes after removing a child that isn't the last
+### `supervisor`'s loop is not a tail call
 
-```gem
-load "std/dynamic_supervisor"
-fn w(a) spawn do while true receive when other then nil end end end end
-let ds = dynamic_supervisor.start({child: {start: w}})
-let a = dynamic_supervisor.start_child(ds, "a")
-dynamic_supervisor.start_child(ds, "b")
-dynamic_supervisor.terminate_child(ds, a)
-print(dynamic_supervisor.which_children(ds))
-```
-
-The supervisor dies with `field access on non-table: got nil`
-(dynamic_supervisor.gem `find_child_index`), and `which_children`, which
-has no `after`, deadlocks main. `dsup_loop` removes children with
-`delete(state.children, idx)` on an array (the hole trap); use
-`remove_at`. The DOWN path for temporary and transient children has the
-same `delete`, so the exit of such a child that isn't last in the list
-crashes the supervisor too (three `restart: "temporary"` children; stop
-the first, then the second).
-
-### The supervisors' loops are not tail calls
-
-Some paths of `sup_loop` (std/supervisor) and `dsup_loop`
-(std/dynamic_supervisor) recurse with `sup_loop(state)` /
-`dsup_loop(state)` followed by `return nil`, a non-tail call that adds a
-stack frame: the exit of a temporary or transient child, `terminate_child`
-and `which_children` in the dynamic supervisor. (Restarts are tail calls.)
-A dynamic supervisor with `restart: "temporary"` children that exit at
-once dies with `stack overflow in <fn>` after 1,750 to 2,000 child exits.
-Make the self call the last expression.
+Some paths of `sup_loop` (std/supervisor) recurse with `sup_loop(state)`
+followed by `return nil`, a non-tail call that adds a stack frame.
+(Restarts are tail calls.) Make the self call the last expression.
 
 ### `http.serve` returns when the caller gets any message
 
