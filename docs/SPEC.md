@@ -456,7 +456,7 @@ c()  # 1
 c()  # 2
 ```
 
-A closure body (`fn() ... end`, a `do` block, a `spawn do` body, `pcall <expr>`) resolves names exactly like a named function body: reading or assigning a name that no enclosing scope declares (no `let`, parameter, function, builtin or `load`) is a compile error, `undeclared identifier`, at the use.
+A closure body (`fn() ... end`, a `do` block, a `spawn do` body, `pcall <expr>`) resolves names exactly like a named function body: reading or assigning a name that no enclosing scope declares (no `let`, parameter, function, builtin or `load`) is a compile error, `undeclared identifier`, at the use. A closure sees only the variables declared before it is created, so a closure that reads a `let` written after it, or calls itself through the `let` it initializes, is the same error; declare the variable first (`let fact = nil`) and assign the closure to it (`fact = fn(n) ... fact(n - 1) ... end`).
 
 ## Tail Call Optimization
 

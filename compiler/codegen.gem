@@ -241,6 +241,18 @@ let shadow_stmt = nil
 let shadow_stmts = nil
 let shadow_children = nil
 
+# Where a `let` is declared, for the out-of-scope hint: {line, file}.
+# Pattern bindings come from lowering without a line of their own (nil).
+# The file matters because one scope walk covers the top-level code of
+# every loaded module.
+fn shadow_decl_site(let_node)
+  let line = let_node.line
+  if line == 0
+    line = nil
+  end
+  {line: line, file: let_node.file}
+end
+
 fn shadow_bind(let_node, env, mode, ctx)
   let name = let_node.name
   if name == nil
@@ -254,12 +266,7 @@ fn shadow_bind(let_node, env, mode, ctx)
   else
     env[name] = name
   end
-  # Pattern bindings come from lowering without a line of their own.
-  let line = let_node.line
-  if line == 0
-    line = nil
-  end
-  ctx.lines[env[name]] = line
+  ctx.lines[env[name]] = shadow_decl_site(let_node)
 end
 
 # A block whose scope was `inner` ends; `outer` is the enclosing scope.
@@ -283,8 +290,9 @@ end
 # block of the declaration's scope, e.g. a `while` condition reading a
 # `let` of the loop body (`ctx.later`: every let of the current named fn
 # or top-level code outside closures). Inside a closure such a use (a
-# closure calling itself through the let it initializes, or a let made
-# after it) is left to codegen.
+# closure calling itself through the let it initializes, or reading a let
+# made after it) is reported too, as "later_closure": the closure's env is
+# built when it is created, before the let exists.
 fn shadow_check_use(node, name, env, ctx)
   if has_key(env, name)
     return nil
@@ -294,8 +302,12 @@ fn shadow_check_use(node, name, env, ctx)
   end
   if has_key(ctx.ended, name)
     ctx.report(node, name, "ended", ctx.ended[name])
-  elif ctx.closure_depth == 0 and has_key(ctx.later, name)
-    ctx.report(node, name, "later", ctx.later[name])
+  elif has_key(ctx.later, name)
+    if ctx.closure_depth == 0
+      ctx.report(node, name, "later", ctx.later[name])
+    else
+      ctx.report(node, name, "later_closure", ctx.later[name])
+    end
   end
 end
 
@@ -311,11 +323,7 @@ shadow_collect_lets = fn(node, out)
     return nil
   end
   if node.tag == "let" and node.name != nil and not has_key(out, node.name)
-    let line = node.line
-    if line == 0
-      line = nil
-    end
-    out[node.name] = line
+    out[node.name] = shadow_decl_site(node)
   end
   for k, v in node
     if k != "tag" and type(v) == "table"
@@ -494,9 +502,11 @@ shadow_children = fn(v, env, mode, ctx)
 end
 
 # `builtins` and `externs` are names that resolve without a binding;
-# `report(node, name, kind, decl_line)` reports a use of a name whose
-# `let` is not visible there: kind "ended" (its block ended) or "later"
-# (declared after the use, outside any block containing it).
+# `report(node, name, kind, decl)` reports a use of a name whose
+# `let` is not visible there: kind "ended" (its block ended), "later"
+# (declared after the use, outside any block containing it) or
+# "later_closure" (the same, from inside a closure). `decl` is the
+# declaration's {line, file}.
 fn scope_shadowing_lets(fn_defs, top_stmts, builtins, externs, report)
   let globals = {}
   collect_top_let_names(top_stmts, globals)
@@ -5333,14 +5343,26 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     for ef in extern_fns_list
       push(extern_names, ef.name)
     end
-    let report_out_of_scope = fn(node, name, kind, decl_line)
+    let report_out_of_scope = fn(node, name, kind, decl)
+      # `where`: " at line N" (or " at <file>:N" when the let is in another
+      # file: the walk covers every loaded module's top-level code).
+      let where = ""
+      if decl != nil and decl.line != nil
+        if file_of(decl) == file_of(node)
+          where = " at line {decl.line}"
+        else
+          where = " at {rel_path(file_of(decl))}:{decl.line}"
+        end
+      end
       let at = ""
-      if decl_line != nil
-        at = " at line {decl_line},"
+      if where != ""
+        at = "{where},"
       end
       let hint = "`{name}` is declared{at} inside a block that has ended; declare it before that block (`let {name} = nil`) and assign it inside"
       if kind == "later"
         hint = "`{name}` is declared{at} after this use or in a block that does not contain it; a `let` is visible from its declaration to the end of its block"
+      elif kind == "later_closure"
+        hint = "a closure sees only variables declared before it is created, and the `let` of `{name}`{where} comes after; declare it first (`let {name} = nil`) and assign it afterwards (`{name} = ...`)"
       end
       sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", hint)
     end

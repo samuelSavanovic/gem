@@ -26,6 +26,7 @@ expected=(
   "cascade_braces:2:5"
   "closure_undeclared:7:7"
   "closure_undeclared_assign:3:3"
+  "closure_later_let:2:2"
   "dotdot_concat:1:1"
   "header_block:3:3"
   "interp_bad_expr:2:2"
