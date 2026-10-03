@@ -1,0 +1,202 @@
+# Runtime known-bug fixes: sort with nested or concurrent comparators,
+# string table keys that differ after a NUL, INT64_MIN / -1, `after`
+# timeouts, sqlite edge cases, `s = s + x` in a loop, and NULs in printed
+# tables.
+
+fn err(r)
+  r.error
+end
+
+# ── sort ──
+print("-- sort --")
+let groups = [[3, 1], [9, 8], [5, 4]]
+sort(groups, fn(a, b)
+  sort(a, fn(x, y) x - y end)
+  a[0] - b[0]
+end)
+print("nested:", groups)
+
+# Two processes sort at once with comparators that loop (so the scheduler
+# switches between them mid-sort).
+let me = self()
+fn slow_diff(a, b)
+  let i = 0
+  while i < 50
+    i += 1
+  end
+  a - b
+end
+for k = 0, 2
+  spawn do
+    let xs = []
+    for i = 0, 3000
+      push(xs, (i * 7919) % 3001)
+    end
+    if k == 0
+      sort(xs, fn(a, b) slow_diff(a, b) end)
+    else
+      sort(xs, fn(a, b) slow_diff(b, a) end)
+    end
+    let ok = true
+    for i = 1, len(xs)
+      if (k == 0 and xs[i - 1] > xs[i]) or (k == 1 and xs[i - 1] < xs[i])
+        ok = false
+      end
+    end
+    send(me, {tag: "sorted", k: k, ok: ok})
+  end
+end
+let results = [nil, nil]
+for i = 0, 2
+  receive
+  when {tag: "sorted", k: k, ok: ok} then results[k] = ok
+  end
+end
+print("concurrent:", results)
+
+let st = []
+for i = 0, 20
+  push(st, {k: i % 2, v: i})
+end
+sort(st, fn(a, b) a.k - b.k end)
+let order = []
+for e in st
+  push(order, e.v)
+end
+print("stable:", order)
+let mixed = [3, 1, "x", 2]
+print("error:", err(pcall sort(mixed, fn(a, b) a - b end)), mixed)
+let grows = [3, 2, 1]
+print(err(pcall sort(grows, fn(a, b)
+  push(grows, 0)
+  a - b
+end)))
+print("small:", sort([], fn(a, b) a - b end), sort([1], fn(a, b) a - b end), sort([2, 1], fn(a, b) a - b end))
+
+# ── string keys with NULs ──
+print("-- keys --")
+let t = {}
+t["a\0b"] = 1
+t["a\0c"] = 2
+print(len(t), t["a\0b"], t["a\0c"], t["a\0zzz"], t["a"])
+t["a"] = 3
+print(len(t), t.a, has_key(t, "a\0"), has_key(t, "a\0b"))
+delete(t, "a\0b")
+print(len(t), t["a\0b"], t["a\0c"], t.a)
+let lit = {"x\0y": 1, "x\0z": 2}
+print(len(lit), lit["x\0y"], lit["x\0z"])
+spawn do
+  send(me, {tag: "copied", t: lit})
+end
+receive
+when {tag: "copied", t: c} then print("copied:", len(c), c["x\0z"])
+end
+let big = {}
+for i = 0, 5000
+  big["k{i}"] = i
+end
+for i = 0, 5000
+  if i % 2 == 0
+    delete(big, "k{i}")
+  end
+end
+let big_ok = len(big) == 2500
+for i = 0, 5000
+  let v = big["k{i}"]
+  if (i % 2 == 0 and v != nil) or (i % 2 == 1 and v != i)
+    big_ok = false
+  end
+end
+print("many keys:", big_ok)
+
+# ── INT64_MIN / -1 ──
+print("-- division --")
+let m = -9223372036854775807 - 1
+let d = -1
+print(m / d, m % d, 7 / d, -7 % d)
+print(-9223372036854775808 / -1, -9223372036854775808 % -1)
+print(-7 / 2, -7 % 2, 7 / -2, 7 % -2)
+
+# ── after timeouts ──
+print("-- after --")
+for v in [nil, true, 1.5, "abc"]
+  print(err(pcall(fn()
+    receive
+    after v then nil
+    end
+  end)))
+end
+let waiter = spawn do
+  receive
+  when "go" then send(me, "got go")
+  after 9223372036854775807 then send(me, "timed out")
+  end
+end
+send_after(waiter, "go", 30)
+receive
+when "got go" then print("huge after: waited for the message")
+when "timed out" then print("huge after: timed out")
+end
+let timer = send_after(me, "late", 9223372036854775807)
+receive
+when "late" then print("huge send_after: delivered")
+after 50 then print("huge send_after: pending")
+end
+cancel_timer(timer)
+let sleeper = spawn do
+  sleep(9223372036854775807)
+  send(me, "woke")
+end
+receive
+when "woke" then print("huge sleep: woke")
+after 50 then print("huge sleep: sleeping")
+end
+kill(sleeper, "kill")
+receive
+after -5 then print("negative after: no wait")
+end
+
+# ── sqlite ──
+print("-- sqlite --")
+let db = sqlite_open(":memory:")
+print(sqlite_query(db, "", []), sqlite_query(db, "  -- a comment\n", nil))
+print(err(pcall sqlite_query(db, "", [1])))
+sqlite_exec(db, "CREATE TABLE t(x); CREATE TABLE u(y)  -- two statements\n")
+print(err(pcall sqlite_exec(db, "INSERT INTO t VALUES (1); INSERT INTO t VALUES (?)")))
+print(sqlite_query(db, "SELECT count(*) AS n FROM t", []))
+print(err(pcall sqlite_query(db, "INSERT INTO t VALUES (2); INSERT INTO t VALUES (3)", [])))
+print(sqlite_query(db, "SELECT count(*) AS n FROM t;  /* trailing */ ", []))
+let row = sqlite_query(db, "SELECT ? AS s", ["x\0y"])[0]
+print(len(row.s), row.s == "x\0y")
+sqlite_exec(db, "SELECT 1; SELECT 2")
+sqlite_exec(db, "")
+print(err(pcall sqlite_exec(db, "INSERT INTO nope VALUES (1)")))
+sqlite_close(db)
+
+# ── s = s + x in a loop ──
+print("-- append --")
+fn append_ints()
+  let s = ""
+  let i = 0
+  while i < 3
+    s = s + i
+    i += 1
+  end
+  s
+end
+print(err(pcall append_ints()))
+fn append_strings()
+  let s = ""
+  for i = 0, 3
+    s = s + "x{i}"
+  end
+  s
+end
+print(append_strings())
+
+# ── NULs in printed tables ──
+print("-- print --")
+let arr = ["a\0b"]
+print(len(arr[0]), arr)
+print({"a\0b": 1, ok: "x\0y"})
+print(len(to_string(arr)), "{arr}" == to_string(arr))

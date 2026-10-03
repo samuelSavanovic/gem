@@ -3784,3 +3784,46 @@ dynamic_supervisor.start: the child template's shutdown must be an int (millisec
      |
 Stack trace:
   at main (examples/192_untrappable_kill.gem:283)
+-- sort --
+nested: [[1, 3], [5, 4], [8, 9]]
+concurrent: [true, true]
+stable: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
+error: type error in -: got int and string [3, 1, "x", 2]
+sort: the comparator changed the length of the table being sorted
+small: {} [1] [1, 2]
+-- keys --
+2 1 2 nil nil
+3 3 false true
+2 nil 2 3
+2 1 2
+copied: 2 2
+many keys: true
+-- division --
+-9223372036854775808 0 -7 0
+-9223372036854775808 0
+-3 -1 -3 1
+-- after --
+receive: after expects an int (milliseconds), got nil
+receive: after expects an int (milliseconds), got bool
+receive: after expects an int (milliseconds), got float
+receive: after expects an int (milliseconds), got string
+huge after: waited for the message
+huge send_after: pending
+huge sleep: sleeping
+negative after: no wait
+-- sqlite --
+{} {}
+sqlite_query: statement has 0 parameter(s), got 1
+sqlite_exec: statement 2 has parameters; use sqlite_query to bind them
+[{n: 1}]
+sqlite_query: expected one SQL statement, got several (sqlite_exec runs several, without parameters)
+[{n: 1}]
+3 true
+sqlite_exec: no such table: nope
+-- append --
+type error in +: got string and int
+x0x1x2
+-- print --
+3 ["a\0b"]
+{"a\0b": 1, ok: "x\0y"}
+8 true
