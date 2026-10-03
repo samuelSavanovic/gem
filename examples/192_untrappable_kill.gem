@@ -14,14 +14,18 @@ fn err(r)
 end
 
 # Traps exits and ignores every message: only "kill" ends it.
+fn stubborn_loop()
+  process_flag("trap_exit", true)
+  while true
+    receive
+    when other then nil
+    end
+  end
+end
+
 fn stubborn()
   spawn do
-    process_flag("trap_exit", true)
-    while true
-      receive
-      when other then nil
-      end
-    end
+    stubborn_loop()
   end
 end
 
@@ -267,6 +271,15 @@ end}})
 print(err(pcall dynamic_supervisor.start_child(bad, nil)))
 receive when {tag: "bad_child", pid: p} then bad_child = p end
 print("bad child killed:", not alive(bad_child))
+# The same with a child that `start` links to the supervisor: its "killed"
+# must not reach the supervisor.
+let bad_linked = dynamic_supervisor.start({child: {start: fn(a)
+  {pid: spawn_link(fn() stubborn_loop() end), shutdown: "soon"}
+end}})
+print(err(pcall dynamic_supervisor.start_child(bad_linked, nil)))
+settle()
+print("supervisor still alive:", alive(bad.pid), alive(bad_linked.pid))
+dynamic_supervisor.stop(bad_linked)
 dynamic_supervisor.stop(bad)
 
 # ── argument checks ──

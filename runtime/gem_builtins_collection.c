@@ -340,6 +340,9 @@ GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
         gem_merge_sort(args[1], buf, buf + n, n);
         /* The comparator may have resized the table meanwhile. */
         if (t->len != n) gem_error("sort: the comparator changed the length of the table being sorted");
+        /* Again: the comparator may have spawned, putting the table in a
+           module snapshot unit that must not see the sorted order. */
+        gem_table_check_mutable(t);
         memcpy(t->vals, buf + n, (size_t)n * sizeof(GemVal));
         gem_table_written(t);
     } else {
@@ -348,6 +351,9 @@ GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
     for (int i = 0; i < t->len; i++) {
         t->keys[i] = gem_int(i);
     }
+    /* No string keys are left: drop their index, whose entries point at
+       key strings nothing roots any more. */
+    gem_str_index_free(&t->str_index);
     t->shape_id++;
     return args[0];
 }

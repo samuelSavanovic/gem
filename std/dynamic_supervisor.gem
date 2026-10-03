@@ -82,7 +82,10 @@ fn shutdown_of(template, handle, pid)
   if type(handle) == "table" and has_key(handle, "shutdown")
     let s = handle.shutdown
     if s != nil and type(s) != "int"
-      # Not supervised yet: don't leave it running.
+      # Not supervised yet: don't leave it running. Unlink first: a
+      # `start` that linked it (spawn_link runs in the supervisor) would
+      # otherwise pass its "killed" on to the supervisor as an exit signal.
+      unlink(pid)
       kill(pid, "kill")
       error("child start returned a handle whose shutdown is a {type(s)}, not an int (milliseconds) or nil")
     end

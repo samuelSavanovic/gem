@@ -167,6 +167,83 @@ practice, not what C guarantees; an optimizer may assume it never
 happens. Compute in `uint64_t` and convert back, as `gem_div` does for
 `INT64_MIN / -1`.
 
+### `insert` and `remove_at` on a table with string keys keep a stale key index
+
+```gem
+let h = {a: 3, b: 1}
+insert(h, 0, 9)
+print(h.a, h.b, h)        # 9 3 [9, 3, 1]: the keys are 0..2 now
+let r = {a: 3, b: 1, c: 2}
+remove_at(r, 0)
+print(r.a, r.b, r)        # 1 2 [1, 2]
+```
+
+Both renumber every key to an int (`gem_insert_fn`, `gem_remove_at_fn` in
+runtime/gem_builtins_collection.c) but leave the table's string-key index
+in place, so the old string keys still find (wrong) values. The index
+points at key strings that nothing roots any more: after a region reset
+frees them, a lookup reads freed memory and can crash. `sort` had the same
+problem and now drops the index (`gem_str_index_free`); these two should
+too.
+
+### `in` answers differently on a copy of a table whose string keys were deleted
+
+```gem
+let t = {}
+t.a = 1
+delete(t, "a")
+push(t, "a")
+let me = self()
+spawn do
+  send(me, t)
+end
+receive
+when c then print("a" in t, "a" in c)   # false true
+end
+```
+
+`gem_in_fn` (runtime/gem_builtins_collection.c) treats a table as an
+array, and looks for the value, when its string-key index is `NULL`, and
+as a map, looking for the key, otherwise. Deleting the last string key
+leaves an empty index; a copy rebuilds the index lazily and gets `NULL`.
+Decide on the table's keys, not on the index.
+
+### A buffer passed as `s` to `s = s + x` in a loop is changed in place
+
+```gem
+fn f(s, xs)
+  let i = 0
+  while i < len(xs)
+    s = s + xs[i]
+    i += 1
+  end
+  s
+end
+let b = buf_new()
+buf_push(b, "pre")
+print(type(f(b, ["a", "b"])), to_string(b))   # string preab
+```
+
+`b + "a"` raises (`type error in +: got buffer and string`), but inside the
+loop codegen turns `s = s + x` into `gem_string_append`
+(`find_append_vars` in compiler/codegen.gem, runtime/gem_ops.c), which
+can't tell the caller's buffer from the buffer it builds a string in: it
+appends to the caller's buffer and returns a string.
+
+### sqlite: SQL after an embedded NUL is ignored
+
+```gem
+let db = sqlite_open(":memory:")
+sqlite_exec(db, "CREATE TABLE a(x)")
+sqlite_exec(db, "INSERT INTO a VALUES (1);\0INSERT INTO a VALUES (2)")
+print(sqlite_query(db, "SELECT count(*) AS n FROM a", []))   # [{n: 1}]
+```
+
+sqlite's parser stops at a NUL even when given the full length, so
+`sqlite_exec` runs only what comes before it, and `sqlite_query` doesn't
+see a second statement after one. Both should raise on SQL containing a
+NUL (runtime/gem_builtins_sqlite.c).
+
 ## Standard library
 
 

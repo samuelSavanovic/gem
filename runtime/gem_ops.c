@@ -101,8 +101,9 @@ GemVal gem_neg(GemVal a) {
 }
 
 void gem_string_append(GemVal *accum, GemVal rhs) {
-    /* `s = s + x` with s a string: x must be a string too, as for `+`
-       (the accumulator is a buffer only while it stands for a string). */
+    /* `s = s + x` with s a string: x must be a string too, as for `+`.
+       A buffer here is the string being built, or a user's buf_new()
+       buffer (KNOWN_BUGS: "A buffer passed as `s` to `s = s + x`"). */
     if ((accum->type == VAL_BUFFER || accum->type == VAL_STRING) && rhs.type != VAL_STRING) {
         char buf[128];
         snprintf(buf, sizeof(buf), "type error in +: got string and %s", gem_type_str(rhs));
