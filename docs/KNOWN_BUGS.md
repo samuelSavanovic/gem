@@ -219,6 +219,27 @@ columns are read back with `gem_string` (strlen), so a string with an
 embedded NUL is cut short; use `sqlite3_column_bytes`.
 runtime/gem_builtins_sqlite.c.
 
+### `sort` keeps the comparator in a global shared by all processes
+
+```gem
+let groups = [[3, 1], [9, 8], [5, 4]]
+sort(groups, fn(a, b)
+  sort(a, fn(x, y) x - y end)
+  a[0] - b[0]
+end)
+print(groups)
+```
+
+fails with `type error in -: got table and table` at the inner
+comparator: the `sort` builtin stores the comparator in `static GemVal
+gem_sort_cmp_fn_global` (runtime/gem_builtins_collection.c) and calls
+`qsort`, so a nested sort replaces it and the outer `qsort` goes on
+calling the inner comparator. Two processes sorting at once do the same
+when a comparator has a loop (the scheduler can switch processes at its
+back-edge): the array comes back unsorted, with no error. Keep the
+comparator per call (`qsort_r`, or a sort of our own that passes it
+along), saved and restored across a yield.
+
 ## Standard library
 
 ### A `one_for_all` restart hangs on a child that traps exits

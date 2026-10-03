@@ -149,13 +149,6 @@ end
 
 # Shallow copy of an array or a record.
 fn copy(tbl)
-  if is_array(tbl)
-    let result = []
-    for item in tbl
-      push(result, item)
-    end
-    return result
-  end
   let result = {}
   for k, v in tbl
     result[k] = v

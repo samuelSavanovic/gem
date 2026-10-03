@@ -3177,3 +3177,7 @@ insert 1 1
 select [{name: "a"}]
 bad sql raises: sqlite_exec: near "nonsense": syntax error
 param count raises: sqlite_query: statement has 1 parameter(s), got 2
+copy int keys {10: "ten", 20: "twenty"}
+copy mixed {0: 1, 1: 2, name: "x"}
+copy array [3, 4, 5] 3
+join record raises: string.join: arr must be an array, got a table with key a

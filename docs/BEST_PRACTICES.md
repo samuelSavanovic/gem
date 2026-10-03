@@ -639,6 +639,12 @@ sort(people, fn(a, b) a.age - b.age end)
 the first two elements and raises `table.sort: the comparator must return
 a number ...` instead.
 
+Keep comparators short and loop-free, and don't sort inside one **(bug)**:
+the comparator lives in one global for all processes, so a sort inside a
+comparator, or a comparator with a loop (where the scheduler can switch
+to another process that sorts), makes the outer sort call the wrong
+comparator. Compute sort keys first, then sort on them.
+
 ---
 
 ## Numbers
@@ -1260,6 +1266,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `t.x = nil` to remove a key | key stays | `delete(t, "x")` |
 | `id in seen` on an int-keyed set | scans values | `has_key(seen, id)` |
 | Boolean `sort` comparator | array left unsorted | return `a - b` |
+| `sort` inside a comparator, or a comparator with a loop **(bug)** | wrong comparator called; unsorted or a type error | precompute keys; short comparators |
 | `json.encode({})` | `[]` | write `'{}'` yourself |
 | `match` with no arm matching | yields `nil` silently | add an `else` |
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |

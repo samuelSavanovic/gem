@@ -6,6 +6,7 @@ load "std/time"
 load "std/log"
 load "std/task"
 load "std/sqlite"
+load "std/string"
 
 fn show(label, r)
   if r.ok
@@ -119,3 +120,16 @@ print("select", sqlite.query(db, "SELECT name FROM t WHERE id = ?", [1]))
 show("bad sql", pcall sqlite.exec(db, "nonsense"))
 show("param count", pcall sqlite.query(db, "SELECT ?", [1, 2]))
 sqlite.close(db)
+
+# table.copy keeps every key; string.join rejects records
+let ids = {}
+ids[10] = "ten"
+ids[20] = "twenty"
+print("copy int keys", table.copy(ids))
+let mixed = [1, 2]
+mixed.name = "x"
+print("copy mixed", table.copy(mixed))
+let arr_copy = table.copy([3, 4])
+push(arr_copy, 5)
+print("copy array", arr_copy, len(arr_copy))
+show("join record", pcall string.join({a: 1}, ","))

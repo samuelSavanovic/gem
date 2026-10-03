@@ -1386,7 +1386,7 @@ table.each(parts) { |item| print(item) }
 - `string.split(s, delim)` — split `s` at each occurrence of `delim`, scanning left to right, and return the array of pieces. Empty pieces are kept (`split("a,,b,", ",")` is `["a", "", "b", ""]`), `split("", ",")` is `[""]`, and an empty `delim` returns `[s]`.
 - `string.index_of(s, needle, start = 0)` — byte offset of the first occurrence of `needle` at or after `start`, or -1. A negative `start` counts as 0; a non-int raises. An empty `needle` is found at `start` (or -1 when `start > len(s)`).
 - `string.contains(s, needle)` — true if `needle` occurs in `s` (always true for `""`).
-- `string.join(arr, delim)` — join the array's elements with `delim`, converting each as interpolation does (`join([1, nil], "-")` is `"1-nil"`). `arr` must be a table.
+- `string.join(arr, delim)` — join the array's elements with `delim`, adding strings and buffers as their bytes and converting other values as interpolation does (`join([1, nil], "-")` is `"1-nil"`). `arr` must be an array; a record raises `string.join: arr must be an array, ...`.
 - `string.trim(s)` — strip leading and trailing ASCII whitespace (space, `\t`, `\n`, `\v`, `\f`, `\r`).
 - `string.starts_with(s, prefix)` / `string.ends_with(s, suffix)` — boolean prefix/suffix check; the empty string is a prefix and suffix of everything.
 - `string.upper(s)` / `string.lower(s)` — ASCII case conversion; other bytes (UTF-8 included) are unchanged.
@@ -1407,13 +1407,13 @@ table.each(parts) { |item| print(item) }
 - `table.slice(arr, start[, len])` — return new array with `len` elements starting at `start` (fewer at the end of the array, none for `len <= 0`). Negative `start` counts from end; one before the first element counts as `0`. Without `len`, everything from `start` on.
 - `table.index_of(arr, val)` — return index of first occurrence of `val`, or -1 if not found
 - `table.concat(a, b)` — return new array with elements of `a` followed by elements of `b`
-- `table.copy(tbl)` — shallow copy of an array or a record. Mutations to the copy do not affect the original. An empty table copies to an empty table.
+- `table.copy(tbl)` — shallow copy of any table: every key and value, in the same order. Mutations to the copy do not affect the original. An empty table copies to an empty table.
 - `table.flat_map(arr, fn)` — map each element with `fn`, then flatten one level. If `fn` returns an array, its elements are inlined (an empty table adds nothing, as in `flatten`); scalars and non-empty records are kept as-is.
 - `table.zip(a, b)` — return array of `[a[i], b[i]]` pairs, truncated to the shorter array
 - `table.unique(arr)` — return new array with duplicate values removed (first occurrence kept). Two values are duplicates when `==` says so: `1`, `1.0` and `"1"` are all kept, and tables compare by identity.
 - `table.count(arr, fn)` — count elements where `fn(item)` is truthy
 - `table.flatten(arr)` — flatten one level of nesting. Nested arrays are inlined; non-array elements (non-empty records included) are kept as-is. Empty tables are dropped.
-- `table.group_by(arr, fn)` — group elements by the key returned by `fn(item)`. Returns a table mapping keys to arrays of matching elements, in first-seen order. Return string keys (a table with int keys that aren't `0 .. n-1` doesn't encode to JSON); a negative int key raises `table.group_by: key ... is a negative int ...`.
+- `table.group_by(arr, fn)` — group elements by the key returned by `fn(item)`. Returns a table mapping keys to arrays of matching elements, in first-seen order. Keys are kept as `fn` returns them (`json.encode` writes int keys that aren't `0 .. n-1` as object keys); a negative int key raises `table.group_by: key ... is a negative int ...`.
 
 `std/math` — exports `math` table:
 
