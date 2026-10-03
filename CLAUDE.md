@@ -107,7 +107,7 @@ Add a numbered example under `examples/` (next free slot) and append its stdout 
 
 ## Adding a Std Module
 
-1. Create `std/<name>.gem`. Use `load` for any std deps. End the file with `export <fn>, <fn>, ...`.
+1. Create `std/<name>.gem`. Use `load` for any std deps. End the file with `export <fn>, <fn>, ...`. Give the module a `##` header and every exported fn a `##` doc comment (BEST_PRACTICES.md, "Document the public API with `##`").
 2. Update `docs/SPEC.md` (Standard Library section) and `docs/CHEATSHEET.md`.
 3. Add tests as a numbered example (e.g. `78_time_stdlib.gem`) so they run in `make test`.
 4. Update editor extensions if the module exposes new identifiers worth highlighting.

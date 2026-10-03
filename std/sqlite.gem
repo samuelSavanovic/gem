@@ -1,42 +1,108 @@
-# sqlite — SQLite databases, a thin layer over the sqlite_* builtins.
-#
-#   let db = sqlite.open("app.db")          # or ":memory:"
-#   sqlite.exec(db, "CREATE TABLE IF NOT EXISTS notes(id INTEGER PRIMARY KEY, text TEXT)")
-#   sqlite.query(db, "INSERT INTO notes(text) VALUES (?)", ["hi"])
-#   let rows = sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [sqlite.last_id(db)])
-#   sqlite.close(db)
-#
-# Every function raises on an SQLite error, with the builtin's name and
-# SQLite's message. `open` and `close` run on the I/O thread pool; `exec`
-# and `query` run on the scheduler thread and stall every process while
-# they run, so keep queries short and indexed. Close a handle in the
-# process that opened it, on every path.
+## sqlite — SQLite databases, a thin layer over the sqlite_* builtins.
+##
+##   load "std/sqlite"
+##   let db = sqlite.open("app.db")          # or ":memory:"
+##   sqlite.exec(db, "CREATE TABLE IF NOT EXISTS notes(id INTEGER PRIMARY KEY, text TEXT)")
+##   sqlite.query(db, "INSERT INTO notes(text) VALUES (?)", ["hi"])
+##   let rows = sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [sqlite.last_id(db)])
+##   sqlite.close(db)
+##
+## A handle `db` is an int. Errors start with the name of the builtin
+## underneath (`sqlite_open`, `sqlite_close`, `sqlite_exec`,
+## `sqlite_query`, `sqlite_last_insert_id`, `sqlite_changes`): an SQLite
+## error raises `<builtin>: <SQLite's message>` (`sqlite_query: UNIQUE
+## constraint failed: t.name`), a closed or unknown
+## handle `...: not an open database handle`, and a handle that is not an
+## int `...: expected a database handle, got <type>`. `exec` and `query`
+## run on the scheduler thread without yielding, so they stall every
+## process while they run: keep queries short and indexed. A handle is
+## not closed when its process dies: close it on every path.
+##
+## A handle is one connection, shared by every process that has it: a
+## transaction opened with `exec(db, "BEGIN")` takes in every statement any
+## process runs on `db` until COMMIT or ROLLBACK, so don't yield (sleep,
+## receive, a long loop) inside a transaction on a shared handle, or open
+## one handle per process. A nested BEGIN raises.
+##
+##   sqlite.exec(db, "BEGIN")
+##   let r = pcall sqlite.query(db, "INSERT INTO notes(text) VALUES (?)", ["a"])
+##   if r.ok
+##     sqlite.exec(db, "COMMIT")
+##   else
+##     sqlite.exec(db, "ROLLBACK")
+##   end
 
+# open and close run on the I/O thread pool; exec, query, last_id and
+# changes run inline on the scheduler thread without yielding. Handles are
+# ids in one registry for the whole program (runtime/gem_builtins_sqlite.c),
+# never reused after a close.
+
+## Opens (creating if needed) the database file at `path` and returns its
+## handle. ":memory:" opens a private in-memory database. Foreign keys are
+## enforced, and a file database uses WAL journaling. There is no busy
+## timeout: a write while another connection holds the write lock raises
+## `...: database is locked` at once.
+##
+## Raises if the file can't be opened. Blocks only the calling process
+## while the file opens.
 fn open(path)
   sqlite_open(path)
 end
 
+## Closes `db`. The handle is invalid afterwards, for every process.
+##
+## Raises if `db` is not open. Blocks only the calling process.
 fn close(db)
   sqlite_close(db)
 end
 
-# Runs SQL that takes no parameters and returns no rows (DDL, PRAGMA).
+## Runs `sql`, which takes no parameters, and returns nil. Several
+## statements separated by `;` all run; rows they return are discarded.
+## Use it for DDL, PRAGMA and migration scripts. A statement with a
+## placeholder raises `sqlite_exec: statement <n> has parameters; use
+## sqlite_query to bind them`, after the statements before it have run.
+## Use `query` to pass parameters.
+##
+##   sqlite.exec(db, "CREATE TABLE a(x); CREATE TABLE b(y)")
 fn exec(db, sql)
   sqlite_exec(db, sql)
 end
 
-# Runs one statement with `?` placeholders bound from `params` and returns
-# its rows as an array of records keyed by column name.
+## Runs one statement with its `?` placeholders bound, in order, from the
+## array `params`, and returns its rows: an array of records keyed by
+## column name (an empty table, printed `{}`, when there are none, as for
+## INSERT, UPDATE and DELETE). `?N` takes the Nth param, and each `:name` the next one
+## in order of first use. `params` may be nil (no params).
+##
+## Params may be nil, bools (stored as 1 and 0), ints, floats or strings.
+## Columns come back as ints, floats, strings or nil; a NULL column is
+## still a key of the record, holding nil. Strings keep every byte, NULs
+## included, both ways; a BLOB column comes back as a string too. When two
+## columns share a name the last one wins; name them with `AS`. Empty or
+## comment-only `sql` returns an empty table.
+##
+##   sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [1])
+##   # [{id: 1, text: "hi"}]
+##
+## Raises `sqlite_query: expected one SQL statement, got several ...`,
+## before anything runs, when `sql` holds more than one statement (a
+## trailing `;`, whitespace and comments are fine). Raises if `params` is
+## not a table, if the number of params differs
+## from the statement's parameter count (the highest `?N`; a reused `?N` or
+## `:name` counts once), or if a param is of another type.
 fn query(db, sql, params = [])
   sqlite_query(db, sql, params)
 end
 
-# The rowid of the last row inserted through `db`.
+## Returns the rowid of the last row inserted through `db`, or 0 before
+## any insert.
 fn last_id(db)
   sqlite_last_insert_id(db)
 end
 
-# How many rows the last INSERT, UPDATE or DELETE changed.
+## Returns how many rows the last INSERT, UPDATE or DELETE through `db`
+## changed (0 before any). Other statements leave it unchanged. After a
+## multi-statement `exec` it counts the last such statement.
 fn changes(db)
   sqlite_changes(db)
 end

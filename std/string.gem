@@ -1,15 +1,16 @@
-# string — byte-string utilities: split, join, search, trim, ASCII case.
-#
-#   load "std/string"
-#   let parts = string.split("a,b,c", ",")      # ["a", "b", "c"]
-#   string.join(parts, "-")                     # "a-b-c"
-#   string.index_of("hello", "l")               # 2
-#   string.index_of("hello", "l", 3)            # 3 (search from byte 3)
-#
-# Strings are bytes: positions are byte offsets, `upper`/`lower` change
-# ASCII letters only, `trim` strips ASCII whitespace. A buffer works
-# wherever a string does (read as its contents; results are strings);
-# anything else raises `string.<fn>: ...`.
+## string — split, join, search, trim and change ASCII case.
+##
+##   load "std/string"
+##   let parts = string.split("a,b,c", ",")    # ["a", "b", "c"]
+##   string.join(parts, "-")                   # "a-b-c"
+##   string.index_of("hello", "l")             # 2
+##
+## Strings are bytes: positions are byte offsets, `upper` and `lower`
+## change ASCII letters only, and `trim` strips ASCII whitespace. Any
+## argument that takes a string also takes a buffer (its contents are
+## used); results are always strings. An argument of any other type
+## raises `string.<fn>: <arg> must be a string, got <type>`, where <arg>
+## is the parameter name (`s`, `delim`, `needle`...).
 
 # The string to work on: a string, or a buffer's contents.
 fn text(fname, what, v)
@@ -101,8 +102,17 @@ fn find(s, needle, from)
   -1
 end
 
-# split(s, delim): the pieces of s between occurrences of delim, scanning
-# left to right. `split("", ",")` is `[""]`; an empty delim gives `[s]`.
+## Splits `s` at every occurrence of `delim` and returns the pieces, left
+## to right.
+##
+## Delimiters next to each other or at either end give empty pieces, so
+## the result always has one more piece than `s` has delimiters. An empty
+## `delim` gives `[s]`. Matches don't overlap:
+## `split("aaa", "aa")` is `["", "a"]`.
+##
+##   string.split("a,b,c", ",")    # ["a", "b", "c"]
+##   string.split("a,,b,", ",")    # ["a", "", "b", ""]
+##   string.split("", ",")         # [""]
 fn split(s, delim)
   s = text("split", "s", s)
   delim = text("split", "delim", delim)
@@ -138,9 +148,17 @@ fn split(s, delim)
   parts
 end
 
-# index_of(s, needle, start): byte offset of the first occurrence at or
-# after start (a negative start counts as 0), or -1. An empty needle is
-# found at start.
+## Returns the byte offset of the first `needle` in `s` at or after
+## `start`, or -1 when there is none.
+##
+## A negative `start` counts as 0. An empty `needle` is found at `start`
+## (-1 when `start` is past the end).
+##
+##   string.index_of("hello", "l")       # 2
+##   string.index_of("hello", "l", 3)    # 3
+##   string.index_of("hello", "z")       # -1
+##
+## Raises if `start` is not an int.
 fn index_of(s, needle, start = 0)
   s = text("index_of", "s", s)
   needle = text("index_of", "needle", needle)
@@ -159,13 +177,29 @@ fn index_of(s, needle, start = 0)
   find(s, needle, start)
 end
 
+## Returns true when `needle` occurs anywhere in `s`. An empty `needle`
+## is always found.
+##
+##   string.contains("hello", "ell")    # true
 fn contains(s, needle)
   s = text("contains", "s", s)
   needle = text("contains", "needle", needle)
   len(needle) == 0 or find(s, needle, 0) >= 0
 end
 
-# join(arr, delim): elements are converted as interpolation does.
+## Joins the elements of `arr` into one string, with `delim` between
+## each pair.
+##
+## Elements are converted as string interpolation does, so they don't
+## have to be strings. An empty array gives "".
+##
+##   string.join(["a", "b"], ", ")      # "a, b"
+##   string.join(["a", 1, nil], "-")    # "a-1-nil"
+##
+## Raises if `arr` is not an array: a table whose keys are exactly
+## 0 .. n-1, added in that order (as `push` and `[...]` literals do). A
+## table whose int keys were assigned out of order is rejected, naming a
+## key, though `table.*` and `json.encode` accept it.
 fn join(arr, delim)
   if type(arr) != "table"
     error("string.join: arr must be an array, got {type(arr)}")
@@ -186,6 +220,10 @@ fn join(arr, delim)
   end
 end
 
+## Returns `s` without its leading and trailing ASCII whitespace (space,
+## tab, newline, vertical tab, form feed, carriage return).
+##
+##   string.trim("  hi there\n")    # "hi there"
 fn trim(s)
   s = text("trim", "s", s)
   let slen = len(s)
@@ -203,6 +241,9 @@ fn trim(s)
   substr(s, start, stop - start)
 end
 
+## Returns true when `s` begins with `prefix`. Every string begins with "".
+##
+##   string.starts_with("hello", "he")    # true
 fn starts_with(s, prefix)
   s = text("starts_with", "s", s)
   prefix = text("starts_with", "prefix", prefix)
@@ -210,6 +251,9 @@ fn starts_with(s, prefix)
   plen <= len(s) and substr(s, 0, plen) == prefix
 end
 
+## Returns true when `s` ends with `suffix`. Every string ends with "".
+##
+##   string.ends_with("hello", "lo")    # true
 fn ends_with(s, suffix)
   s = text("ends_with", "s", s)
   suffix = text("ends_with", "suffix", suffix)
@@ -242,16 +286,29 @@ fn shift_range(s, lo, hi, delta)
   out
 end
 
+## Returns `s` with the ASCII letters a-z changed to A-Z. Other bytes,
+## UTF-8 sequences included, are unchanged.
+##
+##   string.upper("héllo")    # "HéLLO"
 fn upper(s)
   s = text("upper", "s", s)
   shift_range(s, 97, 122, -32)
 end
 
+## Returns `s` with the ASCII letters A-Z changed to a-z. Other bytes,
+## UTF-8 sequences included, are unchanged.
+##
+##   string.lower("HÉLLO")    # "hÉllo"
 fn lower(s)
   s = text("lower", "s", s)
   shift_range(s, 65, 90, 32)
 end
 
+## Returns `s` repeated `n` times, or "" when `n` is 0 or negative.
+##
+##   string.repeat("ab", 3)    # "ababab"
+##
+## Raises if `n` is not an int.
 fn repeat(s, n)
   s = text("repeat", "s", s)
   if type(n) != "int"

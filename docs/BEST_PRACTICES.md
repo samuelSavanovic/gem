@@ -551,8 +551,10 @@ end
 ```
 
 `pcall fn() ... end` does *not* run the closure: it evaluates the closure
-expression and returns `{ok: true, value: <fn>}`. And `pcall(f, x)` calls
-`f()` with no arguments, dropping `x`. Stick to `pcall f(x)` and
+expression and returns `{ok: true, value: <fn>}`. `pcall(f, x)` calls
+`f()` with no arguments, dropping `x`. And `pcall(f(x))`, with
+parentheses, is the function form: `f(x)` runs first, as its argument,
+outside the protection, so its error is not caught. Stick to `pcall f(x)` and
 `pcall do ... end`.
 
 ### `fn main` runs automatically
@@ -667,6 +669,10 @@ sort(people, fn(a, b) a.age - b.age end)
 `table.sort(arr, cmp)` (std/table) checks what the comparator returns for
 the first two elements and raises `table.sort: the comparator must return
 a number ...` instead.
+
+Sort only arrays **(bug)**: `sort` and `table.sort` on a record don't
+raise; they replace its keys with 0 .. n-1, so `{b: 2, a: 1}` becomes
+`[1, 2]`. Sort `keys(t)` or `values(t)` instead.
 
 ---
 
@@ -1246,10 +1252,10 @@ leaks its socket; bound the request with its `timeout_ms` instead.
 ### Layout
 
 ```gem
-# thing — one line on what it is for.
-#
-#   let x = thing.make(...)      # a short usage example
-#   thing.use(x)
+## thing — one line on what it is for.
+##
+##   let x = thing.make(...)      # a short usage example
+##   thing.use(x)
 
 load "std/string"
 
@@ -1258,6 +1264,7 @@ let DEFAULT_LIMIT = 100
 fn helper(...)               # private: not in the export list
 end
 
+## Makes a thing from ...
 fn make(...)
 end
 
@@ -1282,6 +1289,60 @@ export make, use
 - Modules can't load each other in a cycle: the compiler reports
   `load cycle: a.gem → b.gem → a.gem`. Move shared code into a third
   module.
+
+### Document the public API with `##`
+
+A comment that starts with `##` is a doc comment. It is for *callers*:
+the module header and the block directly above each exported function.
+Tools read only `##` lines (editor hover will show them). A plain `#`
+comment is for whoever *maintains* the code: why it's shaped this way,
+invariants, performance internals. To decide which one a sentence
+belongs in, ask: **would a caller write different code if they knew
+this?** "Returns -1 when there is none" goes in `##`; "searches growing
+chunks in C, then bisects" goes in `#`.
+
+A function's doc, in this order, leaving out what doesn't apply:
+
+1. **One summary sentence** that starts with a verb ("Splits...",
+   "Returns..."). Don't restate the signature: the editor shows it.
+2. **Results and edge cases**: what comes back for empty input, not
+   found, `nil`, a negative count. Name arguments in backticks.
+3. **Examples**, indented two spaces past the text, as
+   `call    # result`.
+4. **Raises**: when it calls `error()`, for conditions the module
+   header doesn't already cover.
+5. **Process effects**: whether it blocks, spawns, links or monitors,
+   what it can leave in the caller's mailbox, and what happens if the
+   caller or the target dies.
+6. **Cost**, only when the caller can see it and act on it ("O(n) per
+   call; build a table for repeated lookups").
+
+```gem
+## Returns the byte offset of the first `needle` in `s` at or after
+## `start`, or -1 when there is none.
+##
+## A negative `start` counts as 0. An empty `needle` is found at `start`
+## (-1 when `start` is past the end).
+##
+##   string.index_of("hello", "l")       # 2
+##   string.index_of("hello", "l", 3)    # 3
+##
+## Raises if `start` is not an int.
+fn index_of(s, needle, start = 0)
+```
+
+The module header is the module's front page: the `##` line
+`name — what it is for.`, a usage example, and the conventions that hold
+for every function (argument types, units, what errors look like), so
+each function's doc doesn't repeat them. A small module needs about a
+dozen lines; a large one (std/http, the OTP modules) can need two or three
+times that, and that's fine as long as every line is a rule that holds
+across functions. A rule about one function goes on that function. A
+design overview that only maintainers need goes in a `#` block after the
+`load`s.
+
+Private functions don't get `##`. Give one a `#` comment when its
+contract isn't obvious from its name.
 
 ### Accept a pid or a `{pid}` handle in one place
 
@@ -1333,7 +1394,9 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
   both values, the path to the first difference, and the types when they
   differ: `expected {a: [1, 2]}, got {a: [1, 2.0]}: at .a[1], expected 2
   (int), got 2.0 (float)`. `assert_throws` returns the error message, so
-  check it with `assert_eq` when it matters.
+  check it with `assert_eq` when it matters. Pass it a fn **(bug)**:
+  `test.assert_throws(42)` (or a misspelled field, `t.misspelled`) passes,
+  because calling the non-fn raises inside the check.
 - Register cases with `test.case` at the top level (or from `main`), in
   the process that calls `test.run()`. The case list is a module-level
   variable, so a case registered inside a spawned process lands in that
@@ -1362,9 +1425,11 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
   (only call arguments and table literals can), and a line starting with
   `- 2` is silently a separate statement **(trap)**. Split a long
   condition into named `let`s.
-- Comments say *why*, not what. Write a header comment for every module and
-  a one-line comment for any function whose contract isn't obvious from its
-  name.
+- Comments say *why*, not what. Document every module and every exported
+  function with `##` (see
+  [Document the public API with `##`](#document-the-public-api-with-)),
+  and give a private function a `#` comment when its contract isn't
+  obvious from its name.
 - Keep functions short. Prefer a well-named helper to a long arm inside a
   `match`.
 
@@ -1389,13 +1454,15 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `id in seen` on an int-keyed set | scans values | `has_key(seen, id)` |
 | Large set or index with sparse int (or table) keys | quadratic | string keys (`"{id}"`) |
 | Boolean `sort` comparator | array left unsorted | return `a - b` |
+| `sort` on a record **(bug)** | keys replaced by 0 .. n-1 | sort `keys(t)` or `values(t)` |
+| `test.assert_throws(x)` with a non-fn `x` **(bug)** | the assert passes | pass `fn() ... end` |
 | `json.encode({})` | `[]` | write `'{}'` yourself |
 | `match` with no arm matching | yields `nil` silently | add an `else` |
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |
 | `when x > 5`, `when "a" or "b"` | compares with a bool / one value | `if` chain |
 | `nil` passed for a defaulted parameter | parameter is `nil` | leave the argument out |
 | Call arguments with side effects, one a field access like `f(x).y` **(bug)** | the field access's object runs before the arguments left of it | separate statements |
-| `pcall fn() ... end`, `pcall(f, x)` | runs nothing / drops `x` | `pcall f(x)`, `pcall do ... end` |
+| `pcall fn() ... end`, `pcall(f, x)`, `pcall(f(x))` | runs nothing / drops `x` / doesn't catch | `pcall f(x)`, `pcall do ... end` |
 | Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
 | `2.0 == 2` | `false` | convert first |
 | `to_int` on user input or a file line | raises | `trim`, then `pcall` |

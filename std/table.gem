@@ -1,14 +1,20 @@
-# table — helpers for arrays (tables with keys 0 .. n-1).
-#
-#   let evens = table.filter(nums) do |n|
-#     n % 2 == 0
-#   end
-#   let names = table.map(users, fn(u) u.name end)
-#   table.sort(users, fn(a, b) a.age - b.age end)
-#
-# Only `sort` changes its argument; the others build new tables. They
-# take arrays (`copy` takes any table): on a record, `for x in t` sees
-# `nil` for every entry, so pass `keys(t)` or `values(t)`.
+## table — map, filter, search, slice, group and sort arrays.
+##
+##   load "std/table"
+##   let evens = table.filter(nums) do |n|
+##     n % 2 == 0
+##   end
+##   let names = table.map(users, fn(u) u.name end)
+##   table.sort(users, fn(a, b) a.age - b.age end)
+##
+## An array is a table with keys 0 .. n-1. Only `sort` changes its
+## argument; the others return new tables. They take arrays (`copy` takes
+## any table): on a record, `for x in t` sees `nil` for every entry, so
+## pass `keys(t)` or `values(t)`. They don't check: a record, a string, or
+## a table mixing int and string keys gives `nil` entries or a wrong result,
+## not an error (`table.map({a: 1}, f)` is `[nil]`). Values are compared
+## with `==`: `1` and `1.0` differ, and tables are equal only when they are
+## the same table.
 
 # The identity of a table as an int (runtime/gem_core.c), so `unique` can
 # key tables by a hashed string. Stable during `unique`'s loop: the items
@@ -24,12 +30,16 @@ fn is_array(t)
   false
 end
 
+## Calls `f(item)` for each element, in order, and returns nil.
 fn each(arr, f)
   for item in arr
     f(item)
   end
 end
 
+## Returns a new array of `f(item)` for each element.
+##
+##   table.map([1, 2, 3], fn(x) x * 10 end)    # [10, 20, 30]
 fn map(arr, f)
   let result = []
   for item in arr
@@ -38,6 +48,10 @@ fn map(arr, f)
   result
 end
 
+## Returns a new array of the elements for which `f(item)` is truthy, in
+## order.
+##
+##   table.filter([1, 2, 3, 4], fn(n) n % 2 == 0 end)    # [2, 4]
 fn filter(arr, f)
   let result = []
   for item in arr
@@ -48,6 +62,10 @@ fn filter(arr, f)
   result
 end
 
+## Folds the array from the left: starts from `init` and replaces it with
+## `f(acc, item)` for each element. Returns `init` for an empty array.
+##
+##   table.reduce([1, 2, 3], 0, fn(acc, x) acc + x end)    # 6
 fn reduce(arr, init, f)
   let acc = init
   for item in arr
@@ -56,6 +74,12 @@ fn reduce(arr, init, f)
   acc
 end
 
+## Returns the first element for which `f(item)` is truthy, or nil.
+##
+##   table.find([1, 2, 3], fn(x) x > 1 end)    # 2
+##
+## A found `nil` looks the same as no match; use `index_of` or `any` to
+## tell them apart.
 fn find(arr, f)
   for item in arr
     if f(item)
@@ -65,6 +89,8 @@ fn find(arr, f)
   nil
 end
 
+## Returns true when `f(item)` is truthy for some element, stopping at the
+## first. False for an empty array.
 fn any(arr, f)
   for item in arr
     if f(item)
@@ -74,6 +100,8 @@ fn any(arr, f)
   false
 end
 
+## Returns true when `f(item)` is truthy for every element, stopping at
+## the first that isn't. True for an empty array.
 fn all(arr, f)
   for item in arr
     if not f(item)
@@ -83,6 +111,7 @@ fn all(arr, f)
   true
 end
 
+## Returns how many elements `f(item)` is truthy for.
 fn count(arr, f)
   let n = 0
   for item in arr
@@ -93,6 +122,9 @@ fn count(arr, f)
   n
 end
 
+## Returns a new array with the elements in reverse order.
+##
+##   table.reverse([1, 2, 3])    # [3, 2, 1]
 fn reverse(arr)
   let result = []
   let i = len(arr) - 1
@@ -103,6 +135,13 @@ fn reverse(arr)
   result
 end
 
+## Returns true when an element `==` `value`.
+##
+##   table.contains([1, 2], 2)      # true
+##   table.contains([1], 1.0)       # false
+##
+## Scans the array on every call; for repeated lookups, build a table
+## keyed by the values and use `has_key`.
 fn contains(arr, value)
   for item in arr
     if item == value
@@ -112,6 +151,9 @@ fn contains(arr, value)
   false
 end
 
+## Returns the index of the first element `==` `value`, or -1.
+##
+##   table.index_of(["a", "b"], "b")    # 1
 fn index_of(arr, value)
   for i, item in arr
     if item == value
@@ -121,8 +163,14 @@ fn index_of(arr, value)
   -1
 end
 
-# `length` elements from `start` (negative counts from the end); with no
-# `length`, everything from `start` on.
+## Returns a new array of up to `length` elements from index `start`, or
+## of everything from `start` on when `length` is left out.
+##
+## A negative `start` counts from the end (clipped to 0). A `start` past
+## the end, or a `length` of 0 or less, gives an empty array.
+##
+##   table.slice([1, 2, 3, 4], 1, 2)    # [2, 3]
+##   table.slice([1, 2, 3, 4], -2)      # [3, 4]
 fn slice(arr, start, length = nil)
   let n = len(arr)
   if start < 0
@@ -142,6 +190,9 @@ fn slice(arr, start, length = nil)
   result
 end
 
+## Returns a new array of the elements of `a` followed by those of `b`.
+##
+##   table.concat([1, 2], [3])    # [1, 2, 3]
 fn concat(a, b)
   let result = []
   for item in a
@@ -153,7 +204,8 @@ fn concat(a, b)
   result
 end
 
-# Shallow copy of an array or a record.
+## Returns a shallow copy of an array or a record: a new table with the
+## same keys and values. Nested tables are shared, not copied.
 fn copy(tbl)
   let result = {}
   for k, v in tbl
@@ -181,6 +233,11 @@ fn push_flat(result, x)
   end
 end
 
+## Returns a new array of the results of `f(item)`, with array results
+## spliced in: an array adds its elements, an empty table adds nothing,
+## and anything else (a record included) is added as one element.
+##
+##   table.flat_map([1, 2], fn(x) [x, x] end)    # [1, 1, 2, 2]
 fn flat_map(arr, f)
   let result = []
   for item in arr
@@ -189,6 +246,10 @@ fn flat_map(arr, f)
   result
 end
 
+## Returns a new array with the elements of nested arrays spliced in, one
+## level deep. Empty tables are dropped; records and other values stay.
+##
+##   table.flatten([[1, 2], 3, [[4]], []])    # [1, 2, 3, [4]]
 fn flatten(arr)
   let result = []
   for item in arr
@@ -197,6 +258,10 @@ fn flatten(arr)
   result
 end
 
+## Returns an array of pairs `[a[i], b[i]]`, as long as the shorter of
+## the two.
+##
+##   table.zip([1, 2, 3], ["a", "b"])    # [[1, "a"], [2, "b"]]
 fn zip(a, b)
   let n = len(a)
   if len(b) < n
@@ -209,8 +274,6 @@ fn zip(a, b)
   result
 end
 
-# Drops repeated values, keeping the first. Values are the same when `==`
-# says so: `1`, `1.0` and `"1"` all differ, and tables compare by identity.
 # A string key that stands for `item` under `==` (only string keys are
 # hashed; other keys are found by a linear scan), or nil for values that
 # need the scan: functions and NaN.
@@ -236,6 +299,10 @@ fn unique_key(item)
   nil
 end
 
+## Returns a new array without repeated values, keeping the first of each
+## in order. NaN never equals itself, so every NaN is kept.
+##
+##   table.unique([1, 1.0, "1", 1, 2])    # [1, 1.0, "1", 2]
 fn unique(arr)
   let seen = {}
   let others = []
@@ -257,6 +324,17 @@ fn unique(arr)
   result
 end
 
+## Returns a table mapping each key `f(item)` to the array of elements
+## that gave it, in order. A key can be any value except a negative int
+## (a table key matches only that same table).
+##
+##   table.group_by(["apple", "avocado", "banana"], fn(s) substr(s, 0, 1) end)
+##   # {a: ["apple", "avocado"], b: ["banana"]}
+##
+## To `json.encode` the result, return string keys: int keys 0 .. n-1
+## encode as an array, and bool, nil and float keys can't be encoded.
+##
+## Raises if `f` returns a negative int.
 fn group_by(arr, f)
   let groups = {}
   for item in arr
@@ -272,13 +350,28 @@ fn group_by(arr, f)
   groups
 end
 
-# Sorts `arr` in place and returns it. `cmp(a, b)` returns a negative
-# number when `a` comes first, zero when they tie, and a positive number
-# otherwise. The `sort` builtin leaves the array unsorted, with no error,
-# when the comparator returns a bool, so this checks what `cmp` returns for
-# the first two elements first and raises if it isn't a number. A `let`,
-# not a `fn`, so that its body still reaches the `sort` builtin.
+## Sorts the array `arr` in place and returns it. Not guaranteed stable.
+## Without `cmp`, numbers sort ascending and strings by byte order; mixed
+## types go nil, bools, numbers, strings, fns, tables (bools, fns and
+## tables tie among themselves, in no set order). `cmp(a, b)` returns a
+## negative number when `a` comes first, zero when they tie, and a
+## positive number otherwise.
+##
+##   table.sort(users, fn(a, b) a.age - b.age end)
+##
+## On a record, it sorts the values and replaces the keys with 0 .. n-1:
+## the record is lost.
+##
+## Raises `table.sort: arr must be an array, got <type>` if `arr` is not
+## a table (a record is accepted, as above), or if `cmp` returns something other
+## than a number (a bool, say) for the first two elements. Only that first
+## call is checked: a non-number later counts as a tie and silently
+## mis-sorts.
 let sort = fn(arr, cmp = nil)
+  # The `sort` builtin leaves the array unsorted, with no error, when the
+  # comparator returns a bool, so this checks what `cmp` returns for the
+  # first two elements first. A `let`, not a `fn`, so that its body still
+  # reaches the `sort` builtin.
   if type(arr) != "table"
     error("table.sort: arr must be an array, got {type(arr)}")
   end

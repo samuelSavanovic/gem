@@ -193,7 +193,7 @@ Source-preserving formatter (CST or token-level rewriting, ~1000–1500 LOC on t
 
 Land once core is real and a real workload demands them.
 
-- **Hover** (`textDocument/hover`, ~100 lines). Functions: show parameter names and count. Builtins: short doc string from a static table. Variables: inferred "type" if known (`table`, `function`, `string`).
+- **Hover** (`textDocument/hover`, ~100 lines). Functions: show parameter names and count, plus the `##` doc comment directly above the definition (and a module's `##` header on its namespace name); strip the `## ` prefix and render lines indented past the text as code. Builtins: short doc string from a static table. Variables: inferred "type" if known (`table`, `function`, `string`).
 - **Document symbols** (`textDocument/documentSymbol`, ~50 lines). Top-level functions and variable definitions for the outline / breadcrumb. Internal `gem/debug/symbols` already exposes the same data.
 - **Find references** (`textDocument/references`, ~80 lines). Inverse of goto-def — scan the symbol table for all occurrences in the same scope chain.
 - **Rename symbol** — needs reliable reference finding across files first.

@@ -1,2 +1,2 @@
-note: std/test.gem:15: this changes module-level `test.cases` in code that runs in a spawned process (spawn at examples/181_test_deep_eq.gem:116); each process has its own copy of module state, so the change is visible only in that process.
+note: std/test.gem:22: this changes module-level `test.cases` in code that runs in a spawned process (spawn at examples/181_test_deep_eq.gem:116); each process has its own copy of module state, so the change is visible only in that process.
 

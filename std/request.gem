@@ -1,24 +1,27 @@
-# std/request — HTTP/1.1 client (plain http only; Gem has no TLS).
-#
-#   let resp = request.get("http://127.0.0.1:8080/items?page=2")
-#   resp.status                      # 200
-#   resp.headers["content-type"]     # header names are lowercase
-#   resp.body                        # chunked bodies come back decoded
-#   request.post(url, {body: json.encode(x), headers: {"Content-Type": "application/json"}, timeout_ms: 5000})
-#
-# Header names must be HTTP tokens and values non-nil, without CR, LF or
-# other control bytes. A body gets a Content-Length (`0` for an empty
-# POST, PUT or PATCH).
-#
-# Each call opens a connection, sends `Connection: close`, reads one
-# response and closes the socket, also when it raises; a caller killed
-# mid-request leaks it. `timeout_ms` (default 30000, `nil` for none) is
-# one deadline for the whole call, not a per-read limit;
-# connecting and writing can't be interrupted, so only the reads are cut
-# short. Every error is prefixed with the function the
-# caller used (`request.get: ...`).
+## request — HTTP/1.1 client for http:// URLs (no https: Gem has no TLS).
+##
+##   load "std/request"
+##   let resp = request.get("http://127.0.0.1:8080/items?page=2")
+##   resp.status                     # 200
+##   resp.headers["content-type"]    # "text/plain; charset=utf-8"
+##   resp.body                       # "page 2"
+##
+## Every fn takes an optional `opts` table (`body`, `headers`,
+## `timeout_ms`; see `request`) and returns `{status, headers, body}` for
+## any status, 404 and 500 included. Redirects are not followed. Errors
+## start with the fn called (`request.get: ...`): bad arguments, connect
+## failures, timeouts and malformed responses all raise.
+##
+## A call blocks the calling process until the whole response is read;
+## other processes keep running, and the caller's mailbox is not touched.
+## A caller killed mid-call leaks its socket, so bound a request with
+## `timeout_ms`, not by killing the process.
 
 load "std/string"
+
+# Each call opens one connection, sends `Connection: close`, reads one
+# response and closes the socket in do_request, also when the exchange
+# raises. Nothing is spawned, linked or received.
 
 # Runtime helper (one C pass): the length of the prefix of `s` made of
 # bytes from `accept`.
@@ -469,6 +472,7 @@ fn given_nil(opts, key)
   type(opts) == "table" and has_key(opts, key) and opts[key] == nil
 end
 
+# The whole call; `name` ("request.get") prefixes every error.
 fn do_request(name, method, raw_url, opts)
   let {headers = {}, body = "", timeout_ms = DEFAULT_TIMEOUT_MS} = opts
   if given_nil(opts, "timeout_ms")
@@ -512,26 +516,92 @@ fn do_request(name, method, raw_url, opts)
   r.value
 end
 
+## Sends a GET to `raw_url` and returns `{status, headers, body}`.
+## Options, result and errors are as for `request`.
+##
+##   let resp = request.get("http://127.0.0.1:8080/items?page=2")
+##   resp.status    # 200
 fn get(raw_url, opts = {})
   do_request("request.get", "GET", raw_url, opts)
 end
 
+## Sends a POST to `raw_url` and returns `{status, headers, body}`. An
+## empty body is sent with `Content-Length: 0`, and no Content-Type is
+## added: set one in `headers`. Options, result and errors are as for
+## `request`.
+##
+##   let body = json.encode({a: 1})
+##   request.post(url, {body: body, headers: {"Content-Type": "application/json"}})
 fn post(raw_url, opts = {})
   do_request("request.post", "POST", raw_url, opts)
 end
 
+## Sends a PUT to `raw_url` and returns `{status, headers, body}`. An
+## empty body is sent with `Content-Length: 0`, and no Content-Type is
+## added: set one in `headers`. Options, result and errors are as for
+## `request`.
 fn put(raw_url, opts = {})
   do_request("request.put", "PUT", raw_url, opts)
 end
 
+## Sends a PATCH to `raw_url` and returns `{status, headers, body}`. An
+## empty body is sent with `Content-Length: 0`, and no Content-Type is
+## added: set one in `headers`. Options, result and errors are as for
+## `request`.
 fn patch(raw_url, opts = {})
   do_request("request.patch", "PATCH", raw_url, opts)
 end
 
+## Sends a DELETE to `raw_url` and returns `{status, headers, body}`.
+## Options, result and errors are as for `request`.
 fn delete(raw_url, opts = {})
   do_request("request.delete", "DELETE", raw_url, opts)
 end
 
+## Sends a request with any `method` ("HEAD", "OPTIONS", ...) to
+## `raw_url` and returns `{status, headers, body}`. `method` is sent as
+## given: "get" goes out lowercase.
+##
+## `raw_url` is `http://host[:port][/path][?query][#fragment]`: port 80
+## by default, a missing path is `/`, the fragment is not sent. It is
+## sent as given: a space raises (`invalid character (byte 32) in URL`),
+## so encode path segments and query values with `url.encode` (or build
+## the query with `url.build_query`).
+##
+## `opts` must be a table (anything else, nil included, raises an
+## unprefixed `field access on non-table` error). Its keys, all optional
+## (nil means the default, except for `timeout_ms`):
+## - `body`: a string, default "". A non-empty one is sent with a
+##   Content-Length.
+## - `headers`: a table of name → value; a value is sent as its text
+##   (`"{value}"`), so an int is fine. `Host`, `Connection: close` and
+##   `Content-Length` are added unless `headers` sets them (in any case);
+##   nothing else is, Content-Type included.
+## - `timeout_ms`: an int > 0, default 30000, or nil for no limit. One
+##   deadline for the whole call, not per read. Connecting and sending
+##   the request are not cut short by it, only waiting for the response.
+##
+## In the result, `status` is an int, `headers` maps lowercase names to
+## trimmed values (a repeated header's values joined with ", ", but
+## `set-cookie`'s with "\n"), and `body` is a string: chunked bodies come
+## back decoded, other codings (gzip) as sent. A HEAD, 204 or 304
+## response has the body "". Interim 1xx responses are skipped. To send
+## cookies back, split `set-cookie` on "\n", keep each line up to its
+## `;`, and pass them joined with "; " as `headers: {Cookie: ...}`.
+##
+##   request.request("HEAD", "http://127.0.0.1:8080/items").body    # ""
+##
+## Raises `request.<fn>: timed out after <ms> ms waiting for <url>` when
+## the deadline passes, and `request.<fn>: cannot connect to
+## <host>:<port>: ...` when the connect fails. Also raises for a URL
+## that is not plain http (https, credentials, IPv6 literals), a header
+## name that is not an HTTP token, a nil header value, CR, LF or other
+## control bytes in the method, a header or the URL, a
+## Transfer-Encoding header, a non-string body, a malformed response or
+## one cut short.
+##
+## Resolving a host name (rather than an IP address) blocks every
+## process until it is done.
 fn request(method, raw_url, opts = {})
   do_request("request.request", method, raw_url, opts)
 end

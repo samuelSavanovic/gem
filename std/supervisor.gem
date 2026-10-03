@@ -1,37 +1,39 @@
-# std/supervisor — OTP-style supervisor for Gem processes
-#
-#   let sup = supervisor.start({
-#     strategy: "one_for_one",
-#     name: "app_sup",
-#     children: [
-#       {id: "db", start: fn() gen_server.start(db_server) end},
-#       {id: "acceptor", restart: "transient", shutdown: 1000, start: start_acceptor}
-#     ]
-#   })
-#   supervisor.which_children(sup)        # or sup.pid, or "app_sup"
-#
-# A child's `start` spawns the child and returns its pid or a `{pid}`
-# handle. A child that is not running shows pid -1 in `which_children`.
-#
-# Stopping a child (the supervisor's own shutdown, a one_for_all restart)
-# sends it the exit signal "shutdown", waits up to its `shutdown` budget
-# (ms; nil waits forever) for its DOWN, then kills it with the untrappable
-# "kill" (stop_child). The budget comes from the child spec's `shutdown`,
-# else from an int or nil `shutdown` key on the handle its `start` returned (a
+## supervisor — start a fixed set of child processes and restart them
+## when they die.
+##
+##   let sup = supervisor.start({
+##     strategy: "one_for_one",
+##     name: "app_sup",
+##     children: [
+##       {id: "db", start: fn() gen_server.start(db_server) end},
+##       {id: "acceptor", restart: "transient", shutdown: 1000, start: start_acceptor}
+##     ]
+##   })
+##   supervisor.which_children(sup)        # or sup.pid, or "app_sup"
+##   supervisor.stop(sup)
+##
+## A supervisor is named by the `{pid}` handle `start` returns, a bare pid
+## or a registered name. Errors start with `supervisor.<fn>: `. A name
+## nobody holds, also that of a supervisor that has stopped, raises
+## `supervisor.<fn>: no process registered as "<name>"`.
+
+# Design. The supervisor traps exits and monitors and links each child.
+# The restart signal is the child's DOWN; the EXIT a child's death also
+# sends is dropped. The runtime queues a dead process's DOWN before its
+# EXIT, so the EXIT is always dropped right after its DOWN is taken, and
+# any EXIT the main loop sees is an exit signal (a `kill` of the
+# supervisor, from a child as well as from anyone else). Stopping a child
+# (stop_child: the supervisor's own shutdown, a one_for_all restart) sends
+# it "shutdown", waits up to its budget for its DOWN, then sends the
+# untrappable "kill". The budget comes from the spec's `shutdown`, else
+# from an int or nil `shutdown` key on the handle its `start` returned (a
 # supervisor's handle has `shutdown: nil`, so a nested supervisor gets all
-# the time its own ordered shutdown takes), else DEFAULT_SHUTDOWN_MS.
-#
-# The supervisor traps exits and links each child. When it exits (an exit
-# signal from anyone, `stop`, restart intensity reached, or any error in
-# the supervisor, but not the untrappable "kill", which ends it at once),
-# it first shuts its children down, OTP-style: it stops
-# each running child as above, last started first; then it exits. A nested
-# supervisor does the same, so the whole tree is down when it exits. The
-# restart signal is the child's DOWN; the EXIT a child's death also sends
-# is dropped. The runtime queues a dead process's DOWN before its EXIT, so
-# the EXIT is always dropped right after its DOWN is taken, and any EXIT the
-# main loop sees is an exit signal (a `kill` of the supervisor, from a child
-# as well as from anyone else).
+# the time its own ordered shutdown takes), else DEFAULT_SHUTDOWN_MS. When
+# the supervisor exits (an exit signal, `stop`, restart intensity reached,
+# or any error in the supervisor, but not the untrappable "kill", which
+# ends it at once), it first stops each running child that way, last
+# started first; then it exits. A nested supervisor does the same, so the
+# whole tree is down when it exits.
 
 let STRATEGIES = {one_for_one: true, one_for_all: true}
 let RESTARTS = {permanent: true, transient: true, temporary: true}
@@ -342,6 +344,51 @@ fn check_children(children)
   end
 end
 
+## Spawns a supervisor that starts the children in `spec.children` and
+## returns its handle `{pid, shutdown: nil}`.
+##
+## `spec` takes `children`: an array of `{id, start, restart, shutdown}`
+## specs, where `id` is required and unique, `start` spawns the child and
+## returns the pid, `{pid}` handle or registered name of the process it
+## spawned (any int is trusted as a pid: one that is not a live process
+## counts as dead at once and is restarted until the restart limit stops
+## the supervisor), and `restart` is `"permanent"` (the default: always
+## restart), `"transient"` (restart unless it exits with `"normal"` or
+## `"shutdown"`) or `"temporary"` (never). `shutdown` is how long, in
+## milliseconds, the child gets to exit after `"shutdown"` before it is
+## killed with the untrappable `"kill"` (an int `<= 0` doesn't wait; `nil`
+## waits with no limit). Left out, it comes from an int or `nil`
+## `shutdown` key on the handle `start` returned, else 5000: a
+## supervisor's own handle says `nil`, so a nested supervisor finishes its
+## ordered shutdown. Write `shutdown: x` only when `x` is set: `nil` there
+## is not the default. `strategy` is `"one_for_one"` (the default: restart
+## the dead child) or `"one_for_all"` (stop the others, last started
+## first, then start them all again). The supervisor gives up and exits
+## when more than `max_restarts` (default 3) restarts fall within
+## `max_seconds` MILLISECONDS, despite the name (default 5000, i.e. 5 s).
+## `name` registers it.
+##
+## A restart runs `start` again from scratch: no state carries over. It
+## happens in the supervisor, after the child's death, so for a moment a
+## call by the child's registered name raises `no process registered`.
+##
+## Raises, and starts nothing, for a bad spec (e.g. `supervisor.start:
+## duplicate child id "d"`) or a name that is taken.
+##
+## Returns at once: the supervisor calls each child's `start` later, in
+## its own process, so `self()` there is the supervisor. It is not linked
+## to the caller: the caller dying leaves it running, and it dying (on its
+## restart limit, an exit signal, or a child's `start` that raises)
+## doesn't kill the caller. Its exit reason is `"supervisor: max restart
+## intensity reached"` or the error a child's `start` raised, unchanged;
+## both are also printed on stderr. Before it exits it stops its children
+## as `stop` does. `kill(sup.pid, reason)` is handled when it next reads
+## its mailbox; use `stop` to know it is gone. `kill(sup.pid, "kill")`
+## ends it at once, without stopping its children: those that don't trap
+## exits die through their links, the others get an `EXIT` and run on.
+## Children are linked to the supervisor, so a child that traps exits gets
+## its `EXIT` messages; it should clean up and return on one from the
+## supervisor, or it is killed when its budget runs out.
 fn start(spec)
   if type(spec) != "table"
     error("supervisor.start: expected a spec table \{strategy, children, ...\}, got {type(spec)}")
@@ -437,6 +484,19 @@ fn await_children_for(pid, ref, timeout_ms)
   end
 end
 
+## Returns the supervisor's children as `{id, pid, restart}` tables in
+## spec order; `pid` is -1 for a child that is not running.
+##
+##   supervisor.which_children(sup)   # [{id: "db", pid: 2, restart: "permanent"}, ...]
+##
+## Raises `supervisor.which_children: supervisor exited: <reason>` at once
+## when the supervisor is dead or dies first, and `...: timeout` after
+## `timeout_ms` (nil: no limit).
+##
+## Blocks until the supervisor has started all its children and answers.
+## Monitors the supervisor for the request only, as `gen_server.call`
+## does, and leaves no monitor or `DOWN` behind. After a timeout, a late
+## `{tag: "_sup_children"}` answer may land in the caller's mailbox.
 fn which_children(target, timeout_ms = 5000)
   let pid = target_pid(target, "supervisor.which_children")
   check_timeout(timeout_ms, "supervisor.which_children")
@@ -461,9 +521,21 @@ fn which_children(target, timeout_ms = 5000)
   res.children
 end
 
-# Stops the supervisor with an exit signal "shutdown" and waits for its
-# DOWN, which comes once it has shut its children down (see the top of the
-# file); by default with no limit, since each child has its own budget.
+## Stops the supervisor, waits until it has exited, and returns nil (also
+## for one already gone, given by pid or handle; by name see the header).
+##
+## The supervisor stops its children one at a time, last started first:
+## each gets the exit signal `"shutdown"`, then, if it is still running
+## after its `shutdown` budget, the untrappable `"kill"`. So the whole tree
+## is down, and every name registered in it free, when `stop` returns.
+## Only direct children are stopped: processes a child spawned itself
+## (such as its tasks, which aren't linked to it) keep running. By default
+## `stop` waits with no limit, since the budgets bound the shutdown; with a
+## `timeout_ms` it raises `supervisor.stop: the supervisor did not stop
+## within <ms> ms` after that long (the shutdown goes on).
+##
+## Blocks the caller. Takes the supervisor's `DOWN`, unless the caller
+## monitors it itself: that monitor still gets it.
 fn stop(target, timeout_ms = nil)
   let pid = target_pid(target, "supervisor.stop")
   check_timeout(timeout_ms, "supervisor.stop")

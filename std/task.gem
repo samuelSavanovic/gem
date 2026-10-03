@@ -1,16 +1,31 @@
-# std/task — run a function in its own process and wait for its result.
-#
-#   let t = task.async do
-#     fetch(url)
-#   end
-#   let body = task.await(t)
-#
-# `await` returns the function's value, or raises the function's error in the
-# caller. A timeout, or a task that dies without a result, raises an error
-# that starts with "task.await: " ("task.await_all: " from `await_all`).
-# Only the process that called `async` can await the task, and each task
-# can be awaited once.
+## task — run a function in its own process and wait for its result.
+##
+##   let t = task.async do
+##     fetch(url)
+##   end
+##   let body = task.await(t)
+##
+## A task is the table `async` returns; its `pid` is the task process
+## (`kill(t.pid, reason)` stops it, and `await` then raises `task exited`).
+## Only the process that called `async` (its owner) can await it, and only
+## once. A failed await raises an error starting with `task.await: `
+## (`task.await_all: ` from `await_all`), except that the task's own error
+## is raised unchanged; it is not printed on stderr. The task is not
+## linked to its owner: the owner dying leaves it running. Don't trap
+## exits in a task: then a timeout can't stop it.
 
+## Spawns a process that runs `f()` and returns the task to await.
+##
+##   let t = task.async(fn() 21 * 2 end)
+##   task.await(t)    # 42
+##
+## Raises if `f` is not a fn.
+##
+## Returns at once. The owner monitors the task; the task sends its result
+## to the owner and exits, so a `{tag: "_task_result"}` message and the
+## task's `DOWN` land in the owner's mailbox. `await` removes both; a task
+## that is never awaited leaves them there. `monitor(t.pid)` returns false
+## and adds nothing: `await` takes the only `DOWN`.
 fn async(f)
   if type(f) != "fn"
     error("task.async: expected a function, got {type(f)}")
@@ -141,6 +156,22 @@ fn discard(t)
   end
 end
 
+## Waits for task `t` and returns the value of its fn.
+##
+## Raises the task's error message when its fn raised. Raises
+## `task.await: timeout` after `timeout_ms` (nil, the default: no limit)
+## and kills the task with reason `"timeout"`. Raises `task.await: task
+## exited: <reason>` when the task process died without a result, and
+## raises when `t` was already awaited or belongs to another process.
+##
+##   task.await(task.async(fn() error("bad") end))    # raises "bad"
+##   task.await(t, 1000)                              # at most 1 s
+##
+## Blocks the caller. Removes the task's result and `DOWN` from the
+## mailbox, also on timeout, unless the task traps exits: then it runs on
+## after the timeout, and its result and `DOWN` arrive later and stay in
+## the owner's mailbox. A `receive` in the owner that takes any message
+## can take them first; `await` then raises an error saying so.
 fn await(t, timeout_ms = nil)
   check_owner(t, "task.await")
   check_timeout(timeout_ms, "task.await")
@@ -151,9 +182,24 @@ fn await(t, timeout_ms = nil)
   res.value
 end
 
-# Awaits every task and returns their values in the same order as `tasks`.
-# If one fails or the shared timeout expires, the remaining tasks are stopped
-# and the error is raised.
+## Waits for every task in `tasks` and returns their values in the same
+## order.
+##
+##   task.await_all([task.async(fn() 1 end), task.async(fn() 2 end)])   # [1, 2]
+##   len(task.await_all([]))                                           # 0
+##
+## `timeout_ms` covers the whole call (nil, the default: no limit). Tasks
+## are awaited in list order, so a failure is raised only when its turn
+## comes (a slow task before it delays it), and only the first failing
+## task in list order is reported. When a task fails or the time runs
+## out, raises as `await` would (messages start with `task.await_all: `,
+## except a task's own error, raised unchanged) and kills the tasks not
+## awaited yet with reason `"cancelled"` (the one that timed out gets
+## `"timeout"`). Raises if a task appears twice or `await` would refuse
+## one; then it awaits nothing and leaves the tasks running, still
+## awaitable (unawaited, their result and `DOWN` stay in the mailbox).
+##
+## Blocks the caller, and cleans the mailbox as `await` does.
 fn await_all(tasks, timeout_ms = nil)
   if type(tasks) != "table"
     error("task.await_all: expected an array of tasks, got {type(tasks)}")

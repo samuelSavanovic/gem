@@ -68,6 +68,43 @@ Today, wrapping a C library that uses small structs by value (raylib's `Vector2`
 
 `load` today resolves stdlib (`std/...`) and project-local paths. There is no story for depending on third-party Gem code — no manifest, no fetch, no version pinning, no lockfile. Becomes pressing the moment a second real Gem app wants to share code with the first. Likely shape: a `gem.toml` manifest, a `gem_modules/` (or `.gem/deps/`) cache, git-URL or registry-based resolution, lockfile for reproducibility. Design intentionally deferred until pull from real users.
 
+## std API gaps found by the blind doc review (P2)
+
+A blind reader wrote programs against std from its `##` docs alone (2026-10). These came up as missing
+API, not doc problems:
+
+- **`gen_server.stop`**: there is no way to stop a server except `kill(h.pid, reason)` or a supervisor. Add
+  `stop(target, reason = "normal", timeout_ms = 5000)` that waits for the exit, like `supervisor.stop`,
+  and maybe a `{stop: reason, reply?, state}` callback result (Erlang's `{stop, ...}`).
+- **Dropping late replies**: after a `gen_server.call`, `supervisor.which_children` or a
+  `dynamic_supervisor` call times out, the late reply still lands in the caller's mailbox and nothing
+  removes it. Erlang solves this with process aliases (a reply to a deactivated alias is dropped). Needs a
+  runtime alias or a per-ref "drop" set checked at delivery.
+- **`http.json_response` with a status**: a JSON 201/404 needs `http.response(status, {"Content-Type":
+  ...}, json.encode(x))`. Add an optional `status` param.
+- **The port bound by `http.start({port: 0})`**: an ephemeral port works but nothing reports it, so tests
+  can't use one. Return `{pid, port}` (needs the bound port from `tcp_listen`, e.g. a `tcp_local_port`
+  builtin).
+- **Multi-value query keys in `url.build_query`**: `{tags: ["a", "b"]}` should give `tags=a&tags=b`; today
+  the table's `to_string` text is encoded. `parse_query` would need a matching opt-in (last value wins now).
+- **Parsing dates in `std/time`**: nothing turns an ISO 8601 or HTTP date back into epoch ms, and `format`
+  has no millisecond directive. A log analyzer had to hand-write days-from-civil.
+- **`json.encode` pretty-printing**: an `indent` option.
+- **Stopping what a supervised child spawned**: `supervisor.stop` stops direct children only; a task a
+  worker is awaiting keeps running (tasks aren't linked to their owner). A linked `task.async` variant, or
+  tasks dying with their owner, would make a supervised shutdown complete.
+- **More from the http request**: the client address, the raw query string and multi-value query/form
+  parsing. On the client side, cookie help in `std/request` (today: split `set-cookie` by hand).
+- **Naming a gen_server at start**: `gen_server.start(module, {name})` that registers before `init`, so a
+  supervised restart can't leave a window where the name is unregistered.
+- **More `std/mime` types**: `text/javascript` for `ext`, `.wav`, `.ogg`, `.md`, `.yaml`, `.map`.
+- **One rule for what a child's `start` returns**: `supervisor` accepts a pid, a `{pid}` handle or a
+  registered name; `dynamic_supervisor` rejects a name. Pick one for both.
+
+## `gem doc` and checked doc examples (P3)
+
+`##` doc comments (BEST_PRACTICES.md, "Document the public API with `##`") document the public API of std and user modules, but nothing reads them yet outside the editor. Needs: a `gem doc <file>` subcommand that prints (or writes HTML for) a module's header and its exported functions' docs, using the same comment collection as LSP hover; and a doctest pass that runs each `call    # result` example line and compares the printed value, wired into `make test` for std, so docs can't drift from behavior (as Rust's doctests do). Trade-off: examples have to stay self-contained one-liners for the checker; a multi-line example would need an explicit marker.
+
 ## Debugger / breakpoints (P2)
 
 Stack traces on `error()` are good; there's no interactive step-through, breakpoint, or variable-inspection story. Pairs with `LSP_ROADMAP.md` but is a separate capability — typically a DAP (Debug Adapter Protocol) server that the runtime cooperates with (instrumented `gem_set_line` callbacks, ability to pause a coroutine, mailbox/process inspection).

@@ -151,6 +151,35 @@ module's top-level names in fn bodies but never walks the param defaults
 `_mod_lib_D`. std/http writes `ok`'s default content type out as a literal
 because of it.
 
+### A newline inside a `"..."` or `'...'` string isn't counted in line numbers
+
+```gem
+let s = "a
+  b"
+print(1)
+error("x")        # reported at line 3, shows the line `print(1)`
+```
+
+Compile errors (`unexpected character`, `undeclared identifier`) and runtime
+error locations after such a string are one line early per newline inside
+it. Triple-quoted strings count correctly. The single- and double-quoted
+string branches of the lexer (compiler/lexer.gem, from `if ch == "\""`) step
+over a raw `\n` without incrementing `line` or resetting `line_start`.
+
+### An unterminated `{` in a string is reported past the end of the line
+
+```gem
+let r = f(u, "{not json", {headers: {"Content-Type": "application/json"}, timeout_ms: 1000})
+```
+
+`unterminated string interpolation` points at a column past the end of the
+line (131 on a 105-character line; longer files give columns in the
+hundreds or thousands), not at the `{` that opened it. The lexer
+(compiler/lexer.gem, the `unterminated string interpolation` report near
+line 825) uses the scan position after searching on for the `}`, not the
+position of the `{`. The note "this '{' is never closed" form at line 858
+already has the right location.
+
 ## Runtime
 
 ### `in` answers differently on a copy of a table whose string keys were deleted
@@ -213,5 +242,159 @@ NUL (runtime/gem_builtins_sqlite.c).
 
 ## Standard library
 
+### `json.encode` writes infinite and NaN floats as bare `inf`/`nan`
 
-None at the moment.
+```gem
+load "std/json"
+let inf = to_float("inf")
+print(json.encode([inf - inf, inf]))         # [nan,inf]: not JSON
+print(pcall json.parse(json.encode(inf)))    # error: unexpected character 'i' at byte 0
+```
+
+`encode` (std/json.gem, the `int`/`float`/`bool` branch) writes floats with
+`to_string`, so non-finite values produce output no JSON parser accepts,
+`json.parse` included. It should raise (as JSON.stringify-style encoders that
+reject them do) or write `null`.
+
+### `http.start` doesn't range-check the port
+
+```gem
+load "std/http"
+let h = http.start(http.router(), {port: 70000, host: "127.0.0.1"})  # starts, listens on 4464
+let h2 = http.start(http.router(), {port: -1, host: "127.0.0.1"})    # starts too
+```
+
+`start` passes `port` to `tcp_listen` (std/http.gem, `pcall tcp_listen`)
+without checking it, and the runtime truncates it to 16 bits. A non-int port
+raises, but as `http.start: tcp_listen: expected (string host, int port)`.
+`start` should raise `http.start: port must be an int from 0 to 65535`.
+
+### `http` static files: the request path is not percent-decoded
+
+```gem
+load "std/http"
+load "std/request"
+# public/my file.txt exists
+let app = http.router()
+app.static("/", "public")
+let s = http.start(app, {port: 18931, host: "127.0.0.1"})
+print(request.get("http://127.0.0.1:18931/my%20file.txt").status)   # 404
+```
+
+`r.static` (std/http.gem) joins the raw request path to `dir`, so a file
+whose name needs percent-encoding can't be served, while route `:params` are
+decoded. It should decode the path first and apply the `..` check to the
+decoded path.
+
+### `sort` and `table.sort` on a record turn it into an array
+
+```gem
+let rec = {b: 2, a: 1}
+sort(rec)
+print(rec)            # [1, 2]: the keys are gone
+```
+
+The `sort` builtin (runtime/gem_builtins_collection.c) accepts any table
+and rewrites its values as entries 0 .. n-1; `table.sort` (std/table.gem)
+only checks that `arr` is a table, so it does the same. With a comparator,
+`table.sort` first checks `cmp(arr[0], arr[1])`, which on a record is
+`cmp(nil, nil)`, so a typical `a - b` comparator raises `type error in -: got
+nil and nil` from the caller's code instead. Both should raise for a table
+that isn't an array.
+
+### `log.set_level` returns the internal level number
+
+`print(log.set_level("info"))` prints `1`. `set_level` (std/log.gem) ends
+with the assignment to `min_level`, so it leaks that value; it should
+return nil.
+
+### Some std errors don't name the function called
+
+```gem
+load "std/http"
+load "std/time"
+load "std/sqlite"
+load "std/request"
+pcall http.html_escape(5)       # "str_replace: all arguments must be strings, got int, string, string"
+pcall http.parse_form(nil)      # "url.parse_query: s must be a string, got nil"
+pcall time.date(nil)            # "format_time: expected (int, string), got (nil, string)"
+pcall sqlite.last_id(999)       # "sqlite_last_insert_id: not an open database handle"
+pcall request.post("http://127.0.0.1:1/", "x", "opts")   # "field access on non-table: got string"
+pcall http.start(http.router(), nil)                   # "field access on non-table: got nil"
+```
+
+The convention (BEST_PRACTICES, "Prefix messages with where they came
+from") is `<module>.<fn>: ...`. These functions pass arguments straight to a
+builtin or another module without checking them first, so the message names
+the callee. std/sqlite uses the builtins' names for every error, which for
+`last_id` differs from the std name.
+
+### The spawned-module-state note fires for std's per-process settings
+
+```gem
+load "std/log"
+let p = spawn do
+  log.set_level("debug")      # what std/log's docs recommend
+  log.debug("hi")
+end
+```
+
+`gem --check` prints a note starting `note: std/log.gem:36: this changes
+module-level` and naming `log.min_level`, "in code that runs in a spawned
+process". The same
+happens for `test.case` in a spawned process (`std/test.gem`). The write is
+the intended per-process behaviour and documented, yet the note fires, and it
+points at a std line and names a private variable, not the user's call.
+`note_spawn_global_writes` (compiler/codegen.gem) should attribute the note to
+the call site in the user's file, or skip writes inside std whose
+per-process meaning the module documents.
+
+### `http` sends a nil or table header value as the text `nil`
+
+```gem
+load "std/http"
+let app = http.router()
+app.get("/n") do |req|
+  let h = {}
+  h["X-Nil"] = nil
+  h["X-T"] = {a: 1}
+  http.response(200, h, "x")   # sent as "X-Nil: nil" and "X-T: nil"
+end
+app.get("/c") do |req|
+  http.set_cookie(http.ok("x"), "a", nil)                  # sent as "Set-Cookie: a=nil; ..."
+end
+```
+
+The response check in std/http.gem validates header names and CR/LF in
+values but interpolates any value, so nil becomes `nil` and a record is
+taken for an empty-ish array. std/request raises `header X has a nil value`
+for the same input. The server should treat these as an invalid response
+(500), and `set_cookie` should raise on a non-string value.
+
+### `test.assert_throws` passes when its body isn't a fn
+
+```gem
+load "std/test"
+print(test.assert_throws(42))     # "attempt to call int value": the assert passes
+```
+
+`assert_throws` (std/test.gem) calls `body` under pcall, so a non-fn body
+raises inside the protection and counts as the expected error; a typo makes
+a test pass. It should raise `test.assert_throws: body must be a fn`.
+
+### `string.join` rejects an array whose keys were added out of order
+
+```gem
+load "std/string"
+load "std/json"
+let t = {}
+t[1] = "b"
+t[0] = "a"
+print(json.encode(t))                    # ["a","b"]
+print(pcall string.join(t, ","))         # error: arr must be an array, got a table with key 1
+```
+
+`join` (std/string.gem) requires the iteration order to be 0, 1, 2, ...,
+while `table.*`, `json.encode` and array patterns accept any table whose keys
+are exactly 0 .. n-1. std should share one definition of an array; the error
+also names a valid key.

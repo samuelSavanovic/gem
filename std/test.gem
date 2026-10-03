@@ -1,16 +1,23 @@
-# std/test — minimal test harness for self-validating example programs.
-#
-# Register cases with test.case(name, fn). Use the assert helpers inside;
-# they raise via error() on failure. test.run() executes each registered
-# case under pcall, prints a one-line PASS/FAIL per case, prints a
-# summary, and exits with status 1 if any case failed.
-#
-# Cases live in a module-level variable, which is per process: test.run()
-# runs only the cases registered by the process that calls it. Register
-# cases at the top level (or from main) and call test.run() there.
+## test — a minimal harness for self-checking programs.
+##
+##   load "std/test"
+##   test.case("adds") do
+##     test.assert_eq(1 + 1, 2)
+##   end
+##   test.run()    # PASS adds / 1 passed / 0 failed
+##
+## The assert functions raise with `error()` on failure, with a message
+## that starts `test.<fn>: `. `run` catches that per case. Cases are
+## module state, so they are per process: a spawned process starts with a
+## copy of the cases its parent had registered at the spawn, and cases it
+## registers stay in that process. Register cases at the top level (or
+## from main) and call `run` there.
 
 let cases = []
 
+## Registers a test case: `body` is called with no arguments by `run`,
+## after the cases registered before it. A duplicate `name` is allowed;
+## both cases run.
 fn case(name, body)
   push(cases, {name: name, body: body})
 end
@@ -108,9 +115,7 @@ fn failure(nodes, kind, e, a, key, n)
 end
 
 # Structural comparison. Returns nil when `actual` deeply equals
-# `expected`, else a description of the first difference. Non-tables
-# compare with `==` (so 1 and 1.0 differ); tables are equal when they have
-# the same keys with deeply equal values, in any insertion order.
+# `expected`, else a description of the first difference.
 #
 # The walk is depth first over an explicit work stack, so nesting depth
 # doesn't touch the C stack. A pair of tables met again (a shared
@@ -246,6 +251,8 @@ fn swap(arr, i, j)
   arr[j] = t
 end
 
+## Raises "test.assert: assertion failed", plus ": <msg>" when `msg` is
+## given, unless `cond` is truthy. Only `nil` and `false` fail.
 fn assert(cond, msg = nil)
   if not cond
     if msg == nil
@@ -255,6 +262,17 @@ fn assert(cond, msg = nil)
   end
 end
 
+## Raises unless `actual` deeply equals `expected`, and returns nil.
+##
+## Non-tables compare with `==`, so 1 and 1.0 differ. Tables are equal
+## when they have the same keys with deeply equal values, in any
+## insertion order; shared and cyclic tables are fine. A key holding nil
+## counts (`{a: 1}` and `{a: 1, b: nil}` differ), `[]` equals `{}`, and two
+## different fns are unequal. The message shows
+## both values and the first difference, with its path:
+##
+##   test.assert_eq({a: [1, 2]}, {a: [1, 3]})
+##   # test.assert_eq: expected {a: [1, 3]}, got {a: [1, 2]}: at .a[1], expected 3, got 2
 fn assert_eq(actual, expected)
   let d = diff(actual, expected)
   if d == nil
@@ -266,13 +284,23 @@ fn assert_eq(actual, expected)
   error("test.assert_eq: {d}")
 end
 
+## Raises when `actual` deeply equals `expected` (as `assert_eq` compares
+## them).
 fn assert_neq(actual, expected)
   if diff(actual, expected) == nil
     error("test.assert_neq: both values are {show(actual)}")
   end
 end
 
-# Returns the error message, so a case can check it.
+## Calls `body()` and returns the message of the error it raised, so a
+## case can check it. Raises if `body` returns normally. `body` must be a
+## fn: any other value makes the call itself raise ("attempt to call int
+## value"), which comes back as the message, so the check passes.
+##
+##   let msg = test.assert_throws(fn() error("bad") end)    # "bad"
+##
+## An error raised with a non-string value comes back as pcall reports
+## it: `error({code: 1})` gives the string "error".
 fn assert_throws(body)
   let r = pcall body()
   if r.ok
@@ -281,6 +309,14 @@ fn assert_throws(body)
   r.error
 end
 
+## Runs every registered case, prints `PASS <name>` or
+## `FAIL <name>: <error>` for each and then `<n> passed / <m> failed` on
+## stdout, and exits the program with status 1 if any case failed (the
+## whole program, even when called from a spawned process).
+## Otherwise it returns nil; the cases stay registered, so a second call
+## runs them again. A failing assert ends its case at once, skipping any
+## cleanup after it, and a FAIL line shows only the message, not the
+## file or line: pass `msg` to `assert` or keep cases small.
 fn run()
   let passed = 0
   let failed = 0
