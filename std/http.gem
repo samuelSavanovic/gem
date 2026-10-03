@@ -1701,13 +1701,12 @@ fn start(router_ref, opts = {})
   launch("http.start", router_ref, nil, opts)
 end
 
-# A timeout option: its default when left out, nil (no limit) when given
-# as nil, else an int > 0.
-fn timeout_opt(caller, opts, name, value)
-  if type(opts) == "table" and has_key(opts, name) and opts[name] == nil
+# A timeout option (its default when left out): nil (no limit) or an
+# int > 0.
+fn timeout_opt(caller, name, value)
+  if value == nil
     return nil
-  end
-  if type(value) != "int"
+  elif type(value) != "int"
     error("{caller}: {name} must be an int > 0 (milliseconds) or nil, got {type(value)}")
   elif value <= 0
     error("{caller}: {name} must be an int > 0 (milliseconds) or nil, got {value}")
@@ -1720,8 +1719,8 @@ end
 fn launch(caller, router_ref, watch, opts)
   let {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS} = opts
   check_int(caller, "max_body", max_body, 0)
-  idle_timeout_ms = timeout_opt(caller, opts, "idle_timeout_ms", idle_timeout_ms)
-  request_timeout_ms = timeout_opt(caller, opts, "request_timeout_ms", request_timeout_ms)
+  idle_timeout_ms = timeout_opt(caller, "idle_timeout_ms", idle_timeout_ms)
+  request_timeout_ms = timeout_opt(caller, "request_timeout_ms", request_timeout_ms)
   if type(router_ref) != "table" or type(router_ref.match) != "fn"
     error("{caller}: expected a router from http.router(), got {type(router_ref)}")
   end

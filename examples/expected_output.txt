@@ -1356,17 +1356,19 @@ missing: false strlen: expected 1 argument(s), got 0
 wrong type: false strlen: arg 0 expected String, got int
 ok: 5
 let-table: strategy=one_for_all max_restarts=3 name=nil
-let-nil: x=7 y=42
+let-nil: x=nil y=42
 let-fwd: a=5 b=10
 let-extra: p=10
 let-array: first=1 second=2 third=100
-let-array-nil: u=10 v=5
+let-array-nil: u=10 v=nil
+let-array-short: w=10 z=6
 fn-req: 0 5 8
 0.0.0.0:8080/nil
 0.0.0.0:8080/nil
 0.0.0.0:8080/nil
 0.0.0.0:9000/nil
 ::1:7000/nil
+0.0.0.0:nil/nil
 sid=abc;Path=/;Secure=false
 sid=abc;Path=/;Secure=false
 sid=abc;Path=/;Secure=true
@@ -2144,8 +2146,8 @@ a
 3
 [1, 2]
 [1, 9]
-2 20 7
-1 99 1
+2 20 nil
+1 99 nil 1
 [10, 20, 30]
 for 1
 for 2

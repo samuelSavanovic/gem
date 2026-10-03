@@ -128,10 +128,14 @@ fn make_parser(tokens, source, file, sink)
   let pos = 0
   let gensym_counter = 0
   # One destructured binding `name = value` with an optional default that
-  # fires when the value is nil. The default is evaluated into a temp
+  # fires when the key is missing from `obj_name` (a field name, or an
+  # index for an array pattern), like a positional default fires only for
+  # an argument left out: an explicit nil stays nil. The value is read
+  # first (so a non-table still raises as without a default), and only a
+  # nil read checks for the key. The default is evaluated into a temp
   # before `let name`, so a default reading `name` sees the binding it
   # shadows (as any `let` initializer does), and only when it is needed.
-  let push_destructured = fn(stmts, name, value, dflt, line)
+  let push_destructured = fn(stmts, name, obj_name, key, value, dflt, line)
     if dflt == nil
       push(stmts, make_let(name, value, line))
       return nil
@@ -139,12 +143,11 @@ fn make_parser(tokens, source, file, sink)
     gensym_counter += 1
     let tmp = "_d{gensym_counter}v"
     push(stmts, make_let(tmp, value, line))
-    push(stmts, make_if(
+    let missing = make_binop("and",
       make_binop("==", make_var(tmp), make_nil_node()),
-      [make_assign(tmp, dflt, line)],
-      [],
-      line
-    ))
+      make_unop("not", make_call(make_var("__has_key"), [make_var(obj_name), key], line)),
+      line)
+    push(stmts, make_if(missing, [make_assign(tmp, dflt, line)], [], line))
     push(stmts, make_let(name, make_var(tmp), line))
   end
   let fn_depth = 0
@@ -489,7 +492,7 @@ fn make_parser(tokens, source, file, sink)
         # Bind each named field as a local. Per-field defaults fire when the
         # extracted value is nil (key missing or value explicitly nil).
         for di = 0, len(dnames)
-          push_destructured(prelude, dnames[di], make_dot(make_var(pname), dnames[di]), ddflts[di], dline)
+          push_destructured(prelude, dnames[di], pname, make_string(dnames[di]), make_dot(make_var(pname), dnames[di]), ddflts[di], dline)
         end
 
         # The prelude is part of the body, so it reruns on every iteration of
@@ -1396,7 +1399,7 @@ fn make_parser(tokens, source, file, sink)
         let tmp = "_d{gensym_counter}"
         let stmts = [make_let(tmp, rhs, line)]
         for di = 0, len(names)
-          push_destructured(stmts, names[di], make_dot(make_var(tmp), names[di]), dflts[di], line)
+          push_destructured(stmts, names[di], tmp, make_string(names[di]), make_dot(make_var(tmp), names[di]), dflts[di], line)
         end
         return {tag: "block", stmts: stmts}
       end
@@ -1436,7 +1439,7 @@ fn make_parser(tokens, source, file, sink)
         let tmp = "_d{gensym_counter}"
         let stmts = [make_let(tmp, rhs, line)]
         for di = 0, len(names)
-          push_destructured(stmts, names[di], make_index(make_var(tmp), make_int(di)), dflts[di], line)
+          push_destructured(stmts, names[di], tmp, make_int(di), make_index(make_var(tmp), make_int(di)), dflts[di], line)
         end
         return {tag: "block", stmts: stmts}
       end

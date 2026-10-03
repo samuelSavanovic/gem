@@ -117,12 +117,12 @@ let {method, path} = parse_request(raw)
 # Array destructuring — extract by position
 let [first, second] = string.split(line, ",")
 
-# Per-field defaults — apply when the field is missing OR nil
+# Per-field defaults — apply when the field is missing
 let {strategy = "one_for_one", max_restarts = 3} = spec
 let [head, tail = []] = parts
 ```
 
-Table destructuring extracts by name (`let {a, b} = expr` is `let a = expr.a; let b = expr.b`). Array destructuring extracts by index (`let [a, b] = expr` is `let a = expr[0]; let b = expr[1]`). The RHS is evaluated exactly once. Missing keys/indices produce `nil`. Per-field defaults (`name = expr`) substitute when the extracted value is `nil` (i.e. the key was absent or its value was nil); the default is only evaluated in that case and may reference earlier names in the same destructure. Like any `let` initializer, a default that names the field it binds sees the binding it shadows: in `fn f(port) let {port = port + 1} = {} ... end`, the default reads the parameter. Patterns are flat — no renaming, nesting, or rest/splat; a `{key: name}` entry in a `let` or fn-param pattern is a compile error (only match/receive patterns take `key: pattern`). Match/receive patterns are stricter and do **not** accept defaults; defaults are a binding-context feature only (let, fn params).
+Table destructuring extracts by name (`let {a, b} = expr` is `let a = expr.a; let b = expr.b`). Array destructuring extracts by index (`let [a, b] = expr` is `let a = expr[0]; let b = expr[1]`). The RHS is evaluated exactly once. Missing keys/indices produce `nil`. Per-field defaults (`name = expr`) substitute when the key is missing from the table (for an array pattern, the index), exactly like a default parameter fires only for an argument left out: an explicit `nil` stays `nil` (`let {a = 5} = {a: nil}` binds `a = nil`, `let [x, y = 2] = [1]` binds `y = 2`). So an option table can give `nil` a meaning of its own, as std does with `timeout_ms: nil` for no limit, and a caller that wants the default leaves the key out. The default is only evaluated when it fires and may reference earlier names in the same destructure. The value is read first, so destructuring a non-table raises the same error with or without defaults. Like any `let` initializer, a default that names the field it binds sees the binding it shadows: in `fn f(port) let {port = port + 1} = {} ... end`, the default reads the parameter. Patterns are flat — no renaming, nesting, or rest/splat; a `{key: name}` entry in a `let` or fn-param pattern is a compile error (only match/receive patterns take `key: pattern`). Match/receive patterns are stricter and do **not** accept defaults; defaults are a binding-context feature only (let, fn params).
 
 ### Module-level bindings are per-process
 
@@ -233,11 +233,11 @@ fn repeat(s, n = len(s))
 end
 ```
 
-Default parameters work in named functions, anonymous functions, and block parameters. Passing `nil` explicitly does *not* trigger the default — only omitting the argument does. A default is evaluated at call time, each time the argument is omitted, and may refer to earlier parameters.
+Default parameters work in named functions, anonymous functions, and block parameters. Passing `nil` explicitly does *not* trigger the default — only omitting the argument does, as a destructured field's default fires only for a missing key (see Destructuring). A default is evaluated at call time, each time the argument is omitted, and may refer to earlier parameters.
 
 ## Destructuring Parameters
 
-A function parameter position can be a flat table-destructure pattern. The named fields are bound as locals at the start of the body, and per-field defaults work the same way as in `let`-destructuring (the default fires when the field is missing or nil):
+A function parameter position can be a flat table-destructure pattern. The named fields are bound as locals at the start of the body, and per-field defaults work the same way as in `let`-destructuring (the default fires only when the field is missing):
 
 ```
 fn start({port = 8080, host = "0.0.0.0", name = nil})
@@ -245,6 +245,7 @@ fn start({port = 8080, host = "0.0.0.0", name = nil})
 end
 
 start({port: 9000})              # host defaults, name defaults to nil
+start({port: nil})               # port is nil: an explicit nil is not "left out"
 start({})                        # all defaults
 ```
 

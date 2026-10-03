@@ -9,7 +9,7 @@ Keep this file up to date when adding new syntax, keywords, builtins, or std mod
 let x = 10
 let {a, b} = tbl                     # table destructuring
 let [first, second] = arr            # array destructuring
-let {port = 8080, host = "0.0.0.0"} = opts   # field defaults (fire on missing or nil)
+let {port = 8080, host = "0.0.0.0"} = opts   # field defaults (fire on a missing key, not nil)
 let x = x + 1                        # in a fn/block: new variable shadowing the old x (to block end)
                                      # (warned in a `while` body when the condition reads x and nothing assigns it)
                                      # a let is visible only to the end of its block (if/loop body/arm):

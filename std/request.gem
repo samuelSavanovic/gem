@@ -466,18 +466,13 @@ fn exchange(rd, req_str, method)
   read_response(rd, method)
 end
 
-# An option given as nil, as opposed to left out (a destructuring default
-# fires for both).
-fn given_nil(opts, key)
-  type(opts) == "table" and has_key(opts, key) and opts[key] == nil
-end
-
 # The whole call; `name` ("request.get") prefixes every error.
 fn do_request(name, method, raw_url, opts)
   let {headers = {}, body = "", timeout_ms = DEFAULT_TIMEOUT_MS} = opts
-  if given_nil(opts, "timeout_ms")
-    timeout_ms = nil
-  end
+  # A nil body or headers means the default (documented); a nil
+  # timeout_ms means no limit.
+  if headers == nil then headers = {} end
+  if body == nil then body = "" end
   if type(method) != "string" or method == ""
     error("{name}: method must be a non-empty string")
   end

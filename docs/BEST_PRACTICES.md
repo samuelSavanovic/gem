@@ -486,9 +486,13 @@ fn serve(router, opts)
   end
 ```
 
-Inside the bag the rule is looser than for plain defaults: a field default
-applies when the field is missing *or* `nil`. The trailing `= {}` makes the
-bag itself optional, and an explicit `nil` for the bag also becomes `{}`;
+A field default applies only when the field is missing, as a plain
+default applies only when the argument is left out: `{port: nil}` gives
+`port = nil`. So an option where `nil` means something (`timeout_ms: nil`
+for no limit) needs no `has_key` check, and a caller that forwards an
+option it may not have (`{port: opts.port}`) passes `nil`, not the
+default: leave the key out instead. The trailing `= {}` makes the bag
+itself optional, and an explicit `nil` for the bag also becomes `{}`;
 without `= {}`, passing `nil` is an error. Destructured names are ordinary
 locals that closures and `spawn` bodies can capture.
 
@@ -1031,24 +1035,22 @@ with no limit by default.
 
 ### Don't pass an option's `shutdown` through as `nil` **(trap)**
 
-In a child spec, a missing `shutdown` key means the 5000 ms default, but
+In a child spec, a missing `shutdown` key means the default budget, but
 `shutdown: nil` means no limit, like `timeout_ms: nil` elsewhere in std.
 `{id: id, start: s, shutdown: opts.shutdown}` sets the key to `nil` when
 `opts` has no `shutdown`, so a stubborn child keeps its supervisor waiting
-for good. Copy the key only when it is there:
+for good. Give the option a default when you read it (a destructuring
+default fires only on a missing key, so an explicit `nil` still passes
+through):
 
 ```gem
-fn worker_spec(id, opts)
-  let spec = {id: id, start: start_worker}
-  if has_key(opts, "shutdown")      # not `shutdown: opts.shutdown`
-    spec.shutdown = opts.shutdown
-  end
-  spec
+fn worker_spec(id, {shutdown = 5000} = {})
+  {id: id, start: start_worker, shutdown: shutdown}
 end
 ```
 
-(A destructuring default, `let {shutdown = 5000} = opts`, goes the other
-way: it turns an explicit `nil` into 5000.)
+Or copy the key only when it is there (`if has_key(opts, "shutdown")`),
+which leaves the supervisor's own default in place.
 
 ### Request/reply: a ref, a pin, a timeout, and a monitor
 
@@ -1448,7 +1450,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `match` with no arm matching | yields `nil` silently | add an `else` |
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |
 | `when x > 5`, `when "a" or "b"` | compares with a bool / one value | `if` chain |
-| `nil` passed for a defaulted parameter | parameter is `nil` | leave the argument out |
+| `nil` passed for a defaulted parameter or option field | parameter (field) is `nil` | leave the argument (key) out |
 | `pcall fn() ... end`, `pcall(f, x)`, `pcall(f(x))` | runs nothing / drops `x` / doesn't catch | `pcall f(x)`, `pcall do ... end` |
 | Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
 | `2.0 == 2` | `false` | convert first |
@@ -1466,7 +1468,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
 | `after` in a busy server loop | never fires | `send_after` ticks |
-| `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
+| `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | a destructuring default, or copy the key only when `has_key` |
 | Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
 | `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |
