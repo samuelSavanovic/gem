@@ -1,0 +1,20 @@
+# Used by examples/140_stack_frame_names.gem: a module with `_` in its
+# name whose fns fail, for the names and paths stack frames show.
+
+fn check(x)
+  if type(x) != "int"
+    error("not an int: {x}")
+  end
+  x
+end
+
+fn fail_outer(x)
+  let r = check(x)
+  r + 1
+end
+
+fn make_failer(x)
+  fn() fail_outer(x) end
+end
+
+export fail_outer, make_failer

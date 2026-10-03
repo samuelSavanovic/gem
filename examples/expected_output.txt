@@ -618,7 +618,7 @@ Stack trace:
  56 |       error("max restart intensity reached")
     |
 Stack trace:
-  at _mod_supervisor_sup_loop (std/supervisor.gem:56)
+  at supervisor.sup_loop (std/supervisor.gem:56)
   at anonymous fn (std/supervisor.gem:131)
 test4: supervisor crashed: max restart intensity reached
 test1: equal_self=true different=true
@@ -719,7 +719,7 @@ test5: parent died: now-fatal
     |
 Stack trace:
   at anonymous fn (examples/34_gen_server.gem:97)
-  at _mod_gen_server_loop (std/gen_server.gem:17)
+  at gen_server.loop (std/gen_server.gem:17)
   at anonymous fn (std/gen_server.gem:53)
 test1: after incr 10 = 10
 test3: count=2 first=raw1 second=raw2
@@ -2283,6 +2283,58 @@ no source exit: 2
 -o without name exit: 2
 no stack trace: 1
 flag after source: 0
+fn literal: boom
+  anonymous fn (examples/140_stack_frame_names.gem:22)
+  anonymous fn (examples/140_stack_frame_names.gem:23)
+module fn: not an int: a
+  stack_name_mod.check (examples/modules/stack_name_mod.gem:6)
+  stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:12)
+  anonymous fn (examples/140_stack_frame_names.gem:24)
+closure from a module: not an int: nil
+  stack_name_mod.check (examples/modules/stack_name_mod.gem:6)
+  stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:12)
+  anonymous fn (examples/modules/stack_name_mod.gem:17)
+  anonymous fn (examples/140_stack_frame_names.gem:26)
+builtin-named fn: not an int: b
+  stack_name_mod.check (examples/modules/stack_name_mod.gem:6)
+  stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:12)
+  len (examples/140_stack_frame_names.gem:11)
+  anonymous fn (examples/140_stack_frame_names.gem:27)
+nested fn literals: not an int: 2.5
+  stack_name_mod.check (examples/modules/stack_name_mod.gem:6)
+  stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:12)
+  len (examples/140_stack_frame_names.gem:11)
+  anonymous fn (examples/140_stack_frame_names.gem:30)
+  anonymous fn (examples/140_stack_frame_names.gem:31)
+  anonymous fn (examples/140_stack_frame_names.gem:33)
+
+[Runtime Error]: not an int: c
+  --> examples/modules/stack_name_mod.gem:6
+   |
+ 6 |     error("not an int: {x}")
+   |
+Stack trace:
+  at stack_name_mod.check (examples/modules/stack_name_mod.gem:6)
+  at stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:12)
+  at len (examples/140_stack_frame_names.gem:11)
+  at main (examples/140_stack_frame_names.gem:36)
+4
+false sqrt: arg 0 expected Float, got int
+1.5
+2
+4
+false floor: arg 0 expected Float, got int
+5
+3
+3
+false ceil: arg 0 expected Float, got int
+record saw 0 item(s)
+hits after run_now: 1
+own push: 7
+counter: 0
+hits after block spawn: 2
+child counter: 1
+main counter: 0
 normal link ok
 
 [Runtime Error in process 2]: trapped crash

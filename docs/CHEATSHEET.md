@@ -124,7 +124,7 @@ let [x, y] = task.await_all([t1, t2], 5000)
 # Error handling
 error("msg")                         # halt with stack trace; uncaught in main prints source line + stack trace
                                      # uncaught in a spawned process: that process dies, same report on stderr ("[Runtime Error in process <pid>]")
-let r = pcall some_fn()              # {ok: bool, value/error: ...}
+let r = pcall some_fn()              # {ok: bool, value/error: ..., stack: [{name, file, line}]} — names as in traces (`anonymous fn`, `mod.fn`)
 # Stack: 8 MB per process; overflow raises "stack overflow in <fn>" (pcall-catchable, kills only that process)
 
 # Common builtins
@@ -136,7 +136,7 @@ let r = pcall some_fn()              # {ok: bool, value/error: ...}
 # Time:          time_ms, epoch_ms, format_time, format_time_local
 # SQLite:        sqlite_open, sqlite_close, sqlite_exec, sqlite_query, sqlite_last_insert_id, sqlite_changes
 # Math:          floor, ceil, round, abs, pow, sqrt, random
-# Builtin names aren't reserved: a fn/let/param of the same name shadows the builtin in its scope (a top-level one: that file only)
+# Builtin names aren't reserved: a fn/extern fn/let/param of the same name shadows the builtin in its scope (a top-level one: that file only)
 # Bitwise:       band, bor, bxor, bnot, bshl, bshr
 
 # String building

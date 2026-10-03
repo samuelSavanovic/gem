@@ -1,0 +1,36 @@
+# Stack frames show the names a user wrote, the same in a printed trace
+# and in the `stack` table pcall returns: fn literals are `anonymous fn`,
+# a loaded module's fns are `<module>.<name>` (the module name may
+# contain `_`), an entry-file fn named like a builtin keeps its name, and
+# files are project-relative.
+load "./modules/stack_name_mod"
+load "./modules/stack_name_mod" (make_failer)
+
+# Shadows the builtin `len` in this file.
+fn len(x)
+  let n = stack_name_mod.fail_outer(x)
+  n
+end
+
+let show = fn(title, r)
+  print("{title}: {r.error}")
+  for fr in r.stack
+    print("  {fr.name} ({fr.file}:{fr.line})")
+  end
+end
+
+let boom = fn() error("boom") end
+show("fn literal", pcall boom())
+show("module fn", pcall stack_name_mod.fail_outer("a"))
+let failer = make_failer(nil)
+show("closure from a module", pcall failer())
+show("builtin-named fn", pcall len("b"))
+
+let nested = fn()
+  let inner = fn() len(2.5) end
+  inner()
+end
+show("nested fn literals", pcall nested())
+
+# The same names in an uncaught error's trace.
+len("c")

@@ -31,12 +31,6 @@ void *gem_tail_env = NULL;
 int gem_tail_argc = 0;
 GemVal gem_tail_args[GEM_MAX_TAIL_ARGS];
 
-/* Codegen names fn literals with a gensym; don't show it to users. */
-const char *gem_user_fn_name(const char *name) {
-    if (!name || strncmp(name, "_anon_", 6) == 0) return "anonymous fn";
-    return name;
-}
-
 static int gem_frame_same(const GemFrame *a, const GemFrame *b) {
     return a->line == b->line && strcmp(a->name, b->name) == 0 && strcmp(a->file, b->file) == 0;
 }
@@ -44,14 +38,14 @@ static int gem_frame_same(const GemFrame *a, const GemFrame *b) {
 void gem_print_stack_trace(void) {
     if (gem_leaf_site)
         fprintf(stderr, "  at %s (%s:%d)\n",
-            gem_user_fn_name(gem_leaf_site->name), gem_leaf_site->file, gem_leaf_line);
+            gem_leaf_site->name, gem_leaf_site->file, gem_leaf_line);
     int max = gem_call_depth < GEM_MAX_CALL_DEPTH ? gem_call_depth : GEM_MAX_CALL_DEPTH;
     /* Only the outermost GEM_MAX_CALL_DEPTH frames are recorded. */
     if (gem_call_depth > GEM_MAX_CALL_DEPTH)
         fprintf(stderr, "  ... (deeper frames not recorded)\n");
     for (int i = max - 1; i >= 0; i--) {
         fprintf(stderr, "  at %s (%s:%d)\n",
-            gem_user_fn_name(gem_call_stack[i].name),
+            gem_call_stack[i].name,
             gem_call_stack[i].file,
             gem_call_stack[i].line);
         /* Collapse a run of identical frames (deep recursion) to one line. */

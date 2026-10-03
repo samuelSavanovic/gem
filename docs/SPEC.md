@@ -726,6 +726,8 @@ puts("hello from C")
 
 `extern fn` declares a C function. The compiler emits the call directly since we compile to C. Type annotations on extern declarations only — the rest of the language stays dynamically typed. `Ptr` is an opaque type for C pointers.
 
+An `extern fn` is a binding like a top-level `fn`: one named like a builtin (`extern fn sqrt(x: Float) -> Float`) shadows the builtin in its own file, and one in a loaded module can be exported and called as `module.name`. The C function it calls is always the declared name.
+
 The generated wrapper validates `argc` and each argument's runtime type tag before reading the `GemVal` union, so a Gem-side mistake (wrong arity, wrong type) raises a Gem-level error at the boundary instead of passing garbage to C. Errors mention the declared Gem-level type name (e.g. `foo: arg 0 expected String, got int`).
 
 The compiler auto-generates C forward declarations from `extern fn` type signatures, so no separate `.h` file is needed for function declarations. The type mapping:
@@ -955,6 +957,8 @@ Stack trace:
   at anonymous fn (app.gem:21)
 ```
 
+A stack frame names its function as you write it: `handle` for `fn handle`, `anonymous fn` for a `fn` literal, and `counter.bump` for the top-level `fn bump` of a loaded module `counter.gem` (whatever alias it is loaded under). File paths in traces, compile errors and notes are relative to the project root (the directory holding `gem.toml`); without a `gem.toml`, a file in or below the entry file's directory is shown under that directory as you typed it on the command line (`gem app.gem` shows `lib/util.gem`, `gem /src/app.gem` shows `/src/lib/util.gem`). Other files keep their full path.
+
 **Compile-time error format**: the compiler produces Rust-style diagnostics to stderr with source context, caret highlighting, and optional hints:
 
 ```
@@ -1003,7 +1007,7 @@ end)
 ```
 
 - On success: returns `{ok: true, value: <return value>}`
-- On error: returns `{ok: false, error: <error message string>, stack: <array of {name, file, line} tables>}`
+- On error: returns `{ok: false, error: <error message string>, stack: <array of {name, file, line} tables>}`, innermost frame first, with the same names and paths a printed stack trace shows
 - Errors caught by `pcall` do not print to stderr and do not call `exit(1)`
 - If no `pcall` is active, errors behave as before (print + stack trace + exit)
 - `pcall` catches both user `error()` calls and runtime type errors (e.g. `1 + "hello"`)
@@ -1229,7 +1233,7 @@ All builtins are first-class values — they can be stored in variables and pass
 
 **Builtin names are not reserved.** Builtins live in the outermost scope, so any binding with a builtin's name shadows the builtin wherever that binding is in scope, and every call or reference there reaches the binding:
 
-- A top-level `fn` or `let` (a destructuring `let` or a selective import such as `load "std/log" (error)` included) shadows the builtin for the whole file it is in, whether that is the program's entry file or a loaded module. It does not leak into modules that file loads, or into files that load it: `std/log` defines and exports `error`, and `log.error(msg)` logs while a bare `error(msg)` elsewhere still raises.
+- A top-level `fn`, `extern fn` or `let` (a destructuring `let` or a selective import such as `load "std/log" (error)` included) shadows the builtin for the whole file it is in, whether that is the program's entry file or a loaded module. It does not leak into modules that file loads, or into files that load it: `std/log` defines and exports `error`, and `log.error(msg)` logs while a bare `error(msg)` elsewhere still raises.
 - A parameter, `let` local, loop variable or pattern binding shadows it for its scope (`fn f(len) len + 1 end` is fine).
 
 `for` loops and `match` patterns keep working inside such a scope: they never call a user binding named `len`, `type` or `has_key`.

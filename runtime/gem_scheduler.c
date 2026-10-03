@@ -325,7 +325,7 @@ void gem_stack_overflow(const char *name) {
        unwinds to a pcall frame in this process or ends the process, so the
        limit stays armed throughout. */
     char msg[256];
-    snprintf(msg, sizeof msg, "stack overflow in %s", gem_user_fn_name(name));
+    snprintf(msg, sizeof msg, "stack overflow in %s", name);
     gem_raise_error(msg);
     abort(); /* unreachable */
 }
@@ -607,12 +607,12 @@ static void gem_coro_entry(mco_coro *co) {
             char msg[256];
             if (gem_leaf_site) {
                 snprintf(msg, sizeof msg, "stack overflow in native code called from %s",
-                         gem_user_fn_name(gem_leaf_site->name));
+                         gem_leaf_site->name);
             } else if (gem_call_depth > 0) {
                 int top = (gem_call_depth <= GEM_MAX_CALL_DEPTH ? gem_call_depth
                                                                 : GEM_MAX_CALL_DEPTH) - 1;
                 snprintf(msg, sizeof msg, "stack overflow in native code called from %s",
-                         gem_user_fn_name(gem_call_stack[top].name));
+                         gem_call_stack[top].name);
             } else {
                 snprintf(msg, sizeof msg, "stack overflow");
             }
