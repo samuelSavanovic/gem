@@ -1309,9 +1309,12 @@ fn index_of(s, needle, start = 0)
 The module header is the module's front page: the `##` line
 `name — what it is for.`, a usage example, and the conventions that hold
 for every function (argument types, units, what errors look like), so
-each function's doc doesn't repeat them. Keep it to about a dozen
-lines. A design overview that only maintainers need goes in a `#` block
-after the `load`s.
+each function's doc doesn't repeat them. A small module needs about a
+dozen lines; a large one (std/http, the OTP modules) can need two or three
+times that, and that's fine as long as every line is a rule that holds
+across functions. A rule about one function goes on that function. A
+design overview that only maintainers need goes in a `#` block after the
+`load`s.
 
 Private functions don't get `##`. Give one a `#` comment when its
 contract isn't obvious from its name.
