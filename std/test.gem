@@ -68,51 +68,65 @@ fn key_step(k)
   "[{show(k)}]"
 end
 
-# The path to key `k` of the table on top of `stack`, such as `.a[1]`.
-# Built only for a failure message: every frame but the root holds the key
-# it was reached by.
-fn path_to(stack, k)
+# The identity of a table as an int (runtime/gem_core.c). Tables as table
+# keys are found by a linear scan, so the comparison memo below is keyed
+# by a string of two ids instead. An id is stable while the comparison
+# runs: the tables compared are all older than its loop, and a region
+# reset only moves what was allocated since the loop started.
+extern fn gem_table_id(t: Table) -> Int
+
+# The path to key `k` of node `n` (see diff), such as `.a[1]`. Built only
+# for a failure message.
+fn path_to(nodes, n, k)
+  let steps = [key_step(k)]
+  let i = n
+  while nodes.parent[i] >= 0
+    push(steps, key_step(nodes.key[i]))
+    i = nodes.parent[i]
+  end
   build_string do |add|
-    for i, f in stack
-      if i > 0
-        add(key_step(f.key))
-      end
+    let j = len(steps) - 1
+    while j >= 0
+      add(steps[j])
+      j -= 1
     end
-    add(key_step(k))
   end
 end
 
-# True when the pair (expected, actual) repeats one already being compared
-# further up the path, which happens only for cyclic structures. Up to
-# depth 32 every ancestor is checked; deeper, only the ancestor at the
-# largest power of two not above the depth (Brent's cycle check), so a
-# deep acyclic structure costs O(1) per table and a cycle is still caught
-# within a few laps of it.
-fn on_path(stack, expected, actual)
-  let depth = len(stack)
-  if depth <= 32
-    for f in stack
-      if f.expected == expected and f.actual == actual
-        return true
+fn failure(nodes, kind, e, a, key, n)
+  if kind == "missing"
+    return "actual is missing key {path_to(nodes, n, key)}"
+  end
+  if kind == "extra"
+    for k, v in a
+      if not has_key(e, k)
+        return "actual has extra key {path_to(nodes, n, k)}"
       end
     end
-    return false
   end
-  let p = 32
-  while p * 2 <= depth
-    p = p * 2
-  end
-  let f = stack[p - 1]
-  f.expected == expected and f.actual == actual
+  "at {path_to(nodes, n, key)}, {show_pair(e, a)}"
 end
 
 # Structural comparison. Returns nil when `actual` deeply equals
 # `expected`, else a description of the first difference. Non-tables
 # compare with `==` (so 1 and 1.0 differ); tables are equal when they have
-# the same keys with deeply equal values, in any insertion order. The walk
-# uses an explicit stack, so nesting depth doesn't touch the C stack, and
-# a pair of tables that repeats one further up the path counts as equal
-# (see on_path), so cyclic structures terminate.
+# the same keys with deeply equal values, in any insertion order.
+#
+# The walk is depth first over an explicit work stack, so nesting depth
+# doesn't touch the C stack. A pair of tables met again (a shared
+# subtable, or a cycle) counts as equal, since it is either being compared
+# further up or already proven equal: `seen` holds the pairs already
+# expanded, so each is expanded once and the cost is O(pairs x keys) for
+# any graph, cyclic or not. Expanding a pair pushes, in key order, its
+# subtable pairs and its first scalar difference, if any, as a failure
+# entry; a failure is reported when it reaches the top, after the
+# subtables before it, so the difference reported is the first one in key
+# order.
+#
+# The work stack is five parallel arrays rather than an array of records,
+# and the memo skips small flat pairs: the loop's per-iteration arena
+# reset copies whatever of them is live, and records made it several
+# times slower on a large array of small tables.
 fn diff(actual, expected)
   if type(actual) != "table" or type(expected) != "table"
     if actual == expected
@@ -120,39 +134,116 @@ fn diff(actual, expected)
     end
     return show_pair(expected, actual)
   end
-  let stack = []
-  if actual != expected
-    push(stack, {expected: expected, actual: actual, key: nil, ks: keys(expected), i: 0})
+  if actual == expected
+    return nil
   end
-  while len(stack) > 0
-    let f = stack[-1]
-    if f.i == len(f.ks)
-      if len(f.actual) != len(f.expected)
-        for k in keys(f.actual)
-          if not has_key(f.expected, k)
-            return "actual has extra key {path_to(stack, k)}"
+  let seen = {}
+  # One node per expanded pair that pushed work, for failure paths: the
+  # key the pair was reached by and the node it was reached from (-1 at
+  # the root).
+  let node_key = []
+  let node_parent = []
+  # Work entries: a pair of tables to compare (kind "") or a failure to
+  # report ("missing", "extra" or "value") for the pair of node `parent`.
+  let w_kind = [""]
+  let w_e = [expected]
+  let w_a = [actual]
+  let w_key = [""]
+  let w_parent = [-1]
+  while len(w_e) > 0
+    let kind = pop(w_kind)
+    let e = pop(w_e)
+    let a = pop(w_a)
+    let key = pop(w_key)
+    let parent = pop(w_parent)
+    if kind != ""
+      return failure({key: node_key, parent: node_parent}, kind, e, a, key, parent)
+    end
+    let id = "{gem_table_id(e)} {gem_table_id(a)}"
+    if not has_key(seen, id)
+      let n = len(node_key)
+      let base = len(w_e)
+      # An extra key is reported after everything else in the pair.
+      if len(a) != len(e)
+        push(w_kind, "extra")
+        push(w_e, e)
+        push(w_a, a)
+        push(w_key, "")
+        push(w_parent, n)
+      end
+      let first = len(w_e)
+      for k, ev in e
+        let av = a[k]
+        let missing = av == nil and not has_key(a, k)
+        let both = type(ev) == "table" and type(av) == "table"
+        if both and ev != av and small_flat_equal(ev, av)
+          continue
+        end
+        if missing or ev != av
+          if missing
+            push(w_kind, "missing")
+          elif both
+            push(w_kind, "")
+          else
+            push(w_kind, "value")
+          end
+          push(w_e, ev)
+          push(w_a, av)
+          push(w_key, k)
+          push(w_parent, n)
+          if not both
+            break
           end
         end
       end
-      pop(stack)
-    else
-      let k = f.ks[f.i]
-      f.i = f.i + 1
-      if not has_key(f.actual, k)
-        return "actual is missing key {path_to(stack, k)}"
+      if len(w_e) > base
+        push(node_key, key)
+        push(node_parent, parent)
       end
-      let e = f.expected[k]
-      let a = f.actual[k]
-      if type(e) == "table" and type(a) == "table"
-        if e != a and not on_path(stack, e, a)
-          push(stack, {expected: e, actual: a, key: k, ks: keys(e), i: 0})
-        end
-      elif e != a
-        return "at {path_to(stack, k)}, {show_pair(e, a)}"
+      # Comparing a small flat pair again costs about as much as finding
+      # it in `seen`, so only pairs with subtables or more keys are kept.
+      if len(w_e) > first or len(e) > 8
+        seen[id] = true
+      end
+      # Reverse what was pushed, so the first key is on top.
+      let i = first
+      let j = len(w_e) - 1
+      while i < j
+        swap(w_kind, i, j)
+        swap(w_e, i, j)
+        swap(w_a, i, j)
+        swap(w_key, i, j)
+        swap(w_parent, i, j)
+        i += 1
+        j -= 1
       end
     end
   end
   nil
+end
+
+# True when `e` and `a` are small tables of the same keys with equal
+# values none of which is a table: diff settles such a pair (an array of
+# small records) where it meets it, without pushing it. Anything else,
+# including any difference, goes through the work stack, which finds the
+# difference again in order.
+fn small_flat_equal(e, a)
+  if len(e) > 8 or len(e) != len(a)
+    return false
+  end
+  for k, ev in e
+    let av = a[k]
+    if type(ev) == "table" or ev != av or (av == nil and not has_key(a, k))
+      return false
+    end
+  end
+  true
+end
+
+fn swap(arr, i, j)
+  let t = arr[i]
+  arr[i] = arr[j]
+  arr[j] = t
 end
 
 fn assert(cond, msg = nil)

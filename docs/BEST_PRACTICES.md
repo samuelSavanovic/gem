@@ -563,6 +563,14 @@ items[count] = x; count += 1   # Over (and drop the separate counter)
 Appending by index is quadratic: 20,000 appends took 1.6 s with
 `a[len(a)] = x` and 4 ms with `push`.
 
+### Don't call `keys()` or `values()` on a large table **(trap)**
+
+Both builtins are quadratic in the table's size: on a 10,000-entry table
+each took 0.4 s, on 40,000 entries 6.4 s, while `for k, v in` over the
+same table took 4 ms. Iterate with `for k, v in tbl` (or `for x in arr`)
+and keep `keys()` for small tables, or for the snapshot you need before
+deleting entries (see below).
+
 ### Remove from arrays with `remove_at`, never `delete` **(trap)**
 
 `delete` is for string-keyed tables. On an array it moves the last element
@@ -612,7 +620,8 @@ back with the string key `"42"`. Other key types (floats, bools) raise.
 
 `json.parse` reads an integer too big for 64 bits as a float, which loses
 digits past about 16 (`12345678901234567890` becomes
-`1.2345678901234567e+19`). Send ids that big as strings.
+`1.2345678901234567e+19`). Send ids that big as strings. A number past
+the float range (`1e309`) raises; one below it (`1e-400`) reads as `0.0`.
 
 `json.parse` raises on malformed input; wrap it in `pcall` when the input
 comes from outside.
@@ -1223,7 +1232,8 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 - Use `std/test` (`test.case`, `test.assert`, `test.assert_eq`,
   `test.assert_neq`, `test.assert_throws`, `test.run()`) for checks that
   verify themselves. `assert_eq` compares tables by structure (same keys,
-  equal values, any insertion order; cycles and deep nesting are fine) and
+  equal values, any insertion order; cycles, shared subtables and deep
+  nesting are fine) and
   everything else with `==`, so `1` doesn't equal `1.0`. A failure shows
   both values, the path to the first difference, and the types when they
   differ: `expected {a: [1, 2]}, got {a: [1, 2.0]}: at .a[1], expected 2
@@ -1279,6 +1289,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `delete`/`remove_at`/`push` on what a `for` iterates | skips or adds entries, visits `nil` | iterate a snapshot (`keys(tbl)`) |
 | `for x in record` | `x` is `nil` for every entry | `for k, v in record` |
 | `a[len(a)] = x` in a loop | quadratic | `push(a, x)` |
+| `keys(t)` / `values(t)` on a large table | quadratic | `for k, v in t` |
 | `t.x = nil` to remove a key | key stays | `delete(t, "x")` |
 | `id in seen` on an int-keyed set | scans values | `has_key(seen, id)` |
 | Boolean `sort` comparator | array left unsorted | return `a - b` |

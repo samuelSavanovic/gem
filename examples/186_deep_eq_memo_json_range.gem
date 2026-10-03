@@ -1,0 +1,113 @@
+# std/test deep equality on shared and cyclic graphs (each pair of tables
+# is compared once), large and deep data, failure order; std/json numbers
+# out of float range and lone surrogates.
+load "std/test"
+load "std/json"
+
+fn failure(body)
+  let r = pcall body()
+  if r.ok
+    return "ok"
+  end
+  r.error
+end
+
+# Ring of n tables; table i links 1, 2 (and 3) ahead under a, b (and c).
+fn ring(n, links)
+  let ts = []
+  for i = 0, n
+    push(ts, {id: i % 3})
+  end
+  for i = 0, n
+    ts[i].a = ts[(i + 1) % n]
+    ts[i].b = ts[(i + 2) % n]
+    if links > 2
+      ts[i].c = ts[(i + 3) % n]
+    end
+  end
+  ts[0]
+end
+
+# Each level's two keys point at the same next table: 2^n paths.
+fn dag(n)
+  let t = {leaf: true}
+  for i = 0, n
+    t = {l: t, r: t}
+  end
+  t
+end
+
+fn deep(n)
+  let t = {v: 0}
+  for i = 0, n
+    t = {next: t}
+  end
+  t
+end
+
+for n in [33, 100, 1000]
+  for links in [2, 3]
+    test.assert_eq(ring(n, links), ring(n, links))
+  end
+end
+# Same shape, but node ids repeat with period 3 vs one ring of 3: equal
+# as infinite trees only when n is a multiple of 3.
+test.assert_eq(ring(99, 2), ring(3, 2))
+test.assert_neq(ring(100, 2), ring(3, 2))
+print("rings ok")
+test.assert_eq(dag(22), dag(22))
+let d = dag(22)
+test.assert_neq(d, dag(21))
+print("dag ok")
+
+let w1 = []
+let w2 = []
+for i = 0, 50000
+  push(w1, {i: i, s: "x"})
+  push(w2, {i: i, s: "x"})
+end
+test.assert_eq(w1, w2)
+w2[49999].s = "y"
+let msg = failure(fn() test.assert_eq(w2, w1) end)
+print(substr(msg, len(msg) - 40, 40))
+print("wide ok")
+
+test.assert_eq(deep(30000), deep(30000))
+let d1 = deep(30000)
+let dm = failure(fn() test.assert_eq(deep(3), {next: {next: {next: {next: {v: 1}}}}}) end)
+print(dm)
+test.assert_neq(d1, deep(29999))
+print("deep ok")
+
+# The first difference in key order is the one reported, wherever it is.
+print(failure(fn() test.assert_eq({a: {x: 1, y: [2]}, b: 2}, {a: {x: 1, y: [3]}, b: 3}) end))
+print(failure(fn() test.assert_eq({a: [1, 2], b: 5}, {a: [1, 3], b: 6}) end))
+print(failure(fn() test.assert_eq({a: {x: 1}, b: 1}, {a: {x: 1, y: 2}, b: 2}) end))
+print(failure(fn() test.assert_eq({a: {x: 1, z: 3}}, {a: {x: 1}}) end))
+print(failure(fn() test.assert_eq({a: [{p: 1}], b: {q: 2}}, {a: [{p: 1}], b: {q: 2, r: 3}}) end))
+let s = {k: 1}
+print(failure(fn() test.assert_eq({a: s, b: s}, {a: {k: 1}, b: {k: 2}}) end))
+
+fn show(r)
+  if r.ok
+    return "ok {type(r.value)} {r.value}"
+  end
+  "ERR {r.error}"
+end
+
+let big = build_string do |add|
+  add("1")
+  for i = 0, 400
+    add("0")
+  end
+end
+print(show(pcall json.parse(big)))
+for src in ["1e309", "-1e309", "[1e999]", "[1, 0.1e310]", "1.8e308", "1e99999999999999999999",
+            "1.7976931348623157e308", "1e-400", "-1e-400", "0.0000001e-317", "4.9e-324", "1e-320",
+            "100000000000000000000e-330", "1e-99999999999999999999", "0e99999", "123456789012345678901234567890"]
+  print("{src}: {show(pcall json.parse(src))}")
+end
+for src in ["\"\\ude00\"", "\"ab\\udfff\"", "\"\\ud800\"", "\"\\ud800x\"", "\"\\ud800\\u0041\"",
+            "\"\\ud800\\ud800\"", "\"\\ud83d\\ude00\""]
+  print("{src}: {show(pcall json.parse(src))}")
+end

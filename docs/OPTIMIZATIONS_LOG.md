@@ -359,6 +359,11 @@ On macOS, `ps` and `top` report RSS well above `phys_footprint` after deep proce
 
 Not done: ASan builds. ASan's own SIGSEGV reporting is replaced by the overflow handler, which hands non-guard faults to the default action, and minicoro's ASan fiber hooks were not exercised with the mmap'd stacks.
 
+## std/json
+
+### Fast path for escape-free strings in parse ✓ Done (2026-10-03)
+`read_string` (std/json.gem, scanner) first scans for the closing `"`, checking for `\` and control bytes on the way, and returns one `substr` when the string has no escapes; only a string with an escape gets a buffer, which then copies whole runs between escapes instead of pushing byte by byte. Parsing a 2.5 MB string-heavy document (20,000 records of four short strings and a three-string array, best of 5): 514 ms with the fast path disabled, 371 ms with it (1.4x); 940 ms with the parser as it was before the rewrite in commit a6d6942, which pushed every byte into a buffer.
+
 ## C Interop Hardening
 
 ### Arity / type validation at extern boundary ✓ Done (2026-05-05)

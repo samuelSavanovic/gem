@@ -14,6 +14,64 @@ let max_encode_depth = 1000
 # (`ord`), never as 1-byte strings, and string/number tokens are cut out
 # with `substr`, so the hot loops don't allocate per byte.
 
+# True when the JSON number `text` (already validated) is below 1 in
+# magnitude, from its decimal exponent: the position of its first
+# nonzero digit plus the written exponent. Decides whether a number
+# to_float can't represent underflows or overflows.
+fn magnitude_below_one(text)
+  let i = 0
+  if ord(text, 0) == 45
+    i = 1
+  end
+  let n = len(text)
+  # e = the exponent of the first nonzero digit + 1, before the written one
+  let e = 0
+  let seen = false
+  let in_frac = false
+  while i < n
+    let c = ord(text, i)
+    if c == 46
+      in_frac = true
+    elif c == 101 or c == 69
+      break
+    elif in_frac
+      if not seen
+        if c == 48
+          e -= 1
+        else
+          seen = true
+        end
+      end
+    elif seen or c != 48
+      seen = true
+      e += 1
+    end
+    i += 1
+  end
+  if not seen
+    return true
+  end
+  if i < n
+    i += 1
+    let neg = ord(text, i) == 45
+    if neg or ord(text, i) == 43
+      i += 1
+    end
+    # More than 18 exponent digits can't be a float in range either way;
+    # clamp so to_int can't fail.
+    let digits = substr(text, i, n - i)
+    let x = 1000000000000000000
+    if len(digits) < 19
+      x = to_int(digits)
+    end
+    if neg
+      x = -x
+    end
+    return e + x <= 0
+  end
+  e <= 0
+end
+
 fn make_scanner(input)
   let pos = 0
   let length = len(input)
@@ -81,16 +139,25 @@ fn make_scanner(input)
   end
 
   # Appends one `\uXXXX` escape (a surrogate pair counts as one) as UTF-8.
+  # A surrogate that isn't half of a high-low pair is an error, either
+  # half, since it has no UTF-8 encoding.
   let unicode_escape = fn(buf)
+    let at = pos - 2
     let code = hex4()
+    if code >= 56320 and code <= 57343
+      pos = at
+      fail("lone surrogate in unicode escape")
+    end
     if code >= 55296 and code <= 56319
       if substr(input, pos, 2) != "\\u"
-        fail("expected low surrogate after high surrogate")
+        pos = at
+        fail("lone surrogate in unicode escape")
       end
       pos += 2
       let lo = hex4()
       if lo < 56320 or lo > 57343
-        fail("invalid low surrogate")
+        pos = at
+        fail("lone surrogate in unicode escape")
       end
       code = (code - 55296) * 1024 + (lo - 56320) + 65536
     end
@@ -237,17 +304,29 @@ fn make_scanner(input)
       end
     end
     let text = substr(input, start, pos - start)
-    if is_float
-      return to_float(text)
-    end
-    if int_digits < 19
+    if not is_float and int_digits < 19
       return to_int(text)
     end
-    let r = pcall to_int(text)
-    if r.ok
-      return r.value
+    if not is_float
+      let r = pcall to_int(text)
+      if r.ok
+        return r.value
+      end
     end
-    to_float(text)
+    let f = pcall to_float(text)
+    if f.ok
+      return f.value
+    end
+    # to_float refuses only a result out of float range: an underflow
+    # reads as zero, an overflow is an error.
+    if magnitude_below_one(text)
+      if ord(text, 0) == 45
+        return -0.0
+      end
+      return 0.0
+    end
+    pos = start
+    fail("number out of range")
   end
 
   {peek: peek, advance: advance, skip_ws: skip_ws, at_end: at_end, fail: fail,

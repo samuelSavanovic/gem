@@ -363,6 +363,14 @@ typedef struct {
 /* ─── Comparison / equality ─── */
 
 int gem_val_eq(GemVal a, GemVal b);
+/* The identity of a table as an int (0 for any other value), for code that
+   must index tables by identity in O(1): tables as table keys are found by
+   a linear scan. std/test reaches it through `extern fn` to memoize the
+   table pairs of a deep comparison. A table keeps its id only while it is
+   not moved: a region reset (or a copy to another process) can give it a
+   new one, so keep ids only for tables older than the loop that uses them,
+   such as a function's arguments. */
+int64_t gem_table_id(GemVal v);
 int gem_truthy(GemVal v);
 
 /* ─── Arithmetic / operators ─── */
