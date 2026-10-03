@@ -71,6 +71,7 @@ expected=(
   "number_dotdot:1:1"
   "destructure_field_name:4:4"
   "table_float_key:3:3"
+  "interp_closed_unterminated:1:1"
 )
 
 fails=0

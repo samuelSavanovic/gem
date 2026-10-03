@@ -3846,19 +3846,21 @@ v
 {key: "val"} ["callee", "arg", "k", "key", "val"]
 1-2-3 [1, 2, 3]
 3 0
+0 a    b!
+mine
 [1, 5, 7, 6] 5
 done own body
 a
 b c
 d
 
-[Runtime Error]: reported at line 77
-  --> examples/194_compiler_known_bugs.gem:77
+[Runtime Error]: reported at line 93
+  --> examples/194_compiler_known_bugs.gem:93
     |
- 77 | error("reported at line 77")
+ 93 | error("reported at line 93")
     |
 Stack trace:
-  at main (examples/194_compiler_known_bugs.gem:77)
+  at main (examples/194_compiler_known_bugs.gem:93)
 1: partial: true, took about 200 ms: true
 1: zero and negative don't wait: true true true
 1: tcp_write: timeout_ms must be an int (milliseconds) or nil, got string

@@ -489,8 +489,8 @@ fn make_parser(tokens, source, file, sink)
           push(defaults, nil)
         end
 
-        # Bind each named field as a local. Per-field defaults fire when the
-        # extracted value is nil (key missing or value explicitly nil).
+        # Bind each named field as a local. Per-field defaults fire only
+        # when the key is missing (an explicit nil stays nil).
         for di = 0, len(dnames)
           push_destructured(prelude, dnames[di], pname, make_string(dnames[di]), make_dot(make_var(pname), dnames[di]), ddflts[di], dline)
         end
@@ -1369,7 +1369,8 @@ fn make_parser(tokens, source, file, sink)
         while peek().type != "}" and not at_end()
           let _lp = pos
           let field_tok = peek()
-          # NAME or keyword as field name
+          # The field name: check_destructure_field reports anything but a
+          # NAME
           advance()
           push(names, field_tok.value)
           check_destructure_field(field_tok)

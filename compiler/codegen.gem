@@ -3988,7 +3988,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "        {t} = {lc};\n")
       buf_push(b, "    } else \{\n")
       if rc_r.setup != ""
-        buf_push(b, str_replace(rc_r.setup, "    ", "        "))
+        # Pushed as is: re-indenting would also rewrite spaces inside C
+        # string literals.
+        buf_push(b, rc_r.setup)
       end
       buf_push(b, "        {t} = {rc_r.expr};\n")
       buf_push(b, "    }\n")
@@ -4003,7 +4005,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "        {t} = {lc};\n")
       buf_push(b, "    } else \{\n")
       if rc_r.setup != ""
-        buf_push(b, str_replace(rc_r.setup, "    ", "        "))
+        # Pushed as is: re-indenting would also rewrite spaces inside C
+        # string literals.
+        buf_push(b, rc_r.setup)
       end
       buf_push(b, "        {t} = {rc_r.expr};\n")
       buf_push(b, "    }\n")
@@ -4413,7 +4417,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, emit_region_reset("{p}    ", mark, rescue_roots, pinned_rescue_roots))
     end
     if cond_r.setup != ""
-      buf_push(b, str_replace(cond_r.setup, "    ", "{p}    "))
+      buf_push(b, cond_r.setup)
     end
     buf_push(b, "{p}    if (!gem_truthy({cond_r.expr})) break;\n")
     let saved_while_scope = set_union(fn_scope_locals, {})

@@ -437,26 +437,23 @@ fn rename_stmt_in_scope(stmt, rmap, current, top)
     # A module-scope destructuring `let`: the initializer (in the block's
     # first `let`), closures in it included, still calls each builtin the
     # block binds, as for a plain `let` of a builtin's name.
-    let pending = []
-    for s in stmt.stmts
-      if is_node(s, "let") and current[s.name] == "pending"
-        push(pending, s.name)
-      end
-    end
     let init_scope = copy_set(current)
-    for name in pending
-      init_scope[name] = true
-    end
     for s in stmt.stmts
       if is_node(s, "let") and current[s.name] == "pending"
-        rename_node(s.value, rmap, init_scope)
-        s.name = rmap[s.name]
-      else
-        rename_stmt_in_scope(s, rmap, init_scope, top)
+        init_scope[s.name] = true
       end
     end
-    for name in pending
-      delete(current, name)
+    # Only the initializer (the block's first `let`) gets init_scope; the
+    # field lets and their defaults follow in order, as for separate lets,
+    # so a default naming an earlier field sees that field.
+    let first = true
+    for s in stmt.stmts
+      if first
+        rename_stmt_in_scope(s, rmap, init_scope, top)
+        first = false
+      else
+        rename_stmt_in_scope(s, rmap, current, top)
+      end
     end
   elif is_node(stmt, "block")
     for s in stmt.stmts

@@ -250,6 +250,8 @@ fn tokenize(source, file, sink)
   let interp_triple = {}
   let interp_indent = {}
   let interp_open = {}
+  # interp_quote[d]: the opening quote of the string interpolation d is in.
+  let interp_quote = {}
   let triple_dq_indent = ""
   let tstart = 0
 
@@ -335,6 +337,7 @@ fn tokenize(source, file, sink)
 
     # Strings
     if ch == "\""
+      let q_pos = {line: line, col: tstart - line_start + 1}
       pos += 1
 
       # Triple-quoted double string: """..."""  (with interpolation)
@@ -425,6 +428,7 @@ fn tokenize(source, file, sink)
             pos += 1
             interp_brace[interp_depth] = 0
             interp_open[interp_depth] = {line: line, col: pos - line_start}
+            interp_quote[interp_depth] = q_pos
             interp_triple[interp_depth] = true
             interp_indent[interp_depth] = triple_dq_indent
             interp_depth += 1
@@ -476,6 +480,7 @@ fn tokenize(source, file, sink)
           pos += 1
           interp_brace[interp_depth] = 0
           interp_open[interp_depth] = {line: line, col: pos - line_start}
+          interp_quote[interp_depth] = q_pos
           interp_triple[interp_depth] = false
           interp_depth += 1
           hit_interp = true
@@ -811,8 +816,13 @@ fn tokenize(source, file, sink)
 
         if not hit_interp
           if pos >= length
-            let op = interp_open[0]
-            sink.report(source, file, op.line, op.col, 1, "unterminated triple-quoted string interpolation", "the string is never closed after the interpolation this '\{' opens; write '\\\{' for a literal brace")
+            if interp_depth > 0
+              let op = interp_open[0]
+              sink.report(source, file, op.line, op.col, 1, "unterminated triple-quoted string interpolation", "the string is never closed after the interpolation this '\{' opens; write '\\\{' for a literal brace")
+            else
+              let q = interp_quote[0]
+              sink.report(source, file, q.line, q.col, 3, "unterminated triple-quoted string", "this string is never closed")
+            end
             push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
             return tokens
           end
@@ -868,11 +878,16 @@ fn tokenize(source, file, sink)
       end
       if not hit_interp
         if pos >= length
-          # The string never closes. Report the outermost interpolation's
-          # `{` (the first one still open, or this one): it is usually a
-          # brace meant literally, which swallowed the rest of the file.
-          let op = interp_open[0]
-          sink.report(source, file, op.line, op.col, 1, "unterminated string interpolation", "the string is never closed after the interpolation this '\{' opens; write '\\\{' for a literal brace")
+          # The string never closes. When an outer interpolation is still
+          # open, its `{` is usually a brace meant literally, which swallowed
+          # the rest of the file: report it. Otherwise report the string.
+          if interp_depth > 0
+            let op = interp_open[0]
+            sink.report(source, file, op.line, op.col, 1, "unterminated string interpolation", "the string is never closed after the interpolation this '\{' opens; write '\\\{' for a literal brace")
+          else
+            let q = interp_quote[0]
+            sink.report(source, file, q.line, q.col, 1, "unterminated string", "this string is never closed")
+          end
           push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
           return tokens
         end

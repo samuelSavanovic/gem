@@ -54,6 +54,22 @@ print("{g(1)}-{f(2).v}-{g(3)}", log)
 let [len, size] = [fn(x) 0 end, fn(x) len(x) end]
 print(size("abc"), len("abc"))
 
+# A pinned operand keeps the spaces in its string literals, also inside
+# an `and` right side and a `while` condition.
+fn spaced() "a    b" end
+let sp = "a"
+let rounds = 0
+while sp + "    b" != spaced()
+  rounds += 1
+  if rounds > 2 then break end
+end
+print(rounds, true and (sp + "    b" + "!"))
+
+# A destructuring default that names an earlier field (named like a
+# builtin) reads that field.
+let {keys, from_keys = keys({a: 1})} = {keys: fn(t) "mine" end}
+print(from_keys)
+
 # Every `export` statement counts; defaults see the module's lets.
 print(kb.with_defaults(1), kb.anon_default())
 
@@ -74,4 +90,4 @@ b"
 let q = 'c
 d'
 print(s, q)
-error("reported at line 77")
+error("reported at line 93")
