@@ -8,17 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### A renaming destructuring pattern reaches the C compiler
-
-```gem
-let {pid: s} = {pid: 5}
-```
-
-SPEC says destructuring has no renaming, but the parser accepts
-`{key: name}` in a `let` pattern and codegen emits invalid C
-(`#define gem_gi_: 0`, then `gem: compilation failed`). It should be a
-parse error at the pattern.
-
 ### Exporting or importing a name that doesn't exist shows a mangled name
 
 ```gem

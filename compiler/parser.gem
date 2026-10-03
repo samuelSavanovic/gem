@@ -295,6 +295,31 @@ fn make_parser(tokens, source, file, sink)
   let parse_not = nil
   let parse_pattern = nil
 
+  # In a destructuring pattern (`let {..} =`, a `{..}` fn param), after the
+  # field name: `{key: name}` is renaming, which only match/receive patterns
+  # have. Report it at the field and skip the rest of the entry.
+  let reject_destructure_rename = fn(field_tok, example)
+    if peek().type != ":"
+      return nil
+    end
+    let f = field_tok.value
+    report(field_tok.line, field_tok.col, len(f), "destructuring can't rename `{f}`: write `{example}` and use `{f}`", nil)
+    advance()
+    let depth = 0
+    while not at_end()
+      let tp = peek().type
+      if depth == 0 and (tp == "," or tp == "}" or tp == ")")
+        break
+      end
+      if tp == "\{" or tp == "[" or tp == "("
+        depth += 1
+      elif tp == "}" or tp == "]" or tp == ")"
+        depth -= 1
+      end
+      advance()
+    end
+  end
+
   # ── Parameter list ──
   # Returns {params, rest_param, defaults, prelude}.
   # params: param names before the rest param (or all params if no rest).
@@ -330,6 +355,7 @@ fn make_parser(tokens, source, file, sink)
           let field_tok = peek()
           advance()
           push(dnames, field_tok.value)
+          reject_destructure_rename(field_tok, "\{" + field_tok.value + "\}")
           skip_nl()
           if peek().type == "="
             advance()
@@ -1179,6 +1205,7 @@ fn make_parser(tokens, source, file, sink)
           # NAME or keyword as field name
           advance()
           push(names, field_tok.value)
+          reject_destructure_rename(field_tok, "let \{" + field_tok.value + "\} = ...")
           if at_top
             note_top_name(field_tok, "let")
           end
