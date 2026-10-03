@@ -1264,7 +1264,7 @@ All TCP builtins use non-blocking sockets with scheduler poll integration. The s
 
 `sqlite_exec(db, sql)` — executes SQL that returns no rows (DDL, INSERT without RETURNING, etc.). Inline execution (no thread pool). Raises on error.
 
-`sqlite_query(db, sql, params)` — executes a parameterized query. `params` is an array of bind values matching `?` placeholders in `sql`. Returns an array of row tables, where each row is a string-keyed table (e.g., `{id: 1, name: "Alice"}`). Column type mapping: INTEGER → Int, REAL → Float, TEXT → String, NULL → Nil, BLOB → String (raw bytes). Inline execution (no thread pool). Raises on error.
+`sqlite_query(db, sql, params)` — executes a parameterized query. `params` is an array of bind values matching the placeholders in `sql` (`?`, `?N`, `:name`, ...), bound in order; it may be omitted or `nil` when the statement has none. The number of values must equal the statement's parameter count (the highest placeholder index, so `?1` used twice counts once), and each value must be nil, a bool (bound as 1/0), an int, a float or a string; otherwise `sqlite_query` raises, e.g. `sqlite_query: statement has 2 parameter(s), got 1` or `sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string`. Returns an array of row tables, where each row is a string-keyed table (e.g., `{id: 1, name: "Alice"}`). Column type mapping: INTEGER → Int, REAL → Float, TEXT → String, NULL → Nil, BLOB → String (raw bytes). Inline execution (no thread pool). Raises on error.
 
 `sqlite_last_insert_id(db)` — returns `sqlite3_last_insert_rowid` as an int.
 

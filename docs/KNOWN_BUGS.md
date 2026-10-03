@@ -125,12 +125,6 @@ written without a space after the colon (`Host:x`, valid HTTP) is
 dropped. `parse_headers` in std/http.gem splits on `": "`. Lowercase the
 names, trim optional whitespace, and document the `req.headers` keys.
 
-### `sqlite_query` doesn't check its parameters
-
-`sqlite_query(db, "SELECT ?, ?", [1])` binds `NULL` for the missing
-parameter, extra parameters are ignored, and a table parameter binds
-`NULL`. All three should raise. (runtime/gem_builtins_sqlite.c)
-
 ## Editor grammars
 
 ### tree-sitter grammar gaps

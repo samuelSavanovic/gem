@@ -2636,3 +2636,18 @@ my floor 2.5
 entry header: 40
 module header: 407
 system header: 3
+[{a: nil, b: 1, c: 2, d: 1.5, e: "s"}]
+[{one: 1}]
+[{one: 1}]
+[{two: 2}]
+[{a: 7, b: 7}]
+[{x: "p", y: "q"}]
+error: sqlite_query: statement has 2 parameter(s), got 1
+error: sqlite_query: statement has 1 parameter(s), got 2
+error: sqlite_query: statement has 1 parameter(s), got 0
+error: sqlite_query: statement has 0 parameter(s), got 1
+error: sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string
+error: sqlite_query: parameter 2 is a fn; expected nil, bool, int, float or string
+error: sqlite_query: params must be a table, got int
+sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string
+[{v: "ok"}]
