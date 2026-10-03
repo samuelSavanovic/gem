@@ -1,0 +1,99 @@
+# std/supervisor: {pid} handles from child starts, name registered by
+# start, which_children targets/timeout/dead supervisor, tail-call loop,
+# one_for_all, bad strategy.
+load "std/supervisor"
+load "std/gen_server"
+
+let counter = {
+  init: fn() {state: 0} end,
+  handle_call: fn(msg, from, n) {reply: n + 1, state: n + 1} end
+}
+
+fn idle()
+  spawn do
+    receive
+    when {tag: "stop"}
+      nil
+    end
+  end
+end
+
+# A process that is not a supervisor: never answers.
+fn deaf()
+  spawn do
+    receive
+    when {tag: "never"}
+      nil
+    end
+  end
+end
+
+fn main()
+  # 1. A child start that returns a {pid} handle (gen_server.start).
+  let h = supervisor.start({children: [
+    {id: "gs", start: fn() gen_server.start(counter) end},
+    {id: "plain", start: idle}
+  ]})
+  let cs = supervisor.which_children(h)
+  print("1: {len(cs)} children, gs pid is {type(cs[0].pid)}")
+  print("1: call -> {gen_server.call(cs[0].pid, "inc")}")
+  kill(cs[0].pid, "shutdown")
+  let cs2 = supervisor.which_children(h)
+  print("1: gs restarted: {cs2[0].pid != cs[0].pid}, fresh state -> {gen_server.call(cs2[0].pid, "inc")}")
+
+  # 2. The name works as soon as start returns.
+  let named = supervisor.start({name: "sup175", children: [{id: "w", start: idle}]})
+  print("2: whereis matches: {whereis("sup175") == named.pid}")
+  print("2: children by name: {len(supervisor.which_children("sup175"))}")
+  let dup = pcall supervisor.start({name: "sup175", children: [{id: "w", start: idle}]})
+  print("2: duplicate: {dup.error}")
+  print("2: name still points at the first: {whereis("sup175") == named.pid}")
+
+  # 3. which_children targets and failures.
+  print("3: bare pid: {len(supervisor.which_children(named.pid))}")
+  print("3: unknown name: {(pcall supervisor.which_children("nope175")).error}")
+  print("3: bad target: {(pcall supervisor.which_children(nil)).error}")
+  print("3: no answer: {(pcall supervisor.which_children(deaf(), 30)).error}")
+  let doomed = supervisor.start({children: [{id: "w", start: idle}]})
+  kill(doomed.pid, "shutdown")
+  let t0 = time_ms()
+  let r = pcall supervisor.which_children(doomed)
+  print("3: dead supervisor: {r.error}, at once: {time_ms() - t0 < 1000}")
+
+  # 4. Many messages and child exits: the loop is a tail call.
+  let busy = supervisor.start({max_restarts: 100000, children: [
+    {id: "perm", start: idle},
+    {id: "temp", restart: "temporary", start: idle}
+  ]})
+  for i = 0, 5000
+    send(busy.pid, {tag: "DOWN", pid: -5, reason: "unknown child"})
+    send(busy.pid, {tag: "junk", n: i})
+  end
+  let first = supervisor.which_children(busy)[0].pid
+  for i = 0, 500
+    kill(supervisor.which_children(busy)[0].pid, "shutdown")
+  end
+  let bc = supervisor.which_children(busy)
+  kill(bc[1].pid, "shutdown")
+  let after_temp = supervisor.which_children(busy)
+  print("4: still alive, temp pid {after_temp[1].pid}, perm restarted {after_temp[0].pid != first}")
+
+  # 5. one_for_all restarts every child.
+  let all = supervisor.start({strategy: "one_for_all", children: [
+    {id: "a", start: idle}, {id: "b", start: idle}, {id: "c", start: idle}
+  ]})
+  let before = supervisor.which_children(all)
+  kill(before[1].pid, "shutdown")
+  let now = supervisor.which_children(all)
+  let fresh = 0
+  for i = 0, len(now)
+    if now[i].pid != before[i].pid and process_info(before[i].pid) == nil
+      fresh += 1
+    end
+  end
+  print("5: {fresh} of {len(now)} restarted, ids {now[0].id}{now[1].id}{now[2].id}")
+
+  # 6. Bad strategy (restart intensity is in 30_supervisor).
+  print("6: {(pcall supervisor.start({strategy: "rest_for_one", children: []})).error}")
+  exit()
+end

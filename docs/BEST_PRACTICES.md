@@ -872,10 +872,10 @@ stack, so a hostile input gets a clear error instead of a stack overflow.
 
 Some std APIs don't follow this doc yet. Until they are fixed:
 
-- `gen_server.start` and `supervisor.start` return `{pid: pid}`, but
-  `gen_server.call`, `gen_server.cast` and `supervisor.which_children`
-  take a bare pid or a registered name: pass `handle.pid`. `http.start`
-  returns a bare pid.
+- `gen_server.start`, `supervisor.start` and `dynamic_supervisor.start`
+  return `{pid: pid}`, but `gen_server.call` and `gen_server.cast` take a
+  bare pid or a registered name: pass `handle.pid`. `http.start` returns
+  a bare pid.
 - A gen_server callback that returns `nil` or a non-table (such as the
   `nil` of a `match` with no `else`) crashes the server. `handle_call`
   returns `{reply: v, state: s}` (or `{noreply: s}`), the others
@@ -883,12 +883,9 @@ Some std APIs don't follow this doc yet. Until they are fixed:
   sets the state to `nil` and leaves the caller waiting until its
   timeout.
 - `gen_server.call` waits its full timeout (5 s by default) when the
-  server is dead; `supervisor.which_children` waits with no timeout at
-  all.
-- A supervisor child's `start` function must return a bare pid:
-  `start: fn() gen_server.start(m).pid end` **(bug)**.
-- `supervisor.start` with `name:` registers the name only after the
-  children start, so use the returned pid right after `start` **(bug)**.
+  server is dead.
+- A `one_for_all` supervisor hangs when it restarts a child that traps
+  exits **(bug)**: supervise such children `one_for_one`.
 - `std/http` answers a handler error (or a handler that doesn't return a
   response table) with an empty 500 and logs nothing **(bug)**: catch and
   log errors in the handler while debugging. Request header names keep

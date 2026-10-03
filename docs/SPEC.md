@@ -1550,12 +1550,14 @@ let pages = task.await_all([a, b], 5000)
 `std/supervisor` — exports `supervisor` table:
 
 - `supervisor.start(spec)` — start a supervisor process. Returns `{pid: <pid>}`. The spec table supports:
-  - `strategy` — `"one_for_one"` (default): restart only the crashed child. `"one_for_all"`: stop all children and restart all in order.
-  - `children` — array of child specs: `{id: <string>, start: <fn>, restart: <string>}`. The `start` function must spawn and return a pid. `restart` is `"permanent"` (always restart, default), `"temporary"` (never restart), or `"transient"` (restart only on abnormal exit).
-  - `max_restarts` — max restarts within the time window before the supervisor itself crashes (default 3).
+  - `strategy` — `"one_for_one"` (default): restart only the crashed child. `"one_for_all"`: stop all running children (`kill(pid, "shutdown")`, waiting for each one's `DOWN`) and restart all in order. Any other value raises `supervisor.start: unknown strategy ...`.
+  - `children` — array of child specs: `{id: <string>, start: <fn>, restart: <string>}`. The `start` function must spawn the child and return its pid or a `{pid}` handle (so `start: fn() gen_server.start(m) end` works); the supervisor calls it from its own process and monitors the child. `restart` is `"permanent"` (always restart, default), `"temporary"` (never restart), or `"transient"` (restart only on abnormal exit).
+  - `max_restarts` — max restarts within the time window before the supervisor itself crashes with `supervisor: max restart intensity reached` (default 3).
   - `max_seconds` — time window in milliseconds for restart intensity (default 5000).
-  - `name` — optional string name to register the supervisor process.
-- `supervisor.which_children(pid_or_name)` — query a supervisor for its children. Returns an array of `{id, pid, restart}` tables. Takes a pid or a registered name, not the `{pid}` table `start` returns (pass `handle.pid`). Waits with no timeout.
+  - `name` — optional string name to register the supervisor process. `start` registers it before returning, so the name works at once; `start` raises `supervisor.start: name "<name>" is already registered` (and starts nothing) when the name is taken.
+
+  The children are started by the supervisor process after `start` returns; a request such as `which_children` is answered once they have all started.
+- `supervisor.which_children(target, timeout_ms = 5000)` — query a supervisor for its children. `target` is a pid, the `{pid}` handle `start` returns, or a registered name. Returns an array of `{id, pid, restart}` tables in child-spec order; `pid` is `-1` for a child that is not running (a temporary or transient child that exited and was not restarted). Raises `supervisor.which_children: supervisor exited: <reason>` at once when the supervisor is dead or dies before answering, and `supervisor.which_children: timeout` after `timeout_ms`. It monitors the supervisor (the monitor stays, as there is no demonitor).
 
 `std/dynamic_supervisor` — exports `dynamic_supervisor` table. For workloads where children are spawned on demand from a single template (worker pools, per-connection processes, lazily-created topic actors), instead of being declared up front. Restart policies and intensity (`max_restarts` / `max_seconds`) match `std/supervisor`. Strategy is fixed at one-for-one; failed children restart with their original `args`.
 

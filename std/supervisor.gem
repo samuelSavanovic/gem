@@ -1,145 +1,188 @@
 # std/supervisor — OTP-style supervisor for Gem processes
+#
+#   let sup = supervisor.start({
+#     strategy: "one_for_one",
+#     name: "app_sup",
+#     children: [
+#       {id: "db", start: fn() gen_server.start(db_server) end},
+#       {id: "acceptor", restart: "transient", start: start_acceptor}
+#     ]
+#   })
+#   supervisor.which_children(sup)        # or sup.pid, or "app_sup"
+#
+# A child's `start` spawns the child and returns its pid or a `{pid}`
+# handle. A child that is not running shows pid -1 in `which_children`.
+
+let STRATEGIES = {one_for_one: true, one_for_all: true}
+
+# Turns a bare pid, a `{pid}` handle or a registered name into a pid.
+fn target_pid(t, caller)
+  let kind = type(t)
+  if kind == "int"
+    return t
+  elif kind == "string"
+    let pid = whereis(t)
+    if pid == nil
+      error("{caller}: no process registered as \"{t}\"")
+    end
+    return pid
+  elif kind == "table" and type(t.pid) == "int"
+    return t.pid
+  end
+  error("{caller}: expected a pid, a \{pid\} handle or a registered name, got {kind}")
+end
 
 fn start_child(spec)
-  let pid = spec.start()
+  let pid = target_pid(spec.start(), "supervisor: start of child \"{spec.id}\"")
   monitor(pid)
   pid
+end
+
+fn find_child(children, pid)
+  for i = 0, len(children)
+    if children[i].pid == pid
+      return i
+    end
+  end
+  -1
+end
+
+fn should_restart(spec, reason)
+  let {restart = "permanent"} = spec
+  restart == "permanent" or (restart == "transient" and reason != "normal")
+end
+
+# Records a restart at `now`, dropping restarts older than the window, and
+# raises when the supervisor has restarted too often.
+fn note_restart(state, now)
+  let recent = []
+  for t in state.restart_times
+    if now - t <= state.max_seconds
+      push(recent, t)
+    end
+  end
+  push(recent, now)
+  state.restart_times = recent
+  if len(recent) > state.max_restarts
+    error("supervisor: max restart intensity reached")
+  end
+end
+
+# Stops every running child but the one at `dead_idx`, waits for the DOWN
+# of each child it stopped, then starts all children again in order.
+fn restart_all(state, dead_idx)
+  let children = state.children
+  let killed = []
+  for i = 0, len(children)
+    let pid = children[i].pid
+    if i != dead_idx and pid != -1
+      kill(pid, "shutdown")
+      push(killed, pid)
+    end
+  end
+  for pid in killed
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    end
+  end
+  let specs = state.specs
+  for i = 0, len(specs)
+    children[i] = {id: specs[i].id, pid: start_child(specs[i])}
+  end
+end
+
+fn handle_down(state, dead_pid, reason)
+  let idx = find_child(state.children, dead_pid)
+  if idx == -1
+    return state
+  end
+  let spec = state.specs[idx]
+  if not should_restart(spec, reason)
+    state.children[idx] = {id: spec.id, pid: -1}
+    return state
+  end
+  note_restart(state, time_ms())
+  if state.strategy == "one_for_one"
+    state.children[idx] = {id: spec.id, pid: start_child(spec)}
+  else
+    restart_all(state, idx)
+  end
+  state
+end
+
+fn children_info(state)
+  let result = []
+  for i = 0, len(state.children)
+    let spec = state.specs[i]
+    let {restart = "permanent"} = spec
+    push(result, {id: spec.id, pid: state.children[i].pid, restart: restart})
+  end
+  result
 end
 
 fn sup_loop(state)
   receive
   when {tag: "DOWN", pid: dead_pid, reason: reason}
-    let children = state.children
-    let specs = state.specs
-    let found = -1
-    for i = 0, len(children)
-      if children[i].pid == dead_pid
-        found = i
-        break
-      end
-    end
-
-    if found == -1
-      sup_loop(state)
-      return nil
-    end
-
-    let spec = specs[found]
-    let {restart = "permanent"} = spec
-
-    let should_restart = false
-    if restart == "permanent"
-      should_restart = true
-    elif restart == "transient"
-      if reason != "normal"
-        should_restart = true
-      end
-    end
-
-    if not should_restart
-      children[found] = {id: spec.id, pid: -1}
-      sup_loop(state)
-      return nil
-    end
-
-    let now = time_ms()
-    push(state.restart_times, now)
-
-    let count = 0
-    for t in state.restart_times
-      if now - t <= state.max_seconds
-        count += 1
-      end
-    end
-
-    if count > state.max_restarts
-      error("max restart intensity reached")
-    end
-
-    let strategy = state.strategy
-
-    if strategy == "one_for_one"
-      let new_pid = start_child(spec)
-      children[found] = {id: spec.id, pid: new_pid}
-      sup_loop(state)
-    elif strategy == "one_for_all"
-      let alive_count = 0
-      for child in children
-        if child.pid != -1 and child.pid != dead_pid
-          kill(child.pid, "shutdown")
-          alive_count += 1
-        end
-      end
-
-      let drained = 0
-      while drained < alive_count
-        receive
-        when {tag: "DOWN"}
-          drained += 1
-        end
-      end
-
-      for i = 0, len(specs)
-        let new_pid = start_child(specs[i])
-        children[i] = {id: specs[i].id, pid: new_pid}
-      end
-      sup_loop(state)
-    else
-      error("unknown supervisor strategy: {strategy}")
-    end
-  when {tag: "supervisor_which_children", reply_to: reply_to, ref: ref}
-    handle_which_children(state, reply_to, ref)
+    sup_loop(handle_down(state, dead_pid, reason))
+  when {tag: "_sup_which_children", from: from, ref: ref}
+    send(from, {tag: "_sup_children", ref: ref, children: children_info(state)})
+    sup_loop(state)
+  when other
     sup_loop(state)
   end
 end
 
-fn handle_which_children(state, reply_to, ref)
-  let result = []
-  for i = 0, len(state.children)
-    let child = state.children[i]
-    let spec = state.specs[i]
-    let {restart = "permanent"} = spec
-    push(result, {id: spec.id, pid: child.pid, restart: restart})
+fn start({strategy = "one_for_one", max_restarts = 3, max_seconds = 5000, children = [], name = nil})
+  if not has_key(STRATEGIES, strategy)
+    error("supervisor.start: unknown strategy \"{strategy}\"")
   end
-  send(reply_to, {tag: "supervisor_children", ref: ref, children: result})
-end
-
-fn start({strategy = "one_for_one", max_restarts = 3, max_seconds = 5000, children, name = nil})
-  let child_specs = children
-  let sup_name = name
-
-  let sup_pid = spawn(fn()
-    let children = []
-    for child_spec in child_specs
-      let pid = start_child(child_spec)
-      push(children, {id: child_spec.id, pid: pid})
+  if name != nil and whereis(name) != nil
+    error("supervisor.start: name \"{name}\" is already registered")
+  end
+  let specs = children
+  let pid = spawn(fn()
+    let running = []
+    for spec in specs
+      push(running, {id: spec.id, pid: start_child(spec)})
     end
-
-    let state = {
+    sup_loop({
       strategy: strategy,
-      children: children,
-      specs: child_specs,
+      children: running,
+      specs: specs,
       max_restarts: max_restarts,
       max_seconds: max_seconds,
       restart_times: []
-    }
-
-    if sup_name != nil
-      register(sup_name, self())
-    end
-
-    sup_loop(state)
+    })
   end)
-
-  {pid: sup_pid}
+  # The new process hasn't run yet: register it here, so the name works as
+  # soon as start returns.
+  if name != nil
+    register(name, pid)
+  end
+  {pid: pid}
 end
 
-fn which_children(target)
+fn which_children(target, timeout_ms = 5000)
+  let pid = target_pid(target, "supervisor.which_children")
   let ref = make_ref()
-  send(target, {tag: "supervisor_which_children", reply_to: self(), ref: ref})
+  monitor(pid)
+  send(pid, {tag: "_sup_which_children", from: self(), ref: ref})
   receive
-  when {tag: "supervisor_children", ref: ^ref, children: children}
+  when {tag: "_sup_children", ref: ^ref, children: children}
+    # The monitor stays (there is no demonitor); drop a DOWN that has
+    # already arrived.
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    after 0
+      nil
+    end
     children
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    error("supervisor.which_children: supervisor exited: {reason}")
+  after timeout_ms
+    error("supervisor.which_children: timeout")
   end
 end
 

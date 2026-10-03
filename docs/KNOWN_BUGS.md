@@ -186,12 +186,6 @@ runtime/gem_builtins_sqlite.c.
 
 ## Standard library
 
-### `supervisor`'s loop is not a tail call
-
-Some paths of `sup_loop` (std/supervisor) recurse with `sup_loop(state)`
-followed by `return nil`, a non-tail call that adds a stack frame.
-(Restarts are tail calls.) Make the self call the last expression.
-
 ### `http.serve` returns when the caller gets any message
 
 ```gem
@@ -232,19 +226,34 @@ keys), or raise.
 `json.parse("12345678901234567890")` raises `to_int: cannot convert ...`
 (std/json `parse_number`). Parse them as floats.
 
-### `supervisor.start` with `name:` registers the name after starting the children
+### A `one_for_all` restart hangs on a child that traps exits
 
-`supervisor.which_children("sup")` right after `supervisor.start({name:
-"sup", ...})` can raise `send: no process registered with that name`:
-the supervisor process registers itself only once all children are
-started, and `start` has already returned. Register before starting
-children (or from `start`).
+```gem
+load "std/supervisor"
+fn trapper()
+  spawn do
+    process_flag("trap_exit", true)
+    while true
+      receive
+      when other then nil
+      end
+    end
+  end
+end
+fn crasher() spawn do receive when {tag: "crash"} then error("boom") end end end
+let h = supervisor.start({strategy: "one_for_all",
+  children: [{id: "t", start: trapper}, {id: "c", start: crasher}]})
+send(supervisor.which_children(h)[1].pid, {tag: "crash"})
+sleep(50)
+print(pcall supervisor.which_children(h, 300))   # timeout
+```
 
-### Supervisor children must return a bare pid
-
-A child spec `start: fn() gen_server.start(mod) end` returns `{pid}`, and
-the supervisor dies with `monitor: expected pid (int) argument` while
-`supervisor.start` still returns a handle to it. Accept both forms.
+To restart all children, the supervisor sends each running child
+`kill(pid, "shutdown")` and waits for its `DOWN` (std/supervisor
+`restart_all`). A child that traps exits gets an `EXIT` message instead of
+dying, so the supervisor waits forever. Erlang waits a shutdown timeout
+and then sends the untrappable `kill`; Gem has no untrappable exit signal,
+so that needs one in the runtime (`kill` in runtime/gem_scheduler.c).
 
 ### `std/request` has no timeout and doesn't decode chunked bodies
 

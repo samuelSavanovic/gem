@@ -612,15 +612,17 @@ test3: temporary not restarted ok
 Stack trace:
   at anonymous fn (examples/30_supervisor.gem:13)
 
-[Runtime Error in process 10]: max restart intensity reached
-  --> std/supervisor.gem:56
+[Runtime Error in process 10]: supervisor: max restart intensity reached
+  --> std/supervisor.gem:67
     |
- 56 |       error("max restart intensity reached")
+ 67 |     error("supervisor: max restart intensity reached")
     |
 Stack trace:
-  at supervisor.sup_loop (std/supervisor.gem:56)
-  at anonymous fn (std/supervisor.gem:131)
-test4: supervisor crashed: max restart intensity reached
+  at supervisor.note_restart (std/supervisor.gem:67)
+  at supervisor.handle_down (std/supervisor.gem:105)
+  at supervisor.sup_loop (std/supervisor.gem:127)
+  at anonymous fn (std/supervisor.gem:149)
+test4: supervisor crashed: supervisor: max restart intensity reached
 test1: equal_self=true different=true
 test2: type=ref
 test3: r1=first r2=second
@@ -2687,3 +2689,18 @@ dynamic_supervisor.start: the name "pool" is already registered
 dynamic_supervisor.start_child: timeout
 dynamic_supervisor.start_child: supervisor exited: shutdown
 dynamic_supervisor.start_child: supervisor exited: boom
+1: 2 children, gs pid is int
+1: call -> 1
+1: gs restarted: true, fresh state -> 1
+2: whereis matches: true
+2: children by name: 1
+2: duplicate: supervisor.start: name "sup175" is already registered
+2: name still points at the first: true
+3: bare pid: 1
+3: unknown name: supervisor.which_children: no process registered as "nope175"
+3: bad target: supervisor.which_children: expected a pid, a {pid} handle or a registered name, got nil
+3: no answer: supervisor.which_children: timeout
+3: dead supervisor: supervisor.which_children: supervisor exited: noproc, at once: true
+4: still alive, temp pid -1, perm restarted true
+5: 3 of 3 restarted, ids abc
+6: supervisor.start: unknown strategy "rest_for_one"

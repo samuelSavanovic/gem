@@ -52,7 +52,7 @@ fn check_intensity(state)
   end
   state.restart_times = recent
   if len(recent) > state.max_restarts
-    error("max restart intensity reached")
+    error("dynamic_supervisor: max restart intensity reached")
   end
 end
 
