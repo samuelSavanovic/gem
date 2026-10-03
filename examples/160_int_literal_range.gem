@@ -1,0 +1,29 @@
+# Integer literals cover the int64 range. A literal past it is a compile
+# error (tests/broken/int_literal_range.gem); INT64_MIN is written as the
+# negated literal -9223372036854775808.
+
+print(9223372036854775807)
+print(-9223372036854775807)
+print(-9223372036854775808)
+let m = -9223372036854775808
+print(m == -9223372036854775807 - 1)
+print(type(m))
+
+# leading zeros don't count toward the range
+print(00000000000000000000000042)
+print(-0009223372036854775808)
+
+# INT64_MIN as an element, an operand and a pattern
+print([-9223372036854775808, 1][0])
+print(m + 1)
+
+fn classify(x)
+  match x
+  when -9223372036854775808 then "min"
+  when 9223372036854775807 then "max"
+  else "other"
+  end
+end
+print(classify(m))
+print(classify(9223372036854775807))
+print(classify(0))

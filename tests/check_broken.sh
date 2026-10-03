@@ -35,6 +35,7 @@ expected=(
   "interp_bad_expr:2:2"
   "interp_empty:2:2"
   "interp_unterminated:1:1"
+  "int_literal_range:8:8"
   "load_no_export:1:1"
   "export_undefined:1:1"
   "export_twice:1:1"

@@ -8,11 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### Integer literals out of range wrap silently
-
-`print(99999999999999999999)` prints `7766279631452241919`. The lexer
-should report an integer literal that doesn't fit in 64 bits.
-
 ### `pcall <expr>` at top level records line 0
 
 ```gem

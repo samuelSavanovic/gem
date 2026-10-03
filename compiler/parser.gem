@@ -45,6 +45,27 @@ fn str_to_int(s)
   result
 end
 
+# Where a decimal integer literal's digits fall against the int64 range:
+# "ok" (at most 9223372036854775807), "min" (exactly 9223372036854775808,
+# which only `-` may take, giving INT64_MIN) or "over".
+fn int_literal_range(s)
+  let start = 0
+  while start < len(s) - 1 and s[start] == "0"
+    start += 1
+  end
+  let digits = len(s) - start
+  if digits < 19 then return "ok" end
+  if digits > 19 then return "over" end
+  let d = substr(s, start, 19)
+  if d <= "9223372036854775807" then return "ok" end
+  if d == "9223372036854775808" then return "min" end
+  "over"
+end
+
+fn int64_min()
+  0 - 9223372036854775807 - 1
+end
+
 fn contains_dot(s)
   for i = 0, len(s)
     if s[i] == "."
@@ -201,6 +222,11 @@ fn make_parser(tokens, source, file, sink)
       span = len(name)
     end
     report(tok.line, tok.col, span, "`{name}` is already defined at line {prev.line} ({article} `{prev.kind}`)", "pick another name; a module-level name has one definition (only a `let` can be repeated, and it rebinds the name)")
+  end
+
+  # NUMBER token `t` holds an integer literal that doesn't fit in an int.
+  let report_int_range = fn(t)
+    report(t.line, t.col, len(t.value), "integer literal out of range (max 9223372036854775807)", "ints are 64-bit signed: -9223372036854775808 to 9223372036854775807")
   end
 
   # Enter a function body (kind as for closure_kind); returns the state
@@ -496,6 +522,10 @@ fn make_parser(tokens, source, file, sink)
       advance()
       if contains_dot(t.value)
         return make_float(atof(t.value))
+      end
+      if int_literal_range(t.value) != "ok"
+        report_int_range(t)
+        return make_int(0)
       end
       return make_int(str_to_int(t.value))
     end
@@ -865,6 +895,18 @@ fn make_parser(tokens, source, file, sink)
   # unary: -expr | call
   parse_unary = fn()
     if peek().type == "-"
+      # `-9223372036854775808` is INT64_MIN: the one literal whose digits
+      # don't fit unless negated. Not when a postfix follows (`-N.x` is
+      # `-(N.x)`); then the bare literal reports out of range.
+      let nt = peek_at(1)
+      if nt.type == "NUMBER" and not contains_dot(nt.value) and int_literal_range(nt.value) == "min"
+        let follow = peek_at(2).type
+        if follow != "(" and follow != "." and follow != "["
+          advance()
+          advance()
+          return make_int(int64_min())
+        end
+      end
       advance()
       return make_unop("-", parse_unary())
     end
@@ -1064,9 +1106,17 @@ fn make_parser(tokens, source, file, sink)
         if negative then f = 0.0 - f end
         lit = make_float(f)
       else
-        let n = str_to_int(nt.value)
-        if negative then n = 0 - n end
-        lit = make_int(n)
+        let range = int_literal_range(nt.value)
+        if range == "min" and negative
+          lit = make_int(int64_min())
+        elif range != "ok"
+          report_int_range(nt)
+          lit = make_int(0)
+        else
+          let n = str_to_int(nt.value)
+          if negative then n = 0 - n end
+          lit = make_int(n)
+        end
       end
       return make_pat_literal(lit)
     end

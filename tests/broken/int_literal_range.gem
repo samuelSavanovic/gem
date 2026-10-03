@@ -1,0 +1,15 @@
+# Integer literals past int64: each is a compile error at the literal.
+# -9223372036854775808 is fine only as a plain negated literal.
+print(99999999999999999999)
+print(9223372036854775808)
+print(-9223372036854775809)
+let x = 1 - 9223372036854775808
+let y = -9223372036854775808(1)
+let z = -9223372036854775808[0]
+fn g(v)
+  match v
+  when 9223372036854775808 then 1
+  when -99999999999999999999 then 2
+  else 3
+  end
+end

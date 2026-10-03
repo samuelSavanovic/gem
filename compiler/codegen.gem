@@ -45,6 +45,13 @@ fn pad_for(indent)
   repeat_str("    ", indent)
 end
 
+# An int as a C constant. INT64_MIN has no literal of its own in C
+# (`-9223372036854775808` negates an out-of-range constant), so spell it.
+fn c_int_literal(n)
+  if n == 0 - 9223372036854775807 - 1 then return "INT64_MIN" end
+  to_string(n)
+end
+
 fn format_float(val)
   # to_string gives the shortest text that reads back to the same double
   # ("0.1", "2.0", "1e-05", "1e+16"), which is also a valid C double literal,
@@ -3539,7 +3546,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   compile_expr = fn(node)
     match node
     when {tag: "int", value: value}
-      return {expr: "gem_int({value})", setup: ""}
+      return {expr: "gem_int({c_int_literal(value)})", setup: ""}
     when {tag: "float", value: value}
       return {expr: "gem_float({format_float(value)})", setup: ""}
     when {tag: "string", value: value}
