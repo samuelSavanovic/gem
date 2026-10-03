@@ -914,11 +914,32 @@ stack, so a hostile input gets a clear error instead of a stack overflow.
 One std limitation remains:
 
 - A `one_for_all` supervisor hangs when it restarts a child that traps
-  exits, and `dynamic_supervisor.terminate_child` times out on one that
-  doesn't exit on the `EXIT` message, leaving it running **(bug)**:
+  exits, `dynamic_supervisor.terminate_child` times out on one that
+  doesn't exit on the `EXIT` message, leaving it running, and a supervisor
+  that exits waits 4 s for such a child, then leaves it running **(bug)**:
   supervise such children `one_for_one`, and have a child that traps exits
-  return when it gets `{tag: "EXIT", reason: "shutdown"}` from its
-  supervisor.
+  return on any `EXIT` from its supervisor whose reason is not `"normal"`
+  (`"shutdown"` from `stop`, but the supervisor's error message when it
+  reached its restart intensity). The child spec's `start` runs in the
+  supervisor, so `self()` there is the supervisor's pid:
+
+  ```gem
+  fn start_worker()
+    let sup = self()                 # `start` runs in the supervisor
+    spawn do
+      process_flag("trap_exit", true)
+      let running = true
+      while running
+        receive
+        when {tag: "EXIT", pid: ^sup, reason: reason}
+          running = reason == "normal"
+        when other
+          handle(other)
+        end
+      end
+    end
+  end
+  ```
 
 ### A gen_server state with a `state` key goes in `{state: ...}` **(trap)**
 
@@ -982,7 +1003,9 @@ Match on `tag` in `receive`. Prefix tags that are private to a module with
   killing this process. Only for processes whose job is to handle deaths
   (supervisors). Such a process gets an `EXIT` for every linked process
   that ends, normal exits included, so its loop needs an arm or a
-  catch-all for them.
+  catch-all for them. Never in a task: a `task.await` timeout can't kill a
+  task that traps exits, so it runs on and its result and `DOWN` are left
+  in the owner's mailbox.
 
 `pcall` doesn't catch a `kill` or a link's exit: those end the process at
 once.
@@ -1360,6 +1383,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `after` in a busy server loop | never fires | `send_after` ticks |
 | Calling or monitoring a server from a long-lived process | its `DOWN` arrives when the server dies | catch-all or `DOWN` arm in the loop |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
+| Supervised child that traps exits **(bug)** | `one_for_all` restart hangs; the child outlives its supervisor | return on any non-`"normal"` `EXIT` from the supervisor |
 | Main returns while a process tree keeps running **(bug)** | after ~1,024 spawns a process is taken for main; its crash ends the program | keep main waiting (`serve`, or `receive` the tree's `DOWN`) |
 | `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |
 | Spawning thousands of quick tasks in a loop | `process table full` | batch, or cap in-flight tasks |

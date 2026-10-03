@@ -148,7 +148,7 @@ should raise (or wrap) instead. Relatedly, int `+`, `-` and `*` overflow
 is signed-overflow undefined behaviour in C (no `-fwrapv`); it wraps in
 practice.
 
-### A non-integer `after` timeout is read as raw bits
+### A non-integer `after` timeout is read as raw bits; a huge one expires at once
 
 ```gem
 receive
@@ -163,6 +163,30 @@ value's raw payload is taken as milliseconds. `nil` waits 0 ms and `true`
 4.6e18 ms, i.e. forever; `0.0` is 0); a string or a table waits its
 pointer value, which in practice is forever (`after "abc"` still waits
 when another process exits). A non-integer timeout should raise.
+
+An int timeout close to `INT64_MAX` times out at once instead of waiting
+(practically) forever:
+
+```gem
+let t0 = time_ms()
+receive
+when "never" then nil
+after 9223372036854775807 then print("timed out after", time_ms() - t0, "ms")
+end
+```
+
+prints `timed out after 0 ms`: the deadline is computed as
+`gem_now_ms() + (int64_t)ms` (`compile_receive_match` in
+compiler/codegen.gem), which overflows to a negative time already past.
+The runtime does the same for `send_after(pid, msg, ms)` (delivered at
+once; `gem_send_after_builtin` in runtime/gem_scheduler.c) and `sleep(ms)`
+(the deadline goes negative, which reads as "no deadline", so a lone main
+process reports a deadlock; `gem_sleep_builtin`). The std timeouts built
+on them (`gen_server.call`, `task.await`, `task.await_all`, the
+`supervisor` and `dynamic_supervisor` requests and `stop`, a gen_server
+callback's `timeout`) inherit it: a timeout this large raises `...:
+timeout` at once. Use `nil` (no timeout) to wait forever. The deadline
+should saturate at `INT64_MAX`.
 
 ### `s = s + x` in a loop skips the `+` type check
 
@@ -321,9 +345,12 @@ To restart all children, the supervisor sends each running child
 dying, so the supervisor waits forever. Erlang waits a shutdown timeout
 and then sends the untrappable `kill`; Gem has no untrappable exit signal,
 so that needs one in the runtime (`kill` in runtime/gem_scheduler.c).
-The same goes for a supervisor's own death: its children are linked to it
-and exit with it, except a child that traps exits, which gets an `EXIT`
-message and keeps running.
+The same goes for a supervisor's own exit (`stop`, an exit signal,
+restart intensity reached): it kills each child with its exit reason and
+waits for the child's `DOWN`, but a child that traps exits gets an `EXIT`
+message, so the supervisor waits out its whole shutdown wait (4000 ms,
+`SHUTDOWN_MS` in std/supervisor and std/dynamic_supervisor), then exits
+and leaves the child running.
 
 `dynamic_supervisor.terminate_child` has the same limit: it sends the
 child `kill(pid, "shutdown")` and waits for its `DOWN`, so a child that

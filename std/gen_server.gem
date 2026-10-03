@@ -130,7 +130,24 @@ fn loop(module, state, pending)
   end
 end
 
+let CALLBACKS = ["init", "handle_call", "handle_cast", "handle_info"]
+
+# Raises `gen_server.start: ...` unless `module` is a table with every
+# callback as a fn.
+fn check_module(module)
+  if type(module) != "table"
+    error("gen_server.start: expected a module table \{init, handle_call, handle_cast, handle_info\}, got {type(module)}")
+  end
+  for name in CALLBACKS
+    let kind = type(module[name])
+    if kind != "fn"
+      error("gen_server.start: the module's {name} must be a fn, got {kind}")
+    end
+  end
+end
+
 fn start(module)
+  check_module(module)
   let pid = spawn(fn()
     let init_result = module.init()
     let initial_state = init_result

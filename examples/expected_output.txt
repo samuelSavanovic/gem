@@ -613,15 +613,13 @@ Stack trace:
   at anonymous fn (examples/30_supervisor.gem:13)
 
 [Runtime Error in process 10]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:103
+  --> std/supervisor.gem:263
      |
- 103 |     error("supervisor: max restart intensity reached")
+ 263 |     error(res.error)
      |
 Stack trace:
-  at supervisor.note_restart (std/supervisor.gem:103)
-  at supervisor.handle_down (std/supervisor.gem:150)
-  at supervisor.sup_loop (std/supervisor.gem:171)
-  at anonymous fn (std/supervisor.gem:243)
+  at supervisor.sup_main (std/supervisor.gem:263)
+  at anonymous fn (std/supervisor.gem:322)
 test4: supervisor crashed: supervisor: max restart intensity reached
 test1: equal_self=true different=true
 test2: type=ref
@@ -722,7 +720,7 @@ test5: parent died: now-fatal
 Stack trace:
   at anonymous fn (examples/34_gen_server.gem:97)
   at gen_server.loop (std/gen_server.gem:105)
-  at anonymous fn (std/gen_server.gem:145)
+  at anonymous fn (std/gen_server.gem:162)
 test1: after incr 10 = 10
 test3: count=2 first=raw1 second=raw2
 test4: ok=false err=gen_server.call: server exited: kaboom from server
@@ -2697,7 +2695,7 @@ dynamic_supervisor.start_child: supervisor exited: boom
 1: gs restarted: true, fresh state -> 1
 2: whereis matches: true
 2: children by name: 1
-2: duplicate: supervisor.start: name "sup175" is already registered
+2: duplicate: supervisor.start: the name "sup175" is already registered
 2: name still points at the first: true
 3: bare pid: 1
 3: unknown name: supervisor.which_children: no process registered as "nope175"
@@ -2731,7 +2729,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:67)
   at gen_server.check_call_result (std/gen_server.gem:99)
   at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:145)
+  at anonymous fn (std/gen_server.gem:162)
 6: gen_server.call: server exited: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 6]: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
@@ -2743,7 +2741,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:67)
   at gen_server.check_call_result (std/gen_server.gem:99)
   at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:145)
+  at anonymous fn (std/gen_server.gem:162)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 7]: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
@@ -2755,7 +2753,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:67)
   at gen_server.check_call_result (std/gen_server.gem:99)
   at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:145)
+  at anonymous fn (std/gen_server.gem:162)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 8]: gen_server: handle_cast returned nil, expected {state: state}
@@ -2767,7 +2765,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:67)
   at gen_server.check_state_result (std/gen_server.gem:80)
   at gen_server.loop (std/gen_server.gem:115)
-  at anonymous fn (std/gen_server.gem:145)
+  at anonymous fn (std/gen_server.gem:162)
 6: cast nil -> gen_server: handle_cast returned nil, expected {state: state}
 
 [Runtime Error in process 9]: gen_server: handle_info returned an int, expected {state: state}
@@ -2779,7 +2777,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:67)
   at gen_server.check_state_result (std/gen_server.gem:80)
   at gen_server.loop (std/gen_server.gem:128)
-  at anonymous fn (std/gen_server.gem:145)
+  at anonymous fn (std/gen_server.gem:162)
 6: info int -> gen_server: handle_info returned an int, expected {state: state}
 7: info saw ["call", "cast", "gs_reply"]
 8: monitors after 300 callers=1
@@ -3217,15 +3215,13 @@ armed timeout fired
 inner links its children: 3 true
 
 [Runtime Error in process 6]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:103
+  --> std/supervisor.gem:263
      |
- 103 |     error("supervisor: max restart intensity reached")
+ 263 |     error(res.error)
      |
 Stack trace:
-  at supervisor.note_restart (std/supervisor.gem:103)
-  at supervisor.handle_down (std/supervisor.gem:150)
-  at supervisor.sup_loop (std/supervisor.gem:171)
-  at anonymous fn (std/supervisor.gem:243)
+  at supervisor.sup_main (std/supervisor.gem:263)
+  at anonymous fn (std/supervisor.gem:322)
 inner restarted: true
 old db dead: true
 new db: true 0
@@ -3233,21 +3229,19 @@ outer, inner, children dead: true true true true nil
 one_for_all restarted inner: true true true
 
 [Runtime Error in process 22]: dynamic_supervisor: max restart intensity reached
-  --> std/dynamic_supervisor.gem:92
-    |
- 92 |     error("dynamic_supervisor: max restart intensity reached")
-    |
+  --> std/dynamic_supervisor.gem:270
+     |
+ 270 |     error(res.error)
+     |
 Stack trace:
-  at dynamic_supervisor.check_intensity (std/dynamic_supervisor.gem:92)
-  at dynamic_supervisor.handle_down (std/dynamic_supervisor.gem:161)
-  at dynamic_supervisor.dsup_loop (std/dynamic_supervisor.gem:183)
-  at anonymous fn (std/dynamic_supervisor.gem:223)
+  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:270)
+  at anonymous fn (std/dynamic_supervisor.gem:307)
 dsup and its children dead: true true
 ignores a normal exit signal: true
 dsup killed, child dead: true true
 true {}
 trapper gone, dsup alive: true true {}
-trapping child outlives its supervisor: true true
+supervisor waited for its trapping child: true true
 -- 4. one_for_all restarts only what would be restarted
 q exited normally: -1
 started again: {} t: -1 q: -1 c restarted: true
@@ -3265,7 +3259,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:67)
   at gen_server.check_call_result (std/gen_server.gem:89)
   at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:145)
+  at anonymous fn (std/gen_server.gem:162)
 gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
   DOWN gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
 -- 7. init returning a table with a state field
@@ -3451,7 +3445,7 @@ Stack trace:
   at gen_server.check_result_timeout (std/gen_server.gem:74)
   at gen_server.check_call_result (std/gen_server.gem:95)
   at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:145)
+  at anonymous fn (std/gen_server.gem:162)
 gen_server.call: server exited: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
 
 [Runtime Error in process 30]: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
@@ -3461,7 +3455,7 @@ gen_server.call: server exited: gen_server: handle_call returned a timeout that 
     |
 Stack trace:
   at gen_server.check_result_timeout (std/gen_server.gem:74)
-  at anonymous fn (std/gen_server.gem:140)
+  at anonymous fn (std/gen_server.gem:157)
 gen_server.call: server exited: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
 -- control bytes in the request head
 ok: HTTP/1.1 200 OK
@@ -3536,3 +3530,70 @@ rebind: true
 HTTP/1.1 200 OK | Content-Length: 18 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=served
 connect after the kill: false
 rebind: true
+1 after stop: nil nil nil
+1 reports: ["inner.r:shutdown"]
+1 restart same name: int
+2 down: custom ["c:custom", "b:custom", "a:custom"]
+
+[Runtime Error in process 14]: boom
+  --> examples/189_otp_shutdown.gem:102
+     |
+ 102 |     error("boom")
+     |
+Stack trace:
+  at anonymous fn (examples/189_otp_shutdown.gem:102)
+
+[Runtime Error in process 15]: boom
+  --> examples/189_otp_shutdown.gem:102
+     |
+ 102 |     error("boom")
+     |
+Stack trace:
+  at anonymous fn (examples/189_otp_shutdown.gem:102)
+
+[Runtime Error in process 12]: supervisor: max restart intensity reached
+  --> std/supervisor.gem:263
+     |
+ 263 |     error(res.error)
+     |
+Stack trace:
+  at supervisor.sup_main (std/supervisor.gem:263)
+  at anonymous fn (std/supervisor.gem:322)
+3 down: supervisor: max restart intensity reached true ["t:supervisor: max restart intensity reached"]
+
+[Runtime Error in process 18]: boom
+  --> examples/189_otp_shutdown.gem:117
+     |
+ 117 |     when "crash" then error("boom")
+     |
+Stack trace:
+  at anonymous fn (examples/189_otp_shutdown.gem:117)
+4 reports: ["inner.r:shutdown"]
+4 inner restarted: true true
+4 stopped: nil ["inner.r:shutdown"]
+5 terminate: true nil ["inner.r:shutdown"]
+6 reports: ["z:shutdown", "y:shutdown", "x:shutdown"]
+supervisor: exiting on an error raised at:
+  at bad_start (examples/189_otp_shutdown.gem:151)
+  at supervisor.start_child (std/supervisor.gem:55)
+  at anonymous fn (std/supervisor.gem:252)
+
+[Runtime Error in process 33]: start broke
+  --> std/supervisor.gem:263
+     |
+ 263 |     error(res.error)
+     |
+Stack trace:
+  at supervisor.sup_main (std/supervisor.gem:263)
+  at anonymous fn (std/supervisor.gem:322)
+7 down: start broke ["a:start broke"]
+8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got nil
+8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got string
+8 gen_server.start: the module's handle_info must be a fn, got nil
+8 supervisor.start: expected a spec table {strategy, children, ...}, got nil
+8 supervisor.start: expected a spec table {strategy, children, ...}, got string
+8 dynamic_supervisor.start: expected an options table {child, ...}, got nil
+8 dynamic_supervisor.start: expected an options table {child, ...}, got string
+8 supervisor.start: the name "taken" is already registered
+8 dynamic_supervisor.start: the name "taken" is already registered
+9 transient noproc pid: -1

@@ -187,12 +187,12 @@ print(dynamic_supervisor.terminate_child(d5, tp), dynamic_supervisor.which_child
 sleep(60)
 print("trapper gone, dsup alive:", process_info(tp) == nil, process_info(d5.pid).state != "dead",
   dynamic_supervisor.which_children(d5))
-# A child that traps exits survives its supervisor's death.
+# A supervisor that exits waits for a child that traps exits and exits
+# 30 ms after the EXIT.
 let s5 = supervisor.start({children: [{id: "t", start: fn() trapper(0) end}]})
 let tp2 = supervisor.which_children(s5)[0].pid
-kill(s5.pid, "shutdown")
-sleep(5)
-print("trapping child outlives its supervisor:", process_info(s5.pid) == nil, process_info(tp2) != nil)
+supervisor.stop(s5)
+print("supervisor waited for its trapping child:", process_info(s5.pid) == nil, process_info(tp2) == nil)
 sleep(50)
 
 print("-- 4. one_for_all restarts only what would be restarted")

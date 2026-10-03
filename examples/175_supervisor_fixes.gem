@@ -6,7 +6,9 @@ load "std/gen_server"
 
 let counter = {
   init: fn() {state: 0} end,
-  handle_call: fn(msg, from, n) {reply: n + 1, state: n + 1} end
+  handle_call: fn(msg, from, n) {reply: n + 1, state: n + 1} end,
+  handle_cast: fn(msg, n) {state: n} end,
+  handle_info: fn(msg, n) {state: n} end
 }
 
 fn idle()

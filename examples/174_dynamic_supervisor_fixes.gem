@@ -87,7 +87,9 @@ print("after 5000 exits:", len(dynamic_supervisor.which_children(many)))
 fn counter(start_at)
   {
     init: fn() {state: start_at} end,
-    handle_call: fn(msg, from, n) {reply: n, state: n + 1} end
+    handle_call: fn(msg, from, n) {reply: n, state: n + 1} end,
+    handle_cast: fn(msg, n) {state: n} end,
+    handle_info: fn(msg, n) {state: n} end
   }
 end
 let gs = dynamic_supervisor.start({child: {start: fn(n) gen_server.start(counter(n)) end}})
