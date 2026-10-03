@@ -1,15 +1,16 @@
-# url — percent-encoding, query strings and request targets.
-#
-#   load "std/url"
-#   url.encode("a b/é")                     # "a%20b%2F%C3%A9"
-#   url.decode("a%20b+c")                   # "a b c"
-#   let u = url.parse("/search?q=gem&page=2")
-#   u.path                                  # "/search"
-#   u.query.page                            # "2" (values are strings)
-#   url.build_query({q: "a b", page: 2})    # "q=a%20b&page=2"
-#
-# A buffer works wherever a string does; anything else raises
-# `url.<fn>: ...`.
+## url — percent-encoding, query strings and request targets.
+##
+##   load "std/url"
+##   url.encode("a b/é")                     # "a%20b%2F%C3%A9"
+##   url.decode("a%20b+c")                   # "a b c"
+##   let u = url.parse("/search?q=gem&page=2")
+##   u.path                                  # "/search"
+##   u.query.page                            # "2" (values are strings)
+##   url.build_query({q: "a b", page: 2})    # "q=a%20b&page=2"
+##
+## Strings are bytes, so UTF-8 text encodes byte by byte. A buffer works
+## wherever a string does; an argument of any other type raises
+## `url.<fn>: <arg> must be a string, got <type>`.
 
 load "std/string"
 
@@ -43,7 +44,13 @@ fn hex_val(c)
   -1
 end
 
-# encode(s): every byte but the unreserved ones becomes %XX (uppercase hex).
+## Returns `s` percent-encoded: every byte except the RFC 3986
+## unreserved ones (A-Z a-z 0-9 - _ . ~) becomes `%XX` in uppercase hex.
+## Spaces become `%20`, not `+`, and `/` is encoded too, so the result is
+## safe as one path segment or one query key or value.
+##
+##   url.encode("a b/é")      # "a%20b%2F%C3%A9"
+##   url.encode("abc-_.~")    # "abc-_.~"
 fn encode(s)
   s = text("encode", "s", s)
   let slen = len(s)
@@ -70,13 +77,20 @@ fn encode(s)
   out
 end
 
-# decode(s): %XX becomes the byte, `+` becomes a space (form encoding). A
-# `%` not followed by two hex digits is kept as it is.
+## Returns `s` with each `%XX` (either case of hex) turned back into its
+## byte and each `+` into a space, as in form and query encoding. A `%`
+## not followed by two hex digits is kept as it is; it never raises on
+## malformed input.
+##
+##   url.decode("a%20b+c")    # "a b c"
+##   url.decode("%2b")        # "+"
+##   url.decode("100%")       # "100%"
 fn decode(s)
   s = text("decode", "s", s)
   unescape(s)
 end
 
+# decode without the argument check.
 fn unescape(s)
   let t = str_replace(s, "+", " ")
   let tlen = len(t)
@@ -123,9 +137,15 @@ fn add_pair(result, s, start, eq, stop)
   end
 end
 
-# parse_query(s): "a=1&b=x+y" → {a: "1", b: "x y"}. Keys and values are
-# decoded; a key without `=` gets "", an empty key is dropped, and a
-# repeated key keeps its last value.
+## Parses a query string (without its `?`) into a table of decoded keys
+## and values, all strings.
+##
+## A pair without `=` gets the value "", a pair with an empty key is
+## dropped, and a repeated key keeps its last value. Only the first `=`
+## of a pair splits it. An empty `s` gives {}.
+##
+##   url.parse_query("a=1&b=x+y")    # {a: "1", b: "x y"}
+##   url.parse_query("c&a=1&a=2")    # {c: "", a: "2"}
 fn parse_query(s)
   s = text("parse_query", "s", s)
   let result = {}
@@ -146,8 +166,16 @@ fn parse_query(s)
   result
 end
 
-# build_query(tbl): keys and values pass through to_string and encode, in
-# key order; nil values are left out.
+## Returns the query string (without a `?`) for the pairs of `tbl`, in
+## the table's iteration order.
+##
+## Keys and values are converted with `to_string`, then `encode`d. Pairs
+## whose value is nil are left out; an empty table gives "".
+##
+##   url.build_query({q: "a b", page: 2})    # "q=a%20b&page=2"
+##   url.build_query({x: nil, y: true})      # "y=true"
+##
+## Raises if `tbl` is not a table.
 fn build_query(tbl)
   if type(tbl) != "table"
     error("url.build_query: tbl must be a table, got {type(tbl)}")
@@ -163,9 +191,18 @@ fn build_query(tbl)
   end
 end
 
-# parse(target): split a request target such as "/p?q=1" into
-# {path, query_string, query}. A `#fragment` is dropped. The path is not
-# decoded.
+## Splits a request target such as "/p?q=1" into
+## `{path, query_string, query}`, where `query` is
+## `parse_query(query_string)`.
+##
+## The path is not decoded. A `#fragment` is dropped. Without a `?`,
+## `query_string` is "" and `query` is {}. `target` is a path, not a full
+## URL: "http://h/p" comes back whole as the path.
+##
+##   let u = url.parse("/search?q=gem#top")
+##   u.path            # "/search"
+##   u.query_string    # "q=gem"
+##   u.query.q         # "gem"
 fn parse(target)
   target = text("parse", "target", target)
   let tlen = len(target)

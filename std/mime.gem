@@ -1,13 +1,15 @@
-# mime — content types by file extension, and back.
-#
-#   load "std/mime"
-#   mime.lookup("site/index.HTML")       # "text/html; charset=utf-8"
-#   mime.lookup("png")                   # "image/png"
-#   mime.lookup("notes")                 # "application/octet-stream"
-#   mime.ext("image/jpeg")               # ".jpg"
-#
-# Both ignore case, take a string (or a buffer) and raise `mime.<fn>: ...`
-# on anything else.
+## mime — content types by file extension, and back.
+##
+##   load "std/mime"
+##   mime.lookup("site/index.HTML")    # "text/html; charset=utf-8"
+##   mime.lookup("png")                # "image/png"
+##   mime.lookup("notes")              # "application/octet-stream"
+##   mime.ext("image/jpeg")            # ".jpg"
+##
+## Both ignore case and take a string or a buffer. Any other argument
+## raises `mime.<fn>: <arg> must be a string, got <type>`. Only common web
+## types are known (html, css, js, json, images, fonts, pdf, zip, audio,
+## video, wasm...).
 
 load "std/string"
 
@@ -83,8 +85,16 @@ fn needs_charset(content_type)
   false
 end
 
-# lookup(path_or_ext): "index.html", ".html" and "html" all give the type;
-# an unknown or missing extension gives "application/octet-stream".
+## Returns the content type for a path's extension, or for a bare
+## extension: "index.html", ".html" and "html" all give the same type.
+##
+## Text types (text/*, JSON, JavaScript, XML) get "; charset=utf-8". An
+## unknown or missing extension gives "application/octet-stream". Only
+## the last `.` of the last path segment counts.
+##
+##   mime.lookup("site/index.HTML")    # "text/html; charset=utf-8"
+##   mime.lookup("a/b.tar.gz")         # "application/gzip"
+##   mime.lookup("a.d/README")         # "application/octet-stream"
 fn lookup(path_or_ext)
   path_or_ext = text("lookup", "path_or_ext", path_or_ext)
   let ct = types[string.lower(ext_from_path(path_or_ext))]
@@ -97,8 +107,13 @@ fn lookup(path_or_ext)
   ct
 end
 
-# ext(content_type): ".html" for "text/html" (parameters such as
-# "; charset=utf-8" are ignored), or nil for an unknown type.
+## Returns the usual extension, with its dot, for `content_type`, or nil
+## for an unknown type. Parameters such as "; charset=utf-8" and
+## surrounding spaces are ignored.
+##
+##   mime.ext("text/html; charset=utf-8")    # ".html"
+##   mime.ext("image/jpeg")                  # ".jpg"
+##   mime.ext("application/x-nope")          # nil
 fn ext(content_type)
   content_type = text("ext", "content_type", content_type)
   let base = content_type
@@ -107,6 +122,8 @@ fn ext(content_type)
     base = substr(content_type, 0, semi)
   end
   base = string.lower(string.trim(base))
+  # First match in `types` order, so list the preferred extension (jpg,
+  # html) before its aliases.
   for e, ct in types
     if ct == base
       return ".{e}"

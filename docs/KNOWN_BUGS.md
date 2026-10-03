@@ -304,6 +304,20 @@ is `text/html`). Hash and compare string keys by `slen`.
 
 ## Standard library
 
+### `json.encode` writes infinite and NaN floats as bare `inf`/`nan`
+
+```gem
+load "std/json"
+let inf = to_float("inf")
+print(json.encode([inf - inf, inf]))         # [nan,inf]: not JSON
+print(pcall json.parse(json.encode(inf)))    # error: unexpected character 'i' at byte 0
+```
+
+`encode` (std/json.gem, the `int`/`float`/`bool` branch) writes floats with
+`to_string`, so non-finite values produce output no JSON parser accepts,
+`json.parse` included. It should raise (as JSON.stringify-style encoders that
+reject them do) or write `null`.
+
 ### A `one_for_all` restart hangs on a child that traps exits
 
 ```gem

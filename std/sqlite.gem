@@ -1,42 +1,76 @@
-# sqlite — SQLite databases, a thin layer over the sqlite_* builtins.
-#
-#   let db = sqlite.open("app.db")          # or ":memory:"
-#   sqlite.exec(db, "CREATE TABLE IF NOT EXISTS notes(id INTEGER PRIMARY KEY, text TEXT)")
-#   sqlite.query(db, "INSERT INTO notes(text) VALUES (?)", ["hi"])
-#   let rows = sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [sqlite.last_id(db)])
-#   sqlite.close(db)
-#
-# Every function raises on an SQLite error, with the builtin's name and
-# SQLite's message. `open` and `close` run on the I/O thread pool; `exec`
-# and `query` run on the scheduler thread and stall every process while
-# they run, so keep queries short and indexed. Close a handle in the
-# process that opened it, on every path.
+## sqlite — SQLite databases, a thin layer over the sqlite_* builtins.
+##
+##   load "std/sqlite"
+##   let db = sqlite.open("app.db")          # or ":memory:"
+##   sqlite.exec(db, "CREATE TABLE IF NOT EXISTS notes(id INTEGER PRIMARY KEY, text TEXT)")
+##   sqlite.query(db, "INSERT INTO notes(text) VALUES (?)", ["hi"])
+##   let rows = sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [sqlite.last_id(db)])
+##   sqlite.close(db)
+##
+## A handle `db` is an int. Every function raises on an SQLite error as
+## `sqlite_<op>: <SQLite's message>`, and on a closed or unknown handle
+## as `sqlite_<op>: not an open database handle`. `exec` and `query` stall
+## every process while they run, so keep queries short and indexed. A
+## handle is not closed when its process dies: close it on every path.
 
+# open and close run on the I/O thread pool; exec, query, last_id and
+# changes run inline on the scheduler thread without yielding. Handles are
+# ids in one registry for the whole program (runtime/gem_builtins_sqlite.c),
+# never reused after a close.
+
+## Opens (creating if needed) the database file at `path` and returns its
+## handle. ":memory:" opens a private in-memory database.
+##
+## Raises if the file can't be opened. Blocks only the calling process
+## while the file opens.
 fn open(path)
   sqlite_open(path)
 end
 
+## Closes `db`. The handle is invalid afterwards, for every process.
+##
+## Raises if `db` is not open. Blocks only the calling process.
 fn close(db)
   sqlite_close(db)
 end
 
-# Runs SQL that takes no parameters and returns no rows (DDL, PRAGMA).
+## Runs `sql`, which takes no parameters, and returns nil. Several
+## statements separated by `;` all run; rows they return are discarded.
+## Use it for DDL, PRAGMA and migration scripts.
+##
+##   sqlite.exec(db, "CREATE TABLE a(x); CREATE TABLE b(y)")
 fn exec(db, sql)
   sqlite_exec(db, sql)
 end
 
-# Runs one statement with `?` placeholders bound from `params` and returns
-# its rows as an array of records keyed by column name.
+## Runs one statement with its `?` placeholders bound, in order, from the
+## array `params`, and returns its rows: an array of records keyed by
+## column name (an empty table when there are none, as for INSERT, UPDATE
+## and DELETE).
+##
+## Params may be nil, bools (stored as 1 and 0), ints, floats or strings.
+## Columns come back as ints, floats, strings or nil. A string with a NUL
+## byte comes back cut at the first NUL. When two columns share a name the
+## last one wins; name them with `AS`. Only the first statement in `sql`
+## runs: text after it is ignored, even if it is not valid SQL.
+##
+##   sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [1])
+##   # [{id: 1, text: "hi"}]
+##
+## Raises if the number of params differs from the number of
+## placeholders, or a param is of another type.
 fn query(db, sql, params = [])
   sqlite_query(db, sql, params)
 end
 
-# The rowid of the last row inserted through `db`.
+## Returns the rowid of the last row inserted through `db`, or 0 before
+## any insert.
 fn last_id(db)
   sqlite_last_insert_id(db)
 end
 
-# How many rows the last INSERT, UPDATE or DELETE changed.
+## Returns how many rows the last INSERT, UPDATE or DELETE through `db`
+## changed (0 before any). Other statements leave it unchanged.
 fn changes(db)
   sqlite_changes(db)
 end

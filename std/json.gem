@@ -1,10 +1,20 @@
-# std/json — JSON parser and encoder for Gem
+## json — parse JSON text into Gem values and encode values as JSON.
+##
+##   load "std/json"
+##   let v = json.parse('{"name": "gem", "tags": ["a", "b"]}')
+##   v.tags[1]                              # "b"
+##   json.encode({b: 1, a: [1, "x"]})       # '{"b":1,"a":[1,"x"]}'
+##
+## JSON maps to Gem as: object ↔ table with string keys, array ↔ table
+## with keys 0 .. n-1, string ↔ string (UTF-8), number ↔ int or float,
+## true/false ↔ bool, null ↔ nil. Both directions refuse nesting deeper
+## than 1,000 arrays/objects. Errors start with `json.parse: ` or
+## `json.encode: `.
+
 # Passes all 283 required cases of https://github.com/nst/JSONTestSuite
-# (`make test-json-suite`).
-#
-# Limits (see SPEC): both directions refuse nesting deeper than 1,000
-# arrays/objects with a `json.parse: ` / `json.encode: ` error, well inside
-# the 8 MB process stack. The encoder's cap also stops cyclic tables.
+# (`make test-json-suite`). The 1,000-level depth cap (see SPEC) keeps
+# both recursive walks well inside the 8 MB process stack; the encoder's
+# cap also stops cyclic tables.
 
 let max_parse_depth = 1000
 let max_encode_depth = 1000
@@ -435,6 +445,23 @@ end
 
 # ─── Public API: parse ────────────────────────────────────────────
 
+## Parses the JSON text `input` (one value, surrounding whitespace
+## allowed) and returns it as a Gem value.
+##
+## A number without `.` or exponent is an int; one with them is a float,
+## and so is an integer too big for 64 bits. A number too small for a
+## float reads as 0.0. Escapes, `\uXXXX` surrogate pairs included,
+## become UTF-8. A repeated object key keeps its last value. A JSON
+## `null` reads as nil, so an object member that is null reads like a
+## missing one.
+##
+##   json.parse('[1, 2.5, null]')     # [1, 2.5, nil]
+##   json.parse('{"a":1,"a":2}')      # {a: 2}
+##   json.parse("1e2")                # 100.0
+##
+## Raises `json.parse: <what> at byte <offset>` on invalid JSON (trailing
+## data, a lone surrogate, a number too large for a float included), and
+## if `input` is not a string (a buffer too).
 fn parse(input)
   if type(input) != "string"
     error("json.parse: expected a string, got {type(input)}")
@@ -592,6 +619,26 @@ end
 
 # ─── Public API: encode ───────────────────────────────────────────
 
+## Returns `val` as compact JSON text (no spaces or newlines).
+##
+## A table whose keys are exactly the ints 0 .. n-1 (the empty table
+## too) becomes an array; any other table becomes an object, its int keys
+## written as strings and its members in the table's iteration order. A
+## key whose value is nil is written as `null`. Strings are written byte
+## for byte: `"`, `\` and control bytes are escaped, other bytes (UTF-8
+## or not) are not.
+##
+##   json.encode({a: 1, b: [1, nil]})    # '{"a":1,"b":[1,null]}'
+##   json.encode({})                     # "[]"
+##   json.encode({0: "a", 2: "b"})       # '{"0":"a","2":"b"}'
+##   json.encode(2.0)                    # "2.0"
+##
+## An infinite or NaN float comes out as `inf`, `-inf` or `nan`, which
+## is not valid JSON.
+##
+## Raises for a fn, buffer or other value with no JSON form, for a table
+## key that is not a string or int, and for nesting deeper than 1,000
+## levels, which includes any cyclic table.
 fn encode(val)
   let buf = buf_new()
   encode_value(val, buf, 0)

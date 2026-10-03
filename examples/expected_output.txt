@@ -613,13 +613,13 @@ Stack trace:
   at anonymous fn (examples/30_supervisor.gem:13)
 
 [Runtime Error in process 10]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:259
+  --> std/supervisor.gem:261
      |
- 259 |     error(res.error)
+ 261 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:259)
-  at anonymous fn (std/supervisor.gem:318)
+  at supervisor.sup_main (std/supervisor.gem:261)
+  at anonymous fn (std/supervisor.gem:344)
 test4: supervisor crashed: supervisor: max restart intensity reached
 test1: equal_self=true different=true
 test2: type=ref
@@ -719,8 +719,8 @@ test5: parent died: now-fatal
     |
 Stack trace:
   at anonymous fn (examples/34_gen_server.gem:97)
-  at gen_server.loop (std/gen_server.gem:105)
-  at anonymous fn (std/gen_server.gem:154)
+  at gen_server.loop (std/gen_server.gem:107)
+  at anonymous fn (std/gen_server.gem:173)
 test1: after incr 10 = 10
 test3: count=2 first=raw1 second=raw2
 test4: ok=false err=gen_server.call: server exited: kaboom from server
@@ -2721,63 +2721,63 @@ dynamic_supervisor.start_child: supervisor exited: boom
 5: own monitor reason=stop extra=0
 
 [Runtime Error in process 5]: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
-  --> std/gen_server.gem:67
+  --> std/gen_server.gem:69
     |
- 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 69 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:67)
-  at gen_server.check_call_result (std/gen_server.gem:99)
-  at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:154)
+  at gen_server.bad_result (std/gen_server.gem:69)
+  at gen_server.check_call_result (std/gen_server.gem:101)
+  at gen_server.loop (std/gen_server.gem:108)
+  at anonymous fn (std/gen_server.gem:173)
 6: gen_server.call: server exited: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 6]: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
-  --> std/gen_server.gem:67
+  --> std/gen_server.gem:69
     |
- 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 69 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:67)
-  at gen_server.check_call_result (std/gen_server.gem:99)
-  at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:154)
+  at gen_server.bad_result (std/gen_server.gem:69)
+  at gen_server.check_call_result (std/gen_server.gem:101)
+  at gen_server.loop (std/gen_server.gem:108)
+  at anonymous fn (std/gen_server.gem:173)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 7]: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
-  --> std/gen_server.gem:67
+  --> std/gen_server.gem:69
     |
- 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 69 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:67)
-  at gen_server.check_call_result (std/gen_server.gem:99)
-  at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:154)
+  at gen_server.bad_result (std/gen_server.gem:69)
+  at gen_server.check_call_result (std/gen_server.gem:101)
+  at gen_server.loop (std/gen_server.gem:108)
+  at anonymous fn (std/gen_server.gem:173)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 8]: gen_server: handle_cast returned nil, expected {state: state}
-  --> std/gen_server.gem:67
+  --> std/gen_server.gem:69
     |
- 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 69 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:67)
-  at gen_server.check_state_result (std/gen_server.gem:80)
-  at gen_server.loop (std/gen_server.gem:115)
-  at anonymous fn (std/gen_server.gem:154)
+  at gen_server.bad_result (std/gen_server.gem:69)
+  at gen_server.check_state_result (std/gen_server.gem:82)
+  at gen_server.loop (std/gen_server.gem:117)
+  at anonymous fn (std/gen_server.gem:173)
 6: cast nil -> gen_server: handle_cast returned nil, expected {state: state}
 
 [Runtime Error in process 9]: gen_server: handle_info returned an int, expected {state: state}
-  --> std/gen_server.gem:67
+  --> std/gen_server.gem:69
     |
- 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 69 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:67)
-  at gen_server.check_state_result (std/gen_server.gem:80)
-  at gen_server.loop (std/gen_server.gem:128)
-  at anonymous fn (std/gen_server.gem:154)
+  at gen_server.bad_result (std/gen_server.gem:69)
+  at gen_server.check_state_result (std/gen_server.gem:82)
+  at gen_server.loop (std/gen_server.gem:130)
+  at anonymous fn (std/gen_server.gem:173)
 6: info int -> gen_server: handle_info returned an int, expected {state: state}
 7: info saw ["call", "cast", "gs_reply"]
 8: monitors after 300 callers=1
@@ -3212,13 +3212,13 @@ armed timeout fired
 inner links its children: 3 true
 
 [Runtime Error in process 6]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:259
+  --> std/supervisor.gem:261
      |
- 259 |     error(res.error)
+ 261 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:259)
-  at anonymous fn (std/supervisor.gem:318)
+  at supervisor.sup_main (std/supervisor.gem:261)
+  at anonymous fn (std/supervisor.gem:344)
 inner restarted: true
 old db dead: true
 new db: true 0
@@ -3226,13 +3226,13 @@ outer, inner, children dead: true true true true nil
 one_for_all restarted inner: true true true
 
 [Runtime Error in process 22]: dynamic_supervisor: max restart intensity reached
-  --> std/dynamic_supervisor.gem:266
+  --> std/dynamic_supervisor.gem:277
      |
- 266 |     error(res.error)
+ 277 |     error(res.error)
      |
 Stack trace:
-  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:266)
-  at anonymous fn (std/dynamic_supervisor.gem:303)
+  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:277)
+  at anonymous fn (std/dynamic_supervisor.gem:332)
 dsup and its children dead: true true
 ignores a normal exit signal: true
 dsup killed, child dead: true true
@@ -3248,15 +3248,15 @@ oops restarted: true
 -- 6. handle_call returning both reply and noreply
 
 [Runtime Error in process 41]: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
-  --> std/gen_server.gem:67
+  --> std/gen_server.gem:69
     |
- 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 69 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:67)
-  at gen_server.check_call_result (std/gen_server.gem:89)
-  at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:154)
+  at gen_server.bad_result (std/gen_server.gem:69)
+  at gen_server.check_call_result (std/gen_server.gem:91)
+  at gen_server.loop (std/gen_server.gem:108)
+  at anonymous fn (std/gen_server.gem:173)
 gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
 -- 7. init returning a table with a state field
 {state: "idle", count: 0}
@@ -3433,26 +3433,26 @@ task.await_all: timeout must be an int (milliseconds) or nil, got string
 0
 
 [Runtime Error in process 29]: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
-  --> std/gen_server.gem:74
+  --> std/gen_server.gem:76
     |
- 74 |     error("gen_server: {callback} returned a timeout that is {describe(t)}, expected an int (milliseconds) or nil")
+ 76 |     error("gen_server: {callback} returned a timeout that is {describe(t)}, expected an int (milliseconds) or nil")
     |
 Stack trace:
-  at gen_server.check_result_timeout (std/gen_server.gem:74)
-  at gen_server.check_call_result (std/gen_server.gem:95)
-  at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:154)
+  at gen_server.check_result_timeout (std/gen_server.gem:76)
+  at gen_server.check_call_result (std/gen_server.gem:97)
+  at gen_server.loop (std/gen_server.gem:108)
+  at anonymous fn (std/gen_server.gem:173)
 gen_server.call: server exited: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
 
 [Runtime Error in process 30]: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
-  --> std/gen_server.gem:74
+  --> std/gen_server.gem:76
     |
- 74 |     error("gen_server: {callback} returned a timeout that is {describe(t)}, expected an int (milliseconds) or nil")
+ 76 |     error("gen_server: {callback} returned a timeout that is {describe(t)}, expected an int (milliseconds) or nil")
     |
 Stack trace:
-  at gen_server.check_result_timeout (std/gen_server.gem:74)
-  at gen_server.check_state_result (std/gen_server.gem:82)
-  at anonymous fn (std/gen_server.gem:153)
+  at gen_server.check_result_timeout (std/gen_server.gem:76)
+  at gen_server.check_state_result (std/gen_server.gem:84)
+  at anonymous fn (std/gen_server.gem:172)
 gen_server.call: server exited: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
 -- control bytes in the request head
 ok: HTTP/1.1 200 OK
@@ -3550,13 +3550,13 @@ Stack trace:
   at anonymous fn (examples/189_otp_shutdown.gem:102)
 
 [Runtime Error in process 12]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:259
+  --> std/supervisor.gem:261
      |
- 259 |     error(res.error)
+ 261 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:259)
-  at anonymous fn (std/supervisor.gem:318)
+  at supervisor.sup_main (std/supervisor.gem:261)
+  at anonymous fn (std/supervisor.gem:344)
 3 down: supervisor: max restart intensity reached true ["t:shutdown"]
 
 [Runtime Error in process 18]: boom
@@ -3573,17 +3573,17 @@ Stack trace:
 6 reports: ["z:shutdown", "y:shutdown", "x:shutdown"]
 supervisor: exiting on an error raised at:
   at bad_start (examples/189_otp_shutdown.gem:151)
-  at supervisor.start_child (std/supervisor.gem:55)
-  at anonymous fn (std/supervisor.gem:248)
+  at supervisor.start_child (std/supervisor.gem:57)
+  at anonymous fn (std/supervisor.gem:250)
 
 [Runtime Error in process 33]: start broke
-  --> std/supervisor.gem:259
+  --> std/supervisor.gem:261
      |
- 259 |     error(res.error)
+ 261 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:259)
-  at anonymous fn (std/supervisor.gem:318)
+  at supervisor.sup_main (std/supervisor.gem:261)
+  at anonymous fn (std/supervisor.gem:344)
 7 down: start broke ["a:shutdown"]
 8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got nil
 8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got string
@@ -3678,14 +3678,14 @@ gen_server.call: server exited: noproc left: 0
 -- 3. init must return {state}
 
 [Runtime Error in process 27]: gen_server: init returned an int, expected {state: state}
-  --> std/gen_server.gem:67
+  --> std/gen_server.gem:69
     |
- 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 69 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:67)
-  at gen_server.check_state_result (std/gen_server.gem:80)
-  at anonymous fn (std/gen_server.gem:153)
+  at gen_server.bad_result (std/gen_server.gem:69)
+  at gen_server.check_state_result (std/gen_server.gem:82)
+  at anonymous fn (std/gen_server.gem:172)
 gen_server: init returned an int, expected {state: state}
 got timeout
 -- 4. http: Host and bare LF

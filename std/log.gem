@@ -1,11 +1,15 @@
-# log — leveled log lines on stderr.
-#
-#   log.set_level("debug")            # default "info"
-#   log.info("listening on {port}")   # 2026-04-28T14:30:00Z [INFO] listening on 8080
-#   log.error("db: {r.error}")
-#
-# The level is module state, so it is per process: set it in main before
-# spawning (before `http.start`), or in the process that logs.
+## log — leveled log lines on stderr.
+##
+##   load "std/log"
+##   log.set_level("debug")             # default "info"
+##   log.info("listening on {port}")    # 2026-04-28T14:30:00Z [INFO] listening on 8080
+##   log.error("db: {r.error}")
+##
+## Each line is a UTC timestamp, the level in capitals, and the message
+## converted as string interpolation does. The level is module state, so
+## it is per process: a spawned process starts with the level its parent
+## had at the spawn. Set it in main before spawning (before
+## `http.start`), or in the process that logs.
 
 load "std/time"
 
@@ -21,6 +25,10 @@ fn emit(label, msg)
   eprint("{time.iso8601()} [{label}] {msg}")
 end
 
+## Sets the lowest level that is printed, in this process: "debug",
+## "info", "warn" or "error". Lines below it are dropped.
+##
+## Raises on any other `level` (names are lowercase).
 fn set_level(level)
   if not has_key(LEVELS, level)
     raise("log.set_level: unknown level {level}; use \"debug\", \"info\", \"warn\" or \"error\"")
@@ -28,26 +36,31 @@ fn set_level(level)
   min_level = LEVELS[level]
 end
 
+## Prints `msg` at level DEBUG, which is hidden by default.
 fn debug(msg)
   if min_level <= 0
     emit("DEBUG", msg)
   end
 end
 
+## Prints `msg` at level INFO.
 fn info(msg)
   if min_level <= 1
     emit("INFO", msg)
   end
 end
 
+## Prints `msg` at level WARN.
 fn warn(msg)
   if min_level <= 2
     emit("WARN", msg)
   end
 end
 
-# A `let`, not a `fn`, so that `raise` above can still take the builtin.
+## Prints `msg` at level ERROR, which every level shows. It does not
+## raise.
 let error = fn(msg)
+  # A `let`, not a `fn`, so that `raise` above can still take the builtin.
   emit("ERROR", msg)
 end
 

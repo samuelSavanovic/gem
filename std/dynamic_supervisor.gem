@@ -1,23 +1,34 @@
-# std/dynamic_supervisor — supervises anonymous, on-demand-spawned children.
-# Mirrors Erlang `simple_one_for_one` / Elixir `DynamicSupervisor`: every child
-# is started from the same template; the supervisor restarts crashed children
-# by replaying `template.start(args)` with the original args.
-#
-#   let ds = dynamic_supervisor.start({child: {start: fn(args) worker(args) end}})
-#   let pid = dynamic_supervisor.start_child(ds, {id: 1})
-#   dynamic_supervisor.which_children(ds)    # [{pid, args}]
-#   dynamic_supervisor.terminate_child(ds, pid)
-#
-# The supervisor traps exits and links each child. When it exits (an exit
-# signal from anyone, `stop`, restart intensity reached, or any error in
-# the supervisor), it first shuts its children down, OTP-style: it kills
-# each child with "shutdown", last started first, and waits for
-# the child's DOWN, SHUTDOWN_MS in all; then it exits. The restart signal is
-# the child's DOWN; the EXIT a child's death also sends is dropped. The
-# runtime queues a dead process's DOWN before its EXIT, so the EXIT is
-# always dropped right after its DOWN is taken, and any EXIT the main loop
-# sees is an exit signal (a `kill` of the supervisor, from a child as well
-# as from anyone else).
+## dynamic_supervisor — start children on demand from one template and
+## restart them when they die.
+##
+##   let ds = dynamic_supervisor.start({child: {start: fn(args) worker(args) end}})
+##   let pid = dynamic_supervisor.start_child(ds, {id: 1})
+##   dynamic_supervisor.which_children(ds)    # [{pid: pid, args: {id: 1}}]
+##   dynamic_supervisor.terminate_child(ds, pid)    # true
+##
+## A supervisor is named by the `{pid}` handle `start` returns, a bare pid
+## or a registered name. Every call but `start` blocks the caller, and
+## `start_child`, `terminate_child` and `which_children` raise
+## `dynamic_supervisor.<fn>: supervisor exited: <reason>` at once when it
+## is dead or dies first, and `...: timeout` after `timeout_ms` (nil: no
+## limit). They monitor the supervisor only for the call and leave no
+## monitor or `DOWN` behind, but after a timeout a late
+## `{tag: "_dsup_reply"}` may land in the caller's mailbox.
+
+# Design. Mirrors Erlang `simple_one_for_one` / Elixir `DynamicSupervisor`:
+# every child is started from the same template, and a crashed child is
+# restarted by replaying `template.start(args)` with its original args.
+# The supervisor traps exits and monitors and links each child. The
+# restart signal is the child's DOWN; the EXIT a child's death also sends
+# is dropped. The runtime queues a dead process's DOWN before its EXIT,
+# so the EXIT is always dropped right after its DOWN is taken, and any
+# EXIT the main loop sees is an exit signal (a `kill` of the supervisor,
+# from a child as well as from anyone else). When it exits (an exit
+# signal, `stop`, restart intensity reached, or any error in the
+# supervisor), it first shuts its children down, OTP-style: it kills each
+# child with "shutdown", last started first, and waits for the child's
+# DOWN, SHUTDOWN_MS in all; then it exits. Requests are answered with
+# `_dsup_reply` messages carrying a pcall-shaped result.
 
 let RESTARTS = {permanent: true, transient: true, temporary: true}
 # How long, in all, a supervisor that exits waits for its children's DOWN
@@ -269,6 +280,24 @@ fn dsup_main(state)
   kill(self(), reason)
 end
 
+## Spawns a dynamic supervisor with no children and returns its handle
+## `{pid}`.
+##
+## `opts.child` is the template `{start, restart}`: `start(args)` spawns a
+## child and returns its pid or `{pid}` handle; `restart` is
+## `"permanent"` (the default: always restart), `"transient"` (restart
+## unless it exits with `"normal"` or `"shutdown"`) or `"temporary"`
+## (never). The supervisor gives up and exits when more than
+## `opts.max_restarts` (default 3) restarts fall within `opts.max_seconds`
+## ms (default 5000). `opts.name` registers it.
+##
+## Raises, and starts nothing, for bad options or a name that is taken.
+##
+## Returns at once. The supervisor is not linked to the caller: the
+## caller dying leaves it running, and it dying doesn't kill the caller.
+## Before it exits it kills its children with `"shutdown"`, last first,
+## waiting up to 4 s in all for them to go. `kill(ds, reason)` is handled
+## when it next reads its mailbox; use `stop` to know it is gone.
 fn start(opts)
   if type(opts) != "table"
     error("dynamic_supervisor.start: expected an options table \{child, ...\}, got {type(opts)}")
@@ -401,21 +430,46 @@ fn request(target, msg, caller, timeout_ms)
   res.value
 end
 
+## Starts a child by calling the template's `start(args)` in the
+## supervisor, and returns the child's pid (a bare pid, also when `start`
+## returned a handle).
+##
+## `args` is any value; a restart passes the same `args` again. Raises
+## `dynamic_supervisor.start_child: <error>` when `start` raises or
+## returns something other than a pid or handle; the supervisor keeps
+## running.
 fn start_child(target, args, timeout_ms = 5000)
   request(target, {tag: "_dsup_start_child", args: args}, "dynamic_supervisor.start_child", timeout_ms)
 end
 
+## Stops a child with the exit signal `"shutdown"`, waits for it to exit,
+## and returns true; the child is not restarted. Returns false when the
+## supervisor doesn't have `child` (a pid, a `{pid}` handle or a
+## registered name).
+##
+## A child that traps exits only gets an `EXIT` message: the call times
+## out unless the child exits on it, and the child keeps running, left out
+## of `which_children` and not restarted when it does exit.
 fn terminate_child(target, child, timeout_ms = 5000)
   request(target, {tag: "_dsup_terminate_child", pid: pid_of(child)}, "dynamic_supervisor.terminate_child", timeout_ms)
 end
 
+## Returns the running children as `{pid, args}` tables, in the order
+## they were started (a restarted child keeps its place).
+##
+##   dynamic_supervisor.which_children(ds)    # [{pid: 2, args: {id: 1}}]
 fn which_children(target, timeout_ms = 5000)
   request(target, {tag: "_dsup_which_children"}, "dynamic_supervisor.which_children", timeout_ms)
 end
 
-# Stops the supervisor with an exit signal "shutdown" and waits for its
-# DOWN, which comes once it has shut its children down (see the top of the
-# file).
+## Stops the supervisor and waits until it and its children have exited,
+## then returns nil (also for one that was already gone).
+##
+## Raises `dynamic_supervisor.stop: the supervisor did not stop within
+## <ms> ms` after `timeout_ms` (nil: no limit).
+##
+## Sends the exit signal `"shutdown"`. Takes the supervisor's `DOWN`,
+## unless the caller monitors it itself: that monitor still gets it.
 fn stop(target, timeout_ms = 5000)
   let pid = target_pid(target, "dynamic_supervisor.stop")
   check_timeout(timeout_ms, "dynamic_supervisor.stop")
