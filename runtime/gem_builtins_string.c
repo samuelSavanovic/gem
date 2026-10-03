@@ -1,9 +1,21 @@
 /*
  * gem_builtins_string.c — String builtins: str_replace, substr, chr, ord,
- *                          and the buffer API (buf_new, buf_push).
+ *                          and the buffer API (buf_new, buf_push), plus
+ *                          gem_bytes_span (an extern helper for std/http).
  */
 
 #include "gem.h"
+
+/* ─── gem_bytes_span (extern helper, see gem.h) ─── */
+
+int64_t gem_bytes_span(const uint8_t *s, int64_t n, const uint8_t *accept, int64_t accept_n) {
+    uint8_t ok[256];
+    memset(ok, 0, sizeof(ok));
+    for (int64_t i = 0; i < accept_n; i++) ok[accept[i]] = 1;
+    int64_t i = 0;
+    while (i < n && ok[s[i]]) i++;
+    return i;
+}
 
 /* ─── Built-in: str_replace ─── */
 

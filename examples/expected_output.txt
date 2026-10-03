@@ -3305,11 +3305,14 @@ HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type
 -- invalid responses get a 500
 http: GET /inject: invalid response: header Location has a CR or LF in its value
 HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
-http: GET /cookie_inject: invalid response: header Set-Cookie has a CR or LF in its value
+http: GET /cookie_inject: http.set_cookie: invalid cookie value "1
+X-Evil: 1" (no ;, comma, whitespace or control bytes)
+Stack trace:
+  at anonymous fn (examples/185_http_hardening.gem:23)
 HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
-http: GET /status/1000: invalid response: status 1000 is not from 100 to 999
+http: GET /status/1000: invalid response: status 1000 is not from 200 to 999 (1xx responses are not supported)
 HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
-http: GET /status/99: invalid response: status 99 is not from 100 to 999
+http: GET /status/99: invalid response: status 99 is not from 200 to 999 (1xx responses are not supported)
 HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
 http: GET /status_str: invalid response: status must be an int, got string 200
 HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
@@ -3460,3 +3463,76 @@ Stack trace:
   at gen_server.check_result_timeout (std/gen_server.gem:74)
   at anonymous fn (std/gen_server.gem:140)
 gen_server.call: server exited: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
+-- control bytes in the request head
+ok: HTTP/1.1 200 OK
+bare LF in a header: HTTP/1.1 400 Bad Request
+bare CR in a header: HTTP/1.1 400 Bad Request
+bare LF in the request line: HTTP/1.1 400 Bad Request
+NUL in a value: HTTP/1.1 400 Bad Request
+ESC in a value: HTTP/1.1 400 Bad Request
+DEL in a value: HTTP/1.1 400 Bad Request
+control byte in the target: HTTP/1.1 400 Bad Request
+HTAB and obs-text: true
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+-- protocol corners
+HTTP/1.1 200 OK | Content-Length: 13 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=1
+HTTP/1.1 200 OK | Content-Length: 4 | Connection: keep-alive | Content-Type: text/plain; charset=utf-8 |  | 2:abHTTP/1.1 200 OK | Content-Length: 13 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=2
+HTTP/1.1 200 OK | Content-Length: 13 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=3
+HTTP/1.9: HTTP/1.1 505 HTTP Version Not Supported
+HTTP/2.0: HTTP/1.1 505 HTTP Version Not Supported
+HTTP/1.x: HTTP/1.1 400 Bad Request
+FTTP/1.1: HTTP/1.1 400 Bad Request
+TE on HTTP/1.0: HTTP/1.1 400 Bad Request
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 3:abc
+65-digit chunk size: HTTP/1.1 400 Bad Request
+16 significant hex digits: HTTP/1.1 400 Bad Request
+bare CR in a chunk extension: HTTP/1.1 400 Bad Request
+control byte in a trailer: HTTP/1.1 400 Bad Request
+HTTP/1.1 200 OK | Content-Length: 15 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=abs
+HTTP/1.1 200 OK | Content-Length: 15 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=nil
+absolute form without a path: HTTP/1.1 404 Not Found
+-- response checks
+http: GET /status/100: invalid response: status 100 is not from 200 to 999 (1xx responses are not supported)
+status 100: HTTP/1.1 500 Internal Server Error
+http: GET /status/101: invalid response: status 101 is not from 200 to 999 (1xx responses are not supported)
+status 101: HTTP/1.1 500 Internal Server Error
+http: GET /status/199: invalid response: status 199 is not from 200 to 999 (1xx responses are not supported)
+status 199: HTTP/1.1 500 Internal Server Error
+status 200: HTTP/1.1 200 OK
+status 999: HTTP/1.1 999 Unknown
+http: GET /name/space: invalid response: header name "X Y" is not an HTTP token
+header name space: HTTP/1.1 500 Internal Server Error
+http: GET /name/trailing: invalid response: header name "Transfer-Encoding " is not an HTTP token
+header name trailing: HTTP/1.1 500 Internal Server Error
+http: GET /name/colon: invalid response: header name "X:Y" is not an HTTP token
+header name colon: HTTP/1.1 500 Internal Server Error
+http: GET /name/empty: invalid response: header name "" is not an HTTP token
+header name empty: HTTP/1.1 500 Internal Server Error
+header name symbols: HTTP/1.1 200 OK
+-- cookies
+ok: sid=a1-b2_c.3~%20; Path=/; HttpOnly; SameSite=Lax
+http.set_cookie: invalid cookie value "x; Domain=evil.com" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie value "a,b" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie value "a	b" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie value "a
+X-Evil: 1" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie name "s id" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie name "a=b" (empty or contains =)
+http.set_cookie: invalid cookie name "" (empty or contains =)
+http.set_cookie: invalid cookie path "/; Domain=evil.com" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie same_site "Lax; Secure" (no ;, comma, whitespace or control bytes)
+http.set_cookie: max_age must be an int or nil, got string 0; Domain=x
+http.delete_cookie: invalid cookie path "/a b" (no ;, comma, whitespace or control bytes)
+ok: sid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax
+-- std/request
+request.post: a Transfer-Encoding header is not supported (the body is sent with Content-Length)
+3:abc
+-- a handler that traps exits
+true
+kept-alive after stop: true
+HTTP/1.1 200 OK | Content-Length: 8 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | finished closed: true
+rebind: true
+-- the caller of serve is killed
+HTTP/1.1 200 OK | Content-Length: 18 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=served
+connect after the kill: false
+rebind: true

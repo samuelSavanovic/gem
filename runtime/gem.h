@@ -371,6 +371,12 @@ int gem_val_eq(GemVal a, GemVal b);
    new one, so keep ids only for tables older than the loop that uses them,
    such as a function's arguments. */
 int64_t gem_table_id(GemVal v);
+/* The length of the longest prefix of `s` (n bytes) made only of bytes
+   that occur in `accept` (accept_n bytes), like strspn but binary-safe.
+   std/http reaches it through `extern fn` (Bytes params) to validate
+   request heads, header names and cookies in one C pass instead of a
+   Gem loop over `ord`. */
+int64_t gem_bytes_span(const uint8_t *s, int64_t n, const uint8_t *accept, int64_t accept_n);
 int gem_truthy(GemVal v);
 
 /* ─── Arithmetic / operators ─── */

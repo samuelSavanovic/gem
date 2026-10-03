@@ -400,7 +400,11 @@ fn build_request(name, method, parsed, headers, body)
   for key, value in headers
     check_text(name, "header name", "{key}", false)
     check_text(name, "value of header {key}", "{value}", true)
-    given[string.lower("{key}")] = true
+    let lower = string.lower("{key}")
+    if lower == "transfer-encoding"
+      error("{name}: a Transfer-Encoding header is not supported (the body is sent with Content-Length)")
+    end
+    given[lower] = true
   end
   build_string do |add|
     add(method, " ", parsed.path, " HTTP/1.1\r\n")
