@@ -451,9 +451,10 @@ end
 ## A number without `.` or exponent is an int; one with them is a float,
 ## and so is an integer too big for 64 bits. A number too small for a
 ## float reads as 0.0. Escapes, `\uXXXX` surrogate pairs included,
-## become UTF-8. A repeated object key keeps its last value. A JSON
-## `null` reads as nil; a null object member keeps its key (`has_key` is
-## true) but `o.a` is nil, the same as for a missing key.
+## become UTF-8. Object members keep their source order. A repeated
+## object key keeps its last value. A JSON `null` reads as nil; a null
+## object member keeps its key (`has_key` is true) but `o.a` is nil, the
+## same as for a missing key.
 ##
 ##   json.parse('[1, 2.5, null]')     # [1, 2.5, nil]
 ##   json.parse('{"a":1,"a":2}')      # {a: 2}
@@ -621,8 +622,8 @@ end
 
 ## Returns `val` as compact JSON text (no spaces or newlines).
 ##
-## A table whose keys are exactly the ints 0 .. n-1 (the empty table
-## too) becomes an array; any other table becomes an object, its int keys
+## A table whose keys are exactly the ints 0 .. n-1, in whatever order
+## they were added (the empty table too), becomes an array; any other table becomes an object, its int keys
 ## written as strings and its members in the table's iteration order. A
 ## key whose value is nil is written as `null`. Strings are written byte
 ## for byte: `"`, `\` and bytes below 0x20 are escaped, other bytes (DEL,

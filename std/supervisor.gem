@@ -298,9 +298,11 @@ end
 ## returns its handle `{pid}`.
 ##
 ## `spec` takes `children`: an array of `{id, start, restart}` specs, where
-## `start` spawns the child and returns the pid, `{pid}` handle or
-## registered name of the process it spawned (any int is trusted as a
-## pid), and `restart` is `"permanent"` (the default: always restart),
+## `id` is required and unique, `start` spawns the child and returns the
+## pid, `{pid}` handle or registered name of the process it spawned (any
+## int is trusted as a pid: one that is not a live process counts as dead
+## at once and is restarted until the restart limit stops the supervisor),
+## and `restart` is `"permanent"` (the default: always restart),
 ## `"transient"` (restart unless it exits with `"normal"` or `"shutdown"`)
 ## or `"temporary"` (never). `strategy` is `"one_for_one"` (the default:
 ## restart the dead child) or `"one_for_all"` (stop the others, then start
@@ -313,19 +315,24 @@ end
 ## happens in the supervisor, after the child's death, so for a moment a
 ## call by the child's registered name raises `no process registered`.
 ##
-## Raises, and starts nothing, for a bad spec or a name that is taken.
+## Raises, and starts nothing, for a bad spec (e.g. `supervisor.start:
+## duplicate child id "d"`) or a name that is taken.
 ##
 ## Returns at once: the supervisor calls each child's `start` later, in
 ## its own process, so `self()` there is the supervisor. It is not linked
 ## to the caller: the caller dying leaves it running, and it dying (on its
-## restart limit, an exit signal, or a child's `start` that raises) doesn't
-## kill the caller. Before it exits it kills its children with
-## `"shutdown"`, last first, waiting up to 4 s in all for them to go.
-## `kill(sup, reason)` is handled when it next reads its mailbox; use
-## `stop` to know it is gone. A child that traps exits must exit on an
-## `EXIT` from the supervisor: otherwise a `one_for_all` restart hangs for
-## good, the supervisor stops answering, and `which_children` and `stop`
-## time out (`stop` with a nil timeout never returns).
+## restart limit, an exit signal, or a child's `start` that raises)
+## doesn't kill the caller. Its exit reason is `"supervisor: max restart
+## intensity reached"` or the error a child's `start` raised, unchanged;
+## both are also printed on stderr. Before it exits it kills its children
+## with `"shutdown"`, last first, waiting up to 4 s in all for them to go.
+## `kill(sup.pid, reason)` is handled when it next reads its mailbox; use
+## `stop` to know it is gone. Children are linked to the supervisor, so a
+## child that traps exits gets its `EXIT` messages. A child that traps
+## exits must exit on an `EXIT` from the supervisor: otherwise a
+## `one_for_all` restart hangs for good, the supervisor stops answering,
+## and `which_children` and `stop` time out (`stop` with a nil timeout
+## never returns).
 fn start(spec)
   if type(spec) != "table"
     error("supervisor.start: expected a spec table \{strategy, children, ...\}, got {type(spec)}")
@@ -461,7 +468,9 @@ end
 ##
 ## The supervisor gives its children up to 4 s in all to exit, then exits
 ## anyway: a child that traps exits and ignores the `EXIT` is still
-## running when `stop` returns, and keeps any name it registered. Raises
+## running when `stop` returns, and keeps any name it registered. Only
+## direct children are stopped: processes a child spawned itself (such
+## as its tasks, which aren't linked to it) keep running. Raises
 ## `supervisor.stop: the supervisor did not stop within <ms> ms` after
 ## `timeout_ms` (nil: no limit).
 ##

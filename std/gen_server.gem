@@ -160,14 +160,16 @@ end
 ## Spawns a server running `module` and returns its handle `{pid}`.
 ##
 ## `module` is a table of four fns: `init()` returns `{state}`;
-## `handle_call(msg, from, state)` returns `{reply, state}`, or
-## `{noreply: state}` to answer later with `reply`; `handle_cast(msg,
-## state)` and `handle_info(msg, state)` return `{state}`. Any result may
-## add `timeout: ms`: if no message comes within that long, `handle_info`
-## gets `"timeout"`. It covers only the next wait: return it from every
-## callback to keep it. A plain `"timeout"` message looks the same to
-## `handle_info`. `handle_info` gets every message that isn't a call or a
-## cast, such as the `DOWN` of a process the server monitors.
+## `handle_call(msg, from, state)` returns `{reply, state}`, or `{noreply:
+## state}` to answer later with `reply` (`from` is `{pid, ref}`:
+## `from.pid` is the caller; pass `from` itself to `reply`);
+## `handle_cast(msg, state)` and `handle_info(msg, state)` return
+## `{state}`. Any result may add `timeout: ms`: if no message comes within
+## that long, `handle_info` gets `"timeout"`. It covers only the next
+## wait: return it from every callback to keep it. A plain `"timeout"`
+## message looks the same to `handle_info`. `handle_info` gets every
+## message that isn't a call or a cast, such as the `DOWN` of a process
+## the server monitors.
 ##
 ## Raises, and starts nothing, if `module` is not a table or a callback is
 ## not a fn.
@@ -253,7 +255,9 @@ end
 ## stays and still gets its `DOWN`. After a timeout the server may still
 ## reply: the late `{tag: "_gs_reply"}` lands in the caller's mailbox, and
 ## no later `call` takes it, so a long-lived caller needs a catch-all arm.
-## A caller that dies mid-call doesn't affect the server.
+## A caller that dies mid-call doesn't affect the server. Don't call a
+## server from its own callbacks: that call waits out its timeout, then
+## the server dies with `gen_server.call: timeout`.
 fn call(target, msg, timeout_ms = 5000)
   # The monitor makes a dead server fail the call at once; `added` says
   # whether the call owns it (a process monitors a target at most once).
@@ -297,7 +301,9 @@ end
 ##
 ## Works from any process, so the server can hand `from` to a worker. A
 ## reply to a caller that has given up (timed out or died) is dropped or
-## left in its mailbox, as in `call`; call `reply` once per `from`.
+## left in its mailbox, as in `call`. Call `reply` once per `from`: a
+## second reply, or a `reply` followed by a `{reply: ...}` result, leaves
+## an extra `{tag: "_gs_reply"}` in the caller's mailbox.
 fn reply(from, value)
   send(from.pid, {tag: "_gs_reply", ref: from.ref, value: value})
   nil

@@ -10,12 +10,27 @@
 ## A handle `db` is an int. Errors start with the name of the builtin
 ## underneath (`sqlite_open`, `sqlite_close`, `sqlite_exec`,
 ## `sqlite_query`, `sqlite_last_insert_id`, `sqlite_changes`): an SQLite
-## error raises `sqlite_query: <SQLite's message>`, a closed or unknown
+## error raises `<builtin>: <SQLite's message>` (`sqlite_query: UNIQUE
+## constraint failed: t.name`), a closed or unknown
 ## handle `...: not an open database handle`, and a handle that is not an
 ## int `...: expected a database handle, got <type>`. `exec` and `query`
 ## run on the scheduler thread without yielding, so they stall every
 ## process while they run: keep queries short and indexed. A handle is
 ## not closed when its process dies: close it on every path.
+##
+## A handle is one connection, shared by every process that has it: a
+## transaction opened with `exec(db, "BEGIN")` takes in every statement any
+## process runs on `db` until COMMIT or ROLLBACK, so don't yield (sleep,
+## receive, a long loop) inside a transaction on a shared handle, or open
+## one handle per process. A nested BEGIN raises.
+##
+##   sqlite.exec(db, "BEGIN")
+##   let r = pcall sqlite.query(db, "INSERT INTO notes(text) VALUES (?)", ["a"])
+##   if r.ok
+##     sqlite.exec(db, "COMMIT")
+##   else
+##     sqlite.exec(db, "ROLLBACK")
+##   end
 
 # open and close run on the I/O thread pool; exec, query, last_id and
 # changes run inline on the scheduler thread without yielding. Handles are
@@ -24,7 +39,9 @@
 
 ## Opens (creating if needed) the database file at `path` and returns its
 ## handle. ":memory:" opens a private in-memory database. Foreign keys are
-## enforced, and a file database uses WAL journaling.
+## enforced, and a file database uses WAL journaling. There is no busy
+## timeout: a write while another connection holds the write lock raises
+## `...: database is locked` at once.
 ##
 ## Raises if the file can't be opened. Blocks only the calling process
 ## while the file opens.
@@ -51,12 +68,13 @@ end
 
 ## Runs one statement with its `?` placeholders bound, in order, from the
 ## array `params`, and returns its rows: an array of records keyed by
-## column name (an empty table when there are none, as for INSERT, UPDATE
-## and DELETE). `?N` takes the Nth param, and each `:name` the next one
+## column name (an empty table, printed `{}`, when there are none, as for
+## INSERT, UPDATE and DELETE). `?N` takes the Nth param, and each `:name` the next one
 ## in order of first use. `params` may be nil (no params).
 ##
 ## Params may be nil, bools (stored as 1 and 0), ints, floats or strings.
-## Columns come back as ints, floats, strings or nil. A string param is
+## Columns come back as ints, floats, strings or nil; a NULL column is
+## still a key of the record, holding nil. A string param is
 ## stored only up to its first NUL byte; a BLOB column comes back with
 ## every byte. When two columns share a name the last one wins; name them
 ## with `AS`. Only the first statement in `sql`
@@ -66,7 +84,8 @@ end
 ##   # [{id: 1, text: "hi"}]
 ##
 ## Raises if `params` is not a table, if the number of params differs
-## from the number of placeholders, or if a param is of another type.
+## from the statement's parameter count (the highest `?N`; a reused `?N` or
+## `:name` counts once), or if a param is of another type.
 fn query(db, sql, params = [])
   sqlite_query(db, sql, params)
 end
@@ -78,7 +97,8 @@ fn last_id(db)
 end
 
 ## Returns how many rows the last INSERT, UPDATE or DELETE through `db`
-## changed (0 before any). Other statements leave it unchanged.
+## changed (0 before any). Other statements leave it unchanged. After a
+## multi-statement `exec` it counts the last such statement.
 fn changes(db)
   sqlite_changes(db)
 end

@@ -526,8 +526,9 @@ fn get(raw_url, opts = {})
 end
 
 ## Sends a POST to `raw_url` and returns `{status, headers, body}`. An
-## empty body is sent with `Content-Length: 0`. Options, result and
-## errors are as for `request`.
+## empty body is sent with `Content-Length: 0`, and no Content-Type is
+## added: set one in `headers`. Options, result and errors are as for
+## `request`.
 ##
 ##   let body = json.encode({a: 1})
 ##   request.post(url, {body: body, headers: {"Content-Type": "application/json"}})
@@ -536,15 +537,17 @@ fn post(raw_url, opts = {})
 end
 
 ## Sends a PUT to `raw_url` and returns `{status, headers, body}`. An
-## empty body is sent with `Content-Length: 0`. Options, result and
-## errors are as for `request`.
+## empty body is sent with `Content-Length: 0`, and no Content-Type is
+## added: set one in `headers`. Options, result and errors are as for
+## `request`.
 fn put(raw_url, opts = {})
   do_request("request.put", "PUT", raw_url, opts)
 end
 
 ## Sends a PATCH to `raw_url` and returns `{status, headers, body}`. An
-## empty body is sent with `Content-Length: 0`. Options, result and
-## errors are as for `request`.
+## empty body is sent with `Content-Length: 0`, and no Content-Type is
+## added: set one in `headers`. Options, result and errors are as for
+## `request`.
 fn patch(raw_url, opts = {})
   do_request("request.patch", "PATCH", raw_url, opts)
 end
@@ -556,7 +559,8 @@ fn delete(raw_url, opts = {})
 end
 
 ## Sends a request with any `method` ("HEAD", "OPTIONS", ...) to
-## `raw_url` and returns `{status, headers, body}`.
+## `raw_url` and returns `{status, headers, body}`. `method` is sent as
+## given: "get" goes out lowercase.
 ##
 ## `raw_url` is `http://host[:port][/path][?query][#fragment]`: port 80
 ## by default, a missing path is `/`, the fragment is not sent. It is
@@ -571,7 +575,8 @@ end
 ##   Content-Length.
 ## - `headers`: a table of name → value; a value is sent as its text
 ##   (`"{value}"`), so an int is fine. `Host`, `Connection: close` and
-##   `Content-Length` are added unless `headers` sets them (in any case).
+##   `Content-Length` are added unless `headers` sets them (in any case);
+##   nothing else is, Content-Type included.
 ## - `timeout_ms`: an int > 0, default 30000, or nil for no limit. One
 ##   deadline for the whole call, not per read. Connecting and sending
 ##   the request are not cut short by it, only waiting for the response.
@@ -580,7 +585,9 @@ end
 ## trimmed values (a repeated header's values joined with ", ", but
 ## `set-cookie`'s with "\n"), and `body` is a string: chunked bodies come
 ## back decoded, other codings (gzip) as sent. A HEAD, 204 or 304
-## response has the body "". Interim 1xx responses are skipped.
+## response has the body "". Interim 1xx responses are skipped. To send
+## cookies back, split `set-cookie` on "\n", keep each line up to its
+## `;`, and pass them joined with "; " as `headers: {Cookie: ...}`.
 ##
 ##   request.request("HEAD", "http://127.0.0.1:8080/items").body    # ""
 ##

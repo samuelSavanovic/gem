@@ -12,6 +12,8 @@
 ## For measuring durations use the `time_ms()` builtin, which a change
 ## of the system clock can't move. Where `ms` defaults to now, passing
 ## `nil` raises the same `format_time:` error: leave `ms` out instead.
+## There is no parser (nothing turns an ISO 8601 or HTTP date back into
+## ms), and `fmt` has no milliseconds specifier.
 
 ## Returns the current wall-clock time in epoch milliseconds, the same as
 ## the `epoch_ms()` builtin.

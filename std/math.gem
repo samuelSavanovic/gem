@@ -31,10 +31,13 @@ fn max(a, b)
   b
 end
 
-## Returns `val` limited to the range `low` .. `high`, both included.
+## Returns `val` limited to the range `low` .. `high`, both included:
+## `val` itself when in range, else the bound it crossed, so the type can
+## change. A NaN `val` comes back unchanged.
 ##
-##   math.clamp(150, 0, 100)    # 100
-##   math.clamp(-3, 0, 100)     # 0
+##   math.clamp(150, 0, 100)      # 100
+##   math.clamp(-3, 0, 100)       # 0
+##   math.clamp(50, 0.0, 10.0)    # 10.0
 ##
 ## Raises if `low` is greater than `high`.
 fn clamp(val, low, high)

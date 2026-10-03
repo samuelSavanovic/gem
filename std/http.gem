@@ -8,12 +8,14 @@
 ##   http.serve(app, {port: 8080})    # blocks; or http.start, later http.stop
 ##
 ## A handler gets a request table and returns a response table {status,
-## headers, body}; the builders below make one. In the request:
-## `method` ("HEAD" when a HEAD runs a GET route); `path`, raw (not
-## percent-decoded) and without the query string; `query`, the query
-## string as by `url.parse_query` ({} when none); `params`, decoded (see
-## `router`); `headers`, with lowercase names; `cookies`, names to raw
-## values (decode with `url.decode`), {} when none; `body`, "" when none.
+## headers, body}; the builders below make one. The request has just
+## these keys (no client address, no raw query string): `method` ("HEAD"
+## when a HEAD runs a GET route); `path`, raw (not percent-decoded),
+## without the query; `query`, as by `url.parse_query` ({} when none; a
+## repeated key keeps its last value); `params` (see `router`);
+## `headers`, lowercase names, a repeated header's values joined with
+## ", " ("; " for Cookie); `cookies`, names to raw values (decode with
+## `url.decode`; a pair without `=` is dropped); `body`, "" when none.
 ##
 ## A handler that raises or returns an invalid response (see `response`)
 ## gets a 500, its error and stack go to stderr, and the server keeps
@@ -136,18 +138,18 @@ let STATUS_TEXT = {
 
 # ─── Response builders ───
 
-## Returns the response table {status, headers, body}.
+## Returns the response table {status, headers, body}, adding no
+## headers (no Content-Type).
 ##
 ## A handler's response is valid when `status` is an int from 200 to 999,
 ## `body` is nil or a string, and `headers` is nil or a table of name to
-## value. Names must be HTTP tokens (no spaces or `:`), and a value with a
-## CR or LF is invalid. A value is sent as `"{value}"`; an array value is
-## sent as one header line per element. The server writes Content-Length
-## and Connection itself and drops a handler's own Content-Length,
-## Transfer-Encoding and Connection headers, but a Connection header that
-## lists `close` still closes the connection. 204 and 304 responses are
-## sent without a body. The builders don't check any of this; the server
-## does when the handler returns.
+## value. Names must be HTTP tokens, and values must hold no CR or LF. A
+## value is sent as `"{value}"`, an array as one line per element; a nil
+## value or a non-array table is sent as the text "nil". The server
+## writes Content-Length and Connection and drops the handler's own and
+## any Transfer-Encoding, but a Connection header listing `close` still
+## closes the connection. 204 and 304 responses go without a body. The
+## builders check none of this; the server does when the handler returns.
 ##
 ##   http.response(201, {"Location": "/items/7"}, "")
 fn response(status, headers, body)
@@ -184,8 +186,9 @@ fn json_response(data)
   {status: 200, headers: {"Content-Type": "application/json; charset=utf-8"}, body: json.encode(data)}
 end
 
-## Returns a redirect to `location` with an empty body; `status` is 302
-## unless given (301, 303, 307, 308).
+## Returns a redirect to `location` with an empty plain-text body;
+## `status` is 302 unless given. It isn't checked: pass 301, 303, 307 or
+## 308.
 ##
 ##   http.redirect("/login")
 ##   http.redirect("/new-home", 301)
@@ -291,7 +294,8 @@ end
 ##
 ## Options: `path` (default "/"), `http_only` (default true), `secure`
 ## (default false), `same_site` (default "Lax"), `max_age` (seconds, int)
-## and `expires` (epoch ms, int); nil leaves an attribute out.
+## and `expires` (epoch ms, int); nil leaves an attribute out. A nil
+## `value` is sent as the text "nil" (`sid=nil`).
 ##
 ##   http.set_cookie(http.ok("hi"), "sid", token, {max_age: 3600})
 ##   # Set-Cookie: sid=<token>; Path=/; Max-Age=3600; HttpOnly; SameSite=Lax
@@ -440,8 +444,9 @@ end
 ##
 ## A pattern segment starting with `:` matches any one segment, also an
 ## empty one (`/users/` matches `/users/:id` with id ""), and puts it,
-## URL-decoded, in `req.params`; other segments match literally. Trailing
-## slashes are not normalized: `/users/42/` doesn't match `/users/:id`.
+## percent-decoded (`%XX` only: `+` stays `+`, unlike `url.decode`), in
+## `req.params`; other segments match literally. Trailing slashes are
+## not normalized: `/users/42/` doesn't match `/users/:id`.
 ## The first matching route registered wins. A HEAD request runs the GET
 ## route and gets its headers without the body. An unmatched method gets
 ## a 404 (no 405). `match` takes a path without its query string and
@@ -455,12 +460,13 @@ end
 ## Content-Type from `std/mime`. The prefix matches whole segments
 ## (`/static` serves `/static/a.css`, not `/staticx`), the prefix itself
 ## gives `index.html`, `..` can't leave `dir`, and a directory or missing
-## file is a 404. `dir` is resolved against the current directory on each
-## request, not the source file's; a missing `dir` is no error, its URLs
-## are 404s. The path is not percent-decoded before the lookup, so a file
-## whose name needs encoding (a space, say) can't be served. Routes are
-## tried before static dirs. Each request reads the whole file, so
-## changes show at once; don't serve huge files this way.
+## file is a 404. `dir` is relative to the current directory, not the
+## source file; a missing `dir` just gives 404s. The path is not
+## percent-decoded before the lookup, so a file whose name needs encoding
+## (a space, say) can't be served. Routes are tried before static dirs.
+## Each request reads the whole file, so don't serve huge files this way.
+## Files are sent with `Cache-Control: public, max-age=3600`, so browsers
+## may show a stale copy for up to an hour.
 fn router()
   let routes = []
   let static_routes = []
@@ -1677,6 +1683,8 @@ end
 ## `request_timeout_ms` (default 30000: a request's head and body must
 ## arrive within it). A timeout of nil means no limit; past one, the
 ## connection is closed without a response. Other keys are ignored.
+## `opts` must be a table: nil raises an unprefixed `field access on
+## non-table` error.
 ##
 ##   let server = http.start(app, {port: 8080, host: "127.0.0.1"})
 ##   ...
@@ -1811,9 +1819,10 @@ end
 ## a server that already stopped returns nil too.
 ##
 ## `server` is the handle from `start`, the server pid, or a name the pid
-## was registered under. Requests in flight are cut off (also the one
-## whose handler calls `stop`; `stop` doesn't return to it). Waits at most
-## `timeout_ms` (nil: no limit).
+## was registered under; any process given is killed, server or not.
+## Requests in flight are cut off (also the one whose handler calls
+## `stop`; `stop` doesn't return to it). Waits at most `timeout_ms` (nil:
+## no limit).
 ##
 ## Raises `http.stop: the server did not stop within <ms> ms`, and for a
 ## `server` that is none of the above (`no process registered as "..."`).

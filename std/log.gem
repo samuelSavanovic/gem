@@ -5,7 +5,7 @@
 ##   log.info("listening on {port}")    # 2026-04-28T14:30:00Z [INFO] listening on 8080
 ##   log.error("db: {r.error}")
 ##
-## Each line is a UTC timestamp, the level in capitals, and the message
+## Each line is a UTC timestamp to the second, the level in capitals, and the message
 ## converted as string interpolation does (a buffer shows as
 ## `<buffer:N>`; pass `to_string(buf)`). A `\n` in the message starts a
 ## line with no timestamp or level. The level is module state, so

@@ -6,16 +6,17 @@
 ##   dynamic_supervisor.which_children(ds)    # [{pid: pid, args: {id: 1}}]
 ##   dynamic_supervisor.terminate_child(ds, pid)    # true
 ##
-## A supervisor is named by the `{pid}` handle `start` returns, a bare pid
-## or a registered name; a name nobody holds, also that of a supervisor
-## that has stopped, raises `dynamic_supervisor.<fn>: no process
-## registered as "<name>"`. Every call but `start` blocks the caller, and
-## `start_child`, `terminate_child` and `which_children` raise
-## `dynamic_supervisor.<fn>: supervisor exited: <reason>` at once when it
-## is dead or dies first, and `...: timeout` after `timeout_ms` (nil: no
-## limit). They monitor the supervisor only for the call and leave no
-## monitor or `DOWN` behind, but after a timeout a late
-## `{tag: "_dsup_reply"}` may land in the caller's mailbox.
+## A supervisor (the `target` argument) is named by the `{pid}` handle
+## `start` returns, a bare pid or a registered name; a name nobody holds,
+## also that of a supervisor that has stopped, raises
+## `dynamic_supervisor.<fn>: no process registered as "<name>"`. Every
+## call but `start` blocks the caller, and `start_child`,
+## `terminate_child` and `which_children` raise `dynamic_supervisor.<fn>:
+## supervisor exited: <reason>` at once when it is dead or dies first, and
+## `...: timeout` after `timeout_ms` (nil: no limit). They monitor the
+## supervisor only for the call and leave no monitor or `DOWN` behind, but
+## after a timeout a late `{tag: "_dsup_reply"}` may land in the caller's
+## mailbox.
 
 # Design. Mirrors Erlang `simple_one_for_one` / Elixir `DynamicSupervisor`:
 # every child is started from the same template, and a crashed child is
@@ -287,21 +288,24 @@ end
 ##
 ## `opts.child` is the template `{start, restart}`: `start(args)` spawns a
 ## child and returns its pid or `{pid}` handle (not a registered name, as
-## `supervisor` allows); `restart` is
-## `"permanent"` (the default: always restart), `"transient"` (restart
-## unless it exits with `"normal"` or `"shutdown"`) or `"temporary"`
-## (never). The supervisor gives up and exits when more than
-## `opts.max_restarts` (default 3) restarts fall within `opts.max_seconds`
-## MILLISECONDS, despite the name (default 5000, i.e. 5 s). `opts.name`
-## registers it.
+## `supervisor` allows; the process such a `start` spawned is left
+## running, unsupervised); `restart` is `"permanent"` (the default: always
+## restart), `"transient"` (restart unless it exits with `"normal"` or
+## `"shutdown"`) or `"temporary"` (never). The supervisor gives up and
+## exits when more than `opts.max_restarts` (default 3) restarts fall
+## within `opts.max_seconds` MILLISECONDS, despite the name (default 5000,
+## i.e. 5 s). `opts.name` registers it.
 ##
 ## Raises, and starts nothing, for bad options or a name that is taken.
 ##
-## Returns at once. The supervisor is not linked to the caller: the
-## caller dying leaves it running, and it dying doesn't kill the caller.
-## Before it exits it kills its children with `"shutdown"`, last first,
-## waiting up to 4 s in all for them to go. `kill(ds, reason)` is handled
-## when it next reads its mailbox; use `stop` to know it is gone.
+## Returns at once. The supervisor is not linked to the caller: the caller
+## dying leaves it running, and it dying doesn't kill the caller. Its exit
+## reason is `"dynamic_supervisor: max restart intensity reached"` or the
+## error a restart's `start` raised, unchanged; both are also printed on
+## stderr. Before it exits it kills its children with `"shutdown"`, last
+## first, waiting up to 4 s in all for them to go. `kill(ds.pid, reason)`
+## is handled when it next reads its mailbox; use `stop` to know it is
+## gone.
 fn start(opts)
   if type(opts) != "table"
     error("dynamic_supervisor.start: expected an options table \{child, ...\}, got {type(opts)}")
@@ -441,8 +445,9 @@ end
 ## `args` is any value; a restart passes the same `args` again. Raises
 ## `dynamic_supervisor.start_child: <error>` when `start` raises or
 ## returns something other than a pid or handle; the supervisor keeps
-## running. That holds for this first start only: if `start` raises when
-## the supervisor restarts the child, the supervisor exits with that
+## running, and a process the rejected `start` spawned is left running
+## unsupervised. That holds for this first start only: if `start` raises
+## when the supervisor restarts the child, the supervisor exits with that
 ## error and kills its other children.
 fn start_child(target, args, timeout_ms = 5000)
   request(target, {tag: "_dsup_start_child", args: args}, "dynamic_supervisor.start_child", timeout_ms)
@@ -451,11 +456,14 @@ end
 ## Stops a child with the exit signal `"shutdown"`, waits for it to exit,
 ## and returns true; the child is not restarted. Returns false when the
 ## supervisor doesn't have `child` (a pid, a `{pid}` handle or a
-## registered name).
+## registered name), also for a name nobody holds or a value that is not
+## a pid.
 ##
 ## A child that traps exits only gets an `EXIT` message: the call times
 ## out unless the child exits on it, and the child keeps running, left out
-## of `which_children` and not restarted when it does exit.
+## of `which_children` and not restarted when it does exit; it still gets
+## the supervisor's `EXIT` when the supervisor stops. Processes the child
+## spawned itself (such as its tasks) keep running.
 fn terminate_child(target, child, timeout_ms = 5000)
   request(target, {tag: "_dsup_terminate_child", pid: pid_of(child)}, "dynamic_supervisor.terminate_child", timeout_ms)
 end
@@ -473,7 +481,9 @@ end
 ##
 ## The supervisor gives its children up to 4 s in all to exit, then exits
 ## anyway: a child that traps exits and ignores the `EXIT` is still
-## running when `stop` returns. Raises `dynamic_supervisor.stop: the
+## running when `stop` returns. Only direct children are stopped:
+## processes a child spawned itself (such as its tasks, which aren't
+## linked to it) keep running. Raises `dynamic_supervisor.stop: the
 ## supervisor did not stop within <ms> ms` after `timeout_ms` (nil: no
 ## limit).
 ##

@@ -331,6 +331,9 @@ end
 ##   table.group_by(["apple", "avocado", "banana"], fn(s) substr(s, 0, 1) end)
 ##   # {a: ["apple", "avocado"], b: ["banana"]}
 ##
+## To `json.encode` the result, return string keys: int keys 0 .. n-1
+## encode as an array, and bool, nil and float keys can't be encoded.
+##
 ## Raises if `f` returns a negative int.
 fn group_by(arr, f)
   let groups = {}
@@ -359,7 +362,8 @@ end
 ## On a record, it sorts the values and replaces the keys with 0 .. n-1:
 ## the record is lost.
 ##
-## Raises if `arr` is not a table, or if `cmp` returns something other
+## Raises `table.sort: arr must be an array, got <type>` if `arr` is not
+## a table (a record is accepted, as above), or if `cmp` returns something other
 ## than a number (a bool, say) for the first two elements. Only that first
 ## call is checked: a non-number later counts as a tie and silently
 ## mis-sorts.

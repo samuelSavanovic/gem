@@ -9,7 +9,8 @@
 ## change ASCII letters only, and `trim` strips ASCII whitespace. Any
 ## argument that takes a string also takes a buffer (its contents are
 ## used); results are always strings. An argument of any other type
-## raises `string.<fn>: <arg> must be a string, got <type>`.
+## raises `string.<fn>: <arg> must be a string, got <type>`, where <arg>
+## is the parameter name (`s`, `delim`, `needle`...).
 
 # The string to work on: a string, or a buffer's contents.
 fn text(fname, what, v)
@@ -106,7 +107,8 @@ end
 ##
 ## Delimiters next to each other or at either end give empty pieces, so
 ## the result always has one more piece than `s` has delimiters. An empty
-## `delim` gives `[s]`.
+## `delim` gives `[s]`. Matches don't overlap:
+## `split("aaa", "aa")` is `["", "a"]`.
 ##
 ##   string.split("a,b,c", ",")    # ["a", "b", "c"]
 ##   string.split("a,,b,", ",")    # ["a", "", "b", ""]
@@ -195,7 +197,9 @@ end
 ##   string.join(["a", 1, nil], "-")    # "a-1-nil"
 ##
 ## Raises if `arr` is not an array: a table whose keys are exactly
-## 0 .. n-1, added in that order (as `push` and `[...]` literals do).
+## 0 .. n-1, added in that order (as `push` and `[...]` literals do). A
+## table whose int keys were assigned out of order is rejected, naming a
+## key, though `table.*` and `json.encode` accept it.
 fn join(arr, delim)
   if type(arr) != "table"
     error("string.join: arr must be an array, got {type(arr)}")

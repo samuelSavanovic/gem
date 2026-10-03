@@ -16,7 +16,8 @@
 let cases = []
 
 ## Registers a test case: `body` is called with no arguments by `run`,
-## after the cases registered before it.
+## after the cases registered before it. A duplicate `name` is allowed;
+## both cases run.
 fn case(name, body)
   push(cases, {name: name, body: body})
 end
@@ -265,7 +266,9 @@ end
 ##
 ## Non-tables compare with `==`, so 1 and 1.0 differ. Tables are equal
 ## when they have the same keys with deeply equal values, in any
-## insertion order; shared and cyclic tables are fine. The message shows
+## insertion order; shared and cyclic tables are fine. A key holding nil
+## counts (`{a: 1}` and `{a: 1, b: nil}` differ), `[]` equals `{}`, and two
+## different fns are unequal. The message shows
 ## both values and the first difference, with its path:
 ##
 ##   test.assert_eq({a: [1, 2]}, {a: [1, 3]})
@@ -290,7 +293,9 @@ fn assert_neq(actual, expected)
 end
 
 ## Calls `body()` and returns the message of the error it raised, so a
-## case can check it. Raises if `body` returns normally.
+## case can check it. Raises if `body` returns normally. `body` must be a
+## fn: any other value makes the call itself raise ("attempt to call int
+## value"), which comes back as the message, so the check passes.
 ##
 ##   let msg = test.assert_throws(fn() error("bad") end)    # "bad"
 ##
@@ -309,7 +314,9 @@ end
 ## stdout, and exits the program with status 1 if any case failed (the
 ## whole program, even when called from a spawned process).
 ## Otherwise it returns nil; the cases stay registered, so a second call
-## runs them again.
+## runs them again. A failing assert ends its case at once, skipping any
+## cleanup after it, and a FAIL line shows only the message, not the
+## file or line: pass `msg` to `assert` or keep cases small.
 fn run()
   let passed = 0
   let failed = 0

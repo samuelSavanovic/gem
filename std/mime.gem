@@ -7,9 +7,10 @@
 ##   mime.ext("image/jpeg")            # ".jpg"
 ##
 ## Both ignore case and take a string or a buffer. Any other argument
-## raises `mime.<fn>: <arg> must be a string, got <type>`. Only common web
-## types are known (html, css, js, json, images, fonts, pdf, zip, audio,
-## video, wasm...).
+## raises `mime.<fn>: <arg> must be a string, got <type>`. The known
+## extensions are html htm css js mjs json xml txt csv png jpg jpeg gif
+## svg ico webp avif woff woff2 ttf otf pdf zip gz mp3 mp4 webm wasm; any
+## other (.wav, .ogg, .md, .yaml, .map...) is application/octet-stream.
 
 load "std/string"
 

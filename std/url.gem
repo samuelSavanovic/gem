@@ -9,8 +9,9 @@
 ##   url.build_query({q: "a b", page: 2})    # "q=a%20b&page=2"
 ##
 ## Strings are bytes, so UTF-8 text encodes byte by byte. A buffer works
-## wherever a string does; an argument of any other type raises
-## `url.<fn>: <arg> must be a string, got <type>`.
+## wherever a string does. An argument of the wrong type raises
+## `url.<fn>: <arg> must be a string, got <type>` (`... must be a table`
+## for `build_query`).
 
 load "std/string"
 
@@ -78,8 +79,9 @@ fn encode(s)
 end
 
 ## Returns `s` with each `%XX` (either case of hex) turned back into its
-## byte and each `+` into a space, as in form and query encoding. A `%`
-## not followed by two hex digits is kept as it is; it never raises on
+## byte and each `+` into a space, as in form and query encoding; in a
+## path segment `+` is literal, so don't decode paths with it. A `%` not
+## followed by two hex digits is kept as it is; it never raises on
 ## malformed input.
 ##
 ##   url.decode("a%20b+c")    # "a b c"
@@ -176,8 +178,6 @@ end
 ##
 ##   url.build_query({q: "a b", page: 2})    # "q=a%20b&page=2"
 ##   url.build_query({x: nil, y: true})      # "y=true"
-##
-## Raises if `tbl` is not a table.
 fn build_query(tbl)
   if type(tbl) != "table"
     error("url.build_query: tbl must be a table, got {type(tbl)}")

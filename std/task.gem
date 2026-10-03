@@ -24,7 +24,8 @@
 ## Returns at once. The owner monitors the task; the task sends its result
 ## to the owner and exits, so a `{tag: "_task_result"}` message and the
 ## task's `DOWN` land in the owner's mailbox. `await` removes both; a task
-## that is never awaited leaves them there.
+## that is never awaited leaves them there. `monitor(t.pid)` returns false
+## and adds nothing: `await` takes the only `DOWN`.
 fn async(f)
   if type(f) != "fn"
     error("task.async: expected a function, got {type(f)}")
@@ -185,16 +186,18 @@ end
 ## order.
 ##
 ##   task.await_all([task.async(fn() 1 end), task.async(fn() 2 end)])   # [1, 2]
-##   task.await_all([])                                                # []
+##   len(task.await_all([]))                                           # 0
 ##
 ## `timeout_ms` covers the whole call (nil, the default: no limit). Tasks
 ## are awaited in list order, so a failure is raised only when its turn
 ## comes (a slow task before it delays it), and only the first failing
 ## task in list order is reported. When a task fails or the time runs
-## out, raises as `await` would (messages start with `task.await_all: `)
-## and kills the tasks not awaited yet with reason `"cancelled"` (the one
-## that timed out gets `"timeout"`). Raises if a task appears twice or
-## `await` would refuse one.
+## out, raises as `await` would (messages start with `task.await_all: `,
+## except a task's own error, raised unchanged) and kills the tasks not
+## awaited yet with reason `"cancelled"` (the one that timed out gets
+## `"timeout"`). Raises if a task appears twice or `await` would refuse
+## one; then it awaits nothing and leaves the tasks running, still
+## awaitable (unawaited, their result and `DOWN` stay in the mailbox).
 ##
 ## Blocks the caller, and cleans the mailbox as `await` does.
 fn await_all(tasks, timeout_ms = nil)
