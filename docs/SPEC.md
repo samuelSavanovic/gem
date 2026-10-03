@@ -30,6 +30,8 @@ gem lsp                     # start the language server on stdin/stdout
 
 Options can come before or after the source path. Before it, an argument starting with `-` that is not one of the options above is a usage error: `gem` prints a short message and the usage line on stderr and exits 2 (as for a missing source path or `-o` without a name). After the source path, an unknown argument is passed to the program, so `gem prog.gem --help` gives `--help` to `prog.gem`.
 
+A source path that cannot be read prints one line on stderr and exits 1: `gem: cannot open 'missing.gem'`, or `gem: 'src' is a directory, not a source file`.
+
 The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.c`, compiles it to `/tmp/gem_<basename>_bin`, and runs it. Extra positional arguments after the source path are forwarded to the program via `argv()`.
 
 `-c` (or `--compile-only`) keeps the artifact: compiles to `./<basename>` and exits without running. `-o <name>` does the same but lets you pick the path.

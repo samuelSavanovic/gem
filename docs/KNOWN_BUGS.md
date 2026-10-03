@@ -8,14 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### A missing source file prints a stack trace into the driver
-
-`gem missing.gem` prints `[Runtime Error]: read_file: cannot open
-'missing.gem'` with a caret line and stack trace in compiler/main.gem
-(`let source = read_file(src_path)`), exit 1. It should be a one-line
-`gem: cannot open 'missing.gem'` like the other usage errors
-(`usage_error` in compiler/main.gem).
-
 ### Loading a missing file crashes the compiler
 
 ```gem

@@ -94,7 +94,7 @@ After any compiler change, run edge-case and adversarial tests before considerin
 3. **Adversarial inputs** — malformed source, missing tokens, type mismatches at runtime.
 4. **Regression** — `make test` to make sure nothing broke.
 
-Add a numbered example under `examples/` (next free slot) and append its stdout to `expected_output.txt`. For programs that exit non-zero (e.g. uncaught `error()` to test stack-trace output), `run_all.sh` tolerates non-zero exits and diffs by output. For expected compile-time errors, add a `tests/broken/*.gem` entry to `tests/check_broken.sh` (error counts) and check the message text by hand. For compiler `note:`/warning text on stderr, put the expected stderr of `gem --check examples/<name>.gem` in `tests/notes/<name>.expected`; `tests/check_notes.sh` (part of `make test`) diffs it.
+Add a numbered example under `examples/` (next free slot) and append its stdout to `expected_output.txt`. For programs that exit non-zero (e.g. uncaught `error()` to test stack-trace output), `run_all.sh` tolerates non-zero exits and diffs by output. For expected compile-time errors, add a `tests/broken/*.gem` entry to `tests/check_broken.sh` (error counts) and check the message text by hand. For compiler `note:`/warning text on stderr, put the expected stderr of `gem --check examples/<name>.gem` in `tests/notes/<name>.expected`; `tests/check_notes.sh` (part of `make test`) diffs it. For driver CLI errors (bad source path and the like), add a case to `tests/check_cli.sh`.
 
 ## Adding a New Builtin
 

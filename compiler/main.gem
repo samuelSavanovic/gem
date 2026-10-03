@@ -812,6 +812,16 @@ if cli.src_path == nil
 end
 
 let src_path = cli.src_path
+# An unreadable source path is the user's mistake too: one line, exit 1,
+# no stack trace of the driver.
+if is_dir(src_path)
+  eprint("gem: '" + src_path + "' is a directory, not a source file")
+  exit(1)
+end
+if not file_exists(src_path)
+  eprint("gem: cannot open '" + src_path + "'")
+  exit(1)
+end
 let source = read_file(src_path)
 
 let sink = make_error_sink()
