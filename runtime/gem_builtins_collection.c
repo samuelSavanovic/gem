@@ -102,6 +102,25 @@ GemVal gem_has_key_fn(void *_env, GemVal *args, int argc) {
     return gem_bool(0);
 }
 
+/* ─── Internal: __is_array_n (array pattern check) ───
+ * True when args[0] is a table with exactly n entries whose keys are the
+ * ints 0 .. n-1, n = args[1]. lower() emits it for `[p1, ..., pn]`
+ * patterns; not user-visible. Keys in a table are distinct, so n int keys
+ * that all fall in [0, n) are exactly 0 .. n-1 -- no lookups needed. */
+
+GemVal gem_is_array_n_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_TABLE || args[1].type != VAL_INT) return gem_bool(0);
+    GemTable *t = args[0].table;
+    int64_t n = args[1].ival;
+    if ((int64_t)t->len != n) return gem_bool(0);
+    for (int i = 0; i < t->len; i++) {
+        GemVal k = t->keys[i];
+        if (k.type != VAL_INT || k.ival < 0 || k.ival >= n) return gem_bool(0);
+    }
+    return gem_bool(1);
+}
+
 /* ─── Built-in: in operator (value membership for arrays, key check for tables) ─── */
 
 GemVal gem_in_fn(void *_env, GemVal *args, int argc) {

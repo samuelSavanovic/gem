@@ -417,6 +417,7 @@ GemVal gem_table_key_at_fn(void *_env, GemVal *args, int argc);
 GemVal gem_table_val_at_fn(void *_env, GemVal *args, int argc);
 GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc);
 GemVal gem_has_key_fn(void *_env, GemVal *args, int argc);
+GemVal gem_is_array_n_fn(void *_env, GemVal *args, int argc);
 GemVal gem_in_fn(void *_env, GemVal *args, int argc);
 GemVal gem_substr_fn(void *_env, GemVal *args, int argc);
 GemVal gem_chr_fn(void *_env, GemVal *args, int argc);

@@ -107,6 +107,7 @@ let BUILTIN_FNS = {
   __len: "gem_len_fn",
   __type: "gem_type_fn",
   __has_key: "gem_has_key_fn",
+  __is_array_n: "gem_is_array_n_fn",
   __table_key_at: "gem_table_key_at_fn",
   __table_val_at: "gem_table_val_at_fn"
 }

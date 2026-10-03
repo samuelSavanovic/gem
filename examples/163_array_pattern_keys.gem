@@ -1,0 +1,56 @@
+# An array pattern [p1, ..., pn] matches only a table of exactly n entries
+# keyed 0 .. n-1: a record of the same size, or an array with an extra
+# string key, does not match.
+
+fn shape(v)
+  match v
+  when [] then "empty"
+  when [x] then "one {x}"
+  when [[a, b], [c, d]] then "nested {a}{b}{c}{d}"
+  when [x, y] then "pair {x} {y}"
+  when [x, y, z] then "triple {x} {y} {z}"
+  when {a, b} then "record {a} {b}"
+  else "other"
+  end
+end
+
+print(shape([]))
+print(shape({}))
+print(shape([7]))
+print(shape([1, 2]))
+print(shape({a: 1, b: 2}))
+print(shape({a: 1}))
+print(shape([[1, 2], [3, 4]]))
+print(shape([[1, 2], {a: 3, b: 4}]))
+print(shape([1, 2, 3]))
+print(shape([1, 2, 3, 4]))
+print(shape("ab"))
+print(shape(nil))
+
+# keys 0, 1 plus a string key: three entries, not a pair
+let tagged = [1, 2]
+tagged.name = "t"
+print(shape(tagged))
+
+# int keys out of order, or not starting at 0
+print(shape({1: "b", 0: "a"}))
+print(shape({1: "a", 2: "b"}))
+print(shape({0: "a", 2: "b"}))
+
+# an array that had an element removed is still an array
+let xs = [1, 2, 3]
+pop(xs)
+print(shape(xs))
+
+# receive patterns use the same check
+send(self(), {a: 1, b: 2})
+send(self(), [3, 4])
+receive
+when [x, y] then print("got pair {x} {y}")
+after 0 then print("no pair")
+end
+receive
+when [x, y] then print("got pair {x} {y}")
+when {a, b} then print("got record {a} {b}")
+after 0 then print("nothing")
+end

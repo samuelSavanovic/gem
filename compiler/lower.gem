@@ -416,8 +416,9 @@ fn pattern_to_cond(pat, target_expr, state)
   end
 
   if tag == "pat_array"
-    let conditions = [make_binop("==", make_call(make_var("__type"), [target_expr], 0), make_string("table"))]
-    push(conditions, make_binop("==", make_call(make_var("__len"), [target_expr], 0), make_int(len(pat.elements))))
+    # A table of exactly n entries keyed 0 .. n-1 (a record of n keys is not
+    # an array); `[]` matches any empty table.
+    let conditions = [make_call(make_var("__is_array_n"), [target_expr, make_int(len(pat.elements))], 0)]
     let bindings = []
     let i = 0
     for sub_pat in pat.elements

@@ -2528,3 +2528,22 @@ fast: true
 loop 3
 ticked
 child done
+empty
+empty
+one 7
+pair 1 2
+record 1 2
+other
+nested 1234
+pair [1, 2] {a: 3, b: 4}
+triple 1 2 3
+other
+other
+other
+other
+pair a b
+other
+other
+pair 1 2
+got pair 3 4
+got record 1 2

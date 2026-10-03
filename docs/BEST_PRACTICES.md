@@ -417,9 +417,7 @@ end
 Literals (`when 200`, `when "get"`) compare by value without a pin.
 There are no guards or alternatives: `when v > 5` and `when "a" or "b"`
 compile, but compare the target with the *value* of `v > 5` or `"a" or
-"b"`. Use an `if` chain, or one arm per value. An array pattern `[x, y]`
-also matches a record with two keys **(bug)**, so put array arms after
-record arms when both can arrive.
+"b"`. Use an `if` chain, or one arm per value.
 
 ### Give `match` an `else` when no arm should be skipped **(trap)**
 

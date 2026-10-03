@@ -387,7 +387,7 @@ when {ok: false, error: msg}
   print("failed: " + msg)
 end
 
-# Array pattern — match on length and bind positional elements
+# Array pattern — match an array of exactly N elements and bind them by position
 match point
 when [x, y, 0]
   print("2D point")
@@ -417,7 +417,7 @@ end
 
 Pattern rules:
 - `{key: pattern, ...}` — checks target is a table, each key exists, and recursively matches each value against its sub-pattern. Extra keys in the target are ignored (partial match).
-- `[p1, p2, ...]` — checks target is a table with `len(target) == N`, then recursively matches each element. A record with N keys passes the length check too (see `docs/KNOWN_BUGS.md`), so put array arms after record arms when both can occur.
+- `[p1, p2, ...]` — checks target is a table with exactly N entries whose keys are the ints `0 .. N-1`, then recursively matches each element. A record with N string keys, or an array with an extra string key, does not match. `[]` matches any empty table (`{}` and `[]` are the same value). There is no rest element: `[x, y]` never matches a 3-element array.
 - There are no guards or alternatives: `when v > 5` and `when "a" or "b"` are expression arms that compare the target with the value of `v > 5` or `"a" or "b"`. Use an `if` chain, or one arm per value.
 - A literal (int, float, string, bool) in pattern position matches by equality. `nil` is also a literal — `when nil` matches only `nil`, it does not bind a variable.
 - A name in pattern position is a variable binding — always matches and binds the matched value.

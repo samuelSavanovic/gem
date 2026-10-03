@@ -8,17 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### An array pattern matches a record of the same size
-
-```gem
-match {a: 1, b: 2}
-when [x, y] then print("pair", x, y)    # pair nil nil
-end
-```
-
-The `[p1, p2]` check is `len(target) == 2`, which a two-key record
-passes. It should also require the keys `0 .. n-1`.
-
 ### A tab before a closing `"""` is not accepted
 
 A triple-quoted string whose closing `"""` is indented with tabs reports
