@@ -23,7 +23,7 @@ load "./frame.gem"
 fn make_module(name, kind)
   {
     init: fn()
-      {name: name, kind: kind, subs: [], next_idx: 0, next_msg_id: 0}
+      {state: {name: name, kind: kind, subs: [], next_idx: 0, next_msg_id: 0}}
     end,
 
     handle_call: fn(msg, from, state)

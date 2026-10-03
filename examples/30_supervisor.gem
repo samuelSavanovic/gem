@@ -219,7 +219,7 @@ spawn(fn()
   end
 end)
 
-# ─── Test 5: supervisor_which_children ───────────────────────
+# ─── Test 5: which_children ──────────────────────────────────
 
 spawn(fn()
   let me = self()

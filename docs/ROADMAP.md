@@ -23,7 +23,7 @@ Run Gem across multiple OS processes (same box or across the network), with `sen
 
 - Easier to build correctly — no lock-free data structures, no memory-model reasoning. A bug at worst drops a connection.
 - Scales further — past one box, which multithreading can't.
-- Single-box throughput is already decent (~26–29k rps on the HTTP bench); the next 10x is more likely from N nodes behind a load balancer than from squeezing the single-threaded scheduler.
+- Single-box throughput is already decent (~26–29k rps on the bookmark app's static page, M1 Pro, April 2026); the next 10x is more likely from N nodes behind a load balancer than from squeezing the single-threaded scheduler.
 - The two are complementary long-term (BEAM has both), but distribution is the less invasive starting point.
 
 **Trade-off:** cross-node sends pay serialization cost vs. a memcpy. Negligible for shared-nothing request/response workloads; matters for chatty cross-node protocols.
@@ -72,17 +72,27 @@ Today, wrapping a C library that uses small structs by value (raylib's `Vector2`
 
 Stack traces on `error()` are good; there's no interactive step-through, breakpoint, or variable-inspection story. Pairs with `LSP_ROADMAP.md` but is a separate capability — typically a DAP (Debug Adapter Protocol) server that the runtime cooperates with (instrumented `gem_set_line` callbacks, ability to pause a coroutine, mailbox/process inspection).
 
-## `demonitor`, and dropping a dead watcher's monitors (P1)
+## Per-monitor refs (P2)
 
-`monitor(target)` adds the caller's pid to the target's monitor list (`gem_monitor_fn` in `runtime/gem_scheduler.c`), and the entry is freed only when the target exits. When the watcher exits first, its entry stays, so a long-lived process monitored by many short-lived ones accumulates one entry per watcher for as long as it lives, and each `monitor` call walks that list for its duplicate check. There is also no `demonitor`, so a live watcher cannot drop a monitor it no longer needs.
+A process monitors a target at most once (`gem_monitor_fn` in `runtime/gem_scheduler.c`), so `demonitor(pid)` also drops a monitor the caller set up elsewhere; std code that monitors for the length of a request removes its monitor only when its `monitor` returned `true`. Entries of watchers that have exited are dropped lazily, by the next `monitor` of that target.
 
-What needs building: a per-process list of the targets it monitors, so an exiting process can remove its entries from each live target in time proportional to its own monitors; then `demonitor(pid)` on top of the same list. Trade-off: one more list per process, maintained on every `monitor`.
+What needs building: Erlang-style refs (`monitor` returns a ref, `demonitor(ref)`), with a per-process list of the targets it monitors so an exiting process removes its entries eagerly. Trade-off: one more list per process, maintained on every `monitor`, and refs in the API.
+
+## Named sqlite parameters (P3)
+
+`sqlite_query` takes an array of params; a `:name` placeholder binds by its position. A record (`{a: 1, b: 2}`) raises. What needs building: bind a string-keyed params table by name (`sqlite3_bind_parameter_index`, trying the `:`, `@` and `$` prefixes). Trade-off: none beyond the code; arrays keep working.
 
 ## Process-owned resources closed on exit (P2)
 
 TCP sockets and SQLite handles are plain ints. A process that crashes or is killed without closing them leaks the file descriptor or connection; Erlang ties a port to an owning process and closes it when the owner exits. Likewise a command started by `exec` keeps running after its process is killed, because `system()` does not expose the child's pid.
 
 What needs building: a per-process resource list filled by `tcp_listen`/`tcp_accept`/`tcp_connect`/`sqlite_open` and closed in `gem_free_proc_slot`; for `exec`, `posix_spawn` + `waitpid` so the child can be signalled. Trade-off: a handle passed to another process (an acceptor handing a socket to a handler) needs ownership to move with it. Making the user transfer ownership explicitly would add a concept to the language, so the transfer should happen implicitly, e.g. on `send` or `spawn` capture.
+
+## Write timeout for `tcp_write` (P2)
+
+`tcp_write` loops until every byte is written and has no timeout (`gem_tcp_write_fn` in `runtime/gem_builtins_tcp.c`), so a peer that stops reading blocks the writer for as long as it keeps the connection open. In `std/http` such a client holds its connection process (and a process-table slot) forever: the server's idle and request timeouts only cover reads. `std/request` likewise can't bound the write of a large request body.
+
+What needs building: an optional `timeout_ms` argument, `tcp_write(fd, data, timeout_ms)`, using the same per-process deadline as `tcp_read`, that returns the number of bytes written before the deadline (so the caller can tell a partial write); then `std/http` passes a write deadline for each response and `std/request` counts the write against its `timeout_ms`. Trade-off: callers must check the count, which they already should (see BEST_PRACTICES "Pass timeouts to reads, check writes").
 
 ## Shared read-mostly data between processes (P2)
 
@@ -92,7 +102,7 @@ What needs building: an ETS-like store owned by a process, whose entries live ou
 
 ## Deep non-tail recursion ceiling (P3)
 
-Every process, main included, runs on an 8 MB stack (`GEM_CORO_STACK_SIZE` in `runtime/gem.h`, `GEM_MAIN_STACK_SIZE` in `runtime/gem_scheduler.c`). The stacks are mmap'd, so only the pages a process touches cost memory. That is roughly 30,000 frames of a small recursive function, and about 2,000 nesting levels for `std/json`. Recursing past it no longer crashes the program. A Gem call that would run into the bottom 256 KB raises `"stack overflow in <fn>"`, which `pcall` catches. Native code that overflows on its own (a recursive C function behind an `extern fn`) hits a guard page, and only the offending process dies; the runtime's value copies and frees are iterative, so deep data cannot get there. SPEC §"Stack depth" has the user-facing rules. Tail calls, self or mutual within one tail-call cycle, do not consume stack at all (see `OPTIMIZATIONS_LOG.md` §"Mutual TCO via tail-edge SCC trampoline").
+Every process, main included, runs on an 8 MB stack (`GEM_CORO_STACK_SIZE` in `runtime/gem.h`, `GEM_MAIN_STACK_SIZE` in `runtime/gem_scheduler.c`). The stacks are mmap'd, so only the pages a process touches cost memory. That is roughly 30,000 frames of a small recursive function, and about 2,000 nesting levels for the `std/json` parser (3,000 for the encoder; both refuse more than 1,000, see SPEC). Recursing past it no longer crashes the program. A Gem call that would run into the bottom 256 KB raises `"stack overflow in <fn>"`, which `pcall` catches. Native code that overflows on its own (a recursive C function behind an `extern fn`) hits a guard page, and only the offending process dies; the runtime's value copies and frees are iterative, so deep data cannot get there. SPEC §"Stack depth" has the user-facing rules. Tail calls, self or mutual within one tail-call cycle, do not consume stack at all (see `OPTIMIZATIONS_LOG.md` §"Mutual TCO via tail-edge SCC trampoline").
 
 What's left:
 

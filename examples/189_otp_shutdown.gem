@@ -1,0 +1,184 @@
+# OTP review round 3: supervisors shut their children down before they
+# exit (so a whole tree is gone when `stop` returns), the advised child
+# that traps exits, argument checks at start, and transient "noproc".
+load "std/supervisor"
+load "std/dynamic_supervisor"
+load "std/gen_server"
+
+let me = self()
+let M = {
+  init: fn() {state: 0} end,
+  handle_call: fn(msg, from, s) {reply: s, state: s} end,
+  handle_cast: fn(msg, s) {state: s} end,
+  handle_info: fn(msg, s) {state: s} end
+}
+
+fn err(r)
+  r.error
+end
+
+# A child that traps exits and, as BEST_PRACTICES advises, returns on any
+# EXIT from its supervisor that isn't "normal"; it reports the reason.
+fn reporter(id)
+  let sup = self()
+  spawn do
+    process_flag("trap_exit", true)
+    let running = true
+    while running
+      receive
+      when {tag: "EXIT", pid: ^sup, reason: reason}
+        if reason != "normal"
+          send(me, {tag: "child exit", id: id, reason: reason})
+          running = false
+        end
+      when other
+        nil
+      end
+    end
+  end
+end
+
+# Waits for the DOWN of the supervisor `sup` (a handle) and returns its reason.
+fn down_reason(sup)
+  let pid = sup.pid
+  monitor(pid)
+  let reason = nil
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: r}
+    reason = r
+  end
+  reason
+end
+
+fn take_reports(n)
+  let got = []
+  for i = 0, n
+    receive
+    when {tag: "child exit", id: id, reason: reason}
+      push(got, "{id}:{reason}")
+    after 2000
+      push(got, "missing")
+    end
+  end
+  got
+end
+
+# 1. Nested supervisors: stop returns once the whole tree is down.
+fn inner()
+  supervisor.start({name: "inner_sup", children: [
+    {id: "w", start: fn() gen_server.start(M) end},
+    {id: "r", start: fn() reporter("inner.r") end}
+  ]})
+end
+fn pool()
+  dynamic_supervisor.start({name: "pool", child: {start: fn(a) gen_server.start(M) end}})
+end
+let app = supervisor.start({children: [{id: "inner", start: inner}, {id: "pool", start: pool}]})
+supervisor.which_children(app)
+supervisor.which_children("inner_sup")
+let worker = dynamic_supervisor.start_child("pool", nil)
+supervisor.stop(app)
+print("1 after stop:", whereis("inner_sup"), whereis("pool"), process_info(worker))
+print("1 reports:", take_reports(1))
+print("1 restart same name:", type(supervisor.start({name: "inner_sup", children: []}).pid))
+supervisor.stop("inner_sup")
+
+# 2. Shutdown order is last started first, with the supervisor's reason.
+let s2 = supervisor.start({children: [
+  {id: "a", start: fn() reporter("a") end},
+  {id: "b", start: fn() reporter("b") end},
+  {id: "c", start: fn() reporter("c") end}
+]})
+supervisor.which_children(s2)
+kill(s2.pid, "custom")
+let r2 = down_reason(s2)
+print("2 down:", r2, take_reports(3))
+
+# 3. Restart intensity: the advised child exits on the intensity reason, so
+# the supervisor exits at once.
+fn crasher()
+  spawn do
+    sleep(5)
+    error("boom")
+  end
+end
+let s3 = supervisor.start({max_restarts: 1, children: [
+  {id: "t", start: fn() reporter("t") end},
+  {id: "c", start: crasher}
+]})
+let t3 = time_ms()
+let r3 = down_reason(s3)
+print("3 down:", r3, time_ms() - t3 < 1000, take_reports(1))
+
+# 4. one_for_all restarts a nested supervisor child: its name is free again.
+fn crash_on_msg()
+  spawn do
+    receive
+    when "crash" then error("boom")
+    end
+  end
+end
+let s4 = supervisor.start({strategy: "one_for_all", children: [
+  {id: "inner", start: inner},
+  {id: "c", start: crash_on_msg}
+]})
+let old_inner = supervisor.which_children(s4)[0].pid
+send(supervisor.which_children(s4)[1].pid, "crash")
+print("4 reports:", take_reports(1))
+let new_inner = supervisor.which_children(s4)[0].pid
+print("4 inner restarted:", new_inner != old_inner, whereis("inner_sup") == new_inner)
+supervisor.stop(s4)
+print("4 stopped:", whereis("inner_sup"), take_reports(1))
+
+# 5. terminate_child of a nested supervisor waits for its subtree.
+let d5 = dynamic_supervisor.start({child: {start: fn(a) inner() end}})
+let c5 = dynamic_supervisor.start_child(d5, nil)
+supervisor.which_children(c5)
+print("5 terminate:", dynamic_supervisor.terminate_child(d5, c5), whereis("inner_sup"), take_reports(1))
+dynamic_supervisor.stop(d5)
+
+# 6. A dynamic supervisor shuts its children down last started first.
+let d6 = dynamic_supervisor.start({child: {start: fn(id) reporter(id) end}})
+for id in ["x", "y", "z"]
+  dynamic_supervisor.start_child(d6, id)
+end
+dynamic_supervisor.stop(d6)
+print("6 reports:", take_reports(3))
+
+# 7. A child's start that raises: the earlier children are shut down too.
+fn bad_start()
+  sleep(10)                  # let child "a" run and trap exits first
+  error("start broke")
+end
+let s7 = supervisor.start({children: [
+  {id: "a", start: fn() reporter("a") end},
+  {id: "bad", start: bad_start}
+]})
+let r7 = down_reason(s7)
+print("7 down:", r7, take_reports(1))
+
+# 8. Argument checks at start, and the name-taken wording.
+print("8", err(pcall gen_server.start(nil)))
+print("8", err(pcall gen_server.start("m")))
+print("8", err(pcall gen_server.start({init: fn() {state: 0} end, handle_call: M.handle_call, handle_cast: M.handle_cast})))
+print("8", err(pcall supervisor.start()))
+print("8", err(pcall supervisor.start("x")))
+print("8", err(pcall dynamic_supervisor.start(nil)))
+print("8", err(pcall dynamic_supervisor.start("x")))
+register("taken", me)
+print("8", err(pcall supervisor.start({name: "taken"})))
+print("8", err(pcall dynamic_supervisor.start({child: {start: fn(a) a end}, name: "taken"})))
+
+# 9. A transient child that really exits with "noproc" is not restarted.
+let gone = spawn do nil end
+sleep(5)
+fn link_gone()
+  spawn do
+    sleep(5)
+    link(gone)
+  end
+end
+let s9 = supervisor.start({children: [{id: "c", restart: "transient", start: link_gone}]})
+sleep(50)
+print("9 transient noproc pid:", supervisor.which_children(s9)[0].pid)
+supervisor.stop(s9)

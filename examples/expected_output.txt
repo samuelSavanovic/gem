@@ -612,15 +612,15 @@ test3: temporary not restarted ok
 Stack trace:
   at anonymous fn (examples/30_supervisor.gem:13)
 
-[Runtime Error in process 10]: max restart intensity reached
-  --> std/supervisor.gem:56
-    |
- 56 |       error("max restart intensity reached")
-    |
+[Runtime Error in process 10]: supervisor: max restart intensity reached
+  --> std/supervisor.gem:259
+     |
+ 259 |     error(res.error)
+     |
 Stack trace:
-  at supervisor.sup_loop (std/supervisor.gem:56)
-  at anonymous fn (std/supervisor.gem:131)
-test4: supervisor crashed: max restart intensity reached
+  at supervisor.sup_main (std/supervisor.gem:259)
+  at anonymous fn (std/supervisor.gem:318)
+test4: supervisor crashed: supervisor: max restart intensity reached
 test1: equal_self=true different=true
 test2: type=ref
 test3: r1=first r2=second
@@ -719,16 +719,16 @@ test5: parent died: now-fatal
     |
 Stack trace:
   at anonymous fn (examples/34_gen_server.gem:97)
-  at gen_server.loop (std/gen_server.gem:17)
-  at anonymous fn (std/gen_server.gem:53)
+  at gen_server.loop (std/gen_server.gem:105)
+  at anonymous fn (std/gen_server.gem:154)
 test1: after incr 10 = 10
 test3: count=2 first=raw1 second=raw2
+test4: ok=false err=gen_server.call: server exited: kaboom from server
 test1: after incr 5 = 15
 test2: got delayed: request
 test1: after reset = 0
 test5: timeouts_fired=true
 test5: still_counting=true
-test4: ok=false err=gen_server.call timeout
 test1: type=ref
 test2: cancelled=true
 test3: cancel_bogus=false
@@ -1158,6 +1158,9 @@ false
 === all sqlite tests passed ===
 
 Results: 56 passed, 0 failed
+http: GET /error: intentional error
+Stack trace:
+  at anonymous fn (examples/51_http_server_test.gem:43)
 Results: 12 passed, 0 failed
 Results: 12 passed, 0 failed
 test1: 2000
@@ -1283,7 +1286,7 @@ PASS equality on primitives
 PASS inequality
 PASS plain assert
 PASS assert_throws catches errors
-FAIL intentional failure: assert_eq: expected 2, got 1
+FAIL intentional failure: test.assert_eq: expected 2, got 1
 4 passed / 1 failed
 {name: "alice", age: 30}
 {name: "alice", age: 30}
@@ -1422,14 +1425,14 @@ test6: child got 2
 test7: sum=3
 test7: noise left=300
 test8: loop done 20000
-slow call: ok=false error=gen_server.call timeout
+slow call: ok=false error=gen_server.call: timeout
 next call: fast result
 leftover messages: 1
 test1: slow fast concurrent=true
 test2: nil false gem 2
 test3: ok=false error=boom
-test4: ok=false error=task.await timeout task_alive=false
-test5: ok=false error=task exited: external
+test4: ok=false error=task.await: timeout task_alive=false
+test5: ok=false error=task.await: task exited: external
 test6: task.await: task was already awaited
 test7: task.await: only the process that started a task can await it
 test7: owner still gets 7
@@ -1437,15 +1440,15 @@ test8: 0 1 4 9 16
 test8: await_all([]) len=0
 test9: ok=false error=first fails second_alive=false mailbox=0
 test9b: ok=false error=late failure slot_reused=true new_pid=true bystander_alive=true
-test10: ok=false error=task.await timeout
+test10: ok=false error=task.await_all: timeout
 test11: 6
 test12: total=124750
-test13: took _task_result; await error=task exited with reason "normal" before its result was received; a catch-all receive may have taken the result
+test13: took _task_result; await error=task.await: task exited with reason "normal" before its result was received; a catch-all receive may have taken the result
 test14: done mailbox=1 msg=unrelated
-test15: task exited and its result is no longer in the mailbox; a catch-all receive may have taken it
+test15: task.await: task exited and its result is no longer in the mailbox; a catch-all receive may have taken it
 test16: task.await_all: the same task appears more than once
 test16: still awaitable: 1
-test17: task exited with reason "normal" before its result was received; a catch-all receive may have taken the result
+test17: task.await: task exited with reason "normal" before its result was received; a catch-all receive may have taken the result
 final mailbox=0
 
 [Runtime Error]: main failed
@@ -1803,8 +1806,8 @@ test3: stack overflow in is_even
 test3: closure ok=false error=stack overflow in anonymous fn deep=true
 test4: main ok=false error=stack overflow in depth
 test5: depth 63 ok=true error=nil
-test5: depth 100 ok=true error=nil
-test5: depth 1000 ok=false error=JSON nesting too deep (max 128)
+test5: depth 1000 ok=true error=nil
+test5: depth 1001 ok=false error=json.parse: nesting deeper than 1000 levels at byte 1000
 test6: 200 10
 test6: 500 stack overflow in depth
 test6: 200 20
@@ -2665,3 +2668,1060 @@ string s
 int lead
 none
 seven five zero
+terminate first: true
+left: ["b", "c"]
+terminate again: false
+terminate by handle: true
+left: ["c"]
+temporary left: [2, 4]
+temporary after crash: [4]
+transient left: ["y", "z"] y restarted: true
+after 5000 exits: 0
+handle child pid is int: int
+handle child replies: 10
+handle child restarted: true 10
+dynamic_supervisor.start_child: no luck
+dynamic_supervisor.start_child: child start must return a pid or a {pid} handle, got nil
+bad still up: 0
+by name: ["n1"]
+dynamic_supervisor.which_children: no process registered as "nobody"
+dynamic_supervisor.which_children: expected a pid, a {pid} handle or a registered name, got nil
+dynamic_supervisor.start: the name "pool" is already registered
+dynamic_supervisor.start_child: timeout
+dynamic_supervisor.start_child: supervisor exited: shutdown
+dynamic_supervisor.start_child: supervisor exited: boom
+1: 2 children, gs pid is int
+1: call -> 1
+1: gs restarted: true, fresh state -> 1
+2: whereis matches: true
+2: children by name: 1
+2: duplicate: supervisor.start: the name "sup175" is already registered
+2: name still points at the first: true
+3: bare pid: 1
+3: unknown name: supervisor.which_children: no process registered as "nope175"
+3: bad target: supervisor.which_children: expected a pid, a {pid} handle or a registered name, got nil
+3: no answer: supervisor.which_children: timeout
+3: dead supervisor: supervisor.which_children: supervisor exited: noproc, at once: true
+4: still alive, temp pid -1, perm restarted true
+5: 3 of 3 restarted, ids abc
+6: supervisor.start: unknown strategy "rest_for_one"
+1: handle=3 pid=3 name=3
+1: nil reply=nil deferred=deferred 3
+2: gen_server.call: no process registered as "nobody"
+2: gen_server.cast: no process registered as "nobody"
+2: gen_server.call: expected a {pid} handle, a pid or a registered name, got nil
+2: gen_server.cast: expected a {pid} handle, a pid or a registered name, got table
+2: gen_server.call: expected a {pid} handle, a pid or a registered name, got float
+3: gen_server.call: timeout
+4: gen_server.call: server exited: noproc fast=true
+4: downs left=0
+4: gen_server.call: server exited: told to die fast=true
+4: downs left=0
+5: get=0
+5: own monitor reason=stop extra=0
+
+[Runtime Error in process 5]: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
+  --> std/gen_server.gem:67
+    |
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_call_result (std/gen_server.gem:99)
+  at gen_server.loop (std/gen_server.gem:106)
+  at anonymous fn (std/gen_server.gem:154)
+6: gen_server.call: server exited: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
+
+[Runtime Error in process 6]: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
+  --> std/gen_server.gem:67
+    |
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_call_result (std/gen_server.gem:99)
+  at gen_server.loop (std/gen_server.gem:106)
+  at anonymous fn (std/gen_server.gem:154)
+6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
+
+[Runtime Error in process 7]: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
+  --> std/gen_server.gem:67
+    |
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_call_result (std/gen_server.gem:99)
+  at gen_server.loop (std/gen_server.gem:106)
+  at anonymous fn (std/gen_server.gem:154)
+6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
+
+[Runtime Error in process 8]: gen_server: handle_cast returned nil, expected {state: state}
+  --> std/gen_server.gem:67
+    |
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_state_result (std/gen_server.gem:80)
+  at gen_server.loop (std/gen_server.gem:115)
+  at anonymous fn (std/gen_server.gem:154)
+6: cast nil -> gen_server: handle_cast returned nil, expected {state: state}
+
+[Runtime Error in process 9]: gen_server: handle_info returned an int, expected {state: state}
+  --> std/gen_server.gem:67
+    |
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_state_result (std/gen_server.gem:80)
+  at gen_server.loop (std/gen_server.gem:128)
+  at anonymous fn (std/gen_server.gem:154)
+6: info int -> gen_server: handle_info returned an int, expected {state: state}
+7: info saw ["call", "cast", "gs_reply"]
+8: monitors after 300 callers=1
+start returns pid: int
+escape: &lt;a href=&#x27;x&#x27;&gt;&amp;&quot;&lt;/a&gt;
+-- default bodies
+HTTP/1.1 404 Not Found [Not Found]
+http: GET /boom: kaboom
+Stack trace:
+  at anonymous fn (examples/177_http_std_fixes.gem:12)
+HTTP/1.1 500 Internal Server Error [Internal Server Error]
+http: GET /nil: handler returned nil, not a response table
+HTTP/1.1 500 Internal Server Error [Internal Server Error]
+-- headers
+HTTP/1.1 200 OK [connection=close|host=t|host2=no-space|x-dup=1, 2|x-mixed-case=padded]
+HTTP/1.1 200 OK [a=1 b=2 c=3]
+-- malformed
+HTTP/1.1 400 Bad Request [Bad Request]
+HTTP/1.1 400 Bad Request [Bad Request]
+HTTP/1.1 400 Bad Request [Bad Request]
+HTTP/1.1 431 Request Header Fields Too Large [Request Header Fields Too Large]
+-- head split across writes, then a pipelined pair
+HTTP/1.1 200 OK [hello]
+HTTP/1.1 200 OK [got oneHTTP/1.1 200 OK
+Content-Length: 7
+Connection: close
+Content-Type: text/plain; charset=utf-8
+
+got two]
+-- process table full
+http: spawn: process table full; refusing a connection
+HTTP/1.1 503 Service Unavailable [Service Unavailable]
+HTTP/1.1 200 OK [hello]
+-- serve
+HTTP/1.1 200 OK [hello]
+serve after kill shutdown: ok=true value=nil error=nil
+HTTP/1.1 200 OK [hello]
+serve after kill boom: ok=false value=nil error=http.serve: server died: boom
+gem_diag: spawn_overflow=2 proc_hwm=1024 max_procs=1024
+=== keys ===
+{"42":"x"}
+{"0":"z","name":"n"}
+{"name":"a","7":"seven"}
+[10,20,30]
+[]
+[[],[1],{"a":[]}]
+{"2":"c","1":"b"}
+["A","b","c"]
+float key: error json.encode: cannot encode a float table key (only string and int keys)
+bool key: error json.encode: cannot encode a bool table key (only string and int keys)
+sparse round trip: zero two false
+=== numbers ===
+12345678901234567890 -> 1.2345678901234567e+19 (float)
+-12345678901234567890 -> -1.2345678901234567e+19 (float)
+9223372036854775807 -> 9223372036854775807 (int)
+-9223372036854775808 -> -9223372036854775808 (int)
+9223372036854775808 -> 9.223372036854776e+18 (float)
+1000000000000000000 -> 1000000000000000000 (int)
+[1, 123456789012345678901234567890, -3] -> [1, 1.2345678901234568e+29, -3] (table)
+=== strings ===
+"plain"
+""
+"\"quoted\""
+"a\tb\nc\\d"
+"ctl\u0001\u001f\u0000end"
+"café"
+aéb
+"c"
+true
+true
+=== depth ===
+parse 1000 arrays: ok 1
+parse 1001 arrays: error json.parse: nesting deeper than 1000 levels at byte 1000
+parse 1000 objects: ok 1
+parse 1001 objects: error json.parse: nesting deeper than 1000 levels at byte 5000
+parse 100000 arrays: error json.parse: nesting deeper than 1000 levels at byte 1000
+encode 1000: ok 2001
+encode 1001: error json.encode: nesting deeper than 1000 levels (or a cyclic table)
+encode cyclic: error json.encode: nesting deeper than 1000 levels (or a cyclic table)
+spawned: parse true encode true too deep json.parse: nesting deeper than 1000 levels at byte 1000
+=== errors ===
+parse "": error json.parse: unexpected end of input at byte 0
+parse "  ": error json.parse: unexpected end of input at byte 2
+parse "nul": error json.parse: expected 'null' at byte 0
+parse "[1, 2,]": error json.parse: unexpected character ']' at byte 6
+parse "{\"a\" 1}": error json.parse: expected ':' in object at byte 5
+parse "{\"a\": 1,}": error json.parse: expected string key in object at byte 8
+parse "[1 2]": error json.parse: expected ',' or ']' in array at byte 3
+parse "\"abc": error json.parse: unterminated string at byte 4
+parse "\"bad \\x escape\"": error json.parse: invalid escape sequence at byte 6
+parse "\"\\u12G4\"": error json.parse: invalid hex digit in unicode escape at byte 5
+parse "01": error json.parse: unexpected data after JSON value at byte 1
+parse "-": error json.parse: expected digit at byte 1
+parse "1.": error json.parse: expected digit after decimal point at byte 2
+parse "1e": error json.parse: expected digit in exponent at byte 2
+parse "{\"a\": 1} extra": error json.parse: unexpected data after JSON value at byte 9
+parse "\"tab\there\"": error json.parse: unescaped control character in string at byte 4
+parse "[1] [2]": error json.parse: unexpected data after JSON value at byte 4
+parse "{1: 2}": error json.parse: expected string key in object at byte 1
+parse non-string: error json.parse: expected a string, got int
+encode fn: error json.encode: cannot encode a fn
+encode ref: error json.encode: cannot encode a ref
+chunked: 200 {"transfer-encoding": "chunked"} hello, world
+chunked split: 200 {"transfer-encoding": "chunked"} abc0123456789abcdef
+chunk ext + trailer: 200 {"transfer-encoding": "chunked"} Wikipedia in a
+chunked no final CRLF: 200 {"transfer-encoding": "chunked"} ok
+chunked empty: 200 {"transfer-encoding": "chunked"} 
+bad chunk size: error: request.get: malformed chunked body: bad chunk size "zz"
+chunk too long: error: request.get: malformed chunked body: chunk data not followed by CRLF
+chunked truncated: error: request.get: malformed chunked body: connection closed inside a chunk
+chunked no last chunk: error: request.get: malformed chunked body: connection closed before the last chunk
+no reason: 204 {} 
+no reason + body: 200 {"content-length": "2"} hi
+long reason: 404 {} gone
+lowercase names: 200 {"content-type": "text/plain", "x-mixed-case": "padded", "set-cookie": "a=1\nb=2", "content-length": "0"} 
+bare LF: 200 {"content-length": "3"} abc
+100 continue: 201 {"content-length": "4"} done
+content-length stops: 200 {"content-length": "3"} abc
+read to eof: 200 {} until close
+bad status: error: request.get: malformed status line "SSH-2.0-OpenSSH"
+bad code: error: request.get: malformed status line "HTTP/1.1 2x0 OK"
+bad header: error: request.get: malformed response header line "no colon here"
+bad content-length: error: request.get: invalid Content-Length "-1"
+short body: error: request.get: connection closed before the end of the body (10 bytes expected)
+empty reply: error: request.get: connection closed before a response arrived
+closed in headers: error: request.get: connection closed inside the response headers
+silent: error: request.get: timed out after 100 ms waiting for http://127.0.0.1:19815/
+silent took about 100 ms: true
+slow body: error: request.get: timed out after 100 ms waiting for http://127.0.0.1:19816/
+in time: 200 {"content-length": "2"} ok
+no timeout: 200 {"content-length": "2"} ok
+zero timeout: request.get: timeout_ms must be an int > 0 (milliseconds) or nil, got 0
+bad timeout: request.get: timeout_ms must be an int > 0 (milliseconds) or nil, got string
+echo: 200 {"content-length": "73"} GET / HTTP/1.1|Host: 127.0.0.1:19819|Connection: close|X-Token: t1||
+host has port: true
+POST /?q=1 HTTP/1.1|Connection: close|Content-Length: 3|Host: example.test||abc
+true
+https: request.get: https is not supported (Gem has no TLS): https://example.com/
+ftp: request.get: unsupported URL scheme "ftp" (only http:// is supported)
+no scheme: request.get: URL must start with http:// (got "example.com/x")
+no host: request.get: URL has no host: http:///x
+bad port: request.get: invalid port "abc" in URL http://127.0.0.1:abc/
+port range: request.get: invalid port "70000" in URL http://127.0.0.1:70000/
+userinfo: request.get: credentials in the URL are not supported: http://u:p@127.0.0.1/
+space: request.get: invalid character (byte 32) in URL
+crlf: request.get: invalid character (byte 13) in URL
+not a string: request.get: URL must be a string, got int
+header inject: request.get: invalid character (byte 13) in value of header X-A
+bad body: request.post: body must be a string, got int
+bad method: request.request: invalid character (byte 32) in method
+refused: request.get: cannot connect to 127.0.0.1:1: tcp_connect: connect failed: Connection refused
+leak check bad status: error: request.get: malformed status line "garbage"
+leak check timeout: error: request.get: timed out after 50 ms waiting for http://127.0.0.1:19823/
+leak check refused: request.get: cannot connect to 127.0.0.1:1: tcp_connect: connect failed: Connection refused
+fds leaked: false
+sqlite_query: not an open database handle
+sqlite_exec: not an open database handle
+sqlite_last_insert_id: not an open database handle
+sqlite_changes: not an open database handle
+sqlite_close: not an open database handle
+sqlite_query: expected a database handle, got string
+sqlite_close: expected a database handle, got nil
+sqlite_changes: expected a database handle, got table
+sqlite_exec: expected a database handle, got float
+int
+1
+1
+child saw 2 rows, last 8
+2
+nil
+sqlite_query: not an open database handle
+sqlite_exec: not an open database handle
+sqlite_last_insert_id: not an open database handle
+sqlite_changes: not an open database handle
+sqlite_close: not an open database handle
+sqlite_close: not an open database handle
+true
+42
+child closed db2
+sqlite_query: not an open database handle
+one close succeeded: true
+PASS records compare by structure, in any key order
+PASS primitives
+PASS cycles terminate
+PASS long cycles terminate
+PASS deep nesting does not overflow
+PASS shared subtables
+test.assert_eq: expected 1 (int), got 1.0 (float)
+test.assert_eq: expected 2, got 1
+test.assert_eq: expected "ab", got "a\"b\n"
+test.assert_eq: expected {a: [1, 2]}, got {a: [1, 2.0]}: at .a[1], expected 2 (int), got 2.0 (float)
+test.assert_eq: expected {a: 1, "b c": 2}, got {a: 1}: actual is missing key ["b c"]
+test.assert_eq: expected {a: 1}, got {a: 1, z: 0}: actual has extra key .z
+test.assert_eq: expected [1, [3]], got [1, [2]]: at [1][0], expected 3, got 2
+test.assert_eq: expected {1: "y"}, got {1: "x"}: at [1], expected "y", got "x"
+test.assert_eq: expected {} (table), got nil (nil)
+test.assert_eq: expected <fn>, got a different fn <fn>
+test.assert_neq: both values are {a: [1]}
+test.assert: assertion failed
+test.assert: assertion failed: math
+test.assert_throws: expected an error, but the call returned normally
+boom
+PASS failure messages
+PASS cases registered in another process stay there
+FAIL intentional failure: test.assert_eq: expected {a: [1, 3]}, got {a: [1, 2]}: at .a[1], expected 3, got 2
+8 passed / 1 failed
+-- string.split
+[0: "a", 1: "b", 2: "c"]
+[0: ""]
+[0: "abc"]
+[0: "a", 1: "", 2: "b", 3: ""]
+[0: "", 1: ""]
+[0: "a", 1: "b", 2: ":c"]
+[0: "", 1: "a"]
+[0: "é", 1: "ü", 2: "ñ"]
+[0: "a", 1: "b", 2: "c"]
+3 1 0
+[0: "no delimiter here"]
+-- string.index_of / contains
+2
+3
+-1
+3
+0
+5
+-1
+-1
+-1
+1
+1
+2
+3 [0: "key", 1: "value"] "KEY: VALUE" "key: value"
+true false true
+-- long strings take the chunked path
+index_of agrees with the naive scan: true
+split of 170089 bytes: 2001 pieces, join gives it back: true
+667
+-- string.join / trim / affixes / case / repeat
+""
+"only"
+"1-2.5-nil-true"
+"ab"
+"hi there"
+""
+"x"
+""
+"é"
+true true false true
+true true false true
+"HELLO, WöRLD 42!"
+"content-type ÉÀ"
+""
+"already lower"
+"ababab"
+""
+""
+""
+-- string errors
+string.split: s must be a string, got nil
+string.split: delim must be a string, got nil
+string.index_of: needle must be a string, got int
+string.index_of: start must be an int, got string
+string.contains: s must be a string, got nil
+string.join: arr must be an array, got nil
+string.join: delim must be a string, got nil
+string.trim: s must be a string, got int
+string.starts_with: prefix must be a string, got nil
+string.ends_with: s must be a string, got nil
+string.upper: s must be a string, got nil
+string.lower: s must be a string, got table
+string.repeat: n must be an int, got float
+-- url.encode / decode
+a%20b%2F%C3%A9~-_.%2A
+""
+unreserved-only_1.2~
+%00%0A%25%2B%26%3D
+a b c+
+€
+100%
+100%4
+A
+%zz%4g%A
+2
+""
+round trip: é & ü = ?
+-- url.parse_query / build_query / parse
+[a: "1", b: "hello world", c: "/"]
+[]
+[a: "2"]
+[flag: "", b: "2"]
+[a: "", b: ""]
+[a: "b=c"]
+[a: "1"]
+[=: "eq", a b: "c d"]
+"q=a%20b&page=2&a%26b=x%3Dy"
+""
+"a=1&c=3"
+[k: "ü & é", e: ""]
+[path: "/users/42", query_string: "", query: []]
+[path: "/search", query_string: "q=gem&page=2", query: [q: "gem", page: "2"]]
+[path: "/p", query_string: "", query: []]
+[path: "/p", query_string: "q=1?x", query: [q: "1?x"]]
+[path: "/p", query_string: "q=1", query: [q: "1"]]
+[path: "/p", query_string: "", query: []]
+[path: "", query_string: "", query: []]
+-- url errors
+url.encode: s must be a string, got nil
+url.decode: s must be a string, got int
+url.parse_query: s must be a string, got nil
+url.build_query: tbl must be a table, got string
+url.parse: target must be a string, got nil
+-- mime
+text/html; charset=utf-8
+text/css; charset=utf-8
+image/png
+image/jpeg
+application/javascript; charset=utf-8
+application/gzip
+application/octet-stream
+application/octet-stream
+application/octet-stream
+application/octet-stream
+application/octet-stream
+application/octet-stream
+image/svg+xml
+".html"
+".html"
+".png"
+".json"
+".jpg"
+nil
+nil
+mime.lookup: path_or_ext must be a string, got nil
+mime.ext: content_type must be a string, got int
+map empty {} filter empty {}
+reduce empty 7
+find none nil any empty false all empty true
+count 2
+reverse [1] [3, 2, 1]
+index_of past nil 2 -1
+slice no length [2, 3, 4] [4]
+slice edges {} [1, 2] {}
+zip [[1, "a"]] {}
+concat [1] [1]
+copy record {a: 1, b: 2, c: 3} false copy empty {}
+copy array [1, 2, 3] 2
+flatten [1, [2], 3, {k: 1}]
+flat_map empty arrays dropped {}
+flat_map mixed [1, 1, 2, 2] [10, 20]
+unique by == [1, "1", 1.0, nil, true, false, -3, 0, "0"]
+unique tables by identity 3
+group_by {len1: ["a", "d"], len2: ["bb", "cc"]}
+group_by negative key raises: table.group_by: key -2 is a negative int, which can't be a table key; return a string
+sort default [1, 2, 3] sort cmp [3, 2, 1]
+sort float cmp [0.2, 0.5, 0.9]
+sort empty with bool cmp {}
+sort bool cmp raises: table.sort: the comparator must return a number (negative, zero or positive), got bool
+sort nil cmp result raises: table.sort: the comparator must return a number (negative, zero or positive), got nil
+sort 100k 1 100000
+map 100k 100000 200000 50000
+min/max 1 2 1 b
+min/max tie 2.0 2
+clamp 0 10 5
+clamp low > high raises: math.clamp: low (10) is greater than high (0)
+assert 0 is truthy nil
+assert false raises: assertion failed
+assert nil msg raises: assertion failed: rows
+epoch 1970-01-01T00:00:00Z 1970-01-01 Thu, 01 Jan 1970 00:00:00 GMT
+before epoch 1969-12-31T23:59:59Z 1969-12-31T23:59:59Z 1969-12-31T23:59:58Z
+day before 1969-12-30T23:59:59Z 1969-12-31
+ms dropped 1970-01-01T00:00:01Z 2026-04-28T14:30:00Z
+year 10000 10000-01-01T00:00:00Z
+leap day 2000-02-29 Tue, 29 Feb 2000 00:00:00 GMT
+format 14:30:00 118 []
+long format 1000
+format float ms raises: format_time: expected (int, string), got (float, string)
+format nil fmt raises: format_time: expected (int, string), got (int, nil)
+now is an int int true
+set_level unknown raises: log.set_level: unknown level warning; use "debug", "info", "warn" or "error"
+set_level nil raises: log.set_level: unknown level nil; use "debug", "info", "warn" or "error"
+builtin error unaffected raises: plain
+async non-fn raises: task.async: expected a function, got int
+await nil raises: task.await: expected a task from task.async, got nil
+await record raises: task.await: expected a task from task.async, got table
+await_all nil raises: task.await_all: expected an array of tasks, got nil
+await_all empty {}
+await_all nil element raises: task.await_all: expected a task from task.async, got nil
+await timeout raises: task.await: timeout
+await_all timeout raises: task.await_all: timeout
+await killed raises: task.await: task exited: boom
+await raises task error raises: inner
+await twice raises: task.await: task was already awaited
+await_all values [nil, [1]]
+empty select {}
+insert 1 1
+select [{name: "a"}]
+bad sql raises: sqlite_exec: near "nonsense": syntax error
+param count raises: sqlite_query: statement has 1 parameter(s), got 2
+copy int keys {10: "ten", 20: "twenty"}
+copy mixed {0: 1, 1: 2, name: "x"}
+copy array [3, 4, 5] 3
+join record raises: string.join: arr must be an array, got a table with key a
+unique big 40000 40000
+unique mixed [1, 1.0, "1", -1, 0.0, nil, true, false, {}, {}]
+sort non-table raises: table.sort: arr must be an array, got string
+join int keys raises: string.join: arr must be an array, got a table with key 5
+-- 1. calls to a dead server leave no DOWN behind
+0
+gen_server.call: server exited: boom
+gen_server.call: server exited: noproc
+gen_server.call: server exited: noproc
+gen_server.call: server exited: noproc
+DOWNs: 0
+gen_server.call: server exited: noproc
+gen_server.call: server exited: noproc
+DOWNs: 0
+supervisor.which_children: supervisor exited: noproc
+supervisor.which_children: supervisor exited: noproc
+supervisor.which_children: supervisor exited: noproc
+DOWNs: 0
+dynamic_supervisor.which_children: supervisor exited: noproc
+dynamic_supervisor.which_children: supervisor exited: noproc
+dynamic_supervisor.which_children: supervisor exited: noproc
+DOWNs: 0
+-- 2. an idle timeout cancelled by a callback does not fire
+0
+no timeout
+0
+armed timeout fired
+1
+-- 3. a supervisor's children go down with it
+inner links its children: 3 true
+
+[Runtime Error in process 6]: supervisor: max restart intensity reached
+  --> std/supervisor.gem:259
+     |
+ 259 |     error(res.error)
+     |
+Stack trace:
+  at supervisor.sup_main (std/supervisor.gem:259)
+  at anonymous fn (std/supervisor.gem:318)
+inner restarted: true
+old db dead: true
+new db: true 0
+outer, inner, children dead: true true true true nil
+one_for_all restarted inner: true true true
+
+[Runtime Error in process 22]: dynamic_supervisor: max restart intensity reached
+  --> std/dynamic_supervisor.gem:266
+     |
+ 266 |     error(res.error)
+     |
+Stack trace:
+  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:266)
+  at anonymous fn (std/dynamic_supervisor.gem:303)
+dsup and its children dead: true true
+ignores a normal exit signal: true
+dsup killed, child dead: true true
+true {}
+trapper gone, dsup alive: true true {}
+supervisor waited for its trapping child: true true
+-- 4. one_for_all restarts only what would be restarted
+q exited normally: -1
+started again: {} t: -1 q: -1 c restarted: true
+-- 5. a transient child killed with shutdown stays down
+-1
+oops restarted: true
+-- 6. handle_call returning both reply and noreply
+
+[Runtime Error in process 41]: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
+  --> std/gen_server.gem:67
+    |
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_call_result (std/gen_server.gem:89)
+  at gen_server.loop (std/gen_server.gem:106)
+  at anonymous fn (std/gen_server.gem:154)
+gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
+-- 7. init returning a table with a state field
+{state: "idle", count: 0}
+-- 8. cast to a dead server
+nil
+gen_server.cast: no process registered as "srv184"
+-- 9. process_info lists live monitors only
+{}
+1 true
+-- 10. timeouts
+0
+gen_server.call: timeout
+gen_server.call: timeout must be an int (milliseconds) or nil, got string
+gen_server.call: timeout must be an int (milliseconds) or nil, got float
+1
+supervisor.which_children: timeout must be an int (milliseconds) or nil, got bool
+true
+true
+dynamic_supervisor.start_child: timeout must be an int (milliseconds) or nil, got string
+dynamic_supervisor.which_children: timeout must be an int (milliseconds) or nil, got table
+gen_server.call: server exited: stopped
+dynamic_supervisor.start: expected a child template {start, restart}, got nil
+dynamic_supervisor.start: the child template's start must be a fn, got nil
+dynamic_supervisor.start: unknown restart "sometimes"
+supervisor.start: unknown restart "always" for child "x"
+-- chunked request bodies
+HTTP/1.1 200 OK | Content-Length: 9 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 7:abcdefg
+HTTP/1.1 200 OK | Content-Length: 26 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 23:GET /hello HTTP/1.1 |  | 
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 501 Not Implemented | Content-Length: 15 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Not Implemented
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+-- invalid responses get a 500
+http: GET /inject: invalid response: header Location has a CR or LF in its value
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+http: GET /cookie_inject: http.set_cookie: invalid cookie value "1
+X-Evil: 1" (no ;, comma, whitespace or control bytes)
+Stack trace:
+  at anonymous fn (examples/185_http_hardening.gem:23)
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+http: GET /status/1000: invalid response: status 1000 is not from 200 to 999 (1xx responses are not supported)
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+http: GET /status/99: invalid response: status 99 is not from 200 to 999 (1xx responses are not supported)
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+http: GET /status_str: invalid response: status must be an int, got string 200
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+HTTP/1.1 999 Unknown | Content-Length: 1 | Connection: close |  | s
+-- framing headers belong to the server
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close |  | hello
+HTTP/1.1 200 OK | Content-Length: 3 | Connection: close |  | bye
+HTTP/1.1 200 OK | Content-Length: 3 | Connection: close | Set-Cookie: a=1; Path=/; HttpOnly; SameSite=Lax | Set-Cookie: b=2; Path=/; SameSite=Lax |  | two
+-- HEAD
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 
+HTTP/1.1 404 Not Found | Content-Length: 9 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 
+-- static directory
+HTTP/1.1 404 Not Found | Content-Length: 9 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Not Found
+-- Connection handling
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: keep-alive | Content-Type: text/plain; charset=utf-8 |  | helloHTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+-- Expect: 100-continue
+HTTP/1.1 100 Continue |  | HTTP/1.1 200 OK | Content-Length: 4 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 2:hi
+-- limits
+HTTP/1.1 200 OK | Content-Length: 13 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 10:0123456789
+HTTP/1.1 413 Content Too Large | Content-Length: 17 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Content Too Large
+HTTP/1.1 413 Content Too Large | Content-Length: 17 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Content Too Large
+HTTP/1.1 431 Request Header Fields Too Large | Content-Length: 31 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Request Header Fields Too Large
+slow head: [] closed in time: true
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: keep-alive | Content-Type: text/plain; charset=utf-8 |  | hello
+idle close in time: true
+-- a killed connection process
+[] closed at once: true
+-- http.stop
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+stop: nil
+idle connection after stop: ""
+stop again: nil
+connect after stop: false
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+stop by name: nil
+http.stop: no process registered as "web"
+http.stop: expected a server pid, {pid} handle or registered name, got nil
+killed: shutdown
+rebind after kill: true
+rings ok
+dag ok
+..]: at [49999].s, expected "x", got "y"
+wide ok
+test.assert_eq: expected {next: {next: {next: {next: {v: 1}}}}}, got {next: {next: {next: {v: 0}}}}: actual is missing key .next.next.next.next
+deep ok
+test.assert_eq: expected {a: {x: 1, y: [3]}, b: 3}, got {a: {x: 1, y: [2]}, b: 2}: at .a.y[0], expected 3, got 2
+test.assert_eq: expected {a: [1, 3], b: 6}, got {a: [1, 2], b: 5}: at .a[1], expected 3, got 2
+test.assert_eq: expected {a: {x: 1, y: 2}, b: 2}, got {a: {x: 1}, b: 1}: actual is missing key .a.y
+test.assert_eq: expected {a: {x: 1}}, got {a: {x: 1, z: 3}}: actual has extra key .a.z
+test.assert_eq: expected {a: [{p: 1}], b: {q: 2, r: 3}}, got {a: [{p: 1}], b: {q: 2}}: actual is missing key .b.r
+test.assert_eq: expected {a: {k: 1}, b: {k: 2}}, got {a: {k: 1}, b: {k: 1}}: at .b.k, expected 2, got 1
+ERR json.parse: number out of range at byte 0
+1e309: ERR json.parse: number out of range at byte 0
+-1e309: ERR json.parse: number out of range at byte 0
+[1e999]: ERR json.parse: number out of range at byte 1
+[1, 0.1e310]: ERR json.parse: number out of range at byte 4
+1.8e308: ERR json.parse: number out of range at byte 0
+1e99999999999999999999: ERR json.parse: number out of range at byte 0
+1.7976931348623157e308: ok float 1.7976931348623157e+308
+1e-400: ok float 0.0
+-1e-400: ok float -0.0
+0.0000001e-317: ok float 0.0
+4.9e-324: ok float 5e-324
+1e-320: ok float 1e-320
+100000000000000000000e-330: ok float 1e-310
+1e-99999999999999999999: ok float 0.0
+0e99999: ok float 0.0
+123456789012345678901234567890: ok float 1.2345678901234568e+29
+"\ude00": ERR json.parse: lone surrogate in unicode escape at byte 1
+"ab\udfff": ERR json.parse: lone surrogate in unicode escape at byte 3
+"\ud800": ERR json.parse: lone surrogate in unicode escape at byte 1
+"\ud800x": ERR json.parse: lone surrogate in unicode escape at byte 1
+"\ud800\u0041": ERR json.parse: lone surrogate in unicode escape at byte 1
+"\ud800\ud800": ERR json.parse: lone surrogate in unicode escape at byte 1
+"\ud83d\ude00": ok string 😀
+padded 1e399: json.parse: number out of range at byte 0
+padded 1e-400: 0.0
+-- kill(sup, reason) from a child
+supervisor alive: false, children alive: false false
+signal then exit: supervisor alive: false
+normal signal ignored: true true
+restarted after crash: true true
+dynamic: supervisor alive: false, children alive: false false
+-- terminate_child of a child that traps exits
+graceful: true alive after: false
+dynamic_supervisor.terminate_child: timeout
+still running: true, listed: 0
+again: true alive after: false
+unknown: false
+children left: 0
+plain child: true alive after: false
+-- transient child gone before it is monitored
+job ran 1 time(s), pid -1
+dynamic job ran 1 time(s), children 0
+-- stop
+nil
+stopped: false false nil
+name free again: true
+nil
+stop a stopped supervisor: nil
+nil
+nil
+stopped: false false nil
+supervisor.stop: timeout must be an int (milliseconds) or nil, got string
+dynamic_supervisor.stop: no process registered as "nobody187"
+supervisor.stop: expected a pid, a {pid} handle or a registered name, got float
+-- argument checks
+supervisor.start: name must be a string, got int
+dynamic_supervisor.start: name must be a string, got int
+supervisor.start: start of child "x" must be a fn, got nil
+supervisor.start: start of child "x" must be a fn, got int
+supervisor.start: a child spec has no id
+supervisor.start: duplicate child id "x"
+supervisor.start: a child spec must be a table, got string
+supervisor.start: children must be an array of child specs, got string
+supervisor.start: max_restarts must be an int, got string
+supervisor.start: max_seconds must be an int (milliseconds), got float
+dynamic_supervisor.start: max_restarts must be an int, got float
+dynamic_supervisor.start: max_seconds must be an int (milliseconds), got string
+task.await: timeout must be an int (milliseconds) or nil, got string
+task.await: timeout must be an int (milliseconds) or nil, got float
+still awaitable: 1
+task.await_all: timeout must be an int (milliseconds) or nil, got string
+[2]
+0
+
+[Runtime Error in process 29]: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
+  --> std/gen_server.gem:74
+    |
+ 74 |     error("gen_server: {callback} returned a timeout that is {describe(t)}, expected an int (milliseconds) or nil")
+    |
+Stack trace:
+  at gen_server.check_result_timeout (std/gen_server.gem:74)
+  at gen_server.check_call_result (std/gen_server.gem:95)
+  at gen_server.loop (std/gen_server.gem:106)
+  at anonymous fn (std/gen_server.gem:154)
+gen_server.call: server exited: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
+
+[Runtime Error in process 30]: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
+  --> std/gen_server.gem:74
+    |
+ 74 |     error("gen_server: {callback} returned a timeout that is {describe(t)}, expected an int (milliseconds) or nil")
+    |
+Stack trace:
+  at gen_server.check_result_timeout (std/gen_server.gem:74)
+  at gen_server.check_state_result (std/gen_server.gem:82)
+  at anonymous fn (std/gen_server.gem:153)
+gen_server.call: server exited: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
+-- control bytes in the request head
+ok: HTTP/1.1 200 OK
+bare LF in a header: HTTP/1.1 400 Bad Request
+bare CR in a header: HTTP/1.1 400 Bad Request
+bare LF in the request line: HTTP/1.1 400 Bad Request
+NUL in a value: HTTP/1.1 400 Bad Request
+ESC in a value: HTTP/1.1 400 Bad Request
+DEL in a value: HTTP/1.1 400 Bad Request
+control byte in the target: HTTP/1.1 400 Bad Request
+HTAB and obs-text: true
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+-- protocol corners
+HTTP/1.1 200 OK | Content-Length: 13 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=1
+HTTP/1.1 200 OK | Content-Length: 4 | Connection: keep-alive | Content-Type: text/plain; charset=utf-8 |  | 2:abHTTP/1.1 200 OK | Content-Length: 13 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=2
+HTTP/1.1 200 OK | Content-Length: 13 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=3
+HTTP/1.9: HTTP/1.1 505 HTTP Version Not Supported
+HTTP/2.0: HTTP/1.1 505 HTTP Version Not Supported
+HTTP/1.x: HTTP/1.1 400 Bad Request
+FTTP/1.1: HTTP/1.1 400 Bad Request
+TE on HTTP/1.0: HTTP/1.1 400 Bad Request
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 3:abc
+65-digit chunk size: HTTP/1.1 400 Bad Request
+16 significant hex digits: HTTP/1.1 400 Bad Request
+bare CR in a chunk extension: HTTP/1.1 400 Bad Request
+control byte in a trailer: HTTP/1.1 400 Bad Request
+HTTP/1.1 200 OK | Content-Length: 15 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=abs
+HTTP/1.1 200 OK | Content-Length: 15 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=nil
+absolute form without a path: HTTP/1.1 404 Not Found
+-- response checks
+http: GET /status/100: invalid response: status 100 is not from 200 to 999 (1xx responses are not supported)
+status 100: HTTP/1.1 500 Internal Server Error
+http: GET /status/101: invalid response: status 101 is not from 200 to 999 (1xx responses are not supported)
+status 101: HTTP/1.1 500 Internal Server Error
+http: GET /status/199: invalid response: status 199 is not from 200 to 999 (1xx responses are not supported)
+status 199: HTTP/1.1 500 Internal Server Error
+status 200: HTTP/1.1 200 OK
+status 999: HTTP/1.1 999 Unknown
+http: GET /name/space: invalid response: header name "X Y" is not an HTTP token
+header name space: HTTP/1.1 500 Internal Server Error
+http: GET /name/trailing: invalid response: header name "Transfer-Encoding " is not an HTTP token
+header name trailing: HTTP/1.1 500 Internal Server Error
+http: GET /name/colon: invalid response: header name "X:Y" is not an HTTP token
+header name colon: HTTP/1.1 500 Internal Server Error
+http: GET /name/empty: invalid response: header name "" is not an HTTP token
+header name empty: HTTP/1.1 500 Internal Server Error
+header name symbols: HTTP/1.1 200 OK
+-- cookies
+ok: sid=a1-b2_c.3~%20; Path=/; HttpOnly; SameSite=Lax
+http.set_cookie: invalid cookie value "x; Domain=evil.com" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie value "a,b" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie value "a	b" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie value "a
+X-Evil: 1" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie name "s id" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie name "a=b" (empty or contains =)
+http.set_cookie: invalid cookie name "" (empty or contains =)
+http.set_cookie: invalid cookie path "/; Domain=evil.com" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie same_site "Lax; Secure" (no ;, comma, whitespace or control bytes)
+http.set_cookie: max_age must be an int or nil, got string 0; Domain=x
+http.delete_cookie: invalid cookie path "/a b" (no ;, comma, whitespace or control bytes)
+ok: sid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax
+-- std/request
+request.post: a Transfer-Encoding header is not supported (the body is sent with Content-Length)
+3:abc
+-- a handler that traps exits
+true
+kept-alive after stop: true
+HTTP/1.1 200 OK | Content-Length: 8 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | finished closed: true
+rebind: true
+-- the caller of serve is killed
+HTTP/1.1 200 OK | Content-Length: 18 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=served
+connect after the kill: false
+rebind: true
+route param +: [c+++]
+1 after stop: nil nil nil
+1 reports: ["inner.r:shutdown"]
+1 restart same name: int
+2 down: custom ["c:shutdown", "b:shutdown", "a:shutdown"]
+
+[Runtime Error in process 14]: boom
+  --> examples/189_otp_shutdown.gem:102
+     |
+ 102 |     error("boom")
+     |
+Stack trace:
+  at anonymous fn (examples/189_otp_shutdown.gem:102)
+
+[Runtime Error in process 15]: boom
+  --> examples/189_otp_shutdown.gem:102
+     |
+ 102 |     error("boom")
+     |
+Stack trace:
+  at anonymous fn (examples/189_otp_shutdown.gem:102)
+
+[Runtime Error in process 12]: supervisor: max restart intensity reached
+  --> std/supervisor.gem:259
+     |
+ 259 |     error(res.error)
+     |
+Stack trace:
+  at supervisor.sup_main (std/supervisor.gem:259)
+  at anonymous fn (std/supervisor.gem:318)
+3 down: supervisor: max restart intensity reached true ["t:shutdown"]
+
+[Runtime Error in process 18]: boom
+  --> examples/189_otp_shutdown.gem:117
+     |
+ 117 |     when "crash" then error("boom")
+     |
+Stack trace:
+  at anonymous fn (examples/189_otp_shutdown.gem:117)
+4 reports: ["inner.r:shutdown"]
+4 inner restarted: true true
+4 stopped: nil ["inner.r:shutdown"]
+5 terminate: true nil ["inner.r:shutdown"]
+6 reports: ["z:shutdown", "y:shutdown", "x:shutdown"]
+supervisor: exiting on an error raised at:
+  at bad_start (examples/189_otp_shutdown.gem:151)
+  at supervisor.start_child (std/supervisor.gem:55)
+  at anonymous fn (std/supervisor.gem:248)
+
+[Runtime Error in process 33]: start broke
+  --> std/supervisor.gem:259
+     |
+ 259 |     error(res.error)
+     |
+Stack trace:
+  at supervisor.sup_main (std/supervisor.gem:259)
+  at anonymous fn (std/supervisor.gem:318)
+7 down: start broke ["a:shutdown"]
+8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got nil
+8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got string
+8 gen_server.start: the module's handle_info must be a fn, got nil
+8 supervisor.start: expected a spec table {strategy, children, ...}, got nil
+8 supervisor.start: expected a spec table {strategy, children, ...}, got string
+8 dynamic_supervisor.start: expected an options table {child, ...}, got nil
+8 dynamic_supervisor.start: expected an options table {child, ...}, got string
+8 supervisor.start: the name "taken" is already registered
+8 dynamic_supervisor.start: the name "taken" is already registered
+9 transient noproc pid: -1
+-- heads
+200 connection=[close] host=[t] x-empty=[] x-lower=[v] x-mixed-case=[padded value] x-upper=[h]
+200 a=[1, 2, 3] connection=[close] cookie=[x=1; y=2] host=[t]
+200 29998
+repeats fast: true
+431 Request Header Fields Too Large
+400 Bad Request
+400 Bad Request
+400 Bad Request
+400 Bad Request
+400 Bad Request
+505 HTTP Version Not Supported
+400 Bad Request
+400 Bad Request
+200 /q 1
+200 /q nil
+200 user 7 post x y
+200 me
+404 Not Found
+-- bodies
+200 300000:zzzzz / 200 3:abc / 200 me
+200 10:hello
+200 1000:abcde / 200 me
+-- static
+200 index
+200 index
+200 a file
+404 Not Found
+404 Not Found
+404 Not Found
+-- cookies
+expires string: error http.set_cookie: expires must be an int (epoch ms), got string
+expires float: error http.set_cookie: expires must be an int (epoch ms), got float
+n=v; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax
+http: GET /expires: http.set_cookie: expires must be an int (epoch ms), got string
+Stack trace:
+  at anonymous fn (examples/190_http_perf_fixes.gem:40)
+500 Internal Server Error
+http: GET /json_fn: json.encode: cannot encode a fn
+Stack trace:
+  at anonymous fn (examples/190_http_perf_fixes.gem:43)
+500 Internal Server Error
+-- start / stop
+start nil: error http.start: expected a router from http.router(), got nil
+start string: error http.start: expected a router from http.router(), got string
+start table: error http.start: expected a router from http.router(), got table
+serve nil: error http.serve: expected a router from http.router(), got nil
+serve bad opt: error http.serve: max_body must be an int >= 0, got -1
+port in use: error http.start: tcp_listen: bind failed on port 18190: Address already in use
+bad host: error http.start: tcp_listen: invalid address 'nowhere'
+stop timeout: error http.stop: timeout_ms must be an int (milliseconds) or nil, got string
+stop nil timeout: ok nil
+-- request
+POST /p HTTP/1.1|Host: 127.0.0.1:18192|Connection: close|Content-Length: 0||
+PUT /p HTTP/1.1|Host: 127.0.0.1:18193|Connection: close|Content-Length: 0||
+PATCH /p HTTP/1.1|Host: 127.0.0.1:18194|Connection: close|Content-Length: 0||
+POST /p HTTP/1.1|Host: 127.0.0.1:18195|Connection: close|content-length: 0||
+GET /p HTTP/1.1|Host: 127.0.0.1:18196|Connection: close||
+DELETE /p HTTP/1.1|Host: 127.0.0.1:18197|Connection: close||
+POST /p HTTP/1.1|Host: 127.0.0.1:18198|Connection: close|Content-Length: 3||abc
+name with space: error request.get: invalid character (byte 32) in header name
+name with colon: error request.get: invalid header name "X-A:b" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)
+empty name: error request.get: invalid header name "" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)
+name with CRLF: error request.get: invalid character (byte 13) in header name
+int name: error request.get: invalid header name "5" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)
+nil value: error request.post: header X-N has a nil value
+-- 1. monitor and demonitor
+true false true false
+DOWNs after demonitor: 0
+dead: false true noproc
+request pattern leaves: 0
+demonitor: expected pid (int) argument
+-- 2. gen_server.call leaves no monitor or DOWN behind
+after 20 restarts: mailbox_len 0
+monitors after a call: 0 0
+own: true 0 1
+own monitor: bye extra: 0
+gen_server.call: server exited: died
+own monitor: died extra: 0
+gen_server.call: server exited: noproc left: 0
+-- 3. init must return {state}
+
+[Runtime Error in process 27]: gen_server: init returned an int, expected {state: state}
+  --> std/gen_server.gem:67
+    |
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_state_result (std/gen_server.gem:80)
+  at anonymous fn (std/gen_server.gem:153)
+gen_server: init returned an int, expected {state: state}
+got timeout
+-- 4. http: Host and bare LF
+Host: HTTP/1.1 200 OK
+no Host: HTTP/1.1 400 Bad Request
+two Hosts: HTTP/1.1 400 Bad Request
+HTTP/1.0 without Host: HTTP/1.1 200 OK
+bare LF head: HTTP/1.1 400 Bad Request fast: true
+bare LF, split: HTTP/1.1 400 Bad Request fast: true
+CRLF, split: HTTP/1.1 200 OK fast: true
+-- 5. request: Transfer-Encoding, trailers, Set-Cookie
+xchunked: 200 transfer-encoding=[xchunked] body=[3|abc|0||]
+gzip, chunked: 200 transfer-encoding=[gzip, Chunked] body=[abc]
+chunked, gzip: 200 transfer-encoding=[chunked, gzip] body=[3|abc|0||]
+trailers: 200 transfer-encoding=[chunked] x-a=[1] body=[abc]
+set-cookie: 200 content-length=[0] set-cookie=[a=1; Expires=Wed, 21 Oct 2026 07:28:00 GMT\nb=2] x-b=[1, 2] body=[]
+-- 6. format_time
++0000 UTC 0 %z %s
+1969-12-31T23:59:58+0000 -2
+1700000000
+format_time: output is over 256 KB
+131072 0
+-- 7. sqlite params bind by key
+[{a: "first", b: "second"}]
+[{b: 20, a: 10}]
+sqlite_query: params must be an array, got a string key
+sqlite_query: params must be an array (keys 0..1), got key 5
+sqlite_query: statement has 1 parameter(s), got 0
+-- 8. nil means no timeout
+tcp_read 0 / negative: nil nil fast: true
+tcp_read nil: x waited: true
+tcp_read: timeout_ms must be an int (milliseconds) or nil, got string
+no limits: HTTP/1.1 200 OK
+http.stop nil: nil
+http.start: idle_timeout_ms must be an int > 0 (milliseconds) or nil, got 0
+http.start: request_timeout_ms must be an int > 0 (milliseconds) or nil, got string
+-- 9. main's slot is not reused after main ends
+main ends
+1200 processes exited after main ended

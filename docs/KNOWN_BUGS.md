@@ -82,6 +82,45 @@ its symbol. Modules hit it too: `a` with `f`↔`g` next to a module `a_f`
 with `fn body` (`module_mangle` in compiler/main.gem doesn't account for
 the `_body` suffix). Give the helper a name no user fn can have.
 
+### Closures in a destructuring `let` of a builtin's name see the new binding
+
+```gem
+let [len, size] = [fn(x) 0 end, fn(x) len(x) end]
+print(size("abc"))        # 0, not 3
+```
+
+SPEC says the initializer of a module-level `let` that shadows a builtin,
+closures in it included, still reaches the builtin, and it does for a
+plain `let len = ...` and for a direct call in the destructuring
+initializer (`let [len, n] = [f, len("abc")]` binds `n = 3`). A closure in
+a destructuring initializer calls the new `len` instead, in the entry file
+and in a loaded module alike. The initializer scope for a shadowing
+module-level `let` is set up in `rename_stmt_in_scope` /
+`pending_builtin_lets` (compiler/main.gem); the destructuring form doesn't
+get it for closures.
+
+### A field access in a call's arguments runs before the arguments left of it
+
+```gem
+let log = []
+fn f(x)
+  push(log, x)
+  {v: x}
+end
+print(f(1).v, f(2), f(3).v)
+print(log)                       # [1, 3, 2]: f(3) ran before f(2)
+```
+
+Arguments are evaluated left to right, except that the object of a field
+access (`f(3)` in `f(3).v`, `process_info(p)` in
+`process_info(p).monitors`) is hoisted into a temporary before the
+argument array, so it runs before the plain arguments left of it
+(`print(monitor(p), process_info(p).monitors)` shows the monitors from
+before the `monitor`). Codegen builds the args as a C initializer list
+(`GemVal _t[] = {...}`) after hoisting the field object
+(compiler/codegen.gem, the `gem_table_get_cached` path); hoist every
+argument in order, or none.
+
 ### A float key in a table literal becomes a string key
 
 ```gem
@@ -93,6 +132,24 @@ The parser keeps a NUMBER key's text, and `compile_table` emits it as a
 string key; a pattern `{1.5: x}` does the same (compiler/parser.gem
 `parse_int_key` handles only ints). It should be a float key or a
 compile error.
+
+### A default parameter in a loaded module can't use the module's `let`s
+
+```gem
+# lib.gem                           # main.gem
+let D = 5                           load "./lib"
+fn f(x = D)                         print(lib.f())
+  x
+end
+export f
+```
+
+fails with ``undeclared identifier `D` `` at `lib.gem:2`; the same code in
+the entry file prints `5`. `rename_node` (compiler/main.gem) prefixes the
+module's top-level names in fn bodies but never walks the param defaults
+(`node.defaults`), so the default still names `D` while the slot is
+`_mod_lib_D`. std/http writes `ok`'s default content type out as a literal
+because of it.
 
 ## Runtime
 
@@ -113,7 +170,7 @@ should raise (or wrap) instead. Relatedly, int `+`, `-` and `*` overflow
 is signed-overflow undefined behaviour in C (no `-fwrapv`); it wraps in
 practice.
 
-### A non-integer `after` timeout is taken as 0
+### A non-integer `after` timeout is read as raw bits; a huge one expires at once
 
 ```gem
 receive
@@ -122,8 +179,36 @@ end
 ```
 
 runs at once instead of raising: the timeout's `.ival` is read with no
-type check (`compile_receive_match` in compiler/codegen.gem). A
-non-integer timeout should raise.
+type check (`compile_receive_match` in compiler/codegen.gem), so the
+value's raw payload is taken as milliseconds. `nil` waits 0 ms and `true`
+1 ms; a float waits its bit pattern read as an int (`1.5` is about
+4.6e18 ms, i.e. forever; `0.0` is 0); a string or a table waits its
+pointer value, which in practice is forever (`after "abc"` still waits
+when another process exits). A non-integer timeout should raise.
+
+An int timeout close to `INT64_MAX` times out at once instead of waiting
+(practically) forever:
+
+```gem
+let t0 = time_ms()
+receive
+when "never" then nil
+after 9223372036854775807 then print("timed out after", time_ms() - t0, "ms")
+end
+```
+
+prints `timed out after 0 ms`: the deadline is computed as
+`gem_now_ms() + (int64_t)ms` (`compile_receive_match` in
+compiler/codegen.gem), which overflows to a negative time already past.
+The runtime does the same for `send_after(pid, msg, ms)` (delivered at
+once; `gem_send_after_builtin` in runtime/gem_scheduler.c) and `sleep(ms)`
+(the deadline goes negative, which reads as "no deadline", so a lone main
+process reports a deadlock; `gem_sleep_builtin`). The std timeouts built
+on them (`gen_server.call`, `task.await`, `task.await_all`, the
+`supervisor` and `dynamic_supervisor` requests and `stop`, a gen_server
+callback's `timeout`) inherit it: a timeout this large raises `...:
+timeout` at once. Use `nil` (no timeout) to wait forever. The deadline
+should saturate at `INT64_MAX`.
 
 ### `s = s + x` in a loop skips the `+` type check
 
@@ -166,133 +251,118 @@ Empty or comment-only SQL should return `[]`; `sqlite_exec` should raise
 on a statement with parameters; `sqlite_query` should run (or reject)
 the text after the first statement. runtime/gem_builtins_sqlite.c.
 
-### sqlite: named parameters bind by position; TEXT values stop at a NUL
+### sqlite: TEXT values stop at a NUL
 
 ```gem
 let db = sqlite_open(":memory:")
-sqlite_exec(db, "CREATE TABLE t(a, b)")
-sqlite_query(db, "INSERT INTO t VALUES (:b, :a)", {a: 10, b: 20})
-print(sqlite_query(db, "SELECT a, b FROM t", []))  # [{a: 10, b: 20}]: :b got 10
 let r = sqlite_query(db, "SELECT ? AS s", ["x\0y"])
 print(len(r[0].s))                                 # 1, not 3
 ```
 
-`sqlite_query` binds the params table's values in insertion order and
-ignores its keys, so `:name` placeholders get the wrong values; a record
-of params should bind by name (`sqlite3_bind_parameter_index`). TEXT
-columns are read back with `gem_string` (strlen), so a string with an
+TEXT columns are read back with `gem_string` (strlen), so a string with an
 embedded NUL is cut short; use `sqlite3_column_bytes`.
 runtime/gem_builtins_sqlite.c.
 
+### `sort` keeps the comparator in a global shared by all processes
+
+```gem
+let groups = [[3, 1], [9, 8], [5, 4]]
+sort(groups, fn(a, b)
+  sort(a, fn(x, y) x - y end)
+  a[0] - b[0]
+end)
+print(groups)
+```
+
+fails with `type error in -: got table and table` at the inner
+comparator: the `sort` builtin stores the comparator in `static GemVal
+gem_sort_cmp_fn_global` (runtime/gem_builtins_collection.c) and calls
+`qsort`, so a nested sort replaces it and the outer `qsort` goes on
+calling the inner comparator. Two processes sorting at once do the same
+when a comparator has a loop (the scheduler can switch processes at its
+back-edge): the array comes back unsorted, with no error. Keep the
+comparator per call (`qsort_r`, or a sort of our own that passes it
+along), saved and restored across a yield.
+
+### String table keys stop at the first NUL
+
+```gem
+let t = {}
+t["a\0b"] = 1
+t["a\0c"] = 2
+print(len(t), t["a\0zzz"], t["a"])   # 1 2 2
+```
+
+The string-key index of a table (`shput`/`shgeti` in runtime/gem_core.c)
+is stb_ds's C-string hash map, which hashes and compares with
+`strlen`/`strcmp`, while `==` compares `slen` bytes. Keys that differ only
+after a NUL are the same key, so `table.unique`, `table.group_by`,
+`url.parse_query`, `mime.lookup` and `json.parse` (object keys with
+`\u0000`) merge them, and `test.assert_eq` calls two tables equal whose
+keys differ only after a NUL (`mime.lookup("x.html\0")`
+is `text/html`). Hash and compare string keys by `slen`.
+
 ## Standard library
 
-### `dynamic_supervisor` crashes after removing a child that isn't the last
+### A `one_for_all` restart hangs on a child that traps exits
+
+```gem
+load "std/supervisor"
+fn trapper()
+  spawn do
+    process_flag("trap_exit", true)
+    while true
+      receive
+      when other then nil
+      end
+    end
+  end
+end
+fn crasher() spawn do receive when {tag: "crash"} then error("boom") end end end
+let h = supervisor.start({strategy: "one_for_all",
+  children: [{id: "t", start: trapper}, {id: "c", start: crasher}]})
+send(supervisor.which_children(h)[1].pid, {tag: "crash"})
+sleep(50)
+print(pcall supervisor.which_children(h, 300))   # timeout
+```
+
+To restart all children, the supervisor sends each running child
+`kill(pid, "shutdown")` and waits for its `DOWN` (std/supervisor
+`restart_all`). A child that traps exits gets an `EXIT` message instead of
+dying, so the supervisor waits forever. Erlang waits a shutdown timeout
+and then sends the untrappable `kill`; Gem has no untrappable exit signal,
+so that needs one in the runtime (`kill` in runtime/gem_scheduler.c).
+The same goes for a supervisor's own exit (`stop`, an exit signal,
+restart intensity reached): it kills each child with its exit reason and
+waits for the child's `DOWN`, but a child that traps exits gets an `EXIT`
+message, so the supervisor waits out its whole shutdown wait (4000 ms,
+`SHUTDOWN_MS` in std/supervisor and std/dynamic_supervisor), then exits
+and leaves the child running. The window is shared by all children, so the
+siblings killed after such a child get no wait: a sibling that is itself
+a supervisor may still be shutting down, and holding its names, when the
+parent's `DOWN` arrives.
+
+`dynamic_supervisor.terminate_child` has the same limit: it sends the
+child `kill(pid, "shutdown")` and waits for its `DOWN`, so a child that
+traps exits and doesn't exit on the `EXIT` message makes it raise
+`dynamic_supervisor.terminate_child: timeout`, and the child keeps running
+(left out of `which_children`, not restarted; another `terminate_child`
+sends the signal again):
 
 ```gem
 load "std/dynamic_supervisor"
-fn w(a) spawn do while true receive when other then nil end end end end
-let ds = dynamic_supervisor.start({child: {start: w}})
-let a = dynamic_supervisor.start_child(ds, "a")
-dynamic_supervisor.start_child(ds, "b")
-dynamic_supervisor.terminate_child(ds, a)
-print(dynamic_supervisor.which_children(ds))
+fn trapper(a)
+  spawn do
+    process_flag("trap_exit", true)
+    while true
+      receive
+      when other then nil
+      end
+    end
+  end
+end
+let d = dynamic_supervisor.start({child: {start: trapper}})
+let p = dynamic_supervisor.start_child(d, nil)
+print(pcall dynamic_supervisor.terminate_child(d, p, 100))   # timeout
+print(process_info(p) != nil)                                 # true
 ```
-
-The supervisor dies with `field access on non-table: got nil`
-(dynamic_supervisor.gem `find_child_index`), and `which_children`, which
-has no `after`, deadlocks main. `dsup_loop` removes children with
-`delete(state.children, idx)` on an array (the hole trap); use
-`remove_at`. The DOWN path for temporary and transient children has the
-same `delete`, so the exit of such a child that isn't last in the list
-crashes the supervisor too (three `restart: "temporary"` children; stop
-the first, then the second).
-
-### The supervisors' loops are not tail calls
-
-Some paths of `sup_loop` (std/supervisor) and `dsup_loop`
-(std/dynamic_supervisor) recurse with `sup_loop(state)` /
-`dsup_loop(state)` followed by `return nil`, a non-tail call that adds a
-stack frame: the exit of a temporary or transient child, `terminate_child`
-and `which_children` in the dynamic supervisor. (Restarts are tail calls.)
-A dynamic supervisor with `restart: "temporary"` children that exit at
-once dies with `stack overflow in <fn>` after 1,750 to 2,000 child exits.
-Make the self call the last expression.
-
-### `http.serve` returns when the caller gets any message
-
-```gem
-spawn do sleep(100); send(me, {tag: "hello"}) end   # let me = self() before
-http.serve(app, {port: 8080})                       # returns {tag: "hello"}
-```
-
-`serve` monitors the acceptor and then calls `receive()`, which takes
-whatever arrives first. Match `{tag: "DOWN", pid: ^pid}` instead.
-
-### `std/http` hides handler errors and sends empty default bodies
-
-A handler that raises, or returns something other than a response table,
-gets a 500 with an empty body and nothing on stderr. The server's own
-404/500 responses also have empty bodies, although SPEC says the
-defaults are `"Not Found"` and `"Internal Server Error"`: std/http calls
-`not_found(nil)` / `server_error(nil)` with an explicit `nil`, which
-doesn't apply the default. Log the caught error, and call the builders
-with no argument.
-
-### `json.encode` drops entries of tables with non-sequential int keys
-
-```gem
-let ids = {}
-ids[42] = "x"
-print(json.encode(ids))         # [null]
-let m = ["z"]
-m.name = "n"
-print(json.encode(m))           # ["z",null]
-```
-
-`is_array` in std/json looks only at the first key's type. A table whose
-keys aren't exactly `0 .. n-1` should encode as an object (with string
-keys), or raise.
-
-### `json.parse` can't parse integers beyond 64 bits
-
-`json.parse("12345678901234567890")` raises `to_int: cannot convert ...`
-(std/json `parse_number`). Parse them as floats.
-
-### `supervisor.start` with `name:` registers the name after starting the children
-
-`supervisor.which_children("sup")` right after `supervisor.start({name:
-"sup", ...})` can raise `send: no process registered with that name`:
-the supervisor process registers itself only once all children are
-started, and `start` has already returned. Register before starting
-children (or from `start`).
-
-### Supervisor children must return a bare pid
-
-A child spec `start: fn() gen_server.start(mod) end` returns `{pid}`, and
-the supervisor dies with `monitor: expected pid (int) argument` while
-`supervisor.start` still returns a handle to it. Accept both forms.
-
-### `std/request` has no timeout and doesn't decode chunked bodies
-
-`request` reads with `tcp_read(fd, READ_SIZE)` and no timeout, so a silent
-server blocks the caller forever; a parse error leaks the socket; a
-chunked response comes back with the chunk framing in `body`; a status
-line with no reason phrase (`HTTP/1.1 204`) or an `https://` URL raises
-`to_int: cannot convert "" to int`.
-
-### A bad sqlite handle crashes the program
-
-`print(pcall sqlite_query(12345, "select 1", []))` dies with a segmentation
-fault (exit 139); `pcall` can't catch it. A handle is a raw `sqlite3 *`
-stored as an int: using one after `sqlite_close` is a use-after-free, and
-closing twice returns `nil`. Keep a table of open handles in
-runtime/gem_builtins_sqlite.c and raise on an unknown one.
-
-### `std/http` request headers keep the client's case
-
-`req.headers["content-type"]` is `nil` when the client sent
-`Content-Type`, and the other way round; `Cookie` is looked up in that
-exact case only, so `cookie: a=1` gives empty `req.cookies`. A header
-written without a space after the colon (`Host:x`, valid HTTP) is
-dropped. `parse_headers` in std/http.gem splits on `": "`. Lowercase the
-names, trim optional whitespace, and document the `req.headers` keys.

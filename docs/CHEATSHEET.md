@@ -111,7 +111,8 @@ end
 receive                              # arms optional: just wait, mailbox untouched
 after 100 then nil
 end
-monitor(pid)                         # → true; DOWN message on exit
+monitor(pid)                         # → true (false if already monitoring); DOWN message on exit
+demonitor(pid)                       # → true if a monitor was removed; a delivered DOWN stays
 link(pid); unlink(pid)
 process_flag("trap_exit", true)
 kill(pid, "shutdown")                # → true if alive; EXIT msg if pid traps exits
@@ -154,24 +155,30 @@ let s = build_string do |add|
 end
 
 # Std library modules
-# std/string     split, join, trim, upper, lower, repeat, index_of, contains, starts_with, ends_with
+# std/string     split, join, trim, upper, lower, repeat, index_of(s, x, start = 0), contains,
+#                starts_with, ends_with
 # std/table      each, map, filter, reduce, find, any, all, count, reverse, unique, contains, index_of,
-#                slice, concat, copy, flatten, flat_map, zip, group_by
+#                slice, concat, copy, flatten, flat_map, zip, group_by, sort
 # std/math       min, max, clamp, assert
 # std/time       now, format, format_local, iso8601, http_date, date
 # std/log        set_level, debug, info, warn, error
-# std/json       parse, encode
+# std/json       parse, encode   (array = keys 0..n-1, else object with int keys as "42";
+#                nesting > 1000 raises; ints past 64 bits parse as floats)
 # std/http       response, ok, html, json_response, redirect, not_found, bad_request, server_error,
-#                set_cookie, delete_cookie, parse_form, html_escape, router, start, serve
-# std/request    get, post, put, patch, delete, request
+#                set_cookie, delete_cookie, parse_form, html_escape, router, start, serve, stop
+#                (start opts {port, host, max_body = 8 MB, idle_timeout_ms, request_timeout_ms = 30000, nil: none};
+#                start returns {pid}; stop(server) closes every socket; HEAD uses the GET route;
+#                set_cookie raises on ; , whitespace or control bytes: url.encode values)
+# std/request    get, post, put, patch, delete, request  (http:// only; opts {body, headers, timeout_ms = 30000, nil: none};
+#                returns {status, headers (lowercase names), body (chunked decoded)})
 # std/url        encode, decode, parse, parse_query, build_query
 # std/mime       lookup, ext
 # std/sqlite     open, close, exec, query, last_id, changes  (wraps sqlite_* builtins)
-# std/supervisor start, which_children
-# std/dynamic_supervisor  start, start_child, terminate_child, which_children
+# std/supervisor start, which_children, stop
+# std/dynamic_supervisor  start, start_child, terminate_child, which_children, stop
 # std/task       async, await, await_all
 # std/gen_server start, call, cast, reply
-# std/test       case, assert, assert_eq, assert_neq, assert_throws, run
+# std/test       case, assert, assert_eq, assert_neq, assert_throws, run  (assert_eq is deep; run exits 1 on failure)
 
 # C interop
 extern include "stdio.h"                 # a libc fn needs its header; your own: path relative to the .gem file

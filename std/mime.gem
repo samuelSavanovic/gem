@@ -1,4 +1,13 @@
-# std/mime — MIME type lookup by file extension
+# mime — content types by file extension, and back.
+#
+#   load "std/mime"
+#   mime.lookup("site/index.HTML")       # "text/html; charset=utf-8"
+#   mime.lookup("png")                   # "image/png"
+#   mime.lookup("notes")                 # "application/octet-stream"
+#   mime.ext("image/jpeg")               # ".jpg"
+#
+# Both ignore case, take a string (or a buffer) and raise `mime.<fn>: ...`
+# on anything else.
 
 load "std/string"
 
@@ -35,58 +44,73 @@ let types = {
 
 let charset_prefixes = ["text/", "application/json", "application/javascript", "application/xml"]
 
+# The string to work on: a string, or a buffer's contents.
+fn text(fname, what, v)
+  let t = type(v)
+  if t == "string"
+    return v
+  end
+  if t == "buffer"
+    return to_string(v)
+  end
+  error("mime.{fname}: {what} must be a string, got {t}")
+end
+
+# The extension of a path's last segment ("a/b.tar.gz" → "gz", "a.d/x" →
+# ""). A string with no `/` and no `.` is taken as a bare extension.
 fn ext_from_path(path_or_ext)
-  let dot = -1
-  let i = len(path_or_ext) - 1
+  let n = len(path_or_ext)
+  let i = n - 1
   while i >= 0
-    if ord(path_or_ext, i) == 46
-      dot = i
-      break
+    let c = ord(path_or_ext, i)
+    if c == 46
+      return substr(path_or_ext, i + 1, n - i - 1)
+    end
+    if c == 47
+      return ""
     end
     i -= 1
   end
-  if dot < 0
-    return path_or_ext
-  end
-  substr(path_or_ext, dot + 1, len(path_or_ext) - dot - 1)
+  path_or_ext
 end
 
 fn needs_charset(content_type)
-  let i = 0
-  while i < len(charset_prefixes)
-    if string.starts_with(content_type, charset_prefixes[i])
+  for prefix in charset_prefixes
+    if string.starts_with(content_type, prefix)
       return true
     end
-    i += 1
   end
   false
 end
 
+# lookup(path_or_ext): "index.html", ".html" and "html" all give the type;
+# an unknown or missing extension gives "application/octet-stream".
 fn lookup(path_or_ext)
-  let e = string.lower(ext_from_path(path_or_ext))
-  let ct = types[e]
+  path_or_ext = text("lookup", "path_or_ext", path_or_ext)
+  let ct = types[string.lower(ext_from_path(path_or_ext))]
   if ct == nil
     return "application/octet-stream"
   end
   if needs_charset(ct)
-    return ct + "; charset=utf-8"
+    return "{ct}; charset=utf-8"
   end
   ct
 end
 
+# ext(content_type): ".html" for "text/html" (parameters such as
+# "; charset=utf-8" are ignored), or nil for an unknown type.
 fn ext(content_type)
+  content_type = text("ext", "content_type", content_type)
   let base = content_type
   let semi = string.index_of(content_type, ";")
   if semi >= 0
-    base = string.trim(substr(content_type, 0, semi))
+    base = substr(content_type, 0, semi)
   end
-  let ks = keys(types)
-  let i = 0
-  while i < len(ks)
-    if types[ks[i]] == base
-      return "." + ks[i]
+  base = string.lower(string.trim(base))
+  for e, ct in types
+    if ct == base
+      return ".{e}"
     end
-    i += 1
   end
   nil
 end

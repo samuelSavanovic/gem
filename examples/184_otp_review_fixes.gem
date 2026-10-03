@@ -1,0 +1,311 @@
+# std/gen_server, std/supervisor, std/dynamic_supervisor: no DOWN left
+# however often a dead server is called, stale idle timeouts, supervisors that take
+# their children down when they exit, one_for_all and transient restart
+# rules, result and argument checks, nil timeouts, and live-only monitor
+# lists in process_info.
+load "std/gen_server"
+load "std/supervisor"
+load "std/dynamic_supervisor"
+
+let me = self()
+
+# Counts (and removes) the queued DOWNs for `pid`; prints their reasons.
+fn drain_downs(pid)
+  let n = 0
+  let more = true
+  while more
+    receive
+    when {tag: "DOWN", pid: ^pid, reason: r}
+      n += 1
+      print("  DOWN", r)
+    after 0
+      more = false
+    end
+  end
+  n
+end
+
+fn sleeper()
+  spawn do
+    receive
+    when {tag: "crash"}
+      kill(self(), "boom")
+    end
+  end
+end
+
+let ECHO = {
+  init: fn() {state: 0} end,
+  handle_call: fn(msg, from, s)
+    match msg
+    when "die"
+      kill(self(), "boom")
+    when "both"
+      {reply: "r", noreply: 7}
+    when "slow"
+      sleep(80)
+      {reply: s, state: s}
+    else
+      {reply: s, state: s}
+    end
+  end,
+  handle_cast: fn(msg, s) {state: s} end,
+  handle_info: fn(msg, s) {state: s} end
+}
+
+print("-- 1. calls to a dead server leave no DOWN behind")
+let h = gen_server.start(ECHO)
+print(gen_server.call(h, "x"))
+print((pcall gen_server.call(h, "die")).error)
+for i = 0, 3
+  print((pcall gen_server.call(h, "x")).error)
+end
+print("DOWNs:", drain_downs(h.pid))
+# A server that was already gone before the first call: noproc, still none.
+print((pcall gen_server.call(h, "x")).error)
+print((pcall gen_server.call(h, "x")).error)
+print("DOWNs:", drain_downs(h.pid))
+let s1 = supervisor.start({children: []})
+kill(s1.pid, "shutdown")
+for i = 0, 3
+  print((pcall supervisor.which_children(s1)).error)
+end
+print("DOWNs:", drain_downs(s1.pid))
+let d1 = dynamic_supervisor.start({child: {start: fn(a) sleeper() end}})
+kill(d1.pid, "shutdown")
+for i = 0, 3
+  print((pcall dynamic_supervisor.which_children(d1)).error)
+end
+print("DOWNs:", drain_downs(d1.pid))
+
+print("-- 2. an idle timeout cancelled by a callback does not fire")
+let TIMED = {
+  init: fn() {state: 0, timeout: 30} end,
+  handle_call: fn(msg, from, s)
+    match msg
+    when "slow"
+      sleep(60)
+      {reply: s, state: s}
+    when "arm"
+      {reply: s, state: s, timeout: 20}
+    else
+      {reply: s, state: s}
+    end
+  end,
+  handle_cast: fn(msg, s) {state: s} end,
+  handle_info: fn(msg, s)
+    if msg == "timeout"
+      send(me, "timed out")
+    end
+    {state: s + 1}
+  end
+}
+let t = gen_server.start(TIMED)
+print(gen_server.call(t, "slow"))
+receive
+when "timed out" then print("stale timeout fired")
+after 80 then print("no timeout")
+end
+print(gen_server.call(t, "arm"))
+receive
+when "timed out" then print("armed timeout fired")
+after 200 then print("armed timeout missing")
+end
+print(gen_server.call(t, "get"))
+
+print("-- 3. a supervisor's children go down with it")
+fn start_db()
+  let g = gen_server.start(ECHO)
+  register("db184", g.pid)
+  g
+end
+fn start_inner()
+  supervisor.start({max_restarts: 1, children: [
+    {id: "db", start: start_db},
+    {id: "c", start: sleeper}]})
+end
+let outer = supervisor.start({children: [{id: "inner", start: start_inner}]})
+let inner = supervisor.which_children(outer)[0].pid
+let db1 = whereis("db184")
+print("inner links its children:", len(process_info(inner).links), process_info(inner).trap_exit)
+for i = 0, 2
+  send(supervisor.which_children(inner)[1].pid, {tag: "crash"})
+  sleep(20)
+end
+print("inner restarted:", supervisor.which_children(outer)[0].pid != inner)
+print("old db dead:", process_info(db1) == nil)
+let db2 = whereis("db184")
+print("new db:", db2 != nil and db2 != db1, gen_server.call("db184", "x"))
+# kill(sup, "shutdown") from outside: the supervisor and its children exit.
+let inner2 = supervisor.which_children(outer)[0].pid
+let kids = supervisor.which_children(inner2)
+kill(outer.pid, "shutdown")
+sleep(10)
+print("outer, inner, children dead:", process_info(outer.pid) == nil, process_info(inner2) == nil,
+  process_info(kids[0].pid) == nil, process_info(kids[1].pid) == nil, whereis("db184"))
+# one_for_all over a supervisor child: the inner one is stopped and restarted.
+let s3 = supervisor.start({strategy: "one_for_all", children: [
+  {id: "inner", start: start_inner},
+  {id: "c", start: sleeper}]})
+let in3 = supervisor.which_children(s3)[0].pid
+let db3 = whereis("db184")
+send(supervisor.which_children(s3)[1].pid, {tag: "crash"})
+sleep(20)
+print("one_for_all restarted inner:", supervisor.which_children(s3)[0].pid != in3,
+  process_info(db3) == nil, whereis("db184") != nil)
+kill(s3.pid, "shutdown")
+sleep(10)
+# dynamic_supervisor: same on intensity and on kill.
+let d3 = dynamic_supervisor.start({max_restarts: 0, child: {start: fn(a) sleeper() end}})
+let w1 = dynamic_supervisor.start_child(d3, 1)
+let w2 = dynamic_supervisor.start_child(d3, 2)
+send(w1, {tag: "crash"})
+sleep(20)
+print("dsup and its children dead:", process_info(d3.pid) == nil, process_info(w2) == nil)
+let d4 = dynamic_supervisor.start({child: {start: fn(a) sleeper() end}})
+let w3 = dynamic_supervisor.start_child(d4, 1)
+kill(d4.pid, "normal")
+print("ignores a normal exit signal:", dynamic_supervisor.which_children(d4)[0].pid == w3)
+kill(d4.pid, "shutdown")
+sleep(10)
+print("dsup killed, child dead:", process_info(d4.pid) == nil, process_info(w3) == nil)
+# terminate_child of a child that traps exits: no restart, and its late
+# EXIT does not bring the supervisor down.
+fn trapper(a)
+  spawn do
+    process_flag("trap_exit", true)
+    receive
+    when {tag: "EXIT", reason: r}
+      sleep(30)
+      kill(self(), r)
+    end
+  end
+end
+let d5 = dynamic_supervisor.start({child: {start: trapper}})
+let tp = dynamic_supervisor.start_child(d5, "t")
+print(dynamic_supervisor.terminate_child(d5, tp), dynamic_supervisor.which_children(d5))
+sleep(60)
+print("trapper gone, dsup alive:", process_info(tp) == nil, process_info(d5.pid).state != "dead",
+  dynamic_supervisor.which_children(d5))
+# A supervisor that exits waits for a child that traps exits and exits
+# 30 ms after the EXIT.
+let s5 = supervisor.start({children: [{id: "t", start: fn() trapper(0) end}]})
+let tp2 = supervisor.which_children(s5)[0].pid
+supervisor.stop(s5)
+print("supervisor waited for its trapping child:", process_info(s5.pid) == nil, process_info(tp2) == nil)
+sleep(50)
+
+print("-- 4. one_for_all restarts only what would be restarted")
+fn temp()
+  spawn do
+    send(me, "temp started")
+    receive when {tag: "crash"} then kill(self(), "boom") end
+  end
+end
+fn quick()
+  spawn do
+    send(me, "quick started")
+  end
+end
+let s4 = supervisor.start({strategy: "one_for_all", children: [
+  {id: "t", restart: "temporary", start: temp},
+  {id: "q", restart: "transient", start: quick},
+  {id: "c", start: sleeper}]})
+receive when "temp started" then nil end
+receive when "quick started" then nil end
+sleep(10)
+let before = supervisor.which_children(s4)
+print("q exited normally:", before[1].pid)
+send(before[2].pid, {tag: "crash"})
+sleep(20)
+let after_ = supervisor.which_children(s4)
+let restarted = []
+let more = true
+while more
+  receive
+  when "temp started" then push(restarted, "t")
+  when "quick started" then push(restarted, "q")
+  after 0 then more = false
+  end
+end
+print("started again:", restarted, "t:", after_[0].pid, "q:", after_[1].pid,
+  "c restarted:", after_[2].pid != before[2].pid)
+
+print("-- 5. a transient child killed with shutdown stays down")
+fn exiter()
+  spawn do
+    receive when {tag: "exit", reason: r} then kill(self(), r) end
+  end
+end
+let s6 = supervisor.start({children: [{id: "w", restart: "transient", start: exiter}]})
+send(supervisor.which_children(s6)[0].pid, {tag: "exit", reason: "shutdown"})
+sleep(10)
+print(supervisor.which_children(s6)[0].pid)
+let s7 = supervisor.start({children: [{id: "w", restart: "transient", start: exiter}]})
+let w7 = supervisor.which_children(s7)[0].pid
+send(w7, {tag: "exit", reason: "oops"})
+sleep(10)
+print("oops restarted:", supervisor.which_children(s7)[0].pid != w7)
+
+print("-- 6. handle_call returning both reply and noreply")
+let h6 = gen_server.start(ECHO)
+print((pcall gen_server.call(h6, "both")).error)
+drain_downs(h6.pid)
+
+print("-- 7. init returning a table with a state field")
+let FSM = {
+  init: fn() {state: {state: "idle", count: 0}} end,
+  handle_call: fn(msg, from, s) {reply: s, state: s} end,
+  handle_cast: fn(msg, s) {state: s} end,
+  handle_info: fn(msg, s) {state: s} end
+}
+print(gen_server.call(gen_server.start(FSM), "get"))
+
+print("-- 8. cast to a dead server")
+let h8 = gen_server.start(ECHO)
+register("srv184", h8.pid)
+kill(h8.pid, "shutdown")
+print(gen_server.cast(h8, "x"))
+print((pcall gen_server.cast("srv184", "x")).error)
+
+print("-- 9. process_info lists live monitors only")
+let srv = spawn do
+  receive when "stop" then nil end
+end
+for i = 0, 5
+  spawn do monitor(srv) end
+end
+sleep(10)
+print(process_info(srv).monitors)
+monitor(srv)
+let mons = process_info(srv).monitors
+print(len(mons), mons[0] == me)
+send(srv, "stop")
+drain_downs(srv)
+
+print("-- 10. timeouts")
+let h10 = gen_server.start(ECHO)
+print(gen_server.call(h10, "slow", nil))
+print((pcall gen_server.call(h10, "slow", 10)).error)
+print((pcall gen_server.call(h10, "x", "abc")).error)
+print((pcall gen_server.call(h10, "x", 1.5)).error)
+let s10 = supervisor.start({children: [{id: "a", start: sleeper}]})
+print(len(supervisor.which_children(s10, nil)))
+print((pcall supervisor.which_children(s10, true)).error)
+let d10 = dynamic_supervisor.start({child: {start: fn(a) sleeper() end}})
+let c10 = dynamic_supervisor.start_child(d10, 1, nil)
+print(dynamic_supervisor.which_children(d10, nil)[0].pid == c10)
+print(dynamic_supervisor.terminate_child(d10, c10, nil))
+print((pcall dynamic_supervisor.start_child(d10, 1, "abc")).error)
+print((pcall dynamic_supervisor.which_children(d10, {})).error)
+# nil waits for the DOWN of a server that dies mid-call.
+let h11 = gen_server.start(ECHO)
+spawn do
+  sleep(20)
+  kill(h11.pid, "stopped")
+end
+print((pcall gen_server.call(h11, "slow", nil)).error)
+print((pcall dynamic_supervisor.start({})).error)
+print((pcall dynamic_supervisor.start({child: {}})).error)
+print((pcall dynamic_supervisor.start({child: {start: fn(a) sleeper() end, restart: "sometimes"}})).error)
+print((pcall supervisor.start({children: [{id: "x", restart: "always", start: sleeper}]})).error)

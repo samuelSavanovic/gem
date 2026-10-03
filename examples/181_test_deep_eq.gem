@@ -1,0 +1,132 @@
+# std/test: deep equality in assert_eq / assert_neq, failure messages,
+# per-process case registration, and run()'s exit status.
+load "std/test"
+
+# Runs `body` and returns the assertion's error message (or "ok").
+fn failure(body)
+  let r = pcall body()
+  if r.ok
+    return "ok"
+  end
+  r.error
+end
+
+fn nested(depth)
+  let root = {}
+  let cur = root
+  let i = 0
+  while i < depth
+    cur.next = {}
+    cur = cur.next
+    i += 1
+  end
+  root
+end
+
+test.case("records compare by structure, in any key order", fn()
+  test.assert_eq({a: 1, b: [1, 2, {c: "x"}]}, {b: [1, 2, {c: "x"}], a: 1})
+  test.assert_eq([], {})
+  test.assert_eq([[], [[]]], [[], [[]]])
+  test.assert_neq([1, 2], [2, 1])
+  test.assert_neq({a: 1}, {a: 1, b: nil})
+end)
+
+test.case("primitives", fn()
+  test.assert_eq(nil, nil)
+  test.assert_eq("a" + "b", "ab")
+  test.assert_neq(1, 1.0)
+  test.assert_neq(nil, false)
+  test.assert_neq({}, nil)
+  let f = fn() 1 end
+  test.assert_eq(f, f)
+  test.assert_neq(f, fn() 1 end)
+end)
+
+test.case("cycles terminate", fn()
+  let a = {name: "a"}
+  a.self = a
+  let b = {name: "a"}
+  b.self = b
+  test.assert_eq(a, b)
+  let c = {name: "c"}
+  c.self = c
+  test.assert_neq(a, c)
+  let x = [1]
+  push(x, x)
+  let y = [1]
+  push(y, y)
+  test.assert_eq(x, y)
+end)
+
+# A chain of `tail` tables leading into a ring of `ring` tables; node i
+# holds i % period.
+fn lasso(tail, ring, period)
+  let nodes = []
+  let i = 0
+  while i < tail + ring
+    push(nodes, {v: i % period})
+    i += 1
+  end
+  i = 0
+  while i < tail + ring - 1
+    nodes[i].next = nodes[i + 1]
+    i += 1
+  end
+  nodes[-1].next = nodes[tail]
+  nodes[0]
+end
+
+test.case("long cycles terminate", fn()
+  test.assert_eq(lasso(0, 50, 5), lasso(0, 50, 5))
+  test.assert_eq(lasso(100, 40, 4), lasso(0, 60, 4))
+  test.assert_eq(lasso(1000, 70, 7), lasso(3, 7, 7))
+  test.assert_neq(lasso(0, 50, 5), lasso(0, 50, 25))
+  test.assert_neq(lasso(200, 64, 8), lasso(200, 64, 16))
+end)
+
+test.case("deep nesting does not overflow", fn()
+  test.assert_eq(nested(20000), nested(20000))
+  test.assert_neq(nested(20000), nested(20001))
+end)
+
+test.case("shared subtables", fn()
+  let s = [1, 2]
+  test.assert_eq({p: s, q: s}, {p: [1, 2], q: [1, 2]})
+end)
+
+test.case("failure messages", fn()
+  print(failure(fn() test.assert_eq(1.0, 1) end))
+  print(failure(fn() test.assert_eq(1, 2) end))
+  print(failure(fn() test.assert_eq("a\"b\n", "ab") end))
+  print(failure(fn() test.assert_eq({a: [1, 2.0]}, {a: [1, 2]}) end))
+  print(failure(fn() test.assert_eq({a: 1}, {a: 1, "b c": 2}) end))
+  print(failure(fn() test.assert_eq({a: 1, z: 0}, {a: 1}) end))
+  print(failure(fn() test.assert_eq([1, [2]], [1, [3]]) end))
+  print(failure(fn() test.assert_eq({1: "x"}, {1: "y"}) end))
+  print(failure(fn() test.assert_eq(nil, {}) end))
+  print(failure(fn() test.assert_eq(fn() 1 end, fn() 1 end) end))
+  print(failure(fn() test.assert_neq({a: [1]}, {a: [1]}) end))
+  print(failure(fn() test.assert(false) end))
+  print(failure(fn() test.assert(1 > 2, "math") end))
+  print(failure(fn() test.assert_throws(fn() 1 end) end))
+  print(test.assert_throws(fn() error("boom") end))
+end)
+
+test.case("cases registered in another process stay there", fn()
+  let pid = spawn_monitor(fn()
+    test.case("registered in a child", fn() nil end)
+  end).pid
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    test.assert_eq(reason, "normal")
+  after 2000
+    error("child did not exit")
+  end
+end)
+
+test.case("intentional failure", fn()
+  test.assert_eq({a: [1, 2]}, {a: [1, 3]})
+end)
+
+test.run()
+print("not reached")

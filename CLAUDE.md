@@ -31,7 +31,7 @@ runtime/              # C runtime — split by category:
   gem_threadpool.c    #   worker thread pool for blocking I/O (4 workers)
   gem_builtins_core.c #   print, error, len, type, conversions, pcall, argv, etc.
   gem_builtins_collection.c  # push, pop, keys, values, sort, insert, delete
-  gem_builtins_string.c      # str_replace, substr, chr/ord, buf_* API
+  gem_builtins_string.c      # str_replace, substr, chr/ord, buf_* API; gem_bytes_span (std/http's extern helper)
   gem_builtins_math.c        # math ops, random, bitwise operations
   gem_builtins_io.c          # file I/O, filesystem ops, exec
   gem_builtins_tcp.c         # TCP socket operations (non-blocking)
@@ -68,7 +68,7 @@ make test-lsp          # smoke-test the `gem lsp` subcommand (canned initialize/
 make clean             # remove build/ and /tmp/gem_*
 ```
 
-After changing compiler sources, run `make bootstrap` to update `stage0.c`. The bootstrap target verifies the new stage0 can compile itself (fixed-point check) before replacing it. If codegen output changes, the built-in roundtrip will fail on the first pass — do a manual 3-stage bootstrap (see `RESUME_PROMPT.md` for the exact commands).
+After changing compiler sources, or a std module the compiler or LSP loads (`std/string`, `std/json`), run `make bootstrap` to update `stage0.c`. The bootstrap target verifies the new stage0 can compile itself (fixed-point check) before replacing it. If codegen output changes, the built-in roundtrip will fail on the first pass — do a manual 3-stage bootstrap (see `RESUME_PROMPT.md` for the exact commands).
 
 ## Commits and Pull Requests
 

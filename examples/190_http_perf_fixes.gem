@@ -1,0 +1,231 @@
+# std/http round-3 fixes: request heads parsed in one pass (header names,
+# values, repeated headers joined once), bodies read without extra copies
+# (pipelined requests after a body), static prefixes on a segment
+# boundary, set_cookie's expires check, start/serve/stop argument errors;
+# std/request header-name and nil-value checks and Content-Length: 0 for
+# an empty POST/PUT/PATCH.
+
+load "std/http"
+load "std/request"
+load "std/string"
+
+let PORT = 18190
+
+let app = http.router()
+app.get("/headers") do |req|
+  let names = keys(req.headers)
+  sort(names)
+  let parts = []
+  for n in names
+    push(parts, "{n}=[{req.headers[n]}]")
+  end
+  http.ok(string.join(parts, " "))
+end
+app.get("/count") do |req|
+  http.ok("{len(req.headers.a)}")
+end
+app.post("/echo") do |req|
+  http.ok("{len(req.body)}:{substr(req.body, 0, 5)}")
+end
+app.get("/users/:id/posts/:post") do |req|
+  http.ok("user {req.params.id} post {req.params.post}")
+end
+app.get("/users/me") do |req|
+  http.ok("me")
+end
+app.get("/q") do |req|
+  http.ok("{req.path} {req.query.a}")
+end
+app.get("/expires") do |req|
+  http.set_cookie(http.ok("x"), "n", "v", {expires: "tomorrow"})
+end
+app.get("/json_fn") do |req|
+  http.json_response({f: fn() 1 end})
+end
+app.static("/static", "examples/support/static190")
+
+# Sends `pieces` (each written separately) and reads until the server
+# closes; CRLF shown as " | ".
+fn exchange(pieces, wait_ms = 2000)
+  let fd = tcp_connect("127.0.0.1", PORT)
+  for piece in pieces
+    tcp_write(fd, piece)
+  end
+  let acc = buf_new()
+  let chunk = tcp_read(fd, 8192, wait_ms)
+  while chunk != nil and chunk != ""
+    buf_push(acc, chunk)
+    chunk = tcp_read(fd, 8192, wait_ms)
+  end
+  tcp_close(fd)
+  str_replace(to_string(acc), "\r\n", " | ")
+end
+
+# The status line and body of each response in `raw` (as exchange shows it).
+fn summary(raw)
+  let out = []
+  for part in string.split(raw, "HTTP/1.1 ")
+    if part != ""
+      let pieces = string.split(part, " |  | ")
+      push(out, "{substr(pieces[0], 0, 3)} {pieces[len(pieces) - 1]}")
+    end
+  end
+  string.join(out, " / ")
+end
+
+fn get(path, extra = "")
+  summary(exchange(["GET {path} HTTP/1.1\r\nHost: t\r\n{extra}Connection: close\r\n\r\n"]))
+end
+
+fn try(label, f)
+  let r = pcall f()
+  if r.ok
+    print("{label}: ok {r.value}")
+  else
+    print("{label}: error {r.error}")
+  end
+end
+
+fn head_tests()
+  print("-- heads")
+  print(get("/headers", "X-UPPER: h\r\nX-Mixed-Case:   padded value \t\r\nx-lower:v\r\nX-Empty:\r\n"))
+  print(get("/headers", "A: 1\r\na: 2\r\nA:3\r\nCookie: x=1\r\ncookie: y=2\r\n"))
+  # 10000 repeats of one header: joined once (linear), not per repeat.
+  let t = time_ms()
+  print(get("/count", string.repeat("a: b\r\n", 10000)))
+  print("repeats fast: {time_ms() - t < 1500}")
+  # Repeats over the head limit get a 431.
+  print(get("/count", string.repeat("a: bbbbbbbb\r\n", 6000)))
+  print(get("/headers", "Bad Name: x\r\n"))
+  print(get("/headers", ": x\r\n"))
+  print(get("/headers", "NoColon\r\n"))
+  print(get("/headers", "X: a\rb\r\n"))
+  print(get("/headers", "X: a\001b\r\n"))
+  print(summary(exchange(["GET /headers HTTP/2.0\r\nConnection: close\r\n\r\n"])))
+  print(summary(exchange(["GET /headers HTTP/2.0\r\nX: a\001\r\nConnection: close\r\n\r\n"])))
+  print(summary(exchange(["GET /headers HTTP/1.1\001\r\nConnection: close\r\n\r\n"])))
+  print(get("/q?a=1#frag"))
+  print(get("/q#x?a=2"))
+  print(get("/users/7/posts/x%20y"))
+  print(get("/users/me"))
+  print(get("/users/me/"))
+end
+
+fn body_tests()
+  print("-- bodies")
+  let big = string.repeat("z", 300000)
+  # Two requests with bodies and a third without, pipelined in one write.
+  let pipelined = "POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 300000\r\n\r\n{big}POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 3\r\n\r\nabcGET /users/me HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"
+  print(summary(exchange([pipelined])))
+  # The same, the body arriving in pieces.
+  print(summary(exchange(["POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 10\r\nConnection: close\r\n\r\nhel", "lo", "world"])))
+  # A chunked body of many chunks, then a pipelined request.
+  let chunks = build_string() do |add|
+    for i = 0, 200
+      add("5\r\nabcde\r\n")
+    end
+  end
+  print(summary(exchange(["POST /echo HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\n\r\n{chunks}0\r\n\r\nGET /users/me HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"])))
+end
+
+fn static_tests()
+  print("-- static")
+  print(get("/static"))
+  print(get("/static/"))
+  print(get("/static/a.txt"))
+  print(get("/staticx"))
+  print(get("/static.txt"))
+  print(get("/static/../../190_http_perf_fixes.gem"))
+end
+
+fn cookie_tests()
+  print("-- cookies")
+  try("expires string", fn() http.set_cookie(http.ok("x"), "n", "v", {expires: "tomorrow"}) end)
+  try("expires float", fn() http.set_cookie(http.ok("x"), "n", "v", {expires: 1.5}) end)
+  let r = http.set_cookie(http.ok("x"), "n", "v", {expires: 0})
+  print(r.headers["Set-Cookie"])
+  print(get("/expires"))
+  # The trace leaves out std/json's frames as well as std/http's.
+  print(get("/json_fn"))
+end
+
+fn start_stop_tests()
+  print("-- start / stop")
+  try("start nil", fn() http.start(nil, {port: PORT + 1, host: "127.0.0.1"}) end)
+  try("start string", fn() http.start("app", {port: PORT + 1, host: "127.0.0.1"}) end)
+  try("start table", fn() http.start({}, {port: PORT + 1, host: "127.0.0.1"}) end)
+  try("serve nil", fn() http.serve(nil, {port: PORT + 1, host: "127.0.0.1"}) end)
+  try("serve bad opt", fn() http.serve(app, {port: PORT + 1, host: "127.0.0.1", max_body: -1}) end)
+  try("port in use", fn() http.start(app, {port: PORT, host: "127.0.0.1"}) end)
+  try("bad host", fn() http.start(app, {port: PORT + 1, host: "nowhere"}) end)
+  try("stop timeout", fn() http.stop(12345, "soon") end)
+  try("stop nil timeout", fn() http.stop(12345, nil) end)
+end
+
+# A one-shot server for std/request: answers one request with 200 and
+# sends the request head it got to `parent`.
+fn capture_once(listen_fd, parent)
+  let fd = tcp_accept(listen_fd)
+  let acc = ""
+  while string.index_of(acc, "\r\n\r\n") < 0
+    let chunk = tcp_read(fd, 8192, 2000)
+    if chunk == nil or chunk == ""
+      break
+    end
+    acc = "{acc}{chunk}"
+  end
+  tcp_write(fd, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+  tcp_close(fd)
+  send(parent, {tag: "head", text: acc})
+end
+
+# The request std/request sends for `f(url)`, CRLF shown as "|".
+fn sent_request(port, f)
+  let listen_fd = tcp_listen("127.0.0.1", port)
+  let me = self()
+  spawn(fn()
+    capture_once(listen_fd, me)
+  end)
+  let r = pcall f("http://127.0.0.1:{port}/p")
+  let text = "(none)"
+  receive
+  when {tag: "head", text: t}
+    text = t
+  after 2000
+    nil
+  end
+  tcp_close(listen_fd)
+  if not r.ok
+    return "error {r.error}"
+  end
+  str_replace(text, "\r\n", "|")
+end
+
+fn request_tests()
+  print("-- request")
+  let port = PORT + 2
+  print(sent_request(port, fn(u) request.post(u) end))
+  print(sent_request(port + 1, fn(u) request.put(u, {body: ""}) end))
+  print(sent_request(port + 2, fn(u) request.patch(u, {body: nil}) end))
+  print(sent_request(port + 3, fn(u) request.post(u, {body: "", headers: {"content-length": "0"}}) end))
+  print(sent_request(port + 4, fn(u) request.get(u) end))
+  print(sent_request(port + 5, fn(u) request.delete(u) end))
+  print(sent_request(port + 6, fn(u) request.post(u, {body: "abc"}) end))
+  try("name with space", fn() request.get("http://127.0.0.1:1/", {headers: {"X A": "v"}}) end)
+  try("name with colon", fn() request.get("http://127.0.0.1:1/", {headers: {"X-A:b": "v"}}) end)
+  try("empty name", fn() request.get("http://127.0.0.1:1/", {headers: {"": "v"}}) end)
+  try("name with CRLF", fn() request.get("http://127.0.0.1:1/", {headers: {"X\r\nY": "v"}}) end)
+  try("int name", fn() request.get("http://127.0.0.1:1/", {headers: {5: "v"}}) end)
+  try("nil value", fn() request.post("http://127.0.0.1:1/", {headers: {"X-N": nil}}) end)
+end
+
+fn main()
+  let server = http.start(app, {port: PORT, host: "127.0.0.1"})
+  head_tests()
+  body_tests()
+  static_tests()
+  cookie_tests()
+  start_stop_tests()
+  http.stop(server)
+  request_tests()
+end

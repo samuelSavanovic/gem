@@ -1,0 +1,161 @@
+# std/gen_server: targets (handle, pid, name), monitored calls, private
+# tags, callback result checks, and monitor-list pruning in the runtime.
+load "std/gen_server"
+
+let COUNTER = {
+  init: fn() {state: 0} end,
+  handle_call: fn(msg, from, n)
+    match msg
+    when "get"
+      {reply: n, state: n}
+    when "nil_reply"
+      {reply: nil, state: n}
+    when "defer"
+      gen_server.reply(from, "deferred {n}")
+      {noreply: n}
+    when "die"
+      kill(self(), "told to die")
+      {reply: nil, state: n}
+    when "never"
+      {noreply: n}
+    else
+      {reply: "unknown", state: n}
+    end
+  end,
+  handle_cast: fn(msg, n)
+    match msg
+    when "incr"
+      {state: n + 1}
+    else
+      {state: n}
+    end
+  end,
+  handle_info: fn(msg, n) {state: n} end
+}
+
+fn error_of(r)
+  if r.ok
+    return "ok: {r.value}"
+  end
+  r.error
+end
+
+# Waits for the DOWN of `pid` (or 500 ms) and returns its reason.
+fn down_reason(pid)
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    reason
+  after 500
+    "no DOWN"
+  end
+end
+
+# Number of DOWN messages for `pid` already in the mailbox (removes them).
+fn count_downs(pid, n = 0)
+  receive
+  when {tag: "DOWN", pid: ^pid}
+    count_downs(pid, n + 1)
+  after 0
+    n
+  end
+end
+
+# ─── 1. a {pid} handle, a bare pid and a registered name all work ───
+let h = gen_server.start(COUNTER)
+gen_server.cast(h, "incr")
+gen_server.cast(h.pid, "incr")
+register("counter", h.pid)
+gen_server.cast("counter", "incr")
+print("1: handle={gen_server.call(h, "get")} pid={gen_server.call(h.pid, "get")} name={gen_server.call("counter", "get")}")
+print("1: nil reply={gen_server.call(h, "nil_reply")} deferred={gen_server.call(h, "defer")}")
+
+# ─── 2. bad targets fail with a prefixed error ───
+print("2: {error_of(pcall gen_server.call("nobody", "get"))}")
+print("2: {error_of(pcall gen_server.cast("nobody", "incr"))}")
+print("2: {error_of(pcall gen_server.call(nil, "get"))}")
+print("2: {error_of(pcall gen_server.cast({name: "x"}, "incr"))}")
+print("2: {error_of(pcall gen_server.call(2.5, "get"))}")
+
+# ─── 3. timeout is a default param ───
+print("3: {error_of(pcall gen_server.call(h, "never", 20))}")
+
+# ─── 4. a dead server fails the call at once ───
+let dead = gen_server.start(COUNTER)
+kill(dead.pid, "shutdown")
+let t0 = time_ms()
+print("4: {error_of(pcall gen_server.call(dead, "get"))} fast={time_ms() - t0 < 1000}")
+print("4: downs left={count_downs(dead.pid)}")
+
+# Dies while handling the call: the call fails at once, and leaves no DOWN
+# behind (the call's monitor was its own).
+let dying = gen_server.start(COUNTER)
+let t1 = time_ms()
+print("4: {error_of(pcall gen_server.call(dying, "die"))} fast={time_ms() - t1 < 1000}")
+print("4: downs left={count_downs(dying.pid)}")
+
+# ─── 5. the caller's own monitor still gets its one DOWN ───
+let watched = gen_server.start(COUNTER)
+monitor(watched.pid)
+print("5: get={gen_server.call(watched, "get")}")
+kill(watched.pid, "stop")
+print("5: own monitor reason={down_reason(watched.pid)} extra={count_downs(watched.pid)}")
+
+# ─── 6. bad callback results kill the server with a clear error ───
+fn bad_server(handle_call, handle_cast, handle_info)
+  gen_server.start({
+    init: fn() {state: 0} end,
+    handle_call: handle_call,
+    handle_cast: handle_cast,
+    handle_info: handle_info
+  })
+end
+
+let ok_call = fn(msg, from, s) {reply: s, state: s} end
+let ok_cast = fn(msg, s) {state: s} end
+
+let b1 = bad_server(fn(msg, from, s)
+  match msg
+  when "known"
+    {reply: 1, state: s}
+  end
+end, ok_cast, ok_cast)
+print("6: {error_of(pcall gen_server.call(b1, "unknown"))}")
+
+let b2 = bad_server(fn(msg, from, s) {value: 1} end, ok_cast, ok_cast)
+print("6: {error_of(pcall gen_server.call(b2, "x"))}")
+
+let b3 = bad_server(fn(msg, from, s) {reply: 1} end, ok_cast, ok_cast)
+print("6: {error_of(pcall gen_server.call(b3, "x"))}")
+
+let b4 = bad_server(ok_call, fn(msg, s) nil end, ok_cast)
+monitor(b4.pid)
+gen_server.cast(b4, "x")
+print("6: cast nil -> {down_reason(b4.pid)}")
+
+let b5 = bad_server(ok_call, ok_cast, fn(msg, s) 5 end)
+monitor(b5.pid)
+send(b5.pid, "raw")
+print("6: info int -> {down_reason(b5.pid)}")
+
+# ─── 7. old tags are not special any more ───
+let echo = gen_server.start({
+  init: fn() {state: []} end,
+  handle_call: fn(msg, from, seen) {reply: seen, state: seen} end,
+  handle_cast: fn(msg, seen) {state: seen} end,
+  handle_info: fn(msg, seen)
+    push(seen, msg.tag)
+    {state: seen}
+  end
+})
+send(echo.pid, {tag: "call", msg: 1})
+send(echo.pid, {tag: "cast", msg: 2})
+send(echo.pid, {tag: "gs_reply", msg: 3})
+print("7: info saw {gen_server.call(echo, "seen")}")
+
+# ─── 8. many short-lived callers don't grow the server's monitor list ───
+for i = 0, 300
+  let r = spawn_monitor(fn() gen_server.call(h, "get") end)
+  down_reason(r.pid)
+end
+monitor(h.pid)
+print("8: monitors after 300 callers={len(process_info(h.pid).monitors)}")

@@ -10,7 +10,7 @@ load "std/gen_server"
 # reproduce.
 
 let mod = {
-  init: fn() {count: 0} end,
+  init: fn() {state: {count: 0}} end,
   handle_call: fn(msg, from, state) {reply: state.count, state: state} end,
   handle_cast: fn(msg, state)
     let new_count = state.count + 1

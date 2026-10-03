@@ -1,75 +1,300 @@
 # std/test — minimal test harness for self-validating example programs.
 #
-# Register cases with test.case(name, fn). Use assert_* helpers inside;
+# Register cases with test.case(name, fn). Use the assert helpers inside;
 # they raise via error() on failure. test.run() executes each registered
 # case under pcall, prints a one-line PASS/FAIL per case, prints a
-# summary, and exits non-zero if any case failed.
+# summary, and exits with status 1 if any case failed.
+#
+# Cases live in a module-level variable, which is per process: test.run()
+# runs only the cases registered by the process that calls it. Register
+# cases at the top level (or from main) and call test.run() there.
 
-let _cases = []
-let _count = 0
+let cases = []
 
 fn case(name, body)
-  _cases[_count] = {name: name, body: body}
-  _count += 1
+  push(cases, {name: name, body: body})
 end
 
-fn _format(v)
-  let t = type(v)
-  if t == "string"
-    return "\"" + v + "\""
+fn is_identifier(s)
+  if len(s) == 0
+    return false
   end
-  if t == "nil"
-    return "nil"
+  for i, ch in s
+    let c = ord(ch)
+    let letter = (c >= 97 and c <= 122) or (c >= 65 and c <= 90) or c == 95
+    if not letter and (i == 0 or c < 48 or c > 57)
+      return false
+    end
+  end
+  true
+end
+
+fn quote(s)
+  let q = str_replace(s, "\\", "\\\\")
+  q = str_replace(q, "\"", "\\\"")
+  q = str_replace(q, "\n", "\\n")
+  q = str_replace(q, "\r", "\\r")
+  q = str_replace(q, "\t", "\\t")
+  q = str_replace(q, "\0", "\\0")
+  "\"{q}\""
+end
+
+fn show(v)
+  if type(v) == "string"
+    return quote(v)
   end
   to_string(v)
 end
 
-fn assert(cond, msg)
-  if not cond
-    if msg == nil
-      error("assertion failed")
-    else
-      error("assertion failed: {msg}")
+# Shows a differing pair so the two sides never read the same: the types
+# are added when they differ (1 vs 1.0), and a pair that prints the same
+# (two different functions) says so.
+fn show_pair(expected, actual)
+  let e = show(expected)
+  let a = show(actual)
+  if type(expected) != type(actual)
+    return "expected {e} ({type(expected)}), got {a} ({type(actual)})"
+  end
+  if e == a
+    return "expected {e}, got a different {type(actual)} {a}"
+  end
+  "expected {e}, got {a}"
+end
+
+fn key_step(k)
+  if type(k) == "string" and is_identifier(k)
+    return ".{k}"
+  end
+  "[{show(k)}]"
+end
+
+# The identity of a table as an int (runtime/gem_core.c). Tables as table
+# keys are found by a linear scan, so the comparison memo below is keyed
+# by a string of two ids instead. An id is stable while the comparison
+# runs: the tables compared are all older than its loop, and a region
+# reset only moves what was allocated since the loop started.
+extern fn gem_table_id(t: Table) -> Int
+
+# The path to key `k` of node `n` (see diff), such as `.a[1]`. Built only
+# for a failure message.
+fn path_to(nodes, n, k)
+  let steps = [key_step(k)]
+  let i = n
+  while nodes.parent[i] >= 0
+    push(steps, key_step(nodes.key[i]))
+    i = nodes.parent[i]
+  end
+  build_string do |add|
+    let j = len(steps) - 1
+    while j >= 0
+      add(steps[j])
+      j -= 1
     end
   end
 end
 
-fn assert_eq(actual, expected)
-  if actual != expected
-    error("assert_eq: expected " + _format(expected) + ", got " + _format(actual))
+fn failure(nodes, kind, e, a, key, n)
+  if kind == "missing"
+    return "actual is missing key {path_to(nodes, n, key)}"
   end
+  if kind == "extra"
+    for k, v in a
+      if not has_key(e, k)
+        return "actual has extra key {path_to(nodes, n, k)}"
+      end
+    end
+  end
+  "at {path_to(nodes, n, key)}, {show_pair(e, a)}"
+end
+
+# Structural comparison. Returns nil when `actual` deeply equals
+# `expected`, else a description of the first difference. Non-tables
+# compare with `==` (so 1 and 1.0 differ); tables are equal when they have
+# the same keys with deeply equal values, in any insertion order.
+#
+# The walk is depth first over an explicit work stack, so nesting depth
+# doesn't touch the C stack. A pair of tables met again (a shared
+# subtable, or a cycle) counts as equal, since it is either being compared
+# further up or already proven equal: `seen` holds the pairs already
+# expanded, so each is expanded once and the cost is O(pairs x keys) for
+# any graph, cyclic or not. Expanding a pair pushes, in key order, its
+# subtable pairs and its first scalar difference, if any, as a failure
+# entry; a failure is reported when it reaches the top, after the
+# subtables before it, so the difference reported is the first one in key
+# order.
+#
+# The work stack is five parallel arrays rather than an array of records,
+# and the memo skips small flat pairs: the loop's per-iteration arena
+# reset copies whatever of them is live, and records made it several
+# times slower on a large array of small tables.
+fn diff(actual, expected)
+  if type(actual) != "table" or type(expected) != "table"
+    if actual == expected
+      return nil
+    end
+    return show_pair(expected, actual)
+  end
+  if actual == expected
+    return nil
+  end
+  let seen = {}
+  # One node per expanded pair that pushed work, for failure paths: the
+  # key the pair was reached by and the node it was reached from (-1 at
+  # the root).
+  let node_key = []
+  let node_parent = []
+  # Work entries: a pair of tables to compare (kind "") or a failure to
+  # report ("missing", "extra" or "value") for the pair of node `parent`.
+  let w_kind = [""]
+  let w_e = [expected]
+  let w_a = [actual]
+  let w_key = [""]
+  let w_parent = [-1]
+  while len(w_e) > 0
+    let kind = pop(w_kind)
+    let e = pop(w_e)
+    let a = pop(w_a)
+    let key = pop(w_key)
+    let parent = pop(w_parent)
+    if kind != ""
+      return failure({key: node_key, parent: node_parent}, kind, e, a, key, parent)
+    end
+    let id = "{gem_table_id(e)} {gem_table_id(a)}"
+    if not has_key(seen, id)
+      let n = len(node_key)
+      let base = len(w_e)
+      # An extra key is reported after everything else in the pair.
+      if len(a) != len(e)
+        push(w_kind, "extra")
+        push(w_e, e)
+        push(w_a, a)
+        push(w_key, "")
+        push(w_parent, n)
+      end
+      let first = len(w_e)
+      for k, ev in e
+        let av = a[k]
+        let missing = av == nil and not has_key(a, k)
+        let both = type(ev) == "table" and type(av) == "table"
+        if both and ev != av and small_flat_equal(ev, av)
+          continue
+        end
+        if missing or ev != av
+          if missing
+            push(w_kind, "missing")
+          elif both
+            push(w_kind, "")
+          else
+            push(w_kind, "value")
+          end
+          push(w_e, ev)
+          push(w_a, av)
+          push(w_key, k)
+          push(w_parent, n)
+          if not both
+            break
+          end
+        end
+      end
+      if len(w_e) > base
+        push(node_key, key)
+        push(node_parent, parent)
+      end
+      # Comparing a small flat pair again costs about as much as finding
+      # it in `seen`, so only pairs with subtables or more keys are kept.
+      if len(w_e) > first or len(e) > 8
+        seen[id] = true
+      end
+      # Reverse what was pushed, so the first key is on top.
+      let i = first
+      let j = len(w_e) - 1
+      while i < j
+        swap(w_kind, i, j)
+        swap(w_e, i, j)
+        swap(w_a, i, j)
+        swap(w_key, i, j)
+        swap(w_parent, i, j)
+        i += 1
+        j -= 1
+      end
+    end
+  end
+  nil
+end
+
+# True when `e` and `a` are small tables of the same keys with equal
+# values none of which is a table: diff settles such a pair (an array of
+# small records) where it meets it, without pushing it. Anything else,
+# including any difference, goes through the work stack, which finds the
+# difference again in order.
+fn small_flat_equal(e, a)
+  if len(e) > 8 or len(e) != len(a)
+    return false
+  end
+  for k, ev in e
+    let av = a[k]
+    if type(ev) == "table" or ev != av or (av == nil and not has_key(a, k))
+      return false
+    end
+  end
+  true
+end
+
+fn swap(arr, i, j)
+  let t = arr[i]
+  arr[i] = arr[j]
+  arr[j] = t
+end
+
+fn assert(cond, msg = nil)
+  if not cond
+    if msg == nil
+      error("test.assert: assertion failed")
+    end
+    error("test.assert: assertion failed: {msg}")
+  end
+end
+
+fn assert_eq(actual, expected)
+  let d = diff(actual, expected)
+  if d == nil
+    return nil
+  end
+  if type(actual) == "table" and type(expected) == "table"
+    error("test.assert_eq: expected {show(expected)}, got {show(actual)}: {d}")
+  end
+  error("test.assert_eq: {d}")
 end
 
 fn assert_neq(actual, expected)
-  if actual == expected
-    error("assert_neq: both values are " + _format(actual))
+  if diff(actual, expected) == nil
+    error("test.assert_neq: both values are {show(actual)}")
   end
 end
 
+# Returns the error message, so a case can check it.
 fn assert_throws(body)
-  let r = pcall(body)
+  let r = pcall body()
   if r.ok
-    error("assert_throws: expected error, but call returned normally")
+    error("test.assert_throws: expected an error, but the call returned normally")
   end
+  r.error
 end
 
 fn run()
   let passed = 0
   let failed = 0
-  let i = 0
-  while i < _count
-    let c = _cases[i]
-    let r = pcall(c.body)
+  for c in cases
+    let r = pcall c.body()
     if r.ok
-      print("PASS " + c.name)
+      print("PASS {c.name}")
       passed += 1
     else
-      print("FAIL " + c.name + ": " + r.error)
+      print("FAIL {c.name}: {r.error}")
       failed += 1
     end
-    i += 1
   end
-  print(to_string(passed) + " passed / " + to_string(failed) + " failed")
+  print("{passed} passed / {failed} failed")
   if failed > 0
     exit(1)
   end

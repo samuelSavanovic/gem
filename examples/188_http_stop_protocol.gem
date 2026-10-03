@@ -1,0 +1,239 @@
+# std/http: http.stop against a handler that traps exits, a server whose
+# serve caller is killed, control bytes and bare CR/LF in request heads,
+# protocol corners (empty lines before a request, HTTP versions,
+# Transfer-Encoding on HTTP/1.0, chunk sizes with leading zeros,
+# absolute-form targets), response checks (1xx statuses, header names
+# that aren't tokens), cookie checks, and std/request refusing a
+# Transfer-Encoding header.
+
+load "std/http"
+load "std/request"
+load "std/string"
+
+let PORT = 18188
+
+let app = http.router()
+app.get("/x") do |req|
+  http.ok("x path={req.path} a={req.query.a}")
+end
+app.get("/h") do |req|
+  http.ok("v=[{req.headers["x-v"]}]")
+end
+app.post("/echo") do |req|
+  http.ok("{len(req.body)}:{req.body}")
+end
+app.get("/trap") do |req|
+  process_flag("trap_exit", true)
+  http.ok("trapping")
+end
+app.get("/trap_slow") do |req|
+  process_flag("trap_exit", true)
+  sleep(150)
+  http.ok("finished")
+end
+app.get("/status/:n") do |req|
+  http.response(to_int(req.params.n), {}, "s")
+end
+app.get("/name/:which") do |req|
+  let names = {space: "X Y", trailing: "Transfer-Encoding ", colon: "X:Y", empty: "", symbols: "X-A!#$%&'*+.^_`|~1"}
+  let headers = {}
+  headers[names[req.params.which]] = "v"
+  http.response(200, headers, "named")
+end
+
+# Sends `pieces` (each written separately), reads until the server closes
+# (or `wait_ms` passes without data), and returns what came back with CRLF
+# shown as " | ".
+fn exchange(port, pieces, wait_ms = 2000)
+  let fd = tcp_connect("127.0.0.1", port)
+  for piece in pieces
+    tcp_write(fd, piece)
+    sleep(5)
+  end
+  let acc = buf_new()
+  let chunk = tcp_read(fd, 8192, wait_ms)
+  while chunk != nil and chunk != ""
+    buf_push(acc, chunk)
+    chunk = tcp_read(fd, 8192, wait_ms)
+  end
+  tcp_close(fd)
+  let out = str_replace(to_string(acc), "\r\n", " | ")
+  if chunk == nil
+    out = "{out} <no close>"
+  end
+  out
+end
+
+# The status line of the answer to `raw`. It closes after the first
+# read, so the server's drain after an error response ends at once.
+fn status_of(raw)
+  let fd = tcp_connect("127.0.0.1", PORT)
+  tcp_write(fd, raw)
+  let got = tcp_read(fd, 8192, 2000)
+  tcp_close(fd)
+  if got == nil
+    return "<nothing>"
+  end
+  let eol = string.index_of(got, "\r\n")
+  if eol < 0
+    return "[{got}]"
+  end
+  substr(got, 0, eol)
+end
+
+fn show(label, raw)
+  print("{label}: {status_of(raw)}")
+end
+
+fn run_heads()
+  print("-- control bytes in the request head")
+  show("ok", "GET /x HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n")
+  show("bare LF in a header", "GET /x HTTP/1.1\r\nHost: t\r\nX-A: a\nContent-Length: 3\r\nConnection: close\r\n\r\n")
+  show("bare CR in a header", "GET /x HTTP/1.1\r\nHost: t\r\nX-A: a\rContent-Length: 3\r\nConnection: close\r\n\r\n")
+  show("bare LF in the request line", "GET /x\n HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n")
+  show("NUL in a value", "GET /x HTTP/1.1\r\nHost: t\r\nX-A: a\0b\r\nConnection: close\r\n\r\n")
+  show("ESC in a value", "GET /x HTTP/1.1\r\nHost: t\r\nX-A: a{chr(27)}b\r\nConnection: close\r\n\r\n")
+  show("DEL in a value", "GET /x HTTP/1.1\r\nHost: t\r\nX-A: a{chr(127)}b\r\nConnection: close\r\n\r\n")
+  show("control byte in the target", "GET /x{chr(1)} HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n")
+  # HTAB and obs-text are allowed in a value.
+  let got = exchange(PORT, ["GET /h HTTP/1.1\r\nHost: t\r\nX-V: a\tb{chr(200)}\r\nConnection: close\r\n\r\n"])
+  print("HTAB and obs-text: {string.ends_with(got, "v=[a\tb{chr(200)}]")}")
+  # A bare LF can't smuggle a second request past Content-Length.
+  print(exchange(PORT, ["POST /echo HTTP/1.1\r\nHost: t\r\nX: a\nContent-Length: 23\r\n\r\nGET /x?a=smuggled HTTP/1.1\r\n\r\n"]))
+end
+
+fn run_protocol()
+  print("-- protocol corners")
+  # Empty lines before a request line are ignored, also after a body.
+  print(exchange(PORT, ["\r\n\r\nGET /x?a=1 HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"]))
+  print(exchange(PORT, ["POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 2\r\n\r\nab\r\nGET /x?a=2 HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"]))
+  print(exchange(PORT, ["\r\n", "\r\n", "GET /x?a=3 HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"]))
+  show("HTTP/1.9", "GET /x HTTP/1.9\r\nConnection: close\r\n\r\n")
+  show("HTTP/2.0", "GET /x HTTP/2.0\r\nConnection: close\r\n\r\n")
+  show("HTTP/1.x", "GET /x HTTP/1.x\r\nConnection: close\r\n\r\n")
+  show("FTTP/1.1", "GET /x FTTP/1.1\r\nConnection: close\r\n\r\n")
+  show("TE on HTTP/1.0", "POST /echo HTTP/1.0\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n\r\n")
+  print(exchange(PORT, ["POST /echo HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n0000000000000003\r\nabc\r\n000\r\n\r\n"]))
+  show("65-digit chunk size", "POST /echo HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n{string.repeat("0", 64)}3\r\nabc\r\n0\r\n\r\n")
+  show("16 significant hex digits", "POST /echo HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n1000000000000003\r\nabc\r\n0\r\n\r\n")
+  show("bare CR in a chunk extension", "POST /echo HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n3;a\rX\r\nabc\r\n0\r\n\r\n")
+  show("control byte in a trailer", "POST /echo HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n3\r\nabc\r\n0\r\nX-T: a{chr(1)}\r\n\r\n")
+  # Absolute-form targets route by their path.
+  print(exchange(PORT, ["GET http://example.com/x?a=abs HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"]))
+  print(exchange(PORT, ["GET HTTPS://example.com:8443/x HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"]))
+  show("absolute form without a path", "GET http://example.com HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n")
+end
+
+fn run_responses()
+  print("-- response checks")
+  for n in ["100", "101", "199", "200", "999"]
+    show("status {n}", "GET /status/{n} HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n")
+  end
+  for which in ["space", "trailing", "colon", "empty", "symbols"]
+    show("header name {which}", "GET /name/{which} HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n")
+  end
+end
+
+fn cookie_error(f)
+  let r = pcall f()
+  if r.ok
+    return "ok: {r.value.headers["Set-Cookie"]}"
+  end
+  r.error
+end
+
+fn run_cookies()
+  print("-- cookies")
+  let resp = http.ok("c")
+  print(cookie_error(fn() http.set_cookie(resp, "sid", "a1-b2_c.3~%20") end))
+  print(cookie_error(fn() http.set_cookie(resp, "sid", "x; Domain=evil.com") end))
+  print(cookie_error(fn() http.set_cookie(resp, "sid", "a,b") end))
+  print(cookie_error(fn() http.set_cookie(resp, "sid", "a\tb") end))
+  print(cookie_error(fn() http.set_cookie(resp, "sid", "a\r\nX-Evil: 1") end))
+  print(cookie_error(fn() http.set_cookie(resp, "s id", "v") end))
+  print(cookie_error(fn() http.set_cookie(resp, "a=b", "v") end))
+  print(cookie_error(fn() http.set_cookie(resp, "", "v") end))
+  print(cookie_error(fn() http.set_cookie(resp, "sid", "v", {path: "/; Domain=evil.com"}) end))
+  print(cookie_error(fn() http.set_cookie(resp, "sid", "v", {same_site: "Lax; Secure"}) end))
+  print(cookie_error(fn() http.set_cookie(resp, "sid", "v", {max_age: "0; Domain=x"}) end))
+  print(cookie_error(fn() http.delete_cookie(resp, "sid", {path: "/a b"}) end))
+  print(cookie_error(fn() http.delete_cookie(resp, "sid") end))
+end
+
+fn run_request()
+  print("-- std/request")
+  let r = pcall request.post("http://127.0.0.1:{PORT}/echo", {body: "abc", headers: {"transfer-Encoding": "chunked"}})
+  print(r.error)
+  print(request.post("http://127.0.0.1:{PORT}/echo", {body: "abc"}).body)
+end
+
+fn run_trap()
+  print("-- a handler that traps exits")
+  let port = PORT + 1
+  let server = http.start(app, {port: port, host: "127.0.0.1"})
+  # It turned trap_exit on in an earlier request: stop still closes the
+  # kept-alive connection.
+  let fd = tcp_connect("127.0.0.1", port)
+  tcp_write(fd, "GET /trap HTTP/1.1\r\nHost: t\r\n\r\n")
+  print(string.contains(tcp_read(fd, 8192, 1000), "trapping"))
+  http.stop(server)
+  print("kept-alive after stop: {tcp_read(fd, 8192, 1000) == ""}")
+  tcp_close(fd)
+  # Stopped while it traps: it finishes its request, answers with
+  # Connection: close, and closes.
+  server = http.start(app, {port: port, host: "127.0.0.1"})
+  fd = tcp_connect("127.0.0.1", port)
+  tcp_write(fd, "GET /trap_slow HTTP/1.1\r\nHost: t\r\n\r\n")
+  sleep(50)
+  http.stop(server)
+  let acc = buf_new()
+  let chunk = tcp_read(fd, 8192, 1000)
+  while chunk != nil and chunk != ""
+    buf_push(acc, chunk)
+    chunk = tcp_read(fd, 8192, 1000)
+  end
+  print("{str_replace(to_string(acc), "\r\n", " | ")} closed: {chunk == ""}")
+  tcp_close(fd)
+  let again = pcall http.start(app, {port: port, host: "127.0.0.1"})
+  print("rebind: {again.ok}")
+  http.stop(again.value)
+end
+
+fn run_serve_killed()
+  print("-- the caller of serve is killed")
+  let port = PORT + 2
+  let caller = spawn(fn()
+    http.serve(app, {port: port, host: "127.0.0.1"})
+  end)
+  sleep(50)
+  print(exchange(port, ["GET /x?a=served HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"]))
+  kill(caller, "shutdown")
+  sleep(50)
+  let c = pcall tcp_connect("127.0.0.1", port)
+  print("connect after the kill: {c.ok}")
+  let again = pcall http.start(app, {port: port, host: "127.0.0.1"})
+  print("rebind: {again.ok}")
+  http.stop(again.value)
+end
+
+# A `+` in a path segment is a literal plus, not a space.
+fn run_route_plus()
+  let app = http.router()
+  app.get("/tags/:name", fn(req) http.ok("[{req.params.name}]") end)
+  let server = http.start(app, {port: PORT + 9, host: "127.0.0.1"})
+  print("route param +:", request.get("http://127.0.0.1:{PORT + 9}/tags/c++%2B").body)
+  http.stop(server)
+end
+
+fn main()
+  let server = http.start(app, {port: PORT, host: "127.0.0.1"})
+  run_heads()
+  run_protocol()
+  run_responses()
+  run_cookies()
+  run_request()
+  http.stop(server)
+  run_trap()
+  run_serve_killed()
+  run_route_plus()
+end

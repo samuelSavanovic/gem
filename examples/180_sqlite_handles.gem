@@ -1,0 +1,79 @@
+# sqlite handles: a bad, closed or non-int handle raises a pcall-catchable
+# "<builtin>: ..." error instead of crashing; a handle works from any process
+# until it is closed.
+load "std/sqlite"
+
+fn show(r)
+  print(r.error)
+end
+
+# A made-up handle.
+show(pcall sqlite_query(12345, "select 1", []))
+show(pcall sqlite_exec(0, "select 1"))
+show(pcall sqlite_last_insert_id(-1))
+show(pcall sqlite_changes(99))
+show(pcall sqlite_close(12345))
+
+# Not an int.
+show(pcall sqlite_query("db", "select 1"))
+show(pcall sqlite_close(nil))
+show(pcall sqlite_changes({}))
+show(pcall sqlite_exec(1.5, "select 1"))
+
+# A real handle is a plain int.
+let db = sqlite.open(":memory:")
+print(type(db))
+sqlite.exec(db, "create table t (x integer)")
+sqlite.query(db, "insert into t (x) values (?)", [7])
+print(sqlite.last_id(db))
+print(sqlite.changes(db))
+
+# Used from another process, then from main again.
+let me = self()
+spawn(fn()
+  sqlite.query(db, "insert into t (x) values (?)", [8])
+  let rows = sqlite.query(db, "select x from t order by x")
+  send(me, {tag: "rows", n: len(rows), last: rows[1].x})
+end)
+receive
+when {tag: "rows", n: n, last: last}
+  print("child saw {n} rows, last {last}")
+end
+print(len(sqlite.query(db, "select x from t")))
+
+# Closed handle: every builtin raises, a second close included.
+let db2 = sqlite.open(":memory:")
+print(sqlite.close(db))
+show(pcall sqlite_query(db, "select 1"))
+show(pcall sqlite_exec(db, "select 1"))
+show(pcall sqlite_last_insert_id(db))
+show(pcall sqlite_changes(db))
+show(pcall sqlite_close(db))
+show(pcall sqlite.close(db))
+
+# Another open connection is unaffected, and ids are not reused.
+let db3 = sqlite.open(":memory:")
+print(db3 != db)
+print(sqlite.query(db2, "select 41 + 1 as v")[0].v)
+
+# A child closes a handle; the parent then sees it closed.
+spawn(fn()
+  sqlite.close(db2)
+  send(me, "closed")
+end)
+receive
+when "closed"
+  print("child closed db2")
+end
+show(pcall sqlite_query(db2, "select 1"))
+
+# Two processes close the same handle at once: exactly one close succeeds.
+spawn(fn()
+  let r = pcall sqlite_close(db3)
+  send(me, {child_close: r.ok})
+end)
+let mine = pcall sqlite_close(db3)
+receive
+when {child_close: ok}
+  print("one close succeeded: {mine.ok != ok}")
+end

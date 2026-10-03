@@ -1,40 +1,54 @@
-# std/log — structured logging to stderr
+# log — leveled log lines on stderr.
+#
+#   log.set_level("debug")            # default "info"
+#   log.info("listening on {port}")   # 2026-04-28T14:30:00Z [INFO] listening on 8080
+#   log.error("db: {r.error}")
+#
+# The level is module state, so it is per process: set it in main before
+# spawning (before `http.start`), or in the process that logs.
 
 load "std/time"
 
-let _level = 1
+let LEVELS = {debug: 0, info: 1, warn: 2, error: 3}
 
-let _levels = {debug: 0, info: 1, warn: 2, error: 3}
-let _labels = {debug: "DEBUG", info: "INFO", warn: "WARN", error: "ERROR"}
+let min_level = 1
 
-fn set_level(level)
-  let n = _levels[level]
-  if n != nil
-    _level = n
-  end
+# log.error, defined at the bottom, hides the `error` builtin in this whole
+# file; top-level code above that `let` still reaches it.
+let raise = error
+
+fn emit(label, msg)
+  eprint("{time.iso8601()} [{label}] {msg}")
 end
 
-fn _log(level, msg)
-  if _levels[level] >= _level
-    let ts = time.iso8601()
-    eprint("{ts} [{_labels[level]}] {msg}")
+fn set_level(level)
+  if not has_key(LEVELS, level)
+    raise("log.set_level: unknown level {level}; use \"debug\", \"info\", \"warn\" or \"error\"")
   end
+  min_level = LEVELS[level]
 end
 
 fn debug(msg)
-  _log("debug", msg)
+  if min_level <= 0
+    emit("DEBUG", msg)
+  end
 end
 
 fn info(msg)
-  _log("info", msg)
+  if min_level <= 1
+    emit("INFO", msg)
+  end
 end
 
 fn warn(msg)
-  _log("warn", msg)
+  if min_level <= 2
+    emit("WARN", msg)
+  end
 end
 
-fn error(msg)
-  _log("error", msg)
+# A `let`, not a `fn`, so that `raise` above can still take the builtin.
+let error = fn(msg)
+  emit("ERROR", msg)
 end
 
 export set_level, debug, info, warn, error

@@ -363,6 +363,26 @@ typedef struct {
 /* ─── Comparison / equality ─── */
 
 int gem_val_eq(GemVal a, GemVal b);
+/* The identity of a table as an int (0 for any other value), for code that
+   must index tables by identity in O(1): tables as table keys are found by
+   a linear scan. std/test reaches it through `extern fn` to memoize the
+   table pairs of a deep comparison. A table keeps its id only while it is
+   not moved: a region reset (or a copy to another process) can give it a
+   new one, so keep ids only for tables older than the loop that uses them,
+   such as a function's arguments. */
+int64_t gem_table_id(GemVal v);
+/* The length of the longest prefix of `s` (n bytes) made only of bytes
+   that occur in `accept` (accept_n bytes), like strspn but binary-safe.
+   std/http and std/request reach it through `extern fn` (Bytes params)
+   to validate request heads, header names and cookies in one C pass
+   instead of a Gem loop over `ord`; the tables of the last few byte sets
+   are cached. */
+int64_t gem_bytes_span(const uint8_t *s, int64_t n, const uint8_t *accept, int64_t accept_n);
+/* The offset of the first occurrence of `needle` (nn bytes) in `s` (n
+   bytes) at or after `from` (clamped to 0), or -1; an empty needle is
+   found at `from` when from <= n. Binary-safe, like memmem. std/http
+   uses it (extern fn, Bytes params) to split request heads in C. */
+int64_t gem_bytes_find(const uint8_t *s, int64_t n, const uint8_t *needle, int64_t nn, int64_t from);
 int gem_truthy(GemVal v);
 
 /* ─── Arithmetic / operators ─── */
@@ -840,7 +860,8 @@ int gem_whereis_name(const char *name);        /* returns pid or -1 */
 void gem_unregister_name_for_pid(int pid);     /* auto-cleanup on death */
 
 /* Monitor API */
-void gem_monitor_fn(int64_t target_pid);
+int gem_monitor_fn(int64_t target_pid);
+int gem_demonitor_fn(int64_t target_pid);
 void gem_deliver_down_messages(int pid, const char *reason);
 
 /* Link API */
@@ -858,6 +879,7 @@ GemVal gem_send_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_receive_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_self_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_monitor_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_demonitor_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_spawn_monitor_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_register_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_whereis_builtin(void *_env, GemVal *args, int argc);

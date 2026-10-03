@@ -1,4 +1,4 @@
-# Handoff: std modernization next (compiler and runtime fixes done)
+# Handoff: std modernization done (in review); what next
 
 Notes for the next session. Delete this file once its work is done.
 
@@ -49,17 +49,43 @@ Notes for the next session. Delete this file once its work is done.
       If the fixes are large, run one more adversarial round.
    6. Open a PR to `main` (no AI attribution, CLAUDE.md "Commits and Pull
       Requests").
-4. **Done once its PR merges: compiler and runtime fix pass.** Every
+4. **Done: compiler and runtime fix pass** (PR #31, squash-merged into
+   `main` as 5747c2b). Every
    `docs/KNOWN_BUGS.md` entry outside "Standard library" plus the
    `sqlite_query` parameter checks, one fix branch per entry
    (`fix/<name>`), squashed onto one integration branch, one PR. The bugs
    the fixers found along the way are new `docs/KNOWN_BUGS.md` entries.
-5. **Next: modernize `std/`** against the merged doc, fixing the
-   "Standard library" entries of `docs/KNOWN_BUGS.md` as part of it
-   (dynamic_supervisor `delete`, non-tail supervisor loops, `http.serve`
-   and silent handler errors, `json.encode` int keys and big ints,
-   supervisor `name:` race and `{pid}` children, `std/request` timeout and
-   chunked bodies), along with the list in "For std modernization" below.
+5. **Done once its PR merges: std modernization.** Every module in `std/`
+   brought in line with `docs/BEST_PRACTICES.md`, and every "Standard
+   library" entry of `docs/KNOWN_BUGS.md` fixed (plus the list in "For std
+   modernization" below), one fix branch per module or group, squashed
+   onto `integrate/std-modernize`, then adversarial review rounds until
+   clean. The PR body lists the API decisions to confirm.
+6. **Next (proposal, confirm with the maintainer):** the remaining
+   `docs/KNOWN_BUGS.md` entries (compiler: default params in loaded
+   modules, destructuring `let` of builtin names, `0..n`, CRLF, ...;
+   runtime: the `sort` comparator global, NUL bytes in table keys, sqlite statement handling, `INT64_MIN /
+   -1`; std: `one_for_all` with exit-trapping children, which needs an
+   untrappable exit signal), and the ROADMAP items std now leans on
+   (a write timeout for `tcp_write`).
+7. **Agreed in the PR #32 review, its own follow-up PR (with its own
+   macOS run):** an untrappable kill and per-child shutdown timeouts.
+   - `kill(pid, "kill")` can't be trapped; the target dies with reason
+     `"killed"`. Links propagate `"killed"` as an ordinary, trappable
+     reason, as in Erlang, so only the direct `kill(pid, "kill")` is
+     untrappable.
+   - Child specs get `shutdown: ms` (default 5000; `nil` waits forever).
+     A supervisor sends `"shutdown"`, waits that long for the child's
+     `DOWN`, then sends `"kill"`; the same for `one_for_all` restarts and
+     `terminate_child`. This closes the `one_for_all` KNOWN_BUGS entry
+     (keep it until then).
+   - A child that is itself a supervisor defaults to `shutdown: nil`, as
+     OTP's supervisor children default to `infinity`, so a parent doesn't
+     kill a nested tree in the middle of its ordered shutdown. Users
+     shouldn't have to set it: e.g. `supervisor.start` /
+     `dynamic_supervisor.start` return a handle that marks itself
+     (`{pid, supervisor: true}`), and the parent picks the default from
+     it.
 
 ## Ground rules from the maintainer
 
@@ -104,6 +130,11 @@ Notes for the next session. Delete this file once its work is done.
   once with a shared `/tmp`. On Linux as root, give each one a private
   `/tmp`: `unshare -m bash -c 'mount --bind /var/tmp/iso_<name> /tmp &&
   make test'` (the step 4 pass did this, five agents at a time).
+  Examples that use TCP also collide on ports; step 5 added a private
+  network namespace too: `unshare -m -n bash -c 'python3 lo_up.py && mount
+  --bind /var/tmp/iso_<name> /tmp && make test'`, where `lo_up.py` brings
+  up loopback without `ip` (an `SIOCGIFFLAGS`/`SIOCSIFFLAGS` ioctl on
+  `lo` setting `IFF_UP`).
 - `expected_output.txt` must stay in numeric example order. When merging
   branches that each appended output, put the hunks in example order.
 
@@ -213,8 +244,8 @@ return.
 
 | Branch | What |
 |---|---|
-| `main` | includes #26, #27, #28 (compiler fixes; 8b482c2), #29 (known-bugs fixes, `docs/KNOWN_BUGS.md`; ccb251d) and #30 (the `docs/BEST_PRACTICES.md` rewrite; e76042b) |
-| `ccr-f506c768-naje0w` | step 4, the compiler and runtime fix pass: PR #31 |
+| `main` | includes #26, #27, #28 (compiler fixes; 8b482c2), #29 (known-bugs fixes, `docs/KNOWN_BUGS.md`; ccb251d), #30 (the `docs/BEST_PRACTICES.md` rewrite; e76042b) and #31 (compiler and runtime fixes; 5747c2b) |
+| `integrate/std-modernize` | step 5, std modernization |
 
 ## For the doc session (step 2), so it isn't lost
 
@@ -293,7 +324,7 @@ When rebasing onto `main`, put the BEST_PRACTICES clause back (dropped in
 Tracking" and the intro of `docs/KNOWN_BUGS.md`, a fix also deletes any
 **(bug)** rule in `docs/BEST_PRACTICES.md` that exists because of it.
 
-## For std modernization (step 5)
+## For std modernization (step 5, done; kept as a record)
 
 - `dynamic_supervisor`: `delete(state.children, idx)` leaves a hole, so
   `terminate_child` of any child but the last crashes the supervisor and

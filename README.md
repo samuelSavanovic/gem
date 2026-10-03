@@ -24,7 +24,7 @@ OTP-style abstractions are written in pure Gem on top of the actor primitives. `
 load "std/gen_server"
 
 let counter = {
-  init: fn() 0 end,
+  init: fn() {state: 0} end,
   handle_call: fn(msg, from, state)
     match msg
     when "get"

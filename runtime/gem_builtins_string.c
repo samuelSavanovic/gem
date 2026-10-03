@@ -1,9 +1,71 @@
 /*
  * gem_builtins_string.c — String builtins: str_replace, substr, chr, ord,
- *                          and the buffer API (buf_new, buf_push).
+ *                          and the buffer API (buf_new, buf_push), plus
+ *                          gem_bytes_span and gem_bytes_find (extern helpers
+ *                          for std/http).
  */
 
 #include "gem.h"
+
+/* ─── gem_bytes_span (extern helper, see gem.h) ─── */
+
+/* std/http calls it with a handful of constant byte sets, many times per
+ * request, so the last few sets' lookup tables are kept: a set that is
+ * byte-for-byte one of them (memcmp, much cheaper than rebuilding the
+ * table) reuses its table. The cache is not locked: only the scheduler
+ * thread may call this, so declare it as a plain (non-blocking) extern fn,
+ * never `extern blocking fn` (those run on the thread pool). 16 slots hold
+ * every set std/http uses (9) with room to spare. */
+#define GEM_SPAN_CACHE 16
+#define GEM_SPAN_CACHE_MAX 256
+static struct {
+    int64_t n;           /* a zeroed slot is the (valid) entry for "" */
+    uint8_t set[GEM_SPAN_CACHE_MAX];
+    uint8_t ok[256];
+} gem_span_cache[GEM_SPAN_CACHE];
+static int gem_span_cache_next = 0;
+
+static const uint8_t *gem_span_table(const uint8_t *accept, int64_t accept_n, uint8_t *scratch) {
+    if (accept_n <= GEM_SPAN_CACHE_MAX) {
+        for (int k = 0; k < GEM_SPAN_CACHE; k++) {
+            if (gem_span_cache[k].n == accept_n && memcmp(gem_span_cache[k].set, accept, (size_t)accept_n) == 0)
+                return gem_span_cache[k].ok;
+        }
+        int k = gem_span_cache_next;
+        gem_span_cache_next = (k + 1) % GEM_SPAN_CACHE;
+        scratch = gem_span_cache[k].ok;
+        memcpy(gem_span_cache[k].set, accept, (size_t)accept_n);
+        gem_span_cache[k].n = accept_n;
+    }
+    memset(scratch, 0, 256);
+    for (int64_t i = 0; i < accept_n; i++) scratch[accept[i]] = 1;
+    return scratch;
+}
+
+int64_t gem_bytes_span(const uint8_t *s, int64_t n, const uint8_t *accept, int64_t accept_n) {
+    uint8_t scratch[256];
+    const uint8_t *ok = gem_span_table(accept, accept_n, scratch);
+    int64_t i = 0;
+    while (i < n && ok[s[i]]) i++;
+    return i;
+}
+
+/* ─── gem_bytes_find (extern helper, see gem.h) ─── */
+
+int64_t gem_bytes_find(const uint8_t *s, int64_t n, const uint8_t *needle, int64_t nn, int64_t from) {
+    if (from < 0) from = 0;
+    if (nn == 0) return from <= n ? from : -1;
+    if (from > n - nn) return -1;
+    const uint8_t *p = s + from;
+    const uint8_t *last = s + (n - nn);
+    while (p <= last) {
+        p = memchr(p, needle[0], (size_t)(last - p) + 1);
+        if (!p) return -1;
+        if (memcmp(p, needle, (size_t)nn) == 0) return (int64_t)(p - s);
+        p++;
+    }
+    return -1;
+}
 
 /* ─── Built-in: str_replace ─── */
 

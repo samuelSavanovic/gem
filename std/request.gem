@@ -1,145 +1,539 @@
-# std/request — HTTP/1.1 client
+# std/request — HTTP/1.1 client (plain http only; Gem has no TLS).
+#
+#   let resp = request.get("http://127.0.0.1:8080/items?page=2")
+#   resp.status                      # 200
+#   resp.headers["content-type"]     # header names are lowercase
+#   resp.body                        # chunked bodies come back decoded
+#   request.post(url, {body: json.encode(x), headers: {"Content-Type": "application/json"}, timeout_ms: 5000})
+#
+# Header names must be HTTP tokens and values non-nil, without CR, LF or
+# other control bytes. A body gets a Content-Length (`0` for an empty
+# POST, PUT or PATCH).
+#
+# Each call opens a connection, sends `Connection: close`, reads one
+# response and closes the socket, also when it raises; a caller killed
+# mid-request leaks it. `timeout_ms` (default 30000, `nil` for none) is
+# one deadline for the whole call, not a per-read limit;
+# connecting and writing can't be interrupted, so only the reads are cut
+# short. Every error is prefixed with the function the
+# caller used (`request.get: ...`).
 
 load "std/string"
 
+# Runtime helper (one C pass): the length of the prefix of `s` made of
+# bytes from `accept`.
+extern fn gem_bytes_span(s: Bytes, accept: Bytes) -> Int
+
 let READ_SIZE = 8192
+let DEFAULT_TIMEOUT_MS = 30000
+let MAX_LINE = 65536
+let MAX_HEADER_LINES = 1000
+# Bytes of an HTTP token (a header name).
+let TOKEN_BYTES = "!#$%&'*+-.^_`|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
-fn parse_url(raw_url)
-  let s = raw_url
-  if string.starts_with(s, "http://")
-    s = substr(s, 7, len(s) - 7)
-  end
+# ─── URLs ───
 
-  let slash = string.index_of(s, "/")
-  let host_part = ""
-  let path = "/"
-  if slash < 0
-    host_part = s
-  else
-    host_part = substr(s, 0, slash)
-    path = substr(s, slash, len(s) - slash)
-  end
-
-  let colon = string.index_of(host_part, ":")
-  let host = ""
-  let port = 80
-  if colon < 0
-    host = host_part
-  else
-    host = substr(host_part, 0, colon)
-    port = to_int(substr(host_part, colon + 1, len(host_part) - colon - 1))
-  end
-
-  {host: host, port: port, path: path}
-end
-
-fn parse_response(raw)
-  let hdr_end = string.index_of(raw, "\r\n\r\n")
-  if hdr_end < 0
-    error("invalid HTTP response: no header boundary")
-  end
-
-  let header_section = substr(raw, 0, hdr_end)
-  let resp_body = substr(raw, hdr_end + 4, len(raw) - hdr_end - 4)
-
-  let lines = string.split(header_section, "\r\n")
-  let status_line = lines[0]
-  let sp1 = string.index_of(status_line, " ")
-  let rest = substr(status_line, sp1 + 1, len(status_line) - sp1 - 1)
-  let sp2 = string.index_of(rest, " ")
-  let status_code = to_int(substr(rest, 0, sp2))
-
-  let headers = {}
-  let i = 1
-  while i < len(lines)
-    let colon = string.index_of(lines[i], ": ")
-    if colon > 0
-      let key = substr(lines[i], 0, colon)
-      let val = substr(lines[i], colon + 2, len(lines[i]) - colon - 2)
-      headers[key] = val
+fn find_byte(s, byte, from = 0)
+  let i = from
+  let n = len(s)
+  while i < n
+    if ord(s, i) == byte
+      return i
     end
     i += 1
   end
-
-  {status: status_code, headers: headers, body: resp_body}
+  -1
 end
 
-fn do_request(method, raw_url, opts)
-  if opts == nil
-    opts = {}
+fn is_digits(s)
+  if len(s) == 0
+    return false
+  end
+  for i = 0, len(s)
+    let c = ord(s, i)
+    if c < 48 or c > 57
+      return false
+    end
+  end
+  true
+end
+
+# Rejects bytes that would let a value split the request (CR, LF and
+# other controls); URLs, methods and header names reject spaces too.
+fn check_text(name, what, s, allow_space)
+  for i = 0, len(s)
+    let c = ord(s, i)
+    let bad = c < 32 or c == 127
+    if c == 32 and not allow_space
+      bad = true
+    end
+    if c == 9 and allow_space
+      bad = false
+    end
+    if bad
+      error("{name}: invalid character (byte {c}) in {what}")
+    end
+  end
+end
+
+fn parse_url(name, raw_url)
+  if type(raw_url) != "string"
+    error("{name}: URL must be a string, got {type(raw_url)}")
+  end
+  check_text(name, "URL", raw_url, false)
+  let sep = string.index_of(raw_url, "://")
+  if sep < 0
+    error("{name}: URL must start with http:// (got \"{raw_url}\")")
+  end
+  let scheme = string.lower(substr(raw_url, 0, sep))
+  if scheme == "https"
+    error("{name}: https is not supported (Gem has no TLS): {raw_url}")
+  end
+  if scheme != "http"
+    error("{name}: unsupported URL scheme \"{scheme}\" (only http:// is supported)")
   end
 
-  let parsed = parse_url(raw_url)
-  let body = opts.body
-  if body == nil
-    body = ""
+  let s = substr(raw_url, sep + 3, len(raw_url) - sep - 3)
+  let hash = find_byte(s, 35)
+  if hash >= 0
+    s = substr(s, 0, hash)
   end
-  let user_headers = opts.headers
-  if user_headers == nil
-    user_headers = {}
+  # The authority ends at the first "/" or "?".
+  let stop = len(s)
+  let slash = find_byte(s, 47)
+  let question = find_byte(s, 63)
+  if slash >= 0
+    stop = slash
+  end
+  if question >= 0 and question < stop
+    stop = question
+  end
+  let authority = substr(s, 0, stop)
+  let path = substr(s, stop, len(s) - stop)
+  if path == "" or ord(path, 0) == 63
+    path = "/{path}"
   end
 
-  let fd = tcp_connect(parsed.host, parsed.port)
+  if find_byte(authority, 64) >= 0
+    error("{name}: credentials in the URL are not supported: {raw_url}")
+  end
+  if len(authority) > 0 and ord(authority, 0) == 91
+    error("{name}: IPv6 address literals are not supported: {raw_url}")
+  end
+  let host = authority
+  let port = 80
+  let colon = find_byte(authority, 58)
+  if colon >= 0
+    host = substr(authority, 0, colon)
+    let port_str = substr(authority, colon + 1, len(authority) - colon - 1)
+    if port_str != ""
+      let valid = is_digits(port_str) and len(port_str) <= 5
+      if valid
+        port = to_int(port_str)
+      end
+      if not valid or port < 1 or port > 65535
+        error("{name}: invalid port \"{port_str}\" in URL {raw_url}")
+      end
+    end
+  end
+  if host == ""
+    error("{name}: URL has no host: {raw_url}")
+  end
+  {host: host, port: port, path: path}
+end
 
-  let req_str = build_string() do |add|
+# ─── Reading ───
+
+# A reader holds the bytes received but not yet consumed (`data` from
+# `pos` on) and the call's deadline (nil: none).
+fn timeout_error(rd)
+  error("{rd.name}: timed out after {rd.timeout_ms} ms waiting for {rd.url}")
+end
+
+# Reads more bytes into the reader; false at end of stream.
+fn fill(rd)
+  let wait = nil
+  if rd.deadline != nil
+    wait = rd.deadline - time_ms()
+    if wait <= 0
+      timeout_error(rd)
+    end
+  end
+  let chunk = tcp_read(rd.fd, READ_SIZE, wait)
+  if chunk == nil
+    timeout_error(rd)
+  end
+  if chunk == ""
+    return false
+  end
+  if rd.pos > 0
+    rd.data = substr(rd.data, rd.pos, len(rd.data) - rd.pos)
+    rd.pos = 0
+  end
+  rd.data = rd.data + chunk
+  true
+end
+
+# Next line without its CRLF (or bare LF); nil at end of stream.
+fn read_line(rd)
+  let scan = rd.pos
+  while true
+    let nl = find_byte(rd.data, 10, scan)
+    if nl >= 0
+      let line_len = nl - rd.pos
+      if line_len > 0 and ord(rd.data, nl - 1) == 13
+        line_len -= 1
+      end
+      if line_len > MAX_LINE
+        error("{rd.name}: response line longer than {MAX_LINE} bytes")
+      end
+      let line = substr(rd.data, rd.pos, line_len)
+      rd.pos = nl + 1
+      return line
+    end
+    let pending = len(rd.data) - rd.pos
+    if pending > MAX_LINE
+      error("{rd.name}: response line longer than {MAX_LINE} bytes")
+    end
+    if not fill(rd)
+      return nil
+    end
+    scan = rd.pos + pending
+  end
+end
+
+# Exactly n bytes; nil if the stream ends first.
+fn read_exact(rd, n)
+  let out = buf_new()
+  let have = 0
+  while true
+    let take = len(rd.data) - rd.pos
+    if take > n - have
+      take = n - have
+    end
+    buf_push(out, substr(rd.data, rd.pos, take))
+    rd.pos = rd.pos + take
+    have += take
+    if have == n
+      return to_string(out)
+    end
+    if not fill(rd)
+      return nil
+    end
+  end
+end
+
+fn read_to_eof(rd)
+  let out = buf_new()
+  buf_push(out, substr(rd.data, rd.pos, len(rd.data) - rd.pos))
+  rd.pos = len(rd.data)
+  while fill(rd)
+    buf_push(out, rd.data)
+    rd.pos = len(rd.data)
+  end
+  to_string(out)
+end
+
+# ─── Parsing ───
+
+# Header names are lowercased; a repeated header's values are joined
+# with ", ", except Set-Cookie's, whose values contain commas (Expires):
+# those are joined with "\n".
+fn add_header(rd, headers, line)
+  let colon = find_byte(line, 58)
+  if colon <= 0
+    error("{rd.name}: malformed response header line \"{line}\"")
+  end
+  let key = string.lower(string.trim(substr(line, 0, colon)))
+  let value = string.trim(substr(line, colon + 1, len(line) - colon - 1))
+  if has_key(headers, key)
+    let sep = ", "
+    if key == "set-cookie"
+      sep = "\n"
+    end
+    headers[key] = "{headers[key]}{sep}{value}"
+  else
+    headers[key] = value
+  end
+end
+
+# "HTTP/1.1 200 OK" or "HTTP/1.1 204" (the reason phrase is optional).
+fn parse_status_line(rd, line)
+  let sp = find_byte(line, 32)
+  let code = ""
+  if sp > 0
+    let rest = substr(line, sp + 1, len(line) - sp - 1)
+    let sp2 = find_byte(rest, 32)
+    code = rest
+    if sp2 >= 0
+      code = substr(rest, 0, sp2)
+    end
+  end
+  if not string.starts_with(line, "HTTP/") or len(code) != 3 or not is_digits(code)
+    error("{rd.name}: malformed status line \"{line}\"")
+  end
+  to_int(code)
+end
+
+fn read_head(rd)
+  let status_line = read_line(rd)
+  if status_line == nil
+    error("{rd.name}: connection closed before a response arrived")
+  end
+  let status = parse_status_line(rd, status_line)
+  let headers = {}
+  let count = 0
+  while true
+    let line = read_line(rd)
+    if line == nil
+      error("{rd.name}: connection closed inside the response headers")
+    end
+    if line == ""
+      break
+    end
+    count += 1
+    if count > MAX_HEADER_LINES
+      error("{rd.name}: more than {MAX_HEADER_LINES} response headers")
+    end
+    add_header(rd, headers, line)
+  end
+  {status: status, headers: headers}
+end
+
+fn parse_hex(s)
+  if len(s) == 0 or len(s) > 15
+    return nil
+  end
+  let n = 0
+  for i = 0, len(s)
+    let c = ord(s, i)
+    let d = -1
+    if c >= 48 and c <= 57
+      d = c - 48
+    elif c >= 97 and c <= 102
+      d = c - 87
+    elif c >= 65 and c <= 70
+      d = c - 55
+    end
+    if d < 0
+      return nil
+    end
+    n = n * 16 + d
+  end
+  n
+end
+
+fn malformed_chunked(rd, why)
+  error("{rd.name}: malformed chunked body: {why}")
+end
+
+# Decodes a chunked body. Chunk extensions and trailer fields are dropped
+# (a trailer must not override a header the caller trusts).
+fn read_chunked(rd)
+  let out = buf_new()
+  while true
+    let line = read_line(rd)
+    if line == nil
+      malformed_chunked(rd, "connection closed before the last chunk")
+    end
+    let size_str = line
+    let semi = find_byte(line, 59)
+    if semi >= 0
+      size_str = substr(line, 0, semi)
+    end
+    size_str = string.trim(size_str)
+    let size = parse_hex(size_str)
+    if size == nil
+      malformed_chunked(rd, "bad chunk size \"{size_str}\"")
+    end
+    if size == 0
+      break
+    end
+    let piece = read_exact(rd, size)
+    if piece == nil
+      malformed_chunked(rd, "connection closed inside a chunk")
+    end
+    buf_push(out, piece)
+    if read_line(rd) != ""
+      malformed_chunked(rd, "chunk data not followed by CRLF")
+    end
+  end
+  # Trailer section; a server that closes instead of sending the final
+  # empty line is tolerated.
+  let line = read_line(rd)
+  while line != nil and line != ""
+    line = read_line(rd)
+  end
+  to_string(out)
+end
+
+fn has_no_body(method, status)
+  method == "HEAD" or status == 204 or status == 304 or status < 200
+end
+
+fn read_body(rd, method, status, headers)
+  if has_no_body(method, status)
+    return ""
+  end
+  let te = headers["transfer-encoding"]
+  if te != nil
+    # Chunked when it is the last coding: "gzip, chunked", not "xchunked".
+    let codings = string.split(te, ",")
+    if string.lower(string.trim(codings[len(codings) - 1])) == "chunked"
+      return read_chunked(rd)
+    end
+    return read_to_eof(rd)
+  end
+  let cl = headers["content-length"]
+  if cl != nil
+    let n_str = string.trim(cl)
+    if not is_digits(n_str) or len(n_str) > 18
+      error("{rd.name}: invalid Content-Length \"{cl}\"")
+    end
+    let body = read_exact(rd, to_int(n_str))
+    if body == nil
+      error("{rd.name}: connection closed before the end of the body ({n_str} bytes expected)")
+    end
+    return body
+  end
+  read_to_eof(rd)
+end
+
+fn read_response(rd, method)
+  let head = read_head(rd)
+  # Skip interim responses (100 Continue and the like); 101 is final.
+  while head.status < 200 and head.status != 101
+    head = read_head(rd)
+  end
+  let body = read_body(rd, method, head.status, head.headers)
+  {status: head.status, headers: head.headers, body: body}
+end
+
+# ─── Requests ───
+
+# Methods whose requests carry a body: one sends `Content-Length: 0` when
+# it is empty (RFC 9110 §8.6; some servers answer 411 without it).
+fn expects_body(method)
+  method == "POST" or method == "PUT" or method == "PATCH"
+end
+
+fn build_request(name, method, parsed, headers, body)
+  let given = {}
+  for key, value in headers
+    check_text(name, "header name", "{key}", false)
+    if type(key) != "string" or key == "" or gem_bytes_span(key, TOKEN_BYTES) != len(key)
+      error("{name}: invalid header name \"{key}\" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)")
+    end
+    if value == nil
+      error("{name}: header {key} has a nil value")
+    end
+    check_text(name, "value of header {key}", "{value}", true)
+    let lower = string.lower("{key}")
+    if lower == "transfer-encoding"
+      error("{name}: a Transfer-Encoding header is not supported (the body is sent with Content-Length)")
+    end
+    given[lower] = true
+  end
+  build_string do |add|
     add(method, " ", parsed.path, " HTTP/1.1\r\n")
-    add("Host: ", parsed.host, "\r\n")
-    add("Connection: close\r\n")
-    if len(body) > 0
-      add("Content-Length: ", to_string(len(body)), "\r\n")
+    if not has_key(given, "host")
+      if parsed.port == 80
+        add("Host: ", parsed.host, "\r\n")
+      else
+        add("Host: ", parsed.host, ":", parsed.port, "\r\n")
+      end
     end
-
-    let ks = keys(user_headers)
-    let i = 0
-    while i < len(ks)
-      add(ks[i], ": ", user_headers[ks[i]], "\r\n")
-      i += 1
+    if not has_key(given, "connection")
+      add("Connection: close\r\n")
     end
-
-    add("\r\n")
-    if len(body) > 0
-      add(body)
+    if (len(body) > 0 or expects_body(method)) and not has_key(given, "content-length")
+      add("Content-Length: ", len(body), "\r\n")
     end
+    for key, value in headers
+      add(key, ": ", value, "\r\n")
+    end
+    add("\r\n", body)
   end
-  tcp_write(fd, req_str)
+end
 
-  let resp_buf = buf_new()
-  let reading = true
-  while reading
-    let chunk = tcp_read(fd, READ_SIZE)
-    if chunk == ""
-      reading = false
-    else
-      buf_push(resp_buf, chunk)
-    end
+fn exchange(rd, req_str, method)
+  if tcp_write(rd.fd, req_str) < len(req_str)
+    error("{rd.name}: connection lost while sending the request to {rd.url}")
   end
-  tcp_close(fd)
+  read_response(rd, method)
+end
 
-  parse_response(to_string(resp_buf))
+# An option given as nil, as opposed to left out (a destructuring default
+# fires for both).
+fn given_nil(opts, key)
+  type(opts) == "table" and has_key(opts, key) and opts[key] == nil
+end
+
+fn do_request(name, method, raw_url, opts)
+  let {headers = {}, body = "", timeout_ms = DEFAULT_TIMEOUT_MS} = opts
+  if given_nil(opts, "timeout_ms")
+    timeout_ms = nil
+  end
+  if type(method) != "string" or method == ""
+    error("{name}: method must be a non-empty string")
+  end
+  check_text(name, "method", method, false)
+  if type(body) != "string"
+    error("{name}: body must be a string, got {type(body)}")
+  end
+  if type(headers) != "table"
+    error("{name}: headers must be a table, got {type(headers)}")
+  end
+  if timeout_ms != nil and type(timeout_ms) != "int"
+    error("{name}: timeout_ms must be an int > 0 (milliseconds) or nil, got {type(timeout_ms)}")
+  elif timeout_ms != nil and timeout_ms <= 0
+    error("{name}: timeout_ms must be an int > 0 (milliseconds) or nil, got {timeout_ms}")
+  end
+  let parsed = parse_url(name, raw_url)
+  let req_str = build_request(name, method, parsed, headers, body)
+
+  let deadline = nil
+  if timeout_ms != nil
+    deadline = time_ms() + timeout_ms
+  end
+  let conn = pcall tcp_connect(parsed.host, parsed.port)
+  if not conn.ok
+    error("{name}: cannot connect to {parsed.host}:{parsed.port}: {conn.error}")
+  end
+  let rd = {name: name, url: raw_url, fd: conn.value, data: "", pos: 0, deadline: deadline, timeout_ms: timeout_ms}
+  let r = pcall exchange(rd, req_str, method)
+  tcp_close(conn.value)
+  if not r.ok
+    if string.starts_with(r.error, "{name}: ")
+      error(r.error)
+    end
+    error("{name}: {r.error}")
+  end
+  r.value
 end
 
 fn get(raw_url, opts = {})
-  do_request("GET", raw_url, opts)
+  do_request("request.get", "GET", raw_url, opts)
 end
 
 fn post(raw_url, opts = {})
-  do_request("POST", raw_url, opts)
+  do_request("request.post", "POST", raw_url, opts)
 end
 
 fn put(raw_url, opts = {})
-  do_request("PUT", raw_url, opts)
+  do_request("request.put", "PUT", raw_url, opts)
 end
 
 fn patch(raw_url, opts = {})
-  do_request("PATCH", raw_url, opts)
+  do_request("request.patch", "PATCH", raw_url, opts)
 end
 
-let delete = fn(raw_url, opts = {})
-  do_request("DELETE", raw_url, opts)
+fn delete(raw_url, opts = {})
+  do_request("request.delete", "DELETE", raw_url, opts)
 end
 
 fn request(method, raw_url, opts = {})
-  do_request(method, raw_url, opts)
+  do_request("request.request", method, raw_url, opts)
 end
 
 export get, post, put, patch, delete, request

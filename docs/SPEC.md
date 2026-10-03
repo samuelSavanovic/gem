@@ -598,7 +598,9 @@ let msg = receive()
 - `{tag: "DOWN", pid: <target_pid>, reason: "normal"}` — clean exit
 - `{tag: "DOWN", pid: <target_pid>, reason: "<error message>"}` — crash
 
-Monitoring a pid whose process no longer exists delivers the DOWN message immediately, with reason `"noproc"`. Duplicate monitors are deduplicated. Returns `true`.
+Monitoring a pid whose process no longer exists delivers the DOWN message immediately, with reason `"noproc"` (or the process's exit reason while the runtime still has it), and does so on every such call: a second `monitor` of a dead target sends another `DOWN`. Duplicate monitors of a live target are deduplicated: a process monitors a target at most once, and a second `monitor` of the same target does nothing, so the target's death delivers one `DOWN`. A monitor ends when the monitoring process exits (`monitor` drops the entries of exited monitoring processes from the target's list as it walks it, and `process_info` leaves them out), so a long-lived process monitored by many short-lived ones keeps a list as long as its live monitors. Returns `true` when it adds a monitor or delivers a `DOWN` for a dead target, and `false` when the caller already monitors the live target.
+
+`demonitor(pid)` removes the caller's monitor of `pid`: the target's death no longer sends the caller a `DOWN`. Returns `true` if there was such a monitor, `false` otherwise (no monitor, or the target has already exited). A `DOWN` already in the caller's mailbox stays there. Since a process monitors a target at most once, `demonitor` also removes a monitor the caller set up elsewhere; code that monitors only for a while (like `gen_server.call`) removes the monitor only when its own `monitor` returned `true`.
 
 `spawn_monitor(fn)` atomically spawns and monitors a process. Returns `{pid: <pid>}`.
 
@@ -711,9 +713,9 @@ The `receive()` function call always pops the head of the mailbox unconditionall
 
 `epoch_ms()` returns the current wall-clock time as milliseconds since the Unix epoch (int). Use this for timestamps that need to be formatted into dates or times. Uses `gettimeofday` internally.
 
-`format_time(epoch_ms, format_str)` formats a wall-clock epoch millisecond timestamp into a UTC string using `strftime` specifiers. Returns a string. Supported specifiers include `%Y` (4-digit year), `%m` (month 01-12), `%d` (day 01-31), `%H` (hour 00-23), `%M` (minute 00-59), `%S` (second 00-59), `%a` (abbreviated weekday), `%b` (abbreviated month), `%T` (`%H:%M:%S`), `%F` (`%Y-%m-%d`), and all other platform-supported `strftime` specifiers.
+`format_time(epoch_ms, format_str)` formats a wall-clock epoch millisecond timestamp into a UTC string using `strftime` specifiers. Returns a string. The milliseconds are dropped by rounding down, so `-1` is `1969-12-31T23:59:59Z`. `epoch_ms` must be an int and `format_str` a string (otherwise it raises `format_time: expected (int, string), ...`); a time the platform can't represent raises `format_time: time ... ms is out of range`. An empty format gives `""`, and output over 256 KB (262,144 bytes) raises `format_time: output is over 256 KB`. The format string stops at its first NUL byte. Supported specifiers include `%Y` (4-digit year), `%m` (month 01-12), `%d` (day 01-31), `%H` (hour 00-23), `%M` (minute 00-59), `%S` (second 00-59), `%a` (abbreviated weekday), `%b` (abbreviated month), `%T` (`%H:%M:%S`), `%F` (`%Y-%m-%d`), and all other platform-supported `strftime` specifiers. `%z`, `%Z` and `%s` are UTC's whatever the local zone: `+0000`, `UTC` and the epoch seconds (`strftime` itself takes them from the local zone on some platforms).
 
-`format_time_local(epoch_ms, format_str)` — same as `format_time` but formats in the local timezone instead of UTC.
+`format_time_local(epoch_ms, format_str)` — same as `format_time` but formats in the local timezone instead of UTC (`%z`, `%Z` and `%s` come from the platform's `strftime`).
 
 ## Timers
 
@@ -741,7 +743,7 @@ let info = process_info(pid)
 - `state` — `"ready"`, `"waiting"`, or `"dead"`
 - `mailbox_len` — number of messages in mailbox
 - `links` — array of linked pids
-- `monitors` — array of monitoring pids
+- `monitors` — array of the pids of the live processes monitoring it
 - `trap_exit` — bool
 - `exit_reason` — string or nil
 
@@ -1248,7 +1250,7 @@ end
 
 `tcp_accept(socket)` — accepts an incoming connection on a listening socket. Returns the new connection's file descriptor as an integer. The calling process (main included) yields to the scheduler until a connection is ready. Raises an error on failure.
 
-`tcp_read(socket[, max_bytes[, timeout_ms]])` — reads up to `max_bytes` bytes from a connected socket (default 4096). Returns the data as a string on success, `""` when the remote end has closed the connection (EOF or `ECONNRESET`), or `nil` when the optional `timeout_ms` expires with no data available. Callers without a timeout never see `nil`. While no data is available the calling process (main included) yields to the scheduler, and resumes when data arrives or the timeout deadline is reached. A `timeout_ms` of `0` or less means no timeout.
+`tcp_read(socket[, max_bytes[, timeout_ms]])` — reads up to `max_bytes` bytes from a connected socket (default 4096). Returns the data as a string on success, `""` when the remote end has closed the connection (EOF or `ECONNRESET`), or `nil` when the optional `timeout_ms` expires with no data available. Callers without a timeout never see `nil`. While no data is available the calling process (main included) yields to the scheduler, and resumes when data arrives or the timeout deadline is reached. `timeout_ms` works like `receive ... after`: `nil` or omitted waits until data or EOF, and an int of `0` or less doesn't wait: it returns what is already there, or `nil` (so a remaining time computed as `deadline - time_ms()` that has run out never blocks). Any other `timeout_ms` raises `tcp_read: timeout_ms must be an int (milliseconds) or nil, got <type>`.
 
 `tcp_write(socket, data)` — writes the string `data` to a connected socket. Writes all bytes (loops internally on partial writes). Returns the number of bytes written as an integer. The calling process yields to the scheduler while the socket is not writable; there is no timeout. Writing to a peer that has closed the connection does not raise: the first write usually still reports success and later ones return `0`.
 
@@ -1258,13 +1260,15 @@ All TCP builtins use non-blocking sockets with scheduler poll integration. The s
 
 ## SQLite
 
-`sqlite_open(path)` — opens (or creates) a SQLite database at `path`. Enables WAL mode and foreign keys by default. Returns an opaque database handle (stored as an int). Use `":memory:"` for an in-memory database. Runs on the thread pool in every process, main included, so other processes keep running. Raises on error.
+`sqlite_open(path)` — opens (or creates) a SQLite database at `path`. Enables WAL mode and foreign keys by default. Returns an opaque database handle: a small int id, valid in every process until it is closed (ids are never reused). Use `":memory:"` for an in-memory database. Runs on the thread pool in every process, main included, so other processes keep running. Raises on error.
 
-`sqlite_close(db)` — closes the database handle. Runs on the thread pool, like `sqlite_open`. Returns `nil`.
+`sqlite_close(db)` — closes the database handle. Runs on the thread pool, like `sqlite_open`. Returns `nil`. The handle is invalid from the moment the close starts, in every process.
+
+Every `sqlite_*` builtin that takes a handle raises a catchable error prefixed with its name when the handle is not an int (`sqlite_query: expected a database handle, got string`) or is not an open handle: never returned by `sqlite_open`, or already closed, a second `sqlite_close` included (`sqlite_close: not an open database handle`).
 
 `sqlite_exec(db, sql)` — executes SQL that returns no rows (DDL, INSERT without RETURNING, etc.). Inline execution (no thread pool). Raises on error.
 
-`sqlite_query(db, sql, params)` — executes a parameterized query. `params` is an array of bind values matching the placeholders in `sql` (`?`, `?N`, `:name`, ...), bound in order; it may be omitted or `nil` when the statement has none. The number of values must equal the statement's parameter count (the highest placeholder index, so `?1` used twice counts once), and each value must be nil, a bool (bound as 1/0), an int, a float or a string; otherwise `sqlite_query` raises, e.g. `sqlite_query: statement has 2 parameter(s), got 1` or `sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string`. Returns an array of row tables, where each row is a string-keyed table (e.g., `{id: 1, name: "Alice"}`). Column type mapping: INTEGER → Int, REAL → Float, TEXT → String, NULL → Nil, BLOB → String (raw bytes). Inline execution (no thread pool). Raises on error.
+`sqlite_query(db, sql, params)` — executes a parameterized query. `params` is an array of bind values matching the placeholders in `sql` (`?`, `?N`, `:name`, ...): element `i` binds parameter `i + 1` (a `:name` placeholder's number is its position among the statement's parameters), whatever order the elements were added in. It may be omitted or `nil` when the statement has none. A table with any key other than `0..n-1` raises (`sqlite_query: params must be an array, got a string key`, `sqlite_query: params must be an array (keys 0..1), got key 5`). The number of values must equal the statement's parameter count (the highest placeholder index, so `?1` used twice counts once), and each value must be nil, a bool (bound as 1/0), an int, a float or a string; otherwise `sqlite_query` raises, e.g. `sqlite_query: statement has 2 parameter(s), got 1` or `sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string`. Returns an array of row tables, where each row is a string-keyed table (e.g., `{id: 1, name: "Alice"}`). Column type mapping: INTEGER → Int, REAL → Float, TEXT → String, NULL → Nil, BLOB → String (raw bytes). Inline execution (no thread pool). Raises on error.
 
 `sqlite_last_insert_id(db)` — returns `sqlite3_last_insert_rowid` as an int.
 
@@ -1379,16 +1383,16 @@ let trimmed = string.trim("  hello  ")
 table.each(parts) { |item| print(item) }
 ```
 
-`std/string` — exports `string` table:
+`std/string` — exports `string` table. Strings are bytes: positions are byte offsets. Every argument documented as a string may also be a buffer (read as its contents; results are strings); any other type raises `string.<fn>: <arg> must be a string, got <type>`.
 
-- `string.split(s, delim)` — split string by delimiter, return array
-- `string.index_of(s, needle)` — find first occurrence, return index or -1
-- `string.join(arr, delim)` — join array elements with delimiter
-- `string.trim(s)` — strip leading/trailing ASCII whitespace
-- `string.starts_with(s, prefix)` / `string.ends_with(s, suffix)` — boolean prefix/suffix check
-- `string.upper(s)` / `string.lower(s)` — ASCII case conversion
-- `string.contains(s, needle)` — return true if needle is found in s
-- `string.repeat(s, n)` — repeat string n times
+- `string.split(s, delim)` — split `s` at each occurrence of `delim`, scanning left to right, and return the array of pieces. Empty pieces are kept (`split("a,,b,", ",")` is `["a", "", "b", ""]`), `split("", ",")` is `[""]`, and an empty `delim` returns `[s]`.
+- `string.index_of(s, needle, start = 0)` — byte offset of the first occurrence of `needle` at or after `start`, or -1. A negative `start` counts as 0; a non-int raises. An empty `needle` is found at `start` (or -1 when `start > len(s)`).
+- `string.contains(s, needle)` — true if `needle` occurs in `s` (always true for `""`).
+- `string.join(arr, delim)` — join the array's elements with `delim`, adding strings and buffers as their bytes and converting other values as interpolation does (`join([1, nil], "-")` is `"1-nil"`). `arr` must be an array; a record raises `string.join: arr must be an array, ...`.
+- `string.trim(s)` — strip leading and trailing ASCII whitespace (space, `\t`, `\n`, `\v`, `\f`, `\r`).
+- `string.starts_with(s, prefix)` / `string.ends_with(s, suffix)` — boolean prefix/suffix check; the empty string is a prefix and suffix of everything.
+- `string.upper(s)` / `string.lower(s)` — ASCII case conversion; other bytes (UTF-8 included) are unchanged.
+- `string.repeat(s, n)` — `s` repeated `n` times (`""` for `n <= 0`). `n` must be an int.
 
 `std/table` — exports `table` table:
 
@@ -1401,59 +1405,60 @@ table.each(parts) { |item| print(item) }
 - `table.all(arr, fn)` — return true if fn(item) is truthy for all elements
 - `table.reverse(arr)` — return new array with elements in reverse order
 - `table.contains(arr, value)` — linear scan for value equality
-- `table.sort(arr[, cmp])` — sort array in-place. Without `cmp`, uses default ascending order. With `cmp`, uses `cmp(a, b)` returning negative/zero/positive. Wrapper around the `sort` builtin.
-- `table.slice(arr, start, len)` — return new array with `len` elements starting at `start`. Negative `start` counts from end.
+- `table.sort(arr[, cmp])` — sort array in place and return it. Without `cmp`, uses default ascending order. With `cmp`, uses `cmp(a, b)` returning negative/zero/positive. Wrapper around the `sort` builtin that first calls `cmp` on the first two elements and raises `table.sort: the comparator must return a number ...` when the result is not an int or float (the builtin silently leaves the array unsorted for a boolean comparator).
+- `table.slice(arr, start[, len])` — return new array with `len` elements starting at `start` (fewer at the end of the array, none for `len <= 0`). Negative `start` counts from end; one before the first element counts as `0`. Without `len`, everything from `start` on.
 - `table.index_of(arr, val)` — return index of first occurrence of `val`, or -1 if not found
 - `table.concat(a, b)` — return new array with elements of `a` followed by elements of `b`
-- `table.copy(tbl)` — shallow copy of an array or string-keyed table. Mutations to the copy do not affect the original.
-- `table.flat_map(arr, fn)` — map each element with `fn`, then flatten one level. If `fn` returns an array, its elements are inlined; scalars are kept as-is.
+- `table.copy(tbl)` — shallow copy of any table: every key and value, in the same order. Mutations to the copy do not affect the original. An empty table copies to an empty table.
+- `table.flat_map(arr, fn)` — map each element with `fn`, then flatten one level. If `fn` returns an array, its elements are inlined (an empty table adds nothing, as in `flatten`); scalars and non-empty records are kept as-is.
 - `table.zip(a, b)` — return array of `[a[i], b[i]]` pairs, truncated to the shorter array
-- `table.unique(arr)` — return new array with duplicate values removed (first occurrence kept). Uses `to_string` for identity comparison.
+- `table.unique(arr)` — return new array with duplicate values removed (first occurrence kept). Two values are duplicates when `==` says so: `1`, `1.0` and `"1"` are all kept, and tables compare by identity.
 - `table.count(arr, fn)` — count elements where `fn(item)` is truthy
-- `table.flatten(arr)` — flatten one level of nesting. Nested arrays are inlined; non-array elements are kept as-is. Empty arrays are dropped.
-- `table.group_by(arr, fn)` — group elements by the string key returned by `fn(item)`. Returns a table mapping keys to arrays of matching elements.
+- `table.flatten(arr)` — flatten one level of nesting. Nested arrays are inlined; non-array elements (non-empty records included) are kept as-is. Empty tables are dropped.
+- `table.group_by(arr, fn)` — group elements by the key returned by `fn(item)`. Returns a table mapping keys to arrays of matching elements, in first-seen order. Keys are kept as `fn` returns them (many distinct int keys are slow, as for any table with sparse int keys; prefer strings) (`json.encode` writes int keys that aren't `0 .. n-1` as object keys); a negative int key raises `table.group_by: key ... is a negative int ...`.
 
 `std/math` — exports `math` table:
 
-- `math.min(a, b)` — return the smaller of two comparable values
-- `math.max(a, b)` — return the larger of two comparable values
-- `math.clamp(val, low, high)` — constrain `val` to the range `[low, high]`
-- `math.assert(cond[, msg])` — raise an error if `cond` is falsy. Optional `msg` is included in the error message.
+- `math.min(a, b)` — return the smaller of two values `<` can order (numbers, mixed ints and floats, or strings); on a tie, `b`
+- `math.max(a, b)` — return the larger of two such values; on a tie, `b`
+- `math.clamp(val, low, high)` — constrain `val` to the range `[low, high]`. Raises `math.clamp: low (...) is greater than high (...)` when `high < low`.
+- `math.assert(cond[, msg])` — raise `"assertion failed"` (`"assertion failed: <msg>"` with `msg`) if `cond` is `nil` or `false`.
 
 `std/test` — exports `test` table. Minimal harness for self-validating example programs. Cases register on import; nothing runs until `test.run()` is called.
 
-- `test.case(name, fn)` — register a test case. `fn` takes no arguments.
-- `test.assert(cond[, msg])` — raise an error if `cond` is falsy.
-- `test.assert_eq(actual, expected)` / `test.assert_neq(actual, expected)` — equality / inequality assertion. On failure the error message includes both formatted values.
-- `test.assert_throws(fn)` — assert that calling `fn()` raises an error.
-- `test.run()` — run every registered case under `pcall`, print one-line `PASS <name>` or `FAIL <name>: <reason>` per case, then a `<n> passed / <m> failed` summary, and `exit(1)` if any failed.
+- `test.case(name, fn)` — register a test case. `fn` takes no arguments. The case list is module state, so it is per process: `test.run()` runs only the cases registered by the process that calls it.
+- `test.assert(cond[, msg])` — raise `test.assert: assertion failed[: <msg>]` if `cond` is falsy.
+- `test.assert_eq(actual, expected)` — raise unless `actual` deeply equals `expected`. Two tables are equal when they have the same keys and deeply equal values, in any insertion order (so `[]` equals `{}`); the walk uses an explicit stack, so any nesting depth works, and each pair of tables (an expected and an actual table) is compared once: a pair met again, through a shared subtable or a cycle, counts as equal, so cyclic and shared structures compare without looping and in time proportional to the number of distinct pairs times their keys. Two cyclic structures are equal when unrolling them gives the same infinite tree (a ring of 99 tables equals a ring of 3 with the same contents). Other values compare with `==`: `1` and `1.0` differ, functions, buffers and refs compare by identity. The message shows both values and, for tables, the path to the first difference, with the types when they differ: `test.assert_eq: expected {a: [1, 2]}, got {a: [1, 2.0]}: at .a[1], expected 2 (int), got 2.0 (float)`, `test.assert_eq: expected 1 (int), got 1.0 (float)`; a missing or extra key reads `actual is missing key .b` / `actual has extra key .b`.
+- `test.assert_neq(actual, expected)` — raise `test.assert_neq: both values are <v>` if `actual` deeply equals `expected` (the same equality as `assert_eq`).
+- `test.assert_throws(fn)` — assert that calling `fn()` raises an error, and return the error message; raises `test.assert_throws: expected an error, but the call returned normally` otherwise.
+- `test.run()` — run every registered case under `pcall`, print one-line `PASS <name>` or `FAIL <name>: <reason>` per case, then a `<n> passed / <m> failed` summary, and `exit(1)` if any failed (ending the whole program with status 1, from any process); otherwise it returns `nil`.
 
-The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`to_string()`, and `substr()`. `split` and `index_of` are only available through `std/string` (not as bare builtins).
+The std modules are written in Gem on top of the builtins (`ord`, `chr`, `substr`, `str_replace`, `build_string`, ...). `split` and `index_of` are only available through `std/string` (not as bare builtins).
 
 `std/json` — exports `json` table:
 
-- `json.parse(s)` — parse a JSON string into Gem values. Objects become string-keyed tables, arrays become integer-keyed tables, strings/numbers/booleans map to native types, `null` maps to `nil`. Supports the full JSON spec: nested structures, all string escape sequences (`\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, `\uXXXX`), negative numbers, floats with decimal points and/or exponents (`1.5e-3`). Raises an error on malformed input — wrap with `pcall` for recovery.
-- `json.encode(val)` — serialize a Gem value to a compact JSON string (no extra whitespace). Integer-keyed tables encode as JSON arrays, string-keyed tables as JSON objects, strings are escaped, numbers/booleans/nil map to their JSON equivalents. Raises an error for unencodable types (functions, buffers, refs). Note: empty tables (`{}` / `[]`) are indistinguishable in Gem and always encode as `[]`.
+- `json.parse(s)` — parse a JSON string into Gem values. Objects become string-keyed tables, arrays become integer-keyed tables, strings/numbers/booleans map to native types, `null` maps to `nil`. Supports the full JSON spec: nested structures, all string escape sequences (`\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, `\uXXXX`, surrogate pairs decoded to UTF-8; a lone surrogate, high or low, raises `json.parse: lone surrogate in unicode escape at byte N`, N being the offset of its `\u`), negative numbers, floats with decimal points and/or exponents (`1.5e-3`). A number with a decimal point or an exponent is a float; an integer is an int, or a float when it doesn't fit in 64 bits (`12345678901234567890` → `1.2345678901234567e+19`, negative ones too). A number too small for a float reads as the nearest subnormal or `0.0` (`-0.0` when negative: `1e-400` → `0.0`), and one too large for a float (`1e309`, a 400-digit integer) raises `json.parse: number out of range at byte N`, N being where the number starts (JSON has no infinity: `json.encode` writes an infinite float as `inf`, which is not valid JSON and which `json.parse` rejects). Raises an error starting with `json.parse: ` and ending with the byte offset (`json.parse: unexpected character ']' at byte 6`) on malformed input or a non-string argument — wrap with `pcall` for recovery. Nesting deeper than 1,000 arrays/objects raises `json.parse: nesting deeper than 1000 levels at byte N`; the limit keeps a hostile input well inside the 8 MB process stack, in `main` and in spawned processes alike: without it, the parser and the encoder (also capped at 1,000) would overflow it at two to six times that depth (measured: about 2,000 and 3,000 levels on Linux x86-64, 3,800 and 6,300 on macOS arm64).
+- `json.encode(val)` — serialize a Gem value to a compact JSON string (no extra whitespace). A table whose keys are exactly `0 .. n-1` (in any order) encodes as a JSON array, in index order; every other table encodes as a JSON object in key order (`keys`), with string keys as they are and int keys written as decimal strings (`t[42] = "x"` → `{"42":"x"}`; an array with a string key added → `{"0":"z","name":"n"}`). A table with a key of any other type (float, bool, ...) raises `json.encode: cannot encode a float table key (only string and int keys)`. Strings are escaped (`\"`, `\\`, `\n`, `\r`, `\t`, `\b`, `\f`, other control bytes as `\u00XX`; other bytes are copied as they are), numbers/booleans/nil map to their JSON equivalents (non-finite floats are written as `inf`/`nan`, which is not valid JSON). Raises `json.encode: cannot encode a <type>` for functions, buffers and refs, and `json.encode: nesting deeper than 1000 levels (or a cyclic table)` for tables nested deeper than 1,000 levels, which is also how a cyclic table fails. Note: empty tables (`{}` / `[]`) are indistinguishable in Gem and always encode as `[]`.
 
-`std/mime` — exports `mime` table:
+`std/mime` — exports `mime` table. Both functions take a string (or a buffer) and raise `mime.<fn>: ...` on anything else.
 
-- `mime.lookup(path_or_ext)` — returns the MIME type for a file path or extension. Accepts `"index.html"`, `".html"`, or `"html"`. Returns `"application/octet-stream"` for unknown extensions. Text types (`text/*`, `application/json`, `application/javascript`, `application/xml`) automatically include `; charset=utf-8`. Case-insensitive.
-- `mime.ext(content_type)` — reverse lookup: `"text/html"` → `".html"`. Strips `; charset=...` before matching. Returns `nil` for unknown types.
+- `mime.lookup(path_or_ext)` — returns the MIME type for a file path or extension. Accepts `"index.html"`, `".html"`, or `"html"`; only the last path segment counts, so `"static/html"` and `"v1.2/notes"` have no extension. Returns `"application/octet-stream"` for an unknown or missing extension. Text types (`text/*`, `application/json`, `application/javascript`, `application/xml`) automatically include `; charset=utf-8`. Case-insensitive.
+- `mime.ext(content_type)` — reverse lookup: `"text/html"` → `".html"`. Ignores case, surrounding spaces and parameters (`; charset=...`). Returns `nil` for unknown types.
 
 Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg, ico, webp, avif, woff, woff2, ttf, otf, pdf, zip, gz, mp3, mp4, webm, wasm.
 
-`std/url` — exports `url` table:
+`std/url` — exports `url` table. Every string argument may also be a buffer; any other type raises `url.<fn>: ...`.
 
-- `url.encode(str)` — percent-encode per RFC 3986. Unreserved chars (`A-Za-z0-9-_.~`) pass through, everything else becomes `%XX` (uppercase hex).
-- `url.decode(str)` — percent-decode `%XX` sequences. `+` is decoded as space.
-- `url.parse_query(str)` — parse a query string like `"a=1&b=hello+world&c=%2F"` into a table `{a: "1", b: "hello world", c: "/"}`. Decodes both keys and values. Duplicate keys: last value wins.
-- `url.build_query(table)` — build a query string from a table. Encodes both keys and values.
-- `url.parse(path_with_query)` — split a path on the first `?`. Returns `{path: "/users/123", query_string: "q=foo&page=2", query: {q: "foo", page: "2"}}`. If no `?`, `query_string` is `""` and `query` is `{}`.
+- `url.encode(str)` — percent-encode per RFC 3986. Unreserved bytes (`A-Za-z0-9-_.~`) pass through, every other byte becomes `%XX` (uppercase hex), so UTF-8 text is encoded byte by byte.
+- `url.decode(str)` — percent-decode `%XX` sequences (either hex case); `+` is decoded as space. A `%` not followed by two hex digits is kept as written (`"100%"` stays `"100%"`).
+- `url.parse_query(str)` — parse a query string like `"a=1&b=hello+world&c=%2F"` into a table `{a: "1", b: "hello world", c: "/"}`. Decodes both keys and values, splitting each pair at its first `=`. A key without `=` gets `""`, pairs with an empty key are dropped, and for duplicate keys the last value wins.
+- `url.build_query(table)` — build a query string from a table, in key order. Keys and values are converted with `to_string` and encoded; keys whose value is `nil` are left out.
+- `url.parse(target)` — split a request target on the first `?`. Returns `{path: "/users/123", query_string: "q=foo&page=2", query: {q: "foo", page: "2"}}`. If no `?`, `query_string` is `""` and `query` is `{}`. A `#fragment` is dropped from the end first. The path is returned as written (not decoded).
 
 `std/time` — exports `time` table:
 
 - `time.now()` — returns the current wall-clock time as milliseconds since the Unix epoch (int). Alias for `epoch_ms()`.
-- `time.format(ms, fmt)` — format epoch milliseconds as a UTC string using `strftime` specifiers. Wraps `format_time`.
+- `time.format(ms, fmt)` — format epoch milliseconds as a UTC string using `strftime` specifiers. Wraps `format_time` (see there for negative times and errors).
 - `time.format_local(ms, fmt)` — format epoch milliseconds as a local timezone string. Wraps `format_time_local`.
 - `time.http_date(ms?)` — RFC 7231 format: `"Tue, 28 Apr 2026 14:30:00 GMT"`. Uses current time if `ms` is omitted.
 - `time.iso8601(ms?)` — ISO 8601 format: `"2026-04-28T14:30:00Z"`. Uses current time if `ms` is omitted.
@@ -1462,13 +1467,13 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 `std/log` — exports `log` table. Structured logging to stderr. Depends on `std/time`.
 
 - `log.debug(msg)`, `log.info(msg)`, `log.warn(msg)`, `log.error(msg)` — log at the given level. Output format: `2026-04-28T14:30:00Z [INFO] message`. One line per call, written to stderr via `eprint`.
-- `log.set_level(level)` — set minimum log level. One of `"debug"`, `"info"`, `"warn"`, `"error"`. Default: `"info"`. Messages below the level are silently dropped. The level is module state, so it is per process: set it before spawning (or before `http.start`), or call it in the process that logs.
+- `log.set_level(level)` — set minimum log level. One of `"debug"`, `"info"`, `"warn"`, `"error"`; anything else raises `log.set_level: unknown level ...`. Default: `"info"`. Messages below the level are silently dropped. The level is module state, so it is per process: set it before spawning (or before `http.start`), or call it in the process that logs.
 
 `std/sqlite` — exports `sqlite` table. Thin wrapper over the SQLite C builtins.
 
 - `sqlite.open(path)` — opens (or creates) a SQLite database. Returns an opaque db handle. Use `":memory:"` for in-memory.
 - `sqlite.close(db)` — closes the database handle.
-- `sqlite.exec(db, sql)` — executes SQL that returns no rows (DDL, mutations without RETURNING).
+- `sqlite.exec(db, sql)` — executes SQL that takes no parameters and returns no rows (DDL, PRAGMA, mutations without RETURNING).
 - `sqlite.query(db, sql, params?)` — executes a parameterized query. `params` defaults to `[]`. Returns an array of row tables. Use `?` placeholders for bind parameters.
 - `sqlite.last_id(db)` — returns the last inserted row ID.
 - `sqlite.changes(db)` — returns the number of rows affected by the last mutation.
@@ -1478,6 +1483,7 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 ### Response builders
 
 - `http.response(status, headers, body)` — generic response constructor. Returns `{status, headers, body}`.
+- A response is valid when `status` is an int from 200 to 999 (1xx interim responses are not supported), `body` is `nil` or a string, and `headers` is `nil` or a table of header name → value. A value is sent as `"{value}"`; an array value is sent as one header line per element (`set_cookie` uses this for several cookies). A header name must be an HTTP token (letters, digits and ``!#$%&'*+-.^_`|~``: no spaces, `:` or control bytes, not empty), and a value containing CR or LF makes the response invalid (it could inject headers). The server writes `Content-Length` and `Connection` itself and drops a handler's own `Content-Length`, `Transfer-Encoding` and `Connection` headers (in any case); a handler's `Connection` header that lists `close` still closes the connection after the response.
 - `http.ok(body[, content_type])` — 200 response. Default content type: `"text/plain; charset=utf-8"`.
 - `http.html(body)` — 200 with `text/html; charset=utf-8`.
 - `http.json_response(data)` — 200 with `application/json`. Auto-encodes `data` via `json.encode`.
@@ -1490,14 +1496,16 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 
 - `http.router()` — returns a router table with methods:
   - `router.get(pattern, handler)`, `router.post(...)`, `router.put(...)`, `router.patch(...)`, `router.delete(...)` — register a route. Handler signature: `fn(req) → response table`.
-  - `router.static(url_prefix, dir_path)` — serve static files. Uses `std/mime` for content types. Prevents path traversal by normalizing paths and checking that they don't escape `dir_path`.
+  - `router.static(url_prefix, dir_path)` — serve static files. Uses `std/mime` for content types. Prevents path traversal by normalizing paths and checking that they don't escape `dir_path`. The prefix matches whole path segments: `router.static("/static", dir)` serves `/static` and `/static/...` (`/static` and `/static/` give `index.html`), not `/staticx` or `/static.txt`.
 - Route patterns: segments starting with `:` are parameters. `/users/:id` matches `/users/123` and sets `req.params.id = "123"`. First registered route wins.
-- Handler receives a request table: `{method, path, params, query, headers, body, cookies}`. `params` are extracted from route pattern, `query` is parsed from query string via `url.parse_query`, `cookies` are parsed from the `Cookie` header.
+- Handler receives a request table: `{method, path, params, query, headers, body, cookies}`. `params` are extracted from route pattern, `query` is parsed from query string via `url.parse_query`, `cookies` are parsed from the `Cookie` header (pairs separated by `;`, names and values trimmed).
+- `req.headers` keys are the header names lowercased (`req.headers["content-type"]`, whatever case the client sent), and values have surrounding whitespace trimmed (`Host:x` and `Host:  x` both give `"x"`). A header sent more than once has its values joined with `", "` (`Cookie` with `"; "`).
 
 ### Cookies
 
-- `http.set_cookie(resp, name, value[, opts])` — returns new response with `Set-Cookie` header. `opts` table supports: `path` (default `"/"`), `http_only` (default `true`), `secure` (default `false`), `same_site` (default `"Lax"`), `max_age` (seconds), `expires` (epoch ms).
-- `http.delete_cookie(resp, name[, opts])` — sets cookie with `Max-Age=0`.
+- `http.set_cookie(resp, name, value[, opts])` — returns a new response with a `Set-Cookie` header (`resp.headers` may be `nil`). The first cookie makes the header value a string; each further one turns it into an array of strings, sent as one `Set-Cookie` line each. `opts` table supports: `path` (default `"/"`), `http_only` (default `true`), `secure` (default `false`), `same_site` (default `"Lax"`), `max_age` (seconds, an int), `expires` (epoch ms).
+- The name, value, `path` and `same_site` must not contain `;`, `,`, whitespace or control bytes (any of them could add an attribute, such as `Domain=`, or inject a header), and the name must not be empty or contain `=`; otherwise `set_cookie` raises `http.set_cookie: invalid cookie value "..." (no ;, comma, whitespace or control bytes)` (`name`, `path`, `same_site` likewise; `http.set_cookie: max_age must be an int or nil, got ...`; `http.set_cookie: expires must be an int (epoch ms), got <type>`). In a handler the error gets the usual 500 and report. Encode arbitrary data first (`url.encode(v)`).
+- `http.delete_cookie(resp, name[, opts])` — sets cookie with `Max-Age=0`; checks `name` and `path` the same way (errors start with `http.delete_cookie: `).
 
 ### Form parsing
 
@@ -1509,30 +1517,36 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 
 ### Server
 
-- `http.serve(router[, opts])` — starts the HTTP server and blocks the caller. `opts` table: `port` (default 8080), `host` (default `"0.0.0.0"`). Meant to block until the acceptor process dies; currently it also returns when the caller receives any other message (see `docs/KNOWN_BUGS.md`).
-- `http.start(router[, opts])` — starts the HTTP server without blocking. Returns the acceptor pid. Same options as `serve`.
-- Spawns one process per connection. Supports HTTP/1.1 keep-alive with a 30-second idle timeout (via `tcp_read` timeout). Handles `Connection: close`. Errors in handlers are caught by `pcall` and return 500.
+- `http.start(router[, opts])` — starts the HTTP server without blocking and returns `{pid}`, the pid of the server process. `opts` table: `port` (default 8080), `host` (default `"0.0.0.0"`, an IP address), `max_body` (bytes, default 8388608 = 8 MB; an int `>= 0`, else `start` raises `http.start: max_body must be an int >= 0, got ...`), `idle_timeout_ms` (default 30000), `request_timeout_ms` (default 30000); a timeout given as `nil` means no limit, and otherwise must be an int `> 0`, else `start` raises `http.start: <name> must be an int > 0 (milliseconds) or nil, got <value or type>`. A first argument that isn't a router (a table with a `match` function, as `http.router()` returns) raises `http.start: expected a router from http.router(), got <type>`; a port that can't be bound or a bad host raises `http.start: ` followed by the `tcp_listen` error.
+- `http.stop(server[, timeout_ms])` — stops a server: kills its process with `"shutdown"` and waits (default 5000 ms, then raises `http.stop: the server did not stop within <ms> ms`) until the acceptor and the connection processes are killed and the listening socket and every connection's socket are closed, so the port can be bound again at once. A `timeout_ms` of `nil` waits until the server is down; one that is neither an int nor `nil` raises `http.stop: timeout_ms must be an int (milliseconds) or nil, got <type>`. This includes a connection accepted just before the stop whose process hasn't run yet: the acceptor registers each connection with the server right after spawning it. In-flight requests are cut off, and so is the request of a handler that calls `http.stop` on its own server (its connection process is killed with the rest; `stop` doesn't return to it). A handler that traps exits isn't killed: it finishes its current request, answers it with `Connection: close` and closes its connection, which may be after `stop` has returned (unless the handler takes the `EXIT` message itself); a connection process turns `trap_exit` off again after each handler, so one that trapped in an earlier request is killed as usual. `server` is the `{pid}` handle from `start`, the server pid, or a name it was registered under (an unregistered name raises `http.stop: no process registered as "<name>"`). Returns `nil`; stopping a server that has already stopped returns `nil` too.
+- `http.serve(router[, opts])` — `start`, then block the caller until the server process exits (its argument errors are `start`'s, starting with `http.serve: `). Other messages sent to the caller stay in its mailbox. Returns `nil` when the server was stopped (`http.stop`, or killed with reason `"shutdown"`), and raises `http.serve: server died: <reason>` for any other reason. A `"normal"` exit signal is ignored, as by every process that traps exits, so `kill(server, "normal")` doesn't stop it. The sockets are closed before it returns or raises. The server monitors the caller of `serve`: when the caller is killed, the server shuts down and frees the port.
+- Processes: the server process spawns the acceptor (linked) and monitors one process per connection (the acceptor registers each one with it). It traps exits, so killing it with any reason but `"normal"` (as `stop` and a supervisor do) shuts the server down cleanly, then the process exits with that reason; a supervisor can therefore restart an http server on the same port (its child spec's `start` returns `http.start`'s handle). When a connection process dies without closing its socket (a handler killed by `kill` or a linked process's exit), the server process closes it, so the client sees the connection end instead of hanging.
+- When the process table is full, a new connection gets a `503 Service Unavailable` and is closed, a line goes to stderr, and the acceptor keeps accepting. When accepting fails (for example, the process is out of file descriptors), the acceptor prints one line on stderr and retries every 50 ms; meanwhile new connections wait in the listen backlog (no 503 can be sent without a descriptor).
+- Keep-alive: an HTTP/1.1 connection stays open unless the request's `Connection` header lists `close`; an HTTP/1.0 connection stays open only when it lists `keep-alive` (and not `close`). `Connection` is a comma-separated, case-insensitive token list (`Connection: close, TE` closes). Pipelined requests are answered in order. Responses are always `HTTP/1.1`.
+- Timeouts: the server waits at most `idle_timeout_ms` for each read, including for the first byte of the next request on a kept-alive connection, and the head and body of one request must arrive within `request_timeout_ms` of its first byte; past either, the connection is closed without a response. `nil` turns a limit off. Writing the response has no timeout (`tcp_write`), so a client that stops reading holds its connection process until it goes away.
+- Request bodies: read by `Content-Length` (decimal digits only) or, for `Transfer-Encoding: chunked`, decoded (chunk extensions and trailer fields are discarded; a chunk size may have leading zeros, up to 64 characters with at most 15 significant hex digits). A body over `max_body` gets `413 Content Too Large`. A request with both `Transfer-Encoding` and `Content-Length`, an HTTP/1.0 request with `Transfer-Encoding`, a malformed `Content-Length`, malformed chunk framing (a bad size line, chunk data not followed by CRLF, a bare CR or LF or another control byte other than HTAB in a size or trailer line) gets `400 Bad Request`; any transfer coding other than plain `chunked` gets `501 Not Implemented`. Each of these closes the connection, so a body is never read as the next request. With `Expect: 100-continue` (HTTP/1.1), the server sends `HTTP/1.1 100 Continue` before it reads the body, unless it rejects the request first.
+- `HEAD` requests are dispatched to the `GET` route (`req.method` stays `"HEAD"`) and answered with the headers only: the `Content-Length` of the body the handler returned, and no body. No response to `HEAD` carries a body, the default 404 included. 204 and 304 responses carry neither a body nor `Content-Length`.
+- A handler that raises, or returns something other than a valid response (see Response builders), gets the default `server_error()` response, and the server prints `http: <METHOD> <path>: <message>` on stderr, followed by the handler's stack trace for an error (the server's own frames, and the std frames on top of the handler's, such as those of a builder that raised and of the std functions it called, are left out; the message says what is wrong with an invalid response, e.g. `invalid response: header Location has a CR or LF in its value`). An unmatched route gets the default `not_found()` response, and so does a static route whose path names a directory. A malformed request line (it must be `<method> <target> HTTP/1.0` or `HTTP/1.1`) or header line (no `:`, or whitespace in the name), and a request head with a bare CR, a bare LF or another control byte other than HTAB anywhere in it (RFC 9112 §2.2: another parser could split such a head into different header lines, which smuggles requests), get `bad_request()`; another `HTTP/<digit>.<digit>` version gets `505 HTTP Version Not Supported`; a request head over 64 KB gets `431 Request Header Fields Too Large`; each closes the connection. Empty lines (CRLFs) before a request line are ignored. An absolute-form target (`GET http://host/path?q HTTP/1.1`, as sent to a proxy; scheme `http` or `https`, any case) is routed by its path and query, the host being ignored. Before closing after an error response, the server reads and discards what the client is still sending (until it pauses for 100 ms, at most 1 s), so the client receives the response instead of a connection reset.
 
 `std/request` — exports `request` table. HTTP/1.1 client for outbound requests. Depends on `std/string`, TCP builtins.
 
-- `request.get(url[, opts])` — GET request. Returns `{status, headers, body}`.
-- `request.post(url[, opts])` — POST request. `opts` supports `body` (string) and `headers` (table).
-- `request.put(url[, opts])` — PUT request. Same opts as post.
-- `request.patch(url[, opts])` — PATCH request. Same opts as post.
-- `request.delete(url[, opts])` — DELETE request. Same opts as get.
-- `request.request(method, url[, opts])` — generic method for full control.
-- URL format: `http://host[:port]/path[?query]`. Default port 80. HTTP only (no TLS).
-- Sends `Connection: close` — no keep-alive. Reads response until EOF.
+- `request.get(url[, opts])`, `request.post(url[, opts])`, `request.put(url[, opts])`, `request.patch(url[, opts])`, `request.delete(url[, opts])` — send that method. Return `{status, headers, body}`.
+- `request.request(method, url[, opts])` — any other method (`"HEAD"`, `"OPTIONS"`, ...). A `HEAD` response's body is `""`.
+- `opts` (all optional; `nil` means the default, except for `timeout_ms`): `body` (string, default `""`; a non-empty body gets a `Content-Length` header, and so does an empty one for `POST`, `PUT` and `PATCH`: `Content-Length: 0`, which RFC 9110 asks for and some servers answer `411 Length Required` without), `headers` (table of request header name → value, sent as given; a name must be an HTTP token, else `request.<fn>: invalid header name "<name>" (must be an HTTP token: ...)`, and a `nil` value raises `request.<fn>: header <name> has a nil value`), `timeout_ms` (an int `> 0`, default `30000`, or `nil` for no deadline; anything else raises `request.<fn>: timeout_ms must be an int > 0 (milliseconds) or nil, got ...`). `timeout_ms` is one deadline for the whole call, counted from before the connect until the response has been read: each read waits only for what is left of it, and when it runs out the call raises `"request.<fn>: timed out after <ms> ms waiting for <url>"`. Connecting and writing the request can't be interrupted (see `tcp_connect`, `tcp_write`), so the deadline cuts short only the reads.
+- `status` is the int status code; the reason phrase is optional (`HTTP/1.1 204` works) and not returned. `headers` maps **lowercase** header names to values with surrounding whitespace trimmed (`resp.headers["content-type"]`); a header sent more than once has its values joined with `", "`, except `set-cookie`, whose values are joined with `"\n"` (a cookie's `Expires` contains a comma). `body` is the decoded body: a `Transfer-Encoding` whose last coding is `chunked` is decoded (chunk extensions and trailer fields dropped, so a trailer never overrides a header; the `transfer-encoding` header stays), `Content-Length` is read exactly, and anything else is read until the server closes. Other transfer codings (gzip) are not decoded. Interim `1xx` responses (other than `101`) are skipped.
+- URL format: `http://host[:port][/path][?query][#fragment]`. Default port 80; the fragment is not sent; a path that is missing becomes `/`. `https://` raises `"request.<fn>: https is not supported (Gem has no TLS): <url>"` (see ROADMAP.md); other schemes, a URL without `http://`, a missing host, a bad port, credentials (`user:pass@`), IPv6 literals, and spaces or control bytes in the URL raise a `request.<fn>: ` error too. Control bytes (CR, LF) in a method, header name or header value also raise (`request.<fn>: invalid character (byte <n>) in ...`), so a value can't inject a header.
+- Sends `Host` (with the port when it isn't 80), `Connection: close` and `Content-Length` unless `headers` sets that name (in any case). A `Transfer-Encoding` header in `headers` raises `request.<fn>: a Transfer-Encoding header is not supported (the body is sent with Content-Length)`: the body is always sent whole. No keep-alive, no redirects followed (a `302` comes back as is).
+- Every error is a string prefixed with the function called: `request.get: ...`, `request.request: ...`. A connect failure is `"request.<fn>: cannot connect to <host>:<port>: <tcp_connect error>"`; a malformed response (bad status line, header line, `Content-Length` or chunk framing) or a connection closed early raises one. The socket is closed whether the call returns or raises; a process killed in the middle of a call (a `task.await` timeout, a link) leaks it, so bound requests with `timeout_ms` rather than by killing the caller. A response line (status line, header line, chunk-size line) over 64 KB raises `request.<fn>: response line longer than 65536 bytes`.
 
 `std/task` — exports `task` table. Runs a function in its own process and waits for its result; the simplest way to do several things at once. Load with `load "std/task"`.
 
-- `task.async(f)` — spawns a process that calls `f()` and returns a task handle `{pid, ref, owner, done}`.
-- `task.await(t)` / `task.await(t, timeout_ms)` — waits for the task and returns `f`'s value. If `f` raised an error, `await` raises the same message in the caller. On timeout, the task is killed and `await` raises `"task.await timeout"`. If the task process ends before it produces a result (killed, or `kill(self(), reason)` in `f`), `await` raises `"task exited: <reason>"`; for reason `"normal"` the message instead says the task exited before its result was received and that a catch-all receive may have taken the result. With no timeout, `await` waits until the task finishes.
-- `task.await_all(tasks)` / `task.await_all(tasks, timeout_ms)` — awaits every task and returns their values in the order of `tasks`. The timeout covers the whole call. If any task fails or the timeout expires, the tasks not yet awaited are killed and the error is raised.
+- `task.async(f)` — spawns a process that calls `f()` and returns a task handle `{pid, ref, owner, done}`. Raises `task.async: expected a function, ...` when `f` is not a function. `await` and `await_all` raise `task.await: expected a task from task.async, ...` (or `task.await_all: ...`) for anything but such a handle.
+- `task.await(t)` / `task.await(t, timeout_ms)` — waits for the task and returns `f`'s value. If `f` raised an error, `await` raises the same message in the caller. On timeout, the task is killed (`kill(pid, "timeout")`, so a monitor of it sees reason `"timeout"`; the tasks `await_all` drops when it fails or times out get `"cancelled"`; a task that traps exits is not, see the rules below) and `await` raises `"task.await: timeout"`. If the task process ends before it produces a result (killed, or `kill(self(), reason)` in `f`), `await` raises `"task.await: task exited: <reason>"`; for reason `"normal"` the message instead says the task exited before its result was received and that a catch-all receive may have taken the result. With no timeout (`nil`, the default), `await` waits until the task finishes; a timeout that is neither an int nor `nil` raises `task.await: timeout must be an int (milliseconds) or nil, got <type>` (`task.await_all: ...` from `await_all`) before anything is awaited.
+- `task.await_all(tasks)` / `task.await_all(tasks, timeout_ms)` — awaits every task and returns their values in the order of `tasks`. The timeout covers the whole call. If any task fails or the timeout expires, the tasks not yet awaited are killed (except those that trap exits) and the error is raised; the messages that `await` starts with `task.await: ` start with `task.await_all: ` here.
 
 Rules:
 - Only the process that called `async` can await the task, and each task can be awaited once. Breaking either rule — including passing the same task to `await_all` twice — raises an error.
-- A task whose function sets `process_flag("trap_exit", true)` is not killed by a timeout or an `await_all` failure: it runs on, and its result and `DOWN` later arrive in the owner's mailbox.
+- A task whose function sets `process_flag("trap_exit", true)` is not killed by a timeout or an `await_all` failure (it gets an `EXIT` message instead): it runs on, and its result and `DOWN` later arrive in the owner's mailbox, where `await` no longer takes them. Don't trap exits in a task; if the owner keeps running, give its receive loop a catch-all, or the two messages stay queued.
 - The result reaches the awaiting process as a message, and each task is monitored by its owner. `await` consumes both the result and the task's `DOWN`, so nothing is left in the mailbox. Selective `receive ... when` arms leave these messages alone unless a pattern matches `{tag: "_task_result"}` or the task's `DOWN`; a catch-all `receive()` can take them first, and `await` then raises an error that says so instead of waiting.
 
 ```
@@ -1549,44 +1563,59 @@ let pages = task.await_all([a, b], 5000)
 
 `std/supervisor` — exports `supervisor` table:
 
-- `supervisor.start(spec)` — start a supervisor process. Returns `{pid: <pid>}`. The spec table supports:
-  - `strategy` — `"one_for_one"` (default): restart only the crashed child. `"one_for_all"`: stop all children and restart all in order.
-  - `children` — array of child specs: `{id: <string>, start: <fn>, restart: <string>}`. The `start` function must spawn and return a pid. `restart` is `"permanent"` (always restart, default), `"temporary"` (never restart), or `"transient"` (restart only on abnormal exit).
-  - `max_restarts` — max restarts within the time window before the supervisor itself crashes (default 3).
+- `supervisor.start(spec)` — start a supervisor process. Returns `{pid: <pid>}`. A `spec` that is not a table raises `supervisor.start: expected a spec table {strategy, children, ...}, got <type>`. The spec table supports:
+  - `strategy` — `"one_for_one"` (default): restart only the crashed child. `"one_for_all"`: stop all other running children (`kill(pid, "shutdown")`, waiting for each one's `DOWN`, so a child that is itself a supervisor has shut its own children down first), then start again, in order, the crashed child and the stopped children that are not `"temporary"`; a temporary child it stopped, and a child that was not running, stay down (pid `-1`). Any other value raises `supervisor.start: unknown strategy ...`.
+  - `children` — array of child specs: `{id: <string>, start: <fn>, restart: <string>}`. The `start` function must spawn the child and return its pid or a `{pid}` handle (so `start: fn() gen_server.start(m) end` works); the supervisor calls it from its own process, monitors the child and links to it. `restart` is `"permanent"` (always restart, default), `"temporary"` (never restart), or `"transient"` (restart only on an abnormal exit: a transient child that exits with reason `"normal"` or `"shutdown"` stays down). Any other `restart` raises `supervisor.start: unknown restart "<restart>" for child "<id>"`. `start` also raises a `supervisor.start: ...` error, and starts nothing, when `children` is not a table, a spec is not a table, a spec has no `id` or repeats another's, or a spec's `start` is not a fn.
+
+    `start` should spawn the child and return at once. A child that has already exited when `start` returns (because `start` waited, or the child's work was that short) has an unknown exit reason: the supervisor's monitor reports `"noproc"`. A permanent child is restarted, a transient child is taken to have exited normally and stays down (pid `-1`), a temporary one stays down. The supervisor can't tell this apart from a child that really exits with reason `"noproc"` (one that links to a process that is already gone, without trapping exits, dies with it): a transient child that exits with `"noproc"` is not restarted either.
+  - `max_restarts` — max restarts within the time window before the supervisor itself crashes with `supervisor: max restart intensity reached` (default 3). Must be an int, as must `max_seconds`.
   - `max_seconds` — time window in milliseconds for restart intensity (default 5000).
-  - `name` — optional string name to register the supervisor process.
-- `supervisor.which_children(pid_or_name)` — query a supervisor for its children. Returns an array of `{id, pid, restart}` tables. Takes a pid or a registered name, not the `{pid}` table `start` returns (pass `handle.pid`). Waits with no timeout.
+  - `name` — optional string name to register the supervisor process. `start` registers it before returning, so the name works at once; `start` raises `supervisor.start: the name "<name>" is already registered` (and starts nothing) when the name is taken, and `supervisor.start: name must be a string, got <type>` for a name that is not a string.
+
+  The children are started by the supervisor process after `start` returns; a request such as `which_children` is answered once they have all started.
+
+  The supervisor traps exits and is linked to each child. It exits when it reaches its restart intensity (reason `supervisor: max restart intensity reached`), when it gets an exit signal (`kill(sup, "shutdown")` from `supervisor.stop`, a parent supervisor, one of its own children or anyone else, or the death of a process linked to it; a `"normal"` exit signal is ignored), or on any other error in the supervisor (a child's `start` that raises, for one; it prints where that error was raised on stderr before its crash report). Before it exits, it shuts its children down, as in OTP: it kills each running child with the exit signal `"shutdown"`, whatever its own exit reason, in reverse child-spec order (a restarted child keeps its place), and waits for that child's `DOWN`, at most 4000 ms in all; then it exits with its own reason. A child that is itself a supervisor (or a `dynamic_supervisor`, or an `http` server) does the same when it gets that signal, so the whole tree below is down, and every name registered in it free, by the time the supervisor's `DOWN` arrives. That is what lets supervisors nest: a supervisor started as another's child is restarted with fresh children, so a child that registers a name can register it again. A child that traps exits and doesn't exit on the `EXIT` message uses up the supervisor's whole 4000 ms, then the supervisor exits anyway and leaves it running; the children shut down after it are killed with no wait, so a sibling subtree may still be shutting down (and holding its names) when the supervisor's `DOWN` arrives (see `A one_for_all restart hangs on a child that traps exits` in KNOWN_BUGS.md); such a child should exit on an `EXIT` from its supervisor with reason `"shutdown"` (the supervisor's pid is `self()` inside the child spec's `start`, which runs in the supervisor). The child's `DOWN` is what the supervisor restarts on; the `EXIT` a child's death also sends it is dropped.
+
+  Once the supervisor process has run, it traps exits, so a `kill(sup, reason)` is handled when it next reads its mailbox: right after the `kill` returns, the supervisor and its children are still alive and its name is still registered. To stop a supervisor and know it is gone, use `supervisor.stop`, or monitor it and wait for its `DOWN`.
+- `supervisor.which_children(target, timeout_ms = 5000)` — query a supervisor for its children. `target` is a pid, the `{pid}` handle `start` returns, or a registered name. Returns an array of `{id, pid, restart}` tables in child-spec order; `pid` is `-1` for a child that is not running (a temporary or transient child that exited and was not restarted). Raises `supervisor.which_children: supervisor exited: <reason>` at once when the supervisor is dead or dies before answering, and `supervisor.which_children: timeout` after `timeout_ms`. A `timeout_ms` of `nil` waits until the answer or the supervisor's death; any other non-int raises `supervisor.which_children: timeout must be an int (milliseconds) or nil, ...`. It monitors the supervisor for the length of the request, the way `gen_server.call` monitors its server, and leaves no monitor or `DOWN` of its own behind.
+- `supervisor.stop(target, timeout_ms = 5000)` — stops the supervisor with the exit signal `"shutdown"` and waits for its `DOWN`, which arrives once it has shut down its children and, through nested supervisors, the whole tree below it (see above), so their names are free when `stop` returns. Returns `nil`, also for a supervisor that has already exited; raises `supervisor.stop: the supervisor did not stop within <ms> ms` after `timeout_ms` (`nil` waits forever). `target` is accepted as in `which_children`. Like `http.stop`, it consumes the supervisor's `DOWN`, unless the caller monitors the supervisor itself: that monitor still gets its `DOWN`.
 
 `std/dynamic_supervisor` — exports `dynamic_supervisor` table. For workloads where children are spawned on demand from a single template (worker pools, per-connection processes, lazily-created topic actors), instead of being declared up front. Restart policies and intensity (`max_restarts` / `max_seconds`) match `std/supervisor`. Strategy is fixed at one-for-one; failed children restart with their original `args`.
 
-- `dynamic_supervisor.start({child, max_restarts, max_seconds, name})` — start a dynamic supervisor. Returns `{pid: <pid>}`. The `child` template is `{start: <fn>, restart: <string>}` where `start` takes one argument (the per-child args, packed into a table or any value the caller chose) and must spawn-and-return a pid; `restart` is `"permanent"` (default), `"transient"`, or `"temporary"`.
-- `dynamic_supervisor.start_child(target, args)` — ask the supervisor to spawn a child by calling `template.start(args)`. The supervisor monitors the child and stores `args` so it can replay the start on crash. Returns the new child pid.
-- `dynamic_supervisor.terminate_child(target, pid)` — stop the named child cleanly (`kill(pid, "shutdown")`) and remove it from the supervisor's child set. Returns `true` if the child was known, `false` otherwise.
-- `dynamic_supervisor.which_children(target)` — returns an array of `{pid, args}` tables, one per live child.
+- `dynamic_supervisor.start({child, max_restarts, max_seconds, name})` — start a dynamic supervisor. Returns `{pid: <pid>}`. An argument that is not a table raises `dynamic_supervisor.start: expected an options table {child, ...}, got <type>`. The `child` template is `{start: <fn>, restart: <string>}` where `start` takes one argument (the per-child args, packed into a table or any value the caller chose) and must spawn a process and return its pid or a `{pid}` handle (so `start: fn(a) gen_server.start(m) end` works); `restart` is `"permanent"` (default), `"transient"` (restart unless the child exits with `"normal"` or `"shutdown"`), or `"temporary"`. A missing template, a `start` that is not a fn, any other `restart`, or a `max_restarts` / `max_seconds` that is not an int raises a `dynamic_supervisor.start: ...` error. `name` registers the supervisor before `start` returns; a name that is already taken raises `dynamic_supervisor.start: the name "<name>" is already registered`, and one that is not a string `dynamic_supervisor.start: name must be a string, got <type>`. Like `supervisor`, it traps exits and links each child, and when it exits (on reaching its restart intensity, `dynamic_supervisor: max restart intensity reached`, on an exit signal, from one of its children as well as from anyone else, or on an error) it first shuts its children down the same way: kills each with `"shutdown"`, last started first (a restarted child keeps its place), and waits for its `DOWN`, at most 4000 ms in all. A `kill` of it is handled when it next reads its mailbox. A child that is already gone when `start` returns has exit reason `"noproc"`, and is handled as by `supervisor`: a transient child is not restarted, and neither is one that really exits with `"noproc"`.
+- `dynamic_supervisor.start_child(target, args, timeout_ms = 5000)` — ask the supervisor to spawn a child by calling `template.start(args)`. The supervisor monitors and links the child and stores `args` so it can replay the start on crash. Returns the new child's pid (a bare pid, also when `start` returned a handle). If `start` raises or returns something other than a pid or `{pid}` handle, the call raises `dynamic_supervisor.start_child: <error>` and the supervisor keeps running.
+- `dynamic_supervisor.terminate_child(target, child, timeout_ms = 5000)` — stop the child (`kill(pid, "shutdown")`), wait for it to exit and remove it from the supervisor's child set. `child` is a pid, a `{pid}` handle or a registered name. Returns `true` once the child has exited (it is not restarted), `false` if the supervisor doesn't know it. A child that traps exits gets an `EXIT` message instead and is gone only when it exits by itself: until then `terminate_child` waits, and raises `dynamic_supervisor.terminate_child: timeout` after `timeout_ms`; the child keeps running, is left out of `which_children`, is not restarted when it exits, and another `terminate_child` sends it the exit signal again. There is no untrappable exit signal (see `A one_for_all restart hangs on a child that traps exits` in KNOWN_BUGS.md).
+- `dynamic_supervisor.which_children(target, timeout_ms = 5000)` — returns an array of `{pid, args}` tables, one per live child, in the order they were started.
+- `dynamic_supervisor.stop(target, timeout_ms = 5000)` — as `supervisor.stop`: kills the supervisor with `"shutdown"` and waits for its `DOWN`, which arrives once its children are down; raises `dynamic_supervisor.stop: the supervisor did not stop within <ms> ms`.
+
+`target` is the `{pid}` handle `start` returned, a bare pid, or the registered name. The `start_child`, `terminate_child` and `which_children` calls monitor the supervisor: they raise `dynamic_supervisor.<fn>: supervisor exited: <reason>` at once when it is dead or dies during the call, and `dynamic_supervisor.<fn>: timeout` after `timeout_ms` (`nil`: no timeout; another non-int raises `dynamic_supervisor.<fn>: timeout must be an int (milliseconds) or nil, ...`). A name nobody holds raises `dynamic_supervisor.<fn>: no process registered as "<name>"`. As with `gen_server.call`, the call leaves no monitor and no `DOWN` of its own behind.
 
 `std/gen_server` — exports `gen_server` table. OTP-style synchronous server abstraction. Load with `load "std/gen_server"`.
 
-The caller provides a module table with callback functions: `init`, `handle_call`, `handle_cast`, and `handle_info`.
+The caller provides a module table with callback functions: `init`, `handle_call`, `handle_cast`, and `handle_info`. All four are required, even when a server never gets casts or other messages (`handle_cast: fn(msg, s) {state: s} end` ignores them).
 
-- `gen_server.start(module)` — starts a gen_server process running the given module. Returns `{pid: <pid>}`. The module's `init()` is called to produce the initial state. `init` may return a bare value (used as initial state) or `{state: <s>, timeout: <ms>}` to set an initial idle timeout.
-- `gen_server.call(target, msg)` / `gen_server.call(target, msg, timeout_ms)` — sends a synchronous request and waits for a reply. Default timeout is 5000ms. Internally sends `{tag: "call", from: {pid, ref}, msg: <msg>}` to the server, then blocks waiting for a matching `{tag: "gs_reply", ref: <ref>, value: <value>}`. Returns the reply value. Errors on timeout.
-- `gen_server.cast(target, msg)` — sends an asynchronous (fire-and-forget) message. Sends `{tag: "cast", msg: <msg>}` to the server. Returns `nil`.
+- `gen_server.start(module)` — starts a gen_server process running the given module. Returns `{pid: <pid>}`. A `module` that is not a table raises `gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got <type>`, and one whose callback is missing or not a fn raises `gen_server.start: the module's <callback> must be a fn, got <type>`; nothing is started. The module's `init()` is called in the server process to produce the initial state. Like `handle_cast` and `handle_info`, it returns `{state: <s>}`, and may include `timeout: <ms>` to set an initial idle timeout.
+- `gen_server.call(target, msg, timeout_ms = 5000)` — sends a synchronous request and waits for the reply, which it returns. `target` (here and in `cast`) is the `{pid}` handle `start` returns, a bare pid, or a registered name; anything else, or a name nobody registered, raises a `gen_server.call: ...` error. The caller monitors the server first, so a server that is already dead, or dies before replying, fails the call at once with `gen_server.call: server exited: <reason>` (reason `"noproc"` for a server that was gone already); otherwise the call raises `gen_server.call: timeout` after `timeout_ms`. A `timeout_ms` of `nil` waits until the reply or the server's death; any other non-int raises `gen_server.call: timeout must be an int (milliseconds) or nil, ...`. The monitor lasts only for the call: the call removes it (and drops the `DOWN` it delivered) when the call added it, so a process that has called a server gets no `DOWN` when the server later dies, and calling a dead server again and again leaves nothing in the mailbox. A monitor the caller set up itself is the same monitor (a process monitors a target at most once): the call leaves it in place, and when the server dies during the call, the call puts that monitor's `DOWN` back at the end of the mailbox. The request and reply are private messages (`{tag: "_gs_call", ...}`, `{tag: "_gs_reply", ...}`); the reply is matched by a fresh ref, so a late reply to a call that timed out is never returned by a later call.
+- `gen_server.cast(target, msg)` — sends an asynchronous (fire-and-forget) message (`{tag: "_gs_cast", ...}`). Returns `nil`. A cast through a pid or a handle to a server that has exited is dropped; a cast through a registered name raises `gen_server.cast: no process registered as "<name>"` once the process holding it has died (the name is gone with it), like `send` to a name.
 - `gen_server.reply(from, value)` — sends a reply to a pending `call`. Used for deferred replies when `handle_call` returns `{noreply: state}` instead of replying immediately. Returns `nil`.
 
 Module callback return values:
 
-- `handle_call(msg, from, state)` — must return `{reply: <value>, state: <new_state>}` to reply immediately, or `{noreply: <new_state>}` to defer the reply (use `gen_server.reply(from, value)` later). May include `timeout: <ms>` to schedule an idle timeout.
-- `handle_cast(msg, state)` — must return `{state: <new_state>}`. May include `timeout: <ms>`. A callback that returns anything else (a `match` with no matching arm returns `nil`) crashes the server, so give its `match` an `else`.
+- `handle_call(msg, from, state)` — must return `{reply: <value>, state: <new_state>}` to reply immediately, or `{noreply: <new_state>}` to defer the reply (use `gen_server.reply(from, value)` later), not a table with both `reply` and `noreply`. May include `timeout: <ms>` to schedule an idle timeout.
+- `init()` — must return `{state: <initial_state>}`. May include `timeout: <ms>`.
+- `handle_cast(msg, state)` — must return `{state: <new_state>}`. May include `timeout: <ms>`.
 - `handle_info(msg, state)` — handles any message not from `call`/`cast` (e.g. DOWN messages, EXIT messages, `"timeout"`). Must return `{state: <new_state>}`. May include `timeout: <ms>`.
 
-When any callback returns a `timeout` field, a timer is scheduled: after `timeout` milliseconds with no other message, `handle_info` is called with the string `"timeout"` as the message. Each new timeout cancels the previous pending one. Omitting `timeout` (or setting it to `nil`) cancels any pending timeout without scheduling a new one.
+A callback that returns anything else (`nil`, as a `match` with no matching arm does, a non-table, or a table without those keys) is a bug in the module: the server dies with an error naming the callback and what it should return, such as `gen_server: handle_cast returned nil, expected {state: state}`, and a pending `call` fails at once with that reason. So does a `timeout` that is neither an int nor `nil` in a callback's result (`gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil`); `handle_call`'s reply is not sent. Give each callback's `match` an `else`.
+
+When any callback returns a `timeout` field, a timer is scheduled: after `timeout` milliseconds with no other message, `handle_info` is called with the string `"timeout"` as the message. Each new timeout cancels the previous pending one. Omitting `timeout` (or setting it to `nil`) cancels any pending timeout without scheduling a new one. A timeout that had already fired, but was still queued behind the message whose callback cancelled or replaced it, is ignored.
 
 ```
 load "std/gen_server"
 
 let counter_mod = {
   init: fn()
-    0
+    {state: 0}
   end,
   handle_call: fn(msg, from, state)
     match msg
@@ -1594,6 +1623,8 @@ let counter_mod = {
       {reply: state, state: state}
     when "inc"
       {reply: state + 1, state: state + 1}
+    else
+      {reply: nil, state: state}
     end
   end,
   handle_cast: fn(msg, state)
@@ -1609,7 +1640,7 @@ let counter_mod = {
   end
 }
 
-let server = gen_server.start(counter_mod).pid
+let server = gen_server.start(counter_mod)
 gen_server.call(server, "inc")    # 1
 gen_server.call(server, "inc")    # 2
 gen_server.call(server, "get")    # 2

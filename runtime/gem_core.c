@@ -372,6 +372,10 @@ GemVal gem_table_get_ic_miss(GemTable *t, const char *key, GemICacheSlot *cache)
 
 /* ─── Equality ─── */
 
+int64_t gem_table_id(GemVal v) {
+    return v.type == VAL_TABLE ? (int64_t)(intptr_t)v.table : 0;
+}
+
 int gem_val_eq(GemVal a, GemVal b) {
     if (a.type != b.type) return 0;
     switch (a.type) {

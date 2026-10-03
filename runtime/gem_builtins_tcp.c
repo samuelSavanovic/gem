@@ -187,9 +187,19 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
     if (argc >= 2 && args[1].type == VAL_INT) {
         max_bytes = (size_t)args[1].ival;
     }
-    int64_t timeout_ms = -1;
+    /* timeout_ms: nil or omitted waits until data or EOF; an int is a
+       deadline, and one <= 0 (a remaining time that has run out) only takes
+       what is already there, like `after 0`. */
+    int has_timeout = 0;
+    int64_t timeout_ms = 0;
     if (argc >= 3 && args[2].type == VAL_INT) {
+        has_timeout = 1;
         timeout_ms = args[2].ival;
+    } else if (argc >= 3 && args[2].type != VAL_NIL) {
+        char errbuf[160];
+        snprintf(errbuf, sizeof(errbuf), "tcp_read: timeout_ms must be an int (milliseconds) or nil, got %s",
+                 gem_type_str(args[2]));
+        gem_error(errbuf);
     }
 
     if (gem_current_pid >= 0) {
@@ -202,7 +212,7 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
         }
         char *buf = proc->read_buf;
 
-        if (timeout_ms > 0) {
+        if (has_timeout && timeout_ms > 0) {
             proc->deadline_ms = gem_now_ms() + timeout_ms;
             proc->timed_out = 0;
         }
@@ -222,6 +232,7 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
                 return r;
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (has_timeout && timeout_ms <= 0) return GEM_NIL;
                 gem_io_yield(fd, 0);
                 if (proc->timed_out) {
                     proc->timed_out = 0;

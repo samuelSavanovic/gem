@@ -8,7 +8,7 @@ Priority scale: **P0** = measurable impact on benchmark right now, **P1** = sign
 
 ## Current performance reference
 
-Single-threaded scheduler ceiling on M1 Pro is ~26–29k req/s on `/` (static HTML) regardless of c=4/100/500 — higher concurrency just queues. Full benchmark history is in `OPTIMIZATIONS_LOG.md`.
+Single-threaded scheduler ceiling on M1 Pro was ~26–29k req/s on the bookmark app's `/` (static HTML, April 2026, before the std/http hardening) regardless of c=4/100/500 — higher concurrency just queues. The hardened std/http is back at its pre-hardening throughput in its own load test on Linux x86_64 (`OPTIMIZATIONS_LOG.md`, "std/http"); the bookmark-app figure has not been re-measured since. Full benchmark history is in `OPTIMIZATIONS_LOG.md`.
 
 Key bottlenecks under the current arena + region-reset mechanism:
 - Per-process arena allocation eliminates GC pauses; every loop resets the region it allocated once it passes max(1 MB, 2 × the last reset's cost), so memory is bounded at roughly 3× a loop's live data plus whatever was allocated before the loop started.
@@ -35,7 +35,7 @@ Originally reported at 2.39 GB stuck post-c=500 with the 16 MB threshold. After 
 GemVal is currently 16 bytes (4-byte type enum + 8-byte union + padding). NaN boxing packs type + value into a single 8-byte double by exploiting the NaN payload space. Halves memory per value, improves cache locality, eliminates the type field branch in hot paths. The payoff isn't just memory — every function call, table lookup, and arithmetic op passes GemVals, so halving their size compounds across the entire runtime. Requires rewriting every GemVal constructor and accessor. Major undertaking but large payoff. Would also directly reduce arena allocation pressure since every value, table entry, and function argument shrinks.
 
 ### Avoid hashing integers in tables (P2)
-Integer keys currently fall through to a linear scan if they don't match the array-style fast path (sequential 0..n). A dedicated int hash map (parallel to `str_index`) would give O(1) lookup for sparse integer keys. Low priority — most integer keys follow the array pattern.
+Integer keys currently fall through to a linear scan if they don't match the array-style fast path (sequential 0..n). A dedicated int hash map (parallel to `str_index`) would give O(1) lookup for sparse integer keys. Sparse int sets are common (ids from a database): 20,000 of them (`seen[id] = true`, then `has_key`) take 3.1 s against 30 ms as string keys, and `table.group_by` with 20,000 int groups about 4.9 s; BEST_PRACTICES tells users to key such tables by string.
 
 ## Strings
 
@@ -43,12 +43,22 @@ Integer keys currently fall through to a linear scan if they don't match the arr
 `substr` allocates a copy. A view (pointer + offset + length) into the original string would make substring extraction O(1). Strings already carry their length (`slen`), but every consumer that relies on the trailing NUL (C interop, `printf %s`) would need to copy or check views first. Defer until profiling shows substring allocation as a real bottleneck — the C interop boundary assumes null-terminated strings throughout, and `substr`/`ord(s, i)` already cover the hot cases without changing the representation.
 
 ### Search and scan builtins so std string loops run in C (P1)
-Byte-at-a-time loops written in Gem (`ord(s, i)` per byte, plus a reduction check at every back-edge) are much slower than the same loop in C, and std leans on them: `std/string`'s `index_of`, `contains`, `split`, `starts_with` and `ends_with` all compare byte by byte through `str_eq_at`, and `std/http`'s `html_escape` dispatches on every byte. `split` also builds each piece with `buf_push(buf, chr(ord(s, i)))`, allocating a one-byte string per input byte. Two general builtins would move the inner loops into C:
+A byte loop written in Gem (`ord(s, i)` per byte, plus a reduction check and a reset check at every back-edge) costs about 50 ns a byte, against about 1 ns for `memchr`/`memmem`, and std leans on such loops. `std/string` now works around the missing search builtin: its private `find` scans the first 32 positions in Gem, then tests growing chunks (64 bytes doubling to 64 KB) for a match in C with `len(str_replace(substr(s, i, n), needle, "")) != n` (a miss returns the input without copying), and bisects the matching chunk the same way down to a 32-byte Gem scan. `split` scans in Gem while delimiters are close together and hands longer gaps to `find`. Measured on Linux x86_64 (1 MB strings; before → after the workaround):
 
-- `find(s, needle, start)` — `memmem`-backed; index of the first match at or after `start`, or -1. `index_of` and `contains` become one call, `split` becomes `find` plus one `substr` per piece, and `std/http`'s search for the `\r\n\r\n` header terminator (one `ord` comparison per byte) becomes one call.
-- `find_any(s, chars, start)` — index of the first byte at or after `start` that is in the set `chars`, or -1. `html_escape`, `std/url`'s percent-encoding and tokenizers like the `std/json` scanner scan to the next special byte, then copy the whole run before it. `trim` needs the inverse (skip bytes that *are* in the set, like `strspn`), so give it a negate flag or a sibling `skip_any`.
+| Call | Gem byte loop | chunked `str_replace` |
+|---|---|---|
+| `string.index_of(s, "needle")`, match at byte 1,000,000 | 185 ms | 4 ms |
+| `string.contains(s, "zz")`, no match | 150 ms | 4 ms |
+| `string.split(s, ";")`, no match | 210 ms | 4 ms |
+| `string.split(s, ",")`, 100,000 ten-byte fields | 245 ms | 140 ms |
+| `url.decode(s)`, no `%` | 175 ms | 7 ms |
 
-The range copy already exists: `substr(s, start, count)` is one `memcpy`. The std loops just don't use it; `starts_with`/`ends_with` need no new builtin at all, since `substr(s, pos, len(x)) == x` is one copy plus one compare. `upper`/`lower` also allocate a string per byte (`add(chr(c))`) but need a byte-mapping builtin rather than either of these.
+The dense `split` stays slow: the Gem scan alone is about 55 ms and the 100,000 `substr` + `push` about 45 ms; a C `find` would leave only the latter. The workaround also copies each chunk it tests, and does about 2× the C work of one `memmem` pass. Two general builtins would retire it:
+
+- `find(s, needle, start)` — `memmem`-backed; index of the first match at or after `start`, or -1. `string.index_of`/`contains` become one call, `split` becomes `find` plus one `substr` per piece. std/http already uses a runtime extern helper of this shape, `gem_bytes_find` (and `gem_bytes_span` for spans over a byte set), reached through `extern fn` because there is no builtin; std/string's `find` could switch to it today, and a public builtin would retire both helpers.
+- `find_any(s, chars, start)` — index of the first byte at or after `start` that is in the set `chars`, or -1. `html_escape`, `url.encode` (1 MB with a reserved byte every 10: 215 ms), `url.parse_query` and tokenizers like the `std/json` scanner scan to the next special byte, then copy the whole run before it. `trim` needs the inverse (skip bytes that *are* in the set, like `strspn`), so give it a negate flag or a sibling `skip_any`.
+
+`upper`/`lower` copy unchanged runs with `substr` but still allocate a string per changed byte (`add(chr(c))`): `string.upper` of 1 MB of mostly lowercase text takes 160 ms, `lower` of the same text 80 ms. They need a byte-mapping builtin rather than either of these.
 
 ### String interning for short strings (P1)
 Small strings (< 16 bytes) could be interned in a global table, turning equality checks into pointer comparison. Most table keys are short identifier strings — this would speed up every `gem_table_get`/`gem_table_set` with string keys. Trade-off: interned strings must live in a shared arena or be reference-counted so they outlive individual process arenas. Would also reduce per-process allocation rate — repeated key lookups like `"tag"`, `"pid"`, `"url"` currently allocate a fresh string each time via `gem_string()`.
@@ -66,6 +76,9 @@ Unreachable code after `return`, `break`, `error()` could be stripped. Currently
 ### `gem_eq` for strings (P2)
 Currently `strcmp`. If string interning lands, short strings become pointer equality. Even without interning, caching string length would let us short-circuit on length mismatch before comparing bytes.
 
+### `type(v) == "string"` allocates two strings (P2)
+`gem_type_fn` returns a fresh `gem_string("string")` and the literal on the right is allocated again, so the comparison costs about 130 ns (1M iterations: 131 ms, against 40 ms for 1M calls of an empty fn). std's argument checks (`string.<fn>`, `url.<fn>`, `mime.<fn>` raising on a non-string) pay it once per argument. Returning static strings from `type`, or having codegen turn `type(x) == "<literal>"` into a tag compare, would make such checks nearly free.
+
 ### `gem_add` for strings (P1)
 Every string `+` does `strlen` on both operands. If strings carried their length, this becomes a field read. Depends on string views/length-aware representation. Directly impacts the HTML response building hot path.
 
@@ -76,7 +89,7 @@ Every string `+` does `strlen` on both operands. If strings carried their length
 `gem_int()`, `gem_float()`, `gem_bool()`, `gem_string()` all return `GemVal` by value (16 bytes). With NaN boxing these become trivial bit operations returning 8 bytes. Without NaN boxing, the compiler could use static inline or macros for the trivial constructors. Blocked on NaN boxing for the full win.
 
 ### Integer-key append in `gem_table_set` scans every key (P1)
-`gem_table_set(t, int k, v)` with `k == len(t)` (append by index) falls through to the linear "find existing key" scan before appending, so building an array by index — and the `keys` builtin, which builds its result that way — is O(n²): `keys` of a 20000-entry table takes ~1.8 s. Fix: an append fast path when every key so far is array-shaped (track a flag on the table, cleared by any non-array key), or have `keys`/`values` push directly.
+`gem_table_set(t, int k, v)` with `k == len(t)` (append by index) falls through to the linear "find existing key" scan before appending, so building an array by index — and the `keys` and `values` builtins (`gem_keys`/`gem_values` in runtime/gem_builtins_collection.c), which build their result that way, and the rows of a `sqlite_query` result (10,000 rows 0.5 s, 40,000 rows 6.4 s, all inline on the scheduler thread) — is O(n²): `keys` of a 10,000-entry table takes 0.4 s, of 40,000 entries 6.4 s (`values` the same; `for k, v in` over the same table: 4 ms). std/test's deep equality stopped calling `keys` because of it. Fix: an append fast path when every key so far is array-shaped (track a flag on the table, cleared by any non-array key), or have `keys`/`values` push directly.
 
 ### Table grow strategy (P2)
 `gem_table_grow` doubles capacity. Could use a growth factor of 1.5 to reduce memory waste, or start with capacity 0 (no allocation) for tables that might stay empty.
@@ -94,8 +107,8 @@ The scheduler currently uses `poll()` for socket readiness. Replacing with **kqu
 ### Multi-threaded work-stealing scheduler (P2)
 The scheduler is single-threaded — one scheduler loop round-robining coroutines on one OS thread. N scheduler threads with per-thread run queues and work-stealing (Chase-Lev deque) would scale throughput ~linearly with cores. The per-process arena model already eliminates shared-heap contention. Hard parts: mailboxes need lock-free MPSC queues for cross-thread sends, shared globals (`gem_proc_table`, `gem_name_registry`, free list) need synchronization, each thread needs its own kqueue/epoll set, and process migration (stealing a coroutine between scheduler ticks) needs care. Erlang/BEAM does exactly this architecture. Nothing in the current design blocks it — isolated processes, message passing, and per-process memory are the right foundation.
 
-### `std/supervisor` keeps every restart time (P2)
-`restart` pushes the time of each restart onto `state.restart_times` and scans the whole array to count the ones inside `max_seconds`, never dropping old entries, so restarts are O(n²) in the supervisor's lifetime restart count and its memory grows without bound: 8,000 restarts of a permanent child took 2.9 s. Drop entries older than `max_seconds` when counting (step 5 of docs/HANDOFF.md, std modernization).
+### Supervisor restart bookkeeping is O(restarts in window) per restart (P2)
+`std/supervisor` (`note_restart`) and `std/dynamic_supervisor` (`check_intensity`) rebuild `state.restart_times` on every restart, keeping the times inside `max_seconds` (at most `max_restarts + 1` of them, since one more crashes the supervisor). A restart therefore costs O(restarts in the window): 8,000 restarts of a permanent child took 394 ms with a 1 ms window and 7.2 s with a 100 s window and a huge `max_restarts`. The times are pushed in order, so a queue that drops expired entries from the front (a head index into the array, compacted now and then) makes each restart amortized O(1). Only matters for supervisors configured to tolerate thousands of restarts per window.
 
 ## C Interop Hardening
 
@@ -103,9 +116,6 @@ The scheduler is single-threaded — one scheduler loop round-robining coroutine
 `extern blocking fn` String returns are documented (SPEC §C Interop) to be `malloc`/`strdup`'d — the runtime copies into the arena and `free`s the original. `extern fn` (non-blocking) String returns are *not* freed: the runtime `gem_string`s the pointer (which copies) but the original is leaked if it was malloc'd, or fine if it was a static literal. Two reasonable behaviors with opposite ownership rules, documented in SPEC ("String-return ownership"). Options for removing the asymmetry: (a) unify on the blocking convention (always free), which is the most consistent but breaks the obvious `getenv`/`strerror`-style use case; (b) introduce a `StringStatic` / `StringOwned` distinction.
 
 ## std/json
-
-### Fast path for escape-free strings in parse (P2)
-`parse_string` always allocates a buffer and pushes byte-by-byte. Most JSON strings contain no escapes. A fast path that scans for the closing `"` first (checking for `\` along the way) and uses `substr` when no escapes are found would avoid the buffer allocation entirely. 2-3x speedup on string-heavy JSON.
 
 ### Scanner as plain table instead of closure (P2)
 The closure-based scanner (`{peek, advance, skip_ws}`) pays for hashmap lookup + closure call + captured variable access on every character. A flat table `{input, pos, length}` with module-level functions `peek(s)`, `advance(s)`, `skip_ws(s)` avoids closure overhead. More idiomatic for a language without methods.

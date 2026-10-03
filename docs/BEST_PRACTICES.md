@@ -92,7 +92,7 @@ load "std/string"
 # The gen_server callbacks. handle_call answers gen_server.call; every
 # callback returns the new state, so each match needs an else.
 let NOTES = {
-  init: fn() [] end,
+  init: fn() {state: []} end,
   handle_call: fn(msg, from, notes)
     match msg
     when {tag: "add", text: text}
@@ -134,7 +134,7 @@ fn routes(store)
 end
 
 fn main()
-  let store = gen_server.start(NOTES).pid
+  let store = gen_server.start(NOTES)
   http.serve(routes(store), {port: 8080})
 end
 ```
@@ -145,12 +145,17 @@ end
 - The state lives in a process. Each HTTP connection runs in its own
   process, so a module-level `let notes = []` would give every connection
   its own copy ([State and memory](#state-and-memory)).
-- `gen_server.start(...)` returns `{pid: ...}`; pass `.pid` to
-  `gen_server.call` ([Working around std today](#working-around-std-today)).
+- `gen_server.start(...)` returns a `{pid}` handle, which `gen_server.call`
+  and `gen_server.cast` take as it is (a bare pid or a registered name
+  works too).
 - A handler returns a response table (`http.json_response`,
   `http.bad_request`, ...). `return` inside a `do` block leaves the block,
   which here is the handler.
 - User input goes through `pcall` and a type check before it is trusted.
+- A handler that raises, or returns something other than a valid
+  response (an int status from 200 to 999, no CR or LF in a header),
+  answers 500; std/http prints the error and its stack on stderr.
+  Request header names arrive lowercased: `req.headers["content-type"]`.
 - `task.async` takes a closure; `task.await_all` waits for all of them,
   with a timeout.
 
@@ -325,9 +330,11 @@ doesn't allocate.
 Before writing a byte loop, check whether a builtin does the job:
 `str_replace` and `substr` run in C. HTML-escaping 800 KB took about 150 ms
 with a per-byte loop and 25 to 60 ms with five chained `str_replace` calls.
-`string.split` and `string.index_of` are Gem byte loops themselves and are
-not fast: `string.split` on 800 KB took about 200 ms, against 70 ms for a
-hand-written `ord`/`substr` loop.
+For searching, call `string.index_of(s, needle, start)` (or `split`,
+`contains`) rather than an `ord` loop: they search long stretches in C, so
+finding a needle 1 MB in takes about 4 ms, against about 50 ms for the
+simplest `ord` loop. A `split` with pieces only a few bytes long is still
+Gem-speed: 100,000 ten-byte fields in 1 MB took about 140 ms.
 
 ### Use `for`, not `table.each`, when you need `return` or `break`
 
@@ -492,6 +499,18 @@ A call with too many arguments drops the extras, and missing arguments are
 later as a `nil` somewhere else. An `extern fn` is the exception: it
 raises unless the count matches exactly.
 
+### Don't rely on argument order for side effects **(bug)**
+
+Arguments run left to right, except a field access: in
+`print(monitor(p), process_info(p).monitors)` the `process_info` call
+runs first, so the list doesn't show the new monitor. When arguments have
+side effects that later ones depend on, give them their own statements:
+
+```gem
+let added = monitor(p)
+print(added, process_info(p).monitors)
+```
+
 ### `+=` works only on variables
 
 `t.count += 1` and `t[k] += 1` are compile errors. Write
@@ -513,7 +532,10 @@ A module-level `let` hides it in every function and closure of the file,
 those above it included, and in top-level code from the `let` on: its
 own initializer still reaches the builtin (`let keys = keys(t)` works).
 Do it only when the name is the module's API (`log.error`); elsewhere pick
-another name.
+another name. Such a module can still keep the builtin under another
+name: bind it in top-level code above a `let` that defines the export
+(`let raise = error`, then `let error = fn(msg) ... end`, as std/log
+does). With `fn error`, nothing in the file reaches the builtin.
 
 ### `pcall` takes a call, not a function **(trap)**
 
@@ -554,6 +576,14 @@ items[count] = x; count += 1   # Over (and drop the separate counter)
 Appending by index is quadratic: 20,000 appends took 1.6 s with
 `a[len(a)] = x` and 4 ms with `push`.
 
+### Don't call `keys()` or `values()` on a large table **(trap)**
+
+Both builtins are quadratic in the table's size: on a 10,000-entry table
+each took 0.4 s, on 40,000 entries 6.4 s, while `for k, v in` over the
+same table took 4 ms. Iterate with `for k, v in tbl` (or `for x in arr`)
+and keep `keys()` for small tables, or for the snapshot you need before
+deleting entries (see below).
+
 ### Remove from arrays with `remove_at`, never `delete` **(trap)**
 
 `delete` is for string-keyed tables. On an array it moves the last element
@@ -573,19 +603,28 @@ k)` can. `x in tbl` means `has_key` only on a table with string keys. On a
 table without them (an array, or a set like `seen[id] = true`) it scans
 the *values*, so test such a set with `has_key(seen, id)`.
 
+Int keys are fast only in the array pattern (`0 .. n-1`). Any other int
+key, and any float, bool or table key, is found by a linear scan, so a
+large set or index keyed that way is quadratic **(trap)**: 20,000 sparse
+int ids (`seen[id] = true`, then `has_key`) took 3.1 s, the same ids as
+string keys (`seen["{id}"] = true`) 30 ms. Key big sets and indexes by
+string.
+
 Assigning `nil` doesn't remove a key: after `t.x = nil`, `x` is still in
 `keys(t)`, `len(t)` and `json.encode(t)`. Use `delete(t, "x")`.
 
 ### Don't mix string keys into arrays
 
-A table is either an array or a record. Mixing them makes `len`, `in`,
-`for` and `json.encode` unpredictable.
+A table is either an array or a record. Mixing them makes `len`, `in`
+and `for` unpredictable, and `json.encode` writes the whole table as an
+object (`{"0":"z","name":"n"}`).
 
 ### Tables compare by identity
 
 `{a: 1} == {a: 1}` and `[] == []` are `false`. Compare fields, or compare a
 primitive key such as an id. The same applies to pinned patterns (pin
-strings, numbers and refs, never tables) and to `test.assert_eq`.
+strings, numbers and refs, never tables). `test.assert_eq` is the
+exception: it compares tables by structure.
 
 ### Tables and JSON
 
@@ -594,11 +633,15 @@ gives `[]`, and so does a record emptied with `delete`. When an empty
 object matters on the wire, write that part of the JSON yourself (`'{}'`).
 
 `json.encode` writes keys in insertion order, so two equal records built in
-different orders encode differently. It decides "array or object" from
-the first key alone, so a table with int keys that aren't exactly
-`0 .. n-1` (`by_id[row.id] = row`) loses entries **(bug)**: key `42` alone
-encodes as `[null]`. Key such tables by string (`by_id["{row.id}"]`)
-before encoding.
+different orders encode differently. A table is a JSON array only when its
+keys are exactly `0 .. n-1`; anything else is an object, with int keys
+written as strings: `by_id[42] = "x"` encodes as `{"42":"x"}`, and parses
+back with the string key `"42"`. Other key types (floats, bools) raise.
+
+`json.parse` reads an integer too big for 64 bits as a float, which loses
+digits past about 16 (`12345678901234567890` becomes
+`1.2345678901234567e+19`). Send ids that big as strings. A number past
+the float range (`1e309`) raises; one below it (`1e-400`) reads as `0.0`.
 
 `json.parse` raises on malformed input; wrap it in `pcall` when the input
 comes from outside.
@@ -620,6 +663,16 @@ negative number, zero or a positive number. A boolean comparator
 ```gem
 sort(people, fn(a, b) a.age - b.age end)
 ```
+
+`table.sort(arr, cmp)` (std/table) checks what the comparator returns for
+the first two elements and raises `table.sort: the comparator must return
+a number ...` instead.
+
+Keep comparators short and loop-free, and don't sort inside one **(bug)**:
+the comparator lives in one global for all processes, so a sort inside a
+comparator, or a comparator with a loop (where the scheduler can switch
+to another process that sorts), makes the outer sort call the wrong
+comparator. Compute sort keys first, then sort on them.
 
 ---
 
@@ -847,8 +900,8 @@ old contents.
 Every process has an 8 MB stack: from a few thousand non-tail frames
 (functions with a large `match` or `receive`) to about 30,000 (small
 ones). Past that, the call raises `stack overflow in <fn>`, which `pcall`
-catches like any error. `json.parse` refuses nesting deeper than about 128
-levels; `json.encode` has no cap and overflows at about 5,000. For
+catches like any error. `json.parse` and `json.encode` refuse nesting
+deeper than 1,000 levels (and `json.encode` so stops on a cyclic table). For
 recursive walkers over untrusted input, cap the depth or use an explicit
 stack, so a hostile input gets a clear error instead of a stack overflow.
 
@@ -870,40 +923,35 @@ stack, so a hostile input gets a clear error instead of a stack overflow.
 
 ### Working around std today
 
-Some std APIs don't follow this doc yet. Until they are fixed:
+One supervision limitation remains:
 
-- `gen_server.start`, `supervisor.start` and `dynamic_supervisor.start`
-  return `{pid: pid}`, but `gen_server.call`, `gen_server.cast` and
-  `supervisor.which_children` take a bare pid or a registered name: pass
-  `handle.pid`. `http.start` returns a bare pid.
-- A gen_server callback that returns `nil` or a non-table (such as the
-  `nil` of a `match` with no `else`) crashes the server. `handle_call`
-  returns `{reply: v, state: s}` (or `{noreply: s}`), the others
-  `{state: s}`; a `handle_call` result with neither `reply` nor `noreply`
-  sets the state to `nil` and leaves the caller waiting until its
-  timeout.
-- `gen_server.call` waits its full timeout (5 s by default) when the
-  server is dead; `supervisor.which_children` and the `dynamic_supervisor`
-  calls wait with no timeout at all.
-- A supervisor child's `start` function must return a bare pid:
-  `start: fn() gen_server.start(m).pid end` **(bug)**.
-- `supervisor.start` with `name:` registers the name only after the
-  children start, so use the returned pid right after `start` **(bug)**.
-- A dynamic supervisor crashes when it removes any child but the last one
-  `which_children` lists: through `terminate_child`, or when a temporary
-  or transient child exits. It also overflows its stack after about 2,000
-  temporary or transient child exits **(bug)**. Don't use it for pools of
-  short-lived workers yet.
-- `std/http` answers a handler error (or a handler that doesn't return a
-  response table) with an empty 500 and logs nothing **(bug)**: catch and
-  log errors in the handler while debugging. Request header names keep
-  the client's case (`req.headers["Content-Type"]` misses
-  `content-type`) **(bug)**. `http.serve` returns early when the calling
-  process receives any message **(bug)**, so call it last, from `main`.
-- `std/request` reads with no timeout **(bug)**.
-- Don't send messages tagged `"call"`, `"cast"`, `"gs_reply"`,
-  `"start_child"` or `"which_children"` to std processes: std uses those
-  tags internally.
+- A `one_for_all` supervisor hangs when it restarts a child that traps
+  exits, `dynamic_supervisor.terminate_child` times out on one that
+  doesn't exit on the `EXIT` message, leaving it running, and a supervisor
+  that exits waits 4 s for such a child, then leaves it running **(bug)**:
+  supervise such children `one_for_one`, and have a child that traps exits
+  return on any `EXIT` from its supervisor whose reason is not `"normal"`
+  (`"shutdown"` from `stop`, but the supervisor's error message when it
+  reached its restart intensity). The child spec's `start` runs in the
+  supervisor, so `self()` there is the supervisor's pid:
+
+  ```gem
+  fn start_worker()
+    let sup = self()                 # `start` runs in the supervisor
+    spawn do
+      process_flag("trap_exit", true)
+      let running = true
+      while running
+        receive
+        when {tag: "EXIT", pid: ^sup, reason: reason}
+          running = reason == "normal"
+        when other
+          handle(other)
+        end
+      end
+    end
+  end
+  ```
 
 ### Spawning
 
@@ -955,7 +1003,9 @@ Match on `tag` in `receive`. Prefix tags that are private to a module with
   killing this process. Only for processes whose job is to handle deaths
   (supervisors). Such a process gets an `EXIT` for every linked process
   that ends, normal exits included, so its loop needs an arm or a
-  catch-all for them.
+  catch-all for them. Never in a task: a `task.await` timeout can't kill a
+  task that traps exits, so it runs on and its result and `DOWN` are left
+  in the owner's mailbox.
 
 `pcall` doesn't catch a `kill` or a link's exit: those end the process at
 once.
@@ -964,6 +1014,22 @@ To stop another process, `kill` it with a reason other than `"normal"`
 (`"shutdown"` is the convention). As in Erlang, a `"normal"` exit signal
 from another process is ignored unless the target traps exits;
 `kill(self(), "normal")` does end the caller.
+
+A process that traps exits (a supervisor, an http server) handles a
+`kill` when it next reads its mailbox, so it is still alive, and its name
+still registered, when `kill` returns. To stop one and know it is gone,
+monitor it and wait for its `DOWN`, which is what `supervisor.stop`,
+`dynamic_supervisor.stop` and `http.stop` do:
+
+```gem
+let pid = sup.pid
+monitor(pid)
+kill(pid, "shutdown")
+receive
+when {tag: "DOWN", pid: ^pid} then nil
+after 5000 then error("supervisor did not stop")
+end
+```
 
 ### Request/reply: a ref, a pin, a timeout, and a monitor
 
@@ -989,10 +1055,33 @@ end
 - When the target may die, monitor it and add a `DOWN` arm, so a dead
   server fails at once instead of after the full timeout. `std/task` is the
   model: it monitors, matches `{tag: "DOWN", pid: ^pid}`, and removes the
-  `DOWN` when it's done. There is no `demonitor`, and a monitor from a
-  process that has exited stays on the target's list until the target
-  dies, so don't monitor a long-lived server from many short-lived
-  processes, such as per-connection handlers.
+  `DOWN` when it's done. Monitoring a long-lived server from many
+  short-lived processes, such as per-connection handlers, is fine: a
+  monitor ends with the process that set it up (after 20,000 callers in
+  turn, `process_info(server).monitors` is empty and the runtime's list
+  holds at most one stale entry).
+- A monitor taken for one request should end with it, or the caller gets
+  the server's `DOWN` whenever it dies, long after the request. A process
+  monitors a live target at most once, so `monitor` returns `false` when
+  the caller already monitors it; remove the monitor afterwards only when
+  `monitor` returned `true`, and drop the `DOWN` it may have delivered.
+  `gen_server.call` works this way:
+
+  ```gem
+  let added = monitor(pid)
+  # ... send, then receive the reply or the DOWN ...
+  if added and not demonitor(pid)
+    receive
+    when {tag: "DOWN", pid: ^pid} then nil
+    after 0 then nil
+    end
+  end
+  ```
+
+  `demonitor` returns `false` once the target has died, because its
+  `DOWN` is already in the mailbox. If the request got the `DOWN` and
+  `added` is `false`, send it back to `self()` for the caller's own
+  monitor. A dead target sends a `DOWN` (`"noproc"`) on every `monitor`.
 - A `receive` with only an `after` clause waits that long and takes no
   message: anything that arrives meanwhile stays queued. It is the same as
   `sleep(ms)`; use whichever reads better.
@@ -1077,9 +1166,7 @@ processes.
 | | plain `extern fn`, `input`, `read_stdin`; `print`, `eprint`, `write_stdout` to a slow pipe |
 
 Keep sqlite queries short and indexed: a one-second query stalls every
-process for that second. A sqlite handle is a raw pointer: a wrong or
-already-closed one crashes the program, which `pcall` can't catch
-**(bug)**. Use `extern blocking fn` for any C call that can take more than
+process for that second. Use `extern blocking fn` for any C call that can take more than
 about a millisecond. The pool has 4 workers, so four long `exec` calls
 delay every file read behind them.
 
@@ -1102,7 +1189,13 @@ r.value
 
 To keep a connection open after a bad request, `pcall` each iteration
 inside the connection loop instead. Since `pcall` doesn't catch `kill` or
-a link's exit, keep long-lived handles in a process nobody kills.
+a link's exit, keep long-lived handles in a process nobody kills, or have
+a process that monitors the owner close the handle when the owner dies
+without closing it (std/http's server process does this for its
+connections, so a handler may be killed). Stop an `http.start` server
+with `http.stop(server)`: it closes the listening socket, so the port is
+free again. A `std/request` call killed midway (a `task.await` timeout)
+leaks its socket; bound the request with its `timeout_ms` instead.
 
 ### `tcp_listen` takes an IP address
 
@@ -1113,7 +1206,8 @@ a link's exit, keep long-lived handles in a process nobody kills.
 
 - `tcp_read(fd, n, timeout_ms)` returns `""` at end of stream and `nil` on
   timeout. Library code should always pass a timeout; without one, a silent
-  peer blocks the caller forever. A timeout of `0` means *no* timeout.
+  peer blocks the caller forever. As with `after`, a timeout of `0` or
+  less doesn't wait: it returns what's already there, or `nil`.
 - `tcp_write` returns the number of bytes written and does not raise when
   the peer has gone. Treat `tcp_write(fd, s) < len(s)` as "connection
   lost", but expect the first write after a disconnect to still report
@@ -1206,10 +1300,21 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 ## Tests
 
 - Use `std/test` (`test.case`, `test.assert`, `test.assert_eq`,
-  `test.assert_throws`, `test.run()`) for checks that verify themselves.
-  `assert_eq` compares with `==`, so tables compare by identity and `1`
-  doesn't equal `1.0` (the failure reads `expected 1, got 1`): compare
-  primitives or individual fields.
+  `test.assert_neq`, `test.assert_throws`, `test.run()`) for checks that
+  verify themselves. `assert_eq` compares tables by structure (same keys,
+  equal values, any insertion order; cycles, shared subtables and deep
+  nesting are fine) and
+  everything else with `==`, so `1` doesn't equal `1.0`. A failure shows
+  both values, the path to the first difference, and the types when they
+  differ: `expected {a: [1, 2]}, got {a: [1, 2.0]}: at .a[1], expected 2
+  (int), got 2.0 (float)`. `assert_throws` returns the error message, so
+  check it with `assert_eq` when it matters.
+- Register cases with `test.case` at the top level (or from `main`), in
+  the process that calls `test.run()`. The case list is a module-level
+  variable, so a case registered inside a spawned process lands in that
+  process's copy and never runs (the compiler prints a `note:`).
+  `test.run()` calls `exit(1)` when a case fails, which ends the whole
+  program with status 1, so nothing after it runs.
 - A test that spawns a process should `spawn_monitor` it (or use `task`)
   and check the result or `DOWN`. With `spawn_link`, a crashing child kills
   the test runner, and the remaining cases never run.
@@ -1254,15 +1359,18 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `delete`/`remove_at`/`push` on what a `for` iterates | skips or adds entries, visits `nil` | iterate a snapshot (`keys(tbl)`) |
 | `for x in record` | `x` is `nil` for every entry | `for k, v in record` |
 | `a[len(a)] = x` in a loop | quadratic | `push(a, x)` |
+| `keys(t)` / `values(t)` on a large table | quadratic | `for k, v in t` |
 | `t.x = nil` to remove a key | key stays | `delete(t, "x")` |
 | `id in seen` on an int-keyed set | scans values | `has_key(seen, id)` |
+| Large set or index with sparse int (or table) keys | quadratic | string keys (`"{id}"`) |
 | Boolean `sort` comparator | array left unsorted | return `a - b` |
+| `sort` inside a comparator, or a comparator with a loop **(bug)** | wrong comparator called; unsorted or a type error | precompute keys; short comparators |
 | `json.encode({})` | `[]` | write `'{}'` yourself |
-| Int-keyed table (not `0 .. n-1`) to `json.encode` **(bug)** | entries lost | string keys |
 | `match` with no arm matching | yields `nil` silently | add an `else` |
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |
 | `when x > 5`, `when "a" or "b"` | compares with a bool / one value | `if` chain |
 | `nil` passed for a defaulted parameter | parameter is `nil` | leave the argument out |
+| Call arguments with side effects, one a field access like `f(x).y` **(bug)** | the field access's object runs before the arguments left of it | separate statements |
 | `pcall fn() ... end`, `pcall(f, x)` | runs nothing / drops `x` | `pcall f(x)`, `pcall do ... end` |
 | Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
 | `2.0 == 2` | `false` | convert first |
@@ -1272,8 +1380,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | Re-raising with `error(r.error)` | original stack lost | log `r.stack` first |
 | `loop(state)` followed by more statements | stack and memory grow until overflow | self call as the last expression |
 | `warning: cannot reset ... back-edge` on a `while true` | memory grows without bound | restructure the loop |
-| `{pid}` handle passed to `gen_server.call` | raises | `handle.pid` |
-| gen_server callback returning `nil` | server crashes | `else` arm returning a result table |
+| gen_server callback returning `nil` | server dies, the `call` raises | `else` arm returning a result table |
 | `self()` inside `spawn do ... end` to mean the parent | it's the child | `let parent = self()` before |
 | `spawn(f, x)` | `f` called with no arguments | `spawn do f(x) end` |
 | `link` to a process that may have exited | caller dies with `noproc` | `spawn_link` |
@@ -1281,12 +1388,12 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
 | `after` in a busy server loop | never fires | `send_after` ticks |
-| Monitoring a long-lived server from many short-lived processes | monitor list grows | monitor only when needed |
+| Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
+| Supervised child that traps exits **(bug)** | `one_for_all` restart hangs; the child outlives its supervisor | return on any non-`"normal"` `EXIT` from the supervisor |
 | `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |
 | Spawning thousands of quick tasks in a loop | `process table full` | batch, or cap in-flight tasks |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
-| Bad or closed sqlite handle **(bug)** | segfault, not catchable | close once, in the owning process |
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_listen("localhost", ...)` | raises | `"127.0.0.1"` |
-| `tcp_read` with no timeout, or `0` | blocks forever on a silent peer | pass a timeout |
+| `tcp_read` with no timeout | blocks forever on a silent peer | pass a timeout |

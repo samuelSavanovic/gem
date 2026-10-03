@@ -1,0 +1,146 @@
+# Edge cases of std/table, std/math, std/time, std/log, std/task and
+# std/sqlite.
+load "std/table"
+load "std/math"
+load "std/time"
+load "std/log"
+load "std/task"
+load "std/sqlite"
+load "std/string"
+
+fn show(label, r)
+  if r.ok
+    print(label, r.value)
+  else
+    print(label, "raises:", r.error)
+  end
+end
+
+# ─── table ───
+print("map empty", table.map([], fn(x) x end), "filter empty", table.filter([], fn(x) true end))
+print("reduce empty", table.reduce([], 7, fn(a, b) a + b end))
+print("find none", table.find([1, 2], fn(x) x > 5 end), "any empty", table.any([], fn(x) true end), "all empty", table.all([], fn(x) false end))
+print("count", table.count([1, 2, 3, 4], fn(x) x % 2 == 0 end))
+print("reverse", table.reverse([1]), table.reverse([1, 2, 3]))
+print("index_of past nil", table.index_of([1, nil, 3], 3), table.index_of([], 1))
+print("slice no length", table.slice([1, 2, 3, 4], 1), table.slice([1, 2, 3, 4], -1))
+print("slice edges", table.slice([1, 2, 3], 5, 2), table.slice([1, 2, 3], -10, 2), table.slice([1, 2, 3], 1, -1))
+print("zip", table.zip([1, 2, 3], ["a"]), table.zip([], [1]))
+print("concat", table.concat([], [1]), table.concat([1], []))
+let rec = {a: 1, b: 2}
+let rc = table.copy(rec)
+rc.c = 3
+print("copy record", rc, has_key(rec, "c"), "copy empty", table.copy({}))
+let arr = [1, 2]
+let ac = table.copy(arr)
+push(ac, 3)
+print("copy array", ac, len(arr))
+print("flatten", table.flatten([[1, [2]], [], 3, {k: 1}]))
+print("flat_map empty arrays dropped", table.flat_map([1, 2], fn(x) [] end))
+print("flat_map mixed", table.flat_map([1, 2], fn(x) [x, x] end), table.flat_map([1, 2], fn(x) x * 10 end))
+print("unique by ==", table.unique([1, "1", 1.0, 1, nil, nil, true, false, true, -3, -3, 0, "0"]))
+let shared = [9]
+print("unique tables by identity", len(table.unique([[1], [1], shared, shared])))
+print("group_by", table.group_by(["a", "bb", "cc", "d"], fn(s) "len{len(s)}" end))
+show("group_by negative key", pcall table.group_by([1, -2], fn(x) x end))
+print("sort default", table.sort([3, 1, 2]), "sort cmp", table.sort([3, 1, 2], fn(a, b) b - a end))
+print("sort float cmp", table.sort([0.5, 0.2, 0.9], fn(a, b) a - b end))
+print("sort empty with bool cmp", table.sort([], fn(a, b) a < b end))
+show("sort bool cmp", pcall table.sort([2, 1], fn(a, b) a < b end))
+show("sort nil cmp result", pcall table.sort([2, 1], fn(a, b) nil end))
+let big = []
+for i = 0, 100000
+  push(big, 100000 - i)
+end
+table.sort(big, fn(a, b) a - b end)
+print("sort 100k", big[0], big[99999])
+let mapped = table.map(big, fn(x) x * 2 end)
+print("map 100k", len(mapped), mapped[99999], len(table.filter(big, fn(x) x % 2 == 0 end)))
+
+# ─── math ───
+print("min/max", math.min(1, 2), math.max(1, 2), math.min(2.5, 1), math.max("a", "b"))
+print("min/max tie", math.min(2, 2.0), math.max(2.0, 2))
+print("clamp", math.clamp(-5, 0, 10), math.clamp(15, 0, 10), math.clamp(5, 5, 5))
+show("clamp low > high", pcall math.clamp(5, 10, 0))
+show("assert 0 is truthy", pcall math.assert(0))
+show("assert false", pcall math.assert(false))
+show("assert nil msg", pcall math.assert(nil, "rows"))
+
+# ─── time ───
+print("epoch", time.iso8601(0), time.date(0), time.http_date(0))
+print("before epoch", time.iso8601(-1), time.iso8601(-1000), time.iso8601(-1001))
+print("day before", time.iso8601(-86400001), time.date(-1))
+print("ms dropped", time.iso8601(1999), time.iso8601(1777386600999))
+print("year 10000", time.iso8601(253402300800000))
+print("leap day", time.date(951782400000), time.http_date(951782400000))
+print("format", time.format(1777386600000, "%H:%M:%S %j"), "[{time.format(0, "")}]")
+let long_fmt = build_string do |add|
+  for i = 0, 200
+    add("%Y-")
+  end
+end
+print("long format", len(time.format(0, long_fmt)))
+show("format float ms", pcall time.format(1.5, "%Y"))
+show("format nil fmt", pcall time.format(0, nil))
+print("now is an int", type(time.now()), time.now() > 1700000000000)
+
+# ─── log ───
+show("set_level unknown", pcall log.set_level("warning"))
+show("set_level nil", pcall log.set_level(nil))
+log.set_level("error")
+log.debug("not shown")
+log.info("not shown")
+log.warn("not shown")
+log.set_level("info")
+show("builtin error unaffected", pcall error("plain"))
+
+# ─── task ───
+show("async non-fn", pcall task.async(42))
+show("await nil", pcall task.await(nil))
+show("await record", pcall task.await({a: 1}))
+show("await_all nil", pcall task.await_all(nil))
+show("await_all empty", pcall task.await_all([]))
+show("await_all nil element", pcall task.await_all([nil]))
+show("await timeout", pcall task.await(task.async(fn() sleep(200) end), 10))
+show("await_all timeout", pcall task.await_all([task.async(fn() sleep(200) end)], 10))
+show("await killed", pcall task.await(task.async(fn() kill(self(), "boom") end)))
+show("await raises task error", pcall task.await(task.async(fn() error("inner") end)))
+let t = task.async(fn() 1 end)
+task.await(t)
+show("await twice", pcall task.await(t))
+show("await_all values", pcall task.await_all([task.async(fn() nil end), task.async(fn() [1] end)]))
+
+# ─── sqlite ───
+let db = sqlite.open(":memory:")
+sqlite.exec(db, "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)")
+print("empty select", sqlite.query(db, "SELECT * FROM t"))
+sqlite.query(db, "INSERT INTO t(name) VALUES (?)", ["a"])
+print("insert", sqlite.last_id(db), sqlite.changes(db))
+print("select", sqlite.query(db, "SELECT name FROM t WHERE id = ?", [1]))
+show("bad sql", pcall sqlite.exec(db, "nonsense"))
+show("param count", pcall sqlite.query(db, "SELECT ?", [1, 2]))
+sqlite.close(db)
+
+# table.copy keeps every key; string.join rejects records
+let ids = {}
+ids[10] = "ten"
+ids[20] = "twenty"
+print("copy int keys", table.copy(ids))
+let mixed = [1, 2]
+mixed.name = "x"
+print("copy mixed", table.copy(mixed))
+let arr_copy = table.copy([3, 4])
+push(arr_copy, 5)
+print("copy array", arr_copy, len(arr_copy))
+show("join record", pcall string.join({a: 1}, ","))
+
+# unique keys values by a hashed string; copy stays linear on arrays
+let big = []
+for i = 0, 40000
+  push(big, i)
+end
+print("unique big", len(table.unique(big)), len(table.copy(big)))
+let same = {}
+print("unique mixed", table.unique([1, 1.0, "1", -1, -1, 0.0, -0.0, nil, nil, true, false, same, same, {}]))
+show("sort non-table", pcall table.sort("abc"))
+show("join int keys", pcall string.join({5: "a", 7: "b"}, ","))

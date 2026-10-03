@@ -1,0 +1,274 @@
+# Review-round fixes: demonitor, std requests that leave no monitor or
+# DOWN behind, init returning {state}, http's Host and bare-LF checks,
+# request's Transfer-Encoding, trailer and Set-Cookie handling,
+# format_time's UTC %z/%Z/%s and output limit, sqlite params bound by
+# key, nil as "no timeout" (tcp_read, http options, http.stop), and a
+# process that reuses main's slot after main ends.
+load "std/gen_server"
+load "std/supervisor"
+load "std/http"
+load "std/request"
+load "std/string"
+
+# Counts (and removes) the queued DOWNs for `pid`.
+fn count_downs(pid)
+  let n = 0
+  let more = true
+  while more
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      n += 1
+    after 0
+      more = false
+    end
+  end
+  n
+end
+
+fn down_reason(pid)
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: r} then r
+  after 1000 then "no DOWN"
+  end
+end
+
+print("-- 1. monitor and demonitor")
+let p = spawn do
+  receive
+  when "stop" then nil
+  end
+end
+print(monitor(p), monitor(p), demonitor(p), demonitor(p))
+send(p, "stop")
+sleep(20)
+print("DOWNs after demonitor:", count_downs(p))
+print("dead:", demonitor(p), monitor(p), down_reason(p))
+# The pattern BEST_PRACTICES shows for a monitor taken for one request.
+let q = spawn do
+  receive
+  when "stop" then nil
+  end
+end
+let added = monitor(q)
+send(q, "stop")
+sleep(20)
+if added and not demonitor(q)
+  receive
+  when {tag: "DOWN", pid: ^q} then nil
+  after 0 then nil
+  end
+end
+print("request pattern leaves:", count_downs(q))
+print((pcall demonitor("x")).error)
+
+print("-- 2. gen_server.call leaves no monitor or DOWN behind")
+let SRV = {
+  init: fn() {state: 0} end,
+  handle_call: fn(msg, from, n)
+    if msg == "die"
+      kill(self(), "died")
+    end
+    {reply: n, state: n}
+  end,
+  handle_cast: fn(msg, n) {state: n} end,
+  handle_info: fn(msg, n) {state: n} end
+}
+let sup = supervisor.start({max_restarts: 100, children: [{id: "srv", start: fn()
+  let h = gen_server.start(SRV)
+  register("srv191", h.pid)
+  h
+end}]})
+while whereis("srv191") == nil
+  sleep(1)
+end
+for i = 0, 20
+  gen_server.call("srv191", "get")
+  let old = whereis("srv191")
+  kill(old, "boom")
+  while whereis("srv191") == old or whereis("srv191") == nil
+    sleep(1)
+  end
+end
+print("after 20 restarts: mailbox_len", process_info(self()).mailbox_len)
+let watched = gen_server.start(SRV).pid
+let got = gen_server.call(watched, "get")
+print("monitors after a call:", got, len(process_info(watched).monitors))
+# The caller's own monitor stays, and gets its DOWN once.
+let mine = monitor(watched)
+got = gen_server.call(watched, "get")
+print("own:", mine, got, len(process_info(watched).monitors))
+kill(watched, "bye")
+print("own monitor:", down_reason(watched), "extra:", count_downs(watched))
+let dying = gen_server.start(SRV).pid
+monitor(dying)
+print((pcall gen_server.call(dying, "die")).error)
+print("own monitor:", down_reason(dying), "extra:", count_downs(dying))
+print((pcall gen_server.call(dying, "get")).error, "left:", count_downs(dying))
+supervisor.stop(sup)
+
+print("-- 3. init must return \{state\}")
+let bare = gen_server.start({init: fn() 0 end, handle_call: SRV.handle_call,
+  handle_cast: SRV.handle_cast, handle_info: SRV.handle_info}).pid
+monitor(bare)
+print(down_reason(bare))
+let timed = gen_server.start({init: fn() {state: 7, timeout: 10} end,
+  handle_call: SRV.handle_call, handle_cast: SRV.handle_cast,
+  handle_info: fn(msg, n) {state: "got {msg}"} end})
+sleep(50)
+print(gen_server.call(timed, "get"))
+
+print("-- 4. http: Host and bare LF")
+let PORT = 18191
+let app = http.router()
+app.get("/hello") do |req|
+  http.ok("hello")
+end
+let server = http.start(app, {port: PORT, host: "127.0.0.1"})
+
+# The status line of the response to `pieces` (each written separately).
+fn status_of(...pieces)
+  let fd = tcp_connect("127.0.0.1", PORT)
+  for piece in pieces
+    tcp_write(fd, piece)
+    sleep(5)
+  end
+  let acc = buf_new()
+  let chunk = tcp_read(fd, 4096, 2000)
+  while chunk != nil and chunk != ""
+    buf_push(acc, chunk)
+    chunk = tcp_read(fd, 4096, 2000)
+  end
+  tcp_close(fd)
+  let got = to_string(acc)
+  let eol = string.index_of(got, "\r\n")
+  if eol < 0
+    return "[{got}]"
+  end
+  substr(got, 0, eol)
+end
+
+print("Host:", status_of("GET /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"))
+print("no Host:", status_of("GET /hello HTTP/1.1\r\nConnection: close\r\n\r\n"))
+print("two Hosts:", status_of("GET /hello HTTP/1.1\r\nHost: a\r\nHost: b\r\nConnection: close\r\n\r\n"))
+print("HTTP/1.0 without Host:", status_of("GET /hello HTTP/1.0\r\n\r\n"))
+let t0 = time_ms()
+print("bare LF head:", status_of("GET /hello HTTP/1.1\nHost: t\n\n"), "fast:", time_ms() - t0 < 1000)
+t0 = time_ms()
+print("bare LF, split:", status_of("GET /hello HTTP/1.1\r\nHost: t\n", "\n"), "fast:", time_ms() - t0 < 1000)
+t0 = time_ms()
+print("CRLF, split:", status_of("GET /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r", "\n\r", "\n"), "fast:", time_ms() - t0 < 1000)
+http.stop(server)
+
+print("-- 5. request: Transfer-Encoding, trailers, Set-Cookie")
+let next_port = 19191
+
+# Serves one connection: reads the request head, sends `raw`, closes.
+fn serve_once(port, raw)
+  let lfd = tcp_listen("127.0.0.1", port)
+  spawn do
+    let c = tcp_accept(lfd)
+    let got = ""
+    while string.index_of(got, "\r\n\r\n") < 0
+      let piece = tcp_read(c, 4096, 1000)
+      if piece == nil or piece == ""
+        break
+      end
+      got = got + piece
+    end
+    tcp_write(c, raw)
+    tcp_close(c)
+    tcp_close(lfd)
+  end
+end
+
+fn try_get(label, raw)
+  next_port = next_port + 1
+  serve_once(next_port, raw)
+  let r = pcall request.get("http://127.0.0.1:{next_port}/")
+  if r.ok
+    let names = keys(r.value.headers)
+    sort(names)
+    let hs = []
+    for n in names
+      push(hs, "{n}=[{str_replace(r.value.headers[n], "\n", "\\n")}]")
+    end
+    print("{label}: {r.value.status} {string.join(hs, " ")} body=[{str_replace(r.value.body, "\r\n", "|")}]")
+  else
+    print("{label}: error: {r.error}")
+  end
+end
+
+try_get("xchunked", "HTTP/1.1 200 OK\r\nTransfer-Encoding: xchunked\r\n\r\n3\r\nabc\r\n0\r\n\r\n")
+try_get("gzip, chunked", "HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip, Chunked \r\n\r\n3\r\nabc\r\n0\r\n\r\n")
+try_get("chunked, gzip", "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked, gzip\r\n\r\n3\r\nabc\r\n0\r\n\r\n")
+try_get("trailers", "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nX-A: 1\r\n\r\n3\r\nabc\r\n0\r\nContent-Length: 99\r\nX-A: 2\r\n\r\n")
+try_get("set-cookie", "HTTP/1.1 200 OK\r\nSet-Cookie: a=1; Expires=Wed, 21 Oct 2026 07:28:00 GMT\r\nSet-Cookie: b=2\r\nX-B: 1\r\nX-B: 2\r\nContent-Length: 0\r\n\r\n")
+
+print("-- 6. format_time")
+print(format_time(0, "%z %Z %s %%z %%s"))
+print(format_time(-1500, "%Y-%m-%dT%H:%M:%S%z %s"))
+print(format_time(1700000000123, "%s"))
+let f = buf_new()
+for i = 0, 30000
+  buf_push(f, "%Y-%m-%d ")
+end
+print((pcall format_time(0, to_string(f))).error)
+print(len(format_time(0, string.repeat("%%", 131072))), len(format_time(0, "")))
+
+print("-- 7. sqlite params bind by key")
+let db = sqlite_open(":memory:")
+let params = {}
+params[1] = "second"
+params[0] = "first"
+print(sqlite_query(db, "SELECT ? AS a, ? AS b", params))
+print(sqlite_query(db, "SELECT :b AS b, :a AS a", [20, 10]))
+print((pcall sqlite_query(db, "SELECT ? AS a, ? AS b", {x: 1, y: 2})).error)
+print((pcall sqlite_query(db, "SELECT ? AS a, ? AS b", {0: 1, 5: 2})).error)
+print((pcall sqlite_query(db, "SELECT ? AS a", {})).error)
+sqlite_close(db)
+
+print("-- 8. nil means no timeout")
+let lfd = tcp_listen("127.0.0.1", 18192)
+spawn do
+  let peer = tcp_accept(lfd)
+  sleep(50)
+  tcp_write(peer, "x")
+  sleep(100)
+  tcp_close(peer)
+end
+let c = tcp_connect("127.0.0.1", 18192)
+t0 = time_ms()
+let r0 = tcp_read(c, 100, 0)
+let rneg = tcp_read(c, 100, -5)
+print("tcp_read 0 / negative:", r0, rneg, "fast:", time_ms() - t0 < 30)
+let rnil = tcp_read(c, 100, nil)
+print("tcp_read nil:", rnil, "waited:", time_ms() - t0 >= 40)
+print((pcall tcp_read(c, 100, "1")).error)
+tcp_close(c)
+tcp_close(lfd)
+let untimed = http.start(app, {port: PORT, host: "127.0.0.1", idle_timeout_ms: nil, request_timeout_ms: nil})
+print("no limits:", status_of("GET /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"))
+print("http.stop nil:", http.stop(untimed, nil))
+print((pcall http.start(app, {port: PORT, host: "127.0.0.1", idle_timeout_ms: 0})).error)
+print((pcall http.start(app, {port: PORT, host: "127.0.0.1", request_timeout_ms: "1"})).error)
+
+print("-- 9. main's slot is not reused after main ends")
+# Main ends below. Its slot used to go back on the free list, and the
+# process that got it (about every 1,024th spawn) was taken for main: its
+# exit with any reason but "normal" ended the program.
+spawn do
+  sleep(20)
+  let spawned = 0
+  while spawned < 1200
+    for i = 0, 100
+      spawn do
+        kill(self(), "bye")
+      end
+    end
+    spawned += 100
+    sleep(2)
+  end
+  sleep(20)
+  print("1200 processes exited after main ended")
+end
+print("main ends")

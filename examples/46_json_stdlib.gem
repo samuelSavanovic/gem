@@ -170,11 +170,11 @@ print(r5.ok)
 
 # depth limit
 let deep_json = buf_new()
-for i = 0, 200
+for i = 0, 1001
   buf_push(deep_json, "[")
 end
 buf_push(deep_json, "1")
-for i = 0, 200
+for i = 0, 1001
   buf_push(deep_json, "]")
 end
 let r6 = pcall json.parse(to_string(deep_json))
