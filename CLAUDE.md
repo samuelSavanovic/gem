@@ -111,7 +111,7 @@ Add a numbered example under `examples/` (next free slot) and append its stdout 
 
 ## Known Bugs Tracking
 
-`docs/KNOWN_BUGS.md` tracks bugs that were found and not fixed. When you find a bug outside the scope of the current change, add it there instead of fixing it on the side or leaving it in a PR description: a minimal repro checked against `build/gem`, what goes wrong, and where the code is. A fix deletes its entry in the same change. Before working on an entry, re-run its repro; if it no longer reproduces, delete the entry. Performance problems go in OPTIMIZATIONS.md and missing features in ROADMAP.md, not here.
+`docs/KNOWN_BUGS.md` tracks bugs that were found and not fixed. When you find a bug outside the scope of the current change, add it there instead of fixing it on the side or leaving it in a PR description: a minimal repro checked against `build/gem`, what goes wrong, and where the code is. A fix deletes its entry in the same change, along with any **(bug)** rule in `docs/BEST_PRACTICES.md` that exists because of it. Before working on an entry, re-run its repro; if it no longer reproduces, delete the entry. Performance problems go in OPTIMIZATIONS.md and missing features in ROADMAP.md, not here.
 
 ## Editor Extension Maintenance
 
