@@ -11,7 +11,7 @@
 # The supervisor traps exits and links each child. When it exits (an exit
 # signal from anyone, `stop`, restart intensity reached, or any error in
 # the supervisor), it first shuts its children down, OTP-style: it kills
-# each child with its own exit reason, last started first, and waits for
+# each child with "shutdown", last started first, and waits for
 # the child's DOWN, SHUTDOWN_MS in all; then it exits. The restart signal is
 # the child's DOWN; the EXIT a child's death also sends is dropped. The
 # runtime queues a dead process's DOWN before its EXIT, so the EXIT is
@@ -223,20 +223,16 @@ fn wait_down(pid, deadline)
   end
 end
 
-# Kills every child with `reason`, last started first, and waits for each
-# one's DOWN, SHUTDOWN_MS in all (a "normal" kill would be ignored, so an
-# error message "normal" kills with "shutdown").
-fn shutdown_children(children, reason)
-  let signal = reason
-  if signal == "normal"
-    signal = "shutdown"
-  end
+# Kills every child with "shutdown", last started first, and waits for
+# each one's DOWN, SHUTDOWN_MS in all, whatever the supervisor's own exit
+# reason: a child that traps exits only has to know "shutdown".
+fn shutdown_children(children)
   let deadline = time_ms() + SHUTDOWN_MS
   let i = len(children) - 1
   while i >= 0
     let pid = children[i].pid
     # `kill` returns nil for a child that is gone already.
-    if kill(pid, signal)
+    if kill(pid, "shutdown")
       wait_down(pid, deadline)
     end
     i -= 1
@@ -264,7 +260,7 @@ fn dsup_main(state)
   if not res.ok
     reason = res.error
   end
-  shutdown_children(state.children, reason)
+  shutdown_children(state.children)
   if not res.ok
     report_stack(res)
     error(res.error)
@@ -326,22 +322,27 @@ fn check_timeout(timeout_ms, caller)
   end
 end
 
-# Takes the DOWN of `pid` that the caller just matched (with `reason`) plus
-# any further DOWN for `pid` already queued (each `monitor` of a dead process
-# queues another one, with reason "noproc"), and puts back exactly one, with
-# the first reason: the caller's own monitor of the supervisor, if any, is
-# this same monitor (monitors are per process pair).
-fn keep_one_down(pid, reason)
-  let more = true
-  while more
+# Ends the monitor of `pid` a request took: `added` is what its `monitor`
+# returned. A monitor the caller already had is left alone. One the request
+# added is removed, and its DOWN dropped if the target died meanwhile.
+fn drop_monitor(pid, added)
+  if added and not demonitor(pid)
     receive
     when {tag: "DOWN", pid: ^pid}
       nil
     after 0
-      more = false
+      nil
     end
   end
-  send(self(), {tag: "DOWN", pid: pid, reason: reason})
+end
+
+# After a request matched the DOWN of `pid` (with `reason`): when the
+# monitor was the caller's own (`added` false), puts the DOWN back for it.
+fn return_down(pid, added, reason)
+  if not added
+    send(self(), {tag: "DOWN", pid: pid, reason: reason})
+  end
+  nil
 end
 
 # Waits for the reply to `ref` or the DOWN of `pid`: {result} or {down}.
@@ -376,7 +377,7 @@ fn request(target, msg, caller, timeout_ms)
   let ref = make_ref()
   msg.reply_to = self()
   msg.ref = ref
-  monitor(pid)
+  let added = monitor(pid)
   send(pid, msg)
   let r = nil
   if timeout_ms == nil
@@ -385,12 +386,14 @@ fn request(target, msg, caller, timeout_ms)
     r = await_reply_for(pid, ref, timeout_ms)
   end
   if r == nil
+    drop_monitor(pid, added)
     error("{caller}: timeout")
   end
   if has_key(r, "down")
-    keep_one_down(pid, r.down)
+    return_down(pid, added, r.down)
     error("{caller}: supervisor exited: {r.down}")
   end
+  drop_monitor(pid, added)
   let res = r.result
   if not res.ok
     error("{caller}: {res.error}")
@@ -416,18 +419,19 @@ end
 fn stop(target, timeout_ms = 5000)
   let pid = target_pid(target, "dynamic_supervisor.stop")
   check_timeout(timeout_ms, "dynamic_supervisor.stop")
-  monitor(pid)
+  let added = monitor(pid)
   kill(pid, "shutdown")
   if timeout_ms == nil
     receive
-    when {tag: "DOWN", pid: ^pid}
-      nil
+    when {tag: "DOWN", pid: ^pid, reason: reason}
+      return_down(pid, added, reason)
     end
   else
     receive
-    when {tag: "DOWN", pid: ^pid}
-      nil
+    when {tag: "DOWN", pid: ^pid, reason: reason}
+      return_down(pid, added, reason)
     after timeout_ms
+      drop_monitor(pid, added)
       error("dynamic_supervisor.stop: the supervisor did not stop within {timeout_ms} ms")
     end
   end

@@ -13,6 +13,34 @@ GemVal gem_epoch_ms_fn(void *_env, GemVal *args, int argc) {
     return gem_int((int64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000);
 }
 
+/* For UTC: `fmt` with %z, %Z and %s replaced by "+0000", "UTC" and the
+ * epoch seconds, which strftime would take from the local zone (macOS for
+ * all three; glibc for %s, through mktime). "%%" is kept as it is. A
+ * trailing \x01 is appended in both cases (see format_tm). Caller frees. */
+static char *prepare_fmt(const char *fmt, int64_t secs, int utc) {
+    size_t len = strlen(fmt);
+    char *out = (char *)malloc(len * 21 + 2);
+    if (!out) return NULL;
+    size_t o = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (utc && fmt[i] == '%' && i + 1 < len) {
+            char c = fmt[i + 1];
+            if (c == 'z') { memcpy(out + o, "+0000", 5); o += 5; i++; continue; }
+            if (c == 'Z') { memcpy(out + o, "UTC", 3); o += 3; i++; continue; }
+            if (c == 's') { o += (size_t)sprintf(out + o, "%lld", (long long)secs); i++; continue; }
+            out[o++] = fmt[i];
+            out[o++] = fmt[++i];
+            continue;
+        }
+        out[o++] = fmt[i];
+    }
+    out[o++] = '\x01';
+    out[o] = '\0';
+    return out;
+}
+
+#define GEM_FORMAT_TIME_MAX (256 * 1024)
+
 /* Formats epoch milliseconds `ms` with strftime. The seconds are rounded
  * down, so -1 ms is 23:59:59 of the day before the epoch, not the epoch. */
 static GemVal format_tm(int64_t ms, const char *fmt, int local, const char *who) {
@@ -20,32 +48,38 @@ static GemVal format_tm(int64_t ms, const char *fmt, int local, const char *who)
     if (ms % 1000 < 0) secs64 -= 1;
     time_t secs = (time_t)secs64;
     struct tm tm_buf;
+    char err[128];
     if ((local ? localtime_r(&secs, &tm_buf) : gmtime_r(&secs, &tm_buf)) == NULL) {
-        char buf[128];
-        snprintf(buf, sizeof(buf), "%s: time %lld ms is out of range", who, (long long)ms);
-        gem_error(buf);
+        snprintf(err, sizeof(err), "%s: time %lld ms is out of range", who, (long long)ms);
+        gem_error(err);
     }
     if (fmt[0] == '\0') return gem_string("");
     /* strftime returns 0 both for output that doesn't fit and for empty
-     * output (such as "%p" in some locales), so grow the buffer a few
-     * times before settling on "". */
-    char small[256];
-    size_t n = strftime(small, sizeof(small), fmt, &tm_buf);
-    if (n > 0) return gem_string_with_len(small, (int)n);
-    size_t cap = sizeof(small);
-    for (int tries = 0; tries < 5; tries++) {
-        cap *= 4;
+     * output (such as "%p" in some locales), so the format gets a trailing
+     * \x01: a result is never empty, and 0 always means "too small". */
+    char *f = prepare_fmt(fmt, secs64, !local);
+    if (!f) gem_error("out of memory");
+    /* The last try has room for GEM_FORMAT_TIME_MAX bytes, the \x01 and
+     * the terminator. */
+    const size_t max_cap = GEM_FORMAT_TIME_MAX + 2;
+    for (size_t cap = 256;; cap *= 4) {
+        if (cap > max_cap) cap = max_cap;
         char *out = (char *)malloc(cap);
         if (!out) break;
-        n = strftime(out, cap, fmt, &tm_buf);
+        size_t n = strftime(out, cap, f, &tm_buf);
         if (n > 0) {
-            GemVal r = gem_string_with_len(out, (int)n);
+            GemVal r = gem_string_with_len(out, (int)(n - 1));
             free(out);
+            free(f);
             return r;
         }
         free(out);
+        if (cap == max_cap) break;
     }
-    return gem_string("");
+    free(f);
+    snprintf(err, sizeof(err), "%s: output is over 256 KB", who);
+    gem_error(err);
+    return GEM_NIL;
 }
 
 GemVal gem_format_time_fn(void *_env, GemVal *args, int argc) {

@@ -1,7 +1,7 @@
 # std/gen_server — OTP-style synchronous server with state.
 #
 #   let counter = gen_server.start({
-#     init: fn() 0 end,
+#     init: fn() {state: 0} end,
 #     handle_call: fn(msg, from, n) {reply: n, state: n} end,
 #     handle_cast: fn(msg, n) {state: n + 1} end,
 #     handle_info: fn(msg, n) {state: n} end
@@ -149,17 +149,9 @@ end
 fn start(module)
   check_module(module)
   let pid = spawn(fn()
-    let init_result = module.init()
-    let initial_state = init_result
-    let pending = nil
-    if type(init_result) == "table" and has_key(init_result, "state")
-      initial_state = init_result.state
-      check_result_timeout("init", init_result)
-      if has_key(init_result, "timeout")
-        pending = set_timeout(nil, init_result.timeout)
-      end
-    end
-    loop(module, initial_state, pending)
+    let result = module.init()
+    check_state_result("init", result)
+    loop(module, result.state, set_timeout(nil, result.timeout))
   end)
   {pid: pid}
 end
@@ -170,21 +162,27 @@ fn check_timeout(timeout_ms, caller)
   end
 end
 
-# Takes the DOWN of `pid` that the caller just matched (with `reason`) plus
-# any further DOWN for `pid` already queued (each `monitor` of a dead process
-# queues another one, with reason "noproc"), and puts back exactly one, with
-# the first reason.
-fn keep_one_down(pid, reason)
-  let more = true
-  while more
+# Ends the monitor of `pid` a request took: `added` is what its `monitor`
+# returned. A monitor the caller already had is left alone. One the request
+# added is removed, and its DOWN dropped if the target died meanwhile.
+fn drop_monitor(pid, added)
+  if added and not demonitor(pid)
     receive
     when {tag: "DOWN", pid: ^pid}
       nil
     after 0
-      more = false
+      nil
     end
   end
-  send(self(), {tag: "DOWN", pid: pid, reason: reason})
+end
+
+# After a request matched the DOWN of `pid` (with `reason`): when the
+# monitor was the caller's own (`added` false), puts the DOWN back for it.
+fn return_down(pid, added, reason)
+  if not added
+    send(self(), {tag: "DOWN", pid: pid, reason: reason})
+  end
+  nil
 end
 
 # Waits for the reply to `ref` or the DOWN of `pid`: {value} or {down}.
@@ -210,18 +208,15 @@ fn await_reply_for(pid, ref, timeout_ms)
 end
 
 # Sends `msg` to the server and waits for its reply (forever when
-# `timeout_ms` is nil). The caller monitors the server, so a server that is
-# dead, or dies before replying, fails the call at once. There is no
-# demonitor and a process monitors a target at most once, so that monitor
-# outlives the call and is the same one as any monitor the caller set up
-# itself. The call therefore never consumes the server's DOWN: it leaves
-# exactly one in the mailbox (see keep_one_down), and the caller receives it
-# like any other DOWN.
+# `timeout_ms` is nil). The caller monitors the server for the length of the
+# call, so a server that is dead, or dies before replying, fails the call at
+# once. The call leaves no monitor and no DOWN behind, except that a monitor
+# the caller set up itself stays, and still gets its DOWN.
 fn call(target, msg, timeout_ms = 5000)
   let pid = target_pid(target, "gen_server.call")
   check_timeout(timeout_ms, "gen_server.call")
   let ref = make_ref()
-  monitor(pid)
+  let added = monitor(pid)
   send(pid, {tag: "_gs_call", from: {pid: self(), ref: ref}, msg: msg})
   let res = nil
   if timeout_ms == nil
@@ -230,12 +225,14 @@ fn call(target, msg, timeout_ms = 5000)
     res = await_reply_for(pid, ref, timeout_ms)
   end
   if res == nil
+    drop_monitor(pid, added)
     error("gen_server.call: timeout")
   end
   if has_key(res, "down")
-    keep_one_down(pid, res.down)
+    return_down(pid, added, res.down)
     error("gen_server.call: server exited: {res.down}")
   end
+  drop_monitor(pid, added)
   res.value
 end
 

@@ -498,6 +498,13 @@ static void gem_free_proc_slot(int pid) {
     proc->pending_timers = 0;
     proc->gen++;
     proc->pid = -1;
+    /* Main's slot is never handed out again: its arena and globals live
+       until the program ends, and with gem_main_pid cleared no later
+       process is taken for main (its crash or exit would end the program). */
+    if (pid == gem_main_pid) {
+        gem_main_pid = -1;
+        return;
+    }
     if (gem_free_tail >= 0) {
         gem_proc_table[gem_free_tail].pid = pid;
     } else {
@@ -1164,11 +1171,11 @@ void gem_deliver_down_messages(int pid, const char *reason) {
     proc->monitors = NULL;
 }
 
-void gem_monitor_fn(int64_t target_pid) {
+int gem_monitor_fn(int64_t target_pid) {
     int caller = gem_current_pid;
     if (caller < 0) {
         gem_error("monitor: not inside a spawned process");
-        return;
+        return 0;
     }
     int target_slot = gem_slot_of_pid(target_pid);
 
@@ -1182,7 +1189,7 @@ void gem_monitor_fn(int64_t target_pid) {
         gem_table_set(msg, gem_string("pid"), gem_int(target_pid));
         gem_table_set(msg, gem_string("reason"), gem_string(reason));
         gem_send_msg(caller, msg);
-        return;
+        return 1;
     }
 
     GemProcess *target = &gem_proc_table[target_slot];
@@ -1197,7 +1204,7 @@ void gem_monitor_fn(int64_t target_pid) {
     GemMonitorNode **link = &target->monitors;
     while (*link) {
         GemMonitorNode *node = *link;
-        if (node->pid == caller_pid) return;  /* already monitoring */
+        if (node->pid == caller_pid) return 0;  /* already monitoring */
         int watcher = gem_slot_of_pid(node->pid);
         if (watcher < 0 || gem_proc_table[watcher].state == GEM_PROC_DEAD) {
             *link = node->next;
@@ -1211,6 +1218,28 @@ void gem_monitor_fn(int64_t target_pid) {
     new_node->pid = caller_pid;
     new_node->next = target->monitors;
     target->monitors = new_node;
+    return 1;
+}
+
+/* Removes the caller's monitor of `target_pid`, if any: 1 if there was one.
+   A DOWN already delivered stays in the caller's mailbox. */
+int gem_demonitor_fn(int64_t target_pid) {
+    int caller = gem_current_pid;
+    if (caller < 0) return 0;
+    int target_slot = gem_slot_of_pid(target_pid);
+    if (target_slot < 0 || gem_proc_table[target_slot].state == GEM_PROC_DEAD) return 0;
+    int64_t caller_pid = gem_pid_of_slot(caller);
+    GemMonitorNode **link = &gem_proc_table[target_slot].monitors;
+    while (*link) {
+        GemMonitorNode *node = *link;
+        if (node->pid == caller_pid) {
+            *link = node->next;
+            free(node);
+            return 1;
+        }
+        link = &node->next;
+    }
+    return 0;
 }
 
 /* ─── Link API ─── */
@@ -1488,8 +1517,15 @@ GemVal gem_monitor_builtin(void *_env, GemVal *args, int argc) {
     if (argc < 1 || args[0].type != VAL_INT) {
         gem_error("monitor: expected pid (int) argument");
     }
-    gem_monitor_fn(args[0].ival);
-    return gem_bool(1);
+    return gem_bool(gem_monitor_fn(args[0].ival));
+}
+
+GemVal gem_demonitor_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_INT) {
+        gem_error("demonitor: expected pid (int) argument");
+    }
+    return gem_bool(gem_demonitor_fn(args[0].ival));
 }
 
 GemVal gem_spawn_monitor_builtin(void *_env, GemVal *args, int argc) {

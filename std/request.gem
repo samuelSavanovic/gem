@@ -237,7 +237,8 @@ end
 # ─── Parsing ───
 
 # Header names are lowercased; a repeated header's values are joined
-# with ", ".
+# with ", ", except Set-Cookie's, whose values contain commas (Expires):
+# those are joined with "\n".
 fn add_header(rd, headers, line)
   let colon = find_byte(line, 58)
   if colon <= 0
@@ -246,7 +247,11 @@ fn add_header(rd, headers, line)
   let key = string.lower(string.trim(substr(line, 0, colon)))
   let value = string.trim(substr(line, colon + 1, len(line) - colon - 1))
   if has_key(headers, key)
-    headers[key] = "{headers[key]}, {value}"
+    let sep = ", "
+    if key == "set-cookie"
+      sep = "\n"
+    end
+    headers[key] = "{headers[key]}{sep}{value}"
   else
     headers[key] = value
   end
@@ -322,9 +327,9 @@ fn malformed_chunked(rd, why)
   error("{rd.name}: malformed chunked body: {why}")
 end
 
-# Decodes a chunked body. Chunk extensions are ignored; trailer fields
-# are added to `headers`.
-fn read_chunked(rd, headers)
+# Decodes a chunked body. Chunk extensions and trailer fields are dropped
+# (a trailer must not override a header the caller trusts).
+fn read_chunked(rd)
   let out = buf_new()
   while true
     let line = read_line(rd)
@@ -357,7 +362,6 @@ fn read_chunked(rd, headers)
   # empty line is tolerated.
   let line = read_line(rd)
   while line != nil and line != ""
-    add_header(rd, headers, line)
     line = read_line(rd)
   end
   to_string(out)
@@ -373,8 +377,10 @@ fn read_body(rd, method, status, headers)
   end
   let te = headers["transfer-encoding"]
   if te != nil
-    if string.ends_with(string.lower(string.trim(te)), "chunked")
-      return read_chunked(rd, headers)
+    # Chunked when it is the last coding: "gzip, chunked", not "xchunked".
+    let codings = string.split(te, ",")
+    if string.lower(string.trim(codings[len(codings) - 1])) == "chunked"
+      return read_chunked(rd)
     end
     return read_to_eof(rd)
   end

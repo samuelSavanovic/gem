@@ -1,5 +1,5 @@
-# std/gen_server, std/supervisor, std/dynamic_supervisor: one DOWN however
-# often a dead server is called, stale idle timeouts, supervisors that take
+# std/gen_server, std/supervisor, std/dynamic_supervisor: no DOWN left
+# however often a dead server is called, stale idle timeouts, supervisors that take
 # their children down when they exit, one_for_all and transient restart
 # rules, result and argument checks, nil timeouts, and live-only monitor
 # lists in process_info.
@@ -35,7 +35,7 @@ fn sleeper()
 end
 
 let ECHO = {
-  init: fn() 0 end,
+  init: fn() {state: 0} end,
   handle_call: fn(msg, from, s)
     match msg
     when "die"
@@ -53,7 +53,7 @@ let ECHO = {
   handle_info: fn(msg, s) {state: s} end
 }
 
-print("-- 1. calls to a dead server leave one DOWN, with the real reason")
+print("-- 1. calls to a dead server leave no DOWN behind")
 let h = gen_server.start(ECHO)
 print(gen_server.call(h, "x"))
 print((pcall gen_server.call(h, "die")).error)
@@ -61,7 +61,7 @@ for i = 0, 3
   print((pcall gen_server.call(h, "x")).error)
 end
 print("DOWNs:", drain_downs(h.pid))
-# A server that was already gone before the first call: noproc, still one.
+# A server that was already gone before the first call: noproc, still none.
 print((pcall gen_server.call(h, "x")).error)
 print((pcall gen_server.call(h, "x")).error)
 print("DOWNs:", drain_downs(h.pid))

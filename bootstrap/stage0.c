@@ -17031,24 +17031,24 @@ static GemVal gem_fn__mod_liveness_compute_live_for_pt_loops_in_stmts(void *_env
 }
 
 static GemVal gem_fn__mod_builtins_user_builtin_names(void *_env, GemVal *args, int argc) {
-#line 122 "compiler/builtins.gem"
-    gem_push_frame("builtins.user_builtin_names", "compiler/builtins.gem", 122);
 #line 123 "compiler/builtins.gem"
-    gem_set_line(123);
+    gem_push_frame("builtins.user_builtin_names", "compiler/builtins.gem", 123);
+#line 124 "compiler/builtins.gem"
+    gem_set_line(124);
     GemVal _t2963 = gem_table_new();
     GemVal gem_v_out = _t2963;
-#line 124 "compiler/builtins.gem"
-    gem_set_line(124);
+#line 125 "compiler/builtins.gem"
+    gem_set_line(125);
     GemVal gem_v__for_tbl_67 = gem_g__mod_builtins_BUILTIN_FNS;
-#line 124 "compiler/builtins.gem"
-    gem_set_line(124);
+#line 125 "compiler/builtins.gem"
+    gem_set_line(125);
     GemVal _t2964[] = {gem_v__for_tbl_67};
     GemVal gem_v__for_len_67 = gem_for_len_fn(NULL, _t2964, 1);
-#line 124 "compiler/builtins.gem"
-    gem_set_line(124);
+#line 125 "compiler/builtins.gem"
+    gem_set_line(125);
     GemVal gem_v__for_i_67 = gem_int(0);
-#line 124 "compiler/builtins.gem"
-    gem_set_line(124);
+#line 125 "compiler/builtins.gem"
+    gem_set_line(125);
     GemArenaMark _mk93;
     gem_arena_mark(&_mk93);
     while (1) {
@@ -17058,19 +17058,19 @@ static GemVal gem_fn__mod_builtins_user_builtin_names(void *_env, GemVal *args, 
             gem_arena_reset_region(&_mk93, _rr, 4, NULL, 0);
         }
         if (!gem_truthy(gem_lt(gem_v__for_i_67, gem_v__for_len_67))) break;
-#line 124 "compiler/builtins.gem"
-        gem_set_line(124);
-    GemVal _t2965[] = {gem_v__for_tbl_67, gem_v__for_i_67};
-        GemVal gem_v_k = gem_table_key_at_fn(NULL, _t2965, 2);
-#line 124 "compiler/builtins.gem"
-        gem_set_line(124);
-    GemVal _t2966[] = {gem_v__for_tbl_67, gem_v__for_i_67};
-        GemVal gem_v__ = gem_table_val_at_fn(NULL, _t2966, 2);
-#line 124 "compiler/builtins.gem"
-        gem_set_line(124);
-        gem_v__for_i_67 = gem_add(gem_v__for_i_67, gem_int(1));
 #line 125 "compiler/builtins.gem"
         gem_set_line(125);
+    GemVal _t2965[] = {gem_v__for_tbl_67, gem_v__for_i_67};
+        GemVal gem_v_k = gem_table_key_at_fn(NULL, _t2965, 2);
+#line 125 "compiler/builtins.gem"
+        gem_set_line(125);
+    GemVal _t2966[] = {gem_v__for_tbl_67, gem_v__for_i_67};
+        GemVal gem_v__ = gem_table_val_at_fn(NULL, _t2966, 2);
+#line 125 "compiler/builtins.gem"
+        gem_set_line(125);
+        gem_v__for_i_67 = gem_add(gem_v__for_i_67, gem_int(1));
+#line 126 "compiler/builtins.gem"
+        gem_set_line(126);
     GemVal _t2967[] = {gem_v_k};
     GemVal _t2969;
     if (!gem_truthy(gem_ge(gem_len_fn(NULL, _t2967, 1), gem_int(2)))) {
@@ -17080,19 +17080,19 @@ static GemVal gem_fn__mod_builtins_user_builtin_names(void *_env, GemVal *args, 
         _t2969 = gem_eq(gem_substr_fn(NULL, _t2968, 3), gem_string_with_len("__", 2));
     }
         if (gem_truthy(gem_not(_t2969))) {
-#line 126 "compiler/builtins.gem"
-            gem_set_line(126);
+#line 127 "compiler/builtins.gem"
+            gem_set_line(127);
     GemVal _t2970[] = {gem_v_out, gem_v_k};
             (void)(gem_push_fn(NULL, _t2970, 2));
         }
     }
 
-#line 129 "compiler/builtins.gem"
-    gem_set_line(129);
-    GemVal _t2971[] = {gem_v_out};
-    (void)(gem_sort_fn(NULL, _t2971, 1));
 #line 130 "compiler/builtins.gem"
     gem_set_line(130);
+    GemVal _t2971[] = {gem_v_out};
+    (void)(gem_sort_fn(NULL, _t2971, 1));
+#line 131 "compiler/builtins.gem"
+    gem_set_line(131);
     GemVal _t2972 = gem_v_out;
     gem_pop_frame();
     return _t2972;
@@ -75278,6 +75278,7 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_table_set(_t12945, gem_string("receive"), gem_string_with_len("gem_receive_builtin", 19));
     gem_table_set(_t12945, gem_string("self"), gem_string_with_len("gem_self_builtin", 16));
     gem_table_set(_t12945, gem_string("monitor"), gem_string_with_len("gem_monitor_builtin", 19));
+    gem_table_set(_t12945, gem_string("demonitor"), gem_string_with_len("gem_demonitor_builtin", 21));
     gem_table_set(_t12945, gem_string("spawn_monitor"), gem_string_with_len("gem_spawn_monitor_builtin", 25));
     gem_table_set(_t12945, gem_string("register"), gem_string_with_len("gem_register_builtin", 20));
     gem_table_set(_t12945, gem_string("whereis"), gem_string_with_len("gem_whereis_builtin", 19));
@@ -75354,8 +75355,8 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_table_set(_t12945, gem_string("__table_key_at"), gem_string_with_len("gem_table_key_at_fn", 19));
     gem_table_set(_t12945, gem_string("__table_val_at"), gem_string_with_len("gem_table_val_at_fn", 19));
     gem_global_set(gem_gi__mod_builtins_BUILTIN_FNS, _t12945);
-#line 133 "compiler/builtins.gem"
-    gem_set_line(133);
+#line 134 "compiler/builtins.gem"
+    gem_set_line(134);
     gem_global_set(gem_gi__mod_builtins_BUILTIN_NAMES, gem_fn__mod_builtins_user_builtin_names(NULL, NULL, 0));
 #line 0 "compiler/main.gem"
     gem_set_line(0);

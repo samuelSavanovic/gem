@@ -613,13 +613,13 @@ Stack trace:
   at anonymous fn (examples/30_supervisor.gem:13)
 
 [Runtime Error in process 10]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:263
+  --> std/supervisor.gem:259
      |
- 263 |     error(res.error)
+ 259 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:263)
-  at anonymous fn (std/supervisor.gem:322)
+  at supervisor.sup_main (std/supervisor.gem:259)
+  at anonymous fn (std/supervisor.gem:318)
 test4: supervisor crashed: supervisor: max restart intensity reached
 test1: equal_self=true different=true
 test2: type=ref
@@ -720,7 +720,7 @@ test5: parent died: now-fatal
 Stack trace:
   at anonymous fn (examples/34_gen_server.gem:97)
   at gen_server.loop (std/gen_server.gem:105)
-  at anonymous fn (std/gen_server.gem:162)
+  at anonymous fn (std/gen_server.gem:154)
 test1: after incr 10 = 10
 test3: count=2 first=raw1 second=raw2
 test4: ok=false err=gen_server.call: server exited: kaboom from server
@@ -2714,9 +2714,9 @@ dynamic_supervisor.start_child: supervisor exited: boom
 2: gen_server.call: expected a {pid} handle, a pid or a registered name, got float
 3: gen_server.call: timeout
 4: gen_server.call: server exited: noproc fast=true
-4: downs left=1
+4: downs left=0
 4: gen_server.call: server exited: told to die fast=true
-4: downs left=1
+4: downs left=0
 5: get=0
 5: own monitor reason=stop extra=0
 
@@ -2729,7 +2729,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:67)
   at gen_server.check_call_result (std/gen_server.gem:99)
   at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:162)
+  at anonymous fn (std/gen_server.gem:154)
 6: gen_server.call: server exited: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 6]: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
@@ -2741,7 +2741,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:67)
   at gen_server.check_call_result (std/gen_server.gem:99)
   at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:162)
+  at anonymous fn (std/gen_server.gem:154)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 7]: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
@@ -2753,7 +2753,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:67)
   at gen_server.check_call_result (std/gen_server.gem:99)
   at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:162)
+  at anonymous fn (std/gen_server.gem:154)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 8]: gen_server: handle_cast returned nil, expected {state: state}
@@ -2765,7 +2765,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:67)
   at gen_server.check_state_result (std/gen_server.gem:80)
   at gen_server.loop (std/gen_server.gem:115)
-  at anonymous fn (std/gen_server.gem:162)
+  at anonymous fn (std/gen_server.gem:154)
 6: cast nil -> gen_server: handle_cast returned nil, expected {state: state}
 
 [Runtime Error in process 9]: gen_server: handle_info returned an int, expected {state: state}
@@ -2777,7 +2777,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:67)
   at gen_server.check_state_result (std/gen_server.gem:80)
   at gen_server.loop (std/gen_server.gem:128)
-  at anonymous fn (std/gen_server.gem:162)
+  at anonymous fn (std/gen_server.gem:154)
 6: info int -> gen_server: handle_info returned an int, expected {state: state}
 7: info saw ["call", "cast", "gs_reply"]
 8: monitors after 300 callers=1
@@ -2882,7 +2882,7 @@ encode fn: error json.encode: cannot encode a fn
 encode ref: error json.encode: cannot encode a ref
 chunked: 200 {"transfer-encoding": "chunked"} hello, world
 chunked split: 200 {"transfer-encoding": "chunked"} abc0123456789abcdef
-chunk ext + trailer: 200 {"transfer-encoding": "chunked", "x-checksum": "abc", "x-other": "1"} Wikipedia in a
+chunk ext + trailer: 200 {"transfer-encoding": "chunked"} Wikipedia in a
 chunked no final CRLF: 200 {"transfer-encoding": "chunked"} ok
 chunked empty: 200 {"transfer-encoding": "chunked"} 
 bad chunk size: error: request.get: malformed chunked body: bad chunk size "zz"
@@ -2892,7 +2892,7 @@ chunked no last chunk: error: request.get: malformed chunked body: connection cl
 no reason: 204 {} 
 no reason + body: 200 {"content-length": "2"} hi
 long reason: 404 {} gone
-lowercase names: 200 {"content-type": "text/plain", "x-mixed-case": "padded", "set-cookie": "a=1, b=2", "content-length": "0"} 
+lowercase names: 200 {"content-type": "text/plain", "x-mixed-case": "padded", "set-cookie": "a=1\nb=2", "content-length": "0"} 
 bare LF: 200 {"content-length": "3"} abc
 100 continue: 201 {"content-length": "4"} done
 content-length stops: 200 {"content-length": "3"} abc
@@ -3183,28 +3183,24 @@ unique big 40000 40000
 unique mixed [1, 1.0, "1", -1, 0.0, nil, true, false, {}, {}]
 sort non-table raises: table.sort: arr must be an array, got string
 join int keys raises: string.join: arr must be an array, got a table with key 5
--- 1. calls to a dead server leave one DOWN, with the real reason
+-- 1. calls to a dead server leave no DOWN behind
 0
 gen_server.call: server exited: boom
-gen_server.call: server exited: boom
-gen_server.call: server exited: boom
-gen_server.call: server exited: boom
-  DOWN boom
-DOWNs: 1
 gen_server.call: server exited: noproc
 gen_server.call: server exited: noproc
-  DOWN noproc
-DOWNs: 1
+gen_server.call: server exited: noproc
+DOWNs: 0
+gen_server.call: server exited: noproc
+gen_server.call: server exited: noproc
+DOWNs: 0
 supervisor.which_children: supervisor exited: noproc
 supervisor.which_children: supervisor exited: noproc
 supervisor.which_children: supervisor exited: noproc
-  DOWN noproc
-DOWNs: 1
+DOWNs: 0
 dynamic_supervisor.which_children: supervisor exited: noproc
 dynamic_supervisor.which_children: supervisor exited: noproc
 dynamic_supervisor.which_children: supervisor exited: noproc
-  DOWN noproc
-DOWNs: 1
+DOWNs: 0
 -- 2. an idle timeout cancelled by a callback does not fire
 0
 no timeout
@@ -3215,13 +3211,13 @@ armed timeout fired
 inner links its children: 3 true
 
 [Runtime Error in process 6]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:263
+  --> std/supervisor.gem:259
      |
- 263 |     error(res.error)
+ 259 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:263)
-  at anonymous fn (std/supervisor.gem:322)
+  at supervisor.sup_main (std/supervisor.gem:259)
+  at anonymous fn (std/supervisor.gem:318)
 inner restarted: true
 old db dead: true
 new db: true 0
@@ -3229,13 +3225,13 @@ outer, inner, children dead: true true true true nil
 one_for_all restarted inner: true true true
 
 [Runtime Error in process 22]: dynamic_supervisor: max restart intensity reached
-  --> std/dynamic_supervisor.gem:270
+  --> std/dynamic_supervisor.gem:266
      |
- 270 |     error(res.error)
+ 266 |     error(res.error)
      |
 Stack trace:
-  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:270)
-  at anonymous fn (std/dynamic_supervisor.gem:307)
+  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:266)
+  at anonymous fn (std/dynamic_supervisor.gem:303)
 dsup and its children dead: true true
 ignores a normal exit signal: true
 dsup killed, child dead: true true
@@ -3259,9 +3255,8 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:67)
   at gen_server.check_call_result (std/gen_server.gem:89)
   at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:162)
+  at anonymous fn (std/gen_server.gem:154)
 gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
-  DOWN gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
 -- 7. init returning a table with a state field
 {state: "idle", count: 0}
 -- 8. cast to a dead server
@@ -3445,7 +3440,7 @@ Stack trace:
   at gen_server.check_result_timeout (std/gen_server.gem:74)
   at gen_server.check_call_result (std/gen_server.gem:95)
   at gen_server.loop (std/gen_server.gem:106)
-  at anonymous fn (std/gen_server.gem:162)
+  at anonymous fn (std/gen_server.gem:154)
 gen_server.call: server exited: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
 
 [Runtime Error in process 30]: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
@@ -3455,7 +3450,8 @@ gen_server.call: server exited: gen_server: handle_call returned a timeout that 
     |
 Stack trace:
   at gen_server.check_result_timeout (std/gen_server.gem:74)
-  at anonymous fn (std/gen_server.gem:157)
+  at gen_server.check_state_result (std/gen_server.gem:82)
+  at anonymous fn (std/gen_server.gem:153)
 gen_server.call: server exited: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
 -- control bytes in the request head
 ok: HTTP/1.1 200 OK
@@ -3534,7 +3530,7 @@ route param +: [c+++]
 1 after stop: nil nil nil
 1 reports: ["inner.r:shutdown"]
 1 restart same name: int
-2 down: custom ["c:custom", "b:custom", "a:custom"]
+2 down: custom ["c:shutdown", "b:shutdown", "a:shutdown"]
 
 [Runtime Error in process 14]: boom
   --> examples/189_otp_shutdown.gem:102
@@ -3553,14 +3549,14 @@ Stack trace:
   at anonymous fn (examples/189_otp_shutdown.gem:102)
 
 [Runtime Error in process 12]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:263
+  --> std/supervisor.gem:259
      |
- 263 |     error(res.error)
+ 259 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:263)
-  at anonymous fn (std/supervisor.gem:322)
-3 down: supervisor: max restart intensity reached true ["t:supervisor: max restart intensity reached"]
+  at supervisor.sup_main (std/supervisor.gem:259)
+  at anonymous fn (std/supervisor.gem:318)
+3 down: supervisor: max restart intensity reached true ["t:shutdown"]
 
 [Runtime Error in process 18]: boom
   --> examples/189_otp_shutdown.gem:117
@@ -3577,17 +3573,17 @@ Stack trace:
 supervisor: exiting on an error raised at:
   at bad_start (examples/189_otp_shutdown.gem:151)
   at supervisor.start_child (std/supervisor.gem:55)
-  at anonymous fn (std/supervisor.gem:252)
+  at anonymous fn (std/supervisor.gem:248)
 
 [Runtime Error in process 33]: start broke
-  --> std/supervisor.gem:263
+  --> std/supervisor.gem:259
      |
- 263 |     error(res.error)
+ 259 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:263)
-  at anonymous fn (std/supervisor.gem:322)
-7 down: start broke ["a:start broke"]
+  at supervisor.sup_main (std/supervisor.gem:259)
+  at anonymous fn (std/supervisor.gem:318)
+7 down: start broke ["a:shutdown"]
 8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got nil
 8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got string
 8 gen_server.start: the module's handle_info must be a fn, got nil
@@ -3599,8 +3595,8 @@ Stack trace:
 8 dynamic_supervisor.start: the name "taken" is already registered
 9 transient noproc pid: -1
 -- heads
-200 connection=[close] host=[h] x-empty=[] x-lower=[v] x-mixed-case=[padded value]
-200 a=[1, 2, 3] connection=[close] cookie=[x=1; y=2]
+200 connection=[close] host=[t] x-empty=[] x-lower=[v] x-mixed-case=[padded value] x-upper=[h]
+200 a=[1, 2, 3] connection=[close] cookie=[x=1; y=2] host=[t]
 200 29998
 repeats fast: true
 431 Request Header Fields Too Large
@@ -3664,3 +3660,59 @@ empty name: error request.get: invalid header name "" (must be an HTTP token: le
 name with CRLF: error request.get: invalid character (byte 13) in header name
 int name: error request.get: invalid header name "5" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)
 nil value: error request.post: header X-N has a nil value
+-- 1. monitor and demonitor
+true false true false
+DOWNs after demonitor: 0
+dead: false true noproc
+request pattern leaves: 0
+demonitor: expected pid (int) argument
+-- 2. gen_server.call leaves no monitor or DOWN behind
+after 20 restarts: mailbox_len 0
+monitors after a call: 0 0
+own: true 0 1
+own monitor: bye extra: 0
+gen_server.call: server exited: died
+own monitor: died extra: 0
+gen_server.call: server exited: noproc left: 0
+-- 3. init must return {state}
+
+[Runtime Error in process 27]: gen_server: init returned an int, expected {state: state}
+  --> std/gen_server.gem:67
+    |
+ 67 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:67)
+  at gen_server.check_state_result (std/gen_server.gem:80)
+  at anonymous fn (std/gen_server.gem:153)
+gen_server: init returned an int, expected {state: state}
+got timeout
+-- 4. http: Host and bare LF
+Host: HTTP/1.1 200 OK
+no Host: HTTP/1.1 400 Bad Request
+two Hosts: HTTP/1.1 400 Bad Request
+HTTP/1.0 without Host: HTTP/1.1 200 OK
+bare LF head: HTTP/1.1 400 Bad Request fast: true
+bare LF, split: HTTP/1.1 400 Bad Request fast: true
+CRLF, split: HTTP/1.1 200 OK fast: true
+-- 5. request: Transfer-Encoding, trailers, Set-Cookie
+xchunked: 200 transfer-encoding=[xchunked] body=[3|abc|0||]
+gzip, chunked: 200 transfer-encoding=[gzip, Chunked] body=[abc]
+chunked, gzip: 200 transfer-encoding=[chunked, gzip] body=[3|abc|0||]
+trailers: 200 transfer-encoding=[chunked] x-a=[1] body=[abc]
+set-cookie: 200 content-length=[0] set-cookie=[a=1; Expires=Wed, 21 Oct 2026 07:28:00 GMT\nb=2] x-b=[1, 2] body=[]
+-- 6. format_time
++0000 UTC 0 %z %s
+1969-12-31T23:59:58+0000 -2
+1700000000
+format_time: output is over 256 KB
+131072 0
+-- 7. sqlite params bind by key
+[{a: "first", b: "second"}]
+[{b: 20, a: 10}]
+sqlite_query: params must be an array, got a string key
+sqlite_query: params must be an array (keys 0..1), got key 5
+sqlite_query: statement has 1 parameter(s), got 0
+-- 8. main's slot is not reused after main ends
+main ends
+1200 processes exited after main ended

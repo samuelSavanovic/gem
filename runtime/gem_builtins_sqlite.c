@@ -240,9 +240,24 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
         sqlite3_finalize(stmt);
         gem_error(buf);
     }
+    /* An array: the keys are exactly 0..got-1 (got distinct int keys in
+       that range), in any insertion order; key k binds parameter k + 1. */
+    for (int i = 0; i < got; i++) {
+        GemVal key = params->keys[i];
+        if (key.type != VAL_INT || key.ival < 0 || key.ival >= got) {
+            char buf[192];
+            if (key.type == VAL_INT)
+                snprintf(buf, sizeof(buf), "sqlite_query: params must be an array (keys 0..%d), got key %lld",
+                         got - 1, (long long)key.ival);
+            else
+                snprintf(buf, sizeof(buf), "sqlite_query: params must be an array, got a %s key", gem_type_str(key));
+            sqlite3_finalize(stmt);
+            gem_error(buf);
+        }
+    }
     for (int i = 0; i < got; i++) {
         GemVal v = params->vals[i];
-        int idx = i + 1;
+        int idx = (int)params->keys[i].ival + 1;
         switch (v.type) {
             case VAL_INT:    rc = sqlite3_bind_int64(stmt, idx, v.ival); break;
             case VAL_FLOAT:  rc = sqlite3_bind_double(stmt, idx, v.fval); break;

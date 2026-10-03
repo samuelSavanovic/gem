@@ -3,7 +3,7 @@
 load "std/gen_server"
 
 let slow_server = {
-  init: fn() 0 end,
+  init: fn() {state: 0} end,
   handle_call: fn(msg, from, state)
     if msg == "slow"
       sleep(100)

@@ -4,7 +4,7 @@ load "std/gen_server"
 # ─── Test 1: counter — call + cast happy path ────────────────
 
 let counter_module = {
-  init: fn() 0 end,
+  init: fn() {state: 0} end,
   handle_call: fn(msg, from, state)
     match msg
     when {op: "get"}
@@ -39,7 +39,7 @@ end)
 # ─── Test 2: noreply + later reply via gen_server.reply ──────
 
 let echo_module = {
-  init: fn() {pending: nil} end,
+  init: fn() {state: {pending: nil}} end,
   handle_call: fn(msg, from, state)
     # Stash from; reply later when "go" arrives via handle_info
     {noreply: {pending: from, msg: msg}}
@@ -67,7 +67,7 @@ end)
 # ─── Test 3: handle_info handles non-call/cast messages ──────
 
 let logger_module = {
-  init: fn() [] end,
+  init: fn() {state: []} end,
   handle_call: fn(msg, from, state)
     match msg
     when "list"
@@ -92,7 +92,7 @@ end)
 # ─── Test 4: adversarial — handle_call raises → call fails at once ───
 
 let bad_module = {
-  init: fn() 0 end,
+  init: fn() {state: 0} end,
   handle_call: fn(msg, from, state)
     error("kaboom from server")
   end,

@@ -860,7 +860,8 @@ int gem_whereis_name(const char *name);        /* returns pid or -1 */
 void gem_unregister_name_for_pid(int pid);     /* auto-cleanup on death */
 
 /* Monitor API */
-void gem_monitor_fn(int64_t target_pid);
+int gem_monitor_fn(int64_t target_pid);
+int gem_demonitor_fn(int64_t target_pid);
 void gem_deliver_down_messages(int pid, const char *reason);
 
 /* Link API */
@@ -878,6 +879,7 @@ GemVal gem_send_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_receive_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_self_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_monitor_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_demonitor_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_spawn_monitor_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_register_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_whereis_builtin(void *_env, GemVal *args, int argc);

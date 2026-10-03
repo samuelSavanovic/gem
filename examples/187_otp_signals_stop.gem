@@ -161,7 +161,7 @@ print((pcall task.await_all([t2], "x")).error)
 print(task.await_all([t2], 1000))
 
 let srv = gen_server.start({
-  init: fn() 0 end,
+  init: fn() {state: 0} end,
   handle_call: fn(msg, from, s)
     if msg == "bad"
       return {reply: "never sent", state: s, timeout: "10"}

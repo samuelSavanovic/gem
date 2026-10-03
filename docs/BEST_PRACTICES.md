@@ -92,7 +92,7 @@ load "std/string"
 # The gen_server callbacks. handle_call answers gen_server.call; every
 # callback returns the new state, so each match needs an else.
 let NOTES = {
-  init: fn() [] end,
+  init: fn() {state: []} end,
   handle_call: fn(msg, from, notes)
     match msg
     when {tag: "add", text: text}
@@ -498,6 +498,18 @@ A call with too many arguments drops the extras, and missing arguments are
 `nil` (or their default). Neither is an error, so a wrong call shows up
 later as a `nil` somewhere else. An `extern fn` is the exception: it
 raises unless the count matches exactly.
+
+### Don't rely on argument order for side effects **(bug)**
+
+Arguments run left to right, except a field access: in
+`print(monitor(p), process_info(p).monitors)` the `process_info` call
+runs first, so the list doesn't show the new monitor. When arguments have
+side effects that later ones depend on, give them their own statements:
+
+```gem
+let added = monitor(p)
+print(added, process_info(p).monitors)
+```
 
 ### `+=` works only on variables
 
@@ -941,18 +953,6 @@ One supervision limitation remains:
   end
   ```
 
-### A gen_server state with a `state` key goes in `{state: ...}` **(trap)**
-
-`init` may return the state itself or `{state: s, timeout: ms}`, and any
-table with a `state` key is taken for the second form. A state machine
-whose state is `{state: "idle", count: 0}` returned bare starts with the
-state `"idle"`. When the state is a table that may have a `state` key,
-always wrap it:
-
-```gem
-init: fn() {state: {state: "idle", count: 0}} end
-```
-
 ### Spawning
 
 ```gem
@@ -1060,16 +1060,28 @@ end
   monitor ends with the process that set it up (after 20,000 callers in
   turn, `process_info(server).monitors` is empty and the runtime's list
   holds at most one stale entry).
-- There is no `demonitor`, and a process monitors a live target at most
-  once (a second `monitor` adds nothing, and the death sends one `DOWN`).
-  A dead target is different: every `monitor` of it sends another
-  `DOWN` (`"noproc"`), so a wait that retries on a dead server must drop
-  the extra ones. A long-lived process that monitors a server therefore
-  gets its `DOWN` whenever the server dies, possibly long after the
-  request. Drop it only when the target always exits (as a task does);
-  otherwise leave exactly one for the caller's loop, since it may be the
-  `DOWN` of a monitor the caller set up itself. `gen_server.call` works
-  this way.
+- A monitor taken for one request should end with it, or the caller gets
+  the server's `DOWN` whenever it dies, long after the request. A process
+  monitors a live target at most once, so `monitor` returns `false` when
+  the caller already monitors it; remove the monitor afterwards only when
+  `monitor` returned `true`, and drop the `DOWN` it may have delivered.
+  `gen_server.call` works this way:
+
+  ```gem
+  let added = monitor(pid)
+  # ... send, then receive the reply or the DOWN ...
+  if added and not demonitor(pid)
+    receive
+    when {tag: "DOWN", pid: ^pid} then nil
+    after 0 then nil
+    end
+  end
+  ```
+
+  `demonitor` returns `false` once the target has died, because its
+  `DOWN` is already in the mailbox. If the request got the `DOWN` and
+  `added` is `false`, send it back to `self()` for the caller's own
+  monitor. A dead target sends a `DOWN` (`"noproc"`) on every `monitor`.
 - A `receive` with only an `after` clause waits that long and takes no
   message: anything that arrives meanwhile stays queued. It is the same as
   `sleep(ms)`; use whichever reads better.
@@ -1128,12 +1140,6 @@ program exits with status 0 and those processes are dropped. If main
 itself is stuck that way, the runtime reports `deadlock: main process is
 waiting in receive ...` and exits with status 1. Call `exit()` to end the
 program from anywhere.
-
-Keep main alive while a long-running process tree works: after main
-ends, the process that gets main's slot (about every 1,024th spawn) is
-taken for main, and its crash or `exit` ends the program **(bug)**. End
-`main` with `http.serve(...)` or a `receive` that waits for the tree's
-`DOWN` instead of returning.
 
 A spawned process that crashes prints its error on stderr but doesn't
 change the program's exit status: if main finishes normally, the program
@@ -1363,6 +1369,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |
 | `when x > 5`, `when "a" or "b"` | compares with a bool / one value | `if` chain |
 | `nil` passed for a defaulted parameter | parameter is `nil` | leave the argument out |
+| Call arguments with side effects, one a field access like `f(x).y` **(bug)** | the field access's object runs before the arguments left of it | separate statements |
 | `pcall fn() ... end`, `pcall(f, x)` | runs nothing / drops `x` | `pcall f(x)`, `pcall do ... end` |
 | Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
 | `2.0 == 2` | `false` | convert first |
@@ -1373,7 +1380,6 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `loop(state)` followed by more statements | stack and memory grow until overflow | self call as the last expression |
 | `warning: cannot reset ... back-edge` on a `while true` | memory grows without bound | restructure the loop |
 | gen_server callback returning `nil` | server dies, the `call` raises | `else` arm returning a result table |
-| gen_server `init` returning a table with a `state` key | only that field becomes the state | return `{state: s}` |
 | `self()` inside `spawn do ... end` to mean the parent | it's the child | `let parent = self()` before |
 | `spawn(f, x)` | `f` called with no arguments | `spawn do f(x) end` |
 | `link` to a process that may have exited | caller dies with `noproc` | `spawn_link` |
@@ -1381,10 +1387,9 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
 | `after` in a busy server loop | never fires | `send_after` ticks |
-| Calling or monitoring a server from a long-lived process | its `DOWN` arrives when the server dies | catch-all or `DOWN` arm in the loop |
+| Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
 | Supervised child that traps exits **(bug)** | `one_for_all` restart hangs; the child outlives its supervisor | return on any non-`"normal"` `EXIT` from the supervisor |
-| Main returns while a process tree keeps running **(bug)** | after ~1,024 spawns a process is taken for main; its crash ends the program | keep main waiting (`serve`, or `receive` the tree's `DOWN`) |
 | `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |
 | Spawning thousands of quick tasks in a loop | `process table full` | batch, or cap in-flight tasks |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |

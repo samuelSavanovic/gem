@@ -74,7 +74,7 @@ fn summary(raw)
 end
 
 fn get(path, extra = "")
-  summary(exchange(["GET {path} HTTP/1.1\r\n{extra}Connection: close\r\n\r\n"]))
+  summary(exchange(["GET {path} HTTP/1.1\r\nHost: t\r\n{extra}Connection: close\r\n\r\n"]))
 end
 
 fn try(label, f)
@@ -88,7 +88,7 @@ end
 
 fn head_tests()
   print("-- heads")
-  print(get("/headers", "HOST: h\r\nX-Mixed-Case:   padded value \t\r\nx-lower:v\r\nX-Empty:\r\n"))
+  print(get("/headers", "X-UPPER: h\r\nX-Mixed-Case:   padded value \t\r\nx-lower:v\r\nX-Empty:\r\n"))
   print(get("/headers", "A: 1\r\na: 2\r\nA:3\r\nCookie: x=1\r\ncookie: y=2\r\n"))
   # 10000 repeats of one header: joined once (linear), not per repeat.
   let t = time_ms()
@@ -115,17 +115,17 @@ fn body_tests()
   print("-- bodies")
   let big = string.repeat("z", 300000)
   # Two requests with bodies and a third without, pipelined in one write.
-  let pipelined = "POST /echo HTTP/1.1\r\nContent-Length: 300000\r\n\r\n{big}POST /echo HTTP/1.1\r\nContent-Length: 3\r\n\r\nabcGET /users/me HTTP/1.1\r\nConnection: close\r\n\r\n"
+  let pipelined = "POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 300000\r\n\r\n{big}POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 3\r\n\r\nabcGET /users/me HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"
   print(summary(exchange([pipelined])))
   # The same, the body arriving in pieces.
-  print(summary(exchange(["POST /echo HTTP/1.1\r\nContent-Length: 10\r\nConnection: close\r\n\r\nhel", "lo", "world"])))
+  print(summary(exchange(["POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 10\r\nConnection: close\r\n\r\nhel", "lo", "world"])))
   # A chunked body of many chunks, then a pipelined request.
   let chunks = build_string() do |add|
     for i = 0, 200
       add("5\r\nabcde\r\n")
     end
   end
-  print(summary(exchange(["POST /echo HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n{chunks}0\r\n\r\nGET /users/me HTTP/1.1\r\nConnection: close\r\n\r\n"])))
+  print(summary(exchange(["POST /echo HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\n\r\n{chunks}0\r\n\r\nGET /users/me HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"])))
 end
 
 fn static_tests()

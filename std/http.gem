@@ -467,8 +467,11 @@ fn last_bytes(s, n)
 end
 
 # Reads up to the end of the request head and returns the head without its
-# final blank line, nil when the peer closed or the time ran out, or
-# {too_large: true} when the head is over MAX_HEADER_BYTES. Chunks collect
+# final blank line, nil when the peer closed or the time ran out,
+# {too_large: true} when the head is over MAX_HEADER_BYTES, or
+# {bare_lf: true} when "\n\n" comes before any CRLF CRLF (a head ending in
+# bare LFs, which would otherwise wait for the timeout; a bare LF inside a
+# complete head is caught by parse_head). Chunks collect
 # in a buffer and only the new bytes are scanned, so a peer sending one
 # byte at a time costs linear time.
 fn read_head(rd)
@@ -485,6 +488,9 @@ fn read_head(rd)
     found = gem_bytes_find(chunk, "\r\n\r\n", 0)
   end
   if found < 0
+    if gem_bytes_find(rd.data, "\n\n", rd.pos) >= 0
+      return {bare_lf: true}
+    end
     let acc = buf_new()
     let rest = substr(rd.data, rd.pos, len(rd.data) - rd.pos)
     buf_push(acc, rest)
@@ -499,6 +505,8 @@ fn read_head(rd)
       let at = gem_bytes_find(window, "\r\n\r\n", 0)
       if at >= 0
         found = have - len(tail) + at
+      elif gem_bytes_find(window, "\n\n", 0) >= 0
+        return {bare_lf: true}
       end
       buf_push(acc, chunk)
       have += len(chunk)
@@ -777,7 +785,8 @@ end
 # smuggling risk). One pass over the lines. Header names are lowercased
 # and values trimmed; a repeated header's values are joined with ", "
 # (cookies with "; "), once at the end. A header line needs a name
-# without whitespace before its colon.
+# without whitespace before its colon. An HTTP/1.1 request needs exactly
+# one Host header (RFC 9112 §3.2).
 fn parse_head(head)
   let n = len(head)
   let eol = gem_bytes_find(head, "\r\n", 0)
@@ -825,6 +834,9 @@ fn parse_head(head)
       end
       push(parts, value)
     end
+  end
+  if not info.http10 and (headers.host == nil or (repeated != nil and repeated.host != nil))
+    return 400
   end
   if repeated != nil
     for key, parts in repeated
@@ -1196,7 +1208,7 @@ end
 fn read_request_head(rd)
   for attempt = 0, MAX_EMPTY_LINE_HEADS
     let raw = read_head(rd)
-    if raw == nil or raw.too_large
+    if raw == nil or raw.too_large or raw.bare_lf
       return raw
     end
     let text = raw.text
@@ -1278,7 +1290,7 @@ fn process_one_request(rd, cfg)
   end
   if raw.too_large
     return reject(rd, 431)
-  elif raw.only_empty
+  elif raw.only_empty or raw.bare_lf
     return reject(rd, 400)
   end
   let head = parse_head(raw.text)
@@ -1565,6 +1577,29 @@ fn launch(caller, router_ref, watch, {port = 8080, host = "0.0.0.0", max_body = 
   {pid: s.value}
 end
 
+# Ends the monitor of `pid` a request took: `added` is what its `monitor`
+# returned. A monitor the caller already had is left alone. One the request
+# added is removed, and its DOWN dropped if the target died meanwhile.
+fn drop_monitor(pid, added)
+  if added and not demonitor(pid)
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    after 0
+      nil
+    end
+  end
+end
+
+# After a request matched the DOWN of `pid` (with `reason`): when the
+# monitor was the caller's own (`added` false), puts the DOWN back for it.
+fn return_down(pid, added, reason)
+  if not added
+    send(self(), {tag: "DOWN", pid: pid, reason: reason})
+  end
+  nil
+end
+
 # Runs the server and blocks until its process exits: returns nil when it
 # was stopped or killed with "shutdown", raises otherwise. The server
 # watches the caller and shuts down when it is killed.
@@ -1604,12 +1639,13 @@ fn stop(server, timeout_ms = 5000)
     error("http.stop: timeout_ms must be an int (milliseconds), got {type(timeout_ms)}")
   end
   let pid = target_pid(server, "http.stop")
-  monitor(pid)
+  let added = monitor(pid)
   kill(pid, "shutdown")
   receive
-  when {tag: "DOWN", pid: ^pid}
-    nil
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    return_down(pid, added, reason)
   after timeout_ms
+    drop_monitor(pid, added)
     error("http.stop: the server did not stop within {timeout_ms} ms")
   end
 end

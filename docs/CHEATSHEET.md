@@ -111,7 +111,8 @@ end
 receive                              # arms optional: just wait, mailbox untouched
 after 100 then nil
 end
-monitor(pid)                         # → true; DOWN message on exit
+monitor(pid)                         # → true (false if already monitoring); DOWN message on exit
+demonitor(pid)                       # → true if a monitor was removed; a delivered DOWN stays
 link(pid); unlink(pid)
 process_flag("trap_exit", true)
 kill(pid, "shutdown")                # → true if alive; EXIT msg if pid traps exits

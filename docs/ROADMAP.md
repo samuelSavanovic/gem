@@ -72,11 +72,15 @@ Today, wrapping a C library that uses small structs by value (raylib's `Vector2`
 
 Stack traces on `error()` are good; there's no interactive step-through, breakpoint, or variable-inspection story. Pairs with `LSP_ROADMAP.md` but is a separate capability — typically a DAP (Debug Adapter Protocol) server that the runtime cooperates with (instrumented `gem_set_line` callbacks, ability to pause a coroutine, mailbox/process inspection).
 
-## `demonitor` (P1)
+## Per-monitor refs (P2)
 
-`monitor(target)` adds the caller's pid to the target's monitor list (`gem_monitor_fn` in `runtime/gem_scheduler.c`). Entries of watchers that have exited are dropped lazily, by the next `monitor` of that target as it walks the list for its duplicate check, so the list stays as long as the target's live watchers. There is no `demonitor`, so a live watcher cannot drop a monitor it no longer needs: `gen_server.call` leaves the caller monitoring the server, and the caller gets the server's `DOWN` whenever it dies.
+A process monitors a target at most once (`gem_monitor_fn` in `runtime/gem_scheduler.c`), so `demonitor(pid)` also drops a monitor the caller set up elsewhere; std code that monitors for the length of a request removes its monitor only when its `monitor` returned `true`. Entries of watchers that have exited are dropped lazily, by the next `monitor` of that target.
 
-What needs building: `demonitor(pid)`, with a per-process list of the targets it monitors so an exiting process can also remove its entries eagerly (and `process_info(target).monitors` stops listing exited watchers until the next `monitor`). Since a process monitors a target at most once, `demonitor` would also drop a monitor the caller set up separately; Erlang's per-monitor refs avoid that. Trade-off: one more list per process, maintained on every `monitor`, and refs in the API if monitors stop being deduplicated.
+What needs building: Erlang-style refs (`monitor` returns a ref, `demonitor(ref)`), with a per-process list of the targets it monitors so an exiting process removes its entries eagerly. Trade-off: one more list per process, maintained on every `monitor`, and refs in the API.
+
+## Named sqlite parameters (P3)
+
+`sqlite_query` takes an array of params; a `:name` placeholder binds by its position. A record (`{a: 1, b: 2}`) raises. What needs building: bind a string-keyed params table by name (`sqlite3_bind_parameter_index`, trying the `:`, `@` and `$` prefixes). Trade-off: none beyond the code; arrays keep working.
 
 ## Process-owned resources closed on exit (P2)
 

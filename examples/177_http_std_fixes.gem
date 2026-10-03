@@ -78,7 +78,7 @@ fn run_requests()
 
   print("-- head split across writes, then a pipelined pair")
   print(exchange(PORT, ["GET /hello HTTP/1.1\r\nHost: t\r", "\nConnection: close\r", "\n", "\r", "\n"]))
-  let pair = "POST /echo HTTP/1.1\r\nContent-Length: 3\r\n\r\nonePOST /echo HTTP/1.1\r\nContent-Length: 3\r\nConnection: close\r\n\r\ntwo"
+  let pair = "POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 3\r\n\r\nonePOST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 3\r\nConnection: close\r\n\r\ntwo"
   print(exchange(PORT, [pair]))
 end
 
@@ -128,7 +128,7 @@ fn run_serve(reason, port)
   sleep(20)
   send(server, {tag: "unrelated"})
   sleep(20)
-  print(exchange(port, ["GET /hello HTTP/1.1\r\nConnection: close\r\n\r\n"]))
+  print(exchange(port, ["GET /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"]))
   kill(target, reason)
   receive
   when {tag: "served", result: r}

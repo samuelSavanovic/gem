@@ -12,8 +12,11 @@
 /* std/http calls it with a handful of constant byte sets, many times per
  * request, so the last few sets' lookup tables are kept: a set that is
  * byte-for-byte one of them (memcmp, much cheaper than rebuilding the
- * table) reuses its table. Only the scheduler thread calls extern fns. */
-#define GEM_SPAN_CACHE 8
+ * table) reuses its table. The cache is not locked: only the scheduler
+ * thread may call this, so declare it as a plain (non-blocking) extern fn,
+ * never `extern blocking fn` (those run on the thread pool). 16 slots hold
+ * every set std/http uses (9) with room to spare. */
+#define GEM_SPAN_CACHE 16
 #define GEM_SPAN_CACHE_MAX 256
 static struct {
     int64_t n;           /* a zeroed slot is the (valid) entry for "" */

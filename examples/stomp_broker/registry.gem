@@ -18,7 +18,7 @@ fn classify(name)
 end
 
 let module = {
-  init: fn() nil end,
+  init: fn() {state: nil} end,
   handle_call: fn(msg, from, state)
     match msg
     when {op: "lookup_or_create", name: name}

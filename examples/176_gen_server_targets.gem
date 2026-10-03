@@ -3,7 +3,7 @@
 load "std/gen_server"
 
 let COUNTER = {
-  init: fn() 0 end,
+  init: fn() {state: 0} end,
   handle_call: fn(msg, from, n)
     match msg
     when "get"
@@ -86,8 +86,8 @@ let t0 = time_ms()
 print("4: {error_of(pcall gen_server.call(dead, "get"))} fast={time_ms() - t0 < 1000}")
 print("4: downs left={count_downs(dead.pid)}")
 
-# Dies while handling the call: the call fails at once, and the DOWN stays
-# for the caller.
+# Dies while handling the call: the call fails at once, and leaves no DOWN
+# behind (the call's monitor was its own).
 let dying = gen_server.start(COUNTER)
 let t1 = time_ms()
 print("4: {error_of(pcall gen_server.call(dying, "die"))} fast={time_ms() - t1 < 1000}")
@@ -103,7 +103,7 @@ print("5: own monitor reason={down_reason(watched.pid)} extra={count_downs(watch
 # ─── 6. bad callback results kill the server with a clear error ───
 fn bad_server(handle_call, handle_cast, handle_info)
   gen_server.start({
-    init: fn() 0 end,
+    init: fn() {state: 0} end,
     handle_call: handle_call,
     handle_cast: handle_cast,
     handle_info: handle_info
@@ -139,7 +139,7 @@ print("6: info int -> {down_reason(b5.pid)}")
 
 # ─── 7. old tags are not special any more ───
 let echo = gen_server.start({
-  init: fn() [] end,
+  init: fn() {state: []} end,
   handle_call: fn(msg, from, seen) {reply: seen, state: seen} end,
   handle_cast: fn(msg, seen) {state: seen} end,
   handle_info: fn(msg, seen)

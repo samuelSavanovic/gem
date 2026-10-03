@@ -71,7 +71,7 @@ fn get(path, extra = "", method = "GET")
 end
 
 fn post(head, body)
-  print(exchange(PORT, ["POST /echo HTTP/1.1\r\n{head}\r\n{body}"]))
+  print(exchange(PORT, ["POST /echo HTTP/1.1\r\nHost: t\r\n{head}\r\n{body}"]))
 end
 
 fn run_chunked()
@@ -125,21 +125,21 @@ fn run_connection()
   # HTTP/1.0 closes unless it asks for keep-alive.
   print(exchange(PORT, ["GET /hello HTTP/1.0\r\n\r\n"]))
   print(exchange(PORT, ["GET /hello HTTP/1.0\r\nConnection: keep-alive\r\n\r\nGET /hello HTTP/1.0\r\n\r\n"]))
-  print(exchange(PORT, ["GET /hello HTTP/1.1\r\nConnection: Close, TE\r\n\r\n"]))
-  print(exchange(PORT, ["GET /hello HTTP/1.1\r\nConnection: keep-alive\r\nConnection: close\r\n\r\n"]))
+  print(exchange(PORT, ["GET /hello HTTP/1.1\r\nHost: t\r\nConnection: Close, TE\r\n\r\n"]))
+  print(exchange(PORT, ["GET /hello HTTP/1.1\r\nHost: t\r\nConnection: keep-alive\r\nConnection: close\r\n\r\n"]))
   print("-- Expect: 100-continue")
-  print(exchange(PORT, ["POST /echo HTTP/1.1\r\nContent-Length: 2\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n", "hi"]))
+  print(exchange(PORT, ["POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 2\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n", "hi"]))
 end
 
 fn run_limits()
   print("-- limits")
   let port = PORT + 1
   let small = http.start(app, {port: port, host: "127.0.0.1", max_body: 10, request_timeout_ms: 300, idle_timeout_ms: 500})
-  print(exchange(port, ["POST /echo HTTP/1.1\r\nContent-Length: 10\r\nConnection: close\r\n\r\n0123456789"]))
-  print(exchange(port, ["POST /echo HTTP/1.1\r\nContent-Length: 11\r\n\r\n01234567890"]))
-  print(exchange(port, ["POST /echo HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n6\r\n012345\r\n5\r\n67890\r\n0\r\n\r\n"]))
+  print(exchange(port, ["POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 10\r\nConnection: close\r\n\r\n0123456789"]))
+  print(exchange(port, ["POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 11\r\n\r\n01234567890"]))
+  print(exchange(port, ["POST /echo HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\n\r\n6\r\n012345\r\n5\r\n67890\r\n0\r\n\r\n"]))
   # A head over 64 KB in one write.
-  let big = exchange(port, ["GET /hello HTTP/1.1\r\nX-Big: {string.repeat("a", 70000)}\r\n\r\n"])
+  let big = exchange(port, ["GET /hello HTTP/1.1\r\nHost: t\r\nX-Big: {string.repeat("a", 70000)}\r\n\r\n"])
   print(big)
   # A slow client: the request deadline closes the connection.
   let t0 = time_ms()
@@ -148,7 +148,7 @@ fn run_limits()
   print("slow head: [{slow}] closed in time: {took >= 250 and took < 900}")
   # An idle keep-alive connection closes after idle_timeout_ms.
   t0 = time_ms()
-  print(exchange(port, ["GET /hello HTTP/1.1\r\n\r\n"]))
+  print(exchange(port, ["GET /hello HTTP/1.1\r\nHost: t\r\n\r\n"]))
   took = time_ms() - t0
   print("idle close in time: {took >= 450 and took < 1000}")
   http.stop(small)
@@ -157,17 +157,17 @@ end
 fn run_killed()
   print("-- a killed connection process")
   let t0 = time_ms()
-  print("[{exchange(PORT, ["GET /killed HTTP/1.1\r\n\r\n"])}] closed at once: {time_ms() - t0 < 500}")
+  print("[{exchange(PORT, ["GET /killed HTTP/1.1\r\nHost: t\r\n\r\n"])}] closed at once: {time_ms() - t0 < 500}")
 end
 
 fn run_stop()
   print("-- http.stop")
   let port = PORT + 2
   let server = http.start(app, {port: port, host: "127.0.0.1"})
-  print(exchange(port, ["GET /hello HTTP/1.1\r\nConnection: close\r\n\r\n"]))
+  print(exchange(port, ["GET /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"]))
   # A kept-alive connection is closed by stop too.
   let idle = tcp_connect("127.0.0.1", port)
-  tcp_write(idle, "GET /hello HTTP/1.1\r\n\r\n")
+  tcp_write(idle, "GET /hello HTTP/1.1\r\nHost: t\r\n\r\n")
   let first = tcp_read(idle, 8192, 1000)
   print("stop: {http.stop(server)}")
   print("idle connection after stop: {json_str(tcp_read(idle, 8192, 1000))}")
@@ -178,7 +178,7 @@ fn run_stop()
   # The port can be bound again; stop takes a registered name too.
   let again = http.start(app, {port: port, host: "127.0.0.1"})
   register("web", again.pid)
-  print(exchange(port, ["GET /hello HTTP/1.1\r\nConnection: close\r\n\r\n"]))
+  print(exchange(port, ["GET /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"]))
   print("stop by name: {http.stop("web")}")
   let e = pcall http.stop("web")
   print(e.error)

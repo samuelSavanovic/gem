@@ -7,7 +7,7 @@ load "std/gen_server"
 
 let me = self()
 let M = {
-  init: fn() 0 end,
+  init: fn() {state: 0} end,
   handle_call: fn(msg, from, s) {reply: s, state: s} end,
   handle_cast: fn(msg, s) {state: s} end,
   handle_info: fn(msg, s) {state: s} end
@@ -160,7 +160,7 @@ print("7 down:", r7, take_reports(1))
 # 8. Argument checks at start, and the name-taken wording.
 print("8", err(pcall gen_server.start(nil)))
 print("8", err(pcall gen_server.start("m")))
-print("8", err(pcall gen_server.start({init: fn() 0 end, handle_call: M.handle_call, handle_cast: M.handle_cast})))
+print("8", err(pcall gen_server.start({init: fn() {state: 0} end, handle_call: M.handle_call, handle_cast: M.handle_cast})))
 print("8", err(pcall supervisor.start()))
 print("8", err(pcall supervisor.start("x")))
 print("8", err(pcall dynamic_supervisor.start(nil)))
