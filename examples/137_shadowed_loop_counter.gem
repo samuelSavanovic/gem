@@ -39,3 +39,15 @@ while m < n
   m = m + f() - 99
 end
 print("closure: m = {m}")
+
+# Not warned: a module-level variable that a named fn assigns can change
+# through a call in the loop.
+let count = 0
+fn bump()
+  count += 1
+end
+while count < 3
+  let count = 99
+  bump()
+end
+print("module var changed by a fn: count = {count}")
