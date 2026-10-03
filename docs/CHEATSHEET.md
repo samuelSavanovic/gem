@@ -88,7 +88,7 @@ multi-line literal
 '''
 
 # Operators — and/or/not (NOT &&/||/!), x in tbl, x in arr
-# Tables — { key: val } or [1, 2, 3], dot access, bracket access (negative indexing supported)
+# Tables — { key: val } or [1, 2, 3], dot access, bracket access (negative indexing supported; arr[i] past the end is nil, a string index out of range raises)
 # Logical — nil and false are falsy, everything else truthy
 
 # Concurrency
@@ -128,7 +128,7 @@ let r = pcall some_fn()              # {ok: bool, value/error: ..., stack: [{nam
 # Stack: 8 MB per process; overflow raises "stack overflow in <fn>" (pcall-catchable, kills only that process)
 
 # Common builtins
-# I/O & process: print, eprint, error, pcall, len, type, to_string, to_int, to_float, exit, kill, argv, getenv, input, sleep
+# I/O & process: print, eprint, error, pcall, len, type, to_string, to_int, to_float, exit, kill, argv, getenv, input, read_stdin, write_stdout, sleep
 # Collections:   push, pop, keys, values, sort, insert, delete, remove_at, has_key
 # Strings:       str_replace, substr, chr, ord, buf_new, buf_push, build_string
 # Filesystem:    read_file, write_file, append_file, file_exists, remove_file, mkdir, list_dir, is_dir, dirname, path_join, normalize_path, exec
@@ -165,7 +165,7 @@ end
 # std/test       case, assert, assert_eq, assert_neq, assert_throws, run
 
 # C interop
+extern include "stdio.h"                 # a libc fn needs its header; your own header: absolute path
 extern fn puts(s: String) -> Int
 extern blocking fn net_read(fd: Int) -> String
-extern include "header.h"
 ```

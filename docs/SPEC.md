@@ -162,6 +162,12 @@ let result = add(
 )
 ```
 
+Table and array literals may span lines the same way. Other expressions may not: a line break after a binary operator or inside parentheses ends the statement (`let t = (1 +` followed by `2)` on the next line is a parse error). Split a long condition into named `let`s.
+
+A call with more arguments than the function declares drops the extra ones, and missing arguments are `nil` (or the parameter's default); neither is an error. Calling a non-function value is a runtime error.
+
+If the entry file defines `fn main()`, the compiler calls it with no arguments after the file's top-level code has run. Don't also call it yourself, or it runs twice. Use `argv()` for command-line arguments.
+
 ## Variadic Functions
 
 A `...name` rest parameter collects extra positional arguments into an array. It must be the last declared parameter.
@@ -420,7 +426,7 @@ Each pattern compiles to a condition check plus variable bindings; the bindings 
 
 ## For Loops
 
-Three forms, all desugared to `while` at parse time:
+Three forms, all lowered to `while` loops (in `compiler/lower.gem`):
 
 ```
 # Array iteration
@@ -441,7 +447,7 @@ end
 
 `break` and `continue` work inside `for` loops. The iterator increment happens before the user body, so `continue` correctly advances to the next element.
 
-The table form evaluates the RHS expression exactly once. It desugars to: store the table in a temp, call `keys()` on it, iterate by index, and look up each value by key inside the loop.
+The table form evaluates the RHS expression exactly once. It walks the table's entries in `keys()` order without building a `keys()` array, reading the entry count once before the loop: an entry added during the loop is not visited, and a `delete` during the loop (which moves the last entry into the hole) makes it skip entries and then visit `nil`. The single-variable form is for arrays: it re-reads `len` every iteration, so `push` during the loop extends it and `remove_at` makes it skip elements; on a string-keyed table it yields `nil` for each entry (use `for k, v` or `values(t)`).
 
 ## Closures
 
@@ -554,7 +560,7 @@ Processes are cooperatively scheduled but the compiler inserts automatic yield p
 
 Yield checks are only inserted in user-written loops. Compiler-generated loops (e.g. the mailbox scan in selective receive) do not get yield checks, since yielding mid-scan would break the selective receive contract.
 
-The main program runs as a process too (PID 0), so its loops yield the same way.
+The main program runs as a process too (PID 0), so its loops yield the same way. Self tail calls compile to loops and yield too; non-tail recursion has no yield point, so a long CPU-bound recursive computation (a naive `fib(30)`) holds up every other process until it returns.
 
 ## Process Monitoring
 
@@ -596,7 +602,7 @@ When a linked process dies with a reason other than `"normal"`, the exit signal 
 
 - If the linked process has `trap_exit` set to `true` (via `process_flag("trap_exit", true)`), the exit signal is converted to a message: `{tag: "EXIT", pid: <pid>, reason: <reason>}`.
 - If the linked process does not trap exits, it dies with the same reason, propagating the signal further.
-- Normal exits (reason `"normal"`) do not propagate to non-trapping linked processes.
+- Normal exits (reason `"normal"`) do not propagate to non-trapping linked processes. A process that traps exits does get `{tag: "EXIT", pid: <pid>, reason: "normal"}` for them, so its receive loop needs an arm (or a catch-all) for those too.
 
 Propagation is transitive: if A is linked to B and B is linked to C, and C crashes, B dies (unless trapping), which causes A to die (unless trapping). The implementation is cycle-safe.
 
@@ -619,16 +625,16 @@ end
 
 ```
 let pid = spawn() do
-  register("worker", self())
   let msg = receive()
   print(msg)
 end
+register("worker", pid)
 
 send("worker", "hello")    # send by name
 let p = whereis("worker")  # returns pid or nil
 ```
 
-`register(name, pid)` associates a string name with a pid. Errors if the name is already taken. `whereis(name)` returns the pid for a name, or `nil` if not registered. `send` accepts either a pid (int) or a registered name (string). When a process dies, its name is automatically unregistered.
+`register(name, pid)` associates a string name with a pid. Errors if the name is already taken. `whereis(name)` returns the pid for a name, or `nil` if not registered. `send` accepts either a pid (int) or a registered name (string). When a process dies, its name is automatically unregistered. Sending to a dead pid silently drops the message, but sending to a name that is not registered (including the name of a process that has died) raises `send: no process registered with that name`. Register from the parent, as above: a child that calls `register(name, self())` itself may not have run yet when the parent sends.
 
 `send` edge cases: sending to a dead pid silently drops the message. Sending to a registered name that does not exist raises an error.
 
@@ -691,7 +697,7 @@ cancel_timer(ref)
 
 `send_after(pid, msg, delay_ms)` schedules `msg` to be delivered to `pid` after `delay_ms` milliseconds. Returns a unique ref identifying the timer. The timer fires from the scheduler loop, not from the calling process, so it works even if the caller is blocked or has exited. When the target process exits, its pending timers are dropped; a timer for a pid that has already exited is never scheduled. A pending timer keeps the program running until it fires or is cancelled.
 
-`cancel_timer(ref)` cancels a pending timer by ref. Returns `true` if cancelled, `false` if it already fired, was dropped because its target exited, or is not found.
+`cancel_timer(ref)` cancels a pending timer by ref. Returns `true` if cancelled, `false` if it already fired, was dropped because its target exited, or was already cancelled. A non-ref argument raises.
 
 Pending timers are kept in a min-heap ordered by deadline that grows as needed; timers with the same deadline fire in the order they were created.
 
@@ -717,6 +723,8 @@ Returns `nil` if the pid is invalid or the slot is free.
 ## C Interop
 
 ```
+extern include "stdio.h"
+extern include "math.h"
 extern fn puts(s: String) -> Int
 extern fn sqrt(x: Float) -> Float
 extern fn fopen(path: String, mode: String) -> Ptr
@@ -724,11 +732,13 @@ extern fn fopen(path: String, mode: String) -> Ptr
 puts("hello from C")
 ```
 
+Include the C header of a library function (`extern include`, below). Without one, the compiler writes its own prototype from the extern types (`int64_t puts(const char*)`), which conflicts with the real declaration of any libc function the runtime header already pulls in, and the C compiler rejects it.
+
 `extern fn` declares a C function. The compiler emits the call directly since we compile to C. Type annotations on extern declarations only — the rest of the language stays dynamically typed. `Ptr` is an opaque type for C pointers.
 
 An `extern fn` is a binding like a top-level `fn`: one named like a builtin (`extern fn sqrt(x: Float) -> Float`) shadows the builtin in its own file, and one in a loaded module can be exported and called as `module.name`. The C function it calls is always the declared name.
 
-The generated wrapper validates `argc` and each argument's runtime type tag before reading the `GemVal` union, so a Gem-side mistake (wrong arity, wrong type) raises a Gem-level error at the boundary instead of passing garbage to C. Errors mention the declared Gem-level type name (e.g. `foo: arg 0 expected String, got int`).
+The generated wrapper validates `argc` and each argument's runtime type tag before reading the `GemVal` union, so a Gem-side mistake (wrong arity, wrong type) raises a Gem-level error at the boundary instead of passing garbage to C. Errors mention the declared Gem-level type name (e.g. `foo: arg 0 expected String, got int`). Types are not converted: a `Float` parameter rejects an int (`sqrt(2)` raises; pass `2.0` or `to_float(n)`). Too few arguments raise; extra arguments are currently ignored (see `docs/KNOWN_BUGS.md`). A `Ptr` is an int on the Gem side, and `NULL` comes back as `0`, not `nil`.
 
 The compiler auto-generates C forward declarations from `extern fn` type signatures, so no separate `.h` file is needed for function declarations. The type mapping:
 
@@ -744,6 +754,8 @@ The compiler auto-generates C forward declarations from `extern fn` type signatu
 | `Bytes`         | `const uint8_t*, int64_t` (two C parameters) | `GemBytes` (struct, see below) |
 
 Auto-generation is skipped when `extern include` is present (the user manages declarations via headers).
+
+`extern blocking fn` does not accept `Table` parameters or returns (compile error `extern blocking fn cannot take a Table`): the call runs on another thread, away from the process's arena.
 
 ### `Bytes` — binary-safe FFI
 
@@ -809,7 +821,7 @@ extern include "math.h"
 extern include "stdio.h"
 ```
 
-The line is emitted as `#include "<path>"` into the generated C file, which is compiled in a temporary directory with the runtime directory on the include path; so system headers work by name, and a header of your own needs an absolute path (a relative one is not looked up next to the `.gem` file; see `docs/KNOWN_BUGS.md`). Put your own C functions in the header as `static` functions. The program is linked against libc, libm and pthreads only.
+The line is emitted as `#include "<path>"` into the generated C file, which is compiled in a temporary directory with the runtime directory on the include path; so system headers work by name, and a header of your own needs an absolute path (a relative one is not looked up next to the `.gem` file; see `docs/KNOWN_BUGS.md`). Put your own C functions in the header as `static` functions. The header is included before `gem.h`, so one that uses `GemVal`, `GemBytes` or `gem_bytes` must `#include "gem.h"` itself. The program is linked against libc, libm and pthreads only.
 
 **String-return ownership** differs by call kind:
 
@@ -818,13 +830,15 @@ The line is emitted as `#include "<path>"` into the generated C file, which is c
 
 **Pointer lifetime.** `String`, `Bytes`, and `Table` arguments passed to an `extern fn` point into the calling process's arena. They are stable for the duration of the call but **not** across the next arena reset (which can happen at the back-edge of any loop or self tail call). An `extern blocking fn` receives malloc'd copies of its `String` and `Bytes` arguments instead, which the runtime frees once the call is over. In both cases C code must not stash these pointers — copy out with `strdup`, `memcpy`, or by value before retaining.
 
-The wrapper checks arity and the Gem-level type of each argument (see above), but not the declaration itself: a signature that doesn't match the real C function passes wrong values or crashes, and nothing checks what the C code does with its pointers.
+The wrapper checks the Gem-level type of each argument and that enough arguments were passed (see above), but not the declaration itself: a signature that doesn't match the real C function passes wrong values or crashes, and nothing checks what the C code does with its pointers.
 
 ## Operators
 
 `+` for both arithmetic and string concatenation. If types don't match (e.g. string + int), runtime error. No `..` operator — keep it simple.
 
 `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `not`, `in`
+
+`%` takes integers only (a float operand raises). Integer division and `%` by zero raise `division by zero`, and so does float division by zero (no `inf`). `<`, `<=`, `>`, `>=` compare an int with a float numerically, but `==` never equates them (`2 == 2.0` is `false`).
 
 `x in tbl` — membership test. For arrays (integer-indexed tables with no string keys): returns `true` if `x` equals any value in the array (linear scan). For string-keyed tables: returns `true` if `x` is a key in the table (same as `has_key(tbl, x)`). Precedence is at the comparison level (same as `==`, `<`, etc.).
 
@@ -942,7 +956,7 @@ The interpolation ends at the `}` that balances its `{` (braces of table literal
 
 ## Error Handling
 
-`error(msg)` prints the message with file and line info to stderr, followed by a call stack trace showing each Gem function frame, and halts (`exit(1)`). Runtime type errors (e.g. `1 + "a"`) also print a stack trace with the actual types involved (e.g. `type error in +: got string and int`). The compiler reports the first error and stops.
+`error(msg)` prints the message with file and line info to stderr, followed by a call stack trace showing each Gem function frame, and halts (`exit(1)`). Runtime type errors (e.g. `1 + "a"`) also print a stack trace with the actual types involved (e.g. `type error in +: got string and int`). The compiler reports every error it finds in a file (a parse error can hide later ones) and produces no binary.
 
 **Inside spawned processes**, `error()` does not terminate the program. Each spawned process has an implicit error boundary — if an unhandled error occurs, the process dies but other processes continue. The error is captured, DOWN messages are delivered to monitors, EXIT signals propagate to linked processes, and the scheduler continues. `pcall` inside a spawned process still works — it catches errors locally before the process-level boundary. This boundary covers running out of stack too (see Stack depth below). See Process Monitoring for details.
 
@@ -1035,15 +1049,15 @@ Running out of stack is an ordinary runtime error, not a crash:
 
 ## Built-in Functions
 
-`print(args...)` — prints values separated by spaces, followed by a newline. Stdout is line-buffered, so each `print` flushes — long-running processes don't lose output on `SIGKILL` even when stdout is redirected to a pipe or file.
+`print(args...)` — prints values separated by spaces, followed by a newline. Not binary-safe: a string is printed up to its first `\0` (use `write_stdout` for raw bytes). Stdout is line-buffered, so each `print` flushes — long-running processes don't lose output on `SIGKILL` even when stdout is redirected to a pipe or file.
 
 `error(msg)` — prints the message with file and line info to stderr, prints a call stack trace, and halts (`exit(1)`).
 
 `len(v)` — returns the length of a string, the byte length of a buffer, or the total number of entries in a table (both integer-keyed and string-keyed). `len({a: 1, b: 2})` returns 2. `len([10, 20, 30])` returns 3.
 
-`type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`, `"ref"`.
+`type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`, `"ref"`, `"buffer"`.
 
-`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string. For tables and arrays, recursively renders a `{key: val, ...}` / `[v1, v2, ...]` form (cycles render as `<cycle>`; deep/wide structures truncate with `...`). Same repr is used by `print`, `eprint`, and `"{x}"` interpolation.
+`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string. For tables and arrays, recursively renders a `{key: val, ...}` / `[v1, v2, ...]` form (cycles render as `<cycle>`; deep/wide structures truncate with `...`). Same repr is used by `print`, `eprint`, and `"{x}"` interpolation. Floats are formatted with C's `%g`: six significant digits, and no decimal point for integral values (`to_string(2.0)` is `"2"`, `to_string(1234567.89)` is `"1.23457e+06"`); see `docs/KNOWN_BUGS.md`.
 
 `to_int(v)` — converts a value to an integer. Strings are parsed as decimal integers. Floats are truncated. Bools become 0/1. Errors on nil, tables, functions, or unparseable strings.
 
@@ -1199,7 +1213,7 @@ end
 
 ## TCP Sockets
 
-`tcp_listen(host, port)` — creates a TCP server socket bound to `host` (string) on `port` (int). Calls `socket`, `bind`, and `listen` with a backlog of 128. Sets `SO_REUSEADDR`. Returns the socket file descriptor as an integer. Raises an error on failure. Always synchronous (fast).
+`tcp_listen(host, port)` — creates a TCP server socket bound to `host` (string) on `port` (int). Calls `socket`, `bind`, and `listen` with a backlog of 1024. Sets `SO_REUSEADDR`. Returns the socket file descriptor as an integer. Raises an error on failure. Always synchronous (fast).
 
 `tcp_connect(host, port)` — opens a TCP connection to `host:port`. Returns the connected socket file descriptor as an integer. Raises an error if the connection fails or the host cannot be resolved. Supports both IP addresses and hostnames. The connect itself is non-blocking: the calling process (main included) yields to the scheduler until it completes. Resolving a host name is not: `gethostbyname` runs inline and blocks every process.
 
@@ -1215,9 +1229,9 @@ All TCP builtins use non-blocking sockets with scheduler poll integration. The s
 
 ## SQLite
 
-`sqlite_open(path)` — opens (or creates) a SQLite database at `path`. Enables WAL mode and foreign keys by default. Returns an opaque database handle (stored as an int). Use `":memory:"` for an in-memory database. When called from a spawned process, runs on the thread pool (blocking fn). Raises on error.
+`sqlite_open(path)` — opens (or creates) a SQLite database at `path`. Enables WAL mode and foreign keys by default. Returns an opaque database handle (stored as an int). Use `":memory:"` for an in-memory database. Runs on the thread pool in every process, main included, so other processes keep running. Raises on error.
 
-`sqlite_close(db)` — closes the database handle. When called from a spawned process, runs on the thread pool (blocking fn). Returns `nil`.
+`sqlite_close(db)` — closes the database handle. Runs on the thread pool, like `sqlite_open`. Returns `nil`.
 
 `sqlite_exec(db, sql)` — executes SQL that returns no rows (DDL, INSERT without RETURNING, etc.). Inline execution (no thread pool). Raises on error.
 
@@ -1229,7 +1243,7 @@ All TCP builtins use non-blocking sockets with scheduler poll integration. The s
 
 SQLite is vendored as an amalgamation (`runtime/sqlite3.c` + `runtime/sqlite3.h`), compiled into the runtime static library. No system dependency needed.
 
-**Negative array indexing** — Integer indices to arrays and strings may be negative. A negative index `i` on a collection of length `n` resolves to `n + i`. So `arr[-1]` is the last element, `arr[-2]` is second-to-last, etc. Indices that remain out of bounds after resolution raise a runtime error.
+**Negative array indexing** — Integer indices to arrays and strings may be negative. A negative index `i` on a collection of length `n` resolves to `n + i`. So `arr[-1]` is the last element, `arr[-2]` is second-to-last, etc. Reading an array at a non-negative index past the end gives `nil`; a negative index that is still out of bounds after resolution raises `array index out of bounds`. A string index out of range either way raises `string index out of bounds`.
 
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
@@ -1257,9 +1271,9 @@ Path resolution depends on the form of the load path:
 
 **Stdlib root** is resolved in this order:
 
-1. `$GEM_STDLIB` if set.
+1. `$GEM_STDLIB` if set: the directory that *contains* `std/` (not `std/` itself).
 2. The project root, if it contains a `std/` subdirectory (lets a project vendor or override the stdlib).
-3. The install root, computed as `dirname(dirname(argv()[0]))` — so a binary at `<project>/build/gem` finds `<project>/std/`.
+3. The install root, computed as `dirname(dirname(argv()[0]))` — so a binary at `<project>/build/gem` finds `<project>/std/`. `argv()[0]` is taken as typed, so a symlink to the binary on `PATH` finds neither `std/` nor `runtime/` (see `docs/KNOWN_BUGS.md`); call the binary by its real path, or set `GEM_STDLIB`.
 
 **Project root marker** — drop a `gem.toml` file at the root of your project to mark it. The file may be empty; its presence is what matters. Without it, bare-path loads behave like relative-to-importing-file (which is the safe default for single-file scripts).
 
@@ -1402,14 +1416,14 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 - `time.now()` — returns the current wall-clock time as milliseconds since the Unix epoch (int). Alias for `epoch_ms()`.
 - `time.format(ms, fmt)` — format epoch milliseconds as a UTC string using `strftime` specifiers. Wraps `format_time`.
 - `time.format_local(ms, fmt)` — format epoch milliseconds as a local timezone string. Wraps `format_time_local`.
-- `time.http_date(ms?)` — RFC 7231 format: `"Mon, 28 Apr 2026 14:30:00 GMT"`. Uses current time if `ms` is omitted.
+- `time.http_date(ms?)` — RFC 7231 format: `"Tue, 28 Apr 2026 14:30:00 GMT"`. Uses current time if `ms` is omitted.
 - `time.iso8601(ms?)` — ISO 8601 format: `"2026-04-28T14:30:00Z"`. Uses current time if `ms` is omitted.
 - `time.date(ms?)` — calendar date: `"2026-04-28"`. Uses current time if `ms` is omitted.
 
 `std/log` — exports `log` table. Structured logging to stderr. Depends on `std/time`.
 
 - `log.debug(msg)`, `log.info(msg)`, `log.warn(msg)`, `log.error(msg)` — log at the given level. Output format: `2026-04-28T14:30:00Z [INFO] message`. One line per call, written to stderr via `eprint`.
-- `log.set_level(level)` — set minimum log level. One of `"debug"`, `"info"`, `"warn"`, `"error"`. Default: `"info"`. Messages below the level are silently dropped.
+- `log.set_level(level)` — set minimum log level. One of `"debug"`, `"info"`, `"warn"`, `"error"`. Default: `"info"`. Messages below the level are silently dropped. The level is module state, so it is per process: set it before spawning (or before `http.start`), or call it in the process that logs.
 
 `std/sqlite` — exports `sqlite` table. Thin wrapper over the SQLite C builtins.
 
@@ -1456,7 +1470,7 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 
 ### Server
 
-- `http.serve(router[, opts])` — starts the HTTP server and blocks the caller. `opts` table: `port` (default 8080), `host` (default `"0.0.0.0"`). Blocks until the acceptor process dies.
+- `http.serve(router[, opts])` — starts the HTTP server and blocks the caller. `opts` table: `port` (default 8080), `host` (default `"0.0.0.0"`). Meant to block until the acceptor process dies; currently it also returns when the caller receives any other message (see `docs/KNOWN_BUGS.md`).
 - `http.start(router[, opts])` — starts the HTTP server without blocking. Returns the acceptor pid. Same options as `serve`.
 - Spawns one process per connection. Supports HTTP/1.1 keep-alive with a 30-second idle timeout (via `tcp_read` timeout). Handles `Connection: close`. Errors in handlers are caught by `pcall` and return 500.
 
@@ -1502,7 +1516,7 @@ let pages = task.await_all([a, b], 5000)
   - `max_restarts` — max restarts within the time window before the supervisor itself crashes (default 3).
   - `max_seconds` — time window in milliseconds for restart intensity (default 5000).
   - `name` — optional string name to register the supervisor process.
-- `supervisor.which_children(pid_or_name)` — query a supervisor for its children. Returns an array of `{id, pid, restart}` tables. Must be called from a spawned process (uses `receive`).
+- `supervisor.which_children(pid_or_name)` — query a supervisor for its children. Returns an array of `{id, pid, restart}` tables. Takes a pid or a registered name, not the `{pid}` table `start` returns (pass `handle.pid`). Waits with no timeout.
 
 `std/dynamic_supervisor` — exports `dynamic_supervisor` table. For workloads where children are spawned on demand from a single template (worker pools, per-connection processes, lazily-created topic actors), instead of being declared up front. Restart policies and intensity (`max_restarts` / `max_seconds`) match `std/supervisor`. Strategy is fixed at one-for-one; failed children restart with their original `args`.
 
@@ -1554,7 +1568,7 @@ let counter_mod = {
   end
 }
 
-let {pid: server} = gen_server.start(counter_mod)
+let server = gen_server.start(counter_mod).pid
 gen_server.call(server, "inc")    # 1
 gen_server.call(server, "inc")    # 2
 gen_server.call(server, "get")    # 2

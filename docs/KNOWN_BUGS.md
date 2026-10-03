@@ -50,6 +50,126 @@ helper()             # attempt to call int value
 
 No error at the second definition; the `let` silently wins.
 
+### A parameter named like a top-level `fn` reads the fn inside closures
+
+```gem
+fn item() "FN" end
+fn c(item)
+  let f = fn() item end
+  f()
+end
+print(c(5))          # <fn>, expected 5
+```
+
+A closure (or `do` block) that uses a plain parameter of its enclosing
+function, or of itself, gets the module-level `fn` of the same name
+instead. A `let`, a `for` variable or a destructured parameter of that
+name is fine, and so is a parameter named like a builtin or a module
+`let`. The capture resolution in compiler/codegen.gem prefers the named
+fn to the parameter. `docs/BEST_PRACTICES.md` has a **(bug)** rule for it.
+
+### Float literals keep only six significant digits; some don't compile
+
+```gem
+print(3.14159265358979 == 3.14159)   # true
+print(0.000001)                       # C error: invalid suffix ".0"
+```
+
+`format_float` in compiler/codegen.gem emits a float literal through
+`to_string`, which uses `%g` (six significant digits), so the literal is
+rounded at compile time. When the `%g` form has an exponent and no dot
+(`1e-06`, `1e+06`), codegen appends `.0` and the C compiler rejects
+`1e-06.0`; constant folding hits it too (`1000000 * 1.0`). Emit literals
+with `%.17g` (and add `.0` only to a form with no `.` or `e`).
+
+### Floats print, interpolate and JSON-encode with six significant digits
+
+```gem
+load "std/json"
+let x = 1234567.0 + 0.5
+print(x, "{x}", json.encode(x))      # 1.23457e+06 three times
+print(to_float(to_string(x)) == x)   # false
+```
+
+`to_string` (and `print`, interpolation, `buf_push`, `build_string`'s
+`add`) formats floats with `%g` (runtime/gem_builtins_core.c,
+runtime/gem_builtins_string.c), and `std/json` encodes floats with
+`to_string`, so a float loses precision on every round trip through text.
+Integral floats also print without a decimal point (`2.0` prints `2`).
+Use the shortest representation that reads back to the same double.
+
+### A renaming destructuring pattern reaches the C compiler
+
+```gem
+let {pid: s} = {pid: 5}
+```
+
+SPEC says destructuring has no renaming, but the parser accepts
+`{key: name}` in a `let` pattern and codegen emits invalid C
+(`#define gem_gi_: 0`, then `gem: compilation failed`). It should be a
+parse error at the pattern.
+
+### Exporting or importing a name that doesn't exist shows a mangled name
+
+```gem
+# mods/e1.gem: fn a() 1 end / export a, b
+load "./mods/e1"               # undeclared identifier `_mod_e1_b`
+load "std/string" (nosuch)     # undeclared identifier `_mod_string_nosuch`
+```
+
+Both errors point at the entry file with no line, and show the mangled
+slot name. Expected: `module e1 exports b, which it doesn't define` at the
+`export` line, and `module string has no export nosuch` at the `load`.
+
+### A module file name that isn't a C identifier reaches the C compiler
+
+`load "./mods/my-utils"` fails in cc (`gem_fn__mod_my-utils_f`). Either
+mangle the name or report a Gem error at the `load`.
+
+### Two loaded modules with the same base name replace each other
+
+```gem
+load "std/string"
+load "./mods/string"           # a user module also called string
+string.upper("a")              # module `string` has no export `upper`
+```
+
+The namespace is named after the file's base name, and the later `load`
+silently wins. It should be a compile error at the second `load`.
+
+### The project root is not found when the entry path has no directory
+
+With `p/gem.toml`, `p/lib/util.gem` and `p/app/main.gem` containing
+`load "lib/util"`, `cd p/app && gem main.gem` fails with
+`read_file: cannot open './lib/util.gem'` and a compiler stack trace;
+`cd p && gem app/main.gem` and an absolute path work. `find_project_root`
+in compiler/loader.gem starts at `dirname("main.gem")`, which is `"."`,
+and stops because `dirname(".")` is `"."`. Make the start directory
+absolute first.
+
+### A symlinked `gem` binary finds neither `std/` nor `runtime/`
+
+With a symlink to `build/gem` on `PATH`, `gem prog.gem` fails with
+`gem: stdlib module not found: std/string (looked in .)`: the install root
+is computed from `argv()[0]` as typed. Resolve the executable's real path
+(`/proc/self/exe`, `realpath`) first.
+
+### Integer literals out of range wrap silently
+
+`print(99999999999999999999)` prints `7766279631452241919`. The lexer
+should report an integer literal that doesn't fit in 64 bits.
+
+### `pcall <expr>` at top level records line 0
+
+```gem
+let t = nil
+print((pcall t[0]).stack)    # [{name: "anonymous fn", file: ..., line: 0}]
+```
+
+The same for `pcall 1 / 0` and `pcall 1 < "a"` at top level; inside a
+function the line is right. The closure the expression form desugars to
+has no line for an operator or index expression.
+
 ## Runtime
 
 ### Runtime traces lose the source line when run from another directory
@@ -97,6 +217,114 @@ of the file that contains the `extern include` (or add that directory with
 `-I`), and report a missing header as a Gem error at the line.
 `docs/BEST_PRACTICES.md` (C interop) says to use an absolute path until
 this is fixed.
+
+### An `extern fn` ignores extra arguments
+
+```gem
+extern include "string.h"
+extern fn strlen(s: String) -> Int
+print(strlen("a", "b"))      # 1, no error
+```
+
+The generated wrapper checks `argc` only against too few arguments.
+Raise `expected 1 argument(s), got 2` for too many too.
+
+## Standard library
+
+### `dynamic_supervisor` crashes after terminating a child that isn't the last
+
+```gem
+load "std/dynamic_supervisor"
+fn w(a) spawn do while true receive when other then nil end end end end
+let ds = dynamic_supervisor.start({child: {start: w}})
+let a = dynamic_supervisor.start_child(ds, "a")
+dynamic_supervisor.start_child(ds, "b")
+dynamic_supervisor.terminate_child(ds, a)
+print(dynamic_supervisor.which_children(ds))
+```
+
+The supervisor dies with `field access on non-table: got nil`
+(dynamic_supervisor.gem `find_child_index`), and `which_children`, which
+has no `after`, deadlocks main. `dsup_loop` removes children with
+`delete(state.children, idx)` on an array (the hole trap); use
+`remove_at`. The DOWN path for temporary and transient children has the
+same `delete`.
+
+### The supervisors' loops are not tail calls
+
+`std/supervisor` and `std/dynamic_supervisor` loop with
+`sup_loop(state)` / `dsup_loop(state)` followed by `return nil`, which is
+a non-tail call: each handled message adds a stack frame. A dynamic supervisor with `restart: "temporary"`
+children that exit at once dies with `stack overflow in anonymous fn`
+after about 1,750 child exits. Make the self call the last expression.
+
+### `http.serve` returns when the caller gets any message
+
+```gem
+spawn do sleep(100); send(me, {tag: "hello"}) end   # let me = self() before
+http.serve(app, {port: 8080})                       # returns {tag: "hello"}
+```
+
+`serve` monitors the acceptor and then calls `receive()`, which takes
+whatever arrives first. Match `{tag: "DOWN", pid: ^pid}` instead.
+
+### `std/http` hides handler errors and sends empty default bodies
+
+A handler that raises, or returns something other than a response table,
+gets a 500 with an empty body and nothing on stderr. The server's own
+404/500 responses also have empty bodies, although SPEC says the
+defaults are `"Not Found"` and `"Internal Server Error"`: std/http calls
+`not_found(nil)` / `server_error(nil)` with an explicit `nil`, which
+doesn't apply the default. Log the caught error, and call the builders
+with no argument.
+
+### `json.encode` drops entries of tables with non-sequential int keys
+
+```gem
+let ids = {}
+ids[42] = "x"
+print(json.encode(ids))         # [null]
+let m = ["z"]
+m.name = "n"
+print(json.encode(m))           # ["z",null]
+```
+
+`is_array` in std/json looks only at the first key's type. A table whose
+keys aren't exactly `0 .. n-1` should encode as an object (with string
+keys), or raise.
+
+### `json.parse` can't parse integers beyond 64 bits
+
+`json.parse("12345678901234567890")` raises `to_int: cannot convert ...`
+(std/json `parse_number`). Parse them as floats.
+
+### `supervisor.start` with `name:` registers the name after starting the children
+
+`supervisor.which_children("sup")` right after `supervisor.start({name:
+"sup", ...})` can raise `send: no process registered with that name`:
+the supervisor process registers itself only once all children are
+started, and `start` has already returned. Register before starting
+children (or from `start`).
+
+### Supervisor children must return a bare pid
+
+A child spec `start: fn() gen_server.start(mod) end` returns `{pid}`, and
+the supervisor dies with `monitor: expected pid (int) argument` while
+`supervisor.start` still returns a handle to it. Accept both forms.
+
+### `std/request` has no timeout and doesn't decode chunked bodies
+
+`request` reads with `tcp_read(fd, READ_SIZE)` and no timeout, so a silent
+server blocks the caller forever; a parse error leaks the socket; a
+chunked response comes back with the chunk framing in `body`; a status
+line with no reason phrase (`HTTP/1.1 204`) or an `https://` URL raises
+`to_int: cannot convert "" to int`.
+
+### `sqlite_query` doesn't check its parameters
+
+`sqlite_query(db, "SELECT ?, ?", [1])` binds `NULL` for the missing
+parameter, extra parameters are ignored, and a table parameter binds
+`NULL`. All three should raise. (runtime/gem_builtins_sqlite.c)
 
 ## Editor grammars
 

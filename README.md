@@ -16,9 +16,9 @@ print(receive())   # -> echo: hi
 
 Ruby-ish syntax (blocks-as-trailing-arg, `do/end`), Lua-ish data model (tables for everything - objects, dicts, arrays, modules), Erlang-ish concurrency (processes, mailboxes, monitors, links, supervisors). Compiles to C; vendors `minicoro` for stackful coroutines and `stb_ds` for hash tables. Bootstrap is a checked-in `stage0.c` so any C compiler can rebuild from scratch.
 
-The interesting design choice is the memory model. Each process has its own arena. Messages are deep-copied across process boundaries. There's no GC. Long-running processes work because the compiler emits an arena reset at loop back-edges in process-tail position, with a compile-time liveness pass deciding what to rescue. User code never thinks about lifetimes - `while true ... end` in an accept loop just works.
+The interesting design choice is the memory model. Each process has its own arena. Messages are deep-copied across process boundaries. There's no GC. Long-running processes work because the compiler emits an arena reset at every loop back-edge and self tail call, with a compile-time liveness pass deciding what to rescue. User code never thinks about lifetimes - `while true ... end` in an accept loop just works.
 
-OTP-style abstractions are written in pure Gem on top of the actor primitives. `gen_server` is 83 lines, `supervisor` is 169. No special compiler support - they fall out of `spawn` + `receive ... when` + selective receive + tail-recursive loops.
+OTP-style abstractions are written in pure Gem on top of the actor primitives. `gen_server` is 83 lines, `supervisor` is 146. No special compiler support - they fall out of `spawn` + `receive ... when` + selective receive + tail-recursive loops.
 
 ```gem
 load "std/gen_server"
@@ -42,7 +42,7 @@ gen_server.call(pid, "inc")    # 1
 gen_server.call(pid, "inc")    # 2
 ```
 
-The standard library is written in Gem and includes `string`, `table`, `math`, `json` (passes 283/283 of JSONTestSuite), `url`, `mime`, `time`, `log`, `http` (server with routing and keep-alive), `request` (HTTP client), `sqlite`, `supervisor`, `gen_server`, and `test`.
+The standard library is written in Gem and includes `string`, `table`, `math`, `json` (passes 283/283 of JSONTestSuite), `url`, `mime`, `time`, `log`, `http` (server with routing and keep-alive), `request` (HTTP client), `sqlite`, `task`, `gen_server`, `supervisor`, `dynamic_supervisor`, and `test`.
 
 ## What Gem is not
 
@@ -72,6 +72,7 @@ macOS (arm64, x86_64) and Linux (arm64, x86_64). Windows via WSL2; no native por
 ## Layout
 
 - `docs/SPEC.md` - language spec, source of truth.
+- `docs/BEST_PRACTICES.md` - how to write Gem: idioms and traps.
 - `compiler/` - self-hosting compiler (lexer, parser, liveness, codegen).
 - `runtime/` - C runtime (scheduler, arenas, builtins, vendored deps).
 - `std/` - standard library, in Gem.
