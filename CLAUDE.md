@@ -47,6 +47,7 @@ docs/SPEC.md          # language spec (source of truth for all language decision
 docs/OPTIMIZATIONS.md     # tracked future performance improvements
 docs/OPTIMIZATIONS_LOG.md # shipped optimizations + work logs + benchmark anchors
 docs/ROADMAP.md           # future capabilities (features, not perf)
+docs/KNOWN_BUGS.md        # bugs found and not yet fixed, each with a repro
 docs/LSP_ROADMAP.md       # Gem LSP plan + deferred v2 features
 editors/vscode/       # VS Code extension (TextMate grammar)
 editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
@@ -102,6 +103,10 @@ Add a numbered example under `examples/` (next free slot) and append its stdout 
 ## Roadmap Tracking
 
 `docs/ROADMAP.md` tracks future *capabilities* — features the language doesn't have yet (distribution, hot code reload, etc.). When a discussion surfaces a capability worth pursuing later, add it there rather than letting it evaporate. Distinct from OPTIMIZATIONS.md (perf on existing features) and LSP_ROADMAP.md (tooling). Keep entries brief: motivation, what needs building, trade-offs.
+
+## Known Bugs Tracking
+
+`docs/KNOWN_BUGS.md` tracks bugs that were found and not fixed. When you find a bug outside the scope of the current change, add it there instead of fixing it on the side or leaving it in a PR description: a minimal repro checked against `build/gem`, what goes wrong, and where the code is. A fix deletes its entry in the same change, together with any **(bug)** rule in `docs/BEST_PRACTICES.md` that exists because of it. Before working on an entry, re-run its repro; if it no longer reproduces, delete the entry. Performance problems go in OPTIMIZATIONS.md and missing features in ROADMAP.md, not here.
 
 ## Editor Extension Maintenance
 
