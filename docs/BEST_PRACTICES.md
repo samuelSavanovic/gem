@@ -489,7 +489,8 @@ locals that closures and `spawn` bodies can capture.
 
 A call with too many arguments drops the extras, and missing arguments are
 `nil` (or their default). Neither is an error, so a wrong call shows up
-later as a `nil` somewhere else.
+later as a `nil` somewhere else. An `extern fn` is the exception: it
+raises unless the count matches exactly.
 
 ### `+=` works only on variables
 
@@ -1182,9 +1183,9 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
   `puts`). Without any `extern include`, the compiler writes its own
   prototype from the extern types, which clashes with libc's.
 - Types are checked, not converted: a `Float` parameter rejects `2` (pass
-  `2.0` or `to_float(n)`). Too few arguments raise; extra ones are ignored
-  **(bug)**. A `Ptr` is an int in Gem, and `NULL` comes back as `0`, not
-  `nil`. `extern blocking fn` can't take or return a `Table`.
+  `2.0` or `to_float(n)`). The argument count must match exactly: too few
+  or too many raise. A `Ptr` is an int in Gem, and `NULL` comes back as
+  `0`, not `nil`. `extern blocking fn` can't take or return a `Table`.
 - `String` parameters arrive as `const char *` and stop at the first `\0`.
   Use `Bytes` for binary data.
 - A plain `extern fn` runs on the scheduler thread and blocks every

@@ -2609,3 +2609,17 @@ true
 [hi]1nil<fn>true
 true
 hi<fn>
+strlen exact: ok 3
+strlen extra: error strlen: expected 1 argument(s), got 2
+strlen none: error strlen: expected 1 argument(s), got 0
+getpid exact: ok true
+getpid extra: error getpid: expected 0 argument(s), got 1
+write extra: error write: expected 2 argument(s), got 3
+write few: error write: expected 2 argument(s), got 1
+usleep exact: ok 0
+usleep extra: error usleep: expected 1 argument(s), got 2
+getppid exact: ok true
+getppid extra: error getppid: expected 0 argument(s), got 1
+value extra: error strlen: expected 1 argument(s), got 3
+call1 extra: error getpid: expected 0 argument(s), got 1
+call1 exact: ok 5

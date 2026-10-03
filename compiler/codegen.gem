@@ -4642,10 +4642,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # Without this, a Gem-side mistake (wrong arity, wrong type) reads garbage out of
   # the GemVal union and passes it to C.
   let emit_extern_validation = fn(b, name, params)
+    # Arity counts Gem arguments (a `Bytes` param is one Gem arg, two C args).
+    # Too many raises like too few: an extern has no rest params to absorb them.
     let n = len(params)
-    if n > 0
-      buf_push(b, "    if (argc < {n}) \{ char _eb[128]; snprintf(_eb, sizeof(_eb), \"{name}: expected {n} argument(s), got %d\", argc); gem_error(_eb); }\n")
-    end
+    buf_push(b, "    if (argc != {n}) \{ char _eb[128]; snprintf(_eb, sizeof(_eb), \"{name}: expected {n} argument(s), got %d\", argc); gem_error(_eb); }\n")
     for i = 0, n
       let ptype = params[i]["type"]
       let val_tag = nil

@@ -52,17 +52,6 @@ of the file that contains the `extern include` (or add that directory with
 `docs/BEST_PRACTICES.md` (C interop) says to use an absolute path until
 this is fixed.
 
-### An `extern fn` ignores extra arguments
-
-```gem
-extern include "string.h"
-extern fn strlen(s: String) -> Int
-print(strlen("a", "b"))      # 1, no error
-```
-
-The generated wrapper checks `argc` only against too few arguments.
-Raise `expected 1 argument(s), got 2` for too many too.
-
 ## Standard library
 
 ### `dynamic_supervisor` crashes after removing a child that isn't the last

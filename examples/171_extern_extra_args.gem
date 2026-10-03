@@ -1,0 +1,45 @@
+# An extern fn checks its argument count both ways: too many arguments raise
+# `expected N argument(s), got M`, the same catchable error as too few.
+# Arity counts Gem arguments, so a `Bytes` param (two C args) counts once.
+
+extern include "string.h"
+extern include "unistd.h"
+extern fn strlen(s: String) -> Int
+extern fn getpid() -> Int
+extern fn write(fd: Int, buf: Bytes) -> Int
+extern blocking fn usleep(usec: Int) -> Int
+extern blocking fn getppid() -> Int
+
+fn show(label, r)
+  if r.ok
+    print(label, "ok", r.value)
+  else
+    print(label, "error", r.error)
+  end
+end
+
+# Plain extern: exact, too many, too few.
+show("strlen exact:", pcall strlen("abc"))
+show("strlen extra:", pcall strlen("a", "b"))
+show("strlen none:", pcall strlen())
+
+# Zero params: no args is fine, any arg raises.
+show("getpid exact:", pcall(fn() getpid() > 0 end))
+show("getpid extra:", pcall getpid(1))
+
+# Bytes expands to (data, len) in C but is one Gem argument.
+show("write extra:", pcall write(1, "x", 1))
+show("write few:", pcall write(1))
+
+# Blocking externs.
+show("usleep exact:", pcall usleep(0))
+show("usleep extra:", pcall usleep(0, 0))
+show("getppid exact:", pcall(fn() getppid() > 0 end))
+show("getppid extra:", pcall getppid(nil))
+
+# Called through a value.
+let f = strlen
+show("value extra:", pcall(fn() f("a", "b", "c") end))
+let call1 = fn(g, x) g(x) end
+show("call1 extra:", pcall(fn() call1(getpid, 7) end))
+show("call1 exact:", pcall(fn() call1(strlen, "hello") end))
