@@ -216,65 +216,20 @@ after the merge:
 - Round-1 review findings were applied. Run fresh adversarial review
   rounds until clean.
 
-## Known bugs (found during #28, not fixed)
+## Known bugs
 
-Each repro was re-run on `std-modernize` after merging 8b482c2.
-
-- **Shadowed loop counter loops forever.** `while i < n` … `let i = i + 1`
-  in the body never changes the outer `i`, so the loop never ends, with no
-  warning. A warning when a body `let` shadows a name the condition reads
-  (and the outer one is never assigned in the loop) would fit CLAUDE.md's
-  "no silent cliffs".
-- **Spurious `break` error after a parse error.** A parse error inside a
-  brace block in a `for` body also reports "`break` outside a loop" for a
-  later `break` in the loop body:
-  `for x in xs` / `times(1) { |i| if i then 1 + end }` / `break` / `end`.
-- **`pcall` stack names.** The `stack` table in a `pcall` result keeps raw
-  `_anon_N` names (printed traces say `anonymous fn`).
-- **Nested `"""` dedent.** `"""` nested in a `"""` interpolation: the outer
-  string's dedent width comes from the inner closing `"""` line (lexer
-  pre-scan, compiler/lexer.gem).
-- **Main killed through a link** by a crashing process (`spawn_link do
-  error("x") end`, then `sleep`) exits 0 with no report for main; only the
-  child's report prints.
-- **`link()` to a dead process** raises an ordinary pcall-catchable error
-  (`noproc`, `gem_link_fn` in runtime/gem_scheduler.c), and uncaught it is
-  reported as a crash; probably should be `gem_exit_self(reason)`.
-- **Leaf-function crashes lose their location.** A crash in a leaf closure
-  run directly by `spawn` (`spawn(fn() 1 + "a" end)`) prints only the
-  message: no source line, no stack trace. A crash in any leaf function
-  called from elsewhere is reported at the caller's line, with no frame for
-  the leaf (leaf fns skip `gem_push_frame`).
-- **Loaded-module names and paths.** Loaded-module functions show mangled
-  names in stack traces (`_mod_<mod>_<fn>`, e.g. `_mod_supervisor_sup_loop`),
-  and runtime traces and compile errors in loaded modules show absolute
-  paths.
-- **Name-keyed codegen analyses** (`spawn_callees`, `mutating_builtins` in
-  compiler/codegen.gem) treat a param/local named `spawn`/`push`/… as the
-  builtin; `extern fn` declarations named like builtins (`extern fn
-  len(...)`) are accepted without any check.
-- `exec("echo hi")` in a spawned process passes the command's stdout
-  through (may be intended).
-- `gem --help` treats `--help` as a source path and prints `read_file:
-  cannot open '--help'` with a stack trace.
-- **tree-sitter grammar** (editors/tree-sitter-gem): no `;` statement
-  separator; ~21 repo files already parse with ERROR nodes (e.g.
-  examples/06_blocks.gem, 115–126, std/http.gem, compiler/*.gem `load ...
-  (names)`); `"""` nested in a `"""` interpolation is an ERROR node there,
-  and probably ends the outer string early in the VS Code grammar. (From
-  #28; tree-sitter isn't installed here, so not re-run.)
-- **Still open from the original handoff:**
-  - `keys` is O(n²) on string-keyed tables (20 calls on a 20k-key table
-    take 32 s).
-  - `read_file` on procfs returns `""` (`/proc/self/status` has length 0).
-  - `build_string`'s `add` closure can't be sent or captured in a spawn;
-    capturing it in a `spawn do` body aborts the program with `gem_arena:
-    mmap failed (size=...)`.
-  - Exit reasons leak on the kill/link paths (not re-checked; no simple
-    repro).
-  - Stack traces show the wrong line for an implicit return: an error in a
-    fn's last expression is reported at the line before it, and that trace
-    also lacks the `at main` frame.
+The list that was here moved to `docs/KNOWN_BUGS.md`, tracked under a new
+CLAUDE.md rule ("Known Bugs Tracking"). Most entries were fixed on branch
+`integrate/known-bugs` (off `main`; not yet merged): main killed through a
+link now reports and exits 1, `link()` to a dead pid sends `noproc`, leaf
+fns and last expressions report the right line, frame names are user
+names (`anonymous fn`, `module.fn`) in traces and the pcall `stack`,
+paths shown to the user are project-relative, a warning for a `while`
+counter shadowed by a body `let`, `gem --help`, nested `"""` dedent,
+`build_string`'s `add` across processes, `read_file` on procfs. Once that
+branch is merged into `main`, merge `main` here, and update the doc
+against it (BEST_PRACTICES rules that mention these become stale). What is
+left, plus bugs found while fixing, is in `docs/KNOWN_BUGS.md`.
 
 ## For std modernization (step 3)
 
