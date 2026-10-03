@@ -11,6 +11,7 @@ let {a, b} = tbl                     # table destructuring
 let [first, second] = arr            # array destructuring
 let {port = 8080, host = "0.0.0.0"} = opts   # field defaults (fire on missing or nil)
 let x = x + 1                        # in a fn/block: new variable shadowing the old x (to block end)
+                                     # (warned in a `while` body when the condition reads x and nothing assigns it)
                                      # a let is visible only to the end of its block (if/loop body/arm):
 let s = nil                          #   declare before the if to use the value after it
 if c then s = 1 else s = 2 end
@@ -123,7 +124,7 @@ let [x, y] = task.await_all([t1, t2], 5000)
 # Error handling
 error("msg")                         # halt with stack trace; uncaught in main prints source line + stack trace
                                      # uncaught in a spawned process: that process dies, same report on stderr ("[Runtime Error in process <pid>]")
-let r = pcall some_fn()              # {ok: bool, value/error: ...}
+let r = pcall some_fn()              # {ok: bool, value/error: ..., stack: [{name, file, line}]} — names as in traces (`anonymous fn`, `mod.fn`)
 # Stack: 8 MB per process; overflow raises "stack overflow in <fn>" (pcall-catchable, kills only that process)
 
 # Common builtins
@@ -135,7 +136,7 @@ let r = pcall some_fn()              # {ok: bool, value/error: ...}
 # Time:          time_ms, epoch_ms, format_time, format_time_local
 # SQLite:        sqlite_open, sqlite_close, sqlite_exec, sqlite_query, sqlite_last_insert_id, sqlite_changes
 # Math:          floor, ceil, round, abs, pow, sqrt, random
-# Builtin names aren't reserved: a fn/let/param of the same name shadows the builtin in its scope (a top-level one: that file only)
+# Builtin names aren't reserved: a fn/extern fn/let/param of the same name shadows the builtin in its scope (a top-level one: that file only)
 # Bitwise:       band, bor, bxor, bnot, bshl, bshr
 
 # String building

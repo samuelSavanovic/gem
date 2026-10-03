@@ -1,13 +1,8 @@
 # Main driver for the Gem self-hosting compiler.
 # Reads a .gem source file, parses it, generates C, and compiles/runs.
 #
-# Usage:
-#   gem foo.gem [args...]    # compile and run, passing args to the program
-#   gem foo.gem -c           # compile to ./foo, don't run
-#   gem foo.gem -o name      # compile to ./name (implies -c)
-#   gem foo.gem --emit-c     # print C to stdout (for bootstrapping)
-#   gem foo.gem --check      # parse + analyze, exit 0 on success, 1 on error
-#   gem foo.gem --run        # accepted as a no-op (run is the default)
+# Usage: see USAGE below (`gem --help`). `--emit-c` is what the bootstrap
+# uses; `gem lsp` starts the language server.
 
 load "std/string"
 load "./parser" (parse_source, collect_pattern_names)
@@ -15,7 +10,7 @@ load "./codegen" (make_codegen)
 load "./lower" (lower)
 load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
-load "./loader" (resolve_load_path, find_project_root, compute_stdlib_root)
+load "./loader" (resolve_load_path, find_project_root, compute_stdlib_root, make_show_path)
 load "./builtins" (BUILTIN_FNS)
 load "../lsp/main" (run_lsp)
 
@@ -86,7 +81,7 @@ end
 fn collect_module_top_names(stmts)
   let names = {}
   for stmt in stmts
-    if is_node(stmt, "fn_def")
+    if is_node(stmt, "fn_def") or is_node(stmt, "extern_fn")
       if not string.starts_with(stmt.name, "_mod_")
         names[stmt.name] = true
       end
@@ -185,6 +180,15 @@ fn rename_node(node, rmap, shadowed)
       inner[node.rest_param] = true
     end
     rename_stmts(body, rmap, inner)
+  when {tag: "extern_fn", name: name}
+    # The binding is renamed like a fn's; the C function it calls keeps
+    # the declared name.
+    if has_key(rmap, name)
+      if node.c_name == nil
+        node.c_name = name
+      end
+      node.name = rmap[name]
+    end
   when {tag: "anon_fn", params: params, body: body}
     let inner = copy_set(shadowed)
     for p in params
@@ -446,48 +450,123 @@ fn tag_source_file(node, file)
   end
 end
 
-# ─── Load resolution ──────────────────────────────────────────
+# ─── Shadowed loop-condition warning ──────────────────────────
+# `while i < n` whose body declares `let i = ...` reads the outer `i` in
+# its condition and the new one after the `let`. When nothing in the loop
+# assigns `i` (no `i = ...` or `i += ...` anywhere in the body, closures
+# included), the condition can't change through it: usually a counter
+# that never advances, so the loop never ends. A module-level `i` that a
+# named fn of the file assigns is skipped: the loop can change it through
+# a call. Shadowing is legal, so
+# this is a warning on stderr, not an error. Runs on each file's AST as
+# parsed (before lower and the module renames), so names are the user's.
 
-# Path for diagnostics: relative to `root` when it is under it.
-fn display_path(p, root)
-  if root == nil
-    return p
+# Calls visit(child, in_fn) for every AST node below `node`; `in_fn` is
+# true once the walk is inside a function body (fn_def / anon_fn).
+fn walk_ast(node, in_fn, visit)
+  for k in keys(node)
+    let v = node[k]
+    if type(v) == "table"
+      if v.tag != nil
+        let child_in_fn = in_fn or v.tag == "fn_def" or v.tag == "anon_fn"
+        visit(v, child_in_fn)
+        walk_ast(v, child_in_fn, visit)
+      else
+        for elem in v
+          if type(elem) == "table" and elem.tag != nil
+            let child_in_fn = in_fn or elem.tag == "fn_def" or elem.tag == "anon_fn"
+            visit(elem, child_in_fn)
+            walk_ast(elem, child_in_fn, visit)
+          end
+        end
+      end
+    end
   end
-  let rlen = len(root)
-  if len(p) > rlen and substr(p, 0, rlen) == root and p[rlen] == "/"
-    return substr(p, rlen + 1, len(p) - rlen - 1)
-  end
-  p
 end
+
+fn warn_shadowed_loop_conds(ast, file, show_path)
+  let warned = {}
+  # Messages by line, printed in line order once the walk is done.
+  let by_line = {}
+  let lines = []
+  # A module-level variable can also change through a named fn the loop
+  # calls, so a top-level `let` that some fn in this file assigns never
+  # counts as unassigned.
+  let changed_by_fns = {}
+  let module_lets = {}
+  for st in ast.stmts
+    if st.tag == "let"
+      module_lets[st.name] = true
+    end
+  end
+  walk_ast(ast, false, fn(n, in_fn)
+    if n.tag == "assign" and in_fn and module_lets[n.name] == true
+      changed_by_fns[n.name] = true
+    end
+  end)
+  let check_while = fn(w)
+    let reads = {}
+    walk_ast({tag: "wrap", cond: w.cond}, false, fn(n, in_fn)
+      if n.tag == "var"
+        reads[n.name] = true
+      end
+    end)
+    let assigned = {}
+    let shadows = {}
+    walk_ast({tag: "wrap", body: w.body}, false, fn(n, in_fn)
+      if n.tag == "assign"
+        assigned[n.name] = true
+      elif n.tag == "let" and not in_fn and reads[n.name] == true
+        let prev = shadows[n.name]
+        if prev == nil or (n.line != nil and prev.line != nil and n.line < prev.line)
+          shadows[n.name] = n
+        end
+      end
+    end)
+    for name in sort(keys(shadows))
+      let l = shadows[name]
+      let key = "{l.line}:{name}"
+      if assigned[name] == nil and changed_by_fns[name] == nil and warned[key] == nil
+        warned[key] = true
+        if by_line[l.line] == nil
+          by_line[l.line] = []
+          push(lines, l.line)
+        end
+        push(by_line[l.line], "warning: {show_path(file)}:{l.line}: `let {name}` declares a new `{name}` that hides the one this loop's condition reads (while at line {w.line}); nothing in the loop assigns the outer `{name}`, so the condition can't change through it. To update it, write `{name} = ...` without `let`.")
+      end
+    end
+  end
+  walk_ast(ast, false, fn(n, in_fn)
+    if n.tag == "while"
+      check_while(n)
+    end
+  end)
+  for ln in sort(lines)
+    for msg in by_line[ln]
+      eprint(msg)
+    end
+  end
+end
+
+# ─── Load resolution ──────────────────────────────────────────
 
 # `stmt` loads `full_path`, which is still being resolved further up the
 # load stack: report the cycle at this `load`, with the chain of files
 # from `full_path` back around to it. The `parent` links of the files on
-# the stack lead from stmt's file back to `full_path`, and on to the
-# entry file, whose directory is the display root when the project has
-# no gem.toml.
-fn report_load_cycle(stmt, full_path, project_root, loaded, sources_by_file, sink)
+# the stack lead from stmt's file back to `full_path`. Paths are shown as
+# everywhere else (make_show_path).
+fn report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
   let chain = [full_path]
   let cur = normalize_path(stmt.file)
   while cur != full_path and cur != nil
     insert(chain, 1, cur)
     cur = loaded[cur].parent
   end
-  let root = project_root
-  if root == nil
-    let top = cur
-    while top != nil and loaded[top] != nil and loaded[top].parent != nil
-      top = loaded[top].parent
-    end
-    if top != nil
-      root = dirname(top)
-    end
-  end
   let msg = "load cycle: "
   for p in chain
-    msg = msg + display_path(p, root) + " → "
+    msg = msg + show_path(p) + " → "
   end
-  msg = msg + display_path(full_path, root)
+  msg = msg + show_path(full_path)
   let hint = "move the code these modules share into a module that loads none of them"
   if len(chain) == 1
     hint = "a file cannot load itself; remove this `load`"
@@ -495,7 +574,7 @@ fn report_load_cycle(stmt, full_path, project_root, loaded, sources_by_file, sin
   sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
 end
 
-fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
+fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path)
   let new_stmts = []
   let count = 0
   for stmt in ast.stmts
@@ -504,7 +583,7 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
 
       let cached = loaded[full_path]
       if cached != nil and cached.loading
-        report_load_cycle(stmt, full_path, project_root, loaded, sources_by_file, sink)
+        report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
         continue
       end
       if cached != nil
@@ -545,8 +624,11 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       let loaded_ast = parse_source(source, full_path, sink)
       let parse_failed = sink.count() > errors_before or sink.suppressed()
       tag_source_file(loaded_ast, full_path)
+      if not parse_failed
+        warn_shadowed_loop_conds(loaded_ast, full_path, show_path)
+      end
       let loaded_dir = dirname(full_path)
-      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
+      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path)
 
       entry.loading = false
 
@@ -602,6 +684,32 @@ end
 
 # ─── CLI argument parsing ──────────────────────────────────────
 
+let USAGE = """
+  usage: gem <file.gem> [options] [args...]
+         gem lsp
+
+  Compiles <file.gem> to C, builds it with cc and runs it. Arguments after
+  the file that are not options below are passed to the program.
+
+  options:
+    -c, --compile-only   compile to ./<file>, don't run
+    -o <name>            compile to <name> (implies -c)
+    --emit-c             print the generated C to stdout
+    --check              parse and analyze only; exit 1 on errors
+    --run                run after compiling (the default)
+    -h, --help           print this help
+  subcommands:
+    lsp                  start the language server on stdin/stdout
+  """
+
+# A command-line mistake: a short message and the usage line on stderr,
+# exit status 2. No stack trace: the error is the user's, not the driver's.
+fn usage_error(msg)
+  eprint("gem: " + msg)
+  eprint("usage: gem <file.gem> [options] [args...]   (gem --help for more)")
+  exit(2)
+end
+
 fn parse_args(args)
   let result = {
     src_path: nil,
@@ -630,9 +738,16 @@ fn parse_args(args)
     elif arg == "-o"
       i += 1
       if i >= argc
-        error("gem: -o requires an argument")
+        usage_error("-o requires an argument")
       end
       result.out_name = args[i]
+    elif result.src_path == nil and (arg == "-h" or arg == "--help")
+      print(USAGE)
+      exit(0)
+    elif result.src_path == nil and len(arg) > 1 and substr(arg, 0, 1) == "-"
+      # Before the source file, an unknown flag is a mistake, not a path.
+      # After it, the program gets it like any other argument.
+      usage_error("unknown option '" + arg + "'")
     elif result.src_path == nil
       result.src_path = arg
     else
@@ -679,7 +794,7 @@ end
 
 let argc = len(argv())
 if argc < 2
-  error("usage: gem <file.gem> [args...] [-c | -o <name> | --emit-c]")
+  usage_error("no source file given")
 end
 
 # `gem lsp` subcommand. Hand off to the LSP entry before parse_args runs;
@@ -693,7 +808,7 @@ end
 let cli = parse_args(argv())
 
 if cli.src_path == nil
-  error("usage: gem <file.gem> [args...] [-c | -o <name> | --emit-c]")
+  usage_error("no source file given")
 end
 
 let src_path = cli.src_path
@@ -709,6 +824,7 @@ if project_root != nil
   project_root = normalize_path(project_root)
 end
 let stdlib_root = compute_stdlib_root(install_root, project_root)
+let show_path = make_show_path(src_path, project_root)
 let loaded = {}
 let module_bindings = {}
 let sources_by_file = {}
@@ -722,11 +838,12 @@ loaded[normalize_path(src_path)] = {exported: nil, loading: true, parent: nil}
 # print_all_errors pass either way.
 let resolved_ast = nil
 if not sink.has_any()
-  resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink)
+  warn_shadowed_loop_conds(ast, src_path, show_path)
+  resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path)
 end
 
 if sink.has_any()
-  print_all_errors(sink)
+  print_all_errors(sink, show_path)
   exit(1)
 end
 
@@ -738,14 +855,14 @@ resolved_ast = lower(resolved_ast)
 
 fold_constants(resolved_ast)
 
-let cg = make_codegen(src_path, module_bindings, project_root, sources_by_file, sink, build_global_display(loaded))
+let cg = make_codegen(src_path, module_bindings, show_path, sources_by_file, sink, build_global_display(loaded))
 let c_code = cg.compile(resolved_ast)
 
 # Codegen may have surfaced semantic errors (undeclared identifier,
 # missing module export, etc.). One last pass before we run cc / write
 # output: print everything and exit non-zero if anything fired.
 if sink.has_any()
-  print_all_errors(sink)
+  print_all_errors(sink, show_path)
   exit(1)
 end
 

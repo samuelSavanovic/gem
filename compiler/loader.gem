@@ -69,4 +69,43 @@ fn compute_stdlib_root(install_root, project_root)
   install_root
 end
 
-export resolve_load_path, find_project_root, compute_stdlib_root
+# The path shown for a source file in compile errors, notes, `#line`
+# directives and stack-frame records. With a gem.toml it is relative to
+# the project root, which keeps bootstrap/stage0.c reproducible across
+# machines. Without one, loads resolve against the entry file's
+# directory, so a file under it is shown below the entry's directory as
+# the user typed it (`gem prog.gem` shows `mods/m.gem`, `gem /abs/prog.gem`
+# shows `/abs/mods/m.gem`). Files outside the root keep their path.
+fn make_show_path(entry_path, project_root)
+  let root = project_root
+  let prefix = nil
+  if root == nil and entry_path != nil
+    root = normalize_path(dirname(entry_path))
+    let d = dirname(entry_path)
+    if d != "." and d != ""
+      prefix = d
+    end
+  end
+  let cache = {}
+  fn(p)
+    if root == nil or p == nil
+      return p
+    end
+    if has_key(cache, p)
+      return cache[p]
+    end
+    let shown = p
+    let full = normalize_path(p)
+    let rlen = len(root)
+    if len(full) > rlen and substr(full, 0, rlen) == root and full[rlen] == "/"
+      shown = substr(full, rlen + 1, len(full) - rlen - 1)
+      if prefix != nil
+        shown = path_join(prefix, shown)
+      end
+    end
+    cache[p] = shown
+    shown
+  end
+end
+
+export resolve_load_path, find_project_root, compute_stdlib_root, make_show_path

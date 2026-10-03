@@ -24,7 +24,11 @@ gem <file.gem> -o <name>    # compile to <name>, don't run (implies -c)
 gem <file.gem> --emit-c     # print generated C to stdout (used for bootstrapping)
 gem <file.gem> --check      # parse + analyze, exit 0 on success, 1 on error
 gem <file.gem> --run        # accepted as a no-op; run is the default
+gem --help                  # print usage (also -h), exit 0
+gem lsp                     # start the language server on stdin/stdout
 ```
+
+Options can come before or after the source path. Before it, an argument starting with `-` that is not one of the options above is a usage error: `gem` prints a short message and the usage line on stderr and exits 2 (as for a missing source path or `-o` without a name). After the source path, an unknown argument is passed to the program, so `gem prog.gem --help` gives `--help` to `prog.gem`.
 
 The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.c`, compiles it to `/tmp/gem_<basename>_bin`, and runs it. Extra positional arguments after the source path are forwarded to the program via `argv()`.
 
@@ -78,6 +82,7 @@ A `let` always declares a new variable. If a variable of the same name is alread
 - Closures created before the shadowing `let` keep the old variable; closures created after it see the new one.
 - A shadow made inside a nested block (`if`/`elif`/`else`, `while` and `for` bodies, `match`/`receive` arms, closure bodies) ends with that block: after it the outer variable is visible again, unchanged. In a loop body every iteration starts from the outer variable.
 - `for` loop variables and `match`/`receive` pattern bindings are lets of their body and shadow the same way.
+- **Warning:** a `let` in a `while` body (at any depth, not inside a closure) that shadows a variable the loop's condition reads, when nothing in the loop body assigns that name (`x = …` or `x += …`, closures included), gets a compile-time warning on stderr. The condition reads the outer variable, which then can't change through it: `while i < n` with `let i = i + 1` in the body never ends. To advance the counter, assign it: `i = i + 1`. Any assignment to the name in the body turns the warning off, as does renaming the new variable. A module-level variable that a named function of the same file assigns is not warned about, since a call in the loop can change it.
 
 ```
 fn f(n)
@@ -541,7 +546,7 @@ The main process (top-level code) is itself a schedulable coroutine (PID 0). All
 
 A process blocked on I/O counts as able to send, so a server whose main waits in `receive` while another process loops on `tcp_accept` keeps running.
 
-A pid is an int that names one process for good: after that process exits, its pid never refers to another process, even though the runtime reuses process slots. Messages sent to it are dropped, `kill` returns `nil`, `process_info` returns `nil`, `monitor` delivers `DOWN` with reason `"noproc"`, and `link` fails with `"noproc"`.
+A pid is an int that names one process for good: after that process exits, its pid never refers to another process, even though the runtime reuses process slots. Messages sent to it are dropped, `kill` returns `nil`, `process_info` returns `nil`, `monitor` delivers `DOWN` with reason `"noproc"`, and `link` sends the caller an exit signal with reason `"noproc"`.
 
 ## Preemptive Scheduling (Reduction-Based)
 
@@ -665,7 +670,7 @@ The `receive()` function call always pops the head of the mailbox unconditionall
 
 ## Process Control
 
-`kill(pid, reason)` sends an exit signal to a process. If the target has `trap_exit` enabled, an `{tag: "EXIT", pid: sender_pid, reason: reason}` message is delivered to its mailbox instead of terminating it. Otherwise, the process is terminated immediately: marked dead, DOWN messages delivered to monitors, registered name removed, and exit propagated to linked processes. Returns `true` if the process was alive, `nil` otherwise. A process can kill itself: `kill(self(), reason)` ends it at once with that reason (unless it traps exits), and `pcall` does not catch it. Likewise, when a `kill` brings down the caller through a link, the caller dies at once; `pcall` does not catch that either. If the process ending this way is the main process and the reason is not `"normal"`, the reason is printed as a runtime error and the program exits with status 1. A process killed while it waits on the thread pool (`read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, an `extern blocking fn`) dies at once, but the operation itself still runs to completion on its worker thread: a write still lands, a command started by `exec` keeps running, and once the worker is done the runtime frees the result (closing the connection an abandoned `sqlite_open` opened), except a `Ptr` returned by an `extern blocking fn`.
+`kill(pid, reason)` sends an exit signal to a process. If the target has `trap_exit` enabled, an `{tag: "EXIT", pid: sender_pid, reason: reason}` message is delivered to its mailbox instead of terminating it. Otherwise, the process is terminated immediately: marked dead, DOWN messages delivered to monitors, registered name removed, and exit propagated to linked processes. Returns `true` if the process was alive, `nil` otherwise. A process can kill itself: `kill(self(), reason)` ends it at once with that reason (unless it traps exits), and `pcall` does not catch it. Likewise, when a `kill` brings down the caller through a link, the caller dies at once; `pcall` does not catch that either. If the process ending this way is the main process and the reason is not `"normal"`, the reason is printed as a runtime error and the program exits with status 1; when another process kills main, or main dies through a link, the message names the sender: `main process killed by process <pid>: <reason>` or `main process killed by linked process <pid>: <reason>`, followed by main's stack trace (where main was when the signal arrived). A process killed while it waits on the thread pool (`read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, an `extern blocking fn`) dies at once, but the operation itself still runs to completion on its worker thread: a write still lands, a command started by `exec` keeps running, and once the worker is done the runtime frees the result (closing the connection an abandoned `sqlite_open` opened), except a `Ptr` returned by an `extern blocking fn`.
 
 `sleep(ms)` suspends the current process for `ms` milliseconds. The scheduler resumes the process after the deadline expires; messages that arrive meanwhile wait in the mailbox and do not end the sleep early. `sleep(0)` yields to other ready processes and returns.
 
@@ -720,6 +725,8 @@ puts("hello from C")
 ```
 
 `extern fn` declares a C function. The compiler emits the call directly since we compile to C. Type annotations on extern declarations only — the rest of the language stays dynamically typed. `Ptr` is an opaque type for C pointers.
+
+An `extern fn` is a binding like a top-level `fn`: one named like a builtin (`extern fn sqrt(x: Float) -> Float`) shadows the builtin in its own file, and one in a loaded module can be exported and called as `module.name`. The C function it calls is always the declared name.
 
 The generated wrapper validates `argc` and each argument's runtime type tag before reading the `GemVal` union, so a Gem-side mistake (wrong arity, wrong type) raises a Gem-level error at the boundary instead of passing garbage to C. Errors mention the declared Gem-level type name (e.g. `foo: arg 0 expected String, got int`).
 
@@ -875,7 +882,7 @@ let json = '''
 Rules:
 - The opening `"""` or `'''` must be immediately followed by a newline (optional trailing whitespace before the newline is allowed). Content starts on the next line.
 - The closing `"""` or `'''` must appear on its own line with only leading whitespace before it.
-- **Dedent**: the indentation of the closing delimiter (number of leading spaces) is the base indentation. That many leading spaces are stripped from every content line. Extra indentation beyond the base is preserved.
+- **Dedent**: the indentation of the closing delimiter (number of leading spaces) is the base indentation. That many leading spaces are stripped from every content line. Extra indentation beyond the base is preserved. A `"""` string inside an interpolation has its own closing line and its own dedent; it does not change the outer string's.
 - The final newline before the closing delimiter is stripped, so the resulting string does not end with a trailing `\n`.
 - `"""` supports `{expr}` interpolation and escape sequences identical to regular `"` strings.
 - `'''` has no interpolation; `{` is a literal character. Escape sequences are identical to regular `'` strings.
@@ -937,7 +944,7 @@ The interpolation ends at the `}` that balances its `{` (braces of table literal
 
 **Inside spawned processes**, `error()` does not terminate the program. Each spawned process has an implicit error boundary — if an unhandled error occurs, the process dies but other processes continue. The error is captured, DOWN messages are delivered to monitors, EXIT signals propagate to linked processes, and the scheduler continues. `pcall` inside a spawned process still works — it catches errors locally before the process-level boundary. This boundary covers running out of stack too (see Stack depth below). See Process Monitoring for details.
 
-A process that dies this way is reported on stderr, like Erlang's error logger: the same message, source line and stack trace an uncaught error in the main process prints, under a header naming the process by pid (and registered name, if any). Its monitors and links see the error message as the exit reason, as before. Nothing is printed when a process returns normally, is ended by `kill` (including `kill(self(), reason)`), or dies because a linked process died; only the process whose error went uncaught is reported. Processes under a supervisor are reported too.
+A process that dies this way is reported on stderr, like Erlang's error logger: the same message, source line and stack trace an uncaught error in the main process prints, under a header naming the process by pid (and registered name, if any). Its monitors and links see the error message as the exit reason, as before. Nothing is printed when a process returns normally, is ended by `kill` (including `kill(self(), reason)`), or dies because a linked process died; only the process whose error went uncaught is reported. (The main process is the exception: main dying from an exit signal ends the program and is reported, see `kill`.) Processes under a supervisor are reported too.
 
 ```
 [Runtime Error in process 4 "logger"]: boom
@@ -949,6 +956,8 @@ Stack trace:
   at handle (app.gem:10)
   at anonymous fn (app.gem:21)
 ```
+
+A stack frame names its function as you write it: `handle` for `fn handle`, `anonymous fn` for a `fn` literal, and `counter.bump` for the top-level `fn bump` of a loaded module `counter.gem` (whatever alias it is loaded under). File paths in traces, compile errors and notes are relative to the project root (the directory holding `gem.toml`); without a `gem.toml`, a file in or below the entry file's directory is shown under that directory as you typed it on the command line (`gem app.gem` shows `lib/util.gem`, `gem /src/app.gem` shows `/src/lib/util.gem`). Other files keep their full path.
 
 **Compile-time error format**: the compiler produces Rust-style diagnostics to stderr with source context, caret highlighting, and optional hints:
 
@@ -998,7 +1007,7 @@ end)
 ```
 
 - On success: returns `{ok: true, value: <return value>}`
-- On error: returns `{ok: false, error: <error message string>, stack: <array of {name, file, line} tables>}`
+- On error: returns `{ok: false, error: <error message string>, stack: <array of {name, file, line} tables>}`, innermost frame first, with the same names and paths a printed stack trace shows
 - Errors caught by `pcall` do not print to stderr and do not call `exit(1)`
 - If no `pcall` is active, errors behave as before (print + stack trace + exit)
 - `pcall` catches both user `error()` calls and runtime type errors (e.g. `1 + "hello"`)
@@ -1082,15 +1091,17 @@ let html = build_string() do |add|
 end
 ```
 
+`add` belongs to the process that called `build_string`. It can be captured, sent and stored like any function, but calling it from another process (a `spawn` body that captured it, a receiver of a message holding it) raises `` build_string: `add` can only be called by the process that created it ``. Calling it after `build_string` has returned does nothing visible: the string is already built.
+
 `make_ref()` — returns a unique opaque reference value. Type is `"ref"`. Refs are equal only to themselves (identity equality). Usable as table keys. Format: `#Ref<N>` where N is a monotonically increasing integer.
 
-`link(pid)` — creates a bidirectional link between the calling process and the target process. If the target no longer exists, `link` raises an error with message `"noproc"` in the caller (catchable with `pcall`); a caller that traps exits receives `{tag: "EXIT", pid: <pid>, reason: "noproc"}` instead. Returns `true`.
+`link(pid)` — creates a bidirectional link between the calling process and the target process. If the target no longer exists, the caller gets an exit signal with reason `"noproc"`, as if the target had just exited with that reason (Erlang semantics): a caller that traps exits receives `{tag: "EXIT", pid: <pid>, reason: "noproc"}`; any other caller dies at once with reason `"noproc"`, and `pcall` does not catch it (it is an exit, not an error). Linking to yourself does nothing. Returns `true`.
 
 `unlink(pid)` — removes the bidirectional link between the calling process and the target. Returns `true`.
 
 `spawn_link(fn)` — atomically spawns a new process and links it to the caller. No race window between spawn and link. Returns the new pid.
 
-`process_flag("trap_exit", bool)` — sets the `trap_exit` flag on the current process. Returns the previous value (bool). When `trap_exit` is `true`, exit signals from linked processes are converted to `{tag: "EXIT", pid: <pid>, reason: <reason>}` messages in the process's mailbox instead of killing the process.
+`process_flag("trap_exit", bool)` — sets the `trap_exit` flag on the current process. Returns the previous value (bool). When `trap_exit` is `true`, exit signals from linked processes are converted to `{tag: "EXIT", pid: <pid>, reason: <reason>}` messages in the process's mailbox instead of killing the process. A process that doesn't trap exits dies when a linked process exits with a reason other than `"normal"`; when that process is main, the program reports `main process killed by linked process <pid>: <reason>` with main's stack trace on stderr and exits with status 1.
 
 `sleep(ms)` — suspends the current process for `ms` milliseconds. Works in any process, including the main program.
 
@@ -1102,7 +1113,7 @@ end
 
 `process_info(pid)` — returns a table with process metadata: `state`, `mailbox_len`, `links`, `monitors`, `trap_exit`, `exit_reason`. Returns `nil` for invalid/free pids.
 
-`read_file(path)` — reads the entire file at `path` and returns its contents as a string. Opens in binary mode (no newline translation). Raises an error if the file cannot be opened.
+`read_file(path)` — reads the entire file at `path` and returns its contents as a string. Opens in binary mode (no newline translation). Files whose size isn't known up front (`/proc` and `/sys` files, pipes, devices such as `/dev/stdin`) are read until end of file. Raises an error if the file cannot be opened, is a directory, or a read fails.
 
 `write_file(path, content)` — writes the string `content` to `path`, overwriting any existing file. Opens in binary mode. Raises an error if the file cannot be opened or if the write fails.
 
@@ -1182,7 +1193,7 @@ end
 
 `is_dir(path)` — returns `true` if `path` exists and is a directory, `false` otherwise. Argument must be a string.
 
-`exec(command)` — runs `command` via the system shell (`sh -c`). Blocks until the command exits. Returns the exit code as an integer (0 on success). The shell expands glob patterns and environment variables in `command`. Output goes to the process's stdout/stderr unless redirected inside `command`.
+`exec(command)` — runs `command` via the system shell (`sh -c`). Blocks until the command exits. Returns the exit code as an integer (0 on success). The shell expands glob patterns and environment variables in `command`. The command inherits the program's stdout and stderr, so its output goes straight to the terminal (or wherever the program's output goes), the same from `main` and from a spawned process; `exec` does not capture it. To capture output, redirect it inside `command` (`exec("ls > /tmp/out.txt")`) and `read_file` the result.
 
 ## TCP Sockets
 
@@ -1222,7 +1233,7 @@ All builtins are first-class values — they can be stored in variables and pass
 
 **Builtin names are not reserved.** Builtins live in the outermost scope, so any binding with a builtin's name shadows the builtin wherever that binding is in scope, and every call or reference there reaches the binding:
 
-- A top-level `fn` or `let` (a destructuring `let` or a selective import such as `load "std/log" (error)` included) shadows the builtin for the whole file it is in, whether that is the program's entry file or a loaded module. It does not leak into modules that file loads, or into files that load it: `std/log` defines and exports `error`, and `log.error(msg)` logs while a bare `error(msg)` elsewhere still raises.
+- A top-level `fn`, `extern fn` or `let` (a destructuring `let` or a selective import such as `load "std/log" (error)` included) shadows the builtin for the whole file it is in, whether that is the program's entry file or a loaded module. It does not leak into modules that file loads, or into files that load it: `std/log` defines and exports `error`, and `log.error(msg)` logs while a bare `error(msg)` elsewhere still raises.
 - A parameter, `let` local, loop variable or pattern binding shadows it for its scope (`fn f(len) len + 1 end` is fine).
 
 `for` loops and `match` patterns keep working inside such a scope: they never call a user binding named `len`, `type` or `has_key`.

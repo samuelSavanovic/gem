@@ -1,0 +1,39 @@
+# read_file reads files whose size isn't known up front (procfs files report
+# size 0, pipes report none) until end of file, in main and in a spawned
+# process. Regular files keep the sized fast path, binary-safe.
+
+let fifo = "/tmp/gem_147_fifo"
+exec("rm -f {fifo} && mkfifo {fifo}")
+exec("printf 'hello\\nfrom a pipe' > {fifo} &")
+let s = read_file(fifo)
+print(len(s), s)
+
+let main = self()
+spawn do
+  exec("printf 'child pipe' > {fifo} &")
+  send(main, read_file(fifo))
+end
+print(receive())
+remove_file(fifo)
+
+# procfs (Linux only; skipped elsewhere with the same output)
+let status = "/proc/self/status"
+if file_exists(status)
+  let st = read_file(status)
+  print("procfs:", len(st) > 0 and substr(st, 0, 5) == "Name:")
+else
+  print("procfs:", true)
+end
+
+# Regular files: empty, exactly-sized, binary.
+let path = "/tmp/gem_147_file"
+write_file(path, "")
+print(len(read_file(path)))
+write_file(path, "a\0b\0")
+let b = read_file(path)
+print(len(b), ord(substr(b, 1, 1)))
+remove_file(path)
+
+# A directory is an error, not a crash.
+let r = pcall(fn() read_file("/tmp") end)
+print(r.ok, r.error)

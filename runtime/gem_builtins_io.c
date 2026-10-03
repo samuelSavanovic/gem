@@ -42,17 +42,17 @@ GemVal gem_read_file_fn(void *_env, GemVal *args, int argc) {
         return r;
     }
 
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        char buf[512]; snprintf(buf, sizeof(buf), "read_file: cannot open '%s'", path); gem_error(buf);
+    size_t nread;
+    char *err = NULL;
+    char *raw = gem_read_whole_file(path, &nread, &err);
+    if (!raw) {
+        char buf[512]; snprintf(buf, sizeof(buf), "read_file: %s", err);
+        free(err);
+        gem_error(buf);
     }
-    fseek(f, 0, SEEK_END);
-    long flen = ftell(f);
-    rewind(f);
-    char *data = (char *)gem_alloc((size_t)flen + 1);
-    size_t nread = fread(data, 1, (size_t)flen, f);
-    data[nread] = '\0';
-    fclose(f);
+    char *data = (char *)gem_alloc(nread + 1);
+    memcpy(data, raw, nread + 1);
+    free(raw);
     GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = data; r.slen = (int)nread;
     return r;
 }

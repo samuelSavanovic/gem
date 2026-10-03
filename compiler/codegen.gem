@@ -1104,7 +1104,7 @@ tag_process_tail_while_loops = fn(fn_defs, top_stmts, source_name)
   walk_for_tagging_stmts(top_stmts, true, source_name)
 end
 
-fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_by_file = nil, sink = nil, global_display = nil)
+fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_file = nil, sink = nil, global_display = nil)
   if module_bindings == nil
     module_bindings = {}
   end
@@ -1118,21 +1118,15 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     sink = make_error_sink()
   end
 
-  # Strip project_root prefix so emitted #line / gem_push_frame paths are
-  # reproducible across machines. Files outside the project root keep their
-  # absolute path. No-op when project_root is nil.
+  # The path shown for a source file in `#line` directives, stack-frame
+  # records and notes: project-relative (make_show_path in
+  # compiler/loader.gem), which keeps them reproducible across machines.
+  # Identity when the driver passes no show_path.
   let rel_path = fn(p)
-    if project_root == nil or p == nil
+    if show_path == nil
       return p
     end
-    let rlen = len(project_root)
-    if len(p) <= rlen
-      return p
-    end
-    if substr(p, 0, rlen) == project_root and p[rlen] == "/"
-      return substr(p, rlen + 1, len(p) - rlen - 1)
-    end
-    p
+    show_path(p)
   end
 
   # The name a user wrote for a compiler-mangled binding, for messages:
@@ -1173,9 +1167,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   let loc_of = fn(node)
     let f = file_of(node)
     if node != nil and node.line != nil
-      return "{f}:{node.line}"
+      return "{rel_path(f)}:{node.line}"
     end
-    f
+    rel_path(f)
   end
 
   # Source text for the file containing `node`, used by sink.report() so
@@ -1217,6 +1211,17 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
     end
     name
+  end
+  # The fn name a stack frame shows (printed traces, the pcall `stack`
+  # table, crash reports and stack-overflow messages all read it from the
+  # frame): fn literals are `anonymous fn`, `_sh<N>_` shadow renames and
+  # entry-file `_main_<name>` builtin shadows drop their prefix, and a
+  # loaded module's `_mod_<mod>_<name>` is `<mod>.<name>`.
+  let frame_name = fn(name)
+    if len(name) > 6 and substr(name, 0, 6) == "_anon_"
+      return "anonymous fn"
+    end
+    display_name(user_var_name(name))
   end
   let boxed_vars = {}
   let top_level_vars = {}
@@ -1284,12 +1289,12 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # and emit the trampoline marker instead of a regular call.
   let current_scc_id = nil
   let append_buf_vars = {}
-  # Set when emitting a leaf function (no Gem-level calls in body): we elide
-  # `gem_push_frame`/`gem_pop_frame` and `gem_set_line` so the call doesn't
-  # cost frame bookkeeping. If the leaf raises via a builtin, the trace shows
-  # the caller's frame at the call-site line — the leaf's name and per-stmt
-  # line are not visible. Builtins don't push frames themselves, so this is
-  # consistent with how a non-Gem error already attributes.
+  # Set when emitting a leaf function (no Gem-level calls in body): instead
+  # of `gem_push_frame`/`gem_pop_frame`/`gem_set_line` it records itself in
+  # the cheaper leaf slot (gem.h `GemLeafSite`): `gem_leaf_site = &site` on
+  # entry, `gem_leaf_line = N` per statement, `gem_leaf_site = NULL` on
+  # return. A leaf calls nothing, so it is always the innermost frame and
+  # error reports show it on top of the call stack.
   let in_leaf_fn = false
 
   # ─── Helpers ──
@@ -1408,17 +1413,29 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # `gem_pop_frame()` or `gem_set_line(...)` must go through these.
   let pop_str = fn(p)
     if in_leaf_fn
-      ""
+      "{p}gem_leaf_site = NULL;\n"
     else
       "{p}gem_pop_frame();\n"
     end
   end
   let setline_str = fn(line, p)
     if in_leaf_fn
-      ""
+      "{p}gem_leaf_line = {line};\n"
     else
       "{p}gem_set_line({line});\n"
     end
+  end
+  # Entry bookkeeping of a leaf fn (after its param bindings: a default
+  # expression may call another fn). The line is set here only when the
+  # first statement doesn't set it.
+  let leaf_entry_str = fn(name, file, line, body)
+    let b = buf_new()
+    buf_push(b, "    static const GemLeafSite _leaf_site = \{\"{escape_c_string(name)}\", \"{escape_c_string(file)}\"};\n")
+    buf_push(b, "    gem_leaf_site = &_leaf_site;\n")
+    if len(body) == 0 or type(body[0]) != "table" or body[0].line == nil
+      buf_push(b, "    gem_leaf_line = {line};\n")
+    end
+    to_string(b)
   end
 
   # ─── Free variable analysis ──
@@ -2399,8 +2416,10 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     # Sites that write a variable binding (`x = ...`) or mutate the value a
     # variable holds (`x.f = ...`, `x[k] = ...`, `push(x, ...)`, ...), for
     # the module-state note (note_spawn_global_writes).
-    let record_write = fn(caller_id, name, node)
-      push(caller_records[caller_id].writes, {name: name, node: node})
+    # `via`: the builtin a `push(x, ...)`-style write calls, which a param
+    # or local of the same name shadows (checked by the note).
+    let record_write = fn(caller_id, name, node, via = nil)
+      push(caller_records[caller_id].writes, {name: name, node: node, via: via})
     end
 
     # Lexical parent of each anon caller cid (i.e. the caller_id that
@@ -2461,7 +2480,10 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
             let aid = next_anon_id()
             new_caller_record(aid, true)
             anon_parent[aid] = caller_id
-            pt_anon_nodes[aid] = {fn: node.args[0], spawn: node}
+            # The callee may be a param or local named `spawn`, ...;
+            # note_spawn_global_writes checks it against the caller's
+            # locals before treating the body as a process.
+            pt_anon_nodes[aid] = {fn: node.args[0], spawn: node, spawn_via: node.func.name}
             collect_calls_in_body(node.args[0].body, true, aid)
             if node.args[0].defaults != nil
               for d in node.args[0].defaults
@@ -2480,7 +2502,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         end
 
         if is_node(node.func, "var") and set_contains(mutating_builtins, node.func.name) and node.args != nil and len(node.args) > 0 and is_node(node.args[0], "var")
-          record_write(caller_id, node.args[0].name, node)
+          record_write(caller_id, node.args[0].name, node, node.func.name)
         end
 
         # Regular call. Record edge if callee resolves to a known fn_def
@@ -2739,42 +2761,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       end
       push(children[parent], aid)
     end
-    # cid -> the spawn node it is reachable from (first found)
-    let reached = {}
-    let queue = []
-    for aid, info in pt_anon_nodes
-      if info.spawn != nil
-        reached[aid] = info.spawn
-        push(queue, aid)
-      end
-    end
-    let qi = 0
-    while qi < len(queue)
-      let cid = queue[qi]
-      qi += 1
-      let r = records[cid]
-      if r == nil
-        continue
-      end
-      let next = []
-      for callee, _ in r.tail_callees
-        push(next, "fn:" + callee)
-      end
-      for callee, _ in r.non_tail_callees
-        push(next, "fn:" + callee)
-      end
-      if children[cid] != nil
-        for c in children[cid]
-          push(next, c)
-        end
-      end
-      for n in next
-        if reached[n] == nil
-          reached[n] = reached[cid]
-          push(queue, n)
-        end
-      end
-    end
+
     # Names local to a caller: its own params/lets plus, for a closure,
     # every enclosing scope's (closures capture them).
     let local_cache = {}
@@ -2812,6 +2799,44 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       local_cache[cid] = s
       s
     end
+    # cid -> the spawn node it is reachable from (first found). A call
+    # through a param or local named `spawn` (the name the caller binds,
+    # not the builtin) starts no process.
+    let reached = {}
+    let queue = []
+    for aid, info in pt_anon_nodes
+      if info.spawn != nil and not set_contains(locals_of(pt_anon_parent[aid]), info.spawn_via)
+        reached[aid] = info.spawn
+        push(queue, aid)
+      end
+    end
+    let qi = 0
+    while qi < len(queue)
+      let cid = queue[qi]
+      qi += 1
+      let r = records[cid]
+      if r == nil
+        continue
+      end
+      let next = []
+      for callee, _ in r.tail_callees
+        push(next, "fn:" + callee)
+      end
+      for callee, _ in r.non_tail_callees
+        push(next, "fn:" + callee)
+      end
+      if children[cid] != nil
+        for c in children[cid]
+          push(next, c)
+        end
+      end
+      for n in next
+        if reached[n] == nil
+          reached[n] = reached[cid]
+          push(queue, n)
+        end
+      end
+    end
     let seen = {}
     for cid, spawn_node in reached
       let r = records[cid]
@@ -2819,7 +2844,8 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         continue
       end
       for w in r.writes
-        if set_contains(top_level_vars, w.name) and not set_contains(locals_of(cid), w.name)
+        let locals = locals_of(cid)
+        if set_contains(top_level_vars, w.name) and not set_contains(locals, w.name) and (w.via == nil or not set_contains(locals, w.via))
           let n = w.node
           let line_str = "?"
           if n.line != nil
@@ -4239,7 +4265,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       if node.line != nil
         line_str = to_string(node.line)
       end
-      eprint("warning: {file_of(node)}:{line_str}: cannot reset per-process arena at this loop's back-edge: {refuse_reason}. Memory will grow unbounded across iterations. This pattern is not yet supported in long-running loops — please file an issue with your case if it blocks you.\n")
+      eprint("warning: {rel_path(file_of(node))}:{line_str}: cannot reset per-process arena at this loop's back-edge: {refuse_reason}. Memory will grow unbounded across iterations. This pattern is not yet supported in long-running loops — please file an issue with your case if it blocks you.\n")
     end
     {do_rescue: do_rescue, rescue_roots: rescue_roots, pinned_rescue_roots: pinned_rescue_roots}
   end
@@ -4600,6 +4626,13 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
   compile_extern_fn = fn(node)
     let {name, params, ret_type} = node
+    # The C function it calls: `name` is the Gem binding, which module
+    # loading and builtin shadowing may have renamed (c_name keeps the
+    # declared name, see rename_node in compiler/main.gem).
+    let c_sym = name
+    if node.c_name != nil
+      c_sym = node.c_name
+    end
 
     if node.blocking
       return compile_blocking_extern_fn(node)
@@ -4607,7 +4640,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
     let b = buf_new()
     buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
-    emit_extern_validation(b, name, params)
+    emit_extern_validation(b, c_sym, params)
 
     let c_args = []
     for i = 0, len(params)
@@ -4649,7 +4682,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
       call_args = call_args + c_args[i]
     end
 
-    let call_expr = "{name}({call_args})"
+    let call_expr = "{c_sym}({call_args})"
 
     if ret_type == "Nil"
       buf_push(b, "    {call_expr};\n")
@@ -4682,7 +4715,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(b, "}")
 
     push(forward_decls, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
-    emit_extern_c_decl(name, params, ret_type)
+    emit_extern_c_decl(c_sym, params, ret_type)
 
     to_string(b)
   end
@@ -4692,6 +4725,13 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
   compile_blocking_extern_fn = fn(node)
     let {name, params, ret_type} = node
+    # The C function it calls: `name` is the Gem binding, which module
+    # loading and builtin shadowing may have renamed (c_name keeps the
+    # declared name, see rename_node in compiler/main.gem).
+    let c_sym = name
+    if node.c_name != nil
+      c_sym = node.c_name
+    end
     let b = buf_new()
 
     # 1. Args struct
@@ -4745,7 +4785,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         w_args = w_args + "a->_p{i}"
       end
     end
-    let w_call = "{name}({w_args})"
+    let w_call = "{c_sym}({w_args})"
 
     if ret_type == "Nil"
       buf_push(b, "    {w_call};\n")
@@ -4775,7 +4815,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
 
     # 4. Gem wrapper function
     buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
-    emit_extern_validation(b, name, params)
+    emit_extern_validation(b, c_sym, params)
 
     # Extract args from GemVal
     for i = 0, len(params)
@@ -4816,7 +4856,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
 
     buf_push(b, "        GemIORequest *_req = gem_io_submit_extern(_blk_{name}_worker, _ba, _blk_{name}_free);\n")
-    buf_push(b, "        if (!_req) gem_error(\"{name}: I/O queue full\");\n")
+    buf_push(b, "        if (!_req) gem_error(\"{c_sym}: I/O queue full\");\n")
     buf_push(b, "        GemProcess *_proc = &gem_proc_table[gem_current_pid];\n")
     buf_push(b, "        _proc->io_request = _req;\n")
     buf_push(b, "        gem_io_pool_yield();\n")
@@ -4869,7 +4909,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
         d_args = d_args + "_p{i}"
       end
     end
-    let d_call = "{name}({d_args})"
+    let d_call = "{c_sym}({d_args})"
 
     if ret_type == "Nil"
       buf_push(b, "    {d_call};\n")
@@ -4904,7 +4944,7 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     buf_push(b, "}")
 
     push(forward_decls, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
-    emit_extern_c_decl(name, params, ret_type)
+    emit_extern_c_decl(c_sym, params, ret_type)
 
     to_string(b)
   end
@@ -5109,8 +5149,10 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     if node.line != nil
       fn_line = node.line
     end
-    if not in_leaf_fn
-      buf_push(b, "    gem_push_frame(\"{escape_c_string(display_name(name))}\", \"{escape_c_string(rel_path(file_of(node)))}\", {fn_line});\n")
+    if in_leaf_fn
+      buf_push(b, leaf_entry_str(frame_name(name), rel_path(file_of(node)), fn_line, body))
+    else
+      buf_push(b, "    gem_push_frame(\"{escape_c_string(frame_name(name))}\", \"{escape_c_string(rel_path(file_of(node)))}\", {fn_line});\n")
     end
 
     if use_tco and tco_rebind
@@ -5302,8 +5344,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
 
     buf_push(fb, emit_param_bindings(node, params, inner_boxed))
-    if not in_leaf_fn
-      buf_push(fb, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(rel_path(file_of(node)))}\", 0);\n")
+    let anon_line = 0
+    if node.line != nil
+      anon_line = node.line
+    end
+    if in_leaf_fn
+      buf_push(fb, leaf_entry_str("anonymous fn", rel_path(file_of(node)), anon_line, body))
+    else
+      buf_push(fb, "    gem_push_frame(\"anonymous fn\", \"{escape_c_string(rel_path(file_of(node)))}\", {anon_line});\n")
     end
     buf_push(fb, emit_fn_body(body))
     buf_push(fb, "}")

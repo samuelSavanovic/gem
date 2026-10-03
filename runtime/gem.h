@@ -148,6 +148,21 @@ typedef struct {
 extern GemFrame *gem_call_stack;
 extern int gem_call_depth;
 
+/* Leaf functions (no calls in the body, see codegen.gem `body_is_leaf`)
+ * push no frame. Instead each one has a static GemLeafSite; on entry it sets
+ * gem_leaf_site to it, updates gem_leaf_line before each statement, and
+ * clears gem_leaf_site on return. A leaf calls nothing, so it is always the
+ * innermost frame: error reports and pcall's `stack` show it on top of
+ * gem_call_stack. Per-process like the frames (the scheduler saves and
+ * restores both on every resume, since a leaf's loop can yield); cleared
+ * when an error unwinds (pcall, process death). */
+typedef struct {
+    const char *name;
+    const char *file;
+} GemLeafSite;
+extern const GemLeafSite *gem_leaf_site;
+extern int gem_leaf_line;
+
 /* ─── Mutual-TCO trampoline TLB ───
  *
  * The codegen-emitted body of an SCC member, when it makes an intra-SCC
@@ -378,7 +393,6 @@ extern int gem_pcall_depth;
 void gem_raise_error(const char *msg);
 void gem_print_stack_trace(void);
 void gem_print_runtime_error(const char *msg);
-const char *gem_user_fn_name(const char *name);
 void gem_print_runtime_error_as(const char *head, const char *msg);
 void gem_report_process_crash(int slot, const char *msg);
 
@@ -686,6 +700,8 @@ typedef struct {
     GemPcallFrame pcall_stack[GEM_MAX_PCALL_DEPTH];
     int pcall_depth;
     int call_depth;               /* saved gem_call_depth at last yield (restored on resume) */
+    const GemLeafSite *leaf_site; /* saved gem_leaf_site / gem_leaf_line at last yield */
+    int leaf_line;
     int64_t gen;                  /* slot generation; advanced when the slot is freed */
     int pending_timers;           /* send_after timers that target this process */
     GemFrame call_stack[GEM_MAX_CALL_DEPTH];  /* this process's frames for stack traces */
@@ -772,6 +788,9 @@ void gem_run_scheduler(void);
  * main process exiting with a reason other than "normal" prints the reason as
  * a runtime error and exits the program with status 1. */
 __attribute__((noreturn)) void gem_exit_self(const char *reason);
+/* Main dies from an exit signal sent by from_pid (a link when `linked`):
+   report it like an uncaught error in main and exit 1. */
+__attribute__((noreturn)) void gem_report_main_killed(int64_t from_pid, const char *reason, int linked);
 void gem_run_main(GemFnPtr fn, void *env);
 
 /* Selective receive: remove a specific node from the mailbox */
@@ -852,6 +871,12 @@ GemIORequest *gem_io_submit(GemIOOp op, const char *path,
 GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args,
                                    void (*free_args)(void *));
 void gem_io_release(GemIORequest *req);
+/* Read the whole file at `path` into a malloc'd, NUL-terminated buffer
+   (*out_len bytes, binary-safe). Regular files are read with one fread sized
+   by fstat; anything else (procfs, pipes, devices) is read until EOF.
+   Returns NULL with a malloc'd message in *err_msg on failure (cannot open,
+   directory, read error). Safe to call from a worker thread. */
+char *gem_read_whole_file(const char *path, size_t *out_len, char **err_msg);
 void gem_io_check_completions(void);
 int gem_io_wake_fd(void);
 
