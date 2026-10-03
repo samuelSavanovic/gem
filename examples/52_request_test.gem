@@ -24,7 +24,7 @@ r.post("/echo", fn(req)
 end)
 
 r.get("/headers", fn(req)
-  http.ok("x-custom=" + to_string(req.headers["X-Custom"]))
+  http.ok("x-custom={req.headers["x-custom"]}")
 end)
 
 r.get("/query", fn(req)
@@ -54,7 +54,7 @@ spawn() do
   let pass = 0
   let fail = 0
 
-  let server_pid = http.start(tr, {port: port})
+  let server = http.start(tr, {port: port})
   sleep(100)
 
   let base = "http://127.0.0.1:" + to_string(port)
@@ -184,7 +184,7 @@ spawn() do
 
   # ─── Summary ───
 
-  kill(server_pid, "shutdown")
+  kill(server.pid, "shutdown")
   print("Results: {pass} passed, {fail} failed")
   if fail > 0
     exit(1)

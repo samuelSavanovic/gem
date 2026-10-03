@@ -94,6 +94,24 @@ string key; a pattern `{1.5: x}` does the same (compiler/parser.gem
 `parse_int_key` handles only ints). It should be a float key or a
 compile error.
 
+### A default parameter in a loaded module can't use the module's `let`s
+
+```gem
+# lib.gem                           # main.gem
+let D = 5                           load "./lib"
+fn f(x = D)                         print(lib.f())
+  x
+end
+export f
+```
+
+fails with ``undeclared identifier `D` `` at `lib.gem:2`; the same code in
+the entry file prints `5`. `rename_node` (compiler/main.gem) prefixes the
+module's top-level names in fn bodies but never walks the param defaults
+(`node.defaults`), so the default still names `D` while the slot is
+`_mod_lib_D`. std/http writes `ok`'s default content type out as a literal
+because of it.
+
 ## Runtime
 
 ### `INT64_MIN / -1` kills the program on x86-64
@@ -186,26 +204,6 @@ runtime/gem_builtins_sqlite.c.
 
 ## Standard library
 
-### `http.serve` returns when the caller gets any message
-
-```gem
-spawn do sleep(100); send(me, {tag: "hello"}) end   # let me = self() before
-http.serve(app, {port: 8080})                       # returns {tag: "hello"}
-```
-
-`serve` monitors the acceptor and then calls `receive()`, which takes
-whatever arrives first. Match `{tag: "DOWN", pid: ^pid}` instead.
-
-### `std/http` hides handler errors and sends empty default bodies
-
-A handler that raises, or returns something other than a response table,
-gets a 500 with an empty body and nothing on stderr. The server's own
-404/500 responses also have empty bodies, although SPEC says the
-defaults are `"Not Found"` and `"Internal Server Error"`: std/http calls
-`not_found(nil)` / `server_error(nil)` with an explicit `nil`, which
-doesn't apply the default. Log the caught error, and call the builders
-with no argument.
-
 ### A `one_for_all` restart hangs on a child that traps exits
 
 ```gem
@@ -250,12 +248,3 @@ fault (exit 139); `pcall` can't catch it. A handle is a raw `sqlite3 *`
 stored as an int: using one after `sqlite_close` is a use-after-free, and
 closing twice returns `nil`. Keep a table of open handles in
 runtime/gem_builtins_sqlite.c and raise on an unknown one.
-
-### `std/http` request headers keep the client's case
-
-`req.headers["content-type"]` is `nil` when the client sent
-`Content-Type`, and the other way round; `Cookie` is looked up in that
-exact case only, so `cookie: a=1` gives empty `req.cookies`. A header
-written without a space after the colon (`Host:x`, valid HTTP) is
-dropped. `parse_headers` in std/http.gem splits on `": "`. Lowercase the
-names, trim optional whitespace, and document the `req.headers` keys.

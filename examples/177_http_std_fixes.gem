@@ -1,0 +1,152 @@
+# std/http: default bodies, handler errors on stderr, lowercased request
+# headers, malformed requests, {pid} from start, serve waiting only for its
+# acceptor, and a full process table answered with 503.
+
+load "std/http"
+load "std/string"
+
+let PORT = 18177
+
+let app = http.router()
+app.get("/boom") do |req|
+  error("kaboom")
+end
+app.get("/nil") do |req|
+  nil
+end
+app.get("/headers") do |req|
+  let names = sort(keys(req.headers), fn(a, b) if a < b then -1 else 1 end end)
+  let parts = []
+  for name in names
+    push(parts, "{name}={req.headers[name]}")
+  end
+  http.ok(string.join(parts, "|"))
+end
+app.get("/cookies") do |req|
+  http.ok("a={req.cookies.a} b={req.cookies.b} c={req.cookies.c}")
+end
+app.post("/echo") do |req|
+  http.ok("got {req.body}")
+end
+app.get("/hello") do |req|
+  http.ok("hello")
+end
+
+# Sends `pieces` (each written separately), reads until the server closes,
+# and returns the status line and the body.
+fn exchange(port, pieces)
+  let fd = tcp_connect("127.0.0.1", port)
+  for piece in pieces
+    tcp_write(fd, piece)
+    sleep(5)
+  end
+  let acc = buf_new()
+  let chunk = tcp_read(fd, 8192, 2000)
+  while chunk != nil and chunk != ""
+    buf_push(acc, chunk)
+    chunk = tcp_read(fd, 8192, 2000)
+  end
+  tcp_close(fd)
+  let raw = to_string(acc)
+  let line_end = string.index_of(raw, "\r\n")
+  let head_end = string.index_of(raw, "\r\n\r\n")
+  if line_end < 0 or head_end < 0
+    return "no response ({len(raw)} bytes)"
+  end
+  "{substr(raw, 0, line_end)} [{substr(raw, head_end + 4, len(raw) - head_end - 4)}]"
+end
+
+fn get(path, extra = "")
+  exchange(PORT, ["GET {path} HTTP/1.1\r\nHost: t\r\n{extra}Connection: close\r\n\r\n"])
+end
+
+fn run_requests()
+  print("-- default bodies")
+  print(get("/missing"))
+  print(get("/boom"))
+  print(get("/nil"))
+
+  print("-- headers")
+  print(get("/headers", "X-Mixed-Case:  padded \t\r\nhOsT2:no-space\r\nX-Dup: 1\r\nx-dup: 2\r\n"))
+  print(get("/cookies", "cookie: a=1;b=2\r\nCOOKIE: c=3\r\n"))
+
+  print("-- malformed")
+  print(get("/echo", "Content-Length: abc\r\n"))
+  print(get("/echo", "Content-Length: -4\r\n"))
+  print(exchange(PORT, ["NONSENSE\r\n\r\n"]))
+  print(exchange(PORT, ["GET /hello HTTP/1.1\r\nX-Big: {string.repeat("a", 65537 - 28)}"]))
+
+  print("-- head split across writes, then a pipelined pair")
+  print(exchange(PORT, ["GET /hello HTTP/1.1\r\nHost: t\r", "\nConnection: close\r", "\n", "\r", "\n"]))
+  let pair = "POST /echo HTTP/1.1\r\nContent-Length: 3\r\n\r\nonePOST /echo HTTP/1.1\r\nContent-Length: 3\r\nConnection: close\r\n\r\ntwo"
+  print(exchange(PORT, [pair]))
+end
+
+# Fills the process table, checks the acceptor answers 503 and keeps going,
+# then frees the slots.
+fn run_table_full()
+  print("-- process table full")
+  let fillers = []
+  let full = false
+  while not full
+    let r = pcall spawn(fn()
+      receive
+      when {tag: "stop"} then nil
+      end
+    end)
+    if r.ok
+      push(fillers, r.value)
+    else
+      full = true
+    end
+  end
+  print(get("/hello"))
+  send(fillers[0], {tag: "stop"})
+  sleep(10)
+  print(get("/hello"))
+  for i = 1, len(fillers)
+    send(fillers[i], {tag: "stop"})
+  end
+  sleep(10)
+end
+
+# Runs http.serve in a process and kills its acceptor with `reason`. The
+# acceptor is the first process serve spawns, so its pid is the probe's + 1.
+# (A killed acceptor leaves its listening socket open, so each run takes a
+# fresh port.)
+fn run_serve(reason, port)
+  let parent = self()
+  let server = spawn do
+    let probe = spawn(fn() nil end)
+    send(parent, {tag: "acceptor", pid: probe + 1})
+    let r = pcall http.serve(app, {port: port, host: "127.0.0.1"})
+    send(parent, {tag: "served", result: r})
+  end
+  let acceptor = nil
+  receive
+  when {tag: "acceptor", pid: pid} then acceptor = pid
+  end
+  sleep(20)
+  send(server, {tag: "unrelated"})
+  sleep(20)
+  print(exchange(port, ["GET /hello HTTP/1.1\r\nConnection: close\r\n\r\n"]))
+  kill(acceptor, reason)
+  receive
+  when {tag: "served", result: r}
+    print("serve after kill {reason}: ok={r.ok} value={r.value} error={r.error}")
+  after 2000
+    print("serve still blocked")
+  end
+end
+
+fn main()
+  let server = http.start(app, {port: PORT, host: "127.0.0.1"})
+  print("start returns pid: {type(server.pid)}")
+  print("escape: {http.html_escape("<a href='x'>&\"</a>")}")
+  run_requests()
+  run_table_full()
+  print("-- serve")
+  run_serve("shutdown", 18178)
+  run_serve("boom", 18179)
+  kill(server.pid, "shutdown")
+end

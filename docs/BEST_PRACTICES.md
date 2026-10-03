@@ -151,6 +151,9 @@ end
   `http.bad_request`, ...). `return` inside a `do` block leaves the block,
   which here is the handler.
 - User input goes through `pcall` and a type check before it is trusted.
+- A handler that raises, or returns something other than a response
+  table, answers 500; std/http prints the error and its stack on stderr.
+  Request header names arrive lowercased: `req.headers["content-type"]`.
 - `task.async` takes a closure; `task.await_all` waits for all of them,
   with a timeout.
 
@@ -878,8 +881,7 @@ Some std APIs don't follow this doc yet. Until they are fixed:
 
 - `gen_server.start`, `supervisor.start` and `dynamic_supervisor.start`
   return `{pid: pid}`, but `gen_server.call` and `gen_server.cast` take a
-  bare pid or a registered name: pass `handle.pid`. `http.start` returns
-  a bare pid.
+  bare pid or a registered name: pass `handle.pid`.
 - A gen_server callback that returns `nil` or a non-table (such as the
   `nil` of a `match` with no `else`) crashes the server. `handle_call`
   returns `{reply: v, state: s}` (or `{noreply: s}`), the others
@@ -890,15 +892,9 @@ Some std APIs don't follow this doc yet. Until they are fixed:
   server is dead.
 - A `one_for_all` supervisor hangs when it restarts a child that traps
   exits **(bug)**: supervise such children `one_for_one`.
-- `std/http` answers a handler error (or a handler that doesn't return a
-  response table) with an empty 500 and logs nothing **(bug)**: catch and
-  log errors in the handler while debugging. Request header names keep
-  the client's case (`req.headers["Content-Type"]` misses
-  `content-type`) **(bug)**. `http.serve` returns early when the calling
-  process receives any message **(bug)**, so call it last, from `main`.
 - `std/request` reads with no timeout **(bug)**.
-- Don't send messages tagged `"call"`, `"cast"`, `"gs_reply"` or
-  `"which_children"` to std processes: std uses those tags internally.
+- Don't send messages tagged `"call"`, `"cast"` or `"gs_reply"` to std
+  processes: std uses those tags internally.
 
 ### Spawning
 

@@ -1160,6 +1160,9 @@ false
 === all sqlite tests passed ===
 
 Results: 56 passed, 0 failed
+http: GET /error: intentional error
+Stack trace:
+  at anonymous fn (examples/51_http_server_test.gem:43)
 Results: 12 passed, 0 failed
 Results: 12 passed, 0 failed
 test1: 2000
@@ -2704,6 +2707,42 @@ dynamic_supervisor.start_child: supervisor exited: boom
 4: still alive, temp pid -1, perm restarted true
 5: 3 of 3 restarted, ids abc
 6: supervisor.start: unknown strategy "rest_for_one"
+start returns pid: int
+escape: &lt;a href=&#x27;x&#x27;&gt;&amp;&quot;&lt;/a&gt;
+-- default bodies
+HTTP/1.1 404 Not Found [Not Found]
+http: GET /boom: kaboom
+Stack trace:
+  at anonymous fn (examples/177_http_std_fixes.gem:12)
+HTTP/1.1 500 Internal Server Error [Internal Server Error]
+http: GET /nil: handler returned nil, not a response table
+HTTP/1.1 500 Internal Server Error [Internal Server Error]
+-- headers
+HTTP/1.1 200 OK [connection=close|host=t|host2=no-space|x-dup=1, 2|x-mixed-case=padded]
+HTTP/1.1 200 OK [a=1 b=2 c=3]
+-- malformed
+HTTP/1.1 400 Bad Request [Bad Request]
+HTTP/1.1 400 Bad Request [Bad Request]
+HTTP/1.1 400 Bad Request [Bad Request]
+HTTP/1.1 431 Request Header Fields Too Large [Request Header Fields Too Large]
+-- head split across writes, then a pipelined pair
+HTTP/1.1 200 OK [hello]
+HTTP/1.1 200 OK [got oneHTTP/1.1 200 OK
+Content-Length: 7
+Connection: close
+Content-Type: text/plain; charset=utf-8
+
+got two]
+-- process table full
+http: spawn: process table full; refusing a connection
+HTTP/1.1 503 Service Unavailable [Service Unavailable]
+HTTP/1.1 200 OK [hello]
+-- serve
+HTTP/1.1 200 OK [hello]
+serve after kill shutdown: ok=true value=nil error=nil
+HTTP/1.1 200 OK [hello]
+serve after kill boom: ok=false value=nil error=http.serve: acceptor died: boom
+gem_diag: spawn_overflow=2 proc_hwm=1024 max_procs=1024
 === keys ===
 {"42":"x"}
 {"0":"z","name":"n"}

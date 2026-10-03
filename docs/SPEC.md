@@ -1492,7 +1492,8 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
   - `router.get(pattern, handler)`, `router.post(...)`, `router.put(...)`, `router.patch(...)`, `router.delete(...)` — register a route. Handler signature: `fn(req) → response table`.
   - `router.static(url_prefix, dir_path)` — serve static files. Uses `std/mime` for content types. Prevents path traversal by normalizing paths and checking that they don't escape `dir_path`.
 - Route patterns: segments starting with `:` are parameters. `/users/:id` matches `/users/123` and sets `req.params.id = "123"`. First registered route wins.
-- Handler receives a request table: `{method, path, params, query, headers, body, cookies}`. `params` are extracted from route pattern, `query` is parsed from query string via `url.parse_query`, `cookies` are parsed from the `Cookie` header.
+- Handler receives a request table: `{method, path, params, query, headers, body, cookies}`. `params` are extracted from route pattern, `query` is parsed from query string via `url.parse_query`, `cookies` are parsed from the `Cookie` header (pairs separated by `;`, names and values trimmed).
+- `req.headers` keys are the header names lowercased (`req.headers["content-type"]`, whatever case the client sent), and values have surrounding whitespace trimmed (`Host:x` and `Host:  x` both give `"x"`). A header sent more than once has its values joined with `", "` (`Cookie` with `"; "`).
 
 ### Cookies
 
@@ -1509,9 +1510,10 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 
 ### Server
 
-- `http.serve(router[, opts])` — starts the HTTP server and blocks the caller. `opts` table: `port` (default 8080), `host` (default `"0.0.0.0"`). Meant to block until the acceptor process dies; currently it also returns when the caller receives any other message (see `docs/KNOWN_BUGS.md`).
-- `http.start(router[, opts])` — starts the HTTP server without blocking. Returns the acceptor pid. Same options as `serve`.
-- Spawns one process per connection. Supports HTTP/1.1 keep-alive with a 30-second idle timeout (via `tcp_read` timeout). Handles `Connection: close`. Errors in handlers are caught by `pcall` and return 500.
+- `http.start(router[, opts])` — starts the HTTP server without blocking and returns `{pid}`, the acceptor process's pid. `opts` table: `port` (default 8080), `host` (default `"0.0.0.0"`, an IP address). Raises if the port can't be bound.
+- `http.serve(router[, opts])` — `start`, then block the caller until the acceptor dies. Other messages sent to the caller stay in its mailbox. Returns `nil` when the acceptor was killed with reason `"normal"` or `"shutdown"`, and raises `http.serve: acceptor died: <reason>` for any other reason.
+- Spawns one process per connection. When the process table is full, that connection gets a `503 Service Unavailable` and is closed, a line goes to stderr, and the acceptor keeps accepting. Supports HTTP/1.1 keep-alive with a 30-second idle timeout (via `tcp_read` timeout). Handles `Connection: close`.
+- A handler that raises, or returns something other than a response table (`status` an int, `body` nil or a string, `headers` nil or a table), gets the default `server_error()` response, and the server prints `http: <METHOD> <path>: <message>` on stderr, followed by the handler's stack trace for an error. An unmatched route gets the default `not_found()` response. A malformed request line or `Content-Length` gets `bad_request()` and the connection is closed; a request head over 64 KB gets `431 Request Header Fields Too Large`.
 
 `std/request` — exports `request` table. HTTP/1.1 client for outbound requests. Depends on `std/string`, TCP builtins.
 
