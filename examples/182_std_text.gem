@@ -1,0 +1,219 @@
+# std/string, std/url, std/mime: edge cases and the C-backed search paths.
+
+load "std/string"
+load "std/url"
+load "std/mime"
+
+fn show(v)
+  if type(v) == "table"
+    let parts = []
+    for k, x in v
+      push(parts, "{k}: {show(x)}")
+    end
+    return "[{string.join(parts, ", ")}]"
+  end
+  if type(v) == "string"
+    return "\"{v}\""
+  end
+  "{v}"
+end
+
+fn err(f)
+  let r = pcall f()
+  if r.ok
+    return "no error"
+  end
+  r.error
+end
+
+# The naive definition index_of must agree with.
+fn naive_index(s, needle, from)
+  let n = len(needle)
+  for i = from, len(s) - n + 1
+    if substr(s, i, n) == needle
+      return i
+    end
+  end
+  -1
+end
+
+fn filler(n)
+  build_string() do |add|
+    for i = 0, n
+      add(chr(97 + i % 3))
+    end
+  end
+end
+
+print("-- string.split")
+print(show(string.split("a,b,c", ",")))
+print(show(string.split("", ",")))
+print(show(string.split("abc", "")))
+print(show(string.split("a,,b,", ",")))
+print(show(string.split(",", ",")))
+print(show(string.split("a::b:::c", "::")))
+print(show(string.split("aaa", "aa")))
+print(show(string.split("é,ü,ñ", ",")))
+print(show(string.split("aébéc", "é")))
+let nul_parts = string.split("a\0b\0", "\0")
+print("{len(nul_parts)} {len(nul_parts[0])} {len(nul_parts[2])}")
+print(show(string.split("no delimiter here", ";")))
+
+print("-- string.index_of / contains")
+print(string.index_of("hello", "l"))
+print(string.index_of("hello", "l", 3))
+print(string.index_of("hello", "l", 4))
+print(string.index_of("hello", "lo", -5))
+print(string.index_of("hello", ""))
+print(string.index_of("hello", "", 5))
+print(string.index_of("hello", "", 6))
+print(string.index_of("", "a"))
+print(string.index_of("ab", "abc"))
+print(string.index_of("aaab", "aab"))
+print(string.index_of("x\0y", "\0y"))
+print(string.index_of("naïve", "ï"))
+let b = buf_new()
+buf_push(b, "key: value")
+print("{string.index_of(b, ": ")} {show(string.split(b, ": "))} {show(string.upper(b))} {show(string.trim(b))}")
+print("{string.contains("hello", "ell")} {string.contains("hello", "z")} {string.contains("", "")}")
+
+print("-- long strings take the chunked path")
+let ok = true
+for pos in [0, 31, 32, 33, 63, 64, 95, 96, 97, 200, 1000, 4095, 4096, 70000, 199990]
+  let s = filler(pos) + "XYZ" + filler(200000 - pos)
+  if string.index_of(s, "XYZ") != pos or naive_index(s, "XYZ", 0) != pos
+    ok = false
+    print("mismatch at {pos}")
+  end
+  if string.index_of(s, "XYZ", pos + 1) != -1
+    ok = false
+    print("found past {pos}")
+  end
+end
+let rep = filler(5000)
+for needle in ["abc", "cab", "bca", "ca", "c", "abca", "cc"]
+  for from in [0, 1, 40, 4000]
+    if string.index_of(rep, needle, from) != naive_index(rep, needle, from)
+      ok = false
+      print("mismatch {needle} from {from}")
+    end
+  end
+end
+print("index_of agrees with the naive scan: {ok}")
+let big = build_string() do |add|
+  for i = 0, 2000
+    add("field{i}")
+    add(string.repeat(";", i % 3))
+    add(string.repeat("x", (i * 37) % 150))
+    add("|")
+  end
+end
+let fields = string.split(big, "|")
+let rebuilt = string.join(fields, "|")
+print("split of {len(big)} bytes: {len(fields)} pieces, join gives it back: {rebuilt == big}")
+print(len(string.split(big, ";;")))
+
+print("-- string.join / trim / affixes / case / repeat")
+print(show(string.join([], ",")))
+print(show(string.join(["only"], ",")))
+print(show(string.join([1, 2.5, nil, true], "-")))
+print(show(string.join(["a", "b"], "")))
+print(show(string.trim("  \t hi there \r\n")))
+print(show(string.trim(" \t\n\r ")))
+let vf = "{chr(11)}{chr(12)}"
+print(show(string.trim("{vf}x{vf}")))
+print(show(string.trim("")))
+print(show(string.trim("é ")))
+print("{string.starts_with("abc", "")} {string.starts_with("abc", "ab")} {string.starts_with("ab", "abc")} {string.starts_with("", "")}")
+print("{string.ends_with("abc", "")} {string.ends_with("abc", "bc")} {string.ends_with("bc", "abc")} {string.ends_with("a\0b", "\0b")}")
+print(show(string.upper("Hello, wörld 42!")))
+print(show(string.lower("Content-TYPE ÉÀ")))
+print(show(string.upper("")))
+print(show(string.lower("already lower")))
+print(show(string.repeat("ab", 3)))
+print(show(string.repeat("ab", 0)))
+print(show(string.repeat("ab", -1)))
+print(show(string.repeat("", 5)))
+
+print("-- string errors")
+print(err(fn() string.split(nil, ",") end))
+print(err(fn() string.split("a", nil) end))
+print(err(fn() string.index_of("a", 1) end))
+print(err(fn() string.index_of("a", "a", "0") end))
+print(err(fn() string.contains(nil, "a") end))
+print(err(fn() string.join(nil, ",") end))
+print(err(fn() string.join([], nil) end))
+print(err(fn() string.trim(42) end))
+print(err(fn() string.starts_with("a", nil) end))
+print(err(fn() string.ends_with(nil, "a") end))
+print(err(fn() string.upper(nil) end))
+print(err(fn() string.lower({}) end))
+print(err(fn() string.repeat("a", 1.5) end))
+
+print("-- url.encode / decode")
+print(url.encode("a b/é~-_.*"))
+print(show(url.encode("")))
+print(url.encode("unreserved-only_1.2~"))
+print(url.encode("\0\n%+&="))
+print(url.decode("a%20b+c%2B"))
+print(url.decode("%e2%82%AC"))
+print(url.decode("100%"))
+print(url.decode("100%4"))
+print(url.decode("%41"))
+print(url.decode("%zz%4g%%41"))
+print(len(url.decode("%00x")))
+print(show(url.decode("")))
+print(url.decode(url.encode("round trip: é & ü = ?")))
+
+print("-- url.parse_query / build_query / parse")
+print(show(url.parse_query("a=1&b=hello+world&c=%2F")))
+print(show(url.parse_query("")))
+print(show(url.parse_query("a=1&a=2")))
+print(show(url.parse_query("flag&b=2")))
+print(show(url.parse_query("a=&b")))
+print(show(url.parse_query("a=b=c")))
+print(show(url.parse_query("&&a=1&")))
+print(show(url.parse_query("=v&%3D=eq&a%20b=c+d")))
+print(show(url.build_query({q: "a b", page: 2, "a&b": "x=y"})))
+print(show(url.build_query({})))
+let with_nil = {a: 1, b: nil, c: 3}
+print(show(url.build_query(with_nil)))
+print(show(url.parse_query(url.build_query({k: "ü & é", e: ""}))))
+print(show(url.parse("/users/42")))
+print(show(url.parse("/search?q=gem&page=2")))
+print(show(url.parse("/p?")))
+print(show(url.parse("/p?q=1?x")))
+print(show(url.parse("/p?q=1#frag?x")))
+print(show(url.parse("/p#top")))
+print(show(url.parse("")))
+
+print("-- url errors")
+print(err(fn() url.encode(nil) end))
+print(err(fn() url.decode(5) end))
+print(err(fn() url.parse_query(nil) end))
+print(err(fn() url.build_query("a=1") end))
+print(err(fn() url.parse(nil) end))
+
+print("-- mime")
+print(mime.lookup("index.html"))
+print(mime.lookup(".css"))
+print(mime.lookup("png"))
+print(mime.lookup("PHOTO.JPG"))
+print(mime.lookup("site/App.Js"))
+print(mime.lookup("archive.tar.gz"))
+print(mime.lookup("README"))
+print(mime.lookup(".gitignore"))
+print(mime.lookup("file."))
+print(mime.lookup(""))
+print(mime.lookup("static/html"))
+print(mime.lookup("v1.2/notes"))
+print(mime.lookup("café.svg"))
+print(show(mime.ext("text/html")))
+print(show(mime.ext("text/html; charset=utf-8")))
+print(show(mime.ext("Image/PNG")))
+print(show(mime.ext(" application/json ;q=1")))
+print(show(mime.ext("image/jpeg")))
+print(show(mime.ext("application/x-unknown")))
+print(show(mime.ext("")))
+print(err(fn() mime.lookup(nil) end))
+print(err(fn() mime.ext(42) end))

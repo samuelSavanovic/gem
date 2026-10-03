@@ -329,9 +329,11 @@ doesn't allocate.
 Before writing a byte loop, check whether a builtin does the job:
 `str_replace` and `substr` run in C. HTML-escaping 800 KB took about 150 ms
 with a per-byte loop and 25 to 60 ms with five chained `str_replace` calls.
-`string.split` and `string.index_of` are Gem byte loops themselves and are
-not fast: `string.split` on 800 KB took about 200 ms, against 70 ms for a
-hand-written `ord`/`substr` loop.
+For searching, call `string.index_of(s, needle, start)` (or `split`,
+`contains`) rather than an `ord` loop: they search long stretches in C, so
+finding a needle 1 MB in takes about 4 ms, against about 50 ms for the
+simplest `ord` loop. A `split` with pieces only a few bytes long is still
+Gem-speed: 100,000 ten-byte fields in 1 MB took about 140 ms.
 
 ### Use `for`, not `table.each`, when you need `return` or `break`
 

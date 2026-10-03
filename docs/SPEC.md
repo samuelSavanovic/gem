@@ -1381,16 +1381,16 @@ let trimmed = string.trim("  hello  ")
 table.each(parts) { |item| print(item) }
 ```
 
-`std/string` — exports `string` table:
+`std/string` — exports `string` table. Strings are bytes: positions are byte offsets. Every argument documented as a string may also be a buffer (read as its contents; results are strings); any other type raises `string.<fn>: <arg> must be a string, got <type>`.
 
-- `string.split(s, delim)` — split string by delimiter, return array
-- `string.index_of(s, needle)` — find first occurrence, return index or -1
-- `string.join(arr, delim)` — join array elements with delimiter
-- `string.trim(s)` — strip leading/trailing ASCII whitespace
-- `string.starts_with(s, prefix)` / `string.ends_with(s, suffix)` — boolean prefix/suffix check
-- `string.upper(s)` / `string.lower(s)` — ASCII case conversion
-- `string.contains(s, needle)` — return true if needle is found in s
-- `string.repeat(s, n)` — repeat string n times
+- `string.split(s, delim)` — split `s` at each occurrence of `delim`, scanning left to right, and return the array of pieces. Empty pieces are kept (`split("a,,b,", ",")` is `["a", "", "b", ""]`), `split("", ",")` is `[""]`, and an empty `delim` returns `[s]`.
+- `string.index_of(s, needle, start = 0)` — byte offset of the first occurrence of `needle` at or after `start`, or -1. A negative `start` counts as 0; a non-int raises. An empty `needle` is found at `start` (or -1 when `start > len(s)`).
+- `string.contains(s, needle)` — true if `needle` occurs in `s` (always true for `""`).
+- `string.join(arr, delim)` — join the array's elements with `delim`, converting each as interpolation does (`join([1, nil], "-")` is `"1-nil"`). `arr` must be a table.
+- `string.trim(s)` — strip leading and trailing ASCII whitespace (space, `\t`, `\n`, `\v`, `\f`, `\r`).
+- `string.starts_with(s, prefix)` / `string.ends_with(s, suffix)` — boolean prefix/suffix check; the empty string is a prefix and suffix of everything.
+- `string.upper(s)` / `string.lower(s)` — ASCII case conversion; other bytes (UTF-8 included) are unchanged.
+- `string.repeat(s, n)` — `s` repeated `n` times (`""` for `n <= 0`). `n` must be an int.
 
 `std/table` — exports `table` table:
 
@@ -1431,27 +1431,27 @@ table.each(parts) { |item| print(item) }
 - `test.assert_throws(fn)` — assert that calling `fn()` raises an error, and return the error message; raises `test.assert_throws: expected an error, but the call returned normally` otherwise.
 - `test.run()` — run every registered case under `pcall`, print one-line `PASS <name>` or `FAIL <name>: <reason>` per case, then a `<n> passed / <m> failed` summary, and `exit(1)` if any failed (ending the whole program with status 1, from any process); otherwise it returns `nil`.
 
-The std versions are implemented in pure Gem using `ord()`, `chr()`, `buf_new()`/`buf_push()`/`to_string()`, and `substr()`. `split` and `index_of` are only available through `std/string` (not as bare builtins).
+The std modules are written in Gem on top of the builtins (`ord`, `chr`, `substr`, `str_replace`, `build_string`, ...). `split` and `index_of` are only available through `std/string` (not as bare builtins).
 
 `std/json` — exports `json` table:
 
 - `json.parse(s)` — parse a JSON string into Gem values. Objects become string-keyed tables, arrays become integer-keyed tables, strings/numbers/booleans map to native types, `null` maps to `nil`. Supports the full JSON spec: nested structures, all string escape sequences (`\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, `\uXXXX`, surrogate pairs decoded to UTF-8), negative numbers, floats with decimal points and/or exponents (`1.5e-3`). A number with a decimal point or an exponent is a float; an integer is an int, or a float when it doesn't fit in 64 bits (`12345678901234567890` → `1.2345678901234567e+19`, negative ones too). Raises an error starting with `json.parse: ` and ending with the byte offset (`json.parse: unexpected character ']' at byte 6`) on malformed input or a non-string argument — wrap with `pcall` for recovery. Nesting deeper than 1,000 arrays/objects raises `json.parse: nesting deeper than 1000 levels at byte N`; the limit keeps a hostile input well inside the 8 MB process stack (the parser itself overflows past about 3,000 levels), in `main` and in spawned processes alike.
 - `json.encode(val)` — serialize a Gem value to a compact JSON string (no extra whitespace). A table whose keys are exactly `0 .. n-1` (in any order) encodes as a JSON array, in index order; every other table encodes as a JSON object in key order (`keys`), with string keys as they are and int keys written as decimal strings (`t[42] = "x"` → `{"42":"x"}`; an array with a string key added → `{"0":"z","name":"n"}`). A table with a key of any other type (float, bool, ...) raises `json.encode: cannot encode a float table key (only string and int keys)`. Strings are escaped (`\"`, `\\`, `\n`, `\r`, `\t`, `\b`, `\f`, other control bytes as `\u00XX`; other bytes are copied as they are), numbers/booleans/nil map to their JSON equivalents (non-finite floats are written as `inf`/`nan`, which is not valid JSON). Raises `json.encode: cannot encode a <type>` for functions, buffers and refs, and `json.encode: nesting deeper than 1000 levels (or a cyclic table)` for tables nested deeper than 1,000 levels, which is also how a cyclic table fails. Note: empty tables (`{}` / `[]`) are indistinguishable in Gem and always encode as `[]`.
 
-`std/mime` — exports `mime` table:
+`std/mime` — exports `mime` table. Both functions take a string (or a buffer) and raise `mime.<fn>: ...` on anything else.
 
-- `mime.lookup(path_or_ext)` — returns the MIME type for a file path or extension. Accepts `"index.html"`, `".html"`, or `"html"`. Returns `"application/octet-stream"` for unknown extensions. Text types (`text/*`, `application/json`, `application/javascript`, `application/xml`) automatically include `; charset=utf-8`. Case-insensitive.
-- `mime.ext(content_type)` — reverse lookup: `"text/html"` → `".html"`. Strips `; charset=...` before matching. Returns `nil` for unknown types.
+- `mime.lookup(path_or_ext)` — returns the MIME type for a file path or extension. Accepts `"index.html"`, `".html"`, or `"html"`; only the last path segment counts, so `"static/html"` and `"v1.2/notes"` have no extension. Returns `"application/octet-stream"` for an unknown or missing extension. Text types (`text/*`, `application/json`, `application/javascript`, `application/xml`) automatically include `; charset=utf-8`. Case-insensitive.
+- `mime.ext(content_type)` — reverse lookup: `"text/html"` → `".html"`. Ignores case, surrounding spaces and parameters (`; charset=...`). Returns `nil` for unknown types.
 
 Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg, ico, webp, avif, woff, woff2, ttf, otf, pdf, zip, gz, mp3, mp4, webm, wasm.
 
-`std/url` — exports `url` table:
+`std/url` — exports `url` table. Every string argument may also be a buffer; any other type raises `url.<fn>: ...`.
 
-- `url.encode(str)` — percent-encode per RFC 3986. Unreserved chars (`A-Za-z0-9-_.~`) pass through, everything else becomes `%XX` (uppercase hex).
-- `url.decode(str)` — percent-decode `%XX` sequences. `+` is decoded as space.
-- `url.parse_query(str)` — parse a query string like `"a=1&b=hello+world&c=%2F"` into a table `{a: "1", b: "hello world", c: "/"}`. Decodes both keys and values. Duplicate keys: last value wins.
-- `url.build_query(table)` — build a query string from a table. Encodes both keys and values.
-- `url.parse(path_with_query)` — split a path on the first `?`. Returns `{path: "/users/123", query_string: "q=foo&page=2", query: {q: "foo", page: "2"}}`. If no `?`, `query_string` is `""` and `query` is `{}`.
+- `url.encode(str)` — percent-encode per RFC 3986. Unreserved bytes (`A-Za-z0-9-_.~`) pass through, every other byte becomes `%XX` (uppercase hex), so UTF-8 text is encoded byte by byte.
+- `url.decode(str)` — percent-decode `%XX` sequences (either hex case); `+` is decoded as space. A `%` not followed by two hex digits is kept as written (`"100%"` stays `"100%"`).
+- `url.parse_query(str)` — parse a query string like `"a=1&b=hello+world&c=%2F"` into a table `{a: "1", b: "hello world", c: "/"}`. Decodes both keys and values, splitting each pair at its first `=`. A key without `=` gets `""`, pairs with an empty key are dropped, and for duplicate keys the last value wins.
+- `url.build_query(table)` — build a query string from a table, in key order. Keys and values are converted with `to_string` and encoded; keys whose value is `nil` are left out.
+- `url.parse(target)` — split a request target on the first `?`. Returns `{path: "/users/123", query_string: "q=foo&page=2", query: {q: "foo", page: "2"}}`. If no `?`, `query_string` is `""` and `query` is `{}`. A `#fragment` is dropped from the end first. The path is returned as written (not decoded).
 
 `std/time` — exports `time` table:
 

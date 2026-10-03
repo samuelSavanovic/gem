@@ -154,7 +154,8 @@ let s = build_string do |add|
 end
 
 # Std library modules
-# std/string     split, join, trim, upper, lower, repeat, index_of, contains, starts_with, ends_with
+# std/string     split, join, trim, upper, lower, repeat, index_of(s, x, start = 0), contains,
+#                starts_with, ends_with
 # std/table      each, map, filter, reduce, find, any, all, count, reverse, unique, contains, index_of,
 #                slice, concat, copy, flatten, flat_map, zip, group_by
 # std/math       min, max, clamp, assert

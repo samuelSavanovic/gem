@@ -1,149 +1,257 @@
-# std/string — string utilities for Gem
+# string — byte-string utilities: split, join, search, trim, ASCII case.
+#
+#   load "std/string"
+#   let parts = string.split("a,b,c", ",")      # ["a", "b", "c"]
+#   string.join(parts, "-")                     # "a-b-c"
+#   string.index_of("hello", "l")               # 2
+#   string.index_of("hello", "l", 3)            # 3 (search from byte 3)
+#
+# Strings are bytes: positions are byte offsets, `upper`/`lower` change
+# ASCII letters only, `trim` strips ASCII whitespace. A buffer works
+# wherever a string does (read as its contents; results are strings);
+# anything else raises `string.<fn>: ...`.
 
-fn str_eq_at(s, pos, needle)
-  let nlen = len(needle)
-  if pos + nlen > len(s)
-    return false
+# The string to work on: a string, or a buffer's contents.
+fn text(fname, what, v)
+  let t = type(v)
+  if t == "string"
+    return v
   end
-  let i = 0
-  while i < nlen
-    if ord(s, pos + i) != ord(needle, i)
+  if t == "buffer"
+    return to_string(v)
+  end
+  error("string.{fname}: {what} must be a string, got {t}")
+end
+
+fn is_space(c)
+  c == 32 or (c >= 9 and c <= 13)
+end
+
+# True when needle (nlen bytes, nlen >= 1) occurs at pos; the first byte is
+# already known to match.
+fn rest_eq_at(s, pos, needle, nlen)
+  for k = 1, nlen
+    if ord(s, pos + k) != ord(needle, k)
       return false
     end
-    i += 1
   end
   true
 end
 
-fn split(s, delim)
-  let result = []
-  let slen = len(s)
-  let dlen = len(delim)
-  if dlen == 0
-    push(result, s)
-    return result
-  end
-  let buf = buf_new()
-  let i = 0
-  while i < slen
-    if str_eq_at(s, i, delim)
-      push(result, to_string(buf))
-      buf = buf_new()
-      i += dlen
-    else
-      buf_push(buf, chr(ord(s, i)))
-      i += 1
-    end
-  end
-  push(result, to_string(buf))
-  result
+# Does needle start at any of the n positions i .. i+n-1? Runs in C:
+# str_replace returns its input unchanged when nothing matches.
+fn chunk_has(s, i, n, needle, nlen)
+  let chunk = substr(s, i, n + nlen - 1)
+  len(str_replace(chunk, needle, "")) != len(chunk)
 end
 
-fn index_of(s, needle)
-  let slen = len(s)
-  let nlen = len(needle)
-  if nlen == 0
-    return 0
-  end
-  if nlen > slen
-    return -1
-  end
-  let i = 0
-  let limit = slen - nlen
-  while i <= limit
-    if str_eq_at(s, i, needle)
-      return i
+# Gem byte scan of the n start positions from i, for the first match.
+fn scan(s, i, n, needle, nlen)
+  let first = ord(needle, 0)
+  for p = i, i + n
+    if ord(s, p) == first and (nlen == 1 or rest_eq_at(s, p, needle, nlen))
+      return p
     end
-    i += 1
   end
   -1
 end
 
+# First position >= from where needle (nlen >= 1) starts, or -1. A byte
+# loop costs about 50 ns a byte, so after a short Gem scan (cheap for
+# matches close by) find tests growing chunks in C, then bisects the
+# chunk that matched down to a short scan.
+fn find(s, needle, from)
+  let nlen = len(needle)
+  let npos = len(s) - nlen + 1 - from      # start positions left
+  if npos <= 0
+    return -1
+  end
+  let n = npos
+  if n > 32
+    n = 32
+  end
+  let hit = scan(s, from, n, needle, nlen)
+  if hit >= 0
+    return hit
+  end
+  let i = from + n
+  let size = 64
+  while i < from + npos
+    n = size
+    if n > from + npos - i
+      n = from + npos - i
+    end
+    if chunk_has(s, i, n, needle, nlen)
+      while n > 32
+        let half = n / 2
+        if chunk_has(s, i, half, needle, nlen)
+          n = half
+        else
+          i += half
+          n -= half
+        end
+      end
+      return scan(s, i, n, needle, nlen)
+    end
+    i += n
+    if size < 65536
+      size *= 2
+    end
+  end
+  -1
+end
+
+# split(s, delim): the pieces of s between occurrences of delim, scanning
+# left to right. `split("", ",")` is `[""]`; an empty delim gives `[s]`.
+fn split(s, delim)
+  s = text("split", "s", s)
+  delim = text("split", "delim", delim)
+  let dlen = len(delim)
+  if dlen == 0
+    return [s]
+  end
+  let parts = []
+  let first = ord(delim, 0)
+  let last = len(s) - dlen         # last position delim can start at
+  let start = 0                    # start of the current piece
+  let i = 0
+  # Scan in Gem while delimiters are close together (no call per byte);
+  # hand a long gap to find, which searches it in C.
+  while i <= last
+    if ord(s, i) == first and (dlen == 1 or rest_eq_at(s, i, delim, dlen))
+      push(parts, substr(s, start, i - start))
+      i += dlen
+      start = i
+    elif i - start >= 32
+      let at = find(s, delim, i)
+      if at < 0
+        break
+      end
+      push(parts, substr(s, start, at - start))
+      i = at + dlen
+      start = i
+    else
+      i += 1
+    end
+  end
+  push(parts, substr(s, start, len(s) - start))
+  parts
+end
+
+# index_of(s, needle, start): byte offset of the first occurrence at or
+# after start (a negative start counts as 0), or -1. An empty needle is
+# found at start.
+fn index_of(s, needle, start = 0)
+  s = text("index_of", "s", s)
+  needle = text("index_of", "needle", needle)
+  if type(start) != "int"
+    error("string.index_of: start must be an int, got {type(start)}")
+  end
+  if start < 0
+    start = 0
+  end
+  if len(needle) == 0
+    if start > len(s)
+      return -1
+    end
+    return start
+  end
+  find(s, needle, start)
+end
+
+fn contains(s, needle)
+  s = text("contains", "s", s)
+  needle = text("contains", "needle", needle)
+  len(needle) == 0 or find(s, needle, 0) >= 0
+end
+
+# join(arr, delim): elements are converted as interpolation does.
 fn join(arr, delim)
+  if type(arr) != "table"
+    error("string.join: arr must be an array, got {type(arr)}")
+  end
+  delim = text("join", "delim", delim)
   build_string() do |add|
-    let i = 0
-    let n = len(arr)
-    while i < n
+    for i, x in arr
       if i > 0
         add(delim)
       end
-      add(arr[i])
-      i += 1
+      add(x)
     end
   end
 end
 
 fn trim(s)
+  s = text("trim", "s", s)
   let slen = len(s)
-  if slen == 0
-    return s
-  end
   let start = 0
-  while start < slen
-    let c = ord(s, start)
-    if c != 32 and c != 9 and c != 10 and c != 13
-      break
-    end
+  while start < slen and is_space(ord(s, start))
     start += 1
   end
-  if start == slen
-    return ""
-  end
-  let stop = slen - 1
-  while stop >= start
-    let c = ord(s, stop)
-    if c != 32 and c != 9 and c != 10 and c != 13
-      break
-    end
+  let stop = slen
+  while stop > start and is_space(ord(s, stop - 1))
     stop -= 1
   end
-  substr(s, start, stop - start + 1)
+  if start == 0 and stop == slen
+    return s
+  end
+  substr(s, start, stop - start)
 end
 
 fn starts_with(s, prefix)
-  str_eq_at(s, 0, prefix)
+  s = text("starts_with", "s", s)
+  prefix = text("starts_with", "prefix", prefix)
+  let plen = len(prefix)
+  plen <= len(s) and substr(s, 0, plen) == prefix
 end
 
 fn ends_with(s, suffix)
-  let slen = len(s)
+  s = text("ends_with", "s", s)
+  suffix = text("ends_with", "suffix", suffix)
   let plen = len(suffix)
-  if plen > slen
-    return false
+  plen <= len(s) and substr(s, len(s) - plen, plen) == suffix
+end
+
+# Shift the bytes in lo .. hi by delta, copying unchanged runs whole.
+fn shift_range(s, lo, hi, delta)
+  let slen = len(s)
+  let run = 0
+  let out = build_string() do |add|
+    for i = 0, slen
+      let c = ord(s, i)
+      if c >= lo and c <= hi
+        if i > run
+          add(substr(s, run, i - run))
+        end
+        add(chr(c + delta))
+        run = i + 1
+      end
+    end
+    if run > 0 and run < slen
+      add(substr(s, run, slen - run))
+    end
   end
-  str_eq_at(s, slen - plen, suffix)
+  if run == 0
+    return s
+  end
+  out
 end
 
 fn upper(s)
-  build_string() do |add|
-    for i = 0, len(s)
-      let c = ord(s, i)
-      if c >= 97 and c <= 122
-        add(chr(c - 32))
-      else
-        add(chr(c))
-      end
-    end
-  end
+  s = text("upper", "s", s)
+  shift_range(s, 97, 122, -32)
 end
 
 fn lower(s)
-  build_string() do |add|
-    for i = 0, len(s)
-      let c = ord(s, i)
-      if c >= 65 and c <= 90
-        add(chr(c + 32))
-      else
-        add(chr(c))
-      end
-    end
-  end
-end
-
-fn contains(s, needle)
-  index_of(s, needle) >= 0
+  s = text("lower", "s", s)
+  shift_range(s, 65, 90, 32)
 end
 
 fn repeat(s, n)
+  s = text("repeat", "s", s)
+  if type(n) != "int"
+    error("string.repeat: n must be an int, got {type(n)}")
+  end
   build_string() do |add|
     for i = 0, n
       add(s)
