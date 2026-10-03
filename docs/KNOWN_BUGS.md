@@ -8,27 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### A module file name that isn't a C identifier reaches the C compiler
-
-`load "./mods/my-utils"` fails in cc (`gem_fn__mod_my-utils_f`). Either
-mangle the name or report a Gem error at the `load`.
-
-### Two loaded modules with the same base name replace each other
-
-```gem
-load "std/string"
-load "./mods/string"           # exports only `upper2`
-string.upper("a")              # module `string` has no export `upper`
-```
-
-The namespace is named after the file's base name, and the later `load`
-silently wins (if both modules export the same name, cc fails with
-`redefinition of 'gem_fn__mod_string_upper'` instead). A module loaded indirectly counts too: with a user
-`./json.gem` exporting `parse`, `load "std/http"` (which loads std/json)
-plus `load "./json"` fails in the C compiler (`redefinition of
-'gem_fn__mod_json_parse'`). It should be a compile error at the second
-`load`, or modules should be named by path.
-
 ### The project root is not found when the entry path has no directory
 
 With `p/gem.toml`, `p/lib/util.gem` and `p/app/main.gem` containing

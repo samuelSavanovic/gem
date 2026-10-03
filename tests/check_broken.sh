@@ -45,6 +45,8 @@ expected=(
   "load_missing_nested:1:1"
   "load_self:1:1"
   "load_name_clash:1:1"
+  "module_name_clash:1:1"
+  "module_name_not_ident:1:1"
   "double_typo:2:4"
   "missing_end:2:8"
   "missing_then_branches:1:4"

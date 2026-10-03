@@ -71,7 +71,7 @@ else
 end
 
 # Modules — load (NOT import), export at end of file
-load "std/string"                    # => string.split(...)
+load "std/string"                    # => string.split(...)  (namespace = file base name)
 load "std/string" as str             # => str.split(...)
 load "std/string" (split, trim)      # => split(...) directly
 

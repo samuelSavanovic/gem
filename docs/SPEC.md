@@ -1310,7 +1310,9 @@ export split, join, trim, index_of, starts_with, ends_with, upper, lower, contai
 When a file has an `export` statement, `load` treats it as a module:
 
 - The file's code is scoped — non-exported names are private and not accessible from outside.
-- The exported names are collected into a table named after the file's basename.
+- The exported names are collected into a table named after the file's basename (`load "std/string"` binds `string`), so that name must be an identifier and not a keyword: `load "./my-utils"` is a compile error at the `load` (rename the file to `my_utils.gem`, or use `as` or a selective import, which don't bind the basename).
+- Two different files loaded by one file can't bind the same namespace name: `load "std/string"` then `load "./lib/string"` is a compile error at the second `load`; load one of them with `as`. Loading the same file again (under any path that resolves to it) is fine.
+- Modules are distinct by file, not by name: a module and one with the same basename loaded elsewhere in the program (a user `json.gem` while `std/http` loads `std/json`) are separate modules with separate state, and each file sees the one it loaded. Stack traces and messages name a module's bindings `<basename>.<name>`.
 
 ```
 load "std/string"

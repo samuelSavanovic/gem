@@ -1,0 +1,26 @@
+# Modules are named by path internally: two different files never share
+# C symbols, whatever their base names.
+
+# std/log loads std/time; this file's own `time` is a different module.
+load "std/log"
+load "./modules/time"
+print(time.now())
+
+# A stack frame shows the module's base name.
+let r = pcall(time.boom)
+print(r.error, r.stack[0].name)
+
+# A file name that isn't an identifier, loaded with `as` or selectively.
+load "./modules/my-mod" as my_mod
+load "./modules/my-mod" (hello)
+print(my_mod.hello(), hello())
+
+# `mn` + `pre_f` vs `mn_pre` + `f`.
+load "./modules/mn"
+load "./modules/mn_pre"
+print(mn.pre_f(), mn_pre.f())
+
+# The same file by another path is the same module, with the same state.
+load "./modules/../modules/mn" as mn_again
+mn_again.pre_f()
+print(mn.count(), mn_again.count())

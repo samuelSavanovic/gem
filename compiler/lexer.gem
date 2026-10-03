@@ -862,4 +862,4 @@ fn tokenize(source, file, sink)
   tokens
 end
 
-export tokenize
+export tokenize, build_keyword_set

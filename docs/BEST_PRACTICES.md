@@ -1146,13 +1146,13 @@ export make, use
   noise.
 - The `export` list decides what is public. Private functions don't need a
   `_` prefix.
-- Name module files in `snake_case`: a file name that isn't a C
-  identifier (`my-utils.gem`) fails in the C compiler **(bug)**. Don't name
-  a module like any std module (`log.gem`, `json.gem`): the namespace is
-  the file's base name, and a module of the same name loaded anywhere in
-  the program, by you or by std (`std/http` loads `string`, `url`,
-  `mime`, `json` and `time`), replaces it or breaks the C compile
-  **(bug)**.
+- Name module files in `snake_case`: the namespace is the file's base
+  name, so `load "./my-utils"` is a compile error (``module file name
+  `my-utils` is not an identifier``); `load "./my-utils" as my_utils`
+  works. A module named like a std module (`json.gem`) is fine, even when
+  std loads its own (`std/http` loads `std/json`): they are different
+  modules. Only one file loading both is an error (``module name `json`
+  is already used by ...``); load one of them with `as`.
 - Modules can't load each other in a cycle: the compiler reports
   `load cycle: a.gem → b.gem → a.gem`. Move shared code into a third
   module.

@@ -12,12 +12,15 @@ load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
 load "./loader" (resolve_load_path, load_target_problem, find_project_root, compute_stdlib_root, make_show_path)
 load "./builtins" (BUILTIN_FNS)
+load "./lexer" (build_keyword_set)
 load "../lsp/main" (run_lsp)
 
 # ─── Install root (for runtime/, build/libgem_runtime.a) ──────
 # argv()[0] is typically <root>/build/gem, so install_root is <root>.
 
 let install_root = dirname(dirname(argv()[0]))
+
+let KEYWORDS = build_keyword_set()
 
 # ─── AST helpers (defined locally to avoid shared module deps) ──
 
@@ -69,6 +72,77 @@ fn module_name_from_path(path)
     end
   end
   name
+end
+
+# A module's namespace binding is its file's base name, so that name must
+# lex as an identifier (`my-utils` doesn't) and not be a keyword.
+fn is_identifier_name(name)
+  if name == "" or KEYWORDS[name] == true
+    return false
+  end
+  let i = 0
+  while i < len(name)
+    let c = ord(name, i)
+    let alpha = (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or c == 95
+    if not alpha and (i == 0 or c < 48 or c > 57)
+      return false
+    end
+    i += 1
+  end
+  true
+end
+
+# `name` with every byte outside [A-Za-z0-9_] replaced by `_`.
+fn c_safe_name(name)
+  let parts = []
+  for i = 0, len(name)
+    let c = ord(name, i)
+    if (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or (c >= 48 and c <= 57) or c == 95
+      push(parts, chr(c))
+    else
+      push(parts, "_")
+    end
+  end
+  string.join(parts, "")
+end
+
+# The internal name of the module in `full_path`, used in its C symbols
+# (`_mod_<mangle>_<name>`): its base name through c_safe_name, plus `_2`,
+# `_3`, ... when another file already uses that name or one of the
+# module's symbols would equal another module's (`a` + `b_c` vs `a_b` + `c`). A std module loaded before any
+# clash keeps `_mod_<base>_`. Users never see the mangle: messages and
+# stack traces show `<base>.<name>` (build_global_display).
+# `registry`: {prefixes: mangle -> path, symbols: symbol -> path}, shared
+# by every load of the program.
+fn module_mangle(full_path, mod_name, top_names, registry)
+  let base = c_safe_name(mod_name)
+  if base == ""
+    base = "m"
+  end
+  let cand = base
+  let n = 1
+  while true
+    let ok = registry.prefixes[cand] == nil
+    if ok
+      for name, _ in top_names
+        let owner = registry.symbols["_mod_" + cand + "_" + name]
+        if owner != nil and owner != full_path
+          ok = false
+          break
+        end
+      end
+    end
+    if ok
+      break
+    end
+    n += 1
+    cand = base + "_" + to_string(n)
+  end
+  registry.prefixes[cand] = full_path
+  for name, _ in top_names
+    registry.symbols["_mod_" + cand + "_" + name] = full_path
+  end
+  cand
 end
 
 fn find_export_node(stmts)
@@ -377,9 +451,8 @@ fn shadow_entry_builtins(stmts, module_bindings)
   end
 end
 
-fn transform_module(stmts, mod_name)
-  let prefix = "_mod_" + mod_name + "_"
-  let top_names = collect_module_top_names(stmts)
+fn transform_module(stmts, mangle, top_names)
+  let prefix = "_mod_" + mangle + "_"
   let rmap = build_rename_map(top_names, prefix)
 
   # Statements spliced in from this module's own loads (`from_load`) are
@@ -439,8 +512,8 @@ end
 # name the module doesn't export is reported at the `load` and bound to
 # nil, so its uses don't each report an undeclared name. A name in `bad`
 # (listed in the module's `export` but not defined) was reported there.
-fn import_bindings(load_node, mod_name, exported, bad, module_bindings, sources_by_file, sink)
-  let prefix = "_mod_" + mod_name + "_"
+fn import_bindings(load_node, mod_name, mangle, exported, bad, module_bindings, sources_by_file, sink)
+  let prefix = "_mod_" + mangle + "_"
   let result = []
   if load_node.selective != nil
     let is_exported = {}
@@ -631,9 +704,45 @@ fn report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
   sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
 end
 
-fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path)
+# The namespace a whole-module `load` binds in its file: the alias, or the
+# file's base name, which must then be an identifier. Two different modules
+# can't share a namespace name in one file (`seen`: name -> {path, stmt} of
+# the first load binding it). Reports the problem at `stmt` and returns
+# false when the load can't bind its namespace.
+fn check_namespace_name(stmt, full_path, seen, sources_by_file, sink)
+  if stmt.selective != nil
+    return true
+  end
+  let ns = stmt.alias
+  if ns == nil
+    ns = module_name_from_path(stmt.path)
+    if not is_identifier_name(ns)
+      let msg = "module file name `{ns}` is not an identifier, so it can't name the module's namespace"
+      let hint = "rename it to {c_safe_name(ns)}.gem, or load it with `load \"{stmt.path}\" as name`"
+      if KEYWORDS[ns] == true
+        msg = "module file name `{ns}` is a keyword, so it can't name the module's namespace"
+        hint = "rename the file, or load it with `load \"{stmt.path}\" as name`"
+      end
+      sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
+      return false
+    end
+  end
+  let prev = seen[ns]
+  if prev != nil and prev.path != full_path
+    sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "module name `{ns}` is already used by `load \"{prev.stmt.path}\"` at line {prev.stmt.line}", "rename one of the files, or load one with `load \"{stmt.path}\" as name`")
+    return false
+  end
+  if prev == nil
+    seen[ns] = {path: full_path, stmt: stmt}
+  end
+  true
+end
+
+fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, registry)
   let new_stmts = []
   let count = 0
+  # Namespace names bound by this file's loads (check_namespace_name).
+  let ns_seen = {}
   for stmt in ast.stmts
     if is_node(stmt, "load")
       let full_path = resolve_load_path(stmt.path, base_dir, project_root, stdlib_root)
@@ -643,9 +752,12 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
         report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
         continue
       end
+      if not check_namespace_name(stmt, full_path, ns_seen, sources_by_file, sink)
+        continue
+      end
       if cached != nil
         if cached.exported != nil
-          for b in import_bindings(stmt, cached.mod_name, cached.exported, cached.bad_exports, module_bindings, sources_by_file, sink)
+          for b in import_bindings(stmt, cached.mod_name, cached.mangle, cached.exported, cached.bad_exports, module_bindings, sources_by_file, sink)
             new_stmts[count] = b
             count += 1
           end
@@ -682,7 +794,7 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
         warn_shadowed_loop_conds(loaded_ast, full_path, show_path)
       end
       let loaded_dir = dirname(full_path)
-      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path)
+      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, registry)
 
       entry.loading = false
 
@@ -698,13 +810,15 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
 
       let mod_name = module_name_from_path(stmt.path)
       # top_names: the module-scope names transform_module prefixes with
-      # `_mod_<mod_name>_`; build_global_display maps them back for messages.
+      # `_mod_<mangle>_`; build_global_display maps them back to
+      # `<mod_name>.<name>` for messages and stack traces.
       let top_names = collect_module_top_names(resolved.stmts)
+      let mangle = module_mangle(full_path, mod_name, top_names, registry)
       let bad_exports = {}
       let exported = checked_exports(export_node, top_names, mod_name, full_path, parse_failed, sources_by_file, sink, bad_exports)
-      loaded[full_path] = {mod_name: mod_name, exported: exported, bad_exports: bad_exports, top_names: top_names}
-      let mod_stmts = transform_module(resolved.stmts, mod_name)
-      for b in import_bindings(stmt, mod_name, exported, bad_exports, module_bindings, sources_by_file, sink)
+      loaded[full_path] = {mod_name: mod_name, mangle: mangle, exported: exported, bad_exports: bad_exports, top_names: top_names}
+      let mod_stmts = transform_module(resolved.stmts, mangle, top_names)
+      for b in import_bindings(stmt, mod_name, mangle, exported, bad_exports, module_bindings, sources_by_file, sink)
         push(mod_stmts, b)
       end
       for ms in mod_stmts
@@ -719,8 +833,8 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
   make_program(new_stmts)
 end
 
-# Mangled module-slot name -> the name a user writes: `_mod_<mod>_<name>`
-# -> `<mod>.<name>`, from the loaded-module table (no string splitting, so
+# Mangled module-slot name -> the name a user writes: `_mod_<mangle>_<name>`
+# -> `<mod>.<name>` (the file's base name, never the mangle), from the loaded-module table (no string splitting, so
 # underscores in module or binding names stay unambiguous). Codegen uses it
 # in diagnostics that name module state.
 fn build_global_display(loaded)
@@ -728,7 +842,7 @@ fn build_global_display(loaded)
   for _, info in loaded
     if info.top_names != nil
       for name, _ in info.top_names
-        display["_mod_" + info.mod_name + "_" + name] = info.mod_name + "." + name
+        display["_mod_" + info.mangle + "_" + name] = info.mod_name + "." + name
       end
     end
   end
@@ -902,7 +1016,7 @@ loaded[normalize_path(src_path)] = {exported: nil, loading: true, parent: nil}
 let resolved_ast = nil
 if not sink.has_any()
   warn_shadowed_loop_conds(ast, src_path, show_path)
-  resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path)
+  resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, {prefixes: {}, symbols: {}})
 end
 
 if sink.has_any()

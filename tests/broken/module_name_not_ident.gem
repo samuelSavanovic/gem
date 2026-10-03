@@ -1,0 +1,6 @@
+# A module file name that isn't an identifier can't name its namespace:
+# a compile error at the `load` (`as` or a selective load is fine).
+load "./modules/bad-name"
+load "./modules/bad-name" as bad_name
+load "./modules/bad-name" (f)
+print(bad_name.f(), f())
