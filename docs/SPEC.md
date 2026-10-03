@@ -598,7 +598,7 @@ let msg = receive()
 - `{tag: "DOWN", pid: <target_pid>, reason: "normal"}` — clean exit
 - `{tag: "DOWN", pid: <target_pid>, reason: "<error message>"}` — crash
 
-Monitoring a pid whose process no longer exists delivers the DOWN message immediately, with reason `"noproc"`. Duplicate monitors are deduplicated. Returns `true`.
+Monitoring a pid whose process no longer exists delivers the DOWN message immediately, with reason `"noproc"`. Duplicate monitors are deduplicated: a process monitors a target at most once, and a second `monitor` of the same target does nothing, so the target's death delivers one `DOWN`. A monitor ends when the monitoring process exits (`monitor` drops the entries of exited monitoring processes from the target's list as it walks it), so a long-lived process monitored by many short-lived ones keeps a list as long as its live monitors. Returns `true`.
 
 `spawn_monitor(fn)` atomically spawns and monitors a process. Returns `{pid: <pid>}`.
 
@@ -1575,15 +1575,17 @@ let pages = task.await_all([a, b], 5000)
 The caller provides a module table with callback functions: `init`, `handle_call`, `handle_cast`, and `handle_info`.
 
 - `gen_server.start(module)` — starts a gen_server process running the given module. Returns `{pid: <pid>}`. The module's `init()` is called to produce the initial state. `init` may return a bare value (used as initial state) or `{state: <s>, timeout: <ms>}` to set an initial idle timeout.
-- `gen_server.call(target, msg)` / `gen_server.call(target, msg, timeout_ms)` — sends a synchronous request and waits for a reply. Default timeout is 5000ms. Internally sends `{tag: "call", from: {pid, ref}, msg: <msg>}` to the server, then blocks waiting for a matching `{tag: "gs_reply", ref: <ref>, value: <value>}`. Returns the reply value. Errors on timeout.
-- `gen_server.cast(target, msg)` — sends an asynchronous (fire-and-forget) message. Sends `{tag: "cast", msg: <msg>}` to the server. Returns `nil`.
+- `gen_server.call(target, msg, timeout_ms = 5000)` — sends a synchronous request and waits for the reply, which it returns. `target` (here and in `cast`) is the `{pid}` handle `start` returns, a bare pid, or a registered name; anything else, or a name nobody registered, raises a `gen_server.call: ...` error. The caller monitors the server first, so a server that is already dead, or dies before replying, fails the call at once with `gen_server.call: server exited: <reason>` (reason `"noproc"` for a server that was gone already); otherwise the call raises `gen_server.call: timeout` after `timeout_ms`. There is no demonitor and a process monitors a target at most once, so this monitor stays after the call returns and is the same monitor as any the caller set up itself: a process that has called a server gets `{tag: "DOWN", pid: <server>, reason: ...}` when the server dies, exactly once. A call that fails because the server died puts the `DOWN` it matched back in the mailbox (at the end), so it never takes a `DOWN` from the caller's own monitor. The request and reply are private messages (`{tag: "_gs_call", ...}`, `{tag: "_gs_reply", ...}`); the reply is matched by a fresh ref, so a late reply to a call that timed out is never returned by a later call.
+- `gen_server.cast(target, msg)` — sends an asynchronous (fire-and-forget) message (`{tag: "_gs_cast", ...}`). Returns `nil`. A cast to a server that has exited is dropped.
 - `gen_server.reply(from, value)` — sends a reply to a pending `call`. Used for deferred replies when `handle_call` returns `{noreply: state}` instead of replying immediately. Returns `nil`.
 
 Module callback return values:
 
 - `handle_call(msg, from, state)` — must return `{reply: <value>, state: <new_state>}` to reply immediately, or `{noreply: <new_state>}` to defer the reply (use `gen_server.reply(from, value)` later). May include `timeout: <ms>` to schedule an idle timeout.
-- `handle_cast(msg, state)` — must return `{state: <new_state>}`. May include `timeout: <ms>`. A callback that returns anything else (a `match` with no matching arm returns `nil`) crashes the server, so give its `match` an `else`.
+- `handle_cast(msg, state)` — must return `{state: <new_state>}`. May include `timeout: <ms>`.
 - `handle_info(msg, state)` — handles any message not from `call`/`cast` (e.g. DOWN messages, EXIT messages, `"timeout"`). Must return `{state: <new_state>}`. May include `timeout: <ms>`.
+
+A callback that returns anything else (`nil`, as a `match` with no matching arm does, a non-table, or a table without those keys) is a bug in the module: the server dies with an error naming the callback and what it should return, such as `gen_server: handle_cast returned nil, expected {state: state}`, and a pending `call` fails at once with that reason. Give each callback's `match` an `else`.
 
 When any callback returns a `timeout` field, a timer is scheduled: after `timeout` milliseconds with no other message, `handle_info` is called with the string `"timeout"` as the message. Each new timeout cancels the previous pending one. Omitting `timeout` (or setting it to `nil`) cancels any pending timeout without scheduling a new one.
 
@@ -1600,6 +1602,8 @@ let counter_mod = {
       {reply: state, state: state}
     when "inc"
       {reply: state + 1, state: state + 1}
+    else
+      {reply: nil, state: state}
     end
   end,
   handle_cast: fn(msg, state)
@@ -1615,7 +1619,7 @@ let counter_mod = {
   end
 }
 
-let server = gen_server.start(counter_mod).pid
+let server = gen_server.start(counter_mod)
 gen_server.call(server, "inc")    # 1
 gen_server.call(server, "inc")    # 2
 gen_server.call(server, "get")    # 2

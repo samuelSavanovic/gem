@@ -16,9 +16,9 @@ let slow_server = {
 }
 
 let server = gen_server.start(slow_server)
-let timed_out = pcall gen_server.call(server.pid, "slow", 20)
+let timed_out = pcall gen_server.call(server, "slow", 20)
 print("slow call: ok={timed_out.ok} error={timed_out.error}")
 sleep(150)
-print("next call: {gen_server.call(server.pid, "fast")}")
+print("next call: {gen_server.call(server, "fast")}")
 print("leftover messages: {process_info(self()).mailbox_len}")
 kill(server.pid, "stop")

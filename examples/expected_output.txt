@@ -721,16 +721,16 @@ test5: parent died: now-fatal
     |
 Stack trace:
   at anonymous fn (examples/34_gen_server.gem:97)
-  at gen_server.loop (std/gen_server.gem:17)
-  at anonymous fn (std/gen_server.gem:53)
+  at gen_server.loop (std/gen_server.gem:86)
+  at anonymous fn (std/gen_server.gem:120)
 test1: after incr 10 = 10
 test3: count=2 first=raw1 second=raw2
+test4: ok=false err=gen_server.call: server exited: kaboom from server
 test1: after incr 5 = 15
 test2: got delayed: request
 test1: after reset = 0
 test5: timeouts_fired=true
 test5: still_counting=true
-test4: ok=false err=gen_server.call timeout
 test1: type=ref
 test2: cancelled=true
 test3: cancel_bogus=false
@@ -1427,7 +1427,7 @@ test6: child got 2
 test7: sum=3
 test7: noise left=300
 test8: loop done 20000
-slow call: ok=false error=gen_server.call timeout
+slow call: ok=false error=gen_server.call: timeout
 next call: fast result
 leftover messages: 1
 test1: slow fast concurrent=true
@@ -2707,6 +2707,82 @@ dynamic_supervisor.start_child: supervisor exited: boom
 4: still alive, temp pid -1, perm restarted true
 5: 3 of 3 restarted, ids abc
 6: supervisor.start: unknown strategy "rest_for_one"
+1: handle=3 pid=3 name=3
+1: nil reply=nil deferred=deferred 3
+2: gen_server.call: no process registered as "nobody"
+2: gen_server.cast: no process registered as "nobody"
+2: gen_server.call: expected a {pid} handle, a pid or a registered name, got nil
+2: gen_server.cast: expected a {pid} handle, a pid or a registered name, got table
+2: gen_server.call: expected a {pid} handle, a pid or a registered name, got float
+3: gen_server.call: timeout
+4: gen_server.call: server exited: noproc fast=true
+4: downs left=1
+4: gen_server.call: server exited: told to die fast=true
+4: downs left=1
+5: get=0
+5: own monitor reason=stop extra=0
+
+[Runtime Error in process 5]: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
+  --> std/gen_server.gem:62
+    |
+ 62 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:62)
+  at gen_server.check_call_result (std/gen_server.gem:80)
+  at gen_server.loop (std/gen_server.gem:87)
+  at anonymous fn (std/gen_server.gem:120)
+6: gen_server.call: server exited: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
+
+[Runtime Error in process 6]: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
+  --> std/gen_server.gem:62
+    |
+ 62 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:62)
+  at gen_server.check_call_result (std/gen_server.gem:80)
+  at gen_server.loop (std/gen_server.gem:87)
+  at anonymous fn (std/gen_server.gem:120)
+6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
+
+[Runtime Error in process 7]: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
+  --> std/gen_server.gem:62
+    |
+ 62 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:62)
+  at gen_server.check_call_result (std/gen_server.gem:80)
+  at gen_server.loop (std/gen_server.gem:87)
+  at anonymous fn (std/gen_server.gem:120)
+6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
+
+[Runtime Error in process 8]: gen_server: handle_cast returned nil, expected {state: state}
+  --> std/gen_server.gem:62
+    |
+ 62 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:62)
+  at gen_server.check_state_result (std/gen_server.gem:67)
+  at gen_server.loop (std/gen_server.gem:96)
+  at anonymous fn (std/gen_server.gem:120)
+6: cast nil -> gen_server: handle_cast returned nil, expected {state: state}
+
+[Runtime Error in process 9]: gen_server: handle_info returned an int, expected {state: state}
+  --> std/gen_server.gem:62
+    |
+ 62 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:62)
+  at gen_server.check_state_result (std/gen_server.gem:67)
+  at gen_server.loop (std/gen_server.gem:104)
+  at anonymous fn (std/gen_server.gem:120)
+6: info int -> gen_server: handle_info returned an int, expected {state: state}
+7: info saw ["call", "cast", "gs_reply"]
+8: monitors after 300 callers=1
 start returns pid: int
 escape: &lt;a href=&#x27;x&#x27;&gt;&amp;&quot;&lt;/a&gt;
 -- default bodies

@@ -134,7 +134,7 @@ fn routes(store)
 end
 
 fn main()
-  let store = gen_server.start(NOTES).pid
+  let store = gen_server.start(NOTES)
   http.serve(routes(store), {port: 8080})
 end
 ```
@@ -145,8 +145,9 @@ end
 - The state lives in a process. Each HTTP connection runs in its own
   process, so a module-level `let notes = []` would give every connection
   its own copy ([State and memory](#state-and-memory)).
-- `gen_server.start(...)` returns `{pid: ...}`; pass `.pid` to
-  `gen_server.call` ([Working around std today](#working-around-std-today)).
+- `gen_server.start(...)` returns a `{pid}` handle, which `gen_server.call`
+  and `gen_server.cast` take as it is (a bare pid or a registered name
+  works too).
 - A handler returns a response table (`http.json_response`,
   `http.bad_request`, ...). `return` inside a `do` block leaves the block,
   which here is the handler.
@@ -879,22 +880,9 @@ stack, so a hostile input gets a clear error instead of a stack overflow.
 
 Some std APIs don't follow this doc yet. Until they are fixed:
 
-- `gen_server.start`, `supervisor.start` and `dynamic_supervisor.start`
-  return `{pid: pid}`, but `gen_server.call` and `gen_server.cast` take a
-  bare pid or a registered name: pass `handle.pid`.
-- A gen_server callback that returns `nil` or a non-table (such as the
-  `nil` of a `match` with no `else`) crashes the server. `handle_call`
-  returns `{reply: v, state: s}` (or `{noreply: s}`), the others
-  `{state: s}`; a `handle_call` result with neither `reply` nor `noreply`
-  sets the state to `nil` and leaves the caller waiting until its
-  timeout.
-- `gen_server.call` waits its full timeout (5 s by default) when the
-  server is dead.
 - A `one_for_all` supervisor hangs when it restarts a child that traps
   exits **(bug)**: supervise such children `one_for_one`.
 - `std/request` reads with no timeout **(bug)**.
-- Don't send messages tagged `"call"`, `"cast"` or `"gs_reply"` to std
-  processes: std uses those tags internally.
 
 ### Spawning
 
@@ -980,10 +968,17 @@ end
 - When the target may die, monitor it and add a `DOWN` arm, so a dead
   server fails at once instead of after the full timeout. `std/task` is the
   model: it monitors, matches `{tag: "DOWN", pid: ^pid}`, and removes the
-  `DOWN` when it's done. There is no `demonitor`, and a monitor from a
-  process that has exited stays on the target's list until the target
-  dies, so don't monitor a long-lived server from many short-lived
-  processes, such as per-connection handlers.
+  `DOWN` when it's done. Monitoring a long-lived server from many
+  short-lived processes, such as per-connection handlers, is fine: a
+  monitor ends with the process that set it up (20,000 callers in turn
+  leave the server with 1 entry on its monitor list).
+- There is no `demonitor`, and a process monitors a target at most once
+  (a second `monitor` adds nothing, and the death sends one `DOWN`). A
+  long-lived process that monitors a server therefore gets its `DOWN`
+  whenever the server dies, possibly long after the request. Drop it only
+  when the target always exits (as a task does); otherwise leave it for
+  the caller's loop, since it may be the `DOWN` of a monitor the caller
+  set up itself. `gen_server.call` works this way.
 - A `receive` with only an `after` clause waits that long and takes no
   message: anything that arrives meanwhile stays queued. It is the same as
   `sleep(ms)`; use whichever reads better.
@@ -1262,8 +1257,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | Re-raising with `error(r.error)` | original stack lost | log `r.stack` first |
 | `loop(state)` followed by more statements | stack and memory grow until overflow | self call as the last expression |
 | `warning: cannot reset ... back-edge` on a `while true` | memory grows without bound | restructure the loop |
-| `{pid}` handle passed to `gen_server.call` | raises | `handle.pid` |
-| gen_server callback returning `nil` | server crashes | `else` arm returning a result table |
+| gen_server callback returning `nil` | server dies, the `call` raises | `else` arm returning a result table |
 | `self()` inside `spawn do ... end` to mean the parent | it's the child | `let parent = self()` before |
 | `spawn(f, x)` | `f` called with no arguments | `spawn do f(x) end` |
 | `link` to a process that may have exited | caller dies with `noproc` | `spawn_link` |
@@ -1271,7 +1265,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
 | `after` in a busy server loop | never fires | `send_after` ticks |
-| Monitoring a long-lived server from many short-lived processes | monitor list grows | monitor only when needed |
+| Calling or monitoring a server from a long-lived process | its `DOWN` arrives when the server dies | catch-all or `DOWN` arm in the loop |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
 | `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |
 | Spawning thousands of quick tasks in a loop | `process table full` | batch, or cap in-flight tasks |

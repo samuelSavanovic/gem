@@ -1188,11 +1188,23 @@ void gem_monitor_fn(int64_t target_pid) {
     GemProcess *target = &gem_proc_table[target_slot];
     int64_t caller_pid = gem_pid_of_slot(caller);
 
-    /* Deduplicate: check if caller is already monitoring target */
-    GemMonitorNode *node = target->monitors;
-    while (node) {
+    /* Deduplicate: return if the caller already monitors the target. The
+       same walk unlinks the nodes of monitoring processes that have exited
+       (their DOWN would be dropped anyway), so a long-lived target monitored
+       by many short-lived processes keeps a list as long as its live
+       monitors. A node's pid carries its slot generation, so
+       gem_slot_of_pid rejects it once the slot is freed or reused. */
+    GemMonitorNode **link = &target->monitors;
+    while (*link) {
+        GemMonitorNode *node = *link;
         if (node->pid == caller_pid) return;  /* already monitoring */
-        node = node->next;
+        int watcher = gem_slot_of_pid(node->pid);
+        if (watcher < 0 || gem_proc_table[watcher].state == GEM_PROC_DEAD) {
+            *link = node->next;
+            free(node);
+            continue;
+        }
+        link = &node->next;
     }
 
     GemMonitorNode *new_node = (GemMonitorNode *)malloc(sizeof(GemMonitorNode));

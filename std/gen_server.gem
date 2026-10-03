@@ -1,41 +1,108 @@
 # std/gen_server — OTP-style synchronous server with state.
+#
+#   let counter = gen_server.start({
+#     init: fn() 0 end,
+#     handle_call: fn(msg, from, n) {reply: n, state: n} end,
+#     handle_cast: fn(msg, n) {state: n + 1} end,
+#     handle_info: fn(msg, n) {state: n} end
+#   })
+#   gen_server.cast(counter, "incr")
+#   gen_server.call(counter, "get")    # 1
+#
+# `call` and `cast` take the `{pid}` handle `start` returns, a bare pid or a
+# registered name.
+
+# The pid for a `{pid}` handle, a bare pid or a registered name.
+fn target_pid(target, caller)
+  let t = type(target)
+  if t == "int"
+    return target
+  end
+  if t == "table" and type(target.pid) == "int"
+    return target.pid
+  end
+  if t == "string"
+    let pid = whereis(target)
+    if pid == nil
+      error("{caller}: no process registered as \"{target}\"")
+    end
+    return pid
+  end
+  error("{caller}: expected a \{pid\} handle, a pid or a registered name, got {t}")
+end
 
 fn set_timeout(timer_ref, timeout_ms)
   if timer_ref != nil
     cancel_timer(timer_ref)
   end
   if timeout_ms != nil
-    let me = self()
-    return send_after(me, {tag: "_gs_timeout"}, timeout_ms)
+    return send_after(self(), {tag: "_gs_timeout"}, timeout_ms)
   end
   nil
 end
 
+fn describe(v)
+  let t = type(v)
+  if t == "nil"
+    return "nil"
+  end
+  if t == "table"
+    return "a table with keys {keys(v)}"
+  end
+  if t == "int"
+    return "an int"
+  end
+  "a {t}"
+end
+
+# A callback result that isn't what the callback must return is a bug in the
+# module: the server dies with an error naming the callback, and a pending
+# `call` fails at once through its monitor.
+fn bad_result(callback, result, expected)
+  error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+end
+
+fn check_state_result(callback, result)
+  if type(result) != "table" or not has_key(result, "state")
+    bad_result(callback, result, "\{state: state\}")
+  end
+end
+
+fn check_call_result(result)
+  if type(result) == "table"
+    if has_key(result, "noreply")
+      return nil
+    end
+    if has_key(result, "reply") and has_key(result, "state")
+      return nil
+    end
+  end
+  bad_result("handle_call", result, "\{reply: value, state: state\} or \{noreply: state\}")
+end
+
 fn loop(module, state, timer_ref)
   receive
-  when {tag: "call", from: from, msg: msg}
+  when {tag: "_gs_call", from: from, msg: msg}
     let result = module.handle_call(msg, from, state)
-    let new_state = state
+    check_call_result(result)
+    let new_state = result.noreply
     if has_key(result, "reply")
-      send(from.pid, {tag: "gs_reply", ref: from.ref, value: result.reply})
+      send(from.pid, {tag: "_gs_reply", ref: from.ref, value: result.reply})
       new_state = result.state
-    else
-      new_state = result.noreply
     end
-    let new_ref = set_timeout(timer_ref, result.timeout)
-    loop(module, new_state, new_ref)
-  when {tag: "cast", msg: msg}
+    loop(module, new_state, set_timeout(timer_ref, result.timeout))
+  when {tag: "_gs_cast", msg: msg}
     let result = module.handle_cast(msg, state)
-    let new_ref = set_timeout(timer_ref, result.timeout)
-    loop(module, result.state, new_ref)
+    check_state_result("handle_cast", result)
+    loop(module, result.state, set_timeout(timer_ref, result.timeout))
   when {tag: "_gs_timeout"}
     let result = module.handle_info("timeout", state)
-    let new_ref = set_timeout(nil, result.timeout)
-    loop(module, result.state, new_ref)
+    check_state_result("handle_info", result)
+    loop(module, result.state, set_timeout(nil, result.timeout))
   when other
     let result = module.handle_info(other, state)
-    let new_ref = set_timeout(timer_ref, result.timeout)
-    loop(module, result.state, new_ref)
+    check_state_result("handle_info", result)
+    loop(module, result.state, set_timeout(timer_ref, result.timeout))
   end
 end
 
@@ -55,28 +122,36 @@ fn start(module)
   {pid: pid}
 end
 
-fn call(target, msg, ...rest)
-  let timeout_ms = 5000
-  if len(rest) > 0
-    timeout_ms = rest[0]
-  end
+# Sends `msg` to the server and waits for its reply. The caller monitors the
+# server, so a server that is dead, or dies before replying, fails the call
+# at once. There is no demonitor and a process monitors a target at most
+# once, so that monitor outlives the call and is the same one as any monitor
+# the caller set up itself. The call therefore never consumes the server's
+# DOWN: it puts back the one it matched, and the caller receives it like any
+# other DOWN.
+fn call(target, msg, timeout_ms = 5000)
+  let pid = target_pid(target, "gen_server.call")
   let ref = make_ref()
-  send(target, {tag: "call", from: {pid: self(), ref: ref}, msg: msg})
+  monitor(pid)
+  send(pid, {tag: "_gs_call", from: {pid: self(), ref: ref}, msg: msg})
   receive
-  when {tag: "gs_reply", ref: ^ref, value: v}
+  when {tag: "_gs_reply", ref: ^ref, value: v}
     v
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    send(self(), {tag: "DOWN", pid: pid, reason: reason})
+    error("gen_server.call: server exited: {reason}")
   after timeout_ms
-    error("gen_server.call timeout")
+    error("gen_server.call: timeout")
   end
 end
 
 fn cast(target, msg)
-  send(target, {tag: "cast", msg: msg})
+  send(target_pid(target, "gen_server.cast"), {tag: "_gs_cast", msg: msg})
   nil
 end
 
 fn reply(from, value)
-  send(from.pid, {tag: "gs_reply", ref: from.ref, value: value})
+  send(from.pid, {tag: "_gs_reply", ref: from.ref, value: value})
   nil
 end
 

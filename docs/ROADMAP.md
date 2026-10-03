@@ -72,11 +72,11 @@ Today, wrapping a C library that uses small structs by value (raylib's `Vector2`
 
 Stack traces on `error()` are good; there's no interactive step-through, breakpoint, or variable-inspection story. Pairs with `LSP_ROADMAP.md` but is a separate capability — typically a DAP (Debug Adapter Protocol) server that the runtime cooperates with (instrumented `gem_set_line` callbacks, ability to pause a coroutine, mailbox/process inspection).
 
-## `demonitor`, and dropping a dead watcher's monitors (P1)
+## `demonitor` (P1)
 
-`monitor(target)` adds the caller's pid to the target's monitor list (`gem_monitor_fn` in `runtime/gem_scheduler.c`), and the entry is freed only when the target exits. When the watcher exits first, its entry stays, so a long-lived process monitored by many short-lived ones accumulates one entry per watcher for as long as it lives, and each `monitor` call walks that list for its duplicate check. There is also no `demonitor`, so a live watcher cannot drop a monitor it no longer needs.
+`monitor(target)` adds the caller's pid to the target's monitor list (`gem_monitor_fn` in `runtime/gem_scheduler.c`). Entries of watchers that have exited are dropped lazily, by the next `monitor` of that target as it walks the list for its duplicate check, so the list stays as long as the target's live watchers. There is no `demonitor`, so a live watcher cannot drop a monitor it no longer needs: `gen_server.call` leaves the caller monitoring the server, and the caller gets the server's `DOWN` whenever it dies.
 
-What needs building: a per-process list of the targets it monitors, so an exiting process can remove its entries from each live target in time proportional to its own monitors; then `demonitor(pid)` on top of the same list. Trade-off: one more list per process, maintained on every `monitor`.
+What needs building: `demonitor(pid)`, with a per-process list of the targets it monitors so an exiting process can also remove its entries eagerly (and `process_info(target).monitors` stops listing exited watchers until the next `monitor`). Since a process monitors a target at most once, `demonitor` would also drop a monitor the caller set up separately; Erlang's per-monitor refs avoid that. Trade-off: one more list per process, maintained on every `monitor`, and refs in the API if monitors stop being deduplicated.
 
 ## Process-owned resources closed on exit (P2)
 

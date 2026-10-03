@@ -27,12 +27,12 @@ let counter_module = {
 
 spawn(fn()
   let server = gen_server.start(counter_module)
-  let v1 = gen_server.call(server.pid, {op: "incr", by: 10})
+  let v1 = gen_server.call(server, {op: "incr", by: 10})
   print("test1: after incr 10 = {v1}")
-  let v2 = gen_server.call(server.pid, {op: "incr", by: 5})
+  let v2 = gen_server.call(server, {op: "incr", by: 5})
   print("test1: after incr 5 = {v2}")
-  gen_server.cast(server.pid, {op: "reset"})
-  let v3 = gen_server.call(server.pid, {op: "get"})
+  gen_server.cast(server, {op: "reset"})
+  let v3 = gen_server.call(server, {op: "get"})
   print("test1: after reset = {v3}")
 end)
 
@@ -60,7 +60,7 @@ spawn(fn()
   let helper = spawn(fn()
     send(server.pid, "go")
   end)
-  let v = gen_server.call(server.pid, "request")
+  let v = gen_server.call(server, "request")
   print("test2: got {v}")
 end)
 
@@ -85,11 +85,11 @@ spawn(fn()
   let server = gen_server.start(logger_module)
   send(server.pid, "raw1")
   send(server.pid, "raw2")
-  let logs = gen_server.call(server.pid, "list")
+  let logs = gen_server.call(server, "list")
   print("test3: count={len(logs)} first={logs[0]} second={logs[1]}")
 end)
 
-# ─── Test 4: adversarial — handle_call raises → caller times out ───
+# ─── Test 4: adversarial — handle_call raises → call fails at once ───
 
 let bad_module = {
   init: fn() 0 end,
@@ -102,7 +102,7 @@ let bad_module = {
 
 spawn(fn()
   let server = gen_server.start(bad_module)
-  let result = pcall gen_server.call(server.pid, "anything", 200)
+  let result = pcall gen_server.call(server, "anything", 200)
   print("test4: ok={result.ok} err={result.error}")
 end)
 
@@ -132,9 +132,9 @@ spawn(fn()
   let server = gen_server.start(timeout_module)
   send_after(self(), "check", 180)
   receive()
-  let count = gen_server.call(server.pid, "get")
+  let count = gen_server.call(server, "get")
   print("test5: timeouts_fired={count > 0}")
   # Verify activity resets: call resets the timeout
-  let count2 = gen_server.call(server.pid, "get")
+  let count2 = gen_server.call(server, "get")
   print("test5: still_counting={count2 >= count}")
 end)
