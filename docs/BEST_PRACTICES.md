@@ -670,6 +670,10 @@ sort(people, fn(a, b) a.age - b.age end)
 the first two elements and raises `table.sort: the comparator must return
 a number ...` instead.
 
+Sort only arrays **(bug)**: `sort` and `table.sort` on a record don't
+raise; they replace its keys with 0 .. n-1, so `{b: 2, a: 1}` becomes
+`[1, 2]`. Sort `keys(t)` or `values(t)` instead.
+
 Keep comparators short and loop-free, and don't sort inside one **(bug)**:
 the comparator lives in one global for all processes, so a sort inside a
 comparator, or a comparator with a loop (where the scheduler can switch
@@ -1420,6 +1424,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `id in seen` on an int-keyed set | scans values | `has_key(seen, id)` |
 | Large set or index with sparse int (or table) keys | quadratic | string keys (`"{id}"`) |
 | Boolean `sort` comparator | array left unsorted | return `a - b` |
+| `sort` on a record **(bug)** | keys replaced by 0 .. n-1 | sort `keys(t)` or `values(t)` |
 | `sort` inside a comparator, or a comparator with a loop **(bug)** | wrong comparator called; unsorted or a type error | precompute keys; short comparators |
 | `json.encode({})` | `[]` | write `'{}'` yourself |
 | `match` with no arm matching | yields `nil` silently | add an `else` |

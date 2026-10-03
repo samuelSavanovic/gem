@@ -68,6 +68,28 @@ Today, wrapping a C library that uses small structs by value (raylib's `Vector2`
 
 `load` today resolves stdlib (`std/...`) and project-local paths. There is no story for depending on third-party Gem code — no manifest, no fetch, no version pinning, no lockfile. Becomes pressing the moment a second real Gem app wants to share code with the first. Likely shape: a `gem.toml` manifest, a `gem_modules/` (or `.gem/deps/`) cache, git-URL or registry-based resolution, lockfile for reproducibility. Design intentionally deferred until pull from real users.
 
+## std API gaps found by the blind doc review (P2)
+
+A blind reader wrote programs against std from its `##` docs alone (2026-10). These came up as missing
+API, not doc problems:
+
+- **`gen_server.stop`**: there is no way to stop a server except `kill(h.pid, reason)` or a supervisor. Add
+  `stop(target, reason = "normal", timeout_ms = 5000)` that waits for the exit, like `supervisor.stop`,
+  and maybe a `{stop: reason, reply?, state}` callback result (Erlang's `{stop, ...}`).
+- **Dropping late replies**: after a `gen_server.call`, `supervisor.which_children` or a
+  `dynamic_supervisor` call times out, the late reply still lands in the caller's mailbox and nothing
+  removes it. Erlang solves this with process aliases (a reply to a deactivated alias is dropped). Needs a
+  runtime alias or a per-ref "drop" set checked at delivery.
+- **`http.json_response` with a status**: a JSON 201/404 needs `http.response(status, {"Content-Type":
+  ...}, json.encode(x))`. Add an optional `status` param.
+- **The port bound by `http.start({port: 0})`**: an ephemeral port works but nothing reports it, so tests
+  can't use one. Return `{pid, port}` (needs the bound port from `tcp_listen`, e.g. a `tcp_local_port`
+  builtin).
+- **Multi-value query keys in `url.build_query`**: `{tags: ["a", "b"]}` should give `tags=a&tags=b`; today
+  the table's `to_string` text is encoded. `parse_query` would need a matching opt-in (last value wins now).
+- **One rule for what a child's `start` returns**: `supervisor` accepts a pid, a `{pid}` handle or a
+  registered name; `dynamic_supervisor` rejects a name. Pick one for both.
+
 ## `gem doc` and checked doc examples (P3)
 
 `##` doc comments (BEST_PRACTICES.md, "Document the public API with `##`") document the public API of std and user modules, but nothing reads them yet outside the editor. Needs: a `gem doc <file>` subcommand that prints (or writes HTML for) a module's header and its exported functions' docs, using the same comment collection as LSP hover; and a doctest pass that runs each `call    # result` example line and compares the printed value, wired into `make test` for std, so docs can't drift from behavior (as Rust's doctests do). Trade-off: examples have to stay self-contained one-liners for the checker; a multi-line example would need an explicit marker.
