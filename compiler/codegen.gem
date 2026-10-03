@@ -1284,12 +1284,12 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # and emit the trampoline marker instead of a regular call.
   let current_scc_id = nil
   let append_buf_vars = {}
-  # Set when emitting a leaf function (no Gem-level calls in body): we elide
-  # `gem_push_frame`/`gem_pop_frame` and `gem_set_line` so the call doesn't
-  # cost frame bookkeeping. If the leaf raises via a builtin, the trace shows
-  # the caller's frame at the call-site line — the leaf's name and per-stmt
-  # line are not visible. Builtins don't push frames themselves, so this is
-  # consistent with how a non-Gem error already attributes.
+  # Set when emitting a leaf function (no Gem-level calls in body): instead
+  # of `gem_push_frame`/`gem_pop_frame`/`gem_set_line` it records itself in
+  # the cheaper leaf slot (gem.h `GemLeafSite`): `gem_leaf_site = &site` on
+  # entry, `gem_leaf_line = N` per statement, `gem_leaf_site = NULL` on
+  # return. A leaf calls nothing, so it is always the innermost frame and
+  # error reports show it on top of the call stack.
   let in_leaf_fn = false
 
   # ─── Helpers ──
@@ -1408,17 +1408,29 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
   # `gem_pop_frame()` or `gem_set_line(...)` must go through these.
   let pop_str = fn(p)
     if in_leaf_fn
-      ""
+      "{p}gem_leaf_site = NULL;\n"
     else
       "{p}gem_pop_frame();\n"
     end
   end
   let setline_str = fn(line, p)
     if in_leaf_fn
-      ""
+      "{p}gem_leaf_line = {line};\n"
     else
       "{p}gem_set_line({line});\n"
     end
+  end
+  # Entry bookkeeping of a leaf fn (after its param bindings: a default
+  # expression may call another fn). The line is set here only when the
+  # first statement doesn't set it.
+  let leaf_entry_str = fn(name, file, line, body)
+    let b = buf_new()
+    buf_push(b, "    static const GemLeafSite _leaf_site = \{\"{escape_c_string(name)}\", \"{escape_c_string(file)}\"};\n")
+    buf_push(b, "    gem_leaf_site = &_leaf_site;\n")
+    if len(body) == 0 or type(body[0]) != "table" or body[0].line == nil
+      buf_push(b, "    gem_leaf_line = {line};\n")
+    end
+    to_string(b)
   end
 
   # ─── Free variable analysis ──
@@ -5109,7 +5121,9 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     if node.line != nil
       fn_line = node.line
     end
-    if not in_leaf_fn
+    if in_leaf_fn
+      buf_push(b, leaf_entry_str(display_name(name), rel_path(file_of(node)), fn_line, body))
+    else
       buf_push(b, "    gem_push_frame(\"{escape_c_string(display_name(name))}\", \"{escape_c_string(rel_path(file_of(node)))}\", {fn_line});\n")
     end
 
@@ -5302,8 +5316,14 @@ fn make_codegen(source_name, module_bindings = nil, project_root = nil, sources_
     end
 
     buf_push(fb, emit_param_bindings(node, params, inner_boxed))
-    if not in_leaf_fn
-      buf_push(fb, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(rel_path(file_of(node)))}\", 0);\n")
+    let anon_line = 0
+    if node.line != nil
+      anon_line = node.line
+    end
+    if in_leaf_fn
+      buf_push(fb, leaf_entry_str(name, rel_path(file_of(node)), anon_line, body))
+    else
+      buf_push(fb, "    gem_push_frame(\"{escape_c_string(name)}\", \"{escape_c_string(rel_path(file_of(node)))}\", {anon_line});\n")
     end
     buf_push(fb, emit_fn_body(body))
     buf_push(fb, "}")

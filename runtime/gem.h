@@ -148,6 +148,21 @@ typedef struct {
 extern GemFrame *gem_call_stack;
 extern int gem_call_depth;
 
+/* Leaf functions (no calls in the body, see codegen.gem `body_is_leaf`)
+ * push no frame. Instead each one has a static GemLeafSite; on entry it sets
+ * gem_leaf_site to it, updates gem_leaf_line before each statement, and
+ * clears gem_leaf_site on return. A leaf calls nothing, so it is always the
+ * innermost frame: error reports and pcall's `stack` show it on top of
+ * gem_call_stack. Per-process like the frames (the scheduler saves and
+ * restores both on every resume, since a leaf's loop can yield); cleared
+ * when an error unwinds (pcall, process death). */
+typedef struct {
+    const char *name;
+    const char *file;
+} GemLeafSite;
+extern const GemLeafSite *gem_leaf_site;
+extern int gem_leaf_line;
+
 /* ─── Mutual-TCO trampoline TLB ───
  *
  * The codegen-emitted body of an SCC member, when it makes an intra-SCC
@@ -686,6 +701,8 @@ typedef struct {
     GemPcallFrame pcall_stack[GEM_MAX_PCALL_DEPTH];
     int pcall_depth;
     int call_depth;               /* saved gem_call_depth at last yield (restored on resume) */
+    const GemLeafSite *leaf_site; /* saved gem_leaf_site / gem_leaf_line at last yield */
+    int leaf_line;
     int64_t gen;                  /* slot generation; advanced when the slot is freed */
     int pending_timers;           /* send_after timers that target this process */
     GemFrame call_stack[GEM_MAX_CALL_DEPTH];  /* this process's frames for stack traces */
@@ -772,6 +789,9 @@ void gem_run_scheduler(void);
  * main process exiting with a reason other than "normal" prints the reason as
  * a runtime error and exits the program with status 1. */
 __attribute__((noreturn)) void gem_exit_self(const char *reason);
+/* Main dies from an exit signal sent by from_pid (a link when `linked`):
+   report it like an uncaught error in main and exit 1. */
+__attribute__((noreturn)) void gem_report_main_killed(int64_t from_pid, const char *reason, int linked);
 void gem_run_main(GemFnPtr fn, void *env);
 
 /* Selective receive: remove a specific node from the mailbox */
