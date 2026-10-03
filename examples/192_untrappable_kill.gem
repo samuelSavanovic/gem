@@ -260,27 +260,24 @@ settle()
 dynamic_supervisor.stop(d)
 print("stop killed p3:", not alive(p3))
 
-# A dynamic child whose handle has a bad shutdown fails start_child only,
-# and is killed rather than left running unsupervised.
-let bad_child = nil
-let bad = dynamic_supervisor.start({child: {start: fn(a)
-  let c = stubborn()
-  send(me, {tag: "bad_child", pid: c})
-  {pid: c, shutdown: "soon"}
-end}})
-print(err(pcall dynamic_supervisor.start_child(bad, nil)))
-receive when {tag: "bad_child", pid: p} then bad_child = p end
-print("bad child killed:", not alive(bad_child))
-# The same with a child that `start` links to the supervisor: its "killed"
-# must not reach the supervisor.
-let bad_linked = dynamic_supervisor.start({child: {start: fn(a)
-  {pid: spawn_link(fn() stubborn_loop() end), shutdown: "soon"}
-end}})
-print(err(pcall dynamic_supervisor.start_child(bad_linked, nil)))
-settle()
-print("supervisor still alive:", alive(bad.pid), alive(bad_linked.pid))
-dynamic_supervisor.stop(bad_linked)
-dynamic_supervisor.stop(bad)
+# An object-style handle whose `shutdown` is a method is no budget marker:
+# the child is supervised as usual (5000 ms budget), in both supervisors.
+fn obj_worker()
+  let pid = spawn do
+    receive when m then nil end
+  end
+  {pid: pid, shutdown: fn() kill(pid, "shutdown") end}
+end
+let os = supervisor.start({children: [{id: "obj", start: obj_worker}]})
+let obj_pid = supervisor.which_children(os)[0].pid
+print("object handle supervised:", alive(obj_pid))
+supervisor.stop(os)
+print("object handle stopped:", not alive(obj_pid))
+let od = dynamic_supervisor.start({child: {start: fn(a) obj_worker() end}})
+let op = dynamic_supervisor.start_child(od, nil)
+print("dynamic object handle:", alive(op), len(dynamic_supervisor.which_children(od)))
+dynamic_supervisor.stop(od)
+print("dynamic object handle stopped:", not alive(op))
 
 # ── argument checks ──
 print("-- checks --")

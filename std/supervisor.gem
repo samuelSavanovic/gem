@@ -17,7 +17,7 @@
 # sends it the exit signal "shutdown", waits up to its `shutdown` budget
 # (ms; nil waits forever) for its DOWN, then kills it with the untrappable
 # "kill" (stop_child). The budget comes from the child spec's `shutdown`,
-# else from a `shutdown` key on the handle its `start` returned (a
+# else from an int or nil `shutdown` key on the handle its `start` returned (a
 # supervisor's handle has `shutdown: nil`, so a nested supervisor gets all
 # the time its own ordered shutdown takes), else DEFAULT_SHUTDOWN_MS.
 #
@@ -59,21 +59,17 @@ end
 
 # A child's shutdown budget: its spec's `shutdown`, else the one the handle
 # its `start` returned asks for, else DEFAULT_SHUTDOWN_MS.
-fn shutdown_of(spec, handle, pid)
+fn shutdown_of(spec, handle)
   if has_key(spec, "shutdown")
     return spec.shutdown
   end
+  # The handle belongs to the child's own API: only an int or nil there is
+  # a budget; anything else (a `shutdown` method, say) is no marker.
   if type(handle) == "table" and has_key(handle, "shutdown")
     let s = handle.shutdown
-    if s != nil and type(s) != "int"
-      # Not supervised yet: don't leave it running. Unlink first: a
-      # `start` that linked it (spawn_link runs in the supervisor) would
-      # otherwise pass its "killed" on to the supervisor as an exit signal.
-      unlink(pid)
-      kill(pid, "kill")
-      error("supervisor: start of child \"{spec.id}\" returned a handle whose shutdown is a {type(s)}, not an int (milliseconds) or nil")
+    if s == nil or type(s) == "int"
+      return s
     end
-    return s
   end
   DEFAULT_SHUTDOWN_MS
 end
@@ -82,7 +78,7 @@ end
 fn start_child(spec)
   let handle = spec.start()
   let pid = target_pid(handle, "supervisor: start of child \"{spec.id}\"")
-  let shutdown = shutdown_of(spec, handle, pid)
+  let shutdown = shutdown_of(spec, handle)
   monitor(pid)
   # A child that has already exited gives an EXIT "noproc" here (the
   # supervisor traps exits) after its DOWN "noproc".
