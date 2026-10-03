@@ -134,37 +134,6 @@ f("a")
 The report points at line 4 (`print("hi")`), and the trace has no
 `at main` frame.
 
-### `build_string`'s `add` captured in a spawn aborts the program
-
-```gem
-let s = build_string do |add|
-  spawn do
-    add("x")
-  end
-  sleep(20)
-end
-```
-
-The whole program aborts with `gem_arena: mmap failed (size=...)`. `add`
-can't meaningfully run in another process (the buffer lives in the
-builder's arena), but it must fail as a Gem error, not corrupt memory.
-
-### `read_file` on procfs returns `""`
-
-`read_file("/proc/self/status")` returns an empty string: the file size is
-taken from `fseek`/`ftell`, which give 0 for procfs files
-(runtime/gem_builtins_io.c, runtime/gem_threadpool.c). Read until EOF instead.
-
-### Exit reasons leak on the kill/link paths
-
-Reported in the original compiler-fix handoff; no simple repro yet. Find
-one before fixing.
-
-### `exec` in a spawned process passes stdout through
-
-`spawn do exec("echo hi") end` prints `hi` on the program's stdout. May be
-intended; decide, and document the behavior in SPEC.md either way.
-
 ## Editor grammars
 
 ### tree-sitter grammar gaps

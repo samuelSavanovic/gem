@@ -1082,6 +1082,8 @@ let html = build_string() do |add|
 end
 ```
 
+`add` belongs to the process that called `build_string`. It can be captured, sent and stored like any function, but calling it from another process (a `spawn` body that captured it, a receiver of a message holding it) raises `` build_string: `add` can only be called by the process that created it ``. Calling it after `build_string` has returned does nothing visible: the string is already built.
+
 `make_ref()` — returns a unique opaque reference value. Type is `"ref"`. Refs are equal only to themselves (identity equality). Usable as table keys. Format: `#Ref<N>` where N is a monotonically increasing integer.
 
 `link(pid)` — creates a bidirectional link between the calling process and the target process. If the target no longer exists, `link` raises an error with message `"noproc"` in the caller (catchable with `pcall`); a caller that traps exits receives `{tag: "EXIT", pid: <pid>, reason: "noproc"}` instead. Returns `true`.
@@ -1102,7 +1104,7 @@ end
 
 `process_info(pid)` — returns a table with process metadata: `state`, `mailbox_len`, `links`, `monitors`, `trap_exit`, `exit_reason`. Returns `nil` for invalid/free pids.
 
-`read_file(path)` — reads the entire file at `path` and returns its contents as a string. Opens in binary mode (no newline translation). Raises an error if the file cannot be opened.
+`read_file(path)` — reads the entire file at `path` and returns its contents as a string. Opens in binary mode (no newline translation). Files whose size isn't known up front (`/proc` and `/sys` files, pipes, devices such as `/dev/stdin`) are read until end of file. Raises an error if the file cannot be opened, is a directory, or a read fails.
 
 `write_file(path, content)` — writes the string `content` to `path`, overwriting any existing file. Opens in binary mode. Raises an error if the file cannot be opened or if the write fails.
 
@@ -1182,7 +1184,7 @@ end
 
 `is_dir(path)` — returns `true` if `path` exists and is a directory, `false` otherwise. Argument must be a string.
 
-`exec(command)` — runs `command` via the system shell (`sh -c`). Blocks until the command exits. Returns the exit code as an integer (0 on success). The shell expands glob patterns and environment variables in `command`. Output goes to the process's stdout/stderr unless redirected inside `command`.
+`exec(command)` — runs `command` via the system shell (`sh -c`). Blocks until the command exits. Returns the exit code as an integer (0 on success). The shell expands glob patterns and environment variables in `command`. The command inherits the program's stdout and stderr, so its output goes straight to the terminal (or wherever the program's output goes), the same from `main` and from a spawned process; `exec` does not capture it. To capture output, redirect it inside `command` (`exec("ls > /tmp/out.txt")`) and `read_file` the result.
 
 ## TCP Sockets
 

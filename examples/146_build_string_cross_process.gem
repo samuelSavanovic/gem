@@ -1,0 +1,80 @@
+# build_string's `add` belongs to the process that called build_string.
+# A copy of it in another process (captured by a spawn, sent in a message,
+# read from a module slot by a spawn) raises a Gem error when called, instead
+# of corrupting memory. The builder's own string is unaffected.
+
+fn try(label, f)
+  let r = pcall(f)
+  print(label, r.ok, r.error)
+end
+
+let main = self()
+
+# Captured by a spawn body.
+let s1 = build_string do |add|
+  add("a")
+  spawn do
+    try("spawn:", fn() add("x") end)
+    send(main, "done")
+  end
+  receive
+    when "done"
+      nil
+  end
+  add("b")
+end
+print("s1 =", s1)
+
+# Sent in a message (inside a table).
+let p = spawn do
+  let m = receive()
+  try("message:", fn() m.add("y") end)
+  send(main, "done")
+end
+let s2 = build_string do |add|
+  send(p, {add: add})
+  receive
+    when "done"
+      nil
+  end
+  add("ok")
+end
+print("s2 =", s2)
+
+# Stored in a module slot, read by a spawned process.
+let saved = nil
+let s3 = build_string do |add|
+  saved = add
+  add("c")
+end
+print("s3 =", s3)
+spawn do
+  try("module slot:", fn() saved("z") end)
+  send(main, "done")
+end
+receive
+  when "done"
+    nil
+end
+
+# In its own process, a stray call after build_string returned is harmless.
+saved("late")
+print("owner call ok")
+
+# Many builders in a loop whose `add` stays live across the back-edge, so
+# region resets copy it.
+fn many(n)
+  let keep = nil
+  let total = 0
+  for i = 0, n
+    let t = build_string do |add|
+      keep = add
+      add(i, "-")
+    end
+    keep("more")
+    total = total + len(t)
+  end
+  keep("x")
+  total
+end
+print("total", many(20000))

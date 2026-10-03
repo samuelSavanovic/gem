@@ -236,11 +236,20 @@ GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc) {
 
 /* ─── build_string ─── */
 
+/* `add`'s env is an ordinary closure env (see gem_copy_fill_env):
+ * [n = 2][box: the VAL_BUFFER][box: the owner's Gem-visible pid]. Copies
+ * (spawn, send, module snapshot units, region resets) then treat it like any
+ * closure. A copy in another process holds a copy of the buffer, so `add`
+ * refuses to run there instead of silently filling a buffer nobody reads. */
+static int64_t build_string_owner(void) {
+    return gem_current_pid >= 0 ? gem_pid_of_slot(gem_current_pid) : -1;
+}
+
 static GemVal build_string_add_fn(void *_env, GemVal *args, int argc) {
-    GemVal buf_val;
-    buf_val.type = VAL_BUFFER;
-    buf_val.magic = GEM_MAGIC;
-    buf_val.buffer = (GemBuffer *)_env;
+    GemVal **fields = (GemVal **)((char *)_env + sizeof(intptr_t));
+    if (fields[1]->ival != build_string_owner())
+        gem_error("build_string: `add` can only be called by the process that created it");
+    GemVal buf_val = *fields[0];
     for (int i = 0; i < argc; i++) {
         GemVal push_args[2] = {buf_val, args[i]};
         gem_buf_push_fn(NULL, push_args, 2);
@@ -254,11 +263,22 @@ GemVal gem_build_string_fn(void *_env, GemVal *args, int argc) {
         gem_error("build_string: expected a function argument");
     }
     GemBuffer *b = gem_buffer_alloc(256);
+    GemVal *buf_box = (GemVal *)gem_alloc(sizeof(GemVal));
+    buf_box->type = VAL_BUFFER;
+    buf_box->magic = GEM_MAGIC;
+    buf_box->buffer = b;
+    GemVal *owner_box = (GemVal *)gem_alloc(sizeof(GemVal));
+    *owner_box = gem_int(build_string_owner());
+    void *env = gem_alloc(sizeof(intptr_t) + 2 * sizeof(GemVal *));
+    *(intptr_t *)env = 2;
+    GemVal **fields = (GemVal **)((char *)env + sizeof(intptr_t));
+    fields[0] = buf_box;
+    fields[1] = owner_box;
     GemVal add_fn;
     add_fn.type = VAL_FN;
     add_fn.magic = GEM_MAGIC;
     add_fn.fn = build_string_add_fn;
-    add_fn.env = b;
+    add_fn.env = env;
     GemVal block_args[1] = {add_fn};
     args[0].fn(args[0].env, block_args, 1);
     char *s = (char *)gem_alloc(b->len + 1);

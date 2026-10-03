@@ -1,0 +1,21 @@
+# exec runs a shell command that inherits the program's stdout/stderr: its
+# output is not captured, and it behaves the same in main and in a spawned
+# process. exec returns the command's exit status. To capture output,
+# redirect it inside the command and read the file.
+
+print("main before")
+print("main status", exec("echo hi from main"))
+print("main status", exec("exit 3"))
+
+let main = self()
+spawn do
+  print("child before")
+  print("child status", exec("echo hi from child; exit 2"))
+  send(main, "done")
+end
+receive()
+
+let out = "/tmp/gem_148_out"
+exec("printf captured > {out}")
+print("read back:", read_file(out))
+remove_file(out)
