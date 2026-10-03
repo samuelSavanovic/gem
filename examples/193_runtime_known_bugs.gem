@@ -200,3 +200,20 @@ let arr = ["a\0b"]
 print(len(arr[0]), arr)
 print({"a\0b": 1, ok: "x\0y"})
 print(len(to_string(arr)), "{arr}" == to_string(arr))
+
+# ── renumbering drops stale string keys; int arithmetic wraps ──
+print("-- renumber --")
+let ins = {a: 3, b: 1}
+insert(ins, 0, 9)
+print(ins.a, ins.b, ins)
+let rem = {a: 3, b: 1, c: 2}
+remove_at(rem, 0)
+print(rem.a, rem.b, rem)
+let keep = {a: 1}
+push(keep, 2)
+insert(keep, 1, 7)
+print(keep.a, keep)
+print(sort({a: 5}), sort({a: 5}).a)
+let top = 9223372036854775807
+let bottom = -top - 1
+print(top + 1, bottom - 1, top * 2, -bottom, 9223372036854775807 + 1)

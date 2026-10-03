@@ -1035,6 +1035,27 @@ Set `shutdown:` to how long the child's cleanup can take. Only give
 supervisor waiting for good, and with it `supervisor.stop`, which waits
 with no limit by default.
 
+### Don't pass an option's `shutdown` through as `nil` **(trap)**
+
+In a child spec, a missing `shutdown` key means the 5000 ms default, but
+`shutdown: nil` means no limit, like `timeout_ms: nil` elsewhere in std.
+`{id: id, start: s, shutdown: opts.shutdown}` sets the key to `nil` when
+`opts` has no `shutdown`, so a stubborn child keeps its supervisor waiting
+for good. Copy the key only when it is there:
+
+```gem
+fn worker_spec(id, opts)
+  let spec = {id: id, start: start_worker}
+  if has_key(opts, "shutdown")      # not `shutdown: opts.shutdown`
+    spec.shutdown = opts.shutdown
+  end
+  spec
+end
+```
+
+(A destructuring default, `let {shutdown = 5000} = opts`, goes the other
+way: it turns an explicit `nil` into 5000.)
+
 ### Request/reply: a ref, a pin, a timeout, and a monitor
 
 When you write the request side yourself (instead of using
@@ -1391,6 +1412,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
 | `after` in a busy server loop | never fires | `send_after` ticks |
+| `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
 | Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
 | `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |

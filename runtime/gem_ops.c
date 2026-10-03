@@ -5,7 +5,9 @@
 #include "gem.h"
 
 GemVal gem_add(GemVal a, GemVal b) {
-    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int(a.ival + b.ival);
+    /* Int + - * and unary - wrap on overflow (two's complement): computed in
+       uint64_t, since signed overflow is undefined behaviour in C. */
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int((int64_t)((uint64_t)a.ival + (uint64_t)b.ival));
     if (a.type == VAL_FLOAT && b.type == VAL_FLOAT) return gem_float(a.fval + b.fval);
     if (a.type == VAL_INT && b.type == VAL_FLOAT) return gem_float((double)a.ival + b.fval);
     if (a.type == VAL_FLOAT && b.type == VAL_INT) return gem_float(a.fval + (double)b.ival);
@@ -21,7 +23,7 @@ GemVal gem_add(GemVal a, GemVal b) {
 }
 
 GemVal gem_sub(GemVal a, GemVal b) {
-    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int(a.ival - b.ival);
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int((int64_t)((uint64_t)a.ival - (uint64_t)b.ival));
     if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
         double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
         double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
@@ -31,7 +33,7 @@ GemVal gem_sub(GemVal a, GemVal b) {
 }
 
 GemVal gem_mul(GemVal a, GemVal b) {
-    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int(a.ival * b.ival);
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int((int64_t)((uint64_t)a.ival * (uint64_t)b.ival));
     if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
         double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
         double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
@@ -95,7 +97,7 @@ GemVal gem_le(GemVal a, GemVal b) { return gem_bool(!gem_truthy(gem_gt(a, b))); 
 GemVal gem_ge(GemVal a, GemVal b) { return gem_bool(!gem_truthy(gem_lt(a, b))); }
 
 GemVal gem_neg(GemVal a) {
-    if (a.type == VAL_INT) return gem_int(-a.ival);
+    if (a.type == VAL_INT) return gem_int((int64_t)(0 - (uint64_t)a.ival));
     if (a.type == VAL_FLOAT) return gem_float(-a.fval);
     { char buf[128]; snprintf(buf, sizeof(buf), "type error in unary -: got %s", gem_type_str(a)); gem_error(buf); } return GEM_NIL;
 }

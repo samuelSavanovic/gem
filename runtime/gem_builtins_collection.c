@@ -331,7 +331,8 @@ GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
     if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "sort: expected table, got %s", gem_type_str(args[0])); gem_error(buf); }
     GemTable *t = args[0].table;
     gem_table_check_mutable(t);
-    if (t->len <= 1) return args[0];
+    /* A one-entry table is still renumbered below (`sort({a: 5})` is [5]). */
+    if (t->len == 0) return args[0];
 
     if (argc >= 2 && args[1].type == VAL_FN) {
         int n = t->len;
@@ -358,6 +359,16 @@ GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
     return args[0];
 }
 
+/* After keys were renumbered to ints: the string-key index may point at
+   key strings that are gone from the table, which nothing roots any more
+   (a reset frees them). Drop it; string keys left below the renumbered
+   range get a fresh index on next use. */
+static void gem_table_drop_str_index(GemTable *t) {
+    if (t->str_index == NULL) return;
+    gem_str_index_free(&t->str_index);
+    t->index_stale = 1;
+}
+
 /* ─── Built-in: insert (insert at index in array) ─── */
 
 GemVal gem_insert_fn(void *_env, GemVal *args, int argc) {
@@ -378,6 +389,7 @@ GemVal gem_insert_fn(void *_env, GemVal *args, int argc) {
     for (int i = pos; i < t->len; i++) {
         t->keys[i] = gem_int(i);
     }
+    gem_table_drop_str_index(t);
     t->shape_id++;
     return args[0];
 }
@@ -400,6 +412,7 @@ GemVal gem_remove_at_fn(void *_env, GemVal *args, int argc) {
     for (int i = pos; i < t->len; i++) {
         t->keys[i] = gem_int(i);
     }
+    gem_table_drop_str_index(t);
     t->shape_id++;
     return removed;
 }

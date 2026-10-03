@@ -153,39 +153,6 @@ because of it.
 
 ## Runtime
 
-### Int `+`, `-` and `*` overflow is undefined behaviour in C
-
-```gem
-let m = 9223372036854775807
-print(m + 1)      # -9223372036854775808 in practice
-```
-
-`gem_add`/`gem_sub`/`gem_mul` in runtime/gem_ops.c (and the constant
-folder, compiler/fold.gem, which runs them) overflow signed 64-bit ints
-with no `-fwrapv`, so the wrap SPEC promises is what the C compilers do in
-practice, not what C guarantees; an optimizer may assume it never
-happens. Compute in `uint64_t` and convert back, as `gem_div` does for
-`INT64_MIN / -1`.
-
-### `insert` and `remove_at` on a table with string keys keep a stale key index
-
-```gem
-let h = {a: 3, b: 1}
-insert(h, 0, 9)
-print(h.a, h.b, h)        # 9 3 [9, 3, 1]: the keys are 0..2 now
-let r = {a: 3, b: 1, c: 2}
-remove_at(r, 0)
-print(r.a, r.b, r)        # 1 2 [1, 2]
-```
-
-Both renumber every key to an int (`gem_insert_fn`, `gem_remove_at_fn` in
-runtime/gem_builtins_collection.c) but leave the table's string-key index
-in place, so the old string keys still find (wrong) values. The index
-points at key strings that nothing roots any more: after a region reset
-frees them, a lookup reads freed memory and can crash. `sort` had the same
-problem and now drops the index (`gem_str_index_free`); these two should
-too.
-
 ### `in` answers differently on a copy of a table whose string keys were deleted
 
 ```gem
@@ -243,16 +210,6 @@ sqlite's parser stops at a NUL even when given the full length, so
 `sqlite_exec` runs only what comes before it, and `sqlite_query` doesn't
 see a second statement after one. Both should raise on SQL containing a
 NUL (runtime/gem_builtins_sqlite.c).
-
-### `sort` doesn't renumber the keys of a table with one entry
-
-```gem
-print(sort({a: 5}), sort({a: 5, b: 1}))   # {a: 5} [1, 5]
-```
-
-SPEC says `sort` renumbers keys to `0..n-1`, but `gem_sort_fn`
-(runtime/gem_builtins_collection.c) returns early when the table has at
-most one entry, so `{a: 5}` keeps its string key.
 
 ## Standard library
 
