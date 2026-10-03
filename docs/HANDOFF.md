@@ -10,7 +10,9 @@ Notes for the next session. Delete this file once its work is done.
    recipe" and "The fixes" below are kept as a record.
 2. **Done.** Known-bugs fixes: PR #29, squash-merged into `main` as ccb251d. Most of
    the list below moved to `docs/KNOWN_BUGS.md` and was fixed there.
-3. **Next session (fresh): rewrite `docs/BEST_PRACTICES.md`.**
+3. **Done once its PR merges: rewrite `docs/BEST_PRACTICES.md`.** The
+   review rounds found ~25 new bugs, now in `docs/KNOWN_BUGS.md`.
+   Steps, kept as a record:
    1. Rebase `std-modernize` onto `origin/main` (the maintainer asked for a
       rebase here, not a merge; the branch is only theirs and the doc
       sessions', so push with `--force-with-lease`). The branch's own
@@ -46,7 +48,28 @@ Notes for the next session. Delete this file once its work is done.
       If the fixes are large, run one more adversarial round.
    6. Open a PR to `main` (no AI attribution, CLAUDE.md "Commits and Pull
       Requests").
-4. **After that:** modernize `std/` against the merged doc.
+4. **Next: compiler and runtime fix pass** (agreed after the doc review
+   found many bugs). Fix every `docs/KNOWN_BUGS.md` entry outside
+   "Standard library": the sections "Compiler diagnostics", "Runtime",
+   "C interop" and "Editor grammars" (the param-named-like-a-fn capture,
+   float literal precision and `1e-06.0`, float `%g` formatting,
+   integer-literal overflow, renaming destructuring, bad module names and
+   same-basename modules, project root and symlinked-binary lookup,
+   mangled export/import errors, `pcall` line 0, `extern include` paths,
+   extern extra args, plus the older entries). `sqlite_query`'s parameter
+   checks are runtime C, so they belong here too even though the entry
+   sits under "Standard library". Same setup as #28/#29 ("Ground rules",
+   "Build and test recipe"): one subagent per fix in its own worktree off
+   `origin/main`, an integration branch, one PR. Each fix deletes its
+   KNOWN_BUGS entry **and** its **(bug)** rule or trap-index row in
+   `docs/BEST_PRACTICES.md`, and fixes SPEC where it describes the bug
+   (e.g. `to_string` floats, `http.serve`, extern arity).
+5. **Then: modernize `std/`** against the merged doc, fixing the
+   "Standard library" entries of `docs/KNOWN_BUGS.md` as part of it
+   (dynamic_supervisor `delete`, non-tail supervisor loops, `http.serve`
+   and silent handler errors, `json.encode` int keys and big ints,
+   supervisor `name:` race and `{pid}` children, `std/request` timeout and
+   chunked bodies), along with the list in "For std modernization" below.
 
 ## Ground rules from the maintainer
 
@@ -198,7 +221,7 @@ return.
 | Branch | What |
 |---|---|
 | `main` | includes #26, #27, #28 (compiler fixes; 8b482c2) and #29 (known-bugs fixes, `docs/KNOWN_BUGS.md`; ccb251d) |
-| `std-modernize` | `docs/BEST_PRACTICES.md` (needs the rewrite in step 3), the CLAUDE.md attribution rule, the BEST_PRACTICES links in CLAUDE.md and CHEATSHEET, this file. Contains #28 but **not #29**: rebase it onto `main` first (step 3.1). |
+| `std-modernize` | rebased onto `main` (ccb251d); the rewritten `docs/BEST_PRACTICES.md`, the SPEC/CHEATSHEET/README fixes and new `docs/KNOWN_BUGS.md` entries from the doc review, the CLAUDE.md attribution rule and BEST_PRACTICES links, this file. Goes to `main` as the step 3 PR. |
 
 ## For the doc session (step 2), so it isn't lost
 
@@ -277,7 +300,7 @@ When rebasing onto `main`, put the BEST_PRACTICES clause back (dropped in
 Tracking" and the intro of `docs/KNOWN_BUGS.md`, a fix also deletes any
 **(bug)** rule in `docs/BEST_PRACTICES.md` that exists because of it.
 
-## For std modernization (step 3)
+## For std modernization (step 5)
 
 - `dynamic_supervisor`: `delete(state.children, idx)` leaves a hole, so
   `terminate_child` of any child but the last crashes the supervisor and
