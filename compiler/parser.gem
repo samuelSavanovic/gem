@@ -3,7 +3,7 @@
 # Produces the EXACT same AST shape as the bootstrap compiler.
 
 load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_for_in, make_for_range, make_match_arm, make_pat_table, make_pat_table_entry, make_pat_array, make_pat_literal, make_pat_name, make_pat_pin, make_pat_error, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
-load "./lexer" (tokenize)
+load "./lexer" (tokenize, normalize_newlines)
 load "./errors" (make_error_sink)
 
 # ─── Number conversion helpers ───────────────────────────────────
@@ -82,6 +82,7 @@ fn parse_source(source, file, sink)
     sink = make_error_sink()
   end
   let errors_before = sink.count()
+  source = normalize_newlines(source)
   let tokens = tokenize(source, file, sink)
   # If the lexer reported errors for this file, skip the parser entirely —
   # the token stream past an unterminated string is meaningless and parser
@@ -127,10 +128,14 @@ fn make_parser(tokens, source, file, sink)
   let pos = 0
   let gensym_counter = 0
   # One destructured binding `name = value` with an optional default that
-  # fires when the value is nil. The default is evaluated into a temp
+  # fires when the key is missing from `obj_name` (a field name, or an
+  # index for an array pattern), like a positional default fires only for
+  # an argument left out: an explicit nil stays nil. The value is read
+  # first (so a non-table still raises as without a default), and only a
+  # nil read checks for the key. The default is evaluated into a temp
   # before `let name`, so a default reading `name` sees the binding it
   # shadows (as any `let` initializer does), and only when it is needed.
-  let push_destructured = fn(stmts, name, value, dflt, line)
+  let push_destructured = fn(stmts, name, obj_name, key, value, dflt, line)
     if dflt == nil
       push(stmts, make_let(name, value, line))
       return nil
@@ -138,12 +143,11 @@ fn make_parser(tokens, source, file, sink)
     gensym_counter += 1
     let tmp = "_d{gensym_counter}v"
     push(stmts, make_let(tmp, value, line))
-    push(stmts, make_if(
+    let missing = make_binop("and",
       make_binop("==", make_var(tmp), make_nil_node()),
-      [make_assign(tmp, dflt, line)],
-      [],
-      line
-    ))
+      make_unop("not", make_call(make_var("__has_key"), [make_var(obj_name), key], line)),
+      line)
+    push(stmts, make_if(missing, [make_assign(tmp, dflt, line)], [], line))
     push(stmts, make_let(name, make_var(tmp), line))
   end
   let fn_depth = 0
@@ -234,14 +238,21 @@ fn make_parser(tokens, source, file, sink)
   # `:` and returns the key's value, read like any int literal (decimal,
   # leading zeros ignored, range-checked: an out-of-range key is reported
   # and reads as 0). `- NUMBER :` is reported: a negative int indexes from
-  # the end and is never a key. Otherwise consumes nothing and returns nil.
+  # the end and is never a key. A float key is reported too (and reads as
+  # 0). Otherwise consumes nothing and returns nil.
   let parse_int_key = fn()
     let negative = peek().type == "-"
     let off = 0
     if negative then off = 1 end
     let nt = peek_at(off)
-    if nt.type != "NUMBER" or contains_dot(nt.value) or peek_at(off + 1).type != ":"
+    if nt.type != "NUMBER" or peek_at(off + 1).type != ":"
       return nil
+    end
+    if contains_dot(nt.value)
+      let first = advance()
+      if negative then advance() end
+      report(first.line, first.col, nt.col + len(nt.value) - first.col, "a float can't be a table key in a literal or pattern", "set it with an index: `t[{nt.value}] = v`, or key the entry with a string")
+      return 0
     end
     let first = advance()
     if negative
@@ -352,6 +363,9 @@ fn make_parser(tokens, source, file, sink)
   # ── Forward declarations for mutual recursion ──
 
   let parse_expr = nil
+  # An expression statement: an assignment or a value (parse_expr rejects
+  # an assignment).
+  let parse_stmt_expr = nil
   let parse_stmt = nil
   let parse_unary = nil
   let parse_not = nil
@@ -360,6 +374,21 @@ fn make_parser(tokens, source, file, sink)
   # In a destructuring pattern (`let {..} =`, a `{..}` fn param), after the
   # field name: `{key: name}` is renaming, which only match/receive patterns
   # have. Report it at the field and skip the rest of the entry.
+  # A destructuring pattern's field is a name: it is both the key read
+  # and the variable bound. Report anything else (a string, a number, a
+  # keyword).
+  let check_destructure_field = fn(field_tok)
+    if field_tok.type != "NAME"
+      let v = field_tok.value
+      if v == "" or v == "\n"
+        v = field_tok.type
+      elif field_tok.type == "STRING"
+        v = "\"" + v + "\""
+      end
+      report(field_tok.line, field_tok.col, len(field_tok.value), "expected a field name in a destructuring pattern, got `{v}`", "each field binds a variable of the same name: `let \{a, b\} = t`")
+    end
+  end
+
   let reject_destructure_rename = fn(field_tok, example)
     if peek().type != ":"
       return nil
@@ -417,6 +446,7 @@ fn make_parser(tokens, source, file, sink)
           let field_tok = peek()
           advance()
           push(dnames, field_tok.value)
+          check_destructure_field(field_tok)
           reject_destructure_rename(field_tok, "\{" + field_tok.value + "\}")
           skip_nl()
           if peek().type == "="
@@ -459,10 +489,10 @@ fn make_parser(tokens, source, file, sink)
           push(defaults, nil)
         end
 
-        # Bind each named field as a local. Per-field defaults fire when the
-        # extracted value is nil (key missing or value explicitly nil).
+        # Bind each named field as a local. Per-field defaults fire only
+        # when the key is missing (an explicit nil stays nil).
         for di = 0, len(dnames)
-          push_destructured(prelude, dnames[di], make_dot(make_var(pname), dnames[di]), ddflts[di], dline)
+          push_destructured(prelude, dnames[di], pname, make_string(dnames[di]), make_dot(make_var(pname), dnames[di]), ddflts[di], dline)
         end
 
         # The prelude is part of the body, so it reruns on every iteration of
@@ -715,7 +745,7 @@ fn make_parser(tokens, source, file, sink)
     # pcall expression: pcall <expr> desugars to pcall(fn() <expr> end)
     if t.type == "NAME" and t.value == "pcall" and peek_at(1).type != "(" and peek_at(1).type != "do"
       advance()
-      let expr = parse_expr()
+      let expr = parse_stmt_expr()
       return make_call(make_var("pcall"), [make_anon_fn([], nil, [expr], [], t.line)], t.line)
     end
 
@@ -775,7 +805,7 @@ fn make_parser(tokens, source, file, sink)
     let brace_line = peek().line
     expect("\{")
     let bp = parse_block_params()
-    let bexpr = parse_expr()
+    let bexpr = parse_stmt_expr()
     if peek().type == "}"
       advance()
     else
@@ -804,11 +834,24 @@ fn make_parser(tokens, source, file, sink)
     report(tok.line, tok.col, 1, "a trailing block can't be used in an if / while / for header", "assign the call's result to a variable before the header")
   end
 
+  let is_assign_node = fn(e)
+    type(e) == "table" and (e.tag == "assign" or e.tag == "dot_assign" or e.tag == "index_assign")
+  end
+
+  # Report an assignment where a value is expected, at its `=`.
+  let report_assign_as_value = fn(e, msg)
+    let span = 1
+    if e.eq_len != nil
+      span = e.eq_len
+    end
+    report(e.eq_line, e.eq_col, span, msg, nil)
+  end
+
   # An expression in an if / while / for header. A `do` after it is
   # reported and skipped: these headers take no `do`.
   let parse_header_expr = fn(keyword)
     header_depth += 1
-    let e = parse_expr()
+    let e = parse_stmt_expr()
     header_depth -= 1
     if peek().type == "do" and peek_at(1).type == "|"
       # `f() do |x| ... end`: a block with params, not a stray `do`.
@@ -818,6 +861,9 @@ fn make_parser(tokens, source, file, sink)
       let d = peek()
       report(d.line, d.col, 2, "'{keyword}' does not take 'do'", "start the body on the next line")
       advance()
+    end
+    if keyword == "for" and is_assign_node(e)
+      report_assign_as_value(e, "an assignment is a statement, not a value; use '==' to compare")
     end
     e
   end
@@ -918,6 +964,7 @@ fn make_parser(tokens, source, file, sink)
         end
         advance()
         node = make_dot(node, field_tok.value, field_tok.line)
+        node.col = field_tok.col
         continue
       end
 
@@ -1033,18 +1080,21 @@ fn make_parser(tokens, source, file, sink)
 
     # Simple assignment: var = expr, obj.field = expr, obj[key] = expr
     if peek().type == "="
-      advance()
+      let eq_tok = advance()
       let value = parse_expr()
+      let a = nil
       if lhs.tag == "var"
-        let a = make_assign(lhs.name, value, start_line)
+        a = make_assign(lhs.name, value, start_line)
         a.col = lhs.col
+      elif lhs.tag == "dot"
+        a = make_dot_assign(lhs.object, lhs.field, value, start_line)
+      elif lhs.tag == "index"
+        a = make_index_assign(lhs.object, lhs.key, value, start_line)
+      end
+      if a != nil
+        a.eq_line = eq_tok.line
+        a.eq_col = eq_tok.col
         return a
-      end
-      if lhs.tag == "dot"
-        return make_dot_assign(lhs.object, lhs.field, value, start_line)
-      end
-      if lhs.tag == "index"
-        return make_index_assign(lhs.object, lhs.key, value, start_line)
       end
       report(start_line, 1, 1, "invalid assignment target (expected variable, field, or index)", nil)
       return make_error_stmt(start_line, 1)
@@ -1063,14 +1113,27 @@ fn make_parser(tokens, source, file, sink)
       # position, so a diagnostic about the name is reported once.
       let a = make_assign(lhs.name, make_binop(base_op, make_var(lhs.name, lhs.line, lhs.col), value), start_line)
       a.col = lhs.col
+      a.eq_line = op_tok.line
+      a.eq_col = op_tok.col
+      a.eq_len = len(op_tok.value)
       return a
     end
 
     lhs
   end
 
-  # Wire up forward declaration
-  parse_expr = parse_assign_fn
+  # Wire up forward declaration. An assignment is a statement: only an
+  # expression statement (and a block body, which is one) may be one.
+  # Everywhere else a value is expected, so `f(a = 1)` is reported.
+  parse_stmt_expr = parse_assign_fn
+  parse_expr = fn()
+    let e = parse_assign_fn()
+    if is_assign_node(e)
+      report_assign_as_value(e, "an assignment is a statement, not a value; use '==' to compare")
+      return make_error_expr(e.eq_line, e.eq_col)
+    end
+    e
+  end
 
   # ── Pattern parsing (for match destructuring) ──
 
@@ -1306,9 +1369,11 @@ fn make_parser(tokens, source, file, sink)
         while peek().type != "}" and not at_end()
           let _lp = pos
           let field_tok = peek()
-          # NAME or keyword as field name
+          # The field name: check_destructure_field reports anything but a
+          # NAME
           advance()
           push(names, field_tok.value)
+          check_destructure_field(field_tok)
           reject_destructure_rename(field_tok, "let \{" + field_tok.value + "\} = ...")
           if at_top
             note_top_name(field_tok, "let")
@@ -1335,7 +1400,7 @@ fn make_parser(tokens, source, file, sink)
         let tmp = "_d{gensym_counter}"
         let stmts = [make_let(tmp, rhs, line)]
         for di = 0, len(names)
-          push_destructured(stmts, names[di], make_dot(make_var(tmp), names[di]), dflts[di], line)
+          push_destructured(stmts, names[di], tmp, make_string(names[di]), make_dot(make_var(tmp), names[di]), dflts[di], line)
         end
         return {tag: "block", stmts: stmts}
       end
@@ -1375,7 +1440,7 @@ fn make_parser(tokens, source, file, sink)
         let tmp = "_d{gensym_counter}"
         let stmts = [make_let(tmp, rhs, line)]
         for di = 0, len(names)
-          push_destructured(stmts, names[di], make_index(make_var(tmp), make_int(di)), dflts[di], line)
+          push_destructured(stmts, names[di], tmp, make_int(di), make_index(make_var(tmp), make_int(di)), dflts[di], line)
         end
         return {tag: "block", stmts: stmts}
       end
@@ -1401,7 +1466,7 @@ fn make_parser(tokens, source, file, sink)
         note_top_name(name_tok, "fn")
       end
       if fn_depth > 0
-        report(line, 1, len(name) + 3, "named fn inside function body is not supported", "use: let {name} = fn(...) ... end")
+        report(line, t.col, len(name) + 3, "named fn inside function body is not supported", "use: let {name} = fn(...) ... end")
       elif stmt_depth > 1
         report(line, t.col, len(name) + 3, "named fn inside a block is not supported", "define it at the top level, or use: let {name} = fn(...) ... end")
       end
@@ -1422,8 +1487,8 @@ fn make_parser(tokens, source, file, sink)
       let line = t.line
       advance()
       let cond = parse_header_expr(t.value)
-      if cond.tag == "assign" or cond.tag == "dot_assign" or cond.tag == "index_assign"
-        report(cond.line, 1, 1, "assignment is not allowed in condition; use '==' for comparison", nil)
+      if is_assign_node(cond)
+        report_assign_as_value(cond, "assignment is not allowed in condition; use '==' for comparison")
       end
       if peek().type == "then"
         advance()
@@ -1453,8 +1518,8 @@ fn make_parser(tokens, source, file, sink)
       let line = t.line
       advance()
       let cond = parse_header_expr("while")
-      if cond.tag == "assign" or cond.tag == "dot_assign" or cond.tag == "index_assign"
-        report(cond.line, 1, 1, "assignment is not allowed in condition; use '==' for comparison", nil)
+      if is_assign_node(cond)
+        report_assign_as_value(cond, "assignment is not allowed in condition; use '==' for comparison")
       end
       loop_depth += 1
       let wbody = parse_body()
@@ -1759,7 +1824,7 @@ fn make_parser(tokens, source, file, sink)
     # Default: expression statement. Operator, index, call and fn nodes
     # carry their line, literals don't; give a lineless statement its first
     # token's line so codegen emits a line update for it.
-    let e = parse_expr()
+    let e = parse_assign_fn()
     if type(e) == "table" and e.line == nil
       e.line = t.line
     end

@@ -271,7 +271,22 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2 || args[0].type != VAL_INT || (args[1].type != VAL_STRING && args[1].type != VAL_BUFFER)) {
-        gem_error("tcp_write: expected (int socket_fd, string|buffer data)");
+        gem_error("tcp_write: expected (int socket_fd, string|buffer data[, int timeout_ms])");
+    }
+    /* timeout_ms, as for tcp_read: nil or omitted waits until every byte is
+       written; an int is a deadline for the whole write, and one <= 0 only
+       writes what the socket takes at once. Past it, the count written so
+       far is returned. */
+    int has_timeout = 0;
+    int64_t timeout_ms = 0;
+    if (argc >= 3 && args[2].type == VAL_INT) {
+        has_timeout = 1;
+        timeout_ms = args[2].ival;
+    } else if (argc >= 3 && args[2].type != VAL_NIL) {
+        char errbuf[160];
+        snprintf(errbuf, sizeof(errbuf), "tcp_write: timeout_ms must be an int (milliseconds) or nil, got %s",
+                 gem_type_str(args[2]));
+        gem_error(errbuf);
     }
     int fd = (int)args[0].ival;
     const char *data;
@@ -285,6 +300,13 @@ GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
     }
 
     if (gem_current_pid >= 0) {
+        GemProcess *proc = &gem_proc_table[gem_current_pid];
+        /* Start from a clean slate: a `receive ... after` can leave a
+           deadline or a timed_out flag behind, which must not cut this
+           write short. Only a deadline set here counts. */
+        int own_deadline = has_timeout && timeout_ms > 0;
+        proc->deadline_ms = own_deadline ? gem_now_ms() + timeout_ms : -1;
+        proc->timed_out = 0;
         size_t sent = 0;
         while (sent < total) {
             ssize_t n = write(fd, data + sent, total - sent);
@@ -294,9 +316,16 @@ GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
             }
             if (n == 0) continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (has_timeout && timeout_ms <= 0) break;
                 gem_io_yield(fd, 1);
+                if (own_deadline && proc->timed_out) {
+                    proc->timed_out = 0;
+                    break;
+                }
+                proc->timed_out = 0;
                 continue;
             }
+            proc->deadline_ms = -1;
             if (errno == EPIPE || errno == ECONNRESET) {
                 return gem_int((int64_t)sent);
             }
@@ -304,6 +333,7 @@ GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
             snprintf(buf, sizeof(buf), "tcp_write: write failed: %s", strerror(errno));
             gem_error(buf);
         }
+        proc->deadline_ms = -1;
         return gem_int((int64_t)sent);
     }
 

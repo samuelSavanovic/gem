@@ -1,6 +1,6 @@
 # Destructuring defaults: a default that reads the name it binds sees the
 # binding it shadows (a param or module global), like any `let` initializer.
-# The default is evaluated only when the value is nil, and a later field's
+# The default is evaluated only when the key is missing, and a later field's
 # default sees the earlier fields.
 
 fn bump_port(port)
@@ -38,4 +38,5 @@ fn fallback()
 end
 let {q = fallback()} = {q: 1}
 let {r = fallback()} = {}
-print(q, r, calls)
+let {s = fallback()} = {s: nil}
+print(q, r, s, calls)

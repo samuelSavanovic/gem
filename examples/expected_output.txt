@@ -1356,17 +1356,19 @@ missing: false strlen: expected 1 argument(s), got 0
 wrong type: false strlen: arg 0 expected String, got int
 ok: 5
 let-table: strategy=one_for_all max_restarts=3 name=nil
-let-nil: x=7 y=42
+let-nil: x=nil y=42
 let-fwd: a=5 b=10
 let-extra: p=10
 let-array: first=1 second=2 third=100
-let-array-nil: u=10 v=5
+let-array-nil: u=10 v=nil
+let-array-short: w=10 z=6
 fn-req: 0 5 8
 0.0.0.0:8080/nil
 0.0.0.0:8080/nil
 0.0.0.0:8080/nil
 0.0.0.0:9000/nil
 ::1:7000/nil
+0.0.0.0:nil/nil
 sid=abc;Path=/;Secure=false
 sid=abc;Path=/;Secure=false
 sid=abc;Path=/;Secure=true
@@ -2144,8 +2146,8 @@ a
 3
 [1, 2]
 [1, 9]
-2 20 7
-1 99 1
+2 20 nil
+1 99 nil 1
 [10, 20, 30]
 for 1
 for 2
@@ -3711,7 +3713,7 @@ format_time: output is over 256 KB
 -- 7. sqlite params bind by key
 [{a: "first", b: "second"}]
 [{b: 20, a: 10}]
-sqlite_query: params must be an array, got a string key
+sqlite_query: parameter 1 is positional (?); bind it with a params array, or name it (:name)
 sqlite_query: params must be an array (keys 0..1), got key 5
 sqlite_query: statement has 1 parameter(s), got 0
 -- 8. nil means no timeout
@@ -3835,3 +3837,55 @@ nil nil [1, 2]
 1 {a: 1, 1: 7, 2: 2}
 [5] nil
 -9223372036854775808 9223372036854775807 -2 -9223372036854775808 -9223372036854775808
+1 {v: 2} 3
+[1, 2, 3]
+3 false [1, 2, 3, 4]
+false right [false, nil, "right"]
+arg
+v
+{key: "val"} ["callee", "arg", "k", "key", "val"]
+1-2-3 [1, 2, 3]
+3 0
+0 a    b!
+mine
+v:[1]
+S
+[1, 5, 7, 6] 5
+done own body
+a
+b c
+d
+
+[Runtime Error]: reported at line 99
+  --> examples/194_compiler_known_bugs.gem:99
+    |
+ 99 | error("reported at line 99")
+    |
+Stack trace:
+  at main (examples/194_compiler_known_bugs.gem:99)
+1: partial: true, took about 200 ms: true
+1: zero and negative don't wait: true true true
+1: tcp_write: timeout_ms must be an int (milliseconds) or nil, got string
+2: wrote 3 and 3
+2: peer got abcdef
+3: closed early: true, got only part: true
+3: http.start: write_timeout_ms must be an int > 0 (milliseconds) or nil, got 0
+4: request.post: timed out after 300 ms waiting for http://127.0.0.1:18295/up
+4: within the deadline: true
+5: wrote all: true
+5: peer got all: true
+sid=v; HttpOnly
+sid=; Max-Age=0; HttpOnly; SameSite=Lax
+[{id: 1}]
+[{text: "there"}]
+[{text: "none"}]
+3
+[{text: "there"}]
+sqlite_query: parameter 2 is positional (?); bind it with a params array, or name it (:name)
+sqlite_query: parameter 1 is positional (?); bind it with a params array, or name it (:name)
+sqlite_query: params key "b" matches no parameter of the statement
+sqlite_query: no value for parameter :b (params has no key "b")
+sqlite_query: parameter :a is a table; expected nil, bool, int, float or string
+sqlite_query: params must be an array or a record of names, not both
+sqlite_query: params must be an array, got a float key
+sqlite_query: params key "a" matches no parameter of the statement

@@ -459,25 +459,29 @@ fn build_request(name, method, parsed, headers, body)
   end
 end
 
+# Sends the request within what is left of the deadline, then reads the
+# response.
 fn exchange(rd, req_str, method)
-  if tcp_write(rd.fd, req_str) < len(req_str)
+  let wait = nil
+  if rd.deadline != nil
+    wait = rd.deadline - time_ms()
+  end
+  if tcp_write(rd.fd, req_str, wait) < len(req_str)
+    if rd.deadline != nil and time_ms() >= rd.deadline
+      timeout_error(rd)
+    end
     error("{rd.name}: connection lost while sending the request to {rd.url}")
   end
   read_response(rd, method)
 end
 
-# An option given as nil, as opposed to left out (a destructuring default
-# fires for both).
-fn given_nil(opts, key)
-  type(opts) == "table" and has_key(opts, key) and opts[key] == nil
-end
-
 # The whole call; `name` ("request.get") prefixes every error.
 fn do_request(name, method, raw_url, opts)
   let {headers = {}, body = "", timeout_ms = DEFAULT_TIMEOUT_MS} = opts
-  if given_nil(opts, "timeout_ms")
-    timeout_ms = nil
-  end
+  # A nil body or headers means the default (documented); a nil
+  # timeout_ms means no limit.
+  if headers == nil then headers = {} end
+  if body == nil then body = "" end
   if type(method) != "string" or method == ""
     error("{name}: method must be a non-empty string")
   end
@@ -578,8 +582,9 @@ end
 ##   `Content-Length` are added unless `headers` sets them (in any case);
 ##   nothing else is, Content-Type included.
 ## - `timeout_ms`: an int > 0, default 30000, or nil for no limit. One
-##   deadline for the whole call, not per read. Connecting and sending
-##   the request are not cut short by it, only waiting for the response.
+##   deadline for the whole call, not per read: sending the request and
+##   waiting for the response count against it. Connecting is not cut
+##   short by it.
 ##
 ## In the result, `status` is an int, `headers` maps lowercase names to
 ## trimmed values (a repeated header's values joined with ", ", but

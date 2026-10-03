@@ -1,12 +1,13 @@
 # Destructuring defaults — both let-bindings and function parameters.
-# Defaults fire when the field is absent OR explicitly nil.
+# Defaults fire only when the field (index) is absent: an explicit nil
+# stays nil, as for a positional default.
 
 # ─── let-table-destructure with field defaults ───
 let opts = {strategy: "one_for_all"}
 let {strategy = "one_for_one", max_restarts = 3, name = nil} = opts
 print("let-table: strategy={strategy} max_restarts={max_restarts} name={name}")
 
-# nil values trigger defaults
+# An explicit nil does not trigger the default
 let {x = 7, y = 9} = {x: nil, y: 42}
 print("let-nil: x={x} y={y}")
 
@@ -24,6 +25,8 @@ print("let-array: first={first} second={second} third={third}")
 
 let [u, v = 5] = [10, nil]
 print("let-array-nil: u={u} v={v}")
+let [w, z = 6] = [10]
+print("let-array-short: w={w} z={z}")
 
 # ─── fn param destructuring (required arg) ───
 fn add({x = 0, y = 0})
@@ -40,6 +43,7 @@ print(server(nil))                                 # nil-coerced to {}
 print(server({}))                                  # empty
 print(server({port: 9000}))                        # only port
 print(server({port: 7000, host: "::1", x: "ig"}))  # extras ignored
+print(server({port: nil}))                         # explicit nil stays
 
 # ─── Mixing regular params with destructure params ───
 fn cookie(name, value, {path = "/", secure = false} = {})

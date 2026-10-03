@@ -1,0 +1,158 @@
+# tcp_write with a timeout; std/http's write_timeout_ms; std/request's
+# timeout_ms counting the write.
+
+load "std/http"
+load "std/request"
+
+let PORT = 18295
+let me = self()
+
+# 32 MB: more than a loopback socket's send and receive buffers hold.
+let chunk = build_string() do |add|
+  for i = 0, 1024
+    add("x")
+  end
+end
+let payload = build_string() do |add|
+  for i = 0, 32 * 1024
+    add(chunk)
+  end
+end
+
+# A listener that accepts one connection and doesn't read from it until
+# told to close it.
+fn silent_server(port, parent)
+  spawn do
+    let l = tcp_listen("127.0.0.1", port)
+    send(parent, "listening")
+    let fd = tcp_accept(l)
+    receive
+    when "close" then nil
+    end
+    tcp_close(fd)
+    tcp_close(l)
+  end
+end
+
+fn wait_listening()
+  receive
+  when "listening" then nil
+  end
+end
+
+# 1. A peer that doesn't read: the write gives up at its deadline and
+#    returns how much it wrote.
+let srv = silent_server(PORT, me)
+wait_listening()
+let fd = tcp_connect("127.0.0.1", PORT)
+let t0 = time_ms()
+let n = tcp_write(fd, payload, 200)
+let took = time_ms() - t0
+print("1: partial: {n > 0 and n < len(payload)}, took about 200 ms: {took >= 190 and took < 1500}")
+
+# A deadline that has run out (0 or less) only writes what fits now.
+t0 = time_ms()
+let n0 = tcp_write(fd, payload, 0)
+let nneg = tcp_write(fd, "abc", -5)
+print("1: zero and negative don't wait: {n0 < len(payload)} {nneg <= 3} {time_ms() - t0 < 150}")
+
+# A bad timeout raises before writing.
+let bad = pcall tcp_write(fd, "abc", "soon")
+print("1: {bad.error}")
+send(srv, "close")
+tcp_close(fd)
+
+# 2. A write that fits completes as usual, with or without a timeout.
+let srv2 = spawn do
+  let l = tcp_listen("127.0.0.1", PORT + 1)
+  send(me, "listening")
+  let c = tcp_accept(l)
+  let got = ""
+  while len(got) < 6
+    let s = tcp_read(c, 100, 2000)
+    if s == nil or s == ""
+      break
+    end
+    got = got + s
+  end
+  send(me, {got: got})
+  tcp_close(c)
+  tcp_close(l)
+end
+wait_listening()
+let fd2 = tcp_connect("127.0.0.1", PORT + 1)
+print("2: wrote {tcp_write(fd2, "abc", 1000)} and {tcp_write(fd2, "def", nil)}")
+receive
+when {got: got} then print("2: peer got {got}")
+end
+tcp_close(fd2)
+
+# 3. std/http: a client that asks for a big response and doesn't read
+#    loses its connection after write_timeout_ms instead of holding it.
+let app = http.router()
+app.get("/big", fn(req) http.ok(payload) end)
+let server = http.start(app, {port: PORT + 2, host: "127.0.0.1", write_timeout_ms: 200})
+let c3 = tcp_connect("127.0.0.1", PORT + 2)
+tcp_write(c3, "GET /big HTTP/1.1\r\nHost: x\r\n\r\n")
+sleep(600)
+let total = 0
+let eof = false
+while true
+  let s = tcp_read(c3, 1048576, 2000)
+  if s == nil
+    break
+  elif s == ""
+    eof = true
+    break
+  end
+  total += len(s)
+end
+print("3: closed early: {eof}, got only part: {total < len(payload)}")
+tcp_close(c3)
+let bad_opt = pcall http.start(app, {port: PORT + 2, write_timeout_ms: 0})
+print("3: {bad_opt.error}")
+http.stop(server)
+
+# 4. std/request: sending the body counts against timeout_ms.
+let srv4 = silent_server(PORT, me)
+wait_listening()
+t0 = time_ms()
+let r4 = pcall request.post("http://127.0.0.1:{PORT}/up", {body: payload, timeout_ms: 300})
+print("4: {r4.error}")
+print("4: within the deadline: {time_ms() - t0 < 1500}")
+send(srv4, "close")
+
+# 5. A timed-out `receive ... after` before a write with no timeout
+#    doesn't cut the write short.
+let srv5 = spawn do
+  let l = tcp_listen("127.0.0.1", PORT + 3)
+  send(me, "listening")
+  let c = tcp_accept(l)
+  sleep(300)
+  let got = 0
+  while got < len(payload)
+    let s = tcp_read(c, 1048576, 2000)
+    if s == nil or s == ""
+      break
+    end
+    got += len(s)
+  end
+  send(me, {got5: got})
+  tcp_close(c)
+  tcp_close(l)
+end
+wait_listening()
+let fd5 = tcp_connect("127.0.0.1", PORT + 3)
+receive
+when "never" then nil
+after 10 then nil
+end
+print("5: wrote all: {tcp_write(fd5, payload) == len(payload)}")
+receive
+when {got5: g} then print("5: peer got all: {g == len(payload)}")
+end
+tcp_close(fd5)
+
+# 6. A cookie option given as nil leaves its attribute out.
+print(http.set_cookie(http.ok("x"), "sid", "v", {path: nil, same_site: nil}).headers["Set-Cookie"])
+print(http.delete_cookie(http.ok("x"), "sid", {path: nil}).headers["Set-Cookie"])
