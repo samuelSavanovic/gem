@@ -209,7 +209,9 @@ the function is defined, but its value exists only once the `let` has run:
 read before that (by top-level code above it, or by a function called from
 there), it is `nil`, with no error. Put module-level `let`s at the top of
 the file. A second `let` of the same name at module level rebinds that
-variable instead of making a new one.
+variable instead of making a new one. A `fn` or `extern fn` can't share a name
+with a module-level `let` or another `fn` of the file: that is a compile
+error.
 
 Each process has its own copy of module-level variables (see
 [State and memory](#state-and-memory)), so they are for constants and

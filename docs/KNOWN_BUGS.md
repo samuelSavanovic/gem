@@ -8,16 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### A module-level `let` and `fn` with the same name are both accepted
-
-```gem
-let helper = 1
-fn helper() print("fn") end
-helper()             # attempt to call int value
-```
-
-No error at the second definition; the `let` silently wins.
-
 ### A parameter named like a top-level `fn` reads the fn inside closures
 
 ```gem

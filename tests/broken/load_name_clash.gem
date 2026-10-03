@@ -1,0 +1,4 @@
+# A module-level name clash in a loaded module is reported against that
+# module.
+load "./modules/name_clash"
+print(name_clash.scale(2))

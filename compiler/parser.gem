@@ -141,6 +141,14 @@ fn make_parser(tokens, source, file, sink)
   # a loop outside it; parse_stmt reports them when loop_depth is 0.
   let loop_depth = 0
   let closure_kind = nil
+  # Position of the statement parse() is parsing at the file's top level,
+  # so parse_stmt can tell a module-scope `let` / `fn` / `extern fn` from a
+  # nested one.
+  let top_stmt_pos = -1
+  # Module-scope names declared so far: name -> {kind, line}. Each name has
+  # one module-level definition: a `fn`, an `extern fn` or `let`s (a second
+  # `let` rebinds the slot). Any other pair is reported at the second one.
+  let top_names = {}
 
   # ── Token access ──
 
@@ -165,6 +173,34 @@ fn make_parser(tokens, source, file, sink)
   # Report a parser error at the given location.
   let report = fn(line, col, span, msg, hint)
     sink.report(source, file, line, col, span, msg, hint)
+  end
+
+  # A module-scope binding of `tok`'s name (kind "let", "load", "fn" or
+  # "extern fn"), clashing with an earlier one unless both are lets or
+  # loads (the bindings a `load` makes are lets). `span` overrides the
+  # underline width.
+  let note_top_name = fn(tok, kind, span = nil)
+    if tok.synthetic == true or type(tok.value) != "string"
+      return nil
+    end
+    let name = tok.value
+    let prev = top_names[name]
+    if prev == nil
+      top_names[name] = {kind: kind, line: tok.line}
+      return nil
+    end
+    let rebindable = {let: true, load: true}
+    if rebindable[prev.kind] and rebindable[kind]
+      return nil
+    end
+    let article = "a"
+    if prev.kind == "extern fn"
+      article = "an"
+    end
+    if span == nil
+      span = len(name)
+    end
+    report(tok.line, tok.col, span, "`{name}` is already defined at line {prev.line} ({article} `{prev.kind}`)", "pick another name; a module-level name has one definition (only a `let` can be repeated, and it rebinds the name)")
   end
 
   # Enter a function body (kind as for closure_kind); returns the state
@@ -1128,6 +1164,7 @@ fn make_parser(tokens, source, file, sink)
     # let declaration
     if t.type == "let"
       let line = t.line
+      let at_top = pos == top_stmt_pos
       advance()
 
       # Table destructuring: let {a, b [= default], c} = expr
@@ -1142,6 +1179,9 @@ fn make_parser(tokens, source, file, sink)
           # NAME or keyword as field name
           advance()
           push(names, field_tok.value)
+          if at_top
+            note_top_name(field_tok, "let")
+          end
           skip_nl()
           if peek().type == "="
             advance()
@@ -1177,7 +1217,11 @@ fn make_parser(tokens, source, file, sink)
         skip_nl()
         while peek().type != "]" and not at_end()
           let _lp = pos
-          push(names, expect("NAME").value)
+          let name_tok = expect("NAME")
+          push(names, name_tok.value)
+          if at_top
+            note_top_name(name_tok, "let")
+          end
           skip_nl()
           if peek().type == "="
             advance()
@@ -1205,7 +1249,11 @@ fn make_parser(tokens, source, file, sink)
         return {tag: "block", stmts: stmts}
       end
 
-      let name = expect("NAME").value
+      let name_tok = expect("NAME")
+      let name = name_tok.value
+      if at_top
+        note_top_name(name_tok, "let")
+      end
       expect("=")
       let value = parse_expr()
       return make_let(name, value, line)
@@ -1214,8 +1262,13 @@ fn make_parser(tokens, source, file, sink)
     # fn definition: fn NAME(params) body end
     if t.type == "fn" and peek_at(1).type == "NAME"
       let line = t.line
+      let at_top = pos == top_stmt_pos
       advance()
-      let name = expect("NAME").value
+      let name_tok = expect("NAME")
+      let name = name_tok.value
+      if at_top
+        note_top_name(name_tok, "fn")
+      end
       if fn_depth > 0
         report(line, 1, len(name) + 3, "named fn inside function body is not supported", "use: let {name} = fn(...) ... end")
       elif stmt_depth > 1
@@ -1389,21 +1442,48 @@ fn make_parser(tokens, source, file, sink)
 
     # load "path" [as name | (name, ...)]
     if t.type == "load"
+      let at_top = pos == top_stmt_pos
       advance()
-      let path = expect("STRING").value
+      let path_tok = expect("STRING")
+      let path = path_tok.value
       let alias_name = nil
       let selective = nil
       if peek().type == "NAME" and peek().value == "as"
         advance()
-        alias_name = expect("NAME").value
+        let alias_tok = expect("NAME")
+        alias_name = alias_tok.value
+        if at_top
+          note_top_name(alias_tok, "load")
+        end
       elif peek().type == "("
         advance()
-        selective = [expect("NAME").value]
-        while peek().type == ","
+        selective = []
+        let sel_tok = expect("NAME")
+        while true
+          push(selective, sel_tok.value)
+          if at_top
+            note_top_name(sel_tok, "load")
+          end
+          if peek().type != ","
+            break
+          end
           advance()
-          push(selective, expect("NAME").value)
+          sel_tok = expect("NAME")
         end
         expect(")")
+      elif at_top and path_tok.synthetic != true
+        # The namespace binding is named after the file's base name.
+        let start = 0
+        for i = 0, len(path)
+          if ord(path, i) == 47
+            start = i + 1
+          end
+        end
+        let base = substr(path, start, len(path) - start)
+        if len(base) > 4 and substr(base, len(base) - 4, 4) == ".gem"
+          base = substr(base, 0, len(base) - 4)
+        end
+        note_top_name({type: "NAME", value: base, line: path_tok.line, col: path_tok.col}, "load", len(path) + 2)
       end
       return {tag: "load", path: path, alias: alias_name, selective: selective, line: t.line, col: t.col}
     end
@@ -1425,6 +1505,7 @@ fn make_parser(tokens, source, file, sink)
       if stmt_depth > 1
         report(t.line, t.col, 6, "extern declaration must be at the top level", "move it out of the enclosing block or function")
       end
+      let at_top = pos == top_stmt_pos
       advance()
       let is_blocking = false
       if peek().type == "blocking"
@@ -1433,7 +1514,11 @@ fn make_parser(tokens, source, file, sink)
       end
       if peek().type == "fn"
         advance()
-        let name = expect("NAME").value
+        let name_tok = expect("NAME")
+        let name = name_tok.value
+        if at_top
+          note_top_name(name_tok, "extern fn")
+        end
         expect("(")
         let eparams = []
         if peek().type != ")"
@@ -1528,6 +1613,7 @@ fn make_parser(tokens, source, file, sink)
     skip_nl()
     while not at_end()
       let _lp = pos
+      top_stmt_pos = pos
       push(stmts, parse_stmt())
       skip_nl()
       # Top-level watchdog: if parse_stmt didn't advance, force one token

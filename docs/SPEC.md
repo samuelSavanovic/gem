@@ -99,7 +99,7 @@ end
 f(5)
 ```
 
-The exception is a `let` directly in a file's top-level code: that declares the module-level binding of the name (see below), of which there is one per name. A second top-level `let` of the same name rebinds that module-level binding, as an assignment would; named functions and closures, which always read module-level bindings live, see the new value.
+The exception is a `let` directly in a file's top-level code: that declares the module-level binding of the name (see below), of which there is one per name. A second top-level `let` of the same name rebinds that module-level binding, as an assignment would; named functions and closures, which always read module-level bindings live, see the new value. A module-level name has one kind of definition: a `fn`, an `extern fn`, or `let`s (the names a `load` binds count as `let`s). A `fn` or `extern fn` with the name of another module-level `let`, `load` binding, `fn` or `extern fn` in the same file, in either order, is a compile error at the second definition (`` `helper` is already defined at line 1 (a `let`)``).
 
 ### Destructuring
 
@@ -169,6 +169,8 @@ let result = add(
 Table and array literals may span lines the same way. Other expressions may not: a line break after a binary operator or inside parentheses ends the statement (`let t = (1 +` followed by `2)` on the next line is a parse error), and a line that starts with `-` is a new statement (`let x = 1` followed by `- 2` on the next line leaves `x` at `1`). Parameter lists in a `fn` definition must fit on one line. Split a long condition into named `let`s.
 
 A call with more arguments than the function declares drops the extra ones, and missing arguments are `nil` (or the parameter's default); neither is an error. Calling a non-function value is a runtime error.
+
+A named function is a module-level binding: two `fn`s of the same name in one file, or a `fn` and a top-level `let` or `extern fn` of the same name, are a compile error at the second one (see Shadowing). A `let` of that name inside a function or block shadows the function as usual.
 
 If the entry file defines `fn main()`, the compiler calls it with no arguments after the file's top-level code has run. Don't also call it yourself, or it runs twice. Use `argv()` for command-line arguments.
 
