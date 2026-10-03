@@ -98,3 +98,7 @@ What's left:
 
 - **Growable stacks.** The depth bound itself remains: a recursion that needs more than 8 MB fails, cleanly. Removing the bound means growing stacks on demand (copying stacks, or segmented stacks with a fault-driven grow path). High cost: minicoro has no support, pointers into the stack would have to be fixed up, and the signal-handler path gets harder. The motivation is programs that want unbounded recursion to *succeed*, e.g. recursive descent over adversarially deep input without a depth cap. So far an explicit depth limit (as `std/json` has) has been the better answer.
 - **Pcall for guard-page overflows.** An overflow caught by the guard page (inside C code) always ends the process, because the C code it interrupts may hold half-updated state. Only `extern fn` code can get there now (`gem_deep_copy` and `gem_deep_free` are iterative); making it catchable would need a contract for what an interrupted extern may leave behind.
+
+## Exponent syntax in float literals (P3)
+
+`1e6` doesn't lex as a number (it reads as `1` followed by the name `e6`), while `to_string` writes floats below `1e-4` or from `1e16` up in exponent form (`1e-05`, `1e+16`). So the text a float prints as isn't always a valid Gem literal; `to_float("1e-7")` is the way to write one today. Needs: the lexer accepting `<digits>[.<digits>](e|E)[+-]<digits>` as a float (an exponent makes it a float even without a dot, as in C), the editor grammars, SPEC "Numbers". Trade-off: none beyond the work; `1e6` currently fails to compile, so nothing changes meaning.

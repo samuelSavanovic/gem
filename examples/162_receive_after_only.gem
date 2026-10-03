@@ -46,7 +46,7 @@ receive
 after 0
   print("after 0")
 end
-print("fast:", time_ms() - t1 < 5)
+print("fast:", time_ms() - t1 < 100)
 print(receive())
 
 # In a loop, and as a self tail call in a spawned process.

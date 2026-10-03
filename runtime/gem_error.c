@@ -74,9 +74,6 @@ void gem_print_stack_trace(void) {
  * Nothing found: no source line, as before. Buffers are static (this runs
  * once per uncaught error, maybe on a nearly exhausted process stack). */
 
-#ifdef __APPLE__
-#include <mach-o/dyld.h>
-#endif
 #include <unistd.h>
 #include <limits.h>
 #ifndef PATH_MAX
@@ -128,23 +125,15 @@ static int gem_try_source_upward(char *dir, const char *file, int line) {
     }
 }
 
-/* The directory holding the running executable, into gem_src_dir.
- * Returns 0 where it can't be determined. */
+/* The directory holding the running executable (gem_exe_path, in
+ * gem_builtins_io.c), into gem_src_dir. Returns 0 where it can't be
+ * determined (gem_exe_path then falls back to a relative argv[0]). */
 static int gem_exe_dir(void) {
-    char *slash;
-#if defined(__linux__)
-    ssize_t n = readlink("/proc/self/exe", gem_src_dir, sizeof(gem_src_dir) - 1);
-    if (n <= 0) return 0;
-    gem_src_dir[n] = 0;
-#elif defined(__APPLE__)
-    uint32_t size = sizeof(gem_src_cand);
-    if (_NSGetExecutablePath(gem_src_cand, &size) != 0) return 0;
-    if (!realpath(gem_src_cand, gem_src_dir)) return 0;
-#else
-    return 0;
-#endif
-    slash = strrchr(gem_src_dir, '/');
-    if (!slash) return 0;
+    const char *exe = gem_exe_path();
+    if (exe[0] != '/') return 0;
+    int n = snprintf(gem_src_dir, sizeof(gem_src_dir), "%s", exe);
+    if (n < 0 || (size_t)n >= sizeof(gem_src_dir)) return 0;
+    char *slash = strrchr(gem_src_dir, '/');
     if (slash == gem_src_dir) slash[1] = 0; else *slash = 0;
     return 1;
 }

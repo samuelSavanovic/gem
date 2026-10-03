@@ -8,9 +8,128 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
+### An assignment as a call argument crashes the compiler
+
+```gem
+fn f(x) x end
+let a = nil
+print(f(a = 1))
+```
+
+reports `[Compiler Bug]: unknown expression node: assign`. The parser
+accepts an assignment where an expression is expected; it should be a
+compile error at the `=`. (compiler/parser.gem, codegen's
+`compile_expr`)
+
+### Files with CRLF line endings don't lex
+
+`printf 'let b = "q"\r\nprint(b)\r\n' > x.gem; gem x.gem` reports
+`unexpected character` at the `\r`; a `"""` followed by `\r\n` reports
+`triple-quoted string must be followed by a newline`. The lexer
+(compiler/lexer.gem) should treat `\r\n` as a newline everywhere.
+
+### `0..n` lexes as a float and fails at runtime
+
+```gem
+for i in 0..len("ab")
+  print(i)
+end
+```
+
+fails at runtime with `field access on non-table: got float`: `0.` lexes
+as a float and `.len(...)` as a field access. A number followed by `..`
+should be a compile error (Gem's range loop is `for i = 0, n`).
+
+### A destructuring `let` accepts a non-name field
+
+`let {"a"} = {a: 1}` (or `let {1} = ...`) compiles and runs with no
+error and binds nothing. The field loops of `let {...}` and `{...}`
+param patterns in compiler/parser.gem take any token as a field name;
+they should report `expected a field name`.
+
+### Only a module's last `export` statement counts
+
+A module with `fn a() 1 end`, `export a`, `fn b() 2 end`, `export b`
+exports only `b`: `m.a()` reports `module `two` has no export `a``.
+`find_export_node` in compiler/main.gem takes the last one. Merge them,
+or report a second `export` as an error.
+
+### Error columns for nested named fns and private module fields
+
+`fn inner() ... end` inside a fn body or closure reports "named fn inside
+function body is not supported" at column 1 instead of the `fn` token.
+`print(ok.priv())`, where module `ok` doesn't export `priv`, reports "has
+no export" at column 1 with the span of `print`, not at `priv`.
+
 ## Runtime
 
-## C interop
+### `INT64_MIN / -1` kills the program
+
+```gem
+let m = -9223372036854775807 - 1
+let d = -1
+print(m / d)      # Floating point exception, exit 136
+```
+
+`%` does the same. The constant folder hits it too: compiling
+`print(-9223372036854775808 / -1)` crashes the compiler (exit 136).
+`gem_div`/`gem_mod` in runtime/gem_ops.c and `try_fold_binop` in
+compiler/fold.gem should raise (or wrap) instead. Relatedly, int `+`,
+`-` and `*` overflow is signed-overflow undefined behaviour in C (no
+`-fwrapv`); it wraps in practice.
+
+### A non-integer `after` timeout is taken as 0
+
+```gem
+receive
+after nil then print("no wait")
+end
+```
+
+runs at once instead of raising: the timeout's `.ival` is read with no
+type check (`compile_receive_match` in compiler/codegen.gem). A
+non-integer timeout should raise.
+
+### `s = s + x` in a loop skips the `+` type check
+
+```gem
+fn f()
+  let s = ""
+  let i = 0
+  while i < 3
+    s = s + i
+    i += 1
+  end
+  s
+end
+print(f())        # 012, but "" + 1 raises a type error elsewhere
+```
+
+Codegen turns `s = s + x` inside a loop into `gem_string_append`
+(`decompose_concat`/`find_append_vars` in compiler/codegen.gem,
+runtime/gem_ops.c), which appends any value's `to_string` form instead
+of raising like `+`.
+
+### Printing a table cuts strings at an embedded NUL
+
+`let t = ["a\0b"]` / `print(len(t[0]), t)` prints `3 ["a"]`. `fmt_value`
+in runtime/gem_builtins_core.c (used by `print`, `to_string` and
+interpolation of tables) writes strings with `strlen`, not `slen`.
+
+### sqlite: empty SQL, placeholders in `sqlite_exec`, several statements
+
+```gem
+let db = sqlite_open(":memory:")
+pcall(fn() sqlite_query(db, "", []) end)         # error "sqlite_query: not an error"
+sqlite_exec(db, "CREATE TABLE t(x)")
+sqlite_exec(db, "INSERT INTO t VALUES (?)")      # inserts NULL, no error
+sqlite_query(db, "INSERT INTO t VALUES (1); INSERT INTO t VALUES (2)", [])
+print(sqlite_query(db, "SELECT count(*) AS n FROM t", []))   # [{n: 2}]: the 2nd INSERT never ran
+```
+
+Empty or comment-only SQL should return `[]`; `sqlite_exec` should raise
+on a statement with parameters; `sqlite_query` should run (or reject)
+the text after the first statement. runtime/gem_builtins_sqlite.c.
 
 ## Standard library
 
@@ -124,6 +243,3 @@ exact case only, so `cookie: a=1` gives empty `req.cookies`. A header
 written without a space after the colon (`Host:x`, valid HTTP) is
 dropped. `parse_headers` in std/http.gem splits on `": "`. Lowercase the
 names, trim optional whitespace, and document the `req.headers` keys.
-
-## Editor grammars
-
