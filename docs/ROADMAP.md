@@ -84,6 +84,12 @@ TCP sockets and SQLite handles are plain ints. A process that crashes or is kill
 
 What needs building: a per-process resource list filled by `tcp_listen`/`tcp_accept`/`tcp_connect`/`sqlite_open` and closed in `gem_free_proc_slot`; for `exec`, `posix_spawn` + `waitpid` so the child can be signalled. Trade-off: a handle passed to another process (an acceptor handing a socket to a handler) needs ownership to move with it. Making the user transfer ownership explicitly would add a concept to the language, so the transfer should happen implicitly, e.g. on `send` or `spawn` capture.
 
+## Write timeout for `tcp_write` (P2)
+
+`tcp_write` loops until every byte is written and has no timeout (`gem_tcp_write_fn` in `runtime/gem_builtins_tcp.c`), so a peer that stops reading blocks the writer for as long as it keeps the connection open. In `std/http` such a client holds its connection process (and a process-table slot) forever: the server's idle and request timeouts only cover reads. `std/request` likewise can't bound the write of a large request body.
+
+What needs building: an optional `timeout_ms` argument, `tcp_write(fd, data, timeout_ms)`, using the same per-process deadline as `tcp_read`, that returns the number of bytes written before the deadline (so the caller can tell a partial write); then `std/http` passes a write deadline for each response and `std/request` counts the write against its `timeout_ms`. Trade-off: callers must check the count, which they already should (see BEST_PRACTICES "Pass timeouts to reads, check writes").
+
 ## Shared read-mostly data between processes (P2)
 
 Module-level bindings are per-process (SPEC "Module-level bindings are per-process"): every process has its own copy, writes stay local, and `spawn` copies the parent's module state. Sharing mutable state means a process plus messages, which is the right default but makes large read-mostly data (a config tree, a routing table, a lookup cache) cost a copy per spawn or a message round-trip per read.

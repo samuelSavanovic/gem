@@ -5,10 +5,18 @@
 #     http.ok("hello {req.params.name}")
 #   end
 #   http.serve(app, {port: 8080})        # or: let server = http.start(app, ...)
+#                                        #     ... http.stop(server)
 #
 # Each connection runs in its own process. A handler that raises (or returns
-# something that isn't a response table) gets a 500, and the error and its
+# something that isn't a valid response) gets a 500, and the error and its
 # stack go to stderr. Request header names are lowercased.
+#
+# `start` spawns a server process (the pid in the handle it returns). It
+# spawns the acceptor, linked, and monitors every connection process, so it
+# closes the socket of one that dies without closing it (the connection
+# tells it before closing its socket itself, so it never closes an fd number
+# that may have been reused). Killing the server process, as `stop` does,
+# kills the acceptor and the connections and closes every socket.
 
 load "std/string"
 load "std/url"
@@ -16,27 +24,51 @@ load "std/mime"
 load "std/json"
 load "std/time"
 
-let IDLE_TIMEOUT_MS = 30000
 let READ_SIZE = 8192
 let MAX_HEADER_BYTES = 65536
+let MAX_LINE = 4096
+let DEFAULT_MAX_BODY = 8388608
+let DEFAULT_IDLE_TIMEOUT_MS = 30000
+let DEFAULT_REQUEST_TIMEOUT_MS = 30000
+let ACCEPT_BACKOFF_MS = 50
+let DRAIN_QUIET_MS = 100
+let REFUSE_DRAIN_MS = 50
+let STOP_TIMEOUT_MS = 5000
 let TEXT_PLAIN = "text/plain; charset=utf-8"
 
 let STATUS_TEXT = {
+  100: "Continue",
+  101: "Switching Protocols",
   200: "OK",
   201: "Created",
+  202: "Accepted",
   204: "No Content",
+  206: "Partial Content",
   301: "Moved Permanently",
   302: "Found",
+  303: "See Other",
   304: "Not Modified",
+  307: "Temporary Redirect",
+  308: "Permanent Redirect",
   400: "Bad Request",
   401: "Unauthorized",
   403: "Forbidden",
   404: "Not Found",
   405: "Method Not Allowed",
+  408: "Request Timeout",
+  409: "Conflict",
+  410: "Gone",
+  413: "Content Too Large",
+  415: "Unsupported Media Type",
+  422: "Unprocessable Content",
+  429: "Too Many Requests",
   431: "Request Header Fields Too Large",
   500: "Internal Server Error",
+  501: "Not Implemented",
   502: "Bad Gateway",
-  503: "Service Unavailable"
+  503: "Service Unavailable",
+  504: "Gateway Timeout",
+  505: "HTTP Version Not Supported"
 }
 
 # ─── Response builders ───
@@ -95,17 +127,26 @@ fn set_cookie(resp, name, value, {path = "/", http_only = true, secure = false, 
   end
 
   let new_headers = {}
-  for k, v in resp.headers
-    new_headers[k] = v
+  if resp.headers != nil
+    for k, v in resp.headers
+      new_headers[k] = v
+    end
   end
 
-  # Several cookies share one header value; serialize_response splits them
-  # back into one Set-Cookie line each.
+  # Several cookies make the header value an array, sent as one
+  # Set-Cookie line each.
   let existing = new_headers["Set-Cookie"]
-  if existing != nil
-    new_headers["Set-Cookie"] = "{existing}\r\nSet-Cookie: {cookie_str}"
-  else
+  if existing == nil
     new_headers["Set-Cookie"] = cookie_str
+  elif type(existing) == "table"
+    let all = []
+    for c in existing
+      push(all, c)
+    end
+    push(all, cookie_str)
+    new_headers["Set-Cookie"] = all
+  else
+    new_headers["Set-Cookie"] = [existing, cookie_str]
   end
 
   {status: resp.status, headers: new_headers, body: resp.body}
@@ -192,7 +233,7 @@ fn match_static(static_routes, path)
         rel = "/index.html"
       end
       let file_path = "{sr.dir}{normalize_path(rel)}"
-      if file_exists(file_path)
+      if file_exists(file_path) and not is_dir(file_path)
         let content = read_file(file_path)
         let ct = mime.lookup(file_path)
         let handler = fn(req)
@@ -257,19 +298,61 @@ fn router()
   r
 end
 
-# ─── HTTP parsing ───
+# ─── Reading requests ───
 
-# Index of the first "\r\n\r\n" in `s`, or -1.
-fn find_header_end(s)
-  let slen = len(s)
-  let i = 0
-  while i < slen - 3
-    if ord(s, i) == 13 and ord(s, i + 1) == 10 and ord(s, i + 2) == 13 and ord(s, i + 3) == 10
-      return i
-    end
-    i += 1
+# A connection's reader: the bytes received but not yet consumed (`data`
+# from `pos` on), and the deadline for the request being read (nil while
+# waiting for its first byte).
+fn new_reader(fd, cfg)
+  {fd: fd, data: "", pos: 0, deadline: nil, idle_ms: cfg.idle_ms, request_ms: cfg.request_ms}
+end
+
+fn pending(rd)
+  len(rd.data) - rd.pos
+end
+
+# Starts the clock for the request being read.
+fn start_deadline(rd)
+  if rd.deadline == nil and rd.request_ms > 0
+    rd.deadline = time_ms() + rd.request_ms
   end
-  -1
+end
+
+# The next bytes from the peer: each read waits at most `idle_ms`, and
+# never past the request's deadline. nil when the peer closed or the time
+# ran out.
+fn read_more(rd)
+  let wait = rd.idle_ms
+  if rd.deadline != nil
+    let left = rd.deadline - time_ms()
+    if left <= 0
+      return nil
+    end
+    if wait <= 0 or left < wait
+      wait = left
+    end
+  end
+  # nil = timeout, "" = EOF; both end the connection.
+  let chunk = tcp_read(rd.fd, READ_SIZE, wait)
+  if chunk == nil or chunk == ""
+    return nil
+  end
+  start_deadline(rd)
+  chunk
+end
+
+# Appends the next bytes to the reader; false when there are none.
+fn fill(rd)
+  let chunk = read_more(rd)
+  if chunk == nil
+    return false
+  end
+  if rd.pos > 0
+    rd.data = substr(rd.data, rd.pos, len(rd.data) - rd.pos)
+    rd.pos = 0
+  end
+  rd.data = "{rd.data}{chunk}"
+  true
 end
 
 fn last_bytes(s, n)
@@ -279,91 +362,297 @@ fn last_bytes(s, n)
   substr(s, len(s) - n, n)
 end
 
-# Reads until the end of the request head. Returns {data, header_end}
-# (`data` holds everything read so far, `conn_buf` included), nil when the
-# peer closed or went idle, or {too_large: true} past MAX_HEADER_BYTES.
-# Chunks collect in a buffer and only the new bytes are scanned, so a peer
-# sending one byte at a time costs linear time.
-fn read_head(client_fd, conn_buf)
-  let header_end = find_header_end(conn_buf)
-  if header_end >= 0
-    return {data: conn_buf, header_end: header_end}
+# Reads up to the end of the request head and returns the head without its
+# final blank line, nil when the peer closed or the time ran out, or
+# {too_large: true} when the head is over MAX_HEADER_BYTES. Chunks collect
+# in a buffer and only the new bytes are scanned, so a peer sending one
+# byte at a time costs linear time.
+fn read_head(rd)
+  let found = string.index_of(rd.data, "\r\n\r\n", rd.pos)
+  if found < 0
+    let acc = buf_new()
+    let rest = substr(rd.data, rd.pos, len(rd.data) - rd.pos)
+    buf_push(acc, rest)
+    let have = len(rest)
+    let tail = last_bytes(rest, 3)
+    while found < 0
+      let chunk = read_more(rd)
+      if chunk == nil
+        return nil
+      end
+      let window = "{tail}{chunk}"
+      let at = string.index_of(window, "\r\n\r\n")
+      if at >= 0
+        found = have - len(tail) + at
+      end
+      buf_push(acc, chunk)
+      have += len(chunk)
+      tail = last_bytes(window, 3)
+      if found < 0 and have > MAX_HEADER_BYTES
+        return {too_large: true}
+      end
+    end
+    rd.data = to_string(acc)
+    rd.pos = 0
   end
-  let acc = buf_new()
-  buf_push(acc, conn_buf)
-  let have = len(conn_buf)
-  let tail = last_bytes(conn_buf, 3)
-  while header_end < 0
-    if have > MAX_HEADER_BYTES
-      return {too_large: true}
-    end
-    let chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
-    # nil = idle timeout, "" = EOF; both end the connection.
-    if chunk == nil or chunk == ""
-      return nil
-    end
-    let window = "{tail}{chunk}"
-    let found = find_header_end(window)
-    if found >= 0
-      header_end = have - len(tail) + found
-    end
-    buf_push(acc, chunk)
-    have = have + len(chunk)
-    tail = last_bytes(window, 3)
+  if found - rd.pos > MAX_HEADER_BYTES
+    return {too_large: true}
   end
-  {data: to_string(acc), header_end: header_end}
+  let head = substr(rd.data, rd.pos, found - rd.pos)
+  rd.pos = found + 4
+  {text: head}
 end
 
+# Exactly n bytes; nil when the peer closed or the time ran out first.
+fn read_exact(rd, n)
+  let out = buf_new()
+  let have = 0
+  while true
+    let take = pending(rd)
+    if take > n - have
+      take = n - have
+    end
+    buf_push(out, substr(rd.data, rd.pos, take))
+    rd.pos = rd.pos + take
+    have += take
+    if have == n
+      return to_string(out)
+    end
+    if not fill(rd)
+      return nil
+    end
+  end
+end
+
+# The next CRLF-terminated line (for chunked bodies): {line}, {closed: true}
+# when the peer closed or the time ran out, or {bad: true} for a bare LF or
+# a line over MAX_LINE bytes.
+fn read_line(rd)
+  let scan = rd.pos
+  while true
+    let nl = string.index_of(rd.data, "\n", scan)
+    if nl >= 0
+      if nl == rd.pos or ord(rd.data, nl - 1) != 13 or nl - rd.pos - 1 > MAX_LINE
+        return {bad: true}
+      end
+      let line = substr(rd.data, rd.pos, nl - rd.pos - 1)
+      rd.pos = nl + 1
+      return {line: line}
+    end
+    let before = pending(rd)
+    if before > MAX_LINE
+      return {bad: true}
+    end
+    if not fill(rd)
+      return {closed: true}
+    end
+    scan = rd.pos + before
+  end
+end
+
+fn parse_hex(s)
+  if len(s) == 0 or len(s) > 15
+    return nil
+  end
+  let n = 0
+  for i = 0, len(s)
+    let c = ord(s, i)
+    let d = -1
+    if c >= 48 and c <= 57
+      d = c - 48
+    elif c >= 97 and c <= 102
+      d = c - 87
+    elif c >= 65 and c <= 70
+      d = c - 55
+    end
+    if d < 0
+      return nil
+    end
+    n = n * 16 + d
+  end
+  n
+end
+
+# Decodes a chunked request body: {body}, {status: 400 or 413} for a
+# malformed or oversized one, or nil when the peer closed or the time ran
+# out. Chunk extensions and trailer fields are discarded.
+fn read_chunked(rd, max_body)
+  let out = buf_new()
+  let total = 0
+  while true
+    let r = read_line(rd)
+    if r.closed
+      return nil
+    elif r.bad
+      return {status: 400}
+    end
+    let size_str = r.line
+    let semi = string.index_of(size_str, ";")
+    if semi >= 0
+      size_str = substr(size_str, 0, semi)
+    end
+    let size = parse_hex(string.trim(size_str))
+    if size == nil
+      return {status: 400}
+    end
+    if size == 0
+      break
+    end
+    total += size
+    if total > max_body
+      return {status: 413}
+    end
+    let piece = read_exact(rd, size)
+    if piece == nil
+      return nil
+    end
+    buf_push(out, piece)
+    let end_r = read_line(rd)
+    if end_r.closed
+      return nil
+    elif end_r.bad or end_r.line != ""
+      return {status: 400}
+    end
+  end
+  let trailer_bytes = 0
+  while true
+    let r = read_line(rd)
+    if r.closed
+      return nil
+    elif r.bad
+      return {status: 400}
+    end
+    if r.line == ""
+      break
+    end
+    trailer_bytes += len(r.line)
+    if trailer_bytes > MAX_HEADER_BYTES
+      return {status: 400}
+    end
+  end
+  {body: to_string(out)}
+end
+
+# ─── Parsing requests ───
+
+# "GET /path HTTP/1.1" as {method, target, http10}, or nil.
 fn parse_request_line(line)
   let sp1 = string.index_of(line, " ")
-  if sp1 < 0
+  if sp1 <= 0
     return nil
   end
-  let rest = substr(line, sp1 + 1, len(line) - sp1 - 1)
-  let sp2 = string.index_of(rest, " ")
-  if sp2 < 0
+  let sp2 = string.index_of(line, " ", sp1 + 1)
+  if sp2 <= sp1 + 1 or len(line) - sp2 - 1 != 8
     return nil
   end
-  {method: substr(line, 0, sp1), raw_path: substr(rest, 0, sp2)}
+  let version = substr(line, sp2 + 1, 8)
+  if not string.starts_with(version, "HTTP/1.")
+    return nil
+  end
+  {method: substr(line, 0, sp1), target: substr(line, sp1 + 1, sp2 - sp1 - 1), http10: version == "HTTP/1.0"}
+end
+
+# str_replace (in C) returns its input unchanged when nothing matches.
+fn has_text(s, t)
+  len(str_replace(s, t, "")) != len(s)
 end
 
 # Header names are lowercased and values trimmed. A repeated header's
-# values are joined with ", " (cookies with "; ").
+# values are joined with ", " (cookies with "; "). nil when a line has no
+# name, or whitespace in its name.
 fn parse_headers(header_block)
   let headers = {}
+  if header_block == ""
+    return headers
+  end
   for line in string.split(header_block, "\r\n")
     let colon = string.index_of(line, ":")
-    if colon > 0
-      let key = string.lower(string.trim(substr(line, 0, colon)))
-      let value = string.trim(substr(line, colon + 1, len(line) - colon - 1))
-      let prev = headers[key]
-      if prev == nil
-        headers[key] = value
-      elif key == "cookie"
-        headers[key] = "{prev}; {value}"
-      else
-        headers[key] = "{prev}, {value}"
-      end
+    if colon <= 0
+      return nil
+    end
+    let name = substr(line, 0, colon)
+    if has_text(name, " ") or has_text(name, "\t")
+      return nil
+    end
+    let key = string.lower(name)
+    let value = string.trim(substr(line, colon + 1, len(line) - colon - 1))
+    let prev = headers[key]
+    if prev == nil
+      headers[key] = value
+    elif key == "cookie"
+      headers[key] = "{prev}; {value}"
+    else
+      headers[key] = "{prev}, {value}"
     end
   end
   headers
 end
 
-# The Content-Length as an int (0 when absent), or nil when it isn't a
-# non-negative integer.
-fn content_length(headers)
-  let cl = headers["content-length"]
-  if cl == nil
-    return 0
+# The request head as {method, target, http10, headers}, or nil.
+fn parse_head(head)
+  let request_line = head
+  let header_block = ""
+  let first_line_end = string.index_of(head, "\r\n")
+  if first_line_end >= 0
+    request_line = substr(head, 0, first_line_end)
+    header_block = substr(head, first_line_end + 2, len(head) - first_line_end - 2)
   end
-  let r = pcall to_int(cl)
-  if not r.ok or r.value < 0
+  let info = parse_request_line(request_line)
+  if info == nil
     return nil
   end
-  r.value
+  let headers = parse_headers(header_block)
+  if headers == nil
+    return nil
+  end
+  info.headers = headers
+  info
 end
 
-# ─── Response serialization ───
+# A Content-Length value as an int (0 when absent), or nil when it isn't a
+# plain decimal number.
+fn content_length(value)
+  if value == nil
+    return 0
+  end
+  if len(value) == 0 or len(value) > 15
+    return nil
+  end
+  for i = 0, len(value)
+    let c = ord(value, i)
+    if c < 48 or c > 57
+      return nil
+    end
+  end
+  to_int(value)
+end
+
+# A comma-separated header value (Connection, Transfer-Encoding) as its
+# lowercased tokens.
+fn token_list(value)
+  let out = []
+  if value == nil
+    return out
+  end
+  for part in string.split(value, ",")
+    let t = string.lower(string.trim(part))
+    if t != ""
+      push(out, t)
+    end
+  end
+  out
+end
+
+fn has_token(tokens, t)
+  for x in tokens
+    if x == t
+      return true
+    end
+  end
+  false
+end
+
+# ─── Responses ───
 
 fn status_text(code)
   let text = STATUS_TEXT[code]
@@ -373,43 +662,113 @@ fn status_text(code)
   text
 end
 
-fn serialize_response(resp, keep_alive)
+# The server writes these itself; a handler's own are dropped.
+fn is_framing_header(name)
+  let l = len(name)
+  if l != 10 and l != 14 and l != 17
+    return false
+  end
+  let n = string.lower(name)
+  n == "content-length" or n == "transfer-encoding" or n == "connection"
+end
+
+fn has_cr_or_lf(s)
+  has_text(s, "\r") or has_text(s, "\n")
+end
+
+# nil when `resp` can be sent, else what is wrong with it.
+fn response_problem(resp)
+  if type(resp) != "table"
+    return "handler returned {resp}, not a response table"
+  end
+  let status = resp.status
+  if type(status) != "int"
+    return "invalid response: status must be an int, got {type(status)} {status}"
+  end
+  if status < 100 or status > 999
+    return "invalid response: status {status} is not from 100 to 999"
+  end
+  if resp.body != nil and type(resp.body) != "string"
+    return "invalid response: body must be nil or a string, got {type(resp.body)}"
+  end
+  let headers = resp.headers
+  if headers == nil
+    return nil
+  end
+  if type(headers) != "table"
+    return "invalid response: headers must be nil or a table, got {type(headers)}"
+  end
+  for name, value in headers
+    if type(name) != "string" or name == "" or has_cr_or_lf(name) or has_text(name, ":")
+      return "invalid response: bad header name {name}"
+    end
+    if type(value) == "table"
+      for v in value
+        if has_cr_or_lf("{v}")
+          return "invalid response: header {name} has a CR or LF in its value"
+        end
+      end
+    elif type(value) == "string"
+      if has_cr_or_lf(value)
+        return "invalid response: header {name} has a CR or LF in its value"
+      end
+    elif has_cr_or_lf("{value}")
+      return "invalid response: header {name} has a CR or LF in its value"
+    end
+  end
+  nil
+end
+
+# The response's bytes. `head_only` (a HEAD request) leaves the body out
+# but keeps its Content-Length; 1xx, 204 and 304 responses have neither.
+fn serialize_response(resp, keep_alive, head_only = false)
   let body = resp.body
   if body == nil
     body = ""
   end
-  let headers = resp.headers
-  if headers == nil
-    headers = {}
-  end
+  let status = resp.status
+  let bodiless = status < 200 or status == 204 or status == 304
   build_string() do |add|
-    add("HTTP/1.1 ", resp.status, " ", status_text(resp.status), "\r\n")
-    add("Content-Length: ", len(body), "\r\n")
+    add("HTTP/1.1 ", status, " ", status_text(status), "\r\n")
+    if not bodiless
+      add("Content-Length: ", len(body), "\r\n")
+    end
     if keep_alive
       add("Connection: keep-alive\r\n")
     else
       add("Connection: close\r\n")
     end
-    for k, v in headers
-      if k == "Set-Cookie"
-        for part in string.split(v, "\r\nSet-Cookie: ")
-          add("Set-Cookie: ", part, "\r\n")
+    if resp.headers != nil
+      for k, v in resp.headers
+        if not is_framing_header(k)
+          if type(v) == "table"
+            for part in v
+              add(k, ": ", part, "\r\n")
+            end
+          else
+            add(k, ": ", v, "\r\n")
+          end
         end
-      else
-        add(k, ": ", v, "\r\n")
       end
     end
     add("\r\n")
-    add(body)
+    if not bodiless and not head_only
+      add(body)
+    end
   end
 end
 
-fn is_response(resp)
-  if type(resp) != "table" or type(resp.status) != "int"
+# True when the handler's own Connection header asks to close.
+fn response_closes(resp)
+  if resp.headers == nil
     return false
   end
-  let body_ok = resp.body == nil or type(resp.body) == "string"
-  body_ok and (resp.headers == nil or type(resp.headers) == "table")
+  for k, v in resp.headers
+    if len(k) == 10 and string.lower(k) == "connection" and has_token(token_list("{v}"), "close")
+      return true
+    end
+  end
+  false
 end
 
 # ─── Error reporting ───
@@ -445,93 +804,153 @@ fn report_error(what, stack)
 end
 
 # Runs the handler. Returns its response, or a 500 after reporting the
-# error (or the bad return value) on stderr.
+# error (or what is wrong with the response) on stderr.
 fn call_handler(handler, req)
   let r = pcall handler(req)
   if not r.ok
     report_error("{req.method} {req.path}: {r.error}", r.stack)
     return server_error()
   end
-  if not is_response(r.value)
-    report_error("{req.method} {req.path}: handler returned {r.value}, not a response table", [])
+  let problem = response_problem(r.value)
+  if problem != nil
+    report_error("{req.method} {req.path}: {problem}", [])
     return server_error()
   end
   r.value
 end
 
-# ─── Connection handler ───
+# ─── Connections ───
 
-fn send_and_close(client_fd, resp)
-  tcp_write(client_fd, serialize_response(resp, false))
+# Reads and discards what the peer still sends, until it pauses for
+# DRAIN_QUIET_MS or `total_ms` (default 1 s) have passed, so that closing with unread
+# request bytes doesn't reset the connection before the peer has read the
+# response.
+fn drain(fd, total_ms = 1000)
+  let until = time_ms() + total_ms
+  while time_ms() < until
+    let chunk = tcp_read(fd, READ_SIZE, DRAIN_QUIET_MS)
+    if chunk == nil or chunk == ""
+      return nil
+    end
+  end
   nil
 end
 
-# Process one request from the connection. Returns the bytes already read
-# past this request (for keep-alive), or nil when the connection should
-# close.
-fn process_one_request(client_fd, router_ref, conn_buf)
-  let head = read_head(client_fd, conn_buf)
-  if head == nil
-    return nil
-  end
-  if head.too_large
-    return send_and_close(client_fd, response(431, {"Content-Type": TEXT_PLAIN}, "Request Header Fields Too Large"))
-  end
-  let data = head.data
-  let header_end = head.header_end
-  let header_section = substr(data, 0, header_end)
-  let after_headers = substr(data, header_end + 4, len(data) - header_end - 4)
+# Answers `status` with its default text, then drains; the connection is
+# to be closed (returns false).
+fn reject(rd, status, head_only = false)
+  let resp = response(status, {"Content-Type": TEXT_PLAIN}, status_text(status))
+  tcp_write(rd.fd, serialize_response(resp, false, head_only))
+  drain(rd.fd)
+  false
+end
 
-  let request_line = header_section
-  let header_block = ""
-  let first_line_end = string.index_of(header_section, "\r\n")
-  if first_line_end >= 0
-    request_line = substr(header_section, 0, first_line_end)
-    header_block = substr(header_section, first_line_end + 2, len(header_section) - first_line_end - 2)
-  end
+# The process table is full: 503, then close.
+fn refuse(fd)
+  let resp = response(503, {"Content-Type": TEXT_PLAIN}, status_text(503))
+  tcp_write(fd, serialize_response(resp, false))
+  drain(fd, REFUSE_DRAIN_MS)
+  tcp_close(fd)
+end
 
-  let req_info = parse_request_line(request_line)
-  if req_info == nil
-    return send_and_close(client_fd, bad_request())
-  end
-  let headers = parse_headers(header_block)
-  let body_len = content_length(headers)
-  if body_len == nil
-    return send_and_close(client_fd, bad_request())
-  end
-
-  # Read the body, keeping any bytes past it for the next request.
-  let body = ""
-  let next_buf = after_headers
-  if body_len > 0
-    let body_buf = buf_new()
-    buf_push(body_buf, after_headers)
-    let have = len(after_headers)
-    while have < body_len
-      let chunk = tcp_read(client_fd, READ_SIZE, IDLE_TIMEOUT_MS)
-      if chunk == nil or chunk == ""
-        return nil
-      end
-      buf_push(body_buf, chunk)
-      have = have + len(chunk)
+# Reads the body announced by the head into `req.body`. Returns nil when
+# it was read, a status to reject the request with, or false when the
+# peer closed or the time ran out.
+fn read_body(rd, cfg, head, req)
+  let headers = head.headers
+  let te = headers["transfer-encoding"]
+  let chunked = false
+  let n = 0
+  if te != nil
+    if headers["content-length"] != nil
+      return 400
     end
-    let full_body = to_string(body_buf)
-    body = substr(full_body, 0, body_len)
-    next_buf = substr(full_body, body_len, len(full_body) - body_len)
+    let codings = token_list(te)
+    if len(codings) != 1 or codings[0] != "chunked"
+      return 501
+    end
+    chunked = true
+  else
+    n = content_length(headers["content-length"])
+    if n == nil
+      return 400
+    end
+    if n > cfg.max_body
+      return 413
+    end
+    if n == 0
+      return nil
+    end
   end
+  let expect = headers["expect"]
+  if expect != nil and string.lower(expect) == "100-continue" and not head.http10
+    tcp_write(rd.fd, "HTTP/1.1 100 Continue\r\n\r\n")
+  end
+  if chunked
+    let r = read_chunked(rd, cfg.max_body)
+    if r == nil
+      return false
+    elif r.status != nil
+      return r.status
+    end
+    req.body = r.body
+  else
+    let body = read_exact(rd, n)
+    if body == nil
+      return false
+    end
+    req.body = body
+  end
+  nil
+end
 
-  let parsed = url.parse(req_info.raw_path)
+# Serves one request. Returns true to keep the connection open.
+fn process_one_request(rd, cfg)
+  rd.deadline = nil
+  if pending(rd) > 0
+    start_deadline(rd)
+  end
+  let raw = read_head(rd)
+  if raw == nil
+    return false
+  end
+  if raw.too_large
+    return reject(rd, 431)
+  end
+  let head = parse_head(raw.text)
+  if head == nil
+    return reject(rd, 400)
+  end
+  let head_only = head.method == "HEAD"
+  let headers = head.headers
+  let parsed = url.parse(head.target)
   let req = {
-    method: req_info.method,
+    method: head.method,
     path: parsed.path,
     query: parsed.query,
     headers: headers,
-    body: body,
+    body: "",
     cookies: parse_cookies(headers["cookie"]),
     params: {}
   }
+  let bad = read_body(rd, cfg, head, req)
+  if bad == false
+    return false
+  elif bad != nil
+    return reject(rd, bad, head_only)
+  end
 
-  let matched = router_ref.match(req.method, req.path)
+  let tokens = token_list(headers["connection"])
+  let keep_alive = not has_token(tokens, "close")
+  if head.http10
+    keep_alive = keep_alive and has_token(tokens, "keep-alive")
+  end
+
+  let route_method = req.method
+  if head_only
+    route_method = "GET"
+  end
+  let matched = cfg.router.match(route_method, req.path)
   let resp = nil
   if matched != nil
     req.params = matched.params
@@ -539,74 +958,228 @@ fn process_one_request(client_fd, router_ref, conn_buf)
   else
     resp = not_found()
   end
-
-  let connection_hdr = headers["connection"]
-  let keep_alive = connection_hdr == nil or string.lower(connection_hdr) != "close"
-  tcp_write(client_fd, serialize_response(resp, keep_alive))
-  if not keep_alive
-    return nil
+  if response_closes(resp)
+    keep_alive = false
   end
-  next_buf
+  tcp_write(rd.fd, serialize_response(resp, keep_alive, head_only))
+  keep_alive
 end
 
-# Keep-alive loop: serve requests on `client_fd` until the peer closes or
-# sends `Connection: close`. `conn_buf` carries the bytes already read past
-# the previous request.
-fn handle_connection_loop(client_fd, router_ref)
-  let conn_buf = ""
-  while conn_buf != nil
-    let r = pcall process_one_request(client_fd, router_ref, conn_buf)
+# Keep-alive loop: serve requests on `fd` until the peer closes, goes idle,
+# or a request or response asks to close. Tells the server process before
+# closing the socket, so it doesn't close it again.
+fn handle_connection(fd, cfg)
+  let rd = new_reader(fd, cfg)
+  let open = true
+  while open
+    let r = pcall process_one_request(rd, cfg)
     if r.ok
-      conn_buf = r.value
+      open = r.value
     else
       eprint("http: internal error: {r.error}")
-      pcall send_and_close(client_fd, server_error())
-      conn_buf = nil
+      pcall reject(rd, 500)
+      open = false
     end
   end
-  tcp_close(client_fd)
+  send(cfg.server, {tag: "_http_closing", pid: self()})
+  tcp_close(fd)
 end
 
 # ─── Server ───
 
-# Accept loop: a process per connection. When the process table is full,
-# that connection gets a 503 and the loop carries on.
-fn accept_loop(server_fd, router_ref)
+# Accept loop: a process per connection, registered with the server
+# process. When the process table is full, that connection gets a 503;
+# when accepting fails (out of file descriptors), the loop logs it once
+# and retries every ACCEPT_BACKOFF_MS until it succeeds again.
+fn accept_loop(listen_fd, cfg)
+  let failing = false
   while true
-    let client_fd = tcp_accept(server_fd)
-    let r = pcall spawn(fn()
-      handle_connection_loop(client_fd, router_ref)
-    end)
-    if not r.ok
-      eprint("http: {r.error}; refusing a connection")
-      pcall send_and_close(client_fd, response(503, {"Content-Type": TEXT_PLAIN}, "Service Unavailable"))
-      tcp_close(client_fd)
+    let a = pcall tcp_accept(listen_fd)
+    if a.ok
+      failing = false
+      let fd = a.value
+      let r = pcall spawn(fn()
+        send(cfg.server, {tag: "_http_conn", pid: self(), fd: fd})
+        handle_connection(fd, cfg)
+      end)
+      if not r.ok
+        eprint("http: {r.error}; refusing a connection")
+        pcall refuse(fd)
+      end
+    else
+      if not failing
+        eprint("http: {a.error}; retrying every {ACCEPT_BACKOFF_MS} ms")
+        failing = true
+      end
+      sleep(ACCEPT_BACKOFF_MS)
     end
   end
 end
 
-# Starts the server in its own process and returns {pid: acceptor_pid}.
-fn start(router_ref, {port = 8080, host = "0.0.0.0"} = {})
-  let server_fd = tcp_listen(host, port)
-  let pid = spawn(fn()
-    accept_loop(server_fd, router_ref)
-  end)
-  {pid: pid}
+# A connection's message to the server process: start tracking it
+# ("_http_conn"), stop tracking it ("_http_closing": it closes its own
+# socket next), or its "DOWN" (close its socket if it still holds one).
+fn track_connection(conns, tag, pid, fd = nil)
+  let key = "{pid}"
+  if tag == "_http_conn"
+    monitor(pid)
+    conns[key] = {pid: pid, fd: fd}
+  elif tag == "_http_closing"
+    delete(conns, key)
+  else
+    let c = conns[key]
+    if c != nil
+      tcp_close(c.fd)
+      delete(conns, key)
+    end
+  end
 end
 
-# Runs the server and blocks until the acceptor dies: returns nil when it
-# was killed with "normal" or "shutdown", raises otherwise.
+# Kills the acceptor and every connection and closes their sockets. A
+# connection that traps exits isn't killed; it closes its own socket.
+fn shut_down(listen_fd, acceptor, conns)
+  kill(acceptor, "shutdown")
+  tcp_close(listen_fd)
+  for c in values(conns)
+    kill(c.pid, "shutdown")
+  end
+  # The DOWN of each connection killed above is queued by now. A
+  # connection spawned just before the acceptor died may still be
+  # registering: kill it too.
+  let more = true
+  while more
+    receive
+    when {tag: "_http_conn", pid: pid, fd: fd}
+      track_connection(conns, "_http_conn", pid, fd)
+      kill(pid, "shutdown")
+    when {tag: "_http_closing", pid: pid}
+      track_connection(conns, "_http_closing", pid)
+    when {tag: "DOWN", pid: pid}
+      track_connection(conns, "DOWN", pid)
+    after 0
+      more = false
+    end
+  end
+end
+
+# The server process: traps exits, so that being killed (`stop`, a
+# supervisor) or the acceptor dying arrives as an EXIT message and it can
+# shut down cleanly before it exits with that reason.
+fn server_main(listen_fd, cfg, starter, ref)
+  process_flag("trap_exit", true)
+  cfg.server = self()
+  let a = pcall spawn_link(fn()
+    accept_loop(listen_fd, cfg)
+  end)
+  if not a.ok
+    tcp_close(listen_fd)
+    send(starter, {tag: "_http_started", ref: ref, error: a.error})
+    return nil
+  end
+  let acceptor = a.value
+  send(starter, {tag: "_http_started", ref: ref, error: nil})
+  let conns = {}
+  let reason = nil
+  while reason == nil
+    receive
+    when {tag: "_http_conn", pid: pid, fd: fd}
+      track_connection(conns, "_http_conn", pid, fd)
+    when {tag: "_http_closing", pid: pid}
+      track_connection(conns, "_http_closing", pid)
+    when {tag: "DOWN", pid: pid}
+      track_connection(conns, "DOWN", pid)
+    when {tag: "EXIT", pid: pid, reason: why}
+      if pid == acceptor
+        eprint("http: acceptor died: {why}")
+        reason = "acceptor died: {why}"
+      elif why != "normal"
+        reason = why
+      end
+    end
+  end
+  shut_down(listen_fd, acceptor, conns)
+  process_flag("trap_exit", false)
+  kill(self(), reason)
+end
+
+fn check_int(name, v, min)
+  if type(v) != "int" or v < min
+    error("http.start: {name} must be an int >= {min}, got {v}")
+  end
+end
+
+# Starts the server and returns {pid}, the server process's pid.
+fn start(router_ref, {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS} = {})
+  check_int("max_body", max_body, 0)
+  check_int("idle_timeout_ms", idle_timeout_ms, 0)
+  check_int("request_timeout_ms", request_timeout_ms, 0)
+  let cfg = {router: router_ref, max_body: max_body, idle_ms: idle_timeout_ms, request_ms: request_timeout_ms, server: nil}
+  let listen_fd = tcp_listen(host, port)
+  let me = self()
+  let ref = make_ref()
+  let s = pcall spawn(fn()
+    server_main(listen_fd, cfg, me, ref)
+  end)
+  if not s.ok
+    tcp_close(listen_fd)
+    error("http.start: {s.error}")
+  end
+  receive
+  when {tag: "_http_started", ref: ^ref, error: e}
+    if e != nil
+      error("http.start: {e}")
+    end
+  after STOP_TIMEOUT_MS
+    error("http.start: the server process did not start")
+  end
+  {pid: s.value}
+end
+
+# Runs the server and blocks until its process exits: returns nil when it
+# was stopped or killed with "normal" or "shutdown", raises otherwise.
 fn serve(router_ref, opts = {})
   let pid = start(router_ref, opts).pid
   monitor(pid)
   receive
   when {tag: "DOWN", pid: ^pid, reason: reason}
     if reason != "normal" and reason != "shutdown"
-      error("http.serve: acceptor died: {reason}")
+      error("http.serve: server died: {reason}")
     end
     nil
   end
 end
 
+fn target_pid(t, caller)
+  let kind = type(t)
+  if kind == "int"
+    return t
+  elif kind == "string"
+    let pid = whereis(t)
+    if pid == nil
+      error("{caller}: no process registered as \"{t}\"")
+    end
+    return pid
+  elif kind == "table" and type(t.pid) == "int"
+    return t.pid
+  end
+  error("{caller}: expected a server pid, \{pid\} handle or registered name, got {t}")
+end
+
+# Stops the server: kills its process with "shutdown" and waits until it
+# has closed the listening socket and every connection's. Returns nil; a
+# server that already stopped is fine.
+fn stop(server, timeout_ms = 5000)
+  let pid = target_pid(server, "http.stop")
+  monitor(pid)
+  kill(pid, "shutdown")
+  receive
+  when {tag: "DOWN", pid: ^pid}
+    nil
+  after timeout_ms
+    error("http.stop: the server did not stop within {timeout_ms} ms")
+  end
+end
+
 export response, ok, html, json_response, redirect, not_found, bad_request,
-  server_error, set_cookie, delete_cookie, parse_form, html_escape, router, start, serve
+  server_error, set_cookie, delete_cookie, parse_form, html_escape, router,
+  start, serve, stop

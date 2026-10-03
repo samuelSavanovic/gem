@@ -164,7 +164,9 @@ end
 # std/json       parse, encode   (array = keys 0..n-1, else object with int keys as "42";
 #                nesting > 1000 raises; ints past 64 bits parse as floats)
 # std/http       response, ok, html, json_response, redirect, not_found, bad_request, server_error,
-#                set_cookie, delete_cookie, parse_form, html_escape, router, start, serve
+#                set_cookie, delete_cookie, parse_form, html_escape, router, start, serve, stop
+#                (start opts {port, host, max_body = 8 MB, idle_timeout_ms, request_timeout_ms = 30000};
+#                start returns {pid}; stop(server) closes every socket; HEAD uses the GET route)
 # std/request    get, post, put, patch, delete, request  (http:// only; opts {body, headers, timeout_ms = 30000};
 #                returns {status, headers (lowercase names), body (chunked decoded)})
 # std/url        encode, decode, parse, parse_query, build_query

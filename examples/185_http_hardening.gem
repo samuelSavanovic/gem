@@ -1,0 +1,218 @@
+# std/http hardening: chunked request bodies (no smuggling), response
+# validation (header injection, status range), framing headers owned by
+# the server, HEAD, Expect: 100-continue, HTTP/1.0 and Connection token
+# lists, size limits and deadlines, http.stop, and sockets of killed
+# connection processes closed by the server.
+
+load "std/http"
+load "std/string"
+
+let PORT = 18185
+
+let app = http.router()
+app.get("/hello") do |req|
+  http.ok("hello")
+end
+app.post("/echo") do |req|
+  http.ok("{len(req.body)}:{req.body}")
+end
+app.get("/inject") do |req|
+  http.redirect("/x\r\nX-Evil: 1")
+end
+app.get("/cookie_inject") do |req|
+  http.set_cookie(http.ok("c"), "a", "1\r\nX-Evil: 1")
+end
+app.get("/status/:n") do |req|
+  http.response(to_int(req.params.n), {}, "s")
+end
+app.get("/status_str") do |req|
+  {status: "200", body: "x"}
+end
+app.get("/own_framing") do |req|
+  http.response(200, {"Content-Length": "3", "Transfer-Encoding": "chunked", "connection": "keep-alive"}, "hello")
+end
+app.get("/closes") do |req|
+  http.response(200, {"Connection": "close"}, "bye")
+end
+app.get("/cookies") do |req|
+  let r = http.set_cookie({status: 200, body: "two"}, "a", "1")
+  http.set_cookie(r, "b", "2", {http_only: false})
+end
+app.get("/killed") do |req|
+  kill(self(), "kill")
+end
+app.static("/ex", "examples")
+
+# Sends `pieces` (each written separately), reads until the server closes
+# (or `wait_ms` passes without data), and returns what came back with CRLF
+# shown as " | ".
+fn exchange(port, pieces, wait_ms = 2000)
+  let fd = tcp_connect("127.0.0.1", port)
+  for piece in pieces
+    tcp_write(fd, piece)
+    sleep(5)
+  end
+  let acc = buf_new()
+  let chunk = tcp_read(fd, 8192, wait_ms)
+  while chunk != nil and chunk != ""
+    buf_push(acc, chunk)
+    chunk = tcp_read(fd, 8192, wait_ms)
+  end
+  tcp_close(fd)
+  let out = str_replace(to_string(acc), "\r\n", " | ")
+  if chunk == nil
+    out = "{out} <no close>"
+  end
+  out
+end
+
+fn get(path, extra = "", method = "GET")
+  print(exchange(PORT, ["{method} {path} HTTP/1.1\r\nHost: t\r\n{extra}Connection: close\r\n\r\n"]))
+end
+
+fn post(head, body)
+  print(exchange(PORT, ["POST /echo HTTP/1.1\r\n{head}\r\n{body}"]))
+end
+
+fn run_chunked()
+  print("-- chunked request bodies")
+  post("Transfer-Encoding: chunked\r\nConnection: close\r\n", "3\r\nabc\r\n4;ext=1\r\ndefg\r\n0\r\nX-Trailer: t\r\n\r\n")
+  # The chunk holds a whole request: it is body, not a second request.
+  let inner = "GET /hello HTTP/1.1\r\n\r\n"
+  post("Transfer-Encoding: chunked\r\nConnection: close\r\n", "{format_hex(len(inner))}\r\n{inner}\r\n0\r\n\r\n")
+  post("Transfer-Encoding: chunked\r\nContent-Length: 3\r\n", "3\r\nabc\r\n0\r\n\r\n")
+  post("Transfer-Encoding: gzip, chunked\r\n", "")
+  post("Transfer-Encoding: chunked\r\n", "zz\r\nabc\r\n0\r\n\r\n")
+  post("Transfer-Encoding: chunked\r\n", "3\r\nabcXX\r\n0\r\n\r\n")
+  post("Transfer-Encoding: chunked\r\n", "3\nabc\r\n0\r\n\r\n")
+  # Content-Length: digits only; a space before the colon is rejected.
+  post("Content-Length: +3\r\n", "abc")
+  post("Content-Length : 3\r\n", "abc")
+end
+
+fn format_hex(n)
+  let digits = "0123456789abcdef"
+  let out = ""
+  let v = n
+  while v > 0
+    out = "{substr(digits, v % 16, 1)}{out}"
+    v = v / 16
+  end
+  out
+end
+
+fn run_responses()
+  print("-- invalid responses get a 500")
+  get("/inject")
+  get("/cookie_inject")
+  get("/status/1000")
+  get("/status/99")
+  get("/status_str")
+  get("/status/999")
+  print("-- framing headers belong to the server")
+  get("/own_framing")
+  get("/closes", "", "GET")
+  get("/cookies")
+  print("-- HEAD")
+  get("/hello", "", "HEAD")
+  get("/missing", "", "HEAD")
+  print("-- static directory")
+  get("/ex/bookmark_app")
+end
+
+fn run_connection()
+  print("-- Connection handling")
+  # HTTP/1.0 closes unless it asks for keep-alive.
+  print(exchange(PORT, ["GET /hello HTTP/1.0\r\n\r\n"]))
+  print(exchange(PORT, ["GET /hello HTTP/1.0\r\nConnection: keep-alive\r\n\r\nGET /hello HTTP/1.0\r\n\r\n"]))
+  print(exchange(PORT, ["GET /hello HTTP/1.1\r\nConnection: Close, TE\r\n\r\n"]))
+  print(exchange(PORT, ["GET /hello HTTP/1.1\r\nConnection: keep-alive\r\nConnection: close\r\n\r\n"]))
+  print("-- Expect: 100-continue")
+  print(exchange(PORT, ["POST /echo HTTP/1.1\r\nContent-Length: 2\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n", "hi"]))
+end
+
+fn run_limits()
+  print("-- limits")
+  let port = PORT + 1
+  let small = http.start(app, {port: port, host: "127.0.0.1", max_body: 10, request_timeout_ms: 300, idle_timeout_ms: 500})
+  print(exchange(port, ["POST /echo HTTP/1.1\r\nContent-Length: 10\r\nConnection: close\r\n\r\n0123456789"]))
+  print(exchange(port, ["POST /echo HTTP/1.1\r\nContent-Length: 11\r\n\r\n01234567890"]))
+  print(exchange(port, ["POST /echo HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n6\r\n012345\r\n5\r\n67890\r\n0\r\n\r\n"]))
+  # A head over 64 KB in one write.
+  let big = exchange(port, ["GET /hello HTTP/1.1\r\nX-Big: {string.repeat("a", 70000)}\r\n\r\n"])
+  print(big)
+  # A slow client: the request deadline closes the connection.
+  let t0 = time_ms()
+  let slow = exchange(port, ["GET /hello HTTP/1.1\r\n", "Host: t\r\n"])
+  let took = time_ms() - t0
+  print("slow head: [{slow}] closed in time: {took >= 250 and took < 900}")
+  # An idle keep-alive connection closes after idle_timeout_ms.
+  t0 = time_ms()
+  print(exchange(port, ["GET /hello HTTP/1.1\r\n\r\n"]))
+  took = time_ms() - t0
+  print("idle close in time: {took >= 450 and took < 1000}")
+  http.stop(small)
+end
+
+fn run_killed()
+  print("-- a killed connection process")
+  let t0 = time_ms()
+  print("[{exchange(PORT, ["GET /killed HTTP/1.1\r\n\r\n"])}] closed at once: {time_ms() - t0 < 500}")
+end
+
+fn run_stop()
+  print("-- http.stop")
+  let port = PORT + 2
+  let server = http.start(app, {port: port, host: "127.0.0.1"})
+  print(exchange(port, ["GET /hello HTTP/1.1\r\nConnection: close\r\n\r\n"]))
+  # A kept-alive connection is closed by stop too.
+  let idle = tcp_connect("127.0.0.1", port)
+  tcp_write(idle, "GET /hello HTTP/1.1\r\n\r\n")
+  let first = tcp_read(idle, 8192, 1000)
+  print("stop: {http.stop(server)}")
+  print("idle connection after stop: {json_str(tcp_read(idle, 8192, 1000))}")
+  tcp_close(idle)
+  print("stop again: {http.stop(server)}")
+  let c = pcall tcp_connect("127.0.0.1", port)
+  print("connect after stop: {c.ok}")
+  # The port can be bound again; stop takes a registered name too.
+  let again = http.start(app, {port: port, host: "127.0.0.1"})
+  register("web", again.pid)
+  print(exchange(port, ["GET /hello HTTP/1.1\r\nConnection: close\r\n\r\n"]))
+  print("stop by name: {http.stop("web")}")
+  let e = pcall http.stop("web")
+  print(e.error)
+  e = pcall http.stop(nil)
+  print(e.error)
+  # Killing the server process with "shutdown" (as a supervisor does)
+  # frees the port as well.
+  let third = http.start(app, {port: port, host: "127.0.0.1"})
+  let third_pid = third.pid
+  monitor(third_pid)
+  kill(third_pid, "shutdown")
+  receive
+  when {tag: "DOWN", pid: ^third_pid, reason: reason}
+    print("killed: {reason}")
+  end
+  let fourth = pcall http.start(app, {port: port, host: "127.0.0.1"})
+  print("rebind after kill: {fourth.ok}")
+  http.stop(fourth.value)
+end
+
+fn json_str(v)
+  if v == nil
+    return "nil"
+  end
+  "\"{v}\""
+end
+
+fn main()
+  let server = http.start(app, {port: PORT, host: "127.0.0.1"})
+  run_chunked()
+  run_responses()
+  run_connection()
+  run_limits()
+  run_killed()
+  run_stop()
+  http.stop(server)
+end

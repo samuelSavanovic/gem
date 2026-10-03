@@ -1,6 +1,6 @@
 # std/http: default bodies, handler errors on stderr, lowercased request
 # headers, malformed requests, {pid} from start, serve waiting only for its
-# acceptor, and a full process table answered with 503.
+# server process, and a full process table answered with 503.
 
 load "std/http"
 load "std/string"
@@ -110,27 +110,26 @@ fn run_table_full()
   sleep(10)
 end
 
-# Runs http.serve in a process and kills its acceptor with `reason`. The
-# acceptor is the first process serve spawns, so its pid is the probe's + 1.
-# (A killed acceptor leaves its listening socket open, so each run takes a
-# fresh port.)
+# Runs http.serve in a process and kills its server process with `reason`.
+# The server process is the first process serve spawns, so its pid is the
+# probe's + 1.
 fn run_serve(reason, port)
   let parent = self()
   let server = spawn do
     let probe = spawn(fn() nil end)
-    send(parent, {tag: "acceptor", pid: probe + 1})
+    send(parent, {tag: "server_pid", pid: probe + 1})
     let r = pcall http.serve(app, {port: port, host: "127.0.0.1"})
     send(parent, {tag: "served", result: r})
   end
-  let acceptor = nil
+  let target = nil
   receive
-  when {tag: "acceptor", pid: pid} then acceptor = pid
+  when {tag: "server_pid", pid: pid} then target = pid
   end
   sleep(20)
   send(server, {tag: "unrelated"})
   sleep(20)
   print(exchange(port, ["GET /hello HTTP/1.1\r\nConnection: close\r\n\r\n"]))
-  kill(acceptor, reason)
+  kill(target, reason)
   receive
   when {tag: "served", result: r}
     print("serve after kill {reason}: ok={r.ok} value={r.value} error={r.error}")

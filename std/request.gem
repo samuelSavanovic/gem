@@ -7,10 +7,11 @@
 #   request.post(url, {body: json.encode(x), headers: {"Content-Type": "application/json"}, timeout_ms: 5000})
 #
 # Each call opens a connection, sends `Connection: close`, reads one
-# response and closes the socket on every path. `timeout_ms` (default
-# 30000, `0` or less for none) is one deadline for the whole call, not a
-# per-read limit; connecting and writing can't be interrupted, so only
-# the reads are cut short. Every error is prefixed with the function the
+# response and closes the socket, also when it raises; a caller killed
+# mid-request leaks it. `timeout_ms` (default 30000, `0` or less for
+# none) is one deadline for the whole call, not a per-read limit;
+# connecting and writing can't be interrupted, so only the reads are cut
+# short. Every error is prefixed with the function the
 # caller used (`request.get: ...`).
 
 load "std/string"
@@ -172,6 +173,9 @@ fn read_line(rd)
       let line_len = nl - rd.pos
       if line_len > 0 and ord(rd.data, nl - 1) == 13
         line_len -= 1
+      end
+      if line_len > MAX_LINE
+        error("{rd.name}: response line longer than {MAX_LINE} bytes")
       end
       let line = substr(rd.data, rd.pos, line_len)
       rd.pos = nl + 1

@@ -152,8 +152,9 @@ end
   `http.bad_request`, ...). `return` inside a `do` block leaves the block,
   which here is the handler.
 - User input goes through `pcall` and a type check before it is trusted.
-- A handler that raises, or returns something other than a response
-  table, answers 500; std/http prints the error and its stack on stderr.
+- A handler that raises, or returns something other than a valid
+  response (an int status from 100 to 999, no CR or LF in a header),
+  answers 500; std/http prints the error and its stack on stderr.
   Request header names arrive lowercased: `req.headers["content-type"]`.
 - `task.async` takes a closure; `task.await_all` waits for all of them,
   with a timeout.
@@ -1126,7 +1127,13 @@ r.value
 
 To keep a connection open after a bad request, `pcall` each iteration
 inside the connection loop instead. Since `pcall` doesn't catch `kill` or
-a link's exit, keep long-lived handles in a process nobody kills.
+a link's exit, keep long-lived handles in a process nobody kills, or have
+a process that monitors the owner close the handle when the owner dies
+without closing it (std/http's server process does this for its
+connections, so a handler may be killed). Stop an `http.start` server
+with `http.stop(server)`: it closes the listening socket, so the port is
+free again. A `std/request` call killed midway (a `task.await` timeout)
+leaks its socket; bound the request with its `timeout_ms` instead.
 
 ### `tcp_listen` takes an IP address
 

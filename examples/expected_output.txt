@@ -2817,7 +2817,7 @@ HTTP/1.1 200 OK [hello]
 HTTP/1.1 200 OK [hello]
 serve after kill shutdown: ok=true value=nil error=nil
 HTTP/1.1 200 OK [hello]
-serve after kill boom: ok=false value=nil error=http.serve: acceptor died: boom
+serve after kill boom: ok=false value=nil error=http.serve: server died: boom
 gem_diag: spawn_overflow=2 proc_hwm=1024 max_procs=1024
 === keys ===
 {"42":"x"}
@@ -3288,6 +3288,66 @@ dynamic_supervisor.start: expected a child template {start, restart}, got nil
 dynamic_supervisor.start: the child template's start must be a fn, got nil
 dynamic_supervisor.start: unknown restart "sometimes"
 supervisor.start: unknown restart "always" for child "x"
+-- chunked request bodies
+HTTP/1.1 200 OK | Content-Length: 9 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 7:abcdefg
+HTTP/1.1 200 OK | Content-Length: 26 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 23:GET /hello HTTP/1.1 |  | 
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 501 Not Implemented | Content-Length: 15 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Not Implemented
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+-- invalid responses get a 500
+http: GET /inject: invalid response: header Location has a CR or LF in its value
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+http: GET /cookie_inject: invalid response: header Set-Cookie has a CR or LF in its value
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+http: GET /status/1000: invalid response: status 1000 is not from 100 to 999
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+http: GET /status/99: invalid response: status 99 is not from 100 to 999
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+http: GET /status_str: invalid response: status must be an int, got string 200
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+HTTP/1.1 999 Unknown | Content-Length: 1 | Connection: close |  | s
+-- framing headers belong to the server
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close |  | hello
+HTTP/1.1 200 OK | Content-Length: 3 | Connection: close |  | bye
+HTTP/1.1 200 OK | Content-Length: 3 | Connection: close | Set-Cookie: a=1; Path=/; HttpOnly; SameSite=Lax | Set-Cookie: b=2; Path=/; SameSite=Lax |  | two
+-- HEAD
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 
+HTTP/1.1 404 Not Found | Content-Length: 9 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 
+-- static directory
+HTTP/1.1 404 Not Found | Content-Length: 9 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Not Found
+-- Connection handling
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: keep-alive | Content-Type: text/plain; charset=utf-8 |  | helloHTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+-- Expect: 100-continue
+HTTP/1.1 100 Continue |  | HTTP/1.1 200 OK | Content-Length: 4 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 2:hi
+-- limits
+HTTP/1.1 200 OK | Content-Length: 13 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 10:0123456789
+HTTP/1.1 413 Content Too Large | Content-Length: 17 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Content Too Large
+HTTP/1.1 413 Content Too Large | Content-Length: 17 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Content Too Large
+HTTP/1.1 431 Request Header Fields Too Large | Content-Length: 31 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Request Header Fields Too Large
+slow head: [] closed in time: true
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: keep-alive | Content-Type: text/plain; charset=utf-8 |  | hello
+idle close in time: true
+-- a killed connection process
+[] closed at once: true
+-- http.stop
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+stop: nil
+idle connection after stop: ""
+stop again: nil
+connect after stop: false
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+stop by name: nil
+http.stop: no process registered as "web"
+http.stop: expected a server pid, {pid} handle or registered name, got nil
+killed: shutdown
+rebind after kill: true
 rings ok
 dag ok
 ..]: at [49999].s, expected "x", got "y"
