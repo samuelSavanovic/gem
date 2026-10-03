@@ -87,6 +87,17 @@ API, not doc problems:
   builtin).
 - **Multi-value query keys in `url.build_query`**: `{tags: ["a", "b"]}` should give `tags=a&tags=b`; today
   the table's `to_string` text is encoded. `parse_query` would need a matching opt-in (last value wins now).
+- **Parsing dates in `std/time`**: nothing turns an ISO 8601 or HTTP date back into epoch ms, and `format`
+  has no millisecond directive. A log analyzer had to hand-write days-from-civil.
+- **`json.encode` pretty-printing**: an `indent` option.
+- **Stopping what a supervised child spawned**: `supervisor.stop` stops direct children only; a task a
+  worker is awaiting keeps running (tasks aren't linked to their owner). A linked `task.async` variant, or
+  tasks dying with their owner, would make a supervised shutdown complete.
+- **More from the http request**: the client address, the raw query string and multi-value query/form
+  parsing. On the client side, cookie help in `std/request` (today: split `set-cookie` by hand).
+- **Naming a gen_server at start**: `gen_server.start(module, {name})` that registers before `init`, so a
+  supervised restart can't leave a window where the name is unregistered.
+- **More `std/mime` types**: `text/javascript` for `ext`, `.wav`, `.ogg`, `.md`, `.yaml`, `.map`.
 - **One rule for what a child's `start` returns**: `supervisor` accepts a pid, a `{pid}` handle or a
   registered name; `dynamic_supervisor` rejects a name. Pick one for both.
 

@@ -166,6 +166,20 @@ it. Triple-quoted strings count correctly. The single- and double-quoted
 string branches of the lexer (compiler/lexer.gem, from `if ch == "\""`) step
 over a raw `\n` without incrementing `line` or resetting `line_start`.
 
+### An unterminated `{` in a string is reported past the end of the line
+
+```gem
+let r = f(u, "{not json", {headers: {"Content-Type": "application/json"}, timeout_ms: 1000})
+```
+
+`unterminated string interpolation` points at a column past the end of the
+line (131 on a 105-character line; longer files give columns in the
+hundreds or thousands), not at the `{` that opened it. The lexer
+(compiler/lexer.gem, the `unterminated string interpolation` report near
+line 825) uses the scan position after searching on for the `}`, not the
+position of the `{`. The note "this '{' is never closed" form at line 858
+already has the right location.
+
 ## Runtime
 
 ### `INT64_MIN / -1` kills the program on x86-64
@@ -394,6 +408,7 @@ pcall http.parse_form(nil)      # "url.parse_query: s must be a string, got nil"
 pcall time.date(nil)            # "format_time: expected (int, string), got (nil, string)"
 pcall sqlite.last_id(999)       # "sqlite_last_insert_id: not an open database handle"
 pcall request.post("http://127.0.0.1:1/", "x", "opts")   # "field access on non-table: got string"
+pcall http.start(http.router(), nil)                   # "field access on non-table: got nil"
 ```
 
 The convention (BEST_PRACTICES, "Prefix messages with where they came
@@ -421,6 +436,53 @@ points at a std line and names a private variable, not the user's call.
 `note_spawn_global_writes` (compiler/codegen.gem) should attribute the note to
 the call site in the user's file, or skip writes inside std whose
 per-process meaning the module documents.
+
+### `http` sends a nil or table header value as the text `nil`
+
+```gem
+load "std/http"
+let app = http.router()
+app.get("/n") do |req|
+  http.response(200, {"X-Nil": nil, "X-T": {a: 1}}, "x")   # sent as "X-Nil: nil", "X-T: nil"
+end
+app.get("/c") do |req|
+  http.set_cookie(http.ok("x"), "a", nil)                  # sent as "Set-Cookie: a=nil; ..."
+end
+```
+
+The response check in std/http.gem validates header names and CR/LF in
+values but interpolates any value, so nil becomes `nil` and a record is
+taken for an empty-ish array. std/request raises `header X has a nil value`
+for the same input. The server should treat these as an invalid response
+(500), and `set_cookie` should raise on a non-string value.
+
+### `test.assert_throws` passes when its body isn't a fn
+
+```gem
+load "std/test"
+print(test.assert_throws(42))     # "attempt to call int value": the assert passes
+```
+
+`assert_throws` (std/test.gem) calls `body` under pcall, so a non-fn body
+raises inside the protection and counts as the expected error; a typo makes
+a test pass. It should raise `test.assert_throws: body must be a fn`.
+
+### `string.join` rejects an array whose keys were added out of order
+
+```gem
+load "std/string"
+load "std/json"
+let t = {}
+t[1] = "b"
+t[0] = "a"
+print(json.encode(t))                    # ["a","b"]
+print(pcall string.join(t, ","))         # error: arr must be an array, got a table with key 1
+```
+
+`join` (std/string.gem) requires the iteration order to be 0, 1, 2, ...,
+while `table.*`, `json.encode` and array patterns accept any table whose keys
+are exactly 0 .. n-1. std should share one definition of an array; the error
+also names a valid key.
 
 ### A `one_for_all` restart hangs on a child that traps exits
 

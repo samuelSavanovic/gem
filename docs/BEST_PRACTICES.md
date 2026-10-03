@@ -1369,7 +1369,9 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
   both values, the path to the first difference, and the types when they
   differ: `expected {a: [1, 2]}, got {a: [1, 2.0]}: at .a[1], expected 2
   (int), got 2.0 (float)`. `assert_throws` returns the error message, so
-  check it with `assert_eq` when it matters.
+  check it with `assert_eq` when it matters. Pass it a fn **(bug)**:
+  `test.assert_throws(42)` (or a misspelled field, `t.misspelled`) passes,
+  because calling the non-fn raises inside the check.
 - Register cases with `test.case` at the top level (or from `main`), in
   the process that calls `test.run()`. The case list is a module-level
   variable, so a case registered inside a spawned process lands in that
@@ -1428,6 +1430,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | Large set or index with sparse int (or table) keys | quadratic | string keys (`"{id}"`) |
 | Boolean `sort` comparator | array left unsorted | return `a - b` |
 | `sort` on a record **(bug)** | keys replaced by 0 .. n-1 | sort `keys(t)` or `values(t)` |
+| `test.assert_throws(x)` with a non-fn `x` **(bug)** | the assert passes | pass `fn() ... end` |
 | `sort` inside a comparator, or a comparator with a loop **(bug)** | wrong comparator called; unsorted or a type error | precompute keys; short comparators |
 | `json.encode({})` | `[]` | write `'{}'` yourself |
 | `match` with no arm matching | yields `nil` silently | add an `else` |
