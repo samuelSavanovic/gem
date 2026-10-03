@@ -1229,11 +1229,12 @@ leaks its socket; bound the request with its `timeout_ms` instead.
   timeout. Library code should always pass a timeout; without one, a silent
   peer blocks the caller forever. As with `after`, a timeout of `0` or
   less doesn't wait: it returns what's already there, or `nil`.
-- `tcp_write` returns the number of bytes written and does not raise when
-  the peer has gone. Treat `tcp_write(fd, s) < len(s)` as "connection
-  lost", but expect the first write after a disconnect to still report
-  success; only later writes show it. `tcp_write` has no timeout, so a peer
-  that stops reading blocks the writer.
+- `tcp_write(fd, s, timeout_ms)` returns the number of bytes written and
+  does not raise when the peer has gone or the timeout passes. Treat
+  `tcp_write(fd, s, ms) < len(s)` as "connection lost or too slow", but
+  expect the first write after a disconnect to still report success; only
+  later writes show it. Without a timeout, a peer that stops reading
+  blocks the writer for as long as it keeps the connection open.
 
 ---
 

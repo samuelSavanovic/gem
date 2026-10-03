@@ -3859,3 +3859,12 @@ d
     |
 Stack trace:
   at main (examples/194_compiler_known_bugs.gem:77)
+1: partial: true, took about 200 ms: true
+1: zero and negative don't wait: true true true
+1: tcp_write: timeout_ms must be an int (milliseconds) or nil, got string
+2: wrote 3 and 3
+2: peer got abcdef
+3: closed early: true, got only part: true
+3: http.start: write_timeout_ms must be an int > 0 (milliseconds) or nil, got 0
+4: request.post: timed out after 300 ms waiting for http://127.0.0.1:18295/up
+4: within the deadline: true

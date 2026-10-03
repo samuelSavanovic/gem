@@ -459,8 +459,17 @@ fn build_request(name, method, parsed, headers, body)
   end
 end
 
+# Sends the request within what is left of the deadline, then reads the
+# response.
 fn exchange(rd, req_str, method)
-  if tcp_write(rd.fd, req_str) < len(req_str)
+  let wait = nil
+  if rd.deadline != nil
+    wait = rd.deadline - time_ms()
+  end
+  if tcp_write(rd.fd, req_str, wait) < len(req_str)
+    if rd.deadline != nil and time_ms() >= rd.deadline
+      timeout_error(rd)
+    end
     error("{rd.name}: connection lost while sending the request to {rd.url}")
   end
   read_response(rd, method)
@@ -573,8 +582,9 @@ end
 ##   `Content-Length` are added unless `headers` sets them (in any case);
 ##   nothing else is, Content-Type included.
 ## - `timeout_ms`: an int > 0, default 30000, or nil for no limit. One
-##   deadline for the whole call, not per read. Connecting and sending
-##   the request are not cut short by it, only waiting for the response.
+##   deadline for the whole call, not per read: sending the request and
+##   waiting for the response count against it. Connecting is not cut
+##   short by it.
 ##
 ## In the result, `status` is an int, `headers` maps lowercase names to
 ## trimmed values (a repeated header's values joined with ", ", but
