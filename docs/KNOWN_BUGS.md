@@ -82,6 +82,23 @@ its symbol. Modules hit it too: `a` with `f`↔`g` next to a module `a_f`
 with `fn body` (`module_mangle` in compiler/main.gem doesn't account for
 the `_body` suffix). Give the helper a name no user fn can have.
 
+### Closures in a destructuring `let` of a builtin's name see the new binding
+
+```gem
+let [len, size] = [fn(x) 0 end, fn(x) len(x) end]
+print(size("abc"))        # 0, not 3
+```
+
+SPEC says the initializer of a module-level `let` that shadows a builtin,
+closures in it included, still reaches the builtin, and it does for a
+plain `let len = ...` and for a direct call in the destructuring
+initializer (`let [len, n] = [f, len("abc")]` binds `n = 3`). A closure in
+a destructuring initializer calls the new `len` instead, in the entry file
+and in a loaded module alike. The initializer scope for a shadowing
+module-level `let` is set up in `rename_stmt_in_scope` /
+`pending_builtin_lets` (compiler/main.gem); the destructuring form doesn't
+get it for closures.
+
 ### A float key in a table literal becomes a string key
 
 ```gem

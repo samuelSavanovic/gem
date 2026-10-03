@@ -157,7 +157,7 @@ end
 # std/string     split, join, trim, upper, lower, repeat, index_of(s, x, start = 0), contains,
 #                starts_with, ends_with
 # std/table      each, map, filter, reduce, find, any, all, count, reverse, unique, contains, index_of,
-#                slice, concat, copy, flatten, flat_map, zip, group_by
+#                slice, concat, copy, flatten, flat_map, zip, group_by, sort
 # std/math       min, max, clamp, assert
 # std/time       now, format, format_local, iso8601, http_date, date
 # std/log        set_level, debug, info, warn, error

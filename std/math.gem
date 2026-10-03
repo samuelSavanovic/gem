@@ -1,5 +1,11 @@
-# std/math — math utilities for Gem
+# math — small numeric helpers (the math builtins such as `floor`, `sqrt`
+# and `abs` need no load).
+#
+#   let pct = math.clamp(done * 100 / total, 0, 100)
+#   math.assert(len(rows) > 0, "no rows")
 
+# min, max and clamp work on any values `<` can order: ints and floats
+# (mixed), or strings. On a tie they return the second argument.
 fn min(a, b)
   if a < b
     return a
@@ -15,6 +21,9 @@ fn max(a, b)
 end
 
 fn clamp(val, low, high)
+  if high < low
+    error("math.clamp: low ({low}) is greater than high ({high})")
+  end
   if val < low
     return low
   end
@@ -24,13 +33,14 @@ fn clamp(val, low, high)
   val
 end
 
-fn assert(cond, msg)
+# Raises "assertion failed" (with ": msg" when given) unless `cond` is
+# truthy; only `nil` and `false` fail.
+fn assert(cond, msg = nil)
   if not cond
     if msg == nil
       error("assertion failed")
-    else
-      error("assertion failed: {msg}")
     end
+    error("assertion failed: {msg}")
   end
 end
 

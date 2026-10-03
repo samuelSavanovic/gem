@@ -711,7 +711,7 @@ The `receive()` function call always pops the head of the mailbox unconditionall
 
 `epoch_ms()` returns the current wall-clock time as milliseconds since the Unix epoch (int). Use this for timestamps that need to be formatted into dates or times. Uses `gettimeofday` internally.
 
-`format_time(epoch_ms, format_str)` formats a wall-clock epoch millisecond timestamp into a UTC string using `strftime` specifiers. Returns a string. Supported specifiers include `%Y` (4-digit year), `%m` (month 01-12), `%d` (day 01-31), `%H` (hour 00-23), `%M` (minute 00-59), `%S` (second 00-59), `%a` (abbreviated weekday), `%b` (abbreviated month), `%T` (`%H:%M:%S`), `%F` (`%Y-%m-%d`), and all other platform-supported `strftime` specifiers.
+`format_time(epoch_ms, format_str)` formats a wall-clock epoch millisecond timestamp into a UTC string using `strftime` specifiers. Returns a string. The milliseconds are dropped by rounding down, so `-1` is `1969-12-31T23:59:59Z`. `epoch_ms` must be an int and `format_str` a string (otherwise it raises `format_time: expected (int, string), ...`); a time the platform can't represent raises `format_time: time ... ms is out of range`. An empty format, or output longer than 256 KB, gives `""`. Supported specifiers include `%Y` (4-digit year), `%m` (month 01-12), `%d` (day 01-31), `%H` (hour 00-23), `%M` (minute 00-59), `%S` (second 00-59), `%a` (abbreviated weekday), `%b` (abbreviated month), `%T` (`%H:%M:%S`), `%F` (`%Y-%m-%d`), and all other platform-supported `strftime` specifiers.
 
 `format_time_local(epoch_ms, format_str)` — same as `format_time` but formats in the local timezone instead of UTC.
 
@@ -1403,24 +1403,24 @@ table.each(parts) { |item| print(item) }
 - `table.all(arr, fn)` — return true if fn(item) is truthy for all elements
 - `table.reverse(arr)` — return new array with elements in reverse order
 - `table.contains(arr, value)` — linear scan for value equality
-- `table.sort(arr[, cmp])` — sort array in-place. Without `cmp`, uses default ascending order. With `cmp`, uses `cmp(a, b)` returning negative/zero/positive. Wrapper around the `sort` builtin.
-- `table.slice(arr, start, len)` — return new array with `len` elements starting at `start`. Negative `start` counts from end.
+- `table.sort(arr[, cmp])` — sort array in place and return it. Without `cmp`, uses default ascending order. With `cmp`, uses `cmp(a, b)` returning negative/zero/positive. Wrapper around the `sort` builtin that first calls `cmp` on the first two elements and raises `table.sort: the comparator must return a number ...` when the result is not an int or float (the builtin silently leaves the array unsorted for a boolean comparator).
+- `table.slice(arr, start[, len])` — return new array with `len` elements starting at `start` (fewer at the end of the array, none for `len <= 0`). Negative `start` counts from end; one before the first element counts as `0`. Without `len`, everything from `start` on.
 - `table.index_of(arr, val)` — return index of first occurrence of `val`, or -1 if not found
 - `table.concat(a, b)` — return new array with elements of `a` followed by elements of `b`
-- `table.copy(tbl)` — shallow copy of an array or string-keyed table. Mutations to the copy do not affect the original.
-- `table.flat_map(arr, fn)` — map each element with `fn`, then flatten one level. If `fn` returns an array, its elements are inlined; scalars are kept as-is.
+- `table.copy(tbl)` — shallow copy of an array or a record. Mutations to the copy do not affect the original. An empty table copies to an empty table.
+- `table.flat_map(arr, fn)` — map each element with `fn`, then flatten one level. If `fn` returns an array, its elements are inlined (an empty table adds nothing, as in `flatten`); scalars and non-empty records are kept as-is.
 - `table.zip(a, b)` — return array of `[a[i], b[i]]` pairs, truncated to the shorter array
-- `table.unique(arr)` — return new array with duplicate values removed (first occurrence kept). Uses `to_string` for identity comparison.
+- `table.unique(arr)` — return new array with duplicate values removed (first occurrence kept). Two values are duplicates when `==` says so: `1`, `1.0` and `"1"` are all kept, and tables compare by identity.
 - `table.count(arr, fn)` — count elements where `fn(item)` is truthy
-- `table.flatten(arr)` — flatten one level of nesting. Nested arrays are inlined; non-array elements are kept as-is. Empty arrays are dropped.
-- `table.group_by(arr, fn)` — group elements by the string key returned by `fn(item)`. Returns a table mapping keys to arrays of matching elements.
+- `table.flatten(arr)` — flatten one level of nesting. Nested arrays are inlined; non-array elements (non-empty records included) are kept as-is. Empty tables are dropped.
+- `table.group_by(arr, fn)` — group elements by the key returned by `fn(item)`. Returns a table mapping keys to arrays of matching elements, in first-seen order. Return string keys (a table with int keys that aren't `0 .. n-1` doesn't encode to JSON); a negative int key raises `table.group_by: key ... is a negative int ...`.
 
 `std/math` — exports `math` table:
 
-- `math.min(a, b)` — return the smaller of two comparable values
-- `math.max(a, b)` — return the larger of two comparable values
-- `math.clamp(val, low, high)` — constrain `val` to the range `[low, high]`
-- `math.assert(cond[, msg])` — raise an error if `cond` is falsy. Optional `msg` is included in the error message.
+- `math.min(a, b)` — return the smaller of two values `<` can order (numbers, mixed ints and floats, or strings); on a tie, `b`
+- `math.max(a, b)` — return the larger of two such values; on a tie, `b`
+- `math.clamp(val, low, high)` — constrain `val` to the range `[low, high]`. Raises `math.clamp: low (...) is greater than high (...)` when `high < low`.
+- `math.assert(cond[, msg])` — raise `"assertion failed"` (`"assertion failed: <msg>"` with `msg`) if `cond` is `nil` or `false`.
 
 `std/test` — exports `test` table. Minimal harness for self-validating example programs. Cases register on import; nothing runs until `test.run()` is called.
 
@@ -1456,7 +1456,7 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 `std/time` — exports `time` table:
 
 - `time.now()` — returns the current wall-clock time as milliseconds since the Unix epoch (int). Alias for `epoch_ms()`.
-- `time.format(ms, fmt)` — format epoch milliseconds as a UTC string using `strftime` specifiers. Wraps `format_time`.
+- `time.format(ms, fmt)` — format epoch milliseconds as a UTC string using `strftime` specifiers. Wraps `format_time` (see there for negative times and errors).
 - `time.format_local(ms, fmt)` — format epoch milliseconds as a local timezone string. Wraps `format_time_local`.
 - `time.http_date(ms?)` — RFC 7231 format: `"Tue, 28 Apr 2026 14:30:00 GMT"`. Uses current time if `ms` is omitted.
 - `time.iso8601(ms?)` — ISO 8601 format: `"2026-04-28T14:30:00Z"`. Uses current time if `ms` is omitted.
@@ -1465,13 +1465,13 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 `std/log` — exports `log` table. Structured logging to stderr. Depends on `std/time`.
 
 - `log.debug(msg)`, `log.info(msg)`, `log.warn(msg)`, `log.error(msg)` — log at the given level. Output format: `2026-04-28T14:30:00Z [INFO] message`. One line per call, written to stderr via `eprint`.
-- `log.set_level(level)` — set minimum log level. One of `"debug"`, `"info"`, `"warn"`, `"error"`. Default: `"info"`. Messages below the level are silently dropped. The level is module state, so it is per process: set it before spawning (or before `http.start`), or call it in the process that logs.
+- `log.set_level(level)` — set minimum log level. One of `"debug"`, `"info"`, `"warn"`, `"error"`; anything else raises `log.set_level: unknown level ...`. Default: `"info"`. Messages below the level are silently dropped. The level is module state, so it is per process: set it before spawning (or before `http.start`), or call it in the process that logs.
 
 `std/sqlite` — exports `sqlite` table. Thin wrapper over the SQLite C builtins.
 
 - `sqlite.open(path)` — opens (or creates) a SQLite database. Returns an opaque db handle. Use `":memory:"` for in-memory.
 - `sqlite.close(db)` — closes the database handle.
-- `sqlite.exec(db, sql)` — executes SQL that returns no rows (DDL, mutations without RETURNING).
+- `sqlite.exec(db, sql)` — executes SQL that takes no parameters and returns no rows (DDL, PRAGMA, mutations without RETURNING).
 - `sqlite.query(db, sql, params?)` — executes a parameterized query. `params` defaults to `[]`. Returns an array of row tables. Use `?` placeholders for bind parameters.
 - `sqlite.last_id(db)` — returns the last inserted row ID.
 - `sqlite.changes(db)` — returns the number of rows affected by the last mutation.
@@ -1530,9 +1530,9 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 
 `std/task` — exports `task` table. Runs a function in its own process and waits for its result; the simplest way to do several things at once. Load with `load "std/task"`.
 
-- `task.async(f)` — spawns a process that calls `f()` and returns a task handle `{pid, ref, owner, done}`.
-- `task.await(t)` / `task.await(t, timeout_ms)` — waits for the task and returns `f`'s value. If `f` raised an error, `await` raises the same message in the caller. On timeout, the task is killed and `await` raises `"task.await timeout"`. If the task process ends before it produces a result (killed, or `kill(self(), reason)` in `f`), `await` raises `"task exited: <reason>"`; for reason `"normal"` the message instead says the task exited before its result was received and that a catch-all receive may have taken the result. With no timeout, `await` waits until the task finishes.
-- `task.await_all(tasks)` / `task.await_all(tasks, timeout_ms)` — awaits every task and returns their values in the order of `tasks`. The timeout covers the whole call. If any task fails or the timeout expires, the tasks not yet awaited are killed and the error is raised.
+- `task.async(f)` — spawns a process that calls `f()` and returns a task handle `{pid, ref, owner, done}`. Raises `task.async: expected a function, ...` when `f` is not a function. `await` and `await_all` raise `task.await: expected a task from task.async, ...` (or `task.await_all: ...`) for anything but such a handle.
+- `task.await(t)` / `task.await(t, timeout_ms)` — waits for the task and returns `f`'s value. If `f` raised an error, `await` raises the same message in the caller. On timeout, the task is killed and `await` raises `"task.await: timeout"`. If the task process ends before it produces a result (killed, or `kill(self(), reason)` in `f`), `await` raises `"task.await: task exited: <reason>"`; for reason `"normal"` the message instead says the task exited before its result was received and that a catch-all receive may have taken the result. With no timeout, `await` waits until the task finishes.
+- `task.await_all(tasks)` / `task.await_all(tasks, timeout_ms)` — awaits every task and returns their values in the order of `tasks`. The timeout covers the whole call. If any task fails or the timeout expires, the tasks not yet awaited are killed and the error is raised; the messages that `await` starts with `task.await: ` start with `task.await_all: ` here.
 
 Rules:
 - Only the process that called `async` can await the task, and each task can be awaited once. Breaking either rule — including passing the same task to `await_all` twice — raises an error.

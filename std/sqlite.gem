@@ -1,4 +1,16 @@
-# std/sqlite — thin wrapper over SQLite C builtins
+# sqlite — SQLite databases, a thin layer over the sqlite_* builtins.
+#
+#   let db = sqlite.open("app.db")          # or ":memory:"
+#   sqlite.exec(db, "CREATE TABLE IF NOT EXISTS notes(id INTEGER PRIMARY KEY, text TEXT)")
+#   sqlite.query(db, "INSERT INTO notes(text) VALUES (?)", ["hi"])
+#   let rows = sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [sqlite.last_id(db)])
+#   sqlite.close(db)
+#
+# Every function raises on an SQLite error, with the builtin's name and
+# SQLite's message. `open` and `close` run on the I/O thread pool; `exec`
+# and `query` run on the scheduler thread and stall every process while
+# they run, so keep queries short and indexed. Close a handle in the
+# process that opened it, on every path.
 
 fn open(path)
   sqlite_open(path)
@@ -8,18 +20,23 @@ fn close(db)
   sqlite_close(db)
 end
 
+# Runs SQL that takes no parameters and returns no rows (DDL, PRAGMA).
 fn exec(db, sql)
   sqlite_exec(db, sql)
 end
 
+# Runs one statement with `?` placeholders bound from `params` and returns
+# its rows as an array of records keyed by column name.
 fn query(db, sql, params = [])
   sqlite_query(db, sql, params)
 end
 
+# The rowid of the last row inserted through `db`.
 fn last_id(db)
   sqlite_last_insert_id(db)
 end
 
+# How many rows the last INSERT, UPDATE or DELETE changed.
 fn changes(db)
   sqlite_changes(db)
 end

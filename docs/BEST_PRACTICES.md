@@ -519,7 +519,10 @@ A module-level `let` hides it in every function and closure of the file,
 those above it included, and in top-level code from the `let` on: its
 own initializer still reaches the builtin (`let keys = keys(t)` works).
 Do it only when the name is the module's API (`log.error`); elsewhere pick
-another name.
+another name. Such a module can still keep the builtin under another
+name: bind it in top-level code above a `let` that defines the export
+(`let raise = error`, then `let error = fn(msg) ... end`, as std/log
+does). With `fn error`, nothing in the file reaches the builtin.
 
 ### `pcall` takes a call, not a function **(trap)**
 
@@ -631,6 +634,10 @@ negative number, zero or a positive number. A boolean comparator
 ```gem
 sort(people, fn(a, b) a.age - b.age end)
 ```
+
+`table.sort(arr, cmp)` (std/table) checks what the comparator returns for
+the first two elements and raises `table.sort: the comparator must return
+a number ...` instead.
 
 ---
 

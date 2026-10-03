@@ -6,14 +6,19 @@
 #   let body = task.await(t)
 #
 # `await` returns the function's value, or raises the function's error in the
-# caller. Only the process that called `async` can await the task, and each
-# task can be awaited once.
+# caller. A timeout, or a task that dies without a result, raises an error
+# that starts with "task.await: " ("task.await_all: " from `await_all`).
+# Only the process that called `async` can await the task, and each task
+# can be awaited once.
 
 fn async(f)
+  if type(f) != "fn"
+    error("task.async: expected a function, got {type(f)}")
+  end
   let owner = self()
   let ref = make_ref()
   let pid = spawn(fn()
-    send(owner, {tag: "_task_result", ref: ref, result: pcall(f)})
+    send(owner, {tag: "_task_result", ref: ref, result: pcall f()})
   end)
   monitor(pid)
   {pid: pid, ref: ref, owner: owner, done: false}
@@ -46,29 +51,29 @@ fn stop(pid, reason)
 end
 
 # The result for a task whose process exited before its result was received.
-fn exited_without_result(reason)
+fn exited_without_result(reason, caller)
   if reason == "normal"
-    return {ok: false, error: "task exited with reason \"normal\" before its result was received; a catch-all receive may have taken the result", down: true}
+    return {ok: false, error: "{caller}: task exited with reason \"normal\" before its result was received; a catch-all receive may have taken the result", down: true}
   end
-  {ok: false, error: "task exited: {reason}", down: true}
+  {ok: false, error: "{caller}: task exited: {reason}", down: true}
 end
 
 # Waits for the result or the DOWN of the task (`ref`, `pid`). Returns the
 # result table, or nil when `timeout_ms` passes first.
-fn receive_result(ref, pid, timeout_ms)
+fn receive_result(ref, pid, timeout_ms, caller)
   if timeout_ms == nil
     receive
     when {tag: "_task_result", ref: ^ref, result: res}
       res
     when {tag: "DOWN", pid: ^pid, reason: reason}
-      exited_without_result(reason)
+      exited_without_result(reason, caller)
     end
   else
     receive
     when {tag: "_task_result", ref: ^ref, result: res}
       res
     when {tag: "DOWN", pid: ^pid, reason: reason}
-      exited_without_result(reason)
+      exited_without_result(reason, caller)
     after timeout_ms
       nil
     end
@@ -76,6 +81,9 @@ fn receive_result(ref, pid, timeout_ms)
 end
 
 fn check_owner(t, caller)
+  if type(t) != "table" or not has_key(t, "ref")
+    error("{caller}: expected a task from task.async, got {type(t)}")
+  end
   if t.owner != self()
     error("{caller}: only the process that started a task can await it")
   end
@@ -85,23 +93,24 @@ fn check_owner(t, caller)
 end
 
 # Waits for `t` and returns {ok: true, value: v} or {ok: false, error: msg}
-# (the table may carry other keys). On timeout the task is stopped.
-fn collect(t, timeout_ms)
+# (the table may carry other keys). On timeout the task is stopped. `caller`
+# names the API function in error messages.
+fn collect(t, timeout_ms, caller)
   t.done = true
   let ref = t.ref
   let pid = t.pid
-  let res = receive_result(ref, pid, 0)
+  let res = receive_result(ref, pid, 0, caller)
   if res == nil
     if process_info(pid) == nil
       # The process is gone, so its DOWN was delivered, and the check above
       # found neither the DOWN nor a result in the mailbox.
-      return {ok: false, error: "task exited and its result is no longer in the mailbox; a catch-all receive may have taken it"}
+      return {ok: false, error: "{caller}: task exited and its result is no longer in the mailbox; a catch-all receive may have taken it"}
     end
-    res = receive_result(ref, pid, timeout_ms)
+    res = receive_result(ref, pid, timeout_ms, caller)
   end
   if res == nil
     stop(pid, "timeout")
-    return {ok: false, error: "task.await timeout"}
+    return {ok: false, error: "{caller}: timeout"}
   end
   if not has_key(res, "down")
     # The task exits right after sending its result, so its DOWN follows.
@@ -128,7 +137,7 @@ end
 
 fn await(t, timeout_ms = nil)
   check_owner(t, "task.await")
-  let res = collect(t, timeout_ms)
+  let res = collect(t, timeout_ms, "task.await")
   if not res.ok
     error(res.error)
   end
@@ -139,6 +148,9 @@ end
 # If one fails or the shared timeout expires, the remaining tasks are stopped
 # and the error is raised.
 fn await_all(tasks, timeout_ms = nil)
+  if type(tasks) != "table"
+    error("task.await_all: expected an array of tasks, got {type(tasks)}")
+  end
   let seen = {}
   for t in tasks
     check_owner(t, "task.await_all")
@@ -160,7 +172,7 @@ fn await_all(tasks, timeout_ms = nil)
         remaining = 0
       end
     end
-    let res = collect(tasks[i], remaining)
+    let res = collect(tasks[i], remaining, "task.await_all")
     if not res.ok
       for j = i + 1, len(tasks)
         discard(tasks[j])
