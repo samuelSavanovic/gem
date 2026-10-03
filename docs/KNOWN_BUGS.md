@@ -127,12 +127,3 @@ names, trim optional whitespace, and document the `req.headers` keys.
 
 ## Editor grammars
 
-### tree-sitter grammar gaps
-
-- No `;` statement separator.
-- About 21 repo files parse with ERROR nodes (e.g. examples/06_blocks.gem,
-  examples 115–126, std/http.gem, `load ... (names)` in compiler/*.gem).
-- `"""` nested in a `"""` interpolation is an ERROR node, and probably ends
-  the outer string early in the VS Code grammar too.
-
-Not re-checked after #28 (no tree-sitter CLI in that environment).

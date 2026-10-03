@@ -10,6 +10,9 @@
 "load" @keyword.control.import
 "include" @keyword.control.import
 "export" @keyword.control.import
+"as" @keyword.control.import
+
+(load_statement alias: (identifier) @namespace)
 
 "if" @keyword.control.conditional
 "elif" @keyword.control.conditional
@@ -72,6 +75,9 @@
 (call_with_block
   function: (identifier) @function.call)
 
+; `pcall <expr>`
+(pcall_expression "pcall" @function.builtin)
+
 ; Builtin functions
 ((call_expression
   function: (identifier) @function.builtin)
@@ -79,7 +85,7 @@
 
 ((call_with_block
   function: (identifier) @function.builtin)
-  (#match? @function.builtin "^(spawn|send|receive|monitor|spawn_monitor|register|build_string)$"))
+  (#match? @function.builtin "^(spawn|send|receive|monitor|spawn_monitor|register|build_string|pcall)$"))
 
 ; Parameters
 (parameter_list (identifier) @variable.parameter)
