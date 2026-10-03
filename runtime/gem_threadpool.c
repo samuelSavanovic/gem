@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 #ifndef GEM_POOL_SIZE
 #define GEM_POOL_SIZE 4
@@ -31,21 +32,55 @@ static pthread_cond_t gem_io_cond = PTHREAD_COND_INITIALIZER;
 static int gem_io_wake_pipe_fds[2] = {-1, -1};
 static volatile int gem_io_shutdown_flag = 0;
 
-static void gem_io_do_read(GemIORequest *req) {
-    FILE *f = fopen(req->path, "rb");
+char *gem_read_whole_file(const char *path, size_t *out_len, char **err_msg) {
+    char msg[512];
+    *out_len = 0;
+    *err_msg = NULL;
+    FILE *f = fopen(path, "rb");
     if (!f) {
-        char buf[512];
-        snprintf(buf, sizeof(buf), "cannot open '%s'", req->path);
-        req->error_msg = strdup(buf);
-        return;
+        snprintf(msg, sizeof(msg), "cannot open '%s'", path);
+        *err_msg = strdup(msg);
+        return NULL;
     }
-    fseek(f, 0, SEEK_END);
-    long flen = ftell(f);
-    rewind(f);
-    req->result_data = (char *)malloc((size_t)flen + 1);
-    req->result_len = fread(req->result_data, 1, (size_t)flen, f);
-    req->result_data[req->result_len] = '\0';
+    /* st_size is exact for regular files; procfs/sysfs files report 0 and
+       pipes/devices report nothing useful, so those are read until EOF. */
+    struct stat st;
+    size_t cap = 4096;
+    if (fstat(fileno(f), &st) == 0) {
+        if (S_ISDIR(st.st_mode)) {
+            fclose(f);
+            snprintf(msg, sizeof(msg), "'%s' is a directory", path);
+            *err_msg = strdup(msg);
+            return NULL;
+        }
+        if (S_ISREG(st.st_mode) && st.st_size > 0) cap = (size_t)st.st_size + 1;
+    }
+    char *data = (char *)malloc(cap);
+    size_t len = 0;
+    for (;;) {
+        len += fread(data + len, 1, cap - 1 - len, f);
+        if (len < cap - 1) break;          /* short read: EOF or error */
+        int c = fgetc(f);                  /* full: is there more? */
+        if (c == EOF) break;
+        cap *= 2;
+        data = (char *)realloc(data, cap);
+        data[len++] = (char)c;
+    }
+    if (ferror(f)) {
+        fclose(f);
+        free(data);
+        snprintf(msg, sizeof(msg), "read failed for '%s'", path);
+        *err_msg = strdup(msg);
+        return NULL;
+    }
     fclose(f);
+    data[len] = '\0';
+    *out_len = len;
+    return data;
+}
+
+static void gem_io_do_read(GemIORequest *req) {
+    req->result_data = gem_read_whole_file(req->path, &req->result_len, &req->error_msg);
 }
 
 static void gem_io_do_write(GemIORequest *req, const char *mode) {

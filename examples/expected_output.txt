@@ -2274,3 +2274,26 @@ child exits without sending
 Stack trace:
   at wait_for_reply (examples/136_main_receive_deadlock.gem:80)
   at main (examples/136_main_receive_deadlock.gem:85)
+spawn: false build_string: `add` can only be called by the process that created it
+s1 = ab
+message: false build_string: `add` can only be called by the process that created it
+s2 = ok
+s3 = c
+module slot: false build_string: `add` can only be called by the process that created it
+owner call ok
+total 108890
+17 hello
+from a pipe
+child pipe
+procfs: true
+0
+4 0
+false read_file: '/tmp' is a directory
+main before
+hi from main
+main status 0
+main status 3
+child before
+hi from child
+child status 2
+read back: captured

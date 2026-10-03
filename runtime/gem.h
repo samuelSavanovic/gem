@@ -852,6 +852,12 @@ GemIORequest *gem_io_submit(GemIOOp op, const char *path,
 GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args,
                                    void (*free_args)(void *));
 void gem_io_release(GemIORequest *req);
+/* Read the whole file at `path` into a malloc'd, NUL-terminated buffer
+   (*out_len bytes, binary-safe). Regular files are read with one fread sized
+   by fstat; anything else (procfs, pipes, devices) is read until EOF.
+   Returns NULL with a malloc'd message in *err_msg on failure (cannot open,
+   directory, read error). Safe to call from a worker thread. */
+char *gem_read_whole_file(const char *path, size_t *out_len, char **err_msg);
 void gem_io_check_completions(void);
 int gem_io_wake_fd(void);
 
