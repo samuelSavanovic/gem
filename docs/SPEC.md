@@ -1413,7 +1413,7 @@ table.each(parts) { |item| print(item) }
 - `table.unique(arr)` — return new array with duplicate values removed (first occurrence kept). Two values are duplicates when `==` says so: `1`, `1.0` and `"1"` are all kept, and tables compare by identity.
 - `table.count(arr, fn)` — count elements where `fn(item)` is truthy
 - `table.flatten(arr)` — flatten one level of nesting. Nested arrays are inlined; non-array elements (non-empty records included) are kept as-is. Empty tables are dropped.
-- `table.group_by(arr, fn)` — group elements by the key returned by `fn(item)`. Returns a table mapping keys to arrays of matching elements, in first-seen order. Keys are kept as `fn` returns them (`json.encode` writes int keys that aren't `0 .. n-1` as object keys); a negative int key raises `table.group_by: key ... is a negative int ...`.
+- `table.group_by(arr, fn)` — group elements by the key returned by `fn(item)`. Returns a table mapping keys to arrays of matching elements, in first-seen order. Keys are kept as `fn` returns them (many distinct int keys are slow, as for any table with sparse int keys; prefer strings) (`json.encode` writes int keys that aren't `0 .. n-1` as object keys); a negative int key raises `table.group_by: key ... is a negative int ...`.
 
 `std/math` — exports `math` table:
 

@@ -591,6 +591,13 @@ k)` can. `x in tbl` means `has_key` only on a table with string keys. On a
 table without them (an array, or a set like `seen[id] = true`) it scans
 the *values*, so test such a set with `has_key(seen, id)`.
 
+Int keys are fast only in the array pattern (`0 .. n-1`). Any other int
+key, and any float, bool or table key, is found by a linear scan, so a
+large set or index keyed that way is quadratic **(trap)**: 20,000 sparse
+int ids (`seen[id] = true`, then `has_key`) took 3.1 s, the same ids as
+string keys (`seen["{id}"] = true`) 30 ms. Key big sets and indexes by
+string.
+
 Assigning `nil` doesn't remove a key: after `t.x = nil`, `x` is still in
 `keys(t)`, `len(t)` and `json.encode(t)`. Use `delete(t, "x")`.
 
@@ -1325,6 +1332,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `keys(t)` / `values(t)` on a large table | quadratic | `for k, v in t` |
 | `t.x = nil` to remove a key | key stays | `delete(t, "x")` |
 | `id in seen` on an int-keyed set | scans values | `has_key(seen, id)` |
+| Large set or index with sparse int (or table) keys | quadratic | string keys (`"{id}"`) |
 | Boolean `sort` comparator | array left unsorted | return `a - b` |
 | `sort` inside a comparator, or a comparator with a loop **(bug)** | wrong comparator called; unsorted or a type error | precompute keys; short comparators |
 | `json.encode({})` | `[]` | write `'{}'` yourself |
