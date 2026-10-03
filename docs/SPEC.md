@@ -1292,6 +1292,8 @@ A `load` whose file does not exist is a compile error at that `load`, naming the
 
 **Export declaration** — `export name1, name2, ...` declares which names a file exports. Placed at the end of the file.
 
+Each exported name must be bound at the module's top level: a `fn`, `extern fn` or `let` (a destructuring `let` and the bindings of the module's own `load`s included, so a module can re-export a name it imports or a namespace it loads). A name the module doesn't define, or one listed twice, is a compile error at that name in the `export` list.
+
 ```
 # std/string.gem
 fn split(s, delim)
@@ -1335,6 +1337,8 @@ split("a,b,c", ",")     # OK — imported directly
 trim("  hello  ")        # OK — imported directly
 join(parts, ",")         # error — join was not imported
 ```
+
+Naming a name the module doesn't export (one it doesn't define, or a private one) is a compile error at that name in the `load`: `module string has no export nosuch`.
 
 All three `load` forms use the same two-step path resolution. When a module has already been loaded by the program, re-importing it skips re-parsing but still creates the requested bindings (table, alias, or selective).
 

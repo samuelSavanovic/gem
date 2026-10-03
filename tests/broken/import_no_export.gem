@@ -1,0 +1,6 @@
+# A selective import of a name the module doesn't export, whether it is
+# missing or private: one error per name, at the name in the `load`. The
+# names are bound to nil, so their uses add nothing.
+load "std/string" (upper, nosuch)
+load "./modules/private_fn" (pub, priv)
+print(upper("a"), nosuch, pub(), priv())

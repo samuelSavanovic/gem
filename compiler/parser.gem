@@ -1475,6 +1475,7 @@ fn make_parser(tokens, source, file, sink)
       let path = path_tok.value
       let alias_name = nil
       let selective = nil
+      let selective_pos = nil
       if peek().type == "NAME" and peek().value == "as"
         advance()
         let alias_tok = expect("NAME")
@@ -1484,18 +1485,22 @@ fn make_parser(tokens, source, file, sink)
         end
       elif peek().type == "("
         advance()
-        selective = []
-        let sel_tok = expect("NAME")
-        while true
-          push(selective, sel_tok.value)
-          if at_top
-            note_top_name(sel_tok, "load")
-          end
-          if peek().type != ","
-            break
-          end
+        # selective_pos[i]: where selective[i] is written, for errors
+        # about a name the module doesn't export.
+        let nt = expect("NAME")
+        selective = [nt.value]
+        selective_pos = [{line: nt.line, col: nt.col}]
+        if at_top
+          note_top_name(nt, "load")
+        end
+        while peek().type == ","
           advance()
-          sel_tok = expect("NAME")
+          nt = expect("NAME")
+          push(selective, nt.value)
+          push(selective_pos, {line: nt.line, col: nt.col})
+          if at_top
+            note_top_name(nt, "load")
+          end
         end
         expect(")")
       elif at_top and path_tok.synthetic != true
@@ -1512,19 +1517,29 @@ fn make_parser(tokens, source, file, sink)
         end
         note_top_name({type: "NAME", value: base, line: path_tok.line, col: path_tok.col}, "load", len(path) + 2)
       end
-      return {tag: "load", path: path, alias: alias_name, selective: selective, line: t.line, col: t.col}
+      return {tag: "load", path: path, alias: alias_name, selective: selective, selective_pos: selective_pos, line: t.line, col: t.col}
     end
 
     # export name, name, ...
     if t.type == "export"
       advance()
-      let names = [expect("NAME").value]
+      # name_pos[i]: where names[i] is written, for errors about a name
+      # the module doesn't define.
+      let nt = expect("NAME")
+      let names = [nt.value]
+      let name_pos = [{line: nt.line, col: nt.col}]
       while peek().type == ","
         advance()
         skip_nl()
-        push(names, expect("NAME").value)
+        nt = expect("NAME")
+        push(names, nt.value)
+        push(name_pos, {line: nt.line, col: nt.col})
       end
-      return make_export(names)
+      let node = make_export(names)
+      node.name_pos = name_pos
+      node.line = t.line
+      node.col = t.col
+      return node
     end
 
     # extern fn / extern blocking fn / extern include

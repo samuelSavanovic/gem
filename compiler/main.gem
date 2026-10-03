@@ -33,6 +33,10 @@ fn make_let(name, value, line)
   {tag: "let", name: name, value: value, line: line}
 end
 
+fn make_nil_node()
+  {tag: "nil"}
+end
+
 fn make_var(name, line = nil, col = nil)
   {tag: "var", name: name, line: line, col: col}
 end
@@ -373,7 +377,7 @@ fn shadow_entry_builtins(stmts, module_bindings)
   end
 end
 
-fn transform_module(stmts, mod_name, export_node, load_node)
+fn transform_module(stmts, mod_name)
   let prefix = "_mod_" + mod_name + "_"
   let top_names = collect_module_top_names(stmts)
   let rmap = build_rename_map(top_names, prefix)
@@ -390,7 +394,8 @@ fn transform_module(stmts, mod_name, export_node, load_node)
     end
   end
 
-  # Everything but the binding lets pushed below belongs to this module.
+  # Everything here belongs to this module; the loader's bindings
+  # (import_bindings) come after.
   let result = []
   for stmt in stmts
     if not is_node(stmt, "export")
@@ -398,13 +403,66 @@ fn transform_module(stmts, mod_name, export_node, load_node)
       push(result, stmt)
     end
   end
+  result
+end
 
-  let exported = export_node.names
+# The names of a module's `export` that it can export: each reported if
+# the module doesn't define it at module scope or lists it twice, then
+# left out, so a use of it reports "has no export" rather than an
+# undeclared mangled slot (a selective import of it reports nothing more:
+# `bad` collects the names left out). A module that failed to parse has
+# already reported why; its missing names are dropped without another error.
+fn checked_exports(export_node, top_names, mod_name, file, parse_failed, sources_by_file, sink, bad)
+  let result = []
+  let seen = {}
+  let i = 0
+  for name in export_node.names
+    let pos = export_node.name_pos[i]
+    i += 1
+    if seen[name] != nil
+      sink.report(sources_by_file[file], file, pos.line, pos.col, len(name), "module `{mod_name}` exports `{name}` twice", "remove the second `{name}` from the `export` list")
+    elif top_names[name] == nil
+      if not parse_failed
+        sink.report(sources_by_file[file], file, pos.line, pos.col, len(name), "module `{mod_name}` exports `{name}`, which it doesn't define", "define `{name}` at the top level of the module, or remove it from the `export` list")
+      end
+      bad[name] = true
+    else
+      push(result, name)
+    end
+    seen[name] = true
+  end
+  result
+end
 
+# The bindings a `load` creates in the loading file: a `let` per name of
+# a selective import, or the module's frozen namespace table. A selective
+# name the module doesn't export is reported at the `load` and bound to
+# nil, so its uses don't each report an undeclared name. A name in `bad`
+# (listed in the module's `export` but not defined) was reported there.
+fn import_bindings(load_node, mod_name, exported, bad, module_bindings, sources_by_file, sink)
+  let prefix = "_mod_" + mod_name + "_"
+  let result = []
   if load_node.selective != nil
+    let is_exported = {}
+    for ename in exported
+      is_exported[ename] = true
+    end
+    let i = 0
     for sel_name in load_node.selective
-      let prefixed = prefix + sel_name
-      push(result, make_let(sel_name, make_var(prefixed), 0))
+      let pos = load_node.selective_pos[i]
+      i += 1
+      if is_exported[sel_name] != nil
+        push(result, make_let(sel_name, make_var(prefix + sel_name), 0))
+      else
+        if bad[sel_name] == nil
+          let hint = nil
+          if len(exported) > 0
+            hint = "the module exports: " + string.join(exported, ", ")
+          end
+          sink.report(sources_by_file[load_node.file], load_node.file, pos.line, pos.col, len(sel_name), "module `{mod_name}` has no export `{sel_name}`", hint)
+        end
+        push(result, make_let(sel_name, make_nil_node(), 0))
+      end
     end
   else
     let binding_name = mod_name
@@ -413,14 +471,13 @@ fn transform_module(stmts, mod_name, export_node, load_node)
     end
     let entries = []
     for ename in exported
-      let prefixed = prefix + ename
-      push(entries, make_table_entry(ename, make_var(prefixed)))
+      push(entries, make_table_entry(ename, make_var(prefix + ename)))
     end
     let mod_tbl = make_table(entries)
     mod_tbl.frozen = true
     push(result, make_let(binding_name, mod_tbl, 0))
+    module_bindings[binding_name] = exported
   end
-
   result
 end
 
@@ -588,26 +645,9 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       end
       if cached != nil
         if cached.exported != nil
-          let prefix = "_mod_" + cached.mod_name + "_"
-          if stmt.selective != nil
-            for sel_name in stmt.selective
-              new_stmts[count] = make_let(sel_name, make_var(prefix + sel_name), 0)
-              count += 1
-            end
-          else
-            let binding_name = cached.mod_name
-            if stmt.alias != nil
-              binding_name = stmt.alias
-            end
-            let entries = []
-            for ename in cached.exported
-              push(entries, make_table_entry(ename, make_var(prefix + ename)))
-            end
-            let mod_tbl = make_table(entries)
-            mod_tbl.frozen = true
-            new_stmts[count] = make_let(binding_name, mod_tbl, 0)
+          for b in import_bindings(stmt, cached.mod_name, cached.exported, cached.bad_exports, module_bindings, sources_by_file, sink)
+            new_stmts[count] = b
             count += 1
-            module_bindings[binding_name] = cached.exported
           end
         end
         continue
@@ -659,14 +699,13 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       let mod_name = module_name_from_path(stmt.path)
       # top_names: the module-scope names transform_module prefixes with
       # `_mod_<mod_name>_`; build_global_display maps them back for messages.
-      loaded[full_path] = {mod_name: mod_name, exported: export_node.names, top_names: collect_module_top_names(resolved.stmts)}
-      let mod_stmts = transform_module(resolved.stmts, mod_name, export_node, stmt)
-      if stmt.selective == nil
-        let bn = mod_name
-        if stmt.alias != nil
-          bn = stmt.alias
-        end
-        module_bindings[bn] = export_node.names
+      let top_names = collect_module_top_names(resolved.stmts)
+      let bad_exports = {}
+      let exported = checked_exports(export_node, top_names, mod_name, full_path, parse_failed, sources_by_file, sink, bad_exports)
+      loaded[full_path] = {mod_name: mod_name, exported: exported, bad_exports: bad_exports, top_names: top_names}
+      let mod_stmts = transform_module(resolved.stmts, mod_name)
+      for b in import_bindings(stmt, mod_name, exported, bad_exports, module_bindings, sources_by_file, sink)
+        push(mod_stmts, b)
       end
       for ms in mod_stmts
         new_stmts[count] = ms

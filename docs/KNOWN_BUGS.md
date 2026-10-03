@@ -8,18 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### Exporting or importing a name that doesn't exist shows a mangled name
-
-```gem
-# mods/e1.gem: fn a() 1 end / export a, b
-load "./mods/e1"               # undeclared identifier `_mod_e1_b`
-load "std/string" (nosuch)     # undeclared identifier `_mod_string_nosuch`
-```
-
-Both errors point at the entry file with no line, and show the mangled
-slot name. Expected: `module e1 exports b, which it doesn't define` at the
-`export` line, and `module string has no export nosuch` at the `load`.
-
 ### A module file name that isn't a C identifier reaches the C compiler
 
 `load "./mods/my-utils"` fails in cc (`gem_fn__mod_my-utils_f`). Either
