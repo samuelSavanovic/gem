@@ -2,7 +2,8 @@
 # DOWN behind, init returning {state}, http's Host and bare-LF checks,
 # request's Transfer-Encoding, trailer and Set-Cookie handling,
 # format_time's UTC %z/%Z/%s and output limit, sqlite params bound by
-# key, and a process that reuses main's slot after main ends.
+# key, nil as "no timeout" (tcp_read, http options, http.stop), and a
+# process that reuses main's slot after main ends.
 load "std/gen_server"
 load "std/supervisor"
 load "std/http"
@@ -226,7 +227,32 @@ print((pcall sqlite_query(db, "SELECT ? AS a, ? AS b", {0: 1, 5: 2})).error)
 print((pcall sqlite_query(db, "SELECT ? AS a", {})).error)
 sqlite_close(db)
 
-print("-- 8. main's slot is not reused after main ends")
+print("-- 8. nil means no timeout")
+let lfd = tcp_listen("127.0.0.1", 18192)
+spawn do
+  let peer = tcp_accept(lfd)
+  sleep(50)
+  tcp_write(peer, "x")
+  sleep(100)
+  tcp_close(peer)
+end
+let c = tcp_connect("127.0.0.1", 18192)
+t0 = time_ms()
+let r0 = tcp_read(c, 100, 0)
+let rneg = tcp_read(c, 100, -5)
+print("tcp_read 0 / negative:", r0, rneg, "fast:", time_ms() - t0 < 30)
+let rnil = tcp_read(c, 100, nil)
+print("tcp_read nil:", rnil, "waited:", time_ms() - t0 >= 40)
+print((pcall tcp_read(c, 100, "1")).error)
+tcp_close(c)
+tcp_close(lfd)
+let untimed = http.start(app, {port: PORT, host: "127.0.0.1", idle_timeout_ms: nil, request_timeout_ms: nil})
+print("no limits:", status_of("GET /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"))
+print("http.stop nil:", http.stop(untimed, nil))
+print((pcall http.start(app, {port: PORT, host: "127.0.0.1", idle_timeout_ms: 0})).error)
+print((pcall http.start(app, {port: PORT, host: "127.0.0.1", request_timeout_ms: "1"})).error)
+
+print("-- 9. main's slot is not reused after main ends")
 # Main ends below. Its slot used to go back on the free list, and the
 # process that got it (about every 1,024th spawn) was taken for main: its
 # exit with any reason but "normal" ended the program.

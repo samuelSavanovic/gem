@@ -115,7 +115,8 @@ let took = time_ms() - t0
 print("silent took about 100 ms: {took >= 95 and took < 600}")
 try_get("slow body", ["HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\npartial"], {timeout_ms: 100}, 0, 250)
 try_get("in time", ["HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"], {timeout_ms: 1000}, 30)
-try_get("no timeout", ["HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"], {timeout_ms: 0}, 30)
+try_get("no timeout", ["HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"], {timeout_ms: nil}, 30)
+try_url("zero timeout", fn() request.get(url_for(1), {timeout_ms: 0}) end)
 try_url("bad timeout", fn() request.get(url_for(1), {timeout_ms: "soon"}) end)
 
 # ─── What is sent ───

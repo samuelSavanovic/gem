@@ -1206,7 +1206,8 @@ leaks its socket; bound the request with its `timeout_ms` instead.
 
 - `tcp_read(fd, n, timeout_ms)` returns `""` at end of stream and `nil` on
   timeout. Library code should always pass a timeout; without one, a silent
-  peer blocks the caller forever. A timeout of `0` means *no* timeout.
+  peer blocks the caller forever. As with `after`, a timeout of `0` or
+  less doesn't wait: it returns what's already there, or `nil`.
 - `tcp_write` returns the number of bytes written and does not raise when
   the peer has gone. Treat `tcp_write(fd, s) < len(s)` as "connection
   lost", but expect the first write after a disconnect to still report
@@ -1395,4 +1396,4 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_listen("localhost", ...)` | raises | `"127.0.0.1"` |
-| `tcp_read` with no timeout, or `0` | blocks forever on a silent peer | pass a timeout |
+| `tcp_read` with no timeout | blocks forever on a silent peer | pass a timeout |

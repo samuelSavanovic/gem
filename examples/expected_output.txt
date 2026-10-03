@@ -2909,7 +2909,8 @@ silent took about 100 ms: true
 slow body: error: request.get: timed out after 100 ms waiting for http://127.0.0.1:19816/
 in time: 200 {"content-length": "2"} ok
 no timeout: 200 {"content-length": "2"} ok
-bad timeout: request.get: timeout_ms must be an int, got string
+zero timeout: request.get: timeout_ms must be an int > 0 (milliseconds) or nil, got 0
+bad timeout: request.get: timeout_ms must be an int > 0 (milliseconds) or nil, got string
 echo: 200 {"content-length": "73"} GET / HTTP/1.1|Host: 127.0.0.1:19819|Connection: close|X-Token: t1||
 host has port: true
 POST /?q=1 HTTP/1.1|Connection: close|Content-Length: 3|Host: example.test||abc
@@ -3644,8 +3645,8 @@ serve nil: error http.serve: expected a router from http.router(), got nil
 serve bad opt: error http.serve: max_body must be an int >= 0, got -1
 port in use: error http.start: tcp_listen: bind failed on port 18190: Address already in use
 bad host: error http.start: tcp_listen: invalid address 'nowhere'
-stop timeout: error http.stop: timeout_ms must be an int (milliseconds), got string
-stop nil timeout: error http.stop: timeout_ms must be an int (milliseconds), got nil
+stop timeout: error http.stop: timeout_ms must be an int (milliseconds) or nil, got string
+stop nil timeout: ok nil
 -- request
 POST /p HTTP/1.1|Host: 127.0.0.1:18192|Connection: close|Content-Length: 0||
 PUT /p HTTP/1.1|Host: 127.0.0.1:18193|Connection: close|Content-Length: 0||
@@ -3713,6 +3714,14 @@ format_time: output is over 256 KB
 sqlite_query: params must be an array, got a string key
 sqlite_query: params must be an array (keys 0..1), got key 5
 sqlite_query: statement has 1 parameter(s), got 0
--- 8. main's slot is not reused after main ends
+-- 8. nil means no timeout
+tcp_read 0 / negative: nil nil fast: true
+tcp_read nil: x waited: true
+tcp_read: timeout_ms must be an int (milliseconds) or nil, got string
+no limits: HTTP/1.1 200 OK
+http.stop nil: nil
+http.start: idle_timeout_ms must be an int > 0 (milliseconds) or nil, got 0
+http.start: request_timeout_ms must be an int > 0 (milliseconds) or nil, got string
+-- 9. main's slot is not reused after main ends
 main ends
 1200 processes exited after main ended

@@ -12,8 +12,8 @@
 #
 # Each call opens a connection, sends `Connection: close`, reads one
 # response and closes the socket, also when it raises; a caller killed
-# mid-request leaks it. `timeout_ms` (default 30000, `0` or less for
-# none) is one deadline for the whole call, not a per-read limit;
+# mid-request leaks it. `timeout_ms` (default 30000, `nil` for none) is
+# one deadline for the whole call, not a per-read limit;
 # connecting and writing can't be interrupted, so only the reads are cut
 # short. Every error is prefixed with the function the
 # caller used (`request.get: ...`).
@@ -152,7 +152,7 @@ end
 
 # Reads more bytes into the reader; false at end of stream.
 fn fill(rd)
-  let wait = 0
+  let wait = nil
   if rd.deadline != nil
     wait = rd.deadline - time_ms()
     if wait <= 0
@@ -463,7 +463,17 @@ fn exchange(rd, req_str, method)
   read_response(rd, method)
 end
 
-fn do_request(name, method, raw_url, {headers = {}, body = "", timeout_ms = DEFAULT_TIMEOUT_MS} = {})
+# An option given as nil, as opposed to left out (a destructuring default
+# fires for both).
+fn given_nil(opts, key)
+  type(opts) == "table" and has_key(opts, key) and opts[key] == nil
+end
+
+fn do_request(name, method, raw_url, opts)
+  let {headers = {}, body = "", timeout_ms = DEFAULT_TIMEOUT_MS} = opts
+  if given_nil(opts, "timeout_ms")
+    timeout_ms = nil
+  end
   if type(method) != "string" or method == ""
     error("{name}: method must be a non-empty string")
   end
@@ -474,14 +484,16 @@ fn do_request(name, method, raw_url, {headers = {}, body = "", timeout_ms = DEFA
   if type(headers) != "table"
     error("{name}: headers must be a table, got {type(headers)}")
   end
-  if type(timeout_ms) != "int"
-    error("{name}: timeout_ms must be an int, got {type(timeout_ms)}")
+  if timeout_ms != nil and type(timeout_ms) != "int"
+    error("{name}: timeout_ms must be an int > 0 (milliseconds) or nil, got {type(timeout_ms)}")
+  elif timeout_ms != nil and timeout_ms <= 0
+    error("{name}: timeout_ms must be an int > 0 (milliseconds) or nil, got {timeout_ms}")
   end
   let parsed = parse_url(name, raw_url)
   let req_str = build_request(name, method, parsed, headers, body)
 
   let deadline = nil
-  if timeout_ms > 0
+  if timeout_ms != nil
     deadline = time_ms() + timeout_ms
   end
   let conn = pcall tcp_connect(parsed.host, parsed.port)

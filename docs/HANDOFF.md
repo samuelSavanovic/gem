@@ -68,6 +68,24 @@ Notes for the next session. Delete this file once its work is done.
    -1`; std: `one_for_all` with exit-trapping children, which needs an
    untrappable exit signal), and the ROADMAP items std now leans on
    (a write timeout for `tcp_write`).
+7. **Agreed in the PR #32 review, its own follow-up PR (with its own
+   macOS run):** an untrappable kill and per-child shutdown timeouts.
+   - `kill(pid, "kill")` can't be trapped; the target dies with reason
+     `"killed"`. Links propagate `"killed"` as an ordinary, trappable
+     reason, as in Erlang, so only the direct `kill(pid, "kill")` is
+     untrappable.
+   - Child specs get `shutdown: ms` (default 5000; `nil` waits forever).
+     A supervisor sends `"shutdown"`, waits that long for the child's
+     `DOWN`, then sends `"kill"`; the same for `one_for_all` restarts and
+     `terminate_child`. This closes the `one_for_all` KNOWN_BUGS entry
+     (keep it until then).
+   - A child that is itself a supervisor defaults to `shutdown: nil`, as
+     OTP's supervisor children default to `infinity`, so a parent doesn't
+     kill a nested tree in the middle of its ordered shutdown. Users
+     shouldn't have to set it: e.g. `supervisor.start` /
+     `dynamic_supervisor.start` return a handle that marks itself
+     (`{pid, supervisor: true}`), and the parent picks the default from
+     it.
 
 ## Ground rules from the maintainer
 

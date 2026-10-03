@@ -416,14 +416,14 @@ end
 
 # Starts the clock for the request being read.
 fn start_deadline(rd)
-  if rd.deadline == nil and rd.request_ms > 0
+  if rd.deadline == nil and rd.request_ms != nil
     rd.deadline = time_ms() + rd.request_ms
   end
 end
 
-# The next bytes from the peer: each read waits at most `idle_ms`, and
-# never past the request's deadline. nil when the peer closed or the time
-# ran out.
+# The next bytes from the peer: each read waits at most `idle_ms` (nil:
+# no limit), and never past the request's deadline. nil when the peer
+# closed or the time ran out.
 fn read_more(rd)
   let wait = rd.idle_ms
   if rd.deadline != nil
@@ -431,7 +431,7 @@ fn read_more(rd)
     if left <= 0
       return nil
     end
-    if wait <= 0 or left < wait
+    if wait == nil or left < wait
       wait = left
     end
   end
@@ -1544,10 +1544,25 @@ end
 
 # `start`, with the server watching `watch` (nil: nobody); errors start
 # with `caller`.
-fn launch(caller, router_ref, watch, {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS} = {})
+# A timeout option: its default when left out, nil (no limit) when given
+# as nil, else an int > 0.
+fn timeout_opt(caller, opts, name, value)
+  if type(opts) == "table" and has_key(opts, name) and opts[name] == nil
+    return nil
+  end
+  if type(value) != "int"
+    error("{caller}: {name} must be an int > 0 (milliseconds) or nil, got {type(value)}")
+  elif value <= 0
+    error("{caller}: {name} must be an int > 0 (milliseconds) or nil, got {value}")
+  end
+  value
+end
+
+fn launch(caller, router_ref, watch, opts)
+  let {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS} = opts
   check_int(caller, "max_body", max_body, 0)
-  check_int(caller, "idle_timeout_ms", idle_timeout_ms, 0)
-  check_int(caller, "request_timeout_ms", request_timeout_ms, 0)
+  idle_timeout_ms = timeout_opt(caller, opts, "idle_timeout_ms", idle_timeout_ms)
+  request_timeout_ms = timeout_opt(caller, opts, "request_timeout_ms", request_timeout_ms)
   if type(router_ref) != "table" or type(router_ref.match) != "fn"
     error("{caller}: expected a router from http.router(), got {type(router_ref)}")
   end
@@ -1635,12 +1650,19 @@ end
 # has closed the listening socket and every connection's. Returns nil; a
 # server that already stopped is fine.
 fn stop(server, timeout_ms = 5000)
-  if type(timeout_ms) != "int"
-    error("http.stop: timeout_ms must be an int (milliseconds), got {type(timeout_ms)}")
+  if timeout_ms != nil and type(timeout_ms) != "int"
+    error("http.stop: timeout_ms must be an int (milliseconds) or nil, got {type(timeout_ms)}")
   end
   let pid = target_pid(server, "http.stop")
   let added = monitor(pid)
   kill(pid, "shutdown")
+  if timeout_ms == nil
+    receive
+    when {tag: "DOWN", pid: ^pid, reason: reason}
+      return_down(pid, added, reason)
+    end
+    return nil
+  end
   receive
   when {tag: "DOWN", pid: ^pid, reason: reason}
     return_down(pid, added, reason)
