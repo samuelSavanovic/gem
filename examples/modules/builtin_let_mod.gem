@@ -1,0 +1,15 @@
+# Module-scope lets named like builtins: each initializer still calls the
+# builtin; the module's fns see the bindings.
+let source = {x: 1, y: 2, z: 3}
+let keys = sort(keys(source))
+let print = fn(line) print("[mod] " + line) end
+
+fn key_count()
+  len(keys)
+end
+
+fn say(line)
+  print(line)
+end
+
+export keys, key_count, say

@@ -10,18 +10,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Runtime
 
-### A top-level `let` named like a builtin can't read the builtin
-
-```gem
-let t = {a: 1}
-let keys = keys(t)          # attempt to call nil value
-```
-
-The entry file's top-level binding named like a builtin replaces the
-builtin in the whole file (`shadow_entry_builtins` in compiler/main.gem),
-so its own initializer calls the not-yet-set slot. A `let` inside a
-function (`let keys = keys(t)`) works: its initializer sees the builtin.
-
 ## C interop
 
 ### `extern include` with a relative path is not found next to the source

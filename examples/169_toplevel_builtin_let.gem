@@ -1,0 +1,45 @@
+# A top-level `let` named like a builtin shadows it like any `let`: its
+# initializer, and top-level code before it, still see the builtin; code
+# after it and every fn of the file see the binding.
+
+load "./modules/builtin_let_mod" as mod
+
+let t = {a: 1, b: 2}
+
+# Before the let: the builtin, also in a nested block.
+print(len(keys(t)))
+if len(t) > 0
+  print(type(keys))
+end
+
+# A closure and a named fn defined before the let see the binding.
+let later = fn() keys end
+fn key_total()
+  len(keys)
+end
+
+let keys = sort(keys(t))         # the initializer calls the builtin
+print(keys)
+print(key_total(), later())
+
+# A second let of the same name reads the first one.
+let keys = len(keys) + 10
+print(keys)
+
+# A closure in the initializer wraps the builtin.
+let values = fn(tbl) sort(values(tbl)) end
+print(values({p: 3, q: 1}))
+
+# Destructuring: the temp's initializer sees the builtin.
+let {abs} = {abs: abs}
+print(abs(-3))
+
+# A loaded module behaves the same.
+print(mod.keys, mod.key_count())
+mod.say("hello")
+
+# A top-level fn still shadows the builtin in the whole file.
+print(floor(2.5))
+fn floor(x)
+  "my floor {x}"
+end

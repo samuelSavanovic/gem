@@ -197,6 +197,20 @@ fn copy_set(s)
   result
 end
 
+# The scope a fn body (named or anonymous) starts from. A module-scope
+# `let` of a builtin's name marked "pending" (not reached yet) leaves the
+# name meaning the builtin in the module's own statements before it; a fn
+# body runs later and sees the module binding, like any module-level name.
+fn fn_body_scope(shadowed)
+  let result = {}
+  for k, v in shadowed
+    if v != "pending"
+      result[k] = v
+    end
+  end
+  result
+end
+
 fn rename_pattern(pat, rmap, shadowed)
   if pat == nil
     return nil
@@ -251,7 +265,7 @@ fn rename_node(node, rmap, shadowed)
     if has_key(rmap, name)
       node.name = rmap[name]
     end
-    let inner = copy_set(shadowed)
+    let inner = fn_body_scope(shadowed)
     for p in params
       inner[p] = true
     end
@@ -269,7 +283,7 @@ fn rename_node(node, rmap, shadowed)
       node.name = rmap[name]
     end
   when {tag: "anon_fn", params: params, body: body}
-    let inner = copy_set(shadowed)
+    let inner = fn_body_scope(shadowed)
     for p in params
       inner[p] = true
     end
@@ -396,12 +410,51 @@ fn rename_stmt_in_scope(stmt, rmap, current, top)
   elif is_node(stmt, "let") and not top
     rename_node(stmt.value, rmap, current)
     current[stmt.name] = true
+  elif is_node(stmt, "let") and current[stmt.name] == "pending"
+    # The first module-scope `let` of a builtin's name: its initializer
+    # (closures in it included) and every statement before it still call
+    # the builtin.
+    let init_scope = copy_set(current)
+    init_scope[stmt.name] = true
+    rename_node(stmt.value, rmap, init_scope)
+    delete(current, stmt.name)
+    stmt.name = rmap[stmt.name]
   else
     rename_node(stmt, rmap, current)
     if is_node(stmt, "let") and not has_key(rmap, stmt.name)
       current[stmt.name] = true
     end
   end
+end
+
+# The starting scope for renaming a module's own top-level statements:
+# each builtin's name that the module binds with a `let` (not a fn or an
+# extern fn, which bind it for the whole module) is "pending" until that
+# `let`, so the module's statements before it, and its initializer, call
+# the builtin, as for a shadowing `let` anywhere else.
+fn pending_builtin_lets(stmts, rmap)
+  let lets = {}
+  let fns = {}
+  for stmt in stmts
+    if is_node(stmt, "fn_def") or is_node(stmt, "extern_fn")
+      fns[stmt.name] = true
+    elif is_node(stmt, "let")
+      lets[stmt.name] = true
+    elif is_node(stmt, "block")
+      for s in stmt.stmts
+        if is_node(s, "let")
+          lets[s.name] = true
+        end
+      end
+    end
+  end
+  let scope = {}
+  for name, _ in lets
+    if has_key(rmap, name) and has_key(BUILTIN_FNS, name) and not has_key(fns, name)
+      scope[name] = "pending"
+    end
+  end
+  scope
 end
 
 fn rename_stmts(stmts, rmap, shadowed)
@@ -416,8 +469,11 @@ fn is_from_load(stmt)
 end
 
 # A top-level binding in the entry file whose name is a builtin's (a fn,
-# a let, a selective import) shadows the builtin for the whole entry file,
-# like it does in a loaded module, where transform_module prefixes it. The
+# a let, a selective import) shadows the builtin in the entry file, like
+# it does in a loaded module, where transform_module prefixes it: a fn for
+# the whole file, a `let` from that `let` on (its initializer and the
+# top-level statements before it call the builtin; fn bodies see the
+# binding, see pending_builtin_lets). The
 # entry file's top-level names are not prefixed, so rename just the ones
 # that collide with a builtin to `_main_<name>`. Statements spliced in from
 # loads are skipped: their free names mean the builtin. Runs before
@@ -440,7 +496,7 @@ fn shadow_entry_builtins(stmts, module_bindings)
   if not any
     return nil
   end
-  let scope = {}
+  let scope = pending_builtin_lets(own, rmap)
   for stmt in own
     rename_stmt_in_scope(stmt, rmap, scope, true)
   end
@@ -461,7 +517,13 @@ fn transform_module(stmts, mangle, top_names)
   # builtins (or undeclared), never this module's bindings, so they are
   # left alone: a module's `fn len` must not capture `len` in a module it
   # loads.
-  let module_scope = {}
+  let own = []
+  for stmt in stmts
+    if not is_from_load(stmt)
+      push(own, stmt)
+    end
+  end
+  let module_scope = pending_builtin_lets(own, rmap)
   for stmt in stmts
     if not is_from_load(stmt)
       rename_stmt_in_scope(stmt, rmap, module_scope, true)

@@ -508,9 +508,10 @@ Pick another name.
 
 Naming a function or variable like a builtin (`fn error`, `let len = 3`)
 is allowed: it hides the builtin in that file only, and modules the file
-loads keep the builtin. A module-level one hides it in the whole file,
-functions above it included, and `let keys = keys(t)` at module level
-fails because its own initializer no longer reaches the builtin **(bug)**.
+loads keep the builtin. A module-level `fn` hides it in the whole file.
+A module-level `let` hides it in every function and closure of the file,
+those above it included, and in top-level code from the `let` on: its
+own initializer still reaches the builtin (`let keys = keys(t)` works).
 Do it only when the name is the module's API (`log.error`); elsewhere pick
 another name.
 
