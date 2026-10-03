@@ -1,0 +1,40 @@
+# sqlite_query binds a record of names to :name, @name and $name.
+
+load "std/sqlite"
+
+let db = sqlite.open(":memory:")
+sqlite.exec(db, "CREATE TABLE notes(id INTEGER PRIMARY KEY, text TEXT, n INTEGER)")
+sqlite.query(db, "INSERT INTO notes(text, n) VALUES (:text, :n)", {text: "hi", n: 1})
+sqlite.query(db, "INSERT INTO notes(text, n) VALUES (@text, $n)", {n: 2, text: "there"})
+# A key holding nil binds NULL.
+sqlite.query(db, "INSERT INTO notes(text, n) VALUES (:text, :n)", {text: "none", n: nil})
+print(sqlite.query(db, "SELECT id FROM notes WHERE text = :t", {t: "hi"}))
+# A name used twice reads one value.
+print(sqlite.query(db, "SELECT text FROM notes WHERE n = :v OR id = :v ORDER BY id", {v: 2}))
+print(sqlite.query(db, "SELECT text FROM notes WHERE n IS NULL", {}))
+# Strings keep every byte.
+sqlite.query(db, "INSERT INTO notes(text) VALUES (:t)", {t: "a\0b"})
+print(len(sqlite.query(db, "SELECT text FROM notes WHERE id = :id", {id: 4})[0].text))
+
+# Arrays keep working.
+print(sqlite.query(db, "SELECT text FROM notes WHERE id = ?", [2]))
+
+# Errors.
+let mixed = {a: 1}
+mixed[0] = 2
+let float_key = {}
+float_key[1.5] = 1
+for c in [
+  ["SELECT :a, ?", {a: 1}],
+  ["SELECT ?1", {a: 1}],
+  ["SELECT :a", {a: 1, b: 2}],
+  ["SELECT :a, :b", {a: 1}],
+  ["SELECT :a", {a: {}}],
+  ["SELECT :a", mixed],
+  ["SELECT ?", float_key],
+  ["SELECT 1", {a: 1}],
+]
+  let r = pcall sqlite.query(db, c[0], c[1])
+  print(r.error)
+end
+sqlite.close(db)

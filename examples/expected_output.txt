@@ -3713,7 +3713,7 @@ format_time: output is over 256 KB
 -- 7. sqlite params bind by key
 [{a: "first", b: "second"}]
 [{b: 20, a: 10}]
-sqlite_query: params must be an array, got a string key
+sqlite_query: parameter 1 is positional (?); bind it with a params array, or name it (:name)
 sqlite_query: params must be an array (keys 0..1), got key 5
 sqlite_query: statement has 1 parameter(s), got 0
 -- 8. nil means no timeout
@@ -3868,3 +3868,16 @@ Stack trace:
 3: http.start: write_timeout_ms must be an int > 0 (milliseconds) or nil, got 0
 4: request.post: timed out after 300 ms waiting for http://127.0.0.1:18295/up
 4: within the deadline: true
+[{id: 1}]
+[{text: "there"}]
+[{text: "none"}]
+3
+[{text: "there"}]
+sqlite_query: parameter 2 is positional (?); bind it with a params array, or name it (:name)
+sqlite_query: parameter 1 is positional (?); bind it with a params array, or name it (:name)
+sqlite_query: params key "b" matches no parameter of the statement
+sqlite_query: no value for parameter :b (params has no key "b")
+sqlite_query: parameter :a is a table; expected nil, bool, int, float or string
+sqlite_query: params must be an array or a record of names, not both
+sqlite_query: params must be an array, got a float key
+sqlite_query: params key "a" matches no parameter of the statement
