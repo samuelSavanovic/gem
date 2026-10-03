@@ -13,6 +13,10 @@
 # for gem.toml; returns the normalized absolute root or nil.
 # compute_stdlib_root prefers $GEM_STDLIB, then a project-vendored std/,
 # then the install root.
+#
+# find_install_root is the directory two levels above the running binary's
+# real path (<root>/build/gem → <root>), so a symlink on PATH, a bare name
+# found on PATH and a relative path all find <root>/std and <root>/runtime.
 
 load "std/string"
 
@@ -94,6 +98,16 @@ fn find_project_root(start_dir)
   end
 end
 
+# gem_exe_path (runtime/gem_builtins_io.c) resolves /proc/self/exe on
+# Linux, _NSGetExecutablePath on macOS, else argv[0] via PATH, then
+# realpath. It is a runtime helper, not a builtin, so a compiler built by
+# an older one can call it.
+extern fn gem_exe_path() -> String
+
+fn find_install_root()
+  dirname(dirname(gem_exe_path()))
+end
+
 fn compute_stdlib_root(install_root, project_root)
   let env_root = getenv("GEM_STDLIB")
   if env_root != nil and env_root != ""
@@ -147,4 +161,4 @@ fn make_show_path(entry_path, project_root)
   end
 end
 
-export resolve_load_path, load_target_problem, find_project_root, compute_stdlib_root, make_show_path
+export resolve_load_path, load_target_problem, find_project_root, find_install_root, compute_stdlib_root, make_show_path

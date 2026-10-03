@@ -67,6 +67,8 @@ build/gem examples/01_basics.gem --emit-c   # print generated C
 build/gem examples/01_basics.gem --check    # parse + analyze only
 ```
 
+To put `gem` on your `PATH`, symlink it (`ln -s "$PWD/build/gem" ~/.local/bin/gem`) or add `build/` to `PATH`. The binary finds `std/` and `runtime/` two levels above its real path (symlinks resolved), so keep it inside the checkout.
+
 macOS (arm64, x86_64) and Linux (arm64, x86_64). Windows via WSL2; no native port.
 
 ## Layout

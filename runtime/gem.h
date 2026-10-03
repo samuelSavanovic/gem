@@ -593,6 +593,12 @@ void gem_init(int argc, char **argv);
 extern int gem_stored_argc;
 extern char **gem_stored_argv;
 
+/* Canonical (realpath) path of the running executable: /proc/self/exe,
+   _NSGetExecutablePath, else argv[0] resolved via PATH. Static buffer,
+   never NULL. Used by the compiler/LSP through an `extern fn` to find the
+   install root; not a Gem builtin. */
+char *gem_exe_path(void);
+
 /* ─── Helpers used by codegen ─── */
 
 const char *gem_type_str(GemVal v);

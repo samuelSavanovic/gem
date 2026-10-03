@@ -1286,7 +1286,9 @@ A `load` whose file does not exist is a compile error at that `load`, naming the
 
 1. `$GEM_STDLIB` if set: the directory that *contains* `std/` (not `std/` itself).
 2. The project root, if it contains a `std/` subdirectory (lets a project vendor or override the stdlib). It replaces the whole stdlib: a `load "std/x"` that isn't in the project's `std/` fails, with no fallback to the installed one.
-3. The install root, computed as `dirname(dirname(argv()[0]))` — so a binary at `<project>/build/gem` finds `<project>/std/`. `argv()[0]` is taken as typed, so a symlink to the binary on `PATH` finds neither `std/` nor `runtime/` (see `docs/KNOWN_BUGS.md`); call the binary by its real path (`GEM_STDLIB` finds `std/` but not `runtime/`, so the C compile still fails).
+3. The install root: the directory two levels above the `gem` binary's real path, so a binary at `<root>/build/gem` finds `<root>/std/`. The real path is the operating system's answer (`/proc/self/exe` on Linux, `_NSGetExecutablePath` on macOS), else `argv()[0]` looked up on `PATH` when it has no `/`; symlinks are resolved either way. So a symlink to the binary on `PATH`, a chain of symlinks, a bare `gem` found on `PATH` and a relative path all find the checkout's `std/`.
+
+The install root also holds what every compile needs besides the stdlib: `runtime/` (headers) and `build/libgem_runtime.a`. Those always come from the install root; `$GEM_STDLIB` moves only the stdlib, so a binary copied out of its checkout (not symlinked) cannot compile.
 
 **Project root marker** — drop a `gem.toml` file at the root of your project to mark it. The file may be empty; its presence is what matters. Without it, bare-path loads behave like relative-to-importing-file (which is the safe default for single-file scripts).
 

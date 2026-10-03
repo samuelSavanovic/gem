@@ -14,7 +14,7 @@ STAGE0 = bootstrap/stage0.c
 BUILD_DIR = build
 GEM = $(BUILD_DIR)/gem
 
-.PHONY: build test test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-lsp bootstrap clean
+.PHONY: build test test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-lsp bootstrap clean
 
 # Build the compiler from the checked-in stage0.c
 build: $(GEM)
@@ -44,7 +44,7 @@ bootstrap: $(GEM)
 	cp /tmp/gem_stage0_new.c $(STAGE0)
 	@echo "bootstrap/stage0.c regenerated and verified"
 
-test: $(GEM) test-broken test-notes test-corpus test-cli test-project-root test-lsp
+test: $(GEM) test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-lsp
 	@bash examples/run_all.sh
 
 test-broken: $(GEM)
@@ -61,6 +61,9 @@ test-cli: $(GEM)
 
 test-project-root: $(GEM)
 	@bash tests/check_project_root.sh
+
+test-exe-path: $(GEM)
+	@bash tests/check_exe_path.sh
 
 test-lsp: $(GEM)
 	@bash tests/lsp/smoke.sh

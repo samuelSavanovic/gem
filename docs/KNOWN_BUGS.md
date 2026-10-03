@@ -8,14 +8,6 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### A symlinked `gem` binary finds neither `std/` nor `runtime/`
-
-With a symlink to `build/gem` on `PATH`, `gem prog.gem` fails with
-`gem: stdlib module not found: std/string (looked in .)`: the install root
-is computed from `argv()[0]` as typed. `GEM_STDLIB` finds `std/` but not
-`runtime/`, so the C compile still fails (`gem.h: No such file`). Resolve
-the executable's real path (`/proc/self/exe`, `realpath`) first.
-
 ### Integer literals out of range wrap silently
 
 `print(99999999999999999999)` prints `7766279631452241919`. The lexer

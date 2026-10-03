@@ -17,7 +17,7 @@ load "../compiler/parser" (parse_source)
 load "../compiler/lexer" (tokenize)
 load "../compiler/lower" (lower)
 load "../compiler/errors" (make_error_sink)
-load "../compiler/loader" (find_project_root, compute_stdlib_root, resolve_load_path, load_target_problem, make_show_path)
+load "../compiler/loader" (find_project_root, find_install_root, compute_stdlib_root, resolve_load_path, load_target_problem, make_show_path)
 
 # Computed at module load time so the string lives in the main process's
 # arena (which is never freed and shareable across processes). Lazy init
@@ -25,7 +25,7 @@ load "../compiler/loader" (find_project_root, compute_stdlib_root, resolve_load_
 # *that* process's arena; the next arena reset would free it underneath
 # the BSS-backed top-level box, and subsequent reads would dangle. macOS
 # malloc tolerates that UAF; Linux glibc trips realloc heap canaries.
-let _install_root_path = dirname(dirname(argv()[0]))
+let _install_root_path = find_install_root()
 
 fn install_root()
   _install_root_path

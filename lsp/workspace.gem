@@ -22,10 +22,10 @@ load "../compiler/parser" (parse_source)
 load "../compiler/lexer" (tokenize)
 load "../compiler/lower" (lower)
 load "../compiler/errors" (make_error_sink)
-load "../compiler/loader" (find_project_root, compute_stdlib_root)
+load "../compiler/loader" (find_project_root, find_install_root, compute_stdlib_root)
 
 # Shared with lsp/doc.gem — see the rationale comment there.
-let _install_root_path = dirname(dirname(argv()[0]))
+let _install_root_path = find_install_root()
 
 fn install_root()
   _install_root_path
