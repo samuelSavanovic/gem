@@ -3848,19 +3848,20 @@ v
 3 0
 0 a    b!
 mine
+v:[1]
 [1, 5, 7, 6] 5
 done own body
 a
 b c
 d
 
-[Runtime Error]: reported at line 93
-  --> examples/194_compiler_known_bugs.gem:93
+[Runtime Error]: reported at line 96
+  --> examples/194_compiler_known_bugs.gem:96
     |
- 93 | error("reported at line 93")
+ 96 | error("reported at line 96")
     |
 Stack trace:
-  at main (examples/194_compiler_known_bugs.gem:93)
+  at main (examples/194_compiler_known_bugs.gem:96)
 1: partial: true, took about 200 ms: true
 1: zero and negative don't wait: true true true
 1: tcp_write: timeout_ms must be an int (milliseconds) or nil, got string

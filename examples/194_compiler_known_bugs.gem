@@ -69,6 +69,9 @@ print(rounds, true and (sp + "    b" + "!"))
 # builtin) reads that field.
 let {keys, from_keys = keys({a: 1})} = {keys: fn(t) "mine" end}
 print(from_keys)
+# A closure in a field's default naming that field calls the builtin.
+let {values = fn(t) "v:" + to_string(values(t)) end} = {}
+print(values({a: 1}))
 
 # Every `export` statement counts; defaults see the module's lets.
 print(kb.with_defaults(1), kb.anon_default())
@@ -90,4 +93,4 @@ b"
 let q = 'c
 d'
 print(s, q)
-error("reported at line 93")
+error("reported at line 96")

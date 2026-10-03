@@ -445,14 +445,28 @@ fn rename_stmt_in_scope(stmt, rmap, current, top)
     end
     # Only the initializer (the block's first `let`) gets init_scope; the
     # field lets and their defaults follow in order, as for separate lets,
-    # so a default naming an earlier field sees that field.
-    let first = true
-    for s in stmt.stmts
-      if first
+    # so a default naming an earlier field sees that field. A field's
+    # default (the statements before its `let`) is that let's initializer:
+    # its own name still means the builtin there, closures included.
+    let stmts = stmt.stmts
+    for k = 0, len(stmts)
+      let s = stmts[k]
+      if k == 0
         rename_stmt_in_scope(s, rmap, init_scope, top)
-        first = false
-      else
+      elif is_node(s, "let") and current[s.name] == "pending"
         rename_stmt_in_scope(s, rmap, current, top)
+      else
+        let scope = current
+        let j = k + 1
+        while j < len(stmts)
+          if is_node(stmts[j], "let") and current[stmts[j].name] == "pending"
+            scope = copy_set(current)
+            scope[stmts[j].name] = true
+            break
+          end
+          j += 1
+        end
+        rename_stmt_in_scope(s, rmap, scope, top)
       end
     end
   elif is_node(stmt, "block")
