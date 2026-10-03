@@ -50,6 +50,10 @@ With `let total = total + x` inside the loop, each iteration makes a new
 with no warning. The compiler warns only in one case: a `let` in a `while`
 body that hides a variable the loop's condition reads.
 
+A module-level variable read before its `let` has run (by top-level code
+above it, or by a function called from there) is `nil`, with no error.
+Put module-level `let`s at the top of the file.
+
 Shadowing on purpose is fine. The new variable's initializer still sees the
 old one, so `let n = n - 1` and `let line = trim(line)` work, and a closure
 created before the second `let` keeps the old variable. A second `let`
@@ -95,8 +99,9 @@ any order.
 
 ### Don't name a parameter like a top-level `fn` of the same file **(bug)**
 
-Inside a closure (a `fn` literal or `do` block), a plain parameter named
-like a top-level `fn` reads the function instead of the argument:
+Inside a closure (a `fn` literal or `do` block), a parameter (plain,
+defaulted or rest) named like a top-level `fn` reads the function instead
+of the argument:
 
 ```gem
 fn item() "FN" end
@@ -259,6 +264,11 @@ end
 ```
 
 Literals (`when 200`, `when "get"`) compare by value without a pin.
+There are no guards or alternatives: `when v > 5` and `when "a" or "b"`
+compile, but compare the target with the *value* of `v > 5` or `"a" or
+"b"`. Use an `if` chain, or one arm per value. An array pattern `[x, y]`
+also matches a record with two keys **(bug)**, so put array arms after
+record arms when both can arrive.
 
 ### Give `match` an `else` when no arm should be skipped **(trap)**
 
@@ -343,8 +353,11 @@ Pick another name.
 
 Naming a function or variable like a builtin (`fn error`, `let len = 3`)
 is allowed: it hides the builtin in that file only, and modules the file
-loads keep the builtin. Do it only when the name is the module's API
-(`log.error`); elsewhere it just confuses readers.
+loads keep the builtin. A top-level one hides it in the whole file,
+functions above it included, and `let keys = keys(t)` at top level fails
+because its own initializer no longer reaches the builtin **(bug)**. Do it
+only when the name is the module's API (`log.error`); elsewhere pick
+another name.
 
 ### `pcall` takes a call, not a function **(trap)**
 
@@ -360,7 +373,8 @@ end
 ```
 
 `pcall(f)` (with parentheses) calls `f` with no arguments, so
-`pcall(fn() ... end)` works too.
+`pcall(fn() ... end)` works too, but `pcall(f, x)` also calls `f()` with
+no arguments and drops `x`. Write `pcall f(x)`.
 
 ### `fn main` runs automatically
 
@@ -397,7 +411,9 @@ delete(tbl, "key")             # string-keyed tables only
 ### Test keys with `has_key` when `nil` is a valid value
 
 `tbl[k] != nil` can't tell "missing" from "present and nil". `has_key`
-can. Assigning `nil` doesn't remove a key (`t.x = nil` leaves `x` in
+can, and so can `x in tbl` for string keys; on a table with no string
+keys (an array, or a set like `seen[id] = true`) `in` scans the *values*,
+so use `has_key(seen, id)`. Assigning `nil` doesn't remove a key (`t.x = nil` leaves `x` in
 `keys(t)`, `len(t)` and `json.encode(t)`); use `delete`. `x in tbl` is `has_key` for string-keyed tables and a value scan for
 arrays.
 
@@ -430,6 +446,19 @@ before encoding.
 
 Reading an array past its end gives `nil`, but a negative index past the
 start raises, and any out-of-range string index raises (`"abc"[10]`).
+Negative integers are always positions from the end, never keys:
+`t[-10] = x` raises on a table with fewer than 10 entries. Use string keys
+for data keyed by negative numbers.
+
+### `sort` comparators return a number **(trap)**
+
+`sort(arr, cmp)` expects `cmp(a, b)` to return a negative number, zero or
+a positive number. A boolean comparator (`fn(a, b) a < b end`) leaves the
+array unsorted, with no error:
+
+```gem
+sort(people, fn(a, b) a.age - b.age end)
+```
 
 ---
 
@@ -462,7 +491,8 @@ for floats too.
 
 ### `to_int` and `to_float` raise on bad input
 
-`to_int("12abc")` is an error. Wrap conversions of user input (route
+`to_int("12abc")` is an error, and so is `to_int("12\n")`: `trim` lines
+read from files first. Wrap conversions of user input (route
 params, query strings, form fields) in `pcall`, or a bad id becomes a 500.
 
 ---
@@ -499,14 +529,19 @@ let out = build_string do |add|
 end
 ```
 
-`add` takes any number of values and converts each with `to_string`. Use
+`add` takes any number of values and converts each with `to_string`,
+except a buffer, which it drops **(bug)**: pass `to_string(buf)`. Use
 `buf_new`/`buf_push`/`to_string(buf)` when the buffer has to outlive a
-single block, such as a read loop that collects chunks.
+single block, such as a read loop that collects chunks. `print(buf)` and
+`"{buf}"` show `<buffer:N>`, not the contents.
 
 ### Strings are bytes
 
 `len` is the byte count (`len("é")` is `2`), `s[i]` is a 1-byte string,
-and `ord(s, i)` is the byte value. Use `substr(s, start, count)` to slice.
+and `ord(s, i)` is the byte value. Use `substr(s, start, count)` to slice;
+unlike `s[-1]`, a negative `start` counts as `0`. Double-quoted strings
+have no `\x` or `\u` escapes (an unknown escape is kept as written); use
+`chr(n)` for other bytes.
 Strings may contain `\0`, but `print` stops at the first one; use
 `write_stdout` for binary output.
 
@@ -1029,7 +1064,8 @@ Some std APIs predate these rules, and are being fixed:
   a one-line comment for any function whose contract isn't obvious from its
   name.
 - An expression can't continue on the next line, even inside parentheses
-  (only call arguments and table literals can). Split a long condition into
+  (only call arguments and table literals can), and a next line starting
+  with `- 2` is silently a separate statement. Split a long condition into
   named `let`s.
 - Keep functions short. Prefer a well-named helper to a long arm inside a
   `match`.
@@ -1051,6 +1087,9 @@ Some std APIs predate these rules, and are being fixed:
 | String accumulator read inside its loop | quadratic | `build_string` |
 | `match` with no arm matching | yields `nil` silently | add an `else` |
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |
+| `when x > 5`, `when "a" or "b"` | compares with a bool / one value | `if` chain |
+| Boolean `sort` comparator | array left unsorted | return `a - b` |
+| `id in seen` on an int-keyed set | scans values | `has_key(seen, id)` |
 | Parameter named like a top-level `fn`, used in a closure **(bug)** | reads the fn | rename the parameter |
 | `pcall fn() ... end` | returns the closure, runs nothing | `pcall do ... end` |
 | `error(non_string)` | message becomes `"error"` | string message or result table |

@@ -61,17 +61,18 @@ end
 print(c(5))          # <fn>, expected 5
 ```
 
-A closure (or `do` block) that uses a plain parameter of its enclosing
-function, or of itself, gets the module-level `fn` of the same name
-instead. A `let`, a `for` variable or a destructured parameter of that
-name is fine, and so is a parameter named like a builtin or a module
+A closure (or `do` block) that uses a parameter (plain, defaulted or
+rest) of its enclosing function, or of itself, gets the module-level `fn`
+of the same name instead. A `let`, a `for` variable or a destructured
+parameter of that name is fine, and so is a parameter named like a builtin or a module
 `let`. The capture resolution in compiler/codegen.gem prefers the named
 fn to the parameter. `docs/BEST_PRACTICES.md` has a **(bug)** rule for it.
 
 ### Float literals keep only six significant digits; some don't compile
 
 ```gem
-print(3.14159265358979 == 3.14159)   # true
+let a = 3.14159265358979
+print(a == 3.14159)                   # true
 print(0.000001)                       # C error: invalid suffix ".0"
 ```
 
@@ -86,7 +87,7 @@ with `%.17g` (and add `.0` only to a form with no `.` or `e`).
 
 ```gem
 load "std/json"
-let x = 1234567.0 + 0.5
+let x = to_float("1234567.5")
 print(x, "{x}", json.encode(x))      # 1.23457e+06 three times
 print(to_float(to_string(x)) == x)   # false
 ```
@@ -170,6 +171,30 @@ The same for `pcall 1 / 0` and `pcall 1 < "a"` at top level; inside a
 function the line is right. The closure the expression form desugars to
 has no line for an operator or index expression.
 
+### An array pattern matches a record of the same size
+
+```gem
+match {a: 1, b: 2}
+when [x, y] then print("pair", x, y)    # pair nil nil
+end
+```
+
+The `[p1, p2]` check is `len(target) == 2`, which a two-key record
+passes. It should also require the keys `0 .. n-1`.
+
+### A tab before a closing `"""` is not accepted
+
+A triple-quoted string whose closing `"""` is indented with tabs reports
+`unterminated triple-quoted string`; with spaces it works. SPEC says
+"only leading whitespace".
+
+### `for i, ch in "abc"` reports an internal name
+
+`for ch in "abc"` iterates the bytes, but the two-variable form fails at
+runtime with `__table_key_at: expected table` (the lowered loop's helper).
+Either support strings there or report `for k, v` over a string at the
+`for`.
+
 ## Runtime
 
 ### Runtime traces lose the source line when run from another directory
@@ -195,6 +220,33 @@ In Erlang, an exit signal with reason `normal` is ignored by a process
 that doesn't trap exits; here it ends the target (main included, with no
 report). `gem_exit_builtin` in runtime/gem_scheduler.c. Decide which
 semantics Gem wants and document it in SPEC.md (`kill`).
+
+### `buf_push` and `build_string`'s `add` drop buffers, functions and refs
+
+```gem
+let b = buf_new()
+buf_push(b, "hi")
+let c = buf_new()
+buf_push(c, b)
+print(len(to_string(c)))                         # 0
+print(build_string do |add| add("[", b, "]") end) # []
+```
+
+`gem_buf_push_fn` in runtime/gem_builtins_string.c turns any value it has
+no case for into `""`. A buffer should append its contents, and other
+values their `to_string` form.
+
+### A top-level `let` named like a builtin can't read the builtin
+
+```gem
+let t = {a: 1}
+let keys = keys(t)          # attempt to call nil value
+```
+
+The entry file's top-level binding named like a builtin replaces the
+builtin in the whole file (`shadow_entry_builtins` in compiler/main.gem),
+so its own initializer calls the not-yet-set slot. A `let` inside a
+function (`let keys = keys(t)`) works: its initializer sees the builtin.
 
 ## C interop
 

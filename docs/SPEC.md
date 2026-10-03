@@ -162,7 +162,7 @@ let result = add(
 )
 ```
 
-Table and array literals may span lines the same way. Other expressions may not: a line break after a binary operator or inside parentheses ends the statement (`let t = (1 +` followed by `2)` on the next line is a parse error). Split a long condition into named `let`s.
+Table and array literals may span lines the same way. Other expressions may not: a line break after a binary operator or inside parentheses ends the statement (`let t = (1 +` followed by `2)` on the next line is a parse error), and a line that starts with `-` is a new statement (`let x = 1` followed by `- 2` on the next line leaves `x` at `1`). Parameter lists in a `fn` definition must fit on one line. Split a long condition into named `let`s.
 
 A call with more arguments than the function declares drops the extra ones, and missing arguments are `nil` (or the parameter's default); neither is an error. Calling a non-function value is a runtime error.
 
@@ -406,7 +406,8 @@ end
 
 Pattern rules:
 - `{key: pattern, ...}` — checks target is a table, each key exists, and recursively matches each value against its sub-pattern. Extra keys in the target are ignored (partial match).
-- `[p1, p2, ...]` — checks target is a table with `len(target) == N`, then recursively matches each element.
+- `[p1, p2, ...]` — checks target is a table with `len(target) == N`, then recursively matches each element. A record with N keys passes the length check too (see `docs/KNOWN_BUGS.md`), so put array arms after record arms when both can occur.
+- There are no guards or alternatives: `when v > 5` and `when "a" or "b"` are expression arms that compare the target with the value of `v > 5` or `"a" or "b"`. Use an `if` chain, or one arm per value.
 - A literal (int, float, string, bool) in pattern position matches by equality. `nil` is also a literal — `when nil` matches only `nil`, it does not bind a variable.
 - A name in pattern position is a variable binding — always matches and binds the matched value.
 - `^name` (a pin) matches by equality with the current value of the variable `name`; it binds nothing. The pinned name must already be in scope, and only a plain variable name can be pinned — bind an expression like `t.ref` to a local first. `when ^x` works at the top of a `match` or `receive` arm as well as inside table and array patterns. The comparison is `==`, so a pinned table matches only that same table — never a copy received in a message. Pin primitives and refs.
@@ -447,7 +448,7 @@ end
 
 `break` and `continue` work inside `for` loops. The iterator increment happens before the user body, so `continue` correctly advances to the next element.
 
-The table form evaluates the RHS expression exactly once. It walks the table's entries in `keys()` order without building a `keys()` array, reading the entry count once before the loop: an entry added during the loop is not visited, and a `delete` during the loop (which moves the last entry into the hole) makes it skip entries and then visit `nil`. The single-variable form is for arrays: it re-reads `len` every iteration, so `push` during the loop extends it and `remove_at` makes it skip elements; on a string-keyed table it yields `nil` for each entry (use `for k, v` or `values(t)`).
+The range form evaluates its bound once, before the loop, and assigning the loop variable in the body doesn't change the next iteration. The table form evaluates the RHS expression exactly once. It walks the table's entries in `keys()` order without building a `keys()` array, reading the entry count once before the loop: an entry added during the loop is not visited, and a `delete` during the loop (which moves the last entry into the hole) makes it skip entries and then visit `nil`. The single-variable form is for arrays: it re-reads `len` every iteration, so `push` during the loop extends it and `remove_at` makes it skip elements; on a string-keyed table it yields `nil` for each entry (use `for k, v` or `values(t)`).
 
 ## Closures
 
@@ -840,7 +841,7 @@ The wrapper checks the Gem-level type of each argument and that enough arguments
 
 `%` takes integers only (a float operand raises). Integer division and `%` by zero raise `division by zero`, and so does float division by zero (no `inf`). `<`, `<=`, `>`, `>=` compare an int with a float numerically, but `==` never equates them (`2 == 2.0` is `false`).
 
-`x in tbl` — membership test. For arrays (integer-indexed tables with no string keys): returns `true` if `x` equals any value in the array (linear scan). For string-keyed tables: returns `true` if `x` is a key in the table (same as `has_key(tbl, x)`). Precedence is at the comparison level (same as `==`, `<`, etc.).
+`x in tbl` — membership test. For tables with no string keys (arrays, and int-keyed tables such as `seen[5] = true`): returns `true` if `x` equals any value (linear scan), so use `has_key` to test an int key. For string-keyed tables: returns `true` if `x` is a key in the table (same as `has_key(tbl, x)`). Precedence is at the comparison level (same as `==`, `<`, etc.).
 
 **Equality semantics:** `==` compares by value for primitives (int, float, string, bool, nil) and by identity (reference) for tables, functions, and refs. Two distinct tables with identical contents are not equal: `{a: 1} == {a: 1}` is `false`. The same table reference compared to itself is `true`.
 
@@ -860,7 +861,7 @@ s[0]
 s + " world"
 ```
 
-Both styles support escape sequences: `\n`, `\r`, `\t`, `\0`, `\\`, and the matching quote (`\"` or `\'`). `\0` produces a null byte (0x00). Double-quoted strings also support `\{` and `\}` to escape interpolation braces.
+Double-quoted strings support the escape sequences `\n`, `\r`, `\t`, `\0`, `\\`, `\"`, `\{` and `\}` (the last two escape interpolation braces). `\0` produces a null byte (0x00). Any other backslash sequence is kept as written (`"\x41"` is the four characters `\x41`); there are no `\x` or `\u` escapes, so build other bytes with `chr(n)`.
 
 Note: `\0` in single-quoted strings produces the literal characters `\0` (two chars), not a null byte — single-quoted strings only process `\n`, `\r`, `\t`, `\\`, and `\'`.
 
@@ -1057,9 +1058,9 @@ Running out of stack is an ordinary runtime error, not a crash:
 
 `type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`, `"ref"`, `"buffer"`.
 
-`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string. For tables and arrays, recursively renders a `{key: val, ...}` / `[v1, v2, ...]` form (cycles render as `<cycle>`; deep/wide structures truncate with `...`). Same repr is used by `print`, `eprint`, and `"{x}"` interpolation. Floats are formatted with C's `%g`: six significant digits, and no decimal point for integral values (`to_string(2.0)` is `"2"`, `to_string(1234567.89)` is `"1.23457e+06"`); see `docs/KNOWN_BUGS.md`.
+`to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string. For tables and arrays, recursively renders a `{key: val, ...}` / `[v1, v2, ...]` form (cycles render as `<cycle>`; deep/wide structures truncate with `...`). Same repr is used by `print`, `eprint`, and `"{x}"` interpolation, except for buffers, which those show as `<buffer:N>` (N is the length); call `to_string(buf)` for the contents. Floats are formatted with C's `%g`: six significant digits, and no decimal point for integral values (`to_string(2.0)` is `"2"`, `to_string(1234567.89)` is `"1.23457e+06"`); see `docs/KNOWN_BUGS.md`.
 
-`to_int(v)` — converts a value to an integer. Strings are parsed as decimal integers. Floats are truncated. Bools become 0/1. Errors on nil, tables, functions, or unparseable strings.
+`to_int(v)` — converts a value to an integer. Strings are parsed as decimal integers; leading spaces are skipped, but trailing whitespace (a `\n` from a file line included) is an error, so `trim` first. Floats are truncated. Bools become 0/1. Errors on nil, tables, functions, or unparseable strings.
 
 `to_float(v)` — converts a value to a float. Strings are parsed as decimal floats. Ints are widened. Bools become 0.0/1.0. Errors on nil, tables, functions, or unparseable strings.
 
@@ -1081,7 +1082,7 @@ print(items[0])    # a
 
 `has_key(tbl, key)` — returns `true` if `key` exists in the table, `false` otherwise. Unlike `tbl[key] != nil`, correctly detects keys whose value is `nil`.
 
-`substr(s, start[, len])` — returns a substring of `s` starting at `start`. If `len` is provided, returns at most `len` characters; otherwise returns to the end of the string. Accepts buffers as well as strings (the result is always a fresh string).
+`substr(s, start[, len])` — returns a substring of `s` starting at `start` (a negative `start` counts as `0`, unlike `s[-1]`). If `len` is provided, returns at most `len` characters; otherwise returns to the end of the string. Accepts buffers as well as strings (the result is always a fresh string).
 
 `chr(n)` — converts an integer (0–255) to a single-character string with that byte value.
 
@@ -1243,7 +1244,7 @@ All TCP builtins use non-blocking sockets with scheduler poll integration. The s
 
 SQLite is vendored as an amalgamation (`runtime/sqlite3.c` + `runtime/sqlite3.h`), compiled into the runtime static library. No system dependency needed.
 
-**Negative array indexing** — Integer indices to arrays and strings may be negative. A negative index `i` on a collection of length `n` resolves to `n + i`. So `arr[-1]` is the last element, `arr[-2]` is second-to-last, etc. Reading an array at a non-negative index past the end gives `nil`; a negative index that is still out of bounds after resolution raises `array index out of bounds`. A string index out of range either way raises `string index out of bounds`.
+**Negative array indexing** — Integer indices to arrays and strings may be negative. A negative index `i` on a collection of length `n` resolves to `n + i`. So `arr[-1]` is the last element, `arr[-2]` is second-to-last, etc. Negative integers are always positions, never keys: `t[-10] = x` on a table with fewer than 10 entries raises, so key data by negative numbers with strings. Reading an array at a non-negative index past the end gives `nil`; a negative index that is still out of bounds after resolution raises `array index out of bounds`. A string index out of range either way raises `string index out of bounds`.
 
 All builtins are first-class values — they can be stored in variables and passed to functions.
 
