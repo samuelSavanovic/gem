@@ -324,6 +324,9 @@ Desugaring now uses `__table_key_at` / `__table_val_at` to index directly into t
 
 ## Runtime Hot Paths
 
+### Inline value constructors and operators ✓ Done (2026-10-04)
+`gem_int`, `gem_float`, `gem_bool`, `gem_truthy`, `gem_val_eq`, `gem_eq`/`gem_neq`/`gem_not` and the comparisons are `static inline` in gem.h, and `gem_add`/`gem_sub`/`gem_mul`/`gem_lt` inline their int (for `+` also float) case and call `gem_<op>_slow` in gem_ops.c for every other operand type. Codegen is unchanged: it already emitted these calls for every operator, `if` and literal. In a `sample` profile of `examples/logstat` (`--by ip`, from a file) the out-of-line calls were about 15% of the main thread. logstat, 1M lines (macOS arm64): `--by ip` from a file 3.19 → 2.42 s, from stdin 3.02 → 2.25 s; `--by path` 3.25 → 2.39 s and 3.16 → 2.36 s; `--by hour` 2.72 → 1.85 s and 2.64 → 1.85 s (Python: 2.0 s).
+
 ### POST burst p99 regression after 2026-05-01 cleanup pass ✓ Closed as noise (2026-05-01)
 The reported "regression" (80→263→525 ms across three runs) was below the noise floor of the bench. Re-ran three back-to-back 30s POST bursts at HEAD with the same app and got p99 = 75 ms / 264 ms / 562 ms — the original three numbers fall inside the same envelope. p50 stayed flat at 35–39 ms in all runs. SQLite fsync tail on macOS is bumpy enough at this sample size (~1500 samples → p99 = worst ~15) that ~6× swings on the deepest tail are baseline variance, not a code change.
 
@@ -366,6 +369,9 @@ On macOS, `ps` and `top` report RSS well above `phys_footprint` after deep proce
 Not done: ASan builds. ASan's own SIGSEGV reporting is replaced by the overflow handler, which hands non-guard faults to the default action, and minicoro's ASan fiber hooks were not exercised with the mmap'd stacks.
 
 ## Strings
+
+### Static string literals and `type()` results ✓ Done (2026-10-04)
+Codegen emitted `gem_string_with_len("...", N)` for every string literal and `gem_string("k")` (`gem_string_with_len` when the key held a NUL) for every record-literal and field-assignment key, so each evaluation allocated and copied the bytes; `type()` returned a fresh string too, so `type(v) == "string"` allocated two strings per check (std's argument checks run one per argument). Literals and keys now compile to `GEM_STR_LIT("...", N)` (gem.h), a `GemVal` whose `sval` points at the C string constant, and `type()` and the constant cases of `to_string` return such values. Sound because no runtime path writes a string's bytes in place or frees a string it did not copy, region resets leave strings outside the region alone, and copies to another process duplicate the bytes. 1M calls (macOS arm64): `string.index_of` on a 115–120-byte line 174 → 72 ms (`find`: 17 ms); `type(s) == "string"` 131 → 18 ms (with "Inline value constructors and operators": 53 ms and 8 ms). `examples/logstat`, 1M lines (macOS arm64), with `gem_strlen_check` and `gem_current_arena` made `static inline` in the same change (2–3% of it): `--by ip` from a file 5.18 → 3.19 s, from stdin 4.74 → 3.02 s; `--by hour` 3.96 → 2.72 s and 3.77 → 2.64 s (Python: 2.0 s).
 
 ### `find` builtin ✓ Done (2026-10-04)
 `find(s, needle, start)` searches with `memchr` (+ `memcmp` for longer needles) in C. It replaced std/string's private `find`, which scanned 32 positions in Gem and then tested growing chunks with `str_replace`, and std/http's runtime extern `gem_bytes_find`. `string.index_of`, `contains` and `split` are now one `find` per match. `examples/logstat` (eight `index_of` and one `split` per line), 1M lines, macOS arm64: from a file 11.3–13.1 s → 4.5–6.0 s, from stdin 7.9–9.4 s → 4.3–5.7 s (Python: 2.0 s).

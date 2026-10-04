@@ -10,7 +10,7 @@ Priority scale: **P0** = measurable impact on benchmark right now, **P1** = sign
 
 Single-threaded scheduler ceiling on M1 Pro was ~26–29k req/s on the bookmark app's `/` (static HTML, April 2026, before the std/http hardening) regardless of c=4/100/500 — higher concurrency just queues. The hardened std/http is back at its pre-hardening throughput in its own load test on Linux x86_64 (`OPTIMIZATIONS_LOG.md`, "std/http"); the bookmark-app figure has not been re-measured since. Full benchmark history is in `OPTIMIZATIONS_LOG.md`.
 
-Text processing in one process is the weak spot: `examples/logstat` summarizes 1M access-log lines (123 MB) in 3.8–5.0 s from stdin and 3.9–5.2 s from a file, against 2.0 s for the same program in Python (`benchmarks/logstat/run.sh`, macOS arm64, October 2026). Up to 1.1 s of it is resets re-copying the aggregate tables ("Survivors of a reset are copied again"); the rest is spread over allocation, string literals ("String literals are allocated at every evaluation") and the per-call overhead of Gem code. Memory stays flat on stdin (the arena resets keep up); a file is held whole, twice at the peak.
+Text processing in one process is the weak spot: `examples/logstat` summarizes 1M access-log lines (123 MB) in 1.9–2.4 s, from stdin or from a file, against 2.0 s for the same program in Python (`benchmarks/logstat/run.sh`, macOS arm64, October 2026; `--by hour` is the fast end). Part of it is resets re-copying the aggregate tables ("Survivors of a reset are copied again"); in a `sample` profile (`--by ip`, from a file) the rest is spread over string-key hashing in table get/set ("Hash string table keys faster"), `substr` copies, std/string's argument checks and the per-call overhead of Gem code. Memory stays flat on stdin (the arena resets keep up); a file is held whole, twice at the peak.
 
 Key bottlenecks under the current arena + region-reset mechanism:
 - Per-process arena allocation eliminates GC pauses; every loop resets the region it allocated once it passes max(1 MB, 2 × the last reset's cost), so memory is bounded at roughly 3× a loop's live data plus whatever was allocated before the loop started.
@@ -56,14 +56,11 @@ A byte loop written in Gem (`ord(s, i)` per byte, plus a reduction check and a r
 
 `upper`/`lower` copy unchanged runs with `substr` but still allocate a string per changed byte (`add(chr(c))`): `string.upper` of 1 MB of mostly lowercase text takes 160 ms, `lower` of the same text 80 ms. They need a byte-mapping builtin rather than either of these.
 
-### String literals are allocated at every evaluation (P1)
-Codegen emits `gem_string_with_len("...", N)` for a string literal and `gem_string("ip")` for a record literal's key, so each evaluation allocates and copies the bytes into the arena: one call of logstat's `clf.parse` makes about 80 literal strings, most of them inside std/string (the argument and type names its checks compare against), and 9 key strings. In a `sample` profile of logstat (stdin, `--by ip`, macOS arm64), `gem_string_with_len` and the allocation and copy under it were 16% of the main thread's samples (`input()` makes one call per line; the literals the rest). A literal could be one static `GemVal` whose `sval` points at the C string constant: strings are immutable, a region reset copies only what lies in its region, and copies to another process copy the bytes anyway. Needs a check that no runtime path writes through a string's `sval` or frees it.
-
 ### String interning for short strings (P1)
-Small strings (< 16 bytes) could be interned in a global table, turning equality checks into pointer comparison. Most table keys are short identifier strings — this would speed up every `gem_table_get`/`gem_table_set` with string keys. Trade-off: interned strings must live in a shared arena or be reference-counted so they outlive individual process arenas. Would also reduce per-process allocation rate — repeated key lookups like `"tag"`, `"pid"`, `"url"` currently allocate a fresh string each time via `gem_string()`.
+Small strings (< 16 bytes) could be interned in a global table, turning equality checks into pointer comparison. Most table keys are short identifier strings — this would speed up every `gem_table_get`/`gem_table_set` with string keys. Trade-off: interned strings must live in a shared arena or be reference-counted so they outlive individual process arenas. Would also reduce per-process allocation rate for keys built at runtime (literal keys like `"tag"` are already static, `GEM_STR_LIT`).
 
 ### `gem_string()` copies unconditionally (P2)
-`gem_string(const char *s)` always allocates + memcpy. Callers that already have an arena-allocated string (e.g. `buf_str`) pay for a redundant copy. A `gem_string_own(char *s)` variant that takes ownership would eliminate this.
+`gem_string(const char *s)` always allocates + memcpy. Callers that already have an arena-allocated string pay for a redundant copy. A `gem_string_own(char *s)` variant that takes ownership would eliminate this.
 
 ## Codegen Output
 
@@ -75,29 +72,20 @@ Unreachable code after `return`, `break`, `error()` could be stripped. Currently
 
 ## Runtime Hot Paths
 
-### Hash string table keys faster (P2)
+### Hash string table keys faster (P1)
 
 The string-key index (`gem_str_index_*` in runtime/gem_core.c) hashes the
 key's `slen` bytes with byte-wise FNV-1a on every lookup. Measured on
 macOS arm64 with 200k keys: 1M lookups take 95 ms against 84 ms with the
 old stb_ds index (about +13%), while insert/delete churn got faster.
 Cache the hash on the string (strings are immutable), or use a
-word-at-a-time hash.
-
-### `gem_eq` for strings (P2)
-Currently `strcmp`. If string interning lands, short strings become pointer equality. Even without interning, caching string length would let us short-circuit on length mismatch before comparing bytes.
-
-### `type(v) == "string"` allocates two strings (P2)
-`gem_type_fn` returns a fresh `gem_string("string")` and the literal on the right is allocated again, so the comparison costs about 130 ns (1M iterations: 131 ms, against 40 ms for 1M calls of an empty fn). std's argument checks (`string.<fn>`, `url.<fn>`, `mime.<fn>` raising on a non-string) pay it once per argument. Returning static strings from `type`, or having codegen turn `type(x) == "<literal>"` into a tag compare, would make such checks nearly free.
-
-### `gem_add` for strings (P1)
-Every string `+` does `strlen` on both operands. If strings carried their length, this becomes a field read. Depends on string views/length-aware representation. Directly impacts the HTML response building hot path.
+word-at-a-time hash. A literal key (`GEM_STR_LIT`) could carry a hash
+computed by the compiler. `gem_str_index_get` and `gem_str_index_put`
+are the two largest runtime functions in a `sample` profile of logstat
+(`--by ip`, October 2026).
 
 ### `buf_push` specialization for non-strings (P2)
 `buf_push` auto-coerces non-string values via `to_string`, allocating a temporary string. Specialized variants (`buf_push_int`, `buf_push_float`) that write directly into the buffer would skip the allocation. Small win per call but high frequency in formatting-heavy code.
-
-### Constructor return-by-value (P1)
-`gem_int()`, `gem_float()`, `gem_bool()`, `gem_string()` all return `GemVal` by value (16 bytes). With NaN boxing these become trivial bit operations returning 8 bytes. Without NaN boxing, the compiler could use static inline or macros for the trivial constructors. Blocked on NaN boxing for the full win.
 
 ### Integer-key append in `gem_table_set` scans every key (P1)
 `gem_table_set(t, int k, v)` with `k == len(t)` (append by index) falls through to the linear "find existing key" scan before appending, so building an array by index — and the `keys` and `values` builtins (`gem_keys`/`gem_values` in runtime/gem_builtins_collection.c), which build their result that way, and the rows of a `sqlite_query` result (10,000 rows 0.5 s, 40,000 rows 6.4 s, all inline on the scheduler thread) — is O(n²): `keys` of a 10,000-entry table takes 0.4 s, of 40,000 entries 6.4 s (`values` the same; `for k, v in` over the same table: 4 ms). std/test's deep equality stopped calling `keys` because of it. Fix: an append fast path when every key so far is array-shaped (track a flag on the table, cleared by any non-array key), or have `keys`/`values` push directly.

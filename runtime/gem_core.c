@@ -77,8 +77,6 @@ void gem_init_char_cache(void) {
 
 /* ─── Constructors ─── */
 
-GemVal gem_int(int64_t v) { return (GemVal){VAL_INT, GEM_MAGIC, {.ival = v}}; }
-GemVal gem_float(double v) { GemVal r; r.type = VAL_FLOAT; r.magic = GEM_MAGIC; r.fval = v; return r; }
 
 int gem_format_float(double v, char *out) {
     if (isnan(v)) { memcpy(out, "nan", 4); return 3; }
@@ -137,7 +135,6 @@ int gem_format_float(double v, char *out) {
     return n;
 }
 
-GemVal gem_bool(int v) { GemVal r; r.type = VAL_BOOL; r.magic = GEM_MAGIC; r.bval = v; return r; }
 GemVal gem_make_fn(GemFnPtr f, void *env) { GemVal r; r.type = VAL_FN; r.magic = GEM_MAGIC; r.fn = f; r.env = env; return r; }
 
 /* Global ref counter — single-threaded coroutine model means a plain
@@ -472,26 +469,10 @@ GemVal gem_table_get_ic_miss(GemTable *t, const char *key, GemICacheSlot *cache)
     return (GemVal){VAL_NIL, GEM_MAGIC, {0}};
 }
 
-/* ─── Equality ─── */
+/* ─── Table identity ─── */
 
 int64_t gem_table_id(GemVal v) {
     return v.type == VAL_TABLE ? (int64_t)(intptr_t)v.table : 0;
-}
-
-int gem_val_eq(GemVal a, GemVal b) {
-    if (a.type != b.type) return 0;
-    switch (a.type) {
-        case VAL_NIL: return 1;
-        case VAL_BOOL: return a.bval == b.bval;
-        case VAL_INT: return a.ival == b.ival;
-        case VAL_FLOAT: return a.fval == b.fval;
-        case VAL_STRING: return a.slen == b.slen && memcmp(a.sval, b.sval, (size_t)a.slen) == 0;
-        case VAL_REF: return a.rval == b.rval;
-        case VAL_TABLE: return a.table == b.table;
-        case VAL_BUFFER: return a.buffer == b.buffer;
-        case VAL_FN: return a.fn == b.fn && a.env == b.env;
-        default: return 0;
-    }
 }
 
 /* ─── Type name helper ─── */
@@ -511,11 +492,4 @@ const char *gem_type_str(GemVal v) {
     return "unknown";
 }
 
-/* ─── Truthiness ─── */
-
-int gem_truthy(GemVal v) {
-    if (v.type == VAL_NIL) return 0;
-    if (v.type == VAL_BOOL) return v.bval;
-    return 1;
-}
 
