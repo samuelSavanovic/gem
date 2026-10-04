@@ -578,7 +578,7 @@ void gem_deep_free_n(const GemVal *vals, int nvals) {
         external branch encounters env fields pointing at pinned boxes.
         gem_pin_mark_walked dedups: if not yet walked, walk the contents
         now; if already walked, just preserve the pointer.
-     3. Boxes allocated before the reset's mark (seq < mark.pin_seq) can be
+     3. Boxes allocated before the reset's point (seq < point.pin_seq) can be
         held by callers' frames: they are always walked and never freed.
      4. Sweep: any newer pin-set entry not marked is unreachable — free it.
         Surviving entries are reset to "untouched" for the next cycle.
@@ -862,25 +862,34 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
         if (n_moved) gem_rekey_index(t, moved, n_moved);
     }
     free(moved);
-    /* Compact the log from the base point's epoch on. Entries for tables in
-       the region (about to be unmapped) or kept by earlier resets of this
-       loop (newer than the base point) are dropped: every live mark other
-       than this one is older than the base point, so its resets see those
-       tables as part of their own region, and this mark's next reset only
-       reads entries written after this one. Of the entries for tables older
-       than the base point, one per table is kept; it still has epoch >=
-       base.clock, so this and every enclosing mark (all older) find it. */
+    /* Compact the log. Entries for tables in the region (about to be
+       unmapped) or kept by earlier resets of this loop (newer than the base
+       point) are dropped: every live mark other than this one is older than
+       the base point, so its resets see those tables as part of their own
+       region; this mark's young resets read only entries written after
+       this one, and its full resets have those tables in their region. Of
+       the entries for tables older than the base point, one per table is
+       kept; it still has epoch >= base.clock, so this and every enclosing
+       mark (all older) find it. A young reset compacts only the entries
+       written since the young point (the ones before it were compacted by
+       earlier resets), so a table older than the base point written again
+       keeps one entry per reset that saw it; the whole window from the base
+       point's epoch is compacted again by full resets and whenever it has
+       doubled since its last compaction, which keeps both the log and the
+       work linear. */
     {
         size_t blo = 0, bhi = arena->rem_len;
         while (blo < bhi) {
             size_t mid = blo + (bhi - blo) / 2;
             if (arena->rem[mid].epoch < mark->base.clock) blo = mid + 1; else bhi = mid;
         }
+        int whole = full || arena->rem_len - blo > 2 * mark->rem_window + 4096;
+        size_t from = whole ? blo : rem_start;
         GemArenaBlock *bb = mark->base.block;
         GemRegion kept;
         gem_region_build(&kept, bb->data + mark->base.used, bb->data + bb->used, bb->next);
-        size_t w = blo;
-        for (size_t ri = blo; ri < arena->rem_len; ri++) {
+        size_t w = from;
+        for (size_t ri = from; ri < arena->rem_len; ri++) {
             GemTable *t = arena->rem[ri].t;
             if (gem_region_contains(&region, t) || gem_region_contains(&kept, t)) {
                 t->rem_flag = 0;
@@ -890,8 +899,12 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
             t->rem_flag = 2;
             arena->rem[w++] = arena->rem[ri];
         }
-        for (size_t ri = blo; ri < w; ri++) arena->rem[ri].t->rem_flag = 0;
+        for (size_t ri = from; ri < w; ri++) arena->rem[ri].t->rem_flag = 0;
+        /* Each entry visited touches a table that is likely cold: charge a
+           cache line for it, so the next reset waits accordingly. */
+        scanned += (arena->rem_len - from) * 64;
         arena->rem_len = w;
+        if (whole) mark->rem_window = w - blo;
         free(kept.ranges);
     }
     if (gem_diag_state > 0) gem_diag_t_walk += gem_diag_now() - tw0;
@@ -911,6 +924,10 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
         GemMsgNode *head = NULL, *tail = NULL;
         while (n) {
             GemMsgNode *next = n->next;
+            /* A backlog an earlier reset kept is walked again by every
+               reset until it is received: charge it, so the resets space
+               out as the backlog grows. */
+            scanned += 256;
             GemVal v = gem_deep_copy_internal(n->value, &map);
             GemMsgNode *node = n;
             if (gem_region_contains(&region, n)) node = (GemMsgNode *)gem_arena_alloc(arena, sizeof(GemMsgNode));

@@ -91,6 +91,7 @@ typedef struct {
     size_t trigger;            /* reset once bytes_allocated exceeds this */
     size_t old_bytes;          /* bytes kept between base and young */
     size_t old_limit;          /* full reset once old_bytes exceeds this */
+    size_t rem_window;         /* remembered-log entries from base.clock on after its last whole compaction */
 } GemArenaMark;
 
 extern GemArena gem_global_arena;
@@ -321,7 +322,7 @@ GemVal gem_make_ref(void);
    malloc-backed (gem_core.c "String key index"). Keys are hashed and
    compared by their `slen` bytes, so keys that differ only after a NUL are
    different keys. The entries point at the key strings in `keys`, which the
-   table owns; a reset that moves them drops the index (gem_copy.c). */
+   table owns; a reset that moves them re-points the entries (gem_rekey_index in gem_copy.c). */
 typedef struct {
     const char *key;   /* NULL: empty slot */
     int64_t len;
@@ -1103,6 +1104,7 @@ static inline void gem_arena_mark(GemArenaMark *m) {
     m->trigger = a->bytes_allocated + GEM_ARENA_RESET_THRESHOLD;
     m->old_bytes = 0;
     m->old_limit = 0;
+    m->rem_window = 0;
 }
 
 static inline int gem_arena_reset_due(const GemArenaMark *m) {
