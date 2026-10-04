@@ -63,9 +63,11 @@ built from `supervisor`, `dynamic_supervisor` and `gen_server`),
 `examples/mini_redis/` (a Redis-protocol server: one process owning
 a large keyspace, a process per connection, pub/sub), `examples/lox/`
 (an interpreter for the Lox language: a lexer, a recursive-descent parser
-and a tree walker over tables) and `examples/gemgrep/` (a recursive grep
+and a tree walker over tables), `examples/gemgrep/` (a recursive grep
 on libc's regex through `extern fn`: a C object behind a `Ptr`, file
-contents as `Bytes`) follow this doc and test themselves with
+contents as `Bytes`) and `examples/jobqueue/` (a job queue whose workers
+crash, hang and get killed under a `dynamic_supervisor`: retries,
+deadlines, restart intensity) follow this doc and test themselves with
 `std/test`; read them for how the pieces fit together.
 
 **Words this doc uses.**
@@ -914,6 +916,20 @@ loop's back-edge`, that loop's memory grows without bound. It is printed
 only for `while true` loops, and says why; restructure the loop, or file an
 issue.
 
+### A process holding a lot of data pauses every process **(trap)**
+
+A long-running loop copies what it keeps alive at each arena reset, all
+of it at once, and processes share one thread, so nothing else runs
+meanwhile. A gen_server whose state grows inside its loop (the loop
+started with `init`) copies all of it at every reset: with 100,000 small
+records the longest pause was about 0.1 s, with 300,000 1.4 s (Linux
+x86_64 VM). `examples/jobqueue`'s queue, which keeps a record per job,
+stalls the program 50–80 ms at 20,000 jobs and 1.5 s at 100,000, and a
+timer set to 100 ms then fires before a 20 ms job has had a chance to
+report. Bound what a long-lived process keeps (expire finished records,
+keep a count instead of a history), or split it across processes, and
+leave deadlines room for the pauses.
+
 ### Mutate state in place
 
 Tables are never shared between processes (messages are copies), so a
@@ -1197,6 +1213,38 @@ slower: 2,000 round trips took 11 ms with an empty mailbox and 1.1 s with
   (which takes the next message, whatever it is): it would take messages
   that belong to someone else, such as a task result or another call's
   reply.
+
+### A process that makes calls doesn't also collect a stream **(trap)**
+
+A request/reply wait (`gen_server.call`, a `receive` on `^ref`) scans the
+whole mailbox for its reply, messages that will be read later included.
+A process that makes calls while another process streams messages to it
+(notifications, results, a server telling it each job is done) therefore
+scans the growing stream on every call: quadratic. 10,000 calls to a
+server that also sends the caller a note per call took 14 s; the same
+calls made from a process of their own took 68 ms (Linux x86_64 VM;
+`examples/jobqueue`'s driver: 21 s against 0.7 s for 10,000 jobs).
+Split the two roles:
+
+```gem
+let me = self()
+spawn do                              # Prefer: the calls in their own process
+  for i = 0, n
+    gen_server.call(server, {n: i, notify: me})
+  end
+end
+for i = 0, n                          # this process only collects
+  receive
+  when {tag: "done"} then nil
+  end
+end
+
+# Over: one process calls and collects
+#   for i = 0, n
+#     gen_server.call(server, {n: i, notify: self()})
+#   end
+#   ... then receive the n notes
+```
 
 ### Registered names
 
@@ -1697,6 +1745,8 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | Reply pattern without `^ref` | takes a stale reply | `ref: ^ref` |
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
+| Calls from a process that also collects a stream of messages | every reply wait scans the stream: quadratic | make the calls from a separate process |
+| A long-lived process holding 100,000s of records | each reset copies them all and stalls every process (0.1–1.5 s) | bound or shard the state |
 | `after` in a busy server loop | never fires | `send_after` ticks |
 | `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
 | Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |

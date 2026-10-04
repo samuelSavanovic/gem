@@ -50,7 +50,8 @@ examples/             # numbered tests (01-193+) + run_all.sh; plus larger progr
                       #   logstat/ (CLI access-log analyzer, its own gem.toml project; the text-processing perf yardstick),
                       #   mini_redis/ (Redis-protocol server; the yardstick for long-lived state, connections and fan-out),
                       #   lox/ (tree-walking Lox interpreter + bench/*.lox; the yardstick for calls, closures, recursion, objects),
-                      #   gemgrep/ (recursive grep on libc's regcomp/regexec via extern fn + a header of static helpers; the yardstick for C interop)
+                      #   gemgrep/ (recursive grep on libc's regcomp/regexec via extern fn + a header of static helpers; the yardstick for C interop),
+                      #   jobqueue/ (job queue on a dynamic_supervisor worker pool under seeded fault injection; the yardstick for failure under load)
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 docs/BEST_PRACTICES.md    # how to write Gem: idioms, traps, std conventions (new code follows it)
 docs/OPTIMIZATIONS.md     # tracked future performance improvements
@@ -66,6 +67,7 @@ benchmarks/           # wrk harness for examples/bookmark_app (run.sh) + node_ba
                       #   mini_redis/            — examples/mini_redis vs redis-server (redis-benchmark, pub/sub fan-out, a reply diff)
                       #   lox/                   — examples/lox vs the same interpreter in Python on bench/*.lox, with an output diff
                       #   gemgrep/               — examples/gemgrep vs GNU grep -E and a Python twin on a generated tree, with output diffs
+                      #   jobqueue/              — examples/jobqueue vs Python asyncio and Elixir/OTP twins on six fault scenarios; checks their invariants
 ```
 
 ## Build, Test, Bootstrap
@@ -116,7 +118,7 @@ After any compiler change, run edge-case and adversarial tests before considerin
 3. **Adversarial inputs** — malformed source, missing tokens, type mismatches at runtime.
 4. **Regression** — `make test` to make sure nothing broke.
 
-Add a numbered example under `examples/` (next free slot) and append its stdout to `expected_output.txt`. For programs that exit non-zero (e.g. uncaught `error()` to test stack-trace output), `run_all.sh` tolerates non-zero exits and diffs by output. For expected compile-time errors, add a `tests/broken/*.gem` entry to `tests/check_broken.sh` (error counts) and check the message text by hand. For compiler `note:`/warning text on stderr, put the expected stderr of `gem --check examples/<name>.gem` in `tests/notes/<name>.expected`; `tests/check_notes.sh` (part of `make test`) diffs it. For driver CLI errors (bad source path and the like), add a case to `tests/check_cli.sh`. For behaviour that depends on the cwd or the file layout (e.g. where a binary finds its sources for trace context), add a script under `tests/` and wire it into the Makefile `test` target, like `tests/check_project_root.sh` or `tests/check_trace_source.sh`. The larger programs in `examples/` (`json_parser.gem`, `tcp_echo.gem`, `bookmark_app/`, `stomp_broker/`, `logstat/`, `mini_redis/`, `lox/`, `gemgrep/`) check themselves instead (`std/test` suites in each directory's `test.gem`; logstat's built program is also diffed against `logstat/expected_report.txt`, lox's tests run its bench programs against `lox/bench/*.expected`, and gemgrep's built program runs on stdin and a small tree for its output, messages and exit statuses); `tests/check_example_apps.sh` runs them, so a change to one of them updates its tests too.
+Add a numbered example under `examples/` (next free slot) and append its stdout to `expected_output.txt`. For programs that exit non-zero (e.g. uncaught `error()` to test stack-trace output), `run_all.sh` tolerates non-zero exits and diffs by output. For expected compile-time errors, add a `tests/broken/*.gem` entry to `tests/check_broken.sh` (error counts) and check the message text by hand. For compiler `note:`/warning text on stderr, put the expected stderr of `gem --check examples/<name>.gem` in `tests/notes/<name>.expected`; `tests/check_notes.sh` (part of `make test`) diffs it. For driver CLI errors (bad source path and the like), add a case to `tests/check_cli.sh`. For behaviour that depends on the cwd or the file layout (e.g. where a binary finds its sources for trace context), add a script under `tests/` and wire it into the Makefile `test` target, like `tests/check_project_root.sh` or `tests/check_trace_source.sh`. The larger programs in `examples/` (`json_parser.gem`, `tcp_echo.gem`, `bookmark_app/`, `stomp_broker/`, `logstat/`, `mini_redis/`, `lox/`, `gemgrep/`, `jobqueue/`) check themselves instead (`std/test` suites in each directory's `test.gem`; logstat's built program is also diffed against `logstat/expected_report.txt`, lox's tests run its bench programs against `lox/bench/*.expected`, gemgrep's built program runs on stdin and a small tree for its output, messages and exit statuses, and jobqueue's on a small seeded run whose invariants must hold); `tests/check_example_apps.sh` runs them, so a change to one of them updates its tests too.
 
 ## Adding a New Builtin
 

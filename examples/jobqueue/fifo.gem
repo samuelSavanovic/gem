@@ -1,0 +1,44 @@
+## fifo — a first-in first-out queue with O(1) amortized push and pop.
+##
+##   let q = fifo.new()
+##   fifo.put(q, "a")
+##   fifo.take(q)       # "a"
+
+# An array and the index of its first element. `remove_at(items, 0)`
+# would shift the whole array on every pop: O(n²) for a backlog of n.
+# The popped prefix is dropped once it is half the array.
+
+## Returns an empty queue.
+fn new()
+  {items: [], head: 0}
+end
+
+## Returns the number of elements.
+fn size(q)
+  len(q.items) - q.head
+end
+
+## Adds `x` at the back.
+fn put(q, x)
+  push(q.items, x)
+end
+
+## Removes and returns the front element, or nil when the queue is empty.
+fn take(q)
+  if q.head >= len(q.items)
+    return nil
+  end
+  let x = q.items[q.head]
+  q.head = q.head + 1
+  if q.head * 2 >= len(q.items)
+    let rest = []
+    for i = q.head, len(q.items)
+      push(rest, q.items[i])
+    end
+    q.items = rest
+    q.head = 0
+  end
+  x
+end
+
+export new, size, put, take

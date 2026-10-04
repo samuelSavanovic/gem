@@ -1,0 +1,21 @@
+# A job queue with a supervised worker pool under seeded fault injection;
+# see README.md.
+#
+#   jobqueue [--jobs N] [--workers W] [--crash P] [--hang P] [--slow P] [--seed S] ...
+
+load "std/table"
+load "./options"
+load "./driver"
+
+fn main()
+  let parsed = options.parse(table.slice(argv(), 1))
+  if not parsed.ok
+    eprint(parsed.error)
+    exit(2)
+  end
+  let summary = driver.run(parsed.value)
+  print(driver.format(summary))
+  if len(summary.violations) > 0
+    exit(1)
+  end
+end

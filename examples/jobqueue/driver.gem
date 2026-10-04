@@ -1,0 +1,252 @@
+## driver — runs a seeded load through a fresh jobqueue system, waits for
+## it to drain, checks the invariants and returns the run's summary.
+
+load "std/string"
+load "std/dynamic_supervisor"
+load "./jobqueue"
+load "./schedule"
+load "./invariants"
+
+let TICK_MS = 20
+
+## Returns `{rss, hwm}` in KB from /proc/self/status, or nils where there
+## is no /proc.
+fn memory_kb()
+  let r = pcall read_file("/proc/self/status")
+  let out = {rss: nil, hwm: nil}
+  if not r.ok
+    return out
+  end
+  for line in string.split(r.value, "\n")
+    if string.starts_with(line, "VmRSS:")
+      out.rss = to_int(string.trim(str_replace(substr(line, 6, len(line)), "kB", "")))
+    elif string.starts_with(line, "VmHWM:")
+      out.hwm = to_int(string.trim(str_replace(substr(line, 6, len(line)), "kB", "")))
+    end
+  end
+  out
+end
+
+## Samples what must come back after the load: the process count, the
+## queue's monitors, links and mailbox, the worker supervisor's links,
+## and RSS.
+fn sample()
+  let p = jobqueue.pids()
+  let q = process_info(p.queue)
+  let w = nil
+  if p.workers != nil
+    w = process_info(p.workers)
+  end
+  let out = {
+    processes: len(processes()),
+    queue_monitors: len(q.monitors),
+    queue_links: len(q.links),
+    queue_mailbox: q.mailbox_len,
+    workers_links: nil,
+    rss: memory_kb().rss
+  }
+  if w != nil
+    out.workers_links = len(w.links)
+  end
+  out
+end
+
+# Kills up to `opts.storm` workers every `opts.storm_every_ms`,
+# `opts.storm_bursts` times, with reason "storm".
+fn storm(opts)
+  for b = 0, opts.storm_bursts
+    sleep(opts.storm_every_ms)
+    let r = pcall dynamic_supervisor.which_children("jobqueue_workers")
+    if r.ok
+      let n = 0
+      for c in r.value
+        if n < opts.storm
+          kill(c.pid, "storm")
+          n += 1
+        end
+      end
+    end
+  end
+end
+
+# Waits for the job_done of jobs 1 .. n, sampling the process count every
+# TICK_MS, and how late the tick comes (the longest time no other process
+# could run). Returns {done, peak, lag, last_at}; stops early at
+# `give_up_at`.
+fn collect(n, give_up_at)
+  let done = {}
+  let got = 0
+  let peak = len(processes())
+  let lag = 0
+  let last_at = time_ms()
+  let due = time_ms() + TICK_MS
+  let tick = send_after(self(), {tag: "_jq_tick"}, TICK_MS)
+  while got < n and time_ms() < give_up_at
+    receive
+    when {tag: "job_done", id: id, status: status, attempts: attempts, submitted_at: t0, finished_at: t1}
+      let key = "{id}"
+      if not has_key(done, key)
+        done[key] = []
+        got += 1
+      end
+      push(done[key], {status: status, attempts: attempts, latency: t1 - t0})
+      last_at = time_ms()
+    when {tag: "_jq_tick"}
+      let now = time_ms()
+      if now - due > lag
+        lag = now - due
+      end
+      let count = len(processes())
+      if count > peak
+        peak = count
+      end
+      due = now + TICK_MS
+      tick = send_after(self(), {tag: "_jq_tick"}, TICK_MS)
+    end
+  end
+  if not cancel_timer(tick)
+    receive
+    when {tag: "_jq_tick"} then nil
+    after 0 then nil
+    end
+  end
+  {done: done, peak: peak, lag: lag, last_at: last_at}
+end
+
+# Waits until every worker has retired (the queue holds no slots) or
+# `ms` pass.
+fn await_drain(ms)
+  let until = time_ms() + ms
+  let st = jobqueue.stats()
+  while st.slots > 0 or st.busy > 0 or st.pending > 0
+    if time_ms() > until
+      return st
+    end
+    sleep(TICK_MS)
+    st = jobqueue.stats()
+  end
+  st
+end
+
+## Returns the value at quantile `q` of the sorted int array `xs`.
+fn percentile(xs, q)
+  if len(xs) == 0
+    return 0
+  end
+  let i = to_int(floor(len(xs) * q))
+  if i >= len(xs)
+    i = len(xs) - 1
+  end
+  xs[i]
+end
+
+fn latencies(done)
+  let out = []
+  for k, notes in done
+    push(out, notes[0].latency)
+  end
+  sort(out, fn(a, b) a - b end)
+  out
+end
+
+## Runs `opts.jobs` jobs of the seeded workload through a new system (see
+## jobqueue.start for the options it takes) and returns the summary:
+## counts, failures by class, wall time, throughput, latency percentiles,
+## process counts and RSS, and `violations`, the invariants that failed.
+fn run(opts)
+  let n = opts.jobs
+  let sys = jobqueue.start(opts)
+  let baseline = sample()
+  let mem0 = memory_kb()
+  let storm_pid = nil
+  if opts.storm > 0
+    storm_pid = spawn_monitor(fn() storm(opts) end).pid
+  end
+  let t0 = time_ms()
+  let collector = self()
+  spawn do
+    for id = 1, n + 1
+      let r = jobqueue.submit(schedule.job(opts, id), collector)
+      if not r.ok
+        send(collector, {tag: "rejected", error: r.error})
+      end
+    end
+  end
+  let rejected = []
+  let c = collect(n, t0 + opts.timeout_ms)
+  let wall = c.last_at - t0
+  if storm_pid != nil
+    receive
+    when {tag: "DOWN", pid: ^storm_pid} then nil
+    end
+  end
+  let stats = await_drain(opts.idle_ms * 5 + 2000)
+  let final = sample()
+  let mem1 = memory_kb()
+  let report = jobqueue.report()
+  let violations = invariants.check(opts, n, c.done, report, jobqueue.dead_letters(), stats, baseline, final)
+  for e in rejected
+    push(violations, "rejected: {e}")
+  end
+  jobqueue.stop(sys)
+  let stopped = memory_kb()
+  let lat = latencies(c.done)
+  let throughput = 0
+  if wall > 0
+    throughput = n * 1000 / wall
+  end
+  {
+    jobs: n,
+    completed: stats.completed,
+    dead: stats.dead,
+    attempts: stats.attempts,
+    retries: stats.retries,
+    failures: invariants.failures(report),
+    late_results: stats.late_results,
+    sup_restarts: stats.sup_restarts,
+    wall_ms: wall,
+    throughput: throughput,
+    latency: {p50: percentile(lat, 0.5), p90: percentile(lat, 0.9), p99: percentile(lat, 0.99), max: percentile(lat, 1.0)},
+    lag_ms: c.lag,
+    processes: {baseline: baseline.processes, peak: c.peak, final: final.processes},
+    rss_kb: {baseline: mem0.rss, peak: mem1.hwm, final: mem1.rss, stopped: stopped.rss},
+    violations: violations
+  }
+end
+
+## Returns the summary as the lines main prints (the same format as
+## benchmarks/jobqueue's Python and Elixir versions).
+fn format(s)
+  let f = s.failures
+  let lines = [
+    "jobs          {s.jobs}",
+    "completed     {s.completed}",
+    "dead_letters  {s.dead}",
+    "attempts      {s.attempts}",
+    "retries       {s.retries}",
+    "failures      crash={f.crash} killed={f.killed} deadline={f.deadline} storm={f.storm} shutdown={f.shutdown} noproc={f.noproc} other={f.other}",
+    "late_results  {s.late_results}",
+    "sup_restarts  {s.sup_restarts}",
+    "wall_ms       {s.wall_ms}",
+    "throughput    {s.throughput} jobs/s",
+    "latency_ms    p50={s.latency.p50} p90={s.latency.p90} p99={s.latency.p99} max={s.latency.max}",
+    "tick_lag_ms   {s.lag_ms}",
+    "processes     baseline={s.processes.baseline} peak={s.processes.peak} final={s.processes.final}",
+    "rss_kb        baseline={s.rss_kb.baseline} peak={s.rss_kb.peak} final={s.rss_kb.final} stopped={s.rss_kb.stopped}"
+  ]
+  if len(s.violations) == 0
+    push(lines, "invariants    ok")
+  else
+    push(lines, "invariants    FAILED ({len(s.violations)})")
+    let shown = 0
+    for v in s.violations
+      if shown < 20
+        push(lines, "  {v}")
+        shown += 1
+      end
+    end
+  end
+  string.join(lines, "\n")
+end
+
+export run, format, percentile, memory_kb
