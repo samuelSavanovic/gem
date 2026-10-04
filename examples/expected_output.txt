@@ -3850,24 +3850,26 @@ v
 mine
 v:[1]
 S
+nil nil nil 9
 [1, 5, 7, 6] 5
 done own body
 a
 b c
 d
 
-[Runtime Error]: reported at line 99
-  --> examples/194_compiler_known_bugs.gem:99
-    |
- 99 | error("reported at line 99")
-    |
+[Runtime Error]: reported at line 106
+  --> examples/194_compiler_known_bugs.gem:106
+     |
+ 106 | error("reported at line 106")
+     |
 Stack trace:
-  at main (examples/194_compiler_known_bugs.gem:99)
+  at main (examples/194_compiler_known_bugs.gem:106)
 1: partial: true, took about 200 ms: true
 1: zero and negative don't wait: true true true
 1: tcp_write: timeout_ms must be an int (milliseconds) or nil, got string
 2: wrote 3 and 3
 2: peer got abcdef
+http: closing a connection: the client took no bytes of a 33554542-byte response for 200 ms
 3: closed early: true, got only part: true
 3: http.start: write_timeout_ms must be an int > 0 (milliseconds) or nil, got 0
 4: request.post: timed out after 300 ms waiting for http://127.0.0.1:18295/up
@@ -3876,6 +3878,13 @@ Stack trace:
 5: peer got all: true
 sid=v; HttpOnly
 sid=; Max-Age=0; HttpOnly; SameSite=Lax
+7: read after a matched receive: data
+7: read after a timed-out receive: late
+8: slow reader got the whole body: true, took longer than the timeout: true
+http.start: port must be an int, got nil
+http.start: host must be a string (an IP address), got nil
+request.get: headers must be a table, got nil
+request.get: body must be a string, got nil
 [{id: 1}]
 [{text: "there"}]
 [{text: "none"}]

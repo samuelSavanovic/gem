@@ -369,7 +369,7 @@ fn tokenize(source, file, sink)
           tq_close = tq_scan_body(source, pos, "\"", false)
         end
         if tq_close == nil
-          sink.report(source, file, line, pos - line_start + 1, 1, "unterminated triple-quoted string", nil)
+          sink.report(source, file, q_pos.line, q_pos.col, 3, "unterminated triple-quoted string", "this string is never closed")
           push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
           return tokens
         end
@@ -507,6 +507,7 @@ fn tokenize(source, file, sink)
 
     # Single-quoted strings (no interpolation)
     if ch == "'"
+      let sq_pos = {line: line, col: tstart - line_start + 1}
       pos += 1
 
       # Triple-quoted single string: '''...'''  (no interpolation)
@@ -551,7 +552,7 @@ fn tokenize(source, file, sink)
           end
         end
         if not sq_found
-          sink.report(source, file, line, pos - line_start + 1, 1, "unterminated triple-quoted string", nil)
+          sink.report(source, file, sq_pos.line, sq_pos.col, 3, "unterminated triple-quoted string", "this string is never closed")
           push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
           return tokens
         end

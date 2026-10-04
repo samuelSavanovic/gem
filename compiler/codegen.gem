@@ -4206,7 +4206,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       check_assign_target(name, node)
       let r = compile_expr(value)
       let t = tmp()
-      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_store(name, t)}\n{ns_refresh(name, p)}{pop_str(p)}{p}return {t};"
+      # An assignment is a statement: in tail position it yields nil, as a
+      # field or index assignment does.
+      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_store(name, t)}\n{ns_refresh(name, p)}{pop_str(p)}{p}return GEM_NIL;"
     when {tag: "return", value: value}
       if value != nil
         let r = compile_expr(value)

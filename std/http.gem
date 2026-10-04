@@ -1312,8 +1312,7 @@ fn read_body(rd, cfg, head, req)
   end
   let expect = headers["expect"]
   if expect != nil and string.lower(expect) == "100-continue" and not head.http10
-    let interim = "HTTP/1.1 100 Continue\r\n\r\n"
-    if tcp_write(rd.fd, interim, rd.write_ms) < len(interim)
+    if not send_all(rd, "HTTP/1.1 100 Continue\r\n\r\n")
       return false
     end
   end
@@ -1484,13 +1483,31 @@ fn process_one_request(rd, cfg)
   if response_closes(resp)
     keep_alive = false
   end
-  # A client that doesn't take the response within write_ms (or has gone)
-  # loses its connection.
-  let out = serialize_response(resp, keep_alive, head_only)
-  if tcp_write(rd.fd, out, rd.write_ms) < len(out)
+  if not send_all(rd, serialize_response(resp, keep_alive, head_only))
     keep_alive = false
   end
   keep_alive
+end
+
+# Writes a response. `write_ms` bounds the wait for progress, not the whole
+# response: a slow client that keeps taking bytes gets all of it. A client
+# that takes nothing for write_ms loses its connection (logged), as does
+# one that has gone (not logged). Returns false when the response was cut.
+fn send_all(rd, out)
+  let rest = out
+  while true
+    let t0 = time_ms()
+    let n = tcp_write(rd.fd, rest, rd.write_ms)
+    if n == len(rest)
+      return true
+    elif n == 0
+      if rd.write_ms != nil and time_ms() - t0 >= rd.write_ms
+        eprint("http: closing a connection: the client took no bytes of a {len(out)}-byte response for {rd.write_ms} ms")
+      end
+      return false
+    end
+    rest = substr(rest, n)
+  end
 end
 
 # Keep-alive loop: serve requests on `fd` until the peer closes, goes idle,
@@ -1696,11 +1713,13 @@ end
 ## `idle_timeout_ms` (default 30000: the longest wait for each read, also
 ## for the next request on a kept-alive connection) and
 ## `request_timeout_ms` (default 30000: a request's head and body must
-## arrive within it) and `write_timeout_ms` (default 30000: each response
-## must be written within it, so a client that stops reading can't hold
-## its connection). A timeout of nil means no limit; past a read one, the
-## connection is closed without a response, past the write one, it is
-## closed with the response cut short. Other keys are ignored.
+## arrive within it) and `write_timeout_ms` (default 30000: the longest a
+## client may go without taking any bytes of a response, so one that
+## stops reading can't hold its connection; a slow one that keeps reading
+## gets the whole response). A timeout of nil means no limit; past a read
+## one, the connection is closed without a response, past the write one,
+## it is closed with the response cut short and a line on stderr. Other
+## keys are ignored.
 ## `opts` must be a table: nil raises an unprefixed `field access on
 ## non-table` error.
 ##
@@ -1735,6 +1754,12 @@ end
 # with `caller`.
 fn launch(caller, router_ref, watch, opts)
   let {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS, write_timeout_ms = DEFAULT_WRITE_TIMEOUT_MS} = opts
+  if type(port) != "int"
+    error("{caller}: port must be an int, got {type(port)}")
+  end
+  if type(host) != "string"
+    error("{caller}: host must be a string (an IP address), got {type(host)}")
+  end
   check_int(caller, "max_body", max_body, 0)
   idle_timeout_ms = timeout_opt(caller, "idle_timeout_ms", idle_timeout_ms)
   request_timeout_ms = timeout_opt(caller, "request_timeout_ms", request_timeout_ms)

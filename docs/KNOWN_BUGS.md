@@ -20,6 +20,13 @@ fn k(a = b, b = 1) a end
 print(k())             # cc fails: 'gem_v_b' undeclared
 ```
 
+```gem
+let D = 5
+fn f(x = D, D = 1) x end
+print(f())             # cc fails: 'gem_v_D' undeclared (a later param
+                       # shadows the module binding the default names)
+```
+
 A default runs in the fn's scope with every param visible, so `x = x`
 reads the param before it is set (an uninitialized C local, `gem_v_x =
 gem_v_x;`) and a later param reaches C undeclared. SPEC says a default
@@ -31,34 +38,26 @@ check belongs in `scope_shadowing_lets`.
 
 ## Runtime
 
-### A `receive ... after` that timed out makes the next `tcp_read` with no timeout return nil
+### A `tcp_accept` waiting on a listening socket that another process closes spins forever
 
 ```gem
-let l = tcp_listen("127.0.0.1", 18299)
+let l = tcp_listen("127.0.0.1", 18296)
 spawn do
-  let c = tcp_accept(l)
-  sleep(300)
-  tcp_write(c, "late")
-  sleep(100)
-  tcp_close(c)
+  let r = pcall tcp_accept(l)
+  print("accept returned", r)    # never printed
 end
-let fd = tcp_connect("127.0.0.1", 18299)
-receive
-when "never" then nil
-after 10 then nil
-end
-print(tcp_read(fd, 100))         # nil, not "late"
+sleep(100)
+tcp_close(l)
+print("closed")                  # the program then never exits, at 100% CPU
 ```
 
-A `receive ... after` that times out leaves the process's `timed_out` flag
-set (and one that matched a message after yielding leaves `deadline_ms`
-set, which the scheduler can fire later). `gem_tcp_read_fn`
-(runtime/gem_builtins_tcp.c) checks `proc->timed_out` after every
-`gem_io_yield` even when the call set no deadline, so it reports a
-timeout that never happened. `tcp_write` clears both on entry and only
-honours a deadline it set itself; `tcp_read` should do the same, or
-`gem_selective_yield`'s callers should clear the flag once they have
-read it.
+The waiting process is never told: `poll` reports the closed fd as
+`POLLNVAL` at once on every pass, the scheduler keeps it waiting
+(`gem_run_scheduler` / the poll loop in runtime/gem_scheduler.c), and
+`accept` is not retried, so the scheduler busy-loops. A `POLLNVAL` (or
+`POLLERR`/`POLLHUP`) should make the waiter ready so `accept` fails with
+`EBADF` and raises. Likely the same for a `tcp_read` on a socket another
+process closes.
 
 ### `in` answers differently on a copy of a table whose string keys were deleted
 
@@ -119,6 +118,29 @@ see a second statement after one. Both should raise on SQL containing a
 NUL (runtime/gem_builtins_sqlite.c).
 
 ## Standard library
+
+### `request` loses a status the server sent before the body was written
+
+```gem
+load "std/request"
+load "std/string"
+let l = tcp_listen("127.0.0.1", 18298)
+spawn do
+  let c = tcp_accept(l)
+  tcp_read(c, 4096, 1000)
+  tcp_write(c, "HTTP/1.1 413 Payload Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+  tcp_close(c)
+end
+let body = string.repeat("x", 32 * 1024 * 1024)
+print((pcall request.post("http://127.0.0.1:18298/up", {body: body})).error)
+# request.post: connection lost while sending the request to ...
+```
+
+A server that answers early (413, 401) and closes while the body is still
+being sent leaves a short `tcp_write`, which `exchange` (std/request.gem)
+turns into "connection lost while sending"; the status the server already
+sent is never read. On a short write it should still try to read a
+response before raising.
 
 ### `json.encode` writes infinite and NaN floats as bare `inf`/`nan`
 

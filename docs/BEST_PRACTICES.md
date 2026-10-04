@@ -1039,18 +1039,24 @@ In a child spec, a missing `shutdown` key means the default budget, but
 `shutdown: nil` means no limit, like `timeout_ms: nil` elsewhere in std.
 `{id: id, start: s, shutdown: opts.shutdown}` sets the key to `nil` when
 `opts` has no `shutdown`, so a stubborn child keeps its supervisor waiting
-for good. Give the option a default when you read it (a destructuring
-default fires only on a missing key, so an explicit `nil` still passes
-through):
+for good. Copy the key only when it is there, which leaves the
+supervisor's own default in place (5000 ms, or the budget the child's
+handle asks for):
 
 ```gem
-fn worker_spec(id, {shutdown = 5000} = {})
-  {id: id, start: start_worker, shutdown: shutdown}
+fn worker_spec(id, opts)
+  let spec = {id: id, start: start_worker}
+  if has_key(opts, "shutdown")      # not `shutdown: opts.shutdown`
+    spec.shutdown = opts.shutdown
+  end
+  spec
 end
 ```
 
-Or copy the key only when it is there (`if has_key(opts, "shutdown")`),
-which leaves the supervisor's own default in place.
+Or give the option a default when you read it: a destructuring default
+fires only on a missing key, so an explicit `nil` still passes through
+(`fn worker_spec(id, {shutdown = 5000} = {})`), at the cost of fixing the
+default yourself.
 
 ### Request/reply: a ref, a pin, a timeout, and a monitor
 
@@ -1469,7 +1475,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
 | `after` in a busy server loop | never fires | `send_after` ticks |
-| `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | a destructuring default, or copy the key only when `has_key` |
+| `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
 | Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
 | `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |

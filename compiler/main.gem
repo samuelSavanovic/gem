@@ -12,7 +12,7 @@ load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
 load "./loader" (resolve_load_path, load_target_problem, find_project_root, find_install_root, compute_stdlib_root, make_show_path)
 load "./builtins" (BUILTIN_FNS)
-load "./lexer" (build_keyword_set)
+load "./lexer" (build_keyword_set, normalize_newlines)
 load "../lsp/main" (run_lsp)
 
 # ─── Install root (for runtime/, build/libgem_runtime.a) ──────
@@ -921,7 +921,8 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
         sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "cannot read module `{stmt.path}` ({show_path(full_path)})", nil)
         continue
       end
-      let source = read_res.value
+      # CRLF reads as LF here, so error snippets don't show the CR either.
+      let source = normalize_newlines(read_res.value)
       sources_by_file[full_path] = source
       let errors_before = sink.count()
       let loaded_ast = parse_source(source, full_path, sink)
@@ -1126,7 +1127,7 @@ if not file_exists(src_path)
   eprint("gem: cannot open '" + src_path + "'")
   exit(1)
 end
-let source = read_file(src_path)
+let source = normalize_newlines(read_file(src_path))
 
 let sink = make_error_sink()
 

@@ -478,10 +478,6 @@ end
 # The whole call; `name` ("request.get") prefixes every error.
 fn do_request(name, method, raw_url, opts)
   let {headers = {}, body = "", timeout_ms = DEFAULT_TIMEOUT_MS} = opts
-  # A nil body or headers means the default (documented); a nil
-  # timeout_ms means no limit.
-  if headers == nil then headers = {} end
-  if body == nil then body = "" end
   if type(method) != "string" or method == ""
     error("{name}: method must be a non-empty string")
   end
@@ -574,7 +570,8 @@ end
 ##
 ## `opts` must be a table (anything else, nil included, raises an
 ## unprefixed `field access on non-table` error). Its keys, all optional
-## (nil means the default, except for `timeout_ms`):
+## (a key left out gets the default; a nil `timeout_ms` means no limit,
+## a nil `body` or `headers` raises):
 ## - `body`: a string, default "". A non-empty one is sent with a
 ##   Content-Length.
 ## - `headers`: a table of name → value; a value is sent as its text

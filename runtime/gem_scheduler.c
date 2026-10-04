@@ -601,6 +601,11 @@ void gem_selective_yield(int64_t deadline_ms) {
     proc->timed_out = 0;
     proc->state = GEM_PROC_WAITING;
     mco_yield(proc->coro);
+    /* Resumed: by a message, or by the deadline (timed_out, which the
+       caller reads next). Either way the deadline is spent; left set, a
+       later wait of another kind would be woken by it. The receive loop
+       sets it again before it yields again. */
+    proc->deadline_ms = -1;
 }
 
 /* Coroutine entry point — calls the GemFnPtr stored in user_data.

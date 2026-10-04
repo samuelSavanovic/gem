@@ -250,8 +250,12 @@ fn make_parser(tokens, source, file, sink)
     end
     if contains_dot(nt.value)
       let first = advance()
-      if negative then advance() end
-      report(first.line, first.col, nt.col + len(nt.value) - first.col, "a float can't be a table key in a literal or pattern", "set it with an index: `t[{nt.value}] = v`, or key the entry with a string")
+      let text = nt.value
+      if negative
+        advance()
+        text = "-" + text
+      end
+      report(first.line, first.col, nt.col + len(nt.value) - first.col, "a float can't be a table key in a literal or pattern", "set it with an index: `t[{text}] = v`, or key the entry with a string")
       return 0
     end
     let first = advance()

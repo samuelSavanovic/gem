@@ -76,6 +76,13 @@ print(values({a: 1}))
 let {later = fn() to_string(sort([2, 1])) end, sort = fn(a) "S" end} = {}
 print(later())
 
+# An assignment as the last statement yields nil, like a field
+# assignment does.
+let assigned = 0
+let set_var = fn() assigned = 5 end
+let set_field = fn() u.x = 6 end
+print(set_var(), set_field(), (pcall assigned = 9).value, assigned)
+
 # Every `export` statement counts; defaults see the module's lets.
 print(kb.with_defaults(1), kb.anon_default())
 
@@ -96,4 +103,4 @@ b"
 let q = 'c
 d'
 print(s, q)
-error("reported at line 99")
+error("reported at line 106")

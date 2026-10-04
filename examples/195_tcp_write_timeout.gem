@@ -87,14 +87,15 @@ when {got: got} then print("2: peer got {got}")
 end
 tcp_close(fd2)
 
-# 3. std/http: a client that asks for a big response and doesn't read
-#    loses its connection after write_timeout_ms instead of holding it.
+# 3. std/http: a client that asks for a big response and stops reading
+#    loses its connection (with a line on stderr) once the socket takes
+#    no bytes for write_timeout_ms, instead of holding it.
 let app = http.router()
 app.get("/big", fn(req) http.ok(payload) end)
 let server = http.start(app, {port: PORT + 2, host: "127.0.0.1", write_timeout_ms: 200})
 let c3 = tcp_connect("127.0.0.1", PORT + 2)
 tcp_write(c3, "GET /big HTTP/1.1\r\nHost: x\r\n\r\n")
-sleep(600)
+sleep(1500)
 let total = 0
 let eof = false
 while true
@@ -156,3 +157,66 @@ tcp_close(fd5)
 # 6. A cookie option given as nil leaves its attribute out.
 print(http.set_cookie(http.ok("x"), "sid", "v", {path: nil, same_site: nil}).headers["Set-Cookie"])
 print(http.delete_cookie(http.ok("x"), "sid", {path: nil}).headers["Set-Cookie"])
+
+# 7. A `receive ... after` that matched a message leaves no deadline
+#    behind for a later tcp_accept or tcp_read with no timeout.
+let srv7 = spawn do
+  sleep(20)
+  send(me, "hello")
+  sleep(300)
+  let c = tcp_connect("127.0.0.1", PORT + 4)
+  sleep(200)
+  tcp_write(c, "data")
+  sleep(100)
+  tcp_close(c)
+end
+let l7 = tcp_listen("127.0.0.1", PORT + 4)
+receive
+when "hello" then nil
+after 100 then print("7: unexpected timeout")
+end
+let c7 = tcp_accept(l7)
+print("7: read after a matched receive: {tcp_read(c7, 100)}")
+tcp_close(c7)
+tcp_close(l7)
+receive
+when "never" then nil
+after 10 then nil
+end
+let srv7b = spawn do
+  let c = tcp_connect("127.0.0.1", PORT + 5)
+  sleep(300)
+  tcp_write(c, "late")
+  sleep(100)
+  tcp_close(c)
+end
+let l7b = tcp_listen("127.0.0.1", PORT + 5)
+let c7b = tcp_accept(l7b)
+print("7: read after a timed-out receive: {tcp_read(c7b, 100)}")
+tcp_close(c7b)
+tcp_close(l7b)
+
+# 8. write_timeout_ms bounds the wait for progress, not the whole
+#    response: a slow client that keeps reading gets all of it.
+let server8 = http.start(app, {port: PORT + 6, host: "127.0.0.1", write_timeout_ms: 200})
+let c8 = tcp_connect("127.0.0.1", PORT + 6)
+tcp_write(c8, "GET /big HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+let got8 = 0
+let t8 = time_ms()
+while true
+  let s = tcp_read(c8, 4194304, 2000)
+  if s == nil or s == ""
+    break
+  end
+  got8 += len(s)
+  sleep(60)
+end
+print("8: slow reader got the whole body: {got8 > len(payload)}, took longer than the timeout: {time_ms() - t8 > 200}")
+tcp_close(c8)
+http.stop(server8)
+
+# 9. An explicit nil option is nil: an error that names the option.
+print((pcall http.start(app, {port: nil})).error)
+print((pcall http.start(app, {host: nil})).error)
+print((pcall request.get("http://127.0.0.1:{PORT}/", {headers: nil})).error)
+print((pcall request.get("http://127.0.0.1:{PORT}/", {body: nil})).error)
