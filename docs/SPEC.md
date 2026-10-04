@@ -624,7 +624,7 @@ send(pid, "world")
 
 `spawn`, `send`, `receive` are runtime functions, not keywords. Under the hood they use minicoro coroutines with a round-robin scheduler. Each spawned coroutine gets a mailbox (a simple queue). `receive` yields the coroutine if the mailbox is empty; the scheduler resumes it when a message arrives via `send`.
 
-At most 1024 processes, main included, are alive at once; past that, `spawn` raises `spawn: process table full`. A process's slot is freed when it exits.
+At most 262,144 processes, main included, are alive at once; past that, `spawn` raises `spawn: process table full`. Setting the environment variable `GEM_MAX_PROCS` to a smaller number (at least 2) when the program starts lowers the limit; any other value stops the program before it runs. A process's slot is freed when it exits. Each process also needs a few memory mappings of its own (stack and heap): when the system refuses one, `spawn` raises `spawn: cannot map a stack for a new process (N processes alive)`. On Linux the default per-program limit, `vm.max_map_count` = 65,530, allows about 16,000 live processes; raise it (`sysctl vm.max_map_count=262144`) for more. An idle process takes about 21 KB of memory. The scheduler's cost per pass is proportional to the processes that are ready to run, not to the number alive, so idle processes cost memory but no time.
 
 The main process (top-level code) is itself a schedulable coroutine (PID 0). All concurrency primitives — `self()`, `send`, `receive`, `sleep`, `monitor`, `link` — work at the top level. The program exits when all processes have terminated; if spawned processes outlive main, the program continues running until they complete.
 

@@ -16,7 +16,7 @@ print(receive())   # -> echo: hi
 
 Ruby-ish syntax (blocks-as-trailing-arg, `do/end`), Lua-ish data model (tables for everything - objects, dicts, arrays, modules), Erlang-ish concurrency (processes, mailboxes, monitors, links, supervisors). Compiles to C; vendors `minicoro` for stackful coroutines and `stb_ds` for hash tables. Bootstrap is a checked-in `stage0.c` so any C compiler can rebuild from scratch.
 
-A *process* is a lightweight green thread with its own heap and mailbox, cheap enough to start one per connection or task (up to 1024 alive at once). Processes share nothing and talk only by message.
+A *process* is a lightweight green thread with its own heap and mailbox, cheap enough to start one per connection or task: about 21 KB each when idle, and tens of thousands can be alive at once. Processes share nothing and talk only by message.
 
 ## Memory model
 

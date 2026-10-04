@@ -1,0 +1,111 @@
+# More live processes than the old fixed table of 1024 held: 5000 workers at
+# once, timeouts, a ring, monitors and kills across all of them. The pid
+# lists are locals of main: a module-level table that grows between spawns
+# is copied for every child (BEST_PRACTICES.md, "State and memory").
+
+let N = 5000
+
+fn worker()
+  receive
+  when {from: from, n: n}
+    send(from, {tag: "reply", n: n * 2})
+    worker()
+  when {tag: "stop"}
+    nil
+  end
+end
+
+let me = self()
+
+# A node of a ring that passes a counter around.
+fn ring_node(next)
+  receive
+  when {tag: "link", to: to}
+    ring_node(to)
+  when {tag: "token", hops: hops}
+    if hops == 0
+      send(me, {tag: "done"})
+    else
+      send(next, {tag: "token", hops: hops - 1})
+      ring_node(next)
+    end
+  end
+end
+
+fn main()
+  let pids = []
+  for i = 0, N
+    push(pids, spawn(worker))
+  end
+  print("alive", len(processes()))
+
+  for i = 0, N
+    send(pids[i], {from: me, n: i})
+  end
+  let total = 0
+  for i = 0, N
+    receive
+    when {tag: "reply", n: n} then total += n
+    end
+  end
+  print("sum", total, total == N * (N - 1))
+
+  # Half the waiters get a message before their deadline, half time out.
+  let waiters = []
+  for i = 0, 2000
+    push(waiters, spawn do
+      receive
+      when {tag: "poke"} then send(me, {tag: "poked"})
+      after 100
+        send(me, {tag: "timeout"})
+      end
+    end)
+  end
+  for i = 0, 2000
+    if i % 2 == 0 then send(waiters[i], {tag: "poke"}) end
+  end
+  let poked = 0
+  let timeouts = 0
+  for i = 0, 2000
+    receive
+    when {tag: "poked"} then poked += 1
+    when {tag: "timeout"} then timeouts += 1
+    end
+  end
+  print("poked", poked, "timed out", timeouts)
+
+  # A ring of 3000 processes passes a counter around twice.
+  let ring = []
+  for i = 0, 3000
+    push(ring, spawn(fn() ring_node(nil) end))
+  end
+  for i = 0, 3000
+    send(ring[i], {tag: "link", to: ring[(i + 1) % 3000]})
+  end
+  send(ring[0], {tag: "token", hops: 6000})
+  receive
+  when {tag: "done"} then print("ring done")
+  end
+
+  # Monitor every worker, kill a fifth of them, stop the rest.
+  for i = 0, N
+    monitor(pids[i])
+  end
+  for i = 0, N
+    if i % 5 == 0 then kill(pids[i], "cull") else send(pids[i], {tag: "stop"}) end
+  end
+  let culled = 0
+  let normal = 0
+  for i = 0, N
+    receive
+    when {tag: "DOWN", reason: "cull"} then culled += 1
+    when {tag: "DOWN", reason: "normal"} then normal += 1
+    end
+  end
+  print("culled", culled, "normal", normal)
+  for p in ring
+    kill(p, "kill")
+  end
+  sleep(10)
+  print("alive", len(processes()))
+end

@@ -246,19 +246,12 @@ GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args,
     return req;
 }
 
-void gem_io_check_completions(void) {
-    if (gem_io_wake_pipe_fds[0] < 0) return;
+int gem_io_check_completions(void) {
+    if (gem_io_wake_pipe_fds[0] < 0) return 0;
     char buf[64];
-    while (read(gem_io_wake_pipe_fds[0], buf, sizeof(buf)) > 0) {}
-
-    for (int i = 0; i < gem_proc_hwm; i++) {
-        GemProcess *proc = &gem_proc_table[i];
-        if (proc->state == GEM_PROC_IO_WAIT && proc->io_request != NULL) {
-            if (__atomic_load_n(&proc->io_request->done, __ATOMIC_ACQUIRE)) {
-                proc->state = GEM_PROC_READY;
-            }
-        }
-    }
+    int any = 0;
+    while (read(gem_io_wake_pipe_fds[0], buf, sizeof(buf)) > 0) any = 1;
+    return any;
 }
 
 int gem_io_wake_fd(void) {

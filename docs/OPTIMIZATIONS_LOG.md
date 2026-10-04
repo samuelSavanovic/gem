@@ -358,7 +358,7 @@ Replaced the 256-slot fixed timer array with a dynamic min-heap keyed by `deadli
 ### Lazy-paged coroutine stacks via mmap ✓ Done (2026-10-02)
 Shipped together with stack-overflow containment (SPEC §"Stack depth"; `runtime/gem_scheduler.c` "Process stacks"). Every process stack, main included, is now an mmap'd block with a 64 KB `PROT_NONE` guard between minicoro's header and the stack, and `GEM_CORO_STACK_SIZE` went from 256 KB to 8 MB, the same as main. The old entry assumed malloc'd stacks were committed up front. On Linux glibc they were not: 256 KB is above the mmap threshold, so they were lazily paged too. Measured on Linux x86_64 with `VmRSS`, 1000 idle processes take 22.6 MB both before and after (≈16.5 KB per process, mostly arena and the stack's top pages). What changed is reserved address space: 8 GB with all 1024 slots in use, against 256 MB before. That is free on 64-bit Linux (`MAP_NORESERVE`, default overcommit) and macOS. Under `vm.overcommit_memory=2` it is charged in full, and spawn fails with a catchable "coroutine creation failed" once the commit limit is hit. Build with a smaller `-DGEM_CORO_STACK_SIZE` there.
 
-Spawn cost: mapping, guarding and unmapping a stack per spawn made spawn+exit about 2.3x slower (200k spawn/exit: 1.5 s before, 3.5 s after). Released stacks go to a LIFO cache (`gem_stack_cache`) sized to the process table, `GEM_MAX_PROCS`. The cache can't hold more stacks than were alive at once, and each is trimmed on release, so the size costs address space, not memory. An earlier cap of 128 made every exit an 8 MB `munmap` and every spawn an `mmap` + `mprotect` once more than 128 processes churned: 200k spawn/exit with 1000 alive took 3.2 s on macOS and 3.7 s on Linux, against 0.8 s and 1.8 s on main.
+Spawn cost: mapping, guarding and unmapping a stack per spawn made spawn+exit about 2.3x slower (200k spawn/exit: 1.5 s before, 3.5 s after). Released stacks go to a LIFO cache (`gem_stack_cache`) sized to the process table, `GEM_MAX_PROCS` (since the growable process table, a fixed 1,024: see "Growable process table" below). The cache can't hold more stacks than were alive at once, and each is trimmed on release, so the size costs address space, not memory. An earlier cap of 128 made every exit an 8 MB `munmap` and every spawn an `mmap` + `mprotect` once more than 128 processes churned: 200k spawn/exit with 1000 alive took 3.2 s on macOS and 3.7 s on Linux, against 0.8 s and 1.8 s on main.
 
 On release, everything below the top 16 KB of the *stack* (not of the mapping, which has a trailing page beyond the stack; on 16 KB-page macOS that page alone filled the kept region, so the real top page was discarded and re-faulted on every spawn) is handed back with `madvise` (`MADV_DONTNEED`, or `MADV_FREE_REUSABLE` on macOS, the only one of the three that lowers `phys_footprint` there). `madvise` over 8 MB costs several microseconds on macOS even when nothing in the range is resident, so a single `mincore` over the 64 KB below the kept region decides first: stacks are touched from the top down, so if none of those pages is resident, nothing deeper is either and the `madvise` is skipped. A C frame larger than 64 KB that skipped the probed pages could leave deeper pages resident in the cached stack until it is reused; that costs memory, not correctness.
 
@@ -405,6 +405,25 @@ Measured on Linux x86_64 (4 cores, shared with other jobs, so ±10%), a minimal 
 What is left per connection is mostly runtime work: the spawn (copying the closure env with the router, and the module slots: about 23k instructions), the server process's wakeup, and the arena teardown at exit.
 
 ## Scheduler / Concurrency
+
+### Growable process table, scheduler without table scans ✓ Done
+The process table was a static array of 1,024 slots, and every scheduler pass scanned all slots up to the high-water mark: picking READY processes, checking deadlines, building the poll set, checking thread-pool completions. Both changed together (runtime/gem_scheduler.c, "Process table" and "Run state"):
+
+- **Table.** `gem_proc_table` is a `PROT_NONE` reservation for `GEM_MAX_PROCS` (262,144) slots, made accessible 64 slots at a time as the high-water mark grows; it never moves, so `GemProcess *` pointers stay valid across spawns. `GEM_MAX_PROCS=<n>` in the environment lowers the limit. New slots come from the high-water mark up to 1,024, then from freed slots (FIFO), then from the mark again, so programs with fewer than 1,024 live processes get the same slots and pids as before, and the table only grows to the peak live count. The old FIFO over a pre-filled free list would have cycled through every slot of a large table (the stress suite's churn test timed out after 180 s with a 65,536-slot build of the old scheduler).
+- **Run state.** A three-level bitmap of READY slots lets a pass run them in slot order (the old scan's order, so every recorded interleaving is unchanged) at a cost proportional to the READY ones. Deadlines (`receive ... after`, `sleep`, tcp timeouts) sit in an indexed min-heap; fd waiters and thread-pool waiters in their own lists; WAITING processes are a count. Every state change goes through `gem_proc_set_state`. One deadline value expires per pass, so when the scheduler falls behind, overdue timeouts still fire in deadline order (40,000 sleepers in 5 buckets 40 ms apart: sorted now, interleaved before). Pool waiters are checked only when the wake pipe had a byte.
+
+Measured on Linux x86_64 (4 cores), best of 3, binaries only:
+
+| Workload | Before | After |
+|---|---|---|
+| 200k ping-pong round trips, no idle processes | 0.30 s | 0.29 s |
+| same, 1,000 idle processes in `receive` | 0.84 s | 0.35 s |
+| same, 10,000 idle (impossible before) | — | 0.52 s incl. spawning them |
+| 200k spawn + exit | 4.6 s | 2.1 s |
+| 200k spawn + exit, 1,000 alive | 4.8 s | 1.9 s |
+| ring of 50,000 × 20 rounds (before: a 65,536-slot build of the old scheduler) | 11.9 s | 6.6 s |
+
+Live processes now stop at memory mappings, not the table: four per process, so about 16,000 under Linux's default `vm.max_map_count`; 100,000 idle processes ran in 2.1 GB with the limit raised (OPTIMIZATIONS.md, "Per-process footprint"). The stack cache stays capped at 1,024 stacks instead of growing with the table, so a burst of tens of thousands of processes doesn't leave their stacks mapped.
 
 ### `std/supervisor` keeps every restart time ✓ Done (std modernization)
 `restart` used to push the time of each restart onto `state.restart_times` and never drop old entries, so restarts were O(n²) in the supervisor's lifetime restart count and its memory grew without bound (8,000 restarts of a permanent child: 2.9 s). Restart times outside `max_seconds` are now dropped at each restart (`note_restart` in std/supervisor, `check_intensity` in std/dynamic_supervisor); what remains (O(restarts in the window) per restart) is tracked in OPTIMIZATIONS.md.

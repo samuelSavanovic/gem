@@ -2789,7 +2789,7 @@ escape: &lt;a href=&#x27;x&#x27;&gt;&amp;&quot;&lt;/a&gt;
 HTTP/1.1 404 Not Found [Not Found]
 http: GET /boom: kaboom
 Stack trace:
-  at anonymous fn (examples/177_http_std_fixes.gem:12)
+  at anonymous fn (examples/177_http_std_fixes.gem:13)
 HTTP/1.1 500 Internal Server Error [Internal Server Error]
 http: GET /nil: handler returned nil, not a response table
 HTTP/1.1 500 Internal Server Error [Internal Server Error]
@@ -2809,16 +2809,11 @@ Connection: close
 Content-Type: text/plain; charset=utf-8
 
 got two]
--- process table full
-http: spawn: process table full; refusing a connection
-HTTP/1.1 503 Service Unavailable [Service Unavailable]
-HTTP/1.1 200 OK [hello]
 -- serve
 HTTP/1.1 200 OK [hello]
 serve after kill shutdown: ok=true value=nil error=nil
 HTTP/1.1 200 OK [hello]
 serve after kill boom: ok=false value=nil error=http.serve: server died: boom
-gem_diag: spawn_overflow=2 proc_hwm=1024 max_procs=1024
 === keys ===
 {"42":"x"}
 {"0":"z","name":"n"}
@@ -3931,3 +3926,9 @@ xyyy x
 hello b true table
 2 1 1 1 1 1
 nil true false true
+alive 5001
+sum 24995000 true
+poked 1000 timed out 1000
+ring done
+culled 1000 normal 4000
+alive 1
