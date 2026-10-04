@@ -83,7 +83,9 @@ typedef struct {
 extern GemArena gem_global_arena;
 extern int gem_main_pid;
 
-GemArena *gem_current_arena(void);
+/* The running process's arena, or gem_global_arena outside any process.
+   Defined after GemProcess. */
+static inline GemArena *gem_current_arena(void);
 
 static inline void *gem_alloc(size_t n) {
     return gem_arena_alloc(gem_current_arena(), n);
@@ -124,9 +126,16 @@ GemBuffer *gem_buffer_alloc(int cap);
    and a buffer's len and cap are C ints, and a buffer keeps cap > len. */
 #define GEM_MAX_STRLEN (INT_MAX - 1)
 
-/* Returns n as an int, or raises "<who>: a string of N bytes is over the
-   limit of GEM_MAX_STRLEN bytes" (no prefix when who is NULL). */
-int gem_strlen_check(size_t n, const char *who);
+/* Raises "<who>: a string of N bytes is over the limit of GEM_MAX_STRLEN
+   bytes" (no prefix when who is NULL). */
+void gem_strlen_error(size_t n, const char *who);
+
+/* Returns n as an int, or raises through gem_strlen_error when n is over
+   GEM_MAX_STRLEN. */
+static inline int gem_strlen_check(size_t n, const char *who) {
+    if (__builtin_expect(n > (size_t)GEM_MAX_STRLEN, 0)) gem_strlen_error(n, who);
+    return (int)n;
+}
 
 /* Grows b in the current arena so that b->len + extra < b->cap; the old
    data block is copied, not freed. Raises through gem_strlen_check when
@@ -149,6 +158,14 @@ struct GemVal {
 };
 
 extern GemVal GEM_NIL;
+
+/* A string value over `n` bytes of static storage `s` (a C string literal,
+   NUL at s[n]), with no allocation. The runtime never writes a string's
+   bytes in place and frees only strings it copied itself; region resets
+   leave strings outside the region where they are, and copies to another
+   process duplicate them. */
+#define GEM_STR_LIT(s, n) \
+    ((GemVal){ .type = VAL_STRING, .magic = GEM_MAGIC, .sval = (char *)(s), .slen = (n) })
 
 /* ─── Call stack for stack traces ─── */
 
@@ -246,8 +263,8 @@ static inline void gem_set_line(int line) {
 
 /* ─── Constructors ─── */
 
-GemVal gem_int(int64_t v);
-GemVal gem_float(double v);
+static inline GemVal gem_int(int64_t v) { return (GemVal){ .type = VAL_INT, .magic = GEM_MAGIC, .ival = v }; }
+static inline GemVal gem_float(double v) { return (GemVal){ .type = VAL_FLOAT, .magic = GEM_MAGIC, .fval = v }; }
 /* Float -> text: the shortest digits that read back (strtod) to the same
  * double, with a decimal point on integral values ("2.0", "-0.0") and
  * exponent form outside 1e-4 <= |v| < 1e16 ("1e+16", "1.5e-07"); "inf",
@@ -255,7 +272,7 @@ GemVal gem_float(double v);
  * of at most GEM_FLOAT_BUF - 1 bytes to `out` and returns its length. */
 #define GEM_FLOAT_BUF 40
 int gem_format_float(double v, char *out);
-GemVal gem_bool(int v);
+static inline GemVal gem_bool(int v) { return (GemVal){ .type = VAL_BOOL, .magic = GEM_MAGIC, .bval = v }; }
 GemVal gem_string(const char *s);
 GemVal gem_string_with_len(const char *s, int64_t len);  /* binary-safe; copies len bytes and appends a trailing '\0'; raises past GEM_MAX_STRLEN */
 GemVal gem_make_fn(GemFnPtr f, void *env);
@@ -399,7 +416,21 @@ typedef struct {
 
 /* ─── Comparison / equality ─── */
 
-int gem_val_eq(GemVal a, GemVal b);
+static inline int gem_val_eq(GemVal a, GemVal b) {
+    if (a.type != b.type) return 0;
+    switch (a.type) {
+        case VAL_NIL: return 1;
+        case VAL_BOOL: return a.bval == b.bval;
+        case VAL_INT: return a.ival == b.ival;
+        case VAL_FLOAT: return a.fval == b.fval;
+        case VAL_STRING: return a.slen == b.slen && memcmp(a.sval, b.sval, (size_t)a.slen) == 0;
+        case VAL_REF: return a.rval == b.rval;
+        case VAL_TABLE: return a.table == b.table;
+        case VAL_BUFFER: return a.buffer == b.buffer;
+        case VAL_FN: return a.fn == b.fn && a.env == b.env;
+        default: return 0;
+    }
+}
 /* The identity of a table as an int (0 for any other value), for code that
    must index tables by identity in O(1): tables as table keys are found by
    a linear scan. std/test reaches it through `extern fn` to memoize the
@@ -415,23 +446,58 @@ int64_t gem_table_id(GemVal v);
    instead of a Gem loop over `ord`; the tables of the last few byte sets
    are cached. */
 int64_t gem_bytes_span(const uint8_t *s, int64_t n, const uint8_t *accept, int64_t accept_n);
-int gem_truthy(GemVal v);
+static inline int gem_truthy(GemVal v) {
+    if (v.type == VAL_NIL) return 0;
+    if (v.type == VAL_BOOL) return v.bval;
+    return 1;
+}
 
-/* ─── Arithmetic / operators ─── */
+/* ─── Arithmetic / operators ───
+ *
+ * The int (and for + float) cases are inline; gem_<op>_slow in gem_ops.c
+ * handles every operand type, raising the type errors. Int + - * wrap on
+ * overflow (two's complement): computed in uint64_t, since signed overflow
+ * is undefined behaviour in C. */
 
-GemVal gem_add(GemVal a, GemVal b);
-GemVal gem_sub(GemVal a, GemVal b);
-GemVal gem_mul(GemVal a, GemVal b);
+GemVal gem_add_slow(GemVal a, GemVal b);
+GemVal gem_sub_slow(GemVal a, GemVal b);
+GemVal gem_mul_slow(GemVal a, GemVal b);
+GemVal gem_lt_slow(GemVal a, GemVal b);
+
+static inline GemVal gem_add(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int((int64_t)((uint64_t)a.ival + (uint64_t)b.ival));
+    if (a.type == VAL_FLOAT && b.type == VAL_FLOAT) return gem_float(a.fval + b.fval);
+    return gem_add_slow(a, b);
+}
+
+static inline GemVal gem_sub(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int((int64_t)((uint64_t)a.ival - (uint64_t)b.ival));
+    return gem_sub_slow(a, b);
+}
+
+static inline GemVal gem_mul(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int((int64_t)((uint64_t)a.ival * (uint64_t)b.ival));
+    return gem_mul_slow(a, b);
+}
+
 GemVal gem_div(GemVal a, GemVal b);
 GemVal gem_mod(GemVal a, GemVal b);
-GemVal gem_eq(GemVal a, GemVal b);
-GemVal gem_neq(GemVal a, GemVal b);
-GemVal gem_lt(GemVal a, GemVal b);
-GemVal gem_gt(GemVal a, GemVal b);
-GemVal gem_le(GemVal a, GemVal b);
-GemVal gem_ge(GemVal a, GemVal b);
+
+static inline GemVal gem_eq(GemVal a, GemVal b) { return gem_bool(gem_val_eq(a, b)); }
+static inline GemVal gem_neq(GemVal a, GemVal b) { return gem_bool(!gem_val_eq(a, b)); }
+
+static inline GemVal gem_lt(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_bool(a.ival < b.ival);
+    return gem_lt_slow(a, b);
+}
+static inline GemVal gem_gt(GemVal a, GemVal b) { return gem_lt(b, a); }
+/* a <= b is not (b < a), and a >= b is not (a < b): with a NaN operand
+   both are true. */
+static inline GemVal gem_le(GemVal a, GemVal b) { return gem_bool(!gem_lt(b, a).bval); }
+static inline GemVal gem_ge(GemVal a, GemVal b) { return gem_bool(!gem_lt(a, b).bval); }
+
 GemVal gem_neg(GemVal a);
-GemVal gem_not(GemVal a);
+static inline GemVal gem_not(GemVal a) { return gem_bool(!gem_truthy(a)); }
 /* `s = s + rhs` in a loop that only appends to s (compile_while in
    compiler/codegen.gem); *built is that loop's flag, 0 before the loop. The
    first append to a string copies it into a fresh buffer and sets *built;
@@ -983,14 +1049,16 @@ static inline GemVal gem_table_get_cached(GemVal tbl, const char *key, GemICache
     return gem_table_get_ic_miss(t, key, cache);
 }
 
-/* ─── Region marks: hot-path helpers (emitted at every loop entry/back-edge) ─── */
+/* ─── Current arena (every allocation) ─── */
 
-static inline GemArena *gem_arena_of_current(void) {
+static inline GemArena *gem_current_arena(void) {
     return gem_current_pid >= 0 ? &gem_proc_table[gem_current_pid].arena : &gem_global_arena;
 }
 
+/* ─── Region marks: hot-path helpers (emitted at every loop entry/back-edge) ─── */
+
 static inline void gem_arena_mark(GemArenaMark *m) {
-    GemArena *a = gem_arena_of_current();
+    GemArena *a = gem_current_arena();
     m->block = a->current;
     m->used = a->current->used;
     m->tables = a->table_list;

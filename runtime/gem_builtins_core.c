@@ -260,35 +260,36 @@ GemVal gem_len_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_type_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 1) return gem_string("nil");
+    if (argc < 1) return GEM_STR_LIT("nil", 3);
     switch (args[0].type) {
-        case VAL_NIL: return gem_string("nil");
-        case VAL_BOOL: return gem_string("bool");
-        case VAL_INT: return gem_string("int");
-        case VAL_FLOAT: return gem_string("float");
-        case VAL_STRING: return gem_string("string");
-        case VAL_FN: return gem_string("fn");
-        case VAL_TABLE: return gem_string("table");
-        case VAL_BUFFER: return gem_string("buffer");
-        case VAL_REF: return gem_string("ref");
+        case VAL_NIL: return GEM_STR_LIT("nil", 3);
+        case VAL_BOOL: return GEM_STR_LIT("bool", 4);
+        case VAL_INT: return GEM_STR_LIT("int", 3);
+        case VAL_FLOAT: return GEM_STR_LIT("float", 5);
+        case VAL_STRING: return GEM_STR_LIT("string", 6);
+        case VAL_FN: return GEM_STR_LIT("fn", 2);
+        case VAL_TABLE: return GEM_STR_LIT("table", 5);
+        case VAL_BUFFER: return GEM_STR_LIT("buffer", 6);
+        case VAL_REF: return GEM_STR_LIT("ref", 3);
+        case VAL_LAZY: break;
     }
-    return gem_string("unknown");
+    return GEM_STR_LIT("unknown", 7);
 }
 
 /* ─── Built-in: to_string ─── */
 
 GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 1) return gem_string("");
+    if (argc < 1) return GEM_STR_LIT("", 0);
     GemVal v = args[0];
     char buf[64];
     switch (v.type) {
-        case VAL_NIL: return gem_string("nil");
-        case VAL_BOOL: return gem_string(v.bval ? "true" : "false");
+        case VAL_NIL: return GEM_STR_LIT("nil", 3);
+        case VAL_BOOL: return v.bval ? GEM_STR_LIT("true", 4) : GEM_STR_LIT("false", 5);
         case VAL_INT: snprintf(buf, sizeof(buf), "%lld", (long long)v.ival); return gem_string(buf);
         case VAL_FLOAT: gem_format_float(v.fval, buf); return gem_string(buf);
         case VAL_STRING: return v;
-        case VAL_FN: return gem_string("<fn>");
+        case VAL_FN: return GEM_STR_LIT("<fn>", 4);
         case VAL_TABLE: return gem_format_value_string(v);
         case VAL_BUFFER: {
             GemBuffer *b = v.buffer;
@@ -299,8 +300,9 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
             return r;
         }
         case VAL_REF: snprintf(buf, sizeof(buf), "#Ref<%lld>", (long long)v.rval); return gem_string(buf);
+        case VAL_LAZY: break;
     }
-    return gem_string("");
+    return GEM_STR_LIT("", 0);
 }
 
 /* ─── Built-in: to_int / to_float ─── */

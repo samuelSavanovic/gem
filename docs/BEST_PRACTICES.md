@@ -342,8 +342,8 @@ For searching, call `find(s, needle, start)` (or `string.index_of`,
 runs in C, so a needle 1 MB in is found in well under 1 ms, against
 about 25 ms for the simplest `ord` loop, and `split` cuts 100,000
 ten-byte fields in about 6 ms. On short strings the call dominates: on a
-120-byte line, a million `find` calls took 33 ms, a million
-`string.index_of` calls 174 ms.
+115-byte line, a million `find` calls took 14 ms, a million
+`string.index_of` calls 53 ms (macOS arm64).
 
 ### Use `for`, not `table.each`, when you need `return` or `break`
 

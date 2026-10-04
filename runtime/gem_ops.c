@@ -4,7 +4,7 @@
 
 #include "gem.h"
 
-GemVal gem_add(GemVal a, GemVal b) {
+GemVal gem_add_slow(GemVal a, GemVal b) {
     /* Int + - * and unary - wrap on overflow (two's complement): computed in
        uint64_t, since signed overflow is undefined behaviour in C. */
     if (a.type == VAL_INT && b.type == VAL_INT) return gem_int((int64_t)((uint64_t)a.ival + (uint64_t)b.ival));
@@ -23,7 +23,7 @@ GemVal gem_add(GemVal a, GemVal b) {
     { char buf[128]; snprintf(buf, sizeof(buf), "type error in +: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
 
-GemVal gem_sub(GemVal a, GemVal b) {
+GemVal gem_sub_slow(GemVal a, GemVal b) {
     if (a.type == VAL_INT && b.type == VAL_INT) return gem_int((int64_t)((uint64_t)a.ival - (uint64_t)b.ival));
     if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
         double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
@@ -33,7 +33,7 @@ GemVal gem_sub(GemVal a, GemVal b) {
     { char buf[128]; snprintf(buf, sizeof(buf), "type error in -: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
 
-GemVal gem_mul(GemVal a, GemVal b) {
+GemVal gem_mul_slow(GemVal a, GemVal b) {
     if (a.type == VAL_INT && b.type == VAL_INT) return gem_int((int64_t)((uint64_t)a.ival * (uint64_t)b.ival));
     if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
         double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
@@ -68,15 +68,7 @@ GemVal gem_mod(GemVal a, GemVal b) {
     { char buf[128]; snprintf(buf, sizeof(buf), "type error in %%: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
 
-GemVal gem_eq(GemVal a, GemVal b) {
-    return gem_bool(gem_val_eq(a, b));
-}
-
-GemVal gem_neq(GemVal a, GemVal b) {
-    return gem_bool(!gem_truthy(gem_eq(a, b)));
-}
-
-GemVal gem_lt(GemVal a, GemVal b) {
+GemVal gem_lt_slow(GemVal a, GemVal b) {
     if (a.type == VAL_INT && b.type == VAL_INT) return gem_bool(a.ival < b.ival);
     if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
         double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
@@ -92,10 +84,6 @@ GemVal gem_lt(GemVal a, GemVal b) {
     }
     { char buf[128]; snprintf(buf, sizeof(buf), "type error in <: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
-
-GemVal gem_gt(GemVal a, GemVal b) { return gem_lt(b, a); }
-GemVal gem_le(GemVal a, GemVal b) { return gem_bool(!gem_truthy(gem_gt(a, b))); }
-GemVal gem_ge(GemVal a, GemVal b) { return gem_bool(!gem_truthy(gem_lt(a, b))); }
 
 GemVal gem_neg(GemVal a) {
     if (a.type == VAL_INT) return gem_int((int64_t)(0 - (uint64_t)a.ival));
@@ -135,6 +123,3 @@ GemVal gem_string_finish(GemVal val) {
     return val;
 }
 
-GemVal gem_not(GemVal a) {
-    return gem_bool(!gem_truthy(a));
-}
