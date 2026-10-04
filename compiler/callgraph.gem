@@ -1,0 +1,422 @@
+# Call graph over the post-lower program, built once per compile by
+# codegen's mark_process_tail: per caller (each fn_def `fn:<name>`, each
+# closure body, each spawn body, and the top-level program `<top>`), its
+# tail and non-tail callees and the writes it makes. Consumers: mutual-TCO
+# SCC detection (find_tail_call_sccs in tco.gem, tail edges) and the
+# module-state note (note_spawn_global_writes in codegen.gem).
+
+load "./cgutil" (set_add, set_contains, is_node)
+
+let spawn_callees = {}
+set_add(spawn_callees, "spawn")
+set_add(spawn_callees, "spawn_link")
+set_add(spawn_callees, "spawn_monitor")
+
+let mutating_builtins = {}
+for mb_name in ["push", "pop", "insert", "delete", "remove_at", "sort"]
+  set_add(mutating_builtins, mb_name)
+end
+
+# Returns {caller_records, anon_parent, anon_nodes, name_to_fn}:
+#   caller_records[cid] -> the caller's record (tail_callees, ...; see
+#                          new_caller_record)
+#   anon_parent[aid]    -> cid of the caller a closure is created in
+#   anon_nodes[aid]     -> {fn: anon_fn node, spawn: the spawn call or nil,
+#                          spawn_via: the spawn builtin's name}
+#   name_to_fn[name]    -> fn_def node
+fn build_call_graph(fn_defs, top_stmts)
+  let caller_records = {}
+  let name_to_fn = {}
+  for fd in fn_defs
+    name_to_fn[fd.name] = fd
+  end
+
+  # Module loads desugar at the top level into either:
+  #   (a) selective: `let foo = _mod_mod_foo` (one let per imported name).
+  #   (b) whole-module: `let mod = {fn_a: _mod_mod_fn_a, fn_b: …}`
+  #       (frozen table, one entry per export).
+  # Calls in the importing module then use `foo(…)` or `mod.fn_a(…)`,
+  # neither of which lex as a direct call to `_mod_…_…`. Without
+  # resolution those edges are dropped from the call graph and
+  # `mark_process_tail` can't reason about them. Build two maps:
+  #   alias_to_fn[name]            → fn_def name (case a)
+  #   module_dot_to_fn[mod][field] → fn_def name (case b)
+  let alias_to_fn = {}
+  let module_dot_to_fn = {}
+  for s in top_stmts
+    if is_node(s, "let") and s.value != nil
+      if is_node(s.value, "var")
+        if name_to_fn[s.value.name] != nil
+          alias_to_fn[s.name] = s.value.name
+        end
+      elif is_node(s.value, "table") and s.value.entries != nil
+        let mod_map = {}
+        let any = false
+        for e in s.value.entries
+          if e.value != nil and is_node(e.value, "var") and name_to_fn[e.value.name] != nil
+            # Entry key may be either a raw string (when synthesized by
+            # main.gem's `make_table_entry`) or a string AST node (when
+            # parsed from user source).
+            let key_str = nil
+            if type(e.key) == "string"
+              key_str = e.key
+            elif e.key != nil and is_node(e.key, "string")
+              key_str = e.key.value
+            end
+            if key_str != nil
+              mod_map[key_str] = e.value.name
+              any = true
+            end
+          end
+        end
+        if any
+          module_dot_to_fn[s.name] = mod_map
+        end
+      end
+    end
+  end
+
+  # Resolve a call-target var name to its fn_def name (or nil if not a
+  # known fn). Handles direct fn-name calls and selective-load aliases.
+  let resolve_callee = fn(name)
+    if name_to_fn[name] != nil
+      return name
+    end
+    let aliased = alias_to_fn[name]
+    if aliased != nil
+      return aliased
+    end
+    nil
+  end
+
+  # Resolve a `mod.field`-style callee (whole-module loads) to its
+  # fn_def name, or nil if not a known module export.
+  let resolve_dot_callee = fn(mod_name, field_name)
+    let m = module_dot_to_fn[mod_name]
+    if m == nil
+      return nil
+    end
+    let f = m[field_name]
+    if f == nil
+      return nil
+    end
+    f
+  end
+
+  let anon_id_counter = 0
+  let next_anon_id = fn()
+    let id = "anon:" + to_string(anon_id_counter)
+    anon_id_counter += 1
+    id
+  end
+
+  let new_caller_record = fn(caller_id, is_seed)
+    caller_records[caller_id] = {tail_callees: {}, non_tail_callees: {}, is_seed: is_seed, writes: []}
+  end
+
+  # Sites that write a variable binding (`x = ...`) or mutate the value a
+  # variable holds (`x.f = ...`, `x[k] = ...`, `push(x, ...)`, ...), for
+  # the module-state note (note_spawn_global_writes).
+  # `via`: the builtin a `push(x, ...)`-style write calls, which a param
+  # or local of the same name shadows (checked by the note).
+  let record_write = fn(caller_id, name, node, via = nil)
+    push(caller_records[caller_id].writes, {name: name, node: node, via: via})
+  end
+
+  # Lexical parent of each anon caller cid (i.e. the caller_id that
+  # contained the `anon_fn` expression at AST construction time). Lets
+  # the upward outer-reset BFS hop from a closure body to the fn that
+  # built it — without this, all closure-mediated call chains terminate
+  # at the anon and lose the connection to any PT context above.
+  let anon_parent = {}
+  let anon_nodes = {}
+
+  # A `return` with a trivial constant (or no value) exits the enclosing
+  # function without reading any locals. A call immediately followed by such
+  # a return is therefore tail-effective: even though textually non-last,
+  # the C frame holds no live state at the point the call's reset would fire.
+  # This recognizes the common early-exit pattern `f(); return nil`.
+  let is_trivial_return = fn(s)
+    if not is_node(s, "return")
+      return false
+    end
+    if s.value == nil
+      return true
+    end
+    if is_node(s.value, "nil")
+      return true
+    end
+    if is_node(s.value, "int")
+      return true
+    end
+    if is_node(s.value, "float")
+      return true
+    end
+    if is_node(s.value, "bool")
+      return true
+    end
+    if is_node(s.value, "string")
+      return true
+    end
+    false
+  end
+
+  let collect_calls = nil
+  let collect_calls_in_body = nil
+
+  collect_calls = fn(node, is_tail_pos, caller_id)
+    if node == nil
+      return nil
+    end
+    if type(node) != "table"
+      return nil
+    end
+    if node.tag == nil
+      return nil
+    end
+
+    if node.tag == "call"
+      # Spawn-family with anon_fn arg[0]: that anon body is a fresh process root.
+      if is_node(node.func, "var") and set_contains(spawn_callees, node.func.name)
+        if node.args != nil and len(node.args) > 0 and is_node(node.args[0], "anon_fn")
+          let aid = next_anon_id()
+          new_caller_record(aid, true)
+          anon_parent[aid] = caller_id
+          # The callee may be a param or local named `spawn`, ...;
+          # note_spawn_global_writes checks it against the caller's
+          # locals before treating the body as a process.
+          anon_nodes[aid] = {fn: node.args[0], spawn: node, spawn_via: node.func.name}
+          collect_calls_in_body(node.args[0].body, true, aid)
+          if node.args[0].defaults != nil
+            for d in node.args[0].defaults
+              if d != nil
+                collect_calls(d, false, aid)
+              end
+            end
+          end
+          let i = 1
+          while i < len(node.args)
+            collect_calls(node.args[i], false, caller_id)
+            i += 1
+          end
+          return nil
+        end
+      end
+
+      if is_node(node.func, "var") and set_contains(mutating_builtins, node.func.name) and node.args != nil and len(node.args) > 0 and is_node(node.args[0], "var")
+        record_write(caller_id, node.args[0].name, node, node.func.name)
+      end
+
+      # Regular call. Record edge if callee resolves to a known fn_def
+      # name (directly, via a selective-load alias, or via a
+      # whole-module dot access like `mod.fn(...)`).
+      let resolved_callee = nil
+      if is_node(node.func, "var")
+        resolved_callee = resolve_callee(node.func.name)
+      elif is_node(node.func, "dot") and node.func.object != nil and is_node(node.func.object, "var")
+        resolved_callee = resolve_dot_callee(node.func.object.name, node.func.field)
+      end
+      if resolved_callee != nil
+        if is_tail_pos
+          set_add(caller_records[caller_id].tail_callees, resolved_callee)
+        else
+          set_add(caller_records[caller_id].non_tail_callees, resolved_callee)
+        end
+      else
+        collect_calls(node.func, false, caller_id)
+      end
+      if node.args != nil
+        for a in node.args
+          collect_calls(a, false, caller_id)
+        end
+      end
+      return nil
+    end
+
+    if node.tag == "anon_fn"
+      # Closure outside any spawn context — its body is a non-seed caller.
+      # Calls from it can never be tail-from-process_tail, so callees of this
+      # body get demoted (correct: the closure's invocation site holds C state).
+      let aid = next_anon_id()
+      new_caller_record(aid, false)
+      anon_parent[aid] = caller_id
+      anon_nodes[aid] = {fn: node, spawn: nil}
+      collect_calls_in_body(node.body, true, aid)
+      if node.defaults != nil
+        for d in node.defaults
+          if d != nil
+            collect_calls(d, false, aid)
+          end
+        end
+      end
+      return nil
+    end
+
+    if node.tag == "if"
+      collect_calls(node.cond, false, caller_id)
+      collect_calls_in_body(node.then, is_tail_pos, caller_id)
+      if node.else != nil
+        collect_calls_in_body(node.else, is_tail_pos, caller_id)
+      end
+      return nil
+    end
+
+    if node.tag == "while"
+      collect_calls(node.cond, false, caller_id)
+      collect_calls_in_body(node.body, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "match"
+      collect_calls(node.target, false, caller_id)
+      for w in node.whens
+        collect_calls_in_body(w.body, is_tail_pos, caller_id)
+      end
+      if node.else != nil
+        collect_calls_in_body(node.else, is_tail_pos, caller_id)
+      end
+      return nil
+    end
+
+    if node.tag == "receive_match"
+      for arm in node.arms
+        collect_calls_in_body(arm.body, is_tail_pos, caller_id)
+      end
+      if node.after_body != nil
+        collect_calls_in_body(node.after_body, is_tail_pos, caller_id)
+      end
+      return nil
+    end
+
+    if node.tag == "return"
+      if node.value != nil
+        collect_calls(node.value, true, caller_id)
+      end
+      return nil
+    end
+
+    if node.tag == "block"
+      collect_calls_in_body(node.stmts, is_tail_pos, caller_id)
+      return nil
+    end
+
+    if node.tag == "let" or node.tag == "assign"
+      if node.tag == "assign"
+        record_write(caller_id, node.name, node)
+      end
+      if node.value != nil
+        collect_calls(node.value, false, caller_id)
+      end
+      return nil
+    end
+
+    if node.tag == "dot_assign"
+      if is_node(node.object, "var")
+        record_write(caller_id, node.object.name, node)
+      end
+      collect_calls(node.object, false, caller_id)
+      collect_calls(node.value, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "index_assign"
+      if is_node(node.object, "var")
+        record_write(caller_id, node.object.name, node)
+      end
+      collect_calls(node.object, false, caller_id)
+      collect_calls(node.key, false, caller_id)
+      collect_calls(node.value, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "binop"
+      collect_calls(node.left, false, caller_id)
+      collect_calls(node.right, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "unop"
+      collect_calls(node.expr, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "dot"
+      collect_calls(node.object, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "index"
+      collect_calls(node.object, false, caller_id)
+      collect_calls(node.key, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "table"
+      if node.entries != nil
+        for e in node.entries
+          collect_calls(e.key, false, caller_id)
+          collect_calls(e.value, false, caller_id)
+        end
+      end
+      return nil
+    end
+
+    if node.tag == "array"
+      if node.elements != nil
+        for el in node.elements
+          collect_calls(el, false, caller_id)
+        end
+      end
+      return nil
+    end
+
+    if node.tag == "interp"
+      if node.parts != nil
+        for p in node.parts
+          collect_calls(p, false, caller_id)
+        end
+      end
+      return nil
+    end
+
+    # Leaf nodes: int float string bool nil var break continue load export
+    # extern_fn extern_include — no nested calls.
+    nil
+  end
+
+  collect_calls_in_body = fn(stmts, is_tail_pos, caller_id)
+    let n = len(stmts)
+    let i = 0
+    while i < n
+      let stmt_is_tail = false
+      if i == n - 1
+        stmt_is_tail = is_tail_pos
+      elif i + 1 < n and is_trivial_return(stmts[i + 1])
+        stmt_is_tail = true
+      end
+      collect_calls(stmts[i], stmt_is_tail, caller_id)
+      i += 1
+    end
+  end
+
+  # Walk every fn_def body
+  for fd in fn_defs
+    let cid = "fn:" + fd.name
+    new_caller_record(cid, false)
+    collect_calls_in_body(fd.body, true, cid)
+    if fd.defaults != nil
+      for d in fd.defaults
+        if d != nil
+          collect_calls(d, false, cid)
+        end
+      end
+    end
+  end
+
+  # Top-level program is a process root
+  new_caller_record("<top>", true)
+  collect_calls_in_body(top_stmts, true, "<top>")
+  {caller_records: caller_records, anon_parent: anon_parent, anon_nodes: anon_nodes, name_to_fn: name_to_fn}
+end
+
+export build_call_graph

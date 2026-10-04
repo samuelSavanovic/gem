@@ -1,0 +1,175 @@
+# Small helpers shared by the code generator and its analysis passes:
+# C string and number literals, indentation, name-keyed sets, and the
+# closest-name lookup behind "did you mean" hints.
+
+# ─── String helpers ─────────────────────────────────────────────
+
+fn escape_c_string(s)
+  let cr = chr(13)
+  let b = buf_new()
+  for i = 0, len(s)
+    let ch = s[i]
+    if ch == "\\"
+      buf_push(b, "\\\\")
+    elif ch == "\""
+      buf_push(b, "\\\"")
+    elif ch == "\n"
+      buf_push(b, "\\n")
+    elif ch == cr
+      buf_push(b, "\\r")
+    elif ch == "\t"
+      buf_push(b, "\\t")
+    elif ord(ch) == 0
+      # 3-digit octal so a following digit char isn't absorbed into the escape.
+      buf_push(b, "\\000")
+    else
+      buf_push(b, ch)
+    end
+  end
+  to_string(b)
+end
+
+fn repeat_str(s, n)
+  let b = buf_new()
+  for i = 0, n
+    buf_push(b, s)
+  end
+  to_string(b)
+end
+
+fn pad_for(indent)
+  repeat_str("    ", indent)
+end
+
+# An int as a C constant. INT64_MIN has no literal of its own in C
+# (`-9223372036854775808` negates an out-of-range constant), so spell it.
+fn c_int_literal(n)
+  if n == 0 - 9223372036854775807 - 1 then return "INT64_MIN" end
+  to_string(n)
+end
+
+fn format_float(val)
+  # to_string gives the shortest text that reads back to the same double
+  # ("0.1", "2.0", "1e-05", "1e+16"), which is also a valid C double literal,
+  # except for the non-finite values (constant folding can produce inf).
+  let s = to_string(val)
+  if s == "inf"
+    return "__builtin_inf()"
+  elif s == "-inf"
+    return "(-__builtin_inf())"
+  elif s == "nan"
+    return "__builtin_nan(\"\")"
+  end
+  let has_dot = false
+  for i = 0, len(s)
+    if s[i] == "." or s[i] == "e"
+      has_dot = true
+    end
+  end
+  if not has_dot
+    s = s + ".0"
+  end
+  s
+end
+
+# ─── Array/set helpers ────────────────────────────────────────────
+
+fn set_add(s, val)
+  if s[val] != true
+    s[val] = true
+  end
+end
+
+fn set_contains(s, val)
+  s[val] == true
+end
+
+fn set_union(a, b)
+  let result = {}
+  for k, _ in a
+    result[k] = true
+  end
+  for k, _ in b
+    result[k] = true
+  end
+  result
+end
+
+fn set_intersect(a, b)
+  let result = {}
+  for k, _ in a
+    if b[k] == true
+      result[k] = true
+    end
+  end
+  result
+end
+
+fn sorted_array_to_set(arr)
+  let s = {}
+  for item in arr
+    s[item] = true
+  end
+  s
+end
+
+fn levenshtein(a, b)
+  let alen = len(a)
+  let blen = len(b)
+  if alen == 0 then return blen end
+  if blen == 0 then return alen end
+  let prev = []
+  let i = 0
+  while i <= blen
+    prev[i] = i
+    i += 1
+  end
+  let curr = []
+  i = 1
+  while i <= alen
+    curr[0] = i
+    let j = 1
+    while j <= blen
+      let cost = 1
+      if ord(a, i - 1) == ord(b, j - 1) then cost = 0 end
+      let del = prev[j] + 1
+      let ins = curr[j - 1] + 1
+      let sub = prev[j - 1] + cost
+      let m = del
+      if ins < m then m = ins end
+      if sub < m then m = sub end
+      curr[j] = m
+      j += 1
+    end
+    let tmp = prev
+    prev = curr
+    curr = tmp
+    i += 1
+  end
+  prev[blen]
+end
+
+fn find_closest_export(field, exports)
+  let best = nil
+  let best_d = 999
+  for ename in exports
+    let d = levenshtein(field, ename)
+    if d < best_d
+      best_d = d
+      best = ename
+    end
+  end
+  let flen = len(field)
+  let threshold = 2
+  if flen <= 4 then threshold = 1 end
+  if best_d <= threshold
+    return best
+  end
+  nil
+end
+
+fn is_node(node, tag)
+  type(node) == "table" and node.tag == tag
+end
+
+export escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node
