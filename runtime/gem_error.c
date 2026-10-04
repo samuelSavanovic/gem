@@ -228,7 +228,7 @@ static void gem_pcall_longjmp(GemPcallFrame *frame, const char *msg) {
 
 void gem_raise_error(const char *msg) {
     /* If inside a process, use per-process pcall stack */
-    if (gem_current_pid >= 0 && gem_current_pid < GEM_MAX_PROCS) {
+    if (gem_current_pid >= 0 && gem_current_pid < gem_proc_hwm) {
         GemProcess *proc = &gem_proc_table[gem_current_pid];
         if (proc->state != GEM_PROC_FREE && proc->state != GEM_PROC_DEAD) {
             if (proc->pcall_depth > 0) {

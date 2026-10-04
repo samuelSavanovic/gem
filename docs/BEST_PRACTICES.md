@@ -836,6 +836,35 @@ still costs time: a child reading a module-level array of 200,000 small
 records spent a few hundred milliseconds copying it. Keep large data in a
 process that answers queries, or pass a child only what it needs.
 
+### Don't grow a module-level table while spawning **(trap)**
+
+Each `spawn` hands the child a copy of every module-level variable that
+changed since the previous spawn, whether the child reads it or not (made
+at the spawn, kept until the child exits). Top-level code that collects pids in a module-level
+array therefore copies the whole array for every child: 3,000 spawns take
+290 ms, 10,000 take 11 s and 2.6 GB on Linux x86_64 (0.41 s, and 1.6 s
+and 3.3 GB, on macOS arm64). Keep the table in a local of a function
+(`fn main` runs automatically), and the same 10,000 spawns take 0.2 s
+(0.39 s on macOS arm64).
+
+```gem
+fn main()
+  let pids = []                      # Prefer: a local
+  for i = 0, 10000
+    push(pids, spawn(fn() receive() end))
+  end
+  for p in pids
+    kill(p, "kill")
+  end
+end
+
+# Over, at the top level:
+#   let pids = []
+#   for i = 0, 10000
+#     push(pids, spawn(fn() receive() end))   # copies pids into each child
+#   end
+```
+
 ### A process loop is `while` or a tail call **(trap)**
 
 Each process's memory is freed when it exits, and every loop also frees
@@ -1194,17 +1223,34 @@ A `gen_server.call` waiting when the server dies raises
 kills it is printed on stderr when it happens; to act on the reason in
 code, monitor the server, whose `DOWN` carries it.
 
-### There are at most 1024 processes
+### `spawn` can fail: catch it where load decides **(trap)**
 
-`spawn` raises `spawn: process table full` past the limit; main uses one
-slot, so 1,023 spawned processes can be alive at once. A loop that spawns
-quick tasks can still hit it: `spawn` doesn't let the children run, so
-`for i = 0, 5000` spawning a one-line task fails at the 1,024th. Batch the
-work, or cap how many are in flight (a `sleep(0)` in the loop lets
-finished children exit). `task.async` over a long list has the same limit.
-A reader/writer pair per connection uses two. An acceptor that spawns per
-connection should catch that error and close the connection, or cap the
-number of connections; otherwise one burst kills the acceptor.
+Processes are cheap (an idle one takes about 21 KB on Linux x86_64, 70 KB
+on macOS arm64), and a program can keep thousands alive (tens of
+thousands where memory mappings allow), but not an unbounded number. `spawn` raises when it can't start one:
+
+- `spawn: process table full` past the process limit: 262,144 by default,
+  lower when the environment sets `GEM_MAX_PROCS`;
+- `spawn: too many processes for the system's memory-mapping limit (...)`
+  on Linux, which comes first: at about 14,000 live processes with the
+  default `vm.max_map_count` (65,530), leaving the rest of the limit to
+  the processes already running. Raise that sysctl to go further;
+- `spawn: cannot map a stack for a new process (N processes alive)` when
+  the system refuses the memory (a `ulimit -v`).
+
+Spawning 5,000 one-line tasks in a loop is fine. What needs care is
+spawning in proportion to outside load: an acceptor that spawns per
+connection should catch the error and close the connection (std/http
+answers 503 and keeps accepting), or one burst kills the acceptor. Fan-out
+over a list of unknown length (`task.async` per item) should cap how many
+are in flight.
+
+```gem
+let r = pcall spawn(fn() handle(fd) end)
+if not r.ok
+  tcp_close(fd)        # refuse this one, keep accepting
+end
+```
 
 ### When the program ends
 
@@ -1505,6 +1551,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `let x = ...` inside a block, meant to update an outer `x` | new variable; the outer one never changes | `x = ...` without `let` |
 | Module-level variable read before its `let` runs | `nil` | module-level `let`s at the top |
 | Module-level `let` used as shared state | each process changes only its own copy | keep shared state in a process |
+| Module-level table pushed to between spawns | copied into every child: O(n²) time and memory | keep it in a local of `fn main` |
 | Module-level state written from an `http` handler | per-connection copy, no `note:` | keep state in a process |
 | A variable named `json`, `string`, `table`... | module hidden; runtime error | another name |
 | Expression continued on the next line | parse error, or a silent separate statement | named `let`s |
@@ -1544,8 +1591,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
 | A child's `start` or a gen_server's `init` waiting for an answer from its starter | deadlock error, or a wait for good or until a timeout | pass it in the spec, or `send(self(), ...)` in `init` |
 | `gen_server.call` to a server that has already died | `server exited: noproc` (by name: `no process registered`), not why it died | monitor it: the `DOWN` has the reason |
-| `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |
-| Spawning thousands of quick tasks in a loop | `process table full` | batch, or cap in-flight tasks |
+| `spawn` per connection or per item, unguarded **(trap)** | raises at the process or memory limit (~14,000 on stock Linux); the acceptor dies | catch it, or cap in-flight work |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_listen("localhost", ...)` | raises | `"127.0.0.1"` |

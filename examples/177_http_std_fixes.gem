@@ -1,6 +1,7 @@
 # std/http: default bodies, handler errors on stderr, lowercased request
-# headers, malformed requests, {pid} from start, serve waiting only for its
-# server process, and a full process table answered with 503.
+# headers, malformed requests, {pid} from start, and serve waiting only for
+# its server process. A full process table answered with 503 is in
+# tests/check_proc_limit.sh, which needs a small GEM_MAX_PROCS.
 
 load "std/http"
 load "std/string"
@@ -82,34 +83,6 @@ fn run_requests()
   print(exchange(PORT, [pair]))
 end
 
-# Fills the process table, checks the acceptor answers 503 and keeps going,
-# then frees the slots.
-fn run_table_full()
-  print("-- process table full")
-  let fillers = []
-  let full = false
-  while not full
-    let r = pcall spawn(fn()
-      receive
-      when {tag: "stop"} then nil
-      end
-    end)
-    if r.ok
-      push(fillers, r.value)
-    else
-      full = true
-    end
-  end
-  print(get("/hello"))
-  send(fillers[0], {tag: "stop"})
-  sleep(10)
-  print(get("/hello"))
-  for i = 1, len(fillers)
-    send(fillers[i], {tag: "stop"})
-  end
-  sleep(10)
-end
-
 # Runs http.serve in a process and kills its server process with `reason`.
 # The server process is the first process serve spawns, so its pid is the
 # probe's + 1.
@@ -143,7 +116,6 @@ fn main()
   print("start returns pid: {type(server.pid)}")
   print("escape: {http.html_escape("<a href='x'>&\"</a>")}")
   run_requests()
-  run_table_full()
   print("-- serve")
   run_serve("shutdown", 18178)
   run_serve("boom", 18179)

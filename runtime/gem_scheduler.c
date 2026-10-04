@@ -8,6 +8,9 @@
 #endif
 
 #define MINICORO_IMPL
+/* minicoro's debug log goes to stdout (puts), into the program's output,
+   so it is off. */
+#define MCO_LOG(s) ((void)0)
 #include "minicoro.h"
 
 #include <poll.h>
@@ -22,10 +25,11 @@
 
 /* ─── Globals ─── */
 
-GemProcess gem_proc_table[GEM_MAX_PROCS];
+GemProcess *gem_proc_table = NULL;
 int gem_current_pid = -1;
-int gem_free_head = 0;
-int gem_free_tail = GEM_MAX_PROCS - 1;
+/* Freed slots, FIFO, linked through GemProcess.pid (gem_proc_alloc_slot). */
+int gem_free_head = -1;
+int gem_free_tail = -1;
 int gem_proc_hwm = 0;
 GemNameEntry *gem_name_registry = NULL;
 GemTimer *gem_timers = NULL;
@@ -108,6 +112,7 @@ static void gem_timer_drop_for_slot(int slot) {
     gem_proc_table[slot].pending_timers = 0;
 }
 int gem_main_pid = -1;
+static int gem_proc_cap = 0;        /* slots reserved: the process limit */
 
 /* Diagnostic counters — printed on process exit via atexit handler.
    Used to disambiguate proc-table exhaustion vs other failure modes
@@ -124,13 +129,14 @@ static void gem_diag_print_on_exit(void) {
     fprintf(stderr,
             "gem_diag: spawn_overflow=%llu proc_hwm=%d max_procs=%d\n",
             (unsigned long long)gem_spawn_overflow_count,
-            gem_proc_hwm, GEM_MAX_PROCS);
+            gem_proc_hwm, gem_proc_cap);
     fflush(stderr);
 }
 
-/* Pre-allocated poll scratch arrays (avoid malloc/free per scheduler idle) */
-static struct pollfd gem_poll_fds[GEM_MAX_PROCS];
-static int gem_poll_pids[GEM_MAX_PROCS];
+/* Poll scratch arrays, grown with the fd waiter list (one entry per fd
+   waiter plus the thread pool's wake pipe). */
+static struct pollfd *gem_poll_fds = NULL;
+static int *gem_poll_pids = NULL;
 
 /* revents that make an fd waiter ready. POLLNVAL counts: an fd closed
    without tcp_close (which wakes its waiters itself, gem_io_fd_closed), e.g.
@@ -175,6 +181,7 @@ static int gem_poll_pids[GEM_MAX_PROCS];
  */
 
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <pthread.h>
 #include <signal.h>
 #include <unistd.h>
@@ -211,11 +218,12 @@ static size_t gem_round_up(size_t n, size_t to) {
    short-lived process. A cached stack keeps its guard; everything below its
    top GEM_STACK_KEEP_BYTES is handed back to the OS on release, so a cached
    stack holds at most a few pages however deep its last owner went. The
-   cache can never hold more stacks than were alive at once, and each is
-   trimmed on release, so sizing it to the process table costs address
-   space, not memory. */
+   cache can never hold more stacks than were alive at once. It is capped
+   so that a burst of many thousands of processes doesn't leave their
+   stacks, a few pages and three mappings each, cached for good; past the
+   cap, churn maps and unmaps a stack per spawn. */
 #ifndef GEM_STACK_CACHE_MAX
-#define GEM_STACK_CACHE_MAX GEM_MAX_PROCS
+#define GEM_STACK_CACHE_MAX 1024
 #endif
 #define GEM_STACK_KEEP_BYTES (16 * 1024)
 /* How far below the kept region to look for touched pages before trimming. */
@@ -242,6 +250,7 @@ static void *gem_coro_stack_alloc(size_t size, void *udata) {
         munmap(p, len);
         return NULL;
     }
+    gem_runtime_maps += 3;   /* header, guard, stack */
     return p;
 }
 
@@ -290,6 +299,7 @@ static void gem_coro_stack_free(void *ptr, size_t size, void *udata) {
         return;
     }
     munmap(ptr, len);
+    gem_runtime_maps -= 3;
 }
 
 static void gem_coro_entry(mco_coro *co);
@@ -446,13 +456,432 @@ static void gem_install_overflow_handler(void) {
     sigaction(SIGBUS, &sa, NULL);
 }
 
-void gem_scheduler_init(void) {
-    for (int i = 0; i < GEM_MAX_PROCS - 1; i++) {
-        gem_proc_table[i].pid = i + 1;
+/* ─── Process table ───
+ *
+ * gem_proc_table is one reservation of address space for GEM_MAX_PROCS
+ * slots, mapped PROT_NONE so it costs neither memory nor commit charge.
+ * Slots are made accessible in chunks as the high-water mark gem_proc_hwm
+ * grows, and the table never moves, so a GemProcess * taken before a spawn
+ * stays valid after it. The GEM_MAX_PROCS environment variable can lower
+ * the limit (gem_proc_limit), and so does an address-space limit
+ * (ulimit -v): the table takes at most 1/16 of it. If the address space
+ * still can't be reserved, the reservation halves until it fits.
+ *
+ * A new slot comes from the high-water mark until it reaches
+ * GEM_PROC_REUSE_MIN, then from the freed slots (FIFO), then from the
+ * high-water mark again. So a program that never has more than
+ * GEM_PROC_REUSE_MIN processes alive gets the slots a fixed table of
+ * GEM_PROC_REUSE_MIN slots with a FIFO free list would give it, and the
+ * table only grows as far as the larger of GEM_PROC_REUSE_MIN and the most
+ * processes alive at once.
+ */
+
+#ifndef GEM_PROC_REUSE_MIN
+#define GEM_PROC_REUSE_MIN 1024
+#endif
+/* Slots made accessible at a time. */
+#define GEM_PROC_COMMIT_SLOTS 64
+
+static int gem_procs_alive = 0;     /* slots handed out and not yet freed */
+static int gem_proc_committed = 0;  /* slots accessible (a prefix of the table) */
+static size_t gem_proc_committed_bytes = 0;
+
+/* gem_propagate_exit's worklist: each slot at most once, so one entry per
+   accessible slot. */
+static int *gem_exit_worklist = NULL;
+static const char **gem_exit_reasons = NULL;
+
+/* The process limit: GEM_MAX_PROCS, or the GEM_MAX_PROCS environment
+   variable when it is set: digits only, at least 2 (main and one more);
+   a larger number than GEM_MAX_PROCS means GEM_MAX_PROCS. */
+static int gem_proc_limit(void) {
+    const char *env = getenv("GEM_MAX_PROCS");
+    if (!env) return GEM_MAX_PROCS;
+    long n = 0;
+    int ok = *env != '\0';
+    for (const char *c = env; *c && ok; c++) {
+        if (*c < '0' || *c > '9') ok = 0;
+        else if (n <= GEM_MAX_PROCS) n = n * 10 + (*c - '0');
     }
-    gem_proc_table[GEM_MAX_PROCS - 1].pid = -1;
-    gem_free_head = 0;
-    gem_free_tail = GEM_MAX_PROCS - 1;
+    if (!ok || n < 2) {
+        fprintf(stderr, "gem: GEM_MAX_PROCS must be a number of processes (at least 2), got '%s'\n", env);
+        exit(1);
+    }
+    return n < GEM_MAX_PROCS ? (int)n : GEM_MAX_PROCS;
+}
+
+static void gem_proc_table_reserve(void) {
+    size_t page = (size_t)sysconf(_SC_PAGESIZE);
+    int flags = MAP_PRIVATE | MAP_ANON;
+#ifdef MAP_NORESERVE
+    flags |= MAP_NORESERVE;
+#endif
+    int limit = gem_proc_limit();
+    /* Under an address-space limit (ulimit -v), take at most 1/16 of it:
+       the stacks and arenas of the processes need the rest. */
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_AS, &rl) == 0 && rl.rlim_cur != RLIM_INFINITY) {
+        size_t share = (size_t)(rl.rlim_cur / 16) / sizeof(GemProcess);
+        if (share < 2) share = 2;
+        if (share < (size_t)limit) limit = (int)share;
+    }
+    for (int cap = limit; cap >= 2; cap = cap > GEM_PROC_COMMIT_SLOTS ? cap / 2 : 1) {
+        size_t len = ((size_t)cap * sizeof(GemProcess) + page - 1) / page * page;
+        void *p = mmap(NULL, len, PROT_NONE, flags, -1, 0);
+        if (p != MAP_FAILED) {
+            gem_proc_table = (GemProcess *)p;
+            gem_proc_cap = cap;
+            return;
+        }
+    }
+    fprintf(stderr, "gem: cannot reserve the process table\n");
+    exit(1);
+}
+
+/* Make slots [0, n) accessible. Returns 0 when the memory isn't there. */
+static int gem_proc_table_commit(int n) {
+    if (n <= gem_proc_committed) return 1;
+    int want = (n + GEM_PROC_COMMIT_SLOTS - 1) / GEM_PROC_COMMIT_SLOTS * GEM_PROC_COMMIT_SLOTS;
+    if (want > gem_proc_cap) want = gem_proc_cap;
+    size_t page = (size_t)sysconf(_SC_PAGESIZE);
+    size_t bytes = ((size_t)want * sizeof(GemProcess) + page - 1) / page * page;
+    if (mprotect((char *)gem_proc_table + gem_proc_committed_bytes,
+                 bytes - gem_proc_committed_bytes, PROT_READ | PROT_WRITE) != 0)
+        return 0;
+    int *wl = (int *)realloc(gem_exit_worklist, sizeof(int) * (size_t)want);
+    if (!wl) return 0;
+    gem_exit_worklist = wl;
+    const char **rs = (const char **)realloc(gem_exit_reasons, sizeof(char *) * (size_t)want);
+    if (!rs) return 0;
+    gem_exit_reasons = rs;
+    gem_proc_committed_bytes = bytes;
+    gem_proc_committed = want;
+    return 1;
+}
+
+/* Memory mappings spawn leaves to everything else: the system's per-program
+   limit (Linux vm.max_map_count) minus headroom for arena growth, malloc
+   and libraries, or 0 when there is no such limit. Each process needs four
+   (gem_runtime_maps counts them). When the system refuses an arena block,
+   the program exits (gem_arena_new_block); at spawn, the spawn fails. So
+   spawn stops early enough that existing processes can still grow. */
+static long gem_map_limit = 0;
+static long gem_map_system = 0;
+
+static void gem_map_limit_init(void) {
+    FILE *f = fopen("/proc/sys/vm/max_map_count", "r");
+    if (!f) return;
+    long n = 0;
+    if (fscanf(f, "%ld", &n) == 1 && n > 0) {
+        long headroom = n / 8 > 1024 ? n / 8 : 1024;
+        gem_map_system = n;
+        gem_map_limit = n > headroom ? n - headroom : 1;
+    }
+    fclose(f);
+}
+
+/* A free slot (state GEM_PROC_FREE, below gem_proc_hwm on return), or -1
+   when the table is full. */
+static int gem_proc_alloc_slot(void) {
+    int from_free = gem_free_head >= 0 &&
+                    (gem_proc_hwm >= GEM_PROC_REUSE_MIN || gem_proc_hwm >= gem_proc_cap);
+    if (!from_free && gem_proc_hwm < gem_proc_cap) {
+        if (!gem_proc_table_commit(gem_proc_hwm + 1)) {
+            if (gem_free_head < 0) return -1;
+        } else {
+            gem_procs_alive++;
+            return gem_proc_hwm++;
+        }
+    }
+    if (gem_free_head < 0) return -1;
+    int slot = gem_free_head;
+    gem_free_head = gem_proc_table[slot].pid;
+    if (gem_free_head < 0) gem_free_tail = -1;
+    gem_procs_alive++;
+    return slot;
+}
+
+/* ─── Run state ───
+ *
+ * A scheduler pass never scans the process table. It keeps:
+ *   - the ready set: a three-level bitmap over slots, so a pass can run the
+ *     READY processes in slot order at a cost proportional to the READY
+ *     ones;
+ *   - the deadline heap: WAITING processes (receive ... after, sleep) and
+ *     fd waiters (a tcp timeout) with a deadline, keyed by deadline_ms;
+ *   - the fd waiter list (polled) and the pool waiter list (checked when
+ *     the thread pool signals a completion);
+ *   - a count of WAITING processes.
+ * Every state change goes through gem_proc_set_state, which keeps them in
+ * step with GemProcess.state.
+ */
+
+#define GEM_RDY_L0 ((GEM_MAX_PROCS + 63) / 64)
+#define GEM_RDY_L1 ((GEM_RDY_L0 + 63) / 64)
+#define GEM_RDY_L2 ((GEM_RDY_L1 + 63) / 64)
+static uint64_t gem_rdy_l0[GEM_RDY_L0];
+static uint64_t gem_rdy_l1[GEM_RDY_L1];
+static uint64_t gem_rdy_l2[GEM_RDY_L2];
+
+static void gem_ready_set(int i) {
+    gem_rdy_l0[i >> 6] |= 1ULL << (i & 63);
+    gem_rdy_l1[i >> 12] |= 1ULL << ((i >> 6) & 63);
+    gem_rdy_l2[i >> 18] |= 1ULL << ((i >> 12) & 63);
+}
+
+static void gem_ready_clear(int i) {
+    int w0 = i >> 6;
+    gem_rdy_l0[w0] &= ~(1ULL << (i & 63));
+    if (gem_rdy_l0[w0]) return;
+    int w1 = w0 >> 6;
+    gem_rdy_l1[w1] &= ~(1ULL << (w0 & 63));
+    if (gem_rdy_l1[w1]) return;
+    gem_rdy_l2[w1 >> 6] &= ~(1ULL << (w1 & 63));
+}
+
+/* The lowest READY slot >= i, or -1. */
+static int gem_ready_next(int i) {
+    if (i < 0) i = 0;
+    if (i >= GEM_RDY_L0 * 64) return -1;
+    int w0 = i >> 6;
+    uint64_t m = gem_rdy_l0[w0] & (~0ULL << (i & 63));
+    if (m) return (w0 << 6) + __builtin_ctzll(m);
+    int j = w0 + 1;                       /* next l0 word */
+    if (j >= GEM_RDY_L0) return -1;
+    int w1 = j >> 6;
+    m = gem_rdy_l1[w1] & (~0ULL << (j & 63));
+    if (m) {
+        int a = (w1 << 6) + __builtin_ctzll(m);
+        return (a << 6) + __builtin_ctzll(gem_rdy_l0[a]);
+    }
+    int k = w1 + 1;                       /* next l1 word */
+    if (k >= GEM_RDY_L1) return -1;
+    for (int w2 = k >> 6; w2 < GEM_RDY_L2; w2++) {
+        m = gem_rdy_l2[w2];
+        if (w2 == (k >> 6)) m &= ~0ULL << (k & 63);
+        if (m) {
+            int b = (w2 << 6) + __builtin_ctzll(m);
+            int a = (b << 6) + __builtin_ctzll(gem_rdy_l1[b]);
+            return (a << 6) + __builtin_ctzll(gem_rdy_l0[a]);
+        }
+    }
+    return -1;
+}
+
+/* `pass` is the scheduler pass in which the wait began (gem_pass_no). */
+typedef struct { int64_t dl; int slot; uint64_t pass; } GemDeadline;
+static uint64_t gem_pass_no = 0;
+static GemDeadline *gem_dl_heap = NULL;
+static int gem_dl_n = 0, gem_dl_cap = 0;
+
+static void gem_dl_place(int i, GemDeadline e) {
+    gem_dl_heap[i] = e;
+    gem_proc_table[e.slot].dl_idx = i + 1;
+}
+
+static void gem_dl_sift_up(int i) {
+    GemDeadline e = gem_dl_heap[i];
+    while (i > 0) {
+        int parent = (i - 1) / 2;
+        if (gem_dl_heap[parent].dl <= e.dl) break;
+        gem_dl_place(i, gem_dl_heap[parent]);
+        i = parent;
+    }
+    gem_dl_place(i, e);
+}
+
+static void gem_dl_sift_down(int i) {
+    GemDeadline e = gem_dl_heap[i];
+    for (;;) {
+        int l = 2 * i + 1, r = l + 1, c = l;
+        if (l >= gem_dl_n) break;
+        if (r < gem_dl_n && gem_dl_heap[r].dl < gem_dl_heap[l].dl) c = r;
+        if (gem_dl_heap[c].dl >= e.dl) break;
+        gem_dl_place(i, gem_dl_heap[c]);
+        i = c;
+    }
+    gem_dl_place(i, e);
+}
+
+static void gem_dl_push(int slot, int64_t dl) {
+    if (gem_dl_n == gem_dl_cap) {
+        int cap = gem_dl_cap ? gem_dl_cap * 2 : 64;
+        GemDeadline *h = (GemDeadline *)realloc(gem_dl_heap, sizeof(GemDeadline) * (size_t)cap);
+        if (!h) { fprintf(stderr, "gem: out of memory (deadline heap)\n"); exit(1); }
+        gem_dl_heap = h;
+        gem_dl_cap = cap;
+    }
+    gem_dl_heap[gem_dl_n++] = (GemDeadline){dl, slot, gem_pass_no};
+    gem_dl_sift_up(gem_dl_n - 1);
+}
+
+static void gem_dl_remove(int slot) {
+    int i = gem_proc_table[slot].dl_idx - 1;
+    gem_proc_table[slot].dl_idx = 0;
+    gem_dl_n--;
+    if (i == gem_dl_n) return;
+    gem_dl_heap[i] = gem_dl_heap[gem_dl_n];
+    gem_dl_sift_down(i);
+    gem_dl_sift_up(gem_proc_table[gem_dl_heap[i].slot].dl_idx - 1);
+}
+
+typedef struct { int *slots; int n, cap; } GemWaitList;
+static GemWaitList gem_fd_waiters = {NULL, 0, 0};
+static GemWaitList gem_pool_waiters = {NULL, 0, 0};
+static int gem_poll_cap = 0;
+static int gem_n_msg_wait = 0;
+
+static void gem_waitlist_add(GemWaitList *wl, int slot) {
+    if (wl->n == wl->cap) {
+        int cap = wl->cap ? wl->cap * 2 : 64;
+        int *a = (int *)realloc(wl->slots, sizeof(int) * (size_t)cap);
+        if (!a) { fprintf(stderr, "gem: out of memory (waiter list)\n"); exit(1); }
+        wl->slots = a;
+        wl->cap = cap;
+    }
+    gem_proc_table[slot].wait_idx = wl->n;
+    wl->slots[wl->n++] = slot;
+    if (wl == &gem_fd_waiters && gem_poll_cap < wl->n + 1) {
+        int cap = wl->cap + 1;
+        struct pollfd *f = (struct pollfd *)realloc(gem_poll_fds, sizeof(struct pollfd) * (size_t)cap);
+        if (f) gem_poll_fds = f;
+        int *pp = (int *)realloc(gem_poll_pids, sizeof(int) * (size_t)cap);
+        if (pp) gem_poll_pids = pp;
+        if (!f || !pp) { fprintf(stderr, "gem: out of memory (poll set)\n"); exit(1); }
+        gem_poll_cap = cap;
+    }
+}
+
+static void gem_waitlist_remove(GemWaitList *wl, int slot) {
+    int i = gem_proc_table[slot].wait_idx;
+    int last = wl->slots[--wl->n];
+    wl->slots[i] = last;
+    gem_proc_table[last].wait_idx = i;
+}
+
+/* Move the process in `slot` to state `st`, keeping the run-state
+   structures in step. Entering WAITING or an fd wait reads deadline_ms;
+   entering IO_WAIT reads io_request (set: a thread pool wait). */
+static void gem_proc_set_state(int slot, GemProcState st) {
+    GemProcess *p = &gem_proc_table[slot];
+    switch (p->state) {
+        case GEM_PROC_READY:   gem_ready_clear(slot); break;
+        case GEM_PROC_WAITING: gem_n_msg_wait--; break;
+        case GEM_PROC_IO_WAIT:
+            gem_waitlist_remove(p->wait_kind == GEM_WAIT_POOL ? &gem_pool_waiters
+                                                              : &gem_fd_waiters, slot);
+            p->wait_kind = GEM_WAIT_NONE;
+            break;
+        default: break;
+    }
+    if (p->dl_idx) gem_dl_remove(slot);
+    p->state = st;
+    switch (st) {
+        case GEM_PROC_READY: gem_ready_set(slot); break;
+        case GEM_PROC_WAITING:
+            gem_n_msg_wait++;
+            if (p->deadline_ms >= 0) gem_dl_push(slot, p->deadline_ms);
+            break;
+        case GEM_PROC_IO_WAIT:
+            if (p->io_request) {
+                p->wait_kind = GEM_WAIT_POOL;
+                gem_waitlist_add(&gem_pool_waiters, slot);
+            } else {
+                p->wait_kind = GEM_WAIT_FD;
+                gem_waitlist_add(&gem_fd_waiters, slot);
+                if (p->deadline_ms >= 0) gem_dl_push(slot, p->deadline_ms);
+            }
+            break;
+        default: break;
+    }
+}
+
+/* Wake the processes whose deadline has passed (timed_out set), after a
+   pass. A wait that began in this pass is left for the next one, so an
+   expired wait wakes after the pass following the one that started it
+   and its process runs in the pass after that; the interleavings of
+   sleep(0) and short `after` timeouts depend on that timing. Returns how
+   many woke. */
+static GemDeadline *gem_dl_held = NULL;
+static int gem_dl_held_cap = 0;
+
+static int gem_expire_deadlines(void) {
+    if (gem_dl_n == 0) return 0;
+    int64_t now = gem_now_ms();
+    int woke = 0, held = 0;
+    while (gem_dl_n > 0 && gem_dl_heap[0].dl <= now) {
+        GemDeadline e = gem_dl_heap[0];
+        if (e.pass == gem_pass_no) {
+            if (held == gem_dl_held_cap) {
+                int cap = gem_dl_held_cap ? gem_dl_held_cap * 2 : 64;
+                GemDeadline *h = (GemDeadline *)realloc(gem_dl_held, sizeof(GemDeadline) * (size_t)cap);
+                if (!h) { fprintf(stderr, "gem: out of memory (deadline heap)\n"); exit(1); }
+                gem_dl_held = h;
+                gem_dl_held_cap = cap;
+            }
+            gem_dl_held[held++] = e;
+            gem_dl_remove(e.slot);
+            continue;
+        }
+        GemProcess *p = &gem_proc_table[e.slot];
+        p->timed_out = 1;
+        p->deadline_ms = -1;
+        gem_proc_set_state(e.slot, GEM_PROC_READY);
+        woke++;
+    }
+    for (int k = 0; k < held; k++) {
+        gem_dl_push(gem_dl_held[k].slot, gem_dl_held[k].dl);
+        gem_dl_heap[gem_proc_table[gem_dl_held[k].slot].dl_idx - 1].pass = gem_dl_held[k].pass;
+    }
+    return woke;
+}
+
+/* Wake the pool waiters whose request is done. */
+static void gem_wake_pool_waiters(void) {
+    for (int k = gem_pool_waiters.n - 1; k >= 0; k--) {
+        int slot = gem_pool_waiters.slots[k];
+        GemIORequest *req = gem_proc_table[slot].io_request;
+        if (req && __atomic_load_n(&req->done, __ATOMIC_ACQUIRE))
+            gem_proc_set_state(slot, GEM_PROC_READY);
+    }
+}
+
+/* Fill the poll scratch arrays with the fd waiters; returns the count. */
+static int gem_poll_fill(void) {
+    int nfds = 0;
+    for (int k = 0; k < gem_fd_waiters.n; k++) {
+        int slot = gem_fd_waiters.slots[k];
+        GemProcess *p = &gem_proc_table[slot];
+        gem_poll_fds[nfds].fd = p->wait_fd;
+        gem_poll_fds[nfds].events = p->wait_write ? POLLOUT : POLLIN;
+        gem_poll_fds[nfds].revents = 0;
+        gem_poll_pids[nfds] = slot;
+        nfds++;
+    }
+    return nfds;
+}
+
+/* Make READY the polled fd waiters whose fd reported an event. */
+static void gem_poll_wake(int nfds) {
+    for (int j = 0; j < nfds; j++) {
+        int slot = gem_poll_pids[j];
+        if (slot < 0 || !(gem_poll_fds[j].revents & GEM_POLL_WAKE)) continue;
+        GemProcess *p = &gem_proc_table[slot];
+        if (p->state == GEM_PROC_IO_WAIT && p->wait_kind == GEM_WAIT_FD)
+            gem_proc_set_state(slot, GEM_PROC_READY);
+    }
+}
+
+void gem_scheduler_init(void) {
+    gem_proc_table_reserve();
+    gem_map_limit_init();
+    gem_poll_cap = 65;
+    gem_poll_fds = (struct pollfd *)malloc(sizeof(struct pollfd) * (size_t)gem_poll_cap);
+    gem_poll_pids = (int *)malloc(sizeof(int) * (size_t)gem_poll_cap);
+    if (!gem_poll_fds || !gem_poll_pids) {
+        fprintf(stderr, "gem: out of memory (poll set)\n");
+        exit(1);
+    }
     /* The name registry receives strings from arbitrary process arenas
        (e.g. a destination gen_server registers `name` where `name` lives
        in the *registry* process's arena, then the registry's per-iteration
@@ -494,7 +923,8 @@ static void gem_free_proc_slot(int pid) {
        reference to the request, so release it on the process's behalf. */
     if (proc->io_request) gem_io_release(proc->io_request);
 
-    proc->state = GEM_PROC_FREE;
+    gem_proc_set_state(pid, GEM_PROC_FREE);
+    gem_procs_alive--;
     proc->coro = NULL;
     proc->stack_lo = NULL;
     proc->stack_overflowed = 0;
@@ -529,7 +959,7 @@ void gem_yield_check(void) {
     proc->reductions++;
     if (proc->reductions >= GEM_REDUCTION_LIMIT) {
         proc->reductions = 0;
-        proc->state = GEM_PROC_READY;
+        gem_proc_set_state(gem_current_pid, GEM_PROC_READY);
         mco_yield(proc->coro);
     }
 }
@@ -599,14 +1029,14 @@ int64_t gem_after_deadline(GemVal ms) {
 
 /* Yield for selective receive — sets deadline and transitions to WAITING */
 void gem_selective_yield(int64_t deadline_ms) {
-    if (gem_current_pid < 0 || gem_current_pid >= GEM_MAX_PROCS) {
+    if (gem_current_pid < 0 || gem_current_pid >= gem_proc_hwm) {
         gem_error("receive: not inside a spawned process");
         return;
     }
     GemProcess *proc = &gem_proc_table[gem_current_pid];
     proc->deadline_ms = deadline_ms;
     proc->timed_out = 0;
-    proc->state = GEM_PROC_WAITING;
+    gem_proc_set_state(gem_current_pid, GEM_PROC_WAITING);
     mco_yield(proc->coro);
     /* Resumed: by a message, or by the deadline (timed_out, which the
        caller reads next). Either way the deadline is spent; left set, a
@@ -684,14 +1114,23 @@ void gem_exit_self(const char *reason) {
 /* Core API */
 
 int gem_spawn_fn(GemFnPtr fn, void *env) {
-    if (gem_free_head < 0) {
+    /* A new process maps an arena block, and a stack unless one is cached. */
+    int new_maps = gem_stack_cache_len > 0 ? 1 : 4;
+    if (gem_map_limit > 0 && gem_runtime_maps + new_maps > gem_map_limit) {
+        gem_spawn_overflow_count++;
+        char msg[200];
+        snprintf(msg, sizeof msg,
+                 "spawn: too many processes for the system's memory-mapping limit "
+                 "(%d alive, vm.max_map_count = %ld)", gem_procs_alive, gem_map_system);
+        gem_error(msg);
+        return -1;
+    }
+    int pid = gem_proc_alloc_slot();
+    if (pid < 0) {
         gem_spawn_overflow_count++;
         gem_error("spawn: process table full");
         return -1;
     }
-    int pid = gem_free_head;
-    gem_free_head = gem_proc_table[pid].pid;
-    if (gem_free_head < 0) gem_free_tail = -1;
 
     if (gem_proc_table[pid].exit_reason) {
         free((char *)gem_proc_table[pid].exit_reason);
@@ -727,16 +1166,20 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
         gem_pin_free_all(&gem_proc_table[pid]);
         gem_globals_free(&gem_proc_table[pid]);
         /* Put the slot back on the free list before raising. */
+        gem_procs_alive--;
         gem_proc_table[pid].pid = gem_free_head;
         gem_free_head = pid;
         if (gem_free_tail < 0) gem_free_tail = pid;
-        gem_error("spawn: coroutine creation failed");
+        char msg[160];
+        snprintf(msg, sizeof msg,
+                 "spawn: cannot map a stack for a new process (%d processes alive)",
+                 gem_procs_alive);
+        gem_error(msg);
         return -1;
     }
     gem_proc_table[pid].stack_lo = stack_lo;
     gem_proc_table[pid].stack_overflowed = 0;
 
-    gem_proc_table[pid].state = GEM_PROC_READY;
     gem_proc_table[pid].coro = co;
     gem_proc_table[pid].mailbox = (GemMailbox){NULL, NULL};
     gem_proc_table[pid].pid = pid;
@@ -751,13 +1194,12 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].pcall_depth = 0;
     gem_proc_table[pid].call_depth = 0;
     gem_proc_table[pid].leaf_site = NULL;
-
-    if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
+    gem_proc_set_state(pid, GEM_PROC_READY);
     return pid;
 }
 
 void gem_send_msg(int pid, GemVal val) {
-    if (pid < 0 || pid >= GEM_MAX_PROCS) return;
+    if (pid < 0 || pid >= gem_proc_hwm) return;
     GemProcess *proc = &gem_proc_table[pid];
     if (proc->state == GEM_PROC_FREE || proc->state == GEM_PROC_DEAD) return;
 
@@ -767,20 +1209,18 @@ void gem_send_msg(int pid, GemVal val) {
     gem_mailbox_push(&proc->mailbox, copied);
     gem_current_pid = saved;
 
-    if (proc->state == GEM_PROC_WAITING) {
-        proc->state = GEM_PROC_READY;
-    }
+    if (proc->state == GEM_PROC_WAITING) gem_proc_set_state(pid, GEM_PROC_READY);
 }
 
 GemVal gem_receive_msg(void) {
-    if (gem_current_pid < 0 || gem_current_pid >= GEM_MAX_PROCS) {
+    if (gem_current_pid < 0 || gem_current_pid >= gem_proc_hwm) {
         gem_error("receive: not inside a spawned process");
         return GEM_NIL;
     }
     GemProcess *proc = &gem_proc_table[gem_current_pid];
 
     while (gem_mailbox_empty(&proc->mailbox)) {
-        proc->state = GEM_PROC_WAITING;
+        gem_proc_set_state(gem_current_pid, GEM_PROC_WAITING);
         mco_yield(proc->coro);
     }
 
@@ -798,6 +1238,7 @@ int64_t gem_pid_of_slot(int slot) {
 int gem_slot_of_pid(int64_t pid) {
     if (pid < 0) return -1;
     int slot = (int)(pid % GEM_MAX_PROCS);
+    if (slot >= gem_proc_hwm) return -1;
     GemProcess *proc = &gem_proc_table[slot];
     if (proc->gen != pid / GEM_MAX_PROCS) return -1;
     if (proc->state == GEM_PROC_FREE) return -1;
@@ -805,21 +1246,21 @@ int gem_slot_of_pid(int64_t pid) {
 }
 
 void gem_io_pool_yield(void) {
-    if (gem_current_pid < 0 || gem_current_pid >= GEM_MAX_PROCS) return;
+    if (gem_current_pid < 0 || gem_current_pid >= gem_proc_hwm) return;
     GemProcess *proc = &gem_proc_table[gem_current_pid];
-    proc->state = GEM_PROC_IO_WAIT;
+    gem_proc_set_state(gem_current_pid, GEM_PROC_IO_WAIT);
     mco_yield(proc->coro);
 }
 
 int gem_io_yield(int fd, int for_write) {
-    if (gem_current_pid < 0 || gem_current_pid >= GEM_MAX_PROCS) {
+    if (gem_current_pid < 0 || gem_current_pid >= gem_proc_hwm) {
         return 0;
     }
     GemProcess *proc = &gem_proc_table[gem_current_pid];
-    proc->state = GEM_PROC_IO_WAIT;
     proc->wait_fd = fd;
     proc->wait_write = for_write;
     proc->wait_fd_closed = 0;
+    gem_proc_set_state(gem_current_pid, GEM_PROC_IO_WAIT);
     mco_yield(proc->coro);
     if (proc->wait_fd_closed) {
         proc->wait_fd_closed = 0;
@@ -830,12 +1271,13 @@ int gem_io_yield(int fd, int for_write) {
 }
 
 void gem_io_fd_closed(int fd) {
-    for (int i = 0; i < gem_proc_hwm; i++) {
-        GemProcess *proc = &gem_proc_table[i];
-        if (proc->state == GEM_PROC_IO_WAIT && proc->io_request == NULL &&
-            proc->wait_fd == fd) {
+    /* Backwards: waking slot k moves the last entry, already seen, into k. */
+    for (int k = gem_fd_waiters.n - 1; k >= 0; k--) {
+        int slot = gem_fd_waiters.slots[k];
+        GemProcess *proc = &gem_proc_table[slot];
+        if (proc->wait_fd == fd) {
             proc->wait_fd_closed = 1;
-            proc->state = GEM_PROC_READY;
+            gem_proc_set_state(slot, GEM_PROC_READY);
         }
     }
 }
@@ -866,13 +1308,11 @@ static int64_t gem_earliest_timer_deadline(void) {
 #endif
 
 void gem_run_main(GemFnPtr fn, void *env) {
-    if (gem_free_head < 0) {
+    int pid = gem_proc_alloc_slot();
+    if (pid < 0) {
         gem_error("spawn: process table full");
         return;
     }
-    int pid = gem_free_head;
-    gem_free_head = gem_proc_table[pid].pid;
-    if (gem_free_head < 0) gem_free_tail = -1;
 
     gem_arena_init(&gem_proc_table[pid].arena);
     gem_main_pid = pid;
@@ -898,7 +1338,6 @@ void gem_run_main(GemFnPtr fn, void *env) {
     gem_proc_table[pid].stack_lo = stack_lo;
     gem_proc_table[pid].stack_overflowed = 0;
 
-    gem_proc_table[pid].state = GEM_PROC_READY;
     gem_proc_table[pid].coro = co;
     gem_proc_table[pid].mailbox = (GemMailbox){NULL, NULL};
     gem_proc_table[pid].pid = pid;
@@ -914,8 +1353,7 @@ void gem_run_main(GemFnPtr fn, void *env) {
     gem_proc_table[pid].call_depth = 0;
     gem_proc_table[pid].leaf_site = NULL;
     gem_proc_table[pid].pinned_boxes = NULL;
-
-    if (pid >= gem_proc_hwm) gem_proc_hwm = pid + 1;
+    gem_proc_set_state(pid, GEM_PROC_READY);
     gem_run_scheduler();
 }
 
@@ -968,210 +1406,136 @@ void gem_report_main_killed(int64_t from_pid, const char *reason, int linked) {
     exit(1);
 }
 
+/* Resume the READY process in slot i until it yields, waits or ends. */
+static void gem_run_proc(int i) {
+    GemProcess *proc = &gem_proc_table[i];
+    gem_current_pid = i;
+    proc->reductions = 0;
+    /* gem_call_stack / gem_call_depth are globals but logically
+       per-process — point them at this proc's frames and saved
+       depth before resuming, save the depth back after. Stack
+       traces read the frames. gem_cur_globals likewise points
+       at the running process's module slots. */
+    int saved_global_depth = gem_call_depth;
+    GemFrame *saved_global_stack = gem_call_stack;
+    gem_call_depth = proc->call_depth;
+    gem_call_stack = proc->call_stack;
+    gem_leaf_site = proc->leaf_site;
+    gem_leaf_line = proc->leaf_line;
+    gem_cur_globals = proc->globals;
+    gem_running_slot = i;
+    gem_stack_limit = (uintptr_t)proc->stack_lo + GEM_STACK_RED_ZONE;
+    mco_resume(proc->coro);
+    gem_stack_limit = 0;
+    gem_running_slot = -1;
+    proc->call_depth = gem_call_depth;
+    proc->leaf_site = gem_leaf_site;
+    proc->leaf_line = gem_leaf_line;
+    gem_leaf_site = NULL;
+    gem_call_depth = saved_global_depth;
+    gem_call_stack = saved_global_stack;
+    gem_cur_globals = NULL;
+
+    if (mco_status(proc->coro) == MCO_DEAD) {
+        mco_destroy(proc->coro);
+        proc->coro = NULL;
+        const char *reason = proc->exit_reason ? proc->exit_reason : "normal";
+        gem_proc_set_state(i, GEM_PROC_DEAD);
+        gem_deliver_down_messages(i, reason);
+        gem_unregister_name_for_pid(i);
+        gem_propagate_exit(i, reason);
+    }
+}
+
+/* Up to this many fd waiters, the scheduler polls them after every pass
+   that ran something. Above it, the next poll waits GEM_POLL_COST_FACTOR
+   times as long as the last one took, and at most a millisecond: polling
+   then takes at most about 1/(factor + 1) of the scheduler's time while a
+   poll costs less than 1 ms / factor, and an fd event waits at most about
+   that long while processes stay READY. */
+#define GEM_POLL_EVERY_PASS_MAX 64
+#define GEM_POLL_COST_FACTOR 2
+static int64_t gem_next_poll_us = 0;
+
+/* Monotonic time in microseconds. */
+static int64_t gem_now_us(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+}
+
 void gem_run_scheduler(void) {
-    int active = 1;
-
-    while (active) {
-        active = 0;
-        int has_ready = 0;
-        int has_fd_wait = 0;
-        int has_pool_wait = 0;
-        int has_msg_wait = 0;
-
+    for (;;) {
         gem_fire_timers();
-        gem_io_check_completions();
+        if (gem_io_check_completions()) gem_wake_pool_waiters();
 
-        for (int i = 0; i < gem_proc_hwm; i++) {
-            GemProcess *proc = &gem_proc_table[i];
-
-            if (proc->state == GEM_PROC_READY) {
-                has_ready = 1;
-                active = 1;
-                gem_current_pid = i;
-                proc->reductions = 0;
-                /* gem_call_stack / gem_call_depth are globals but logically
-                   per-process — point them at this proc's frames and saved
-                   depth before resuming, save the depth back after. Stack
-                   traces read the frames. gem_cur_globals likewise points
-                   at the running process's module slots. */
-                int saved_global_depth = gem_call_depth;
-                GemFrame *saved_global_stack = gem_call_stack;
-                gem_call_depth = proc->call_depth;
-                gem_call_stack = proc->call_stack;
-                gem_leaf_site = proc->leaf_site;
-                gem_leaf_line = proc->leaf_line;
-                gem_cur_globals = proc->globals;
-                gem_running_slot = i;
-                gem_stack_limit = (uintptr_t)proc->stack_lo + GEM_STACK_RED_ZONE;
-                mco_resume(proc->coro);
-                gem_stack_limit = 0;
-                gem_running_slot = -1;
-                proc->call_depth = gem_call_depth;
-                proc->leaf_site = gem_leaf_site;
-                proc->leaf_line = gem_leaf_line;
-                gem_leaf_site = NULL;
-                gem_call_depth = saved_global_depth;
-                gem_call_stack = saved_global_stack;
-                gem_cur_globals = NULL;
-
-                if (mco_status(proc->coro) == MCO_DEAD) {
-                    mco_destroy(proc->coro);
-                    proc->coro = NULL;
-                    const char *reason = proc->exit_reason ? proc->exit_reason : "normal";
-                    proc->state = GEM_PROC_DEAD;
-                    gem_deliver_down_messages(i, reason);
-                    gem_unregister_name_for_pid(i);
-                    gem_propagate_exit(i, reason);
-                }
-            } else if (proc->state == GEM_PROC_WAITING) {
-                has_msg_wait = 1;
-                active = 1;
-                /* Check deadline for selective receive with after */
-                if (proc->deadline_ms >= 0) {
-                    int64_t now = gem_now_ms();
-                    if (now >= proc->deadline_ms) {
-                        proc->timed_out = 1;
-                        proc->deadline_ms = -1;
-                        proc->state = GEM_PROC_READY;
-                        has_ready = 1;
-                    }
-                }
-            } else if (proc->state == GEM_PROC_IO_WAIT) {
-                active = 1;
-                if (proc->io_request)
-                    has_pool_wait = 1;
-                else {
-                    if (proc->deadline_ms >= 0) {
-                        int64_t now = gem_now_ms();
-                        if (now >= proc->deadline_ms) {
-                            proc->timed_out = 1;
-                            proc->deadline_ms = -1;
-                            proc->state = GEM_PROC_READY;
-                            has_ready = 1;
-                            continue;
-                        }
-                    }
-                    has_fd_wait = 1;
-                }
-            }
+        /* One pass: run the READY processes in slot order. A process that
+           becomes READY during the pass runs in it if its slot is above the
+           one running, else in the next pass (as with a scan of the table). */
+        int ran = 0;
+        for (int i = gem_ready_next(0); i >= 0; i = gem_ready_next(i + 1)) {
+            ran = 1;
+            gem_run_proc(i);
         }
+        if (gem_expire_deadlines() > 0) ran = 1;
+        gem_pass_no++;
 
-        /* Non-blocking poll: surface fd-readiness even when other procs
-           are READY. Without this, a continuously-READY proc (e.g. a
-           broker reader draining a never-empty TCP buffer) starves any
-           proc IO_WAIT'ing on a different fd — the scheduler never
-           reaches the blocking poll() below (e.g. a broker writer waiting
-           for POLLOUT to a slow client while a publisher's reader stays
-           READY would wait forever). The cost is one syscall per scheduler scan
-           when any proc is fd-waiting; the build/mark loops are O(hwm)
-           but already cheap relative to the proc-scan above. */
-        if (has_ready && has_fd_wait) {
-            int nfds = 0;
-            for (int i = 0; i < gem_proc_hwm; i++) {
-                if (gem_proc_table[i].state == GEM_PROC_IO_WAIT &&
-                    gem_proc_table[i].io_request == NULL) {
-                    gem_poll_fds[nfds].fd = gem_proc_table[i].wait_fd;
-                    gem_poll_fds[nfds].events = gem_proc_table[i].wait_write ? POLLOUT : POLLIN;
-                    gem_poll_fds[nfds].revents = 0;
-                    gem_poll_pids[nfds] = i;
-                    nfds++;
-                }
-            }
-            if (nfds > 0 && poll(gem_poll_fds, (nfds_t)nfds, 0) > 0) {
-                for (int j = 0; j < nfds; j++) {
-                    if (gem_poll_fds[j].revents & GEM_POLL_WAKE) {
-                        if (gem_proc_table[gem_poll_pids[j]].state == GEM_PROC_IO_WAIT)
-                            gem_proc_table[gem_poll_pids[j]].state = GEM_PROC_READY;
-                    }
-                }
-            }
-        }
-
-        /* If we ran at least one READY process, loop immediately —
-           the resumed coroutines may have enqueued messages or spawned
-           new work. */
-        if (has_ready) continue;
-
-        /* Nothing was READY. Block until something becomes ready:
-           fd I/O, thread pool completions, or a deadline/timer. */
-        if (has_fd_wait || has_pool_wait) {
-            int nfds = 0;
-            for (int i = 0; i < gem_proc_hwm; i++) {
-                if (gem_proc_table[i].state == GEM_PROC_IO_WAIT &&
-                    gem_proc_table[i].io_request == NULL) {
-                    gem_poll_fds[nfds].fd = gem_proc_table[i].wait_fd;
-                    gem_poll_fds[nfds].events = gem_proc_table[i].wait_write ? POLLOUT : POLLIN;
-                    gem_poll_fds[nfds].revents = 0;
-                    gem_poll_pids[nfds] = i;
-                    nfds++;
-                }
-            }
-
-            /* Include the thread pool wake-pipe so poll returns when
-               a worker thread completes an I/O operation. */
-            int wake_fd = gem_io_wake_fd();
-            int wake_idx = -1;
-            if (has_pool_wait && wake_fd >= 0) {
-                wake_idx = nfds;
-                gem_poll_fds[nfds].fd = wake_fd;
-                gem_poll_fds[nfds].events = POLLIN;
-                gem_poll_fds[nfds].revents = 0;
-                gem_poll_pids[nfds] = -1;
-                nfds++;
-            }
-
-            /* Compute timeout: earliest deadline among WAITING/IO_WAIT procs and timers */
-            int poll_timeout = -1;
-            int64_t timer_dl = gem_earliest_timer_deadline();
-            int64_t earliest = -1;
-            for (int i = 0; i < gem_proc_hwm; i++) {
-                if ((gem_proc_table[i].state == GEM_PROC_WAITING ||
-                     gem_proc_table[i].state == GEM_PROC_IO_WAIT) &&
-                    gem_proc_table[i].deadline_ms >= 0) {
-                    if (earliest < 0 || gem_proc_table[i].deadline_ms < earliest)
-                        earliest = gem_proc_table[i].deadline_ms;
-                }
-            }
-            if (timer_dl >= 0 && (earliest < 0 || timer_dl < earliest))
-                earliest = timer_dl;
-            if (earliest >= 0) {
-                int64_t now = gem_now_ms();
-                int64_t wait_ms = earliest - now;
-                if (wait_ms > INT_MAX) wait_ms = INT_MAX;   /* poll again then */
-                poll_timeout = (wait_ms > 0) ? (int)wait_ms : 0;
-            }
-
-            int ready = poll(gem_poll_fds, (nfds_t)nfds, poll_timeout);
-            if (ready > 0) {
-                for (int j = 0; j < nfds; j++) {
-                    if (gem_poll_fds[j].revents & GEM_POLL_WAKE) {
-                        if (j == wake_idx) continue;
-                        gem_proc_table[gem_poll_pids[j]].state = GEM_PROC_READY;
+        if (ran) {
+            /* Non-blocking poll: surface fd-readiness even when processes
+               stay READY. Without it, a continuously-READY process (e.g. a
+               broker reader draining a never-empty TCP buffer) would starve
+               every process waiting on another fd (e.g. a writer waiting for
+               POLLOUT to a slow client): the blocking poll below would never
+               be reached. poll costs O(fd waiters), so with many of them
+               (thousands of idle connections) it is spaced out by its cost
+               (GEM_POLL_COST_FACTOR). */
+            if (gem_fd_waiters.n > 0) {
+                int many = gem_fd_waiters.n > GEM_POLL_EVERY_PASS_MAX;
+                int64_t t0 = many ? gem_now_us() : 0;
+                if (!many || t0 >= gem_next_poll_us) {
+                    int nfds = gem_poll_fill();
+                    if (poll(gem_poll_fds, (nfds_t)nfds, 0) > 0) gem_poll_wake(nfds);
+                    if (many) {
+                        int64_t t1 = gem_now_us();
+                        int64_t gap = (t1 - t0) * GEM_POLL_COST_FACTOR;
+                        gem_next_poll_us = t1 + (gap < 1000 ? gap : 1000);
                     }
                 }
             }
             continue;
         }
 
-        /* Check for pending timers — they keep the scheduler alive */
+        /* Nothing was READY. Earliest wake-up: a process deadline or a timer. */
+        int64_t earliest = gem_dl_n > 0 ? gem_dl_heap[0].dl : -1;
         int64_t timer_dl = gem_earliest_timer_deadline();
-        if (timer_dl >= 0) active = 1;
+        if (timer_dl >= 0 && (earliest < 0 || timer_dl < earliest)) earliest = timer_dl;
 
-        /* Only mailbox waiters (or timers) remain. Check if any have deadlines or
-           there are pending timers — sleep until the earliest, then loop. */
-        if (has_msg_wait || timer_dl >= 0) {
-            int64_t earliest = -1;
-            for (int i = 0; i < gem_proc_hwm; i++) {
-                if (gem_proc_table[i].state == GEM_PROC_WAITING &&
-                    gem_proc_table[i].deadline_ms >= 0) {
-                    if (earliest < 0 || gem_proc_table[i].deadline_ms < earliest) {
-                        earliest = gem_proc_table[i].deadline_ms;
-                    }
-                }
+        /* Block until fd I/O, a thread pool completion or the earliest
+           deadline. */
+        if (gem_fd_waiters.n > 0 || gem_pool_waiters.n > 0) {
+            int nfds = gem_poll_fill();
+            /* The thread pool's wake pipe, so poll returns when a worker
+               completes a request. */
+            int wake_fd = gem_io_wake_fd();
+            if (gem_pool_waiters.n > 0 && wake_fd >= 0) {
+                gem_poll_fds[nfds].fd = wake_fd;
+                gem_poll_fds[nfds].events = POLLIN;
+                gem_poll_fds[nfds].revents = 0;
+                gem_poll_pids[nfds] = -1;
+                nfds++;
             }
-            if (timer_dl >= 0 && (earliest < 0 || timer_dl < earliest)) {
-                earliest = timer_dl;
+            int poll_timeout = -1;
+            if (earliest >= 0) {
+                int64_t wait_ms = earliest - gem_now_ms();
+                if (wait_ms > INT_MAX) wait_ms = INT_MAX;   /* poll again then */
+                poll_timeout = (wait_ms > 0) ? (int)wait_ms : 0;
             }
+            if (poll(gem_poll_fds, (nfds_t)nfds, poll_timeout) > 0) gem_poll_wake(nfds);
+            continue;
+        }
+
+        /* Only mailbox waiters (or timers) remain. */
+        if (gem_n_msg_wait > 0 || timer_dl >= 0) {
             if (earliest < 0) {
                 /* True deadlock: every live process waits in a receive
                    without `after`, and no timer, fd or pool job can wake
@@ -1184,18 +1548,19 @@ void gem_run_scheduler(void) {
                     gem_report_main_deadlock();
                 break;
             }
-            /* Sleep until earliest deadline */
-            int64_t now = gem_now_ms();
-            int64_t wait_ms = earliest - now;
+            /* Sleep until the earliest deadline; the next pass wakes it. */
+            int64_t wait_ms = earliest - gem_now_ms();
             if (wait_ms > 0) {
                 struct timespec ts_sleep;
                 ts_sleep.tv_sec = wait_ms / 1000;
                 ts_sleep.tv_nsec = (wait_ms % 1000) * 1000000;
                 nanosleep(&ts_sleep, NULL);
             }
-            /* Loop back — the deadline/timer check above will mark it READY */
             continue;
         }
+
+        /* No process is alive and no timer is pending. */
+        break;
     }
     gem_current_pid = -1;
     gem_threadpool_shutdown();
@@ -1376,8 +1741,6 @@ void gem_unlink_fn(int64_t target_pid) {
    gem_exit_self, which unwinds to the coro's setjmp handler past any pcall;
    the scheduler will pick up the death and propagate this process's links
    normally. */
-static int gem_exit_worklist[GEM_MAX_PROCS];
-static const char *gem_exit_reasons[GEM_MAX_PROCS];
 
 void gem_propagate_exit(int dead_pid, const char *reason) {
     int *worklist = gem_exit_worklist;
@@ -1406,7 +1769,7 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
             GemLinkNode *link_next = link->next;
             free(link);
             link = link_next;
-            if (lpid < 0 || lpid >= GEM_MAX_PROCS) continue;
+            if (lpid < 0 || lpid >= gem_proc_hwm) continue;
             GemProcess *lproc = &gem_proc_table[lpid];
             if (lproc->state == GEM_PROC_FREE || lproc->state == GEM_PROC_DEAD) continue;
 
@@ -1440,8 +1803,8 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
                 }
                 gem_deliver_down_messages(lpid, r);
                 gem_unregister_name_for_pid(lpid);
-                lproc->state = GEM_PROC_DEAD;
-                if (wl_tail < GEM_MAX_PROCS) {
+                gem_proc_set_state(lpid, GEM_PROC_DEAD);
+                if (wl_tail < gem_proc_committed) {
                     worklist[wl_tail] = lpid;
                     reasons[wl_tail] = r;
                     wl_tail++;
@@ -1465,7 +1828,7 @@ void gem_propagate_exit(int dead_pid, const char *reason) {
 /* ─── Named Process Registry ─── */
 
 void gem_register_name(const char *name, int pid) {
-    if (pid < 0 || pid >= GEM_MAX_PROCS) {
+    if (pid < 0 || pid >= gem_proc_hwm) {
         gem_error("register: invalid pid");
         return;
     }
@@ -1716,7 +2079,7 @@ GemVal gem_exit_builtin(void *_env, GemVal *args, int argc) {
         mco_destroy(proc->coro);
         proc->coro = NULL;
     }
-    proc->state = GEM_PROC_DEAD;
+    gem_proc_set_state(pid, GEM_PROC_DEAD);
     gem_deliver_down_messages(pid, proc->exit_reason);
     gem_unregister_name_for_pid(pid);
     gem_propagate_exit(pid, proc->exit_reason);
@@ -1742,7 +2105,7 @@ GemVal gem_sleep_builtin(void *_env, GemVal *args, int argc) {
     do {
         proc->deadline_ms = deadline;
         proc->timed_out = 0;
-        proc->state = GEM_PROC_WAITING;
+        gem_proc_set_state(gem_current_pid, GEM_PROC_WAITING);
         mco_yield(proc->coro);
     } while (gem_now_ms() < deadline);
     proc->timed_out = 0;
@@ -1801,7 +2164,7 @@ GemVal gem_processes_builtin(void *_env, GemVal *args, int argc) {
     (void)_env; (void)args; (void)argc;
     GemVal list = gem_table_new();
     GemTable *t = list.table;
-    for (int i = 0; i < GEM_MAX_PROCS; i++) {
+    for (int i = 0; i < gem_proc_hwm; i++) {
         if (gem_proc_table[i].state != GEM_PROC_FREE &&
             gem_proc_table[i].state != GEM_PROC_DEAD) {
             if (t->len >= t->cap) gem_table_grow(t);

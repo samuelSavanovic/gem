@@ -27,6 +27,12 @@ static size_t gem_arena_page_size(void) {
     return cached;
 }
 
+/* Memory mappings the runtime holds (arena blocks and process stacks).
+   spawn compares it against the system's limit (gem_scheduler.c,
+   gem_map_limit) so that hitting the limit fails a spawn, not a later
+   allocation. */
+long gem_runtime_maps = 0;
+
 static GemArenaBlock *gem_arena_new_block(size_t min_cap) {
     size_t cap = min_cap;
     if (cap < GEM_ARENA_INITIAL_BLOCK) cap = GEM_ARENA_INITIAL_BLOCK;
@@ -42,6 +48,7 @@ static GemArenaBlock *gem_arena_new_block(size_t min_cap) {
         fprintf(stderr, "gem_arena: mmap failed (size=%zu)\n", total);
         exit(1);
     }
+    gem_runtime_maps++;
     block->next = NULL;
     block->cap = cap;
     block->used = 0;
@@ -79,6 +86,7 @@ void gem_arena_free_blocks(GemArenaBlock *block) {
     while (block) {
         GemArenaBlock *next = block->next;
         munmap(block, sizeof(GemArenaBlock) + block->cap);
+        gem_runtime_maps--;
         block = next;
     }
 }
