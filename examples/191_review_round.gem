@@ -107,10 +107,9 @@ print((pcall gen_server.call(dying, "get")).error, "left:", count_downs(dying))
 supervisor.stop(sup)
 
 print("-- 3. init must return \{state\}")
-let bare = gen_server.start({init: fn() 0 end, handle_call: SRV.handle_call,
-  handle_cast: SRV.handle_cast, handle_info: SRV.handle_info}).pid
-monitor(bare)
-print(down_reason(bare))
+let bare = pcall gen_server.start({init: fn() 0 end, handle_call: SRV.handle_call,
+  handle_cast: SRV.handle_cast, handle_info: SRV.handle_info})
+print(bare.error)
 let timed = gen_server.start({init: fn() {state: 7, timeout: 10} end,
   handle_call: SRV.handle_call, handle_cast: SRV.handle_cast,
   handle_info: fn(msg, n) {state: "got {msg}"} end})
