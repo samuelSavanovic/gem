@@ -1,0 +1,121 @@
+# supervisor.start returns once every child's start has returned: a child's
+# registered name works at once, children start in order, a nested tree is
+# up, and a start that raises makes supervisor.start raise.
+load "std/supervisor"
+load "std/gen_server"
+
+let counter = {
+  init: fn() {state: 0} end,
+  handle_call: fn(msg, from, n) {reply: n + 1, state: n + 1} end,
+  handle_cast: fn(msg, n) {state: n} end,
+  handle_info: fn(msg, n) {state: n} end
+}
+
+fn start_named(name)
+  let h = gen_server.start(counter)
+  register(name, h.pid)
+  h
+end
+
+fn idle()
+  spawn do
+    receive
+    when {tag: "never"}
+      nil
+    end
+  end
+end
+
+fn boom()
+  error("boom")
+end
+
+# The tags of the tagged messages left in the caller's mailbox.
+fn leftovers()
+  let tags = []
+  let more = true
+  while more
+    receive
+    when {tag: tag}
+      push(tags, tag)
+    after 0
+      more = false
+    end
+  end
+  tags
+end
+
+fn main()
+  # 1. A child's name works as soon as start returns.
+  let s1 = supervisor.start({children: [{id: "c", start: fn() start_named("counter201") end}]})
+  print("1 call by name:", gen_server.call("counter201", "inc"))
+  supervisor.stop(s1)
+
+  # 2. Children start in order: a later child's start finds an earlier one.
+  # (A start runs in the supervisor's process: it reports by message.)
+  let me = self()
+  let s2 = supervisor.start({children: [
+    {id: "first", start: fn() start_named("first201") end},
+    {id: "second", start: fn()
+      send(me, {tag: "saw", found: whereis("first201") != nil})
+      idle()
+    end}
+  ]})
+  receive
+  when {tag: "saw", found: found}
+    print("2 second saw first:", found)
+  end
+  supervisor.stop(s2)
+
+  # 3. A nested supervisor's children are up when the outer start returns.
+  let s3 = supervisor.start({children: [
+    {id: "inner", start: fn()
+      supervisor.start({children: [{id: "c", start: fn() start_named("deep201") end}]})
+    end}
+  ]})
+  print("3 nested child:", gen_server.call("deep201", "inc"))
+  supervisor.stop(s3)
+  print("3 nested child gone:", whereis("deep201"))
+
+  # 4. No children.
+  let s4 = supervisor.start({children: []})
+  print("4 children:", len(supervisor.which_children(s4)))
+  supervisor.stop(s4)
+
+  # 5. A start that raises; the name is free again when start raises.
+  let r5 = pcall supervisor.start({name: "s201", children: [
+    {id: "ok", start: idle},
+    {id: "bad", start: boom}
+  ]})
+  print("5", r5.error)
+  print("5 name free:", whereis("s201"))
+  let s5 = supervisor.start({name: "s201", children: [{id: "ok", start: idle}]})
+  print("5 restarted under the same name:", whereis("s201") == s5.pid)
+  supervisor.stop(s5)
+
+  # 6. A start that returns a name nobody holds.
+  let r6 = pcall supervisor.start({children: [{id: "ghost", start: fn() "nobody201" end}]})
+  print("6", r6.error)
+
+  # 7. A nested supervisor whose child fails: both levels report it.
+  let r7 = pcall supervisor.start({children: [
+    {id: "inner", start: fn()
+      supervisor.start({children: [{id: "bad", start: boom}]})
+    end}
+  ]})
+  print("7", r7.error)
+
+  # 8. The supervisor killed while its children start.
+  let killer = spawn do
+    sleep(5)
+    kill(whereis("s8_201"), "kill")
+  end
+  let r8 = pcall supervisor.start({name: "s8_201", children: [{id: "slow", start: fn()
+    sleep(50)
+    idle()
+  end}]})
+  print("8", r8.error)
+
+  # 9. start leaves nothing in the caller's mailbox.
+  print("9 leftovers:", leftovers())
+end

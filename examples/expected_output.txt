@@ -613,13 +613,13 @@ Stack trace:
   at anonymous fn (examples/30_supervisor.gem:13)
 
 [Runtime Error in process 10]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:310
+  --> std/supervisor.gem:319
      |
- 310 |     error(res.error)
+ 319 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:310)
-  at anonymous fn (std/supervisor.gem:417)
+  at supervisor.sup_main (std/supervisor.gem:319)
+  at anonymous fn (std/supervisor.gem:437)
 test4: supervisor crashed: supervisor: max restart intensity reached
 test1: equal_self=true different=true
 test2: type=ref
@@ -2703,7 +2703,7 @@ dynamic_supervisor.start_child: supervisor exited: boom
 3: unknown name: supervisor.which_children: no process registered as "nope175"
 3: bad target: supervisor.which_children: expected a pid, a {pid} handle or a registered name, got nil
 3: no answer: supervisor.which_children: timeout
-3: dead supervisor: supervisor.which_children: supervisor exited: noproc, at once: true
+3: dead supervisor: supervisor.which_children: supervisor exited: shutdown, at once: true
 4: still alive, temp pid -1, perm restarted true
 5: 3 of 3 restarted, ids abc
 6: supervisor.start: unknown strategy "rest_for_one"
@@ -3196,7 +3196,7 @@ DOWNs: 0
 gen_server.call: server exited: noproc
 gen_server.call: server exited: noproc
 DOWNs: 0
-supervisor.which_children: supervisor exited: noproc
+supervisor.which_children: supervisor exited: shutdown
 supervisor.which_children: supervisor exited: noproc
 supervisor.which_children: supervisor exited: noproc
 DOWNs: 0
@@ -3214,13 +3214,13 @@ armed timeout fired
 inner links its children: 3 true
 
 [Runtime Error in process 6]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:310
+  --> std/supervisor.gem:319
      |
- 310 |     error(res.error)
+ 319 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:310)
-  at anonymous fn (std/supervisor.gem:417)
+  at supervisor.sup_main (std/supervisor.gem:319)
+  at anonymous fn (std/supervisor.gem:437)
 inner restarted: true
 old db dead: true
 new db: true 0
@@ -3228,13 +3228,13 @@ outer, inner, children dead: true true true true nil
 one_for_all restarted inner: true true true
 
 [Runtime Error in process 22]: dynamic_supervisor: max restart intensity reached
-  --> std/dynamic_supervisor.gem:317
+  --> std/dynamic_supervisor.gem:318
      |
- 317 |     error(res.error)
+ 318 |     error(res.error)
      |
 Stack trace:
-  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:317)
-  at anonymous fn (std/dynamic_supervisor.gem:387)
+  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:318)
+  at anonymous fn (std/dynamic_supervisor.gem:389)
 dsup and its children dead: true true
 ignores a normal exit signal: true
 dsup killed, child dead: true true
@@ -3434,7 +3434,7 @@ task.await_all: timeout must be an int (milliseconds) or nil, got string
 [2]
 0
 
-[Runtime Error in process 29]: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
+[Runtime Error in process 31]: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
   --> std/gen_server.gem:85
     |
  85 |     error("gen_server: {callback} returned a timeout that is {describe(t)}, expected an int (milliseconds) or nil")
@@ -3446,7 +3446,7 @@ Stack trace:
   at anonymous fn (std/gen_server.gem:188)
 gen_server.call: server exited: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
 
-[Runtime Error in process 30]: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
+[Runtime Error in process 32]: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
   --> std/gen_server.gem:85
     |
  85 |     error("gen_server: {callback} returned a timeout that is {describe(t)}, expected an int (milliseconds) or nil")
@@ -3552,16 +3552,16 @@ Stack trace:
   at anonymous fn (examples/189_otp_shutdown.gem:102)
 
 [Runtime Error in process 12]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:310
+  --> std/supervisor.gem:319
      |
- 310 |     error(res.error)
+ 319 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:310)
-  at anonymous fn (std/supervisor.gem:417)
+  at supervisor.sup_main (std/supervisor.gem:319)
+  at anonymous fn (std/supervisor.gem:437)
 3 down: supervisor: max restart intensity reached true ["t:shutdown"]
 
-[Runtime Error in process 18]: boom
+[Runtime Error in process 20]: boom
   --> examples/189_otp_shutdown.gem:117
      |
  117 |     when "crash" then error("boom")
@@ -3574,19 +3574,10 @@ Stack trace:
 5 terminate: true nil ["inner.r:shutdown"]
 6 reports: ["z:shutdown", "y:shutdown", "x:shutdown"]
 supervisor: exiting on an error raised at:
-  at bad_start (examples/189_otp_shutdown.gem:151)
+  at bad_start (examples/189_otp_shutdown.gem:152)
   at supervisor.start_child (std/supervisor.gem:81)
-  at anonymous fn (std/supervisor.gem:299)
-
-[Runtime Error in process 33]: start broke
-  --> std/supervisor.gem:310
-     |
- 310 |     error(res.error)
-     |
-Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:310)
-  at anonymous fn (std/supervisor.gem:417)
-7 down: start broke ["a:shutdown"]
+  at anonymous fn (std/supervisor.gem:300)
+7 start: supervisor.start: child "bad" failed to start: start broke nil ["a:shutdown"]
 8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got nil
 8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got string
 8 gen_server.start: the module's handle_info must be a fn, got nil
@@ -3931,3 +3922,32 @@ xyyy x
 hello b true table
 2 1 1 1 1 1
 nil true false true
+1 call by name: 1
+2 second saw first: true
+3 nested child: 1
+3 nested child gone: nil
+4 children: 0
+supervisor: exiting on an error raised at:
+  at boom (examples/201_supervisor_start_waits.gem:30)
+  at supervisor.start_child (std/supervisor.gem:81)
+  at anonymous fn (std/supervisor.gem:300)
+5 supervisor.start: child "bad" failed to start: boom
+5 name free: nil
+5 restarted under the same name: true
+supervisor: exiting on an error raised at:
+  at supervisor.target_pid (std/supervisor.gem:53)
+  at supervisor.start_child (std/supervisor.gem:82)
+  at anonymous fn (std/supervisor.gem:300)
+6 supervisor.start: child "ghost" failed to start: supervisor: start of child "ghost": no process registered as "nobody201"
+supervisor: exiting on an error raised at:
+  at boom (examples/201_supervisor_start_waits.gem:30)
+  at supervisor.start_child (std/supervisor.gem:81)
+  at anonymous fn (std/supervisor.gem:300)
+supervisor: exiting on an error raised at:
+  at supervisor.start (std/supervisor.gem:461)
+  at anonymous fn (examples/201_supervisor_start_waits.gem:103)
+  at supervisor.start_child (std/supervisor.gem:81)
+  at anonymous fn (std/supervisor.gem:300)
+7 supervisor.start: child "inner" failed to start: supervisor.start: child "bad" failed to start: boom
+8 supervisor.start: supervisor exited: killed
+9 leftovers: {}
