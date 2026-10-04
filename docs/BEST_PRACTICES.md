@@ -1436,6 +1436,15 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
   [Document the public API with `##`](#document-the-public-api-with-)),
   and give a private function a `#` comment when its contract isn't
   obvious from its name.
+- How much to comment depends on who reads the code. A library (std, or
+  a module other code loads) has callers who don't read its source, so
+  its `##` docs are complete. Application code and examples are read as
+  code: a one-line `##` per module and exported function is enough, and a
+  `#` comment earns its place only by saying what the code can't, such
+  as a design choice that's easy to undo by mistake or a Gem behaviour
+  the reader wouldn't expect (a lookup that blocks every process, a
+  process that traps exits so it can close its socket). Don't narrate
+  what the next line does.
 - Keep functions short. Prefer a well-named helper to a long arm inside a
   `match`.
 

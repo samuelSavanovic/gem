@@ -85,6 +85,8 @@ Any Gem you write (`std/`, `examples/`, `compiler/`, `lsp/`, benchmarks, test pr
 - **The trap exists because of a bug**: add the bug to `docs/KNOWN_BUGS.md` (see below) and mark the rule **(bug)**. A fix deletes the **(bug)** rule and its trap-index row in the same change.
 - **A change to the language, runtime or std changes what a rule says** (a new builtin, a fixed bug, different performance): update the rule with the change, as with SPEC.md.
 
+Comment density follows BEST_PRACTICES.md "Style": std modules carry full `##` docs; examples, benchmarks and other application code comment only what the code can't say (a non-obvious design choice, a Gem behaviour a reader wouldn't expect).
+
 Keep it a doc of what to reach for and what to avoid, not a second SPEC: one rule per trap, a short sample, the measured cost when it is about performance.
 
 ## Testing Discipline
