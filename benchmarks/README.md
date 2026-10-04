@@ -17,6 +17,8 @@ The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the
 
 `lox/` benchmarks `examples/lox` (a tree-walking interpreter for the Lox language) against the same interpreter in Python; see [below](#lox).
 
+`gemgrep/` benchmarks `examples/gemgrep` (a recursive grep on libc's regex) against GNU grep and the same program in Python; see [below](#gemgrep).
+
 ## Running
 
 Prereqs: `wrk` on PATH (`brew install wrk`), the gem app built once.
@@ -118,3 +120,47 @@ First run (October 2026, commit 2487e74 + lox, Linux x86_64 VM, 4 cores, Python 
 | `methods.lox 3000` | 0.92–0.93 | |
 
 The other programs stay at 10 MB, like Python. In callgrind profiles 40–45% of the Gem instructions are string-key table lookups, because the field-access inline cache misses on 99% of the reads, and the Gem runs spend 20–30% of their time in page faults on the arena blocks resets map anew. `docs/OPTIMIZATIONS.md` tracks each of these.
+
+## gemgrep
+
+`examples/gemgrep` is a recursive grep on libc's POSIX regex (`regcomp`/`regexec` through `extern fn`), so it measures Gem's C interop on a hot path, plus whole-file reads, line walking with `find`, and output building. The control is GNU grep (`grep -E`, in the C locale), as redis-server is for mini_redis; `gemgrep/gemgrep.py` is the same program in Python on `re` (same options, walk order, output and messages; its docstring lists where `re` and POSIX EREs differ). It needs `python3` and GNU grep.
+
+```bash
+benchmarks/gemgrep/run.sh                  # the eleven searches, about a minute
+benchmarks/gemgrep/run.sh few many         # some of them
+MB=512 benchmarks/gemgrep/run.sh           # a bigger corpus (default 128 MB)
+GEM_DIAG=1 benchmarks/gemgrep/run.sh       # plus the arena reset statistics of each Gem run
+```
+
+`gen_corpus.py` writes the corpus into a temporary directory: 1,092 files (at 128 MB) of log-like and code-like lines in 80 directories, the same bytes on every run, with the rare token `deadbeef` on about one line in 2,500. The `src_*` searches run over the repository's `compiler`, `runtime`, `std`, `lsp` and `examples` (352 files, 13 MB, `sqlite3.c` among them). For each search it prints the wall time and peak RSS of the three programs and the Gem/grep and Gem/Python ratios, and stops with a diff if gemgrep's output differs from the twin's, or from grep's once sorted (grep walks directories in readdir order, the other two in sorted order).
+
+| Search | What it loads |
+|---|---|
+| `literal`: `-r handler` | a common word: 162,000 lines out |
+| `icase`: `-ri timeout` | case folding |
+| `alternation`: `-r 'connect(ed\|ion)\|socket'` | an alternation with a group: 453,000 lines out |
+| `word`: `-rw id` | `-w`, which wraps the pattern in boundary groups |
+| `count`: `-rc error` | counting, no output |
+| `list`: `-rl deadbeef` | `-l`: each file until its first match |
+| `invert`: `-rv e` | `-v` |
+| `few`: `-rn deadbeef` | a pattern with few matches: nearly all regex work |
+| `many`: `-rn e` | most lines match: 2.4M lines, 191 MB out |
+| `src_literal`, `src_icase` | the repository's sources, a few large files |
+
+First run (October 2026, commit 5304ef5 + gemgrep, Linux x86_64 VM, 4 cores, GNU grep 3.11, Python 3.11; two runs, ratios of wall time):
+
+| Search | Gem/grep | Gem/Python |
+|---|---|---|
+| `literal` | 4.9–5.2 | 1.37–1.43 |
+| `icase` | 6.2–6.4 | 0.82–0.88 |
+| `alternation` | 3.5–3.8 | 0.76–0.84 |
+| `word` | 5.9–6.1 | 0.45–0.46 |
+| `count` | 6.3–7.5 | 1.51–1.62 |
+| `list` | 9.5–11 | 1.02–1.09 |
+| `invert` | 5.2–5.9 | 0.88–1.19 |
+| `few` | 7.4–7.8 | 1.29–1.41 |
+| `many` | 4.5–4.7 | 1.35–1.63 |
+| `src_literal` | 13 | 2.0–2.3 |
+| `src_icase` | 3.2–6.1 | 0.40–0.58 |
+
+The `src_*` runs take 0.1–0.4 s, so their ratios are the noisiest. Peak RSS: 13–20 MB for gemgrep on the corpus (49 MB for `many`), 10 MB for grep, 13–18 MB for Python; 22 MB against Python's 40 MB on the sources. Per line, gemgrep spends about as many instructions on its own side (the line walk, the binding's checks, the call) as in `regexec`, and GNU grep runs no regex per line at all; `examples/gemgrep/README.md` ("Performance") has the breakdown, and the numbers for the whole-buffer helper it measured and didn't keep.

@@ -61,9 +61,11 @@ form.
 built from `supervisor`, `dynamic_supervisor` and `gen_server`),
 `examples/logstat/` (a command-line log analyzer in a `gem.toml` project),
 `examples/mini_redis/` (a Redis-protocol server: one process owning
-a large keyspace, a process per connection, pub/sub) and `examples/lox/`
+a large keyspace, a process per connection, pub/sub), `examples/lox/`
 (an interpreter for the Lox language: a lexer, a recursive-descent parser
-and a tree walker over tables) follow this doc and test themselves with
+and a tree walker over tables) and `examples/gemgrep/` (a recursive grep
+on libc's regex through `extern fn`: a C object behind a `Ptr`, file
+contents as `Bytes`) follow this doc and test themselves with
 `std/test`; read them for how the pieces fit together.
 
 **Words this doc uses.**
@@ -1357,6 +1359,22 @@ way to read a *file* a line at a time: `read_file` and split it yourself
 (see `examples/logstat/lib/source.gem`), which holds the whole file in
 memory, twice while it is read.
 
+### Write large output in one piece
+
+`print` flushes after every line, so each line is a `write` system call:
+a million lines to a file took 0.6 s with `print` against 0.3 s with one
+`write_stdout` of a string built with `build_string`, and 0.73 s with
+`print` into a pipe. For bulk output, build a block of lines and write it
+once:
+
+```gem
+write_stdout(build_string do |add|
+  for line in lines
+    add(line, "\n")
+  end
+end)
+```
+
 ### `tcp_listen` takes an IP address
 
 `tcp_listen("localhost", port)` raises `invalid address`; pass
@@ -1495,21 +1513,84 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
   prototype from the extern types, which clashes with libc's.
 - Types are checked, not converted: a `Float` parameter rejects `2` (pass
   `2.0` or `to_float(n)`). The argument count must match exactly: too few
-  or too many raise. A `Ptr` is an int in Gem, and `NULL` comes back as
-  `0`, not `nil`. `extern blocking fn` can't take or return a `Table`.
+  or too many raise. `extern blocking fn` can't take or return a `Table`.
+- A `Ptr` is an int in Gem, and `NULL` comes back as `0`, not `nil`.
+  `0` is truthy, so `if not p` never catches a `NULL` **(trap)**: compare
+  with `p == 0`.
 - `String` parameters arrive as `const char *` and stop at the first `\0`.
-  Use `Bytes` for binary data.
-- A plain `extern fn` runs on the scheduler thread and blocks every
-  process. Declare slow calls `extern blocking fn`.
+  Use `Bytes` for binary data. A plain `extern fn` gets a pointer into
+  the string itself, not a copy, so passing a large string with offsets
+  (`data: Bytes, start: Int, stop: Int`) costs the same as passing a
+  short one; slicing it with `substr` first copies the slice.
 - Returned strings: a plain `extern fn` must return static memory (the
   runtime copies it and does not free it); an `extern blocking fn` must
   return `malloc`'d memory (the runtime frees it). A `NULL` return is
   `nil` from a plain `extern fn` but `""` from an `extern blocking fn`.
+  Declare a helper's return `char *`: the generated wrapper assigns it to
+  a `char *`, so a `const char *` return, and a libc function that
+  returns one (`hstrerror`), make cc warn on every build **(bug)**.
 - Don't keep pointers to Gem strings or tables on the C side after the call
   returns: the next arena reset or the process's exit frees that memory,
   and an `extern blocking fn` gets copies that are freed when it returns.
 - C code that recurses without limit kills the process, and `pcall` can't
   catch it.
+
+### Plain `extern fn` for quick calls, `extern blocking fn` for waits **(trap)**
+
+A plain `extern fn` runs on the scheduler thread: no process runs until
+it returns. An `extern blocking fn` runs on the 4-thread pool while the
+caller waits and other processes run, but every call pays a hand-off to
+a worker and back, and copies every `String` and `Bytes` argument. Called
+once per line, that is ruinous: `regexec` on each of 19,000 lines of a
+1 MB file took 5 ms as a plain `extern fn`, 0.64 s as an `extern blocking
+fn` given each line, and 1.7 s given the whole file each time (Linux
+x86_64; `examples/gemgrep`).
+
+```gem
+extern include "unistd.h"
+extern fn write(fd: Int, data: Bytes) -> Int      # quick: a plain call, inline
+extern blocking fn fsync(fd: Int) -> Int           # can wait for the disk: the pool
+```
+
+Use `extern blocking fn` for calls that wait (I/O, locks, the network) or
+run for more than about a millisecond, and a plain `extern fn` for short
+calls in loops. A plain call from a loop holds the other processes only
+for one call, since the loop's back-edge lets them run; one call that
+runs long holds them for all of it (glibc's `regexec` with a
+backreference can take seconds on one line).
+
+### A `Ptr` is a number, not an owner **(trap)**
+
+A C object behind a `Ptr` (a `FILE *`, a compiled regex, a handle a
+library gave you) is not freed when the process holding it dies, as a
+socket isn't closed. And `spawn` and `send` copy the number, not the
+object: two processes then share one object, and when one frees it the
+other holds a dangling pointer, which crashes or corrupts memory rather
+than raising. Make, use and free a C object in one process, free it on
+every path, and give other processes what they need to make their own:
+
+```gem
+fn file_magic(path)
+  let f = fopen(path, "rb")
+  if f == 0
+    return nil
+  end
+  let r = pcall magic(f)          # Gem code that may raise
+  fclose(f)                       # on every path
+  if not r.ok
+    error(r.error)
+  end
+  r.value
+end
+
+for path in paths
+  push(tasks, task.async(fn() file_magic(path) end))   # each task opens its own
+end
+```
+
+When the free function tolerates it, zero the handle after freeing
+(`h.ptr = 0`) and check for `0` before each use, so a use after the free
+raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 
 ---
 
@@ -1624,6 +1705,9 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `gen_server.call` to a server that has already died | `server exited: noproc` (by name: `no process registered`), not why it died | monitor it: the `DOWN` has the reason |
 | `spawn` per connection or per item, unguarded **(trap)** | raises at the process or memory limit (~14,000 on stock Linux); the acceptor dies | catch it, or cap in-flight work |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
+| `extern blocking fn` called once per line or item | a thread hand-off and argument copies per call: 100x slower | plain `extern fn` for quick calls |
+| `if not p` on a `Ptr` | `NULL` is `0`, which is truthy | `p == 0` |
+| A `Ptr` sent, captured by `spawn`, or left when its process dies | shared or leaked C object; use after free | one process makes, uses and frees it, on every path |
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_listen("localhost", ...)` | raises | `"127.0.0.1"` |
 | `tcp_read` with no timeout | blocks forever on a silent peer | pass a timeout |

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Run the larger example programs, each of which checks itself: the JSON
-# parser and the bookmark app, STOMP broker, mini_redis, logstat and lox
-# test suites (std/test, exit status 1 on a failing case), and the TCP echo program
-# (raises on a bad echo). The bookmark app looks its static files up
-# relative to the cwd, so its tests run from its own directory (as do
-# lox's, which read its bench programs). logstat also runs as a program on
-# a generated log.
+# parser and the bookmark app, STOMP broker, mini_redis, logstat, lox and
+# gemgrep test suites (std/test, exit status 1 on a failing case), and the
+# TCP echo program (raises on a bad echo). The bookmark app looks its
+# static files up relative to the cwd, so its tests run from its own
+# directory (as do lox's, which read its bench programs). logstat also
+# runs as a program on a generated log, and gemgrep on stdin and a small
+# tree, for its output, messages and exit statuses.
 #
 # Run from the repo root: tests/check_example_apps.sh
 
@@ -54,6 +55,7 @@ run stomp_broker examples/stomp_broker test.gem
 run mini_redis examples/mini_redis test.gem
 run logstat_test examples/logstat test.gem
 run lox_test examples/lox test.gem
+run gemgrep_test examples/gemgrep test.gem
 
 # logstat end to end: a generated log, read from a file and from stdin, and
 # the exit statuses for a bad flag (2) and an unreadable file (1).
@@ -85,8 +87,43 @@ else
   fails=$((fails + 1))
 fi
 
+# gemgrep end to end: stdin, a tree with -r, a missing file and a bad
+# pattern, a bad option; stdout, stderr and the exit status of each.
+if "$GEM" examples/gemgrep/main.gem -o "$T/gemgrep" > /dev/null 2>&1; then
+  G=$T/gemgrep
+  mkdir -p "$T/gg/sub"
+  printf 'foo bar\nbaz\n' > "$T/gg/a.txt"
+  printf 'x\nFOO\n' > "$T/gg/sub/b.txt"
+  printf 'bin\0foo\n' > "$T/gg/sub/c.dat"
+  gg_case() {
+    local want_status=$1 want_out=$2 want_err=$3
+    shift 3
+    local status=0
+    (cd "$T/gg" && "$G" "$@" < a.txt > "$T/gg.out" 2> "$T/gg.err") || status=$?
+    if [ "$status" -ne "$want_status" ] || [ "$(cat "$T/gg.out")" != "$want_out" ] || [ "$(cat "$T/gg.err")" != "$want_err" ]; then
+      echo "FAIL: gemgrep $*: status $status (want $want_status)"
+      echo "--- stdout:"; cat "$T/gg.out"; echo "--- stderr:"; cat "$T/gg.err"
+      fails=$((fails + 1))
+    fi
+  }
+  gg_case 0 "foo bar" "" foo
+  gg_case 0 "(standard input):1:foo bar" "" -Hn foo -
+  gg_case 0 "a.txt:foo bar
+sub/b.txt:FOO" "gemgrep: sub/c.dat: binary file matches" -ri foo
+  gg_case 1 "" "" zzz a.txt
+  gg_case 2 "a.txt:1" "gemgrep: nope: No such file or directory" -c foo nope a.txt
+  gg_case 2 "" "gemgrep: sub: Is a directory" foo sub
+  gg_case 2 "" "gemgrep: Unmatched ( or \(" "a(" a.txt
+  gg_case 2 "" "gemgrep: invalid option -- 'z'
+Usage: gemgrep [OPTION]... PATTERN [FILE]...
+Try 'gemgrep --help' for more information." -z foo
+else
+  echo "FAIL: gemgrep doesn't compile"
+  fails=$((fails + 1))
+fi
+
 # The entry points the tests don't build.
-for f in examples/bookmark_app/app.gem examples/stomp_broker/main.gem examples/mini_redis/main.gem examples/lox/main.gem; do
+for f in examples/bookmark_app/app.gem examples/stomp_broker/main.gem examples/mini_redis/main.gem examples/lox/main.gem examples/gemgrep/main.gem; do
   if ! "$GEM" --check "$f" > "$T/check.out" 2>&1 || [ -s "$T/check.out" ]; then
     echo "FAIL: gem --check $f:"
     cat "$T/check.out"
