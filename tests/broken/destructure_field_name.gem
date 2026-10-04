@@ -1,0 +1,6 @@
+# A destructuring field must be a name: it is the key and the variable.
+# expect: expected a field name in a destructuring pattern, got `"a"`
+let {"a"} = {a: 1}
+let {1} = {}
+let {match} = {}
+fn f({"x", y}) y end

@@ -63,6 +63,7 @@ let MAX_CHUNK_SIZE_LEN = 64
 let DEFAULT_MAX_BODY = 8388608
 let DEFAULT_IDLE_TIMEOUT_MS = 30000
 let DEFAULT_REQUEST_TIMEOUT_MS = 30000
+let DEFAULT_WRITE_TIMEOUT_MS = 30000
 let ACCEPT_BACKOFF_MS = 50
 let MAX_EMPTY_LINE_HEADS = 16
 let DRAIN_QUIET_MS = 100
@@ -247,7 +248,9 @@ fn cookie_line(caller, name, value, path, http_only, secure, same_site, max_age,
   end
   build_string() do |add|
     add(n, "=", v)
-    add("; Path=", path)
+    if path != nil
+      add("; Path=", path)
+    end
     if max_age != nil
       add("; Max-Age=", max_age)
     end
@@ -260,7 +263,9 @@ fn cookie_line(caller, name, value, path, http_only, secure, same_site, max_age,
     if secure
       add("; Secure")
     end
-    add("; SameSite=", same_site)
+    if same_site != nil
+      add("; SameSite=", same_site)
+    end
   end
 end
 
@@ -542,7 +547,7 @@ end
 # from `pos` on), and the deadline for the request being read (nil while
 # waiting for its first byte).
 fn new_reader(fd, cfg)
-  {fd: fd, data: "", pos: 0, deadline: nil, idle_ms: cfg.idle_ms, request_ms: cfg.request_ms}
+  {fd: fd, data: "", pos: 0, deadline: nil, idle_ms: cfg.idle_ms, request_ms: cfg.request_ms, write_ms: cfg.write_ms}
 end
 
 fn pending(rd)
@@ -1262,15 +1267,16 @@ end
 # to be closed (returns false).
 fn reject(rd, status, head_only = false)
   let resp = response(status, {"Content-Type": TEXT_PLAIN}, status_text(status))
-  tcp_write(rd.fd, serialize_response(resp, false, head_only))
+  tcp_write(rd.fd, serialize_response(resp, false, head_only), rd.write_ms)
   drain(rd.fd)
   false
 end
 
-# The process table is full: 503, then close.
+# The process table is full: 503, then close. The acceptor runs this, so
+# the write doesn't wait: a fresh socket takes the short response at once.
 fn refuse(fd)
   let resp = response(503, {"Content-Type": TEXT_PLAIN}, status_text(503))
-  tcp_write(fd, serialize_response(resp, false))
+  tcp_write(fd, serialize_response(resp, false), 0)
   drain(fd, REFUSE_DRAIN_MS)
   tcp_close(fd)
 end
@@ -1306,7 +1312,9 @@ fn read_body(rd, cfg, head, req)
   end
   let expect = headers["expect"]
   if expect != nil and string.lower(expect) == "100-continue" and not head.http10
-    tcp_write(rd.fd, "HTTP/1.1 100 Continue\r\n\r\n")
+    if not send_all(rd, "HTTP/1.1 100 Continue\r\n\r\n")
+      return false
+    end
   end
   if chunked
     let r = read_chunked(rd, cfg.max_body)
@@ -1475,8 +1483,33 @@ fn process_one_request(rd, cfg)
   if response_closes(resp)
     keep_alive = false
   end
-  tcp_write(rd.fd, serialize_response(resp, keep_alive, head_only))
+  if not send_all(rd, serialize_response(resp, keep_alive, head_only))
+    keep_alive = false
+  end
   keep_alive
+end
+
+# Writes a response. `write_ms` bounds the wait for progress, not the whole
+# response: a slow client that keeps taking bytes gets all of it. Each
+# tcp_write waits up to write_ms; one that writes nothing ends the
+# response, so a client that stops taking bytes loses its connection
+# between write_ms and twice that after its last byte (logged), as does
+# one that has gone (not logged). Returns false when the response was cut.
+fn send_all(rd, out)
+  let rest = out
+  while true
+    let t0 = time_ms()
+    let n = tcp_write(rd.fd, rest, rd.write_ms)
+    if n == len(rest)
+      return true
+    elif n == 0
+      if rd.write_ms != nil and time_ms() - t0 >= rd.write_ms
+        eprint("http: closing a connection: the client took no bytes of a {len(out)}-byte response for {rd.write_ms} ms")
+      end
+      return false
+    end
+    rest = substr(rest, n)
+  end
 end
 
 # Keep-alive loop: serve requests on `fd` until the peer closes, goes idle,
@@ -1682,8 +1715,14 @@ end
 ## `idle_timeout_ms` (default 30000: the longest wait for each read, also
 ## for the next request on a kept-alive connection) and
 ## `request_timeout_ms` (default 30000: a request's head and body must
-## arrive within it). A timeout of nil means no limit; past one, the
-## connection is closed without a response. Other keys are ignored.
+## arrive within it) and `write_timeout_ms` (default 30000: a response
+## is cut once the client takes no bytes of it for a whole
+## write_timeout_ms, which is between write_timeout_ms and twice that
+## after the last byte it took, so one that stops reading can't hold its
+## connection; a slow one that keeps reading gets the whole response). A timeout of nil means no limit; past a read
+## one, the connection is closed without a response, past the write one,
+## it is closed with the response cut short and a line on stderr. Other
+## keys are ignored.
 ## `opts` must be a table: nil raises an unprefixed `field access on
 ## non-table` error.
 ##
@@ -1701,13 +1740,12 @@ fn start(router_ref, opts = {})
   launch("http.start", router_ref, nil, opts)
 end
 
-# A timeout option: its default when left out, nil (no limit) when given
-# as nil, else an int > 0.
-fn timeout_opt(caller, opts, name, value)
-  if type(opts) == "table" and has_key(opts, name) and opts[name] == nil
+# A timeout option (its default when left out): nil (no limit) or an
+# int > 0.
+fn timeout_opt(caller, name, value)
+  if value == nil
     return nil
-  end
-  if type(value) != "int"
+  elif type(value) != "int"
     error("{caller}: {name} must be an int > 0 (milliseconds) or nil, got {type(value)}")
   elif value <= 0
     error("{caller}: {name} must be an int > 0 (milliseconds) or nil, got {value}")
@@ -1718,14 +1756,21 @@ end
 # `start`, with the server watching `watch` (nil: nobody); errors start
 # with `caller`.
 fn launch(caller, router_ref, watch, opts)
-  let {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS} = opts
+  let {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS, write_timeout_ms = DEFAULT_WRITE_TIMEOUT_MS} = opts
+  if type(port) != "int"
+    error("{caller}: port must be an int, got {type(port)}")
+  end
+  if type(host) != "string"
+    error("{caller}: host must be a string (an IP address), got {type(host)}")
+  end
   check_int(caller, "max_body", max_body, 0)
-  idle_timeout_ms = timeout_opt(caller, opts, "idle_timeout_ms", idle_timeout_ms)
-  request_timeout_ms = timeout_opt(caller, opts, "request_timeout_ms", request_timeout_ms)
+  idle_timeout_ms = timeout_opt(caller, "idle_timeout_ms", idle_timeout_ms)
+  request_timeout_ms = timeout_opt(caller, "request_timeout_ms", request_timeout_ms)
+  write_timeout_ms = timeout_opt(caller, "write_timeout_ms", write_timeout_ms)
   if type(router_ref) != "table" or type(router_ref.match) != "fn"
     error("{caller}: expected a router from http.router(), got {type(router_ref)}")
   end
-  let cfg = {router: router_ref, max_body: max_body, idle_ms: idle_timeout_ms, request_ms: request_timeout_ms, server: nil}
+  let cfg = {router: router_ref, max_body: max_body, idle_ms: idle_timeout_ms, request_ms: request_timeout_ms, write_ms: write_timeout_ms, server: nil}
   let l = pcall tcp_listen(host, port)
   if not l.ok
     error("{caller}: {l.error}")

@@ -1339,6 +1339,35 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     "_t{tmp_counter}"
   end
 
+  # True for a compiled expression with no side effects whose value can't
+  # change while later code runs: a literal, or a temp the setup already
+  # computed. Anything else (a call, a variable read) must be evaluated
+  # into a temp before a later operand's setup or call runs, so operands
+  # run left to right (C leaves the order inside an initializer list or a
+  # call's arguments unspecified).
+  let is_inert_expr = fn(e)
+    if substr(e, 0, 2) == "_t" and len(e) > 2
+      for i = 2, len(e)
+        let c = e[i]
+        if c < "0" or c > "9"
+          return false
+        end
+      end
+      return true
+    end
+    e == "GEM_NIL" or e == "gem_bool(1)" or e == "gem_bool(0)" or substr(e, 0, 8) == "gem_int(" or substr(e, 0, 10) == "gem_float(" or substr(e, 0, 21) == "gem_string_with_len(\"" or e == "gem_string(\"\")"
+  end
+
+  # Evaluate a compiled operand now, into a temp, unless it is inert.
+  # Returns the setup to append and the expression to use.
+  let pin_operand = fn(r)
+    if is_inert_expr(r.expr)
+      return r
+    end
+    let t = tmp()
+    {expr: t, setup: r.setup + "    GemVal {t} = {r.expr};\n"}
+  end
+
   let anon_name = fn()
     anon_counter += 1
     "_anon_{anon_counter}"
@@ -2191,6 +2220,43 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # ─── Compilation ──
 
   let compile_expr = nil
+
+  # Compile a two-operand form left to right: the left operand (already
+  # compiled) is evaluated before anything the right one runs.
+  let operands = fn(left_r, right_node)
+    let right_r = compile_expr(right_node)
+    if right_r.setup != "" or not is_inert_expr(right_r.expr)
+      left_r = pin_operand(left_r)
+    end
+    {left: left_r.expr, right: right_r.expr, setup: left_r.setup + right_r.setup}
+  end
+
+  # Make a list of compiled operands (call arguments, interpolation parts)
+  # run left to right: an operand is evaluated into a temp when anything
+  # after it runs code (a later operand's setup or call). The last one
+  # never needs it. Returns the concatenated setup and the expressions.
+  let left_to_right = fn(results)
+    let later_runs = false
+    let i = len(results) - 1
+    while i >= 0
+      let r = results[i]
+      if later_runs
+        r = pin_operand(r)
+        results[i] = r
+      end
+      if r.setup != "" or not is_inert_expr(r.expr)
+        later_runs = true
+      end
+      i -= 1
+    end
+    let b = buf_new()
+    let exprs = []
+    for r in results
+      buf_push(b, r.setup)
+      push(exprs, r.expr)
+    end
+    {setup: to_string(b), exprs: exprs}
+  end
   let compile_stmt = nil
   let compile_stmt_return = nil
   let compile_stmts = nil
@@ -2769,7 +2835,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     # functions) are not, so each round-trip eats a C frame and saturates the
     # 256 KB minicoro stack after ~175 frames. Find SCCs in the tail-edge
     # subgraph; if every member is viable, mark them so compile_fn emits a
-    # `gem_fn_<name>_body` + thin trampoline-loop wrapper, and intra-SCC tail
+    # `gem_sccbody_<name>` + thin trampoline-loop wrapper, and intra-SCC tail
     # calls become a TLB write + return rather than a real C call.
     find_tail_call_sccs(fn_defs, caller_records, name_to_fn)
 
@@ -3184,7 +3250,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   #
   # Replaces what would be a real C call to a sibling SCC member at a
   # tail-position site. Compiles the args, writes them into the global
-  # TLB, sets `gem_tail_fn = gem_fn_<target>_body`, pops the body's
+  # TLB, sets `gem_tail_fn = gem_sccbody_<target>`, pops the body's
   # frame (pushed at body entry, balanced here), and returns GEM_NIL.
   # The wrapper around the body sees the non-NULL marker and dispatches
   # the next body — collapsing the C-stack growth that would otherwise
@@ -3206,7 +3272,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
     buf_push(b, "{p}gem_tail_argc = {len(arg_temps)};\n")
     buf_push(b, "{p}gem_tail_env = NULL;\n")
-    buf_push(b, "{p}gem_tail_fn = gem_fn_{target_name}_body;\n")
+    buf_push(b, "{p}gem_tail_fn = gem_sccbody_{target_name};\n")
     buf_push(b, pop_str(p))
     buf_push(b, "{p}return GEM_NIL;")
     to_string(b)
@@ -3223,7 +3289,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let name = node.name
     let b = buf_new()
     buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
-    buf_push(b, "    GemFnPtr _next_fn = gem_fn_{name}_body;\n")
+    buf_push(b, "    GemFnPtr _next_fn = gem_sccbody_{name};\n")
     buf_push(b, "    void *_next_env = _env;\n")
     buf_push(b, "    GemVal *_next_args = args;\n")
     buf_push(b, "    int _next_argc = argc;\n")
@@ -3557,14 +3623,13 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       if len(parts) == 0
         return {expr: "gem_string(\"\")", setup: ""}
       end
-      let setup = ""
-      let compiled = []
-      for i = 0, len(parts)
-        let part = parts[i]
-        let r = compile_expr(part)
-        setup = setup + r.setup
-        push(compiled, r.expr)
+      let results = []
+      for part in parts
+        push(results, compile_expr(part))
       end
+      let ordered = left_to_right(results)
+      let setup = ordered.setup
+      let compiled = ordered.exprs
       let arr_tmp = tmp()
       let items = compiled[0]
       for i = 1, len(compiled)
@@ -3654,9 +3719,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       let setup = r.setup + "    GemVal {t} = {r.expr};\n    static GemICacheSlot _ic_{ic} = {ic_init};\n"
       return {expr: "gem_table_get_cached({t}, \"{escaped}\", &_ic_{ic})", setup: setup}
     when {tag: "index", object: object, key: key}
-      let obj_r = compile_expr(object)
-      let key_r = compile_expr(key)
-      return {expr: "gem_table_get({obj_r.expr}, {key_r.expr})", setup: obj_r.setup + key_r.setup}
+      let o = operands(compile_expr(object), key)
+      return {expr: "gem_table_get({o.left}, {o.right})", setup: o.setup}
     end
 
     codegen_error(node, "unknown expression node: {node.tag}")
@@ -3786,23 +3850,22 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # Returns {setup, arr_name, argc}. arr_name is nil when argc == 0.
 
   let compile_args = fn(args)
-    let b = buf_new()
-    let arg_exprs = []
-    for i = 0, len(args)
-      let r = compile_expr(args[i])
-      buf_push(b, r.setup)
-      push(arg_exprs, r.expr)
+    let results = []
+    for a in args
+      push(results, compile_expr(a))
     end
     let argc = len(args)
+    let ordered = left_to_right(results)
+    let arg_exprs = ordered.exprs
     if argc == 0
-      return {setup: to_string(b), arr_name: nil, argc: 0}
+      return {setup: ordered.setup, arr_name: nil, argc: 0}
     end
     let t = tmp()
     let arr = arg_exprs[0]
     for i = 1, argc
       arr = arr + ", " + arg_exprs[i]
     end
-    {setup: to_string(b) + "    GemVal {t}[] = \{{arr}};\n", arr_name: t, argc: argc}
+    {setup: ordered.setup + "    GemVal {t}[] = \{{arr}};\n", arr_name: t, argc: argc}
   end
 
   # Emit a direct call: fn_name(env, args, argc)
@@ -3847,6 +3910,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
 
     # General case: call through function value
+    # The callee is evaluated before the arguments, and checked after them.
     let func_r = compile_expr(func)
     let ca = compile_args(args)
     let tmp_fn = tmp()
@@ -3855,7 +3919,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       line = 0
     end
     let escaped_file = escape_c_string(rel_path(file_of(node)))
-    let setup = func_r.setup + ca.setup + "    GemVal {tmp_fn} = {func_r.expr};\n    gem_check_callable({tmp_fn}, \"{escaped_file}\", {line});\n"
+    let setup = func_r.setup + "    GemVal {tmp_fn} = {func_r.expr};\n" + ca.setup + "    gem_check_callable({tmp_fn}, \"{escaped_file}\", {line});\n"
     if ca.argc == 0
       return {expr: "{tmp_fn}.fn({tmp_fn}.env, NULL, 0)", setup: setup}
     end
@@ -3869,45 +3933,51 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let lc_r = compile_expr(node.left)
     let lc = lc_r.expr
     let ls = lc_r.setup
+    # `and` / `or` read the left value twice; it must be computed once.
+    if op == "and" or op == "or"
+      let pr = pin_operand(lc_r)
+      lc = pr.expr
+      ls = pr.setup
+    end
 
     if op == "+"
-      let rc_r = compile_expr(node.right)
-      return {expr: "gem_add({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_add({o.left}, {o.right})", setup: o.setup}
     elif op == "-"
-      let rc_r = compile_expr(node.right)
-      return {expr: "gem_sub({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_sub({o.left}, {o.right})", setup: o.setup}
     elif op == "*"
-      let rc_r = compile_expr(node.right)
-      return {expr: "gem_mul({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_mul({o.left}, {o.right})", setup: o.setup}
     elif op == "/"
-      let rc_r = compile_expr(node.right)
-      return {expr: "gem_div({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_div({o.left}, {o.right})", setup: o.setup}
     elif op == "%"
-      let rc_r = compile_expr(node.right)
-      return {expr: "gem_mod({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_mod({o.left}, {o.right})", setup: o.setup}
     elif op == "in"
-      let rc_r = compile_expr(node.right)
+      let o = operands(lc_r, node.right)
       let t = tmp()
-      let setup = ls + rc_r.setup + "    GemVal {t}[] = \{{rc_r.expr}, {lc}};\n"
+      let setup = o.setup + "    GemVal {t}[] = \{{o.right}, {o.left}};\n"
       return {expr: "gem_in_fn(NULL, {t}, 2)", setup: setup}
     elif op == "=="
-      let rc_r = compile_expr(node.right)
-      return {expr: "gem_eq({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_eq({o.left}, {o.right})", setup: o.setup}
     elif op == "!="
-      let rc_r = compile_expr(node.right)
-      return {expr: "gem_neq({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_neq({o.left}, {o.right})", setup: o.setup}
     elif op == "<"
-      let rc_r = compile_expr(node.right)
-      return {expr: "gem_lt({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_lt({o.left}, {o.right})", setup: o.setup}
     elif op == ">"
-      let rc_r = compile_expr(node.right)
-      return {expr: "gem_gt({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_gt({o.left}, {o.right})", setup: o.setup}
     elif op == "<="
-      let rc_r = compile_expr(node.right)
-      return {expr: "gem_le({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_le({o.left}, {o.right})", setup: o.setup}
     elif op == ">="
-      let rc_r = compile_expr(node.right)
-      return {expr: "gem_ge({lc}, {rc_r.expr})", setup: ls + rc_r.setup}
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_ge({o.left}, {o.right})", setup: o.setup}
     elif op == "and"
       let rc_r = compile_expr(node.right)
       let t = tmp()
@@ -3918,7 +3988,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "        {t} = {lc};\n")
       buf_push(b, "    } else \{\n")
       if rc_r.setup != ""
-        buf_push(b, str_replace(rc_r.setup, "    ", "        "))
+        # Pushed as is: re-indenting would also rewrite spaces inside C
+        # string literals.
+        buf_push(b, rc_r.setup)
       end
       buf_push(b, "        {t} = {rc_r.expr};\n")
       buf_push(b, "    }\n")
@@ -3933,7 +4005,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "        {t} = {lc};\n")
       buf_push(b, "    } else \{\n")
       if rc_r.setup != ""
-        buf_push(b, str_replace(rc_r.setup, "    ", "        "))
+        # Pushed as is: re-indenting would also rewrite spaces inside C
+        # string literals.
+        buf_push(b, rc_r.setup)
       end
       buf_push(b, "        {t} = {rc_r.expr};\n")
       buf_push(b, "    }\n")
@@ -4029,15 +4103,12 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       end
       return "{line_dir}{r.setup}{p}{var_store(name, r.expr)}"
     when {tag: "dot_assign", object: object, value: value, field: field}
-      let obj_r = compile_expr(object)
-      let val_r = compile_expr(value)
+      let o = left_to_right([compile_expr(object), compile_expr(value)])
       let escaped = escape_c_string(field)
-      return "{line_dir}{obj_r.setup}{val_r.setup}{p}gem_table_set({obj_r.expr}, gem_string(\"{escaped}\"), {val_r.expr});"
+      return "{line_dir}{o.setup}{p}gem_table_set({o.exprs[0]}, gem_string(\"{escaped}\"), {o.exprs[1]});"
     when {tag: "index_assign", object: object, key: key, value: value}
-      let obj_r = compile_expr(object)
-      let key_r = compile_expr(key)
-      let val_r = compile_expr(value)
-      return "{line_dir}{obj_r.setup}{key_r.setup}{val_r.setup}{p}gem_table_set({obj_r.expr}, {key_r.expr}, {val_r.expr});"
+      let o = left_to_right([compile_expr(object), compile_expr(key), compile_expr(value)])
+      return "{line_dir}{o.setup}{p}gem_table_set({o.exprs[0]}, {o.exprs[1]}, {o.exprs[2]});"
     when {tag: "if"}
       return "{line_dir}" + compile_if(node, indent, false)
     when {tag: "while"}
@@ -4096,7 +4167,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     # Mutual-TCO: if we're inside an SCC member's body and this is a tail
     # call to a sibling member (not shadowed locally), trampoline it via
     # the global TLB instead of emitting a real C call. The wrapper around
-    # gem_fn_<name>_body sees the marker and dispatches the next body.
+    # gem_sccbody_<name> sees the marker and dispatches the next body.
     if current_scc_id != nil
       let scc_call_target = nil
       if is_node(node, "call") and is_node(node.func, "var")
@@ -4135,7 +4206,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       check_assign_target(name, node)
       let r = compile_expr(value)
       let t = tmp()
-      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_store(name, t)}\n{ns_refresh(name, p)}{pop_str(p)}{p}return {t};"
+      # An assignment is a statement: in tail position it yields nil, as a
+      # field or index assignment does.
+      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_store(name, t)}\n{ns_refresh(name, p)}{pop_str(p)}{p}return GEM_NIL;"
     when {tag: "return", value: value}
       if value != nil
         let r = compile_expr(value)
@@ -4346,7 +4419,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, emit_region_reset("{p}    ", mark, rescue_roots, pinned_rescue_roots))
     end
     if cond_r.setup != ""
-      buf_push(b, str_replace(cond_r.setup, "    ", "{p}    "))
+      buf_push(b, cond_r.setup)
     end
     buf_push(b, "{p}    if (!gem_truthy({cond_r.expr})) break;\n")
     let saved_while_scope = set_union(fn_scope_locals, {})
@@ -5152,7 +5225,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     # ─── SCC member detection ───
     # If `name` is in a viable mutual-TCO SCC, emit the body as
-    # `gem_fn_<name>_body` and a thin trampoline wrapper as the
+    # `gem_sccbody_<name>` and a thin trampoline wrapper as the
     # public `gem_fn_<name>`. Direct-self TCO inside the body still
     # works (faster than trampolining); only intra-SCC tail calls to
     # SIBLINGS go through the trampoline marker.
@@ -5161,7 +5234,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let body_fn_name = "gem_fn_{name}"
     if scc_id != nil
       current_scc_id = scc_id
-      body_fn_name = "gem_fn_{name}_body"
+      body_fn_name = "gem_sccbody_{name}"
     end
 
     let b = buf_new()
@@ -5249,7 +5322,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
 
     # ─── SCC trampoline wrapper ───
-    # Public `gem_fn_<name>` calls `gem_fn_<name>_body` in a loop, redispatching
+    # Public `gem_fn_<name>` calls `gem_sccbody_<name>` in a loop, redispatching
     # whenever the body exits via the mutual-TCO TLB marker. The body pushes/pops
     # its own frame, so traces attribute correctly to the currently-executing
     # member. Per-iteration arena reset mirrors the direct-TCO reset, gated the
@@ -5550,10 +5623,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       set_add(defined_fns, fd.name)
       let decl = "static GemVal gem_fn_{fd.name}(void *_env, GemVal *args, int argc);"
       push(forward_decls, decl)
-      # SCC members get an extra `_body` decl so the wrapper and other SCC
+      # SCC members get an extra body decl so the wrapper and other SCC
       # members' marker emissions can reference the body directly.
       if scc_member_to_id[fd.name] != nil
-        push(forward_decls, "static GemVal gem_fn_{fd.name}_body(void *_env, GemVal *args, int argc);")
+        push(forward_decls, "static GemVal gem_sccbody_{fd.name}(void *_env, GemVal *args, int argc);")
       end
     end
 

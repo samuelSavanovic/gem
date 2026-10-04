@@ -1,0 +1,106 @@
+# Compiler known-bugs batch: evaluation order, destructuring of a
+# builtin's name, several `export`s, module param defaults, line numbers
+# after a multi-line string.
+
+load "./modules/kb_split_export" as kb
+
+let log = []
+fn f(x)
+  push(log, x)
+  {v: x}
+end
+fn g(x)
+  push(log, x)
+  x
+end
+
+# Arguments run left to right, a field access among them included.
+print(f(1).v, f(2), f(3).v)
+print(log)
+
+# Both operands of a binary operator run left to right.
+log = []
+let sum = g(1) + g(2)
+let same = g(3) == g(4)
+print(sum, same, log)
+
+# `and` / `or` evaluate the left operand once.
+log = []
+let a = g(false) and g("never")
+let o = g(nil) or g("right")
+print(a, o, log)
+
+# Callee before arguments; index object before key; assignment target,
+# key, then value.
+log = []
+let fns = {id: fn(x) x end}
+let pick = fn()
+  push(log, "callee")
+  fns.id
+end
+print(pick()(g("arg")))
+let t = {k: "v"}
+print(t[g("k")])
+let u = {}
+u[g("key")] = g("val")
+print(u, log)
+
+# Interpolation parts run left to right.
+log = []
+print("{g(1)}-{f(2).v}-{g(3)}", log)
+
+# A closure in a destructuring `let` of a builtin's name still sees the
+# builtin, like a plain `let len = ...` does.
+let [len, size] = [fn(x) 0 end, fn(x) len(x) end]
+print(size("abc"), len("abc"))
+
+# A pinned operand keeps the spaces in its string literals, also inside
+# an `and` right side and a `while` condition.
+fn spaced() "a    b" end
+let sp = "a"
+let rounds = 0
+while sp + "    b" != spaced()
+  rounds += 1
+  if rounds > 2 then break end
+end
+print(rounds, true and (sp + "    b" + "!"))
+
+# A destructuring default that names an earlier field (named like a
+# builtin) reads that field.
+let {keys, from_keys = keys({a: 1})} = {keys: fn(t) "mine" end}
+print(from_keys)
+# A closure in a field's default naming that field calls the builtin.
+let {values = fn(t) "v:" + to_string(values(t)) end} = {}
+print(values({a: 1}))
+# ...and one naming a later field reads that field, as for separate lets.
+let {later = fn() to_string(sort([2, 1])) end, sort = fn(a) "S" end} = {}
+print(later())
+
+# An assignment as the last statement yields nil, like a field
+# assignment does.
+let assigned = 0
+let set_var = fn() assigned = 5 end
+let set_field = fn() u.x = 6 end
+print(set_var(), set_field(), (pcall assigned = 9).value, assigned)
+
+# Every `export` statement counts; defaults see the module's lets.
+print(kb.with_defaults(1), kb.anon_default())
+
+# A fn named `<f>_body` next to a mutual tail-call cycle through `f`.
+fn ping(n)
+  if n == 0 then return "done" end
+  pong(n - 1)
+end
+fn pong(n)
+  ping(n)
+end
+fn ping_body() "own body" end
+print(ping(3), ping_body())
+
+# A newline inside a "..." or '...' string counts as a line.
+let s = "a
+b"
+let q = 'c
+d'
+print(s, q)
+error("reported at line 106")

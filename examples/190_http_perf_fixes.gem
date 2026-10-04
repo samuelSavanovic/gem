@@ -206,7 +206,7 @@ fn request_tests()
   let port = PORT + 2
   print(sent_request(port, fn(u) request.post(u) end))
   print(sent_request(port + 1, fn(u) request.put(u, {body: ""}) end))
-  print(sent_request(port + 2, fn(u) request.patch(u, {body: nil}) end))
+  print(sent_request(port + 2, fn(u) request.patch(u) end))
   print(sent_request(port + 3, fn(u) request.post(u, {body: "", headers: {"content-length": "0"}}) end))
   print(sent_request(port + 4, fn(u) request.get(u) end))
   print(sent_request(port + 5, fn(u) request.delete(u) end))

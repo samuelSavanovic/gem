@@ -9,7 +9,7 @@ Keep this file up to date when adding new syntax, keywords, builtins, or std mod
 let x = 10
 let {a, b} = tbl                     # table destructuring
 let [first, second] = arr            # array destructuring
-let {port = 8080, host = "0.0.0.0"} = opts   # field defaults (fire on missing or nil)
+let {port = 8080, host = "0.0.0.0"} = opts   # field defaults (fire on a missing key, not nil)
 let x = x + 1                        # in a fn/block: new variable shadowing the old x (to block end)
                                      # (warned in a `while` body when the condition reads x and nothing assigns it)
                                      # a let is visible only to the end of its block (if/loop body/arm):
@@ -167,7 +167,7 @@ end
 #                nesting > 1000 raises; ints past 64 bits parse as floats)
 # std/http       response, ok, html, json_response, redirect, not_found, bad_request, server_error,
 #                set_cookie, delete_cookie, parse_form, html_escape, router, start, serve, stop
-#                (start opts {port, host, max_body = 8 MB, idle_timeout_ms, request_timeout_ms = 30000, nil: none};
+#                (start opts {port, host, max_body = 8 MB, idle_timeout_ms, request_timeout_ms, write_timeout_ms = 30000, nil: none};
 #                start returns {pid}; stop(server) closes every socket; HEAD uses the GET route;
 #                set_cookie raises on ; , whitespace or control bytes: url.encode values)
 # std/request    get, post, put, patch, delete, request  (http:// only; opts {body, headers, timeout_ms = 30000, nil: none};
