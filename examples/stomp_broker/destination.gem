@@ -5,18 +5,9 @@
 ##   gen_server.cast(pid, {op: "publish", body: "hi", headers: {}})
 ##   gen_server.call(pid, {op: "info"})    # {name, kind, subscribers: 1}
 ##
-## Subscribers are `{conn_pid, sub_id}`: `conn_pid` is a connection's
-## writer process, which gets each message as `{tag: "deliver", frame}`
-## and owns the socket. A topic sends every message to every subscriber;
-## a queue sends each to one subscriber, in turn.
+## `conn_pid` is a connection's writer; it gets `{tag: "deliver", frame}`.
 
 load "std/gen_server"
-
-# The destination monitors every subscribing connection and drops its
-# subscriptions on the DOWN, so a client that disconnects without
-# UNSUBSCRIBE leaves nothing behind. A process monitors a target at most
-# once, so a connection with several subscriptions here still sends one
-# DOWN.
 
 fn remove_subs(state, keep)
   let kept = []
@@ -77,7 +68,7 @@ fn server(name, kind)
     handle_cast: fn(msg, state)
       match msg
       when {op: "subscribe", conn_pid: cp, sub_id: sid}
-        monitor(cp)
+        monitor(cp)    # its DOWN drops what a vanished client left behind
         push(state.subs, {conn_pid: cp, sub_id: sid})
       when {op: "unsubscribe", conn_pid: cp, sub_id: sid}
         remove_subs(state, fn(s) s.conn_pid != cp or s.sub_id != sid end)
@@ -101,8 +92,7 @@ fn server(name, kind)
   }
 end
 
-## Starts the destination `name` of `kind` ("topic" or "queue") and
-## returns its handle `{pid}`.
+## Starts destination `name` of `kind` ("topic" or "queue"); returns `{pid}`.
 fn start(name, kind)
   gen_server.start(server(name, kind))
 end

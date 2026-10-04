@@ -1,14 +1,8 @@
-# TCP echo server and client in one program.
-#
-# The server accepts connections in its own process and gives each one a
-# handler process that echoes what it reads until the client closes. The
-# client (main) opens two connections, checks each echo and stops the
-# server. Run it with `gem examples/tcp_echo.gem`.
+# TCP echo server, one process per connection, and a client that checks it.
 
 let PORT = 9125
 let READ_TIMEOUT_MS = 2000
 
-# Echoes `fd` until the peer closes, goes quiet or stops reading.
 fn echo_loop(fd)
   while true
     let data = tcp_read(fd, 4096, READ_TIMEOUT_MS)
@@ -22,8 +16,6 @@ fn echo_loop(fd)
   tcp_close(fd)
 end
 
-# Accepts until it is killed. Each connection gets its own process, so a
-# slow client doesn't hold the others up.
 fn serve(listener)
   while true
     let fd = tcp_accept(listener)
@@ -36,7 +28,6 @@ fn serve(listener)
   end
 end
 
-# Sends `msg` on a fresh connection and returns what comes back.
 fn round_trip(msg)
   let fd = tcp_connect("127.0.0.1", PORT)
   let r = pcall do
@@ -66,7 +57,6 @@ fn main()
     print("echo: {reply}")
   end
 
-  # The accept loop never returns on its own: stop it, then free the port.
   kill(server, "shutdown")
   tcp_close(listener)
 end

@@ -1,8 +1,4 @@
-# Tests for the STOMP broker: the frame parser on its own, then the whole
-# broker, started on a local port and driven by STOMP clients written in
-# Gem.
-#
-#   build/gem examples/stomp_broker/test.gem
+# Tests for the STOMP broker: frames, then the broker driven by Gem clients.
 
 load "std/gen_server"
 load "std/string"
@@ -51,8 +47,7 @@ fn client_send(c, command, headers = {}, body = "")
   test.assert_eq(tcp_write(c.fd, bytes), len(bytes))
 end
 
-# The next frame from the broker, or nil when none comes within
-# `timeout_ms` or the broker closed the connection.
+# nil on timeout or close.
 fn next_frame(c, timeout_ms = WAIT_MS)
   while true
     let nul = string.index_of(c.buf, "\0")
@@ -76,8 +71,7 @@ fn expect(c, command)
   f
 end
 
-# Sends `command` with a receipt and waits for it, so that whatever the
-# frame did at the broker is done when this returns.
+# Waits for the receipt, so the frame has taken effect when this returns.
 fn sync_send(c, command, headers, body = "")
   headers.receipt = "r-{command}"
   client_send(c, command, headers, body)
@@ -104,7 +98,6 @@ fn close(c)
   tcp_close(c.fd)
 end
 
-# Waits until destination `name` has `n` subscribers.
 fn await_subscribers(name, n)
   let dest = registry.lookup_or_create(name)
   let deadline = epoch_ms() + WAIT_MS
@@ -262,7 +255,6 @@ test.case("a crashed destination is replaced") do
     test.assert(epoch_ms() < deadline, "the registry kept the dead destination")
     sleep(10)
   end
-  # The subscription died with the old process; a new one works.
   sync_send(s, "UNSUBSCRIBE", {id: "a"})
   subscribe(s, "b", "/topic/crash")
   let p = connect()

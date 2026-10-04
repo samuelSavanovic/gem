@@ -1,9 +1,4 @@
-## broker — a STOMP 1.2 broker's supervision tree.
-##
-##   let listener = tcp_listen("0.0.0.0", 61613)
-##   let sup = broker.start(listener)
-##   ...
-##   broker.stop(sup)
+## broker — the STOMP broker's supervision tree (see README.md).
 
 load "std/supervisor"
 load "std/dynamic_supervisor"
@@ -11,24 +6,6 @@ load "./destination"
 load "./registry"
 load "./connection"
 
-# The tree, started in this order:
-#
-#   stomp_destinations — a dynamic_supervisor holding one gen_server per
-#     destination, started on demand by the registry. Children are
-#     temporary: a destination that crashes loses its subscribers (STOMP
-#     without persistence promises nothing), and the registry starts a
-#     fresh one on the next SUBSCRIBE or SEND to its name.
-#
-#   stomp_registry — maps destination names to pids. It monitors every
-#     destination, so a dead one is forgotten.
-#
-#   acceptor — accepts connections and starts a connection (a writer and a
-#     reader process) for each. Connections are not supervised: a client
-#     whose connection dies reconnects, and the broker has nothing to
-#     restore for it.
-
-# Accepts until it is stopped. `next_id` numbers the connections for their
-# session ids; it is local, so it is this process's own counter.
 fn accept_loop(listener)
   let next_id = 0
   while true
@@ -36,20 +13,21 @@ fn accept_loop(listener)
     next_id += 1
     let r = pcall connection.start(fd, next_id)
     if not r.ok
-      # The process table is full: refuse this client, keep accepting.
+      # process table full: refuse this client
       tcp_close(fd)
     end
   end
 end
 
-## Starts the broker on `listener` (from `tcp_listen`) and returns the
-## supervisor's handle. The caller keeps the listener: `stop` doesn't close
-## it.
+## Starts the broker on `listener` and returns the supervisor's handle.
+## `stop` doesn't close the listener.
 fn start(listener)
   supervisor.start({
     strategy: "one_for_one",
     name: "stomp_broker_sup",
     children: [
+      # Temporary children: a crashed destination has lost its subscribers,
+      # so the registry starts a fresh one on the next lookup instead.
       {id: "destinations", start: fn()
         dynamic_supervisor.start({
           name: registry.DESTINATIONS,
@@ -66,9 +44,7 @@ fn start(listener)
   })
 end
 
-## Stops the acceptor, the registry and every destination, and returns
-## once they are gone. Open connections stay open until their clients
-## leave.
+## Stops the broker; open connections stay open until their clients leave.
 fn stop(sup)
   supervisor.stop(sup)
 end

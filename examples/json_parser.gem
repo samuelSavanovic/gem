@@ -1,31 +1,24 @@
-# A recursive-descent JSON parser, written from scratch to show how Gem
-# reads for this kind of code: a scanner closed over its cursor, one
-# function per grammar rule, `error()` for malformed input and `pcall` at
-# the boundary. Real code should use std/json, which this checks itself
-# against at the end.
-#
-# `make test-json` runs it; a failing case exits 1.
+# A recursive-descent JSON parser, to show what such code looks like in
+# Gem. Real code should use std/json.
 
 load "std/json"
 load "std/test"
 
 let MAX_DEPTH = 500
 
-# Byte values the parser compares against.
 let QUOTE = 34
 let BACKSLASH = 92
 let ZERO = 48
 let NINE = 57
 
-# UTF-16 surrogates (D800-DBFF high, DC00-DFFF low), for \u escapes.
+# UTF-16 surrogates: D800-DBFF high, DC00-DFFF low.
 let HIGH_FIRST = 55296
 let LOW_FIRST = 56320
 let LOW_LAST = 57343
 
 # ─── Scanner ──────────────────────────────────────────────────────
 
-# Wraps `input` in a cursor. `peek` returns the byte at the cursor (-1 at
-# the end) without allocating; `fail` raises with the cursor's offset.
+# `peek` returns -1 at the end.
 fn make_scanner(input)
   let pos = 0
   let n = len(input)
@@ -53,7 +46,6 @@ fn make_scanner(input)
     end
   end
 
-  # Consumes `word` (a literal like "true") or fails.
   let expect = fn(word)
     if substr(input, pos, len(word)) != word
       fail("expected {word}")
@@ -61,7 +53,6 @@ fn make_scanner(input)
     pos += len(word)
   end
 
-  # Returns input[from .. pos) — the bytes consumed since `from`.
   let since = fn(from) substr(input, from, pos - from) end
 
   let at = fn() pos end
@@ -155,7 +146,6 @@ fn parse_array(s, depth)
   arr
 end
 
-# The escapes that stand for one byte, keyed by the byte after the `\`.
 let SIMPLE_ESCAPES = {
   "\"": "\"", "\\": "\\", "/": "/",
   b: chr(8), f: chr(12), n: "\n", r: "\r", t: "\t"
@@ -186,8 +176,6 @@ fn parse_string(s)
   to_string(buf)
 end
 
-# Reads the 4 hex digits after `\u`, and a second `\uXXXX` when the first
-# is a high surrogate, and returns the code point.
 fn parse_code_point(s)
   let hi = read_hex4(s)
   if hi < HIGH_FIRST or hi > LOW_LAST
@@ -224,8 +212,6 @@ fn read_hex4(s)
   v
 end
 
-# Encodes code point `cp` as UTF-8: 1 to 4 bytes, each continuation byte
-# carrying 6 bits under a 10xxxxxx prefix.
 fn utf8(cp)
   if cp < 128
     return chr(cp)
@@ -239,13 +225,11 @@ fn utf8(cp)
   chr(bor(240, bshr(cp, 18))) + cont(cp, 12) + cont(cp, 6) + cont(cp, 0)
 end
 
-# The continuation byte for bits `shift` .. `shift + 5` of `cp`.
 fn cont(cp, shift)
   chr(bor(128, band(bshr(cp, shift), 63)))
 end
 
-# Scans the number's grammar (-? int frac? exp?), then lets to_int or
-# to_float convert the bytes it covered.
+# -? int frac? exp?
 fn parse_number(s)
   let start = s.at()
   let is_float = false
@@ -283,10 +267,7 @@ fn skip_digits(s)
   end
 end
 
-## Parses `input` as one JSON value and returns it: objects become
-## records, arrays become arrays, `null` becomes nil. Raises
-## `json_parser: <what> at byte <n>` on malformed input, trailing
-## content included.
+## Parses `input` as one JSON value; raises `json_parser: <what> at byte <n>`.
 fn parse_json(input)
   let s = make_scanner(input)
   let v = parse_value(s, 0)

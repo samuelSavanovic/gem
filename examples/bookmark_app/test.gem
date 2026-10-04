@@ -1,8 +1,4 @@
-# Tests for the bookmark app: serves its routes on a local port with an
-# in-memory database and drives them with std/request. Run from this
-# directory (static files are looked up relative to it):
-#
-#   cd examples/bookmark_app && ../../build/gem test.gem
+# Tests for the bookmark app, over HTTP. Run from this directory.
 
 load "std/http"
 load "std/log"
@@ -80,7 +76,6 @@ test.case("missing and malformed ids are 404") do
 end
 
 test.case("fetch title") do
-  # Bookmark 3 points at this server's own index page.
   post("/bookmarks", "url=" + url.encode("{BASE}/"))
   let r = post("/bookmarks/3/fetch-title", "")
   test.assert_eq(r.body, "Bookmark Manager")

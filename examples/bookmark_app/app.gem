@@ -1,9 +1,4 @@
-# Bookmark manager: an HTMX CRUD app on std/http and std/sqlite.
-#
-#   cd examples/bookmark_app && ../../build/gem app.gem
-#
-# then open http://localhost:8080. The routes live in bookmarks.gem;
-# test.gem runs them against an in-memory database.
+# Bookmark manager on http://localhost:8080. Run it from this directory.
 
 load "std/http"
 load "std/log"

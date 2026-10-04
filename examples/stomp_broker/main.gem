@@ -1,9 +1,4 @@
-# A STOMP 1.2 broker: topics, queues, receipts, no persistence.
-#
-#   build/gem examples/stomp_broker/main.gem
-#
-# then talk to it on port 61613 (README.md has a session to paste into
-# nc). test.gem runs the broker against a client written in Gem.
+# A STOMP 1.2 broker on port 61613; see README.md.
 
 load "./broker"
 

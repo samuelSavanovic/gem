@@ -1,31 +1,15 @@
 ## registry — finds or starts the destination process for a name.
-##
-##   let pid = registry.lookup_or_create("/topic/news")
-##
-## Names starting with `/queue/` are queues (each message goes to one
-## subscriber, in turn); every other name is a topic (each message goes to
-## every subscriber).
+## Names starting with `/queue/` are queues, all others topics.
 
 load "std/gen_server"
 load "std/dynamic_supervisor"
 load "std/string"
 
-# Lookups go through one gen_server so that two clients subscribing to a
-# new name at once get the same destination. Destination names come from
-# clients, so they are keys of this server's table, never registered
-# process names: a client can't take over "stomp_registry" by subscribing
-# to it.
-#
-# A destination that dies is forgotten when its DOWN arrives. A lookup
-# answered just before that gets the dead pid, and what the client sends
-# there is dropped, which STOMP allows.
-#
-# Destinations outlive a registry crash (they belong to the dynamic
-# supervisor), so `init` rebuilds the table from that supervisor's
-# children; a restarted registry knows every live destination.
+# Destination names come from clients, so they are keys of this server's
+# table, never registered names: a client can't reach "stomp_registry" by
+# subscribing to it.
 
-## The registered name of the dynamic supervisor that holds the
-## destinations (see broker.gem).
+## The registered name of the destinations' dynamic supervisor.
 let DESTINATIONS = "stomp_destinations"
 let NAME = "stomp_registry"
 
@@ -42,8 +26,7 @@ fn remember(state, name, pid)
   state.by_pid["{pid}"] = name
 end
 
-# {ok: true, value: pid}, or {ok: false, error} when the destination can't
-# start (the process table is full): the caller fails, not the registry.
+# A failed start is returned, not raised: the caller fails, not the registry.
 fn lookup(state, name)
   let pid = state.by_name[name]
   if pid != nil
@@ -56,6 +39,8 @@ fn lookup(state, name)
   r
 end
 
+# Destinations outlive a registry crash, so a restarted registry finds
+# them in the supervisor.
 fn init()
   let state = {by_name: {}, by_pid: {}}
   for child in dynamic_supervisor.which_children(DESTINATIONS)
@@ -96,7 +81,7 @@ let SERVER = {
   end
 }
 
-## Starts the registry and registers it; a supervisor child's `start`.
+## Starts and registers the registry (a supervisor child's `start`).
 fn start()
   let h = gen_server.start(SERVER)
   register(NAME, h.pid)
@@ -104,8 +89,7 @@ fn start()
 end
 
 ## Returns the pid of the destination `name`, starting it if needed.
-## Raises if the destination can't start, or if the registry is down (e.g.
-## while its supervisor restarts it).
+## Raises if it can't start or the registry is down.
 fn lookup_or_create(name)
   let r = gen_server.call(NAME, {op: "lookup_or_create", name: name})
   if not r.ok

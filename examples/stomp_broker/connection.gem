@@ -1,11 +1,5 @@
-## connection — one client connection: a writer and a reader process.
-##
-##   connection.start(fd, 7)    # 7 becomes the session id
-##
-## The writer owns the socket's writes and runs the protocol: it handles
-## the frames the reader parses and the MESSAGEs destinations deliver. The
-## reader only reads and parses. Splitting them lets the writer wait in one
-## `receive` for both, without ever blocking in `tcp_read`.
+## connection — one client connection: a reader process that parses
+## frames, and a writer that runs the protocol and owns the socket's writes.
 
 load "std/gen_server"
 load "std/string"
@@ -16,16 +10,9 @@ let READ_SIZE = 65536
 
 # ─── Reader ────────────────────────────────────────────────────
 
-# Reads frames until the client closes, and sends each to `writer` as
-# {tag: "frame", frame}. Then sends {tag: "eof"}, or {tag: "bad_frame"}
-# on a frame that doesn't parse.
-#
-# No read timeout: the broker offers no heart-beats ("0,0" in CONNECTED),
-# so a subscriber that is quiet for hours is still a live client.
+# No read timeout: without heart-beats, a quiet subscriber is still live.
 fn reader_loop(fd, writer)
-  # Bytes of a frame that hasn't ended yet. A chunk without a NUL only
-  # adds to it, so a large frame arriving in many chunks is copied once.
-  let pending = buf_new()
+  let pending = buf_new()    # the start of a frame that hasn't ended yet
   while true
     let chunk = tcp_read(fd, READ_SIZE)
     if chunk == nil or chunk == ""
@@ -45,8 +32,7 @@ fn reader_loop(fd, writer)
   end
 end
 
-# Sends every complete frame in `data` to `writer` and returns the bytes
-# after the last one, or nil after a malformed frame.
+# Returns the bytes after the last complete frame, or nil after a bad one.
 fn send_frames(data, writer)
   let pos = 0
   while true
@@ -65,7 +51,6 @@ fn send_frames(data, writer)
   end
 end
 
-# A heart-beat is a bare newline (LF or CRLF) between frames.
 fn skip_heartbeats(data, pos)
   let n = len(data)
   while pos < n
@@ -80,8 +65,7 @@ end
 
 # ─── Writer ────────────────────────────────────────────────────
 
-# Every handler takes the connection state and a frame and returns true
-# to keep the connection open, false to close it.
+# The handlers return true to keep the connection open.
 
 fn writer_loop(conn)
   while true
@@ -96,8 +80,7 @@ fn writer_loop(conn)
       send_error(conn, "malformed frame")
       return nil
     when {tag: "EXIT", reason: reason}
-      # The reader ended. After a normal exit its eof is already here or
-      # handled; any other reason means it crashed.
+      # a normal exit comes after its eof
       if reason != "normal" then return nil end
     when other
       nil
@@ -178,24 +161,19 @@ fn handle_send(conn, f)
   true
 end
 
-# Writes `f` and returns whether all of it went out. A client that stops
-# reading blocks this write, and deliveries queue up in the writer's
-# mailbox meanwhile.
 fn write_frame(conn, f)
   let bytes = frame.render_frame(f)
   tcp_write(conn.fd, bytes) == len(bytes)
 end
 
-# Sends an ERROR frame. Returns false: STOMP closes the connection after
-# an ERROR.
+# STOMP closes the connection after an ERROR.
 fn send_error(conn, message)
   write_frame(conn, {command: "ERROR", headers: {message: message}, body: ""})
   false
 end
 
-# The writer process: starts the reader, runs the protocol, then closes the
-# socket on every path, a crash included. It traps exits so that a reader
-# that crashes arrives as a message instead of killing it before the close.
+# Traps exits so that a crashing reader can't kill the writer before it
+# closes the socket.
 fn run_writer(fd, id)
   process_flag("trap_exit", true)
   let reader = nil
@@ -215,12 +193,8 @@ fn run_writer(fd, id)
   end
 end
 
-## Starts the processes for the accepted socket `fd` and returns the
-## writer's pid; `id` becomes the session id. They own `fd` from here on
-## and close it when the client leaves.
-##
-## Raises `spawn: process table full` when no process can start; `fd` is
-## then still the caller's to close.
+## Starts the connection for accepted socket `fd`, which it closes when
+## done; `id` is the session id. If this raises, `fd` is still the caller's.
 fn start(fd, id)
   spawn do
     run_writer(fd, id)

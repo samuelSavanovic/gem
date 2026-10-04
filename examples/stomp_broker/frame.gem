@@ -4,20 +4,13 @@
 ##   f    # {command: "SEND", headers: {destination: "/queue/a"}, body: "hi"}
 ##   frame.render_frame(f)    # "SEND\ndestination:/queue/a\n\nhi\0"
 ##
-## A frame is `{command, headers, body}`: `headers` maps names to values,
-## both unescaped. There is no `content-length` support, so a body can't
-## contain a NUL byte.
+## No `content-length` support, so a body can't contain a NUL byte.
 
 load "std/string"
 
-# Header escapes (STOMP 1.2): \r, \n, \c (colon) and \\. The byte after a
-# backslash, as a 1-byte string, maps to what it stands for.
 let UNESCAPES = {r: "\r", n: "\n", c: ":", "\\": "\\"}
 
-## Returns `s` with the STOMP header escapes decoded; an unknown escape is
-## kept as written.
-##
-##   frame.unescape_header("a\\cb")    # "a:b"
+## Decodes header escapes (`\\c` → `:`); an unknown escape is kept.
 fn unescape_header(s)
   if string.index_of(s, "\\") < 0
     return s
@@ -38,9 +31,7 @@ fn unescape_header(s)
   end
 end
 
-## Returns `s` with backslash, CR, LF and colon escaped for a header line.
-##
-##   frame.escape_header("a:b")    # "a\\cb"
+## Escapes backslash, CR, LF and colon for a header line.
 fn escape_header(s)
   let out = str_replace(s, "\\", "\\\\")
   out = str_replace(out, "\r", "\\r")
@@ -48,7 +39,6 @@ fn escape_header(s)
   str_replace(out, ":", "\\c")
 end
 
-# `line` without a trailing CR.
 fn without_cr(line)
   let n = len(line)
   if n > 0 and ord(line, n - 1) == 13
@@ -57,10 +47,8 @@ fn without_cr(line)
   line
 end
 
-## Parses one frame, given without its trailing NUL, and returns it, or
-## nil when it is malformed: empty, no blank line after the headers, an
-## empty command, or a header line without a colon. Lines may end in LF
-## or CRLF. When a header repeats, its first value wins.
+## Parses one frame (without its trailing NUL); nil when malformed. Lines
+## may end in LF or CRLF; a repeated header keeps its first value.
 fn parse_frame(raw)
   let sep = string.index_of(raw, "\n\n")
   let body_at = sep + 2
@@ -95,7 +83,7 @@ fn parse_frame(raw)
   {command: command, headers: headers, body: substr(raw, body_at, len(raw) - body_at)}
 end
 
-## Returns the wire bytes of frame `f`, NUL terminator included.
+## Returns the wire bytes of frame `f`, NUL included.
 fn render_frame(f)
   build_string do |add|
     add(f.command, "\n")

@@ -1,10 +1,5 @@
-## bookmarks — the bookmark manager's database and HTTP routes.
-##
-##   let db = bookmarks.open_db("bookmarks.db")    # or ":memory:"
-##   http.serve(bookmarks.routes(db, "./static"), {port: 8080})
-##
-## The pages are HTMX fragments: every change answers with the whole
-## bookmark list, which the browser swaps into `#bookmarks`.
+## bookmarks — the bookmark manager's database and HTMX routes. Every
+## change answers with the whole list, swapped into `#bookmarks`.
 
 load "std/http"
 load "std/sqlite"
@@ -17,8 +12,7 @@ let FETCH_TIMEOUT_MS = 5000
 
 # ─── Database ───
 
-## Opens the database at `path`, creating the bookmarks table if needed,
-## and returns its handle.
+## Opens (and if needed creates) the database at `path`.
 fn open_db(path)
   let db = sqlite.open(path)
   sqlite.exec(db, """
@@ -110,8 +104,7 @@ end
 
 # ─── Input ───
 
-# The bookmark fields of a create or edit form, or nil when the URL is
-# missing. The title defaults to the URL, the tags to "".
+# nil when the URL is missing; the title defaults to the URL.
 fn form_fields(body)
   let {url = "", title = "", tags = ""} = http.parse_form(body)
   if url == ""
@@ -123,8 +116,7 @@ fn form_fields(body)
   {url: url, title: title, tags: tags}
 end
 
-# The `:id` route parameter as an int, or nil when it isn't one, so a bad
-# id is a 404 rather than a 500.
+# nil for a non-numeric id, so it is a 404 rather than a 500.
 fn route_id(req)
   let r = pcall to_int(req.params.id)
   if not r.ok
@@ -135,7 +127,6 @@ end
 
 # ─── Fetching a page title ───
 
-# The text of the first <title> element in `page`, or nil.
 fn extract_title(page)
   let lower = string.lower(page)
   let open = string.index_of(lower, "<title>")
@@ -154,10 +145,7 @@ fn extract_title(page)
   title
 end
 
-# Fetches `page_url` and returns its title, or nil when the fetch fails or
-# the page has none. The host name lookup blocks every process (see
-# BEST_PRACTICES, "Know what blocks every process"); the timeout bounds
-# the rest.
+# The host name lookup blocks every process; the timeout bounds the rest.
 fn fetch_title(page_url)
   let r = pcall request.get(page_url, {timeout_ms: FETCH_TIMEOUT_MS})
   if not r.ok
@@ -172,15 +160,12 @@ end
 
 # ─── Routes ───
 
-## Returns the app's router. `db` is a handle from `open_db`; `static_dir`
-## holds index.html and the stylesheet, relative to the current
-## directory.
+## Returns the app's router; `static_dir` is relative to the current directory.
 fn routes(db, static_dir)
   let app = http.router()
   let index_html = read_file("{static_dir}/index.html")
 
-  # Registers `handler` with `register` (app.get, app.post, ...), logging
-  # each request first.
+  # Registers a route that logs each request.
   let on = fn(register, pattern, handler)
     register(pattern, fn(req)
       log.info("{req.method} {req.path}")
@@ -250,8 +235,6 @@ fn routes(db, static_dir)
     if title == nil
       return http.html("<em>Could not fetch title</em>")
     end
-    # The bookmark may have been deleted during the fetch; then this
-    # updates nothing, and the answer is still the title.
     sqlite.query(db, "UPDATE bookmarks SET title = ? WHERE id = ?", [title, id])
     log.info("fetched title for bookmark {id}: {title}")
     http.html(esc(title))
