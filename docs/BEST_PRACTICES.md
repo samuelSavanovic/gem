@@ -1206,10 +1206,12 @@ it can't start one:
 
 - `spawn: process table full` past the process limit: 262,144 by default,
   lower when the environment sets `GEM_MAX_PROCS`;
+- `spawn: too many processes for the system's memory-mapping limit (...)`
+  on Linux, which comes first: at about 14,000 live processes with the
+  default `vm.max_map_count` (65,530), leaving the rest of the limit to
+  the processes already running. Raise that sysctl to go further;
 - `spawn: cannot map a stack for a new process (N processes alive)` when
-  the system refuses the memory. On Linux this comes first, at about
-  16,000 live processes, from the default `vm.max_map_count` (65,530);
-  raise that sysctl to go further.
+  the system refuses the memory (a `ulimit -v`).
 
 Spawning 5,000 one-line tasks in a loop is fine. What needs care is
 spawning in proportion to outside load: an acceptor that spawns per
@@ -1564,7 +1566,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
 | Calling a supervisor's child by name right after `supervisor.start` | `no process registered` | `supervisor.which_children(sup)` first |
 | `gen_server.call` to a server that has already died | `server exited: noproc`, not why it died | monitor it: the `DOWN` has the reason |
-| `spawn` per connection or per item, unguarded **(trap)** | raises at the process or memory limit (~16,000 on stock Linux); the acceptor dies | catch it, or cap in-flight work |
+| `spawn` per connection or per item, unguarded **(trap)** | raises at the process or memory limit (~14,000 on stock Linux); the acceptor dies | catch it, or cap in-flight work |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_listen("localhost", ...)` | raises | `"127.0.0.1"` |

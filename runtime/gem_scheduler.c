@@ -181,6 +181,7 @@ static int *gem_poll_pids = NULL;
  */
 
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <pthread.h>
 #include <signal.h>
 #include <unistd.h>
@@ -249,6 +250,7 @@ static void *gem_coro_stack_alloc(size_t size, void *udata) {
         munmap(p, len);
         return NULL;
     }
+    gem_runtime_maps += 3;   /* header, guard, stack */
     return p;
 }
 
@@ -297,6 +299,7 @@ static void gem_coro_stack_free(void *ptr, size_t size, void *udata) {
         return;
     }
     munmap(ptr, len);
+    gem_runtime_maps -= 3;
 }
 
 static void gem_coro_entry(mco_coro *co);
@@ -460,13 +463,14 @@ static void gem_install_overflow_handler(void) {
  * Slots are made accessible in chunks as the high-water mark gem_proc_hwm
  * grows, and the table never moves, so a GemProcess * taken before a spawn
  * stays valid after it. The GEM_MAX_PROCS environment variable can lower
- * the limit (gem_proc_limit). If the address space for every slot can't be
- * reserved (a ulimit -v), the reservation halves until it fits.
+ * the limit (gem_proc_limit), and so does an address-space limit
+ * (ulimit -v): the table takes at most 1/16 of it. If the address space
+ * still can't be reserved, the reservation halves until it fits.
  *
  * A new slot comes from the high-water mark until it reaches
  * GEM_PROC_REUSE_MIN, then from the freed slots (FIFO), then from the
  * high-water mark again. So a program that never has more than
- * GEM_PROC_REUSE_MIN - 1 processes alive gets the same slots (and pids) as
+ * GEM_PROC_REUSE_MIN - 1 processes alive gets the same slots as
  * with the old fixed table of that size, and the table only grows as far
  * as the most processes alive at once (plus the reuse floor).
  */
@@ -487,14 +491,18 @@ static int *gem_exit_worklist = NULL;
 static const char **gem_exit_reasons = NULL;
 
 /* The process limit: GEM_MAX_PROCS, or the GEM_MAX_PROCS environment
-   variable when it is set to a smaller number (at least 2: main and one
-   more). */
+   variable when it is set: digits only, at least 2 (main and one more);
+   a larger number than GEM_MAX_PROCS means GEM_MAX_PROCS. */
 static int gem_proc_limit(void) {
     const char *env = getenv("GEM_MAX_PROCS");
-    if (!env || !*env) return GEM_MAX_PROCS;
-    char *end;
-    long n = strtol(env, &end, 10);
-    if (*end != '\0' || n < 2) {
+    if (!env) return GEM_MAX_PROCS;
+    long n = 0;
+    int ok = *env != '\0';
+    for (const char *c = env; *c && ok; c++) {
+        if (*c < '0' || *c > '9') ok = 0;
+        else if (n <= GEM_MAX_PROCS) n = n * 10 + (*c - '0');
+    }
+    if (!ok || n < 2) {
         fprintf(stderr, "gem: GEM_MAX_PROCS must be a number of processes (at least 2), got '%s'\n", env);
         exit(1);
     }
@@ -508,6 +516,14 @@ static void gem_proc_table_reserve(void) {
     flags |= MAP_NORESERVE;
 #endif
     int limit = gem_proc_limit();
+    /* Under an address-space limit (ulimit -v), take at most 1/16 of it:
+       the stacks and arenas of the processes need the rest. */
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_AS, &rl) == 0 && rl.rlim_cur != RLIM_INFINITY) {
+        size_t share = (size_t)(rl.rlim_cur / 16) / sizeof(GemProcess);
+        if (share < 2) share = 2;
+        if (share < (size_t)limit) limit = (int)share;
+    }
     for (int cap = limit; cap >= 2; cap = cap > GEM_PROC_COMMIT_SLOTS ? cap / 2 : 1) {
         size_t len = ((size_t)cap * sizeof(GemProcess) + page - 1) / page * page;
         void *p = mmap(NULL, len, PROT_NONE, flags, -1, 0);
@@ -540,6 +556,27 @@ static int gem_proc_table_commit(int n) {
     gem_proc_committed_bytes = bytes;
     gem_proc_committed = want;
     return 1;
+}
+
+/* Memory mappings spawn leaves to everything else: the system's per-program
+   limit (Linux vm.max_map_count) minus headroom for arena growth, malloc
+   and libraries, or 0 when there is no such limit. Each process needs four
+   (gem_runtime_maps counts them); when the system refuses a mapping, the
+   process that asked dies (gem_arena) or, at spawn, the spawn fails, so
+   spawn stops early enough that existing processes can still grow. */
+static long gem_map_limit = 0;
+static long gem_map_system = 0;
+
+static void gem_map_limit_init(void) {
+    FILE *f = fopen("/proc/sys/vm/max_map_count", "r");
+    if (!f) return;
+    long n = 0;
+    if (fscanf(f, "%ld", &n) == 1 && n > 0) {
+        long headroom = n / 8 > 1024 ? n / 8 : 1024;
+        gem_map_system = n;
+        gem_map_limit = n > headroom ? n - headroom : 1;
+    }
+    fclose(f);
 }
 
 /* A free slot (state GEM_PROC_FREE, below gem_proc_hwm on return), or -1
@@ -630,7 +667,9 @@ static int gem_ready_next(int i) {
     return -1;
 }
 
-typedef struct { int64_t dl; int slot; } GemDeadline;
+/* `pass` is the scheduler pass in which the wait began (gem_pass_no). */
+typedef struct { int64_t dl; int slot; uint64_t pass; } GemDeadline;
+static uint64_t gem_pass_no = 0;
 static GemDeadline *gem_dl_heap = NULL;
 static int gem_dl_n = 0, gem_dl_cap = 0;
 
@@ -671,7 +710,7 @@ static void gem_dl_push(int slot, int64_t dl) {
         gem_dl_heap = h;
         gem_dl_cap = cap;
     }
-    gem_dl_heap[gem_dl_n++] = (GemDeadline){dl, slot};
+    gem_dl_heap[gem_dl_n++] = (GemDeadline){dl, slot, gem_pass_no};
     gem_dl_sift_up(gem_dl_n - 1);
 }
 
@@ -756,22 +795,44 @@ static void gem_proc_set_state(int slot, GemProcState st) {
     }
 }
 
-/* Wake the processes with the earliest deadline, if it has passed
-   (timed_out set). One deadline per pass: when the scheduler falls behind,
-   processes whose deadlines have all passed still wake in deadline order,
-   the earliest in this pass and the next in the next one, instead of
-   together in slot order. */
-static void gem_expire_deadlines(void) {
-    if (gem_dl_n == 0) return;
-    int64_t due = gem_dl_heap[0].dl;
-    if (due > gem_now_ms()) return;
-    while (gem_dl_n > 0 && gem_dl_heap[0].dl == due) {
-        int slot = gem_dl_heap[0].slot;
-        GemProcess *p = &gem_proc_table[slot];
+/* Wake the processes whose deadline has passed (timed_out set), after a
+   pass. A wait that began in this pass is left for the next one: the old
+   full-table scan noticed an expired wait only in a pass after the one
+   that started it, and the woken process ran in the pass after that, so
+   keeping both steps keeps every interleaving (sleep(0) included) as it
+   was. Returns how many woke. */
+static GemDeadline *gem_dl_held = NULL;
+static int gem_dl_held_cap = 0;
+
+static int gem_expire_deadlines(void) {
+    if (gem_dl_n == 0) return 0;
+    int64_t now = gem_now_ms();
+    int woke = 0, held = 0;
+    while (gem_dl_n > 0 && gem_dl_heap[0].dl <= now) {
+        GemDeadline e = gem_dl_heap[0];
+        if (e.pass == gem_pass_no) {
+            if (held == gem_dl_held_cap) {
+                int cap = gem_dl_held_cap ? gem_dl_held_cap * 2 : 64;
+                GemDeadline *h = (GemDeadline *)realloc(gem_dl_held, sizeof(GemDeadline) * (size_t)cap);
+                if (!h) { fprintf(stderr, "gem: out of memory (deadline heap)\n"); exit(1); }
+                gem_dl_held = h;
+                gem_dl_held_cap = cap;
+            }
+            gem_dl_held[held++] = e;
+            gem_dl_remove(e.slot);
+            continue;
+        }
+        GemProcess *p = &gem_proc_table[e.slot];
         p->timed_out = 1;
         p->deadline_ms = -1;
-        gem_proc_set_state(slot, GEM_PROC_READY);
+        gem_proc_set_state(e.slot, GEM_PROC_READY);
+        woke++;
     }
+    for (int k = 0; k < held; k++) {
+        gem_dl_push(gem_dl_held[k].slot, gem_dl_held[k].dl);
+        gem_dl_heap[gem_proc_table[gem_dl_held[k].slot].dl_idx - 1].pass = gem_dl_held[k].pass;
+    }
+    return woke;
 }
 
 /* Wake the pool waiters whose request is done. */
@@ -812,6 +873,7 @@ static void gem_poll_wake(int nfds) {
 
 void gem_scheduler_init(void) {
     gem_proc_table_reserve();
+    gem_map_limit_init();
     gem_poll_cap = 65;
     gem_poll_fds = (struct pollfd *)malloc(sizeof(struct pollfd) * (size_t)gem_poll_cap);
     gem_poll_pids = (int *)malloc(sizeof(int) * (size_t)gem_poll_cap);
@@ -1051,6 +1113,17 @@ void gem_exit_self(const char *reason) {
 /* Core API */
 
 int gem_spawn_fn(GemFnPtr fn, void *env) {
+    /* A new process maps an arena block, and a stack unless one is cached. */
+    int new_maps = gem_stack_cache_len > 0 ? 1 : 4;
+    if (gem_map_limit > 0 && gem_runtime_maps + new_maps > gem_map_limit) {
+        gem_spawn_overflow_count++;
+        char msg[200];
+        snprintf(msg, sizeof msg,
+                 "spawn: too many processes for the system's memory-mapping limit "
+                 "(%d alive, vm.max_map_count = %ld)", gem_procs_alive, gem_map_system);
+        gem_error(msg);
+        return -1;
+    }
     int pid = gem_proc_alloc_slot();
     if (pid < 0) {
         gem_spawn_overflow_count++;
@@ -1373,11 +1446,15 @@ static void gem_run_proc(int i) {
     }
 }
 
+/* Up to this many fd waiters, the scheduler polls them after every pass
+   that ran something; above it, at most once per millisecond. */
+#define GEM_POLL_EVERY_PASS_MAX 64
+static int64_t gem_last_poll_ms = -1;
+
 void gem_run_scheduler(void) {
     for (;;) {
         gem_fire_timers();
         if (gem_io_check_completions()) gem_wake_pool_waiters();
-        gem_expire_deadlines();
 
         /* One pass: run the READY processes in slot order. A process that
            becomes READY during the pass runs in it if its slot is above the
@@ -1387,6 +1464,8 @@ void gem_run_scheduler(void) {
             ran = 1;
             gem_run_proc(i);
         }
+        if (gem_expire_deadlines() > 0) ran = 1;
+        gem_pass_no++;
 
         if (ran) {
             /* Non-blocking poll: surface fd-readiness even when processes
@@ -1394,11 +1473,16 @@ void gem_run_scheduler(void) {
                broker reader draining a never-empty TCP buffer) would starve
                every process waiting on another fd (e.g. a writer waiting for
                POLLOUT to a slow client): the blocking poll below would never
-               be reached. One syscall per pass while any process waits on
-               an fd. */
+               be reached. poll costs O(fd waiters), so with many of them
+               (thousands of idle connections) it runs at most once per
+               millisecond instead of once per pass. */
             if (gem_fd_waiters.n > 0) {
-                int nfds = gem_poll_fill();
-                if (poll(gem_poll_fds, (nfds_t)nfds, 0) > 0) gem_poll_wake(nfds);
+                int64_t now = gem_fd_waiters.n > GEM_POLL_EVERY_PASS_MAX ? gem_now_ms() : 0;
+                if (gem_fd_waiters.n <= GEM_POLL_EVERY_PASS_MAX || now != gem_last_poll_ms) {
+                    gem_last_poll_ms = now;
+                    int nfds = gem_poll_fill();
+                    if (poll(gem_poll_fds, (nfds_t)nfds, 0) > 0) gem_poll_wake(nfds);
+                }
             }
             continue;
         }

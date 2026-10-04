@@ -87,12 +87,13 @@ let early = task.async(fn() 1 end)
 let failing = task.async(fn() sleep(20) error("late failure") end)
 sleep(5)
 # `early` has exited; spawn processes until one reuses its process slot
-# (pid modulo the default process-table size of 1024).
+# (pid modulo the process-table size, 262,144). Slots are reused once 1,024
+# have been handed out, so this finds one within the loop.
 let bystander = nil
 let extras = []
 for i = 0, 2000
   let p = spawn(fn() sleep(10000) end)
-  if p % 1024 == early.pid % 1024
+  if p % 262144 == early.pid % 262144
     bystander = p
     break
   end

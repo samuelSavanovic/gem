@@ -2,7 +2,9 @@
 # The process limit: GEM_MAX_PROCS lowers it, spawn past it raises
 # "spawn: process table full" (catchable), std/http answers a connection it
 # can't spawn a process for with 503 and keeps accepting, and a bad
-# GEM_MAX_PROCS stops the program before it runs.
+# GEM_MAX_PROCS stops the program before it runs. Also: spawn's headroom
+# under Linux's vm.max_map_count, and thread-pool work from more processes
+# than the old table held.
 #
 # Run from the repo root: tests/check_proc_limit.sh
 
@@ -117,6 +119,75 @@ check "http 503 when full" "HTTP/1.1 503 Service Unavailable
 HTTP/1.1 200 OK" "$out"
 check "http stderr" "http: spawn: process table full; refusing a connection" \
   "$(grep '^http:' "$dir/http_err")"
+
+# Linux: spawn stops with headroom left under vm.max_map_count, so the
+# processes already running (main here) can still allocate.
+if [ -r /proc/sys/vm/max_map_count ]; then
+  cat > "$dir/maps.gem" <<'GEM'
+load "std/string"
+fn main()
+  let pids = []
+  let err = nil
+  while err == nil
+    let r = pcall spawn(fn() receive() end)
+    if r.ok then push(pids, r.value) else err = r.error end
+  end
+  print(string.starts_with(err, "spawn: too many processes for the system's memory-mapping limit"))
+  kill(pids[0], "kill")
+  let again = pcall spawn(fn() nil end)
+  print("spawn after an exit:", again.ok)
+  let big = []
+  for i = 0, 200000
+    push(big, "x{i}")
+  end
+  print("main still allocates", len(big))
+  for p in pids
+    kill(p, "kill")
+  end
+end
+GEM
+  "$GEM" "$dir/maps.gem" -o "$dir/maps" 2>"$dir/err" || { echo "FAIL: maps.gem doesn't compile"; cat "$dir/err"; exit 1; }
+  check "map limit headroom" "true
+spawn after an exit: true
+main still allocates 200000" "$("$dir/maps" 2>/dev/null)"
+fi
+
+# A process count past the old 1024 doing thread-pool work at once: the
+# pool's queue grows instead of failing with "I/O queue full".
+cat > "$dir/pool.gem" <<'GEM'
+fn main()
+  let me = self()
+  write_file("pool_input.txt", "abc")
+  for i = 0, 2000
+    spawn do
+      let r = pcall read_file("pool_input.txt")
+      send(me, r.ok and r.value == "abc")
+    end
+  end
+  let ok = 0
+  for i = 0, 2000
+    if receive() then ok += 1 end
+  end
+  print(ok)
+  remove_file("pool_input.txt")
+end
+GEM
+"$GEM" "$dir/pool.gem" -o "$dir/pool" 2>"$dir/err" || { echo "FAIL: pool.gem doesn't compile"; cat "$dir/err"; exit 1; }
+check "2000 concurrent read_file" "2000" "$(cd "$dir" && ./pool 2>&1)"
+
+for bad in "" " 5" "+3" "5 "; do
+  out=$(GEM_MAX_PROCS=$bad "$dir/fill" 2>&1)
+  code=$?
+  check "GEM_MAX_PROCS='$bad'" "gem: GEM_MAX_PROCS must be a number of processes (at least 2), got '$bad'
+exit 1" "$out
+exit $code"
+done
+cat > "$dir/one.gem" <<'GEM'
+print(len(processes()))
+GEM
+"$GEM" "$dir/one.gem" -o "$dir/one" 2>"$dir/err" || { echo "FAIL: one.gem doesn't compile"; cat "$dir/err"; exit 1; }
+check "GEM_MAX_PROCS above the maximum" "1" \
+  "$(GEM_MAX_PROCS=99999999999999999999 "$dir/one" 2>&1)"
 
 if [ "$fails" -eq 0 ]; then
   echo "proc limit: ok"

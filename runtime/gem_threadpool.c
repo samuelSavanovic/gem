@@ -20,10 +20,12 @@
 #ifndef GEM_POOL_SIZE
 #define GEM_POOL_SIZE 4
 #endif
-#define GEM_IO_QUEUE_CAP 1024
 
 static pthread_t gem_io_workers[GEM_POOL_SIZE];
-static GemIORequest *gem_io_queue[GEM_IO_QUEUE_CAP];
+/* Ring of submitted requests, grown as needed: every process can have one
+   request in flight, and there can be many thousands of processes. */
+static GemIORequest **gem_io_queue = NULL;
+static int gem_io_q_cap = 0;
 static int gem_io_q_head = 0;
 static int gem_io_q_tail = 0;
 static int gem_io_q_count = 0;
@@ -135,7 +137,7 @@ static void *gem_io_worker_fn(void *arg) {
             break;
         }
         GemIORequest *req = gem_io_queue[gem_io_q_head];
-        gem_io_q_head = (gem_io_q_head + 1) % GEM_IO_QUEUE_CAP;
+        gem_io_q_head = (gem_io_q_head + 1) % gem_io_q_cap;
         gem_io_q_count--;
         pthread_mutex_unlock(&gem_io_mutex);
 
@@ -192,6 +194,28 @@ void gem_io_release(GemIORequest *req) {
     free(req);
 }
 
+/* Append `req` to the queue and wake a worker. Call with gem_io_mutex held.
+   Returns 0 (queue unchanged) when the queue can't grow. */
+static int gem_io_enqueue(GemIORequest *req) {
+    if (gem_io_q_count == gem_io_q_cap) {
+        int cap = gem_io_q_cap ? gem_io_q_cap * 2 : 1024;
+        GemIORequest **q = (GemIORequest **)malloc(sizeof(GemIORequest *) * (size_t)cap);
+        if (!q) return 0;
+        for (int i = 0; i < gem_io_q_count; i++)
+            q[i] = gem_io_queue[(gem_io_q_head + i) % gem_io_q_cap];
+        free(gem_io_queue);
+        gem_io_queue = q;
+        gem_io_q_cap = cap;
+        gem_io_q_head = 0;
+        gem_io_q_tail = gem_io_q_count;
+    }
+    gem_io_queue[gem_io_q_tail] = req;
+    gem_io_q_tail = (gem_io_q_tail + 1) % gem_io_q_cap;
+    gem_io_q_count++;
+    pthread_cond_signal(&gem_io_cond);
+    return 1;
+}
+
 GemIORequest *gem_io_submit(GemIOOp op, const char *path,
                             const char *content, size_t content_len) {
     GemIORequest *req = (GemIORequest *)calloc(1, sizeof(GemIORequest));
@@ -206,17 +230,13 @@ GemIORequest *gem_io_submit(GemIOOp op, const char *path,
     }
 
     pthread_mutex_lock(&gem_io_mutex);
-    if (gem_io_q_count >= GEM_IO_QUEUE_CAP) {
+    if (!gem_io_enqueue(req)) {
         pthread_mutex_unlock(&gem_io_mutex);
         free(req->path);
         free(req->content);
         free(req);
         return NULL;
     }
-    gem_io_queue[gem_io_q_tail] = req;
-    gem_io_q_tail = (gem_io_q_tail + 1) % GEM_IO_QUEUE_CAP;
-    gem_io_q_count++;
-    pthread_cond_signal(&gem_io_cond);
     pthread_mutex_unlock(&gem_io_mutex);
     return req;
 }
@@ -232,16 +252,12 @@ GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args,
     req->free_extern = free_args;
 
     pthread_mutex_lock(&gem_io_mutex);
-    if (gem_io_q_count >= GEM_IO_QUEUE_CAP) {
+    if (!gem_io_enqueue(req)) {
         pthread_mutex_unlock(&gem_io_mutex);
         if (free_args) free_args(args);
         free(req);
         return NULL;
     }
-    gem_io_queue[gem_io_q_tail] = req;
-    gem_io_q_tail = (gem_io_q_tail + 1) % GEM_IO_QUEUE_CAP;
-    gem_io_q_count++;
-    pthread_cond_signal(&gem_io_cond);
     pthread_mutex_unlock(&gem_io_mutex);
     return req;
 }

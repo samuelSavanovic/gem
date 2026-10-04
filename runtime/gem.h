@@ -916,6 +916,7 @@ void gem_pin_free_all(GemProcess *proc);
    Only slots below gem_proc_hwm are accessible: check a slot index against
    it (gem_slot_of_pid does) before indexing. */
 extern GemProcess *gem_proc_table;
+extern long gem_runtime_maps;   /* gem_arena.c: memory mappings the runtime holds */
 extern int gem_current_pid;
 extern int gem_free_head;
 extern int gem_free_tail;
