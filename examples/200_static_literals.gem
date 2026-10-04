@@ -1,0 +1,44 @@
+# String literals, record keys and type() results are values over static
+# memory. They behave like any other string: through loop resets, copies
+# to other processes, appends and as table keys.
+
+let nul = "a\0b"
+print(len(nul), ord(nul[1]), nul == "a\0b", nul == "a")
+let rec = {"k\0x": 1, k: 2}
+print(rec["k\0x"], rec.k, len(keys(rec)))
+
+# Kept across many region resets: the records allocated per iteration are
+# copied, the literal keys and values they point at are not.
+let kept = []
+let i = 0
+while i < 200000
+  let r = {name: "row", kind: type(i), tag: ""}
+  if i % 50000 == 0
+    push(kept, r)
+  end
+  i = i + 1
+end
+print(len(kept), kept[3].name, kept[3].kind, len(kept[3].tag))
+
+let s = "x"
+for j in [1, 2, 3]
+  s = s + "y"
+end
+print(s, "x")
+
+let me = self()
+let child = spawn do
+  let m = receive()
+  send(me, {word: m.word, list: m.list, same: m.word == "hello", t: type(m)})
+end
+send(child, {word: "hello", list: ["a", "b"]})
+let back = receive()
+print(back.word, back.list[1], back.same, back.t)
+
+let counts = {}
+for v in [1, "a", nil, 2.5, [1], true, 3]
+  let t = type(v)
+  counts[t] = (counts[t] or 0) + 1
+end
+print(counts.int, counts.string, counts["nil"], counts.float, counts.table, counts.bool)
+print(to_string(nil), to_string(true), to_string(false), "" == to_string(""))

@@ -1358,7 +1358,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       end
       return true
     end
-    e == "GEM_NIL" or e == "gem_bool(1)" or e == "gem_bool(0)" or substr(e, 0, 8) == "gem_int(" or substr(e, 0, 10) == "gem_float(" or substr(e, 0, 21) == "gem_string_with_len(\"" or e == "gem_string(\"\")"
+    e == "GEM_NIL" or e == "gem_bool(1)" or e == "gem_bool(0)" or substr(e, 0, 8) == "gem_int(" or substr(e, 0, 10) == "gem_float(" or substr(e, 0, 13) == "GEM_STR_LIT(\""
   end
 
   # Evaluate a compiled operand now, into a temp, unless it is inert.
@@ -3647,11 +3647,11 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       return {expr: "gem_float({format_float(value)})", setup: ""}
     when {tag: "string", value: value}
       let escaped = escape_c_string(value)
-      # Use _with_len so embedded NULs survive — len(value) reads slen.
-      return {expr: "gem_string_with_len(\"{escaped}\", {len(value)})", setup: ""}
+      # Points at the C literal; the explicit length keeps embedded NULs.
+      return {expr: "GEM_STR_LIT(\"{escaped}\", {len(value)})", setup: ""}
     when {tag: "interp", parts: parts}
       if len(parts) == 0
-        return {expr: "gem_string(\"\")", setup: ""}
+        return {expr: "GEM_STR_LIT(\"\", 0)", setup: ""}
       end
       let results = []
       for part in parts
@@ -3770,12 +3770,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(b, "    gem_table_set({t}, gem_int({c_int_literal(entry.int_key)}), {val_r.expr});\n")
       else
         let escaped = escape_c_string(entry.key)
-        let key_c = "gem_string(\"{escaped}\")"
-        if len(str_replace(entry.key, "\0", "")) != len(entry.key)
-          # gem_string stops at the first NUL.
-          key_c = "gem_string_with_len(\"{escaped}\", {len(entry.key)})"
-        end
-        buf_push(b, "    gem_table_set({t}, {key_c}, {val_r.expr});\n")
+        buf_push(b, "    gem_table_set({t}, GEM_STR_LIT(\"{escaped}\", {len(entry.key)}), {val_r.expr});\n")
       end
     end
     if node.frozen == true
@@ -4136,7 +4131,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     when {tag: "dot_assign", object: object, value: value, field: field}
       let o = left_to_right([compile_expr(object), compile_expr(value)])
       let escaped = escape_c_string(field)
-      return "{line_dir}{o.setup}{p}gem_table_set({o.exprs[0]}, gem_string(\"{escaped}\"), {o.exprs[1]});"
+      return "{line_dir}{o.setup}{p}gem_table_set({o.exprs[0]}, GEM_STR_LIT(\"{escaped}\", {len(field)}), {o.exprs[1]});"
     when {tag: "index_assign", object: object, key: key, value: value}
       let o = left_to_right([compile_expr(object), compile_expr(key), compile_expr(value)])
       return "{line_dir}{o.setup}{p}gem_table_set({o.exprs[0]}, {o.exprs[1]}, {o.exprs[2]});"

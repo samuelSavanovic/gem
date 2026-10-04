@@ -3924,3 +3924,10 @@ rows: 0 1 2 3 4 5
 [1, 1, 2, 3, 9]
 [1, 5]
 200000 200000 199999 nil false true
+3 0 true false
+1 2 2
+4 row int 0
+xyyy x
+hello b true table
+2 1 1 1 1 1
+nil true false true

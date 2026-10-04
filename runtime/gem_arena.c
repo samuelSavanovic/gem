@@ -49,12 +49,6 @@ static GemArenaBlock *gem_arena_new_block(size_t min_cap) {
     return block;
 }
 
-GemArena *gem_current_arena(void) {
-    if (gem_current_pid >= 0)
-        return &gem_proc_table[gem_current_pid].arena;
-    return &gem_global_arena;
-}
-
 void gem_arena_init(GemArena *arena) {
     GemArenaBlock *block = gem_arena_new_block(GEM_ARENA_INITIAL_BLOCK);
     arena->current = block;
@@ -89,14 +83,11 @@ void gem_arena_free_blocks(GemArenaBlock *block) {
     }
 }
 
-int gem_strlen_check(size_t n, const char *who) {
-    if (n > (size_t)GEM_MAX_STRLEN) {
-        char buf[160];
-        snprintf(buf, sizeof(buf), "%s%sa string of %zu bytes is over the limit of %d bytes",
-                 who ? who : "", who ? ": " : "", n, GEM_MAX_STRLEN);
-        gem_error(buf);
-    }
-    return (int)n;
+void gem_strlen_error(size_t n, const char *who) {
+    char buf[160];
+    snprintf(buf, sizeof(buf), "%s%sa string of %zu bytes is over the limit of %d bytes",
+             who ? who : "", who ? ": " : "", n, GEM_MAX_STRLEN);
+    gem_error(buf);
 }
 
 void gem_buffer_reserve(GemBuffer *b, size_t extra, const char *who) {
