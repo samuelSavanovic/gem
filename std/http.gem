@@ -1490,8 +1490,10 @@ fn process_one_request(rd, cfg)
 end
 
 # Writes a response. `write_ms` bounds the wait for progress, not the whole
-# response: a slow client that keeps taking bytes gets all of it. A client
-# that takes nothing for write_ms loses its connection (logged), as does
+# response: a slow client that keeps taking bytes gets all of it. Each
+# tcp_write waits up to write_ms; one that writes nothing ends the
+# response, so a client that stops taking bytes loses its connection
+# between write_ms and twice that after its last byte (logged), as does
 # one that has gone (not logged). Returns false when the response was cut.
 fn send_all(rd, out)
   let rest = out
@@ -1713,10 +1715,11 @@ end
 ## `idle_timeout_ms` (default 30000: the longest wait for each read, also
 ## for the next request on a kept-alive connection) and
 ## `request_timeout_ms` (default 30000: a request's head and body must
-## arrive within it) and `write_timeout_ms` (default 30000: the longest a
-## client may go without taking any bytes of a response, so one that
-## stops reading can't hold its connection; a slow one that keeps reading
-## gets the whole response). A timeout of nil means no limit; past a read
+## arrive within it) and `write_timeout_ms` (default 30000: a response
+## is cut once the client takes no bytes of it for a whole
+## write_timeout_ms, which is between write_timeout_ms and twice that
+## after the last byte it took, so one that stops reading can't hold its
+## connection; a slow one that keeps reading gets the whole response). A timeout of nil means no limit; past a read
 ## one, the connection is closed without a response, past the write one,
 ## it is closed with the response cut short and a line on stderr. Other
 ## keys are ignored.
