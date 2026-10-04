@@ -90,10 +90,11 @@ Choices worth knowing:
 
 ## Known limits
 
-- **Slow consumers.** A client that stops reading blocks its writer in
-  `tcp_write`, and messages for it pile up in the writer's mailbox
-  without bound. The fix is a write timeout plus a policy (drop the
-  client, or drop messages); NOTES.md discusses the options.
+- **Slow consumers are disconnected.** A client that doesn't take a
+  frame within `write_timeout_ms` (10 s by default, a `broker.start`
+  option) is dropped, so its messages can't pile up without bound. Until
+  then they queue in its writer's mailbox. Dropping messages instead of
+  the client would be the other policy (NOTES.md discusses both).
 - **Every `SEND` asks the registry for the destination** (one
   `gen_server.call`), so all publishers go through one process. A
   connection could keep the pids it has looked up, at the cost of

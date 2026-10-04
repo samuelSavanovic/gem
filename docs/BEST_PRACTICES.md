@@ -497,9 +497,13 @@ fn serve(router, opts)
   end
 ```
 
-Inside the bag the rule is looser than for plain defaults: a field default
-applies when the field is missing *or* `nil`. The trailing `= {}` makes the
-bag itself optional, and an explicit `nil` for the bag also becomes `{}`;
+A field default applies only when the field is missing, as a plain
+default applies only when the argument is left out: `{port: nil}` gives
+`port = nil`. So an option where `nil` means something (`timeout_ms: nil`
+for no limit) needs no `has_key` check, and a caller that forwards an
+option it may not have (`{port: opts.port}`) passes `nil`, not the
+default: leave the key out instead. The trailing `= {}` makes the bag
+itself optional, and an explicit `nil` for the bag also becomes `{}`;
 without `= {}`, passing `nil` is an error. Destructured names are ordinary
 locals that closures and `spawn` bodies can capture.
 
@@ -509,18 +513,6 @@ A call with too many arguments drops the extras, and missing arguments are
 `nil` (or their default). Neither is an error, so a wrong call shows up
 later as a `nil` somewhere else. An `extern fn` is the exception: it
 raises unless the count matches exactly.
-
-### Don't rely on argument order for side effects **(bug)**
-
-Arguments run left to right, except a field access: in
-`print(monitor(p), process_info(p).monitors)` the `process_info` call
-runs first, so the list doesn't show the new monitor. When arguments have
-side effects that later ones depend on, give them their own statements:
-
-```gem
-let added = monitor(p)
-print(added, process_info(p).monitors)
-```
 
 ### `+=` works only on variables
 
@@ -1054,11 +1046,13 @@ with no limit by default.
 
 ### Don't pass an option's `shutdown` through as `nil` **(trap)**
 
-In a child spec, a missing `shutdown` key means the 5000 ms default, but
+In a child spec, a missing `shutdown` key means the default budget, but
 `shutdown: nil` means no limit, like `timeout_ms: nil` elsewhere in std.
 `{id: id, start: s, shutdown: opts.shutdown}` sets the key to `nil` when
 `opts` has no `shutdown`, so a stubborn child keeps its supervisor waiting
-for good. Copy the key only when it is there:
+for good. Copy the key only when it is there, which leaves the
+supervisor's own default in place (5000 ms, or the budget the child's
+handle asks for):
 
 ```gem
 fn worker_spec(id, opts)
@@ -1070,8 +1064,10 @@ fn worker_spec(id, opts)
 end
 ```
 
-(A destructuring default, `let {shutdown = 5000} = opts`, goes the other
-way: it turns an explicit `nil` into 5000.)
+Or give the option a default when you read it: a destructuring default
+fires only on a missing key, so an explicit `nil` still passes through
+(`fn worker_spec(id, {shutdown = 5000} = {})`), at the cost of fixing the
+default yourself.
 
 ### Request/reply: a ref, a pin, a timeout, and a monitor
 
@@ -1259,11 +1255,12 @@ twice while it is read; there is no way to read a file a line at a time.
   timeout. Library code should always pass a timeout; without one, a silent
   peer blocks the caller forever. As with `after`, a timeout of `0` or
   less doesn't wait: it returns what's already there, or `nil`.
-- `tcp_write` returns the number of bytes written and does not raise when
-  the peer has gone. Treat `tcp_write(fd, s) < len(s)` as "connection
-  lost", but expect the first write after a disconnect to still report
-  success; only later writes show it. `tcp_write` has no timeout, so a peer
-  that stops reading blocks the writer.
+- `tcp_write(fd, s, timeout_ms)` returns the number of bytes written and
+  does not raise when the peer has gone or the timeout passes. Treat
+  `tcp_write(fd, s, ms) < len(s)` as "connection lost or too slow", but
+  expect the first write after a disconnect to still report success; only
+  later writes show it. Without a timeout, a peer that stops reading
+  blocks the writer for as long as it keeps the connection open.
 
 ---
 
@@ -1489,8 +1486,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `match` with no arm matching | yields `nil` silently | add an `else` |
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |
 | `when x > 5`, `when "a" or "b"` | compares with a bool / one value | `if` chain |
-| `nil` passed for a defaulted parameter | parameter is `nil` | leave the argument out |
-| Call arguments with side effects, one a field access like `f(x).y` **(bug)** | the field access's object runs before the arguments left of it | separate statements |
+| `nil` passed for a defaulted parameter or option field | parameter (field) is `nil` | leave the argument (key) out |
 | `pcall fn() ... end`, `pcall(f, x)`, `pcall(f(x))` | runs nothing / drops `x` / doesn't catch | `pcall f(x)`, `pcall do ... end` |
 | Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
 | `2.0 == 2` | `false` | convert first |

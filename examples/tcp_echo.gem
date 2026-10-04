@@ -1,15 +1,15 @@
 # TCP echo server, one process per connection, and a client that checks it.
 
 let PORT = 9125
-let READ_TIMEOUT_MS = 2000
+let TIMEOUT_MS = 2000
 
 fn echo_loop(fd)
   while true
-    let data = tcp_read(fd, 4096, READ_TIMEOUT_MS)
+    let data = tcp_read(fd, 4096, TIMEOUT_MS)
     if data == nil or data == ""
       break
     end
-    if tcp_write(fd, data) < len(data)
+    if tcp_write(fd, data, TIMEOUT_MS) < len(data)
       break
     end
   end
@@ -31,10 +31,10 @@ end
 fn round_trip(msg)
   let fd = tcp_connect("127.0.0.1", PORT)
   let r = pcall do
-    if tcp_write(fd, msg) < len(msg)
+    if tcp_write(fd, msg, TIMEOUT_MS) < len(msg)
       error("tcp_echo: write failed")
     end
-    tcp_read(fd, 4096, READ_TIMEOUT_MS)
+    tcp_read(fd, 4096, TIMEOUT_MS)
   end
   tcp_close(fd)
   if not r.ok

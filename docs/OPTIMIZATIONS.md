@@ -77,6 +77,9 @@ Small strings (< 16 bytes) could be interned in a global table, turning equality
 
 ## Codegen Output
 
+### Don't pin plain local reads for left-to-right evaluation (P2)
+Left-to-right evaluation (`left_to_right` / `operands` / `pin_operand` in codegen.gem) copies every operand that isn't a literal or a temp into a C temp when a later operand runs code, plain C locals (`gem_v_s`, `gem_v__for_i_N`) included. On a 50M-iteration `s = s + t[i % 10] * 2 + len(t) - (i % 7)` loop that is +9–10% over the old (wrong-order) code on macOS arm64 (1.78 s vs 1.62 s); removing just the local pins gets back about a third of it. A plain unboxed local can only change mid-expression through a later operand that assigns it, which after "assignment is a statement" means a non-escaping closure assigning it through its stack env (`g(x, pcall x = 2)` must still read the old `x`). So: treat `gem_v_<name>` as inert unless a later operand of the same expression assigns `name` (directly, or in a non-escaping closure's `stack_env_writes`). Boxed locals and module slots stay pinned.
+
 ### Dead code elimination (P2)
 Unreachable code after `return`, `break`, `error()` could be stripped. Currently emitted as-is.
 

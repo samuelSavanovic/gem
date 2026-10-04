@@ -161,9 +161,11 @@ fn handle_send(conn, f)
   true
 end
 
+# A client that doesn't take a frame within the timeout is dropped: its
+# deliveries would otherwise queue up in this process without bound.
 fn write_frame(conn, f)
   let bytes = frame.render_frame(f)
-  tcp_write(conn.fd, bytes) == len(bytes)
+  tcp_write(conn.fd, bytes, conn.write_timeout_ms) == len(bytes)
 end
 
 # STOMP closes the connection after an ERROR.
@@ -174,7 +176,7 @@ end
 
 # Traps exits so that a crashing reader can't kill the writer before it
 # closes the socket.
-fn run_writer(fd, id)
+fn run_writer(fd, id, write_timeout_ms)
   process_flag("trap_exit", true)
   let reader = nil
   let r = pcall do
@@ -182,7 +184,7 @@ fn run_writer(fd, id)
     reader = spawn_link do
       reader_loop(fd, me)
     end
-    writer_loop({fd: fd, id: id, connected: false, subs: {}})
+    writer_loop({fd: fd, id: id, write_timeout_ms: write_timeout_ms, connected: false, subs: {}})
   end
   if reader != nil
     kill(reader, "shutdown")
@@ -194,10 +196,12 @@ fn run_writer(fd, id)
 end
 
 ## Starts the connection for accepted socket `fd`, which it closes when
-## done; `id` is the session id. If this raises, `fd` is still the caller's.
-fn start(fd, id)
+## done; `id` is the session id. A frame the client doesn't take within
+## `write_timeout_ms` closes the connection. If this raises, `fd` is still
+## the caller's.
+fn start(fd, id, write_timeout_ms)
   spawn do
-    run_writer(fd, id)
+    run_writer(fd, id, write_timeout_ms)
   end
 end
 

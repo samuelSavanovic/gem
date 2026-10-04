@@ -8,179 +8,56 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
-### An assignment as a call argument crashes the compiler
+### A param default that names its own or a later param
 
 ```gem
-fn f(x) x end
-let a = nil
-print(f(a = 1))
+fn h(x = x) x end
+print(h())             # prints whatever the C local held (nil here)
 ```
-
-reports `[Compiler Bug]: unknown expression node: assign`. The parser
-accepts an assignment where an expression is expected; it should be a
-compile error at the `=`. (compiler/parser.gem, codegen's
-`compile_expr`)
-
-### Files with CRLF line endings don't lex
-
-`printf 'let b = "q"\r\nprint(b)\r\n' > x.gem; gem x.gem` reports
-`unexpected character` at the `\r`; a `"""` followed by `\r\n` reports
-`triple-quoted string must be followed by a newline`. The lexer
-(compiler/lexer.gem) should treat `\r\n` as a newline everywhere.
-
-### `0..n` lexes as a float and fails at runtime
 
 ```gem
-for i in 0..len("ab")
-  print(i)
-end
+fn k(a = b, b = 1) a end
+print(k())             # cc fails: 'gem_v_b' undeclared
 ```
-
-fails at runtime with `field access on non-table: got float`: `0.` lexes
-as a float and `.len(...)` as a field access. A number followed by `..`
-should be a compile error (Gem's range loop is `for i = 0, n`).
-
-### A destructuring `let` accepts a non-name field
-
-`let {"a"} = {a: 1}` (or `let {1} = ...`) compiles and runs with no
-error and binds nothing. The field loops of `let {...}` and `{...}`
-param patterns in compiler/parser.gem take any token as a field name;
-they should report `expected a field name`.
-
-### Only a module's last `export` statement counts
-
-A module with `fn a() 1 end`, `export a`, `fn b() 2 end`, `export b`
-exports only `b`: `m.a()` reports `module `two` has no export `a``.
-`find_export_node` in compiler/main.gem takes the last one. Merge them,
-or report a second `export` as an error.
-
-### Error columns for nested named fns and private module fields
-
-`fn inner() ... end` inside a fn body or closure reports "named fn inside
-function body is not supported" at column 1 instead of the `fn` token.
-`print(ok.priv())`, where module `ok` doesn't export `priv`, reports "has
-no export" at column 1 with the span of `print`, not at `priv`.
-
-### A fn named `<f>_body` clashes with a mutual-recursion helper
 
 ```gem
-fn f(n)
-  if n == 0 then return 0 end
-  g(n - 1)
-end
-fn g(n)
-  f(n)
-end
-fn f_body() 1 end
-print(f(3), f_body())
+let D = 5
+fn f(x = D, D = 1) x end
+print(f())             # cc fails: 'gem_v_D' undeclared (a later param
+                       # shadows the module binding the default names)
 ```
 
-fails in cc with `redefinition of 'gem_fn_f_body'`: each fn of a mutual
-tail-call cycle gets a C helper `gem_fn_<name>_body` (`scc_wrapper_for` in
-compiler/codegen.gem), which a user fn named `<name>_body` also gets as
-its symbol. Modules hit it too: `a` with `f`↔`g` next to a module `a_f`
-with `fn body` (`module_mangle` in compiler/main.gem doesn't account for
-the `_body` suffix). Give the helper a name no user fn can have.
-
-### Closures in a destructuring `let` of a builtin's name see the new binding
-
-```gem
-let [len, size] = [fn(x) 0 end, fn(x) len(x) end]
-print(size("abc"))        # 0, not 3
-```
-
-SPEC says the initializer of a module-level `let` that shadows a builtin,
-closures in it included, still reaches the builtin, and it does for a
-plain `let len = ...` and for a direct call in the destructuring
-initializer (`let [len, n] = [f, len("abc")]` binds `n = 3`). A closure in
-a destructuring initializer calls the new `len` instead, in the entry file
-and in a loaded module alike. The initializer scope for a shadowing
-module-level `let` is set up in `rename_stmt_in_scope` /
-`pending_builtin_lets` (compiler/main.gem); the destructuring form doesn't
-get it for closures.
-
-### A field access in a call's arguments runs before the arguments left of it
-
-```gem
-let log = []
-fn f(x)
-  push(log, x)
-  {v: x}
-end
-print(f(1).v, f(2), f(3).v)
-print(log)                       # [1, 3, 2]: f(3) ran before f(2)
-```
-
-Arguments are evaluated left to right, except that the object of a field
-access (`f(3)` in `f(3).v`, `process_info(p)` in
-`process_info(p).monitors`) is hoisted into a temporary before the
-argument array, so it runs before the plain arguments left of it
-(`print(monitor(p), process_info(p).monitors)` shows the monitors from
-before the `monitor`). Codegen builds the args as a C initializer list
-(`GemVal _t[] = {...}`) after hoisting the field object
-(compiler/codegen.gem, the `gem_table_get_cached` path); hoist every
-argument in order, or none.
-
-### A float key in a table literal becomes a string key
-
-```gem
-let t = {1.5: "e"}
-print(has_key(t, "1.5"), has_key(t, 1.5))   # true false
-```
-
-The parser keeps a NUMBER key's text, and `compile_table` emits it as a
-string key; a pattern `{1.5: x}` does the same (compiler/parser.gem
-`parse_int_key` handles only ints). It should be a float key or a
-compile error.
-
-### A default parameter in a loaded module can't use the module's `let`s
-
-```gem
-# lib.gem                           # main.gem
-let D = 5                           load "./lib"
-fn f(x = D)                         print(lib.f())
-  x
-end
-export f
-```
-
-fails with ``undeclared identifier `D` `` at `lib.gem:2`; the same code in
-the entry file prints `5`. `rename_node` (compiler/main.gem) prefixes the
-module's top-level names in fn bodies but never walks the param defaults
-(`node.defaults`), so the default still names `D` while the slot is
-`_mod_lib_D`. std/http writes `ok`'s default content type out as a literal
-because of it.
-
-### A newline inside a `"..."` or `'...'` string isn't counted in line numbers
-
-```gem
-let s = "a
-  b"
-print(1)
-error("x")        # reported at line 3, shows the line `print(1)`
-```
-
-Compile errors (`unexpected character`, `undeclared identifier`) and runtime
-error locations after such a string are one line early per newline inside
-it. Triple-quoted strings count correctly. The single- and double-quoted
-string branches of the lexer (compiler/lexer.gem, from `if ch == "\""`) step
-over a raw `\n` without incrementing `line` or resetting `line_start`.
-
-### An unterminated `{` in a string is reported past the end of the line
-
-```gem
-let r = f(u, "{not json", {headers: {"Content-Type": "application/json"}, timeout_ms: 1000})
-```
-
-`unterminated string interpolation` points at a column past the end of the
-line (131 on a 105-character line; longer files give columns in the
-hundreds or thousands), not at the `{` that opened it. The lexer
-(compiler/lexer.gem, the `unterminated string interpolation` report near
-line 825) uses the scan position after searching on for the `}`, not the
-position of the `{`. The note "this '{' is never closed" form at line 858
-already has the right location.
+A default runs in the fn's scope with every param visible, so `x = x`
+reads the param before it is set (an uninitialized C local, `gem_v_x =
+gem_v_x;`) and a later param reaches C undeclared. SPEC says a default
+may refer to *earlier* params; the others should be a compile error
+(`undeclared identifier`), or `x = x` should read the binding the param
+shadows, as a `let` initializer does. Param defaults are emitted in
+compiler/codegen.gem (the `if (argc > i) ... else` prelude); the scope
+check belongs in `scope_shadowing_lets`.
 
 ## Runtime
+
+### A `tcp_accept` waiting on a listening socket that another process closes spins forever
+
+```gem
+let l = tcp_listen("127.0.0.1", 18296)
+spawn do
+  let r = pcall tcp_accept(l)
+  print("accept returned", r)    # never printed
+end
+sleep(100)
+tcp_close(l)
+print("closed")                  # the program then never exits, at 100% CPU
+```
+
+The waiting process is never told: `poll` reports the closed fd as
+`POLLNVAL` at once on every pass, the scheduler keeps it waiting
+(`gem_run_scheduler` / the poll loop in runtime/gem_scheduler.c), and
+`accept` is not retried, so the scheduler busy-loops. A `POLLNVAL` (or
+`POLLERR`/`POLLHUP`) should make the waiter ready so `accept` fails with
+`EBADF` and raises. Likely the same for a `tcp_read` on a socket another
+process closes.
 
 ### `in` answers differently on a copy of a table whose string keys were deleted
 
@@ -269,6 +146,29 @@ see a second statement after one. Both should raise on SQL containing a
 NUL (runtime/gem_builtins_sqlite.c).
 
 ## Standard library
+
+### `request` loses a status the server sent before the body was written
+
+```gem
+load "std/request"
+load "std/string"
+let l = tcp_listen("127.0.0.1", 18298)
+spawn do
+  let c = tcp_accept(l)
+  tcp_read(c, 4096, 1000)
+  tcp_write(c, "HTTP/1.1 413 Payload Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+  tcp_close(c)
+end
+let body = string.repeat("x", 32 * 1024 * 1024)
+print((pcall request.post("http://127.0.0.1:18298/up", {body: body})).error)
+# request.post: connection lost while sending the request to ...
+```
+
+A server that answers early (413, 401) and closes while the body is still
+being sent leaves a short `tcp_write`, which `exchange` (std/request.gem)
+turns into "connection lost while sending"; the status the server already
+sent is never read. On a short write it should still try to read a
+response before raising.
 
 ### `json.encode` writes infinite and NaN floats as bare `inf`/`nan`
 

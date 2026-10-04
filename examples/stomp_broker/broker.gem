@@ -6,12 +6,12 @@ load "./destination"
 load "./registry"
 load "./connection"
 
-fn accept_loop(listener)
+fn accept_loop(listener, write_timeout_ms)
   let next_id = 0
   while true
     let fd = tcp_accept(listener)
     next_id += 1
-    let r = pcall connection.start(fd, next_id)
+    let r = pcall connection.start(fd, next_id, write_timeout_ms)
     if not r.ok
       # process table full: refuse this client
       tcp_close(fd)
@@ -20,8 +20,9 @@ fn accept_loop(listener)
 end
 
 ## Starts the broker on `listener` and returns the supervisor's handle.
-## `stop` doesn't close the listener.
-fn start(listener)
+## A client that doesn't take a frame within `write_timeout_ms` is
+## disconnected. `stop` doesn't close the listener.
+fn start(listener, {write_timeout_ms = 10000} = {})
   supervisor.start({
     strategy: "one_for_one",
     name: "stomp_broker_sup",
@@ -37,7 +38,7 @@ fn start(listener)
       {id: "registry", start: registry.start},
       {id: "acceptor", start: fn()
         spawn do
-          accept_loop(listener)
+          accept_loop(listener, write_timeout_ms)
         end
       end}
     ]

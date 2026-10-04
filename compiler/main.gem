@@ -12,7 +12,7 @@ load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
 load "./loader" (resolve_load_path, load_target_problem, find_project_root, find_install_root, compute_stdlib_root, make_show_path)
 load "./builtins" (BUILTIN_FNS)
-load "./lexer" (build_keyword_set)
+load "./lexer" (build_keyword_set, normalize_newlines)
 load "../lsp/main" (run_lsp)
 
 # ─── Install root (for runtime/, build/libgem_runtime.a) ──────
@@ -146,15 +146,31 @@ fn module_mangle(full_path, mod_name, top_names, registry)
   cand
 end
 
+# A module's exports: every top-level `export` statement counts, in order
+# (a name listed twice, in one or in two statements, is reported by
+# checked_exports). nil when there is none.
 fn find_export_node(stmts)
-  let i = len(stmts) - 1
-  while i >= 0
-    if is_node(stmts[i], "export")
-      return stmts[i]
+  let found = []
+  for stmt in stmts
+    if is_node(stmt, "export")
+      push(found, stmt)
     end
-    i -= 1
   end
-  nil
+  if len(found) == 0
+    return nil
+  elif len(found) == 1
+    return found[0]
+  end
+  let merged = {tag: "export", names: [], name_pos: [], line: found[0].line, col: found[0].col}
+  for node in found
+    for name in node.names
+      push(merged.names, name)
+    end
+    for pos in node.name_pos
+      push(merged.name_pos, pos)
+    end
+  end
+  merged
 end
 
 fn collect_module_top_names(stmts)
@@ -209,6 +225,18 @@ fn fn_body_scope(shadowed)
     end
   end
   result
+end
+
+# A fn's param defaults run in the fn's scope (its params visible).
+fn rename_defaults(defaults, rmap, inner)
+  if defaults == nil
+    return nil
+  end
+  for d in defaults
+    if d != nil
+      rename_node(d, rmap, inner)
+    end
+  end
 end
 
 fn rename_pattern(pat, rmap, shadowed)
@@ -272,6 +300,7 @@ fn rename_node(node, rmap, shadowed)
     if node.rest_param != nil
       inner[node.rest_param] = true
     end
+    rename_defaults(node.defaults, rmap, inner)
     rename_stmts(body, rmap, inner)
   when {tag: "extern_fn", name: name}
     # The binding is renamed like a fn's; the C function it calls keeps
@@ -290,6 +319,7 @@ fn rename_node(node, rmap, shadowed)
     if node.rest_param != nil
       inner[node.rest_param] = true
     end
+    rename_defaults(node.defaults, rmap, inner)
     rename_stmts(body, rmap, inner)
   when {tag: "let", name: name, value: value}
     rename_node(value, rmap, shadowed)
@@ -403,7 +433,48 @@ end
 # the block and keeps its own name. A `block` (destructuring `let`) is
 # transparent: its lets belong to the enclosing list.
 fn rename_stmt_in_scope(stmt, rmap, current, top)
-  if is_node(stmt, "block")
+  if is_node(stmt, "block") and top
+    # A module-scope destructuring `let`: the initializer (in the block's
+    # first `let`), closures in it included, still calls each builtin the
+    # block binds, as for a plain `let` of a builtin's name.
+    let init_scope = copy_set(current)
+    for s in stmt.stmts
+      if is_node(s, "let") and current[s.name] == "pending"
+        init_scope[s.name] = true
+      end
+    end
+    # Only the initializer (the block's first `let`) gets init_scope; the
+    # field lets and their defaults follow in order, as for separate lets,
+    # so a default naming an earlier field sees that field. A field's
+    # default (the statements before its `let`) is that let's initializer:
+    # its own name still means the builtin there, closures included.
+    let stmts = stmt.stmts
+    for k = 0, len(stmts)
+      let s = stmts[k]
+      if k == 0
+        rename_stmt_in_scope(s, rmap, init_scope, top)
+      elif is_node(s, "let") and current[s.name] == "pending"
+        rename_stmt_in_scope(s, rmap, current, top)
+      else
+        # A default's statements (`let _dMv = ...`, the `if`) belong to the
+        # next field let that reads the temp (`let name = _dMv`, a var).
+        let scope = current
+        let j = k + 1
+        while j < len(stmts)
+          let f = stmts[j]
+          if is_node(f, "let") and is_node(f.value, "var")
+            if current[f.name] == "pending"
+              scope = copy_set(current)
+              scope[f.name] = true
+            end
+            break
+          end
+          j += 1
+        end
+        rename_stmt_in_scope(s, rmap, scope, top)
+      end
+    end
+  elif is_node(stmt, "block")
     for s in stmt.stmts
       rename_stmt_in_scope(s, rmap, current, top)
     end
@@ -850,7 +921,8 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
         sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "cannot read module `{stmt.path}` ({show_path(full_path)})", nil)
         continue
       end
-      let source = read_res.value
+      # CRLF reads as LF here, so error snippets don't show the CR either.
+      let source = normalize_newlines(read_res.value)
       sources_by_file[full_path] = source
       let errors_before = sink.count()
       let loaded_ast = parse_source(source, full_path, sink)
@@ -1055,7 +1127,7 @@ if not file_exists(src_path)
   eprint("gem: cannot open '" + src_path + "'")
   exit(1)
 end
-let source = read_file(src_path)
+let source = normalize_newlines(read_file(src_path))
 
 let sink = make_error_sink()
 

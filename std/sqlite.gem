@@ -68,11 +68,13 @@ fn exec(db, sql)
   sqlite_exec(db, sql)
 end
 
-## Runs one statement with its `?` placeholders bound, in order, from the
-## array `params`, and returns its rows: an array of records keyed by
-## column name (an empty table, printed `{}`, when there are none, as for
-## INSERT, UPDATE and DELETE). `?N` takes the Nth param, and each `:name` the next one
-## in order of first use. `params` may be nil (no params).
+## Runs one statement with its placeholders bound from `params` and
+## returns its rows: an array of records keyed by column name (an empty
+## table, printed `{}`, when there are none, as for INSERT, UPDATE and
+## DELETE). `params` is an array bound in order (`?N` takes the Nth
+## param, and each `:name` the next one in order of first use), or a
+## record of names: `:name`, `@name` and `$name` take the value at `name`
+## (a key holding nil binds NULL). `params` may be nil (no params).
 ##
 ## Params may be nil, bools (stored as 1 and 0), ints, floats or strings.
 ## Columns come back as ints, floats, strings or nil; a NULL column is
@@ -83,13 +85,16 @@ end
 ##
 ##   sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [1])
 ##   # [{id: 1, text: "hi"}]
+##   sqlite.query(db, "SELECT id FROM notes WHERE text = :t", {t: "hi"})
+##   # [{id: 1}]
 ##
 ## Raises `sqlite_query: expected one SQL statement, got several ...`,
 ## before anything runs, when `sql` holds more than one statement (a
 ## trailing `;`, whitespace and comments are fine). Raises if `params` is
-## not a table, if the number of params differs
-## from the statement's parameter count (the highest `?N`; a reused `?N` or
-## `:name` counts once), or if a param is of another type.
+## not a table, if an array's length differs from the statement's
+## parameter count (the highest `?N`; a reused `?N` or `:name` counts
+## once), if a record lacks a placeholder's name, has a key no placeholder
+## names, or meets a positional `?`, or if a param is of another type.
 fn query(db, sql, params = [])
   sqlite_query(db, sql, params)
 end

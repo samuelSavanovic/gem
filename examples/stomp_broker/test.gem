@@ -110,7 +110,7 @@ end
 # ─── Broker ────────────────────────────────────────────────────
 
 let listener = tcp_listen("127.0.0.1", PORT)
-let sup = broker.start(listener)
+let sup = broker.start(listener, {write_timeout_ms: 300})
 
 test.case("connect") do
   let c = {fd: tcp_connect("127.0.0.1", PORT), buf: ""}
@@ -280,6 +280,25 @@ test.case("a restarted registry keeps the live destinations") do
   publish(p, "/topic/survivor", "still subscribed")
   test.assert_eq(expect(s, "MESSAGE").body, "still subscribed")
   close(s)
+  close(p)
+end
+
+test.case("a client that stops reading is disconnected") do
+  let slow = connect()
+  subscribe(slow, "a", "/topic/firehose")
+  let p = connect()
+  let dest = registry.lookup_or_create("/topic/firehose")
+  let body = string.repeat("x", 1048576)
+  let sent = 0
+  # The socket buffers take a few MB; then the slow writer's write times out.
+  while gen_server.call(dest, {op: "info"}).subscribers > 0
+    test.assert(sent < 64, "the slow subscriber was never dropped")
+    publish(p, "/topic/firehose", body)
+    sent += 1
+    sleep(50)
+  end
+  test.assert(sent > 1)
+  close(slow)
   close(p)
 end
 

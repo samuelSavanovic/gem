@@ -226,6 +226,112 @@ GemVal gem_sqlite_exec_fn(void *_env, GemVal *args, int argc) {
     return GEM_NIL;
 }
 
+/* Binds one value to parameter idx; on a bad value or a bind error,
+   finalizes the statement and raises. */
+static void gem_sqlite_bind_value(sqlite3 *db, sqlite3_stmt *stmt, int idx, GemVal v, const char *what) {
+    int rc;
+    switch (v.type) {
+        case VAL_INT:    rc = sqlite3_bind_int64(stmt, idx, v.ival); break;
+        case VAL_FLOAT:  rc = sqlite3_bind_double(stmt, idx, v.fval); break;
+        case VAL_STRING: rc = sqlite3_bind_text(stmt, idx, v.sval, v.slen, SQLITE_TRANSIENT); break;
+        case VAL_BOOL:   rc = sqlite3_bind_int64(stmt, idx, v.bval ? 1 : 0); break;
+        case VAL_NIL:    rc = sqlite3_bind_null(stmt, idx); break;
+        default: {
+            char buf[320];
+            snprintf(buf, sizeof(buf), "sqlite_query: parameter %s is a %s; expected nil, bool, int, float or string",
+                     what, gem_type_str(v));
+            sqlite3_finalize(stmt);
+            gem_error(buf);
+            return;
+        }
+    }
+    if (rc != SQLITE_OK) {
+        char buf[512];
+        snprintf(buf, sizeof(buf), "sqlite_query: parameter %s: %s", what, sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        gem_error(buf);
+    }
+}
+
+/* An array: the keys are exactly 0..got-1 (got distinct int keys in that
+   range), in any insertion order; key k binds parameter k + 1. */
+static void gem_sqlite_bind_array(sqlite3 *db, sqlite3_stmt *stmt, GemTable *params, int want) {
+    int got = params ? params->len : 0;
+    if (want != got) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "sqlite_query: statement has %d parameter(s), got %d", want, got);
+        sqlite3_finalize(stmt);
+        gem_error(buf);
+    }
+    for (int i = 0; i < got; i++) {
+        GemVal key = params->keys[i];
+        if (key.type != VAL_INT || key.ival < 0 || key.ival >= got) {
+            char buf[192];
+            if (key.type == VAL_INT)
+                snprintf(buf, sizeof(buf), "sqlite_query: params must be an array (keys 0..%d), got key %lld",
+                         got - 1, (long long)key.ival);
+            else
+                snprintf(buf, sizeof(buf), "sqlite_query: params must be an array, got a %s key", gem_type_str(key));
+            sqlite3_finalize(stmt);
+            gem_error(buf);
+        }
+    }
+    for (int i = 0; i < got; i++) {
+        int idx = (int)params->keys[i].ival + 1;
+        char what[32];
+        snprintf(what, sizeof(what), "%d", idx);
+        gem_sqlite_bind_value(db, stmt, idx, params->vals[i], what);
+    }
+}
+
+/* A record: each parameter is a named placeholder (`:name`, `@name` or
+   `$name`), bound to the record's value at `name` (a present nil binds
+   NULL). A positional placeholder, a name the record lacks, or a key that
+   names no parameter raises. */
+static void gem_sqlite_bind_named(sqlite3 *db, sqlite3_stmt *stmt, GemTable *params, int want) {
+    int got = params->len;
+    /* Arena memory: an error longjmps out without freeing anything. */
+    char *used = (char *)gem_alloc((size_t)got + 1);
+    memset(used, 0, (size_t)got + 1);
+    for (int idx = 1; idx <= want; idx++) {
+        const char *pname = sqlite3_bind_parameter_name(stmt, idx);
+        if (pname == NULL || pname[0] == '?') {
+            char buf[256];
+            snprintf(buf, sizeof(buf), "sqlite_query: parameter %d is positional (?); bind it with a params array, or name it (:name)", idx);
+            sqlite3_finalize(stmt);
+            gem_error(buf);
+        }
+        const char *name = pname + 1;
+        size_t nlen = strlen(name);
+        int found = -1;
+        for (int i = 0; i < got; i++) {
+            GemVal k = params->keys[i];
+            if ((size_t)k.slen == nlen && memcmp(k.sval, name, nlen) == 0) {
+                found = i;
+                break;
+            }
+        }
+        if (found < 0) {
+            char buf[320];
+            snprintf(buf, sizeof(buf), "sqlite_query: no value for parameter %s (params has no key \"%s\")", pname, name);
+            sqlite3_finalize(stmt);
+            gem_error(buf);
+        }
+        used[found] = 1;
+        gem_sqlite_bind_value(db, stmt, idx, params->vals[found], pname);
+    }
+    for (int i = 0; i < got; i++) {
+        if (!used[i]) {
+            char buf[320];
+            GemVal k = params->keys[i];
+            snprintf(buf, sizeof(buf), "sqlite_query: params key \"%.*s\" matches no parameter of the statement",
+                     k.slen > 200 ? 200 : k.slen, k.sval);
+            sqlite3_finalize(stmt);
+            gem_error(buf);
+        }
+    }
+}
+
 /* ─── Built-in: sqlite_query ─── */
 
 GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
@@ -272,50 +378,19 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
     /* Empty or comment-only SQL: no statement, no rows. */
     int want = stmt ? sqlite3_bind_parameter_count(stmt) : 0;
     int got = params ? params->len : 0;
-    if (want != got) {
-        char buf[128];
-        snprintf(buf, sizeof(buf), "sqlite_query: statement has %d parameter(s), got %d", want, got);
+    /* A record (string keys) binds by name; anything else is an array. */
+    int n_str = 0;
+    for (int i = 0; i < got; i++) {
+        if (params->keys[i].type == VAL_STRING) n_str++;
+    }
+    if (n_str > 0 && n_str < got) {
         sqlite3_finalize(stmt);
-        gem_error(buf);
+        gem_error("sqlite_query: params must be an array or a record of names, not both");
     }
-    /* An array: the keys are exactly 0..got-1 (got distinct int keys in
-       that range), in any insertion order; key k binds parameter k + 1. */
-    for (int i = 0; i < got; i++) {
-        GemVal key = params->keys[i];
-        if (key.type != VAL_INT || key.ival < 0 || key.ival >= got) {
-            char buf[192];
-            if (key.type == VAL_INT)
-                snprintf(buf, sizeof(buf), "sqlite_query: params must be an array (keys 0..%d), got key %lld",
-                         got - 1, (long long)key.ival);
-            else
-                snprintf(buf, sizeof(buf), "sqlite_query: params must be an array, got a %s key", gem_type_str(key));
-            sqlite3_finalize(stmt);
-            gem_error(buf);
-        }
-    }
-    for (int i = 0; i < got; i++) {
-        GemVal v = params->vals[i];
-        int idx = (int)params->keys[i].ival + 1;
-        switch (v.type) {
-            case VAL_INT:    rc = sqlite3_bind_int64(stmt, idx, v.ival); break;
-            case VAL_FLOAT:  rc = sqlite3_bind_double(stmt, idx, v.fval); break;
-            case VAL_STRING: rc = sqlite3_bind_text(stmt, idx, v.sval, v.slen, SQLITE_TRANSIENT); break;
-            case VAL_BOOL:   rc = sqlite3_bind_int64(stmt, idx, v.bval ? 1 : 0); break;
-            case VAL_NIL:    rc = sqlite3_bind_null(stmt, idx); break;
-            default: {
-                char buf[160];
-                snprintf(buf, sizeof(buf), "sqlite_query: parameter %d is a %s; expected nil, bool, int, float or string",
-                         idx, gem_type_str(v));
-                sqlite3_finalize(stmt);
-                gem_error(buf);
-            }
-        }
-        if (rc != SQLITE_OK) {
-            char buf[512];
-            snprintf(buf, sizeof(buf), "sqlite_query: parameter %d: %s", idx, sqlite3_errmsg(db));
-            sqlite3_finalize(stmt);
-            gem_error(buf);
-        }
+    if (n_str > 0) {
+        gem_sqlite_bind_named(db, stmt, params, want);
+    } else {
+        gem_sqlite_bind_array(db, stmt, params, want);
     }
 
     GemVal result = gem_table_new();
