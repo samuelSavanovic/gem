@@ -757,6 +757,9 @@ typedef enum {
     GEM_PROC_DEAD,      /* finished execution */
 } GemProcState;
 
+/* What a GEM_PROC_IO_WAIT process waits on. */
+enum { GEM_WAIT_NONE, GEM_WAIT_FD, GEM_WAIT_POOL };
+
 /* Monitor list node */
 typedef struct GemMonitorNode {
     int64_t pid;                  /* Gem-visible pid of the monitoring process (see gem_pid_of_slot) */
@@ -818,13 +821,19 @@ typedef struct {
 
 /* Process slot */
 typedef struct {
-    GemProcState state;
+    GemProcState state;           /* change only through the scheduler (gem_proc_set_state) */
     mco_coro *coro;
     GemMailbox mailbox;
     int pid;
     int wait_fd;        /* fd this process is waiting on (when IO_WAIT) */
     int wait_write;     /* 0 = waiting for read, 1 = waiting for write */
     int wait_fd_closed; /* set by gem_io_fd_closed while waiting on wait_fd */
+    /* Scheduler bookkeeping (gem_scheduler.c, "Run state"). wait_kind and
+       dl_idx are zero when the process is in none of the structures;
+       wait_idx means something only while wait_kind is set. */
+    int wait_kind;      /* IO_WAIT only: GEM_WAIT_FD or GEM_WAIT_POOL */
+    int wait_idx;       /* index in the fd or pool waiter list */
+    int dl_idx;         /* 1 + index in the deadline heap, 0 = not in it */
     GemIORequest *io_request;     /* non-NULL when waiting on thread pool I/O */
     GemMonitorNode *monitors;     /* linked list of pids monitoring this process */
     GemLinkNode *links;           /* linked list of pids linked to this process */
@@ -879,7 +888,11 @@ void gem_pin_sweep(GemProcess *proc);
 void gem_pin_free_all(GemProcess *proc);
 
 #ifndef GEM_MAX_PROCS
-#define GEM_MAX_PROCS 1024
+/* Most processes alive at once, main included. The process table is a
+ * reservation of address space for this many slots (gem_scheduler.c,
+ * "Process table"); only slots up to the high-water mark are ever touched.
+ * It is also the pid modulus: pid = slot + generation * GEM_MAX_PROCS. */
+#define GEM_MAX_PROCS 262144
 #endif
 
 #ifndef GEM_CORO_STACK_SIZE
@@ -900,7 +913,11 @@ void gem_pin_free_all(GemProcess *proc);
 #define GEM_STACK_RED_ZONE (256 * 1024)
 #endif
 
-extern GemProcess gem_proc_table[GEM_MAX_PROCS];
+/* Slot-indexed; never moves, so a GemProcess * stays valid across spawns.
+   Only slots below gem_proc_hwm are accessible: check a slot index against
+   it (gem_slot_of_pid does) before indexing. */
+extern GemProcess *gem_proc_table;
+extern long gem_runtime_maps;   /* gem_arena.c: memory mappings the runtime holds */
 extern int gem_current_pid;
 extern int gem_free_head;
 extern int gem_free_tail;
@@ -1029,7 +1046,9 @@ void gem_io_release(GemIORequest *req);
    Returns NULL with a malloc'd message in *err_msg on failure (cannot open,
    directory, read error). Safe to call from a worker thread. */
 char *gem_read_whole_file(const char *path, size_t *out_len, char **err_msg);
-void gem_io_check_completions(void);
+/* Drain the thread pool's wake pipe; returns 1 when a request may have
+   completed since the last call (the scheduler then checks its pool waiters). */
+int gem_io_check_completions(void);
 int gem_io_wake_fd(void);
 
 /* ─── Inline-cached field access (hot path inlined, miss in gem_core.c) ─── */

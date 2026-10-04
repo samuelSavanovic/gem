@@ -16,9 +16,22 @@ print(receive())   # -> echo: hi
 
 Ruby-ish syntax (blocks-as-trailing-arg, `do/end`), Lua-ish data model (tables for everything - objects, dicts, arrays, modules), Erlang-ish concurrency (processes, mailboxes, monitors, links, supervisors). Compiles to C; vendors `minicoro` for stackful coroutines and `stb_ds` for hash tables. Bootstrap is a checked-in `stage0.c` so any C compiler can rebuild from scratch.
 
-The interesting design choice is the memory model. Each process has its own arena. Messages are deep-copied across process boundaries. There's no GC. Long-running processes work because the compiler emits an arena reset at every loop back-edge and self tail call, with a compile-time liveness pass deciding what to rescue. User code never thinks about lifetimes - `while true ... end` in an accept loop just works.
+A *process* is a lightweight green thread with its own heap and mailbox, cheap enough to start one per connection or task: about 21 KB each when idle on Linux x86_64 (70 KB on macOS arm64, with its 16 KB pages), with about 14,000 alive at once on a stock Linux and more with a raised `vm.max_map_count`. Processes share nothing and talk only by message.
 
-OTP-style abstractions are written in pure Gem on top of the actor primitives. `gen_server` is 83 lines, `supervisor` is 146. No special compiler support - they fall out of `spawn` + `receive ... when` + selective receive + tail-recursive loops.
+## Memory model
+
+The interesting design choice. In short:
+
+- **Inside a process, tables are references.** `let b = a` and passing `a` to a function share the same table, as in Lua or JavaScript. Strings and numbers are values.
+- **Between processes, everything is copied.** `send` deep-copies the message into the receiver's heap, and `spawn` copies the variables the new process captures and the module-level state. No shared memory, no locks, no data races.
+- **No tracing GC, no global pause.** Each process allocates from its own arena, freed in one go when the process exits. For long-running processes, the compiler inserts a reset at the back-edge of every loop and self tail call: a liveness analysis decides what the loop still uses, the runtime copies that and frees the rest. `while true ... end` in an accept loop stays at constant memory without any annotation.
+- **The costs are visible.** A message costs a copy proportional to its size. A loop reset costs time proportional to what the loop keeps. Non-tail recursion keeps its memory until it returns. If the compiler can't reset a `while true` loop, it warns instead of leaking silently.
+
+The full rules are in [docs/SPEC.md, "Memory Model"](docs/SPEC.md#memory-model); the practical advice is in [docs/BEST_PRACTICES.md, "State and memory"](docs/BEST_PRACTICES.md#state-and-memory).
+
+## OTP in plain Gem
+
+OTP-style abstractions are written in pure Gem on top of the actor primitives. `gen_server` and `supervisor` are a few hundred lines each. No special compiler support - they fall out of `spawn` + `receive ... when` + selective receive + tail-recursive loops.
 
 ```gem
 load "std/gen_server"

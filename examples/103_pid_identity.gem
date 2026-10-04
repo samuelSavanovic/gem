@@ -1,6 +1,7 @@
 # A pid names one process for good: once that process exits, the pid never
 # reaches a process that reuses its slot. Slots are found by pid modulo the
-# default process-table size of 1024.
+# process-table size, 262,144; freed slots are reused once 1,024 have been
+# handed out, so the loops below find one.
 
 let old = spawn(fn() 1 end)
 sleep(5)
@@ -9,7 +10,7 @@ let reused = nil
 for i = 0, 2000
   let p = spawn(fn() receive() end)
   push(fresh, p)
-  if p % 1024 == old % 1024
+  if p % 262144 == old % 262144
     reused = p
     break
   end
@@ -45,7 +46,7 @@ for i = 0, 2000
       send(parent, "heir got no DOWN")
     end
   end)
-  if p % 1024 == watcher % 1024
+  if p % 262144 == watcher % 262144
     heir = p
     break
   end

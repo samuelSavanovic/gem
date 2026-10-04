@@ -311,8 +311,9 @@ Implication for the broker: at K=1000 a single MESSAGE costs
 ~2.5 ms of destination CPU to fan out (1000 × 2.5 µs). That sets
 a hard upper bound of ~400 publishes/sec sustained at 1k subs *if*
 the broker could survive that long. Actually doing 1k topic subs
-also requires bumping `GEM_MAX_PROCS` from 1024 (each TCP connection
-is reader+writer = 2 procs, so 500 conns ≈ ceiling).
+also required bumping `GEM_MAX_PROCS` from 1024 at the time (each TCP
+connection is reader+writer = 2 procs, so 500 conns was the ceiling);
+the process table has since grown to 262,144 slots.
 
 ### What this surfaces (design questions, not commitments)
 
@@ -447,7 +448,8 @@ Two suspects, both anticipated by the original M6 writeup:
    acceptor, registry, broker supervisor → ~1010 procs against
    `GEM_MAX_PROCS = 1024`. Headroom is thin; a transient spike of
    short-lived processes (a connection retry, an exit-trap closure)
-   could push past the cap.
+   could push past the cap. (Since lifted: the table now holds 262,144
+   processes, about 14,000 on a stock Linux `vm.max_map_count`.)
 
 The test that would distinguish these — slow consumer + fast publisher
 holding for 60s+ to actually OOM — wasn't run this pass. With the

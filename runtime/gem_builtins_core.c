@@ -204,7 +204,7 @@ GemVal gem_error_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
     /* If pcall or coroutine isolation will catch it, pass just the user's message */
     int will_catch = 0;
-    if (gem_current_pid >= 0 && gem_current_pid < GEM_MAX_PROCS) {
+    if (gem_current_pid >= 0 && gem_current_pid < gem_proc_hwm) {
         GemProcess *_proc = &gem_proc_table[gem_current_pid];
         if (_proc->state != GEM_PROC_FREE && _proc->state != GEM_PROC_DEAD)
             will_catch = 1;
@@ -374,7 +374,7 @@ GemVal gem_pcall_fn(void *_env, GemVal *args, int argc) {
     /* Use per-process pcall stack if inside a process, else global */
     GemPcallFrame *stack;
     int *depth_ptr;
-    if (gem_current_pid >= 0 && gem_current_pid < GEM_MAX_PROCS) {
+    if (gem_current_pid >= 0 && gem_current_pid < gem_proc_hwm) {
         GemProcess *proc = &gem_proc_table[gem_current_pid];
         stack = proc->pcall_stack;
         depth_ptr = &proc->pcall_depth;
