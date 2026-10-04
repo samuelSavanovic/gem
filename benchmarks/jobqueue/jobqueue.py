@@ -644,6 +644,8 @@ async def run(opts):
     while (stats["slots"] > 0 or stats["busy"] > 0 or stats["pending"] > 0) and now_ms() <= until:
         await asyncio.sleep(TICK_MS / 1000)
         stats = queue.stats_now()
+    # Let the done callbacks of the last retired workers run.
+    await asyncio.sleep(TICK_MS / 1000)
     final = sample(top, queue)
     mem1 = memory_kb()
     report = queue.report()

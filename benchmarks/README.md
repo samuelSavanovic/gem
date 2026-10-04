@@ -19,6 +19,8 @@ The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the
 
 `gemgrep/` benchmarks `examples/gemgrep` (a recursive grep on libc's regex) against GNU grep and the same program in Python; see [below](#gemgrep).
 
+`jobqueue/` benchmarks `examples/jobqueue` (a job queue with a supervised worker pool under fault injection) against the same design in Python asyncio and in Elixir/OTP; see [below](#jobqueue).
+
 ## Running
 
 Prereqs: `wrk` on PATH (`brew install wrk`), the gem app built once.
@@ -164,3 +166,38 @@ First run (October 2026, commit 5304ef5 + gemgrep, Linux x86_64 VM, 4 cores, GNU
 | `src_icase` | 3.2–6.1 | 0.40–0.58 |
 
 The `src_*` runs take 0.1–0.4 s, so their ratios are the noisiest. Peak RSS: 13–20 MB for gemgrep on the corpus (49 MB for `many`), 10 MB for grep, 13–18 MB for Python; 22 MB against Python's 40 MB on the sources. Per line, gemgrep spends about as many instructions on its own side (the line walk, the binding's checks, the call) as in `regexec`, and GNU grep runs no regex per line at all; `examples/gemgrep/README.md` ("Performance") has the breakdown, and the numbers for the whole-buffer helper it measured and didn't keep.
+
+## jobqueue
+
+`examples/jobqueue` runs a seeded load of jobs through a queue gen_server and a pool of workers under a `dynamic_supervisor`, while a fault schedule makes attempts crash, hang past their deadline, run slow or kill their worker, and storms kill workers in bursts until the worker supervisor gives up. It measures the OTP machinery under failure: monitors and `DOWN`s, restarts, `send_after` timers, kills, and a long-lived server holding a record per job. The control is `jobqueue/jobqueue.exs`, the same design in Elixir/OTP (a `Supervisor` over a `DynamicSupervisor` of transient GenServer workers and the queue GenServer). `jobqueue/jobqueue.py` is the same design again in Python asyncio: tasks instead of processes, done callbacks as monitors, a supervisor class with the same restart intensity. All three take the same options, compute the same workload and fault schedule from the seed (the same integer hash), print the same summary, and check the same invariants at the end: every job completed once or dead-lettered, every attempt failed as scheduled (storm and shutdown losses counted apart), the counters agree, and the system back at its baseline after the drain. It needs `python3` (3.11 or later) and `elixir` (`apt install elixir`; `IMPLS="gem python"` skips it).
+
+```bash
+benchmarks/jobqueue/run.sh                  # the six scenarios, about 3.5 minutes
+benchmarks/jobqueue/run.sh crash5 storm     # some of them
+IMPLS="gem python" benchmarks/jobqueue/run.sh
+```
+
+For each scenario it prints, per implementation, the wall time of the whole program, the throughput and latency percentiles the program measured, the longest tick lag (a 20 ms ticker in the driver: how long no process could run), peak RSS, the process count at the baseline and its peak above it, the retries and worker-supervisor restarts, and whether the invariants held; then the Gem/Python and Gem/Elixir throughput ratios. Elixir runs twice, as it comes (a scheduler per core) and with `+S 1` (one scheduler, like Gem and asyncio). The Gem rows are followed by their `GEM_DIAG=1` arena statistics. The script exits 1 if the invariants fail in any run.
+
+| Scenario | Arguments | What it loads |
+|---|---|---|
+| `none` | 20,000 jobs, 250 ms deadline | the machinery alone: a call per submit, a message per attempt and per result, a deadline timer set and cancelled |
+| `crash5` | 20,000 jobs, 5% crash, 250 ms deadline | a worker crash, `DOWN` and supervisor restart per failed attempt; backoff timers |
+| `hang5` | 10,000 jobs, 5% hang, 100 ms deadline | deadline kills: bound by the deadlines, so all three match |
+| `mixed` | 10,000 jobs, crash, hang, slow and kill faults | every failure path at once; dead letters |
+| `storm` | 10,000 jobs, 10 bursts killing 16 workers, 20 restarts/s allowed | restart intensity: the worker supervisor gives up 5 times and is restarted |
+| `backlog` | 100,000 jobs, 4 workers, 5% slow | a long backlog in the queue: big state in one process |
+
+First run (October 2026, commit d88fca9 + jobqueue, Linux x86_64 VM, 4 cores, Python 3.11, Elixir 1.14 on OTP 24; two to four runs, ratios of throughput, higher is better for Gem):
+
+| Scenario | Gem/Python | Gem/Elixir | Gem/Elixir `+S 1` | Notes |
+|---|---|---|---|---|
+| `none` | 0.88–1.14 | 0.30–0.34 | 0.30–0.44 | |
+| `crash5` | 0.97–1.12 | 0.32–0.36 | 0.50–0.55 | Elixir crashes 1,700 workers/s, over the 1,000/s limit: its worker supervisor restarts once |
+| `hang5` | 0.99–1.00 | 0.99–1.00 | 1.00 | |
+| `mixed` | 1.00 | 1.01 | 1.01 | |
+| `storm` | 0.91–0.93 | 0.95–0.97 | 0.94–0.97 | |
+| `backlog` | 0.86–0.92 | 1.08–1.16 | 1.08–1.15 | Gem: 810–896 MB peak RSS, 1.5–1.7 s longest stall |
+
+The invariants held in every run of all three, with the same retry counts wherever the run is deterministic (everything but the storm and Elixir's extra restart). The cost is in memory and pauses, not in failure handling. Peak RSS for Gem is 85–174 MB in the 10,000- and 20,000-job scenarios against 34–48 MB for Python and 77–116 MB for Elixir (whose VM starts at about 80 MB), and 810–896 MB against 166 and 200–218 MB for the backlog: a small record takes 1.2 KB in Gem, 0.4 KB in Python, 0.14 KB in Elixir. The longest tick lag is 40–100 ms for Gem with 10,000–20,000 jobs and 1.5–1.7 s with 100,000, against at most 75 ms for Python and 36 ms for Elixir: each reset of the queue's loop copies every job record it holds, and with the default 100 ms deadline such a pause now and then kills a healthy attempt (the scenarios use 250 ms where they don't test deadlines). `docs/OPTIMIZATIONS.md` has the numbers ("Survivors of a reset are copied again", "Every string-keyed table `calloc`s its index").
+

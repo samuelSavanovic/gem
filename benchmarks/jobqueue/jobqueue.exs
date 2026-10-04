@@ -589,7 +589,9 @@ defmodule JQ.Driver do
   defp await_drain(until) do
     st = GenServer.call(JQ.Queue, :stats)
 
-    if (st.slots > 0 or st.busy > 0 or st.pending > 0) and now_ms() <= until do
+    {:message_queue_len, queued} = Process.info(Process.whereis(JQ.Queue), :message_queue_len)
+
+    if (st.slots > 0 or st.busy > 0 or st.pending > 0 or queued > 0) and now_ms() <= until do
       Process.sleep(@tick_ms)
       await_drain(until)
     else

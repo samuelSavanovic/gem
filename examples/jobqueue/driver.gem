@@ -113,13 +113,13 @@ fn collect(n, give_up_at)
   {done: done, peak: peak, lag: lag, last_at: last_at}
 end
 
-# Waits until every worker has retired (the queue holds no slots) or
-# `ms` pass.
+# Waits until every worker has retired (the queue holds no slots) and the
+# queue has handled their DOWNs, or `ms` pass.
 fn await_drain(ms)
-  let until = time_ms() + ms
+  let give_up_at = time_ms() + ms
   let st = jobqueue.stats()
-  while st.slots > 0 or st.busy > 0 or st.pending > 0
-    if time_ms() > until
+  while st.slots > 0 or st.busy > 0 or st.pending > 0 or process_info(jobqueue.pids().queue).mailbox_len > 0
+    if time_ms() > give_up_at
       return st
     end
     sleep(TICK_MS)

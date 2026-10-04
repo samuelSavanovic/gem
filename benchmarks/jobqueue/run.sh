@@ -27,10 +27,12 @@ trap 'rm -rf "$WORK"' EXIT
 
 IMPLS=${IMPLS:-"gem python elixir elixir_s1"}
 
-# name: arguments. Deadlines stay well above a slow attempt's 20 ms.
+# name: arguments. Deadlines leave room for Gem's reset pauses (50-100 ms
+# at 10,000-20,000 jobs; see docs/OPTIMIZATIONS.md): with the default
+# 100 ms, a 20,000-job run now and then kills a healthy attempt.
 declare -A SCENARIOS=(
-  [none]="--jobs 20000"
-  [crash5]="--jobs 20000 --crash 0.05"
+  [none]="--jobs 20000 --deadline 250"
+  [crash5]="--jobs 20000 --crash 0.05 --deadline 250"
   [hang5]="--jobs 10000 --hang 0.05"
   [mixed]="--jobs 10000 --crash 0.05 --hang 0.02 --slow 0.1 --kill 0.03 --deadline 200"
   [storm]="--jobs 10000 --slow 0.1 --deadline 250 --storm 16 --storm-every 100 --storm-bursts 10 --max-restarts 20"
