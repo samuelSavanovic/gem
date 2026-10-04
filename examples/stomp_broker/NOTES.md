@@ -10,7 +10,7 @@
 > live under a `dynamic_supervisor` and are looked up in the registry's
 > table instead of registered names, the writer is a `while` loop rather
 > than the `writer_loop ↔ handle_*` tail-call cycle discussed below, and
-> `test.gem` replaces `test_frame.gem` and `smoke_test.sh`. See
+> `test.gem` replaces `test_frame.gem` and `smoke_test.sh`. The milestone tutorial these notes refer to has been removed. See
 > [README.md](README.md) for the current design and how to run it.
 
 ## What worked well

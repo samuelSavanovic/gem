@@ -102,5 +102,4 @@ Choices worth knowing:
   copies), so a big body on a topic with many subscribers costs
   `size × subscribers`.
 
-NOTES.md is the build log of the first version and its load tests;
-TUTORIAL.md is the exercise that started it, milestone by milestone.
+NOTES.md is the build log of the first version and its load tests.
