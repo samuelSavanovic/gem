@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Run the larger example programs, each of which checks itself: the JSON
-# parser and the bookmark app, STOMP broker, mini_redis and logstat test
-# suites (std/test, exit status 1 on a failing case), and the TCP echo program
+# parser and the bookmark app, STOMP broker, mini_redis, logstat and lox
+# test suites (std/test, exit status 1 on a failing case), and the TCP echo program
 # (raises on a bad echo). The bookmark app looks its static files up
-# relative to the cwd, so its tests run from its own directory. logstat
-# also runs as a program on a generated log.
+# relative to the cwd, so its tests run from its own directory (as do
+# lox's, which read its bench programs). logstat also runs as a program on
+# a generated log.
 #
 # Run from the repo root: tests/check_example_apps.sh
 
@@ -52,6 +53,7 @@ run bookmark_app examples/bookmark_app test.gem
 run stomp_broker examples/stomp_broker test.gem
 run mini_redis examples/mini_redis test.gem
 run logstat_test examples/logstat test.gem
+run lox_test examples/lox test.gem
 
 # logstat end to end: a generated log, read from a file and from stdin, and
 # the exit statuses for a bad flag (2) and an unreadable file (1).
@@ -84,7 +86,7 @@ else
 fi
 
 # The entry points the tests don't build.
-for f in examples/bookmark_app/app.gem examples/stomp_broker/main.gem examples/mini_redis/main.gem; do
+for f in examples/bookmark_app/app.gem examples/stomp_broker/main.gem examples/mini_redis/main.gem examples/lox/main.gem; do
   if ! "$GEM" --check "$f" > "$T/check.out" 2>&1 || [ -s "$T/check.out" ]; then
     echo "FAIL: gem --check $f:"
     cat "$T/check.out"

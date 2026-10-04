@@ -1,0 +1,417 @@
+## parser — builds the syntax tree of a Lox program from its tokens.
+##
+##   let r = parser.parse(lexer.scan(source).tokens)
+##   r.statements   # [{kind: "print", expr: {...}, line: 1}, ...]
+##   r.errors       # ["[line 1] Error at ';': Expect expression."], or []
+##
+## Every node is a table with a `kind` and the `line` it starts on.
+## Expressions: literal, grouping, unary, binary, logical, variable,
+## assign, call, get, set, this, super. Statements: expr, print, var,
+## block, if, while, function, return, class. A `for` loop comes out as a
+## block holding a while. Variable, assign, this and super nodes get a
+## `depth` from the resolver.
+
+let MAX_ARGS = 255
+
+# Thrown (as the error message) to unwind to the statement being parsed;
+# the real message is already in the parser's errors.
+let PARSE_ERROR = "lox: parse error"
+
+## Parses `tokens` (ending with "eof"). Returns `{statements, errors}`.
+## After a syntax error, parsing resumes at the next statement, so one
+## pass reports several errors.
+fn parse(tokens)
+  let p = {tokens: tokens, pos: 0, errors: []}
+  let statements = []
+  while not at_end(p)
+    let r = pcall declaration(p)
+    if r.ok
+      push(statements, r.value)
+    elif r.error == PARSE_ERROR
+      synchronize(p)
+    else
+      error(r.error)
+    end
+  end
+  {statements: statements, errors: p.errors}
+end
+
+# ─── Token helpers ─────────────────────────────────────────────
+
+fn peek(p)
+  p.tokens[p.pos]
+end
+
+fn previous(p)
+  p.tokens[p.pos - 1]
+end
+
+fn at_end(p)
+  peek(p).type == "eof"
+end
+
+fn check(p, type)
+  peek(p).type == type
+end
+
+fn advance(p)
+  let t = peek(p)
+  if t.type != "eof"
+    p.pos = p.pos + 1
+  end
+  t
+end
+
+# Consumes the next token when it has `type`.
+fn accept(p, type)
+  if check(p, type)
+    advance(p)
+    return true
+  end
+  false
+end
+
+fn expect(p, type, message)
+  if check(p, type)
+    return advance(p)
+  end
+  fail(p, peek(p), message)
+end
+
+# Records an error at `t` without unwinding.
+fn report(p, t, message)
+  if t.type == "eof"
+    push(p.errors, "[line {t.line}] Error at end: {message}")
+  else
+    push(p.errors, "[line {t.line}] Error at '{t.lexeme}': {message}")
+  end
+end
+
+fn fail(p, t, message)
+  report(p, t, message)
+  error(PARSE_ERROR)
+end
+
+# Skips to the start of the next statement after an error.
+fn synchronize(p)
+  advance(p)
+  while not at_end(p)
+    if previous(p).type == ";"
+      return nil
+    end
+    match peek(p).type
+    when "class" then return nil
+    when "fun" then return nil
+    when "var" then return nil
+    when "for" then return nil
+    when "if" then return nil
+    when "while" then return nil
+    when "print" then return nil
+    when "return" then return nil
+    else advance(p)
+    end
+  end
+end
+
+# ─── Declarations and statements ───────────────────────────────
+
+fn declaration(p)
+  if accept(p, "class")
+    return class_declaration(p)
+  end
+  if accept(p, "fun")
+    return function(p, "function")
+  end
+  if accept(p, "var")
+    return var_declaration(p)
+  end
+  statement(p)
+end
+
+fn class_declaration(p)
+  let name = expect(p, "identifier", "Expect class name.")
+  let superclass = nil
+  if accept(p, "<")
+    let s = expect(p, "identifier", "Expect superclass name.")
+    superclass = {kind: "variable", name: s.lexeme, line: s.line, depth: nil}
+  end
+  expect(p, "\{", "Expect '\{' before class body.")
+  let methods = []
+  while not check(p, "}") and not at_end(p)
+    push(methods, function(p, "method"))
+  end
+  expect(p, "}", "Expect '}' after class body.")
+  {kind: "class", name: name.lexeme, superclass: superclass, methods: methods, line: name.line}
+end
+
+fn function(p, what)
+  let name = expect(p, "identifier", "Expect {what} name.")
+  expect(p, "(", "Expect '(' after {what} name.")
+  let params = []
+  if not check(p, ")")
+    let more = true
+    while more
+      if len(params) >= MAX_ARGS
+        report(p, peek(p), "Can't have more than {MAX_ARGS} parameters.")
+      end
+      push(params, expect(p, "identifier", "Expect parameter name.").lexeme)
+      more = accept(p, ",")
+    end
+  end
+  expect(p, ")", "Expect ')' after parameters.")
+  expect(p, "\{", "Expect '\{' before {what} body.")
+  {kind: "function", name: name.lexeme, params: params, body: block(p), line: name.line}
+end
+
+fn var_declaration(p)
+  let name = expect(p, "identifier", "Expect variable name.")
+  let init = nil
+  if accept(p, "=")
+    init = expression(p)
+  end
+  expect(p, ";", "Expect ';' after variable declaration.")
+  {kind: "var", name: name.lexeme, init: init, line: name.line}
+end
+
+fn statement(p)
+  let t = peek(p)
+  match t.type
+  when "print"
+    advance(p)
+    let value = expression(p)
+    expect(p, ";", "Expect ';' after value.")
+    {kind: "print", expr: value, line: t.line}
+  when "\{"
+    advance(p)
+    {kind: "block", statements: block(p), line: t.line}
+  when "if" then if_statement(p)
+  when "while" then while_statement(p)
+  when "for" then for_statement(p)
+  when "return" then return_statement(p)
+  else
+    let e = expression(p)
+    expect(p, ";", "Expect ';' after expression.")
+    {kind: "expr", expr: e, line: t.line}
+  end
+end
+
+# The statements up to the "}" closing a block whose "{" is consumed.
+fn block(p)
+  let statements = []
+  while not check(p, "}") and not at_end(p)
+    push(statements, declaration(p))
+  end
+  expect(p, "}", "Expect '}' after block.")
+  statements
+end
+
+fn if_statement(p)
+  let line = advance(p).line
+  expect(p, "(", "Expect '(' after 'if'.")
+  let cond = expression(p)
+  expect(p, ")", "Expect ')' after if condition.")
+  let then_branch = statement(p)
+  let else_branch = nil
+  if accept(p, "else")
+    else_branch = statement(p)
+  end
+  {kind: "if", cond: cond, then_branch: then_branch, else_branch: else_branch, line: line}
+end
+
+fn while_statement(p)
+  let line = advance(p).line
+  expect(p, "(", "Expect '(' after 'while'.")
+  let cond = expression(p)
+  expect(p, ")", "Expect ')' after condition.")
+  {kind: "while", cond: cond, body: statement(p), line: line}
+end
+
+fn for_statement(p)
+  let line = advance(p).line
+  expect(p, "(", "Expect '(' after 'for'.")
+  let init = nil
+  if check(p, ";")
+    advance(p)
+  elif accept(p, "var")
+    init = var_declaration(p)
+  else
+    let e = expression(p)
+    expect(p, ";", "Expect ';' after expression.")
+    init = {kind: "expr", expr: e, line: line}
+  end
+  let cond = {kind: "literal", value: true, line: line}
+  if not check(p, ";")
+    cond = expression(p)
+  end
+  expect(p, ";", "Expect ';' after loop condition.")
+  let increment = nil
+  if not check(p, ")")
+    increment = expression(p)
+  end
+  expect(p, ")", "Expect ')' after for clauses.")
+
+  let body = statement(p)
+  if increment != nil
+    let step = {kind: "expr", expr: increment, line: increment.line}
+    body = {kind: "block", statements: [body, step], line: body.line}
+  end
+  let loop = {kind: "while", cond: cond, body: body, line: line}
+  if init == nil
+    return loop
+  end
+  {kind: "block", statements: [init, loop], line: line}
+end
+
+fn return_statement(p)
+  let line = advance(p).line
+  let value = nil
+  if not check(p, ";")
+    value = expression(p)
+  end
+  expect(p, ";", "Expect ';' after return value.")
+  {kind: "return", value: value, line: line}
+end
+
+# ─── Expressions ───────────────────────────────────────────────
+
+fn expression(p)
+  assignment(p)
+end
+
+fn assignment(p)
+  let target = logic_or(p)
+  if check(p, "=")
+    let equals = advance(p)
+    let value = assignment(p)
+    if target.kind == "variable"
+      return {kind: "assign", name: target.name, value: value, line: target.line, depth: nil}
+    end
+    if target.kind == "get"
+      return {kind: "set", object: target.object, name: target.name, value: value, line: target.line}
+    end
+    report(p, equals, "Invalid assignment target.")
+  end
+  target
+end
+
+fn logic_or(p)
+  let e = logic_and(p)
+  while check(p, "or")
+    let op = advance(p)
+    e = {kind: "logical", op: "or", left: e, right: logic_and(p), line: op.line}
+  end
+  e
+end
+
+fn logic_and(p)
+  let e = equality(p)
+  while check(p, "and")
+    let op = advance(p)
+    e = {kind: "logical", op: "and", left: e, right: equality(p), line: op.line}
+  end
+  e
+end
+
+fn equality(p)
+  let e = comparison(p)
+  while check(p, "==") or check(p, "!=")
+    let op = advance(p)
+    e = {kind: "binary", op: op.type, left: e, right: comparison(p), line: op.line}
+  end
+  e
+end
+
+fn comparison(p)
+  let e = term(p)
+  while check(p, "<") or check(p, "<=") or check(p, ">") or check(p, ">=")
+    let op = advance(p)
+    e = {kind: "binary", op: op.type, left: e, right: term(p), line: op.line}
+  end
+  e
+end
+
+fn term(p)
+  let e = factor(p)
+  while check(p, "+") or check(p, "-")
+    let op = advance(p)
+    e = {kind: "binary", op: op.type, left: e, right: factor(p), line: op.line}
+  end
+  e
+end
+
+fn factor(p)
+  let e = unary(p)
+  while check(p, "*") or check(p, "/")
+    let op = advance(p)
+    e = {kind: "binary", op: op.type, left: e, right: unary(p), line: op.line}
+  end
+  e
+end
+
+fn unary(p)
+  if check(p, "!") or check(p, "-")
+    let op = advance(p)
+    return {kind: "unary", op: op.type, right: unary(p), line: op.line}
+  end
+  call(p)
+end
+
+fn call(p)
+  let e = primary(p)
+  while true
+    if check(p, "(")
+      let paren = advance(p)
+      e = {kind: "call", callee: e, args: arguments(p), line: paren.line}
+    elif accept(p, ".")
+      let name = expect(p, "identifier", "Expect property name after '.'.")
+      e = {kind: "get", object: e, name: name.lexeme, line: name.line}
+    else
+      return e
+    end
+  end
+end
+
+fn arguments(p)
+  let args = []
+  if not check(p, ")")
+    let more = true
+    while more
+      if len(args) >= MAX_ARGS
+        report(p, peek(p), "Can't have more than {MAX_ARGS} arguments.")
+      end
+      push(args, expression(p))
+      more = accept(p, ",")
+    end
+  end
+  expect(p, ")", "Expect ')' after arguments.")
+  args
+end
+
+fn primary(p)
+  let t = advance(p)
+  match t.type
+  when "number" then {kind: "literal", value: t.literal, line: t.line}
+  when "string" then {kind: "literal", value: t.literal, line: t.line}
+  when "true" then {kind: "literal", value: true, line: t.line}
+  when "false" then {kind: "literal", value: false, line: t.line}
+  when "nil" then {kind: "literal", value: nil, line: t.line}
+  when "identifier" then {kind: "variable", name: t.lexeme, line: t.line, depth: nil}
+  when "this" then {kind: "this", line: t.line, depth: nil}
+  when "super"
+    expect(p, ".", "Expect '.' after 'super'.")
+    let method = expect(p, "identifier", "Expect superclass method name.")
+    {kind: "super", method: method.lexeme, line: t.line, depth: nil}
+  when "("
+    let e = expression(p)
+    expect(p, ")", "Expect ')' after expression.")
+    {kind: "grouping", expr: e, line: t.line}
+  else
+    # Leave the token for synchronize, as jlox reports it unconsumed.
+    if t.type != "eof"
+      p.pos = p.pos - 1
+    end
+    fail(p, t, "Expect expression.")
+  end
+end
+
+export parse

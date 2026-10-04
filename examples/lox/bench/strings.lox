@@ -1,0 +1,62 @@
+// String building: spell numbers digit by digit, word-wrap them into
+// lines, compare and measure the results.
+//   lox strings.lox [n]     (default 20000)
+
+var n = arg(0) or 20000;
+var width = 60;
+
+fun digitWord(d) {
+  if (d == 0) return "zero";
+  if (d == 1) return "one";
+  if (d == 2) return "two";
+  if (d == 3) return "three";
+  if (d == 4) return "four";
+  if (d == 5) return "five";
+  if (d == 6) return "six";
+  if (d == 7) return "seven";
+  if (d == 8) return "eight";
+  return "nine";
+}
+
+// 205 -> "two-zero-five"
+fun spell(k) {
+  var place = 1;
+  while (place * 10 <= k) place = place * 10;
+  var words = "";
+  while (place >= 1) {
+    var d = 0;
+    while (k >= place) {
+      k = k - place;
+      d = d + 1;
+    }
+    words = words + digitWord(d);
+    if (place > 1) words = words + "-";
+    place = place / 10;
+  }
+  return words;
+}
+
+var line = "";
+var lines = 0;
+var chars = 0;
+var longest = "";
+var repeats = 0;
+var previous = "";
+for (var i = 0; i < n; i = i + 1) {
+  var word = spell(i * 7);
+  if (word == previous) repeats = repeats + 1;
+  previous = word;
+  if (len(line) + len(word) + 1 > width) {
+    lines = lines + 1;
+    chars = chars + len(line);
+    if (lines < 4) print line;
+    line = "";
+  }
+  if (line != "") line = line + " ";
+  line = line + word;
+  if (len(word) > len(longest)) longest = word;
+}
+print line;
+print "lines: " + str(lines + 1) + ", chars: " + str(chars + len(line));
+print "longest word: " + longest + " (" + str(len(longest)) + ")";
+print "repeats: " + str(repeats);

@@ -1,0 +1,42 @@
+// The Mandelbrot set in ASCII: floating-point arithmetic in loops.
+//   lox mandelbrot.lox [rows]     (default 40; twice as many columns)
+
+var rows = arg(0) or 40;
+var cols = rows * 2;
+var maxIter = 200;
+
+fun shade(iter) {
+  if (iter >= maxIter) return "#";
+  if (iter > 40) return "%";
+  if (iter > 20) return "*";
+  if (iter > 10) return "+";
+  if (iter > 5) return "-";
+  if (iter > 2) return ".";
+  return " ";
+}
+
+fun escape(cr, ci) {
+  var zr = 0;
+  var zi = 0;
+  var iter = 0;
+  while (iter < maxIter and zr * zr + zi * zi <= 4) {
+    var t = zr * zr - zi * zi + cr;
+    zi = 2 * zr * zi + ci;
+    zr = t;
+    iter = iter + 1;
+  }
+  return iter;
+}
+
+var inside = 0;
+for (var y = 0; y < rows; y = y + 1) {
+  var line = "";
+  var ci = 2.4 * y / rows - 1.2;
+  for (var x = 0; x < cols; x = x + 1) {
+    var iter = escape(3 * x / cols - 2.1, ci);
+    if (iter >= maxIter) inside = inside + 1;
+    line = line + shade(iter);
+  }
+  print line;
+}
+print "inside: " + str(inside) + " of " + str(rows * cols);

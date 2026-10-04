@@ -1,0 +1,122 @@
+## lexer — turns Lox source into tokens.
+##
+##   let r = lexer.scan("print 1 + 2;")
+##   r.tokens    # [{type: "print", lexeme: "print", literal: nil, line: 1}, ...]
+##   r.errors    # ["[line 1] Error: Unexpected character."], or []
+##
+## A token's `type` is its lexeme for punctuation and keywords ("(", "!=",
+## "while"), else "identifier", "number", "string" or "eof".
+
+let KEYWORDS = {
+  "and": true, "class": true, "else": true, "false": true, "for": true,
+  "fun": true, "if": true, "nil": true, "or": true, "print": true,
+  "return": true, "super": true, "this": true, "true": true, "var": true,
+  "while": true
+}
+
+# The characters that are a token by themselves, and those that are one
+# with a following "=" too.
+let SINGLE = {
+  "(": true, ")": true, '{': true, '}': true, ",": true, ".": true,
+  "-": true, "+": true, ";": true, "*": true
+}
+let WITH_EQUAL = {"!": true, "=": true, "<": true, ">": true}
+
+fn is_digit(c)
+  c >= 48 and c <= 57
+end
+
+fn is_alpha(c)
+  (c >= 97 and c <= 122) or (c >= 65 and c <= 90) or c == 95
+end
+
+fn token(type, lexeme, literal, line)
+  {type: type, lexeme: lexeme, literal: literal, line: line}
+end
+
+## Scans `source`. Returns `{tokens, errors}`: the tokens end with an
+## "eof" token, and scanning goes on after an error, as jlox does.
+fn scan(source)
+  let tokens = []
+  let errors = []
+  let n = len(source)
+  let line = 1
+  let i = 0
+  while i < n
+    let c = ord(source, i)
+    let ch = source[i]
+    let start = i
+    i += 1
+    if c == 10
+      line += 1
+    elif c == 32 or c == 9 or c == 13
+      continue
+    elif has_key(SINGLE, ch)
+      push(tokens, token(ch, ch, nil, line))
+    elif has_key(WITH_EQUAL, ch)
+      if i < n and ord(source, i) == 61
+        i += 1
+        push(tokens, token(ch + "=", ch + "=", nil, line))
+      else
+        push(tokens, token(ch, ch, nil, line))
+      end
+    elif ch == "/"
+      if i < n and ord(source, i) == 47
+        while i < n and ord(source, i) != 10
+          i += 1
+        end
+      else
+        push(tokens, token("/", "/", nil, line))
+      end
+    elif ch == "\""
+      let first_line = line
+      while i < n and ord(source, i) != 34
+        if ord(source, i) == 10 then line += 1 end
+        i += 1
+      end
+      if i >= n
+        push(errors, "[line {line}] Error: Unterminated string.")
+      else
+        i += 1
+        let text = substr(source, start + 1, i - start - 2)
+        push(tokens, token("string", substr(source, start, i - start), text, first_line))
+      end
+    elif is_digit(c)
+      i = scan_number(source, i)
+      let text = substr(source, start, i - start)
+      push(tokens, token("number", text, to_float(text), line))
+    elif is_alpha(c)
+      while i < n and (is_alpha(ord(source, i)) or is_digit(ord(source, i)))
+        i += 1
+      end
+      let text = substr(source, start, i - start)
+      if has_key(KEYWORDS, text)
+        push(tokens, token(text, text, nil, line))
+      else
+        push(tokens, token("identifier", text, nil, line))
+      end
+    else
+      push(errors, "[line {line}] Error: Unexpected character.")
+    end
+  end
+  push(tokens, token("eof", "", nil, line))
+  {tokens: tokens, errors: errors}
+end
+
+# Returns the index after the number whose first digit is before `i`: the
+# digits, then a fraction only when a digit follows the ".".
+fn scan_number(source, i)
+  let n = len(source)
+  while i < n and is_digit(ord(source, i))
+    i += 1
+  end
+  if i + 1 < n and ord(source, i) == 46 and is_digit(ord(source, i + 1))
+    i += 1
+    while i < n and is_digit(ord(source, i))
+      i += 1
+    end
+  end
+  i
+end
+
+export scan

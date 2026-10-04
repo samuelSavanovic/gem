@@ -1,0 +1,43 @@
+// The benchmarks game's binary-trees: many short-lived instances and
+// one long-lived tree.
+//   lox binary_trees.lox [max depth]     (default 14)
+
+class Tree {
+  init(depth) {
+    if (depth > 0) {
+      this.left = Tree(depth - 1);
+      this.right = Tree(depth - 1);
+    } else {
+      this.left = nil;
+      this.right = nil;
+    }
+  }
+
+  check() {
+    if (this.left == nil) return 1;
+    return 1 + this.left.check() + this.right.check();
+  }
+}
+
+var minDepth = 4;
+var maxDepth = arg(0) or 14;
+if (maxDepth < minDepth + 2) maxDepth = minDepth + 2;
+
+var stretchDepth = maxDepth + 1;
+print "stretch tree of depth " + str(stretchDepth) + " check: " + str(Tree(stretchDepth).check());
+
+var longLived = Tree(maxDepth);
+
+var iterations = 1;
+for (var i = 0; i < maxDepth; i = i + 1) iterations = iterations * 2;
+
+for (var depth = minDepth; depth <= maxDepth; depth = depth + 2) {
+  var check = 0;
+  for (var i = 0; i < iterations; i = i + 1) {
+    check = check + Tree(depth).check();
+  }
+  print str(iterations) + " trees of depth " + str(depth) + " check: " + str(check);
+  iterations = iterations / 4;
+}
+
+print "long lived tree of depth " + str(maxDepth) + " check: " + str(longLived.check());

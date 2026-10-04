@@ -15,6 +15,8 @@ The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the
 
 `mini_redis/` benchmarks `examples/mini_redis` (a Redis-protocol server) against a real `redis-server`; see [below](#mini_redis).
 
+`lox/` benchmarks `examples/lox` (a tree-walking interpreter for the Lox language) against the same interpreter in Python; see [below](#lox).
+
 ## Running
 
 Prereqs: `wrk` on PATH (`brew install wrk`), the gem app built once.
@@ -83,3 +85,36 @@ First run (October 2026, commit 97426ba + mini_redis, Linux x86_64 VM, 4 cores, 
 
 The Gem server spent 32.8 s in arena resets in the `basic` phase and 25.8 s in `pipeline` (`gem.log`): its keyspace is re-copied by every reset ("Survivors of a reset are copied again" in OPTIMIZATIONS.md).
 
+## lox
+
+`examples/lox` interprets Lox programs by walking their syntax tree, so it measures the CPU-bound core of Gem: calls, recursion, closures, `match` dispatch, field access on tables, and short-lived tables. The reference is `lox/lox.py`, the same interpreter in Python, module for module (dict nodes with a `kind`, the same resolver, `return` passed up as a record), so the ratio compares the two runtimes on the same algorithm. It needs only `python3`.
+
+```bash
+benchmarks/lox/run.sh                    # the six programs, about a minute
+benchmarks/lox/run.sh fib methods        # some of them
+GEM_DIAG=1 benchmarks/lox/run.sh         # plus the arena reset statistics of each Gem run
+```
+
+For each program in `examples/lox/bench/`, at a size where Python takes 2–12 s, it prints the wall time and peak RSS of both runs and the Gem/Python time ratio, and stops with a diff if the outputs differ.
+
+| Program | Size | What it loads |
+|---|---|---|
+| `fib.lox` | 28 | a naive recursive Fibonacci: 1M calls, no loop |
+| `binary_trees.lox` | 12 | the benchmarks game's binary-trees: 670,000 short-lived instances, one long-lived tree |
+| `closures.lox` | 100000 | closures made and called in a loop, a list made of closures |
+| `strings.lox` | 20000 | numbers spelled digit by digit and word-wrapped: concatenation, `len`, `==` |
+| `mandelbrot.lox` | 60 | the Mandelbrot set in ASCII: float arithmetic in nested loops |
+| `methods.lox` | 3000 | a particle simulation with classes: method calls, fields, inheritance, `super` |
+
+First run (October 2026, commit 2487e74 + lox, Linux x86_64 VM, 4 cores, Python 3.11; two runs, ratios are Gem/Python wall time):
+
+| Program | Gem/Python | Notes |
+|---|---|---|
+| `fib.lox 28` | 1.09–1.15 | peak RSS 1.9 GB against 11 MB: nothing is freed during the recursion |
+| `binary_trees.lox 12` | 0.66–0.69 | resets copy the long-lived tree again: 1.6 GB, a quarter of the run |
+| `closures.lox 100000` | 0.90–0.97 | |
+| `strings.lox 20000` | 0.76–0.79 | |
+| `mandelbrot.lox 60` | 0.66–0.69 | |
+| `methods.lox 3000` | 0.92–0.93 | |
+
+The other programs stay at 10 MB, like Python. In callgrind profiles 40–45% of the Gem instructions are string-key table lookups, because the field-access inline cache misses on 99% of the reads, and the Gem runs spend 20–30% of their time in page faults on the arena blocks resets map anew. `docs/OPTIMIZATIONS.md` tracks each of these.
