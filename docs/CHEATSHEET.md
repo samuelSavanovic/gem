@@ -183,6 +183,7 @@ end
 #   child template {start, restart, shutdown}, as a supervisor child spec
 # std/task       async, await, await_all
 # std/gen_server start, call, cast, reply
+#   start returns once init has; an init that raises makes it raise
 # std/test       case, assert, assert_eq, assert_neq, assert_throws, run  (assert_eq is deep; run exits 1 on failure)
 
 # C interop
