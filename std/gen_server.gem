@@ -174,20 +174,66 @@ end
 ## Raises, and starts nothing, if `module` is not a table or a callback is
 ## not a fn.
 ##
-## Returns at once: `init` runs later, in the server. The server is
-## neither linked to nor monitored by the caller, so either can die
-## without taking the other along; a server whose `init` raises dies. A
-## `call` already waiting then raises `gen_server.call: server exited:
-## <error>`; one made after the runtime has reclaimed the server raises
-## `server exited: noproc`.
+## Returns once `init` has returned, so what `init` does (registering a
+## name, binding a port) is done by then. `init` runs in the server while
+## the caller waits, so an `init` that waits for an answer from the caller
+## never gets one; to do work after `start` returns, `send(self(), msg)`
+## in `init` and do it in `handle_info`. An `init` that raises, or returns
+## something other than `{state}`, ends the server, and `start` raises
+## `gen_server.start: init failed: <error>` once it has exited; where the
+## error was raised is printed on stderr. A server killed during `init`
+## makes `start` raise `gen_server.start: server exited: <reason>`.
+##
+## The server is neither linked to nor monitored by the caller, so either
+## can die without taking the other along.
 fn start(module)
   check_module(module)
-  let pid = spawn(fn()
-    let result = module.init()
-    check_state_result("init", result)
-    loop(module, result.state, set_timeout(nil, result.timeout))
-  end)
+  let caller = self()
+  let ref = make_ref()
+  let pid = spawn do
+    serve(module, caller, ref)
+  end
+  monitor(pid)
+  receive
+  when {tag: "_gs_started", ref: ^ref}
+    drop_monitor(pid, true)
+  when {tag: "_gs_init_failed", ref: ^ref, error: e}
+    # Its exit is next: wait for it, so no DOWN is left behind.
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    end
+    error("gen_server.start: init failed: {e}")
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    error("gen_server.start: server exited: {reason}")
+  end
   {pid: pid}
+end
+
+# Runs `module.init` and checks its result: {state, timeout}.
+fn run_init(module)
+  let result = module.init()
+  check_state_result("init", result)
+  result
+end
+
+# The server process: runs `init`, tells `caller` (waiting in `start`,
+# under `ref`) whether it returned, then runs the loop. An `init` that
+# fails ends the server with the error as its reason.
+fn serve(module, caller, ref)
+  let res = pcall run_init(module)
+  if not res.ok
+    eprint("gen_server: init raised at:")
+    for f in res.stack
+      eprint("  at {f.name} ({f.file}:{f.line})")
+    end
+    send(caller, {tag: "_gs_init_failed", ref: ref, error: res.error})
+    # An `init` may have trapped exits, which would make the kill a message.
+    process_flag("trap_exit", false)
+    kill(self(), res.error)
+  end
+  send(caller, {tag: "_gs_started", ref: ref})
+  loop(module, res.value.state, set_timeout(nil, res.value.timeout))
 end
 
 fn check_timeout(timeout_ms, caller)
@@ -305,8 +351,12 @@ end
 ## reply to a caller that has given up (timed out or died) is dropped or
 ## left in its mailbox, as in `call`. Call `reply` once per `from`: a
 ## second reply, or a `reply` followed by a `{reply: ...}` result, leaves
-## an extra `{tag: "_gs_reply"}` in the caller's mailbox.
+## an extra `{tag: "_gs_reply"}` in the caller's mailbox. Raises
+## `gen_server.reply: ...` when `from` is not a `{pid, ref}` table.
 fn reply(from, value)
+  if type(from) != "table" or type(from.pid) != "int"
+    error("gen_server.reply: expected the \{pid, ref\} from that handle_call got, got {describe(from)}")
+  end
   send(from.pid, {tag: "_gs_reply", ref: from.ref, value: value})
   nil
 end

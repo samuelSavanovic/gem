@@ -188,16 +188,26 @@ fn not_running(spec)
   {id: spec.id, pid: -1, shutdown: nil}
 end
 
+# A child that isn't running and is owed a restart (start_pending).
+fn pending(spec)
+  {id: spec.id, pid: -1, shutdown: nil, pending: true}
+end
+
+fn is_pending(child)
+  child.pending == true
+end
+
 # Stops every running child but the one at `dead_idx`, in reverse spec
-# order (stop_child), then starts again, in order, the dead child and every child
-# it stopped except temporary ones. A child that was not running stays
-# down.
-fn restart_all(state, dead_idx)
+# order (stop_child), and marks pending the dead child and every child it
+# stopped or that was pending, except temporary ones. A child that was not
+# running and not pending stays down.
+fn stop_all_for_restart(state, dead_idx)
   let children = state.children
   let specs = state.specs
   let revive = []
   for i = 0, len(children)
-    push(revive, i == dead_idx or (children[i].pid != -1 and restart_of(specs[i]) != "temporary"))
+    let was_up = children[i].pid != -1 or is_pending(children[i])
+    push(revive, i == dead_idx or (was_up and restart_of(specs[i]) != "temporary"))
   end
   let i = len(children) - 1
   while i >= 0
@@ -208,11 +218,50 @@ fn restart_all(state, dead_idx)
   end
   for j = 0, len(specs)
     if revive[j]
-      children[j] = start_child(specs[j])
+      children[j] = pending(specs[j])
     else
       children[j] = not_running(specs[j])
     end
   end
+end
+
+# Prints the error of a restart's `start` and where it was raised.
+fn report_failed_restart(spec, res)
+  eprint("supervisor: restart of child \"{spec.id}\" failed: {res.error}")
+  for f in res.stack
+    eprint("  at {f.name} ({f.file}:{f.line})")
+  end
+end
+
+# Starts the pending children in spec order, up to the first whose `start`
+# raises: that one and the pending ones after it stay pending, and a
+# `_sup_retry` message to the supervisor itself (one queued at a time)
+# makes sup_loop try again, counted as a restart.
+fn start_pending(state)
+  for i = 0, len(state.children)
+    if is_pending(state.children[i])
+      let started = pcall start_child(state.specs[i])
+      if not started.ok
+        report_failed_restart(state.specs[i], started)
+        if not state.retry_queued
+          state.retry_queued = true
+          send(self(), {tag: "_sup_retry"})
+        end
+        return nil
+      end
+      state.children[i] = started.value
+    end
+  end
+  nil
+end
+
+fn has_pending(children)
+  for c in children
+    if is_pending(c)
+      return true
+    end
+  end
+  false
 end
 
 fn handle_down(state, dead_pid, reason)
@@ -228,10 +277,11 @@ fn handle_down(state, dead_pid, reason)
   end
   note_restart(state, time_ms())
   if state.strategy == "one_for_one"
-    state.children[idx] = start_child(spec)
+    state.children[idx] = pending(spec)
   else
-    restart_all(state, idx)
+    stop_all_for_restart(state, idx)
   end
+  start_pending(state)
   state
 end
 
@@ -249,6 +299,13 @@ fn sup_loop(state)
   receive
   when {tag: "DOWN", pid: dead_pid, reason: reason}
     sup_loop(handle_down(state, dead_pid, reason))
+  when {tag: "_sup_retry"}
+    state.retry_queued = false
+    if has_pending(state.children)
+      note_restart(state, time_ms())
+      start_pending(state)
+    end
+    sup_loop(state)
   when {tag: "_sup_which_children", from: from, ref: ref}
     send(from, {tag: "_sup_children", ref: ref, children: children_info(state)})
     sup_loop(state)
@@ -373,14 +430,21 @@ end
 ## ordered shutdown. Write `shutdown: x` only when `x` is set: `nil` there
 ## is not the default. `strategy` is `"one_for_one"` (the default: restart
 ## the dead child) or `"one_for_all"` (stop the others, in reverse spec
-## order, then start them all again). The supervisor gives up and exits
+## order, then start again, in spec order, the dead child and the others
+## that were running or owed a restart, except temporary ones). The supervisor gives up and exits
 ## when more than `max_restarts` (default 3) restarts fall within
 ## `max_seconds` MILLISECONDS, despite the name (default 5000, i.e. 5 s).
 ## `name` registers it.
 ##
 ## A restart runs `start` again from scratch: no state carries over. It
 ## happens in the supervisor, after the child's death, so for a moment a
-## call by the child's registered name raises `no process registered`.
+## call by the child's registered name raises `no process registered`. A
+## restart whose `start` raises (a gen_server whose `init` fails, say) is
+## printed on stderr and tried again, after the requests already queued;
+## each try counts as a restart, so the restart limit ends a `start` that
+## keeps failing. Until a try succeeds, `which_children` shows the child
+## with pid -1. In `"one_for_all"`, the children before the failing one
+## stay up, and it and the ones after it start, in order, on the next try.
 ##
 ## Raises, and starts nothing, for a bad spec (e.g. `supervisor.start:
 ## duplicate child id "d"`) or a name that is taken.
@@ -395,12 +459,10 @@ end
 ## supervisor has exited; where the error was raised is printed on stderr.
 ##
 ## The supervisor is not linked to the caller: the caller dying leaves it
-## running, and it dying later (on its restart limit, an exit signal, or a
-## child's `start` that raises when the child is restarted) doesn't kill
-## the caller. Its exit reason is the exit signal's reason,
-## `"supervisor: max restart intensity reached"` or the error a child's
-## `start` raised, unchanged; the last two are also printed on stderr. Before it exits it stops its children as `stop`
-## does. `kill(sup.pid, reason)` is handled when it next reads
+## running, and it dying later (on its restart limit or an exit signal)
+## doesn't kill the caller. Its exit reason is the exit signal's reason or
+## `"supervisor: max restart intensity reached"`, which is also printed on
+## stderr. Before it exits it stops its children as `stop` does. `kill(sup.pid, reason)` is handled when it next reads
 ## its mailbox; use `stop` to know it is gone. `kill(sup.pid, "kill")`
 ## ends it at once, without stopping its children: those that don't trap
 ## exits die through their links, the others get an `EXIT` and run on.
@@ -440,7 +502,8 @@ fn start(spec)
       specs: specs,
       max_restarts: max_restarts,
       max_seconds: max_seconds,
-      restart_times: []
+      restart_times: [],
+      retry_queued: false
     }, caller, ref)
   end
   # The new process hasn't run yet: register it here, so a child's `start`

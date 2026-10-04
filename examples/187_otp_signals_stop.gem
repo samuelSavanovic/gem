@@ -176,10 +176,10 @@ let srv = gen_server.start({
 })
 print(gen_server.call(srv, "ok"))
 print((pcall gen_server.call(srv, "bad")).error)
-let srv2 = gen_server.start({
+let srv2 = pcall gen_server.start({
   init: fn() {state: 0, timeout: 1.5} end,
   handle_call: fn(msg, from, s) {reply: s, state: s} end,
   handle_cast: fn(m, s) {state: s} end,
   handle_info: fn(m, s) {state: s} end
 })
-print((pcall gen_server.call(srv2, "x")).error)
+print(srv2.error)
