@@ -54,15 +54,16 @@ program in Python and checks that both print the same report. On 1M lines
 | logstat, file | 3.9–5.2 s | 261–274 MB |
 | Python | 2.0 s | 22–24 MB |
 
-Where it goes: with `--by ip` or `--by path`, 0.9–1.1 s are the region
-resets copying the group records again at every reset; `--by hour`
-(24 groups) spends 0.1 s there. The rest is spread over allocation (every
+Where it goes: with `--by ip` or `--by path`, 0.9–1.1 s were the region
+resets copying the group records again at every reset, until resets
+promoted what they keep (now 0.32–0.43 s with `--by ip` on a Linux x86_64
+VM, which copies 0.7 MB instead of 526 MB); `--by hour` (24 groups)
+spent 0.1 s there. The rest is spread over allocation (every
 string literal is allocated each time it is evaluated), `substr` copies
 and the cost of Gem calls. A file is held whole, twice while it is read.
 
-These are tracked in `docs/OPTIMIZATIONS.md` ("Survivors of a reset are
-copied again", "String literals are allocated at every evaluation" and
-"`read_file` holds the file twice") and `docs/ROADMAP.md`
+These are tracked in `docs/OPTIMIZATIONS.md` ("String literals are
+allocated at every evaluation" and "`read_file` holds the file twice") and `docs/ROADMAP.md`
 ("Line-at-a-time input"). Keep this
 program idiomatic: it is the yardstick for those fixes, not a place to
 work around them.

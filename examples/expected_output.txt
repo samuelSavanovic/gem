@@ -4050,3 +4050,14 @@ poked 1000 timed out 1000
 ring done
 culled 1000 normal 4000
 alive 1
+records 30000 4286 2999 85471498 id2995
+grow 20000 20000
+buffers 128890 <0><1><2><3> <19999>
+boxes v19999 20000 v0 v19999
+nested 16000 0:0 39:399
+registry 500 19500 19999 nnnn
+messages 20000 199990000 item-19999
+tco 1000 19000 19999
+churn 50000 g49999-49
+spawner 10 10000
+backlog 49 0 50

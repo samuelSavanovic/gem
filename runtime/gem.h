@@ -67,17 +67,30 @@ void gem_arena_free_blocks(GemArenaBlock *block);  /* munmap a block chain */
  * Codegen takes a mark where a loop starts (a `while` loop's entry, a TCO
  * function's entry, a mutual-TCO trampoline's entry) and at the loop's
  * back-edge calls gem_arena_reset_region with the values live there. A
- * region reset frees only memory allocated AFTER the mark; everything
- * allocated before it -- which is everything the callers' C frames can
- * hold -- stays where it is. Soundness argument: gem_copy.c. */
+ * region reset frees only memory allocated AFTER a point of the mark;
+ * everything allocated before it -- which is everything the callers' C
+ * frames can hold -- stays where it is. Soundness argument: gem_copy.c. */
 typedef struct {
-    GemArenaBlock *block;      /* arena->current at mark time */
-    size_t used;               /* block->used at mark time */
-    GemTable *tables;          /* arena->table_list at mark time */
-    struct GemBuffer *buffers; /* arena->buffer_list at mark time */
-    uint64_t pin_seq;          /* arena->pin_seq at mark time */
-    uint64_t clock;            /* gem_mut_clock value this mark started (see GEM_TABLE_WRITTEN) */
+    GemArenaBlock *block;      /* arena->current at that point */
+    size_t used;               /* block->used at that point */
+    GemTable *tables;          /* arena->table_list at that point */
+    struct GemBuffer *buffers; /* arena->buffer_list at that point */
+    uint64_t pin_seq;          /* arena->pin_seq at that point */
+    uint64_t clock;            /* gem_mut_clock epoch that began there (see GEM_TABLE_WRITTEN) */
+} GemArenaPoint;
+
+/* Two points: `base`, where the loop started, and `young`, the end of what
+   earlier resets of this loop kept. A reset normally frees only what was
+   allocated since `young` and moves `young` past what it kept (promotion),
+   so data the loop holds is copied once, not by every reset; once the kept
+   memory has doubled since the last full reset, a full reset from `base`
+   drops the garbage among it (gem_copy.c, "Region reset"). */
+typedef struct {
+    GemArenaPoint base;
+    GemArenaPoint young;       /* == base until the first reset */
     size_t trigger;            /* reset once bytes_allocated exceeds this */
+    size_t old_bytes;          /* bytes kept between base and young */
+    size_t old_limit;          /* full reset once old_bytes exceeds this */
 } GemArenaMark;
 
 extern GemArena gem_global_arena;
@@ -633,12 +646,14 @@ void gem_deep_free(GemVal val);
 void gem_deep_free_n(const GemVal *vals, int n);
 
 /* Region reset (see GemArenaMark): if the arena has passed the mark's
-   trigger, copy everything allocated since `mark` that is still reachable
-   from `roots`, `pinned_roots` (malloc'd boxes from gem_box_alloc, whose
-   contents are copied), the process's module slots, its mailbox,
-   pinned boxes older than the mark, and tables/buffers older than the mark,
-   into fresh blocks, then free the rest of the post-mark memory. Values
-   allocated before the mark are never moved or freed. */
+   trigger, copy everything allocated since the mark's young point (its
+   base point, for a full reset) that is still reachable from `roots`,
+   `pinned_roots` (malloc'd boxes from gem_box_alloc, whose contents are
+   copied), the process's module slots, its mailbox, pinned boxes older than
+   that point, and tables/buffers older than it, then free the rest of the
+   memory allocated since it. Values allocated before it are never moved or
+   freed. The copies count as older from then on: the young point moves past
+   them. */
 void gem_arena_reset_region(GemArenaMark *mark, GemVal **roots, int n_roots,
                             GemVal **pinned_roots, int n_pinned);
 
@@ -1078,13 +1093,16 @@ static inline GemArena *gem_current_arena(void) {
 
 static inline void gem_arena_mark(GemArenaMark *m) {
     GemArena *a = gem_current_arena();
-    m->block = a->current;
-    m->used = a->current->used;
-    m->tables = a->table_list;
-    m->buffers = a->buffer_list;
-    m->pin_seq = a->pin_seq;
-    m->clock = ++gem_mut_clock;
+    m->base.block = a->current;
+    m->base.used = a->current->used;
+    m->base.tables = a->table_list;
+    m->base.buffers = a->buffer_list;
+    m->base.pin_seq = a->pin_seq;
+    m->base.clock = ++gem_mut_clock;
+    m->young = m->base;
     m->trigger = a->bytes_allocated + GEM_ARENA_RESET_THRESHOLD;
+    m->old_bytes = 0;
+    m->old_limit = 0;
 }
 
 static inline int gem_arena_reset_due(const GemArenaMark *m) {

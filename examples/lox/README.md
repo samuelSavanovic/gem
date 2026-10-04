@@ -126,16 +126,17 @@ Where it goes:
 - **Freed memory comes back as fresh pages.** A reset unmaps the blocks
   it frees and the next allocations map new ones, so the Gem runs spend
   20 to 30% of their time in the kernel taking page faults.
-- **Survivors are copied again by every reset.** `binary_trees` keeps a
-  tree alive while it builds and drops thousands of others, and the
-  resets copy that tree each time: 1.6 GB in 5,000 resets, a quarter of
-  the run.
+- **Trees are copied at every level that builds them.** `binary_trees`
+  builds each subtree in one iteration of the interpreter's statement
+  loop, and each level's loop starts a fresh mark whose first reset
+  copies the subtree it finds: 1.4 GB in 5,000 resets, a quarter of the
+  run.
 - **Gem frames are large.** A Lox call takes about ten Gem frames of 0.5
   to 2 KB, which is why the call depth is capped at 256.
 
 These are tracked in `docs/OPTIMIZATIONS.md` ("Inline caches key on the
 table, not its shape", "A recursion frees nothing until a loop moves
-on", "Resets unmap the blocks they free", "Survivors of a reset are
-copied again", "Large C frames"). Keep
+on", "Resets unmap the blocks they free", "A loop's first reset is
+full", "Large C frames"). Keep
 this program idiomatic: it is the yardstick for those fixes, not a place
 to work around them.

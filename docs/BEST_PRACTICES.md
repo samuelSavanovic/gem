@@ -918,17 +918,23 @@ issue.
 
 ### A process holding a lot of data pauses every process **(trap)**
 
-A long-running loop copies what it keeps alive at each arena reset, all
-of it at once, and processes share one thread, so nothing else runs
-meanwhile. A gen_server whose state grows inside its loop (the loop
-started with `init`) copies all of it at every reset: with 100,000 small
-records the longest pause was about 0.1 s, with 300,000 1.4 s (Linux
-x86_64 VM). `examples/jobqueue`'s queue, which keeps a record per job,
-stalls the program 50–80 ms at 20,000 jobs and 1.5 s at 100,000, and a
-timer set to 100 ms then fires before a 20 ms job has had a chance to
-report. Bound what a long-lived process keeps (expire finished records,
-keep a count instead of a history), or split it across processes, and
-leave deadlines room for the pauses.
+A long-running loop copies what it keeps alive at its arena resets, and
+processes share one thread, so nothing else runs meanwhile. Most resets
+copy only what the loop made since the last one: what a reset keeps is
+promoted, and later resets leave it alone. But now and then a full reset
+copies all of it again, to drop what the loop no longer holds. It comes
+once the kept data has doubled since the last one (grown fourfold, when
+that one found little garbage). A process whose state grows inside its
+loop (a gen_server's state, made after `init`) so pauses every process
+for as long as one copy of that state takes. A process that keeps one
+small record per message it gets pauses for up to 0.04 s at 100,000
+records and 0.25 s at 300,000 (`GEM_DIAG=1`, `max=`; Linux x86_64 VM).
+`examples/jobqueue`'s queue, which keeps a record per job, pauses up to
+0.09 s at 20,000 jobs and 0.3 s at 100,000. A timer set to 100 ms can
+then fire before a 20 ms job has had a chance to report. Bound what a
+long-lived process keeps (expire finished records, keep a count instead
+of a history), or split it across processes, and leave deadlines room for
+the pauses.
 
 ### Mutate state in place
 
@@ -1746,7 +1752,7 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
 | Calls from a process that also collects a stream of messages | every reply wait scans the stream: quadratic | make the calls from a separate process |
-| A long-lived process holding 100,000s of records | each reset copies them all and stalls every process (0.1–1.5 s) | bound or shard the state |
+| A long-lived process holding 100,000s of records | full resets copy them all and stall every process (0.05–0.3 s) | bound or shard the state |
 | `after` in a busy server loop | never fires | `send_after` ticks |
 | `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
 | Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
