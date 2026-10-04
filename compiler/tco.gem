@@ -90,13 +90,11 @@ end
 # `caller_records` and `name_to_fn` come from codegen's mark_process_tail.
 # Returns the SCCs of size >= 2 that survived the viability filter:
 #   member_to_id[name]  -> SCC id (int) of a member fn
-#   id_to_members[id]   -> member names in source order (stable C identifiers)
 #   id_max_params[id]   -> the largest param count among the members: the
 #                          wrapper copies that many TLB slots, since no body
 #                          reads more.
 fn find_tail_call_sccs(fn_defs, caller_records, name_to_fn)
   let scc_member_to_id = {}
-  let scc_id_to_members = {}
   let scc_id_max_params = {}
   let scc_counter = 0
 
@@ -247,41 +245,8 @@ fn find_tail_call_sccs(fn_defs, caller_records, name_to_fn)
     end
     let sid = scc_counter
     scc_counter += 1
-    # Stable sort: emit in source order. comp from Tarjan is in
-    # post-order; sort by appearance in fn_defs for determinism.
-    let comp_set = {}
-    for name in comp
-      set_add(comp_set, name)
-    end
-    let order = {}
-    let i = 0
-    for fd in fn_defs
-      if set_contains(comp_set, fd.name)
-        order[fd.name] = i
-      end
-      i += 1
-    end
-    let members = []
-    for name in comp
-      push(members, name)
-    end
-    # Insertion sort by `order[name]`.
-    let n = len(members)
-    let j = 1
-    while j < n
-      let cur = members[j]
-      let cur_order = order[cur]
-      let k = j - 1
-      while k >= 0 and order[members[k]] > cur_order
-        members[k + 1] = members[k]
-        k -= 1
-      end
-      members[k + 1] = cur
-      j += 1
-    end
-    scc_id_to_members[sid] = members
     let max_params = 0
-    for name in members
+    for name in comp
       scc_member_to_id[name] = sid
       if len(name_to_fn[name].params) > max_params
         max_params = len(name_to_fn[name].params)
@@ -289,7 +254,7 @@ fn find_tail_call_sccs(fn_defs, caller_records, name_to_fn)
     end
     scc_id_max_params[sid] = max_params
   end
-  {member_to_id: scc_member_to_id, id_to_members: scc_id_to_members, id_max_params: scc_id_max_params}
+  {member_to_id: scc_member_to_id, id_max_params: scc_id_max_params}
 end
 
 export fn_def_is_tco, find_tail_call_sccs
