@@ -1,49 +1,68 @@
+## broker — the STOMP broker's supervision tree (see README.md).
+
 load "std/supervisor"
-load "./registry.gem"
-load "./connection.gem"
+load "std/dynamic_supervisor"
+load "./destination"
+load "./registry"
+load "./connection"
 
-# Top-level supervision tree. Two permanent children:
-#
-#   registry — owns the destination namespace. Restarting it would lose
-#     all destination registrations, but since destinations auto-register
-#     on creation, the next SUBSCRIBE/SEND on a topic just re-creates it.
-#     For v0 it should never crash anyway (it has no per-frame logic).
-#
-#   acceptor — drives the per-connection spawn. If this crashes we lose
-#     the ability to accept new connections; restart is the right call.
-#     Existing connection processes are independent and survive.
-#
-# Connection processes are *not* supervised: STOMP without persistence
-# promises nothing across reconnect, and a crashed connection is exactly
-# the case where the client should reconnect on its own. They die quietly
-# and the supervisor is unaware.
-#
-# Destination processes are *not* statically supervised either: they're
-# lazy-spawned on demand by the registry. A destination crash drops its
-# subscribers (acceptable for v0 — STOMP has no replay guarantees), and
-# the next op re-creates it. Adding dynamic supervision would require a
-# DynamicSupervisor analogue that std/supervisor.gem doesn't have.
-
-fn acceptor_loop(listener)
+# Accepting fails when the process is out of file descriptors: log it
+# once and retry every 50 ms until it succeeds again.
+fn accept_loop(listener, write_timeout_ms)
+  let next_id = 0
+  let failing = false
   while true
-    let fd = tcp_accept(listener)
-    connection.start(fd)
+    let a = pcall tcp_accept(listener)
+    if not a.ok
+      if not failing
+        eprint("stomp: {a.error}; retrying")
+        failing = true
+      end
+      sleep(50)
+      continue
+    end
+    failing = false
+    let fd = a.value
+    next_id += 1
+    let r = pcall connection.start(fd, next_id, write_timeout_ms)
+    if not r.ok
+      # process table full: refuse this client
+      tcp_close(fd)
+    end
   end
 end
 
-fn start_acceptor(listener)
-  spawn(fn() acceptor_loop(listener) end)
-end
-
-fn start(listener)
+## Starts the broker on `listener` and returns the supervisor's handle.
+## A client that doesn't take a frame within `write_timeout_ms` is
+## disconnected. `stop` doesn't close the listener.
+fn start(listener, {write_timeout_ms = 10000} = {})
   supervisor.start({
     strategy: "one_for_one",
     name: "stomp_broker_sup",
     children: [
+      # Temporary children: after a crash the registry starts a fresh one
+      # on the next lookup, and the connections subscribe to it again.
+      {id: "destinations", start: fn()
+        dynamic_supervisor.start({
+          name: registry.DESTINATIONS,
+          child: {start: fn(args) destination.start(args.name, args.kind) end, restart: "temporary"}
+        })
+      end},
       {id: "registry", start: registry.start},
-      {id: "acceptor", start: fn() start_acceptor(listener) end}
+      {id: "acceptor", start: fn()
+        spawn do
+          accept_loop(listener, write_timeout_ms)
+        end
+      end}
     ]
   })
 end
 
-export start
+## Stops the broker. Connections aren't part of it: each one left open
+## gets an ERROR and is closed when it next needs a destination, a
+## subscriber as soon as its destinations stop.
+fn stop(sup)
+  supervisor.stop(sup)
+end
+
+export start, stop

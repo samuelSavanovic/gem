@@ -1,29 +1,69 @@
-# TCP echo server test
-# Server accepts one connection, echoes back, then closes.
-# Client connects, sends a message, reads the echo, prints it.
+# TCP echo server, one process per connection, and a client that checks it.
 
-let port = 9125
+let PORT = 9125
+let TIMEOUT_MS = 2000
 
-let client_pid = spawn() do
-  # Wait for server to signal it's ready
-  receive
-  when "ready"
-    nil
+fn echo_loop(fd)
+  while true
+    let data = tcp_read(fd, 4096, TIMEOUT_MS)
+    if data == nil or data == ""
+      break
+    end
+    if tcp_write(fd, data, TIMEOUT_MS) < len(data)
+      break
+    end
   end
-
-  let sock = tcp_connect("127.0.0.1", port)
-  tcp_write(sock, "hello from gem")
-  let response = tcp_read(sock)
-  tcp_close(sock)
-  print(response)
+  tcp_close(fd)
 end
 
-spawn() do
-  let server = tcp_listen("0.0.0.0", port)
-  send(client_pid, "ready")
-  let conn = tcp_accept(server)
-  let data = tcp_read(conn)
-  tcp_write(conn, "echo: " + data)
-  tcp_close(conn)
-  tcp_close(server)
+# Accepting fails when the process is out of file descriptors; retry
+# until it succeeds again.
+fn serve(listener)
+  while true
+    let a = pcall tcp_accept(listener)
+    if not a.ok
+      sleep(50)
+      continue
+    end
+    let fd = a.value
+    let r = pcall spawn do
+      echo_loop(fd)
+    end
+    if not r.ok
+      tcp_close(fd)        # process table full: refuse this one
+    end
+  end
+end
+
+fn round_trip(msg)
+  let fd = tcp_connect("127.0.0.1", PORT)
+  let r = pcall do
+    if tcp_write(fd, msg, TIMEOUT_MS) < len(msg)
+      error("tcp_echo: write failed")
+    end
+    tcp_read(fd, 4096, TIMEOUT_MS)
+  end
+  tcp_close(fd)
+  if not r.ok
+    error(r.error)
+  end
+  r.value
+end
+
+fn main()
+  let listener = tcp_listen("127.0.0.1", PORT)
+  let server = spawn do
+    serve(listener)
+  end
+
+  for msg in ["hello from gem", "second connection"]
+    let reply = round_trip(msg)
+    if reply != msg
+      error("tcp_echo: sent {msg}, got {reply}")
+    end
+    print("echo: {reply}")
+  end
+
+  kill(server, "shutdown")
+  tcp_close(listener)
 end

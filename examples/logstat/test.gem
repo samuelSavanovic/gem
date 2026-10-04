@@ -1,0 +1,122 @@
+# Tests for logstat's modules. tests/check_example_apps.sh also runs the
+# built program on a generated log.
+
+load "std/json"
+load "std/string"
+load "std/test"
+load "lib/args"
+load "lib/clf"
+load "lib/report"
+load "lib/source"
+load "lib/stats"
+
+let LINE = '203.0.113.9 - ann [04/Oct/2026:13:55:36 +0000] "GET /a?x=1 HTTP/1.1" 404 512'
+
+fn record(fields)
+  let r = {ip: "10.0.0.1", user: "-", method: "GET", path: "/", status: "200", bytes: 10, hour: "2026-10-04 00:00"}
+  for k, v in fields
+    r[k] = v
+  end
+  r
+end
+
+test.case("parse the common format") do
+  test.assert_eq(clf.parse(LINE), {
+    ip: "203.0.113.9", user: "ann", method: "GET", path: "/a",
+    status: "404", bytes: 512, hour: "2026-10-04 13:00"
+  })
+end
+
+test.case("parse the combined format and odd fields") do
+  let r = clf.parse('::1 - - [31/Dec/2025:23:59:59 -0800] "POST /login HTTP/2.0" 304 - "https://x/" "agent with spaces"')
+  test.assert_eq([r.ip, r.path, r.status, r.bytes, r.hour], ["::1", "/login", "304", 0, "2025-12-31 23:00"])
+  let bad_request = clf.parse('10.0.0.1 - - [04/Oct/2026:13:55:36 +0000] "-" 400 0')
+  test.assert_eq([bad_request.method, bad_request.path], ["-", "-"])
+end
+
+test.case("malformed lines") do
+  for line in [
+    "",
+    "garbage",
+    '10.0.0.1 - - [04/Oct/2026:13:55:36 +0000] GET / HTTP/1.1 200 5',
+    '10.0.0.1 - - [04/Oct/2026:13:55:36 +0000] "GET / HTTP/1.1" 2000 5',
+    '10.0.0.1 - - [04/Oct/2026:13:55:36 +0000] "GET / HTTP/1.1" 200 5k',
+    '10.0.0.1 - - [04/Oct/2026:13:55:36 +0000] "GET / HTTP/1.1" 200',
+    '10.0.0.1 - - [04/Foo/2026:13:55:36 +0000] "GET / HTTP/1.1" 200 5',
+    '10.0.0.1 - - [04/Oct/2026] "GET / HTTP/1.1" 200 5',
+    '10.0.0.1 - - [04/Oct/2026:13:55:36 +0000] "GET /" 200 5',
+    '10.0.0.1 - - [04/Oct/2026:13:55:36 +0000] "GET / HTTP/1.1" 200 999999999999999999999',
+    '10.0.0.1 - - [x4/Oct/2026:13:55:36 +0000] "GET / HTTP/1.1" 200 5'
+  ]
+    test.assert_eq(clf.parse(line), nil, "expected malformed: {line}")
+  end
+end
+
+test.case("stats: totals, groups, top with ties") do
+  let s = stats.new("path")
+  stats.add(s, record({path: "/b", bytes: 5}))
+  stats.add(s, record({path: "/a", bytes: 5, status: "500"}))
+  stats.add(s, record({path: "/c", bytes: 1}))
+  stats.add(s, record({path: "/c", bytes: 1, status: "404"}))
+  stats.malformed(s)
+  test.assert_eq([s.lines, s.malformed, s.requests, s.bytes, s.errors], [5, 1, 4, 12, 2])
+  test.assert_eq(stats.distinct(s), 3)
+  let keys_of = fn(rows)
+    let ks = []
+    for r in rows
+      push(ks, r.key)
+    end
+    ks
+  end
+  test.assert_eq(keys_of(stats.top(s, "requests", 0)), ["/c", "/a", "/b"])
+  test.assert_eq(keys_of(stats.top(s, "bytes", 2)), ["/a", "/b"])
+  test.assert_eq(stats.top(s, "errors", 1), [{key: "/a", requests: 1, bytes: 5, errors: 1}])
+end
+
+test.case("report: text and JSON") do
+  let s = stats.new("status")
+  stats.add(s, record({status: "200", bytes: 1500}))
+  stats.add(s, record({status: "200", bytes: 7}))
+  stats.add(s, record({status: "503", bytes: 0}))
+  let rows = stats.top(s, "requests", 10)
+  test.assert_eq(report.text(s, rows, "requests"), """
+    lines 3, malformed 0, requests 3, bytes 1507, errors 1 (33.3%)
+
+    top 2 of 2 by status, sorted by requests
+    requests  bytes  errors  status
+           2   1507       0  200
+           1      0       1  503
+
+    """)
+  let j = json.parse(report.to_json(s, rows, "requests"))
+  test.assert_eq([j.requests, j.errors, j.by, j.distinct], [3, 1, "status", 2])
+  test.assert_eq(j.rows[1], {key: "503", requests: 1, bytes: 0, errors: 1})
+  test.assert(string.contains(report.text(stats.new("ip"), [], "bytes"), "errors 0 (0.0%)"))
+end
+
+test.case("args") do
+  test.assert_eq(args.parse([]).value.files, [])
+  let o = args.parse(["--by=ip", "--sort", "bytes", "--top", "0", "--json", "a.log", "-"]).value
+  test.assert_eq([o.by, o.sort, o.top, o.json, o.files], ["ip", "bytes", 0, true, ["a.log", "-"]])
+  test.assert(args.parse(["-h"]).value.help)
+  test.assert_eq(args.parse(["--by", "agent"]).error, "can't group by agent: use ip, user, method, path, status, hour")
+  test.assert_eq(args.parse(["--sort"]).error, "--sort needs a value")
+  test.assert_eq(args.parse(["--top", "-1"]).error, "--top needs a count, got -1")
+  test.assert_eq(args.parse(["--top", "x"]).error, "--top needs a count, got x")
+  test.assert_eq(args.parse(["-x"]).error, "unknown option -x")
+  test.assert_eq(args.parse(["--json=1"]).error, "unknown option --json=1")
+end
+
+test.case("source: lines of a file") do
+  let path = "/tmp/gem_logstat_test_{epoch_ms()}.log"
+  write_file(path, "a\r\nb\n\nc")
+  let seen = []
+  source.each_line(path) do |line, n|
+    push(seen, "{n}:{line}")
+  end
+  remove_file(path)
+  test.assert_eq(seen, ["1:a", "2:b", "3:", "4:c"])
+  test.assert_throws(fn() source.each_line(path, fn(line, n) nil end) end)
+end
+
+test.run()

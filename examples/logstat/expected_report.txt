@@ -1,0 +1,10 @@
+lines 30000, malformed 2, requests 29998, bytes 272580941, errors 5198 (17.3%)
+
+top 6 of 6 by status, sorted by bytes
+requests      bytes  errors  status
+   20813  207416849       0  200
+    2575   25506808    2575  404
+    1309   13302228    1309  500
+    1314   13240236    1314  401
+    1319   13114820       0  301
+    2668          0       0  304

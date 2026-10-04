@@ -1,0 +1,329 @@
+# Tests for the STOMP broker: frames, then the broker driven by Gem clients.
+
+load "std/gen_server"
+load "std/string"
+load "std/test"
+load "./frame"
+load "./broker"
+load "./registry"
+
+let PORT = 61699
+let WAIT_MS = 2000
+let QUIET_MS = 200
+
+# ─── Frames ────────────────────────────────────────────────────
+
+test.case("parse") do
+  test.assert_eq(frame.parse_frame("CONNECT\naccept-version:1.2\nhost:localhost\n\n"),
+    {command: "CONNECT", headers: {"accept-version": "1.2", host: "localhost"}, body: ""})
+  test.assert_eq(frame.parse_frame("SEND\ndestination:/topic/foo\n\nhello\n\nworld").body, "hello\n\nworld")
+  test.assert_eq(frame.parse_frame("SEND\r\ndestination:/q\r\n\r\nbody"),
+    {command: "SEND", headers: {destination: "/q"}, body: "body"})
+  test.assert_eq(frame.parse_frame("SEND\nk:first\nk:second\n\n").headers.k, "first")
+  test.assert_eq(frame.parse_frame("SEND\nk:a:b\n\n").headers.k, "a:b")
+end
+
+test.case("parse rejects malformed frames") do
+  test.assert_eq(frame.parse_frame(""), nil)
+  test.assert_eq(frame.parse_frame("no blank line"), nil)
+  test.assert_eq(frame.parse_frame("CMD\nbadheader\n\nbody"), nil)
+  test.assert_eq(frame.parse_frame("\n\nbody"), nil)
+end
+
+test.case("header escapes") do
+  test.assert_eq(frame.unescape_header("a\\cb\\nc\\\\d\\re"), "a:b\nc\\d\re")
+  test.assert_eq(frame.unescape_header("keep \\x and trailing \\"), "keep \\x and trailing \\")
+  test.assert_eq(frame.escape_header("a:b\nc\\d\re"), "a\\cb\\nc\\\\d\\re")
+  let f = {command: "MESSAGE", headers: {"no:te": "a:b\nc\\"}, body: "hi"}
+  let wire = frame.render_frame(f)
+  test.assert_eq(ord(wire, len(wire) - 1), 0)
+  test.assert_eq(frame.parse_frame(substr(wire, 0, len(wire) - 1)), f)
+end
+
+# ─── A test client ─────────────────────────────────────────────
+
+fn client_send(c, command, headers = {}, body = "")
+  let bytes = frame.render_frame({command: command, headers: headers, body: body})
+  test.assert_eq(tcp_write(c.fd, bytes), len(bytes))
+end
+
+# nil on timeout or close.
+fn next_frame(c, timeout_ms = WAIT_MS)
+  while true
+    let nul = string.index_of(c.buf, "\0")
+    if nul >= 0
+      let raw = substr(c.buf, 0, nul)
+      c.buf = substr(c.buf, nul + 1, len(c.buf) - nul - 1)
+      return frame.parse_frame(raw)
+    end
+    let chunk = tcp_read(c.fd, 65536, timeout_ms)
+    if chunk == nil or chunk == ""
+      return nil
+    end
+    c.buf = c.buf + chunk
+  end
+end
+
+fn expect(c, command)
+  let f = next_frame(c)
+  test.assert(f != nil, "expected {command}, got nothing")
+  test.assert_eq(f.command, command)
+  f
+end
+
+# Waits for the receipt, so the frame has taken effect when this returns.
+fn sync_send(c, command, headers, body = "")
+  headers.receipt = "r-{command}"
+  client_send(c, command, headers, body)
+  test.assert_eq(expect(c, "RECEIPT").headers["receipt-id"], "r-{command}")
+end
+
+fn connect()
+  let c = {fd: tcp_connect("127.0.0.1", PORT), buf: ""}
+  client_send(c, "CONNECT", {"accept-version": "1.2", host: "localhost"})
+  expect(c, "CONNECTED")
+  c
+end
+
+fn subscribe(c, id, destination)
+  sync_send(c, "SUBSCRIBE", {id: id, destination: destination})
+end
+
+fn publish(c, destination, body, headers = {})
+  headers.destination = destination
+  sync_send(c, "SEND", headers, body)
+end
+
+fn close(c)
+  tcp_close(c.fd)
+end
+
+fn await_subscribers(name, n)
+  let dest = registry.lookup_or_create(name)
+  let deadline = epoch_ms() + WAIT_MS
+  while gen_server.call(dest, {op: "info"}).subscribers != n
+    test.assert(epoch_ms() < deadline, "{name} never got to {n} subscribers")
+    sleep(10)
+  end
+end
+
+# ─── Broker ────────────────────────────────────────────────────
+
+let listener = tcp_listen("127.0.0.1", PORT)
+let sup = broker.start(listener, {write_timeout_ms: 300})
+
+test.case("connect") do
+  let c = {fd: tcp_connect("127.0.0.1", PORT), buf: ""}
+  client_send(c, "STOMP", {"accept-version": "1.2"})
+  let f = expect(c, "CONNECTED")
+  test.assert_eq(f.headers.version, "1.2")
+  test.assert_eq(f.headers["heart-beat"], "0,0")
+  close(c)
+end
+
+test.case("a frame before CONNECT is an error") do
+  let c = {fd: tcp_connect("127.0.0.1", PORT), buf: ""}
+  client_send(c, "SEND", {destination: "/topic/x"})
+  test.assert_eq(expect(c, "ERROR").headers.message, "expected CONNECT, got SEND")
+  test.assert_eq(next_frame(c), nil)
+  close(c)
+end
+
+test.case("topic fans out to every subscriber") do
+  let s1 = connect()
+  let s2 = connect()
+  let p = connect()
+  subscribe(s1, "a", "/topic/news")
+  subscribe(s2, "b", "/topic/news")
+  publish(p, "/topic/news", "hello", {"content-type": "text/plain"})
+  let m1 = expect(s1, "MESSAGE")
+  let m2 = expect(s2, "MESSAGE")
+  test.assert_eq([m1.body, m1.headers.subscription, m1.headers.destination], ["hello", "a", "/topic/news"])
+  test.assert_eq([m2.body, m2.headers.subscription], ["hello", "b"])
+  test.assert_eq(m1.headers["content-type"], "text/plain")
+  test.assert(m1.headers["message-id"] != m2.headers["message-id"])
+  for c in [s1, s2, p]
+    close(c)
+  end
+end
+
+test.case("queue round-robins") do
+  let c1 = connect()
+  let c2 = connect()
+  let p = connect()
+  subscribe(c1, "q", "/queue/jobs")
+  subscribe(c2, "q", "/queue/jobs")
+  for i = 0, 4
+    publish(p, "/queue/jobs", "job {i}")
+  end
+  test.assert_eq([expect(c1, "MESSAGE").body, expect(c1, "MESSAGE").body], ["job 0", "job 2"])
+  test.assert_eq([expect(c2, "MESSAGE").body, expect(c2, "MESSAGE").body], ["job 1", "job 3"])
+  test.assert_eq(next_frame(c1, QUIET_MS), nil)
+  for c in [c1, c2, p]
+    close(c)
+  end
+end
+
+test.case("unsubscribe stops delivery") do
+  let s = connect()
+  let p = connect()
+  subscribe(s, "a", "/topic/unsub")
+  sync_send(s, "UNSUBSCRIBE", {id: "a"})
+  publish(p, "/topic/unsub", "nobody hears this")
+  test.assert_eq(next_frame(s, QUIET_MS), nil)
+  close(s)
+  close(p)
+end
+
+test.case("a duplicate subscription id is an error") do
+  let s = connect()
+  subscribe(s, "a", "/topic/dup")
+  client_send(s, "SUBSCRIBE", {id: "a", destination: "/topic/other"})
+  test.assert_eq(expect(s, "ERROR").headers.message, "subscription id a is already in use")
+  close(s)
+end
+
+test.case("disconnect with a receipt") do
+  let c = connect()
+  client_send(c, "DISCONNECT", {receipt: "bye"})
+  test.assert_eq(expect(c, "RECEIPT").headers["receipt-id"], "bye")
+  test.assert_eq(next_frame(c), nil)
+  close(c)
+end
+
+test.case("frames split across writes, several per write, heart-beats") do
+  let c = connect()
+  let wire = frame.render_frame({command: "SUBSCRIBE", headers: {id: "s", destination: "/topic/split", receipt: "1"}, body: ""})
+  tcp_write(c.fd, substr(wire, 0, 10))
+  sleep(20)
+  tcp_write(c.fd, substr(wire, 10, len(wire) - 10) + "\n\r\n")
+  test.assert_eq(expect(c, "RECEIPT").headers["receipt-id"], "1")
+  let two = build_string do |add|
+    for i = 0, 2
+      add(frame.render_frame({command: "SEND", headers: {destination: "/topic/split"}, body: "m{i}"}), "\n")
+    end
+  end
+  tcp_write(c.fd, two)
+  test.assert_eq([expect(c, "MESSAGE").body, expect(c, "MESSAGE").body], ["m0", "m1"])
+  close(c)
+end
+
+test.case("a malformed frame closes only that connection") do
+  let bad = connect()
+  tcp_write(bad.fd, "garbage with no blank line\0")
+  test.assert_eq(expect(bad, "ERROR").headers.message, "malformed frame")
+  test.assert_eq(next_frame(bad), nil)
+  close(bad)
+  let good = connect()
+  subscribe(good, "a", "/topic/still-up")
+  close(good)
+end
+
+test.case("a client that leaves without UNSUBSCRIBE is pruned") do
+  let s1 = connect()
+  let s2 = connect()
+  subscribe(s1, "a", "/topic/prune")
+  subscribe(s2, "b", "/topic/prune")
+  await_subscribers("/topic/prune", 2)
+  close(s1)
+  await_subscribers("/topic/prune", 1)
+  let p = connect()
+  publish(p, "/topic/prune", "still delivered")
+  test.assert_eq(expect(s2, "MESSAGE").body, "still delivered")
+  close(s2)
+  close(p)
+end
+
+test.case("destination names can't reach the broker's own processes") do
+  let s = connect()
+  let p = connect()
+  subscribe(s, "a", "stomp_registry")
+  publish(p, "stomp_registry", "just a topic")
+  test.assert_eq(expect(s, "MESSAGE").body, "just a topic")
+  test.assert(registry.lookup_or_create("stomp_registry") != whereis("stomp_registry"))
+  close(s)
+  close(p)
+end
+
+test.case("a crashed destination's subscriptions move to its replacement") do
+  let s = connect()
+  subscribe(s, "a", "/topic/crash")
+  let old = registry.lookup_or_create("/topic/crash")
+  kill(old, "boom")
+  # s's writer has the DOWN before this frame, so it has resubscribed
+  publish(s, "/topic/elsewhere", "sync")
+  test.assert(registry.lookup_or_create("/topic/crash") != old, "the registry kept the dead destination")
+  let p = connect()
+  publish(p, "/topic/crash", "after the crash")
+  test.assert_eq(expect(s, "MESSAGE").headers.subscription, "a")
+  sync_send(s, "UNSUBSCRIBE", {id: "a"})
+  subscribe(s, "a", "/topic/crash")
+  close(s)
+  close(p)
+end
+
+test.case("a frame over the size limit closes the connection") do
+  let bad = connect()
+  tcp_write(bad.fd, "SEND\ndestination:/topic/big\n\n" + string.repeat("x", 5 * 1024 * 1024), WAIT_MS)
+  # The broker closes the connection (EOF or a reset reads as ""); the
+  # ERROR before it can be lost to the reset, as the broker closes with
+  # input unread.
+  let got = bad.buf
+  while true
+    let chunk = tcp_read(bad.fd, 65536, WAIT_MS)
+    test.assert(chunk != nil, "the connection is still open")
+    if chunk == ""
+      break
+    end
+    got = got + chunk
+  end
+  if got != ""
+    test.assert(string.contains(got, "message:frame larger than 4194304 bytes"), "unexpected reply: {got}")
+  end
+  close(bad)
+  let good = connect()
+  subscribe(good, "a", "/topic/still-up")
+  close(good)
+end
+
+test.case("a restarted registry keeps the live destinations") do
+  let s = connect()
+  subscribe(s, "a", "/topic/survivor")
+  let dest = registry.lookup_or_create("/topic/survivor")
+  let old = whereis("stomp_registry")
+  kill(old, "boom")
+  let deadline = epoch_ms() + WAIT_MS
+  while whereis("stomp_registry") == nil or whereis("stomp_registry") == old
+    test.assert(epoch_ms() < deadline, "the registry was not restarted")
+    sleep(10)
+  end
+  test.assert_eq(registry.lookup_or_create("/topic/survivor"), dest)
+  let p = connect()
+  publish(p, "/topic/survivor", "still subscribed")
+  test.assert_eq(expect(s, "MESSAGE").body, "still subscribed")
+  close(s)
+  close(p)
+end
+
+test.case("a client that stops reading is disconnected") do
+  let slow = connect()
+  subscribe(slow, "a", "/topic/firehose")
+  let p = connect()
+  let dest = registry.lookup_or_create("/topic/firehose")
+  let body = string.repeat("x", 1048576)
+  let sent = 0
+  # The socket buffers take a few MB; then the slow writer's write times out.
+  while gen_server.call(dest, {op: "info"}).subscribers > 0
+    test.assert(sent < 64, "the slow subscriber was never dropped")
+    publish(p, "/topic/firehose", body)
+    sent += 1
+    sleep(50)
+  end
+  test.assert(sent > 1)
+  close(slow)
+  close(p)
+end
+
+test.run()
+broker.stop(sup)
+tcp_close(listener)

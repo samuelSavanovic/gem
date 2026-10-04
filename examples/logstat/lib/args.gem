@@ -1,0 +1,104 @@
+## args — logstat's command line.
+##
+##   args.parse(["--by", "ip", "access.log"])
+##   # {ok: true, value: {by: "ip", sort: "requests", top: 10, files: ["access.log"], ...}}
+##
+## Returns `{ok: false, error}` for a bad command line.
+
+load "std/string"
+load "std/table"
+load "lib/stats"
+
+let USAGE = """
+usage: logstat [options] [file ...]
+
+Summarizes access logs (Common or Combined Log Format). Reads stdin when
+no file is given, or for a file named -.
+
+  --by FIELD     group by ip, user, method, path, status or hour (default path)
+  --sort METRIC  order groups by requests, bytes or errors (default requests)
+  --top N        show the first N groups, 0 for all (default 10)
+  --json         print JSON instead of a table
+  --quiet        don't report malformed lines on stderr
+  -h, --help     show this help
+"""
+
+fn fail(msg)
+  {ok: false, error: msg}
+end
+
+let VALUE_FLAGS = ["--by", "--sort", "--top"]
+
+# "--by=ip" → "--by", "ip". A flag that takes no value keeps its "=", so
+# parse reports it as unknown instead of reading the value as a file.
+fn split_assignments(argv)
+  let out = []
+  for arg in argv
+    let eq = string.index_of(arg, "=")
+    if eq > 0 and table.contains(VALUE_FLAGS, substr(arg, 0, eq))
+      push(out, substr(arg, 0, eq))
+      push(out, substr(arg, eq + 1, len(arg) - eq - 1))
+    else
+      push(out, arg)
+    end
+  end
+  out
+end
+
+## Parses `argv` (without the program name).
+fn parse(argv)
+  let opts = {by: "path", sort: "requests", top: 10, json: false, quiet: false, help: false, files: []}
+  let args = split_assignments(argv)
+  let i = 0
+  while i < len(args)
+    let arg = args[i]
+    i += 1
+    if table.contains(VALUE_FLAGS, arg)
+      if i >= len(args)
+        return fail("{arg} needs a value")
+      end
+      let r = set_value(opts, arg, args[i])
+      if not r.ok
+        return r
+      end
+      i += 1
+    elif arg == "--json"
+      opts.json = true
+    elif arg == "--quiet"
+      opts.quiet = true
+    elif arg == "-h" or arg == "--help"
+      opts.help = true
+    elif string.starts_with(arg, "-") and arg != "-"
+      return fail("unknown option {arg}")
+    else
+      push(opts.files, arg)
+    end
+  end
+  {ok: true, value: opts}
+end
+
+fn set_value(opts, flag, value)
+  match flag
+  when "--by"
+    if not table.contains(stats.FIELDS, value)
+      return fail("can't group by {value}: use {string.join(stats.FIELDS, ", ")}")
+    end
+    opts.by = value
+  when "--sort"
+    if not table.contains(stats.METRICS, value)
+      return fail("can't sort by {value}: use {string.join(stats.METRICS, ", ")}")
+    end
+    opts.sort = value
+  when "--top"
+    let n = pcall to_int(value)
+    if not n.ok or n.value < 0
+      return fail("--top needs a count, got {value}")
+    end
+    opts.top = n.value
+  else
+    error("args.set_value: unknown flag {flag}")
+  end
+  {ok: true}
+end
+
+export USAGE, parse

@@ -1,8 +1,13 @@
 # STOMP broker — builder notes
 
-> Builder notes from the M1–M5 work, then a "Milestone 6: lived experience"
-> section at the bottom with the load-test numbers and the design
-> questions they surface.
+> Builder notes from building the first version, then "Milestone 6"
+> sections with the load-test numbers and the design questions they
+> surface.
+>
+> **Historical.** These notes describe the first version of the broker
+> (May 2026) and the runtime of that time, not the code in this
+> directory; files and workarounds they mention may not exist in it. See
+> [README.md](README.md) for the current design and how to run it.
 
 ## What worked well
 
@@ -121,35 +126,6 @@
   workloads — those are where the actor model's deep-copy fan-out cost
   and the mailbox-growth question would actually show up, and the
   tutorial is right that *those numbers* are the artifact worth keeping.
-
-## File layout
-
-```
-main.gem         # entry: tcp_listen, broker.start, sleep loop
-broker.gem       # supervision tree (registry + acceptor)
-connection.gem   # reader + writer pair, state machine, frame dispatch
-destination.gem  # gen_server per topic/queue
-registry.gem    # gen_server: lookup-or-create destinations
-frame.gem        # parse_frame, render_frame, header escape/unescape
-test_frame.gem   # unit tests for the parser
-smoke_test.sh    # end-to-end: fan-out, round-robin, adversarial
-```
-
-## How to run
-
-```sh
-# In one terminal:
-build/gem examples/stomp_broker/main.gem
-
-# In another:
-bash examples/stomp_broker/smoke_test.sh
-```
-
-Or hand-test:
-
-```sh
-printf 'CONNECT\naccept-version:1.2\nhost:localhost\n\n\0' | nc localhost 61613
-```
 
 ---
 

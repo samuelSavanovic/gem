@@ -1,0 +1,97 @@
+# Tests for the bookmark app, over HTTP. Run from this directory.
+
+load "std/http"
+load "std/log"
+load "std/request"
+load "std/string"
+load "std/test"
+load "std/url"
+load "./bookmarks"
+
+let PORT = 18080
+let BASE = "http://127.0.0.1:{PORT}"
+let FORM = {"Content-Type": "application/x-www-form-urlencoded"}
+
+log.set_level("warn")
+let db = bookmarks.open_db(":memory:")
+let server = http.start(bookmarks.routes(db, "./static"), {port: PORT, host: "127.0.0.1"})
+
+fn post(path, body)
+  request.post("{BASE}{path}", {body: body, headers: FORM})
+end
+
+fn put(path, body)
+  request.put("{BASE}{path}", {body: body, headers: FORM})
+end
+
+fn has(s, needle)
+  string.contains(s, needle)
+end
+
+test.case("index and static files") do
+  let page = request.get("{BASE}/")
+  test.assert_eq(page.status, 200)
+  test.assert(has(page.body, "<title>Bookmark Manager</title>"))
+  let css = request.get("{BASE}/static/style.css")
+  test.assert_eq(css.status, 200)
+  test.assert(has(css.headers["content-type"], "text/css"))
+end
+
+test.case("empty list") do
+  let r = request.get("{BASE}/bookmarks")
+  test.assert_eq(r.status, 200)
+  test.assert(has(r.body, "No bookmarks yet"))
+end
+
+test.case("create needs a URL") do
+  test.assert_eq(post("/bookmarks", "title=x").status, 400)
+  test.assert_eq(post("/bookmarks", "url=&title=x").status, 400)
+end
+
+test.case("create, escaping, title default") do
+  let r = post("/bookmarks", "url=http%3A%2F%2Fa.test&title=%3Cb%3EA%3C%2Fb%3E&tags=x")
+  test.assert_eq(r.status, 200)
+  test.assert(has(r.body, "&lt;b&gt;A&lt;/b&gt;"))
+  test.assert(not has(r.body, "<b>A"))
+  let r2 = post("/bookmarks", "url=http%3A%2F%2Fb.test")
+  test.assert(has(r2.body, "<td id='title-2'>http://b.test</td>"))
+end
+
+test.case("edit form and update") do
+  let form = request.get("{BASE}/bookmarks/1/edit")
+  test.assert_eq(form.status, 200)
+  test.assert(has(form.body, "Editing bookmark #1"))
+  let r = put("/bookmarks/1", "url=http%3A%2F%2Fa.test&title=Renamed&tags=y")
+  test.assert_eq(r.status, 200)
+  test.assert(has(r.body, "<td id='title-1'>Renamed</td>"))
+  test.assert_eq(put("/bookmarks/1", "title=no+url").status, 400)
+end
+
+test.case("missing and malformed ids are 404") do
+  test.assert_eq(request.get("{BASE}/bookmarks/99/edit").status, 404)
+  test.assert_eq(request.get("{BASE}/bookmarks/abc/edit").status, 404)
+  test.assert_eq(put("/bookmarks/99", "url=x").status, 404)
+  test.assert_eq(request.delete("{BASE}/bookmarks/abc").status, 404)
+  test.assert_eq(post("/bookmarks/99/fetch-title", "").status, 404)
+end
+
+test.case("fetch title") do
+  post("/bookmarks", "url=" + url.encode("{BASE}/"))
+  let r = post("/bookmarks/3/fetch-title", "")
+  test.assert_eq(r.body, "Bookmark Manager")
+  let list = request.get("{BASE}/bookmarks")
+  test.assert(has(list.body, "<td id='title-3'>Bookmark Manager</td>"))
+  # Nothing listens on port 1.
+  post("/bookmarks", "url=http%3A%2F%2F127.0.0.1%3A1%2F")
+  test.assert_eq(post("/bookmarks/4/fetch-title", "").body, "<em>Could not fetch title</em>")
+end
+
+test.case("delete") do
+  let r = request.delete("{BASE}/bookmarks/2")
+  test.assert_eq(r.status, 200)
+  test.assert(not has(r.body, "bookmark-2"))
+  test.assert_eq(request.delete("{BASE}/bookmarks/2").status, 404)
+end
+
+test.run()
+http.stop(server)

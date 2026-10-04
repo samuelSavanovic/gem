@@ -1,0 +1,89 @@
+# Writes a synthetic access log in the Combined Log Format to stdout:
+#
+#   gem gen.gem 1000000 [seed] > access.log
+#
+# The same count and seed always give the same log. About one line in
+# 20,000 is malformed on purpose.
+
+load "std/table"
+
+let PATHS = ["/", "/login", "/logout", "/search", "/static/app.js", "/static/app.css",
+  "/favicon.ico", "/api/items", "/api/orders", "/api/users/me", "/healthz"]
+let METHODS = ["GET", "GET", "GET", "GET", "GET", "GET", "POST", "POST", "PUT", "DELETE"]
+let STATUSES = ["200", "200", "200", "200", "200", "200", "200", "200", "200", "200",
+  "200", "200", "200", "200", "200", "200", "304", "304", "301", "404", "404", "401", "500"]
+let USERS = ["-", "-", "-", "-", "-", "-", "ann", "bo", "cy", "dee"]
+let AGENTS = ["Mozilla/5.0 (X11; Linux x86_64) Firefox/131.0", "curl/8.9.1",
+  "Mozilla/5.0 (Macintosh) Safari/605.1.15", "Googlebot/2.1 (+http://www.google.com/bot.html)"]
+let START_MS = 1791072000000    # 2026-10-04T00:00:00Z
+let BATCH = 10000
+
+# A linear congruential generator, so a seed gives the same log everywhere.
+fn next_state(state)
+  (state * 1103515245 + 12345) % 2147483648
+end
+
+fn pick(list, r)
+  list[r % len(list)]
+end
+
+fn line_for(rng, i, stamp)
+  let r1 = bshr(rng, 4)
+  let r2 = bshr(rng, 9)
+  let r3 = bshr(rng, 14)
+  # Squaring skews the address choice: a few clients send most requests.
+  let client = (r1 % 1000) * (r1 % 1000) / 40
+  let ip = "10.{client / 65536}.{(client / 256) % 256}.{client % 256}"
+  let path = pick(PATHS, r2)
+  if path == "/api/items"
+    path = "/api/items/{r3 % 5000}"
+  elif path == "/search"
+    path = "/search?q=term{r3 % 100}"
+  end
+  let status = pick(STATUSES, r3)
+  let bytes = "{(r2 * 7) % 20000}"
+  if status == "304"
+    bytes = "-"
+  end
+  if i % 20011 == 7
+    return "{ip} - - [{stamp}] GET {path} HTTP/1.1 {status}"
+  end
+  "{ip} - {pick(USERS, r1)} [{stamp}] \"{pick(METHODS, r3)} {path} HTTP/1.1\" {status} {bytes} \"-\" \"{pick(AGENTS, r2)}\""
+end
+
+fn main()
+  let args = table.slice(argv(), 1)
+  if len(args) < 1
+    eprint("usage: gen N [seed]")
+    exit(2)
+  end
+  let count = to_int(args[0])
+  let rng = 42
+  if len(args) > 1
+    rng = to_int(args[1])
+  end
+
+  let second = -1
+  let stamp = ""
+  let i = 0
+  while i < count
+    let batch_end = i + BATCH
+    if batch_end > count
+      batch_end = count
+    end
+    let chunk = build_string do |add|
+      while i < batch_end
+        # 25 requests a second
+        let ms = START_MS + i * 40
+        if ms / 1000 != second
+          second = ms / 1000
+          stamp = format_time(ms, "%d/%b/%Y:%H:%M:%S +0000")
+        end
+        rng = next_state(rng)
+        add(line_for(rng, i, stamp), "\n")
+        i += 1
+      end
+    end
+    write_stdout(chunk)
+  end
+end

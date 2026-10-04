@@ -1,0 +1,65 @@
+## report — renders stats as an aligned text table or as JSON.
+
+load "std/json"
+load "std/math"
+load "std/string"
+load "lib/stats"
+
+# "28.6%": tenths, in integer arithmetic.
+fn percent(part, whole)
+  if whole == 0
+    return "0.0%"
+  end
+  let tenths = (part * 1000 + whole / 2) / whole
+  "{tenths / 10}.{tenths % 10}%"
+end
+
+fn pad_left(s, width)
+  string.repeat(" ", width - len(s)) + s
+end
+
+## Returns the text report for `rows` (from `stats.top`).
+fn text(s, rows, metric)
+  let header = ["requests", "bytes", "errors"]
+  let widths = []
+  for name in header
+    let w = len(name)
+    for r in rows
+      w = math.max(w, len("{r[name]}"))
+    end
+    push(widths, w)
+  end
+
+  build_string do |add|
+    add("lines {s.lines}, malformed {s.malformed}, requests {s.requests}, ")
+    add("bytes {s.bytes}, errors {s.errors} ({percent(s.errors, s.requests)})\n\n")
+    add("top {len(rows)} of {stats.distinct(s)} by {s.by}, sorted by {metric}\n")
+    for i = 0, len(header)
+      add(pad_left(header[i], widths[i]), "  ")
+    end
+    add(s.by, "\n")
+    for r in rows
+      for i = 0, len(header)
+        add(pad_left("{r[header[i]]}", widths[i]), "  ")
+      end
+      add(r.key, "\n")
+    end
+  end
+end
+
+## Returns the JSON report for `rows`: a summary and the rows in order.
+fn to_json(s, rows, metric)
+  json.encode({
+    lines: s.lines,
+    malformed: s.malformed,
+    requests: s.requests,
+    bytes: s.bytes,
+    errors: s.errors,
+    by: s.by,
+    sorted_by: metric,
+    distinct: stats.distinct(s),
+    rows: rows
+  })
+end
+
+export text, to_json

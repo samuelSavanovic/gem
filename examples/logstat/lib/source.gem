@@ -1,0 +1,60 @@
+## source — the lines of a log file or of stdin.
+##
+##   source.each_line("access.log") do |line, n|    # "-" reads stdin
+##     ...
+##   end
+##
+## Lines come without their LF or CRLF; `n` counts from 1. Raises
+## `read_file: ...` for a file that can't be read.
+
+load "std/string"
+
+fn without_cr(line)
+  let n = len(line)
+  if n > 0 and ord(line, n - 1) == 13
+    return substr(line, 0, n - 1)
+  end
+  line
+end
+
+## Calls `f(line, n)` for every line of `name`.
+fn each_line(name, f)
+  if name == "-"
+    each_stdin_line(f)
+  else
+    each_file_line(name, f)
+  end
+end
+
+# input() splits lines of 4,095 bytes or more into pieces (KNOWN_BUGS).
+fn each_stdin_line(f)
+  let n = 0
+  while true
+    let line = input()
+    if line == nil
+      break
+    end
+    n += 1
+    f(line, n)
+  end
+end
+
+# There is no way to read a file a line at a time, so this holds the whole
+# file in memory (ROADMAP).
+fn each_file_line(path, f)
+  let data = read_file(path)
+  let size = len(data)
+  let start = 0
+  let n = 0
+  while start < size
+    let nl = string.index_of(data, "\n", start)
+    if nl < 0
+      nl = size
+    end
+    n += 1
+    f(without_cr(substr(data, start, nl - start)), n)
+    start = nl + 1
+  end
+end
+
+export each_line

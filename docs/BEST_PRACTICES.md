@@ -56,6 +56,13 @@ is the same as `table.filter(nums, fn(n) n % 2 == 0 end)`. `spawn do ...
 end`, `pcall do ... end` and `build_string do |add| ... end` are the same
 form.
 
+**Larger programs.** `examples/bookmark_app/` (an HTMX web app on
+`std/http` and `std/sqlite`), `examples/stomp_broker/` (a message broker
+built from `supervisor`, `dynamic_supervisor` and `gen_server`) and
+`examples/logstat/` (a command-line log analyzer in a `gem.toml` project)
+follow this doc and test themselves with `std/test`; read them for how the
+pieces fit together.
+
 **Words this doc uses.**
 
 - *Array*: a table with integer keys `0 .. n-1` (`[1, 2, 3]`). *Record*: a
@@ -334,7 +341,11 @@ For searching, call `string.index_of(s, needle, start)` (or `split`,
 `contains`) rather than an `ord` loop: they search long stretches in C, so
 finding a needle 1 MB in takes about 4 ms, against about 50 ms for the
 simplest `ord` loop. A `split` with pieces only a few bytes long is still
-Gem-speed: 100,000 ten-byte fields in 1 MB took about 140 ms.
+Gem-speed: 100,000 ten-byte fields in 1 MB took about 140 ms. On short
+strings each call costs about 2 µs whatever it finds, so a parser that
+searches a line several times is slow: six `index_of` calls on each of a
+million 120-byte log lines took 11 s (`examples/logstat` spends 21 s of
+26 s parsing). There is no faster way yet; OPTIMIZATIONS.md tracks it.
 
 ### Use `for`, not `table.each`, when you need `return` or `break`
 
@@ -1224,6 +1235,15 @@ with `http.stop(server)`: it closes the listening socket, so the port is
 free again. A `std/request` call killed midway (a `task.await` timeout)
 leaks its socket; bound the request with its `timeout_ms` instead.
 
+### Reading input line by line **(bug)**
+
+`input()` returns the next line of stdin without its newline, and `nil`
+at the end. It splits a line of 4,095 bytes or more into several, and
+cuts a line at a NUL byte, without saying so. For input that may hold
+such lines, read the file with `read_file` and split it yourself (see
+`examples/logstat/lib/source.gem`). That holds the whole file in memory,
+twice while it is read; there is no way to read a file a line at a time.
+
 ### `tcp_listen` takes an IP address
 
 `tcp_listen("localhost", port)` raises `invalid address`; pass
@@ -1427,6 +1447,15 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
   [Document the public API with `##`](#document-the-public-api-with-)),
   and give a private function a `#` comment when its contract isn't
   obvious from its name.
+- How much to comment depends on who reads the code. A library (std, or
+  a module other code loads) has callers who don't read its source, so
+  its `##` docs are complete. Application code and examples are read as
+  code: a one-line `##` per module and exported function is enough, and a
+  `#` comment earns its place only by saying what the code can't, such
+  as a design choice that's easy to undo by mistake or a Gem behaviour
+  the reader wouldn't expect (a lookup that blocks every process, a
+  process that traps exits so it can close its socket). Don't narrate
+  what the next line does.
 - Keep functions short. Prefer a well-named helper to a long arm inside a
   `match`.
 
@@ -1484,3 +1513,4 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_listen("localhost", ...)` | raises | `"127.0.0.1"` |
 | `tcp_read` with no timeout | blocks forever on a silent peer | pass a timeout |
+| `input()` on lines of 4,095 bytes or more **(bug)** | the line comes back in pieces | `read_file` and split |

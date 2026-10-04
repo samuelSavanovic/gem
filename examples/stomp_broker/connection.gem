@@ -1,242 +1,276 @@
-load "std/string"
-load "std/gen_server"
-load "./frame.gem"
-load "./registry.gem"
+## connection — one client connection: a reader process that parses
+## frames, and a writer that runs the protocol and owns the socket's writes.
 
-# Per-connection: a reader process (blocks on tcp_read, parses frames, pipes
-# them to the writer) plus a writer process (owns the fd for writes, runs
-# the state machine, talks to destinations). Splitting them lets the writer
-# block on `receive` for both wire frames and MESSAGE deliveries from
-# destinations without ever competing for tcp_read.
-#
-# Both processes link each other: an abnormal exit on either side
-# cascades, while a normal exit (clean DISCONNECT, EOF) does not.
+load "std/gen_server"
+load "std/string"
+load "./frame"
+load "./registry"
+
+let READ_SIZE = 65536
+let MAX_FRAME = 4 * 1024 * 1024
 
 # ─── Reader ────────────────────────────────────────────────────
 
-fn reader_loop(fd, writer_pid, buf)
-  let chunk = tcp_read(fd, 4096)
-  if len(chunk) == 0
-    # EOF — remote closed.
-    send(writer_pid, {tag: "eof"})
-    return nil
-  end
-  let new_buf = buf + chunk
-  new_buf = drain_frames(new_buf, writer_pid)
-  if new_buf == nil
-    # Bad frame — already signaled the writer; exit normally.
-    return nil
-  end
-  reader_loop(fd, writer_pid, new_buf)
-end
-
-fn drain_frames(buf, writer_pid)
+# No read timeout: without heart-beats, a quiet subscriber is still live.
+fn reader_loop(fd, writer)
+  let pending = buf_new()    # the start of a frame that hasn't ended yet
+  let pending_len = 0
   while true
-    # STOMP heart-beat: a bare \n (or \r\n) between frames is just a
-    # keepalive. Strip leading newlines before looking for a frame.
-    let stripped = strip_heartbeat(buf)
-    if stripped != buf
-      buf = stripped
-    end
-
-    let nul = string.index_of(buf, "\0")
-    if nul == -1
-      return buf
-    end
-
-    let raw = substr(buf, 0, nul)
-    buf = substr(buf, nul + 1, len(buf))
-
-    let parsed = frame.parse_frame(raw)
-    if parsed == nil
-      send(writer_pid, {tag: "bad_frame"})
+    let chunk = tcp_read(fd, READ_SIZE)
+    if chunk == nil or chunk == ""
+      send(writer, {tag: "eof"})
       return nil
     end
-    send(writer_pid, {tag: "frame", frame: parsed})
+    if string.index_of(chunk, "\0") < 0
+      pending_len += len(chunk)
+      if pending_len > MAX_FRAME
+        send(writer, {tag: "frame_too_large"})
+        return nil
+      end
+      buf_push(pending, chunk)
+      continue
+    end
+    let rest = send_frames(to_string(pending) + chunk, writer)
+    if rest == nil
+      return nil
+    end
+    pending = buf_new()
+    buf_push(pending, rest)
+    pending_len = len(rest)
   end
 end
 
-fn strip_heartbeat(buf)
-  let i = 0
-  let blen = len(buf)
-  while i < blen
-    let c = ord(buf, i)
-    if c == 10 or c == 13
-      i += 1
-    else
+# Returns the bytes after the last complete frame, or nil after a bad one.
+fn send_frames(data, writer)
+  let pos = 0
+  while true
+    pos = skip_heartbeats(data, pos)
+    let nul = string.index_of(data, "\0", pos)
+    if nul < 0
+      if len(data) - pos > MAX_FRAME
+        send(writer, {tag: "frame_too_large"})
+        return nil
+      end
+      return substr(data, pos, len(data) - pos)
+    end
+    if nul - pos > MAX_FRAME
+      send(writer, {tag: "frame_too_large"})
+      return nil
+    end
+    let f = frame.parse_frame(substr(data, pos, nul - pos))
+    if f == nil
+      send(writer, {tag: "bad_frame"})
+      return nil
+    end
+    send(writer, {tag: "frame", frame: f})
+    pos = nul + 1
+  end
+end
+
+fn skip_heartbeats(data, pos)
+  let n = len(data)
+  while pos < n
+    let c = ord(data, pos)
+    if c != 10 and c != 13
       break
     end
+    pos += 1
   end
-  if i == 0
-    return buf
-  end
-  substr(buf, i, blen)
+  pos
 end
 
 # ─── Writer ────────────────────────────────────────────────────
 
-fn make_state(fd, conn_id)
-  {
-    fd: fd,
-    id: conn_id,
-    mode: "awaiting_connect",
-    subs: {}
-  }
-end
+# The handlers return true to keep the connection open.
 
-fn writer_loop(state)
-  receive
-  when {tag: "frame", frame: f}
-    handle_frame(state, f)
-  when {tag: "deliver", frame: f}
-    # MESSAGE pushed by a destination. Just write it.
-    write_frame(state.fd, f)
-    writer_loop(state)
-  when {tag: "eof"}
-    cleanup(state)
-    return nil
-  when {tag: "bad_frame"}
-    write_frame(state.fd, {
-      command: "ERROR",
-      headers: {message: "malformed frame"},
-      body: ""
-    })
-    cleanup(state)
-    return nil
-  when {tag: "EXIT", reason: r}
-    # Linked reader died abnormally. trap_exit isn't on, so we won't see
-    # this — but if someone enables it, fall through gracefully.
-    cleanup(state)
-    return nil
-  when other
-    writer_loop(state)
+fn writer_loop(conn)
+  while true
+    receive
+    when {tag: "frame", frame: f}
+      if not handle_frame(conn, f) then return nil end
+    when {tag: "deliver", frame: f}
+      if not write_frame(conn, f) then return nil end
+    when {tag: "eof"}
+      return nil
+    when {tag: "bad_frame"}
+      send_error(conn, "malformed frame")
+      return nil
+    when {tag: "frame_too_large"}
+      send_error(conn, "frame larger than {MAX_FRAME} bytes")
+      return nil
+    when {tag: "DOWN", pid: pid}
+      if not resubscribe(conn, pid) then return nil end
+    when {tag: "EXIT", reason: reason}
+      # a normal exit comes after its eof
+      if reason != "normal" then return nil end
+    when other
+      nil
+    end
   end
 end
 
-fn handle_frame(state, f)
-  if state.mode == "awaiting_connect"
+fn handle_frame(conn, f)
+  if not conn.connected
     if f.command == "CONNECT" or f.command == "STOMP"
-      handle_connect(state, f)
-    else
-      send_error(state.fd, "expected CONNECT, got {f.command}")
-      cleanup(state)
-      return nil
+      return handle_connect(conn, f)
     end
+    return send_error(conn, "expected CONNECT, got {f.command}")
+  end
+  let ok = dispatch(conn, f)
+  let receipt = f.headers.receipt
+  if ok and receipt != nil
+    ok = write_frame(conn, {command: "RECEIPT", headers: {"receipt-id": receipt}, body: ""})
+  end
+  ok and f.command != "DISCONNECT"
+end
+
+fn dispatch(conn, f)
+  match f.command
+  when "SUBSCRIBE" then handle_subscribe(conn, f)
+  when "UNSUBSCRIBE" then handle_unsubscribe(conn, f)
+  when "SEND" then handle_send(conn, f)
+  when "DISCONNECT" then true
   else
-    if f.command == "SUBSCRIBE"
-      handle_subscribe(state, f)
-    elif f.command == "UNSUBSCRIBE"
-      handle_unsubscribe(state, f)
-    elif f.command == "SEND"
-      handle_send(state, f)
-    elif f.command == "DISCONNECT"
-      handle_disconnect(state, f)
-      return nil
-    else
-      send_error(state.fd, "unknown command: {f.command}")
-      cleanup(state)
-      return nil
-    end
+    send_error(conn, "unknown command: {f.command}")
   end
 end
 
-fn handle_connect(state, f)
-  # Minimal: ignore version negotiation. Any 1.x is fine for v0.
-  let session = "{state.id}"
-  write_frame(state.fd, {
+fn handle_connect(conn, f)
+  conn.connected = true
+  write_frame(conn, {
     command: "CONNECTED",
-    headers: {version: "1.2", session: session, "heart-beat": "0,0"},
+    headers: {version: "1.2", session: "{conn.id}", "heart-beat": "0,0"},
     body: ""
   })
-  state.mode = "connected"
-  writer_loop(state)
 end
 
-fn handle_subscribe(state, f)
-  let dest = f.headers["destination"]
-  let sub_id = f.headers["id"]
-  if dest == nil or sub_id == nil
-    send_error(state.fd, "SUBSCRIBE requires destination and id headers")
-    cleanup(state)
-    return nil
+fn handle_subscribe(conn, f)
+  let destination = f.headers.destination
+  let id = f.headers.id
+  if destination == nil or id == nil
+    return send_error(conn, "SUBSCRIBE requires destination and id headers")
   end
-  let dest_pid = registry.lookup_or_create(dest)
-  gen_server.cast(dest_pid, {op: "subscribe", conn_pid: self(), sub_id: sub_id})
-  state.subs[sub_id] = dest_pid
-  writer_loop(state)
+  if has_key(conn.subs, id)
+    return send_error(conn, "subscription id {id} is already in use")
+  end
+  let r = pcall subscribe(conn, id, destination)
+  if not r.ok
+    return send_error(conn, "can't subscribe to {destination}: {r.error}")
+  end
+  true
 end
 
-fn handle_unsubscribe(state, f)
-  let sub_id = f.headers["id"]
-  if sub_id == nil
-    send_error(state.fd, "UNSUBSCRIBE requires id header")
-    cleanup(state)
-    return nil
-  end
-  let dest_pid = state.subs[sub_id]
-  if dest_pid != nil
-    gen_server.cast(dest_pid, {op: "unsubscribe", conn_pid: self(), sub_id: sub_id})
-    delete(state.subs, sub_id)
-  end
-  writer_loop(state)
+# Monitored so that a crashed destination's subscriptions move to the
+# fresh one the registry starts (see resubscribe).
+fn subscribe(conn, id, destination)
+  let dest = registry.lookup_or_create(destination)
+  monitor(dest)
+  gen_server.cast(dest, {op: "subscribe", conn_pid: self(), sub_id: id})
+  conn.subs[id] = {pid: dest, destination: destination}
 end
 
-fn handle_send(state, f)
-  let dest = f.headers["destination"]
-  if dest == nil
-    send_error(state.fd, "SEND requires destination header")
-    cleanup(state)
-    return nil
+# A destination died: subscribe each of its ids again. The registry got
+# the same DOWN before this lookup reaches it, so it starts a fresh one.
+# Messages published in between are lost.
+fn resubscribe(conn, pid)
+  let lost = []
+  for id, sub in conn.subs
+    if sub.pid == pid
+      push(lost, id)
+    end
   end
-  let dest_pid = registry.lookup_or_create(dest)
-  gen_server.cast(dest_pid, {op: "publish", body: f.body, headers: f.headers})
-  writer_loop(state)
+  for id in lost
+    let r = pcall subscribe(conn, id, conn.subs[id].destination)
+    if not r.ok
+      return send_error(conn, "subscription {id} lost: {r.error}")
+    end
+  end
+  true
 end
 
-fn handle_disconnect(state, f)
-  let receipt = f.headers["receipt"]
-  if receipt != nil
-    write_frame(state.fd, {
-      command: "RECEIPT",
-      headers: {"receipt-id": receipt},
-      body: ""
-    })
+fn handle_unsubscribe(conn, f)
+  let id = f.headers.id
+  if id == nil
+    return send_error(conn, "UNSUBSCRIBE requires an id header")
   end
-  cleanup(state)
+  let sub = conn.subs[id]
+  if sub != nil
+    gen_server.cast(sub.pid, {op: "unsubscribe", conn_pid: self(), sub_id: id})
+    delete(conn.subs, id)
+    if not watches(conn, sub.pid)
+      demonitor(sub.pid)
+    end
+  end
+  true
 end
 
-# ─── Helpers ──────────────────────────────────────────────────
+fn watches(conn, pid)
+  for id, sub in conn.subs
+    if sub.pid == pid
+      return true
+    end
+  end
+  false
+end
 
-fn write_frame(fd, f)
+fn handle_send(conn, f)
+  let destination = f.headers.destination
+  if destination == nil
+    return send_error(conn, "SEND requires a destination header")
+  end
+  let r = pcall registry.lookup_or_create(destination)
+  if not r.ok
+    return send_error(conn, "can't send to {destination}: {r.error}")
+  end
+  gen_server.cast(r.value, {op: "publish", body: f.body, headers: f.headers})
+  true
+end
+
+# A client that doesn't take a frame within the timeout is dropped: its
+# deliveries would otherwise queue up in this process without bound.
+fn write_frame(conn, f)
   let bytes = frame.render_frame(f)
-  let r = pcall(fn() tcp_write(fd, bytes) end)
-  # Ignore write errors here — caller decides whether to bail.
-  r.ok
+  tcp_write(conn.fd, bytes, conn.write_timeout_ms) == len(bytes)
 end
 
-fn send_error(fd, msg)
-  write_frame(fd, {command: "ERROR", headers: {message: msg}, body: ""})
+# STOMP closes the connection after an ERROR.
+fn send_error(conn, message)
+  write_frame(conn, {command: "ERROR", headers: {message: message}, body: ""})
+  false
 end
 
-fn cleanup(state)
-  tcp_close(state.fd)
-  nil
-end
-
-# ─── Entry point: spawn writer + reader for an accepted fd ─────
-
-let next_conn_id = 0
-
-fn start(fd)
-  next_conn_id = next_conn_id + 1
-  let conn_id = next_conn_id
-  spawn(fn()
+# Traps exits so that a crashing reader can't kill the writer before it
+# closes the socket.
+fn run_writer(fd, id, write_timeout_ms)
+  process_flag("trap_exit", true)
+  let reader = nil
+  let r = pcall do
     let me = self()
-    # spawn_link from inside the writer pairs reader<->writer atomically;
-    # if either dies abnormally, the other is killed.
-    spawn_link(fn() reader_loop(fd, me, "") end)
-    writer_loop(make_state(fd, conn_id))
-  end)
+    reader = spawn_link do
+      reader_loop(fd, me)
+    end
+    writer_loop({fd: fd, id: id, write_timeout_ms: write_timeout_ms, connected: false, subs: {}})
+  end
+  if reader == nil
+    # the process table is full: the client is refused, not a crash
+    tcp_close(fd)
+    return nil
+  end
+  kill(reader, "shutdown")
+  tcp_close(fd)
+  if not r.ok
+    error(r.error)
+  end
+end
+
+## Starts the connection for accepted socket `fd`, which it closes when
+## done; `id` is the session id. A frame the client doesn't take within
+## `write_timeout_ms` closes the connection. If this raises, `fd` is still
+## the caller's.
+fn start(fd, id, write_timeout_ms)
+  spawn do
+    run_writer(fd, id, write_timeout_ms)
+  end
 end
 
 export start
