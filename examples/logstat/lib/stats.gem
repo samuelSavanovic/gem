@@ -1,0 +1,78 @@
+## stats — per-group request counts for one field of the parsed lines.
+##
+##   let s = stats.new("path")
+##   stats.add(s, clf.parse(line))      # or stats.malformed(s) for nil
+##   stats.top(s, "bytes", 10)          # [{key, requests, bytes, errors}, ...]
+
+load "std/table"
+
+## The fields a report can group by.
+let FIELDS = ["ip", "user", "method", "path", "status", "hour"]
+
+## The metrics a report can sort by.
+let METRICS = ["requests", "bytes", "errors"]
+
+## Returns empty stats grouped by `field`.
+fn new(field)
+  {by: field, lines: 0, malformed: 0, requests: 0, bytes: 0, errors: 0, groups: {}}
+end
+
+## Counts one parsed request.
+fn add(s, req)
+  let is_error = to_int(req.status) >= 400
+  s.lines = s.lines + 1
+  s.requests = s.requests + 1
+  s.bytes = s.bytes + req.bytes
+
+  let key = req[s.by]
+  let g = s.groups[key]
+  if g == nil
+    g = {key: key, requests: 0, bytes: 0, errors: 0}
+    s.groups[key] = g
+  end
+  g.requests = g.requests + 1
+  g.bytes = g.bytes + req.bytes
+  if is_error
+    s.errors = s.errors + 1
+    g.errors = g.errors + 1
+  end
+end
+
+## Counts a line that didn't parse.
+fn malformed(s)
+  s.lines = s.lines + 1
+  s.malformed = s.malformed + 1
+end
+
+## Returns the number of distinct groups.
+fn distinct(s)
+  len(s.groups)
+end
+
+## Returns the `n` groups with the most `metric` (all of them for 0), ties
+## by key.
+fn top(s, metric, n)
+  let rows = []
+  for key, g in s.groups
+    push(rows, g)
+  end
+  sort(rows, fn(a, b)
+    let d = b[metric] - a[metric]
+    if d != 0
+      return d
+    end
+    if a.key < b.key
+      return -1
+    end
+    if a.key > b.key
+      return 1
+    end
+    0
+  end)
+  if n <= 0 or n >= len(rows)
+    return rows
+  end
+  table.slice(rows, 0, n)
+end
+
+export FIELDS, METRICS, new, add, malformed, distinct, top

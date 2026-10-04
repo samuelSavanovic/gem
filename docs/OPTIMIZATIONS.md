@@ -10,12 +10,19 @@ Priority scale: **P0** = measurable impact on benchmark right now, **P1** = sign
 
 Single-threaded scheduler ceiling on M1 Pro was ~26–29k req/s on the bookmark app's `/` (static HTML, April 2026, before the std/http hardening) regardless of c=4/100/500 — higher concurrency just queues. The hardened std/http is back at its pre-hardening throughput in its own load test on Linux x86_64 (`OPTIMIZATIONS_LOG.md`, "std/http"); the bookmark-app figure has not been re-measured since. Full benchmark history is in `OPTIMIZATIONS_LOG.md`.
 
+Text processing in one process is the weak spot: `examples/logstat` summarizes 1M access-log lines (123 MB) in 26 s from stdin and 35 s from a file, against 4 s for the same program in Python (`benchmarks/logstat/run.sh`, Linux x86_64, October 2026). Most of it is std/string searching in Gem ("Search and scan builtins"); 4–7 s is resets re-copying the aggregate tables ("Survivors of a reset are copied again"). Memory stays flat on stdin (the arena resets keep up); a file is held whole, twice at the peak.
+
 Key bottlenecks under the current arena + region-reset mechanism:
 - Per-process arena allocation eliminates GC pauses; every loop resets the region it allocated once it passes max(1 MB, 2 × the last reset's cost), so memory is bounded at roughly 3× a loop's live data plus whatever was allocated before the loop started.
 - String concatenation patterns that escape `build_string` still allocate per-concat.
 - Every loop entry takes a region mark and every back-edge checks the trigger (a load and a compare); the reset itself is amortized O(1) per allocated byte (see `OPTIMIZATIONS_LOG.md` "Region resets").
 
 ## Arena / Memory
+
+### Survivors of a reset are copied again by every later reset (P1)
+A reset copies what is live in its loop's region into fresh blocks, and those blocks belong to the region too, so the next reset copies the same survivors again. Data that a long loop keeps, such as the table it aggregates into, is copied once per reset for the rest of the loop: its cost is `live size × resets`, bounded only by the hysteresis (the next reset waits for 2 × the last one's work). In `examples/logstat` on 1M lines (`benchmarks/logstat/run.sh`, GEM_DIAG=1), grouping by IP (990 groups) copies 1.3 GB in 3,471 resets, 4.4 s of a 25.5 s run, and grouping by path (5,010 groups) 1.7 GB, 6.7 s; grouping by hour (24 groups) copies 9 MB, 0.7 s. Python's whole run takes 4 s.
+
+Fix: promote survivors. After a reset, treat the blocks it copied into as older than the mark (move the mark past them), so later resets of the same loop leave them alone, as a generational collector's old space. Soundness already holds for older objects: tables and buffers are tracked by the write barrier and the buffer walk, pinned boxes by their pin `seq`. Garbage among promoted objects (a group removed later) is then kept until an enclosing loop resets or the process exits, so a loop whose live set churns would grow; promoting only after an object survived two resets, or capping promotion at a fraction of the region, bounds that.
 
 ### Garbage allocated before a loop starts is kept by that loop (P2)
 A region reset frees only what the loop allocated since its mark. Garbage from straight-line code before the loop (e.g. main's startup work before a top-level `while true` server loop) stays until an enclosing loop resets or the process exits. It is a constant, not growth. For loops at depth 0 of the main program the mark could sit at the start of the arena (main has no caller frames and its module slots are roots), reclaiming startup garbage too; spawned bodies would need their env rooted.
@@ -57,6 +64,8 @@ The dense `split` stays slow: the Gem scan alone is about 55 ms and the 100,000 
 
 - `find(s, needle, start)` — `memmem`-backed; index of the first match at or after `start`, or -1. `string.index_of`/`contains` become one call, `split` becomes `find` plus one `substr` per piece. std/http already uses a runtime extern helper of this shape, `gem_bytes_find` (and `gem_bytes_span` for spans over a byte set), reached through `extern fn` because there is no builtin; std/string's `find` could switch to it today, and a public builtin would retire both helpers.
 - `find_any(s, chars, start)` — index of the first byte at or after `start` that is in the set `chars`, or -1. `html_escape`, `url.encode` (1 MB with a reserved byte every 10: 215 ms), `url.parse_query` and tokenizers like the `std/json` scanner scan to the next special byte, then copy the whole run before it. `trim` needs the inverse (skip bytes that *are* in the set, like `strspn`), so give it a negate flag or a sibling `skip_any`.
+
+Short strings are the other half of the problem: every search first scans up to 32 positions in Gem, and a call costs about 2 µs even when the match is a few bytes away. `examples/logstat` (a log analyzer, `benchmarks/logstat/run.sh`) parses each 120-byte access-log line with six `index_of` calls and one three-field `split`. On 1M lines from stdin (Linux x86_64): reading the lines with `input()` takes 0.26 s, the six `index_of` calls 10.9 s, the `split` 3.5 s, the whole parse 21.5 s, and the full run 25.5 s, against 4.1 s for the same program in Python. A `memchr`-backed `find` would take the per-call cost to roughly that of a builtin call.
 
 `upper`/`lower` copy unchanged runs with `substr` but still allocate a string per changed byte (`add(chr(c))`): `string.upper` of 1 MB of mostly lowercase text takes 160 ms, `lower` of the same text 80 ms. They need a byte-mapping builtin rather than either of these.
 
@@ -104,6 +113,9 @@ Every string `+` does `strlen` on both operands. If strings carried their length
 `gem_table_grow` doubles capacity. Could use a growth factor of 1.5 to reduce memory waste, or start with capacity 0 (no allocation) for tables that might stay empty.
 
 ## Runtime I/O
+
+### `read_file` holds the file twice at its peak (P2)
+The I/O worker reads the file into a malloc'd buffer, and `gem_read_file_fn` (runtime/gem_builtins_io.c) then copies it into the arena: a 123 MB log peaks at 247 MB RSS. Allocating the arena block first and having the worker read into it, or adopting the malloc'd buffer as a large arena block, would halve it. Iterating the result line by line is also slower than `input()`: logstat takes 35 s on a 1M-line file against 26 s for the same lines on stdin, the difference being one `string.index_of(data, "\n", start)` per line on the 123 MB string (see "Search and scan builtins"). A line reader (ROADMAP "Line-at-a-time input") would remove both costs for this use.
 
 ### Selective receive save-queue optimization (P2)
 `receive ... when` scans the mailbox from oldest to newest on every wake. If a process accumulates many messages and the match is near the end, that's O(n) pattern matches per wake. Erlang's optimization: remember which messages were already tested against the current receive and skip them on re-scan, only testing newly arrived messages. Non-trivial but maps onto the existing mailbox structure — a "scan cursor" per process that advances as messages are rejected and resets when the receive shape changes or a new message arrives.

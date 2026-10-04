@@ -11,6 +11,8 @@ This directory holds the benchmark **harness**, not the application being benchm
 
 The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the entry point); `examples/bookmark_app/test.gem` checks them, as part of `make test`. Keep the response bodies the same as the Node baseline's when changing it, or the two stop being comparable.
 
+`logstat/run.sh [lines]` is a separate benchmark: it times `examples/logstat` (an access-log analyzer) against the same program in Python (`logstat/logstat.py`) on a generated log and diffs their reports. It needs only `python3` and `bc`.
+
 ## Running
 
 Prereqs: `wrk` on PATH (`brew install wrk`), the gem app built once.

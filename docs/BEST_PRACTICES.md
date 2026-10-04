@@ -57,8 +57,9 @@ end`, `pcall do ... end` and `build_string do |add| ... end` are the same
 form.
 
 **Larger programs.** `examples/bookmark_app/` (an HTMX web app on
-`std/http` and `std/sqlite`) and `examples/stomp_broker/` (a message
-broker built from `supervisor`, `dynamic_supervisor` and `gen_server`)
+`std/http` and `std/sqlite`), `examples/stomp_broker/` (a message broker
+built from `supervisor`, `dynamic_supervisor` and `gen_server`) and
+`examples/logstat/` (a command-line log analyzer in a `gem.toml` project)
 follow this doc and test themselves with `std/test`; read them for how the
 pieces fit together.
 
@@ -340,7 +341,11 @@ For searching, call `string.index_of(s, needle, start)` (or `split`,
 `contains`) rather than an `ord` loop: they search long stretches in C, so
 finding a needle 1 MB in takes about 4 ms, against about 50 ms for the
 simplest `ord` loop. A `split` with pieces only a few bytes long is still
-Gem-speed: 100,000 ten-byte fields in 1 MB took about 140 ms.
+Gem-speed: 100,000 ten-byte fields in 1 MB took about 140 ms. On short
+strings each call costs about 2 µs whatever it finds, so a parser that
+searches a line several times is slow: six `index_of` calls on each of a
+million 120-byte log lines took 11 s (`examples/logstat` spends 21 s of
+26 s parsing). There is no faster way yet; OPTIMIZATIONS.md tracks it.
 
 ### Use `for`, not `table.each`, when you need `return` or `break`
 
@@ -1234,6 +1239,15 @@ with `http.stop(server)`: it closes the listening socket, so the port is
 free again. A `std/request` call killed midway (a `task.await` timeout)
 leaks its socket; bound the request with its `timeout_ms` instead.
 
+### Reading input line by line **(bug)**
+
+`input()` returns the next line of stdin without its newline, and `nil`
+at the end. It splits a line longer than 4,095 bytes into several, and
+cuts a line at a NUL byte, without saying so. For input that may hold
+such lines, read the file with `read_file` and split it yourself (see
+`examples/logstat/lib/source.gem`). That holds the whole file in memory,
+twice while it is read; there is no way to read a file a line at a time.
+
 ### `tcp_listen` takes an IP address
 
 `tcp_listen("localhost", port)` raises `invalid address`; pass
@@ -1503,3 +1517,4 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_listen("localhost", ...)` | raises | `"127.0.0.1"` |
 | `tcp_read` with no timeout | blocks forever on a silent peer | pass a timeout |
+| `input()` on lines over 4,095 bytes **(bug)** | the line comes back in pieces | `read_file` and split |

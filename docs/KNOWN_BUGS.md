@@ -226,6 +226,34 @@ loop codegen turns `s = s + x` into `gem_string_append`
 can't tell the caller's buffer from the buffer it builds a string in: it
 appends to the caller's buffer and returns a string.
 
+### `input()` splits lines over 4095 bytes and stops at a NUL
+
+```sh
+python3 -c 'print("a" * 5000); print("b\0c")' | gem lines.gem
+# lines.gem: while true / let line = input() / if line == nil then break end / print(len(line)) / end
+# prints 4095, 905, 1 instead of 5000, 3
+```
+
+`gem_input_fn` (runtime/gem_builtins_core.c) reads with one `fgets` into a
+4096-byte stack buffer and takes the length with `strlen`. A longer line
+comes back as several lines, with nothing to tell the caller, and a NUL
+byte ends the line early. Read with `getline` (or grow a buffer until the
+newline) and use the returned length.
+
+### `read_file` of a file of 2 GiB or more gives a wrong length
+
+```sh
+truncate -s 2200M big.bin
+gem read.gem big.bin    # read.gem: print(len(read_file(argv()[1])))
+# prints -1988100096; a 4200M file prints 109051904
+```
+
+A string's length is a C `int` (`slen` in `runtime/gem.h`), and
+`gem_read_file_fn` (runtime/gem_builtins_io.c) stores the file size into it
+with an unchecked `(int)` cast. Strings can't hold 2 GiB, so `read_file`
+should raise for such a file; the other places that size a string from a
+`size_t` need the same check.
+
 ### sqlite: SQL after an embedded NUL is ignored
 
 ```gem

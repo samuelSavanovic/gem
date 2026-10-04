@@ -1,0 +1,112 @@
+## clf — parses access-log lines in the Common and Combined Log Formats.
+##
+##   clf.parse('203.0.113.9 - ann [04/Oct/2026:13:55:36 +0000] "GET /a?x=1 HTTP/1.1" 404 512')
+##   # {ip: "203.0.113.9", user: "ann", method: "GET", path: "/a", status: "404",
+##   #  bytes: 512, hour: "2026-10-04 13:00"}
+##
+## Returns nil for a line in neither format. `status` stays a string (it is
+## a grouping key); a `-` byte count is 0.
+
+load "std/string"
+
+let MONTHS = {
+  Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
+  Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12"
+}
+
+fn is_digits(s)
+  if s == ""
+    return false
+  end
+  for i = 0, len(s)
+    let c = ord(s, i)
+    if c < 48 or c > 57
+      return false
+    end
+  end
+  true
+end
+
+# "04/Oct/2026:13:55:36 +0000" → "2026-10-04 13:00", in the log's own zone.
+fn hour_of(t)
+  if len(t) < 20
+    return nil
+  end
+  let month = MONTHS[substr(t, 3, 3)]
+  if month == nil
+    return nil
+  end
+  "{substr(t, 7, 4)}-{month}-{substr(t, 0, 2)} {substr(t, 12, 2)}:00"
+end
+
+## Parses one log line; nil when it is malformed.
+fn parse(line)
+  # host ident user [time] "request" status bytes ["referer" "agent"]
+  let ip_end = string.index_of(line, " ")
+  let user_start = string.index_of(line, " ", ip_end + 1) + 1
+  let time_start = string.index_of(line, " [", user_start)
+  let time_end = string.index_of(line, "] \"", time_start)
+  if ip_end <= 0 or user_start <= 0 or time_start < 0 or time_end < 0
+    return nil
+  end
+  let req_start = time_end + 3
+  let req_end = string.index_of(line, "\" ", req_start)
+  if req_end < 0
+    return nil
+  end
+
+  let status_end = string.index_of(line, " ", req_end + 2)
+  if status_end < 0
+    return nil
+  end
+  let bytes_end = string.index_of(line, " ", status_end + 1)
+  if bytes_end < 0
+    bytes_end = len(line)
+  end
+  let status = substr(line, req_end + 2, status_end - req_end - 2)
+  let bytes = substr(line, status_end + 1, bytes_end - status_end - 1)
+  if len(status) != 3 or not is_digits(status)
+    return nil
+  end
+  if bytes == "-"
+    bytes = "0"
+  elif not is_digits(bytes)
+    return nil
+  end
+
+  let hour = hour_of(substr(line, time_start + 2, time_end - time_start - 2))
+  let request = parse_request(substr(line, req_start, req_end - req_start))
+  if hour == nil or request == nil
+    return nil
+  end
+
+  {
+    ip: substr(line, 0, ip_end),
+    user: substr(line, user_start, time_start - user_start),
+    method: request.method,
+    path: request.path,
+    status: status,
+    bytes: to_int(bytes),
+    hour: hour
+  }
+end
+
+# "GET /a?x=1 HTTP/1.1" → {method: "GET", path: "/a"}. A client that sent
+# garbage is logged as "-".
+fn parse_request(request)
+  if request == "-"
+    return {method: "-", path: "-"}
+  end
+  let parts = string.split(request, " ")
+  if len(parts) != 3
+    return nil
+  end
+  let [method, target] = parts
+  let query = string.index_of(target, "?")
+  if query >= 0
+    target = substr(target, 0, query)
+  end
+  {method: method, path: target}
+end
+
+export parse

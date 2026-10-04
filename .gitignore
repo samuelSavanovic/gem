@@ -15,6 +15,7 @@ json_parser
 test_build_string
 test_push_buf
 examples/bookmark_app/app
+examples/logstat/logstat
 benchmarks/logs/
 benchmarks/stomp/logs/
 .DS_Store

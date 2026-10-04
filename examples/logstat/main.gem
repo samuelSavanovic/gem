@@ -1,0 +1,66 @@
+# logstat: summarizes web server access logs. `logstat --help` for usage.
+
+load "std/table"
+load "lib/args"
+load "lib/clf"
+load "lib/report"
+load "lib/source"
+load "lib/stats"
+
+let MAX_REPORTED = 5
+
+fn display_name(name)
+  if name == "-"
+    return "stdin"
+  end
+  name
+end
+
+fn main()
+  let parsed = args.parse(table.slice(argv(), 1))
+  if not parsed.ok
+    eprint("logstat: {parsed.error}")
+    eprint("try 'logstat --help'")
+    exit(2)
+  end
+  let opts = parsed.value
+  if opts.help
+    print(args.USAGE)
+    return nil
+  end
+
+  let s = stats.new(opts.by)
+  let files = opts.files
+  if len(files) == 0
+    files = ["-"]
+  end
+  for name in files
+    let r = pcall do
+      source.each_line(name) do |line, n|
+        let req = clf.parse(line)
+        if req == nil
+          stats.malformed(s)
+          if not opts.quiet and s.malformed <= MAX_REPORTED
+            eprint("logstat: {display_name(name)}:{n}: malformed line")
+          end
+        else
+          stats.add(s, req)
+        end
+      end
+    end
+    if not r.ok
+      eprint("logstat: {r.error}")
+      exit(1)
+    end
+  end
+  if not opts.quiet and s.malformed > MAX_REPORTED
+    eprint("logstat: {s.malformed - MAX_REPORTED} more malformed lines")
+  end
+
+  let rows = stats.top(s, opts.sort, opts.top)
+  if opts.json
+    print(report.to_json(s, rows, opts.sort))
+  else
+    write_stdout(report.text(s, rows, opts.sort))
+  end
+end
