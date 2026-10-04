@@ -169,7 +169,7 @@ Choices worth knowing:
   Arena resets promote what they keep, so most of them copy only the
   records made since the last one, but a full reset now and then copies
   all of them, and no other process runs meanwhile. With 20,000 jobs the
-  longest reset takes about 0.09 s, with 100,000 about 0.3 s; a job whose
+  longest reset takes about 0.09 s, with 100,000 0.25–0.5 s; a job whose
   attempt overlaps one can miss a 100 ms deadline it would otherwise meet
   (`--jobs 20000 --slow 0.1`: 0–5 healthy attempts killed per run,
   `--jobs 40000`: 14). The benchmark scenarios give deadlines room; see

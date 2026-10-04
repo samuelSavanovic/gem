@@ -930,7 +930,7 @@ for as long as one copy of that state takes. A process that keeps one
 small record per message it gets pauses for up to 0.04 s at 100,000
 records and 0.25 s at 300,000 (`GEM_DIAG=1`, `max=`; Linux x86_64 VM).
 `examples/jobqueue`'s queue, which keeps a record per job, pauses up to
-0.09 s at 20,000 jobs and 0.3 s at 100,000. A timer set to 100 ms can
+0.09 s at 20,000 jobs and 0.25–0.5 s at 100,000. A timer set to 100 ms can
 then fire before a 20 ms job has had a chance to report. Bound what a
 long-lived process keeps (expire finished records, keep a count instead
 of a history), or split it across processes, and leave deadlines room for
@@ -1752,7 +1752,7 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
 | Calls from a process that also collects a stream of messages | every reply wait scans the stream: quadratic | make the calls from a separate process |
-| A long-lived process holding 100,000s of records | full resets copy them all and stall every process (0.05–0.3 s) | bound or shard the state |
+| A long-lived process holding 100,000s of records | full resets copy them all and stall every process (0.05–0.5 s) | bound or shard the state |
 | `after` in a busy server loop | never fires | `send_after` ticks |
 | `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
 | Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
