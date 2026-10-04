@@ -245,23 +245,45 @@ test.case("destination names can't reach the broker's own processes") do
   close(p)
 end
 
-test.case("a crashed destination is replaced") do
+test.case("a crashed destination's subscriptions move to its replacement") do
   let s = connect()
   subscribe(s, "a", "/topic/crash")
   let old = registry.lookup_or_create("/topic/crash")
   kill(old, "boom")
-  let deadline = epoch_ms() + WAIT_MS
-  while registry.lookup_or_create("/topic/crash") == old
-    test.assert(epoch_ms() < deadline, "the registry kept the dead destination")
-    sleep(10)
-  end
-  sync_send(s, "UNSUBSCRIBE", {id: "a"})
-  subscribe(s, "b", "/topic/crash")
+  # s's writer has the DOWN before this frame, so it has resubscribed
+  publish(s, "/topic/elsewhere", "sync")
+  test.assert(registry.lookup_or_create("/topic/crash") != old, "the registry kept the dead destination")
   let p = connect()
   publish(p, "/topic/crash", "after the crash")
-  test.assert_eq(expect(s, "MESSAGE").headers.subscription, "b")
+  test.assert_eq(expect(s, "MESSAGE").headers.subscription, "a")
+  sync_send(s, "UNSUBSCRIBE", {id: "a"})
+  subscribe(s, "a", "/topic/crash")
   close(s)
   close(p)
+end
+
+test.case("a frame over the size limit closes the connection") do
+  let bad = connect()
+  tcp_write(bad.fd, "SEND\ndestination:/topic/big\n\n" + string.repeat("x", 5 * 1024 * 1024), WAIT_MS)
+  # The broker closes the connection (EOF or a reset reads as ""); the
+  # ERROR before it can be lost to the reset, as the broker closes with
+  # input unread.
+  let got = bad.buf
+  while true
+    let chunk = tcp_read(bad.fd, 65536, WAIT_MS)
+    test.assert(chunk != nil, "the connection is still open")
+    if chunk == ""
+      break
+    end
+    got = got + chunk
+  end
+  if got != ""
+    test.assert(string.contains(got, "message:frame larger than 4194304 bytes"), "unexpected reply: {got}")
+  end
+  close(bad)
+  let good = connect()
+  subscribe(good, "a", "/topic/still-up")
+  close(good)
 end
 
 test.case("a restarted registry keeps the live destinations") do

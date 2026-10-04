@@ -1,16 +1,12 @@
 # STOMP broker — builder notes
 
-> Builder notes from the M1–M5 work, then a "Milestone 6: lived experience"
-> section at the bottom with the load-test numbers and the design
-> questions they surface.
+> Builder notes from building the first version, then "Milestone 6"
+> sections with the load-test numbers and the design questions they
+> surface.
 >
 > **Historical.** These notes describe the first version of the broker
-> (May 2026) and the runtime of that time; most of the workarounds are
-> gone. The broker has since been rewritten (October 2026): destinations
-> live under a `dynamic_supervisor` and are looked up in the registry's
-> table instead of registered names, the writer is a `while` loop rather
-> than the `writer_loop ↔ handle_*` tail-call cycle discussed below, and
-> `test.gem` replaces `test_frame.gem` and `smoke_test.sh`. The milestone tutorial these notes refer to has been removed. See
+> (May 2026) and the runtime of that time, not the code in this
+> directory; files and workarounds they mention may not exist in it. See
 > [README.md](README.md) for the current design and how to run it.
 
 ## What worked well

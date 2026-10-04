@@ -120,7 +120,7 @@ What needs building: Erlang-style refs (`monitor` returns a ref, `demonitor(ref)
 A program can read a file only whole (`read_file`), so a log analyzer
 holds the whole log in memory (twice at the peak, see OPTIMIZATIONS.md)
 and a file larger than memory, or than the 2 GiB string limit, can't be
-processed at all. stdin has `input()` (one line, at most 4,095 bytes:
+processed at all. stdin has `input()` (one line, shorter than 4,095 bytes:
 KNOWN_BUGS) and `read_stdin(n)` (n bytes), but nothing that reads to the
 end. `examples/logstat` needs both paths and works around each.
 

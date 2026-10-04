@@ -44,7 +44,9 @@ test.case("malformed lines") do
     '10.0.0.1 - - [04/Oct/2026:13:55:36 +0000] "GET / HTTP/1.1" 200',
     '10.0.0.1 - - [04/Foo/2026:13:55:36 +0000] "GET / HTTP/1.1" 200 5',
     '10.0.0.1 - - [04/Oct/2026] "GET / HTTP/1.1" 200 5',
-    '10.0.0.1 - - [04/Oct/2026:13:55:36 +0000] "GET /" 200 5'
+    '10.0.0.1 - - [04/Oct/2026:13:55:36 +0000] "GET /" 200 5',
+    '10.0.0.1 - - [04/Oct/2026:13:55:36 +0000] "GET / HTTP/1.1" 200 999999999999999999999',
+    '10.0.0.1 - - [x4/Oct/2026:13:55:36 +0000] "GET / HTTP/1.1" 200 5'
   ]
     test.assert_eq(clf.parse(line), nil, "expected malformed: {line}")
   end
@@ -102,10 +104,11 @@ test.case("args") do
   test.assert_eq(args.parse(["--top", "-1"]).error, "--top needs a count, got -1")
   test.assert_eq(args.parse(["--top", "x"]).error, "--top needs a count, got x")
   test.assert_eq(args.parse(["-x"]).error, "unknown option -x")
+  test.assert_eq(args.parse(["--json=1"]).error, "unknown option --json=1")
 end
 
 test.case("source: lines of a file") do
-  let path = "/tmp/gem_logstat_test.log"
+  let path = "/tmp/gem_logstat_test_{epoch_ms()}.log"
   write_file(path, "a\r\nb\n\nc")
   let seen = []
   source.each_line(path) do |line, n|

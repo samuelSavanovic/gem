@@ -70,10 +70,14 @@ Choices worth knowing:
   monitors each destination and forgets it on its `DOWN`. Destinations
   belong to the dynamic supervisor, not the registry, so a restarted
   registry rebuilds its table from `dynamic_supervisor.which_children`.
-- **Destinations are temporary children.** A destination that crashes has
-  lost its subscribers, so restarting it gains nothing: the next lookup of
-  its name starts a fresh one. The dynamic supervisor still gives the
-  broker an orderly shutdown (`broker.stop`).
+- **Destinations are temporary children.** The registry forgets a
+  destination on its `DOWN` and starts a fresh one on the next lookup of
+  its name; a restart by the supervisor would leave a second process the
+  registry doesn't know. Each connection monitors the destinations it
+  subscribes to and, on a `DOWN`, subscribes the same ids to the fresh
+  one; messages published in between are lost. The dynamic supervisor
+  stops the destinations with the rest of the broker (`broker.stop`);
+  connections left open then get an `ERROR` and are closed.
 - **Destinations monitor their subscribers** and drop a connection's
   subscriptions on its `DOWN`, so a client that disappears without
   `UNSUBSCRIBE` leaves nothing behind.
@@ -90,11 +94,15 @@ Choices worth knowing:
 
 ## Known limits
 
+- **A frame is at most 4 MB** (`MAX_FRAME` in `connection.gem`); a
+  bigger one gets an `ERROR` and the connection is closed, so a client
+  that never ends a frame can't grow the broker's memory without bound.
 - **Slow consumers are disconnected.** A client that doesn't take a
   frame within `write_timeout_ms` (10 s by default, a `broker.start`
   option) is dropped, so its messages can't pile up without bound. Until
   then they queue in its writer's mailbox. Dropping messages instead of
-  the client would be the other policy (NOTES.md discusses both).
+  the client would be the other policy (NOTES.md discusses ways to drop
+  or throttle).
 - **Every `SEND` asks the registry for the destination** (one
   `gen_server.call`), so all publishers go through one process. A
   connection could keep the pids it has looked up, at the cost of

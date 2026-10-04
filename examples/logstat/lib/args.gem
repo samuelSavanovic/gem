@@ -27,12 +27,15 @@ fn fail(msg)
   {ok: false, error: msg}
 end
 
-# "--by=ip" → "--by", "ip".
+let VALUE_FLAGS = ["--by", "--sort", "--top"]
+
+# "--by=ip" → "--by", "ip". A flag that takes no value keeps its "=", so
+# parse reports it as unknown instead of reading the value as a file.
 fn split_assignments(argv)
   let out = []
   for arg in argv
     let eq = string.index_of(arg, "=")
-    if string.starts_with(arg, "--") and eq > 0
+    if eq > 0 and table.contains(VALUE_FLAGS, substr(arg, 0, eq))
       push(out, substr(arg, 0, eq))
       push(out, substr(arg, eq + 1, len(arg) - eq - 1))
     else
@@ -50,7 +53,7 @@ fn parse(argv)
   while i < len(args)
     let arg = args[i]
     i += 1
-    if arg == "--by" or arg == "--sort" or arg == "--top"
+    if table.contains(VALUE_FLAGS, arg)
       if i >= len(args)
         return fail("{arg} needs a value")
       end

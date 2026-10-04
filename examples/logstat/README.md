@@ -27,7 +27,8 @@ status: 0, 1 for an unreadable file, 2 for a bad command line.
 ## Layout
 
 A `gem.toml` marks this directory as a project root, so modules load by
-their path from here (`load "lib/stats"`) wherever they are loaded from.
+their path from here (`load "lib/stats"`) for an entry file in this
+directory.
 
 | File | What it holds |
 |---|---|
@@ -54,7 +55,7 @@ x86_64):
 | Python | 4 s | 11 MB |
 
 Where it goes (stdin, `--by ip`): reading the lines takes 0.3 s; parsing
-takes 21 s, of which 11 s are the six `string.index_of` calls per line and
+takes 21 s, of which 11 s are the eight `string.index_of` calls per line and
 3.5 s the one `string.split` (std/string searches in Gem before it reaches
 C); the region resets take 4.4 s, most of it copying the group tables
 again at every reset. A file is held whole, twice while it is read, and
@@ -63,6 +64,6 @@ splitting it into lines costs another `index_of` per line.
 These are tracked in `docs/OPTIMIZATIONS.md` ("Search and scan builtins",
 "Survivors of a reset are copied again", "`read_file` holds the file
 twice"), `docs/ROADMAP.md` ("Line-at-a-time input") and
-`docs/KNOWN_BUGS.md` (`input()` splits lines over 4,095 bytes). Keep this
+`docs/KNOWN_BUGS.md` (`input()` splits lines of 4,095 bytes or more). Keep this
 program idiomatic: it is the yardstick for those fixes, not a place to
 work around them.

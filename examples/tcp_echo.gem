@@ -16,9 +16,16 @@ fn echo_loop(fd)
   tcp_close(fd)
 end
 
+# Accepting fails when the process is out of file descriptors; retry
+# until it succeeds again.
 fn serve(listener)
   while true
-    let fd = tcp_accept(listener)
+    let a = pcall tcp_accept(listener)
+    if not a.ok
+      sleep(50)
+      continue
+    end
+    let fd = a.value
     let r = pcall spawn do
       echo_loop(fd)
     end

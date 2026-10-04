@@ -255,10 +255,16 @@ fn parse_number(s)
     skip_digits(s)
   end
   let text = s.since(start)
+  let r = nil
   if is_float
-    return to_float(text)
+    r = pcall to_float(text)
+  else
+    r = pcall to_int(text)
   end
-  to_int(text)
+  if not r.ok
+    s.fail("number out of range")
+  end
+  r.value
 end
 
 fn skip_digits(s)
@@ -331,6 +337,7 @@ test.case("malformed input") do
   fails_with("1.", "json_parser: expected a digit after '.' at byte 2")
   fails_with("-", "json_parser: expected a digit at byte 1")
   fails_with("[1] x", "json_parser: trailing content at byte 4")
+  fails_with("123456789012345678901234", "json_parser: number out of range at byte 24")
   fails_with('"\\x"', "json_parser: bad escape '\\x' at byte 3")
   fails_with('"\\udc00"', "json_parser: lone low surrogate at byte 7")
   fails_with("@", "json_parser: unexpected character '@' at byte 0")

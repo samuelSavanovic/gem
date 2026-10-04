@@ -103,7 +103,7 @@ loop codegen turns `s = s + x` into `gem_string_append`
 can't tell the caller's buffer from the buffer it builds a string in: it
 appends to the caller's buffer and returns a string.
 
-### `input()` splits lines over 4095 bytes and stops at a NUL
+### `input()` splits lines of 4,095 bytes or more and stops at a NUL
 
 ```sh
 python3 -c 'print("a" * 5000); print("b\0c")' | gem lines.gem
@@ -112,8 +112,9 @@ python3 -c 'print("a" * 5000); print("b\0c")' | gem lines.gem
 ```
 
 `gem_input_fn` (runtime/gem_builtins_core.c) reads with one `fgets` into a
-4096-byte stack buffer and takes the length with `strlen`. A longer line
-comes back as several lines, with nothing to tell the caller, and a NUL
+4096-byte stack buffer and takes the length with `strlen`. A line of
+4,095 bytes or more comes back as several lines (one of exactly 4,095
+as that line and an empty one), with nothing to tell the caller, and a NUL
 byte ends the line early. Read with `getline` (or grow a buffer until the
 newline) and use the returned length.
 
@@ -193,9 +194,9 @@ let h2 = http.start(http.router(), {port: -1, host: "127.0.0.1"})    # starts to
 ```
 
 `start` passes `port` to `tcp_listen` (std/http.gem, `pcall tcp_listen`)
-without checking it, and the runtime truncates it to 16 bits. A non-int port
-raises, but as `http.start: tcp_listen: expected (string host, int port)`.
-`start` should raise `http.start: port must be an int from 0 to 65535`.
+without checking its range (a non-int raises `http.start: port must be an
+int, got <type>`), and the runtime truncates it to 16 bits. `start` should
+raise `http.start: port must be an int from 0 to 65535`.
 
 ### `http` static files: the request path is not percent-decoded
 
@@ -230,12 +231,6 @@ only checks that `arr` is a table, so it does the same. With a comparator,
 nil and nil` from the caller's code instead. Both should raise for a table
 that isn't an array.
 
-### `log.set_level` returns the internal level number
-
-`print(log.set_level("info"))` prints `1`. `set_level` (std/log.gem) ends
-with the assignment to `min_level`, so it leaks that value; it should
-return nil.
-
 ### Some std errors don't name the function called
 
 ```gem
@@ -267,7 +262,7 @@ let p = spawn do
 end
 ```
 
-`gem --check` prints a note starting `note: std/log.gem:36: this changes
+`gem --check` prints a note starting `note: std/log.gem:38: this changes
 module-level` and naming `log.min_level`, "in code that runs in a spawned
 process". The same
 happens for `test.case` in a spawned process (`std/test.gem`). The write is

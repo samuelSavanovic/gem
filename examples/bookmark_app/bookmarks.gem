@@ -1,5 +1,6 @@
-## bookmarks — the bookmark manager's database and HTMX routes. Every
-## change answers with the whole list, swapped into `#bookmarks`.
+## bookmarks — the bookmark manager's database and HTMX routes. A change
+## to the list answers with the whole list, swapped into `#bookmarks`;
+## `/fetch-title` answers with the title alone.
 
 load "std/http"
 load "std/sqlite"
@@ -145,7 +146,8 @@ fn extract_title(page)
   title
 end
 
-# The host name lookup blocks every process; the timeout bounds the rest.
+# The host name lookup blocks every process, and the connect isn't bounded
+# by the timeout; the timeout bounds the rest.
 fn fetch_title(page_url)
   let r = pcall request.get(page_url, {timeout_ms: FETCH_TIMEOUT_MS})
   if not r.ok

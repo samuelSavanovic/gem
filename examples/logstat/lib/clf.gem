@@ -4,7 +4,8 @@
 ##   # {ip: "203.0.113.9", user: "ann", method: "GET", path: "/a", status: "404",
 ##   #  bytes: 512, hour: "2026-10-04 13:00"}
 ##
-## Returns nil for a line in neither format. `status` stays a string (it is
+## Returns nil for a line it can't read as either format (anything after
+## the byte count is ignored). `status` stays a string (it is
 ## a grouping key); a `-` byte count is 0.
 
 load "std/string"
@@ -36,7 +37,13 @@ fn hour_of(t)
   if month == nil
     return nil
   end
-  "{substr(t, 7, 4)}-{month}-{substr(t, 0, 2)} {substr(t, 12, 2)}:00"
+  let year = substr(t, 7, 4)
+  let day = substr(t, 0, 2)
+  let hour = substr(t, 12, 2)
+  if not (is_digits(year) and is_digits(day) and is_digits(hour))
+    return nil
+  end
+  "{year}-{month}-{day} {hour}:00"
 end
 
 ## Parses one log line; nil when it is malformed.
@@ -70,7 +77,7 @@ fn parse(line)
   end
   if bytes == "-"
     bytes = "0"
-  elif not is_digits(bytes)
+  elif not is_digits(bytes) or len(bytes) > 18     # 19 digits can overflow
     return nil
   end
 

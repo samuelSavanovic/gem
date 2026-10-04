@@ -1238,7 +1238,7 @@ leaks its socket; bound the request with its `timeout_ms` instead.
 ### Reading input line by line **(bug)**
 
 `input()` returns the next line of stdin without its newline, and `nil`
-at the end. It splits a line longer than 4,095 bytes into several, and
+at the end. It splits a line of 4,095 bytes or more into several, and
 cuts a line at a NUL byte, without saying so. For input that may hold
 such lines, read the file with `read_file` and split it yourself (see
 `examples/logstat/lib/source.gem`). That holds the whole file in memory,
@@ -1513,4 +1513,4 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_listen("localhost", ...)` | raises | `"127.0.0.1"` |
 | `tcp_read` with no timeout | blocks forever on a silent peer | pass a timeout |
-| `input()` on lines over 4,095 bytes **(bug)** | the line comes back in pieces | `read_file` and split |
+| `input()` on lines of 4,095 bytes or more **(bug)** | the line comes back in pieces | `read_file` and split |

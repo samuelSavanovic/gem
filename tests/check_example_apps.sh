@@ -23,6 +23,12 @@ trap 'rm -rf "$T"' EXIT
 
 fails=0
 
+# limit <secs> <cmd...>: run cmd, killed by SIGALRM after secs. perl, since
+# macOS has no `timeout`.
+limit() {
+  perl -e 'alarm shift; exec @ARGV or die "exec $ARGV[0]: $!\n"' "$@"
+}
+
 # run <name> <dir> <file>: build <file> in <dir>, run it there with a time
 # limit, and show its output only when it fails.
 run() {
@@ -33,7 +39,7 @@ run() {
     fails=$((fails + 1))
     return
   fi
-  if ! (cd "$dir" && timeout 60 "$T/$name") > "$T/$name.out" 2>&1; then
+  if ! (cd "$dir" && limit 60 "$T/$name") > "$T/$name.out" 2>&1; then
     echo "FAIL: $dir/$file:"
     cat "$T/$name.out"
     fails=$((fails + 1))
