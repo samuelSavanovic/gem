@@ -140,7 +140,7 @@ This covers the tables-as-objects pattern which is the primary Gem idiom.
 Complete variable and function names visible at the cursor position. Includes: local variables, function parameters, top-level definitions, imported names.
 
 **3. Builtin functions.**
-Complete from the known builtin list (same list as `compiler/codegen.gem`'s `builtin_fns` table). Static data, no analysis needed.
+Complete from the known builtin list (same list as `BUILTIN_FNS` in `compiler/builtins.gem`). Static data, no analysis needed.
 
 **Effort:** ~200 lines.
 

@@ -545,8 +545,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     #
     # Direct self-recursion is TCO'd by `fn_def_is_tco` (compiler/tco.gem) + the `while(1)`
     # in compile_fn. Mutual cycles (X→tail Y, Y→tail X — possibly through 3+
-    # functions) are not, so each round-trip eats a C frame and saturates the
-    # 256 KB minicoro stack after ~175 frames. Find SCCs in the tail-edge
+    # functions) are not, so each round-trip eats a C frame until the process
+    # hits its stack-overflow limit. Find SCCs in the tail-edge
     # subgraph; if every member is viable, mark them so compile_fn emits a
     # `gem_sccbody_<name>` + thin trampoline-loop wrapper, and intra-SCC tail
     # calls become a TLB write + return rather than a real C call.

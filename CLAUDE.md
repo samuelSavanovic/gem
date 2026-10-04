@@ -75,7 +75,14 @@ make test-lsp          # smoke-test the `gem lsp` subcommand (canned initialize/
 make clean             # remove build/ and /tmp/gem_*
 ```
 
-After changing compiler sources, or a std module the compiler or LSP loads (`std/string`, `std/json`), run `make bootstrap` to update `stage0.c`. The bootstrap target verifies the new stage0 can compile itself (fixed-point check) before replacing it. If codegen output changes, the built-in roundtrip will fail on the first pass — do a manual 3-stage bootstrap (see `RESUME_PROMPT.md` for the exact commands).
+After changing compiler sources, or a std module the compiler or LSP loads (`std/string`, `std/json`), run `make bootstrap` to update `stage0.c`. The bootstrap target verifies the new stage0 can compile itself (fixed-point check) before replacing it. If a change alters the C the compiler emits for itself (codegen output), the built-in roundtrip fails on the first pass, because `build/gem` still runs the old codegen. Build a compiler from the new sources first, then bootstrap:
+
+```bash
+build/gem compiler/main.gem -o build/gem_stage1 && mv build/gem_stage1 build/gem
+make bootstrap
+```
+
+The new binary has to live in `build/` (it finds `std/` and `runtime/` two levels above itself, see "Install root" below).
 
 ## Commits and Pull Requests
 
