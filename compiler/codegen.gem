@@ -7,6 +7,7 @@ load "./builtins" (BUILTIN_FNS)
 load "./cgutil" (escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node)
 load "./scope" (collect_block_lets, collect_top_let_names, scope_shadowing_lets, collect_module_namespaces, collect_shadow_lets_in_fn)
 load "./captures" (collect_free_vars, collect_free_node, walk_captures_node, walk_writes_node, find_captured_in_scope, find_capture_writes_in_scope, find_writes_in_closure_body, mark_non_escaping_stmts)
+load "./tco" (fn_def_is_tco, find_tail_call_sccs)
 load "./loops" (lift_captured_arm_lets_in_fn, lift_captured_arm_lets_top_stmts, top_rescue_placeholders, tag_process_tail_while_loops)
 
 fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_file = nil, sink = nil, global_display = nil)
@@ -179,16 +180,11 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   end
   # ─── Mutual-tail-call SCC bookkeeping ───
   # `scc_member_to_id[name]` (int) when `name` is a top-level fn_def in a
-  # tail-cycle SCC of size >= 2 that survived viability filtering. Set by
-  # `find_tail_call_sccs`.
-  # `scc_id_to_members[id]` is a sorted array of member names (used to
-  # generate stable C identifiers and to seed cross-SCC tail-call detection).
-  # `scc_id_max_params[id]` is the largest parameter count among the members:
-  # the wrapper copies that many TLB slots, since no body reads more.
+  # tail-cycle SCC of size >= 2 that survived viability filtering;
+  # `scc_id_max_params[id]` is the number of TLB slots its wrapper copies.
+  # Set from `find_tail_call_sccs` (compiler/tco.gem).
   let scc_member_to_id = {}
-  let scc_id_to_members = {}
   let scc_id_max_params = {}
-  let scc_counter = 0
   # Set inside the body of an SCC member during compile_fn — gives
   # compile_stmt_return a way to recognize "tail call to a sibling in my SCC"
   # and emit the trampoline marker instead of a regular call.
@@ -439,86 +435,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   let compile_extern_fn = nil
   let compile_blocking_extern_fn = nil
   let compile_fn = nil
-  let is_self_tail_call = nil
-  let has_self_tail_call = nil
   let emit_tco_continue = nil
-  let find_tail_call_sccs = nil
   let emit_scc_tail_call = nil
   let scc_wrapper_for = nil
-
-  # ─── TCO (tail call optimization) ──
-
-  is_self_tail_call = fn(fn_name, node)
-    if node == nil
-      return false
-    end
-    if type(node) != "table" or node.tag == nil
-      return false
-    end
-    match node
-    when {tag: "call", func: func}
-      return is_node(func, "var") and func.name == fn_name
-    when {tag: "return", value: value}
-      if value != nil
-        return is_self_tail_call(fn_name, value)
-      end
-      return false
-    when {tag: "if", then: then_body, else: else_body}
-      if has_self_tail_call(fn_name, then_body)
-        return true
-      end
-      if else_body != nil
-        return has_self_tail_call(fn_name, else_body)
-      end
-      return false
-    when {tag: "match", whens: whens, else: else_body}
-      for i = 0, len(whens)
-        if has_self_tail_call(fn_name, whens[i].body)
-          return true
-        end
-      end
-      if else_body != nil
-        return has_self_tail_call(fn_name, else_body)
-      end
-      return false
-    when {tag: "receive_match", arms: arms, after_body: after_body}
-      for i = 0, len(arms)
-        if has_self_tail_call(fn_name, arms[i].body)
-          return true
-        end
-      end
-      if after_body != nil
-        return has_self_tail_call(fn_name, after_body)
-      end
-      return false
-    when {tag: "block", stmts: stmts}
-      return has_self_tail_call(fn_name, stmts)
-    end
-    return false
-  end
-
-  has_self_tail_call = fn(fn_name, stmts)
-    if len(stmts) == 0
-      return false
-    end
-    is_self_tail_call(fn_name, stmts[-1])
-  end
-
-  # Whether compile_fn turns a named fn's self tail calls into a loop: it has
-  # one, and no param, rest param or body-level let shadows the fn's name.
-  # Default, rest and destructured params are all supported (rebind mode in
-  # emit_tco_continue / compile_fn).
-  let fn_def_is_tco = fn(fd)
-    let scope_vars = sorted_array_to_set(fd.params)
-    if fd.rest_param != nil
-      set_add(scope_vars, fd.rest_param)
-    end
-    collect_top_let_names(fd.body, scope_vars)
-    if set_contains(scope_vars, fd.name)
-      return false
-    end
-    has_self_tail_call(fd.name, fd.body)
-  end
 
   # ─── Leaf-function detection ──
   #
@@ -1022,14 +941,16 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     # ─── Mutual-tail-call SCC detection ───
     #
-    # Direct self-recursion is TCO'd by `is_self_tail_call` + the `while(1)`
+    # Direct self-recursion is TCO'd by `fn_def_is_tco` (compiler/tco.gem) + the `while(1)`
     # in compile_fn. Mutual cycles (X→tail Y, Y→tail X — possibly through 3+
     # functions) are not, so each round-trip eats a C frame and saturates the
     # 256 KB minicoro stack after ~175 frames. Find SCCs in the tail-edge
     # subgraph; if every member is viable, mark them so compile_fn emits a
     # `gem_sccbody_<name>` + thin trampoline-loop wrapper, and intra-SCC tail
     # calls become a TLB write + return rather than a real C call.
-    find_tail_call_sccs(fn_defs, caller_records, name_to_fn)
+    let sccs = find_tail_call_sccs(fn_defs, caller_records, name_to_fn)
+    scc_member_to_id = sccs.member_to_id
+    scc_id_max_params = sccs.id_max_params
 
     pt_caller_records = caller_records
     pt_anon_parent = anon_parent
@@ -1155,215 +1076,6 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
           end
         end
       end
-    end
-  end
-
-  # ─── Tail-edge SCC discovery (Tarjan) ───
-  #
-  # Operates only on fn_def→fn_def tail edges; non-tail edges and edges
-  # through closures don't form a recursive cycle worth merging. Result is
-  # populated into `scc_member_to_id` / `scc_id_to_members`.
-  find_tail_call_sccs = fn(fn_defs, caller_records, name_to_fn)
-    # Reset accumulated state from any prior run.
-    for k in keys(scc_member_to_id)
-      delete(scc_member_to_id, k)
-    end
-    for k in keys(scc_id_to_members)
-      delete(scc_id_to_members, k)
-    end
-    for k in keys(scc_id_max_params)
-      delete(scc_id_max_params, k)
-    end
-    scc_counter = 0
-
-    let name_set = {}
-    for fd in fn_defs
-      set_add(name_set, fd.name)
-    end
-
-    # Adjacency: name → array of tail-callee names, restricted to known fn_defs.
-    let tail_succs = {}
-    for fd in fn_defs
-      let cid = "fn:" + fd.name
-      let r = caller_records[cid]
-      let succs = []
-      if r != nil
-        for callee, _ in r.tail_callees
-          if set_contains(name_set, callee)
-            push(succs, callee)
-          end
-        end
-      end
-      tail_succs[fd.name] = succs
-    end
-
-    # Tarjan's SCC algorithm.
-    let idx_counter = 0
-    let indices = {}
-    let lowlinks = {}
-    let stack = []
-    let on_stack = {}
-    let raw_sccs = []
-
-    let strongconnect = nil
-    strongconnect = fn(v)
-      indices[v] = idx_counter
-      lowlinks[v] = idx_counter
-      idx_counter += 1
-      push(stack, v)
-      set_add(on_stack, v)
-      let succs = tail_succs[v]
-      if succs != nil
-        for w in succs
-          if indices[w] == nil
-            strongconnect(w)
-            if lowlinks[w] < lowlinks[v]
-              lowlinks[v] = lowlinks[w]
-            end
-          elif set_contains(on_stack, w)
-            if indices[w] < lowlinks[v]
-              lowlinks[v] = indices[w]
-            end
-          end
-        end
-      end
-      if lowlinks[v] == indices[v]
-        let comp = []
-        while true
-          let w = stack[-1]
-          pop(stack)
-          delete(on_stack, w)
-          push(comp, w)
-          if w == v
-            break
-          end
-        end
-        push(raw_sccs, comp)
-      end
-    end
-
-    for fd in fn_defs
-      if indices[fd.name] == nil
-        strongconnect(fd.name)
-      end
-    end
-
-    # Viability filter: every member must be merge-eligible. If any member
-    # disqualifies, the whole SCC is left as separate fn_defs (stack cliff
-    # remains for that SCC, but the broker case has none of these warts).
-    for comp in raw_sccs
-      if len(comp) < 2
-        continue
-      end
-      let viable = true
-      let why = ""
-      for name in comp
-        let fd = name_to_fn[name]
-        if fd == nil
-          viable = false
-          why = "missing fn_def"
-          break
-        end
-        if fd.rest_param != nil
-          viable = false
-          why = "{name} has a rest parameter"
-          break
-        end
-        if fd.defaults != nil
-          for d in fd.defaults
-            if d != nil
-              viable = false
-              why = "{name} has default arguments"
-              break
-            end
-          end
-        end
-        if not viable
-          break
-        end
-        # Mirrors GEM_MAX_TAIL_ARGS in runtime/gem.h. Hardcoded here to keep
-        # the compiler self-hosting without parsing C; bump both if needed.
-        if len(fd.params) > 16
-          viable = false
-          why = "{name} has more than 16 parameters"
-          break
-        end
-        # Mutated-captured params live in malloc-backed boxes that the body
-        # creates per-iteration. Trampolining across two such boxes would
-        # leak. Bail conservatively — none of the broker's writer/handle_*
-        # fns box their params, so this matters only for an unusual closure
-        # pattern across a tail cycle.
-        let scope_vars = sorted_array_to_set(fd.params)
-        let cap_writes = find_capture_writes_in_scope(fd.body, scope_vars)
-        let any_boxed = false
-        for p in fd.params
-          if set_contains(cap_writes, p)
-            any_boxed = true
-            break
-          end
-        end
-        if any_boxed
-          viable = false
-          why = "{name} has a parameter captured-and-mutated by an inner closure"
-          break
-        end
-        # Direct-TCO already bails when the fn name is in its own body's
-        # scope_vars (a `let foo = ...` shadowing). For SCC merging we keep
-        # the same restriction so the wrapper's name stays callable.
-        if set_contains(scope_vars, fd.name)
-          viable = false
-          why = "{name} shadows itself in its body"
-          break
-        end
-      end
-      if not viable
-        # Conservative: skip silently for now. (Future: surface as a note
-        # so users can refactor an SCC into mergeable shape.)
-        continue
-      end
-      let sid = scc_counter
-      scc_counter += 1
-      # Stable sort: emit in source order. comp from Tarjan is in
-      # post-order; sort by appearance in fn_defs for determinism.
-      let comp_set = {}
-      for name in comp
-        set_add(comp_set, name)
-      end
-      let order = {}
-      let i = 0
-      for fd in fn_defs
-        if set_contains(comp_set, fd.name)
-          order[fd.name] = i
-        end
-        i += 1
-      end
-      let members = []
-      for name in comp
-        push(members, name)
-      end
-      # Insertion sort by `order[name]`.
-      let n = len(members)
-      let j = 1
-      while j < n
-        let cur = members[j]
-        let cur_order = order[cur]
-        let k = j - 1
-        while k >= 0 and order[members[k]] > cur_order
-          members[k + 1] = members[k]
-          k -= 1
-        end
-        members[k + 1] = cur
-        j += 1
-      end
-      scc_id_to_members[sid] = members
-      let max_params = 0
-      for name in members
-        scc_member_to_id[name] = sid
-        if len(name_to_fn[name].params) > max_params
-          max_params = len(name_to_fn[name].params)
-        end
-      end
-      scc_id_max_params[sid] = max_params
     end
   end
 
