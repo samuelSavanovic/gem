@@ -145,17 +145,17 @@ end
 dynamic_supervisor.stop(d6)
 print("6 reports:", take_reports(3))
 
-# 7. A child's start that raises: the earlier children are shut down too.
+# 7. A child's start that raises: the earlier children are shut down too,
+# and start raises once the supervisor (and its name) is gone.
 fn bad_start()
   sleep(10)                  # let child "a" run and trap exits first
   error("start broke")
 end
-let s7 = supervisor.start({children: [
+let r7 = pcall supervisor.start({name: "s7", children: [
   {id: "a", start: fn() reporter("a") end},
   {id: "bad", start: bad_start}
 ]})
-let r7 = down_reason(s7)
-print("7 down:", r7, take_reports(1))
+print("7 start:", r7.error, whereis("s7"), take_reports(1))
 
 # 8. Argument checks at start, and the name-taken wording.
 print("8", err(pcall gen_server.start(nil)))

@@ -178,6 +178,7 @@ end
 # std/supervisor start, which_children, stop
 #   child spec {id, start, restart, shutdown}: on stop, "shutdown", then "kill"
 #   after `shutdown` ms (default 5000; nil = wait; a supervisor child: nil)
+#   start returns once every child's start has; one that raises makes it raise
 # std/dynamic_supervisor  start, start_child, terminate_child, which_children, stop
 #   child template {start, restart, shutdown}, as a supervisor child spec
 # std/task       async, await, await_all

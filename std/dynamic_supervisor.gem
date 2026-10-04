@@ -36,8 +36,8 @@
 # else DEFAULT_SHUTDOWN_MS; stop_child applies it. When the supervisor
 # exits (an exit signal, `stop`, restart intensity reached, or any error
 # in the supervisor, but not the untrappable "kill", which ends it at
-# once), it first stops each child that way, last started first; then it
-# exits. terminate_child stops the child inside the supervisor, which
+# once), it first stops each child that way, last started first (a
+# restarted child keeps its place); then it exits. terminate_child stops the child inside the supervisor, which
 # answers nothing else meanwhile. Requests are answered with `_dsup_reply`
 # messages carrying a pcall-shaped result.
 
@@ -279,7 +279,8 @@ fn dsup_loop(state)
   end
 end
 
-# Stops every child, last started first (stop_child), whatever the
+# Stops every child, last started first (a restarted child keeps its
+# place; stop_child), whatever the
 # supervisor's own exit reason: a child that traps exits only has to know
 # "shutdown".
 fn shutdown_children(children)
@@ -344,7 +345,8 @@ end
 ## reason is `"dynamic_supervisor: max restart intensity reached"` or the
 ## error a restart's `start` raised, unchanged; both are also printed on
 ## stderr. Before it exits it stops its children as `terminate_child`
-## does, last started first. `kill(ds.pid, reason)` is handled when it
+## does, last started first (a restarted child keeps its place).
+## `kill(ds.pid, reason)` is handled when it
 ## next reads its mailbox; use `stop` to know it is gone.
 ## `kill(ds.pid, "kill")` ends it at once, without stopping its children.
 fn start(opts)
@@ -529,8 +531,8 @@ end
 ## Stops the supervisor, waits until it has exited, and returns nil (also
 ## for one already gone, given by pid or handle; by name see the header).
 ##
-## The supervisor stops its children one at a time, last started first,
-## as `terminate_child` does, so they are all down when `stop` returns.
+## The supervisor stops its children one at a time, last started first
+## (a restarted child keeps its place), as `terminate_child` does, so they are all down when `stop` returns.
 ## Only direct children are stopped: processes a child spawned itself
 ## (such as its tasks, which aren't linked to it) keep running. By default
 ## `stop` waits with no limit, since the budgets bound the shutdown; with
