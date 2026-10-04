@@ -132,6 +132,13 @@ static void gem_diag_print_on_exit(void) {
 static struct pollfd gem_poll_fds[GEM_MAX_PROCS];
 static int gem_poll_pids[GEM_MAX_PROCS];
 
+/* revents that make an fd waiter ready. POLLNVAL counts: an fd closed
+   without tcp_close (which wakes its waiters itself, gem_io_fd_closed), e.g.
+   by C code behind an extern fn, would otherwise report POLLNVAL on every
+   pass and spin the scheduler; the waiter's tcp builtin then fails with
+   EBADF and raises. */
+#define GEM_POLL_WAKE (POLLIN | POLLOUT | POLLERR | POLLHUP | POLLNVAL)
+
 /* ─── Process stacks ───
  *
  * Every process (main included) runs on a minicoro stack that we map
@@ -804,15 +811,33 @@ void gem_io_pool_yield(void) {
     mco_yield(proc->coro);
 }
 
-void gem_io_yield(int fd, int for_write) {
+int gem_io_yield(int fd, int for_write) {
     if (gem_current_pid < 0 || gem_current_pid >= GEM_MAX_PROCS) {
-        return;
+        return 0;
     }
     GemProcess *proc = &gem_proc_table[gem_current_pid];
     proc->state = GEM_PROC_IO_WAIT;
     proc->wait_fd = fd;
     proc->wait_write = for_write;
+    proc->wait_fd_closed = 0;
     mco_yield(proc->coro);
+    if (proc->wait_fd_closed) {
+        proc->wait_fd_closed = 0;
+        errno = EBADF;
+        return -1;
+    }
+    return 0;
+}
+
+void gem_io_fd_closed(int fd) {
+    for (int i = 0; i < gem_proc_hwm; i++) {
+        GemProcess *proc = &gem_proc_table[i];
+        if (proc->state == GEM_PROC_IO_WAIT && proc->io_request == NULL &&
+            proc->wait_fd == fd) {
+            proc->wait_fd_closed = 1;
+            proc->state = GEM_PROC_READY;
+        }
+    }
 }
 
 static void gem_fire_timers(void) {
@@ -1035,11 +1060,9 @@ void gem_run_scheduler(void) {
            are READY. Without this, a continuously-READY proc (e.g. a
            broker reader draining a never-empty TCP buffer) starves any
            proc IO_WAIT'ing on a different fd — the scheduler never
-           reaches the blocking poll() below. Discovered via the STOMP
-           M6 slow-consumer trace: a broker writer's POLLOUT wait wedged
-           permanently after the slow client's kernel buffer first
-           filled, because the publisher's reader stayed READY and we
-           never polled. The cost is one syscall per scheduler scan
+           reaches the blocking poll() below (e.g. a broker writer waiting
+           for POLLOUT to a slow client while a publisher's reader stays
+           READY would wait forever). The cost is one syscall per scheduler scan
            when any proc is fd-waiting; the build/mark loops are O(hwm)
            but already cheap relative to the proc-scan above. */
         if (has_ready && has_fd_wait) {
@@ -1056,7 +1079,7 @@ void gem_run_scheduler(void) {
             }
             if (nfds > 0 && poll(gem_poll_fds, (nfds_t)nfds, 0) > 0) {
                 for (int j = 0; j < nfds; j++) {
-                    if (gem_poll_fds[j].revents & (POLLIN | POLLOUT | POLLERR | POLLHUP)) {
+                    if (gem_poll_fds[j].revents & GEM_POLL_WAKE) {
                         if (gem_proc_table[gem_poll_pids[j]].state == GEM_PROC_IO_WAIT)
                             gem_proc_table[gem_poll_pids[j]].state = GEM_PROC_READY;
                     }
@@ -1121,7 +1144,7 @@ void gem_run_scheduler(void) {
             int ready = poll(gem_poll_fds, (nfds_t)nfds, poll_timeout);
             if (ready > 0) {
                 for (int j = 0; j < nfds; j++) {
-                    if (gem_poll_fds[j].revents & (POLLIN | POLLOUT | POLLERR | POLLHUP)) {
+                    if (gem_poll_fds[j].revents & GEM_POLL_WAKE) {
                         if (j == wake_idx) continue;
                         gem_proc_table[gem_poll_pids[j]].state = GEM_PROC_READY;
                     }

@@ -43,27 +43,26 @@ directory.
 
 ## Performance
 
-It is written the way Gem code should be written, and it is slow:
-`benchmarks/logstat/run.sh` times it against the same program in Python
-and checks that both print the same report. On 1M lines (123 MB, Linux
-x86_64):
+It is written the way Gem code should be written, and it is slower than
+it should be: `benchmarks/logstat/run.sh` times it against the same
+program in Python and checks that both print the same report. On 1M lines
+(123 MB, macOS arm64, the three `--by` groupings):
 
 | | time | peak RSS |
 |---|---|---|
-| logstat, stdin | 21–28 s | 8–18 MB |
-| logstat, file | 29–37 s | 247 MB |
-| Python | 4 s | 11 MB |
+| logstat, stdin | 3.8–5.0 s | 20–33 MB |
+| logstat, file | 3.9–5.2 s | 261–274 MB |
+| Python | 2.0 s | 22–24 MB |
 
-Where it goes (stdin, `--by ip`): reading the lines takes 0.3 s; parsing
-takes 21 s, of which 11 s are the eight `string.index_of` calls per line and
-3.5 s the one `string.split` (std/string searches in Gem before it reaches
-C); the region resets take 4.4 s, most of it copying the group tables
-again at every reset. A file is held whole, twice while it is read, and
-splitting it into lines costs another `index_of` per line.
+Where it goes: with `--by ip` or `--by path`, 0.9–1.1 s are the region
+resets copying the group records again at every reset; `--by hour`
+(24 groups) spends 0.1 s there. The rest is spread over allocation (every
+string literal is allocated each time it is evaluated), `substr` copies
+and the cost of Gem calls. A file is held whole, twice while it is read.
 
-These are tracked in `docs/OPTIMIZATIONS.md` ("Search and scan builtins",
-"Survivors of a reset are copied again", "`read_file` holds the file
-twice"), `docs/ROADMAP.md` ("Line-at-a-time input") and
-`docs/KNOWN_BUGS.md` (`input()` splits lines of 4,095 bytes or more). Keep this
+These are tracked in `docs/OPTIMIZATIONS.md` ("Survivors of a reset are
+copied again", "String literals are allocated at every evaluation" and
+"`read_file` holds the file twice") and `docs/ROADMAP.md`
+("Line-at-a-time input"). Keep this
 program idiomatic: it is the yardstick for those fixes, not a place to
 work around them.

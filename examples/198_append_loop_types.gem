@@ -1,0 +1,70 @@
+# `s = s + x` in a loop that only appends to s builds the string in place;
+# whatever s holds, the result is what plain `+` gives.
+
+fn append_all(s, xs)
+  let i = 0
+  while i < len(xs)
+    s = s + xs[i]
+    i += 1
+  end
+  s
+end
+
+print(append_all("pre", ["a", "b", "c"]))
+print(append_all("", []))
+print(append_all(10, [1, 2, 3]))
+
+# A caller's buffer is not a string: `+` raises, and the buffer is untouched.
+let b = buf_new()
+buf_push(b, "pre")
+let r = pcall append_all(b, ["a", "b"])
+print(r.ok, r.error, to_string(b))
+
+# With no iterations the buffer comes back as it went in.
+let same = append_all(b, [])
+print(type(same), to_string(same))
+
+# A string, then a non-string: the same error as outside a loop.
+let r2 = pcall append_all("x", ["y", 1])
+print(r2.ok, r2.error)
+
+# Nested loops appending to the same variable.
+fn grid(n)
+  let s = ""
+  for i = 0, n
+    s = s + "["
+    for j = 0, n
+      s = s + "{i}{j}"
+    end
+    s = s + "]"
+  end
+  s
+end
+print(grid(3))
+
+# A loop that appends only in its inner loop.
+fn rows(n)
+  let s = "rows:"
+  for i = 0, n
+    for j = 0, 2
+      s = s + " " + to_string(i * 2 + j)
+    end
+  end
+  s
+end
+print(rows(3))
+
+# A module-level variable is a string to every fn the loop calls.
+let LOG = ""
+fn peek()
+  type(LOG)
+end
+fn log_all(xs)
+  let seen = []
+  for x in xs
+    LOG = LOG + x
+    push(seen, peek())
+  end
+  seen
+end
+print(log_all(["a", "b"]), LOG)

@@ -31,7 +31,7 @@ runtime/              # C runtime — split by category:
   gem_threadpool.c    #   worker thread pool for blocking I/O (4 workers)
   gem_builtins_core.c #   print, error, len, type, conversions, pcall, argv, etc.
   gem_builtins_collection.c  # push, pop, keys, values, sort, insert, delete
-  gem_builtins_string.c      # str_replace, substr, chr/ord, buf_* API; gem_bytes_span (std/http's extern helper)
+  gem_builtins_string.c      # find, str_replace, substr, chr/ord, buf_* API; gem_bytes_span (std/http's and std/request's extern helper)
   gem_builtins_math.c        # math ops, random, bitwise operations
   gem_builtins_io.c          # file I/O, filesystem ops, exec
   gem_builtins_tcp.c         # TCP socket operations (non-blocking)

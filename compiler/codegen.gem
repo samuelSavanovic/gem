@@ -1323,6 +1323,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # compile_stmt_return a way to recognize "tail call to a sibling in my SCC"
   # and emit the trampoline marker instead of a regular call.
   let current_scc_id = nil
+  # Name -> C flag of the loop that turns `name = name + x` into an in-place
+  # append (compile_while). The flag is set once the variable holds the
+  # buffer the append built, and only then is it turned back into a string.
   let append_buf_vars = {}
   # Set when emitting a leaf function (no Gem-level calls in body): instead
   # of `gem_push_frame`/`gem_pop_frame`/`gem_set_line` it records itself in
@@ -2407,6 +2410,33 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       end
     end
     true
+  end
+
+  # True when node calls something that could read the running process's
+  # module slots: a user fn or closure, or a builtin that runs a fn or copies
+  # module state into a new process. Nested fn bodies run only when called.
+  let slot_reader_builtins = {pcall: true, sort: true, build_string: true, spawn: true, spawn_link: true, spawn_monitor: true}
+  let node_may_read_slots = nil
+  node_may_read_slots = fn(node)
+    if node == nil or type(node) != "table"
+      return false
+    end
+    let tag = node.tag
+    if tag == "anon_fn" or tag == "fn_def"
+      return false
+    end
+    if tag == "call"
+      let callee = node.func
+      if not is_node(callee, "var") or set_contains(local_names, callee.name) or not has_key(builtin_fns, callee.name) or has_key(slot_reader_builtins, callee.name)
+        return true
+      end
+    end
+    for k, v in node
+      if type(v) == "table" and node_may_read_slots(v)
+        return true
+      end
+    end
+    false
   end
 
   # ─── Call graph ──
@@ -4082,16 +4112,17 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};"
     when {tag: "assign", name: name, value: value}
       check_assign_target(name, node)
-      if set_contains(append_buf_vars, name)
+      if has_key(append_buf_vars, name)
         let parts = decompose_concat(name, value)
         if parts != nil
           let mname = var_lvalue(name)
+          let flag = append_buf_vars[name]
           let b = buf_new()
           buf_push(b, line_dir)
           for part in parts
             let r = compile_expr(part)
             buf_push(b, r.setup)
-            buf_push(b, "{p}gem_string_append(&{mname}, {r.expr});\n")
+            buf_push(b, "{p}gem_string_append_to(&{mname}, {r.expr}, &{flag});\n")
           end
           return to_string(b)
         end
@@ -4385,7 +4416,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       if expr_has_var(node.cond, name)
         delete(eligible, name)
       end
-      if set_contains(boxed_vars, name)
+      # Anything that reads a module slot while the loop runs must see a
+      # string, not the buffer: only top-level code whose loop calls nothing
+      # that could read the slot keeps the in-place append for one.
+      if set_contains(boxed_vars, name) or (is_global_ref(name) and not (in_top_level and not node_may_read_slots(node)))
         delete(eligible, name)
       end
     end
@@ -4394,11 +4428,21 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     for k, v in append_buf_vars
       saved_append[k] = v
     end
+    # A name an enclosing loop already appends to keeps that loop's flag,
+    # and that loop turns it back into a string.
+    let owned = []
     for name, _ in eligible
-      set_add(append_buf_vars, name)
+      if not has_key(append_buf_vars, name)
+        let flag = tmp()
+        append_buf_vars[name] = flag
+        push(owned, name)
+      end
     end
 
     let b = buf_new()
+    for name in owned
+      buf_push(b, "{p}int {append_buf_vars[name]} = 0;\n")
+    end
     let mark = nil
     if do_rescue
       # SOUNDNESS: the mark is taken before the loop's first iteration, so
@@ -4427,9 +4471,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     fn_scope_locals = saved_while_scope
     buf_push(b, "{p}}")
 
-    for name, _ in eligible
+    for name in owned
       let mname = var_lvalue(name)
-      buf_push(b, "\n{p}{mname} = gem_string_finish({mname});")
+      buf_push(b, "\n{p}if ({append_buf_vars[name]}) {mname} = gem_string_finish({mname});")
       let refresh = ns_refresh(name, p)
       if refresh != ""
         buf_push(b, "\n" + substr(refresh, 0, len(refresh) - 1))
@@ -4807,7 +4851,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "    return gem_int((int64_t)(intptr_t)_ret);\n")
     elif ret_type == "Bytes"
       buf_push(b, "    GemBytes _ret = {call_expr};\n")
-      buf_push(b, "    return _ret.data ? gem_string_with_len((const char*)_ret.data, (int)_ret.len) : GEM_NIL;\n")
+      buf_push(b, "    if (_ret.data && _ret.len > GEM_MAX_STRLEN) gem_strlen_check((size_t)_ret.len, \"{c_sym}\");\n")
+      buf_push(b, "    return _ret.data ? gem_string_with_len((const char*)_ret.data, _ret.len) : GEM_NIL;\n")
     else
       buf_push(b, "    {call_expr};\n")
       buf_push(b, "    return GEM_NIL;\n")
@@ -4970,7 +5015,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "        return _gv;\n")
     elif ret_type == "Bytes"
       buf_push(b, "        GemBytes _raw = _ba->_result;\n")
-      buf_push(b, "        GemVal _gv = _raw.data ? gem_string_with_len((const char*)_raw.data, (int)_raw.len) : gem_string_with_len(\"\", 0);\n")
+      buf_push(b, "        if (_raw.data && _raw.len > GEM_MAX_STRLEN) \{ gem_io_release(_req); gem_strlen_check((size_t)_raw.len, \"{c_sym}\"); }\n")
+      buf_push(b, "        GemVal _gv = _raw.data ? gem_string_with_len((const char*)_raw.data, _raw.len) : gem_string_with_len(\"\", 0);\n")
       buf_push(b, "        gem_io_release(_req);\n")
       buf_push(b, "        return _gv;\n")
     elif ret_type == "Nil"
@@ -5034,7 +5080,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "    return gem_int((int64_t)(intptr_t)_ret);\n")
     elif ret_type == "Bytes"
       buf_push(b, "    GemBytes _ret = {d_call};\n")
-      buf_push(b, "    GemVal _gv = _ret.data ? gem_string_with_len((const char*)_ret.data, (int)_ret.len) : gem_string_with_len(\"\", 0);\n")
+      buf_push(b, "    if (_ret.data && _ret.len > GEM_MAX_STRLEN) \{ free((void*)_ret.data); gem_strlen_check((size_t)_ret.len, \"{c_sym}\"); }\n")
+      buf_push(b, "    GemVal _gv = _ret.data ? gem_string_with_len((const char*)_ret.data, _ret.len) : gem_string_with_len(\"\", 0);\n")
       buf_push(b, "    if (_ret.data) free((void*)_ret.data);\n")
       buf_push(b, "    return _gv;\n")
     else

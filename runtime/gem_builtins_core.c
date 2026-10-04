@@ -5,14 +5,15 @@
 
 #include "gem.h"
 #include <errno.h>
+#include <limits.h>
+#include <sys/types.h>
 #include <math.h>
 
 /* ─── Value formatting ───
  *
  * Single shared repr used by print/eprint/to_string and string interpolation.
- * Tables previously rendered as `<table:N>` which made print debugging useless;
- * now they recurse into a `{k: v, ...}` (or `[v1, v2, ...]` for dense int-keyed)
- * form with cycle detection and depth/breadth caps.
+ * Tables render as `{k: v, ...}` (or `[v1, v2, ...]` for dense int-keyed),
+ * with cycle detection and depth/breadth caps.
  */
 
 #define GEM_FMT_MAX_DEPTH 8
@@ -24,19 +25,8 @@ typedef struct {
     int len;
 } GemFmtSeen;
 
-static void fmt_buf_grow(GemBuffer *b, int need) {
-    while (b->len + need >= b->cap) {
-        int nc = b->cap * 2;
-        if (nc < b->len + need + 1) nc = b->len + need + 1;
-        char *nd = (char *)gem_alloc(nc);
-        memcpy(nd, b->data, b->len);
-        b->data = nd;
-        b->cap = nc;
-    }
-}
-
 static void fmt_buf_appendn(GemBuffer *b, const char *s, int n) {
-    fmt_buf_grow(b, n);
+    gem_buffer_reserve(b, (size_t)n, "to_string");
     memcpy(b->data + b->len, s, n);
     b->len += n;
 }
@@ -483,12 +473,19 @@ GemVal gem_input_fn(void *_env, GemVal *args, int argc) {
         printf("%s", args[0].sval);
         fflush(stdout);
     }
-    char buf[4096];
-    if (!fgets(buf, sizeof(buf), stdin)) return GEM_NIL;
-    size_t len = strlen(buf);
-    if (len > 0 && buf[len - 1] == '\n') buf[--len] = '\0';
-    if (len > 0 && buf[len - 1] == '\r') buf[--len] = '\0';
-    return gem_string(buf);
+    /* getline reads a line of any length and reports its byte count, so a
+       NUL inside the line is kept. The buffer is reused across calls. */
+    static char *line = NULL;
+    static size_t cap = 0;
+    ssize_t n = getline(&line, &cap, stdin);
+    if (n < 0) return GEM_NIL;
+    size_t len = (size_t)n;
+    if (len > 0 && line[len - 1] == '\n') {
+        len--;
+        if (len > 0 && line[len - 1] == '\r') len--;
+    }
+    gem_strlen_check(len, "input");
+    return gem_string_with_len(line, (int64_t)len);
 }
 
 /* ─── Built-in: write_stdout (write raw bytes + flush) ─── */
@@ -519,6 +516,7 @@ GemVal gem_read_stdin_fn(void *_env, GemVal *args, int argc) {
     int64_t n = args[0].ival;
     if (n < 0) { gem_error("read_stdin: negative length"); }
     if (n == 0) { GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = gem_alloc(1); r.sval[0] = '\0'; r.slen = 0; return r; }
+    gem_strlen_check((size_t)n, "read_stdin");
     char *data = (char *)gem_alloc((size_t)n + 1);
     size_t got = fread(data, 1, (size_t)n, stdin);
     data[got] = '\0';

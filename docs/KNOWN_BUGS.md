@@ -38,27 +38,6 @@ check belongs in `scope_shadowing_lets`.
 
 ## Runtime
 
-### A `tcp_accept` waiting on a listening socket that another process closes spins forever
-
-```gem
-let l = tcp_listen("127.0.0.1", 18296)
-spawn do
-  let r = pcall tcp_accept(l)
-  print("accept returned", r)    # never printed
-end
-sleep(100)
-tcp_close(l)
-print("closed")                  # the program then never exits, at 100% CPU
-```
-
-The waiting process is never told: `poll` reports the closed fd as
-`POLLNVAL` at once on every pass, the scheduler keeps it waiting
-(`gem_run_scheduler` / the poll loop in runtime/gem_scheduler.c), and
-`accept` is not retried, so the scheduler busy-loops. A `POLLNVAL` (or
-`POLLERR`/`POLLHUP`) should make the waiter ready so `accept` fails with
-`EBADF` and raises. Likely the same for a `tcp_read` on a socket another
-process closes.
-
 ### `in` answers differently on a copy of a table whose string keys were deleted
 
 ```gem
@@ -80,57 +59,6 @@ array, and looks for the value, when its string-key index is `NULL`, and
 as a map, looking for the key, otherwise. Deleting the last string key
 leaves an empty index; a copy rebuilds the index lazily and gets `NULL`.
 Decide on the table's keys, not on the index.
-
-### A buffer passed as `s` to `s = s + x` in a loop is changed in place
-
-```gem
-fn f(s, xs)
-  let i = 0
-  while i < len(xs)
-    s = s + xs[i]
-    i += 1
-  end
-  s
-end
-let b = buf_new()
-buf_push(b, "pre")
-print(type(f(b, ["a", "b"])), to_string(b))   # string preab
-```
-
-`b + "a"` raises (`type error in +: got buffer and string`), but inside the
-loop codegen turns `s = s + x` into `gem_string_append`
-(`find_append_vars` in compiler/codegen.gem, runtime/gem_ops.c), which
-can't tell the caller's buffer from the buffer it builds a string in: it
-appends to the caller's buffer and returns a string.
-
-### `input()` splits lines of 4,095 bytes or more and stops at a NUL
-
-```sh
-python3 -c 'print("a" * 5000); print("b\0c")' | gem lines.gem
-# lines.gem: while true / let line = input() / if line == nil then break end / print(len(line)) / end
-# prints 4095, 905, 1 instead of 5000, 3
-```
-
-`gem_input_fn` (runtime/gem_builtins_core.c) reads with one `fgets` into a
-4096-byte stack buffer and takes the length with `strlen`. A line of
-4,095 bytes or more comes back as several lines (one of exactly 4,095
-as that line and an empty one), with nothing to tell the caller, and a NUL
-byte ends the line early. Read with `getline` (or grow a buffer until the
-newline) and use the returned length.
-
-### `read_file` of a file of 2 GiB or more gives a wrong length
-
-```sh
-truncate -s 2200M big.bin
-gem read.gem big.bin    # read.gem: print(len(read_file(argv()[1])))
-# prints -1988100096; a 4200M file prints 109051904
-```
-
-A string's length is a C `int` (`slen` in `runtime/gem.h`), and
-`gem_read_file_fn` (runtime/gem_builtins_io.c) stores the file size into it
-with an unchecked `(int)` cast. Strings can't hold 2 GiB, so `read_file`
-should raise for such a file; the other places that size a string from a
-`size_t` need the same check.
 
 ### sqlite: SQL after an embedded NUL is ignored
 

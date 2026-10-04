@@ -81,6 +81,9 @@ Canonical comparison point for the `while true` rescue+reset codegen vs. the pre
 
 ## Arena / Memory
 
+### Zero only the arena memory a reset hands out again ✓ Done (2026-10-04)
+`gem_arena_alloc` cleared every allocation with `memset`, although a block comes from `mmap` already zeroed: in a `sample` profile of `examples/logstat` the `memset` was about 9% of the main thread. A block now records the highest `used` a region reset rewound it from (`dirty` in `GemArenaBlock`), and an allocation clears only what lies below it. logstat, 1M lines on stdin, `--by ip` (macOS arm64): 5.41 s → 4.93 s, same report.
+
 ### Region resets: sound in any call context, with hysteresis ✓ Done (2026-10-02)
 
 Replaced the whole-arena reset (sound only for loops reachable from a process root through tail calls, guarded elsewhere by a runtime "depth-2 fence") with region resets. Each loop (`while`, TCO fn, mutual-TCO trampoline) takes a `GemArenaMark` at entry; its back-edge reset copies what is reachable from the memory allocated since the mark and unmaps the rest. Older memory is never moved, so callers' frames stay valid; older tables written since the mark are found through a write barrier + remembered log and fixed up in place, old buffers / pinned boxes / module slots / mailbox likewise. The process-tail analysis, the depth fence, the pcall skip and the "TCO function not reachable from a process root" warnings are gone; zero-arg tail calls reset too. Next reset waits for max(1 MB, 2 × copied + scanned) bytes.
@@ -142,7 +145,7 @@ Replaced Boehm GC with per-process arena allocation. No global stop-the-world pa
 All heavy string accumulators in `compiler/codegen.gem` rewritten to use `buf_new`/`buf_push`/`buf_str`. Eliminated ~188 O(n²) concatenations.
 
 ### `x = x + y` auto-optimization ✓ Done
-The compiler detects the self-append pattern `assign(name, binary("+", var(name), expr))` inside `while`/`for` loop bodies and emits `gem_string_append`/`gem_string_finish` instead of `gem_add`. Eligible variables must only appear in append patterns within the loop body (no non-append reads). Handles chained concatenation (`x = x + a + b + c`), conditional appends inside `if`/`match`, and nested loops. Runtime fallback for non-string types (integers, floats) ensures correctness without static type information.
+The compiler detects the self-append pattern `assign(name, binary("+", var(name), expr))` inside `while`/`for` loop bodies and emits `gem_string_append_to`/`gem_string_finish` instead of `gem_add`. Eligible variables must only appear in append patterns within the loop body (no non-append reads), and a module-level variable is eligible only in top-level code whose loop calls no user fn and none of `pcall`, `sort`, `build_string` or the `spawn` family (anything else could read its slot mid-loop). A per-loop C flag records that the variable holds the buffer the loop built; only then are appends in place and the variable turned back into a string after the loop, so a buffer the program passed in gets plain `+`. Handles chained concatenation (`x = x + a + b + c`), conditional appends inside `if`/`match`, and nested loops. Runtime fallback for non-string types (integers, floats) ensures correctness without static type information.
 
 ### Redundant `gem_push_frame` / `gem_pop_frame` for leaf functions ✓ Done (2026-05-04)
 A leaf function — one whose body contains no `call` AST node and no `receive_match` — emits its body without `gem_push_frame`/`gem_pop_frame` and without `gem_set_line`. Detection (`body_is_leaf` in `compiler/codegen.gem`) is conservative: every builtin invocation parses as a `call` (since `print`, `len`, `error`, … all go through `compile_call`'s direct-call path), so any use of one disqualifies the fn. Predicates / accessors / pure arithmetic / control-flow / table-and-array literal builders qualify; bookkeeping helpers do not.
@@ -310,6 +313,9 @@ Structural-decrease termination check (option B) is still TODO — see `OPTIMIZA
 
 ## Table Access
 
+### O(1) appends and misses on arrays ✓ Done (2026-10-04)
+`t[len(t)] = v` searched every key before appending, so building an array by index, and the runtime's own `keys`, `values`, `list_dir`, `argv` and sqlite result rows (all built that way), were quadratic. A table now carries `is_array` (entry i has key i): on such a table an int key at or past the end is appended, and a lookup or `has_key` past the end is a miss, without a search. `push` uses the flag too; on a table that is not an array it is `t[len(t)] = v`, where it used to add a second entry with an existing key. `keys` + `values` of a 40,000-entry table: 2,110 ms → 2 ms; of 1M entries: 30 ms. Sparse int keys are still searched (OPTIMIZATIONS.md, "Avoid hashing integers in tables").
+
 ### Inline caching for `.field` access ✓ Done
 Codegen emits a `static GemICacheSlot` per `.field` access site. On cache hit (same table + same shape_id), returns `t->vals[cached_index]` directly — no hash, no `gem_string()` allocation. Cache miss falls back to full `shgeti` lookup and populates the cache. `shape_id` on `GemTable` is bumped by structural mutations (delete, pop, sort, insert, remove_at) but not by set/push (which don't move existing key→index mappings). Monomorphic (1 slot per site) — sufficient for AST walking where each access site typically sees one table shape.
 
@@ -358,6 +364,11 @@ Measured after these fixes, 200k spawn/exit: macOS arm64 1.80 / 0.78 / 0.99 s wi
 On macOS, `ps` and `top` report RSS well above `phys_footprint` after deep processes exit (381 MB against 21 MB in the test above). That is how `MADV_FREE_REUSABLE` works: the pages are reclaimable but stay counted until the system needs them. Use `phys_footprint` (`footprint` or Activity Monitor's Memory column), not RSS, when looking for a stack leak on macOS. Call overhead of the soft limit check in `gem_push_frame` (one load and one compare) is within noise: fib(35) 1.07 s before vs 1.11 s after, averaged over 5 runs with ±10% run-to-run spread; self-compile of `compiler/main.gem` was 3.0–3.3 s in both.
 
 Not done: ASan builds. ASan's own SIGSEGV reporting is replaced by the overflow handler, which hands non-guard faults to the default action, and minicoro's ASan fiber hooks were not exercised with the mmap'd stacks.
+
+## Strings
+
+### `find` builtin ✓ Done (2026-10-04)
+`find(s, needle, start)` searches with `memchr` (+ `memcmp` for longer needles) in C. It replaced std/string's private `find`, which scanned 32 positions in Gem and then tested growing chunks with `str_replace`, and std/http's runtime extern `gem_bytes_find`. `string.index_of`, `contains` and `split` are now one `find` per match. `examples/logstat` (eight `index_of` and one `split` per line), 1M lines, macOS arm64: from a file 11.3–13.1 s → 4.5–6.0 s, from stdin 7.9–9.4 s → 4.3–5.7 s (Python: 2.0 s).
 
 ## std/json
 

@@ -28,80 +28,6 @@ fn is_space(c)
   c == 32 or (c >= 9 and c <= 13)
 end
 
-# True when needle (nlen bytes, nlen >= 1) occurs at pos; the first byte is
-# already known to match.
-fn rest_eq_at(s, pos, needle, nlen)
-  for k = 1, nlen
-    if ord(s, pos + k) != ord(needle, k)
-      return false
-    end
-  end
-  true
-end
-
-# Does needle start at any of the n positions i .. i+n-1? Runs in C:
-# str_replace returns its input unchanged when nothing matches.
-fn chunk_has(s, i, n, needle, nlen)
-  let chunk = substr(s, i, n + nlen - 1)
-  len(str_replace(chunk, needle, "")) != len(chunk)
-end
-
-# Gem byte scan of the n start positions from i, for the first match.
-fn scan(s, i, n, needle, nlen)
-  let first = ord(needle, 0)
-  for p = i, i + n
-    if ord(s, p) == first and (nlen == 1 or rest_eq_at(s, p, needle, nlen))
-      return p
-    end
-  end
-  -1
-end
-
-# First position >= from where needle (nlen >= 1) starts, or -1. A byte
-# loop costs about 50 ns a byte, so after a short Gem scan (cheap for
-# matches close by) find tests growing chunks in C, then bisects the
-# chunk that matched down to a short scan.
-fn find(s, needle, from)
-  let nlen = len(needle)
-  let npos = len(s) - nlen + 1 - from      # start positions left
-  if npos <= 0
-    return -1
-  end
-  let n = npos
-  if n > 32
-    n = 32
-  end
-  let hit = scan(s, from, n, needle, nlen)
-  if hit >= 0
-    return hit
-  end
-  let i = from + n
-  let size = 64
-  while i < from + npos
-    n = size
-    if n > from + npos - i
-      n = from + npos - i
-    end
-    if chunk_has(s, i, n, needle, nlen)
-      while n > 32
-        let half = n / 2
-        if chunk_has(s, i, half, needle, nlen)
-          n = half
-        else
-          i += half
-          n -= half
-        end
-      end
-      return scan(s, i, n, needle, nlen)
-    end
-    i += n
-    if size < 65536
-      size *= 2
-    end
-  end
-  -1
-end
-
 ## Splits `s` at every occurrence of `delim` and returns the pieces, left
 ## to right.
 ##
@@ -121,28 +47,14 @@ fn split(s, delim)
     return [s]
   end
   let parts = []
-  let first = ord(delim, 0)
-  let last = len(s) - dlen         # last position delim can start at
   let start = 0                    # start of the current piece
-  let i = 0
-  # Scan in Gem while delimiters are close together (no call per byte);
-  # hand a long gap to find, which searches it in C.
-  while i <= last
-    if ord(s, i) == first and (dlen == 1 or rest_eq_at(s, i, delim, dlen))
-      push(parts, substr(s, start, i - start))
-      i += dlen
-      start = i
-    elif i - start >= 32
-      let at = find(s, delim, i)
-      if at < 0
-        break
-      end
-      push(parts, substr(s, start, at - start))
-      i = at + dlen
-      start = i
-    else
-      i += 1
+  while true
+    let at = find(s, delim, start)
+    if at < 0
+      break
     end
+    push(parts, substr(s, start, at - start))
+    start = at + dlen
   end
   push(parts, substr(s, start, len(s) - start))
   parts
@@ -165,15 +77,6 @@ fn index_of(s, needle, start = 0)
   if type(start) != "int"
     error("string.index_of: start must be an int, got {type(start)}")
   end
-  if start < 0
-    start = 0
-  end
-  if len(needle) == 0
-    if start > len(s)
-      return -1
-    end
-    return start
-  end
   find(s, needle, start)
 end
 
@@ -184,7 +87,7 @@ end
 fn contains(s, needle)
   s = text("contains", "s", s)
   needle = text("contains", "needle", needle)
-  len(needle) == 0 or find(s, needle, 0) >= 0
+  find(s, needle) >= 0
 end
 
 ## Joins the elements of `arr` into one string, with `delim` between

@@ -16,6 +16,11 @@ GemVal gem_push_fn(void *_env, GemVal *args, int argc) {
     if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "push: expected table or buffer as first argument, got %s", gem_type_str(tbl)); gem_error(buf); }
     GemTable *t = tbl.table;
     GemVal val = args[1];
+    if (!t->is_array) {
+        /* Key len may already be in the table: push(t, v) is t[len(t)] = v. */
+        gem_table_set(tbl, gem_int(t->len), val);
+        return val;
+    }
     gem_table_check_mutable(t);
     if (t->len >= t->cap) gem_table_grow(t);
     gem_table_written(t);
@@ -118,6 +123,7 @@ GemVal gem_has_key_fn(void *_env, GemVal *args, int argc) {
         if (ik >= 0 && ik < t->len && t->keys[ik].type == VAL_INT && t->keys[ik].ival == ik) {
             return gem_bool(1);
         }
+        if (t->is_array) return gem_bool(0);
     }
 
     /* Fallback: linear scan */
@@ -203,6 +209,7 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
 
     int last = t->len - 1;
     if (pos < last) {
+        t->is_array = 0;
         GemVal moved_key = t->keys[last];
         t->keys[pos] = moved_key;
         t->vals[pos] = t->vals[last];
@@ -211,6 +218,7 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
         }
     }
     t->len--;
+    if (t->len == 0) t->is_array = 1;
     t->shape_id++;
     return removed;
 }
@@ -229,6 +237,7 @@ GemVal gem_pop_fn(void *_env, GemVal *args, int argc) {
     GemVal removed = t->vals[t->len];
     GemVal removed_key = t->keys[t->len];
     if (removed_key.type == VAL_STRING) gem_str_index_del(t->str_index, removed_key.sval, removed_key.slen);
+    if (t->len == 0) t->is_array = 1;
     t->shape_id++;
     return removed;
 }
@@ -352,6 +361,7 @@ GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
     for (int i = 0; i < t->len; i++) {
         t->keys[i] = gem_int(i);
     }
+    t->is_array = 1;
     /* No string keys are left: drop their index, whose entries point at
        key strings nothing roots any more. */
     gem_str_index_free(&t->str_index);

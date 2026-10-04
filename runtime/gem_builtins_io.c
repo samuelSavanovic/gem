@@ -176,6 +176,7 @@ GemVal gem_path_join_fn(void *_env, GemVal *args, int argc) {
     const char *file = args[1].sval;
     size_t dlen = (size_t)args[0].slen;
     size_t flen = (size_t)args[1].slen;
+    gem_strlen_check(dlen + 1 + flen, "path_join");
     if (flen > 0 && file[0] == '/') {
         char *copy = (char *)gem_alloc(flen + 1);
         memcpy(copy, file, flen);

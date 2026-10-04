@@ -1,0 +1,83 @@
+# A process waiting in tcp_accept, tcp_read or tcp_write on a socket that
+# another process closes gets an error at once, even when a new socket has
+# already taken the closed one's fd number.
+
+extern include "unistd.h"
+extern fn close(fd: Int) -> Int
+
+let me = self()
+
+let l = tcp_listen("127.0.0.1", 18296)
+spawn do
+  let r = pcall tcp_accept(l)
+  send(me, ["accept", r.ok, r.error])
+end
+sleep(20)
+tcp_close(l)
+print(receive())
+
+# The new listener reuses the closed fd number; the old waiter must not
+# accept its connection.
+let l2 = tcp_listen("127.0.0.1", 18297)
+spawn do
+  let r = pcall tcp_accept(l2)
+  send(me, ["accept on reused fd", r.ok, r.error])
+end
+sleep(20)
+tcp_close(l2)
+let l3 = tcp_listen("127.0.0.1", 18298)
+print("fd reused:", l3 == l2)
+let c3 = tcp_connect("127.0.0.1", 18298)
+print(receive())
+let s3 = tcp_accept(l3)
+print("new listener still accepts:", type(s3))
+
+let l4 = tcp_listen("127.0.0.1", 18299)
+let c = tcp_connect("127.0.0.1", 18299)
+let s = tcp_accept(l4)
+spawn do
+  let r = pcall tcp_read(c)
+  send(me, ["read", r.ok, r.error])
+end
+spawn do
+  let r = pcall tcp_read(s, 4096, 60000)
+  send(me, ["read with timeout", r.ok, r.error])
+end
+sleep(20)
+tcp_close(c)
+tcp_close(s)
+print(receive())
+print(receive())
+
+# 8 MB: more than a loopback socket's buffers hold while the peer doesn't read.
+let big = build_string() do |add|
+  for i = 0, 8 * 1024 * 1024
+    add("x")
+  end
+end
+let c6 = tcp_connect("127.0.0.1", 18299)
+let s6 = tcp_accept(l4)
+spawn do
+  let r = pcall tcp_write(c6, big)
+  send(me, ["write", r.ok, r.error])
+end
+sleep(20)
+tcp_close(c6)
+print(receive())
+tcp_close(s6)
+
+# A close that bypasses tcp_close (here a C extern) is seen through poll.
+let l5 = tcp_listen("127.0.0.1", 18300)
+spawn do
+  let r = pcall tcp_accept(l5)
+  send(me, ["accept, closed from C", r.ok, r.error])
+end
+sleep(20)
+close(l5)
+print(receive())
+
+tcp_close(c3)
+tcp_close(s3)
+tcp_close(l3)
+tcp_close(l4)
+print("done")

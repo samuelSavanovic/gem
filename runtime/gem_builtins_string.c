@@ -1,8 +1,8 @@
 /*
- * gem_builtins_string.c — String builtins: str_replace, substr, chr, ord,
- *                          and the buffer API (buf_new, buf_push), plus
- *                          gem_bytes_span and gem_bytes_find (extern helpers
- *                          for std/http).
+ * gem_builtins_string.c — String builtins: find, str_replace, substr, chr,
+ *                          ord, and the buffer API (buf_new, buf_push), plus
+ *                          gem_bytes_span (extern helper for std/http and
+ *                          std/request).
  */
 
 #include "gem.h"
@@ -50,21 +50,51 @@ int64_t gem_bytes_span(const uint8_t *s, int64_t n, const uint8_t *accept, int64
     return i;
 }
 
-/* ─── gem_bytes_find (extern helper, see gem.h) ─── */
+/* ─── Built-in: find ─── */
 
-int64_t gem_bytes_find(const uint8_t *s, int64_t n, const uint8_t *needle, int64_t nn, int64_t from) {
-    if (from < 0) from = 0;
-    if (nn == 0) return from <= n ? from : -1;
+/* The offset of the first `needle` (nn bytes, nn >= 1) in `s` (n bytes) at
+   or after `from`, or -1. */
+static int64_t bytes_find(const char *s, int64_t n, const char *needle, int64_t nn, int64_t from) {
     if (from > n - nn) return -1;
-    const uint8_t *p = s + from;
-    const uint8_t *last = s + (n - nn);
+    if (nn == 1) {
+        const char *p = memchr(s + from, needle[0], (size_t)(n - from));
+        return p ? (int64_t)(p - s) : -1;
+    }
+    const char *p = s + from;
+    const char *last = s + (n - nn);
     while (p <= last) {
         p = memchr(p, needle[0], (size_t)(last - p) + 1);
         if (!p) return -1;
-        if (memcmp(p, needle, (size_t)nn) == 0) return (int64_t)(p - s);
+        if (memcmp(p + 1, needle + 1, (size_t)nn - 1) == 0) return (int64_t)(p - s);
         p++;
     }
     return -1;
+}
+
+/* A string's or buffer's bytes in *s and *n, returning 1; 0 for any other
+   type. */
+static int text_bytes(GemVal v, const char **s, int64_t *n) {
+    if (v.type == VAL_STRING) { *s = v.sval; *n = v.slen; return 1; }
+    if (v.type == VAL_BUFFER) { *s = v.buffer->data; *n = v.buffer->len; return 1; }
+    return 0;
+}
+
+GemVal gem_find_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    const char *s, *needle;
+    int64_t n, nn;
+    if (argc < 2 || !text_bytes(args[0], &s, &n) || !text_bytes(args[1], &needle, &nn) ||
+        (argc >= 3 && args[2].type != VAL_INT)) {
+        char buf[200];
+        snprintf(buf, sizeof(buf), "find: expected (string|buffer s, string|buffer needle[, int start]), got (%s, %s%s%s)",
+                 argc < 1 ? "nothing" : gem_type_str(args[0]), argc < 2 ? "nothing" : gem_type_str(args[1]),
+                 argc >= 3 ? ", " : "", argc >= 3 ? gem_type_str(args[2]) : "");
+        gem_error(buf);
+    }
+    int64_t from = argc >= 3 ? args[2].ival : 0;
+    if (from < 0) from = 0;
+    if (nn == 0) return gem_int(from <= n ? from : -1);
+    return gem_int(bytes_find(s, n, needle, nn, from));
 }
 
 /* ─── Built-in: str_replace ─── */
@@ -96,6 +126,7 @@ GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc) {
     /* Modular arithmetic in size_t: when new_len < old_len, the subtraction
      * wraps but the final sum lands at the correct non-negative result. */
     size_t result_len = s_len + (size_t)count * (new_len - old_len);
+    gem_strlen_check(result_len, "str_replace");
     char *result = (char *)gem_alloc(result_len + 1);
     char *dst = result;
     i = 0;
@@ -194,21 +225,11 @@ GemVal gem_ord_fn(void *_env, GemVal *args, int argc) {
 
 /* ─── String interpolation ─── */
 
-static void interp_append(char **data, int *len, int *cap, const char *s, int slen) {
-    while (*len + slen >= *cap) {
-        int new_cap = *cap * 2;
-        char *new_data = (char *)gem_alloc(new_cap);
-        memcpy(new_data, *data, *len);
-        *data = new_data;
-        *cap = new_cap;
-    }
-    memcpy(*data + *len, s, slen);
-    *len += slen;
-}
-
 GemVal gem_interp(int n, GemVal *parts) {
-    int cap = 128, len = 0;
-    char *data = (char *)gem_alloc(cap);
+    GemBuffer b;
+    b.cap = 128;
+    b.len = 0;
+    b.data = (char *)gem_alloc((size_t)b.cap);
     char tmp[64];
     for (int i = 0; i < n; i++) {
         const char *s;
@@ -232,24 +253,25 @@ GemVal gem_interp(int n, GemVal *parts) {
             case VAL_REF: slen = snprintf(tmp, sizeof(tmp), "#Ref<%lld>", (long long)parts[i].rval); s = tmp; break;
             default: s = ""; slen = 0; break;
         }
-        interp_append(&data, &len, &cap, s, slen);
+        gem_buffer_reserve(&b, (size_t)slen, "string interpolation");
+        memcpy(b.data + b.len, s, (size_t)slen);
+        b.len += slen;
     }
-    char *s = (char *)gem_alloc(len + 1);
-    memcpy(s, data, len);
-    s[len] = '\0';
+    char *s = (char *)gem_alloc((size_t)b.len + 1);
+    memcpy(s, b.data, (size_t)b.len);
+    s[b.len] = '\0';
     GemVal r;
     r.type = VAL_STRING;
     r.magic = GEM_MAGIC;
     r.sval = s;
-    r.slen = len;
+    r.slen = b.len;
     return r;
 }
 
 /* ─── String builder (buf_new / buf_push) ───
  *
  * Buffers are finalized to a string via the generic `to_string` builtin
- * (`gem_to_string_fn` handles VAL_BUFFER); there is no longer a dedicated
- * `buf_str`. */
+ * (`gem_to_string_fn` handles VAL_BUFFER). */
 
 GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc) {
     (void)_env; (void)args; (void)argc;
@@ -265,14 +287,7 @@ GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc) {
  * point into `b->data` itself: the old block is copied, not freed. */
 static void buf_append_bytes(GemBuffer *b, const char *src, int n) {
     if (n <= 0) return;
-    if (b->len + n >= b->cap) {
-        int new_cap = b->cap > 16 ? b->cap : 16;
-        while (b->len + n >= new_cap) new_cap *= 2;
-        char *new_data = (char *)gem_alloc(new_cap);
-        memcpy(new_data, b->data, b->len);
-        b->data = new_data;
-        b->cap = new_cap;
-    }
+    gem_buffer_reserve(b, (size_t)n, "buf_push");
     memcpy(b->data + b->len, src, n);
     b->len += n;
 }
@@ -326,6 +341,8 @@ static GemVal build_string_add_fn(void *_env, GemVal *args, int argc) {
         gem_error("build_string: `add` can only be called by the process that created it");
     GemVal buf_val = *fields[0];
     for (int i = 0; i < argc; i++) {
+        if (args[i].type == VAL_STRING)
+            gem_buffer_reserve(buf_val.buffer, (size_t)args[i].slen, "build_string");
         GemVal push_args[2] = {buf_val, args[i]};
         gem_buf_push_fn(NULL, push_args, 2);
     }

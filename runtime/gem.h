@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <limits.h>
 #include <setjmp.h>
 
 /* minicoro forward declaration — full impl is in gem_scheduler.c.
@@ -24,6 +25,9 @@ typedef struct GemArenaBlock {
     struct GemArenaBlock *next;
     size_t cap;
     size_t used;
+    size_t dirty;   /* data[used .. dirty) was handed out before a region
+                       reset rewound `used`; past it the block is still
+                       mmap's zero fill */
     char data[];
 } GemArenaBlock;
 
@@ -115,6 +119,19 @@ typedef struct GemBuffer {
 /* Allocate a buffer (struct + `cap` data bytes) in the current arena and
    track it in the arena's buffer_list, which region resets scan. */
 GemBuffer *gem_buffer_alloc(int cap);
+
+/* A string or buffer holds at most GEM_MAX_STRLEN bytes: a string's slen
+   and a buffer's len and cap are C ints, and a buffer keeps cap > len. */
+#define GEM_MAX_STRLEN (INT_MAX - 1)
+
+/* Returns n as an int, or raises "<who>: a string of N bytes is over the
+   limit of GEM_MAX_STRLEN bytes" (no prefix when who is NULL). */
+int gem_strlen_check(size_t n, const char *who);
+
+/* Grows b in the current arena so that b->len + extra < b->cap; the old
+   data block is copied, not freed. Raises through gem_strlen_check when
+   the result would be longer than GEM_MAX_STRLEN. */
+void gem_buffer_reserve(GemBuffer *b, size_t extra, const char *who);
 
 struct GemVal {
     GemType type;
@@ -240,7 +257,7 @@ GemVal gem_float(double v);
 int gem_format_float(double v, char *out);
 GemVal gem_bool(int v);
 GemVal gem_string(const char *s);
-GemVal gem_string_with_len(const char *s, int len);  /* binary-safe; copies len bytes and appends a trailing '\0' */
+GemVal gem_string_with_len(const char *s, int64_t len);  /* binary-safe; copies len bytes and appends a trailing '\0'; raises past GEM_MAX_STRLEN */
 GemVal gem_make_fn(GemFnPtr f, void *env);
 
 /* ─── extern fn `Bytes` marshaling ───
@@ -304,6 +321,9 @@ struct GemTable {
     uint8_t immutable;       /* frozen module namespace table (gem_table_freeze); copies keep the flag */
     uint8_t rem_flag;        /* scratch bit for a reset's remembered-log compaction */
     uint8_t index_stale;     /* str_index not built yet (deep copies build it on first string-key use) */
+    uint8_t is_array;        /* every entry i has the int key i, so no key is >= len and t[len] = v
+                                appends without a search; cleared by any other append or a delete
+                                that moves an entry, set again by sort */
     uint32_t snap_gen;       /* module snapshot unit this table was copied into (0: none); see gem_table_check_mutable */
     uint64_t mut_seq;        /* gem_mut_clock at creation or the last logged write (see gem_table_written) */
 };
@@ -395,11 +415,6 @@ int64_t gem_table_id(GemVal v);
    instead of a Gem loop over `ord`; the tables of the last few byte sets
    are cached. */
 int64_t gem_bytes_span(const uint8_t *s, int64_t n, const uint8_t *accept, int64_t accept_n);
-/* The offset of the first occurrence of `needle` (nn bytes) in `s` (n
-   bytes) at or after `from` (clamped to 0), or -1; an empty needle is
-   found at `from` when from <= n. Binary-safe, like memmem. std/http
-   uses it (extern fn, Bytes params) to split request heads in C. */
-int64_t gem_bytes_find(const uint8_t *s, int64_t n, const uint8_t *needle, int64_t nn, int64_t from);
 int gem_truthy(GemVal v);
 
 /* ─── Arithmetic / operators ─── */
@@ -417,7 +432,13 @@ GemVal gem_le(GemVal a, GemVal b);
 GemVal gem_ge(GemVal a, GemVal b);
 GemVal gem_neg(GemVal a);
 GemVal gem_not(GemVal a);
-void gem_string_append(GemVal *accum, GemVal rhs);
+/* `s = s + rhs` in a loop that only appends to s (compile_while in
+   compiler/codegen.gem); *built is that loop's flag, 0 before the loop. The
+   first append to a string copies it into a fresh buffer and sets *built;
+   later ones append to that buffer, and the loop ends with
+   `if (built) s = gem_string_finish(s)`. Any other s (an int, a buffer the
+   program made) gets plain `+`. */
+void gem_string_append_to(GemVal *accum, GemVal rhs, int *built);
 GemVal gem_string_finish(GemVal val);
 
 /* ─── Protected call (pcall) ─── */
@@ -458,6 +479,7 @@ GemVal gem_has_key_fn(void *_env, GemVal *args, int argc);
 GemVal gem_is_array_n_fn(void *_env, GemVal *args, int argc);
 GemVal gem_in_fn(void *_env, GemVal *args, int argc);
 GemVal gem_substr_fn(void *_env, GemVal *args, int argc);
+GemVal gem_find_fn(void *_env, GemVal *args, int argc);
 GemVal gem_chr_fn(void *_env, GemVal *args, int argc);
 GemVal gem_ord_fn(void *_env, GemVal *args, int argc);
 GemVal gem_to_int_fn(void *_env, GemVal *args, int argc);
@@ -736,6 +758,7 @@ typedef struct {
     int pid;
     int wait_fd;        /* fd this process is waiting on (when IO_WAIT) */
     int wait_write;     /* 0 = waiting for read, 1 = waiting for write */
+    int wait_fd_closed; /* set by gem_io_fd_closed while waiting on wait_fd */
     GemIORequest *io_request;     /* non-NULL when waiting on thread pool I/O */
     GemMonitorNode *monitors;     /* linked list of pids monitoring this process */
     GemLinkNode *links;           /* linked list of pids linked to this process */
@@ -858,8 +881,15 @@ int64_t gem_after_deadline(GemVal ms);
 int64_t gem_now_ms(void);
 
 /* Non-blocking I/O: yield current coroutine until fd is ready.
-   for_write=0 means wait for readable, for_write=1 means wait for writable. */
-void gem_io_yield(int fd, int for_write);
+   for_write=0 means wait for readable, for_write=1 means wait for writable.
+   Returns 0 when the fd may be ready, or -1 with errno = EBADF when the fd
+   was closed through gem_io_fd_closed during the wait; the caller must not
+   touch the fd then, since its number may already belong to a new file. */
+int gem_io_yield(int fd, int for_write);
+
+/* Wake every process waiting in gem_io_yield on fd, making their waits
+   return -1. Call before close(fd). */
+void gem_io_fd_closed(int fd);
 
 /* Yield the current coroutine for a thread pool I/O request.
    Sets state to IO_WAIT; caller must set proc->io_request first. */

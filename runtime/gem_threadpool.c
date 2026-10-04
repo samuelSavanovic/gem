@@ -53,6 +53,13 @@ char *gem_read_whole_file(const char *path, size_t *out_len, char **err_msg) {
             *err_msg = strdup(msg);
             return NULL;
         }
+        if (S_ISREG(st.st_mode) && (uint64_t)st.st_size > (uint64_t)GEM_MAX_STRLEN) {
+            fclose(f);
+            snprintf(msg, sizeof(msg), "'%s' is %lld bytes, over the string limit of %d bytes",
+                     path, (long long)st.st_size, GEM_MAX_STRLEN);
+            *err_msg = strdup(msg);
+            return NULL;
+        }
         if (S_ISREG(st.st_mode) && st.st_size > 0) cap = (size_t)st.st_size + 1;
     }
     char *data = (char *)malloc(cap);
@@ -62,9 +69,21 @@ char *gem_read_whole_file(const char *path, size_t *out_len, char **err_msg) {
         if (len < cap - 1) break;          /* short read: EOF or error */
         int c = fgetc(f);                  /* full: is there more? */
         if (c == EOF) break;
+        if (len >= (size_t)GEM_MAX_STRLEN) {
+            len = (size_t)GEM_MAX_STRLEN + 1;   /* stop reading: too long */
+            break;
+        }
         cap *= 2;
         data = (char *)realloc(data, cap);
         data[len++] = (char)c;
+    }
+    if (len > (size_t)GEM_MAX_STRLEN) {
+        fclose(f);
+        free(data);
+        snprintf(msg, sizeof(msg), "'%s' holds more than the string limit of %d bytes",
+                 path, GEM_MAX_STRLEN);
+        *err_msg = strdup(msg);
+        return NULL;
     }
     if (ferror(f)) {
         fclose(f);

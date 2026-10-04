@@ -26,7 +26,6 @@ fn each_line(name, f)
   end
 end
 
-# input() splits lines of 4,095 bytes or more into pieces (KNOWN_BUGS).
 fn each_stdin_line(f)
   let n = 0
   while true

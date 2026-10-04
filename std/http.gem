@@ -49,12 +49,9 @@ load "std/time"
 # instead; it closes its own socket after that request. `serve` has the
 # server monitor its caller, so killing the caller stops the server.
 
-# Runtime helpers, one C pass each (a Gem loop over `ord` costs about
-# 50 ns a byte): the length of the prefix of `s` made of bytes from
-# `accept`, and the offset of the first `needle` in `s` at or after
-# `from` (-1 when there is none).
+# Runtime helper, one C pass (a Gem loop over `ord` costs about 50 ns a
+# byte): the length of the prefix of `s` made of bytes from `accept`.
 extern fn gem_bytes_span(s: Bytes, accept: Bytes) -> Int
-extern fn gem_bytes_find(s: Bytes, needle: Bytes, from: Int) -> Int
 
 let READ_SIZE = 8192
 let MAX_HEADER_BYTES = 65536
@@ -615,7 +612,7 @@ end
 # in a buffer and only the new bytes are scanned, so a peer sending one
 # byte at a time costs linear time.
 fn read_head(rd)
-  let found = gem_bytes_find(rd.data, "\r\n\r\n", rd.pos)
+  let found = find(rd.data, "\r\n\r\n", rd.pos)
   if found < 0 and rd.pos == len(rd.data)
     # Nothing pending (the usual case): one read mostly brings the whole
     # head, and then needs no buffer.
@@ -625,10 +622,10 @@ fn read_head(rd)
     end
     rd.data = chunk
     rd.pos = 0
-    found = gem_bytes_find(chunk, "\r\n\r\n", 0)
+    found = find(chunk, "\r\n\r\n", 0)
   end
   if found < 0
-    if gem_bytes_find(rd.data, "\n\n", rd.pos) >= 0
+    if find(rd.data, "\n\n", rd.pos) >= 0
       return {bare_lf: true}
     end
     let acc = buf_new()
@@ -642,10 +639,10 @@ fn read_head(rd)
         return nil
       end
       let window = "{tail}{chunk}"
-      let at = gem_bytes_find(window, "\r\n\r\n", 0)
+      let at = find(window, "\r\n\r\n", 0)
       if at >= 0
         found = have - len(tail) + at
-      elif gem_bytes_find(window, "\n\n", 0) >= 0
+      elif find(window, "\n\n", 0) >= 0
         return {bare_lf: true}
       end
       buf_push(acc, chunk)
@@ -705,7 +702,7 @@ end
 fn read_line(rd)
   let scan = rd.pos
   while true
-    let nl = gem_bytes_find(rd.data, "\n", scan)
+    let nl = find(rd.data, "\n", scan)
     if nl >= 0
       if nl == rd.pos or ord(rd.data, nl - 1) != 13 or nl - rd.pos - 1 > MAX_LINE
         return {bad: true}
@@ -775,7 +772,7 @@ fn read_chunked(rd, max_body)
     if not line_bytes_ok(size_str)
       return {status: 400}
     end
-    let semi = gem_bytes_find(size_str, ";", 0)
+    let semi = find(size_str, ";", 0)
     if semi >= 0
       size_str = substr(size_str, 0, semi)
     end
@@ -843,11 +840,11 @@ fn parse_request_line(line)
   if not line_bytes_ok(line)
     return 400
   end
-  let sp1 = gem_bytes_find(line, " ", 0)
+  let sp1 = find(line, " ", 0)
   if sp1 <= 0
     return 400
   end
-  let sp2 = gem_bytes_find(line, " ", sp1 + 1)
+  let sp2 = find(line, " ", sp1 + 1)
   if sp2 <= sp1 + 1 or len(line) - sp2 - 1 != 8
     return 400
   end
@@ -929,7 +926,7 @@ end
 # one Host header (RFC 9112 §3.2).
 fn parse_head(head)
   let n = len(head)
-  let eol = gem_bytes_find(head, "\r\n", 0)
+  let eol = find(head, "\r\n", 0)
   if eol < 0
     eol = n
   end
@@ -948,7 +945,7 @@ fn parse_head(head)
   let repeated = nil              # key -> its values, for repeated headers
   let pos = eol + 2
   while pos <= n
-    let stop = gem_bytes_find(head, "\r\n", pos)
+    let stop = find(head, "\r\n", pos)
     if stop < 0
       stop = n
     end
@@ -1396,7 +1393,7 @@ end
 # The path and query of an origin-form target, as url.parse gives them
 # (without its byte loop for the usual target with no `?` or `#`).
 fn parse_target(target)
-  if gem_bytes_find(target, "?", 0) < 0 and gem_bytes_find(target, "#", 0) < 0
+  if find(target, "?", 0) < 0 and find(target, "#", 0) < 0
     return {path: target, query: {}}
   end
   url.parse(target)

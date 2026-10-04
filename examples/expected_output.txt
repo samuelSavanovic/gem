@@ -720,7 +720,7 @@ test5: parent died: now-fatal
 Stack trace:
   at anonymous fn (examples/34_gen_server.gem:97)
   at gen_server.loop (std/gen_server.gem:116)
-  at anonymous fn (std/gen_server.gem:186)
+  at anonymous fn (std/gen_server.gem:188)
 test1: after incr 10 = 10
 test3: count=2 first=raw1 second=raw2
 test4: ok=false err=gen_server.call: server exited: kaboom from server
@@ -2731,7 +2731,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_call_result (std/gen_server.gem:110)
   at gen_server.loop (std/gen_server.gem:117)
-  at anonymous fn (std/gen_server.gem:186)
+  at anonymous fn (std/gen_server.gem:188)
 6: gen_server.call: server exited: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 6]: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
@@ -2743,7 +2743,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_call_result (std/gen_server.gem:110)
   at gen_server.loop (std/gen_server.gem:117)
-  at anonymous fn (std/gen_server.gem:186)
+  at anonymous fn (std/gen_server.gem:188)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 7]: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
@@ -2755,7 +2755,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_call_result (std/gen_server.gem:110)
   at gen_server.loop (std/gen_server.gem:117)
-  at anonymous fn (std/gen_server.gem:186)
+  at anonymous fn (std/gen_server.gem:188)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 8]: gen_server: handle_cast returned nil, expected {state: state}
@@ -2767,7 +2767,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_state_result (std/gen_server.gem:91)
   at gen_server.loop (std/gen_server.gem:126)
-  at anonymous fn (std/gen_server.gem:186)
+  at anonymous fn (std/gen_server.gem:188)
 6: cast nil -> gen_server: handle_cast returned nil, expected {state: state}
 
 [Runtime Error in process 9]: gen_server: handle_info returned an int, expected {state: state}
@@ -2779,7 +2779,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_state_result (std/gen_server.gem:91)
   at gen_server.loop (std/gen_server.gem:139)
-  at anonymous fn (std/gen_server.gem:186)
+  at anonymous fn (std/gen_server.gem:188)
 6: info int -> gen_server: handle_info returned an int, expected {state: state}
 7: info saw ["call", "cast", "gs_reply"]
 8: monitors after 300 callers=1
@@ -3258,7 +3258,7 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_call_result (std/gen_server.gem:100)
   at gen_server.loop (std/gen_server.gem:117)
-  at anonymous fn (std/gen_server.gem:186)
+  at anonymous fn (std/gen_server.gem:188)
 gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
 -- 7. init returning a table with a state field
 {state: "idle", count: 0}
@@ -3443,7 +3443,7 @@ Stack trace:
   at gen_server.check_result_timeout (std/gen_server.gem:85)
   at gen_server.check_call_result (std/gen_server.gem:106)
   at gen_server.loop (std/gen_server.gem:117)
-  at anonymous fn (std/gen_server.gem:186)
+  at anonymous fn (std/gen_server.gem:188)
 gen_server.call: server exited: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
 
 [Runtime Error in process 30]: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
@@ -3454,7 +3454,7 @@ gen_server.call: server exited: gen_server: handle_call returned a timeout that 
 Stack trace:
   at gen_server.check_result_timeout (std/gen_server.gem:85)
   at gen_server.check_state_result (std/gen_server.gem:93)
-  at anonymous fn (std/gen_server.gem:185)
+  at anonymous fn (std/gen_server.gem:187)
 gen_server.call: server exited: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
 -- control bytes in the request head
 ok: HTTP/1.1 200 OK
@@ -3687,7 +3687,7 @@ gen_server.call: server exited: noproc left: 0
 Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_state_result (std/gen_server.gem:91)
-  at anonymous fn (std/gen_server.gem:185)
+  at anonymous fn (std/gen_server.gem:187)
 gen_server: init returned an int, expected {state: state}
 got timeout
 -- 4. http: Host and bare LF
@@ -3898,3 +3898,29 @@ sqlite_query: parameter :a is a table; expected nil, bool, int, float or string
 sqlite_query: params must be an array or a record of names, not both
 sqlite_query: params must be an array, got a float key
 sqlite_query: params key "a" matches no parameter of the statement
+["accept", false, "tcp_accept: accept failed: Bad file descriptor"]
+fd reused: true
+["accept on reused fd", false, "tcp_accept: accept failed: Bad file descriptor"]
+new listener still accepts: int
+["read", false, "tcp_read: read failed: Bad file descriptor"]
+["read with timeout", false, "tcp_read: read failed: Bad file descriptor"]
+["write", false, "tcp_write: write failed: Bad file descriptor"]
+["accept, closed from C", false, "tcp_accept: accept failed: Bad file descriptor"]
+done
+preabc
+
+16
+false type error in +: got buffer and string pre
+buffer pre
+false type error in +: got string and int
+[000102][101112][202122]
+rows: 0 1 2 3 4 5
+["string", "string"] ab
+{1: "b"} 1
+{2: "z", 1: "y"} 2 z true false
+{0: 10, 1: 20, 2: 30, 5: 70, 3: 40} 5 nil false true
+{2: 3, 1: 2, 3: "y"}
+["zero", "one"] one
+[1, 1, 2, 3, 9]
+[1, 5]
+200000 200000 199999 nil false true
