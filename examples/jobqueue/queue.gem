@@ -1,0 +1,357 @@
+## queue — the gen_server that owns the jobs: it hands them to pool
+## workers, kills a worker whose job outlives its deadline, retries a
+## failed job with exponential backoff, and dead-letters one that runs out
+## of retries. See README.md for the protocol.
+
+load "std/gen_server"
+load "std/dynamic_supervisor"
+load "./fifo"
+
+# Workers are children of the dynamic supervisor `workers` (a registered
+# name), restarted by it when they crash, so the pool's size is the
+# supervisor's child count: `slots` counts the children the queue asked
+# for, minus the ones it let retire. A crash doesn't change it (the
+# restart takes the slot); the supervisor's own death empties it.
+#
+# A worker is idle, busy (`busy["<pid>"]`: the attempt it runs) or being
+# killed for a deadline (`killing`). Every worker is monitored, and its
+# DOWN is how the queue learns that an attempt failed. A late `done` from
+# an attempt the queue has given up on is counted and dropped: an attempt
+# is identified by its ref, never by its job.
+
+let RESUP_MS = 10
+
+fn new_state(opts)
+  {
+    workers: opts.workers_name,
+    worker_config: opts.worker_config,
+    pool: opts.pool,
+    backoff_ms: opts.backoff_ms,
+    backoff_max_ms: opts.backoff_max_ms,
+    sup: nil,
+    slots: 0,
+    idle: [],
+    busy: {},
+    killing: {},
+    pending: fifo.new(),
+    jobs: {},
+    dead: [],
+    stats: {submitted: 0, completed: 0, dead: 0, attempts: 0, retries: 0, late_results: 0, worker_starts: 0, sup_restarts: 0}
+  }
+end
+
+# Monitors the worker supervisor under its registered name, or tries
+# again shortly while its own supervisor is restarting it.
+fn find_sup(s)
+  let pid = whereis(s.workers)
+  if pid == nil
+    send_after(self(), {tag: "resup"}, RESUP_MS)
+    return nil
+  end
+  s.sup = pid
+  monitor(pid)
+end
+
+fn backoff(s, attempt)
+  let d = s.backoff_ms
+  for i = 1, attempt
+    d = d * 2
+    if d >= s.backoff_max_ms
+      return s.backoff_max_ms
+    end
+  end
+  d
+end
+
+fn notify(rec)
+  send(rec.notify, {
+    tag: "job_done",
+    id: rec.job.id,
+    status: rec.status,
+    attempts: len(rec.attempts),
+    result: rec.result,
+    submitted_at: rec.submitted_at,
+    finished_at: rec.finished_at
+  })
+end
+
+fn start_attempt(s, pid, id)
+  let rec = s.jobs["{id}"]
+  let n = len(rec.attempts) + 1
+  let ref = make_ref()
+  let timer = nil
+  if rec.job.deadline_ms != nil
+    timer = send_after(self(), {tag: "deadline", pid: pid, ref: ref}, rec.job.deadline_ms)
+  end
+  rec.status = "running"
+  s.busy["{pid}"] = {pid: pid, id: id, attempt: n, ref: ref, timer: timer}
+  s.stats.attempts = s.stats.attempts + 1
+  send(pid, {tag: "run", job: rec.job, attempt: n, ref: ref})
+end
+
+fn start_workers(s)
+  let want = fifo.size(s.pending) - len(s.idle)
+  while want > 0 and s.slots < s.pool and s.sup != nil
+    let r = pcall dynamic_supervisor.start_child(s.sup, s.worker_config)
+    if not r.ok
+      # The supervisor is going down: its DOWN brings the queue back here.
+      return nil
+    end
+    s.slots = s.slots + 1
+    s.stats.worker_starts = s.stats.worker_starts + 1
+    want -= 1
+  end
+end
+
+# Gives pending jobs to idle workers, then asks for more workers if jobs
+# are still waiting and the pool has room. A new worker announces itself
+# (`worker_up`), which dispatches again.
+fn dispatch(s)
+  while fifo.size(s.pending) > 0 and len(s.idle) > 0
+    start_attempt(s, pop(s.idle), fifo.take(s.pending))
+  end
+  start_workers(s)
+end
+
+fn succeed(s, entry, result)
+  let rec = s.jobs["{entry.id}"]
+  push(rec.attempts, "ok")
+  rec.status = "completed"
+  rec.result = result
+  rec.finished_at = time_ms()
+  s.stats.completed = s.stats.completed + 1
+  notify(rec)
+end
+
+fn fail(s, entry, reason)
+  let rec = s.jobs["{entry.id}"]
+  push(rec.attempts, reason)
+  rec.error = reason
+  if entry.attempt <= rec.job.max_retries
+    rec.status = "retrying"
+    s.stats.retries = s.stats.retries + 1
+    send_after(self(), {tag: "retry", id: entry.id}, backoff(s, entry.attempt))
+    return nil
+  end
+  rec.status = "dead"
+  rec.finished_at = time_ms()
+  push(s.dead, entry.id)
+  s.stats.dead = s.stats.dead + 1
+  notify(rec)
+end
+
+fn on_done(s, pid, ref, result)
+  let key = "{pid}"
+  let entry = s.busy[key]
+  if entry == nil or entry.ref != ref
+    s.stats.late_results = s.stats.late_results + 1
+    return nil
+  end
+  delete(s.busy, key)
+  if entry.timer != nil
+    cancel_timer(entry.timer)
+  end
+  succeed(s, entry, result)
+  push(s.idle, pid)
+  dispatch(s)
+end
+
+fn on_deadline(s, pid, ref)
+  let key = "{pid}"
+  let entry = s.busy[key]
+  if entry == nil or entry.ref != ref
+    return nil
+  end
+  delete(s.busy, key)
+  s.killing[key] = true
+  kill(pid, "deadline")
+  fail(s, entry, "deadline")
+end
+
+fn remove_idle(s, pid)
+  for i, p in s.idle
+    if p == pid
+      remove_at(s.idle, i)
+      return true
+    end
+  end
+  false
+end
+
+fn on_down(s, pid, reason)
+  if pid == s.sup
+    # The worker supervisor gave up; its children are gone, and their
+    # DOWNs came first. Its own supervisor starts a new one.
+    s.sup = nil
+    s.slots = 0
+    s.idle = []
+    s.stats.sup_restarts = s.stats.sup_restarts + 1
+    find_sup(s)
+    dispatch(s)
+    return nil
+  end
+  let key = "{pid}"
+  let entry = s.busy[key]
+  if entry != nil
+    delete(s.busy, key)
+    if entry.timer != nil
+      cancel_timer(entry.timer)
+    end
+    fail(s, entry, reason)
+  elif has_key(s.killing, key)
+    delete(s.killing, key)
+  else
+    remove_idle(s, pid)
+  end
+end
+
+fn check_job(job)
+  if type(job) != "table" or type(job.id) != "int"
+    return "a job needs an int id"
+  end
+  if type(job.kind) != "string"
+    return "job {job.id}: kind must be a string"
+  end
+  if type(job.max_retries) != "int" or job.max_retries < 0
+    return "job {job.id}: max_retries must be an int >= 0"
+  end
+  if job.deadline_ms != nil and (type(job.deadline_ms) != "int" or job.deadline_ms <= 0)
+    return "job {job.id}: deadline_ms must be a positive int or nil"
+  end
+  nil
+end
+
+fn submit(s, job, notify_pid)
+  let problem = check_job(job)
+  if problem != nil
+    return {ok: false, error: problem}
+  end
+  let key = "{job.id}"
+  if has_key(s.jobs, key)
+    return {ok: false, error: "job {job.id} was already submitted"}
+  end
+  s.jobs[key] = {
+    job: job,
+    status: "queued",
+    attempts: [],
+    result: nil,
+    error: nil,
+    notify: notify_pid,
+    submitted_at: time_ms(),
+    finished_at: nil
+  }
+  s.stats.submitted = s.stats.submitted + 1
+  fifo.put(s.pending, job.id)
+  dispatch(s)
+  {ok: true}
+end
+
+fn status_of(rec)
+  {
+    id: rec.job.id,
+    status: rec.status,
+    attempts: rec.attempts,
+    result: rec.result,
+    error: rec.error,
+    submitted_at: rec.submitted_at,
+    finished_at: rec.finished_at
+  }
+end
+
+fn stats_of(s)
+  let st = {}
+  for k, v in s.stats
+    st[k] = v
+  end
+  st.pending = fifo.size(s.pending)
+  st.busy = len(s.busy)
+  st.idle = len(s.idle)
+  st.slots = s.slots
+  st
+end
+
+fn handle_call(msg, from, s)
+  match msg
+  when {tag: "submit", job: job, notify: notify_pid}
+    {reply: submit(s, job, notify_pid), state: s}
+  when {tag: "retire", pid: pid}
+    let ok = remove_idle(s, pid)
+    if ok
+      s.slots = s.slots - 1
+    end
+    {reply: ok, state: s}
+  when {tag: "status", id: id}
+    let rec = s.jobs["{id}"]
+    if rec == nil
+      return {reply: nil, state: s}
+    end
+    {reply: status_of(rec), state: s}
+  when {tag: "stats"}
+    {reply: stats_of(s), state: s}
+  when {tag: "dead_letters"}
+    let out = []
+    for id in s.dead
+      push(out, status_of(s.jobs["{id}"]))
+    end
+    {reply: out, state: s}
+  when {tag: "report"}
+    let out = []
+    for k, rec in s.jobs
+      push(out, status_of(rec))
+    end
+    {reply: out, state: s}
+  else
+    {reply: nil, state: s}
+  end
+end
+
+fn handle_cast(msg, s)
+  match msg
+  when {tag: "worker_up", pid: pid}
+    monitor(pid)
+    push(s.idle, pid)
+    dispatch(s)
+  when {tag: "done", pid: pid, ref: ref, result: result}
+    on_done(s, pid, ref, result)
+  else
+    nil
+  end
+  {state: s}
+end
+
+fn handle_info(msg, s)
+  match msg
+  when {tag: "DOWN", pid: pid, reason: reason}
+    on_down(s, pid, reason)
+  when {tag: "deadline", pid: pid, ref: ref}
+    on_deadline(s, pid, ref)
+  when {tag: "retry", id: id}
+    s.jobs["{id}"].status = "queued"
+    fifo.put(s.pending, id)
+    dispatch(s)
+  when {tag: "resup"}
+    find_sup(s)
+    dispatch(s)
+  else
+    nil
+  end
+  {state: s}
+end
+
+## Starts the queue (see jobqueue.start for `opts`), registered as
+## `opts.name`, and returns its handle.
+fn start(opts)
+  gen_server.start({
+    init: fn()
+      register(opts.name, self())
+      let s = new_state(opts)
+      find_sup(s)
+      {state: s}
+    end,
+    handle_call: handle_call,
+    handle_cast: handle_cast,
+    handle_info: handle_info
+  })
+end
+
+export start

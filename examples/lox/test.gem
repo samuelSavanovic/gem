@@ -1,0 +1,247 @@
+# Tests for the Lox interpreter: the lexer, parser and resolver on their
+# own, then whole programs, error cases included, and the bench programs
+# at small sizes against bench/*.expected.
+
+load "std/string"
+load "std/test"
+load "./lexer"
+load "./parser"
+load "./resolver"
+load "./lox"
+
+# The size each bench program runs at here; bench/<name>.expected is its
+# output at that size.
+let BENCH_SIZES = {
+  fib: 15, binary_trees: 6, closures: 2000, strings: 2000, mandelbrot: 16, methods: 200
+}
+
+fn run(source, args = [])
+  let lines = []
+  let r = lox.run(source, {out: fn(line) push(lines, line) end, args: args})
+  {status: r.status, errors: r.errors, out: lines}
+end
+
+# The printed lines of a program that must run cleanly.
+fn output(source)
+  let r = run(source)
+  test.assert_eq(r.errors, [])
+  test.assert_eq(r.status, 0)
+  r.out
+end
+
+fn types(tokens)
+  let ts = []
+  for t in tokens
+    push(ts, t.type)
+  end
+  ts
+end
+
+# ─── Lexer ─────────────────────────────────────────────────────
+
+test.case("lexer: tokens, literals and lines") do
+  let r = lexer.scan('var x = 12.5; // comment
+print "a
+b" != x <= 3.;')
+  test.assert_eq(r.errors, [])
+  test.assert_eq(types(r.tokens), ["var", "identifier", "=", "number", ";", "print", "string", "!=", "identifier", "<=", "number", ".", ";", "eof"])
+  test.assert_eq(r.tokens[3].literal, 12.5)
+  test.assert_eq(r.tokens[6].literal, "a\nb")
+  test.assert_eq(r.tokens[6].line, 2)
+  test.assert_eq(r.tokens[10].literal, 3.0)
+  test.assert_eq(r.tokens[13].line, 3)
+end
+
+test.case("lexer: keywords, identifiers, operators") do
+  let r = lexer.scan("and andy _x1 class fun this super nil == = ! >= > / *")
+  test.assert_eq(types(r.tokens), ["and", "identifier", "identifier", "class", "fun", "this", "super", "nil", "==", "=", "!", ">=", ">", "/", "*", "eof"])
+  test.assert_eq(types(lexer.scan("").tokens), ["eof"])
+end
+
+test.case("lexer: errors don't stop the scan") do
+  let r = lexer.scan("var a = 1 @ 2;\n# \"open")
+  test.assert_eq(r.errors, ["[line 1] Error: Unexpected character.", "[line 2] Error: Unexpected character.", "[line 2] Error: Unterminated string."])
+  test.assert_eq(types(r.tokens), ["var", "identifier", "=", "number", "number", ";", "eof"])
+end
+
+# ─── Parser and resolver ───────────────────────────────────────
+
+fn parse(source)
+  parser.parse(lexer.scan(source).tokens)
+end
+
+test.case("parser: precedence and associativity") do
+  let e = parse("-1 + 2 * 3 - 4 < 5 == !true or a and b;").statements[0].expr
+  test.assert_eq(e.kind, "logical")
+  test.assert_eq(e.op, "or")
+  let eq = e.left
+  test.assert_eq([eq.op, eq.left.op, eq.right.kind], ["==", "<", "unary"])
+  let minus = eq.left.left
+  test.assert_eq([minus.op, minus.left.op, minus.left.right.op], ["-", "+", "*"])
+  test.assert_eq(minus.left.left.kind, "unary")
+  test.assert_eq(e.right.op, "and")
+end
+
+test.case("parser: calls, properties and assignment targets") do
+  let s = parse("a.b(1, 2).c = d = 3;").statements[0].expr
+  test.assert_eq([s.kind, s.name, s.object.kind, len(s.object.args)], ["set", "c", "call", 2])
+  test.assert_eq([s.value.kind, s.value.name], ["assign", "d"])
+end
+
+test.case("parser: for desugars to a block holding a while") do
+  let s = parse("for (var i = 0; i < 3; i = i + 1) print i;").statements[0]
+  test.assert_eq(s.kind, "block")
+  test.assert_eq([s.statements[0].kind, s.statements[1].kind], ["var", "while"])
+  test.assert_eq(s.statements[1].body.statements[1].expr.kind, "assign")
+  let bare = parse("for (;;) print 1;").statements[0]
+  test.assert_eq([bare.kind, bare.cond.value], ["while", true])
+end
+
+test.case("parser: reports errors and resynchronizes") do
+  let r = parse('print ;\n1 = 2;\nvar = 3;\nprint f(1;\nclass { }\nfun f(a b) {}\nprint 1')
+  test.assert_eq(r.errors, [
+    "[line 1] Error at ';': Expect expression.",
+    "[line 2] Error at '=': Invalid assignment target.",
+    "[line 3] Error at '=': Expect variable name.",
+    "[line 4] Error at ';': Expect ')' after arguments.",
+    "[line 5] Error at '\{': Expect class name.",
+    "[line 6] Error at 'b': Expect ')' after parameters.",
+    "[line 7] Error at end: Expect ';' after value."
+  ])
+end
+
+test.case("resolver: depths") do
+  let statements = parse('var g; { var a; { var b; a; b; g; } }').statements
+  test.assert_eq(resolver.resolve(statements), [])
+  let inner = statements[1].statements[1].statements
+  test.assert_eq([inner[1].expr.depth, inner[2].expr.depth, inner[3].expr.depth], [1, 0, nil])
+end
+
+test.case("resolver: static errors") do
+  let cases = [
+    ["return 1;", "[line 1] Error at 'return': Can't return from top-level code."],
+    ["print this;", "[line 1] Error at 'this': Can't use 'this' outside of a class."],
+    ['fun f() { super.x(); }', "[line 1] Error at 'super': Can't use 'super' outside of a class."],
+    ['class A { f() { super.f(); } }', "[line 1] Error at 'super': Can't use 'super' in a class with no superclass."],
+    ['class A < A {}', "[line 1] Error at 'A': A class can't inherit from itself."],
+    ['{ var a = a; }', "[line 1] Error at 'a': Can't read local variable in its own initializer."],
+    ['{ var a; var a; }', "[line 1] Error at 'a': Already a variable with this name in this scope."],
+    ['class A { init() { return 1; } }', "[line 1] Error at 'return': Can't return a value from an initializer."]
+  ]
+  for c in cases
+    let r = run(c[0])
+    test.assert_eq([r.status, r.errors], [65, [c[1]]], c[0])
+  end
+  # Globals may be redeclared and read in their own initializer.
+  test.assert_eq(output("var a = 1; var a = a + 1; print a;"), ["2"])
+end
+
+# ─── Programs ──────────────────────────────────────────────────
+
+test.case("values and printing") do
+  test.assert_eq(output('print 1; print 2.5; print -0.5; print 1 / 3; print 10000000000000000; print "s"; print nil; print true; print !1;'), [
+    "1", "2.5", "-0.5", "0.3333333333333333", "1e+16", "s", "nil", "true", "false"
+  ])
+  test.assert_eq(output("print 3 * 1000000 * 1000000 * 1000; print 0.1 + 0.2;"), ["3000000000000000", "0.30000000000000004"])
+  test.assert_eq(output('fun f() {} class C {} print f; print clock; print C; print C();'), ["<fn f>", "<native fn>", "C", "C instance"])
+end
+
+test.case("equality and truthiness") do
+  test.assert_eq(output('print 1 == 1; print "a" == "a"; print nil == false; print 1 == "1"; print nil == nil; print 0 != 0;'), ["true", "true", "false", "false", "true", "false"])
+  test.assert_eq(output('if (0) print "zero is true"; if ("") print "empty is true"; if (nil) print "no"; else print "nil is false";'), ["zero is true", "empty is true", "nil is false"])
+  test.assert_eq(output('print nil or "x"; print 1 and 2; print false and 1/0; print 1 or 1/0;'), ["x", "2", "false", "1"])
+end
+
+test.case("scopes, shadowing and loops") do
+  test.assert_eq(output('var a = 1; { var a = 2; print a; } print a; var i = 0; while (i < 3) i = i + 1; print i;'), ["2", "1", "3"])
+  test.assert_eq(output('for (var i = 0; i < 3; i = i + 1) { var x = i * 10; print x; }'), ["0", "10", "20"])
+  # A closure keeps the binding it resolved to, even when a later
+  # declaration shadows the name in the same block.
+  test.assert_eq(output('var a = "global"; { fun show() { print a; } show(); var a = "block"; show(); }'), ["global", "global"])
+end
+
+test.case("functions, recursion and closures") do
+  test.assert_eq(output('fun fib(n) { if (n < 2) return n; return fib(n - 1) + fib(n - 2); } print fib(15);'), ["610"])
+  test.assert_eq(output('fun f() { return; } fun g() {} print f(); print g();'), ["nil", "nil"])
+  test.assert_eq(output('fun counter() { var i = 0; fun next() { i = i + 1; return i; } return next; } var a = counter(); var b = counter(); a(); a(); print a(); print b();'), ["3", "1"])
+  test.assert_eq(output('fun early(n) { while (true) { for (;;) { if (n > 2) return n; n = n + 1; } } } print early(0);'), ["3"])
+end
+
+test.case("classes, methods, inheritance") do
+  let src = '''
+class Animal {
+  init(name) { this.name = name; }
+  speak() { return this.name + " makes a sound"; }
+  rename(n) { this.name = n; return this; }
+}
+class Dog < Animal {
+  init(name) { super.init(name); this.tricks = 0; }
+  speak() { return super.speak() + ", woof"; }
+}
+var d = Dog("rex");
+print d.speak();
+var speak = d.speak;
+d.rename("max");
+print speak();
+print d.init("bo") == d;
+print d.name;
+print Dog;
+'''
+  test.assert_eq(output(src), ["rex makes a sound, woof", "max makes a sound, woof", "true", "bo", "Dog"])
+  test.assert_eq(output('class A { init() { this.x = 1; return; } } print A().x;'), ["1"])
+  test.assert_eq(output('class A { f() { return "f"; } } class B < A {} print B().f();'), ["f"])
+end
+
+test.case("natives") do
+  test.assert_eq(output('print str(1.5) + str(nil) + str(2); print len("hello"); print clock() > 0;'), ["1.5nil2", "5", "true"])
+  let r = run("print arg(0) + 1; print arg(1); print arg(2);", ["41", "word"])
+  test.assert_eq(r.out, ["42", "word", "nil"])
+end
+
+test.case("runtime errors carry the line") do
+  let cases = [
+    ['print "a" + 1;', "Operands must be two numbers or two strings.\n[line 1]"],
+    ["print -\"a\";", "Operand must be a number.\n[line 1]"],
+    ["\n\nprint 1 < nil;", "Operands must be numbers.\n[line 3]"],
+    ["print x;", "Undefined variable 'x'.\n[line 1]"],
+    ["y = 1;", "Undefined variable 'y'.\n[line 1]"],
+    ['"s"();', "Can only call functions and classes.\n[line 1]"],
+    ['fun f(a) {} f(1, 2);', "Expected 1 arguments but got 2.\n[line 1]"],
+    ['class A {} A(1);', "Expected 0 arguments but got 1.\n[line 1]"],
+    ["print len(1);", "len() takes a string.\n[line 1]"],
+    ["print 1 .x;", "Only instances have properties.\n[line 1]"],
+    ["var s = 1; s.x = 2;", "Only instances have fields.\n[line 1]"],
+    ['class A {} print A().nope;', "Undefined property 'nope'.\n[line 1]"],
+    ['var B = 1; class A < B {}', "Superclass must be a class.\n[line 1]"],
+    ["print 1 / 0;", "Division by zero.\n[line 1]"],
+    ['fun f() { f(); } f();', "Stack overflow.\n[line 1]"]
+  ]
+  for c in cases
+    let r = run(c[0])
+    test.assert_eq([r.status, r.errors], [70, [c[1]]], c[0])
+  end
+end
+
+test.case("output before a runtime error is kept") do
+  let r = run('print "before";\nprint nil.x;')
+  test.assert_eq([r.status, r.out, r.errors], [70, ["before"], ["Only instances have properties.\n[line 2]"]])
+end
+
+test.case("deeply nested blocks overflow the Gem stack cleanly") do
+  let body = string.repeat("\{", 60) + " if (true) return 1 + d(n - 1); " + string.repeat("}", 60)
+  let r = run("fun d(n) \{ if (n == 0) return 0; {body} } print d(250);")
+  test.assert_eq([r.status, r.errors], [70, ["Stack overflow."]])
+end
+
+test.case("bench programs at small sizes") do
+  for name, size in BENCH_SIZES
+    let source = read_file("bench/{name}.lox")
+    let expected = string.split(read_file("bench/{name}.expected"), "\n")
+    pop(expected)
+    let r = run(source, ["{size}"])
+    test.assert_eq([r.status, r.errors], [0, []], name)
+    test.assert_eq(r.out, expected, name)
+  end
+end
+
+test.run()

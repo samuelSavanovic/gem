@@ -1,0 +1,198 @@
+## resp — the Redis serialization protocol (RESP2): parse client
+## commands, encode replies.
+
+load "std/string"
+
+let MAX_BULK = 512 * 1024 * 1024
+let MAX_ARGS = 2147483647
+let MAX_INLINE = 64 * 1024
+let INT_MAX_DIGITS = "9223372036854775807"
+let INT_MIN_DIGITS = "9223372036854775808"
+
+## The reply for `+OK`.
+let OK = {status: "OK"}
+
+## Parses `s` as Redis does (`string2ll`): an optional `-`, then digits
+## with no leading zero, in the 64-bit range. Returns the int, or nil.
+fn parse_int(s)
+  let n = len(s)
+  if n == 0 or n > 20
+    return nil
+  end
+  let i = 0
+  let neg = ord(s, 0) == 45
+  if neg
+    i = 1
+  end
+  if i == n
+    return nil
+  end
+  let first = ord(s, i)
+  if first == 48
+    if n == 1 then return 0 end
+    return nil
+  end
+  if first < 49 or first > 57
+    return nil
+  end
+  for j = i + 1, n
+    let c = ord(s, j)
+    if c < 48 or c > 57
+      return nil
+    end
+  end
+  if n - i == 19
+    let digits = substr(s, i, 19)
+    if neg and digits > INT_MIN_DIGITS then return nil end
+    if not neg and digits > INT_MAX_DIGITS then return nil end
+  elif n - i > 19
+    return nil
+  end
+  to_int(s)
+end
+
+fn protocol_error(r, what)
+  r.error = "ERR Protocol error: {what}"
+  r
+end
+
+## Parses the complete commands at the start of `data`. Returns `{cmds,
+## used, need, error}`: `cmds` holds each command as an array of strings,
+## `used` is how many bytes they took, `need` is the length the unparsed
+## rest must reach before parsing it again is worth it (0 when any new
+## byte might finish a command), and `error` is the error reply for a
+## protocol error after the commands in `cmds` (the connection must then
+## be closed), else nil.
+##
+## Commands are multibulk (`*2\r\n$3\r\nGET\r\n$1\r\nk\r\n`) or inline
+## (`GET k\r\n`, split at spaces; quotes are not supported). An empty
+## multibulk or blank inline line is skipped.
+fn parse(data)
+  let r = {cmds: [], used: 0, need: 0, error: nil}
+  let n = len(data)
+  let pos = 0
+  while pos < n
+    if ord(data, pos) == 42
+      let res = parse_multibulk(data, pos, r)
+      if res == nil
+        return r
+      end
+      pos = res
+    else
+      let eol = find(data, "\n", pos)
+      if eol < 0
+        if n - pos > MAX_INLINE
+          return protocol_error(r, "too big inline request")
+        end
+        return r
+      end
+      let stop = eol
+      if stop > pos and ord(data, stop - 1) == 13
+        stop -= 1
+      end
+      let args = []
+      for word in string.split(substr(data, pos, stop - pos), " ")
+        if word != ""
+          push(args, word)
+        end
+      end
+      if len(args) > 0
+        push(r.cmds, args)
+      end
+      pos = eol + 1
+    end
+    r.used = pos
+  end
+  r
+end
+
+# Parses the multibulk at `pos`. Returns the position after it, or nil when
+# it is incomplete (setting r.need) or malformed (setting r.error).
+fn parse_multibulk(data, pos, r)
+  let n = len(data)
+  let eol = find(data, "\r\n", pos)
+  if eol < 0
+    if n - pos > MAX_INLINE
+      protocol_error(r, "too big mbulk count string")
+    end
+    return nil
+  end
+  let count = parse_int(substr(data, pos + 1, eol - pos - 1))
+  if count == nil or count > MAX_ARGS
+    protocol_error(r, "invalid multibulk length")
+    return nil
+  end
+  let p = eol + 2
+  let args = []
+  for i = 0, count
+    if p >= n
+      return nil
+    end
+    let c = ord(data, p)
+    if c != 36
+      protocol_error(r, "expected '$', got '{chr(c)}'")
+      return nil
+    end
+    let beol = find(data, "\r\n", p)
+    if beol < 0
+      if n - p > MAX_INLINE
+        protocol_error(r, "too big bulk count string")
+      end
+      return nil
+    end
+    let blen = parse_int(substr(data, p + 1, beol - p - 1))
+    if blen == nil or blen < 0 or blen > MAX_BULK
+      protocol_error(r, "invalid bulk length")
+      return nil
+    end
+    let start = beol + 2
+    if start + blen + 2 > n
+      r.need = start + blen + 2 - pos
+      return nil
+    end
+    push(args, substr(data, start, blen))
+    p = start + blen + 2
+  end
+  if len(args) > 0
+    push(r.cmds, args)
+  end
+  p
+end
+
+## Appends the RESP encoding of reply `v` through `add` (a `build_string`
+## adder): a string is a bulk string, an int an integer, nil a null bulk
+## string, `{status}` a simple string, `{error}` an error, and any other
+## table an array of replies.
+fn encode(add, v)
+  let t = type(v)
+  if t == "string"
+    add("$", len(v), "\r\n", v, "\r\n")
+  elif t == "int"
+    add(":", v, "\r\n")
+  elif t == "nil"
+    add("$-1\r\n")
+  elif v.status != nil
+    add("+", v.status, "\r\n")
+  elif v.error != nil
+    add("-", v.error, "\r\n")
+  else
+    add("*", len(v), "\r\n")
+    for x in v
+      encode(add, x)
+    end
+  end
+end
+
+## Returns the RESP encoding of reply `v` as a string (see `encode`).
+fn render(v)
+  build_string do |add|
+    encode(add, v)
+  end
+end
+
+## Returns `{error: msg}`, an error reply.
+fn err(msg)
+  {error: msg}
+end
+
+export OK, parse_int, parse, encode, render, err

@@ -1,0 +1,368 @@
+# Tests for mini_redis: the protocol, the data structures and the
+# commands, then the server driven by Gem clients over TCP.
+
+load "std/test"
+load "std/string"
+load "./resp"
+load "./deque"
+load "./rset"
+load "./keyspace"
+load "./server"
+
+let PORT = 63791
+let WAIT_MS = 2000
+
+# ─── Protocol ──────────────────────────────────────────────────
+
+test.case("parse_int is as strict as Redis") do
+  test.assert_eq(resp.parse_int("0"), 0)
+  test.assert_eq(resp.parse_int("-12"), -12)
+  test.assert_eq(resp.parse_int("9223372036854775807"), 9223372036854775807)
+  test.assert_eq(resp.parse_int("-9223372036854775808"), -9223372036854775807 - 1)
+  for bad in ["", "-", "+1", "012", "-0", "1.5", " 1", "1 ", "9223372036854775808", "12345678901234567890123"]
+    test.assert_eq(resp.parse_int(bad), nil)
+  end
+end
+
+test.case("parse multibulk and inline commands") do
+  let r = resp.parse("*2\r\n$3\r\nGET\r\n$1\r\nk\r\nSET  a b\r\nPING\n\r\n")
+  test.assert_eq(r.cmds, [["GET", "k"], ["SET", "a", "b"], ["PING"]])
+  test.assert_eq(r.used, 37)
+  test.assert_eq(r.error, nil)
+  test.assert_eq(resp.parse("*1\r\n$3\r\na\0b\r\n").cmds, [["a\0b"]])
+  test.assert_eq(resp.parse("*0\r\n*-1\r\n").cmds, [])
+end
+
+test.case("parse stops at an incomplete command") do
+  let r = resp.parse("*1\r\n$4\r\nPING\r\n*2\r\n$3\r\nGET\r\n$10\r\nabc")
+  test.assert_eq(r.cmds, [["PING"]])
+  test.assert_eq(r.used, 14)
+  test.assert_eq(r.need, 30)
+  test.assert_eq(resp.parse("*2\r\n$3").need, 0)
+  test.assert_eq(resp.parse("GET k").cmds, [])
+end
+
+test.case("parse reports protocol errors after the good commands") do
+  let r = resp.parse("PING\r\n*1\r\nx\r\n")
+  test.assert_eq(r.cmds, [["PING"]])
+  test.assert_eq(r.error, "ERR Protocol error: expected '$', got 'x'")
+  test.assert_eq(resp.parse("*a\r\n").error, "ERR Protocol error: invalid multibulk length")
+  test.assert_eq(resp.parse("*1\r\n$-3\r\n").error, "ERR Protocol error: invalid bulk length")
+  test.assert_eq(resp.parse(string.repeat("x", 70000)).error, "ERR Protocol error: too big inline request")
+end
+
+test.case("encode") do
+  test.assert_eq(resp.render("hi"), "$2\r\nhi\r\n")
+  test.assert_eq(resp.render(-3), ":-3\r\n")
+  test.assert_eq(resp.render(nil), "$-1\r\n")
+  test.assert_eq(resp.render(resp.OK), "+OK\r\n")
+  test.assert_eq(resp.render(resp.err("ERR x")), "-ERR x\r\n")
+  test.assert_eq(resp.render(["a", 1, nil, []]), "*4\r\n$1\r\na\r\n:1\r\n$-1\r\n*0\r\n")
+end
+
+# ─── Data structures ───────────────────────────────────────────
+
+test.case("deque") do
+  let d = deque.new()
+  test.assert_eq(deque.pop_front(d), nil)
+  test.assert_eq(deque.pop_back(d), nil)
+  for i = 0, 10
+    deque.push_back(d, i)
+  end
+  deque.push_front(d, -1)
+  test.assert_eq(deque.size(d), 11)
+  test.assert_eq(deque.at(d, 0), -1)
+  test.assert_eq(deque.at(d, 10), 9)
+  test.assert_eq(deque.at(d, 11), nil)
+  let got = []
+  while deque.size(d) > 0
+    push(got, deque.pop_front(d))
+    if deque.size(d) > 0
+      push(got, deque.pop_back(d))
+    end
+  end
+  test.assert_eq(got, [-1, 9, 0, 8, 1, 7, 2, 6, 3, 5, 4])
+  for i = 0, 5
+    deque.push_front(d, i)
+  end
+  test.assert_eq([deque.pop_back(d), deque.pop_back(d), deque.at(d, 0)], [0, 1, 4])
+end
+
+test.case("rset") do
+  let s = rset.new()
+  test.assert_eq(rset.pick(s), nil)
+  test.assert(rset.add(s, "a"))
+  test.assert(not rset.add(s, "a"))
+  rset.add(s, "b")
+  rset.add(s, "c")
+  test.assert(rset.remove(s, "a"))
+  test.assert(not rset.remove(s, "a"))
+  test.assert_eq(rset.size(s), 2)
+  test.assert(rset.has(s, "c") and not rset.has(s, "a"))
+  test.assert(rset.has(s, rset.pick(s)))
+  let ms = rset.members(s)
+  sort(ms, fn(x, y) ord(x) - ord(y) end)
+  test.assert_eq(ms, ["b", "c"])
+end
+
+test.case("glob_match") do
+  let cases = [
+    ["*", "", true], ["*", "abc", true], ["a*c", "abbbc", true], ["a*c", "abcd", false],
+    ["h?llo", "hello", true], ["h?llo", "hllo", false], ["h[ae]llo", "hallo", true],
+    ["h[^e]llo", "hello", false], ["h[a-b]llo", "hbllo", true], ["a\\*", "a*", true],
+    ["a\\*", "ab", false], ["**x", "yyx", true], ["", "", true], ["", "a", false]
+  ]
+  for c in cases
+    test.assert_eq(keyspace.glob_match(c[0], 0, c[1], 0), c[2], "{c[0]} on {c[1]}")
+  end
+end
+
+# ─── Commands ──────────────────────────────────────────────────
+
+fn run(db, now, ...args)
+  keyspace.execute(db, args, now)
+end
+
+test.case("expiry at a given time") do
+  let db = keyspace.new()
+  run(db, 1000, "SET", "k", "v", "PX", "500")
+  test.assert_eq(run(db, 1499, "GET", "k"), "v")
+  test.assert_eq(run(db, 1499, "PTTL", "k"), 1)
+  test.assert_eq(run(db, 1500, "GET", "k"), nil)
+  test.assert_eq(keyspace.size(db), 0)
+  run(db, 0, "SET", "a", "1", "EX", "10")
+  run(db, 0, "SET", "b", "1")
+  run(db, 0, "SET", "b", "1", "KEEPTTL")
+  test.assert_eq(run(db, 0, "TTL", "b"), -1)
+  test.assert_eq(run(db, 0, "TTL", "a"), 10)
+  test.assert_eq(run(db, 0, "EXPIRE", "b", "-1"), 1)
+  test.assert_eq(run(db, 0, "EXISTS", "b"), 0)
+end
+
+test.case("the expire cycle removes keys nobody reads") do
+  let db = keyspace.new()
+  for i = 0, 1000
+    run(db, 0, "SET", "k{i}", "v", "PX", "10")
+  end
+  run(db, 0, "SET", "keep", "v", "PX", "100000")
+  run(db, 0, "SET", "plain", "v")
+  while keyspace.expire_cycle(db, 50) > 0
+  end
+  test.assert_eq(keyspace.size(db), 2)
+end
+
+test.case("wrong types and bad arguments") do
+  let db = keyspace.new()
+  run(db, 0, "RPUSH", "l", "a")
+  test.assert_eq(run(db, 0, "GET", "l").error, "WRONGTYPE Operation against a key holding the wrong kind of value")
+  test.assert_eq(run(db, 0, "INCR", "l").error, "WRONGTYPE Operation against a key holding the wrong kind of value")
+  test.assert_eq(run(db, 0, "get").error, "ERR wrong number of arguments for 'get' command")
+  test.assert_eq(run(db, 0, "HSET", "h", "f").error, "ERR wrong number of arguments for 'hset' command")
+  test.assert_eq(run(db, 0, "nope", "x").error, "ERR unknown command 'nope', with args beginning with: 'x' ")
+  test.assert_eq(run(db, 0, "set", "k", "v", "ex", "0").error, "ERR invalid expire time in 'set' command")
+  run(db, 0, "SET", "n", "9223372036854775807")
+  test.assert_eq(run(db, 0, "INCR", "n").error, "ERR increment or decrement would overflow")
+end
+
+test.case("lists keep order across both ends") do
+  let db = keyspace.new()
+  test.assert_eq(run(db, 0, "LPUSH", "l", "b", "a"), 2)
+  test.assert_eq(run(db, 0, "RPUSH", "l", "c", "d"), 4)
+  test.assert_eq(run(db, 0, "LRANGE", "l", "0", "-1"), ["a", "b", "c", "d"])
+  test.assert_eq(run(db, 0, "LRANGE", "l", "-100", "1"), ["a", "b"])
+  test.assert_eq(run(db, 0, "RPOP", "l", "3"), ["d", "c", "b"])
+  test.assert_eq(run(db, 0, "LPOP", "l"), "a")
+  test.assert_eq(run(db, 0, "EXISTS", "l"), 0)
+end
+
+# ─── A test client ─────────────────────────────────────────────
+
+fn connect()
+  {fd: tcp_connect("127.0.0.1", PORT), buf: ""}
+end
+
+fn encode_command(args)
+  build_string do |add|
+    add("*", len(args), "\r\n")
+    for a in args
+      add("$", len(a), "\r\n", a, "\r\n")
+    end
+  end
+end
+
+fn send_raw(c, bytes)
+  test.assert_eq(tcp_write(c.fd, bytes), len(bytes))
+end
+
+# Decodes the reply at `pos` of `s`: {value, pos}, or nil if incomplete.
+fn decode(s, pos)
+  let eol = find(s, "\r\n", pos)
+  if eol < 0 then return nil end
+  let kind = s[pos]
+  let line = substr(s, pos + 1, eol - pos - 1)
+  let next = eol + 2
+  if kind == "+"
+    return {value: {status: line}, pos: next}
+  elif kind == "-"
+    return {value: {error: line}, pos: next}
+  elif kind == ":"
+    return {value: to_int(line), pos: next}
+  elif kind == "$"
+    let n = to_int(line)
+    if n < 0 then return {value: nil, pos: next} end
+    if next + n + 2 > len(s) then return nil end
+    return {value: substr(s, next, n), pos: next + n + 2}
+  end
+  let items = []
+  for i = 0, to_int(line)
+    let r = decode(s, next)
+    if r == nil then return nil end
+    push(items, r.value)
+    next = r.pos
+  end
+  {value: items, pos: next}
+end
+
+# The next reply, or nil when the server closes the connection or says
+# nothing within WAIT_MS.
+fn next_reply(c, timeout_ms = WAIT_MS)
+  while true
+    let r = decode(c.buf, 0)
+    if r != nil
+      c.buf = substr(c.buf, r.pos)
+      return r.value
+    end
+    let chunk = tcp_read(c.fd, 65536, timeout_ms)
+    if chunk == nil or chunk == ""
+      return nil
+    end
+    c.buf = c.buf + chunk
+  end
+end
+
+fn call(c, ...args)
+  send_raw(c, encode_command(args))
+  next_reply(c)
+end
+
+fn closed(c)
+  tcp_read(c.fd, 65536, WAIT_MS) == ""
+end
+
+# ─── End to end ────────────────────────────────────────────────
+
+let listener = tcp_listen("127.0.0.1", PORT)
+let sup = server.start(listener)
+
+test.case("commands over TCP") do
+  let c = connect()
+  test.assert_eq(call(c, "PING"), {status: "PONG"})
+  test.assert_eq(call(c, "set", "k", "v"), {status: "OK"})
+  test.assert_eq(call(c, "GET", "k"), "v")
+  test.assert_eq(call(c, "HSET", "h", "a", "1", "b", "2"), 2)
+  test.assert_eq(call(c, "HGETALL", "h"), ["a", "1", "b", "2"])
+  test.assert_eq(call(c, "SELECT", "1"), {error: "ERR DB index is out of range"})
+  tcp_close(c.fd)
+end
+
+test.case("pipelined and inline commands answer in order") do
+  let c = connect()
+  let bytes = build_string do |add|
+    for i = 0, 100
+      add(encode_command(["INCR", "pipe"]))
+      if i % 10 == 0
+        add("PING\r\n")
+      end
+    end
+  end
+  send_raw(c, bytes)
+  for i = 0, 100
+    test.assert_eq(next_reply(c), i + 1)
+    if i % 10 == 0
+      test.assert_eq(next_reply(c), {status: "PONG"})
+    end
+  end
+  tcp_close(c.fd)
+end
+
+test.case("a value split across many writes") do
+  let c = connect()
+  let value = string.repeat("0123456789", 100000)
+  let bytes = encode_command(["SET", "big", value])
+  let pos = 0
+  while pos < len(bytes)
+    send_raw(c, substr(bytes, pos, 4096))
+    pos += 4096
+  end
+  test.assert_eq(next_reply(c), {status: "OK"})
+  test.assert_eq(call(c, "STRLEN", "big"), 1000000)
+  test.assert_eq(call(c, "GET", "big") == value, true)
+  tcp_close(c.fd)
+end
+
+test.case("QUIT and protocol errors close the connection") do
+  let c = connect()
+  send_raw(c, "QUIT\r\nPING\r\n")
+  test.assert_eq(next_reply(c), {status: "OK"})
+  test.assert(closed(c), "open after QUIT")
+  tcp_close(c.fd)
+  let d = connect()
+  send_raw(d, "PING\r\n*1\r\n$abc\r\n")
+  test.assert_eq(next_reply(d), {status: "PONG"})
+  test.assert_eq(next_reply(d), {error: "ERR Protocol error: invalid bulk length"})
+  test.assert(closed(d), "open after a protocol error")
+  tcp_close(d.fd)
+end
+
+test.case("publish reaches subscribers until they leave") do
+  let sub = connect()
+  test.assert_eq(call(sub, "SUBSCRIBE", "news", "sport"), ["subscribe", "news", 1])
+  test.assert_eq(next_reply(sub), ["subscribe", "sport", 2])
+  let pub = connect()
+  test.assert_eq(call(pub, "PUBLISH", "news", "hello"), 1)
+  test.assert_eq(next_reply(sub), ["message", "news", "hello"])
+  test.assert_eq(call(sub, "GET", "k").error, "ERR Can't execute 'get': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context")
+  test.assert_eq(call(sub, "PING"), ["pong", ""])
+  test.assert_eq(call(sub, "UNSUBSCRIBE", "news"), ["unsubscribe", "news", 1])
+  test.assert_eq(call(pub, "PUBLISH", "news", "again"), 0)
+  test.assert_eq(call(pub, "PUBLISH", "sport", "goal"), 1)
+  test.assert_eq(next_reply(sub), ["message", "sport", "goal"])
+  test.assert_eq(call(sub, "UNSUBSCRIBE"), ["unsubscribe", "sport", 0])
+  test.assert_eq(call(sub, "GET", "k"), "v")
+  tcp_close(sub.fd)
+  tcp_close(pub.fd)
+end
+
+test.case("a subscriber that disconnects is forgotten") do
+  let sub = connect()
+  test.assert_eq(call(sub, "SUBSCRIBE", "gone"), ["subscribe", "gone", 1])
+  tcp_close(sub.fd)
+  let pub = connect()
+  let n = 1
+  let deadline = time_ms() + WAIT_MS
+  while n != 0 and time_ms() < deadline
+    sleep(10)
+    n = call(pub, "PUBLISH", "gone", "x")
+  end
+  test.assert_eq(n, 0)
+  tcp_close(pub.fd)
+end
+
+test.case("keys expire without being read") do
+  let c = connect()
+  call(c, "FLUSHALL")
+  for i = 0, 50
+    call(c, "SET", "tmp{i}", "v", "PX", "20")
+  end
+  call(c, "SET", "stays", "v")
+  let deadline = time_ms() + WAIT_MS
+  while call(c, "DBSIZE") > 1 and time_ms() < deadline
+    sleep(20)
+  end
+  test.assert_eq(call(c, "DBSIZE"), 1)
+  tcp_close(c.fd)
+end
+
+test.run()
+server.stop(sup)
+tcp_close(listener)

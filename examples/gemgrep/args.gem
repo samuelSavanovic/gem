@@ -1,0 +1,127 @@
+## args — gemgrep's command line, as GNU grep reads it.
+##
+##   args.parse(["-in", "--", "-x", "a.txt"])
+##   # {ok: true, value: {pattern: "-x", files: ["a.txt"], icase: true, number: true, ...}}
+##
+## Returns `{ok: false, error: msg}` for a bad command line; `msg` is nil
+## when grep would print only the usage lines.
+
+let USAGE = "Usage: gemgrep [OPTION]... PATTERN [FILE]..."
+
+let HELP = """
+Usage: gemgrep [OPTION]... PATTERN [FILE]...
+Search for PATTERN, a POSIX extended regular expression, in each FILE.
+With no FILE, read standard input, or with -r the working directory.
+
+  -E          PATTERN is an extended regular expression (the default)
+  -F          PATTERN is a fixed string
+  -e PATTERN  use PATTERN (one that starts with -)
+  -i          ignore case
+  -w          match only whole words
+  -x          match only whole lines
+  -v          select the lines that don't match
+  -c          print only a count of selected lines per file
+  -l          print only the names of files with selected lines
+  -o          print only the matched parts of lines
+  -n          print line numbers
+  -H          print the file name with each match
+  -h          never print file names
+  -r          search directories recursively
+  -q          print nothing; exit 0 at the first selected line
+  -s          don't report unreadable files
+  --help      show this help
+
+Exit status: 0 when a line is selected, 1 when none is, 2 on an error.
+"""
+
+# Each flag letter and the option it sets to true.
+let FLAGS = {
+  i: "icase", v: "invert", c: "count", l: "list", n: "number", w: "word", x: "line",
+  F: "fixed", r: "recursive", o: "only", q: "quiet", s: "no_messages"
+}
+
+fn defaults()
+  {
+    pattern: nil, files: [], help: false, with_filename: nil,
+    icase: false, invert: false, count: false, list: false, number: false,
+    word: false, line: false, fixed: false, recursive: false, only: false, quiet: false,
+    no_messages: false
+  }
+end
+
+fn fail(msg)
+  {ok: false, error: msg}
+end
+
+# Sets the options of one cluster of flags ("-inr", "-epat", "-e"); returns
+# how many of the following arguments it took (0 or 1), or a failure.
+fn short_flags(opts, arg, next)
+  let i = 1
+  while i < len(arg)
+    let ch = arg[i]
+    i += 1
+    if ch == "e"
+      if i < len(arg)
+        opts.pattern = substr(arg, i, len(arg) - i)
+        return 0
+      end
+      if next == nil
+        return fail("option requires an argument -- 'e'")
+      end
+      opts.pattern = next
+      return 1
+    elif ch == "H"
+      opts.with_filename = true
+    elif ch == "h"
+      opts.with_filename = false
+    elif ch == "E"
+      nil
+    elif has_key(FLAGS, ch)
+      opts[FLAGS[ch]] = true
+    else
+      return fail("invalid option -- '{ch}'")
+    end
+  end
+  0
+end
+
+## Parses `argv` (without the program name). A lone `-` is a file (stdin);
+## `--` ends the options.
+fn parse(argv)
+  let opts = defaults()
+  let operands = []
+  let i = 0
+  let options_done = false
+  while i < len(argv)
+    let arg = argv[i]
+    i += 1
+    if options_done or arg == "-" or len(arg) < 2 or arg[0] != "-"
+      push(operands, arg)
+    elif arg == "--"
+      options_done = true
+    elif arg == "--help"
+      opts.help = true
+    elif arg[1] == "-"
+      return fail("unrecognized option '{arg}'")
+    else
+      let took = short_flags(opts, arg, argv[i])
+      if type(took) == "table"
+        return took
+      end
+      i += took
+    end
+  end
+  if opts.help
+    return {ok: true, value: opts}
+  end
+  if opts.pattern == nil
+    if len(operands) == 0
+      return fail(nil)
+    end
+    opts.pattern = remove_at(operands, 0)
+  end
+  opts.files = operands
+  {ok: true, value: opts}
+end
+
+export USAGE, HELP, parse

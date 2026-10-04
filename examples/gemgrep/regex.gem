@@ -1,0 +1,107 @@
+## regex — POSIX extended regular expressions (libc's regcomp/regexec).
+##
+##   let r = regex.compile("fo+|ba[rz]", {icase: true})
+##   if r.ok
+##     let rx = r.value
+##     regex.test(rx, "a Foo b", 0, 7)     # true
+##     regex.free(rx)
+##   end
+##
+## A compiled regex is C memory behind a handle: free it with
+## `regex.free` once done, on every path, and use it only in the process
+## that compiled it (give other processes the pattern instead). Matching
+## works on byte ranges of a string, NUL bytes included, and runs inline:
+## it holds up every other process while it runs.
+
+extern include "rx.h"
+extern fn rx_new() -> Ptr
+extern fn rx_compile(h: Ptr, pattern: String, icase: Bool) -> Int
+extern fn rx_error(h: Ptr, code: Int) -> String
+extern fn rx_free(h: Ptr) -> Nil
+extern fn rx_exec(h: Ptr, data: Bytes, start: Int, stop: Int, notbol: Bool, offsets: Bool) -> Bool
+extern fn rx_group_start(h: Ptr, group: Int) -> Int
+extern fn rx_group_end(h: Ptr, group: Int) -> Int
+
+let METACHARS = '.[]()*+?{}|^$\\'
+let WORD = "[:alnum:]_"
+
+## Escapes `s` so that it matches itself (grep -F).
+fn quote(s)
+  build_string do |add|
+    for ch in s
+      if find(METACHARS, ch) >= 0
+        add("\\")
+      end
+      add(ch)
+    end
+  end
+end
+
+## Compiles `pattern` (an ERE, as grep -E). Options: `icase` ignores
+## case; `word` matches only whole words (grep -w): the match must start
+## and end at a line edge or next to a byte that is not a letter, digit or
+## `_`; `line` matches only whole lines (grep -x, which wins over
+## `word`). Returns `{ok: true, value: rx}` or `{ok: false, error: msg}` with
+## libc's message (`Unmatched ( or \(`). A pattern can't hold a NUL byte.
+fn compile(pattern, {icase = false, word = false, line = false} = {})
+  if find(pattern, "\0") >= 0
+    return {ok: false, error: "the pattern holds a NUL byte"}
+  end
+  let source = pattern
+  let group = 0
+  if line
+    source = "^({pattern})$"
+    group = 1
+  elif word
+    # Groups 1 and 3 take the bytes around the word; the pattern is group 2.
+    source = "(^|[^{WORD}])({pattern})([^{WORD}]|$)"
+    group = 2
+  end
+  let h = rx_new()
+  if h == 0
+    return {ok: false, error: "out of memory"}
+  end
+  let code = rx_compile(h, source, icase)
+  if code != 0
+    let msg = rx_error(h, code)
+    rx_free(h)
+    return {ok: false, error: msg}
+  end
+  {ok: true, value: {handle: h, group: group}}
+end
+
+## Frees the compiled regex. Freeing it again does nothing; using it
+## afterwards raises.
+fn free(rx)
+  rx_free(rx.handle)
+  rx.handle = 0
+end
+
+fn check(rx, s, start, stop)
+  if rx.handle == 0
+    error("regex: the regex was freed")
+  end
+  if start < 0 or start > stop or stop > len(s)
+    error("regex: bad range {start}..{stop} of a {len(s)}-byte string")
+  end
+end
+
+## Whether `rx` matches somewhere in `s[start, stop)`, a line or part of
+## one. `^` matches at `start` only when `start` is 0 or follows a
+## newline.
+fn test(rx, s, start, stop)
+  check(rx, s, start, stop)
+  rx_exec(rx.handle, s, start, stop, start > 0 and ord(s, start - 1) != 10, false)
+end
+
+## The first match in `s[start, stop)`: `{start, stop}` offsets into `s`
+## (with `word`, the word without the bytes around it), or nil.
+fn search(rx, s, start, stop)
+  check(rx, s, start, stop)
+  if not rx_exec(rx.handle, s, start, stop, start > 0 and ord(s, start - 1) != 10, true)
+    return nil
+  end
+  {start: rx_group_start(rx.handle, rx.group), stop: rx_group_end(rx.handle, rx.group)}
+end
+
+export quote, compile, free, test, search

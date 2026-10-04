@@ -1,0 +1,110 @@
+## jobqueue — a job queue with a supervised worker pool: the public API.
+##
+##   let sys = jobqueue.start({pool: 8})
+##   jobqueue.submit({id: 1, kind: "sum", payload: 10, max_retries: 3, deadline_ms: 100})
+##   receive
+##   when {tag: "job_done", id: 1, status: status} then print(status)
+##   end
+##   jobqueue.stop(sys)
+##
+## One system runs at a time: the queue and its worker supervisor are
+## registered under fixed names.
+
+load "std/gen_server"
+load "std/supervisor"
+load "std/dynamic_supervisor"
+load "./queue"
+load "./worker"
+
+let QUEUE = "jobqueue"
+let WORKERS = "jobqueue_workers"
+
+## Starts the system and returns its supervisor's handle. Options (all
+## optional): `pool` (most workers at once, 8), `backoff_ms` (the first
+## retry's delay, 10; doubled for each later one), `backoff_max_ms`
+## (1000), `idle_ms` (a worker idle that long exits, 200),
+## `max_restarts` / `restart_window_ms` (the worker supervisor's restart
+## intensity, 1000 per 1000 ms), and the fault schedule passed to the
+## workers: `seed`, `crash`, `hang`, `slow`, `kill` (probabilities per
+## attempt) and `slow_ms`.
+fn start(opts = {})
+  let {
+    pool = 8, backoff_ms = 10, backoff_max_ms = 1000, idle_ms = 200,
+    max_restarts = 1000, restart_window_ms = 1000,
+    seed = 1, crash = 0.0, hang = 0.0, slow = 0.0, kill = 0.0, slow_ms = 20
+  } = opts
+  let worker_config = {
+    queue: QUEUE, idle_ms: idle_ms, slow_ms: slow_ms,
+    seed: seed, crash: crash, hang: hang, slow: slow, kill: kill
+  }
+  let queue_opts = {
+    name: QUEUE, workers_name: WORKERS, worker_config: worker_config,
+    pool: pool, backoff_ms: backoff_ms, backoff_max_ms: backoff_max_ms
+  }
+  # The worker supervisor comes first: the queue's init looks it up.
+  supervisor.start({
+    strategy: "one_for_one",
+    name: "jobqueue_sup",
+    max_restarts: 20,
+    max_seconds: 10000,
+    children: [
+      {id: "workers", start: fn()
+        dynamic_supervisor.start({
+          name: WORKERS,
+          child: {start: worker.start, restart: "transient", shutdown: 100},
+          max_restarts: max_restarts,
+          max_seconds: restart_window_ms
+        })
+      end},
+      {id: "queue", start: fn() queue.start(queue_opts) end}
+    ]
+  })
+end
+
+## Stops the system: the workers, the queue and its state.
+fn stop(sys)
+  supervisor.stop(sys)
+end
+
+## Submits `job` (`{id, kind, payload, max_retries, deadline_ms}`, with a
+## unique int `id` and `deadline_ms` nil for no deadline) and returns
+## `{ok: true}`, or `{ok: false, error}` for a bad or duplicate job.
+## `notify` (default: the caller) gets `{tag: "job_done", id, status,
+## attempts, result, submitted_at, finished_at}` once the job completes
+## (`status` "completed") or is dead-lettered ("dead").
+fn submit(job, notify = self())
+  gen_server.call(QUEUE, {tag: "submit", job: job, notify: notify})
+end
+
+## Returns job `id`'s `{id, status, attempts, result, error,
+## submitted_at, finished_at}`, or nil for an unknown id. `status` is
+## "queued", "running", "retrying", "completed" or "dead"; `attempts`
+## holds each attempt's outcome: "ok" or why it failed.
+fn status(id)
+  gen_server.call(QUEUE, {tag: "status", id: id})
+end
+
+## Returns the queue's counters: submitted, completed, dead, attempts,
+## retries, late_results, worker_starts, sup_restarts, and pending, busy,
+## idle and slots (workers the supervisor holds) right now.
+fn stats()
+  gen_server.call(QUEUE, {tag: "stats"})
+end
+
+## Returns the dead-lettered jobs' statuses, oldest first.
+fn dead_letters()
+  gen_server.call(QUEUE, {tag: "dead_letters"})
+end
+
+## Returns every job's status.
+fn report()
+  gen_server.call(QUEUE, {tag: "report"}, 60000)
+end
+
+## Returns the pids of the queue and of the worker supervisor (nil while
+## it restarts).
+fn pids()
+  {queue: whereis(QUEUE), workers: whereis(WORKERS)}
+end
+
+export start, stop, submit, status, stats, dead_letters, report, pids

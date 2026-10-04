@@ -1,0 +1,69 @@
+## rset — a set of strings with O(1) add, remove, membership and random
+## pick: the backing store of Redis sets and of the key expiry index.
+##
+##   let s = rset.new()
+##   rset.add(s, "a")        # true
+##   rset.has(s, "a")        # true
+##   rset.pick(s)            # "a"
+
+# `items` holds the members in an array and `pos` maps each member to its
+# index there. Removing moves the last member into the hole.
+
+## Returns an empty set.
+fn new()
+  {items: [], pos: {}}
+end
+
+## Returns the number of members.
+fn size(s)
+  len(s.items)
+end
+
+## Returns true when `m` is a member.
+fn has(s, m)
+  has_key(s.pos, m)
+end
+
+## Adds `m`. Returns true when it was not a member yet.
+fn add(s, m)
+  if has_key(s.pos, m)
+    return false
+  end
+  s.pos[m] = len(s.items)
+  push(s.items, m)
+  true
+end
+
+## Removes `m`. Returns true when it was a member.
+fn remove(s, m)
+  if not has_key(s.pos, m)
+    return false
+  end
+  let i = s.pos[m]
+  let last = pop(s.items)
+  if last != m
+    s.items[i] = last
+    s.pos[last] = i
+  end
+  delete(s.pos, m)
+  true
+end
+
+## Returns a random member, or nil when the set is empty.
+fn pick(s)
+  let n = len(s.items)
+  if n == 0 then return nil end
+  s.items[random(n)]
+end
+
+## Returns the members as an array that the caller may keep (a copy), in
+## no particular order.
+fn members(s)
+  let out = []
+  for m in s.items
+    push(out, m)
+  end
+  out
+end
+
+export new, size, has, add, remove, pick, members

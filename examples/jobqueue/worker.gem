@@ -1,0 +1,83 @@
+## worker — a pool worker: announces itself to the queue, runs the jobs
+## the queue sends it, and retires after idling. Faults from the schedule
+## are injected into each run.
+
+load "std/gen_server"
+load "./schedule"
+
+let HANG_MS = 86400000
+
+## Runs `job` and returns its result: "sum" adds up 0 .. payload-1,
+## "text" builds a string of `payload` pairs and returns its length,
+## "sleep" waits 1 to 3 ms and returns the payload.
+fn run_job(job)
+  match job.kind
+  when "sum"
+    let total = 0
+    for i = 0, job.payload
+      total += i
+    end
+    total
+  when "text"
+    let s = build_string do |add|
+      for i = 0, job.payload
+        add("ab")
+      end
+    end
+    len(s)
+  when "sleep"
+    sleep(1 + job.payload % 3)
+    job.payload
+  else
+    error("jobqueue: unknown job kind {job.kind}")
+  end
+end
+
+# A crash and a kill end the worker, as a bug in a job would: the queue
+# learns of it from the worker's DOWN and the supervisor restarts it.
+fn inject(config, job, attempt)
+  match schedule.fault(config, job.id, attempt)
+  when "crash"
+    error("jobqueue: injected crash in job {job.id}")
+  when "hang"
+    sleep(HANG_MS)
+  when "slow"
+    sleep(config.slow_ms)
+  when "kill"
+    kill(self(), "kill")
+  else
+    nil
+  end
+end
+
+fn serve(config)
+  let queue = config.queue
+  gen_server.cast(queue, {tag: "worker_up", pid: self()})
+  let running = true
+  while running
+    receive
+    when {tag: "run", job: job, attempt: attempt, ref: ref}
+      inject(config, job, attempt)
+      let result = run_job(job)
+      gen_server.cast(queue, {tag: "done", pid: self(), ref: ref, result: result})
+    when other
+      nil
+    after config.idle_ms
+      # The queue says no when it has just sent this worker a job.
+      running = not gen_server.call(queue, {tag: "retire", pid: self()})
+    end
+  end
+end
+
+## Spawns a worker for the queue registered as `config.queue` and
+## returns its pid; the dynamic supervisor's child template calls it.
+## `config` also carries the fault schedule (see schedule.fault),
+## `slow_ms` and `idle_ms`, the idle time after which the worker asks the
+## queue to let it exit.
+fn start(config)
+  spawn do
+    serve(config)
+  end
+end
+
+export start, run_job

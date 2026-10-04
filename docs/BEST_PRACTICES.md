@@ -58,10 +58,17 @@ form.
 
 **Larger programs.** `examples/bookmark_app/` (an HTMX web app on
 `std/http` and `std/sqlite`), `examples/stomp_broker/` (a message broker
-built from `supervisor`, `dynamic_supervisor` and `gen_server`) and
-`examples/logstat/` (a command-line log analyzer in a `gem.toml` project)
-follow this doc and test themselves with `std/test`; read them for how the
-pieces fit together.
+built from `supervisor`, `dynamic_supervisor` and `gen_server`),
+`examples/logstat/` (a command-line log analyzer in a `gem.toml` project),
+`examples/mini_redis/` (a Redis-protocol server: one process owning
+a large keyspace, a process per connection, pub/sub), `examples/lox/`
+(an interpreter for the Lox language: a lexer, a recursive-descent parser
+and a tree walker over tables), `examples/gemgrep/` (a recursive grep
+on libc's regex through `extern fn`: a C object behind a `Ptr`, file
+contents as `Bytes`) and `examples/jobqueue/` (a job queue whose workers
+crash, hang and get killed under a `dynamic_supervisor`: retries,
+deadlines, restart intensity) follow this doc and test themselves with
+`std/test`; read them for how the pieces fit together.
 
 **Words this doc uses.**
 
@@ -909,6 +916,20 @@ loop's back-edge`, that loop's memory grows without bound. It is printed
 only for `while true` loops, and says why; restructure the loop, or file an
 issue.
 
+### A process holding a lot of data pauses every process **(trap)**
+
+A long-running loop copies what it keeps alive at each arena reset, all
+of it at once, and processes share one thread, so nothing else runs
+meanwhile. A gen_server whose state grows inside its loop (the loop
+started with `init`) copies all of it at every reset: with 100,000 small
+records the longest pause was about 0.1 s, with 300,000 1.4 s (Linux
+x86_64 VM). `examples/jobqueue`'s queue, which keeps a record per job,
+stalls the program 50–80 ms at 20,000 jobs and 1.5 s at 100,000, and a
+timer set to 100 ms then fires before a 20 ms job has had a chance to
+report. Bound what a long-lived process keeps (expire finished records,
+keep a count instead of a history), or split it across processes, and
+leave deadlines room for the pauses.
+
 ### Mutate state in place
 
 Tables are never shared between processes (messages are copies), so a
@@ -927,6 +948,33 @@ catches like any error. `json.parse` and `json.encode` refuse nesting
 deeper than 1,000 levels (and `json.encode` so stops on a cyclic table). For
 recursive walkers over untrusted input, cap the depth or use an explicit
 stack, so a hostile input gets a clear error instead of a stack overflow.
+
+### Recursion keeps what it allocates until a loop moves on **(trap)**
+
+Memory is freed at loop back-edges, and a recursion has none of its own:
+what a recursive function and its callees allocate stays until a loop
+that was already running finishes its iteration. Memory then grows with
+the *number of calls*, not with the depth. This counter makes one small
+table per call, a million calls for `count(28)`, and peaks at 530 MB:
+
+```gem
+fn count(n)
+  if n < 2
+    return {v: n}
+  end
+  let a = count(n - 1)
+  let b = count(n - 2)
+  {v: a.v + b.v}
+end
+```
+
+Loop over the recursive calls instead, and each back-edge frees what the
+call before it made: with `for k in [n - 1, n - 2]` adding up
+`count(k).v`, the same count runs in 10 MB. A `while` loop with an
+explicit stack does too. A tree walk that allocates at every node, such
+as an interpreter, is the usual way into this: `examples/lox` runs a
+naive `fib(30)` in Lox, 2.7 million interpreted calls with an
+environment table each, in 4.9 GB.
 
 ---
 
@@ -1166,6 +1214,38 @@ slower: 2,000 round trips took 11 ms with an empty mailbox and 1.1 s with
   that belong to someone else, such as a task result or another call's
   reply.
 
+### A process that makes calls doesn't also collect a stream **(trap)**
+
+A request/reply wait (`gen_server.call`, a `receive` on `^ref`) scans the
+whole mailbox for its reply, messages that will be read later included.
+A process that makes calls while another process streams messages to it
+(notifications, results, a server telling it each job is done) therefore
+scans the growing stream on every call: quadratic. 10,000 calls to a
+server that also sends the caller a note per call took 14 s; the same
+calls made from a process of their own took 68 ms (Linux x86_64 VM;
+`examples/jobqueue`'s driver: 21 s against 0.7 s for 10,000 jobs).
+Split the two roles:
+
+```gem
+let me = self()
+spawn do                              # Prefer: the calls in their own process
+  for i = 0, n
+    gen_server.call(server, {n: i, notify: me})
+  end
+end
+for i = 0, n                          # this process only collects
+  receive
+  when {tag: "done"} then nil
+  end
+end
+
+# Over: one process calls and collects
+#   for i = 0, n
+#     gen_server.call(server, {n: i, notify: self()})
+#   end
+#   ... then receive the n notes
+```
+
 ### Registered names
 
 `register("db", pid)` lets other processes `send("db", msg)` and
@@ -1327,6 +1407,22 @@ way to read a *file* a line at a time: `read_file` and split it yourself
 (see `examples/logstat/lib/source.gem`), which holds the whole file in
 memory, twice while it is read.
 
+### Write large output in one piece
+
+`print` flushes after every line, so each line is a `write` system call:
+a million lines to a file took 0.6 s with `print` against 0.3 s with one
+`write_stdout` of a string built with `build_string`, and 0.73 s with
+`print` into a pipe. For bulk output, build a block of lines and write it
+once:
+
+```gem
+write_stdout(build_string do |add|
+  for line in lines
+    add(line, "\n")
+  end
+end)
+```
+
 ### `tcp_listen` takes an IP address
 
 `tcp_listen("localhost", port)` raises `invalid address`; pass
@@ -1465,21 +1561,84 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
   prototype from the extern types, which clashes with libc's.
 - Types are checked, not converted: a `Float` parameter rejects `2` (pass
   `2.0` or `to_float(n)`). The argument count must match exactly: too few
-  or too many raise. A `Ptr` is an int in Gem, and `NULL` comes back as
-  `0`, not `nil`. `extern blocking fn` can't take or return a `Table`.
+  or too many raise. `extern blocking fn` can't take or return a `Table`.
+- A `Ptr` is an int in Gem, and `NULL` comes back as `0`, not `nil`.
+  `0` is truthy, so `if not p` never catches a `NULL` **(trap)**: compare
+  with `p == 0`.
 - `String` parameters arrive as `const char *` and stop at the first `\0`.
-  Use `Bytes` for binary data.
-- A plain `extern fn` runs on the scheduler thread and blocks every
-  process. Declare slow calls `extern blocking fn`.
+  Use `Bytes` for binary data. A plain `extern fn` gets a pointer into
+  the string itself, not a copy, so passing a large string with offsets
+  (`data: Bytes, start: Int, stop: Int`) costs the same as passing a
+  short one; slicing it with `substr` first copies the slice.
 - Returned strings: a plain `extern fn` must return static memory (the
   runtime copies it and does not free it); an `extern blocking fn` must
   return `malloc`'d memory (the runtime frees it). A `NULL` return is
   `nil` from a plain `extern fn` but `""` from an `extern blocking fn`.
+  Declare a helper's return `char *`: the generated wrapper assigns it to
+  a `char *`, so a `const char *` return, and a libc function that
+  returns one (`hstrerror`), make cc warn on every build **(bug)**.
 - Don't keep pointers to Gem strings or tables on the C side after the call
   returns: the next arena reset or the process's exit frees that memory,
   and an `extern blocking fn` gets copies that are freed when it returns.
 - C code that recurses without limit kills the process, and `pcall` can't
   catch it.
+
+### Plain `extern fn` for quick calls, `extern blocking fn` for waits **(trap)**
+
+A plain `extern fn` runs on the scheduler thread: no process runs until
+it returns. An `extern blocking fn` runs on the 4-thread pool while the
+caller waits and other processes run, but every call pays a hand-off to
+a worker and back, and copies every `String` and `Bytes` argument. Called
+once per line, that is ruinous: `regexec` on each of 19,000 lines of a
+1 MB file took 5 ms as a plain `extern fn`, 0.64 s as an `extern blocking
+fn` given each line, and 1.7 s given the whole file each time (Linux
+x86_64; `examples/gemgrep`).
+
+```gem
+extern include "unistd.h"
+extern fn write(fd: Int, data: Bytes) -> Int      # quick: a plain call, inline
+extern blocking fn fsync(fd: Int) -> Int           # can wait for the disk: the pool
+```
+
+Use `extern blocking fn` for calls that wait (I/O, locks, the network) or
+run for more than about a millisecond, and a plain `extern fn` for short
+calls in loops. A plain call from a loop holds the other processes only
+for one call, since the loop's back-edge lets them run; one call that
+runs long holds them for all of it (glibc's `regexec` with a
+backreference can take seconds on one line).
+
+### A `Ptr` is a number, not an owner **(trap)**
+
+A C object behind a `Ptr` (a `FILE *`, a compiled regex, a handle a
+library gave you) is not freed when the process holding it dies, as a
+socket isn't closed. And `spawn` and `send` copy the number, not the
+object: two processes then share one object, and when one frees it the
+other holds a dangling pointer, which crashes or corrupts memory rather
+than raising. Make, use and free a C object in one process, free it on
+every path, and give other processes what they need to make their own:
+
+```gem
+fn file_magic(path)
+  let f = fopen(path, "rb")
+  if f == 0
+    return nil
+  end
+  let r = pcall magic(f)          # Gem code that may raise
+  fclose(f)                       # on every path
+  if not r.ok
+    error(r.error)
+  end
+  r.value
+end
+
+for path in paths
+  push(tasks, task.async(fn() file_magic(path) end))   # each task opens its own
+end
+```
+
+When the free function tolerates it, zero the handle after freeing
+(`h.ptr = 0`) and check for `0` before each use, so a use after the free
+raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 
 ---
 
@@ -1578,6 +1737,7 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | Re-raising with `error(r.error)` | original stack lost | log `r.stack` first |
 | `loop(state)` followed by more statements | stack and memory grow until overflow | self call as the last expression |
 | `warning: cannot reset ... back-edge` on a `while true` | memory grows without bound | restructure the loop |
+| Recursion with millions of calls that allocate | memory grows with the call count | loop over the recursive calls, or an explicit stack |
 | gen_server callback returning `nil` | server dies, the `call` raises | `else` arm returning a result table |
 | `self()` inside `spawn do ... end` to mean the parent | it's the child | `let parent = self()` before |
 | `spawn(f, x)` | `f` called with no arguments | `spawn do f(x) end` |
@@ -1585,6 +1745,8 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | Reply pattern without `^ref` | takes a stale reply | `ref: ^ref` |
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
+| Calls from a process that also collects a stream of messages | every reply wait scans the stream: quadratic | make the calls from a separate process |
+| A long-lived process holding 100,000s of records | each reset copies them all and stalls every process (0.1–1.5 s) | bound or shard the state |
 | `after` in a busy server loop | never fires | `send_after` ticks |
 | `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
 | Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
@@ -1593,6 +1755,9 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `gen_server.call` to a server that has already died | `server exited: noproc` (by name: `no process registered`), not why it died | monitor it: the `DOWN` has the reason |
 | `spawn` per connection or per item, unguarded **(trap)** | raises at the process or memory limit (~14,000 on stock Linux); the acceptor dies | catch it, or cap in-flight work |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
+| `extern blocking fn` called once per line or item | a thread hand-off and argument copies per call: 100x slower | plain `extern fn` for quick calls |
+| `if not p` on a `Ptr` | `NULL` is `0`, which is truthy | `p == 0` |
+| A `Ptr` sent, captured by `spawn`, or left when its process dies | shared or leaked C object; use after free | one process makes, uses and frees it, on every path |
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_listen("localhost", ...)` | raises | `"127.0.0.1"` |
 | `tcp_read` with no timeout | blocks forever on a silent peer | pass a timeout |

@@ -1,0 +1,196 @@
+## resolver — binds each variable use to the scope that declares it.
+##
+##   let errors = resolver.resolve(statements)    # [] when the program is fine
+##
+## Sets `depth` on every variable, assign, this and super node: how many
+## environments up from the current one the name lives, or nil for a
+## global. Also reports the static errors jlox does (a `return` outside a
+## function, `this` outside a class, a variable read in its own
+## initializer, ...).
+
+## Resolves `statements` in place. Returns the error messages.
+fn resolve(statements)
+  let r = {scopes: [], function: "none", class: "none", errors: []}
+  resolve_all(r, statements)
+  r.errors
+end
+
+fn report(r, line, where, message)
+  push(r.errors, "[line {line}] Error at '{where}': {message}")
+end
+
+fn begin_scope(r)
+  push(r.scopes, {})
+end
+
+fn end_scope(r)
+  pop(r.scopes)
+end
+
+fn declare(r, name, line)
+  if len(r.scopes) == 0
+    return nil
+  end
+  let scope = r.scopes[-1]
+  if has_key(scope, name)
+    report(r, line, name, "Already a variable with this name in this scope.")
+  end
+  scope[name] = false
+end
+
+fn define(r, name)
+  if len(r.scopes) > 0
+    r.scopes[-1][name] = true
+  end
+end
+
+fn resolve_local(r, node, name)
+  let top = len(r.scopes) - 1
+  let i = top
+  while i >= 0
+    if has_key(r.scopes[i], name)
+      node.depth = top - i
+      return nil
+    end
+    i -= 1
+  end
+end
+
+fn resolve_all(r, statements)
+  for s in statements
+    statement(r, s)
+  end
+end
+
+fn statement(r, s)
+  match s.kind
+  when "expr" then expression(r, s.expr)
+  when "print" then expression(r, s.expr)
+  when "var"
+    declare(r, s.name, s.line)
+    if s.init != nil
+      expression(r, s.init)
+    end
+    define(r, s.name)
+  when "block"
+    begin_scope(r)
+    resolve_all(r, s.statements)
+    end_scope(r)
+  when "if"
+    expression(r, s.cond)
+    statement(r, s.then_branch)
+    if s.else_branch != nil
+      statement(r, s.else_branch)
+    end
+  when "while"
+    expression(r, s.cond)
+    statement(r, s.body)
+  when "function"
+    declare(r, s.name, s.line)
+    define(r, s.name)
+    function(r, s, "function")
+  when "return"
+    if r.function == "none"
+      report(r, s.line, "return", "Can't return from top-level code.")
+    end
+    if s.value != nil
+      if r.function == "initializer"
+        report(r, s.line, "return", "Can't return a value from an initializer.")
+      end
+      expression(r, s.value)
+    end
+  when "class" then class_declaration(r, s)
+  else
+    error("resolver: unknown statement {s.kind}")
+  end
+end
+
+fn function(r, f, kind)
+  let enclosing = r.function
+  r.function = kind
+  begin_scope(r)
+  for p in f.params
+    declare(r, p, f.line)
+    define(r, p)
+  end
+  resolve_all(r, f.body)
+  end_scope(r)
+  r.function = enclosing
+end
+
+fn class_declaration(r, s)
+  let enclosing = r.class
+  r.class = "class"
+  declare(r, s.name, s.line)
+  define(r, s.name)
+  if s.superclass != nil
+    if s.superclass.name == s.name
+      report(r, s.superclass.line, s.name, "A class can't inherit from itself.")
+    end
+    r.class = "subclass"
+    expression(r, s.superclass)
+    begin_scope(r)
+    r.scopes[-1]["super"] = true
+  end
+  begin_scope(r)
+  r.scopes[-1]["this"] = true
+  for m in s.methods
+    let kind = "method"
+    if m.name == "init"
+      kind = "initializer"
+    end
+    function(r, m, kind)
+  end
+  end_scope(r)
+  if s.superclass != nil
+    end_scope(r)
+  end
+  r.class = enclosing
+end
+
+fn expression(r, e)
+  match e.kind
+  when "literal" then nil
+  when "variable"
+    if len(r.scopes) > 0 and r.scopes[-1][e.name] == false
+      report(r, e.line, e.name, "Can't read local variable in its own initializer.")
+    end
+    resolve_local(r, e, e.name)
+  when "assign"
+    expression(r, e.value)
+    resolve_local(r, e, e.name)
+  when "binary"
+    expression(r, e.left)
+    expression(r, e.right)
+  when "logical"
+    expression(r, e.left)
+    expression(r, e.right)
+  when "unary" then expression(r, e.right)
+  when "grouping" then expression(r, e.expr)
+  when "call"
+    expression(r, e.callee)
+    for a in e.args
+      expression(r, a)
+    end
+  when "get" then expression(r, e.object)
+  when "set"
+    expression(r, e.value)
+    expression(r, e.object)
+  when "this"
+    if r.class == "none"
+      report(r, e.line, "this", "Can't use 'this' outside of a class.")
+    end
+    resolve_local(r, e, "this")
+  when "super"
+    if r.class == "none"
+      report(r, e.line, "super", "Can't use 'super' outside of a class.")
+    elif r.class != "subclass"
+      report(r, e.line, "super", "Can't use 'super' in a class with no superclass.")
+    end
+    resolve_local(r, e, "super")
+  else
+    error("resolver: unknown expression {e.kind}")
+  end
+end
+
+export resolve

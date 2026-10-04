@@ -1,0 +1,57 @@
+## server — mini_redis's supervision tree and accept loop (see README.md).
+
+load "std/supervisor"
+load "./store"
+load "./pubsub"
+load "./connection"
+
+# Accepting fails when the process is out of file descriptors: log it
+# once and retry every 50 ms until it succeeds again.
+fn accept_loop(listener, write_timeout_ms)
+  let failing = false
+  while true
+    let a = pcall tcp_accept(listener)
+    if not a.ok
+      if not failing
+        eprint("mini_redis: {a.error}; retrying")
+        failing = true
+      end
+      sleep(50)
+      continue
+    end
+    failing = false
+    let fd = a.value
+    let r = pcall connection.start(fd, write_timeout_ms)
+    if not r.ok
+      tcp_write(fd, "-ERR max number of clients reached\r\n", 100)
+      tcp_close(fd)
+    end
+  end
+end
+
+## Starts the server on `listener` and returns the supervisor's handle. A
+## client that doesn't take a reply within `write_timeout_ms` is
+## disconnected. `stop` doesn't close the listener.
+fn start(listener, {write_timeout_ms = 10000} = {})
+  supervisor.start({
+    strategy: "one_for_one",
+    name: "mini_redis_sup",
+    children: [
+      {id: "store", start: store.start},
+      {id: "pubsub", start: pubsub.start},
+      {id: "acceptor", start: fn()
+        spawn do
+          accept_loop(listener, write_timeout_ms)
+        end
+      end}
+    ]
+  })
+end
+
+## Stops the server. Open connections aren't part of it: each one fails
+## its next command that needs the store or pub/sub.
+fn stop(sup)
+  supervisor.stop(sup)
+end
+
+export start, stop

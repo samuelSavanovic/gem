@@ -1,0 +1,172 @@
+## grep — runs one gemgrep command: the walk, the search, the output.
+##
+##   let status = grep.run(opts, {out: write_stdout, err: fn(line) eprint(line) end})
+##
+## `opts` are args.parse's. `out` receives the text for stdout (whole
+## lines, a file's at a time); `err` one message at a time, without its
+## newline. Returns grep's exit status: 0 when a line was selected, 1 when
+## none was, 2 after an error.
+
+load "std/task"
+load "./regex"
+load "./search"
+load "./walk"
+
+# Files searched by one task, and how many tasks run at once.
+let BATCH = 32
+let WORKERS = 4
+
+fn compile(opts)
+  let pattern = opts.pattern
+  if opts.fixed
+    pattern = regex.quote(pattern)
+  end
+  regex.compile(pattern, {icase: opts.icase, word: opts.word, line: opts.line})
+end
+
+# Whether a file's lines carry its name: -H or -h when given, else when
+# there are several operands or the file was found in a directory.
+fn shows_name(entry, with_filename)
+  with_filename or (with_filename == nil and entry.in_dir)
+end
+
+# One file's result: {out, count, binary} from search.text, or {error}.
+fn search_file(entry, rx, opts, with_filename)
+  if entry.error != nil
+    return {error: entry.error}
+  end
+  let path = entry.path
+  let name = path
+  if path == "-"
+    path = "/dev/stdin"
+    name = "(standard input)"
+  end
+  let read = pcall read_file(path)
+  if not read.ok
+    return {error: walk.open_error(path) or read.error}
+  end
+  let prefix = nil
+  if shows_name(entry, with_filename)
+    prefix = name
+  end
+  let r = search.text(read.value, rx, opts, prefix)
+  r.name = name
+  r
+end
+
+fn search_files(entries, rx, opts, with_filename)
+  let results = []
+  for entry in entries
+    push(results, search_file(entry, rx, opts, with_filename))
+  end
+  results
+end
+
+# Searches a batch of files in a process of its own. The regex is compiled
+# again there: a handle belongs to the process that made it, and it is
+# freed on every path, since nothing frees it when the process dies.
+fn start_batch(entries, opts, with_filename)
+  task.async do
+    let rx = compile(opts).value
+    let r = pcall search_files(entries, rx, opts, with_filename)
+    regex.free(rx)
+    if not r.ok
+      error(r.error)
+    end
+    r.value
+  end
+end
+
+fn batches(entries)
+  let out = []
+  let i = 0
+  while i < len(entries)
+    let batch = []
+    for j = i, min(i + BATCH, len(entries))
+      push(batch, entries[j])
+    end
+    push(out, batch)
+    i += BATCH
+  end
+  out
+end
+
+fn min(a, b)
+  if a < b then a else b end
+end
+
+# Prints one file's result; returns whether it selected a line.
+fn report(r, entry, opts, with_filename, io)
+  if r.error != nil
+    if not opts.no_messages
+      io.err("gemgrep: {entry.path}: {r.error}")
+    end
+    return false
+  end
+  if opts.quiet
+    return r.count > 0
+  end
+  if opts.list
+    if r.count > 0
+      io.out("{r.name}\n")
+    end
+  elif opts.count
+    if shows_name(entry, with_filename)
+      io.out("{r.name}:{r.count}\n")
+    else
+      io.out("{r.count}\n")
+    end
+  elif len(r.out) > 0
+    io.out(r.out)
+  end
+  if r.binary and not opts.count and not opts.list
+    io.err("gemgrep: {r.name}: binary file matches")
+  end
+  r.count > 0
+end
+
+## Runs the search `opts` describes and returns the exit status.
+fn run(opts, io)
+  let compiled = compile(opts)
+  if not compiled.ok
+    io.err("gemgrep: {compiled.error}")
+    return 2
+  end
+  # Only checked here; each batch compiles its own.
+  regex.free(compiled.value)
+  let entries = walk.files(opts.files, opts.recursive)
+  let with_filename = opts.with_filename
+  if with_filename == nil and len(opts.files) > 1
+    with_filename = true
+  end
+  let groups = batches(entries)
+  let running = []
+  let next = 0
+  let selected = false
+  let failed = false
+  for group in groups
+    while next < len(groups) and len(running) < WORKERS
+      push(running, start_batch(groups[next], opts, with_filename))
+      next += 1
+    end
+    let results = task.await(remove_at(running, 0))
+    for i = 0, len(group)
+      let r = results[i]
+      if r.error != nil
+        failed = true
+      end
+      if report(r, group[i], opts, with_filename, io)
+        selected = true
+        if opts.quiet
+          return 0
+        end
+      end
+    end
+  end
+  if failed
+    return 2
+  end
+  if selected then 0 else 1 end
+end
+
+export run

@@ -1,0 +1,437 @@
+## interp — runs a resolved Lox program by walking its syntax tree.
+##
+##   let r = interp.run(statements, {out: fn(line) print(line) end, args: []})
+##   r    # {ok: true} or {ok: false, error: "Operands must be numbers.\n[line 3]"}
+##
+## Lox values are Gem values where they can be: nil, booleans, numbers
+## (always floats) and strings. Functions, classes and instances are
+## tables with a `kind`. An environment is `{values, enclosing}`.
+##
+## Natives: `clock()` (seconds), `str(v)` (v as `print` shows it),
+## `len(s)` (byte length of a string), `arg(i)` (the i-th script argument,
+## a number when it reads as one, nil past the end).
+
+# Lox calls nest deeper than this raise "Stack overflow.". A Lox call
+# takes about ten Gem frames of 1-2 KB each, and this keeps a program
+# well inside the 8 MB Gem stack; a function with deeply nested blocks
+# can still exhaust it first, which reports the same error.
+let MAX_CALL_DEPTH = 256
+
+# Prefix of the messages of runtime errors, to tell them from bugs.
+let RUNTIME = "lox runtime error: "
+
+let globals = nil
+let call_depth = 0
+let emit = nil
+
+## Runs `statements` (already resolved). Each Lox `print` passes its text
+## to `out`; `args` are what the `arg` native returns. Returns `{ok:
+## true}`, or `{ok: false, error}` for a runtime error, with the message
+## and line as jlox prints them.
+fn run(statements, {out = fn(line) print(line) end, args = []} = {})
+  globals = new_env(nil)
+  call_depth = 0
+  emit = out
+  define_natives(args)
+  let r = pcall exec_block(statements, globals)
+  if r.ok
+    return {ok: true}
+  end
+  let msg = r.error
+  if find(msg, "stack overflow in ") == 0
+    return {ok: false, error: "Stack overflow."}
+  end
+  if find(msg, RUNTIME) != 0
+    error(msg)
+  end
+  {ok: false, error: substr(msg, len(RUNTIME), len(msg))}
+end
+
+fn runtime_error(line, message)
+  error("{RUNTIME}{message}\n[line {line}]")
+end
+
+fn new_env(enclosing)
+  {values: {}, enclosing: enclosing}
+end
+
+fn ancestor(env, depth)
+  let e = env
+  for i = 0, depth
+    e = e.enclosing
+  end
+  e
+end
+
+# ─── Values ────────────────────────────────────────────────────
+
+fn native(name, arity, impl)
+  {kind: "native", name: name, arity: arity, impl: impl}
+end
+
+fn define_natives(args)
+  let v = globals.values
+  v["clock"] = native("clock", 0) do |a, line|
+    to_float(time_ms()) / 1000.0
+  end
+  v["str"] = native("str", 1) do |a, line|
+    stringify(a[0])
+  end
+  v["len"] = native("len", 1) do |a, line|
+    if type(a[0]) != "string"
+      runtime_error(line, "len() takes a string.")
+    end
+    to_float(len(a[0]))
+  end
+  v["arg"] = native("arg", 1) do |a, line|
+    if type(a[0]) != "float"
+      runtime_error(line, "arg() takes a number.")
+    end
+    let i = to_int(a[0])
+    if i < 0 or i >= len(args)
+      return nil
+    end
+    let r = pcall to_float(args[i])
+    if r.ok then return r.value end
+    args[i]
+  end
+end
+
+fn number_to_string(x)
+  if x > -10000000000000000.0 and x < 10000000000000000.0
+    let i = to_int(x)
+    if to_float(i) == x
+      return to_string(i)
+    end
+  end
+  to_string(x)
+end
+
+fn stringify(v)
+  match type(v)
+  when "nil" then "nil"
+  when "float" then number_to_string(v)
+  when "string" then v
+  when "bool" then to_string(v)
+  else
+    match v.kind
+    when "function" then "<fn {v.decl.name}>"
+    when "native" then "<native fn>"
+    when "class" then v.name
+    when "instance" then "{v.klass.name} instance"
+    else error("interp: unknown value {v}")
+    end
+  end
+end
+
+fn find_method(klass, name)
+  let k = klass
+  while k != nil
+    let m = k.methods[name]
+    if m != nil
+      return m
+    end
+    k = k.superclass
+  end
+  nil
+end
+
+fn bind(method, instance)
+  let env = new_env(method.closure)
+  env.values["this"] = instance
+  {kind: "function", decl: method.decl, closure: env, is_init: method.is_init}
+end
+
+# ─── Statements ────────────────────────────────────────────────
+
+# Statements return nil, or `{value}` when a `return` ran, which the
+# enclosing statements pass up to the function call.
+fn exec_block(statements, env)
+  for s in statements
+    let r = execute(s, env)
+    if r != nil
+      return r
+    end
+  end
+  nil
+end
+
+fn execute(s, env)
+  match s.kind
+  when "expr"
+    evaluate(s.expr, env)
+    nil
+  when "print"
+    emit(stringify(evaluate(s.expr, env)))
+    nil
+  when "var"
+    let value = nil
+    if s.init != nil
+      value = evaluate(s.init, env)
+    end
+    env.values[s.name] = value
+    nil
+  when "block" then exec_block(s.statements, new_env(env))
+  when "if"
+    if evaluate(s.cond, env)
+      return execute(s.then_branch, env)
+    end
+    if s.else_branch != nil
+      return execute(s.else_branch, env)
+    end
+    nil
+  when "while"
+    while evaluate(s.cond, env)
+      let r = execute(s.body, env)
+      if r != nil
+        return r
+      end
+    end
+    nil
+  when "return"
+    let value = nil
+    if s.value != nil
+      value = evaluate(s.value, env)
+    end
+    {value: value}
+  when "function"
+    env.values[s.name] = {kind: "function", decl: s, closure: env, is_init: false}
+    nil
+  when "class" then define_class(s, env)
+  else
+    error("interp: unknown statement {s.kind}")
+  end
+end
+
+fn define_class(s, env)
+  let superclass = nil
+  if s.superclass != nil
+    superclass = evaluate(s.superclass, env)
+    if type(superclass) != "table" or superclass.kind != "class"
+      runtime_error(s.superclass.line, "Superclass must be a class.")
+    end
+  end
+  env.values[s.name] = nil
+  let method_env = env
+  if superclass != nil
+    method_env = new_env(env)
+    method_env.values["super"] = superclass
+  end
+  let methods = {}
+  for m in s.methods
+    methods[m.name] = {kind: "function", decl: m, closure: method_env, is_init: m.name == "init"}
+  end
+  env.values[s.name] = {kind: "class", name: s.name, superclass: superclass, methods: methods}
+  nil
+end
+
+# ─── Expressions ───────────────────────────────────────────────
+
+fn evaluate(e, env)
+  match e.kind
+  when "literal" then e.value
+  when "variable" then look_up(e, env)
+  when "binary" then binary(e, env)
+  when "call" then call(e, env)
+  when "get" then get_property(e, env)
+  when "assign" then assign(e, env)
+  when "logical"
+    let left = evaluate(e.left, env)
+    if e.op == "or"
+      if left then return left end
+    elif not left
+      return left
+    end
+    evaluate(e.right, env)
+  when "unary" then unary(e, env)
+  when "grouping" then evaluate(e.expr, env)
+  when "set" then set_property(e, env)
+  when "this" then ancestor(env, e.depth).values["this"]
+  when "super" then super_method(e, env)
+  else
+    error("interp: unknown expression {e.kind}")
+  end
+end
+
+fn look_up(e, env)
+  if e.depth != nil
+    return ancestor(env, e.depth).values[e.name]
+  end
+  let values = globals.values
+  if not has_key(values, e.name)
+    runtime_error(e.line, "Undefined variable '{e.name}'.")
+  end
+  values[e.name]
+end
+
+fn assign(e, env)
+  let value = evaluate(e.value, env)
+  if e.depth != nil
+    ancestor(env, e.depth).values[e.name] = value
+    return value
+  end
+  if not has_key(globals.values, e.name)
+    runtime_error(e.line, "Undefined variable '{e.name}'.")
+  end
+  globals.values[e.name] = value
+  value
+end
+
+fn unary(e, env)
+  let right = evaluate(e.right, env)
+  if e.op == "!"
+    return not right
+  end
+  if type(right) != "float"
+    runtime_error(e.line, "Operand must be a number.")
+  end
+  -right
+end
+
+fn check_numbers(e, a, b)
+  if type(a) != "float" or type(b) != "float"
+    runtime_error(e.line, "Operands must be numbers.")
+  end
+end
+
+fn binary(e, env)
+  let a = evaluate(e.left, env)
+  let b = evaluate(e.right, env)
+  match e.op
+  when "+"
+    if type(a) == "float" and type(b) == "float"
+      return a + b
+    end
+    if type(a) == "string" and type(b) == "string"
+      return a + b
+    end
+    runtime_error(e.line, "Operands must be two numbers or two strings.")
+  when "-"
+    check_numbers(e, a, b)
+    a - b
+  when "*"
+    check_numbers(e, a, b)
+    a * b
+  when "/"
+    check_numbers(e, a, b)
+    if b == 0.0
+      runtime_error(e.line, "Division by zero.")
+    end
+    a / b
+  when "<"
+    check_numbers(e, a, b)
+    a < b
+  when "<="
+    check_numbers(e, a, b)
+    a <= b
+  when ">"
+    check_numbers(e, a, b)
+    a > b
+  when ">="
+    check_numbers(e, a, b)
+    a >= b
+  when "==" then a == b
+  when "!=" then a != b
+  else
+    error("interp: unknown operator {e.op}")
+  end
+end
+
+fn call(e, env)
+  let callee = evaluate(e.callee, env)
+  let args = []
+  for a in e.args
+    push(args, evaluate(a, env))
+  end
+  if type(callee) != "table"
+    runtime_error(e.line, "Can only call functions and classes.")
+  end
+  match callee.kind
+  when "function"
+    check_arity(e, len(callee.decl.params), len(args))
+    call_function(callee, args, e.line)
+  when "native"
+    check_arity(e, callee.arity, len(args))
+    callee.impl(args, e.line)
+  when "class" then instantiate(callee, args, e)
+  else
+    runtime_error(e.line, "Can only call functions and classes.")
+  end
+end
+
+fn check_arity(e, arity, count)
+  if arity != count
+    runtime_error(e.line, "Expected {arity} arguments but got {count}.")
+  end
+end
+
+fn call_function(f, args, line)
+  call_depth += 1
+  if call_depth > MAX_CALL_DEPTH
+    runtime_error(line, "Stack overflow.")
+  end
+  let env = new_env(f.closure)
+  let params = f.decl.params
+  for i = 0, len(params)
+    env.values[params[i]] = args[i]
+  end
+  let r = exec_block(f.decl.body, env)
+  call_depth -= 1
+  if f.is_init
+    return f.closure.values["this"]
+  end
+  if r != nil
+    return r.value
+  end
+  nil
+end
+
+fn instantiate(klass, args, e)
+  let instance = {kind: "instance", klass: klass, fields: {}}
+  let init = find_method(klass, "init")
+  if init == nil
+    check_arity(e, 0, len(args))
+  else
+    check_arity(e, len(init.decl.params), len(args))
+    call_function(bind(init, instance), args, e.line)
+  end
+  instance
+end
+
+fn get_property(e, env)
+  let object = evaluate(e.object, env)
+  if type(object) != "table" or object.kind != "instance"
+    runtime_error(e.line, "Only instances have properties.")
+  end
+  let fields = object.fields
+  if has_key(fields, e.name)
+    return fields[e.name]
+  end
+  let method = find_method(object.klass, e.name)
+  if method == nil
+    runtime_error(e.line, "Undefined property '{e.name}'.")
+  end
+  bind(method, object)
+end
+
+fn set_property(e, env)
+  let object = evaluate(e.object, env)
+  if type(object) != "table" or object.kind != "instance"
+    runtime_error(e.line, "Only instances have fields.")
+  end
+  let value = evaluate(e.value, env)
+  object.fields[e.name] = value
+  value
+end
+
+fn super_method(e, env)
+  let superclass = ancestor(env, e.depth).values["super"]
+  let object = ancestor(env, e.depth - 1).values["this"]
+  let method = find_method(superclass, e.method)
+  if method == nil
+    runtime_error(e.line, "Undefined property '{e.method}'.")
+  end
+  bind(method, object)
+end
+
+export run, stringify

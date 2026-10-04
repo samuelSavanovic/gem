@@ -1,0 +1,246 @@
+# Tests for gemgrep: the command line, the regex binding (bad patterns,
+# NUL bytes, offsets, freeing), one file's search, and whole runs on a
+# fixture tree the test writes under /tmp. tests/check_example_apps.sh
+# also runs the built program: stdin, exit statuses, messages.
+
+load "std/test"
+load "./args"
+load "./regex"
+load "./search"
+load "./grep"
+
+let DEFAULTS = args.parse(["x"]).value
+
+fn options(fields)
+  let opts = args.parse(["x"]).value
+  for k, v in fields
+    opts[k] = v
+  end
+  opts
+end
+
+fn compiled(pattern, flags = {})
+  let r = regex.compile(pattern, flags)
+  test.assert(r.ok, "compile {pattern}: {r.error}")
+  r.value
+end
+
+# ─── Command line ──────────────────────────────────────────────
+
+test.case("args: flags, clusters and operands") do
+  let o = args.parse(["-in", "foo", "a.txt", "-c", "b.txt"]).value
+  test.assert_eq([o.pattern, o.files, o.icase, o.number, o.count, o.invert], ["foo", ["a.txt", "b.txt"], true, true, true, false])
+  let all = args.parse(["-EFHclnoqrsvwx", "p"]).value
+  for k in ["fixed", "count", "list", "number", "only", "quiet", "recursive", "no_messages", "invert", "word", "line"]
+    test.assert(all[k], k)
+  end
+  test.assert_eq(all.with_filename, true)
+  test.assert_eq(args.parse(["-Hh", "p"]).value.with_filename, false)
+  test.assert_eq(DEFAULTS.with_filename, nil)
+end
+
+test.case("args: -e, --, and -") do
+  test.assert_eq(args.parse(["-e", "-x", "f"]).value.pattern, "-x")
+  test.assert_eq(args.parse(["-e", "-x", "f"]).value.files, ["f"])
+  test.assert_eq(args.parse(["-iefoo"]).value.pattern, "foo")
+  test.assert_eq(args.parse(["-iefoo"]).value.icase, true)
+  let o = args.parse(["--", "-v", "-"]).value
+  test.assert_eq([o.pattern, o.files, o.invert], ["-v", ["-"], false])
+  test.assert_eq(args.parse(["", "-"]).value.pattern, "")
+end
+
+test.case("args: errors") do
+  test.assert_eq(args.parse(["-z", "p"]), {ok: false, error: "invalid option -- 'z'"})
+  test.assert_eq(args.parse(["--zap", "p"]), {ok: false, error: "unrecognized option '--zap'"})
+  test.assert_eq(args.parse(["-e"]), {ok: false, error: "option requires an argument -- 'e'"})
+  test.assert_eq(args.parse([]), {ok: false, error: nil})
+  test.assert_eq(args.parse(["-i"]), {ok: false, error: nil})
+  test.assert(args.parse(["--help"]).value.help)
+end
+
+# ─── The regex binding ─────────────────────────────────────────
+
+test.case("regex: bad patterns give libc's message") do
+  test.assert_eq(regex.compile("a("), {ok: false, error: "Unmatched ( or \\("})
+  test.assert_eq(regex.compile("[[:nope:]]"), {ok: false, error: "Invalid character class name"})
+  test.assert_eq(regex.compile("a\\"), {ok: false, error: "Trailing backslash"})
+  test.assert_eq(regex.compile('a{2,1}').ok, false)
+  test.assert_eq(regex.compile("a\0b"), {ok: false, error: "the pattern holds a NUL byte"})
+  # A bad pattern is rejected however it is wrapped.
+  test.assert_eq(regex.compile("a(", {word: true}).ok, false)
+  test.assert_eq(regex.compile("a(", {line: true}).ok, false)
+end
+
+test.case("regex: matching byte ranges, NULs included") do
+  let rx = compiled("fo+|ba[rz]")
+  let s = "xx\0foo\0\nbaz"
+  test.assert(regex.test(rx, s, 0, 7), "the match after a NUL")
+  test.assert(not regex.test(rx, s, 0, 4), "the range ends before the match")
+  test.assert(regex.test(rx, s, 8, 11), "the second line")
+  test.assert_eq(regex.search(rx, s, 0, 11), {start: 3, stop: 6})
+  test.assert_eq(regex.search(rx, s, 6, 11), {start: 8, stop: 11})
+  test.assert_eq(regex.search(rx, s, 0, 2), nil)
+  # libc's `.` never matches a NUL byte (RE_DOT_NOT_NULL); a bracket does.
+  let nul = compiled("a.b|x[^y]z")
+  test.assert(not regex.test(nul, "a\0b", 0, 3), "`.` and NUL")
+  test.assert(regex.test(nul, "x\0z", 0, 3), "`[^y]` and NUL")
+  test.assert(regex.test(compiled(""), "", 0, 0), "the empty pattern matches the empty line")
+  regex.free(rx)
+  regex.free(nul)
+end
+
+test.case("regex: anchors at a range's edges") do
+  let rx = compiled("^ab|cd$")
+  test.assert(regex.test(rx, "xab", 1, 3) == false, "^ mid-line")
+  test.assert(regex.test(rx, "x\nab", 2, 4), "^ after a newline")
+  test.assert(regex.test(rx, "xcdy", 0, 3), "$ at the range's end")
+  test.assert(not regex.test(rx, "x\0cd", 0, 2), "the range ends early")
+end
+
+test.case("regex: -i, -w, -x and -F") do
+  test.assert(regex.test(compiled("FOO", {icase: true}), "a foo", 0, 5), "icase")
+  let w = compiled("foo", {word: true})
+  test.assert(regex.test(w, "foo", 0, 3), "whole line")
+  test.assert(regex.test(w, "(foo)", 0, 5), "punctuation around")
+  test.assert(not regex.test(w, "foo_bar", 0, 7), "_ is a word byte")
+  test.assert(not regex.test(w, "afoo", 0, 4), "letter before")
+  test.assert_eq(regex.search(w, "foo1 foo", 0, 8), {start: 5, stop: 8})
+  let x = compiled("fo+|bar", {line: true, word: true})
+  test.assert(regex.test(x, "foo", 0, 3), "whole line")
+  test.assert(not regex.test(x, "foo bar", 0, 7), "-x wins over -w")
+  test.assert_eq(regex.quote('a.b*(c)|[d]{1}^$\\'), 'a\\.b\\*\\(c\\)\\|\\[d\\]\\{1\\}\\^\\$\\\\')
+  let f = compiled(regex.quote("a.b("))
+  test.assert(regex.test(f, "xa.b(", 0, 5), "fixed")
+  test.assert(not regex.test(f, "axb(", 0, 4), "fixed: . is literal")
+end
+
+test.case("regex: a freed regex and bad ranges raise") do
+  let rx = compiled("a")
+  test.assert_eq(test.assert_throws(fn() regex.test(rx, "a", 0, 2) end), "regex: bad range 0..2 of a 1-byte string")
+  test.assert_eq(test.assert_throws(fn() regex.search(rx, "a", -1, 1) end), "regex: bad range -1..1 of a 1-byte string")
+  regex.free(rx)
+  regex.free(rx)
+  test.assert_eq(test.assert_throws(fn() regex.test(rx, "a", 0, 1) end), "regex: the regex was freed")
+end
+
+# ─── One file ──────────────────────────────────────────────────
+
+let TEXT = "foo bar\nbaz\n\nFoo foo\nlast foo"
+
+fn run_text(pattern, fields, name = nil, data = TEXT)
+  let opts = options(fields)
+  let rx = compiled(pattern, {icase: opts.icase, word: opts.word, line: opts.line})
+  let r = search.text(data, rx, opts, name)
+  regex.free(rx)
+  r
+end
+
+test.case("search: lines, numbers, prefixes") do
+  test.assert_eq(run_text("foo", {}), {out: "foo bar\nFoo foo\nlast foo\n", count: 3, binary: false})
+  test.assert_eq(run_text("foo", {number: true}, "a").out, "a:1:foo bar\na:4:Foo foo\na:5:last foo\n")
+  test.assert_eq(run_text("^$", {number: true}).out, "3:\n")
+  test.assert_eq(run_text("foo", {invert: true}).out, "baz\n\n")
+  test.assert_eq(run_text("", {count: true}), {out: "", count: 5, binary: false})
+  test.assert_eq(run_text("x", {}, nil, ""), {out: "", count: 0, binary: false})
+  test.assert_eq(run_text("", {}, nil, "\n").count, 1)
+end
+
+test.case("search: -o prints each match") do
+  test.assert_eq(run_text("fo*", {only: true, icase: true}).out, "foo\nFoo\nfoo\nfoo\n")
+  test.assert_eq(run_text("o*", {only: true}, nil, "aoob").out, "oo\n")
+  test.assert_eq(run_text("^a", {only: true}, nil, "aaa").out, "a\n")
+  test.assert_eq(run_text("foo", {only: true, invert: true}).out, "")
+  test.assert_eq(run_text("ba.", {only: true, word: true}, nil, "bar,bazz baz").out, "bar\nbaz\n")
+end
+
+test.case("search: binary data") do
+  let data = "text foo\nbin\0foo\n"
+  # Without -c the search stops at the first selected line.
+  test.assert_eq(run_text("foo", {}, nil, data), {out: "", count: 1, binary: true})
+  test.assert_eq(run_text("foo", {count: true}, nil, data).count, 2)
+  test.assert_eq(run_text("zzz", {}, nil, data).binary, false)
+end
+
+# ─── Whole runs ────────────────────────────────────────────────
+
+let ROOT = "/tmp/gem_gemgrep_test_{time_ms()}_{random(1000000)}"
+
+fn setup()
+  mkdir(ROOT)
+  mkdir("{ROOT}/tree")
+  mkdir("{ROOT}/tree/sub")
+  mkdir("{ROOT}/tree/b")
+  write_file("{ROOT}/tree/a.txt", "foo bar\nbaz\nFoo\n")
+  write_file("{ROOT}/tree/sub/c.txt", "foo\nno newline foo")
+  write_file("{ROOT}/tree/b/bin.dat", "x\0foo\n")
+  write_file("{ROOT}/tree/b/A.txt", "FOO\n")
+  exec("ln -s ../a.txt '{ROOT}/tree/sub/link.txt'")
+  exec("ln -s .. '{ROOT}/tree/sub/up'")
+end
+
+fn grep_run(argv)
+  let parsed = args.parse(argv)
+  test.assert(parsed.ok, "args")
+  let out = buf_new()
+  let errs = []
+  let status = grep.run(parsed.value, {out: fn(s) buf_push(out, s) end, err: fn(line) push(errs, line) end})
+  {status: status, out: to_string(out), err: errs}
+end
+
+setup()
+let T = "{ROOT}/tree"
+let A = "{T}/a.txt"
+
+test.case("run: one file, several files, -h and -H") do
+  test.assert_eq(grep_run(["foo", A]), {status: 0, out: "foo bar\n", err: []})
+  test.assert_eq(grep_run(["-H", "foo", A]).out, "{A}:foo bar\n")
+  test.assert_eq(grep_run(["foo", A, "{T}/sub/c.txt"]).out, "{A}:foo bar\n{T}/sub/c.txt:foo\n{T}/sub/c.txt:no newline foo\n")
+  test.assert_eq(grep_run(["-h", "-c", "foo", A, "{T}/sub/c.txt"]).out, "1\n2\n")
+  test.assert_eq(grep_run(["zzz", A]), {status: 1, out: "", err: []})
+end
+
+test.case("run: -r walks in byte order, skips symbolic links") do
+  let r = grep_run(["-ri", "foo", T])
+  test.assert_eq(r.status, 0)
+  test.assert_eq(r.out, "{T}/a.txt:foo bar\n{T}/a.txt:Foo\n{T}/b/A.txt:FOO\n{T}/sub/c.txt:foo\n{T}/sub/c.txt:no newline foo\n")
+  test.assert_eq(r.err, ["gemgrep: {T}/b/bin.dat: binary file matches"])
+  test.assert_eq(grep_run(["-rl", "foo", "{T}/"]).out, "{T}/a.txt\n{T}/b/bin.dat\n{T}/sub/c.txt\n")
+  test.assert_eq(grep_run(["-rc", "zzz", T]).out, "{T}/a.txt:0\n{T}/b/A.txt:0\n{T}/b/bin.dat:0\n{T}/sub/c.txt:0\n")
+  # A file named on the command line keeps its name off its lines, as in grep.
+  test.assert_eq(grep_run(["-r", "foo", A]).out, "foo bar\n")
+  # A link named on the command line is followed.
+  test.assert_eq(grep_run(["-r", "baz", "{T}/sub/link.txt"]).out, "baz\n")
+end
+
+test.case("run: -q, -l, -v, -n together with -r") do
+  test.assert_eq(grep_run(["-rq", "foo", T]), {status: 0, out: "", err: []})
+  test.assert_eq(grep_run(["-rq", "zzz", T]), {status: 1, out: "", err: []})
+  test.assert_eq(grep_run(["-rvn", "o", "{T}/sub"]).out, "")
+  test.assert_eq(grep_run(["-rvn", "foo", "{T}/a.txt", "{T}/sub"]).out, "{T}/a.txt:2:baz\n{T}/a.txt:3:Foo\n")
+end
+
+test.case("run: errors and exit statuses") do
+  let missing = grep_run(["foo", "{ROOT}/nope", A])
+  test.assert_eq(missing, {status: 2, out: "{A}:foo bar\n", err: ["gemgrep: {ROOT}/nope: No such file or directory"]})
+  test.assert_eq(grep_run(["-s", "foo", "{ROOT}/nope"]), {status: 2, out: "", err: []})
+  test.assert_eq(grep_run(["-q", "foo", "{ROOT}/nope", A]).status, 0)
+  test.assert_eq(grep_run(["foo", T]), {status: 2, out: "", err: ["gemgrep: {T}: Is a directory"]})
+  test.assert_eq(grep_run(["a(", A]), {status: 2, out: "", err: ["gemgrep: Unmatched ( or \\("]})
+  test.assert_eq(grep_run(["-F", "a(", A]).status, 1)
+end
+
+test.case("run: more files than one batch, output in order") do
+  mkdir("{ROOT}/many")
+  let expected = buf_new()
+  for i = 0, 100
+    let name = "{ROOT}/many/f{1000 + i}"
+    write_file(name, "line {i}\nmatch {i}\n")
+    buf_push(expected, "{name}:2:match {i}\n")
+  end
+  let r = grep_run(["-rn", "match", "{ROOT}/many"])
+  test.assert_eq(r.status, 0)
+  test.assert_eq(r.out, to_string(expected))
+end
+
+test.run()
+exec("rm -rf '{ROOT}'")
