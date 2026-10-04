@@ -56,6 +56,12 @@ is the same as `table.filter(nums, fn(n) n % 2 == 0 end)`. `spawn do ...
 end`, `pcall do ... end` and `build_string do |add| ... end` are the same
 form.
 
+**Larger programs.** `examples/bookmark_app/` (an HTMX web app on
+`std/http` and `std/sqlite`) and `examples/stomp_broker/` (a message
+broker built from `supervisor`, `dynamic_supervisor` and `gen_server`)
+follow this doc and test themselves with `std/test`; read them for how the
+pieces fit together.
+
 **Words this doc uses.**
 
 - *Array*: a table with integer keys `0 .. n-1` (`[1, 2, 3]`). *Record*: a

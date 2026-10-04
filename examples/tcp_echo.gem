@@ -1,29 +1,72 @@
-# TCP echo server test
-# Server accepts one connection, echoes back, then closes.
-# Client connects, sends a message, reads the echo, prints it.
+# TCP echo server and client in one program.
+#
+# The server accepts connections in its own process and gives each one a
+# handler process that echoes what it reads until the client closes. The
+# client (main) opens two connections, checks each echo and stops the
+# server. Run it with `gem examples/tcp_echo.gem`.
 
-let port = 9125
+let PORT = 9125
+let READ_TIMEOUT_MS = 2000
 
-let client_pid = spawn() do
-  # Wait for server to signal it's ready
-  receive
-  when "ready"
-    nil
+# Echoes `fd` until the peer closes, goes quiet or stops reading.
+fn echo_loop(fd)
+  while true
+    let data = tcp_read(fd, 4096, READ_TIMEOUT_MS)
+    if data == nil or data == ""
+      break
+    end
+    if tcp_write(fd, data) < len(data)
+      break
+    end
   end
-
-  let sock = tcp_connect("127.0.0.1", port)
-  tcp_write(sock, "hello from gem")
-  let response = tcp_read(sock)
-  tcp_close(sock)
-  print(response)
+  tcp_close(fd)
 end
 
-spawn() do
-  let server = tcp_listen("0.0.0.0", port)
-  send(client_pid, "ready")
-  let conn = tcp_accept(server)
-  let data = tcp_read(conn)
-  tcp_write(conn, "echo: " + data)
-  tcp_close(conn)
-  tcp_close(server)
+# Accepts until it is killed. Each connection gets its own process, so a
+# slow client doesn't hold the others up.
+fn serve(listener)
+  while true
+    let fd = tcp_accept(listener)
+    let r = pcall spawn do
+      echo_loop(fd)
+    end
+    if not r.ok
+      tcp_close(fd)        # process table full: refuse this one
+    end
+  end
+end
+
+# Sends `msg` on a fresh connection and returns what comes back.
+fn round_trip(msg)
+  let fd = tcp_connect("127.0.0.1", PORT)
+  let r = pcall do
+    if tcp_write(fd, msg) < len(msg)
+      error("tcp_echo: write failed")
+    end
+    tcp_read(fd, 4096, READ_TIMEOUT_MS)
+  end
+  tcp_close(fd)
+  if not r.ok
+    error(r.error)
+  end
+  r.value
+end
+
+fn main()
+  let listener = tcp_listen("127.0.0.1", PORT)
+  let server = spawn do
+    serve(listener)
+  end
+
+  for msg in ["hello from gem", "second connection"]
+    let reply = round_trip(msg)
+    if reply != msg
+      error("tcp_echo: sent {msg}, got {reply}")
+    end
+    print("echo: {reply}")
+  end
+
+  # The accept loop never returns on its own: stop it, then free the port.
+  kill(server, "shutdown")
+  tcp_close(listener)
 end

@@ -1,118 +1,108 @@
+## frame — STOMP 1.2 frames: parse and render.
+##
+##   let f = frame.parse_frame("SEND\ndestination:/queue/a\n\nhi")
+##   f    # {command: "SEND", headers: {destination: "/queue/a"}, body: "hi"}
+##   frame.render_frame(f)    # "SEND\ndestination:/queue/a\n\nhi\0"
+##
+## A frame is `{command, headers, body}`: `headers` maps names to values,
+## both unescaped. There is no `content-length` support, so a body can't
+## contain a NUL byte.
+
 load "std/string"
 
-# STOMP 1.2 header value escapes:
-#   \r -> CR (13)
-#   \n -> LF (10)
-#   \c -> ':' (58)
-#   \\ -> '\' (92)
-# Unknown escapes are passed through untouched.
+# Header escapes (STOMP 1.2): \r, \n, \c (colon) and \\. The byte after a
+# backslash, as a 1-byte string, maps to what it stands for.
+let UNESCAPES = {r: "\r", n: "\n", c: ":", "\\": "\\"}
 
+## Returns `s` with the STOMP header escapes decoded; an unknown escape is
+## kept as written.
+##
+##   frame.unescape_header("a\\cb")    # "a:b"
 fn unescape_header(s)
-  let slen = len(s)
-  build_string() do |add|
+  if string.index_of(s, "\\") < 0
+    return s
+  end
+  let n = len(s)
+  build_string do |add|
     let i = 0
-    while i < slen
-      let c = ord(s, i)
-      if c == 92 and i + 1 < slen
-        let next = ord(s, i + 1)
-        if next == 110
-          add(chr(10))
-          i += 2
-        elif next == 114
-          add(chr(13))
-          i += 2
-        elif next == 99
-          add(chr(58))
-          i += 2
-        elif next == 92
-          add(chr(92))
-          i += 2
-        else
-          add(chr(c))
-          i += 1
-        end
+    while i < n
+      let c = s[i]
+      if c == "\\" and i + 1 < n and has_key(UNESCAPES, s[i + 1])
+        add(UNESCAPES[s[i + 1]])
+        i += 2
       else
-        add(chr(c))
+        add(c)
         i += 1
       end
     end
   end
 end
 
+## Returns `s` with backslash, CR, LF and colon escaped for a header line.
+##
+##   frame.escape_header("a:b")    # "a\\cb"
 fn escape_header(s)
-  let slen = len(s)
-  build_string() do |add|
-    let i = 0
-    while i < slen
-      let c = ord(s, i)
-      if c == 13
-        add("\\r")
-      elif c == 10
-        add("\\n")
-      elif c == 58
-        add("\\c")
-      elif c == 92
-        add("\\\\")
-      else
-        add(chr(c))
-      end
-      i += 1
-    end
-  end
+  let out = str_replace(s, "\\", "\\\\")
+  out = str_replace(out, "\r", "\\r")
+  out = str_replace(out, "\n", "\\n")
+  str_replace(out, ":", "\\c")
 end
 
-# raw is one frame without the trailing NUL byte. Returns
-# {command, headers, body} or nil on malformed input.
+# `line` without a trailing CR.
+fn without_cr(line)
+  let n = len(line)
+  if n > 0 and ord(line, n - 1) == 13
+    return substr(line, 0, n - 1)
+  end
+  line
+end
+
+## Parses one frame, given without its trailing NUL, and returns it, or
+## nil when it is malformed: empty, no blank line after the headers, an
+## empty command, or a header line without a colon. Lines may end in LF
+## or CRLF. When a header repeats, its first value wins.
 fn parse_frame(raw)
-  if len(raw) == 0
-    return nil
-  end
-
   let sep = string.index_of(raw, "\n\n")
-  if sep == -1
+  let body_at = sep + 2
+  let crlf = string.index_of(raw, "\r\n\r\n")
+  if crlf >= 0 and (sep < 0 or crlf < sep)
+    sep = crlf
+    body_at = crlf + 4
+  end
+  if sep < 0
     return nil
   end
 
-  let head = substr(raw, 0, sep)
-  let body = substr(raw, sep + 2, len(raw))
-
-  let lines = string.split(head, "\n")
-  if len(lines) == 0
+  let lines = string.split(substr(raw, 0, sep), "\n")
+  let command = without_cr(lines[0])
+  if command == ""
     return nil
   end
 
-  let command = lines[0]
-  if len(command) == 0
-    return nil
-  end
-
-  # STOMP 1.2: first occurrence of a header key wins (later duplicates ignored).
   let headers = {}
-  let i = 1
-  while i < len(lines)
-    let line = lines[i]
+  for i = 1, len(lines)
+    let line = without_cr(lines[i])
     let colon = string.index_of(line, ":")
-    if colon == -1
+    if colon < 0
       return nil
     end
     let key = unescape_header(substr(line, 0, colon))
-    let val = unescape_header(substr(line, colon + 1, len(line)))
     if not has_key(headers, key)
-      headers[key] = val
+      headers[key] = unescape_header(substr(line, colon + 1, len(line) - colon - 1))
     end
-    i += 1
   end
 
-  {command: command, headers: headers, body: body}
+  {command: command, headers: headers, body: substr(raw, body_at, len(raw) - body_at)}
 end
 
-fn render_frame(frame)
-  build_string() do |add|
-    add(frame.command, "\n")
-    for k, v in frame.headers
+## Returns the wire bytes of frame `f`, NUL terminator included.
+fn render_frame(f)
+  build_string do |add|
+    add(f.command, "\n")
+    for k, v in f.headers
       add(escape_header(k), ":", escape_header(v), "\n")
     end
-    add("\n", frame.body, "\0")
+    add("\n", f.body, "\0")
   end
 end
 

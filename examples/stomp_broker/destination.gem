@@ -1,155 +1,110 @@
+## destination — one topic or queue: a gen_server holding its subscribers.
+##
+##   let pid = destination.start("/topic/news", "topic").pid
+##   gen_server.cast(pid, {op: "subscribe", conn_pid: writer, sub_id: "s1"})
+##   gen_server.cast(pid, {op: "publish", body: "hi", headers: {}})
+##   gen_server.call(pid, {op: "info"})    # {name, kind, subscribers: 1}
+##
+## Subscribers are `{conn_pid, sub_id}`: `conn_pid` is a connection's
+## writer process, which gets each message as `{tag: "deliver", frame}`
+## and owns the socket. A topic sends every message to every subscriber;
+## a queue sends each to one subscriber, in turn.
+
 load "std/gen_server"
-load "./frame.gem"
 
-# A destination is a gen_server owning a list of subscribers and (for queues)
-# a round-robin index. Subscribers are addressed as {conn_pid, sub_id}; the
-# connection process owns its socket and serializes wire writes.
-#
-# Messages handled (all via cast — no reply needed):
-#   {op: "subscribe",   conn_pid, sub_id}
-#   {op: "unsubscribe", conn_pid, sub_id}
-#   {op: "publish",     body, headers}    # SEND from a publisher
-#
-# Lifecycle:
-#   - On subscribe, the destination calls monitor(conn_pid). When the
-#     connection process dies (DOWN message via handle_info), all subs
-#     with that pid are pruned. Cheap, no leaks even if a client crashes
-#     without UNSUBSCRIBE.
-#   - The destination process itself is registered under its destination
-#     string (e.g. "/topic/foo"). Auto-unregister on death is fine for v0
-#     — the registry serializes lookup_or_create, so a stale-then-respawn
-#     race window is closed.
+# The destination monitors every subscribing connection and drops its
+# subscriptions on the DOWN, so a client that disconnects without
+# UNSUBSCRIBE leaves nothing behind. A process monitors a target at most
+# once, so a connection with several subscriptions here still sends one
+# DOWN.
 
-fn make_module(name, kind)
-  {
-    init: fn()
-      {state: {name: name, kind: kind, subs: [], next_idx: 0, next_msg_id: 0}}
-    end,
-
-    handle_call: fn(msg, from, state)
-      # No call interface in v0; reply with nil for safety.
-      {reply: nil, state: state}
-    end,
-
-    handle_cast: fn(msg, state)
-      match msg
-      when {op: "subscribe", conn_pid: cp, sub_id: sid}
-        # Monitor every subscribing connection. Duplicate monitors on the
-        # same pid are harmless — DOWN fires once per ref, but we treat any
-        # DOWN as "drop everything from this pid", so extras are no-ops.
-        monitor(cp)
-        push(state.subs, {conn_pid: cp, sub_id: sid})
-        {state: state}
-      when {op: "unsubscribe", conn_pid: cp, sub_id: sid}
-        let kept = []
-        for s in state.subs
-          if not (s.conn_pid == cp and s.sub_id == sid)
-            push(kept, s)
-          end
-        end
-        {state: with_subs(state, kept, state.next_idx)}
-      when {op: "publish", body: body, headers: headers}
-        deliver(state, body, headers)
-      end
-    end,
-
-    handle_info: fn(msg, state)
-      match msg
-      when {tag: "DOWN", pid: dead}
-        let kept = []
-        for s in state.subs
-          if s.conn_pid != dead
-            push(kept, s)
-          end
-        end
-        let new_idx = state.next_idx
-        if len(kept) == 0
-          new_idx = 0
-        elif new_idx >= len(kept)
-          new_idx = 0
-        end
-        {state: with_subs(state, kept, new_idx)}
-      when other
-        {state: state}
-      end
+fn remove_subs(state, keep)
+  let kept = []
+  for s in state.subs
+    if keep(s)
+      push(kept, s)
     end
-  }
-end
-
-fn with_subs(state, subs, next_idx)
-  {
-    name: state.name,
-    kind: state.kind,
-    subs: subs,
-    next_idx: next_idx,
-    next_msg_id: state.next_msg_id
-  }
-end
-
-fn with_msg_id(state, mid)
-  {
-    name: state.name,
-    kind: state.kind,
-    subs: state.subs,
-    next_idx: state.next_idx,
-    next_msg_id: mid
-  }
+  end
+  state.subs = kept
+  if state.next >= len(kept)
+    state.next = 0
+  end
 end
 
 fn deliver(state, body, publish_headers)
-  if len(state.subs) == 0
-    return {state: state}
+  let n = len(state.subs)
+  if n == 0
+    return nil
   end
-
   if state.kind == "topic"
-    let mid = state.next_msg_id
     for s in state.subs
-      mid += 1
-      send_message(s, state.name, body, publish_headers, mid)
+      send_message(state, s, body, publish_headers)
     end
-    {state: with_msg_id(state, mid)}
   else
-    # Queue: round-robin to a single subscriber, advance index.
-    let idx = state.next_idx
-    if idx >= len(state.subs)
-      idx = 0
-    end
-    let s = state.subs[idx]
-    let mid = state.next_msg_id + 1
-    send_message(s, state.name, body, publish_headers, mid)
-    let next = idx + 1
-    if next >= len(state.subs)
-      next = 0
-    end
-    {state: {
-      name: state.name,
-      kind: state.kind,
-      subs: state.subs,
-      next_idx: next,
-      next_msg_id: mid
-    }}
+    send_message(state, state.subs[state.next], body, publish_headers)
+    state.next = (state.next + 1) % n
   end
 end
 
-fn send_message(sub, dest_name, body, publish_headers, mid)
+fn send_message(state, sub, body, publish_headers)
+  state.next_msg_id = state.next_msg_id + 1
   let headers = {
-    destination: dest_name,
-    "message-id": "{mid}",
+    destination: state.name,
+    "message-id": "{state.next_msg_id}",
     subscription: sub.sub_id
   }
   if has_key(publish_headers, "content-type")
     headers["content-type"] = publish_headers["content-type"]
   end
-  let msg_frame = {command: "MESSAGE", headers: headers, body: body}
-  send(sub.conn_pid, {tag: "deliver", frame: msg_frame})
-  nil
+  send(sub.conn_pid, {tag: "deliver", frame: {command: "MESSAGE", headers: headers, body: body}})
 end
 
+fn server(name, kind)
+  {
+    init: fn()
+      {state: {name: name, kind: kind, subs: [], next: 0, next_msg_id: 0}}
+    end,
+
+    handle_call: fn(msg, from, state)
+      match msg
+      when {op: "info"}
+        {reply: {name: state.name, kind: state.kind, subscribers: len(state.subs)}, state: state}
+      else
+        error("destination: unknown call {msg}")
+      end
+    end,
+
+    handle_cast: fn(msg, state)
+      match msg
+      when {op: "subscribe", conn_pid: cp, sub_id: sid}
+        monitor(cp)
+        push(state.subs, {conn_pid: cp, sub_id: sid})
+      when {op: "unsubscribe", conn_pid: cp, sub_id: sid}
+        remove_subs(state, fn(s) s.conn_pid != cp or s.sub_id != sid end)
+      when {op: "publish", body: body, headers: headers}
+        deliver(state, body, headers)
+      else
+        error("destination: unknown cast {msg}")
+      end
+      {state: state}
+    end,
+
+    handle_info: fn(msg, state)
+      match msg
+      when {tag: "DOWN", pid: dead}
+        remove_subs(state, fn(s) s.conn_pid != dead end)
+      else
+        nil
+      end
+      {state: state}
+    end
+  }
+end
+
+## Starts the destination `name` of `kind` ("topic" or "queue") and
+## returns its handle `{pid}`.
 fn start(name, kind)
-  let m = make_module(name, kind)
-  let result = gen_server.start(m)
-  register(name, result.pid)
-  result.pid
+  gen_server.start(server(name, kind))
 end
 
 export start

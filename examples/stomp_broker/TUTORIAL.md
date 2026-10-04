@@ -57,61 +57,60 @@ that's a real signal — chase it down before you're 5 milestones deep with a le
 printf 'CONNECT\naccept-version:1.2\n\n\0' | nc localhost 61613
 ```
 
-### Pseudocode
+### A starting point
 
-The accept loop and per-connection process:
+The accept loop and per-connection process (this runs as is, with the
+parser below in `frame.gem`):
 
 ```gem
 # main.gem
 load "std/string"
+load "./frame"
 
 fn main()
   let listener = tcp_listen("0.0.0.0", 61613)
   print("listening on 61613")
   while true
-    let client = tcp_accept(listener)
+    let fd = tcp_accept(listener)
     spawn do
-      handle_connection(client)
+      handle_connection(fd)
     end
   end
 end
 
 fn handle_connection(fd)
-  let buf = ""                          # accumulator
+  let buf = ""                           # bytes not yet part of a whole frame
   while true
     let chunk = tcp_read(fd, 4096)
-    if chunk == nil or len(chunk) == 0
+    if chunk == nil or chunk == ""      # closed
       tcp_close(fd)
       return nil
     end
-    buf = buf .. chunk                  # or buf_push if you switch to buf_*
+    buf = buf + chunk
 
-    # drain as many complete frames as we have
-    while true
-      let nul = string.index_of(buf, "\0")
-      if nul == nil then break end       # need more bytes
-
-      let raw = substr(buf, 0, nul)      # frame WITHOUT trailing \0
-      buf = substr(buf, nul + 1, len(buf))
-
-      let frame = parse_frame(raw)
-      if frame == nil
-        # malformed — write ERROR and bail (milestone 2 does this properly)
-        tcp_write(fd, "ERROR\nmessage:bad-frame\n\n\0")
+    # Handle every complete frame in buf.
+    let nul = string.index_of(buf, "\0")
+    while nul >= 0
+      let f = frame.parse_frame(substr(buf, 0, nul))
+      buf = substr(buf, nul + 1, len(buf) - nul - 1)
+      if f == nil
+        tcp_write(fd, "ERROR\nmessage:malformed frame\n\n\0")
         tcp_close(fd)
         return nil
       end
-
-      # echo back as text — milestone 1 only
-      tcp_write(fd, render_frame(frame))
+      tcp_write(fd, frame.render_frame(f))    # milestone 1: echo it back
+      nul = string.index_of(buf, "\0")
     end
   end
 end
-
-main()
 ```
 
-The parser — split on the blank line, then split the head into command + headers:
+`fn main` runs by itself; don't call it. `buf = buf + chunk` copies the
+whole buffer each time, which is fine for small frames; the finished
+broker collects chunks in a buffer (`buf_new`/`buf_push`) instead.
+
+The parser: split on the blank line, then split the head into the command
+and headers.
 
 ```gem
 # frame.gem
@@ -120,39 +119,31 @@ load "std/string"
 fn parse_frame(raw)
   # raw = "COMMAND\nh1:v1\nh2:v2\n\nbody"   (no trailing \0)
   let sep = string.index_of(raw, "\n\n")
-  if sep == nil then return nil end
+  if sep < 0 then return nil end
 
-  let head = substr(raw, 0, sep)
-  let body = substr(raw, sep + 2, len(raw))
-
-  let lines = string.split(head, "\n")
-  if len(lines) == 0 then return nil end
-
+  let lines = string.split(substr(raw, 0, sep), "\n")
   let command = lines[0]
+  if command == "" then return nil end
+
   let headers = {}
-  let i = 1
-  while i < len(lines)
+  for i = 1, len(lines)
     let line = lines[i]
     let colon = string.index_of(line, ":")
-    if colon == nil then return nil end
-    let key = substr(line, 0, colon)
-    let val = substr(line, colon + 1, len(line))
-    # TODO: STOMP header unescaping (\n, \c, \\, \r) — defer to milestone 2
-    headers[key] = val
-    i = i + 1
+    if colon < 0 then return nil end
+    # TODO: header unescaping (\n, \c, \\, \r): milestone 2
+    headers[substr(line, 0, colon)] = substr(line, colon + 1, len(line) - colon - 1)
   end
 
-  {command: command, headers: headers, body: body}
+  {command: command, headers: headers, body: substr(raw, sep + 2, len(raw) - sep - 2)}
 end
 
-fn render_frame(frame)
-  # build_string wants () before do — see CLAUDE.md quick reference
-  build_string() do |add|
-    add(frame.command, "\n")
-    for k, v in frame.headers
+fn render_frame(f)
+  build_string do |add|
+    add(f.command, "\n")
+    for k, v in f.headers
       add(k, ":", v, "\n")
     end
-    add("\n", frame.body, "\0")
+    add("\n", f.body, "\0")
   end
 end
 
@@ -180,8 +171,9 @@ handle `DISCONNECT` cleanly.
 
 - Spawn a connection process per accepted socket. Its loop: read → parse → handle →
   maybe write → repeat.
-- `link` the connection process to the socket cleanup. When the process dies (crash
-  or DISCONNECT), close the fd.
+- Close the fd on every path out of the connection, a crash included: run the
+  connection's loop under `pcall` and close after it (BEST_PRACTICES.md, "The
+  process that opens a handle closes it").
 - Give every connection a unique id (counter or pid string). You'll need it in
   milestone 3.
 - Now is also the time to do header unescaping properly.
@@ -206,8 +198,11 @@ that owns `{subscribers: [{conn_pid, sub_id}]}`. Use `std/gen_server`.
 **Architecture decision** (worth thinking through before coding):
 
 - Lazy creation: destination process is spawned the first time someone subscribes or
-  sends to it. Use `register` / `whereis` keyed on the destination string
-  (`"/queue/foo"`).
+  sends to it. Route the lookup-or-create through one process (a `gen_server`
+  holding a `{name: pid}` table), so that two clients subscribing to a new name at
+  once get the same destination. Don't `register` destinations under their names:
+  the names come from clients, and a client could then subscribe to one of the
+  broker's own registered processes.
 - Connection process talks to destination with `send`; destination `send`s `MESSAGE`
   frames back to connection processes, which serialize and write to the socket.
 - *Why route writes through the connection process*: the socket fd is owned by one
@@ -217,7 +212,7 @@ that owns `{subscribers: [{conn_pid, sub_id}]}`. Use `std/gen_server`.
 **Gotcha**: `monitor` the connection process from the destination so you can prune
 dead subscribers. Otherwise a crashed client leaks subscriber entries forever.
 
-**Demo it**: two `nc` sessions subscribed to `/queue/test`, third session sends → both
+**Demo it**: two `nc` sessions subscribed to `/topic/test`, third session sends → both
 receive.
 
 ---
@@ -227,9 +222,11 @@ receive.
 **Goal**: a connection crash takes down only that connection; a destination crash
 recovers without losing other destinations.
 
-**Concepts**: `std/supervisor` with appropriate restart strategies. A top-level
-supervisor for the broker; one supervisor for connections (transient — don't restart,
-the client will reconnect), one for destinations (permanent — restart and re-register).
+**Concepts**: `std/supervisor` for the fixed processes (the registry, the acceptor) and
+`std/dynamic_supervisor` for the destinations, which start on demand. Connections
+needn't be supervised: a client whose connection dies reconnects. Decide what a
+destination restart means: its subscribers are gone either way, so a restarted
+destination with no subscribers isn't worth much over a fresh one on the next lookup.
 
 **Things to figure out**:
 

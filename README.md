@@ -78,7 +78,7 @@ macOS (arm64, x86_64) and Linux (arm64, x86_64). Windows via WSL2; no native por
 - `compiler/` - self-hosting compiler (lexer, parser, liveness, codegen).
 - `runtime/` - C runtime (scheduler, arenas, builtins, vendored deps).
 - `std/` - standard library, in Gem.
-- `examples/` - numbered tests and larger programs (HTTP server, bookmark app on SQLite).
+- `examples/` - numbered tests and larger programs: a JSON parser, a TCP echo server, a bookmark web app on SQLite (`bookmark_app/`) and a STOMP message broker (`stomp_broker/`).
 - `editors/` - VS Code grammar and tree-sitter grammar for Helix.
 
 ## Status

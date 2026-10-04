@@ -1,284 +1,373 @@
-# json_parser.gem — recursive descent JSON parser in Gem
-# Parses a JSON string into Gem tables/arrays.
-# Exercises: string indexing, len(), while+break+continue, match,
-# recursive functions, table building, closures.
+# A recursive-descent JSON parser, written from scratch to show how Gem
+# reads for this kind of code: a scanner closed over its cursor, one
+# function per grammar rule, `error()` for malformed input and `pcall` at
+# the boundary. Real code should use std/json, which this checks itself
+# against at the end.
+#
+# `make test-json` runs it; a failing case exits 1.
+
+load "std/json"
+load "std/test"
+
+let MAX_DEPTH = 500
+
+# Byte values the parser compares against.
+let QUOTE = 34
+let BACKSLASH = 92
+let ZERO = 48
+let NINE = 57
+
+# UTF-16 surrogates (D800-DBFF high, DC00-DFFF low), for \u escapes.
+let HIGH_FIRST = 55296
+let LOW_FIRST = 56320
+let LOW_LAST = 57343
 
 # ─── Scanner ──────────────────────────────────────────────────────
 
+# Wraps `input` in a cursor. `peek` returns the byte at the cursor (-1 at
+# the end) without allocating; `fail` raises with the cursor's offset.
 fn make_scanner(input)
   let pos = 0
-  let length = len(input)
+  let n = len(input)
 
   let peek = fn()
-    if pos >= length
-      return ""
-    end
-    input[pos]
+    if pos >= n then return -1 end
+    ord(input, pos)
+  end
+
+  let fail = fn(what)
+    error("json_parser: {what} at byte {pos}")
   end
 
   let advance = fn()
-    let ch = peek()
+    if pos >= n then fail("unexpected end of input") end
     pos += 1
-    ch
+    ord(input, pos - 1)
   end
 
   let skip_ws = fn()
-    while pos < length
-      let ch = input[pos]
-      if ch == " " or ch == "\n" or ch == "\t"
-        pos += 1
-      else
-        break
-      end
+    while pos < n
+      let c = ord(input, pos)
+      if c != 32 and c != 10 and c != 13 and c != 9 then break end
+      pos += 1
     end
   end
 
-  {peek: peek, advance: advance, skip_ws: skip_ws}
+  # Consumes `word` (a literal like "true") or fails.
+  let expect = fn(word)
+    if substr(input, pos, len(word)) != word
+      fail("expected {word}")
+    end
+    pos += len(word)
+  end
+
+  # Returns input[from .. pos) — the bytes consumed since `from`.
+  let since = fn(from) substr(input, from, pos - from) end
+
+  let at = fn() pos end
+
+  {peek: peek, advance: advance, skip_ws: skip_ws, expect: expect,
+   fail: fail, since: since, at: at}
 end
 
-# ─── Helpers ──────────────────────────────────────────────────────
-
-fn is_digit(ch)
-  if ch == ""
-    return false
-  end
-  let c = ord(ch)
-  c >= 48 and c <= 57
+fn is_digit(c)
+  c >= ZERO and c <= NINE
 end
 
 # ─── Parser ───────────────────────────────────────────────────────
 
-fn parse_value(s)
+fn parse_value(s, depth)
+  if depth > MAX_DEPTH
+    s.fail("nesting deeper than {MAX_DEPTH}")
+  end
   s.skip_ws()
-  let ch = s.peek()
-
-  if ch == "\""
-    return parse_string(s)
-  end
-  if ch == '{'
-    return parse_object(s)
-  end
-  if ch == "["
-    return parse_array(s)
-  end
-  if ch == "t"
-    return parse_literal(s, "true", true)
-  end
-  if ch == "f"
-    return parse_literal(s, "false", false)
-  end
-  if ch == "n"
-    return parse_literal(s, "null", nil)
-  end
-  if ch == "-" or is_digit(ch)
-    return parse_number(s)
-  end
-  error("unexpected character: {ch}")
-end
-
-fn parse_literal(s, text, value)
-  let i = 0
-  while i < len(text)
-    s.advance()
-    i += 1
-  end
-  value
-end
-
-fn parse_string(s)
-  s.advance()
-  let buf = buf_new()
-  while true
-    let ch = s.advance()
-    if ch == "\""
-      break
-    end
-    if ch == "\\"
-      let esc = s.advance()
-      match esc
-      when "n"
-        buf_push(buf, "\n")
-      when "t"
-        buf_push(buf, "\t")
-      when "\\"
-        buf_push(buf, "\\")
-      when "\""
-        buf_push(buf, "\"")
-      when "/"
-        buf_push(buf, "/")
-      else
-        buf_push(buf, "\\")
-        buf_push(buf, esc)
-      end
-    else
-      buf_push(buf, ch)
-    end
-  end
-  to_string(buf)
-end
-
-fn parse_number(s)
-  let buf = buf_new()
-  if s.peek() == "-"
-    buf_push(buf, s.advance())
-  end
-  while is_digit(s.peek())
-    buf_push(buf, s.advance())
-  end
-  let has_dot = false
-  if s.peek() == "."
-    has_dot = true
-    buf_push(buf, s.advance())
-    while is_digit(s.peek())
-      buf_push(buf, s.advance())
-    end
-  end
-  let str = to_string(buf)
-  if has_dot
-    to_float(str)
+  let c = s.peek()
+  match c
+  when 123 then parse_object(s, depth + 1)      # {
+  when 91 then parse_array(s, depth + 1)        # [
+  when 34 then parse_string(s)                  # "
+  when 116                                      # t
+    s.expect("true")
+    true
+  when 102                                      # f
+    s.expect("false")
+    false
+  when 110                                      # n
+    s.expect("null")
+    nil
   else
-    to_int(str)
+    if c == 45 or is_digit(c)                   # - or a digit
+      return parse_number(s)
+    end
+    if c == -1
+      s.fail("unexpected end of input")
+    end
+    s.fail("unexpected character '{chr(c)}'")
   end
 end
 
-fn parse_object(s)
-  s.advance()  # skip {
-  s.skip_ws()
+fn parse_object(s, depth)
+  s.advance()                                   # {
   let obj = {}
-  if s.peek() == "}"
+  s.skip_ws()
+  if s.peek() == 125                            # }
     s.advance()
     return obj
   end
-
   while true
     s.skip_ws()
+    if s.peek() != QUOTE
+      s.fail("expected a string key")
+    end
     let key = parse_string(s)
     s.skip_ws()
-    let colon = s.advance()
-    if colon != ":"
-      error("expected ':' in object, got: {colon}")
+    if s.advance() != 58                        # :
+      s.fail("expected ':'")
     end
-    let val = parse_value(s)
-    obj[key] = val
-
+    obj[key] = parse_value(s, depth)
     s.skip_ws()
-    let next = s.advance()
-    if next == "}"
-      break
-    end
-    if next != ","
-      error("expected ',' or '}' in object, got: {next}")
+    let c = s.advance()
+    if c == 125 then break end                  # }
+    if c != 44                                  # ,
+      s.fail("expected ',' or '}'")
     end
   end
   obj
 end
 
-fn parse_array(s)
-  s.advance()  # skip [
-  s.skip_ws()
+fn parse_array(s, depth)
+  s.advance()                                   # [
   let arr = []
-  if s.peek() == "]"
+  s.skip_ws()
+  if s.peek() == 93                             # ]
     s.advance()
     return arr
   end
-
   while true
-    let val = parse_value(s)
-    push(arr, val)
-
+    push(arr, parse_value(s, depth))
     s.skip_ws()
-    let next = s.advance()
-    if next == "]"
-      break
-    end
-    if next != ","
-      error("expected ',' or ']' in array, got: {next}")
+    let c = s.advance()
+    if c == 93 then break end                   # ]
+    if c != 44                                  # ,
+      s.fail("expected ',' or ']'")
     end
   end
   arr
 end
 
+# The escapes that stand for one byte, keyed by the byte after the `\`.
+let SIMPLE_ESCAPES = {
+  "\"": "\"", "\\": "\\", "/": "/",
+  b: chr(8), f: chr(12), n: "\n", r: "\r", t: "\t"
+}
+
+fn parse_string(s)
+  s.advance()                                   # opening quote
+  let buf = buf_new()
+  while true
+    let c = s.advance()
+    if c == QUOTE then break end
+    if c < 32
+      s.fail("control character in string")
+    end
+    if c == BACKSLASH
+      let e = chr(s.advance())
+      if e == "u"
+        buf_push(buf, utf8(parse_code_point(s)))
+      elif has_key(SIMPLE_ESCAPES, e)
+        buf_push(buf, SIMPLE_ESCAPES[e])
+      else
+        s.fail("bad escape '\\{e}'")
+      end
+    else
+      buf_push(buf, chr(c))
+    end
+  end
+  to_string(buf)
+end
+
+# Reads the 4 hex digits after `\u`, and a second `\uXXXX` when the first
+# is a high surrogate, and returns the code point.
+fn parse_code_point(s)
+  let hi = read_hex4(s)
+  if hi < HIGH_FIRST or hi > LOW_LAST
+    return hi
+  end
+  if hi >= LOW_FIRST
+    s.fail("lone low surrogate")
+  end
+  s.expect("\\u")
+  let lo = read_hex4(s)
+  if lo < LOW_FIRST or lo > LOW_LAST
+    s.fail("expected a low surrogate")
+  end
+  65536 + (hi - HIGH_FIRST) * 1024 + (lo - LOW_FIRST)
+end
+
+fn read_hex4(s)
+  let v = 0
+  for i = 0, 4
+    let c = s.advance()
+    let d = -1
+    if is_digit(c)
+      d = c - ZERO
+    elif c >= 97 and c <= 102                   # a-f
+      d = c - 87
+    elif c >= 65 and c <= 70                    # A-F
+      d = c - 55
+    end
+    if d < 0
+      s.fail("bad hex digit in \\u escape")
+    end
+    v = v * 16 + d
+  end
+  v
+end
+
+# Encodes code point `cp` as UTF-8: 1 to 4 bytes, each continuation byte
+# carrying 6 bits under a 10xxxxxx prefix.
+fn utf8(cp)
+  if cp < 128
+    return chr(cp)
+  end
+  if cp < 2048
+    return chr(bor(192, bshr(cp, 6))) + cont(cp, 0)
+  end
+  if cp < 65536
+    return chr(bor(224, bshr(cp, 12))) + cont(cp, 6) + cont(cp, 0)
+  end
+  chr(bor(240, bshr(cp, 18))) + cont(cp, 12) + cont(cp, 6) + cont(cp, 0)
+end
+
+# The continuation byte for bits `shift` .. `shift + 5` of `cp`.
+fn cont(cp, shift)
+  chr(bor(128, band(bshr(cp, shift), 63)))
+end
+
+# Scans the number's grammar (-? int frac? exp?), then lets to_int or
+# to_float convert the bytes it covered.
+fn parse_number(s)
+  let start = s.at()
+  let is_float = false
+  if s.peek() == 45 then s.advance() end        # -
+  if s.peek() == ZERO
+    s.advance()                                 # no leading zeros: "0" alone
+  elif is_digit(s.peek())
+    skip_digits(s)
+  else
+    s.fail("expected a digit")
+  end
+  if s.peek() == 46                             # .
+    is_float = true
+    s.advance()
+    if not is_digit(s.peek()) then s.fail("expected a digit after '.'") end
+    skip_digits(s)
+  end
+  if s.peek() == 101 or s.peek() == 69          # e or E
+    is_float = true
+    s.advance()
+    if s.peek() == 43 or s.peek() == 45 then s.advance() end
+    if not is_digit(s.peek()) then s.fail("expected a digit in the exponent") end
+    skip_digits(s)
+  end
+  let text = s.since(start)
+  if is_float
+    return to_float(text)
+  end
+  to_int(text)
+end
+
+fn skip_digits(s)
+  while is_digit(s.peek())
+    s.advance()
+  end
+end
+
+## Parses `input` as one JSON value and returns it: objects become
+## records, arrays become arrays, `null` becomes nil. Raises
+## `json_parser: <what> at byte <n>` on malformed input, trailing
+## content included.
 fn parse_json(input)
   let s = make_scanner(input)
-  parse_value(s)
+  let v = parse_value(s, 0)
+  s.skip_ws()
+  if s.peek() != -1
+    s.fail("trailing content")
+  end
+  v
 end
 
 # ─── Tests ────────────────────────────────────────────────────────
 
-# Simple values
-print("=== simple values ===")
-print(parse_json("42"))
-print(parse_json("-7"))
-print(parse_json("0"))
-print(parse_json("3.14"))
-print(parse_json("-0.5"))
-print(parse_json("true"))
-print(parse_json("false"))
-print(parse_json("null"))
-print(parse_json("\"hello world\""))
-print(parse_json("\"\""))
+fn fails_with(input, msg)
+  let r = pcall parse_json(input)
+  test.assert(not r.ok, "expected {input} to fail")
+  test.assert_eq(r.error, msg)
+end
 
-# Arrays
-print("=== arrays ===")
-let arr = parse_json("[1, 2, 3]")
-print(arr[0])
-print(arr[1])
-print(arr[2])
-print(len(arr))
+test.case("scalars") do
+  test.assert_eq(parse_json("42"), 42)
+  test.assert_eq(parse_json("-7"), -7)
+  test.assert_eq(parse_json("0"), 0)
+  test.assert_eq(parse_json("3.14"), 3.14)
+  test.assert_eq(parse_json("-0.5"), -0.5)
+  test.assert_eq(parse_json("1e3"), 1000.0)
+  test.assert_eq(parse_json("2.5E-1"), 0.25)
+  test.assert_eq(parse_json("true"), true)
+  test.assert_eq(parse_json("false"), false)
+  test.assert_eq(parse_json("null"), nil)
+  test.assert_eq(parse_json('"hello world"'), "hello world")
+  test.assert_eq(parse_json('""'), "")
+end
 
-let nested = parse_json("[[1, 2], [3, 4]]")
-print(nested[0][0])
-print(nested[0][1])
-print(nested[1][0])
-print(nested[1][1])
+test.case("arrays and objects") do
+  test.assert_eq(parse_json("[1, 2, 3]"), [1, 2, 3])
+  test.assert_eq(parse_json("[[1, 2], [3, 4]]"), [[1, 2], [3, 4]])
+  test.assert_eq(parse_json("[]"), [])
+  test.assert_eq(parse_json('{"name": "gem", "version": 1}'), {name: "gem", version: 1})
+  test.assert_eq(parse_json('{"a": {"b": {"c": {"d": 42}}}}'), {a: {b: {c: {d: 42}}}})
+  test.assert_eq(parse_json('[1, "two", true, false, null, [3]]'), [1, "two", true, false, nil, [3]])
+  test.assert_eq(parse_json(' \r\n\t{ "a" : 1 , "b" : [ ] }  '), {a: 1, b: []})
+end
 
-let empty_arr = parse_json("[]")
-print(len(empty_arr))
+test.case("string escapes") do
+  test.assert_eq(parse_json('"a\\nb\\tc"'), "a\nb\tc")
+  test.assert_eq(parse_json('"q\\"b\\\\s\\/"'), "q\"b\\s/")
+  test.assert_eq(parse_json('"\\u0041\\u00e9"'), "Aé")
+  test.assert_eq(parse_json('"\\u20AC"'), "€")
+  test.assert_eq(parse_json('"\\ud83d\\ude00"'), "😀")
+end
 
-# Objects
-print("=== objects ===")
-let obj = parse_json('{"name": "gem", "version": 1}')
-print(obj["name"])
-print(obj["version"])
+test.case("malformed input") do
+  fails_with("", "json_parser: unexpected end of input at byte 0")
+  fails_with("tru", "json_parser: expected true at byte 0")
+  fails_with('"abc', "json_parser: unexpected end of input at byte 4")
+  fails_with("[1, 2", "json_parser: unexpected end of input at byte 5")
+  fails_with("[1 2]", "json_parser: expected ',' or ']' at byte 4")
+  fails_with('{"a" 1}', "json_parser: expected ':' at byte 6")
+  fails_with('{a: 1}', "json_parser: expected a string key at byte 1")
+  fails_with("01", "json_parser: trailing content at byte 1")
+  fails_with("1.", "json_parser: expected a digit after '.' at byte 2")
+  fails_with("-", "json_parser: expected a digit at byte 1")
+  fails_with("[1] x", "json_parser: trailing content at byte 4")
+  fails_with('"\\x"', "json_parser: bad escape '\\x' at byte 3")
+  fails_with('"\\udc00"', "json_parser: lone low surrogate at byte 7")
+  fails_with("@", "json_parser: unexpected character '@' at byte 0")
+end
 
-let empty_obj = parse_json('{}')
-print(len(empty_obj))
+test.case("nesting is capped") do
+  let deep = build_string do |add|
+    for i = 0, MAX_DEPTH + 1
+      add("[")
+    end
+  end
+  fails_with(deep, "json_parser: nesting deeper than {MAX_DEPTH} at byte {MAX_DEPTH + 1}")
+end
 
-# Nested structures
-print("=== nested ===")
-let data = parse_json('{"users": [{"name": "alice", "age": 30}, {"name": "bob", "age": 25}], "count": 2}')
-print(data["count"])
-print(data["users"][0]["name"])
-print(data["users"][0]["age"])
-print(data["users"][1]["name"])
-print(data["users"][1]["age"])
+test.case("agrees with std/json") do
+  let doc = '{"users": [{"name": "alice", "age": 30, "tags": ["a", "b"]}, {"name": "bob", "age": 25.5, "tags": []}], "count": 2, "ok": true, "none": null}'
+  test.assert_eq(parse_json(doc), json.parse(doc))
+  test.assert_eq(parse_json(json.encode(parse_json(doc))), json.parse(doc))
+end
 
-# String escapes
-print("=== string escapes ===")
-let escaped = parse_json('"hello\\nworld"')
-print(escaped)
-let escaped2 = parse_json('"tab\\there"')
-print(escaped2)
-
-# Whitespace handling
-print("=== whitespace ===")
-let spaced = parse_json('  { "a" : 1 , "b" : 2 }  ')
-print(spaced["a"])
-print(spaced["b"])
-
-# Mixed types in array
-print("=== mixed types ===")
-let mixed = parse_json('[1, "two", true, false, null, [3]]')
-print(mixed[0])
-print(mixed[1])
-print(mixed[2])
-print(mixed[3])
-print(mixed[4])
-print(mixed[5][0])
-
-# Deeply nested
-print("=== deep nesting ===")
-let deep = parse_json('{"a": {"b": {"c": {"d": 42}}}}')
-print(deep["a"]["b"]["c"]["d"])
-
-print("=== all tests passed ===")
+test.run()

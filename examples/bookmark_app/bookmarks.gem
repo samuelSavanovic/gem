@@ -1,0 +1,263 @@
+## bookmarks — the bookmark manager's database and HTTP routes.
+##
+##   let db = bookmarks.open_db("bookmarks.db")    # or ":memory:"
+##   http.serve(bookmarks.routes(db, "./static"), {port: 8080})
+##
+## The pages are HTMX fragments: every change answers with the whole
+## bookmark list, which the browser swaps into `#bookmarks`.
+
+load "std/http"
+load "std/sqlite"
+load "std/request"
+load "std/log"
+load "std/time"
+load "std/string"
+
+let FETCH_TIMEOUT_MS = 5000
+
+# ─── Database ───
+
+## Opens the database at `path`, creating the bookmarks table if needed,
+## and returns its handle.
+fn open_db(path)
+  let db = sqlite.open(path)
+  sqlite.exec(db, """
+    CREATE TABLE IF NOT EXISTS bookmarks (
+      id INTEGER PRIMARY KEY,
+      url TEXT NOT NULL,
+      title TEXT NOT NULL,
+      tags TEXT,
+      created_at INTEGER
+    )
+  """)
+  db
+end
+
+fn all_bookmarks(db)
+  sqlite.query(db, "SELECT * FROM bookmarks ORDER BY created_at DESC")
+end
+
+fn find_bookmark(db, id)
+  let rows = sqlite.query(db, "SELECT * FROM bookmarks WHERE id = ?", [id])
+  if len(rows) == 0
+    return nil
+  end
+  rows[0]
+end
+
+# ─── Rendering ───
+
+fn esc(s)
+  if s == nil
+    return ""
+  end
+  http.html_escape("{s}")
+end
+
+fn format_date(ms)
+  if ms == nil
+    return ""
+  end
+  time.format(ms, "%Y-%m-%d %H:%M")
+end
+
+fn render_row(b)
+  """
+  <tr id='bookmark-{b.id}'>
+  <td><a href='{esc(b.url)}' target='_blank'>{esc(b.url)}</a></td>
+  <td id='title-{b.id}'>{esc(b.title)}</td>
+  <td>{esc(b.tags)}</td>
+  <td>{format_date(b.created_at)}</td>
+  <td class='actions'>
+  <button hx-post='/bookmarks/{b.id}/fetch-title' hx-target='#title-{b.id}' hx-swap='innerHTML'>Fetch Title</button>
+   <button hx-get='/bookmarks/{b.id}/edit' hx-target='#bookmarks' hx-swap='innerHTML'>Edit</button>
+   <button hx-delete='/bookmarks/{b.id}' hx-target='#bookmarks' hx-swap='innerHTML' hx-confirm='Delete this bookmark?'>Delete</button>
+  </td>
+  </tr>
+  """
+end
+
+fn render_list(bookmarks)
+  build_string do |add|
+    add("<table>")
+    add("<thead><tr><th>URL</th><th>Title</th><th>Tags</th><th>Created</th><th>Actions</th></tr></thead>")
+    add("<tbody>")
+    for b in bookmarks
+      add(render_row(b))
+    end
+    add("</tbody></table>")
+    if len(bookmarks) == 0
+      add("<p class='empty'>No bookmarks yet. Add one above!</p>")
+    end
+  end
+end
+
+fn render_edit_form(b)
+  """
+  <form hx-put='/bookmarks/{b.id}' hx-target='#bookmarks' hx-swap='innerHTML' class='edit-form'>
+  <h3>Editing bookmark #{b.id}</h3>
+  <label>URL <input type='text' name='url' value='{esc(b.url)}' required></label>
+  <label>Title <input type='text' name='title' value='{esc(b.title)}' required></label>
+  <label>Tags <input type='text' name='tags' value='{esc(b.tags)}' placeholder='comma-separated'></label>
+  <div class='edit-actions'><button type='submit'>Save</button> <button hx-get='/bookmarks' hx-target='#bookmarks' hx-swap='innerHTML'>Cancel</button></div>
+  </form>
+  """
+end
+
+fn list_page(db)
+  http.html(render_list(all_bookmarks(db)))
+end
+
+# ─── Input ───
+
+# The bookmark fields of a create or edit form, or nil when the URL is
+# missing. The title defaults to the URL, the tags to "".
+fn form_fields(body)
+  let {url = "", title = "", tags = ""} = http.parse_form(body)
+  if url == ""
+    return nil
+  end
+  if title == ""
+    title = url
+  end
+  {url: url, title: title, tags: tags}
+end
+
+# The `:id` route parameter as an int, or nil when it isn't one, so a bad
+# id is a 404 rather than a 500.
+fn route_id(req)
+  let r = pcall to_int(req.params.id)
+  if not r.ok
+    return nil
+  end
+  r.value
+end
+
+# ─── Fetching a page title ───
+
+# The text of the first <title> element in `page`, or nil.
+fn extract_title(page)
+  let lower = string.lower(page)
+  let open = string.index_of(lower, "<title>")
+  if open < 0
+    return nil
+  end
+  let start = open + len("<title>")
+  let close = string.index_of(lower, "</title>", start)
+  if close < 0
+    return nil
+  end
+  let title = string.trim(substr(page, start, close - start))
+  if title == ""
+    return nil
+  end
+  title
+end
+
+# Fetches `page_url` and returns its title, or nil when the fetch fails or
+# the page has none. The host name lookup blocks every process (see
+# BEST_PRACTICES, "Know what blocks every process"); the timeout bounds
+# the rest.
+fn fetch_title(page_url)
+  let r = pcall request.get(page_url, {timeout_ms: FETCH_TIMEOUT_MS})
+  if not r.ok
+    log.warn("fetch {page_url}: {r.error}")
+    return nil
+  end
+  if r.value.status < 200 or r.value.status >= 400
+    return nil
+  end
+  extract_title(r.value.body)
+end
+
+# ─── Routes ───
+
+## Returns the app's router. `db` is a handle from `open_db`; `static_dir`
+## holds index.html and the stylesheet, relative to the current
+## directory.
+fn routes(db, static_dir)
+  let app = http.router()
+  let index_html = read_file("{static_dir}/index.html")
+
+  # Registers `handler` with `register` (app.get, app.post, ...), logging
+  # each request first.
+  let on = fn(register, pattern, handler)
+    register(pattern, fn(req)
+      log.info("{req.method} {req.path}")
+      handler(req)
+    end)
+  end
+
+  app.static("/static", static_dir)
+
+  on(app.get, "/") do |req|
+    http.html(index_html)
+  end
+
+  on(app.get, "/bookmarks") do |req|
+    list_page(db)
+  end
+
+  on(app.post, "/bookmarks") do |req|
+    let f = form_fields(req.body)
+    if f == nil
+      return http.bad_request("URL is required")
+    end
+    sqlite.query(db, "INSERT INTO bookmarks (url, title, tags, created_at) VALUES (?, ?, ?, ?)", [f.url, f.title, f.tags, epoch_ms()])
+    log.info("created bookmark {sqlite.last_id(db)}: {f.title}")
+    list_page(db)
+  end
+
+  on(app.get, "/bookmarks/:id/edit") do |req|
+    let b = find_bookmark(db, route_id(req))
+    if b == nil
+      return http.not_found("Bookmark not found")
+    end
+    http.html(render_edit_form(b))
+  end
+
+  on(app.put, "/bookmarks/:id") do |req|
+    let id = route_id(req)
+    let f = form_fields(req.body)
+    if f == nil
+      return http.bad_request("URL is required")
+    end
+    sqlite.query(db, "UPDATE bookmarks SET url = ?, title = ?, tags = ? WHERE id = ?", [f.url, f.title, f.tags, id])
+    if sqlite.changes(db) == 0
+      return http.not_found("Bookmark not found")
+    end
+    log.info("updated bookmark {id}")
+    list_page(db)
+  end
+
+  on(app.delete, "/bookmarks/:id") do |req|
+    let id = route_id(req)
+    sqlite.query(db, "DELETE FROM bookmarks WHERE id = ?", [id])
+    if sqlite.changes(db) == 0
+      return http.not_found("Bookmark not found")
+    end
+    log.info("deleted bookmark {id}")
+    list_page(db)
+  end
+
+  on(app.post, "/bookmarks/:id/fetch-title") do |req|
+    let id = route_id(req)
+    let b = find_bookmark(db, id)
+    if b == nil
+      return http.not_found("Bookmark not found")
+    end
+    let title = fetch_title(b.url)
+    if title == nil
+      return http.html("<em>Could not fetch title</em>")
+    end
+    # The bookmark may have been deleted during the fetch; then this
+    # updates nothing, and the answer is still the title.
+    sqlite.query(db, "UPDATE bookmarks SET title = ? WHERE id = ?", [title, id])
+    log.info("fetched title for bookmark {id}: {title}")
+    http.html(esc(title))
+  end
+
+  app
+end
+
+export open_db, routes

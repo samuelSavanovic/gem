@@ -9,6 +9,8 @@ This directory holds the benchmark **harness**, not the application being benchm
 - `node_baseline/` — reference Node.js implementation of the same API surface (port 8081). Lets us compare like-for-like under identical wrk parameters. Has its own `run_bench.sh`.
 - `logs/` — output of `run.sh` runs (gitignored). One subdirectory per run: phase outputs, `rss.csv`, `meta.txt` with system info and the gem commit SHA.
 
+The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the entry point); `examples/bookmark_app/test.gem` checks them, as part of `make test`. Keep the response bodies the same as the Node baseline's when changing it, or the two stop being comparable.
+
 ## Running
 
 Prereqs: `wrk` on PATH (`brew install wrk`), the gem app built once.

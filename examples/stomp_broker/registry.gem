@@ -1,49 +1,117 @@
+## registry — finds or starts the destination process for a name.
+##
+##   let pid = registry.lookup_or_create("/topic/news")
+##
+## Names starting with `/queue/` are queues (each message goes to one
+## subscriber, in turn); every other name is a topic (each message goes to
+## every subscriber).
+
 load "std/gen_server"
+load "std/dynamic_supervisor"
 load "std/string"
-load "./destination.gem"
 
-# The registry serializes destination creation. Two SUBSCRIBEs to the same
-# new topic could otherwise both check `whereis`, both see nil, and both
-# `register` — the second would error. Routing the lookup-or-create through
-# this gen_server's mailbox eliminates the race for free.
+# Lookups go through one gen_server so that two clients subscribing to a
+# new name at once get the same destination. Destination names come from
+# clients, so they are keys of this server's table, never registered
+# process names: a client can't take over "stomp_registry" by subscribing
+# to it.
 #
-# We rely on the runtime's auto-unregister-on-death for cleanup; the registry
-# does not track destinations beyond `whereis`.
+# A destination that dies is forgotten when its DOWN arrives. A lookup
+# answered just before that gets the dead pid, and what the client sends
+# there is dropped, which STOMP allows.
+#
+# Destinations outlive a registry crash (they belong to the dynamic
+# supervisor), so `init` rebuilds the table from that supervisor's
+# children; a restarted registry knows every live destination.
 
-fn classify(name)
+## The registered name of the dynamic supervisor that holds the
+## destinations (see broker.gem).
+let DESTINATIONS = "stomp_destinations"
+let NAME = "stomp_registry"
+
+fn kind_of(name)
   if string.starts_with(name, "/queue/")
     return "queue"
   end
   "topic"
 end
 
-let module = {
-  init: fn() {state: nil} end,
+fn remember(state, name, pid)
+  monitor(pid)
+  state.by_name[name] = pid
+  state.by_pid["{pid}"] = name
+end
+
+# {ok: true, value: pid}, or {ok: false, error} when the destination can't
+# start (the process table is full): the caller fails, not the registry.
+fn lookup(state, name)
+  let pid = state.by_name[name]
+  if pid != nil
+    return {ok: true, value: pid}
+  end
+  let r = pcall dynamic_supervisor.start_child(DESTINATIONS, {name: name, kind: kind_of(name)})
+  if r.ok
+    remember(state, name, r.value)
+  end
+  r
+end
+
+fn init()
+  let state = {by_name: {}, by_pid: {}}
+  for child in dynamic_supervisor.which_children(DESTINATIONS)
+    remember(state, child.args.name, child.pid)
+  end
+  {state: state}
+end
+
+let SERVER = {
+  init: init,
+
   handle_call: fn(msg, from, state)
     match msg
     when {op: "lookup_or_create", name: name}
-      let existing = whereis(name)
-      if existing != nil
-        {reply: existing, state: state}
-      else
-        let kind = classify(name)
-        let pid = destination.start(name, kind)
-        {reply: pid, state: state}
-      end
+      {reply: lookup(state, name), state: state}
+    else
+      error("registry: unknown call {msg}")
     end
   end,
-  handle_cast: fn(msg, state) {state: state} end,
-  handle_info: fn(msg, state) {state: state} end
+
+  handle_cast: fn(msg, state)
+    error("registry: unknown cast {msg}")
+  end,
+
+  handle_info: fn(msg, state)
+    match msg
+    when {tag: "DOWN", pid: pid}
+      let key = "{pid}"
+      let name = state.by_pid[key]
+      if name != nil
+        delete(state.by_pid, key)
+        delete(state.by_name, name)
+      end
+    else
+      nil
+    end
+    {state: state}
+  end
 }
 
+## Starts the registry and registers it; a supervisor child's `start`.
 fn start()
-  let result = gen_server.start(module)
-  register("stomp_registry", result.pid)
-  result.pid
+  let h = gen_server.start(SERVER)
+  register(NAME, h.pid)
+  h
 end
 
+## Returns the pid of the destination `name`, starting it if needed.
+## Raises if the destination can't start, or if the registry is down (e.g.
+## while its supervisor restarts it).
 fn lookup_or_create(name)
-  gen_server.call("stomp_registry", {op: "lookup_or_create", name: name})
+  let r = gen_server.call(NAME, {op: "lookup_or_create", name: name})
+  if not r.ok
+    error("registry: can't start destination {name}: {r.error}")
+  end
+  r.value
 end
 
-export start, lookup_or_create
+export DESTINATIONS, start, lookup_or_create
