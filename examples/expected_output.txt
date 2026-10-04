@@ -4061,3 +4061,7 @@ tco 1000 19000 19999
 churn 50000 g49999-49
 spawner 10 10000
 backlog 49 0 50
+index_churn 0 true 1483
+pcalls 30 0
+levels true d30-199
+bigs 27 8100762

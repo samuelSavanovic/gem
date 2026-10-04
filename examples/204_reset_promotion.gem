@@ -286,3 +286,135 @@ fn backlog()
   end
 end
 backlog()
+
+# 12. A table made before the loop, with a string index: keys added,
+#     deleted and added again across many young and full resets. Its
+#     index must keep finding every key the resets moved.
+fn index_churn(n)
+  let t = {}
+  for k = 0, 100
+    t["pre{k}"] = k
+  end
+  let pre_ok = true
+  let i = 0
+  while i < n
+    let key = "k{i % 1500}"
+    if i % 3 == 0 and has_key(t, key)
+      delete(t, key)
+    else
+      t[key] = i
+    end
+    t[i % 50] = "int{i}"
+    if i % 997 == 0
+      for k = 0, 100
+        if t["pre{k}"] != k
+          pre_ok = false
+        end
+      end
+    end
+    junk(i)
+    i += 1
+  end
+  let m = {}
+  for j = 0, n
+    let key = "k{j % 1500}"
+    if j % 3 == 0 and has_key(m, key)
+      delete(m, key)
+    else
+      m[key] = j
+    end
+  end
+  let bad = 0
+  for k = 0, 1500
+    if t["k{k}"] != m["k{k}"]
+      bad += 1
+    end
+  end
+  print("index_churn", bad, pre_ok, len(keys(t)))
+end
+index_churn(20000)
+
+# 13. An inner loop that promotes, then raises through pcall: the outer
+#     loop goes on with what the abandoned loop kept.
+fn boom(acc, j)
+  let local = {items: []}
+  let i = 0
+  while true
+    push(local.items, "b{j}-{i}")
+    acc["last{j % 10}"] = local
+    junk(i)
+    if i == 500
+      error("stop {j}")
+    end
+    i += 1
+  end
+end
+fn pcalls(n)
+  let acc = {}
+  let errs = 0
+  let j = 0
+  while j < n
+    if not pcall(fn() boom(acc, j) end).ok
+      errs += 1
+    end
+    junk(j)
+    j += 1
+  end
+  let bad = 0
+  for k = 0, 10
+    let l = acc["last{k}"]
+    if len(l.items) != 501 or l.items[500] != "b{n - 10 + k}-500"
+      bad += 1
+    end
+  end
+  print("pcalls", errs, bad)
+end
+pcalls(30)
+
+# 14. Recursion where every level runs a loop that keeps a table and
+#     stores it in the level above's.
+fn levels(depth, up)
+  let mine = nil
+  let i = 0
+  while i < 200
+    if mine == nil
+      mine = {d: depth, xs: []}
+    end
+    push(mine.xs, "d{depth}-{i}")
+    up["lvl{depth}"] = mine
+    junk(i)
+    i += 1
+  end
+  let ok = true
+  if depth > 0
+    ok = levels(depth - 1, mine) and mine["lvl{depth - 1}"].d == depth - 1
+  end
+  ok and len(mine.xs) == 200
+end
+let top = {}
+print("levels", levels(30, top), top.lvl30.xs[199])
+
+# 15. Strings and buffers bigger than an arena block, kept and dropped.
+fn bigs(n)
+  let keep = []
+  let i = 0
+  while i < n
+    let s = string.repeat("x", 300000 + i)
+    if i % 4 == 0
+      push(keep, s)
+    end
+    let b = buf_new()
+    buf_push(b, s)
+    buf_push(b, "!")
+    if i % 5 == 0
+      push(keep, b)
+    end
+    i += 1
+  end
+  let total = 0
+  for k = 0, len(keep)
+    total += len(to_string(keep[k]))
+  end
+  print("bigs", len(keep), total)
+end
+bigs(60)
