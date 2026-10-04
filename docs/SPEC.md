@@ -10,7 +10,7 @@ Compilation target is C source code. `gcc`/`clang` handles optimization and link
 
 C runtime is minimal glue code wiring together two libraries plus a per-process arena allocator:
 
-- **Per-process arena allocation** — each process (coroutine) gets its own arena (bump allocator). When a process spawns another, values are deep-copied into the new process's arena. When a process dies, its entire arena is freed at once. Messages (`send`) are deep-copied into the target process's arena, and so is the parent's module state at `spawn` (each process has its own copy of the module-level bindings, see Variables). No global GC pauses — memory is reclaimed per-process on exit, and loops reclaim their own garbage as they run (see Long-Running Processes).
+- **Per-process arena allocation** — each process (coroutine) gets its own arena (bump allocator). When a process spawns another, values are deep-copied into the new process's arena. When a process dies, its entire arena is freed at once. Messages (`send`) are deep-copied into the target process's arena, and so is the parent's module state at `spawn` (each process has its own copy of the module-level bindings, see Variables). No global GC pauses — memory is reclaimed per-process on exit, and loops reclaim their own garbage as they run (see Memory Model).
 - **minicoro** — single-header stackful coroutines (libdill is abandoned, crashes on arm64 macOS). Runtime builds scheduler + channels on top (~150 lines)
 - **stb_ds.h** — single-header hash maps and dynamic arrays for table implementation
 
@@ -49,6 +49,59 @@ Nine types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`, `R
 A float turns into text (`to_string`, `print`, `eprint`, interpolation, `buf_push`, `build_string`'s `add`, and so `json.encode`) as the shortest decimal that reads back to the same double, so `to_float(to_string(x)) == x` for every finite `x`. An integral float keeps a decimal point (`2.0`, `-0.0`, `100.0`), so a float never prints like an int. Magnitudes below `1e-4` or from `1e16` up use exponent form with a signed, at least two-digit exponent (`1e-05`, `1.5e-07`, `1e+16`, `1.2345678901234567e+19`); this is also valid JSON. The non-finite values (from overflow, e.g. `to_float("1e308") * 10.0`) print as `inf`, `-inf` and `nan`; `to_float` reads those back, but `json.encode` writes them as is, which is not valid JSON.
 
 Strings are binary-safe: they carry an explicit byte length, so `"\0"` is a 1-byte string, `len(s)` reports byte length (not strlen), and embedded NULs survive concatenation, indexing, equality, `build_string`, `tcp_write`, and `read_file`/`write_file` round-trips. Strings remain NUL-terminated for C interop convenience; the byte after the last content byte is always `\0`. A string or buffer holds at most 2,147,483,646 bytes (2 GiB − 2): anything that would make a longer one (`+`, interpolation, `buf_push`, `build_string`, `str_replace`, `read_file`, `read_stdin`, `input`, an extern `Bytes` return) raises `"<op>: a string of N bytes is over the limit of 2147483646 bytes"` (`read_file` raises `"read_file: '<path>' is N bytes, over the string limit of 2147483646 bytes"` for a regular file, before reading it, and `"read_file: '<path>' holds more than the string limit of 2147483646 bytes"` for a pipe or device; an extern fn's message names its C function). **Caveat — `extern fn`:** when a Gem `String` is passed to an `extern fn ... s: String` parameter, it marshals as `const char *` and the C side will see only the bytes up to the first NUL. Use the `Bytes` extern type (see C Interop) when the C function needs binary data — it marshals the byte length alongside the pointer.
+
+## Memory Model
+
+Two rules: inside a process, values are shared; between processes, nothing is.
+
+**Inside a process, tables, buffers and closures are references.** Assigning a table to another variable, passing it to a function or storing it in another table does not copy it, and a change made through one name shows through every other. `==` on tables compares identity (see Operators). `table.copy` makes a shallow copy when one holder must keep the old contents. Strings, numbers, bools and `nil` are values: `s2 = s1` followed by `s2 += "x"` leaves `s1` unchanged. A closure shares the variables it captures with the scope that created it (see Closures).
+
+```
+let a = {x: 1}
+let b = a
+b.x = 2
+print(a.x)        # 2 — a and b are the same table
+
+fn bump(t) t.x = t.x + 1 end
+bump(a)
+print(a.x)        # 3
+```
+
+**Between processes, every value is copied.** Each process has its own heap (an arena). `send` deep-copies the message into the receiver's arena; `spawn` copies the variables its closure captures and, lazily, the module-level bindings it reads (see Module-level bindings are per-process). After the copy the two sides are independent: a change on either side is never seen by the other, and no lock is ever needed. A copy keeps the shape of what it copies: two references to one table stay one table on the receiving side, and a table that contains itself is copied as a cycle. Because the copy is a different table, a received table is never `==` to the one sent.
+
+```
+let shared = [1]
+let pid = spawn do
+  receive
+  when {from: from, m: m}
+    m.p[0] = 99                          # changes the receiver's copy only
+    send(from, {same: m.p == m.q, val: m.q[0]})
+  end
+end
+send(pid, {from: self(), m: {p: shared, q: shared}})
+print(receive())  # {same: true, val: 99}
+print(shared[0])  # 1
+```
+
+**Memory is reclaimed without a tracing GC or a global pause.** There is no per-object `free` and no collector that walks every process. Memory comes back in two ways:
+
+- When a process exits, its whole arena is freed at once. A short-lived process (a request handler, a task) needs nothing else.
+- At the back-edge of every loop — `while`, `for`, self tail calls, mutual tail calls — the runtime copies what the loop still uses, as computed by the compiler's liveness analysis, and frees everything else the loop allocated. This is what keeps a `while true` server loop or a recursive `loop(state)` at constant memory (see Long-Running Processes). Garbage made outside any loop is freed when an enclosing loop resets or when the process exits.
+
+A reset works on one process's arena only: it never scans or moves another process's memory, and its cost depends on that process's data alone. Processes share one scheduler thread, so while a reset runs the others wait, as they do for any other work in that process.
+
+**What it costs.**
+
+- `send` and `spawn` cost time proportional to the size of what they copy, strings included. Send what the receiver needs, not a large state table; keep large shared data in a process that answers queries.
+- A loop reset costs time proportional to the data the loop keeps, and the next reset waits until the loop has allocated twice that much again, so a loop that holds a large state does not slow down as it grows.
+
+**When memory grows.**
+
+- A non-tail recursive call keeps its frame and its garbage until it returns: `loop(state)` followed by another statement is not a loop (see Tail Call Optimization).
+- A `while true` loop whose live values the compiler cannot root runs without resetting, and the compiler warns: `cannot reset per-process arena at this loop's back-edge` (see When the back-edge reset cannot fire).
+- The main process's arena lives until the program ends, so top-level straight-line code that allocates a lot keeps it.
+
+**C code sees arena pointers only for the duration of a call.** A `String`, `Bytes` or `Table` passed to an `extern fn` points into the process's arena and can move at the next loop reset; C code must copy anything it keeps (see C Interop, Pointer lifetime).
 
 ## Variables
 
@@ -316,7 +369,7 @@ let list = [1, 2, 3]
 list[0]
 ```
 
-`{ }` with keys is a table. `[ ]` is sugar for an integer-keyed table. Dot access is sugar for string key lookup. Keywords are allowed as table keys and dot fields: `{else: body}`, `node.else`. A literal key is a name or keyword (a string key), a string (`{"x y": 1}`; `{"5": 1}` has the string key `"5"`), or a non-negative int literal (`{0: "a", 10: "b"}`), which reads like any int literal: `{010: x}` has the key `10`, and a key outside the int range is a compile error. A negative int key (`{-1: x}`) is a compile error, since negative ints index from the end (see Negative array indexing). A float literal key (`{1.5: x}`) is a compile error too; set a float key with an index (`t[1.5] = x`). Table patterns take the same keys: `when {1: x}` matches a table with the int key `1`, `when {"1": x}` one with the string key `"1"`.
+`{ }` with keys is a table. `[ ]` is sugar for an integer-keyed table. Tables are mutable and passed by reference within a process, and copied when sent to another (see Memory Model). Dot access is sugar for string key lookup. Keywords are allowed as table keys and dot fields: `{else: body}`, `node.else`. A literal key is a name or keyword (a string key), a string (`{"x y": 1}`; `{"5": 1}` has the string key `"5"`), or a non-negative int literal (`{0: "a", 10: "b"}`), which reads like any int literal: `{010: x}` has the key `10`, and a key outside the int range is a compile error. A negative int key (`{-1: x}`) is a compile error, since negative ints index from the end (see Negative array indexing). A float literal key (`{1.5: x}`) is a compile error too; set a float key with an index (`t[1.5] = x`). Table patterns take the same keys: `when {1: x}` matches a table with the int key `1`, `when {"1": x}` one with the string key `"1"`.
 
 Tables can have methods via closures:
 
@@ -570,6 +623,8 @@ send(pid, "world")
 ```
 
 `spawn`, `send`, `receive` are runtime functions, not keywords. Under the hood they use minicoro coroutines with a round-robin scheduler. Each spawned coroutine gets a mailbox (a simple queue). `receive` yields the coroutine if the mailbox is empty; the scheduler resumes it when a message arrives via `send`.
+
+At most 1024 processes, main included, are alive at once; past that, `spawn` raises `spawn: process table full`. A process's slot is freed when it exits.
 
 The main process (top-level code) is itself a schedulable coroutine (PID 0). All concurrency primitives — `self()`, `send`, `receive`, `sleep`, `monitor`, `link` — work at the top level. The program exits when all processes have terminated; if spawned processes outlive main, the program continues running until they complete.
 
