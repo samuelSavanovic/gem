@@ -1,0 +1,87 @@
+## schedule — the seeded workload and fault schedule: what each job is,
+## and which fault each of its attempts gets. A pure function of the seed,
+## the job id and the attempt, shared with benchmarks/jobqueue's Python
+## and Elixir versions, which must compute the same values.
+
+let MASK = 4294967295
+let KINDS = ["sum", "sum", "sum", "sum", "sum", "sum", "text", "text", "text", "sleep"]
+
+# A 32-bit integer hash (the "lowbias" mixer with a 27-bit multiplier, so
+# every product fits in an int).
+fn hash32(x)
+  x = band(bxor(bshr(x, 16), x) * 73244475, MASK)
+  x = band(bxor(bshr(x, 16), x) * 73244475, MASK)
+  bxor(bshr(x, 16), x)
+end
+
+## Returns a hash in [0, 2^32) of the seed, the job id and a salt.
+fn hash(seed, id, salt)
+  let h = hash32(band(seed, MASK))
+  h = hash32(bxor(h, band(id, MASK)))
+  hash32(bxor(h, band(salt, MASK)))
+end
+
+## Returns a float in [0, 1) from `hash`.
+fn unit(seed, id, salt)
+  to_float(hash(seed, id, salt)) / 4294967296.0
+end
+
+## Returns job `id` of the workload `opts` (`seed`, `retries`,
+## `deadline_ms`; a deadline of 0 means none): `{id, kind, payload,
+## max_retries, deadline_ms}`.
+fn job(opts, id)
+  let deadline = opts.deadline_ms
+  if deadline == 0
+    deadline = nil
+  end
+  {
+    id: id,
+    kind: KINDS[hash(opts.seed, id, 1) % 10],
+    payload: 100 + hash(opts.seed, id, 2) % 900,
+    max_retries: opts.retries,
+    deadline_ms: deadline
+  }
+end
+
+## Returns the fault injected into `attempt` (1 for the first run) of job
+## `id`: "crash", "hang", "slow", "kill" or nil, drawn with the
+## probabilities `opts.crash`, `opts.hang`, `opts.slow` and `opts.kill`.
+fn fault(opts, id, attempt)
+  let u = unit(opts.seed, id, 1000 + attempt)
+  let edge = opts.crash
+  if u < edge then return "crash" end
+  edge = edge + opts.hang
+  if u < edge then return "hang" end
+  edge = edge + opts.slow
+  if u < edge then return "slow" end
+  edge = edge + opts.kill
+  if u < edge then return "kill" end
+  nil
+end
+
+## Returns the result a successful run of `job` gives.
+fn expected_result(job)
+  match job.kind
+  when "sum" then job.payload * (job.payload - 1) / 2
+  when "text" then 2 * job.payload
+  else job.payload
+  end
+end
+
+## Returns the failure a run with `fault` reports, or nil for one that
+## succeeds: a hang is cut short by the job's deadline, and a slow run
+## finishes unless it outlasts the deadline (`slow_ms`).
+fn expected_failure(opts, job, fault)
+  if fault == "crash" or fault == "kill"
+    return fault
+  end
+  if fault == "hang"
+    return "deadline"
+  end
+  if fault == "slow" and job.deadline_ms != nil and opts.slow_ms >= job.deadline_ms
+    return "deadline"
+  end
+  nil
+end
+
+export hash, unit, job, fault, expected_result, expected_failure

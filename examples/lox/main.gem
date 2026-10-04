@@ -1,0 +1,26 @@
+# A Lox interpreter; see README.md.
+#
+#   lox script.lox [args...]
+
+load "std/table"
+load "./lox"
+
+fn main()
+  let args = argv()
+  if len(args) < 2
+    eprint("usage: lox script.lox [args...]")
+    exit(64)
+  end
+  let read = pcall read_file(args[1])
+  if not read.ok
+    eprint("lox: {read.error}")
+    exit(66)
+  end
+  let r = lox.run(read.value, {args: table.slice(args, 2)})
+  for e in r.errors
+    eprint(e)
+  end
+  if r.status != 0
+    exit(r.status)
+  end
+end

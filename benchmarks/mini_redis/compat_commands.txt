@@ -1,0 +1,138 @@
+FLUSHALL
+PING
+PING hello
+ECHO "two words"
+SELECT 0
+SELECT x
+SET k v
+GET k
+GET missing
+SET k v2 NX
+SET k v3 XX
+GET k
+SET newkey v XX
+SET k v EX 0
+SET k v EX abc
+SET k v PX -5
+SET k v FOO
+SET k v NX XX
+SET k v EX 10 PX 10
+SET k v EX 100
+TTL k
+SET k v KEEPTTL
+TTL k
+SET k v
+TTL k
+TTL missing
+EXPIRE k 50
+TTL k
+PERSIST k
+PERSIST k
+TTL k
+EXPIRE missing 10
+EXPIRE k notanumber
+EXPIRE k -1
+EXISTS k
+SET counter 10
+INCR counter
+INCRBY counter 5
+DECR counter
+DECRBY counter 20
+INCR newcounter
+INCRBY counter 1.5
+SET big 9223372036854775807
+INCR big
+SET small -9223372036854775808
+DECR small
+SET notnum 12abc
+INCR notnum
+SET lead 012
+INCR lead
+APPEND s hello
+APPEND s " world"
+GET s
+STRLEN s
+STRLEN missing
+MSET a 1 b 2 c 3
+MGET a b c missing
+MSET a
+DEL a b missing
+EXISTS a b c c
+TYPE c
+TYPE missing
+RPUSH list a b c
+LPUSH list z y
+LRANGE list 0 -1
+LRANGE list 1 2
+LRANGE list -2 -1
+LRANGE list 5 10
+LRANGE list 0 100
+LRANGE list x 1
+LINDEX list 0
+LINDEX list -1
+LINDEX list 99
+LLEN list
+LPOP list
+RPOP list
+LPOP list 2
+RPOP list 5
+LLEN list
+EXISTS list
+LPOP list
+LLEN missing
+TYPE list
+RPUSH list2 1 2 3 4 5 6 7 8 9 10
+LPOP list2
+LPOP list2
+RPOP list2
+LRANGE list2 0 -1
+GET list2
+LPUSH c x
+INCR list2
+HSET h f1 v1 f2 v2
+HSET h f1 new f3 v3
+HSET h odd
+HGET h f1
+HGET h missing
+HGET missing f
+HLEN h
+HEXISTS h f2
+HEXISTS h nope
+HGETALL h
+HDEL h f1 f2 nope
+HDEL h f3
+EXISTS h
+HGETALL missing
+TYPE h
+SADD set a b c
+SADD set a d
+SCARD set
+SISMEMBER set a
+SISMEMBER set zz
+SREM set a b zz
+SCARD set
+SREM set c d
+EXISTS set
+SADD one only
+SMEMBERS one
+SPOP one
+SPOP one
+SCARD missing
+SET str x
+SADD str a
+HGET str f
+LPUSH str a
+MSET k1 1 k2 2 key3 3 other 4
+KEYS ?2
+KEYS k[^1]
+KEYS key*
+KEYS ot[a-z]er
+KEYS nothing*
+DBSIZE
+FLUSHDB
+DBSIZE
+PUBLISH nobody hi
+NOSUCHCOMMAND a b
+get
+GET a b
+set onlykey

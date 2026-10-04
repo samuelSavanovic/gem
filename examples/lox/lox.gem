@@ -1,0 +1,38 @@
+## lox — runs Lox source: scan, parse, resolve, interpret.
+##
+##   let r = lox.run('print "hi";', {out: fn(line) push(lines, line) end})
+##   r    # {status: 0, errors: []}
+##
+## `status` is jlox's exit status: 0, 65 for a syntax or resolution
+## error (nothing runs), 70 for a runtime error. `errors` holds the
+## messages, in the order jlox prints them.
+
+load "./lexer"
+load "./parser"
+load "./resolver"
+load "./interp"
+
+## Runs `source`. `opts` goes to `interp.run`: `out` receives the text of
+## each `print`, `args` are the script arguments.
+fn run(source, opts = {})
+  let scanned = lexer.scan(source)
+  let parsed = parser.parse(scanned.tokens)
+  let errors = scanned.errors
+  for e in parsed.errors
+    push(errors, e)
+  end
+  if len(errors) > 0
+    return {status: 65, errors: errors}
+  end
+  errors = resolver.resolve(parsed.statements)
+  if len(errors) > 0
+    return {status: 65, errors: errors}
+  end
+  let r = interp.run(parsed.statements, opts)
+  if not r.ok
+    return {status: 70, errors: [r.error]}
+  end
+  {status: 0, errors: []}
+end
+
+export run

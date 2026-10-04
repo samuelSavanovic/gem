@@ -1,0 +1,94 @@
+## walk — the files a search reads, in the order grep reports them.
+##
+##   walk.files(["src", "notes.txt"], true)
+##   # [{path: "src/a.gem", in_dir: true}, ..., {path: "notes.txt", in_dir: false}]
+##
+## An entry with an `error` is a path that can't be searched, with the
+## reason (`No such file or directory`, `Is a directory`). `path` "-" is
+## standard input. Directory entries come in byte order of their names.
+
+load "std/string"
+
+extern include "fs.h"
+extern fn fs_is_symlink(path: String) -> Bool
+extern fn fs_open_error(path: String) -> String
+
+## Why `path` can't be opened for reading, or nil when it can.
+fn open_error(path)
+  fs_open_error(path)
+end
+
+# "" is the working directory when no operand names it: its files are
+# named without "./".
+fn join(dir, name)
+  if dir == ""
+    return name
+  end
+  if string.ends_with(dir, "/")
+    return dir + name
+  end
+  "{dir}/{name}"
+end
+
+# Appends the files under `dir`. Like grep -r, it follows no symbolic link
+# it finds on the way (only the ones named on the command line).
+fn walk_dir(dir, out)
+  let listing = dir
+  if dir == ""
+    listing = "."
+  end
+  let r = pcall list_dir(listing)
+  if not r.ok
+    push(out, {path: listing, error: open_error(listing) or "cannot read the directory"})
+    return nil
+  end
+  let names = r.value
+  sort(names)
+  for name in names
+    let path = join(dir, name)
+    if fs_is_symlink(path)
+      continue
+    end
+    if is_dir(path)
+      walk_dir(path, out)
+    else
+      push(out, {path: path, in_dir: true})
+    end
+  end
+end
+
+fn trim_slashes(path)
+  while len(path) > 1 and string.ends_with(path, "/")
+    path = substr(path, 0, len(path) - 1)
+  end
+  path
+end
+
+## The files named by `operands`, with each directory expanded when
+## `recursive`. No operands means standard input, or the working
+## directory (its files named without `./`) when `recursive`.
+fn files(operands, recursive)
+  let out = []
+  if len(operands) == 0
+    if recursive
+      walk_dir("", out)
+    else
+      push(out, {path: "-", in_dir: false})
+    end
+    return out
+  end
+  for path in operands
+    if path != "-" and is_dir(path)
+      if recursive
+        walk_dir(trim_slashes(path), out)
+      else
+        push(out, {path: path, error: "Is a directory"})
+      end
+    else
+      push(out, {path: path, in_dir: false})
+    end
+  end
+  out
+end
+
+export files, open_error

@@ -1,0 +1,123 @@
+## pubsub — the gen_server that keeps the channel subscriptions and fans
+## published messages out to the subscribed connections.
+##
+## A subscriber gets `{tag: "message", channel, payload}` for every message
+## published to a channel it is subscribed to.
+
+load "std/gen_server"
+
+## The pubsub server's registered name.
+let NAME = "mini_redis_pubsub"
+
+# channels: channel → {"<pid>": pid}; by_pid: "<pid>" → {channel: true}.
+# Pids are ints, and big sets keyed by int are linear scans, hence the
+# string keys. Subscribers are monitored, so a connection that dies
+# without unsubscribing leaves nothing behind.
+
+fn subscribe(s, pid, channel)
+  let pk = "{pid}"
+  let mine = s.by_pid[pk]
+  if mine == nil
+    mine = {}
+    s.by_pid[pk] = mine
+    monitor(pid)
+  end
+  mine[channel] = true
+  let subs = s.channels[channel]
+  if subs == nil
+    subs = {}
+    s.channels[channel] = subs
+  end
+  subs[pk] = pid
+end
+
+fn unsubscribe(s, pid, channel)
+  let pk = "{pid}"
+  let mine = s.by_pid[pk]
+  if mine == nil or not has_key(mine, channel)
+    return nil
+  end
+  delete(mine, channel)
+  if len(mine) == 0
+    delete(s.by_pid, pk)
+    demonitor(pid)
+  end
+  let subs = s.channels[channel]
+  delete(subs, pk)
+  if len(subs) == 0
+    delete(s.channels, channel)
+  end
+end
+
+fn forget(s, pid)
+  let mine = s.by_pid["{pid}"]
+  if mine == nil then return nil end
+  for channel in keys(mine)
+    unsubscribe(s, pid, channel)
+  end
+end
+
+fn publish(s, channel, payload)
+  let subs = s.channels[channel]
+  if subs == nil then return 0 end
+  let msg = {tag: "message", channel: channel, payload: payload}
+  for pk, pid in subs
+    send(pid, msg)
+  end
+  len(subs)
+end
+
+let MODULE = {
+  init: fn()
+    register(NAME, self())
+    {state: {channels: {}, by_pid: {}}}
+  end,
+  handle_call: fn(msg, from, s)
+    match msg
+    when {op: "subscribe", channel: channel}
+      subscribe(s, from.pid, channel)
+      {reply: true, state: s}
+    when {op: "unsubscribe", channel: channel}
+      unsubscribe(s, from.pid, channel)
+      {reply: true, state: s}
+    when {op: "publish", channel: channel, payload: payload}
+      {reply: publish(s, channel, payload), state: s}
+    else
+      {reply: nil, state: s}
+    end
+  end,
+  handle_cast: fn(msg, s) {state: s} end,
+  handle_info: fn(msg, s)
+    match msg
+    when {tag: "DOWN", pid: pid}
+      forget(s, pid)
+    else
+      nil
+    end
+    {state: s}
+  end
+}
+
+## Starts the pubsub server and registers it as `NAME`. Returns its handle.
+fn start()
+  gen_server.start(MODULE)
+end
+
+## Subscribes the calling process to `channel`. Waits until it is done, so
+## a message published after this returns reaches the caller.
+fn join(channel)
+  gen_server.call(NAME, {op: "subscribe", channel: channel})
+end
+
+## Unsubscribes the calling process from `channel`.
+fn leave(channel)
+  gen_server.call(NAME, {op: "unsubscribe", channel: channel})
+end
+
+## Sends `payload` to the subscribers of `channel`. Returns how many there
+## were.
+fn publish_to(channel, payload)
+  gen_server.call(NAME, {op: "publish", channel: channel, payload: payload})
+end
+
+export NAME, start, join, leave, publish_to

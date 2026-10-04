@@ -1,0 +1,26 @@
+# A recursive grep on libc's POSIX regex; see README.md.
+#
+#   gemgrep [-EFHchilnoqrsvwx] [-e PATTERN] PATTERN [FILE...]
+
+load "std/table"
+load "./args"
+load "./grep"
+
+fn main()
+  let parsed = args.parse(table.slice(argv(), 1))
+  if not parsed.ok
+    if parsed.error != nil
+      eprint("gemgrep: {parsed.error}")
+    end
+    eprint(args.USAGE)
+    eprint("Try 'gemgrep --help' for more information.")
+    exit(2)
+  end
+  let opts = parsed.value
+  if opts.help
+    write_stdout(args.HELP)
+    exit(0)
+  end
+  let status = grep.run(opts, {out: write_stdout, err: fn(line) eprint(line) end})
+  exit(status)
+end

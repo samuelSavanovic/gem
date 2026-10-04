@@ -1,0 +1,147 @@
+## invariants — checks a finished run against the fault schedule: no job
+## lost or finished twice, every attempt's outcome the one the schedule
+## injected, the retry counts that follow, and the system back at its
+## baseline once the load has drained.
+
+load "./schedule"
+
+## Returns the class of an attempt's outcome: "ok", "crash", "killed",
+## "deadline", or, for failures the schedule didn't inject, "storm" (a
+## burst killed the worker), "shutdown" (its supervisor gave up),
+## "noproc" (the worker died before the queue saw it start) or "other".
+fn classify(outcome)
+  if outcome == "ok" or outcome == "killed" or outcome == "deadline" or outcome == "storm" or outcome == "shutdown" or outcome == "noproc"
+    return outcome
+  end
+  if find(outcome, "jobqueue: injected crash", 0) == 0
+    return "crash"
+  end
+  "other"
+end
+
+let EXTERNAL = {storm: true, shutdown: true, noproc: true}
+let INJECTED = {crash: "crash", kill: "killed", deadline: "deadline"}
+
+## Returns the failure counts by class over every attempt in `report`.
+fn failures(report)
+  let counts = {crash: 0, deadline: 0, killed: 0, storm: 0, shutdown: 0, noproc: 0, other: 0}
+  for st in report
+    for o in st.attempts
+      let c = classify(o)
+      if c != "ok"
+        counts[c] = counts[c] + 1
+      end
+    end
+  end
+  counts
+end
+
+# The problems with one job's attempts, appended to `out`.
+fn check_attempts(opts, job, st, out)
+  let oks = 0
+  for i, o in st.attempts
+    let c = classify(o)
+    if c == "ok"
+      oks += 1
+    end
+    if has_key(EXTERNAL, c)
+      continue
+    end
+    let n = i + 1
+    let want = schedule.expected_failure(opts, job, schedule.fault(opts, job.id, n))
+    let want_class = "ok"
+    if want != nil
+      want_class = INJECTED[want]
+    end
+    if c != want_class
+      push(out, "job {job.id} attempt {n}: {o}, the schedule says {want_class}")
+    end
+  end
+  let n = len(st.attempts)
+  if st.status == "completed"
+    if oks != 1 or st.attempts[n - 1] != "ok"
+      push(out, "job {job.id}: completed with attempts {st.attempts}")
+    end
+    if st.result != schedule.expected_result(job)
+      push(out, "job {job.id}: result {st.result}, expected {schedule.expected_result(job)}")
+    end
+  elif st.status == "dead"
+    if oks != 0 or n != job.max_retries + 1
+      push(out, "job {job.id}: dead-lettered with attempts {st.attempts}")
+    end
+  else
+    push(out, "job {job.id}: still {st.status}")
+  end
+end
+
+## Returns the list of violated invariants (empty when all hold) for a
+## run of jobs 1 .. `n` of the workload `opts`. `done` maps "<id>" to the
+## job_done notifications received for it (an array), `report` is
+## jobqueue.report(), `dead` is jobqueue.dead_letters(), `stats` is
+## jobqueue.stats() after the drain, and `baseline` / `final` are
+## samples of the system before and after the run (see driver.sample).
+fn check(opts, n, done, report, dead, stats, baseline, final)
+  let out = []
+  let by_id = {}
+  for st in report
+    by_id["{st.id}"] = st
+  end
+  if len(report) != n
+    push(out, "the queue holds {len(report)} jobs, {n} were submitted")
+  end
+  let attempts = 0
+  let dead_ids = {}
+  for id = 1, n + 1
+    let key = "{id}"
+    let notes = done[key]
+    if notes == nil
+      push(out, "job {id}: no job_done (lost)")
+    elif len(notes) > 1
+      push(out, "job {id}: {len(notes)} job_done notifications")
+    end
+    let st = by_id[key]
+    if st == nil
+      push(out, "job {id}: unknown to the queue")
+      continue
+    end
+    attempts += len(st.attempts)
+    if notes != nil and (notes[0].status != st.status or notes[0].attempts != len(st.attempts))
+      push(out, "job {id}: notified {notes[0].status} after {notes[0].attempts} attempts, the queue says {st.status} after {len(st.attempts)}")
+    end
+    if st.status == "dead"
+      dead_ids[key] = true
+    end
+    check_attempts(opts, schedule.job(opts, id), st, out)
+  end
+  if len(dead) != len(dead_ids)
+    push(out, "{len(dead)} dead letters, {len(dead_ids)} dead jobs")
+  end
+  for st in dead
+    if not has_key(dead_ids, "{st.id}")
+      push(out, "job {st.id} is a dead letter but not dead")
+    end
+  end
+  if stats.attempts != attempts
+    push(out, "the queue counted {stats.attempts} attempts, the jobs record {attempts}")
+  end
+  if stats.retries != attempts - n
+    push(out, "the queue counted {stats.retries} retries, the jobs record {attempts - n}")
+  end
+  check_drained(stats, baseline, final, out)
+  out
+end
+
+fn check_drained(stats, baseline, final, out)
+  for k in ["pending", "busy", "idle", "slots"]
+    if stats[k] != 0
+      push(out, "after the drain the queue has {k} = {stats[k]}")
+    end
+  end
+  for k in ["processes", "queue_monitors", "queue_links", "queue_mailbox", "workers_links"]
+    if final[k] != baseline[k]
+      push(out, "{k}: {final[k]} after the drain, {baseline[k]} before the load")
+    end
+  end
+end
+
+export classify, failures, check

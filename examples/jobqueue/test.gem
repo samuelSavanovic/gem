@@ -1,0 +1,436 @@
+# Tests for jobqueue: the schedule, the fifo and the options, then the
+# queue driven through a running system (completion, backoff, deadline
+# kills, dead letters, supervisor restarts), the invariant checker, and
+# small seeded runs end to end.
+
+load "std/test"
+load "std/dynamic_supervisor"
+load "./schedule"
+load "./fifo"
+load "./options"
+load "./jobqueue"
+load "./invariants"
+load "./driver"
+
+let WAIT_MS = 5000
+
+# Waits for the job_done of `id` and returns it.
+fn await_done(id)
+  receive
+  when {tag: "job_done", id: ^id, status: status, attempts: attempts, result: result, submitted_at: t0, finished_at: t1}
+    {status: status, attempts: attempts, result: result, ms: t1 - t0}
+  after WAIT_MS
+    error("no job_done for job {id}")
+  end
+end
+
+fn job(id, {kind = "sum", payload = 10, max_retries = 3, deadline_ms = 200} = {})
+  {id: id, kind: kind, payload: payload, max_retries: max_retries, deadline_ms: deadline_ms}
+end
+
+# Runs `body(sys)` with a system started with `opts`, and stops it on
+# every path.
+fn with_system(opts, body)
+  let sys = jobqueue.start(opts)
+  let r = pcall body(sys)
+  jobqueue.stop(sys)
+  if not r.ok
+    error(r.error)
+  end
+  r.value
+end
+
+# ─── Schedule ──────────────────────────────────────────────────
+
+test.case("the hash matches the Python and Elixir versions") do
+  test.assert_eq(schedule.hash(1, 1, 1), 4269941795)
+  test.assert_eq(schedule.hash(1, 1, 2), 744277919)
+  test.assert_eq(schedule.hash(42, 7, 1003), 3463246431)
+  test.assert_eq(schedule.unit(1, 1, 1001), 0.6549126843456179)
+end
+
+test.case("jobs are a pure function of the seed and the id") do
+  let opts = {seed: 7, retries: 2, deadline_ms: 50}
+  let a = schedule.job(opts, 12)
+  test.assert_eq(a, schedule.job(opts, 12))
+  test.assert_eq(a.max_retries, 2)
+  test.assert_eq(a.deadline_ms, 50)
+  test.assert(a.payload >= 100 and a.payload < 1000)
+  test.assert_eq(schedule.job({seed: 7, retries: 2, deadline_ms: 0}, 12).deadline_ms, nil)
+  let kinds = {sum: 0, text: 0, sleep: 0}
+  for id = 1, 2001
+    let k = schedule.job(opts, id).kind
+    kinds[k] = kinds[k] + 1
+  end
+  test.assert(kinds.sum > 1000 and kinds.text > 450 and kinds.sleep > 120)
+end
+
+test.case("faults come with their probabilities") do
+  let opts = {seed: 3, crash: 0.1, hang: 0.05, slow: 0.2, kill: 0.0}
+  let counts = {crash: 0, hang: 0, slow: 0, kill: 0, none: 0}
+  for id = 1, 5001
+    let f = schedule.fault(opts, id, 1)
+    if f == nil
+      f = "none"
+    end
+    counts[f] = counts[f] + 1
+  end
+  test.assert(counts.crash > 420 and counts.crash < 580)
+  test.assert(counts.hang > 180 and counts.hang < 320)
+  test.assert(counts.slow > 900 and counts.slow < 1100)
+  test.assert_eq(counts.kill, 0)
+  # Attempts of one job are drawn independently.
+  let both = 0
+  for id = 1, 5001
+    if schedule.fault(opts, id, 1) == "crash" and schedule.fault(opts, id, 2) == "crash"
+      both += 1
+    end
+  end
+  test.assert(both > 25 and both < 85)
+end
+
+test.case("expected results and failures") do
+  test.assert_eq(schedule.expected_result({kind: "sum", payload: 10}), 45)
+  test.assert_eq(schedule.expected_result({kind: "text", payload: 10}), 20)
+  test.assert_eq(schedule.expected_result({kind: "sleep", payload: 10}), 10)
+  let opts = {slow_ms: 20}
+  let j = {deadline_ms: 100}
+  test.assert_eq(schedule.expected_failure(opts, j, "crash"), "crash")
+  test.assert_eq(schedule.expected_failure(opts, j, "kill"), "kill")
+  test.assert_eq(schedule.expected_failure(opts, j, "hang"), "deadline")
+  test.assert_eq(schedule.expected_failure(opts, j, "slow"), nil)
+  test.assert_eq(schedule.expected_failure({slow_ms: 100}, j, "slow"), "deadline")
+  test.assert_eq(schedule.expected_failure({slow_ms: 100}, {deadline_ms: nil}, "slow"), nil)
+  test.assert_eq(schedule.expected_failure(opts, j, nil), nil)
+end
+
+# ─── fifo and options ──────────────────────────────────────────
+
+test.case("fifo keeps order across compactions") do
+  let q = fifo.new()
+  test.assert_eq(fifo.take(q), nil)
+  let out = []
+  for i = 0, 1000
+    fifo.put(q, i)
+    if i % 3 == 0
+      push(out, fifo.take(q))
+    end
+  end
+  while fifo.size(q) > 0
+    push(out, fifo.take(q))
+  end
+  test.assert_eq(len(out), 1000)
+  for i = 0, 1000
+    test.assert_eq(out[i], i)
+  end
+  test.assert_eq(fifo.take(q), nil)
+end
+
+test.case("options") do
+  let d = options.parse([])
+  test.assert(d.ok)
+  test.assert_eq(d.value, options.defaults())
+  let r = options.parse(["--jobs", "50", "--workers", "3", "--crash", "0.25", "--deadline", "0", "--storm", "2"])
+  test.assert(r.ok)
+  test.assert_eq([r.value.jobs, r.value.pool, r.value.crash, r.value.deadline_ms, r.value.storm], [50, 3, 0.25, 0, 2])
+  test.assert_eq(options.parse(["--jobs", "x"]).error, "--jobs expects an int >= 0, got \"x\"")
+  test.assert_eq(options.parse(["--workers", "0"]).error, "--workers expects an int >= 1, got \"0\"")
+  test.assert_eq(options.parse(["--crash", "1.5"]).error, "--crash expects a probability from 0 to 1, got \"1.5\"")
+  test.assert_eq(options.parse(["--jobs"]).error, "--jobs needs a value")
+  test.assert_eq(options.parse(["--crash", "0.6", "--hang", "0.6"]).error, "--crash, --hang, --slow and --kill add up to more than 1")
+  test.assert(find(options.parse(["--nope", "1"]).error, "unknown option --nope", 0) == 0)
+  test.assert(not options.parse(["--help"]).ok)
+end
+
+test.case("percentiles") do
+  test.assert_eq(driver.percentile([], 0.5), 0)
+  test.assert_eq(driver.percentile([7], 0.99), 7)
+  let xs = []
+  for i = 0, 100
+    push(xs, i)
+  end
+  test.assert_eq([driver.percentile(xs, 0.5), driver.percentile(xs, 0.9), driver.percentile(xs, 0.99), driver.percentile(xs, 1.0)], [50, 90, 99, 99])
+end
+
+# ─── The queue ─────────────────────────────────────────────────
+
+test.case("a job runs and its status is kept") do
+  with_system({pool: 2}) do |sys|
+    test.assert_eq(jobqueue.submit(job(1, {payload: 100})), {ok: true})
+    test.assert_eq(jobqueue.submit(job(2, {kind: "text", payload: 5})), {ok: true})
+    test.assert_eq(await_done(1).result, 4950)
+    test.assert_eq(await_done(2).result, 10)
+    let st = jobqueue.status(1)
+    test.assert_eq([st.status, st.attempts, st.result, st.error], ["completed", ["ok"], 4950, nil])
+    test.assert_eq(jobqueue.status(99), nil)
+    let s = jobqueue.stats()
+    test.assert_eq([s.submitted, s.completed, s.attempts, s.retries, s.pending], [2, 2, 2, 0, 0])
+  end
+end
+
+test.case("bad and duplicate jobs are rejected") do
+  with_system({}) do |sys|
+    test.assert_eq(jobqueue.submit({kind: "sum"}).error, "a job needs an int id")
+    test.assert_eq(jobqueue.submit(job(1, {max_retries: -1})).error, "job 1: max_retries must be an int >= 0")
+    test.assert_eq(jobqueue.submit(job(1, {deadline_ms: 0})).error, "job 1: deadline_ms must be a positive int or nil")
+    test.assert_eq(jobqueue.submit({id: 1, kind: 3, max_retries: 0}).error, "job 1: kind must be a string")
+    test.assert(jobqueue.submit(job(1)).ok)
+    test.assert_eq(jobqueue.submit(job(1)).error, "job 1 was already submitted")
+    await_done(1)
+    test.assert_eq(jobqueue.stats().submitted, 1)
+  end
+end
+
+test.case("a crashing job is retried with exponential backoff, then dead-lettered") do
+  with_system({crash: 1.0, backoff_ms: 20, backoff_max_ms: 1000}) do |sys|
+    jobqueue.submit(job(1, {max_retries: 3}))
+    let d = await_done(1)
+    test.assert_eq([d.status, d.attempts], ["dead", 4])
+    # 20 + 40 + 80 ms between the four attempts.
+    test.assert(d.ms >= 140)
+    let st = jobqueue.status(1)
+    test.assert_eq(len(st.attempts), 4)
+    for o in st.attempts
+      test.assert_eq(invariants.classify(o), "crash")
+    end
+    test.assert_eq(st.error, "jobqueue: injected crash in job 1")
+    let dead = jobqueue.dead_letters()
+    test.assert_eq(len(dead), 1)
+    test.assert_eq(dead[0].id, 1)
+    test.assert_eq(jobqueue.stats().retries, 3)
+  end
+end
+
+test.case("the backoff is capped") do
+  with_system({crash: 1.0, backoff_ms: 10, backoff_max_ms: 15}) do |sys|
+    jobqueue.submit(job(1, {max_retries: 4}))
+    let d = await_done(1)
+    test.assert_eq(d.attempts, 5)
+    # 10 + 15 + 15 + 15: the doubling stops at the cap.
+    test.assert(d.ms >= 55 and d.ms < 1000)
+  end
+end
+
+test.case("a job that outlives its deadline has its worker killed") do
+  with_system({hang: 1.0, pool: 1}) do |sys|
+    jobqueue.submit(job(1, {max_retries: 1, deadline_ms: 30}))
+    let d = await_done(1)
+    test.assert_eq([d.status, d.attempts], ["dead", 2])
+    test.assert(d.ms >= 60)
+    test.assert_eq(jobqueue.status(1).attempts, ["deadline", "deadline"])
+    # The killed worker was restarted in its slot: the pool still has one.
+    test.assert_eq(jobqueue.stats().slots, 1)
+  end
+end
+
+test.case("without a deadline a slow job finishes") do
+  with_system({slow: 1.0, slow_ms: 50}) do |sys|
+    jobqueue.submit(job(1, {deadline_ms: nil}))
+    let d = await_done(1)
+    test.assert_eq([d.status, d.attempts], ["completed", 1])
+    test.assert(d.ms >= 50)
+    jobqueue.submit(job(2, {deadline_ms: 20}))
+    test.assert_eq(await_done(2).status, "dead")
+    test.assert_eq(jobqueue.status(2).attempts[0], "deadline")
+  end
+end
+
+test.case("a killed worker is restarted and the pool keeps working") do
+  with_system({kill: 1.0, pool: 2}) do |sys|
+    jobqueue.submit(job(1, {max_retries: 2}))
+    test.assert_eq(await_done(1).status, "dead")
+    test.assert_eq(jobqueue.status(1).attempts, ["killed", "killed", "killed"])
+    let s = jobqueue.stats()
+    test.assert_eq(s.slots, 1)
+    test.assert_eq(s.worker_starts, 1)
+    # Each kill was a restart, not a new start: the supervisor still has
+    # one child, and it is running.
+    let kids = dynamic_supervisor.which_children(jobqueue.pids().workers)
+    test.assert_eq(len(kids), 1)
+  end
+end
+
+test.case("an unknown job kind fails like a crash") do
+  with_system({}) do |sys|
+    jobqueue.submit(job(1, {kind: "nope", max_retries: 0}))
+    test.assert_eq(await_done(1).status, "dead")
+    test.assert_eq(jobqueue.status(1).error, "jobqueue: unknown job kind nope")
+    test.assert_eq(invariants.classify("jobqueue: unknown job kind nope"), "other")
+  end
+end
+
+test.case("idle workers retire and the pool shrinks to nothing") do
+  with_system({pool: 4, idle_ms: 30}) do |sys|
+    for id = 1, 9
+      jobqueue.submit(job(id, {kind: "sleep"}))
+    end
+    for id = 1, 9
+      test.assert_eq(await_done(id).status, "completed")
+    end
+    test.assert(jobqueue.stats().slots > 0)
+    sleep(200)
+    let s = jobqueue.stats()
+    test.assert_eq([s.slots, s.idle, s.busy], [0, 0, 0])
+    test.assert_eq(len(dynamic_supervisor.which_children(jobqueue.pids().workers)), 0)
+  end
+end
+
+test.case("the queue outlives its worker supervisor") do
+  # No restarts allowed: the first crash makes the worker supervisor give
+  # up, and the top supervisor starts a new one.
+  with_system({crash: 1.0, max_restarts: 0, pool: 1}) do |sys|
+    let before = jobqueue.pids()
+    jobqueue.submit(job(1, {max_retries: 1}))
+    test.assert_eq(await_done(1).status, "dead")
+    let now = jobqueue.pids()
+    test.assert_eq(now.queue, before.queue)
+    test.assert(now.workers != before.workers)
+    test.assert(jobqueue.stats().sup_restarts >= 1)
+  end
+end
+
+test.case("a storm makes the queue retry what was running") do
+  with_system({slow: 1.0, slow_ms: 30, pool: 4}) do |sys|
+    for id = 1, 5
+      jobqueue.submit(job(id, {deadline_ms: nil}))
+    end
+    sleep(10)
+    for c in dynamic_supervisor.which_children(jobqueue.pids().workers)
+      kill(c.pid, "storm")
+    end
+    for id = 1, 5
+      test.assert_eq(await_done(id).status, "completed")
+    end
+    let stormed = 0
+    for id = 1, 5
+      let a = jobqueue.status(id).attempts
+      test.assert_eq(a[len(a) - 1], "ok")
+      if a[0] == "storm"
+        stormed += 1
+      end
+    end
+    test.assert(stormed >= 1)
+  end
+end
+
+# ─── Invariants ────────────────────────────────────────────────
+
+let SMALL = {jobs: 3, seed: 1, retries: 1, deadline_ms: 100, crash: 0.0, hang: 0.0, slow: 0.0, kill: 0.0, slow_ms: 20}
+let DRAINED = {pending: 0, busy: 0, idle: 0, slots: 0, attempts: 3, retries: 0}
+let BASE = {processes: 4, queue_monitors: 0, queue_links: 1, queue_mailbox: 0, workers_links: 1}
+
+fn fake_report()
+  let out = []
+  for id = 1, 4
+    let j = schedule.job(SMALL, id)
+    push(out, {id: id, status: "completed", attempts: ["ok"], result: schedule.expected_result(j)})
+  end
+  out
+end
+
+fn fake_done()
+  let out = {}
+  for id = 1, 4
+    out["{id}"] = [{status: "completed", attempts: 1}]
+  end
+  out
+end
+
+test.case("the checker passes a clean run") do
+  test.assert_eq(invariants.check(SMALL, 3, fake_done(), fake_report(), [], DRAINED, BASE, BASE), [])
+end
+
+test.case("the checker finds lost, duplicated and wrong jobs") do
+  let done = fake_done()
+  delete(done, "2")
+  push(done["3"], {status: "completed", attempts: 1})
+  let report = fake_report()
+  report[0].attempts = ["jobqueue: injected crash in job 1", "ok"]
+  report[0].result = 0
+  let v = invariants.check(SMALL, 3, done, report, [], DRAINED, BASE, BASE)
+  test.assert_eq(v, [
+    "job 1: notified completed after 1 attempts, the queue says completed after 2",
+    "job 1 attempt 1: jobqueue: injected crash in job 1, the schedule says ok",
+    "job 1: result 0, expected {schedule.expected_result(schedule.job(SMALL, 1))}",
+    "job 2: no job_done (lost)",
+    "job 3: 2 job_done notifications",
+    "the queue counted 3 attempts, the jobs record 4",
+    "the queue counted 0 retries, the jobs record 1"
+  ])
+end
+
+test.case("the checker ignores failures the schedule didn't inject, but not their effect") do
+  let report = fake_report()
+  report[1].attempts = ["storm", "ok"]
+  report[2].attempts = ["shutdown", "noproc"]
+  report[2].status = "dead"
+  let done = fake_done()
+  done["2"][0].attempts = 2
+  done["3"][0] = {status: "dead", attempts: 2}
+  let v = invariants.check(SMALL, 3, done, report, [{id: 3}], {pending: 0, busy: 0, idle: 0, slots: 0, attempts: 5, retries: 2}, BASE, BASE)
+  test.assert_eq(v, [])
+  test.assert_eq(invariants.failures(report), {crash: 0, deadline: 0, killed: 0, storm: 1, shutdown: 1, noproc: 1, other: 0})
+end
+
+test.case("the checker finds a system that didn't drain") do
+  let left = {processes: 5, queue_monitors: 1, queue_links: 1, queue_mailbox: 2, workers_links: 3}
+  let st = {pending: 0, busy: 1, idle: 0, slots: 2, attempts: 3, retries: 0}
+  test.assert_eq(invariants.check(SMALL, 3, fake_done(), fake_report(), [], st, BASE, left), [
+    "after the drain the queue has busy = 1",
+    "after the drain the queue has slots = 2",
+    "processes: 5 after the drain, 4 before the load",
+    "queue_monitors: 1 after the drain, 0 before the load",
+    "queue_mailbox: 2 after the drain, 0 before the load",
+    "workers_links: 3 after the drain, 1 before the load"
+  ])
+end
+
+# ─── Whole runs ────────────────────────────────────────────────
+
+fn small_run(extra)
+  let opts = options.defaults()
+  opts.jobs = 300
+  opts.pool = 8
+  opts.idle_ms = 30
+  opts.timeout_ms = 20000
+  for k, v in extra
+    opts[k] = v
+  end
+  driver.run(opts)
+end
+
+test.case("a run without faults") do
+  let s = small_run({})
+  test.assert_eq(s.violations, [])
+  test.assert_eq([s.completed, s.dead, s.attempts, s.retries], [300, 0, 300, 0])
+  test.assert_eq(s.processes.final, s.processes.baseline)
+  test.assert(s.processes.peak <= s.processes.baseline + 8 + 1)
+end
+
+test.case("a seeded run with every fault holds the invariants, and repeats") do
+  let faults = {crash: 0.1, hang: 0.05, slow: 0.1, kill: 0.05, deadline_ms: 50, seed: 9}
+  let a = small_run(faults)
+  test.assert_eq(a.violations, [])
+  test.assert(a.retries > 30)
+  test.assert(a.failures.crash > 0 and a.failures.killed > 0 and a.failures.deadline > 0)
+  test.assert_eq(a.completed + a.dead, 300)
+  let b = small_run(faults)
+  test.assert_eq(b.violations, [])
+  test.assert_eq([b.completed, b.dead, b.attempts, b.failures], [a.completed, a.dead, a.attempts, a.failures])
+end
+
+test.case("a storm that exhausts the worker supervisor loses no job") do
+  let s = small_run({crash: 0.05, storm: 8, storm_every_ms: 20, storm_bursts: 5, max_restarts: 30, jobs: 2000})
+  test.assert_eq(s.violations, [])
+  test.assert_eq(s.completed + s.dead, 2000)
+  test.assert(s.sup_restarts >= 1)
+end
+
+test.case("the summary format") do
+  let s = small_run({jobs: 20})
+  let text = driver.format(s)
+  test.assert(find(text, "jobs          20\ncompleted     20\n", 0) == 0)
+  test.assert(find(text, "invariants    ok", 0) > 0)
+end
+
+test.run()

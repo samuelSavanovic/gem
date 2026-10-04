@@ -36,6 +36,23 @@ shadows, as a `let` initializer does. Param defaults are emitted in
 compiler/codegen.gem (the `if (argc > i) ... else` prelude); the scope
 check belongs in `scope_shadowing_lets`.
 
+### An extern fn returning a `const char *` makes cc warn
+
+```gem
+extern include "netdb.h"
+extern fn hstrerror(err: Int) -> String
+print(hstrerror(1))     # Unknown host, after a cc warning on every build:
+                        # initialization discards 'const' qualifier ...
+```
+
+The wrapper of a plain `extern fn ... -> String` stores the result in a
+`char *` (`char* _ret = ...` in the extern wrapper emitted by
+compiler/codegen.gem), so any C function that returns `const char *` (libc's
+`hstrerror`, `gai_strerror`, a helper returning a string literal) gets a
+`-Wdiscarded-qualifiers` warning printed at every compile. The runtime only
+copies the string, so the plain wrapper can use `const char *`; the
+`extern blocking fn` wrapper frees it and should keep `char *`.
+
 ## Runtime
 
 ### `in` answers differently on a copy of a table whose string keys were deleted
@@ -73,6 +90,23 @@ sqlite's parser stops at a NUL even when given the full length, so
 `sqlite_exec` runs only what comes before it, and `sqlite_query` doesn't
 see a second statement after one. Both should raise on SQL containing a
 NUL (runtime/gem_builtins_sqlite.c).
+
+### `read_file` and `list_dir` don't say why a path can't be opened
+
+```gem
+print((pcall read_file("/no/such/file")).error)   # read_file: cannot open '/no/such/file'
+print((pcall list_dir("/etc/passwd")).error)      # list_dir: cannot open directory '/etc/passwd'
+```
+
+The messages drop `errno`, so a program can't tell a missing file from a
+permission problem or report it the way other tools do (`No such file or
+directory`, `Not a directory`, `Permission denied`); `examples/gemgrep`
+opens the file again from C (`fs_open_error` in `fs.h`) to get
+`strerror`'s text. The messages are made in `gem_read_whole_file` in
+runtime/gem_threadpool.c (on the worker thread, where `errno` is still
+set) and in `gem_list_dir_fn` in runtime/gem_builtins_io.c; `write_file`
+and `append_file` do the same. Append `strerror(errno)` where the call
+fails.
 
 ## Standard library
 

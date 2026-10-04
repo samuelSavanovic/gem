@@ -1,0 +1,75 @@
+## search — one file's contents through the regex: the lines grep prints.
+##
+##   let r = search.text(data, rx, opts, "a.txt")
+##   r.out       # "a.txt:3:foo bar\n" (with opts.number)
+##   r.count     # selected lines
+##   r.binary    # true when `data` holds a NUL byte and a line was selected
+##
+## `opts` are args.parse's; `name` is the prefix for each line, or nil for
+## none. A binary file prints nothing but is still counted (-c) and listed
+## (-l); grep prints `binary file matches` for it instead of its lines.
+
+load "./regex"
+
+# The output of one selected line: the line, or with -o each non-empty
+# match in it, under the prefix.
+fn emit(add, data, rx, opts, prefix, start, stop)
+  if not opts.only
+    add(prefix, substr(data, start, stop - start), "\n")
+    return nil
+  end
+  let at = start
+  while at <= stop
+    let m = regex.search(rx, data, at, stop)
+    if m == nil
+      break
+    end
+    if m.stop > m.start
+      add(prefix, substr(data, m.start, m.stop - m.start), "\n")
+      at = m.stop
+    else
+      at = m.stop + 1
+    end
+  end
+end
+
+## Searches `data` line by line. Lines end at `\n`; a last line without
+## one counts too, and is printed with one.
+fn text(data, rx, opts, name)
+  let size = len(data)
+  let binary = find(data, "\0") >= 0
+  let quiet = opts.quiet or opts.list or (binary and not opts.count)
+  let printing = not quiet and not opts.count and not (opts.only and opts.invert)
+  let count = 0
+  let lineno = 0
+  let pos = 0
+  let out = build_string do |add|
+    while pos < size
+      let stop = find(data, "\n", pos)
+      if stop < 0
+        stop = size
+      end
+      lineno += 1
+      if regex.test(rx, data, pos, stop) != opts.invert
+        count += 1
+        if quiet
+          return nil
+        end
+        if printing
+          let prefix = ""
+          if name != nil
+            prefix = name + ":"
+          end
+          if opts.number
+            prefix = "{prefix}{lineno}:"
+          end
+          emit(add, data, rx, opts, prefix, pos, stop)
+        end
+      end
+      pos = stop + 1
+    end
+  end
+  {out: out, count: count, binary: binary and count > 0}
+end
+
+export text

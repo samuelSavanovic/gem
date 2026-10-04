@@ -1,0 +1,333 @@
+## connection — one client connection: reads commands, runs them, writes
+## the replies, and delivers pub/sub messages once the client subscribes.
+
+load "std/string"
+load "./resp"
+load "./keyspace"
+load "./store"
+load "./pubsub"
+
+let READ_SIZE = 65536
+
+# The commands a subscribed client may still send, as in Redis.
+let SUBSCRIBED_OK = {
+  subscribe: true, unsubscribe: true, psubscribe: true, punsubscribe: true,
+  ssubscribe: true, sunsubscribe: true, ping: true, quit: true, reset: true
+}
+
+# ─── Commands the connection answers itself ────────────────────
+
+fn arity_error(name)
+  resp.err("ERR wrong number of arguments for '{name}' command")
+end
+
+fn emit(conn, reply)
+  let s = resp.render(reply)
+  buf_push(conn.out, s)
+end
+
+fn cmd_ping(conn, args)
+  if len(args) > 2
+    return emit(conn, arity_error("ping"))
+  end
+  let msg = nil
+  if len(args) == 2 then msg = args[1] end
+  if conn.nsubs > 0
+    if msg == nil then msg = "" end
+    return emit(conn, ["pong", msg])
+  end
+  if msg == nil
+    return emit(conn, {status: "PONG"})
+  end
+  emit(conn, msg)
+end
+
+fn cmd_echo(conn, args)
+  if len(args) != 2
+    return emit(conn, arity_error("echo"))
+  end
+  emit(conn, args[1])
+end
+
+fn cmd_quit(conn, args)
+  conn.quit = true
+  emit(conn, resp.OK)
+end
+
+fn cmd_select(conn, args)
+  if len(args) != 2
+    return emit(conn, arity_error("select"))
+  end
+  let n = resp.parse_int(args[1])
+  if n == nil
+    return emit(conn, resp.err("ERR value is not an integer or out of range"))
+  end
+  if n != 0
+    return emit(conn, resp.err("ERR DB index is out of range"))
+  end
+  emit(conn, resp.OK)
+end
+
+fn cmd_subscribe(conn, args)
+  if len(args) < 2
+    return emit(conn, arity_error("subscribe"))
+  end
+  for i = 1, len(args)
+    let channel = args[i]
+    if not has_key(conn.channels, channel)
+      pubsub.join(channel)
+      conn.channels[channel] = true
+      conn.nsubs = conn.nsubs + 1
+    end
+    emit(conn, ["subscribe", channel, conn.nsubs])
+  end
+end
+
+fn cmd_unsubscribe(conn, args)
+  let channels = []
+  for i = 1, len(args)
+    push(channels, args[i])
+  end
+  if len(args) == 1
+    channels = keys(conn.channels)
+    if len(channels) == 0
+      return emit(conn, ["unsubscribe", nil, 0])
+    end
+  end
+  for channel in channels
+    if has_key(conn.channels, channel)
+      pubsub.leave(channel)
+      delete(conn.channels, channel)
+      conn.nsubs = conn.nsubs - 1
+    end
+    emit(conn, ["unsubscribe", channel, conn.nsubs])
+  end
+end
+
+fn cmd_publish(conn, args)
+  if len(args) != 3
+    return emit(conn, arity_error("publish"))
+  end
+  emit(conn, pubsub.publish_to(args[1], args[2]))
+end
+
+# Only what redis-benchmark and redis-cli ask at startup: CONFIG GET
+# knows the two persistence settings (both off), COMMAND lists no commands.
+let CONFIG = {save: "", appendonly: "no"}
+
+fn cmd_config(conn, args)
+  if len(args) != 3 or string.lower(args[1]) != "get"
+    return emit(conn, resp.err("ERR mini_redis supports only CONFIG GET <parameter>"))
+  end
+  let name = string.lower(args[2])
+  if has_key(CONFIG, name)
+    return emit(conn, [name, CONFIG[name]])
+  end
+  emit(conn, [])
+end
+
+# Ends the program at once, as SHUTDOWN NOSAVE does (there is nothing to
+# save); a benchmark run uses it to stop the server cleanly.
+fn cmd_shutdown(conn, args)
+  exit(0)
+end
+
+fn cmd_command(conn, args)
+  emit(conn, [])
+end
+
+let LOCAL = {
+  ping: cmd_ping, echo: cmd_echo, quit: cmd_quit, select: cmd_select,
+  subscribe: cmd_subscribe, unsubscribe: cmd_unsubscribe, publish: cmd_publish,
+  config: cmd_config, command: cmd_command, shutdown: cmd_shutdown
+}
+
+for name in keys(LOCAL)
+  LOCAL[string.upper(name)] = LOCAL[name]
+end
+
+# ─── Running a batch ───────────────────────────────────────────
+
+# Consecutive data commands go to the store in one call; a command the
+# connection answers itself sends the ones before it first, so the replies
+# stay in order.
+fn run_commands(conn, cmds)
+  let batch = []
+  for args in cmds
+    if conn.quit
+      break
+    end
+    let name = args[0]
+    let handler = LOCAL[name]
+    if handler == nil and keyspace.find_command(name) == nil
+      handler = LOCAL[string.lower(name)]
+    end
+    if conn.nsubs > 0 and not has_key(SUBSCRIBED_OK, string.lower(name))
+      flush_batch(conn, batch)
+      batch = []
+      if handler == nil and keyspace.find_command(name) == nil
+        emit(conn, keyspace.execute(nil, args, 0))
+      else
+        emit(conn, resp.err("ERR Can't execute '{string.lower(name)}': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context"))
+      end
+    elif handler != nil
+      flush_batch(conn, batch)
+      batch = []
+      handler(conn, args)
+    else
+      push(batch, args)
+    end
+  end
+  flush_batch(conn, batch)
+end
+
+fn flush_batch(conn, batch)
+  if len(batch) > 0
+    buf_push(conn.out, store.run(batch))
+  end
+end
+
+# Writes what the replies so far hold. False when the client is gone or
+# doesn't take them within the write timeout.
+fn flush_out(conn)
+  let n = len(conn.out)
+  if n == 0
+    return true
+  end
+  let written = tcp_write(conn.fd, conn.out, conn.write_timeout_ms)
+  conn.out = buf_new()
+  written == n
+end
+
+# Handles a chunk read from the socket. False when the connection must
+# close: QUIT, a protocol error, or a client that stopped reading.
+fn handle_input(conn, chunk)
+  let data = chunk
+  if len(conn.pending) > 0
+    buf_push(conn.pending, chunk)
+    if conn.need > 0 and len(conn.pending) < conn.need
+      return true
+    end
+    data = conn.pending
+  end
+  let r = resp.parse(data)
+  run_commands(conn, r.cmds)
+  if r.error != nil
+    emit(conn, resp.err(r.error))
+    flush_out(conn)
+    return false
+  end
+  let rest = buf_new()
+  if r.used < len(data)
+    buf_push(rest, substr(data, r.used))
+  end
+  conn.pending = rest
+  conn.need = r.need
+  flush_out(conn) and not conn.quit
+end
+
+# ─── Pub/sub delivery ──────────────────────────────────────────
+
+fn add_message(conn, channel, payload)
+  if has_key(conn.channels, channel)
+    emit(conn, ["message", channel, payload])
+  end
+end
+
+# Writes the message and any others already queued in one write.
+fn deliver(conn, channel, payload)
+  add_message(conn, channel, payload)
+  let more = true
+  while more
+    receive
+    when {tag: "message", channel: c, payload: p}
+      add_message(conn, c, p)
+    after 0
+      more = false
+    end
+  end
+  flush_out(conn)
+end
+
+# Once a client subscribes, it needs both its socket and its mailbox
+# watched: a linked reader process takes over the socket reads and mails
+# the chunks here.
+fn reader_loop(fd, conn_pid)
+  while true
+    let chunk = tcp_read(fd, READ_SIZE)
+    if chunk == ""
+      send(conn_pid, {tag: "eof"})
+      return nil
+    end
+    send(conn_pid, {tag: "chunk", data: chunk})
+  end
+end
+
+# The next chunk from the client, or nil at the end of the connection.
+fn next_chunk(conn)
+  if conn.reader == nil
+    if conn.nsubs == 0
+      let chunk = tcp_read(conn.fd, READ_SIZE)
+      if chunk == "" then return nil end
+      return chunk
+    end
+    let fd = conn.fd
+    let me = self()
+    conn.reader = spawn_link do
+      reader_loop(fd, me)
+    end
+  end
+  while true
+    receive
+    when {tag: "chunk", data: data}
+      return data
+    when {tag: "eof"}
+      return nil
+    when {tag: "message", channel: channel, payload: payload}
+      if not deliver(conn, channel, payload) then return nil end
+    when {tag: "EXIT", reason: reason}
+      # a normal exit comes after its eof
+      if reason != "normal" then return nil end
+    when other
+      nil
+    end
+  end
+end
+
+fn serve(conn)
+  while true
+    let chunk = next_chunk(conn)
+    if chunk == nil or not handle_input(conn, chunk)
+      return nil
+    end
+  end
+end
+
+# Traps exits so that a crashing reader can't kill this process before it
+# closes the socket.
+fn run(fd, write_timeout_ms)
+  process_flag("trap_exit", true)
+  let conn = {
+    fd: fd, write_timeout_ms: write_timeout_ms, pending: buf_new(), need: 0,
+    out: buf_new(), quit: false, channels: {}, nsubs: 0, reader: nil
+  }
+  let r = pcall serve(conn)
+  if conn.reader != nil
+    kill(conn.reader, "shutdown")
+  end
+  tcp_close(fd)
+  if not r.ok
+    error(r.error)
+  end
+end
+
+## Starts the connection for accepted socket `fd`, which it closes when
+## done. A client that doesn't take a reply within `write_timeout_ms` is
+## disconnected. If this raises, `fd` is still the caller's.
+fn start(fd, write_timeout_ms)
+  spawn do
+    run(fd, write_timeout_ms)
+  end
+end
+
+export start

@@ -1,0 +1,101 @@
+## options — jobqueue's command line.
+##
+##   options.parse(["--jobs", "500", "--crash", "0.05"])
+##   # {ok: true, value: {jobs: 500, crash: 0.05, workers: 16, ...}}
+##
+## Returns `{ok: false, error: msg}` for a bad command line.
+
+let USAGE = """
+usage: jobqueue [options]
+  --jobs N             jobs to run (10000)
+  --workers W          most workers at once (16)
+  --seed S             seed of the workload and the fault schedule (1)
+  --crash P            chance an attempt raises (0)
+  --hang P             chance an attempt never finishes (0)
+  --slow P             chance an attempt first sleeps --slow-ms (0)
+  --kill P             chance an attempt kills its worker (0)
+  --slow-ms MS         how long a slow attempt sleeps (20)
+  --retries R          retries per job before it is dead-lettered (3)
+  --deadline MS        per-attempt deadline, 0 for none (100)
+  --backoff MS         first retry delay, doubled per retry (10)
+  --backoff-max MS     longest retry delay (1000)
+  --idle MS            a worker idle that long exits (200)
+  --max-restarts N     worker restarts allowed per --restart-window (1000)
+  --restart-window MS  (1000)
+  --storm N            kill N workers per burst (0: no storm)
+  --storm-every MS     time between bursts (100)
+  --storm-bursts K     bursts (10)
+  --timeout MS         give up on the run after MS (120000)
+"""
+
+# Each int option: flag → {key, least value}.
+let INTS = {
+  "--jobs": ["jobs", 0], "--workers": ["pool", 1], "--seed": ["seed", 0],
+  "--slow-ms": ["slow_ms", 0], "--retries": ["retries", 0], "--deadline": ["deadline_ms", 0],
+  "--backoff": ["backoff_ms", 1], "--backoff-max": ["backoff_max_ms", 1], "--idle": ["idle_ms", 1],
+  "--max-restarts": ["max_restarts", 0], "--restart-window": ["restart_window_ms", 1],
+  "--storm": ["storm", 0], "--storm-every": ["storm_every_ms", 1], "--storm-bursts": ["storm_bursts", 0],
+  "--timeout": ["timeout_ms", 1]
+}
+let FLOATS = {"--crash": "crash", "--hang": "hang", "--slow": "slow", "--kill": "kill"}
+
+## Returns the options when none is given.
+fn defaults()
+  {
+    jobs: 10000, pool: 16, seed: 1, crash: 0.0, hang: 0.0, slow: 0.0, kill: 0.0,
+    slow_ms: 20, retries: 3, deadline_ms: 100, backoff_ms: 10, backoff_max_ms: 1000,
+    idle_ms: 200, max_restarts: 1000, restart_window_ms: 1000,
+    storm: 0, storm_every_ms: 100, storm_bursts: 10, timeout_ms: 120000
+  }
+end
+
+fn fail(msg)
+  {ok: false, error: msg}
+end
+
+fn parse_value(opts, flag, text)
+  if has_key(INTS, flag)
+    let spec = INTS[flag]
+    let r = pcall to_int(text)
+    if not r.ok or r.value < spec[1]
+      return "{flag} expects an int >= {spec[1]}, got \"{text}\""
+    end
+    opts[spec[0]] = r.value
+    return nil
+  end
+  let r = pcall to_float(text)
+  if not r.ok or r.value < 0.0 or r.value > 1.0
+    return "{flag} expects a probability from 0 to 1, got \"{text}\""
+  end
+  opts[FLOATS[flag]] = r.value
+  nil
+end
+
+## Parses `args` (the arguments after the program name).
+fn parse(args)
+  let opts = defaults()
+  let i = 0
+  while i < len(args)
+    let flag = args[i]
+    if flag == "--help" or flag == "-h"
+      return fail(USAGE)
+    end
+    if not has_key(INTS, flag) and not has_key(FLOATS, flag)
+      return fail("unknown option {flag}\n{USAGE}")
+    end
+    if i + 1 >= len(args)
+      return fail("{flag} needs a value")
+    end
+    let problem = parse_value(opts, flag, args[i + 1])
+    if problem != nil
+      return fail(problem)
+    end
+    i += 2
+  end
+  if opts.crash + opts.hang + opts.slow + opts.kill > 1.0
+    return fail("--crash, --hang, --slow and --kill add up to more than 1")
+  end
+  {ok: true, value: opts}
+end
+
+export parse, defaults
