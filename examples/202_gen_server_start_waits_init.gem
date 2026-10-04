@@ -1,0 +1,231 @@
+# gen_server.start returns once init has returned, and raises when init
+# fails; supervisors retry a restart whose start raises, counting each try
+# against the restart limit.
+load "std/gen_server"
+load "std/supervisor"
+load "std/dynamic_supervisor"
+
+# Numbers the inits of each key (1, 2, ...) and logs them in order. A
+# separate process, so an init can ask it without calling its starter.
+fn tally_loop(counts, log)
+  receive
+  when {tag: "next", key: key, from: from}
+    let n = 1
+    if has_key(counts, key)
+      n = counts[key] + 1
+    end
+    counts[key] = n
+    push(log, "{key}{n}")
+    send(from, {tag: "tally", n: n})
+    tally_loop(counts, log)
+  when {tag: "log", from: from}
+    send(from, {tag: "tally_log", log: log})
+    tally_loop(counts, [])
+  end
+end
+
+let TALLY = spawn do
+  tally_loop({}, [])
+end
+
+fn attempt(key)
+  send(TALLY, {tag: "next", key: key, from: self()})
+  let n = nil
+  receive
+  when {tag: "tally", n: got}
+    n = got
+  end
+  n
+end
+
+# The inits since the last call, in order.
+fn take_log()
+  send(TALLY, {tag: "log", from: self()})
+  let log = nil
+  receive
+  when {tag: "tally_log", log: got}
+    log = got
+  end
+  log
+end
+
+fn contains(list, x)
+  for v in list
+    if v == x
+      return true
+    end
+  end
+  false
+end
+
+# A server whose init raises on the attempts in `fail_on` (1 is the first).
+fn flaky(key, fail_on)
+  {
+    init: fn()
+      let n = attempt(key)
+      if contains(fail_on, n)
+        error("{key} init {n} failed")
+      end
+      {state: n}
+    end,
+    handle_call: fn(msg, from, n) {reply: n, state: n} end,
+    handle_cast: fn(msg, n) {state: n} end,
+    handle_info: fn(msg, n) {state: n} end
+  }
+end
+
+fn start_flaky(key, fail_on)
+  let h = gen_server.start(flaky(key, fail_on))
+  register(key, h.pid)
+  h
+end
+
+fn wait_down(pid)
+  monitor(pid)
+  let reason = nil
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: r}
+    reason = r
+  end
+  reason
+end
+
+# The tags of the tagged messages left in the caller's mailbox.
+fn leftovers()
+  let tags = []
+  let more = true
+  while more
+    receive
+    when {tag: tag}
+      push(tags, tag)
+    after 0
+      more = false
+    end
+  end
+  tags
+end
+
+fn main()
+  # 1. What init does is done when start returns.
+  let h1 = gen_server.start({
+    init: fn()
+      register("self_named", self())
+      {state: 1}
+    end,
+    handle_call: fn(msg, from, n) {reply: n, state: n} end,
+    handle_cast: fn(msg, n) {state: n} end,
+    handle_info: fn(msg, n) {state: n} end
+  })
+  print("1 registered by init:", whereis("self_named") == h1.pid)
+  kill(h1.pid, "shutdown")
+
+  # 2. An init that raises: start raises once the server is gone.
+  let r2 = pcall gen_server.start(flaky("two", [1]))
+  print("2", r2.error)
+
+  # 3. A server killed during init.
+  let r3 = pcall gen_server.start({
+    init: fn()
+      kill(self(), "gone")
+      {state: 0}
+    end,
+    handle_call: fn(msg, from, n) {reply: n, state: n} end,
+    handle_cast: fn(msg, n) {state: n} end,
+    handle_info: fn(msg, n) {state: n} end
+  })
+  print("3", r3.error)
+
+  # 4. Work deferred from init runs after start returns, before later calls.
+  let h4 = gen_server.start({
+    init: fn()
+      send(self(), "setup")
+      {state: "starting"}
+    end,
+    handle_call: fn(msg, from, s) {reply: s, state: s} end,
+    handle_cast: fn(msg, s) {state: s} end,
+    handle_info: fn(msg, s)
+      if msg == "setup"
+        return {state: "ready"}
+      end
+      {state: s}
+    end
+  })
+  print("4 after setup:", gen_server.call(h4, "get"))
+  kill(h4.pid, "shutdown")
+  take_log()
+
+  # 5. A restart whose init fails once is retried, and the child runs again.
+  let s5 = supervisor.start({children: [{id: "five", start: fn() start_flaky("five", [2]) end}]})
+  let first = whereis("five")
+  kill(first, "boom")
+  # The retry is queued behind this first request, which still sees the
+  # child pending (pid -1); the second is answered after the retry.
+  print("5 pending:", supervisor.which_children(s5)[0].pid)
+  let cs5 = supervisor.which_children(s5)
+  print("5 running again:", cs5[0].pid != -1 and cs5[0].pid != first, "init", gen_server.call("five", "n"))
+  print("5 inits:", take_log())
+  supervisor.stop(s5)
+
+  # 6. A restart that keeps failing: the tries count towards the limit.
+  let s6 = supervisor.start({max_restarts: 3, children: [{id: "six", start: fn() start_flaky("six", [2, 3, 4, 5, 6]) end}]})
+  kill(whereis("six"), "boom")
+  print("6 down:", wait_down(s6.pid))
+  print("6 inits:", take_log())
+
+  # 7. one_for_all: the children before the failing one stay up, the rest
+  # start on the retry, in spec order.
+  let s7 = supervisor.start({strategy: "one_for_all", children: [
+    {id: "a", start: fn() start_flaky("a", []) end},
+    {id: "b", start: fn() start_flaky("b", [2]) end},
+    {id: "c", start: fn() start_flaky("c", []) end}
+  ]})
+  take_log()
+  kill(whereis("a"), "boom")
+  supervisor.which_children(s7)
+  let ids = []
+  for c in supervisor.which_children(s7)
+    push(ids, "{c.id}:{c.pid != -1}")
+  end
+  print("7 children:", ids, "inits:", take_log())
+  supervisor.stop(s7)
+
+  # 8. dynamic_supervisor: start_child raises for a failing init; a failed
+  # restart is retried.
+  let ds = dynamic_supervisor.start({child: {start: fn(args) start_flaky(args.key, args.fail_on) end}})
+  let r8 = pcall dynamic_supervisor.start_child(ds, {key: "eight_bad", fail_on: [1]})
+  print("8", r8.error)
+  let p8 = dynamic_supervisor.start_child(ds, {key: "eight", fail_on: [2]})
+  kill(p8, "boom")
+  print("8 pending:", len(dynamic_supervisor.which_children(ds)))
+  let kids = dynamic_supervisor.which_children(ds)
+  print("8 children:", len(kids), "restarted:", kids[0].pid != p8, "init", gen_server.call("eight", "n"))
+  print("8 inits:", take_log())
+  dynamic_supervisor.stop(ds)
+
+  # 9. An init that traps exits and then raises still ends the server.
+  let r9 = pcall gen_server.start({
+    init: fn()
+      process_flag("trap_exit", true)
+      error("trapped then failed")
+    end,
+    handle_call: fn(msg, from, n) {reply: n, state: n} end,
+    handle_cast: fn(msg, n) {state: n} end,
+    handle_info: fn(msg, n) {state: n} end
+  })
+  print("9", r9.error)
+
+  # 10. A dynamic supervisor traps exits once start returns: a kill right
+  # after it stops its children before it exits.
+  let ds10 = dynamic_supervisor.start({name: "ds10", child: {start: fn(args) start_flaky(args, []) end}})
+  dynamic_supervisor.start_child(ds10, "ten")
+  kill(ds10.pid, "boom")
+  print("10 still there:", whereis("ds10") == ds10.pid)
+  print("10 down:", wait_down(ds10.pid), "child gone:", whereis("ten"))
+  take_log()
+
+  # 11. reply with something that isn't a `from`.
+  print("11", (pcall gen_server.reply(nil, 1)).error)
+
+  # 12. Nothing left in the caller's mailbox.
+  print("12 leftovers:", leftovers())
+end

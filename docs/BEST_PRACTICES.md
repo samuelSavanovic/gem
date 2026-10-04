@@ -1170,31 +1170,55 @@ slower: 2,000 round trips took 11 ms with an empty mailbox and 1.1 s with
 `register("db", pid)` lets other processes `send("db", msg)` and
 `whereis("db")`. Register a process from its parent, after `spawn`: a
 child that registers itself may not have run yet when the parent sends.
+A gen_server's `init` can register it: `gen_server.start` returns after
+`init`.
 `send` to a dead pid silently drops the message, but `send("db", msg)`
 raises `send: no process registered with that name` once the process has
 died (say, while a supervisor restarts it). Where that can happen, check
 `whereis` for `nil`, or `pcall` the send.
 
-### A supervisor's children start after `supervisor.start` returns **(trap)**
+### A child's `start` and a server's `init` must not wait for their starter **(trap)**
 
-`supervisor.start` returns before the supervisor has run any child's
-`start`, so a name a child registers there isn't taken yet: calling it at
-once raises `gen_server.call: no process registered as "counter"`.
-`supervisor.which_children(sup)` answers only after the children have
-started, so call it first:
+`supervisor.start` returns once the supervisor has called every child's
+`start`, and `gen_server.start` once the server's `init` has returned, so
+a name registered there works right after, and a failure there makes the
+call raise (`supervisor.start: child "db" failed to start: ...`,
+`gen_server.start: init failed: ...`). While it waits, the caller
+handles no messages: a `start` or `init` that sends it a request and
+waits for the answer gets none. When no other process can run, the
+program stops with `deadlock: main process is waiting in receive ...`;
+otherwise both wait for good, or until the request times out. Under a
+supervisor, the supervisor is the one starting a gen_server, so its
+`init` must not ask the supervisor anything (`which_children`) either.
+Pass what a child needs in its spec (`start: fn() start_worker(config)
+end`), or do the work after `start` returns: send the server a message
+from `init` and handle it in `handle_info`.
 
 ```gem
-let sup = supervisor.start({children: [{id: "counter", start: start_counter}]})
-supervisor.which_children(sup)          # the children have started
-gen_server.call("counter", "get")
+init: fn()
+  send(self(), "connect")          # handled after start returns
+  {state: {db: nil}}
+end,
+handle_info: fn(msg, s)
+  if msg == "connect"
+    s.db = connect()
+  end
+  {state: s}
+end,
 ```
+
+A slow `init` holds up its starter the same way: a supervisor starts its
+other children after it, and a dynamic supervisor answers no other
+request meanwhile; a `dynamic_supervisor.start_child` whose `init` takes
+longer than its `timeout_ms` (5000 by default) raises `timeout`,
+although the child does start.
 
 ### Only the pending call learns why a server died **(trap)**
 
 A `gen_server.call` waiting when the server dies raises
-`gen_server.call: server exited: <reason>`. A later call raises
-`server exited: noproc` as soon as the runtime has reclaimed the dead
-process, which can be the very next call. An error that
+`gen_server.call: server exited: <reason>`. A later call by pid raises
+`gen_server.call: server exited: noproc`, and one by registered name
+`gen_server.call: no process registered as "<name>"`. An error that
 kills it is printed on stderr when it happens; to act on the reason in
 code, monitor the server, whose `DOWN` carries it.
 
@@ -1564,8 +1588,8 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
 | Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
-| Calling a supervisor's child by name right after `supervisor.start` | `no process registered` | `supervisor.which_children(sup)` first |
-| `gen_server.call` to a server that has already died | `server exited: noproc`, not why it died | monitor it: the `DOWN` has the reason |
+| A child's `start` or a gen_server's `init` waiting for an answer from its starter | deadlock error, or a wait for good or until a timeout | pass it in the spec, or `send(self(), ...)` in `init` |
+| `gen_server.call` to a server that has already died | `server exited: noproc` (by name: `no process registered`), not why it died | monitor it: the `DOWN` has the reason |
 | `spawn` per connection or per item, unguarded **(trap)** | raises at the process or memory limit (~14,000 on stock Linux); the acceptor dies | catch it, or cap in-flight work |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
 | Handle opened, process crashes | fd leak | close on every path |

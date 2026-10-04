@@ -36,9 +36,9 @@
 # else DEFAULT_SHUTDOWN_MS; stop_child applies it. When the supervisor
 # exits (an exit signal, `stop`, restart intensity reached, or any error
 # in the supervisor, but not the untrappable "kill", which ends it at
-# once), it first stops each child that way, last started first; then it
-# exits. terminate_child stops the child inside the supervisor, which
-# answers nothing else meanwhile. Requests are answered with `_dsup_reply`
+# once), it first stops each child that way, last started first (a
+# restarted child keeps its place); then it exits. terminate_child stops
+# the child inside the supervisor, which answers nothing else meanwhile. Requests are answered with `_dsup_reply`
 # messages carrying a pcall-shaped result.
 
 let RESTARTS = {permanent: true, transient: true, temporary: true}
@@ -143,8 +143,11 @@ fn check_intensity(state)
   end
 end
 
-# The index of the child `pid` in `children`, or -1.
+# The index of the running child `pid` in `children`, or -1.
 fn find_child_index(children, pid)
+  if pid == -1
+    return -1
+  end
   for i, c in children
     if c.pid == pid
       return i
@@ -241,13 +244,65 @@ fn handle_down(state, pid, reason)
     return nil
   end
   check_intensity(state)
-  state.children[idx] = start_from_template(state, state.children[idx].args)
+  state.children[idx] = pending(state.children[idx].args)
+  start_pending(state)
+end
+
+# A child that isn't running and is owed a restart (start_pending).
+fn pending(args)
+  {pid: -1, args: args, shutdown: nil, pending: true}
+end
+
+fn is_pending(child)
+  child.pending == true
+end
+
+fn has_pending(children)
+  for c in children
+    if is_pending(c)
+      return true
+    end
+  end
+  false
+end
+
+# Prints the error of a restart's `start` and where it was raised.
+fn report_failed_restart(res)
+  eprint("dynamic_supervisor: restart of a child failed: {res.error}")
+  for f in res.stack
+    eprint("  at {f.name} ({f.file}:{f.line})")
+  end
+end
+
+# Starts the pending children in order, up to the first whose `start`
+# raises: that one and the pending ones after it stay pending, and a
+# `_dsup_retry` message to the supervisor itself (one queued at a time)
+# makes dsup_loop try again, counted as a restart.
+fn start_pending(state)
+  for i = 0, len(state.children)
+    let c = state.children[i]
+    if is_pending(c)
+      let started = pcall start_from_template(state, c.args)
+      if not started.ok
+        report_failed_restart(started)
+        if not state.retry_queued
+          state.retry_queued = true
+          send(self(), {tag: "_dsup_retry"})
+        end
+        return nil
+      end
+      state.children[i] = started.value
+    end
+  end
+  nil
 end
 
 fn handle_which_children(state, to, ref)
   let result = []
   for c in state.children
-    push(result, {pid: c.pid, args: c.args})
+    if c.pid != -1
+      push(result, {pid: c.pid, args: c.args})
+    end
   end
   reply(to, ref, {ok: true, value: result})
 end
@@ -267,6 +322,13 @@ fn dsup_loop(state)
   when {tag: "_dsup_which_children", reply_to: to, ref: ref}
     handle_which_children(state, to, ref)
     dsup_loop(state)
+  when {tag: "_dsup_retry"}
+    state.retry_queued = false
+    if has_pending(state.children)
+      check_intensity(state)
+      start_pending(state)
+    end
+    dsup_loop(state)
   when {tag: "EXIT", reason: reason}
     if reason != "normal"
       # An exit signal (`kill(sup, "shutdown")`, from a child or anyone
@@ -279,13 +341,15 @@ fn dsup_loop(state)
   end
 end
 
-# Stops every child, last started first (stop_child), whatever the
-# supervisor's own exit reason: a child that traps exits only has to know
-# "shutdown".
+# Stops every running child, last started first (a restarted child keeps
+# its place; stop_child), whatever the supervisor's own exit reason: a
+# child that traps exits only has to know "shutdown".
 fn shutdown_children(children)
   let i = len(children) - 1
   while i >= 0
-    stop_child(children[i].pid, children[i].shutdown)
+    if children[i].pid != -1
+      stop_child(children[i].pid, children[i].shutdown)
+    end
     i -= 1
   end
 end
@@ -304,8 +368,9 @@ end
 # The supervisor process: runs the loop, and on the way out (an exit
 # signal or an error) shuts the children down before it exits with the
 # same reason.
-fn dsup_main(state)
+fn dsup_main(state, caller, ref)
   process_flag("trap_exit", true)
+  send(caller, {tag: "_dsup_started", ref: ref})
   let res = pcall dsup_loop(state)
   let reason = res.value
   if not res.ok
@@ -327,8 +392,8 @@ end
 ## spawns a child and returns its pid or `{pid}` handle (not a registered
 ## name, as `supervisor` allows; the process such a `start` spawned is left
 ## running, unsupervised); `restart` is `"permanent"` (the default: always
-## restart), `"transient"` (restart unless it exits with `"normal"` or
-## `"shutdown"`) or `"temporary"` (never); `shutdown` is how long, in
+## restart), `"transient"` (restart unless it exits with `"normal"`,
+## `"shutdown"` or `"noproc"`) or `"temporary"` (never); `shutdown` is how long, in
 ## milliseconds, a child gets to exit after `"shutdown"` before it is
 ## killed with the untrappable `"kill"` (an int `<= 0` doesn't wait; `nil`
 ## waits with no limit). Left out, each child's budget comes from an int
@@ -339,13 +404,20 @@ end
 ##
 ## Raises, and starts nothing, for bad options or a name that is taken.
 ##
-## Returns at once. The supervisor is not linked to the caller: the caller
+## A restart whose `start` raises (a gen_server whose `init` fails, say)
+## is printed on stderr and tried again, after the requests already
+## queued; each try counts as a restart, so the restart limit ends a
+## `start` that keeps failing. Until a try succeeds, `which_children`
+## leaves the child out.
+##
+## Returns once the supervisor process traps exits, so a `kill` of it is
+## handled from then on. The supervisor is not linked to the caller: the caller
 ## dying leaves it running, and it dying doesn't kill the caller. Its exit
-## reason is `"dynamic_supervisor: max restart intensity reached"` or the
-## error a restart's `start` raised, unchanged; both are also printed on
-## stderr. Before it exits it stops its children as `terminate_child`
-## does, last started first. `kill(ds.pid, reason)` is handled when it
-## next reads its mailbox; use `stop` to know it is gone.
+## reason is the exit signal's reason or `"dynamic_supervisor: max restart
+## intensity reached"`, which is also printed on stderr. Before it exits
+## it stops its children as `terminate_child` does, last started first (a
+## restarted child keeps its place). `kill(ds.pid, reason)` is handled
+## when it next reads its mailbox; use `stop` to know it is gone.
 ## `kill(ds.pid, "kill")` ends it at once, without stopping its children.
 fn start(opts)
   if type(opts) != "table"
@@ -383,19 +455,30 @@ fn start(opts)
     end
     template.shutdown = child.shutdown
   end
+  let caller = self()
+  let ref = make_ref()
   let pid = spawn do
     dsup_main({
       template: template,
       children: [],
       max_restarts: max_restarts,
       max_seconds: max_seconds,
-      restart_times: []
-    })
+      restart_times: [],
+      retry_queued: false
+    }, caller, ref)
   end
-  # The new process hasn't run yet: register it here, so the name works as
-  # soon as start returns.
+  # The new process hasn't run yet: register it here, so the name is taken
+  # before anything else can run.
   if name != nil
     register(name, pid)
+  end
+  # Wait until it traps exits, so a `kill` of it from here on is handled.
+  monitor(pid)
+  receive
+  when {tag: "_dsup_started", ref: ^ref}
+    drop_monitor(pid, true)
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    error("dynamic_supervisor.start: supervisor exited: {reason}")
   end
   # `shutdown: nil`: a supervisor above this one waits for its whole
   # shutdown instead of killing it midway (see the top of the file).
@@ -495,9 +578,13 @@ end
 ## `dynamic_supervisor.start_child: <error>` when `start` raises or
 ## returns something other than a pid or handle; the supervisor keeps
 ## running, and a process the rejected `start` spawned is left running
-## unsupervised. That holds for this first start only: if `start` raises
-## when the supervisor restarts the child, the supervisor exits with that
-## error and kills its other children.
+## unsupervised. A restart whose `start` raises is retried (see `start`).
+##
+## The supervisor runs `start` in its own process and answers no other
+## request meanwhile, so a slow `start` (a gen_server's `init`) holds up
+## its other callers, and one slower than `timeout_ms` makes `start_child`
+## raise `dynamic_supervisor.start_child: timeout` although the child is
+## started.
 fn start_child(target, args, timeout_ms = 5000)
   request(target, {tag: "_dsup_start_child", args: args}, "dynamic_supervisor.start_child", timeout_ms)
 end
@@ -529,8 +616,8 @@ end
 ## Stops the supervisor, waits until it has exited, and returns nil (also
 ## for one already gone, given by pid or handle; by name see the header).
 ##
-## The supervisor stops its children one at a time, last started first,
-## as `terminate_child` does, so they are all down when `stop` returns.
+## The supervisor stops its children one at a time, last started first
+## (a restarted child keeps its place), as `terminate_child` does, so they are all down when `stop` returns.
 ## Only direct children are stopped: processes a child spawned itself
 ## (such as its tasks, which aren't linked to it) keep running. By default
 ## `stop` waits with no limit, since the budgets bound the shutdown; with
