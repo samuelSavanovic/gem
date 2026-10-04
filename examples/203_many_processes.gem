@@ -1,7 +1,7 @@
-# More live processes than the old fixed table of 1024 held: 5000 workers at
-# once, timeouts, a ring, monitors and kills across all of them. The pid
-# lists are locals of main: a module-level table that grows between spawns
-# is copied for every child (BEST_PRACTICES.md, "State and memory").
+# 5000 live workers at once, timeouts, a ring, monitors and kills across
+# all of them. The pid lists are locals of main: a module-level table that
+# grows between spawns is copied for every child (BEST_PRACTICES.md,
+# "State and memory").
 
 let N = 5000
 

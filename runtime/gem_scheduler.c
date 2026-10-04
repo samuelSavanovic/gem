@@ -8,8 +8,8 @@
 #endif
 
 #define MINICORO_IMPL
-/* minicoro's debug log goes to stdout (puts), into the program's output;
-   every failure it logs is reported by the caller anyway. */
+/* minicoro's debug log goes to stdout (puts), into the program's output,
+   so it is off. */
 #define MCO_LOG(s) ((void)0)
 #include "minicoro.h"
 
@@ -219,9 +219,9 @@ static size_t gem_round_up(size_t n, size_t to) {
    top GEM_STACK_KEEP_BYTES is handed back to the OS on release, so a cached
    stack holds at most a few pages however deep its last owner went. The
    cache can never hold more stacks than were alive at once. It is capped
-   (not sized to the process table) so that a burst of many thousands of
-   processes doesn't leave their stacks, a few pages and two mappings each,
-   cached for good; past the cap, churn maps and unmaps a stack per spawn. */
+   so that a burst of many thousands of processes doesn't leave their
+   stacks, a few pages and three mappings each, cached for good; past the
+   cap, churn maps and unmaps a stack per spawn. */
 #ifndef GEM_STACK_CACHE_MAX
 #define GEM_STACK_CACHE_MAX 1024
 #endif
@@ -470,9 +470,10 @@ static void gem_install_overflow_handler(void) {
  * A new slot comes from the high-water mark until it reaches
  * GEM_PROC_REUSE_MIN, then from the freed slots (FIFO), then from the
  * high-water mark again. So a program that never has more than
- * GEM_PROC_REUSE_MIN - 1 processes alive gets the same slots as
- * with the old fixed table of that size, and the table only grows as far
- * as the most processes alive at once (plus the reuse floor).
+ * GEM_PROC_REUSE_MIN processes alive gets the slots a fixed table of
+ * GEM_PROC_REUSE_MIN slots with a FIFO free list would give it, and the
+ * table only grows as far as the larger of GEM_PROC_REUSE_MIN and the most
+ * processes alive at once.
  */
 
 #ifndef GEM_PROC_REUSE_MIN
@@ -561,8 +562,8 @@ static int gem_proc_table_commit(int n) {
 /* Memory mappings spawn leaves to everything else: the system's per-program
    limit (Linux vm.max_map_count) minus headroom for arena growth, malloc
    and libraries, or 0 when there is no such limit. Each process needs four
-   (gem_runtime_maps counts them); when the system refuses a mapping, the
-   process that asked dies (gem_arena) or, at spawn, the spawn fails, so
+   (gem_runtime_maps counts them). When the system refuses an arena block,
+   the program exits (gem_arena_new_block); at spawn, the spawn fails. So
    spawn stops early enough that existing processes can still grow. */
 static long gem_map_limit = 0;
 static long gem_map_system = 0;
@@ -602,10 +603,10 @@ static int gem_proc_alloc_slot(void) {
 
 /* ─── Run state ───
  *
- * The scheduler never scans the process table. It keeps:
+ * A scheduler pass never scans the process table. It keeps:
  *   - the ready set: a three-level bitmap over slots, so a pass can run the
- *     READY processes in slot order (as the old full-table scan did) at a
- *     cost proportional to the READY ones;
+ *     READY processes in slot order at a cost proportional to the READY
+ *     ones;
  *   - the deadline heap: WAITING processes (receive ... after, sleep) and
  *     fd waiters (a tcp timeout) with a deadline, keyed by deadline_ms;
  *   - the fd waiter list (polled) and the pool waiter list (checked when
@@ -796,11 +797,11 @@ static void gem_proc_set_state(int slot, GemProcState st) {
 }
 
 /* Wake the processes whose deadline has passed (timed_out set), after a
-   pass. A wait that began in this pass is left for the next one: the old
-   full-table scan noticed an expired wait only in a pass after the one
-   that started it, and the woken process ran in the pass after that, so
-   keeping both steps keeps every interleaving (sleep(0) included) as it
-   was. Returns how many woke. */
+   pass. A wait that began in this pass is left for the next one, so an
+   expired wait wakes after the pass following the one that started it
+   and its process runs in the pass after that; the interleavings of
+   sleep(0) and short `after` timeouts depend on that timing. Returns how
+   many woke. */
 static GemDeadline *gem_dl_held = NULL;
 static int gem_dl_held_cap = 0;
 
@@ -1447,9 +1448,21 @@ static void gem_run_proc(int i) {
 }
 
 /* Up to this many fd waiters, the scheduler polls them after every pass
-   that ran something; above it, at most once per millisecond. */
+   that ran something. Above it, the next poll waits GEM_POLL_COST_FACTOR
+   times as long as the last one took, and at most a millisecond: polling
+   then takes at most about 1/(factor + 1) of the scheduler's time while a
+   poll costs less than 1 ms / factor, and an fd event waits at most about
+   that long while processes stay READY. */
 #define GEM_POLL_EVERY_PASS_MAX 64
-static int64_t gem_last_poll_ms = -1;
+#define GEM_POLL_COST_FACTOR 2
+static int64_t gem_next_poll_us = 0;
+
+/* Monotonic time in microseconds. */
+static int64_t gem_now_us(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+}
 
 void gem_run_scheduler(void) {
     for (;;) {
@@ -1474,14 +1487,19 @@ void gem_run_scheduler(void) {
                every process waiting on another fd (e.g. a writer waiting for
                POLLOUT to a slow client): the blocking poll below would never
                be reached. poll costs O(fd waiters), so with many of them
-               (thousands of idle connections) it runs at most once per
-               millisecond instead of once per pass. */
+               (thousands of idle connections) it is spaced out by its cost
+               (GEM_POLL_COST_FACTOR). */
             if (gem_fd_waiters.n > 0) {
-                int64_t now = gem_fd_waiters.n > GEM_POLL_EVERY_PASS_MAX ? gem_now_ms() : 0;
-                if (gem_fd_waiters.n <= GEM_POLL_EVERY_PASS_MAX || now != gem_last_poll_ms) {
-                    gem_last_poll_ms = now;
+                int many = gem_fd_waiters.n > GEM_POLL_EVERY_PASS_MAX;
+                int64_t t0 = many ? gem_now_us() : 0;
+                if (!many || t0 >= gem_next_poll_us) {
                     int nfds = gem_poll_fill();
                     if (poll(gem_poll_fds, (nfds_t)nfds, 0) > 0) gem_poll_wake(nfds);
+                    if (many) {
+                        int64_t t1 = gem_now_us();
+                        int64_t gap = (t1 - t0) * GEM_POLL_COST_FACTOR;
+                        gem_next_poll_us = t1 + (gap < 1000 ? gap : 1000);
+                    }
                 }
             }
             continue;

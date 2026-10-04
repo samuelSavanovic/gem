@@ -828,8 +828,9 @@ typedef struct {
     int wait_fd;        /* fd this process is waiting on (when IO_WAIT) */
     int wait_write;     /* 0 = waiting for read, 1 = waiting for write */
     int wait_fd_closed; /* set by gem_io_fd_closed while waiting on wait_fd */
-    /* Scheduler bookkeeping (gem_scheduler.c, "Run state"); zero when the
-       process is in none of the structures. */
+    /* Scheduler bookkeeping (gem_scheduler.c, "Run state"). wait_kind and
+       dl_idx are zero when the process is in none of the structures;
+       wait_idx means something only while wait_kind is set. */
     int wait_kind;      /* IO_WAIT only: GEM_WAIT_FD or GEM_WAIT_POOL */
     int wait_idx;       /* index in the fd or pool waiter list */
     int dl_idx;         /* 1 + index in the deadline heap, 0 = not in it */

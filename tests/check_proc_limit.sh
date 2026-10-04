@@ -3,8 +3,8 @@
 # "spawn: process table full" (catchable), std/http answers a connection it
 # can't spawn a process for with 503 and keeps accepting, and a bad
 # GEM_MAX_PROCS stops the program before it runs. Also: spawn's headroom
-# under Linux's vm.max_map_count, and thread-pool work from more processes
-# than the old table held.
+# under Linux's vm.max_map_count, and thread-pool work from more than 1024
+# processes at once.
 #
 # Run from the repo root: tests/check_proc_limit.sh
 
@@ -152,12 +152,19 @@ spawn after an exit: true
 main still allocates 200000" "$("$dir/maps" 2>/dev/null)"
 fi
 
-# A process count past the old 1024 doing thread-pool work at once: the
-# pool's queue grows instead of failing with "I/O queue full".
+# 2000 thread-pool requests queued at once: four `exec("sleep 1")` calls
+# hold the pool's four workers while the readers submit, and every read
+# succeeds (none raises "I/O queue full").
 cat > "$dir/pool.gem" <<'GEM'
 fn main()
   let me = self()
   write_file("pool_input.txt", "abc")
+  for i = 0, 4
+    spawn do
+      exec("sleep 1")
+    end
+  end
+  sleep(50)
   for i = 0, 2000
     spawn do
       let r = pcall read_file("pool_input.txt")

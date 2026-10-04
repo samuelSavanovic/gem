@@ -839,12 +839,13 @@ process that answers queries, or pass a child only what it needs.
 ### Don't grow a module-level table while spawning **(trap)**
 
 Each `spawn` hands the child a copy of every module-level variable that
-changed since the previous spawn (made at the spawn, kept until the child
-reads it or exits). Top-level code that collects pids in a module-level
+changed since the previous spawn, whether the child reads it or not (made
+at the spawn, kept until the child exits). Top-level code that collects pids in a module-level
 array therefore copies the whole array for every child: 3,000 spawns take
-290 ms, 10,000 take 11 s and 2.6 GB. Keep the table in a local of a
-function (`fn main` runs automatically), and the same 10,000 spawns take
-0.2 s.
+290 ms, 10,000 take 11 s and 2.6 GB on Linux x86_64 (0.41 s, and 1.6 s
+and 3.3 GB, on macOS arm64). Keep the table in a local of a function
+(`fn main` runs automatically), and the same 10,000 spawns take 0.2 s
+(0.39 s on macOS arm64).
 
 ```gem
 fn main()
@@ -1222,11 +1223,11 @@ A `gen_server.call` waiting when the server dies raises
 kills it is printed on stderr when it happens; to act on the reason in
 code, monitor the server, whose `DOWN` carries it.
 
-### `spawn` can fail: catch it where load decides (trap)
+### `spawn` can fail: catch it where load decides **(trap)**
 
-Processes are cheap (about 21 KB each when idle), and a program can keep
-tens of thousands alive, but not an unbounded number. `spawn` raises when
-it can't start one:
+Processes are cheap (an idle one takes about 21 KB on Linux x86_64, 70 KB
+on macOS arm64), and a program can keep thousands alive (tens of
+thousands where memory mappings allow), but not an unbounded number. `spawn` raises when it can't start one:
 
 - `spawn: process table full` past the process limit: 262,144 by default,
   lower when the environment sets `GEM_MAX_PROCS`;
