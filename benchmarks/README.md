@@ -68,3 +68,18 @@ Results land in `benchmarks/mini_redis/logs/<timestamp>/` (gitignored): `summary
 
 Compare ratios, not absolute numbers, between machines: Redis is the control. Both servers run on the machine that runs the load, and `redis-benchmark` uses CPU of its own.
 
+First run (October 2026, commit 97426ba + mini_redis, Linux x86_64 VM, 4 cores, Redis 7.0.15; ratios are Gem/Redis requests per second):
+
+| Phase | Gem/Redis | Notes |
+|---|---|---|
+| basic: PING | 0.78–0.83 | protocol and connection process only |
+| basic: SET, GET, INCR, list/set/hash ops | 0.25–0.41 | p99 4–12 ms against ~1 ms |
+| basic: LRANGE_100 / LRANGE_600 | 0.15 / 0.09 | p99 124 / 157 ms |
+| pipeline (-P 16) | 0.10–0.25 | Gem tops out at 130–220k ops/s |
+| 1000 clients: SET, GET | 0.25 | p50 60 ms against 8 ms; RSS 442 MB against 21 MB |
+| 1M keys of 100 B | 0.25 (fill) | RSS 330 MB against 143 MB |
+| 1M keys, 2 s TTL | | Gem's active expiry takes ~9 s to clear them, and RSS stays at 442 MB |
+| pub/sub, 1 / 100 / 1000 subscribers | 0.81 / 0.04 / 0.04 | one write per delivered message (OPTIMIZATIONS.md) |
+
+The Gem server spent 32.8 s in arena resets in the `basic` phase and 25.8 s in `pipeline` (`gem.log`): its keyspace is re-copied by every reset ("Survivors of a reset are copied again" in OPTIMIZATIONS.md).
+
