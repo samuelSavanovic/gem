@@ -60,8 +60,10 @@ form.
 `std/http` and `std/sqlite`), `examples/stomp_broker/` (a message broker
 built from `supervisor`, `dynamic_supervisor` and `gen_server`) and
 `examples/logstat/` (a command-line log analyzer in a `gem.toml` project)
-follow this doc and test themselves with `std/test`; read them for how the
-pieces fit together.
+and `examples/mini_redis/` (a Redis-protocol server: one process owning
+a large keyspace, a process per connection, pub/sub) follow this doc and
+test themselves with `std/test`; read them for how the pieces fit
+together.
 
 **Words this doc uses.**
 

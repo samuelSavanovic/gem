@@ -1,0 +1,51 @@
+## store — the gen_server that owns the database. Connections send it
+## their commands in batches and get the encoded replies back.
+
+load "std/gen_server"
+load "./keyspace"
+load "./resp"
+
+## The store's registered name.
+let NAME = "mini_redis_store"
+
+# Redis runs its active expiry cycle 10 times a second (hz 10).
+let EXPIRE_TICK_MS = 100
+
+let MODULE = {
+  init: fn()
+    register(NAME, self())
+    send_after(self(), "expire_tick", EXPIRE_TICK_MS)
+    {state: keyspace.new()}
+  end,
+  handle_call: fn(cmds, from, db)
+    let now = time_ms()
+    let out = build_string do |add|
+      for args in cmds
+        resp.encode(add, keyspace.execute(db, args, now))
+      end
+    end
+    {reply: out, state: db}
+  end,
+  handle_cast: fn(msg, db) {state: db} end,
+  handle_info: fn(msg, db)
+    if msg == "expire_tick"
+      keyspace.expire_cycle(db, time_ms())
+      send_after(self(), "expire_tick", EXPIRE_TICK_MS)
+    end
+    {state: db}
+  end
+}
+
+## Starts the store and registers it as `NAME`. Returns its handle.
+fn start()
+  gen_server.start(MODULE)
+end
+
+## Runs the commands in `cmds` (an array of commands, each an array of
+## strings) in order, with nothing in between, and returns their replies
+## encoded as RESP. Waits as long as they take; raises if the store dies.
+fn run(cmds)
+  gen_server.call(NAME, cmds, nil)
+end
+
+export NAME, start, run

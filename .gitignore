@@ -18,5 +18,6 @@ examples/bookmark_app/app
 examples/logstat/logstat
 benchmarks/logs/
 benchmarks/stomp/logs/
+benchmarks/mini_redis/logs/
 .DS_Store
 RESUME_PROMPT.md
