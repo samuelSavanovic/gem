@@ -45,6 +45,7 @@ static GemArenaBlock *gem_arena_new_block(size_t min_cap) {
     block->next = NULL;
     block->cap = cap;
     block->used = 0;
+    block->dirty = 0;
     return block;
 }
 
@@ -88,6 +89,29 @@ void gem_arena_free_blocks(GemArenaBlock *block) {
     }
 }
 
+int gem_strlen_check(size_t n, const char *who) {
+    if (n > (size_t)GEM_MAX_STRLEN) {
+        char buf[160];
+        snprintf(buf, sizeof(buf), "%s%sa string of %zu bytes is over the limit of %d bytes",
+                 who ? who : "", who ? ": " : "", n, GEM_MAX_STRLEN);
+        gem_error(buf);
+    }
+    return (int)n;
+}
+
+void gem_buffer_reserve(GemBuffer *b, size_t extra, const char *who) {
+    size_t need = (size_t)b->len + extra;
+    if (need < (size_t)b->cap) return;
+    gem_strlen_check(need, who);
+    size_t cap = b->cap > 16 ? (size_t)b->cap : 16;
+    while (cap <= need) cap *= 2;
+    if (cap > (size_t)INT_MAX) cap = (size_t)INT_MAX;
+    char *data = (char *)gem_alloc(cap);
+    memcpy(data, b->data, (size_t)b->len);
+    b->data = data;
+    b->cap = (int)cap;
+}
+
 GemBuffer *gem_buffer_alloc(int cap) {
     GemArena *a = gem_current_arena();
     GemBuffer *b = (GemBuffer *)gem_arena_alloc(a, sizeof(GemBuffer));
@@ -107,8 +131,13 @@ void *gem_arena_alloc(GemArena *arena, size_t size) {
     GemArenaBlock *block = arena->current;
     if (block->used + size <= block->cap) {
         void *ptr = block->data + block->used;
+        /* Allocations come back zeroed; only memory a reset gave back
+           needs clearing. */
+        if (block->used < block->dirty) {
+            size_t n = block->dirty - block->used;
+            memset(ptr, 0, n < size ? n : size);
+        }
         block->used += size;
-        memset(ptr, 0, size);
         return ptr;
     }
 
@@ -124,9 +153,8 @@ void *gem_arena_alloc(GemArena *arena, size_t size) {
     char *end = new_block->data + new_block->cap;
     if (end > arena->hi) arena->hi = end;
 
-    void *ptr = new_block->data + new_block->used;
+    void *ptr = new_block->data + new_block->used;   /* fresh mmap: zeroed */
     new_block->used += size;
-    memset(ptr, 0, size);
     return ptr;
 }
 

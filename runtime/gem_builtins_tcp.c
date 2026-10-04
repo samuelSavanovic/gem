@@ -72,10 +72,12 @@ GemVal gem_tcp_connect_fn(void *_env, GemVal *args, int argc) {
             gem_error(buf);
         }
         if (rc < 0) {
-            gem_io_yield(fd, 1);
+            if (gem_io_yield(fd, 1) < 0) {
+                gem_error("tcp_connect: connect failed: socket closed while connecting");
+            }
             int err = 0;
             socklen_t errlen = sizeof(err);
-            getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &errlen);
+            if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &errlen) < 0) err = errno;
             if (err != 0) {
                 close(fd);
                 char buf[256];
@@ -169,8 +171,7 @@ GemVal gem_tcp_accept_fn(void *_env, GemVal *args, int argc) {
                 gem_set_nonblocking(fd);
                 return gem_int(fd);
             }
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                gem_io_yield(server_fd, 0);
+            if ((errno == EAGAIN || errno == EWOULDBLOCK) && gem_io_yield(server_fd, 0) == 0) {
                 continue;
             }
             char buf[256];
@@ -245,7 +246,11 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 if (has_timeout && timeout_ms <= 0) return GEM_NIL;
-                gem_io_yield(fd, 0);
+                if (gem_io_yield(fd, 0) < 0) {
+                    proc->timed_out = 0;
+                    proc->deadline_ms = -1;
+                    gem_error("tcp_read: read failed: Bad file descriptor");
+                }
                 if (own_deadline && (proc->timed_out || gem_now_ms() >= deadline)) {
                     proc->timed_out = 0;
                     proc->deadline_ms = -1;
@@ -328,7 +333,11 @@ GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
             if (n == 0) continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 if (has_timeout && timeout_ms <= 0) break;
-                gem_io_yield(fd, 1);
+                if (gem_io_yield(fd, 1) < 0) {
+                    proc->timed_out = 0;
+                    proc->deadline_ms = -1;
+                    gem_error("tcp_write: write failed: Bad file descriptor");
+                }
                 if (own_deadline && (proc->timed_out || gem_now_ms() >= deadline)) {
                     proc->timed_out = 0;
                     break;
@@ -371,6 +380,7 @@ GemVal gem_tcp_close_fn(void *_env, GemVal *args, int argc) {
     if (argc < 1 || args[0].type != VAL_INT) {
         gem_error("tcp_close: expected int socket fd");
     }
+    gem_io_fd_closed((int)args[0].ival);
     close((int)args[0].ival);
     return GEM_NIL;
 }

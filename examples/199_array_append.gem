@@ -1,0 +1,47 @@
+# push(t, v) is t[len(t)] = v, on any table; int-key appends to an array,
+# keys and values stay linear.
+
+let t = {}
+t[1] = "a"
+push(t, "b")
+print(t, len(t))
+let u = {}
+u[2] = "x"
+u[1] = "y"
+u[2] = "z"
+print(u, len(u), u[2], has_key(u, 1), has_key(u, 0))
+let a = [10, 20]
+a[2] = 30
+a[5] = 60
+a[3] = 40
+a[5] = 61
+push(a, 70)
+print(a, len(a), a[4], has_key(a, 4), has_key(a, 5))
+let b = [1, 2, 3]
+delete(b, 0)
+b[3] = "x"
+push(b, "y")
+print(b)
+let c = {k: 1}
+delete(c, "k")
+c[0] = "zero"
+push(c, "one")
+print(c, c[1])
+let d = [3, 1, 2]
+d.x = 1
+sort(d)
+push(d, 9)
+print(d)
+let e = [1, 2]
+pop(e)
+e[1] = 5
+print(e)
+let n = 200000
+let t0 = time_ms()
+let big = {}
+for i = 0, n
+  big[i] = i
+end
+let ks = keys(big)
+let vs = values(big)
+print(len(ks), len(vs), big[n - 1], big[n], has_key(big, n), time_ms() - t0 < 1000)

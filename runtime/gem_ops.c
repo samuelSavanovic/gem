@@ -13,11 +13,12 @@ GemVal gem_add(GemVal a, GemVal b) {
     if (a.type == VAL_FLOAT && b.type == VAL_INT) return gem_float(a.fval + (double)b.ival);
     if (a.type == VAL_STRING && b.type == VAL_STRING) {
         size_t la = (size_t)a.slen, lb = (size_t)b.slen;
+        int len = gem_strlen_check(la + lb, "+");
         char *s = (char *)gem_alloc(la + lb + 1);
         memcpy(s, a.sval, la);
         memcpy(s + la, b.sval, lb);
         s[la + lb] = '\0';
-        GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s; r.slen = (int)(la + lb); return r;
+        GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s; r.slen = len; return r;
     }
     { char buf[128]; snprintf(buf, sizeof(buf), "type error in +: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
 }
@@ -102,32 +103,28 @@ GemVal gem_neg(GemVal a) {
     { char buf[128]; snprintf(buf, sizeof(buf), "type error in unary -: got %s", gem_type_str(a)); gem_error(buf); } return GEM_NIL;
 }
 
-void gem_string_append(GemVal *accum, GemVal rhs) {
-    /* `s = s + x` with s a string: x must be a string too, as for `+`.
-       A buffer here is the string being built, or a user's buf_new()
-       buffer (KNOWN_BUGS: "A buffer passed as `s` to `s = s + x`"). */
-    if ((accum->type == VAL_BUFFER || accum->type == VAL_STRING) && rhs.type != VAL_STRING) {
+void gem_string_append_to(GemVal *accum, GemVal rhs, int *built) {
+    if (!*built) {
+        if (accum->type != VAL_STRING || rhs.type != VAL_STRING) {
+            *accum = gem_add(*accum, rhs);
+            return;
+        }
+        GemBuffer *b = gem_buffer_alloc(64);
+        gem_buffer_reserve(b, (size_t)accum->slen + (size_t)rhs.slen, "+");
+        memcpy(b->data, accum->sval, (size_t)accum->slen);
+        b->len = accum->slen;
+        accum->type = VAL_BUFFER;
+        accum->buffer = b;
+        *built = 1;
+    } else if (rhs.type != VAL_STRING) {
         char buf[128];
         snprintf(buf, sizeof(buf), "type error in +: got string and %s", gem_type_str(rhs));
         gem_error(buf);
     }
-    if (accum->type == VAL_BUFFER) {
-        GemVal args[2] = {*accum, rhs};
-        gem_buf_push_fn(NULL, args, 2);
-    } else if (accum->type == VAL_STRING) {
-        int slen = accum->slen;
-        int cap = 64;
-        while (cap <= slen) cap *= 2;
-        GemBuffer *b = gem_buffer_alloc(cap);
-        memcpy(b->data, accum->sval, slen);
-        b->len = slen;
-        accum->type = VAL_BUFFER;
-        accum->buffer = b;
-        GemVal args[2] = {*accum, rhs};
-        gem_buf_push_fn(NULL, args, 2);
-    } else {
-        *accum = gem_add(*accum, rhs);
-    }
+    GemBuffer *b = accum->buffer;
+    gem_buffer_reserve(b, (size_t)rhs.slen, "+");
+    memcpy(b->data + b->len, rhs.sval, (size_t)rhs.slen);
+    b->len += rhs.slen;
 }
 
 GemVal gem_string_finish(GemVal val) {

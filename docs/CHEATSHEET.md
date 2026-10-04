@@ -141,7 +141,7 @@ let r = pcall some_fn()              # {ok: bool, value/error: ..., stack: [{nam
 # Common builtins
 # I/O & process: print, eprint, error, pcall, len, type, to_string, to_int, to_float, exit, kill, argv, getenv, input, read_stdin, write_stdout, sleep
 # Collections:   push, pop, keys, values, sort, insert, delete, remove_at, has_key
-# Strings:       str_replace, substr, chr, ord, buf_new, buf_push, build_string
+# Strings:       find, str_replace, substr, chr, ord, buf_new, buf_push, build_string
 # Filesystem:    read_file, write_file, append_file, file_exists, remove_file, mkdir, list_dir, is_dir, dirname, path_join, normalize_path, exec
 # TCP:           tcp_listen, tcp_accept, tcp_connect, tcp_read, tcp_write, tcp_close
 # Time:          time_ms, epoch_ms, format_time, format_time_local

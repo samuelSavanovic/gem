@@ -337,15 +337,13 @@ doesn't allocate.
 Before writing a byte loop, check whether a builtin does the job:
 `str_replace` and `substr` run in C. HTML-escaping 800 KB took about 150 ms
 with a per-byte loop and 25 to 60 ms with five chained `str_replace` calls.
-For searching, call `string.index_of(s, needle, start)` (or `split`,
-`contains`) rather than an `ord` loop: they search long stretches in C, so
-finding a needle 1 MB in takes about 4 ms, against about 50 ms for the
-simplest `ord` loop. A `split` with pieces only a few bytes long is still
-Gem-speed: 100,000 ten-byte fields in 1 MB took about 140 ms. On short
-strings each call costs about 2 µs whatever it finds, so a parser that
-searches a line several times is slow: six `index_of` calls on each of a
-million 120-byte log lines took 11 s (`examples/logstat` spends 21 s of
-26 s parsing). There is no faster way yet; OPTIMIZATIONS.md tracks it.
+For searching, call `find(s, needle, start)` (or `string.index_of`,
+`split`, `contains`, which use it) rather than an `ord` loop: the search
+runs in C, so a needle 1 MB in is found in well under 1 ms, against
+about 25 ms for the simplest `ord` loop, and `split` cuts 100,000
+ten-byte fields in about 6 ms. On short strings the call dominates: on a
+120-byte line, a million `find` calls took 33 ms, a million
+`string.index_of` calls 174 ms.
 
 ### Use `for`, not `table.each`, when you need `return` or `break`
 
@@ -570,24 +568,15 @@ runs twice.
 
 ## Tables and arrays
 
-### Append with `push` **(trap)**
+### Append with `push`
 
 ```gem
 push(items, x)                 # Prefer
-items[len(items)] = x          # Over
+items[len(items)] = x          # Over: the same thing, longer
 items[count] = x; count += 1   # Over (and drop the separate counter)
 ```
 
-Appending by index is quadratic: 20,000 appends took 1.6 s with
-`a[len(a)] = x` and 4 ms with `push`.
-
-### Don't call `keys()` or `values()` on a large table **(trap)**
-
-Both builtins are quadratic in the table's size: on a 10,000-entry table
-each took 0.4 s, on 40,000 entries 6.4 s, while `for k, v in` over the
-same table took 4 ms. Iterate with `for k, v in tbl` (or `for x in arr`)
-and keep `keys()` for small tables, or for the snapshot you need before
-deleting entries (see below).
+On an array all three take the same time (1M appends: 40–60 ms).
 
 ### Remove from arrays with `remove_at`, never `delete` **(trap)**
 
@@ -723,9 +712,11 @@ for text with literal braces, such as `'{"key": 1}'`.
 Inside a loop, `s = s + piece` (or `s += piece`) is compiled into an
 in-place append, so it is fast, **as long as the loop doesn't read `s`
 until it is done**. A loop that tests `len(s)` or compares `s` each time
-round, a string threaded through recursion as an argument, or a prepend
-(`s = piece + s`) copies the whole string every iteration and is
-quadratic (200 KB: about 1.2 s, against 2 ms for the plain loop). For
+round, a string threaded through recursion as an argument, a prepend
+(`s = piece + s`), or a module-level `s` appended to inside a fn (or in a
+top-level loop that calls a fn of yours) copies the whole string every
+iteration and is quadratic (200 KB: about 1.2 s, against 2 ms for the
+plain loop). For
 anything non-trivial, use `build_string`, which has no such conditions:
 
 ```gem
@@ -1156,6 +1147,29 @@ raises `send: no process registered with that name` once the process has
 died (say, while a supervisor restarts it). Where that can happen, check
 `whereis` for `nil`, or `pcall` the send.
 
+### A supervisor's children start after `supervisor.start` returns **(trap)**
+
+`supervisor.start` returns before the supervisor has run any child's
+`start`, so a name a child registers there isn't taken yet: calling it at
+once raises `gen_server.call: no process registered as "counter"`.
+`supervisor.which_children(sup)` answers only after the children have
+started, so call it first:
+
+```gem
+let sup = supervisor.start({children: [{id: "counter", start: start_counter}]})
+supervisor.which_children(sup)          # the children have started
+gen_server.call("counter", "get")
+```
+
+### Only the pending call learns why a server died **(trap)**
+
+A `gen_server.call` waiting when the server dies raises
+`gen_server.call: server exited: <reason>`. A later call raises
+`server exited: noproc` as soon as the runtime has reclaimed the dead
+process, which can be the very next call. An error that
+kills it is printed on stderr when it happens; to act on the reason in
+code, monitor the server, whose `DOWN` carries it.
+
 ### There are at most 1024 processes
 
 `spawn` raises `spawn: process table full` past the limit; main uses one
@@ -1235,14 +1249,13 @@ with `http.stop(server)`: it closes the listening socket, so the port is
 free again. A `std/request` call killed midway (a `task.await` timeout)
 leaks its socket; bound the request with its `timeout_ms` instead.
 
-### Reading input line by line **(bug)**
+### Reading input line by line
 
-`input()` returns the next line of stdin without its newline, and `nil`
-at the end. It splits a line of 4,095 bytes or more into several, and
-cuts a line at a NUL byte, without saying so. For input that may hold
-such lines, read the file with `read_file` and split it yourself (see
-`examples/logstat/lib/source.gem`). That holds the whole file in memory,
-twice while it is read; there is no way to read a file a line at a time.
+`input()` returns the next line of stdin, of any length and NUL bytes
+included, without its `\n` or `\r\n`, and `nil` at the end. There is no
+way to read a *file* a line at a time: `read_file` and split it yourself
+(see `examples/logstat/lib/source.gem`), which holds the whole file in
+memory, twice while it is read.
 
 ### `tcp_listen` takes an IP address
 
@@ -1474,8 +1487,6 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `delete(arr, i)` | hole in the array; `for` misses the last element | `remove_at(arr, i)` |
 | `delete`/`remove_at`/`push` on what a `for` iterates | skips or adds entries, visits `nil` | iterate a snapshot (`keys(tbl)`) |
 | `for x in record` | `x` is `nil` for every entry | `for k, v in record` |
-| `a[len(a)] = x` in a loop | quadratic | `push(a, x)` |
-| `keys(t)` / `values(t)` on a large table | quadratic | `for k, v in t` |
 | `t.x = nil` to remove a key | key stays | `delete(t, "x")` |
 | `id in seen` on an int-keyed set | scans values | `has_key(seen, id)` |
 | Large set or index with sparse int (or table) keys | quadratic | string keys (`"{id}"`) |
@@ -1507,10 +1518,11 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 | `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
 | Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
+| Calling a supervisor's child by name right after `supervisor.start` | `no process registered` | `supervisor.which_children(sup)` first |
+| `gen_server.call` to a server that has already died | `server exited: noproc`, not why it died | monitor it: the `DOWN` has the reason |
 | `spawn` past 1,023 live processes | raises; unguarded acceptor dies | catch it or cap connections |
 | Spawning thousands of quick tasks in a loop | `process table full` | batch, or cap in-flight tasks |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_listen("localhost", ...)` | raises | `"127.0.0.1"` |
 | `tcp_read` with no timeout | blocks forever on a silent peer | pass a timeout |
-| `input()` on lines of 4,095 bytes or more **(bug)** | the line comes back in pieces | `read_file` and split |

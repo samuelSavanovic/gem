@@ -48,7 +48,7 @@ Nine types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`, `R
 
 A float turns into text (`to_string`, `print`, `eprint`, interpolation, `buf_push`, `build_string`'s `add`, and so `json.encode`) as the shortest decimal that reads back to the same double, so `to_float(to_string(x)) == x` for every finite `x`. An integral float keeps a decimal point (`2.0`, `-0.0`, `100.0`), so a float never prints like an int. Magnitudes below `1e-4` or from `1e16` up use exponent form with a signed, at least two-digit exponent (`1e-05`, `1.5e-07`, `1e+16`, `1.2345678901234567e+19`); this is also valid JSON. The non-finite values (from overflow, e.g. `to_float("1e308") * 10.0`) print as `inf`, `-inf` and `nan`; `to_float` reads those back, but `json.encode` writes them as is, which is not valid JSON.
 
-Strings are binary-safe: they carry an explicit byte length, so `"\0"` is a 1-byte string, `len(s)` reports byte length (not strlen), and embedded NULs survive concatenation, indexing, equality, `build_string`, `tcp_write`, and `read_file`/`write_file` round-trips. Strings remain NUL-terminated for C interop convenience; the byte after the last content byte is always `\0`. **Caveat — `extern fn`:** when a Gem `String` is passed to an `extern fn ... s: String` parameter, it marshals as `const char *` and the C side will see only the bytes up to the first NUL. Use the `Bytes` extern type (see C Interop) when the C function needs binary data — it marshals the byte length alongside the pointer.
+Strings are binary-safe: they carry an explicit byte length, so `"\0"` is a 1-byte string, `len(s)` reports byte length (not strlen), and embedded NULs survive concatenation, indexing, equality, `build_string`, `tcp_write`, and `read_file`/`write_file` round-trips. Strings remain NUL-terminated for C interop convenience; the byte after the last content byte is always `\0`. A string or buffer holds at most 2,147,483,646 bytes (2 GiB − 2): anything that would make a longer one (`+`, interpolation, `buf_push`, `build_string`, `str_replace`, `read_file`, `read_stdin`, `input`, an extern `Bytes` return) raises `"<op>: a string of N bytes is over the limit of 2147483646 bytes"` (`read_file` raises `"read_file: '<path>' is N bytes, over the string limit of 2147483646 bytes"` for a regular file, before reading it, and `"read_file: '<path>' holds more than the string limit of 2147483646 bytes"` for a pipe or device; an extern fn's message names its C function). **Caveat — `extern fn`:** when a Gem `String` is passed to an `extern fn ... s: String` parameter, it marshals as `const char *` and the C side will see only the bytes up to the first NUL. Use the `Bytes` extern type (see C Interop) when the C function needs binary data — it marshals the byte length alongside the pointer.
 
 ## Variables
 
@@ -1118,7 +1118,7 @@ Running out of stack is an ordinary runtime error, not a crash:
 
 `to_float(v)` — converts a value to a float. Strings are parsed as decimal floats, with an optional exponent (`"1.5e-7"`); `"inf"` and `"nan"` are accepted, and a value too large for a double, or so small it would read as zero, is an error (subnormals are kept). Ints are widened. Bools become 0.0/1.0. Errors on nil, tables, functions, or unparseable strings.
 
-`push(target, val)` — if `target` is a table, appends `val` at the next integer index (mutates in place, returns `val`). If `target` is a buffer, appends `val` coerced to a string (same as `buf_push`; returns the buffer).
+`push(target, val)` — if `target` is a table, sets `target[len(target)] = val`: on an array, appends `val` at the end (mutates in place, returns `val`). On a table that already has the key `len(target)`, that entry's value is replaced. If `target` is a buffer, appends `val` coerced to a string (same as `buf_push`; returns the buffer).
 
 ```
 let items = []
@@ -1135,6 +1135,8 @@ print(items[0])    # a
 `str_replace(s, old, new)` — replaces all occurrences of `old` with `new` in string `s`. Returns a new string. If `old` is empty, returns `s` unchanged.
 
 `has_key(tbl, key)` — returns `true` if `key` exists in the table, `false` otherwise. Unlike `tbl[key] != nil`, correctly detects keys whose value is `nil`.
+
+`find(s, needle[, start])` — returns the byte offset of the first occurrence of `needle` in `s` at or after `start` (default `0`; a negative `start` counts as `0`), or `-1` when there is none. An empty `needle` is found at `start` (`-1` when `start` is past the end). Binary-safe; `s` and `needle` may be strings or buffers. The search runs in C (`memchr`).
 
 `substr(s, start[, len])` — returns a substring of `s` starting at `start` (a negative `start` counts as `0`, unlike `s[-1]`). If `len` is provided, returns at most `len` characters; otherwise returns to the end of the string. Accepts buffers as well as strings (the result is always a fresh string).
 
@@ -1184,7 +1186,7 @@ end
 
 `process_info(pid)` — returns a table with process metadata: `state`, `mailbox_len`, `links`, `monitors`, `trap_exit`, `exit_reason`. Returns `nil` for invalid/free pids.
 
-`read_file(path)` — reads the entire file at `path` and returns its contents as a string. Opens in binary mode (no newline translation). Files whose size isn't known up front (`/proc` and `/sys` files, pipes, devices such as `/dev/stdin`) are read until end of file. Raises an error if the file cannot be opened, is a directory, or a read fails.
+`read_file(path)` — reads the entire file at `path` and returns its contents as a string. Opens in binary mode (no newline translation). Files whose size isn't known up front (`/proc` and `/sys` files, pipes, devices such as `/dev/stdin`) are read until end of file. Raises an error if the file cannot be opened, is a directory, is larger than the string limit (see Strings), or a read fails.
 
 `write_file(path, content)` — writes the string `content` to `path`, overwriting any existing file. Opens in binary mode. Raises an error if the file cannot be opened or if the write fails.
 
@@ -1224,7 +1226,7 @@ end
 
 `getenv(name)` — returns the value of environment variable `name` as a string, or `nil` if not set.
 
-`input()` — reads a line from stdin, stripping the trailing newline. Returns `nil` on EOF.
+`input()` — reads a line from stdin, of any length and binary-safe (NUL bytes are kept), stripping the trailing `\n` or `\r\n`. A last line without a newline is returned as is. Returns `nil` on EOF.
 
 `input(prompt)` — prints `prompt` to stdout (no newline), then reads a line from stdin.
 
@@ -1278,7 +1280,7 @@ end
 
 `tcp_write(socket, data[, timeout_ms])` — writes the string (or buffer) `data` to a connected socket. Writes all bytes (loops internally on partial writes). Returns the number of bytes written as an integer. The calling process yields to the scheduler while the socket is not writable. `timeout_ms` is one deadline for the whole write, like `tcp_read`'s: `nil` or omitted waits until every byte is written, an int of `0` or less writes only what the socket takes at once, and past the deadline `tcp_write` returns the count written so far (less than `len(data)`), without raising. Any other `timeout_ms` raises `tcp_write: timeout_ms must be an int (milliseconds) or nil, got <type>`. Writing to a peer that has closed the connection does not raise: the first write usually still reports success and later ones return `0`.
 
-`tcp_close(socket)` — closes a socket file descriptor. Always synchronous. Returns `nil`.
+`tcp_close(socket)` — closes a socket file descriptor. Always synchronous. Returns `nil`. A process waiting in `tcp_accept`, `tcp_read`, `tcp_write` or `tcp_connect` on that socket raises an error (e.g. `"tcp_read: read failed: Bad file descriptor"`), even when a new socket has taken the same fd number by the time it runs.
 
 All TCP builtins use non-blocking sockets with scheduler poll integration. The scheduler's `poll()` loop handles readiness notification with zero thread pool overhead.
 

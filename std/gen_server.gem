@@ -176,8 +176,10 @@ end
 ##
 ## Returns at once: `init` runs later, in the server. The server is
 ## neither linked to nor monitored by the caller, so either can die
-## without taking the other along; a server whose `init` raises dies, and
-## the next `call` raises `gen_server.call: server exited: <error>`.
+## without taking the other along; a server whose `init` raises dies. A
+## `call` already waiting then raises `gen_server.call: server exited:
+## <error>`; one made after the runtime has reclaimed the server raises
+## `server exited: noproc`.
 fn start(module)
   check_module(module)
   let pid = spawn(fn()

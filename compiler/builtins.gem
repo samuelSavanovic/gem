@@ -24,6 +24,7 @@ let BUILTIN_FNS = {
   str_replace: "gem_str_replace_fn",
   has_key: "gem_has_key_fn",
   substr: "gem_substr_fn",
+  find: "gem_find_fn",
   chr: "gem_chr_fn",
   ord: "gem_ord_fn",
   to_int: "gem_to_int_fn",

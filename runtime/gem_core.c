@@ -156,20 +156,21 @@ GemVal gem_string(const char *s) {
     r.type = VAL_STRING;
     r.magic = GEM_MAGIC;
     size_t len = strlen(s);
+    r.slen = gem_strlen_check(len, NULL);
     r.sval = (char *)gem_alloc(len + 1);
     memcpy(r.sval, s, len + 1);
-    r.slen = (int)len;
     return r;
 }
 
-GemVal gem_string_with_len(const char *s, int len) {
+GemVal gem_string_with_len(const char *s, int64_t len) {
     GemVal r;
     r.type = VAL_STRING;
     r.magic = GEM_MAGIC;
+    if (len < 0) len = 0;
+    r.slen = gem_strlen_check((size_t)len, NULL);
     r.sval = (char *)gem_alloc((size_t)len + 1);
     if (len > 0) memcpy(r.sval, s, (size_t)len);
     r.sval[len] = '\0';
-    r.slen = len;
     return r;
 }
 
@@ -300,6 +301,7 @@ GemVal gem_table_new(void) {
     t->vals = ALLOC_N(GemVal, 4);
     t->str_index = NULL;
     t->shape_id = gem_shape_counter++;
+    t->is_array = 1;
 
     GemArena *a = gem_current_arena();
     t->arena_next = a->table_list;
@@ -356,6 +358,7 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
         t->keys[pos] = key;
         t->vals[pos] = val;
         t->len++;
+        t->is_array = 0;
         gem_str_index_put(&t->str_index, key.sval, key.slen, pos);
         return;
     }
@@ -377,6 +380,16 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
             t->vals[ik] = val;
             return;
         }
+        /* An array has no key >= len: t[len] = v appends, anything past it
+           is a new key too. */
+        if (t->is_array && ik >= t->len) {
+            if (t->len >= t->cap) gem_table_grow(t);
+            t->keys[t->len] = key;
+            t->vals[t->len] = val;
+            t->is_array = (ik == t->len);
+            t->len++;
+            return;
+        }
     }
 
     /* Fallback: linear scan for non-string, non-array-pattern keys */
@@ -391,6 +404,7 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
     if (t->len >= t->cap) gem_table_grow(t);
     t->keys[t->len] = key;
     t->vals[t->len] = val;
+    t->is_array = 0;
     t->len++;
 }
 
@@ -430,6 +444,7 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
         if (ik >= 0 && ik < t->len && t->keys[ik].type == VAL_INT && t->keys[ik].ival == ik) {
             return t->vals[ik];
         }
+        if (t->is_array) return (GemVal){VAL_NIL, GEM_MAGIC, {0}};
     }
 
     /* Fallback: linear scan */
