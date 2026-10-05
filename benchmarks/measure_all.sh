@@ -21,6 +21,7 @@
 #   GUARD_RSS_MB     memory cap per section (default: half the RAM)
 #   GUARD_SWAP_MB    swap growth cap per section (default 2048)
 #   GUARD_TIMEOUT_S  time cap per section (default 2400)
+#   ALLOW_BATTERY    set to run on battery power (macOS refuses otherwise)
 #
 # Each section runs in its own process group, stdin from /dev/null, under a
 # watchdog that samples it about every half second and kills the whole group (harness, servers, load
@@ -28,7 +29,10 @@
 # in use has grown by GUARD_SWAP_MB since the section started, when the
 # system reports critical memory pressure (macOS), or at GUARD_TIMEOUT_S.
 # sections.txt gives each section's status, wall time and peak RSS (the
-# highest sample), and the reason for a kill.
+# highest sample), and the reason for a kill; driver.log holds what the
+# script printed. On macOS it keeps the machine from idle and system sleep
+# while it runs (caffeinate; closing the lid still sleeps it) and posts a
+# notification when it ends.
 #
 # The batch harnesses (logstat, lox, gemgrep, jobqueue) append their runs
 # to batch.csv through benchmarks/measure.py; the servers (bookmark and its
@@ -69,12 +73,20 @@ GUARD_RSS_MB=${GUARD_RSS_MB:-$((RAM_MB / 2))}
 GUARD_SWAP_MB=${GUARD_SWAP_MB:-2048}
 GUARD_TIMEOUT_S=${GUARD_TIMEOUT_S:-2400}
 
+if [[ "$(uname)" == Darwin && -z "${ALLOW_BATTERY:-}" ]] && ! pmset -g batt | head -1 | grep -q "AC Power"; then
+  echo "on battery power: plug in, or set ALLOW_BATTERY=1" >&2
+  exit 1
+fi
 if [[ -e "$OUT" && -n "$(ls -A "$OUT" 2> /dev/null)" ]]; then
   echo "$OUT is not empty: pick another OUT or remove it" >&2
   exit 1
 fi
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
+exec > >(tee "$OUT/driver.log") 2>&1
+if [[ "$(uname)" == Darwin ]]; then
+  caffeinate -ims -w $$ &
+fi
 
 (cd "$ROOT" && make build > /dev/null) || { echo "make build failed" >&2; exit 1; }
 
@@ -226,3 +238,7 @@ rm -f "$OUT/mini_redis/mini_redis" "$OUT/stomp/stomp_broker"
 echo
 python3 "$SCRIPT_DIR/summarize.py" "$OUT"
 echo "baseline in $OUT"
+if [[ "$(uname)" == Darwin ]]; then
+  failed=$(grep -cv ' ok ' "$OUT/sections.txt")
+  osascript -e "display notification \"$(basename "$OUT"): $failed of $(wc -l < "$OUT/sections.txt" | tr -d ' ') sections not ok\" with title \"Gem benchmarks done\"" 2> /dev/null
+fi
