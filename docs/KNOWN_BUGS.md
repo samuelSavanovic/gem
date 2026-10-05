@@ -283,3 +283,19 @@ print(pcall string.join(t, ","))         # error: arr must be an array, got a ta
 while `table.*`, `json.encode` and array patterns accept any table whose keys
 are exactly 0 .. n-1. std should share one definition of an array; the error
 also names a valid key.
+
+## Example programs
+
+### gemgrep: a backreference with `-w` or `-x` names the wrong group
+
+```sh
+cd examples/gemgrep && ../../build/gem main.gem -o /tmp/gemgrep
+printf 'aa\na\n' | /tmp/gemgrep -w '(a)\1'    # prints a (GNU grep: aa)
+printf 'aa\na\n' | /tmp/gemgrep -x '(a)\1'    # gemgrep: Invalid back reference (GNU grep: aa)
+```
+
+`regex.compile` (examples/gemgrep/regex.gem) wraps the pattern in groups
+of its own for `-w` (`(^|[^[:alnum:]_])(PATTERN)([^[:alnum:]_]|$)`) and
+`-x` (`^(PATTERN)$`), which come first, so the user's `\1` names the
+wrapper's group. The wrapper should renumber the pattern's backreferences
+by the groups it adds before it, and refuse one that would pass `\9`.

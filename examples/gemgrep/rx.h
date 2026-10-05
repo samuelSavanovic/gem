@@ -1,10 +1,9 @@
 /* rx.h — the C side of regex.gem: a POSIX regex_t behind a Ptr handle.
  *
  * Every function here is a plain `extern fn`: it runs on the scheduler
- * thread, takes no lock and keeps no pointer to Gem memory after it
- * returns. A handle belongs to the process that made it: it holds the
- * offsets of its last match, so two processes sharing one would read each
- * other's. */
+ * thread and keeps no pointer to Gem memory after it returns. A handle
+ * belongs to the process that made it: another process given the number
+ * would hold a pointer that the owner frees. */
 
 #include <regex.h>
 #include <stdint.h>
@@ -25,22 +24,47 @@ static void *rx_new(void) {
     return calloc(1, sizeof(rx_handle));
 }
 
+/* macOS's regcomp reads `\<`, `\>`, `\b`, `\w`, `\s` and backreferences
+ * as glibc's does only under REG_ENHANCED; without it each matches the
+ * escaped character itself (`\w` matches `w`). glibc has no such flag. */
+#ifdef REG_ENHANCED
+#define RX_DIALECT REG_ENHANCED
+#else
+#define RX_DIALECT 0
+#endif
+
 /* 0, or the regcomp error code for rx_error. REG_NEWLINE: a range that
  * spans lines matches `^` and `$` at each newline, and `.` and `[^a]`
  * never match one. */
 static int64_t rx_compile(void *h, const char *pattern, int icase) {
     rx_handle *r = h;
-    int flags = REG_EXTENDED | REG_NEWLINE | (icase ? REG_ICASE : 0);
+    int flags = REG_EXTENDED | REG_NEWLINE | RX_DIALECT | (icase ? REG_ICASE : 0);
     int rc = regcomp(&r->re, pattern, flags);
     r->compiled = rc == 0;
     return rc;
 }
 
-/* regerror's text for `code`. Static memory: a plain extern fn's String
- * return is copied, never freed. `char *`, not `const char *`, is what the
- * generated wrapper expects. Call it before rx_free. */
+/* The message for regcomp's error `code`: glibc's text, which is GNU
+ * grep's, for the POSIX codes whatever the libc, else regerror's. Static
+ * memory: a plain extern fn's String return is copied, never freed.
+ * `char *`, not `const char *`, is what the generated wrapper expects.
+ * Call it before rx_free. */
 static char *rx_error(void *h, int64_t code) {
     static char msg[256];
+    switch (code) {
+    case REG_BADPAT: return (char *)"Invalid regular expression";
+    case REG_ECOLLATE: return (char *)"Invalid collation character";
+    case REG_ECTYPE: return (char *)"Invalid character class name";
+    case REG_EESCAPE: return (char *)"Trailing backslash";
+    case REG_ESUBREG: return (char *)"Invalid back reference";
+    case REG_EBRACK: return (char *)"Unmatched [, [^, [:, [., or [=";
+    case REG_EPAREN: return (char *)"Unmatched ( or \\(";
+    case REG_EBRACE: return (char *)"Unmatched \\{";
+    case REG_BADBR: return (char *)"Invalid content of \\{\\}";
+    case REG_ERANGE: return (char *)"Invalid range end";
+    case REG_ESPACE: return (char *)"Memory exhausted";
+    case REG_BADRPT: return (char *)"Invalid preceding regular expression";
+    }
     regerror((int)code, &((rx_handle *)h)->re, msg, sizeof msg);
     return msg;
 }
