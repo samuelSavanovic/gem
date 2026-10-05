@@ -60,11 +60,13 @@ end
 
 # ─── The regex binding ─────────────────────────────────────────
 
-test.case("regex: bad patterns give libc's message") do
+test.case("regex: bad patterns give grep's message") do
   test.assert_eq(regex.compile("a("), {ok: false, error: "Unmatched ( or \\("})
   test.assert_eq(regex.compile("[[:nope:]]"), {ok: false, error: "Invalid character class name"})
   test.assert_eq(regex.compile("a\\"), {ok: false, error: "Trailing backslash"})
-  test.assert_eq(regex.compile('a{2,1}').ok, false)
+  test.assert_eq(regex.compile('a{2,1}'), {ok: false, error: 'Invalid content of \\{\\}'})
+  test.assert_eq(regex.compile('a{1'), {ok: false, error: 'Unmatched \\{'})
+  test.assert_eq(regex.compile("[a"), {ok: false, error: "Unmatched [, [^, [:, [., or [="})
   test.assert_eq(regex.compile("a\0b"), {ok: false, error: "the pattern holds a NUL byte"})
   # A bad pattern is rejected however it is wrapped.
   test.assert_eq(regex.compile("a(", {word: true}).ok, false)
@@ -80,13 +82,21 @@ test.case("regex: matching byte ranges, NULs included") do
   test.assert_eq(regex.search(rx, s, 0, 11), {start: 3, stop: 6})
   test.assert_eq(regex.search(rx, s, 6, 11), {start: 8, stop: 11})
   test.assert_eq(regex.search(rx, s, 0, 2), nil)
-  # libc's `.` never matches a NUL byte (RE_DOT_NOT_NULL); a bracket does.
-  let nul = compiled("a.b|x[^y]z")
-  test.assert(not regex.test(nul, "a\0b", 0, 3), "`.` and NUL")
+  # A bracket matches a NUL byte. Whether `.` does is libc's choice
+  # (glibc: no, macOS: yes).
+  let nul = compiled("x[^y]z")
   test.assert(regex.test(nul, "x\0z", 0, 3), "`[^y]` and NUL")
   test.assert(regex.test(compiled(""), "", 0, 0), "the empty pattern matches the empty line")
   regex.free(rx)
   regex.free(nul)
+end
+
+test.case("regex: word boundaries, classes and backreferences") do
+  test.assert_eq(regex.search(compiled('\\<fo+\\>'), "foox foo", 0, 8), {start: 5, stop: 8})
+  test.assert_eq(regex.search(compiled('\\bba'), "abar bar", 0, 8), {start: 5, stop: 7})
+  test.assert_eq(regex.search(compiled('\\w+\\s'), "-ab_1 c", 0, 7), {start: 1, stop: 6})
+  test.assert(regex.test(compiled('(ab)\\1'), "xabab", 0, 5), "backreference")
+  test.assert(not regex.test(compiled('(ab)\\1'), "xabba", 0, 5), "backreference, no match")
 end
 
 test.case("regex: anchors at a range's edges") do
@@ -108,6 +118,10 @@ test.case("regex: -i, -w, -x and -F") do
   let x = compiled("fo+|bar", {line: true, word: true})
   test.assert(regex.test(x, "foo", 0, 3), "whole line")
   test.assert(not regex.test(x, "foo bar", 0, 7), "-x wins over -w")
+  test.assert(regex.test(compiled("", {line: true}), "", 0, 0), "-x: the empty pattern, an empty line")
+  test.assert(not regex.test(compiled("", {line: true}), "a", 0, 1), "-x: the empty pattern, a line")
+  test.assert(regex.test(compiled("", {word: true}), "a ", 0, 2), "-w: the empty pattern beside a space")
+  test.assert(not regex.test(compiled("", {word: true}), "ab", 0, 2), "-w: the empty pattern inside a word")
   test.assert_eq(regex.quote('a.b*(c)|[d]{1}^$\\'), 'a\\.b\\*\\(c\\)\\|\\[d\\]\\{1\\}\\^\\$\\\\')
   let f = compiled(regex.quote("a.b("))
   test.assert(regex.test(f, "xa.b(", 0, 5), "fixed")

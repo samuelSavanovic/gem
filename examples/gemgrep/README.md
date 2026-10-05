@@ -18,12 +18,15 @@ cd examples/gemgrep
 ```
 
 ```
-28:/* 0, or the regcomp error code for rx_error. REG_NEWLINE: a range that
-34:    int rc = regcomp(&r->re, pattern, flags);
-54:        regfree(&r->re);
+27:/* macOS's regcomp reads `\<`, `\>`, `\b`, `\w`, `\s` and backreferences
+36:/* 0, or the regcomp error code for rx_error. REG_NEWLINE: a range that
+42:    int rc = regcomp(&r->re, pattern, flags);
+47:/* The message for regcomp's error `code`: glibc's text, which is GNU
+78:        regfree(&r->re);
 regex.gem:8
 walk.gem:3
 ./README.md
+./gemgrep
 ./regex.gem
 ./rx.h
 ```
@@ -57,25 +60,37 @@ them, and `-` is standard input. As in grep:
   selected line.
 - Errors go to stderr as `gemgrep: nope: No such file or directory`,
   `gemgrep: src: Is a directory` (a directory without `-r`),
-  `gemgrep: Unmatched ( or \(` (libc's message for a bad pattern), and a
-  bad command line prints grep's usage lines.
+  `gemgrep: Unmatched ( or \(` (grep's message for a bad pattern), and a
+  bad command line prints grep-style usage lines.
 - A file that holds a NUL byte is binary: its lines aren't printed;
   `gemgrep: FILE: binary file matches` goes to stderr instead when one is
   selected. `-c` and `-l` treat it like any file.
 
 Differences from GNU grep:
 
-- **The regex is libc's**, so its dialect and messages are glibc's: no
-  BRE mode (`-G`), `\<`, `\>`, `\b`, `\w` and backreferences work as
-  glibc extensions, and a few edge patterns that GNU grep accepts are
-  errors (`a{1` is `Unmatched \{`). `.` never matches a NUL byte
-  (glibc's `RE_DOT_NOT_NULL`).
+- **The regex is libc's**, so its dialect is: no BRE mode (`-G`);
+  `\<`, `\>`, `\b`, `\w`, `\s` and backreferences work as extensions
+  (backreferences not with `-w` or `-x`, KNOWN_BUGS.md); and a few edge
+  patterns that GNU grep accepts are errors (`a{1` is `Unmatched \{`).
+  The messages are glibc's, which are grep's, whatever the libc:
+  `rx_error` holds glibc's text for the POSIX error codes. glibc's `.`
+  never matches a NUL byte (`RE_DOT_NOT_NULL`).
+- **On macOS**, libc's regex has the extensions above only under
+  `REG_ENHANCED`, which `rx.h` sets there. It differs from glibc's in
+  more places than these: `.` matches a NUL byte; an empty alternative
+  (`a|`, `(|b)`) and a repeated repetition (`a**`) are errors (`empty
+  (sub)expression`, `Invalid preceding regular expression`); `\d` is a
+  digit and `\t`, `\n` and `\r` are control characters (glibc: the
+  letters); `a{,2}` is literal text (glibc: `a{0,2}`); `+?`, `*?` and `??`
+  are lazy (glibc: greedy); and the backtracking pattern under "Inline,
+  not blocking" below runs for more than 30 s. The empty pattern itself
+  works: `regex.compile` passes it as `()`.
 - **Binary files**: grep decides from the first buffer it reads and,
   in a binary file, also ends lines at NUL bytes, so `-v` can select the
   bytes before a NUL; here a NUL anywhere makes the file binary and lines
   end only at `\n`. Devices and FIFOs under `-r` are read, not skipped.
-- **Directory order**: grep walks in readdir order, gemgrep in byte order
-  of the names, so a tree's files come out sorted.
+- **Directory order**: grep walks in readdir order; gemgrep sorts each
+  directory's entries by name, in byte order.
 - No context lines (`-A`, `-B`, `-C`), `-L`, `-m`, `--include`, colors,
   or long options other than `--help`; patterns hold no newline.
 
@@ -94,25 +109,22 @@ Differences from GNU grep:
 ## The C side
 
 `rx.h` and `fs.h` are headers of `static` functions that the `.gem`
-files include with `extern include`; the program links only libc, so
-everything else comes from there. What each part shows:
+files include with `extern include`; they call nothing beyond libc. What each part shows:
 
-- **A handle with a lifetime.** `regex.compile` `malloc`s a `regex_t`
-  (`rx_new`) and returns it in a table, `{handle, group}`; `regex.free`
+- **A handle with a lifetime.** `regex.compile` allocates an `rx_handle`
+  holding a `regex_t` (`rx_new`) and returns it in a table, `{handle, group}`; `regex.free`
   calls `regfree` and `free` and zeroes the handle, so a second free does
   nothing and a use after it raises instead of reading freed memory. A
-  bad pattern takes the error path in the right order: `regerror`'s text
+  bad pattern takes the error path in the right order: the message
   first, then the free, then `{ok: false, error}`. A NULL from `rx_new`
   comes back as `0`, which Gem treats as true, so it is compared with `0`.
 - **Freed on every path.** A `Ptr` is an int to Gem: nothing frees the
   C object when the process holding it dies, the way nothing closes a
   socket. Each batch task compiles its own regex and runs its files
   under `pcall`, frees the regex, then re-raises.
-- **One owner per handle.** A handle also holds its last match's offsets
-  (`rx_group_start`/`end` read them after `rx_exec`), so two processes
-  sharing one could read each other's; and `spawn` or `send` would copy
-  the number, not the object, so a process freeing it would leave the
-  other with a dangling pointer. The tasks get the pattern and compile
+- **One owner per handle.** `spawn` or `send` would copy the number, not
+  the object, so a process freeing it would leave the other with a
+  dangling pointer. The tasks get the pattern and compile
   their own (once per 32 files; it costs nothing measurable).
 - **`Bytes`, not `String`, for data.** The file's contents go to `rx_exec`
   as `Bytes`, a pointer and a length, and `REG_STARTEND` makes `regexec`
@@ -124,14 +136,16 @@ everything else comes from there. What each part shows:
   into the string, which `-o` slices with `substr`; with `-w` the pattern
   is wrapped as `(^|[^[:alnum:]_])(PATTERN)([^[:alnum:]_]|$)` and the
   offsets are group 2's.
-- **Static strings back.** `rx_error` returns `regerror`'s text in a
-  `static` buffer and `fs_open_error` returns `strerror`'s: a plain
+- **Static strings back.** `rx_error` returns a string literal, or
+  `regerror`'s text in a `static` buffer, and `fs_open_error` returns
+  `strerror`'s: a plain
   `extern fn` copies a returned string and never frees it. They return
   `char *`: a `const char *` return makes cc warn in the generated
   wrapper (KNOWN_BUGS.md).
 - **Inline, not blocking.** Matching is a plain `extern fn`: it runs on
-  the scheduler thread, between two loop back-edges, so other processes
-  wait for one `regexec` call (one line), not for a file. As an
+  the scheduler thread, between two loop back-edges, so the scheduler can
+  preempt a task between two lines (every `GEM_REDUCTION_LIMIT`
+  back-edges), never inside a call. As an
   `extern blocking fn`, each call would go through the thread pool and
   copy its `Bytes` argument: 19,000 lines of a 1 MB file took 0.64 s
   passing each line, 1.7 s passing the whole file, against 5 ms inline.
@@ -141,7 +155,8 @@ everything else comes from there. What each part shows:
   File reads use `read_file`, which runs on the pool, so a task waiting
   for its file lets the others match.
 - **Why it can't read the error.** `read_file` and `list_dir` raise
-  `cannot open '<path>'` without the reason (KNOWN_BUGS.md), so after a
+  `read_file: cannot open '<path>'` and `list_dir: cannot open directory
+  '<path>'` without the reason (KNOWN_BUGS.md), so after a
   failed read `fs_open_error` opens the file again to get `strerror`'s
   text for grep's message.
 
@@ -151,12 +166,12 @@ everything else comes from there. What each part shows:
   and calls `regex.test` on each line's range of the file's string. A
   helper that hands `regexec` the rest of the buffer (with `REG_NEWLINE`,
   a match stays inside a line) and returns the start of the next matching
-  line is 1.4 to 2.4 times faster when matches are rare (on the 64 MB
-  corpus: `-r handler` 0.25 s against 0.52 s, `-rn deadbeef` 0.18 against
+  line is 1.4 to 2.4 times faster when matches are rare (on the corpus
+  at `MB=64`: `-r handler` 0.25 s against 0.52 s, `-rn deadbeef` 0.18 against
   0.44, `-rl deadbeef` 0.09 against 0.19) and the same when most lines
-  match (`-rn e`, 1.25 s), because the per-line loop then runs anyway. It
-  was not kept: it needs a second helper to count lines for `-n`, `-v`
-  still needs the line walk, a file with no match holds the scheduler for
+  match (`-rn e`, 1.25 s), because the per-line loop then runs anyway.
+  The program doesn't use one: it would need a second helper to count
+  lines for `-n`, `-v` would still need the line walk, a file with no match holds the scheduler for
   the whole file in one call, and the per-line loop is the program a Gem
   user writes first.
 - **Tasks for batches, output in order.** `grep.run` cuts the file list
@@ -209,13 +224,12 @@ Where it goes:
   and loses where `re` can jump to a literal (`handler`, `deadbeef`,
   `gem_table_set`): there Python's per-line cost is lower than Gem's
   loop overhead alone.
-- **Big outputs are copied by resets.** `-rn e` copied 1 GB in 892
-  resets, 0.58 s of a 2.6–3.0 s run: the batch's result array and the
-  output being built survive each reset of the loop that grows them, and
-  each reset copied them again. Resets now promote what they keep, but
-  the short inner loops start fresh marks whose first reset copies
-  everything it finds: 655 of 1,693 resets are full, copying 1.6 GB
-  (OPTIMIZATIONS.md, "A loop's first reset is full").
+- **Big outputs are copied by resets.** The batch's result array and
+  the output being built survive each reset of the loop that grows them.
+  A reset promotes what it keeps, so later resets of that loop don't copy
+  it again, but the short inner loops start fresh marks whose first reset
+  is full: in `-rn e`, 655 of 1,693 resets are full, and the resets copy
+  1.6 GB (OPTIMIZATIONS.md, "A loop's first reset is full").
 
 Keep this program idiomatic: it is the yardstick for C-interop and
 text-processing fixes, not a place to work around them.
