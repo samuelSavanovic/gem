@@ -42,18 +42,26 @@ end
 ## and end at a line edge or next to a byte that is not a letter, digit or
 ## `_`; `line` matches only whole lines (grep -x, which wins over
 ## `word`). Returns `{ok: true, value: rx}` or `{ok: false, error: msg}` with
-## libc's message (`Unmatched ( or \(`). A pattern can't hold a NUL byte.
+## GNU grep's message for the POSIX error codes (`Unmatched ( or \(`). A
+## pattern can't hold a NUL byte. With `word` or `line`, a backreference in
+## `pattern` names the wrong group (KNOWN_BUGS.md).
 fn compile(pattern, {icase = false, word = false, line = false} = {})
   if find(pattern, "\0") >= 0
     return {ok: false, error: "the pattern holds a NUL byte"}
   end
   let source = pattern
+  if pattern == ""
+    # macOS's regcomp rejects an empty pattern; `()` matches the empty
+    # string under either libc.
+    source = "()"
+  end
   let group = 0
   if line
     source = "^({pattern})$"
     group = 1
   elif word
-    # Groups 1 and 3 take the bytes around the word; the pattern is group 2.
+    # The first and last groups take the bytes around the word; the pattern
+    # is group 2.
     source = "(^|[^{WORD}])({pattern})([^{WORD}]|$)"
     group = 2
   end
