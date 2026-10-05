@@ -2,6 +2,8 @@
 # Benchmarks examples/bookmark_app with wrk: read bursts, a soak and a
 # write burst, sampling the app's RSS throughout. Results go to
 # benchmarks/logs/<timestamp>/, or to $OUT. Phase durations: see below.
+# The app runs with LOG_LEVEL=warn, so it logs no line per request, like
+# the Node twin (benchmarks/node_baseline/app.mjs).
 # Exits 1 if the app crashed.
 set -euo pipefail
 
@@ -52,7 +54,7 @@ wait_for_server() {
 start_app() {
   rm -f "$APP_DIR/bookmarks.db" "$APP_DIR/bookmarks.db-shm" "$APP_DIR/bookmarks.db-wal"
   cd "$APP_DIR"
-  ./app > "$RUN_DIR/app_stdout.log" 2>&1 &
+  LOG_LEVEL=warn ./app > "$RUN_DIR/app_stdout.log" 2>&1 &
   APP_PID=$!
   wait_for_server
 }
