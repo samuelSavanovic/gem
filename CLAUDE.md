@@ -62,6 +62,8 @@ docs/LSP_ROADMAP.md       # Gem LSP plan + deferred v2 features
 editors/vscode/       # VS Code extension (TextMate grammar)
 editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
 benchmarks/           # wrk harness for examples/bookmark_app (run.sh) + node_baseline reference impl
+                      #   measure_all.sh         — runs every harness below into baselines/<date>_<machine>/ (to commit); summarize.py writes
+                      #                            its summary.csv/.md and compares two baselines (--compare); measure.py times the batch runs
                       #   stomp/                 — Python STOMP load harness for examples/stomp_broker (M6 lived-experience numbers)
                       #   logstat/               — examples/logstat vs the same program in Python, with an output diff
                       #   mini_redis/            — examples/mini_redis vs redis-server (redis-benchmark, pub/sub fan-out, a reply diff)

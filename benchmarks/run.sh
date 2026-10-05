@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Benchmarks examples/bookmark_app with wrk: read bursts, a soak and a
+# write burst, sampling the app's RSS throughout. Results go to
+# benchmarks/logs/<timestamp>/, or to $OUT. Phase durations: see below.
+# Exits 1 if the app crashed.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -93,7 +97,7 @@ fi
 # --- setup run directory ---
 
 RUN_ID="$(timestamp)"
-RUN_DIR="$LOGS_DIR/$RUN_ID"
+RUN_DIR="${OUT:-$LOGS_DIR/$RUN_ID}"
 mkdir -p "$RUN_DIR"
 
 echo "=== Gem Bookmark App Benchmark ==="
@@ -155,7 +159,7 @@ echo "  (watching for latency drift and memory growth)"
 wrk -t"$SOAK_THREADS" -c"$SOAK_CONNECTIONS" -d"$SOAK_DURATION" \
   --latency "$URL/bookmarks" \
   | tee "$RUN_DIR/soak_get_bookmarks.txt"
-check_alive || echo "  !! App crashed during soak"
+check_alive || { echo "  !! App crashed during soak"; CRASHED=1; }
 echo ""
 
 # =============================================
@@ -166,7 +170,7 @@ echo "--- Burst: POST /bookmarks ($WRITE_BURST_DURATION, ${WRITE_BURST_CONNECTIO
 wrk -t1 -c"$WRITE_BURST_CONNECTIONS" -d"$WRITE_BURST_DURATION" \
   --latency -s "$SCRIPT_DIR/wrk_post_bookmark.lua" "$URL/bookmarks" \
   | tee "$RUN_DIR/burst_post_bookmarks.txt"
-check_alive || echo "  !! App crashed during write burst"
+check_alive || { echo "  !! App crashed during write burst"; CRASHED=1; }
 echo ""
 
 # --- stop RSS sampling, stop app ---
@@ -220,3 +224,4 @@ echo ""
 
 echo "=== Done ==="
 echo "Results saved to: $RUN_DIR"
+[[ -z "${CRASHED:-}" ]] || exit 1
