@@ -1,0 +1,27 @@
+{
+  "workload": "slow_consumer",
+  "n_fast": 4,
+  "n_slow": 1,
+  "slow_delay_ms": 200,
+  "body_size": 1024,
+  "duration_s": 15.0,
+  "publish_elapsed_s": 15.004,
+  "msgs_sent": 304821,
+  "publish_msgs_per_s": 20315.3,
+  "publisher_error": null,
+  "publisher_blocked_at_s": null,
+  "fast_subs_msgs": [
+    880,
+    881,
+    881,
+    881
+  ],
+  "fast_subs_min": 880,
+  "fast_subs_max": 881,
+  "slow_subs_msgs": [
+    97
+  ],
+  "slow_subs_min": 97,
+  "slow_subs_max": 97,
+  "n_errors": 0
+}

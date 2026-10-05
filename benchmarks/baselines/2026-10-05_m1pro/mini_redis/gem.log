@@ -1,0 +1,24 @@
+mini_redis listening on 127.0.0.1:6391
+--- end of phase basic
+gem_diag: arena_resets=20220 copied=646505440 scanned=4698509576 freed=26809263136 time=2.432s walk=0.858s full=831 max=0.044s
+gem_diag: spawn_overflow=0 proc_hwm=809 max_procs=262144
+mini_redis listening on 127.0.0.1:6391
+--- end of phase pipeline
+gem_diag: arena_resets=10635 copied=657244384 scanned=1609028256 freed=23617579504 time=0.876s walk=0.424s full=927 max=0.039s
+gem_diag: spawn_overflow=0 proc_hwm=809 max_procs=262144
+mini_redis listening on 127.0.0.1:6391
+--- end of phase clients
+gem_diag: arena_resets=214 copied=206392688 scanned=297256464 freed=721097152 time=0.285s walk=0.120s full=20 max=0.013s
+gem_diag: spawn_overflow=0 proc_hwm=1024 max_procs=262144
+mini_redis listening on 127.0.0.1:6391
+--- end of phase keyspace
+gem_diag: arena_resets=1399 copied=334699984 scanned=1070848560 freed=2604052768 time=0.717s walk=0.389s full=105 max=0.094s
+gem_diag: spawn_overflow=0 proc_hwm=110 max_procs=262144
+mini_redis listening on 127.0.0.1:6391
+--- end of phase expire
+gem_diag: arena_resets=1309 copied=660415360 scanned=2113308832 freed=3344323504 time=0.962s walk=0.711s full=58 max=0.234s
+gem_diag: spawn_overflow=0 proc_hwm=62 max_procs=262144
+mini_redis listening on 127.0.0.1:6391
+--- end of phase pubsub
+gem_diag: arena_resets=489 copied=590528 scanned=41906304 freed=593169824 time=0.064s walk=0.003s full=104 max=0.001s
+gem_diag: spawn_overflow=0 proc_hwm=2006 max_procs=262144

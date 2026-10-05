@@ -1,0 +1,72 @@
+6649:C 05 Oct 2026 18:56:53.493 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+6649:C 05 Oct 2026 18:56:53.493 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=6649, just started
+6649:C 05 Oct 2026 18:56:53.493 * Configuration loaded
+6649:M 05 Oct 2026 18:56:53.494 * monotonic clock: ARM CNTVCT @ 24 ticks/us
+6649:M 05 Oct 2026 18:56:53.495 * Running mode=standalone, port=6390.
+6649:M 05 Oct 2026 18:56:53.495 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+6649:M 05 Oct 2026 18:56:53.495 * Server initialized
+6649:M 05 Oct 2026 18:56:53.496 * Ready to accept connections tcp
+6649:M 05 Oct 2026 18:56:53.496 # WARNING: Redis does not require authentication. Redis will accept connections from any local client.
+6649:signal-handler (1791219450) Received SIGTERM scheduling shutdown...
+6649:M 05 Oct 2026 18:57:30.370 * User requested shutdown...
+6649:M 05 Oct 2026 18:57:30.370 # Redis is now ready to exit, bye bye...
+7512:C 05 Oct 2026 18:57:30.392 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+7512:C 05 Oct 2026 18:57:30.392 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=7512, just started
+7512:C 05 Oct 2026 18:57:30.392 * Configuration loaded
+7512:M 05 Oct 2026 18:57:30.392 * monotonic clock: ARM CNTVCT @ 24 ticks/us
+7512:M 05 Oct 2026 18:57:30.393 * Running mode=standalone, port=6390.
+7512:M 05 Oct 2026 18:57:30.393 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+7512:M 05 Oct 2026 18:57:30.393 * Server initialized
+7512:M 05 Oct 2026 18:57:30.393 * Ready to accept connections tcp
+7512:M 05 Oct 2026 18:57:30.393 # WARNING: Redis does not require authentication. Redis will accept connections from any local client.
+7512:signal-handler (1791219469) Received SIGTERM scheduling shutdown...
+7512:M 05 Oct 2026 18:57:49.543 * User requested shutdown...
+7512:M 05 Oct 2026 18:57:49.543 # Redis is now ready to exit, bye bye...
+7964:C 05 Oct 2026 18:57:49.563 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+7964:C 05 Oct 2026 18:57:49.563 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=7964, just started
+7964:C 05 Oct 2026 18:57:49.563 * Configuration loaded
+7964:M 05 Oct 2026 18:57:49.564 * monotonic clock: ARM CNTVCT @ 24 ticks/us
+7964:M 05 Oct 2026 18:57:49.564 * Running mode=standalone, port=6390.
+7964:M 05 Oct 2026 18:57:49.564 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+7964:M 05 Oct 2026 18:57:49.564 * Server initialized
+7964:M 05 Oct 2026 18:57:49.564 * Ready to accept connections tcp
+7964:M 05 Oct 2026 18:57:49.564 # WARNING: Redis does not require authentication. Redis will accept connections from any local client.
+7964:signal-handler (1791219477) Received SIGTERM scheduling shutdown...
+7964:M 05 Oct 2026 18:57:57.595 * User requested shutdown...
+7964:M 05 Oct 2026 18:57:57.595 # Redis is now ready to exit, bye bye...
+8174:C 05 Oct 2026 18:57:57.619 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+8174:C 05 Oct 2026 18:57:57.619 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=8174, just started
+8174:C 05 Oct 2026 18:57:57.619 * Configuration loaded
+8174:M 05 Oct 2026 18:57:57.619 * monotonic clock: ARM CNTVCT @ 24 ticks/us
+8174:M 05 Oct 2026 18:57:57.619 * Running mode=standalone, port=6390.
+8174:M 05 Oct 2026 18:57:57.619 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+8174:M 05 Oct 2026 18:57:57.620 * Server initialized
+8174:M 05 Oct 2026 18:57:57.620 * Ready to accept connections tcp
+8174:M 05 Oct 2026 18:57:57.620 # WARNING: Redis does not require authentication. Redis will accept connections from any local client.
+8174:signal-handler (1791219482) Received SIGTERM scheduling shutdown...
+8174:M 05 Oct 2026 18:58:02.402 * User requested shutdown...
+8174:M 05 Oct 2026 18:58:02.402 # Redis is now ready to exit, bye bye...
+8316:C 05 Oct 2026 18:58:02.428 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+8316:C 05 Oct 2026 18:58:02.428 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=8316, just started
+8316:C 05 Oct 2026 18:58:02.428 * Configuration loaded
+8316:M 05 Oct 2026 18:58:02.429 * monotonic clock: ARM CNTVCT @ 24 ticks/us
+8316:M 05 Oct 2026 18:58:02.429 * Running mode=standalone, port=6390.
+8316:M 05 Oct 2026 18:58:02.429 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+8316:M 05 Oct 2026 18:58:02.429 * Server initialized
+8316:M 05 Oct 2026 18:58:02.429 * Ready to accept connections tcp
+8316:M 05 Oct 2026 18:58:02.429 # WARNING: Redis does not require authentication. Redis will accept connections from any local client.
+8316:signal-handler (1791219496) Received SIGTERM scheduling shutdown...
+8316:M 05 Oct 2026 18:58:16.745 * User requested shutdown...
+8316:M 05 Oct 2026 18:58:16.746 # Redis is now ready to exit, bye bye...
+8698:C 05 Oct 2026 18:58:16.769 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+8698:C 05 Oct 2026 18:58:16.769 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=8698, just started
+8698:C 05 Oct 2026 18:58:16.769 * Configuration loaded
+8698:M 05 Oct 2026 18:58:16.770 * monotonic clock: ARM CNTVCT @ 24 ticks/us
+8698:M 05 Oct 2026 18:58:16.770 * Running mode=standalone, port=6390.
+8698:M 05 Oct 2026 18:58:16.770 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+8698:M 05 Oct 2026 18:58:16.770 * Server initialized
+8698:M 05 Oct 2026 18:58:16.770 * Ready to accept connections tcp
+8698:M 05 Oct 2026 18:58:16.770 # WARNING: Redis does not require authentication. Redis will accept connections from any local client.
+8698:signal-handler (1791219501) Received SIGTERM scheduling shutdown...
+8698:M 05 Oct 2026 18:58:21.932 * User requested shutdown...
+8698:M 05 Oct 2026 18:58:21.932 # Redis is now ready to exit, bye bye...
