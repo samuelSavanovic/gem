@@ -165,13 +165,15 @@ Choices worth knowing:
   Python, 0.14 KB in Elixir). 100,000 jobs peak at about 800 MB, against
   166 MB for the Python twin and 218 MB for Elixir. A real queue would
   expire finished records.
-- **Big state means long pauses.** The queue's records live in its loop,
-  so every arena reset of the queue copies all of them, and no other
-  process runs meanwhile. With 20,000 jobs the longest pause is 50–80 ms,
-  with 100,000 about 1.5 s; a job whose attempt overlaps one can miss a
-  100 ms deadline it would otherwise meet (`--jobs 40000 --slow 0.1`: 30
-  healthy attempts killed). The benchmark scenarios give deadlines room;
-  see docs/OPTIMIZATIONS.md, "Survivors of a reset are copied again".
+- **Big state means pauses.** The queue's records live in its loop.
+  Arena resets promote what they keep, so most of them copy only the
+  records made since the last one, but a full reset now and then copies
+  all of them, and no other process runs meanwhile. With 20,000 jobs the
+  longest reset takes about 0.09 s, with 100,000 0.25–0.5 s; a job whose
+  attempt overlaps one can miss a 100 ms deadline it would otherwise meet
+  (`--jobs 20000 --slow 0.1`: 0–5 healthy attempts killed per run,
+  `--jobs 40000`: 14). The benchmark scenarios give deadlines room; see
+  docs/OPTIMIZATIONS.md, "Full resets still copy all a loop keeps".
 - **One system at a time**: the queue and the worker supervisor have
   fixed registered names.
 - **No jitter in the backoff**, so retries of jobs that failed together

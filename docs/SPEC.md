@@ -93,7 +93,7 @@ A reset works on one process's arena only: it never scans or moves another proce
 **What it costs.**
 
 - `send` and `spawn` cost time proportional to the size of what they copy, strings included. Send what the receiver needs, not a large state table; keep large shared data in a process that answers queries.
-- A loop reset costs time proportional to the data the loop keeps, and the next reset waits until the loop has allocated twice that much again, so a loop that holds a large state does not slow down as it grows.
+- A loop reset costs time proportional to what the loop made since its last reset and still uses: what a reset keeps is not copied again by the next ones. Now and then a full reset copies everything the loop keeps, to free what it no longer holds; it comes once the kept data has doubled since the last one, so a loop that holds a large state does not slow down as it grows, but it pauses the other processes for one copy of that state at a time.
 
 **When memory grows.**
 
@@ -579,9 +579,9 @@ Loops reclaim their own garbage as they run, so long-lived processes (accept loo
 2. **Self tail calls** (TCO, see above), with any number of arguments — including none — and any kind of parameter.
 3. **Mutual tail calls** that the compiler turns into a trampoline.
 
-When a loop starts, the runtime remembers how much of the arena is in use. At the loop's back-edge, once the loop has allocated enough (at least 1 MB), the runtime copies the values that are still reachable from what was allocated since the loop started — the loop's live variables (computed by the compiler's liveness analysis), the process's module state and mailbox, and anything stored into older tables or buffers — into fresh memory, and returns the rest to the OS. Memory allocated before the loop started is never moved or freed by the loop, which is what makes this safe wherever the loop runs: called from any position, at any depth, inside `pcall`, in a spawned closure or in the main program. From the program's perspective nothing happens.
+When a loop starts, the runtime remembers how much of the arena is in use. At the loop's back-edge, once the loop has allocated enough (at least 1 MB), the runtime copies the values that are still reachable from what was allocated since the loop's last reset (since the loop started, for the first one) — the loop's live variables (computed by the compiler's liveness analysis), the process's module state and mailbox, and anything stored into older tables or buffers — into fresh memory, and returns the rest to the OS. What a reset copied counts as older from then on, so the next resets leave it in place; a full reset, which starts again from where the loop started, frees what the loop dropped among it once that memory has doubled. Memory allocated before the loop started is never moved or freed by the loop, which is what makes this safe wherever the loop runs: called from any position, at any depth, inside `pcall`, in a spawned closure or in the main program. From the program's perspective nothing happens.
 
-The cost of a reset is proportional to the data it keeps, and the next reset waits until the loop has allocated at least twice that much again, so the total reset work stays proportional to the memory the loop allocates — a loop that builds a large table, or a server holding a large state, does not slow down as its live data grows.
+The cost of a reset is proportional to the data it copies, and the next reset waits until the loop has allocated at least twice that much again; a full reset copies everything the loop keeps and comes only once the kept data has doubled since the last one. So the total reset work stays proportional to the memory the loop allocates — a loop that builds a large table, or a server holding a large state, does not slow down as its live data grows.
 
 ```
 # tail recursive: memory stays bounded however long it runs

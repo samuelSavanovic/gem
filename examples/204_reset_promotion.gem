@@ -1,0 +1,420 @@
+# Arena resets promote what they keep: after a reset, the values it copied
+# count as older than the loop, and later resets copy only what is newer,
+# until the kept memory has doubled and a full reset drops its garbage.
+# Every way a kept value can come to point at newer memory must still work
+# after any number of later resets.
+
+load "std/string"
+
+# About 4 KB of garbage per call, so a loop resets every few hundred
+# iterations.
+fn junk(i)
+  let t = []
+  for k = 0, 40
+    push(t, "junk-{i}-{k}-" + to_string(k * i))
+  end
+  t
+end
+
+# 1. A table made in the loop, kept by a reset, then written: new records,
+#    new string keys, replaced values, deletes. Its key index must keep
+#    working while the keys it points at move.
+fn records(n)
+  let state = nil
+  let i = 0
+  while i < n
+    if state == nil
+      state = {by_id: {}, order: [], count: 0}
+    end
+    let id = "id{i % 3000}"
+    state.by_id[id] = {id: id, seen: i, tags: ["t{i}"]}
+    if i % 7 == 0
+      push(state.order, id)
+    end
+    if i % 11 == 0 and has_key(state.by_id, "id{(i + 5) % 3000}")
+      delete(state.by_id, "id{(i + 5) % 3000}")
+    end
+    state.count = state.count + 1
+    junk(i)
+    i += 1
+  end
+  let sum = 0
+  let found = 0
+  for k = 0, 3000
+    let r = state.by_id["id{k}"]
+    if r != nil
+      found += 1
+      sum += r.seen
+      if r.id != "id{k}" or r.tags[0] != "t{r.seen}"
+        print("records: wrong record", k)
+      end
+    end
+  end
+  print("records", state.count, len(state.order), found, sum, state.order[len(state.order) - 1])
+end
+records(30000)
+
+# 2. A kept array grown after the reset (its key/val arrays move to newer
+#    memory) and holding newer tables and closures.
+fn grow(n)
+  let rows = nil
+  let i = 0
+  while i < n
+    if rows == nil
+      rows = []
+    end
+    let v = i
+    push(rows, {n: i, f: fn() v * 2 end})
+    junk(i)
+    i += 1
+  end
+  let ok = 0
+  for k = 0, len(rows)
+    if rows[k].n == k and rows[k].f() == k * 2
+      ok += 1
+    end
+  end
+  print("grow", len(rows), ok)
+end
+grow(20000)
+
+# 3. A buffer made in the loop, kept, then appended to.
+fn buffers(n)
+  let b = nil
+  let i = 0
+  while i < n
+    if b == nil
+      b = buf_new()
+    end
+    buf_push(b, "<{i}>")
+    junk(i)
+    i += 1
+  end
+  let s = to_string(b)
+  print("buffers", len(s), substr(s, 0, 12), substr(s, len(s) - 7, 7))
+end
+buffers(20000)
+
+# 4. Captured variables a closure assigns (pinned boxes), kept and then
+#    given newer values.
+fn boxes(n)
+  let i = 0
+  let get = nil
+  let set = nil
+  while i < n
+    if get == nil
+      let last = {v: "none"}
+      let history = []
+      get = fn() [last, history] end
+      set = fn(v)
+        last = {v: v}
+        push(history, v)
+      end
+    end
+    set("v{i}")
+    junk(i)
+    i += 1
+  end
+  let lh = get()
+  print("boxes", lh[0].v, len(lh[1]), lh[1][0], lh[1][n - 1])
+end
+boxes(20000)
+
+# 5. Nested loops: the inner loop promotes into memory the outer loop's
+#    resets own; values cross between them.
+fn nested(n)
+  let outer = {}
+  let j = 0
+  while j < n
+    let inner = nil
+    let i = 0
+    while i < 400
+      if inner == nil
+        inner = {items: []}
+      end
+      push(inner.items, "{j}:{i}")
+      junk(i)
+      i += 1
+    end
+    outer["k{j}"] = inner
+    j += 1
+  end
+  let total = 0
+  for k = 0, n
+    total += len(outer["k{k}"].items)
+  end
+  print("nested", total, outer.k0.items[0], outer["k{n - 1}"].items[399])
+end
+nested(40)
+
+# 6. A module-level table written from a loop.
+let registry = {}
+fn register(n)
+  let i = 0
+  while i < n
+    registry["r{i % 500}"] = {at: i, name: string.repeat("n", i % 5)}
+    junk(i)
+    i += 1
+  end
+  print("registry", len(keys(registry)), registry.r0.at, registry.r499.at, registry.r4.name)
+end
+register(20000)
+
+# 7. Messages: a process keeps received messages in state made in its loop
+#    while others keep arriving.
+fn collector(parent)
+  let state = nil
+  let running = true
+  while running
+    receive
+    when {tag: "item", n}
+      if state == nil
+        state = {items: [], sum: 0}
+      end
+      push(state.items, {n: n, label: "item-{n}"})
+      state.sum = state.sum + n
+      junk(n)
+    when {tag: "done"}
+      send(parent, {tag: "result", count: len(state.items), sum: state.sum, last: state.items[len(state.items) - 1].label})
+      running = false
+    end
+  end
+end
+let me = self()
+let c = spawn(fn() collector(me) end)
+for k = 0, 20000
+  send(c, {tag: "item", n: k})
+end
+send(c, {tag: "done"})
+receive
+when {tag: "result", count, sum, last}
+  print("messages", count, sum, last)
+end
+
+# 8. A tail-recursive loop carrying its kept state as an argument.
+fn tco(i, n, acc)
+  if i == n
+    return acc
+  end
+  acc["x{i % 1000}"] = i
+  junk(i)
+  tco(i + 1, n, acc)
+end
+fn tco_start(n)
+  let acc = tco(0, n, {})
+  print("tco", len(keys(acc)), acc.x0, acc.x999)
+end
+tco_start(20000)
+
+# 9. Churn: a loop that keeps replacing what it holds. Kept garbage must
+#    be dropped by full resets, so memory stays bounded however long it
+#    runs (each iteration makes a new 2 KB state and drops the old one).
+fn churn(n)
+  let state = {gen: 0, data: []}
+  let i = 0
+  while i < n
+    let data = []
+    for k = 0, 50
+      push(data, "g{i}-{k}")
+    end
+    state = {gen: state.gen + 1, data: data}
+    junk(i)
+    i += 1
+  end
+  print("churn", state.gen, state.data[49])
+end
+churn(50000)
+
+# 10. Spawns from a loop that keeps changing a module-level table: each
+#     child must see the table as it was at its spawn, through the kept
+#     copy the parent's resets made of it.
+let shared = {log: []}
+fn spawner(n)
+  let me = self()
+  let i = 0
+  while i < n
+    push(shared.log, "e{i}")
+    if i % 1000 == 999
+      let want = i + 1
+      spawn(fn()
+        let ok = len(shared.log) == want and shared.log[want - 1] == "e{want - 1}"
+        send(me, {tag: "seen", ok: ok})
+      end)
+    end
+    junk(i)
+    i += 1
+  end
+  let good = 0
+  for k = 0, n / 1000
+    receive
+    when {tag: "seen", ok}
+      if ok
+        good += 1
+      end
+    end
+  end
+  print("spawner", good, len(shared.log))
+end
+spawner(10000)
+
+# 11. Messages left in the mailbox while the receiver loops, then taken
+#     out of order with selective receive.
+fn backlog()
+  let me = self()
+  let p = spawn(fn()
+    let i = 0
+    while i < 3000
+      junk(i)
+      i += 1
+    end
+    let got = []
+    for k = 0, 50
+      let want = 49 - k
+      receive
+      when {tag: "b", n: ^want, pad}
+        push(got, want)
+      end
+    end
+    send(me, {tag: "backlog", first: got[0], last: got[49], count: len(got)})
+  end)
+  for k = 0, 50
+    send(p, {tag: "b", n: k, pad: junk(k)})
+  end
+  receive
+  when {tag: "backlog", first, last, count}
+    print("backlog", first, last, count)
+  end
+end
+backlog()
+
+# 12. A table made before the loop, with a string index: keys added,
+#     deleted and added again across many young and full resets. Its
+#     index must keep finding every key the resets moved.
+fn index_churn(n)
+  let t = {}
+  for k = 0, 100
+    t["pre{k}"] = k
+  end
+  let pre_ok = true
+  let i = 0
+  while i < n
+    let key = "k{i % 1500}"
+    if i % 3 == 0 and has_key(t, key)
+      delete(t, key)
+    else
+      t[key] = i
+    end
+    t[i % 50] = "int{i}"
+    if i % 997 == 0
+      for k = 0, 100
+        if t["pre{k}"] != k
+          pre_ok = false
+        end
+      end
+    end
+    junk(i)
+    i += 1
+  end
+  let m = {}
+  for j = 0, n
+    let key = "k{j % 1500}"
+    if j % 3 == 0 and has_key(m, key)
+      delete(m, key)
+    else
+      m[key] = j
+    end
+  end
+  let bad = 0
+  for k = 0, 1500
+    if t["k{k}"] != m["k{k}"]
+      bad += 1
+    end
+  end
+  print("index_churn", bad, pre_ok, len(keys(t)))
+end
+index_churn(20000)
+
+# 13. An inner loop that promotes, then raises through pcall: the outer
+#     loop goes on with what the abandoned loop kept.
+fn boom(acc, j)
+  let local = {items: []}
+  let i = 0
+  while true
+    push(local.items, "b{j}-{i}")
+    acc["last{j % 10}"] = local
+    junk(i)
+    if i == 500
+      error("stop {j}")
+    end
+    i += 1
+  end
+end
+fn pcalls(n)
+  let acc = {}
+  let errs = 0
+  let j = 0
+  while j < n
+    if not pcall(fn() boom(acc, j) end).ok
+      errs += 1
+    end
+    junk(j)
+    j += 1
+  end
+  let bad = 0
+  for k = 0, 10
+    let l = acc["last{k}"]
+    if len(l.items) != 501 or l.items[500] != "b{n - 10 + k}-500"
+      bad += 1
+    end
+  end
+  print("pcalls", errs, bad)
+end
+pcalls(30)
+
+# 14. Recursion where every level runs a loop that keeps a table and
+#     stores it in the level above's.
+fn levels(depth, up)
+  let mine = nil
+  let i = 0
+  while i < 200
+    if mine == nil
+      mine = {d: depth, xs: []}
+    end
+    push(mine.xs, "d{depth}-{i}")
+    up["lvl{depth}"] = mine
+    junk(i)
+    i += 1
+  end
+  let ok = true
+  if depth > 0
+    ok = levels(depth - 1, mine) and mine["lvl{depth - 1}"].d == depth - 1
+  end
+  ok and len(mine.xs) == 200
+end
+let top = {}
+print("levels", levels(30, top), top.lvl30.xs[199])
+
+# 15. Strings and buffers bigger than an arena block, kept and dropped.
+fn bigs(n)
+  let keep = []
+  let i = 0
+  while i < n
+    let s = string.repeat("x", 300000 + i)
+    if i % 4 == 0
+      push(keep, s)
+    end
+    let b = buf_new()
+    buf_push(b, s)
+    buf_push(b, "!")
+    if i % 5 == 0
+      push(keep, b)
+    end
+    i += 1
+  end
+  let total = 0
+  for k = 0, len(keep)
+    total += len(to_string(keep[k]))
+  end
+  print("bigs", len(keep), total)
+end
+bigs(60)

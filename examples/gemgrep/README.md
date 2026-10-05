@@ -209,11 +209,13 @@ Where it goes:
   and loses where `re` can jump to a literal (`handler`, `deadbeef`,
   `gem_table_set`): there Python's per-line cost is lower than Gem's
   loop overhead alone.
-- **Big outputs are copied by resets.** `-rn e` copies 1 GB in 892
+- **Big outputs are copied by resets.** `-rn e` copied 1 GB in 892
   resets, 0.58 s of a 2.6–3.0 s run: the batch's result array and the
   output being built survive each reset of the loop that grows them, and
-  each reset copies them again (OPTIMIZATIONS.md, "Survivors of a reset
-  are copied again").
+  each reset copied them again. Resets now promote what they keep, but
+  the short inner loops start fresh marks whose first reset copies
+  everything it finds: 655 of 1,693 resets are full, copying 1.6 GB
+  (OPTIMIZATIONS.md, "A loop's first reset is full").
 
 Keep this program idiomatic: it is the yardstick for C-interop and
 text-processing fixes, not a place to work around them.
