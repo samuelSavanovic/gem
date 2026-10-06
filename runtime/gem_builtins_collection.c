@@ -110,11 +110,9 @@ GemVal gem_has_key_fn(void *_env, GemVal *args, int argc) {
     if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "has_key: expected table as first argument, got %s", gem_type_str(args[0])); gem_error(buf); }
     GemTable *t = args[0].table;
     GemVal key = args[1];
-    gem_table_index(t);
 
-    /* String key: use hash index */
     if (key.type == VAL_STRING) {
-        return gem_bool(gem_str_index_get(t->str_index, key.sval, key.slen) >= 0);
+        return gem_bool(gem_table_str_pos(t, key.sval, key.slen) >= 0);
     }
 
     /* Integer key: try direct array indexing */
@@ -162,8 +160,8 @@ GemVal gem_in_fn(void *_env, GemVal *args, int argc) {
     GemVal needle = args[1];
     gem_table_index(t);
 
-    /* Array (no string keys): scan values for membership */
-    if (t->str_index == NULL) {
+    /* No string keys (arrays, int-keyed tables): scan values for membership */
+    if (t->nstr == 0) {
         for (int i = 0; i < t->len; i++) {
             if (gem_val_eq(t->vals[i], needle)) return gem_bool(1);
         }
@@ -172,7 +170,7 @@ GemVal gem_in_fn(void *_env, GemVal *args, int argc) {
 
     /* String-keyed table: check if needle is a key */
     if (needle.type == VAL_STRING) {
-        return gem_bool(gem_str_index_get(t->str_index, needle.sval, needle.slen) >= 0);
+        return gem_bool(gem_table_str_pos(t, needle.sval, needle.slen) >= 0);
     }
 
     /* Fallback: linear scan of keys */
@@ -195,7 +193,7 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
     gem_table_index(t);
 
     if (key.type == VAL_STRING) {
-        pos = gem_str_index_get(t->str_index, key.sval, key.slen);
+        pos = gem_table_str_pos(t, key.sval, key.slen);
     } else {
         for (int i = 0; i < t->len; i++) {
             if (gem_val_eq(t->keys[i], key)) { pos = i; break; }
@@ -205,7 +203,10 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
     if (pos < 0) return GEM_NIL;
     GemVal removed = t->vals[pos];
 
-    if (key.type == VAL_STRING) gem_str_index_del(t->str_index, key.sval, key.slen);
+    if (key.type == VAL_STRING) {
+        gem_str_index_del(t->str_index, key.sval, key.slen);
+        t->nstr--;
+    }
 
     int last = t->len - 1;
     if (pos < last) {
@@ -236,7 +237,10 @@ GemVal gem_pop_fn(void *_env, GemVal *args, int argc) {
     t->len--;
     GemVal removed = t->vals[t->len];
     GemVal removed_key = t->keys[t->len];
-    if (removed_key.type == VAL_STRING) gem_str_index_del(t->str_index, removed_key.sval, removed_key.slen);
+    if (removed_key.type == VAL_STRING) {
+        gem_str_index_del(t->str_index, removed_key.sval, removed_key.slen);
+        t->nstr--;
+    }
     if (t->len == 0) t->is_array = 1;
     t->shape_id++;
     return removed;
@@ -365,16 +369,18 @@ GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
     /* No string keys are left: drop their index, whose entries point at
        key strings nothing roots any more. */
     gem_str_index_free(&t->str_index);
+    t->nstr = 0;
+    t->index_stale = 0;
     t->shape_id++;
     return args[0];
 }
 
 /* After keys were renumbered to ints: the string-key index may point at
    key strings that are gone from the table, which nothing roots any more
-   (a reset frees them). Drop it; string keys left below the renumbered
-   range get a fresh index on next use. */
+   (a reset frees them), and nstr may count them. Drop both; gem_table_index
+   recomputes them from the string keys left below the renumbered range. */
 static void gem_table_drop_str_index(GemTable *t) {
-    if (t->str_index == NULL) return;
+    if (t->str_index == NULL && t->nstr == 0) return;
     gem_str_index_free(&t->str_index);
     t->index_stale = 1;
 }
