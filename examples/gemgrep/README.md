@@ -190,10 +190,11 @@ files include with `extern include`; they call nothing beyond libc. What each pa
 ## Performance
 
 `benchmarks/gemgrep/run.sh` runs eleven searches over a generated
-128 MB tree of 1,092 text files and over the repository's sources,
-through gemgrep, GNU grep and the Python twin, and checks that the
-three print the same lines. On a 4-core Linux x86_64 VM (October 2026,
-two runs), gemgrep takes 3.2 to 13 times GNU grep's time and 0.40 to 2.3
+128 MB tree of 1,092 text files and over a generated 12 MB tree shaped
+like the repository's sources, through gemgrep, GNU grep and the Python
+twin, and checks that the three print the same lines. On a 4-core Linux
+x86_64 VM (October 2026, two runs, the last two searches over the
+repository's own sources), gemgrep takes 3.2 to 13 times GNU grep's time and 0.40 to 2.3
 times Python's.
 
 | Search | Gem/grep | Gem/Python |

@@ -7,10 +7,10 @@
 #   MB=256 benchmarks/gemgrep/run.sh          # a bigger corpus (default 128 MB)
 #   GEM_DIAG=1 benchmarks/gemgrep/run.sh      # plus arena statistics (of each Gem row's last run)
 #
-# The corpus is generated (gen_corpus.py, the same bytes every time) into a
-# temporary directory; the `src_*` cases search the repository's own
-# sources. Prints one row per search and program: wall time, peak RSS and
-# (on macOS) instructions retired, over BENCH_REPS runs (measure.py, which
+# Both inputs are generated into a temporary directory, the same bytes
+# every time: the corpus (gen_corpus.py) and, for the `src_*` cases, a tree
+# shaped like this repository's sources (gen_src.py). Prints one row per
+# search and program: wall time, peak RSS and (on macOS) instructions retired, over BENCH_REPS runs (measure.py, which
 # also writes BENCH_CSV); then the Gem/grep and Gem/Python time ratios. The control is `ggrep` when
 # it is on PATH (GNU grep on macOS, `brew install grep`), else `grep`.
 # grep walks directories in readdir order, gemgrep and the twin in sorted
@@ -49,6 +49,7 @@ GREP=$(command -v ggrep || command -v grep) || { echo "grep not found" >&2; exit
 
 (cd "$APP" && env -u GEM_DIAG "$GEM" main.gem -o "$WORK/gemgrep")
 python3 "$SCRIPT_DIR/gen_corpus.py" "$WORK/corpus" "${MB:-128}"
+python3 "$SCRIPT_DIR/gen_src.py" "$WORK/src"
 echo "grep: $("$GREP" --version | head -1); $(python3 --version)"
 
 # measure <impl> <case> <command...>: runs the command (in the cwd) with
@@ -79,7 +80,7 @@ for c in "${CASES[@]}"; do
     cd "$WORK/corpus"
     argv+=(.)
   else
-    cd "$ROOT"
+    cd "$WORK/src"
   fi
   echo "== $name: gemgrep ${argv[*]}"
   measure gem "$name" "$WORK/gemgrep" "${argv[@]}"
