@@ -43,9 +43,12 @@ typedef struct {
     char *lo;
     char *hi;
     size_t bytes_allocated;         /* monotonic count of bytes handed out */
+    size_t bytes_freed;             /* monotonic count of bytes region resets freed */
     struct GemRemEntry *rem;             /* remembered log: tables written per clock epoch (see gem_table_written) */
     size_t rem_len, rem_cap;
     uint64_t pin_seq;               /* stamp for the next pinned box (see GemPinEntry.seq) */
+    size_t ret_min;                 /* return-reset hysteresis (gem_arena_reset_return) */
+    size_t ret_at;                  /* bytes_allocated after the last return reset */
 } GemArena;
 
 void gem_arena_init(GemArena *arena);
@@ -69,14 +72,25 @@ void gem_arena_free_blocks(GemArenaBlock *block);  /* munmap a block chain */
  * back-edge calls gem_arena_reset_region with the values live there. A
  * region reset frees only memory allocated AFTER a point of the mark;
  * everything allocated before it -- which is everything the callers' C
- * frames can hold -- stays where it is. Soundness argument: gem_copy.c. */
+ * frames can hold -- stays where it is. Soundness argument: gem_copy.c.
+ *
+ * Return points: a fn that can recurse (mark_recursive_fns in
+ * compiler/callgraph.gem) records a point at entry (after its param
+ * bindings and gem_push_frame; a TCO fn and a mutual-TCO trampoline use
+ * their loop mark's base point) and at each return calls
+ * gem_arena_reset_return with the return value as the only root when
+ * gem_ret_reset_due says so. A recursion so frees what its calls allocate
+ * as they return, not only when an enclosing loop's iteration ends. */
 typedef struct {
     GemArenaBlock *block;      /* arena->current at that point */
     size_t used;               /* block->used at that point */
     GemTable *tables;          /* arena->table_list at that point */
     struct GemBuffer *buffers; /* arena->buffer_list at that point */
     uint64_t pin_seq;          /* arena->pin_seq at that point */
-    uint64_t clock;            /* gem_mut_clock epoch that began there (see GEM_TABLE_WRITTEN) */
+    uint64_t clock;            /* gem_mut_clock epoch that began there (see gem_table_written) */
+    GemArena *arena;           /* the arena it is a point of */
+    size_t ret_trig;           /* bytes_allocated - bytes_freed at that point, plus
+                                  GEM_ARENA_RESET_THRESHOLD (gem_ret_reset_due) */
 } GemArenaPoint;
 
 /* Two points: `base`, where the loop started, and `young`, the end of what
@@ -657,6 +671,18 @@ void gem_deep_free_n(const GemVal *vals, int n);
    them. */
 void gem_arena_reset_region(GemArenaMark *mark, GemVal **roots, int n_roots,
                             GemVal **pinned_roots, int n_pinned);
+/* Return reset (see "Return points" at GemArenaPoint), called when
+   gem_ret_reset_due holds. It returns at once for a process body's return
+   (the process frees its whole arena when it exits): `own_frames` is how
+   many frames the returning fn has on the call stack (1 for a fn that
+   pushed one, 0 for a trampoline), so a call depth of at most that means
+   no Gem frame of this process called it. It also returns when the
+   call's unfreed memory and what the arena allocated since the last
+   return reset add up to less than that reset's ret_min. Otherwise it
+   runs a full region reset from `pt` with *ret as the only root, and
+   ret_min becomes 2 * bytes copied + bytes scanned / 2 (4 * bytes copied
+   + bytes scanned / 2 when the reset kept at least half of its region). */
+void gem_arena_reset_return(const GemArenaPoint *pt, GemVal *ret, int own_frames);
 
 /* ─── Module globals (per-process module state) ───
  *
@@ -1092,14 +1118,23 @@ static inline GemArena *gem_current_arena(void) {
 
 /* ─── Region marks: hot-path helpers (emitted at every loop entry/back-edge) ─── */
 
+/* The new clock epoch makes the first write after the point to any older
+   table log it, so the resets from this point find it. */
+static inline void gem_arena_point(GemArenaPoint *pt) {
+    GemArena *a = gem_current_arena();
+    pt->block = a->current;
+    pt->used = a->current->used;
+    pt->tables = a->table_list;
+    pt->buffers = a->buffer_list;
+    pt->pin_seq = a->pin_seq;
+    pt->clock = ++gem_mut_clock;
+    pt->arena = a;
+    pt->ret_trig = a->bytes_allocated - a->bytes_freed + GEM_ARENA_RESET_THRESHOLD;
+}
+
 static inline void gem_arena_mark(GemArenaMark *m) {
     GemArena *a = gem_current_arena();
-    m->base.block = a->current;
-    m->base.used = a->current->used;
-    m->base.tables = a->table_list;
-    m->base.buffers = a->buffer_list;
-    m->base.pin_seq = a->pin_seq;
-    m->base.clock = ++gem_mut_clock;
+    gem_arena_point(&m->base);
     m->young = m->base;
     m->trigger = a->bytes_allocated + GEM_ARENA_RESET_THRESHOLD;
     m->old_bytes = 0;
@@ -1110,6 +1145,18 @@ static inline void gem_arena_mark(GemArenaMark *m) {
 static inline int gem_arena_reset_due(const GemArenaMark *m) {
     return gem_current_pid >= 0 &&
            gem_proc_table[gem_current_pid].arena.bytes_allocated > m->trigger;
+}
+
+/* A return reset may be due once the memory the call allocated and no
+   reset has freed yet is at least GEM_ARENA_RESET_THRESHOLD: every reset
+   during the call frees only memory newer than the point, so the arena's
+   allocated-minus-freed count has grown by that much, plus the
+   remembered-log entries the call added (counted as allocation, see
+   gem_remember_table).
+   gem_arena_reset_return checks the rest. */
+static inline int gem_ret_reset_due(const GemArenaPoint *pt) {
+    const GemArena *a = pt->arena;
+    return a->bytes_allocated - a->bytes_freed >= pt->ret_trig;
 }
 
 #endif /* GEM_H */

@@ -1,0 +1,324 @@
+# A fn that can recurse frees what its call allocated when it returns,
+# keeping only the return value. Every way a value made inside a recursion
+# can reach memory older than the call must survive those resets.
+
+# About 20 KB of garbage per call: a recursion of a hundred calls passes
+# the reset threshold.
+fn junk(i)
+  let t = []
+  for k = 0, 40
+    push(t, "junk-{i}-{k}-" + to_string(k * i))
+  end
+  t
+end
+
+# 1. A table per call, combined on the way up.
+fn count(n)
+  junk(n)
+  if n < 2
+    return {v: n, tag: "leaf {n}"}
+  end
+  let a = count(n - 1)
+  let b = count(n - 2)
+  {v: a.v + b.v, tag: "node {n}", left: a.tag}
+end
+let c = count(18)
+print("count", c.v, c.tag, c.left)
+
+# 2. A result that grows on the way up.
+fn build(n)
+  if n == 0
+    return []
+  end
+  let xs = build(n - 1)
+  junk(n)
+  for i = 0, 20
+    push(xs, "item {n}.{i}")
+  end
+  xs
+end
+let xs = build(800)
+print("build", len(xs), xs[0], xs[len(xs) - 1], xs[8000])
+
+# 3. Fresh values stored into memory older than the call.
+let seen = {}
+let names = []
+let last_note = nil
+
+fn store(older, n)
+  junk(n)
+  older["k{n}"] = {n: n, s: "older {n}"}
+  seen["s{n}"] = "seen {n}"
+  if n % 50 == 0
+    push(names, "name {n}")
+    last_note = "note {n}"
+  end
+  if n % 100 == 0
+    send(self(), {tag: "rec", n: n, body: "msg {n}"})
+  end
+  if n > 0
+    store(older, n - 1)
+  end
+  n
+end
+
+fn emit(add, set_last, n)
+  junk(n)
+  add("<{n}>")
+  set_last("last {n}")
+  if n > 0
+    emit(add, set_last, n - 1)
+  end
+  nil
+end
+
+fn stores()
+  let older = {}
+  store(older, 600)
+  let ok = 0
+  for n = 0, 601
+    if older["k{n}"].s == "older {n}" and seen["s{n}"] == "seen {n}"
+      ok += 1
+    end
+  end
+  print("stores", ok, len(names), names[0], names[len(names) - 1], last_note)
+  let msgs = 0
+  let body = nil
+  while msgs < 7
+    receive
+    when {tag: "rec", n: n, body: b}
+      msgs += 1
+      body = b
+    after 0
+      break
+    end
+  end
+  print("mailbox", msgs, body)
+  let last = nil
+  let set_last = fn(v)
+    last = v
+  end
+  let s = build_string do |add|
+    emit(add, set_last, 500)
+  end
+  print("buffer", len(s), substr(s, 0, 10), last)
+end
+stores()
+
+# 4. What a return value may alias.
+fn pass_through(t, n)
+  junk(n)
+  if n == 0
+    return t
+  end
+  pass_through(t, n - 1)
+end
+
+fn wrap(t, n)
+  junk(n)
+  if n == 0
+    return {inner: t, made: "wrap"}
+  end
+  let w = wrap(t, n - 1)
+  {inner: w.inner, made: "{w.made}+", depth: n}
+end
+
+fn counter(n)
+  junk(n)
+  if n == 0
+    let total = 0
+    let label = "counter"
+    return fn(k)
+      total = total + k
+      "{label} {total}"
+    end
+  end
+  counter(n - 1)
+end
+
+fn aliases()
+  let t = {name: "older"}
+  print("same", pass_through(t, 400) == t)
+  let w = wrap(t, 400)
+  print("wrap", w.inner == t, len(w.made), w.depth)
+  let inc = counter(400)
+  inc(1)
+  junk(1)
+  count(14)
+  print("closure", inc(41))
+end
+aliases()
+
+# 5. Errors, sort comparators, mutual and tail recursion.
+fn fail_at(n)
+  junk(n)
+  if n == 0
+    error("bottom")
+  end
+  fail_at(n - 1)
+end
+
+fn weight(v, n)
+  junk(n)
+  if n == 0
+    return v
+  end
+  weight(v, n - 1)
+end
+
+fn by_weight(a, b)
+  weight(a, 60) - weight(b, 60)
+end
+
+fn even_tree(n)
+  junk(n)
+  if n == 0
+    return {even: true}
+  end
+  let r = odd_tree(n - 1)
+  {even: not r.even, from: n}
+end
+
+fn odd_tree(n)
+  junk(n)
+  if n == 0
+    return {even: false}
+  end
+  let r = even_tree(n - 1)
+  {even: not r.even, from: n}
+end
+
+fn walk(n, acc)
+  if n == 0
+    return acc
+  end
+  let sub = count(8)
+  junk(n)
+  walk(n - 1, acc + sub.v)
+end
+
+fn ping(n, acc)
+  junk(n)
+  if n == 0
+    return {acc: acc, who: "ping"}
+  end
+  pong(n - 1, acc + 1)
+end
+
+fn pong(n, acc)
+  junk(n)
+  if n == 0
+    return {acc: acc, who: "pong"}
+  end
+  ping(n - 1, acc + 1)
+end
+
+fn misc()
+  let r = pcall fail_at(400)
+  print("pcall", r.ok, r.error)
+  let after_err = count(14)
+  print("after error", after_err.v)
+  let arr = [5, 3, 9, 1, 7, 2, 8]
+  sort(arr, by_weight)
+  print("sorted", arr[0], arr[3], arr[6])
+  let e = even_tree(301)
+  print("mutual", e.even, e.from)
+  print("walk", walk(300, 0))
+  let p = ping(600, 0)
+  print("mutual tco", p.acc, p.who)
+end
+misc()
+
+# 6. A spawned named fn: its own process body, and recursions inside it.
+fn worker(parent)
+  let c = count(16)
+  send(parent, {tag: "done", v: c.v, tag2: c.tag})
+end
+
+fn spawned()
+  let me = self()
+  spawn(fn() worker(me) end)
+  receive
+  when {tag: "done", v: v, tag2: t}
+    print("spawned", v, t)
+  end
+end
+spawned()
+
+fn solo()
+  let parent = receive()
+  let c = count(16)
+  send(parent, {tag: "solo", v: c.v})
+  c
+end
+
+fn spawned_body()
+  let pid = spawn(solo)
+  send(pid, self())
+  receive
+  when {tag: "solo", v: v}
+    print("solo", v)
+  end
+end
+spawned_body()
+
+# 7. Recursion through a closure stored in a table, writing a captured
+#    variable of its creator.
+fn visitors()
+  let calls = 0
+  let v = {}
+  v.walk = fn(n)
+    junk(n)
+    calls += 1
+    if n < 2
+      return {v: n, s: "leaf"}
+    end
+    let a = v.walk(n - 1)
+    let b = v.walk(n - 2)
+    {v: a.v + b.v, s: a.s}
+  end
+  let r = v.walk(16)
+  print("closure recursion", r.v, r.s, calls)
+end
+visitors()
+
+# 8. Recursion through a named fn passed as a value.
+fn apply(f, x)
+  f(x)
+end
+
+fn deep(n)
+  junk(n)
+  if n < 2
+    return {v: n}
+  end
+  let a = apply(deep, n - 1)
+  let b = apply(deep, n - 2)
+  {v: a.v + b.v}
+end
+print("value recursion", deep(16).v)
+
+# 9. A recursive named fn spawned as the process body itself.
+fn tree_body(n = 16, top = true)
+  junk(n)
+  if n < 2
+    return {v: n}
+  end
+  let a = tree_body(n - 1, false)
+  let b = tree_body(n - 2, false)
+  let r = {v: a.v + b.v}
+  if top
+    send(whereis("t205"), {tag: "tree", v: r.v})
+  end
+  r
+end
+
+fn spawned_tree()
+  register("t205", self())
+  spawn(tree_body)
+  receive
+  when {tag: "tree", v: v}
+    print("tree body", v)
+  end
+end
+spawned_tree()

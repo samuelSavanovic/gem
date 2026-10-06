@@ -83,10 +83,13 @@ print(receive())  # {same: true, val: 99}
 print(shared[0])  # 1
 ```
 
-**Memory is reclaimed without a tracing GC or a global pause.** There is no per-object `free` and no collector that walks every process. Memory comes back in two ways:
+**Memory is reclaimed without a tracing GC or a global pause.** There is no per-object `free` and no collector that walks every process. Memory comes back in three ways:
 
 - When a process exits, its whole arena is freed at once. A short-lived process (a request handler, a task) needs nothing else.
-- At the back-edge of every loop — `while`, `for`, self tail calls, mutual tail calls — the runtime copies what the loop still uses, as computed by the compiler's liveness analysis, and frees everything else the loop allocated. This is what keeps a `while true` server loop or a recursive `loop(state)` at constant memory (see Long-Running Processes). Garbage made outside any loop is freed when an enclosing loop resets or when the process exits.
+- At the back-edge of every loop — `while`, `for`, self tail calls, mutual tail calls — the runtime copies what the loop still uses, as computed by the compiler's liveness analysis, and frees everything else the loop allocated. This is what keeps a `while true` server loop or a recursive `loop(state)` at constant memory (see Long-Running Processes).
+- When a function that can recurse returns, once its call has allocated enough (at least 1 MB) that no reset has freed yet, the runtime copies the return value (if any) and frees everything else the call allocated. A recursion so frees its calls' garbage as they return: its memory grows with its depth, not with the number of calls (see Return resets).
+
+Other garbage (made outside any loop, or in a call of a function that cannot recurse) is freed when an enclosing loop or recursive call resets or when the process exits.
 
 A reset works on one process's arena only: it never scans or moves another process's memory, and its cost depends on that process's data alone. Processes share one scheduler thread, so while a reset runs the others wait, as they do for any other work in that process.
 
@@ -602,7 +605,13 @@ end
 spawn(fn() accept_loop(fd) end)
 ```
 
-Garbage made outside any loop (straight-line code, or before a loop starts) is freed when an enclosing loop resets or when the process exits.
+Garbage made outside any loop (straight-line code, or before a loop starts) is freed when an enclosing loop resets, when an enclosing call of a function that can recurse returns, or when the process exits.
+
+### Return resets
+
+The return of a function that can recurse is a reset point too. When a call starts, the runtime remembers how much of the arena is in use; when it returns, if the call has allocated at least 1 MB that no reset during it has freed, the runtime copies the return value (if any) — and, as for a loop, the process's module state and mailbox and anything stored into older tables, buffers or captured variables — into fresh memory and frees the rest of what the call allocated. Memory allocated before the call is never moved or freed by it. After a return reset, the next one also waits until the returning call's unfreed memory and what the process has allocated since add up to twice what that reset copied (four times, when it kept most of what it found), plus half of what it scanned, so a recursion that hands a growing result up its levels copies it a number of times logarithmic in its size, not once per level.
+
+A function can recurse when the compiler finds it on a cycle of calls. A call through a variable, a parameter or a table field, and a call to `pcall`, `sort` or `build_string` (which call the function they are given), count as calls of every closure and of every named function used as a value, so recursion through closures and callbacks is found too. Other functions have no return reset. A closure written directly as the argument of `pcall` or `sort` usually has none either, and the body of a process skips it (its arena is freed when it exits). A call that ends by raising an error frees nothing at that point; its garbage is freed by the next enclosing loop or return reset.
 
 ### When the back-edge reset cannot fire
 
@@ -925,7 +934,7 @@ A relative path is resolved against the directory of the `.gem` file that contai
 - `extern fn` (non-blocking) — the runtime copies the returned `char*` into the calling process's arena via `gem_string` and **does not free the original**. Use this for static literals (`getenv`, `strerror`, etc.). A `malloc`'d return will leak.
 - `extern blocking fn` — the runtime copies into the arena and **frees the original** with `free`. The C function must return a `malloc`/`strdup`'d pointer; returning a static literal will crash on the free. NULL is allowed and yields an empty string from an `extern blocking fn`, or `nil` from an `extern fn`.
 
-**Pointer lifetime.** `String`, `Bytes`, and `Table` arguments passed to an `extern fn` point into the calling process's arena. They are stable for the duration of the call but **not** across the next arena reset (which can happen at the back-edge of any loop or self tail call). An `extern blocking fn` receives malloc'd copies of its `String` and `Bytes` arguments instead, which the runtime frees once the call is over. In both cases C code must not stash these pointers — copy out with `strdup`, `memcpy`, or by value before retaining.
+**Pointer lifetime.** `String`, `Bytes`, and `Table` arguments passed to an `extern fn` point into the calling process's arena. They are stable for the duration of the call but **not** across the next arena reset (which can happen at the back-edge of any loop or self tail call, or when a Gem function that can recurse returns). An `extern blocking fn` receives malloc'd copies of its `String` and `Bytes` arguments instead, which the runtime frees once the call is over. In both cases C code must not stash these pointers — copy out with `strdup`, `memcpy`, or by value before retaining.
 
 The wrapper checks the Gem-level type of each argument and that enough arguments were passed (see above), but not the declaration itself: a signature that doesn't match the real C function passes wrong values or crashes, and nothing checks what the C code does with its pointers.
 

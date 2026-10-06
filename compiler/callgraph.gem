@@ -1,9 +1,11 @@
 # Call graph over the post-lower program, built once per compile by
 # codegen's mark_process_tail: per caller (each fn_def `fn:<name>`, each
 # closure body, each spawn body, and the top-level program `<top>`), its
-# tail and non-tail callees and the writes it makes. Consumers: mutual-TCO
-# SCC detection (find_tail_call_sccs in tco.gem, tail edges) and the
-# module-state note (note_spawn_global_writes in codegen.gem).
+# tail and non-tail callees, whether it makes an indirect call, and the
+# writes it makes; and the named fns used as values. Consumers: mutual-TCO
+# SCC detection (find_tail_call_sccs in tco.gem, tail edges), the
+# module-state note (note_spawn_global_writes in codegen.gem) and
+# mark_recursive_fns below (which fns get a return reset).
 
 load "./cgutil" (set_add, set_contains, is_node)
 
@@ -12,19 +14,31 @@ set_add(spawn_callees, "spawn")
 set_add(spawn_callees, "spawn_link")
 set_add(spawn_callees, "spawn_monitor")
 
+# Builtins that call a fn value they are passed (the `pcall <expr>` form
+# wraps its operand in a closure, see the parser).
+let callback_builtins = {}
+for cb_name in ["pcall", "sort", "build_string"]
+  set_add(callback_builtins, cb_name)
+end
+
 let mutating_builtins = {}
 for mb_name in ["push", "pop", "insert", "delete", "remove_at", "sort"]
   set_add(mutating_builtins, mb_name)
 end
 
-# Returns {caller_records, anon_parent, anon_nodes, name_to_fn}:
+# Returns {caller_records, anon_parent, anon_nodes, name_to_fn, value_fns}:
 #   caller_records[cid] -> the caller's record (tail_callees, ...; see
 #                          new_caller_record)
 #   anon_parent[aid]    -> cid of the caller a closure is created in
 #   anon_nodes[aid]     -> {fn: anon_fn node, spawn: the spawn call or nil,
 #                          spawn_via: the spawn builtin's name}
 #   name_to_fn[name]    -> fn_def node
-fn build_call_graph(fn_defs, top_stmts)
+#   value_fns           -> set of fn_def names used other than as the callee
+#                          of a call (an indirect call may reach them)
+# A call is indirect when its callee is not a fn_def, a builtin or an
+# extern fn (`builtin_names`: a table keyed by builtin name), or when it
+# calls a builtin that calls a fn value back (pcall, sort, build_string).
+fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
   let caller_records = {}
   let name_to_fn = {}
   for fd in fn_defs
@@ -103,6 +117,12 @@ fn build_call_graph(fn_defs, top_stmts)
     f
   end
 
+  let extern_set = {}
+  for en in extern_names
+    set_add(extern_set, en)
+  end
+  let value_fns = {}
+
   let anon_id_counter = 0
   let next_anon_id = fn()
     let id = "anon:" + to_string(anon_id_counter)
@@ -111,7 +131,53 @@ fn build_call_graph(fn_defs, top_stmts)
   end
 
   let new_caller_record = fn(caller_id, is_seed)
-    caller_records[caller_id] = {tail_callees: {}, non_tail_callees: {}, is_seed: is_seed, writes: []}
+    caller_records[caller_id] = {tail_callees: {}, non_tail_callees: {}, indirect: false, is_seed: is_seed, writes: [], bound: {}}
+  end
+
+  # The names a caller binds (params, rest param, every let in its body
+  # outside nested fns) plus, for a closure, those of the callers it is
+  # nested in: a call through one of them is indirect even when the name
+  # is a builtin's.
+  let bind_names = nil
+  bind_names = fn(node, out)
+    if type(node) != "table" or node.tag == "anon_fn" or node.tag == "fn_def"
+      return nil
+    end
+    if node.tag == "let" and type(node.name) == "string"
+      set_add(out, node.name)
+    end
+    for k, v in node
+      if k != "tag" and type(v) == "table"
+        let vks = keys(v)
+        if len(vks) > 0 and type(vks[0]) == "int"
+          for item in v
+            bind_names(item, out)
+          end
+        else
+          bind_names(v, out)
+        end
+      end
+    end
+  end
+  let set_bound = fn(caller_id, fn_node, parent_id)
+    let out = {}
+    if parent_id != nil and caller_records[parent_id] != nil
+      for n, _ in caller_records[parent_id].bound
+        set_add(out, n)
+      end
+    end
+    if fn_node.params != nil
+      for pn in fn_node.params
+        set_add(out, pn)
+      end
+    end
+    if fn_node.rest_param != nil
+      set_add(out, fn_node.rest_param)
+    end
+    for st in fn_node.body
+      bind_names(st, out)
+    end
+    caller_records[caller_id].bound = out
   end
 
   # Sites that write a variable binding (`x = ...`) or mutate the value a
@@ -181,6 +247,7 @@ fn build_call_graph(fn_defs, top_stmts)
         if node.args != nil and len(node.args) > 0 and is_node(node.args[0], "anon_fn")
           let aid = next_anon_id()
           new_caller_record(aid, true)
+          set_bound(aid, node.args[0], caller_id)
           anon_parent[aid] = caller_id
           # The callee may be a param or local named `spawn`, ...;
           # note_spawn_global_writes checks it against the caller's
@@ -223,6 +290,15 @@ fn build_call_graph(fn_defs, top_stmts)
           set_add(caller_records[caller_id].non_tail_callees, resolved_callee)
         end
       else
+        let direct = false
+        if is_node(node.func, "var")
+          let cn = node.func.name
+          let shadowed = set_contains(caller_records[caller_id].bound, cn)
+          direct = not shadowed and ((has_key(builtin_names, cn) and not set_contains(callback_builtins, cn)) or set_contains(extern_set, cn))
+        end
+        if not direct
+          caller_records[caller_id].indirect = true
+        end
         collect_calls(node.func, false, caller_id)
       end
       if node.args != nil
@@ -239,6 +315,7 @@ fn build_call_graph(fn_defs, top_stmts)
       # body get demoted (correct: the closure's invocation site holds C state).
       let aid = next_anon_id()
       new_caller_record(aid, false)
+      set_bound(aid, node, caller_id)
       anon_parent[aid] = caller_id
       anon_nodes[aid] = {fn: node, spawn: nil}
       collect_calls_in_body(node.body, true, aid)
@@ -341,7 +418,29 @@ fn build_call_graph(fn_defs, top_stmts)
     end
 
     if node.tag == "dot"
+      # `mod.f` as a value: only `f` escapes, not the whole namespace.
+      if is_node(node.object, "var") and module_dot_to_fn[node.object.name] != nil
+        let df = resolve_dot_callee(node.object.name, node.field)
+        if df != nil
+          set_add(value_fns, df)
+        end
+        return nil
+      end
       collect_calls(node.object, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "var"
+      let vf = resolve_callee(node.name)
+      if vf != nil
+        set_add(value_fns, vf)
+      end
+      let ns = module_dot_to_fn[node.name]
+      if ns != nil
+        for _, nf in ns
+          set_add(value_fns, nf)
+        end
+      end
       return nil
     end
 
@@ -403,6 +502,7 @@ fn build_call_graph(fn_defs, top_stmts)
   for fd in fn_defs
     let cid = "fn:" + fd.name
     new_caller_record(cid, false)
+    set_bound(cid, fd, nil)
     collect_calls_in_body(fd.body, true, cid)
     if fd.defaults != nil
       for d in fd.defaults
@@ -413,10 +513,124 @@ fn build_call_graph(fn_defs, top_stmts)
     end
   end
 
-  # Top-level program is a process root
+  # Top-level program is a process root. The lets that bind a load's alias
+  # or namespace table (recognized above) are not uses of the fns as
+  # values: their uses are.
   new_caller_record("<top>", true)
-  collect_calls_in_body(top_stmts, true, "<top>")
-  {caller_records: caller_records, anon_parent: anon_parent, anon_nodes: anon_nodes, name_to_fn: name_to_fn}
+  let top_walked = []
+  for s in top_stmts
+    let binds_fns = is_node(s, "let") and (alias_to_fn[s.name] != nil or module_dot_to_fn[s.name] != nil)
+    if not binds_fns
+      push(top_walked, s)
+    end
+  end
+  collect_calls_in_body(top_walked, true, "<top>")
+  {caller_records: caller_records, anon_parent: anon_parent, anon_nodes: anon_nodes, name_to_fn: name_to_fn, value_fns: value_fns}
 end
 
-export build_call_graph
+# Sets `may_recurse = true` on every fn_def and anon_fn node on a cycle of
+# the call graph, where an indirect call reaches every closure and every
+# fn in value_fns.
+# A spawn body runs on its own stack and is no call target.
+fn mark_recursive_fns(graph)
+  let records = graph.caller_records
+  let succs = {}
+  let targets = []
+  for aid, info in graph.anon_nodes
+    if info.spawn == nil
+      push(targets, aid)
+    end
+  end
+  for name, _ in graph.value_fns
+    push(targets, "fn:" + name)
+  end
+  succs["<indirect>"] = targets
+  for cid, r in records
+    let out = []
+    for callee, _ in r.tail_callees
+      push(out, "fn:" + callee)
+    end
+    for callee, _ in r.non_tail_callees
+      push(out, "fn:" + callee)
+    end
+    if r.indirect
+      push(out, "<indirect>")
+    end
+    succs[cid] = out
+  end
+
+  # Tarjan's SCC algorithm, iterative.
+  let index = {}
+  let low = {}
+  let on_stack = {}
+  let stack = []
+  let next_index = 0
+  let in_cycle = {}
+  for root, _ in succs
+    if index[root] == nil
+      let work = [{v: root, i: 0}]
+      index[root] = next_index
+      low[root] = next_index
+      next_index += 1
+      push(stack, root)
+      set_add(on_stack, root)
+      while len(work) > 0
+        let top = work[len(work) - 1]
+        let v = top.v
+        let vs = succs[v]
+        if vs != nil and top.i < len(vs)
+          let w = vs[top.i]
+          top.i = top.i + 1
+          if w == v
+            set_add(in_cycle, v)
+          end
+          if index[w] == nil
+            index[w] = next_index
+            low[w] = next_index
+            next_index += 1
+            push(stack, w)
+            set_add(on_stack, w)
+            push(work, {v: w, i: 0})
+          elif set_contains(on_stack, w) and index[w] < low[v]
+            low[v] = index[w]
+          end
+        else
+          pop(work)
+          if len(work) > 0
+            let parent = work[len(work) - 1].v
+            if low[v] < low[parent]
+              low[parent] = low[v]
+            end
+          end
+          if low[v] == index[v]
+            let comp = []
+            let w = nil
+            while w != v
+              w = pop(stack)
+              delete(on_stack, w)
+              push(comp, w)
+            end
+            if len(comp) > 1
+              for c in comp
+                set_add(in_cycle, c)
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  for name, fd in graph.name_to_fn
+    if set_contains(in_cycle, "fn:" + name)
+      fd.may_recurse = true
+    end
+  end
+  for aid, info in graph.anon_nodes
+    if set_contains(in_cycle, aid)
+      info.fn.may_recurse = true
+    end
+  end
+end
+
+export build_call_graph, mark_recursive_fns
