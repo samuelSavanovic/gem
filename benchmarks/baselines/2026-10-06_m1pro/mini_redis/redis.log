@@ -1,0 +1,72 @@
+50862:C 06 Oct 2026 18:15:09.808 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+50862:C 06 Oct 2026 18:15:09.808 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=50862, just started
+50862:C 06 Oct 2026 18:15:09.808 * Configuration loaded
+50862:M 06 Oct 2026 18:15:09.809 * monotonic clock: ARM CNTVCT @ 24 ticks/us
+50862:M 06 Oct 2026 18:15:09.810 * Running mode=standalone, port=6390.
+50862:M 06 Oct 2026 18:15:09.810 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+50862:M 06 Oct 2026 18:15:09.810 * Server initialized
+50862:M 06 Oct 2026 18:15:09.811 * Ready to accept connections tcp
+50862:M 06 Oct 2026 18:15:09.811 # WARNING: Redis does not require authentication. Redis will accept connections from any local client.
+50862:signal-handler (1791303345) Received SIGTERM scheduling shutdown...
+50862:M 06 Oct 2026 18:15:45.776 * User requested shutdown...
+50862:M 06 Oct 2026 18:15:45.776 # Redis is now ready to exit, bye bye...
+51700:C 06 Oct 2026 18:15:45.796 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+51700:C 06 Oct 2026 18:15:45.796 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=51700, just started
+51700:C 06 Oct 2026 18:15:45.796 * Configuration loaded
+51700:M 06 Oct 2026 18:15:45.796 * monotonic clock: ARM CNTVCT @ 24 ticks/us
+51700:M 06 Oct 2026 18:15:45.796 * Running mode=standalone, port=6390.
+51700:M 06 Oct 2026 18:15:45.796 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+51700:M 06 Oct 2026 18:15:45.797 * Server initialized
+51700:M 06 Oct 2026 18:15:45.797 * Ready to accept connections tcp
+51700:M 06 Oct 2026 18:15:45.797 # WARNING: Redis does not require authentication. Redis will accept connections from any local client.
+51700:signal-handler (1791303365) Received SIGTERM scheduling shutdown...
+51700:M 06 Oct 2026 18:16:05.326 * User requested shutdown...
+51700:M 06 Oct 2026 18:16:05.326 # Redis is now ready to exit, bye bye...
+52175:C 06 Oct 2026 18:16:05.351 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+52175:C 06 Oct 2026 18:16:05.351 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=52175, just started
+52175:C 06 Oct 2026 18:16:05.351 * Configuration loaded
+52175:M 06 Oct 2026 18:16:05.351 * monotonic clock: ARM CNTVCT @ 24 ticks/us
+52175:M 06 Oct 2026 18:16:05.351 * Running mode=standalone, port=6390.
+52175:M 06 Oct 2026 18:16:05.351 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+52175:M 06 Oct 2026 18:16:05.352 * Server initialized
+52175:M 06 Oct 2026 18:16:05.352 * Ready to accept connections tcp
+52175:M 06 Oct 2026 18:16:05.352 # WARNING: Redis does not require authentication. Redis will accept connections from any local client.
+52175:signal-handler (1791303373) Received SIGTERM scheduling shutdown...
+52175:M 06 Oct 2026 18:16:13.177 * User requested shutdown...
+52175:M 06 Oct 2026 18:16:13.177 # Redis is now ready to exit, bye bye...
+52373:C 06 Oct 2026 18:16:13.197 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+52373:C 06 Oct 2026 18:16:13.197 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=52373, just started
+52373:C 06 Oct 2026 18:16:13.197 * Configuration loaded
+52373:M 06 Oct 2026 18:16:13.198 * monotonic clock: ARM CNTVCT @ 24 ticks/us
+52373:M 06 Oct 2026 18:16:13.198 * Running mode=standalone, port=6390.
+52373:M 06 Oct 2026 18:16:13.198 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+52373:M 06 Oct 2026 18:16:13.199 * Server initialized
+52373:M 06 Oct 2026 18:16:13.199 * Ready to accept connections tcp
+52373:M 06 Oct 2026 18:16:13.199 # WARNING: Redis does not require authentication. Redis will accept connections from any local client.
+52373:signal-handler (1791303377) Received SIGTERM scheduling shutdown...
+52373:M 06 Oct 2026 18:16:17.882 * User requested shutdown...
+52373:M 06 Oct 2026 18:16:17.882 # Redis is now ready to exit, bye bye...
+52515:C 06 Oct 2026 18:16:17.904 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+52515:C 06 Oct 2026 18:16:17.904 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=52515, just started
+52515:C 06 Oct 2026 18:16:17.904 * Configuration loaded
+52515:M 06 Oct 2026 18:16:17.904 * monotonic clock: ARM CNTVCT @ 24 ticks/us
+52515:M 06 Oct 2026 18:16:17.904 * Running mode=standalone, port=6390.
+52515:M 06 Oct 2026 18:16:17.904 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+52515:M 06 Oct 2026 18:16:17.905 * Server initialized
+52515:M 06 Oct 2026 18:16:17.905 * Ready to accept connections tcp
+52515:M 06 Oct 2026 18:16:17.905 # WARNING: Redis does not require authentication. Redis will accept connections from any local client.
+52515:signal-handler (1791303392) Received SIGTERM scheduling shutdown...
+52515:M 06 Oct 2026 18:16:32.235 * User requested shutdown...
+52515:M 06 Oct 2026 18:16:32.235 # Redis is now ready to exit, bye bye...
+52897:C 06 Oct 2026 18:16:32.262 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+52897:C 06 Oct 2026 18:16:32.262 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=52897, just started
+52897:C 06 Oct 2026 18:16:32.262 * Configuration loaded
+52897:M 06 Oct 2026 18:16:32.263 * monotonic clock: ARM CNTVCT @ 24 ticks/us
+52897:M 06 Oct 2026 18:16:32.263 * Running mode=standalone, port=6390.
+52897:M 06 Oct 2026 18:16:32.263 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.
+52897:M 06 Oct 2026 18:16:32.264 * Server initialized
+52897:M 06 Oct 2026 18:16:32.264 * Ready to accept connections tcp
+52897:M 06 Oct 2026 18:16:32.264 # WARNING: Redis does not require authentication. Redis will accept connections from any local client.
+52897:signal-handler (1791303397) Received SIGTERM scheduling shutdown...
+52897:M 06 Oct 2026 18:16:37.210 * User requested shutdown...
+52897:M 06 Oct 2026 18:16:37.210 # Redis is now ready to exit, bye bye...

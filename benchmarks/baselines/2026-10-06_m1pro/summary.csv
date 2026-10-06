@@ -1,0 +1,1513 @@
+bench,case,impl,metric,value
+logstat,--by ip,gem_file,runs,5
+logstat,--by ip,gem_file,wall_s,1.4783
+logstat,--by ip,gem_file,wall_min_s,1.4755
+logstat,--by ip,gem_file,wall_max_s,1.481
+logstat,--by ip,gem_file,wall_spread_pct,0.372
+logstat,--by ip,gem_file,user_s,1.35
+logstat,--by ip,gem_file,sys_s,0.11
+logstat,--by ip,gem_file,instructions,24220782577
+logstat,--by ip,gem_file,instr_spread_pct,0.0666
+logstat,--by ip,gem_file,cycles,4746580635
+logstat,--by ip,gem_file,maxrss_kb,245072
+logstat,--by ip,gem_file,footprint_kb,244432
+logstat,--by ip,gem_stdin,runs,5
+logstat,--by ip,gem_stdin,wall_s,1.4521
+logstat,--by ip,gem_stdin,wall_min_s,1.4476
+logstat,--by ip,gem_stdin,wall_max_s,1.4581
+logstat,--by ip,gem_stdin,wall_spread_pct,0.7231
+logstat,--by ip,gem_stdin,user_s,1.32
+logstat,--by ip,gem_stdin,sys_s,0.12
+logstat,--by ip,gem_stdin,instructions,23705310156
+logstat,--by ip,gem_stdin,instr_spread_pct,0.0139
+logstat,--by ip,gem_stdin,cycles,4658824345
+logstat,--by ip,gem_stdin,maxrss_kb,4080
+logstat,--by ip,gem_stdin,footprint_kb,3344
+logstat,--by ip,python,runs,5
+logstat,--by ip,python,wall_s,1.6894
+logstat,--by ip,python,wall_min_s,1.6837
+logstat,--by ip,python,wall_max_s,1.7326
+logstat,--by ip,python,wall_spread_pct,2.8945
+logstat,--by ip,python,user_s,1.65
+logstat,--by ip,python,sys_s,0.03
+logstat,--by ip,python,instructions,26649477963
+logstat,--by ip,python,instr_spread_pct,0.4676
+logstat,--by ip,python,cycles,5420839577
+logstat,--by ip,python,maxrss_kb,22304
+logstat,--by ip,python,footprint_kb,12560
+logstat,--by path,gem_file,runs,5
+logstat,--by path,gem_file,wall_s,1.4824
+logstat,--by path,gem_file,wall_min_s,1.4784
+logstat,--by path,gem_file,wall_max_s,1.4986
+logstat,--by path,gem_file,wall_spread_pct,1.3627
+logstat,--by path,gem_file,user_s,1.35
+logstat,--by path,gem_file,sys_s,0.12
+logstat,--by path,gem_file,instructions,24291789172
+logstat,--by path,gem_file,instr_spread_pct,0.0895
+logstat,--by path,gem_file,cycles,4753053089
+logstat,--by path,gem_file,maxrss_kb,248496
+logstat,--by path,gem_file,footprint_kb,247872
+logstat,--by path,gem_stdin,runs,5
+logstat,--by path,gem_stdin,wall_s,1.455
+logstat,--by path,gem_stdin,wall_min_s,1.4519
+logstat,--by path,gem_stdin,wall_max_s,1.4565
+logstat,--by path,gem_stdin,wall_spread_pct,0.3162
+logstat,--by path,gem_stdin,user_s,1.33
+logstat,--by path,gem_stdin,sys_s,0.11
+logstat,--by path,gem_stdin,instructions,23788765689
+logstat,--by path,gem_stdin,instr_spread_pct,0.0806
+logstat,--by path,gem_stdin,cycles,4666778615
+logstat,--by path,gem_stdin,maxrss_kb,7520
+logstat,--by path,gem_stdin,footprint_kb,6784
+logstat,--by path,python,runs,5
+logstat,--by path,python,wall_s,1.6908
+logstat,--by path,python,wall_min_s,1.669
+logstat,--by path,python,wall_max_s,1.7055
+logstat,--by path,python,wall_spread_pct,2.1587
+logstat,--by path,python,user_s,1.65
+logstat,--by path,python,sys_s,0.03
+logstat,--by path,python,instructions,26782151902
+logstat,--by path,python,instr_spread_pct,0.3422
+logstat,--by path,python,cycles,5428209222
+logstat,--by path,python,maxrss_kb,24000
+logstat,--by path,python,footprint_kb,14256
+logstat,--by hour,gem_file,runs,5
+logstat,--by hour,gem_file,wall_s,1.4322
+logstat,--by hour,gem_file,wall_min_s,1.4298
+logstat,--by hour,gem_file,wall_max_s,1.4332
+logstat,--by hour,gem_file,wall_spread_pct,0.2374
+logstat,--by hour,gem_file,user_s,1.3
+logstat,--by hour,gem_file,sys_s,0.11
+logstat,--by hour,gem_file,instructions,23816846921
+logstat,--by hour,gem_file,instr_spread_pct,0.14
+logstat,--by hour,gem_file,cycles,4591918733
+logstat,--by hour,gem_file,maxrss_kb,244496
+logstat,--by hour,gem_file,footprint_kb,243856
+logstat,--by hour,gem_stdin,runs,5
+logstat,--by hour,gem_stdin,wall_s,1.4062
+logstat,--by hour,gem_stdin,wall_min_s,1.4015
+logstat,--by hour,gem_stdin,wall_max_s,1.4067
+logstat,--by hour,gem_stdin,wall_spread_pct,0.3698
+logstat,--by hour,gem_stdin,user_s,1.27
+logstat,--by hour,gem_stdin,sys_s,0.12
+logstat,--by hour,gem_stdin,instructions,23298067075
+logstat,--by hour,gem_stdin,instr_spread_pct,0.0356
+logstat,--by hour,gem_stdin,cycles,4509997061
+logstat,--by hour,gem_stdin,maxrss_kb,3488
+logstat,--by hour,gem_stdin,footprint_kb,2752
+logstat,--by hour,python,runs,5
+logstat,--by hour,python,wall_s,1.6447
+logstat,--by hour,python,wall_min_s,1.6268
+logstat,--by hour,python,wall_max_s,1.656
+logstat,--by hour,python,wall_spread_pct,1.7754
+logstat,--by hour,python,user_s,1.6
+logstat,--by hour,python,sys_s,0.03
+logstat,--by hour,python,instructions,26715912104
+logstat,--by hour,python,instr_spread_pct,0.482
+logstat,--by hour,python,cycles,5279854512
+logstat,--by hour,python,maxrss_kb,21872
+logstat,--by hour,python,footprint_kb,12128
+lox,fib 28,gem,runs,5
+lox,fib 28,gem,wall_s,0.8637
+lox,fib 28,gem,wall_min_s,0.8608
+lox,fib 28,gem,wall_max_s,0.8657
+lox,fib 28,gem,wall_spread_pct,0.5673
+lox,fib 28,gem,user_s,0.78
+lox,fib 28,gem,sys_s,0.07
+lox,fib 28,gem,instructions,14355600141
+lox,fib 28,gem,instr_spread_pct,0.073
+lox,fib 28,gem,cycles,2765632833
+lox,fib 28,gem,maxrss_kb,10080
+lox,fib 28,gem,footprint_kb,9280
+lox,fib 28,python,runs,5
+lox,fib 28,python,wall_s,1.6266
+lox,fib 28,python,wall_min_s,1.6208
+lox,fib 28,python,wall_max_s,1.6478
+lox,fib 28,python,wall_spread_pct,1.6599
+lox,fib 28,python,user_s,1.61
+lox,fib 28,python,sys_s,0.0
+lox,fib 28,python,instructions,28169954106
+lox,fib 28,python,instr_spread_pct,0.7205
+lox,fib 28,python,cycles,5218206230
+lox,fib 28,python,maxrss_kb,20864
+lox,fib 28,python,footprint_kb,11536
+lox,binary_trees 12,gem,runs,5
+lox,binary_trees 12,gem,wall_s,2.1308
+lox,binary_trees 12,gem,wall_min_s,2.1295
+lox,binary_trees 12,gem,wall_max_s,2.1713
+lox,binary_trees 12,gem,wall_spread_pct,1.9617
+lox,binary_trees 12,gem,user_s,1.84
+lox,binary_trees 12,gem,sys_s,0.28
+lox,binary_trees 12,gem,instructions,33714581937
+lox,binary_trees 12,gem,instr_spread_pct,0.1349
+lox,binary_trees 12,gem,cycles,6843997193
+lox,binary_trees 12,gem,maxrss_kb,27744
+lox,binary_trees 12,gem,footprint_kb,26960
+lox,binary_trees 12,python,runs,5
+lox,binary_trees 12,python,wall_s,3.1742
+lox,binary_trees 12,python,wall_min_s,3.1571
+lox,binary_trees 12,python,wall_max_s,3.1864
+lox,binary_trees 12,python,wall_spread_pct,0.9231
+lox,binary_trees 12,python,user_s,3.16
+lox,binary_trees 12,python,sys_s,0.0
+lox,binary_trees 12,python,instructions,53570542646
+lox,binary_trees 12,python,instr_spread_pct,0.9598
+lox,binary_trees 12,python,cycles,10202090017
+lox,binary_trees 12,python,maxrss_kb,24016
+lox,binary_trees 12,python,footprint_kb,14736
+lox,closures 100000,gem,runs,5
+lox,closures 100000,gem,wall_s,1.3177
+lox,closures 100000,gem,wall_min_s,1.3146
+lox,closures 100000,gem,wall_max_s,1.3213
+lox,closures 100000,gem,wall_spread_pct,0.5085
+lox,closures 100000,gem,user_s,1.19
+lox,closures 100000,gem,sys_s,0.11
+lox,closures 100000,gem,instructions,22087803243
+lox,closures 100000,gem,instr_spread_pct,0.1838
+lox,closures 100000,gem,cycles,4226601766
+lox,closures 100000,gem,maxrss_kb,5824
+lox,closures 100000,gem,footprint_kb,5024
+lox,closures 100000,python,runs,5
+lox,closures 100000,python,wall_s,2.4666
+lox,closures 100000,python,wall_min_s,2.4589
+lox,closures 100000,python,wall_max_s,2.4811
+lox,closures 100000,python,wall_spread_pct,0.9
+lox,closures 100000,python,user_s,2.43
+lox,closures 100000,python,sys_s,0.02
+lox,closures 100000,python,instructions,39996377223
+lox,closures 100000,python,instr_spread_pct,0.903
+lox,closures 100000,python,cycles,7920952029
+lox,closures 100000,python,maxrss_kb,21024
+lox,closures 100000,python,footprint_kb,11776
+lox,strings 20000,gem,runs,5
+lox,strings 20000,gem,wall_s,0.8939
+lox,strings 20000,gem,wall_min_s,0.8902
+lox,strings 20000,gem,wall_max_s,0.8948
+lox,strings 20000,gem,wall_spread_pct,0.5146
+lox,strings 20000,gem,user_s,0.85
+lox,strings 20000,gem,sys_s,0.03
+lox,strings 20000,gem,instructions,15805948863
+lox,strings 20000,gem,instr_spread_pct,0.012
+lox,strings 20000,gem,cycles,2861765435
+lox,strings 20000,gem,maxrss_kb,4064
+lox,strings 20000,gem,footprint_kb,3248
+lox,strings 20000,python,runs,5
+lox,strings 20000,python,wall_s,1.895
+lox,strings 20000,python,wall_min_s,1.8906
+lox,strings 20000,python,wall_max_s,1.9151
+lox,strings 20000,python,wall_spread_pct,1.2929
+lox,strings 20000,python,user_s,1.88
+lox,strings 20000,python,sys_s,0.0
+lox,strings 20000,python,instructions,31960088106
+lox,strings 20000,python,instr_spread_pct,0.8095
+lox,strings 20000,python,cycles,6079869217
+lox,strings 20000,python,maxrss_kb,20864
+lox,strings 20000,python,footprint_kb,11536
+lox,mandelbrot 60,gem,runs,5
+lox,mandelbrot 60,gem,wall_s,0.9114
+lox,mandelbrot 60,gem,wall_min_s,0.9104
+lox,mandelbrot 60,gem,wall_max_s,0.9161
+lox,mandelbrot 60,gem,wall_spread_pct,0.6254
+lox,mandelbrot 60,gem,user_s,0.88
+lox,mandelbrot 60,gem,sys_s,0.01
+lox,mandelbrot 60,gem,instructions,16083554981
+lox,mandelbrot 60,gem,instr_spread_pct,0.0053
+lox,mandelbrot 60,gem,cycles,2919571195
+lox,mandelbrot 60,gem,maxrss_kb,4528
+lox,mandelbrot 60,gem,footprint_kb,3712
+lox,mandelbrot 60,python,runs,5
+lox,mandelbrot 60,python,wall_s,1.9981
+lox,mandelbrot 60,python,wall_min_s,1.9593
+lox,mandelbrot 60,python,wall_max_s,2.0038
+lox,mandelbrot 60,python,wall_spread_pct,2.2271
+lox,mandelbrot 60,python,user_s,1.98
+lox,mandelbrot 60,python,sys_s,0.0
+lox,mandelbrot 60,python,instructions,33731734649
+lox,mandelbrot 60,python,instr_spread_pct,1.8101
+lox,mandelbrot 60,python,cycles,6415426455
+lox,mandelbrot 60,python,maxrss_kb,20880
+lox,mandelbrot 60,python,footprint_kb,11552
+lox,methods 3000,gem,runs,5
+lox,methods 3000,gem,wall_s,0.8399
+lox,methods 3000,gem,wall_min_s,0.8384
+lox,methods 3000,gem,wall_max_s,0.8468
+lox,methods 3000,gem,wall_spread_pct,1.0001
+lox,methods 3000,gem,user_s,0.77
+lox,methods 3000,gem,sys_s,0.05
+lox,methods 3000,gem,instructions,14067245902
+lox,methods 3000,gem,instr_spread_pct,0.0587
+lox,methods 3000,gem,cycles,2690545208
+lox,methods 3000,gem,maxrss_kb,6112
+lox,methods 3000,gem,footprint_kb,5312
+lox,methods 3000,python,runs,5
+lox,methods 3000,python,wall_s,1.5308
+lox,methods 3000,python,wall_min_s,1.527
+lox,methods 3000,python,wall_max_s,1.5467
+lox,methods 3000,python,wall_spread_pct,1.2869
+lox,methods 3000,python,user_s,1.52
+lox,methods 3000,python,sys_s,0.0
+lox,methods 3000,python,instructions,25544624180
+lox,methods 3000,python,instr_spread_pct,0.8519
+lox,methods 3000,python,cycles,4916422562
+lox,methods 3000,python,maxrss_kb,20880
+lox,methods 3000,python,footprint_kb,11536
+gemgrep,literal,gem,runs,5
+gemgrep,literal,gem,wall_s,1.3089
+gemgrep,literal,gem,wall_min_s,1.3071
+gemgrep,literal,gem,wall_max_s,1.3152
+gemgrep,literal,gem,wall_spread_pct,0.6188
+gemgrep,literal,gem,user_s,0.97
+gemgrep,literal,gem,sys_s,0.37
+gemgrep,literal,gem,instructions,18794953528
+gemgrep,literal,gem,instr_spread_pct,0.0839
+gemgrep,literal,gem,cycles,4309523832
+gemgrep,literal,gem,maxrss_kb,14800
+gemgrep,literal,gem,footprint_kb,14096
+gemgrep,literal,grep,runs,5
+gemgrep,literal,grep,wall_s,0.1583
+gemgrep,literal,grep,wall_min_s,0.1579
+gemgrep,literal,grep,wall_max_s,0.1602
+gemgrep,literal,grep,wall_spread_pct,1.4529
+gemgrep,literal,grep,user_s,0.11
+gemgrep,literal,grep,sys_s,0.03
+gemgrep,literal,grep,instructions,873977352
+gemgrep,literal,grep,instr_spread_pct,0.0324
+gemgrep,literal,grep,cycles,494786768
+gemgrep,literal,grep,maxrss_kb,2528
+gemgrep,literal,grep,footprint_kb,1872
+gemgrep,literal,python,runs,5
+gemgrep,literal,python,wall_s,0.4845
+gemgrep,literal,python,wall_min_s,0.4804
+gemgrep,literal,python,wall_max_s,0.4864
+gemgrep,literal,python,wall_spread_pct,1.2384
+gemgrep,literal,python,user_s,0.43
+gemgrep,literal,python,sys_s,0.03
+gemgrep,literal,python,instructions,6694349535
+gemgrep,literal,python,instr_spread_pct,0.2643
+gemgrep,literal,python,cycles,1541824366
+gemgrep,literal,python,maxrss_kb,22432
+gemgrep,literal,python,footprint_kb,13104
+gemgrep,icase,gem,runs,5
+gemgrep,icase,gem,wall_s,3.0377
+gemgrep,icase,gem,wall_min_s,3.0315
+gemgrep,icase,gem,wall_max_s,3.0459
+gemgrep,icase,gem,wall_spread_pct,0.474
+gemgrep,icase,gem,user_s,2.68
+gemgrep,icase,gem,sys_s,0.38
+gemgrep,icase,gem,instructions,42001567060
+gemgrep,icase,gem,instr_spread_pct,0.4497
+gemgrep,icase,gem,cycles,9882545112
+gemgrep,icase,gem,maxrss_kb,14336
+gemgrep,icase,gem,footprint_kb,13632
+gemgrep,icase,grep,runs,5
+gemgrep,icase,grep,wall_s,0.1596
+gemgrep,icase,grep,wall_min_s,0.1586
+gemgrep,icase,grep,wall_max_s,0.1607
+gemgrep,icase,grep,wall_spread_pct,1.3158
+gemgrep,icase,grep,user_s,0.11
+gemgrep,icase,grep,sys_s,0.03
+gemgrep,icase,grep,instructions,911441971
+gemgrep,icase,grep,instr_spread_pct,0.0458
+gemgrep,icase,grep,cycles,501982914
+gemgrep,icase,grep,maxrss_kb,2528
+gemgrep,icase,grep,footprint_kb,1872
+gemgrep,icase,python,runs,5
+gemgrep,icase,python,wall_s,1.0797
+gemgrep,icase,python,wall_min_s,1.0761
+gemgrep,icase,python,wall_max_s,1.0839
+gemgrep,icase,python,wall_spread_pct,0.7224
+gemgrep,icase,python,user_s,1.03
+gemgrep,icase,python,sys_s,0.04
+gemgrep,icase,python,instructions,19254753899
+gemgrep,icase,python,instr_spread_pct,0.1082
+gemgrep,icase,python,cycles,3457627901
+gemgrep,icase,python,maxrss_kb,23216
+gemgrep,icase,python,footprint_kb,13888
+gemgrep,alternation,gem,runs,5
+gemgrep,alternation,gem,wall_s,3.2376
+gemgrep,alternation,gem,wall_min_s,3.2355
+gemgrep,alternation,gem,wall_max_s,3.247
+gemgrep,alternation,gem,wall_spread_pct,0.3552
+gemgrep,alternation,gem,user_s,2.32
+gemgrep,alternation,gem,sys_s,0.95
+gemgrep,alternation,gem,instructions,46050895866
+gemgrep,alternation,gem,instr_spread_pct,0.5129
+gemgrep,alternation,gem,cycles,10517147716
+gemgrep,alternation,gem,maxrss_kb,20640
+gemgrep,alternation,gem,footprint_kb,19936
+gemgrep,alternation,grep,runs,5
+gemgrep,alternation,grep,wall_s,0.3451
+gemgrep,alternation,grep,wall_min_s,0.3448
+gemgrep,alternation,grep,wall_max_s,0.3468
+gemgrep,alternation,grep,wall_spread_pct,0.5795
+gemgrep,alternation,grep,user_s,0.28
+gemgrep,alternation,grep,sys_s,0.05
+gemgrep,alternation,grep,instructions,2403687129
+gemgrep,alternation,grep,instr_spread_pct,0.0551
+gemgrep,alternation,grep,cycles,1092657365
+gemgrep,alternation,grep,maxrss_kb,2592
+gemgrep,alternation,grep,footprint_kb,1936
+gemgrep,alternation,python,runs,5
+gemgrep,alternation,python,wall_s,1.1636
+gemgrep,alternation,python,wall_min_s,1.1622
+gemgrep,alternation,python,wall_max_s,1.1697
+gemgrep,alternation,python,wall_spread_pct,0.6446
+gemgrep,alternation,python,user_s,1.1
+gemgrep,alternation,python,sys_s,0.04
+gemgrep,alternation,python,instructions,18572468048
+gemgrep,alternation,python,instr_spread_pct,0.1132
+gemgrep,alternation,python,cycles,3723235950
+gemgrep,alternation,python,maxrss_kb,24624
+gemgrep,alternation,python,footprint_kb,15296
+gemgrep,word,gem,runs,5
+gemgrep,word,gem,wall_s,2.8034
+gemgrep,word,gem,wall_min_s,2.7993
+gemgrep,word,gem,wall_max_s,2.8054
+gemgrep,word,gem,wall_spread_pct,0.2176
+gemgrep,word,gem,user_s,2.25
+gemgrep,word,gem,sys_s,0.58
+gemgrep,word,gem,instructions,42628109770
+gemgrep,word,gem,instr_spread_pct,0.0463
+gemgrep,word,gem,cycles,9118564362
+gemgrep,word,gem,maxrss_kb,15264
+gemgrep,word,gem,footprint_kb,14560
+gemgrep,word,grep,runs,5
+gemgrep,word,grep,wall_s,0.2752
+gemgrep,word,grep,wall_min_s,0.2743
+gemgrep,word,grep,wall_max_s,0.2754
+gemgrep,word,grep,wall_spread_pct,0.3997
+gemgrep,word,grep,user_s,0.22
+gemgrep,word,grep,sys_s,0.04
+gemgrep,word,grep,instructions,1620908448
+gemgrep,word,grep,instr_spread_pct,0.0131
+gemgrep,word,grep,cycles,872170875
+gemgrep,word,grep,maxrss_kb,2592
+gemgrep,word,grep,footprint_kb,1936
+gemgrep,word,python,runs,5
+gemgrep,word,python,wall_s,2.7874
+gemgrep,word,python,wall_min_s,2.7794
+gemgrep,word,python,wall_max_s,2.7966
+gemgrep,word,python,wall_spread_pct,0.6171
+gemgrep,word,python,user_s,2.73
+gemgrep,word,python,sys_s,0.04
+gemgrep,word,python,instructions,44245382705
+gemgrep,word,python,instr_spread_pct,0.045
+gemgrep,word,python,cycles,8956269458
+gemgrep,word,python,maxrss_kb,23648
+gemgrep,word,python,footprint_kb,14320
+gemgrep,count,gem,runs,5
+gemgrep,count,gem,wall_s,1.3919
+gemgrep,count,gem,wall_min_s,1.3896
+gemgrep,count,gem,wall_max_s,1.3982
+gemgrep,count,gem,wall_spread_pct,0.6179
+gemgrep,count,gem,user_s,1.36
+gemgrep,count,gem,sys_s,0.06
+gemgrep,count,gem,instructions,20065134889
+gemgrep,count,gem,instr_spread_pct,0.0095
+gemgrep,count,gem,cycles,4580997369
+gemgrep,count,gem,maxrss_kb,12720
+gemgrep,count,gem,footprint_kb,12000
+gemgrep,count,grep,runs,5
+gemgrep,count,grep,wall_s,0.1564
+gemgrep,count,grep,wall_min_s,0.1561
+gemgrep,count,grep,wall_max_s,0.1578
+gemgrep,count,grep,wall_spread_pct,1.087
+gemgrep,count,grep,user_s,0.12
+gemgrep,count,grep,sys_s,0.02
+gemgrep,count,grep,instructions,670455323
+gemgrep,count,grep,instr_spread_pct,0.0415
+gemgrep,count,grep,cycles,492188983
+gemgrep,count,grep,maxrss_kb,2528
+gemgrep,count,grep,footprint_kb,1872
+gemgrep,count,python,runs,5
+gemgrep,count,python,wall_s,0.5286
+gemgrep,count,python,wall_min_s,0.528
+gemgrep,count,python,wall_max_s,0.5298
+gemgrep,count,python,wall_spread_pct,0.3405
+gemgrep,count,python,user_s,0.48
+gemgrep,count,python,sys_s,0.03
+gemgrep,count,python,instructions,6630141277
+gemgrep,count,python,instr_spread_pct,0.2436
+gemgrep,count,python,cycles,1687135136
+gemgrep,count,python,maxrss_kb,22112
+gemgrep,count,python,footprint_kb,12672
+gemgrep,list,gem,runs,5
+gemgrep,list,gem,wall_s,0.3722
+gemgrep,list,gem,wall_min_s,0.3713
+gemgrep,list,gem,wall_max_s,0.3729
+gemgrep,list,gem,wall_spread_pct,0.4299
+gemgrep,list,gem,user_s,0.35
+gemgrep,list,gem,sys_s,0.05
+gemgrep,list,gem,instructions,5771368090
+gemgrep,list,gem,instr_spread_pct,0.0245
+gemgrep,list,gem,cycles,1290465381
+gemgrep,list,gem,maxrss_kb,12048
+gemgrep,list,gem,footprint_kb,11328
+gemgrep,list,grep,runs,5
+gemgrep,list,grep,wall_s,0.0459
+gemgrep,list,grep,wall_min_s,0.0456
+gemgrep,list,grep,wall_max_s,0.0461
+gemgrep,list,grep,wall_spread_pct,1.0893
+gemgrep,list,grep,user_s,0.01
+gemgrep,list,grep,sys_s,0.02
+gemgrep,list,grep,instructions,314807054
+gemgrep,list,grep,instr_spread_pct,0.1044
+gemgrep,list,grep,cycles,135818897
+gemgrep,list,grep,maxrss_kb,2432
+gemgrep,list,grep,footprint_kb,1776
+gemgrep,list,python,runs,5
+gemgrep,list,python,wall_s,0.2773
+gemgrep,list,python,wall_min_s,0.2745
+gemgrep,list,python,wall_max_s,0.2803
+gemgrep,list,python,wall_spread_pct,2.0916
+gemgrep,list,python,user_s,0.23
+gemgrep,list,python,sys_s,0.03
+gemgrep,list,python,instructions,3693860048
+gemgrep,list,python,instr_spread_pct,0.335
+gemgrep,list,python,cycles,880324514
+gemgrep,list,python,maxrss_kb,22944
+gemgrep,list,python,footprint_kb,13504
+gemgrep,invert,gem,runs,5
+gemgrep,invert,gem,wall_s,0.6187
+gemgrep,invert,gem,wall_min_s,0.6169
+gemgrep,invert,gem,wall_max_s,0.6195
+gemgrep,invert,gem,wall_spread_pct,0.4202
+gemgrep,invert,gem,user_s,0.29
+gemgrep,invert,gem,sys_s,0.35
+gemgrep,invert,gem,instructions,9472027880
+gemgrep,invert,gem,instr_spread_pct,0.1706
+gemgrep,invert,gem,cycles,2086419077
+gemgrep,invert,gem,maxrss_kb,13856
+gemgrep,invert,gem,footprint_kb,13152
+gemgrep,invert,grep,runs,5
+gemgrep,invert,grep,wall_s,0.1762
+gemgrep,invert,grep,wall_min_s,0.176
+gemgrep,invert,grep,wall_max_s,0.1789
+gemgrep,invert,grep,wall_spread_pct,1.6459
+gemgrep,invert,grep,user_s,0.14
+gemgrep,invert,grep,sys_s,0.03
+gemgrep,invert,grep,instructions,1482743735
+gemgrep,invert,grep,instr_spread_pct,0.0115
+gemgrep,invert,grep,cycles,556797285
+gemgrep,invert,grep,maxrss_kb,2528
+gemgrep,invert,grep,footprint_kb,1872
+gemgrep,invert,python,runs,5
+gemgrep,invert,python,wall_s,0.5211
+gemgrep,invert,python,wall_min_s,0.5205
+gemgrep,invert,python,wall_max_s,0.5235
+gemgrep,invert,python,wall_spread_pct,0.5757
+gemgrep,invert,python,user_s,0.47
+gemgrep,invert,python,sys_s,0.03
+gemgrep,invert,python,instructions,8337259220
+gemgrep,invert,python,instr_spread_pct,0.1763
+gemgrep,invert,python,cycles,1661730014
+gemgrep,invert,python,maxrss_kb,22192
+gemgrep,invert,python,footprint_kb,12864
+gemgrep,few,gem,runs,5
+gemgrep,few,gem,wall_s,0.9329
+gemgrep,few,gem,wall_min_s,0.931
+gemgrep,few,gem,wall_max_s,0.9343
+gemgrep,few,gem,wall_spread_pct,0.3537
+gemgrep,few,gem,user_s,0.9
+gemgrep,few,gem,sys_s,0.05
+gemgrep,few,gem,instructions,14523696293
+gemgrep,few,gem,instr_spread_pct,0.0051
+gemgrep,few,gem,cycles,3098359571
+gemgrep,few,gem,maxrss_kb,12384
+gemgrep,few,gem,footprint_kb,11680
+gemgrep,few,grep,runs,5
+gemgrep,few,grep,wall_s,0.1204
+gemgrep,few,grep,wall_min_s,0.1198
+gemgrep,few,grep,wall_max_s,0.1206
+gemgrep,few,grep,wall_spread_pct,0.6645
+gemgrep,few,grep,user_s,0.08
+gemgrep,few,grep,sys_s,0.02
+gemgrep,few,grep,instructions,619992969
+gemgrep,few,grep,instr_spread_pct,0.0336
+gemgrep,few,grep,cycles,374438212
+gemgrep,few,grep,maxrss_kb,2528
+gemgrep,few,grep,footprint_kb,1872
+gemgrep,few,python,runs,5
+gemgrep,few,python,wall_s,0.4404
+gemgrep,few,python,wall_min_s,0.4341
+gemgrep,few,python,wall_max_s,0.4413
+gemgrep,few,python,wall_spread_pct,1.6349
+gemgrep,few,python,user_s,0.4
+gemgrep,few,python,sys_s,0.03
+gemgrep,few,python,instructions,6187526428
+gemgrep,few,python,instr_spread_pct,0.2531
+gemgrep,few,python,cycles,1401901807
+gemgrep,few,python,maxrss_kb,22144
+gemgrep,few,python,footprint_kb,12704
+gemgrep,many,gem,runs,5
+gemgrep,many,gem,wall_s,6.2281
+gemgrep,many,gem,wall_min_s,6.2047
+gemgrep,many,gem,wall_max_s,6.2894
+gemgrep,many,gem,wall_spread_pct,1.36
+gemgrep,many,gem,user_s,0.95
+gemgrep,many,gem,sys_s,5.3
+gemgrep,many,gem,instructions,87692281800
+gemgrep,many,gem,instr_spread_pct,1.142
+gemgrep,many,gem,cycles,20121059036
+gemgrep,many,gem,maxrss_kb,49776
+gemgrep,many,gem,footprint_kb,49088
+gemgrep,many,grep,runs,5
+gemgrep,many,grep,wall_s,0.6267
+gemgrep,many,grep,wall_min_s,0.6259
+gemgrep,many,grep,wall_max_s,0.63
+gemgrep,many,grep,wall_spread_pct,0.6542
+gemgrep,many,grep,user_s,0.46
+gemgrep,many,grep,sys_s,0.15
+gemgrep,many,grep,instructions,8093352580
+gemgrep,many,grep,instr_spread_pct,0.0346
+gemgrep,many,grep,cycles,1998649890
+gemgrep,many,grep,maxrss_kb,2528
+gemgrep,many,grep,footprint_kb,1872
+gemgrep,many,python,runs,5
+gemgrep,many,python,wall_s,1.0649
+gemgrep,many,python,wall_min_s,1.0637
+gemgrep,many,python,wall_max_s,1.0765
+gemgrep,many,python,wall_spread_pct,1.202
+gemgrep,many,python,user_s,0.98
+gemgrep,many,python,sys_s,0.07
+gemgrep,many,python,instructions,16572666607
+gemgrep,many,python,instr_spread_pct,1.1957
+gemgrep,many,python,cycles,3408443736
+gemgrep,many,python,maxrss_kb,31472
+gemgrep,many,python,footprint_kb,22144
+gemgrep,src_literal,gem,runs,5
+gemgrep,src_literal,gem,wall_s,0.0886
+gemgrep,src_literal,gem,wall_min_s,0.0882
+gemgrep,src_literal,gem,wall_max_s,0.0891
+gemgrep,src_literal,gem,wall_spread_pct,1.0158
+gemgrep,src_literal,gem,user_s,0.07
+gemgrep,src_literal,gem,sys_s,0.01
+gemgrep,src_literal,gem,instructions,1337118863
+gemgrep,src_literal,gem,instr_spread_pct,1.226
+gemgrep,src_literal,gem,cycles,301434222
+gemgrep,src_literal,gem,maxrss_kb,23536
+gemgrep,src_literal,gem,footprint_kb,22816
+gemgrep,src_literal,grep,runs,5
+gemgrep,src_literal,grep,wall_s,0.0465
+gemgrep,src_literal,grep,wall_min_s,0.0455
+gemgrep,src_literal,grep,wall_max_s,0.0471
+gemgrep,src_literal,grep,wall_spread_pct,3.4409
+gemgrep,src_literal,grep,user_s,0.03
+gemgrep,src_literal,grep,sys_s,0.0
+gemgrep,src_literal,grep,instructions,232405447
+gemgrep,src_literal,grep,instr_spread_pct,0.0718
+gemgrep,src_literal,grep,cycles,136748728
+gemgrep,src_literal,grep,maxrss_kb,2512
+gemgrep,src_literal,grep,footprint_kb,1856
+gemgrep,src_literal,python,runs,5
+gemgrep,src_literal,python,wall_s,0.0817
+gemgrep,src_literal,python,wall_min_s,0.0812
+gemgrep,src_literal,python,wall_max_s,0.0832
+gemgrep,src_literal,python,wall_spread_pct,2.448
+gemgrep,src_literal,python,user_s,0.06
+gemgrep,src_literal,python,sys_s,0.01
+gemgrep,src_literal,python,instructions,1037999029
+gemgrep,src_literal,python,instr_spread_pct,0.2538
+gemgrep,src_literal,python,cycles,249461979
+gemgrep,src_literal,python,maxrss_kb,50864
+gemgrep,src_literal,python,footprint_kb,41552
+gemgrep,src_icase,gem,runs,5
+gemgrep,src_icase,gem,wall_s,0.6234
+gemgrep,src_icase,gem,wall_min_s,0.6204
+gemgrep,src_icase,gem,wall_max_s,0.6252
+gemgrep,src_icase,gem,wall_spread_pct,0.77
+gemgrep,src_icase,gem,user_s,0.61
+gemgrep,src_icase,gem,sys_s,0.01
+gemgrep,src_icase,gem,instructions,8551916922
+gemgrep,src_icase,gem,instr_spread_pct,0.0392
+gemgrep,src_icase,gem,cycles,2022017071
+gemgrep,src_icase,gem,maxrss_kb,23584
+gemgrep,src_icase,gem,footprint_kb,22864
+gemgrep,src_icase,grep,runs,5
+gemgrep,src_icase,grep,wall_s,0.0682
+gemgrep,src_icase,grep,wall_min_s,0.0674
+gemgrep,src_icase,grep,wall_max_s,0.069
+gemgrep,src_icase,grep,wall_spread_pct,2.346
+gemgrep,src_icase,grep,user_s,0.05
+gemgrep,src_icase,grep,sys_s,0.0
+gemgrep,src_icase,grep,instructions,450557925
+gemgrep,src_icase,grep,instr_spread_pct,0.0321
+gemgrep,src_icase,grep,cycles,207679359
+gemgrep,src_icase,grep,maxrss_kb,2512
+gemgrep,src_icase,grep,footprint_kb,1856
+gemgrep,src_icase,python,runs,5
+gemgrep,src_icase,python,wall_s,0.3082
+gemgrep,src_icase,python,wall_min_s,0.307
+gemgrep,src_icase,python,wall_max_s,0.3095
+gemgrep,src_icase,python,wall_spread_pct,0.8112
+gemgrep,src_icase,python,user_s,0.28
+gemgrep,src_icase,python,sys_s,0.01
+gemgrep,src_icase,python,instructions,5779745325
+gemgrep,src_icase,python,instr_spread_pct,0.029
+gemgrep,src_icase,python,cycles,977203444
+gemgrep,src_icase,python,maxrss_kb,50864
+gemgrep,src_icase,python,footprint_kb,41536
+jobqueue,none,gem,runs,5
+jobqueue,none,gem,wall_s,0.6136
+jobqueue,none,gem,wall_min_s,0.5947
+jobqueue,none,gem,wall_max_s,0.8375
+jobqueue,none,gem,wall_spread_pct,39.5698
+jobqueue,none,gem,user_s,0.32
+jobqueue,none,gem,sys_s,0.04
+jobqueue,none,gem,instructions,4881154117
+jobqueue,none,gem,instr_spread_pct,2.5423
+jobqueue,none,gem,cycles,1110229030
+jobqueue,none,gem,maxrss_kb,104480
+jobqueue,none,gem,footprint_kb,103568
+jobqueue,none,python,runs,5
+jobqueue,none,python,wall_s,1.1418
+jobqueue,none,python,wall_min_s,1.1303
+jobqueue,none,python,wall_max_s,1.1574
+jobqueue,none,python,wall_spread_pct,2.3734
+jobqueue,none,python,user_s,0.65
+jobqueue,none,python,sys_s,0.03
+jobqueue,none,python,instructions,9466945992
+jobqueue,none,python,instr_spread_pct,0.2342
+jobqueue,none,python,cycles,2151715766
+jobqueue,none,python,maxrss_kb,55568
+jobqueue,none,python,footprint_kb,45264
+jobqueue,none,elixir,runs,5
+jobqueue,none,elixir,wall_s,1.2652
+jobqueue,none,elixir,wall_min_s,1.2233
+jobqueue,none,elixir,wall_max_s,1.2842
+jobqueue,none,elixir,wall_spread_pct,4.8135
+jobqueue,none,elixir,user_s,1.19
+jobqueue,none,elixir,sys_s,0.38
+jobqueue,none,elixir,instructions,13422277279
+jobqueue,none,elixir,instr_spread_pct,1.6782
+jobqueue,none,elixir,cycles,4734242116
+jobqueue,none,elixir,maxrss_kb,151408
+jobqueue,none,elixir,footprint_kb,143488
+jobqueue,none,elixir_s1,runs,5
+jobqueue,none,elixir_s1,wall_s,1.2826
+jobqueue,none,elixir_s1,wall_min_s,1.2765
+jobqueue,none,elixir_s1,wall_max_s,1.2942
+jobqueue,none,elixir_s1,wall_spread_pct,1.38
+jobqueue,none,elixir_s1,user_s,0.87
+jobqueue,none,elixir_s1,sys_s,0.06
+jobqueue,none,elixir_s1,instructions,10256165921
+jobqueue,none,elixir_s1,instr_spread_pct,0.1702
+jobqueue,none,elixir_s1,cycles,2939679571
+jobqueue,none,elixir_s1,maxrss_kb,123808
+jobqueue,none,elixir_s1,footprint_kb,115904
+jobqueue,crash5,gem,runs,5
+jobqueue,crash5,gem,wall_s,0.7081
+jobqueue,crash5,gem,wall_min_s,0.6983
+jobqueue,crash5,gem,wall_max_s,0.7278
+jobqueue,crash5,gem,wall_spread_pct,4.1661
+jobqueue,crash5,gem,user_s,0.34
+jobqueue,crash5,gem,sys_s,0.09
+jobqueue,crash5,gem,instructions,5778941895
+jobqueue,crash5,gem,instr_spread_pct,0.1902
+jobqueue,crash5,gem,cycles,1348793006
+jobqueue,crash5,gem,maxrss_kb,113024
+jobqueue,crash5,gem,footprint_kb,112096
+jobqueue,crash5,python,runs,5
+jobqueue,crash5,python,wall_s,1.3482
+jobqueue,crash5,python,wall_min_s,1.3366
+jobqueue,crash5,python,wall_max_s,1.361
+jobqueue,crash5,python,wall_spread_pct,1.8098
+jobqueue,crash5,python,user_s,0.81
+jobqueue,crash5,python,sys_s,0.05
+jobqueue,crash5,python,instructions,10969227225
+jobqueue,crash5,python,instr_spread_pct,0.1905
+jobqueue,crash5,python,cycles,2714672991
+jobqueue,crash5,python,maxrss_kb,56640
+jobqueue,crash5,python,footprint_kb,46336
+jobqueue,crash5,elixir,runs,5
+jobqueue,crash5,elixir,wall_s,1.3268
+jobqueue,crash5,elixir,wall_min_s,1.3209
+jobqueue,crash5,elixir,wall_max_s,1.3391
+jobqueue,crash5,elixir,wall_spread_pct,1.3717
+jobqueue,crash5,elixir,user_s,1.39
+jobqueue,crash5,elixir,sys_s,0.46
+jobqueue,crash5,elixir,instructions,15393185218
+jobqueue,crash5,elixir,instr_spread_pct,2.38
+jobqueue,crash5,elixir,cycles,5594583215
+jobqueue,crash5,elixir,maxrss_kb,152640
+jobqueue,crash5,elixir,footprint_kb,144704
+jobqueue,crash5,elixir_s1,runs,5
+jobqueue,crash5,elixir_s1,wall_s,1.3458
+jobqueue,crash5,elixir_s1,wall_min_s,1.3264
+jobqueue,crash5,elixir_s1,wall_max_s,1.3496
+jobqueue,crash5,elixir_s1,wall_spread_pct,1.7239
+jobqueue,crash5,elixir_s1,user_s,0.93
+jobqueue,crash5,elixir_s1,sys_s,0.07
+jobqueue,crash5,elixir_s1,instructions,11002495593
+jobqueue,crash5,elixir_s1,instr_spread_pct,0.7942
+jobqueue,crash5,elixir_s1,cycles,3149670349
+jobqueue,crash5,elixir_s1,maxrss_kb,123824
+jobqueue,crash5,elixir_s1,footprint_kb,115888
+jobqueue,hang5,gem,runs,5
+jobqueue,hang5,gem,wall_s,3.6718
+jobqueue,hang5,gem,wall_min_s,3.6464
+jobqueue,hang5,gem,wall_max_s,3.6862
+jobqueue,hang5,gem,wall_spread_pct,1.0839
+jobqueue,hang5,gem,user_s,0.47
+jobqueue,hang5,gem,sys_s,0.08
+jobqueue,hang5,gem,instructions,2600237866
+jobqueue,hang5,gem,instr_spread_pct,0.2104
+jobqueue,hang5,gem,cycles,826675744
+jobqueue,hang5,gem,maxrss_kb,61888
+jobqueue,hang5,gem,footprint_kb,60976
+jobqueue,hang5,python,runs,5
+jobqueue,hang5,python,wall_s,3.715
+jobqueue,hang5,python,wall_min_s,3.6904
+jobqueue,hang5,python,wall_max_s,3.7214
+jobqueue,hang5,python,wall_spread_pct,0.8345
+jobqueue,hang5,python,user_s,0.81
+jobqueue,hang5,python,sys_s,0.04
+jobqueue,hang5,python,instructions,4929568777
+jobqueue,hang5,python,instr_spread_pct,0.3169
+jobqueue,hang5,python,cycles,1489490411
+jobqueue,hang5,python,maxrss_kb,43120
+jobqueue,hang5,python,footprint_kb,32816
+jobqueue,hang5,elixir,runs,5
+jobqueue,hang5,elixir,wall_s,4.2498
+jobqueue,hang5,elixir,wall_min_s,4.2418
+jobqueue,hang5,elixir,wall_max_s,4.2706
+jobqueue,hang5,elixir,wall_spread_pct,0.6777
+jobqueue,hang5,elixir,user_s,1.57
+jobqueue,hang5,elixir,sys_s,0.52
+jobqueue,hang5,elixir,instructions,12188297803
+jobqueue,hang5,elixir,instr_spread_pct,5.5283
+jobqueue,hang5,elixir,cycles,4660736596
+jobqueue,hang5,elixir,maxrss_kb,129344
+jobqueue,hang5,elixir,footprint_kb,121440
+jobqueue,hang5,elixir_s1,runs,5
+jobqueue,hang5,elixir_s1,wall_s,4.261
+jobqueue,hang5,elixir_s1,wall_min_s,4.2452
+jobqueue,hang5,elixir_s1,wall_max_s,4.2677
+jobqueue,hang5,elixir_s1,wall_spread_pct,0.528
+jobqueue,hang5,elixir_s1,user_s,1.28
+jobqueue,hang5,elixir_s1,sys_s,0.09
+jobqueue,hang5,elixir_s1,instructions,10111505223
+jobqueue,hang5,elixir_s1,instr_spread_pct,0.1494
+jobqueue,hang5,elixir_s1,cycles,3136203682
+jobqueue,hang5,elixir_s1,maxrss_kb,110064
+jobqueue,hang5,elixir_s1,footprint_kb,102144
+jobqueue,mixed,gem,runs,5
+jobqueue,mixed,gem,wall_s,4.6918
+jobqueue,mixed,gem,wall_min_s,4.6713
+jobqueue,mixed,gem,wall_max_s,4.7201
+jobqueue,mixed,gem,wall_spread_pct,1.0401
+jobqueue,mixed,gem,user_s,0.53
+jobqueue,mixed,gem,sys_s,0.21
+jobqueue,mixed,gem,instructions,2986236418
+jobqueue,mixed,gem,instr_spread_pct,0.155
+jobqueue,mixed,gem,cycles,1063392284
+jobqueue,mixed,gem,maxrss_kb,70352
+jobqueue,mixed,gem,footprint_kb,69440
+jobqueue,mixed,python,runs,5
+jobqueue,mixed,python,wall_s,4.7629
+jobqueue,mixed,python,wall_min_s,4.7526
+jobqueue,mixed,python,wall_max_s,4.7703
+jobqueue,mixed,python,wall_spread_pct,0.3716
+jobqueue,mixed,python,user_s,1.07
+jobqueue,mixed,python,sys_s,0.1
+jobqueue,mixed,python,instructions,5776186647
+jobqueue,mixed,python,instr_spread_pct,0.1575
+jobqueue,mixed,python,cycles,1987397444
+jobqueue,mixed,python,maxrss_kb,43536
+jobqueue,mixed,python,footprint_kb,33200
+jobqueue,mixed,elixir,runs,5
+jobqueue,mixed,elixir,wall_s,5.3029
+jobqueue,mixed,elixir,wall_min_s,5.2772
+jobqueue,mixed,elixir,wall_max_s,5.314
+jobqueue,mixed,elixir,wall_spread_pct,0.694
+jobqueue,mixed,elixir,user_s,2.03
+jobqueue,mixed,elixir,sys_s,0.85
+jobqueue,mixed,elixir,instructions,15073666387
+jobqueue,mixed,elixir,instr_spread_pct,4.6091
+jobqueue,mixed,elixir,cycles,5988670226
+jobqueue,mixed,elixir,maxrss_kb,130704
+jobqueue,mixed,elixir,footprint_kb,122784
+jobqueue,mixed,elixir_s1,runs,5
+jobqueue,mixed,elixir_s1,wall_s,5.324
+jobqueue,mixed,elixir_s1,wall_min_s,5.296
+jobqueue,mixed,elixir_s1,wall_max_s,5.3253
+jobqueue,mixed,elixir_s1,wall_spread_pct,0.5503
+jobqueue,mixed,elixir_s1,user_s,1.61
+jobqueue,mixed,elixir_s1,sys_s,0.15
+jobqueue,mixed,elixir_s1,instructions,11370639559
+jobqueue,mixed,elixir_s1,instr_spread_pct,0.498
+jobqueue,mixed,elixir_s1,cycles,3760016903
+jobqueue,mixed,elixir_s1,maxrss_kb,109792
+jobqueue,mixed,elixir_s1,footprint_kb,101872
+jobqueue,storm,gem,runs,5
+jobqueue,storm,gem,wall_s,1.685
+jobqueue,storm,gem,wall_min_s,1.6648
+jobqueue,storm,gem,wall_max_s,1.7
+jobqueue,storm,gem,wall_spread_pct,2.089
+jobqueue,storm,gem,user_s,0.33
+jobqueue,storm,gem,sys_s,0.06
+jobqueue,storm,gem,instructions,2514594695
+jobqueue,storm,gem,instr_spread_pct,0.1835
+jobqueue,storm,gem,cycles,701334273
+jobqueue,storm,gem,maxrss_kb,54544
+jobqueue,storm,gem,footprint_kb,53616
+jobqueue,storm,python,runs,5
+jobqueue,storm,python,wall_s,1.6751
+jobqueue,storm,python,wall_min_s,1.6419
+jobqueue,storm,python,wall_max_s,1.6861
+jobqueue,storm,python,wall_spread_pct,2.6386
+jobqueue,storm,python,user_s,0.5
+jobqueue,storm,python,sys_s,0.03
+jobqueue,storm,python,instructions,4813623422
+jobqueue,storm,python,instr_spread_pct,0.1428
+jobqueue,storm,python,cycles,1142685599
+jobqueue,storm,python,maxrss_kb,42848
+jobqueue,storm,python,footprint_kb,32560
+jobqueue,storm,elixir,runs,5
+jobqueue,storm,elixir,wall_s,2.2793
+jobqueue,storm,elixir,wall_min_s,2.2334
+jobqueue,storm,elixir,wall_max_s,2.3039
+jobqueue,storm,elixir,wall_spread_pct,3.0931
+jobqueue,storm,elixir,user_s,1.26
+jobqueue,storm,elixir,sys_s,0.43
+jobqueue,storm,elixir,instructions,11307933440
+jobqueue,storm,elixir,instr_spread_pct,2.0105
+jobqueue,storm,elixir,cycles,4208274275
+jobqueue,storm,elixir,maxrss_kb,127808
+jobqueue,storm,elixir,footprint_kb,119920
+jobqueue,storm,elixir_s1,runs,5
+jobqueue,storm,elixir_s1,wall_s,2.3296
+jobqueue,storm,elixir_s1,wall_min_s,2.3061
+jobqueue,storm,elixir_s1,wall_max_s,2.3342
+jobqueue,storm,elixir_s1,wall_spread_pct,1.2062
+jobqueue,storm,elixir_s1,user_s,0.98
+jobqueue,storm,elixir_s1,sys_s,0.07
+jobqueue,storm,elixir_s1,instructions,9224387813
+jobqueue,storm,elixir_s1,instr_spread_pct,0.1339
+jobqueue,storm,elixir_s1,cycles,2769976213
+jobqueue,storm,elixir_s1,maxrss_kb,109808
+jobqueue,storm,elixir_s1,footprint_kb,101872
+jobqueue,backlog,gem,runs,5
+jobqueue,backlog,gem,wall_s,13.7927
+jobqueue,backlog,gem,wall_min_s,13.772
+jobqueue,backlog,gem,wall_max_s,13.8648
+jobqueue,backlog,gem,wall_spread_pct,0.6728
+jobqueue,backlog,gem,user_s,3.79
+jobqueue,backlog,gem,sys_s,0.52
+jobqueue,backlog,gem,instructions,23915006904
+jobqueue,backlog,gem,instr_spread_pct,0.2966
+jobqueue,backlog,gem,cycles,7325902267
+jobqueue,backlog,gem,maxrss_kb,402992
+jobqueue,backlog,gem,footprint_kb,402192
+jobqueue,backlog,python,runs,5
+jobqueue,backlog,python,wall_s,12.7154
+jobqueue,backlog,python,wall_min_s,12.6781
+jobqueue,backlog,python,wall_max_s,12.7424
+jobqueue,backlog,python,wall_spread_pct,0.5057
+jobqueue,backlog,python,user_s,5.07
+jobqueue,backlog,python,sys_s,0.25
+jobqueue,backlog,python,instructions,42438667460
+jobqueue,backlog,python,instr_spread_pct,0.1542
+jobqueue,backlog,python,cycles,10578474969
+jobqueue,backlog,python,maxrss_kb,177696
+jobqueue,backlog,python,footprint_kb,167488
+jobqueue,backlog,elixir,runs,5
+jobqueue,backlog,elixir,wall_s,16.3562
+jobqueue,backlog,elixir,wall_min_s,16.3216
+jobqueue,backlog,elixir,wall_max_s,16.3982
+jobqueue,backlog,elixir,wall_spread_pct,0.4683
+jobqueue,backlog,elixir,user_s,14.36
+jobqueue,backlog,elixir,sys_s,1.68
+jobqueue,backlog,elixir,instructions,118285935073
+jobqueue,backlog,elixir,instr_spread_pct,1.3547
+jobqueue,backlog,elixir,cycles,42873266215
+jobqueue,backlog,elixir,maxrss_kb,248016
+jobqueue,backlog,elixir,footprint_kb,240208
+jobqueue,backlog,elixir_s1,runs,5
+jobqueue,backlog,elixir_s1,wall_s,16.6658
+jobqueue,backlog,elixir_s1,wall_min_s,16.6177
+jobqueue,backlog,elixir_s1,wall_max_s,16.8927
+jobqueue,backlog,elixir_s1,wall_spread_pct,1.6501
+jobqueue,backlog,elixir_s1,user_s,10.9
+jobqueue,backlog,elixir_s1,sys_s,0.25
+jobqueue,backlog,elixir_s1,instructions,87517721789
+jobqueue,backlog,elixir_s1,instr_spread_pct,3.6803
+jobqueue,backlog,elixir_s1,cycles,31916174847
+jobqueue,backlog,elixir_s1,maxrss_kb,231712
+jobqueue,backlog,elixir_s1,footprint_kb,223904
+jobqueue,none,gem,throughput_jobs_per_s,69686.0
+jobqueue,none,gem,latency_p50_ms,5.0
+jobqueue,none,gem,latency_p99_ms,22.0
+jobqueue,none,gem,tick_lag_ms,0.0
+jobqueue,none,gem,peak_rss_mb,102
+jobqueue,none,gem,retries,0.0
+jobqueue,none,gem,invariants_ok,5
+jobqueue,none,gem,runs,5
+jobqueue,none,python,throughput_jobs_per_s,26917.0
+jobqueue,none,python,latency_p50_ms,0.0
+jobqueue,none,python,latency_p99_ms,3.0
+jobqueue,none,python,tick_lag_ms,0.0
+jobqueue,none,python,peak_rss_mb,54
+jobqueue,none,python,retries,0.0
+jobqueue,none,python,invariants_ok,5
+jobqueue,none,python,runs,5
+jobqueue,none,elixir,throughput_jobs_per_s,50890.0
+jobqueue,none,elixir,latency_p50_ms,97.0
+jobqueue,none,elixir,latency_p99_ms,114.0
+jobqueue,none,elixir,tick_lag_ms,1.0
+jobqueue,none,elixir,peak_rss_mb,147
+jobqueue,none,elixir,retries,0.0
+jobqueue,none,elixir,invariants_ok,5
+jobqueue,none,elixir,runs,5
+jobqueue,none,elixir_s1,throughput_jobs_per_s,49504.0
+jobqueue,none,elixir_s1,latency_p50_ms,68.0
+jobqueue,none,elixir_s1,latency_p99_ms,82.0
+jobqueue,none,elixir_s1,tick_lag_ms,1.0
+jobqueue,none,elixir_s1,peak_rss_mb,120
+jobqueue,none,elixir_s1,retries,0.0
+jobqueue,none,elixir_s1,invariants_ok,5
+jobqueue,none,elixir_s1,runs,5
+jobqueue,crash5,gem,throughput_jobs_per_s,50505.0
+jobqueue,crash5,gem,latency_p50_ms,0.0
+jobqueue,crash5,gem,latency_p99_ms,14.0
+jobqueue,crash5,gem,tick_lag_ms,1.0
+jobqueue,crash5,gem,peak_rss_mb,110
+jobqueue,crash5,gem,retries,1018.0
+jobqueue,crash5,gem,invariants_ok,5
+jobqueue,crash5,gem,runs,5
+jobqueue,crash5,python,throughput_jobs_per_s,21231.0
+jobqueue,crash5,python,latency_p50_ms,0.0
+jobqueue,crash5,python,latency_p99_ms,11.0
+jobqueue,crash5,python,tick_lag_ms,1.0
+jobqueue,crash5,python,peak_rss_mb,55
+jobqueue,crash5,python,retries,1020.0
+jobqueue,crash5,python,invariants_ok,5
+jobqueue,crash5,python,runs,5
+jobqueue,crash5,elixir,throughput_jobs_per_s,43763.0
+jobqueue,crash5,elixir,latency_p50_ms,87.0
+jobqueue,crash5,elixir,latency_p99_ms,195.0
+jobqueue,crash5,elixir,tick_lag_ms,1.0
+jobqueue,crash5,elixir,peak_rss_mb,149
+jobqueue,crash5,elixir,retries,1024.0
+jobqueue,crash5,elixir,invariants_ok,5
+jobqueue,crash5,elixir,runs,5
+jobqueue,crash5,elixir_s1,throughput_jobs_per_s,42372.0
+jobqueue,crash5,elixir_s1,latency_p50_ms,29.0
+jobqueue,crash5,elixir_s1,latency_p99_ms,79.0
+jobqueue,crash5,elixir_s1,tick_lag_ms,1.0
+jobqueue,crash5,elixir_s1,peak_rss_mb,120
+jobqueue,crash5,elixir_s1,retries,1027.0
+jobqueue,crash5,elixir_s1,invariants_ok,5
+jobqueue,crash5,elixir_s1,runs,5
+jobqueue,hang5,gem,throughput_jobs_per_s,2949.0
+jobqueue,hang5,gem,latency_p50_ms,1590.0
+jobqueue,hang5,gem,latency_p99_ms,3164.0
+jobqueue,hang5,gem,tick_lag_ms,10.0
+jobqueue,hang5,gem,peak_rss_mb,60
+jobqueue,hang5,gem,retries,487.0
+jobqueue,hang5,gem,invariants_ok,5
+jobqueue,hang5,gem,runs,5
+jobqueue,hang5,python,throughput_jobs_per_s,2983.0
+jobqueue,hang5,python,latency_p50_ms,1515.0
+jobqueue,hang5,python,latency_p99_ms,3053.0
+jobqueue,hang5,python,tick_lag_ms,3.0
+jobqueue,hang5,python,peak_rss_mb,42
+jobqueue,hang5,python,retries,487.0
+jobqueue,hang5,python,invariants_ok,5
+jobqueue,hang5,python,runs,5
+jobqueue,hang5,elixir,throughput_jobs_per_s,2948.0
+jobqueue,hang5,elixir,latency_p50_ms,1596.0
+jobqueue,hang5,elixir,latency_p99_ms,3144.0
+jobqueue,hang5,elixir,tick_lag_ms,6.0
+jobqueue,hang5,elixir,peak_rss_mb,126
+jobqueue,hang5,elixir,retries,487.0
+jobqueue,hang5,elixir,invariants_ok,5
+jobqueue,hang5,elixir,runs,5
+jobqueue,hang5,elixir_s1,throughput_jobs_per_s,2945.0
+jobqueue,hang5,elixir_s1,latency_p50_ms,1596.0
+jobqueue,hang5,elixir_s1,latency_p99_ms,3141.0
+jobqueue,hang5,elixir_s1,tick_lag_ms,1.0
+jobqueue,hang5,elixir_s1,peak_rss_mb,107
+jobqueue,hang5,elixir_s1,retries,487.0
+jobqueue,hang5,elixir_s1,invariants_ok,5
+jobqueue,hang5,elixir_s1,runs,5
+jobqueue,mixed,gem,throughput_jobs_per_s,2265.0
+jobqueue,mixed,gem,latency_p50_ms,1898.0
+jobqueue,mixed,gem,latency_p99_ms,4142.0
+jobqueue,mixed,gem,tick_lag_ms,10.0
+jobqueue,mixed,gem,peak_rss_mb,68
+jobqueue,mixed,gem,retries,1071.0
+jobqueue,mixed,gem,invariants_ok,5
+jobqueue,mixed,gem,runs,5
+jobqueue,mixed,python,throughput_jobs_per_s,2272.0
+jobqueue,mixed,python,latency_p50_ms,1791.0
+jobqueue,mixed,python,latency_p99_ms,3981.0
+jobqueue,mixed,python,tick_lag_ms,3.0
+jobqueue,mixed,python,peak_rss_mb,42
+jobqueue,mixed,python,retries,1071.0
+jobqueue,mixed,python,invariants_ok,5
+jobqueue,mixed,python,runs,5
+jobqueue,mixed,elixir,throughput_jobs_per_s,2252.0
+jobqueue,mixed,elixir,latency_p50_ms,1905.0
+jobqueue,mixed,elixir,latency_p99_ms,4130.0
+jobqueue,mixed,elixir,tick_lag_ms,5.0
+jobqueue,mixed,elixir,peak_rss_mb,127
+jobqueue,mixed,elixir,retries,1071.0
+jobqueue,mixed,elixir,invariants_ok,5
+jobqueue,mixed,elixir,runs,5
+jobqueue,mixed,elixir_s1,throughput_jobs_per_s,2246.0
+jobqueue,mixed,elixir_s1,latency_p50_ms,1905.0
+jobqueue,mixed,elixir_s1,latency_p99_ms,4120.0
+jobqueue,mixed,elixir_s1,tick_lag_ms,10.0
+jobqueue,mixed,elixir_s1,peak_rss_mb,107
+jobqueue,mixed,elixir_s1,retries,1071.0
+jobqueue,mixed,elixir_s1,invariants_ok,5
+jobqueue,mixed,elixir_s1,runs,5
+jobqueue,storm,gem,throughput_jobs_per_s,7097.0
+jobqueue,storm,gem,latency_p50_ms,639.0
+jobqueue,storm,gem,latency_p99_ms,1359.0
+jobqueue,storm,gem,tick_lag_ms,6.0
+jobqueue,storm,gem,peak_rss_mb,53
+jobqueue,storm,gem,retries,160.0
+jobqueue,storm,gem,invariants_ok,5
+jobqueue,storm,gem,runs,5
+jobqueue,storm,python,throughput_jobs_per_s,7598.0
+jobqueue,storm,python,latency_p50_ms,505.0
+jobqueue,storm,python,latency_p99_ms,1170.0
+jobqueue,storm,python,tick_lag_ms,3.0
+jobqueue,storm,python,peak_rss_mb,41
+jobqueue,storm,python,retries,180.0
+jobqueue,storm,python,invariants_ok,5
+jobqueue,storm,python,runs,5
+jobqueue,storm,elixir,throughput_jobs_per_s,7017.0
+jobqueue,storm,elixir,latency_p50_ms,641.0
+jobqueue,storm,elixir,latency_p99_ms,1373.0
+jobqueue,storm,elixir,tick_lag_ms,2.0
+jobqueue,storm,elixir,peak_rss_mb,124
+jobqueue,storm,elixir,retries,180.0
+jobqueue,storm,elixir,invariants_ok,5
+jobqueue,storm,elixir,runs,5
+jobqueue,storm,elixir_s1,throughput_jobs_per_s,6835.0
+jobqueue,storm,elixir_s1,latency_p50_ms,651.0
+jobqueue,storm,elixir_s1,latency_p99_ms,1398.0
+jobqueue,storm,elixir_s1,tick_lag_ms,1.0
+jobqueue,storm,elixir_s1,peak_rss_mb,107
+jobqueue,storm,elixir_s1,retries,180.0
+jobqueue,storm,elixir_s1,invariants_ok,5
+jobqueue,storm,elixir_s1,runs,5
+jobqueue,backlog,gem,throughput_jobs_per_s,7550.0
+jobqueue,backlog,gem,latency_p50_ms,6365.0
+jobqueue,backlog,gem,latency_p99_ms,12625.0
+jobqueue,backlog,gem,tick_lag_ms,57.0
+jobqueue,backlog,gem,peak_rss_mb,393
+jobqueue,backlog,gem,retries,0.0
+jobqueue,backlog,gem,invariants_ok,5
+jobqueue,backlog,gem,runs,5
+jobqueue,backlog,python,throughput_jobs_per_s,8378.0
+jobqueue,backlog,python,latency_p50_ms,4926.0
+jobqueue,backlog,python,latency_p99_ms,9946.0
+jobqueue,backlog,python,tick_lag_ms,13.0
+jobqueue,backlog,python,peak_rss_mb,173
+jobqueue,backlog,python,retries,0.0
+jobqueue,backlog,python,invariants_ok,5
+jobqueue,backlog,python,runs,5
+jobqueue,backlog,elixir,throughput_jobs_per_s,6521.0
+jobqueue,backlog,elixir,latency_p50_ms,6212.0
+jobqueue,backlog,elixir,latency_p99_ms,8788.0
+jobqueue,backlog,elixir,tick_lag_ms,4.0
+jobqueue,backlog,elixir,peak_rss_mb,242
+jobqueue,backlog,elixir,retries,0.0
+jobqueue,backlog,elixir,invariants_ok,5
+jobqueue,backlog,elixir,runs,5
+jobqueue,backlog,elixir_s1,throughput_jobs_per_s,6406.0
+jobqueue,backlog,elixir_s1,latency_p50_ms,6179.0
+jobqueue,backlog,elixir_s1,latency_p99_ms,8381.0
+jobqueue,backlog,elixir_s1,tick_lag_ms,2.0
+jobqueue,backlog,elixir_s1,peak_rss_mb,226
+jobqueue,backlog,elixir_s1,retries,0.0
+jobqueue,backlog,elixir_s1,invariants_ok,5
+jobqueue,backlog,elixir_s1,runs,5
+bookmark,burst_get_bookmarks,gem,req_per_s,10545.14
+bookmark,burst_get_bookmarks,gem,p50_ms,0.85
+bookmark,burst_get_bookmarks,gem,p75_ms,0.9
+bookmark,burst_get_bookmarks,gem,p90_ms,1.64
+bookmark,burst_get_bookmarks,gem,p99_ms,1.84
+bookmark,burst_get_bookmarks,gem,requests,317409
+bookmark,burst_get_bookmarks,gem,non_2xx,0
+bookmark,burst_get_bookmarks,gem,socket_errors,0
+bookmark,burst_get_bookmarks,node,req_per_s,16795.26
+bookmark,burst_get_bookmarks,node,p50_ms,0.534
+bookmark,burst_get_bookmarks,node,p75_ms,0.574
+bookmark,burst_get_bookmarks,node,p90_ms,1.01
+bookmark,burst_get_bookmarks,node,p99_ms,1.15
+bookmark,burst_get_bookmarks,node,requests,505541
+bookmark,burst_get_bookmarks,node,non_2xx,0
+bookmark,burst_get_bookmarks,node,socket_errors,0
+bookmark,burst_get_index,gem,req_per_s,87982.8
+bookmark,burst_get_index,gem,p50_ms,0.101
+bookmark,burst_get_index,gem,p75_ms,0.134
+bookmark,burst_get_index,gem,p90_ms,0.176
+bookmark,burst_get_index,gem,p99_ms,0.262
+bookmark,burst_get_index,gem,requests,2648252
+bookmark,burst_get_index,gem,non_2xx,0
+bookmark,burst_get_index,gem,socket_errors,0
+bookmark,burst_get_index,node,req_per_s,64376.12
+bookmark,burst_get_index,node,p50_ms,0.138
+bookmark,burst_get_index,node,p75_ms,0.175
+bookmark,burst_get_index,node,p90_ms,0.24
+bookmark,burst_get_index,node,p99_ms,0.302
+bookmark,burst_get_index,node,requests,1937696
+bookmark,burst_get_index,node,non_2xx,0
+bookmark,burst_get_index,node,socket_errors,0
+bookmark,soak_get_bookmarks,gem,req_per_s,10782.0
+bookmark,soak_get_bookmarks,gem,p50_ms,0.284
+bookmark,soak_get_bookmarks,gem,p75_ms,0.539
+bookmark,soak_get_bookmarks,gem,p90_ms,0.561
+bookmark,soak_get_bookmarks,gem,p99_ms,0.617
+bookmark,soak_get_bookmarks,gem,requests,3235673
+bookmark,soak_get_bookmarks,gem,non_2xx,0
+bookmark,soak_get_bookmarks,gem,socket_errors,0
+bookmark,soak_get_bookmarks,node,req_per_s,16807.2
+bookmark,soak_get_bookmarks,node,p50_ms,0.19
+bookmark,soak_get_bookmarks,node,p75_ms,0.338
+bookmark,soak_get_bookmarks,node,p90_ms,0.366
+bookmark,soak_get_bookmarks,node,p99_ms,0.422
+bookmark,soak_get_bookmarks,node,requests,5043837
+bookmark,soak_get_bookmarks,node,non_2xx,0
+bookmark,soak_get_bookmarks,node,socket_errors,0
+bookmark,burst_post_bookmarks,gem,req_per_s,225.41
+bookmark,burst_post_bookmarks,gem,p50_ms,17.82
+bookmark,burst_post_bookmarks,gem,p75_ms,24.68
+bookmark,burst_post_bookmarks,gem,p90_ms,35.82
+bookmark,burst_post_bookmarks,gem,p99_ms,51.37
+bookmark,burst_post_bookmarks,gem,requests,2265
+bookmark,burst_post_bookmarks,gem,non_2xx,0
+bookmark,burst_post_bookmarks,gem,socket_errors,0
+bookmark,burst_post_bookmarks,node,req_per_s,303.72
+bookmark,burst_post_bookmarks,node,p50_ms,13.15
+bookmark,burst_post_bookmarks,node,p75_ms,18.51
+bookmark,burst_post_bookmarks,node,p90_ms,26.44
+bookmark,burst_post_bookmarks,node,p99_ms,37.94
+bookmark,burst_post_bookmarks,node,requests,3051
+bookmark,burst_post_bookmarks,node,non_2xx,0
+bookmark,burst_post_bookmarks,node,socket_errors,0
+bookmark,rss_whole_run,gem,rss_min_kb,4048
+bookmark,rss_whole_run,gem,rss_end_kb,13168
+bookmark,rss_whole_run,gem,rss_peak_kb,17760
+bookmark,rss_whole_run,gem,rss_mean_kb,12737
+bookmark,rss_whole_run,gem,rss_growth_from_min_kb,9120
+bookmark,rss_whole_run,gem,rss_second_half_growth_kb,-1152
+bookmark,rss_whole_run,node,rss_min_kb,64832
+bookmark,rss_whole_run,node,rss_end_kb,313088
+bookmark,rss_whole_run,node,rss_peak_kb,316784
+bookmark,rss_whole_run,node,rss_mean_kb,105875
+bookmark,rss_whole_run,node,rss_growth_from_min_kb,248256
+bookmark,rss_whole_run,node,rss_second_half_growth_kb,218544
+mini_redis,basic/PING_INLINE,redis,rps,177304.97
+mini_redis,basic/PING_INLINE,redis,p50_ms,0.151
+mini_redis,basic/PING_INLINE,redis,p99_ms,0.847
+mini_redis,basic/PING_INLINE,gem,rps,180505.41
+mini_redis,basic/PING_INLINE,gem,p50_ms,0.191
+mini_redis,basic/PING_INLINE,gem,p99_ms,0.479
+mini_redis,basic/PING_MBULK,redis,rps,186915.88
+mini_redis,basic/PING_MBULK,redis,p50_ms,0.151
+mini_redis,basic/PING_MBULK,redis,p99_ms,0.287
+mini_redis,basic/PING_MBULK,gem,rps,185185.17
+mini_redis,basic/PING_MBULK,gem,p50_ms,0.191
+mini_redis,basic/PING_MBULK,gem,p99_ms,0.487
+mini_redis,basic/SET,redis,rps,181159.42
+mini_redis,basic/SET,redis,p50_ms,0.151
+mini_redis,basic/SET,redis,p99_ms,0.367
+mini_redis,basic/SET,gem,rps,120481.93
+mini_redis,basic/SET,gem,p50_ms,0.335
+mini_redis,basic/SET,gem,p99_ms,1.047
+mini_redis,basic/GET,redis,rps,183823.52
+mini_redis,basic/GET,redis,p50_ms,0.151
+mini_redis,basic/GET,redis,p99_ms,0.295
+mini_redis,basic/GET,gem,rps,129701.68
+mini_redis,basic/GET,gem,p50_ms,0.327
+mini_redis,basic/GET,gem,p99_ms,0.735
+mini_redis,basic/INCR,redis,rps,184501.84
+mini_redis,basic/INCR,redis,p50_ms,0.151
+mini_redis,basic/INCR,redis,p99_ms,0.335
+mini_redis,basic/INCR,gem,rps,115473.45
+mini_redis,basic/INCR,gem,p50_ms,0.335
+mini_redis,basic/INCR,gem,p99_ms,1.815
+mini_redis,basic/LPUSH,redis,rps,186915.88
+mini_redis,basic/LPUSH,redis,p50_ms,0.151
+mini_redis,basic/LPUSH,redis,p99_ms,0.327
+mini_redis,basic/LPUSH,gem,rps,120772.95
+mini_redis,basic/LPUSH,gem,p50_ms,0.335
+mini_redis,basic/LPUSH,gem,p99_ms,1.175
+mini_redis,basic/RPUSH,redis,rps,184842.88
+mini_redis,basic/RPUSH,redis,p50_ms,0.151
+mini_redis,basic/RPUSH,redis,p99_ms,0.343
+mini_redis,basic/RPUSH,gem,rps,122850.12
+mini_redis,basic/RPUSH,gem,p50_ms,0.327
+mini_redis,basic/RPUSH,gem,p99_ms,1.191
+mini_redis,basic/LPOP,redis,rps,177935.95
+mini_redis,basic/LPOP,redis,p50_ms,0.151
+mini_redis,basic/LPOP,redis,p99_ms,0.383
+mini_redis,basic/LPOP,gem,rps,133333.33
+mini_redis,basic/LPOP,gem,p50_ms,0.327
+mini_redis,basic/LPOP,gem,p99_ms,0.711
+mini_redis,basic/RPOP,redis,rps,182149.36
+mini_redis,basic/RPOP,redis,p50_ms,0.151
+mini_redis,basic/RPOP,redis,p99_ms,0.359
+mini_redis,basic/RPOP,gem,rps,132100.39
+mini_redis,basic/RPOP,gem,p50_ms,0.327
+mini_redis,basic/RPOP,gem,p99_ms,0.735
+mini_redis,basic/SADD,redis,rps,184162.06
+mini_redis,basic/SADD,redis,p50_ms,0.151
+mini_redis,basic/SADD,redis,p99_ms,0.319
+mini_redis,basic/SADD,gem,rps,118906.06
+mini_redis,basic/SADD,gem,p50_ms,0.343
+mini_redis,basic/SADD,gem,p99_ms,1.383
+mini_redis,basic/HSET,redis,rps,180180.17
+mini_redis,basic/HSET,redis,p50_ms,0.159
+mini_redis,basic/HSET,redis,p99_ms,0.399
+mini_redis,basic/HSET,gem,rps,119474.31
+mini_redis,basic/HSET,gem,p50_ms,0.351
+mini_redis,basic/HSET,gem,p99_ms,1.111
+mini_redis,basic/SPOP,redis,rps,187265.92
+mini_redis,basic/SPOP,redis,p50_ms,0.159
+mini_redis,basic/SPOP,redis,p99_ms,0.375
+mini_redis,basic/SPOP,gem,rps,124533.01
+mini_redis,basic/SPOP,gem,p50_ms,0.335
+mini_redis,basic/SPOP,gem,p99_ms,1.239
+mini_redis,basic/LPUSH (needed to benchmark LRANGE),redis,rps,180180.17
+mini_redis,basic/LPUSH (needed to benchmark LRANGE),redis,p50_ms,0.151
+mini_redis,basic/LPUSH (needed to benchmark LRANGE),redis,p99_ms,0.335
+mini_redis,basic/LPUSH (needed to benchmark LRANGE),gem,rps,127388.53
+mini_redis,basic/LPUSH (needed to benchmark LRANGE),gem,p50_ms,0.327
+mini_redis,basic/LPUSH (needed to benchmark LRANGE),gem,p99_ms,1.111
+mini_redis,basic/LRANGE_100 (first 100 elements),redis,rps,111358.58
+mini_redis,basic/LRANGE_100 (first 100 elements),redis,p50_ms,0.255
+mini_redis,basic/LRANGE_100 (first 100 elements),redis,p99_ms,0.391
+mini_redis,basic/LRANGE_100 (first 100 elements),gem,rps,44483.99
+mini_redis,basic/LRANGE_100 (first 100 elements),gem,p50_ms,0.999
+mini_redis,basic/LRANGE_100 (first 100 elements),gem,p99_ms,1.735
+mini_redis,basic/LRANGE_600 (first 600 elements),redis,rps,34317.09
+mini_redis,basic/LRANGE_600 (first 600 elements),redis,p50_ms,0.775
+mini_redis,basic/LRANGE_600 (first 600 elements),redis,p99_ms,0.959
+mini_redis,basic/LRANGE_600 (first 600 elements),gem,rps,9866.8
+mini_redis,basic/LRANGE_600 (first 600 elements),gem,p50_ms,4.847
+mini_redis,basic/LRANGE_600 (first 600 elements),gem,p99_ms,5.895
+mini_redis,basic/MSET (10 keys),redis,rps,148148.14
+mini_redis,basic/MSET (10 keys),redis,p50_ms,0.271
+mini_redis,basic/MSET (10 keys),redis,p99_ms,0.543
+mini_redis,basic/MSET (10 keys),gem,rps,65963.06
+mini_redis,basic/MSET (10 keys),gem,p50_ms,0.599
+mini_redis,basic/MSET (10 keys),gem,p99_ms,4.447
+mini_redis,pipeline/PING_INLINE,redis,rps,1428571.38
+mini_redis,pipeline/PING_INLINE,redis,p50_ms,0.383
+mini_redis,pipeline/PING_INLINE,redis,p99_ms,1.479
+mini_redis,pipeline/PING_INLINE,gem,rps,990099.0
+mini_redis,pipeline/PING_INLINE,gem,p50_ms,0.631
+mini_redis,pipeline/PING_INLINE,gem,p99_ms,4.743
+mini_redis,pipeline/PING_MBULK,redis,rps,2500000.0
+mini_redis,pipeline/PING_MBULK,redis,p50_ms,0.199
+mini_redis,pipeline/PING_MBULK,redis,p99_ms,0.367
+mini_redis,pipeline/PING_MBULK,gem,rps,884955.75
+mini_redis,pipeline/PING_MBULK,gem,p50_ms,0.679
+mini_redis,pipeline/PING_MBULK,gem,p99_ms,6.607
+mini_redis,pipeline/SET,redis,rps,1515151.5
+mini_redis,pipeline/SET,redis,p50_ms,0.463
+mini_redis,pipeline/SET,redis,p99_ms,0.623
+mini_redis,pipeline/SET,gem,rps,537634.38
+mini_redis,pipeline/SET,gem,p50_ms,1.223
+mini_redis,pipeline/SET,gem,p99_ms,5.823
+mini_redis,pipeline/GET,redis,rps,1960784.38
+mini_redis,pipeline/GET,redis,p50_ms,0.343
+mini_redis,pipeline/GET,redis,p99_ms,0.503
+mini_redis,pipeline/GET,gem,rps,641025.62
+mini_redis,pipeline/GET,gem,p50_ms,1.071
+mini_redis,pipeline/GET,gem,p99_ms,6.679
+mini_redis,pipeline/INCR,redis,rps,1666666.75
+mini_redis,pipeline/INCR,redis,p50_ms,0.415
+mini_redis,pipeline/INCR,redis,p99_ms,0.583
+mini_redis,pipeline/INCR,gem,rps,518134.72
+mini_redis,pipeline/INCR,gem,p50_ms,1.143
+mini_redis,pipeline/INCR,gem,p99_ms,7.639
+mini_redis,pipeline/LPUSH,redis,rps,1754386.0
+mini_redis,pipeline/LPUSH,redis,p50_ms,0.399
+mini_redis,pipeline/LPUSH,redis,p99_ms,0.543
+mini_redis,pipeline/LPUSH,gem,rps,520833.34
+mini_redis,pipeline/LPUSH,gem,p50_ms,1.063
+mini_redis,pipeline/LPUSH,gem,p99_ms,7.119
+mini_redis,pipeline/RPUSH,redis,rps,1923076.88
+mini_redis,pipeline/RPUSH,redis,p50_ms,0.351
+mini_redis,pipeline/RPUSH,redis,p99_ms,0.511
+mini_redis,pipeline/RPUSH,gem,rps,609756.06
+mini_redis,pipeline/RPUSH,gem,p50_ms,1.063
+mini_redis,pipeline/RPUSH,gem,p99_ms,6.727
+mini_redis,pipeline/LPOP,redis,rps,1666666.75
+mini_redis,pipeline/LPOP,redis,p50_ms,0.415
+mini_redis,pipeline/LPOP,redis,p99_ms,0.599
+mini_redis,pipeline/LPOP,gem,rps,704225.31
+mini_redis,pipeline/LPOP,gem,p50_ms,1.031
+mini_redis,pipeline/LPOP,gem,p99_ms,2.391
+mini_redis,pipeline/RPOP,redis,rps,1818181.88
+mini_redis,pipeline/RPOP,redis,p50_ms,0.375
+mini_redis,pipeline/RPOP,redis,p99_ms,0.527
+mini_redis,pipeline/RPOP,gem,rps,699300.69
+mini_redis,pipeline/RPOP,gem,p50_ms,1.039
+mini_redis,pipeline/RPOP,gem,p99_ms,2.367
+mini_redis,pipeline/SADD,redis,rps,1538461.62
+mini_redis,pipeline/SADD,redis,p50_ms,0.447
+mini_redis,pipeline/SADD,redis,p99_ms,0.719
+mini_redis,pipeline/SADD,gem,rps,543478.25
+mini_redis,pipeline/SADD,gem,p50_ms,1.199
+mini_redis,pipeline/SADD,gem,p99_ms,6.927
+mini_redis,pipeline/HSET,redis,rps,1369863.0
+mini_redis,pipeline/HSET,redis,p50_ms,0.511
+mini_redis,pipeline/HSET,redis,p99_ms,0.751
+mini_redis,pipeline/HSET,gem,rps,512820.53
+mini_redis,pipeline/HSET,gem,p50_ms,1.319
+mini_redis,pipeline/HSET,gem,p99_ms,5.007
+mini_redis,pipeline/SPOP,redis,rps,1315789.5
+mini_redis,pipeline/SPOP,redis,p50_ms,0.655
+mini_redis,pipeline/SPOP,redis,p99_ms,0.903
+mini_redis,pipeline/SPOP,gem,rps,621118.0
+mini_redis,pipeline/SPOP,gem,p50_ms,1.215
+mini_redis,pipeline/SPOP,gem,p99_ms,2.951
+mini_redis,pipeline/LPUSH (needed to benchmark LRANGE),redis,rps,1754386.0
+mini_redis,pipeline/LPUSH (needed to benchmark LRANGE),redis,p50_ms,0.399
+mini_redis,pipeline/LPUSH (needed to benchmark LRANGE),redis,p99_ms,0.543
+mini_redis,pipeline/LPUSH (needed to benchmark LRANGE),gem,rps,510204.09
+mini_redis,pipeline/LPUSH (needed to benchmark LRANGE),gem,p50_ms,1.063
+mini_redis,pipeline/LPUSH (needed to benchmark LRANGE),gem,p99_ms,6.759
+mini_redis,pipeline/LRANGE_100 (first 100 elements),redis,rps,241545.89
+mini_redis,pipeline/LRANGE_100 (first 100 elements),redis,p50_ms,1.727
+mini_redis,pipeline/LRANGE_100 (first 100 elements),redis,p99_ms,3.103
+mini_redis,pipeline/LRANGE_100 (first 100 elements),gem,rps,58582.31
+mini_redis,pipeline/LRANGE_100 (first 100 elements),gem,p50_ms,13.159
+mini_redis,pipeline/LRANGE_100 (first 100 elements),gem,p99_ms,17.983
+mini_redis,pipeline/LRANGE_600 (first 600 elements),redis,rps,28376.85
+mini_redis,pipeline/LRANGE_600 (first 600 elements),redis,p50_ms,15.151
+mini_redis,pipeline/LRANGE_600 (first 600 elements),redis,p99_ms,19.743
+mini_redis,pipeline/LRANGE_600 (first 600 elements),gem,rps,10576.42
+mini_redis,pipeline/LRANGE_600 (first 600 elements),gem,p50_ms,74.751
+mini_redis,pipeline/LRANGE_600 (first 600 elements),gem,p99_ms,78.527
+mini_redis,pipeline/MSET (10 keys),redis,rps,272479.56
+mini_redis,pipeline/MSET (10 keys),redis,p50_ms,2.735
+mini_redis,pipeline/MSET (10 keys),redis,p99_ms,4.623
+mini_redis,pipeline/MSET (10 keys),gem,rps,116009.28
+mini_redis,pipeline/MSET (10 keys),gem,p50_ms,5.015
+mini_redis,pipeline/MSET (10 keys),gem,p99_ms,15.175
+mini_redis,clients/SET,redis,rps,165289.25
+mini_redis,clients/SET,redis,p50_ms,2.903
+mini_redis,clients/SET,redis,p99_ms,12.359
+mini_redis,clients/SET,gem,rps,77881.62
+mini_redis,clients/SET,gem,p50_ms,11.999
+mini_redis,clients/SET,gem,p99_ms,21.759
+mini_redis,clients/GET,redis,rps,161290.33
+mini_redis,clients/GET,redis,p50_ms,2.879
+mini_redis,clients/GET,redis,p99_ms,15.663
+mini_redis,clients/GET,gem,rps,78431.38
+mini_redis,clients/GET,gem,p50_ms,11.391
+mini_redis,clients/GET,gem,p99_ms,23.951
+mini_redis,keyspace_fill/SET,redis,rps,1197604.88
+mini_redis,keyspace_fill/SET,redis,p50_ms,0.575
+mini_redis,keyspace_fill/SET,redis,p99_ms,1.079
+mini_redis,keyspace_fill/SET,gem,rps,447227.19
+mini_redis,keyspace_fill/SET,gem,p50_ms,1.255
+mini_redis,keyspace_fill/SET,gem,p99_ms,15.847
+mini_redis,keyspace_get/GET,redis,rps,176366.86
+mini_redis,keyspace_get/GET,redis,p50_ms,0.151
+mini_redis,keyspace_get/GET,redis,p99_ms,0.503
+mini_redis,keyspace_get/GET,gem,rps,125156.45
+mini_redis,keyspace_get/GET,gem,p50_ms,0.335
+mini_redis,keyspace_get/GET,gem,p99_ms,0.719
+mini_redis,memory/after basic,redis,rss_kb,28016
+mini_redis,memory/after basic,redis,keys,163255
+mini_redis,memory/after basic,gem,rss_kb,137056
+mini_redis,memory/after basic,gem,keys,163250
+mini_redis,memory/after pipeline,redis,rss_kb,32016
+mini_redis,memory/after pipeline,redis,keys,163333
+mini_redis,memory/after pipeline,gem,rss_kb,187232
+mini_redis,memory/after pipeline,gem,keys,163234
+mini_redis,memory/after 1000 clients,redis,rss_kb,29456
+mini_redis,memory/after 1000 clients,redis,keys,63125
+mini_redis,memory/after 1000 clients,gem,rss_kb,337488
+mini_redis,memory/after 1000 clients,gem,keys,63252
+mini_redis,memory/1M keys of 100 B,redis,rss_kb,127376
+mini_redis,memory/1M keys of 100 B,redis,keys,632301
+mini_redis,memory/1M keys of 100 B,gem,rss_kb,349904
+mini_redis,memory/1M keys of 100 B,gem,keys,632397
+mini_redis,memory/1M keys with a 2 s TTL,redis,rss_kb,64512
+mini_redis,memory/1M keys with a 2 s TTL,redis,keys,0
+mini_redis,memory/1M keys with a 2 s TTL,gem,rss_kb,885968
+mini_redis,memory/1M keys with a 2 s TTL,gem,keys,631825
+mini_redis,memory/3 s later,redis,rss_kb,64528
+mini_redis,memory/3 s later,redis,keys,0
+mini_redis,memory/3 s later,gem,rss_kb,886224
+mini_redis,memory/3 s later,gem,keys,523347
+mini_redis,memory/6 s later,redis,rss_kb,64528
+mini_redis,memory/6 s later,redis,keys,0
+mini_redis,memory/6 s later,gem,rss_kb,886544
+mini_redis,memory/6 s later,gem,keys,343667
+mini_redis,memory/9 s later,redis,rss_kb,64528
+mini_redis,memory/9 s later,redis,keys,0
+mini_redis,memory/9 s later,gem,rss_kb,886880
+mini_redis,memory/9 s later,gem,keys,138787
+mini_redis,pubsub/1_subs,redis,publish_per_s,69236.0
+mini_redis,pubsub/1_subs,redis,delivered_per_s,69135.0
+mini_redis,pubsub/1_subs,redis,seconds,0.72
+mini_redis,pubsub/1_subs,gem,publish_per_s,29174.0
+mini_redis,pubsub/1_subs,gem,delivered_per_s,29153.0
+mini_redis,pubsub/1_subs,gem,seconds,1.72
+mini_redis,pubsub/100_subs,redis,publish_per_s,77455.0
+mini_redis,pubsub/100_subs,redis,delivered_per_s,7604213.0
+mini_redis,pubsub/100_subs,redis,seconds,0.03
+mini_redis,pubsub/100_subs,gem,publish_per_s,2765.0
+mini_redis,pubsub/100_subs,gem,delivered_per_s,276006.0
+mini_redis,pubsub/100_subs,gem,seconds,0.72
+mini_redis,pubsub/1000_subs,redis,publish_per_s,10395.0
+mini_redis,pubsub/1000_subs,redis,delivered_per_s,9187412.0
+mini_redis,pubsub/1000_subs,redis,seconds,0.02
+mini_redis,pubsub/1000_subs,gem,publish_per_s,192.0
+mini_redis,pubsub/1000_subs,gem,delivered_per_s,192058.0
+mini_redis,pubsub/1000_subs,gem,seconds,1.04
+stomp,fanout,gem,publish_msgs_per_s,30737.8
+stomp,fanout,gem,delivered_msgs_per_s,12043.5
+stomp,fanout,gem,fanout_elapsed_s,0.4152
+stomp,fanout,gem,median_first_msg_latency_s,0.0181
+stomp,fanout,gem,p100_first_msg_latency_s,0.3472
+stomp,fanout,gem,complete_subs,1000
+stomp,fanout,gem,n_errors,0
+stomp,fanout,gem,rss_start_kb,2752
+stomp,fanout,gem,rss_end_kb,181552
+stomp,fanout,gem,rss_peak_kb,187760
+stomp,fanout,gem,rss_mean_kb,119441
+stomp,fanout,gem,rss_growth_kb,178800
+stomp,slow,gem,msgs_sent,313704
+stomp,slow,gem,publish_msgs_per_s,20911.5
+stomp,slow,gem,fast_subs_min,984
+stomp,slow,gem,slow_subs_max,97
+stomp,slow,gem,n_errors,0
+stomp,slow,gem,rss_start_kb,2768
+stomp,slow,gem,rss_end_kb,768192
+stomp,slow,gem,rss_peak_kb,772192
+stomp,slow,gem,rss_mean_kb,519204
+stomp,slow,gem,rss_growth_kb,765424
+stomp,queue,gem,publish_msgs_per_s,41992.5
+stomp,queue,gem,total_elapsed_s,0.439
+stomp,queue,gem,delivered_total,10000
+stomp,queue,gem,fairness_ratio,1.0
+stomp,queue,gem,n_publisher_errors,0
+stomp,queue,gem,rss_start_kb,2752
+stomp,queue,gem,rss_end_kb,8016
+stomp,queue,gem,rss_peak_kb,8016
+stomp,queue,gem,rss_mean_kb,5258
+stomp,queue,gem,rss_growth_kb,5264
+stomp,soak,gem,msgs_sent,1500
+stomp,soak,gem,delivered_total,300000
+stomp,soak,gem,expected_total,300000
+stomp,soak,gem,min_received,1500
+stomp,soak,gem,n_errors,0
+stomp,soak,gem,rss_start_kb,2752
+stomp,soak,gem,rss_end_kb,178848
+stomp,soak,gem,rss_peak_kb,256528
+stomp,soak,gem,rss_mean_kb,145134
+stomp,soak,gem,rss_growth_kb,176096
