@@ -267,10 +267,34 @@ void gem_str_index_free(GemStrIndex **ixp) {
 void gem_table_rebuild_index(GemTable *t) {
     t->index_stale = 0;
     gem_str_index_free(&t->str_index);
+    int n = 0;
+    for (int i = 0; i < t->len; i++) n += (t->keys[i].type == VAL_STRING);
+    t->nstr = n;
+    if (n == 0 || t->len <= GEM_TABLE_SCAN_MAX) return;
     for (int i = 0; i < t->len; i++) {
         if (t->keys[i].type == VAL_STRING)
             gem_str_index_put(&t->str_index, t->keys[i].sval, t->keys[i].slen, i);
     }
+}
+
+int gem_table_str_pos(GemTable *t, const char *key, int64_t len) {
+    gem_table_index(t);
+    if (t->str_index) return gem_str_index_get(t->str_index, key, len);
+    if (t->nstr == 0) return -1;
+    for (int i = 0; i < t->len; i++) {
+        const GemVal *k = &t->keys[i];
+        if (k->type == VAL_STRING && k->slen == len &&
+            (k->sval == key || memcmp(k->sval, key, (size_t)len) == 0))
+            return i;
+    }
+    return -1;
+}
+
+/* After an append: a table past GEM_TABLE_SCAN_MAX entries with a string key
+   in it gets its index. */
+static inline void gem_table_appended(GemTable *t) {
+    if (t->str_index == NULL && t->nstr > 0 && t->len > GEM_TABLE_SCAN_MAX)
+        gem_table_rebuild_index(t);
 }
 
 void gem_table_grow(GemTable *t) {
@@ -297,6 +321,7 @@ GemVal gem_table_new(void) {
     t->keys = ALLOC_N(GemVal, 4);
     t->vals = ALLOC_N(GemVal, 4);
     t->str_index = NULL;
+    t->nstr = 0;
     t->shape_id = gem_shape_counter++;
     t->is_array = 1;
 
@@ -340,11 +365,9 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
     GemTable *t = tbl.table;
     gem_table_check_mutable(t);
     gem_table_written(t);
-    gem_table_index(t);
 
-    /* String key: use hash index for O(1) lookup */
     if (key.type == VAL_STRING) {
-        int found = gem_str_index_get(t->str_index, key.sval, key.slen);
+        int found = gem_table_str_pos(t, key.sval, key.slen);
         if (found >= 0) {
             t->vals[found] = val;
             return;
@@ -355,10 +378,13 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
         t->keys[pos] = key;
         t->vals[pos] = val;
         t->len++;
+        t->nstr++;
         t->is_array = 0;
-        gem_str_index_put(&t->str_index, key.sval, key.slen, pos);
+        if (t->str_index) gem_str_index_put(&t->str_index, key.sval, key.slen, pos);
+        else gem_table_appended(t);
         return;
     }
+    gem_table_index(t);
 
     /* Integer key: check for direct array-style indexing */
     if (key.type == VAL_INT) {
@@ -403,6 +429,7 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
     t->vals[t->len] = val;
     t->is_array = 0;
     t->len++;
+    gem_table_appended(t);
 }
 
 GemVal gem_table_get(GemVal tbl, GemVal key) {
@@ -418,11 +445,9 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
 
     if (tbl.type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "index get on non-table: got %s", gem_type_str(tbl)); gem_error(buf); }
     GemTable *t = tbl.table;
-    gem_table_index(t);
 
-    /* String key: use hash index */
     if (key.type == VAL_STRING) {
-        int found = gem_str_index_get(t->str_index, key.sval, key.slen);
+        int found = gem_table_str_pos(t, key.sval, key.slen);
         if (found >= 0) return t->vals[found];
         return (GemVal){VAL_NIL, GEM_MAGIC, {0}};
     }
@@ -454,10 +479,9 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
 /* ─── Inline cache miss path ─── */
 
 GemVal gem_table_get_ic_miss(GemTable *t, const char *key, GemICacheSlot *cache) {
-    gem_table_index(t);
     {
         /* A field name from the source: no NUL inside. */
-        int vi = gem_str_index_get(t->str_index, key, (int64_t)strlen(key));
+        int vi = gem_table_str_pos(t, key, (int64_t)strlen(key));
         if (vi >= 0) {
             cache->table = t;
             cache->shape_id = t->shape_id;

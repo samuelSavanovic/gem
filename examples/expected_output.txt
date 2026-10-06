@@ -4084,3 +4084,54 @@ solo 987
 closure recursion 987 leaf 3193
 value recursion 987
 tree body 987
+grown 12 k0=0 k1=1 k2=2 k3=3 k4=4 k5=5 k6=6 k7=7 k8=8 k9=9 k10=10 k11=11
+shrunk 2 k11=11 k10=10
+lookups 10 11 nil false true false
+re-added 3 k11=11 k10=10 k3=back
+small get 0 40 nil nil
+small has_key true true false false
+small in true true false false
+small delete 0 nil nil 4
+small after delete 40 true 10
+small pop 30 3 true
+small set again 4
+small keys 4 4
+edge get 0 70 nil nil
+edge has_key true true false false
+edge in true true false false
+edge delete 0 nil nil 7
+edge after delete 70 true 10
+edge pop 60 6 true
+edge set again 7
+edge keys 7 7
+over get 0 80 nil nil
+over has_key true true false false
+over in true true false false
+over delete 0 nil nil 8
+over after delete 80 true 10
+over pop 70 7 true
+over set again 8
+over keys 8 8
+large get 0 390 nil nil
+large has_key true true false false
+large in true true false false
+large delete 0 nil nil 39
+large after delete 390 true 10
+large pop 380 38 true
+large set again 39
+large keys 39 39
+mixed 11 m 81 true true
+mixed extra 1 m m nil 1
+array+tag 4 t 3 true true
+int-keyed in true false
+emptied in true false
+tricky 1 2 3 4 5 6 nil nil
+tricky big 12 1 2 3 4 5 6 nil nil
+cache r0 r11 r29 174
+cache shifting 3,3,3 3 2
+sorted record 3 1 3 nil false true
+sorted big 12 1 12 nil true
+insert 4 15 30 true
+remove_at 3 15 false
+echo 1 11 nil yes yes 3 21 19 true 2
+spawned sees 1 9 10

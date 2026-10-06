@@ -161,9 +161,8 @@ Choices worth knowing:
 ## Known limits
 
 - **Memory grows with the jobs run**: the queue keeps every job's record
-  for `status`, and a small record costs about 1.2 KB in Gem (0.4 KB in
-  Python, 0.14 KB in Elixir). 100,000 jobs peak at about 800 MB, against
-  166 MB for the Python twin and 218 MB for Elixir. A real queue would
+  for `status`. 100,000 jobs peak at about 400 MB, against 175 MB for
+  the Python twin and 246 MB for Elixir (macOS arm64). A real queue would
   expire finished records.
 - **Big state means pauses.** The queue's records live in its loop.
   Arena resets promote what they keep, so most of them copy only the

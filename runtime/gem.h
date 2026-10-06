@@ -360,12 +360,14 @@ struct GemTable {
     GemVal *vals;
     int len;
     int cap;
-    GemStrIndex *str_index;  /* string key index (NULL until first string key) */
+    GemStrIndex *str_index;  /* string key index, or NULL (see GEM_TABLE_SCAN_MAX) */
     uint32_t shape_id;       /* incremented on structural mutations (delete, pop, sort, etc.) */
+    int nstr;                /* number of string keys */
     GemTable *arena_next;    /* linked list in owning arena's table_list */
     uint8_t immutable;       /* frozen module namespace table (gem_table_freeze); copies keep the flag */
     uint8_t rem_flag;        /* scratch bit for a reset's remembered-log compaction */
-    uint8_t index_stale;     /* str_index not built yet (deep copies build it on first string-key use) */
+    uint8_t index_stale;     /* str_index and nstr not computed yet (deep copies, insert and remove_at
+                                leave them to gem_table_index) */
     uint8_t is_array;        /* every entry i has the int key i, so no key is >= len and t[len] = v
                                 appends without a search; cleared by any other append or a delete
                                 that moves an entry, set again by sort */
@@ -401,11 +403,21 @@ static inline void gem_table_written(GemTable *t) {
 
 /* ─── Table operations ─── */
 
+/* A table with at most this many entries has no string-key index: a string
+   key is found by scanning keys[]. A table gets its index when an append
+   takes it past this size with a string key in it, and keeps it through
+   deletes; sort, insert, remove_at and copies recompute it. */
+#ifndef GEM_TABLE_SCAN_MAX
+#define GEM_TABLE_SCAN_MAX 8
+#endif
+
 void gem_table_rebuild_index(GemTable *t);
-/* Call before touching t->str_index. */
+/* Call before touching t->str_index or t->nstr. */
 static inline void gem_table_index(GemTable *t) {
     if (t->index_stale) gem_table_rebuild_index(t);
 }
+/* Position of the string key (key, len) in t, or -1. */
+int gem_table_str_pos(GemTable *t, const char *key, int64_t len);
 
 GemVal gem_table_new(void);
 void gem_table_set(GemVal tbl, GemVal key, GemVal val);
