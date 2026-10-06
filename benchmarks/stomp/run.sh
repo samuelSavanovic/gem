@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Driver for the STOMP broker milestone-6 load tests.
+# Driver for the STOMP broker load tests (examples/stomp_broker/NOTES.md,
+# "Milestone 6").
 #
 # Starts the broker, samples its RSS in the background, runs each workload
 # via harness.py from a separate process, and writes everything (stdout, RSS
-# CSV, harness JSON) into benchmarks/stomp/logs/<timestamp>/.
+# CSV, harness JSON) into benchmarks/stomp/logs/<timestamp>/, or into $OUT.
 #
-# Each phase is a fresh broker — slow-consumer can wedge the broker and
-# we don't want one phase poisoning the next.
+# Each phase gets a fresh broker, so no phase inherits another's state.
+# Exits 1 if a harness failed or the broker died in any phase.
 
 set -uo pipefail
 
@@ -21,11 +22,12 @@ BROKER_SRC="$PROJECT_ROOT/examples/stomp_broker/main.gem"
 PORT=61613
 
 RUN_ID="$(date +"%Y-%m-%d_%H-%M-%S")"
-RUN_DIR="$LOGS_DIR/$RUN_ID"
+RUN_DIR="${OUT:-$LOGS_DIR/$RUN_ID}"
 mkdir -p "$RUN_DIR"
 
 BROKER_PID=""
 RSS_PID=""
+FAILURES=0
 
 cleanup() {
   [[ -n "$RSS_PID" ]] && kill "$RSS_PID" 2>/dev/null || true
@@ -100,10 +102,8 @@ stop_broker() {
       wait "$BROKER_PID" 2>/dev/null
       BROKER_EXIT_STATUS="killed-by-driver"
     else
-      set +e
       wait "$BROKER_PID" 2>/dev/null
       local wstatus=$?
-      set -e
       if (( wstatus > 128 )); then
         local sig=$(( wstatus - 128 ))
         local signame
@@ -154,17 +154,17 @@ phase() {
   start_broker "$label"
   sleep 1
   local out="$RUN_DIR/${label}.json"
-  set +e
   "$PYTHON" "$HARNESS" "$@" | tee "$out"
   local rc=$?
-  set -e
   if [ $rc -ne 0 ]; then
     echo "  !! harness exited with $rc"
+    FAILURES=$((FAILURES + 1))
   fi
   local alive="yes"
   if ! kill -0 "$BROKER_PID" 2>/dev/null; then
     alive="DIED"
     echo "  !! broker died during phase $label"
+    FAILURES=$((FAILURES + 1))
   fi
   stop_broker
   echo "broker status: alive_at_phase_end=$alive  $BROKER_EXIT_STATUS"
@@ -257,3 +257,4 @@ done
 echo
 echo "=== done ==="
 echo "results: $RUN_DIR"
+[[ $FAILURES == 0 ]] || { echo "$FAILURES phase(s) failed"; exit 1; }

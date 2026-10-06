@@ -1,0 +1,17 @@
+{
+  "workload": "fanout",
+  "n_subs": 1000,
+  "n_msgs": 5,
+  "body_size": 256,
+  "publish_elapsed_s": 0.0002,
+  "publish_msgs_per_s": 25488.5,
+  "fanout_elapsed_s": 0.4477,
+  "delivered_msgs_total": 5000,
+  "delivered_msgs_per_s": 11167.3,
+  "expected_total": 5000,
+  "complete_subs": 1000,
+  "median_first_msg_latency_s": 0.0217,
+  "p100_first_msg_latency_s": 0.3422,
+  "errors": [],
+  "n_errors": 0
+}

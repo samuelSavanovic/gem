@@ -1,0 +1,81 @@
+=== Gem Bookmark App Benchmark ===
+Run: 2026-10-05_18-44-16
+Logs: /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-05_m1pro/bookmark
+
+App PID: 81595
+
+Seeded 20 bookmarks
+
+--- Warmup (5s) ---
+Done
+
+--- Burst: GET /bookmarks (30s, 10c) ---
+Running 30s test @ http://localhost:8080/bookmarks
+  2 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     0.98ms  314.79us   2.81ms   86.68%
+    Req/Sec     5.14k   551.44     5.89k    53.32%
+  Latency Distribution
+     50%    0.88ms
+     75%    0.97ms
+     90%    1.69ms
+     99%    1.93ms
+  307927 requests in 30.10s, 3.25GB read
+Requests/sec:  10230.05
+Transfer/sec:    110.54MB
+
+--- Burst: GET / (30s, 10c) ---
+Running 30s test @ http://localhost:8080/
+  2 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   118.20us   54.39us   1.11ms   74.37%
+    Req/Sec    41.62k     8.36k   54.80k    54.15%
+  Latency Distribution
+     50%  106.00us
+     75%  144.00us
+     90%  192.00us
+     99%  298.00us
+  2492547 requests in 30.10s, 2.52GB read
+Requests/sec:  82810.45
+Transfer/sec:     85.77MB
+
+--- Soak: GET /bookmarks (5m, 4c) ---
+  (watching for latency drift and memory growth)
+Running 5m test @ http://localhost:8080/bookmarks
+  1 threads and 4 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   377.55us  137.27us   2.00ms   66.44%
+    Req/Sec    10.62k   180.38    10.99k    66.88%
+  Latency Distribution
+     50%  290.00us
+     75%  548.00us
+     90%  573.00us
+     99%  637.00us
+  3172225 requests in 5.00m, 33.47GB read
+Requests/sec:  10570.56
+Transfer/sec:    114.22MB
+
+--- Burst: POST /bookmarks (10s, 4c) ---
+Running 10s test @ http://localhost:8080/bookmarks
+  1 threads and 4 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    18.53ms   12.20ms  63.69ms   67.51%
+    Req/Sec   227.45    221.36     1.97k    94.00%
+  Latency Distribution
+     50%   17.33ms
+     75%   25.00ms
+     90%   34.92ms
+     99%   51.24ms
+  2276 requests in 10.06s, 1.37GB read
+Requests/sec:    226.18
+Transfer/sec:    139.28MB
+
+--- RSS Summary ---
+  Start:   4048 KB
+  End:     16144 KB
+  Peak:    22464 KB
+  Mean:    16399 KB
+  Growth:  12096 KB over 375s
+
+=== Done ===
+Results saved to: /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-05_m1pro/bookmark

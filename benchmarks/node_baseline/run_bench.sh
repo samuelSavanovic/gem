@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# The bookmark benchmark (benchmarks/run.sh, default durations) against
+# app.mjs on port 8081. Results go to results/, or to $OUT.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -26,7 +28,7 @@ sample_rss() {
   done
 }
 
-RUN_DIR="$SCRIPT_DIR/results"
+RUN_DIR="${OUT:-$SCRIPT_DIR/results}"
 mkdir -p "$RUN_DIR"
 
 # Start fresh

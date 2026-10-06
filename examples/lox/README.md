@@ -117,26 +117,26 @@ Where it goes:
   node or environment table at nearly every access: 99% of them miss
   and hash the key. Looking up string keys is 40 to 45% of the
   instructions in every program.
-- **A recursion frees nothing until it returns to a loop.** Memory is
-  reclaimed at loop back-edges, and an interpreted call recurses through
-  `evaluate` and `execute` without one, so `fib(28)`'s million calls keep
-  every environment and argument list they made: 1.9 GB. `fib(30)` needs
-  4.9 GB. The programs whose work happens inside Lox loops stay at
-  10 MB.
+- **Every interpreted call pays for a return point.** The interpreter's
+  functions call each other recursively, so each records where its call
+  began in the arena, and its return frees what the call allocated once
+  that passes 1 MB: `fib(28)`'s million calls stay at 14 MB. The point
+  costs about 20 instructions a Gem call, 2 to 3% of the instructions.
 - **Freed memory comes back as fresh pages.** A reset unmaps the blocks
   it frees and the next allocations map new ones, so the Gem runs spend
   20 to 30% of their time in the kernel taking page faults.
 - **Trees are copied at every level that builds them.** `binary_trees`
   builds each subtree in one iteration of the interpreter's statement
   loop, and each level's loop starts a fresh mark whose first reset
-  copies the subtree it finds: 1.4 GB in 5,000 resets, a quarter of the
-  run.
+  copies the subtree it finds, and the returns that hand a subtree up
+  copy it too: 1.7 GB in 5,900 resets.
 - **Gem frames are large.** A Lox call takes about ten Gem frames of 0.5
   to 2 KB, which is why the call depth is capped at 256.
 
 These are tracked in `docs/OPTIMIZATIONS.md` ("Inline caches key on the
-table, not its shape", "A recursion frees nothing until a loop moves
-on", "Resets unmap the blocks they free", "A loop's first reset is
-full", "Large C frames"). Keep
+table, not its shape", "A return point costs about 20 instructions a
+call", "Resets unmap the blocks they free", "A loop's first reset is
+full", "Return resets copy a large live return value whole", "Large C
+frames"). Keep
 this program idiomatic: it is the yardstick for those fixes, not a place
 to work around them.
