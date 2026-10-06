@@ -1,0 +1,166 @@
+# A table finds a string key by scanning its keys until it grows past 8
+# entries, and through a string-key index from then on (deletes keep the
+# index). Every operation must give the same answer on both sides of that
+# size, and while a table crosses it in either direction.
+
+load "std/string"
+
+fn show(label, t)
+  let parts = []
+  for k, v in t
+    push(parts, "{k}={v}")
+  end
+  print(label, len(t), string.join(parts, " "))
+end
+
+# 1. Growing past the cutoff, then deleting back under it.
+let t = {}
+for i = 0, 12
+  t["k{i}"] = i
+  if t["k{i}"] != i or not has_key(t, "k{i}") or not ("k0" in t)
+    print("lost a key at size", len(t))
+  end
+end
+show("grown", t)
+for i = 0, 10
+  delete(t, "k{i}")
+end
+show("shrunk", t)
+print("lookups", t.k10, t.k11, t.k3, has_key(t, "k3"), "k11" in t, "k3" in t)
+t.k3 = "back"
+show("re-added", t)
+
+# 2. Every builtin on a small and a large record.
+fn exercise(label, n)
+  let r = {}
+  for i = 0, n
+    r["f{i}"] = i * 10
+  end
+  let last = "f{n - 1}"
+  print(label, "get", r.f0, r[last], r.missing, r["f{n}"])
+  print(label, "has_key", has_key(r, "f0"), has_key(r, last), has_key(r, "nope"), has_key(r, 0))
+  print(label, "in", "f0" in r, last in r, "nope" in r, 0 in r)
+  print(label, "delete", delete(r, "f0"), delete(r, "f0"), delete(r, "nope"), len(r))
+  print(label, "after delete", r[last], has_key(r, last), r.f1)
+  print(label, "pop", pop(r), len(r), has_key(r, last))
+  r.f0 = "again"
+  print(label, "set", r.f0, len(r))
+  let ks = keys(r)
+  print(label, "keys", len(ks), len(values(r)))
+end
+exercise("small", 5)
+exercise("edge", 8)
+exercise("over", 9)
+exercise("large", 40)
+
+# 3. String and int keys mixed: a record with int keys, and an array that
+#    gets a string key.
+let mixed = {name: "m"}
+for i = 0, 10
+  mixed[i] = i * i
+end
+print("mixed", len(mixed), mixed.name, mixed[9], has_key(mixed, "name"), "name" in mixed)
+mixed.extra = 1
+print("mixed extra", mixed.extra, mixed.name, delete(mixed, "name"), mixed.name, mixed.extra)
+let arr = [1, 2, 3]
+arr.tag = "t"
+print("array+tag", len(arr), arr.tag, arr[2], has_key(arr, "tag"), "tag" in arr)
+
+# 4. `in` on a table with no string keys tests values, even after its string
+#    keys are deleted.
+let ints = {}
+ints[5] = "five"
+print("int-keyed in", "five" in ints, 5 in ints)
+let emptied = {a: 1}
+emptied[0] = "zero"
+delete(emptied, "a")
+print("emptied in", "zero" in emptied, "a" in emptied)
+
+# 5. Keys with equal prefixes, equal lengths and embedded NULs.
+let tricky = {}
+tricky["ab"] = 1
+tricky["abc"] = 2
+tricky["abd"] = 3
+tricky["a\0b"] = 4
+tricky["a\0c"] = 5
+tricky[""] = 6
+print("tricky", tricky.ab, tricky.abc, tricky.abd, tricky["a\0b"], tricky["a\0c"], tricky[""], tricky["a"], tricky["a\0"])
+for i = 0, 6
+  tricky["pad{i}"] = i
+end
+print("tricky big", len(tricky), tricky.ab, tricky.abc, tricky.abd, tricky["a\0b"], tricky["a\0c"], tricky[""], tricky["a"], tricky["a\0"])
+
+# 6. One field read (one inline cache) over records of different layouts
+#    and sizes.
+fn make(i)
+  let r = {}
+  for j = 0, i % 12
+    r["x{j}"] = j
+  end
+  r.name = "r{i}"
+  r
+end
+let names = []
+let total = 0
+for i = 0, 30
+  let r = make(i)
+  push(names, r.name)
+  if has_key(r, "x0")
+    total = total + r.x0 + len(r)
+  end
+end
+print("cache", names[0], names[11], names[29], total)
+let shifting = {a: 1, b: 2, c: 3}
+let reads = []
+for i = 0, 3
+  push(reads, shifting.c)
+  delete(shifting, "a")
+  shifting.a = i
+end
+print("cache shifting", string.join(reads, ","), shifting.c, shifting.a)
+
+# 7. sort, insert and remove_at renumber keys.
+let s = {b: 2, a: 1, c: 3}
+sort(s)
+print("sorted record", len(s), s[0], s[2], s.a, has_key(s, "a"), 1 in s)
+let big = {}
+for i = 0, 12
+  big["k{i}"] = 12 - i
+end
+sort(big)
+print("sorted big", len(big), big[0], big[11], big.k0, 5 in big)
+let ins = [10, 20, 30]
+insert(ins, 1, 15)
+print("insert", len(ins), ins[1], ins[3], 15 in ins)
+remove_at(ins, 0)
+print("remove_at", len(ins), ins[0], 10 in ins)
+
+# 8. Copies across send and spawn keep every key reachable.
+fn echo()
+  let msg = receive()
+  let small = msg.small
+  let large = msg.large
+  small.added = "yes"
+  large.added = "yes"
+  send(msg.from, {small: small, large: large, s1: small.a, l1: large.k11, missing: large.nope})
+end
+let small = {a: 1, b: 2}
+let large = {}
+for i = 0, 20
+  large["k{i}"] = i
+end
+let pid = spawn(echo)
+send(pid, {from: self(), small: small, large: large})
+receive
+when {small: sm, large: lg, s1: s1, l1: l1, missing: m}
+  print("echo", s1, l1, m, sm.added, lg.added, len(sm), len(lg), lg.k19, has_key(lg, "k0"), sm.b)
+end
+let captured = {x: 1}
+let big_captured = {}
+for i = 0, 10
+  big_captured["c{i}"] = i
+end
+spawn(fn()
+  print("spawned sees", captured.x, big_captured.c9, len(big_captured))
+end)
+sleep(10)

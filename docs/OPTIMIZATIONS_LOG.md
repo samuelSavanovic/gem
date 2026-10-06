@@ -345,6 +345,18 @@ Structural-decrease termination check (option B) is still TODO — see `OPTIMIZA
 
 ## Table Access
 
+### Small tables scan their keys instead of indexing them ✓ Done (2026-10-06)
+Every table `calloc`'d a string-key index (a hash table outside the arena) at its first string key, so each record cost a `malloc`/`free` pair and an index of 8 slots of 32 bytes (16 slots from its 7th key) plus `malloc`'s overhead, and a reset freed the indexes of the tables it dropped one by one. A table with at most `GEM_TABLE_SCAN_MAX` (8, runtime/gem.h) entries now has no index: `gem_table_str_pos` (runtime/gem_core.c), which every string-key get, set, `has_key`, `in`, `delete` and inline-cache miss goes through, compares each string key's length and then its bytes. A table gets its index when an append takes it past 8 entries with a string key in it, and keeps it through deletes. `sort` drops it (every key is an int afterwards); `insert`, `remove_at` and copies of an indexed table leave it to be rebuilt on the next lookup (`index_stale`, `gem_table_rebuild_index`), which builds one only for a table past the cutoff. Each table also counts its string keys (`nstr`, in what was padding in `GemTable`), so a lookup in a table without string keys answers at once, and `x in t` tests values exactly when the table has no string key, as SPEC.md says (it used to test keys on a record whose string keys had all been deleted).
+
+A cutoff of 4 cost lox 0.5–2.5% more instructions than 8; 16 was within 0.5% of 8.
+
+Before → after (macOS arm64, M1 Pro; binaries built from the commits before and after, run back to back; instructions and peak RSS from `/usr/bin/time -l`):
+- `examples/lox`, six bench programs: instructions −9 to −21% (`closures.lox 100000` 27.5 → 22.1 G, `binary_trees.lox 12` 42.8 → 33.7 G, `fib.lox 28` 17.1 → 14.4 G, `mandelbrot` −9%), wall −10 to −24%, peak RSS −24 to −41% (`binary_trees` 44 → 26 MB).
+- `examples/jobqueue` `backlog` (100,000 jobs): peak RSS 559 → 396 MB, instructions 27.8 → 24.0 G.
+- `examples/logstat` (1M lines, from a file): instructions −10%, wall −10%, peak RSS unchanged (239 MB, most of it the input file, held twice at the peak).
+- Self-compile (`build/gem compiler/main.gem --emit-c`): 13.3 → 12.4 G instructions, peak RSS 112 → 91 MB.
+- 100,000 seven-field records pushed onto an array (`{id: i, status: "done", attempts: ["ok"], result: i * 2, error: nil, submitted_at: 1.5, finished_at: 2.5}`): peak RSS 121.5 → 104 MB. Reset copies of a table leave its index unbuilt until a lookup, so many of the old runtime's kept records had none either.
+
 ### O(1) appends and misses on arrays ✓ Done (2026-10-04)
 `t[len(t)] = v` searched every key before appending, so building an array by index, and the runtime's own `keys`, `values`, `list_dir`, `argv` and sqlite result rows (all built that way), were quadratic. A table now carries `is_array` (entry i has key i): on such a table an int key at or past the end is appended, and a lookup or `has_key` past the end is a miss, without a search. `push` uses the flag too; on a table that is not an array it is `t[len(t)] = v`, where it used to add a second entry with an existing key. `keys` + `values` of a 40,000-entry table: 2,110 ms → 2 ms; of 1M entries: 30 ms. Sparse int keys are still searched (OPTIMIZATIONS.md, "Avoid hashing integers in tables").
 

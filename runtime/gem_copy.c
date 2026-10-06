@@ -325,6 +325,7 @@ static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
             nt->keys = (GemVal *)gem_copy_alloc(map, sizeof(GemVal) * t->cap);
             nt->vals = (GemVal *)gem_copy_alloc(map, sizeof(GemVal) * t->cap);
             nt->str_index = NULL;
+            nt->nstr = t->nstr;
             nt->shape_id = gem_shape_counter++;
             nt->immutable = t->immutable;  /* a frozen namespace stays frozen */
             nt->is_array = t->is_array;
