@@ -1,0 +1,15 @@
+{
+  "workload": "soak",
+  "n_subs": 200,
+  "rate_msgs_per_s": 50.0,
+  "body_size": 256,
+  "duration_s": 30.0,
+  "msgs_sent": 1500,
+  "publish_elapsed_s": 30.007,
+  "delivered_total": 300000,
+  "expected_total": 300000,
+  "min_received": 1500,
+  "max_received": 1500,
+  "publisher_error": null,
+  "n_errors": 0
+}

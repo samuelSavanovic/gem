@@ -1,0 +1,136 @@
+compiling broker → /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-06_m1pro/stomp/stomp_broker
+Run dir: /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-06_m1pro/stomp
+Phases: fanout slow queue soak
+
+=== phase: fanout ===
+broker pid: 53134 (log: /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-06_m1pro/stomp/fanout.broker.log)
+broker ready
+{
+  "workload": "fanout",
+  "n_subs": 1000,
+  "n_msgs": 5,
+  "body_size": 256,
+  "publish_elapsed_s": 0.0002,
+  "publish_msgs_per_s": 30737.8,
+  "fanout_elapsed_s": 0.4152,
+  "delivered_msgs_total": 5000,
+  "delivered_msgs_per_s": 12043.5,
+  "expected_total": 5000,
+  "complete_subs": 1000,
+  "median_first_msg_latency_s": 0.0181,
+  "p100_first_msg_latency_s": 0.3472,
+  "errors": [],
+  "n_errors": 0
+}
+broker status: alive_at_phase_end=yes  killed-by-driver
+
+rss summary for fanout:
+  start_kb: 2752
+  end_kb:   181552
+  peak_kb:  187760
+  mean_kb:  119441
+  growth_kb: 178800 (over 6s)
+
+=== phase: slow ===
+broker pid: 53389 (log: /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-06_m1pro/stomp/slow.broker.log)
+broker ready
+{
+  "workload": "slow_consumer",
+  "n_fast": 4,
+  "n_slow": 1,
+  "slow_delay_ms": 200,
+  "body_size": 1024,
+  "duration_s": 15.0,
+  "publish_elapsed_s": 15.002,
+  "msgs_sent": 313704,
+  "publish_msgs_per_s": 20911.5,
+  "publisher_error": null,
+  "publisher_blocked_at_s": null,
+  "fast_subs_msgs": [
+    984,
+    985,
+    985,
+    985
+  ],
+  "fast_subs_min": 984,
+  "fast_subs_max": 985,
+  "slow_subs_msgs": [
+    97
+  ],
+  "slow_subs_min": 97,
+  "slow_subs_max": 97,
+  "n_errors": 0
+}
+broker status: alive_at_phase_end=yes  killed-by-driver
+
+rss summary for slow:
+  start_kb: 2768
+  end_kb:   768192
+  peak_kb:  772192
+  mean_kb:  519204
+  growth_kb: 765424 (over 22s)
+
+=== phase: queue ===
+broker pid: 54138 (log: /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-06_m1pro/stomp/queue.broker.log)
+broker ready
+{
+  "workload": "queue",
+  "n_publishers": 10,
+  "n_workers": 4,
+  "msgs_per_publisher": 1000,
+  "body_size": 256,
+  "publish_elapsed_s": 0.238,
+  "publish_msgs_per_s": 41992.5,
+  "total_elapsed_s": 0.439,
+  "delivered_total": 10000,
+  "expected_total": 10000,
+  "worker_counts": [
+    2500,
+    2500,
+    2500,
+    2500
+  ],
+  "worker_min": 2500,
+  "worker_max": 2500,
+  "fairness_ratio": 1.0,
+  "publisher_errors": [],
+  "n_publisher_errors": 0
+}
+broker status: alive_at_phase_end=yes  killed-by-driver
+
+rss summary for queue:
+  start_kb: 2752
+  end_kb:   8016
+  peak_kb:  8016
+  mean_kb:  5258
+  growth_kb: 5264 (over 4s)
+
+=== phase: soak ===
+broker pid: 54320 (log: /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-06_m1pro/stomp/soak.broker.log)
+broker ready
+{
+  "workload": "soak",
+  "n_subs": 200,
+  "rate_msgs_per_s": 50.0,
+  "body_size": 256,
+  "duration_s": 30.0,
+  "msgs_sent": 1500,
+  "publish_elapsed_s": 30.007,
+  "delivered_total": 300000,
+  "expected_total": 300000,
+  "min_received": 1500,
+  "max_received": 1500,
+  "publisher_error": null,
+  "n_errors": 0
+}
+broker status: alive_at_phase_end=yes  killed-by-driver
+
+rss summary for soak:
+  start_kb: 2752
+  end_kb:   178848
+  peak_kb:  256528
+  mean_kb:  145134
+  growth_kb: 176096 (over 37s)
+
+=== done ===
+results: /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-06_m1pro/stomp

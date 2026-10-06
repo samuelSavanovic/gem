@@ -1,0 +1,49 @@
+date: 2026-10-06T15:45:51Z
+gem commit: 05b979c
+system: Darwin 27.0.0 arm64
+os: macOS 27.0.1 (26A434)
+cpu: Apple M1 Pro, 10 cores (8 performance)
+memory: 16 GB
+power: AC Power
+low power mode: 0
+load average at start: 1.47 1.66 2.95
+cc: Apple clang version 21.0.0 (clang-2100.3.34.2)
+python3: Python 3.14.5
+python3.14: Python 3.14.5
+node: v25.9.0
+elixir: Elixir 1.20.1 (compiled with Erlang/OTP 29)
+redis: Redis server v=8.10.2 sha=00000000:1 malloc=libc bits=64 build=764b3e45065a66fb
+wrk: wrk 4.2.0 [kqueue] Copyright (C) 2012 Will Glozer
+grep: ggrep (GNU grep) 3.12
+REPS=5 WARMUP=1
+GUARD_RSS_MB=8192 GUARD_SWAP_MB=2048 GUARD_TIMEOUT_S=2400
+SECTIONS=logstat lox gemgrep jobqueue bookmark bookmark_node mini_redis stomp
+
+=== logstat (17:45:52, load 1.47 1.66 2.95)
+logstat        ok        89 s  peak    268 MB
+
+=== lox (17:47:21, load 1.46 1.61 2.80)
+lox            ok       120 s  peak    105 MB
+
+=== gemgrep (17:49:21, load 1.28 1.52 2.60)
+gemgrep        ok       211 s  peak    371 MB
+
+=== jobqueue (17:52:52, load 1.21 1.37 2.30)
+jobqueue       ok       576 s  peak    364 MB
+
+=== bookmark (18:02:32, load 1.49 1.27 1.76)
+bookmark       ok       377 s  peak     26 MB
+
+=== bookmark_node (18:08:49, load 2.06 1.89 1.89)
+benchmarks/measure_all.sh: child setpgid (43774 to 43774): Operation not permitted
+benchmarks/measure_all.sh: child setpgid (45684 to 45684): Operation not permitted
+bookmark_node  ok       377 s  peak    325 MB
+
+=== mini_redis (18:15:06, load 2.06 2.31 2.16)
+mini_redis     ok        91 s  peak    932 MB
+
+=== stomp (18:16:37, load 2.26 2.37 2.20)
+stomp          ok        78 s  peak    784 MB
+
+wrote /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-06_m1pro/summary.csv (1512 rows) and /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-06_m1pro/summary.md
+baseline in /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-06_m1pro
