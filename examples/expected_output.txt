@@ -4065,3 +4065,22 @@ index_churn 0 true 1483
 pcalls 30 0
 levels true d30-199
 bigs 27 8100762
+count 2584 node 18 node 17
+build 16000 item 1.0 item 800.19 item 401.0
+stores 601 13 name 600 name 0 note 0
+mailbox 7 msg 0
+buffer 2395 <500><499> last 0
+same true
+wrap true 404 400
+closure counter 42
+pcall false bottom
+after error 377
+sorted 1 5 9
+mutual true 301
+walk 6300
+mutual tco 600 ping
+spawned 987 node 16
+solo 987
+closure recursion 987 leaf 3193
+value recursion 987
+tree body 987

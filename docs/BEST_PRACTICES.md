@@ -81,7 +81,8 @@ deadlines, restart intensity) follow this doc and test themselves with
 - *Pin*: `^name` in a pattern, which compares with the variable's value
   instead of binding a new variable.
 - *Arena*: a process's memory. The runtime frees garbage at each loop's
-  *back-edge*, the point where an iteration ends and the next begins.
+  *back-edge*, the point where an iteration ends and the next begins, and
+  when a recursive function returns.
 
 **Statements, not expressions.** `if`, `match` and `receive` don't produce
 values inside expressions (`let x = if ...` doesn't parse). An expression
@@ -955,33 +956,6 @@ deeper than 1,000 levels (and `json.encode` so stops on a cyclic table). For
 recursive walkers over untrusted input, cap the depth or use an explicit
 stack, so a hostile input gets a clear error instead of a stack overflow.
 
-### Recursion keeps what it allocates until a loop moves on **(trap)**
-
-Memory is freed at loop back-edges, and a recursion has none of its own:
-what a recursive function and its callees allocate stays until a loop
-that was already running finishes its iteration. Memory then grows with
-the *number of calls*, not with the depth. This counter makes one small
-table per call, a million calls for `count(28)`, and peaks at 530 MB:
-
-```gem
-fn count(n)
-  if n < 2
-    return {v: n}
-  end
-  let a = count(n - 1)
-  let b = count(n - 2)
-  {v: a.v + b.v}
-end
-```
-
-Loop over the recursive calls instead, and each back-edge frees what the
-call before it made: with `for k in [n - 1, n - 2]` adding up
-`count(k).v`, the same count runs in 10 MB. A `while` loop with an
-explicit stack does too. A tree walk that allocates at every node, such
-as an interpreter, is the usual way into this: `examples/lox` runs a
-naive `fib(30)` in Lox, 2.7 million interpreted calls with an
-environment table each, in 4.9 GB.
-
 ---
 
 ## Processes
@@ -1743,7 +1717,6 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | Re-raising with `error(r.error)` | original stack lost | log `r.stack` first |
 | `loop(state)` followed by more statements | stack and memory grow until overflow | self call as the last expression |
 | `warning: cannot reset ... back-edge` on a `while true` | memory grows without bound | restructure the loop |
-| Recursion with millions of calls that allocate | memory grows with the call count | loop over the recursive calls, or an explicit stack |
 | gen_server callback returning `nil` | server dies, the `call` raises | `else` arm returning a result table |
 | `self()` inside `spawn do ... end` to mean the parent | it's the child | `let parent = self()` before |
 | `spawn(f, x)` | `f` called with no arguments | `spawn do f(x) end` |

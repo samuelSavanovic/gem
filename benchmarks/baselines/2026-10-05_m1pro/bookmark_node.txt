@@ -1,0 +1,72 @@
+Seeded 20 bookmarks
+--- Warmup (5s) ---
+Done
+
+--- Burst: GET /bookmarks (30s, 10c) ---
+Running 30s test @ http://localhost:8081/bookmarks
+  2 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   585.69us  164.26us   3.91ms   89.67%
+    Req/Sec     8.57k   514.58     9.69k    66.28%
+  Latency Distribution
+     50%  527.00us
+     75%  565.00us
+     90%    1.00ms
+     99%    1.12ms
+  513359 requests in 30.10s, 5.45GB read
+Requests/sec:  17055.34
+Transfer/sec:    185.55MB
+
+--- Burst: GET / (30s, 10c) ---
+Running 30s test @ http://localhost:8081/
+  2 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   152.03us   54.47us 631.00us   72.16%
+    Req/Sec    32.40k     1.52k   36.55k    69.10%
+  Latency Distribution
+     50%  138.00us
+     75%  174.00us
+     90%  240.00us
+     99%  303.00us
+  1940869 requests in 30.10s, 2.11GB read
+Requests/sec:  64482.21
+Transfer/sec:     71.64MB
+
+--- Soak: GET /bookmarks (5m, 4c) ---
+Running 5m test @ http://localhost:8081/bookmarks
+  1 threads and 4 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   233.70us   85.01us   2.63ms   63.14%
+    Req/Sec    17.14k   189.85    17.54k    68.68%
+  Latency Distribution
+     50%  187.00us
+     75%  334.00us
+     90%  355.00us
+     99%  413.00us
+  5118065 requests in 5.00m, 54.38GB read
+Requests/sec:  17054.53
+Transfer/sec:    185.55MB
+
+--- Burst: POST /bookmarks (10s, 4c) ---
+Running 10s test @ http://localhost:8081/bookmarks
+  1 threads and 4 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    13.66ms    8.86ms  40.05ms   67.41%
+    Req/Sec   308.08    302.72     2.73k    93.00%
+  Latency Distribution
+     50%   12.96ms
+     75%   18.27ms
+     90%   26.19ms
+     99%   37.38ms
+  3076 requests in 10.04s, 2.49GB read
+Requests/sec:    306.31
+Transfer/sec:    254.41MB
+
+--- RSS Summary ---
+  Start:   64736 KB
+  End:     310336 KB
+  Peak:    312064 KB
+  Mean:    103101 KB
+  Growth:  245600 KB over 375s
+
+=== Done ===

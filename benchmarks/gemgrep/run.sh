@@ -5,14 +5,17 @@
 #
 #   benchmarks/gemgrep/run.sh [case...]       # default: all of them
 #   MB=256 benchmarks/gemgrep/run.sh          # a bigger corpus (default 128 MB)
-#   GEM_DIAG=1 benchmarks/gemgrep/run.sh      # plus each Gem run's arena statistics
+#   GEM_DIAG=1 benchmarks/gemgrep/run.sh      # plus arena statistics (of each Gem row's last run)
 #
 # The corpus is generated (gen_corpus.py, the same bytes every time) into a
 # temporary directory; the `src_*` cases search the repository's own
-# sources. Prints one row per run: wall time and peak RSS, then the
-# Gem/grep and Gem/Python time ratios. grep walks directories in readdir
-# order, gemgrep and the twin in sorted order, so grep's output is sorted
-# before the comparison; the twin's must match gemgrep's byte for byte.
+# sources. Prints one row per search and program: wall time, peak RSS and
+# (on macOS) instructions retired, over BENCH_REPS runs (measure.py, which
+# also writes BENCH_CSV); then the Gem/grep and Gem/Python time ratios. The control is `ggrep` when
+# it is on PATH (GNU grep on macOS, `brew install grep`), else `grep`.
+# grep walks directories in readdir order, gemgrep and the twin in sorted
+# order, so grep's output is sorted before the comparison; the twin's must
+# match gemgrep's byte for byte.
 
 set -euo pipefail
 
@@ -42,35 +45,23 @@ SELECT=("$@")
 
 [[ -x "$GEM" ]] || { echo "build/gem not found: run 'make build'" >&2; exit 1; }
 command -v python3 > /dev/null || { echo "python3 not found" >&2; exit 1; }
-command -v grep > /dev/null || { echo "grep not found" >&2; exit 1; }
+GREP=$(command -v ggrep || command -v grep) || { echo "grep not found" >&2; exit 1; }
 
 (cd "$APP" && env -u GEM_DIAG "$GEM" main.gem -o "$WORK/gemgrep")
 python3 "$SCRIPT_DIR/gen_corpus.py" "$WORK/corpus" "${MB:-128}"
-echo "grep: $(grep --version | head -1); $(python3 --version)"
+echo "grep: $("$GREP" --version | head -1); $(python3 --version)"
 
-# measure <label> <command...>: runs the command (in the cwd) with stdout to
-# $WORK/out and prints its wall time and peak RSS (getrusage of the child);
-# leaves the wall time in $WORK/wall. Exit status 1 (nothing selected) is
-# not a failure.
+# measure <impl> <case> <command...>: runs the command (in the cwd) with
+# stdout to $WORK/out and prints its wall time, peak RSS and instruction
+# count (benchmarks/measure.py: BENCH_REPS, BENCH_CSV); leaves the wall
+# time in $WORK/wall. Exit status 1 (nothing selected) is not a failure;
+# the output comparisons catch a run that exits 1 for another reason.
 measure() {
-  local label=$1
-  shift
-  python3 - "$label" "$WORK" "$@" <<'PY'
-import resource, subprocess, sys, time
-label, work, *cmd = sys.argv[1:]
-start = time.monotonic()
-with open(f"{work}/out", "wb") as o, open(f"{work}/err", "wb") as e:
-    rc = subprocess.call(cmd, stdout=o, stderr=e)
-wall = time.monotonic() - start
-peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
-if sys.platform == "darwin":
-    peak //= 1024    # bytes on macOS, KB on Linux
-print(f"{label:<34} {wall:8.2f} s {peak:9d} KB")
-open(f"{work}/wall", "w").write(f"{wall}\n")
-if rc > 1:
-    sys.stdout.write(open(f"{work}/err").read())
-    sys.exit(rc)
-PY
+  local impl=$1 case=$2
+  shift 2
+  python3 "$SCRIPT_DIR/../measure.py" --bench gemgrep --impl "$impl" --case "$case" \
+    --ok-max 1 --width 34 --out "$WORK/out" --err "$WORK/err" --wall-file "$WORK/wall" \
+    "$impl" -- "$@"
   grep '^gem_diag: arena' "$WORK/err" || true
 }
 
@@ -91,13 +82,13 @@ for c in "${CASES[@]}"; do
     cd "$ROOT"
   fi
   echo "== $name: gemgrep ${argv[*]}"
-  measure "gem" "$WORK/gemgrep" "${argv[@]}"
+  measure gem "$name" "$WORK/gemgrep" "${argv[@]}"
   cp "$WORK/out" "$WORK/gem.txt"
   gem_wall=$(cat "$WORK/wall")
-  measure "grep -E" grep -E "${argv[@]}"
+  measure grep "$name" "$GREP" -E "${argv[@]}"
   grep_wall=$(cat "$WORK/wall")
   sort "$WORK/out" > "$WORK/grep.txt"
-  measure "python" python3 "$SCRIPT_DIR/gemgrep.py" "${argv[@]}"
+  measure python "$name" python3 "$SCRIPT_DIR/gemgrep.py" "${argv[@]}"
   py_wall=$(cat "$WORK/wall")
   if ! sort "$WORK/gem.txt" | cmp -s - "$WORK/grep.txt"; then
     echo "MISMATCH with grep for $name:"

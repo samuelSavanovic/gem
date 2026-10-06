@@ -65,10 +65,13 @@ void gem_arena_init(GemArena *arena) {
     arena->lo = block->data;
     arena->hi = block->data + block->cap;
     arena->bytes_allocated = 0;
+    arena->bytes_freed = 0;
     arena->rem = NULL;
     arena->rem_len = 0;
     arena->rem_cap = 0;
     arena->pin_seq = 0;
+    arena->ret_min = 0;
+    arena->ret_at = 0;
 }
 
 /* Fresh block chained after `after` and made current; used by region resets

@@ -9,7 +9,7 @@ load "./scope" (collect_top_let_names, scope_shadowing_lets, collect_module_name
 load "./captures" (collect_free_vars, collect_free_node, walk_captures_node, walk_writes_node, find_captured_in_scope, find_capture_writes_in_scope, find_writes_in_closure_body, mark_non_escaping_stmts)
 load "./tco" (fn_def_is_tco, find_tail_call_sccs)
 load "./append" (decompose_concat, expr_has_var, find_append_vars)
-load "./callgraph" (build_call_graph)
+load "./callgraph" (build_call_graph, mark_recursive_fns)
 load "./loops" (lift_captured_arm_lets_in_fn, lift_captured_arm_lets_top_stmts, top_rescue_placeholders, tag_process_tail_while_loops)
 
 fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_file = nil, sink = nil, global_display = nil)
@@ -198,6 +198,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # return. A leaf calls nothing, so it is always the innermost frame and
   # error reports show it on top of the call stack.
   let in_leaf_fn = false
+  # C expression of the return point (`GemArenaPoint`) of the fn being
+  # compiled, or nil: return_str emits the return reset from it.
+  let ret_point = nil
 
   # ─── Helpers ──
 
@@ -348,6 +351,24 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     else
       "{p}gem_pop_frame();\n"
     end
+  end
+  # Every return of a fn body goes through these two (a mutual-TCO body's
+  # trampoline return, emit_scc_tail_call, is not one: the body has no
+  # return point). In a fn with a return point, a return first frees what
+  # the call allocated, keeping the return value (gem_arena_reset_return).
+  let return_str = fn(p, t)
+    let reset = ""
+    if ret_point != nil
+      reset = "{p}if (gem_ret_reset_due(&{ret_point})) gem_arena_reset_return(&{ret_point}, &{t}, 1);\n"
+    end
+    "{reset}{pop_str(p)}{p}return {t};"
+  end
+  let return_nil_str = fn(p)
+    let reset = ""
+    if ret_point != nil
+      reset = "{p}if (gem_ret_reset_due(&{ret_point})) gem_arena_reset_return(&{ret_point}, NULL, 1);\n"
+    end
+    "{reset}{pop_str(p)}{p}return GEM_NIL;"
   end
   let setline_str = fn(line, p)
     if in_leaf_fn
@@ -524,8 +545,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # loops for back-edge resets, attaches liveness, and finds mutual-tail-call
   # SCCs. (Historically it decided which functions were "process-tail", i.e.
   # allowed to reset the arena; region resets made that unnecessary.)
-  let mark_process_tail = fn(fn_defs, top_stmts)
-    let graph = build_call_graph(fn_defs, top_stmts)
+  let mark_process_tail = fn(fn_defs, top_stmts, extern_names)
+    let graph = build_call_graph(fn_defs, top_stmts, builtin_fns, extern_names)
+    mark_recursive_fns(graph)
     let caller_records = graph.caller_records
     let name_to_fn = graph.name_to_fn
 
@@ -834,6 +856,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     buf_push(b, "        }\n")
     buf_push(b, "        gem_yield_check();\n")
     buf_push(b, "    }\n")
+    # Return reset from the mark's base point: the members' own returns
+    # don't reset (compile_fn). The wrapper has no frame of its own.
+    buf_push(b, "    if (gem_ret_reset_due(&_mk.base)) gem_arena_reset_return(&_mk.base, &_result, 0);\n")
     buf_push(b, "    return _result;\n")
     buf_push(b, "}")
     to_string(b)
@@ -1290,7 +1315,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "\n")
     else
       let p = pad_for(indent)
-      buf_push(b, "{pop_str(p)}{p}return GEM_NIL;\n")
+      buf_push(b, "{return_nil_str(p)}\n")
     end
     to_string(b)
   end
@@ -1374,9 +1399,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       if value != nil
         let r = compile_expr(value)
         let t = tmp()
-        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{pop_str(p)}{p}return {t};"
+        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{return_str(p, t)}"
       end
-      return "{line_dir}{pop_str(p)}{p}return GEM_NIL;"
+      return "{line_dir}{return_nil_str(p)}"
     when {tag: "call"}
       let r = compile_expr(node)
       return "{line_dir}{r.setup}{p}(void)({r.expr});"
@@ -1445,30 +1470,30 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       let r = compile_expr(value)
       let mname = mangle(name)
       if in_top_level and set_contains(top_level_vars, name)
-        return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});\n{pop_str(p)}{p}return GEM_NIL;"
+        return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});\n{return_nil_str(p)}"
       end
       if set_contains(boxed_vars, name)
-        return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
+        return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};\n{return_nil_str(p)}"
       end
-      return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};\n{pop_str(p)}{p}return GEM_NIL;"
+      return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};\n{return_nil_str(p)}"
     when {tag: "assign", name: name, value: value}
       check_assign_target(name, node)
       let r = compile_expr(value)
       let t = tmp()
       # An assignment is a statement: in tail position it yields nil, as a
       # field or index assignment does.
-      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_store(name, t)}\n{ns_refresh(name, p)}{pop_str(p)}{p}return GEM_NIL;"
+      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_store(name, t)}\n{ns_refresh(name, p)}{return_nil_str(p)}"
     when {tag: "return", value: value}
       if value != nil
         let r = compile_expr(value)
         let t = tmp()
-        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{pop_str(p)}{p}return {t};"
+        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{return_str(p, t)}"
       end
-      return "{line_dir}{pop_str(p)}{p}return GEM_NIL;"
+      return "{line_dir}{return_nil_str(p)}"
     when {tag: "if"}
       return "{line_dir}" + compile_if(node, indent, true)
     when {tag: "while"}
-      return "{line_dir}{compile_while(node, indent)}\n{pop_str(p)}{p}return GEM_NIL;"
+      return "{line_dir}{compile_while(node, indent)}\n{return_nil_str(p)}"
     when {tag: "match"}
       return "{line_dir}" + compile_match(node, indent, true)
     when {tag: "receive_match"}
@@ -1489,20 +1514,20 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "{p}}")
       return to_string(b)
     when {tag: "dot_assign"}
-      return "{compile_stmt(node, indent)}\n{pop_str(p)}{p}return GEM_NIL;"
+      return "{compile_stmt(node, indent)}\n{return_nil_str(p)}"
     when {tag: "index_assign"}
-      return "{compile_stmt(node, indent)}\n{pop_str(p)}{p}return GEM_NIL;"
+      return "{compile_stmt(node, indent)}\n{return_nil_str(p)}"
     when {tag: "break"}
-      return "{compile_stmt(node, indent)}\n{pop_str(p)}{p}return GEM_NIL;"
+      return "{compile_stmt(node, indent)}\n{return_nil_str(p)}"
     when {tag: "continue"}
-      return "{compile_stmt(node, indent)}\n{pop_str(p)}{p}return GEM_NIL;"
+      return "{compile_stmt(node, indent)}\n{return_nil_str(p)}"
     when {tag: "fn_def"}
-      return "{compile_stmt(node, indent)}\n{pop_str(p)}{p}return GEM_NIL;"
+      return "{compile_stmt(node, indent)}\n{return_nil_str(p)}"
     end
 
     let r = compile_expr(node)
     let t = tmp()
-    "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{pop_str(p)}{p}return {t};"
+    "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{return_str(p, t)}"
   end
 
   # ─── compile_if ──
@@ -1720,7 +1745,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       if node.else != nil
         buf_push(b, compile_stmts_tail(node.else, indent, return_pos))
       elif return_pos
-        buf_push(b, "{pop_str(p)}{p}return GEM_NIL;\n")
+        buf_push(b, "{return_nil_str(p)}\n")
       end
       buf_push(b, "{p}(void){t};")
       return to_string(b)
@@ -2404,8 +2429,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, compile_stmt_return(body[-1], 1))
       buf_push(b, "\n")
     else
-      let pf = pop_str("    ")
-      buf_push(b, "{pf}    return GEM_NIL;\n")
+      buf_push(b, return_nil_str("    ") + "\n")
     end
     to_string(b)
   end
@@ -2432,6 +2456,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let saved_local = local_names
     let saved_fn_scope = fn_scope_locals
     let saved_in_leaf = in_leaf_fn
+    let saved_ret_point = ret_point
     local_names = shadowed_locals
     # Flow-sensitive: params now, each let as compile_stmt reaches it (so a
     # read of a module global before a same-named let still hits the slot).
@@ -2520,6 +2545,23 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     else
       buf_push(b, "    gem_push_frame(\"{escape_c_string(frame_name(name))}\", \"{escape_c_string(rel_path(file_of(node)))}\", {fn_line});\n")
     end
+    # Return point, taken after the param bindings so the args are older.
+    # Only a fn that can recurse (mark_recursive_fns in callgraph.gem) takes
+    # one; a point costs about 20 instructions a call. A self-TCO fn reuses
+    # its loop mark's base point. A
+    # mutual-TCO body returns to its trampoline, which resets instead
+    # (scc_wrapper_for): a body's TLB return carries the next body's args
+    # in gem_tail_args.
+    ret_point = nil
+    if not in_leaf_fn and scc_id == nil
+      if use_tco
+        ret_point = "_tco_mk.base"
+      elif node.may_recurse == true
+        ret_point = "_ret_pt"
+        buf_push(b, "    GemArenaPoint _ret_pt;\n")
+        buf_push(b, "    gem_arena_point(&_ret_pt);\n")
+      end
+    end
 
     if use_tco and tco_rebind
       # Rebind mode (default / rest params). The body runs in its own C
@@ -2537,8 +2579,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(bb, compile_stmt_return(body[-1], 3))
         buf_push(bb, "\n")
       else
-        let pf3 = pop_str("            ")
-        buf_push(bb, "{pf3}            return GEM_NIL;\n")
+        buf_push(bb, return_nil_str("            ") + "\n")
       end
       let argv_n = tco_argv_max
       if argv_n < 1
@@ -2568,8 +2609,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(b, compile_stmt_return(body[-1], 2))
         buf_push(b, "\n")
       else
-        let pf2 = pop_str("        ")
-        buf_push(b, "{pf2}        return GEM_NIL;\n")
+        buf_push(b, return_nil_str("        ") + "\n")
       end
       buf_push(b, "    \}\n")
     else
@@ -2604,6 +2644,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     fn_scope_locals = saved_fn_scope
     closure_captures = saved_fn_closure_captures
     in_leaf_fn = saved_in_leaf
+    ret_point = saved_ret_point
     to_string(b)
   end
 
@@ -2633,6 +2674,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let saved_current_closure_captures = current_closure_captures
     let saved_stack_env_writes = stack_env_writes
     let saved_in_leaf = in_leaf_fn
+    let saved_ret_point = ret_point
+    ret_point = nil
     # A tail call inside this closure is the closure's own tail call, not
     # the enclosing named fn's: suspend that fn's self-TCO and mutual-TCO
     # rewrites (they would emit `continue`/`goto`/a TLB return in a
@@ -2719,6 +2762,14 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     else
       buf_push(fb, "    gem_push_frame(\"anonymous fn\", \"{escape_c_string(rel_path(file_of(node)))}\", {anon_line});\n")
     end
+    # Return point, as in compile_fn. A non-escaping closure writes its
+    # creator's unboxed C locals (stack_env_writes), which the reset would
+    # not root, so it gets none.
+    if not in_leaf_fn and node.non_escaping != true and node.may_recurse == true
+      ret_point = "_ret_pt"
+      buf_push(fb, "    GemArenaPoint _ret_pt;\n")
+      buf_push(fb, "    gem_arena_point(&_ret_pt);\n")
+    end
     buf_push(fb, emit_fn_body(body))
     buf_push(fb, "}")
 
@@ -2731,6 +2782,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     current_closure_captures = saved_current_closure_captures
     stack_env_writes = saved_stack_env_writes
     in_leaf_fn = saved_in_leaf
+    ret_point = saved_ret_point
     tco_fn_name = saved_tco_fn_name
     current_scc_id = saved_scc_id
 
@@ -2867,7 +2919,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     # Call graph (for mutual-TCO SCCs and the module-state note), loop
     # tagging and per-loop liveness.
-    mark_process_tail(fn_defs, top_stmts)
+    mark_process_tail(fn_defs, top_stmts, extern_names)
 
     # Liveness-driven hoist: for PT-while nodes, lift arm-lets live at the
     # back-edge to the surrounding stmt list so they have a stable C local.

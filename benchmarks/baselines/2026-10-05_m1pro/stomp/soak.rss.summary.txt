@@ -1,0 +1,5 @@
+  start_kb: 2800
+  end_kb:   210848
+  peak_kb:  310032
+  mean_kb:  190397
+  growth_kb: 208048 (over 37s)

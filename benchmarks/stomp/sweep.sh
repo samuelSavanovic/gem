@@ -62,22 +62,18 @@ run_cell() {
   ) > "$rss_csv" &
   local rss_pid=$!
 
-  set +e
   "$PYTHON" "$HARNESS" fanout \
     --n-subs "$subs" --n-msgs "$msgs" --body-size "$body" \
     --publish-pause-s "$pause" \
     > "$RUN_DIR/${label}.json" 2> "$RUN_DIR/${label}.harness.err"
   local rc=$?
-  set -e
 
   local alive="yes"
   local exit_status=""
   if ! kill -0 $bpid 2>/dev/null; then
     alive="DIED"
-    set +e
     wait $bpid
     local wstatus=$?
-    set -e
     if (( wstatus > 128 )); then
       local sig=$(( wstatus - 128 ))
       local signame

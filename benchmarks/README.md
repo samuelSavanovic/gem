@@ -7,7 +7,7 @@ This directory holds the benchmark **harness**, not the application being benchm
 - `run.sh` — wrk-driven benchmark of `examples/bookmark_app`. Starts the app on port 8080, runs warmup → read bursts → 5-minute soak → write burst, samples RSS throughout, writes results to `benchmarks/logs/<timestamp>/`.
 - `wrk_post_bookmark.lua` — wrk script for the POST burst phase.
 - `node_baseline/` — reference Node.js implementation of the routes the benchmark hits (`GET /`, `GET /bookmarks`, `POST /bookmarks`; port 8081). Lets us compare like-for-like under identical wrk parameters. Has its own `run_bench.sh`.
-- `logs/` — output of `run.sh` runs (gitignored). One subdirectory per run: phase outputs, `rss.csv`, `meta.txt` with system info and the gem commit SHA.
+- `logs/` — output of `run.sh` runs (gitignored; `OUT` picks another directory). One subdirectory per run: phase outputs, `rss.csv`, `meta.txt` with system info and the gem commit SHA.
 
 The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the entry point); `examples/bookmark_app/test.gem` checks them, as part of `make test`. Keep the response bodies the same as the Node baseline's when changing it, or the two stop being comparable.
 
@@ -20,6 +20,22 @@ The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the
 `gemgrep/` benchmarks `examples/gemgrep` (a recursive grep on libc's regex) against GNU grep and the same program in Python; see [below](#gemgrep).
 
 `jobqueue/` benchmarks `examples/jobqueue` (a job queue with a supervised worker pool under fault injection) against the same design in Python asyncio and in Elixir/OTP; see [below](#jobqueue).
+
+## Baselines
+
+`measure_all.sh` runs every harness in this directory (stomp's is in `stomp/`) and writes a baseline directory, `baselines/<date>_<machine>/` (e.g. `2026-10-05_m1pro`), to commit:
+
+```bash
+benchmarks/measure_all.sh                          # everything, about an hour
+SECTIONS="logstat lox" REPS=3 benchmarks/measure_all.sh
+python3 benchmarks/summarize.py --compare benchmarks/baselines/OLD benchmarks/baselines/NEW
+```
+
+A baseline holds `meta.txt` (commit, machine, tool versions, and on macOS the power source), each harness's output (`<section>.txt`, and a directory per server), `batch.csv` (one row per timed run of a batch program), `sections.txt` (status, wall time and peak RSS of each section), and what `summarize.py` makes of them: `summary.csv` (one row per bench, case, implementation and metric) and `summary.md`. `--compare` prints the headline metrics two baselines share (wall time, instructions, peak memory, throughput, latency) and the change in percent. Compare baselines from the same machine; between machines only the ratios against the controls carry over.
+
+Each section runs under a watchdog that kills it, servers and load generators included, when its processes pass half the RAM (`GUARD_RSS_MB`), swap grows by 2 GB (`GUARD_SWAP_MB`), macOS reports critical memory pressure, or it runs past 40 minutes (`GUARD_TIMEOUT_S`); `sections.txt` records each section's peak RSS (the highest of its samples) and the reason for any kill.
+
+The batch harnesses (logstat, lox, gemgrep, jobqueue) time each run through `measure.py`: `BENCH_REPS` timed runs (median wall time), `BENCH_WARMUP` untimed ones before them, and `BENCH_CSV` to append the runs to a CSV. On macOS it reads `/usr/bin/time -l`, which adds instructions retired, cycles and peak memory footprint; instruction counts move far less between runs than wall time. The servers run once each, with their load generators on the same machine.
 
 ## Running
 

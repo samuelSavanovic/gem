@@ -696,6 +696,26 @@ void gem_pin_free_all(GemProcess *proc) {
  * of its own points, so marks held by enclosing loops (all older: their
  * young points were set before this loop started) stay valid.
  *
+ * Return resets (gem_arena_reset_return). A fn records a point at entry
+ * and at a return resets from it with the return value as the only root,
+ * through a one-shot mark whose young point is its base point (so the
+ * reset is full). The cases above hold with "the loop" read as "the
+ * call": the frame's other locals are dead at the return (1); callers'
+ * frames, including argument values a caller evaluated before the call
+ * and runtime frames that called back into Gem, were suspended before the
+ * point (2); the point's clock epoch (gem_arena_point bumps
+ * gem_mut_clock) makes the first write during the call to any older table
+ * log it, so case 3 finds it; and every mark held by an enclosing loop or
+ * call is older than the point, since loops in the caller cannot reach
+ * their back-edge during the call, while loops in the callee have ended
+ * or are left by this return. A non-escaping closure (a pcall or sort
+ * argument, mark_non_escaping) can write its creator's C locals, which
+ * its loops' resets root but a return reset would not, so it has no
+ * return point; nor does a mutual-TCO body, whose return carries
+ * the next body's args in the global gem_tail_args: its trampoline resets
+ * when the cycle returns. A call left by an error (longjmp) skips its
+ * reset.
+ *
  * Hysteresis: the next reset for this mark fires after the loop allocates
  * max(GEM_ARENA_RESET_THRESHOLD, 2 * bytes copied + bytes scanned / 2) after
  * a young reset, or max(GEM_ARENA_RESET_THRESHOLD, bytes scanned / 2) after
@@ -703,17 +723,18 @@ void gem_pin_free_all(GemProcess *proc) {
  * allocation or promotion. */
 
 /* GEM_DIAG=1 reports reset counts and volumes at exit. */
-static uint64_t gem_diag_resets, gem_diag_full, gem_diag_copied, gem_diag_scanned, gem_diag_freed;
+static uint64_t gem_diag_resets, gem_diag_full, gem_diag_ret, gem_diag_ret_copied, gem_diag_copied, gem_diag_scanned, gem_diag_freed;
 static double gem_diag_t_total, gem_diag_t_walk, gem_diag_t_max;
 #include <time.h>
 static double gem_diag_now(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return ts.tv_sec + ts.tv_nsec * 1e-9; }
 static int gem_diag_state = -1;
 
 static void gem_diag_reset_report(void) {
-    fprintf(stderr, "gem_diag: arena_resets=%llu copied=%llu scanned=%llu freed=%llu time=%.3fs walk=%.3fs full=%llu max=%.3fs\n",
+    fprintf(stderr, "gem_diag: arena_resets=%llu copied=%llu scanned=%llu freed=%llu time=%.3fs walk=%.3fs full=%llu ret_resets=%llu ret_copied=%llu max=%.3fs\n",
             (unsigned long long)gem_diag_resets, (unsigned long long)gem_diag_copied,
             (unsigned long long)gem_diag_scanned, (unsigned long long)gem_diag_freed,
-            gem_diag_t_total, gem_diag_t_walk, (unsigned long long)gem_diag_full, gem_diag_t_max);
+            gem_diag_t_total, gem_diag_t_walk, (unsigned long long)gem_diag_full,
+            (unsigned long long)gem_diag_ret, (unsigned long long)gem_diag_ret_copied, gem_diag_t_max);
 }
 
 static void gem_diag_note_reset(size_t copied, size_t scanned, size_t freed, int full) {
@@ -751,8 +772,11 @@ static void gem_rekey_index(GemTable *t, const int *moved, int n_moved) {
     }
 }
 
+/* Sets *copied_out, *scanned_out and *region_out to the bytes the reset
+   copied, scanned and found in its region. */
 static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_roots,
-                                  GemVal **pinned_roots, int n_pinned) {
+                                  GemVal **pinned_roots, int n_pinned,
+                                  size_t *copied_out, size_t *scanned_out, size_t *region_out) {
     GemProcess *proc = &gem_proc_table[gem_current_pid];
     GemArena *arena = &proc->arena;
 
@@ -767,6 +791,9 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
     GemArenaBlock *post_blocks = mb->next;
     GemRegion region;
     gem_region_build(&region, mb->data + pt->used, mb->data + mb->used, post_blocks);
+
+    size_t region_used = mb->used - pt->used;
+    for (GemArenaBlock *b = post_blocks; b; b = b->next) region_used += b->used;
 
     /* Detach the region's blocks. The copies go into mb's tail when nothing
        was allocated there since the point (a reset leaves its last copy
@@ -957,6 +984,7 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
     size_t region_bytes = 0;
     for (int i = 0; i < region.n; i++) region_bytes += (size_t)(region.ranges[i].hi - region.ranges[i].lo);
     gem_arena_free_blocks(post_blocks);
+    arena->bytes_freed += region_used;
     if (!tail_free) {
         if (mb->dirty < mb->used) mb->dirty = mb->used;
         mb->used = pt->used;
@@ -978,7 +1006,12 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
     mark->young.buffers = arena->buffer_list;
     mark->young.pin_seq = arena->pin_seq;
     mark->young.clock = ++gem_mut_clock;
+    mark->young.arena = arena;
+    mark->young.ret_trig = arena->bytes_allocated - arena->bytes_freed + GEM_ARENA_RESET_THRESHOLD;
     gem_arena_append_block(arena, last, 0);
+    *copied_out = copied;
+    *scanned_out = scanned;
+    *region_out = region_used;
 
     size_t budget;
     if (full) {
@@ -1019,8 +1052,49 @@ void gem_arena_reset_region(GemArenaMark *mark, GemVal **roots, int n_roots,
     if (gem_current_pid < 0) return;
     if (!gem_arena_reset_due(mark)) return;
     double t0 = gem_diag_state != 0 ? gem_diag_now() : 0;
-    gem_region_reset_impl(mark, roots, n_roots, pinned_roots, n_pinned);
+    size_t copied, scanned, region;
+    gem_region_reset_impl(mark, roots, n_roots, pinned_roots, n_pinned, &copied, &scanned, &region);
     if (gem_diag_state > 0) {
+        double dt = gem_diag_now() - t0;
+        gem_diag_t_total += dt;
+        if (dt > gem_diag_t_max) gem_diag_t_max = dt;
+    }
+}
+
+void gem_arena_reset_return(const GemArenaPoint *pt, GemVal *ret, int own_frames) {
+    if (gem_current_pid < 0 || gem_call_depth <= own_frames) return;
+    GemArena *arena = &gem_proc_table[gem_current_pid].arena;
+    size_t live = arena->bytes_allocated - arena->bytes_freed - (pt->ret_trig - GEM_ARENA_RESET_THRESHOLD);
+    if (live + (arena->bytes_allocated - arena->ret_at) < arena->ret_min) return;
+    double t0 = gem_diag_state != 0 ? gem_diag_now() : 0;
+    /* A one-shot mark whose young point is its base point: the impl takes
+       the full path, with the region everything allocated since `pt`. Its
+       promotion and trigger updates land in this dead mark. */
+    GemArenaMark mark;
+    mark.base = *pt;
+    mark.young = *pt;
+    mark.trigger = 0;
+    mark.old_bytes = 0;
+    mark.old_limit = 0;
+    mark.rem_window = 0;
+    GemVal *roots[1] = { ret };
+    size_t copied, scanned, region;
+    gem_region_reset_impl(&mark, roots, ret ? 1 : 0, NULL, 0, &copied, &scanned, &region);
+    /* The hysteresis is the arena's, not the frame's: a recursion
+       returning a growing result up its levels copies it again only once
+       the returning frame's region and the allocation since this reset
+       add up to twice this copy plus half the bytes scanned (four times
+       the copy, when this reset kept at
+       least half of its region: the data was mostly live), so its copies
+       grow geometrically, as a loop's do, not once per level. Counting
+       the allocation since this reset lets a big copy hold back later
+       return resets only until as much has been allocated again. */
+    size_t factor = 2 * copied >= region ? 4 : 2;
+    arena->ret_min = factor * copied + scanned / 2;
+    arena->ret_at = arena->bytes_allocated;
+    if (gem_diag_state > 0) {
+        gem_diag_ret++;
+        gem_diag_ret_copied += copied;
         double dt = gem_diag_now() - t0;
         gem_diag_t_total += dt;
         if (dt > gem_diag_t_max) gem_diag_t_max = dt;

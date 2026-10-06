@@ -1,4 +1,5 @@
 # Bookmark manager on http://localhost:8080. Run it from this directory.
+# LOG_LEVEL (debug, info, warn, error; default info) sets which lines it logs.
 
 load "std/http"
 load "std/log"
@@ -7,6 +8,10 @@ load "./bookmarks"
 let PORT = 8080
 
 fn main()
+  let level = getenv("LOG_LEVEL")
+  if level != nil
+    log.set_level(level)
+  end
   let db = bookmarks.open_db("bookmarks.db")
   log.info("bookmark manager listening on http://localhost:{PORT}")
   http.serve(bookmarks.routes(db, "./static"), {port: PORT})
