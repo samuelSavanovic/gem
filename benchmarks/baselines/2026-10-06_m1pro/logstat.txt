@@ -1,0 +1,11 @@
+input: 1000000 lines, 123390638 bytes
+gem_file --by ip             1.48 s    245072 KB    24.22 G instr   (n=5, min 1.48, max 1.48)
+gem_stdin --by ip            1.45 s      4080 KB    23.71 G instr   (n=5, min 1.45, max 1.46)
+python --by ip               1.69 s     22304 KB    26.65 G instr   (n=5, min 1.68, max 1.73)
+gem_file --by path           1.48 s    248496 KB    24.29 G instr   (n=5, min 1.48, max 1.50)
+gem_stdin --by path          1.46 s      7520 KB    23.79 G instr   (n=5, min 1.45, max 1.46)
+python --by path             1.69 s     24000 KB    26.78 G instr   (n=5, min 1.67, max 1.71)
+gem_file --by hour           1.43 s    244496 KB    23.82 G instr   (n=5, min 1.43, max 1.43)
+gem_stdin --by hour          1.41 s      3488 KB    23.30 G instr   (n=5, min 1.40, max 1.41)
+python --by hour             1.64 s     21872 KB    26.72 G instr   (n=5, min 1.63, max 1.66)
+reports match

@@ -1,0 +1,20 @@
+date: 2026-10-06T15:45:51Z
+gem commit: 05b979c
+system: Darwin 27.0.0 arm64
+os: macOS 27.0.1 (26A434)
+cpu: Apple M1 Pro, 10 cores (8 performance)
+memory: 16 GB
+power: AC Power
+low power mode: 0
+load average at start: 1.47 1.66 2.95
+cc: Apple clang version 21.0.0 (clang-2100.3.34.2)
+python3: Python 3.14.5
+python3.14: Python 3.14.5
+node: v25.9.0
+elixir: Elixir 1.20.1 (compiled with Erlang/OTP 29)
+redis: Redis server v=8.10.2 sha=00000000:1 malloc=libc bits=64 build=764b3e45065a66fb
+wrk: wrk 4.2.0 [kqueue] Copyright (C) 2012 Will Glozer
+grep: ggrep (GNU grep) 3.12
+REPS=5 WARMUP=1
+GUARD_RSS_MB=8192 GUARD_SWAP_MB=2048 GUARD_TIMEOUT_S=2400
+SECTIONS=logstat lox gemgrep jobqueue bookmark bookmark_node mini_redis stomp
