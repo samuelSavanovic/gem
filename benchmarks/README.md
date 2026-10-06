@@ -150,7 +150,7 @@ MB=512 benchmarks/gemgrep/run.sh           # a bigger corpus (default 128 MB)
 GEM_DIAG=1 benchmarks/gemgrep/run.sh       # plus the arena reset statistics of each Gem run
 ```
 
-`gen_corpus.py` writes the corpus into a temporary directory: 1,092 files (at 128 MB) of log-like and code-like lines in 80 directories, the same bytes on every run, with the rare token `deadbeef` on about one line in 2,500. The `src_*` searches run over the repository's `compiler`, `runtime`, `std`, `lsp` and `examples` (352 files, 13 MB, `sqlite3.c` among them). For each search it prints the wall time and peak RSS of the three programs and the Gem/grep and Gem/Python ratios, and stops with a diff if gemgrep's output differs from the twin's, or from grep's once sorted (grep walks directories in readdir order, the other two in sorted order).
+`gen_corpus.py` writes the corpus into a temporary directory: 1,092 files (at 128 MB) of log-like and code-like lines in 80 directories, the same bytes on every run, with the rare token `deadbeef` on about one line in 2,500. `gen_src.py` writes the tree the `src_*` searches run over, shaped like this repository's sources: `compiler`, `runtime`, `std`, `lsp` and `examples`, 369 files and 12 MB of C-like, Gem-like and text lines, most files a few KB and one C file of 9.5 MB, the same bytes on every run. For each search it prints the wall time and peak RSS of the three programs and the Gem/grep and Gem/Python ratios, and stops with a diff if gemgrep's output differs from the twin's, or from grep's once sorted (grep walks directories in readdir order, the other two in sorted order).
 
 | Search | What it loads |
 |---|---|
@@ -163,7 +163,7 @@ GEM_DIAG=1 benchmarks/gemgrep/run.sh       # plus the arena reset statistics of 
 | `invert`: `-rv e` | `-v` |
 | `few`: `-rn deadbeef` | a pattern with few matches: nearly all regex work |
 | `many`: `-rn e` | most lines match: 2.4M lines, 191 MB out |
-| `src_literal`, `src_icase` | the repository's sources, a few large files |
+| `src_literal`, `src_icase` | a source-like tree: many small files, a few large ones |
 
 First run (October 2026, commit 5304ef5 + gemgrep, Linux x86_64 VM, 4 cores, GNU grep 3.11, Python 3.11; two runs, ratios of wall time):
 
@@ -181,7 +181,7 @@ First run (October 2026, commit 5304ef5 + gemgrep, Linux x86_64 VM, 4 cores, GNU
 | `src_literal` | 13 | 2.0–2.3 |
 | `src_icase` | 3.2–6.1 | 0.40–0.58 |
 
-The `src_*` runs take 0.1–0.4 s, so their ratios are the noisiest. Peak RSS: 13–20 MB for gemgrep on the corpus (49 MB for `many`), 10 MB for grep, 13–18 MB for Python; 22 MB against Python's 40 MB on the sources. Per line, gemgrep spends about as many instructions on its own side (the line walk, the binding's checks, the call) as in `regexec`, and GNU grep runs no regex per line at all; `examples/gemgrep/README.md` ("Performance") has the breakdown, and the numbers for the whole-buffer helper it measured and didn't keep.
+In this run the `src_*` searches ran over the repository's own sources at that commit, not the generated tree. The `src_*` runs take 0.1–0.4 s, so their ratios are the noisiest. Peak RSS: 13–20 MB for gemgrep on the corpus (49 MB for `many`), 10 MB for grep, 13–18 MB for Python; 22 MB against Python's 40 MB on the sources. Per line, gemgrep spends about as many instructions on its own side (the line walk, the binding's checks, the call) as in `regexec`, and GNU grep runs no regex per line at all; `examples/gemgrep/README.md` has the breakdown ("Performance") and the numbers for a whole-buffer helper the program doesn't use ("Design").
 
 ## jobqueue
 
