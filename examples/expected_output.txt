@@ -4135,3 +4135,49 @@ insert 4 15 30 true
 remove_at 3 15 false
 echo 1 11 nil yes yes 3 21 19 true 2
 spawned sees 1 9 10
+4 3
+false len: expected string, table, or buffer, got int
+  at size 7
+  at outer 12
+  at anonymous fn 23
+101
+false index 9 past 3
+  at checked 28
+  at anonymous fn 33
+ord: index out of bounds
+ord: index out of bounds
+ord: index must be an integer
+ord: expected string|buffer argument, got int
+ord: empty string
+len: expected string, table, or buffer, got nil
+len: expected string, table, or buffer, got float
+3 99 97 65 66
+buffer int nil string table fn
+6 0 a=1; 0=h;1=i; 
+false for: expected a table or string to iterate, got int
+  at sum 48
+  at anonymous fn 61
+called x mine q
+false len: expected string, table, or buffer, got nil
+  at spin 81
+  at anonymous fn 88
+false len: expected string, table, or buffer, got nil
+  at spin 81
+  at anonymous fn 86
+false from a default
+  at fail_default 94
+  at anonymous fn 102
+false from a default
+  at fail_default 94
+  at anonymous fn 103
+3 3
+
+[Runtime Error]: len: expected string, table, or buffer, got nil
+  --> examples/207_leaf_builtins.gem:7
+   |
+ 7 |   let n = len(x)
+   |
+Stack trace:
+  at size (examples/207_leaf_builtins.gem:7)
+  at outer (examples/207_leaf_builtins.gem:12)
+  at main (examples/207_leaf_builtins.gem:107)
