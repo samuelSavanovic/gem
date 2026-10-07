@@ -1,0 +1,109 @@
+# A function whose only calls are to builtins that run no Gem code (len,
+# ord, error, ...) runs without a call frame (a leaf), and `len`, `type`, `ord` and the `for` loop's internals are
+# called through direct entry points. Errors raised inside those builtins
+# must still name the function, with its line, on top of the stack.
+
+fn size(x)
+  let n = len(x)
+  n + 1
+end
+
+fn outer(x)
+  size(x)
+end
+
+fn show_stack(r)
+  print(r.ok, r.error)
+  for f in r.stack
+    print("  at", f.name, f.line)
+  end
+end
+
+print(size("abc"), size([1, 2]))
+show_stack(pcall(fn() outer(5) end))
+
+# 1. error() from a leaf.
+fn checked(s, i)
+  if i >= len(s)
+    error("index {i} past {len(s)}")
+  end
+  ord(s, i)
+end
+print(checked("hey", 1))
+show_stack(pcall(fn() checked("hey", 9) end))
+
+# 2. Every error of the direct entry points is the builtin's.
+for f in [fn() ord("", 0) end, fn() ord("a", -1) end, fn() ord("a", 1.5) end,
+          fn() ord(5) end, fn() ord("") end, fn() len(nil) end, fn() len(3.5) end]
+  print(pcall(f).error)
+end
+let b = buf_new()
+buf_push(b, "abc")
+print(len(b), ord(b, 2), ord(b), ord("A"), ord("AB", 1))
+print(type(b), type(1), type(nil), type("s"), type({}), type(size))
+
+# 3. for loops over arrays, tables and strings; a non-iterable raises.
+fn sum(t)
+  let s = 0
+  for v in t
+    s += v
+  end
+  s
+end
+fn pairs(t)
+  let out = ""
+  for k, v in t
+    out = out + "{k}={v};"
+  end
+  out
+end
+print(sum([1, 2, 3]), sum([]), pairs({a: 1}), pairs("hi"), pairs([]))
+show_stack(pcall(fn() sum(5) end))
+
+# 4. A param or local named like a builtin is called as itself.
+fn shadow_param(len)
+  len("x")
+end
+fn shadow_local(s)
+  let ord = fn(c) "mine {c}" end
+  ord(s)
+end
+print(shadow_param(fn(s) "called {s}" end), shadow_local("q"))
+
+# 5. A leaf's loop yields to other processes; its name survives the switch.
+fn spin(n, bad)
+  let i = 0
+  let acc = 0
+  while i < n
+    acc += len("ab")
+    i += 1
+  end
+  len(bad)
+  acc
+end
+let me = self()
+spawn(fn()
+  send(me, pcall(fn() spin(50000, nil) end))
+end)
+show_stack(pcall(fn() spin(50000, nil) end))
+show_stack(receive())
+
+# 6. Default arguments run before their function records itself, leaf or
+#    not, so an error raised in one shows the caller on top (a bug:
+#    docs/KNOWN_BUGS.md, "An error in a param default is reported without
+#    the fn").
+fn fail_default()
+  error("from a default")
+end
+fn with_default(a, x = fail_default())
+  len(a) + x
+end
+fn arith_default(a, x = fail_default())
+  a + x
+end
+show_stack(pcall(fn() with_default("ab") end))
+show_stack(pcall(fn() arith_default(1) end))
+print(with_default("ab", 1), arith_default(1, 2))
+
+# 7. Uncaught: the leaf heads the trace.
+outer(nil)

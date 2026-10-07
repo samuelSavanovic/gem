@@ -36,6 +36,40 @@ shadows, as a `let` initializer does. Param defaults are emitted in
 compiler/codegen.gem (the `if (argc > i) ... else` prelude); the scope
 check belongs in `scope_shadowing_lets`.
 
+### An error in a param default is reported without the fn
+
+```gem
+fn f(s, n = len(s))
+  print(n)
+end
+f(5)
+```
+
+```
+[Runtime Error]: len: expected string, table, or buffer, got int
+  --> kb2.gem:4
+   |
+ 4 | f(5)
+   |
+Stack trace:
+  at main (kb2.gem:4)
+```
+
+A fn's param defaults run before it records itself on the call stack, so
+an error raised in a default (or in a fn a default calls) shows the
+caller on top, at the call site, and `f` is missing from the trace and
+from pcall's `stack`. The default runs because `f` was called: `f` should
+be on top, at the line of its `fn` header. When a self tail call reruns
+the defaults (`_tco_rebind`), the frame is there, but its line is the
+tail call's, not the default's. Leaf fns behave the same as framed ones
+(`examples/207_leaf_builtins.gem`, section 6, which prints the current
+traces). The param prelude (`if (argc > i) ... else`) is emitted before
+`gem_push_frame` / `leaf_entry_str` in `compile_fn` and
+`compile_closure_fn` (compiler/codegen.gem); moving the frame push above
+it, with a line set before each default, would put the defaults inside
+the fn. The frame push's stack-overflow check would then run before the
+defaults too.
+
 ### An extern fn returning a `const char *` makes cc warn
 
 ```gem

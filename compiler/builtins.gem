@@ -4,13 +4,16 @@
 #
 # Imported by:
 #   - compiler/codegen.gem — emits `gem_make_fn(<c_symbol>, NULL)` for
-#     builtin references and direct calls.
+#     builtin references and calls `<c_symbol>` directly; LEAF_BUILTINS
+#     and DIRECT_BUILTINS below tune those calls.
+#   - compiler/main.gem — renames the entry file's top-level bindings
+#     named like a builtin (shadow_entry_builtins).
 #   - lsp/completion.gem — surfaces the names as completion items so the
 #     LSP doesn't fork the list and drift.
 #
-# When adding a new builtin: edit this table only. CLAUDE.md's
-# "Adding a New Builtin" checklist still applies for the runtime + spec
-# updates, but the codegen + LSP halves are now driven from this map.
+# When adding a new builtin: add it to BUILTIN_FNS, and to LEAF_BUILTINS
+# when it runs no Gem code and never yields. CLAUDE.md's "Adding a New
+# Builtin" checklist covers the runtime and spec updates.
 
 let BUILTIN_FNS = {
   print: "gem_print",
@@ -115,9 +118,46 @@ let BUILTIN_FNS = {
   __table_val_at: "gem_table_val_at_fn"
 }
 
+# Builtins a leaf function may call (codegen.gem, "Leaf-function
+# detection"): each runs only C, never a Gem function or closure, and
+# never yields to the scheduler, so the leaf calling it stays the innermost
+# Gem frame while it runs. One may raise: the error report shows the leaf
+# on top, as for an arithmetic error in its body.
+let LEAF_BUILTINS = {
+  print: true, eprint: true, error: true, len: true, type: true,
+  to_string: true, push: true, keys: true, values: true, str_replace: true,
+  has_key: true, substr: true, find: true, chr: true, ord: true,
+  to_int: true, to_float: true, buf_new: true, buf_push: true,
+  delete: true, pop: true, insert: true, remove_at: true,
+  floor: true, ceil: true, round: true, abs: true, pow: true, sqrt: true,
+  random: true, band: true, bor: true, bxor: true, bnot: true, bshl: true,
+  bshr: true, self: true, make_ref: true, time_ms: true, epoch_ms: true,
+  __len: true, __type: true, __has_key: true, __is_array_n: true,
+  __for_len: true, __table_key_at: true, __table_val_at: true
+}
+
+# Builtins with a direct C entry point for one arity: "<name>/<argc>" →
+# an inline function in runtime/gem.h taking the arguments as C
+# parameters (no argument array, no argc check). Each one handles the
+# argument types it is mostly called with inline (`len`: strings and
+# tables; `ord`: strings; `type`: all; the `for` helpers: tables) and
+# passes anything else to the builtin's `(env, args, argc)` function, so
+# behaviour and errors are the builtin's.
+let DIRECT_BUILTINS = {
+  "len/1": "gem_len_1",
+  "__len/1": "gem_len_1",
+  "type/1": "gem_type_1",
+  "__type/1": "gem_type_1",
+  "ord/1": "gem_ord_1",
+  "ord/2": "gem_ord_2",
+  "__for_len/1": "gem_for_len_1",
+  "__table_key_at/2": "gem_table_key_at_2",
+  "__table_val_at/2": "gem_table_val_at_2"
+}
+
 # User-visible builtin names, sorted lexicographically. The double-underscore
-# entries (`__table_key_at`, `__len`, ...) are compiler-internal: lower()
-# emits them in desugared for-loops and match patterns, so a user binding
+# entries (`__table_key_at`, `__type`, ...) are compiler-internal: lower()
+# emits most of them in desugared for-loops and match patterns, so a user binding
 # named `len`, `type` or `has_key` can't capture those calls. Users would
 # have to type the underscores themselves to reference them. They're
 # filtered out so completion doesn't offer them.
@@ -134,4 +174,4 @@ end
 
 let BUILTIN_NAMES = user_builtin_names()
 
-export BUILTIN_FNS, BUILTIN_NAMES
+export BUILTIN_FNS, BUILTIN_NAMES, LEAF_BUILTINS, DIRECT_BUILTINS

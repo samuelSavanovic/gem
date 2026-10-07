@@ -126,7 +126,7 @@ Add a numbered example under `examples/` (next free slot) and append its stdout 
 
 1. Implement the C function in the appropriate `runtime/gem_builtins_*.c` file.
 2. Add the declaration to `runtime/gem.h`.
-3. Add the name → C function mapping to the `BUILTIN_FNS` table in `compiler/builtins.gem`.
+3. Add the name → C function mapping to the `BUILTIN_FNS` table in `compiler/builtins.gem`, and the name to `LEAF_BUILTINS` there if the builtin runs no Gem code (no callback, no closure argument it calls) and never yields to the scheduler: a function whose body's only calls are to such builtins, with no `receive` block, pushes no frame.
 4. Update `docs/SPEC.md`.
 5. Update both editor extensions (see below).
 6. Add a numbered example to `examples/`, append expected output, run `make test`, then `make bootstrap`.
