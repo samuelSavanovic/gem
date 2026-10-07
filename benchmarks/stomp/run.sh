@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Driver for the STOMP broker load tests (examples/stomp_broker/NOTES.md,
-# "Milestone 6").
+# Driver for the STOMP broker load tests (examples/stomp_broker).
 #
 # Starts the broker, samples its RSS in the background, runs each workload
 # via harness.py from a separate process, and writes everything (stdout, RSS

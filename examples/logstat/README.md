@@ -43,27 +43,26 @@ directory.
 
 ## Performance
 
-It is written the way Gem code should be written, and it is slower than
-it should be: `benchmarks/logstat/run.sh` times it against the same
-program in Python and checks that both print the same report. On 1M lines
-(123 MB, macOS arm64, the three `--by` groupings):
+`benchmarks/logstat/run.sh` times it against the same program in Python
+and checks that both print the same report. On 1M lines (123 MB, the
+three `--by` groupings; macOS arm64,
+`benchmarks/baselines/2026-10-07_m1pro`):
 
 | | time | peak RSS |
 |---|---|---|
-| logstat, stdin | 3.8–5.0 s | 20–33 MB |
-| logstat, file | 3.9–5.2 s | 261–274 MB |
-| Python | 2.0 s | 22–24 MB |
+| logstat, stdin | 1.29–1.35 s | 3–7 MB |
+| logstat, file | 1.32–1.38 s | 239–243 MB |
+| Python | 1.67–1.71 s | 21–24 MB |
 
-Where it goes: with `--by ip` or `--by path`, 0.9–1.1 s were the region
-resets copying the group records again at every reset, until resets
-promoted what they keep (now 0.32–0.43 s with `--by ip` on a Linux x86_64
-VM, which copies 0.7 MB instead of 526 MB); `--by hour` (24 groups)
-spent 0.1 s there. The rest is spread over allocation (every
-string literal is allocated each time it is evaluated), `substr` copies
-and the cost of Gem calls. A file is held whole, twice while it is read.
+Where it goes: the region resets take 0.05–0.10 s of a run, since they
+promote the group records instead of copying them again
+(`GEM_DIAG=1 benchmarks/logstat/run.sh`). The rest is spread over
+string-key hashing in table get/set, `substr` copies, std/string's
+argument checks and the cost of Gem calls. A file is held whole, twice
+while it is read.
 
-These are tracked in `docs/OPTIMIZATIONS.md` ("String literals are
-allocated at every evaluation" and "`read_file` holds the file twice") and `docs/ROADMAP.md`
-("Line-at-a-time input"). Keep this
-program idiomatic: it is the yardstick for those fixes, not a place to
-work around them.
+These are tracked in `docs/OPTIMIZATIONS.md` ("Hash string table keys
+faster" and "`read_file` holds the file twice at its peak") and
+`docs/ROADMAP.md` ("Line-at-a-time input from files and stdin"). Keep
+this program idiomatic: it is the yardstick for those fixes, not a place
+to work around them.

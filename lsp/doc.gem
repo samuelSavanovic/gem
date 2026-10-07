@@ -5,7 +5,7 @@
 # Process name format: "lsp_doc:" + uri. send/whereis use that name; when
 # the doc closes, the process exits and the registration auto-cleans.
 #
-# Every set_text reparses with a fresh sink (Phase 0b sinks are
+# Every set_text reparses with a fresh sink (error sinks are
 # closure-captured and non-resettable). Symbol-table construction reuses
 # the AST as-is — a partial AST from a recovered parse is fine, we just
 # walk whatever is there.
@@ -152,8 +152,8 @@ end
 
 fn change(td, content_changes)
   # Full-text sync (TextDocumentSyncKind.Full == 1): exactly one change with
-  # the entire new text. Phase 1a advertises Full sync so we don't have to
-  # apply per-range edits yet — that lands when incremental sync becomes a
+  # the entire new text. The server advertises Full sync, so it doesn't
+  # apply per-range edits; incremental sync waits until it becomes a
   # measurable win on real file sizes.
   if len(content_changes) > 0
     let new_text = content_changes[0].text

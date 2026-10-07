@@ -5,8 +5,8 @@
  * GemCopyMap walker:
  *   - Deep copy (spawn / send / general value duplication).
  *   - Pin-set bookkeeping (malloc-backed boxes for fn-local mutated captures).
- *   - Per-process arena reset (the rescue+reset path used by long-running
- *     loops and TCO back-edges).
+ *   - Per-process region reset (at the back-edges of loops and TCO
+ *     functions, and at returns of functions that can recurse).
  *
  * The pin-set lives in GemProcess (declared in gem.h) but its lifecycle is
  * driven entirely by reset and process exit, so all three sit here.

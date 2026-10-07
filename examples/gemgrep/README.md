@@ -22,9 +22,9 @@ cd examples/gemgrep
 36:/* 0, or the regcomp error code for rx_error. REG_NEWLINE: a range that
 42:    int rc = regcomp(&r->re, pattern, flags);
 47:/* The message for regcomp's error `code`: glibc's text, which is GNU
-78:        regfree(&r->re);
+77:        regfree(&r->re);
 regex.gem:8
-walk.gem:3
+walk.gem:2
 ./README.md
 ./gemgrep
 ./regex.gem
@@ -186,45 +186,44 @@ files include with `extern include`; they call nothing beyond libc. What each pa
 `benchmarks/gemgrep/run.sh` runs eleven searches over a generated
 128 MB tree of 1,092 text files and over a generated 12 MB tree shaped
 like the repository's sources, through gemgrep, GNU grep and the Python
-twin, and checks that the three print the same lines. On a 4-core Linux
-x86_64 VM (October 2026, two runs, the last two searches over the
-repository's own sources), gemgrep takes 3.2 to 13 times GNU grep's time and 0.40 to 2.3
-times Python's.
+twin, and checks that the three print the same lines. gemgrep takes 1.4
+to 17 times GNU grep's time and 0.56 to 2.6 times Python's (macOS arm64,
+`benchmarks/baselines/2026-10-07_m1pro`; ratios of wall time):
 
 | Search | Gem/grep | Gem/Python |
 |---|---|---|
-| `-r handler` (162,000 lines out) | 4.9–5.2 | 1.37–1.43 |
-| `-ri timeout` | 6.2–6.4 | 0.82–0.88 |
-| `-r 'connect(ed\|ion)\|socket'` | 3.5–3.8 | 0.76–0.84 |
-| `-rw id` | 5.9–6.1 | 0.45–0.46 |
-| `-rc error` | 6.3–7.5 | 1.51–1.62 |
-| `-rl deadbeef` | 9.5–11 | 1.02–1.09 |
-| `-rv e` | 5.2–5.9 | 0.88–1.19 |
-| `-rn deadbeef` (1,046 lines out) | 7.4–7.8 | 1.29–1.41 |
-| `-rn e` (2.4M lines, 191 MB out) | 4.5–4.7 | 1.35–1.63 |
-| `-rn gem_table_set` on the sources | 13 | 2.0–2.3 |
-| `-rin 'todo\|fixme'` on the sources | 3.2–6.1 | 0.40–0.58 |
+| `-r handler` | 6.2 | 2.0 |
+| `-ri timeout` | 17 | 2.5 |
+| `-r 'connect(ed\|ion)\|socket'` | 6.8 | 2.0 |
+| `-rw id` | 8.2 | 0.81 |
+| `-rc error` | 8.9 | 2.6 |
+| `-rl deadbeef` | 8.1 | 1.3 |
+| `-rv e` | 1.7 | 0.56 |
+| `-rn deadbeef` | 7.7 | 2.1 |
+| `-rn e` | 1.4 | 0.82 |
+| `-rn gem_table_set` on the source tree | 4.1 | 1.2 |
+| `-rin 'todo\|fixme'` on the source tree | 12 | 1.9 |
 
 Where it goes:
 
+- **Most of the time is libc's `regexec`.**
+  `benchmarks/gemgrep/regexec_floor.c` does the same reads and the same
+  `rx_exec` call per line in C; on a 64 MB corpus it takes 8.86 G of the
+  9.95 G instructions of `gemgrep -rc error`, which leaves about 830
+  instructions a line for the Gem code around the calls (the `find`, the
+  `regex.test` call and its range checks, the loop). For `-rc error` and
+  `-rn deadbeef` that C floor alone takes more instructions than the
+  whole Python run: macOS's `regexec` is slower than Python's `re`.
+  gemgrep is ahead of Python only where most lines match (`-rv e`,
+  `-rn e`) and on `-rw id`.
 - **GNU grep doesn't run a regex per line.** It searches the buffer for
   the pattern's literal parts (Boyer-Moore) and runs a DFA only around
-  candidates. Per line, gemgrep spends about 1,100 instructions in
-  `regexec` and about as many on its own side: the `find`, the
-  `regex.test` call and its range checks, the loop (callgrind, `-c
-  deadbeef` on 163,000 lines). The extern call itself is cheap, about 60
-  instructions.
-- **Against Python**, gemgrep wins where the wrapped or case-folded
-  pattern defeats `re`'s literal-prefix search (`-w`, `-i`, alternation)
-  and loses where `re` can jump to a literal (`handler`, `deadbeef`,
-  `gem_table_set`): there Python's per-line cost is lower than Gem's
-  loop overhead alone.
+  candidates.
 - **Big outputs are copied by resets.** The batch's result array and
   the output being built survive each reset of the loop that grows them.
   A reset promotes what it keeps, so later resets of that loop don't copy
   it again, but the short inner loops start fresh marks whose first reset
-  is full: in `-rn e`, 655 of 1,693 resets are full, and the resets copy
-  1.6 GB (OPTIMIZATIONS.md, "A loop's first reset is full").
+  is full (OPTIMIZATIONS.md, "A loop's first reset is full").
 
 Keep this program idiomatic: it is the yardstick for C-interop and
 text-processing fixes, not a place to work around them.

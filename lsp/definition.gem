@@ -48,7 +48,7 @@ fn find_first_by_name(list, name)
 end
 
 # Build an LSP Location pointing at line `line` (1-based) of `path`.
-# Range is zero-width at column 0 — Phase 1b doesn't track per-binding
+# Range is zero-width at column 0 — location_for takes no per-binding
 # columns, so the cursor lands at the start of the line. Most editors
 # handle zero-width ranges fine; tighten when symbols.gem grows column
 # precision.

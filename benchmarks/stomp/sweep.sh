@@ -4,8 +4,6 @@
 # Each cell: fresh broker, 256-byte body, 50 ms pause between publishes
 # so the destination has a chance to drain. Output: a one-line summary
 # per cell on stdout, plus full JSON in logs/<run>/sweep_<i>.json.
-#
-# We expect cells with msgs * subs > ~25,000 to crash (see NOTES.md).
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

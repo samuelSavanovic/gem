@@ -14,7 +14,7 @@ send(pid, {from: self(), msg: "hi"})
 print(receive())   # -> echo: hi
 ```
 
-Ruby-ish syntax (blocks-as-trailing-arg, `do/end`), Lua-ish data model (tables for everything - objects, dicts, arrays, modules), Erlang-ish concurrency (processes, mailboxes, monitors, links, supervisors). Compiles to C; vendors `minicoro` for stackful coroutines and `stb_ds` for hash tables. Bootstrap is a checked-in `stage0.c` so any C compiler can rebuild from scratch.
+Ruby-ish syntax (blocks-as-trailing-arg, `do/end`), Lua-ish data model (tables for everything - objects, dicts, arrays, modules), Erlang-ish concurrency (processes, mailboxes, monitors, links, supervisors). Compiles to C; vendors `minicoro` for stackful coroutines and `stb_ds` for the runtime's internal hash maps. Bootstrap is a checked-in `stage0.c` so any C compiler can rebuild from scratch.
 
 A *process* is a lightweight green thread with its own heap and mailbox, cheap enough to start one per connection or task: about 21 KB each when idle on Linux x86_64 (70 KB on macOS arm64, with its 16 KB pages), with about 14,000 alive at once on a stock Linux and more with a raised `vm.max_map_count`. Processes share nothing and talk only by message.
 
@@ -61,7 +61,7 @@ The standard library is written in Gem and includes `string`, `table`, `math`, `
 
 Not a general-purpose language. Good at protocol parsing, request handling, and supervised long-running processes; not aimed at numeric computing, systems programming, or anything that needs a polished editor experience.
 
-Not production software for anyone but me. The HTTP server has held ~25k req/s on a laptop (GET `/`, c=4, p50=141µs, p99=2.96ms) and survived a 5-minute / 7.5M-request soak with stable RSS, but there's no security audit, no commitment to backwards compatibility, and TLS is deliberately not in the runtime (terminate at a reverse proxy).
+Not production software for anyone but me. The HTTP server serves a static page at about 90k req/s on an M1 Pro (GET `/`, 10 connections, p50 97 µs, p99 256 µs; a Node twin serves 65k) and keeps the bookmark app under 18 MB of RSS through a 5-minute, 3.2M-request soak (`benchmarks/baselines/2026-10-07_m1pro`), but there's no security audit, no commitment to backwards compatibility, and TLS is deliberately not in the runtime (terminate at a reverse proxy).
 
 Not a community project. Personal weekend work. Issues and PRs welcome but response time is "when I have a weekend free."
 

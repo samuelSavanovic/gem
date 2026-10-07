@@ -1,9 +1,9 @@
-# Regression: self-recursive TCO function with a param captured-and-mutated
-# by an inner closure must reset the per-process arena at the back-edge.
-# Before "TCO reset with pinned roots", emit_tco_continue skipped the reset
-# whenever the function had any malloc-boxed local — RSS would grow
-# unbounded. The fix pins boxed params via gem_arena_reset_with_roots_pinned
-# so the post-reset sweep keeps the box alive across the tail call.
+# Regression: a self-recursive TCO function whose param is captured and
+# mutated by an inner closure resets the per-process arena at its back-edge.
+# The param lives in a pinned box (gem_box_alloc); the tail call resets the
+# region (gem_arena_reset_region, emitted by emit_tco_continue) with the arg
+# temps as roots and gives the rebound param a fresh box, and the pin sweep
+# frees the old box once no closure reaches it.
 # 10000 iterations × ~200 bytes/iter exceed the 1 MB threshold several times.
 
 let main_pid = self()
