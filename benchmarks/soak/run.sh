@@ -161,6 +161,7 @@ stop_server() {
   fi
   echo "server_end=alive" >> "$dir/status.txt"
   if [[ $t == mini_redis ]]; then
+    # shellcheck disable=SC2016 # $8 is RESP's length prefix, not a variable
     "$PYTHON" -c 'import socket,sys; s=socket.create_connection(("127.0.0.1", int(sys.argv[1])), 5); s.sendall(b"*1\r\n$8\r\nSHUTDOWN\r\n"); s.recv(1)' \
       "$MINI_REDIS_PORT" 2> /dev/null
   else
@@ -201,8 +202,7 @@ run_target() {
   server_pid=$!
   echo "server_pid=$server_pid" >> "$dir/status.txt"
 
-  local i
-  for i in $(seq 100); do
+  for _ in $(seq 100); do
     port_open "$port" && break
     kill -0 "$server_pid" 2> /dev/null || break
     sleep 0.1
