@@ -20,5 +20,6 @@ examples/logstat/logstat
 benchmarks/logs/
 benchmarks/stomp/logs/
 benchmarks/mini_redis/logs/
+benchmarks/soak/logs/
 .DS_Store
 RESUME_PROMPT.md

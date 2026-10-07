@@ -21,6 +21,8 @@ The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the
 
 `jobqueue/` benchmarks `examples/jobqueue` (a job queue with a supervised worker pool under fault injection) against the same design in Python asyncio and in Elixir/OTP; see [below](#jobqueue).
 
+`soak/` is not a benchmark: it runs the long-lived servers (mini_redis, stomp_broker, bookmark_app) under a steady mixed load for an hour each and checks that they stay up, answer correctly, and keep memory, file descriptors and latency flat; see [below](#soak).
+
 ## Baselines
 
 `measure_all.sh` runs every harness in this directory (stomp's is in `stomp/`) and writes a baseline directory, `baselines/<date>_<machine>/` (e.g. `2026-10-05_m1pro`), to commit:
@@ -216,4 +218,52 @@ First run (October 2026, commit d88fca9 + jobqueue, Linux x86_64 VM, 4 cores, Py
 | `backlog` | 0.86–0.92 | 1.08–1.16 | 1.08–1.15 | Gem: 810–896 MB peak RSS, 1.5–1.7 s longest stall |
 
 The invariants held in every run of all three, with the same retry counts wherever the run is deterministic (everything but the storm and Elixir's extra restart). The cost is in memory and pauses, not in failure handling. Peak RSS for Gem is 85–174 MB in the 10,000- and 20,000-job scenarios against 34–48 MB for Python and 77–116 MB for Elixir (whose VM starts at about 80 MB), and 810–896 MB against 166 and 200–218 MB for the backlog. These Gem figures predate tables of up to 8 entries without a string-key index (OPTIMIZATIONS_LOG.md, "Small tables scan their keys instead of indexing them"), which on macOS arm64 took the backlog's peak from 559 to 396 MB. The longest tick lag is 40–100 ms for Gem with 10,000–20,000 jobs and 1.5–1.7 s with 100,000, against at most 75 ms for Python and 36 ms for Elixir: each reset of the queue's loop copied every job record it holds, and with the default 100 ms deadline such a pause now and then kills a healthy attempt (the scenarios use 250 ms where they don't test deadlines). Since resets promote what they keep, only full resets copy all the records: in `backlog` the longest tick lag is 0.25–0.48 s and peak RSS 472–475 MB (0.45–0.56 s and 780–960 MB just before, on the same VM). `docs/OPTIMIZATIONS.md` has the numbers ("Full resets still copy all a loop keeps").
+
+## soak
+
+The other harnesses run each server for seconds to a few minutes. `soak/run.sh` runs each one for an hour (by default) under a steady, paced load, so what only shows over time can show: memory a loop's resets never give back, a remembered log, pin set or mailbox that grows slowly, latency that creeps up as kept data grows, process slots, pids, sockets and timers that leak a little per connection. It needs only `python3`; it is not part of `measure_all.sh`.
+
+```bash
+DURATION=2m benchmarks/soak/run.sh               # a short run: does the harness work here?
+benchmarks/soak/run.sh                           # the three targets, an hour each
+TARGETS=mini_redis DURATION=4h benchmarks/soak/run.sh
+MINI_REDIS_ARGS="--rate 8000 --subs 50" TARGETS=mini_redis benchmarks/soak/run.sh
+python3 benchmarks/soak/report.py benchmarks/soak/logs/<run>   # the report again
+```
+
+Each target gets a fresh server, built once at the start (a build error stops the run before it starts), run with `GEM_DIAG=1`, and a load generator that checks every answer it gets:
+
+| Target | Load (defaults; `--help` on each `*_load.py` lists the options) | Checked |
+|---|---|---|
+| `mini_redis` | 8 clients at 4,000 requests/s in all (one in ten a pipelined batch of 16): GET/SET/DEL, INCR, SET EX with 1–5 s TTLs, a list used as a FIFO, a hash and a set, each client on its own keys; 20 new connections/s; 200 PUBLISHes/s on 4 channels to 20 subscribers that leave and rejoin every 30 s on average | every reply against the client's model of its keys (a TTL check fails only when the reply is wrong for every moment the server could have run the command), messages in order with no gaps |
+| `stomp` | 200 SENDs/s to 4 topics with 30 subscribers that leave and rejoin (UNSUBSCRIBE + DISCONNECT, or an abrupt close); 200 jobs/s to a queue with 4 workers; 10 connections/s that SEND and DISCONNECT with a receipt | messages in order with no gaps; every job delivered at most once, and the backlog (sent − received) bounded |
+| `bookmark` | 4 readers at 200 GETs/s in all (`/`, `/bookmarks`, edit forms); one writer at 20 POST/PUT/DELETEs per second keeping the table near 100 rows; 10 one-request connections/s | after each change, the list the app answers with against the writer's model of the table; the pages readers get |
+
+There are no slow consumers and no unbounded tables: stomp_broker queues messages for a slow subscriber without bound by design, and bookmark_app's list grows with the table ("POST phase is O(N²)" above), so either would read as a leak. jobqueue isn't a target yet: a run has a fixed number of jobs and keeps a record of each to check its invariants, so its memory grows with the run by design; it needs a mode that runs for a duration and drops finished records first.
+
+Alongside the load, `sample.py` samples the server's RSS, CPU time and open file descriptors (`DURATION`/120 seconds apart, 2 to 30). Results land in `soak/logs/<timestamp>/` (gitignored), one directory per target:
+
+| File | What it holds |
+|---|---|
+| `load.csv` | a row per interval: throughput, latency p50/p99/max of each kind of request, errors by kind, a probe (a new connection's first answer) |
+| `server.csv` | a row per sample: RSS, CPU time and percent, open fds (on macOS `lsof`'s count, mapped files included: compare a run with itself) |
+| `errors.log` | the first 200 errors in full; the rest are counted |
+| `server.log` | the server's output, with its `GEM_DIAG` statistics at the end when it was shut down cleanly (mini_redis with `SHUTDOWN`; the other two have no clean shutdown, so SIGTERM ends them without the statistics) |
+| `status.txt` | how the target ended: the load's exit, whether the server was alive, what the sampler saw |
+| `load.csv.done` | the load's totals and why it stopped |
+
+**Nothing is lost when a run stops early.** Every row is flushed and fsynced when it is written, never kept for the end. Ctrl-C (or SIGTERM to `run.sh`) stops the current target cleanly (the server ignores the SIGINT, so it is still shut down normally), skips the rest and writes the report, whose verdict for that target is STOPPED. If the server dies or its RSS passes `GUARD_RSS_MB` (default 4096; the sampler kills it), the load stops at once and the report says why; the run goes on with the next target. If `run.sh` itself is killed hard (`kill -9`, a closed terminal), the load generator and sampler notice and exit, the data on disk is complete up to then, and `report.py` reports on it; the server keeps running and needs stopping by hand. A load generator still running 5 minutes after its deadline is killed and the target fails. On macOS the run holds off system sleep with `caffeinate`.
+
+`report.md` gives each target a verdict and the checks behind it, with a sparkline of each series. The run is split into warm-up (the first 15%, at most 10 minutes: mini_redis's keyspace fills in about 4 minutes), early (the next 10%) and late (the last 10%):
+
+| Check | Passes when |
+|---|---|
+| ran to the end | the load reached its deadline and the server was alive at the end |
+| no errors | no wrong answer, gap, duplicate or I/O error (`errors.log` lists them) |
+| memory steady | RSS grew at most 10 MB, or 5% of the late RSS if more, over the second half (least-squares slope) |
+| fds steady | the late median of open fds is at most 10 above the early one |
+| `<latency>` steady | each latency's median interval p99 late is at most 1.5× the early one, or at most 1 ms above it |
+| queue backlog bounded | (stomp) at most 1,000 jobs in the late window |
+
+The steadiness checks (all but the first two) only count in a run of at least 10 minutes; in a shorter one they are shown and the verdict is SHORT RUN, which says the harness works, not that the server is steady. `report.py --help` lists the thresholds. `run.sh` exits 0 when no target failed and the run was not stopped.
 
