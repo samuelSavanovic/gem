@@ -125,6 +125,37 @@ are the two largest runtime functions in a `sample` profile of logstat
 (`--by ip`, October 2026). Tables of up to 8 entries that never grew
 past that scan their keys instead (`gem_table_str_pos`); larger ones,
 such as Lox's global environment, still hash on every lookup.
+rapidhash and wyhash are single-header C word-at-a-time hashes that
+could be vendored into runtime/ (like stb_ds.h); the gain is mostly on
+keys longer than about 16 bytes.
+
+### Float to string tries up to three `snprintf` + `strtod` rounds (P1)
+
+`gem_format_float` (runtime/gem_core.c) finds the shortest decimal that
+reads back as the same double by formatting with `snprintf("%.*e")` at
+15, 16 and 17 significant digits and parsing each with `strtod` until
+one round-trips. `print` and value formatting (`fmt_value`), `to_string`
+and string interpolation (`gem_interp`) all go through it. Ryu (plain C, Apache-2.0 or Boost licensed)
+computes the shortest round-trip digits in one pass without libc,
+typically 10–30× faster than a `printf`-family call. Its digits and
+exponent would feed the existing layout code below the loop unchanged.
+The current function gives a check to test against: both must produce
+identical output for random doubles, subnormals, powers of ten and the
+integer-valued floats. The lox benchmarks (all Lox numbers are floats)
+should show it.
+
+### `to_float` parses with `strtod` (P2)
+
+`to_float` (runtime/gem_builtins_core.c) and through it std/json's
+number parsing call libc `strtod`, which is slow, especially on macOS.
+The Eisel–Lemire algorithm (Lemire's fast_float) parses decimal floats
+several times faster with correct rounding, but its reference
+implementation is C++, so this needs a C port (an `extern "C"` shim
+would make the runtime build need a C++ compiler). The fast path is a
+few hundred lines plus a table of 128-bit powers of ten and can fall
+back to `strtod` when it can't decide; Wuffs' single-file C release may
+already have one to vendor. Worth doing only if a
+parse-heavy profile (JSON decoding of numeric data) shows `strtod`.
 
 ### `buf_push` specialization for non-strings (P2)
 `buf_push` auto-coerces non-string values via `to_string`, allocating a temporary string. Specialized variants (`buf_push_int`, `buf_push_float`) that write directly into the buffer would skip the allocation. Small win per call but high frequency in formatting-heavy code.
