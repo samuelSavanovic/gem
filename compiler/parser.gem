@@ -7,9 +7,9 @@ load "./lexer" (tokenize, normalize_newlines)
 load "./errors" (make_error_sink)
 
 # The deepest nesting the parser accepts (see `nest` in make_parser). Per
-# level, the parser recurses deepest: on macOS arm64, about 800 nested
-# parentheses overflow the compiler's stack.
-let MAX_NEST = 500
+# level, the parser recurses deepest: about 800 nested parentheses
+# overflow the compiler's stack on macOS arm64, 400 to 450 on Linux arm64.
+let MAX_NEST = 200
 # The deepest AST it builds: nesting plus the links of operator and postfix
 # chains (`a + b + c` is a binop inside a binop, `t.a.b` a field read of a
 # field read). The passes after the parser, and the C compiler on the

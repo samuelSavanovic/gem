@@ -32,7 +32,7 @@ Options can come before or after the source path. Before it, an argument startin
 
 A source path that cannot be read prints one line on stderr and exits 1: `gem: cannot open 'missing.gem'`, or `gem: 'src' is a directory, not a source file`.
 
-Nesting is limited, so that neither the compiler nor the C compiler runs out of stack. Each statement, expression, unary operator and pattern opens a level while it is parsed (a top-level statement and its expression are two; each `elif` of a chain nests one more), and opening more than 500 is a compile error (`nested too deeply: more than 500 levels`). Counting also each link of an operator chain (`a + b + c`) or postfix chain (`t.a.b`, `t[0][1]`, `f()()`), more than 1,000 levels is a compile error too (`expression too deep: more than 1000 levels`). Split such code with `let` or a helper fn.
+Nesting is limited, so that neither the compiler nor the C compiler runs out of stack. Each statement, expression, unary operator and pattern opens a level while it is parsed (a top-level statement and its expression are two; each `elif` of a chain nests one more), and opening more than 200 is a compile error (`nested too deeply: more than 200 levels`). Counting also each link of an operator chain (`a + b + c`) or postfix chain (`t.a.b`, `t[0][1]`, `f()()`), more than 1,000 levels is a compile error too (`expression too deep: more than 1000 levels`). Split such code with `let` or a helper fn.
 
 The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.c`, compiles it to `/tmp/gem_<basename>_bin`, and runs it. Extra positional arguments after the source path are forwarded to the program via `argv()`.
 

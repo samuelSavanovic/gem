@@ -86024,7 +86024,7 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi__mod_parser_make_error_sink, gem_make_fn(gem_fn__mod_errors_make_error_sink, NULL));
 #line 12 "compiler/parser.gem"
     gem_set_line(12);
-    gem_global_set(gem_gi__mod_parser_MAX_NEST, gem_int(500));
+    gem_global_set(gem_gi__mod_parser_MAX_NEST, gem_int(200));
 #line 18 "compiler/parser.gem"
     gem_set_line(18);
     gem_global_set(gem_gi__mod_parser_MAX_DEPTH, gem_int(1000));
