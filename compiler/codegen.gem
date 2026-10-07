@@ -12,7 +12,7 @@ load "./append" (decompose_concat, expr_has_var, find_append_vars)
 load "./callgraph" (build_call_graph, mark_recursive_fns)
 load "./loops" (lift_captured_arm_lets_in_fn, lift_captured_arm_lets_top_stmts, top_rescue_placeholders, tag_process_tail_while_loops)
 
-fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_file = nil, sink = nil, global_display = nil)
+fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_file = nil, sink = nil, global_display = nil, std_dir = nil)
   if module_bindings == nil
     module_bindings = {}
   end
@@ -378,9 +378,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       "{p}gem_set_line({line});\n"
     end
   end
-  # Entry bookkeeping of a leaf fn (after its param bindings: a default
-  # expression may call another fn). The line is set here only when the
-  # first statement doesn't set it.
+  # Entry bookkeeping of a leaf fn, before its param bindings. The line is
+  # set here only when the first statement doesn't set it.
   let leaf_entry_str = fn(name, file, line, body)
     let b = buf_new()
     buf_push(b, "    static const GemLeafSite _leaf_site = \{\"{escape_c_string(name)}\", \"{escape_c_string(file)}\"};\n")
@@ -468,8 +467,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # so it doesn't count; its arguments still do. This keeps elision sound
   # for stack traces: while the body runs no Gem fn pushes a frame above
   # the absent one, and an error raised inside such a call reports the leaf
-  # on top, from the leaf slot. (Default arguments run before any fn, leaf
-  # or not, records itself; see leaf_entry_str.) An extern fn call counts as a call: its C body can sit in the
+  # on top, from the leaf slot. Param defaults run after the fn records
+  # itself, and their calls count like the body's (fn_is_leaf). An extern
+  # fn call counts as a call: its C body can sit in the
   # same C file, where the C compiler may drop the leaf-slot store before
   # it as dead (nothing it can see reads the slot before the store of NULL
   # at return), and the guard-page rescue (gem_scheduler.c) reads the slot
@@ -529,10 +529,19 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
     false
   end
-  let body_is_leaf = fn(body)
+  # A fn's param defaults run in it too, so a call in one makes it a
+  # non-leaf.
+  let fn_is_leaf = fn(node, body)
     for s in body
       if node_has_calls(s)
         return false
+      end
+    end
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil and node_has_calls(d)
+          return false
+        end
       end
     end
     true
@@ -710,7 +719,11 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       end
       for w in r.writes
         let locals = locals_of(cid)
-        if set_contains(top_level_vars, w.name) and not set_contains(locals, w.name) and (w.via == nil or not set_contains(locals, w.via))
+        # A std module's module-level settings are per process by design,
+        # as its docs say (`log.set_level` in a spawned process).
+        let wf = file_of(w.node)
+        let in_std = std_dir != nil and substr(wf, 0, len(std_dir) + 1) == std_dir + "/"
+        if not in_std and set_contains(top_level_vars, w.name) and not set_contains(locals, w.name) and (w.via == nil or not set_contains(locals, w.via))
           let n = w.node
           let line_str = "?"
           if n.line != nil
@@ -1227,7 +1240,11 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       line = 0
     end
     let escaped_file = escape_c_string(rel_path(file_of(node)))
-    let setup = func_r.setup + "    GemVal {tmp_fn} = {func_r.expr};\n" + ca.setup + "    gem_check_callable({tmp_fn}, \"{escaped_file}\", {line});\n"
+    let check = "gem_check_callable({tmp_fn}, \"{escaped_file}\", {line})"
+    if func.tag == "dot"
+      check = "gem_check_callable_field({tmp_fn}, \"{escape_c_string(func.field)}\", \"{escaped_file}\", {line})"
+    end
+    let setup = func_r.setup + "    GemVal {tmp_fn} = {func_r.expr};\n" + ca.setup + "    {check};\n"
     if ca.argc == 0
       return {expr: "{tmp_fn}.fn({tmp_fn}.env, NULL, 0)", setup: setup}
     end
@@ -1960,8 +1977,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   # ─── compile_extern_fn ──
 
-  # Helper: emit C forward declaration for an extern function
-  let emit_extern_c_decl = fn(name, params, ret_type)
+  # Helper: emit C forward declaration for an extern function, declared at
+  # `node`.
+  let emit_extern_c_decl = fn(name, params, ret_type, node)
     let c_ret = "void"
     if ret_type == "Int"
       c_ret = "int64_t"
@@ -2010,7 +2028,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       end
     end
 
-    push(extern_c_decls, "{c_ret} {name}({c_params});")
+    push(extern_c_decls, {decl: "{c_ret} {name}({c_params});", node: node})
   end
 
   # Emit arity + per-argument type validation at the top of an extern wrapper.
@@ -2119,7 +2137,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "    double _ret = {call_expr};\n")
       buf_push(b, "    return gem_float(_ret);\n")
     elif ret_type == "String"
-      buf_push(b, "    char* _ret = {call_expr};\n")
+      # const: the runtime only copies the string, and a C function may
+      # return a `const char *`.
+      buf_push(b, "    const char* _ret = {call_expr};\n")
       buf_push(b, "    return _ret ? gem_string(_ret) : GEM_NIL;\n")
     elif ret_type == "Bool"
       buf_push(b, "    int _ret = {call_expr};\n")
@@ -2139,7 +2159,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     buf_push(b, "}")
 
     push(forward_decls, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
-    emit_extern_c_decl(c_sym, params, ret_type)
+    emit_extern_c_decl(c_sym, params, ret_type, node)
 
     to_string(b)
   end
@@ -2370,7 +2390,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     buf_push(b, "}")
 
     push(forward_decls, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
-    emit_extern_c_decl(c_sym, params, ret_type)
+    emit_extern_c_decl(c_sym, params, ret_type, node)
 
     to_string(b)
   end
@@ -2408,9 +2428,20 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       let has_def = i < len(defaults) and defaults[i] != nil
       if has_def
         let r = compile_expr(defaults[i])
+        # An error in the default reports the default's line (the fn's
+        # header line when the default has none).
+        let def_line = defaults[i].line
+        if def_line == nil
+          def_line = node.line
+        end
+        let set_def_line = ""
+        if def_line != nil
+          set_def_line = setline_str(def_line, "    ")
+        end
         if set_contains(cap_set, params[i])
           buf_push(b, "    {decl_box}{mp} = gem_box_alloc();\n")
           buf_push(b, "    if (argc > {i}) \{ *{mp} = args[{i}]; } else \{\n")
+          buf_push(b, set_def_line)
           buf_push(b, r.setup)
           buf_push(b, "    *{mp} = {r.expr};\n    }\n")
         else
@@ -2418,6 +2449,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
             buf_push(b, "    GemVal {mp};\n")
           end
           buf_push(b, "    if (argc > {i}) \{ {mp} = args[{i}]; } else \{\n")
+          buf_push(b, set_def_line)
           buf_push(b, r.setup)
           buf_push(b, "    {mp} = {r.expr};\n    }\n")
         end
@@ -2501,7 +2533,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
     let saved_fn_closure_captures = closure_captures
     closure_captures = {}
-    in_leaf_fn = body_is_leaf(body)
+    in_leaf_fn = fn_is_leaf(node, body)
 
     let captured = find_captured_in_scope(body, scope_vars, is_global_name)
     if node.defaults != nil
@@ -2569,17 +2601,17 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n")
     end
 
-    buf_push(b, emit_param_bindings(node, params, boxed_vars))
-
     let fn_line = 0
     if node.line != nil
       fn_line = node.line
     end
+    # The frame comes first, so an error in a param default shows this fn.
     if in_leaf_fn
       buf_push(b, leaf_entry_str(frame_name(name), rel_path(file_of(node)), fn_line, body))
     else
       buf_push(b, "    gem_push_frame(\"{escape_c_string(frame_name(name))}\", \"{escape_c_string(rel_path(file_of(node)))}\", {fn_line});\n")
     end
+    buf_push(b, emit_param_bindings(node, params, boxed_vars))
     # Return point, taken after the param bindings so the args are older.
     # Only a fn that can recurse (mark_recursive_fns in callgraph.gem) takes
     # one; a point costs about 20 instructions a call. A self-TCO fn reuses
@@ -2724,7 +2756,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     if node.rest_param != nil
       set_add(fn_scope_locals, node.rest_param)
     end
-    in_leaf_fn = body_is_leaf(body)
+    in_leaf_fn = fn_is_leaf(node, body)
 
     let inner_captured = find_captured_in_scope(body, inner_scope, is_global_name)
     if node.defaults != nil
@@ -2787,16 +2819,17 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       stack_env_writes = find_writes_in_closure_body(body, closure_captures, own)
     end
 
-    buf_push(fb, emit_param_bindings(node, params, inner_boxed))
     let anon_line = 0
     if node.line != nil
       anon_line = node.line
     end
+    # The frame comes first, so an error in a param default shows this fn.
     if in_leaf_fn
       buf_push(fb, leaf_entry_str("anonymous fn", rel_path(file_of(node)), anon_line, body))
     else
       buf_push(fb, "    gem_push_frame(\"anonymous fn\", \"{escape_c_string(rel_path(file_of(node)))}\", {anon_line});\n")
     end
+    buf_push(fb, emit_param_bindings(node, params, inner_boxed))
     # Return point, as in compile_fn. A non-escaping closure writes its
     # creator's unboxed C locals (stack_env_writes), which the reset would
     # not root, so it gets none.
@@ -2939,6 +2972,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         hint = "`{name}` is declared{at} after this use or in a block that does not contain it; a `let` is visible from its declaration to the end of its block"
       elif kind == "later_closure"
         hint = "a closure sees only variables declared before it is created, and the `let` of `{name}`{where} comes after; declare it first (`let {name} = nil`) and assign it afterwards (`{name} = ...`)"
+      elif kind == "param_later"
+        hint = "a parameter's default can use only the parameters before it"
       end
       sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", hint)
     end
@@ -3098,10 +3133,20 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     # Extern C forward declarations (auto-generated from extern fn signatures)
     # Skip when extern include is present — the user manages declarations via headers
+    # In compile mode each one is marked with its `extern fn` line, so cc
+    # reports a clash with a system header's prototype there.
     if len(extern_includes) == 0
-      for i = 0, len(extern_c_decls)
-        buf_push(ob, extern_c_decls[i])
+      for d in extern_c_decls
+        if c_file != nil
+          buf_push(ob, "#line {d.node.line} \"{escape_c_string(rel_path(file_of(d.node)))}\"\n")
+        end
+        buf_push(ob, d.decl)
         buf_push(ob, "\n")
+      end
+      if c_file != nil and len(extern_c_decls) > 0
+        let so_far = to_string(ob)
+        let lines = len(so_far) - len(str_replace(so_far, "\n", ""))
+        buf_push(ob, "#line {lines + 2} \"{escape_c_string(c_file)}\"\n")
       end
     end
 

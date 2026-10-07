@@ -2,7 +2,7 @@
 # input() reads whole lines from stdin: any length, NUL bytes kept, a
 # trailing "\n" or "\r\n" stripped, a last line without a newline returned,
 # nil at EOF. read_file and read_stdin raise for a string over the limit
-# (2,147,483,646 bytes).
+# (2,147,483,646 bytes). print and eprint write NUL bytes.
 #
 # Run from the repo root: tests/check_io.sh
 
@@ -72,6 +72,21 @@ truncate -s 2200M "$dir/big.bin"
 check "read_file and read_stdin over the string limit" "read_file: '$dir/over.bin' is 2147483647 bytes, over the string limit of 2147483646 bytes
 read_file: '$dir/big.bin' is 2306867200 bytes, over the string limit of 2147483646 bytes
 read_stdin: a string of 3000000000 bytes is over the limit of 2147483646 bytes" "$("$dir/limits" "$dir/over.bin" "$dir/big.bin" </dev/null)"
+
+cat > "$dir/nul.gem" <<'GEM'
+let s = "a\0b"
+print(s, [s])
+print("x{s}y")
+eprint("e\0f")
+GEM
+"$GEM" "$dir/nul.gem" -o "$dir/nul" 2>"$dir/err" || { echo "FAIL: nul.gem doesn't compile"; cat "$dir/err"; exit 1; }
+"$dir/nul" > "$dir/nul.out" 2>&1
+printf 'a\0b ["a\\0b"]\nxa\0by\ne\0f\n' > "$dir/nul.want"
+if ! cmp -s "$dir/nul.want" "$dir/nul.out"; then
+  echo "FAIL: print and eprint write NUL bytes"
+  od -c "$dir/nul.out"
+  fails=$((fails + 1))
+fi
 
 if [ "$fails" -gt 0 ]; then
   exit 1

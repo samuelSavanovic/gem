@@ -91,7 +91,7 @@ GemVal gem_write_file_fn(void *_env, GemVal *args, int argc) {
 
     FILE *f = fopen(path, "wb");
     if (!f) {
-        char buf[512]; snprintf(buf, sizeof(buf), "write_file: cannot open '%s' for writing", path); gem_error(buf);
+        char buf[512]; snprintf(buf, sizeof(buf), "write_file: cannot open '%s' for writing: %s", path, strerror(errno)); gem_error(buf);
     }
     size_t nwritten = fwrite(content, 1, len, f);
     fclose(f);
@@ -131,7 +131,7 @@ GemVal gem_append_file_fn(void *_env, GemVal *args, int argc) {
     }
 
     FILE *f = fopen(path, "ab");
-    if (!f) { char buf[512]; snprintf(buf, sizeof(buf), "append_file: cannot open '%s'", path); gem_error(buf); }
+    if (!f) { char buf[512]; snprintf(buf, sizeof(buf), "append_file: cannot open '%s': %s", path, strerror(errno)); gem_error(buf); }
     size_t nwritten = fwrite(content, 1, len, f);
     fclose(f);
     if (nwritten != len) { char buf[512]; snprintf(buf, sizeof(buf), "append_file: write failed for '%s'", path); gem_error(buf); }
@@ -299,7 +299,7 @@ GemVal gem_list_dir_fn(void *_env, GemVal *args, int argc) {
     }
     DIR *d = opendir(args[0].sval);
     if (!d) {
-        char buf[512]; snprintf(buf, sizeof(buf), "list_dir: cannot open directory '%s'", args[0].sval); gem_error(buf);
+        char buf[512]; snprintf(buf, sizeof(buf), "list_dir: cannot open directory '%s': %s", args[0].sval, strerror(errno)); gem_error(buf);
     }
     GemVal result = gem_table_new();
     struct dirent *entry;

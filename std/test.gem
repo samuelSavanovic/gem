@@ -293,15 +293,17 @@ fn assert_neq(actual, expected)
 end
 
 ## Calls `body()` and returns the message of the error it raised, so a
-## case can check it. Raises if `body` returns normally. `body` must be a
-## fn: any other value makes the call itself raise ("attempt to call int
-## value"), which comes back as the message, so the check passes.
+## case can check it. Raises if `body` returns normally, and
+## `test.assert_throws: body must be a fn, got <type>` when it isn't a fn.
 ##
 ##   let msg = test.assert_throws(fn() error("bad") end)    # "bad"
 ##
 ## An error raised with a non-string value comes back as pcall reports
 ## it: `error({code: 1})` gives the string "error".
 fn assert_throws(body)
+  if type(body) != "fn"
+    error("test.assert_throws: body must be a fn, got {type(body)}")
+  end
   let r = pcall body()
   if r.ok
     error("test.assert_throws: expected an error, but the call returned normally")

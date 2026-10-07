@@ -11,11 +11,21 @@ load "std/string"
 
 extern include "fs.h"
 extern fn fs_is_symlink(path: String) -> Bool
-extern fn fs_open_error(path: String) -> String
 
-## Why `path` can't be opened for reading, or nil when it can.
-fn open_error(path)
-  fs_open_error(path)
+## The reason in a `read_file` or `list_dir` error, which ends with
+## `'<path>': <reason>` (`No such file or directory`); the whole message
+## when it has none.
+fn error_reason(message)
+  let at = -1
+  let next = find(message, "': ")
+  while next >= 0
+    at = next
+    next = find(message, "': ", next + 1)
+  end
+  if at < 0
+    return message
+  end
+  substr(message, at + 3)
 end
 
 # "" is the working directory when no operand names it: its files are
@@ -39,7 +49,7 @@ fn walk_dir(dir, out)
   end
   let r = pcall list_dir(listing)
   if not r.ok
-    push(out, {path: listing, error: open_error(listing) or "cannot read the directory"})
+    push(out, {path: listing, error: error_reason(r.error)})
     return nil
   end
   let names = r.value
@@ -91,4 +101,4 @@ fn files(operands, recursive)
   out
 end
 
-export files, open_error
+export files, error_reason

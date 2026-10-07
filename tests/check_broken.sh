@@ -72,6 +72,16 @@ expected=(
   "destructure_field_name:4:4"
   "table_float_key:3:3"
   "interp_closed_unterminated:1:1"
+  "duplicate_params:6:6"
+  "pattern_bound_twice:4:4"
+  "param_default_later:3:3"
+  "extern_c_keyword:1:1"
+  "entry_export_undefined:1:1"
+  "eof_after_dot:1:1"
+  "tq_unterminated_eof:1:1"
+  "nested_too_deep:1:1"
+  "expression_too_deep:1:1"
+  "postfix_too_deep:1:1"
 )
 
 fails=0

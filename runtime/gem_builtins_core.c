@@ -88,6 +88,7 @@ static void fmt_value(GemVal v, GemBuffer *out, GemFmtSeen *seen, int depth, int
             else fmt_buf_appendn(out, v.sval, (int)v.slen);
             return;
         case VAL_FN:    fmt_buf_append(out, "<fn>"); return;
+        case VAL_LAZY:  return;
         case VAL_BUFFER:
             n = snprintf(tmp, sizeof(tmp), "<buffer:%d>", v.buffer ? v.buffer->len : 0);
             fmt_buf_appendn(out, tmp, n); return;
@@ -174,15 +175,16 @@ GemVal gem_print(void *_env, GemVal *args, int argc) {
             case VAL_BOOL: printf("%s", v.bval ? "true" : "false"); break;
             case VAL_INT: printf("%lld", (long long)v.ival); break;
             case VAL_FLOAT: { char fb[GEM_FLOAT_BUF]; gem_format_float(v.fval, fb); fputs(fb, stdout); break; }
-            case VAL_STRING: printf("%s", v.sval); break;
+            case VAL_STRING: fwrite(v.sval, 1, (size_t)v.slen, stdout); break;
             case VAL_FN: printf("<fn>"); break;
             case VAL_TABLE: {
                 GemVal s = gem_format_value_string(v);
-                fputs(s.sval, stdout);
+                fwrite(s.sval, 1, (size_t)s.slen, stdout);
                 break;
             }
             case VAL_BUFFER: printf("<buffer:%d>", v.buffer->len); break;
             case VAL_REF: printf("#Ref<%lld>", (long long)v.rval); break;
+            case VAL_LAZY: break;
         }
     }
     printf("\n");
@@ -238,6 +240,15 @@ void gem_check_callable(GemVal v, const char *file, int line) {
     if (v.type == VAL_FN) return;
     char buf[128];
     snprintf(buf, sizeof(buf), "attempt to call %s value", gem_type_str(v));
+    GemVal arg = gem_string(buf);
+    gem_error_at_fn(file, line, &arg, 1);
+}
+
+/* The same for a call through a field (`t.f()`), naming the field. */
+void gem_check_callable_field(GemVal v, const char *field, const char *file, int line) {
+    if (v.type == VAL_FN) return;
+    char buf[160];
+    snprintf(buf, sizeof(buf), "attempt to call %s value (field %.64s)", gem_type_str(v), field);
     GemVal arg = gem_string(buf);
     gem_error_at_fn(file, line, &arg, 1);
 }
@@ -314,7 +325,7 @@ GemVal gem_to_int_fn(void *_env, GemVal *args, int argc) {
     if (argc < 1) { gem_error("to_int: expected 1 argument"); }
     GemVal v = args[0];
     if (v.type == VAL_INT) return v;
-    if (v.type == VAL_FLOAT) return gem_int((int64_t)v.fval);
+    if (v.type == VAL_FLOAT) return gem_float_to_int(v.fval, "to_int");
     if (v.type == VAL_BOOL) return gem_int(v.bval ? 1 : 0);
     if (v.type == VAL_STRING) {
         const char *s = v.sval;
@@ -423,15 +434,16 @@ GemVal gem_eprint_fn(void *_env, GemVal *args, int argc) {
             case VAL_BOOL: fprintf(stderr, "%s", v.bval ? "true" : "false"); break;
             case VAL_INT: fprintf(stderr, "%lld", (long long)v.ival); break;
             case VAL_FLOAT: { char fb[GEM_FLOAT_BUF]; gem_format_float(v.fval, fb); fputs(fb, stderr); break; }
-            case VAL_STRING: fprintf(stderr, "%s", v.sval); break;
+            case VAL_STRING: fwrite(v.sval, 1, (size_t)v.slen, stderr); break;
             case VAL_FN: fprintf(stderr, "<fn>"); break;
             case VAL_TABLE: {
                 GemVal s = gem_format_value_string(v);
-                fputs(s.sval, stderr);
+                fwrite(s.sval, 1, (size_t)s.slen, stderr);
                 break;
             }
             case VAL_BUFFER: fprintf(stderr, "<buffer:%d>", v.buffer->len); break;
             case VAL_REF: fprintf(stderr, "#Ref<%lld>", (long long)v.rval); break;
+            case VAL_LAZY: break;
         }
     }
     fprintf(stderr, "\n");
@@ -474,7 +486,7 @@ GemVal gem_getenv_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_input_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc > 0 && args[0].type == VAL_STRING) {
-        printf("%s", args[0].sval);
+        fwrite(args[0].sval, 1, (size_t)args[0].slen, stdout);
         fflush(stdout);
     }
     /* getline reads a line of any length and reports its byte count, so a

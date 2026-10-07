@@ -9,11 +9,16 @@ load "std/string"
 load "std/json"
 
 # ─── Reading frames ──────────────────────────────────────────────
-# Returns the JSON-decoded message as a Gem table, or nil on EOF / malformed
-# header. The caller is responsible for closing the loop on nil.
+# Returns nil at EOF before a frame's body or on a header the frame can't be
+# read past (no or a bad Content-Length; the reason goes to stderr), and
+# otherwise {ok: true, msg: <request or notification>} or, for a body that
+# isn't one (a short body at EOF included), {ok: false, id, code, message}:
+# the error response to send. A frame with no method but a `result` or
+# `error` (a JSON-RPC response) comes back as {ok: false, code: nil}:
+# nothing to send.
 
 fn read_message()
-  let length = -1
+  let length = nil
   while true
     let line = input()
     if line == nil
@@ -24,14 +29,34 @@ fn read_message()
     end
     if string.starts_with(line, "Content-Length:")
       let value_str = string.trim(substr(line, 15, len(line) - 15))
-      length = to_int(value_str)
+      let parsed = pcall to_int(value_str)
+      if not parsed.ok or parsed.value < 0
+        eprint("gem lsp: bad Content-Length header: {line}")
+        return nil
+      end
+      length = parsed.value
     end
   end
-  if length < 0
+  if length == nil
+    eprint("gem lsp: message without a Content-Length header")
     return nil
   end
   let body = read_stdin(length)
-  json.parse(body)
+  let parsed = pcall json.parse(body)
+  if not parsed.ok
+    return {ok: false, id: nil, code: ERR_PARSE, message: parsed.error}
+  end
+  let msg = parsed.value
+  if type(msg) != "table"
+    return {ok: false, id: nil, code: ERR_INVALID_REQUEST, message: "a message must be a JSON object"}
+  end
+  if type(msg.method) != "string"
+    if has_key(msg, "result") or has_key(msg, "error")
+      return {ok: false, id: nil, code: nil, message: nil}
+    end
+    return {ok: false, id: msg.id, code: ERR_INVALID_REQUEST, message: "a request must have a string method"}
+  end
+  {ok: true, msg: msg}
 end
 
 # ─── Writing frames ──────────────────────────────────────────────

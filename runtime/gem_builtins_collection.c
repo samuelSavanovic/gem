@@ -137,17 +137,23 @@ GemVal gem_has_key_fn(void *_env, GemVal *args, int argc) {
  * patterns; not user-visible. Keys in a table are distinct, so n int keys
  * that all fall in [0, n) are exactly 0 .. n-1 -- no lookups needed. */
 
+/* An array: its keys are exactly 0 .. len-1, in any order (keys are
+   distinct, so len int keys in that range are all of them). */
+static int gem_table_is_array_keys(GemTable *t) {
+    if (t->is_array) return 1;
+    for (int i = 0; i < t->len; i++) {
+        GemVal k = t->keys[i];
+        if (k.type != VAL_INT || k.ival < 0 || k.ival >= t->len) return 0;
+    }
+    return 1;
+}
+
 GemVal gem_is_array_n_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2 || args[0].type != VAL_TABLE || args[1].type != VAL_INT) return gem_bool(0);
     GemTable *t = args[0].table;
-    int64_t n = args[1].ival;
-    if ((int64_t)t->len != n) return gem_bool(0);
-    for (int i = 0; i < t->len; i++) {
-        GemVal k = t->keys[i];
-        if (k.type != VAL_INT || k.ival < 0 || k.ival >= n) return gem_bool(0);
-    }
-    return gem_bool(1);
+    if ((int64_t)t->len != args[1].ival) return gem_bool(0);
+    return gem_bool(gem_table_is_array_keys(t));
 }
 
 /* ─── Built-in: in operator (value membership for arrays, key check for tables) ─── */
@@ -155,7 +161,7 @@ GemVal gem_is_array_n_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_in_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2) { gem_error("in: expected 2 arguments"); }
-    if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "in: expected table as first argument, got %s", gem_type_str(args[0])); gem_error(buf); }
+    if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "in: right operand must be a table, got %s", gem_type_str(args[0])); gem_error(buf); }
     GemTable *t = args[0].table;
     GemVal needle = args[1];
     gem_table_index(t);
@@ -342,9 +348,12 @@ GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1) { gem_error("sort: expected 1-2 arguments"); }
     if (args[0].type != VAL_TABLE) { char buf[128]; snprintf(buf, sizeof(buf), "sort: expected table, got %s", gem_type_str(args[0])); gem_error(buf); }
+    if (argc >= 2 && args[1].type != VAL_FN && args[1].type != VAL_NIL) {
+        char buf[128]; snprintf(buf, sizeof(buf), "sort: comparator must be a fn, got %s", gem_type_str(args[1])); gem_error(buf);
+    }
     GemTable *t = args[0].table;
     gem_table_check_mutable(t);
-    /* A one-entry table is still renumbered below (`sort({a: 5})` is [5]). */
+    if (!gem_table_is_array_keys(t)) gem_error("sort: expected an array (keys 0 .. n-1), got a table with other keys");
     if (t->len == 0) return args[0];
 
     if (argc >= 2 && args[1].type == VAL_FN) {

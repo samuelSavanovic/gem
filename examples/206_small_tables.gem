@@ -119,16 +119,14 @@ for i = 0, 3
 end
 print("cache shifting", string.join(reads, ","), shifting.c, shifting.a)
 
-# 7. sort, insert and remove_at renumber keys.
+# 7. sort takes only arrays; insert and remove_at renumber keys.
 let s = {b: 2, a: 1, c: 3}
-sort(s)
-print("sorted record", len(s), s[0], s[2], s.a, has_key(s, "a"), 1 in s)
+print("sorted record", (pcall sort(s)).error, len(s), s.a)
 let big = {}
 for i = 0, 12
   big["k{i}"] = 12 - i
 end
-sort(big)
-print("sorted big", len(big), big[0], big[11], big.k0, 5 in big)
+print("sorted big", (pcall sort(big)).error, len(big), big.k0)
 let ins = [10, 20, 30]
 insert(ins, 1, 15)
 print("insert", len(ins), ins[1], ins[3], 15 in ins)
