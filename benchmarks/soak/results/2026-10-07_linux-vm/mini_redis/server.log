@@ -1,0 +1,3 @@
+mini_redis listening on 127.0.0.1:6395
+gem_diag: arena_resets=88782 copied=8420856656 scanned=120471638520 freed=152347274096 time=93.222s walk=46.606s full=2440 ret_resets=98 ret_copied=12624496 max=0.087s
+gem_diag: spawn_overflow=0 proc_hwm=1024 max_procs=262144
