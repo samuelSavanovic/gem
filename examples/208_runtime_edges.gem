@@ -1,0 +1,72 @@
+# Builtins at the edges of their input: exact integer powers, floats that
+# don't fit an int, keys no lookup could reach, sizes past the end, bytes
+# out of range, bad comparators and operands, ports, inherited sockets,
+# and why a file can't be opened.
+
+fn err(f)
+  (pcall f()).error
+end
+
+print("== pow")
+print(pow(3, 39), pow(7, 0), pow(-2, 63), pow(2, 64), pow(2, 63))
+print(pow(2, -1), pow(2.0, 3), abs(-9223372036854775807 - 1))
+
+print("== float to int")
+let huge = to_float("1e300")
+let nan = to_float("nan")
+print(err(fn() to_int(huge) end))
+print(err(fn() floor(nan) end))
+print(err(fn() ceil(to_float("-inf")) end))
+print(err(fn() round(huge) end))
+print(to_int(-2.9), floor(2.5), round(-2.5), ceil(-0.5))
+
+print("== table keys")
+let t = {}
+print(err(fn() t[nan] = 1 end))
+print(err(fn() t[nil] = 1 end))
+t[1.5] = "float key"
+print(len(t), t[1.5])
+
+print("== substr and chr")
+print(substr("abc", 1, 9223372036854775807), substr("abc", 1, 1))
+print(err(fn() chr(256) end))
+print(err(fn() chr(-1) end))
+print(ord(chr(255)), ord(chr(0)))
+
+print("== sort")
+print(err(fn() sort([3, 1], 5) end))
+print(err(fn() sort({b: 2, a: 1}) end))
+print(sort([3, 1], nil), sort([]))
+let shuffled = {}
+shuffled[1] = "b"
+shuffled[0] = "c"
+shuffled[2] = "a"
+print(sort(shuffled))
+
+print("== in")
+fn has(x, tbl) x in tbl end
+print(err(fn() has("x", "xyz") end))
+
+print("== field names in errors")
+let rec = {a: 1}
+print(err(fn() rec.a.b end))
+print(err(fn() rec.missing() end))
+
+print("== tcp")
+print(err(fn() tcp_listen("127.0.0.1", 70000) end))
+print(err(fn() tcp_connect("127.0.0.1", -1) end))
+let l = tcp_listen("127.0.0.1", 0)
+print("child sees its stdin:", exec("test -e /dev/fd/0") == 0)
+print("child sees the socket:", exec("test -e /dev/fd/{l}") == 0)
+tcp_close(l)
+
+print("== files and sqlite")
+print(err(fn() read_file("/no/such/file") end))
+print(err(fn() list_dir("/no/such/dir") end))
+print(err(fn() write_file("/no/such/dir/x", "a") end))
+let db = sqlite_open(":memory:")
+sqlite_exec(db, "CREATE TABLE a(x)")
+print(err(fn() sqlite_exec(db, "INSERT INTO a VALUES (1);\0INSERT INTO a VALUES (2)") end))
+print(err(fn() sqlite_query(db, "SELECT 1\0", []) end))
+print(sqlite_query(db, "SELECT count(*) AS n FROM a", []))
+sqlite_close(db)

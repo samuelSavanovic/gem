@@ -20,7 +20,7 @@ r.get("/json", fn(req)
 end)
 
 r.post("/echo", fn(req)
-  http.ok(req.body, req.headers["Content-Type"])
+  http.ok(req.body, req.headers["content-type"])
 end)
 
 r.get("/headers", fn(req)

@@ -359,14 +359,11 @@ end
 ##
 ##   table.sort(users, fn(a, b) a.age - b.age end)
 ##
-## On a record, it sorts the values and replaces the keys with 0 .. n-1:
-## the record is lost.
-##
-## Raises `table.sort: arr must be an array, got <type>` if `arr` is not
-## a table (a record is accepted, as above), or if `cmp` returns something other
-## than a number (a bool, say) for the first two elements. Only that first
-## call is checked: a non-number later counts as a tie and silently
-## mis-sorts.
+## Raises `table.sort: arr must be an array, ...` if `arr` is not an
+## array (a table whose keys are 0 .. n-1), and `table.sort: the comparator
+## must return a number ...` if `cmp` returns something other than a number
+## (a bool, say) for the first two elements. Only that first call is
+## checked: a non-number later counts as a tie and silently mis-sorts.
 let sort = fn(arr, cmp = nil)
   # The `sort` builtin leaves the array unsorted, with no error, when the
   # comparator returns a bool, so this checks what `cmp` returns for the
@@ -374,6 +371,10 @@ let sort = fn(arr, cmp = nil)
   # reaches the `sort` builtin.
   if type(arr) != "table"
     error("table.sort: arr must be an array, got {type(arr)}")
+  end
+  # `__is_array_n` is the check array patterns compile to.
+  if not __is_array_n(arr, len(arr))
+    error("table.sort: arr must be an array, got a table with keys other than 0 .. n-1")
   end
   if cmp == nil
     return sort(arr)

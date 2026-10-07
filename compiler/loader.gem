@@ -161,4 +161,4 @@ fn make_show_path(entry_path, project_root)
   end
 end
 
-export resolve_load_path, load_target_problem, find_project_root, find_install_root, compute_stdlib_root, make_show_path
+export resolve_load_path, load_target_problem, find_project_root, find_install_root, compute_stdlib_root, make_show_path, normalize_load_path

@@ -6,6 +6,10 @@
 
 load "./cgutil" (set_add, set_contains, is_node)
 
+# The scope entry of a param whose default is being walked when the param
+# isn't bound yet: the default's own param and the ones after it.
+let PENDING_PARAM = "\0pending param"
+
 
 fn collect_block_lets(stmt, result)
   if is_node(stmt, "block")
@@ -142,6 +146,9 @@ end
 # built when it is created, before the let exists.
 fn shadow_check_use(node, name, env, ctx)
   if has_key(env, name)
+    if env[name] == PENDING_PARAM
+      ctx.report(node, name, "param_later", nil)
+    end
     return nil
   end
   if set_contains(ctx.globals, name) or set_contains(ctx.fns, name) or set_contains(ctx.externs, name) or has_key(ctx.builtins, name)
@@ -212,10 +219,15 @@ end
 
 # A fn or closure: its params are new C params, visible in the body
 # (hiding any outer binding of the same name). A param keeps its name,
-# except one named like a named or extern fn (`shadow_param_name`).
+# except one named like a named or extern fn (`shadow_param_name`). A
+# param's default sees only the params before it; naming its own param or
+# a later one is reported (in C that param's local is not yet set, or not
+# yet declared).
 fn shadow_fn(node, env, ctx)
   let inner = copy_scope_env(env)
+  let originals = []
   if node.params != nil
+    originals = node.params
     let params = []
     for p in node.params
       let c = shadow_param_name(p, ctx)
@@ -224,14 +236,25 @@ fn shadow_fn(node, env, ctx)
     end
     node.params = params
   end
+  let rest_original = node.rest_param
   if node.rest_param != nil
     let c = shadow_param_name(node.rest_param, ctx)
     inner[node.rest_param] = c
     node.rest_param = c
   end
   if node.defaults != nil
-    for d in node.defaults
-      shadow_node(d, inner, "fn", ctx)
+    for i = 0, len(node.defaults)
+      let d = node.defaults[i]
+      if d != nil
+        let at = copy_scope_env(inner)
+        for j = i, len(originals)
+          at[originals[j]] = PENDING_PARAM
+        end
+        if rest_original != nil
+          at[rest_original] = PENDING_PARAM
+        end
+        shadow_node(d, at, "fn", ctx)
+      end
     end
   end
   shadow_stmts(node.body, inner, "fn", ctx)
@@ -288,13 +311,13 @@ shadow_node = fn(node, env, mode, ctx)
   let cm = shadow_child_mode(mode)
   if tag == "var"
     shadow_check_use(node, node.name, env, ctx)
-    if has_key(env, node.name)
+    if has_key(env, node.name) and env[node.name] != PENDING_PARAM
       node.name = env[node.name]
     end
   elif tag == "assign"
     shadow_node(node.value, env, mode, ctx)
     shadow_check_use(node, node.name, env, ctx)
-    if has_key(env, node.name)
+    if has_key(env, node.name) and env[node.name] != PENDING_PARAM
       node.name = env[node.name]
     end
   elif tag == "let" or tag == "block"

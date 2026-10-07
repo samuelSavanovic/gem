@@ -29,6 +29,8 @@ push(c, "one")
 print(c, c[1])
 let d = [3, 1, 2]
 d.x = 1
+print((pcall sort(d)).error)
+delete(d, "x")
 sort(d)
 push(d, 9)
 print(d)

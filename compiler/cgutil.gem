@@ -19,9 +19,12 @@ fn escape_c_string(s)
       buf_push(b, "\\r")
     elif ch == "\t"
       buf_push(b, "\\t")
-    elif ord(ch) == 0
-      # 3-digit octal so a following digit char isn't absorbed into the escape.
-      buf_push(b, "\\000")
+    elif ord(ch) < 32 or ord(ch) >= 127
+      # Other control bytes, and bytes that may not be valid UTF-8 (cc warns
+      # on those), as 3-digit octal so a following digit char isn't
+      # absorbed into the escape.
+      let o = ord(ch)
+      buf_push(b, "\\" + to_string(o / 64) + to_string(o / 8 % 8) + to_string(o % 8))
     else
       buf_push(b, ch)
     end

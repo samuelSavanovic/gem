@@ -142,9 +142,9 @@ let STATUS_TEXT = {
 ##
 ## A handler's response is valid when `status` is an int from 200 to 999,
 ## `body` is nil or a string, and `headers` is nil or a table of name to
-## value. Names must be HTTP tokens, and values must hold no CR or LF. A
-## value is sent as `"{value}"`, an array as one line per element; a nil
-## value or a non-array table is sent as the text "nil". The server
+## value. Names must be HTTP tokens, and a value a string, number or bool
+## (sent as `"{value}"`) with no CR or LF, or an array of them (one line
+## per element); a nil value or another table is invalid. The server
 ## writes Content-Length and Connection and drops the handler's own and
 ## any Transfer-Encoding, but a Connection header listing `close` still
 ## closes the connection. 204 and 304 responses go without a body. The
@@ -228,6 +228,9 @@ end
 # The Set-Cookie line's value; raises on a name, value or attribute that
 # could change the cookie's meaning or inject a header.
 fn cookie_line(caller, name, value, path, http_only, secure, same_site, max_age, expires)
+  if value == nil or type(value) == "table"
+    error("{caller}: cookie value must be a string or a number, got {type(value)}")
+  end
   let n = "{name}"
   let v = "{value}"
   if n == "" or has_text(n, "=")
@@ -297,8 +300,8 @@ end
 ##
 ## Options: `path` (default "/"), `http_only` (default true), `secure`
 ## (default false), `same_site` (default "Lax"), `max_age` (seconds, int)
-## and `expires` (epoch ms, int); nil leaves an attribute out. A nil
-## `value` is sent as the text "nil" (`sid=nil`).
+## and `expires` (epoch ms, int); nil leaves an attribute out. A nil or
+## table `value` raises.
 ##
 ##   http.set_cookie(http.ok("hi"), "sid", token, {max_age: 3600})
 ##   # Set-Cookie: sid=<token>; Path=/; Max-Age=3600; HttpOnly; SameSite=Lax
@@ -348,9 +351,12 @@ end
 ##   http.parse_form("name=Ann+Lee&age=30")    # {name: "Ann Lee", age: "30"}
 ##   http.parse_form(req.body)
 ##
-## Raises `url.parse_query: s must be a string, got <type>` for a
+## Raises `http.parse_form: body must be a string, got <type>` for a
 ## non-string `body`.
 fn parse_form(body)
+  if type(body) != "string"
+    error("http.parse_form: body must be a string, got {type(body)}")
+  end
   url.parse_query(body)
 end
 
@@ -362,9 +368,12 @@ end
 ##   http.html_escape("<b>\"Tom\" & 'Jerry'</b>")
 ##   # "&lt;b&gt;&quot;Tom&quot; &amp; &#x27;Jerry&#x27;&lt;/b&gt;"
 ##
-## Raises `str_replace: all arguments must be strings, ...` when `s`
+## Raises `http.html_escape: s must be a string, got <type>` when `s`
 ## isn't a string (convert numbers with "{n}").
 fn html_escape(s)
+  if type(s) != "string"
+    error("http.html_escape: s must be a string, got {type(s)}")
+  end
   let out = str_replace(s, "&", "&amp;")
   out = str_replace(out, "<", "&lt;")
   out = str_replace(out, ">", "&gt;")
@@ -420,12 +429,14 @@ fn match_static(static_routes, path)
   for sr in static_routes
     let plen = len(sr.prefix)
     if string.starts_with(path, sr.prefix) and at_segment(path, sr.prefix, plen)
-      let rel = substr(path, plen, len(path) - plen)
+      # Decoded before the `..` check in normalize_path; `+` is literal in a
+      # path. A NUL would cut the name short in the file system's calls.
+      let rel = url.decode(str_replace(substr(path, plen, len(path) - plen), "+", "%2B"))
       if rel == "" or rel == "/"
         rel = "/index.html"
       end
       let file_path = "{sr.dir}{normalize_path(rel)}"
-      if file_exists(file_path) and not is_dir(file_path)
+      if find(file_path, "\0") < 0 and file_exists(file_path) and not is_dir(file_path)
         let content = read_file(file_path)
         let ct = mime.lookup(file_path)
         let handler = fn(req)
@@ -464,9 +475,9 @@ end
 ## (`/static` serves `/static/a.css`, not `/staticx`), the prefix itself
 ## gives `index.html`, `..` can't leave `dir`, and a directory or missing
 ## file is a 404. `dir` is relative to the current directory, not the
-## source file; a missing `dir` just gives 404s. The path is not
-## percent-decoded before the lookup, so a file whose name needs encoding
-## (a space, say) can't be served. Routes are tried before static dirs.
+## source file; a missing `dir` just gives 404s. The path is
+## percent-decoded (`%XX` only, as for `:params`) before the lookup.
+## Routes are tried before static dirs.
 ## Each request reads the whole file, so don't serve huge files this way.
 ## Files are sent with `Cache-Control: public, max-age=3600`, so browsers
 ## may show a stale copy for up to an hour.
@@ -1089,18 +1100,22 @@ fn response_problem(resp)
     if type(name) != "string" or not is_token(name)
       return "invalid response: header name \"{name}\" is not an HTTP token"
     end
+    let values = [value]
     if type(value) == "table"
-      for v in value
-        if has_cr_or_lf("{v}")
-          return "invalid response: header {name} has a CR or LF in its value"
-        end
+      # `__is_array_n` is the check array patterns compile to.
+      if not __is_array_n(value, len(value))
+        return "invalid response: header {name} must be a string, number, bool or array of them, got a table with keys other than 0 .. n-1"
       end
-    elif type(value) == "string"
-      if has_cr_or_lf(value)
+      values = value
+    end
+    for v in values
+      let t = type(v)
+      if t != "string" and t != "int" and t != "float" and t != "bool"
+        return "invalid response: header {name} must be a string, number, bool or array of them, got {t}"
+      end
+      if t == "string" and has_cr_or_lf(v)
         return "invalid response: header {name} has a CR or LF in its value"
       end
-    elif has_cr_or_lf("{value}")
-      return "invalid response: header {name} has a CR or LF in its value"
     end
   end
   nil
@@ -1705,8 +1720,8 @@ end
 ## Starts a server for `router_ref` without blocking and returns
 ## `{pid}`, the server process.
 ##
-## Options: `port` (default 8080; not range-checked, so keep it in
-## 1..65535; 0 binds a free port but nothing tells you which), `host`
+## Options: `port` (default 8080, 0 to 65535; 0 binds a free port but
+## nothing tells you which), `host`
 ## (an IP address, default "0.0.0.0"; "127.0.0.1" for local only),
 ## `max_body` (bytes, default 8 MB; a bigger body gets 413),
 ## `idle_timeout_ms` (default 30000: the longest wait for each read, also
@@ -1720,8 +1735,6 @@ end
 ## one, the connection is closed without a response, past the write one,
 ## it is closed with the response cut short and a line on stderr. Other
 ## keys are ignored.
-## `opts` must be a table: nil raises an unprefixed `field access on
-## non-table` error.
 ##
 ##   let server = http.start(app, {port: 8080, host: "127.0.0.1"})
 ##   ...
@@ -1753,9 +1766,12 @@ end
 # `start`, with the server watching `watch` (nil: nobody); errors start
 # with `caller`.
 fn launch(caller, router_ref, watch, opts)
+  if type(opts) != "table"
+    error("{caller}: opts must be a table, got {type(opts)}")
+  end
   let {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS, write_timeout_ms = DEFAULT_WRITE_TIMEOUT_MS} = opts
-  if type(port) != "int"
-    error("{caller}: port must be an int, got {type(port)}")
+  if type(port) != "int" or port < 0 or port > 65535
+    error("{caller}: port must be an int from 0 to 65535, got {port}")
   end
   if type(host) != "string"
     error("{caller}: host must be a string (an IP address), got {type(host)}")

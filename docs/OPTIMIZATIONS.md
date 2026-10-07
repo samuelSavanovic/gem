@@ -179,11 +179,6 @@ Every live process costs about 21 KB of memory on Linux x86_64 (about 70 KB on m
 ### An `extern blocking fn` call costs a thread hand-off (P2)
 Each call of an `extern blocking fn` copies its `String` and `Bytes` arguments into malloc'd memory, signals a pool worker through a condition variable, and is woken through the wake pipe and a `poll` of the scheduler, even when the C work takes nanoseconds. Calling glibc's `regexec` on each of 19,000 lines of a 1 MB file took 5 ms as a plain `extern fn`, 0.64 s as an `extern blocking fn` given each line (33 µs a call), and 1.7 s given the whole file with offsets (90 µs a call: the 1 MB copy; Linux x86_64 VM). So a blocking call can't be used for short work in a loop, and `examples/gemgrep` runs its matching inline, which lets one pathological pattern stall every process. Options: skip the copies (the calling process is suspended, so its arena doesn't move during the call; what needs care is a process killed mid-call, whose arena would have to outlive the worker's use of it, as the request already does); spin briefly for the completion before sleeping in `poll` when nothing else is runnable; or an `extern fn` variant that runs inline but lets the scheduler preempt to the pool only past a time budget.
 
-## Compiler
-
-### Lexing a long string literal is quadratic (P1)
-The lexer builds each token's text a character at a time (`val = val + source[pos]` in compiler/lexer.gem, 25 places), and the in-place append doesn't apply to these loops, so every character copies the text so far: `gem --check` on a file holding one 100 KB string literal takes 0.5 s, 200 KB 2.3 s, 1 MB 64 s (macOS arm64). A generated file with an embedded asset hits this. The lexer should take each token's text as one `substr` of `source` from its start to its end (escapes need a `build_string` or a slice per run of plain characters).
-
 ## std/json
 
 ### Scanner as plain table instead of closure (P2)

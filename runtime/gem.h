@@ -614,6 +614,7 @@ GemVal gem_eprint_fn(void *_env, GemVal *args, int argc);
 GemVal gem_exit_process_fn(void *_env, GemVal *args, int argc);
 GemVal gem_argv_fn(void *_env, GemVal *args, int argc);
 GemVal gem_sort_fn(void *_env, GemVal *args, int argc);
+GemVal gem_float_to_int(double d, const char *who);
 GemVal gem_floor_fn(void *_env, GemVal *args, int argc);
 GemVal gem_ceil_fn(void *_env, GemVal *args, int argc);
 GemVal gem_round_fn(void *_env, GemVal *args, int argc);
@@ -789,6 +790,7 @@ GemVal gem_len_val(GemVal v);
 void gem_error(const char *msg);
 GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc);
 void gem_check_callable(GemVal v, const char *file, int line);
+void gem_check_callable_field(GemVal v, const char *field, const char *file, int line);
 GemVal gem_keys(GemVal tbl);
 
 /* Direct entry points of builtins for one arity (DIRECT_BUILTINS in
@@ -1164,7 +1166,7 @@ GemVal gem_table_get_ic_miss(GemTable *t, const char *key, GemICacheSlot *cache)
 static inline GemVal gem_table_get_cached(GemVal tbl, const char *key, GemICacheSlot *cache) {
     if (tbl.type != VAL_TABLE) {
         char buf[128];
-        snprintf(buf, sizeof(buf), "field access on non-table: got %s", gem_type_str(tbl));
+        snprintf(buf, sizeof(buf), "field access on non-table: got %s (reading .%.64s)", gem_type_str(tbl), key);
         gem_error(buf);
     }
     GemTable *t = tbl.table;

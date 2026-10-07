@@ -1,0 +1,8 @@
+# A triple-quoted string that resumes after an interpolation and runs
+# to the end of the file is unterminated, not a lexer crash.
+# expect: unterminated triple-quoted string
+let v = 1
+let s = """
+  x{v}
+  y
+  

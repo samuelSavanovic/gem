@@ -6,6 +6,25 @@ load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_n
 load "./lexer" (tokenize, normalize_newlines)
 load "./errors" (make_error_sink)
 
+# The deepest nesting the parser accepts (see `nest` in make_parser). Per
+# level, the parser recurses deepest: on macOS arm64, about 800 nested
+# parentheses overflow the compiler's stack.
+let MAX_NEST = 500
+# The deepest AST it builds: nesting plus the links of operator and postfix
+# chains (`a + b + c` is a binop inside a binop, `t.a.b` a field read of a
+# field read). The passes after the parser, and the C compiler on the
+# nested C expressions codegen emits, recurse once per level: clang
+# crashes on about 1,900 nested index reads.
+let MAX_DEPTH = 1000
+
+# Words that can't name the C function an `extern fn` calls: C's keywords
+# that aren't also Gem keywords, and the type names the generated
+# prototypes use.
+let C_RESERVED = {}
+for w in ["auto", "case", "char", "const", "default", "double", "enum", "float", "goto", "inline", "int", "long", "register", "restrict", "short", "signed", "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned", "void", "volatile", "asm", "typeof", "_Alignas", "_Alignof", "_Atomic", "_Bool", "_Complex", "_Generic", "_Imaginary", "_Noreturn", "_Static_assert", "_Thread_local", "bool", "int64_t", "uint8_t", "GemVal", "GemBytes"]
+  C_RESERVED[w] = true
+end
+
 # ─── Number conversion helpers ───────────────────────────────────
 
 extern fn atof(s: String) -> Float
@@ -151,6 +170,17 @@ fn make_parser(tokens, source, file, sink)
     push(stmts, make_let(name, make_var(tmp), line))
   end
   let fn_depth = 0
+  # Levels of statements, expressions, unary operators and patterns open
+  # around the token being parsed, and the operator- and postfix-chain links
+  # among them. A program nested past MAX_NEST, or deeper than MAX_DEPTH
+  # counting the links, is reported as a compile error.
+  let nest = 0
+  let links = 0
+  let nest_overflow = false
+  # Names the pattern being parsed binds so far, and how many patterns deep
+  # the parser is (0 outside one).
+  let pat_bound = {}
+  let pat_level = 0
   # Nesting of the statement being parsed: 1 for a statement directly in
   # the file's top-level code, more inside any block (if/while/for/match/
   # receive arms, fn and do bodies). Named fns and externs live only at 1.
@@ -181,7 +211,11 @@ fn make_parser(tokens, source, file, sink)
     tokens[pos]
   end
 
+  # Past the end it gives the EOF token, as `peek` does at the end.
   let peek_at = fn(n)
+    if pos + n >= len(tokens)
+      return tokens[-1]
+    end
     tokens[pos + n]
   end
 
@@ -195,9 +229,57 @@ fn make_parser(tokens, source, file, sink)
     tokens[pos].type == "EOF"
   end
 
-  # Report a parser error at the given location.
+  # Report a parser error at the given location. Once the nesting limit
+  # was hit, the parse that follows is a recovery: its errors are skipped.
   let report = fn(line, col, span, msg, hint)
+    if nest_overflow
+      return nil
+    end
     sink.report(source, file, line, col, span, msg, hint)
+  end
+
+  # Reports the first nesting overflow, at the token that went over.
+  let report_nest = fn(msg, hint)
+    if not nest_overflow
+      let t = tokens[pos]
+      report(t.line, t.col, 1, msg, hint)
+      nest_overflow = true
+    end
+  end
+
+  # Opens one level of nesting; false (and nothing opened) past a limit.
+  let enter_nest = fn()
+    if nest >= MAX_NEST
+      report_nest("nested too deeply: more than {MAX_NEST} levels", "split the code with `let` or a helper fn")
+      return false
+    end
+    if nest + links >= MAX_DEPTH
+      report_nest("expression too deep: more than {MAX_DEPTH} levels", "each operator of a chain like `a + b + c` adds a level; split it with `let`")
+      return false
+    end
+    nest += 1
+    true
+  end
+
+  # Opens one link of an operator chain; false (and nothing opened) past
+  # MAX_DEPTH.
+  let enter_link = fn()
+    if nest + links >= MAX_DEPTH
+      report_nest("expression too deep: more than {MAX_DEPTH} levels", "each operator of a chain like `a + b + c` adds a level; split it with `let`")
+      return false
+    end
+    links += 1
+    true
+  end
+
+  # Records a name the current pattern binds; a second binding of it is an
+  # error, since it reads like an equality test and would bind the last
+  # match. `_` may repeat.
+  let bind_pattern_name = fn(tok)
+    if tok.value != "_" and has_key(pat_bound, tok.value)
+      report(tok.line, tok.col, len(tok.value), "'{tok.value}' is bound twice in this pattern", "a repeated name doesn't compare the values; pin it with `^{tok.value}` against an earlier binding, or compare in the body")
+    end
+    pat_bound[tok.value] = true
   end
 
   # A module-scope binding of `tok`'s name (kind "let", "load", "fn" or
@@ -429,11 +511,23 @@ fn make_parser(tokens, source, file, sink)
     let defaults = []
     let prelude = []
     let has_default = false
+    # Every name the list binds, plain, destructured or rest.
+    let bound = {}
+    let bind = fn(tok)
+      if has_key(bound, tok.value)
+        report(tok.line, tok.col, len(tok.value), "duplicate parameter '{tok.value}'", nil)
+      end
+      bound[tok.value] = true
+    end
 
     while peek().type == "NAME" or peek().type == "..." or peek().type == "\{"
       if peek().type == "..."
         advance()
-        rest_param = expect("NAME").value
+        let rest_tok = expect("NAME")
+        rest_param = rest_tok.value
+        if not rest_tok.synthetic
+          bind(rest_tok)
+        end
         break
       end
 
@@ -450,6 +544,7 @@ fn make_parser(tokens, source, file, sink)
           let field_tok = peek()
           advance()
           push(dnames, field_tok.value)
+          bind(field_tok)
           check_destructure_field(field_tok)
           reject_destructure_rename(field_tok, "\{" + field_tok.value + "\}")
           skip_nl()
@@ -513,6 +608,7 @@ fn make_parser(tokens, source, file, sink)
 
       let name_tok = advance()
       push(params, name_tok.value)
+      bind(name_tok)
       if peek().type == "="
         advance()
         push(defaults, parse_expr())
@@ -876,7 +972,11 @@ fn make_parser(tokens, source, file, sink)
   let parse_call = fn()
     let node = parse_atom()
 
-    while true
+    # Each postfix (call, field, index) nests the node in another, so each
+    # loop turn opens a chain link.
+    let opened = 0
+    while enter_link()
+      opened += 1
       # Block call without parens: `f do ... end`, `m.f { |x| ... }`. The
       # block is the only argument. A brace block needs `|params|` here so
       # it can't be mistaken for a table literal.
@@ -962,7 +1062,9 @@ fn make_parser(tokens, source, file, sink)
           else
             report(field_tok.line, field_tok.col, len(field_tok.value), "expected field name after '.', got '{field_tok.type}'", nil)
           end
-          advance()
+          if field_tok.type != "EOF"
+            advance()
+          end
           node = make_dot(node, "", field_tok.line)
           continue
         end
@@ -983,6 +1085,7 @@ fn make_parser(tokens, source, file, sink)
 
       break
     end
+    links -= opened
 
     node
   end
@@ -1002,8 +1105,13 @@ fn make_parser(tokens, source, file, sink)
           return make_int(int64_min())
         end
       end
+      if not enter_nest()
+        return make_error_expr(peek().line, peek().col)
+      end
       let minus_line = advance().line
-      return make_unop("-", parse_unary(), minus_line)
+      let operand = parse_unary()
+      nest -= 1
+      return make_unop("-", operand, minus_line)
     end
     parse_call()
   end
@@ -1012,11 +1120,14 @@ fn make_parser(tokens, source, file, sink)
   let parse_mul = fn()
     let start_line = peek().line
     let left = parse_unary()
-    while peek().type == "*" or peek().type == "/" or peek().type == "%"
+    let opened = 0
+    while (peek().type == "*" or peek().type == "/" or peek().type == "%") and enter_link()
+      opened += 1
       let op = advance().type
       let right = parse_unary()
       left = make_binop(op, left, right, start_line)
     end
+    links -= opened
     left
   end
 
@@ -1024,11 +1135,14 @@ fn make_parser(tokens, source, file, sink)
   let parse_add = fn()
     let start_line = peek().line
     let left = parse_mul()
-    while peek().type == "+" or peek().type == "-"
+    let opened = 0
+    while (peek().type == "+" or peek().type == "-") and enter_link()
+      opened += 1
       let op = advance().type
       let right = parse_mul()
       left = make_binop(op, left, right, start_line)
     end
+    links -= opened
     left
   end
 
@@ -1036,19 +1150,27 @@ fn make_parser(tokens, source, file, sink)
   let parse_compare = fn()
     let start_line = peek().line
     let left = parse_add()
-    while peek().type == "==" or peek().type == "!=" or peek().type == "<" or peek().type == ">" or peek().type == "<=" or peek().type == ">=" or peek().type == "in"
+    let opened = 0
+    while (peek().type == "==" or peek().type == "!=" or peek().type == "<" or peek().type == ">" or peek().type == "<=" or peek().type == ">=" or peek().type == "in") and enter_link()
+      opened += 1
       let op = advance().type
       let right = parse_add()
       left = make_binop(op, left, right, start_line)
     end
+    links -= opened
     left
   end
 
   # not: "not" not | compare
   parse_not = fn()
     if peek().type == "not"
+      if not enter_nest()
+        return make_error_expr(peek().line, peek().col)
+      end
       let not_line = advance().line
-      return make_unop("not", parse_not(), not_line)
+      let operand = parse_not()
+      nest -= 1
+      return make_unop("not", operand, not_line)
     end
     parse_compare()
   end
@@ -1057,11 +1179,14 @@ fn make_parser(tokens, source, file, sink)
   let parse_and = fn()
     let start_line = peek().line
     let left = parse_not()
-    while peek().type == "and"
+    let opened = 0
+    while peek().type == "and" and enter_link()
+      opened += 1
       advance()
       let right = parse_not()
       left = make_binop("and", left, right, start_line)
     end
+    links -= opened
     left
   end
 
@@ -1069,11 +1194,14 @@ fn make_parser(tokens, source, file, sink)
   let parse_or = fn()
     let start_line = peek().line
     let left = parse_and()
-    while peek().type == "or"
+    let opened = 0
+    while peek().type == "or" and enter_link()
+      opened += 1
       advance()
       let right = parse_and()
       left = make_binop("or", left, right, start_line)
     end
+    links -= opened
     left
   end
 
@@ -1131,7 +1259,12 @@ fn make_parser(tokens, source, file, sink)
   # Everywhere else a value is expected, so `f(a = 1)` is reported.
   parse_stmt_expr = parse_assign_fn
   parse_expr = fn()
+    let t = peek()
+    if not enter_nest()
+      return make_error_expr(t.line, t.col)
+    end
     let e = parse_assign_fn()
+    nest -= 1
     if is_assign_node(e)
       report_assign_as_value(e, "an assignment is a statement, not a value; use '==' to compare")
       return make_error_expr(e.eq_line, e.eq_col)
@@ -1148,7 +1281,7 @@ fn make_parser(tokens, source, file, sink)
   # for the match target. Keeping the structural form in the AST
   # lets future tooling (formatters, refactors, completion inside
   # `when` arms) read what the user wrote.
-  parse_pattern = fn()
+  let parse_pattern_fn = fn()
     let t = peek()
 
     # Table pattern: {key: pattern, ...} or {key} (shorthand bind)
@@ -1178,6 +1311,9 @@ fn make_parser(tokens, source, file, sink)
           advance()
           skip_nl()
           sub_pat = parse_pattern()
+        end
+        if sub_pat == nil
+          bind_pattern_name(key_tok)
         end
         let entry = make_pat_table_entry(key_name, sub_pat)
         if int_key != nil then set_int_key(entry, int_key) end
@@ -1285,6 +1421,7 @@ fn make_parser(tokens, source, file, sink)
     # Name pattern: variable binding (catch-all)
     if t.type == "NAME"
       advance()
+      bind_pattern_name(t)
       return make_pat_name(t.value)
     end
 
@@ -1296,6 +1433,21 @@ fn make_parser(tokens, source, file, sink)
     end
     make_pat_error()
   end
+
+  parse_pattern = fn()
+    if not enter_nest()
+      return make_pat_error()
+    end
+    if pat_level == 0
+      pat_bound = {}
+    end
+    pat_level += 1
+    let p = parse_pattern_fn()
+    pat_level -= 1
+    nest -= 1
+    p
+  end
+
 
   # A `when` arm pattern. A pin may not name a variable the same pattern
   # binds: the pin compares against the value from before the pattern.
@@ -1369,6 +1521,7 @@ fn make_parser(tokens, source, file, sink)
         advance()
         let names = []
         let dflts = []
+        pat_bound = {}
         skip_nl()
         while peek().type != "}" and not at_end()
           let _lp = pos
@@ -1377,6 +1530,7 @@ fn make_parser(tokens, source, file, sink)
           # NAME
           advance()
           push(names, field_tok.value)
+          bind_pattern_name(field_tok)
           check_destructure_field(field_tok)
           reject_destructure_rename(field_tok, "let \{" + field_tok.value + "\} = ...")
           if at_top
@@ -1414,11 +1568,15 @@ fn make_parser(tokens, source, file, sink)
         advance()
         let names = []
         let dflts = []
+        pat_bound = {}
         skip_nl()
         while peek().type != "]" and not at_end()
           let _lp = pos
           let name_tok = expect("NAME")
           push(names, name_tok.value)
+          if not name_tok.synthetic
+            bind_pattern_name(name_tok)
+          end
           if at_top
             note_top_name(name_tok, "let")
           end
@@ -1543,7 +1701,11 @@ fn make_parser(tokens, source, file, sink)
       if peek().type == "," and peek_at(1).type == "NAME"
         # for k, v in table ... end
         advance()  # consume ","
-        let val_name = expect("NAME").value
+        let val_tok = expect("NAME")
+        let val_name = val_tok.value
+        if val_name == var_name and val_name != "_"
+          report(val_tok.line, val_tok.col, len(val_name), "'{val_name}' is bound twice in this loop", "name the key and the value differently")
+        end
         expect("in")
         let tbl_expr = parse_header_expr("for")
         loop_depth += 1
@@ -1740,6 +1902,9 @@ fn make_parser(tokens, source, file, sink)
         if at_top
           note_top_name(name_tok, "extern fn")
         end
+        if has_key(C_RESERVED, name)
+          report(name_tok.line, name_tok.col, len(name), "`{name}` is reserved in C and can't name an extern fn", "an extern fn is the C function of the same name")
+        end
         expect("(")
         let eparams = []
         if peek().type != ")"
@@ -1761,7 +1926,7 @@ fn make_parser(tokens, source, file, sink)
           advance()
           ret_type = expect_extern_type(true, is_blocking)
         end
-        return make_extern_fn(name, eparams, ret_type, is_blocking)
+        return make_extern_fn(name, eparams, ret_type, is_blocking, name_tok.line, name_tok.col)
       elif not is_blocking and peek().type == "NAME" and peek().value == "include"
         advance()
         let path_tok = expect("STRING")
@@ -1837,9 +2002,14 @@ fn make_parser(tokens, source, file, sink)
 
   # Wire up forward declaration
   parse_stmt = fn()
+    let t = peek()
+    if not enter_nest()
+      return make_error_stmt(t.line, t.col)
+    end
     stmt_depth += 1
     let s = parse_stmt_fn()
     stmt_depth -= 1
+    nest -= 1
     s
   end
 

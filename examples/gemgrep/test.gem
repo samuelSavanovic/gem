@@ -97,6 +97,12 @@ test.case("regex: word boundaries, classes and backreferences") do
   test.assert_eq(regex.search(compiled('\\w+\\s'), "-ab_1 c", 0, 7), {start: 1, stop: 6})
   test.assert(regex.test(compiled('(ab)\\1'), "xabab", 0, 5), "backreference")
   test.assert(not regex.test(compiled('(ab)\\1'), "xabba", 0, 5), "backreference, no match")
+  # -w and -x put groups of their own before the pattern's.
+  test.assert(regex.test(compiled('(a)\\1', {word: true}), "aa", 0, 2), "backreference with -w")
+  test.assert(not regex.test(compiled('(a)\\1', {word: true}), "a", 0, 1), "backreference with -w, no match")
+  test.assert(regex.test(compiled('(a)\\1', {line: true}), "aa", 0, 2), "backreference with -x")
+  test.assert(regex.test(compiled('[\\1]x', {line: true}), "1x", 0, 2), "a bracket's backslash is no backreference")
+  test.assert_eq(regex.compile('(a)(b)(c)(d)(e)(f)(g)(h)\\8', {word: true}).error, "Invalid back reference")
 end
 
 test.case("regex: anchors at a range's edges") do

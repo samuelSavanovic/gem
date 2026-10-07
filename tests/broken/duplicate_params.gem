@@ -1,0 +1,9 @@
+# A parameter list names each parameter once: plain, rest, destructured
+# and block parameters each report the repeat.
+# expect: duplicate parameter 'a'
+fn f(a, a) a end
+let g = fn(x, x) x end
+fn h(b, ...b) b end
+fn k(y, {y}) y end
+fn m({z, z}) z end
+let r = [1].map do |q, q| q end

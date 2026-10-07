@@ -17,6 +17,30 @@ static void gem_set_nonblocking(int fd) {
     if (flags >= 0) fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
+/* Every socket is marked close-on-exec, so a command `exec` starts doesn't
+   hold it: by socket() itself where SOCK_CLOEXEC exists, and by fcntl right
+   after socket() and accept() in every case. `exec` runs on a pool thread,
+   so a command starting between an accept() (or, without SOCK_CLOEXEC, a
+   socket()) and that fcntl can still inherit the new socket. */
+#ifdef SOCK_CLOEXEC
+#define GEM_SOCK_STREAM (SOCK_STREAM | SOCK_CLOEXEC)
+#else
+#define GEM_SOCK_STREAM SOCK_STREAM
+#endif
+
+static void gem_set_cloexec(int fd) {
+    fcntl(fd, F_SETFD, FD_CLOEXEC);
+}
+
+static int gem_tcp_port(GemVal v, const char *who) {
+    if (v.ival < 0 || v.ival > 65535) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "%s: port must be from 0 to 65535, got %lld", who, (long long)v.ival);
+        gem_error(buf);
+    }
+    return (int)v.ival;
+}
+
 /* Every blocking wait here starts from a clean slate: no deadline and no
    timed_out flag. A `receive ... after` or `sleep` sets both for its own
    wait; a wait here sets a deadline only for its own timeout and honours
@@ -36,14 +60,15 @@ GemVal gem_tcp_connect_fn(void *_env, GemVal *args, int argc) {
         gem_error("tcp_connect: expected (string host, int port)");
     }
     const char *host = args[0].sval;
-    int port = (int)args[1].ival;
+    int port = gem_tcp_port(args[1], "tcp_connect");
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    int fd = socket(AF_INET, GEM_SOCK_STREAM, 0);
     if (fd < 0) {
         char buf[256];
         snprintf(buf, sizeof(buf), "tcp_connect: socket failed: %s", strerror(errno));
         gem_error(buf);
     }
+    gem_set_cloexec(fd);
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
@@ -105,14 +130,15 @@ GemVal gem_tcp_listen_fn(void *_env, GemVal *args, int argc) {
         gem_error("tcp_listen: expected (string host, int port)");
     }
     const char *host = args[0].sval;
-    int port = (int)args[1].ival;
+    int port = gem_tcp_port(args[1], "tcp_listen");
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    int fd = socket(AF_INET, GEM_SOCK_STREAM, 0);
     if (fd < 0) {
         char buf[256];
         snprintf(buf, sizeof(buf), "tcp_listen: socket failed: %s", strerror(errno));
         gem_error(buf);
     }
+    gem_set_cloexec(fd);
 
     int opt = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
@@ -168,6 +194,7 @@ GemVal gem_tcp_accept_fn(void *_env, GemVal *args, int argc) {
         while (1) {
             int fd = accept(server_fd, (struct sockaddr *)&addr, &addr_len);
             if (fd >= 0) {
+                gem_set_cloexec(fd);
                 gem_set_nonblocking(fd);
                 return gem_int(fd);
             }
@@ -186,6 +213,7 @@ GemVal gem_tcp_accept_fn(void *_env, GemVal *args, int argc) {
         snprintf(buf, sizeof(buf), "tcp_accept: accept failed: %s", strerror(errno));
         gem_error(buf);
     }
+    gem_set_cloexec(fd);
     return gem_int(fd);
 }
 

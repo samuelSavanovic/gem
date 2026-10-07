@@ -47,23 +47,22 @@ static int64_t rx_compile(void *h, const char *pattern, int icase) {
 /* The message for regcomp's error `code`: glibc's text, which is GNU
  * grep's, for the POSIX codes whatever the libc, else regerror's. Static
  * memory: a plain extern fn's String return is copied, never freed.
- * `char *`, not `const char *`, is what the generated wrapper expects.
  * Call it before rx_free. */
-static char *rx_error(void *h, int64_t code) {
+static const char *rx_error(void *h, int64_t code) {
     static char msg[256];
     switch (code) {
-    case REG_BADPAT: return (char *)"Invalid regular expression";
-    case REG_ECOLLATE: return (char *)"Invalid collation character";
-    case REG_ECTYPE: return (char *)"Invalid character class name";
-    case REG_EESCAPE: return (char *)"Trailing backslash";
-    case REG_ESUBREG: return (char *)"Invalid back reference";
-    case REG_EBRACK: return (char *)"Unmatched [, [^, [:, [., or [=";
-    case REG_EPAREN: return (char *)"Unmatched ( or \\(";
-    case REG_EBRACE: return (char *)"Unmatched \\{";
-    case REG_BADBR: return (char *)"Invalid content of \\{\\}";
-    case REG_ERANGE: return (char *)"Invalid range end";
-    case REG_ESPACE: return (char *)"Memory exhausted";
-    case REG_BADRPT: return (char *)"Invalid preceding regular expression";
+    case REG_BADPAT: return "Invalid regular expression";
+    case REG_ECOLLATE: return "Invalid collation character";
+    case REG_ECTYPE: return "Invalid character class name";
+    case REG_EESCAPE: return "Trailing backslash";
+    case REG_ESUBREG: return "Invalid back reference";
+    case REG_EBRACK: return "Unmatched [, [^, [:, [., or [=";
+    case REG_EPAREN: return "Unmatched ( or \\(";
+    case REG_EBRACE: return "Unmatched \\{";
+    case REG_BADBR: return "Invalid content of \\{\\}";
+    case REG_ERANGE: return "Invalid range end";
+    case REG_ESPACE: return "Memory exhausted";
+    case REG_BADRPT: return "Invalid preceding regular expression";
     }
     regerror((int)code, &((rx_handle *)h)->re, msg, sizeof msg);
     return msg;

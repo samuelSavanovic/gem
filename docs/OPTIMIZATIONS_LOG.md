@@ -427,6 +427,11 @@ Codegen emitted `gem_string_with_len("...", N)` for every string literal and `ge
 ### `find` builtin ✓ Done (2026-10-04)
 `find(s, needle, start)` searches with `memchr` (+ `memcmp` for longer needles) in C. It replaced std/string's private `find`, which scanned 32 positions in Gem and then tested growing chunks with `str_replace`, and std/http's runtime extern `gem_bytes_find`. `string.index_of`, `contains` and `split` are now one `find` per match. `examples/logstat` (eight `index_of` and one `split` per line), 1M lines, macOS arm64: from a file 11.3–13.1 s → 4.5–6.0 s, from stdin 7.9–9.4 s → 4.3–5.7 s (Python: 2.0 s).
 
+## Compiler
+
+### The lexer builds string tokens in buffers ✓ Done (2026-10-07)
+The lexer took each string literal's text a character at a time (`val = val + source[pos]`), and the in-place append doesn't apply to those loops (they also read and reset `val`), so every character copied the text so far: `gem --check` on a file holding one 200 KB string literal took 2.2 s, and one with a 1 MB literal about a minute. The string-scanning loops in compiler/lexer.gem now push into a buffer and take the token's text with `to_string` at the end: the 1 MB literal checks in 0.07 s (macOS arm64).
+
 ## std/json
 
 ### Fast path for escape-free strings in parse ✓ Done (2026-10-03)
