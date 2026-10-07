@@ -3,7 +3,7 @@
 
 load "./liveness" (compute_live_for_pt_loops_in_stmts)
 load "./errors" (make_error_sink)
-load "./builtins" (BUILTIN_FNS)
+load "./builtins" (BUILTIN_FNS, LEAF_BUILTINS, DIRECT_BUILTINS)
 load "./cgutil" (escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node)
 load "./scope" (collect_top_let_names, scope_shadowing_lets, collect_module_namespaces, collect_shadow_lets_in_fn)
 load "./captures" (collect_free_vars, collect_free_node, walk_captures_node, walk_writes_node, find_captured_in_scope, find_capture_writes_in_scope, find_writes_in_closure_body, mark_non_escaping_stmts)
@@ -191,12 +191,13 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # append (compile_while). The flag is set once the variable holds the
   # buffer the append built, and only then is it turned back into a string.
   let append_buf_vars = {}
-  # Set when emitting a leaf function (no Gem-level calls in body): instead
-  # of `gem_push_frame`/`gem_pop_frame`/`gem_set_line` it records itself in
-  # the cheaper leaf slot (gem.h `GemLeafSite`): `gem_leaf_site = &site` on
-  # entry, `gem_leaf_line = N` per statement, `gem_leaf_site = NULL` on
-  # return. A leaf calls nothing, so it is always the innermost frame and
-  # error reports show it on top of the call stack.
+  # Set when emitting a leaf function (no Gem-level calls in body, see
+  # "Leaf-function detection"): instead of `gem_push_frame`/`gem_pop_frame`/
+  # `gem_set_line` it records itself in the cheaper leaf slot (gem.h
+  # `GemLeafSite`): `gem_leaf_site = &site` on entry, `gem_leaf_line = N`
+  # per statement, `gem_leaf_site = NULL` on return. A leaf calls no Gem
+  # code, so it is always the innermost Gem frame and error reports show it
+  # on top of the call stack.
   let in_leaf_fn = false
   # C expression of the return point (`GemArenaPoint`) of the fn being
   # compiled, or nil: return_str emits the return reset from it.
@@ -460,20 +461,34 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   # ─── Leaf-function detection ──
   #
-  # A function is a "leaf" iff its body invokes no other function: no `call`
-  # AST node, no `receive_match` (which can yield to other coroutines mid-call
-  # and re-enters scheduler bookkeeping). Builtins are *also* calls — every
-  # builtin invocation parses as `call(var(name), args)` — so any use of
-  # `print`, `len`, `error`, etc. disqualifies the fn as leaf. Restrictive on
-  # purpose: it makes elision trivially sound w.r.t. stack-trace correctness
-  # (no inner Gem fn pushes a frame whose attribution depends on us pushing
-  # one first; no builtin reaches `gem_error` whose trace would otherwise
-  # show our absent frame).
+  # A function is a "leaf" iff its body runs no other Gem code: no call of
+  # a Gem function or closure, no `receive_match` (which can yield to other
+  # coroutines mid-call and re-enters scheduler bookkeeping). A call of a
+  # builtin in LEAF_BUILTINS (compiler/builtins.gem) runs only runtime C,
+  # so it doesn't count; its arguments still do. This keeps elision sound
+  # for stack traces: while the body runs no Gem fn pushes a frame above
+  # the absent one, and an error raised inside such a call reports the leaf
+  # on top, from the leaf slot. (Default arguments run before any fn, leaf
+  # or not, records itself; see leaf_entry_str.) An extern fn call counts as a call: its C body can sit in the
+  # same C file, where the C compiler may drop the leaf-slot store before
+  # it as dead (nothing it can see reads the slot before the store of NULL
+  # at return), and the guard-page rescue (gem_scheduler.c) reads the slot
+  # to name the function. A builtin's `(env, args, argc)` function is in
+  # the runtime's own C files, compiled apart from the program, so the
+  # store before a call to one stays; the inline direct entry points in
+  # gem.h (DIRECT_BUILTINS) neither raise nor fault on their inline path,
+  # and call that function for everything else.
   #
   # Arithmetic, comparisons, table/array literals, var reads, dot access,
-  # interp, control flow — none of these are calls. So small predicates and
-  # accessors qualify; almost anything that touches `len()`, `print()`, etc.
-  # does not.
+  # interp, control flow — none of these are calls. So small predicates,
+  # accessors and helpers that only call builtins qualify.
+  let leaf_safe_call = fn(node)
+    let func = node.func
+    if type(func) != "table" or func.tag != "var" or set_contains(local_names, func.name)
+      return false
+    end
+    LEAF_BUILTINS[func.name] == true
+  end
   let node_has_calls = nil
   node_has_calls = fn(node)
     if node == nil
@@ -483,8 +498,19 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       return false
     end
     let tag = node.tag
-    if tag == "call" or tag == "receive_match"
+    if tag == "receive_match"
       return true
+    end
+    if tag == "call"
+      if not leaf_safe_call(node)
+        return true
+      end
+      for a in node.args
+        if node_has_calls(a)
+          return true
+        end
+      end
+      return false
     end
     if tag == "anon_fn" or tag == "fn_def"
       # Nested fn definition — its body is a separate compilation unit, not
@@ -1176,6 +1202,15 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         end
         return {expr: "gem_error_at_fn(\"{escaped_file}\", {line}, {ca.arr_name}, {ca.argc})", setup: ca.setup}
       elif has_key(builtin_fns, name) and not set_contains(local_names, name)
+        let direct = DIRECT_BUILTINS["{name}/{len(args)}"]
+        if direct != nil
+          let results = []
+          for a in args
+            push(results, compile_expr(a))
+          end
+          let ordered = left_to_right(results)
+          return {expr: "{direct}({join_c(ordered.exprs)})", setup: ordered.setup}
+        end
         return emit_direct_call(builtin_fns[name], "NULL", compile_args(args))
       elif set_contains(defined_fns, name) and not set_contains(local_names, name)
         return emit_direct_call("gem_fn_{name}", "NULL", compile_args(args))

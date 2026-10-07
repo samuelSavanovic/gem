@@ -1300,7 +1300,7 @@ end
 
 `read_stdin(n)` — reads exactly `n` bytes from stdin and returns them as a binary-safe string. Returns `""` for `n == 0`. On EOF the returned string may be shorter than `n` (or empty if EOF arrives first). Blocks the OS thread on `fread` — does not yield to the scheduler. Intended for length-framed protocols (e.g. LSP `Content-Length` bodies); for line-oriented input use `input()`.
 
-`write_stdout(s)` — writes `s` to stdout as raw bytes (no trailing newline) and `fflush`es. Binary-safe (uses the string's stored length, not `strlen`). Pair with `read_stdin` when implementing framed stdio protocols where the receiver expects the frame on the wire as soon as the writer is done.
+`write_stdout(s)` — writes `s` to stdout as raw bytes (no trailing newline), after anything `print` left buffered. It returns once every byte is written (on a non-blocking stdout it waits until stdout takes them); a write error, such as a closed reader, drops the rest. Binary-safe (uses the string's stored length, not `strlen`). Pair with `read_stdin` when implementing framed stdio protocols where the receiver expects the frame on the wire as soon as the writer is done.
 
 `insert(arr, i, val)` — inserts `val` at index `i` in an array table, shifting subsequent elements right. Returns the table. Errors if `i < 0` or `i > len(arr)`.
 

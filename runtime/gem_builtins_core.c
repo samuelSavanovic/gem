@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <limits.h>
 #include <sys/types.h>
+#include <unistd.h>
+#include <poll.h>
 #include <math.h>
 
 /* ─── Value formatting ───
@@ -491,17 +493,36 @@ GemVal gem_input_fn(void *_env, GemVal *args, int argc) {
 }
 
 /* ─── Built-in: write_stdout (write raw bytes + flush) ─── */
-/* Binary-safe (uses slen, not strlen). No trailing newline. Flushes
- * immediately so framed protocols (e.g. LSP over stdio) see complete
- * frames. Returns nil. */
+/* Binary-safe (uses slen, not strlen). No trailing newline. Returns once
+ * every byte is written (waiting on a non-blocking stdout until it takes
+ * more), so framed protocols (e.g. LSP over stdio) see complete frames; a
+ * write error, such as a closed reader, drops the rest. It flushes what
+ * print left in stdout's buffer and writes the string to fd 1 directly:
+ * stdout is line-buffered (gem_init), and macOS's fwrite on a line-buffered
+ * stream makes one write(2) per line. Returns nil. */
 
 GemVal gem_write_stdout_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1 || args[0].type != VAL_STRING) {
         char buf[128]; snprintf(buf, sizeof(buf), "write_stdout: expected string, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
     }
-    fwrite(args[0].sval, 1, (size_t)args[0].slen, stdout);
     fflush(stdout);
+    const char *p = args[0].sval;
+    size_t left = (size_t)args[0].slen;
+    while (left > 0) {
+        ssize_t w = write(STDOUT_FILENO, p, left);
+        if (w < 0) {
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                struct pollfd pfd = { .fd = STDOUT_FILENO, .events = POLLOUT };
+                poll(&pfd, 1, -1);
+                continue;
+            }
+            break;
+        }
+        p += w;
+        left -= (size_t)w;
+    }
     return GEM_NIL;
 }
 

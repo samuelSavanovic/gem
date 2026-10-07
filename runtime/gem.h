@@ -210,11 +210,13 @@ typedef struct {
 extern GemFrame *gem_call_stack;
 extern int gem_call_depth;
 
-/* Leaf functions (no calls in the body, see codegen.gem `body_is_leaf`)
- * push no frame. Instead each one has a static GemLeafSite; on entry it sets
- * gem_leaf_site to it, updates gem_leaf_line before each statement, and
- * clears gem_leaf_site on return. A leaf calls nothing, so it is always the
- * innermost frame: error reports and pcall's `stack` show it on top of
+/* Leaf functions (no calls in the body other than to builtins that run no
+ * Gem code, see codegen.gem `body_is_leaf`) push no frame. Instead each one
+ * has a static GemLeafSite; on entry it sets gem_leaf_site to it, updates
+ * gem_leaf_line before each statement, and clears gem_leaf_site on return.
+ * A leaf calls no Gem code, so it is always the innermost Gem frame: error
+ * reports (an error a builtin raises included) and pcall's `stack` show it
+ * on top of
  * gem_call_stack. Per-process like the frames (the scheduler saves and
  * restores both on every resume, since a leaf's loop can yield); cleared
  * when an error unwinds (pcall, process death). */
@@ -788,6 +790,56 @@ void gem_error(const char *msg);
 GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc);
 void gem_check_callable(GemVal v, const char *file, int line);
 GemVal gem_keys(GemVal tbl);
+
+/* Direct entry points of builtins for one arity (DIRECT_BUILTINS in
+ * compiler/builtins.gem): codegen calls these instead of the builtin's
+ * (env, args, argc) function. Each handles the argument types it is mostly
+ * called with inline and hands anything else to that function, which
+ * raises its errors. */
+static inline GemVal gem_len_1(GemVal v) {
+    if (v.type == VAL_STRING) return gem_int((int64_t)v.slen);
+    if (v.type == VAL_TABLE) return gem_int((int64_t)v.table->len);
+    return gem_len_val(v);
+}
+static inline GemVal gem_type_1(GemVal v) {
+    switch (v.type) {
+        case VAL_NIL: return GEM_STR_LIT("nil", 3);
+        case VAL_BOOL: return GEM_STR_LIT("bool", 4);
+        case VAL_INT: return GEM_STR_LIT("int", 3);
+        case VAL_FLOAT: return GEM_STR_LIT("float", 5);
+        case VAL_STRING: return GEM_STR_LIT("string", 6);
+        case VAL_FN: return GEM_STR_LIT("fn", 2);
+        case VAL_TABLE: return GEM_STR_LIT("table", 5);
+        case VAL_BUFFER: return GEM_STR_LIT("buffer", 6);
+        default: return gem_type_fn(NULL, &v, 1);
+    }
+}
+static inline GemVal gem_ord_1(GemVal s) {
+    if (s.type == VAL_STRING && s.slen > 0) return gem_int((int64_t)(unsigned char)s.sval[0]);
+    return gem_ord_fn(NULL, &s, 1);
+}
+static inline GemVal gem_ord_2(GemVal s, GemVal i) {
+    if (s.type == VAL_STRING && i.type == VAL_INT && (uint64_t)i.ival < (uint64_t)s.slen)
+        return gem_int((int64_t)(unsigned char)s.sval[i.ival]);
+    GemVal args[2] = {s, i};
+    return gem_ord_fn(NULL, args, 2);
+}
+static inline GemVal gem_for_len_1(GemVal v) {
+    if (v.type == VAL_TABLE) return gem_int((int64_t)v.table->len);
+    return gem_for_len_fn(NULL, &v, 1);
+}
+static inline GemVal gem_table_key_at_2(GemVal t, GemVal i) {
+    if (t.type == VAL_TABLE && i.type == VAL_INT && (uint64_t)i.ival < (uint64_t)t.table->len)
+        return t.table->keys[i.ival];
+    GemVal args[2] = {t, i};
+    return gem_table_key_at_fn(NULL, args, 2);
+}
+static inline GemVal gem_table_val_at_2(GemVal t, GemVal i) {
+    if (t.type == VAL_TABLE && i.type == VAL_INT && (uint64_t)i.ival < (uint64_t)t.table->len)
+        return t.table->vals[i.ival];
+    GemVal args[2] = {t, i};
+    return gem_table_val_at_fn(NULL, args, 2);
+}
 
 /* ─── Concurrency: mailbox, process table, scheduler ─── */
 

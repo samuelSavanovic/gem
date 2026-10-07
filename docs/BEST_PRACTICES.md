@@ -348,7 +348,7 @@ with a per-byte loop and 25 to 60 ms with five chained `str_replace` calls.
 For searching, call `find(s, needle, start)` (or `string.index_of`,
 `split`, `contains`, which use it) rather than an `ord` loop: the search
 runs in C, so a needle 1 MB in is found in well under 1 ms, against
-about 25 ms for the simplest `ord` loop, and `split` cuts 100,000
+about 25 ms for the simplest `ord` loop (5 ms on macOS arm64), and `split` cuts 100,000
 ten-byte fields in about 6 ms. On short strings the call dominates: on a
 115-byte line, a million `find` calls took 14 ms, a million
 `string.index_of` calls 53 ms (macOS arm64).
@@ -1392,8 +1392,9 @@ memory, twice while it is read.
 `print` flushes after every line, so each line is a `write` system call:
 a million lines to a file took 0.6 s with `print` against 0.3 s with one
 `write_stdout` of a string built with `build_string`, and 0.73 s with
-`print` into a pipe. For bulk output, build a block of lines and write it
-once:
+`print` into a pipe (Linux x86_64 VM). On macOS arm64 the gap is wider: 2.7 s with `print`
+to a file and 0.8 s into a pipe, against 0.16 s with one `write_stdout`.
+For bulk output, build a block of lines and write it once:
 
 ```gem
 write_stdout(build_string do |add|
