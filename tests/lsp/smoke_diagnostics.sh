@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tests/lsp/smoke_diagnostics.sh — verifies Phase 2b: parse/lex errors
-# from the Phase 0b error sink surface as publishDiagnostics
-# notifications with non-empty diagnostics arrays containing the
-# expected message + 0-indexed range.
+# tests/lsp/smoke_diagnostics.sh — verifies that parse/lex errors
+# from the error sink surface as publishDiagnostics
+# notifications with non-empty diagnostics arrays: a non-empty message
+# and a well-formed 0-indexed range.
 #
 # Two-step check per file: open broken source → assert non-empty
 # diagnostics, then change to clean source → assert the diagnostics
@@ -24,7 +24,7 @@ trap 'rm -rf "$FIXTURE_DIR"' EXIT
 FIXTURE="$FIXTURE_DIR/broken.gem"
 URI="file://$FIXTURE"
 
-# Source with a parse error: `fn` block missing its `end`. Phase 0b
+# Source with a parse error: `fn` block missing its `end`. The
 # parser reports "expected 'end' but got 'EOF'" (or similar) without
 # crashing, which is exactly the diagnostics path we're exercising.
 BROKEN=$'fn add(a, b)\n  a + b\n'

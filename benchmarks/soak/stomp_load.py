@@ -15,9 +15,11 @@ Threads, all paced:
   churn              connects, SENDs one message, DISCONNECTs with a
                      receipt and waits for it.
 
-No slow consumers: the broker queues messages for a slow subscriber without
-bound by design (examples/stomp_broker/README.md), which would read as a
-leak. Writes one CSV row per --sample-s interval (see soaklib.run).
+No slow consumers: the broker queues a slow subscriber's messages for up
+to 10 s and then disconnects it (examples/stomp_broker/README.md, "Known
+limits"), so memory would follow the consumers rather than the broker, and
+each disconnect would count as an error. Writes one CSV row per --sample-s
+interval (see soaklib.run).
 """
 
 import argparse

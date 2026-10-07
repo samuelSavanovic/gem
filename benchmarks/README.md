@@ -21,6 +21,8 @@ The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the
 
 `jobqueue/` benchmarks `examples/jobqueue` (a job queue with a supervised worker pool under fault injection) against the same design in Python asyncio and in Elixir/OTP; see [below](#jobqueue).
 
+`stomp/` loads `examples/stomp_broker` (a STOMP message broker) with topic fan-out, slow subscribers and work queues; there is no control implementation. See [below](#stomp).
+
 `soak/` is not a benchmark: it runs the long-lived servers (mini_redis, stomp_broker, bookmark_app) under a steady mixed load for an hour each and checks that they stay up, answer correctly, and keep memory, file descriptors and latency flat; see [below](#soak).
 
 ## Baselines
@@ -28,7 +30,7 @@ The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the
 `measure_all.sh` runs every harness in this directory (stomp's is in `stomp/`) and writes a baseline directory, `baselines/<date>_<machine>/` (e.g. `2026-10-05_m1pro`), to commit:
 
 ```bash
-benchmarks/measure_all.sh                          # everything, about an hour
+benchmarks/measure_all.sh                          # everything, about 32 minutes on an M1 Pro
 SECTIONS="logstat lox" REPS=3 benchmarks/measure_all.sh
 python3 benchmarks/summarize.py --compare benchmarks/baselines/OLD benchmarks/baselines/NEW
 ```
@@ -73,7 +75,7 @@ Results land in `benchmarks/node_baseline/results/`. Use the same wrk parameters
 
 ```bash
 benchmarks/mini_redis/compat.sh    # same replies as redis-server for compat_commands.txt?
-benchmarks/mini_redis/run.sh       # all phases, about 10 minutes
+benchmarks/mini_redis/run.sh       # all phases, about 90 s on an M1 Pro
 PHASES="basic pubsub" N=20000 benchmarks/mini_redis/run.sh
 ```
 
@@ -92,20 +94,7 @@ Results land in `benchmarks/mini_redis/logs/<timestamp>/` (gitignored): `summary
 
 Compare ratios, not absolute numbers, between machines: Redis is the control. Both servers run on the machine that runs the load, and `redis-benchmark` uses CPU of its own.
 
-First run (October 2026, commit 97426ba + mini_redis, Linux x86_64 VM, 4 cores, Redis 7.0.15; ratios are Gem/Redis requests per second):
-
-| Phase | Gem/Redis | Notes |
-|---|---|---|
-| basic: PING | 0.78–0.83 | protocol and connection process only |
-| basic: SET, GET, INCR, list/set/hash ops | 0.25–0.41 | p99 4–12 ms against ~1 ms |
-| basic: LRANGE_100 / LRANGE_600 | 0.15 / 0.09 | p99 124 / 157 ms |
-| pipeline (-P 16) | 0.10–0.25 | Gem tops out at 130–220k ops/s |
-| 1000 clients: SET, GET | 0.25 | p50 60 ms against 8 ms; RSS 442 MB against 21 MB |
-| 1M keys of 100 B | 0.25 (fill) | RSS 330 MB against 143 MB |
-| 1M keys, 2 s TTL | | Gem's active expiry takes ~9 s to clear them, and RSS stays at 442 MB |
-| pub/sub, 1 / 100 / 1000 subscribers | 0.81 / 0.04 / 0.04 | one write per delivered message (OPTIMIZATIONS.md) |
-
-The Gem server spent 32.8 s in arena resets in the `basic` phase and 25.8 s in `pipeline` (`gem.log`): its keyspace was re-copied by every reset. Since resets promote what they keep (OPTIMIZATIONS_LOG.md, "Promote what a reset keeps"), with `PHASES="basic pipeline" N=50000` on the same VM the resets take 3.6 s in `basic` and 1.5 s in `pipeline` (10.7 s and 12.5 s just before), copying 0.4 GB in each (4.0 and 3.5 GB); LRANGE_100's p99 in `basic` fell from 51 to 8.5 ms, and LRANGE_600's throughput in `pipeline` went from 2,074 to 3,903 requests per second. The other commands moved within the run-to-run noise.
+Recorded runs are in the `mini_redis` files of each baseline in [`baselines/`](baselines/); runs on a Linux x86_64 VM at older commits are in [`docs/archive/benchmark_first_runs_linux_vm.md`](../docs/archive/benchmark_first_runs_linux_vm.md#mini_redis).
 
 ## lox
 
@@ -117,7 +106,7 @@ benchmarks/lox/run.sh fib methods        # some of them
 GEM_DIAG=1 benchmarks/lox/run.sh         # plus the arena reset statistics of each Gem run
 ```
 
-For each program in `examples/lox/bench/`, at a size where Python takes 2–12 s, it prints the wall time and peak RSS of both runs and the Gem/Python time ratio, and stops with a diff if the outputs differ.
+For each program in `examples/lox/bench/`, at a size where Python takes 1.5–3.2 s on an M1 Pro, it prints the wall time and peak RSS of both runs and the Gem/Python time ratio, and stops with a diff if the outputs differ.
 
 | Program | Size | What it loads |
 |---|---|---|
@@ -128,18 +117,7 @@ For each program in `examples/lox/bench/`, at a size where Python takes 2–12 s
 | `mandelbrot.lox` | 60 | the Mandelbrot set in ASCII: float arithmetic in nested loops |
 | `methods.lox` | 3000 | a particle simulation with classes: method calls, fields, inheritance, `super` |
 
-First run (October 2026, commit 2487e74 + lox, Linux x86_64 VM, 4 cores, Python 3.11; two runs, ratios are Gem/Python wall time):
-
-| Program | Gem/Python | Notes |
-|---|---|---|
-| `fib.lox 28` | 1.09–1.15 | peak RSS 1.9 GB against 11 MB: nothing is freed during the recursion |
-| `binary_trees.lox 12` | 0.66–0.69 | resets copy the long-lived tree again: 1.6 GB, a quarter of the run |
-| `closures.lox 100000` | 0.90–0.97 | |
-| `strings.lox 20000` | 0.76–0.79 | |
-| `mandelbrot.lox 60` | 0.66–0.69 | |
-| `methods.lox 3000` | 0.92–0.93 | |
-
-The other programs stay at 10 MB, like Python. In callgrind profiles 40–45% of the Gem instructions are string-key table lookups, because the field-access inline cache misses on 99% of the reads, and the Gem runs spend 20–30% of their time in page faults on the arena blocks resets map anew. `docs/OPTIMIZATIONS.md` tracks each of these.
+Recorded runs are in the `lox` files of each baseline in [`baselines/`](baselines/); runs on a Linux x86_64 VM at older commits are in [`docs/archive/benchmark_first_runs_linux_vm.md`](../docs/archive/benchmark_first_runs_linux_vm.md#lox).
 
 ## gemgrep
 
@@ -167,30 +145,14 @@ GEM_DIAG=1 benchmarks/gemgrep/run.sh       # plus the arena reset statistics of 
 | `many`: `-rn e` | most lines match: 2.4M lines, 191 MB out |
 | `src_literal`, `src_icase` | a source-like tree: many small files, a few large ones |
 
-First run (October 2026, commit 5304ef5 + gemgrep, Linux x86_64 VM, 4 cores, GNU grep 3.11, Python 3.11; two runs, ratios of wall time):
-
-| Search | Gem/grep | Gem/Python |
-|---|---|---|
-| `literal` | 4.9–5.2 | 1.37–1.43 |
-| `icase` | 6.2–6.4 | 0.82–0.88 |
-| `alternation` | 3.5–3.8 | 0.76–0.84 |
-| `word` | 5.9–6.1 | 0.45–0.46 |
-| `count` | 6.3–7.5 | 1.51–1.62 |
-| `list` | 9.5–11 | 1.02–1.09 |
-| `invert` | 5.2–5.9 | 0.88–1.19 |
-| `few` | 7.4–7.8 | 1.29–1.41 |
-| `many` | 4.5–4.7 | 1.35–1.63 |
-| `src_literal` | 13 | 2.0–2.3 |
-| `src_icase` | 3.2–6.1 | 0.40–0.58 |
-
-In this run the `src_*` searches ran over the repository's own sources at that commit, not the generated tree. The `src_*` runs take 0.1–0.4 s, so their ratios are the noisiest. Peak RSS: 13–20 MB for gemgrep on the corpus (49 MB for `many`), 10 MB for grep, 13–18 MB for Python; 22 MB against Python's 40 MB on the sources. Per line, gemgrep spends about as many instructions on its own side (the line walk, the binding's checks, the call) as in `regexec`, and GNU grep runs no regex per line at all; `examples/gemgrep/README.md` has the breakdown ("Performance") and the numbers for a whole-buffer helper the program doesn't use ("Design").
+Recorded runs are in the `gemgrep` files of each baseline in [`baselines/`](baselines/); runs on a Linux x86_64 VM at older commits are in [`docs/archive/benchmark_first_runs_linux_vm.md`](../docs/archive/benchmark_first_runs_linux_vm.md#gemgrep).
 
 ## jobqueue
 
 `examples/jobqueue` runs a seeded load of jobs through a queue gen_server and a pool of workers under a `dynamic_supervisor`, while a fault schedule makes attempts crash, hang past their deadline, run slow or kill their worker, and storms kill workers in bursts until the worker supervisor gives up. It measures the OTP machinery under failure: monitors and `DOWN`s, restarts, `send_after` timers, kills, and a long-lived server holding a record per job. The control is `jobqueue/jobqueue.exs`, the same design in Elixir/OTP (a `Supervisor` over a `DynamicSupervisor` of transient GenServer workers and the queue GenServer). `jobqueue/jobqueue.py` is the same design again in Python asyncio: tasks instead of processes, done callbacks as monitors, a supervisor class with the same restart intensity. All three take the same options, compute the same workload and fault schedule from the seed (the same integer hash), print the same summary, and check the same invariants at the end: every job completed once or dead-lettered, every attempt failed as scheduled (storm and shutdown losses counted apart), the counters agree, and the system back at its baseline after the drain. It needs `python3` (3.11 or later) and `elixir` (`apt install elixir`; `IMPLS="gem python"` skips it).
 
 ```bash
-benchmarks/jobqueue/run.sh                  # the six scenarios, about 3.5 minutes
+benchmarks/jobqueue/run.sh                  # the six scenarios, about 2 minutes on an M1 Pro
 benchmarks/jobqueue/run.sh crash5 storm     # some of them
 IMPLS="gem python" benchmarks/jobqueue/run.sh
 ```
@@ -206,18 +168,28 @@ For each scenario it prints, per implementation, the wall time of the whole prog
 | `storm` | 10,000 jobs, 10 bursts killing 16 workers, 20 restarts/s allowed | restart intensity: the worker supervisor gives up 5 times and is restarted |
 | `backlog` | 100,000 jobs, 4 workers, 5% slow | a long backlog in the queue: big state in one process |
 
-First run (October 2026, commit d88fca9 + jobqueue, Linux x86_64 VM, 4 cores, Python 3.11, Elixir 1.14 on OTP 24; two to four runs, ratios of throughput, higher is better for Gem):
+Recorded runs are in the `jobqueue` files of each baseline in [`baselines/`](baselines/); runs on a Linux x86_64 VM at older commits are in [`docs/archive/benchmark_first_runs_linux_vm.md`](../docs/archive/benchmark_first_runs_linux_vm.md#jobqueue).
 
-| Scenario | Gem/Python | Gem/Elixir | Gem/Elixir `+S 1` | Notes |
-|---|---|---|---|---|
-| `none` | 0.88–1.14 | 0.30–0.34 | 0.30–0.44 | |
-| `crash5` | 0.97–1.12 | 0.32–0.36 | 0.50–0.55 | Elixir crashes 1,700 workers/s, over the 1,000/s limit: its worker supervisor restarts once |
-| `hang5` | 0.99–1.00 | 0.99–1.00 | 1.00 | |
-| `mixed` | 1.00 | 1.01 | 1.01 | |
-| `storm` | 0.91–0.93 | 0.95–0.97 | 0.94–0.97 | |
-| `backlog` | 0.86–0.92 | 1.08–1.16 | 1.08–1.15 | Gem: 810–896 MB peak RSS, 1.5–1.7 s longest stall |
+## stomp
 
-The invariants held in every run of all three, with the same retry counts wherever the run is deterministic (everything but the storm and Elixir's extra restart). The cost is in memory and pauses, not in failure handling. Peak RSS for Gem is 85–174 MB in the 10,000- and 20,000-job scenarios against 34–48 MB for Python and 77–116 MB for Elixir (whose VM starts at about 80 MB), and 810–896 MB against 166 and 200–218 MB for the backlog. These Gem figures predate tables of up to 8 entries without a string-key index (OPTIMIZATIONS_LOG.md, "Small tables scan their keys instead of indexing them"), which on macOS arm64 took the backlog's peak from 559 to 396 MB. The longest tick lag is 40–100 ms for Gem with 10,000–20,000 jobs and 1.5–1.7 s with 100,000, against at most 75 ms for Python and 36 ms for Elixir: each reset of the queue's loop copied every job record it holds, and with the default 100 ms deadline such a pause now and then kills a healthy attempt (the scenarios use 250 ms where they don't test deadlines). Since resets promote what they keep, only full resets copy all the records: in `backlog` the longest tick lag is 0.25–0.48 s and peak RSS 472–475 MB (0.45–0.56 s and 780–960 MB just before, on the same VM). `docs/OPTIMIZATIONS.md` has the numbers ("Full resets still copy all a loop keeps").
+`examples/stomp_broker` is a STOMP message broker built on gen_servers, so this load measures fan-out of one message to many connection processes, and memory under a steady publish rate. There is no control implementation: the numbers are the broker's own. `stomp/harness.py` is the load generator (`python3.14`, one thread per client); it prints one JSON line of summary numbers per workload.
+
+```bash
+benchmarks/stomp/run.sh                            # fanout, slow and queue
+PHASES="fanout soak" benchmarks/stomp/run.sh
+```
+
+`run.sh` builds the broker once, then starts a fresh one for each phase (with `GEM_DIAG=1`), samples its RSS every half second, and runs the phase's workload against it. The phases (`PHASES`, default `fanout slow queue`):
+
+| Phase | What it loads |
+|---|---|
+| `fanout` | 1 publisher, 1,000 topic subscribers, 5 messages of 256 B (`FANOUT_SUBS`, `FANOUT_MSGS`, `FANOUT_BODY`) |
+| `fanout_small` | the same with 100 subscribers |
+| `slow` | 1 publisher for 15 s to 4 fast subscribers and 1 that takes 200 ms per message (`SLOW_*`) |
+| `queue` | 10 publishers, 10,000 messages into one queue, 4 workers (`QUEUE_*`) |
+| `soak` | 200 subscribers at 50 messages a second for 30 s (`SOAK_*`): whether memory stays flat |
+
+Results land in `benchmarks/stomp/logs/<timestamp>/` (gitignored; `OUT` picks another directory): per phase the harness's JSON, the broker's log with its `GEM_DIAG` line, the RSS samples and their summary, and `meta.txt`. The script exits 1 if a workload failed or the broker died. `measure_all.sh` runs it with `soak` added.
 
 ## soak
 
@@ -239,7 +211,7 @@ Each target gets a fresh server, built once at the start (a build error stops th
 | `stomp` | 200 SENDs/s to 4 topics with 30 subscribers that leave and rejoin (UNSUBSCRIBE + DISCONNECT, or an abrupt close); 200 jobs/s to a queue with 4 workers; 10 connections/s that SEND and DISCONNECT with a receipt | messages in order with no gaps; every job delivered at most once, and the backlog (sent − received) bounded |
 | `bookmark` | 4 readers at 200 GETs/s in all (`/`, `/bookmarks`, edit forms); one writer at 20 POST/PUT/DELETEs per second keeping the table near 100 rows; 10 one-request connections/s | after each change, the list the app answers with against the writer's model of the table; the pages readers get |
 
-There are no slow consumers and no unbounded tables: stomp_broker queues messages for a slow subscriber without bound by design, and bookmark_app's list grows with the table ("POST phase is O(N²)" above), so either would read as a leak. jobqueue isn't a target yet: a run has a fixed number of jobs and keeps a record of each to check its invariants, so its memory grows with the run by design; it needs a mode that runs for a duration and drops finished records first.
+There are no slow consumers and no unbounded tables: stomp_broker queues a slow subscriber's messages for up to 10 s and then drops it (`examples/stomp_broker/README.md`, "Known limits"), so memory would follow the consumers rather than the broker, and bookmark_app's list grows with the table ("POST phase is O(N²)" above), which would read as a leak. jobqueue isn't a target yet: a run has a fixed number of jobs and keeps a record of each to check its invariants, so its memory grows with the run by design; it needs a mode that runs for a duration and drops finished records first.
 
 Alongside the load, `sample.py` samples the server's RSS, CPU time and open file descriptors (`DURATION`/120 seconds apart, 2 to 30). Results land in `soak/logs/<timestamp>/` (gitignored), one directory per target:
 
@@ -266,4 +238,3 @@ Alongside the load, `sample.py` samples the server's RSS, CPU time and open file
 | queue backlog bounded | (stomp) at most 1,000 jobs in the late window |
 
 The steadiness checks (all but the first two) only count in a run of at least 10 minutes; in a shorter one they are shown and the verdict is SHORT RUN, which says the harness works, not that the server is steady. `report.py --help` lists the thresholds. `run.sh` exits 0 when no target failed and the run was not stopped.
-

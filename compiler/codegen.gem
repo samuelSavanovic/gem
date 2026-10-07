@@ -2873,8 +2873,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     # Public `gem_fn_<name>` calls `gem_sccbody_<name>` in a loop, redispatching
     # whenever the body exits via the mutual-TCO TLB marker. The body pushes/pops
     # its own frame, so traces attribute correctly to the currently-executing
-    # member. Per-iteration arena reset mirrors the direct-TCO reset, gated the
-    # same way (unconditional for process_tail SCCs, depth-2 fenced otherwise).
+    # member. The per-iteration arena reset happens in the wrapper
+    # (scc_wrapper_for), at each trampoline iteration.
     if scc_id != nil
       buf_push(b, "\n\n")
       buf_push(b, scc_wrapper_for(node, scc_id))

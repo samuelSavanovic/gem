@@ -1,21 +1,21 @@
-# lsp/diagnostics.gem — convert Phase 0b error sink entries into LSP
+# lsp/diagnostics.gem — convert the error sink's entries into LSP
 # Diagnostic notifications, grouped by source file URI.
 #
-# The sink (compiler/errors.gem) records every lex+parse error from one
-# analyze() pass. Each entry is {source, file, line, col, span, msg, hint}
-# where `source` is the *text of the file the error was raised against*
-# (so cross-file errors carry their own caret context).
+# The sink (compiler/errors.gem) records the errors of one analyze() pass
+# in lsp/doc.gem: lexing, parsing, `lower`, and the checks of the file's
+# `load`s (report_load_problems). Each entry is {source, file, line, col,
+# span, msg, hint} where `source` is the *text of the file the error was
+# raised against* (so cross-file errors carry their own caret context).
 #
-# Today analyze() in lsp/doc.gem only runs lex+parse on the entry file,
-# so every entry has file == that file. We still group by file for
-# forward compatibility: when load resolution joins the LSP analyze
-# pipeline, the same builder will fan diagnostics out to every loaded
-# file's URI without changes here.
+# Entries are grouped by file (build_publishes): one publishDiagnostics
+# payload per file in the sink, so an error raised against a file other
+# than the one analyzed goes to that file's URI, plus an empty one for
+# the analyzed file when it has no errors, which clears its squiggles.
 #
-# Severity mapping: Phase 0b only emits errors, so everything is severity
-# 1 (Error). Codegen warnings (TCO can't tail-call, cannot reset) come
-# from the full compile pipeline which the LSP doesn't run; they'll land
-# when the LSP grows a real --check pass.
+# Severity mapping: the sink holds only errors, so everything is severity
+# 1 (Error). Codegen warnings and notes (a loop that can't reset, a loop
+# `let` shadowing an accumulator) come from the full compile pipeline,
+# which the LSP doesn't run.
 
 load "./rpc"
 load "../compiler/errors" (get_source_line)
@@ -94,7 +94,7 @@ fn build_publishes(entry_uri, cache)
   for e in cache.sink.drain()
     if e.line == nil
       # No location → can't draw a squiggle. Skip for v1; these are
-      # compiler-bug paths and shouldn't surface from a parse-only LSP.
+      # compiler-bug paths and shouldn't surface from the LSP's analyze pass.
       continue
     end
     let path = e.file

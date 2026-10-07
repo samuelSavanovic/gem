@@ -1,8 +1,8 @@
 # Regression: `while true` process loop with state mutation must run with
-# bounded memory. The compiler tags the loop as process-tail and emits an
-# arena rescue+reset at the back-edge, mirroring TCO's mechanism. With
+# bounded memory. The compiler emits an arena region reset at the loop's
+# back-edge, the same mechanism as a TCO function's. With
 # 10000 iterations × ~200 bytes/iter, the per-process arena exceeds the
-# 1MB reset threshold several times — if rescue is broken the program
+# 1MB reset threshold several times — if the reset is broken the program
 # either OOMs or use-after-frees a captured value.
 
 let main_pid = self()

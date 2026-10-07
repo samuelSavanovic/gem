@@ -1,10 +1,10 @@
-# Regression: process-tail `while true` loop where the next-state value is
+# Regression: `while true` process loop where the next-state value is
 # declared before an `if`/`else` and assigned in both arms, then read
 # after the branch (a `let` in each arm would end with its arm), with
 # `state` as the only live param across the back-edge.
 #
-# Run for many iterations to also exercise the arena rescue+reset path
-# with the post-lift shape.
+# Run for many iterations to also exercise the arena region reset
+# with that state shape.
 
 let main_pid = self()
 

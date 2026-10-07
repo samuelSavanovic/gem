@@ -41,8 +41,8 @@ end
 fn server_capabilities()
   {
     capabilities: {
-      # TextDocumentSyncKind.Full = 1. Incremental sync (= 2) deferred to
-      # Phase 1b once we measure full-reparse cost on real files.
+      # TextDocumentSyncKind.Full = 1. Incremental sync (= 2) waits until
+      # full-reparse cost is measured on real files.
       textDocumentSync: 1,
       definitionProvider: true,
       # `.` is the only contextual trigger; identifier completion fires
