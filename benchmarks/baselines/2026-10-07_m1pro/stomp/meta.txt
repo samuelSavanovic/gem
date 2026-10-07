@@ -1,0 +1,9 @@
+date: 2026-10-07T16:27:02Z
+host: MacBookPro.fritz.box
+os: Darwin 27.0.0 arm64
+cpu: Apple M1 Pro
+cores: 10
+gem_commit: 5bae04c
+gem_branch: silent-mistake-diagnostics
+python: Python 3.14.5
+phases: fanout slow queue soak

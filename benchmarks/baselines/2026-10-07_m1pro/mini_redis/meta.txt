@@ -1,0 +1,6 @@
+date: 2026-10-07T16:24:19Z
+gem commit: 5bae04c
+redis: Redis server v=8.10.2 sha=00000000:1 malloc=libc bits=64 build=764b3e45065a66fb
+system: Darwin 27.0.0 arm64
+cpu: Apple M1 Pro, 10 cores
+N=100000 CLIENTS=50 PHASES=basic pipeline clients keyspace expire pubsub

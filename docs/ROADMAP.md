@@ -23,7 +23,7 @@ Run Gem across multiple OS processes (same box or across the network), with `sen
 
 - Easier to build correctly — no lock-free data structures, no memory-model reasoning. A bug at worst drops a connection.
 - Scales further — past one box, which multithreading can't.
-- Single-box throughput is already decent (~88k rps on the bookmark app's static page, M1 Pro, `benchmarks/baselines/2026-10-06_m1pro`); the next 10x is more likely from N nodes behind a load balancer than from squeezing the single-threaded scheduler.
+- Single-box throughput is already decent (~90k rps on the bookmark app's static page, M1 Pro, `benchmarks/baselines/2026-10-07_m1pro`); the next 10x is more likely from N nodes behind a load balancer than from squeezing the single-threaded scheduler.
 - The two are complementary long-term (BEAM has both), but distribution is the less invasive starting point.
 
 **Trade-off:** cross-node sends pay serialization cost vs. a memcpy. Negligible for shared-nothing request/response workloads; matters for chatty cross-node protocols.
