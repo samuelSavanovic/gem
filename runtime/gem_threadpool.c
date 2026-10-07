@@ -40,7 +40,7 @@ char *gem_read_whole_file(const char *path, size_t *out_len, char **err_msg) {
     *err_msg = NULL;
     FILE *f = fopen(path, "rb");
     if (!f) {
-        snprintf(msg, sizeof(msg), "cannot open '%s'", path);
+        snprintf(msg, sizeof(msg), "cannot open '%s': %s", path, strerror(errno));
         *err_msg = strdup(msg);
         return NULL;
     }
@@ -108,7 +108,7 @@ static void gem_io_do_write(GemIORequest *req, const char *mode) {
     FILE *f = fopen(req->path, mode);
     if (!f) {
         char buf[512];
-        snprintf(buf, sizeof(buf), "cannot open '%s' for writing", req->path);
+        snprintf(buf, sizeof(buf), "cannot open '%s' for writing: %s", req->path, strerror(errno));
         req->error_msg = strdup(buf);
         return;
     }
@@ -162,8 +162,10 @@ void gem_threadpool_init(void) {
         perror("gem: pipe failed for threadpool wake-pipe");
         return;
     }
-    fcntl(gem_io_wake_pipe_fds[0], F_SETFL, O_NONBLOCK);
-    fcntl(gem_io_wake_pipe_fds[1], F_SETFL, O_NONBLOCK);
+    for (int i = 0; i < 2; i++) {
+        fcntl(gem_io_wake_pipe_fds[i], F_SETFL, O_NONBLOCK);
+        fcntl(gem_io_wake_pipe_fds[i], F_SETFD, FD_CLOEXEC);
+    }
 
     gem_io_shutdown_flag = 0;
     for (int i = 0; i < GEM_POOL_SIZE; i++)

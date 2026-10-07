@@ -70,7 +70,7 @@ Differences from GNU grep:
 
 - **The regex is libc's**, so its dialect is: no BRE mode (`-G`);
   `\<`, `\>`, `\b`, `\w`, `\s` and backreferences work as extensions
-  (backreferences not with `-w` or `-x`, KNOWN_BUGS.md); and a few edge
+  (with `-w` and `-x` too, up to `\9` counting the groups they add); and a few edge
   patterns that GNU grep accepts are errors (`a{1` is `Unmatched \{`).
   The messages are glibc's, which are grep's, whatever the libc:
   `rx_error` holds glibc's text for the POSIX error codes. glibc's `.`
@@ -100,7 +100,7 @@ Differences from GNU grep:
 |---|---|
 | `main.gem` | the command: arguments, `grep.run`, the exit status |
 | `args.gem` | the command line, as grep reads it |
-| `walk.gem`, `fs.h` | the operands expanded to files; `lstat` and `strerror` from C |
+| `walk.gem`, `fs.h` | the operands expanded to files; `lstat` from C |
 | `regex.gem`, `rx.h` | the regex binding: a `regex_t` behind a `Ptr`, matching on byte ranges |
 | `search.gem` | one file's contents through the regex: the lines to print |
 | `grep.gem` | the run: batches of files searched in tasks, output in order |
@@ -135,13 +135,12 @@ files include with `extern include`; they call nothing beyond libc. What each pa
 - **Offsets back.** `regex.search` returns `{start, stop}` byte offsets
   into the string, which `-o` slices with `substr`; with `-w` the pattern
   is wrapped as `(^|[^[:alnum:]_])(PATTERN)([^[:alnum:]_]|$)` and the
-  offsets are group 2's.
+  offsets are group 2's; the pattern's own backreferences are renumbered
+  past the wrapper's groups (`\1` becomes `\3`), as with `-x`, which
+  wraps it as `^(PATTERN)$`.
 - **Static strings back.** `rx_error` returns a string literal, or
-  `regerror`'s text in a `static` buffer, and `fs_open_error` returns
-  `strerror`'s: a plain
-  `extern fn` copies a returned string and never frees it. They return
-  `char *`: a `const char *` return makes cc warn in the generated
-  wrapper (KNOWN_BUGS.md).
+  `regerror`'s text in a `static` buffer: a plain `extern fn` copies a
+  returned string and never frees it.
 - **Inline, not blocking.** Matching is a plain `extern fn`: it runs on
   the scheduler thread, between two loop back-edges, so the scheduler can
   preempt a task between two lines (every `GEM_REDUCTION_LIMIT`
@@ -154,11 +153,6 @@ files include with `extern include`; they call nothing beyond libc. What each pa
   5.4 s in a single call, during which no process runs (GNU grep: 5 ms).
   File reads use `read_file`, which runs on the pool, so a task waiting
   for its file lets the others match.
-- **Why it can't read the error.** `read_file` and `list_dir` raise
-  `read_file: cannot open '<path>'` and `list_dir: cannot open directory
-  '<path>'` without the reason (KNOWN_BUGS.md), so after a
-  failed read `fs_open_error` opens the file again to get `strerror`'s
-  text for grep's message.
 
 ## Design
 

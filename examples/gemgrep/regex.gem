@@ -25,6 +25,59 @@ extern fn rx_group_end(h: Ptr, group: Int) -> Int
 let METACHARS = '.[]()*+?{}|^$\\'
 let WORD = "[:alnum:]_"
 
+# `pattern` with each backreference `\N` outside a bracket expression
+# renumbered by `shift`, for the groups a wrapper puts before it; nil when
+# one would pass `\9`.
+fn shift_backrefs(pattern, shift)
+  let out = buf_new()
+  let i = 0
+  let n = len(pattern)
+  while i < n
+    let ch = pattern[i]
+    if ch == "\\" and i + 1 < n
+      let next = pattern[i + 1]
+      if next >= "1" and next <= "9"
+        let k = to_int(next) + shift
+        if k > 9
+          return nil
+        end
+        buf_push(out, "\\{k}")
+      else
+        buf_push(out, ch + next)
+      end
+      i += 2
+    elif ch == "["
+      # A bracket expression runs to its first `]` that is neither its
+      # first member nor the end of a `[:class:]`, `[.x.]` or `[=x=]`.
+      let j = i + 1
+      if j < n and pattern[j] == "^"
+        j += 1
+      end
+      if j < n and pattern[j] == "]"
+        j += 1
+      end
+      while j < n and pattern[j] != "]"
+        if pattern[j] == "[" and j + 1 < n and (pattern[j + 1] == ":" or pattern[j + 1] == "." or pattern[j + 1] == "=")
+          let close = find(pattern, pattern[j + 1] + "]", j + 2)
+          if close < 0
+            j = n
+          else
+            j = close + 2
+          end
+        else
+          j += 1
+        end
+      end
+      buf_push(out, substr(pattern, i, j + 1 - i))
+      i = j + 1
+    else
+      buf_push(out, ch)
+      i += 1
+    end
+  end
+  to_string(out)
+end
+
 ## Escapes `s` so that it matches itself (grep -F).
 fn quote(s)
   build_string do |add|
@@ -43,8 +96,7 @@ end
 ## `_`; `line` matches only whole lines (grep -x, which wins over
 ## `word`). Returns `{ok: true, value: rx}` or `{ok: false, error: msg}` with
 ## GNU grep's message for the POSIX error codes (`Unmatched ( or \(`). A
-## pattern can't hold a NUL byte. With `word` or `line`, a backreference in
-## `pattern` names the wrong group (KNOWN_BUGS.md).
+## pattern can't hold a NUL byte.
 fn compile(pattern, {icase = false, word = false, line = false} = {})
   if find(pattern, "\0") >= 0
     return {ok: false, error: "the pattern holds a NUL byte"}
@@ -56,14 +108,22 @@ fn compile(pattern, {icase = false, word = false, line = false} = {})
     source = "()"
   end
   let group = 0
-  if line
-    source = "^({pattern})$"
+  if line or word
     group = 1
-  elif word
-    # The first and last groups take the bytes around the word; the pattern
-    # is group 2.
-    source = "(^|[^{WORD}])({pattern})([^{WORD}]|$)"
-    group = 2
+    if not line
+      group = 2
+    end
+    let shifted = shift_backrefs(pattern, group)
+    if shifted == nil
+      return {ok: false, error: "Invalid back reference"}
+    end
+    if line
+      source = "^({shifted})$"
+    else
+      # The first and last groups take the bytes around the word; the
+      # pattern is group 2.
+      source = "(^|[^{WORD}])({shifted})([^{WORD}]|$)"
+    end
   end
   let h = rx_new()
   if h == 0

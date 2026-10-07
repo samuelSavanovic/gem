@@ -196,6 +196,8 @@ GemVal gem_sqlite_exec_fn(void *_env, GemVal *args, int argc) {
        run. */
     const char *sql = args[1].sval;
     const char *end = sql + args[1].slen;
+    /* sqlite stops parsing at a NUL, so what follows one would be skipped. */
+    if (memchr(sql, '\0', (size_t)args[1].slen)) gem_error("sqlite_exec: the SQL contains a NUL byte");
     int n = 0;
     while (sql < end) {
         sqlite3_stmt *stmt = NULL;
@@ -342,6 +344,8 @@ GemVal gem_sqlite_query_fn(void *_env, GemVal *args, int argc) {
     }
     const char *sql = args[1].sval;
     const char *end = sql + args[1].slen;
+    /* sqlite stops parsing at a NUL, so what follows one would be skipped. */
+    if (memchr(sql, '\0', (size_t)args[1].slen)) gem_error("sqlite_query: the SQL contains a NUL byte");
 
     sqlite3_stmt *stmt = NULL;
     const char *tail = NULL;

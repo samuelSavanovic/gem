@@ -18,33 +18,48 @@ static double gem_to_num(GemVal v, const char *fn_name) {
 
 /* ─── Math builtins ─── */
 
+/* Truncates a float to an int, raising when it is NaN, infinite or outside
+   int64's range, where C's cast is undefined. */
+GemVal gem_float_to_int(double d, const char *who) {
+    if (!(d >= -9223372036854775808.0 && d < 9223372036854775808.0)) {
+        char fb[GEM_FLOAT_BUF];
+        gem_format_float(d, fb);
+        char buf[160];
+        snprintf(buf, sizeof(buf), "%s: %s is out of the int range", who, fb);
+        gem_error(buf);
+    }
+    return gem_int((int64_t)d);
+}
+
 GemVal gem_floor_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1) { gem_error("floor: expected 1 argument"); }
     if (args[0].type == VAL_INT) return args[0];
-    return gem_int((int64_t)floor(gem_to_num(args[0], "floor")));
+    return gem_float_to_int(floor(gem_to_num(args[0], "floor")), "floor");
 }
 
 GemVal gem_ceil_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1) { gem_error("ceil: expected 1 argument"); }
     if (args[0].type == VAL_INT) return args[0];
-    return gem_int((int64_t)ceil(gem_to_num(args[0], "ceil")));
+    return gem_float_to_int(ceil(gem_to_num(args[0], "ceil")), "ceil");
 }
 
 GemVal gem_round_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1) { gem_error("round: expected 1 argument"); }
     if (args[0].type == VAL_INT) return args[0];
-    return gem_int((int64_t)round(gem_to_num(args[0], "round")));
+    return gem_float_to_int(round(gem_to_num(args[0], "round")), "round");
 }
 
 GemVal gem_abs_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1) { gem_error("abs: expected 1 argument"); }
     if (args[0].type == VAL_INT) {
-        int64_t v = args[0].ival;
-        return gem_int(v < 0 ? -v : v);
+        /* Negated in uint64_t, so abs of the smallest int wraps to
+           itself like `0 - x` instead of overflowing. */
+        uint64_t v = (uint64_t)args[0].ival;
+        return gem_int((int64_t)(args[0].ival < 0 ? 0 - v : v));
     }
     return gem_float(fabs(gem_to_num(args[0], "abs")));
 }
@@ -52,13 +67,21 @@ GemVal gem_abs_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_pow_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 2) { gem_error("pow: expected 2 arguments"); }
-    double base = gem_to_num(args[0], "pow");
-    double exp = gem_to_num(args[1], "pow");
-    double result = pow(base, exp);
     if (args[0].type == VAL_INT && args[1].type == VAL_INT && args[1].ival >= 0) {
+        /* Exponentiation by squaring in uint64_t: exact, and wrapping on
+           overflow like `*`. */
+        uint64_t base = (uint64_t)args[0].ival, result = 1;
+        int64_t e = args[1].ival;
+        while (e > 0) {
+            if (e & 1) result *= base;
+            base *= base;
+            e >>= 1;
+        }
         return gem_int((int64_t)result);
     }
-    return gem_float(result);
+    double base = gem_to_num(args[0], "pow");
+    double exp = gem_to_num(args[1], "pow");
+    return gem_float(pow(base, exp));
 }
 
 GemVal gem_sqrt_fn(void *_env, GemVal *args, int argc) {

@@ -19,11 +19,26 @@ fn run()
   workspace.start()
   let d = handlers.make_dispatcher()
   while true
-    let msg = rpc.read_message()
-    if msg == nil
+    let r = rpc.read_message()
+    if r == nil
       exit(0)
     end
-    d.dispatch(msg)
+    if not r.ok
+      if r.code != nil
+        rpc.write_message(rpc.make_error_response(r.id, r.code, r.message))
+      end
+      continue
+    end
+    # A message the server can't handle (bad params, a bug) answers its
+    # request with an error and leaves the session running.
+    let msg = r.msg
+    let run = pcall d.dispatch(msg)
+    if not run.ok
+      eprint("gem lsp: {msg.method}: {run.error}")
+      if msg.id != nil
+        rpc.write_message(rpc.make_error_response(msg.id, rpc.ERR_INTERNAL, run.error))
+      end
+    end
   end
 end
 

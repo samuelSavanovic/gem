@@ -43,7 +43,7 @@ fn search_file(entry, rx, opts, with_filename)
   end
   let read = pcall read_file(path)
   if not read.ok
-    return {error: walk.open_error(path) or read.error}
+    return {error: walk.error_reason(read.error)}
   end
   let prefix = nil
   if shows_name(entry, with_filename)

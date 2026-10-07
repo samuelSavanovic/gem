@@ -1,0 +1,92 @@
+# std at the edges of its input: errors that name the std function
+# called, arrays whose keys were added out of order, floats JSON can't
+# write, header and cookie values, percent-encoded static paths, and a
+# server that answers and closes before the whole request body is sent.
+
+load "std/http"
+load "std/request"
+load "std/json"
+load "std/math"
+load "std/sqlite"
+load "std/string"
+load "std/table"
+load "std/test"
+load "std/time"
+
+fn err(f)
+  (pcall f()).error
+end
+
+print("== errors name the function")
+print(err(fn() http.html_escape(5) end))
+print(err(fn() http.parse_form(nil) end))
+print(err(fn() time.date(nil) end))
+print(err(fn() time.format(1, nil) end))
+print(err(fn() sqlite.last_id(999) end))
+print(err(fn() request.post("http://127.0.0.1:1/", "opts") end))
+print(err(fn() math.min([4, 2]) end))
+print(err(fn() math.clamp(1, "a", 2) end))
+print(err(fn() http.start(http.router(), nil) end))
+print(err(fn() http.start(http.router(), {port: 70000}) end))
+print(err(fn() test.assert_throws(42) end))
+let db = sqlite.open(":memory:")
+sqlite.exec(db, "CREATE TABLE t(name TEXT UNIQUE)")
+sqlite.query(db, "INSERT INTO t VALUES (?)", ["a"])
+print(err(fn() sqlite.query(db, "INSERT INTO t VALUES (?)", ["a"]) end))
+sqlite.close(db)
+
+print("== arrays")
+let out_of_order = {}
+out_of_order[1] = "b"
+out_of_order[0] = "a"
+print(string.join(out_of_order, ","))
+print(err(fn() string.join({a: 1}, ",") end))
+print(err(fn() table.sort({b: 2, a: 1}) end))
+print(table.sort(out_of_order))
+
+print("== json")
+let inf = to_float("inf")
+print(err(fn() json.encode([inf]) end))
+print(err(fn() json.encode({x: inf - inf}) end))
+print(json.encode([1.5, -0.0]))
+
+print("== responses")
+let app = http.router()
+app.get("/nil") do |req|
+  let h = {}
+  h["X-Nil"] = nil
+  http.response(200, h, "x")
+end
+app.get("/table") do |req|
+  http.response(200, {"X-T": {a: 1}}, "x")
+end
+app.get("/list") do |req|
+  http.response(200, {"X-L": ["a", 2]}, "x")
+end
+print(err(fn() http.set_cookie(http.ok("x"), "a", nil) end))
+let dir = "/tmp/gem_209_static"
+exec("rm -rf {dir}")
+mkdir(dir)
+write_file("{dir}/my file.txt", "spaced")
+app.static("/files", dir)
+let server = http.start(app, {port: 18471, host: "127.0.0.1"})
+let base = "http://127.0.0.1:18471"
+print(request.get("{base}/nil").status, request.get("{base}/table").status)
+print(request.get("{base}/list").headers["x-l"])
+let file = request.get("{base}/files/my%20file.txt")
+print(file.status, file.body)
+print(request.get("{base}/files/my%00file.txt").status)
+http.stop(server)
+exec("rm -rf {dir}")
+
+print("== an early answer")
+let l = tcp_listen("127.0.0.1", 18472)
+spawn do
+  let c = tcp_accept(l)
+  tcp_read(c, 4096, 1000)
+  tcp_write(c, "HTTP/1.1 413 Payload Too Large\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+  tcp_close(c)
+end
+let big = string.repeat("x", 32 * 1024 * 1024)
+print(request.post("http://127.0.0.1:18472/up", {body: big}).status)
+tcp_close(l)

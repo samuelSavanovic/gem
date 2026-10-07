@@ -438,7 +438,9 @@ fn classify(code)
 end
 ```
 
-Literals (`when 200`, `when "get"`) compare by value without a pin.
+Literals (`when 200`, `when "get"`) compare by value without a pin. A
+name bound twice in one pattern (`when [x, x]`) is a compile error, not an
+equality test: bind two names and compare them in the arm.
 There are no guards or alternatives: `when v > 5` and `when "a" or "b"`
 compile, but compare the target with the *value* of `v > 5` or `"a" or
 "b"`. Use an `if` chain, or one arm per value.
@@ -670,9 +672,8 @@ sort(people, fn(a, b) a.age - b.age end)
 the first two elements and raises `table.sort: the comparator must return
 a number ...` instead.
 
-Sort only arrays **(bug)**: `sort` and `table.sort` on a record don't
-raise; they replace its keys with 0 .. n-1, so `{b: 2, a: 1}` becomes
-`[1, 2]`. Sort `keys(t)` or `values(t)` instead.
+`sort` and `table.sort` take only arrays; to order a record, sort
+`keys(t)` or `values(t)`.
 
 ---
 
@@ -696,7 +697,8 @@ for floats too.
 ### `to_int` and `to_float` raise on bad input
 
 `to_int("12abc")` is an error, and so is `to_int("12\n")`: `string.trim` lines
-read from files first. Wrap conversions of user input (route params,
+read from files first. A float outside the int range, an infinity or NaN
+raises too, from `to_int`, `floor`, `ceil` and `round` alike. Wrap conversions of user input (route params,
 query strings, form fields) in `pcall` and answer a 400, or a bad id
 becomes a 500.
 
@@ -749,8 +751,8 @@ and `ord(s, i)` is the byte value. `for ch in s` walks the bytes as
 1-byte strings, and `for i, ch in s` adds the 0-based byte index. Use `substr(s, start, count)` to slice;
 unlike `s[-1]`, a negative `start` counts as `0`. Double-quoted strings
 have no `\x` or `\u` escapes (an unknown escape is kept as written); use
-`chr(n)` for other bytes. Strings may contain `\0`, but `print` stops at
-the first one; use `write_stdout` for binary output.
+`chr(n)` for other bytes. Strings may contain `\0`, and `print` writes
+them whole.
 
 ---
 
@@ -1555,9 +1557,6 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
   runtime copies it and does not free it); an `extern blocking fn` must
   return `malloc`'d memory (the runtime frees it). A `NULL` return is
   `nil` from a plain `extern fn` but `""` from an `extern blocking fn`.
-  Declare a helper's return `char *`: the generated wrapper assigns it to
-  a `char *`, so a `const char *` return, and a libc function that
-  returns one (`hstrerror`), make cc warn on every build **(bug)**.
 - Don't keep pointers to Gem strings or tables on the C side after the call
   returns: the next arena reset or the process's exit frees that memory,
   and an `extern blocking fn` gets copies that are freed when it returns.
@@ -1634,13 +1633,11 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
   both values, the path to the first difference, and the types when they
   differ: `expected {a: [1, 2]}, got {a: [1, 2.0]}: at .a[1], expected 2
   (int), got 2.0 (float)`. `assert_throws` returns the error message, so
-  check it with `assert_eq` when it matters. Pass it a fn **(bug)**:
-  `test.assert_throws(42)` (or a misspelled field, `t.misspelled`) passes,
-  because calling the non-fn raises inside the check.
+  check it with `assert_eq` when it matters.
 - Register cases with `test.case` at the top level (or from `main`), in
   the process that calls `test.run()`. The case list is a module-level
   variable, so a case registered inside a spawned process lands in that
-  process's copy and never runs (the compiler prints a `note:`).
+  process's copy and never runs.
   `test.run()` calls `exit(1)` when a case fails, which ends the whole
   program with status 1, so nothing after it runs.
 - A test that spawns a process should `spawn_monitor` it (or use `task`)
@@ -1702,8 +1699,6 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | `id in seen` on an int-keyed set | scans values | `has_key(seen, id)` |
 | Large set or index with sparse int (or table) keys | quadratic | string keys (`"{id}"`) |
 | Boolean `sort` comparator | array left unsorted | return `a - b` |
-| `sort` on a record **(bug)** | keys replaced by 0 .. n-1 | sort `keys(t)` or `values(t)` |
-| `test.assert_throws(x)` with a non-fn `x` **(bug)** | the assert passes | pass `fn() ... end` |
 | `json.encode({})` | `[]` | write `'{}'` yourself |
 | `match` with no arm matching | yields `nil` silently | add an `else` |
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |

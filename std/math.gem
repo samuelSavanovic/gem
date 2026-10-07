@@ -6,15 +6,27 @@
 ##
 ## The math builtins (`floor`, `sqrt`, `abs`...) need no load. `min`,
 ## `max` and `clamp` take any values `<` can order: ints and floats,
-## mixed, or strings. Values `<` can't compare (an int and a string,
-## `nil`) raise the operator's type error. With a NaN, `min` and `max`
-## return their second argument, so the result depends on argument order.
+## mixed, or strings. Other values (an int and a string, `nil`) raise
+## `math.<fn>: expected numbers or strings, got <type> and <type>`. With a
+## NaN, `min` and `max` return their second argument, so the result
+## depends on argument order.
+
+# Raises unless `a` and `b` are both numbers or both strings.
+fn check_ordered(caller, a, b)
+  let ta = type(a)
+  let tb = type(b)
+  let numbers = (ta == "int" or ta == "float") and (tb == "int" or tb == "float")
+  if not numbers and not (ta == "string" and tb == "string")
+    error("math.{caller}: expected numbers or strings, got {ta} and {tb}")
+  end
+end
 
 ## Returns the smaller of `a` and `b`, or `b` when they tie.
 ##
 ##   math.min(3, 1)      # 1
 ##   math.min(2, 2.0)    # 2.0
 fn min(a, b)
+  check_ordered("min", a, b)
   if a < b
     return a
   end
@@ -25,6 +37,7 @@ end
 ##
 ##   math.max(1, 2.5)    # 2.5
 fn max(a, b)
+  check_ordered("max", a, b)
   if a > b
     return a
   end
@@ -41,6 +54,8 @@ end
 ##
 ## Raises if `low` is greater than `high`.
 fn clamp(val, low, high)
+  check_ordered("clamp", low, high)
+  check_ordered("clamp", val, low)
   if high < low
     error("math.clamp: low ({low}) is greater than high ({high})")
   end

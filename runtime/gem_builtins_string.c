@@ -177,7 +177,7 @@ GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
     } else {
         count = slen - start;
     }
-    if (start + count > slen) count = slen - start;
+    if (count > slen - start) count = slen - start;
 
     char *buf = (char *)gem_alloc((size_t)count + 1);
     memcpy(buf, s + start, (size_t)count);
@@ -191,8 +191,9 @@ GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_chr_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1 || args[0].type != VAL_INT) { char buf[128]; snprintf(buf, sizeof(buf), "chr: expected int argument, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
+    if (args[0].ival < 0 || args[0].ival > 255) { char ebuf[128]; snprintf(ebuf, sizeof(ebuf), "chr: expected 0..255, got %lld", (long long)args[0].ival); gem_error(ebuf); }
     char buf[2];
-    buf[0] = (char)(args[0].ival & 0xFF);
+    buf[0] = (char)args[0].ival;
     buf[1] = '\0';
     return gem_string_with_len(buf, 1);
 }

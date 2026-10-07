@@ -609,7 +609,13 @@ fn encode_value(val, buf, depth)
     encode_string(val, buf)
   elif t == "nil"
     buf_push(buf, "null")
-  elif t == "int" or t == "float" or t == "bool"
+  elif t == "int" or t == "bool"
+    buf_push(buf, val)
+  elif t == "float"
+    # x - x is 0.0 for every finite x, NaN for infinities and NaN.
+    if val - val != 0.0
+      error("json.encode: cannot encode {val}: JSON has no infinite or NaN numbers")
+    end
     buf_push(buf, val)
   elif t == "table"
     encode_table(val, buf, depth + 1)
@@ -637,10 +643,8 @@ end
 ##   json.encode({0: "a", 2: "b"})       # '{"0":"a","2":"b"}'
 ##   json.encode(2.0)                    # "2.0"
 ##
-## An infinite or NaN float comes out as `inf`, `-inf` or `nan`, which
-## is not valid JSON.
-##
-## Raises for a fn, buffer or other value with no JSON form, for a table
+## Raises for an infinite or NaN float, which JSON can't write, for a fn,
+## buffer or other value with no JSON form, for a table
 ## key of any type but string or int (a computed float key too), and for
 ## nesting deeper than 1,000 levels, which includes any cyclic table.
 fn encode(val)

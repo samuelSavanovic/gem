@@ -376,7 +376,7 @@ fn tokenize(source, file, sink)
         triple_dq_indent = tq_close.indent
 
         # Real scan: collect content with dedent and interpolation
-        let val = ""
+        let val = buf_new()
         let hit_interp = false
         let tq_als = true
 
@@ -388,7 +388,7 @@ fn tokenize(source, file, sink)
             if pos + 2 < length and source[pos] == "\"" and source[pos + 1] == "\"" and source[pos + 2] == "\""
               pos += 3
               # Strip the trailing newline that precedes the closing delimiter
-              if len(val) > 0 and val[-1] == "\n"
+              if len(val) > 0 and substr(val, len(val) - 1, 1) == "\n"
                 val = substr(val, 0, len(val) - 1)
               end
               break
@@ -397,7 +397,7 @@ fn tokenize(source, file, sink)
 
           let tqc = source[pos]
           if tqc == "\n"
-            val = val + "\n"
+            buf_push(val, "\n")
             line += 1
             line_start = pos + 1
             pos += 1
@@ -414,17 +414,17 @@ fn tokenize(source, file, sink)
             let tqe = source[pos]
             let esc_result = apply_escape(tqe, "dq")
             if esc_result != nil
-              val = val + esc_result
+              buf_push(val, esc_result)
             else
-              val = val + "\\" + tqe
+              buf_push(val, "\\" + tqe)
             end
             pos += 1
             continue
           end
           if tqc == "\{"
             push(tokens, {type: "INTERP_START", value: "", line: line, col: tstart - line_start + 1})
-            push(tokens, {type: "INTERP_TEXT", value: val, line: line, col: tstart - line_start + 1})
-            val = ""
+            push(tokens, {type: "INTERP_TEXT", value: to_string(val), line: line, col: tstart - line_start + 1})
+            val = buf_new()
             pos += 1
             interp_brace[interp_depth] = 0
             interp_open[interp_depth] = {line: line, col: pos - line_start}
@@ -435,12 +435,12 @@ fn tokenize(source, file, sink)
             hit_interp = true
             break
           end
-          val = val + tqc
+          buf_push(val, tqc)
           pos += 1
         end
 
         if not hit_interp
-          push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
+          push(tokens, {type: "STRING", value: to_string(val), line: line, col: tstart - line_start + 1})
         end
         continue
       end
@@ -449,7 +449,7 @@ fn tokenize(source, file, sink)
       # its tokens keep the position of the opening quote.
       let s_line = line
       let s_col = tstart - line_start + 1
-      let val = ""
+      let val = buf_new()
       let hit_interp = false
       while pos < length and source[pos] != "\""
         if source[pos] == "\\"
@@ -466,17 +466,17 @@ fn tokenize(source, file, sink)
           end
           let esc_result = apply_escape(esc, "dq")
           if esc_result != nil
-            val = val + esc_result
+            buf_push(val, esc_result)
           else
-            val = val + "\\" + esc
+            buf_push(val, "\\" + esc)
           end
           pos += 1
           continue
         end
         if source[pos] == "\{"
           push(tokens, {type: "INTERP_START", value: "", line: s_line, col: s_col})
-          push(tokens, {type: "INTERP_TEXT", value: val, line: s_line, col: s_col})
-          val = ""
+          push(tokens, {type: "INTERP_TEXT", value: to_string(val), line: s_line, col: s_col})
+          val = buf_new()
           pos += 1
           interp_brace[interp_depth] = 0
           interp_open[interp_depth] = {line: line, col: pos - line_start}
@@ -490,7 +490,7 @@ fn tokenize(source, file, sink)
           line += 1
           line_start = pos + 1
         end
-        val = val + source[pos]
+        buf_push(val, source[pos])
         pos += 1
       end
       if not hit_interp
@@ -500,7 +500,7 @@ fn tokenize(source, file, sink)
           return tokens
         end
         pos += 1
-        push(tokens, {type: "STRING", value: val, line: s_line, col: s_col})
+        push(tokens, {type: "STRING", value: to_string(val), line: s_line, col: s_col})
       end
       continue
     end
@@ -558,7 +558,7 @@ fn tokenize(source, file, sink)
         end
 
         # Real scan: collect content with dedent (no interpolation)
-        let val = ""
+        let val = buf_new()
         let sq_als = true
 
         while pos < length
@@ -569,7 +569,7 @@ fn tokenize(source, file, sink)
             if pos + 2 < length and source[pos] == "'" and source[pos + 1] == "'" and source[pos + 2] == "'"
               pos += 3
               # Strip the trailing newline that precedes the closing delimiter
-              if len(val) > 0 and val[-1] == "\n"
+              if len(val) > 0 and substr(val, len(val) - 1, 1) == "\n"
                 val = substr(val, 0, len(val) - 1)
               end
               break
@@ -578,7 +578,7 @@ fn tokenize(source, file, sink)
 
           let sqc = source[pos]
           if sqc == "\n"
-            val = val + "\n"
+            buf_push(val, "\n")
             line += 1
             line_start = pos + 1
             pos += 1
@@ -595,18 +595,18 @@ fn tokenize(source, file, sink)
             let sqe = source[pos]
             let esc_result = apply_escape(sqe, "sq")
             if esc_result != nil
-              val = val + esc_result
+              buf_push(val, esc_result)
             else
-              val = val + "\\" + sqe
+              buf_push(val, "\\" + sqe)
             end
             pos += 1
             continue
           end
-          val = val + sqc
+          buf_push(val, sqc)
           pos += 1
         end
 
-        push(tokens, {type: "STRING", value: val, line: line, col: tstart - line_start + 1})
+        push(tokens, {type: "STRING", value: to_string(val), line: line, col: tstart - line_start + 1})
         continue
       end
 
@@ -614,7 +614,7 @@ fn tokenize(source, file, sink)
       # its token keeps the position of the opening quote.
       let s_line = line
       let s_col = tstart - line_start + 1
-      let val = ""
+      let val = buf_new()
       while pos < length and source[pos] != "'"
         if source[pos] == "\\"
           pos += 1
@@ -630,9 +630,9 @@ fn tokenize(source, file, sink)
           end
           let esc_result = apply_escape(esc, "sq")
           if esc_result != nil
-            val = val + esc_result
+            buf_push(val, esc_result)
           else
-            val = val + "\\" + esc
+            buf_push(val, "\\" + esc)
           end
           pos += 1
           continue
@@ -641,7 +641,7 @@ fn tokenize(source, file, sink)
           line += 1
           line_start = pos + 1
         end
-        val = val + source[pos]
+        buf_push(val, source[pos])
         pos += 1
       end
       if pos >= length
@@ -650,7 +650,7 @@ fn tokenize(source, file, sink)
         return tokens
       end
       pos += 1
-      push(tokens, {type: "STRING", value: val, line: s_line, col: s_col})
+      push(tokens, {type: "STRING", value: to_string(val), line: s_line, col: s_col})
       continue
     end
 
@@ -755,8 +755,9 @@ fn tokenize(source, file, sink)
       # Resume inside a triple-double-quoted string
       if interp_triple[interp_depth]
         triple_dq_indent = interp_indent[interp_depth]
-        let val = ""
+        let val = buf_new()
         let hit_interp = false
+        let closed = false
         let tqr_als = false
 
         while pos < length
@@ -766,16 +767,20 @@ fn tokenize(source, file, sink)
             # Check for closing """
             if pos + 2 < length and source[pos] == "\"" and source[pos + 1] == "\"" and source[pos + 2] == "\""
               pos += 3
-              if len(val) > 0 and val[-1] == "\n"
+              if len(val) > 0 and substr(val, len(val) - 1, 1) == "\n"
                 val = substr(val, 0, len(val) - 1)
               end
+              closed = true
+              break
+            end
+            if pos >= length
               break
             end
           end
 
           let tqrc = source[pos]
           if tqrc == "\n"
-            val = val + "\n"
+            buf_push(val, "\n")
             line += 1
             line_start = pos + 1
             pos += 1
@@ -792,16 +797,16 @@ fn tokenize(source, file, sink)
             let tqre = source[pos]
             let esc_result = apply_escape(tqre, "dq")
             if esc_result != nil
-              val = val + esc_result
+              buf_push(val, esc_result)
             else
-              val = val + "\\" + tqre
+              buf_push(val, "\\" + tqre)
             end
             pos += 1
             continue
           end
           if tqrc == "\{"
-            push(tokens, {type: "INTERP_TEXT", value: val, line: line, col: tstart - line_start + 1})
-            val = ""
+            push(tokens, {type: "INTERP_TEXT", value: to_string(val), line: line, col: tstart - line_start + 1})
+            val = buf_new()
             pos += 1
             interp_brace[interp_depth] = 0
             interp_open[interp_depth] = {line: line, col: pos - line_start}
@@ -811,12 +816,12 @@ fn tokenize(source, file, sink)
             hit_interp = true
             break
           end
-          val = val + tqrc
+          buf_push(val, tqrc)
           pos += 1
         end
 
         if not hit_interp
-          if pos >= length
+          if not closed
             if interp_depth > 0
               let op = interp_open[0]
               sink.report(source, file, op.line, op.col, 1, "unterminated triple-quoted string interpolation", "the string is never closed after the interpolation this '\{' opens; write '\\\{' for a literal brace")
@@ -827,14 +832,14 @@ fn tokenize(source, file, sink)
             push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
             return tokens
           end
-          push(tokens, {type: "INTERP_TEXT", value: val, line: line, col: tstart - line_start + 1})
+          push(tokens, {type: "INTERP_TEXT", value: to_string(val), line: line, col: tstart - line_start + 1})
           push(tokens, {type: "INTERP_END", value: "", line: line, col: tstart - line_start + 1})
         end
         continue
       end
 
       # Resume inside a regular double-quoted string
-      let val = ""
+      let val = buf_new()
       let hit_interp = false
       while pos < length and source[pos] != "\""
         if source[pos] == "\\"
@@ -851,17 +856,17 @@ fn tokenize(source, file, sink)
           end
           let esc_result = apply_escape(esc, "dq")
           if esc_result != nil
-            val = val + esc_result
+            buf_push(val, esc_result)
           else
-            val = val + "\\" + esc
+            buf_push(val, "\\" + esc)
           end
           pos += 1
           continue
         end
         if source[pos] == "\{"
           # Another interpolation expression
-          push(tokens, {type: "INTERP_TEXT", value: val, line: line, col: tstart - line_start + 1})
-          val = ""
+          push(tokens, {type: "INTERP_TEXT", value: to_string(val), line: line, col: tstart - line_start + 1})
+          val = buf_new()
           pos += 1
           interp_brace[interp_depth] = 0
           interp_open[interp_depth] = {line: line, col: pos - line_start}
@@ -874,7 +879,7 @@ fn tokenize(source, file, sink)
           line += 1
           line_start = pos + 1
         end
-        val = val + source[pos]
+        buf_push(val, source[pos])
         pos += 1
       end
       if not hit_interp
@@ -892,7 +897,7 @@ fn tokenize(source, file, sink)
           push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
           return tokens
         end
-        push(tokens, {type: "INTERP_TEXT", value: val, line: line, col: tstart - line_start + 1})
+        push(tokens, {type: "INTERP_TEXT", value: to_string(val), line: line, col: tstart - line_start + 1})
         push(tokens, {type: "INTERP_END", value: "", line: line, col: tstart - line_start + 1})
         pos += 1
       end

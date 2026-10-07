@@ -88,10 +88,10 @@ end)
 show_stack(pcall(fn() spin(50000, nil) end))
 show_stack(receive())
 
-# 6. Default arguments run before their function records itself, leaf or
-#    not, so an error raised in one shows the caller on top (a bug:
-#    docs/KNOWN_BUGS.md, "An error in a param default is reported without
-#    the fn").
+# 6. Default arguments run after their function records itself, so an
+#    error raised in one shows the function under the one that raised. A
+#    default that calls anything but a builtin in LEAF_BUILTINS makes its
+#    function a non-leaf.
 fn fail_default()
   error("from a default")
 end

@@ -415,6 +415,11 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
         }
     }
 
+    /* A nil key reads as a missing one, and a NaN key never equals itself,
+       so no lookup could reach either entry. */
+    if (key.type == VAL_NIL) gem_error("table key is nil");
+    if (key.type == VAL_FLOAT && key.fval != key.fval) gem_error("table key is NaN");
+
     /* Fallback: linear scan for non-string, non-array-pattern keys */
     for (int i = 0; i < t->len; i++) {
         if (gem_val_eq(t->keys[i], key)) {
@@ -512,6 +517,7 @@ const char *gem_type_str(GemVal v) {
         case VAL_TABLE:  return "table";
         case VAL_BUFFER: return "buffer";
         case VAL_REF:    return "ref";
+        case VAL_LAZY:   break;
     }
     return "unknown";
 }

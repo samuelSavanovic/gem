@@ -100,25 +100,22 @@ end
 ##   string.join(["a", 1, nil], "-")    # "a-1-nil"
 ##
 ## Raises if `arr` is not an array: a table whose keys are exactly
-## 0 .. n-1, added in that order (as `push` and `[...]` literals do). A
-## table whose int keys were assigned out of order is rejected, naming a
-## key, though `table.*` and `json.encode` accept it.
+## 0 .. n-1.
 fn join(arr, delim)
   if type(arr) != "table"
     error("string.join: arr must be an array, got {type(arr)}")
   end
+  # `__is_array_n` is the check array patterns compile to.
+  if not __is_array_n(arr, len(arr))
+    error("string.join: arr must be an array, got a table with keys other than 0 .. n-1")
+  end
   delim = text("join", "delim", delim)
   build_string() do |add|
-    let n = 0
-    for i, x in arr
-      if i != n
-        error("string.join: arr must be an array, got a table with key {i}")
-      end
-      if n > 0
+    for i = 0, len(arr)
+      if i > 0
         add(delim)
       end
-      add(x)
-      n += 1
+      add(arr[i])
     end
   end
 end

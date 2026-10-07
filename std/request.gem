@@ -460,7 +460,8 @@ fn build_request(name, method, parsed, headers, body)
 end
 
 # Sends the request within what is left of the deadline, then reads the
-# response.
+# response. A server may answer early (413, 401) and close while the body
+# is still going out; its response is still read after the short write.
 fn exchange(rd, req_str, method)
   let wait = nil
   if rd.deadline != nil
@@ -470,6 +471,10 @@ fn exchange(rd, req_str, method)
     if rd.deadline != nil and time_ms() >= rd.deadline
       timeout_error(rd)
     end
+    let early = pcall read_response(rd, method)
+    if early.ok
+      return early.value
+    end
     error("{rd.name}: connection lost while sending the request to {rd.url}")
   end
   read_response(rd, method)
@@ -477,6 +482,9 @@ end
 
 # The whole call; `name` ("request.get") prefixes every error.
 fn do_request(name, method, raw_url, opts)
+  if type(opts) != "table"
+    error("{name}: opts must be a table, got {type(opts)}")
+  end
   let {headers = {}, body = "", timeout_ms = DEFAULT_TIMEOUT_MS} = opts
   if type(method) != "string" or method == ""
     error("{name}: method must be a non-empty string")
@@ -568,8 +576,8 @@ end
 ## so encode path segments and query values with `url.encode` (or build
 ## the query with `url.build_query`).
 ##
-## `opts` must be a table (anything else, nil included, raises an
-## unprefixed `field access on non-table` error). Its keys, all optional
+## `opts` must be a table (anything else, nil included, raises
+## `request.<fn>: opts must be a table, got <type>`). Its keys, all optional
 ## (a key left out gets the default; a nil `timeout_ms` means no limit,
 ## a nil `body` or `headers` raises):
 ## - `body`: a string, default "". A non-empty one is sent with a
