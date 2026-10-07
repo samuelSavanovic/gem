@@ -4165,11 +4165,11 @@ false len: expected string, table, or buffer, got nil
   at spin 81
   at anonymous fn 86
 false from a default
-  at fail_default 94
-  at anonymous fn 102
+  at fail_default 96
+  at anonymous fn 104
 false from a default
-  at fail_default 94
-  at anonymous fn 103
+  at fail_default 96
+  at anonymous fn 105
 3 3
 
 [Runtime Error]: len: expected string, table, or buffer, got nil
@@ -4180,4 +4180,4 @@ false from a default
 Stack trace:
   at size (examples/207_leaf_builtins.gem:7)
   at outer (examples/207_leaf_builtins.gem:12)
-  at main (examples/207_leaf_builtins.gem:107)
+  at main (examples/207_leaf_builtins.gem:109)
