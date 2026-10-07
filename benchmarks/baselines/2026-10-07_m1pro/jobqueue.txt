@@ -1,0 +1,166 @@
+commit: 5bae04c
+system: Darwin 27.0.0 arm64, 10 cores; Python 3.14.5; Elixir 1.20.1 (compiled with Erlang/OTP 29)
+run              wall     throughput       p50        p99    tick lag peak RSS     procs              
+── none: --jobs 20000 --deadline 250
+gem            0.90 s   62893 jobs/s  p50     3  p99    19 ms  lag     0 ms     81 MB  procs    4+17  retries     0  sup  0  ok
+            gem_diag: arena_resets=250 copied=96940288 scanned=123075104 freed=414663776 time=0.077s walk=0.049s full=30 ret_resets=2 ret_copied=12107024 max=0.012s
+gem            0.64 s   65359 jobs/s  p50     4  p99    41 ms  lag     4 ms    102 MB  procs    4+17  retries     0  sup  0  ok
+            gem_diag: arena_resets=248 copied=111280272 scanned=123606848 freed=431236256 time=0.091s walk=0.058s full=30 ret_resets=2 ret_copied=12107024 max=0.020s
+gem            0.57 s   69930 jobs/s  p50     5  p99    19 ms  lag     0 ms     79 MB  procs    4+17  retries     0  sup  0  ok
+            gem_diag: arena_resets=248 copied=84724032 scanned=127568800 freed=396954944 time=0.062s walk=0.039s full=29 ret_resets=2 ret_copied=12107024 max=0.005s
+gem            0.62 s   66225 jobs/s  p50     9  p99    39 ms  lag    17 ms    101 MB  procs    4+17  retries     0  sup  0  ok
+            gem_diag: arena_resets=248 copied=111911888 scanned=129669984 freed=429244048 time=0.087s walk=0.054s full=30 ret_resets=2 ret_copied=12107024 max=0.019s
+gem            0.60 s   69930 jobs/s  p50     8  p99    18 ms  lag     0 ms     80 MB  procs    4+17  retries     0  sup  0  ok
+            gem_diag: arena_resets=249 copied=85194832 scanned=129350656 freed=400366320 time=0.066s walk=0.041s full=29 ret_resets=2 ret_copied=12107024 max=0.005s
+python         1.16 s   26702 jobs/s  p50     0  p99     3 ms  lag     0 ms     54 MB  procs    1+16  retries     0  sup  0  ok
+python         1.13 s   26809 jobs/s  p50     0  p99     3 ms  lag     0 ms     54 MB  procs    1+16  retries     0  sup  0  ok
+python         1.14 s   26881 jobs/s  p50     0  p99     3 ms  lag     0 ms     54 MB  procs    1+16  retries     0  sup  0  ok
+python         1.15 s   26917 jobs/s  p50     0  p99     3 ms  lag     0 ms     54 MB  procs    1+16  retries     0  sup  0  ok
+python         1.16 s   26809 jobs/s  p50     0  p99     3 ms  lag     0 ms     54 MB  procs    1+16  retries     0  sup  0  ok
+elixir         1.30 s   50761 jobs/s  p50   100  p99   112 ms  lag     1 ms    131 MB  procs   69+17  retries     0  sup  0  ok
+elixir         1.26 s   51020 jobs/s  p50    95  p99   113 ms  lag     1 ms    145 MB  procs   69+17  retries     0  sup  0  ok
+elixir         1.25 s   50632 jobs/s  p50    99  p99   115 ms  lag     1 ms    141 MB  procs   69+17  retries     0  sup  0  ok
+elixir         1.27 s   50632 jobs/s  p50    99  p99   118 ms  lag     1 ms    141 MB  procs   69+17  retries     0  sup  0  ok
+elixir         1.26 s   50890 jobs/s  p50    97  p99   113 ms  lag     1 ms    134 MB  procs   69+17  retries     0  sup  0  ok
+elixir_s1      1.28 s   49504 jobs/s  p50    67  p99    85 ms  lag     1 ms    120 MB  procs   69+17  retries     0  sup  0  ok
+elixir_s1      1.28 s   49751 jobs/s  p50    65  p99    78 ms  lag     1 ms    118 MB  procs   69+17  retries     0  sup  0  ok
+elixir_s1      1.27 s   49875 jobs/s  p50    66  p99    80 ms  lag     1 ms    118 MB  procs   69+17  retries     0  sup  0  ok
+elixir_s1      1.28 s   49382 jobs/s  p50    70  p99    80 ms  lag     1 ms    118 MB  procs   69+17  retries     0  sup  0  ok
+elixir_s1      1.28 s   49751 jobs/s  p50    67  p99    81 ms  lag     1 ms    121 MB  procs   69+17  retries     0  sup  0  ok
+            throughput gem/python 2.61  gem/elixir 1.37  gem/elixir_s1 1.41  
+── crash5: --jobs 20000 --crash 0.05 --deadline 250
+gem            0.70 s   51413 jobs/s  p50     0  p99    14 ms  lag    14 ms    109 MB  procs    4+17  retries  1017  sup  1  ok
+            gem_diag: arena_resets=275 copied=99269184 scanned=129811216 freed=451827312 time=0.075s walk=0.053s full=17 ret_resets=2 ret_copied=12107744 max=0.014s
+gem            0.71 s   51020 jobs/s  p50     0  p99    13 ms  lag    14 ms    109 MB  procs    4+17  retries  1019  sup  1  ok
+            gem_diag: arena_resets=275 copied=99151184 scanned=129422640 freed=451882928 time=0.079s walk=0.054s full=17 ret_resets=2 ret_copied=12107744 max=0.016s
+gem            0.69 s   51546 jobs/s  p50     0  p99    14 ms  lag     3 ms    110 MB  procs    4+17  retries  1019  sup  1  ok
+            gem_diag: arena_resets=274 copied=99395952 scanned=129601136 freed=450607376 time=0.069s walk=0.051s full=17 ret_resets=2 ret_copied=12107744 max=0.014s
+gem            0.70 s   51150 jobs/s  p50     0  p99    14 ms  lag     3 ms    110 MB  procs    4+17  retries  1019  sup  1  ok
+            gem_diag: arena_resets=274 copied=99391792 scanned=129995872 freed=449328496 time=0.075s walk=0.054s full=17 ret_resets=2 ret_copied=12107744 max=0.014s
+gem            0.69 s   50377 jobs/s  p50     0  p99    14 ms  lag     3 ms    110 MB  procs    4+17  retries  1016  sup  1  ok
+            gem_diag: arena_resets=274 copied=99407280 scanned=127945968 freed=450529520 time=0.076s walk=0.054s full=17 ret_resets=2 ret_copied=12107744 max=0.014s
+python         1.34 s   21276 jobs/s  p50     0  p99    11 ms  lag     0 ms     55 MB  procs    1+17  retries  1020  sup  1  ok
+python         1.33 s   21186 jobs/s  p50     0  p99    11 ms  lag     0 ms     55 MB  procs    1+16  retries  1019  sup  1  ok
+python         1.35 s   21097 jobs/s  p50     0  p99    11 ms  lag     1 ms     55 MB  procs    1+16  retries  1020  sup  1  ok
+python         1.35 s   21253 jobs/s  p50     0  p99    11 ms  lag     1 ms     55 MB  procs    1+16  retries  1019  sup  1  ok
+python         1.36 s   21186 jobs/s  p50     0  p99    11 ms  lag     0 ms     54 MB  procs    1+16  retries  1020  sup  1  ok
+elixir         1.33 s   43668 jobs/s  p50    87  p99   193 ms  lag     1 ms    152 MB  procs   69+17  retries  1025  sup  1  ok
+elixir         1.33 s   44150 jobs/s  p50    80  p99   182 ms  lag     2 ms    153 MB  procs   69+17  retries  1025  sup  1  ok
+elixir         1.33 s   43956 jobs/s  p50    89  p99   196 ms  lag     1 ms    147 MB  procs   69+17  retries  1025  sup  1  ok
+elixir         1.32 s   43859 jobs/s  p50    86  p99   192 ms  lag     1 ms    143 MB  procs   69+17  retries  1024  sup  1  ok
+elixir         1.31 s   43956 jobs/s  p50    88  p99   193 ms  lag     1 ms    136 MB  procs   69+17  retries  1024  sup  1  ok
+elixir_s1      1.35 s   42194 jobs/s  p50    28  p99    76 ms  lag     1 ms    120 MB  procs   69+17  retries  1027  sup  1  ok
+elixir_s1      1.34 s   42283 jobs/s  p50    31  p99    88 ms  lag     1 ms    119 MB  procs   69+17  retries  1026  sup  1  ok
+elixir_s1      1.35 s   42283 jobs/s  p50    29  p99    86 ms  lag     1 ms    116 MB  procs   69+17  retries  1026  sup  1  ok
+elixir_s1      1.35 s   42643 jobs/s  p50    30  p99    85 ms  lag     1 ms    117 MB  procs   69+17  retries  1026  sup  1  ok
+elixir_s1      1.33 s   42735 jobs/s  p50    28  p99    76 ms  lag     1 ms    118 MB  procs   69+17  retries  1027  sup  1  ok
+            throughput gem/python 2.38  gem/elixir 1.15  gem/elixir_s1 1.18  
+── hang5: --jobs 10000 --hang 0.05
+gem            3.65 s    2944 jobs/s  p50  1589  p99  3158 ms  lag    10 ms     59 MB  procs    4+17  retries   487  sup  0  ok
+            gem_diag: arena_resets=114 copied=50665968 scanned=53542192 freed=196713152 time=0.062s walk=0.040s full=13 ret_resets=1 ret_copied=5266752 max=0.007s
+gem            3.67 s    2959 jobs/s  p50  1590  p99  3164 ms  lag    10 ms     59 MB  procs    4+17  retries   487  sup  0  ok
+            gem_diag: arena_resets=114 copied=50687456 scanned=53542000 freed=196828704 time=0.059s walk=0.036s full=13 ret_resets=1 ret_copied=5266752 max=0.006s
+gem            3.70 s    2935 jobs/s  p50  1592  p99  3155 ms  lag    10 ms     59 MB  procs    4+17  retries   487  sup  0  ok
+            gem_diag: arena_resets=113 copied=50747216 scanned=51999136 freed=198553904 time=0.069s walk=0.044s full=13 ret_resets=1 ret_copied=5266752 max=0.006s
+gem            3.64 s    2966 jobs/s  p50  1588  p99  3152 ms  lag    10 ms     59 MB  procs    4+17  retries   487  sup  0  ok
+            gem_diag: arena_resets=114 copied=50676768 scanned=53533792 freed=198137376 time=0.062s walk=0.039s full=13 ret_resets=1 ret_copied=5266752 max=0.006s
+gem            3.68 s    2952 jobs/s  p50  1587  p99  3154 ms  lag    10 ms     59 MB  procs    4+17  retries   487  sup  0  ok
+            gem_diag: arena_resets=114 copied=50678416 scanned=53503648 freed=198158736 time=0.056s walk=0.036s full=13 ret_resets=1 ret_copied=5266752 max=0.006s
+python         3.70 s    2984 jobs/s  p50  1517  p99  3052 ms  lag     2 ms     41 MB  procs    1+17  retries   487  sup  0  ok
+python         3.69 s    2986 jobs/s  p50  1513  p99  3049 ms  lag     3 ms     41 MB  procs    1+17  retries   487  sup  0  ok
+python         3.71 s    2985 jobs/s  p50  1514  p99  3051 ms  lag     3 ms     42 MB  procs    1+17  retries   487  sup  0  ok
+python         3.71 s    2985 jobs/s  p50  1514  p99  3053 ms  lag     3 ms     41 MB  procs    1+17  retries   487  sup  0  ok
+python         3.71 s    2983 jobs/s  p50  1514  p99  3051 ms  lag     3 ms     41 MB  procs    1+17  retries   487  sup  0  ok
+elixir         4.27 s    2948 jobs/s  p50  1599  p99  3147 ms  lag     6 ms    113 MB  procs   69+17  retries   487  sup  0  ok
+elixir         4.24 s    2947 jobs/s  p50  1596  p99  3148 ms  lag     6 ms    119 MB  procs   69+17  retries   487  sup  0  ok
+elixir         4.25 s    2949 jobs/s  p50  1598  p99  3149 ms  lag     6 ms    121 MB  procs   69+17  retries   487  sup  0  ok
+elixir         4.24 s    2949 jobs/s  p50  1597  p99  3147 ms  lag     6 ms    117 MB  procs   69+17  retries   487  sup  0  ok
+elixir         4.26 s    2947 jobs/s  p50  1595  p99  3141 ms  lag     6 ms    123 MB  procs   69+17  retries   487  sup  0  ok
+elixir_s1      4.25 s    2946 jobs/s  p50  1595  p99  3142 ms  lag     1 ms    107 MB  procs   69+17  retries   487  sup  0  ok
+elixir_s1      4.25 s    2946 jobs/s  p50  1590  p99  3137 ms  lag     1 ms    107 MB  procs   69+17  retries   487  sup  0  ok
+elixir_s1      4.27 s    2942 jobs/s  p50  1594  p99  3142 ms  lag     1 ms    107 MB  procs   69+17  retries   487  sup  0  ok
+elixir_s1      4.27 s    2945 jobs/s  p50  1593  p99  3139 ms  lag     1 ms    107 MB  procs   69+17  retries   487  sup  0  ok
+elixir_s1      4.26 s    2945 jobs/s  p50  1595  p99  3140 ms  lag     1 ms    107 MB  procs   69+17  retries   487  sup  0  ok
+            throughput gem/python 0.99  gem/elixir 1.00  gem/elixir_s1 1.00  
+── mixed: --jobs 10000 --crash 0.05 --hang 0.02 --slow 0.1 --kill 0.03 --deadline 200
+gem            4.69 s    2268 jobs/s  p50  1892  p99  4136 ms  lag    10 ms     68 MB  procs    4+17  retries  1071  sup  0  ok
+            gem_diag: arena_resets=136 copied=50093248 scanned=54882416 freed=232395712 time=0.068s walk=0.042s full=14 ret_resets=2 ret_copied=5279888 max=0.006s
+gem            4.68 s    2266 jobs/s  p50  1898  p99  4140 ms  lag     9 ms     68 MB  procs    4+17  retries  1071  sup  0  ok
+            gem_diag: arena_resets=136 copied=50043904 scanned=54886416 freed=232393200 time=0.075s walk=0.045s full=14 ret_resets=2 ret_copied=5279888 max=0.008s
+gem            4.69 s    2266 jobs/s  p50  1900  p99  4141 ms  lag    10 ms     67 MB  procs    4+17  retries  1071  sup  0  ok
+            gem_diag: arena_resets=136 copied=50079648 scanned=54888464 freed=232398928 time=0.067s walk=0.041s full=14 ret_resets=2 ret_copied=5279888 max=0.005s
+gem            4.68 s    2263 jobs/s  p50  1901  p99  4142 ms  lag    11 ms     68 MB  procs    4+17  retries  1071  sup  0  ok
+            gem_diag: arena_resets=136 copied=50089440 scanned=54849312 freed=232346624 time=0.067s walk=0.040s full=14 ret_resets=2 ret_copied=5279888 max=0.006s
+gem            4.68 s    2266 jobs/s  p50  1892  p99  4138 ms  lag    10 ms     68 MB  procs    4+17  retries  1071  sup  0  ok
+            gem_diag: arena_resets=136 copied=50067120 scanned=54864128 freed=232394608 time=0.070s walk=0.044s full=14 ret_resets=2 ret_copied=5279888 max=0.007s
+python         4.76 s    2273 jobs/s  p50  1787  p99  3977 ms  lag     2 ms     42 MB  procs    1+17  retries  1071  sup  0  ok
+python         4.75 s    2273 jobs/s  p50  1789  p99  3978 ms  lag     3 ms     42 MB  procs    1+17  retries  1071  sup  0  ok
+python         4.76 s    2274 jobs/s  p50  1789  p99  3977 ms  lag     3 ms     42 MB  procs    1+17  retries  1071  sup  0  ok
+python         4.76 s    2272 jobs/s  p50  1790  p99  3979 ms  lag     3 ms     42 MB  procs    1+17  retries  1071  sup  0  ok
+python         4.76 s    2271 jobs/s  p50  1789  p99  3983 ms  lag     3 ms     42 MB  procs    1+17  retries  1071  sup  0  ok
+elixir         5.31 s    2256 jobs/s  p50  1904  p99  4124 ms  lag     4 ms    121 MB  procs   69+17  retries  1071  sup  0  ok
+elixir         5.31 s    2252 jobs/s  p50  1905  p99  4131 ms  lag     4 ms    123 MB  procs   69+17  retries  1071  sup  0  ok
+elixir         5.28 s    2255 jobs/s  p50  1903  p99  4125 ms  lag     2 ms    122 MB  procs   69+17  retries  1071  sup  0  ok
+elixir         5.29 s    2254 jobs/s  p50  1901  p99  4126 ms  lag     5 ms    124 MB  procs   69+17  retries  1071  sup  0  ok
+elixir         5.29 s    2254 jobs/s  p50  1902  p99  4129 ms  lag     5 ms    122 MB  procs   69+17  retries  1071  sup  0  ok
+elixir_s1      5.31 s    2249 jobs/s  p50  1894  p99  4114 ms  lag     2 ms    107 MB  procs   69+17  retries  1071  sup  0  ok
+elixir_s1      5.32 s    2247 jobs/s  p50  1891  p99  4111 ms  lag     2 ms    107 MB  procs   69+17  retries  1071  sup  0  ok
+elixir_s1      5.32 s    2246 jobs/s  p50  1902  p99  4119 ms  lag     2 ms    107 MB  procs   69+17  retries  1071  sup  0  ok
+elixir_s1      5.30 s    2249 jobs/s  p50  1899  p99  4116 ms  lag     2 ms    107 MB  procs   69+17  retries  1071  sup  0  ok
+elixir_s1      5.32 s    2246 jobs/s  p50  1895  p99  4120 ms  lag     1 ms    107 MB  procs   69+17  retries  1071  sup  0  ok
+            throughput gem/python 1.00  gem/elixir 1.01  gem/elixir_s1 1.01  
+── storm: --jobs 10000 --slow 0.1 --deadline 250 --storm 16 --storm-every 100 --storm-bursts 10 --max-restarts 20
+gem            1.65 s    7147 jobs/s  p50   629  p99  1346 ms  lag     6 ms     52 MB  procs    4+18  retries   160  sup  5  ok
+            gem_diag: arena_resets=102 copied=51807744 scanned=43624576 freed=190536464 time=0.046s walk=0.031s full=12 ret_resets=1 ret_copied=5266752 max=0.006s
+gem            1.67 s    7122 jobs/s  p50   641  p99  1352 ms  lag     6 ms     52 MB  procs    4+18  retries   160  sup  5  ok
+            gem_diag: arena_resets=102 copied=51718304 scanned=43632288 freed=188779952 time=0.052s walk=0.035s full=12 ret_resets=1 ret_copied=5266752 max=0.008s
+gem            1.66 s    7102 jobs/s  p50   635  p99  1356 ms  lag     5 ms     52 MB  procs    4+18  retries   160  sup  5  ok
+            gem_diag: arena_resets=102 copied=51798160 scanned=43462704 freed=190556880 time=0.043s walk=0.028s full=12 ret_resets=1 ret_copied=5266752 max=0.007s
+gem            1.65 s    7163 jobs/s  p50   637  p99  1348 ms  lag     6 ms     53 MB  procs    4+18  retries   160  sup  5  ok
+            gem_diag: arena_resets=102 copied=51805696 scanned=43639392 freed=189500624 time=0.045s walk=0.029s full=12 ret_resets=1 ret_copied=5266752 max=0.007s
+gem            1.65 s    7147 jobs/s  p50   633  p99  1347 ms  lag     5 ms     53 MB  procs    4+18  retries   160  sup  5  ok
+            gem_diag: arena_resets=102 copied=51801312 scanned=43632800 freed=189494768 time=0.045s walk=0.029s full=12 ret_resets=1 ret_copied=5266752 max=0.007s
+python         1.67 s    7598 jobs/s  p50   507  p99  1178 ms  lag     3 ms     41 MB  procs    1+18  retries   180  sup  5  ok
+python         1.67 s    7593 jobs/s  p50   508  p99  1179 ms  lag     2 ms     41 MB  procs    1+18  retries   180  sup  5  ok
+python         1.67 s    7627 jobs/s  p50   507  p99  1170 ms  lag     2 ms     41 MB  procs    1+18  retries   180  sup  5  ok
+python         1.67 s    7651 jobs/s  p50   501  p99  1167 ms  lag     3 ms     41 MB  procs    1+18  retries   180  sup  5  ok
+python         1.66 s    7680 jobs/s  p50   504  p99  1161 ms  lag     2 ms     41 MB  procs    1+18  retries   180  sup  5  ok
+elixir         2.32 s    6973 jobs/s  p50   642  p99  1378 ms  lag     2 ms    127 MB  procs   69+18  retries   180  sup  5  ok
+elixir         2.31 s    6958 jobs/s  p50   645  p99  1383 ms  lag     1 ms    118 MB  procs   69+18  retries   180  sup  5  ok
+elixir         2.27 s    6993 jobs/s  p50   643  p99  1378 ms  lag     3 ms    120 MB  procs   69+18  retries   180  sup  5  ok
+elixir         2.34 s    6821 jobs/s  p50   663  p99  1406 ms  lag     2 ms    124 MB  procs   69+18  retries   180  sup  5  ok
+elixir         2.28 s    7007 jobs/s  p50   641  p99  1370 ms  lag     1 ms    122 MB  procs   69+18  retries   180  sup  5  ok
+elixir_s1      2.33 s    6765 jobs/s  p50   651  p99  1408 ms  lag     1 ms    107 MB  procs   69+18  retries   180  sup  5  ok
+elixir_s1      2.33 s    6839 jobs/s  p50   649  p99  1395 ms  lag     1 ms    107 MB  procs   69+18  retries   180  sup  5  ok
+elixir_s1      2.34 s    6811 jobs/s  p50   657  p99  1403 ms  lag     1 ms    107 MB  procs   69+18  retries   180  sup  5  ok
+elixir_s1      2.32 s    6816 jobs/s  p50   648  p99  1400 ms  lag     1 ms    107 MB  procs   69+18  retries   180  sup  5  ok
+elixir_s1      2.34 s    6798 jobs/s  p50   650  p99  1404 ms  lag     1 ms    107 MB  procs   69+18  retries   180  sup  5  ok
+            throughput gem/python 0.93  gem/elixir 1.02  gem/elixir_s1 1.05  
+── backlog: --jobs 100000 --workers 4 --slow 0.05 --slow-ms 4 --deadline 0
+gem           13.79 s    7554 jobs/s  p50  6375  p99 12601 ms  lag    86 ms    390 MB  procs     4+5  retries     0  sup  0  ok
+            gem_diag: arena_resets=912 copied=513023648 scanned=485967280 freed=1996644512 time=0.764s walk=0.425s full=32 ret_resets=6 ret_copied=66827024 max=0.090s
+gem           13.78 s    7551 jobs/s  p50  6346  p99 12634 ms  lag    91 ms    389 MB  procs     4+5  retries     0  sup  0  ok
+            gem_diag: arena_resets=906 copied=513008384 scanned=467077744 freed=1995466496 time=0.741s walk=0.409s full=32 ret_resets=6 ret_copied=66828336 max=0.091s
+gem           13.80 s    7554 jobs/s  p50  6375  p99 12631 ms  lag    75 ms    390 MB  procs     4+5  retries     0  sup  0  ok
+            gem_diag: arena_resets=906 copied=513121360 scanned=467084352 freed=1994768800 time=0.776s walk=0.420s full=32 ret_resets=6 ret_copied=66825712 max=0.082s
+gem           13.81 s    7547 jobs/s  p50  6381  p99 12639 ms  lag    73 ms    389 MB  procs     4+5  retries     0  sup  0  ok
+            gem_diag: arena_resets=909 copied=512984720 scanned=476522528 freed=1996504480 time=0.766s walk=0.417s full=32 ret_resets=6 ret_copied=66827680 max=0.090s
+gem           13.81 s    7539 jobs/s  p50  6392  p99 12649 ms  lag    79 ms    388 MB  procs     4+5  retries     0  sup  0  ok
+            gem_diag: arena_resets=910 copied=513052128 scanned=476512288 freed=1998008400 time=0.765s walk=0.422s full=32 ret_resets=6 ret_copied=66828336 max=0.080s
+python        12.76 s    8369 jobs/s  p50  4907  p99  9971 ms  lag    13 ms    173 MB  procs     1+5  retries     0  sup  0  ok
+python        12.66 s    8402 jobs/s  p50  4897  p99  9915 ms  lag     3 ms    173 MB  procs     1+5  retries     0  sup  0  ok
+python        12.66 s    8399 jobs/s  p50  4883  p99  9906 ms  lag     3 ms    173 MB  procs     1+5  retries     0  sup  0  ok
+python        12.72 s    8374 jobs/s  p50  4914  p99  9944 ms  lag     2 ms    172 MB  procs     1+5  retries     0  sup  0  ok
+python        12.75 s    8362 jobs/s  p50  4922  p99  9977 ms  lag    14 ms    173 MB  procs     1+5  retries     0  sup  0  ok
+elixir        16.39 s    6518 jobs/s  p50  6234  p99  8894 ms  lag     6 ms    227 MB  procs    69+5  retries     0  sup  0  ok
+elixir        16.36 s    6524 jobs/s  p50  6280  p99  8921 ms  lag     2 ms    234 MB  procs    69+5  retries     0  sup  0  ok
+elixir        16.32 s    6528 jobs/s  p50  6227  p99  8916 ms  lag     4 ms    231 MB  procs    69+5  retries     0  sup  0  ok
+elixir        16.35 s    6523 jobs/s  p50  6236  p99  8813 ms  lag     7 ms    237 MB  procs    69+5  retries     0  sup  0  ok
+elixir        16.33 s    6528 jobs/s  p50  6201  p99  8868 ms  lag     2 ms    227 MB  procs    69+5  retries     0  sup  0  ok
+elixir_s1     16.63 s    6412 jobs/s  p50  6141  p99  8440 ms  lag     1 ms    215 MB  procs    69+5  retries     0  sup  0  ok
+elixir_s1     16.64 s    6418 jobs/s  p50  6163  p99  8354 ms  lag     1 ms    212 MB  procs    69+5  retries     0  sup  0  ok
+elixir_s1     16.65 s    6411 jobs/s  p50  6188  p99  8389 ms  lag     8 ms    219 MB  procs    69+5  retries     0  sup  0  ok
+elixir_s1     16.91 s    6303 jobs/s  p50  6116  p99  7826 ms  lag     3 ms    211 MB  procs    69+5  retries     0  sup  0  ok
+elixir_s1     16.69 s    6394 jobs/s  p50  6215  p99  8415 ms  lag     5 ms    214 MB  procs    69+5  retries     0  sup  0  ok
+            throughput gem/python 0.90  gem/elixir 1.15  gem/elixir_s1 1.18  
+invariants held in every run

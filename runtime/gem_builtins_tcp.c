@@ -41,6 +41,24 @@ static int gem_tcp_port(GemVal v, const char *who) {
     return (int)v.ival;
 }
 
+/* Sets *out to `host`'s IPv4 address: a dotted quad as is, a name through
+   getaddrinfo (which blocks the scheduler thread while it resolves). */
+static void gem_tcp_resolve4(const char *host, struct in_addr *out, const char *who) {
+    if (inet_pton(AF_INET, host, out) == 1) return;
+    struct addrinfo hints, *res = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    int rc = getaddrinfo(host, NULL, &hints, &res);
+    if (rc != 0 || res == NULL) {
+        char buf[256];
+        snprintf(buf, sizeof(buf), "%s: cannot resolve '%s'", who, host);
+        gem_error(buf);
+    }
+    *out = ((struct sockaddr_in *)res->ai_addr)->sin_addr;
+    freeaddrinfo(res);
+}
+
 /* Every blocking wait here starts from a clean slate: no deadline and no
    timed_out flag. A `receive ... after` or `sleep` sets both for its own
    wait; a wait here sets a deadline only for its own timeout and honours
@@ -62,6 +80,12 @@ GemVal gem_tcp_connect_fn(void *_env, GemVal *args, int argc) {
     const char *host = args[0].sval;
     int port = gem_tcp_port(args[1], "tcp_connect");
 
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)port);
+    gem_tcp_resolve4(host, &addr.sin_addr, "tcp_connect");
+
     int fd = socket(AF_INET, GEM_SOCK_STREAM, 0);
     if (fd < 0) {
         char buf[256];
@@ -69,22 +93,6 @@ GemVal gem_tcp_connect_fn(void *_env, GemVal *args, int argc) {
         gem_error(buf);
     }
     gem_set_cloexec(fd);
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)port);
-
-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        struct hostent *he = gethostbyname(host);
-        if (!he) {
-            close(fd);
-            char buf[256];
-            snprintf(buf, sizeof(buf), "tcp_connect: cannot resolve '%s'", host);
-            gem_error(buf);
-        }
-        memcpy(&addr.sin_addr, he->h_addr_list[0], (size_t)he->h_length);
-    }
 
     if (gem_current_pid >= 0) {
         gem_tcp_begin_wait();
@@ -132,6 +140,12 @@ GemVal gem_tcp_listen_fn(void *_env, GemVal *args, int argc) {
     const char *host = args[0].sval;
     int port = gem_tcp_port(args[1], "tcp_listen");
 
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)port);
+    gem_tcp_resolve4(host, &addr.sin_addr, "tcp_listen");
+
     int fd = socket(AF_INET, GEM_SOCK_STREAM, 0);
     if (fd < 0) {
         char buf[256];
@@ -142,22 +156,6 @@ GemVal gem_tcp_listen_fn(void *_env, GemVal *args, int argc) {
 
     int opt = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)port);
-
-    if (strcmp(host, "0.0.0.0") == 0) {
-        addr.sin_addr.s_addr = INADDR_ANY;
-    } else {
-        if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-            close(fd);
-            char buf[256];
-            snprintf(buf, sizeof(buf), "tcp_listen: invalid address '%s'", host);
-            gem_error(buf);
-        }
-    }
 
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         close(fd);

@@ -188,6 +188,7 @@ static uint64_t gem_str_hash(const char *key, int64_t len) {
 
 /* The slot holding `key`, or -1. */
 static int gem_str_index_find(const GemStrIndex *ix, const char *key, int64_t len, uint64_t h) {
+    if (ix->cap == 0) return -1;
     int mask = ix->cap - 1;
     for (int i = (int)(h & (uint64_t)mask);; i = (i + 1) & mask) {
         const GemStrSlot *sl = &ix->slots[i];
@@ -239,6 +240,7 @@ void gem_str_index_put(GemStrIndex **ixp, const char *key, int64_t len, int pos)
         while ((live + 1) * 2 > cap) cap *= 2;
         GemStrIndex *nix = gem_str_index_alloc(cap);
         if (ix) {
+            nix->keyix = ix->keyix;
             for (int i = 0; i < ix->cap; i++) {
                 GemStrSlot *sl = &ix->slots[i];
                 if (sl->key && sl->value >= 0) gem_str_index_insert_new(nix, sl->key, sl->len, sl->hash, sl->value);
@@ -258,8 +260,128 @@ void gem_str_index_del(GemStrIndex *ix, const char *key, int64_t len) {
 }
 
 void gem_str_index_free(GemStrIndex **ixp) {
+    if (*ixp) free((*ixp)->keyix);
     free(*ixp);
     *ixp = NULL;
+}
+
+/* ─── Value key index (see GemKeyIndex in gem.h) ─── */
+
+typedef struct {
+    uint64_t hash;
+    int pos1;          /* position + 1; 0: empty slot, -1: deleted */
+} GemKeySlot;
+
+struct GemKeyIndex {
+    int cap;           /* power of 2 */
+    int used;          /* live + deleted slots */
+    GemKeySlot slots[];
+};
+
+static int gem_key_indexable(GemVal k) {
+    return k.type == VAL_INT || k.type == VAL_FLOAT || k.type == VAL_BOOL || k.type == VAL_REF;
+}
+
+static uint64_t gem_key_hash(GemVal k) {
+    uint64_t x;
+    switch (k.type) {
+        case VAL_INT: x = (uint64_t)k.ival; break;
+        case VAL_BOOL: x = (uint64_t)k.bval; break;
+        case VAL_REF: x = (uint64_t)k.rval; break;
+        default: {
+            double d = k.fval == 0.0 ? 0.0 : k.fval;   /* -0.0 == 0.0 */
+            memcpy(&x, &d, sizeof(x));
+        }
+    }
+    x ^= (uint64_t)k.type * 0x9E3779B97F4A7C15ULL;
+    x ^= x >> 33; x *= 0xFF51AFD7ED558CCDULL;
+    x ^= x >> 33; x *= 0xC4CEB9FE1A85EC53ULL;
+    x ^= x >> 33;
+    return x;
+}
+
+static GemKeyIndex *gem_key_index_of(const GemTable *t) {
+    return t->str_index ? t->str_index->keyix : NULL;
+}
+
+/* The slot of `ix` holding `key`, or -1. */
+static int gem_key_index_find(const GemTable *t, const GemKeyIndex *ix, GemVal key, uint64_t h) {
+    int mask = ix->cap - 1;
+    int i = (int)(h & (uint64_t)mask);
+    while (ix->slots[i].pos1 != 0) {
+        int p = ix->slots[i].pos1 - 1;
+        if (p >= 0 && ix->slots[i].hash == h && gem_val_eq(t->keys[p], key)) return i;
+        i = (i + 1) & mask;
+    }
+    return -1;
+}
+
+static void gem_key_index_insert_new(GemKeyIndex *ix, uint64_t h, int pos) {
+    int mask = ix->cap - 1;
+    int i = (int)(h & (uint64_t)mask);
+    while (ix->slots[i].pos1 != 0) i = (i + 1) & mask;
+    ix->slots[i].hash = h;
+    ix->slots[i].pos1 = pos + 1;
+    ix->used++;
+}
+
+/* A fresh index with room for `live` + 1 keys at a load of at most 1/2,
+   holding the live slots of `old` (freed). */
+static GemKeyIndex *gem_key_index_resize(GemKeyIndex *old, int live) {
+    int cap = 16;
+    while ((live + 1) * 2 > cap) cap *= 2;
+    GemKeyIndex *ix = (GemKeyIndex *)calloc(1, sizeof(GemKeyIndex) + (size_t)cap * sizeof(GemKeySlot));
+    if (ix == NULL) { fprintf(stderr, "gem: out of memory (table key index)\n"); exit(1); }
+    ix->cap = cap;
+    if (old) {
+        for (int i = 0; i < old->cap; i++)
+            if (old->slots[i].pos1 > 0) gem_key_index_insert_new(ix, old->slots[i].hash, old->slots[i].pos1 - 1);
+        free(old);
+    }
+    return ix;
+}
+
+void gem_key_index_put(GemTable *t, GemVal key, int pos) {
+    GemKeyIndex *ix = gem_key_index_of(t);
+    if (ix == NULL || !gem_key_indexable(key)) return;
+    uint64_t h = gem_key_hash(key);
+    int i = gem_key_index_find(t, ix, key, h);
+    if (i >= 0) { ix->slots[i].pos1 = pos + 1; return; }
+    /* Keep the load (deleted slots included) at most 3/4; a resize drops
+       the deleted ones. */
+    if ((ix->used + 1) * 4 > ix->cap * 3) {
+        int live = 0;
+        for (int j = 0; j < ix->cap; j++) live += (ix->slots[j].pos1 > 0);
+        ix = t->str_index->keyix = gem_key_index_resize(ix, live);
+    }
+    gem_key_index_insert_new(ix, h, pos);
+}
+
+void gem_key_index_del(GemTable *t, GemVal key) {
+    GemKeyIndex *ix = gem_key_index_of(t);
+    if (ix == NULL || !gem_key_indexable(key)) return;
+    int i = gem_key_index_find(t, ix, key, gem_key_hash(key));
+    if (i >= 0) ix->slots[i].pos1 = -1;   /* a tombstone keeps probe chains intact */
+}
+
+int gem_table_key_pos(GemTable *t, GemVal key) {
+    if (gem_key_indexable(key) && t->len > GEM_TABLE_SCAN_MAX) {
+        gem_table_index(t);
+        GemKeyIndex *ix = gem_key_index_of(t);
+        if (ix == NULL) {
+            /* A table without string keys has no string index: one of
+               capacity 0 holds the key index. */
+            if (t->str_index == NULL) t->str_index = gem_str_index_alloc(0);
+            ix = t->str_index->keyix = gem_key_index_resize(NULL, t->len);
+            for (int i = 0; i < t->len; i++)
+                if (gem_key_indexable(t->keys[i])) gem_key_index_insert_new(ix, gem_key_hash(t->keys[i]), i);
+        }
+        int i = gem_key_index_find(t, ix, key, gem_key_hash(key));
+        return i < 0 ? -1 : ix->slots[i].pos1 - 1;
+    }
+    for (int i = 0; i < t->len; i++)
+        if (gem_val_eq(t->keys[i], key)) return i;
+    return -1;
 }
 
 /* ─── Table operations ─── */
@@ -314,7 +436,7 @@ uint32_t gem_shape_counter = 1;
 
 uint64_t gem_mut_clock = 1;
 
-GemVal gem_table_new(void) {
+static inline GemVal gem_table_alloc(int braces) {
     GemTable *t = ALLOC(GemTable);
     t->len = 0;
     t->cap = 4;
@@ -323,6 +445,7 @@ GemVal gem_table_new(void) {
     t->str_index = NULL;
     t->nstr = 0;
     t->shape_id = gem_shape_counter++;
+    t->braces = braces;
     t->is_array = 1;
 
     GemArena *a = gem_current_arena();
@@ -331,6 +454,14 @@ GemVal gem_table_new(void) {
     t->mut_seq = gem_mut_clock;  /* new in this epoch: nothing older can need it logged */
 
     GemVal r; r.type = VAL_TABLE; r.magic = GEM_MAGIC; r.table = t; return r;
+}
+
+GemVal gem_table_new(void) {
+    return gem_table_alloc(0);
+}
+
+GemVal gem_table_new_braces(void) {
+    return gem_table_alloc(1);
 }
 
 void gem_table_freeze(GemVal tbl) {
@@ -410,6 +541,7 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
             t->keys[t->len] = key;
             t->vals[t->len] = val;
             t->is_array = (ik == t->len);
+            gem_key_index_put(t, key, t->len);
             t->len++;
             return;
         }
@@ -420,12 +552,11 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
     if (key.type == VAL_NIL) gem_error("table key is nil");
     if (key.type == VAL_FLOAT && key.fval != key.fval) gem_error("table key is NaN");
 
-    /* Fallback: linear scan for non-string, non-array-pattern keys */
-    for (int i = 0; i < t->len; i++) {
-        if (gem_val_eq(t->keys[i], key)) {
-            t->vals[i] = val;
-            return;
-        }
+    /* Any other non-string key */
+    int found = gem_table_key_pos(t, key);
+    if (found >= 0) {
+        t->vals[found] = val;
+        return;
     }
 
     /* Append new entry */
@@ -433,6 +564,7 @@ void gem_table_set(GemVal tbl, GemVal key, GemVal val) {
     t->keys[t->len] = key;
     t->vals[t->len] = val;
     t->is_array = 0;
+    gem_key_index_put(t, key, t->len);
     t->len++;
     gem_table_appended(t);
 }
@@ -474,10 +606,8 @@ GemVal gem_table_get(GemVal tbl, GemVal key) {
         if (t->is_array) return (GemVal){VAL_NIL, GEM_MAGIC, {0}};
     }
 
-    /* Fallback: linear scan */
-    for (int i = 0; i < t->len; i++) {
-        if (gem_val_eq(t->keys[i], key)) return t->vals[i];
-    }
+    int found = gem_table_key_pos(t, key);
+    if (found >= 0) return t->vals[found];
     return (GemVal){VAL_NIL, GEM_MAGIC, {0}};
 }
 
@@ -502,6 +632,10 @@ GemVal gem_table_get_ic_miss(GemTable *t, const char *key, GemICacheSlot *cache)
 
 int64_t gem_table_id(GemVal v) {
     return v.type == VAL_TABLE ? (int64_t)(intptr_t)v.table : 0;
+}
+
+int gem_table_braces(GemVal v) {
+    return v.type == VAL_TABLE && v.table->braces;
 }
 
 /* ─── Type name helper ─── */

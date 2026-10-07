@@ -195,9 +195,11 @@ end
 ```
 
 With `let total = total + x` inside the loop, each iteration makes a new
-`total` that disappears at the end of the iteration, and `sum` returns `0`
-with no warning. The compiler warns only in one case: a `let` in a `while`
-body that hides a variable the loop's condition reads.
+`total` that disappears at the end of the iteration, and `sum` returns `0`.
+The compiler warns about a loop's `let` that reads the name it declares
+when the code after the loop reads the outer one, and about a `let` in a
+`while` body that hides a variable the loop's condition reads. A `let` in
+an `if` branch meant to update an outer variable gets no warning.
 
 Shadowing on purpose is fine. The new variable's initializer still sees
 the old one, so `let n = n - 1` and `let line = string.trim(line)` work,
@@ -316,8 +318,9 @@ with no step; count down with a `while`.
 `for k, v in tbl` visits keys in `keys(tbl)` order (insertion order for
 string keys, until a `delete` moves the last key into the hole); on an
 array, `k` is the index. The single-variable form `for x in t` is for
-arrays only: on a record it yields `nil` for every entry. Use `for k, v in
-t` or `values(t)`.
+arrays only: on a table with any other key it raises (`for: one loop
+variable needs an array or a string, ...`). Use `for k, v in t` or
+`values(t)`.
 
 ### Don't add or remove entries of what you're iterating **(trap)**
 
@@ -442,8 +445,7 @@ Literals (`when 200`, `when "get"`) compare by value without a pin. A
 name bound twice in one pattern (`when [x, x]`) is a compile error, not an
 equality test: bind two names and compare them in the arm.
 There are no guards or alternatives: `when v > 5` and `when "a" or "b"`
-compile, but compare the target with the *value* of `v > 5` or `"a" or
-"b"`. Use an `if` chain, or one arm per value.
+are compile errors. Use an `if` chain, or one arm per value.
 
 ### Give `match` an `else` when no arm should be skipped **(trap)**
 
@@ -515,12 +517,19 @@ itself optional, and an explicit `nil` for the bag also becomes `{}`;
 without `= {}`, passing `nil` is an error. Destructured names are ordinary
 locals that closures and `spawn` bodies can capture.
 
-### Arity is not checked
+### Arity is checked only for direct calls
 
-A call with too many arguments drops the extras, and missing arguments are
-`nil` (or their default). Neither is an error, so a wrong call shows up
-later as a `nil` somewhere else. An `extern fn` is the exception: it
-raises unless the count matches exactly.
+A call to a named fn, an `extern fn` or a module-level `let f = fn(...)`
+that nothing reassigns, by name or as a module export (`json.encode(x)`),
+with fewer arguments than its parameters without defaults, or more than
+all of them (and no rest parameter), is a compile error. Make a parameter
+optional with a default (`msg = nil`), not by leaving it out at the call.
+
+A call through a value (a parameter, variable or table field holding a
+fn, as in a callback) is not checked: extra arguments are dropped and
+missing ones are `nil`, so a wrong call shows up later as a `nil`
+somewhere else. An `extern fn` called through a value still raises
+unless the count matches exactly.
 
 ### `+=` works only on variables
 
@@ -561,12 +570,11 @@ let r = pcall do
 end
 ```
 
-`pcall fn() ... end` does *not* run the closure: it evaluates the closure
-expression and returns `{ok: true, value: <fn>}`. `pcall(f, x)` calls
-`f()` with no arguments, dropping `x`. And `pcall(f(x))`, with
-parentheses, is the function form: `f(x)` runs first, as its argument,
-outside the protection, so its error is not caught. Stick to `pcall f(x)` and
-`pcall do ... end`.
+`pcall(f(x))`, with parentheses, is the function form: `f(x)` runs first,
+as its argument, outside the protection, so its error is not caught.
+Stick to `pcall f(x)` and `pcall do ... end`. (`pcall fn() ... end`,
+which wouldn't run the closure, `pcall f` and `pcall(f, x)` are compile
+errors.)
 
 ### `fn main` runs automatically
 
@@ -607,12 +615,13 @@ k)` can. `x in tbl` means `has_key` only on a table with string keys. On a
 table without them (an array, or a set like `seen[id] = true`) it scans
 the *values*, so test such a set with `has_key(seen, id)`.
 
-Int keys are fast only in the array pattern (`0 .. n-1`). Any other int
-key, and any float, bool or table key, is found by a linear scan, so a
-large set or index keyed that way is quadratic **(trap)**: 20,000 sparse
-int ids (`seen[id] = true`, then `has_key`) took 3.1 s, the same ids as
-string keys (`seen["{id}"] = true`) 30 ms. Key big sets and indexes by
-string.
+In a table of more than 8 entries, string, int, float, bool and ref keys
+are hashed: 20,000 sparse int ids
+(`seen[id] = true`, then `has_key`) take 3 ms, the same ids as string
+keys 9 ms (macOS arm64, M1 Pro). A table used as a key is found by a
+linear scan, so a large set of tables is quadratic **(trap)**: adding
+20,000 tables as keys took 0.27 s. Key such a set by an id the tables
+carry.
 
 Assigning `nil` doesn't remove a key: after `t.x = nil`, `x` is still in
 `keys(t)`, `len(t)` and `json.encode(t)`. Use `delete(t, "x")`.
@@ -632,9 +641,10 @@ exception: it compares tables by structure.
 
 ### Tables and JSON
 
-An empty array and an empty record can't be told apart, so `json.encode({})`
-gives `[]`, and so does a record emptied with `delete`. When an empty
-object matters on the wire, write that part of the JSON yourself (`'{}'`).
+An empty table encodes as `{}` when it was made with braces (`{}`, a
+record emptied with `delete`, an object from `json.parse`) and as `[]`
+otherwise (`[]`, `keys(t)`), so start a record with `{}` and a list with
+`[]`.
 
 `json.encode` writes keys in insertion order, so two equal records built in
 different orders encode differently. A table is a JSON array only when its
@@ -658,19 +668,16 @@ Negative integers are always positions from the end (`arr[-1]` is the last
 element), never keys: `t[-10] = x` raises on a table with fewer than 10
 entries. Use string keys for data keyed by negative numbers.
 
-### `sort` comparators return a number **(trap)**
+### `sort` comparators return a number
 
 `sort(arr, cmp)` sorts in place and expects `cmp(a, b)` to return a
-negative number, zero or a positive number. A boolean comparator
-(`fn(a, b) a < b end`) leaves the array unsorted, with no error:
+negative number, zero or a positive number; a boolean comparator
+(`fn(a, b) a < b end`) raises `sort: the comparator must return a number
+...`:
 
 ```gem
 sort(people, fn(a, b) a.age - b.age end)
 ```
-
-`table.sort(arr, cmp)` (std/table) checks what the comparator returns for
-the first two elements and raises `table.sort: the comparator must return
-a number ...` instead.
 
 `sort` and `table.sort` take only arrays; to order a record, sort
 `keys(t)` or `values(t)`.
@@ -758,11 +765,11 @@ them whole.
 
 ## Errors
 
-### `error` takes a string **(trap)**
+### `error` takes a string
 
-`error({code: 404})` and `error(42)` lose the value: `pcall` reports the
-message as the string `"error"`. When callers need structure, return a
-result table instead of raising.
+`error({code: 404})` raises the string `"{code: 404}"`: `pcall`'s `error`
+is always a string, so `r.error.code` doesn't work. When callers need
+structure, return a result table instead of raising.
 
 ### Prefix messages with where they came from
 
@@ -985,8 +992,8 @@ end
 
 - Inside the `spawn` body, `self()` is the child. Take the parent's pid
   before spawning, as above.
-- Pass arguments through the closure: `spawn(worker, 5)` calls `worker()`
-  with no arguments.
+- Pass arguments through the closure: `spawn do worker(5) end`
+  (`spawn(worker, 5)` is a compile error).
 - Spawn a literal function (`spawn do ... end`) rather than one held in a
   variable: the compiler follows a literal body to find writes to
   module-level state and print a `note:`.
@@ -1406,11 +1413,6 @@ write_stdout(build_string do |add|
 end)
 ```
 
-### `tcp_listen` takes an IP address
-
-`tcp_listen("localhost", port)` raises `invalid address`; pass
-`"127.0.0.1"` or `"0.0.0.0"`. `tcp_connect` accepts host names.
-
 ### Pass timeouts to reads, check writes
 
 - `tcp_read(fd, n, timeout_ms)` returns `""` at end of stream and `nil` on
@@ -1632,12 +1634,14 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
   everything else with `==`, so `1` doesn't equal `1.0`. A failure shows
   both values, the path to the first difference, and the types when they
   differ: `expected {a: [1, 2]}, got {a: [1, 2.0]}: at .a[1], expected 2
-  (int), got 2.0 (float)`. `assert_throws` returns the error message, so
-  check it with `assert_eq` when it matters.
+  (int), got 2.0 (float)`. `assert_eq` and `assert_neq` take an optional
+  message, shown after the prefix (`test.assert_eq(n, 3, "count")`).
+  `assert_throws` returns the error message, so check it with `assert_eq`
+  when it matters.
 - Register cases with `test.case` at the top level (or from `main`), in
-  the process that calls `test.run()`. The case list is a module-level
-  variable, so a case registered inside a spawned process lands in that
-  process's copy and never runs.
+  the process that calls `test.run()`; `test.case` raises when called in a
+  spawned process, whose copy of the case list `test.run()` would never
+  see.
   `test.run()` calls `exit(1)` when a case fails, which ends the whole
   program with status 1, so nothing after it runs.
 - A test that spawns a process should `spawn_monitor` it (or use `task`)
@@ -1685,7 +1689,7 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 
 | Trap | What happens | Do instead |
 |---|---|---|
-| `let x = ...` inside a block, meant to update an outer `x` | new variable; the outer one never changes | `x = ...` without `let` |
+| `let x = ...` inside a block, meant to update an outer `x` | new variable; the outer one never changes (a warning only in loops) | `x = ...` without `let` |
 | Module-level variable read before its `let` runs | `nil` | module-level `let`s at the top |
 | Module-level `let` used as shared state | each process changes only its own copy | keep shared state in a process |
 | Module-level table pushed to between spawns | copied into every child: O(n²) time and memory | keep it in a local of `fn main` |
@@ -1694,28 +1698,22 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | Expression continued on the next line | parse error, or a silent separate statement | named `let`s |
 | `delete(arr, i)` | hole in the array; `for` misses the last element | `remove_at(arr, i)` |
 | `delete`/`remove_at`/`push` on what a `for` iterates | skips or adds entries, visits `nil` | iterate a snapshot (`keys(tbl)`) |
-| `for x in record` | `x` is `nil` for every entry | `for k, v in record` |
 | `t.x = nil` to remove a key | key stays | `delete(t, "x")` |
 | `id in seen` on an int-keyed set | scans values | `has_key(seen, id)` |
-| Large set or index with sparse int (or table) keys | quadratic | string keys (`"{id}"`) |
-| Boolean `sort` comparator | array left unsorted | return `a - b` |
-| `json.encode({})` | `[]` | write `'{}'` yourself |
+| Large set or index with tables as keys | quadratic | key by an id the tables carry |
 | `match` with no arm matching | yields `nil` silently | add an `else` |
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |
-| `when x > 5`, `when "a" or "b"` | compares with a bool / one value | `if` chain |
 | `nil` passed for a defaulted parameter or option field | parameter (field) is `nil` | leave the argument (key) out |
-| `pcall fn() ... end`, `pcall(f, x)`, `pcall(f(x))` | runs nothing / drops `x` / doesn't catch | `pcall f(x)`, `pcall do ... end` |
+| `pcall(f(x))` | `f(x)` runs outside the protection: not caught | `pcall f(x)`, `pcall do ... end` |
 | Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
 | `2.0 == 2` | `false` | convert first |
 | `to_int` on user input or a file line | raises | `trim`, then `pcall` |
 | String accumulator read inside its loop | quadratic | `build_string` |
-| `error(non_string)` | message becomes `"error"` | string message or result table |
 | Re-raising with `error(r.error)` | original stack lost | log `r.stack` first |
 | `loop(state)` followed by more statements | stack and memory grow until overflow | self call as the last expression |
 | `warning: cannot reset ... back-edge` on a `while true` | memory grows without bound | restructure the loop |
 | gen_server callback returning `nil` | server dies, the `call` raises | `else` arm returning a result table |
 | `self()` inside `spawn do ... end` to mean the parent | it's the child | `let parent = self()` before |
-| `spawn(f, x)` | `f` called with no arguments | `spawn do f(x) end` |
 | `link` to a process that may have exited | caller dies with `noproc` | `spawn_link` |
 | Reply pattern without `^ref` | takes a stale reply | `ref: ^ref` |
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
@@ -1734,5 +1732,4 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | `if not p` on a `Ptr` | `NULL` is `0`, which is truthy | `p == 0` |
 | A `Ptr` sent, captured by `spawn`, or left when its process dies | shared or leaked C object; use after free | one process makes, uses and frees it, on every path |
 | Handle opened, process crashes | fd leak | close on every path |
-| `tcp_listen("localhost", ...)` | raises | `"127.0.0.1"` |
 | `tcp_read` with no timeout | blocks forever on a silent peer | pass a timeout |

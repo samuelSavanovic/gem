@@ -526,12 +526,19 @@ fn encode_string(str, buf)
   buf_push(buf, "\"")
 end
 
+# Whether table `t` was made by a `{...}` literal (runtime/gem_core.c).
+extern fn gem_table_braces(t: Table) -> Bool
+
 # A table is a JSON array when its keys are exactly 0 .. n-1 (in any
-# order; keys are distinct, so "all ints in range" is enough). Returns
+# order; keys are distinct, so "all ints in range" is enough), except an
+# empty table made by a `{...}` literal, which is an object. Returns
 # "array" (keys in place, `t[i]` is direct), "unordered" (a permutation of
 # 0 .. n-1) or "object". One pass, no allocation.
 fn table_kind(t)
   let n = len(t)
+  if n == 0 and gem_table_braces(t)
+    return "object"
+  end
   let i = 0
   let in_place = true
   for k, v in t
@@ -629,17 +636,18 @@ end
 ## Returns `val` as compact JSON text (no spaces or newlines).
 ##
 ## A table whose keys are exactly the ints 0 .. n-1, in whatever order
-## they were added (the empty table too), becomes an array; any other table becomes an object, its int keys
-## written as strings and its members in the table's iteration order. A
-## key whose value is nil is written as `null`. Strings are written byte
+## they were added, becomes an array; any other table becomes an object,
+## its int keys written as strings and its members in the table's
+## iteration order. An empty table becomes `{}` when it was made by a
+## `{...}` literal (as `json.parse` makes objects), even if its keys were
+## deleted since, and `[]` otherwise (`[]`, `keys(t)`, `values(t)`, ...).
+## A key whose value is nil is written as `null`. Strings are written byte
 ## for byte: `"`, `\` and bytes below 0x20 are escaped, other bytes (DEL,
 ## UTF-8 or not) are not.
 ##
-## So an empty object doesn't round-trip:
-## `json.encode(json.parse('{}'))` is `"[]"`.
-##
 ##   json.encode({a: 1, b: [1, nil]})    # '{"a":1,"b":[1,null]}'
-##   json.encode({})                     # "[]"
+##   json.encode({})                     # "{}"
+##   json.encode([])                     # "[]"
 ##   json.encode({0: "a", 2: "b"})       # '{"0":"a","2":"b"}'
 ##   json.encode(2.0)                    # "2.0"
 ##

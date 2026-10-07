@@ -75,8 +75,9 @@ spawn do
 end
 print(receive())
 
-# Zero-arg tail call to a param-capturing function: params become nil.
-fn zero(a, b)
+# Zero-arg tail call to a param-capturing function: params take their
+# defaults.
+fn zero(a = nil, b = nil)
   let f = fn() [a, b] end
   if a == nil then return f() end
   zero()

@@ -743,6 +743,182 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
   end
 
+  # ─── Argument counts of direct calls (compile error) ──
+  #
+  # A call to a named fn, an extern fn, a module-level `let name = fn(...)`
+  # that is declared once and never assigned, or a module export `m.f` of
+  # one of those must pass
+  # at least the fn's required parameters (those up to the last one without
+  # a default) and at most all of them, unless it has a rest parameter.
+  # scope_shadowing_lets has renamed every let named like a fn or a
+  # module-level binding, and every parameter named like a fn, so a `var`
+  # callee with such a name is that fn unless an enclosing fn has a
+  # parameter of that name. Calls through other values (a variable,
+  # parameter or table field holding a fn) are not checked.
+  let check_call_arities = fn(fn_defs, extern_fns_list, top_stmts)
+    let arity = {}
+    let let_fns = {}
+    # Every name an `x = ...` (or `x += ...`) assigns, anywhere.
+    let assigned = {}
+    let find_assigns = nil
+    find_assigns = fn(node)
+      if node.tag == "assign"
+        set_add(assigned, node.name)
+      end
+      for k, v in node
+        if type(v) == "table" and k != "liveness_result"
+          find_assigns(v)
+        end
+      end
+    end
+    for fd in fn_defs
+      find_assigns(fd)
+    end
+    for s in top_stmts
+      find_assigns(s)
+    end
+    let top_let_count = {}
+    for s in top_stmts
+      let lets = [s]
+      if s.tag == "block"
+        lets = s.stmts
+      end
+      for l in lets
+        if l.tag == "let"
+          top_let_count[l.name] = (top_let_count[l.name] or 0) + 1
+        end
+      end
+    end
+    for s in top_stmts
+      if s.tag == "let" and is_node(s.value, "anon_fn") and top_let_count[s.name] == 1 and not set_contains(assigned, s.name) and set_contains(top_level_vars, s.name)
+        let f = s.value
+        let min = 0
+        for i = 0, len(f.params)
+          if f.defaults == nil or f.defaults[i] == nil
+            min = i + 1
+          end
+        end
+        let max = len(f.params)
+        if f.rest_param != nil
+          max = nil
+        end
+        arity[s.name] = {min: min, max: max, def: {params: f.params, defaults: f.defaults, rest_param: f.rest_param, line: s.line, file: file_of(s), tag: "let"}}
+        let_fns[s.name] = true
+      end
+    end
+    for fd in fn_defs
+      let min = 0
+      for i = 0, len(fd.params)
+        if fd.defaults == nil or fd.defaults[i] == nil
+          min = i + 1
+        end
+      end
+      let max = len(fd.params)
+      if fd.rest_param != nil
+        max = nil
+      end
+      arity[fd.name] = {min: min, max: max, def: fd}
+    end
+    for ef in extern_fns_list
+      arity[ef.name] = {min: len(ef.params), max: len(ef.params), def: ef}
+    end
+    let reported = {}
+    let check = fn(call, name, shown, loc, span)
+      let a = arity[name]
+      let n = len(call.args)
+      if a == nil or (n >= a.min and (a.max == nil or n <= a.max))
+        return nil
+      end
+      let key = "{file_of(loc)}:{loc.line}:{loc.col}"
+      if reported[key] != nil
+        return nil
+      end
+      reported[key] = true
+      let takes = "{a.min}"
+      if a.max == nil
+        takes = "at least {a.min}"
+      elif a.max != a.min
+        takes = "{a.min} to {a.max}"
+      end
+      let noun = "arguments"
+      if a.max == 1 and a.min == 1
+        noun = "argument"
+      end
+      let sig = []
+      let d = a.def
+      for i = 0, len(d.params)
+        let pname = user_var_name(d.params[i])
+        if d.tag == "extern_fn"
+          pname = d.params[i].name
+        elif d.defaults != nil and d.defaults[i] != nil
+          pname = pname + " = ..."
+        end
+        push(sig, pname)
+      end
+      if d.rest_param != nil
+        push(sig, "..." + user_var_name(d.rest_param))
+      end
+      let sig_text = ""
+      for i = 0, len(sig)
+        if i > 0
+          sig_text = sig_text + ", "
+        end
+        sig_text = sig_text + sig[i]
+      end
+      let hint = "it is defined as `{shown}({sig_text})`"
+      if d.line != nil
+        hint = hint + " at {rel_path(file_of(d))}:{d.line}"
+      end
+      if n < a.min
+        hint = hint + "; to make a parameter optional, give it a default (`name = nil`)"
+      elif n > 0 and is_node(call.args[n - 1], "anon_fn") and call.args[n - 1].do_block == true
+        hint = hint + "; the `do` block is the last argument"
+      end
+      sink.report(source_of(loc), file_of(loc), loc.line, loc.col, span, "`{shown}` takes {takes} {noun}, called with {n}", hint)
+    end
+    # The builtins that take one fn and call it with no arguments.
+    let one_fn = {pcall: "pcall f(x)", spawn: "spawn do f(x) end", spawn_link: "spawn_link do f(x) end", spawn_monitor: "spawn_monitor do f(x) end"}
+    # `params`: the parameters of the enclosing fns. scope_shadowing_lets
+    # renames lets named like a builtin, but not such parameters.
+    let walk = nil
+    walk = fn(node, params)
+      if node.tag == "fn_def" or node.tag == "anon_fn"
+        params = set_union(params, sorted_array_to_set(node.params))
+        if node.rest_param != nil
+          set_add(params, node.rest_param)
+        end
+      end
+      if node.tag == "call"
+        let f = node.func
+        if is_node(f, "var") and has_key(one_fn, f.name) and not set_contains(params, f.name) and len(node.args) != 1
+          sink.report(source_of(f), file_of(f), f.line, f.col, len(f.name), "`{f.name}` takes one fn and calls it with no arguments, called with {len(node.args)} arguments", "to pass arguments, wrap the call: `{one_fn[f.name]}`")
+        elif is_node(f, "var") and arity[f.name] != nil and not (let_fns[f.name] == true and set_contains(params, f.name))
+          let shown = frame_name(f.name)
+          check(node, f.name, shown, f, len(shown))
+        elif is_node(f, "dot") and is_node(f.object, "var") and has_key(module_ns, f.object.name)
+          let target = module_ns[f.object.name][f.field]
+          if target != nil and arity[target] != nil
+            let shown = "{display_name(f.object.name)}.{f.field}"
+            check(node, target, shown, f.object, len(shown))
+          end
+        end
+      end
+      # An untagged table (a statement list, table literal entries, a
+      # receive arm's pattern) is walked through like a node.
+      for k, v in node
+        if type(v) == "table" and k != "liveness_result"
+          walk(v, params)
+        end
+      end
+    end
+    for fd in fn_defs
+      walk(fd, {})
+    end
+    for s in top_stmts
+      walk(s, {})
+    end
+  end
+
   emit_tco_continue = fn(call_node, indent)
     let p = pad_for(indent)
     let b = buf_new()
@@ -1049,7 +1225,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let entries = node.entries
     let t = tmp()
     let b = buf_new()
-    buf_push(b, "    GemVal {t} = gem_table_new();\n")
+    buf_push(b, "    GemVal {t} = gem_table_new_braces();\n")
     for entry in entries
       let val_r = compile_expr(entry.value)
       buf_push(b, val_r.setup)
@@ -3050,6 +3226,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       end
     end
     note_spawn_global_writes()
+    check_call_arities(fn_defs, extern_fns_list, top_stmts)
     let top_captured = find_captured_in_scope(top_stmts, {}, is_global_name)
     # Module-level bindings are slots, never captured. Main's other locals
     # (lets nested in top-level loops/ifs) box like a fn's locals.

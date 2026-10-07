@@ -780,13 +780,9 @@ collect_closure_captures_in_node = fn(node, defined, caps)
     if nk != "tag" and type(v) == "table"
       let vks = keys(v)
       if len(vks) > 0 and type(vks[0]) == "int"
-        let vi = 0
-        while vi < len(v)
-          if type(v[vi]) == "table"
-            collect_closure_captures_in_node(v[vi], defined, caps)
-          end
-          vi += 1
-        end
+        # A statement list (an `if` arm, a nested loop body, a block): its
+        # lets are the arm's own locals for the closures after them.
+        collect_closure_captures_in_stmts(v, defined, caps)
       else
         collect_closure_captures_in_node(v, defined, caps)
       end

@@ -1,0 +1,47 @@
+date: 2026-10-07T15:56:00Z
+gem commit: 5bae04c
+system: Darwin 27.0.0 arm64
+os: macOS 27.0.1 (26A434)
+cpu: Apple M1 Pro, 10 cores (8 performance)
+memory: 16 GB
+power: AC Power
+low power mode: 0
+load average at start: 1.46 1.45 2.59
+cc: Apple clang version 21.0.0 (clang-2100.3.34.2)
+python3: Python 3.14.5
+python3.14: Python 3.14.5
+node: v25.9.0
+elixir: Elixir 1.20.1 (compiled with Erlang/OTP 29)
+redis: Redis server v=8.10.2 sha=00000000:1 malloc=libc bits=64 build=764b3e45065a66fb
+wrk: wrk 4.2.0 [kqueue] Copyright (C) 2012 Will Glozer
+grep: ggrep (GNU grep) 3.12
+REPS=5 WARMUP=1
+GUARD_RSS_MB=8192 GUARD_SWAP_MB=2048 GUARD_TIMEOUT_S=2400
+SECTIONS=logstat lox gemgrep jobqueue bookmark bookmark_node mini_redis stomp
+
+=== logstat (17:56:01, load 1.46 1.45 2.59)
+logstat        ok        83 s  peak    267 MB
+
+=== lox (17:57:24, load 1.43 1.45 2.48)
+lox            ok       118 s  peak    105 MB
+
+=== gemgrep (17:59:22, load 1.48 1.43 2.33)
+gemgrep        ok       162 s  peak    371 MB
+
+=== jobqueue (18:02:04, load 1.37 1.42 2.17)
+jobqueue       ok       575 s  peak    396 MB
+
+=== bookmark (18:11:43, load 1.25 1.32 1.71)
+bookmark       ok       376 s  peak     26 MB
+
+=== bookmark_node (18:17:59, load 2.95 2.29 2.03)
+bookmark_node  ok       377 s  peak    319 MB
+
+=== mini_redis (18:24:16, load 2.66 2.41 2.18)
+mini_redis     ok        89 s  peak    930 MB
+
+=== stomp (18:25:45, load 2.48 2.40 2.19)
+stomp          ok        77 s  peak    759 MB
+
+wrote /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-07_m1pro/summary.csv (1512 rows) and /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-07_m1pro/summary.md
+baseline in /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-07_m1pro
