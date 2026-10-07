@@ -75,3 +75,66 @@ building bookmark
 load: deadline after 3601 s
 
 ── stomp: 3600 s, from 19:56:02 ──
+      30 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.5 ms  job p99 0.9 ms
+      90 s  RSS 35 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+     150 s  RSS 43 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+     210 s  RSS 38 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+     270 s  RSS 41 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+     330 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+     390 s  RSS 39 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+     450 s  RSS 41 MB  fds 42  errors 0  deliver p99 1.4 ms  job p99 0.9 ms
+     510 s  RSS 36 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+     570 s  RSS 43 MB  fds 42  errors 0  deliver p99 1.4 ms  job p99 0.8 ms
+     630 s  RSS 37 MB  fds 42  errors 0  deliver p99 1.4 ms  job p99 0.8 ms
+     690 s  RSS 40 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+     750 s  RSS 36 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+     810 s  RSS 41 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+     870 s  RSS 38 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+     930 s  RSS 41 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+     990 s  RSS 37 MB  fds 42  errors 0  deliver p99 1.4 ms  job p99 0.8 ms
+    1050 s  RSS 43 MB  fds 42  errors 0  deliver p99 1.5 ms  job p99 0.9 ms
+    1110 s  RSS 38 MB  fds 42  errors 0  deliver p99 1.1 ms  job p99 0.7 ms
+    1170 s  RSS 39 MB  fds 42  errors 0  deliver p99 1.5 ms  job p99 0.9 ms
+    1230 s  RSS 34 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    1290 s  RSS 41 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    1350 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.8 ms
+    1410 s  RSS 43 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.8 ms
+    1470 s  RSS 41 MB  fds 42  errors 0  deliver p99 1.1 ms  job p99 0.7 ms
+    1530 s  RSS 38 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+    1590 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.7 ms
+    1650 s  RSS 41 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    1710 s  RSS 40 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    1770 s  RSS 44 MB  fds 42  errors 0  deliver p99 1.4 ms  job p99 0.8 ms
+    1830 s  RSS 39 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+    1890 s  RSS 40 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.7 ms
+    1950 s  RSS 40 MB  fds 42  errors 0  deliver p99 1.4 ms  job p99 0.7 ms
+    2010 s  RSS 40 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+    2070 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.1 ms  job p99 0.7 ms
+    2130 s  RSS 41 MB  fds 42  errors 0  deliver p99 1.1 ms  job p99 0.7 ms
+    2190 s  RSS 35 MB  fds 42  errors 0  deliver p99 1.1 ms  job p99 0.7 ms
+    2250 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    2310 s  RSS 36 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.8 ms
+    2370 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    2430 s  RSS 41 MB  fds 42  errors 0  deliver p99 1.1 ms  job p99 0.7 ms
+    2490 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    2550 s  RSS 43 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    2610 s  RSS 45 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    2670 s  RSS 38 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    2730 s  RSS 40 MB  fds 42  errors 0  deliver p99 1.1 ms  job p99 0.7 ms
+    2790 s  RSS 43 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    2850 s  RSS 41 MB  fds 42  errors 0  deliver p99 1.4 ms  job p99 0.8 ms
+    2910 s  RSS 41 MB  fds 42  errors 0  deliver p99 1.1 ms  job p99 0.7 ms
+    2970 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    3030 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.4 ms  job p99 0.8 ms
+    3090 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    3150 s  RSS 44 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    3210 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    3270 s  RSS 39 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    3330 s  RSS 43 MB  fds 42  errors 0  deliver p99 1.3 ms  job p99 0.7 ms
+    3390 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    3450 s  RSS 45 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    3510 s  RSS 42 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+    3570 s  RSS 43 MB  fds 42  errors 0  deliver p99 1.2 ms  job p99 0.7 ms
+load: deadline after 3601 s
+
+── bookmark: 3600 s, from 20:56:04 ──
