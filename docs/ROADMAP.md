@@ -2,7 +2,7 @@
 
 Forward-looking features that are not yet implemented. Distinct from `OPTIMIZATIONS.md` (perf work on existing capabilities) and `LSP_ROADMAP.md` (tooling). Items here change what the language can *do*, not how fast it does it.
 
-Priority scale: **P0** = next likely feature work, **P1** = clear value, larger scope, **P2** = speculative.
+Priority scale: **P0** = next likely feature work, **P1** = clear value, larger scope, **P2** = speculative, **P3** = small, or waiting for a program that needs it.
 
 ## Distribution / horizontal scaling (P1)
 
@@ -66,12 +66,11 @@ Today, wrapping a C library that uses small structs by value (raylib's `Vector2`
 
 ## Package manager / external dependencies (P2)
 
-`load` today resolves stdlib (`std/...`) and project-local paths. There is no story for depending on third-party Gem code — no manifest, no fetch, no version pinning, no lockfile. Becomes pressing the moment a second real Gem app wants to share code with the first. Likely shape: a `gem.toml` manifest, a `gem_modules/` (or `.gem/deps/`) cache, git-URL or registry-based resolution, lockfile for reproducibility. Design intentionally deferred until pull from real users.
+`load` today resolves stdlib (`std/...`) and project-local paths. There is no story for depending on third-party Gem code — no manifest, no fetch, no version pinning, no lockfile. Becomes pressing the moment a second real Gem app wants to share code with the first. Likely shape: dependencies declared in `gem.toml` (today an empty marker for the project root; SPEC "Project root marker"), a `gem_modules/` (or `.gem/deps/`) cache, git-URL or registry-based resolution, lockfile for reproducibility. The design waits for real users' needs.
 
-## std API gaps found by the blind doc review (P2)
+## std API gaps (P2)
 
-A blind reader wrote programs against std from its `##` docs alone (2026-10). These came up as missing
-API, not doc problems:
+Std API that programs need and the std modules lack:
 
 - **`gen_server.stop`**: there is no way to stop a server except `kill(h.pid, reason)` or a supervisor. Add
   `stop(target, reason = "normal", timeout_ms = 5000)` that waits for the exit, like `supervisor.stop`,
@@ -103,7 +102,7 @@ API, not doc problems:
 
 ## `gem doc` and checked doc examples (P3)
 
-`##` doc comments (BEST_PRACTICES.md, "Document the public API with `##`") document the public API of std and user modules, but nothing reads them yet outside the editor. Needs: a `gem doc <file>` subcommand that prints (or writes HTML for) a module's header and its exported functions' docs, using the same comment collection as LSP hover; and a doctest pass that runs each `call    # result` example line and compares the printed value, wired into `make test` for std, so docs can't drift from behavior (as Rust's doctests do). Trade-off: examples have to stay self-contained one-liners for the checker; a multi-line example would need an explicit marker.
+`##` doc comments (BEST_PRACTICES.md, "Document the public API with `##`") document the public API of std and user modules, but nothing reads them yet. Needs: a `gem doc <file>` subcommand that prints (or writes HTML for) a module's header and its exported functions' docs, with a comment collection an LSP hover could reuse; and a doctest pass that runs each `call    # result` example line and compares the printed value, wired into `make test` for std, so docs can't drift from behavior (as Rust's doctests do). Trade-off: examples have to stay self-contained one-liners for the checker; a multi-line example would need an explicit marker.
 
 ## Debugger / breakpoints (P2)
 
@@ -149,12 +148,12 @@ What needs building: an ETS-like store owned by a process, whose entries live ou
 
 ## Deep non-tail recursion ceiling (P3)
 
-Every process, main included, runs on an 8 MB stack (`GEM_CORO_STACK_SIZE` in `runtime/gem.h`, `GEM_MAIN_STACK_SIZE` in `runtime/gem_scheduler.c`). The stacks are mmap'd, so only the pages a process touches cost memory. That is roughly 30,000 frames of a small recursive function, and about 2,000 nesting levels for the `std/json` parser (3,000 for the encoder; both refuse more than 1,000, see SPEC). Recursing past it no longer crashes the program. A Gem call that would run into the bottom 256 KB raises `"stack overflow in <fn>"`, which `pcall` catches. Native code that overflows on its own (a recursive C function behind an `extern fn`) hits a guard page, and only the offending process dies; the runtime's value copies and frees are iterative, so deep data cannot get there. SPEC §"Stack depth" has the user-facing rules. Tail calls, self or mutual within one tail-call cycle, do not consume stack at all (see `OPTIMIZATIONS_LOG.md` §"Mutual TCO via tail-edge SCC trampoline").
+Every process runs on an 8 MB stack (`GEM_CORO_STACK_SIZE` in `runtime/gem.h`, `GEM_MAIN_STACK_SIZE` in `runtime/gem_scheduler.c`), roughly 30,000 frames of a small recursive function; a Gem call past it raises `"stack overflow in <fn>"` (SPEC "Stack depth"). Tail calls don't use stack.
 
-What's left:
+Not covered:
 
-- **Growable stacks.** The depth bound itself remains: a recursion that needs more than 8 MB fails, cleanly. Removing the bound means growing stacks on demand (copying stacks, or segmented stacks with a fault-driven grow path). High cost: minicoro has no support, pointers into the stack would have to be fixed up, and the signal-handler path gets harder. The motivation is programs that want unbounded recursion to *succeed*, e.g. recursive descent over adversarially deep input without a depth cap. So far an explicit depth limit (as `std/json` has) has been the better answer.
-- **Pcall for guard-page overflows.** An overflow caught by the guard page (inside C code) always ends the process, because the C code it interrupts may hold half-updated state. Only `extern fn` code can get there now (`gem_deep_copy` and `gem_deep_free` are iterative); making it catchable would need a contract for what an interrupted extern may leave behind.
+- **Growable stacks.** The depth bound itself remains: a recursion that needs more than 8 MB fails, cleanly. Removing the bound means growing stacks on demand (copying stacks, or segmented stacks with a fault-driven grow path). High cost: minicoro has no support, pointers into the stack would have to be fixed up, and the signal-handler path gets harder. The motivation is programs that want unbounded recursion to *succeed*, e.g. recursive descent over adversarially deep input without a depth cap. An explicit depth limit (as `std/json` has) covers that case.
+- **Pcall for guard-page overflows.** An overflow caught by the guard page (inside C code) always ends the process, because the C code it interrupts may hold half-updated state. Only `extern fn` code can reach it (`gem_deep_copy` and `gem_deep_free` are iterative); making it catchable would need a contract for what an interrupted extern may leave behind.
 
 ## Exponent syntax in float literals (P3)
 

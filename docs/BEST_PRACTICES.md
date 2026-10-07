@@ -6,8 +6,8 @@ runtime's traps. [`SPEC.md`](SPEC.md) says what the language *does*;
 what to *reach for*.
 
 Every rule and sample here was checked by running it with the compiler.
-Timings were measured on Linux x86_64 and are only meant as orders of
-magnitude. Two markers:
+Timings are only meant as orders of magnitude. One that names no platform
+was measured on Linux x86_64; the others name theirs. Two markers:
 
 - **(trap)**: fails silently, crashes, or falls off a performance cliff.
   Treat it as a hard rule.
@@ -940,7 +940,8 @@ for as long as one copy of that state takes. A process that keeps one
 small record per message it gets pauses for up to 0.04 s at 100,000
 records and 0.25 s at 300,000 (`GEM_DIAG=1`, `max=`; Linux x86_64 VM).
 `examples/jobqueue`'s queue, which keeps a record per job, pauses up to
-0.09 s at 20,000 jobs and 0.25–0.5 s at 100,000. A timer set to 100 ms can
+0.09 s at 20,000 jobs and 0.25–0.5 s at 100,000 (up to 0.02 s and
+0.08–0.09 s on macOS arm64, `benchmarks/baselines/2026-10-07_m1pro`). A timer set to 100 ms can
 then fire before a 20 ms job has had a chance to report. Bound what a
 long-lived process keeps (expire finished records, keep a count instead
 of a history), or split it across processes, and leave deadlines room for
@@ -1475,8 +1476,7 @@ export make, use
 
 A comment that starts with `##` is a doc comment. It is for *callers*:
 the module header and the block directly above each exported function.
-Tools read only `##` lines (editor hover will show them). A plain `#`
-comment is for whoever *maintains* the code: why it's shaped this way,
+A plain `#` comment is for whoever *maintains* the code: why it's shaped this way,
 invariants, performance internals. To decide which one a sentence
 belongs in, ask: **would a caller write different code if they knew
 this?** "Returns -1 when there is none" goes in `##`; "searches growing
@@ -1534,6 +1534,9 @@ once in a helper; don't repeat `if type(t) == "table"` in every function.
 ---
 
 ## C interop
+
+The full rules are in [`SPEC.md`](SPEC.md) ("C Interop"); these are the
+ones that bite.
 
 - Put the C code in a header of `static` functions and write
   `extern include "<path>"` before the `extern fn` declarations, with
@@ -1650,9 +1653,6 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 - Cover the edges as well as the happy path: empty input, a single element,
   `nil` where a table is expected, deep nesting, timeouts, and a process
   dying mid-request.
-- In this repository, every behavior change also gets a numbered example
-  under `examples/`, with its stdout appended to `expected_output.txt`;
-  `make test` runs them all.
 
 ---
 
@@ -1719,14 +1719,14 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
 | Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
 | Calls from a process that also collects a stream of messages | every reply wait scans the stream: quadratic | make the calls from a separate process |
-| A long-lived process holding 100,000s of records | full resets copy them all and stall every process (0.05–0.5 s) | bound or shard the state |
+| A long-lived process holding 100,000s of records | full resets copy them all and stall every process (0.04–0.5 s) | bound or shard the state |
 | `after` in a busy server loop | never fires | `send_after` ticks |
-| `shutdown: opts.shutdown` in a child spec **(trap)** | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
+| `shutdown: opts.shutdown` in a child spec | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
 | Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
 | A child's `start` or a gen_server's `init` waiting for an answer from its starter | deadlock error, or a wait for good or until a timeout | pass it in the spec, or `send(self(), ...)` in `init` |
 | `gen_server.call` to a server that has already died | `server exited: noproc` (by name: `no process registered`), not why it died | monitor it: the `DOWN` has the reason |
-| `spawn` per connection or per item, unguarded **(trap)** | raises at the process or memory limit (~14,000 on stock Linux); the acceptor dies | catch it, or cap in-flight work |
+| `spawn` per connection or per item, unguarded | raises at the process or memory limit (~14,000 on stock Linux); the acceptor dies | catch it, or cap in-flight work |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
 | `extern blocking fn` called once per line or item | a thread hand-off and argument copies per call: 100x slower | plain `extern fn` for quick calls |
 | `if not p` on a `Ptr` | `NULL` is `0`, which is truthy | `p == 0` |

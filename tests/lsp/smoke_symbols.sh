@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/lsp/smoke_symbols.sh — exercises the Phase 1b symbol table by
+# tests/lsp/smoke_symbols.sh — exercises the symbol table by
 # opening a small file, requesting `gem/debug/symbols`, and asserting
 # the expected function/var/import names appear. The debug method is
 # gated on $GEM_LSP_DEBUG so it isn't reachable from a real editor.

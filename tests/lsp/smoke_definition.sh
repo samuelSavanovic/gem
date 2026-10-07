@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# tests/lsp/smoke_definition.sh — exercises Phase 2a goto-definition.
-# Three positions are checked: a same-file function call, a same-file
-# var reference, and a cross-file member access into std/string.
+# tests/lsp/smoke_definition.sh — exercises goto-definition.
+# Four positions are checked: a same-file function call, a same-file
+# var reference, a cross-file member access into std/string, and the
+# module name itself (jumps to the top of std/string.gem).
 
 set -e
 

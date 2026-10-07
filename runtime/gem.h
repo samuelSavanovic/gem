@@ -211,7 +211,7 @@ extern GemFrame *gem_call_stack;
 extern int gem_call_depth;
 
 /* Leaf functions (no calls in the body other than to builtins that run no
- * Gem code, see codegen.gem `body_is_leaf`) push no frame. Instead each one
+ * Gem code, see codegen.gem `fn_is_leaf`) push no frame. Instead each one
  * has a static GemLeafSite; on entry it sets gem_leaf_site to it, updates
  * gem_leaf_line before each statement, and clears gem_leaf_site on return.
  * A leaf calls no Gem code, so it is always the innermost Gem frame: error

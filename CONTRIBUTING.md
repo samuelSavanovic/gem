@@ -16,7 +16,7 @@ gh pr merge --auto --squash --delete-branch
 
 ## CI
 
-Every push and PR runs `.github/workflows/ci.yml` on `ubuntu-24.04` (x86_64) and `ubuntu-24.04-arm` (arm64). Each job:
+Every pull request, and every push to `main`, runs `.github/workflows/ci.yml` on `ubuntu-24.04` (x86_64) and `ubuntu-24.04-arm` (arm64). Each job:
 
 1. `make build` — compile the compiler from `bootstrap/stage0.c`.
 2. `make test` — run the numbered examples against `examples/expected_output.txt`.

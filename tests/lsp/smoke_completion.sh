@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# tests/lsp/smoke_completion.sh — exercises Phase 2a completion. Three
+# tests/lsp/smoke_completion.sh — exercises completion. Three
 # checks: module-import field completion (`string.`), local-table field
-# completion (`t.` after a literal init), and identifier completion
+# completion (`local.` after a literal init), and identifier completion
 # returning at least one builtin.
 
 set -e
