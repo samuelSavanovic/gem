@@ -1,9 +1,9 @@
 # Regression: process loop using a non-`true` cond (graceful shutdown via
-# a `running = false` assignment). The compiler must tag this `while running`
-# loop as process-tail, compute liveness with the post-loop set, and emit
-# arena rescue+reset at the back-edge — same as `while true` does. With 5000
+# a `running = false` assignment). The compiler must compute this
+# `while running` loop's liveness with the post-loop set, and emit
+# an arena region reset at the back-edge — same as `while true` does. With 5000
 # iterations × ~200 bytes/iter the per-process arena exceeds the 1MB reset
-# threshold a few times; a broken rescue would OOM, dangle, or miscount.
+# threshold a few times; a broken reset would OOM, dangle, or miscount.
 
 let main_pid = self()
 

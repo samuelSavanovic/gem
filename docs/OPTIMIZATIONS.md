@@ -2,7 +2,7 @@
 
 Future performance improvements. None are blocking — collect ideas here as they come up. Shipped optimizations live in [`OPTIMIZATIONS_LOG.md`](OPTIMIZATIONS_LOG.md) with their work logs and benchmark anchors.
 
-Priorities are informed by benchmark results from the bookmark CRUD app.
+Priorities come from the yardstick programs in `examples/` (`bookmark_app`, `stomp_broker`, `logstat`, `mini_redis`, `lox`, `gemgrep`, `jobqueue`) and their harnesses in `benchmarks/`.
 
 Priority scale: **P0** = measurable impact on benchmark right now, **P1** = significant but requires groundwork, **P2** = nice to have or niche.
 
@@ -58,8 +58,8 @@ Region resets find old tables written since the mark through a write barrier and
 ### Mailbox messages are copied by the resets that find them in the region (P2)
 Messages are deep-copied into the receiver's arena by the sender, so a backlog that arrives during a loop is part of that loop's region: a reset copies it once and promotes it, and full resets copy what is still queued again, until it is consumed. Every reset still walks the whole mailbox (relinking nodes a selective receive unlinked), so each queued message is charged 256 bytes to the reset budget, which spaces the resets out as a backlog grows; skipping the part of the mailbox older than the young point would need the relinking done another way. Hysteresis keeps the total linear (300 × 100 KB messages drain in linear time), but a large backlog doubles its memory while a reset runs, and consumed messages stay in the kept memory until the next full reset. Allocating message bodies in a separate per-process message arena that a reset never scans (freed when the message is received and dropped) would avoid both; the cost is a second allocator and a copy (or ownership transfer) when the message is received.
 
-### Investigate post-idle high-water at high concurrency (P2)
-Originally reported at 2.39 GB stuck post-c=500 with the 16 MB threshold. After lowering the default threshold to 1 MB, post-idle RSS at c=500 dropped to 174 MB — flat across +0/+30/+90s probes, so it's still not draining, but the absolute waste is now an order of magnitude smaller and unlikely to matter for typical workloads. The underlying mechanism (per-process arenas of completed connection handlers not fully releasing — likely `madvise(DONTNEED)` happens but `munmap` doesn't, or proc-table objects linger until late cleanup) is unchanged. Keep tracking but don't prioritize until a workload demonstrates the residual is a real problem. If revisited, trace `gem_proc_exit` against actual mmap accounting under load.
+### `GEM_DIAG` reports reset totals, not which loop pays them (P2)
+`GEM_DIAG=1` prints one line at exit with the program's reset totals, all processes together (count, bytes copied, scanned and freed, time, the longest reset; `gem_diag_reset_report` in runtime/gem_copy.c). A program whose resets are slow, because some loop keeps a large value live across its back-edge, shows the cost but not the loop. A per-mark breakdown keyed by the loop's source line (resets, bytes copied, longest pause) would point at it.
 
 ## Value Representation
 
@@ -173,16 +173,13 @@ parse-heavy profile (JSON decoding of numeric data) shows `strtod`.
 ### `buf_push` specialization for non-strings (P2)
 `buf_push` auto-coerces non-string values via `to_string`, allocating a temporary string. Specialized variants (`buf_push_int`, `buf_push_float`) that write directly into the buffer would skip the allocation. Small win per call but high frequency in formatting-heavy code.
 
-### Integer-key append in `gem_table_set` scans every key (P1)
-`gem_table_set(t, int k, v)` with `k == len(t)` (append by index) falls through to the linear "find existing key" scan before appending, so building an array by index — and the `keys` and `values` builtins (`gem_keys`/`gem_values` in runtime/gem_builtins_collection.c), which build their result that way, and the rows of a `sqlite_query` result (10,000 rows 0.5 s, 40,000 rows 6.4 s, all inline on the scheduler thread) — is O(n²): `keys` of a 10,000-entry table takes 0.4 s, of 40,000 entries 6.4 s (`values` the same; `for k, v in` over the same table: 4 ms). std/test's deep equality stopped calling `keys` because of it. Fix: an append fast path when every key so far is array-shaped (track a flag on the table, cleared by any non-array key), or have `keys`/`values` push directly.
-
 ### Table grow strategy (P2)
 `gem_table_grow` doubles capacity. Could use a growth factor of 1.5 to reduce memory waste, or start with capacity 0 (no allocation) for tables that might stay empty.
 
 ## Runtime I/O
 
 ### `read_file` holds the file twice at its peak (P2)
-The I/O worker reads the file into a malloc'd buffer, and `gem_read_file_fn` (runtime/gem_builtins_io.c) then copies it into the arena: logstat on a 123 MB log peaks at 261–274 MB RSS (macOS arm64), against 20–33 MB reading the same lines from stdin. Allocating the arena block first and having the worker read into it, or adopting the malloc'd buffer as a large arena block, would halve it; a line reader (ROADMAP "Line-at-a-time input") would keep only the current line.
+The I/O worker reads the file into a malloc'd buffer, and `gem_read_file_fn` (runtime/gem_builtins_io.c) then copies it into the arena: logstat on a 123 MB log peaks at 239–243 MB RSS, against 3–7 MB reading the same lines from stdin (macOS arm64, `benchmarks/baselines/2026-10-07_m1pro`). Allocating the arena block first and having the worker read into it, or adopting the malloc'd buffer as a large arena block, would halve it; a line reader (ROADMAP "Line-at-a-time input") would keep only the current line.
 
 ### Selective receive save-queue optimization (P1)
 `receive ... when` scans the mailbox from oldest to newest on every wake. If a process accumulates many messages and the match is near the end, that's O(n) pattern matches per wake. Erlang's optimization: remember which messages were already tested against the current receive and skip them on re-scan, only testing newly arrived messages. Non-trivial but maps onto the existing mailbox structure — a "scan cursor" per process that advances as messages are rejected and resets when the receive shape changes or a new message arrives.
@@ -227,13 +224,3 @@ Each call of an `extern blocking fn` copies its `String` and `Bytes` arguments i
 
 ### Scanner as plain table instead of closure (P2)
 The closure-based scanner (`{peek, advance, skip_ws}`) pays for hashmap lookup + closure call + captured variable access on every character. A flat table `{input, pos, length}` with module-level functions `peek(s)`, `advance(s)`, `skip_ws(s)` avoids closure overhead. More idiomatic for a language without methods.
-
-## Known DX warts of the rescue+reset mechanism (P2)
-
-The arena reset mechanism is invisible to user code by design — `while true` Just Works and resets at the back-edge once the threshold trips. This list captures the DX warts the mechanism has. None forces users to write code differently; all are observable by users in some form (jitter, throughput, mystery RSS) but not explainable from the source alone.
-
-1. **Latency cliff at threshold crossings.** With a 1 MB threshold, most iterations of a tight loop pay only the gate check; every Nth iteration pays a full sweep+rescue (proportional to live-set size). Visible as p99 jitter on hot HTTP loops — see `OPTIMIZATIONS_LOG.md` for headline numbers. Post-rescue p99 is ~6–20× better than the unbounded-RSS baseline, but the floor isn't flat. Mitigation idea: adaptive threshold based on observed allocation rate, or a hint mechanism per loop. Both edge into "language tax" territory (CLAUDE.md), so probably never worth shipping unless a real workload demands it. Document, don't fix.
-
-2. **Rescue set is invisible.** A user who keeps a 10 MB value live across the back-edge pays for copying it at resets (amortized by the hysteresis, but visible as memory and jitter), with no way to see which loop it is. `GEM_DIAG=1` prints whole-program reset totals (count, bytes copied/scanned/freed, time) at exit; there is still no per-loop accounting. Next step: a `GEM_DEBUG_RESETS=1` that logs `[reset pid=N at line X: rescued K bytes, took T µs]`.
-
-3. **Stdlib comments must not leak the mechanism.** A stdlib reader (or a user reading stdlib for examples) shouldn't have to know about `GEM_ARENA_RESET_THRESHOLD`, "back-edge", "PT tagging", or "rescue+reset". Comments should describe what a function does at the API level. Caught and removed two such comments in `std/http.gem` (commit `91bb6be`): `accept_loop`'s stale "depth 2 from process entry" fence, and `handle_connection_loop`'s `GEM_ARENA_RESET_THRESHOLD` reference. Future stdlib additions (and CLAUDE.md guidance) should keep this discipline. Not really an optimization — call it a documentation invariant.

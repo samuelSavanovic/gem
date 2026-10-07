@@ -132,12 +132,13 @@ Choices worth knowing:
 - **Deadlines and backoff are `send_after` timers to the queue.** A
   deadline timer is cancelled when the attempt ends first; one that
   fires late finds no matching attempt and does nothing.
-- **The producer is its own process.** The driver first submitted the
-  jobs itself and collected their notifications afterwards: every
-  `gen_server.call`'s reply wait then scanned past all the notifications
-  already queued in its mailbox, and 10,000 jobs took 21 s instead of
-  0.7 s (BEST_PRACTICES.md, "A process that makes calls doesn't also
-  collect a stream").
+- **The producer is its own process.** `driver.run` spawns a process
+  that submits the jobs and only collects their notifications itself
+  while they run: a `gen_server.call`'s reply wait scans past every
+  message already queued in the caller's mailbox, so submitting from the
+  collecting process would slow down with each notification it holds
+  (BEST_PRACTICES.md, "A process that makes calls doesn't also collect a
+  stream").
 - **The pending queue is a fifo** (`fifo.gem`), not `remove_at(arr, 0)`,
   which shifts the whole backlog on every pop.
 
@@ -161,18 +162,19 @@ Choices worth knowing:
 ## Known limits
 
 - **Memory grows with the jobs run**: the queue keeps every job's record
-  for `status`. 100,000 jobs peak at about 400 MB, against 175 MB for
-  the Python twin and 246 MB for Elixir (macOS arm64). A real queue would
-  expire finished records.
+  for `status`. 100,000 jobs peak at 390 MB, against 173 MB for the
+  Python twin and 237 MB for Elixir (macOS arm64,
+  `benchmarks/baselines/2026-10-07_m1pro`). A real queue would expire
+  finished records.
 - **Big state means pauses.** The queue's records live in its loop.
   Arena resets promote what they keep, so most of them copy only the
   records made since the last one, but a full reset now and then copies
-  all of them, and no other process runs meanwhile. With 20,000 jobs the
-  longest reset takes about 0.09 s, with 100,000 0.25–0.5 s; a job whose
-  attempt overlaps one can miss a 100 ms deadline it would otherwise meet
-  (`--jobs 20000 --slow 0.1`: 0–5 healthy attempts killed per run,
-  `--jobs 40000`: 14). The benchmark scenarios give deadlines room; see
-  docs/OPTIMIZATIONS.md, "Full resets still copy all a loop keeps".
+  all of them, and no other process runs meanwhile. The longest reset
+  takes 0.005–0.02 s with 20,000 jobs and 0.08–0.09 s with 100,000
+  (macOS arm64, `benchmarks/baselines/2026-10-07_m1pro`); a job whose
+  attempt overlaps one can miss a deadline it would otherwise meet. The
+  benchmark scenarios give deadlines room; see docs/OPTIMIZATIONS.md,
+  "Full resets still copy all a loop keeps".
 - **One system at a time**: the queue and the worker supervisor have
   fixed registered names.
 - **No jitter in the backoff**, so retries of jobs that failed together

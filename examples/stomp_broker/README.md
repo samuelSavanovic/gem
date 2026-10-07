@@ -101,8 +101,8 @@ Choices worth knowing:
   frame within `write_timeout_ms` (10 s by default, a `broker.start`
   option) is dropped, so its messages can't pile up without bound. Until
   then they queue in its writer's mailbox. Dropping messages instead of
-  the client would be the other policy (NOTES.md discusses ways to drop
-  or throttle).
+  the client would be the other policy (`docs/archive/stomp_broker_m6.md`
+  lists ways to drop or throttle).
 - **Every `SEND` asks the registry for the destination** (one
   `gen_server.call`), so all publishers go through one process. A
   connection could keep the pids it has looked up, at the cost of
@@ -111,4 +111,5 @@ Choices worth knowing:
   copies), so a big body on a topic with many subscribers costs
   `size × subscribers`.
 
-NOTES.md is the build log of the first version and its load tests.
+`docs/archive/stomp_broker_m6.md` holds load-test measurements of an
+earlier version of the broker.

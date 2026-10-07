@@ -570,7 +570,7 @@ end
 # ─── Non-escaping closure detection ──
 #
 # Mark anon_fn nodes that appear as the immediate argument of a call to an
-# allowlisted callee (currently `pcall`). Such closures are invoked
+# allowlisted callee (`pcall`, `sort`). Such closures are invoked
 # synchronously and discarded — they cannot outlive the C frame holding
 # their captures, so the enclosing function need not box those captures.
 # Conservative: we only mark closures whose own body contains no nested

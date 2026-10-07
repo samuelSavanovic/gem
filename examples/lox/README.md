@@ -97,41 +97,41 @@ textbook interpreter does, and the Python twin
 ## Performance
 
 `benchmarks/lox/run.sh` runs each bench program through both
-interpreters and checks that the outputs match. On a 4-core Linux x86_64
-VM (October 2026, two runs), Gem takes 0.66 to 1.15 times Python's
-time: a compiled Gem program runs a tree walker at about CPython's speed.
+interpreters and checks that the outputs match. Gem takes 0.41 to 0.64
+times Python's time (macOS arm64,
+`benchmarks/baselines/2026-10-07_m1pro`):
 
-| Program | What it exercises | Gem/Python time |
-|---|---|---|
-| `fib.lox 28` | calls and recursion | 1.09–1.15 (peak RSS 1.9 GB against 11 MB) |
-| `binary_trees.lox 12` | allocating instances, a long-lived tree | 0.66–0.69 |
-| `closures.lox 100000` | closures, captured variables | 0.90–0.97 |
-| `strings.lox 20000` | string concatenation and comparison | 0.76–0.79 |
-| `mandelbrot.lox 60` | float arithmetic in loops | 0.66–0.69 |
-| `methods.lox 3000` | method calls, fields, `super` | 0.92–0.93 |
+| Program | What it exercises | Gem/Python time | peak RSS, Gem / Python |
+|---|---|---|---|
+| `fib.lox 28` | calls and recursion | 0.49 | 10 / 20 MB |
+| `binary_trees.lox 12` | allocating instances, a long-lived tree | 0.64 | 27 / 24 MB |
+| `closures.lox 100000` | closures, captured variables | 0.49 | 6 / 21 MB |
+| `strings.lox 20000` | string concatenation and comparison | 0.43 | 4 / 20 MB |
+| `mandelbrot.lox 60` | float arithmetic in loops | 0.41 | 4 / 20 MB |
+| `methods.lox 3000` | method calls, fields, `super` | 0.50 | 6 / 20 MB |
 
 Where it goes:
 
 - **Field access hashes the name every time.** The inline cache at a
   `t.field` site remembers one table, and the walker sees a different
   node or environment table at nearly every access: 99% of them miss
-  and hash the key. Looking up string keys is 40 to 45% of the
-  instructions in every program.
+  and look the key up again.
 - **Every interpreted call pays for a return point.** The interpreter's
   functions call each other recursively, so each records where its call
   began in the arena, and its return frees what the call allocated once
-  that passes 1 MB: `fib(28)`'s million calls stay at 14 MB. The point
-  costs about 20 instructions a Gem call, 2 to 3% of the instructions.
+  that passes 1 MB, which keeps `fib(28)`'s million calls at 10 MB. The
+  point costs about 20 instructions a Gem call.
 - **Freed memory comes back as fresh pages.** A reset unmaps the blocks
-  it frees and the next allocations map new ones, so the Gem runs spend
-  20 to 30% of their time in the kernel taking page faults.
+  it frees and the next allocations map new ones, and fault them in: 1 to
+  14% of the Gem runs' time is system time.
 - **Trees are copied at every level that builds them.** `binary_trees`
   builds each subtree in one iteration of the interpreter's statement
   loop, and each level's loop starts a fresh mark whose first reset
   copies the subtree it finds, and the returns that hand a subtree up
-  copy it too: 1.7 GB in 5,900 resets.
-- **Gem frames are large.** A Lox call takes about ten Gem frames of 0.5
-  to 2 KB, which is why the call depth is capped at 256.
+  copy it too.
+- **Gem frames are large.** Each Gem call takes a C frame of about 1 to
+  2 KB, and a Lox call goes through several of them; the interpreter
+  caps the Lox call depth at 256 (`MAX_CALL_DEPTH` in `interp.gem`).
 
 These are tracked in `docs/OPTIMIZATIONS.md` ("Inline caches key on the
 table, not its shape", "A return point costs about 20 instructions a
