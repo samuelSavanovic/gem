@@ -1,0 +1,13 @@
+# pcall, spawn, spawn_link and spawn_monitor take one fn and call it with
+# no arguments; a parameter of that name is not the builtin.
+# expect: `pcall` takes one fn and calls it with no arguments, called with 2 arguments
+fn f(x) x end
+pcall(f, 9)
+spawn(f, 5)
+spawn_link(f, 1, 2)
+spawn_monitor()
+pcall()
+fn ok(spawn)
+  spawn(1, 2)
+end
+let r = pcall(f)

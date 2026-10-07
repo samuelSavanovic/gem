@@ -1,0 +1,19 @@
+# A `when` arm can't test a condition: there are no guards, and a
+# comparison or boolean expression would be compared with the target.
+# expect: a `when` arm can't test a condition
+let v = 3
+let xs = [1]
+match 10
+when v > 5 then print("big")
+when "a" or "b" then print("ab")
+when not v then print("n")
+when v in xs then print("in")
+when (v == 1) then print("paren")
+when v + 1 then print("an expression arm")
+else
+  print("small")
+end
+receive
+when x >= 1 then print(x)
+after 0 then print("t")
+end

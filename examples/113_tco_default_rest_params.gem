@@ -63,13 +63,6 @@ fn zz(a = 5, b = a + 1)
 end
 print(zz(1, 1), zz(), zz(9))
 
-# Extra args with no rest param are evaluated (side effects) and dropped.
-fn extra(n, acc = 0)
-  if n == 0 then return acc end
-  extra(n - 1, acc + 1, bump())
-end
-hits[0] = 0
-print(extra(4), hits[0])
 
 # ── Rest params ──
 

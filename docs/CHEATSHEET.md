@@ -11,7 +11,8 @@ let {a, b} = tbl                     # table destructuring
 let [first, second] = arr            # array destructuring
 let {port = 8080, host = "0.0.0.0"} = opts   # field defaults (fire on a missing key, not nil)
 let x = x + 1                        # in a fn/block: new variable shadowing the old x (to block end)
-                                     # (warned in a `while` body when the condition reads x and nothing assigns it)
+                                     # (warned in a loop when nothing there assigns x and the loop's condition
+                                     #  or the code after the loop reads it)
                                      # a let is visible only to the end of its block (if/loop body/arm):
 let s = nil                          #   declare before the if to use the value after it
 if c then s = 1 else s = 2 end
@@ -20,7 +21,7 @@ if c then s = 1 else s = 2 end
 fn add(a, b)
   a + b
 end
-fn greet(name, greeting = "Hello")   # default params
+fn greet(name, greeting = "Hello")   # default params; a direct call with the wrong count is a compile error
   print("{greeting}, {name}!")
 end
 fn log(level, ...msgs)               # variadic (rest param)
@@ -54,7 +55,7 @@ while cond
   body
 end
 
-for item in arr ... end              # array iteration
+for item in arr ... end              # array iteration (raises on a non-array table)
 for k, v in tbl ... end              # key-value iteration
 for i, ch in str ... end             # bytes: 0-based index, 1-byte string
 for i = 0, n ... end                 # range [0, n)
@@ -67,6 +68,7 @@ when {ok: true, value: v}            # destructuring pattern
 when {id: ^wanted}                   # ^pin: equals existing var `wanted`, no binding
   mine()
 when 0 then zero()                   # one-line arm: `then` (as in `if ... then`)
+                                     # no guards: `when x > 5` is a compile error
 else
   fallback()
 end
@@ -184,7 +186,7 @@ end
 # std/task       async, await, await_all
 # std/gen_server start, call, cast, reply
 #   start returns once init has; an init that raises makes it raise
-# std/test       case, assert, assert_eq, assert_neq, assert_throws, run  (assert_eq is deep; run exits 1 on failure)
+# std/test       case, assert, assert_eq, assert_neq, assert_throws, run  (assert_eq is deep, takes an optional msg; run exits 1 on failure)
 
 # C interop
 extern include "stdio.h"                 # a libc fn needs its header; your own: path relative to the .gem file

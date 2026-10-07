@@ -106,21 +106,26 @@ test.case("failure messages", fn()
   print(failure(fn() test.assert_eq(nil, {}) end))
   print(failure(fn() test.assert_eq(fn() 1 end, fn() 1 end) end))
   print(failure(fn() test.assert_neq({a: [1]}, {a: [1]}) end))
+  print(failure(fn() test.assert_eq(1 + 1, 3, "sum") end))
+  print(failure(fn() test.assert_eq([1], [2], "list") end))
+  print(failure(fn() test.assert_neq(1, 1, "ids") end))
   print(failure(fn() test.assert(false) end))
   print(failure(fn() test.assert(1 > 2, "math") end))
   print(failure(fn() test.assert_throws(fn() 1 end) end))
   print(test.assert_throws(fn() error("boom") end))
 end)
 
-test.case("cases registered in another process stay there", fn()
-  let pid = spawn_monitor(fn()
-    test.case("registered in a child", fn() nil end)
-  end).pid
+test.case("a case registered in a spawned process raises", fn()
+  let parent = self()
+  spawn(fn()
+    let r = pcall test.case("registered in a child", fn() nil end)
+    send(parent, {tag: "registered", error: r.error})
+  end)
   receive
-  when {tag: "DOWN", pid: ^pid, reason: reason}
-    test.assert_eq(reason, "normal")
+  when {tag: "registered", error: e}
+    test.assert_eq(e, "test.case: called in a spawned process; register cases at the top level or from main, where `test.run` runs them")
   after 2000
-    error("child did not exit")
+    error("child did not answer")
   end
 end)
 

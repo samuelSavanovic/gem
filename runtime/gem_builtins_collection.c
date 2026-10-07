@@ -26,6 +26,7 @@ GemVal gem_push_fn(void *_env, GemVal *args, int argc) {
     gem_table_written(t);
     t->keys[t->len] = gem_int(t->len);
     t->vals[t->len] = val;
+    gem_key_index_put(t, t->keys[t->len], t->len);
     t->len++;
     return val;
 }
@@ -50,6 +51,37 @@ GemVal gem_for_len_fn(void *_env, GemVal *args, int argc) {
     if (args[0].type == VAL_TABLE) return gem_int((int64_t)args[0].table->len);
     if (args[0].type == VAL_STRING) return gem_int((int64_t)args[0].slen);
     gem_for_type_error(args[0]);
+    return GEM_NIL;
+}
+
+static int gem_table_is_array_keys(GemTable *t);
+
+/* `__for_items(v)`: the value a one-variable `for` iterates, checked once
+   before the loop: a string, or a table whose keys are the ints 0 .. n-1. */
+GemVal gem_for_items_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("__for_items: expected 1 argument"); return GEM_NIL; }
+    GemVal v = args[0];
+    if (v.type == VAL_STRING) return v;
+    if (v.type != VAL_TABLE) { gem_for_type_error(v); return GEM_NIL; }
+    GemTable *t = v.table;
+    if (gem_table_is_array_keys(t)) return v;
+    char key[96];
+    for (int i = 0; i < t->len; i++) {
+        GemVal k = t->keys[i];
+        if (k.type == VAL_STRING) {
+            snprintf(key, sizeof(key), "\"%.*s%s\"", k.slen > 40 ? 40 : (int)k.slen, k.sval, k.slen > 40 ? "..." : "");
+            break;
+        }
+        if (k.type != VAL_INT || k.ival < 0 || k.ival >= t->len) {
+            if (k.type == VAL_INT) snprintf(key, sizeof(key), "%lld", (long long)k.ival);
+            else snprintf(key, sizeof(key), "of type %s", gem_type_str(k));
+            break;
+        }
+    }
+    char buf[256];
+    snprintf(buf, sizeof(buf), "for: one loop variable needs an array or a string, got a table with the key %s; use two (`for k, v in ...`) for its entries, or iterate `values(...)`", key);
+    gem_error(buf);
     return GEM_NIL;
 }
 
@@ -124,11 +156,7 @@ GemVal gem_has_key_fn(void *_env, GemVal *args, int argc) {
         if (t->is_array) return gem_bool(0);
     }
 
-    /* Fallback: linear scan */
-    for (int i = 0; i < t->len; i++) {
-        if (gem_val_eq(t->keys[i], key)) return gem_bool(1);
-    }
-    return gem_bool(0);
+    return gem_bool(gem_table_key_pos(t, key) >= 0);
 }
 
 /* ─── Internal: __is_array_n (array pattern check) ───
@@ -179,11 +207,7 @@ GemVal gem_in_fn(void *_env, GemVal *args, int argc) {
         return gem_bool(gem_table_str_pos(t, needle.sval, needle.slen) >= 0);
     }
 
-    /* Fallback: linear scan of keys */
-    for (int i = 0; i < t->len; i++) {
-        if (gem_val_eq(t->keys[i], needle)) return gem_bool(1);
-    }
-    return gem_bool(0);
+    return gem_bool(gem_table_key_pos(t, needle) >= 0);
 }
 
 /* ─── Built-in: delete (remove key from table) ─── */
@@ -201,9 +225,7 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
     if (key.type == VAL_STRING) {
         pos = gem_table_str_pos(t, key.sval, key.slen);
     } else {
-        for (int i = 0; i < t->len; i++) {
-            if (gem_val_eq(t->keys[i], key)) { pos = i; break; }
-        }
+        pos = gem_table_key_pos(t, key);
     }
 
     if (pos < 0) return GEM_NIL;
@@ -212,6 +234,8 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
     if (key.type == VAL_STRING) {
         gem_str_index_del(t->str_index, key.sval, key.slen);
         t->nstr--;
+    } else {
+        gem_key_index_del(t, key);
     }
 
     int last = t->len - 1;
@@ -222,6 +246,8 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
         t->vals[pos] = t->vals[last];
         if (moved_key.type == VAL_STRING && t->str_index != NULL) {
             gem_str_index_put(&t->str_index, moved_key.sval, moved_key.slen, pos);
+        } else {
+            gem_key_index_put(t, moved_key, pos);
         }
     }
     t->len--;
@@ -246,6 +272,8 @@ GemVal gem_pop_fn(void *_env, GemVal *args, int argc) {
     if (removed_key.type == VAL_STRING) {
         gem_str_index_del(t->str_index, removed_key.sval, removed_key.slen);
         t->nstr--;
+    } else {
+        gem_key_index_del(t, removed_key);
     }
     if (t->len == 0) t->is_array = 1;
     t->shape_id++;
@@ -307,6 +335,9 @@ static int gem_call_cmp(GemVal cmp, GemVal a, GemVal b) {
         return (v > 0) - (v < 0);
     }
     if (result.type == VAL_FLOAT) return (result.fval > 0) - (result.fval < 0);
+    char buf[160];
+    snprintf(buf, sizeof(buf), "sort: the comparator must return a number (negative, zero or positive), got %s", gem_type_str(result));
+    gem_error(buf);
     return 0;
 }
 

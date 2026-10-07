@@ -114,6 +114,7 @@ let BUILTIN_FNS = {
   __has_key: "gem_has_key_fn",
   __is_array_n: "gem_is_array_n_fn",
   __for_len: "gem_for_len_fn",
+  __for_items: "gem_for_items_fn",
   __table_key_at: "gem_table_key_at_fn",
   __table_val_at: "gem_table_val_at_fn"
 }
@@ -133,7 +134,7 @@ let LEAF_BUILTINS = {
   random: true, band: true, bor: true, bxor: true, bnot: true, bshl: true,
   bshr: true, self: true, make_ref: true, time_ms: true, epoch_ms: true,
   __len: true, __type: true, __has_key: true, __is_array_n: true,
-  __for_len: true, __table_key_at: true, __table_val_at: true
+  __for_len: true, __for_items: true, __table_key_at: true, __table_val_at: true
 }
 
 # Builtins with a direct C entry point for one arity: "<name>/<argc>" →
@@ -151,6 +152,7 @@ let DIRECT_BUILTINS = {
   "ord/1": "gem_ord_1",
   "ord/2": "gem_ord_2",
   "__for_len/1": "gem_for_len_1",
+  "__for_items/1": "gem_for_items_1",
   "__table_key_at/2": "gem_table_key_at_2",
   "__table_val_at/2": "gem_table_val_at_2"
 }

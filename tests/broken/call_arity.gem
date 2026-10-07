@@ -1,0 +1,40 @@
+# A direct call to a named fn, an extern fn or a module export passes at
+# least the required parameters and at most all of them (no limit with a
+# rest parameter). A call through a value is not checked.
+# expect: `two` takes 2 arguments, called with 1
+load "std/table"
+extern fn strlen(s: String) -> Int
+fn two(a, b) a end
+fn opt(a, b = 1) a end
+fn rest(a, ...r) a end
+fn none() 1 end
+fn blk(xs) xs end
+two(1)
+two(1, 2, 3)
+opt()
+opt(1, 2, 3)
+rest()
+none(1)
+blk([1]) do |x| x end
+strlen()
+table.map([1])
+let f = fn()
+  two()
+end
+# Not errors: defaults and rest absorb, values aren't checked.
+opt(1)
+rest(1, 2, 3, 4)
+let g = two
+g(1)
+fn shadow(two)
+  two(1)
+end
+# A module-level `let` of a fn literal, never assigned, is checked like a
+# named fn; one that is assigned, or a parameter of that name, is not.
+let helper = fn(a, b = 1) a end
+let swapped = fn(a) a end
+swapped = fn(a, b) b end
+helper()
+table.sort([2, 1], nil, 3)
+swapped(1, 2)
+let h = fn(helper) helper(1, 2, 3) end

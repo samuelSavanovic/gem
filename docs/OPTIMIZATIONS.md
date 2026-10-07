@@ -66,9 +66,6 @@ Originally reported at 2.39 GB stuck post-c=500 with the 16 MB threshold. After 
 ### NaN boxing (P1)
 GemVal is currently 24 bytes (4-byte type enum, 4-byte magic, and a 16-byte union whose largest members are a string's pointer and length and a closure's function and env pointers). NaN boxing packs type + value into a single 8-byte double by exploiting the NaN payload space. Cuts memory per value to a third, improves cache locality, eliminates the type field branch in hot paths. The payoff isn't just memory — every function call, table lookup, and arithmetic op passes GemVals, so halving their size compounds across the entire runtime. Requires rewriting every GemVal constructor and accessor. Major undertaking but large payoff. Would also directly reduce arena allocation pressure since every value, table entry, and function argument shrinks.
 
-### Avoid hashing integers in tables (P2)
-An int key k is found at once when entry k holds it; otherwise a table that is not an array (`is_array` in runtime/gem.h: entry i has key i) is searched linearly. On an array, `t[len(t)] = v`, `push` and a lookup past the end are O(1). A dedicated int hash map (parallel to `str_index`) would give O(1) lookup for sparse integer keys. Sparse int sets are common (ids from a database): 20,000 of them (`seen[id] = true`, then `has_key`) take 3.1 s against 30 ms as string keys, and `table.group_by` with 20,000 int groups about 4.9 s; BEST_PRACTICES tells users to key such tables by string.
-
 ## Strings
 
 ### String views / slices (P1)

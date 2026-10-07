@@ -330,6 +330,7 @@ static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
             nt->shape_id = gem_shape_counter++;
             nt->immutable = t->immutable;  /* a frozen namespace stays frozen */
             nt->is_array = t->is_array;
+            nt->braces = t->braces;
             /* A reset moves the table within its process: it stays part of
                the snapshot unit it was copied into. */
             if (map->preserve_external) nt->snap_gen = t->snap_gen;
@@ -978,7 +979,7 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
     gem_pin_sweep_from(proc, pt->pin_seq);
 
     /* Region tables are garbage now (live ones were copied): free their
-       malloc'd string indexes, then unmap the region's blocks. */
+       malloc'd indexes, then unmap the region's blocks. */
     for (GemTable *t = post_tables; t && t != pt->tables; t = t->arena_next) {
         gem_str_index_free(&t->str_index);
     }
