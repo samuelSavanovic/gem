@@ -193,13 +193,17 @@ GemVal gem_print(void *_env, GemVal *args, int argc) {
 
 /* ─── Built-in: error ─── */
 
+/* The message `error(v)` raises: a string as is, any other value as
+   `to_string` shows it, and "error" for no argument. */
+static const char *gem_error_message(GemVal *args, int argc) {
+    if (argc == 0) return "error";
+    if (args[0].type == VAL_STRING) return args[0].sval;
+    return gem_to_string_fn(NULL, args, 1).sval;
+}
+
 GemVal gem_error_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc > 0 && args[0].type == VAL_STRING) {
-        gem_raise_error(args[0].sval);
-    } else {
-        gem_raise_error("error");
-    }
+    gem_raise_error(gem_error_message(args, argc));
     return GEM_NIL;
 }
 
@@ -216,15 +220,11 @@ GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {
         will_catch = 1;
     }
     if (will_catch) {
-        if (argc > 0 && args[0].type == VAL_STRING) {
-            gem_raise_error(args[0].sval);
-        } else {
-            gem_raise_error("error");
-        }
+        gem_raise_error(gem_error_message(args, argc));
     } else {
         /* No pcall, no coroutine — fatal error with file:line prefix */
-        if (argc > 0 && args[0].type == VAL_STRING) {
-            fprintf(stderr, "%s:%d: error: %s\n", file, line, args[0].sval);
+        if (argc > 0) {
+            fprintf(stderr, "%s:%d: error: %s\n", file, line, gem_error_message(args, argc));
         } else {
             fprintf(stderr, "%s:%d: error\n", file, line);
         }

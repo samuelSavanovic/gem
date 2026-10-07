@@ -704,7 +704,7 @@ fn tag_source_file(node, file)
       if v.tag != nil
         tag_source_file(v, file)
       else
-        for elem in v
+        for _, elem in v
           if type(elem) == "table"
             tag_source_file(elem, file)
           end
@@ -719,33 +719,205 @@ end
 # its condition and the new one after the `let`. When nothing in the loop
 # assigns `i` (no `i = ...` or `i += ...` anywhere in the body, closures
 # included), the condition can't change through it: usually a counter
-# that never advances, so the loop never ends. A module-level `i` that a
-# named fn of the file assigns is skipped: the loop can change it through
-# a call. Shadowing is legal, so
+# that never advances, so the loop never ends. A name that a module-level
+# `let` declares and some fn or closure of the file assigns is skipped:
+# the loop can change the module-level variable through a call. Shadowing
+# is legal, so
 # this is a warning on stderr, not an error. Runs on each file's AST as
 # parsed (before lower and the module renames), so names are the user's.
 
 # Calls visit(child, in_fn) for every AST node below `node`; `in_fn` is
-# true once the walk is inside a function body (fn_def / anon_fn).
+# true once the walk is inside a function body (fn_def / anon_fn). An
+# untagged table (a statement list, a table literal's entries, an entry)
+# is walked through, not visited.
 fn walk_ast(node, in_fn, visit)
-  for k in keys(node)
-    let v = node[k]
+  for _, v in node
     if type(v) == "table"
       if v.tag != nil
         let child_in_fn = in_fn or v.tag == "fn_def" or v.tag == "anon_fn"
         visit(v, child_in_fn)
         walk_ast(v, child_in_fn, visit)
       else
-        for elem in v
-          if type(elem) == "table" and elem.tag != nil
-            let child_in_fn = in_fn or elem.tag == "fn_def" or elem.tag == "anon_fn"
-            visit(elem, child_in_fn)
-            walk_ast(elem, child_in_fn, visit)
+        walk_ast(v, in_fn, visit)
+      end
+    end
+  end
+end
+
+# ─── Shadowed accumulator warning ─────────────────────────────
+# `let total = total + x` in a loop body declares a new `total` each
+# iteration, computed from the outer `total`, so a loop meant to accumulate
+# leaves the outer one unchanged. Reported (through `report(let_node,
+# loop, name, use_line)`) when the `let`'s value reads the name, the name
+# isn't declared inside the loop before it (loop variables, earlier lets,
+# pattern bindings), nothing in the loop assigns it, a statement after the
+# loop reads it (in the loop's block or an enclosing one, up to the
+# enclosing fn body), and it is not a name skipped by the loop-condition
+# warning (a module-level name some fn or closure assigns). Lets inside
+# closures in the loop are not counted.
+
+# True when `node` (an AST subtree) reads the variable `name`.
+fn reads_name(node, name)
+  let found = false
+  walk_ast({tag: "wrap", n: node}, false, fn(n, in_fn)
+    if n.tag == "var" and n.name == name
+      found = true
+    end
+  end)
+  found
+end
+
+# The line of the first read of `name` in `stmts`, or nil.
+fn first_read_line(stmts, name)
+  for st in stmts
+    let line = nil
+    walk_ast({tag: "wrap", n: st}, false, fn(n, in_fn)
+      if line == nil and n.tag == "var" and n.name == name
+        line = n.line
+        if line == nil
+          line = st.line
+        end
+      end
+    end)
+    if line != nil
+      return line
+    end
+  end
+  nil
+end
+
+fn add_pattern_names(pat, declared)
+  if type(pat) != "table"
+    return nil
+  end
+  if pat.tag == "pat_name"
+    declared[pat.name] = true
+  end
+  walk_ast({tag: "wrap", p: pat}, false, fn(n, in_fn)
+    if n.tag == "pat_name"
+      declared[n.name] = true
+    end
+  end)
+end
+
+fn find_shadowed_accumulators(ast, changed_by_fns, report)
+  # Visits the loop body `stmts` of `loop` with the names `declared` inside
+  # the loop so far; `following` are the statements following the loop.
+  let check_body = nil
+  let check_node = nil
+  check_body = fn(stmts, declared, loop, following)
+    let d = {}
+    for k, _ in declared
+      d[k] = true
+    end
+    for st in stmts
+      if type(st) != "table" or st.tag == nil
+        continue
+      end
+      if st.tag == "let" and d[st.name] == nil and st.value != nil and reads_name(st.value, st.name) and changed_by_fns[st.name] == nil
+        let assigned = false
+        walk_ast({tag: "wrap", n: loop.body}, false, fn(n, in_fn)
+          if n.tag == "assign" and n.name == st.name
+            assigned = true
           end
+        end)
+        let in_cond = loop.tag == "while" and reads_name(loop.cond, st.name)
+        let use_line = first_read_line(following, st.name)
+        if not assigned and not in_cond and use_line != nil
+          report(st, loop, st.name, use_line)
+        end
+      end
+      check_node(st, d, loop, following)
+      if st.tag == "let"
+        d[st.name] = true
+      end
+    end
+  end
+  # Descends into the blocks of `node` (not into closures).
+  check_node = fn(node, declared, loop, following)
+    let tag = node.tag
+    if tag == "fn_def" or tag == "anon_fn"
+      return nil
+    end
+    if tag == "for_in" or tag == "for_range"
+      let d = {}
+      for k, _ in declared
+        d[k] = true
+      end
+      d[node.var_name] = true
+      if node.val_name != nil
+        d[node.val_name] = true
+      end
+      check_body(node.body, d, loop, following)
+      return nil
+    end
+    if tag == "match_arm"
+      let d = {}
+      for k, _ in declared
+        d[k] = true
+      end
+      add_pattern_names(node.pattern, d)
+      check_body(node.body, d, loop, following)
+      return nil
+    end
+    for k, v in node
+      if type(v) == "table"
+        if v.tag == nil and len(v) > 0 and type(v[0]) == "table" and v[0].tag != nil
+          check_body(v, declared, loop, following)
+        else
+          check_node(v, declared, loop, following)
         end
       end
     end
   end
+  # Checks each loop in the statement list `stmts` against the statements
+  # that run after it: the rest of `stmts`, then `outer`, the statements
+  # after the enclosing blocks (up to the enclosing fn body).
+  let scan = nil
+  let scan_block = fn(stmts, outer)
+    for i = 0, len(stmts)
+      let st = stmts[i]
+      if type(st) != "table" or st.tag == nil
+        continue
+      end
+      let following = []
+      for j = i + 1, len(stmts)
+        push(following, stmts[j])
+      end
+      for o in outer
+        push(following, o)
+      end
+      if st.tag == "while" or st.tag == "for_in" or st.tag == "for_range"
+        let d = {}
+        if st.tag != "while"
+          d[st.var_name] = true
+          if st.val_name != nil
+            d[st.val_name] = true
+          end
+        end
+        check_body(st.body, d, st, following)
+      end
+      scan(st, following)
+    end
+  end
+  scan = fn(node, following)
+    for k, v in node
+      if type(v) == "table"
+        if v.tag == "fn_def" or v.tag == "anon_fn"
+          scan(v, [])
+        elif v.tag == nil and len(v) > 0 and type(v[0]) == "table" and v[0].tag != nil
+          let inner = following
+          if node.tag == "fn_def" or node.tag == "anon_fn"
+            inner = []
+          end
+          scan_block(v, inner)
+        else
+          scan(v, following)
+        end
+      end
+    end
+  end
+  scan_block(ast.stmts, [])
 end
 
 fn warn_shadowed_loop_conds(ast, file, show_path)
@@ -803,6 +975,17 @@ fn warn_shadowed_loop_conds(ast, file, show_path)
   walk_ast(ast, false, fn(n, in_fn)
     if n.tag == "while"
       check_while(n)
+    end
+  end)
+  find_shadowed_accumulators(ast, changed_by_fns, fn(l, loop, name, use_line)
+    let key = "{l.line}:{name}"
+    if warned[key] == nil
+      warned[key] = true
+      if by_line[l.line] == nil
+        by_line[l.line] = []
+        push(lines, l.line)
+      end
+      push(by_line[l.line], "warning: {show_path(file)}:{l.line}: `let {name}` declares a new `{name}` in each iteration of the loop at line {loop.line}, computed from the outer `{name}`, which nothing in the loop assigns; the outer `{name}` read at line {use_line} still has its value from before the loop. To update it, write `{name} = ...` without `let`.")
     end
   end)
   for ln in sort(lines)

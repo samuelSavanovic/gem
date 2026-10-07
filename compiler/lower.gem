@@ -59,7 +59,9 @@ fn tag_file(node, file)
       if v.tag != nil
         tag_file(v, file)
       else
-        for elem in v
+        # An untagged table (an array, or a record such as a receive
+        # arm's pattern): tag the nodes in its values.
+        for _, elem in v
           if type(elem) == "table"
             tag_file(elem, file)
           end
@@ -286,7 +288,7 @@ fn lower_for_in(node, state)
     line
   )
   let result = {tag: "block", stmts: [
-    make_let(items_var, lower_node(node.items, state), line),
+    make_let(items_var, make_call(make_var("__for_items"), [lower_node(node.items, state)], 0), line),
     make_let(idx_var, make_int(0), line),
     while_node
   ]}

@@ -1,0 +1,75 @@
+date: 2026-10-07T16:24:19Z
+gem commit: 5bae04c
+redis: Redis server v=8.10.2 sha=00000000:1 malloc=libc bits=64 build=764b3e45065a66fb
+system: Darwin 27.0.0 arm64
+cpu: Apple M1 Pro, 10 cores
+N=100000 CLIENTS=50 PHASES=basic pipeline clients keyspace expire pubsub
+
+basic
+  test                                  redis rps    gem rps gem/redis redis p50  gem p50 redis p99  gem p99
+  PING_INLINE                              173310     186220      1.07     0.151    0.183     0.447    0.519
+  PING_MBULK                               186567     179856      0.96     0.143    0.191     0.303    0.479
+  SET                                      179211     125945      0.70     0.151    0.327     0.391    0.999
+  GET                                      184843     134953      0.73     0.151    0.319     0.303    0.671
+  INCR                                     180832     116279      0.64     0.151    0.335     0.335    1.831
+  LPUSH                                    185185     125471      0.68     0.151    0.319     0.311    1.127
+  RPUSH                                    188679     124533      0.66     0.151    0.327     0.311    1.119
+  LPOP                                     186916     136054      0.73     0.151    0.319     0.375    0.687
+  RPOP                                     186916     139082      0.74     0.151    0.319     0.295    0.655
+  SADD                                     181159     123609      0.68     0.151    0.335     0.383    1.399
+  HSET                                     183150     119190      0.65     0.151    0.343     0.391    1.103
+  SPOP                                     184843     128700      0.70     0.159    0.327     0.399    1.231
+  LPUSH (needed to benchmark LRANGE)       179856     125945      0.70     0.151    0.327     0.423    1.111
+  LRANGE_100 (first 100 elements)          108342      46318      0.43     0.255    0.959     0.399    1.663
+  LRANGE_600 (first 600 elements)           34305      10335      0.30     0.775    4.631     0.951    5.511
+  MSET (10 keys)                           142248      67935      0.48     0.279    0.575     0.575    4.335
+after basic                  redis    28272 KB (163278 keys)   gem   137744 KB (163235 keys)
+
+pipeline
+  test                                  redis rps    gem rps gem/redis redis p50  gem p50 redis p99  gem p99
+  PING_INLINE                             1492537     970874      0.65     0.343    0.639     1.903    4.695
+  PING_MBULK                              2777778     892857      0.32     0.199    0.655     0.287    6.647
+  SET                                     1408451     578035      0.41     0.487    1.119     0.775    4.999
+  GET                                     1562500     675676      0.43     0.423    0.943     0.719    6.607
+  INCR                                    1639344     520833      0.32     0.423    1.119     0.607    8.119
+  LPUSH                                   1724138     552486      0.32     0.399    1.007     0.543    6.887
+  RPUSH                                   1960784     617284      0.31     0.351    1.023     0.495    7.079
+  LPOP                                    1562500     724638      0.46     0.423    0.999     0.759    2.287
+  RPOP                                    1818182     636943      0.35     0.375    0.999     0.519    4.991
+  SADD                                    1666667     552486      0.33     0.423    1.183     0.583    5.983
+  HSET                                    1449275     531915      0.37     0.479    1.191     0.655    5.815
+  SPOP                                    1298701     632911      0.49     0.599    1.183     0.967    3.383
+  LPUSH (needed to benchmark LRANGE)      1587302     621118      0.39     0.423    1.031     0.767    5.615
+  LRANGE_100 (first 100 elements)          240964      60606      0.25     1.719   12.575     3.839   17.951
+  LRANGE_600 (first 600 elements)           39588      10960      0.28     5.199   71.935    16.687   75.263
+  MSET (10 keys)                           271739     124224      0.46     2.743    4.671     3.815   14.271
+after pipeline               redis    31424 KB (163179 keys)   gem   185920 KB (163143 keys)
+
+clients
+  test                                  redis rps    gem rps gem/redis redis p50  gem p50 redis p99  gem p99
+  SET                                      161551      79554      0.49     2.903   11.751    13.631   23.327
+  GET                                      159490      79428      0.50     2.943   11.071    16.879   27.231
+after 1000 clients           redis    29648 KB (63194 keys)   gem   331648 KB (63314 keys)
+
+keyspace_fill
+  test                                  redis rps    gem rps gem/redis redis p50  gem p50 redis p99  gem p99
+  SET                                     1196172     468165      0.39     0.583    1.191     0.999   10.343
+1M keys of 100 B             redis   127344 KB (631724 keys)   gem   348784 KB (632077 keys)
+keyspace_get
+  test                                  redis rps    gem rps gem/redis redis p50  gem p50 redis p99  gem p99
+  GET                                      177620     128535      0.72     0.151    0.335     0.671    0.687
+
+1M keys with a 2 s TTL       redis    62640 KB (0 keys)   gem   886096 KB (632202 keys)
+3 s later                    redis    62656 KB (0 keys)   gem   886320 KB (534761 keys)
+6 s later                    redis    62656 KB (0 keys)   gem   886640 KB (347261 keys)
+9 s later                    redis    62656 KB (0 keys)   gem   886960 KB (163121 keys)
+
+pubsub (subscribers,messages,payload,publish/s,delivered/s,seconds)
+  redis 1,50000,32,69685,69562,0.72
+  gem   1,50000,32,29509,29508,1.69
+  redis 100,2000,32,76079,7473795,0.03
+  gem   100,2000,32,2818,281711,0.71
+  redis 1000,200,32,10358,9179172,0.02
+  gem   1000,200,32,194,194285,1.03
+
+results in /Users/samuel/Documents/projects/gem/benchmarks/baselines/2026-10-07_m1pro/mini_redis

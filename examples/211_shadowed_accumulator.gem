@@ -1,0 +1,57 @@
+# `let x = ...x...` in a loop body declares a new `x` each iteration,
+# computed from the outer one, which never changes: the compiler warns
+# when the code after the loop reads the outer `x` and nothing in the loop
+# assigns it (tests/notes/211_shadowed_accumulator.expected).
+
+let total = 0
+for x in [1, 2, 3]
+  let total = total + x
+end
+print("total", total)
+
+fn joined(words)
+  let out = ""
+  for w in words
+    if w != ""
+      let out = out + w
+    end
+  end
+  out
+end
+print("joined", joined(["a", "b"]))
+
+fn counted(items)
+  let count = 0
+  match items
+  when [_, _]
+    for i = 0, 2
+      let count = count + 1
+    end
+  else
+    nil
+  end
+  count
+end
+print("counted", counted([1, 2]))
+
+# No warning: the loop variable, an earlier let of the body, an assignment
+# in the loop, a let inside a closure, or no read after the loop.
+fn quiet(lines, path)
+  let n = 0
+  let k = 0
+  let m = 0
+  let acc = ""
+  let line = "outer"
+  for line in lines
+    let line = line + "!"
+    let path = path + "/" + line
+    let k = 1
+    let k = k + 1
+    let m = m + 1
+    m += 1
+    let f = fn() let acc = acc + "y" end
+    print(path, k)
+  end
+  print(n, m, acc, line, k)
+end
+quiet(["a"], "p")

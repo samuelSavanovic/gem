@@ -1,0 +1,19 @@
+gem fib 28                       0.79 s     10080 KB    13.39 G instr   (n=5, min 0.79, max 0.80)
+python fib 28                    1.62 s     20864 KB    28.17 G instr   (n=5, min 1.61, max 1.66)
+gem/python                       0.49
+gem binary_trees 12              2.02 s     27520 KB    31.76 G instr   (n=5, min 2.01, max 2.03)
+python binary_trees 12           3.18 s     24112 KB    53.60 G instr   (n=5, min 3.16, max 3.21)
+gem/python                       0.64
+gem closures 100000              1.21 s      5840 KB    20.47 G instr   (n=5, min 1.21, max 1.21)
+python closures 100000           2.47 s     21072 KB    39.94 G instr   (n=5, min 2.45, max 2.48)
+gem/python                       0.49
+gem strings 20000                0.82 s      4080 KB    14.70 G instr   (n=5, min 0.81, max 0.82)
+python strings 20000             1.90 s     20848 KB    31.88 G instr   (n=5, min 1.89, max 1.92)
+gem/python                       0.43
+gem mandelbrot 60                0.83 s      4544 KB    15.03 G instr   (n=5, min 0.83, max 0.83)
+python mandelbrot 60             2.04 s     20896 KB    33.80 G instr   (n=5, min 1.96, max 2.04)
+gem/python                       0.41
+gem methods 3000                 0.76 s      6128 KB    13.01 G instr   (n=5, min 0.76, max 0.76)
+python methods 3000              1.52 s     20896 KB    25.44 G instr   (n=5, min 1.52, max 1.53)
+gem/python                       0.50
+outputs match

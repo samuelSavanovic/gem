@@ -1,0 +1,8 @@
+logstat        ok        83 s  peak    267 MB
+lox            ok       118 s  peak    105 MB
+gemgrep        ok       162 s  peak    371 MB
+jobqueue       ok       575 s  peak    396 MB
+bookmark       ok       376 s  peak     26 MB
+bookmark_node  ok       377 s  peak    319 MB
+mini_redis     ok        89 s  peak    930 MB
+stomp          ok        77 s  peak    759 MB

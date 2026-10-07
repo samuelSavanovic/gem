@@ -846,6 +846,13 @@ fn make_parser(tokens, source, file, sink)
     if t.type == "NAME" and t.value == "pcall" and peek_at(1).type != "(" and peek_at(1).type != "do"
       advance()
       let expr = parse_stmt_expr()
+      # Evaluating a fn literal or a variable can't raise: the caller
+      # meant to run it.
+      if expr.tag == "anon_fn"
+        report(t.line, t.col, len("pcall"), "`pcall fn() ... end` returns the fn without running it", "write `pcall do ... end` to run a block, or `pcall f(x)` to run a call")
+      elif expr.tag == "var"
+        report(t.line, t.col, len("pcall") + 1 + len(expr.name), "`pcall {expr.name}` returns `{expr.name}` without calling it", "write `pcall {expr.name}()` to run it")
+      end
       return make_call(make_var("pcall"), [make_anon_fn([], nil, [expr], [], t.line)], t.line)
     end
 
@@ -897,7 +904,9 @@ fn make_parser(tokens, source, file, sink)
     leave_fn_body(saved_loops)
     fn_depth -= 1
     expect("end")
-    make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, body), bp.defaults, do_line)
+    let block = make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, body), bp.defaults, do_line)
+    block.do_block = true
+    block
   end
 
   # `{ [|params|] expr }` → anonymous fn
@@ -1496,7 +1505,23 @@ fn make_parser(tokens, source, file, sink)
       let pat = parse_arm_pattern()
       return make_match_arm(pat, nil, parse_arm_body())
     end
+    let wstart = peek()
     let wval = parse_expr()
+    # A comparison or a boolean expression here would compare the match
+    # target with its value: there are no guards.
+    let cond_ops = {"==": true, "!=": true, "<": true, ">": true, "<=": true, ">=": true, "and": true, "or": true, "in": true}
+    let operand_failed = (wval.tag == "binop" and (wval.left.tag == "error_expr" or wval.right.tag == "error_expr")) or (wval.tag == "unop" and wval.expr.tag == "error_expr")
+    if not operand_failed and ((wval.tag == "binop" and has_key(cond_ops, wval.op)) or (wval.tag == "unop" and wval.op == "not"))
+      let last = tokens[pos - 1]
+      let span = 1
+      if last.line == wstart.line and last.col >= wstart.col
+        span = last.col - wstart.col + len(to_string(last.value))
+        if last.type == "STRING"
+          span += 2
+        end
+      end
+      report(wstart.line, wstart.col, span, "a `when` arm can't test a condition: this compares the match target with the value of this expression", "there are no guards; use an `if`/`elif` chain, or one arm per value")
+    end
     if wval.tag == "var" and not ends_arm_head(peek().type)
       # `when x foo`: report the missing `then` once, and keep `x` a
       # binding so its uses in the body don't also report as undeclared.

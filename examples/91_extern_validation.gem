@@ -10,7 +10,10 @@
 extern include "string.h"
 extern fn strlen(s: String) -> Int
 
-let r1 = pcall strlen()
+# A direct call with the wrong count is a compile error; through a value
+# it raises.
+let strlen_v = strlen
+let r1 = pcall strlen_v()
 print("missing:", r1.ok, r1.error)
 
 let r2 = pcall strlen(42)

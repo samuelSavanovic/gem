@@ -346,9 +346,14 @@ typedef struct {
     int value;         /* position in keys/vals; -1: deleted slot */
 } GemStrSlot;
 
+typedef struct GemKeyIndex GemKeyIndex;
+
 typedef struct {
-    int cap;           /* power of two */
+    int cap;           /* power of two, or 0 for an index that only holds `keyix`
+                          (a table without string keys) */
     int used;          /* live + deleted slots */
+    GemKeyIndex *keyix;  /* the table's value key index, or NULL (see GemKeyIndex);
+                            freed with this index */
     GemStrSlot slots[];
 } GemStrIndex;
 
@@ -356,6 +361,17 @@ int gem_str_index_get(const GemStrIndex *ix, const char *key, int64_t len);
 void gem_str_index_put(GemStrIndex **ix, const char *key, int64_t len, int pos);
 void gem_str_index_del(GemStrIndex *ix, const char *key, int64_t len);
 void gem_str_index_free(GemStrIndex **ix);
+
+/* Index of a table's value keys -- ints, floats, bools and refs, the keys
+   whose hash depends only on their value -- by open addressing from a key's
+   hash to its position in keys[]; a slot holds no key, so a reset that moves
+   the keys array leaves it valid. Table, buffer and fn keys compare by
+   identity and a reset can move them, so they are found by a scan. It hangs
+   off the string key index (t->str_index->keyix, with a string index of
+   capacity 0 to hold it in a table without string keys), so whatever drops
+   or rebuilds that index drops it too. One that exists maps every value key
+   of the table. It is built by the first lookup of a value key that misses
+   the array fast path in a table of more than GEM_TABLE_SCAN_MAX entries. */
 
 struct GemTable {
     GemVal *keys;
@@ -367,7 +383,9 @@ struct GemTable {
     int nstr;                /* number of string keys */
     GemTable *arena_next;    /* linked list in owning arena's table_list */
     uint8_t immutable;       /* frozen module namespace table (gem_table_freeze); copies keep the flag */
-    uint8_t rem_flag;        /* scratch bit for a reset's remembered-log compaction */
+    uint8_t rem_flag : 2;    /* scratch for a reset's remembered-log compaction (0, 1 or 2) */
+    uint8_t braces : 1;      /* made by a `{...}` literal (gem_table_new_braces), which std/json
+                                writes as `{}` when empty; copies keep the flag */
     uint8_t index_stale;     /* str_index and nstr not computed yet (deep copies, insert and remove_at
                                 leave them to gem_table_index) */
     uint8_t is_array;        /* every entry i has the int key i, so no key is >= len and t[len] = v
@@ -414,6 +432,13 @@ static inline void gem_table_written(GemTable *t) {
 #endif
 
 void gem_table_rebuild_index(GemTable *t);
+/* The position of the non-string key `key` in t->keys, or -1. */
+int gem_table_key_pos(GemTable *t, GemVal key);
+/* Keep the value key index in step: a value key now at `pos`, and a value
+   key removed (no-ops without an index or for another key type). */
+void gem_key_index_put(GemTable *t, GemVal key, int pos);
+void gem_key_index_del(GemTable *t, GemVal key);
+
 /* Call before touching t->str_index or t->nstr. */
 static inline void gem_table_index(GemTable *t) {
     if (t->index_stale) gem_table_rebuild_index(t);
@@ -481,6 +506,11 @@ static inline int gem_val_eq(GemVal a, GemVal b) {
    new one, so keep ids only for tables older than the loop that uses them,
    such as a function's arguments. */
 int64_t gem_table_id(GemVal v);
+/* A new empty table that remembers it was made by a `{...}` literal, and
+   whether a table was (1) or not (0, also for a non-table). std/json reaches
+   the second through `extern fn` to write an empty `{}` table as `{}`. */
+GemVal gem_table_new_braces(void);
+int gem_table_braces(GemVal v);
 /* The length of the longest prefix of `s` (n bytes) made only of bytes
    that occur in `accept` (accept_n bytes), like strspn but binary-safe.
    std/http and std/request reach it through `extern fn` (Bytes params)
@@ -580,6 +610,7 @@ GemVal gem_push_fn(void *_env, GemVal *args, int argc);
 GemVal gem_pcall_fn(void *_env, GemVal *args, int argc);
 GemVal gem_keys_fn(void *_env, GemVal *args, int argc);
 GemVal gem_for_len_fn(void *_env, GemVal *args, int argc);
+GemVal gem_for_items_fn(void *_env, GemVal *args, int argc);
 GemVal gem_table_key_at_fn(void *_env, GemVal *args, int argc);
 GemVal gem_table_val_at_fn(void *_env, GemVal *args, int argc);
 GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc);
@@ -829,6 +860,10 @@ static inline GemVal gem_ord_2(GemVal s, GemVal i) {
 static inline GemVal gem_for_len_1(GemVal v) {
     if (v.type == VAL_TABLE) return gem_int((int64_t)v.table->len);
     return gem_for_len_fn(NULL, &v, 1);
+}
+static inline GemVal gem_for_items_1(GemVal v) {
+    if (v.type == VAL_TABLE && v.table->is_array) return v;
+    return gem_for_items_fn(NULL, &v, 1);
 }
 static inline GemVal gem_table_key_at_2(GemVal t, GemVal i) {
     if (t.type == VAL_TABLE && i.type == VAL_INT && (uint64_t)i.ival < (uint64_t)t.table->len)

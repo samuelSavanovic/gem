@@ -1,0 +1,24 @@
+mini_redis listening on 127.0.0.1:6391
+--- end of phase basic
+gem_diag: arena_resets=20452 copied=681332112 scanned=4813324528 freed=27115310736 time=1.989s walk=0.903s full=1075 ret_resets=246 ret_copied=77075728 max=0.050s
+gem_diag: spawn_overflow=0 proc_hwm=809 max_procs=262144
+mini_redis listening on 127.0.0.1:6391
+--- end of phase pipeline
+gem_diag: arena_resets=17017 copied=1588786080 scanned=1876367312 freed=27369590448 time=1.012s walk=0.466s full=7306 ret_resets=6379 ret_copied=936122288 max=0.058s
+gem_diag: spawn_overflow=0 proc_hwm=809 max_procs=262144
+mini_redis listening on 127.0.0.1:6391
+--- end of phase clients
+gem_diag: arena_resets=239 copied=224777952 scanned=250006192 freed=768330512 time=0.277s walk=0.121s full=24 ret_resets=2 ret_copied=4718592 max=0.015s
+gem_diag: spawn_overflow=0 proc_hwm=1024 max_procs=262144
+mini_redis listening on 127.0.0.1:6391
+--- end of phase keyspace
+gem_diag: arena_resets=1540 copied=506104672 scanned=1193207008 freed=2923177472 time=0.765s walk=0.499s full=178 ret_resets=72 ret_copied=100487808 max=0.196s
+gem_diag: spawn_overflow=0 proc_hwm=110 max_procs=262144
+mini_redis listening on 127.0.0.1:6391
+--- end of phase expire
+gem_diag: arena_resets=1397 copied=1060271104 scanned=2612627216 freed=3830887824 time=1.056s walk=0.815s full=116 ret_resets=58 ret_copied=402139520 max=0.241s
+gem_diag: spawn_overflow=0 proc_hwm=62 max_procs=262144
+mini_redis listening on 127.0.0.1:6391
+--- end of phase pubsub
+gem_diag: arena_resets=491 copied=595728 scanned=41973384 freed=594808064 time=0.051s walk=0.003s full=106 ret_resets=2 ret_copied=5200 max=0.000s
+gem_diag: spawn_overflow=0 proc_hwm=2006 max_procs=262144

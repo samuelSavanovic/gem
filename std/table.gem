@@ -360,15 +360,11 @@ end
 ##   table.sort(users, fn(a, b) a.age - b.age end)
 ##
 ## Raises `table.sort: arr must be an array, ...` if `arr` is not an
-## array (a table whose keys are 0 .. n-1), and `table.sort: the comparator
-## must return a number ...` if `cmp` returns something other than a number
-## (a bool, say) for the first two elements. Only that first call is
-## checked: a non-number later counts as a tie and silently mis-sorts.
+## array (a table whose keys are 0 .. n-1), and, as the `sort` builtin
+## does, `sort: the comparator must return a number ...` when `cmp`
+## returns something other than a number (a bool, say).
 let sort = fn(arr, cmp = nil)
-  # The `sort` builtin leaves the array unsorted, with no error, when the
-  # comparator returns a bool, so this checks what `cmp` returns for the
-  # first two elements first. A `let`, not a `fn`, so that its body still
-  # reaches the `sort` builtin.
+  # A `let`, not a `fn`, so that its body still reaches the `sort` builtin.
   if type(arr) != "table"
     error("table.sort: arr must be an array, got {type(arr)}")
   end
@@ -378,12 +374,6 @@ let sort = fn(arr, cmp = nil)
   end
   if cmp == nil
     return sort(arr)
-  end
-  if len(arr) >= 2
-    let t = type(cmp(arr[0], arr[1]))
-    if t != "int" and t != "float"
-      error("table.sort: the comparator must return a number (negative, zero or positive), got {t}")
-    end
   end
   sort(arr, cmp)
 end
