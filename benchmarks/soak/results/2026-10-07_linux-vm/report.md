@@ -15,6 +15,7 @@ duration per target: 3600 s, sample every 30 s, guard RSS 4096 MB
 |---|---|
 | mini_redis | PASS |
 | stomp | PASS |
+| bookmark | PASS |
 
 ## mini_redis
 
@@ -62,5 +63,26 @@ CPU %            ▇▇▆▇▆▇▄▅▆▇█▇▇▇▅▅▅▅▅▄▄
 deliver_p99_ms   █▅▅▇▄█▄▆▅▄▃▂▅▇▁▇▁▂▂▂▄▃▂▅▄▅▅▂▇▅▆▃▁▂▁▃▁▆▁▃▆▂▂▃▄▂▂▁
 job_p99_ms       █▄▅▇▄█▆▇▄▅▄▄▅▇▃█▂▃▄▃▅▂▃▅▃▃▃▂▆▄▆▄▁▁▁▃▁▆▂▃▆▁▁▂▃▁▂▁
 probe_ms         ▃▅▁▄▂▄▃▃▃▃▂▄▄▃▃▃▂▃▅▂▂▃▃█▃▂▃▄▂▁▂▃▃▂▂▄▂▂▄▃▂▅▂▃▁▆▃▄
+```
+
+## bookmark
+
+- **PASS** ran to the end: load: deadline, 1h00m of 1h00m; server at the end: alive
+- **PASS** no errors: 0 errors
+- **PASS** memory steady: RSS 22 MB early, 19 MB late, peak 24 MB; second half -2.0 MB (-4.0 MB/h), limit 10 MB
+- **PASS** fds steady: 14 open early, 14 late, max 15, limit +10
+- **PASS** read_p99_ms steady: 5.09 ms early, 4.81 ms late (×0.95), worst interval 5.5 ms
+- **PASS** write_p99_ms steady: 4.55 ms early, 4.51 ms late (×0.99), worst interval 5.1 ms
+- **PASS** probe_ms steady: 0.47 ms early, 0.41 ms late (×0.88), worst interval 2.0 ms
+
+Totals over 1h00m: reads 756,005, writes 72,001, conns 36,001.
+
+```
+RSS MB           ▁▅▅▆▆▇▆▇▆▇▇████▅▆▆▆▆▆▇▆▇█▇█▇▇▆▆▆▇▇▇▇▇▇▇▇███▅▆▅▆▅
+fds              ▁█▁▁▁▁█▁▁▁▁▁▁█▁▁▁▁▁█▁▁▁▁▁█▁▁▁▁▁█▁▁▁▁▁▁▁▁▁▁▁▁█▁▁▁
+CPU %            ▆▆▇▆██▆▅▆▄██▃▄▅▇▅▄▄▆▆▅▄▇▅▅▆▄▃▆▃▄▄▄▄▅▄▆▄▅▄▆▅▄▄▄▁▂
+read_p99_ms      █▆▅▅██▆▆▄▃██▃▄▆▇▄▄▄▄▆▅▄▇▅▄▅▄▄█▂▄▃▄▄▇▅▅▃▆▃█▃▃▆▄▁▂
+write_p99_ms     █▅▅▄▄▂▄▃▂▁▇▅▃▅▃▅▄▅█▅▄▄▁▇▅▅▄▄▃▆▄▃▂▃▃▆▁▆▃▆▅▅▁▄▆▂▃▁
+probe_ms         ▃▄▇▁▄▁▁▁▁▃▂▁▁▁▁▁▁▁▁▅▁▁▁▁▂▁█▂▁▁▁▁▁▁▁▂▁▅▆▁▁▂▁▁▁▁▁▁
 ```
 

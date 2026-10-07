@@ -138,3 +138,95 @@ load: deadline after 3601 s
 load: deadline after 3601 s
 
 ── bookmark: 3600 s, from 20:56:04 ──
+      60 s  RSS 14 MB  fds 15  errors 0  read p99 5.4 ms  write p99 5.0 ms
+     120 s  RSS 17 MB  fds 14  errors 0  read p99 5.1 ms  write p99 4.5 ms
+     180 s  RSS 18 MB  fds 14  errors 0  read p99 5.2 ms  write p99 4.7 ms
+     240 s  RSS 17 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.1 ms
+     270 s  RSS 20 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.3 ms
+     330 s  RSS 19 MB  fds 14  errors 0  read p99 5.1 ms  write p99 4.4 ms
+     390 s  RSS 21 MB  fds 14  errors 0  read p99 5.1 ms  write p99 4.5 ms
+     450 s  RSS 20 MB  fds 14  errors 0  read p99 5.1 ms  write p99 4.6 ms
+     540 s  RSS 18 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.5 ms
+     600 s  RSS 19 MB  fds 14  errors 0  read p99 5.2 ms  write p99 4.6 ms
+     660 s  RSS 19 MB  fds 14  errors 0  read p99 5.1 ms  write p99 4.4 ms
+     720 s  RSS 21 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.3 ms
+     750 s  RSS 21 MB  fds 14  errors 0  read p99 4.7 ms  write p99 4.4 ms
+     810 s  RSS 21 MB  fds 14  errors 0  read p99 5.4 ms  write p99 4.9 ms
+     870 s  RSS 22 MB  fds 14  errors 0  read p99 5.4 ms  write p99 4.8 ms
+     960 s  RSS 22 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.6 ms
+    1020 s  RSS 21 MB  fds 14  errors 0  read p99 4.8 ms  write p99 4.6 ms
+    1080 s  RSS 18 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.4 ms
+    1140 s  RSS 18 MB  fds 14  errors 0  read p99 5.3 ms  write p99 4.8 ms
+    1200 s  RSS 18 MB  fds 14  errors 0  read p99 5.2 ms  write p99 4.7 ms
+    1230 s  RSS 19 MB  fds 14  errors 0  read p99 4.9 ms  write p99 4.5 ms
+    1290 s  RSS 19 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.8 ms
+    1350 s  RSS 19 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.6 ms
+    1440 s  RSS 20 MB  fds 14  errors 0  read p99 5.1 ms  write p99 4.5 ms
+    1500 s  RSS 19 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.8 ms
+    1560 s  RSS 20 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.6 ms
+    1620 s  RSS 18 MB  fds 14  errors 0  read p99 4.9 ms  write p99 4.3 ms
+    1650 s  RSS 18 MB  fds 14  errors 0  read p99 5.2 ms  write p99 4.7 ms
+    1710 s  RSS 21 MB  fds 14  errors 0  read p99 4.9 ms  write p99 4.4 ms
+    1770 s  RSS 21 MB  fds 14  errors 0  read p99 5.2 ms  write p99 4.9 ms
+    1860 s  RSS 19 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.6 ms
+    1920 s  RSS 21 MB  fds 15  errors 0  read p99 4.9 ms  write p99 4.8 ms
+    1980 s  RSS 21 MB  fds 14  errors 0  read p99 5.1 ms  write p99 4.7 ms
+    2040 s  RSS 22 MB  fds 14  errors 0  read p99 4.9 ms  write p99 4.4 ms
+    2100 s  RSS 22 MB  fds 14  errors 0  read p99 4.8 ms  write p99 4.1 ms
+    2130 s  RSS 20 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.6 ms
+    2190 s  RSS 19 MB  fds 14  errors 0  read p99 4.9 ms  write p99 4.7 ms
+    2250 s  RSS 18 MB  fds 14  errors 0  read p99 5.5 ms  write p99 4.9 ms
+    2340 s  RSS 19 MB  fds 14  errors 0  read p99 5.1 ms  write p99 4.4 ms
+    2400 s  RSS 20 MB  fds 15  errors 0  read p99 5.1 ms  write p99 4.7 ms
+    2460 s  RSS 19 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.5 ms
+    2520 s  RSS 21 MB  fds 14  errors 0  read p99 5.1 ms  write p99 4.6 ms
+    2550 s  RSS 18 MB  fds 14  errors 0  read p99 4.9 ms  write p99 4.5 ms
+    2610 s  RSS 20 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.6 ms
+    2670 s  RSS 21 MB  fds 14  errors 0  read p99 4.8 ms  write p99 4.2 ms
+    2760 s  RSS 21 MB  fds 14  errors 0  read p99 5.2 ms  write p99 4.5 ms
+    2820 s  RSS 21 MB  fds 14  errors 0  read p99 4.9 ms  write p99 4.7 ms
+    2880 s  RSS 20 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.6 ms
+    2940 s  RSS 21 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.6 ms
+    3000 s  RSS 21 MB  fds 14  errors 0  read p99 5.3 ms  write p99 4.9 ms
+    3030 s  RSS 22 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.8 ms
+    3090 s  RSS 24 MB  fds 14  errors 0  read p99 5.1 ms  write p99 4.7 ms
+    3150 s  RSS 23 MB  fds 14  errors 0  read p99 5.4 ms  write p99 4.8 ms
+    3240 s  RSS 19 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.5 ms
+    3300 s  RSS 18 MB  fds 14  errors 0  read p99 5.0 ms  write p99 4.7 ms
+    3360 s  RSS 17 MB  fds 14  errors 0  read p99 4.9 ms  write p99 4.9 ms
+    3420 s  RSS 18 MB  fds 14  errors 0  read p99 4.7 ms  write p99 4.6 ms
+    3480 s  RSS 18 MB  fds 14  errors 0  read p99 4.8 ms  write p99 4.6 ms
+    3510 s  RSS 19 MB  fds 14  errors 0  read p99 4.7 ms  write p99 4.4 ms
+    3570 s  RSS 18 MB  fds 14  errors 0  read p99 4.9 ms  write p99 4.4 ms
+load: deadline after 3600 s
+
+
+mini_redis
+  PASS ran to the end: load: deadline, 1h00m of 1h00m; server at the end: alive
+  PASS no errors: 0 errors
+  PASS memory steady: RSS 108 MB early, 108 MB late, peak 142 MB; second half -0.9 MB (-1.8 MB/h), limit 10 MB
+  PASS fds steady: 36 open early, 36 late, max 37, limit +10
+  PASS lat_p99_ms steady: 1.79 ms early, 1.79 ms late (×1.00), worst interval 3.0 ms
+  PASS deliver_p99_ms steady: 3.28 ms early, 3.35 ms late (×1.02), worst interval 4.6 ms
+  PASS probe_ms steady: 0.86 ms early, 1.23 ms late (×1.43), worst interval 11.2 ms
+
+stomp
+  PASS ran to the end: load: deadline, 1h00m of 1h00m; server at the end: alive
+  PASS no errors: 0 errors
+  PASS memory steady: RSS 40 MB early, 43 MB late, peak 46 MB; second half +0.4 MB (+0.7 MB/h), limit 10 MB
+  PASS fds steady: 42 open early, 42 late, max 42, limit +10
+  PASS deliver_p99_ms steady: 1.26 ms early, 1.17 ms late (×0.93), worst interval 1.5 ms
+  PASS job_p99_ms steady: 0.77 ms early, 0.69 ms late (×0.90), worst interval 0.9 ms
+  PASS probe_ms steady: 1.29 ms early, 0.87 ms late (×0.67), worst interval 3.8 ms
+  PASS queue backlog bounded: max 2 jobs, 2 in the late window, limit 1000
+
+bookmark
+  PASS ran to the end: load: deadline, 1h00m of 1h00m; server at the end: alive
+  PASS no errors: 0 errors
+  PASS memory steady: RSS 22 MB early, 19 MB late, peak 24 MB; second half -2.0 MB (-4.0 MB/h), limit 10 MB
+  PASS fds steady: 14 open early, 14 late, max 15, limit +10
+  PASS read_p99_ms steady: 5.09 ms early, 4.81 ms late (×0.95), worst interval 5.5 ms
+  PASS write_p99_ms steady: 4.55 ms early, 4.51 ms late (×0.99), worst interval 5.1 ms
+  PASS probe_ms steady: 0.47 ms early, 0.41 ms late (×0.88), worst interval 2.0 ms
+
+report: benchmarks/soak/results/2026-10-07_linux-vm/report.md
