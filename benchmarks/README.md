@@ -23,6 +23,8 @@ The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the
 
 `stomp/` loads `examples/stomp_broker` (a STOMP message broker) with topic fan-out, slow subscribers and work queues; there is no control implementation. See [below](#stomp).
 
+`soak/` is not a benchmark: it runs the long-lived servers (mini_redis, stomp_broker, bookmark_app) under a steady mixed load for an hour each and checks that they stay up, answer correctly, and keep memory, file descriptors and latency flat; see [below](#soak).
+
 ## Baselines
 
 `measure_all.sh` runs every harness in this directory (stomp's is in `stomp/`) and writes a baseline directory, `baselines/<date>_<machine>/` (e.g. `2026-10-05_m1pro`), to commit:
@@ -188,3 +190,62 @@ PHASES="fanout soak" benchmarks/stomp/run.sh
 | `soak` | 200 subscribers at 50 messages a second for 30 s (`SOAK_*`): whether memory stays flat |
 
 Results land in `benchmarks/stomp/logs/<timestamp>/` (gitignored; `OUT` picks another directory): per phase the harness's JSON, the broker's log with its `GEM_DIAG` line, the RSS samples and their summary, and `meta.txt`. The script exits 1 if a workload failed or the broker died. `measure_all.sh` runs it with `soak` added.
+
+## soak
+
+The other harnesses run each server for seconds to a few minutes. `soak/run.sh` runs each one for an hour (by default) under a steady, paced load, so what only shows over time can show: memory a loop's resets never give back, a remembered log, pin set or mailbox that grows slowly, latency that creeps up as kept data grows, process slots, pids, sockets and timers that leak a little per connection. It needs only `python3`; it is not part of `measure_all.sh`.
+
+```bash
+DURATION=2m benchmarks/soak/run.sh               # a short run: does the harness work here?
+benchmarks/soak/run.sh                           # the three targets, an hour each
+TARGETS=mini_redis DURATION=4h benchmarks/soak/run.sh
+MINI_REDIS_ARGS="--rate 8000 --subs 50" TARGETS=mini_redis benchmarks/soak/run.sh
+python3 benchmarks/soak/report.py benchmarks/soak/logs/<run>   # the report again
+```
+
+Each target gets a fresh server, built once at the start (a build error stops the run before it starts), run with `GEM_DIAG=1`, and a load generator that checks every answer it gets:
+
+| Target | Load (defaults; `--help` on each `*_load.py` lists the options) | Checked |
+|---|---|---|
+| `mini_redis` | 8 clients at 4,000 requests/s in all (one in ten a pipelined batch of 16): GET/SET/DEL, INCR, SET EX with 1–5 s TTLs, a list used as a FIFO, a hash and a set, each client on its own keys; 20 new connections/s; 200 PUBLISHes/s on 4 channels to 20 subscribers that leave and rejoin every 30 s on average | every reply against the client's model of its keys (a TTL check fails only when the reply is wrong for every moment the server could have run the command), messages in order with no gaps |
+| `stomp` | 200 SENDs/s to 4 topics with 30 subscribers that leave and rejoin (UNSUBSCRIBE + DISCONNECT, or an abrupt close); 200 jobs/s to a queue with 4 workers; 10 connections/s that SEND and DISCONNECT with a receipt | messages in order with no gaps; every job delivered at most once, and the backlog (sent − received) bounded |
+| `bookmark` | 4 readers at 200 GETs/s in all (`/`, `/bookmarks`, edit forms); one writer at 20 POST/PUT/DELETEs per second keeping the table near 100 rows; 10 one-request connections/s | after each change, the list the app answers with against the writer's model of the table; the pages readers get |
+
+There are no slow consumers and no unbounded tables: stomp_broker queues a slow subscriber's messages for up to 10 s and then drops it (`examples/stomp_broker/README.md`, "Known limits"), so memory would follow the consumers rather than the broker, and bookmark_app's list grows with the table ("POST phase is O(N²)" above), which would read as a leak. jobqueue isn't a target yet: a run has a fixed number of jobs and keeps a record of each to check its invariants, so its memory grows with the run by design; it needs a mode that runs for a duration and drops finished records first.
+
+Alongside the load, `sample.py` samples the server's RSS, CPU time and open file descriptors (`DURATION`/120 seconds apart, 2 to 30). Results land in `soak/logs/<timestamp>/` (gitignored), one directory per target:
+
+| File | What it holds |
+|---|---|
+| `load.csv` | a row per interval: throughput, latency p50/p99/max of each kind of request, errors by kind, a probe (a new connection's first answer) |
+| `server.csv` | a row per sample: RSS, CPU time and percent, open fds (on macOS `lsof`'s count, mapped files included: compare a run with itself) |
+| `errors.log` | the first 200 errors in full; the rest are counted |
+| `server.log` | the server's output, with its `GEM_DIAG` statistics at the end when it was shut down cleanly (mini_redis with `SHUTDOWN`; the other two have no clean shutdown, so SIGTERM ends them without the statistics) |
+| `status.txt` | how the target ended: the load's exit, whether the server was alive, what the sampler saw |
+| `load.csv.done` | the load's totals and why it stopped |
+
+**Nothing is lost when a run stops early.** Every row is flushed and fsynced when it is written, never kept for the end. Ctrl-C (or SIGTERM to `run.sh`) stops the current target cleanly (the server ignores the SIGINT, so it is still shut down normally), skips the rest and writes the report, whose verdict for that target is STOPPED. If the server dies or its RSS passes `GUARD_RSS_MB` (default 4096; the sampler kills it), the load stops at once and the report says why; the run goes on with the next target. If `run.sh` itself is killed hard (`kill -9`, a closed terminal), the load generator and sampler notice and exit, the data on disk is complete up to then, and `report.py` reports on it; the server keeps running and needs stopping by hand. A load generator still running 5 minutes after its deadline is killed and the target fails. On macOS the run holds off system sleep with `caffeinate`.
+
+`report.md` gives each target a verdict and the checks behind it, with a sparkline of each series. The run is split into warm-up (the first 15%, at most 10 minutes: mini_redis's keyspace fills in about 4 minutes), early (the next 10%) and late (the last 10%):
+
+| Check | Passes when |
+|---|---|
+| ran to the end | the load reached its deadline and the server was alive at the end |
+| no errors | no wrong answer, gap, duplicate or I/O error (`errors.log` lists them) |
+| memory steady | RSS grew at most 10 MB, or 5% of the late RSS if more, over the second half (least-squares slope) |
+| fds steady | the late median of open fds is at most 10 above the early one |
+| `<latency>` steady | each latency's median interval p99 late is at most 1.5× the early one, or at most 1 ms above it |
+| queue backlog bounded | (stomp) at most 1,000 jobs in the late window |
+
+The steadiness checks (all but the first two) only count in a run of at least 10 minutes; in a shorter one they are shown and the verdict is SHORT RUN, which says the harness works, not that the server is steady. `report.py --help` lists the thresholds. `run.sh` exits 0 when no target failed and the run was not stopped.
+
+### Recorded runs
+
+`soak/results/<date>_<machine>/` holds runs worth keeping, committed like the baselines: a run directory without `bin/` and the servers' `work/` directories (built binaries, bookmark_app's database), plus `run.txt`, the terminal output. `python3 benchmarks/soak/report.py benchmarks/soak/results/<run>` writes its `report.md` again.
+
+| Run | Machine | Commit | Result |
+|---|---|---|---|
+| [`2026-10-07_linux-vm`](soak/results/2026-10-07_linux-vm/report.md) | Linux x86_64 VM, 4 cores, 15 GB | 531563d | all three PASS, 1 h each, 0 errors |
+
+In that run, over its hour, mini_redis took 36M commands, 72,000 connections and 3.6M pub/sub deliveries; after warm-up its RSS swung between 82 and 125 MB as resets reclaimed memory (142 MB at the peak, during warm-up), with the same 108 MB median early and late, and its p99 stayed at 1.8 ms. stomp_broker delivered 5.4M topic messages and 720,000 queue jobs (each once) at 20–46 MB RSS after warm-up, and bookmark_app served 756,000 reads and 72,000 writes at 16–24 MB. Open fds stayed constant in all three. The one series that moved was mini_redis's probe, a new connection's first DBSIZE: 0.86 ms early and 1.23 ms late, within the 1 ms allowance; a second run would tell a trend from noise. A VM's numbers say whether the servers stay steady, not how fast they are: compare speed with the M1 Pro baselines.
+

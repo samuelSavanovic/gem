@@ -7,6 +7,7 @@ prototype/scheduler_test
 build/
 *.log
 !benchmarks/baselines/**/*.log
+!benchmarks/soak/results/**/*.log
 *.db
 *.db-shm
 *.db-wal
@@ -20,5 +21,6 @@ examples/logstat/logstat
 benchmarks/logs/
 benchmarks/stomp/logs/
 benchmarks/mini_redis/logs/
+benchmarks/soak/logs/
 .DS_Store
 RESUME_PROMPT.md
