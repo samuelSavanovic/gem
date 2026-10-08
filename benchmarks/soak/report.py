@@ -10,12 +10,12 @@ Works on a run that was cut short (everything it reads is written as the
 run goes), so it can be rerun at any time, also while a run is going.
 
 A target's samples are split into warm-up (the first 15%, at most 10
-minutes: mini_redis's keyspace fills in about 4 minutes), early (the
-next 10% of the run) and late (the last 10%). The checks that compare early
-with late (memory, fds, latency, backlog) only count once a target ran for
---min-judge-s (default 10 minutes); in a shorter run they are shown as
-"short" and the verdict is SHORT RUN, which says the harness works, not
-that the server is steady.
+minutes), early (the next 10% of the run) and late (the last 10%). The
+steadiness checks (memory, fds, throughput, CPU, latency, backlog) use
+those windows and only count once a target ran for --min-judge-s (default 10 minutes); in a shorter run they are
+shown as "short" and the verdict is SHORT RUN, which says the harness works,
+not that the server is steady. In a run that long, a check whose early or
+late window has fewer than three samples fails.
 """
 
 import argparse
@@ -24,22 +24,26 @@ import os
 import statistics
 import sys
 
-# Latency columns (interval p99s) each target's load writes.
+# Latency columns each target's load writes: interval p99s, and the probe's
+# single timing per interval.
 LATENCIES = {
     "mini_redis": ["lat_p99_ms", "deliver_p99_ms", "probe_ms"],
     "stomp": ["deliver_p99_ms", "job_p99_ms", "probe_ms"],
     "bookmark": ["read_p99_ms", "write_p99_ms", "probe_ms"],
 }
-# Counters summed over the run, shown in the throughput line.
+# The counter whose rate per interval stands for the target's throughput.
+THROUGHPUT = {"mini_redis": "ops", "stomp": "delivered", "bookmark": "reads"}
+# Counters summed over the run, shown in the totals line.
 COUNTERS = {
     "mini_redis": ["ops", "conns", "published", "delivered", "sub_sessions"],
     "stomp": ["published", "delivered", "jobs_sent", "jobs_done", "conns", "sub_sessions"],
     "bookmark": ["reads", "writes", "conns"],
 }
 SPARK = "▁▂▃▄▅▆▇█"
-# The checks that compare the early and late windows; the others (ran to
-# the end, no errors) count however long the run was.
-STEADINESS = {"memory steady", "fds steady", "queue backlog bounded"} | {
+# The checks that use the early and late windows; the others (ran to the
+# end, no errors) count however long the run was.
+STEADINESS = {"memory steady", "fds steady", "queue backlog bounded", "throughput steady",
+              "CPU steady"} | {
     f"{c} steady" for cols in LATENCIES.values() for c in cols}
 
 
@@ -72,14 +76,18 @@ def series(rows, col):
     return [(float(r["elapsed_s"]), num(r, col)) for r in rows if num(r, col) is not None]
 
 
-def windows(points, span):
-    """(early, late) value lists of `points` [(t, v)], or None when too few."""
+def windows(points, span, judged):
+    """(early, late) value lists of `points` [(t, v)], or None when too few.
+    A run too short to judge (`judged` false) falls back to the first and
+    last three points after warm-up; a judged run never does, so a series
+    that stops early is missing data, not a comparison of other windows."""
     warm = min(600.0, 0.15 * span)
     tenth = 0.1 * span
     early = [v for t, v in points if warm < t <= warm + tenth]
     late = [v for t, v in points if t > span - tenth]
     if len(early) < 3 or len(late) < 3:
-        # Short runs: fall back to the first and last three after warm-up.
+        if judged:
+            return None
         after = [v for t, v in points if t > warm]
         if len(after) < 6:
             return None
@@ -129,6 +137,12 @@ def target_report(name, d, args):
     planned = float(status.get("duration_s", "0") or 0)
     span = max([float(r["elapsed_s"]) for r in load] + [float(r["elapsed_s"]) for r in server]
                + [0.0])
+    judged = span >= args.min_judge_s
+    # A check without enough samples: in a judged run the data is missing.
+    no_data = "FAIL" if judged else "too short"
+
+    def few(n, what):
+        return f"{n} {what}" + (", too few in the early or late window" if judged else "")
 
     # ── ran to the end ──
     end_reason = done.get("end_reason", "(load still running or killed hard)")
@@ -139,8 +153,8 @@ def target_report(name, d, args):
         detail += f"; {sampler}"
     if end_reason == "deadline" and server_end == "alive" and not sampler:
         verdict = "PASS"
-    elif end_reason in ("SIGINT", "SIGTERM") and server_end == "alive" and not sampler:
-        verdict = "STOPPED"  # by hand (Ctrl-C), not by a failure
+    elif end_reason in ("SIGINT", "SIGTERM", "SIGHUP") and server_end == "alive" and not sampler:
+        verdict = "STOPPED"  # by hand (Ctrl-C, a closed terminal), not by a failure
     else:
         verdict = "FAIL"
     if status.get("load_hung"):
@@ -155,7 +169,10 @@ def target_report(name, d, args):
             for k, v in r.items():
                 if v and (k == "errors" or k.startswith("err_")):
                     totals[k] = totals.get(k, 0) + int(float(v))
-    errors = totals.get("errors", 0)
+    probe_fails = sum(1 for r in load if r.get("probe_error"))
+    if probe_fails:
+        totals["err_probe"] = probe_fails
+    errors = totals.get("errors", 0) + probe_fails
     kinds = ", ".join(f"{k[4:]}={v}" for k, v in sorted(totals.items())
                       if k.startswith("err_") and v)
     checks.append(("no errors", "PASS" if errors == 0 else "FAIL",
@@ -163,9 +180,9 @@ def target_report(name, d, args):
 
     # ── memory ──
     rss = [(t, v / 1024) for t, v in series(server, "rss_kb")]
-    w = windows(rss, span)
+    w = windows(rss, span, judged)
     if w is None:
-        checks.append(("memory steady", "too short", f"{len(rss)} RSS samples"))
+        checks.append(("memory steady", no_data, few(len(rss), "RSS samples")))
     else:
         early, late = statistics.median(w[0]), statistics.median(w[1])
         half = [(t, v) for t, v in rss if t >= span / 2]
@@ -180,9 +197,9 @@ def target_report(name, d, args):
 
     # ── file descriptors ──
     fds = series(server, "fds")
-    w = windows(fds, span)
+    w = windows(fds, span, judged)
     if w is None:
-        checks.append(("fds steady", "too short", f"{len(fds)} fd samples"))
+        checks.append(("fds steady", no_data, few(len(fds), "fd samples")))
     else:
         early, late = statistics.median(w[0]), statistics.median(w[1])
         verdict = "PASS" if late - early <= args.fd_growth else "FAIL"
@@ -190,13 +207,39 @@ def target_report(name, d, args):
                        f"{early:.0f} open early, {late:.0f} late, max "
                        f"{max(v for _, v in fds):.0f}, limit +{args.fd_growth}"))
 
+    # ── throughput: the paced load keeps its rate ──
+    col = THROUGHPUT.get(name)
+    rate = [(float(r["elapsed_s"]), num(r, col) / num(r, "interval_s")) for r in load
+            if col and num(r, col) is not None and num(r, "interval_s")]
+    w = windows(rate, span, judged)
+    if col and w is None:
+        checks.append(("throughput steady", no_data, few(len(rate), "intervals")))
+    elif col:
+        early, late = statistics.median(w[0]), statistics.median(w[1])
+        ok = late >= early * args.throughput_ratio
+        checks.append(("throughput steady", "PASS" if ok else "FAIL",
+                       f"{col} {early:,.0f}/s early, {late:,.0f}/s late, lowest interval "
+                       f"{min(v for _, v in rate):,.0f}/s, limit ×{args.throughput_ratio:g}"))
+
+    # ── CPU: the same paced work should cost the same ──
+    cpu = series(server, "cpu_pct")
+    w = windows(cpu, span, judged)
+    if w is None:
+        checks.append(("CPU steady", no_data, few(len(cpu), "CPU samples")))
+    else:
+        early, late = statistics.median(w[0]), statistics.median(w[1])
+        ok = late <= early * args.cpu_ratio or late - early <= args.cpu_floor_pct
+        checks.append(("CPU steady", "PASS" if ok else "FAIL",
+                       f"{early:.1f}% early, {late:.1f}% late, limit ×{args.cpu_ratio:g} "
+                       f"or +{args.cpu_floor_pct:g} points"))
+
     # ── latency ──
     lat_rows = []
     for col in LATENCIES.get(name, []):
         pts = series(load, col)
-        w = windows(pts, span)
+        w = windows(pts, span, judged)
         if w is None:
-            checks.append((f"{col} steady", "too short", f"{len(pts)} samples"))
+            checks.append((f"{col} steady", no_data, few(len(pts), "samples")))
             continue
         early, late = statistics.median(w[0]), statistics.median(w[1])
         worst = max(v for _, v in pts)
@@ -210,9 +253,9 @@ def target_report(name, d, args):
     # ── stomp: the queue backlog stays bounded ──
     backlog = series(load, "queue_backlog")
     if backlog:
-        w = windows(backlog, span)
+        w = windows(backlog, span, judged)
         if w is None:
-            checks.append(("queue backlog bounded", "too short", f"{len(backlog)} samples"))
+            checks.append(("queue backlog bounded", no_data, few(len(backlog), "samples")))
         else:
             late = max(w[1])
             ok = late <= args.backlog
@@ -220,7 +263,7 @@ def target_report(name, d, args):
                            f"max {max(v for _, v in backlog):.0f} jobs, {late:.0f} in the "
                            f"late window, limit {args.backlog}"))
 
-    if span < args.min_judge_s:
+    if not judged:
         checks = [(c, "short" if c in STEADINESS and v in ("PASS", "FAIL") else v, dt)
                   for c, v, dt in checks]
         lines.append(f"Ran {fmt_dur(span)}, under {fmt_dur(args.min_judge_s)}: the steadiness "
@@ -243,7 +286,6 @@ def target_report(name, d, args):
     lines.append(f"{'RSS MB':<16} {spark([v for _, v in rss])}")
     if fds:
         lines.append(f"{'fds':<16} {spark([v for _, v in fds])}")
-    cpu = series(server, "cpu_pct")
     if cpu:
         lines.append(f"{'CPU %':<16} {spark([v for _, v in cpu])}")
     for col, vals in lat_rows:
@@ -272,12 +314,20 @@ def main():
                    help="allowed RSS growth over the second half, MB (default 10)")
     p.add_argument("--rss-growth-pct", type=float, default=5,
                    help="... or this percent of the late RSS, if larger (default 5)")
-    p.add_argument("--fd-growth", type=int, default=10)
+    p.add_argument("--fd-growth", type=int, default=10,
+                   help="allowed rise of the median open fds, late over early (default 10)")
     p.add_argument("--p99-ratio", type=float, default=1.5,
                    help="allowed late/early ratio of an interval p99 (default 1.5)")
     p.add_argument("--p99-floor-ms", type=float, default=1.0,
                    help="... or this absolute rise in ms, if larger (default 1)")
-    p.add_argument("--backlog", type=int, default=1000, help="queue backlog limit, jobs")
+    p.add_argument("--throughput-ratio", type=float, default=0.9,
+                   help="lowest allowed late/early ratio of the throughput (default 0.9)")
+    p.add_argument("--cpu-ratio", type=float, default=1.5,
+                   help="allowed late/early ratio of the server's CPU %% (default 1.5)")
+    p.add_argument("--cpu-floor-pct", type=float, default=10,
+                   help="... or this rise in percentage points, if larger (default 10)")
+    p.add_argument("--backlog", type=int, default=1000,
+                   help="queue backlog limit in the late window, jobs (default 1000)")
     p.add_argument("--min-judge-s", type=float, default=600,
                    help="shortest run whose steadiness checks count (default 600)")
     args = p.parse_args()

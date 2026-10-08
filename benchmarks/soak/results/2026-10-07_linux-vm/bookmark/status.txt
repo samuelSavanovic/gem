@@ -1,6 +1,0 @@
-duration_s=3600
-started=2026-10-07T20:56:04Z
-server_pid=15769
-load_exit=0
-server_end=alive
-ended=2026-10-07T21:56:05Z
