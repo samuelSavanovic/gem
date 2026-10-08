@@ -26,12 +26,14 @@
 #                  MINI_REDIS_ARGS="--rate 8000 --subs 50" (see --help)
 #
 # Every sample is flushed and fsynced as it is taken, so stopping a run
-# (Ctrl-C, SIGTERM, a crash) keeps everything sampled so far; Ctrl-C stops
-# the current target cleanly, skips the rest and writes the report. On
-# macOS the run holds off system sleep with caffeinate.
+# (Ctrl-C, SIGTERM, a closed terminal, a crash) keeps everything sampled so
+# far; Ctrl-C, SIGTERM and SIGHUP stop the current target cleanly, skip the
+# rest and write the report. On macOS the run holds off system sleep with
+# caffeinate.
 #
-# Exit status: 0 when every target passed, 1 when one failed or the run was
-# stopped, 2 for a setup problem.
+# Exit status: 0 when no target failed and the run was not stopped (a run
+# too short to judge exits 0), 1 when one failed or the run was stopped, 2
+# for a setup problem or a report that could not be written.
 
 set -uo pipefail
 
@@ -86,6 +88,7 @@ for t in $TARGETS; do
 done
 
 mkdir -p "$OUT/bin" || die "cannot create $OUT"
+OUT="$(cd "$OUT" && pwd)"
 
 {
   echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -122,7 +125,7 @@ for t in $TARGETS; do
 done
 
 if [[ "$(uname)" == Darwin ]] && command -v caffeinate > /dev/null; then
-  caffeinate -dims -w $$ &
+  (trap '' HUP && exec caffeinate -dims -w $$) &
 fi
 
 STOPPING=0
@@ -135,7 +138,7 @@ on_signal() {
   echo "soak: stopping (the samples so far are kept)"
   [[ -n "$load_pid" ]] && kill -TERM "$load_pid" 2> /dev/null
 }
-trap on_signal INT TERM
+trap on_signal INT TERM HUP
 
 # wait_for <pid>: its exit status, waiting through the interruptions a
 # trapped signal makes.
@@ -183,20 +186,20 @@ run_target() {
   echo "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$dir/status.txt"
 
   # Each server runs in its own directory (bookmark_app opens bookmarks.db
-  # and serves ./static from its working directory), with SIGINT ignored:
-  # Ctrl-C goes to the whole process group, and the server must outlive it
-  # to be shut down cleanly (and print its GEM_DIAG statistics).
+  # and serves ./static from its working directory), with SIGINT and SIGHUP
+  # ignored: Ctrl-C and a closed terminal signal the whole process group,
+  # and the server must outlive them to be shut down cleanly (and print its GEM_DIAG statistics).
   mkdir -p "$dir/work"
   case $t in
     mini_redis)
-      (cd "$dir/work" && trap '' INT && GEM_DIAG=1 exec "$OUT/bin/mini_redis" --port "$port") > "$dir/server.log" 2>&1 &
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG=1 exec "$OUT/bin/mini_redis" --port "$port") > "$dir/server.log" 2>&1 &
       load=mini_redis_load.py; extra=${MINI_REDIS_ARGS:-} ;;
     stomp)
-      (cd "$dir/work" && trap '' INT && GEM_DIAG=1 exec "$OUT/bin/stomp") > "$dir/server.log" 2>&1 &
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG=1 exec "$OUT/bin/stomp") > "$dir/server.log" 2>&1 &
       load=stomp_load.py; extra=${STOMP_ARGS:-} ;;
     bookmark)
       cp -R "$ROOT/examples/bookmark_app/static" "$dir/work/static"
-      (cd "$dir/work" && trap '' INT && GEM_DIAG=1 LOG_LEVEL=warn exec "$OUT/bin/bookmark") > "$dir/server.log" 2>&1 &
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG=1 LOG_LEVEL=warn exec "$OUT/bin/bookmark") > "$dir/server.log" 2>&1 &
       load=bookmark_load.py; extra=${BOOKMARK_ARGS:-} ;;
   esac
   server_pid=$!
@@ -222,7 +225,7 @@ run_target() {
     --sample-s "$SAMPLE_S" --out "$dir/load.csv" --errors "$dir/errors.log" $extra \
     > "$dir/load.log" 2>&1 &
   load_pid=$!
-  (trap '' INT && exec "$PYTHON" "$SCRIPT_DIR/sample.py" --pid "$server_pid" \
+  (trap '' INT HUP && exec "$PYTHON" "$SCRIPT_DIR/sample.py" --pid "$server_pid" \
     --interval "$SAMPLE_S" --out "$dir/server.csv" --status "$dir/status.txt" \
     --notify "$load_pid" --guard-rss-mb "$GUARD_RSS_MB") > "$dir/sampler.log" 2>&1 &
   sampler_pid=$!

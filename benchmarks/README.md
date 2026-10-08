@@ -193,7 +193,7 @@ Results land in `benchmarks/stomp/logs/<timestamp>/` (gitignored; `OUT` picks an
 
 ## soak
 
-The other harnesses run each server for seconds to a few minutes. `soak/run.sh` runs each one for an hour (by default) under a steady, paced load, so what only shows over time can show: memory a loop's resets never give back, a remembered log, pin set or mailbox that grows slowly, latency that creeps up as kept data grows, process slots, pids, sockets and timers that leak a little per connection. It needs only `python3`; it is not part of `measure_all.sh`.
+The other harnesses run each server for seconds to a few minutes. `soak/run.sh` runs each one for an hour (by default) under a steady, paced load, so what only shows over time can show: memory a loop's resets never give back, a remembered log, pin set or mailbox that grows slowly, latency that creeps up as kept data grows, process slots, pids, sockets and timers that leak a little per connection. Besides a built `build/gem` it needs only `python3`; it is not part of `measure_all.sh`.
 
 ```bash
 DURATION=2m benchmarks/soak/run.sh               # a short run: does the harness work here?
@@ -217,35 +217,40 @@ Alongside the load, `sample.py` samples the server's RSS, CPU time and open file
 
 | File | What it holds |
 |---|---|
-| `load.csv` | a row per interval: throughput, latency p50/p99/max of each kind of request, errors by kind, a probe (a new connection's first answer) |
+| `load.csv` | a row per interval: throughput, latency p50/p99/max of each kind of request, errors by kind, a probe (one timed request per interval: mini_redis's is a DBSIZE on a connection it keeps open, stomp's and bookmark's a new connection's first answer) |
 | `server.csv` | a row per sample: RSS, CPU time and percent, open fds (on macOS `lsof`'s count, mapped files included: compare a run with itself) |
 | `errors.log` | the first 200 errors in full; the rest are counted |
 | `server.log` | the server's output, with its `GEM_DIAG` statistics at the end when it was shut down cleanly (mini_redis with `SHUTDOWN`; the other two have no clean shutdown, so SIGTERM ends them without the statistics) |
 | `status.txt` | how the target ended: the load's exit, whether the server was alive, what the sampler saw |
 | `load.csv.done` | the load's totals and why it stopped |
 
-**Nothing is lost when a run stops early.** Every row is flushed and fsynced when it is written, never kept for the end. Ctrl-C (or SIGTERM to `run.sh`) stops the current target cleanly (the server ignores the SIGINT, so it is still shut down normally), skips the rest and writes the report, whose verdict for that target is STOPPED. If the server dies or its RSS passes `GUARD_RSS_MB` (default 4096; the sampler kills it), the load stops at once and the report says why; the run goes on with the next target. If `run.sh` itself is killed hard (`kill -9`, a closed terminal), the load generator and sampler notice and exit, the data on disk is complete up to then, and `report.py` reports on it; the server keeps running and needs stopping by hand. A load generator still running 5 minutes after its deadline is killed and the target fails. On macOS the run holds off system sleep with `caffeinate`.
+**Nothing is lost when a run stops early.** Every row is flushed and fsynced when it is written, never kept for the end. Ctrl-C, a closed terminal or SIGTERM to `run.sh` stops the current target cleanly (the server ignores SIGINT and SIGHUP, so it is still shut down normally), skips the rest and writes the report, whose verdict for that target is STOPPED unless a check failed. If the server dies or its RSS passes `GUARD_RSS_MB` (default 4096; the sampler kills it), the load stops within one sample interval and the report says why; the run goes on with the next target. If `run.sh` itself is killed with `kill -9`, the load generator and sampler notice and exit, the data on disk is complete up to then, and `report.py` reports on it; the server keeps running and needs stopping by hand. A load generator still running 5 minutes after its deadline is killed and the target fails. On macOS the run holds off system sleep with `caffeinate`.
 
-`report.md` gives each target a verdict and the checks behind it, with a sparkline of each series. The run is split into warm-up (the first 15%, at most 10 minutes: mini_redis's keyspace fills in about 4 minutes), early (the next 10%) and late (the last 10%):
+`report.md` gives each target a verdict and the checks behind it, with sparklines of RSS, fds, CPU and each latency. The run is split into warm-up (the first 15%, at most 10 minutes; with the default load, mini_redis's keyspace fills in about 4 minutes), early (the next 10%) and late (the last 10%):
 
 | Check | Passes when |
 |---|---|
 | ran to the end | the load reached its deadline and the server was alive at the end |
-| no errors | no wrong answer, gap, duplicate or I/O error (`errors.log` lists them) |
+| no errors | no wrong answer, gap, duplicate or I/O error (`errors.log` lists them), and no failed probe |
 | memory steady | RSS grew at most 10 MB, or 5% of the late RSS if more, over the second half (least-squares slope) |
 | fds steady | the late median of open fds is at most 10 above the early one |
-| `<latency>` steady | each latency's median interval p99 late is at most 1.5× the early one, or at most 1 ms above it |
+| throughput steady | the late median rate of the target's main counter (mini_redis ops, stomp deliveries, bookmark reads) is at least 0.9× the early one. The load is paced: a server that falls behind gets fewer requests rather than queueing them, and mini_redis's and bookmark's latencies are timed from each request's send, so there it shows in throughput rather than in latency |
+| CPU steady | the server's late median CPU % is at most 1.5× the early one, or at most 10 points above it: the same paced work should cost the same |
+| `<latency>` steady | each latency's late median (of the interval p99s; of the probe's single timings) is at most 1.5× the early one, or at most 1 ms above it |
 | queue backlog bounded | (stomp) at most 1,000 jobs in the late window |
 
-The steadiness checks (all but the first two) only count in a run of at least 10 minutes; in a shorter one they are shown and the verdict is SHORT RUN, which says the harness works, not that the server is steady. `report.py --help` lists the thresholds. `run.sh` exits 0 when no target failed and the run was not stopped.
+The steadiness checks (all but the first two; memory judges the second half's slope and the backlog the late window, the others compare early with late) only count in a run of at least 10 minutes; in a shorter one they are shown and the verdict is SHORT RUN, which says the harness works, not that the server is steady. In a run that long, a check with fewer than three samples in its early or late window fails (a sampler or probe that stopped partway). `report.py --help` lists the thresholds. `run.sh` exits 0 when no target failed and the run was not stopped (so also for SHORT RUN).
 
 ### Recorded runs
 
-`soak/results/<date>_<machine>/` holds runs worth keeping, committed like the baselines: a run directory without `bin/` and the servers' `work/` directories (built binaries, bookmark_app's database), plus `run.txt`, the terminal output. `python3 benchmarks/soak/report.py benchmarks/soak/results/<run>` writes its `report.md` again.
+Most soak runs are not recorded: read the report in `soak/logs/` and move on. A milestone run (the first on a platform, the first of a new length, the first after a change to resets, copying or the scheduler) is recorded as its `report.md` alone, in `soak/results/<date>_<machine>[_<length>]/report.md`, with a row below. The report holds the machine, the commit, every check with its numbers, the sparklines and, for mini_redis, the `GEM_DIAG` line. The CSVs and logs it was made from are not committed: they stay in `soak/logs/` on the machine that ran it, where `report.py` can be rerun on them while chasing a failure. The figures quoted below that are not in a report come from those CSVs; the Linux VM run's are in git history (`git show a6a1448:benchmarks/soak/results/2026-10-07_linux-vm/`), the 8-hour run's are not.
 
 | Run | Machine | Commit | Result |
 |---|---|---|---|
 | [`2026-10-07_linux-vm`](soak/results/2026-10-07_linux-vm/report.md) | Linux x86_64 VM, 4 cores, 15 GB | 531563d | all three PASS, 1 h each, 0 errors |
+| [`2026-10-08_m1pro_8h`](soak/results/2026-10-08_m1pro_8h/report.md) | macOS arm64, M1 Pro, 16 GB, in desktop use | a6a1448 (`benchmarks/soak/` uncommitted) | mini_redis PASS, 8 h, 0 errors |
 
-In that run, over its hour, mini_redis took 36M commands, 72,000 connections and 3.6M pub/sub deliveries; after warm-up its RSS swung between 82 and 125 MB as resets reclaimed memory (142 MB at the peak, during warm-up), with the same 108 MB median early and late, and its p99 stayed at 1.8 ms. stomp_broker delivered 5.4M topic messages and 720,000 queue jobs (each once) at 20–46 MB RSS after warm-up, and bookmark_app served 756,000 reads and 72,000 writes at 16–24 MB. Open fds stayed constant in all three. The one series that moved was mini_redis's probe, a new connection's first DBSIZE: 0.86 ms early and 1.23 ms late, within the 1 ms allowance; a second run would tell a trend from noise. A VM's numbers say whether the servers stay steady, not how fast they are: compare speed with the M1 Pro baselines.
+In that run, over its hour, mini_redis took 36M commands, 72,000 connections and 3.6M pub/sub deliveries; after warm-up its RSS swung between 82 and 125 MB as resets reclaimed memory (142 MB at the peak, during warm-up), with the same 108 MB median early and late, and its median interval p99 stayed at 1.8 ms. stomp_broker delivered 5.4M topic messages and 720,000 queue jobs (each once) at 20–46 MB RSS after warm-up, and bookmark_app served 756,000 reads and 72,000 writes at 16–24 MB. Open fds stayed within one of their early count in all three. The largest latency rise was mini_redis's probe, a DBSIZE once per interval: 0.86 ms early and 1.23 ms late, within the 1 ms allowance; a second run would tell a trend from noise. A VM's numbers say whether the servers stay steady, not how fast they are: compare speed with the M1 Pro baselines.
+
+The 8-hour mini_redis run shared its Mac with ordinary desktop use (Docker containers, browsers, a Jest run), so its CPU and latency series carry that machine's load. It took 288M commands, 576,000 connections and 28.8M pub/sub deliveries with 0 errors. Its hourly RSS median stayed between 128 and 132 MB (80–156 MB as resets reclaimed memory), and its open fds at 39–40; the second half's slope, +1.2 MB/h, is within the noise of that swing. The worst throughput and p99 intervals (3,800 ops/s, 62 ms) and the RSS lows of 57 and 68 MB fall in the same two minutes, 3 h 18 m in, when a Jest run held every core; the slowest probe, 117 ms, was a separate blip 80 minutes earlier. The `GEM_DIAG` line shows 1,028 s of the 8 h in resets and the longest single reset at 0.53 s, against 0.09 s in the Linux VM's hour.
 
