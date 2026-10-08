@@ -238,3 +238,14 @@ Alongside the load, `sample.py` samples the server's RSS, CPU time and open file
 | queue backlog bounded | (stomp) at most 1,000 jobs in the late window |
 
 The steadiness checks (all but the first two) only count in a run of at least 10 minutes; in a shorter one they are shown and the verdict is SHORT RUN, which says the harness works, not that the server is steady. `report.py --help` lists the thresholds. `run.sh` exits 0 when no target failed and the run was not stopped.
+
+### Recorded runs
+
+`soak/results/<date>_<machine>/` holds runs worth keeping, committed like the baselines: a run directory without `bin/` and the servers' `work/` directories (built binaries, bookmark_app's database), plus `run.txt`, the terminal output. `python3 benchmarks/soak/report.py benchmarks/soak/results/<run>` writes its `report.md` again.
+
+| Run | Machine | Commit | Result |
+|---|---|---|---|
+| [`2026-10-07_linux-vm`](soak/results/2026-10-07_linux-vm/report.md) | Linux x86_64 VM, 4 cores, 15 GB | 531563d | all three PASS, 1 h each, 0 errors |
+
+In that run, over its hour, mini_redis took 36M commands, 72,000 connections and 3.6M pub/sub deliveries; after warm-up its RSS swung between 82 and 125 MB as resets reclaimed memory (142 MB at the peak, during warm-up), with the same 108 MB median early and late, and its p99 stayed at 1.8 ms. stomp_broker delivered 5.4M topic messages and 720,000 queue jobs (each once) at 20–46 MB RSS after warm-up, and bookmark_app served 756,000 reads and 72,000 writes at 16–24 MB. Open fds stayed constant in all three. The one series that moved was mini_redis's probe, a new connection's first DBSIZE: 0.86 ms early and 1.23 ms late, within the 1 ms allowance; a second run would tell a trend from noise. A VM's numbers say whether the servers stay steady, not how fast they are: compare speed with the M1 Pro baselines.
+
