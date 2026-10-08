@@ -1,6 +1,6 @@
 """Shared pieces of the soak load generators: interval statistics, a CSV
 writer that survives an interrupted run, and the run loop that ends on
-the deadline or on SIGINT/SIGTERM.
+the deadline or on SIGINT/SIGTERM/SIGHUP.
 
 Every row is flushed and fsynced as it is written, so a run that is
 killed, or a machine that goes down, keeps every interval sampled before
@@ -137,8 +137,8 @@ class Pacer:
 
 def run(args, stats, columns, sample_extra, threads, stop):
     """Starts `threads`, writes a row of `columns` to `args.out` every
-    `args.sample_s` seconds until `args.duration_s` passes or a SIGINT or
-    SIGTERM arrives, then stops the threads and writes `args.out` + ".done"
+    `args.sample_s` seconds until `args.duration_s` passes or a SIGINT,
+    SIGTERM or SIGHUP arrives, then stops the threads and writes `args.out` + ".done"
     with the totals. `sample_extra()` adds probe values (key counts and the
     like) to each row; it runs on this thread.
 
@@ -157,6 +157,7 @@ def run(args, stats, columns, sample_extra, threads, stop):
 
     signal.signal(signal.SIGINT, on_signal)
     signal.signal(signal.SIGTERM, on_signal)
+    signal.signal(signal.SIGHUP, on_signal)
 
     start = time.time()
     parent = os.getppid()

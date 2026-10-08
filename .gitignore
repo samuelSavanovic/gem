@@ -7,7 +7,6 @@ prototype/scheduler_test
 build/
 *.log
 !benchmarks/baselines/**/*.log
-!benchmarks/soak/results/**/*.log
 *.db
 *.db-shm
 *.db-wal

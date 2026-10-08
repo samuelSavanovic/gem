@@ -71,7 +71,7 @@ benchmarks/           # wrk harness for examples/bookmark_app (run.sh) + node_ba
                       #   lox/                   — examples/lox vs the same interpreter in Python on bench/*.lox, with an output diff
                       #   gemgrep/               — examples/gemgrep vs GNU grep -E and a Python twin on a generated tree, with output diffs
                       #   jobqueue/              — examples/jobqueue vs Python asyncio and Elixir/OTP twins on six fault scenarios; checks their invariants
-                      #   soak/                  — not in measure_all.sh: the example servers under an hour of checked load; flat memory, fds, latency? (runs in results/)
+                      #   soak/                  — not in measure_all.sh: the example servers under an hour of checked load: flat memory, fds, throughput, CPU, latency? (milestone reports in results/)
 ```
 
 ## Build, Test, Bootstrap

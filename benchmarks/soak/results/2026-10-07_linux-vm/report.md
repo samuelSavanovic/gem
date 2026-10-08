@@ -23,6 +23,8 @@ duration per target: 3600 s, sample every 30 s, guard RSS 4096 MB
 - **PASS** no errors: 0 errors
 - **PASS** memory steady: RSS 108 MB early, 108 MB late, peak 142 MB; second half -0.9 MB (-1.8 MB/h), limit 10 MB
 - **PASS** fds steady: 36 open early, 36 late, max 37, limit +10
+- **PASS** throughput steady: ops 9,988/s early, 9,990/s late, lowest interval 9,774/s, limit ×0.9
+- **PASS** CPU steady: 28.4% early, 27.9% late, limit ×1.5 or +10 points
 - **PASS** lat_p99_ms steady: 1.79 ms early, 1.79 ms late (×1.00), worst interval 3.0 ms
 - **PASS** deliver_p99_ms steady: 3.28 ms early, 3.35 ms late (×1.02), worst interval 4.6 ms
 - **PASS** probe_ms steady: 0.86 ms early, 1.23 ms late (×1.43), worst interval 11.2 ms
@@ -49,6 +51,8 @@ GEM_DIAG at exit:
 - **PASS** no errors: 0 errors
 - **PASS** memory steady: RSS 40 MB early, 43 MB late, peak 46 MB; second half +0.4 MB (+0.7 MB/h), limit 10 MB
 - **PASS** fds steady: 42 open early, 42 late, max 42, limit +10
+- **PASS** throughput steady: delivered 1,500/s early, 1,500/s late, lowest interval 1,476/s, limit ×0.9
+- **PASS** CPU steady: 9.0% early, 8.0% late, limit ×1.5 or +10 points
 - **PASS** deliver_p99_ms steady: 1.26 ms early, 1.17 ms late (×0.93), worst interval 1.5 ms
 - **PASS** job_p99_ms steady: 0.77 ms early, 0.69 ms late (×0.90), worst interval 0.9 ms
 - **PASS** probe_ms steady: 1.29 ms early, 0.87 ms late (×0.67), worst interval 3.8 ms
@@ -71,6 +75,8 @@ probe_ms         ▃▅▁▄▂▄▃▃▃▃▂▄▄▃▃▃▂▃▅▂▂
 - **PASS** no errors: 0 errors
 - **PASS** memory steady: RSS 22 MB early, 19 MB late, peak 24 MB; second half -2.0 MB (-4.0 MB/h), limit 10 MB
 - **PASS** fds steady: 14 open early, 14 late, max 15, limit +10
+- **PASS** throughput steady: reads 210/s early, 210/s late, lowest interval 210/s, limit ×0.9
+- **PASS** CPU steady: 12.5% early, 11.9% late, limit ×1.5 or +10 points
 - **PASS** read_p99_ms steady: 5.09 ms early, 4.81 ms late (×0.95), worst interval 5.5 ms
 - **PASS** write_p99_ms steady: 4.55 ms early, 4.51 ms late (×0.99), worst interval 5.1 ms
 - **PASS** probe_ms steady: 0.47 ms early, 0.41 ms late (×0.88), worst interval 2.0 ms
