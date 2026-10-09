@@ -1,0 +1,5 @@
+let f = fn(v) "old {v}" end
+fn set()
+  f = fn(v) "new {v}" end
+end
+export f, set

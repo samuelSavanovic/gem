@@ -39,23 +39,11 @@
         },
         {
           "type": "SYMBOL",
-          "name": "if_statement"
-        },
-        {
-          "type": "SYMBOL",
           "name": "while_statement"
         },
         {
           "type": "SYMBOL",
           "name": "for_statement"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "match_statement"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "receive_block"
         },
         {
           "type": "SYMBOL",
@@ -635,29 +623,8 @@
           "name": "value",
           "content": {
             "type": "SYMBOL",
-            "name": "_value"
+            "name": "_expression"
           }
-        }
-      ]
-    },
-    "_value": {
-      "type": "CHOICE",
-      "members": [
-        {
-          "type": "SYMBOL",
-          "name": "_expression"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "if_statement"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "match_statement"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "receive_block"
         }
       ]
     },
@@ -1269,7 +1236,7 @@
             "members": [
               {
                 "type": "SYMBOL",
-                "name": "_value"
+                "name": "_expression"
               },
               {
                 "type": "BLANK"
@@ -1512,7 +1479,7 @@
             "name": "right",
             "content": {
               "type": "SYMBOL",
-              "name": "_value"
+              "name": "_expression"
             }
           }
         ]
@@ -1521,6 +1488,18 @@
     "_expression": {
       "type": "CHOICE",
       "members": [
+        {
+          "type": "SYMBOL",
+          "name": "if_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "match_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "receive_block"
+        },
         {
           "type": "SYMBOL",
           "name": "binary_expression"
@@ -2267,7 +2246,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "_value"
+          "name": "_expression"
         },
         {
           "type": "STRING",
