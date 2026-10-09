@@ -243,6 +243,7 @@ static void gem_res_close_n(const int32_t *idx, int n) {
         GemResEntry e = gem_res[idx[k]];
         gem_res_free_entry(idx[k]);
         if (e.kind == GEM_RES_SOCKET) gem_tcp_close_fd_checked(e.fd, e.dev, e.ino);
+        else if (e.kind == GEM_RES_SQLITE) gem_sqlite_exit_close(e.ptr);
     }
 }
 

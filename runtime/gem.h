@@ -1259,8 +1259,9 @@ const char *gem_res_type_name(int kind);
 const char *gem_res_print_name(int kind);
 /* GEM_DIAG=1 counts. */
 void gem_res_diag_counts(int *open, int *ownerless);
-/* Close callback of sockets. */
+/* Close callbacks of the kinds, run at a process's exit. */
 void gem_tcp_close_fd_checked(int fd, uint64_t dev, uint64_t ino);
+void gem_sqlite_exit_close(void *db);
 
 /* ─── Thread pool for async I/O ─── */
 

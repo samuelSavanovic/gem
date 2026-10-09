@@ -1,0 +1,73 @@
+# Database handles follow the same rules as sockets: an unclaimed handle
+# closes when its opener crashes or is killed and stays open when it
+# returns; a claimed one closes when its claimer exits.
+
+let me = self()
+
+fn check(db)
+  let r = pcall sqlite_query(db, "select 1 as v")
+  if r.ok
+    "open"
+  else
+    r.error
+  end
+end
+
+# Spawns `body` with a handle it opens, waits for the process to end and
+# returns the handle.
+fn opened_by(body)
+  let pid = spawn do
+    let db = sqlite_open(":memory:")
+    send(me, {tag: "db", db: db})
+    body(db)
+  end
+  let ref = monitor(pid)
+  let db = receive
+  when {tag: "db", db: d}
+    d
+  end
+  receive
+  when {tag: "DOWN", pid: ^pid}
+    nil
+  end
+  db
+end
+
+print("crash:", check(opened_by(fn(db) error("opener crashed") end)))
+print("normal return:", check(opened_by(fn(db) nil end)))
+print("claimed, normal return:", check(opened_by(fn(db) claim(db) end)))
+
+let pid = spawn do
+  let db = sqlite_open(":memory:")
+  send(me, {tag: "db", db: db})
+  receive()
+end
+let killed_db = receive
+when {tag: "db", db: d}
+  d
+end
+kill(pid, "kill")
+sleep(10)
+print("killed:", check(killed_db))
+
+# A pool lends handles it opened; a borrower that claims one takes it
+# with it when it exits, the others stay with the pool.
+let pool = [sqlite_open(":memory:"), sqlite_open(":memory:")]
+let borrower = spawn do
+  claim(pool[0])
+  sqlite_query(pool[1], "select 1")
+  send(me, "claimed")
+end
+let ref = monitor(borrower)
+receive
+when "claimed"
+  nil
+end
+receive
+when {tag: "DOWN", pid: ^borrower}
+  nil
+end
+print("claimed by the borrower:", check(pool[0]))
+print("only used by it:", check(pool[1]))
+print(process_info(self()).resources)
+sqlite_close(pool[1])

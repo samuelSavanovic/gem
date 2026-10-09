@@ -2935,16 +2935,16 @@ leak check bad status: error: request.get: malformed status line "garbage"
 leak check timeout: error: request.get: timed out after 50 ms waiting for http://127.0.0.1:19823/
 leak check refused: request.get: cannot connect to 127.0.0.1:1: tcp_connect: connect failed: Connection refused
 fds leaked: false
-sqlite_query: not an open database handle
-sqlite_exec: not an open database handle
-sqlite_last_insert_id: not an open database handle
-sqlite_changes: not an open database handle
-sqlite_close: not an open database handle
+sqlite_query: expected a database handle, got int
+sqlite_exec: expected a database handle, got int
+sqlite_last_insert_id: expected a database handle, got int
+sqlite_changes: expected a database handle, got int
+sqlite_close: expected a database handle, got int
 sqlite_query: expected a database handle, got string
 sqlite_close: expected a database handle, got nil
 sqlite_changes: expected a database handle, got table
 sqlite_exec: expected a database handle, got float
-int
+sqlite
 1
 1
 child saw 2 rows, last 8
@@ -2954,13 +2954,14 @@ sqlite_query: not an open database handle
 sqlite_exec: not an open database handle
 sqlite_last_insert_id: not an open database handle
 sqlite_changes: not an open database handle
-sqlite_close: not an open database handle
-sqlite.close: not an open database handle
+nil
+nil
 true
 42
 child closed db2
 sqlite_query: not an open database handle
-one close succeeded: true
+both closes returned: true
+sqlite_query: not an open database handle
 PASS records compare by structure, in any key order
 PASS primitives
 PASS cycles terminate
@@ -4230,7 +4231,7 @@ http.html_escape: s must be a string, got int
 http.parse_form: body must be a string, got nil
 time.date: ms must be an int, got nil
 time.format: fmt must be a string, got nil
-sqlite.last_id: not an open database handle
+sqlite.last_id: expected a database handle, got int
 request.post: opts must be a table, got string
 math.min: expected numbers or strings, got table and nil
 math.clamp: expected numbers or strings, got string and int
@@ -4417,9 +4418,9 @@ tcp_peer: socket is closed
 tcp_peer: expected a socket, got string
 tcp_peer: expected a socket, got nil
 == values
-socket
-true true
-true false true
+socket sqlite
+true true true
+true false true true
 a copy is equal: true
 client server false
 type error in <: got socket and socket
@@ -4434,6 +4435,9 @@ tcp_accept: expected a socket, got nil
 tcp_close: expected a socket, got int
 tcp_peer: expected a socket, got nil
 tcp_fd: expected a socket, got int
+tcp_read: expected a socket, got sqlite
+sqlite_query: expected a database handle, got socket
+sqlite_close: expected a database handle, got int
 claim: expected a socket or a database handle, got int
 claim: expected a socket or a database handle, got nil
 == tcp_fd
@@ -4448,6 +4452,9 @@ tcp_peer: socket is closed
 tcp_fd: socket is closed
 claim: socket is closed
 peer sees the close: true
+nil nil
+sqlite_query: not an open database handle
+claim: database is closed
 == tcp_from_fd
 socket true true
 true
@@ -4522,6 +4529,22 @@ still open
 file on the same number: true
 file still open: true
 done
+
+[Runtime Error in process 1]: opener crashed
+  --> examples/220_sqlite_ownership.gem:36
+    |
+ 36 | print("crash:", check(opened_by(fn(db) error("opener crashed") end)))
+    |
+Stack trace:
+  at anonymous fn (examples/220_sqlite_ownership.gem:36)
+  at anonymous fn (examples/220_sqlite_ownership.gem:22)
+crash: sqlite_query: not an open database handle
+normal return: open
+claimed, normal return: sqlite_query: not an open database handle
+killed: sqlite_query: not an open database handle
+claimed by the borrower: sqlite_query: not an open database handle
+only used by it: open
+1
 open while the call runs: true
 closed once it returns: true true
 unaffected

@@ -1,6 +1,6 @@
-# Sockets are values of their own type: they print
+# Sockets and sqlite handles are values of their own types: they print
 # with a table id, compare equal only to themselves, work as table keys,
-# and every builtin refuses an int or a closed socket.
+# and every builtin refuses an int, a closed resource or the other kind.
 
 load "std/json"
 
@@ -18,11 +18,12 @@ end
 let l = tcp_listen("127.0.0.1", 18217)
 let c = tcp_connect("127.0.0.1", 18217)
 let s = tcp_accept(l)
+let db = sqlite_open(":memory:")
 
 print("== values")
-print(type(l))
-print(to_string(l) == "{l}", find("{l}", "#Socket<") == 0)
-print(l == l, l == c, c != s)
+print(type(l), type(db))
+print(to_string(l) == "{l}", find("{l}", "#Socket<") == 0, find("{db}", "#Sqlite<") == 0)
+print(l == l, l == c, c != s, db == db)
 let copy = [l][0]
 print("a copy is equal:", copy == l)
 let names = {}
@@ -51,6 +52,9 @@ print(err(fn() tcp_accept(nil) end))
 print(err(fn() tcp_close(3) end))
 print(err(fn() tcp_peer() end))
 print(err(fn() tcp_fd(4294967299) end))
+print(err(fn() tcp_read(db) end))
+print(err(fn() sqlite_query(s, "select 1") end))
+print(err(fn() sqlite_close(1) end))
 print(err(fn() claim(1) end))
 print(err(fn() claim() end))
 
@@ -69,6 +73,9 @@ print(err(fn() tcp_peer(c) end))
 print(err(fn() tcp_fd(c) end))
 print(err(fn() claim(c) end))
 print("peer sees the close:", tcp_read(s, 16, 1000) == "")
+print(sqlite_close(db), sqlite_close(db))
+print(err(fn() sqlite_query(db, "select 1") end))
+print(err(fn() claim(db) end))
 
 print("== tcp_from_fd")
 let raw = socket(2, 1, 0)
