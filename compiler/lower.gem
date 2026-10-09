@@ -4,6 +4,9 @@
 # simpler shapes codegen expects:
 #
 #   for_in / for_range  →  block of let / while / assign
+#   let / assignment / return whose value is an if, match or receive
+#                       →  the block, with each branch's value stored or
+#                          returned at the branch's end
 #   match (with match_arm) → match (with when_clause)
 #   receive_match (with match_arm) → receive_match (arms are
 #                                    {pattern: {condition, bindings}, body})
@@ -102,6 +105,13 @@ fn lower_node(node, state)
   end
   if tag == "receive_match"
     return lower_receive(node, state)
+  end
+
+  if (tag == "let" or tag == "assign" or tag == "dot_assign" or tag == "index_assign") and is_block_value(node.value)
+    return lower_block_value_store(node, state)
+  end
+  if tag == "return" and is_block_value(node.value)
+    return lower_block_value_return(node, state)
   end
 
   # ── Pass-through: recurse in place so metadata (`file`, `line`,
@@ -321,6 +331,95 @@ fn lower_for_range(node, state)
   ]}
   tag_file(result, node.file)
   result
+end
+
+# ─── if / match / receive as a value ───────────────────────────
+# `let x = if c then a else b end` becomes
+#
+#   let _val_N = nil
+#   if c then _val_N = a else _val_N = b end
+#   let x = _val_N
+#
+# The temporary keeps the block from seeing `x` (`let n = if n == nil ...`
+# reads the outer `n`). A branch that ends in a statement, and an `if` or
+# `match` that takes no branch, leave the value `nil`, as the last statement
+# of a function does. `return <block>` instead returns from each branch, so
+# a call at a branch's end stays a tail call.
+
+fn is_block_value(value)
+  type(value) == "table" and (value.tag == "if" or value.tag == "match" or value.tag == "receive_match")
+end
+
+let STATEMENT_TAGS = {let: true, assign: true, dot_assign: true, index_assign: true, fn_def: true, if: true, while: true, for_in: true, for_range: true, match: true, receive_match: true, return: true, break: true, continue: true, block: true, export: true, extern_fn: true, extern_include: true, error_stmt: true}
+
+# `stmts` (a branch body, or nil for a missing branch) with its value passed
+# to `finish`, which turns an expression into the statement that uses it.
+fn finish_branch(stmts, finish)
+  let out = []
+  if stmts != nil
+    for s in stmts
+      push(out, s)
+    end
+  end
+  if len(out) == 0
+    push(out, finish(make_nil_node()))
+    return out
+  end
+  let last = out[-1]
+  if is_block_value(last)
+    finish_block(last, finish)
+  elif type(last) != "table" or not has_key(STATEMENT_TAGS, last.tag)
+    out[-1] = finish(last)
+  elif last.tag != "return" and last.tag != "break" and last.tag != "continue" and last.tag != "error_stmt"
+    push(out, finish(make_nil_node()))
+  end
+  out
+end
+
+# Finish every branch of an if / match / receive in place.
+fn finish_block(node, finish)
+  if node.tag == "if"
+    node.then = finish_branch(node.then, finish)
+    node.else = finish_branch(node.else, finish)
+  elif node.tag == "match"
+    for arm in node.whens
+      arm.body = finish_branch(arm.body, finish)
+    end
+    node.else = finish_branch(node.else, finish)
+  else
+    for arm in node.arms
+      arm.body = finish_branch(arm.body, finish)
+    end
+    if node.after_ms != nil
+      node.after_body = finish_branch(node.after_body, finish)
+    end
+  end
+  nil
+end
+
+fn lower_block_value_store(node, state)
+  state.gensym = state.gensym + 1
+  let tmp = "_val_{state.gensym}"
+  let line = node.line
+  let block = node.value
+  finish_block(block, fn(e) make_assign(tmp, e, line) end)
+  if node.compound_op != nil
+    # The read of the target shares the target's position, as in `x += 1`.
+    node.value = make_binop(node.compound_op, make_var(node.name, node.line, node.col), make_var(tmp))
+  else
+    node.value = make_var(tmp)
+  end
+  let result = {tag: "block", stmts: [make_let(tmp, make_nil_node(), line), block, node]}
+  tag_file(result, node.file)
+  lower_node(result, state)
+end
+
+fn lower_block_value_return(node, state)
+  let line = node.line
+  let block = node.value
+  finish_block(block, fn(e) make_return(e, line) end)
+  tag_file(block, node.file)
+  lower_node(block, state)
 end
 
 # ─── match / receive ────────────────────────────────────────────

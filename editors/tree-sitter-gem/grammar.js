@@ -139,7 +139,16 @@ module.exports = grammar({
         $.array_destructure,
       )),
       '=',
-      field('value', $._expression),
+      field('value', $._value),
+    ),
+
+    // The value of a `let`, an assignment or a `return`, and a brace
+    // block's body: an expression, or a whole `if` / `match` / `receive`.
+    _value: $ => choice(
+      $._expression,
+      $.if_statement,
+      $.match_statement,
+      $.receive_block,
     ),
 
     table_destructure: $ => seq('{', optional(sep1($._destructure_field, ',')), '}'),
@@ -231,7 +240,7 @@ module.exports = grammar({
       repeat($._statement),
     ),
 
-    return_statement: $ => prec.right(seq('return', optional($._expression))),
+    return_statement: $ => prec.right(seq('return', optional($._value))),
     break_statement: $ => 'break',
     continue_statement: $ => 'continue',
 
@@ -263,7 +272,7 @@ module.exports = grammar({
         $.subscript_expression,
       )),
       field('operator', choice('=', '+=', '-=', '*=', '/=')),
-      field('right', $._expression),
+      field('right', $._value),
     )),
 
     // Expressions
@@ -367,7 +376,7 @@ module.exports = grammar({
     // `f(x) { expr }`: a block without params after a call's parens.
     brace_block: $ => seq(
       alias($._block_brace_open, '{'),
-      $._expression,
+      $._value,
       '}',
     ),
 

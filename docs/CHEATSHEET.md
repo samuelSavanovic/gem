@@ -12,8 +12,7 @@ let x = x + 1                        # in a fn/block: new variable shadowing the
                                      # (warned in a loop when nothing there assigns x and the loop's condition
                                      #  or the code after the loop reads it)
                                      # a let is visible only to the end of its block (if/loop body/arm):
-let s = nil                          #   declare before the if to use the value after it
-if c then s = 1 else s = 2 end
+let s = if c then 1 else 2 end       #   give the if a value to use it after the block
 
 # Functions — fn/end, last expression is implicit return; named fns only at top level
 fn add(a, b)
@@ -70,6 +69,14 @@ when 0 then zero()                   # one-line arm: `then` (as in `if ... then`
 else
   fallback()
 end
+
+# if / match / receive give a value to a let, an assignment or a return (nil when no branch is taken)
+let size = if n > 10 then "big" else "small" end
+total += match op
+when "inc" then 1
+else 0
+end
+                                     # not inside an expression: print(if ...) is an error; bind it first
 
 # Modules — load (NOT import), export at end of file
 load "std/string"                    # => string.split(...)  (namespace = file base name)

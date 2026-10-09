@@ -34,6 +34,11 @@ fn count(items)
   end
   n
 end
+
+fn label(n)
+  let size = if n > 10 then "big" else "small" end
+  size
+end
 GEM
 
 URI="file://$FIXTURE"
@@ -87,7 +92,7 @@ fi
 # Sanity-check the response contains the expected names. We're not
 # asserting positions — those are exercised by build_symbols' walk; the
 # smoke test guarantees the wire path works end-to-end.
-for needle in '"name":"shout"' '"name":"count"' '"name":"greeting"' '"name":"msg"' '"name":"items"' '"name":"n"' '"name":"string"'; do
+for needle in '"name":"shout"' '"name":"count"' '"name":"greeting"' '"name":"msg"' '"name":"items"' '"name":"n"' '"name":"string"' '"name":"size"'; do
   case "$SYMS_LINE" in
     *"$needle"*) ;;
     *) echo "FAIL: missing $needle in symbols response" >&2; printf '%s\n' "$SYMS_LINE" >&2; exit 1 ;;
@@ -95,7 +100,7 @@ for needle in '"name":"shout"' '"name":"count"' '"name":"greeting"' '"name":"msg
 done
 
 # Negative assertion: gensym names must not leak into the table.
-for unwanted in '"_for_' '"_pdestr' '"_d1"' '"_d2"'; do
+for unwanted in '"_for_' '"_pdestr' '"_d1"' '"_d2"' '"_val_'; do
   case "$SYMS_LINE" in
     *"$unwanted"*) echo "FAIL: gensym name $unwanted leaked into symbols" >&2; printf '%s\n' "$SYMS_LINE" >&2; exit 1 ;;
   esac

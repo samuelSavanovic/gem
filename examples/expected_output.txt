@@ -4299,3 +4299,35 @@ int
 10000 0 zero 10 ref false
 -- a captured let assigned inside an if in a loop, after another loop
 [true, false]
+-- let
+big small
+A B nil
+point 1,2 pair 3 4 zero other
+-- no branch taken, or a branch ending in a statement: nil
+nil nil 6
+-- the block reads the outer variable it shadows
+1 5
+-- module-level let
+few
+-- assignments
+105 five [1, 2]
+-- destructuring let
+1 2 10 20
+-- return: a call at a branch's end is a tail call
+1000000
+2000000
+nil 1
+-- nested blocks
+nested
+-- receive
+14 -1
+-- in a loop, each iteration gets its own value
+["even", "odd", "even", "odd"]
+-- return, break and continue in a branch
+early late
+[0, 1, 3]
+-- closures as branch values
+12
+-- brace block body
+small 1
+big 2

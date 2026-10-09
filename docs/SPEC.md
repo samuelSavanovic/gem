@@ -340,10 +340,11 @@ times(5) do |i|
 end
 ```
 
-Single-expression blocks use braces:
+Single-expression blocks use braces. The body is one expression, assignment, or whole `if`, `match` or `receive`:
 
 ```
 times(5) { |i| print(i) }
+each(items) { |x| if x > 0 then print(x) end }
 ```
 
 When the block is the only argument, the parentheses can be dropped. A brace block then needs its `|params|` (use `||` for none), so it is not read as a table literal:
@@ -434,10 +435,31 @@ else "many"
 end
 ```
 
-`if`, `match` and `receive` are statements, not expressions: `let x = if ...`, `print(if ...)` and
-`return match ...` don't parse. One yields a value only as the last statement of a function, closure or
-block, where the taken branch's last expression is the result (`fn size(x) if x > 10 then "big" else
-"small" end end`).
+`if`, `match` and `receive` are statements that give a value: the last expression of the branch taken.
+The value is used where one of them is the last statement of a function, closure or block (`fn size(x)
+if x > 10 then "big" else "small" end end`), the whole value of a `let` (destructuring included), of an
+assignment (`=`, `+=` and the other compound forms, a field or an index), or of a `return`, and a
+brace block's body:
+
+```
+let label = if n > 100 then "big" else "small" end
+let reply = match msg
+when {tag: "get"} then state
+else nil
+end
+count += if hit then 1 else 0 end
+return match n
+when 0 then acc
+else loop(n - 1, acc + n)
+end
+```
+
+A branch that ends in a statement (a `let`, a loop, an assignment) gives `nil`, and so do an `if`
+with no `else` whose conditions are all false and a `match` with no `else` whose arms all fail. In `let n = if n == nil then 0 else n end` the block reads the
+outer `n`. In `return <block>`, a call at the end of a branch is a tail call (see Tail Call
+Optimization). Anywhere else in an expression one is a compile error, `` an `if` can't be used inside
+an expression`` (`print(if ...)`, `1 + match ...`, a call argument, a table entry), and so is anything
+after its `end` on the same line (`let x = if ... end + 1`); bind it with a `let` first.
 
 A `when` arm's body starts either on the line after the pattern or, after `then`, on the same line (`then` must be on the pattern's line, like `if <cond> then`; the body may continue onto further lines). Anything else on the pattern's line is a compile error: `when x nil` reports "expected `then` or a newline after the `when` pattern". This holds for `match` and `receive` arms alike. A `receive`'s `after <ms>` clause also accepts an optional `then` (`after 100 then retry()`).
 
@@ -962,7 +984,7 @@ The wrapper checks the Gem-level type of each argument and that enough arguments
 variable: `t.n += 1` and `a[0] += 1` are compile errors (`compound assignment requires variable target`);
 write `t.n = t.n + 1`.
 
-An assignment is a statement, not an expression: it has no value (as the last statement of a function or block it yields `nil`, like every statement that isn't an expression), so one where a value is expected (`f(a = 1)`, `let b = a = 1`, `(a = 1)`, `return a = 1`, an `if`, `while` or `for` header) is a compile error at its `=`. A `do` / `{ |x| ... }` block body or a `pcall` body may be an assignment, since it is a statement.
+An assignment is a statement, not an expression: it has no value (as the last statement of a function or block it yields `nil`, like a `let` or a loop), so one where a value is expected (`f(a = 1)`, `let b = a = 1`, `(a = 1)`, `return a = 1`, an `if`, `while` or `for` header) is a compile error at its `=`. A `do` / `{ |x| ... }` block body or a `pcall` body may be an assignment, since it is a statement.
 
 ## Strings
 
