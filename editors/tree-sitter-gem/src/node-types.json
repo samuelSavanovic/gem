@@ -6001,6 +6001,10 @@
     "named": false
   },
   {
+    "type": "Socket",
+    "named": false
+  },
+  {
     "type": "String",
     "named": false
   },

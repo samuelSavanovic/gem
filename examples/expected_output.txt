@@ -4549,3 +4549,21 @@ open while the call runs: true
 closed once it returns: true true
 unaffected
 claimed while parked: kept
+== extern fn
+5 hello
+gem_example_sock_write: arg 0 expected Socket, got int
+gem_example_sock_write: arg 0 expected Socket, got nil
+gem_example_sock_write: arg 0 expected Socket, got sqlite
+gem_example_sock_write: arg 0: socket is closed
+== closed while a blocking call uses it
+closed for Gem code: tcp_read: socket is closed
+the call still writes: late
+call returned 4
+then the fd closes: true
+== the caller is killed and the owner closes it
+the call still writes: after the kill
+then the fd closes: true
+== a socket the call uses, owned by its killed caller
+still open while parked: 1 x
+the call still writes: own
+then the fd closes: true

@@ -155,8 +155,6 @@ Sockets and SQLite handles are owned resources (SPEC "Owned Resources", design i
 What remains:
 
 - `exec`'s child process as a third resource kind: `posix_spawn` + `waitpid` so the child can be signalled when its owner dies. It registers a close callback in `runtime/gem_resource.c` and gets `claim` for free.
-- A `Socket` extern parameter type that passes the fd, so C interop needs no `tcp_fd` and the runtime knows which sockets a blocking C call uses (today it only holds back the sockets of the process whose own `extern blocking fn` is running when it is killed).
-- Cleanups the runtime close makes possible: std/http's per-connection fd bookkeeping and `_http_closing` (its `DOWN` → `tcp_close` path is now a no-op on an already-closed socket), and the `trap_exit` mini_redis's and stomp_broker's connections use only to close their sockets.
 
 ## Shared read-mostly data between processes (P2)
 

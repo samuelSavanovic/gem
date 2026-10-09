@@ -1649,6 +1649,11 @@ ones that bite.
 - Don't keep pointers to Gem strings or tables on the C side after the call
   returns: the next arena reset or the process's exit frees that memory,
   and an `extern blocking fn` gets copies that are freed when it returns.
+- Pass a socket to C as a `Socket` parameter, not `tcp_fd(sock)` as an
+  `Int`: the wrapper checks it is open, and an `extern blocking fn` keeps
+  its fd open until the call returns even if another process closes the
+  socket meanwhile. With an `Int`, C code can write to whatever took the
+  number after the close.
 - C code that recurses without limit kills the process, and `pcall` can't
   catch it.
 

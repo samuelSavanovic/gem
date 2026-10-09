@@ -134,7 +134,7 @@
 
     "extern-type-annotation": {
       "comment": ": Type or -> Type in extern declarations",
-      "match": "(?::\\s*|->>?\\s*)\\b(Int|Float|String|Bool|Nil|Ptr|Table|Fn|Bytes)\\b",
+      "match": "(?::\\s*|->>?\\s*)\\b(Int|Float|String|Bool|Nil|Ptr|Table|Fn|Bytes|Socket)\\b",
       "captures": {
         "1": { "name": "entity.name.type.gem" }
       }

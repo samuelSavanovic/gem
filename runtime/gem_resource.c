@@ -184,7 +184,7 @@ GemVal gem_res_new(int kind) {
 GemResEntry *gem_res_lookup(GemVal v) {
     if (v.type != VAL_RESOURCE || v.res_slot < 0 || v.res_slot >= gem_res_hwm) return NULL;
     GemResEntry *e = &gem_res[v.res_slot];
-    return e->serial == v.res_id ? e : NULL;
+    return e->serial == v.res_id && !e->dead ? e : NULL;
 }
 
 GemResEntry *gem_res_get_open(GemVal v, int kind, const char *who) {
@@ -229,7 +229,9 @@ void *gem_res_take(GemResEntry *e) {
 }
 
 /* Close n entries: wake the waiters of the sockets among them with one
-   scan of the fd waiters, free the entries, then close each payload. */
+   scan of the fd waiters, free the entries, then close each payload. A
+   socket an `extern blocking fn` is using (busy) is only retired: closed
+   for Gem code now, its fd closed by gem_res_busy_end. */
 static void gem_res_close_n(const int32_t *idx, int n) {
     int sockets = 0;
     for (int k = 0; k < n; k++) {
@@ -240,6 +242,16 @@ static void gem_res_close_n(const int32_t *idx, int n) {
     }
     if (sockets) gem_io_wake_closing();
     for (int k = 0; k < n; k++) {
+        if (gem_res[idx[k]].busy > 0) {
+            GemResEntry *e = &gem_res[idx[k]];
+            gem_res_own_unlink(idx[k]);
+            gem_res_use_unlink(idx[k]);
+            e->owner = -1;
+            e->closing = 0;
+            e->dead = 1;
+            gem_res_open--;
+            continue;
+        }
         GemResEntry e = gem_res[idx[k]];
         gem_res_free_entry(idx[k]);
         if (e.kind == GEM_RES_SOCKET) gem_tcp_close_fd_checked(e.fd, e.dev, e.ino);
@@ -264,7 +276,7 @@ GemResEntry *gem_res_find_socket(int fd, uint64_t dev, uint64_t ino) {
 void gem_res_diag_counts(int *open, int *ownerless) {
     int none = 0;
     for (int32_t i = 0; i < gem_res_hwm; i++)
-        if (gem_res[i].serial && gem_res[i].owner_slot < 0) none++;
+        if (gem_res[i].serial && !gem_res[i].dead && gem_res[i].owner_slot < 0) none++;
     *open = gem_res_open;
     *ownerless = none;
 }
@@ -376,6 +388,11 @@ void gem_res_proc_exit(int slot) {
     GemIORequest *req = proc->io_request;
     int park = req && req->op == GEM_IO_EXTERN && !__atomic_load_n(&req->done, __ATOMIC_ACQUIRE);
     int parked = -1, n = 0, left[GEM_RES_KINDS] = {0};
+    if (req && req->nbusy > 0) {
+        /* Its call's Socket params stay busy until the call returns. */
+        if (park) parked = gem_res_park_slot(req);
+        else gem_res_busy_end(req);
+    }
     while (proc->res_owned >= 0) {
         int32_t i = proc->res_owned;
         GemResEntry *e = &gem_res[i];
@@ -417,6 +434,7 @@ void gem_res_check_parked(void) {
         }
         gem_res_parked[k].req = NULL;
         gem_res_parked_live--;
+        gem_res_busy_end(req);
         gem_io_release(req);
         if (n > 0) gem_res_close_n(gem_res_batch, n);
     }
@@ -424,6 +442,58 @@ void gem_res_check_parked(void) {
 
 int gem_res_parked_pending(void) {
     return gem_res_parked_live > 0;
+}
+
+/* ─── `Socket` params of extern fns ─── */
+
+struct GemResBusy {
+    int32_t slot;
+    int64_t serial;
+};
+
+int gem_extern_socket_fd(GemVal v, const char *fn, int argi) {
+    char buf[200];
+    if (v.type != VAL_RESOURCE || v.res_kind != GEM_RES_SOCKET) {
+        snprintf(buf, sizeof(buf), "%s: arg %d expected Socket, got %s", fn, argi, gem_type_str(v));
+        gem_error(buf);
+    }
+    GemResEntry *e = gem_res_lookup(v);
+    if (!e) {
+        snprintf(buf, sizeof(buf), "%s: arg %d: socket is closed", fn, argi);
+        gem_error(buf);
+    }
+    gem_res_note_user(v.res_slot);
+    return e->fd;
+}
+
+void gem_res_busy_begin(GemIORequest *req, const GemVal *args, const int *idx, int n) {
+    req->busy = (struct GemResBusy *)malloc(sizeof(struct GemResBusy) * (size_t)n);
+    if (!req->busy) gem_res_oom();
+    req->nbusy = 0;
+    for (int k = 0; k < n; k++) {
+        GemResEntry *e = gem_res_lookup(args[idx[k]]);
+        if (!e) continue;   /* resolved just before the submit: never happens */
+        e->busy++;
+        req->busy[req->nbusy].slot = args[idx[k]].res_slot;
+        req->busy[req->nbusy].serial = e->serial;
+        req->nbusy++;
+    }
+}
+
+void gem_res_busy_end(GemIORequest *req) {
+    for (int k = 0; k < req->nbusy; k++) {
+        GemResEntry *e = &gem_res[req->busy[k].slot];
+        if (e->serial != req->busy[k].serial || --e->busy > 0 || !e->dead) continue;
+        /* Retired while the call used it: close it now. */
+        int fd = e->fd;
+        uint64_t dev = e->dev, ino = e->ino;
+        e->serial = 0;
+        e->dead = 0;
+        e->free_next = gem_res_free;
+        gem_res_free = req->busy[k].slot;
+        gem_tcp_close_fd_checked(fd, dev, ino);
+    }
+    req->nbusy = 0;
 }
 
 /* ─── Built-in: claim ─── */

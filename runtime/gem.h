@@ -972,6 +972,11 @@ typedef struct {
     void (*free_extern)(void *); /* frees extern_args and whatever it still owns */
     int refs;              /* outstanding releases; 2 at submit */
     int done;              /* set to 1 by worker thread (atomic release/acquire) */
+    /* Sockets an `extern blocking fn` got as `Socket` params, busy until the
+       call returns (gem_res_busy_begin / gem_res_busy_end); read and
+       written only on the scheduler thread, freed with the request. */
+    struct GemResBusy *busy;
+    int nbusy;
 } GemIORequest;
 
 /* Process slot */
@@ -1214,6 +1219,8 @@ typedef struct {
     int user_slot;
     int parked;          /* index of the parked request it waits for, or -1 */
     int closing;         /* set while gem_res_close wakes its waiters */
+    int busy;            /* `extern blocking fn` calls using its fd right now */
+    int dead;            /* closed for Gem code, fd closed when busy reaches 0 */
     int32_t own_prev, own_next;  /* owner's list (or the parked request's) */
     int32_t use_prev, use_next;  /* user's list */
     int32_t free_next;
@@ -1252,6 +1259,17 @@ void gem_res_proc_init(GemProcess *proc);
    after draining the pool's wake pipe); and whether any are pending. */
 void gem_res_check_parked(void);
 int gem_res_parked_pending(void);
+/* The fd of socket `v` for argument `argi` of extern fn `fn` (a `Socket`
+   param); raises "<fn>: arg <i> expected Socket, got <type>" or "<fn>: arg
+   <i>: socket is closed". */
+int gem_extern_socket_fd(GemVal v, const char *fn, int argi);
+/* An `extern blocking fn` call passes the sockets args[idx[0..n)] to C:
+   mark them busy for request `req` (after it is submitted), so closing one
+   meanwhile closes it for Gem code at once but its fd only when the call
+   returns; gem_res_busy_end (after the call, or by the scheduler for the
+   request of a killed process) ends that. */
+void gem_res_busy_begin(GemIORequest *req, const GemVal *args, const int *idx, int n);
+void gem_res_busy_end(GemIORequest *req);
 /* The open socket entry with this fd and inode, or NULL. */
 GemResEntry *gem_res_find_socket(int fd, uint64_t dev, uint64_t ino);
 /* Kind names: "socket" / "sqlite" (type), "Socket" / "Sqlite" (print). */

@@ -909,10 +909,13 @@ The compiler auto-generates C forward declarations from `extern fn` type signatu
 | `Nil`           | —                  | `void`          |
 | `Table`         | `GemVal`           | `GemVal`        |
 | `Bytes`         | `const uint8_t*, int64_t` (two C parameters) | `GemBytes` (struct, see below) |
+| `Socket`        | `int` (the socket's fd) | — (compile error `an extern fn cannot return a Socket`) |
 
 Auto-generation is skipped when `extern include` is present (the user manages declarations via headers).
 
 `extern blocking fn` does not accept `Table` parameters or returns (compile error `extern blocking fn cannot take a Table`): the call runs on another thread, away from the process's arena.
+
+**`Socket` parameters.** A `Socket` parameter takes a socket (see Owned Resources) and passes its fd as a C `int`; anything else raises `<fn>: arg <i> expected Socket, got <type>`, and a closed socket `<fn>: arg <i>: socket is closed`. The C function may use the fd for the call only, and must not close it. For an `extern blocking fn`, the socket stays open for the C call until it returns: a `tcp_close` meanwhile, or its owner's exit, closes it for Gem code at once (every builtin raises `socket is closed`), but its fd only once the call has returned. A C function that gets the fd some other way (`tcp_fd` passed as an `Int`) has no such guarantee, except for the sockets of the calling process itself, which a kill mid-call leaves open until the call returns. To hand the runtime a socket C code made, return its fd as an `Int` and register it with `tcp_from_fd`.
 
 ### `Bytes` — binary-safe FFI
 
@@ -1427,7 +1430,7 @@ So the process responsible for a connection claims it first: an acceptor accepts
 
 `tcp_peer(socket)` — returns the address of a connected socket's remote end as a table `{ip, port}`: `ip` is a string (`"203.0.113.7"`), `port` an int. Returns `nil` when the socket has no peer: a listening socket, or a connection the peer has reset. A peer that closed cleanly keeps its address only until a write to it draws a reset, so read the address once, right after `tcp_accept`, and keep it. Raises `tcp_peer: not a TCP socket` for a socket that isn't a TCP one (only `tcp_from_fd` could make one) and `tcp_peer: getpeername failed: <reason>` for any other failure. Never waits.
 
-`tcp_fd(socket)` — returns the socket's file descriptor number as an int, for an `extern fn` (and for debugging). The fd stays valid while the socket is open. C code must not close it (`tcp_close` does) or keep it after the socket closes: the number can then belong to a new file. If C code does close it, the runtime notices when it closes the socket itself (it compares the fd's inode with the one it registered) and leaves whatever took the number alone, but a `tcp_read` or `tcp_write` on the stale socket meanwhile can reach that file.
+`tcp_fd(socket)` — returns the socket's file descriptor number as an int, for debugging and for C code that needs the number outside a call (a `Socket` extern parameter passes a socket to C more safely, see C Interop). The fd stays valid while the socket is open. C code must not close it (`tcp_close` does) or keep it after the socket closes: the number can then belong to a new file. If C code does close it, the runtime notices when it closes the socket itself (it compares the fd's inode with the one it registered) and leaves whatever took the number alone, but a `tcp_read` or `tcp_write` on the stale socket meanwhile can reach that file.
 
 `tcp_from_fd(fd)` — registers a TCP socket made outside the runtime (by a TLS library, or inherited from the parent process) and returns it as a socket opened by the caller. From then on the runtime owns the fd: it marks it non-blocking and close-on-exec and closes it with the socket. Raises `tcp_from_fd: fd 9 is not open`, `tcp_from_fd: fd 9 is not a TCP socket` (any fd but an IPv4 or IPv6 stream socket), `tcp_from_fd: fd 9 is already registered as a socket` (the fd of an open socket), and `tcp_from_fd: expected an int fd, got <type>`.
 
