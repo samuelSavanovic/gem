@@ -8,12 +8,12 @@
 # doesn't allow named fns inside fn bodies — every nested fn is anon.
 #
 # Functions: only top-level `fn_def` and `extern fn` declarations. Anon
-# fns that happen to be let-bound show up in `vars` via their let binding;
-# PR #11 (goto-def / completion) can look-through if needed.
+# fns that happen to be let-bound show up in `vars` via their let binding.
 #
 # Vars: every `let` (including destructuring), every fn param, every
-# `match` arm binding, every `receive` arm binding. Per Gem's function
-# scoping, all of these live in the enclosing function's scope.
+# `match` arm binding, every `receive` arm binding, except the ones the
+# compiler introduces (`is_gensym`). Each is recorded with its enclosing
+# fn chain, not the block it is declared in.
 #
 # Imports: every `load` node, with the resolved absolute path when
 # resolution succeeds (resolve_load_path throws when there is no stdlib
@@ -21,38 +21,17 @@
 # workspace lookup returns nil for it.
 #
 # Col is 0 for `let`/`fn_def` because the parser only stamps line on
-# those node tags. PR #11 can plumb through real columns when it needs
-# them for go-to-definition precision.
+# those node tags.
 
 load "std/string"
 load "../compiler/loader" (resolve_load_path)
 
-# Names the desugar layer (param destructuring, let destructuring, for
-# loops, block values) introduces. They aren't user-visible — keep them out
-# of the symbol table so completion / outline never surfaces them. The gensym
-# convention is `_pdestr<N>`, `_d<N>`, `_d<N>v`, `_for_<role>_<N>`, `_val_<N>`.
-# `_pdestr` and `_for_` are filtered by prefix; `_d` and `_val_` only with a
-# digit after them, so ordinary user names like `_data` and `_value` stay.
+# Names the compiler introduces before the LSP sees the AST (destructuring,
+# `for` loops, `match` and `receive` targets, block values). They all start
+# with `__`, which user code can't declare, so completion / outline leave
+# them out by that prefix.
 fn is_gensym(name)
-  if string.starts_with(name, "_pdestr")
-    return true
-  end
-  if string.starts_with(name, "_for_")
-    return true
-  end
-  if string.starts_with(name, "_val_") and len(name) >= 6
-    let c = ord(name, 5)
-    if c >= 48 and c <= 57
-      return true
-    end
-  end
-  if string.starts_with(name, "_d") and len(name) >= 3
-    let c = ord(name, 2)
-    if c >= 48 and c <= 57
-      return true
-    end
-  end
-  false
+  string.starts_with(name, "__")
 end
 
 fn module_name_from_path(path)

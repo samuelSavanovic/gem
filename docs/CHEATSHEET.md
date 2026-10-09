@@ -155,6 +155,7 @@ let r = pcall some_fn()              # {ok: bool, value/error: ..., stack: [{nam
 # SQLite:        sqlite_open, sqlite_close, sqlite_exec, sqlite_query, sqlite_last_insert_id, sqlite_changes
 # Math:          floor, ceil, round, abs, pow, sqrt, random
 # Builtin names aren't reserved: a fn/extern fn/let/param of the same name shadows the builtin in its scope (a top-level one: that file only)
+# Names starting with `__` are reserved for the compiler (compile error); `t.__x` and `{__x: 1}` are fine
 # Bitwise:       band, bor, bxor, bnot, bshl, bshr
 
 # String building

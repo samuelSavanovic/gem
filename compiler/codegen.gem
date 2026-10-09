@@ -38,19 +38,19 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   end
 
   # The name a user wrote for a compiler-mangled binding, for messages:
-  # drops `_sh<N>_` shadow renames (scope_shadowing_lets), then maps a
-  # module slot `_mod_<mod>_<name>` to `<mod>.<name>` via global_display
+  # drops `__sh<N>_` shadow renames (scope_shadowing_lets), then maps a
+  # module slot `__mod_<mangle>_<name>` to `<mod>.<name>` via global_display
   # (built from the loaded-module table in main.gem). Other names pass
-  # through; entry-file `_main_<name>` builtin shadows are display_name's
+  # through; entry-file `__main_<name>` builtin shadows are display_name's
   # job (defined below, so callers compose the two).
   let user_var_name = fn(name)
     let n = name
-    while len(n) > 4 and substr(n, 0, 3) == "_sh"
-      let i = 3
+    while len(n) > 5 and substr(n, 0, 4) == "__sh"
+      let i = 4
       while i < len(n) and ord(n, i) >= 48 and ord(n, i) <= 57
         i += 1
       end
-      if i == 3 or i >= len(n) or n[i] != "_"
+      if i == 4 or i >= len(n) or n[i] != "_"
         break
       end
       n = substr(n, i + 1, len(n) - i - 1)
@@ -109,11 +109,11 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     builtins[k] = true
   end
   # The name to show the user for a binding: an entry-file binding that
-  # shadows a builtin is renamed `_main_<name>` (shadow_entry_builtins in
+  # shadows a builtin is renamed `__main_<name>` (shadow_entry_builtins in
   # compiler/main.gem), shown as `<name>` in messages and stack traces.
   let display_name = fn(name)
-    if len(name) > 6 and substr(name, 0, 6) == "_main_"
-      let orig = substr(name, 6, len(name) - 6)
+    if len(name) > 7 and substr(name, 0, 7) == "__main_"
+      let orig = substr(name, 7, len(name) - 7)
       if has_key(builtin_fns, orig)
         return orig
       end
@@ -122,11 +122,11 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   end
   # The fn name a stack frame shows (printed traces, the pcall `stack`
   # table, crash reports and stack-overflow messages all read it from the
-  # frame): fn literals are `anonymous fn`, `_sh<N>_` shadow renames and
-  # entry-file `_main_<name>` builtin shadows drop their prefix, and a
-  # loaded module's `_mod_<mod>_<name>` is `<mod>.<name>`.
+  # frame): fn literals are `anonymous fn`, `__sh<N>_` shadow renames and
+  # entry-file `__main_<name>` builtin shadows drop their prefix, and a
+  # loaded module's `__mod_<mangle>_<name>` is `<mod>.<name>`.
   let frame_name = fn(name)
-    if len(name) > 6 and substr(name, 0, 6) == "_anon_"
+    if len(name) > 7 and substr(name, 0, 7) == "__anon_"
       return "anonymous fn"
     end
     display_name(user_var_name(name))
@@ -134,10 +134,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   let boxed_vars = {}
   let top_level_vars = {}
   # Whole-module loads: binding name -> {export: top-level name it holds}
-  # (`_mod_<mod>_<export>`), for module bindings never rebound (see
+  # (`__mod_<mangle>_<export>`), for module bindings never rebound (see
   # collect_module_namespaces). `m.x` compiles straight to that slot or fn.
   let module_ns = {}
-  # Reverse of module_ns: "_mod_<mod>_<export>" -> [{binding, field}], the
+  # Reverse of module_ns: "__mod_<mangle>_<export>" -> [{binding, field}], the
   # namespace entries that hold that binding's value.
   let ns_targets = {}
   let in_top_level = false
@@ -241,7 +241,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   let anon_name = fn()
     anon_counter += 1
-    "_anon_{anon_counter}"
+    "__anon_{anon_counter}"
   end
 
   let mangle = fn(name)

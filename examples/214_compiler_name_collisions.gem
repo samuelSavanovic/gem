@@ -1,0 +1,70 @@
+# Names shaped like the compiler's temporaries and renames are ordinary
+# names: none of them meets a binding the compiler makes.
+
+load "std/string" (split)
+
+fn block_value()
+  let _val_1 = 5
+  let x = if true then _val_1 else 0 end
+  x
+end
+print(block_value())
+
+fn destructure(t)
+  let _d1 = "mine"
+  let {a} = t
+  print(_d1, a)
+end
+destructure({a: 1})
+
+fn param_destructure({a}, _pdestr1)
+  print(a, _pdestr1)
+end
+param_destructure({a: 2}, "mine")
+
+fn match_target()
+  let _match_1 = 7
+  match 1
+  when 1 then print(_match_1)
+  end
+end
+match_target()
+
+fn for_loops(xs)
+  let _for_i_1 = "mine"
+  let _for_items_2 = "mine"
+  for x in xs
+    print(x, _for_i_1, _for_items_2)
+  end
+end
+for_loops([1, 2])
+
+fn shadowing(x)
+  let _sh1_x = "mine"
+  if true
+    let x = 2
+    print(_sh1_x, x)
+  end
+end
+shadowing(1)
+
+let _main_len = "mine"
+fn len(x)
+  "my len"
+end
+print(_main_len, len([1]))
+
+let _mod_string_split = "mine"
+print(_mod_string_split, split("a,b", ","))
+
+fn _anon_1()
+  error("boom")
+end
+let r = pcall _anon_1()
+print(r.ok, r.stack[0].name)
+
+# A field name or table key with `__` is just a key; std's internal
+# builtins stay callable.
+let t = {__x: 1}
+t.__y = 2
+print(t.__x, t.__y, t["__x"])

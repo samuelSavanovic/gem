@@ -160,8 +160,8 @@ let DIRECT_BUILTINS = {
 # User-visible builtin names, sorted lexicographically. The double-underscore
 # entries (`__table_key_at`, `__type`, ...) are compiler-internal: lower()
 # emits most of them in desugared for-loops and match patterns, so a user binding
-# named `len`, `type` or `has_key` can't capture those calls. Users would
-# have to type the underscores themselves to reference them. They're
+# named `len`, `type` or `has_key` can't capture those calls. Source may
+# only call them (compiler/lexer.gem, `check_reserved_names`). They're
 # filtered out so completion doesn't offer them.
 fn user_builtin_names()
   let out = []

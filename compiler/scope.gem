@@ -43,7 +43,7 @@ end
 # redefinition in the same C block; in a nested block the initializer reads
 # the new, uninitialized variable). So this pass alpha-renames every
 # shadowing let (and the references and assignments it scopes) to a fresh
-# `_sh<N>_<name>`. After it no let reuses a name visible at that point, and
+# `__sh<N>_<name>`. After it no let reuses a name visible at that point, and
 # every later pass sees distinct variables. A parameter named like a named
 # or extern fn is renamed the same way (`shadow_param_name`).
 #
@@ -71,7 +71,7 @@ end
 # liveness, process-tail tagging).
 #
 # `env` maps every name visible in the current scope (params, lets) to the
-# name it compiles to (itself, or its fresh `_sh<N>_` name). `mode` is
+# name it compiles to (itself, or its fresh `__sh<N>_` name). `mode` is
 # "module" (module-scope statement list: lets are slots), "block" (nested
 # top-level scope) or "fn" (inside a fn or closure body). Module-level
 # bindings and named fns count as visible everywhere outside module scope
@@ -112,7 +112,7 @@ fn shadow_bind(let_node, env, mode, ctx)
   end
   if mode != "module" and (has_key(env, name) or set_contains(ctx.globals, name) or set_contains(ctx.fns, name) or set_contains(ctx.externs, name) or has_key(ctx.builtins, name))
     ctx.n = ctx.n + 1
-    let fresh = "_sh{ctx.n}_{name}"
+    let fresh = "__sh{ctx.n}_{name}"
     let_node.name = fresh
     env[name] = fresh
   else
@@ -217,7 +217,7 @@ end
 fn shadow_param_name(p, ctx)
   if set_contains(ctx.fns, p) or set_contains(ctx.externs, p)
     ctx.n = ctx.n + 1
-    return "_sh{ctx.n}_{p}"
+    return "__sh{ctx.n}_{p}"
   end
   p
 end
@@ -445,7 +445,7 @@ end
 
 # Whole-module load bindings (`let m = <frozen namespace table>`, from
 # resolve_loads in main.gem) whose name is never rebound or assigned:
-# out[m] = {export: "_mod_<mod>_<export>"}. Codegen compiles `m.export`
+# out[m] = {export: "__mod_<mangle>_<export>"}. Codegen compiles `m.export`
 # straight to that binding, so it is the module's own value in the
 # running process.
 # `assigned`: names assigned (`name = …`) anywhere in the program.

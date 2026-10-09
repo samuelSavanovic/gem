@@ -1,0 +1,16 @@
+# Names starting with `__` are reserved for the compiler: one error per
+# occurrence (a declaration, a param, a use, a `for` variable, a pattern
+# binding, an internal builtin used as a value), and nothing for a field
+# name, a table key or a call of an internal builtin.
+# expect: names starting with `__` are reserved for the compiler
+let __a = 1
+fn f(__p)
+  __p
+end
+for __i in [1]
+  print(__i)
+end
+let {__k} = {__k: 1}
+let g = __len
+let t = {__x: 1}
+print(t.__x, __len("ab"))

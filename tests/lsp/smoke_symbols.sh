@@ -100,7 +100,7 @@ for needle in '"name":"shout"' '"name":"count"' '"name":"greeting"' '"name":"msg
 done
 
 # Negative assertion: gensym names must not leak into the table.
-for unwanted in '"_for_' '"_pdestr' '"_d1"' '"_d2"' '"_val_'; do
+for unwanted in '"__'; do
   case "$SYMS_LINE" in
     *"$unwanted"*) echo "FAIL: gensym name $unwanted leaked into symbols" >&2; printf '%s\n' "$SYMS_LINE" >&2; exit 1 ;;
   esac

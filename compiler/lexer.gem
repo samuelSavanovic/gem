@@ -3,12 +3,14 @@
 #   {type: "NUMBER", value: "42", line: 3, col: 1}
 
 load "./errors" (make_error_sink)
+load "./builtins" (BUILTIN_FNS)
 #
 # Token types: NUMBER, STRING, NAME, NEWLINE, EOF,
+# INTERP_START / INTERP_TEXT / INTERP_END (an interpolated string's parts),
 # keywords (fn, end, let, if, elif, else, then, while, for, in, return, break, continue,
-#   do, match, when, after, and, or, not, true, false, nil, load, extern, blocking),
+#   do, match, when, after, and, or, not, true, false, nil, load, export, extern, blocking),
 # operators (+, -, *, /, %, ==, !=, <=, >=, <, >, =, +=, -=, *=, /=, ->),
-# punctuation ( ( ) [ ] { } . , : | )
+# punctuation ( ( ) [ ] { } . , : | ^ ... )
 
 # ─── Character classification (range checks, no lookup tables) ──
 
@@ -57,7 +59,8 @@ end
 # its own closing `"""` line. The pre-scan must skip anything inside an interpolation,
 # where a nested `"""` string has a closing line of its own. These helpers
 # follow the lexer's rules just far enough to find where each string and
-# interpolation ends; positions are byte offsets, -1 means unterminated.
+# interpolation ends; positions are byte offsets, and an unterminated
+# string or interpolation is -1 (`tq_scan_body`: nil).
 
 fn tq_is_triple(source, p, q)
   p + 2 < len(source) and source[p] == q and source[p + 1] == q and source[p + 2] == q
@@ -220,6 +223,36 @@ fn build_keyword_set()
   t.after = true
   t.then = true
   t
+end
+
+# Names starting with `__` belong to the compiler: the temporaries and
+# renames it introduces (`__d<N>`, `__val_<N>`, `__sh<N>_<name>`,
+# `__mod_<mangle>_<name>`, ...) and the internal builtins its desugarings
+# call (`__has_key`, `__for_items`, `__table_key_at`, ...). Reporting every
+# other `__` name in source keeps those from ever meeting a user's binding.
+# A name followed by `:` passes (a table key, or an extern fn param, which
+# binds nothing in Gem), as does one after `.` (a field name) and a call of
+# an internal builtin (std calls `__is_array_n`).
+fn check_reserved_names(tokens, source, file, sink)
+  for i = 0, len(tokens)
+    let t = tokens[i]
+    if t.type != "NAME" or len(t.value) < 2 or substr(t.value, 0, 2) != "__"
+      continue
+    end
+    let prev = if i > 0 then tokens[i - 1].type else "" end
+    let next = if i + 1 < len(tokens) then tokens[i + 1].type else "" end
+    if prev == "." or next == ":"
+      continue
+    end
+    if has_key(BUILTIN_FNS, t.value) and next == "(" and prev != "fn"
+      continue
+    end
+    let stem = t.value
+    while len(stem) > 0 and stem[0] == "_"
+      stem = substr(stem, 1, len(stem) - 1)
+    end
+    sink.report(source, file, t.line, t.col, len(t.value), "`{t.value}`: names starting with `__` are reserved for the compiler", "rename it, e.g. `_{stem}`")
+  end
 end
 
 # A CRLF line ending reads as LF (in string literals too), so files
@@ -926,4 +959,4 @@ fn tokenize(source, file, sink)
   tokens
 end
 
-export tokenize, build_keyword_set, normalize_newlines
+export tokenize, build_keyword_set, normalize_newlines, check_reserved_names

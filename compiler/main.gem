@@ -108,10 +108,10 @@ fn c_safe_name(name)
 end
 
 # The internal name of the module in `full_path`, used in its C symbols
-# (`_mod_<mangle>_<name>`): its base name through c_safe_name, plus `_2`,
+# (`__mod_<mangle>_<name>`): its base name through c_safe_name, plus `_2`,
 # `_3`, ... when another file already uses that name or one of the
 # module's symbols would equal another module's (`a` + `b_c` vs `a_b` + `c`). A std module loaded before any
-# clash keeps `_mod_<base>_`. Users never see the mangle: messages and
+# clash keeps `__mod_<base>_`. Users never see the mangle: messages and
 # stack traces show `<base>.<name>` (build_global_display).
 # `registry`: {prefixes: mangle -> path, symbols: symbol -> path}, shared
 # by every load of the program.
@@ -126,7 +126,7 @@ fn module_mangle(full_path, mod_name, top_names, registry)
     let ok = registry.prefixes[cand] == nil
     if ok
       for name, _ in top_names
-        let owner = registry.symbols["_mod_" + cand + "_" + name]
+        let owner = registry.symbols["__mod_" + cand + "_" + name]
         if owner != nil and owner != full_path
           ok = false
           break
@@ -141,7 +141,7 @@ fn module_mangle(full_path, mod_name, top_names, registry)
   end
   registry.prefixes[cand] = full_path
   for name, _ in top_names
-    registry.symbols["_mod_" + cand + "_" + name] = full_path
+    registry.symbols["__mod_" + cand + "_" + name] = full_path
   end
   cand
 end
@@ -177,18 +177,18 @@ fn collect_module_top_names(stmts)
   let names = {}
   for stmt in stmts
     if is_node(stmt, "fn_def") or is_node(stmt, "extern_fn")
-      if not string.starts_with(stmt.name, "_mod_")
+      if not string.starts_with(stmt.name, "__mod_")
         names[stmt.name] = true
       end
     elif is_node(stmt, "let")
-      if not string.starts_with(stmt.name, "_mod_")
+      if not string.starts_with(stmt.name, "__mod_")
         names[stmt.name] = true
       end
     elif is_node(stmt, "block")
       # Destructuring `let {a, b} = …` at module scope: a block of lets
       # (temp + one per name), all module-level bindings.
       for s in stmt.stmts
-        if is_node(s, "let") and not string.starts_with(s.name, "_mod_")
+        if is_node(s, "let") and not string.starts_with(s.name, "__mod_")
           names[s.name] = true
         end
       end
@@ -546,7 +546,7 @@ end
 # top-level statements before it call the builtin; fn bodies see the
 # binding, see pending_builtin_lets). The
 # entry file's top-level names are not prefixed, so rename just the ones
-# that collide with a builtin to `_main_<name>`. Statements spliced in from
+# that collide with a builtin to `__main_<name>`. Statements spliced in from
 # loads are skipped: their free names mean the builtin. Runs before
 # lower(), so the `len`/`type`/... calls lower synthesizes are untouched.
 fn shadow_entry_builtins(stmts, module_bindings)
@@ -560,7 +560,7 @@ fn shadow_entry_builtins(stmts, module_bindings)
   let any = false
   for name, _ in collect_module_top_names(own)
     if has_key(BUILTIN_FNS, name)
-      rmap[name] = "_main_" + name
+      rmap[name] = "__main_" + name
       any = true
     end
   end
@@ -580,7 +580,7 @@ fn shadow_entry_builtins(stmts, module_bindings)
 end
 
 fn transform_module(stmts, mangle, top_names)
-  let prefix = "_mod_" + mangle + "_"
+  let prefix = "__mod_" + mangle + "_"
   let rmap = build_rename_map(top_names, prefix)
 
   # Statements spliced in from this module's own loads (`from_load`) are
@@ -647,7 +647,7 @@ end
 # nil, so its uses don't each report an undeclared name. A name in `bad`
 # (listed in the module's `export` but not defined) was reported there.
 fn import_bindings(load_node, mod_name, mangle, exported, bad, module_bindings, sources_by_file, sink)
-  let prefix = "_mod_" + mangle + "_"
+  let prefix = "__mod_" + mangle + "_"
   let result = []
   if load_node.selective != nil
     let is_exported = {}
@@ -1125,7 +1125,7 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
 
       let mod_name = module_name_from_path(stmt.path)
       # top_names: the module-scope names transform_module prefixes with
-      # `_mod_<mangle>_`; build_global_display maps them back to
+      # `__mod_<mangle>_`; build_global_display maps them back to
       # `<mod_name>.<name>` for messages and stack traces.
       let top_names = collect_module_top_names(resolved.stmts)
       let mangle = module_mangle(full_path, mod_name, top_names, registry)
@@ -1148,7 +1148,7 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
   make_program(new_stmts)
 end
 
-# Mangled module-slot name -> the name a user writes: `_mod_<mangle>_<name>`
+# Mangled module-slot name -> the name a user writes: `__mod_<mangle>_<name>`
 # -> `<mod>.<name>` (the file's base name, never the mangle), from the loaded-module table (no string splitting, so
 # underscores in module or binding names stay unambiguous). Codegen uses it
 # in diagnostics that name module state.
@@ -1157,7 +1157,7 @@ fn build_global_display(loaded)
   for _, info in loaded
     if info.top_names != nil
       for name, _ in info.top_names
-        display["_mod_" + info.mangle + "_" + name] = info.mod_name + "." + name
+        display["__mod_" + info.mangle + "_" + name] = info.mod_name + "." + name
       end
     end
   end
