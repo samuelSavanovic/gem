@@ -4456,6 +4456,65 @@ true
 true
 tcp_from_fd: fd -1 is not open
 tcp_from_fd: expected an int fd, got string
+== unclaimed: closed when the opener dies abnormally
+
+[Runtime Error in process 1]: session crashed
+  --> examples/218_resource_ownership.gem:40
+    |
+ 40 | let p = pair(fn(c) error("session crashed") end)
+    |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:40)
+  at anonymous fn (examples/218_resource_ownership.gem:18)
+crash: true
+kill shutdown: true
+kill kill: true
+
+[Runtime Error in process 5]: linked crash
+  --> examples/218_resource_ownership.gem:50
+    |
+ 50 |   spawn_link(fn() error("linked crash") end)
+    |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:50)
+link exit: true
+== unclaimed: open when the opener returns
+still usable: 2 hi
+== claimed: closed on any exit
+normal return: true
+
+[Runtime Error in process 8]: claimed crash
+  --> examples/218_resource_ownership.gem:68
+    |
+ 68 |   error("claimed crash")
+    |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:68)
+  at anonymous fn (examples/218_resource_ownership.gem:18)
+crash: true
+kill: true
+orderly shutdown: true
+== claim moves a socket main opened
+session owns: 1 main owns one less: true
+closed with the session: true
+== helpers that only use a socket leave it open
+
+[Runtime Error in process 12]: helper crashed
+  --> examples/218_resource_ownership.gem:108
+     |
+ 108 |   error("helper crashed")
+     |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:108)
+after a crash, a kill and a return: from helper!
+== a task that opens a socket hands over a live one
+alive
+== any process may close; waiters raise
+waiter: tcp_read: socket is closed
+watchdog closed it: true
+== a closed socket's owner count drops
+true
+true
 ["s2 took s1's fd number", true, "but is another socket", true]
 ["reader of s1 got", false, nil, "tcp_read: socket is closed"]
 new socket on the same number: true
@@ -4463,3 +4522,7 @@ still open
 file on the same number: true
 file still open: true
 done
+open while the call runs: true
+closed once it returns: true true
+unaffected
+claimed while parked: kept

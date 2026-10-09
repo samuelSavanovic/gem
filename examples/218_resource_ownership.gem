@@ -1,0 +1,151 @@
+# Who closes a socket: one its opener never claimed closes when the opener
+# crashes, is killed or dies from a link, and stays open (with no owner)
+# when the opener returns; one a process claimed closes when that process
+# exits for any reason. Processes that only use a socket never close it by
+# exiting. Any process may close it, and a waiter on a closed socket raises.
+
+load "std/task"
+
+let me = self()
+let l = tcp_listen("127.0.0.1", 18218)
+
+# Spawns a process that connects, sends its socket here and runs body(c);
+# returns [pid, client socket, server socket].
+fn pair(body)
+  let pid = spawn do
+    let c = tcp_connect("127.0.0.1", 18218)
+    send(me, {tag: "sock", sock: c})
+    body(c)
+  end
+  let c = receive
+  when {tag: "sock", sock: c}
+    c
+  end
+  [pid, c, tcp_accept(l)]
+end
+
+fn closed(s)
+  tcp_read(s, 16, 1000) == ""
+end
+
+fn wait_down(pid)
+  let ref = monitor(pid)
+  receive
+  when {tag: "DOWN", pid: ^pid}
+    nil
+  end
+end
+
+print("== unclaimed: closed when the opener dies abnormally")
+let p = pair(fn(c) error("session crashed") end)
+wait_down(p[0])
+print("crash:", closed(p[2]))
+p = pair(fn(c) receive() end)
+kill(p[0], "shutdown")
+print("kill shutdown:", closed(p[2]))
+p = pair(fn(c) receive() end)
+kill(p[0], "kill")
+print("kill kill:", closed(p[2]))
+p = pair(fn(c)
+  spawn_link(fn() error("linked crash") end)
+  receive()
+end)
+wait_down(p[0])
+print("link exit:", closed(p[2]))
+
+print("== unclaimed: open when the opener returns")
+p = pair(fn(c) nil end)
+wait_down(p[0])
+print("still usable:", tcp_write(p[1], "hi", 1000), tcp_read(p[2], 16, 1000))
+tcp_close(p[1])
+
+print("== claimed: closed on any exit")
+p = pair(fn(c) claim(c) end)
+wait_down(p[0])
+print("normal return:", closed(p[2]))
+p = pair(fn(c)
+  claim(c)
+  error("claimed crash")
+end)
+wait_down(p[0])
+print("crash:", closed(p[2]))
+p = pair(fn(c)
+  claim(c)
+  receive()
+end)
+kill(p[0], "kill")
+print("kill:", closed(p[2]))
+p = pair(fn(c)
+  process_flag("trap_exit", true)
+  claim(c)
+  receive
+  when {tag: "EXIT"}
+    nil
+  end
+end)
+kill(p[0], "shutdown")
+print("orderly shutdown:", closed(p[2]))
+
+print("== claim moves a socket main opened")
+let c = tcp_connect("127.0.0.1", 18218)
+let s = tcp_accept(l)
+let before = process_info(self()).resources
+let session = spawn do
+  claim(s)
+  send(me, process_info(self()).resources)
+  receive()
+end
+print("session owns:", receive(), "main owns one less:", process_info(self()).resources == before - 1)
+kill(session, "kill")
+print("closed with the session:", tcp_read(c, 16, 1000) == "")
+tcp_close(c)
+
+print("== helpers that only use a socket leave it open")
+c = tcp_connect("127.0.0.1", 18218)
+s = tcp_accept(l)
+let h = spawn do
+  tcp_write(c, "from helper", 1000)
+  error("helper crashed")
+end
+wait_down(h)
+h = spawn do
+  receive()
+end
+kill(h, "kill")
+h = spawn do
+  tcp_write(c, "!", 1000)
+end
+wait_down(h)
+print("after a crash, a kill and a return:", tcp_read(s, 64, 1000))
+
+print("== a task that opens a socket hands over a live one")
+let t = task.async(fn() tcp_connect("127.0.0.1", 18218) end)
+let tc = task.await(t, 1000)
+let ts = tcp_accept(l)
+tcp_write(tc, "alive", 1000)
+print(tcp_read(ts, 16, 1000))
+tcp_close(tc)
+tcp_close(ts)
+
+print("== any process may close; waiters raise")
+spawn do
+  let r = pcall tcp_read(s)
+  send(me, {tag: "waiter", error: r.error})
+end
+spawn do
+  sleep(10)
+  tcp_close(s)
+end
+receive
+when {tag: "waiter", error: e}
+  print("waiter:", e)
+end
+print("watchdog closed it:", tcp_read(c, 16, 1000) == "")
+tcp_close(c)
+
+print("== a closed socket's owner count drops")
+let n = process_info(self()).resources
+c = tcp_connect("127.0.0.1", 18218)
+print(process_info(self()).resources == n + 1)
+tcp_close(c)
+print(process_info(self()).resources == n)

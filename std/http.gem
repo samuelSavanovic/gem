@@ -38,14 +38,14 @@ load "std/time"
 # handle it returns). It traps exits, spawns the acceptor linked, and
 # monitors every connection process: the acceptor registers each one
 # (`_http_conn`) right after spawning it, so a connection accepted just
-# before a stop is still killed. The server closes the socket of a
-# connection that dies without closing it; a connection tells the server
-# (`_http_closing`) before closing its socket itself, so the server never
-# closes an fd number that may have been reused. Killing the server
-# process (as `stop` and a supervisor do; not with the untrappable "kill",
-# which ends it at once with its sockets open) arrives as an EXIT: it kills the
-# acceptor and the connections, closes every socket, then exits with that
-# reason. A connection whose handler traps exits gets an EXIT message
+# before a stop is still killed. Each connection claims its socket and the
+# server claims the listener, so whichever way a process ends, its socket
+# closes (the untrappable "kill" included). The server still closes the
+# socket of a connection that dies, and a connection tells the server
+# (`_http_closing`) before closing its socket itself; both are no-ops now
+# that the runtime closes them. Killing the server process (as `stop` and
+# a supervisor do) arrives as an EXIT: it kills the acceptor and the
+# connections, closes every socket, then exits with that reason. A connection whose handler traps exits gets an EXIT message
 # instead; it closes its own socket after that request. `serve` has the
 # server monitor its caller, so killing the caller stops the server.
 
@@ -1514,9 +1514,11 @@ fn send_all(rd, out)
 end
 
 # Keep-alive loop: serve requests on `fd` until the peer closes, goes idle,
-# or a request or response asks to close. Tells the server process before
-# closing the socket, so it doesn't close it again.
+# or a request or response asks to close. Claims the socket first, so it
+# closes however this process ends, and tells the server process before
+# closing it.
 fn handle_connection(fd, cfg)
+  claim(fd)
   let rd = new_reader(fd, cfg)
   let open = true
   while open
@@ -1655,6 +1657,7 @@ end
 # shut down cleanly before it exits with that reason. `watch` (serve's
 # caller, or nil) is monitored: when it dies, the server shuts down too.
 fn server_main(listen_fd, cfg, starter, ref, watch)
+  claim(listen_fd)
   process_flag("trap_exit", true)
   if watch != nil
     monitor(watch)

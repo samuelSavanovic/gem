@@ -239,9 +239,11 @@ fn send_error(conn, message)
   false
 end
 
-# Traps exits so that a crashing reader can't kill the writer before it
-# closes the socket.
+# Claims the socket, so it closes however the writer ends; the reader only
+# uses it. Traps exits so that a crashing reader can't kill the writer
+# before it closes the socket.
 fn run_writer(fd, id, write_timeout_ms)
+  claim(fd)
   process_flag("trap_exit", true)
   let reader = nil
   let r = pcall do

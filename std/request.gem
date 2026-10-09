@@ -14,8 +14,9 @@
 ##
 ## A call blocks the calling process until the whole response is read;
 ## other processes keep running, and the caller's mailbox is not touched.
-## A caller killed mid-call leaks its socket, so bound a request with
-## `timeout_ms`, not by killing the process.
+## The socket belongs to the caller: a caller killed mid-call (a
+## `task.await` timeout) closes it as it dies. Still, bound a request with
+## `timeout_ms` rather than by killing the process.
 
 load "std/string"
 

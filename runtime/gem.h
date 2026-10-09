@@ -996,6 +996,7 @@ typedef struct {
     jmp_buf proc_jmp;             /* process-level error handler (crash isolation) */
     char *stack_lo;               /* lowest usable byte of the coroutine stack; the guard sits just below */
     int stack_overflowed;         /* set when the guard page caught an overflow (exit reason "stack overflow") */
+    int crashed;                  /* died of an uncaught error (whatever exit_reason says) */
     const char *exit_reason;      /* NULL while alive, set on exit/crash */
     int64_t deadline_ms;          /* -1 = no deadline; else absolute time in ms */
     int timed_out;                /* set to 1 by scheduler when deadline expires */
@@ -1247,6 +1248,10 @@ int gem_res_closing(GemVal v);
 void gem_res_proc_exit(int slot);
 /* Initialise a new process's lists. */
 void gem_res_proc_init(GemProcess *proc);
+/* Close the sockets of parked requests that have finished (scheduler,
+   after draining the pool's wake pipe); and whether any are pending. */
+void gem_res_check_parked(void);
+int gem_res_parked_pending(void);
 /* The open socket entry with this fd and inode, or NULL. */
 GemResEntry *gem_res_find_socket(int fd, uint64_t dev, uint64_t ino);
 /* Kind names: "socket" / "sqlite" (type), "Socket" / "Sqlite" (print). */

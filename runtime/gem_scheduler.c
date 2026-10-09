@@ -921,7 +921,8 @@ static void gem_free_proc_slot(int pid) {
     if (pid != gem_main_pid)
         gem_arena_destroy(&proc->arena);
 
-    /* Disown its resources (gem_resource.c). */
+    /* Close or disown its resources (gem_resource.c); this may take over
+       its pool request to close its sockets once the request is done. */
     gem_res_proc_exit(pid);
 
     /* A process killed while waiting on the thread pool still holds its
@@ -933,6 +934,7 @@ static void gem_free_proc_slot(int pid) {
     proc->coro = NULL;
     proc->stack_lo = NULL;
     proc->stack_overflowed = 0;
+    proc->crashed = 0;
     proc->io_request = NULL;
     proc->trap_exit = 0;
     proc->read_buf = NULL;
@@ -1097,6 +1099,7 @@ static void gem_coro_entry(mco_coro *co) {
             gem_report_process_crash(gem_current_pid, msg);
             if (proc->exit_reason) free((char *)proc->exit_reason);
             proc->exit_reason = strdup(msg);
+            proc->crashed = 1;
             proc->pcall_depth = 0;
             gem_call_depth = 0;
         }
@@ -1467,7 +1470,10 @@ static int64_t gem_now_us(void) {
 void gem_run_scheduler(void) {
     for (;;) {
         gem_fire_timers();
-        if (gem_io_check_completions()) gem_wake_pool_waiters();
+        if (gem_io_check_completions()) {
+            gem_wake_pool_waiters();
+            gem_res_check_parked();
+        }
 
         /* One pass: run the READY processes in slot order. A process that
            becomes READY during the pass runs in it if its slot is above the
@@ -1511,13 +1517,16 @@ void gem_run_scheduler(void) {
         if (timer_dl >= 0 && (earliest < 0 || timer_dl < earliest)) earliest = timer_dl;
 
         /* Block until fd I/O, a thread pool completion or the earliest
-           deadline. */
-        if (gem_fd_waiters.n > 0 || gem_pool_waiters.n > 0) {
+           deadline. A parked request (gem_resource.c) has no waiting
+           process but still needs its completion seen, to close the
+           sockets it holds. */
+        int wake_fd = gem_io_wake_fd();
+        int pool_wait = gem_pool_waiters.n > 0 || (gem_res_parked_pending() && wake_fd >= 0);
+        if (gem_fd_waiters.n > 0 || pool_wait) {
             int nfds = gem_poll_fill();
             /* The thread pool's wake pipe, so poll returns when a worker
                completes a request. */
-            int wake_fd = gem_io_wake_fd();
-            if (gem_pool_waiters.n > 0 && wake_fd >= 0) {
+            if (pool_wait && wake_fd >= 0) {
                 gem_poll_fds[nfds].fd = wake_fd;
                 gem_poll_fds[nfds].events = POLLIN;
                 gem_poll_fds[nfds].revents = 0;

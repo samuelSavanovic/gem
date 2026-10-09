@@ -55,6 +55,7 @@ typedef struct {
 } GemResParked;
 
 static GemResParked *gem_res_parked = NULL;
+static int gem_res_parked_n = 0, gem_res_parked_cap = 0, gem_res_parked_live = 0;
 
 static void gem_res_oom(void) {
     fprintf(stderr, "gem: out of memory (resource table)\n");
@@ -143,6 +144,7 @@ void gem_res_proc_init(GemProcess *proc) {
     proc->res_owned = -1;
     proc->res_used = -1;
     proc->res_count = 0;
+    proc->crashed = 0;
     proc->wait_res = GEM_NIL;
 }
 
@@ -268,11 +270,159 @@ void gem_res_diag_counts(int *open, int *ownerless) {
 
 /* ─── Process exit ─── */
 
-/* For now a process's exit leaves everything it owns open and ownerless. */
+static int gem_res_diag_level(void) {
+    static int level = -1;
+    if (level < 0) {
+        const char *d = getenv("GEM_DIAG");
+        level = d && (d[0] == '1' || d[0] == '2') ? d[0] - '0' : 0;
+    }
+    return level;
+}
+
+/* A process's name for the GEM_DIAG=2 report: its entry function, or the
+   function that one called when the entry is a fn literal (`spawn do
+   session(sock) end`). Frames past the call depth are stale but kept, and
+   the bottom two are cleared at spawn. */
+static const char *gem_res_proc_name(int slot) {
+    if (slot < 0) return NULL;
+    GemFrame *f = gem_proc_table[slot].call_stack;
+    const char *n = f[0].name;
+    if (n && strcmp(n, "anonymous fn") == 0 && f[1].name) n = f[1].name;
+    return n;
+}
+
+static void gem_res_print_proc(char *buf, size_t n, int64_t pid, int slot) {
+    const char *name = gem_res_proc_name(slot);
+    if (name) snprintf(buf, n, "process %lld (%s)", (long long)pid, name);
+    else snprintf(buf, n, "process %lld", (long long)pid);
+}
+
+static int32_t *gem_res_batch = NULL;
+static int gem_res_batch_cap = 0;
+
+static void gem_res_batch_push(int *n, int32_t i) {
+    if (*n == gem_res_batch_cap) {
+        int cap = gem_res_batch_cap ? gem_res_batch_cap * 2 : 16;
+        int32_t *a = (int32_t *)realloc(gem_res_batch, sizeof(int32_t) * (size_t)cap);
+        if (!a) gem_res_oom();
+        gem_res_batch = a;
+        gem_res_batch_cap = cap;
+    }
+    gem_res_batch[(*n)++] = i;
+}
+
+static int gem_res_park_slot(GemIORequest *req) {
+    for (int k = 0; k < gem_res_parked_n; k++) {
+        if (!gem_res_parked[k].req) {
+            gem_res_parked[k].req = req;
+            gem_res_parked[k].head = -1;
+            gem_res_parked_live++;
+            return k;
+        }
+    }
+    if (gem_res_parked_n == gem_res_parked_cap) {
+        int cap = gem_res_parked_cap ? gem_res_parked_cap * 2 : 8;
+        GemResParked *a = (GemResParked *)realloc(gem_res_parked, sizeof(GemResParked) * (size_t)cap);
+        if (!a) gem_res_oom();
+        gem_res_parked = a;
+        gem_res_parked_cap = cap;
+    }
+    gem_res_parked[gem_res_parked_n].req = req;
+    gem_res_parked[gem_res_parked_n].head = -1;
+    gem_res_parked_live++;
+    return gem_res_parked_n++;
+}
+
 void gem_res_proc_exit(int slot) {
     GemProcess *proc = &gem_proc_table[slot];
-    while (proc->res_used >= 0) gem_res_use_unlink(proc->res_used);
-    while (proc->res_owned >= 0) gem_res_set_owner(proc->res_owned, -1);
+    int abnormal = proc->crashed ||
+                   (proc->exit_reason && strcmp(proc->exit_reason, "normal") != 0);
+    int diag = gem_res_diag_level() == 2;
+    int64_t pid = gem_pid_of_slot(slot);
+    const char *how = proc->crashed ? "error" : proc->exit_reason ? proc->exit_reason : "normal";
+    char me[160], other[160];
+    if (diag) gem_res_print_proc(me, sizeof(me), pid, slot);
+
+    /* Resources it used without owning: report the open ones, by owner. */
+    while (proc->res_used >= 0) {
+        int32_t i = proc->res_used;
+        GemResEntry *e = &gem_res[i];
+        if (diag) {
+            int kind = e->kind, count = 0;
+            int64_t owner = e->owner;
+            int owner_slot = e->owner_slot;
+            for (int32_t j = proc->res_used; j >= 0; ) {
+                int32_t next = gem_res[j].use_next;
+                if (gem_res[j].kind == kind && gem_res[j].owner == owner) {
+                    count++;
+                    gem_res_use_unlink(j);
+                }
+                j = next;
+            }
+            if (owner < 0) snprintf(other, sizeof(other), "no process");
+            else gem_res_print_proc(other, sizeof(other), owner, owner_slot);
+            fprintf(stderr, "gem_resources: %s exited (%s) after using %d %s%s owned by %s\n",
+                    me, how, count, gem_res_kinds[kind].type, count == 1 ? "" : "s", other);
+        } else {
+            gem_res_use_unlink(i);
+        }
+    }
+
+    /* Resources it owns: claimed ones close on any exit, the rest on an
+       abnormal one and are left ownerless on a normal one. The sockets of
+       a process killed during its own extern blocking call are parked
+       until the call returns. */
+    GemIORequest *req = proc->io_request;
+    int park = req && req->op == GEM_IO_EXTERN && !__atomic_load_n(&req->done, __ATOMIC_ACQUIRE);
+    int parked = -1, n = 0, left[GEM_RES_KINDS] = {0};
+    while (proc->res_owned >= 0) {
+        int32_t i = proc->res_owned;
+        GemResEntry *e = &gem_res[i];
+        if (!e->claimed && !abnormal) {
+            left[e->kind]++;
+            gem_res_set_owner(i, -1);
+        } else if (park && e->kind == GEM_RES_SOCKET) {
+            if (parked < 0) parked = gem_res_park_slot(req);
+            gem_res_set_owner(i, -1);
+            e->parked = parked;
+            gem_res_own_link(i, &gem_res_parked[parked].head);
+        } else {
+            gem_res_own_unlink(i);
+            e->owner = -1;
+            gem_res_batch_push(&n, i);
+        }
+    }
+    if (parked >= 0) proc->io_request = NULL;   /* the parked list holds its reference now */
+    if (n > 0) gem_res_close_n(gem_res_batch, n);
+    if (diag) {
+        for (int k = 1; k < GEM_RES_KINDS; k++) {
+            if (left[k] == 0) continue;
+            fprintf(stderr, "gem_resources: %s exited (%s) leaving %d %s%s open with no owner\n",
+                    me, how, left[k], gem_res_kinds[k].type, left[k] == 1 ? "" : "s");
+        }
+    }
+}
+
+void gem_res_check_parked(void) {
+    if (gem_res_parked_live == 0) return;
+    for (int k = 0; k < gem_res_parked_n; k++) {
+        GemIORequest *req = gem_res_parked[k].req;
+        if (!req || !__atomic_load_n(&req->done, __ATOMIC_ACQUIRE)) continue;
+        int n = 0;
+        while (gem_res_parked[k].head >= 0) {
+            int32_t i = gem_res_parked[k].head;
+            gem_res_own_unlink(i);
+            gem_res_batch_push(&n, i);
+        }
+        gem_res_parked[k].req = NULL;
+        gem_res_parked_live--;
+        gem_io_release(req);
+        if (n > 0) gem_res_close_n(gem_res_batch, n);
+    }
+}
+
+int gem_res_parked_pending(void) {
+    return gem_res_parked_live > 0;
 }
 
 /* ─── Built-in: claim ─── */

@@ -303,9 +303,11 @@ fn serve(conn)
   end
 end
 
-# Traps exits so that a crashing reader can't kill this process before it
-# closes the socket.
+# Claims the socket, so it closes however this process ends; the reader
+# only uses it. Traps exits so that a crashing reader can't kill this
+# process before it closes the socket.
 fn run(fd, write_timeout_ms)
+  claim(fd)
   process_flag("trap_exit", true)
   let conn = {
     fd: fd, write_timeout_ms: write_timeout_ms, pending: buf_new(), need: 0,
