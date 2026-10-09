@@ -19,17 +19,17 @@ Telnet only; SSH is out of scope. An HTTP honeypot on :80 via std/http is an opt
 | Gap | Today | Needed |
 |---|---|---|
 | Peer address | done: `tcp_peer(sock)` returns `{ip, port}`, or `nil` once the peer has reset | per-IP caps and the `ip` column; the acceptor treats `nil` as a connection already gone |
-| Socket ownership | sockets are plain ints, so a session that crashes leaks its fd | ROADMAP "Process-owned resources closed on exit"; proposed design in `docs/design/process_owned_resources.md` (sockets and sqlite handles become owned resource values; a session takes its socket over with `claim(sock)`, and it closes when the session exits for any reason), agreed |
+| Socket ownership | done: sockets and sqlite handles are owned resources (SPEC "Owned Resources", `docs/design/process_owned_resources.md`); a session takes its socket over with `claim(sock)`, and it closes when the session exits for any reason | `process_info(acceptor).resources` and `GEM_DIAG=2` show a session that forgot its claim; `tests/check_socket_leak.sh` runs this layout |
 | Crash data | a `DOWN` message carries only the error message; the trace goes to stderr and the raw input dies with the session | the session streams capped raw-input chunks to the recorder as it reads; traces come from the service's stderr log, matched by pid |
 | Runtime reset stats | `GEM_DIAG` prints reset statistics only at exit | a builtin that reads them, or leave them out of the metrics |
 
-The honeypot waits for socket ownership. Closing fds on `DOWN` in the honeypot would only hide the leak the ROADMAP item fixes.
+Socket ownership is in place, so the honeypot closes nothing on `DOWN`: each session claims its socket.
 
 ## Process layout
 
-- **acceptor**: `tcp_listen` on the configured port (2323 locally, 23 in production via a redirect) and a loop on `tcp_accept`, sending `{fd, ip}` to the registry. `tcp_accept` takes no timeout, so this process does nothing else.
+- **acceptor**: `tcp_listen` on the configured port (2323 locally, 23 in production via a redirect) and a loop on `tcp_accept`, sending `{sock, ip}` to the registry. `tcp_accept` takes no timeout, so this process does nothing else.
 - **registry**: owns the global and per-IP connection counts, applies the caps (refuses and logs when over), spawns and monitors one session per connection, and records abnormal exits. Sessions are temporary and never restarted, so no `dynamic_supervisor`.
-- **session** (one per connection): owns the socket. Runs telnet negotiation, the fake login and the fake shell. Streams its raw input to the recorder. Exits on close, idle timeout, max session length or a byte cap.
+- **session** (one per connection): claims its socket first (`claim(sock)`), so any exit closes it. Runs telnet negotiation, the fake login and the fake shell. Streams its raw input to the recorder. Exits on close, idle timeout, max session length or a byte cap.
 - **recorder**: the only process that touches sqlite. Batches inserts in a transaction (every N events or T ms). Keeps a capped raw-input ring per live session, written out on a crash and dropped on a normal exit. Counts the events it drops when its backlog is over the cap.
 - **metrics sampler**: every 1–5 minutes records RSS (`/proc/self/statm`), open fds (`list_dir("/proc/self/fd")`), live processes (`len(processes())`), sessions per state, crashes, cap hits and the Gem commit. The `/proc` reads are Linux only.
 - **dashboard** (later, maybe never): `sqlite_query` and `sqlite_exec` run on the scheduler thread, so heavy aggregate queries in-process would stall every session. Either the recorder keeps rollup tables, or the dashboard is a separate OS process reading the WAL database. Until then the `sqlite3` CLI over SSH is the dashboard.

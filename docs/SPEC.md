@@ -44,7 +44,7 @@ The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.
 
 ## Values and Types
 
-Nine types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`, `Ref`. All dynamically typed. Every value is a tagged C union. Yes this means primitives are boxed and slow — doesn't matter for v0. Future optimization: NaN-boxing to pack ints, bools, and nil into a double's NaN space, eliminating heap allocation for primitives.
+Eleven types: `Int`, `Float`, `String`, `Bool`, `Nil`, `Table`, `Fn`, `Buffer`, `Ref`, and the two owned resources `Socket` and `Sqlite` (see Owned Resources). All dynamically typed. Every value is a tagged C union. Yes this means primitives are boxed and slow — doesn't matter for v0. Future optimization: NaN-boxing to pack ints, bools, and nil into a double's NaN space, eliminating heap allocation for primitives.
 
 **Numbers.** An `Int` is a signed 64-bit integer, from -9223372036854775808 to 9223372036854775807; a `Float` is an IEEE 754 double. Integer literals are decimal digits (`42`, `007` is `7`; no hex, binary, octal or `_` separators), and a literal outside that range is a compile error at the literal (`integer literal out of range`). The literal `9223372036854775808` is accepted only right after a unary `-`, so `-9223372036854775808` writes the smallest int; `x - 9223372036854775808` is still an error. A number literal with a decimal point is a float (`2.0`, `0.000001`, `3.14159265358979`). There is no exponent syntax in literals (`1e6` does not lex as a number); `to_float("1e6")` parses one. A float literal keeps every digit: it compiles to the nearest double, as in C.
 
@@ -862,7 +862,7 @@ Pending timers are kept in a min-heap ordered by deadline that grows as needed; 
 ```
 let info = process_info(pid)
 # info == {state: "ready", mailbox_len: 0, links: [], monitors: [],
-#          trap_exit: false, exit_reason: nil}
+#          trap_exit: false, exit_reason: nil, resources: 0}
 ```
 
 `process_info(pid)` returns a table with metadata about the process:
@@ -873,6 +873,7 @@ let info = process_info(pid)
 - `monitors` — array of the pids of the live processes monitoring it
 - `trap_exit` — bool
 - `exit_reason` — string or nil
+- `resources` — how many open resources (sockets, database handles) it owns (see Owned Resources)
 
 Returns `nil` if the pid is invalid or the slot is free.
 
@@ -1228,7 +1229,7 @@ Running out of stack is an ordinary runtime error, not a crash:
 
 `len(v)` — returns the length of a string, the byte length of a buffer, or the total number of entries in a table (both integer-keyed and string-keyed). `len({a: 1, b: 2})` returns 2. `len([10, 20, 30])` returns 3.
 
-`type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`, `"ref"`, `"buffer"`.
+`type(v)` — returns the type name as a string: `"int"`, `"float"`, `"string"`, `"bool"`, `"nil"`, `"table"`, `"fn"`, `"ref"`, `"buffer"`, `"socket"`, `"sqlite"`.
 
 `to_string(v)` — converts any value to its string representation. For buffers, returns the buffer contents as a string. For tables and arrays, recursively renders a `{key: val, ...}` / `[v1, v2, ...]` form (cycles render as `<cycle>`; deep/wide structures truncate with `...`). Strings inside render quoted, with `"`, `\\`, newline, tab, CR and NUL escaped (`["a\0b"]`), and every byte kept; a string key that is a plain identifier renders bare. Same repr is used by `print`, `eprint`, and `"{x}"` interpolation, except for buffers, which those show as `<buffer:N>` (N is the length); call `to_string(buf)` for the contents. Floats are formatted as described under "Numbers" in Values and Types (`to_string(2.0)` is `"2.0"`, `to_string(1234567.89)` is `"1234567.89"`); `buf_push` and `build_string`'s `add` format them the same way.
 
@@ -1386,31 +1387,59 @@ end
 
 `exec(command)` — runs `command` via the system shell (`sh -c`). Blocks until the command exits. Returns the exit code as an integer (0 on success). The shell expands glob patterns and environment variables in `command`. The command inherits the program's stdout and stderr, so its output goes straight to the terminal (or wherever the program's output goes), the same from `main` and from a spawned process; `exec` does not capture it. To capture output, redirect it inside `command` (`exec("ls > /tmp/out.txt")`) and `read_file` the result.
 
+## Owned Resources
+
+Sockets and sqlite database handles are *owned resources*: values of their own types (`type` is `"socket"` or `"sqlite"`), not file descriptors or pointers. A resource value names an entry of one runtime table by an id that is never reused. It prints as `#Socket<N>` / `#Sqlite<N>`, `N` that id. It is equal only to itself (in any process, after any number of copies), works as a table key, and sorts like a ref; `<` on it raises (`type error in <: got socket and socket`), as do `to_int` and `json.encode`. `spawn`, `send` and every other copy copy the value, not the resource: every copy names the same socket.
+
+The rules:
+
+1. Every resource has an **owner**, at first the process that opened it (`tcp_listen`, `tcp_accept`, `tcp_connect`, `tcp_from_fd`, `sqlite_open`).
+2. **`claim(r)`** makes the calling process the owner and marks the resource *claimed*. Nothing else changes ownership: `spawn`, `send` and copies leave it where it is. `claim` returns `r`, never waits, and the last claim wins. It raises `claim: socket is closed` (`claim: database is closed`) for a closed resource and `claim: expected a socket or a database handle, got <type>` for any other value.
+3. **A claimed resource is closed when its owner exits, for any reason. An unclaimed one is closed when its opener crashes, is killed or dies from a link's exit signal**; when the opener returns normally it stays open, with no owner, until some process closes or claims it.
+4. **Any process that has a resource can use it and close it.** `tcp_close` and `sqlite_close` of a closed resource return `nil`.
+5. **A closed resource stays closed in every process.** Any other use raises (`tcp_read: socket is closed`, `sqlite_query: not an open database handle`), including a builtin that was waiting on the socket when it closed, even if a new socket has the same fd number by then.
+
+| How the owner ends | Claimed resources | Unclaimed (opener's) resources |
+|---|---|---|
+| Returns normally (main included) | closed | stay open, with no owner |
+| Uncaught error (`error("normal")` included) | closed | closed |
+| `kill(pid, reason)`, any reason but `"normal"` (`"kill"` included) | closed | closed |
+| Exit signal from a link, not trapped | closed | closed |
+| Main crashes, or `exit(code)` | the program ends; the OS closes everything | same |
+
+A process that traps exits receives `EXIT` and doesn't die; if it then returns, that is a normal exit. A process killed while its own `extern blocking fn` runs on the thread pool keeps its sockets open until the C call returns (the call may be using their fds through `tcp_fd`), then they close; a `claim` by another process meanwhile takes one over.
+
+So the process responsible for a connection claims it first: an acceptor accepts and hands each socket on, and the session that serves it calls `claim(sock)`, whose exit (a crash, a kill, an early return, an orderly shutdown) closes it. Helpers that only use a socket (a reader process, a `task.async` that writes to it, a watchdog that closes it) never close it by exiting. A session that forgets to claim leaves its socket with the acceptor: `process_info(pid).resources` counts the open resources a process owns, `GEM_DIAG=2` prints a `gem_resources:` line on stderr for each process that exits leaving resources open that it owned or used without owning (`gem_resources: process 412 (session) exited (error) after using 1 socket owned by process 3 (acceptor)`), and `GEM_DIAG=1` adds `resources_open=N ownerless=M` to the `gem_diag:` line at exit.
+
 ## TCP Sockets
 
-`tcp_listen(host, port)` — creates a TCP server socket bound to `host` (string: an IPv4 address, `"0.0.0.0"` for every interface, or a host name such as `"localhost"`, resolved to its first IPv4 address; a name that doesn't resolve raises `tcp_listen: cannot resolve '<host>'`) on `port` (int). Calls `socket`, `bind`, and `listen` with a backlog of 1024. Sets `SO_REUSEADDR`. A port outside 0–65535 raises `tcp_listen: port must be from 0 to 65535, got <port>` (`tcp_connect` likewise). Every socket the runtime opens is marked close-on-exec, so a command `exec` runs doesn't inherit it (one that starts at the very moment a socket is opened still can). Returns the socket file descriptor as an integer. Raises an error on failure. Always synchronous; resolving a host name (`getaddrinfo`, inline) blocks every process, as for `tcp_connect`.
+`tcp_listen(host, port)` — creates a TCP server socket bound to `host` (string: an IPv4 address, `"0.0.0.0"` for every interface, or a host name such as `"localhost"`, resolved to its first IPv4 address; a name that doesn't resolve raises `tcp_listen: cannot resolve '<host>'`) on `port` (int). Calls `socket`, `bind`, and `listen` with a backlog of 1024. Sets `SO_REUSEADDR`. A port outside 0–65535 raises `tcp_listen: port must be from 0 to 65535, got <port>` (`tcp_connect` likewise). Every socket the runtime opens is marked close-on-exec, so a command `exec` runs doesn't inherit it (one that starts at the very moment a socket is opened still can). Returns the socket, owned by the calling process (see Owned Resources). Raises an error on failure. Always synchronous; resolving a host name (`getaddrinfo`, inline) blocks every process, as for `tcp_connect`.
 
-`tcp_connect(host, port)` — opens a TCP connection to `host:port`. Returns the connected socket file descriptor as an integer. Raises an error if the connection fails or the host cannot be resolved. Supports both IP addresses and hostnames. The connect itself is non-blocking: the calling process (main included) yields to the scheduler until it completes. Resolving a host name is not: `getaddrinfo` runs inline and blocks every process.
+`tcp_connect(host, port)` — opens a TCP connection to `host:port`. Returns the connected socket. Raises an error if the connection fails or the host cannot be resolved (`tcp_connect: connect failed: <reason>`; `tcp_connect: connect failed: socket closed while connecting` when another process closes it meanwhile). Supports both IP addresses and hostnames. The connect itself is non-blocking: the calling process (main included) yields to the scheduler until it completes, and owns the socket from the start, so a process killed mid-connect closes it. Resolving a host name is not: `getaddrinfo` runs inline and blocks every process.
 
-`tcp_accept(socket)` — accepts an incoming connection on a listening socket. Returns the new connection's file descriptor as an integer. The calling process (main included) yields to the scheduler until a connection is ready. Raises an error on failure.
+`tcp_accept(socket)` — accepts an incoming connection on a listening socket. Returns the new connection's socket, owned by the calling process. The calling process (main included) yields to the scheduler until a connection is ready. Raises an error on failure.
 
 `tcp_read(socket[, max_bytes[, timeout_ms]])` — reads up to `max_bytes` bytes from a connected socket (default 4096). Returns the data as a string on success, `""` when the remote end has closed the connection (EOF or `ECONNRESET`), or `nil` when the optional `timeout_ms` expires with no data available. Callers without a timeout never see `nil`. While no data is available the calling process (main included) yields to the scheduler, and resumes when data arrives or the timeout deadline is reached. `timeout_ms` works like `receive ... after`: `nil` or omitted waits until data or EOF, and an int of `0` or less doesn't wait: it returns what is already there, or `nil` (so a remaining time computed as `deadline - time_ms()` that has run out never blocks). Any other `timeout_ms` raises `tcp_read: timeout_ms must be an int (milliseconds) or nil, got <type>`.
 
 `tcp_write(socket, data[, timeout_ms])` — writes the string (or buffer) `data` to a connected socket. Writes all bytes (loops internally on partial writes). Returns the number of bytes written as an integer. The calling process yields to the scheduler while the socket is not writable. `timeout_ms` is one deadline for the whole write, like `tcp_read`'s: `nil` or omitted waits until every byte is written, an int of `0` or less writes only what the socket takes at once, and past the deadline `tcp_write` returns the count written so far (less than `len(data)`), without raising. Any other `timeout_ms` raises `tcp_write: timeout_ms must be an int (milliseconds) or nil, got <type>`. Writing to a peer that has closed the connection does not raise: the first write usually still reports success and later ones return `0`.
 
-`tcp_close(socket)` — closes a socket file descriptor. Always synchronous. Returns `nil`. A process waiting in `tcp_accept`, `tcp_read`, `tcp_write` or `tcp_connect` on that socket raises an error (e.g. `"tcp_read: read failed: Bad file descriptor"`), even when a new socket has taken the same fd number by the time it runs.
+`tcp_close(socket)` — closes a socket, from any process. Always synchronous. Returns `nil`, also for a socket that is already closed. A process waiting in `tcp_accept`, `tcp_read`, `tcp_write` or `tcp_connect` on that socket raises `<builtin>: socket is closed` (`tcp_connect: connect failed: socket closed while connecting`), even when a new socket has taken the same fd number by the time it runs.
 
-`tcp_peer(socket)` — returns the address of a connected socket's remote end as a table `{ip, port}`: `ip` is a string (`"203.0.113.7"`), `port` an int. Returns `nil` when the socket has no peer: a listening socket, or a connection the peer has reset. A peer that closed cleanly keeps its address only until a write to it draws a reset, so read the address once, right after `tcp_accept`, and keep it. Raises `tcp_peer: getpeername failed: <reason>` for an fd that isn't an open socket, `tcp_peer: not a TCP socket` for another kind of socket (a UDP or Unix socket inherited from the parent process), and `tcp_peer: expected int socket fd` for a non-int argument. Never waits.
+`tcp_peer(socket)` — returns the address of a connected socket's remote end as a table `{ip, port}`: `ip` is a string (`"203.0.113.7"`), `port` an int. Returns `nil` when the socket has no peer: a listening socket, or a connection the peer has reset. A peer that closed cleanly keeps its address only until a write to it draws a reset, so read the address once, right after `tcp_accept`, and keep it. Raises `tcp_peer: not a TCP socket` for a socket that isn't a TCP one (only `tcp_from_fd` could make one) and `tcp_peer: getpeername failed: <reason>` for any other failure. Never waits.
 
-All TCP builtins use non-blocking sockets with scheduler poll integration. The scheduler's `poll()` loop handles readiness notification with zero thread pool overhead.
+`tcp_fd(socket)` — returns the socket's file descriptor number as an int, for an `extern fn` (and for debugging). The fd stays valid while the socket is open. C code must not close it (`tcp_close` does) or keep it after the socket closes: the number can then belong to a new file. If C code does close it, the runtime notices when it closes the socket itself (it compares the fd's inode with the one it registered) and leaves whatever took the number alone, but a `tcp_read` or `tcp_write` on the stale socket meanwhile can reach that file.
+
+`tcp_from_fd(fd)` — registers a TCP socket made outside the runtime (by a TLS library, or inherited from the parent process) and returns it as a socket opened by the caller. From then on the runtime owns the fd: it marks it non-blocking and close-on-exec and closes it with the socket. Raises `tcp_from_fd: fd 9 is not open`, `tcp_from_fd: fd 9 is not a TCP socket` (any fd but an IPv4 or IPv6 stream socket), `tcp_from_fd: fd 9 is already registered as a socket` (the fd of an open socket), and `tcp_from_fd: expected an int fd, got <type>`.
+
+Every TCP builtin that takes a socket raises `<builtin>: expected a socket, got <type>` for any other value (an int fd included) and `<builtin>: socket is closed` for a closed one (`tcp_close` returns `nil` instead). All TCP builtins use non-blocking sockets with scheduler poll integration. The scheduler's `poll()` loop handles readiness notification with zero thread pool overhead.
 
 ## SQLite
 
-`sqlite_open(path)` — opens (or creates) a SQLite database at `path`. Enables WAL mode and foreign keys by default. Returns an opaque database handle: a small int id, valid in every process until it is closed (ids are never reused). Use `":memory:"` for an in-memory database. Runs on the thread pool in every process, main included, so other processes keep running. Raises on error.
+`sqlite_open(path)` — opens (or creates) a SQLite database at `path`. Enables WAL mode and foreign keys by default. Returns a database handle (an owned resource of type `"sqlite"`, see Owned Resources), valid in every process until it is closed, and owned by the calling process. Use `":memory:"` for an in-memory database. Runs on the thread pool in every process, main included, so other processes keep running. Raises on error.
 
-`sqlite_close(db)` — closes the database handle. Runs on the thread pool, like `sqlite_open`. Returns `nil`. The handle is invalid from the moment the close starts, in every process.
+`sqlite_close(db)` — closes the database handle, from any process. Runs on the thread pool, like `sqlite_open`. Returns `nil`, also for a handle that is already closed. The handle is invalid from the moment the close starts, in every process. A handle whose owner exits closes as Owned Resources says, through the thread pool too.
 
-Every `sqlite_*` builtin that takes a handle raises a catchable error prefixed with its name when the handle is not an int (`sqlite_query: expected a database handle, got string`) or is not an open handle: never returned by `sqlite_open`, or already closed, a second `sqlite_close` included (`sqlite_close: not an open database handle`).
+Every other `sqlite_*` builtin that takes a handle raises a catchable error prefixed with its name when the value is not a handle (`sqlite_query: expected a database handle, got int`) or the handle is closed (`sqlite_query: not an open database handle`).
 
 `sqlite_exec(db, sql)` — executes SQL that returns no rows (DDL, INSERT without RETURNING, etc.). SQL containing a NUL byte raises `sqlite_exec: the SQL contains a NUL byte` (`sqlite_query` likewise), since sqlite would ignore what follows it. `sql` may hold several statements, run in order (rows a statement returns are dropped); empty or comment-only SQL does nothing. A statement with placeholders raises `sqlite_exec: statement <n> has parameters; use sqlite_query to bind them`, since there is nothing to bind them to. Inline execution (no thread pool). Raises on error; the statements before the failing one have run.
 

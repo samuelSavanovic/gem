@@ -1,6 +1,6 @@
 # Process-owned resources: design
 
-Status: **agreed, being implemented.** Phase 2 of `examples/honeypot/PLAN.md`; implements ROADMAP "Process-owned resources closed on exit" for sockets and sqlite handles. Measured against `build/gem` at d07ae59.
+Status: **implemented** (see "As implemented" at the end for where the code differs in detail). Phase 2 of `examples/honeypot/PLAN.md`; implements ROADMAP "Process-owned resources closed on exit" for sockets and sqlite handles. Measured against `build/gem` at d07ae59.
 
 Third version, after two reviews. The first moved ownership implicitly whenever a resource was captured by `spawn` or sent, so every short-lived helper (a reader, a `task.async`, a watchdog) took sockets over by accident. The second used `tcp_claim` with owner-only close; its review found that normal exits leaked, that owner-only close did no safety work, and that sockets and sqlite followed two models. "Rejected designs" says why each alternative lost.
 
@@ -162,7 +162,7 @@ Every other numbered example that uses tcp or sqlite keeps working unchanged, si
 
 ## Tests
 
-- `examples/217_resource_values.gem`: `type`, printing, equality, table keys, `<`, `json.encode`, `to_int`; closing twice; every builtin on a closed socket and a closed handle; an int passed to each builtin; `tcp_fd`; `tcp_from_fd` on a socket from C `socket()`, on a registered fd, on a pipe and on a closed fd.
+- `examples/217_resource_values.gem`: `type`, printing, equality, table keys, `<`, `json.encode`, `to_int`; closing twice; every builtin on a closed socket and a closed handle; an int passed to each builtin; `tcp_fd`; `tcp_from_fd` on a socket from C `socket()`, on a registered fd, on a file (C `open`; an `extern fn` can't make a pipe without an out-parameter) and on a closed fd.
 - `examples/218_resource_ownership.gem`: unclaimed: the peer reads `""` after the opener crashes, is killed (`"shutdown"`, `"kill"`) or dies from a link, and the opener's normal return leaves it open and ownerless; claimed: closed on the claimer's normal return, crash, kill and orderly `trap_exit` shutdown; a helper that only uses it leaves it open whether it crashes, is killed or returns; a `task.async` that opens a socket and returns it hands over a live socket; a watchdog's `tcp_close` works; a waiter in another process raises `socket is closed`; `process_info(pid).resources` counts.
 - `examples/219_socket_reuse_race.gem`: the KNOWN_BUGS repro, where the reader now raises `socket is closed`; a C `close()` through `tcp_fd`, then a new socket and a file on that number: closing the old value leaves both open.
 - `examples/220_sqlite_ownership.gem`: an unclaimed handle whose opener crashes or is killed is closed (`not an open database handle` from another process), one whose opener returns stays open; a claimed one closes when its claimer returns; a pool that lends handles and a borrower that claims one.
@@ -192,3 +192,13 @@ Step 3 also fixes two `docs/KNOWN_BUGS.md` entries, deleted with it: "A woken tc
 4. **Ownership changes only through `claim`**: no implicit move on `spawn` or `send`; any process may close.
 5. **One mechanism for every owned resource**: one table, one value type whose `type` is the kind, a generic `claim`.
 6. **Later, not in phase 2**: the std/http cleanups (dropping its fd bookkeeping and `_http_closing`), the `trap_exit` cleanups in mini_redis and stomp_broker, and a `Socket` extern parameter type. std/http's two `claim` lines are part of phase 2.
+
+## As implemented
+
+Where the code differs in detail from the text above (the rules, the exit table and the user-visible behaviour are as agreed):
+
+- **Commits.** Sockets as values (table, value type, tcp builtins, `claim`, `tcp_fd`, `tcp_from_fd`); then the exit close (parked sockets, diagnostics, the claim lines in std/http, tcp_echo, mini_redis and stomp_broker, `tests/check_socket_leak.sh`); then sqlite; then the docs.
+- **`tcp_from_fd`** also refuses a stream socket that isn't IPv4 or IPv6 (a Unix socket: `fd 9 is not a TCP socket`), and an fd that isn't open or is out of range says `tcp_from_fd: fd 9 is not open`.
+- **`claim`** of anything but a resource raises `claim: expected a socket or a database handle, got int`.
+- **`GEM_DIAG=2`** prints two kinds of line: `... exited (error) after using 1 socket owned by process 3 (acceptor)` (`owned by no process` for an ownerless one) and, for a normal exit that leaves unclaimed resources ownerless, `... exited (normal) leaving 2 sockets open with no owner`. The exit is named `normal`, `error`, or the exit reason (`killed`, `shutdown`). A process is named by its entry function, or by the function a fn-literal entry calls first (`spawn do session(sock) end` is `session`).
+- **The leak test** checks the GEM_DIAG=1 counts too. Measured on Linux: before this change the three shapes end at 2007, 3008 and 4133 fds against baselines of 7, 2008 and 3009; after it, at their baselines (7, 8, 9). On Linux 99 of the 1,124 mid-connect processes are still connecting when killed (the backlog takes 1,025).

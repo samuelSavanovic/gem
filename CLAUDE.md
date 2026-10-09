@@ -32,6 +32,7 @@ runtime/              # C runtime — split by category:
   gem_error.c         #   error handling, stack trace printing
   gem_scheduler.c     #   process table + run state, coroutine scheduler, mailbox, process lifecycle, I/O polling, process stacks + overflow handling
   gem_threadpool.c    #   worker thread pool for blocking I/O (4 workers)
+  gem_resource.c      #   resource table: sockets and sqlite handles as owned resources, claim, close at a process's exit
   gem_builtins_core.c #   print, error, len, type, conversions, pcall, argv, etc.
   gem_builtins_collection.c  # push, pop, keys, values, sort, insert, delete
   gem_builtins_string.c      # find, str_replace, substr, chr/ord, buf_* API; gem_bytes_span (std/http's and std/request's extern helper)
@@ -196,6 +197,10 @@ After a `grammar.js` change, regenerate, rebuild and check that every `.gem` fil
   - Check a slot index against `gem_proc_hwm` (not `GEM_MAX_PROCS`) before indexing.
   - **Every change of `GemProcess.state` goes through `gem_proc_set_state`**; a direct `proc->state = …` desynchronizes the scheduler.
   - `spawn` refuses before Linux's `vm.max_map_count` runs out, counting the runtime's own mappings in `gem_runtime_maps`: a new kind of long-lived runtime `mmap` must count itself there too.
+- **Owned resources** (overview: gem.h "Owned resources", `runtime/gem_resource.c`; SPEC "Owned Resources"): sockets and sqlite handles are `VAL_RESOURCE` values naming an entry of one resource table by a never-reused serial, so a closed resource stays closed in every copy. Each entry has an owner pid; `gem_res_proc_exit` (called from `gem_free_proc_slot`) closes what a process claimed, and on an abnormal exit (`crashed` flag or an `exit_reason` other than `"normal"`) what it opened, and disowns the rest. Rules:
+  - Every runtime path that closes a resource goes through the table (`gem_res_close`, or `gem_res_take` for a kind that closes itself, like `sqlite_close` through the pool); never `close()` a socket's fd directly.
+  - A tcp builtin resolves its socket with `gem_res_get` and again with `gem_res_lookup` after every `gem_io_yield`, and never touches the fd once the entry is gone: the number may already name a new file.
+  - A new kind (an `exec` child, a TLS stream) adds a `GEM_RES_*` kind with its names in `gem_res_kinds` and its close in `gem_res_close_n`, and gets `claim`, the exit close and the diagnostics for free.
 - TCP builtins use non-blocking sockets + `poll()` in the scheduler loop. `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close` and `extern blocking fn` calls run on a 4-worker thread pool; the other filesystem and sqlite builtins run inline.
 - A `GemIORequest` (runtime/gem.h) is shared by the worker and the requesting process, and each side calls `gem_io_release` exactly once; the last release frees it. A process can be killed mid-request, so a builtin that submits to the pool copies its result out, then releases, and never frees the request or its args by hand. File and `exec` requests (`gem_io_submit`) keep their inputs and outputs in request fields that the last release frees. Other work goes through `gem_io_submit_extern(fn, args, free_args)`, where `free_args` frees anything in `args` the requester hasn't taken (see the sqlite builtins, and `_blk_<name>_free` in codegen for `extern blocking fn`).
 - Selective receive (`receive ... when ... end`) scans the mailbox and removes the first matching message, leaving others queued.
