@@ -19,7 +19,7 @@ Telnet only; SSH is out of scope. An HTTP honeypot on :80 via std/http is an opt
 | Gap | Today | Needed |
 |---|---|---|
 | Peer address | done: `tcp_peer(sock)` returns `{ip, port}`, or `nil` once the peer has reset | per-IP caps and the `ip` column; the acceptor treats `nil` as a connection already gone |
-| Socket ownership | sockets are plain ints, so a session that crashes leaks its fd | ROADMAP "Process-owned resources closed on exit"; proposed design in `docs/design/process_owned_resources.md` (a socket value type owned by one process, which a session takes over with `tcp_claim`; closed when its owner crashes or is killed), agreed; sqlite handles likewise |
+| Socket ownership | sockets are plain ints, so a session that crashes leaks its fd | ROADMAP "Process-owned resources closed on exit"; proposed design in `docs/design/process_owned_resources.md` (sockets and sqlite handles become owned resource values; a session takes its socket over with `claim(sock)`, and it closes when the session exits for any reason), agreed |
 | Crash data | a `DOWN` message carries only the error message; the trace goes to stderr and the raw input dies with the session | the session streams capped raw-input chunks to the recorder as it reads; traces come from the service's stderr log, matched by pid |
 | Runtime reset stats | `GEM_DIAG` prints reset statistics only at exit | a builtin that reads them, or leave them out of the metrics |
 

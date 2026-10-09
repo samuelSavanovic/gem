@@ -154,9 +154,13 @@ TCP sockets and SQLite handles are plain ints. A process that crashes or is kill
 
 Supervisors make this more pressing: they kill a child with the untrappable `"kill"` once its `shutdown` budget runs out, as a routine last resort. A child that holds a listening socket and overruns its budget leaves the port bound, so its restart fails with `EADDRINUSE`, the supervisor reaches its restart intensity and the tree goes down.
 
-Agreed design for sockets and sqlite handles, to implement as phase 2 of the honeypot (`examples/honeypot/PLAN.md`): `docs/design/process_owned_resources.md`. Afterwards std/http can drop its per-connection fd bookkeeping and `_http_closing`, and mini_redis and stomp_broker the `trap_exit` their connections use only to close their sockets. It replaces the plain-int socket with a socket value type owned by one process: the process that should close it takes it over with `tcp_claim`, and the runtime closes a process's sockets when it crashes or is killed.
+Agreed design for sockets and sqlite handles, to implement as phase 2 of the honeypot (`examples/honeypot/PLAN.md`): `docs/design/process_owned_resources.md`. Sockets and handles become values of their own types in one runtime resource table. A resource belongs to whoever opened it or last claimed it (`claim(r)`), closes when a process that claimed it exits or when its opener crashes or is killed, and any process can use or close it. Implicit transfer on `spawn`/`send` was considered and rejected: short-lived helpers took resources over by accident.
 
-What needs building: a per-process resource list filled by `tcp_listen`/`tcp_accept`/`tcp_connect`/`sqlite_open` and closed in `gem_free_proc_slot`; for `exec`, `posix_spawn` + `waitpid` so the child can be signalled. Trade-off: a handle passed to another process (an acceptor handing a socket to a handler) needs ownership to move with it. Making the user transfer ownership explicitly would add a concept to the language, so the transfer should happen implicitly, e.g. on `send` or `spawn` capture.
+What remains after phase 2:
+
+- `exec`'s child process as a third resource kind: `posix_spawn` + `waitpid` so the child can be signalled when its owner dies.
+- A `Socket` extern parameter type that passes the fd, so C interop needs no `tcp_fd` and the runtime knows which sockets a blocking C call uses.
+- Cleanups the runtime close makes possible: std/http's per-connection fd bookkeeping and `_http_closing`, and the `trap_exit` mini_redis's and stomp_broker's connections use only to close their sockets.
 
 ## Shared read-mostly data between processes (P2)
 
