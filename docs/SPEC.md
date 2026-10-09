@@ -116,6 +116,8 @@ let name = "hello"
 x = 20
 ```
 
+A name is a letter or `_` followed by letters, digits and `_`. Names starting with `__` are reserved for the compiler, which names its own temporaries and renamed bindings that way: using one for a variable, function, parameter, `for` variable or pattern binding, or reading one, is a compile error (`` `__x`: names starting with `__` are reserved for the compiler ``). A field name (`t.__x`), a table key (`{__x: 1}`, `when {__x: v}`) and an `extern fn` parameter name (`extern fn f(__n: Int)`, which binds nothing in Gem) may start with `__`. A call of one of the compiler's internal builtins (`__is_array_n(t, n)`, which std calls) compiles too; they are not part of the language and may change.
+
 ### Scope
 
 A variable declared with `let` is visible from its declaration to the end of the block that contains the `let`, and nowhere else. Blocks are function and closure bodies (including `do` blocks), `if`/`elif`/`else` branches, `while` and `for` bodies, and `match`/`receive` arms (including `after`). `for` loop variables are scoped to the loop body and `match`/`receive` pattern bindings to their arm.
