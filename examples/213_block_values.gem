@@ -1,0 +1,158 @@
+# `if`, `match` and `receive` as the value of a `let`, an assignment, a
+# `return` and a brace block's body.
+
+print("-- let")
+fn size(x)
+  let s = if x > 10 then "big" else "small" end
+  s
+end
+print(size(20), size(1))
+
+fn grade(n)
+  let g = if n >= 90
+    "A"
+  elif n >= 80
+    "B"
+  end
+  g
+end
+print(grade(95), grade(85), grade(10))
+
+fn describe(v)
+  let d = match v
+  when {tag: "pt", x: x, y: y} then "point {x},{y}"
+  when [a, b] then "pair {a} {b}"
+  when 0 then "zero"
+  else "other"
+  end
+  d
+end
+print(describe({tag: "pt", x: 1, y: 2}), describe([3, 4]), describe(0), describe("z"))
+
+print("-- no branch taken, or a branch ending in a statement: nil")
+let unmatched = match 5
+when 1 then "one"
+end
+let ends_in_let = if true
+  let tmp = 3
+end
+let ends_in_value = if true
+  let tmp = 3
+  tmp * 2
+end
+print(unmatched, ends_in_let, ends_in_value)
+
+print("-- the block reads the outer variable it shadows")
+fn bump(n)
+  let n = if n == nil then 0 else n end
+  n + 1
+end
+print(bump(nil), bump(4))
+
+print("-- module-level let")
+let mode = if len(argv()) > 99 then "many" else "few" end
+fn show_mode()
+  mode
+end
+print(show_mode())
+
+print("-- assignments")
+let t = {a: 1}
+let k = "b"
+let total = 10
+total = if total > 5 then 5 else 6 end
+t.a = match total
+when 5 then "five"
+else "?"
+end
+t[k] = if total > 3 then [1, 2] else [] end
+total += if t.a == "five" then 100 else 0 end
+print(total, t.a, t[k])
+
+print("-- destructuring let")
+let {x, y} = if true then {x: 1, y: 2} else {x: 0, y: 0} end
+let [p1, p2] = match "pair"
+when "pair" then [10, 20]
+end
+print(x, y, p1, p2)
+
+print("-- return: a call at a branch's end is a tail call")
+fn count(n, acc)
+  return if n == 0 then acc else count(n - 1, acc + 1) end
+end
+print(count(1000000, 0))
+fn count_down(n, acc)
+  return match n
+  when 0 then acc
+  else count_down(n - 1, acc + 2)
+  end
+end
+print(count_down(1000000, 0))
+fn maybe(c)
+  return if c then 1 end
+end
+print(maybe(false), maybe(true))
+
+print("-- nested blocks")
+let nested = if true
+  match 2
+  when 2
+    if false then "no" else "nested" end
+  end
+end
+print(nested)
+
+print("-- receive")
+send(self(), {tag: "hi", n: 7})
+let got = receive
+when {tag: "hi", n: n} then n * 2
+after 100 then -1
+end
+let none = receive
+when {tag: "nope"} then 1
+after 0
+  -1
+end
+print(got, none)
+
+print("-- in a loop, each iteration gets its own value")
+let labels = []
+for i = 0, 4
+  let label = match i % 2
+  when 0 then "even"
+  else "odd"
+  end
+  push(labels, label)
+end
+print(labels)
+
+print("-- return, break and continue in a branch")
+fn early(c)
+  let v = if c then return "early" else "late" end
+  v
+end
+print(early(true), early(false))
+let kept = []
+for i = 0, 6
+  let w = if i == 2
+    continue
+  elif i == 4
+    break
+  else
+    i
+  end
+  push(kept, w)
+end
+print(kept)
+
+print("-- closures as branch values")
+let triple = if true then fn(a) a * 3 end else fn(a) a end end
+print(triple(4))
+
+print("-- brace block body")
+fn each(xs, f)
+  for v in xs
+    f(v)
+  end
+end
+each([1, 2]) { |v| if v > 1 then print("big {v}") else print("small {v}") end }
