@@ -200,10 +200,11 @@ DURATION=2m benchmarks/soak/run.sh               # a short run: does the harness
 benchmarks/soak/run.sh                           # the three targets, an hour each
 TARGETS=mini_redis DURATION=4h benchmarks/soak/run.sh
 MINI_REDIS_ARGS="--rate 8000 --subs 50" TARGETS=mini_redis benchmarks/soak/run.sh
+GEM_DIAG=2 TARGETS=mini_redis DURATION=5m benchmarks/soak/run.sh  # plus a server.log line per reset of 1 ms or more
 python3 benchmarks/soak/report.py benchmarks/soak/logs/<run>   # the report again
 ```
 
-Each target gets a fresh server, built once at the start (a build error stops the run before it starts), run with `GEM_DIAG=1`, and a load generator that checks every answer it gets:
+Each target gets a fresh server, built once at the start (a build error stops the run before it starts), run with `GEM_DIAG=1` (or the `GEM_DIAG` given), and a load generator that checks every answer it gets:
 
 | Target | Load (defaults; `--help` on each `*_load.py` lists the options) | Checked |
 |---|---|---|

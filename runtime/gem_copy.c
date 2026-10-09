@@ -725,12 +725,19 @@ void gem_pin_free_all(GemProcess *proc) {
  * a full one, so each reset's work is paid for by at least as much fresh
  * allocation or promotion. */
 
-/* GEM_DIAG=1 reports reset counts and volumes at exit. */
+/* GEM_DIAG=1 reports reset counts and volumes at exit. GEM_DIAG=2 also
+   prints a `gem_reset:` line for every reset that takes GEM_DIAG_SLOW_S or
+   longer (gem_diag_trace). */
 static uint64_t gem_diag_resets, gem_diag_full, gem_diag_ret, gem_diag_ret_copied, gem_diag_copied, gem_diag_scanned, gem_diag_freed;
 static double gem_diag_t_total, gem_diag_t_walk, gem_diag_t_max;
 #include <time.h>
 static double gem_diag_now(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return ts.tv_sec + ts.tv_nsec * 1e-9; }
-static int gem_diag_state = -1;
+static int gem_diag_state = -1;   /* -1 until read, then the GEM_DIAG level: 0, 1 or 2 */
+#define GEM_DIAG_SLOW_S 0.001
+/* The last reset's figures, for gem_diag_trace. */
+static size_t gem_diag_last_copied, gem_diag_last_scanned, gem_diag_last_region;
+static int gem_diag_last_full;
+static double gem_diag_last_walk;
 
 static void gem_diag_reset_report(void) {
     fprintf(stderr, "gem_diag: arena_resets=%llu copied=%llu scanned=%llu freed=%llu time=%.3fs walk=%.3fs full=%llu ret_resets=%llu ret_copied=%llu max=%.3fs\n",
@@ -740,13 +747,19 @@ static void gem_diag_reset_report(void) {
             (unsigned long long)gem_diag_ret, (unsigned long long)gem_diag_ret_copied, gem_diag_t_max);
 }
 
+static void gem_diag_init(void) {
+    if (gem_diag_state >= 0) return;
+    const char *e = getenv("GEM_DIAG");
+    gem_diag_state = (e && (e[0] == '1' || e[0] == '2')) ? e[0] - '0' : 0;
+    if (gem_diag_state) atexit(gem_diag_reset_report);
+}
+
 static void gem_diag_note_reset(size_t copied, size_t scanned, size_t freed, int full) {
-    if (gem_diag_state < 0) {
-        const char *e = getenv("GEM_DIAG");
-        gem_diag_state = (e && e[0] == '1');
-        if (gem_diag_state) atexit(gem_diag_reset_report);
-    }
     if (!gem_diag_state) return;
+    gem_diag_last_copied = copied;
+    gem_diag_last_scanned = scanned;
+    gem_diag_last_region = freed;
+    gem_diag_last_full = full;
     gem_diag_resets++;
     gem_diag_full += full;
     gem_diag_copied += copied;
@@ -937,7 +950,10 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
         if (whole) mark->rem_window = w - blo;
         free(kept.ranges);
     }
-    if (gem_diag_state > 0) gem_diag_t_walk += gem_diag_now() - tw0;
+    if (gem_diag_state > 0) {
+        gem_diag_last_walk = gem_diag_now() - tw0;
+        gem_diag_t_walk += gem_diag_last_walk;
+    }
     /* Buffers older than the point. */
     for (GemBuffer *b = pt->buffers; b; b = b->arena_next) {
         scanned += sizeof(GemBuffer);
@@ -1050,17 +1066,43 @@ void gem_remember_table(GemTable *t) {
     a->bytes_allocated += sizeof(GemRemEntry);
 }
 
+/* GEM_DIAG=2: one line for a reset that took `dt` seconds, when that is
+   GEM_DIAG_SLOW_S or more: the time (Unix seconds), the process, the kind (young,
+   full, or return for a return reset), its duration and remembered-log walk,
+   the bytes in its region, copied and scanned, and the innermost Gem frame
+   with the line it last ran (a leaf fn pushes no frame record but sets
+   gem_leaf_site, so it is shown itself). */
+static void gem_diag_trace(const char *kind, double dt) {
+    if (gem_diag_state != 2 || dt < GEM_DIAG_SLOW_S) return;
+    const char *name = "?", *file = "?";
+    int line = 0;
+    if (gem_leaf_site) {
+        name = gem_leaf_site->name; file = gem_leaf_site->file; line = gem_leaf_line;
+    } else if (gem_call_depth > 0 && gem_call_depth <= GEM_MAX_CALL_DEPTH) {
+        GemFrame *f = &gem_call_stack[gem_call_depth - 1];
+        name = f->name; file = f->file; line = f->line;
+    }
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    fprintf(stderr, "gem_reset: t=%.3f pid=%lld %s %.1fms walk=%.1fms region=%zuK copied=%zuK scanned=%zuK in %s (%s:%d)\n",
+            ts.tv_sec + ts.tv_nsec * 1e-9, (long long)gem_pid_of_slot(gem_current_pid), kind,
+            dt * 1e3, gem_diag_last_walk * 1e3, gem_diag_last_region / 1024,
+            gem_diag_last_copied / 1024, gem_diag_last_scanned / 1024, name, file, line);
+}
+
 void gem_arena_reset_region(GemArenaMark *mark, GemVal **roots, int n_roots,
                             GemVal **pinned_roots, int n_pinned) {
     if (gem_current_pid < 0) return;
     if (!gem_arena_reset_due(mark)) return;
-    double t0 = gem_diag_state != 0 ? gem_diag_now() : 0;
+    gem_diag_init();
+    double t0 = gem_diag_state > 0 ? gem_diag_now() : 0;
     size_t copied, scanned, region;
     gem_region_reset_impl(mark, roots, n_roots, pinned_roots, n_pinned, &copied, &scanned, &region);
     if (gem_diag_state > 0) {
         double dt = gem_diag_now() - t0;
         gem_diag_t_total += dt;
         if (dt > gem_diag_t_max) gem_diag_t_max = dt;
+        gem_diag_trace(gem_diag_last_full ? "full" : "young", dt);
     }
 }
 
@@ -1069,7 +1111,8 @@ void gem_arena_reset_return(const GemArenaPoint *pt, GemVal *ret, int own_frames
     GemArena *arena = &gem_proc_table[gem_current_pid].arena;
     size_t live = arena->bytes_allocated - arena->bytes_freed - (pt->ret_trig - GEM_ARENA_RESET_THRESHOLD);
     if (live + (arena->bytes_allocated - arena->ret_at) < arena->ret_min) return;
-    double t0 = gem_diag_state != 0 ? gem_diag_now() : 0;
+    gem_diag_init();
+    double t0 = gem_diag_state > 0 ? gem_diag_now() : 0;
     /* A one-shot mark whose young point is its base point: the impl takes
        the full path, with the region everything allocated since `pt`. Its
        promotion and trigger updates land in this dead mark. */
@@ -1101,6 +1144,7 @@ void gem_arena_reset_return(const GemArenaPoint *pt, GemVal *ret, int own_frames
         double dt = gem_diag_now() - t0;
         gem_diag_t_total += dt;
         if (dt > gem_diag_t_max) gem_diag_t_max = dt;
+        gem_diag_trace("return", dt);
     }
 }
 

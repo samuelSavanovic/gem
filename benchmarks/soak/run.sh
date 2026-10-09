@@ -10,7 +10,7 @@
 #
 # Targets (in order): mini_redis, stomp (examples/stomp_broker), bookmark
 # (examples/bookmark_app). Each gets a fresh server, built once at the
-# start, run with GEM_DIAG=1. benchmarks/README.md ("soak") says what each
+# start, run with GEM_DIAG=1 (or the GEM_DIAG given). benchmarks/README.md ("soak") says what each
 # load does and what the report checks.
 #
 # Env:
@@ -19,6 +19,9 @@
 #   SAMPLE_S       seconds between samples (default DURATION/120, 2..30)
 #   GUARD_RSS_MB   kill a server whose RSS passes this (default 4096)
 #   OUT            run directory (default benchmarks/soak/logs/<timestamp>)
+#   GEM_DIAG       the servers' GEM_DIAG (default 1; 2 adds a line per
+#                  reset of 1 ms or more to server.log). The build runs
+#                  without it.
 #   MINI_REDIS_PORT (default 6395); stomp uses 61613 and bookmark 8080,
 #                  which those programs fix
 #   MINI_REDIS_ARGS, STOMP_ARGS, BOOKMARK_ARGS
@@ -45,6 +48,8 @@ DURATION=${DURATION:-1h}
 GUARD_RSS_MB=${GUARD_RSS_MB:-4096}
 MINI_REDIS_PORT=${MINI_REDIS_PORT:-6395}
 OUT=${OUT:-"$SCRIPT_DIR/logs/$(date +%Y%m%d-%H%M%S)"}
+SERVER_DIAG=${GEM_DIAG:-1}
+unset GEM_DIAG
 
 die() { echo "soak: $*" >&2; exit 2; }
 
@@ -192,14 +197,14 @@ run_target() {
   mkdir -p "$dir/work"
   case $t in
     mini_redis)
-      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG=1 exec "$OUT/bin/mini_redis" --port "$port") > "$dir/server.log" 2>&1 &
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG="$SERVER_DIAG" exec "$OUT/bin/mini_redis" --port "$port") > "$dir/server.log" 2>&1 &
       load=mini_redis_load.py; extra=${MINI_REDIS_ARGS:-} ;;
     stomp)
-      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG=1 exec "$OUT/bin/stomp") > "$dir/server.log" 2>&1 &
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG="$SERVER_DIAG" exec "$OUT/bin/stomp") > "$dir/server.log" 2>&1 &
       load=stomp_load.py; extra=${STOMP_ARGS:-} ;;
     bookmark)
       cp -R "$ROOT/examples/bookmark_app/static" "$dir/work/static"
-      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG=1 LOG_LEVEL=warn exec "$OUT/bin/bookmark") > "$dir/server.log" 2>&1 &
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG="$SERVER_DIAG" LOG_LEVEL=warn exec "$OUT/bin/bookmark") > "$dir/server.log" 2>&1 &
       load=bookmark_load.py; extra=${BOOKMARK_ARGS:-} ;;
   esac
   server_pid=$!
