@@ -42,11 +42,8 @@ module.exports = grammar({
       $.export_statement,
       $.let_declaration,
       $.assignment,
-      $.if_statement,
       $.while_statement,
       $.for_statement,
-      $.match_statement,
-      $.receive_block,
       $.return_statement,
       $.break_statement,
       $.continue_statement,
@@ -139,16 +136,7 @@ module.exports = grammar({
         $.array_destructure,
       )),
       '=',
-      field('value', $._value),
-    ),
-
-    // The value of a `let`, an assignment or a `return`, and a brace
-    // block's body: an expression, or a whole `if` / `match` / `receive`.
-    _value: $ => choice(
-      $._expression,
-      $.if_statement,
-      $.match_statement,
-      $.receive_block,
+      field('value', $._expression),
     ),
 
     table_destructure: $ => seq('{', optional(sep1($._destructure_field, ',')), '}'),
@@ -240,7 +228,7 @@ module.exports = grammar({
       repeat($._statement),
     ),
 
-    return_statement: $ => prec.right(seq('return', optional($._value))),
+    return_statement: $ => prec.right(seq('return', optional($._expression))),
     break_statement: $ => 'break',
     continue_statement: $ => 'continue',
 
@@ -272,12 +260,16 @@ module.exports = grammar({
         $.subscript_expression,
       )),
       field('operator', choice('=', '+=', '-=', '*=', '/=')),
-      field('right', $._value),
+      field('right', $._expression),
     )),
 
     // Expressions
 
+    // `if`, `match` and `receive` are expressions too.
     _expression: $ => choice(
+      $.if_statement,
+      $.match_statement,
+      $.receive_block,
       $.binary_expression,
       $.unary_expression,
       $.call_expression,
@@ -376,7 +368,7 @@ module.exports = grammar({
     // `f(x) { expr }`: a block without params after a call's parens.
     brace_block: $ => seq(
       alias($._block_brace_open, '{'),
-      $._value,
+      $._expression,
       '}',
     ),
 

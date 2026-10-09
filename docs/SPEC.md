@@ -363,7 +363,7 @@ apply { |x| x * 2 }
 
 The `do` or `{` must be on the same line as the call.
 
-A trailing block cannot follow a call anywhere in an `if`, `elif`, `while` or `for` header, and a header takes no `do`: `while running do` is reported as an error. To pass a block to a call there, assign the call's result to a variable first.
+A trailing block cannot follow a call in an `if`, `elif`, `while` or `for` header (except inside the bodies of an `if`, `match` or `receive` used as a value there), and a header takes no `do`: `while running do` is reported as an error. To pass a block to a call there, assign the call's result to a variable first.
 
 This one rule lets std define `each`, `map`, `filter` and friends without compiler changes.
 
@@ -438,18 +438,24 @@ end
 ```
 
 `if`, `match` and `receive` are statements that give a value: the last expression of the branch taken.
-The value is used where one of them is the last statement of a function, closure or block (`fn size(x)
-if x > 10 then "big" else "small" end end`), the whole value of a `let` (destructuring included), of an
-assignment (`=`, `+=` and the other compound forms, a field or an index), or of a `return`, and a
-brace block's body:
+One can be used anywhere an expression can: the value of a `let` (destructuring included), of an
+assignment (`=`, `+=` and the other compound forms, a field or an index) or of a `return`, a call
+argument, an operand, a table or array entry, an interpolation, a condition. Its value is also used where
+it is the last statement of a function, closure or block (`fn size(x) if x > 10 then "big" else "small"
+end end`):
 
 ```
 let label = if n > 100 then "big" else "small" end
+print("{n} is {if n % 2 == 0 then "even" else "odd" end}")
 let reply = match msg
 when {tag: "get"} then state
 else nil
 end
 count += if hit then 1 else 0 end
+let total = base + match kind
+when "a" then 1
+else 2
+end
 return match n
 when 0 then acc
 else loop(n - 1, acc + n)
@@ -457,11 +463,27 @@ end
 ```
 
 A branch that ends in a statement (a `let`, a loop, an assignment) gives `nil`, and so do an `if`
-with no `else` whose conditions are all false and a `match` with no `else` whose arms all fail. In `let n = if n == nil then 0 else n end` the block reads the
-outer `n`. In `return <block>`, a call at the end of a branch is a tail call (see Tail Call
-Optimization). Anywhere else in an expression one is a compile error, `` an `if` can't be used inside
-an expression`` (`print(if ...)`, `1 + match ...`, a call argument, a table entry), and so is anything
-after its `end` on the same line (`let x = if ... end + 1`); bind it with a `let` first.
+with no `else` whose conditions are all false and a `match` with no `else` whose arms all fail. A
+branch may end in `return`, `break` or `continue`, which leaves the function or loop before the rest
+of the expression runs (`print(if x == nil then return 0 else x end)`); in a `while` condition,
+`break` and `continue` are a compile error (inside another loop, `` `break` can't be used in a
+`while` condition ``), except in a loop or fn literal of their own there. In `let n = if n == nil then
+0 else n end` the block reads the outer `n`. In `return <block>`, a call at the end of a branch is a
+tail call (see Tail Call Optimization).
+
+Evaluation stays left to right (see Functions): in `f(g(), if c then h() end)`, `g()` runs before the
+block. The right operand of `and` / `or` runs only when it is needed, so a block there does too, and
+a block in a `while` condition runs before every iteration.
+
+The block ends at its `end`, and the expression it is part of goes on from there: `let x = if c then
+1 else 2 end + 1`. A statement that starts with `if`, `match` or `receive` is that block alone, so
+`if ... end + 1` there is an error; write `(if ... end) + 1` instead. A brace block's body is an
+expression, so there it goes on: `{ |x| if x then 1 else 2 end + 1 }`.
+
+Two places can't hold one: a parameter default (`` an `if` can't be a parameter default ``; compute
+the value in the function body) and the value of a `when` arm (`` a `match` can't be a `when` arm's
+value ``; bind it with a `let` before the block and pin it, `when ^v`). A fn literal inside either
+can use them as usual.
 
 A `when` arm's body starts either on the line after the pattern or, after `then`, on the same line (`then` must be on the pattern's line, like `if <cond> then`; the body may continue onto further lines). Anything else on the pattern's line is a compile error: `when x nil` reports "expected `then` or a newline after the `when` pattern". This holds for `match` and `receive` arms alike. A `receive`'s `after <ms>` clause also accepts an optional `then` (`after 100 then retry()`).
 
