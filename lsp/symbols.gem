@@ -28,16 +28,23 @@ load "std/string"
 load "../compiler/loader" (resolve_load_path)
 
 # Names the desugar layer (param destructuring, let destructuring, for
-# loops) introduces. They aren't user-visible — keep them out of the
-# symbol table so completion / outline never surfaces them. The gensym
-# convention is `_pdestr<N>`, `_d<N>`, `_d<N>v`, `_for_<role>_<N>`; we filter the
-# prefix plus a digit to avoid hiding ordinary user names like `_data`.
+# loops, block values) introduces. They aren't user-visible — keep them out
+# of the symbol table so completion / outline never surfaces them. The gensym
+# convention is `_pdestr<N>`, `_d<N>`, `_d<N>v`, `_for_<role>_<N>`, `_val_<N>`.
+# `_pdestr` and `_for_` are filtered by prefix; `_d` and `_val_` only with a
+# digit after them, so ordinary user names like `_data` and `_value` stay.
 fn is_gensym(name)
   if string.starts_with(name, "_pdestr")
     return true
   end
   if string.starts_with(name, "_for_")
     return true
+  end
+  if string.starts_with(name, "_val_") and len(name) >= 6
+    let c = ord(name, 5)
+    if c >= 48 and c <= 57
+      return true
+    end
   end
   if string.starts_with(name, "_d") and len(name) >= 3
     let c = ord(name, 2)

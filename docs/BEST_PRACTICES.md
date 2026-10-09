@@ -84,10 +84,11 @@ deadlines, restart intensity) follow this doc and test themselves with
   *back-edge*, the point where an iteration ends and the next begins, and
   when a recursive function returns.
 
-**Statements, not expressions.** `if`, `match` and `receive` don't produce
-values inside expressions (`let x = if ...` doesn't parse). An expression
-can't continue on the next line, even inside parentheses; only call
-arguments and table literals can span lines. Both come up below.
+**Block values.** `if`, `match` and `receive` give a value to a `let`, an
+assignment or a `return` (`let x = if ...`), but can't sit inside an
+expression (`print(if ...)` is an error). An expression can't continue on
+the next line, even inside parentheses; only call arguments and table
+literals can span lines. Both come up below.
 
 ---
 
@@ -212,16 +213,15 @@ below.)
 A `let` is visible from its declaration to the end of the block it is in
 (the body of a function, `if` branch, loop or `match` arm). Using it after
 the block ends is a compile error, `undeclared identifier`, even when every
-branch of an `if` declares it. Declare the variable before the block and
-assign it inside:
+branch of an `if` declares it. Give the `if` the value instead:
 
 ```gem
-let label = "small"
-if n > 100
-  label = "big"
-end
+let label = if n > 100 then "big" else "small" end
 print(label)
 ```
+
+When the block sets more than one variable, declare them before it and
+assign them inside.
 
 ### Module-level variables
 
@@ -378,28 +378,33 @@ end
 
 ## Control flow
 
-### `if`, `match` and `receive` are statements
+### `if`, `match` and `receive` give values to `let`, `=` and `return`
 
-`let x = if ...`, `let x = match ...`, `let x = receive ...` and
-`return match ...` don't parse. A `match` or `if` yields a value only as the
-last statement of a function, closure or block (including inside any branch
-of a final `if`). When you need a value, put the `match` in a small
-function, or declare the variable first and assign it in each branch:
+The value is the last expression of the branch taken:
 
 ```gem
-fn status_class(code)
-  match code
-  when 200 then "ok"
-  when 404 then "missing"
-  else "error"
-  end
+let kind = match code
+when 200 then "ok"
+when 404 then "missing"
+else "error"
 end
 ```
 
+This works for a `let` (destructuring too), an assignment (`x = `,
+`x += `, `t.k = `, `t[k] = `), a `return`, and as the last statement of a
+function or block. A branch that ends in a statement, and an `if` or
+`match` that takes no branch, gives `nil`. In `return match ...`, a call
+at the end of an arm is a tail call, so a process loop can be written that
+way.
+
+They can't sit inside an expression: `print(if ...)`, `1 + match ...` and
+`let x = if ... end + 1` are compile errors. Bind the value with a `let`
+first.
+
 An arm fits on one line with `then` (`when 200 then "ok"`, `after 100 then
 nil`), like a one-line `if`. Without `then`, the body must start on the
-next line. `pcall` is different: `let r = pcall f(x)` and `let r = pcall do
-... end` are expressions.
+next line. `pcall` is an expression and goes anywhere: `f(pcall g(x))`,
+`let r = pcall do ... end`.
 
 ### `match` on shape instead of `if` chains on fields
 

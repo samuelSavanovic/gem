@@ -467,11 +467,19 @@
             "named": true
           },
           {
+            "type": "if_statement",
+            "named": true
+          },
+          {
             "type": "integer",
             "named": true
           },
           {
             "type": "lambda",
+            "named": true
+          },
+          {
+            "type": "match_statement",
             "named": true
           },
           {
@@ -488,6 +496,10 @@
           },
           {
             "type": "pcall_expression",
+            "named": true
+          },
+          {
+            "type": "receive_block",
             "named": true
           },
           {
@@ -846,11 +858,19 @@
           "named": true
         },
         {
+          "type": "if_statement",
+          "named": true
+        },
+        {
           "type": "integer",
           "named": true
         },
         {
           "type": "lambda",
+          "named": true
+        },
+        {
+          "type": "match_statement",
           "named": true
         },
         {
@@ -867,6 +887,10 @@
         },
         {
           "type": "pcall_expression",
+          "named": true
+        },
+        {
+          "type": "receive_block",
           "named": true
         },
         {
@@ -3377,11 +3401,19 @@
             "named": true
           },
           {
+            "type": "if_statement",
+            "named": true
+          },
+          {
             "type": "integer",
             "named": true
           },
           {
             "type": "lambda",
+            "named": true
+          },
+          {
+            "type": "match_statement",
             "named": true
           },
           {
@@ -3398,6 +3430,10 @@
           },
           {
             "type": "pcall_expression",
+            "named": true
+          },
+          {
+            "type": "receive_block",
             "named": true
           },
           {
@@ -4471,11 +4507,19 @@
           "named": true
         },
         {
+          "type": "if_statement",
+          "named": true
+        },
+        {
           "type": "integer",
           "named": true
         },
         {
           "type": "lambda",
+          "named": true
+        },
+        {
+          "type": "match_statement",
           "named": true
         },
         {
@@ -4492,6 +4536,10 @@
         },
         {
           "type": "pcall_expression",
+          "named": true
+        },
+        {
+          "type": "receive_block",
           "named": true
         },
         {

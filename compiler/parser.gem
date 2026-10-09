@@ -677,6 +677,62 @@ fn make_parser(tokens, source, file, sink)
     stmts
   end
 
+  # ── Block values ──
+  # An `if`, `match` or `receive` is a statement. It may also be the whole
+  # value of a `let`, an assignment or a `return` (compiler/lower.gem
+  # rewrites those into statements), and a brace block's body. Anywhere
+  # else in an expression it is an error.
+
+  # The block keyword at the cursor (`if`, `match`, `receive`), or nil.
+  # `receive` is a block only when a `when`, an `after` or an `end` follows
+  # it (across newlines), as at the start of a statement; otherwise it names
+  # the `receive` builtin.
+  let block_value_keyword = fn()
+    let t = peek()
+    if t.type == "if" or t.type == "match"
+      return t.type
+    end
+    if t.type == "NAME" and t.value == "receive"
+      let la = 1
+      while peek_at(la).type == "NEWLINE"
+        la += 1
+      end
+      let nt = peek_at(la).type
+      if nt == "when" or nt == "after" or nt == "end"
+        return "receive"
+      end
+    end
+    nil
+  end
+
+  # "an `if`", "a `match`", "a `receive`".
+  let block_article = fn(kw)
+    if kw == "if"
+      return "an `if`"
+    end
+    "a `{kw}`"
+  end
+
+  # A value that may be a whole `if` / `match` / `receive`. The block ends
+  # at its `end`: a token after it on the line, other than one that ends the
+  # statement or closes an enclosing block, is reported, and the rest of the
+  # line skipped.
+  let parse_value = fn()
+    let kw = block_value_keyword()
+    if kw == nil
+      return parse_expr()
+    end
+    let node = parse_stmt()
+    let nt = peek()
+    if nt.type != "NEWLINE" and nt.type != "EOF" and nt.type != "end" and nt.type != "else" and nt.type != "elif" and nt.type != "when" and nt.type != "after" and nt.type != "}" and nt.type != ")"
+      report(nt.line, nt.col, len(to_string(nt.value)), "{block_article(kw)} value ends at its `end`: it can't continue into an expression", "bind it first (`let v = {kw} ... end`), then use `v`")
+      while peek().type != "NEWLINE" and not at_end()
+        advance()
+      end
+    end
+    node
+  end
+
   # ── Expression parsing (precedence climbing) ──
 
   # atom: literals, variables, parenthesized exprs, anon fn, table, array
@@ -857,6 +913,15 @@ fn make_parser(tokens, source, file, sink)
     end
 
     # Variable
+    # A block in expression position: report it once and skip it whole, so
+    # its `then` / `when` / `end` don't report on their own.
+    let kw = block_value_keyword()
+    if kw != nil
+      report(t.line, t.col, len(t.value), "{block_article(kw)} can't be used inside an expression", "bind it first (`let v = {kw} ... end`), then use `v`")
+      parse_stmt()
+      return make_error_expr(t.line, t.col)
+    end
+
     if t.type == "NAME"
       advance()
       return make_var(t.value, t.line, t.col)
@@ -914,7 +979,14 @@ fn make_parser(tokens, source, file, sink)
     let brace_line = peek().line
     expect("\{")
     let bp = parse_block_params()
-    let bexpr = parse_stmt_expr()
+    # The body is one statement: an expression, an assignment, or a whole
+    # `if` / `match` / `receive`.
+    let bexpr = nil
+    if block_value_keyword() != nil
+      bexpr = parse_stmt()
+    else
+      bexpr = parse_stmt_expr()
+    end
     if peek().type == "}"
       advance()
     else
@@ -1222,7 +1294,7 @@ fn make_parser(tokens, source, file, sink)
     # Simple assignment: var = expr, obj.field = expr, obj[key] = expr
     if peek().type == "="
       let eq_tok = advance()
-      let value = parse_expr()
+      let value = parse_value()
       let a = nil
       if lhs.tag == "var"
         a = make_assign(lhs.name, value, start_line)
@@ -1245,14 +1317,21 @@ fn make_parser(tokens, source, file, sink)
     if peek().type == "+=" or peek().type == "-=" or peek().type == "*=" or peek().type == "/="
       let op_tok = advance()
       let base_op = op_tok.value[0]
-      let value = parse_expr()
+      let value = parse_value()
       if lhs.tag != "var"
         report(op_tok.line, op_tok.col, len(op_tok.value), "compound assignment requires variable target", nil)
         return make_error_stmt(op_tok.line, op_tok.col)
       end
       # The assignment and the read of the target share the target's
       # position, so a diagnostic about the name is reported once.
-      let a = make_assign(lhs.name, make_binop(base_op, make_var(lhs.name, lhs.line, lhs.col), value), start_line)
+      let a = nil
+      if value.tag == "if" or value.tag == "match" or value.tag == "receive_match"
+        # `x += if ... end`: lower() combines the block's value with `x`.
+        a = make_assign(lhs.name, value, start_line)
+        a.compound_op = base_op
+      else
+        a = make_assign(lhs.name, make_binop(base_op, make_var(lhs.name, lhs.line, lhs.col), value), start_line)
+      end
       a.col = lhs.col
       a.eq_line = op_tok.line
       a.eq_col = op_tok.col
@@ -1578,7 +1657,7 @@ fn make_parser(tokens, source, file, sink)
         end
         expect("}")
         expect("=")
-        let rhs = parse_expr()
+        let rhs = parse_value()
         gensym_counter += 1
         let tmp = "_d{gensym_counter}"
         let stmts = [make_let(tmp, rhs, line)]
@@ -1622,7 +1701,7 @@ fn make_parser(tokens, source, file, sink)
         end
         expect("]")
         expect("=")
-        let rhs = parse_expr()
+        let rhs = parse_value()
         gensym_counter += 1
         let tmp = "_d{gensym_counter}"
         let stmts = [make_let(tmp, rhs, line)]
@@ -1638,7 +1717,7 @@ fn make_parser(tokens, source, file, sink)
         note_top_name(name_tok, "let")
       end
       expect("=")
-      let value = parse_expr()
+      let value = parse_value()
       return make_let(name, value, line)
     end
 
@@ -1804,7 +1883,7 @@ fn make_parser(tokens, source, file, sink)
       advance()
       let value = nil
       if peek().type != "NEWLINE" and peek().type != "EOF" and peek().type != "end" and peek().type != "elif" and peek().type != "else" and peek().type != "when"
-        value = parse_expr()
+        value = parse_value()
       end
       return make_return(value, line)
     end
