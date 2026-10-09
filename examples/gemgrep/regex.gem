@@ -101,11 +101,12 @@ fn compile(pattern, {icase = false, word = false, line = false} = {})
   if find(pattern, "\0") >= 0
     return {ok: false, error: "the pattern holds a NUL byte"}
   end
-  let source = pattern
-  if pattern == ""
+  let source = if pattern == ""
     # macOS's regcomp rejects an empty pattern; `()` matches the empty
     # string under either libc.
-    source = "()"
+    "()"
+  else
+    pattern
   end
   let group = 0
   if line or word

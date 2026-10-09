@@ -43,11 +43,12 @@ fn print_one_error(source, file, line, col, span_len, msg, hint)
     file = "<input>"
   end
   if source == nil or line == nil
-    let loc = ""
-    if file != nil and line != nil
-      loc = "\n  --> " + file + ":" + to_string(line)
+    let loc = if file != nil and line != nil
+      "\n  --> " + file + ":" + to_string(line)
     elif file != nil
-      loc = "\n  --> " + file
+      "\n  --> " + file
+    else
+      ""
     end
     eprint("\n[Compile Error]: " + msg + loc + "\n")
     return
@@ -107,10 +108,8 @@ fn make_error_sink()
     end
     let kfile = file
     if kfile == nil then kfile = "<input>" end
-    let kline = "0"
-    if line != nil then kline = to_string(line) end
-    let kcol = "0"
-    if col != nil then kcol = to_string(col) end
+    let kline = if line != nil then to_string(line) else "0" end
+    let kcol = if col != nil then to_string(col) else "0" end
     let key = kfile + ":" + kline + ":" + kcol + ":" + msg
     if has_key(dedup, key)
       return

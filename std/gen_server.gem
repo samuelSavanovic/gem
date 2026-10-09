@@ -115,10 +115,11 @@ fn loop(module, state, pending)
   when {tag: "_gs_call", from: from, msg: msg}
     let result = module.handle_call(msg, from, state)
     check_call_result(result)
-    let new_state = result.noreply
-    if has_key(result, "reply")
+    let new_state = if has_key(result, "reply")
       send(from.pid, {tag: "_gs_reply", ref: from.ref, value: result.reply})
-      new_state = result.state
+      result.state
+    else
+      result.noreply
     end
     loop(module, new_state, set_timeout(pending, result.timeout))
   when {tag: "_gs_cast", msg: msg}
@@ -314,11 +315,10 @@ fn call(target, msg, timeout_ms = 5000)
   let ref = make_ref()
   let added = monitor(pid)
   send(pid, {tag: "_gs_call", from: {pid: self(), ref: ref}, msg: msg})
-  let res = nil
-  if timeout_ms == nil
-    res = await_reply(pid, ref)
+  let res = if timeout_ms == nil
+    await_reply(pid, ref)
   else
-    res = await_reply_for(pid, ref, timeout_ms)
+    await_reply_for(pid, ref, timeout_ms)
   end
   if res == nil
     drop_monitor(pid, added)

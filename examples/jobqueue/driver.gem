@@ -33,10 +33,7 @@ end
 fn sample()
   let p = jobqueue.pids()
   let q = process_info(p.queue)
-  let w = nil
-  if p.workers != nil
-    w = process_info(p.workers)
-  end
+  let w = if p.workers != nil then process_info(p.workers) end
   let out = {
     processes: len(processes()),
     queue_monitors: len(q.monitors),
@@ -158,10 +155,7 @@ fn run(opts)
   let sys = jobqueue.start(opts)
   let baseline = sample()
   let mem0 = memory_kb()
-  let storm_pid = nil
-  if opts.storm > 0
-    storm_pid = spawn_monitor(fn() storm(opts) end).pid
-  end
+  let storm_pid = if opts.storm > 0 then spawn_monitor(fn() storm(opts) end).pid end
   let t0 = time_ms()
   let collector = self()
   spawn do
@@ -191,10 +185,7 @@ fn run(opts)
   jobqueue.stop(sys)
   let stopped = memory_kb()
   let lat = latencies(c.done)
-  let throughput = 0
-  if wall > 0
-    throughput = n * 1000 / wall
-  end
+  let throughput = if wall > 0 then n * 1000 / wall else 0 end
   {
     jobs: n,
     completed: stats.completed,

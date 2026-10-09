@@ -613,13 +613,13 @@ Stack trace:
   at anonymous fn (examples/30_supervisor.gem:13)
 
 [Runtime Error in process 10]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:376
+  --> std/supervisor.gem:373
      |
- 376 |     error(res.error)
+ 373 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:376)
-  at anonymous fn (std/supervisor.gem:499)
+  at supervisor.sup_main (std/supervisor.gem:373)
+  at anonymous fn (std/supervisor.gem:496)
 test4: supervisor crashed: supervisor: max restart intensity reached
 test1: equal_self=true different=true
 test2: type=ref
@@ -720,8 +720,8 @@ test5: parent died: now-fatal
 Stack trace:
   at anonymous fn (examples/34_gen_server.gem:97)
   at gen_server.loop (std/gen_server.gem:116)
-  at gen_server.serve (std/gen_server.gem:236)
-  at anonymous fn (std/gen_server.gem:194)
+  at gen_server.serve (std/gen_server.gem:237)
+  at anonymous fn (std/gen_server.gem:195)
 test1: after incr 10 = 10
 test3: count=2 first=raw1 second=raw2
 test4: ok=false err=gen_server.call: server exited: kaboom from server
@@ -2731,8 +2731,8 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_call_result (std/gen_server.gem:110)
   at gen_server.loop (std/gen_server.gem:117)
-  at gen_server.serve (std/gen_server.gem:236)
-  at anonymous fn (std/gen_server.gem:194)
+  at gen_server.serve (std/gen_server.gem:237)
+  at anonymous fn (std/gen_server.gem:195)
 6: gen_server.call: server exited: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 6]: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
@@ -2744,8 +2744,8 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_call_result (std/gen_server.gem:110)
   at gen_server.loop (std/gen_server.gem:117)
-  at gen_server.serve (std/gen_server.gem:236)
-  at anonymous fn (std/gen_server.gem:194)
+  at gen_server.serve (std/gen_server.gem:237)
+  at anonymous fn (std/gen_server.gem:195)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 7]: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
@@ -2757,8 +2757,8 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_call_result (std/gen_server.gem:110)
   at gen_server.loop (std/gen_server.gem:117)
-  at gen_server.serve (std/gen_server.gem:236)
-  at anonymous fn (std/gen_server.gem:194)
+  at gen_server.serve (std/gen_server.gem:237)
+  at anonymous fn (std/gen_server.gem:195)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 8]: gen_server: handle_cast returned nil, expected {state: state}
@@ -2769,9 +2769,9 @@ Stack trace:
 Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_state_result (std/gen_server.gem:91)
-  at gen_server.loop (std/gen_server.gem:126)
-  at gen_server.serve (std/gen_server.gem:236)
-  at anonymous fn (std/gen_server.gem:194)
+  at gen_server.loop (std/gen_server.gem:127)
+  at gen_server.serve (std/gen_server.gem:237)
+  at anonymous fn (std/gen_server.gem:195)
 6: cast nil -> gen_server: handle_cast returned nil, expected {state: state}
 
 [Runtime Error in process 9]: gen_server: handle_info returned an int, expected {state: state}
@@ -2782,9 +2782,9 @@ Stack trace:
 Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_state_result (std/gen_server.gem:91)
-  at gen_server.loop (std/gen_server.gem:139)
-  at gen_server.serve (std/gen_server.gem:236)
-  at anonymous fn (std/gen_server.gem:194)
+  at gen_server.loop (std/gen_server.gem:140)
+  at gen_server.serve (std/gen_server.gem:237)
+  at anonymous fn (std/gen_server.gem:195)
 6: info int -> gen_server: handle_info returned an int, expected {state: state}
 7: info saw ["call", "cast", "gs_reply"]
 8: monitors after 300 callers=1
@@ -3217,13 +3217,13 @@ armed timeout fired
 inner links its children: 3 true
 
 [Runtime Error in process 6]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:376
+  --> std/supervisor.gem:373
      |
- 376 |     error(res.error)
+ 373 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:376)
-  at anonymous fn (std/supervisor.gem:499)
+  at supervisor.sup_main (std/supervisor.gem:373)
+  at anonymous fn (std/supervisor.gem:496)
 inner restarted: true
 old db dead: true
 new db: true 0
@@ -3231,13 +3231,13 @@ outer, inner, children dead: true true true true nil
 one_for_all restarted inner: true true true
 
 [Runtime Error in process 22]: dynamic_supervisor: max restart intensity reached
-  --> std/dynamic_supervisor.gem:382
+  --> std/dynamic_supervisor.gem:376
      |
- 382 |     error(res.error)
+ 376 |     error(res.error)
      |
 Stack trace:
-  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:382)
-  at anonymous fn (std/dynamic_supervisor.gem:461)
+  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:376)
+  at anonymous fn (std/dynamic_supervisor.gem:455)
 dsup and its children dead: true true
 ignores a normal exit signal: true
 dsup killed, child dead: true true
@@ -3261,8 +3261,8 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_call_result (std/gen_server.gem:100)
   at gen_server.loop (std/gen_server.gem:117)
-  at gen_server.serve (std/gen_server.gem:236)
-  at anonymous fn (std/gen_server.gem:194)
+  at gen_server.serve (std/gen_server.gem:237)
+  at anonymous fn (std/gen_server.gem:195)
 gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
 -- 7. init returning a table with a state field
 {state: "idle", count: 0}
@@ -3447,14 +3447,14 @@ Stack trace:
   at gen_server.check_result_timeout (std/gen_server.gem:85)
   at gen_server.check_call_result (std/gen_server.gem:106)
   at gen_server.loop (std/gen_server.gem:117)
-  at gen_server.serve (std/gen_server.gem:236)
-  at anonymous fn (std/gen_server.gem:194)
+  at gen_server.serve (std/gen_server.gem:237)
+  at anonymous fn (std/gen_server.gem:195)
 gen_server.call: server exited: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
 gen_server: init raised at:
   at gen_server.check_result_timeout (std/gen_server.gem:85)
   at gen_server.check_state_result (std/gen_server.gem:93)
-  at gen_server.run_init (std/gen_server.gem:216)
-  at anonymous fn (std/gen_server.gem:224)
+  at gen_server.run_init (std/gen_server.gem:217)
+  at anonymous fn (std/gen_server.gem:225)
 gen_server.start: init failed: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
 -- control bytes in the request head
 ok: HTTP/1.1 200 OK
@@ -3552,13 +3552,13 @@ Stack trace:
   at anonymous fn (examples/189_otp_shutdown.gem:102)
 
 [Runtime Error in process 12]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:376
+  --> std/supervisor.gem:373
      |
- 376 |     error(res.error)
+ 373 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:376)
-  at anonymous fn (std/supervisor.gem:499)
+  at supervisor.sup_main (std/supervisor.gem:373)
+  at anonymous fn (std/supervisor.gem:496)
 3 down: supervisor: max restart intensity reached true ["t:shutdown"]
 
 [Runtime Error in process 20]: boom
@@ -3671,8 +3671,8 @@ gen_server.call: server exited: noproc left: 0
 gen_server: init raised at:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_state_result (std/gen_server.gem:91)
-  at gen_server.run_init (std/gen_server.gem:216)
-  at anonymous fn (std/gen_server.gem:224)
+  at gen_server.run_init (std/gen_server.gem:217)
+  at anonymous fn (std/gen_server.gem:225)
 gen_server.start: init failed: gen_server: init returned an int, expected {state: state}
 got timeout
 -- 4. http: Host and bare LF
@@ -3939,7 +3939,7 @@ supervisor: exiting on an error raised at:
   at supervisor.start_child (std/supervisor.gem:81)
   at anonymous fn (std/supervisor.gem:357)
 supervisor: exiting on an error raised at:
-  at supervisor.start (std/supervisor.gem:524)
+  at supervisor.start (std/supervisor.gem:521)
   at anonymous fn (examples/201_supervisor_start_waits.gem:103)
   at supervisor.start_child (std/supervisor.gem:81)
   at anonymous fn (std/supervisor.gem:357)
@@ -3949,17 +3949,17 @@ supervisor: exiting on an error raised at:
 1 registered by init: true
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:215)
-  at anonymous fn (std/gen_server.gem:224)
+  at gen_server.run_init (std/gen_server.gem:216)
+  at anonymous fn (std/gen_server.gem:225)
 2 gen_server.start: init failed: two init 1 failed
 3 gen_server.start: server exited: gone
 4 after setup: ready
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:215)
-  at anonymous fn (std/gen_server.gem:224)
+  at gen_server.run_init (std/gen_server.gem:216)
+  at anonymous fn (std/gen_server.gem:225)
 supervisor: restart of child "five" failed: gen_server.start: init failed: five init 2 failed
-  at gen_server.start (std/gen_server.gem:206)
+  at gen_server.start (std/gen_server.gem:207)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:158)
   at supervisor.start_child (std/supervisor.gem:81)
@@ -3969,51 +3969,51 @@ supervisor: restart of child "five" failed: gen_server.start: init failed: five 
 5 inits: ["five1", "five2", "five3"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:215)
-  at anonymous fn (std/gen_server.gem:224)
+  at gen_server.run_init (std/gen_server.gem:216)
+  at anonymous fn (std/gen_server.gem:225)
 supervisor: restart of child "six" failed: gen_server.start: init failed: six init 2 failed
-  at gen_server.start (std/gen_server.gem:206)
+  at gen_server.start (std/gen_server.gem:207)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:170)
   at supervisor.start_child (std/supervisor.gem:81)
   at anonymous fn (std/supervisor.gem:243)
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:215)
-  at anonymous fn (std/gen_server.gem:224)
+  at gen_server.run_init (std/gen_server.gem:216)
+  at anonymous fn (std/gen_server.gem:225)
 supervisor: restart of child "six" failed: gen_server.start: init failed: six init 3 failed
-  at gen_server.start (std/gen_server.gem:206)
+  at gen_server.start (std/gen_server.gem:207)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:170)
   at supervisor.start_child (std/supervisor.gem:81)
   at anonymous fn (std/supervisor.gem:243)
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:215)
-  at anonymous fn (std/gen_server.gem:224)
+  at gen_server.run_init (std/gen_server.gem:216)
+  at anonymous fn (std/gen_server.gem:225)
 supervisor: restart of child "six" failed: gen_server.start: init failed: six init 4 failed
-  at gen_server.start (std/gen_server.gem:206)
+  at gen_server.start (std/gen_server.gem:207)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:170)
   at supervisor.start_child (std/supervisor.gem:81)
   at anonymous fn (std/supervisor.gem:243)
 
 [Runtime Error in process 10]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:376
+  --> std/supervisor.gem:373
      |
- 376 |     error(res.error)
+ 373 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:376)
-  at anonymous fn (std/supervisor.gem:499)
+  at supervisor.sup_main (std/supervisor.gem:373)
+  at anonymous fn (std/supervisor.gem:496)
 6 down: supervisor: max restart intensity reached
 6 inits: ["six1", "six2", "six3", "six4"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:215)
-  at anonymous fn (std/gen_server.gem:224)
+  at gen_server.run_init (std/gen_server.gem:216)
+  at anonymous fn (std/gen_server.gem:225)
 supervisor: restart of child "b" failed: gen_server.start: init failed: b init 2 failed
-  at gen_server.start (std/gen_server.gem:206)
+  at gen_server.start (std/gen_server.gem:207)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:179)
   at supervisor.start_child (std/supervisor.gem:81)
@@ -4021,26 +4021,26 @@ supervisor: restart of child "b" failed: gen_server.start: init failed: b init 2
 7 children: ["a:true", "b:true", "c:true"] inits: ["a2", "b2", "b3", "c2"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:215)
-  at anonymous fn (std/gen_server.gem:224)
+  at gen_server.run_init (std/gen_server.gem:216)
+  at anonymous fn (std/gen_server.gem:225)
 8 dynamic_supervisor.start_child: gen_server.start: init failed: eight_bad init 1 failed
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:215)
-  at anonymous fn (std/gen_server.gem:224)
+  at gen_server.run_init (std/gen_server.gem:216)
+  at anonymous fn (std/gen_server.gem:225)
 dynamic_supervisor: restart of a child failed: gen_server.start: init failed: eight init 2 failed
-  at gen_server.start (std/gen_server.gem:206)
+  at gen_server.start (std/gen_server.gem:207)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:194)
-  at dynamic_supervisor.start_from_template (std/dynamic_supervisor.gem:110)
-  at anonymous fn (std/dynamic_supervisor.gem:285)
+  at dynamic_supervisor.start_from_template (std/dynamic_supervisor.gem:107)
+  at anonymous fn (std/dynamic_supervisor.gem:282)
 8 pending: 0
 8 children: 1 restarted: true init 3
 8 inits: ["eight_bad1", "eight1", "eight2", "eight3"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:209)
-  at gen_server.run_init (std/gen_server.gem:215)
-  at anonymous fn (std/gen_server.gem:224)
+  at gen_server.run_init (std/gen_server.gem:216)
+  at anonymous fn (std/gen_server.gem:225)
 9 gen_server.start: init failed: trapped then failed
 10 still there: true
 10 down: boom child gone: nil
@@ -4331,3 +4331,6 @@ early late
 -- brace block body
 small 1
 big 2
+-- an error in a branch reports its own line
+165
+174

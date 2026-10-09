@@ -275,10 +275,7 @@ fn tokenize(source, file, sink)
 
     # Newlines and semicolons — collapse consecutive
     if ch == "\n" or ch == ";"
-      let should_add = true
-      if len(tokens) > 0 and tokens[-1].type == "NEWLINE"
-        should_add = false
-      end
+      let should_add = len(tokens) == 0 or tokens[-1].type != "NEWLINE"
       if should_add
         push(tokens, {type: "NEWLINE", value: "\n", line: line, col: tstart - line_start + 1})
       end
@@ -670,10 +667,7 @@ fn tokenize(source, file, sink)
     end
 
     # Multi-char operators (check before single-char)
-    let next = ""
-    if pos + 1 < length
-      next = source[pos + 1]
-    end
+    let next = if pos + 1 < length then source[pos + 1] else "" end
 
     if ch == "=" and next == "="
       push(tokens, {type: "==", value: "==", line: line, col: tstart - line_start + 1})

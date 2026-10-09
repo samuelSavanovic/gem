@@ -133,8 +133,7 @@ fn levenshtein(a, b)
     curr[0] = i
     let j = 1
     while j <= blen
-      let cost = 1
-      if ord(a, i - 1) == ord(b, j - 1) then cost = 0 end
+      let cost = if ord(a, i - 1) == ord(b, j - 1) then 0 else 1 end
       let del = prev[j] + 1
       let ins = curr[j - 1] + 1
       let sub = prev[j - 1] + cost
@@ -163,8 +162,7 @@ fn find_closest_export(field, exports)
     end
   end
   let flen = len(field)
-  let threshold = 2
-  if flen <= 4 then threshold = 1 end
+  let threshold = if flen <= 4 then 1 else 2 end
   if best_d <= threshold
     return best
   end

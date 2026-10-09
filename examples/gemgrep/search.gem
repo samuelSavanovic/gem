@@ -56,10 +56,7 @@ fn text(data, rx, opts, name)
           return nil
         end
         if printing
-          let prefix = ""
-          if name != nil
-            prefix = name + ":"
-          end
+          let prefix = if name != nil then name + ":" else "" end
           if opts.number
             prefix = "{prefix}{lineno}:"
           end

@@ -344,7 +344,15 @@ end
 # reads the outer `n`). A branch that ends in a statement, and an `if` or
 # `match` that takes no branch, leave the value `nil`, as the last statement
 # of a function does. `return <block>` instead returns from each branch, so
-# a call at a branch's end stays a tail call.
+# a call at a branch's end stays a tail call. The store or return takes the
+# line of the branch's last expression, so an error raised there points at
+# it rather than at the `let`.
+
+# The line of `e`, a branch's last expression, or `fallback` for a value
+# lower() made up (the `nil` of a branch that ends in a statement).
+fn branch_line(e, fallback)
+  if type(e) == "table" and e.line != nil then e.line else fallback end
+end
 
 fn is_block_value(value)
   type(value) == "table" and (value.tag == "if" or value.tag == "match" or value.tag == "receive_match")
@@ -402,7 +410,7 @@ fn lower_block_value_store(node, state)
   let tmp = "_val_{state.gensym}"
   let line = node.line
   let block = node.value
-  finish_block(block, fn(e) make_assign(tmp, e, line) end)
+  finish_block(block, fn(e) make_assign(tmp, e, branch_line(e, line)) end)
   if node.compound_op != nil
     # The read of the target shares the target's position, as in `x += 1`.
     node.value = make_binop(node.compound_op, make_var(node.name, node.line, node.col), make_var(tmp))
@@ -417,7 +425,7 @@ end
 fn lower_block_value_return(node, state)
   let line = node.line
   let block = node.value
-  finish_block(block, fn(e) make_return(e, line) end)
+  finish_block(block, fn(e) make_return(e, branch_line(e, line)) end)
   tag_file(block, node.file)
   lower_node(block, state)
 end
@@ -449,10 +457,7 @@ fn lower_receive(node, state)
     # receive_match expects {pattern: {condition, bindings}, body}
     push(arms, {pattern: {condition: lowered.value, bindings: lowered.bindings}, body: lowered.body})
   end
-  let after_ms = nil
-  if node.after_ms != nil
-    after_ms = lower_node(node.after_ms, state)
-  end
+  let after_ms = if node.after_ms != nil then lower_node(node.after_ms, state) end
   let after_body = lower_stmts_or_nil(node.after_body, state)
   let result = make_receive_match(arms, after_ms, after_body, node.line, recv_var)
   tag_file(result, node.file)
@@ -497,8 +502,7 @@ fn pattern_to_cond(pat, target_expr, state)
     let conditions = [make_binop("==", make_call(make_var("__type"), [target_expr], 0), make_string("table"))]
     let bindings = []
     for entry in pat.entries
-      let key_str = make_string(entry.key)
-      if entry.int_key != nil then key_str = make_int(entry.int_key) end
+      let key_str = if entry.int_key != nil then make_int(entry.int_key) else make_string(entry.key) end
       push(conditions, make_call(make_var("__has_key"), [target_expr, key_str], 0))
       let sub_target = make_index(target_expr, key_str)
       if entry.value == nil

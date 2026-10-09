@@ -49,10 +49,7 @@ fn check_attempts(opts, job, st, out)
     end
     let n = i + 1
     let want = schedule.expected_failure(opts, job, schedule.fault(opts, job.id, n))
-    let want_class = "ok"
-    if want != nil
-      want_class = INJECTED[want]
-    end
+    let want_class = if want != nil then INJECTED[want] else "ok" end
     if c != want_class
       push(out, "job {job.id} attempt {n}: {o}, the schedule says {want_class}")
     end

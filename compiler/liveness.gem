@@ -549,12 +549,7 @@ _transfer_stmt = fn(s, live_out)
     return live_in
   when {tag: "if", cond: cond, then: thens, else: el}
     let live_then = _transfer_stmts(thens, live_out)
-    let live_else = nil
-    if el != nil
-      live_else = _transfer_stmts(el, live_out)
-    else
-      live_else = lset_copy(live_out)
-    end
+    let live_else = if el != nil then _transfer_stmts(el, live_out) else lset_copy(live_out) end
     let live_in = lset_copy(live_then)
     lset_union_into(live_in, live_else)
     _uses_expr(cond, live_in)
@@ -923,12 +918,7 @@ _attach_node = fn(s, live_out)
     if s.process_tail == true
       s.liveness_result = r
     end
-    let body_live_after = nil
-    if r.ok
-      body_live_after = r.live
-    else
-      body_live_after = lset_copy(live_out)
-    end
+    let body_live_after = if r.ok then r.live else lset_copy(live_out) end
     _attach_stmts(s.body, body_live_after)
     _scan_anons(s.cond)
     if r.ok

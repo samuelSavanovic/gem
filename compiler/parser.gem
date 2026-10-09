@@ -300,10 +300,7 @@ fn make_parser(tokens, source, file, sink)
     if rebindable[prev.kind] and rebindable[kind]
       return nil
     end
-    let article = "a"
-    if prev.kind == "extern fn"
-      article = "an"
-    end
+    let article = if prev.kind == "extern fn" then "an" else "a" end
     if span == nil
       span = len(name)
     end
@@ -324,8 +321,7 @@ fn make_parser(tokens, source, file, sink)
   # 0). Otherwise consumes nothing and returns nil.
   let parse_int_key = fn()
     let negative = peek().type == "-"
-    let off = 0
-    if negative then off = 1 end
+    let off = if negative then 1 else 0 end
     let nt = peek_at(off)
     if nt.type != "NUMBER" or peek_at(off + 1).type != ":"
       return nil
@@ -944,13 +940,14 @@ fn make_parser(tokens, source, file, sink)
 
   # Optional `|params|` at the start of a block.
   let parse_block_params = fn()
-    let r = {params: [], rest_param: nil, defaults: [], prelude: []}
     if peek().type == "|"
       advance()
-      r = parse_params()
+      let r = parse_params()
       expect("|")
+      r
+    else
+      {params: [], rest_param: nil, defaults: [], prelude: []}
     end
-    r
   end
 
   # `do [|params|] body end` → anonymous fn
@@ -960,10 +957,7 @@ fn make_parser(tokens, source, file, sink)
     expect("do")
     let bp = parse_block_params()
     fn_depth += 1
-    let kind = "do"
-    if is_spawn
-      kind = "spawn"
-    end
+    let kind = if is_spawn then "spawn" else "do" end
     let saved_loops = enter_fn_body(kind)
     let body = parse_fn_body()
     leave_fn_body(saved_loops)
@@ -981,12 +975,7 @@ fn make_parser(tokens, source, file, sink)
     let bp = parse_block_params()
     # The body is one statement: an expression, an assignment, or a whole
     # `if` / `match` / `receive`.
-    let bexpr = nil
-    if block_value_keyword() != nil
-      bexpr = parse_stmt()
-    else
-      bexpr = parse_stmt_expr()
-    end
+    let bexpr = if block_value_keyword() != nil then parse_stmt() else parse_stmt_expr() end
     if peek().type == "}"
       advance()
     else
@@ -1021,10 +1010,7 @@ fn make_parser(tokens, source, file, sink)
 
   # Report an assignment where a value is expected, at its `=`.
   let report_assign_as_value = fn(e, msg)
-    let span = 1
-    if e.eq_len != nil
-      span = e.eq_len
-    end
+    let span = if e.eq_len != nil then e.eq_len else 1 end
     report(e.eq_line, e.eq_col, span, msg, nil)
   end
 
@@ -1101,13 +1087,12 @@ fn make_parser(tokens, source, file, sink)
           # Trailing brace block: {|params| expr} or {expr}
           # Distinguish from table literal by lookahead
           if peek().type == "\{"
-            let is_block = false
-            if peek_at(1).type == "|"
-              is_block = true
+            let is_block = if peek_at(1).type == "|"
+              true
             elif peek_at(1).type == "}" or (peek_at(1).type == "NAME" and peek_at(2).type == ":")
-              is_block = false
+              false
             else
-              is_block = true
+              true
             end
             if is_block
               let brace_tok = peek()
@@ -1132,10 +1117,7 @@ fn make_parser(tokens, source, file, sink)
         # from.ref). Reject punctuation/operator tokens — most importantly the
         # second '.' in '..', which would otherwise parse as `obj.<.>` and
         # fail at runtime ("field access on non-table").
-        let c0 = ""
-        if len(field_tok.type) > 0
-          c0 = field_tok.type[0]
-        end
+        let c0 = if len(field_tok.type) > 0 then field_tok.type[0] else "" end
         let is_keyword_tok = c0 >= "a" and c0 <= "z"
         if field_tok.type != "NAME" and not is_keyword_tok
           if field_tok.type == "."
@@ -1394,11 +1376,10 @@ fn make_parser(tokens, source, file, sink)
           end
         end
         let key_name = key_tok.value
-        let sub_pat = nil
-        if peek().type == ":"
+        let sub_pat = if peek().type == ":"
           advance()
           skip_nl()
-          sub_pat = parse_pattern()
+          parse_pattern()
         end
         if sub_pat == nil
           bind_pattern_name(key_tok)
@@ -1445,22 +1426,21 @@ fn make_parser(tokens, source, file, sink)
       end
       let nt = peek()
       advance()
-      let lit = nil
-      if contains_dot(nt.value)
+      let lit = if contains_dot(nt.value)
         let f = atof(nt.value)
         if negative then f = 0.0 - f end
-        lit = make_float(f)
+        make_float(f)
       else
         let range = int_literal_range(nt.value)
         if range == "min" and negative
-          lit = make_int(int64_min())
+          make_int(int64_min())
         elif range != "ok"
           report_int_range(nt)
-          lit = make_int(0)
+          make_int(0)
         else
           let n = str_to_int(nt.value)
           if negative then n = 0 - n end
-          lit = make_int(n)
+          make_int(n)
         end
       end
       return make_pat_literal(lit)
@@ -1760,17 +1740,16 @@ fn make_parser(tokens, source, file, sink)
         advance()
       end
       let then_body = parse_body()
-      let else_body = nil
-      if peek().type == "elif"
+      let else_body = if peek().type == "elif"
         # Desugar: elif becomes nested if in else branch
-        else_body = [parse_stmt()]
+        [parse_stmt()]
       elif peek().type == "else"
         advance()
         if peek().type == "if"
           let err_tok = peek()
           report(err_tok.line, err_tok.col, 2, "use 'elif' instead of 'else if'", "Gem uses 'elif' for chained conditions")
         end
-        else_body = parse_body()
+        parse_body()
       end
       # Only consume "end" for the outermost if (elif branches don't have their own end)
       if t.type == "if"
@@ -1866,10 +1845,9 @@ fn make_parser(tokens, source, file, sink)
         push(arms, parse_when_arm())
         skip_nl()
       end
-      let else_body = nil
-      if peek().type == "else"
+      let else_body = if peek().type == "else"
         advance()
-        else_body = parse_body()
+        parse_body()
       end
       expect("end")
       # target_var (gensym name) is filled in by lower(); leave nil here
@@ -1881,9 +1859,8 @@ fn make_parser(tokens, source, file, sink)
     if t.type == "return"
       let line = t.line
       advance()
-      let value = nil
-      if peek().type != "NEWLINE" and peek().type != "EOF" and peek().type != "end" and peek().type != "elif" and peek().type != "else" and peek().type != "when"
-        value = parse_value()
+      let value = if peek().type != "NEWLINE" and peek().type != "EOF" and peek().type != "end" and peek().type != "elif" and peek().type != "else" and peek().type != "when"
+        parse_value()
       end
       return make_return(value, line)
     end
@@ -2025,10 +2002,11 @@ fn make_parser(tokens, source, file, sink)
           end
         end
         expect(")")
-        let ret_type = "Nil"
-        if peek().type == "->"
+        let ret_type = if peek().type == "->"
           advance()
-          ret_type = expect_extern_type(true, is_blocking)
+          expect_extern_type(true, is_blocking)
+        else
+          "Nil"
         end
         return make_extern_fn(name, eparams, ret_type, is_blocking, name_tok.line, name_tok.col)
       elif not is_blocking and peek().type == "NAME" and peek().value == "include"

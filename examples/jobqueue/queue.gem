@@ -79,9 +79,8 @@ fn start_attempt(s, pid, id)
   let rec = s.jobs["{id}"]
   let n = len(rec.attempts) + 1
   let ref = make_ref()
-  let timer = nil
-  if rec.job.deadline_ms != nil
-    timer = send_after(self(), {tag: "deadline", pid: pid, ref: ref}, rec.job.deadline_ms)
+  let timer = if rec.job.deadline_ms != nil
+    send_after(self(), {tag: "deadline", pid: pid, ref: ref}, rec.job.deadline_ms)
   end
   rec.status = "running"
   s.busy["{pid}"] = {pid: pid, id: id, attempt: n, ref: ref, timer: timer}

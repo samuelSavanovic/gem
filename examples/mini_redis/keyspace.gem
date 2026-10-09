@@ -469,12 +469,12 @@ end
 
 # LPOP/RPOP key [count]
 fn pop_list(db, args, now, front)
-  let count = nil
-  if len(args) == 3
-    count = resp.parse_int(args[2])
-    if count == nil or count < 0
+  let count = if len(args) == 3
+    let c = resp.parse_int(args[2])
+    if c == nil or c < 0
       return resp.err("ERR value is out of range, must be positive")
     end
+    c
   elif len(args) > 3
     return SYNTAX
   end
@@ -484,8 +484,7 @@ fn pop_list(db, args, now, front)
   end
   if l.error != nil then return l end
   let out = []
-  let n = 1
-  if count != nil then n = count end
+  let n = if count != nil then count else 1 end
   while len(out) < n and deque.size(l.items) > 0
     if front
       push(out, deque.pop_front(l.items))

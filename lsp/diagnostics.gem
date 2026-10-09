@@ -43,10 +43,7 @@ fn entry_range(e)
     span = 1
   end
 
-  let line_text = ""
-  if e.source != nil
-    line_text = get_source_line(e.source, line)
-  end
+  let line_text = if e.source != nil then get_source_line(e.source, line) else "" end
 
   let start_byte = col - 1
   let end_byte = start_byte + span

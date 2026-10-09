@@ -488,10 +488,7 @@ fn router()
   # A pattern without parameters matches its own text only: `segs` is nil
   # and no split is needed.
   let add_route = fn(method, pattern, handler)
-    let segs = nil
-    if has_text(pattern, ":")
-      segs = string.split(pattern, "/")
-    end
+    let segs = if has_text(pattern, ":") then string.split(pattern, "/") end
     push(routes, {method: method, pattern: pattern, segs: segs, handler: handler})
   end
 
@@ -750,13 +747,14 @@ fn parse_hex(s)
   let n = 0
   for i = start, n_len
     let c = ord(s, i)
-    let d = -1
-    if c >= 48 and c <= 57
-      d = c - 48
+    let d = if c >= 48 and c <= 57
+      c - 48
     elif c >= 97 and c <= 102
-      d = c - 87
+      c - 87
     elif c >= 65 and c <= 70
-      d = c - 55
+      c - 55
+    else
+      -1
     end
     if d < 0
       return nil
@@ -988,10 +986,7 @@ fn parse_head(head)
   end
   if repeated != nil
     for key, parts in repeated
-      let sep = ", "
-      if key == "cookie"
-        sep = "; "
-      end
+      let sep = if key == "cookie" then "; " else ", " end
       headers[key] = string.join(parts, sep)
     end
   end
@@ -1100,13 +1095,14 @@ fn response_problem(resp)
     if type(name) != "string" or not is_token(name)
       return "invalid response: header name \"{name}\" is not an HTTP token"
     end
-    let values = [value]
-    if type(value) == "table"
+    let values = if type(value) == "table"
       # `__is_array_n` is the check array patterns compile to.
       if not __is_array_n(value, len(value))
         return "invalid response: header {name} must be a string, number, bool or array of them, got a table with keys other than 0 .. n-1"
       end
-      values = value
+      value
+    else
+      [value]
     end
     for v in values
       let t = type(v)
@@ -1212,11 +1208,10 @@ fn handler_frames(stack)
   let dir = std_dir()
   let frames = []
   for f in stack
-    let std_frame = false
-    if dir == nil
-      std_frame = string.starts_with(f.name, "http.")
+    let std_frame = if dir == nil
+      string.starts_with(f.name, "http.")
     else
-      std_frame = type(f.file) == "string" and string.starts_with(f.file, dir)
+      type(f.file) == "string" and string.starts_with(f.file, dir)
     end
     if len(frames) > 0 or not std_frame
       push(frames, f)
@@ -1422,12 +1417,9 @@ fn stop_requested(server)
   if not process_flag("trap_exit", false)
     return false
   end
-  let asked = false
-  receive
-  when {tag: "EXIT", pid: ^server}
-    asked = true
-  after 0
-    nil
+  let asked = receive
+  when {tag: "EXIT", pid: ^server} then true
+  after 0 then false
   end
   let info = process_info(server)
   asked or info == nil or info.state == "dead"
@@ -1477,10 +1469,7 @@ fn process_one_request(rd, cfg)
     keep_alive = keep_alive and has_token(tokens, "keep-alive")
   end
 
-  let route_method = req.method
-  if head_only
-    route_method = "GET"
-  end
+  let route_method = if head_only then "GET" else req.method end
   let matched = cfg.router.match(route_method, req.path)
   let resp = nil
   if matched != nil

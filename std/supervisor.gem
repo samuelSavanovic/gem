@@ -366,10 +366,7 @@ fn sup_main(state, caller, ref)
   end
   send(caller, {tag: "_sup_started", ref: ref})
   let res = pcall sup_loop(state)
-  let reason = res.value
-  if not res.ok
-    reason = res.error
-  end
+  let reason = if res.ok then res.value else res.error end
   shutdown_children(state.children)
   if not res.ok
     report_stack(res)
@@ -599,11 +596,10 @@ fn which_children(target, timeout_ms = 5000)
   let ref = make_ref()
   let added = monitor(pid)
   send(pid, {tag: "_sup_which_children", from: self(), ref: ref})
-  let res = nil
-  if timeout_ms == nil
-    res = await_children(pid, ref)
+  let res = if timeout_ms == nil
+    await_children(pid, ref)
   else
-    res = await_children_for(pid, ref, timeout_ms)
+    await_children_for(pid, ref, timeout_ms)
   end
   if res == nil
     drop_monitor(pid, added)

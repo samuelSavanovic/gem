@@ -71,11 +71,10 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
             # Entry key may be either a raw string (when synthesized by
             # main.gem's `make_table_entry`) or a string AST node (when
             # parsed from user source).
-            let key_str = nil
-            if type(e.key) == "string"
-              key_str = e.key
+            let key_str = if type(e.key) == "string"
+              e.key
             elif e.key != nil and is_node(e.key, "string")
-              key_str = e.key.value
+              e.key.value
             end
             if key_str != nil
               mod_map[key_str] = e.value.name
@@ -277,11 +276,10 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
       # Regular call. Record edge if callee resolves to a known fn_def
       # name (directly, via a selective-load alias, or via a
       # whole-module dot access like `mod.fn(...)`).
-      let resolved_callee = nil
-      if is_node(node.func, "var")
-        resolved_callee = resolve_callee(node.func.name)
+      let resolved_callee = if is_node(node.func, "var")
+        resolve_callee(node.func.name)
       elif is_node(node.func, "dot") and node.func.object != nil and is_node(node.func.object, "var")
-        resolved_callee = resolve_dot_callee(node.func.object.name, node.func.field)
+        resolve_dot_callee(node.func.object.name, node.func.field)
       end
       if resolved_callee != nil
         if is_tail_pos
@@ -290,11 +288,12 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
           set_add(caller_records[caller_id].non_tail_callees, resolved_callee)
         end
       else
-        let direct = false
-        if is_node(node.func, "var")
+        let direct = if is_node(node.func, "var")
           let cn = node.func.name
           let shadowed = set_contains(caller_records[caller_id].bound, cn)
-          direct = not shadowed and ((has_key(builtin_names, cn) and not set_contains(callback_builtins, cn)) or set_contains(extern_set, cn))
+          not shadowed and ((has_key(builtin_names, cn) and not set_contains(callback_builtins, cn)) or set_contains(extern_set, cn))
+        else
+          false
         end
         if not direct
           caller_records[caller_id].indirect = true
@@ -487,11 +486,12 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
     let n = len(stmts)
     let i = 0
     while i < n
-      let stmt_is_tail = false
-      if i == n - 1
-        stmt_is_tail = is_tail_pos
+      let stmt_is_tail = if i == n - 1
+        is_tail_pos
       elif i + 1 < n and is_trivial_return(stmts[i + 1])
-        stmt_is_tail = true
+        true
+      else
+        false
       end
       collect_calls(stmts[i], stmt_is_tail, caller_id)
       i += 1
