@@ -1,6 +1,7 @@
 /*
  * gem_builtins_tcp.c — TCP socket builtins: tcp_listen, tcp_connect,
- *                       tcp_accept, tcp_read, tcp_write, tcp_close.
+ *                       tcp_accept, tcp_read, tcp_write, tcp_close,
+ *                       tcp_peer.
  */
 
 #include "gem.h"
@@ -409,4 +410,42 @@ GemVal gem_tcp_close_fn(void *_env, GemVal *args, int argc) {
     gem_io_fd_closed((int)args[0].ival);
     close((int)args[0].ival);
     return GEM_NIL;
+}
+
+/* ─── Built-in: tcp_peer ─── */
+
+/* {ip, port} of the socket's remote end, or nil when it has none: a
+   listening socket, or a peer that reset the connection before this call
+   (Linux reports ENOTCONN, macOS EINVAL). Any other failure, such as a
+   closed fd, raises. */
+GemVal gem_tcp_peer_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_INT) {
+        gem_error("tcp_peer: expected int socket fd");
+    }
+    struct sockaddr_storage addr;
+    socklen_t addr_len = sizeof(addr);
+    if (getpeername((int)args[0].ival, (struct sockaddr *)&addr, &addr_len) < 0) {
+        if (errno == ENOTCONN || errno == EINVAL) return GEM_NIL;
+        char buf[256];
+        snprintf(buf, sizeof(buf), "tcp_peer: getpeername failed: %s", strerror(errno));
+        gem_error(buf);
+    }
+    char ip[INET6_ADDRSTRLEN] = "";
+    int port = 0;
+    if (addr.ss_family == AF_INET) {
+        struct sockaddr_in *a = (struct sockaddr_in *)&addr;
+        inet_ntop(AF_INET, &a->sin_addr, ip, sizeof(ip));
+        port = ntohs(a->sin_port);
+    } else if (addr.ss_family == AF_INET6) {
+        struct sockaddr_in6 *a = (struct sockaddr_in6 *)&addr;
+        inet_ntop(AF_INET6, &a->sin6_addr, ip, sizeof(ip));
+        port = ntohs(a->sin6_port);
+    } else {
+        gem_error("tcp_peer: not a TCP socket");
+    }
+    GemVal result = gem_table_new();
+    gem_table_set(result, gem_string("ip"), gem_string(ip));
+    gem_table_set(result, gem_string("port"), gem_int(port));
+    return result;
 }

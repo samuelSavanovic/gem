@@ -4404,3 +4404,14 @@ truthy falsy
 == errors ==
 false attempt to call nil value (field nope)
 false type error in +: got nil and int
+listening socket: nil
+client sees: 127.0.0.1 18320
+server sees: 127.0.0.1 int true
+["in session", "127.0.0.1", true]
+read after peer close: true
+after clean close: 127.0.0.1
+read after reset: true
+after reset: nil
+tcp_peer: getpeername failed: Bad file descriptor
+tcp_peer: expected int socket fd
+tcp_peer: expected int socket fd

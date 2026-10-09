@@ -1400,6 +1400,8 @@ end
 
 `tcp_close(socket)` — closes a socket file descriptor. Always synchronous. Returns `nil`. A process waiting in `tcp_accept`, `tcp_read`, `tcp_write` or `tcp_connect` on that socket raises an error (e.g. `"tcp_read: read failed: Bad file descriptor"`), even when a new socket has taken the same fd number by the time it runs.
 
+`tcp_peer(socket)` — returns the address of a connected socket's remote end as a table `{ip, port}`: `ip` is a string (`"203.0.113.7"`), `port` an int. Returns `nil` when the socket has no peer: a listening socket, or a connection the peer reset before the call (a peer that closed cleanly keeps its address until the socket is closed). Raises `tcp_peer: getpeername failed: <reason>` for an fd that isn't an open socket, and `tcp_peer: expected int socket fd` for a non-int argument. Never waits.
+
 All TCP builtins use non-blocking sockets with scheduler poll integration. The scheduler's `poll()` loop handles readiness notification with zero thread pool overhead.
 
 ## SQLite

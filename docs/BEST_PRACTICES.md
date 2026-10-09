@@ -1447,6 +1447,22 @@ end)
   later writes show it. Without a timeout, a peer that stops reading
   blocks the writer for as long as it keeps the connection open.
 
+### `tcp_peer` is `nil` once the peer has reset **(trap)**
+
+A client that connects and resets at once (scanners and bots do it all
+the time) leaves a socket with no peer address by the time the acceptor
+asks, so `tcp_peer(fd).ip` raises `field access on non-table: got nil`
+and kills the acceptor. Check for `nil` and close the socket:
+
+```gem
+let peer = tcp_peer(fd)
+if peer == nil
+  tcp_close(fd)        # gone before we looked
+else
+  handle(fd, peer.ip)
+end
+```
+
 ---
 
 ## Modules
@@ -1753,3 +1769,4 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | A `Ptr` sent, captured by `spawn`, or left when its process dies | shared or leaked C object; use after free | one process makes, uses and frees it, on every path |
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_read` with no timeout | blocks forever on a silent peer | pass a timeout |
+| `tcp_peer(fd).ip` right after `tcp_accept` | `nil` when the peer already reset; field access raises | check `tcp_peer(fd) == nil` and close |

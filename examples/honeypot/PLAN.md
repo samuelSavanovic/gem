@@ -18,12 +18,12 @@ Telnet only; SSH is out of scope. An HTTP honeypot on :80 via std/http is an opt
 
 | Gap | Today | Needed |
 |---|---|---|
-| Peer address | `tcp_accept` returns only the fd; nothing in the runtime exposes the peer address | a `tcp_peer(sock)` builtin, for per-IP caps and the `ip` column |
+| Peer address | done: `tcp_peer(sock)` returns `{ip, port}`, or `nil` once the peer has reset | per-IP caps and the `ip` column; the acceptor treats `nil` as a connection already gone |
 | Socket ownership | sockets are plain ints, so a session that crashes leaks its fd | ROADMAP "Process-owned resources closed on exit", including ownership passing to a session on `spawn`/`send` |
 | Crash data | a `DOWN` message carries only the error message; the trace goes to stderr and the raw input dies with the session | the session streams capped raw-input chunks to the recorder as it reads; traces come from the service's stderr log, matched by pid |
 | Runtime reset stats | `GEM_DIAG` prints reset statistics only at exit | a builtin that reads them, or leave them out of the metrics |
 
-The honeypot waits for the first two. Closing fds on `DOWN` in the honeypot would only hide the leak the ROADMAP item fixes.
+The honeypot waits for socket ownership. Closing fds on `DOWN` in the honeypot would only hide the leak the ROADMAP item fixes.
 
 ## Process layout
 
@@ -101,7 +101,7 @@ Candidates as of 2026-10: BuyVM Slice 1024 in Luxembourg (often out of stock) or
 
 ## Phases
 
-1. `tcp_peer` builtin.
+1. `tcp_peer` builtin (done).
 2. Process-owned sockets (ROADMAP), with a plan agreed before implementation.
 3. IAC parser, line splitter, fake login and shell on :2323, with `test.gem`. Can run alongside 1–2.
 4. Crash-data path, recorder and schema.
