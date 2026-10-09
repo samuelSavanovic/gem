@@ -154,7 +154,7 @@ TCP sockets and SQLite handles are plain ints. A process that crashes or is kill
 
 Supervisors make this more pressing: they kill a child with the untrappable `"kill"` once its `shutdown` budget runs out, as a routine last resort. A child that holds a listening socket and overruns its budget leaves the port bound, so its restart fails with `EADDRINUSE`, the supervisor reaches its restart intensity and the tree goes down.
 
-Proposed design for sockets (and later sqlite handles), awaiting review: `docs/design/process_owned_resources.md`. It replaces the plain-int socket with a socket value type that the copy into another process recognises, so ownership moves on `spawn`/`send` without an explicit builtin, and closes a process's sockets when it exits abnormally.
+Agreed design for sockets and sqlite handles, to implement as phase 2 of the honeypot (`examples/honeypot/PLAN.md`): `docs/design/process_owned_resources.md`. Afterwards std/http can open its listener in its server process and drop its per-connection fd bookkeeping. It replaces the plain-int socket with a socket value type that the copy into another process recognises, so ownership moves on `spawn`/`send` without an explicit builtin, and closes a process's sockets when it exits abnormally.
 
 What needs building: a per-process resource list filled by `tcp_listen`/`tcp_accept`/`tcp_connect`/`sqlite_open` and closed in `gem_free_proc_slot`; for `exec`, `posix_spawn` + `waitpid` so the child can be signalled. Trade-off: a handle passed to another process (an acceptor handing a socket to a handler) needs ownership to move with it. Making the user transfer ownership explicitly would add a concept to the language, so the transfer should happen implicitly, e.g. on `send` or `spawn` capture.
 

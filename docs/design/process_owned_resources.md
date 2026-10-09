@@ -1,6 +1,6 @@
 # Process-owned sockets: design
 
-Status: **proposal, not implemented.** Phase 2 of `examples/honeypot/PLAN.md`; implements the socket part of ROADMAP "Process-owned resources closed on exit". Measured against `build/gem` at d07ae59.
+Status: **agreed, not implemented** (decisions at the end). Phase 2 of `examples/honeypot/PLAN.md`; implements the socket part of ROADMAP "Process-owned resources closed on exit". Measured against `build/gem` at d07ae59.
 
 ## Problem
 
@@ -34,7 +34,7 @@ The honeypot's flow then needs no extra code: the acceptor sends `{sock, ip}` to
 
 Sockets from `tcp_listen`, `tcp_accept` and `tcp_connect`. `tcp_connect` registers the socket right after `socket()`, before it yields waiting for the connect, so a process killed mid-connect doesn't leak it (today it does).
 
-**SQLite handles: later, and simpler.** The honeypot has one recorder process that owns its database for its whole life, so sqlite isn't on the critical path. sqlite handles are already ids that are never reused (`gem_sqlite_register`). They can get an owner (the opener, never moving) and be closed on its abnormal exit with no change to their type, since nothing has to recognise them in a copy. That is step 8 below, separate from the socket work. `exec`'s child process (`system()` hides its pid) stays in the ROADMAP entry; it needs `posix_spawn` and is unrelated.
+**SQLite handles: in phase 2, and simpler.** sqlite handles are already ids that are never reused (`gem_sqlite_register`), so there is no reuse race to fix and no new type: a handle gets an owner, the process that opened it, and never moves (nothing has to recognise an int in a copy). The owner's abnormal exit closes it: the close goes to the thread pool as for `sqlite_close`, with the entry cleared at once, and the runtime releases its side of the request right after submitting it, so the last release (the worker's) frees it; if the queue is full it closes inline. The honeypot's recorder is the one process that opens the database, so a recorder crash no longer leaks a connection per restart. That is step 8 below, a separate commit from the socket work. `exec`'s child process (`system()` hides its pid) stays in the ROADMAP entry; it needs `posix_spawn` and is unrelated.
 
 ## 2. What closes, and when
 
@@ -104,7 +104,7 @@ No program in the repo needs a code change for correctness. Two optional improve
 
 ### Trade-offs of (c)
 
-- **Backwards compatibility.** `type(sock)` was `"int"` and is now `"socket"`; arithmetic on a socket, `to_int`, passing it to an `extern fn` taking `Int` and comparing it with an int all stop working. The tcp builtins reject ints: `tcp_read: expected a socket, got int`. In the repo only examples/197 depends on the int (it prints `type(s3)`, compares two fds for reuse and closes one from C through `extern fn close(fd: Int)`). A new builtin `tcp_fd(sock)` returns the fd number for C interop and debugging; the caller keeps the socket value alive and doesn't close the fd behind the runtime's back (that is what 197 tests, and it still raises cleanly). There is no int → socket conversion (open question 3).
+- **Backwards compatibility.** `type(sock)` was `"int"` and is now `"socket"`; arithmetic on a socket, `to_int`, passing it to an `extern fn` taking `Int` and comparing it with an int all stop working. The tcp builtins reject ints: `tcp_read: expected a socket, got int`. In the repo only examples/197 depends on the int (it prints `type(s3)`, compares two fds for reuse and closes one from C through `extern fn close(fd: Int)`). A new builtin `tcp_fd(sock)` returns the fd number for C interop and debugging; the caller keeps the socket value alive and doesn't close the fd behind the runtime's back (that is what 197 tests, and it still raises cleanly). `tcp_from_fd(n)` goes the other way, for sockets made by C code (a TLS library, an fd inherited from the parent process): it checks that `n` is a TCP socket (`SO_TYPE`), raises `tcp_from_fd: fd 9 is already a socket` if the table holds it already (a second entry would mean two owners and a double close; the table keeps an fd → entry index for this check), marks it non-blocking and close-on-exec, and returns a socket owned by the caller. A listening socket (`SO_ACCEPTCONN`) is registered as a listener and doesn't move. From then on the runtime owns the fd: C code must not close it.
 - **Printing.** `#Socket<7>` while open (the fd, which is what `strace` and `/proc/self/fd` show), `#Socket<closed>` once closed, following `#Ref<N>`.
 - **Equality and table keys.** Two socket values are equal iff they have the same id, in any process. Usable as a table key, like a ref.
 - **Signatures.** Unchanged except the types: `tcp_listen`/`tcp_accept`/`tcp_connect` return a socket; `tcp_read`, `tcp_write`, `tcp_close`, `tcp_peer` take one. `tcp_peer` on a closed socket raises `tcp_peer: socket is closed` (today it raises `getpeername failed: Bad file descriptor`, or reports a reused fd's peer).
@@ -132,17 +132,18 @@ Errors (all pcall-catchable, prefixed with the builtin name):
 
 Docs:
 
-- **SPEC.md**: TCP section returns/takes sockets; a new "Socket ownership" paragraph with rules 2–6; `type()` gains `"socket"`; `tcp_fd`; equality and keys next to `make_ref`.
+- **SPEC.md**: TCP section returns/takes sockets; a new "Socket ownership" paragraph with rules 2–6; `type()` gains `"socket"`; `tcp_fd` and `tcp_from_fd`; equality and keys next to `make_ref`; SQLite section: a handle is closed when the process that opened it crashes or is killed.
 - **BEST_PRACTICES.md**: rewrite "The process that opens a handle closes it, on every path" for sockets (crashes and kills are covered; normal paths still close; hand a connection to the process that will own it); a **(trap)** rule: sending your socket to a process that only does bookkeeping makes that process the owner, so send your pid, or send the socket after handing it off (std/http's order); update the `Ptr` rule's comparison with sockets. Trap index rows for both.
-- **CHEATSHEET.md**: `tcp_fd`, `type` returning `"socket"`, one line on ownership.
-- **ROADMAP.md**: the entry keeps sqlite (if step 8 is deferred) and `exec`.
-- Editors: `tcp_fd` in both grammars.
+- **CHEATSHEET.md**: `tcp_fd`, `tcp_from_fd`, `type` returning `"socket"`, one line on ownership.
+- **ROADMAP.md**: the entry keeps only `exec`, plus the std/http cleanup below.
+- Editors: `tcp_fd` and `tcp_from_fd` in both grammars.
 
 ## 7. Tests
 
-- `examples/217_socket_values.gem`: `type`, printing open and closed, equality, as a table key, `tcp_close` twice, every builtin on a closed socket, `tcp_fd`, an int passed to each tcp builtin.
+- `examples/217_socket_values.gem`: `type`, printing open and closed, equality, as a table key, `tcp_close` twice, every builtin on a closed socket, `tcp_fd`, an int passed to each tcp builtin; `tcp_from_fd` on a socket made by a C `socket()` (it then reads, writes and closes like any other), on an fd already in the table, on a non-socket fd (a pipe) and on a closed fd.
 - `examples/218_socket_owner_exit.gem`: the peer reads `""` after its owner crashes, is killed (`"shutdown"` and `"kill"`) or dies from a link; a trapping owner and a normal return leave it open; a process in another process blocked in `tcp_read` on it raises `socket is closed`.
 - `examples/219_socket_handoff.gem`: spawn capture and send move it (the new owner's crash closes it, the old owner's doesn't); a non-owner's send doesn't (std/http's order); a listener stays with its opener while an acceptor crashes and a new one accepts on it; a socket in a module global doesn't move; `send_after` doesn't move.
+- `examples/220_sqlite_owner_exit.gem`: a handle whose opener crashes or is killed is closed (`sqlite_query` from another process raises `not an open database handle`); one whose opener returns normally stays open; another process can use a handle while its opener lives.
 - `examples/197`: expected output changes (`type` line, the reuse check through `tcp_fd`, the C close through `tcp_fd`).
 - `tests/check_socket_leak.sh` (Linux only; skips elsewhere), wired into `make test`: the honeypot shape (acceptor → `send` → registry → `spawn` → session), 1,000 sessions that crash, 1,000 killed while blocked in `tcp_read`, and 100 clients killed mid-`tcp_connect` to a non-accepting listener; `/proc/self/fd` must be back to the baseline count. Today this measures 507 and 107 against 7 (table above).
 - `tests/check_proc_limit.sh`: a `spawn` that fails under a low `GEM_MAX_PROCS` leaves the socket with the spawner.
@@ -151,20 +152,20 @@ Docs:
 ## 8. Implementation steps
 
 1. **Value type.** `VAL_SOCKET` in `runtime/gem.h` (id in `ival`), equality and hashing in `gem.h`/`gem_core.c`, `type`/print/`to_string`/interpolation in `gem_builtins_core.c` and `gem_builtins_string.c`, the copy case in `gem_copy.c`. Modelled on `VAL_REF`.
-2. **Socket table** in `runtime/gem_builtins_tcp.c`: entries `{fd, gen, owner slot, is_listener, prev/next in the owner's list}`, a free list, `GemProcess.sockets` (list head) in `gem.h`. The tcp builtins resolve their argument through it; `tcp_connect` registers before its first yield; `tcp_close` frees the entry. New builtin `tcp_fd`.
+2. **Socket table** in `runtime/gem_builtins_tcp.c`: entries `{fd, gen, owner slot, is_listener, prev/next in the owner's list}`, a free list, `GemProcess.sockets` (list head) in `gem.h`. The tcp builtins resolve their argument through it; `tcp_connect` registers before its first yield; `tcp_close` frees the entry. New builtins `tcp_fd` and `tcp_from_fd` (with an fd → entry index).
 3. **Close on abnormal exit** in `gem_free_proc_slot` (`runtime/gem_scheduler.c`), from the exit reason (`exit_reason` set and not `"normal"`), after the state is `DEAD`. A normal exit unlinks the entries and leaves them ownerless.
 4. **Moves**: the copies in `gem_spawn_fn` (closure env) and in the `send` builtin (not `gem_send_msg`'s internal callers or timers) collect the sockets they meet; once the spawn or send has succeeded, each one the current process owns and that isn't a listener moves to the new process.
-5. **Compiler**: `tcp_fd` in `BUILTIN_FNS` and `LEAF_BUILTINS` (`compiler/builtins.gem`), then `make bootstrap`. Editor grammars.
+5. **Compiler**: `tcp_fd` and `tcp_from_fd` in `BUILTIN_FNS` and `LEAF_BUILTINS` (`compiler/builtins.gem`), then `make bootstrap`. Editor grammars.
 6. **`GEM_DIAG=1`** reports sockets left open by normal exits (`gem_diag: sockets_orphaned=N`).
 7. **Docs and tests** (sections 6 and 7); `make test`.
-8. **SQLite** (separate commit; open question 2): owner = opener, never moves, closed through the thread pool on the owner's abnormal exit; ids stay ints.
+8. **SQLite** (separate commit): an owner slot per registry entry in `runtime/gem_builtins_sqlite.c` and a count of owned handles per process, so an exit with none skips the scan; closed through the thread pool on the owner's abnormal exit; ids stay ints.
 
-Optional, after: std/http opens its listener in the server process and drops its fd bookkeeping.
+Later, not in phase 2: std/http opens its listener in the server process and drops its fd bookkeeping (tracked in the ROADMAP entry).
 
-## Open questions for the user
+## Decisions (agreed with the user)
 
-1. **Normal exit**: close only on crash/kill/exit signal (recommended, keeps reader helpers, `task.async` helpers and main-returns-early servers working), or on every exit like Erlang (no leak from a forgotten `tcp_close`, but those patterns break and main needs an exception)?
-2. **SQLite now or later**: do step 8 in phase 2, or leave it in the ROADMAP until a program needs it?
-3. **An int → socket conversion** (`tcp_from_fd(n)`) for sockets made by C code (a future TLS library, an inherited fd): add it now, or wait for a user?
-4. **`send` moving ownership**: keep it (the honeypot's acceptor → registry → session flow needs it), or move only on `spawn` and have the honeypot's acceptor spawn sessions itself after asking the registry? `send` moving is the source of the bookkeeping trap in section 6.
-5. **std/http cleanup** (listener in the server process, no fd tracking): part of phase 2, or later?
+1. **Normal exit closes nothing**; crashes, kills and link exits close. As recommended.
+2. **SQLite handles are in phase 2** (step 8): cheap, since they are already never-reused ids.
+3. **`tcp_from_fd(n)` is added now**, alongside `tcp_fd`.
+4. **`send` moves ownership**, like `spawn`. Left to the design: moving only on `spawn` would force every program to spawn the handler from the process that accepted the connection (the honeypot's registry could no longer spawn sessions), which is the kind of "structure your code this way" rule the Design Philosophy rules out. The cost is the bookkeeping trap, which gets a BEST_PRACTICES **(trap)** rule.
+5. **std/http cleanup later**, not in phase 2.
