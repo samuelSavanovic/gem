@@ -120,12 +120,12 @@ static int gem_proc_cap = 0;        /* slots reserved: the process limit */
 static uint64_t gem_spawn_overflow_count = 0;
 
 static void gem_diag_print_on_exit(void) {
-    /* Always emit when GEM_DIAG=1, otherwise only when something
+    /* Always emit when GEM_DIAG is 1 or 2, otherwise only when something
        interesting happened. Keeps default test runs quiet but lets
        benchmark drivers force a baseline line. */
     const char *force = getenv("GEM_DIAG");
     int interesting = gem_spawn_overflow_count > 0;
-    if (!interesting && !(force && force[0] == '1')) return;
+    if (!interesting && !(force && (force[0] == '1' || force[0] == '2'))) return;
     fprintf(stderr,
             "gem_diag: spawn_overflow=%llu proc_hwm=%d max_procs=%d\n",
             (unsigned long long)gem_spawn_overflow_count,

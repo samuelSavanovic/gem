@@ -6,6 +6,9 @@ Kept for historical context — commit refs, design rationale, regression tests,
 
 ## Arena / Memory
 
+### `GEM_DIAG=2` shows which loop pays for its resets ✓ Done (2026-10-09)
+`GEM_DIAG=1` prints the program's reset totals at exit, all processes together, which shows the cost but not the loop. `GEM_DIAG=2` also prints a `gem_reset:` line on stderr for every reset that takes 1 ms or more: the Unix time, the pid, the kind (young, full or return), its duration and the remembered-log walk's share of it, the bytes in its region, copied and scanned, and the innermost Gem function with the line it last ran (`gem_diag_trace` in runtime/gem_copy.c). With `GEM_DIAG=2 TARGETS=mini_redis benchmarks/soak/run.sh` it shows where mini_redis's reset time goes under the soak load: the store's gen_server loop pays nearly all of them, its young resets mostly in the remembered-log walk over `db.data` (OPTIMIZATIONS.md, "A kept table written once is walked whole at every reset") and its long pauses in full resets ("Full resets still copy all a loop keeps, in one pause").
+
 ### Free a recursion's garbage at function return ✓ Done (2026-10-06)
 
 Memory was reclaimed only at loop back-edges, so a recursion kept everything its calls allocated until a loop that was running before it finished an iteration: memory grew with the number of calls, not the depth. A function that can recurse records a `GemArenaPoint` at entry, and a return that leaves at least `GEM_ARENA_RESET_THRESHOLD` of the call's allocation unfreed runs a region reset from that point with the return value as the only root; the hysteresis (`ret_min`) makes a recursion that hands a growing result up its levels copy it geometrically less often, not once per level. runtime/gem_copy.c ("Region reset", "Return resets") has the mechanism; "can recurse" is a cycle in the call graph (`mark_recursive_fns` in compiler/callgraph.gem). `GEM_DIAG=1` also prints `ret_resets=` and `ret_copied=`.
