@@ -4334,3 +4334,14 @@ big 2
 -- an error in a branch reports its own line
 165
 174
+5
+mine 1
+2 mine
+7
+1 mine mine
+2 mine mine
+mine 2
+mine my len
+mine ["a", "b"]
+false _anon_1
+1 2 1

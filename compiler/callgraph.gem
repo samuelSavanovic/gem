@@ -46,11 +46,11 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
   end
 
   # Module loads desugar at the top level into either:
-  #   (a) selective: `let foo = _mod_mod_foo` (one let per imported name).
-  #   (b) whole-module: `let mod = {fn_a: _mod_mod_fn_a, fn_b: …}`
+  #   (a) selective: `let foo = __mod_mod_foo` (one let per imported name).
+  #   (b) whole-module: `let mod = {fn_a: __mod_mod_fn_a, fn_b: …}`
   #       (frozen table, one entry per export).
   # Calls in the importing module then use `foo(…)` or `mod.fn_a(…)`,
-  # neither of which lex as a direct call to `_mod_…_…`. Without
+  # neither of which lex as a direct call to `__mod_…_…`. Without
   # resolution those edges are dropped from the call graph and
   # `mark_process_tail` can't reason about them. Build two maps:
   #   alias_to_fn[name]            → fn_def name (case a)

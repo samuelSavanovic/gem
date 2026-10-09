@@ -19,7 +19,7 @@ let msg = receive()
 print("child total: {msg.child_total}, child hits: {msg.child_hits}")
 
 # Shadowing a module-level name in a top-level block is renamed by the
-# compiler (`_sh<N>_local_hits`); a spawn writing that block binding is not
+# compiler (`__sh<N>_local_hits`); a spawn writing that block binding is not
 # module state, so it gets no note.
 for i in [1, 2]
   let local_hits = i

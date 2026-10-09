@@ -3,7 +3,7 @@
 # Produces the EXACT same AST shape as the bootstrap compiler.
 
 load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_for_in, make_for_range, make_match_arm, make_pat_table, make_pat_table_entry, make_pat_array, make_pat_literal, make_pat_name, make_pat_pin, make_pat_error, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
-load "./lexer" (tokenize, normalize_newlines)
+load "./lexer" (tokenize, normalize_newlines, check_reserved_names)
 load "./errors" (make_error_sink)
 
 # The deepest nesting the parser accepts (see `nest` in make_parser). Per
@@ -110,6 +110,7 @@ fn parse_source(source, file, sink)
   if sink.count() > errors_before or sink.suppressed()
     return make_program([])
   end
+  check_reserved_names(tokens, source, file, sink)
   let p = make_parser(tokens, source, file, sink)
   p.parse()
 end
@@ -160,7 +161,7 @@ fn make_parser(tokens, source, file, sink)
       return nil
     end
     gensym_counter += 1
-    let tmp = "_d{gensym_counter}v"
+    let tmp = "__d{gensym_counter}v"
     push(stmts, make_let(tmp, value, line))
     let missing = make_binop("and",
       make_binop("==", make_var(tmp), make_nil_node()),
@@ -561,7 +562,7 @@ fn make_parser(tokens, source, file, sink)
         expect("}")
 
         gensym_counter += 1
-        let pname = "_pdestr{gensym_counter}"
+        let pname = "__pdestr{gensym_counter}"
         push(params, pname)
 
         if peek().type == "="
@@ -1639,7 +1640,7 @@ fn make_parser(tokens, source, file, sink)
         expect("=")
         let rhs = parse_value()
         gensym_counter += 1
-        let tmp = "_d{gensym_counter}"
+        let tmp = "__d{gensym_counter}"
         let stmts = [make_let(tmp, rhs, line)]
         for di = 0, len(names)
           push_destructured(stmts, names[di], tmp, make_string(names[di]), make_dot(make_var(tmp), names[di]), dflts[di], line)
@@ -1683,7 +1684,7 @@ fn make_parser(tokens, source, file, sink)
         expect("=")
         let rhs = parse_value()
         gensym_counter += 1
-        let tmp = "_d{gensym_counter}"
+        let tmp = "__d{gensym_counter}"
         let stmts = [make_let(tmp, rhs, line)]
         for di = 0, len(names)
           push_destructured(stmts, names[di], tmp, make_int(di), make_index(make_var(tmp), make_int(di)), dflts[di], line)

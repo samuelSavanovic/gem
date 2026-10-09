@@ -257,9 +257,9 @@ fn lower_for_in(node, state)
     # for k, v in tbl ... end
     state.gensym = state.gensym + 1
     let g = state.gensym
-    let tbl_var = "_for_tbl_{g}"
-    let len_var = "_for_len_{g}"
-    let idx_var = "_for_i_{g}"
+    let tbl_var = "__for_tbl_{g}"
+    let len_var = "__for_len_{g}"
+    let idx_var = "__for_i_{g}"
     let inner = []
     push(inner, make_let(node.var_name, make_call(make_var("__table_key_at"), [make_var(tbl_var), make_var(idx_var)], 0), line))
     push(inner, make_let(node.val_name, make_call(make_var("__table_val_at"), [make_var(tbl_var), make_var(idx_var)], 0), line))
@@ -284,8 +284,8 @@ fn lower_for_in(node, state)
   # for x in items ... end
   state.gensym = state.gensym + 1
   let g = state.gensym
-  let items_var = "_for_items_{g}"
-  let idx_var = "_for_i_{g}"
+  let items_var = "__for_items_{g}"
+  let idx_var = "__for_i_{g}"
   let inner = []
   push(inner, make_let(node.var_name, make_index(make_var(items_var), make_var(idx_var)), line))
   push(inner, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
@@ -311,8 +311,8 @@ fn lower_for_range(node, state)
   let body = lower_stmts(node.body, state)
   state.gensym = state.gensym + 1
   let g = state.gensym
-  let idx_var = "_for_i_{g}"
-  let limit_var = "_for_limit_{g}"
+  let idx_var = "__for_i_{g}"
+  let limit_var = "__for_limit_{g}"
   let inner = []
   push(inner, make_let(node.var_name, make_var(idx_var), line))
   push(inner, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
@@ -336,9 +336,9 @@ end
 # ─── if / match / receive as a value ───────────────────────────
 # `let x = if c then a else b end` becomes
 #
-#   let _val_N = nil
-#   if c then _val_N = a else _val_N = b end
-#   let x = _val_N
+#   let __val_N = nil
+#   if c then __val_N = a else __val_N = b end
+#   let x = __val_N
 #
 # The temporary keeps the block from seeing `x` (`let n = if n == nil ...`
 # reads the outer `n`). A branch that ends in a statement, and an `if` or
@@ -407,7 +407,7 @@ end
 
 fn lower_block_value_store(node, state)
   state.gensym = state.gensym + 1
-  let tmp = "_val_{state.gensym}"
+  let tmp = "__val_{state.gensym}"
   let line = node.line
   let block = node.value
   finish_block(block, fn(e) make_assign(tmp, e, branch_line(e, line)) end)
@@ -434,7 +434,7 @@ end
 
 fn lower_match(node, state)
   state.gensym = state.gensym + 1
-  let match_var = "_match_{state.gensym}"
+  let match_var = "__match_{state.gensym}"
   let target_var_expr = make_var(match_var)
   let target_lowered = lower_node(node.target, state)
   let whens = []
@@ -449,7 +449,7 @@ end
 
 fn lower_receive(node, state)
   state.gensym = state.gensym + 1
-  let recv_var = "_recv_{state.gensym}"
+  let recv_var = "__recv_{state.gensym}"
   let recv_var_expr = make_var(recv_var)
   let arms = []
   for arm in node.arms
