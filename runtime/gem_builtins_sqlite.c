@@ -95,6 +95,7 @@ GemVal gem_sqlite_open_fn(void *_env, GemVal *args, int argc) {
 
         GemIORequest *req = gem_io_submit_extern(gem_sqlite_open_worker, a, gem_sqlite_open_free);
         if (!req) { gem_error("sqlite_open: I/O queue full"); }
+        req->runtime = 1;
         GemProcess *proc = &gem_proc_table[gem_current_pid];
         proc->io_request = req;
         gem_io_pool_yield();
@@ -142,6 +143,7 @@ GemVal gem_sqlite_close_fn(void *_env, GemVal *args, int argc) {
 
         GemIORequest *req = gem_io_submit_extern(gem_sqlite_close_worker, a, gem_sqlite_close_free);
         if (!req) { gem_error("sqlite_close: I/O queue full"); }
+        req->runtime = 1;
         gem_res_take(e);  /* queued: unreachable from now on */
         GemProcess *proc = &gem_proc_table[gem_current_pid];
         proc->io_request = req;

@@ -95,15 +95,19 @@ fn main()
     acceptor(l, reg)
   end
   sleep(10)
+  # A client that sees no EOF ends the shape at once: a regression fails
+  # in seconds instead of waiting out every client's timeout.
   let before = fds()
   let eofs = 0
   for i = 0, 2 * N
     let c = tcp_connect("127.0.0.1", PORT)
     tcp_write(c, "x")
-    if tcp_read(c, 16, 5000) == ""
-      eofs += 1
-    end
+    let r = tcp_read(c, 16, 5000)
     tcp_close(c)
+    if r != ""
+      break
+    end
+    eofs += 1
   end
   sleep(20)
   print("honeypot shape", before, fds(), "eofs", eofs == 2 * N)
@@ -125,9 +129,12 @@ fn main()
     kill(p, "kill")
   end
   eofs = 0
+  let seen = true
   for c in clients
-    if tcp_read(c, 16, 5000) == ""
+    if seen and tcp_read(c, 16, 5000) == ""
       eofs += 1
+    else
+      seen = false
     end
     tcp_close(c)
   end

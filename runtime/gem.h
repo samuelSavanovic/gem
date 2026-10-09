@@ -977,6 +977,8 @@ typedef struct {
        written only on the scheduler thread, freed with the request. */
     struct GemResBusy *busy;
     int nbusy;
+    int runtime;           /* GEM_IO_EXTERN work of the runtime's own (sqlite), not an
+                              `extern blocking fn`: it uses none of the caller's sockets */
 } GemIORequest;
 
 /* Process slot */

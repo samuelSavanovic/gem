@@ -1410,8 +1410,9 @@ end
 Helpers that only use a socket (a reader process, a `task.async` that
 writes to it, a watchdog that closes it on idle) don't claim it, and
 their crash, kill or return leaves it to its owner. Any process may
-`tcp_close` it. A session that forgets its `claim` leaks nothing while
-the acceptor lives, but its socket stays open after it crashes: watch
+`tcp_close` it. A session that forgets its `claim` leaves its socket
+with the acceptor: it stays open after the session crashes, for as long
+as the acceptor lives. Watch
 `process_info(acceptor).resources`, which counts what a process owns, or
 run with `GEM_DIAG=2`, which prints a `gem_resources:` line for every
 process that exits leaving resources open.

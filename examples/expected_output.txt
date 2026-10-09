@@ -4567,3 +4567,10 @@ then the fd closes: true
 still open while parked: 1 x
 the call still writes: own
 then the fd closes: true
+== killed with "kill"
+HTTP/1.1 200 OK
+port free: true
+== the caller killed while the server starts
+server still serves: HTTP/1.1 200 OK
+== stop while a handler is in a blocking call
+closed at once: true true

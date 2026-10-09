@@ -40,14 +40,16 @@ load "std/time"
 # (`_http_conn`) right after spawning it, so a connection accepted just
 # before a stop is still killed, and a connection that finishes says so
 # (`_http_closing`), so the server stops tracking it without a monitor.
-# Each connection claims its socket and the server claims the listener,
-# so whichever way a process ends, its socket closes (the untrappable
-# "kill" included). Killing the server process (as `stop` and a
-# supervisor do) arrives as an EXIT: it closes the listener, kills the
-# acceptor and the connections, then exits with that reason. A connection
-# whose handler traps exits gets an EXIT message instead; it closes its
-# own socket after that request. `serve` has the server monitor its
-# caller, so killing the caller stops the server.
+# The server opens and claims the listener, and each connection claims
+# its socket, so whichever way a process ends, its socket closes (the
+# untrappable "kill" included). The server also closes the socket of a
+# connection that dies: one killed during its own `extern blocking fn`
+# keeps its socket until the C call returns otherwise. Killing the server
+# process (as `stop` and a supervisor do) arrives as an EXIT: it kills the
+# acceptor, closes the listener, kills the connections, then exits with
+# that reason. A connection whose handler traps exits gets an EXIT message
+# instead; it closes its own socket after that request. `serve` has the
+# server monitor its caller, so killing the caller stops the server.
 
 # Runtime helper, one C pass (a Gem loop over `ord` costs about 50 ns a
 # byte): the length of the prefix of `s` made of bytes from `accept`.
@@ -1555,7 +1557,7 @@ fn accept_loop(listen_fd, cfg)
         # Registered here, not by the connection on its first run: the
         # acceptor is killed before the server's shut-down sweep, so every
         # connection it spawned is in the server's mailbox by then.
-        send(cfg.server, {tag: "_http_conn", pid: r.value})
+        send(cfg.server, {tag: "_http_conn", pid: r.value, fd: fd})
       else
         eprint("http: {r.error}; refusing a connection")
         pcall refuse(fd)
@@ -1572,9 +1574,9 @@ end
 
 # A message to the server process, from a connection or the runtime:
 # start tracking a connection ("_http_conn", from the acceptor), stop
-# tracking it ("_http_closing", from a connection that has finished, or
-# its "DOWN"), or an "EXIT". `conns` is the set of tracked connection
-# pids. A new connection is
+# tracking it ("_http_closing", from a connection that has finished), its
+# "DOWN" (close its socket), or an "EXIT". `conns` maps each tracked
+# connection's pid to its socket. A new connection is
 # monitored at once when `unwatched` is nil, else its pid is pushed there
 # for `watch_new` (see server_main). Returns the reason to shut down for,
 # or nil. One catch-all receive and a dispatch on the tag cost less per
@@ -1586,7 +1588,7 @@ fn server_message(conns, msg, acceptor, watch, unwatched = nil)
   end
   let tag = msg.tag
   if tag == "_http_conn"
-    conns[msg.pid] = true
+    conns[msg.pid] = msg.fd
     if unwatched == nil
       monitor(msg.pid)
     else
@@ -1598,7 +1600,10 @@ fn server_message(conns, msg, acceptor, watch, unwatched = nil)
     if watch != nil and msg.pid == watch
       return "shutdown"
     end
-    delete(conns, msg.pid)
+    let fd = delete(conns, msg.pid)
+    if fd != nil
+      tcp_close(fd)
+    end
   elif tag == "EXIT"
     if msg.pid == acceptor
       eprint("http: acceptor died: {msg.reason}")
@@ -1624,9 +1629,9 @@ fn watch_new(conns, unwatched)
   end
 end
 
-# Closes the listener and kills the acceptor and every connection, whose
-# sockets close with them. A connection that traps exits isn't killed; it
-# closes its own socket.
+# Kills the acceptor and every connection and closes their sockets (their
+# DOWNs close those of connections parked in a C call). A connection that
+# traps exits isn't killed; it closes its own socket.
 fn shut_down(listen_fd, acceptor, conns, watch)
   kill(acceptor, "shutdown")
   tcp_close(listen_fd)
@@ -1654,8 +1659,15 @@ end
 # supervisor) or the acceptor dying arrives as an EXIT message and it can
 # shut down cleanly before it exits with that reason. `watch` (serve's
 # caller, or nil) is monitored: when it dies, the server shuts down too.
-fn server_main(listen_fd, cfg, starter, ref, watch)
-  claim(listen_fd)
+# It opens the listener itself, so it owns it from the start: a starter
+# killed before the server ran can't take the port with it.
+fn server_main(host, port, cfg, starter, ref, watch)
+  let l = pcall tcp_listen(host, port)
+  if not l.ok
+    send(starter, {tag: "_http_started", ref: ref, error: l.error})
+    return nil
+  end
+  let listen_fd = claim(l.value)
   process_flag("trap_exit", true)
   if watch != nil
     monitor(watch)
@@ -1734,7 +1746,8 @@ end
 ## option. The server isn't linked to the caller: it keeps running after
 ## the caller exits, until `stop` or an exit signal (any reason but
 ## "normal") kills it, so it can be a supervisor child. Killing it closes
-## the port and every connection.
+## the port and every connection; the untrappable "kill" frees the port
+## too, but leaves open connections serving until they end.
 fn start(router_ref, opts = {})
   launch("http.start", router_ref, nil, opts)
 end
@@ -1773,18 +1786,12 @@ fn launch(caller, router_ref, watch, opts)
     error("{caller}: expected a router from http.router(), got {type(router_ref)}")
   end
   let cfg = {router: router_ref, max_body: max_body, idle_ms: idle_timeout_ms, request_ms: request_timeout_ms, write_ms: write_timeout_ms, server: nil}
-  let l = pcall tcp_listen(host, port)
-  if not l.ok
-    error("{caller}: {l.error}")
-  end
-  let listen_fd = l.value
   let me = self()
   let ref = make_ref()
   let s = pcall spawn(fn()
-    server_main(listen_fd, cfg, me, ref, watch)
+    server_main(host, port, cfg, me, ref, watch)
   end)
   if not s.ok
-    tcp_close(listen_fd)
     error("{caller}: {s.error}")
   end
   receive

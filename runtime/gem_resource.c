@@ -386,7 +386,8 @@ void gem_res_proc_exit(int slot) {
        a process killed during its own extern blocking call are parked
        until the call returns. */
     GemIORequest *req = proc->io_request;
-    int park = req && req->op == GEM_IO_EXTERN && !__atomic_load_n(&req->done, __ATOMIC_ACQUIRE);
+    int park = req && req->op == GEM_IO_EXTERN && !req->runtime &&
+               !__atomic_load_n(&req->done, __ATOMIC_ACQUIRE);
     int parked = -1, n = 0, left[GEM_RES_KINDS] = {0};
     if (req && req->nbusy > 0) {
         /* Its call's Socket params stay busy until the call returns. */
