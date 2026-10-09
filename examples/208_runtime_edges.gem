@@ -57,7 +57,7 @@ print(err(fn() tcp_listen("127.0.0.1", 70000) end))
 print(err(fn() tcp_connect("127.0.0.1", -1) end))
 let l = tcp_listen("127.0.0.1", 0)
 print("child sees its stdin:", exec("test -e /dev/fd/0") == 0)
-print("child sees the socket:", exec("test -e /dev/fd/{l}") == 0)
+print("child sees the socket:", exec("test -e /dev/fd/{tcp_fd(l)}") == 0)
 tcp_close(l)
 
 print("== files and sqlite")

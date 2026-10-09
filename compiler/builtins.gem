@@ -101,6 +101,9 @@ let BUILTIN_FNS = {
   tcp_write: "gem_tcp_write_fn",
   tcp_close: "gem_tcp_close_fn",
   tcp_peer: "gem_tcp_peer_fn",
+  tcp_fd: "gem_tcp_fd_fn",
+  tcp_from_fd: "gem_tcp_from_fd_fn",
+  claim: "gem_claim_fn",
   epoch_ms: "gem_epoch_ms_fn",
   format_time: "gem_format_time_fn",
   format_time_local: "gem_format_time_local_fn",
@@ -134,7 +137,7 @@ let LEAF_BUILTINS = {
   floor: true, ceil: true, round: true, abs: true, pow: true, sqrt: true,
   random: true, band: true, bor: true, bxor: true, bnot: true, bshl: true,
   bshr: true, self: true, make_ref: true, time_ms: true, epoch_ms: true,
-  tcp_peer: true,
+  tcp_peer: true, tcp_fd: true, tcp_from_fd: true, claim: true,
   __len: true, __type: true, __has_key: true, __is_array_n: true,
   __for_len: true, __for_items: true, __table_key_at: true, __table_val_at: true
 }

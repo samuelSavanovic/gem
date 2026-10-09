@@ -126,6 +126,9 @@ static inline void *gem_alloc(size_t n) {
 
 typedef enum {
     VAL_NIL, VAL_BOOL, VAL_INT, VAL_FLOAT, VAL_STRING, VAL_FN, VAL_TABLE, VAL_BUFFER, VAL_REF,
+    /* An owned resource (a socket, a database handle): an entry of the
+       resource table, gem_resource.c. */
+    VAL_RESOURCE,
     /* Only in a module slot of a spawned process that has not touched it
        yet: the value is in the slot's snapshot unit (see "Module globals").
        Reading the slot through gem_global_get copies it in. Never a value
@@ -182,6 +185,10 @@ struct GemVal {
         GemTable *table;
         GemBuffer *buffer;
         int64_t rval;  /* unique reference id (VAL_REF) */
+        /* VAL_RESOURCE: the entry's serial (never reused; equality and
+           hashing use it), its slot in the resource table, and its kind
+           (GEM_RES_*), which outlives the entry. */
+        struct { int64_t res_id; int32_t res_slot; int32_t res_kind; };
     };
 };
 
@@ -492,6 +499,7 @@ static inline int gem_val_eq(GemVal a, GemVal b) {
         case VAL_FLOAT: return a.fval == b.fval;
         case VAL_STRING: return a.slen == b.slen && memcmp(a.sval, b.sval, (size_t)a.slen) == 0;
         case VAL_REF: return a.rval == b.rval;
+        case VAL_RESOURCE: return a.res_id == b.res_id;
         case VAL_TABLE: return a.table == b.table;
         case VAL_BUFFER: return a.buffer == b.buffer;
         case VAL_FN: return a.fn == b.fn && a.env == b.env;
@@ -682,6 +690,9 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_close_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_peer_fn(void *_env, GemVal *args, int argc);
+GemVal gem_tcp_fd_fn(void *_env, GemVal *args, int argc);
+GemVal gem_tcp_from_fd_fn(void *_env, GemVal *args, int argc);
+GemVal gem_claim_fn(void *_env, GemVal *args, int argc);
 GemVal gem_epoch_ms_fn(void *_env, GemVal *args, int argc);
 GemVal gem_format_time_fn(void *_env, GemVal *args, int argc);
 GemVal gem_format_time_local_fn(void *_env, GemVal *args, int argc);
@@ -971,7 +982,7 @@ typedef struct {
     int pid;
     int wait_fd;        /* fd this process is waiting on (when IO_WAIT) */
     int wait_write;     /* 0 = waiting for read, 1 = waiting for write */
-    int wait_fd_closed; /* set by gem_io_fd_closed while waiting on wait_fd */
+    GemVal wait_res;    /* the socket whose fd that is (closing it wakes the process) */
     /* Scheduler bookkeeping (gem_scheduler.c, "Run state"). wait_kind and
        dl_idx are zero when the process is in none of the structures;
        wait_idx means something only while wait_kind is set. */
@@ -1013,6 +1024,11 @@ typedef struct {
        out units, each once), searched by gem_table_mutate_slow. */
     GemModUnit **mod_live;
     int mod_live_n, mod_live_cap;
+    /* Resource table lists (gem_resource.c): entries this process owns,
+       entries it used last without owning them (-1 = none), and how many
+       it owns. */
+    int32_t res_owned, res_used;
+    int res_count;
 } GemProcess;
 
 /* Drop a process's module slots and its snapshot unit references. */
@@ -1107,16 +1123,17 @@ int64_t gem_after_deadline(GemVal ms);
 /* Get current monotonic time in milliseconds */
 int64_t gem_now_ms(void);
 
-/* Non-blocking I/O: yield current coroutine until fd is ready.
-   for_write=0 means wait for readable, for_write=1 means wait for writable.
-   Returns 0 when the fd may be ready, or -1 with errno = EBADF when the fd
-   was closed through gem_io_fd_closed during the wait; the caller must not
-   touch the fd then, since its number may already belong to a new file. */
-int gem_io_yield(int fd, int for_write);
+/* Non-blocking I/O: yield current coroutine until fd, the fd of socket
+   `sock`, may be ready. for_write=0 means wait for readable, for_write=1
+   means wait for writable. Closing the socket wakes the wait too, so the
+   caller resolves `sock` again afterwards (gem_res_lookup) and never
+   touches the fd number once the socket is closed: it may already belong
+   to a new file. */
+void gem_io_yield(int fd, int for_write, GemVal sock);
 
-/* Wake every process waiting in gem_io_yield on fd, making their waits
-   return -1. Call before close(fd). */
-void gem_io_fd_closed(int fd);
+/* Wake every process waiting in gem_io_yield on a socket that is being
+   closed (gem_res_closing). */
+void gem_io_wake_closing(void);
 
 /* Yield the current coroutine for a thread pool I/O request.
    Sets state to IO_WAIT; caller must set proc->io_request first. */
@@ -1171,6 +1188,74 @@ GemVal gem_send_after_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_cancel_timer_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_processes_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_process_info_builtin(void *_env, GemVal *args, int argc);
+
+/* ─── Owned resources (gem_resource.c) ───
+ *
+ * Sockets and sqlite handles are entries of one resource table. A
+ * resource value (VAL_RESOURCE) names an entry by serial: the entry at its
+ * slot is that resource only while the serials match, so a closed one
+ * stays closed in every copy and process. Every entry has an owner (a
+ * full pid, or none), at first the process that opened it; claim(r) makes
+ * the caller the owner and marks it claimed. When a process exits,
+ * gem_res_proc_exit closes what it owns if it claimed it or the exit is
+ * abnormal, and leaves the rest open and ownerless. Every runtime path
+ * that closes a resource goes through gem_res_close / gem_res_take. */
+
+enum { GEM_RES_SOCKET = 1, GEM_RES_SQLITE = 2, GEM_RES_KINDS };
+
+typedef struct {
+    int64_t serial;      /* 0: free slot */
+    int kind;
+    int64_t owner;       /* Gem-visible pid, or -1 for none */
+    int owner_slot;      /* its slot, or -1 */
+    int claimed;
+    int64_t user;        /* last process that used it without owning it, or -1 */
+    int user_slot;
+    int parked;          /* index of the parked request it waits for, or -1 */
+    int closing;         /* set while gem_res_close wakes its waiters */
+    int32_t own_prev, own_next;  /* owner's list (or the parked request's) */
+    int32_t use_prev, use_next;  /* user's list */
+    int32_t free_next;
+    /* Payload. */
+    int fd;              /* GEM_RES_SOCKET */
+    uint64_t dev, ino;   /* the fd's st_dev / st_ino when it was registered */
+    void *ptr;           /* GEM_RES_SQLITE: the sqlite3 * */
+} GemResEntry;
+
+/* Register a new resource owned by the running process (none outside a
+   process); returns its value. Fill in the payload with gem_res_entry. */
+GemVal gem_res_new(int kind);
+/* The entry of an open resource, or NULL when it is closed (or v is no
+   resource). The pointer is valid until the next gem_res_new. */
+GemResEntry *gem_res_lookup(GemVal v);
+/* The open entry of resource `v` of `kind` for builtin `who`, recording
+   the running process as its last user; raises "<who>: expected a
+   socket, got int" for a wrong value and "<who>: socket is closed" (for
+   sqlite "<who>: not an open database handle") for a closed one. */
+GemResEntry *gem_res_get(GemVal v, int kind, const char *who);
+/* As gem_res_get, but returns NULL for a closed resource of `kind`. */
+GemResEntry *gem_res_get_open(GemVal v, int kind, const char *who);
+/* Close an open socket: wake its waiters, close its fd unless the fd now
+   names another file (st_dev/st_ino), free the entry. */
+void gem_res_close(GemResEntry *e);
+/* Remove an entry and return its payload pointer (a kind that closes
+   itself, as sqlite_close does through the pool). */
+void *gem_res_take(GemResEntry *e);
+/* 1 while gem_res_close is closing the socket `v` (for the waiter scan). */
+int gem_res_closing(GemVal v);
+/* The running process's exit: called by gem_free_proc_slot. */
+void gem_res_proc_exit(int slot);
+/* Initialise a new process's lists. */
+void gem_res_proc_init(GemProcess *proc);
+/* The open socket entry with this fd and inode, or NULL. */
+GemResEntry *gem_res_find_socket(int fd, uint64_t dev, uint64_t ino);
+/* Kind names: "socket" / "sqlite" (type), "Socket" / "Sqlite" (print). */
+const char *gem_res_type_name(int kind);
+const char *gem_res_print_name(int kind);
+/* GEM_DIAG=1 counts. */
+void gem_res_diag_counts(int *open, int *ownerless);
+/* Close callback of sockets. */
+void gem_tcp_close_fd_checked(int fd, uint64_t dev, uint64_t ino);
 
 /* ─── Thread pool for async I/O ─── */
 

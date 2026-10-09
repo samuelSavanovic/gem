@@ -3883,13 +3883,13 @@ sqlite.query: parameter :a is a table; expected nil, bool, int, float or string
 sqlite.query: params must be an array or a record of names, not both
 sqlite.query: params must be an array, got a float key
 sqlite.query: params key "a" matches no parameter of the statement
-["accept", false, "tcp_accept: accept failed: Bad file descriptor"]
-fd reused: true
-["accept on reused fd", false, "tcp_accept: accept failed: Bad file descriptor"]
-new listener still accepts: int
-["read", false, "tcp_read: read failed: Bad file descriptor"]
-["read with timeout", false, "tcp_read: read failed: Bad file descriptor"]
-["write", false, "tcp_write: write failed: Bad file descriptor"]
+["accept", false, "tcp_accept: socket is closed"]
+fd reused: true same socket: false
+["accept on reused fd", false, "tcp_accept: socket is closed"]
+new listener still accepts: socket
+["read", false, "tcp_read: socket is closed"]
+["read with timeout", false, "tcp_read: socket is closed"]
+["write", false, "tcp_write: socket is closed"]
 ["accept, closed from C", false, "tcp_accept: accept failed: Bad file descriptor"]
 done
 preabc
@@ -4291,7 +4291,7 @@ sort: the comparator must return a number (negative, zero or positive), got nil
 42
 error
 -- tcp_listen resolves host names
-int
+socket
 -- json: {} stays an object
 {} [] {} {"a":{},"b":[]}
 {} []
@@ -4413,6 +4413,53 @@ after clean close: 127.0.0.1
 after writing to it: nil
 read after reset: true
 after reset: nil
-tcp_peer: getpeername failed: Bad file descriptor
-tcp_peer: expected int socket fd
-tcp_peer: expected int socket fd
+tcp_peer: socket is closed
+tcp_peer: expected a socket, got string
+tcp_peer: expected a socket, got nil
+== values
+socket
+true true
+true false true
+a copy is equal: true
+client server false
+type error in <: got socket and socket
+json.encode: cannot encode a socket
+to_int: cannot convert socket to int
+type error in +: got socket and int
+copied to a process and back: true true
+== wrong values
+tcp_read: expected a socket, got int
+tcp_write: expected a socket, got string
+tcp_accept: expected a socket, got nil
+tcp_close: expected a socket, got int
+tcp_peer: expected a socket, got nil
+tcp_fd: expected a socket, got int
+claim: expected a socket or a database handle, got int
+claim: expected a socket or a database handle, got nil
+== tcp_fd
+int true true
+== closed
+ping
+nil nil
+tcp_read: socket is closed
+tcp_write: socket is closed
+tcp_accept: socket is closed
+tcp_peer: socket is closed
+tcp_fd: socket is closed
+claim: socket is closed
+peer sees the close: true
+== tcp_from_fd
+socket true true
+true
+true
+true
+true
+tcp_from_fd: fd -1 is not open
+tcp_from_fd: expected an int fd, got string
+["s2 took s1's fd number", true, "but is another socket", true]
+["reader of s1 got", false, nil, "tcp_read: socket is closed"]
+new socket on the same number: true
+still open
+file on the same number: true
+file still open: true
+done

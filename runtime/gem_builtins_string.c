@@ -252,6 +252,11 @@ GemVal gem_interp(int n, GemVal *parts) {
             case VAL_FN: s = "<fn>"; slen = 4; break;
             case VAL_BUFFER: slen = snprintf(tmp, sizeof(tmp), "<buffer:%d>", parts[i].buffer->len); s = tmp; break;
             case VAL_REF: slen = snprintf(tmp, sizeof(tmp), "#Ref<%lld>", (long long)parts[i].rval); s = tmp; break;
+            case VAL_RESOURCE:
+                slen = snprintf(tmp, sizeof(tmp), "#%s<%lld>", gem_res_print_name(parts[i].res_kind),
+                                (long long)parts[i].res_id);
+                s = tmp;
+                break;
             default: s = ""; slen = 0; break;
         }
         gem_buffer_reserve(&b, (size_t)slen, "string interpolation");

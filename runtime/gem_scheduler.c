@@ -126,10 +126,12 @@ static void gem_diag_print_on_exit(void) {
     const char *force = getenv("GEM_DIAG");
     int interesting = gem_spawn_overflow_count > 0;
     if (!interesting && !(force && (force[0] == '1' || force[0] == '2'))) return;
+    int res_open, res_ownerless;
+    gem_res_diag_counts(&res_open, &res_ownerless);
     fprintf(stderr,
-            "gem_diag: spawn_overflow=%llu proc_hwm=%d max_procs=%d\n",
+            "gem_diag: spawn_overflow=%llu proc_hwm=%d max_procs=%d resources_open=%d ownerless=%d\n",
             (unsigned long long)gem_spawn_overflow_count,
-            gem_proc_hwm, gem_proc_cap);
+            gem_proc_hwm, gem_proc_cap, res_open, res_ownerless);
     fflush(stderr);
 }
 
@@ -139,10 +141,10 @@ static struct pollfd *gem_poll_fds = NULL;
 static int *gem_poll_pids = NULL;
 
 /* revents that make an fd waiter ready. POLLNVAL counts: an fd closed
-   without tcp_close (which wakes its waiters itself, gem_io_fd_closed), e.g.
-   by C code behind an extern fn, would otherwise report POLLNVAL on every
-   pass and spin the scheduler; the waiter's tcp builtin then fails with
-   EBADF and raises. */
+   without tcp_close (which wakes its waiters itself, gem_io_wake_closing),
+   e.g. by C code behind an extern fn, would otherwise report POLLNVAL on
+   every pass and spin the scheduler; the waiter's tcp builtin then fails
+   with EBADF and raises. */
 #define GEM_POLL_WAKE (POLLIN | POLLOUT | POLLERR | POLLHUP | POLLNVAL)
 
 /* ─── Process stacks ───
@@ -919,6 +921,9 @@ static void gem_free_proc_slot(int pid) {
     if (pid != gem_main_pid)
         gem_arena_destroy(&proc->arena);
 
+    /* Disown its resources (gem_resource.c). */
+    gem_res_proc_exit(pid);
+
     /* A process killed while waiting on the thread pool still holds its
        reference to the request, so release it on the process's behalf. */
     if (proc->io_request) gem_io_release(proc->io_request);
@@ -1194,6 +1199,10 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     gem_proc_table[pid].pcall_depth = 0;
     gem_proc_table[pid].call_depth = 0;
     gem_proc_table[pid].leaf_site = NULL;
+    /* gem_resource.c names a process by its bottom frames in reports. */
+    gem_proc_table[pid].call_stack[0].name = NULL;
+    gem_proc_table[pid].call_stack[1].name = NULL;
+    gem_res_proc_init(&gem_proc_table[pid]);
     gem_proc_set_state(pid, GEM_PROC_READY);
     return pid;
 }
@@ -1252,33 +1261,23 @@ void gem_io_pool_yield(void) {
     mco_yield(proc->coro);
 }
 
-int gem_io_yield(int fd, int for_write) {
-    if (gem_current_pid < 0 || gem_current_pid >= gem_proc_hwm) {
-        return 0;
-    }
+void gem_io_yield(int fd, int for_write, GemVal sock) {
+    if (gem_current_pid < 0 || gem_current_pid >= gem_proc_hwm) return;
     GemProcess *proc = &gem_proc_table[gem_current_pid];
     proc->wait_fd = fd;
     proc->wait_write = for_write;
-    proc->wait_fd_closed = 0;
+    proc->wait_res = sock;
     gem_proc_set_state(gem_current_pid, GEM_PROC_IO_WAIT);
     mco_yield(proc->coro);
-    if (proc->wait_fd_closed) {
-        proc->wait_fd_closed = 0;
-        errno = EBADF;
-        return -1;
-    }
-    return 0;
+    proc->wait_res = GEM_NIL;
 }
 
-void gem_io_fd_closed(int fd) {
+void gem_io_wake_closing(void) {
     /* Backwards: waking slot k moves the last entry, already seen, into k. */
     for (int k = gem_fd_waiters.n - 1; k >= 0; k--) {
         int slot = gem_fd_waiters.slots[k];
-        GemProcess *proc = &gem_proc_table[slot];
-        if (proc->wait_fd == fd) {
-            proc->wait_fd_closed = 1;
+        if (gem_res_closing(gem_proc_table[slot].wait_res))
             gem_proc_set_state(slot, GEM_PROC_READY);
-        }
     }
 }
 
@@ -1353,6 +1352,7 @@ void gem_run_main(GemFnPtr fn, void *env) {
     gem_proc_table[pid].call_depth = 0;
     gem_proc_table[pid].leaf_site = NULL;
     gem_proc_table[pid].pinned_boxes = NULL;
+    gem_res_proc_init(&gem_proc_table[pid]);
     gem_proc_set_state(pid, GEM_PROC_READY);
     gem_run_scheduler();
 }
@@ -2238,6 +2238,9 @@ GemVal gem_process_info_builtin(void *_env, GemVal *args, int argc) {
     } else {
         gem_table_set(info, gem_string("exit_reason"), GEM_NIL);
     }
+
+    /* resources: how many open resources it owns */
+    gem_table_set(info, gem_string("resources"), gem_int(proc->res_count));
 
     return info;
 }

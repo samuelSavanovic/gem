@@ -1,0 +1,88 @@
+# Sockets are values of their own type: they print
+# with a table id, compare equal only to themselves, work as table keys,
+# and every builtin refuses an int or a closed socket.
+
+load "std/json"
+
+extern include "sys/socket.h"
+extern include "fcntl.h"
+extern include "unistd.h"
+extern fn socket(domain: Int, kind: Int, protocol: Int) -> Int
+extern fn open(path: String, flags: Int) -> Int
+extern fn close(fd: Int) -> Int
+
+fn err(f)
+  (pcall f()).error
+end
+
+let l = tcp_listen("127.0.0.1", 18217)
+let c = tcp_connect("127.0.0.1", 18217)
+let s = tcp_accept(l)
+
+print("== values")
+print(type(l))
+print(to_string(l) == "{l}", find("{l}", "#Socket<") == 0)
+print(l == l, l == c, c != s)
+let copy = [l][0]
+print("a copy is equal:", copy == l)
+let names = {}
+names[c] = "client"
+names[s] = "server"
+print(names[c], names[s], has_key(names, l))
+print(err(fn() l < c end))
+print(err(fn() json.encode({sock: s}) end))
+print(err(fn() to_int(l) end))
+print(err(fn() l + 1 end))
+
+# A copy in another process is the same socket.
+let me = self()
+spawn do
+  send(me, {same: names[c] == "client", sock: c})
+end
+receive
+when {same: same, sock: sock}
+  print("copied to a process and back:", same, sock == c)
+end
+
+print("== wrong values")
+print(err(fn() tcp_read(3) end))
+print(err(fn() tcp_write("3", "x") end))
+print(err(fn() tcp_accept(nil) end))
+print(err(fn() tcp_close(3) end))
+print(err(fn() tcp_peer() end))
+print(err(fn() tcp_fd(4294967299) end))
+print(err(fn() claim(1) end))
+print(err(fn() claim() end))
+
+print("== tcp_fd")
+let fd = tcp_fd(c)
+print(type(fd), fd > 2, fd != tcp_fd(s))
+
+print("== closed")
+tcp_write(c, "ping")
+print(tcp_read(s, 16, 1000))
+print(tcp_close(c), tcp_close(c))
+print(err(fn() tcp_read(c) end))
+print(err(fn() tcp_write(c, "x") end))
+print(err(fn() tcp_accept(c) end))
+print(err(fn() tcp_peer(c) end))
+print(err(fn() tcp_fd(c) end))
+print(err(fn() claim(c) end))
+print("peer sees the close:", tcp_read(s, 16, 1000) == "")
+
+print("== tcp_from_fd")
+let raw = socket(2, 1, 0)
+let r = tcp_from_fd(raw)
+print(type(r), tcp_fd(r) == raw, r != l)
+print(err(fn() tcp_from_fd(raw) end) == "tcp_from_fd: fd {raw} is already registered as a socket")
+print(err(fn() tcp_from_fd(tcp_fd(l)) end) == "tcp_from_fd: fd {tcp_fd(l)} is already registered as a socket")
+tcp_close(r)
+let file = open("examples/217_resource_values.gem", 0)
+print(err(fn() tcp_from_fd(file) end) == "tcp_from_fd: fd {file} is not a TCP socket")
+close(file)
+print(err(fn() tcp_from_fd(file) end) == "tcp_from_fd: fd {file} is not open")
+print(err(fn() tcp_from_fd(-1) end))
+print(err(fn() tcp_from_fd("7") end))
+
+tcp_close(s)
+tcp_close(l)
