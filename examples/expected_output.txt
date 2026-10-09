@@ -4410,6 +4410,7 @@ server sees: 127.0.0.1 int true
 ["in session", "127.0.0.1", true]
 read after peer close: true
 after clean close: 127.0.0.1
+after writing to it: nil
 read after reset: true
 after reset: nil
 tcp_peer: getpeername failed: Bad file descriptor

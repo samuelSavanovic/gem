@@ -417,15 +417,22 @@ GemVal gem_tcp_close_fn(void *_env, GemVal *args, int argc) {
 /* {ip, port} of the socket's remote end, or nil when it has none: a
    listening socket, or a peer that reset the connection before this call
    (Linux reports ENOTCONN, macOS EINVAL). Any other failure, such as a
-   closed fd, raises. */
+   closed fd, raises, as does a socket that isn't a TCP one (only an
+   inherited fd can be). */
 GemVal gem_tcp_peer_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1 || args[0].type != VAL_INT) {
         gem_error("tcp_peer: expected int socket fd");
     }
+    int fd = (int)args[0].ival;
+    int sock_type = 0;
+    socklen_t type_len = sizeof(sock_type);
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &sock_type, &type_len) == 0 && sock_type != SOCK_STREAM) {
+        gem_error("tcp_peer: not a TCP socket");
+    }
     struct sockaddr_storage addr;
     socklen_t addr_len = sizeof(addr);
-    if (getpeername((int)args[0].ival, (struct sockaddr *)&addr, &addr_len) < 0) {
+    if (getpeername(fd, (struct sockaddr *)&addr, &addr_len) < 0) {
         if (errno == ENOTCONN || errno == EINVAL) return GEM_NIL;
         char buf[256];
         snprintf(buf, sizeof(buf), "tcp_peer: getpeername failed: %s", strerror(errno));

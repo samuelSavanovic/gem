@@ -23,6 +23,10 @@ print(receive())
 tcp_close(c)
 print("read after peer close:", tcp_read(s, 16, 1000) == "")
 print("after clean close:", tcp_peer(s).ip)
+# Until a write draws a reset from the closed peer.
+tcp_write(s, "x", 1000)
+sleep(20)
+print("after writing to it:", tcp_peer(s))
 tcp_close(s)
 
 # Closing with unread data sends a reset; the server's socket then has no peer.

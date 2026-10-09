@@ -1452,7 +1452,10 @@ end)
 A client that connects and resets at once (scanners and bots do it all
 the time) leaves a socket with no peer address by the time the acceptor
 asks, so `tcp_peer(fd).ip` raises `field access on non-table: got nil`
-and kills the acceptor. Check for `nil` and close the socket:
+and kills the acceptor. Later calls can return `nil` too: a client that
+closed cleanly loses its address as soon as a write to it draws a reset.
+Read the address once, right after `tcp_accept`, check for `nil`, and
+pass the value on:
 
 ```gem
 let peer = tcp_peer(fd)
@@ -1769,4 +1772,4 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | A `Ptr` sent, captured by `spawn`, or left when its process dies | shared or leaked C object; use after free | one process makes, uses and frees it, on every path |
 | Handle opened, process crashes | fd leak | close on every path |
 | `tcp_read` with no timeout | blocks forever on a silent peer | pass a timeout |
-| `tcp_peer(fd).ip` right after `tcp_accept` | `nil` when the peer already reset; field access raises | check `tcp_peer(fd) == nil` and close |
+| `tcp_peer(fd).ip` | `nil` once the peer has reset, even after a clean close; field access raises | read it once after `tcp_accept`, check for `nil`, keep the value |

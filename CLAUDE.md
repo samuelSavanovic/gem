@@ -45,7 +45,7 @@ runtime/              # C runtime — split by category:
   sqlite3.c/sqlite3.h #   SQLite amalgamation (vendored)
 bootstrap/stage0.c    # checked-in C output — bootstrap artifact for clean builds
 build/gem             # compiled compiler binary (gitignored, built from stage0.c)
-examples/             # numbered tests (01–213) + run_all.sh; plus larger programs that test themselves (tests/check_example_apps.sh):
+examples/             # numbered tests (01–216) + run_all.sh; plus larger programs that test themselves (tests/check_example_apps.sh):
                       #   json_parser.gem, tcp_echo.gem, bookmark_app/ (HTMX + sqlite web app), stomp_broker/ (OTP-style STOMP broker),
                       #   logstat/ (CLI access-log analyzer, its own gem.toml project; the text-processing perf yardstick),
                       #   mini_redis/ (Redis-protocol server; the yardstick for long-lived state, connections and fan-out),
