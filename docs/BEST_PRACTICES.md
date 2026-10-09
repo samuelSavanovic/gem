@@ -84,11 +84,12 @@ deadlines, restart intensity) follow this doc and test themselves with
   *back-edge*, the point where an iteration ends and the next begins, and
   when a recursive function returns.
 
-**Block values.** `if`, `match` and `receive` give a value to a `let`, an
-assignment or a `return` (`let x = if ...`), but can't sit inside an
-expression (`print(if ...)` is an error). An expression can't continue on
-the next line, even inside parentheses; only call arguments and table
-literals can span lines. Both come up below.
+**Block values.** `if`, `match` and `receive` give a value, and go
+anywhere an expression does (`let x = if ...`, `print(if ...)`) except a
+parameter default and a `when` arm's value. An expression can't continue
+on the next line, even inside parentheses; only call arguments, table
+literals and the lines of a block itself can span lines. Both come up
+below.
 
 ---
 
@@ -378,7 +379,7 @@ end
 
 ## Control flow
 
-### `if`, `match` and `receive` give values to `let`, `=` and `return`
+### `if`, `match` and `receive` give values
 
 The value is the last expression of the branch taken:
 
@@ -390,16 +391,30 @@ else "error"
 end
 ```
 
-This works for a `let` (destructuring too), an assignment (`x = `,
-`x += `, `t.k = `, `t[k] = `), a `return`, and as the last statement of a
-function or block. A branch that ends in a statement, and an `if` or
-`match` that takes no branch, gives `nil`. In `return match ...`, a call
-at the end of an arm is a tail call, so a process loop can be written that
-way.
+A block goes anywhere an expression does: a `let` (destructuring too), an
+assignment (`x = `, `x += `, `t.k = `, `t[k] = `), a `return`, a call
+argument, an operand, a table entry, an interpolation, and the last
+statement of a function or block. A branch that ends in a statement, and
+an `if` or `match` that takes no branch, gives `nil`. In `return match
+...`, a call at the end of an arm is a tail call, so a process loop can be
+written that way.
 
-They can't sit inside an expression: `print(if ...)`, `1 + match ...` and
-`let x = if ... end + 1` are compile errors. Bind the value with a `let`
-first.
+```gem
+print("{n} item{if n == 1 then "" else "s" end}")
+let total = base + match kind
+when "a" then 1
+else 2
+end
+```
+
+Operands still run left to right (in `f(g(), if c then h() end)`, `g()`
+runs first), and a block in the right operand of `and` / `or` runs only
+when that operand is needed. A statement that starts with `if` is the
+block alone: write `(if c then a else b end).name`, not `if ... end.name`
+(a brace block's body is an expression and goes on).
+A parameter default and a `when` arm's value can't be a block (a compile
+error); compute the default in the body, and bind the `when` value first
+and pin it (`when ^v`).
 
 An arm fits on one line with `then` (`when 200 then "ok"`, `after 100 then
 nil`), like a one-line `if`. Without `then`, the body must start on the

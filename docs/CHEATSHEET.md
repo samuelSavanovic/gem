@@ -70,13 +70,14 @@ else
   fallback()
 end
 
-# if / match / receive give a value to a let, an assignment or a return (nil when no branch is taken)
+# if / match / receive give a value, anywhere an expression goes (nil when no branch is taken)
 let size = if n > 10 then "big" else "small" end
+print("{n} item{if n == 1 then "" else "s" end}")
 total += match op
 when "inc" then 1
 else 0
 end
-                                     # not inside an expression: print(if ...) is an error; bind it first
+                                     # not as a param default or a `when` value
 
 # Modules — load (NOT import), export at end of file
 load "std/string"                    # => string.split(...)  (namespace = file base name)

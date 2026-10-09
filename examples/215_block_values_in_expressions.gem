@@ -1,0 +1,167 @@
+# if / match / receive used as values inside expressions: call arguments,
+# operands, table and array entries, interpolations, conditions, loop
+# headers; evaluation order, short-circuiting, and branches that leave.
+load "std/string"
+load "./modules/block_value_ns" as bvns
+
+let trace = []
+fn t(v)
+  push(trace, v)
+  v
+end
+fn show(label)
+  print(label, string.join(trace, ","))
+  trace = []
+end
+
+let c = true
+let n = 3
+
+print("== positions ==")
+print(if c then "yes" else "no" end)
+print(1 + match n
+when 3 then 10
+else 0
+end)
+print(-if c then 2 else 3 end, not if c then true end)
+print([0, if c then 1 end, 2])
+let tab = {a: 1, b: match n when 3 then "three" else "other" end}
+print(tab.a, tab.b)
+print("n is {if n % 2 == 0 then "even" else "odd" end}")
+print([10, 20, 30][if c then 1 else 0 end])
+print((if c then {x: 7} else {x: 8} end).x)
+print(match n
+when 3 then {name: "m"}
+end.name)
+print((if c then fn(z) z * 2 end end)(21))
+let after_end = if c then 1 else 2 end + 1
+print(after_end)
+print(if if c then false else true end then "inner true" else "inner false" end)
+print(string.trim(if c then "  padded  " else "" end))
+print(len(if c then [1, 2, 3] else [] end))
+
+print("== evaluation order ==")
+print(t("a"), if c then t("b") else t("x") end, t("c"))
+show("args")
+print(t(1) + (if c then t(2) else 0 end) + t(3))
+show("binop")
+let keyed = {}
+keyed[t("k")] = if c then t("v") end
+show("index assign")
+print(keyed["k"])
+let obj = {f: fn(v) "old {v}" end}
+print(obj.f(if c then obj.f = fn(v) "new {v}" end; 1 else 2 end))
+print(obj.f(1))
+let x = 1
+print(x + (if c then x = 10; 1 else 0 end), x)
+let counter = 0
+let bump = fn()
+  counter += 1
+  counter
+end
+print(counter + (if c then bump() else 0 end), counter)
+# A closure in an earlier statement's block that assigns `x`.
+fn closure_in_earlier_block()
+  let x = 1
+  let setter = nil
+  let y = if c then setter = fn() x = 99 end; 0 end
+  print(x, if c then setter(); 1 end)
+end
+closure_in_earlier_block()
+# A module's exported `let`, reassigned by the module.
+print(bvns.f(if c then bvns.set(); 1 end))
+# A shorthand pattern binding named like a loaded module.
+match {string: {f: fn(v) "old {v}" end}}
+when {string}
+  print(string.f(if c then string.f = fn(v) "new {v}" end; 1 end))
+end
+let total = 5
+total += if c then t("rhs") end == "rhs" and 1 or 0
+print(total)
+show("compound")
+
+print("== and / or ==")
+print(false and (if t("never") then 1 end))
+print(true and (if c then t("needed") end))
+print(nil or (if c then t("or needed") end))
+print(1 or (if t("never") then 1 end))
+show("short-circuit")
+
+print("== conditions and loops ==")
+if (if c then n > 2 else false end)
+  print("if cond")
+elif (match t("elif") when "elif" then true end)
+  print("elif cond")
+end
+show("elif not reached")
+let i = 0
+let seen = []
+while (if i < 5 then true else false end)
+  i += 1
+  if i == 2
+    continue
+  end
+  push(seen, i)
+end
+print(seen)
+for k = if c then 1 else 0 end, match n when 3 then 4 end
+  t(k)
+end
+show("for range")
+for v in if c then ["p", "q"] else [] end
+  t(v)
+end
+show("for in")
+match if c then "m" else "n" end
+when "m" then print("match target")
+end
+
+print("== branches that leave ==")
+fn early(v)
+  print(if v then return "early" else "late" end)
+  "end"
+end
+print(early(true))
+print(early(false))
+let kept = []
+for k = 0, 5
+  push(kept, if k == 2 then continue elif k == 4 then break else k end)
+end
+print(kept)
+
+print("== tail calls ==")
+fn count_down(k, acc)
+  if k == 0
+    return acc
+  end
+  return count_down(k - 1, acc + (if k % 2 == 0 then 1 else 0 end))
+end
+print(count_down(1000000, 0))
+
+print("== receive ==")
+send(self(), {tag: "ping", v: 42})
+print("got {receive
+when {tag: "ping", v: v} then v
+after 100 then "timeout"
+end}")
+print(1 + receive
+after 0 then 1
+end)
+
+print("== fn literal in a default ==")
+fn apply(v, f = fn(z) if z then "truthy" else "falsy" end end)
+  f(v)
+end
+print(apply(true), apply(nil))
+
+print("== errors ==")
+let r = pcall do
+  obj.nope(if c then 1 end)
+end
+print(r.ok, r.error)
+let r2 = pcall do
+  print(1 + (if c then
+    nil + 1
+  end))
+end
+print(r2.ok, r2.error)

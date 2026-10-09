@@ -4,9 +4,10 @@
 # simpler shapes codegen expects:
 #
 #   for_in / for_range  →  block of let / while / assign
-#   let / assignment / return whose value is an if, match or receive
-#                       →  the block, with each branch's value stored or
-#                          returned at the branch's end
+#   an if, match or receive used as a value
+#                       →  the block, in statements that run first, with
+#                          each branch's value stored in a temporary (or
+#                          returned, for `return <block>`)
 #   match (with match_arm) → match (with when_clause)
 #   receive_match (with match_arm) → receive_match (arms are
 #                                    {pattern: {condition, bindings}, body})
@@ -36,7 +37,10 @@ load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_n
 # ─── Driver ──────────────────────────────────────────────────────
 
 fn lower(ast)
-  let state = {gensym: 0}
+  let state = {gensym: 0, assigners: {}, declared: {}, namespaces: {}, nested: {}, scanned: false, scopes: [], fn_id: 0, fn_count: 0}
+  if type(ast) == "table" and ast.tag == "program"
+    scan(ast, state)
+  end
   lower_node(ast, state)
 end
 
@@ -107,13 +111,6 @@ fn lower_node(node, state)
     return lower_receive(node, state)
   end
 
-  if (tag == "let" or tag == "assign" or tag == "dot_assign" or tag == "index_assign") and is_block_value(node.value)
-    return lower_block_value_store(node, state)
-  end
-  if tag == "return" and is_block_value(node.value)
-    return lower_block_value_return(node, state)
-  end
-
   # ── Pass-through: recurse in place so metadata (`file`, `line`,
   # `col`, etc.) attached by tag_source_file or future passes is
   # preserved. Rebuilding via constructors would drop fields that aren't
@@ -147,15 +144,8 @@ fn lower_node(node, state)
     node.key = lower_node(node.key, state)
     return node
   end
-  if tag == "anon_fn"
-    node.body = lower_stmts(node.body, state)
-    node.defaults = lower_nodes(node.defaults, state)
-    return node
-  end
-  if tag == "fn_def"
-    node.body = lower_stmts(node.body, state)
-    node.defaults = lower_nodes(node.defaults, state)
-    return node
+  if tag == "anon_fn" or tag == "fn_def"
+    return lower_fn(node, state)
   end
   if tag == "table"
     for e in node.entries
@@ -230,15 +220,64 @@ fn lower_nodes(nodes, state)
   out
 end
 
+# A statement list is a scope: its frame in state.scopes collects the
+# names its lets declare.
 fn lower_stmts(stmts, state)
   if stmts == nil
     return nil
   end
+  push(state.scopes, {names: {}, fn_id: state.fn_id})
   let out = []
   for s in stmts
-    push(out, lower_node(s, state))
+    lower_stmt_into(s, out, state)
   end
+  pop(state.scopes)
   out
+end
+
+# Lowers statement `s` onto `out`, after the statements that compute the
+# blocks it uses as values.
+fn lower_stmt_into(s, out, state)
+  let pre = []
+  let rest = hoist_stmt(s, pre, state)
+  for p in pre
+    lower_stmt_into(p, out, state)
+  end
+  push(out, lower_node(rest, state))
+  if type(rest) == "table" and rest.tag == "let"
+    state.scopes[-1].names[rest.name] = true
+  end
+  nil
+end
+
+# A fn literal or named fn: its body is a new body for stays_in_place, its
+# params a frame of their own.
+fn lower_fn(node, state)
+  let saved_nested = state.nested
+  let saved_fn_id = state.fn_id
+  state.fn_count = state.fn_count + 1
+  state.fn_id = state.fn_count
+  state.nested = {}
+  if node.nested_assigns != nil
+    for name in node.nested_assigns
+      state.nested[name] = true
+    end
+    delete(node, "nested_assigns")
+  end
+  let params = {}
+  for p in node.params
+    params[p] = true
+  end
+  if node.rest_param != nil
+    params[node.rest_param] = true
+  end
+  push(state.scopes, {names: params, fn_id: state.fn_id})
+  node.body = lower_stmts(node.body, state)
+  node.defaults = lower_nodes(node.defaults, state)
+  pop(state.scopes)
+  state.nested = saved_nested
+  state.fn_id = saved_fn_id
+  node
 end
 
 fn lower_stmts_or_nil(stmts, state)
@@ -334,19 +373,35 @@ fn lower_for_range(node, state)
 end
 
 # ─── if / match / receive as a value ───────────────────────────
-# `let x = if c then a else b end` becomes
+# A block used as a value moves out of its expression to just before the
+# statement holding it, and leaves a temporary in its place:
 #
-#   let __val_N = nil
-#   if c then __val_N = a else __val_N = b end
-#   let x = __val_N
+#   print(f(x), if c then a else b end)
 #
-# The temporary keeps the block from seeing `x` (`let n = if n == nil ...`
-# reads the outer `n`). A branch that ends in a statement, and an `if` or
-# `match` that takes no branch, leave the value `nil`, as the last statement
-# of a function does. `return <block>` instead returns from each branch, so
-# a call at a branch's end stays a tail call. The store or return takes the
-# line of the branch's last expression, so an error raised there points at
-# it rather than at the `let`.
+# becomes
+#
+#   let __val_1 = f(x)
+#   let __val_2 = nil
+#   if c then __val_2 = a else __val_2 = b end
+#   print(__val_1, __val_2)
+#
+# An operand evaluated before the block (`f(x)`) moves with it, into a
+# temporary of its own, so evaluation stays left to right. One that gives
+# the same value before the moved code as after it stays where it is
+# (`stays_in_place`). The temporary also keeps the block from seeing the
+# name a `let` declares (`let n = if n == nil ...` reads the outer `n`).
+#
+# The right operand of `and` / `or` runs only when needed, so a block in
+# it moves into an `if` on the left operand's value. A `while` condition
+# runs before every iteration, so a loop whose condition holds a block
+# becomes `while true` with the condition and a `break` at the top of its
+# body. `return <block>` instead returns from each branch, so a call at a
+# branch's end stays a tail call.
+#
+# A branch that ends in a statement, and an `if` or `match` that takes no
+# branch, leave the value `nil`, as the last statement of a function does.
+# The store or return takes the line of the branch's last expression, so
+# an error raised there points at it rather than at the statement.
 
 # The line of `e`, a branch's last expression, or `fallback` for a value
 # lower() made up (the `nil` of a branch that ends in a statement).
@@ -405,29 +460,422 @@ fn finish_block(node, finish)
   nil
 end
 
-fn lower_block_value_store(node, state)
-  state.gensym = state.gensym + 1
-  let tmp = "__val_{state.gensym}"
-  let line = node.line
-  let block = node.value
-  finish_block(block, fn(e) make_assign(tmp, e, branch_line(e, line)) end)
-  if node.compound_op != nil
-    # The read of the target shares the target's position, as in `x += 1`.
-    node.value = make_binop(node.compound_op, make_var(node.name, node.line, node.col), make_var(tmp))
-  else
-    node.value = make_var(tmp)
+# `node`, a node lower() made, with the file of the code it stands for.
+fn stamp(node, file)
+  if file != nil and node.file == nil
+    node.file = file
   end
-  let result = {tag: "block", stmts: [make_let(tmp, make_nil_node(), line), block, node]}
-  tag_file(result, node.file)
-  lower_node(result, state)
+  node
 end
 
-fn lower_block_value_return(node, state)
-  let line = node.line
-  let block = node.value
-  finish_block(block, fn(e) make_return(e, branch_line(e, line)) end)
-  tag_file(block, node.file)
-  lower_node(block, state)
+fn new_temp(state)
+  state.gensym = state.gensym + 1
+  "__val_{state.gensym}"
+end
+
+# True when evaluating `e` runs a block used as a value. A fn literal's
+# body doesn't run, so blocks in it don't count.
+fn contains_block(e)
+  if type(e) != "table" or e.tag == nil
+    return false
+  end
+  if is_block_value(e)
+    return true
+  end
+  let tag = e.tag
+  if tag == "binop"
+    return contains_block(e.left) or contains_block(e.right)
+  elif tag == "unop"
+    return contains_block(e.expr)
+  elif tag == "dot"
+    return contains_block(e.object)
+  elif tag == "index"
+    return contains_block(e.object) or contains_block(e.key)
+  elif tag == "call"
+    if contains_block(e.func)
+      return true
+    end
+    for a in e.args
+      if contains_block(a)
+        return true
+      end
+    end
+  elif tag == "table"
+    for en in e.entries
+      if contains_block(en.value)
+        return true
+      end
+    end
+  elif tag == "array"
+    for x in e.elements
+      if contains_block(x)
+        return true
+      end
+    end
+  elif tag == "interp"
+    for x in e.parts
+      if contains_block(x)
+        return true
+      end
+    end
+  end
+  false
+end
+
+# ── Which variables the moved code can change ──
+# scan(), run once before lowering, fills:
+#   state.assigners[name]: how many function bodies assign (`name = …`)
+#     `name`, the program's top level counting as one body;
+#   state.nested: the names assigned inside the fns of the top level, at
+#     any depth, and the same list as `nested_assigns` on each fn literal
+#     and named fn, for the fns inside it (lower_fn takes it off);
+#   state.namespaces[name]: for a module namespace binding (`let m =
+#     <frozen table>`, from resolve_loads in compiler/main.gem) that
+#     nothing else declares or assigns, its fields: {field: the name of
+#     the binding `m.field` reads}.
+# While lowering, state.nested is the set of the body being lowered,
+# state.scopes a frame per enclosing statement list, {names, fn_id}, with
+# the names its lets declared so far (and a fn's params, in a frame of
+# their own), and state.fn_id identifies the body being lowered.
+
+fn add_count(counts, name)
+  counts[name] = if has_key(counts, name) then counts[name] + 1 else 1 end
+end
+
+# Walks `node`, part of one function body: the names it assigns go into
+# `own`, those assigned in the fns inside it into `inner`, and a count of
+# each binding (a let, a param, a named fn or extern, a `for` variable, a
+# pattern's name) into state.declared.
+fn scan_node(node, own, inner, state)
+  if type(node) != "table"
+    return nil
+  end
+  let tag = node.tag
+  if tag == "anon_fn" or tag == "fn_def"
+    if tag == "fn_def"
+      add_count(state.declared, node.name)
+    end
+    for p in node.params
+      add_count(state.declared, p)
+    end
+    if node.rest_param != nil
+      add_count(state.declared, node.rest_param)
+    end
+    let fn_own = {}
+    let fn_inner = {}
+    scan_node(node.body, fn_own, fn_inner, state)
+    scan_node(node.defaults, fn_own, fn_inner, state)
+    node.nested_assigns = keys(fn_inner)
+    for name, _ in fn_own
+      add_count(state.assigners, name)
+      inner[name] = true
+    end
+    for name, _ in fn_inner
+      inner[name] = true
+    end
+    return nil
+  end
+  if tag == "assign"
+    own[node.name] = true
+  elif tag == "let" or tag == "pat_name" or tag == "extern_fn"
+    add_count(state.declared, node.name)
+  elif tag == "pat_table"
+    # `{name}` binds `name`.
+    for e in node.entries
+      if e.value == nil
+        add_count(state.declared, e.key)
+      end
+    end
+  elif tag == "for_in"
+    add_count(state.declared, node.var_name)
+    if node.val_name != nil
+      add_count(state.declared, node.val_name)
+    end
+  elif tag == "for_range"
+    add_count(state.declared, node.var_name)
+  end
+  for _, v in node
+    if type(v) == "table"
+      scan_node(v, own, inner, state)
+    end
+  end
+  nil
+end
+
+fn scan(ast, state)
+  state.assigners = {}
+  state.declared = {}
+  state.namespaces = {}
+  let own = {}
+  let inner = {}
+  scan_node(ast.stmts, own, inner, state)
+  for name, _ in own
+    add_count(state.assigners, name)
+  end
+  state.nested = inner
+  for s in ast.stmts
+    if type(s) == "table" and s.tag == "let" and type(s.value) == "table" and s.value.tag == "table" and s.value.frozen == true and state.declared[s.name] == 1 and not has_key(state.assigners, s.name)
+      let fields = {}
+      for e in s.value.entries
+        if type(e.key) == "string" and type(e.value) == "table" and e.value.tag == "var"
+          fields[e.key] = e.value.name
+        end
+      end
+      state.namespaces[s.name] = fields
+    end
+  end
+  state.scanned = true
+  nil
+end
+
+# Adds the names assigned in `node` to `out`, leaving out fn literals and
+# named fns.
+fn collect_assigns(node, out)
+  if type(node) != "table" or node.tag == "anon_fn" or node.tag == "fn_def"
+    return nil
+  end
+  if node.tag == "assign"
+    out[node.name] = true
+  end
+  for _, v in node
+    if type(v) == "table"
+      collect_assigns(v, out)
+    end
+  end
+  nil
+end
+
+# True when the innermost recorded binding of `name` (a let or a param;
+# lower() doesn't record pattern bindings or `for` variables) belongs to
+# the body being lowered, a module binding counting for the top level. An
+# unrecorded binding that shadows it is of the same body; one that shadows
+# nothing gives false, which only moves more operands.
+fn resolves_local(name, state)
+  let i = len(state.scopes) - 1
+  while i >= 0
+    let frame = state.scopes[i]
+    if has_key(frame.names, name)
+      return frame.fn_id == state.fn_id
+    end
+    i -= 1
+  end
+  false
+end
+
+# True when operand `e` gives the same value evaluated after the code that
+# moves ahead of its statement (`later`: the operands after it, up to the
+# last one holding a block) as before it: a literal, a fn literal, a
+# variable nothing assigns, or a variable the body being lowered declares
+# that no fn inside the body assigns, and `later` doesn't. Only those can
+# assign it: another call of the body has variables of its own.
+fn stays_in_place(e, later, state)
+  if type(e) != "table"
+    return true
+  end
+  let tag = e.tag
+  if tag == "int" or tag == "float" or tag == "string" or tag == "bool" or tag == "nil" or tag == "anon_fn"
+    return true
+  end
+  if tag != "var"
+    return false
+  end
+  if state.scanned != true
+    return false
+  end
+  if not has_key(state.assigners, e.name)
+    return true
+  end
+  if has_key(state.nested, e.name) or not resolves_local(e.name, state)
+    return false
+  end
+  let inside = {}
+  collect_assigns(later, inside)
+  not has_key(inside, e.name)
+end
+
+# ── Moving blocks out ──
+# `ctx`: {state, pre (where the moved statements go: before the statement
+# being lowered, or into the `if` for an `and` / `or` operand or the loop
+# body for a `while` condition), line (the line they take), file (the
+# statement's)}.
+
+# `e` with each block used as a value in it moved onto ctx.pre.
+fn hoist(e, ctx)
+  if not contains_block(e)
+    return e
+  end
+  let state = ctx.state
+  let file = ctx.file
+  if is_block_value(e)
+    let tmp = new_temp(state)
+    let line = branch_line(e, ctx.line)
+    finish_block(e, fn(v) stamp(make_assign(tmp, v, branch_line(v, line)), file) end)
+    push(ctx.pre, stamp(make_let(tmp, stamp(make_nil_node(), file), line), file))
+    push(ctx.pre, e)
+    return stamp(make_var(tmp), file)
+  end
+  let tag = e.tag
+  if tag == "binop" and (e.op == "and" or e.op == "or")
+    e.left = hoist(e.left, ctx)
+    if not contains_block(e.right)
+      return e
+    end
+    let line = branch_line(e, ctx.line)
+    let tmp = new_temp(state)
+    push(ctx.pre, stamp(make_let(tmp, e.left, line), file))
+    let inner = []
+    let right = hoist(e.right, {state: state, pre: inner, line: line, file: file})
+    push(inner, stamp(make_assign(tmp, right, line), file))
+    let test = stamp(make_var(tmp), file)
+    if e.op == "or"
+      test = stamp(make_unop("not", test, line), file)
+    end
+    push(ctx.pre, stamp(make_if(test, inner, nil, line), file))
+    return stamp(make_var(tmp), file)
+  end
+  if tag == "binop"
+    let r = hoist_operands([e.left, e.right], false, ctx)
+    e.left = r[0]
+    e.right = r[1]
+  elif tag == "unop"
+    e.expr = hoist(e.expr, ctx)
+  elif tag == "dot"
+    e.object = hoist(e.object, ctx)
+  elif tag == "index"
+    let r = hoist_operands([e.object, e.key], false, ctx)
+    e.object = r[0]
+    e.key = r[1]
+  elif tag == "call"
+    let func = e.func
+    let ops = [func]
+    for a in e.args
+      push(ops, a)
+    end
+    # A module namespace's `m.f` whose binding nothing assigns is the same
+    # value wherever it is read.
+    let ns_callee = false
+    if state.scanned == true and type(func) == "table" and func.tag == "dot" and type(func.object) == "table" and func.object.tag == "var" and has_key(state.namespaces, func.object.name)
+      let target = state.namespaces[func.object.name][func.field]
+      ns_callee = target != nil and not has_key(state.assigners, target)
+    end
+    let r = hoist_operands(ops, ns_callee, ctx)
+    if func.tag == "dot" and r[0].tag == "var"
+      # The callee went into a temporary: codegen still names the field
+      # when it isn't callable.
+      e.callee_field = func.field
+    end
+    e.func = r[0]
+    let args = []
+    for i = 1, len(r)
+      push(args, r[i])
+    end
+    e.args = args
+  elif tag == "table"
+    let vals = []
+    for en in e.entries
+      push(vals, en.value)
+    end
+    let r = hoist_operands(vals, false, ctx)
+    for i = 0, len(r)
+      e.entries[i].value = r[i]
+    end
+  elif tag == "array"
+    e.elements = hoist_operands(e.elements, false, ctx)
+  elif tag == "interp"
+    e.parts = hoist_operands(e.parts, false, ctx)
+  end
+  e
+end
+
+# Operands `ops` of one expression, in evaluation order, with the blocks in
+# them moved onto ctx.pre. An operand before the last one holding a block
+# is evaluated into a temporary there first, unless it stays in place; so
+# is the first one only when `fixed_first` is false.
+fn hoist_operands(ops, fixed_first, ctx)
+  let last = -1
+  for i = 0, len(ops)
+    if contains_block(ops[i])
+      last = i
+    end
+  end
+  let out = []
+  for i = 0, len(ops)
+    let op = ops[i]
+    if i <= last
+      op = hoist(op, ctx)
+      if i < last and not (i == 0 and fixed_first)
+        let later = []
+        for j = i + 1, last + 1
+          push(later, ops[j])
+        end
+        if not stays_in_place(op, later, ctx.state)
+          let tmp = new_temp(ctx.state)
+          push(ctx.pre, stamp(make_let(tmp, op, branch_line(op, ctx.line)), ctx.file))
+          op = stamp(make_var(tmp), ctx.file)
+        end
+      end
+    end
+    push(out, op)
+  end
+  out
+end
+
+# Statement `s` with the blocks used as values in its expressions (not in
+# its nested bodies) moved onto `pre`.
+fn hoist_stmt(s, pre, state)
+  if type(s) != "table" or s.tag == nil
+    return s
+  end
+  let tag = s.tag
+  let ctx = {state: state, pre: pre, line: s.line, file: s.file}
+  if tag == "let" or tag == "assign"
+    s.value = hoist(s.value, ctx)
+  elif tag == "dot_assign"
+    let r = hoist_operands([s.object, s.value], false, ctx)
+    s.object = r[0]
+    s.value = r[1]
+  elif tag == "index_assign"
+    let r = hoist_operands([s.object, s.key, s.value], false, ctx)
+    s.object = r[0]
+    s.key = r[1]
+    s.value = r[2]
+  elif tag == "return"
+    if is_block_value(s.value)
+      let block = s.value
+      finish_block(block, fn(v) stamp(make_return(v, branch_line(v, s.line)), s.file) end)
+      return hoist_stmt(block, pre, state)
+    end
+    s.value = hoist(s.value, ctx)
+  elif tag == "if"
+    s.cond = hoist(s.cond, ctx)
+  elif tag == "match"
+    s.target = hoist(s.target, ctx)
+  elif tag == "receive_match"
+    s.after_ms = hoist(s.after_ms, ctx)
+  elif tag == "while"
+    if contains_block(s.cond)
+      let body = []
+      let cond = hoist(s.cond, {state: state, pre: body, line: s.line, file: s.file})
+      let exit = stamp(make_if(stamp(make_unop("not", cond, s.line), s.file), [stamp(make_break(), s.file)], nil, s.line), s.file)
+      push(body, exit)
+      for b in s.body
+        push(body, b)
+      end
+      s.cond = stamp(make_bool(true), s.file)
+      s.body = body
+      # Not an infinite loop for codegen's back-edge warning.
+      s.cond_moved = true
+    end
+  elif tag == "for_in"
+    s.items = hoist(s.items, ctx)
+  elif tag == "for_range"
+    let r = hoist_operands([s.start, s.end_], false, ctx)
+    s.start = r[0]
+    s.end_ = r[1]
+  elif not has_key(STATEMENT_TAGS, tag)
+    return hoist(s, ctx)
+  end
+  s
 end
 
 # ─── match / receive ────────────────────────────────────────────

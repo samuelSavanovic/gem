@@ -86,7 +86,7 @@ expected=(
   "pcall_spawn_args:5:5"
   "pcall_expr_form:2:2"
   "when_condition:6:6"
-  "block_value_position:7:7"
+  "block_value_banned:7:7"
   "reserved_names:7:7"
 )
 

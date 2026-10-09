@@ -48,9 +48,8 @@ end
 # or extern fn is renamed the same way (`shadow_param_name`).
 #
 # The one exception is a `let` in the module's own statement list (or
-# directly in a top-level `block`, the shape of a lowered `for` header, a
-# destructuring `let`, or a `let` / assignment whose value is an `if`,
-# `match` or `receive`): that is a module-level binding, a per-process slot
+# directly in a top-level `block`, the shape of a lowered `for` header or
+# a destructuring `let`): that is a module-level binding, a per-process slot
 # keyed by name (`top_level_vars`), which named fns and closures read live.
 # A second module-level `let` of a name rebinds that same slot. A `let`
 # nested in a top-level `if` / `while` / `for` body / `match` or `receive`
@@ -480,9 +479,8 @@ fn collect_module_namespaces(top_stmts, assigned, out)
       end
     end
   end
-  # A let directly in a top-level block (a lowered `for` header, a
-  # destructuring let, or a let / assignment whose value is an `if`,
-  # `match` or `receive`) also writes a module slot.
+  # A let directly in a top-level block (a lowered `for` header or a
+  # destructuring let) also writes a module slot.
   for s in top_stmts
     if is_node(s, "block")
       for b in s.stmts
