@@ -19,7 +19,7 @@ Telnet only; SSH is out of scope. An HTTP honeypot on :80 via std/http is an opt
 | Gap | Today | Needed |
 |---|---|---|
 | Peer address | done: `tcp_peer(sock)` returns `{ip, port}`, or `nil` once the peer has reset | per-IP caps and the `ip` column; the acceptor treats `nil` as a connection already gone |
-| Socket ownership | sockets are plain ints, so a session that crashes leaks its fd | ROADMAP "Process-owned resources closed on exit", including ownership passing to a session on `spawn`/`send` |
+| Socket ownership | sockets are plain ints, so a session that crashes leaks its fd | ROADMAP "Process-owned resources closed on exit"; proposed design in `docs/design/process_owned_resources.md` (a socket value type, owned by one process, moved to a session on `spawn`/`send`, closed when its owner crashes or is killed), awaiting review |
 | Crash data | a `DOWN` message carries only the error message; the trace goes to stderr and the raw input dies with the session | the session streams capped raw-input chunks to the recorder as it reads; traces come from the service's stderr log, matched by pid |
 | Runtime reset stats | `GEM_DIAG` prints reset statistics only at exit | a builtin that reads them, or leave them out of the metrics |
 
@@ -102,7 +102,7 @@ Candidates as of 2026-10: BuyVM Slice 1024 in Luxembourg (often out of stock) or
 ## Phases
 
 1. `tcp_peer` builtin (done).
-2. Process-owned sockets (ROADMAP), with a plan agreed before implementation.
+2. Process-owned sockets (ROADMAP), with a plan agreed before implementation: the plan is `docs/design/process_owned_resources.md`, awaiting review.
 3. IAC parser, line splitter, fake login and shell on :2323, with `test.gem`. Can run alongside 1–2.
 4. Crash-data path, recorder and schema.
 5. Limits, metrics sampler, local fuzz hour.
