@@ -179,10 +179,7 @@ fn slice(arr, start, length = nil)
   if start < 0
     start = 0
   end
-  let stop = n
-  if length != nil and start + length < n
-    stop = start + length
-  end
+  let stop = if length != nil and start + length < n then start + length else n end
   let result = []
   for i = start, stop
     push(result, arr[i])

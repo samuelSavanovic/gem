@@ -48,8 +48,9 @@ end
 # or extern fn is renamed the same way (`shadow_param_name`).
 #
 # The one exception is a `let` in the module's own statement list (or
-# directly in a top-level `block`, the shape of a lowered `for` header or a
-# destructuring `let`): that is a module-level binding, a per-process slot
+# directly in a top-level `block`, the shape of a lowered `for` header, a
+# destructuring `let`, or a `let` / assignment whose value is an `if`,
+# `match` or `receive`): that is a module-level binding, a per-process slot
 # keyed by name (`top_level_vars`), which named fns and closures read live.
 # A second module-level `let` of a name rebinds that same slot. A `let`
 # nested in a top-level `if` / `while` / `for` body / `match` or `receive`
@@ -76,7 +77,8 @@ end
 # bindings and named fns count as visible everywhere outside module scope
 # (`ctx.globals`, `ctx.fns`), wherever they are declared; extern fns and
 # builtins everywhere. `ctx.ended` maps a name some ended block declared to
-# its declaration line (reset per named fn).
+# its declaration site, plus the `if` / `match` / `receive` whose branch the
+# block was (`block_kw`, nil for any other block); reset per named fn.
 
 fn copy_scope_env(env)
   let r = {}
@@ -121,11 +123,14 @@ end
 
 # A block whose scope was `inner` ends; `outer` is the enclosing scope.
 # Every name it declared (or re-declared as a shadow) goes out of scope:
-# remember where it was declared, for the error at a later use.
-fn shadow_end_scope(inner, outer, ctx)
+# remember where it was declared, and `block_kw` (the keyword of the
+# `if` / `match` / `receive` the block is a branch of, or nil), for the
+# error at a later use.
+fn shadow_end_scope(inner, outer, ctx, block_kw = nil)
   for k, v in inner
     if not has_key(outer, k) or outer[k] != v
-      ctx.ended[k] = ctx.lines[v]
+      let d = ctx.lines[v]
+      ctx.ended[k] = if d != nil then {line: d.line, file: d.file, block_kw: block_kw} end
     end
   end
 end
@@ -260,7 +265,9 @@ fn shadow_fn(node, env, ctx)
   shadow_stmts(node.body, inner, "fn", ctx)
 end
 
-shadow_stmts = fn(stmts, env, mode, ctx)
+# `block_kw`: the keyword of the `if` / `match` / `receive` the list is a
+# branch of, or nil.
+shadow_stmts = fn(stmts, env, mode, ctx, block_kw = nil)
   if stmts == nil
     return nil
   end
@@ -268,7 +275,7 @@ shadow_stmts = fn(stmts, env, mode, ctx)
   for s in stmts
     shadow_stmt(s, scope, mode, ctx)
   end
-  shadow_end_scope(scope, env, ctx)
+  shadow_end_scope(scope, env, ctx, block_kw)
 end
 
 # A statement in a list whose scope is `env` (mutated: lets bind into it).
@@ -287,7 +294,8 @@ shadow_stmt = fn(s, env, mode, ctx)
 end
 
 # Arm bindings (`when` / `receive` patterns) are lets scoped to the arm.
-fn shadow_arm(cond, bindings, body, env, mode, ctx)
+# `block_kw` is "match" or "receive".
+fn shadow_arm(cond, bindings, body, env, mode, ctx, block_kw)
   let arm = copy_scope_env(env)
   let cm = shadow_child_mode(mode)
   shadow_node(cond, arm, mode, ctx)
@@ -299,8 +307,8 @@ fn shadow_arm(cond, bindings, body, env, mode, ctx)
       end
     end
   end
-  shadow_stmts(body, arm, cm, ctx)
-  shadow_end_scope(arm, env, ctx)
+  shadow_stmts(body, arm, cm, ctx, block_kw)
+  shadow_end_scope(arm, env, ctx, block_kw)
 end
 
 shadow_node = fn(node, env, mode, ctx)
@@ -345,14 +353,14 @@ shadow_node = fn(node, env, mode, ctx)
     ctx.outer_later = saved_outer
   elif tag == "if"
     shadow_node(node.cond, env, mode, ctx)
-    shadow_stmts(node.then, env, cm, ctx)
+    shadow_stmts(node.then, env, cm, ctx, "if")
     if node.elifs != nil
       for ei in node.elifs
         shadow_node(ei.cond, env, mode, ctx)
-        shadow_stmts(ei.body, env, cm, ctx)
+        shadow_stmts(ei.body, env, cm, ctx, "if")
       end
     end
-    shadow_stmts(node.else, env, cm, ctx)
+    shadow_stmts(node.else, env, cm, ctx, "if")
   elif tag == "while"
     shadow_node(node.cond, env, mode, ctx)
     shadow_stmts(node.body, env, cm, ctx)
@@ -360,10 +368,10 @@ shadow_node = fn(node, env, mode, ctx)
     shadow_node(node.target, env, mode, ctx)
     if node.whens != nil
       for w in node.whens
-        shadow_arm(w.value, w.bindings, w.body, env, mode, ctx)
+        shadow_arm(w.value, w.bindings, w.body, env, mode, ctx, "match")
       end
     end
-    shadow_stmts(node.else, env, cm, ctx)
+    shadow_stmts(node.else, env, cm, ctx, "match")
   elif tag == "receive_match"
     if node.arms != nil
       for a in node.arms
@@ -373,11 +381,11 @@ shadow_node = fn(node, env, mode, ctx)
           cond = a.pattern.condition
           bindings = a.pattern.bindings
         end
-        shadow_arm(cond, bindings, a.body, env, mode, ctx)
+        shadow_arm(cond, bindings, a.body, env, mode, ctx, "receive")
       end
     end
     shadow_node(node.after_ms, env, mode, ctx)
-    shadow_stmts(node.after_body, env, cm, ctx)
+    shadow_stmts(node.after_body, env, cm, ctx, "receive")
   else
     for k, v in node
       if k != "tag" and type(v) == "table"
@@ -404,10 +412,12 @@ end
 
 # `builtins` and `externs` are names that resolve without a binding;
 # `report(node, name, kind, decl)` reports a use of a name whose
-# `let` is not visible there: kind "ended" (its block ended), "later"
-# (declared after the use, outside any block containing it) or
-# "later_closure" (the same, from inside a closure). `decl` is the
-# declaration's {line, file}.
+# declaration is not visible there: kind "ended" (its block ended), "later"
+# (its `let` comes after the use, in the same block or one that does not
+# contain the use), "later_closure" (the same, from inside a closure) or
+# "param_later" (a parameter default reading a later parameter). `decl` is
+# the declaration's {line, file}, and for "ended" also `block_kw`; it is
+# nil for "param_later".
 fn scope_shadowing_lets(fn_defs, top_stmts, builtins, externs, report)
   let globals = {}
   collect_top_let_names(top_stmts, globals)
@@ -470,8 +480,9 @@ fn collect_module_namespaces(top_stmts, assigned, out)
       end
     end
   end
-  # A let directly in a top-level block (a lowered `for` header or a
-  # destructuring let) also writes a module slot.
+  # A let directly in a top-level block (a lowered `for` header, a
+  # destructuring let, or a let / assignment whose value is an `if`,
+  # `match` or `receive`) also writes a module slot.
   for s in top_stmts
     if is_node(s, "block")
       for b in s.stmts

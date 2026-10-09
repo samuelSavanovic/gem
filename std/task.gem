@@ -213,18 +213,12 @@ fn await_all(tasks, timeout_ms = nil)
     end
     seen[t.ref] = true
   end
-  let deadline = nil
-  if timeout_ms != nil
-    deadline = time_ms() + timeout_ms
-  end
+  let deadline = if timeout_ms != nil then time_ms() + timeout_ms end
   let results = []
   for i = 0, len(tasks)
-    let remaining = nil
-    if deadline != nil
-      remaining = deadline - time_ms()
-      if remaining < 0
-        remaining = 0
-      end
+    let remaining = if deadline != nil
+      let left = deadline - time_ms()
+      if left < 0 then 0 else left end
     end
     let res = collect(tasks[i], remaining, "task.await_all")
     if not res.ok

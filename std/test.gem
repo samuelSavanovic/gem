@@ -289,10 +289,7 @@ fn assert_eq(actual, expected, msg = nil)
   if d == nil
     return nil
   end
-  let prefix = "test.assert_eq: "
-  if msg != nil
-    prefix = "test.assert_eq: {msg}: "
-  end
+  let prefix = if msg != nil then "test.assert_eq: {msg}: " else "test.assert_eq: " end
   if type(actual) == "table" and type(expected) == "table"
     error("{prefix}expected {show(expected)}, got {show(actual)}: {d}")
   end

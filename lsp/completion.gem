@@ -222,10 +222,7 @@ fn fields_for_module_import(imp)
     end
   end
   for name in exports
-    let kind = rpc.CIK_FIELD
-    if has_key(fn_set, name)
-      kind = rpc.CIK_FUNCTION
-    end
+    let kind = if has_key(fn_set, name) then rpc.CIK_FUNCTION else rpc.CIK_FIELD end
     push(items, rpc.make_completion_item(name, kind, "from " + imp.path))
   end
   items

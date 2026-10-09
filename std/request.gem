@@ -155,12 +155,12 @@ end
 
 # Reads more bytes into the reader; false at end of stream.
 fn fill(rd)
-  let wait = nil
-  if rd.deadline != nil
-    wait = rd.deadline - time_ms()
-    if wait <= 0
+  let wait = if rd.deadline != nil
+    let left = rd.deadline - time_ms()
+    if left <= 0
       timeout_error(rd)
     end
+    left
   end
   let chunk = tcp_read(rd.fd, READ_SIZE, wait)
   if chunk == nil
@@ -250,10 +250,7 @@ fn add_header(rd, headers, line)
   let key = string.lower(string.trim(substr(line, 0, colon)))
   let value = string.trim(substr(line, colon + 1, len(line) - colon - 1))
   if has_key(headers, key)
-    let sep = ", "
-    if key == "set-cookie"
-      sep = "\n"
-    end
+    let sep = if key == "set-cookie" then "\n" else ", " end
     headers[key] = "{headers[key]}{sep}{value}"
   else
     headers[key] = value
@@ -263,14 +260,12 @@ end
 # "HTTP/1.1 200 OK" or "HTTP/1.1 204" (the reason phrase is optional).
 fn parse_status_line(rd, line)
   let sp = find_byte(line, 32)
-  let code = ""
-  if sp > 0
+  let code = if sp > 0
     let rest = substr(line, sp + 1, len(line) - sp - 1)
     let sp2 = find_byte(rest, 32)
-    code = rest
-    if sp2 >= 0
-      code = substr(rest, 0, sp2)
-    end
+    if sp2 >= 0 then substr(rest, 0, sp2) else rest end
+  else
+    ""
   end
   if not string.starts_with(line, "HTTP/") or len(code) != 3 or not is_digits(code)
     error("{rd.name}: malformed status line \"{line}\"")
@@ -310,13 +305,14 @@ fn parse_hex(s)
   let n = 0
   for i = 0, len(s)
     let c = ord(s, i)
-    let d = -1
-    if c >= 48 and c <= 57
-      d = c - 48
+    let d = if c >= 48 and c <= 57
+      c - 48
     elif c >= 97 and c <= 102
-      d = c - 87
+      c - 87
     elif c >= 65 and c <= 70
-      d = c - 55
+      c - 55
+    else
+      -1
     end
     if d < 0
       return nil
@@ -463,10 +459,7 @@ end
 # response. A server may answer early (413, 401) and close while the body
 # is still going out; its response is still read after the short write.
 fn exchange(rd, req_str, method)
-  let wait = nil
-  if rd.deadline != nil
-    wait = rd.deadline - time_ms()
-  end
+  let wait = if rd.deadline != nil then rd.deadline - time_ms() end
   if tcp_write(rd.fd, req_str, wait) < len(req_str)
     if rd.deadline != nil and time_ms() >= rd.deadline
       timeout_error(rd)
@@ -504,10 +497,7 @@ fn do_request(name, method, raw_url, opts)
   let parsed = parse_url(name, raw_url)
   let req_str = build_request(name, method, parsed, headers, body)
 
-  let deadline = nil
-  if timeout_ms != nil
-    deadline = time_ms() + timeout_ms
-  end
+  let deadline = if timeout_ms != nil then time_ms() + timeout_ms end
   let conn = pcall tcp_connect(parsed.host, parsed.port)
   if not conn.ok
     error("{name}: cannot connect to {parsed.host}:{parsed.port}: {conn.error}")

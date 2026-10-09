@@ -165,10 +165,7 @@ fn execute(s, env)
     emit(stringify(evaluate(s.expr, env)))
     nil
   when "var"
-    let value = nil
-    if s.init != nil
-      value = evaluate(s.init, env)
-    end
+    let value = if s.init != nil then evaluate(s.init, env) end
     env.values[s.name] = value
     nil
   when "block" then exec_block(s.statements, new_env(env))
@@ -189,10 +186,7 @@ fn execute(s, env)
     end
     nil
   when "return"
-    let value = nil
-    if s.value != nil
-      value = evaluate(s.value, env)
-    end
+    let value = if s.value != nil then evaluate(s.value, env) end
     {value: value}
   when "function"
     env.values[s.name] = {kind: "function", decl: s, closure: env, is_init: false}
@@ -204,18 +198,20 @@ fn execute(s, env)
 end
 
 fn define_class(s, env)
-  let superclass = nil
-  if s.superclass != nil
-    superclass = evaluate(s.superclass, env)
-    if type(superclass) != "table" or superclass.kind != "class"
+  let superclass = if s.superclass != nil
+    let sc = evaluate(s.superclass, env)
+    if type(sc) != "table" or sc.kind != "class"
       runtime_error(s.superclass.line, "Superclass must be a class.")
     end
+    sc
   end
   env.values[s.name] = nil
-  let method_env = env
-  if superclass != nil
-    method_env = new_env(env)
-    method_env.values["super"] = superclass
+  let method_env = if superclass != nil
+    let e = new_env(env)
+    e.values["super"] = superclass
+    e
+  else
+    env
   end
   let methods = {}
   for m in s.methods

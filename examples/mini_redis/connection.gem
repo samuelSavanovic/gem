@@ -30,8 +30,7 @@ fn cmd_ping(conn, args)
   if len(args) > 2
     return emit(conn, arity_error("ping"))
   end
-  let msg = nil
-  if len(args) == 2 then msg = args[1] end
+  let msg = if len(args) == 2 then args[1] end
   if conn.nsubs > 0
     if msg == nil then msg = "" end
     return emit(conn, ["pong", msg])
@@ -202,13 +201,14 @@ end
 # Handles a chunk read from the socket. False when the connection must
 # close: QUIT, a protocol error, or a client that stopped reading.
 fn handle_input(conn, chunk)
-  let data = chunk
-  if len(conn.pending) > 0
+  let data = if len(conn.pending) > 0
     buf_push(conn.pending, chunk)
     if conn.need > 0 and len(conn.pending) < conn.need
       return true
     end
-    data = conn.pending
+    conn.pending
+  else
+    chunk
   end
   let r = resp.parse(data)
   run_commands(conn, r.cmds)

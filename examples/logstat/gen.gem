@@ -41,10 +41,7 @@ fn line_for(rng, i, stamp)
     path = "/search?q=term{r3 % 100}"
   end
   let status = pick(STATUSES, r3)
-  let bytes = "{(r2 * 7) % 20000}"
-  if status == "304"
-    bytes = "-"
-  end
+  let bytes = if status == "304" then "-" else "{(r2 * 7) % 20000}" end
   if i % 20011 == 7
     return "{ip} - - [{stamp}] GET {path} HTTP/1.1 {status}"
   end
@@ -58,10 +55,7 @@ fn main()
     exit(2)
   end
   let count = to_int(args[0])
-  let rng = 42
-  if len(args) > 1
-    rng = to_int(args[1])
-  end
+  let rng = if len(args) > 1 then to_int(args[1]) else 42 end
 
   let second = -1
   let stamp = ""

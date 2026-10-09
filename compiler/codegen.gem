@@ -358,16 +358,18 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # return point). In a fn with a return point, a return first frees what
   # the call allocated, keeping the return value (gem_arena_reset_return).
   let return_str = fn(p, t)
-    let reset = ""
-    if ret_point != nil
-      reset = "{p}if (gem_ret_reset_due(&{ret_point})) gem_arena_reset_return(&{ret_point}, &{t}, 1);\n"
+    let reset = if ret_point != nil
+      "{p}if (gem_ret_reset_due(&{ret_point})) gem_arena_reset_return(&{ret_point}, &{t}, 1);\n"
+    else
+      ""
     end
     "{reset}{pop_str(p)}{p}return {t};"
   end
   let return_nil_str = fn(p)
-    let reset = ""
-    if ret_point != nil
-      reset = "{p}if (gem_ret_reset_due(&{ret_point})) gem_arena_reset_return(&{ret_point}, NULL, 1);\n"
+    let reset = if ret_point != nil
+      "{p}if (gem_ret_reset_due(&{ret_point})) gem_arena_reset_return(&{ret_point}, NULL, 1);\n"
+    else
+      ""
     end
     "{reset}{pop_str(p)}{p}return GEM_NIL;"
   end
@@ -725,17 +727,11 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         let in_std = std_dir != nil and substr(wf, 0, len(std_dir) + 1) == std_dir + "/"
         if not in_std and set_contains(top_level_vars, w.name) and not set_contains(locals, w.name) and (w.via == nil or not set_contains(locals, w.via))
           let n = w.node
-          let line_str = "?"
-          if n.line != nil
-            line_str = to_string(n.line)
-          end
+          let line_str = if n.line != nil then to_string(n.line) else "?" end
           let key = "{file_of(n)}:{line_str}:{w.name}"
           if seen[key] == nil
             seen[key] = true
-            let sline = "?"
-            if spawn_node.line != nil
-              sline = to_string(spawn_node.line)
-            end
+            let sline = if spawn_node.line != nil then to_string(spawn_node.line) else "?" end
             eprint("note: {rel_path(file_of(n))}:{line_str}: this changes module-level `{display_name(user_var_name(w.name))}` in code that runs in a spawned process (spawn at {rel_path(file_of(spawn_node))}:{sline}); each process has its own copy of module state, so the change is visible only in that process.\n")
           end
         end
@@ -779,10 +775,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
     let top_let_count = {}
     for s in top_stmts
-      let lets = [s]
-      if s.tag == "block"
-        lets = s.stmts
-      end
+      let lets = if s.tag == "block" then s.stmts else [s] end
       for l in lets
         if l.tag == "let"
           top_let_count[l.name] = (top_let_count[l.name] or 0) + 1
@@ -798,10 +791,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
             min = i + 1
           end
         end
-        let max = len(f.params)
-        if f.rest_param != nil
-          max = nil
-        end
+        let max = if f.rest_param == nil then len(f.params) end
         arity[s.name] = {min: min, max: max, def: {params: f.params, defaults: f.defaults, rest_param: f.rest_param, line: s.line, file: file_of(s), tag: "let"}}
         let_fns[s.name] = true
       end
@@ -813,10 +803,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
           min = i + 1
         end
       end
-      let max = len(fd.params)
-      if fd.rest_param != nil
-        max = nil
-      end
+      let max = if fd.rest_param == nil then len(fd.params) end
       arity[fd.name] = {min: min, max: max, def: fd}
     end
     for ef in extern_fns_list
@@ -834,16 +821,14 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         return nil
       end
       reported[key] = true
-      let takes = "{a.min}"
-      if a.max == nil
-        takes = "at least {a.min}"
+      let takes = if a.max == nil
+        "at least {a.min}"
       elif a.max != a.min
-        takes = "{a.min} to {a.max}"
+        "{a.min} to {a.max}"
+      else
+        "{a.min}"
       end
-      let noun = "arguments"
-      if a.max == 1 and a.min == 1
-        noun = "argument"
-      end
+      let noun = if a.max == 1 and a.min == 1 then "argument" else "arguments" end
       let sig = []
       let d = a.def
       for i = 0, len(d.params)
@@ -975,10 +960,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     for i = 0, len(tco_params)
       let mp = mangle(tco_params[i])
-      let val = "GEM_NIL"
-      if i < len(arg_temps)
-        val = arg_temps[i]
-      end
+      let val = if i < len(arg_temps) then arg_temps[i] else "GEM_NIL" end
       if set_contains(tco_boxed, tco_params[i])
         buf_push(b, "{p}{mp} = gem_box_alloc();\n")
         buf_push(b, "{p}*{mp} = {val};\n")
@@ -1197,10 +1179,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
             loc_node = object
           end
           let suggestion = find_closest_export(field, exports)
-          let hint = nil
-          if suggestion != nil
-            hint = "did you mean `{suggestion}`?"
-          end
+          let hint = if suggestion != nil then "did you mean `{suggestion}`?" end
           sink.report(source_of(loc_node), file_of(loc_node), loc_node.line, loc_node.col, len(field), "module `{display_name(object.name)}` has no export `{field}`", hint)
         end
       end
@@ -1416,9 +1395,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       line = 0
     end
     let escaped_file = escape_c_string(rel_path(file_of(node)))
-    let check = "gem_check_callable({tmp_fn}, \"{escaped_file}\", {line})"
-    if func.tag == "dot"
-      check = "gem_check_callable_field({tmp_fn}, \"{escape_c_string(func.field)}\", \"{escaped_file}\", {line})"
+    let check = if func.tag == "dot"
+      "gem_check_callable_field({tmp_fn}, \"{escape_c_string(func.field)}\", \"{escaped_file}\", {line})"
+    else
+      "gem_check_callable({tmp_fn}, \"{escaped_file}\", {line})"
     end
     let setup = func_r.setup + "    GemVal {tmp_fn} = {func_r.expr};\n" + ca.setup + "    {check};\n"
     if ca.argc == 0
@@ -1552,9 +1532,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   compile_stmt = fn(node, indent)
     let p = pad_for(indent)
-    let line_dir = ""
-    if node.line != nil
-      line_dir = "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n{setline_str(node.line, p)}"
+    let line_dir = if node.line != nil
+      "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n{setline_str(node.line, p)}"
+    else
+      ""
     end
 
     match node
@@ -1652,9 +1633,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   compile_stmt_return = fn(node, indent)
     let p = pad_for(indent)
-    let line_dir = ""
-    if node.line != nil
-      line_dir = "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n{setline_str(node.line, p)}"
+    let line_dir = if node.line != nil
+      "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n{setline_str(node.line, p)}"
+    else
+      ""
     end
 
     if tco_fn_name != nil
@@ -1671,18 +1653,14 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     # the global TLB instead of emitting a real C call. The wrapper around
     # gem_sccbody_<name> sees the marker and dispatches the next body.
     if current_scc_id != nil
-      let scc_call_target = nil
-      if is_node(node, "call") and is_node(node.func, "var")
-        scc_call_target = node.func.name
+      let scc_call_target = if is_node(node, "call") and is_node(node.func, "var")
+        node.func.name
       elif is_node(node, "return") and node.value != nil and is_node(node.value, "call") and is_node(node.value.func, "var")
-        scc_call_target = node.value.func.name
+        node.value.func.name
       end
       if scc_call_target != nil and not set_contains(local_names, scc_call_target)
         let target_sid = scc_member_to_id[scc_call_target]
-        let call_node = node
-        if is_node(node, "return")
-          call_node = node.value
-        end
+        let call_node = if is_node(node, "return") then node.value else node end
         # A call site passing more args than the TLB holds (GEM_MAX_TAIL_ARGS,
         # 16) stays a plain call: the members have at most 16 params, but
         # the extra args must still be evaluated and must not overrun the TLB.
@@ -1853,10 +1831,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     # process exit.
     let infinite = is_node(node.cond, "bool") and node.cond.value == true
     if not do_rescue and infinite
-      let line_str = "?"
-      if node.line != nil
-        line_str = to_string(node.line)
-      end
+      let line_str = if node.line != nil then to_string(node.line) else "?" end
       eprint("warning: {rel_path(file_of(node))}:{line_str}: cannot reset per-process arena at this loop's back-edge: {refuse_reason}. Memory will grow unbounded across iterations. This pattern is not yet supported in long-running loops — please file an issue with your case if it blocks you.\n")
     end
     {do_rescue: do_rescue, rescue_roots: rescue_roots, pinned_rescue_roots: pinned_rescue_roots}
@@ -1960,12 +1935,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   compile_match = fn(node, indent, return_pos)
     let p = pad_for(indent)
     let target_r = compile_expr(node.target)
-    let t = nil
-    if node.target_var != nil
-      t = mangle(node.target_var)
-    else
-      t = tmp()
-    end
+    let t = if node.target_var != nil then mangle(node.target_var) else tmp() end
     let b = buf_new()
     buf_push(b, target_r.setup)
     buf_push(b, "{p}GemVal {t} = {target_r.expr};\n")
@@ -2050,10 +2020,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     buf_push(b, "{p2}{matched_tmp} = -1;\n")
     # An `after`-only receive (no arms) takes no message: skip the scan
     # and just wait for the deadline, leaving the mailbox as it is.
-    let scan_open = "{p2}while ({cur_tmp}) \{\n"
-    if len(arms) == 0
-      scan_open = "{p2}while (0) \{\n"
-    end
+    let scan_open = if len(arms) == 0 then "{p2}while (0) \{\n" else "{p2}while ({cur_tmp}) \{\n" end
     buf_push(b, scan_open)
     let p3 = pad_for(indent + 2)
     buf_push(b, "{p3}{recv_tmp} = {cur_tmp}->value;\n")
@@ -2156,21 +2123,22 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # Helper: emit C forward declaration for an extern function, declared at
   # `node`.
   let emit_extern_c_decl = fn(name, params, ret_type, node)
-    let c_ret = "void"
-    if ret_type == "Int"
-      c_ret = "int64_t"
+    let c_ret = if ret_type == "Int"
+      "int64_t"
     elif ret_type == "Float"
-      c_ret = "double"
+      "double"
     elif ret_type == "String"
-      c_ret = "char*"
+      "char*"
     elif ret_type == "Bool"
-      c_ret = "int"
+      "int"
     elif ret_type == "Ptr"
-      c_ret = "void*"
+      "void*"
     elif ret_type == "Table"
-      c_ret = "GemVal"
+      "GemVal"
     elif ret_type == "Bytes"
-      c_ret = "GemBytes"
+      "GemBytes"
+    else
+      "void"
     end
 
     let c_params = ""
@@ -2219,21 +2187,20 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     buf_push(b, "    if (argc != {n}) \{ char _eb[128]; snprintf(_eb, sizeof(_eb), \"{name}: expected {n} argument(s), got %d\", argc); gem_error(_eb); }\n")
     for i = 0, n
       let ptype = params[i]["type"]
-      let val_tag = nil
-      if ptype == "Int"
-        val_tag = "VAL_INT"
+      let val_tag = if ptype == "Int"
+        "VAL_INT"
       elif ptype == "Float"
-        val_tag = "VAL_FLOAT"
+        "VAL_FLOAT"
       elif ptype == "String"
-        val_tag = "VAL_STRING"
+        "VAL_STRING"
       elif ptype == "Bool"
-        val_tag = "VAL_BOOL"
+        "VAL_BOOL"
       elif ptype == "Ptr"
-        val_tag = "VAL_INT"
+        "VAL_INT"
       elif ptype == "Bytes"
-        val_tag = "VAL_STRING"
+        "VAL_STRING"
       elif ptype == "Table"
-        val_tag = "VAL_TABLE"
+        "VAL_TABLE"
       end
       if val_tag != nil
         buf_push(b, "    if (args[{i}].type != {val_tag}) \{ char _eb[128]; snprintf(_eb, sizeof(_eb), \"{name}: arg {i} expected {ptype}, got %s\", gem_type_str(args[{i}])); gem_error(_eb); }\n")
@@ -2246,10 +2213,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     # The C function it calls: `name` is the Gem binding, which module
     # loading and builtin shadowing may have renamed (c_name keeps the
     # declared name, see rename_node in compiler/main.gem).
-    let c_sym = name
-    if node.c_name != nil
-      c_sym = node.c_name
-    end
+    let c_sym = if node.c_name != nil then node.c_name else name end
 
     if node.blocking
       return compile_blocking_extern_fn(node)
@@ -2348,10 +2312,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     # The C function it calls: `name` is the Gem binding, which module
     # loading and builtin shadowing may have renamed (c_name keeps the
     # declared name, see rename_node in compiler/main.gem).
-    let c_sym = name
-    if node.c_name != nil
-      c_sym = node.c_name
-    end
+    let c_sym = if node.c_name != nil then node.c_name else name end
     let b = buf_new()
 
     # 1. Args struct
@@ -2610,10 +2571,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         if def_line == nil
           def_line = node.line
         end
-        let set_def_line = ""
-        if def_line != nil
-          set_def_line = setline_str(def_line, "    ")
-        end
+        let set_def_line = if def_line != nil then setline_str(def_line, "    ") else "" end
         if set_contains(cap_set, params[i])
           buf_push(b, "    {decl_box}{mp} = gem_box_alloc();\n")
           buf_push(b, "    if (argc > {i}) \{ *{mp} = args[{i}]; } else \{\n")
@@ -2777,10 +2735,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n")
     end
 
-    let fn_line = 0
-    if node.line != nil
-      fn_line = node.line
-    end
+    let fn_line = if node.line != nil then node.line else 0 end
     # The frame comes first, so an error in a param default shows this fn.
     if in_leaf_fn
       buf_push(b, leaf_entry_str(frame_name(name), rel_path(file_of(node)), fn_line, body))
@@ -2995,10 +2950,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       stack_env_writes = find_writes_in_closure_body(body, closure_captures, own)
     end
 
-    let anon_line = 0
-    if node.line != nil
-      anon_line = node.line
-    end
+    let anon_line = if node.line != nil then node.line else 0 end
     # The frame comes first, so an error in a param default shows this fn.
     if in_leaf_fn
       buf_push(fb, leaf_entry_str("anonymous fn", rel_path(file_of(node)), anon_line, body))
@@ -3068,10 +3020,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       let is_abs = substr(path, 0, 1) == "/"
       let candidate = path_join(dirname(file_of(ei)), path)
       if file_exists(candidate) and not is_dir(candidate)
-        let full = path
-        if not is_abs
-          full = normalize_path(candidate)
-        end
+        let full = if not is_abs then normalize_path(candidate) else path end
         # Two files including the same header get it once.
         if not has_key(seen, full)
           seen[full] = true
@@ -3131,25 +3080,25 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let report_out_of_scope = fn(node, name, kind, decl)
       # `where`: " at line N" (or " at <file>:N" when the let is in another
       # file: the walk covers every loaded module's top-level code).
-      let where = ""
-      if decl != nil and decl.line != nil
-        if file_of(decl) == file_of(node)
-          where = " at line {decl.line}"
-        else
-          where = " at {rel_path(file_of(decl))}:{decl.line}"
-        end
+      let where = if decl == nil or decl.line == nil
+        ""
+      elif file_of(decl) == file_of(node)
+        " at line {decl.line}"
+      else
+        " at {rel_path(file_of(decl))}:{decl.line}"
       end
-      let at = ""
-      if where != ""
-        at = "{where},"
-      end
-      let hint = "`{name}` is declared{at} inside a block that has ended; declare it before that block (`let {name} = nil`) and assign it inside"
-      if kind == "later"
-        hint = "`{name}` is declared{at} after this use or in a block that does not contain it; a `let` is visible from its declaration to the end of its block"
-      elif kind == "later_closure"
-        hint = "a closure sees only variables declared before it is created, and the `let` of `{name}`{where} comes after; declare it first (`let {name} = nil`) and assign it afterwards (`{name} = ...`)"
-      elif kind == "param_later"
-        hint = "a parameter's default can use only the parameters before it"
+      let at = if where != "" then "{where}," else "" end
+      let hint = match kind
+      when "later"
+        "`{name}` is declared{at} after this use or in a block that does not contain it; a `let` is visible from its declaration to the end of its block"
+      when "later_closure"
+        "a closure sees only variables declared before it is created, and the `let` of `{name}`{where} comes after; declare it first (`let {name} = nil`) and assign it afterwards (`{name} = ...`)"
+      when "param_later"
+        "a parameter's default can use only the parameters before it"
+      else
+        let kw = if decl != nil then decl.block_kw end
+        let give = if kw != nil then "give the `{kw}` the value (`let {name} = {kw} ...`), or " else "" end
+        "`{name}` is declared{at} inside a block that has ended; {give}declare it before that block (`let {name} = nil`) and assign it inside"
       end
       sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", hint)
     end

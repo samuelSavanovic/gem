@@ -45,10 +45,7 @@ fn search_file(entry, rx, opts, with_filename)
   if not read.ok
     return {error: walk.error_reason(read.error)}
   end
-  let prefix = nil
-  if shows_name(entry, with_filename)
-    prefix = name
-  end
+  let prefix = if shows_name(entry, with_filename) then name end
   let r = search.text(read.value, rx, opts, prefix)
   r.name = name
   r

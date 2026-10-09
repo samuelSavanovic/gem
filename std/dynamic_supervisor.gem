@@ -78,10 +78,7 @@ end
 
 # The pid a child's `start` returned, which may be a `{pid}` handle.
 fn started_pid(v)
-  let pid = v
-  if type(v) == "table"
-    pid = v.pid
-  end
+  let pid = if type(v) == "table" then v.pid else v end
   if type(pid) != "int"
     error("child start must return a pid or a \{pid\} handle, got {type(v)}")
   end
@@ -372,10 +369,7 @@ fn dsup_main(state, caller, ref)
   process_flag("trap_exit", true)
   send(caller, {tag: "_dsup_started", ref: ref})
   let res = pcall dsup_loop(state)
-  let reason = res.value
-  if not res.ok
-    reason = res.error
-  end
+  let reason = if res.ok then res.value else res.error end
   shutdown_children(state.children)
   if not res.ok
     report_stack(res)
@@ -548,11 +542,10 @@ fn request(target, msg, caller, timeout_ms)
   msg.ref = ref
   let added = monitor(pid)
   send(pid, msg)
-  let r = nil
-  if timeout_ms == nil
-    r = await_reply(pid, ref)
+  let r = if timeout_ms == nil
+    await_reply(pid, ref)
   else
-    r = await_reply_for(pid, ref, timeout_ms)
+    await_reply_for(pid, ref, timeout_ms)
   end
   if r == nil
     drop_monitor(pid, added)

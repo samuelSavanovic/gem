@@ -130,10 +130,9 @@ end
 
 fn class_declaration(p)
   let name = expect(p, "identifier", "Expect class name.")
-  let superclass = nil
-  if accept(p, "<")
+  let superclass = if accept(p, "<")
     let s = expect(p, "identifier", "Expect superclass name.")
-    superclass = {kind: "variable", name: s.lexeme, line: s.line, depth: nil}
+    {kind: "variable", name: s.lexeme, line: s.line, depth: nil}
   end
   expect(p, "\{", "Expect '\{' before class body.")
   let methods = []
@@ -165,10 +164,7 @@ end
 
 fn var_declaration(p)
   let name = expect(p, "identifier", "Expect variable name.")
-  let init = nil
-  if accept(p, "=")
-    init = expression(p)
-  end
+  let init = if accept(p, "=") then expression(p) end
   expect(p, ";", "Expect ';' after variable declaration.")
   {kind: "var", name: name.lexeme, init: init, line: name.line}
 end
@@ -211,10 +207,7 @@ fn if_statement(p)
   let cond = expression(p)
   expect(p, ")", "Expect ')' after if condition.")
   let then_branch = statement(p)
-  let else_branch = nil
-  if accept(p, "else")
-    else_branch = statement(p)
-  end
+  let else_branch = if accept(p, "else") then statement(p) end
   {kind: "if", cond: cond, then_branch: then_branch, else_branch: else_branch, line: line}
 end
 
@@ -229,25 +222,19 @@ end
 fn for_statement(p)
   let line = advance(p).line
   expect(p, "(", "Expect '(' after 'for'.")
-  let init = nil
-  if check(p, ";")
+  let init = if check(p, ";")
     advance(p)
+    nil
   elif accept(p, "var")
-    init = var_declaration(p)
+    var_declaration(p)
   else
     let e = expression(p)
     expect(p, ";", "Expect ';' after expression.")
-    init = {kind: "expr", expr: e, line: line}
+    {kind: "expr", expr: e, line: line}
   end
-  let cond = {kind: "literal", value: true, line: line}
-  if not check(p, ";")
-    cond = expression(p)
-  end
+  let cond = if check(p, ";") then {kind: "literal", value: true, line: line} else expression(p) end
   expect(p, ";", "Expect ';' after loop condition.")
-  let increment = nil
-  if not check(p, ")")
-    increment = expression(p)
-  end
+  let increment = if not check(p, ")") then expression(p) end
   expect(p, ")", "Expect ')' after for clauses.")
 
   let body = statement(p)
@@ -264,10 +251,7 @@ end
 
 fn return_statement(p)
   let line = advance(p).line
-  let value = nil
-  if not check(p, ";")
-    value = expression(p)
-  end
+  let value = if not check(p, ";") then expression(p) end
   expect(p, ";", "Expect ';' after return value.")
   {kind: "return", value: value, line: line}
 end

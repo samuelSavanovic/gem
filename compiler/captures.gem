@@ -421,11 +421,10 @@ fn walk_writes_node(node, scope_vars, defined, writes, inside_anon)
     # already inside an anon (anon-in-anon), carry the outer anon's locals
     # forward — those do shadow further-out names from this inner anon's
     # perspective.
-    let inner_def = nil
-    if inside_anon
-      inner_def = set_union(defined, sorted_array_to_set(params))
+    let inner_def = if inside_anon
+      set_union(defined, sorted_array_to_set(params))
     else
-      inner_def = sorted_array_to_set(params)
+      sorted_array_to_set(params)
     end
     if rest_param != nil
       set_add(inner_def, rest_param)

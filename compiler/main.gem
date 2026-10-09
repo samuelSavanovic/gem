@@ -662,9 +662,8 @@ fn import_bindings(load_node, mod_name, mangle, exported, bad, module_bindings, 
         push(result, make_let(sel_name, make_var(prefix + sel_name), 0))
       else
         if bad[sel_name] == nil
-          let hint = nil
-          if len(exported) > 0
-            hint = "the module exports: " + string.join(exported, ", ")
+          let hint = if len(exported) > 0
+            "the module exports: " + string.join(exported, ", ")
           end
           sink.report(sources_by_file[load_node.file], load_node.file, pos.line, pos.col, len(sel_name), "module `{mod_name}` has no export `{sel_name}`", hint)
         end
@@ -672,10 +671,7 @@ fn import_bindings(load_node, mod_name, mangle, exported, bad, module_bindings, 
       end
     end
   else
-    let binding_name = mod_name
-    if load_node.alias != nil
-      binding_name = load_node.alias
-    end
+    let binding_name = if load_node.alias != nil then load_node.alias else mod_name end
     let entries = []
     for ename in exported
       push(entries, make_table_entry(ename, make_var(prefix + ename)))
@@ -906,10 +902,7 @@ fn find_shadowed_accumulators(ast, changed_by_fns, report)
         if v.tag == "fn_def" or v.tag == "anon_fn"
           scan(v, [])
         elif v.tag == nil and len(v) > 0 and type(v[0]) == "table" and v[0].tag != nil
-          let inner = following
-          if node.tag == "fn_def" or node.tag == "anon_fn"
-            inner = []
-          end
+          let inner = if node.tag == "fn_def" or node.tag == "anon_fn" then [] else following end
           scan_block(v, inner)
         else
           scan(v, following)
@@ -1014,9 +1007,10 @@ fn report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
     msg = msg + show_path(p) + " → "
   end
   msg = msg + show_path(full_path)
-  let hint = "move the code these modules share into a module that loads none of them"
-  if len(chain) == 1
-    hint = "a file cannot load itself; remove this `load`"
+  let hint = if len(chain) == 1
+    "a file cannot load itself; remove this `load`"
+  else
+    "move the code these modules share into a module that loads none of them"
   end
   sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
 end
@@ -1362,9 +1356,8 @@ fold_constants(resolved_ast)
 let cg = make_codegen(src_path, module_bindings, show_path, sources_by_file, sink, build_global_display(loaded), normalize_load_path(path_join(stdlib_root, "std")))
 # The C file cc compiles in compile mode (codegen points `#line` at it
 # after the extern includes); nil for --check and --emit-c.
-let c_file = nil
-if not cli.check and not cli.emit_c
-  c_file = "/tmp/gem_" + basename_no_ext(src_path) + ".c"
+let c_file = if not cli.check and not cli.emit_c
+  "/tmp/gem_" + basename_no_ext(src_path) + ".c"
 end
 let c_code = cg.compile(resolved_ast, c_file)
 
@@ -1412,11 +1405,10 @@ else
   let runtime_dir = path_join(install_root, "runtime")
 
   let runtime_lib = path_join(install_root, "build/libgem_runtime.a")
-  let cc_cmd = ""
-  if file_exists(runtime_lib)
-    cc_cmd = "cc -o " + out_name + " " + tmp_c + " -I " + runtime_dir + " -std=gnu11 -O2 -pthread " + runtime_lib + " -lm"
+  let cc_cmd = if file_exists(runtime_lib)
+    "cc -o " + out_name + " " + tmp_c + " -I " + runtime_dir + " -std=gnu11 -O2 -pthread " + runtime_lib + " -lm"
   else
-    cc_cmd = "cc -o " + out_name + " " + tmp_c + " " + runtime_dir + "/gem_*.c " + runtime_dir + "/sqlite3.c -I " + runtime_dir + " -std=gnu11 -O2 -pthread -lm"
+    "cc -o " + out_name + " " + tmp_c + " " + runtime_dir + "/gem_*.c " + runtime_dir + "/sqlite3.c -I " + runtime_dir + " -std=gnu11 -O2 -pthread -lm"
   end
 
   let cc_ret = exec(cc_cmd)

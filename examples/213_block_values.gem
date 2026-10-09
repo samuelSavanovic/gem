@@ -156,3 +156,23 @@ fn each(xs, f)
   end
 end
 each([1, 2]) { |v| if v > 1 then print("big {v}") else print("small {v}") end }
+
+print("-- an error in a branch reports its own line")
+fn fail_in_let(c)
+  let v = if c
+    "fine"
+  else
+    error("let branch")
+  end
+  v
+end
+fn fail_in_return(c)
+  return match c
+  when 1 then "fine"
+  else
+    let t = {}
+    t.missing.field
+  end
+end
+print((pcall fail_in_let(false)).stack[0].line)
+print((pcall fail_in_return(2)).stack[0].line)

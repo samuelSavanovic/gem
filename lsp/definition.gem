@@ -53,10 +53,7 @@ end
 # handle zero-width ranges fine; tighten when symbols.gem grows column
 # precision.
 fn location_for(path, line)
-  let lsp_line = 0
-  if line != nil and line > 0
-    lsp_line = line - 1
-  end
+  let lsp_line = if line != nil and line > 0 then line - 1 else 0 end
   let pos = rpc.make_position(lsp_line, 0)
   rpc.make_location(file_uri(path), rpc.make_range(pos, pos))
 end

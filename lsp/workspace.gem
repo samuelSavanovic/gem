@@ -59,14 +59,14 @@ end
 fn workspace_loop(cache)
   receive
   when {tag: "lookup", path: path, from: from}
-    let entry = nil
-    if has_key(cache, path)
-      entry = cache[path]
+    let entry = if has_key(cache, path)
+      cache[path]
     else
-      entry = parse_file(path)
-      if entry != nil
-        cache[path] = entry
+      let parsed = parse_file(path)
+      if parsed != nil
+        cache[path] = parsed
       end
+      parsed
     end
     send(from.pid, {tag: "ws_reply", ref: from.ref, entry: entry})
     workspace_loop(cache)

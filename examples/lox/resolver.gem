@@ -135,10 +135,7 @@ fn class_declaration(r, s)
   begin_scope(r)
   r.scopes[-1]["this"] = true
   for m in s.methods
-    let kind = "method"
-    if m.name == "init"
-      kind = "initializer"
-    end
+    let kind = if m.name == "init" then "initializer" else "method" end
     function(r, m, kind)
   end
   end_scope(r)

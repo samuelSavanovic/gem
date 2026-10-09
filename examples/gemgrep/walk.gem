@@ -43,10 +43,7 @@ end
 # Appends the files under `dir`. Like grep -r, it follows no symbolic link
 # it finds on the way (only the ones named on the command line).
 fn walk_dir(dir, out)
-  let listing = dir
-  if dir == ""
-    listing = "."
-  end
+  let listing = if dir == "" then "." else dir end
   let r = pcall list_dir(listing)
   if not r.ok
     push(out, {path: listing, error: error_reason(r.error)})

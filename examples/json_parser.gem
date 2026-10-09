@@ -196,13 +196,14 @@ fn read_hex4(s)
   let v = 0
   for i = 0, 4
     let c = s.advance()
-    let d = -1
-    if is_digit(c)
-      d = c - ZERO
+    let d = if is_digit(c)
+      c - ZERO
     elif c >= 97 and c <= 102                   # a-f
-      d = c - 87
+      c - 87
     elif c >= 65 and c <= 70                    # A-F
-      d = c - 55
+      c - 55
+    else
+      -1
     end
     if d < 0
       s.fail("bad hex digit in \\u escape")
@@ -255,12 +256,7 @@ fn parse_number(s)
     skip_digits(s)
   end
   let text = s.since(start)
-  let r = nil
-  if is_float
-    r = pcall to_float(text)
-  else
-    r = pcall to_int(text)
-  end
+  let r = if is_float then pcall to_float(text) else pcall to_int(text) end
   if not r.ok
     s.fail("number out of range")
   end
