@@ -28,14 +28,21 @@ Run Gem across multiple OS processes (same box or across the network), with `sen
 
 **Trade-off:** cross-node sends pay serialization cost vs. a memcpy. Negligible for shared-nothing request/response workloads; matters for chatty cross-node protocols.
 
-## TLS for sockets / HTTPS — deferred indefinitely
+## TLS for sockets / HTTPS (options under consideration)
 
-`std/http`, `std/request`, and the `tcp_*` builtins are plain TCP only. Rather than pull a TLS stack into the runtime, the deployment story is:
+`std/http`, `std/request`, and the `tcp_*` builtins are plain TCP only.
 
-- **Inbound (servers):** terminate TLS at a reverse proxy (Caddy, nginx, or a cloud LB) in front of `std/http.serve`. This is what most Go and Node deployments do anyway — the edge gets free ACME cert rotation, HTTP/2, and a much larger crypto-bug audit surface than a vendored libtls would. Document this as the recommended deployment recipe.
-- **Outbound (`std/request` against `https://`):** link libcurl and expose its easy API as an `extern blocking fn`, routed through the existing 4-worker thread pool (`gem_threadpool.c`). libcurl is on every mainstream system (macOS and the major Linux distros ship it), battle-tested for TLS/cert handling, and the easy API is blocking — which is exactly what `extern blocking fn` is designed for, so no scheduler changes are needed. `std/request` becomes a thin wrapper that hands URL/method/headers/body to a single C function returning status + headers + body bytes. No process-spawn cost, real error codes, binary-safe responses via the `Bytes` extern type.
+**Inbound (servers): the recommended deployment stays a reverse proxy.** Terminate TLS at Caddy, nginx or a cloud load balancer in front of `std/http.serve`. The edge gets ACME certificate rotation, HTTP/2, and a far larger audit surface for its crypto than anything Gem would embed. Server-side TLS in `std/http` is out of scope for every option below.
 
-Reasons to revisit (i.e. actually vendor a TLS stack): someone wants a single self-contained Gem binary that serves HTTPS directly with no reverse proxy, or a workload where libcurl's blocking-call-per-request ergonomics become limiting (e.g. needing thousands of concurrent outbound requests, where the multi API + scheduler `poll()` integration would start to pay off). Until then, the integration cost (vendoring LibreSSL, threading TLS_WANT_POLLIN/OUT through the non-blocking path, handshake-as-coroutine-yield) buys very little over the recipe above.
+**Outbound (`std/request` against `https://`) and native TLS: options being weighed, none chosen.**
+
+- **libcurl via `extern blocking fn`.** Expose the easy API as one blocking C function (URL, method, headers, body in; status, headers, body bytes out) on the existing 4-worker thread pool (`gem_threadpool.c`), with `std/request` as a thin wrapper. Outbound only, about a day of work, no scheduler changes. Costs: a system dependency (needs "Linker and compiler flags for C interop", below), and each in-flight request occupies one of the 4 workers, so concurrency is capped at 4.
+- **Native `tls_*` builtins** (`tls_connect` / `tls_read` / `tls_write` / `tls_close`, mirroring `tcp_*`). The handshake, reads and writes park the process on `poll()` the way `tcp_read` does. The twist: any TLS call can ask to wait until the socket is readable *or* writable, and a write may have to wait for a read, so the parking path takes the direction from the TLS library rather than from the call. The TLS context is a malloc'd C object kept in a table keyed by fd. `std/request` gains an `https://` branch. Library choices:
+  - **System OpenSSL or libretls, linked dynamically.** libretls is the libtls API on top of OpenSSL, so it still needs OpenSSL. The distro ships the security updates. macOS is awkward: no libtls by default, OpenSSL from Homebrew. Also needs the linker-flags work below.
+  - **Vendored mbedTLS, 3.6 LTS line** (4.0 moved its crypto into TF-PSA-Crypto and changed APIs). A self-contained binary; maintained, TLS 1.3. Its callback-based I/O fits parked processes, and a custom config header trims it to client-only, no DTLS, no legacy ciphers. The cost: **security updates become our job**. mbedTLS publishes advisories regularly, and someone has to watch them and bump the vendored copy.
+  - Ruled out: wolfSSL (GPL or commercial licence), BearSSL (no release since 2018, no TLS 1.3), vendoring LibreSSL or OpenSSL (too large).
+  - Shared concerns, whatever the library: loading the CA bundle (its path differs per distro, and macOS keeps roots in the Keychain); hostname verification on by default; a few milliseconds of handshake crypto on the scheduler thread, during which no other process runs; a socket leaked when its process dies (see "Process-owned resources closed on exit"). Testing in `make test` needs a local `openssl s_server` and a self-signed CA.
+  - A possible later step: both backends behind the same `tls_*` API, chosen per build.
 
 ## Hot code reload (P2)
 
@@ -63,6 +70,15 @@ Today, wrapping a C library that uses small structs by value (raylib's `Vector2`
 **Pairs well with a bindings generator** — small tool that reads a manifest (or libclang-parsed header) and emits both the Gem `extern struct`/`extern fn` decls and the matching C shim. Without the generator, `extern struct` is still a real ergonomic win; with it, writing a raylib binding becomes a manifest edit.
 
 **Why P2:** no current user — Gem isn't aimed at game/graphics bindings, and the existing hand-shim path works for the small surfaces that have come up. Worth keeping on the list because it's a clean addition (extern is already the typed island in Gem; struct shape just extends what's expressible there) and because "can you wrap raylib and write a 2D game" is the kind of question that surfaces a language's FFI ergonomics.
+
+## Linker and compiler flags for C interop (options under consideration)
+
+A module can declare `extern fn`s and `extern include` a header, but not the C libraries those need: the compiler builds every program with a fixed `cc` command (`-pthread … -lm`, in compiler/main.gem), so an extern into a library outside the runtime and the libraries that command links fails to link. The libcurl option and native TLS on a non-vendored library (see "TLS for sockets / HTTPS") both depend on this. Options, probably both layers together:
+
+- **Declared in the source, next to the externs**, e.g. `extern link "mbedtls"` / `extern pkg "openssl"`. Prior art: Nim's `{.passL.}`, cgo's `#cgo LDFLAGS` / `#cgo pkg-config`, Rust's `#[link(name = …)]`. A std module such as a future `std/tls` would declare its own libraries, and its users never see them (CLAUDE.md, "Design Philosophy": don't leak concepts onto the user). The compiler gathers the declarations from every loaded module, removes duplicates and keeps load order (link order matters for static libraries).
+- **`gem.toml` for flags that depend on the machine:** `-L` / `-I` paths, Homebrew prefixes, static versus dynamic linking. Today `gem.toml` is an empty marker for the project root (SPEC, "Project root marker").
+
+Design include paths and compiler flags alongside the linker flags rather than as a later bolt-on, and consider `pkg-config` support (it answers the Homebrew-prefix question on macOS for libraries that ship a `.pc` file). Trade-offs: source-declared flags make a module's build depend on what is installed on the machine, which surfaces as a `cc` link error unless the compiler checks first; machine flags in `gem.toml` don't travel with a module once there is a package manager.
 
 ## Package manager / external dependencies (P2)
 
