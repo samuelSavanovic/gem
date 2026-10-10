@@ -1,0 +1,161 @@
+## telnet — the server side of telnet's in-band commands (RFC 854/855):
+## strips them from the input incrementally and answers option requests.
+##
+##   let t = telnet.new()
+##   tcp_write(sock, telnet.OFFER, ms)          # WILL ECHO, WILL SUPPRESS-GO-AHEAD
+##   let r = telnet.feed(t, chunk)              # {data, reply, events}
+##   tcp_write(sock, r.reply, ms)
+##   tcp_write(sock, telnet.escape(output), ms)
+
+let IAC = 255
+let DONT = 254
+let DO = 253
+let WONT = 252
+let WILL = 251
+let SB = 250
+let SE = 240
+
+let ECHO = 1
+let SGA = 3
+
+let IAC_BYTE = chr(IAC)
+
+## What the server sends on connect: it offers to echo and to suppress
+## go-ahead, which puts a telnet client in character-at-a-time mode.
+let OFFER = chr(IAC) + chr(WILL) + chr(ECHO) + chr(IAC) + chr(WILL) + chr(SGA)
+
+## Makes the parser state for one connection. A subnegotiation
+## (`IAC SB ... IAC SE`) longer than `max_subneg` bytes is abandoned: what
+## follows is data again, and `feed` reports a `subneg_too_long` event.
+fn new(max_subneg = 1024)
+  {
+    state: "data", cmd: 0, sb_len: 0, max_subneg: max_subneg,
+    answered: {}, echo: false
+  }
+end
+
+## True while the client accepts the server's echo (from `DO ECHO` until
+## a `DONT ECHO`): the server must then echo what the client types.
+fn echoing(t)
+  t.echo
+end
+
+# Answers each (command, option) at most once, so two parties that keep
+# refusing each other can't loop, and an IAC flood draws at most a few
+# bytes per option.
+fn answer(t, reply, cmd, opt)
+  let key = cmd * 256 + opt
+  if has_key(t.answered, key)
+    return nil
+  end
+  t.answered[key] = true
+  buf_push(reply, chr(IAC) + chr(cmd) + chr(opt))
+end
+
+# ECHO and SGA are the options OFFER promised: a DO for them accepts the
+# offer and needs no answer.
+fn negotiate(t, reply, cmd, opt)
+  if cmd == DO
+    if opt == ECHO
+      t.echo = true
+    elif opt != SGA
+      answer(t, reply, WONT, opt)
+    end
+  elif cmd == DONT
+    if opt == ECHO
+      t.echo = false
+    end
+    if opt == ECHO or opt == SGA
+      answer(t, reply, WONT, opt)
+    end
+  elif cmd == WILL
+    answer(t, reply, if opt == SGA then DO else DONT end, opt)
+  end
+end
+
+# Handles the command byte after an IAC.
+fn command(t, data, b)
+  if b == IAC
+    buf_push(data, IAC_BYTE)
+    t.state = "data"
+  elif b >= WILL and b <= DONT
+    t.cmd = b
+    t.state = "opt"
+  elif b == SB
+    t.sb_len = 0
+    t.state = "sb"
+  else
+    t.state = "data"
+  end
+end
+
+# Handles one byte inside a subnegotiation. Its contents are skipped:
+# the server asks for no option that has any.
+fn subneg(t, b, events)
+  if t.state == "sb_iac"
+    if b == SE
+      t.state = "data"
+      return nil
+    end
+    t.state = "sb"
+  elif b == IAC
+    t.state = "sb_iac"
+    return nil
+  end
+  t.sb_len = t.sb_len + 1
+  if t.sb_len > t.max_subneg
+    push(events, {kind: "cap", cap: "subneg_too_long"})
+    t.state = "data"
+  end
+end
+
+## Takes the next chunk read from the client. Returns `data`, the chunk
+## without telnet commands (`IAC IAC` becomes one 255 byte), `reply`, the
+## negotiation answers to send back, and `events`, a list of the caps hit.
+## A command split across chunks is completed by the next `feed`.
+##
+##   telnet.feed(t, "ro" + chr(255))     # data "ro"
+##   telnet.feed(t, chr(255) + "ot")     # data chr(255) + "ot"
+fn feed(t, chunk)
+  let events = []
+  let n = len(chunk)
+  if t.state == "data" and find(chunk, IAC_BYTE, 0) < 0
+    return {data: chunk, reply: "", events: events}
+  end
+  let data = buf_new()
+  let reply = buf_new()
+  let i = 0
+  while i < n
+    if t.state == "data"
+      let at = find(chunk, IAC_BYTE, i)
+      if at < 0
+        buf_push(data, substr(chunk, i, n - i))
+        break
+      end
+      if at > i
+        buf_push(data, substr(chunk, i, at - i))
+      end
+      t.state = "iac"
+      i = at + 1
+      continue
+    end
+    let b = ord(chunk, i)
+    if t.state == "iac"
+      command(t, data, b)
+    elif t.state == "opt"
+      negotiate(t, reply, t.cmd, b)
+      t.state = "data"
+    else
+      subneg(t, b, events)
+    end
+    i += 1
+  end
+  {data: to_string(data), reply: to_string(reply), events: events}
+end
+
+## Doubles every 255 byte in `s`, as data sent to a telnet client must be.
+fn escape(s)
+  str_replace(s, IAC_BYTE, IAC_BYTE + IAC_BYTE)
+end
+
+export OFFER, new, echoing, feed, escape

