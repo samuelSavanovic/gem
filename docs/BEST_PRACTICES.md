@@ -965,7 +965,10 @@ records and 0.25 s at 300,000 (`GEM_DIAG=1`, `max=`; Linux x86_64 VM).
 then fire before a 20 ms job has had a chance to report. Bound what a
 long-lived process keeps (expire finished records, keep a count instead
 of a history), or split it across processes, and leave deadlines room for
-the pauses.
+the pauses. A long-running program can watch for them: `runtime_stats()`
+counts the resets that took 1, 10 and 100 ms or more
+(`resets_over_10ms`, ...), and `process_info(pid).memory` shows which
+process holds the data.
 
 ### Mutate state in place
 

@@ -4,7 +4,7 @@
 # can't spawn a process for with 503 and keeps accepting, and a bad
 # GEM_MAX_PROCS stops the program before it runs. Also: spawn's headroom
 # under Linux's vm.max_map_count, and thread-pool work from more than 1024
-# processes at once.
+# processes at once. runtime_stats() reports the limit and the refusals.
 #
 # Run from the repo root: tests/check_proc_limit.sh
 
@@ -38,6 +38,8 @@ while err == nil
   if r.ok then push(pids, r.value) else err = r.error end
 end
 print(len(pids), err)
+let st = runtime_stats()
+print("stats:", st.max_procs, st.procs, st.spawn_refused)
 # A freed slot is usable again.
 kill(pids[0], "kill")
 let r = pcall spawn(fn() nil end)
@@ -49,10 +51,13 @@ GEM
 "$GEM" "$dir/fill.gem" -o "$dir/fill" 2>"$dir/err" || { echo "FAIL: fill.gem doesn't compile"; cat "$dir/err"; exit 1; }
 
 check "limit 8" "7 spawn: process table full
+stats: 8 8 1
 after a kill: true" "$(GEM_MAX_PROCS=8 "$dir/fill" 2>/dev/null)"
 check "limit 2" "1 spawn: process table full
+stats: 2 2 1
 after a kill: true" "$(GEM_MAX_PROCS=2 "$dir/fill" 2>/dev/null)"
 check "limit 100" "99 spawn: process table full
+stats: 100 100 1
 after a kill: true" "$(GEM_MAX_PROCS=100 "$dir/fill" 2>/dev/null)"
 
 for bad in 1 0 -5 abc 12x; do

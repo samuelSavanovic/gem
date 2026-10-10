@@ -742,6 +742,23 @@ void gem_arena_reset_region(GemArenaMark *mark, GemVal **roots, int n_roots,
    + bytes scanned / 2 when the reset kept at least half of its region). */
 void gem_arena_reset_return(const GemArenaPoint *pt, GemVal *ret, int own_frames);
 
+/* Totals over every reset of every process since the program started
+   (gem_copy.c): all resets, the full ones among them (return resets
+   included), the return resets; bytes copied; the scan work (bytes of
+   older data walked, plus fixed charges per remembered-log entry and
+   mailbox message; GEM_DIAG only); the size of the regions freed;
+   seconds spent in resets, and the longest one; the resets that took at
+   least 1, 10 and 100 ms. */
+typedef struct {
+    uint64_t resets, full, ret, ret_copied, copied, scanned, freed;
+    double t_total, t_max;
+    uint64_t over_1ms, over_10ms, over_100ms;
+} GemResetStats;
+void gem_reset_stats_get(GemResetStats *out);
+
+/* Bytes of arena blocks `arena` holds. */
+size_t gem_arena_mapped_bytes(const GemArena *arena);
+
 /* ─── Module globals (per-process module state) ───
  *
  * Top-level `let` bindings compile to slots gem_cur_globals[i], read with
@@ -1196,6 +1213,7 @@ GemVal gem_send_after_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_cancel_timer_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_processes_builtin(void *_env, GemVal *args, int argc);
 GemVal gem_process_info_builtin(void *_env, GemVal *args, int argc);
+GemVal gem_runtime_stats_builtin(void *_env, GemVal *args, int argc);
 
 /* ─── Owned resources (gem_resource.c) ───
  *

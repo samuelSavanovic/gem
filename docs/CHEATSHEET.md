@@ -132,6 +132,7 @@ let ref = make_ref()
 let timer = send_after(pid, msg, 1000); cancel_timer(timer)
 processes()                          # → array of live pids
 process_info(pid)                    # → table or nil
+runtime_stats()                      # → {procs, memory, resets, reset_max_ms, ...}
 
 # Run work concurrently and collect results (std/task)
 let t = task.async do
