@@ -5,6 +5,8 @@ load "./telnet"
 load "./lines"
 load "./shell"
 load "./recorder"
+load "std/string"
+load "std/table"
 
 let READ_SIZE = 4096
 
@@ -69,6 +71,30 @@ fn handle(s, chunk)
   if write(s, out) then nil else "write_failed" end
 end
 
+# Sends the session's first `max_input` bytes of input to the recorder,
+# chunk by chunk, before they are handled: a chunk that crashes the
+# session is stored.
+fn record_input(s, chunk)
+  if s.input_capped
+    return nil
+  end
+  let room = s.max_input - s.input_kept
+  if len(chunk) <= room
+    s.input_kept = s.input_kept + len(chunk)
+    emit(s, {kind: "input", bytes: chunk})
+  else
+    if room > 0
+      emit(s, {kind: "input", bytes: substr(chunk, 0, room)})
+    end
+    s.input_capped = true
+    emit(s, {kind: "cap", cap: "input_truncated"})
+  end
+end
+
+fn trace_text(stack)
+  string.join(table.map(stack, fn(f) "at {f.name} ({f.file}:{f.line})" end), "\n")
+end
+
 fn serve(s)
   if not write(s, telnet.OFFER + crlf(shell.greeting(s.sh)))
     return "write_failed"
@@ -82,6 +108,7 @@ fn serve(s)
       return "closed"
     end
     s.bytes_in = s.bytes_in + len(chunk)
+    record_input(s, chunk)
     let reason = handle(s, chunk)
     if reason != nil
       return reason
@@ -89,26 +116,33 @@ fn serve(s)
   end
 end
 
-## Serves accepted socket `sock` from `peer` (`{ip, port}`) as session
-## `id`, with the server's config `cfg`, and returns when the session is
-## over. Claims `sock` first, so it closes however this ends. Sends
-## `session_start`, `session_end`, the shell's events and `cap` events to
-## `cfg.events`.
-fn run(sock, peer, id, cfg)
+## Serves accepted socket `sock` from `peer` (`{ip, port}`) with the
+## server's config `cfg`, and returns when the session is over. Claims
+## `sock` first, so it closes however this ends. Sends its events to
+## `cfg.events`, each with its pid as `session`: `session_start`, its raw
+## input, the shell's events, `cap` events and `session_end`. An error
+## sends an `error` event with the trace before the session crashes with
+## it.
+fn run(sock, peer, cfg)
   claim(sock)
   let s = {
-    sock: sock, id: id, events: cfg.events, idle_ms: cfg.idle_ms, write_ms: cfg.write_ms,
+    sock: sock, id: self(), events: cfg.events, idle_ms: cfg.idle_ms, write_ms: cfg.write_ms,
     tn: telnet.new(cfg.max_subneg), sp: lines.new(cfg.max_line),
     sh: shell.new({accept_on: cfg.accept_on, accept_chance: cfg.accept_chance}),
-    bytes_in: 0, bytes_out: 0
+    bytes_in: 0, bytes_out: 0, max_input: cfg.max_input, input_kept: 0, input_capped: false
   }
   let started = time_ms()
   emit(s, {kind: "session_start", ip: peer.ip, port: peer.port})
-  let reason = serve(s)
-  emit(s, {
-    kind: "session_end", reason: reason, bytes_in: s.bytes_in, bytes_out: s.bytes_out,
-    logged_in: shell.logged_in(s.sh), ms: time_ms() - started
-  })
+  let r = pcall serve(s)
+  let ev = if r.ok then {kind: "session_end", reason: r.value} else {kind: "error", reason: r.error, trace: trace_text(r.stack)} end
+  ev.bytes_in = s.bytes_in
+  ev.bytes_out = s.bytes_out
+  ev.logged_in = shell.logged_in(s.sh)
+  ev.ms = time_ms() - started
+  emit(s, ev)
+  if not r.ok
+    error(r.error)
+  end
 end
 
 export run

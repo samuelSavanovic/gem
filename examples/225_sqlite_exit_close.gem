@@ -1,0 +1,49 @@
+# A database a process's exit closes is closed by the time its DOWN
+# arrives: the next opener of the file reads it at once, after a normal
+# return of a claimer and after its opener is killed alike.
+
+load "std/sqlite"
+
+let PATH = "/tmp/gem_225_exit_close.db"
+
+fn wait_down(pid)
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: reason} then reason
+  end
+end
+
+fn count_rows()
+  let db = sqlite.open(PATH)
+  let r = pcall sqlite.query(db, "SELECT count(*) AS n FROM t")
+  sqlite.close(db)
+  if r.ok then r.value[0].n else r.error end
+end
+
+for suffix in ["", "-wal", "-shm"]
+  remove_file(PATH + suffix)
+end
+
+let claimer = spawn_monitor(fn()
+  let db = sqlite.open(PATH)
+  claim(db)
+  sqlite.exec(db, "CREATE TABLE t(x); INSERT INTO t VALUES (1)")
+end).pid
+print("claimer: {wait_down(claimer)}, rows {count_rows()}")
+
+let failed = 0
+for i = 0, 20
+  let pid = spawn_monitor(fn()
+    let db = sqlite.open(PATH)
+    sqlite.exec(db, "INSERT INTO t VALUES (2)")
+    kill(self(), "boom")
+  end).pid
+  wait_down(pid)
+  if type(count_rows()) != "int"
+    failed += 1
+  end
+end
+print("killed openers: rows {count_rows()}, failed reads {failed}")
+
+for suffix in ["", "-wal", "-shm"]
+  remove_file(PATH + suffix)
+end

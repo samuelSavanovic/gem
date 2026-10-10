@@ -4588,3 +4588,5 @@ after it died: 1 true
 resources: 3 ownerless: 1
 closed: true
 refused spawns: 0
+claimer: normal, rows 1
+killed openers: rows 21, failed reads 0

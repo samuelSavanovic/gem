@@ -10,14 +10,14 @@
 /* ─── Handles ───
    A Gem handle is a resource value of kind GEM_RES_SQLITE (gem_resource.c)
    whose entry holds the sqlite3 *. The table is only read and written on
-   the scheduler thread (in the builtins themselves, never in the pool
-   workers or the request free functions):
+   the scheduler thread (in the builtins and at a process's exit, never in
+   the pool workers or the request free functions):
    - sqlite_open registers the connection after its worker is done and the
      requester has resumed; a requester killed mid-open never resumes, and
      gem_sqlite_open_free closes the connection with no entry made.
-   - sqlite_close removes the entry as soon as the close is queued, before
-     any worker can free the connection, so no process can reach it
-     afterwards; so does a close at its owner's exit (gem_sqlite_exit_close).
+   - sqlite_close removes the entry right after queuing the close, before
+     it yields, so no Gem code can reach the connection afterwards. A close at its owner's exit removes the entry and closes
+     the connection inline (gem_sqlite_exit_close).
    Queries run inline on the scheduler thread without yielding, so none is in
    progress on a connection when a close is queued. */
 
@@ -159,20 +159,13 @@ GemVal gem_sqlite_close_fn(void *_env, GemVal *args, int argc) {
     return GEM_NIL;
 }
 
-/* A handle closed at its owner's exit (gem_res_proc_exit): through the
-   pool like sqlite_close, with nobody waiting, so the runtime drops the
-   requester's side of the request at once. On a full queue it closes
-   inline (a WAL checkpoint can then block the scheduler); a failed submit
-   has freed `a` already, so it keeps its own pointer. */
+/* A handle closed at its owner's exit (gem_res_proc_exit): inline, on the
+   scheduler thread, so the close (and the WAL checkpoint it may run) is
+   done before any process runs again, and so before anyone acts on the
+   owner's DOWN or EXIT, opens the file again or restarts the owner. Every
+   process waits meanwhile, as for sqlite_exec. */
 void gem_sqlite_exit_close(void *db) {
-    GemIORequest *req = NULL;
-    GemSqliteCloseArgs *a = (GemSqliteCloseArgs *)malloc(sizeof(GemSqliteCloseArgs));
-    if (a) {
-        a->db = (sqlite3 *)db;
-        req = gem_io_submit_extern(gem_sqlite_close_worker, a, gem_sqlite_close_free);
-    }
-    if (req) gem_io_release(req);
-    else sqlite3_close((sqlite3 *)db);
+    sqlite3_close((sqlite3 *)db);
 }
 
 /* ─── Built-in: sqlite_exec ─── */
