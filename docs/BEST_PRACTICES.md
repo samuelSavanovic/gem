@@ -1379,7 +1379,7 @@ processes.
 | Yields to other processes | Blocks everything |
 |---|---|
 | `tcp_*` (except name lookup, see right), `sleep`, `receive` | `tcp_connect` to a host *name* (DNS lookup runs inline) |
-| `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, `extern blocking fn` (4-thread pool) | `sqlite_query`, `sqlite_exec` |
+| `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, `extern blocking fn` (4-thread pool) | `sqlite_query`, `sqlite_exec`, and the close of a database at its owner's exit |
 | | `file_exists`, `is_dir`, `list_dir`, `mkdir`, `remove_file`, `normalize_path` |
 | | plain `extern fn`, `input`, `read_stdin`; `print`, `eprint`, `write_stdout` to a slow pipe |
 
