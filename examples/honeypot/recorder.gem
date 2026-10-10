@@ -1,0 +1,87 @@
+## recorder — takes the honeypot's events and prints one line per event
+## on stdout, every attacker-controlled byte escaped.
+##
+##   recorder.start("honeypot_recorder")
+##   recorder.emit("honeypot_recorder", {kind: "login", session: 3, user: "root"})
+##   # 2026-10-10T12:00:00Z session=3 login user="root"
+
+load "std/time"
+
+let HEX = "0123456789abcdef"
+
+# Fields `format` shows in front, or not at all.
+let HEAD = {tag: true, time: true, session: true, kind: true}
+
+## Sends `ev` to the recorder at `target` (a pid or a registered name),
+## stamped with the time. An event for a name nobody holds, as while the
+## recorder restarts, is dropped.
+fn emit(target, ev)
+  ev.time = epoch_ms()
+  let to = if type(target) == "string" then whereis(target) else target end
+  if to != nil
+    send(to, {tag: "hp_event", event: ev})
+  end
+end
+
+## Quotes `s` for a log line: printable ASCII stays, `"` and `\` get a
+## backslash, every other byte is `\xHH`.
+##
+##   recorder.quote("a\"b" + chr(0))     # "\"a\\\"b\\x00\""
+fn quote(s)
+  build_string do |add|
+    add("\"")
+    let start = 0
+    for i = 0, len(s)
+      let b = ord(s, i)
+      if b < 32 or b > 126 or b == 34 or b == 92
+        add(substr(s, start, i - start))
+        if b == 34 or b == 92
+          add("\\", chr(b))
+        else
+          add("\\x", HEX[bshr(b, 4)], HEX[band(b, 15)])
+        end
+        start = i + 1
+      end
+    end
+    add(substr(s, start, len(s) - start), "\"")
+  end
+end
+
+## The log line for `ev`: its time, session and kind, then its other
+## fields as `name=value`, strings quoted.
+fn format(ev)
+  build_string do |add|
+    add(time.iso8601(ev.time))
+    if ev.session != nil
+      add(" session=", ev.session)
+    end
+    add(" ", ev.kind)
+    for k, v in ev
+      if not has_key(HEAD, k)
+        add(" ", k, "=", if type(v) == "string" then quote(v) else to_string(v) end)
+      end
+    end
+  end
+end
+
+fn loop()
+  while true
+    receive
+    when {tag: "hp_event", event: ev}
+      print(format(ev))
+    when other
+      nil
+    end
+  end
+end
+
+## Starts the recorder under the registered `name` and returns its pid.
+fn start(name)
+  let pid = spawn do
+    loop()
+  end
+  register(name, pid)
+  pid
+end
+
+export emit, quote, format, start

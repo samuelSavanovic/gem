@@ -65,9 +65,12 @@ a large keyspace, a process per connection, pub/sub), `examples/lox/`
 (an interpreter for the Lox language: a lexer, a recursive-descent parser
 and a tree walker over tables), `examples/gemgrep/` (a recursive grep
 on libc's regex through `extern fn`: a C object behind a `Ptr`, file
-contents as `Bytes`) and `examples/jobqueue/` (a job queue whose workers
+contents as `Bytes`), `examples/jobqueue/` (a job queue whose workers
 crash, hang and get killed under a `dynamic_supervisor`: retries,
-deadlines, restart intensity) follow this doc and test themselves with
+deadlines, restart intensity) and `examples/honeypot/` (a telnet
+honeypot: a byte-level protocol parser fed across reads, a process per
+connection that claims its socket, timeouts on every read and write)
+follow this doc and test themselves with
 `std/test`; read them for how the pieces fit together.
 
 **Words this doc uses.**

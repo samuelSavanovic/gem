@@ -1,0 +1,708 @@
+## shell — the fake device's login and BusyBox shell, as a state machine
+## that does no I/O: each input line gives the text to send back and the
+## events to record. It never runs anything and never connects anywhere.
+##
+##   let sh = shell.new({accept_on: 3})
+##   write(shell.greeting(sh))                  # "\nlocalhost login: "
+##   let r = shell.line(sh, "root")             # {out: "Password: ", events: []}
+##
+## Output uses "\n" line ends. Events are tables with a `kind`: `login`
+## (`user`, `password`, `ok`), `command` (`line`), `url` (`url`, `via`)
+## and `echo` (`bytes`, what an `echo -e` decoded).
+
+load "std/string"
+load "./device"
+
+let MAX_DEPTH = 4
+
+let ESCAPES = {n: "\n", t: "\t", r: "\r", a: chr(7), b: chr(8), f: chr(12), v: chr(11), e: chr(27)}
+ESCAPES["\\"] = "\\"
+
+let WGET_VALUE = {"-O": true, "-o": true, "-P": true, "-U": true, "-T": true, "-t": true, "-Y": true, "--header": true}
+
+let WGET_USAGE = """
+BusyBox v1.24.1 (2017-01-04 16:39:08 CST) multi-call binary.
+
+Usage: wget [-c|--continue] [-s|--spider] [-q|--quiet] [-O|--output-document FILE]
+	[--header 'header: value'] [-Y|--proxy on/off] [-P DIR]
+	[-U|--user-agent AGENT] [-T SEC] URL...
+
+"""
+
+let CURL_VALUE = {"-o": true, "-A": true, "-H": true, "-d": true, "-X": true, "-u": true, "-e": true, "-m": true, "--output": true}
+
+let APPLETS = {
+  echo: applet_echo, cat: applet_cat, uname: applet_uname, ps: applet_ps,
+  ls: applet_ls, false: applet_false, exit: applet_exit, logout: applet_exit, wget: applet_wget,
+  curl: applet_curl, tftp: applet_tftp, ftpget: applet_ftpget
+}
+
+## Makes the state for one connection. The `accept_on`th login attempt
+## succeeds, and each earlier one with probability `accept_chance`.
+fn new({accept_on = 3, accept_chance = 0.0} = {})
+  {
+    stage: "login", user: nil, attempts: 0, logged_in: false, closed: false,
+    accept_on: accept_on, accept_chance: accept_chance
+  }
+end
+
+## The text sent on connect: a banner and the login prompt.
+fn greeting(sh)
+  device.BANNER + login_prompt()
+end
+
+## False while the client types its password, which isn't echoed.
+fn echoes(sh)
+  sh.stage != "password"
+end
+
+## True once the client has logged in.
+fn logged_in(sh)
+  sh.logged_in
+end
+
+## True once the client has typed `exit` or `logout`.
+fn closed(sh)
+  sh.closed
+end
+
+fn login_prompt()
+  "{device.HOSTNAME} login: "
+end
+
+## Takes one input line (without its line end). Returns `out`, the text to
+## send back, and `events`.
+fn line(sh, text)
+  let events = []
+  let out = match sh.stage
+  when "login" then login_line(sh, text)
+  when "password" then password_line(sh, text, events)
+  else shell_line(sh, text, events)
+  end
+  {out: out, events: events}
+end
+
+fn login_line(sh, text)
+  if string.trim(text) == ""
+    return login_prompt()
+  end
+  sh.user = text
+  sh.stage = "password"
+  "Password: "
+end
+
+fn password_line(sh, text, events)
+  sh.attempts = sh.attempts + 1
+  let lucky = sh.accept_chance > 0.0 and random() < sh.accept_chance
+  let ok = sh.attempts >= sh.accept_on or lucky
+  push(events, {kind: "login", user: sh.user, password: text, ok: ok})
+  if not ok
+    sh.stage = "login"
+    return "\nLogin incorrect\n" + login_prompt()
+  end
+  sh.stage = "shell"
+  sh.logged_in = true
+  "\n" + device.MOTD + device.PROMPT
+end
+
+fn shell_line(sh, text, events)
+  if string.trim(text) == ""
+    return device.PROMPT
+  end
+  push(events, {kind: "command", line: text})
+  let out = run_line(sh, text, events)
+  if sh.closed then out else out + device.PROMPT end
+end
+
+# ─── Parsing a command line ────────────────────────────────────
+
+# Splits a line into simple commands, each `{words, op, quiet, quiet_err}`:
+# `op` is the operator after it (";", "&&", "||", "|", or nil at the end;
+# "&" counts as ";"), `quiet` is true when its stdout is redirected and
+# `quiet_err` when its stderr is. Quotes and backslashes work as in sh. A
+# command substitution (`$(...)` or backquotes, also inside double
+# quotes) becomes `expand(inner)`, or stays as written when `expand` is
+# nil; its output isn't split into words. `$VAR` and globs stay as
+# written.
+fn parse(text, expand = nil)
+  let p = {
+    cmds: [], cur: new_cmd(), word: buf_new(), in_word: false, target: nil,
+    expand: expand
+  }
+  let n = len(text)
+  let i = 0
+  while i < n
+    let c = text[i]
+    if c == " " or c == "\t"
+      end_word(p)
+      i += 1
+    elif c == "'"
+      p.in_word = true
+      let close = find(text, "'", i + 1)
+      if close < 0 then close = n end
+      buf_push(p.word, substr(text, i + 1, close - i - 1))
+      i = close + 1
+    elif c == "\""
+      p.in_word = true
+      i = double_quoted(p, text, i + 1)
+    elif c == "\\"
+      p.in_word = true
+      if i + 1 < n then buf_push(p.word, text[i + 1]) end
+      i += 2
+    elif starts_substitution(text, i)
+      p.in_word = true
+      i = substitution(p, text, i)
+    elif c == "&" and i + 1 < n and text[i + 1] == ">"
+      end_word(p)
+      p.cur.quiet = true
+      p.cur.quiet_err = true
+      p.target = true
+      i += 2
+    elif c == ";" or c == "&" or c == "|"
+      i = operator(p, text, i)
+    elif c == ">" or c == "<"
+      i = redirect(p, text, i)
+    elif c == "#" and not p.in_word
+      break
+    else
+      p.in_word = true
+      buf_push(p.word, c)
+      i += 1
+    end
+  end
+  end_cmd(p, nil)
+  p.cmds
+end
+
+fn new_cmd()
+  {words: [], op: nil, quiet: false, quiet_err: false}
+end
+
+# Ends the word being read: a redirect's target is dropped, anything else
+# is the command's next word.
+fn end_word(p)
+  if not p.in_word
+    return nil
+  end
+  if p.target == nil
+    push(p.cur.words, to_string(p.word))
+  end
+  p.target = nil
+  p.word = buf_new()
+  p.in_word = false
+end
+
+fn end_cmd(p, op)
+  end_word(p)
+  if len(p.cur.words) > 0
+    p.cur.op = op
+    push(p.cmds, p.cur)
+  end
+  p.cur = new_cmd()
+end
+
+# Reads a double-quoted string from `i` (past the opening quote); returns
+# the offset past the closing quote. A backslash escapes only `"`, `\`,
+# `$` and a backquote, as in sh.
+fn double_quoted(p, text, i)
+  let n = len(text)
+  while i < n
+    let c = text[i]
+    if c == "\""
+      return i + 1
+    end
+    if c == "\\" and i + 1 < n and find("\"\\$`", text[i + 1], 0) >= 0
+      buf_push(p.word, text[i + 1])
+      i += 2
+    elif starts_substitution(text, i)
+      i = substitution(p, text, i)
+    else
+      buf_push(p.word, c)
+      i += 1
+    end
+  end
+  n
+end
+
+fn starts_substitution(text, i)
+  text[i] == "`" or (text[i] == "$" and i + 1 < len(text) and text[i + 1] == "(")
+end
+
+# Reads the command substitution at `i` into the word; returns the offset
+# past it. `$(` ends at its matching `)`, a backquote at the next one, or
+# either at the end of the line.
+fn substitution(p, text, i)
+  let n = len(text)
+  let start = 0
+  let stop = n
+  let next = n
+  if text[i] == "`"
+    start = i + 1
+    let close = find(text, "`", start)
+    if close >= 0
+      stop = close
+      next = close + 1
+    end
+  else
+    start = i + 2
+    let depth = 1
+    let k = start
+    while k < n
+      if text[k] == "(" then depth += 1 end
+      if text[k] == ")" then depth -= 1 end
+      if depth == 0
+        stop = k
+        next = k + 1
+        break
+      end
+      k += 1
+    end
+  end
+  if p.expand == nil
+    buf_push(p.word, substr(text, i, next - i))
+  else
+    buf_push(p.word, p.expand(substr(text, start, stop - start)))
+  end
+  next
+end
+
+fn operator(p, text, i)
+  let c = text[i]
+  let doubled = i + 1 < len(text) and text[i + 1] == c
+  if c == ";"
+    end_cmd(p, ";")
+    return i + 1
+  end
+  if doubled
+    end_cmd(p, c + c)
+    return i + 2
+  end
+  end_cmd(p, if c == "&" then ";" else "|" end)
+  i + 1
+end
+
+# `>`, `>>`, `<`, with an fd before them (`2>`) and a dup after them
+# (`2>&1`, `>&2`). A dup takes no target word: `2>&1` sends stderr where
+# stdout goes so far, `>&2` stdout where stderr goes.
+fn redirect(p, text, i)
+  let n = len(text)
+  let out = text[i] == ">"
+  let fd = if out then 1 else 0 end
+  if p.in_word and (to_string(p.word) == "1" or to_string(p.word) == "2")
+    fd = to_int(to_string(p.word))
+    p.word = buf_new()
+    p.in_word = false
+  else
+    end_word(p)
+  end
+  i += 1
+  if i < n and text[i] == ">" then i += 1 end
+  if i < n and text[i] == "&"
+    i += 1
+    let to = if i < n then text[i] else "" end
+    while i < n and ord(text, i) >= 48 and ord(text, i) <= 57
+      i += 1
+    end
+    if fd == 2 and to == "1" then p.cur.quiet_err = p.cur.quiet end
+    if fd == 1 and to == "2" then p.cur.quiet = p.cur.quiet_err end
+    return i
+  end
+  if out and fd == 1 then p.cur.quiet = true end
+  if out and fd == 2 then p.cur.quiet_err = true end
+  p.target = true
+  i
+end
+
+# ─── Running it ────────────────────────────────────────────────
+
+# Runs the commands in turn: `&&` and `||` skip the next pipeline as sh
+# does, on fake exit statuses. A pipeline prints its first command's
+# output when the rest are filters (`grep`, `head`, ...), else the last
+# non-filter's. The errors of every command it runs that keeps its stderr
+# go to `err`, by default the output itself. A line's command
+# substitutions all run first, when it is parsed, whatever `&&` and `||`
+# then skip. They nest up to MAX_DEPTH deep; deeper ones stay as written.
+fn run_line(sh, text, events, depth = 0, err = nil)
+  let out = buf_new()
+  if err == nil
+    err = out
+  end
+  let expand = if depth < MAX_DEPTH
+    fn(inner) substitute(sh, inner, events, depth + 1, err) end
+  end
+  let cmds = parse(text, expand)
+  let status = 0
+  let prev_op = ";"
+  let i = 0
+  while i < len(cmds) and not sh.closed
+    let j = i
+    while cmds[j].op == "|" and j + 1 < len(cmds)
+      j += 1
+    end
+    let skip = (prev_op == "&&" and status != 0) or (prev_op == "||" and status == 0)
+    if not skip
+      status = run_pipeline(sh, cmds, i, j, out, err, events)
+    end
+    prev_op = cmds[j].op
+    i = j + 1
+  end
+  to_string(out)
+end
+
+# The output of `inner` without its trailing line ends, as `$(...)` gives;
+# its errors go to `err`. An `exit` in it ends only the substitution.
+fn substitute(sh, inner, events, depth, err)
+  let closed = sh.closed
+  let out = run_line(sh, inner, events, depth, err)
+  sh.closed = closed
+  let n = len(out)
+  while n > 0 and out[n - 1] == "\n"
+    n -= 1
+  end
+  substr(out, 0, n)
+end
+
+fn run_pipeline(sh, cmds, first, last, out, err, events)
+  let shown = ""
+  let status = 0
+  for k = first, last + 1
+    let cmd = cmds[k]
+    if k > first and has_key(device.FILTERS, command_name(cmd.words[0]))
+      status = 0
+      continue
+    end
+    let r = run(sh, cmd.words, events)
+    if not cmd.quiet_err then buf_push(err, r.err) end
+    shown = if cmd.quiet then "" else r.out end
+    status = r.status
+    if sh.closed then break end
+  end
+  buf_push(out, shown)
+  status
+end
+
+# The applet a command word names: `/bin/cat` is `cat`; any other path
+# (`./x`, `/tmp/x`) is a program, named by its path.
+fn command_name(word)
+  for dir in ["/bin/", "/sbin/", "/usr/bin/", "/usr/sbin/"]
+    if string.starts_with(word, dir) and find(word, "/", len(dir)) < 0
+      return substr(word, len(dir), len(word) - len(dir))
+    end
+  end
+  word
+end
+
+fn result(out, err = "", status = 0)
+  {out: out, err: err, status: status}
+end
+
+fn run(sh, words, events)
+  let name = command_name(words[0])
+  let args = []
+  for k = 1, len(words)
+    push(args, words[k])
+  end
+  if name == "busybox"
+    if len(args) == 0
+      return result(device.BUSYBOX_USAGE)
+    end
+    let applet = command_name(args[0])
+    if not has_key(APPLETS, applet) and not has_key(device.SILENT, applet)
+      return result("", "{applet}: applet not found\n", 127)
+    end
+    return run(sh, args, events)
+  end
+  if has_key(APPLETS, name)
+    return APPLETS[name](sh, args, events)
+  end
+  if has_key(device.SILENT, name)
+    return result("")
+  end
+  if find(name, "/", 0) >= 0
+    return result("")
+  end
+  result("", "sh: {name}: not found\n", 127)
+end
+
+# ─── Applets ───────────────────────────────────────────────────
+
+fn applet_echo(sh, args, events)
+  let newline = true
+  let escapes = false
+  let k = 0
+  while k < len(args) and is_echo_flag(args[k])
+    newline = newline and find(args[k], "n", 0) < 0
+    escapes = escapes or find(args[k], "e", 0) >= 0
+    k += 1
+  end
+  let words = []
+  for w = k, len(args)
+    push(words, args[w])
+  end
+  let text = string.join(words, " ")
+  if escapes
+    text = decode_escapes(text)
+    push(events, {kind: "echo", bytes: text})
+  end
+  result(if newline then text + "\n" else text end)
+end
+
+fn is_echo_flag(arg)
+  if len(arg) < 2 or arg[0] != "-"
+    return false
+  end
+  for k = 1, len(arg)
+    if find("neE", arg[k], 0) < 0 then return false end
+  end
+  true
+end
+
+# echo -e's escapes: \xHH (one or two hex digits), \0NNN (up to three
+# octal digits), \n and the other letters in ESCAPES; \c ends the output.
+fn decode_escapes(s)
+  let n = len(s)
+  if find(s, "\\", 0) < 0
+    return s
+  end
+  build_string do |add|
+    let i = 0
+    while i < n
+      let at = find(s, "\\", i)
+      if at < 0 or at + 1 >= n
+        add(substr(s, i, n - i))
+        break
+      end
+      add(substr(s, i, at - i))
+      let c = s[at + 1]
+      i = at + 2
+      if c == "x"
+        let v = digits(s, i, 2, 16)
+        if v.count == 0
+          add("\\x")
+        else
+          add(chr(v.value))
+          i += v.count
+        end
+      elif c == "0"
+        let v = digits(s, i, 3, 8)
+        add(chr(band(v.value, 255)))
+        i += v.count
+      elif c == "c"
+        break
+      elif has_key(ESCAPES, c)
+        add(ESCAPES[c])
+      else
+        add("\\", c)
+      end
+    end
+  end
+end
+
+# Reads up to `most` digits in `base` (8 or 16) from `i`.
+fn digits(s, i, most, base)
+  let value = 0
+  let count = 0
+  while count < most and i + count < len(s)
+    let d = digit_value(ord(s, i + count))
+    if d < 0 or d >= base then break end
+    value = value * base + d
+    count += 1
+  end
+  {value: value, count: count}
+end
+
+fn digit_value(b)
+  if b >= 48 and b <= 57 then return b - 48 end
+  if b >= 97 and b <= 102 then return b - 87 end
+  if b >= 65 and b <= 70 then return b - 55 end
+  -1
+end
+
+fn applet_cat(sh, args, events)
+  let out = buf_new()
+  let err = buf_new()
+  let status = 0
+  for path in args
+    if string.starts_with(path, "-") and path != "-"
+      continue
+    end
+    if has_key(device.FILES, path)
+      buf_push(out, device.FILES[path])
+    elif path != "-"
+      buf_push(err, "cat: can't open '{path}': No such file or directory\n")
+      status = 1
+    end
+  end
+  result(to_string(out), to_string(err), status)
+end
+
+fn applet_uname(sh, args, events)
+  let want = {}
+  for arg in args
+    if arg == "-a"
+      want = {s: true, n: true, r: true, v: true, m: true, o: true}
+    elif string.starts_with(arg, "-")
+      for k = 1, len(arg)
+        want[arg[k]] = true
+      end
+    end
+  end
+  if len(want) == 0
+    want.s = true
+  end
+  let parts = []
+  for field in ["s", "n", "r", "v", "m", "o"]
+    if has_key(want, field) then push(parts, device.UNAME[field]) end
+  end
+  result(string.join(parts, " ") + "\n")
+end
+
+fn applet_ps(sh, args, events)
+  result(device.PS)
+end
+
+fn applet_ls(sh, args, events)
+  for arg in args
+    if not string.starts_with(arg, "-") and arg != "/"
+      return result("")
+    end
+  end
+  result(device.LS_ROOT)
+end
+
+fn applet_false(sh, args, events)
+  result("", "", 1)
+end
+
+fn applet_exit(sh, args, events)
+  sh.closed = true
+  result("")
+end
+
+# The first argument that is neither an option nor the value of one of
+# `with_value`.
+fn first_operand(args, with_value)
+  let k = 0
+  while k < len(args)
+    let arg = args[k]
+    if has_key(with_value, arg)
+      k += 2
+    elif string.starts_with(arg, "-") and len(arg) > 1
+      k += 1
+    else
+      return arg
+    end
+  end
+  nil
+end
+
+# The host of a URL: what follows the scheme, up to a "/", ":" or "?".
+fn url_host(url)
+  let start = find(url, "://", 0)
+  start = if start < 0 then 0 else start + 3 end
+  let stop = len(url)
+  for c in ["/", ":", "?"]
+    let at = find(url, c, start)
+    if at >= 0 and at < stop then stop = at end
+  end
+  substr(url, start, stop - start)
+end
+
+fn url_file(url)
+  let scheme = find(url, "://", 0)
+  let path = if scheme < 0 then url else substr(url, scheme + 3) end
+  let slash = -1
+  let at = find(path, "/", 0)
+  while at >= 0
+    slash = at
+    at = find(path, "/", at + 1)
+  end
+  let name = if slash < 0 then "" else substr(path, slash + 1) end
+  if name == "" then "index.html" else name end
+end
+
+fn applet_wget(sh, args, events)
+  let url = first_operand(args, WGET_VALUE)
+  if url == nil
+    return result("", WGET_USAGE, 1)
+  end
+  push(events, {kind: "url", url: url, via: "wget"})
+  let host = url_host(url)
+  let file = url_file(url)
+  for k = 0, len(args) - 1
+    if args[k] == "-O" then file = args[k + 1] end
+  end
+  let progress = build_string do |add|
+    add("Connecting to ", host, " (", host, ":80)\n")
+    add("saving to '", file, "'\n")
+    add(file, "            100% |*******************************| 51234   0:00:00 ETA\n")
+    add("'", file, "' saved\n")
+  end
+  result("", progress)
+end
+
+fn applet_curl(sh, args, events)
+  let url = first_operand(args, CURL_VALUE)
+  if url == nil
+    return result("", "curl: try 'curl --help' for more information\n", 2)
+  end
+  push(events, {kind: "url", url: url, via: "curl"})
+  let meter = build_string do |add|
+    add("  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n")
+    add("                                 Dload  Upload   Total   Spent    Left  Speed\n")
+    add("100 51234  100 51234    0     0   412k      0 --:--:-- --:--:-- --:--:--  412k\n")
+  end
+  result("", meter)
+end
+
+# BusyBox's `tftp [-g|-p] -l LOCAL -r REMOTE HOST [PORT]`, and the
+# `tftp HOST -c get FILE` of other clients.
+fn applet_tftp(sh, args, events)
+  let remote = nil
+  let local = nil
+  let operands = []
+  let k = 0
+  while k < len(args)
+    let arg = args[k]
+    if (arg == "-r" or arg == "-l") and k + 1 < len(args)
+      if arg == "-r" then remote = args[k + 1] else local = args[k + 1] end
+      k += 2
+    elif arg == "-c" and k + 2 < len(args)
+      remote = args[k + 2]
+      k += 3
+    elif string.starts_with(arg, "-")
+      k += 1
+    else
+      push(operands, arg)
+      k += 1
+    end
+  end
+  if len(operands) == 0
+    return result("", "BusyBox v1.24.1 (2017-01-04 16:39:08 CST) multi-call binary.\n\nUsage: tftp [OPTIONS] HOST [PORT]\n", 1)
+  end
+  let host = if len(operands) > 1 then "{operands[0]}:{operands[1]}" else operands[0] end
+  let file = if remote != nil then remote elif local != nil then local else "" end
+  push(events, {kind: "url", url: "tftp://{host}/{file}", via: "tftp"})
+  result("")
+end
+
+# BusyBox's `ftpget [-u USER] [-p PASS] [-P PORT] HOST [LOCAL] REMOTE`.
+fn applet_ftpget(sh, args, events)
+  let operands = []
+  let k = 0
+  while k < len(args)
+    if string.starts_with(args[k], "-")
+      k += 2
+    else
+      push(operands, args[k])
+      k += 1
+    end
+  end
+  if len(operands) < 2
+    return result("", "BusyBox v1.24.1 (2017-01-04 16:39:08 CST) multi-call binary.\n\nUsage: ftpget [OPTIONS] HOST [LOCAL_FILE] REMOTE_FILE\n", 1)
+  end
+  push(events, {kind: "url", url: "ftp://{operands[0]}/{operands[len(operands) - 1]}", via: "ftpget"})
+  result("")
+end
+
+export new, greeting, echoes, logged_in, closed, line, parse, decode_escapes

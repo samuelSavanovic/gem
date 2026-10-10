@@ -27,8 +27,8 @@ Socket ownership is in place, so the honeypot closes nothing on `DOWN`: each ses
 
 ## Process layout
 
-- **acceptor**: `tcp_listen` on the configured port (2323 locally, 23 in production via a redirect) and a loop on `tcp_accept`, sending `{sock, ip}` to the registry. `tcp_accept` takes no timeout, so this process does nothing else.
-- **registry**: owns the global and per-IP connection counts, applies the caps (refuses and logs when over), spawns and monitors one session per connection, and records abnormal exits. Sessions are temporary and never restarted, so no `dynamic_supervisor`.
+- **acceptor**: a loop on `tcp_accept` over the listener main opens on the configured port (2323; in production port 23 is redirected to it), sending `{sock, peer}` to the registry. `tcp_accept` takes no timeout, so this process does nothing else.
+- **registry**: owns the global and per-IP connection counts, applies the caps (refuses and logs when over), spawns and monitors one session per connection, and records abnormal exits. It claims each socket it takes from its mailbox; it and the acceptor restart together, so a registry crash closes the sockets not yet handed to a session, those still in its mailbox included. Sessions are temporary and never restarted, so no `dynamic_supervisor`.
 - **session** (one per connection): claims its socket first (`claim(sock)`), so any exit closes it. Runs telnet negotiation, the fake login and the fake shell. Streams its raw input to the recorder. Exits on close, idle timeout, max session length or a byte cap.
 - **recorder**: the only process that touches sqlite. Batches inserts in a transaction (every N events or T ms). Keeps a capped raw-input ring per live session, written out on a crash and dropped on a normal exit. Counts the events it drops when its backlog is over the cap.
 - **metrics sampler**: every 1–5 minutes records RSS (`/proc/self/statm`), open fds (`list_dir("/proc/self/fd")`), `runtime_stats()` (live processes, arena memory, open and ownerless resources, reset time, and resets over 10 and 100 ms since the last sample), sessions per state, crashes, cap hits and the Gem commit. The `/proc` reads are Linux only.
@@ -103,7 +103,7 @@ Candidates as of 2026-10: BuyVM Slice 1024 in Luxembourg (often out of stock) or
 
 1. `tcp_peer` builtin (done).
 2. Process-owned sockets (ROADMAP), with a plan agreed before implementation: the plan is `docs/design/process_owned_resources.md`, agreed.
-3. IAC parser, line splitter, fake login and shell on :2323, with `test.gem`. Can run alongside 1–2.
+3. IAC parser, line splitter, fake login and shell on :2323, with `test.gem` (done: see README.md; events go to stdout as log lines until phase 4).
 4. Crash-data path, recorder and schema.
 5. Limits, metrics sampler, local fuzz hour.
 6. Deploy on :23, watch the first day's traffic, extend the fake commands.

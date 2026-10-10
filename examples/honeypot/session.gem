@@ -1,0 +1,114 @@
+## session — one telnet connection: negotiation, the fake login and the
+## fake shell, until the client leaves, goes idle or stops reading.
+
+load "./telnet"
+load "./lines"
+load "./shell"
+load "./recorder"
+
+let READ_SIZE = 4096
+
+fn emit(s, ev)
+  ev.session = s.id
+  recorder.emit(s.events, ev)
+end
+
+fn crlf(text)
+  str_replace(text, "\n", "\r\n")
+end
+
+# False when not all of `out` is written: the client doesn't take it
+# within the write timeout, or has reset the connection.
+fn write(s, out)
+  let n = len(out)
+  if n == 0
+    return true
+  end
+  let written = tcp_write(s.sock, out, s.write_ms)
+  s.bytes_out = s.bytes_out + written
+  written == n
+end
+
+fn echoing(s)
+  telnet.echoing(s.tn) and shell.echoes(s.sh)
+end
+
+# Handles one chunk read from the client: the end reason when the session
+# is over, else nil. Echo goes line by line, so a password sent in the
+# same chunk as its username isn't echoed.
+fn handle(s, chunk)
+  let t = telnet.feed(s.tn, chunk)
+  for ev in t.events
+    emit(s, ev)
+  end
+  let out = buf_new()
+  buf_push(out, t.reply)
+  let data = t.data
+  let r = lines.feed(s.sp, data)
+  for i = 0, r.too_long
+    emit(s, {kind: "cap", cap: "line_too_long"})
+  end
+  for ln in r.lines
+    if echoing(s)
+      buf_push(out, telnet.escape(substr(data, ln.from, ln.to - ln.from)))
+      buf_push(out, "\r\n")
+    end
+    let res = shell.line(s.sh, ln.text)
+    for ev in res.events
+      emit(s, ev)
+    end
+    buf_push(out, telnet.escape(crlf(res.out)))
+    if shell.closed(s.sh)
+      write(s, out)
+      return "exit"
+    end
+  end
+  if r.rest < len(data) and echoing(s) and not lines.dropping(s.sp)
+    buf_push(out, telnet.escape(substr(data, r.rest)))
+  end
+  if write(s, out) then nil else "write_failed" end
+end
+
+fn serve(s)
+  if not write(s, telnet.OFFER + crlf(shell.greeting(s.sh)))
+    return "write_failed"
+  end
+  while true
+    let chunk = tcp_read(s.sock, READ_SIZE, s.idle_ms)
+    if chunk == nil
+      return "idle"
+    end
+    if chunk == ""
+      return "closed"
+    end
+    s.bytes_in = s.bytes_in + len(chunk)
+    let reason = handle(s, chunk)
+    if reason != nil
+      return reason
+    end
+  end
+end
+
+## Serves accepted socket `sock` from `peer` (`{ip, port}`) as session
+## `id`, with the server's config `cfg`, and returns when the session is
+## over. Claims `sock` first, so it closes however this ends. Sends
+## `session_start`, `session_end`, the shell's events and `cap` events to
+## `cfg.events`.
+fn run(sock, peer, id, cfg)
+  claim(sock)
+  let s = {
+    sock: sock, id: id, events: cfg.events, idle_ms: cfg.idle_ms, write_ms: cfg.write_ms,
+    tn: telnet.new(cfg.max_subneg), sp: lines.new(cfg.max_line),
+    sh: shell.new({accept_on: cfg.accept_on, accept_chance: cfg.accept_chance}),
+    bytes_in: 0, bytes_out: 0
+  }
+  let started = time_ms()
+  emit(s, {kind: "session_start", ip: peer.ip, port: peer.port})
+  let reason = serve(s)
+  emit(s, {
+    kind: "session_end", reason: reason, bytes_in: s.bytes_in, bytes_out: s.bytes_out,
+    logged_in: shell.logged_in(s.sh), ms: time_ms() - started
+  })
+end
+
+export run

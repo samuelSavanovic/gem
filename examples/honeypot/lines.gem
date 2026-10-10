@@ -1,0 +1,107 @@
+## lines — splits a telnet client's input into lines, across reads.
+##
+##   let sp = lines.new(4096)
+##   let r = lines.feed(sp, data)     # {lines: [{text, from, to}], rest, too_long}
+##
+## CR LF, CR NUL, a lone LF and a lone CR each end a line. A CR at the end
+## of one chunk ends its line at once; an LF or NUL that starts the next
+## chunk is then skipped.
+
+## Makes the splitter state for one connection. A line longer than
+## `max_len` bytes is dropped whole, and its bytes aren't kept.
+fn new(max_len = 4096)
+  {pending: buf_new(), pending_len: 0, after_cr: false, dropping: false, max_len: max_len}
+end
+
+# Adds `count` bytes of `data` at `from` to the line being read, unless it
+# is already too long.
+fn keep(sp, data, from, count)
+  if sp.dropping or count == 0
+    return false
+  end
+  if sp.pending_len + count > sp.max_len
+    sp.dropping = true
+    sp.pending = buf_new()
+    sp.pending_len = 0
+    return true
+  end
+  buf_push(sp.pending, substr(data, from, count))
+  sp.pending_len = sp.pending_len + count
+  false
+end
+
+# The next CR or LF at or after `i`. `at` holds the last position found
+# for each (-1 once there is no more), and each is searched again only
+# when `i` has passed it, so a chunk of many CRs and one far LF is still
+# scanned once for each.
+fn next_end(data, i, at)
+  if at.cr != -1 and at.cr < i
+    at.cr = find(data, "\r", i)
+  end
+  if at.lf != -1 and at.lf < i
+    at.lf = find(data, "\n", i)
+  end
+  if at.cr == -1 then return at.lf end
+  if at.lf == -1 then return at.cr end
+  if at.cr < at.lf then at.cr else at.lf end
+end
+
+## Takes the next chunk of data (telnet commands already removed). Returns
+## `lines`, the lines it completes, each as `{text, from, to}` where
+## `data[from .. to)` is the part of the line in this chunk (its end not
+## included); `rest`, the offset of the unfinished line at the end of
+## `data` (`len(data)` when there is none); and `too_long`, the number of
+## lines that went over the limit in this chunk, each counted once, when
+## it does, and dropped whole.
+##
+##   lines.feed(sp, "ls\r\0cd /\nw")   # lines "ls" and "cd /", rest 9
+fn feed(sp, data)
+  let out = []
+  let too_long = 0
+  let n = len(data)
+  let i = 0
+  if sp.after_cr and n > 0
+    sp.after_cr = false
+    let b = ord(data, 0)
+    if b == 10 or b == 0
+      i = 1
+    end
+  end
+  let at = {cr: find(data, "\r", i), lf: find(data, "\n", i)}
+  while i < n
+    let e = next_end(data, i, at)
+    if e < 0
+      break
+    end
+    if keep(sp, data, i, e - i)
+      too_long += 1
+    end
+    if sp.dropping
+      sp.dropping = false
+    else
+      push(out, {text: to_string(sp.pending), from: i, to: e})
+    end
+    sp.pending = buf_new()
+    sp.pending_len = 0
+    i = e + 1
+    if ord(data, e) == 13
+      if i == n
+        sp.after_cr = true
+      elif ord(data, i) == 10 or ord(data, i) == 0
+        i += 1
+      end
+    end
+  end
+  let rest = i
+  if i < n and keep(sp, data, i, n - i)
+    too_long += 1
+  end
+  {lines: out, rest: rest, too_long: too_long}
+end
+
+## True while the unfinished line is over the limit and being dropped.
+fn dropping(sp)
+  sp.dropping
+end
+
+export new, feed, dropping

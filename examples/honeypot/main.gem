@@ -1,0 +1,37 @@
+# A telnet honeypot: a fake BusyBox device that records what clients try.
+# See README.md and PLAN.md.
+#
+#   honeypot [--port 2323] [--bind 127.0.0.1]
+
+load "./server"
+
+fn usage()
+  eprint("usage: honeypot [--port N] [--bind ADDRESS]")
+  exit(2)
+end
+
+fn main()
+  let args = argv()
+  let port = 2323
+  let host = "127.0.0.1"
+  let i = 1
+  while i < len(args)
+    if i + 1 >= len(args)
+      usage()
+    end
+    let value = args[i + 1]
+    if args[i] == "--port"
+      let r = pcall to_int(value)
+      if not r.ok then usage() end
+      port = r.value
+    elif args[i] == "--bind"
+      host = value
+    else
+      usage()
+    end
+    i += 2
+  end
+  let listener = tcp_listen(host, port)
+  server.start(listener)
+  eprint("honeypot listening on {host}:{port}")
+end

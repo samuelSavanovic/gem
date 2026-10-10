@@ -1,0 +1,85 @@
+## server — the honeypot's supervision tree and accept loop.
+##
+##   let sup = server.start(tcp_listen("127.0.0.1", 2323))
+##   server.stop(sup)
+
+load "std/supervisor"
+load "./recorder"
+load "./registry"
+
+let RECORDER = "honeypot_recorder"
+let REGISTRY = "honeypot_registry"
+
+# An accept that fails (out of file descriptors, a connection aborted
+# before it was taken) is logged once, then retried every 50 ms until one
+# succeeds.
+fn accept_loop(listener)
+  let failing = false
+  while true
+    let a = pcall tcp_accept(listener)
+    if not a.ok
+      if not failing
+        eprint("honeypot: {a.error}; retrying")
+        failing = true
+      end
+      sleep(50)
+      continue
+    end
+    failing = false
+    let sock = a.value
+    let peer = tcp_peer(sock)
+    let to = whereis(REGISTRY)
+    if peer == nil or to == nil
+      tcp_close(sock)
+    else
+      send(to, {tag: "accepted", sock: sock, peer: peer})
+    end
+  end
+end
+
+# The registry and the acceptor restart together. A socket the acceptor
+# has sent but the registry hasn't yet claimed is still the acceptor's,
+# so stopping the acceptor when the registry dies closes the sockets lost
+# in the dead registry's mailbox.
+fn start_front(listener, cfg)
+  supervisor.start({strategy: "one_for_all", children: [
+    {id: "registry", start: fn() registry.start(REGISTRY, cfg) end},
+    {id: "acceptor", start: fn()
+      spawn do
+        accept_loop(listener)
+      end
+    end}
+  ]})
+end
+
+## Starts the honeypot on `listener` and returns the supervisor's handle.
+## Options: `idle_ms`, how long a silent client stays connected;
+## `write_ms`, how long a write may wait for a client that doesn't read;
+## `max_line` and `max_subneg`, the longest line and telnet subnegotiation
+## kept; `accept_on` and `accept_chance`, when a login succeeds (see
+## shell.new); `events`, a pid to send the events to instead of the
+## recorder, which then isn't started.
+fn start(listener, {
+  idle_ms = 60000, write_ms = 5000, max_line = 4096, max_subneg = 1024,
+  accept_on = 3, accept_chance = 0.25, events = nil
+} = {})
+  let cfg = {
+    idle_ms: idle_ms, write_ms: write_ms, max_line: max_line, max_subneg: max_subneg,
+    accept_on: accept_on, accept_chance: accept_chance,
+    events: if events == nil then RECORDER else events end
+  }
+  let children = []
+  if events == nil
+    push(children, {id: "recorder", start: fn() recorder.start(RECORDER) end})
+  end
+  push(children, {id: "front", start: fn() start_front(listener, cfg) end})
+  supervisor.start({strategy: "one_for_one", name: "honeypot_sup", children: children})
+end
+
+## Stops the honeypot. Live sessions aren't part of the tree: each runs
+## until its client leaves or goes idle. `stop` doesn't close the listener.
+fn stop(sup)
+  supervisor.stop(sup)
+end
+
+export start, stop
