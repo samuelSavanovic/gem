@@ -1,5 +1,5 @@
-## registry — starts a session per accepted connection, numbers the
-## sessions, and records the ones that crash.
+## registry — starts a session per accepted connection and records the
+## ones that crash.
 
 load "./session"
 load "./recorder"
@@ -10,15 +10,13 @@ load "./recorder"
 # server.start_front).
 fn accepted(state, sock, peer)
   claim(sock)
-  let id = state.next_id
-  state.next_id = id + 1
   let cfg = state.cfg
-  let r = pcall spawn_monitor(fn() session.run(sock, peer, id, cfg) end)
+  let r = pcall spawn_monitor(fn() session.run(sock, peer, cfg) end)
   if r.ok
-    state.live[r.value.pid] = id
+    state.live[r.value.pid] = peer.ip
   else
     tcp_close(sock)
-    recorder.emit(cfg.events, {kind: "refused", ip: peer.ip, error: r.error})
+    recorder.emit(cfg.events, {kind: "cap", cap: "spawn_failed", ip: peer.ip, detail: r.error})
   end
 end
 
@@ -26,10 +24,9 @@ fn down(state, pid, reason)
   if not has_key(state.live, pid)
     return nil
   end
-  let id = state.live[pid]
   delete(state.live, pid)
   if reason != "normal"
-    recorder.emit(state.cfg.events, {kind: "crash", session: id, reason: reason})
+    recorder.emit(state.cfg.events, {kind: "crash", session: pid, reason: reason})
   end
 end
 
@@ -51,7 +48,7 @@ end
 ## peer}` messages.
 fn start(name, cfg)
   let pid = spawn do
-    loop({next_id: 1, live: {}, cfg: cfg})
+    loop({live: {}, cfg: cfg})
   end
   register(name, pid)
   pid

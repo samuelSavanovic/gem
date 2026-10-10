@@ -69,7 +69,8 @@ contents as `Bytes`), `examples/jobqueue/` (a job queue whose workers
 crash, hang and get killed under a `dynamic_supervisor`: retries,
 deadlines, restart intensity) and `examples/honeypot/` (a telnet
 honeypot: a byte-level protocol parser fed across reads, a process per
-connection that claims its socket, timeouts on every read and write)
+connection that claims its socket, timeouts on every read and write, one
+process that owns a sqlite database and batches its writes)
 follow this doc and test themselves with
 `std/test`; read them for how the pieces fit together.
 
@@ -1128,6 +1129,33 @@ Set `shutdown:` to how long the child's cleanup can take. Only give
 supervisor waiting for good, and with it `supervisor.stop`, which waits
 with no limit by default.
 
+### A process traps exits only once it has run **(trap)**
+
+`process_flag("trap_exit", true)` in a `spawn` body takes effect when the
+new process gets to run that line. An exit signal sent before then, by a
+`kill` right after the `spawn` or a starter that stops at once, kills it
+as if it didn't trap, and its cleanup never runs. When the cleanup
+matters (a buffer to write out), have the starter wait for the child to
+say it traps:
+
+```gem
+fn start_worker()
+  let parent = self()
+  let ref = make_ref()
+  let pid = spawn do
+    process_flag("trap_exit", true)
+    send(parent, {tag: "ready", ref: ref})
+    serve()
+  end
+  receive
+  when {tag: "ready", ref: ^ref} then pid
+  end
+end
+```
+
+A `gen_server` that sets the flag in `init` needs nothing more:
+`gen_server.start` returns after `init`.
+
 ### Don't pass an option's `shutdown` through as `nil` **(trap)**
 
 In a child spec, a missing `shutdown` key means the default budget, but
@@ -1817,6 +1845,7 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | Calls from a process that also collects a stream of messages | every reply wait scans the stream: quadratic | make the calls from a separate process |
 | A long-lived process holding 100,000s of records | full resets copy them all and stall every process (0.04–0.5 s) | bound or shard the state |
 | `after` in a busy server loop | never fires | `send_after` ticks |
+| `process_flag("trap_exit", true)` in a fresh `spawn` body, killed at once | dies before the line runs; no cleanup | the starter waits for a "ready" message |
 | `shutdown: opts.shutdown` in a child spec | a missing option becomes `nil`: no limit, the supervisor can wait for good | copy the key only when `has_key` |
 | Monitoring a server for one request and not removing it | its `DOWN` arrives whenever the server dies | `demonitor` when `monitor` returned `true` |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
