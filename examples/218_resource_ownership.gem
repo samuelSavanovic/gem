@@ -28,6 +28,17 @@ fn closed(s)
   tcp_read(s, 16, 1000) == ""
 end
 
+# n bytes from s, over as many reads as they take to arrive.
+fn read_n(s, n)
+  let got = ""
+  while len(got) < n
+    let part = tcp_read(s, n - len(got), 1000)
+    if part == nil or part == "" then return got end
+    got = got + part
+  end
+  got
+end
+
 fn wait_down(pid)
   let ref = monitor(pid)
   receive
@@ -116,7 +127,7 @@ h = spawn do
   tcp_write(c, "!", 1000)
 end
 wait_down(h)
-print("after a crash, a kill and a return:", tcp_read(s, 64, 1000))
+print("after a crash, a kill and a return:", read_n(s, 12))
 
 print("== a task that opens a socket hands over a live one")
 let t = task.async(fn() tcp_connect("127.0.0.1", 18218) end)

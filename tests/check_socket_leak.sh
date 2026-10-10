@@ -6,7 +6,8 @@
 #     which claims its socket; half crash, half return early;
 #   - sessions killed while blocked in tcp_read;
 #   - processes killed mid-tcp_connect (connects to a listener whose
-#     backlog is full stay in progress).
+#     backlog is full stay in progress on Linux; macOS resets them, so
+#     there the shape only checks the fds of refused connects).
 # Also the GEM_DIAG=2 line for a session that forgot its claim and
 # crashed, and GEM_DIAG=1's counts.
 #
@@ -141,24 +142,27 @@ fn main()
   print("killed in tcp_read", before, fds(), "eofs", eofs == N)
 
   # A listener that never accepts: once its backlog is full, connects to
-  # it stay in progress.
+  # it stay in progress (Linux) or are reset (macOS).
   let l3 = tcp_listen("127.0.0.1", PORT + 2)
   before = fds()
   let connectors = []
   for i = 0, FILL
     push(connectors, spawn do
-      tcp_connect("127.0.0.1", PORT + 2)
-      send(me, "connected")
+      let r = pcall tcp_connect("127.0.0.1", PORT + 2)
+      send(me, if r.ok then "connected" else "refused" end)
       receive()
     end)
   end
   sleep(300)
   let connected = 0
+  let refused = 0
   let more = true
   while more
     receive
     when "connected"
       connected += 1
+    when "refused"
+      refused += 1
     after 0
       more = false
     end
@@ -167,7 +171,7 @@ fn main()
     kill(p, "kill")
   end
   sleep(20)
-  print("killed mid-connect", before, fds(), "pending", FILL - connected)
+  print("killed mid-connect", before, fds(), "pending", FILL - connected - refused)
   tcp_close(l3)
   tcp_close(l2)
   kill(acc, "kill")

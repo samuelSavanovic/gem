@@ -18,6 +18,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#ifdef __APPLE__
+#include <libproc.h>
+#endif
 
 static void gem_set_nonblocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
@@ -39,24 +42,39 @@ static void gem_set_cloexec(int fd) {
     fcntl(fd, F_SETFD, FD_CLOEXEC);
 }
 
+/* The identity of the open file behind fd, or -1 when fd is not open:
+   its st_dev / st_ino, except for a socket on macOS, where fstat reports
+   0 / 0 for every socket and the kernel's id of the socket
+   (proc_pidfdinfo's soi_so) stands in for the inode. */
+static int gem_fd_identity(int fd, uint64_t *dev, uint64_t *ino) {
+    struct stat st;
+    if (fstat(fd, &st) < 0) return -1;
+    *dev = (uint64_t)st.st_dev;
+    *ino = (uint64_t)st.st_ino;
+#ifdef __APPLE__
+    if (S_ISSOCK(st.st_mode)) {
+        struct socket_fdinfo si;
+        if (proc_pidfdinfo(getpid(), fd, PROC_PIDFDSOCKETINFO, &si, sizeof(si)) == (int)sizeof(si))
+            *ino = (uint64_t)si.psi.soi_so;
+    }
+#endif
+    return 0;
+}
+
 /* A new socket for fd, owned by the running process. Records the fd's
-   inode, so a close never closes another file that took the number after
-   C code closed this one (gem_tcp_close_fd_checked). */
+   identity, so a close never closes another file or socket that took the
+   number after C code closed this one (gem_tcp_close_fd_checked). */
 static GemVal gem_tcp_register(int fd) {
     GemVal v = gem_res_new(GEM_RES_SOCKET);
     GemResEntry *e = gem_res_lookup(v);
     e->fd = fd;
-    struct stat st;
-    if (fstat(fd, &st) == 0) {
-        e->dev = (uint64_t)st.st_dev;
-        e->ino = (uint64_t)st.st_ino;
-    }
+    gem_fd_identity(fd, &e->dev, &e->ino);
     return v;
 }
 
 void gem_tcp_close_fd_checked(int fd, uint64_t dev, uint64_t ino) {
-    struct stat st;
-    if (fstat(fd, &st) == 0 && (uint64_t)st.st_dev == dev && (uint64_t)st.st_ino == ino)
+    uint64_t d, i;
+    if (gem_fd_identity(fd, &d, &i) == 0 && d == dev && i == ino)
         close(fd);
 }
 
@@ -512,8 +530,8 @@ GemVal gem_tcp_from_fd_fn(void *_env, GemVal *args, int argc) {
         snprintf(buf, sizeof(buf), "tcp_from_fd: expected an int fd, got %s", gem_type_str(a));
         gem_error(buf);
     }
-    struct stat st;
-    if (a.ival < 0 || a.ival > INT_MAX || fstat((int)a.ival, &st) < 0) {
+    uint64_t dev, ino;
+    if (a.ival < 0 || a.ival > INT_MAX || gem_fd_identity((int)a.ival, &dev, &ino) < 0) {
         snprintf(buf, sizeof(buf), "tcp_from_fd: fd %lld is not open", (long long)a.ival);
         gem_error(buf);
     }
@@ -528,7 +546,7 @@ GemVal gem_tcp_from_fd_fn(void *_env, GemVal *args, int argc) {
         snprintf(buf, sizeof(buf), "tcp_from_fd: fd %d is not a TCP socket", fd);
         gem_error(buf);
     }
-    if (gem_res_find_socket(fd, (uint64_t)st.st_dev, (uint64_t)st.st_ino)) {
+    if (gem_res_find_socket(fd, dev, ino)) {
         snprintf(buf, sizeof(buf), "tcp_from_fd: fd %d is already registered as a socket", fd);
         gem_error(buf);
     }

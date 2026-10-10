@@ -1228,7 +1228,8 @@ typedef struct {
     int32_t free_next;
     /* Payload. */
     int fd;              /* GEM_RES_SOCKET */
-    uint64_t dev, ino;   /* the fd's st_dev / st_ino when it was registered */
+    uint64_t dev, ino;   /* the fd's identity when it was registered (st_dev / st_ino;
+                            on macOS a socket's kernel id for ino) */
     void *ptr;           /* GEM_RES_SQLITE: the sqlite3 * */
 } GemResEntry;
 
@@ -1246,7 +1247,7 @@ GemResEntry *gem_res_get(GemVal v, int kind, const char *who);
 /* As gem_res_get, but returns NULL for a closed resource of `kind`. */
 GemResEntry *gem_res_get_open(GemVal v, int kind, const char *who);
 /* Close an open socket: wake its waiters, close its fd unless the fd now
-   names another file (st_dev/st_ino), free the entry. */
+   names another file or socket (dev/ino), free the entry. */
 void gem_res_close(GemResEntry *e);
 /* Remove an entry and return its payload pointer (a kind that closes
    itself, as sqlite_close does through the pool). */
@@ -1272,7 +1273,7 @@ int gem_extern_socket_fd(GemVal v, const char *fn, int argi);
    request of a killed process) ends that. */
 void gem_res_busy_begin(GemIORequest *req, const GemVal *args, const int *idx, int n);
 void gem_res_busy_end(GemIORequest *req);
-/* The open socket entry with this fd and inode, or NULL. */
+/* The open socket entry with this fd and identity (dev/ino), or NULL. */
 GemResEntry *gem_res_find_socket(int fd, uint64_t dev, uint64_t ino);
 /* Kind names: "socket" / "sqlite" (type), "Socket" / "Sqlite" (print). */
 const char *gem_res_type_name(int kind);

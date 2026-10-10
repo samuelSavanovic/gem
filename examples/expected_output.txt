@@ -4466,24 +4466,24 @@ tcp_from_fd: expected an int fd, got string
 == unclaimed: closed when the opener dies abnormally
 
 [Runtime Error in process 1]: session crashed
-  --> examples/218_resource_ownership.gem:40
+  --> examples/218_resource_ownership.gem:51
     |
- 40 | let p = pair(fn(c) error("session crashed") end)
+ 51 | let p = pair(fn(c) error("session crashed") end)
     |
 Stack trace:
-  at anonymous fn (examples/218_resource_ownership.gem:40)
+  at anonymous fn (examples/218_resource_ownership.gem:51)
   at anonymous fn (examples/218_resource_ownership.gem:18)
 crash: true
 kill shutdown: true
 kill kill: true
 
 [Runtime Error in process 5]: linked crash
-  --> examples/218_resource_ownership.gem:50
+  --> examples/218_resource_ownership.gem:61
     |
- 50 |   spawn_link(fn() error("linked crash") end)
+ 61 |   spawn_link(fn() error("linked crash") end)
     |
 Stack trace:
-  at anonymous fn (examples/218_resource_ownership.gem:50)
+  at anonymous fn (examples/218_resource_ownership.gem:61)
 link exit: true
 == unclaimed: open when the opener returns
 still usable: 2 hi
@@ -4491,12 +4491,12 @@ still usable: 2 hi
 normal return: true
 
 [Runtime Error in process 8]: claimed crash
-  --> examples/218_resource_ownership.gem:68
+  --> examples/218_resource_ownership.gem:79
     |
- 68 |   error("claimed crash")
+ 79 |   error("claimed crash")
     |
 Stack trace:
-  at anonymous fn (examples/218_resource_ownership.gem:68)
+  at anonymous fn (examples/218_resource_ownership.gem:79)
   at anonymous fn (examples/218_resource_ownership.gem:18)
 crash: true
 kill: true
@@ -4507,12 +4507,12 @@ closed with the session: true
 == helpers that only use a socket leave it open
 
 [Runtime Error in process 12]: helper crashed
-  --> examples/218_resource_ownership.gem:108
+  --> examples/218_resource_ownership.gem:119
      |
- 108 |   error("helper crashed")
+ 119 |   error("helper crashed")
      |
 Stack trace:
-  at anonymous fn (examples/218_resource_ownership.gem:108)
+  at anonymous fn (examples/218_resource_ownership.gem:119)
 after a crash, a kill and a return: from helper!
 == a task that opens a socket hands over a live one
 alive
