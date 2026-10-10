@@ -279,7 +279,8 @@ struct GemKeyIndex {
 };
 
 static int gem_key_indexable(GemVal k) {
-    return k.type == VAL_INT || k.type == VAL_FLOAT || k.type == VAL_BOOL || k.type == VAL_REF;
+    return k.type == VAL_INT || k.type == VAL_FLOAT || k.type == VAL_BOOL || k.type == VAL_REF ||
+           k.type == VAL_RESOURCE;
 }
 
 static uint64_t gem_key_hash(GemVal k) {
@@ -288,6 +289,7 @@ static uint64_t gem_key_hash(GemVal k) {
         case VAL_INT: x = (uint64_t)k.ival; break;
         case VAL_BOOL: x = (uint64_t)k.bval; break;
         case VAL_REF: x = (uint64_t)k.rval; break;
+        case VAL_RESOURCE: x = (uint64_t)k.res_id; break;
         default: {
             double d = k.fval == 0.0 ? 0.0 : k.fval;   /* -0.0 == 0.0 */
             memcpy(&x, &d, sizeof(x));
@@ -651,6 +653,7 @@ const char *gem_type_str(GemVal v) {
         case VAL_TABLE:  return "table";
         case VAL_BUFFER: return "buffer";
         case VAL_REF:    return "ref";
+        case VAL_RESOURCE: return gem_res_type_name(v.res_kind);
         case VAL_LAZY:   break;
     }
     return "unknown";

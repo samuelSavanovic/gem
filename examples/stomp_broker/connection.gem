@@ -100,9 +100,6 @@ fn writer_loop(conn)
       return nil
     when {tag: "DOWN", pid: pid}
       if not resubscribe(conn, pid) then return nil end
-    when {tag: "EXIT", reason: reason}
-      # a normal exit comes after its eof
-      if reason != "normal" then return nil end
     when other
       nil
     end
@@ -239,28 +236,23 @@ fn send_error(conn, message)
   false
 end
 
-# Traps exits so that a crashing reader can't kill the writer before it
-# closes the socket.
+# Claims the socket, so it closes however the writer ends; the reader only
+# uses it, and a crash of either kills the other through their link. On
+# the way out the reader is unlinked first, so its "shutdown" doesn't come
+# back as the writer's exit reason.
 fn run_writer(fd, id, write_timeout_ms)
-  process_flag("trap_exit", true)
-  let reader = nil
-  let r = pcall do
-    let me = self()
-    reader = spawn_link do
-      reader_loop(fd, me)
-    end
-    writer_loop({fd: fd, id: id, write_timeout_ms: write_timeout_ms, connected: false, subs: {}})
+  claim(fd)
+  let me = self()
+  let r = pcall spawn_link do
+    reader_loop(fd, me)
   end
-  if reader == nil
+  if not r.ok
     # the process table is full: the client is refused, not a crash
-    tcp_close(fd)
     return nil
   end
-  kill(reader, "shutdown")
-  tcp_close(fd)
-  if not r.ok
-    error(r.error)
-  end
+  writer_loop({fd: fd, id: id, write_timeout_ms: write_timeout_ms, connected: false, subs: {}})
+  unlink(r.value)
+  kill(r.value, "shutdown")
 end
 
 ## Starts the connection for accepted socket `fd`, which it closes when

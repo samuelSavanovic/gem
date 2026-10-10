@@ -1,0 +1,80 @@
+# std/http on owned sockets: a server killed with the untrappable "kill"
+# frees its port; a caller of http.start killed before the server has
+# started doesn't take the server's listener with it; and http.stop closes
+# the socket of a connection whose handler is in an `extern blocking fn`
+# at once, not when the C call returns.
+
+load "std/http"
+
+extern include "unistd.h"
+extern blocking fn usleep(us: Int) -> Int
+
+let app = http.router()
+app.get("/") do |req|
+  http.ok("hi")
+end
+app.get("/block") do |req|
+  usleep(1000000)
+  http.ok("done")
+end
+
+fn get(port, path)
+  let c = tcp_connect("127.0.0.1", port)
+  tcp_write(c, "GET {path} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+  let r = tcp_read(c, 4096, 2000)
+  tcp_close(c)
+  substr(r, 0, 15)
+end
+
+print("== killed with \"kill\"")
+let srv = http.start(app, {port: 18223, host: "127.0.0.1"})
+print(get(18223, "/"))
+kill(srv.pid, "kill")
+let r = pcall tcp_listen("127.0.0.1", 18223)
+print("port free:", r.ok)
+tcp_close(r.value)
+
+print("== the caller killed while the server starts")
+# The killer's process slot lies between the caller's and the server's, so
+# within one scheduler pass it runs after the caller starts waiting for the
+# server and before the server has run.
+let me = self()
+let caller = spawn do
+  sleep(20)
+  http.start(app, {port: 18224, host: "127.0.0.1"})
+  receive()
+end
+spawn do
+  let n = 0
+  while true
+    let info = process_info(caller)
+    if n > 0 and info != nil and info.state == "waiting" and len(processes()) > 3
+      kill(caller, "kill")
+      send(me, "killed")
+      return nil
+    end
+    n += 1
+  end
+end
+receive
+when "killed"
+  nil
+end
+sleep(50)
+print("server still serves:", get(18224, "/"))
+
+print("== stop while a handler is in a blocking call")
+srv = http.start(app, {port: 18225, host: "127.0.0.1"})
+let c = tcp_connect("127.0.0.1", 18225)
+tcp_write(c, "GET /block HTTP/1.1\r\nHost: x\r\n\r\n")
+sleep(100)
+http.stop(srv)
+let t0 = time_ms()
+print("closed at once:", tcp_read(c, 4096, 2000) == "", time_ms() - t0 < 500)
+tcp_close(c)
+
+for p in processes()
+  if p != self()
+    kill(p, "kill")
+  end
+end

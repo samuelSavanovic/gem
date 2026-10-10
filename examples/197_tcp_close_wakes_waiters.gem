@@ -24,9 +24,10 @@ spawn do
   send(me, ["accept on reused fd", r.ok, r.error])
 end
 sleep(20)
+let l2_fd = tcp_fd(l2)
 tcp_close(l2)
 let l3 = tcp_listen("127.0.0.1", 18298)
-print("fd reused:", l3 == l2)
+print("fd reused:", tcp_fd(l3) == l2_fd, "same socket:", l3 == l2)
 let c3 = tcp_connect("127.0.0.1", 18298)
 print(receive())
 let s3 = tcp_accept(l3)
@@ -66,14 +67,15 @@ tcp_close(c6)
 print(receive())
 tcp_close(s6)
 
-# A close that bypasses tcp_close (here a C extern) is seen through poll.
+# A close that bypasses tcp_close (here a C extern, through tcp_fd, which
+# C code must not do) is seen through poll.
 let l5 = tcp_listen("127.0.0.1", 18300)
 spawn do
   let r = pcall tcp_accept(l5)
   send(me, ["accept, closed from C", r.ok, r.error])
 end
 sleep(20)
-close(l5)
+close(tcp_fd(l5))
 print(receive())
 
 tcp_close(c3)

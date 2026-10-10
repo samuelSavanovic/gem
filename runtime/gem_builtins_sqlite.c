@@ -7,56 +7,29 @@
 #include "gem.h"
 #include "sqlite3.h"
 
-/* ─── Handle registry ───
-   A Gem handle is a small opaque int id, never a pointer: ids count up from 1
-   and are never reused, so a closed handle stays invalid instead of naming a
-   later connection. The registry is only read and written on the scheduler
-   thread (in the builtins themselves, never in the pool workers or the
-   request free functions), so it needs no lock:
+/* ─── Handles ───
+   A Gem handle is a resource value of kind GEM_RES_SQLITE (gem_resource.c)
+   whose entry holds the sqlite3 *. The table is only read and written on
+   the scheduler thread (in the builtins themselves, never in the pool
+   workers or the request free functions):
    - sqlite_open registers the connection after its worker is done and the
      requester has resumed; a requester killed mid-open never resumes, and
      gem_sqlite_open_free closes the connection with no entry made.
-   - sqlite_close removes the entry as soon as the close is queued, before any
-     worker can free the connection, so no process can reach it afterwards.
+   - sqlite_close removes the entry as soon as the close is queued, before
+     any worker can free the connection, so no process can reach it
+     afterwards; so does a close at its owner's exit (gem_sqlite_exit_close).
    Queries run inline on the scheduler thread without yielding, so none is in
    progress on a connection when a close is queued. */
 
-static sqlite3 **gem_sqlite_handles = NULL;  /* index id - 1; NULL = closed */
-static int64_t gem_sqlite_handle_count = 0;
-static int64_t gem_sqlite_handle_cap = 0;
-
-static int64_t gem_sqlite_register(sqlite3 *db) {
-    if (gem_sqlite_handle_count == gem_sqlite_handle_cap) {
-        int64_t cap = gem_sqlite_handle_cap ? gem_sqlite_handle_cap * 2 : 16;
-        sqlite3 **h = (sqlite3 **)realloc(gem_sqlite_handles, (size_t)cap * sizeof(sqlite3 *));
-        if (!h) {
-            sqlite3_close(db);
-            gem_error("sqlite_open: out of memory");
-        }
-        gem_sqlite_handles = h;
-        gem_sqlite_handle_cap = cap;
-    }
-    gem_sqlite_handles[gem_sqlite_handle_count++] = db;
-    return gem_sqlite_handle_count;
+static GemVal gem_sqlite_register(sqlite3 *db) {
+    GemVal v = gem_res_new(GEM_RES_SQLITE);
+    gem_res_lookup(v)->ptr = db;
+    return v;
 }
 
 /* The open connection behind args[0], or raises "<fn>: ..." (pcall-catchable). */
 static sqlite3 *gem_sqlite_handle(const char *fn, GemVal *args, int argc) {
-    char buf[160];
-    if (argc < 1) {
-        snprintf(buf, sizeof(buf), "%s: expected a database handle", fn);
-        gem_error(buf);
-    }
-    if (args[0].type != VAL_INT) {
-        snprintf(buf, sizeof(buf), "%s: expected a database handle, got %s", fn, gem_type_str(args[0]));
-        gem_error(buf);
-    }
-    int64_t id = args[0].ival;
-    if (id < 1 || id > gem_sqlite_handle_count || !gem_sqlite_handles[id - 1]) {
-        snprintf(buf, sizeof(buf), "%s: not an open database handle", fn);
-        gem_error(buf);
-    }
-    return gem_sqlite_handles[id - 1];
+    return (sqlite3 *)gem_res_get(argc >= 1 ? args[0] : GEM_NIL, GEM_RES_SQLITE, fn)->ptr;
 }
 
 /* ─── Thread pool args for sqlite_open ─── */
@@ -122,6 +95,7 @@ GemVal gem_sqlite_open_fn(void *_env, GemVal *args, int argc) {
 
         GemIORequest *req = gem_io_submit_extern(gem_sqlite_open_worker, a, gem_sqlite_open_free);
         if (!req) { gem_error("sqlite_open: I/O queue full"); }
+        req->runtime = 1;
         GemProcess *proc = &gem_proc_table[gem_current_pid];
         proc->io_request = req;
         gem_io_pool_yield();
@@ -137,7 +111,7 @@ GemVal gem_sqlite_open_fn(void *_env, GemVal *args, int argc) {
         }
         gem_io_release(req);
 
-        return gem_int(gem_sqlite_register(db));
+        return gem_sqlite_register(db);
     }
 
     sqlite3 *db;
@@ -151,15 +125,17 @@ GemVal gem_sqlite_open_fn(void *_env, GemVal *args, int argc) {
     sqlite3_exec(db, "PRAGMA journal_mode=WAL", NULL, NULL, NULL);
     sqlite3_exec(db, "PRAGMA foreign_keys=ON", NULL, NULL, NULL);
 
-    return gem_int(gem_sqlite_register(db));
+    return gem_sqlite_register(db);
 }
 
 /* ─── Built-in: sqlite_close ─── */
 
+/* Any process may close a handle; closing a closed one returns nil. */
 GemVal gem_sqlite_close_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    sqlite3 *db = gem_sqlite_handle("sqlite_close", args, argc);
-    int64_t id = args[0].ival;
+    GemResEntry *e = gem_res_get_open(argc >= 1 ? args[0] : GEM_NIL, GEM_RES_SQLITE, "sqlite_close");
+    if (!e) return GEM_NIL;
+    sqlite3 *db = (sqlite3 *)e->ptr;
 
     if (gem_current_pid >= 0) {
         GemSqliteCloseArgs *a = (GemSqliteCloseArgs *)malloc(sizeof(GemSqliteCloseArgs));
@@ -167,7 +143,8 @@ GemVal gem_sqlite_close_fn(void *_env, GemVal *args, int argc) {
 
         GemIORequest *req = gem_io_submit_extern(gem_sqlite_close_worker, a, gem_sqlite_close_free);
         if (!req) { gem_error("sqlite_close: I/O queue full"); }
-        gem_sqlite_handles[id - 1] = NULL;  /* queued: unreachable from now on */
+        req->runtime = 1;
+        gem_res_take(e);  /* queued: unreachable from now on */
         GemProcess *proc = &gem_proc_table[gem_current_pid];
         proc->io_request = req;
         gem_io_pool_yield();
@@ -177,9 +154,25 @@ GemVal gem_sqlite_close_fn(void *_env, GemVal *args, int argc) {
         return GEM_NIL;
     }
 
-    gem_sqlite_handles[id - 1] = NULL;
+    gem_res_take(e);
     sqlite3_close(db);
     return GEM_NIL;
+}
+
+/* A handle closed at its owner's exit (gem_res_proc_exit): through the
+   pool like sqlite_close, with nobody waiting, so the runtime drops the
+   requester's side of the request at once. On a full queue it closes
+   inline (a WAL checkpoint can then block the scheduler); a failed submit
+   has freed `a` already, so it keeps its own pointer. */
+void gem_sqlite_exit_close(void *db) {
+    GemIORequest *req = NULL;
+    GemSqliteCloseArgs *a = (GemSqliteCloseArgs *)malloc(sizeof(GemSqliteCloseArgs));
+    if (a) {
+        a->db = (sqlite3 *)db;
+        req = gem_io_submit_extern(gem_sqlite_close_worker, a, gem_sqlite_close_free);
+    }
+    if (req) gem_io_release(req);
+    else sqlite3_close((sqlite3 *)db);
 }
 
 /* ─── Built-in: sqlite_exec ─── */

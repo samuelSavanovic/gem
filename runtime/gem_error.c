@@ -245,6 +245,7 @@ void gem_raise_error(const char *msg) {
             }
             gem_report_process_crash(gem_current_pid, msg);
             proc->exit_reason = strdup(msg);
+            proc->crashed = 1;
             gem_call_depth = 0;
             longjmp(proc->proc_jmp, 1);
         }

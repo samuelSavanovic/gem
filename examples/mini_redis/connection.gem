@@ -285,9 +285,6 @@ fn next_chunk(conn)
       return nil
     when {tag: "message", channel: channel, payload: payload}
       if not deliver(conn, channel, payload) then return nil end
-    when {tag: "EXIT", reason: reason}
-      # a normal exit comes after its eof
-      if reason != "normal" then return nil end
     when other
       nil
     end
@@ -303,21 +300,20 @@ fn serve(conn)
   end
 end
 
-# Traps exits so that a crashing reader can't kill this process before it
-# closes the socket.
+# Claims the socket, so it closes however this process ends; the reader
+# only uses it, and a crash of either kills the other through their link.
+# On the way out the reader is unlinked first, so its "shutdown" doesn't
+# come back as this process's exit reason.
 fn run(fd, write_timeout_ms)
-  process_flag("trap_exit", true)
+  claim(fd)
   let conn = {
     fd: fd, write_timeout_ms: write_timeout_ms, pending: buf_new(), need: 0,
     out: buf_new(), quit: false, channels: {}, nsubs: 0, reader: nil
   }
-  let r = pcall serve(conn)
+  serve(conn)
   if conn.reader != nil
+    unlink(conn.reader)
     kill(conn.reader, "shutdown")
-  end
-  tcp_close(fd)
-  if not r.ok
-    error(r.error)
   end
 end
 

@@ -286,6 +286,7 @@ static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
         case VAL_INT:
         case VAL_FLOAT:
         case VAL_REF:
+        case VAL_RESOURCE:
         case VAL_LAZY:
             return val;
         case VAL_STRING: {
