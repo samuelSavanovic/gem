@@ -1,16 +1,56 @@
-## recorder — takes the honeypot's events and prints one line per event
-## on stdout, every attacker-controlled byte escaped.
+## recorder — the only process that touches the database: stores the
+## honeypot's events in sqlite, in batches, and can print one line per
+## event, every attacker-controlled byte escaped.
 ##
-##   recorder.start("honeypot_recorder")
-##   recorder.emit("honeypot_recorder", {kind: "login", session: 3, user: "root"})
-##   # 2026-10-10T12:00:00Z session=3 login user="root"
+##   recorder.start("honeypot_recorder", {dir: "honeypot_data"})
+##   recorder.emit("honeypot_recorder", {kind: "login", session: pid, user: "root"})
+##   recorder.sync("honeypot_recorder")      # the database file, all written
+##
+## An event is a table with a `kind`; a session's events carry the
+## session's pid as `session`. The database is one file per week in
+## `dir`, `honeypot-YYYY-MM-DD.db` after the week's Monday (UTC); the
+## tables are in SCHEMA.
 
+load "std/sqlite"
+load "std/string"
+load "std/table"
 load "std/time"
 
 let HEX = "0123456789abcdef"
 
 # Fields `format` shows in front, or not at all.
 let HEAD = {tag: true, time: true, session: true, kind: true}
+
+let DAY_MS = 86400000
+let BATCH = 200
+let FLUSH_MS = 1000
+
+# Times are epoch ms. A session's row has no end while the session is
+# live. `bytes_in`, `bytes_out` and `logged_in` are NULL unless the
+# recorder that ended the row got the session's session_end or `error`
+# event (a killed session has none).
+let SCHEMA = """
+CREATE TABLE IF NOT EXISTS sessions(
+  id INTEGER PRIMARY KEY, pid INTEGER, ip TEXT, port INTEGER,
+  start_ms INTEGER, end_ms INTEGER, end_reason TEXT,
+  bytes_in INTEGER, bytes_out INTEGER, logged_in INTEGER);
+CREATE TABLE IF NOT EXISTS input(
+  session_id INTEGER REFERENCES sessions(id), time_ms INTEGER, bytes BLOB);
+CREATE INDEX IF NOT EXISTS input_session ON input(session_id);
+CREATE TABLE IF NOT EXISTS logins(
+  session_id INTEGER REFERENCES sessions(id), time_ms INTEGER,
+  username TEXT, password TEXT, ok INTEGER);
+CREATE TABLE IF NOT EXISTS commands(
+  session_id INTEGER REFERENCES sessions(id), time_ms INTEGER, line TEXT);
+CREATE TABLE IF NOT EXISTS urls(
+  session_id INTEGER REFERENCES sessions(id), time_ms INTEGER, url TEXT, via TEXT);
+CREATE TABLE IF NOT EXISTS echoes(
+  session_id INTEGER REFERENCES sessions(id), time_ms INTEGER, bytes BLOB);
+CREATE TABLE IF NOT EXISTS crashes(
+  session_id INTEGER REFERENCES sessions(id), time_ms INTEGER, reason TEXT, trace TEXT);
+CREATE TABLE IF NOT EXISTS cap_events(
+  session_id INTEGER REFERENCES sessions(id), time_ms INTEGER, cap TEXT, ip TEXT, detail TEXT);
+"""
 
 ## Sends `ev` to the recorder at `target` (a pid or a registered name),
 ## stamped with the time. An event for a name nobody holds, as while the
@@ -20,6 +60,22 @@ fn emit(target, ev)
   let to = if type(target) == "string" then whereis(target) else target end
   if to != nil
     send(to, {tag: "hp_event", event: ev})
+  end
+end
+
+## Has the recorder at `target` store every event it has received, and
+## returns the path of the database file it writes, or nil when no
+## recorder answers within `timeout_ms`.
+fn sync(target, timeout_ms = 5000)
+  let to = if type(target) == "string" then whereis(target) else target end
+  if to == nil
+    return nil
+  end
+  let ref = make_ref()
+  send(to, {tag: "_hp_sync", from: self(), ref: ref})
+  receive
+  when {tag: "_hp_synced", ref: ^ref, file: file} then file
+  after timeout_ms then nil
   end
 end
 
@@ -64,24 +120,302 @@ fn format(ev)
   end
 end
 
-fn loop()
+## The name of the database file for time `ms`, after the Monday (UTC)
+## that starts its week.
+##
+##   recorder.file_name(1760054400000)    # "honeypot-2025-10-06.db" (a Friday)
+fn file_name(ms)
+  let days = ms / DAY_MS
+  let monday = days - (days + 3) % 7
+  "honeypot-{time.date(monday * DAY_MS)}.db"
+end
+
+## Deletes the weekly database files in `dir` past the newest `keep`
+## (with their `-wal` and `-shm` files), never the file named `current`.
+fn prune(dir, keep, current = nil)
+  let weeks = week_files(dir)
+  for i = 0, len(weeks) - keep
+    if weeks[i] != current
+      for suffix in ["", "-wal", "-shm"]
+        remove_file(path_join(dir, weeks[i] + suffix))
+      end
+    end
+  end
+end
+
+fn now(st)
+  if st.clock == nil then epoch_ms() else st.clock() end
+end
+
+# The weekly database files in `dir`, oldest first.
+fn week_files(dir)
+  let weeks = table.filter(list_dir(dir), fn(f)
+    string.starts_with(f, "honeypot-") and string.ends_with(f, ".db")
+  end)
+  sort(weeks)
+end
+
+# Opens the week's file when the week has changed since the last write.
+# A session that spans the change has its row in the old file ended as
+# `week_end`, and gets a new one in the new file.
+fn use_file(st)
+  let name = file_name(now(st))
+  if name == st.file
+    return nil
+  end
+  if st.db != nil
+    sqlite.exec(st.db, "BEGIN")
+    for pid, sess in st.live
+      if sess.row != nil
+        sqlite.query(st.db, "UPDATE sessions SET end_ms = ?, end_reason = 'week_end' WHERE id = ?", [epoch_ms(), sess.row])
+      end
+    end
+    sqlite.exec(st.db, "COMMIT")
+    sqlite.close(st.db)
+  end
+  st.db = sqlite.open(path_join(st.dir, name))
+  claim(st.db)
+  sqlite.exec(st.db, SCHEMA)
+  st.file = name
+  for pid, sess in st.live
+    sess.row = nil
+  end
+  prune(st.dir, st.keep_weeks, name)
+end
+
+# The row of the session `ev` belongs to. A session with no row the
+# recorder knows of (its session_start was lost with a recorder that
+# crashed, or its row was ended by the sweep) gets a new row, with no
+# address unless its session_start reached this recorder.
+fn row_of(st, ev)
+  let sess = st.live[ev.session]
+  if sess == nil
+    sess = {row: nil, ip: nil, port: nil, start_ms: ev.time, error: nil, dead: false}
+    st.live[ev.session] = sess
+  end
+  if sess.row == nil
+    sqlite.query(st.db, "INSERT INTO sessions(pid, ip, port, start_ms) VALUES (?, ?, ?, ?)", [
+      ev.session, sess.ip, sess.port, sess.start_ms
+    ])
+    sess.row = sqlite.last_id(st.db)
+  end
+  sess.row
+end
+
+# Ends the row of the session `ev` belongs to. `stats` holds bytes_in,
+# bytes_out and logged_in, or is nil when they're unknown.
+fn finish(st, ev, reason, stats)
+  let s = if stats == nil then {} else stats end
+  sqlite.query(st.db, "UPDATE sessions SET end_ms = ?, end_reason = ?, bytes_in = ?, bytes_out = ?, logged_in = ? WHERE id = ?", [
+    ev.time, reason, s.bytes_in, s.bytes_out, s.logged_in, row_of(st, ev)
+  ])
+  delete(st.live, ev.session)
+end
+
+# A crash's trace comes from the session's own `error` event, stored
+# before the registry's `crash`; a session that was killed has none.
+fn crash(st, ev)
+  let row = row_of(st, ev)
+  let err = st.live[ev.session].error
+  let trace = if err == nil then nil else err.trace end
+  sqlite.query(st.db, "INSERT INTO crashes(session_id, time_ms, reason, trace) VALUES (?, ?, ?, ?)", [
+    row, ev.time, ev.reason, trace
+  ])
+  finish(st, ev, "crash", err)
+end
+
+fn store(st, ev)
+  let db = st.db
+  match ev.kind
+  when "session_start"
+    st.live[ev.session] = {row: nil, ip: ev.ip, port: ev.port, start_ms: ev.time, error: nil, dead: false}
+    row_of(st, ev)
+  when "input"
+    sqlite.query(db, "INSERT INTO input(session_id, time_ms, bytes) VALUES (?, ?, CAST(? AS BLOB))", [
+      row_of(st, ev), ev.time, ev.bytes
+    ])
+  when "login"
+    sqlite.query(db, "INSERT INTO logins(session_id, time_ms, username, password, ok) VALUES (?, ?, ?, ?, ?)", [
+      row_of(st, ev), ev.time, ev.user, ev.password, ev.ok
+    ])
+  when "command"
+    sqlite.query(db, "INSERT INTO commands(session_id, time_ms, line) VALUES (?, ?, ?)", [
+      row_of(st, ev), ev.time, ev.line
+    ])
+  when "url"
+    sqlite.query(db, "INSERT INTO urls(session_id, time_ms, url, via) VALUES (?, ?, ?, ?)", [
+      row_of(st, ev), ev.time, ev.url, ev.via
+    ])
+  when "echo"
+    sqlite.query(db, "INSERT INTO echoes(session_id, time_ms, bytes) VALUES (?, ?, CAST(? AS BLOB))", [
+      row_of(st, ev), ev.time, ev.bytes
+    ])
+  when "cap"
+    let row = if ev.session == nil then nil else row_of(st, ev) end
+    sqlite.query(db, "INSERT INTO cap_events(session_id, time_ms, cap, ip, detail) VALUES (?, ?, ?, ?, ?)", [
+      row, ev.time, ev.cap, ev.ip, ev.detail
+    ])
+  when "error"
+    row_of(st, ev)
+    st.live[ev.session].error = ev
+  when "session_end"
+    finish(st, ev, ev.reason, ev)
+  when "crash"
+    crash(st, ev)
+  else
+    error("recorder: unknown event kind {ev.kind}")
+  end
+end
+
+# Stores the pending events in one transaction. A failure crashes the
+# recorder, whose handle then closes and rolls the batch back.
+fn write_pending(st)
+  if len(st.pending) == 0
+    return nil
+  end
+  use_file(st)
+  sqlite.exec(st.db, "BEGIN")
+  for ev in st.pending
+    store(st, ev)
+  end
+  sqlite.exec(st.db, "COMMIT")
+  st.pending = []
+end
+
+fn add(st, ev)
+  if st.log and ev.kind != "input"
+    print(format(ev))
+  end
+  push(st.pending, ev)
+  if len(st.pending) >= BATCH
+    write_pending(st)
+  elif not st.timer
+    st.timer = true
+    send_after(self(), {tag: "_hp_flush"}, FLUSH_MS)
+  end
+end
+
+# Takes over the rows a recorder before this one left open in the week's
+# file: those of sessions started since `since` are live sessions of this
+# program, for the sweep to end once they die; older ones are of a
+# program that has ended, and are ended as `lost`. Rows open in other
+# weeks' files are ended too: as `lost` from before `since`, else as
+# `week_end`, since a live session gets a new row in the week's file.
+fn adopt(st, since)
+  for f in week_files(st.dir)
+    if f != st.file
+      let db = sqlite.open(path_join(st.dir, f))
+      sqlite.query(db, "UPDATE sessions SET end_ms = ?, end_reason = CASE WHEN start_ms < ? THEN 'lost' ELSE 'week_end' END WHERE end_ms IS NULL", [
+        epoch_ms(), since
+      ])
+      sqlite.close(db)
+    end
+  end
+  let open = sqlite.query(st.db, "SELECT id, pid, ip, port, start_ms FROM sessions WHERE end_ms IS NULL")
+  sqlite.exec(st.db, "BEGIN")
+  for r in open
+    if r.start_ms < since
+      sqlite.query(st.db, "UPDATE sessions SET end_ms = ?, end_reason = 'lost' WHERE id = ?", [epoch_ms(), r.id])
+    else
+      st.live[r.pid] = {row: r.id, ip: r.ip, port: r.port, start_ms: r.start_ms, error: nil, dead: false}
+    end
+  end
+  sqlite.exec(st.db, "COMMIT")
+end
+
+# Ends the rows of sessions that died without a session_end or crash the
+# recorder got (the recorder restarted meanwhile, or the registry did
+# before their DOWN). A session found dead is ended at the next sweep, so
+# the events it sent before dying are in by then.
+fn sweep(st)
+  let t = now(st)
+  for pid in keys(st.live)
+    let sess = st.live[pid]
+    if sess.dead
+      if sess.error != nil
+        push(st.pending, {kind: "crash", session: pid, time: t, reason: sess.error.reason})
+      else
+        push(st.pending, {kind: "session_end", session: pid, time: t, reason: "lost"})
+      end
+    elif process_info(pid) == nil
+      sess.dead = true
+    end
+  end
+  write_pending(st)
+end
+
+fn loop(st)
   while true
     receive
     when {tag: "hp_event", event: ev}
-      print(format(ev))
+      add(st, ev)
+    when {tag: "_hp_flush"}
+      st.timer = false
+      write_pending(st)
+    when {tag: "_hp_sweep"}
+      sweep(st)
+      send_after(self(), {tag: "_hp_sweep"}, st.sweep_ms)
+    when {tag: "_hp_sync", from: from, ref: ref}
+      write_pending(st)
+      send(from, {tag: "_hp_synced", ref: ref, file: if st.file == nil then nil else path_join(st.dir, st.file) end})
+    when {tag: "EXIT"}
+      write_pending(st)
+      return nil
     when other
       nil
     end
   end
 end
 
-## Starts the recorder under the registered `name` and returns its pid.
-fn start(name)
+## Starts the recorder under the registered `name` and returns its pid,
+## with the week's file open.
+## Options: `dir`, the directory of the database files (made if missing);
+## `keep_weeks`, how many weekly files to keep; `log`, true to also print
+## a line per event (but `input`) on stdout; `sweep_ms`, how often it
+## looks for sessions that died without their end reaching it; `since`,
+## when the program started (default: now), so that the sessions this
+## week's file has open from before then are ended as `lost`, and later
+## ones are taken over from a recorder that crashed; `clock`, a fn
+## returning the epoch ms that picks the week's file, for tests.
+##
+## Raises `recorder.start: ...` when the file can't be opened. Traps
+## exits: an exit signal from its supervisor makes it store what it holds,
+## then return.
+fn start(name, {
+  dir = "honeypot_data", keep_weeks = 8, log = false, sweep_ms = 60000, since = epoch_ms(), clock = nil
+} = {})
+  if not is_dir(dir)
+    mkdir(dir)
+  end
+  # Returns once the recorder traps exits (an exit signal that came
+  # sooner would kill it before it stored anything) and has opened the
+  # week's file, or raises why it couldn't.
+  let parent = self()
+  let ref = make_ref()
   let pid = spawn do
-    loop()
+    process_flag("trap_exit", true)
+    let st = {
+      dir: dir, keep_weeks: keep_weeks, log: log, sweep_ms: sweep_ms, clock: clock,
+      db: nil, file: nil, pending: [], timer: false, live: {}
+    }
+    let r = pcall do
+      use_file(st)
+      adopt(st, since)
+    end
+    send(parent, {tag: "_hp_ready", ref: ref, error: if r.ok then nil else r.error end})
+    if r.ok
+      send_after(self(), {tag: "_hp_sweep"}, sweep_ms)
+      loop(st)
+    end
+  end
+  receive
+  when {tag: "_hp_ready", ref: ^ref, error: err}
+    if err != nil
+      error("recorder.start: {err}")
+    end
   end
   register(name, pid)
   pid
 end
 
-export emit, quote, format, start
+export emit, sync, quote, format, file_name, prune, start

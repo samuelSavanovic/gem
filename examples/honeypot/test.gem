@@ -1,7 +1,9 @@
 # Tests for the honeypot: the telnet parser, the line splitter, the fake
-# shell and the event log lines, then the server driven over TCP.
+# shell, the event log lines and the database, then the server driven over
+# TCP.
 
 load "std/test"
+load "std/sqlite"
 load "std/string"
 load "std/table"
 load "./telnet"
@@ -363,6 +365,222 @@ test.case("recorder formats an event") do
   test.assert_eq(recorder.format({kind: "refused", ip: "1.2.3.4", time: 0}), "1970-01-01T00:00:00Z refused ip=\"1.2.3.4\"")
 end
 
+# A fresh directory for `body(dir)`, removed afterwards.
+fn with_dir(body)
+  let dir = "/tmp/gem_honeypot_test_{epoch_ms()}_{floor(random() * 1000000)}"
+  mkdir(dir)
+  let r = pcall body(dir)
+  exec("rm -rf '{dir}'")
+  if not r.ok
+    error(r.error)
+  end
+end
+
+# Stops the recorder `pid` and waits for it to exit.
+fn stop_recorder(pid)
+  monitor(pid)
+  kill(pid, "shutdown")
+  receive
+  when {tag: "DOWN", pid: ^pid} then nil
+  after WAIT_MS then error("recorder did not stop")
+  end
+end
+
+fn rows(file, sql)
+  let db = sqlite.open(file)
+  let r = sqlite.query(db, sql)
+  sqlite.close(db)
+  r
+end
+
+test.case("recorder: one file per week, from Monday") do
+  test.assert_eq(recorder.file_name(1760054400000), "honeypot-2025-10-06.db")
+  test.assert_eq(recorder.file_name(1759708800000), "honeypot-2025-10-06.db")
+  test.assert_eq(recorder.file_name(1759708799999), "honeypot-2025-09-29.db")
+  test.assert_eq(recorder.file_name(1760313599999), "honeypot-2025-10-06.db")
+  test.assert_eq(recorder.file_name(1760313600000), "honeypot-2025-10-13.db")
+end
+
+test.case("recorder: prune keeps the newest weeks and the current one") do
+  with_dir do |dir|
+    for f in ["honeypot-2025-09-29.db", "honeypot-2025-09-29.db-wal", "honeypot-2025-10-06.db", "honeypot-2025-10-13.db", "honeypot-2025-10-13.db-shm", "notes.txt"]
+      write_file(path_join(dir, f), "")
+    end
+    recorder.prune(dir, 2)
+    test.assert_eq(sort(list_dir(dir)), ["honeypot-2025-10-06.db", "honeypot-2025-10-13.db", "honeypot-2025-10-13.db-shm", "notes.txt"])
+    recorder.prune(dir, 1, "honeypot-2025-10-06.db")
+    test.assert_eq(sort(list_dir(dir)), ["honeypot-2025-10-06.db", "honeypot-2025-10-13.db", "honeypot-2025-10-13.db-shm", "notes.txt"])
+    recorder.prune(dir, 1)
+    test.assert_eq(sort(list_dir(dir)), ["honeypot-2025-10-13.db", "honeypot-2025-10-13.db-shm", "notes.txt"])
+  end
+end
+
+test.case("recorder: stores events by session") do
+  with_dir do |dir|
+    let pid = recorder.start("hp_test_recorder", {dir: dir, clock: fn() 1760054400000 end})
+    let raw = "root" + chr(0) + chr(255) + "\r\n"
+    let evs = [
+      {kind: "session_start", session: 10, ip: "1.2.3.4", port: 5555},
+      {kind: "input", session: 10, bytes: raw},
+      {kind: "login", session: 10, user: "root", password: "x" + chr(200), ok: false},
+      {kind: "command", session: 10, line: "wget http://e.x/a"},
+      {kind: "url", session: 10, url: "http://e.x/a", via: "wget"},
+      {kind: "echo", session: 10, bytes: "ELF" + chr(0)},
+      {kind: "cap", session: 10, cap: "line_too_long"},
+      {kind: "session_start", session: 11, ip: "5.6.7.8", port: 1},
+      {kind: "error", session: 11, reason: "boom", trace: "at f (x.gem:1)", bytes_in: 7, bytes_out: 8, logged_in: true},
+      {kind: "crash", session: 11, reason: "boom"},
+      {kind: "session_start", session: 12, ip: "9.9.9.9", port: 2},
+      {kind: "crash", session: 12, reason: "killed"},
+      {kind: "command", session: 13, line: "ls"},
+      {kind: "cap", cap: "spawn_failed", ip: "6.6.6.6", detail: "spawn: process table full"},
+      {kind: "session_end", session: 10, reason: "exit", bytes_in: 100, bytes_out: 200, logged_in: false}
+    ]
+    for ev in evs
+      recorder.emit("hp_test_recorder", ev)
+    end
+    let file = recorder.sync("hp_test_recorder")
+    test.assert_eq(file, path_join(dir, "honeypot-2025-10-06.db"))
+    let sessions = rows(file, "SELECT pid, ip, port, end_reason, bytes_in, bytes_out, logged_in FROM sessions ORDER BY id")
+    test.assert_eq(sessions, [
+      {pid: 10, ip: "1.2.3.4", port: 5555, end_reason: "exit", bytes_in: 100, bytes_out: 200, logged_in: 0},
+      {pid: 11, ip: "5.6.7.8", port: 1, end_reason: "crash", bytes_in: 7, bytes_out: 8, logged_in: 1},
+      {pid: 12, ip: "9.9.9.9", port: 2, end_reason: "crash", bytes_in: nil, bytes_out: nil, logged_in: nil},
+      {pid: 13, ip: nil, port: nil, end_reason: nil, bytes_in: nil, bytes_out: nil, logged_in: nil}
+    ])
+    test.assert_eq(rows(file, "SELECT typeof(bytes) AS t, bytes FROM input"), [{t: "blob", bytes: raw}])
+    test.assert_eq(rows(file, "SELECT username, password, ok FROM logins"), [{username: "root", password: "x" + chr(200), ok: 0}])
+    test.assert_eq(rows(file, "SELECT line FROM commands ORDER BY rowid"), [{line: "wget http://e.x/a"}, {line: "ls"}])
+    test.assert_eq(rows(file, "SELECT url, via FROM urls"), [{url: "http://e.x/a", via: "wget"}])
+    test.assert_eq(rows(file, "SELECT bytes FROM echoes"), [{bytes: "ELF" + chr(0)}])
+    test.assert_eq(rows(file, "SELECT s.pid, c.reason, c.trace FROM crashes c JOIN sessions s ON s.id = c.session_id ORDER BY c.rowid"), [
+      {pid: 11, reason: "boom", trace: "at f (x.gem:1)"},
+      {pid: 12, reason: "killed", trace: nil}
+    ])
+    test.assert_eq(rows(file, "SELECT session_id IS NULL AS free, cap, ip, detail FROM cap_events ORDER BY rowid"), [
+      {free: 0, cap: "line_too_long", ip: nil, detail: nil},
+      {free: 1, cap: "spawn_failed", ip: "6.6.6.6", detail: "spawn: process table full"}
+    ])
+    stop_recorder(pid)
+  end
+end
+
+test.case("recorder: a new week starts a new file, an old one is pruned") do
+  with_dir do |dir|
+    # The recorder's clock is a fn the spawn copies, so the time it
+    # returns lives in a file this process changes.
+    let now_file = path_join(dir, "now")
+    let set_now = fn(ms) write_file(now_file, to_string(ms)) end
+    let week = 7 * 86400000
+    set_now(1760054400000)
+    let pid = recorder.start("hp_test_recorder", {dir: dir, keep_weeks: 2, clock: fn() to_int(read_file(now_file)) end})
+    recorder.emit(pid, {kind: "session_start", session: 20, ip: "1.2.3.4", port: 9})
+    let first = recorder.sync(pid)
+    set_now(1760054400000 + week)
+    recorder.emit(pid, {kind: "command", session: 20, line: "id"})
+    let second = recorder.sync(pid)
+    test.assert_neq(first, second)
+    test.assert_eq(rows(second, "SELECT pid, ip, port FROM sessions"), [{pid: 20, ip: "1.2.3.4", port: 9}])
+    test.assert_eq(rows(second, "SELECT line FROM commands"), [{line: "id"}])
+    test.assert_eq(rows(first, "SELECT count(*) AS n FROM commands"), [{n: 0}])
+    test.assert_eq(rows(first, "SELECT end_reason FROM sessions"), [{end_reason: "week_end"}])
+    set_now(1760054400000 + 2 * week)
+    recorder.emit(pid, {kind: "session_end", session: 20, reason: "idle"})
+    let third = recorder.sync(pid)
+    test.assert_eq(file_exists(first), false)
+    test.assert(file_exists(second))
+    test.assert_eq(rows(third, "SELECT pid, end_reason FROM sessions"), [{pid: 20, end_reason: "idle"}])
+    stop_recorder(pid)
+  end
+end
+
+test.case("recorder: stores what it holds when it is stopped") do
+  with_dir do |dir|
+    let pid = recorder.start("hp_test_recorder", {dir: dir})
+    recorder.emit(pid, {kind: "command", session: 30, line: "uname -a"})
+    stop_recorder(pid)
+    let files = list_dir(dir)
+    test.assert_eq(len(table.filter(files, fn(f) string.ends_with(f, ".db") end)), 1)
+    let file = path_join(dir, recorder.file_name(epoch_ms()))
+    test.assert_eq(rows(file, "SELECT line FROM commands"), [{line: "uname -a"}])
+  end
+end
+
+test.case("recorder: ends the rows of sessions that died unseen") do
+  with_dir do |dir|
+    let pid = recorder.start("hp_test_recorder", {dir: dir, sweep_ms: 20})
+    let gone = spawn_monitor(fn() nil end).pid
+    let crashed = spawn_monitor(fn() nil end).pid
+    for i = 0, 2
+      receive
+      when {tag: "DOWN"} then nil
+      end
+    end
+    recorder.emit(pid, {kind: "session_start", session: gone, ip: "1.1.1.1", port: 1})
+    recorder.emit(pid, {kind: "session_start", session: crashed, ip: "2.2.2.2", port: 2})
+    recorder.emit(pid, {kind: "error", session: crashed, reason: "bad", trace: "at f (x.gem:1)", bytes_in: 3, bytes_out: 4, logged_in: false})
+    recorder.emit(pid, {kind: "session_start", session: self(), ip: "3.3.3.3", port: 3})
+    sleep(200)
+    let file = recorder.sync(pid)
+    test.assert_eq(rows(file, "SELECT ip, end_reason, bytes_in FROM sessions ORDER BY id"), [
+      {ip: "1.1.1.1", end_reason: "lost", bytes_in: nil},
+      {ip: "2.2.2.2", end_reason: "crash", bytes_in: 3},
+      {ip: "3.3.3.3", end_reason: nil, bytes_in: nil}
+    ])
+    test.assert_eq(rows(file, "SELECT reason, trace FROM crashes"), [{reason: "bad", trace: "at f (x.gem:1)"}])
+    stop_recorder(pid)
+  end
+end
+
+test.case("recorder: a new recorder ends the rows the last one left open") do
+  with_dir do |dir|
+    let since = epoch_ms()
+    let gone = spawn_monitor(fn() nil end).pid
+    receive
+    when {tag: "DOWN", pid: ^gone} then nil
+    end
+    let first = recorder.start("hp_test_recorder", {dir: dir, since: since})
+    recorder.emit(first, {kind: "session_start", session: gone, ip: "1.1.1.1", port: 1})
+    recorder.emit(first, {kind: "session_start", session: self(), ip: "2.2.2.2", port: 2})
+    let file = recorder.sync(first)
+    stop_recorder(first)
+    let second = recorder.start("hp_test_recorder", {dir: dir, since: since, sweep_ms: 20})
+    sleep(200)
+    recorder.emit(second, {kind: "command", session: self(), line: "id"})
+    recorder.sync(second)
+    test.assert_eq(rows(file, "SELECT ip, end_reason FROM sessions ORDER BY id"), [
+      {ip: "1.1.1.1", end_reason: "lost"},
+      {ip: "2.2.2.2", end_reason: nil}
+    ])
+    test.assert_eq(rows(file, "SELECT s.ip FROM commands c JOIN sessions s ON s.id = c.session_id"), [{ip: "2.2.2.2"}])
+    stop_recorder(second)
+    let third = recorder.start("hp_test_recorder", {dir: dir, since: epoch_ms() + 1})
+    test.assert_eq(rows(file, "SELECT ip, end_reason FROM sessions ORDER BY id"), [
+      {ip: "1.1.1.1", end_reason: "lost"},
+      {ip: "2.2.2.2", end_reason: "lost"}
+    ])
+    stop_recorder(third)
+  end
+end
+
+test.case("recorder: a new recorder ends the rows open in other weeks' files") do
+  with_dir do |dir|
+    let old_week = recorder.start("hp_test_recorder", {dir: dir, clock: fn() 1760054400000 end})
+    recorder.emit(old_week, {kind: "session_start", session: self(), ip: "1.1.1.1", port: 1})
+    sleep(5)
+    let since = epoch_ms()
+    recorder.emit(old_week, {kind: "session_start", session: self() + 1, ip: "2.2.2.2", port: 2})
+    let file = recorder.sync(old_week)
+    stop_recorder(old_week)
+    let pid = recorder.start("hp_test_recorder", {dir: dir, since: since})
+    test.assert_eq(rows(file, "SELECT ip, end_reason FROM sessions ORDER BY id"), [
+      {ip: "1.1.1.1", end_reason: "lost"},
+      {ip: "2.2.2.2", end_reason: "week_end"}
+    ])
+    stop_recorder(pid)
+  end
+end
+
 # ─── Over TCP ──────────────────────────────────────────────────
 
 # Reads from `sock` until what was read ends with `marker`; returns all of
@@ -385,13 +603,16 @@ fn read_until(sock, marker)
   to_string(got)
 end
 
-# The events of one session, up to its session_end.
-fn session_events()
+# The events of one session, up to its session_end; its raw input too
+# with `with_input`.
+fn session_events(with_input = false)
   let evs = []
   while true
     receive
     when {tag: "hp_event", event: ev}
-      push(evs, ev)
+      if with_input or ev.kind != "input"
+        push(evs, ev)
+      end
       if ev.kind == "session_end" then return evs end
     after WAIT_MS
       error("session_events: no session_end; got {evs}")
@@ -403,9 +624,17 @@ fn kinds(evs)
   table.map(evs, fn(e) e.kind end)
 end
 
+fn input_of(evs)
+  string.join(table.map(table.filter(evs, fn(e) e.kind == "input" end), fn(e) e.bytes end), "")
+end
+
+# Runs `body` against a server on PORT that sends its events to this
+# process, unless `opts` has `data`, the recorder's directory.
 fn with_server(opts, body)
   let listener = tcp_listen("127.0.0.1", PORT)
-  opts.events = self()
+  if not has_key(opts, "data")
+    opts.events = self()
+  end
   let sup = server.start(listener, opts)
   let r = pcall body()
   server.stop(sup)
@@ -419,8 +648,10 @@ test.case("tcp: a session from login to exit") do
   with_server({accept_on: 1, accept_chance: 0.0}) do
     let sock = tcp_connect("127.0.0.1", PORT)
     let sent = 0
+    let all_sent = ""
     let say = fn(text)
       sent += len(text)
+      all_sent += text
       tcp_write(sock, text, 1000)
     end
     let hello = read_until(sock, "login: ")
@@ -439,7 +670,9 @@ test.case("tcp: a session from login to exit") do
     test.assert_eq(read_until(sock, "exit\r\n"), "exit\r\n")
     test.assert_eq(tcp_read(sock, 4096, WAIT_MS), "")
     tcp_close(sock)
-    let evs = session_events()
+    let with_input = session_events(true)
+    test.assert_eq(input_of(with_input), all_sent)
+    let evs = table.filter(with_input, fn(e) e.kind != "input" end)
     test.assert_eq(kinds(evs), ["session_start", "login", "command", "url", "command", "session_end"])
     test.assert_eq(evs[0].ip, "127.0.0.1")
     test.assert_eq([evs[1].user, evs[1].password, evs[1].ok], ["root", "s3cret", true])
@@ -491,13 +724,14 @@ test.case("tcp: an endless line and an endless subnegotiation stay capped") do
     tcp_write(sock, IAC + SB + junk + "\r\nroot\r\n", 1000)
     test.assert(string.ends_with(read_until(sock, "Password: "), "Password: "))
     tcp_close(sock)
-    let evs = session_events()
+    let evs = session_events(true)
     let caps = table.filter(evs, fn(e) e.kind == "cap" end)
-    test.assert_eq(table.map(caps, fn(e) e.cap end), ["line_too_long", "subneg_too_long"])
+    test.assert_eq(table.map(caps, fn(e) e.cap end), ["line_too_long", "input_truncated", "subneg_too_long"])
+    test.assert_eq(len(input_of(evs)), 65536)
   end
 end
 
-test.case("tcp: a registry crash restarts the acceptor with it") do
+test.case("tcp: the server serves old and new connections after a registry crash") do
   with_server({}) do
     let old = whereis("honeypot_registry")
     let sock = tcp_connect("127.0.0.1", PORT)
@@ -517,6 +751,105 @@ test.case("tcp: a registry crash restarts the acceptor with it") do
     tcp_close(again)
     let evs = session_events()
     test.assert_eq(evs[1].reason, "closed")
+  end
+end
+
+# Reads from `sock` until the server closes it. Raises after WAIT_MS.
+fn read_to_end(sock)
+  let deadline = time_ms() + WAIT_MS
+  while true
+    let chunk = tcp_read(sock, 65536, deadline - time_ms())
+    if chunk == "" then return nil end
+    if chunk == nil then error("read_to_end: the server didn't close") end
+  end
+end
+
+# Syncs the recorder until `sql` returns `n` rows; returns them.
+fn await_rows(sql, n)
+  let deadline = time_ms() + WAIT_MS
+  while true
+    let file = recorder.sync("honeypot_recorder")
+    let got = if file == nil then [] else rows(file, sql) end
+    if len(got) == n
+      return got
+    end
+    if time_ms() > deadline
+      error("await_rows: wanted {n} rows of {sql}, got {got}")
+    end
+    sleep(10)
+  end
+end
+
+test.case("tcp: the recorder stores sessions, crashes and their input") do
+  with_dir do |dir|
+    with_server({data: dir, accept_on: 1, accept_chance: 0.0}) do
+      let sock = tcp_connect("127.0.0.1", PORT)
+      read_until(sock, "login: ")
+      let typed = "root\r\nvizxv\r\nwget http://e.x/m.sh\r\nexit\r\n"
+      tcp_write(sock, typed, 1000)
+      read_to_end(sock)
+      tcp_close(sock)
+      let s = await_rows("SELECT id, ip, end_reason, logged_in FROM sessions WHERE end_reason IS NOT NULL", 1)
+      test.assert_eq([s[0].ip, s[0].end_reason, s[0].logged_in], ["127.0.0.1", "exit", 1])
+      test.assert_eq(rows(recorder.sync("honeypot_recorder"), "SELECT url FROM urls"), [{url: "http://e.x/m.sh"}])
+      let input = rows(recorder.sync("honeypot_recorder"), "SELECT group_concat(bytes, '') AS b FROM input WHERE session_id = {s[0].id}")
+      test.assert_eq(input[0].b, typed)
+
+      let idle = tcp_connect("127.0.0.1", PORT)
+      read_until(idle, "login: ")
+      tcp_write(idle, "ad", 1000)
+      let live = await_rows("SELECT pid FROM sessions WHERE end_reason IS NULL", 1)
+      kill(live[0].pid, "boom")
+      read_to_end(idle)
+      tcp_close(idle)
+      let c = await_rows("SELECT c.reason, c.trace, s.end_reason, s.bytes_in FROM crashes c JOIN sessions s ON s.id = c.session_id", 1)
+      test.assert_eq(c, [{reason: "boom", trace: nil, end_reason: "crash", bytes_in: nil}])
+    end
+  end
+end
+
+test.case("tcp: a session that raises is stored with its trace and input") do
+  with_dir do |dir|
+    with_server({data: dir, accept_on: "not a number"}) do
+      let sock = tcp_connect("127.0.0.1", PORT)
+      read_until(sock, "login: ")
+      let sent = "root\r\n" + chr(0) + chr(255) + chr(255) + "pw\r\n"
+      tcp_write(sock, sent, 1000)
+      read_to_end(sock)
+      tcp_close(sock)
+      let c = await_rows("SELECT c.session_id, c.reason, c.trace, s.end_reason, s.bytes_in FROM crashes c JOIN sessions s ON s.id = c.session_id", 1)
+      test.assert_eq([c[0].reason, c[0].end_reason, c[0].bytes_in], ["type error in <: got int and string", "crash", len(sent)])
+      test.assert(string.contains(c[0].trace, "shell.gem"), c[0].trace)
+      let input = rows(recorder.sync("honeypot_recorder"), "SELECT group_concat(bytes, '') AS b FROM input WHERE session_id = {c[0].session_id}")
+      test.assert_eq(input[0].b, sent)
+    end
+  end
+end
+
+test.case("tcp: a killed recorder restarts and takes the live sessions over") do
+  with_dir do |dir|
+    with_server({data: dir, accept_on: 1, accept_chance: 0.0}) do
+      let sock = tcp_connect("127.0.0.1", PORT)
+      read_until(sock, "login: ")
+      tcp_write(sock, "root\r\n", 1000)
+      read_until(sock, "Password: ")
+      await_rows("SELECT id FROM sessions", 1)
+      for i = 0, 2
+        let old = whereis("honeypot_recorder")
+        kill(old, "kill")
+        let deadline = time_ms() + WAIT_MS
+        while whereis("honeypot_recorder") == nil or whereis("honeypot_recorder") == old
+          if time_ms() > deadline then error("recorder not restarted") end
+          sleep(10)
+        end
+      end
+      tcp_write(sock, "pw\r\nexit\r\n", 1000)
+      read_to_end(sock)
+      tcp_close(sock)
+      let s = await_rows("SELECT end_reason, logged_in FROM sessions WHERE end_reason IS NOT NULL", 1)
+      test.assert_eq(s, [{end_reason: "exit", logged_in: 1}])
+      test.assert_eq(rows(recorder.sync("honeypot_recorder"), "SELECT count(*) AS n FROM sessions"), [{n: 1}])
+    end
   end
 end
 

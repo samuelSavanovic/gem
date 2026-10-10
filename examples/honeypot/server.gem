@@ -56,21 +56,27 @@ end
 ## Options: `idle_ms`, how long a silent client stays connected;
 ## `write_ms`, how long a write may wait for a client that doesn't read;
 ## `max_line` and `max_subneg`, the longest line and telnet subnegotiation
-## kept; `accept_on` and `accept_chance`, when a login succeeds (see
-## shell.new); `events`, a pid to send the events to instead of the
-## recorder, which then isn't started.
+## kept; `max_input`, how many bytes of a session's raw input are stored;
+## `accept_on` and `accept_chance`, when a login succeeds (see
+## shell.new); `data`, `keep_weeks` and `log`, the recorder's `dir`,
+## `keep_weeks` and `log` (see recorder.start); `events`, a pid to send
+## the events to instead of the recorder, which then isn't started.
 fn start(listener, {
-  idle_ms = 60000, write_ms = 5000, max_line = 4096, max_subneg = 1024,
-  accept_on = 3, accept_chance = 0.25, events = nil
+  idle_ms = 60000, write_ms = 5000, max_line = 4096, max_subneg = 1024, max_input = 65536,
+  accept_on = 3, accept_chance = 0.25, data = "honeypot_data", keep_weeks = 8, log = false,
+  events = nil
 } = {})
   let cfg = {
     idle_ms: idle_ms, write_ms: write_ms, max_line: max_line, max_subneg: max_subneg,
-    accept_on: accept_on, accept_chance: accept_chance,
+    max_input: max_input, accept_on: accept_on, accept_chance: accept_chance,
     events: if events == nil then RECORDER else events end
   }
   let children = []
   if events == nil
-    push(children, {id: "recorder", start: fn() recorder.start(RECORDER) end})
+    let since = epoch_ms()
+    push(children, {id: "recorder", start: fn()
+      recorder.start(RECORDER, {dir: data, keep_weeks: keep_weeks, log: log, since: since})
+    end})
   end
   push(children, {id: "front", start: fn() start_front(listener, cfg) end})
   supervisor.start({strategy: "one_for_one", name: "honeypot_sup", children: children})
