@@ -81,13 +81,14 @@ All configurable, all logged when hit: max concurrent sessions (global and per I
 
 - `test.gem` in this directory (std/test) covers the pure parts: the IAC parser including sequences split across reads, the line splitter, the command responses.
 - A replayer (not written yet) sends stored crash input back over TCP. Crashes that reproduce become numbered examples or `docs/KNOWN_BUGS.md` entries.
-- A hostile load generator under `benchmarks/soak/` runs the local fuzz hour (`TARGETS=honeypot benchmarks/soak/run.sh`): random bytes, IAC floods, a 10 MB line with no newline, 1-byte-per-second drips, 5,000 idle connections, connect and reset, half-close, clients that never read, Mirai-style scripts and a checked canary. RSS and fds must be flat once the connections close.
+- A hostile load generator under `benchmarks/soak/` runs the local fuzz hour (`TARGETS=honeypot benchmarks/soak/run.sh`): random bytes, IAC floods, a 10 MB line with no newline, 1-byte-per-second drips, 5,000 idle connections, connect and reset, half-close, clients that never read, Mirai-style scripts and a checked canary. RSS and fds must be flat once the connections close. It passes on macOS and on Linux (`benchmarks/README.md`, "Recorded runs"); after the load RSS keeps the peak's process table slots, about 22 KB per process at the peak (OPTIMIZATIONS.md, "Per-process footprint").
 - Success in production is defined before deploy, e.g. RSS and fd count flat over 7 days.
 
 ## Deployment
 
 - A dedicated VPS running nothing else. Gem's runtime is C, so a memory-safety bug could mean remote code execution on the box.
 - Port 23 redirected to 2323 with nftables; the program runs unprivileged.
+- `--max-sessions` sized to the VM's memory: an idle session holds about 76 KB of arena, but one that keeps sending holds up to about 1.1 MB, since its loop resets only once it has allocated 1 MB (OPTIMIZATIONS.md, "A loop keeps its high-water memory"), so the default 1,000 slow clients could take about 1 GB. On a 1 GB VM, start near 300, with `MemoryMax` below the RAM.
 - Egress default-deny in nftables (DNS, package updates, NTP and SSH replies only) plus the provider firewall: the "no outbound connections" rule is enforced by the host, not only by the code.
 - systemd with restart on failure (a restart is a finding too), `DynamicUser`, `NoNewPrivileges`, `ProtectSystem=strict`, `MemoryMax`, `LimitNOFILE`, `TasksMax`.
 
