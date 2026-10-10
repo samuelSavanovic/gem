@@ -3,7 +3,10 @@
 let PORT = 9125
 let TIMEOUT_MS = 2000
 
+# Claims the socket the acceptor handed over, so it closes however this
+# session ends.
 fn echo_loop(fd)
+  claim(fd)
   while true
     let data = tcp_read(fd, 4096, TIMEOUT_MS)
     if data == nil or data == ""

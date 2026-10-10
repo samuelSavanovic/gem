@@ -1,0 +1,45 @@
+# tcp_peer(sock) gives the remote end's address, or nil once the peer has
+# reset the connection.
+
+let me = self()
+let l = tcp_listen("127.0.0.1", 18320)
+print("listening socket:", tcp_peer(l))
+
+let c = tcp_connect("127.0.0.1", 18320)
+let s = tcp_accept(l)
+let client_side = tcp_peer(c)
+print("client sees:", client_side.ip, client_side.port)
+let server_side = tcp_peer(s)
+print("server sees:", server_side.ip, type(server_side.port), server_side.port > 0)
+
+# From another process, after it is handed the fd, as an acceptor would.
+spawn do
+  let p = tcp_peer(s)
+  send(me, ["in session", p.ip, p.port == server_side.port])
+end
+print(receive())
+
+# A peer that closes cleanly still has an address until the socket closes.
+tcp_close(c)
+print("read after peer close:", tcp_read(s, 16, 1000) == "")
+print("after clean close:", tcp_peer(s).ip)
+# Until a write draws a reset from the closed peer.
+tcp_write(s, "x", 1000)
+sleep(20)
+print("after writing to it:", tcp_peer(s))
+tcp_close(s)
+
+# Closing with unread data sends a reset; the server's socket then has no peer.
+let c2 = tcp_connect("127.0.0.1", 18320)
+let s2 = tcp_accept(l)
+tcp_write(s2, "unread", 1000)
+sleep(20)
+tcp_close(c2)
+print("read after reset:", tcp_read(s2, 16, 1000) == "")
+print("after reset:", tcp_peer(s2))
+tcp_close(s2)
+tcp_close(l)
+
+print((pcall tcp_peer(s)).error)
+print((pcall tcp_peer("3")).error)
+print((pcall tcp_peer()).error)

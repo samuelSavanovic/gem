@@ -2935,16 +2935,16 @@ leak check bad status: error: request.get: malformed status line "garbage"
 leak check timeout: error: request.get: timed out after 50 ms waiting for http://127.0.0.1:19823/
 leak check refused: request.get: cannot connect to 127.0.0.1:1: tcp_connect: connect failed: Connection refused
 fds leaked: false
-sqlite_query: not an open database handle
-sqlite_exec: not an open database handle
-sqlite_last_insert_id: not an open database handle
-sqlite_changes: not an open database handle
-sqlite_close: not an open database handle
+sqlite_query: expected a database handle, got int
+sqlite_exec: expected a database handle, got int
+sqlite_last_insert_id: expected a database handle, got int
+sqlite_changes: expected a database handle, got int
+sqlite_close: expected a database handle, got int
 sqlite_query: expected a database handle, got string
 sqlite_close: expected a database handle, got nil
 sqlite_changes: expected a database handle, got table
 sqlite_exec: expected a database handle, got float
-int
+sqlite
 1
 1
 child saw 2 rows, last 8
@@ -2954,13 +2954,14 @@ sqlite_query: not an open database handle
 sqlite_exec: not an open database handle
 sqlite_last_insert_id: not an open database handle
 sqlite_changes: not an open database handle
-sqlite_close: not an open database handle
-sqlite.close: not an open database handle
+nil
+nil
 true
 42
 child closed db2
 sqlite_query: not an open database handle
-one close succeeded: true
+both closes returned: true
+sqlite_query: not an open database handle
 PASS records compare by structure, in any key order
 PASS primitives
 PASS cycles terminate
@@ -3883,13 +3884,13 @@ sqlite.query: parameter :a is a table; expected nil, bool, int, float or string
 sqlite.query: params must be an array or a record of names, not both
 sqlite.query: params must be an array, got a float key
 sqlite.query: params key "a" matches no parameter of the statement
-["accept", false, "tcp_accept: accept failed: Bad file descriptor"]
-fd reused: true
-["accept on reused fd", false, "tcp_accept: accept failed: Bad file descriptor"]
-new listener still accepts: int
-["read", false, "tcp_read: read failed: Bad file descriptor"]
-["read with timeout", false, "tcp_read: read failed: Bad file descriptor"]
-["write", false, "tcp_write: write failed: Bad file descriptor"]
+["accept", false, "tcp_accept: socket is closed"]
+fd reused: true same socket: false
+["accept on reused fd", false, "tcp_accept: socket is closed"]
+new listener still accepts: socket
+["read", false, "tcp_read: socket is closed"]
+["read with timeout", false, "tcp_read: socket is closed"]
+["write", false, "tcp_write: socket is closed"]
 ["accept, closed from C", false, "tcp_accept: accept failed: Bad file descriptor"]
 done
 preabc
@@ -4230,7 +4231,7 @@ http.html_escape: s must be a string, got int
 http.parse_form: body must be a string, got nil
 time.date: ms must be an int, got nil
 time.format: fmt must be a string, got nil
-sqlite.last_id: not an open database handle
+sqlite.last_id: expected a database handle, got int
 request.post: opts must be a table, got string
 math.min: expected numbers or strings, got table and nil
 math.clamp: expected numbers or strings, got string and int
@@ -4291,7 +4292,7 @@ sort: the comparator must return a number (negative, zero or positive), got nil
 42
 error
 -- tcp_listen resolves host names
-int
+socket
 -- json: {} stays an object
 {} [] {} {"a":{},"b":[]}
 {} []
@@ -4404,3 +4405,172 @@ truthy falsy
 == errors ==
 false attempt to call nil value (field nope)
 false type error in +: got nil and int
+listening socket: nil
+client sees: 127.0.0.1 18320
+server sees: 127.0.0.1 int true
+["in session", "127.0.0.1", true]
+read after peer close: true
+after clean close: 127.0.0.1
+after writing to it: nil
+read after reset: true
+after reset: nil
+tcp_peer: socket is closed
+tcp_peer: expected a socket, got string
+tcp_peer: expected a socket, got nil
+== values
+socket sqlite
+true true true
+true false true true
+a copy is equal: true
+client server false
+type error in <: got socket and socket
+json.encode: cannot encode a socket
+to_int: cannot convert socket to int
+type error in +: got socket and int
+copied to a process and back: true true
+== wrong values
+tcp_read: expected a socket, got int
+tcp_write: expected a socket, got string
+tcp_accept: expected a socket, got nil
+tcp_close: expected a socket, got int
+tcp_peer: expected a socket, got nil
+tcp_fd: expected a socket, got int
+tcp_read: expected a socket, got sqlite
+sqlite_query: expected a database handle, got socket
+sqlite_close: expected a database handle, got int
+claim: expected a socket or a database handle, got int
+claim: expected a socket or a database handle, got nil
+== tcp_fd
+int true true
+== closed
+ping
+nil nil
+tcp_read: socket is closed
+tcp_write: socket is closed
+tcp_accept: socket is closed
+tcp_peer: socket is closed
+tcp_fd: socket is closed
+claim: socket is closed
+peer sees the close: true
+nil nil
+sqlite_query: not an open database handle
+claim: database is closed
+== tcp_from_fd
+socket true true
+true
+true
+true
+true
+tcp_from_fd: fd -1 is not open
+tcp_from_fd: expected an int fd, got string
+== unclaimed: closed when the opener dies abnormally
+
+[Runtime Error in process 1]: session crashed
+  --> examples/218_resource_ownership.gem:51
+    |
+ 51 | let p = pair(fn(c) error("session crashed") end)
+    |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:51)
+  at anonymous fn (examples/218_resource_ownership.gem:18)
+crash: true
+kill shutdown: true
+kill kill: true
+
+[Runtime Error in process 5]: linked crash
+  --> examples/218_resource_ownership.gem:61
+    |
+ 61 |   spawn_link(fn() error("linked crash") end)
+    |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:61)
+link exit: true
+== unclaimed: open when the opener returns
+still usable: 2 hi
+== claimed: closed on any exit
+normal return: true
+
+[Runtime Error in process 8]: claimed crash
+  --> examples/218_resource_ownership.gem:79
+    |
+ 79 |   error("claimed crash")
+    |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:79)
+  at anonymous fn (examples/218_resource_ownership.gem:18)
+crash: true
+kill: true
+orderly shutdown: true
+== claim moves a socket main opened
+session owns: 1 main owns one less: true
+closed with the session: true
+== helpers that only use a socket leave it open
+
+[Runtime Error in process 12]: helper crashed
+  --> examples/218_resource_ownership.gem:119
+     |
+ 119 |   error("helper crashed")
+     |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:119)
+after a crash, a kill and a return: from helper!
+== a task that opens a socket hands over a live one
+alive
+== any process may close; waiters raise
+waiter: tcp_read: socket is closed
+watchdog closed it: true
+== a closed socket's owner count drops
+true
+true
+["s2 took s1's fd number", true, "but is another socket", true]
+["reader of s1 got", false, nil, "tcp_read: socket is closed"]
+new socket on the same number: true
+still open
+file on the same number: true
+file still open: true
+done
+
+[Runtime Error in process 1]: opener crashed
+  --> examples/220_sqlite_ownership.gem:36
+    |
+ 36 | print("crash:", check(opened_by(fn(db) error("opener crashed") end)))
+    |
+Stack trace:
+  at anonymous fn (examples/220_sqlite_ownership.gem:36)
+  at anonymous fn (examples/220_sqlite_ownership.gem:22)
+crash: sqlite_query: not an open database handle
+normal return: open
+claimed, normal return: sqlite_query: not an open database handle
+killed: sqlite_query: not an open database handle
+claimed by the borrower: sqlite_query: not an open database handle
+only used by it: open
+1
+open while the call runs: true
+closed once it returns: true true
+unaffected
+claimed while parked: kept
+== extern fn
+5 hello
+gem_example_sock_write: arg 0 expected Socket, got int
+gem_example_sock_write: arg 0 expected Socket, got nil
+gem_example_sock_write: arg 0 expected Socket, got sqlite
+gem_example_sock_write: arg 0: socket is closed
+== closed while a blocking call uses it
+closed for Gem code: tcp_read: socket is closed
+the call still writes: late
+call returned 4
+then the fd closes: true
+== the caller is killed and the owner closes it
+the call still writes: after the kill
+then the fd closes: true
+== a socket the call uses, owned by its killed caller
+still open while parked: 1 x
+the call still writes: own
+then the fd closes: true
+== killed with "kill"
+HTTP/1.1 200 OK
+port free: true
+== the caller killed while the server starts
+server still serves: HTTP/1.1 200 OK
+== stop while a handler is in a blocking call
+closed at once: true true

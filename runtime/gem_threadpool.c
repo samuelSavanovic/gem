@@ -192,6 +192,7 @@ void gem_io_release(GemIORequest *req) {
     free(req->content);
     free(req->result_data);
     free(req->error_msg);
+    free(req->busy);
     if (req->free_extern) req->free_extern(req->extern_args);
     free(req);
 }

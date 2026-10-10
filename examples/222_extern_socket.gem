@@ -1,0 +1,74 @@
+# A `Socket` extern parameter takes a socket and passes its fd to C. A
+# socket an `extern blocking fn` is using stays open for the C call until
+# it returns, even when a process closes it meanwhile: Gem code sees it
+# closed at once, and its fd closes when the call is done. A caller killed
+# mid-call keeps its own sockets open until then (they are parked).
+
+extern include "support/socket_helpers.h"
+extern fn gem_example_sock_write(sock: Socket, s: String) -> Int
+extern blocking fn gem_example_sock_write_later(sock: Socket, ms: Int, s: String) -> Int
+
+let me = self()
+let l = tcp_listen("127.0.0.1", 18222)
+
+fn pair()
+  let c = tcp_connect("127.0.0.1", 18222)
+  [c, tcp_accept(l)]
+end
+
+print("== extern fn")
+let p = pair()
+print(gem_example_sock_write(p[0], "hello"), tcp_read(p[1], 16, 1000))
+print((pcall gem_example_sock_write(tcp_fd(p[0]), "x")).error)
+print((pcall gem_example_sock_write(nil, "x")).error)
+let db = sqlite_open(":memory:")
+print((pcall gem_example_sock_write(db, "x")).error)
+sqlite_close(db)
+tcp_close(p[0])
+print((pcall gem_example_sock_write(p[0], "x")).error)
+tcp_close(p[1])
+
+print("== closed while a blocking call uses it")
+p = pair()
+spawn do
+  send(me, {tag: "wrote", n: gem_example_sock_write_later(p[0], 200, "late")})
+end
+sleep(50)
+tcp_close(p[0])
+print("closed for Gem code:", (pcall tcp_read(p[0], 1, 0)).error)
+print("the call still writes:", tcp_read(p[1], 16, 2000))
+receive
+when {tag: "wrote", n: n}
+  print("call returned", n)
+end
+print("then the fd closes:", tcp_read(p[1], 16, 1000) == "")
+tcp_close(p[1])
+
+print("== the caller is killed and the owner closes it")
+p = pair()
+let caller = spawn do
+  gem_example_sock_write_later(p[0], 200, "after the kill")
+end
+sleep(50)
+kill(caller, "kill")
+tcp_close(p[0])
+print("the call still writes:", tcp_read(p[1], 32, 2000))
+print("then the fd closes:", tcp_read(p[1], 16, 1000) == "")
+tcp_close(p[1])
+
+# Its own sockets are parked: open for everyone until the call returns.
+print("== a socket the call uses, owned by its killed caller")
+let owner = spawn do
+  let c = tcp_connect("127.0.0.1", 18222)
+  send(me, c)
+  gem_example_sock_write_later(c, 200, "own")
+end
+let c = receive()
+let s = tcp_accept(l)
+sleep(50)
+kill(owner, "kill")
+print("still open while parked:", tcp_write(c, "x", 0), tcp_read(s, 1, 1000))
+print("the call still writes:", tcp_read(s, 16, 2000))
+print("then the fd closes:", tcp_read(s, 16, 1000) == "")
+tcp_close(s)
+tcp_close(l)

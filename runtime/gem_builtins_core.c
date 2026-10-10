@@ -95,6 +95,9 @@ static void fmt_value(GemVal v, GemBuffer *out, GemFmtSeen *seen, int depth, int
         case VAL_REF:
             n = snprintf(tmp, sizeof(tmp), "#Ref<%lld>", (long long)v.rval);
             fmt_buf_appendn(out, tmp, n); return;
+        case VAL_RESOURCE:
+            n = snprintf(tmp, sizeof(tmp), "#%s<%lld>", gem_res_print_name(v.res_kind), (long long)v.res_id);
+            fmt_buf_appendn(out, tmp, n); return;
         case VAL_TABLE: {
             GemTable *t = v.table;
             if (!t) { fmt_buf_append(out, "{}"); return; }
@@ -184,6 +187,7 @@ GemVal gem_print(void *_env, GemVal *args, int argc) {
             }
             case VAL_BUFFER: printf("<buffer:%d>", v.buffer->len); break;
             case VAL_REF: printf("#Ref<%lld>", (long long)v.rval); break;
+            case VAL_RESOURCE: printf("#%s<%lld>", gem_res_print_name(v.res_kind), (long long)v.res_id); break;
             case VAL_LAZY: break;
         }
     }
@@ -284,6 +288,10 @@ GemVal gem_type_fn(void *_env, GemVal *args, int argc) {
         case VAL_TABLE: return GEM_STR_LIT("table", 5);
         case VAL_BUFFER: return GEM_STR_LIT("buffer", 6);
         case VAL_REF: return GEM_STR_LIT("ref", 3);
+        case VAL_RESOURCE: {
+            const char *k = gem_res_type_name(args[0].res_kind);
+            return GEM_STR_LIT(k, (int)strlen(k));
+        }
         case VAL_LAZY: break;
     }
     return GEM_STR_LIT("unknown", 7);
@@ -313,6 +321,9 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
             return r;
         }
         case VAL_REF: snprintf(buf, sizeof(buf), "#Ref<%lld>", (long long)v.rval); return gem_string(buf);
+        case VAL_RESOURCE:
+            snprintf(buf, sizeof(buf), "#%s<%lld>", gem_res_print_name(v.res_kind), (long long)v.res_id);
+            return gem_string(buf);
         case VAL_LAZY: break;
     }
     return GEM_STR_LIT("", 0);
@@ -443,6 +454,7 @@ GemVal gem_eprint_fn(void *_env, GemVal *args, int argc) {
             }
             case VAL_BUFFER: fprintf(stderr, "<buffer:%d>", v.buffer->len); break;
             case VAL_REF: fprintf(stderr, "#Ref<%lld>", (long long)v.rval); break;
+            case VAL_RESOURCE: fprintf(stderr, "#%s<%lld>", gem_res_print_name(v.res_kind), (long long)v.res_id); break;
             case VAL_LAZY: break;
         }
     }

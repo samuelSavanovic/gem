@@ -1,0 +1,65 @@
+# A socket closed while another process waits on it, or while that
+# process is about to run, stays closed for it even after a new socket
+# takes its fd number. And the runtime never closes a file that took the
+# number of a socket C code closed behind its back.
+
+extern include "fcntl.h"
+extern include "unistd.h"
+extern fn close(fd: Int) -> Int
+extern fn open(path: String, flags: Int) -> Int
+extern fn lseek(fd: Int, offset: Int, whence: Int) -> Int
+
+let me = self()
+let l = tcp_listen("127.0.0.1", 18219)
+let c1 = tcp_connect("127.0.0.1", 18219)
+let s1 = tcp_accept(l)
+let cx = tcp_connect("127.0.0.1", 18219)
+let sx = tcp_accept(l)
+let c2 = tcp_connect("127.0.0.1", 18219)
+let s1_fd = tcp_fd(s1)
+spawn do                     # the closer: a lower slot than the reader
+  tcp_read(sx)
+  tcp_close(s1)
+  let s2 = tcp_accept(l)     # takes s1's fd number
+  send(me, ["s2 took s1's fd number", tcp_fd(s2) == s1_fd, "but is another socket", s2 != s1])
+  tcp_write(c2, "SECRET-for-s2")
+end
+spawn do
+  let r = pcall tcp_read(s1)
+  send(me, ["reader of s1 got", r.ok, r.value, r.error])
+end
+sleep(20)
+tcp_write(cx, "go")          # one poll wakes both processes
+tcp_write(c1, "for-s1")
+print(receive())
+print(receive())
+
+# C code closes a socket's fd; a new socket takes the number. Closing the
+# stale value leaves the new socket open.
+let a = tcp_connect("127.0.0.1", 18219)
+let a_srv = tcp_accept(l)
+let n = tcp_fd(a)
+close(n)
+let b = tcp_connect("127.0.0.1", 18219)
+let b_srv = tcp_accept(l)
+print("new socket on the same number:", tcp_fd(b) == n)
+tcp_close(a)
+tcp_write(b, "still open", 1000)
+print(tcp_read(b_srv, 32, 1000))
+
+# Same with a file.
+let d = tcp_connect("127.0.0.1", 18219)
+let d_srv = tcp_accept(l)
+let m = tcp_fd(d)
+close(m)
+let f = open("examples/219_socket_reuse_race.gem", 0)
+print("file on the same number:", f == m)
+tcp_close(d)
+print("file still open:", lseek(f, 0, 0) == 0)
+close(f)
+
+tcp_close(b)
+for s in [c1, cx, sx, c2, a_srv, b_srv, d_srv, l]
+  tcp_close(s)
+end
+print("done")

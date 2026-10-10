@@ -423,10 +423,17 @@ fn make_parser(tokens, source, file, sink)
     if is_ret and ty == "Nil"
       known = true
     end
-    if not known
+    if not is_ret and ty == "Socket"
+      known = true
+    end
+    if is_ret and ty == "Socket"
+      report(t.line, t.col, len(ty), "an extern fn cannot return a Socket", "return the fd as an Int and register it with tcp_from_fd")
+    elif not known
       let allowed = "Int, Float, String, Bool, Ptr, Bytes, Table"
       if is_ret
         allowed = allowed + ", Nil"
+      else
+        allowed = allowed + ", Socket"
       end
       report(t.line, t.col, len(ty), "unknown extern type '{ty}'", "expected one of {allowed}")
     elif is_blocking and ty == "Table" and is_ret

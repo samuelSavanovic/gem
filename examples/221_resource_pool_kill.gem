@@ -1,0 +1,51 @@
+# A process killed while its own `extern blocking fn` runs on the thread
+# pool keeps its sockets open until the C call returns (the call may be
+# using their fds), then they close. Other processes' sockets stay open.
+
+extern include "unistd.h"
+extern blocking fn usleep(us: Int) -> Int
+
+let me = self()
+let l = tcp_listen("127.0.0.1", 18221)
+let other = tcp_connect("127.0.0.1", 18221)
+let other_srv = tcp_accept(l)
+
+let pid = spawn do
+  let c = tcp_connect("127.0.0.1", 18221)
+  claim(c)
+  send(me, "connected")
+  usleep(300000)
+end
+receive
+when "connected"
+  nil
+end
+let s = tcp_accept(l)
+sleep(20)
+let t0 = time_ms()
+kill(pid, "kill")
+print("open while the call runs:", tcp_read(s, 16, 100) == nil)
+print("closed once it returns:", tcp_read(s, 16, 2000) == "", time_ms() - t0 >= 200)
+tcp_write(other, "unaffected", 1000)
+print(tcp_read(other_srv, 32, 1000))
+
+# Claimed by another process while parked: it is that process's now.
+let pid2 = spawn do
+  let c = tcp_connect("127.0.0.1", 18221)
+  send(me, {tag: "sock", sock: c})
+  usleep(200000)
+end
+let c2 = receive
+when {tag: "sock", sock: c}
+  c
+end
+let s2 = tcp_accept(l)
+sleep(20)
+kill(pid2, "kill")
+claim(c2)
+sleep(400)
+tcp_write(c2, "kept", 1000)
+print("claimed while parked:", tcp_read(s2, 16, 1000))
+for x in [c2, s2, s, other, other_srv, l]
+  tcp_close(x)
+end

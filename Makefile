@@ -14,7 +14,7 @@ STAGE0 = bootstrap/stage0.c
 BUILD_DIR = build
 GEM = $(BUILD_DIR)/gem
 
-.PHONY: build test test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-recursion-memory test-lsp test-example-apps bootstrap clean
+.PHONY: build test test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-recursion-memory test-lsp test-example-apps bootstrap clean
 
 # Build the compiler from the checked-in stage0.c
 build: $(GEM)
@@ -44,7 +44,7 @@ bootstrap: $(GEM)
 	cp /tmp/gem_stage0_new.c $(STAGE0)
 	@echo "bootstrap/stage0.c regenerated and verified"
 
-test: $(GEM) test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-recursion-memory test-lsp test-example-apps
+test: $(GEM) test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-recursion-memory test-lsp test-example-apps
 	@bash examples/run_all.sh
 
 test-broken: $(GEM)
@@ -67,6 +67,9 @@ test-io: $(GEM)
 
 test-proc-limit: $(GEM)
 	@bash tests/check_proc_limit.sh
+
+test-socket-leak: $(GEM)
+	@bash tests/check_socket_leak.sh
 
 test-recursion-memory: $(GEM)
 	@bash tests/check_recursion_memory.sh

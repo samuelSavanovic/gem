@@ -1,7 +1,9 @@
 # Extern declarations with types that cannot be marshaled: an unknown type
-# name, Nil as a parameter, and a Table param and return on a blocking extern.
+# name, Nil as a parameter, a Table param and return on a blocking extern,
+# and a Socket return.
 extern fn f(x: Foo) -> Int
 extern fn g(x: Nil) -> Int
 extern blocking fn h(t: Table) -> Int
 extern blocking fn k(x: Int) -> Table
-extern fn ok(t: Table, b: Bytes) -> Table
+extern fn s(x: Int) -> Socket
+extern fn ok(t: Table, b: Bytes, sock: Socket) -> Table

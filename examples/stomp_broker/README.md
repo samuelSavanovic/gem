@@ -85,8 +85,9 @@ Choices worth knowing:
   and sends each parsed frame to the writer. The writer owns the
   protocol state and every write to the socket, and waits in one
   `receive` for both client frames and deliveries from destinations.
-  The writer traps exits, so a crashing reader becomes a message, and it
-  closes the socket on every path out, a crash included.
+  The writer claims the socket, so it closes however the writer ends, a
+  crash included; a crash of the reader or the writer kills the other
+  through their link.
 - **Connections are not supervised.** A client whose connection dies
   reconnects; there is nothing to restore for it.
 - **The reader has no timeout.** With heart-beats off, a subscriber that

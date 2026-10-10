@@ -2169,6 +2169,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
           c_params = c_params + "GemVal"
         elif pt == "Bytes"
           c_params = c_params + "const uint8_t*, int64_t"
+        elif pt == "Socket"
+          c_params = c_params + "int"
         else
           c_params = c_params + "GemVal"
         end
@@ -2250,6 +2252,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(b, "    int64_t _p{i}_len = (int64_t)args[{i}].slen;\n")
         push(c_args, "_p{i}")
         push(c_args, "_p{i}_len")
+      elif ptype == "Socket"
+        buf_push(b, "    int _p{i} = gem_extern_socket_fd(args[{i}], \"{c_sym}\", {i});\n")
+        push(c_args, "_p{i}")
       elif ptype == "Table"
         push(c_args, "args[{i}]")
       else
@@ -2335,6 +2340,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       elif ptype == "Bytes"
         buf_push(b, "    uint8_t *_p{i};\n")
         buf_push(b, "    int64_t _p{i}_len;\n")
+      elif ptype == "Socket"
+        buf_push(b, "    int _p{i};\n")
       end
     end
     if ret_type == "Int"
@@ -2417,6 +2424,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       elif ptype == "Bytes"
         buf_push(b, "    const uint8_t* _p{i} = (const uint8_t*)args[{i}].sval;\n")
         buf_push(b, "    int64_t _p{i}_len = (int64_t)args[{i}].slen;\n")
+      elif ptype == "Socket"
+        buf_push(b, "    int _p{i} = gem_extern_socket_fd(args[{i}], \"{c_sym}\", {i});\n")
       end
     end
 
@@ -2441,10 +2450,27 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     buf_push(b, "        GemIORequest *_req = gem_io_submit_extern(_blk_{name}_worker, _ba, _blk_{name}_free);\n")
     buf_push(b, "        if (!_req) gem_error(\"{c_sym}: I/O queue full\");\n")
+    # Sockets passed to the call stay open (for C) until it returns, even
+    # if a process closes them meanwhile (gem_res_busy_begin in gem.h).
+    let sock_idx = ""
+    let n_socks = 0
+    for i = 0, len(params)
+      if params[i]["type"] == "Socket"
+        sock_idx = if n_socks == 0 then "{i}" else "{sock_idx}, {i}" end
+        n_socks += 1
+      end
+    end
+    if n_socks > 0
+      buf_push(b, "        static const int _sock_idx[] = \{{sock_idx}};\n")
+      buf_push(b, "        gem_res_busy_begin(_req, args, _sock_idx, {n_socks});\n")
+    end
     buf_push(b, "        GemProcess *_proc = &gem_proc_table[gem_current_pid];\n")
     buf_push(b, "        _proc->io_request = _req;\n")
     buf_push(b, "        gem_io_pool_yield();\n")
     buf_push(b, "        _proc->io_request = NULL;\n")
+    if n_socks > 0
+      buf_push(b, "        gem_res_busy_end(_req);\n")
+    end
 
     # Copy the result out of the args struct, then release the request
     if ret_type == "String"

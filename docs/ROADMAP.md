@@ -41,7 +41,7 @@ Run Gem across multiple OS processes (same box or across the network), with `sen
   - **System OpenSSL or libretls, linked dynamically.** libretls is the libtls API on top of OpenSSL, so it still needs OpenSSL. The distro ships the security updates. macOS is awkward: no libtls by default, OpenSSL from Homebrew. Also needs the linker-flags work below.
   - **Vendored mbedTLS, 3.6 LTS line** (4.0 moved its crypto into TF-PSA-Crypto and changed APIs). A self-contained binary; maintained, TLS 1.3. Its callback-based I/O fits parked processes, and a custom config header trims it to client-only, no DTLS, no legacy ciphers. The cost: **security updates become our job**. mbedTLS publishes advisories regularly, and someone has to watch them and bump the vendored copy.
   - Ruled out: wolfSSL (GPL or commercial licence), BearSSL (no release since 2018, no TLS 1.3), vendoring LibreSSL or OpenSSL (too large).
-  - Shared concerns, whatever the library: loading the CA bundle (its path differs per distro, and macOS keeps roots in the Keychain); hostname verification on by default; a few milliseconds of handshake crypto on the scheduler thread, during which no other process runs; a socket leaked when its process dies (see "Process-owned resources closed on exit"). Testing in `make test` needs a local `openssl s_server` and a self-signed CA.
+  - Shared concerns, whatever the library: loading the CA bundle (its path differs per distro, and macOS keeps roots in the Keychain); hostname verification on by default; a few milliseconds of handshake crypto on the scheduler thread, during which no other process runs; a TLS stream should be an owned resource like a socket (see "Process-owned resources closed on exit"). Testing in `make test` needs a local `openssl s_server` and a self-signed CA.
   - A possible later step: both backends behind the same `tls_*` API, chosen per build.
 
 ## Hot code reload (P2)
@@ -150,11 +150,11 @@ every process the way `input()` does.
 
 ## Process-owned resources closed on exit (P2)
 
-TCP sockets and SQLite handles are plain ints. A process that crashes or is killed without closing them leaks the file descriptor or connection; Erlang ties a port to an owning process and closes it when the owner exits. Likewise a command started by `exec` keeps running after its process is killed, because `system()` does not expose the child's pid.
+Sockets and SQLite handles are owned resources (SPEC "Owned Resources", design in `docs/design/process_owned_resources.md`): values of their own types in one runtime table, closed when a process that claimed them (`claim(r)`) exits or when their opener crashes or is killed. A command started by `exec` is not one yet: it keeps running after its process is killed, because `system()` does not expose the child's pid. Erlang ties every port to an owning process; supervisors make this pressing, since they kill a child with the untrappable `"kill"` once its `shutdown` budget runs out.
 
-Supervisors make this more pressing: they kill a child with the untrappable `"kill"` once its `shutdown` budget runs out, as a routine last resort. A child that holds a listening socket and overruns its budget leaves the port bound, so its restart fails with `EADDRINUSE`, the supervisor reaches its restart intensity and the tree goes down.
+What remains:
 
-What needs building: a per-process resource list filled by `tcp_listen`/`tcp_accept`/`tcp_connect`/`sqlite_open` and closed in `gem_free_proc_slot`; for `exec`, `posix_spawn` + `waitpid` so the child can be signalled. Trade-off: a handle passed to another process (an acceptor handing a socket to a handler) needs ownership to move with it. Making the user transfer ownership explicitly would add a concept to the language, so the transfer should happen implicitly, e.g. on `send` or `spawn` capture.
+- `exec`'s child process as a third resource kind: `posix_spawn` + `waitpid` so the child can be signalled when its owner dies. It registers a close callback in `runtime/gem_resource.c` and gets `claim` for free.
 
 ## Shared read-mostly data between processes (P2)
 

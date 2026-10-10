@@ -7,14 +7,17 @@
 ##   let rows = sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [sqlite.last_id(db)])
 ##   sqlite.close(db)
 ##
-## A handle `db` is an int. Errors start with the function's name: an
-## SQLite error raises `sqlite.<fn>: <SQLite's message>` (`sqlite.query:
-## UNIQUE constraint failed: t.name`), a closed or unknown handle
-## `...: not an open database handle`, and a handle that is not an int
-## `...: expected a database handle, got <type>`. `exec` and `query`
-## run on the scheduler thread without yielding, so they stall every
-## process while they run: keep queries short and indexed. A handle is
-## not closed when its process dies: close it on every path.
+## A handle `db` is a value of type "sqlite", an owned resource like a
+## socket: it belongs to the process that opened it, `claim(db)` makes
+## another process its owner, and it closes when a process that claimed it
+## exits, or when its opener crashes or is killed (a normal return leaves
+## it open). Errors start with the function's name: an SQLite error raises
+## `sqlite.<fn>: <SQLite's message>` (`sqlite.query: UNIQUE constraint
+## failed: t.name`), a closed handle `...: not an open database handle`,
+## and anything else `...: expected a database handle, got <type>`.
+## `exec` and `query` run on the scheduler thread without yielding, so
+## they stall every process while they run: keep queries short and
+## indexed.
 ##
 ## A handle is one connection, shared by every process that has it: a
 ## transaction opened with `exec(db, "BEGIN")` takes in every statement any
@@ -65,9 +68,10 @@ fn open(path)
   r.value
 end
 
-## Closes `db`. The handle is invalid afterwards, for every process.
+## Closes `db`, from any process. The handle is invalid afterwards, for
+## every process. Closing a closed handle returns nil.
 ##
-## Raises if `db` is not open. Blocks only the calling process.
+## Raises if `db` is not a handle. Blocks only the calling process.
 fn close(db)
   let r = pcall sqlite_close(db)
   if not r.ok

@@ -112,7 +112,7 @@ module.exports = grammar({
       field('type', $.type),
     ),
 
-    type: $ => choice('Int', 'Float', 'String', 'Bool', 'Nil', 'Ptr', 'Table', 'Fn', 'Bytes'),
+    type: $ => choice('Int', 'Float', 'String', 'Bool', 'Nil', 'Ptr', 'Table', 'Fn', 'Bytes', 'Socket'),
 
     // load "path" | load "path" as name | load "path" (name, ...)
     // The `as` and the `(` must be on the `load` line, as in

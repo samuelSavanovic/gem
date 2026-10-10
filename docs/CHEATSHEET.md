@@ -151,7 +151,9 @@ let r = pcall some_fn()              # {ok: bool, value/error: ..., stack: [{nam
 # Collections:   push, pop, keys, values, sort, insert, delete, remove_at, has_key
 # Strings:       find, str_replace, substr, chr, ord, buf_new, buf_push, build_string
 # Filesystem:    read_file, write_file, append_file, file_exists, remove_file, mkdir, list_dir, is_dir, dirname, path_join, normalize_path, exec
-# TCP:           tcp_listen, tcp_accept, tcp_connect, tcp_read, tcp_write, tcp_close
+# TCP:           tcp_listen, tcp_accept, tcp_connect, tcp_read, tcp_write, tcp_close, tcp_peer, tcp_fd, tcp_from_fd
+# Resources:     a socket (type "socket") or db handle (type "sqlite") belongs to its opener; claim(r) makes the
+#                caller its owner. Closed when a claimer exits, or when the opener crashes or is killed; anyone may close
 # Time:          time_ms, epoch_ms, format_time, format_time_local
 # SQLite:        sqlite_open, sqlite_close, sqlite_exec, sqlite_query, sqlite_last_insert_id, sqlite_changes
 # Math:          floor, ceil, round, abs, pow, sqrt, random

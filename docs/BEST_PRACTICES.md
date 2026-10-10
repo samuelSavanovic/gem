@@ -1382,32 +1382,78 @@ process for that second. Use `extern blocking fn` for any C call that can take m
 about a millisecond. The pool has 4 workers, so four long `exec` calls
 delay every file read behind them.
 
-### The process that opens a handle closes it, on every path
+### Claim a resource in the process responsible for it
 
-Sockets and sqlite handles are not closed when the process that owns them
-dies. A crash between open and close leaks the descriptor (and a listening
-socket keeps its port). For a short exchange, close in the same function
-that opened it, with the risky part in `pcall`:
+Sockets and sqlite handles belong to the process that opened them. One
+it never claimed is closed when that process crashes or is killed, and
+left open (with no owner) when it returns. `claim(r)` moves a resource
+to the calling process and ties it to that process's life: it is closed
+when the claimer exits for any reason, an early `return` or an orderly
+`"shutdown"` included. So the process that serves a connection claims
+it as its first line, wherever the socket came from:
 
 ```gem
-let fd = tcp_connect(host, port)
-let r = pcall request_once(fd)
-tcp_close(fd)
+fn acceptor(listener, registry)
+  while true
+    let sock = tcp_accept(listener)
+    send(registry, {sock: sock, peer: tcp_peer(sock)})
+  end
+end
+
+fn session(sock)
+  claim(sock)               # any exit of this process now closes sock
+  let line = tcp_read(sock, 4096, 30000)
+  ...
+end
+```
+
+Helpers that only use a socket (a reader process, a `task.async` that
+writes to it, a watchdog that closes it on idle) don't claim it, and
+their crash, kill or return leaves it to its owner. Any process may
+`tcp_close` it. A session that forgets its `claim` leaves its socket
+with the acceptor: it stays open after the session crashes, for as long
+as the acceptor lives. Watch
+`process_info(acceptor).resources`, which counts what a process owns, or
+run with `GEM_DIAG=2`, which prints a `gem_resources:` line for every
+process that exits leaving resources open.
+
+For a short exchange in one process, open and close in the same
+function: a crash or kill closes it anyway, and a normal return would
+otherwise leave it open until the program ends.
+
+```gem
+let sock = tcp_connect(host, port)
+let r = pcall request_once(sock)
+tcp_close(sock)
 if not r.ok
   error(r.error)
 end
 r.value
 ```
 
-To keep a connection open after a bad request, `pcall` each iteration
-inside the connection loop instead. Since `pcall` doesn't catch `kill` or
-a link's exit, keep long-lived handles in a process nobody kills, or have
-a process that monitors the owner close the handle when the owner dies
-without closing it (std/http's server process does this for its
-connections, so a handler may be killed). Stop an `http.start` server
-with `http.stop(server)`: it closes the listening socket, so the port is
-free again. A `std/request` call killed midway (a `task.await` timeout)
-leaks its socket; bound the request with its `timeout_ms` instead.
+Stop an `http.start` server with `http.stop(server)`: it closes the
+listening socket, so the port is free again (killing it with `"kill"`
+does too).
+
+### A restartable child opens what it claims **(trap)**
+
+A supervised child that claims a resource it got from its child spec
+closes it with its first crash, and every restart then fails on the
+closed resource (`claim: socket is closed`, `tcp_accept: socket is
+closed`) until the supervisor reaches its restart intensity. Either the child opens the resource itself (a restarted child
+opens a fresh listener, as std/http's server process does), or it only
+uses the parent's resource without claiming it, so a crash leaves it
+open for the restart:
+
+```gem
+# The listener stays with main, which opened it; each restarted acceptor
+# uses it and claims only the sockets it accepts.
+let listener = tcp_listen("0.0.0.0", 2323)
+supervisor.start({
+  strategy: "one_for_one",
+  children: [{id: "acceptor", start: fn() spawn_link(fn() acceptor(listener) end) end}]
+})
+```
 
 ### Reading input line by line
 
@@ -1446,6 +1492,25 @@ end)
   expect the first write after a disconnect to still report success; only
   later writes show it. Without a timeout, a peer that stops reading
   blocks the writer for as long as it keeps the connection open.
+
+### `tcp_peer` is `nil` once the peer has reset **(trap)**
+
+A client that connects and resets at once (scanners and bots do it all
+the time) leaves a socket with no peer address by the time the acceptor
+asks, so `tcp_peer(fd).ip` raises `field access on non-table: got nil`
+and kills the acceptor. Later calls can return `nil` too: a client that
+closed cleanly loses its address as soon as a write to it draws a reset.
+Read the address once, right after `tcp_accept`, check for `nil`, and
+pass the value on:
+
+```gem
+let peer = tcp_peer(fd)
+if peer == nil
+  tcp_close(fd)        # gone before we looked
+else
+  handle(fd, peer.ip)
+end
+```
 
 ---
 
@@ -1585,6 +1650,11 @@ ones that bite.
 - Don't keep pointers to Gem strings or tables on the C side after the call
   returns: the next arena reset or the process's exit frees that memory,
   and an `extern blocking fn` gets copies that are freed when it returns.
+- Pass a socket to C as a `Socket` parameter, not `tcp_fd(sock)` as an
+  `Int`: the wrapper checks it is open, and an `extern blocking fn` keeps
+  its fd open until the call returns even if another process closes the
+  socket meanwhile. With an `Int`, C code can write to whatever took the
+  number after the close.
 - C code that recurses without limit kills the process, and `pcall` can't
   catch it.
 
@@ -1615,8 +1685,8 @@ backreference can take seconds on one line).
 ### A `Ptr` is a number, not an owner **(trap)**
 
 A C object behind a `Ptr` (a `FILE *`, a compiled regex, a handle a
-library gave you) is not freed when the process holding it dies, as a
-socket isn't closed. And `spawn` and `send` copy the number, not the
+library gave you) is not freed when the process holding it dies: unlike a
+socket or a sqlite handle, it is not an owned resource. And `spawn` and `send` copy the number, not the
 object: two processes then share one object, and when one frees it the
 other holds a dangling pointer, which crashes or corrupts memory rather
 than raising. Make, use and free a C object in one process, free it on
@@ -1751,5 +1821,7 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | `extern blocking fn` called once per line or item | a thread hand-off and argument copies per call: 100x slower | plain `extern fn` for quick calls |
 | `if not p` on a `Ptr` | `NULL` is `0`, which is truthy | `p == 0` |
 | A `Ptr` sent, captured by `spawn`, or left when its process dies | shared or leaked C object; use after free | one process makes, uses and frees it, on every path |
-| Handle opened, process crashes | fd leak | close on every path |
+| Socket handed to a session that doesn't `claim` it | stays open after the session crashes (with the acceptor, or with no owner) | `claim(sock)` first in the session |
+| Supervised child claims a resource from its spec | its first crash closes it; every restart raises on it | the child opens its own, or doesn't claim |
 | `tcp_read` with no timeout | blocks forever on a silent peer | pass a timeout |
+| `tcp_peer(fd).ip` | `nil` once the peer has reset, even after a clean close; field access raises | read it once after `tcp_accept`, check for `nil`, keep the value |

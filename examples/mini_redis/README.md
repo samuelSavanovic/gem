@@ -94,7 +94,9 @@ Choices worth knowing:
   blocks in `tcp_read`. Once it subscribes it must also wait for
   messages, so a linked reader process takes over the socket reads and
   mails the chunks to the connection, which waits in one `receive` for
-  both. The connection traps exits and closes the socket on every path.
+  both. The connection claims the socket, so it closes however the
+  connection ends; a crash of the reader or the connection kills the
+  other through their link.
 - **The pubsub server monitors its subscribers** and forgets a
   connection's channels on its `DOWN`.
 
