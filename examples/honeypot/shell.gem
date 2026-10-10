@@ -38,11 +38,14 @@ let APPLETS = {
 }
 
 ## Makes the state for one connection. The `accept_on`th login attempt
-## succeeds, and each earlier one with probability `accept_chance`.
-fn new({accept_on = 3, accept_chance = 0.0} = {})
+## succeeds, and each earlier one with probability `accept_chance`. The
+## session is over after `max_logins` failed attempts, or `max_commands`
+## command lines.
+fn new({accept_on = 3, accept_chance = 0.0, max_logins = 10, max_commands = 500} = {})
   {
-    stage: "login", user: nil, attempts: 0, logged_in: false, closed: false,
-    accept_on: accept_on, accept_chance: accept_chance
+    stage: "login", user: nil, attempts: 0, commands: 0, logged_in: false, closed: nil,
+    accept_on: accept_on, accept_chance: accept_chance, max_logins: max_logins,
+    max_commands: max_commands
   }
 end
 
@@ -61,7 +64,9 @@ fn logged_in(sh)
   sh.logged_in
 end
 
-## True once the client has typed `exit` or `logout`.
+## Why the session is over, or nil while it isn't: `exit` once the
+## client has typed `exit` or `logout`, `max_logins` or `max_commands` once
+## it has used them up.
 fn closed(sh)
   sh.closed
 end
@@ -98,6 +103,10 @@ fn password_line(sh, text, events)
   push(events, {kind: "login", user: sh.user, password: text, ok: ok})
   if not ok
     sh.stage = "login"
+    if sh.attempts >= sh.max_logins
+      sh.closed = "max_logins"
+      return "\nLogin incorrect\n"
+    end
     return "\nLogin incorrect\n" + login_prompt()
   end
   sh.stage = "shell"
@@ -110,7 +119,11 @@ fn shell_line(sh, text, events)
     return device.PROMPT
   end
   push(events, {kind: "command", line: text})
+  sh.commands = sh.commands + 1
   let out = run_line(sh, text, events)
+  if sh.closed == nil and sh.commands >= sh.max_commands
+    sh.closed = "max_commands"
+  end
   if sh.closed then out else out + device.PROMPT end
 end
 
@@ -575,7 +588,7 @@ fn applet_false(sh, args, events)
 end
 
 fn applet_exit(sh, args, events)
-  sh.closed = true
+  sh.closed = "exit"
   result("")
 end
 

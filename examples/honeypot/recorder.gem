@@ -25,6 +25,19 @@ let DAY_MS = 86400000
 let BATCH = 200
 let FLUSH_MS = 1000
 
+# The kinds of event the recorder keeps while it sheds its backlog: those
+# that open and end the sessions' rows, and the metrics.
+let KEEP = {session_start: true, session_end: true, error: true, crash: true, metrics: true}
+
+# The fields of a `metrics` event, in the order of the table's columns.
+let METRICS = [
+  "uptime_ms", "rss_kb", "fds", "procs", "memory", "resources_open", "resources_ownerless",
+  "sessions", "session_ips", "reset_ms", "resets_over_10ms", "resets_over_100ms",
+  "spawn_refused", "backlog", "events_dropped", "gem_commit"
+]
+
+let METRICS_INSERT = "INSERT INTO metrics(time_ms, {string.join(METRICS, ", ")}) VALUES (?{string.repeat(", ?", len(METRICS))})"
+
 # Times are epoch ms. A session's row has no end while the session is
 # live. `bytes_in`, `bytes_out` and `logged_in` are NULL unless the
 # recorder that ended the row got the session's session_end or `error`
@@ -50,6 +63,11 @@ CREATE TABLE IF NOT EXISTS crashes(
   session_id INTEGER REFERENCES sessions(id), time_ms INTEGER, reason TEXT, trace TEXT);
 CREATE TABLE IF NOT EXISTS cap_events(
   session_id INTEGER REFERENCES sessions(id), time_ms INTEGER, cap TEXT, ip TEXT, detail TEXT);
+CREATE TABLE IF NOT EXISTS metrics(
+  time_ms INTEGER, uptime_ms INTEGER, rss_kb INTEGER, fds INTEGER, procs INTEGER,
+  memory INTEGER, resources_open INTEGER, resources_ownerless INTEGER, sessions INTEGER,
+  session_ips INTEGER, reset_ms REAL, resets_over_10ms INTEGER, resets_over_100ms INTEGER,
+  spawn_refused INTEGER, backlog INTEGER, events_dropped INTEGER, gem_commit TEXT);
 """
 
 ## Sends `ev` to the recorder at `target` (a pid or a registered name),
@@ -185,8 +203,8 @@ end
 
 # The row of the session `ev` belongs to. A session with no row the
 # recorder knows of (its session_start was lost with a recorder that
-# crashed, or its row was ended by the sweep) gets a new row, with no
-# address unless its session_start reached this recorder.
+# crashed, or its row was ended by the sweep) gets a new row, with the
+# address the recorder knows for it, if any.
 fn row_of(st, ev)
   let sess = st.live[ev.session]
   if sess == nil
@@ -262,6 +280,12 @@ fn store(st, ev)
     finish(st, ev, ev.reason, ev)
   when "crash"
     crash(st, ev)
+  when "metrics"
+    let values = [ev.time]
+    for f in METRICS
+      push(values, ev[f])
+    end
+    sqlite.query(db, METRICS_INSERT, values)
   else
     error("recorder: unknown event kind {ev.kind}")
   end
@@ -280,6 +304,39 @@ fn write_pending(st)
   end
   sqlite.exec(st.db, "COMMIT")
   st.pending = []
+end
+
+# Starts shedding once the mailbox holds more than `max_backlog` messages,
+# and stops once it holds fewer than half as many, logging what it
+# dropped as a `recorder_backlog` cap event.
+fn shedding(st)
+  let backlog = process_info(self()).mailbox_len
+  if st.shedding and backlog < st.max_backlog / 2
+    st.shedding = false
+    let counts = table.map(keys(st.shed), fn(k) "{k} {st.shed[k]}" end)
+    add(st, {kind: "cap", cap: "recorder_backlog", detail: "dropped {st.shed_n} events: {string.join(counts, ", ")}", time: epoch_ms()})
+    st.shed = {}
+    st.shed_n = 0
+  elif not st.shedding and backlog > st.max_backlog
+    st.shedding = true
+  end
+  st.shedding
+end
+
+# Drops `ev` while shedding, unless it is of a kind in KEEP.
+fn receive_event(st, ev)
+  if not shedding(st) or has_key(KEEP, ev.kind)
+    if ev.kind == "metrics"
+      ev.backlog = process_info(self()).mailbox_len
+      ev.events_dropped = st.dropped
+      st.dropped = 0
+    end
+    add(st, ev)
+    return nil
+  end
+  st.shed[ev.kind] = if has_key(st.shed, ev.kind) then st.shed[ev.kind] + 1 else 1 end
+  st.shed_n = st.shed_n + 1
+  st.dropped = st.dropped + 1
 end
 
 fn add(st, ev)
@@ -333,9 +390,9 @@ fn sweep(st)
     let sess = st.live[pid]
     if sess.dead
       if sess.error != nil
-        push(st.pending, {kind: "crash", session: pid, time: t, reason: sess.error.reason})
+        add(st, {kind: "crash", session: pid, time: t, reason: sess.error.reason})
       else
-        push(st.pending, {kind: "session_end", session: pid, time: t, reason: "lost"})
+        add(st, {kind: "session_end", session: pid, time: t, reason: "lost"})
       end
     elif process_info(pid) == nil
       sess.dead = true
@@ -348,7 +405,7 @@ fn loop(st)
   while true
     receive
     when {tag: "hp_event", event: ev}
-      add(st, ev)
+      receive_event(st, ev)
     when {tag: "_hp_flush"}
       st.timer = false
       write_pending(st)
@@ -371,18 +428,25 @@ end
 ## with the week's file open.
 ## Options: `dir`, the directory of the database files (made if missing);
 ## `keep_weeks`, how many weekly files to keep; `log`, true to also print
-## a line per event (but `input`) on stdout; `sweep_ms`, how often it
+## a line per event it keeps (but `input`) on stdout; `sweep_ms`, how often it
 ## looks for sessions that died without their end reaching it; `since`,
 ## when the program started (default: now), so that the sessions this
 ## week's file has open from before then are ended as `lost`, and later
-## ones are taken over from a recorder that crashed; `clock`, a fn
-## returning the epoch ms that picks the week's file, for tests.
+## ones are taken over from a recorder that crashed; `max_backlog`, how
+## many messages may wait in its mailbox before it drops every event but
+## those that open and end a session's row and the metrics (until fewer
+## than half as many wait); `clock`, a fn returning the epoch ms that
+## picks the week's file, for tests.
+##
+## It fills a `metrics` event's `backlog` (the messages waiting) and
+## `events_dropped` (the events it dropped since the last metrics event).
 ##
 ## Raises `recorder.start: ...` when the file can't be opened. Traps
 ## exits: an exit signal from its supervisor makes it store what it holds,
 ## then return.
 fn start(name, {
-  dir = "honeypot_data", keep_weeks = 8, log = false, sweep_ms = 60000, since = epoch_ms(), clock = nil
+  dir = "honeypot_data", keep_weeks = 8, log = false, sweep_ms = 60000, since = epoch_ms(),
+  max_backlog = 10000, clock = nil
 } = {})
   if not is_dir(dir)
     mkdir(dir)
@@ -396,7 +460,8 @@ fn start(name, {
     process_flag("trap_exit", true)
     let st = {
       dir: dir, keep_weeks: keep_weeks, log: log, sweep_ms: sweep_ms, clock: clock,
-      db: nil, file: nil, pending: [], timer: false, live: {}
+      db: nil, file: nil, pending: [], timer: false, live: {}, max_backlog: max_backlog,
+      shedding: false, shed: {}, shed_n: 0, dropped: 0
     }
     let r = pcall do
       use_file(st)

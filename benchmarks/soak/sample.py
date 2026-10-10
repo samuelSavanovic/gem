@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Samples a server process for a soak run: RSS, CPU time and open file
-descriptors every --interval seconds, one CSV row each (flushed and
-fsynced, see soaklib.Csv).
+"""Samples a server process for a soak run: RSS, on macOS its physical
+footprint, CPU time and open file descriptors every --interval seconds, one
+CSV row each (flushed and fsynced, see soaklib.Csv).
 
 Exits when the process is gone. Then, or when its RSS passes --guard-rss-mb
 (the process is killed first), it writes the reason to --status and sends
@@ -10,6 +10,7 @@ loading a server that isn't there.
 """
 
 import argparse
+import ctypes
 import os
 import platform
 import signal
@@ -27,6 +28,25 @@ def ps(pid):
     if r.returncode != 0 or len(parts) < 2:
         return None
     return int(parts[0]), proc_cpu_seconds(pid) or cpu_seconds(parts[1])
+
+
+def footprint_kb(pid):
+    """The physical footprint of `pid` in KB (macOS), or None.
+
+    It leaves out pages the process has released with MADV_FREE_REUSABLE,
+    which RSS counts until the kernel takes them back."""
+    if platform.system() != "Darwin":
+        return None
+    try:
+        libc = ctypes.CDLL("/usr/lib/libSystem.B.dylib")
+    except OSError:
+        return None
+    # struct rusage_info_v2 (flavor 2) is a 16-byte uuid and then uint64
+    # fields; ri_phys_footprint is the eighth of them.
+    info = (ctypes.c_uint64 * 20)()
+    if libc.proc_pid_rusage(pid, 2, ctypes.byref(info)) != 0:
+        return None
+    return info[9] // 1024
 
 
 def proc_cpu_seconds(pid):
@@ -87,7 +107,8 @@ def main():
 
     stopping = []
     signal.signal(signal.SIGTERM, lambda s, f: stopping.append(s))
-    out = soaklib.Csv(args.out, ["t", "elapsed_s", "rss_kb", "cpu_s", "cpu_pct", "fds"])
+    out = soaklib.Csv(args.out, ["t", "elapsed_s", "rss_kb", "footprint_kb", "cpu_s", "cpu_pct",
+                                 "fds"])
     start = time.time()
     prev = None
     reason = None
@@ -104,7 +125,7 @@ def main():
             cpu_pct = 100.0 * (cpu - prev[1]) / (now - prev[0])
         prev = (now, cpu)
         out.row({"t": round(now, 3), "elapsed_s": round(now - start, 1), "rss_kb": rss,
-                 "cpu_s": cpu, "cpu_pct": cpu_pct, "fds": open_fds(args.pid)})
+                 "footprint_kb": footprint_kb(args.pid), "cpu_s": cpu, "cpu_pct": cpu_pct, "fds": open_fds(args.pid)})
         if args.guard_rss_mb and rss / 1024 > args.guard_rss_mb:
             reason = f"guard: RSS {rss / 1024:.1f} MB > {args.guard_rss_mb:g} MB, server killed"
             try:

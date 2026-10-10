@@ -2,11 +2,22 @@
 # See README.md and PLAN.md.
 #
 #   honeypot [--port 2323] [--bind 127.0.0.1] [--data honeypot_data] [--keep-weeks 8] [--log]
+#            [--commit ID] [--max-sessions 1000] [--max-per-ip 16] ... (see INT_FLAGS)
 
+load "std/string"
 load "./server"
 
+# The flags that set an option of server.start to a positive int.
+let INT_FLAGS = {
+  "--keep-weeks": "keep_weeks", "--max-sessions": "max_sessions", "--max-per-ip": "max_per_ip",
+  "--max-session-ms": "max_session_ms", "--max-bytes": "max_bytes", "--max-logins": "max_logins",
+  "--max-commands": "max_commands", "--max-backlog": "max_backlog", "--idle-ms": "idle_ms",
+  "--accept-on": "accept_on", "--metrics-ms": "metrics_ms"
+}
+
 fn usage()
-  eprint("usage: honeypot [--port N] [--bind ADDRESS] [--data DIR] [--keep-weeks N] [--log]")
+  eprint("usage: honeypot [--port N] [--bind ADDRESS] [--data DIR] [--log] [--commit ID]")
+  eprint("                [{string.join(sort(keys(INT_FLAGS)), " N] [")} N]")
   exit(2)
 end
 
@@ -38,8 +49,10 @@ fn main()
       host = value
     elif args[i] == "--data"
       opts.data = value
-    elif args[i] == "--keep-weeks"
-      opts.keep_weeks = int_arg(value)
+    elif args[i] == "--commit"
+      opts.commit = value
+    elif has_key(INT_FLAGS, args[i])
+      opts[INT_FLAGS[args[i]]] = int_arg(value)
     else
       usage()
     end

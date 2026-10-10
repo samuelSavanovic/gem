@@ -341,14 +341,36 @@ test.case("shell: command substitutions run") do
   test.assert_eq(run(sh, "echo $(nope)x"), "sh: nope: not found\nx\n")
   test.assert_eq(run(sh, "echo $(echo $(echo $(echo $(echo $(echo deep)))))"), "$(echo deep)\n")
   test.assert_eq(run(sh, "echo $(exit) still"), " still\n")
-  test.assert_eq(shell.closed(sh), false)
+  test.assert_eq(shell.closed(sh), nil)
 end
 
 test.case("shell: exit ends the session") do
   let sh = logged_in_shell()
   let r = shell.line(sh, "exit; echo after")
   test.assert_eq(r.out, "")
-  test.assert(shell.closed(sh))
+  test.assert_eq(shell.closed(sh), "exit")
+end
+
+test.case("shell: login attempts and commands run out") do
+  let sh = shell.new({accept_on: 100, max_logins: 2})
+  run(sh, "root")
+  test.assert_eq(run(sh, "a"), "\nLogin incorrect\nlocalhost login: ")
+  run(sh, "root")
+  test.assert_eq(run(sh, "b"), "\nLogin incorrect\n")
+  test.assert_eq(shell.closed(sh), "max_logins")
+  let cmds = shell.new({accept_on: 1, max_commands: 2})
+  run(cmds, "root")
+  run(cmds, "pw")
+  run(cmds, "")
+  test.assert_eq(shell.line(cmds, "echo 1").out, "1\n# ")
+  test.assert_eq(shell.closed(cmds), nil)
+  test.assert_eq(shell.line(cmds, "echo 2; exit").out, "2\n")
+  test.assert_eq(shell.closed(cmds), "exit")
+  let last = shell.new({accept_on: 1, max_commands: 1})
+  run(last, "root")
+  run(last, "pw")
+  test.assert_eq(shell.line(last, "echo 1").out, "1\n")
+  test.assert_eq(shell.closed(last), "max_commands")
 end
 
 # ─── Event log lines ───────────────────────────────────────────
@@ -581,6 +603,30 @@ test.case("recorder: a new recorder ends the rows open in other weeks' files") d
   end
 end
 
+test.case("recorder: sheds events past its backlog, and stores metrics") do
+  with_dir do |dir|
+    let pid = recorder.start("hp_test_recorder", {dir: dir, max_backlog: 50})
+    recorder.emit(pid, {kind: "session_start", session: 40, ip: "1.1.1.1", port: 1})
+    for i = 0, 1000
+      recorder.emit(pid, {kind: "command", session: 40, line: "c{i}"})
+    end
+    recorder.emit(pid, {kind: "session_end", session: 40, reason: "closed", bytes_in: 1, bytes_out: 2, logged_in: true})
+    recorder.emit(pid, {kind: "metrics", procs: 7, gem_commit: "abc"})
+    let file = recorder.sync(pid)
+    let kept = rows(file, "SELECT count(*) AS n FROM commands")[0].n
+    let cap = rows(file, "SELECT cap, detail FROM cap_events")
+    test.assert_eq(len(cap), 1)
+    test.assert_eq(cap[0].cap, "recorder_backlog")
+    let dropped = 1000 - kept
+    test.assert(dropped > 900, "dropped {dropped}")
+    test.assert_eq(cap[0].detail, "dropped {dropped} events: command {dropped}")
+    test.assert_eq(rows(file, "SELECT end_reason FROM sessions"), [{end_reason: "closed"}])
+    let m = rows(file, "SELECT procs, gem_commit, events_dropped, backlog FROM metrics")
+    test.assert_eq(m, [{procs: 7, gem_commit: "abc", events_dropped: dropped, backlog: 1}])
+    stop_recorder(pid)
+  end
+end
+
 # ─── Over TCP ──────────────────────────────────────────────────
 
 # Reads from `sock` until what was read ends with `marker`; returns all of
@@ -604,13 +650,13 @@ fn read_until(sock, marker)
 end
 
 # The events of one session, up to its session_end; its raw input too
-# with `with_input`.
+# with `with_input`. The sampler's events are skipped.
 fn session_events(with_input = false)
   let evs = []
   while true
     receive
     when {tag: "hp_event", event: ev}
-      if with_input or ev.kind != "input"
+      if ev.kind != "metrics" and (with_input or ev.kind != "input")
         push(evs, ev)
       end
       if ev.kind == "session_end" then return evs end
@@ -714,7 +760,7 @@ test.case("tcp: idle clients and clients that leave at once") do
 end
 
 test.case("tcp: an endless line and an endless subnegotiation stay capped") do
-  with_server({max_line: 1000, max_subneg: 100}) do
+  with_server({max_line: 1000, max_subneg: 100, max_bytes: 4194304}) do
     let sock = tcp_connect("127.0.0.1", PORT)
     read_until(sock, "login: ")
     let junk = string.repeat("A", 65536)
@@ -751,6 +797,107 @@ test.case("tcp: the server serves old and new connections after a registry crash
     tcp_close(again)
     let evs = session_events()
     test.assert_eq(evs[1].reason, "closed")
+  end
+end
+
+# The `cap` events of `evs`, as their caps.
+fn caps_of(evs)
+  table.map(table.filter(evs, fn(e) e.kind == "cap" end), fn(e) e.cap end)
+end
+
+# The next `cap` event this process gets for a refused connection.
+fn refusal()
+  receive
+  when {tag: "hp_event", event: {kind: "cap", cap: cap, ip: ip}} then [cap, ip]
+  after WAIT_MS then error("refusal: no cap event")
+  end
+end
+
+test.case("tcp: caps on live sessions, in all and per IP") do
+  with_server({max_sessions: 1}) do
+    let first = tcp_connect("127.0.0.1", PORT)
+    read_until(first, "login: ")
+    let second = tcp_connect("127.0.0.1", PORT)
+    test.assert_eq(tcp_read(second, 4096, WAIT_MS), "")
+    tcp_close(second)
+    test.assert_eq(refusal(), ["max_sessions", "127.0.0.1"])
+    tcp_close(first)
+    session_events()
+    let third = tcp_connect("127.0.0.1", PORT)
+    test.assert(string.ends_with(read_until(third, "login: "), "login: "))
+    tcp_close(third)
+    session_events()
+  end
+  with_server({max_per_ip: 2}) do
+    let a = tcp_connect("127.0.0.1", PORT)
+    let b = tcp_connect("127.0.0.1", PORT)
+    read_until(a, "login: ")
+    read_until(b, "login: ")
+    let c = tcp_connect("127.0.0.1", PORT)
+    test.assert_eq(tcp_read(c, 4096, WAIT_MS), "")
+    tcp_close(c)
+    test.assert_eq(refusal(), ["max_per_ip", "127.0.0.1"])
+    tcp_close(a)
+    tcp_close(b)
+    session_events()
+    session_events()
+  end
+end
+
+test.case("tcp: caps end a session that lasts, sends or tries too much") do
+  with_server({max_session_ms: 300, idle_ms: 5000}) do
+    let sock = tcp_connect("127.0.0.1", PORT)
+    read_until(sock, "login: ")
+    let started = time_ms()
+    let ended = false
+    while not ended
+      tcp_write(sock, "r", 1000)
+      ended = tcp_read(sock, 4096, 50) == ""
+    end
+    test.assert(time_ms() - started < WAIT_MS)
+    tcp_close(sock)
+    let evs = session_events()
+    test.assert_eq(caps_of(evs), ["max_time"])
+    test.assert_eq(evs[len(evs) - 1].reason, "max_time")
+  end
+  with_server({max_session_ms: 200, idle_ms: 100000}) do
+    let sock = tcp_connect("127.0.0.1", PORT)
+    read_until(sock, "login: ")
+    test.assert_eq(tcp_read(sock, 4096, WAIT_MS), "")
+    tcp_close(sock)
+    let evs = session_events()
+    test.assert_eq([evs[1].cap, evs[2].reason], ["max_time", "max_time"])
+  end
+  with_server({max_bytes: 1000}) do
+    let sock = tcp_connect("127.0.0.1", PORT)
+    read_until(sock, "login: ")
+    tcp_write(sock, string.repeat("root\r\n", 200), 1000)
+    read_to_end(sock)
+    tcp_close(sock)
+    let evs = session_events()
+    test.assert_eq(caps_of(evs), ["max_bytes"])
+    test.assert_eq([evs[len(evs) - 1].reason, evs[len(evs) - 1].bytes_in], ["max_bytes", 1200])
+  end
+  with_server({accept_on: 5, accept_chance: 0.0, max_logins: 2}) do
+    let sock = tcp_connect("127.0.0.1", PORT)
+    read_until(sock, "login: ")
+    tcp_write(sock, "root\r\na\r\nroot\r\nb\r\nroot\r\n", 1000)
+    test.assert(string.ends_with(read_until(sock, "Login incorrect\r\n"), "Password: \r\nLogin incorrect\r\n"))
+    test.assert_eq(tcp_read(sock, 4096, WAIT_MS), "")
+    tcp_close(sock)
+    let evs = session_events()
+    test.assert_eq(kinds(evs), ["session_start", "login", "login", "cap", "session_end"])
+    test.assert_eq([evs[3].cap, evs[4].reason], ["max_logins", "max_logins"])
+  end
+  with_server({accept_on: 1, accept_chance: 0.0, max_commands: 2}) do
+    let sock = tcp_connect("127.0.0.1", PORT)
+    read_until(sock, "login: ")
+    tcp_write(sock, "root\r\npw\r\nid\r\nps\r\nuname\r\n", 1000)
+    read_to_end(sock)
+    tcp_close(sock)
+    let evs = session_events()
+    test.assert_eq(kinds(evs), ["session_start", "login", "command", "command", "cap", "session_end"])
+    test.assert_eq([evs[4].cap, evs[5].reason], ["max_commands", "max_commands"])
   end
 end
 
@@ -849,6 +996,29 @@ test.case("tcp: a killed recorder restarts and takes the live sessions over") do
       let s = await_rows("SELECT end_reason, logged_in FROM sessions WHERE end_reason IS NOT NULL", 1)
       test.assert_eq(s, [{end_reason: "exit", logged_in: 1}])
       test.assert_eq(rows(recorder.sync("honeypot_recorder"), "SELECT count(*) AS n FROM sessions"), [{n: 1}])
+    end
+  end
+end
+
+test.case("tcp: the sampler records the metrics") do
+  with_dir do |dir|
+    with_server({data: dir, metrics_ms: 50, commit: "test"}) do
+      let sock = tcp_connect("127.0.0.1", PORT)
+      read_until(sock, "login: ")
+      let deadline = time_ms() + WAIT_MS
+      let m = []
+      while len(m) < 2
+        if time_ms() > deadline then error("no metrics rows") end
+        sleep(20)
+        m = rows(recorder.sync("honeypot_recorder"), "SELECT * FROM metrics ORDER BY time_ms")
+      end
+      tcp_close(sock)
+      let last = m[len(m) - 1]
+      test.assert_eq([last.sessions, last.session_ips, last.gem_commit], [1, 1, "test"])
+      test.assert(last.fds > 3 and last.procs > 4 and last.memory > 0, "{last}")
+      test.assert(last.resources_open >= 2 and last.uptime_ms > 0, "{last}")
+      test.assert_eq([last.resets_over_100ms, last.spawn_refused, last.events_dropped], [0, 0, 0])
+      test.assert(last.rss_kb == nil or last.rss_kb > 1000, "{last}")
     end
   end
 end

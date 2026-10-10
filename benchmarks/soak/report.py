@@ -6,21 +6,29 @@ prints it.
 
     python3 benchmarks/soak/report.py benchmarks/soak/logs/<run>
 
-Works on a run that was cut short (everything it reads is written as the
-run goes), so it can be rerun at any time, also while a run is going.
+Works on a run that was cut short or is still going: it does without
+what a target writes only at its end (load.csv.done, the end of
+status.txt), so it can be rerun at any time.
 
 A target's samples are split into warm-up (the first 15%, at most 10
 minutes), early (the next 10% of the run) and late (the last 10%). The
 steadiness checks (memory, fds, throughput, CPU, latency, backlog) use
-those windows and only count once a target ran for --min-judge-s (default 10 minutes); in a shorter run they are
-shown as "short" and the verdict is SHORT RUN, which says the harness works,
+those windows (memory: the second half's slope) and only count once a target ran for --min-judge-s (default 10 minutes); in a shorter run they are
+shown as "short" ("too short" without enough samples) and the verdict
+is SHORT RUN, which says the harness works,
 not that the server is steady. In a run that long, a check whose early or
 late window has fewer than three samples fails.
+
+The honeypot's report also reads the database it wrote (work/data): its
+crashes, sessions it lost, events its recorder dropped, and its metrics
+after the load has gone (run.sh lets it settle for SETTLE_S).
 """
 
 import argparse
 import csv
+import glob
 import os
+import sqlite3
 import statistics
 import sys
 
@@ -30,18 +38,29 @@ LATENCIES = {
     "mini_redis": ["lat_p99_ms", "deliver_p99_ms", "probe_ms"],
     "stomp": ["deliver_p99_ms", "job_p99_ms", "probe_ms"],
     "bookmark": ["read_p99_ms", "write_p99_ms", "probe_ms"],
+    "honeypot": ["session_p99_ms", "probe_ms"],
 }
 # The counter whose rate per interval stands for the target's throughput.
-THROUGHPUT = {"mini_redis": "ops", "stomp": "delivered", "bookmark": "reads"}
+THROUGHPUT = {"mini_redis": "ops", "stomp": "delivered", "bookmark": "reads",
+              "honeypot": "canaries"}
 # Counters summed over the run, shown in the totals line.
 COUNTERS = {
     "mini_redis": ["ops", "conns", "published", "delivered", "sub_sessions"],
     "stomp": ["published", "delivered", "jobs_sent", "jobs_done", "conns", "sub_sessions"],
     "bookmark": ["reads", "writes", "conns"],
+    "honeypot": ["canaries", "bots", "garbage", "iac", "long_lines", "drips_done", "idle_opened",
+                 "resets", "halfcloses", "nonreaders"],
 }
+TARGETS = ("mini_redis", "stomp", "bookmark", "honeypot")
+# The resources the honeypot holds with no session live: the listener and
+# the database.
+HONEYPOT_IDLE_RESOURCES = 2
+# Open fds the settled honeypot may hold beyond its baseline.
+HONEYPOT_FD_SLACK = 2
 SPARK = "▁▂▃▄▅▆▇█"
-# The checks that use the early and late windows; the others (ran to the
-# end, no errors) count however long the run was.
+# The checks that use the early and late windows (memory: the second
+# half); the others (ran to the end, no errors, the honeypot's database
+# checks) count however long the run was.
 STEADINESS = {"memory steady", "fds steady", "queue backlog bounded", "throughput steady",
               "CPU steady"} | {
     f"{c} steady" for cols in LATENCIES.values() for c in cols}
@@ -134,6 +153,11 @@ def target_report(name, d, args):
     done = read_kv(os.path.join(d, "load.csv.done"))
     load = read_csv(os.path.join(d, "load.csv"))
     server = read_csv(os.path.join(d, "server.csv"))
+    if status.get("settled_s") and load:
+        # The samples after the load ended (the honeypot's settling) would
+        # make the late window an idle server's.
+        end = float(load[-1]["elapsed_s"])
+        server = [r for r in server if float(r["elapsed_s"]) <= end]
     planned = float(status.get("duration_s", "0") or 0)
     span = max([float(r["elapsed_s"]) for r in load] + [float(r["elapsed_s"]) for r in server]
                + [0.0])
@@ -179,21 +203,25 @@ def target_report(name, d, args):
                    f"{errors} errors" + (f" ({kinds}), see errors.log" if kinds else "")))
 
     # ── memory ──
-    rss = [(t, v / 1024) for t, v in series(server, "rss_kb")]
-    w = windows(rss, span, judged)
+    # macOS's physical footprint where the sampler recorded it: its RSS also
+    # counts pages the server has released, until the kernel takes them.
+    mem_name, mem = "footprint", [(t, v / 1024) for t, v in series(server, "footprint_kb")]
+    if not mem:
+        mem_name, mem = "RSS", [(t, v / 1024) for t, v in series(server, "rss_kb")]
+    w = windows(mem, span, judged)
     if w is None:
-        checks.append(("memory steady", no_data, few(len(rss), "RSS samples")))
+        checks.append(("memory steady", no_data, few(len(mem), f"{mem_name} samples")))
     else:
         early, late = statistics.median(w[0]), statistics.median(w[1])
-        half = [(t, v) for t, v in rss if t >= span / 2]
+        half = [(t, v) for t, v in mem if t >= span / 2]
         slope = slope_per_hour(half)
         growth = (slope or 0) * (span / 2) / 3600
-        limit = max(args.rss_growth_mb, args.rss_growth_pct / 100 * late)
+        limit = max(args.mem_growth_mb, args.mem_growth_pct / 100 * late)
         verdict = "PASS" if growth <= limit else "FAIL"
         checks.append(("memory steady", verdict,
-                       f"RSS {early:.0f} MB early, {late:.0f} MB late, peak "
-                       f"{max(v for _, v in rss):.0f} MB; second half {growth:+.1f} MB "
-                       f"({slope or 0:+.1f} MB/h), limit {limit:.0f} MB"))
+                       f"{mem_name} {early:.0f} MB early, {late:.0f} MB late, peak "
+                       f"{max(v for _, v in mem):.0f} MB; second half {growth:+.1f} MB "
+                       f"({slope or 0:+.1f} MB/h), limit {limit:.1f} MB"))
 
     # ── file descriptors ──
     fds = series(server, "fds")
@@ -263,6 +291,12 @@ def target_report(name, d, args):
                            f"max {max(v for _, v in backlog):.0f} jobs, {late:.0f} in the "
                            f"late window, limit {args.backlog}"))
 
+    if name == "honeypot":
+        hp_checks, hp_lines = honeypot_report(d)
+        checks += hp_checks
+    else:
+        hp_lines = []
+
     if not judged:
         checks = [(c, "short" if c in STEADINESS and v in ("PASS", "FAIL") else v, dt)
                   for c, v, dt in checks]
@@ -283,7 +317,7 @@ def target_report(name, d, args):
         lines.append(f"Totals over {fmt_dur(span)}: " + ", ".join(parts) + ".")
         lines.append("")
     lines.append("```")
-    lines.append(f"{'RSS MB':<16} {spark([v for _, v in rss])}")
+    lines.append(f"{mem_name + ' MB':<16} {spark([v for _, v in mem])}")
     if fds:
         lines.append(f"{'fds':<16} {spark([v for _, v in fds])}")
     if cpu:
@@ -292,6 +326,7 @@ def target_report(name, d, args):
         lines.append(f"{col:<16} {spark(vals)}")
     lines.append("```")
     lines.append("")
+    lines += hp_lines
     diag = [l.strip() for l in open(os.path.join(d, "server.log"), errors="replace")
             if l.startswith("gem_diag:")] if os.path.exists(os.path.join(d, "server.log")) else []
     if diag:
@@ -306,14 +341,83 @@ def target_report(name, d, args):
                    else "PASS")
 
 
+def honeypot_report(d):
+    """Checks and summary lines from the honeypot's weekly databases."""
+    files = sorted(glob.glob(os.path.join(d, "work", "data", "honeypot-*.db")))
+    if not files:
+        return [("database written", "FAIL", "no honeypot-*.db in work/data")], []
+    sessions, caps, crashes, metrics = {}, {}, {}, []
+    inputs = 0
+    for f in files:
+        db = sqlite3.connect(f"file:{f}?mode=ro", uri=True)
+        db.row_factory = sqlite3.Row
+        for r in db.execute("SELECT coalesce(end_reason, '(open)') AS k, count(*) AS n "
+                            "FROM sessions GROUP BY 1"):
+            sessions[r["k"]] = sessions.get(r["k"], 0) + r["n"]
+        for r in db.execute("SELECT cap AS k, count(*) AS n FROM cap_events GROUP BY 1"):
+            caps[r["k"]] = caps.get(r["k"], 0) + r["n"]
+        for r in db.execute("SELECT reason AS k, count(*) AS n FROM crashes GROUP BY 1"):
+            crashes[r["k"]] = crashes.get(r["k"], 0) + r["n"]
+        inputs += db.execute("SELECT count(*) FROM input").fetchone()[0]
+        metrics += [dict(r) for r in db.execute("SELECT * FROM metrics")]
+        db.close()
+    metrics.sort(key=lambda m: m["time_ms"])
+    checks = []
+    n_crash = sum(crashes.values())
+    top = sorted(crashes.items(), key=lambda kv: -kv[1])[:5]
+    checks.append(("no session crashes", "PASS" if n_crash == 0 else "FAIL",
+                   f"{n_crash} crashes" + "".join(f"; {n}× {k[:120]!r}" for k, n in top)))
+    lost = sessions.get("lost", 0)
+    checks.append(("no lost sessions", "PASS" if lost == 0 else "FAIL",
+                   f"{lost} sessions ended as lost (their end never reached the recorder)"))
+    if not metrics:
+        checks.append(("metrics recorded", "FAIL", "no rows in the metrics table"))
+        return checks, []
+    dropped = sum(m["events_dropped"] or 0 for m in metrics)
+    backlog = max(m["backlog"] or 0 for m in metrics)
+    checks.append(("recorder kept up", "PASS" if dropped == 0 else "FAIL",
+                   f"{dropped} events dropped, largest backlog {backlog} messages"))
+    last = metrics[-1]
+    # The sampler's first row is taken as the server starts: with no
+    # session yet, its fds are the baseline.
+    first = metrics[0]
+    baseline = first["sessions"] == 0 and len(metrics) > 1
+    fd_limit = first["fds"] + HONEYPOT_FD_SLACK if baseline else None
+    settled = (last["sessions"] == 0 and last["resources_open"] <= HONEYPOT_IDLE_RESOURCES
+               and (fd_limit is None or last["fds"] <= fd_limit))
+    fd_note = (f"limit {fd_limit}: {first['fds']} at the start, +{HONEYPOT_FD_SLACK}" if baseline
+               else "not judged: no sample before the load")
+    peak = max(metrics, key=lambda m: m["sessions"] or 0)
+    checks.append(("settled after the load", "PASS" if settled else "FAIL",
+                   f"last sample: {last['sessions']} sessions, {last['resources_open']} resources "
+                   f"open (limit {HONEYPOT_IDLE_RESOURCES}), {last['fds']} fds ({fd_note}), "
+                   f"{last['procs']} processes, arena {last['memory'] / 1048576:.1f} MB; at the peak "
+                   f"{peak['sessions']} sessions, {peak['procs']} processes, {peak['fds']} fds, "
+                   f"arena {peak['memory'] / 1048576:.0f} MB"))
+    lines = [
+        "Honeypot database: sessions by end reason: "
+        + ", ".join(f"{k} {v:,}" for k, v in sorted(sessions.items(), key=lambda kv: -kv[1]))
+        + "; caps hit: " + (", ".join(f"{k} {v:,}" for k, v in sorted(caps.items(),
+                                                                    key=lambda kv: -kv[1]))
+                           or "none")
+        + f"; {inputs:,} input rows; resets over 10 ms "
+        + f"{sum(m['resets_over_10ms'] or 0 for m in metrics)}, over 100 ms "
+        + f"{sum(m['resets_over_100ms'] or 0 for m in metrics)}; spawns refused "
+        + f"{sum(m['spawn_refused'] or 0 for m in metrics)}.",
+        "",
+    ]
+    return checks, lines
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("run_dir")
-    p.add_argument("--rss-growth-mb", type=float, default=10,
-                   help="allowed RSS growth over the second half, MB (default 10)")
-    p.add_argument("--rss-growth-pct", type=float, default=5,
-                   help="... or this percent of the late RSS, if larger (default 5)")
+    p.add_argument("--mem-growth-mb", type=float, default=10,
+                   help="allowed memory growth over the second half, MB (default 10): "
+                        "the physical footprint on macOS, RSS elsewhere")
+    p.add_argument("--mem-growth-pct", type=float, default=5,
+                   help="... or this percent of the late memory, if larger (default 5)")
     p.add_argument("--fd-growth", type=int, default=10,
                    help="allowed rise of the median open fds, late over early (default 10)")
     p.add_argument("--p99-ratio", type=float, default=1.5,
@@ -339,9 +443,9 @@ def main():
     if os.path.exists(os.path.join(d, "meta.txt")):
         out += ["```"] + open(os.path.join(d, "meta.txt")).read().rstrip().split("\n") + ["```", ""]
     verdicts = []
-    targets = [t for t in ("mini_redis", "stomp", "bookmark") if os.path.isdir(os.path.join(d, t))]
+    targets = [t for t in TARGETS if os.path.isdir(os.path.join(d, t))]
     if not targets:
-        sys.exit(f"{d}: no target directories (mini_redis, stomp, bookmark)")
+        sys.exit(f"{d}: no target directories ({', '.join(TARGETS)})")
     body = []
     for t in targets:
         lines, verdict = target_report(t, os.path.join(d, t), args)

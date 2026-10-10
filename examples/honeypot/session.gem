@@ -10,6 +10,9 @@ load "std/table"
 
 let READ_SIZE = 4096
 
+# The end reasons that are caps, logged as a `cap` event too.
+let CAP_ENDS = {max_time: true, max_bytes: true, max_logins: true, max_commands: true}
+
 fn emit(s, ev)
   ev.session = s.id
   recorder.emit(s.events, ev)
@@ -60,9 +63,9 @@ fn handle(s, chunk)
       emit(s, ev)
     end
     buf_push(out, telnet.escape(crlf(res.out)))
-    if shell.closed(s.sh)
+    if shell.closed(s.sh) != nil
       write(s, out)
-      return "exit"
+      return shell.closed(s.sh)
     end
   end
   if r.rest < len(data) and echoing(s) and not lines.dropping(s.sp)
@@ -100,15 +103,22 @@ fn serve(s)
     return "write_failed"
   end
   while true
-    let chunk = tcp_read(s.sock, READ_SIZE, s.idle_ms)
+    let left = s.deadline - time_ms()
+    if left <= 0
+      return "max_time"
+    end
+    let chunk = tcp_read(s.sock, READ_SIZE, if left < s.idle_ms then left else s.idle_ms end)
     if chunk == nil
-      return "idle"
+      return if left < s.idle_ms then "max_time" else "idle" end
     end
     if chunk == ""
       return "closed"
     end
     s.bytes_in = s.bytes_in + len(chunk)
     record_input(s, chunk)
+    if s.bytes_in > s.max_bytes
+      return "max_bytes"
+    end
     let reason = handle(s, chunk)
     if reason != nil
       return reason
@@ -117,23 +127,31 @@ fn serve(s)
 end
 
 ## Serves accepted socket `sock` from `peer` (`{ip, port}`) with the
-## server's config `cfg`, and returns when the session is over. Claims
-## `sock` first, so it closes however this ends. Sends its events to
-## `cfg.events`, each with its pid as `session`: `session_start`, its raw
-## input, the shell's events, `cap` events and `session_end`. An error
-## sends an `error` event with the trace before the session crashes with
-## it.
+## server's config `cfg`, and returns when the session is over: the client
+## leaves, goes idle or stops reading, or a cap ends it (`max_session_ms`,
+## `max_bytes`, `max_logins`, `max_commands`). Claims `sock` first, so it
+## closes however this ends. Sends its events to `cfg.events`, each with
+## its pid as `session`: `session_start`, its raw input, the shell's
+## events, `cap` events and `session_end`. An error sends an `error` event
+## with the trace before the session crashes with it.
 fn run(sock, peer, cfg)
   claim(sock)
   let s = {
     sock: sock, id: self(), events: cfg.events, idle_ms: cfg.idle_ms, write_ms: cfg.write_ms,
     tn: telnet.new(cfg.max_subneg), sp: lines.new(cfg.max_line),
-    sh: shell.new({accept_on: cfg.accept_on, accept_chance: cfg.accept_chance}),
-    bytes_in: 0, bytes_out: 0, max_input: cfg.max_input, input_kept: 0, input_capped: false
+    sh: shell.new({
+      accept_on: cfg.accept_on, accept_chance: cfg.accept_chance, max_logins: cfg.max_logins,
+      max_commands: cfg.max_commands
+    }),
+    bytes_in: 0, bytes_out: 0, max_input: cfg.max_input, input_kept: 0, input_capped: false,
+    max_bytes: cfg.max_bytes, deadline: time_ms() + cfg.max_session_ms
   }
   let started = time_ms()
   emit(s, {kind: "session_start", ip: peer.ip, port: peer.port})
   let r = pcall serve(s)
+  if r.ok and has_key(CAP_ENDS, r.value)
+    emit(s, {kind: "cap", cap: r.value})
+  end
   let ev = if r.ok then {kind: "session_end", reason: r.value} else {kind: "error", reason: r.error, trace: trace_text(r.stack)} end
   ev.bytes_in = s.bytes_in
   ev.bytes_out = s.bytes_out
