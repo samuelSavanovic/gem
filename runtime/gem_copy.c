@@ -726,11 +726,14 @@ void gem_pin_free_all(GemProcess *proc) {
  * a full one, so each reset's work is paid for by at least as much fresh
  * allocation or promotion. */
 
-/* GEM_DIAG=1 reports reset counts and volumes at exit. GEM_DIAG=2 also
-   prints a `gem_reset:` line for every reset that takes GEM_DIAG_SLOW_S or
-   longer (gem_diag_trace). */
-static uint64_t gem_diag_resets, gem_diag_full, gem_diag_ret, gem_diag_ret_copied, gem_diag_copied, gem_diag_scanned, gem_diag_freed;
-static double gem_diag_t_total, gem_diag_t_walk, gem_diag_t_max;
+/* Reset statistics, counted for every reset of every process:
+   runtime_stats() reads them (gem_reset_stats_get), and under GEM_DIAG=1
+   the `gem_diag: arena_resets=...` line at exit, once a reset has run,
+   prints most of them. GEM_DIAG=2 also prints a `gem_reset:` line for
+   every reset that takes GEM_DIAG_SLOW_S or longer (gem_diag_trace). The
+   remembered-log walk is timed only under GEM_DIAG. */
+static GemResetStats gem_rstats;
+static double gem_diag_t_walk;
 #include <time.h>
 static double gem_diag_now(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return ts.tv_sec + ts.tv_nsec * 1e-9; }
 static int gem_diag_state = -1;   /* -1 until read, then the GEM_DIAG level: 0, 1 or 2 */
@@ -742,10 +745,14 @@ static double gem_diag_last_walk;
 
 static void gem_diag_reset_report(void) {
     fprintf(stderr, "gem_diag: arena_resets=%llu copied=%llu scanned=%llu freed=%llu time=%.3fs walk=%.3fs full=%llu ret_resets=%llu ret_copied=%llu max=%.3fs\n",
-            (unsigned long long)gem_diag_resets, (unsigned long long)gem_diag_copied,
-            (unsigned long long)gem_diag_scanned, (unsigned long long)gem_diag_freed,
-            gem_diag_t_total, gem_diag_t_walk, (unsigned long long)gem_diag_full,
-            (unsigned long long)gem_diag_ret, (unsigned long long)gem_diag_ret_copied, gem_diag_t_max);
+            (unsigned long long)gem_rstats.resets, (unsigned long long)gem_rstats.copied,
+            (unsigned long long)gem_rstats.scanned, (unsigned long long)gem_rstats.freed,
+            gem_rstats.t_total, gem_diag_t_walk, (unsigned long long)gem_rstats.full,
+            (unsigned long long)gem_rstats.ret, (unsigned long long)gem_rstats.ret_copied, gem_rstats.t_max);
+}
+
+void gem_reset_stats_get(GemResetStats *out) {
+    *out = gem_rstats;
 }
 
 static void gem_diag_init(void) {
@@ -756,16 +763,25 @@ static void gem_diag_init(void) {
 }
 
 static void gem_diag_note_reset(size_t copied, size_t scanned, size_t freed, int full) {
-    if (!gem_diag_state) return;
     gem_diag_last_copied = copied;
     gem_diag_last_scanned = scanned;
     gem_diag_last_region = freed;
     gem_diag_last_full = full;
-    gem_diag_resets++;
-    gem_diag_full += full;
-    gem_diag_copied += copied;
-    gem_diag_scanned += scanned;
-    gem_diag_freed += freed;
+    gem_rstats.resets++;
+    gem_rstats.full += full;
+    gem_rstats.copied += copied;
+    gem_rstats.scanned += scanned;
+    gem_rstats.freed += freed;
+}
+
+static void gem_diag_note_time(double dt) {
+    gem_rstats.t_total += dt;
+    if (dt > gem_rstats.t_max) gem_rstats.t_max = dt;
+    if (dt >= 0.001) {
+        gem_rstats.over_1ms++;
+        if (dt >= 0.01) gem_rstats.over_10ms++;
+        if (dt >= 0.1) gem_rstats.over_100ms++;
+    }
 }
 
 static int gem_val_in_region(GemCopyMap *map, GemVal v) {
@@ -1096,15 +1112,12 @@ void gem_arena_reset_region(GemArenaMark *mark, GemVal **roots, int n_roots,
     if (gem_current_pid < 0) return;
     if (!gem_arena_reset_due(mark)) return;
     gem_diag_init();
-    double t0 = gem_diag_state > 0 ? gem_diag_now() : 0;
+    double t0 = gem_diag_now();
     size_t copied, scanned, region;
     gem_region_reset_impl(mark, roots, n_roots, pinned_roots, n_pinned, &copied, &scanned, &region);
-    if (gem_diag_state > 0) {
-        double dt = gem_diag_now() - t0;
-        gem_diag_t_total += dt;
-        if (dt > gem_diag_t_max) gem_diag_t_max = dt;
-        gem_diag_trace(gem_diag_last_full ? "full" : "young", dt);
-    }
+    double dt = gem_diag_now() - t0;
+    gem_diag_note_time(dt);
+    gem_diag_trace(gem_diag_last_full ? "full" : "young", dt);
 }
 
 void gem_arena_reset_return(const GemArenaPoint *pt, GemVal *ret, int own_frames) {
@@ -1113,7 +1126,7 @@ void gem_arena_reset_return(const GemArenaPoint *pt, GemVal *ret, int own_frames
     size_t live = arena->bytes_allocated - arena->bytes_freed - (pt->ret_trig - GEM_ARENA_RESET_THRESHOLD);
     if (live + (arena->bytes_allocated - arena->ret_at) < arena->ret_min) return;
     gem_diag_init();
-    double t0 = gem_diag_state > 0 ? gem_diag_now() : 0;
+    double t0 = gem_diag_now();
     /* A one-shot mark whose young point is its base point: the impl takes
        the full path, with the region everything allocated since `pt`. Its
        promotion and trigger updates land in this dead mark. */
@@ -1139,14 +1152,11 @@ void gem_arena_reset_return(const GemArenaPoint *pt, GemVal *ret, int own_frames
     size_t factor = 2 * copied >= region ? 4 : 2;
     arena->ret_min = factor * copied + scanned / 2;
     arena->ret_at = arena->bytes_allocated;
-    if (gem_diag_state > 0) {
-        gem_diag_ret++;
-        gem_diag_ret_copied += copied;
-        double dt = gem_diag_now() - t0;
-        gem_diag_t_total += dt;
-        if (dt > gem_diag_t_max) gem_diag_t_max = dt;
-        gem_diag_trace("return", dt);
-    }
+    gem_rstats.ret++;
+    gem_rstats.ret_copied += copied;
+    double dt = gem_diag_now() - t0;
+    gem_diag_note_time(dt);
+    gem_diag_trace("return", dt);
 }
 
 /* ─── Module globals ───────────────────────────────────────────────
