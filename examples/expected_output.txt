@@ -4574,3 +4574,17 @@ port free: true
 server still serves: HTTP/1.1 200 OK
 == stop while a handler is in a blocking call
 closed at once: true true
+["full_resets", "max_procs", "memory", "proc_hwm", "procs", "reset_copied", "reset_freed", "reset_max_ms", "reset_ms", "resets", "resets_over_100ms", "resets_over_10ms", "resets_over_1ms", "resources_open", "resources_ownerless", "return_resets", "spawn_refused"]
+types: int float int
+loop reset: true freed: true
+timed: true true
+slow ones counted by duration: true true true
+full and return resets are among all of them: true true
+slow resets: true true
+holder holds over 1 MB: true
+total covers it: true
+procs: 2 hwm at least that: true of true
+after it died: 1 true
+resources: 3 ownerless: 1
+closed: true
+refused spawns: 0

@@ -56,6 +56,7 @@ let BUILTIN_FNS = {
   cancel_timer: "gem_cancel_timer_builtin",
   processes: "gem_processes_builtin",
   process_info: "gem_process_info_builtin",
+  runtime_stats: "gem_runtime_stats_builtin",
   read_file: "gem_read_file_fn",
   write_file: "gem_write_file_fn",
   delete: "gem_delete_fn",
@@ -137,7 +138,7 @@ let LEAF_BUILTINS = {
   floor: true, ceil: true, round: true, abs: true, pow: true, sqrt: true,
   random: true, band: true, bor: true, bxor: true, bnot: true, bshl: true,
   bshr: true, self: true, make_ref: true, time_ms: true, epoch_ms: true,
-  tcp_peer: true, tcp_fd: true, tcp_from_fd: true, claim: true,
+  tcp_peer: true, tcp_fd: true, tcp_from_fd: true, claim: true, runtime_stats: true,
   __len: true, __type: true, __has_key: true, __is_array_n: true,
   __for_len: true, __for_items: true, __table_key_at: true, __table_val_at: true
 }

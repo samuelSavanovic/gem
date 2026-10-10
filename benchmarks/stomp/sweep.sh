@@ -98,7 +98,7 @@ run_cell() {
   # gem_diag line (atexit) — captured into broker.log. Only present when
   # the broker exited normally (atexit doesn't fire on signal-kill).
   local diag_line
-  diag_line=$(grep -m1 '^gem_diag:' "$RUN_DIR/${label}.broker.log" 2>/dev/null || echo "")
+  diag_line=$(grep -m1 '^gem_diag: spawn_overflow=' "$RUN_DIR/${label}.broker.log" 2>/dev/null || echo "")
 
   # Parse summary
   local summary

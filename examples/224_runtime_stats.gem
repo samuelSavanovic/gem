@@ -1,0 +1,70 @@
+# runtime_stats() reads the runtime's totals: arena resets, processes,
+# memory and open resources. process_info(pid).memory is one process's
+# share of the memory.
+
+let me = self()
+let s0 = runtime_stats()
+print(sort(keys(s0)))
+print("types:", type(s0.resets), type(s0.reset_ms), type(s0.memory))
+
+# A loop that makes garbage resets at its back-edge.
+let total = 0
+for i = 0, 200000
+  let row = {n: i, label: "row {i}"}
+  total += row.n
+end
+let s1 = runtime_stats()
+print("loop reset:", s1.resets > s0.resets, "freed:", s1.reset_freed > s0.reset_freed)
+print("timed:", s1.reset_ms > 0.0, s1.reset_max_ms <= s1.reset_ms)
+print("slow ones counted by duration:", s1.resets_over_100ms <= s1.resets_over_10ms, s1.resets_over_10ms <= s1.resets_over_1ms, s1.resets_over_1ms <= s1.resets)
+print("full and return resets are among all of them:", s1.full_resets <= s1.resets, s1.return_resets <= s1.full_resets)
+
+# A loop whose kept state grows: its resets copy what it made since the
+# last one, and now and then all of it, and the bigger copies take over a
+# millisecond.
+let kept = []
+for i = 0, 300000
+  push(kept, {n: i})
+end
+let slow = runtime_stats()
+print("slow resets:", slow.resets_over_1ms > s1.resets_over_1ms, slow.reset_max_ms >= 1.0)
+
+# A process holding a large table: its memory, and the total, grow with it.
+let holder = spawn do
+  let rows = []
+  for i = 0, 100000
+    push(rows, "row {i}")
+  end
+  send(me, "filled")
+  receive()
+  print(len(rows))
+end
+receive
+when "filled"
+  nil
+end
+let m = process_info(holder).memory
+let s2 = runtime_stats()
+print("holder holds over 1 MB:", m > 1000000)
+print("total covers it:", s2.memory >= m + process_info(self()).memory)
+print("procs:", s2.procs, "hwm at least that:", s2.proc_hwm >= s2.procs, "of", s2.max_procs > 0)
+kill(holder, "kill")
+sleep(10)
+let s3 = runtime_stats()
+print("after it died:", s3.procs, s3.memory < s2.memory)
+
+# Resources: open ones, and those nobody owns.
+let l = tcp_listen("127.0.0.1", 18324)
+let opener = spawn do
+  send(me, tcp_connect("127.0.0.1", 18324))
+end
+let c = receive()
+let a = tcp_accept(l)
+sleep(10)
+let s4 = runtime_stats()
+print("resources:", s4.resources_open - s3.resources_open, "ownerless:", s4.resources_ownerless - s3.resources_ownerless)
+for sock in [c, a, l]
+  tcp_close(sock)
+end
+print("closed:", runtime_stats().resources_open == s3.resources_open)
+print("refused spawns:", s4.spawn_refused)

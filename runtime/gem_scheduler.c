@@ -114,9 +114,10 @@ static void gem_timer_drop_for_slot(int slot) {
 int gem_main_pid = -1;
 static int gem_proc_cap = 0;        /* slots reserved: the process limit */
 
-/* Diagnostic counters — printed on process exit via atexit handler.
-   Used to disambiguate proc-table exhaustion vs other failure modes
-   under load (see benchmarks/stomp/sweep.sh). */
+/* Spawns refused for lack of room (a full process table, the memory-
+   mapping limit, a stack that can't be mapped). Read by runtime_stats(),
+   and printed at exit when GEM_DIAG is set or a spawn was refused
+   (benchmarks/stomp/sweep.sh reads that line). */
 static uint64_t gem_spawn_overflow_count = 0;
 
 static void gem_diag_print_on_exit(void) {
@@ -1170,6 +1171,7 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
     char *stack_lo;
     mco_result res = gem_coro_create(&co, GEM_CORO_STACK_SIZE, ctx, &stack_lo);
     if (res != MCO_SUCCESS) {
+        gem_spawn_overflow_count++;
         gem_arena_destroy(&gem_proc_table[pid].arena);
         gem_pin_free_all(&gem_proc_table[pid]);
         gem_globals_free(&gem_proc_table[pid]);
@@ -2251,5 +2253,46 @@ GemVal gem_process_info_builtin(void *_env, GemVal *args, int argc) {
     /* resources: how many open resources it owns */
     gem_table_set(info, gem_string("resources"), gem_int(proc->res_count));
 
+    /* memory: bytes of arena blocks it holds */
+    gem_table_set(info, gem_string("memory"), gem_int((int64_t)gem_arena_mapped_bytes(&proc->arena)));
+
     return info;
+}
+
+/* runtime_stats(): figures for the whole program (SPEC, "Process
+   Introspection"). The reset figures and spawn_refused only grow; the
+   others are counts at the call. */
+GemVal gem_runtime_stats_builtin(void *_env, GemVal *args, int argc) {
+    (void)_env; (void)args; (void)argc;
+    GemResetStats r;
+    gem_reset_stats_get(&r);
+    int procs = 0;
+    size_t memory = 0;
+    for (int i = 0; i < gem_proc_hwm; i++) {
+        GemProcess *p = &gem_proc_table[i];
+        if (p->state == GEM_PROC_FREE || p->state == GEM_PROC_DEAD) continue;
+        procs++;
+        memory += gem_arena_mapped_bytes(&p->arena);
+    }
+    int res_open, res_ownerless;
+    gem_res_diag_counts(&res_open, &res_ownerless);
+    GemVal t = gem_table_new();
+    gem_table_set(t, gem_string("resets"), gem_int((int64_t)r.resets));
+    gem_table_set(t, gem_string("full_resets"), gem_int((int64_t)r.full));
+    gem_table_set(t, gem_string("return_resets"), gem_int((int64_t)r.ret));
+    gem_table_set(t, gem_string("reset_copied"), gem_int((int64_t)r.copied));
+    gem_table_set(t, gem_string("reset_freed"), gem_int((int64_t)r.freed));
+    gem_table_set(t, gem_string("reset_ms"), gem_float(r.t_total * 1e3));
+    gem_table_set(t, gem_string("reset_max_ms"), gem_float(r.t_max * 1e3));
+    gem_table_set(t, gem_string("resets_over_1ms"), gem_int((int64_t)r.over_1ms));
+    gem_table_set(t, gem_string("resets_over_10ms"), gem_int((int64_t)r.over_10ms));
+    gem_table_set(t, gem_string("resets_over_100ms"), gem_int((int64_t)r.over_100ms));
+    gem_table_set(t, gem_string("procs"), gem_int(procs));
+    gem_table_set(t, gem_string("proc_hwm"), gem_int(gem_proc_hwm));
+    gem_table_set(t, gem_string("max_procs"), gem_int(gem_proc_cap));
+    gem_table_set(t, gem_string("spawn_refused"), gem_int((int64_t)gem_spawn_overflow_count));
+    gem_table_set(t, gem_string("memory"), gem_int((int64_t)memory));
+    gem_table_set(t, gem_string("resources_open"), gem_int(res_open));
+    gem_table_set(t, gem_string("resources_ownerless"), gem_int(res_ownerless));
+    return t;
 }

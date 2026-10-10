@@ -21,7 +21,7 @@ Telnet only; SSH is out of scope. An HTTP honeypot on :80 via std/http is an opt
 | Peer address | done: `tcp_peer(sock)` returns `{ip, port}`, or `nil` once the peer has reset | per-IP caps and the `ip` column; the acceptor treats `nil` as a connection already gone |
 | Socket ownership | done: sockets and sqlite handles are owned resources (SPEC "Owned Resources", `docs/design/process_owned_resources.md`); a session takes its socket over with `claim(sock)`, and it closes when the session exits for any reason | `process_info(acceptor).resources` and `GEM_DIAG=2` show a session that forgot its claim; `tests/check_socket_leak.sh` runs this layout |
 | Crash data | a `DOWN` message carries only the error message; the trace goes to stderr and the raw input dies with the session | the session streams capped raw-input chunks to the recorder as it reads; traces come from the service's stderr log, matched by pid |
-| Runtime reset stats | `GEM_DIAG` prints reset statistics only at exit | a builtin that reads them, or leave them out of the metrics |
+| Runtime stats | done: `runtime_stats()` returns the reset totals, process counts, arena memory and open resources; `process_info(pid).memory` is one process's arena | the sampler records them alongside RSS and fds |
 
 Socket ownership is in place, so the honeypot closes nothing on `DOWN`: each session claims its socket.
 
@@ -31,7 +31,7 @@ Socket ownership is in place, so the honeypot closes nothing on `DOWN`: each ses
 - **registry**: owns the global and per-IP connection counts, applies the caps (refuses and logs when over), spawns and monitors one session per connection, and records abnormal exits. Sessions are temporary and never restarted, so no `dynamic_supervisor`.
 - **session** (one per connection): claims its socket first (`claim(sock)`), so any exit closes it. Runs telnet negotiation, the fake login and the fake shell. Streams its raw input to the recorder. Exits on close, idle timeout, max session length or a byte cap.
 - **recorder**: the only process that touches sqlite. Batches inserts in a transaction (every N events or T ms). Keeps a capped raw-input ring per live session, written out on a crash and dropped on a normal exit. Counts the events it drops when its backlog is over the cap.
-- **metrics sampler**: every 1–5 minutes records RSS (`/proc/self/statm`), open fds (`list_dir("/proc/self/fd")`), live processes (`len(processes())`), sessions per state, crashes, cap hits and the Gem commit. The `/proc` reads are Linux only.
+- **metrics sampler**: every 1–5 minutes records RSS (`/proc/self/statm`), open fds (`list_dir("/proc/self/fd")`), `runtime_stats()` (live processes, arena memory, open and ownerless resources, reset time, and resets over 10 and 100 ms since the last sample), sessions per state, crashes, cap hits and the Gem commit. The `/proc` reads are Linux only.
 - **dashboard** (later, maybe never): `sqlite_query` and `sqlite_exec` run on the scheduler thread, so heavy aggregate queries in-process would stall every session. Either the recorder keeps rollup tables, or the dashboard is a separate OS process reading the WAL database. Until then the `sqlite3` CLI over SSH is the dashboard.
 - A top-level supervisor over acceptor, registry, recorder and sampler.
 
@@ -67,7 +67,7 @@ Commands chained with `;`, `&&`, `||` and `|` are split roughly. The first days 
 - `urls`: session_id, url, time
 - `crashes`: session_id, reason, trace, raw input bytes
 - `cap_events`: type, ip, time
-- `metrics`: time, rss, fds, procs, sessions_active, crashes_total, gem commit
+- `metrics`: time, rss, fds, procs, arena_memory, resources_open, resources_ownerless, reset_ms, resets_over_10ms, resets_over_100ms, sessions_active, crashes_total, gem commit
 
 One database file per week, deleting files past the retention limit, so the disk can't fill. IPs are stored for analysis and shown only truncated or aggregated. Anything shown in a browser is escaped and URLs are never clickable: every stored string is attacker-controlled.
 

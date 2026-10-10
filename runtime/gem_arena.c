@@ -161,6 +161,12 @@ void *gem_arena_alloc(GemArena *arena, size_t size) {
 }
 
 
+size_t gem_arena_mapped_bytes(const GemArena *arena) {
+    size_t n = 0;
+    for (const GemArenaBlock *b = arena->head; b; b = b->next) n += sizeof(GemArenaBlock) + b->cap;
+    return n;
+}
+
 void gem_arena_destroy(GemArena *arena) {
     GemTable *t = arena->table_list;
     while (t) {

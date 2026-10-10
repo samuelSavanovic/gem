@@ -862,7 +862,8 @@ Pending timers are kept in a min-heap ordered by deadline that grows as needed; 
 ```
 let info = process_info(pid)
 # info == {state: "ready", mailbox_len: 0, links: [], monitors: [],
-#          trap_exit: false, exit_reason: nil, resources: 0}
+#          trap_exit: false, exit_reason: nil, resources: 0, memory: 69632}
+# (memory: 81920 on macOS arm64, whose pages are 16 KB)
 ```
 
 `process_info(pid)` returns a table with metadata about the process:
@@ -874,8 +875,27 @@ let info = process_info(pid)
 - `trap_exit` — bool
 - `exit_reason` — string or nil
 - `resources` — how many open resources (sockets, database handles) it owns (see Owned Resources)
+- `memory` — bytes of memory its arena holds (the blocks the runtime has mapped for it: at first 64 KB and a header, rounded up to whole pages)
 
 Returns `nil` if the pid is invalid or the slot is free.
+
+```
+let s = runtime_stats()
+# s.procs, s.memory, s.resets, s.reset_max_ms, ...
+```
+
+`runtime_stats()` returns a table of figures for the whole program, for a process that samples them (a metrics loop) or a test:
+
+- `resets` — arena resets so far, in every process (see `GEM_DIAG` below); `full_resets` — those among them that copied everything their loop or function keeps, return resets included; `return_resets` — those at the return of a recursive function
+- `reset_copied`, `reset_freed` — bytes the resets copied, and freed (the size of the regions they released)
+- `reset_ms` — milliseconds spent in resets (a float); `reset_max_ms` — the longest one so far; `resets_over_1ms`, `resets_over_10ms`, `resets_over_100ms` — the resets that took at least that long. Every other process waits while a reset runs.
+- `procs` — live processes; `proc_hwm` — the process table's high-water mark (it grows to 1,024 slots before the runtime reuses freed ones, then only as far as the most processes alive at once); `max_procs` — the process limit (`GEM_MAX_PROCS`); `spawn_refused` — spawns that raised for lack of room: a full process table, the system's limit on memory mappings, or no memory for a new process's stack
+- `memory` — bytes the live processes' arenas hold (the sum of their `process_info(pid).memory`)
+- `resources_open` — open resources (sockets, database handles); `resources_ownerless` — those with no owner (see Owned Resources)
+
+The reset figures and `spawn_refused` only grow: a sampler takes the difference between two calls (`resets_over_10ms` going up between two samples means a pause of 10 ms or more in between). The others are counts at the time of the call.
+
+`GEM_DIAG=1` in the environment prints a summary on stderr when the program exits, as `gem_diag:` lines: the reset totals (once a reset has run; the line has no duration counts) and the process and resource counts; `GEM_DIAG=2` also prints a `gem_reset:` line for every reset that takes 1 ms or more, with the process and the function it ran in.
 
 ## C Interop
 
@@ -1306,7 +1326,9 @@ end
 
 `processes()` — returns a list of all live process pids (excludes free and dead processes).
 
-`process_info(pid)` — returns a table with process metadata: `state`, `mailbox_len`, `links`, `monitors`, `trap_exit`, `exit_reason`. Returns `nil` for invalid/free pids.
+`process_info(pid)` — returns a table with process metadata: `state`, `mailbox_len`, `links`, `monitors`, `trap_exit`, `exit_reason`, `resources`, `memory`. Returns `nil` for invalid/free pids.
+
+`runtime_stats()` — returns a table of figures for the whole program: arena resets (`resets`, `full_resets`, `return_resets`, `reset_copied`, `reset_freed`, `reset_ms`, `reset_max_ms`, `resets_over_1ms`, `resets_over_10ms`, `resets_over_100ms`), processes (`procs`, `proc_hwm`, `max_procs`, `spawn_refused`), `memory`, and resources (`resources_open`, `resources_ownerless`). See Process Introspection.
 
 `read_file(path)` — reads the entire file at `path` and returns its contents as a string. Opens in binary mode (no newline translation). Files whose size isn't known up front (`/proc` and `/sys` files, pipes, devices such as `/dev/stdin`) are read until end of file. Raises an error if the file cannot be opened (`read_file: cannot open '<path>': <reason>`, the system's reason such as `No such file or directory` or `Permission denied`; `write_file`, `append_file` and `list_dir` say why the same way), is a directory, is larger than the string limit (see Strings), or a read fails.
 
