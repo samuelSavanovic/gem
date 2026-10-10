@@ -6,6 +6,7 @@
 load "std/supervisor"
 load "./recorder"
 load "./registry"
+load "./sampler"
 
 let RECORDER = "honeypot_recorder"
 let REGISTRY = "honeypot_registry"
@@ -55,30 +56,48 @@ end
 ## Starts the honeypot on `listener` and returns the supervisor's handle.
 ## Options: `idle_ms`, how long a silent client stays connected;
 ## `write_ms`, how long a write may wait for a client that doesn't read;
+## `max_sessions` and `max_per_ip`, how many sessions may be live at once,
+## in all and from one IP; `max_session_ms`, `max_bytes`, `max_logins` and
+## `max_commands`, how long a session may last, how many bytes it may
+## send, how many failed logins and command lines it may make;
 ## `max_line` and `max_subneg`, the longest line and telnet subnegotiation
 ## kept; `max_input`, how many bytes of a session's raw input are stored;
 ## `accept_on` and `accept_chance`, when a login succeeds (see
-## shell.new); `data`, `keep_weeks` and `log`, the recorder's `dir`,
-## `keep_weeks` and `log` (see recorder.start); `events`, a pid to send
+## shell.new); `data`, `keep_weeks`, `log` and `max_backlog`, the
+## recorder's `dir`, `keep_weeks`, `log` and `max_backlog` (see
+## recorder.start); `metrics_ms` and `commit`, how often the sampler
+## records the metrics, and the build they name; `events`, a pid to send
 ## the events to instead of the recorder, which then isn't started.
 fn start(listener, {
-  idle_ms = 60000, write_ms = 5000, max_line = 4096, max_subneg = 1024, max_input = 65536,
-  accept_on = 3, accept_chance = 0.25, data = "honeypot_data", keep_weeks = 8, log = false,
-  events = nil
+  idle_ms = 60000, write_ms = 5000, max_sessions = 1000, max_per_ip = 16,
+  max_session_ms = 600000, max_bytes = 1048576, max_logins = 10, max_commands = 500,
+  max_line = 4096, max_subneg = 1024, max_input = 65536, accept_on = 3, accept_chance = 0.25,
+  data = "honeypot_data", keep_weeks = 8, log = false, max_backlog = 10000,
+  metrics_ms = 60000, commit = nil, events = nil
 } = {})
   let cfg = {
-    idle_ms: idle_ms, write_ms: write_ms, max_line: max_line, max_subneg: max_subneg,
+    idle_ms: idle_ms, write_ms: write_ms, max_sessions: max_sessions, max_per_ip: max_per_ip,
+    max_session_ms: max_session_ms, max_bytes: max_bytes, max_logins: max_logins,
+    max_commands: max_commands, max_line: max_line, max_subneg: max_subneg,
     max_input: max_input, accept_on: accept_on, accept_chance: accept_chance,
     events: if events == nil then RECORDER else events end
   }
+  let since = epoch_ms()
   let children = []
   if events == nil
-    let since = epoch_ms()
     push(children, {id: "recorder", start: fn()
-      recorder.start(RECORDER, {dir: data, keep_weeks: keep_weeks, log: log, since: since})
+      recorder.start(RECORDER, {
+        dir: data, keep_weeks: keep_weeks, log: log, since: since, max_backlog: max_backlog
+      })
     end})
   end
   push(children, {id: "front", start: fn() start_front(listener, cfg) end})
+  push(children, {id: "sampler", start: fn()
+    sampler.start({
+      events: cfg.events, registry_name: REGISTRY, every_ms: metrics_ms, commit: commit,
+      since: since
+    })
+  end})
   supervisor.start({strategy: "one_for_one", name: "honeypot_sup", children: children})
 end
 

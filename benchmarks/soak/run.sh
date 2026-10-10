@@ -6,25 +6,30 @@
 #   benchmarks/soak/run.sh                          # all targets, 1 h each
 #   DURATION=2m benchmarks/soak/run.sh              # a short check of the harness
 #   TARGETS=mini_redis DURATION=4h benchmarks/soak/run.sh
+#   TARGETS=honeypot benchmarks/soak/run.sh         # the hostile hour on the honeypot
 #   python3 benchmarks/soak/report.py <run dir>     # the report again, any time
 #
-# Targets (in order): mini_redis, stomp (examples/stomp_broker), bookmark
-# (examples/bookmark_app). Each gets a fresh server, built once at the
-# start, run with GEM_DIAG=1 (or the GEM_DIAG given). benchmarks/README.md ("soak") says what each
-# load does and what the report checks.
+# Targets (run in the order TARGETS gives): mini_redis, stomp (examples/stomp_broker), bookmark
+# (examples/bookmark_app), honeypot (examples/honeypot). Each gets a fresh
+# server, built once at the start, run with GEM_DIAG=1 (or the GEM_DIAG
+# given). benchmarks/README.md ("soak") says what each load does and what
+# the report checks.
 #
 # Env:
-#   TARGETS        targets to run (default "mini_redis stomp bookmark")
+#   TARGETS        targets to run (default "mini_redis stomp bookmark honeypot")
 #   DURATION       per target: seconds, or with s/m/h (default 1h)
 #   SAMPLE_S       seconds between samples (default DURATION/120, 2..30)
 #   GUARD_RSS_MB   kill a server whose RSS passes this (default 4096)
-#   OUT            run directory (default benchmarks/soak/logs/<timestamp>)
+#   OUT            run directory, new or without the targets' directories
+#                  (default benchmarks/soak/logs/<timestamp>)
 #   GEM_DIAG       the servers' GEM_DIAG (default 1; 2 adds a line per
 #                  reset of 1 ms or more to server.log). The build runs
 #                  without it.
-#   MINI_REDIS_PORT (default 6395); stomp uses 61613 and bookmark 8080,
-#                  which those programs fix
-#   MINI_REDIS_ARGS, STOMP_ARGS, BOOKMARK_ARGS
+#   MINI_REDIS_PORT (default 6395), HONEYPOT_PORT (default 2333); stomp
+#                  uses 61613 and bookmark 8080, which those programs fix
+#   SETTLE_S       seconds the honeypot runs on after its load has gone
+#                  (default 30), so its metrics show what it gives back
+#   MINI_REDIS_ARGS, STOMP_ARGS, BOOKMARK_ARGS, HONEYPOT_ARGS
 #                  extra options for that target's load generator, e.g.
 #                  MINI_REDIS_ARGS="--rate 8000 --subs 50" (see --help)
 #
@@ -43,10 +48,12 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PYTHON=${PYTHON:-python3}
-TARGETS=${TARGETS:-"mini_redis stomp bookmark"}
+TARGETS=${TARGETS:-"mini_redis stomp bookmark honeypot"}
 DURATION=${DURATION:-1h}
 GUARD_RSS_MB=${GUARD_RSS_MB:-4096}
 MINI_REDIS_PORT=${MINI_REDIS_PORT:-6395}
+HONEYPOT_PORT=${HONEYPOT_PORT:-2333}
+SETTLE_S=${SETTLE_S:-30}
 OUT=${OUT:-"$SCRIPT_DIR/logs/$(date +%Y%m%d-%H%M%S)"}
 SERVER_DIAG=${GEM_DIAG:-1}
 unset GEM_DIAG
@@ -69,7 +76,12 @@ fi
 for t in $TARGETS; do
   case $t in
     mini_redis|stomp|bookmark) ;;
-    *) die "unknown target '$t' (mini_redis, stomp, bookmark)" ;;
+    honeypot)
+      # Its load holds 5,000 idle connections open, on both ends.
+      if (( $(ulimit -Sn) < 16384 )); then
+        ulimit -Sn 16384 2> /dev/null || die "honeypot needs 16384 open files: raise the hard limit (ulimit -Hn)"
+      fi ;;
+    *) die "unknown target '$t' (mini_redis, stomp, bookmark, honeypot)" ;;
   esac
 done
 command -v "$PYTHON" > /dev/null || die "$PYTHON not found"
@@ -80,6 +92,7 @@ port_of() {
     mini_redis) echo "$MINI_REDIS_PORT" ;;
     stomp) echo 61613 ;;
     bookmark) echo 8080 ;;
+    honeypot) echo "$HONEYPOT_PORT" ;;
   esac
 }
 
@@ -90,6 +103,9 @@ port_open() {
 
 for t in $TARGETS; do
   port_open "$(port_of "$t")" && die "port $(port_of "$t") ($t) is already in use"
+  # The CSVs append and the honeypot keeps its database in work/data, so a
+  # second run in the same directory would mix with the first.
+  [[ -e "$OUT/$t" ]] && die "$OUT/$t already exists: give the run a new OUT"
 done
 
 mkdir -p "$OUT/bin" || die "cannot create $OUT"
@@ -112,6 +128,7 @@ OUT="$(cd "$OUT" && pwd)"
   [[ -n "${MINI_REDIS_ARGS:-}" ]] && echo "MINI_REDIS_ARGS: $MINI_REDIS_ARGS"
   [[ -n "${STOMP_ARGS:-}" ]] && echo "STOMP_ARGS: $STOMP_ARGS"
   [[ -n "${BOOKMARK_ARGS:-}" ]] && echo "BOOKMARK_ARGS: $BOOKMARK_ARGS"
+  [[ -n "${HONEYPOT_ARGS:-}" ]] && echo "HONEYPOT_ARGS: $HONEYPOT_ARGS"
 } > "$OUT/meta.txt"
 cat "$OUT/meta.txt"
 echo "run directory: $OUT"
@@ -123,6 +140,7 @@ for t in $TARGETS; do
     mini_redis) src=examples/mini_redis/main.gem ;;
     stomp) src=examples/stomp_broker/main.gem ;;
     bookmark) src=examples/bookmark_app/app.gem ;;
+    honeypot) src=examples/honeypot/main.gem ;;
   esac
   echo "building $t"
   "$ROOT/build/gem" "$ROOT/$src" -o "$OUT/bin/$t" > "$OUT/bin/$t.build.log" 2>&1 \
@@ -158,7 +176,7 @@ wait_for() {
 
 # stop_server <target> <dir>: stops it so it exits through exit() and
 # prints its GEM_DIAG statistics where it can (mini_redis has SHUTDOWN), with
-# SIGTERM otherwise; records how it ended in status.txt.
+# SIGTERM otherwise; records in status.txt whether it was still alive.
 stop_server() {
   local t=$1 dir=$2 st
   if ! kill -0 "$server_pid" 2> /dev/null; then
@@ -193,7 +211,8 @@ run_target() {
   # Each server runs in its own directory (bookmark_app opens bookmarks.db
   # and serves ./static from its working directory), with SIGINT and SIGHUP
   # ignored: Ctrl-C and a closed terminal signal the whole process group,
-  # and the server must outlive them to be shut down cleanly (and print its GEM_DIAG statistics).
+  # and the server must outlive them to be shut down cleanly (mini_redis then
+  # prints its GEM_DIAG statistics).
   mkdir -p "$dir/work"
   case $t in
     mini_redis)
@@ -206,6 +225,14 @@ run_target() {
       cp -R "$ROOT/examples/bookmark_app/static" "$dir/work/static"
       (cd "$dir/work" && trap '' INT HUP && GEM_DIAG="$SERVER_DIAG" LOG_LEVEL=warn exec "$OUT/bin/bookmark") > "$dir/server.log" 2>&1 &
       load=bookmark_load.py; extra=${BOOKMARK_ARGS:-} ;;
+    honeypot)
+      # Every client comes from 127.0.0.1, so the per-IP cap is out of the
+      # way; the server records its metrics every 10 s in work/data.
+      mkdir -p "$dir/work/data"
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG="$SERVER_DIAG" exec "$OUT/bin/honeypot" \
+        --port "$port" --data data --metrics-ms 10000 --max-per-ip 100000 --max-sessions 20000 \
+        --commit "$(git -C "$ROOT" rev-parse --short HEAD)") > "$dir/server.log" 2>&1 &
+      load=honeypot_load.py; extra=${HONEYPOT_ARGS:-} ;;
   esac
   server_pid=$!
   echo "server_pid=$server_pid" >> "$dir/status.txt"
@@ -258,6 +285,11 @@ run_target() {
   st=$?
   load_pid=""
   echo "load_exit=$st" >> "$dir/status.txt"
+  if [[ $t == honeypot && $STOPPING == 0 ]]; then
+    echo "  settling for ${SETTLE_S} s"
+    sleep "$SETTLE_S"
+    echo "settled_s=$SETTLE_S" >> "$dir/status.txt"
+  fi
   # The sampler first: it would take the shutdown for a crash.
   kill -TERM "$sampler_pid" 2> /dev/null
   wait_for "$sampler_pid"
