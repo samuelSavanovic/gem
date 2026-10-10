@@ -1,5 +1,5 @@
-## registry — starts a session per accepted connection and records the
-## ones that crash.
+## registry — starts a session per accepted connection, within the caps on
+## sessions in all and per IP, and records the ones that crash.
 
 load "./session"
 load "./recorder"
@@ -11,12 +11,22 @@ load "./recorder"
 fn accepted(state, sock, peer)
   claim(sock)
   let cfg = state.cfg
+  let ip = peer.ip
+  let from_ip = if has_key(state.per_ip, ip) then state.per_ip[ip] else 0 end
+  let cap = if state.count >= cfg.max_sessions then "max_sessions" elif from_ip >= cfg.max_per_ip then "max_per_ip" end
+  if cap != nil
+    tcp_close(sock)
+    recorder.emit(cfg.events, {kind: "cap", cap: cap, ip: ip})
+    return nil
+  end
   let r = pcall spawn_monitor(fn() session.run(sock, peer, cfg) end)
   if r.ok
-    state.live[r.value.pid] = peer.ip
+    state.live[r.value.pid] = ip
+    state.per_ip[ip] = from_ip + 1
+    state.count = state.count + 1
   else
     tcp_close(sock)
-    recorder.emit(cfg.events, {kind: "cap", cap: "spawn_failed", ip: peer.ip, detail: r.error})
+    recorder.emit(cfg.events, {kind: "cap", cap: "spawn_failed", ip: ip, detail: r.error})
   end
 end
 
@@ -24,7 +34,13 @@ fn down(state, pid, reason)
   if not has_key(state.live, pid)
     return nil
   end
-  delete(state.live, pid)
+  let ip = delete(state.live, pid)
+  state.count = state.count - 1
+  if state.per_ip[ip] == 1
+    delete(state.per_ip, ip)
+  else
+    state.per_ip[ip] = state.per_ip[ip] - 1
+  end
   if reason != "normal"
     recorder.emit(state.cfg.events, {kind: "crash", session: pid, reason: reason})
   end
@@ -37,6 +53,8 @@ fn loop(state)
       accepted(state, sock, peer)
     when {tag: "DOWN", pid: pid, reason: reason}
       down(state, pid, reason)
+    when {tag: "_hp_count", from: from, ref: ref}
+      send(from, {tag: "_hp_counted", ref: ref, sessions: state.count, ips: len(state.per_ip)})
     when other
       nil
     end
@@ -45,13 +63,31 @@ end
 
 ## Starts the registry under the registered `name` with the server's
 ## config `cfg`, and returns its pid. It takes `{tag: "accepted", sock,
-## peer}` messages.
+## peer}` messages, and refuses a connection (closes it and logs a `cap`
+## event) while `cfg.max_sessions` sessions are live, or `cfg.max_per_ip`
+## from its IP.
 fn start(name, cfg)
   let pid = spawn do
-    loop({live: {}, cfg: cfg})
+    loop({live: {}, per_ip: {}, count: 0, cfg: cfg})
   end
   register(name, pid)
   pid
 end
 
-export start
+## The live sessions of the registry at `target` (a pid or a registered
+## name), as `{sessions, ips}`, or nil when it doesn't answer within
+## `timeout_ms`.
+fn count(target, timeout_ms = 1000)
+  let to = if type(target) == "string" then whereis(target) else target end
+  if to == nil
+    return nil
+  end
+  let ref = make_ref()
+  send(to, {tag: "_hp_count", from: self(), ref: ref})
+  receive
+  when {tag: "_hp_counted", ref: ^ref, sessions: n, ips: ips} then {sessions: n, ips: ips}
+  after timeout_ms then nil
+  end
+end
+
+export start, count

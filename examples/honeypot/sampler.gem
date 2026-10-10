@@ -1,0 +1,73 @@
+## sampler — records the honeypot's health every so often, as a `metrics`
+## event: memory, file descriptors, processes, arena resets, live sessions.
+
+load "std/string"
+load "./recorder"
+load "./registry"
+
+# The resident set in KB, from /proc (Linux); nil elsewhere.
+fn rss_kb()
+  if not file_exists("/proc/self/status")
+    return nil
+  end
+  for line in string.split(read_file("/proc/self/status"), "\n")
+    if string.starts_with(line, "VmRSS:")
+      return to_int(string.trim(str_replace(substr(line, 6), "kB", "")))
+    end
+  end
+  nil
+end
+
+# The open file descriptors, less the one that lists them.
+fn open_fds()
+  len(list_dir("/dev/fd")) - 1
+end
+
+# The metrics event for now; `prev` is the runtime_stats() of the last
+# sample, which the reset counts and spawn_refused are taken from.
+fn sample(cfg, prev, stats)
+  let live = registry.count(cfg.registry_name)
+  {
+    kind: "metrics", uptime_ms: epoch_ms() - cfg.since, rss_kb: rss_kb(), fds: open_fds(),
+    procs: stats.procs, memory: stats.memory, resources_open: stats.resources_open,
+    resources_ownerless: stats.resources_ownerless,
+    sessions: if live == nil then nil else live.sessions end,
+    session_ips: if live == nil then nil else live.ips end,
+    reset_ms: stats.reset_ms - prev.reset_ms,
+    resets_over_10ms: stats.resets_over_10ms - prev.resets_over_10ms,
+    resets_over_100ms: stats.resets_over_100ms - prev.resets_over_100ms,
+    spawn_refused: stats.spawn_refused - prev.spawn_refused, gem_commit: cfg.commit
+  }
+end
+
+fn loop(cfg)
+  let prev = runtime_stats()
+  send(self(), {tag: "_hp_sample"})
+  while true
+    receive
+    when {tag: "_hp_sample"}
+      send_after(self(), {tag: "_hp_sample"}, cfg.every_ms)
+      let stats = runtime_stats()
+      recorder.emit(cfg.events, sample(cfg, prev, stats))
+      prev = stats
+    when other
+      nil
+    end
+  end
+end
+
+## Starts the sampler and returns its pid. When it starts, and then every
+## `every_ms`, it sends a `metrics` event to `events` (a pid or a
+## registered name), with the live sessions the registry named
+## `registry_name` reports, `commit` as `gem_commit`, and the time since
+## `since` (the program's start, epoch ms) as `uptime_ms`. The reset
+## figures and `spawn_refused` count since the last sample (the first:
+## zero).
+fn start({events, registry_name, every_ms = 60000, commit = nil, since = epoch_ms()})
+  let cfg = {events: events, registry_name: registry_name, every_ms: every_ms, commit: commit, since: since}
+  spawn do
+    loop(cfg)
+  end
+end
+
+export start

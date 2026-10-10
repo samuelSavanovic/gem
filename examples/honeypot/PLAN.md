@@ -28,10 +28,10 @@ Socket ownership is in place, so the honeypot closes nothing on `DOWN`: each ses
 ## Process layout
 
 - **acceptor**: a loop on `tcp_accept` over the listener main opens on the configured port (2323; in production port 23 is redirected to it), sending `{sock, peer}` to the registry. `tcp_accept` takes no timeout, so this process does nothing else.
-- **registry**: owns the global and per-IP connection counts, applies the caps (refuses and logs when over), spawns and monitors one session per connection, and records abnormal exits. It claims each socket it takes from its mailbox; it and the acceptor restart together, so a registry crash closes the sockets not yet handed to a session, those still in its mailbox included. Sessions are temporary and never restarted, so no `dynamic_supervisor`.
+- **registry**: owns the global and per-IP connection counts, applies the caps (closes and logs when over), spawns and monitors one session per connection, and records abnormal exits. It claims each socket it takes from its mailbox; it and the acceptor restart together, so a registry crash closes the sockets not yet handed to a session, those still in its mailbox included. Sessions are temporary and never restarted, so no `dynamic_supervisor`.
 - **session** (one per connection): claims its socket first (`claim(sock)`), so any exit closes it. Runs telnet negotiation, the fake login and the fake shell. Streams its raw input to the recorder. Exits on close, idle timeout, max session length or a byte cap.
-- **recorder**: the only process that touches sqlite. Batches inserts in a transaction (every 200 events or 1 s). Stores every session's raw input (the first 64 KB) as it arrives, so it survives a crash of the session and, but for the last second, of the whole program. Counts the events it drops when its backlog is over the cap (phase 5).
-- **metrics sampler**: every 1–5 minutes records RSS (`/proc/self/statm`), open fds (`list_dir("/proc/self/fd")`), `runtime_stats()` (live processes, arena memory, open and ownerless resources, reset time, and resets over 10 and 100 ms since the last sample), sessions per state, crashes, cap hits and the Gem commit. The `/proc` reads are Linux only.
+- **recorder**: the only process that touches sqlite. Batches inserts in a transaction (every 200 events or 1 s). Stores every session's raw input (the first 64 KB) as it arrives, so it survives a crash of the session and, but for the last second, of the whole program. Past a backlog of 10,000 messages it drops all but the events that open and end a session's row and the metrics, and logs how many it dropped.
+- **metrics sampler**: every minute records RSS (`/proc/self/status`, Linux only), open fds (`list_dir("/dev/fd")`), `runtime_stats()` (live processes, arena memory, open and ownerless resources, reset time, resets over 10 and 100 ms and refused spawns since the last sample), live sessions and their IPs, the recorder's backlog and dropped events, the uptime and the Gem commit. Crashes and cap hits are counted from their own tables.
 - **dashboard** (later, maybe never): `sqlite_query` and `sqlite_exec` run on the scheduler thread, so heavy aggregate queries in-process would stall every session. Either the recorder keeps rollup tables, or the dashboard is a separate OS process reading the WAL database. Until then the `sqlite3` CLI over SSH is the dashboard.
 - A top-level supervisor over acceptor, registry, recorder and sampler.
 
@@ -61,7 +61,7 @@ Commands chained with `;`, `&&`, `||` and `|` are split roughly. The first days 
 
 ## Storage (sqlite)
 
-- `sessions`: id, pid, ip, port, start/end time, end reason (closed, idle, exit, write_failed, crash, lost, week_end), bytes in/out, login succeeded
+- `sessions`: id, pid, ip, port, start/end time, end reason (closed, idle, exit, write_failed, max_time, max_bytes, max_logins, max_commands, crash, lost, week_end), bytes in/out, login succeeded
 - `input`: session_id, time, raw bytes (BLOB), one row per chunk read
 - `logins`: session_id, username, password, ok, time
 - `commands`: session_id, raw line, time
@@ -69,19 +69,19 @@ Commands chained with `;`, `&&`, `||` and `|` are split roughly. The first days 
 - `echoes`: session_id, the bytes an `echo -e` decoded, time
 - `crashes`: session_id, reason, trace (none for a kill), time
 - `cap_events`: session_id or ip, cap, detail, time
-- `metrics` (phase 5): time, rss, fds, procs, arena_memory, resources_open, resources_ownerless, reset_ms, resets_over_10ms, resets_over_100ms, sessions_active, crashes_total, gem commit
+- `metrics`: time, uptime, rss, fds, procs, arena memory, resources open and ownerless, live sessions and IPs, reset time and resets over 10 and 100 ms, refused spawns, recorder backlog and dropped events, gem commit
 
 One database file per week, deleting files past the retention limit. IPs are stored in full for analysis (and printed in full by `--log`); anything published shows them only truncated or aggregated. Anything shown in a browser is escaped and URLs are never clickable: every stored string is attacker-controlled.
 
 ## Limits
 
-All configurable, all logged when hit: max concurrent sessions (global and per IP), idle timeout (about 60 s), max session length (about 10 min), max line length, max bytes in per session, max subnegotiation length, max login attempts, max commands per session, recorder backlog.
+All configurable, all logged when hit: max concurrent sessions (global and per IP), idle timeout (about 60 s), max session length (about 10 min), max line length, max bytes in per session, max subnegotiation length, max login attempts, max commands per session, recorder backlog. README.md ("Limits") has the defaults.
 
 ## Testing
 
 - `test.gem` in this directory (std/test) covers the pure parts: the IAC parser including sequences split across reads, the line splitter, the command responses.
-- A replayer sends stored crash input back over TCP. Crashes that reproduce become numbered examples or `docs/KNOWN_BUGS.md` entries.
-- A hostile load generator under `benchmarks/soak/` runs the local fuzz hour: random bytes, IAC floods, a 10 MB line with no newline, 1-byte-per-second drips, 5,000 idle connections, connect and reset, half-close. RSS and fds must be flat once the connections close.
+- A replayer (not written yet) sends stored crash input back over TCP. Crashes that reproduce become numbered examples or `docs/KNOWN_BUGS.md` entries.
+- A hostile load generator under `benchmarks/soak/` runs the local fuzz hour (`TARGETS=honeypot benchmarks/soak/run.sh`): random bytes, IAC floods, a 10 MB line with no newline, 1-byte-per-second drips, 5,000 idle connections, connect and reset, half-close, clients that never read, Mirai-style scripts and a checked canary. RSS and fds must be flat once the connections close.
 - Success in production is defined before deploy, e.g. RSS and fd count flat over 7 days.
 
 ## Deployment
@@ -99,7 +99,7 @@ All configurable, all logged when hit: max concurrent sessions (global and per I
 - At least 1 vCPU, 1 GB RAM (Gem is compiled on the box), 10 GB disk.
 - Monthly billing with no long commitment; terms that don't forbid honeypots; an EU location.
 
-Candidates as of 2026-10: BuyVM Slice 1024 in Luxembourg (often out of stock) or Hetzner CX23 (was out of stock). Rejected: OVH VPS-1 (anti-DDoS can't be turned off) and netcup (cheap only on a 24-month term). Re-check stock and prices at deploy time; buy only then.
+Candidates as of 2026-10: BuyVM Slice 1024 in Luxembourg (often out of stock) or Hetzner CX23 (out of stock when checked). Rejected: OVH VPS-1 (anti-DDoS can't be turned off) and netcup (cheap only on a 24-month term). Re-check stock and prices at deploy time; buy only then.
 
 ## Phases
 
@@ -107,6 +107,6 @@ Candidates as of 2026-10: BuyVM Slice 1024 in Luxembourg (often out of stock) or
 2. Process-owned sockets (done: `docs/design/process_owned_resources.md`).
 3. IAC parser, line splitter, fake login and shell on :2323, with `test.gem` (done: see README.md).
 4. Crash-data path, recorder and schema (done: see README.md).
-5. Limits, metrics sampler, local fuzz hour.
+5. Limits, metrics sampler, local fuzz hour (done: see README.md).
 6. Deploy on :23, watch the first day's traffic, extend the fake commands.
 7. Optional: rollups or a dashboard; an HTTP honeypot on :80 under the same supervisor.
