@@ -1,0 +1,100 @@
+## device — the canned text of the fake device: a cheap ARMv7 IoT box
+## running BusyBox. Line ends are "\n"; the session turns them into CR LF.
+
+let HOSTNAME = "localhost"
+
+let BANNER = "\n"
+
+let MOTD = """
+
+BusyBox v1.24.1 (2017-01-04 16:39:08 CST) built-in shell (ash)
+Enter 'help' for a list of built-in commands.
+
+
+"""
+
+let PROMPT = "# "
+
+let UNAME = {
+  s: "Linux", n: HOSTNAME, r: "3.10.14", v: "#1 SMP PREEMPT Tue Jan 9 11:03:47 CST 2018",
+  m: "armv7l", o: "GNU/Linux"
+}
+
+let FILES = {}
+
+FILES["/proc/cpuinfo"] = """
+processor	: 0
+model name	: ARMv7 Processor rev 5 (v7l)
+BogoMIPS	: 48.00
+Features	: half thumb fastmult vfp edsp neon vfpv3 tls vfpv4 idiva idivt vfpd32 lpae evtstrm
+CPU implementer	: 0x41
+CPU architecture: 7
+CPU variant	: 0x0
+CPU part	: 0xc07
+CPU revision	: 5
+
+Hardware	: Generic DT based system
+Revision	: 0000
+Serial		: 0000000000000000
+
+"""
+
+FILES["/proc/mounts"] = """
+rootfs / rootfs rw 0 0
+/dev/root / squashfs ro,relatime 0 0
+proc /proc proc rw,relatime 0 0
+sysfs /sys sysfs rw,relatime 0 0
+tmpfs /tmp tmpfs rw,relatime 0 0
+tmpfs /var tmpfs rw,relatime 0 0
+/dev/mtdblock5 /mnt/mtd jffs2 rw,relatime 0 0
+
+"""
+
+FILES["/proc/version"] = "Linux version 3.10.14 (root@build) (gcc version 4.9.4 (Buildroot 2016.11)) #1 SMP PREEMPT Tue Jan 9 11:03:47 CST 2018\n"
+
+FILES["/etc/passwd"] = """
+root:x:0:0:root:/root:/bin/sh
+daemon:x:1:1:daemon:/usr/sbin:/bin/false
+nobody:x:65534:65534:nobody:/nonexistent:/bin/false
+
+"""
+
+let PS = """
+  PID USER       VSZ STAT COMMAND
+    1 root      1536 S    init
+    2 root         0 SW   [kthreadd]
+    3 root         0 SW   [ksoftirqd/0]
+  412 root      1532 S    /sbin/syslogd -n
+  418 root      1532 S    /sbin/klogd -n
+  503 root      2104 S    /usr/sbin/telnetd -F
+  517 root      9844 S    /usr/bin/ipcam -d
+  611 root      1540 S    -sh
+  640 root      1536 R    ps
+
+"""
+
+let LS_ROOT = "bin   dev   etc   home  lib   mnt   proc  root  sbin  sys   tmp   usr   var\n"
+
+## Applets that run and print nothing.
+let SILENT = {
+  enable: true, system: true, shell: true, sh: true, linuxshell: true, su: true,
+  cd: true, chmod: true, rm: true, mkdir: true, cp: true, mv: true, touch: true,
+  kill: true, killall: true, sleep: true, export: true, ulimit: true
+}
+SILENT["true"] = true
+SILENT[":"] = true
+
+## Commands that read their input and pass it on in a pipeline.
+let FILTERS = {grep: true, head: true, tail: true, sort: true, uniq: true, cut: true, tr: true, awk: true, sed: true}
+
+let BUSYBOX_USAGE = """
+BusyBox v1.24.1 (2017-01-04 16:39:08 CST) multi-call binary.
+BusyBox is copyrighted by many authors between 1998-2015.
+Licensed under GPLv2. See source distribution for detailed
+copyright notices.
+
+Usage: busybox [function [arguments]...]
+
+"""
+
+export HOSTNAME, BANNER, MOTD, PROMPT, UNAME, FILES, PS, LS_ROOT, SILENT, FILTERS, BUSYBOX_USAGE
