@@ -1,0 +1,53 @@
+#!/usr/sbin/nft -f
+# The honeypot host's whole firewall: install as /etc/nftables.conf
+# (README.md in this directory). Inbound: SSH, and telnet on port 23
+# redirected to the honeypot's 2323. Outbound: default deny, so "never make
+# an outbound connection" is enforced by the host, not only by the code.
+
+flush ruleset
+
+define SSH_PORT = 22
+define HONEYPOT_PORT = 2323
+# The UIDs systemd gives a DynamicUser= service, the honeypot's among them.
+define DYNAMIC_UIDS = 61184-65519
+
+table inet honeypot {
+	# Every packet the honeypot tries to send on a connection of its own.
+	# It must stay at 0: `nft list counter inet honeypot honeypot_egress`.
+	counter honeypot_egress {}
+
+	chain prerouting {
+		type nat hook prerouting priority dstnat; policy accept;
+		tcp dport 23 redirect to :$HONEYPOT_PORT
+	}
+
+	chain input {
+		type filter hook input priority filter; policy drop;
+		ct state established,related accept
+		ct state invalid drop
+		iif lo accept
+		icmp type { echo-request, destination-unreachable, time-exceeded } accept
+		meta l4proto ipv6-icmp accept
+		tcp dport $SSH_PORT accept
+		# Only through the redirect: 2323 itself stays closed from outside.
+		tcp dport $HONEYPOT_PORT ct status dnat accept
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+	}
+
+	chain output {
+		type filter hook output priority filter; policy drop;
+		# Replies on the connections let in above: sessions and SSH.
+		ct state established,related accept
+		oif lo accept
+		meta skuid $DYNAMIC_UIDS counter name honeypot_egress log prefix "honeypot egress: " level warn drop
+		meta l4proto ipv6-icmp accept
+		udp dport { 53, 123 } accept
+		tcp dport 53 accept
+		# Package updates (apt fetches as _apt, not root).
+		tcp dport { 80, 443 } accept
+		log prefix "egress drop: " level info
+	}
+}

@@ -82,9 +82,11 @@ All configurable, all logged when hit: max concurrent sessions (global and per I
 - `test.gem` in this directory (std/test) covers the pure parts: the IAC parser including sequences split across reads, the line splitter, the command responses.
 - A replayer (not written yet) sends stored crash input back over TCP. Crashes that reproduce become numbered examples or `docs/KNOWN_BUGS.md` entries.
 - A hostile load generator under `benchmarks/soak/` runs the local fuzz hour (`TARGETS=honeypot benchmarks/soak/run.sh`): random bytes, IAC floods, a 10 MB line with no newline, 1-byte-per-second drips, 5,000 idle connections, connect and reset, half-close, clients that never read, Mirai-style scripts and a checked canary. RSS and fds must be flat once the connections close. It passes on macOS and on Linux (`benchmarks/README.md`, "Recorded runs"); after the load RSS keeps the peak's process table slots, about 22 KB per process at the peak (OPTIMIZATIONS.md, "Per-process footprint").
-- Success in production is defined before deploy, e.g. RSS and fd count flat over 7 days.
+- Success in production is defined before deploy: see Success criteria.
 
 ## Deployment
+
+`deploy/` has the systemd unit, the nftables ruleset, the flags and the health query, and `deploy/README.md` the steps.
 
 - A dedicated VPS running nothing else. Gem's runtime is C, so a memory-safety bug could mean remote code execution on the box.
 - Port 23 redirected to 2323 with nftables; the program runs unprivileged.
@@ -102,6 +104,23 @@ All configurable, all logged when hit: max concurrent sessions (global and per I
 
 Candidates as of 2026-10: BuyVM Slice 1024 in Luxembourg (often out of stock) or Hetzner CX23 (out of stock when checked). Rejected: OVH VPS-1 (anti-DDoS can't be turned off) and netcup (cheap only on a 24-month term). Re-check stock and prices at deploy time; buy only then.
 
+## Success criteria
+
+**Before port 23 opens**: an 8-hour soak on the VPS itself, with the deploy's session cap and memory limit (`deploy/README.md`, step 2), passes every check of its report.
+
+**The first 7 days of real traffic**, by `deploy/health.sql` over the metrics rows and by the host:
+
+| Criterion | Measured as | Must hold |
+|---|---|---|
+| No restarts | `restarts` (`uptime_ms` drops), `systemctl show honeypot -p NRestarts` | 0, but for those of our own upgrades |
+| No fd or resource leak | `fds_extra` (fds beyond one per live session), `res_extra` (resources beyond one per live session), `ownerless` | `fds_extra` at most 2 above the first day's, `res_extra` at most 2, `ownerless` at most 1 (the listener), on every day |
+| Memory flat | `rss_max_mb` by day | under 350 MB (half the unit's `MemoryMax`) on every day, and day 7's at most 25% above day 2's |
+| No stalls | `resets_100ms` | 0 |
+| Nothing lost | `lost`, `dropped`, `spawn_refused` | 0, unless a flood explains it (`cap_events`), which is then a finding |
+| No outbound connection | `nft list counter inet honeypot honeypot_egress` | 0 packets |
+
+Crashes don't fail the week: they are what the honeypot is for. Each one is triaged before the week is called: its stored input replayed (by hand with `nc` until the replayer exists), and the bug fixed or added to `docs/KNOWN_BUGS.md`. A criterion that fails is a finding the same way: what caused it goes to KNOWN_BUGS.md or OPTIMIZATIONS.md, then the week starts again.
+
 ## Phases
 
 1. `tcp_peer` builtin (done).
@@ -109,5 +128,5 @@ Candidates as of 2026-10: BuyVM Slice 1024 in Luxembourg (often out of stock) or
 3. IAC parser, line splitter, fake login and shell on :2323, with `test.gem` (done: see README.md).
 4. Crash-data path, recorder and schema (done: see README.md).
 5. Limits, metrics sampler, local fuzz hour (done: see README.md).
-6. Deploy on :23, watch the first day's traffic, extend the fake commands.
+6. Deploy on :23 (`deploy/`: the unit, the firewall and the health query are done; the soak on the VPS and the deploy are not), watch the first day's traffic, extend the fake commands.
 7. Optional: rollups or a dashboard; an HTTP honeypot on :80 under the same supervisor.

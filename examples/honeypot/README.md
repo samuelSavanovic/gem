@@ -17,6 +17,9 @@ build/gem examples/honeypot/test.gem                     # the tests (part of ma
 TARGETS=honeypot benchmarks/soak/run.sh                  # an hour of hostile load (see Testing)
 ```
 
+`deploy/README.md` sets it up on a server: systemd, nftables, the
+health query.
+
 These limits (see Limits) have a flag that takes a positive int:
 `--max-sessions`, `--max-per-ip`, `--max-session-ms`, `--max-bytes`,
 `--max-logins`, `--max-commands`, `--max-backlog`, `--idle-ms`; and
@@ -122,6 +125,7 @@ honeypot_sup (supervisor, one_for_one)
 | `recorder.gem` | the database: schema, batched writes, weekly files, the backlog cap; the log lines |
 | `sampler.gem` | the metrics: memory, fds, processes, resets, live sessions |
 | `test.gem` | unit tests and end-to-end tests over TCP |
+| `deploy/` | the systemd unit, the nftables ruleset and the health query for a server |
 
 Choices worth knowing:
 
