@@ -271,11 +271,7 @@ fn complete_identifiers(symbols, prefix)
     push_unique(f.name, rpc.CIK_FUNCTION, nil)
   end
   for v in symbols.vars
-    if v.kind == "param"
-      push_unique(v.name, rpc.CIK_VARIABLE, "parameter")
-    else
-      push_unique(v.name, rpc.CIK_VARIABLE, nil)
-    end
+    push_unique(v.name, rpc.CIK_VARIABLE, if v.kind == "param" then "parameter" end)
   end
   for imp in symbols.imports
     if imp.kind == "module"

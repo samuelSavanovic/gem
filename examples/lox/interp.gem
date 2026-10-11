@@ -165,8 +165,7 @@ fn execute(s, env)
     emit(stringify(evaluate(s.expr, env)))
     nil
   when "var"
-    let value = if s.init != nil then evaluate(s.init, env) end
-    env.values[s.name] = value
+    env.values[s.name] = if s.init != nil then evaluate(s.init, env) end
     nil
   when "block" then exec_block(s.statements, new_env(env))
   when "if"
@@ -186,8 +185,7 @@ fn execute(s, env)
     end
     nil
   when "return"
-    let value = if s.value != nil then evaluate(s.value, env) end
-    {value: value}
+    {value: if s.value != nil then evaluate(s.value, env) end}
   when "function"
     env.values[s.name] = {kind: "function", decl: s, closure: env, is_init: false}
     nil
