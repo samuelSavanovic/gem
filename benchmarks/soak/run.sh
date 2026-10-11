@@ -32,6 +32,10 @@
 #   MINI_REDIS_ARGS, STOMP_ARGS, BOOKMARK_ARGS, HONEYPOT_ARGS
 #                  extra options for that target's load generator, e.g.
 #                  MINI_REDIS_ARGS="--rate 8000 --subs 50" (see --help)
+#   HONEYPOT_SERVER_ARGS
+#                  extra options for the honeypot itself, after the run's
+#                  own (a later flag wins), e.g. the deploy's
+#                  "--max-sessions 1000" (examples/honeypot/deploy/README.md)
 #
 # Every sample is flushed and fsynced as it is taken, so stopping a run
 # (Ctrl-C, SIGTERM, a closed terminal, a crash) keeps everything sampled so
@@ -129,6 +133,7 @@ OUT="$(cd "$OUT" && pwd)"
   [[ -n "${STOMP_ARGS:-}" ]] && echo "STOMP_ARGS: $STOMP_ARGS"
   [[ -n "${BOOKMARK_ARGS:-}" ]] && echo "BOOKMARK_ARGS: $BOOKMARK_ARGS"
   [[ -n "${HONEYPOT_ARGS:-}" ]] && echo "HONEYPOT_ARGS: $HONEYPOT_ARGS"
+  [[ -n "${HONEYPOT_SERVER_ARGS:-}" ]] && echo "HONEYPOT_SERVER_ARGS: $HONEYPOT_SERVER_ARGS"
 } > "$OUT/meta.txt"
 cat "$OUT/meta.txt"
 echo "run directory: $OUT"
@@ -229,9 +234,10 @@ run_target() {
       # Every client comes from 127.0.0.1, so the per-IP cap is out of the
       # way; the server records its metrics every 10 s in work/data.
       mkdir -p "$dir/work/data"
+      # shellcheck disable=SC2086 # HONEYPOT_SERVER_ARGS is a list of options
       (cd "$dir/work" && trap '' INT HUP && GEM_DIAG="$SERVER_DIAG" exec "$OUT/bin/honeypot" \
         --port "$port" --data data --metrics-ms 10000 --max-per-ip 100000 --max-sessions 20000 \
-        --commit "$(git -C "$ROOT" rev-parse --short HEAD)") > "$dir/server.log" 2>&1 &
+        --commit "$(git -C "$ROOT" rev-parse --short HEAD)" ${HONEYPOT_SERVER_ARGS:-}) > "$dir/server.log" 2>&1 &
       load=honeypot_load.py; extra=${HONEYPOT_ARGS:-} ;;
   esac
   server_pid=$!

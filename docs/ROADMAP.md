@@ -156,6 +156,10 @@ What remains:
 
 - `exec`'s child process as a third resource kind: `posix_spawn` + `waitpid` so the child can be signalled when its owner dies. It registers a close callback in `runtime/gem_resource.c` and gets `claim` for free.
 
+## IPv6 sockets (P3)
+
+`tcp_listen` and `tcp_connect` take IPv4 addresses and names only (`gem_tcp_resolve4`, `socket(AF_INET, …)` in `runtime/gem_builtins_tcp.c`); `tcp_peer` and `tcp_from_fd` already handle IPv6. A server can't listen on `::`, so the honeypot answers on its host's IPv4 address only. Needs `getaddrinfo` with `AF_UNSPEC` (or `AF_INET6` with `IPV6_V6ONLY` off for a dual-stack listener) and `sockaddr_storage` throughout; resolving a name still blocks the scheduler thread.
+
 ## Shared read-mostly data between processes (P2)
 
 Module-level bindings are per-process (SPEC "Module-level bindings are per-process"): every process has its own copy, writes stay local, and `spawn` copies the parent's module state. Sharing mutable state means a process plus messages, which is the right default but makes large read-mostly data (a config tree, a routing table, a lookup cache) cost a copy per spawn or a message round-trip per read.

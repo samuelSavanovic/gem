@@ -10,7 +10,9 @@ honeypot meets on the internet, all at once, from one asyncio loop.
              subnegotiations, runs of IAC IAC
   long_line  a 10 MB line with no line end, every --long-line-s seconds
   drips      --drips clients typing one byte a second until the server
-             ends them (its max session length), then again
+             ends them (its max session length), then again; each one
+             ends its first session itself, at times spread over
+             --drip-spread-s, so they don't all reach that cap at once
   idle       --idle connections that never send, reopened when the server
              closes them (its idle timeout)
   resets     connect, then reset at once (SO_LINGER 0)
@@ -32,6 +34,7 @@ Writes one CSV row per --sample-s interval (see soaklib.run).
 
 import argparse
 import asyncio
+import functools
 import random
 import socket
 import struct
@@ -123,8 +126,12 @@ class Load:
         except Exception as e:  # a bug in the load, not the server
             self.err("load", f"{name}: {type(e).__name__}: {e}")
 
-    async def forever(self, fn, name):
-        """Runs `fn()` again and again until the end of the run."""
+    async def forever(self, fn, name, first=None):
+        """Runs `fn()` again and again until the end of the run; the first
+        time as `first()` when given."""
+        if first is not None and not self.stopped():
+            await self.guard(first, name)
+            await asyncio.sleep(0.1)
         while not self.stopped():
             await self.guard(fn, name)
             await asyncio.sleep(0.1)
@@ -240,7 +247,9 @@ class Load:
         finally:
             w.close()
 
-    async def drip(self):
+    async def drip(self, hold_s=None):
+        """A byte a second until the server closes, or for `hold_s`."""
+        end = None if hold_s is None else time.monotonic() + hold_s
         r, w = await self.connect()
         try:
             if not await self.greeting(r, "drip"):
@@ -248,7 +257,7 @@ class Load:
             script = b"root\r\nxc3511\r\nroot\r\nvizxv\r\nroot\r\nadmin\r\nls -la /tmp\r\n"
             i = 0
             reader = asyncio.create_task(r.read())  # ends when the server closes
-            while not self.stopped() and not reader.done():
+            while not self.stopped() and not reader.done() and (end is None or time.monotonic() < end):
                 w.write(script[i % len(script):i % len(script) + 1])
                 i += 1
                 await asyncio.wait([reader], timeout=1.0)
@@ -344,7 +353,9 @@ class Load:
             self.paced(a.halfclose_rate, self.halfclose, "halfclose"),
             self.paced(a.nonreader_rate, self.nonreader, "nonreader"),
         ]
-        jobs += [self.forever(self.drip, "drip") for _ in range(a.drips)]
+        jobs += [self.forever(self.drip, "drip", None if a.drip_spread_s <= 0 else
+                              functools.partial(self.drip, (i + 1) * a.drip_spread_s / a.drips))
+                 for i in range(a.drips)]
         tasks = [asyncio.create_task(j) for j in jobs]
         # The idle connections open over --ramp-s, so the accept queue isn't
         # flooded at the start.
@@ -394,6 +405,9 @@ def main():
     p.add_argument("--halfclose-rate", type=float, default=2, help="half-closed sessions/s")
     p.add_argument("--nonreader-rate", type=float, default=0.2, help="clients that never read/s")
     p.add_argument("--drips", type=int, default=50, help="clients typing a byte a second")
+    p.add_argument("--drip-spread-s", type=float, default=600,
+                   help="seconds over which the drips end their first sessions (the server's max "
+                        "session length, so their sessions end evenly; 0: all at the cap)")
     p.add_argument("--idle", type=int, default=5000, help="idle connections held open")
     p.add_argument("--ramp-s", type=float, default=20, help="seconds to open the idle ones")
     args = p.parse_args()

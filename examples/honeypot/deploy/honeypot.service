@@ -1,0 +1,59 @@
+# The honeypot as a systemd service: install as
+# /etc/systemd/system/honeypot.service, with its settings in
+# /etc/honeypot.env (README.md in this directory).
+[Unit]
+Description=Gem telnet honeypot (examples/honeypot)
+# The firewall's egress deny must be in place before the honeypot runs.
+Requires=nftables.service
+After=network-online.target nftables.service
+Wants=network-online.target
+# A restart is a finding (PLAN.md, "Success criteria"), so keep restarting.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/honeypot.env
+ExecStart=/usr/local/bin/honeypot --bind 0.0.0.0 --port 2323 --data /var/lib/honeypot --commit ${HONEYPOT_COMMIT} $HONEYPOT_ARGS
+Restart=always
+RestartSec=5
+
+DynamicUser=yes
+StateDirectory=honeypot
+StateDirectoryMode=0750
+WorkingDirectory=/var/lib/honeypot
+UMask=0077
+
+# --max-sessions in /etc/honeypot.env is sized to this (README.md).
+MemoryMax=2G
+MemorySwapMax=0
+LimitNOFILE=4096
+# The scheduler thread and 4 I/O workers.
+TasksMax=32
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+# The stack cache asks which pages are resident (runtime/gem_scheduler.c).
+SystemCallFilter=mincore
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target
