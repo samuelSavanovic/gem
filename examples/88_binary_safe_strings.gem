@@ -29,8 +29,9 @@ let cat = a + "\0tail"
 print(len(cat))                  # 8
 
 # Round-trip through write_file/read_file preserves NULs
-write_file("/tmp/gem_binsafe.bin", s)
-let back = read_file("/tmp/gem_binsafe.bin")
+let bin_path = "/tmp/gem_88_binsafe_{epoch_ms()}_{random(1000000)}.bin"
+write_file(bin_path, s)
+let back = read_file(bin_path)
 print(len(back))                 # 12
 print(back == s)                 # true
-remove_file("/tmp/gem_binsafe.bin")
+remove_file(bin_path)

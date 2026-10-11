@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Check the driver's one-line errors for a source path it cannot read:
-# exact stderr, empty stdout, exit status 1, no stack trace.
+# exact stderr, empty stdout, exit status 1, no stack trace. Then run
+# mode: paths and arguments with spaces and quotes, the work directory.
 #
 # Run from the repo root: tests/check_cli.sh
 
@@ -39,6 +40,36 @@ check "gem: cannot open 'tests/no_such_file.gem'" 1 --check tests/no_such_file.g
 check "gem: cannot open 'tests/no_such_dir/x.gem'" 1 tests/no_such_dir/x.gem -o /dev/null
 check "gem: 'tests' is a directory, not a source file" 1 tests
 check "gem: 'tests/' is a directory, not a source file" 1 --emit-c tests/
+
+# Run mode: the source path and each argument reach cc and the program as
+# one word, the program's exit status is gem's, and the work directory
+# under $TMPDIR is gone afterwards; when cc fails it stays, holding the C
+# file gem names.
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/gem_cli.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+mkdir "$tmp/a b" "$tmp/work"
+printf 'let a = argv()\nprint("{a[1]}|{a[2]}|{a[3]}|{len(a)}")\nexit(3)\n' > "$tmp/a b/it's.gem"
+total=$((total + 1))
+out=$(TMPDIR="$tmp/work" "$GEM" "$tmp/a b/it's.gem" 'x y' '$(echo no)' "q'uote" 2>&1)
+status=$?
+left=$(ls -A "$tmp/work")
+if [ "$out" != "x y|\$(echo no)|q'uote|4" ] || [ "$status" != 3 ] || [ -n "$left" ]; then
+  echo "FAIL: run mode with spaces and quotes"
+  echo "  want status 3, stdout: x y|\$(echo no)|q'uote|4, an empty work directory"
+  echo "  got  status $status, stdout: $out, work directory: $left"
+  fails=$((fails + 1))
+fi
+printf 'extern fn gem_no_such_fn() -> Int\nprint(gem_no_such_fn())\n' > "$tmp/a b/bad.gem"
+total=$((total + 1))
+err=$(TMPDIR="$tmp/work" "$GEM" "$tmp/a b/bad.gem" 2>&1 >/dev/null)
+status=$?
+c_file=${err##*the C is in }
+if [ "$status" != 1 ] || [ "$c_file" = "$err" ] || [ ! -f "$c_file" ] || [ "${c_file#"$tmp/work/"}" = "$c_file" ]; then
+  echo "FAIL: cc failure keeps the C file"
+  echo "  want status 1, a last line naming the C file under $tmp/work"
+  echo "  got  status $status, stderr: $err"
+  fails=$((fails + 1))
+fi
 
 if [ "$fails" -gt 0 ]; then
   echo

@@ -1,6 +1,6 @@
-# Scope passes codegen runs on the post-lower AST before any name-keyed
-# analysis: shadowing-let renaming and strict block scope
-# (`scope_shadowing_lets`), module namespace resolution
+# Scope passes codegen runs on the post-lower AST: shadowing-let renaming
+# and strict block scope (`scope_shadowing_lets`, which runs before any
+# analysis keyed on names), module namespace resolution
 # (`collect_module_namespaces`), and the let-name collectors codegen uses
 # to tell module slots from locals.
 
@@ -60,11 +60,11 @@ end
 # Scoping is strict: a `let` (or a `for` variable or pattern binding) is
 # visible from its declaration to the end of its block and nowhere else.
 # The pass also reports every use (read or assignment) of a name after the
-# block that declared it ended, or before its `let` (outside closures),
-# unless an outer binding of the name is visible there
-# (`shadow_check_use`). Without the check such a use would
-# reach C as an undeclared or stale `gem_v_<name>` (codegen's local set
-# is fn-wide).
+# block that declared it ended, or before its `let` (from a closure too:
+# its env is built when it is created), unless an outer binding of the
+# name is visible there (`shadow_check_use`). Without the check such a use
+# would reach C as an undeclared or stale `gem_v_<name>` (codegen's local
+# set is fn-wide).
 #
 # Runs on the post-lower AST, before any analysis keyed on names (capture,
 # liveness, process-tail tagging).
@@ -73,11 +73,15 @@ end
 # name it compiles to (itself, or its fresh `__sh<N>_` name). `mode` is
 # "module" (module-scope statement list: lets are slots), "block" (nested
 # top-level scope) or "fn" (inside a fn or closure body). Module-level
-# bindings and named fns count as visible everywhere outside module scope
-# (`ctx.globals`, `ctx.fns`), wherever they are declared; extern fns and
-# builtins everywhere. `ctx.ended` maps a name some ended block declared to
-# its declaration site, plus the `if` / `match` / `receive` whose branch the
-# block was (`block_kw`, nil for any other block); reset per named fn.
+# bindings and named fns (`ctx.globals`, `ctx.fns`, wherever they are
+# declared), extern fns and builtins are visible everywhere; a `let` of
+# such a name outside module scope is renamed. `ctx.ended` maps a name
+# some ended block declared to its declaration site, plus the `if` /
+# `match` / `receive` whose branch the block was (`block_kw`, nil for any
+# other block). `ctx.ended`, `ctx.later` and `ctx.outer_later`
+# (`shadow_check_use`) belong to one body: each named fn gets its own
+# (`shadow_named_fn`), and the top-level code of every loaded module
+# shares the ones `scope_shadowing_lets` starts with.
 
 fn copy_scope_env(env)
   let r = {}
@@ -188,7 +192,7 @@ shadow_collect_lets = fn(node, out)
   end
 end
 
-# A named fn (or the top-level code): its own scope-tracking state.
+# A named fn: its own `ended`, `later` and `outer_later`, restored after.
 fn shadow_named_fn(node, ctx)
   let saved = {ended: ctx.ended, later: ctx.later, outer_later: ctx.outer_later, depth: ctx.closure_depth}
   ctx.ended = {}

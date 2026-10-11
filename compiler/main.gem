@@ -1272,6 +1272,19 @@ fn basename_no_ext(path)
   name
 end
 
+# One word for `sh -c`: single quotes, each `'` inside as `'\''`.
+fn shell_quote(s)
+  "'" + str_replace(s, "'", "'\\''") + "'"
+end
+
+# gem_temp_dir and gem_rmdir (runtime/gem_builtins_io.c) make and remove
+# the work directory that holds a compile's C file, and in run mode its
+# binary, so compiles running at once never share a file. They are
+# runtime helpers, not builtins, so a compiler built by an older one can
+# call them.
+extern fn gem_temp_dir() -> String
+extern fn gem_rmdir(path: String) -> Int
+
 # ─── Main ─────────────────────────────────────────────────────
 
 let argc = len(argv())
@@ -1355,9 +1368,17 @@ fold_constants(resolved_ast)
 
 let cg = make_codegen(src_path, module_bindings, show_path, sources_by_file, sink, build_global_display(loaded), normalize_load_path(path_join(stdlib_root, "std")))
 # The C file cc compiles in compile mode (codegen points `#line` at it
-# after the extern includes); nil for --check and --emit-c.
-let c_file = if not cli.check and not cli.emit_c
-  "/tmp/gem_" + basename_no_ext(src_path) + ".c"
+# after the extern includes), in a new work directory; nil for --check
+# and --emit-c.
+let work_dir = nil
+let c_file = nil
+if not cli.check and not cli.emit_c
+  work_dir = gem_temp_dir()
+  if work_dir == nil
+    eprint("gem: cannot create a work directory under $TMPDIR (or /tmp)\n")
+    exit(1)
+  end
+  c_file = work_dir + "/" + basename_no_ext(src_path) + ".c"
 end
 let c_code = cg.compile(resolved_ast, c_file)
 
@@ -1387,12 +1408,13 @@ else
   let base = basename_no_ext(src_path)
   let tmp_c = c_file
 
-  # Determine output name. Default-to-run drops the binary in /tmp so the
-  # CWD doesn't get littered; compile-only writes to ./<base>.
+  # Determine output name. Default-to-run puts the binary in the work
+  # directory so the CWD doesn't get littered; compile-only writes to
+  # ./<base>.
   let out_name = cli.out_name
   if out_name == nil
     if cli.run
-      out_name = "/tmp/gem_" + base + "_bin"
+      out_name = work_dir + "/" + base
     else
       out_name = "./" + base
     end
@@ -1405,33 +1427,40 @@ else
   let runtime_dir = path_join(install_root, "runtime")
 
   let runtime_lib = path_join(install_root, "build/libgem_runtime.a")
+  let q_out = shell_quote(out_name)
+  let q_c = shell_quote(tmp_c)
+  let q_rt = shell_quote(runtime_dir)
   let cc_cmd = if file_exists(runtime_lib)
-    "cc -o " + out_name + " " + tmp_c + " -I " + runtime_dir + " -std=gnu11 -O2 -pthread " + runtime_lib + " -lm"
+    "cc -o " + q_out + " " + q_c + " -I " + q_rt + " -std=gnu11 -O2 -pthread " + shell_quote(runtime_lib) + " -lm"
   else
-    "cc -o " + out_name + " " + tmp_c + " " + runtime_dir + "/gem_*.c " + runtime_dir + "/sqlite3.c -I " + runtime_dir + " -std=gnu11 -O2 -pthread -lm"
+    "cc -o " + q_out + " " + q_c + " " + q_rt + "/gem_*.c " + q_rt + "/sqlite3.c -I " + q_rt + " -std=gnu11 -O2 -pthread -lm"
   end
 
   let cc_ret = exec(cc_cmd)
   if cc_ret != 0
     # Don't use error() here — cc has already printed its own diagnostics to
     # stderr, and a Gem stack trace pointing at this driver line would be
-    # noise. Exit cleanly with cc's status.
-    eprint("gem: compilation failed (cc exited with " + to_string(cc_ret) + ")\n")
+    # noise. Exit cleanly with cc's status, and leave the C file for reading.
+    eprint("gem: compilation failed (cc exited with " + to_string(cc_ret) + "); the C is in " + tmp_c + "\n")
     exit(cc_ret)
   end
+  remove_file(tmp_c)
 
   # ─── Run mode ───────────────────────────────────────────────
 
+  let run_ret = 0
   if cli.run
-    let run_cmd = out_name
+    let run_cmd = q_out
     let i = 0
     while i < len(cli.run_args)
-      run_cmd = run_cmd + " " + cli.run_args[i]
+      run_cmd = run_cmd + " " + shell_quote(cli.run_args[i])
       i += 1
     end
-    let run_ret = exec(run_cmd)
-    if run_ret != 0
-      exit(run_ret)
-    end
+    run_ret = exec(run_cmd)
+    remove_file(out_name)
+  end
+  gem_rmdir(work_dir)
+  if run_ret != 0
+    exit(run_ret)
   end
 end

@@ -23,7 +23,7 @@ print(is_dir("nonexistent_xyz_abc"))
 print(type(normalize_path("compiler/main.gem")))
 
 # mkdir + write + list_dir + remove_file cycle
-let tmpdir = "/tmp/gem_fs_test_44"
+let tmpdir = "/tmp/gem_44_fs_{epoch_ms()}_{random(1000000)}"
 mkdir(tmpdir)
 write_file(tmpdir + "/only.txt", "data")
 
@@ -38,6 +38,7 @@ print(found)
 
 print(remove_file(tmpdir + "/only.txt"))
 print(file_exists(tmpdir + "/only.txt"))
+exec("rmdir {tmpdir}")
 
 # Adversarial: non-string args raise errors
 let r1 = pcall dirname(42)

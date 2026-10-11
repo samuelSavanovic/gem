@@ -2,6 +2,8 @@
 double atof(const char*);
 char* gem_exe_path(void);
 int gem_table_braces(GemVal);
+char* gem_temp_dir(void);
+int64_t gem_rmdir(const char*);
 static GemVal gem_fn___mod_string_text(void *_env, GemVal *args, int argc);
 static GemVal gem_fn___mod_string_is_space(void *_env, GemVal *args, int argc);
 static GemVal gem_fn___mod_string_split(void *_env, GemVal *args, int argc);
@@ -351,9 +353,12 @@ static GemVal gem_fn_build_global_display(void *_env, GemVal *args, int argc);
 static GemVal gem_fn_usage_error(void *_env, GemVal *args, int argc);
 static GemVal gem_fn_parse_args(void *_env, GemVal *args, int argc);
 static GemVal gem_fn_basename_no_ext(void *_env, GemVal *args, int argc);
+static GemVal gem_fn_shell_quote(void *_env, GemVal *args, int argc);
 static GemVal gem_fn___mod_parser_atof(void *_env, GemVal *args, int argc);
 static GemVal gem_fn___mod_loader_gem_exe_path(void *_env, GemVal *args, int argc);
 static GemVal gem_fn___mod_json_gem_table_braces(void *_env, GemVal *args, int argc);
+static GemVal gem_fn_gem_temp_dir(void *_env, GemVal *args, int argc);
+static GemVal gem_fn_gem_rmdir(void *_env, GemVal *args, int argc);
 #define gem_gi_BUILTIN_FNS 0
 #define gem_g_BUILTIN_FNS gem_global_get(0)
 #define gem_gi_KEYWORDS 1
@@ -902,80 +907,80 @@ static GemVal gem_fn___mod_json_gem_table_braces(void *_env, GemVal *args, int a
 #define gem_g___mod_workspace_parse_source gem_global_get(272)
 #define gem_gi___mod_workspace_tokenize 273
 #define gem_g___mod_workspace_tokenize gem_global_get(273)
-#define gem_gi___val_625 274
-#define gem_g___val_625 gem_global_get(274)
-#define gem_gi_argc 275
-#define gem_g_argc gem_global_get(275)
-#define gem_gi_ast 276
-#define gem_g_ast gem_global_get(276)
-#define gem_gi_base_dir 277
-#define gem_g_base_dir gem_global_get(277)
-#define gem_gi_build_keyword_set 278
-#define gem_g_build_keyword_set gem_global_get(278)
-#define gem_gi_c_code 279
-#define gem_g_c_code gem_global_get(279)
-#define gem_gi_c_file 280
-#define gem_g_c_file gem_global_get(280)
-#define gem_gi_cg 281
-#define gem_g_cg gem_global_get(281)
-#define gem_gi_cli 282
-#define gem_g_cli gem_global_get(282)
-#define gem_gi_collect_pattern_names 283
-#define gem_g_collect_pattern_names gem_global_get(283)
-#define gem_gi_compute_stdlib_root 284
-#define gem_g_compute_stdlib_root gem_global_get(284)
-#define gem_gi_find_install_root 285
-#define gem_g_find_install_root gem_global_get(285)
-#define gem_gi_find_project_root 286
-#define gem_g_find_project_root gem_global_get(286)
-#define gem_gi_fold_constants 287
-#define gem_g_fold_constants gem_global_get(287)
-#define gem_gi_install_root 288
-#define gem_g_install_root gem_global_get(288)
-#define gem_gi_load_target_problem 289
-#define gem_g_load_target_problem gem_global_get(289)
-#define gem_gi_loaded 290
-#define gem_g_loaded gem_global_get(290)
-#define gem_gi_lower 291
-#define gem_g_lower gem_global_get(291)
-#define gem_gi_make_codegen 292
-#define gem_g_make_codegen gem_global_get(292)
-#define gem_gi_make_error_sink 293
-#define gem_g_make_error_sink gem_global_get(293)
-#define gem_gi_make_show_path 294
-#define gem_g_make_show_path gem_global_get(294)
-#define gem_gi_module_bindings 295
-#define gem_g_module_bindings gem_global_get(295)
-#define gem_gi_normalize_load_path 296
-#define gem_g_normalize_load_path gem_global_get(296)
-#define gem_gi_normalize_newlines 297
-#define gem_g_normalize_newlines gem_global_get(297)
-#define gem_gi_parse_source 298
-#define gem_g_parse_source gem_global_get(298)
-#define gem_gi_print_all_errors 299
-#define gem_g_print_all_errors gem_global_get(299)
-#define gem_gi_project_root 300
-#define gem_g_project_root gem_global_get(300)
-#define gem_gi_resolve_load_path 301
-#define gem_g_resolve_load_path gem_global_get(301)
-#define gem_gi_resolved_ast 302
-#define gem_g_resolved_ast gem_global_get(302)
-#define gem_gi_run_lsp 303
-#define gem_g_run_lsp gem_global_get(303)
-#define gem_gi_show_path 304
-#define gem_g_show_path gem_global_get(304)
-#define gem_gi_sink 305
-#define gem_g_sink gem_global_get(305)
-#define gem_gi_source 306
-#define gem_g_source gem_global_get(306)
-#define gem_gi_sources_by_file 307
-#define gem_g_sources_by_file gem_global_get(307)
-#define gem_gi_src_path 308
-#define gem_g_src_path gem_global_get(308)
-#define gem_gi_stdlib_root 309
-#define gem_g_stdlib_root gem_global_get(309)
-#define gem_gi_string 310
-#define gem_g_string gem_global_get(310)
+#define gem_gi_argc 274
+#define gem_g_argc gem_global_get(274)
+#define gem_gi_ast 275
+#define gem_g_ast gem_global_get(275)
+#define gem_gi_base_dir 276
+#define gem_g_base_dir gem_global_get(276)
+#define gem_gi_build_keyword_set 277
+#define gem_g_build_keyword_set gem_global_get(277)
+#define gem_gi_c_code 278
+#define gem_g_c_code gem_global_get(278)
+#define gem_gi_c_file 279
+#define gem_g_c_file gem_global_get(279)
+#define gem_gi_cg 280
+#define gem_g_cg gem_global_get(280)
+#define gem_gi_cli 281
+#define gem_g_cli gem_global_get(281)
+#define gem_gi_collect_pattern_names 282
+#define gem_g_collect_pattern_names gem_global_get(282)
+#define gem_gi_compute_stdlib_root 283
+#define gem_g_compute_stdlib_root gem_global_get(283)
+#define gem_gi_find_install_root 284
+#define gem_g_find_install_root gem_global_get(284)
+#define gem_gi_find_project_root 285
+#define gem_g_find_project_root gem_global_get(285)
+#define gem_gi_fold_constants 286
+#define gem_g_fold_constants gem_global_get(286)
+#define gem_gi_install_root 287
+#define gem_g_install_root gem_global_get(287)
+#define gem_gi_load_target_problem 288
+#define gem_g_load_target_problem gem_global_get(288)
+#define gem_gi_loaded 289
+#define gem_g_loaded gem_global_get(289)
+#define gem_gi_lower 290
+#define gem_g_lower gem_global_get(290)
+#define gem_gi_make_codegen 291
+#define gem_g_make_codegen gem_global_get(291)
+#define gem_gi_make_error_sink 292
+#define gem_g_make_error_sink gem_global_get(292)
+#define gem_gi_make_show_path 293
+#define gem_g_make_show_path gem_global_get(293)
+#define gem_gi_module_bindings 294
+#define gem_g_module_bindings gem_global_get(294)
+#define gem_gi_normalize_load_path 295
+#define gem_g_normalize_load_path gem_global_get(295)
+#define gem_gi_normalize_newlines 296
+#define gem_g_normalize_newlines gem_global_get(296)
+#define gem_gi_parse_source 297
+#define gem_g_parse_source gem_global_get(297)
+#define gem_gi_print_all_errors 298
+#define gem_g_print_all_errors gem_global_get(298)
+#define gem_gi_project_root 299
+#define gem_g_project_root gem_global_get(299)
+#define gem_gi_resolve_load_path 300
+#define gem_g_resolve_load_path gem_global_get(300)
+#define gem_gi_resolved_ast 301
+#define gem_g_resolved_ast gem_global_get(301)
+#define gem_gi_run_lsp 302
+#define gem_g_run_lsp gem_global_get(302)
+#define gem_gi_show_path 303
+#define gem_g_show_path gem_global_get(303)
+#define gem_gi_sink 304
+#define gem_g_sink gem_global_get(304)
+#define gem_gi_source 305
+#define gem_g_source gem_global_get(305)
+#define gem_gi_sources_by_file 306
+#define gem_g_sources_by_file gem_global_get(306)
+#define gem_gi_src_path 307
+#define gem_g_src_path gem_global_get(307)
+#define gem_gi_stdlib_root 308
+#define gem_g_stdlib_root gem_global_get(308)
+#define gem_gi_string 309
+#define gem_g_string gem_global_get(309)
+#define gem_gi_work_dir 310
+#define gem_g_work_dir gem_global_get(310)
 
 static GemVal gem_fn___mod_parser_atof(void *_env, GemVal *args, int argc) {
     if (argc != 1) { char _eb[128]; snprintf(_eb, sizeof(_eb), "atof: expected 1 argument(s), got %d", argc); gem_error(_eb); }
@@ -999,6 +1004,22 @@ static GemVal gem_fn___mod_json_gem_table_braces(void *_env, GemVal *args, int a
     gem_native_call_fence();
     int _ret = gem_table_braces(args[0]);
     return gem_bool(_ret);
+}
+
+static GemVal gem_fn_gem_temp_dir(void *_env, GemVal *args, int argc) {
+    if (argc != 0) { char _eb[128]; snprintf(_eb, sizeof(_eb), "gem_temp_dir: expected 0 argument(s), got %d", argc); gem_error(_eb); }
+    gem_native_call_fence();
+    const char* _ret = gem_temp_dir();
+    return _ret ? gem_string(_ret) : GEM_NIL;
+}
+
+static GemVal gem_fn_gem_rmdir(void *_env, GemVal *args, int argc) {
+    if (argc != 1) { char _eb[128]; snprintf(_eb, sizeof(_eb), "gem_rmdir: expected 1 argument(s), got %d", argc); gem_error(_eb); }
+    if (args[0].type != VAL_STRING) { char _eb[128]; snprintf(_eb, sizeof(_eb), "gem_rmdir: arg 0 expected String, got %s", gem_type_str(args[0])); gem_error(_eb); }
+    char* _p0 = args[0].sval;
+    gem_native_call_fence();
+    int64_t _ret = gem_rmdir(_p0);
+    return gem_int(_ret);
 }
 
 static GemVal gem_fn___mod_string_text(void *_env, GemVal *args, int argc) {
@@ -21781,25 +21802,25 @@ static GemVal gem_fn___mod_scope_collect_top_let_names(void *_env, GemVal *args,
 }
 
 static GemVal gem_fn___mod_scope_copy_scope_env(void *_env, GemVal *args, int argc) {
-#line 82 "compiler/scope.gem"
+#line 86 "compiler/scope.gem"
     static const GemLeafSite _leaf_site = {"scope.copy_scope_env", "compiler/scope.gem"};
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_env = (argc > 0) ? args[0] : GEM_NIL;
-#line 83 "compiler/scope.gem"
-    gem_leaf_line = 83;
+#line 87 "compiler/scope.gem"
+    gem_leaf_line = 87;
     GemVal _t4647 = gem_table_new_braces();
     GemVal gem_v_r = _t4647;
-#line 84 "compiler/scope.gem"
-    gem_leaf_line = 84;
+#line 88 "compiler/scope.gem"
+    gem_leaf_line = 88;
     GemVal gem_v___for_tbl_100 = gem_v_env;
-#line 84 "compiler/scope.gem"
-    gem_leaf_line = 84;
+#line 88 "compiler/scope.gem"
+    gem_leaf_line = 88;
     GemVal gem_v___for_len_100 = gem_for_len_1(gem_v___for_tbl_100);
-#line 84 "compiler/scope.gem"
-    gem_leaf_line = 84;
+#line 88 "compiler/scope.gem"
+    gem_leaf_line = 88;
     GemVal gem_v___for_i_100 = gem_int(0);
-#line 84 "compiler/scope.gem"
-    gem_leaf_line = 84;
+#line 88 "compiler/scope.gem"
+    gem_leaf_line = 88;
     GemArenaMark _mk106;
     gem_arena_mark(&_mk106);
     while (1) {
@@ -21810,50 +21831,50 @@ static GemVal gem_fn___mod_scope_copy_scope_env(void *_env, GemVal *args, int ar
         }
     GemVal _t4648 = gem_v___for_i_100;
         if (!gem_truthy(gem_lt(_t4648, gem_v___for_len_100))) break;
-#line 84 "compiler/scope.gem"
-        gem_leaf_line = 84;
+#line 88 "compiler/scope.gem"
+        gem_leaf_line = 88;
     GemVal _t4649 = gem_v___for_tbl_100;
         GemVal gem_v_k = gem_table_key_at_2(_t4649, gem_v___for_i_100);
-#line 84 "compiler/scope.gem"
-        gem_leaf_line = 84;
+#line 88 "compiler/scope.gem"
+        gem_leaf_line = 88;
     GemVal _t4650 = gem_v___for_tbl_100;
         GemVal gem_v_v = gem_table_val_at_2(_t4650, gem_v___for_i_100);
-#line 84 "compiler/scope.gem"
-        gem_leaf_line = 84;
+#line 88 "compiler/scope.gem"
+        gem_leaf_line = 88;
         gem_v___for_i_100 = gem_add(gem_v___for_i_100, gem_int(1));
-#line 85 "compiler/scope.gem"
-        gem_leaf_line = 85;
+#line 89 "compiler/scope.gem"
+        gem_leaf_line = 89;
     GemVal _t4652 = gem_v_r;
     GemVal _t4651 = gem_v_k;
         gem_table_set(_t4652, _t4651, gem_v_v);
     }
 
-#line 87 "compiler/scope.gem"
-    gem_leaf_line = 87;
+#line 91 "compiler/scope.gem"
+    gem_leaf_line = 91;
     GemVal _t4653 = gem_v_r;
     gem_leaf_site = NULL;
     return _t4653;
 }
 
 static GemVal gem_fn___mod_scope_shadow_decl_site(void *_env, GemVal *args, int argc) {
-#line 99 "compiler/scope.gem"
+#line 103 "compiler/scope.gem"
     static const GemLeafSite _leaf_site = {"scope.shadow_decl_site", "compiler/scope.gem"};
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_let_node = (argc > 0) ? args[0] : GEM_NIL;
-#line 100 "compiler/scope.gem"
-    gem_leaf_line = 100;
+#line 104 "compiler/scope.gem"
+    gem_leaf_line = 104;
     GemVal _t4654 = gem_v_let_node;
     static GemICacheSlot _ic_692 = {0};
     GemVal gem_v_line = gem_table_get_cached(_t4654, "line", &_ic_692);
-#line 101 "compiler/scope.gem"
-    gem_leaf_line = 101;
+#line 105 "compiler/scope.gem"
+    gem_leaf_line = 105;
     if (gem_truthy(gem_eq(gem_v_line, gem_int(0)))) {
-#line 102 "compiler/scope.gem"
-        gem_leaf_line = 102;
+#line 106 "compiler/scope.gem"
+        gem_leaf_line = 106;
         gem_v_line = GEM_NIL;
     }
-#line 104 "compiler/scope.gem"
-    gem_leaf_line = 104;
+#line 108 "compiler/scope.gem"
+    gem_leaf_line = 108;
     GemVal _t4655 = gem_table_new_braces();
     gem_table_set(_t4655, GEM_STR_LIT("line", 4), gem_v_line);
     GemVal _t4656 = gem_v_let_node;
@@ -21865,28 +21886,28 @@ static GemVal gem_fn___mod_scope_shadow_decl_site(void *_env, GemVal *args, int 
 }
 
 static GemVal gem_fn___mod_scope_shadow_bind(void *_env, GemVal *args, int argc) {
-#line 107 "compiler/scope.gem"
-    gem_push_frame("scope.shadow_bind", "compiler/scope.gem", 107);
+#line 111 "compiler/scope.gem"
+    gem_push_frame("scope.shadow_bind", "compiler/scope.gem", 111);
     GemVal gem_v_let_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_env = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_mode = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_ctx = (argc > 3) ? args[3] : GEM_NIL;
-#line 108 "compiler/scope.gem"
-    gem_set_line(108);
+#line 112 "compiler/scope.gem"
+    gem_set_line(112);
     GemVal _t4658 = gem_v_let_node;
     static GemICacheSlot _ic_694 = {0};
     GemVal gem_v_name = gem_table_get_cached(_t4658, "name", &_ic_694);
-#line 109 "compiler/scope.gem"
-    gem_set_line(109);
+#line 113 "compiler/scope.gem"
+    gem_set_line(113);
     if (gem_truthy(gem_eq(gem_v_name, GEM_NIL))) {
-#line 110 "compiler/scope.gem"
-        gem_set_line(110);
+#line 114 "compiler/scope.gem"
+        gem_set_line(114);
         GemVal _t4659 = GEM_NIL;
         gem_pop_frame();
         return _t4659;
     }
-#line 112 "compiler/scope.gem"
-    gem_set_line(112);
+#line 116 "compiler/scope.gem"
+    gem_set_line(116);
     GemVal _t4660 = gem_neq(gem_v_mode, GEM_STR_LIT("module", 6));
     GemVal _t4683;
     if (!gem_truthy(_t4660)) {
@@ -21904,7 +21925,7 @@ static GemVal gem_fn___mod_scope_shadow_bind(void *_env, GemVal *args, int argc)
     static GemICacheSlot _ic_695 = {0};
     GemVal _t4665 = gem_table_get_cached(_t4664, "globals", &_ic_695);
     GemVal _t4666[] = {_t4665, gem_v_name};
-    gem_check_callable(_t4667, "compiler/scope.gem", 112);
+    gem_check_callable(_t4667, "compiler/scope.gem", 116);
         _t4668 = _t4667.fn(_t4667.env, _t4666, 2);
     }
     GemVal _t4673;
@@ -21916,7 +21937,7 @@ static GemVal gem_fn___mod_scope_shadow_bind(void *_env, GemVal *args, int argc)
     static GemICacheSlot _ic_696 = {0};
     GemVal _t4670 = gem_table_get_cached(_t4669, "fns", &_ic_696);
     GemVal _t4671[] = {_t4670, gem_v_name};
-    gem_check_callable(_t4672, "compiler/scope.gem", 112);
+    gem_check_callable(_t4672, "compiler/scope.gem", 116);
         _t4673 = _t4672.fn(_t4672.env, _t4671, 2);
     }
     GemVal _t4678;
@@ -21928,7 +21949,7 @@ static GemVal gem_fn___mod_scope_shadow_bind(void *_env, GemVal *args, int argc)
     static GemICacheSlot _ic_697 = {0};
     GemVal _t4675 = gem_table_get_cached(_t4674, "externs", &_ic_697);
     GemVal _t4676[] = {_t4675, gem_v_name};
-    gem_check_callable(_t4677, "compiler/scope.gem", 112);
+    gem_check_callable(_t4677, "compiler/scope.gem", 116);
         _t4678 = _t4677.fn(_t4677.env, _t4676, 2);
     }
     GemVal _t4682;
@@ -21944,37 +21965,37 @@ static GemVal gem_fn___mod_scope_shadow_bind(void *_env, GemVal *args, int argc)
         _t4683 = _t4682;
     }
     if (gem_truthy(_t4683)) {
-#line 113 "compiler/scope.gem"
-        gem_set_line(113);
+#line 117 "compiler/scope.gem"
+        gem_set_line(117);
     GemVal _t4685 = gem_v_ctx;
     GemVal _t4684 = gem_v_ctx;
     static GemICacheSlot _ic_699 = {0};
         gem_table_set(_t4685, GEM_STR_LIT("n", 1), gem_add(gem_table_get_cached(_t4684, "n", &_ic_699), gem_int(1)));
-#line 114 "compiler/scope.gem"
-        gem_set_line(114);
+#line 118 "compiler/scope.gem"
+        gem_set_line(118);
     GemVal _t4686 = gem_v_ctx;
     static GemICacheSlot _ic_700 = {0};
     GemVal _t4687 = gem_table_get_cached(_t4686, "n", &_ic_700);
     GemVal _t4688[] = {GEM_STR_LIT("__sh", 4), _t4687, GEM_STR_LIT("_", 1), gem_v_name};
         GemVal gem_v_fresh = gem_interp(4, _t4688);
-#line 115 "compiler/scope.gem"
-        gem_set_line(115);
+#line 119 "compiler/scope.gem"
+        gem_set_line(119);
     GemVal _t4689 = gem_v_let_node;
         gem_table_set(_t4689, GEM_STR_LIT("name", 4), gem_v_fresh);
-#line 116 "compiler/scope.gem"
-        gem_set_line(116);
+#line 120 "compiler/scope.gem"
+        gem_set_line(120);
     GemVal _t4691 = gem_v_env;
     GemVal _t4690 = gem_v_name;
         gem_table_set(_t4691, _t4690, gem_v_fresh);
     } else {
-#line 118 "compiler/scope.gem"
-        gem_set_line(118);
+#line 122 "compiler/scope.gem"
+        gem_set_line(122);
     GemVal _t4693 = gem_v_env;
     GemVal _t4692 = gem_v_name;
         gem_table_set(_t4693, _t4692, gem_v_name);
     }
-#line 120 "compiler/scope.gem"
-    gem_set_line(120);
+#line 124 "compiler/scope.gem"
+    gem_set_line(124);
     GemVal _t4694 = gem_v_ctx;
     static GemICacheSlot _ic_701 = {0};
     GemVal _t4698 = gem_table_get_cached(_t4694, "lines", &_ic_701);
@@ -21987,30 +22008,30 @@ static GemVal gem_fn___mod_scope_shadow_bind(void *_env, GemVal *args, int argc)
 }
 
 static GemVal gem_fn___mod_scope_shadow_end_scope(void *_env, GemVal *args, int argc) {
-#line 128 "compiler/scope.gem"
+#line 132 "compiler/scope.gem"
     static const GemLeafSite _leaf_site = {"scope.shadow_end_scope", "compiler/scope.gem"};
     gem_leaf_site = &_leaf_site;
-    gem_leaf_line = 128;
+    gem_leaf_line = 132;
     GemVal gem_v_inner = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_outer = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_ctx = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_block_kw;
     if (argc > 3) { gem_v_block_kw = args[3]; } else {
-    gem_leaf_line = 128;
+    gem_leaf_line = 132;
     gem_v_block_kw = GEM_NIL;
     }
     {
-#line 129 "compiler/scope.gem"
-        gem_leaf_line = 129;
+#line 133 "compiler/scope.gem"
+        gem_leaf_line = 133;
         GemVal gem_v___for_tbl_104 = gem_v_inner;
-#line 129 "compiler/scope.gem"
-        gem_leaf_line = 129;
+#line 133 "compiler/scope.gem"
+        gem_leaf_line = 133;
         GemVal gem_v___for_len_104 = gem_for_len_1(gem_v___for_tbl_104);
-#line 129 "compiler/scope.gem"
-        gem_leaf_line = 129;
+#line 133 "compiler/scope.gem"
+        gem_leaf_line = 133;
         GemVal gem_v___for_i_104 = gem_int(0);
-#line 129 "compiler/scope.gem"
-        gem_leaf_line = 129;
+#line 133 "compiler/scope.gem"
+        gem_leaf_line = 133;
         GemArenaMark _mk107;
         gem_arena_mark(&_mk107);
         while (1) {
@@ -22021,19 +22042,19 @@ static GemVal gem_fn___mod_scope_shadow_end_scope(void *_env, GemVal *args, int 
             }
     GemVal _t4699 = gem_v___for_i_104;
             if (!gem_truthy(gem_lt(_t4699, gem_v___for_len_104))) break;
-#line 129 "compiler/scope.gem"
-            gem_leaf_line = 129;
+#line 133 "compiler/scope.gem"
+            gem_leaf_line = 133;
     GemVal _t4700 = gem_v___for_tbl_104;
             GemVal gem_v_k = gem_table_key_at_2(_t4700, gem_v___for_i_104);
-#line 129 "compiler/scope.gem"
-            gem_leaf_line = 129;
+#line 133 "compiler/scope.gem"
+            gem_leaf_line = 133;
     GemVal _t4701 = gem_v___for_tbl_104;
             GemVal gem_v_v = gem_table_val_at_2(_t4701, gem_v___for_i_104);
-#line 129 "compiler/scope.gem"
-            gem_leaf_line = 129;
+#line 133 "compiler/scope.gem"
+            gem_leaf_line = 133;
             gem_v___for_i_104 = gem_add(gem_v___for_i_104, gem_int(1));
-#line 130 "compiler/scope.gem"
-            gem_leaf_line = 130;
+#line 134 "compiler/scope.gem"
+            gem_leaf_line = 134;
     GemVal _t4702 = gem_v_outer;
     GemVal _t4703[] = {_t4702, gem_v_k};
     GemVal _t4704 = gem_not(gem_has_key_fn(NULL, _t4703, 2));
@@ -22046,28 +22067,28 @@ static GemVal gem_fn___mod_scope_shadow_end_scope(void *_env, GemVal *args, int 
         _t4707 = gem_neq(_t4706, gem_v_v);
     }
             if (gem_truthy(_t4707)) {
-#line 131 "compiler/scope.gem"
-                gem_leaf_line = 131;
+#line 135 "compiler/scope.gem"
+                gem_leaf_line = 135;
     GemVal _t4708 = gem_v_ctx;
     static GemICacheSlot _ic_702 = {0};
     GemVal _t4709 = gem_table_get_cached(_t4708, "lines", &_ic_702);
                 GemVal gem_v_d = gem_table_get(_t4709, gem_v_v);
-#line 132 "compiler/scope.gem"
-                gem_leaf_line = 132;
+#line 136 "compiler/scope.gem"
+                gem_leaf_line = 136;
     GemVal _t4710 = gem_v_ctx;
     static GemICacheSlot _ic_703 = {0};
                 GemVal gem_v___val_101 = gem_table_get_cached(_t4710, "ended", &_ic_703);
-#line 132 "compiler/scope.gem"
-                gem_leaf_line = 132;
+#line 136 "compiler/scope.gem"
+                gem_leaf_line = 136;
                 GemVal gem_v___val_102 = gem_v_k;
-#line 132 "compiler/scope.gem"
-                gem_leaf_line = 132;
+#line 136 "compiler/scope.gem"
+                gem_leaf_line = 136;
                 GemVal gem_v___val_103 = GEM_NIL;
-#line 132 "compiler/scope.gem"
-                gem_leaf_line = 132;
+#line 136 "compiler/scope.gem"
+                gem_leaf_line = 136;
                 if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
-#line 132 "compiler/scope.gem"
-                    gem_leaf_line = 132;
+#line 136 "compiler/scope.gem"
+                    gem_leaf_line = 136;
     GemVal _t4711 = gem_table_new_braces();
     GemVal _t4712 = gem_v_d;
     static GemICacheSlot _ic_704 = {0};
@@ -22078,12 +22099,12 @@ static GemVal gem_fn___mod_scope_shadow_end_scope(void *_env, GemVal *args, int 
     gem_table_set(_t4711, GEM_STR_LIT("block_kw", 8), gem_v_block_kw);
                     gem_v___val_103 = _t4711;
                 } else {
-#line 132 "compiler/scope.gem"
-                    gem_leaf_line = 132;
+#line 136 "compiler/scope.gem"
+                    gem_leaf_line = 136;
                     gem_v___val_103 = GEM_NIL;
                 }
-#line 132 "compiler/scope.gem"
-                gem_leaf_line = 132;
+#line 136 "compiler/scope.gem"
+                gem_leaf_line = 136;
     GemVal _t4715 = gem_v___val_101;
     GemVal _t4714 = gem_v___val_102;
                 gem_table_set(_t4715, _t4714, gem_v___val_103);
@@ -22095,49 +22116,49 @@ static GemVal gem_fn___mod_scope_shadow_end_scope(void *_env, GemVal *args, int 
 }
 
 static GemVal gem_fn___mod_scope_shadow_check_use(void *_env, GemVal *args, int argc) {
-#line 151 "compiler/scope.gem"
-    gem_push_frame("scope.shadow_check_use", "compiler/scope.gem", 151);
+#line 155 "compiler/scope.gem"
+    gem_push_frame("scope.shadow_check_use", "compiler/scope.gem", 155);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_name = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_env = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_ctx = (argc > 3) ? args[3] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 152 "compiler/scope.gem"
-    gem_set_line(152);
+#line 156 "compiler/scope.gem"
+    gem_set_line(156);
     GemVal _t4716 = gem_v_env;
     GemVal _t4717[] = {_t4716, gem_v_name};
     if (gem_truthy(gem_has_key_fn(NULL, _t4717, 2))) {
-#line 153 "compiler/scope.gem"
-        gem_set_line(153);
+#line 157 "compiler/scope.gem"
+        gem_set_line(157);
     GemVal _t4718 = gem_v_env;
     GemVal _t4719 = gem_table_get(_t4718, gem_v_name);
         if (gem_truthy(gem_eq(_t4719, gem_g___mod_scope_PENDING_PARAM))) {
-#line 154 "compiler/scope.gem"
-            gem_set_line(154);
+#line 158 "compiler/scope.gem"
+            gem_set_line(158);
     GemVal _t4720 = gem_v_ctx;
     static GemICacheSlot _ic_706 = {0};
     GemVal _t4723 = gem_table_get_cached(_t4720, "report", &_ic_706);
     GemVal _t4721 = gem_v_node;
     GemVal _t4722[] = {_t4721, gem_v_name, GEM_STR_LIT("param_later", 11), GEM_NIL};
-    gem_check_callable_field(_t4723, "report", "compiler/scope.gem", 154);
+    gem_check_callable_field(_t4723, "report", "compiler/scope.gem", 158);
             (void)(_t4723.fn(_t4723.env, _t4722, 4));
         }
-#line 156 "compiler/scope.gem"
-        gem_set_line(156);
+#line 160 "compiler/scope.gem"
+        gem_set_line(160);
         GemVal _t4724 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t4724, 1);
         gem_pop_frame();
         return _t4724;
     }
-#line 158 "compiler/scope.gem"
-    gem_set_line(158);
+#line 162 "compiler/scope.gem"
+    gem_set_line(162);
     GemVal _t4728 = gem_g___mod_scope_set_contains;
     GemVal _t4725 = gem_v_ctx;
     static GemICacheSlot _ic_707 = {0};
     GemVal _t4726 = gem_table_get_cached(_t4725, "globals", &_ic_707);
     GemVal _t4727[] = {_t4726, gem_v_name};
-    gem_check_callable(_t4728, "compiler/scope.gem", 158);
+    gem_check_callable(_t4728, "compiler/scope.gem", 162);
     GemVal _t4729 = _t4728.fn(_t4728.env, _t4727, 2);
     GemVal _t4734;
     if (gem_truthy(_t4729)) {
@@ -22148,7 +22169,7 @@ static GemVal gem_fn___mod_scope_shadow_check_use(void *_env, GemVal *args, int 
     static GemICacheSlot _ic_708 = {0};
     GemVal _t4731 = gem_table_get_cached(_t4730, "fns", &_ic_708);
     GemVal _t4732[] = {_t4731, gem_v_name};
-    gem_check_callable(_t4733, "compiler/scope.gem", 158);
+    gem_check_callable(_t4733, "compiler/scope.gem", 162);
         _t4734 = _t4733.fn(_t4733.env, _t4732, 2);
     }
     GemVal _t4739;
@@ -22160,7 +22181,7 @@ static GemVal gem_fn___mod_scope_shadow_check_use(void *_env, GemVal *args, int 
     static GemICacheSlot _ic_709 = {0};
     GemVal _t4736 = gem_table_get_cached(_t4735, "externs", &_ic_709);
     GemVal _t4737[] = {_t4736, gem_v_name};
-    gem_check_callable(_t4738, "compiler/scope.gem", 158);
+    gem_check_callable(_t4738, "compiler/scope.gem", 162);
         _t4739 = _t4738.fn(_t4738.env, _t4737, 2);
     }
     GemVal _t4743;
@@ -22174,22 +22195,22 @@ static GemVal gem_fn___mod_scope_shadow_check_use(void *_env, GemVal *args, int 
         _t4743 = gem_has_key_fn(NULL, _t4742, 2);
     }
     if (gem_truthy(_t4743)) {
-#line 159 "compiler/scope.gem"
-        gem_set_line(159);
+#line 163 "compiler/scope.gem"
+        gem_set_line(163);
         GemVal _t4744 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t4744, 1);
         gem_pop_frame();
         return _t4744;
     }
-#line 161 "compiler/scope.gem"
-    gem_set_line(161);
+#line 165 "compiler/scope.gem"
+    gem_set_line(165);
     GemVal _t4745 = gem_v_ctx;
     static GemICacheSlot _ic_711 = {0};
     GemVal _t4746 = gem_table_get_cached(_t4745, "ended", &_ic_711);
     GemVal _t4747[] = {_t4746, gem_v_name};
     if (gem_truthy(gem_has_key_fn(NULL, _t4747, 2))) {
-#line 162 "compiler/scope.gem"
-        gem_set_line(162);
+#line 166 "compiler/scope.gem"
+        gem_set_line(166);
     GemVal _t4748 = gem_v_ctx;
     static GemICacheSlot _ic_712 = {0};
     GemVal _t4754 = gem_table_get_cached(_t4748, "report", &_ic_712);
@@ -22199,21 +22220,21 @@ static GemVal gem_fn___mod_scope_shadow_check_use(void *_env, GemVal *args, int 
     static GemICacheSlot _ic_713 = {0};
     GemVal _t4750 = gem_table_get_cached(_t4749, "ended", &_ic_713);
     GemVal _t4753[] = {_t4752, _t4751, GEM_STR_LIT("ended", 5), gem_table_get(_t4750, gem_v_name)};
-    gem_check_callable_field(_t4754, "report", "compiler/scope.gem", 162);
+    gem_check_callable_field(_t4754, "report", "compiler/scope.gem", 166);
         GemVal _t4755 = _t4754.fn(_t4754.env, _t4753, 4);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t4755, 1);
         gem_pop_frame();
         return _t4755;
     } else {
-#line 163 "compiler/scope.gem"
-        gem_set_line(163);
+#line 167 "compiler/scope.gem"
+        gem_set_line(167);
     GemVal _t4756 = gem_v_ctx;
     static GemICacheSlot _ic_714 = {0};
     GemVal _t4757 = gem_table_get_cached(_t4756, "later", &_ic_714);
     GemVal _t4758[] = {_t4757, gem_v_name};
         if (gem_truthy(gem_has_key_fn(NULL, _t4758, 2))) {
-#line 164 "compiler/scope.gem"
-            gem_set_line(164);
+#line 168 "compiler/scope.gem"
+            gem_set_line(168);
     GemVal _t4759 = gem_v_ctx;
     static GemICacheSlot _ic_715 = {0};
     GemVal _t4765 = gem_table_get_cached(_t4759, "report", &_ic_715);
@@ -22223,21 +22244,21 @@ static GemVal gem_fn___mod_scope_shadow_check_use(void *_env, GemVal *args, int 
     static GemICacheSlot _ic_716 = {0};
     GemVal _t4761 = gem_table_get_cached(_t4760, "later", &_ic_716);
     GemVal _t4764[] = {_t4763, _t4762, GEM_STR_LIT("later", 5), gem_table_get(_t4761, gem_v_name)};
-    gem_check_callable_field(_t4765, "report", "compiler/scope.gem", 164);
+    gem_check_callable_field(_t4765, "report", "compiler/scope.gem", 168);
             GemVal _t4766 = _t4765.fn(_t4765.env, _t4764, 4);
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t4766, 1);
             gem_pop_frame();
             return _t4766;
         } else {
-#line 165 "compiler/scope.gem"
-            gem_set_line(165);
+#line 169 "compiler/scope.gem"
+            gem_set_line(169);
     GemVal _t4767 = gem_v_ctx;
     static GemICacheSlot _ic_717 = {0};
     GemVal _t4768 = gem_table_get_cached(_t4767, "outer_later", &_ic_717);
     GemVal _t4769[] = {_t4768, gem_v_name};
             if (gem_truthy(gem_has_key_fn(NULL, _t4769, 2))) {
-#line 166 "compiler/scope.gem"
-                gem_set_line(166);
+#line 170 "compiler/scope.gem"
+                gem_set_line(170);
     GemVal _t4770 = gem_v_ctx;
     static GemICacheSlot _ic_718 = {0};
     GemVal _t4776 = gem_table_get_cached(_t4770, "report", &_ic_718);
@@ -22247,7 +22268,7 @@ static GemVal gem_fn___mod_scope_shadow_check_use(void *_env, GemVal *args, int 
     static GemICacheSlot _ic_719 = {0};
     GemVal _t4772 = gem_table_get_cached(_t4771, "outer_later", &_ic_719);
     GemVal _t4775[] = {_t4774, _t4773, GEM_STR_LIT("later_closure", 13), gem_table_get(_t4772, gem_v_name)};
-    gem_check_callable_field(_t4776, "report", "compiler/scope.gem", 166);
+    gem_check_callable_field(_t4776, "report", "compiler/scope.gem", 170);
                 GemVal _t4777 = _t4776.fn(_t4776.env, _t4775, 4);
                 if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t4777, 1);
                 gem_pop_frame();
@@ -22262,14 +22283,14 @@ static GemVal gem_fn___mod_scope_shadow_check_use(void *_env, GemVal *args, int 
 }
 
 static GemVal gem_fn___mod_scope_shadow_named_fn(void *_env, GemVal *args, int argc) {
-#line 192 "compiler/scope.gem"
-    gem_push_frame("scope.shadow_named_fn", "compiler/scope.gem", 192);
+#line 196 "compiler/scope.gem"
+    gem_push_frame("scope.shadow_named_fn", "compiler/scope.gem", 196);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_ctx = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 193 "compiler/scope.gem"
-    gem_set_line(193);
+#line 197 "compiler/scope.gem"
+    gem_set_line(197);
     GemVal _t4778 = gem_table_new_braces();
     GemVal _t4779 = gem_v_ctx;
     static GemICacheSlot _ic_720 = {0};
@@ -22284,23 +22305,23 @@ static GemVal gem_fn___mod_scope_shadow_named_fn(void *_env, GemVal *args, int a
     static GemICacheSlot _ic_723 = {0};
     gem_table_set(_t4778, GEM_STR_LIT("depth", 5), gem_table_get_cached(_t4782, "closure_depth", &_ic_723));
     GemVal gem_v_saved = _t4778;
-#line 194 "compiler/scope.gem"
-    gem_set_line(194);
+#line 198 "compiler/scope.gem"
+    gem_set_line(198);
     GemVal _t4784 = gem_v_ctx;
     GemVal _t4783 = gem_table_new_braces();
     gem_table_set(_t4784, GEM_STR_LIT("ended", 5), _t4783);
-#line 195 "compiler/scope.gem"
-    gem_set_line(195);
+#line 199 "compiler/scope.gem"
+    gem_set_line(199);
     GemVal _t4786 = gem_v_ctx;
     GemVal _t4785 = gem_table_new_braces();
     gem_table_set(_t4786, GEM_STR_LIT("later", 5), _t4785);
-#line 196 "compiler/scope.gem"
-    gem_set_line(196);
+#line 200 "compiler/scope.gem"
+    gem_set_line(200);
     GemVal _t4788 = gem_v_ctx;
     GemVal _t4787 = gem_table_new_braces();
     gem_table_set(_t4788, GEM_STR_LIT("outer_later", 11), _t4787);
-#line 197 "compiler/scope.gem"
-    gem_set_line(197);
+#line 201 "compiler/scope.gem"
+    gem_set_line(201);
     GemVal _t4793 = gem_g___mod_scope_shadow_collect_lets;
     GemVal _t4789 = gem_v_node;
     static GemICacheSlot _ic_724 = {0};
@@ -22308,37 +22329,37 @@ static GemVal gem_fn___mod_scope_shadow_named_fn(void *_env, GemVal *args, int a
     GemVal _t4790 = gem_v_ctx;
     static GemICacheSlot _ic_725 = {0};
     GemVal _t4792[] = {_t4791, gem_table_get_cached(_t4790, "later", &_ic_725)};
-    gem_check_callable(_t4793, "compiler/scope.gem", 197);
+    gem_check_callable(_t4793, "compiler/scope.gem", 201);
     (void)(_t4793.fn(_t4793.env, _t4792, 2));
-#line 198 "compiler/scope.gem"
-    gem_set_line(198);
+#line 202 "compiler/scope.gem"
+    gem_set_line(202);
     gem_table_set(gem_v_ctx, GEM_STR_LIT("closure_depth", 13), gem_int(0));
-#line 199 "compiler/scope.gem"
-    gem_set_line(199);
+#line 203 "compiler/scope.gem"
+    gem_set_line(203);
     GemVal _t4795 = gem_v_node;
     GemVal _t4794 = gem_table_new_braces();
     GemVal _t4796[] = {_t4795, _t4794, gem_v_ctx};
     (void)(gem_fn___mod_scope_shadow_fn(NULL, _t4796, 3));
-#line 200 "compiler/scope.gem"
-    gem_set_line(200);
+#line 204 "compiler/scope.gem"
+    gem_set_line(204);
     GemVal _t4798 = gem_v_ctx;
     GemVal _t4797 = gem_v_saved;
     static GemICacheSlot _ic_726 = {0};
     gem_table_set(_t4798, GEM_STR_LIT("ended", 5), gem_table_get_cached(_t4797, "ended", &_ic_726));
-#line 201 "compiler/scope.gem"
-    gem_set_line(201);
+#line 205 "compiler/scope.gem"
+    gem_set_line(205);
     GemVal _t4800 = gem_v_ctx;
     GemVal _t4799 = gem_v_saved;
     static GemICacheSlot _ic_727 = {0};
     gem_table_set(_t4800, GEM_STR_LIT("later", 5), gem_table_get_cached(_t4799, "later", &_ic_727));
-#line 202 "compiler/scope.gem"
-    gem_set_line(202);
+#line 206 "compiler/scope.gem"
+    gem_set_line(206);
     GemVal _t4802 = gem_v_ctx;
     GemVal _t4801 = gem_v_saved;
     static GemICacheSlot _ic_728 = {0};
     gem_table_set(_t4802, GEM_STR_LIT("outer_later", 11), gem_table_get_cached(_t4801, "outer_later", &_ic_728));
-#line 203 "compiler/scope.gem"
-    gem_set_line(203);
+#line 207 "compiler/scope.gem"
+    gem_set_line(207);
     GemVal _t4804 = gem_v_ctx;
     GemVal _t4803 = gem_v_saved;
     static GemICacheSlot _ic_729 = {0};
@@ -22349,39 +22370,39 @@ static GemVal gem_fn___mod_scope_shadow_named_fn(void *_env, GemVal *args, int a
 }
 
 static GemVal gem_fn___mod_scope_shadow_child_mode(void *_env, GemVal *args, int argc) {
-#line 206 "compiler/scope.gem"
+#line 210 "compiler/scope.gem"
     static const GemLeafSite _leaf_site = {"scope.shadow_child_mode", "compiler/scope.gem"};
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_mode = (argc > 0) ? args[0] : GEM_NIL;
-#line 207 "compiler/scope.gem"
-    gem_leaf_line = 207;
+#line 211 "compiler/scope.gem"
+    gem_leaf_line = 211;
     if (gem_truthy(gem_eq(gem_v_mode, GEM_STR_LIT("module", 6)))) {
-#line 208 "compiler/scope.gem"
-        gem_leaf_line = 208;
+#line 212 "compiler/scope.gem"
+        gem_leaf_line = 212;
         GemVal _t4805 = GEM_STR_LIT("block", 5);
         gem_leaf_site = NULL;
         return _t4805;
     }
-#line 210 "compiler/scope.gem"
-    gem_leaf_line = 210;
+#line 214 "compiler/scope.gem"
+    gem_leaf_line = 214;
     GemVal _t4806 = gem_v_mode;
     gem_leaf_site = NULL;
     return _t4806;
 }
 
 static GemVal gem_fn___mod_scope_shadow_param_name(void *_env, GemVal *args, int argc) {
-#line 216 "compiler/scope.gem"
-    gem_push_frame("scope.shadow_param_name", "compiler/scope.gem", 216);
+#line 220 "compiler/scope.gem"
+    gem_push_frame("scope.shadow_param_name", "compiler/scope.gem", 220);
     GemVal gem_v_p = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_ctx = (argc > 1) ? args[1] : GEM_NIL;
-#line 217 "compiler/scope.gem"
-    gem_set_line(217);
+#line 221 "compiler/scope.gem"
+    gem_set_line(221);
     GemVal _t4810 = gem_g___mod_scope_set_contains;
     GemVal _t4807 = gem_v_ctx;
     static GemICacheSlot _ic_730 = {0};
     GemVal _t4808 = gem_table_get_cached(_t4807, "fns", &_ic_730);
     GemVal _t4809[] = {_t4808, gem_v_p};
-    gem_check_callable(_t4810, "compiler/scope.gem", 217);
+    gem_check_callable(_t4810, "compiler/scope.gem", 221);
     GemVal _t4811 = _t4810.fn(_t4810.env, _t4809, 2);
     GemVal _t4816;
     if (gem_truthy(_t4811)) {
@@ -22392,18 +22413,18 @@ static GemVal gem_fn___mod_scope_shadow_param_name(void *_env, GemVal *args, int
     static GemICacheSlot _ic_731 = {0};
     GemVal _t4813 = gem_table_get_cached(_t4812, "externs", &_ic_731);
     GemVal _t4814[] = {_t4813, gem_v_p};
-    gem_check_callable(_t4815, "compiler/scope.gem", 217);
+    gem_check_callable(_t4815, "compiler/scope.gem", 221);
         _t4816 = _t4815.fn(_t4815.env, _t4814, 2);
     }
     if (gem_truthy(_t4816)) {
-#line 218 "compiler/scope.gem"
-        gem_set_line(218);
+#line 222 "compiler/scope.gem"
+        gem_set_line(222);
     GemVal _t4818 = gem_v_ctx;
     GemVal _t4817 = gem_v_ctx;
     static GemICacheSlot _ic_732 = {0};
         gem_table_set(_t4818, GEM_STR_LIT("n", 1), gem_add(gem_table_get_cached(_t4817, "n", &_ic_732), gem_int(1)));
-#line 219 "compiler/scope.gem"
-        gem_set_line(219);
+#line 223 "compiler/scope.gem"
+        gem_set_line(223);
     GemVal _t4819 = gem_v_ctx;
     static GemICacheSlot _ic_733 = {0};
     GemVal _t4820 = gem_table_get_cached(_t4819, "n", &_ic_733);
@@ -22412,53 +22433,53 @@ static GemVal gem_fn___mod_scope_shadow_param_name(void *_env, GemVal *args, int
         gem_pop_frame();
         return _t4822;
     }
-#line 221 "compiler/scope.gem"
-    gem_set_line(221);
+#line 225 "compiler/scope.gem"
+    gem_set_line(225);
     GemVal _t4823 = gem_v_p;
     gem_pop_frame();
     return _t4823;
 }
 
 static GemVal gem_fn___mod_scope_shadow_fn(void *_env, GemVal *args, int argc) {
-#line 230 "compiler/scope.gem"
-    gem_push_frame("scope.shadow_fn", "compiler/scope.gem", 230);
+#line 234 "compiler/scope.gem"
+    gem_push_frame("scope.shadow_fn", "compiler/scope.gem", 234);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_env = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_ctx = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 231 "compiler/scope.gem"
-    gem_set_line(231);
+#line 235 "compiler/scope.gem"
+    gem_set_line(235);
     GemVal _t4824[] = {gem_v_env};
     GemVal gem_v_inner = gem_fn___mod_scope_copy_scope_env(NULL, _t4824, 1);
-#line 232 "compiler/scope.gem"
-    gem_set_line(232);
+#line 236 "compiler/scope.gem"
+    gem_set_line(236);
     GemVal _t4825 = gem_table_new();
     GemVal gem_v_originals = _t4825;
-#line 233 "compiler/scope.gem"
-    gem_set_line(233);
+#line 237 "compiler/scope.gem"
+    gem_set_line(237);
     GemVal _t4826 = gem_v_node;
     static GemICacheSlot _ic_734 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t4826, "params", &_ic_734), GEM_NIL))) {
-#line 234 "compiler/scope.gem"
-        gem_set_line(234);
+#line 238 "compiler/scope.gem"
+        gem_set_line(238);
     GemVal _t4827 = gem_v_node;
     static GemICacheSlot _ic_735 = {0};
         gem_v_originals = gem_table_get_cached(_t4827, "params", &_ic_735);
-#line 235 "compiler/scope.gem"
-        gem_set_line(235);
+#line 239 "compiler/scope.gem"
+        gem_set_line(239);
     GemVal _t4828 = gem_table_new();
         GemVal gem_v_params = _t4828;
-#line 236 "compiler/scope.gem"
-        gem_set_line(236);
+#line 240 "compiler/scope.gem"
+        gem_set_line(240);
     GemVal _t4829 = gem_v_node;
     static GemICacheSlot _ic_736 = {0};
         GemVal gem_v___for_items_106 = gem_for_items_1(gem_table_get_cached(_t4829, "params", &_ic_736));
-#line 236 "compiler/scope.gem"
-        gem_set_line(236);
+#line 240 "compiler/scope.gem"
+        gem_set_line(240);
         GemVal gem_v___for_i_106 = gem_int(0);
-#line 236 "compiler/scope.gem"
-        gem_set_line(236);
+#line 240 "compiler/scope.gem"
+        gem_set_line(240);
         GemArenaMark _mk108;
         gem_arena_mark(&_mk108);
         while (1) {
@@ -22469,79 +22490,79 @@ static GemVal gem_fn___mod_scope_shadow_fn(void *_env, GemVal *args, int argc) {
             }
     GemVal _t4830 = gem_v___for_i_106;
             if (!gem_truthy(gem_lt(_t4830, gem_for_len_1(gem_v___for_items_106)))) break;
-#line 236 "compiler/scope.gem"
-            gem_set_line(236);
+#line 240 "compiler/scope.gem"
+            gem_set_line(240);
     GemVal _t4831 = gem_v___for_items_106;
             GemVal gem_v_p = gem_table_get(_t4831, gem_v___for_i_106);
-#line 236 "compiler/scope.gem"
-            gem_set_line(236);
+#line 240 "compiler/scope.gem"
+            gem_set_line(240);
             gem_v___for_i_106 = gem_add(gem_v___for_i_106, gem_int(1));
-#line 237 "compiler/scope.gem"
-            gem_set_line(237);
+#line 241 "compiler/scope.gem"
+            gem_set_line(241);
     GemVal _t4832 = gem_v_p;
     GemVal _t4833[] = {_t4832, gem_v_ctx};
             GemVal gem_v_c = gem_fn___mod_scope_shadow_param_name(NULL, _t4833, 2);
-#line 238 "compiler/scope.gem"
-            gem_set_line(238);
+#line 242 "compiler/scope.gem"
+            gem_set_line(242);
     GemVal _t4835 = gem_v_inner;
     GemVal _t4834 = gem_v_p;
             gem_table_set(_t4835, _t4834, gem_v_c);
-#line 239 "compiler/scope.gem"
-            gem_set_line(239);
+#line 243 "compiler/scope.gem"
+            gem_set_line(243);
     GemVal _t4836 = gem_v_params;
     GemVal _t4837[] = {_t4836, gem_v_c};
             (void)(gem_push_fn(NULL, _t4837, 2));
         }
 
-#line 241 "compiler/scope.gem"
-        gem_set_line(241);
+#line 245 "compiler/scope.gem"
+        gem_set_line(245);
     GemVal _t4838 = gem_v_node;
         gem_table_set(_t4838, GEM_STR_LIT("params", 6), gem_v_params);
     }
-#line 243 "compiler/scope.gem"
-    gem_set_line(243);
+#line 247 "compiler/scope.gem"
+    gem_set_line(247);
     GemVal _t4839 = gem_v_node;
     static GemICacheSlot _ic_737 = {0};
     GemVal gem_v_rest_original = gem_table_get_cached(_t4839, "rest_param", &_ic_737);
-#line 244 "compiler/scope.gem"
-    gem_set_line(244);
+#line 248 "compiler/scope.gem"
+    gem_set_line(248);
     GemVal _t4840 = gem_v_node;
     static GemICacheSlot _ic_738 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t4840, "rest_param", &_ic_738), GEM_NIL))) {
-#line 245 "compiler/scope.gem"
-        gem_set_line(245);
+#line 249 "compiler/scope.gem"
+        gem_set_line(249);
     GemVal _t4841 = gem_v_node;
     static GemICacheSlot _ic_739 = {0};
     GemVal _t4842 = gem_table_get_cached(_t4841, "rest_param", &_ic_739);
     GemVal _t4843[] = {_t4842, gem_v_ctx};
         GemVal gem_v_c = gem_fn___mod_scope_shadow_param_name(NULL, _t4843, 2);
-#line 246 "compiler/scope.gem"
-        gem_set_line(246);
+#line 250 "compiler/scope.gem"
+        gem_set_line(250);
     GemVal _t4846 = gem_v_inner;
     GemVal _t4844 = gem_v_node;
     static GemICacheSlot _ic_740 = {0};
     GemVal _t4845 = gem_table_get_cached(_t4844, "rest_param", &_ic_740);
         gem_table_set(_t4846, _t4845, gem_v_c);
-#line 247 "compiler/scope.gem"
-        gem_set_line(247);
+#line 251 "compiler/scope.gem"
+        gem_set_line(251);
     GemVal _t4847 = gem_v_node;
         gem_table_set(_t4847, GEM_STR_LIT("rest_param", 10), gem_v_c);
     }
-#line 249 "compiler/scope.gem"
-    gem_set_line(249);
+#line 253 "compiler/scope.gem"
+    gem_set_line(253);
     GemVal _t4848 = gem_v_node;
     static GemICacheSlot _ic_741 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t4848, "defaults", &_ic_741), GEM_NIL))) {
-#line 250 "compiler/scope.gem"
-        gem_set_line(250);
+#line 254 "compiler/scope.gem"
+        gem_set_line(254);
         GemVal gem_v___for_i_108 = gem_int(0);
-#line 250 "compiler/scope.gem"
-        gem_set_line(250);
+#line 254 "compiler/scope.gem"
+        gem_set_line(254);
     GemVal _t4849 = gem_v_node;
     static GemICacheSlot _ic_742 = {0};
         GemVal gem_v___for_limit_108 = gem_len_1(gem_table_get_cached(_t4849, "defaults", &_ic_742));
-#line 250 "compiler/scope.gem"
-        gem_set_line(250);
+#line 254 "compiler/scope.gem"
+        gem_set_line(254);
         GemArenaMark _mk109;
         gem_arena_mark(&_mk109);
         while (1) {
@@ -22552,33 +22573,33 @@ static GemVal gem_fn___mod_scope_shadow_fn(void *_env, GemVal *args, int argc) {
             }
     GemVal _t4850 = gem_v___for_i_108;
             if (!gem_truthy(gem_lt(_t4850, gem_v___for_limit_108))) break;
-#line 250 "compiler/scope.gem"
-            gem_set_line(250);
+#line 254 "compiler/scope.gem"
+            gem_set_line(254);
             GemVal gem_v_i = gem_v___for_i_108;
-#line 250 "compiler/scope.gem"
-            gem_set_line(250);
+#line 254 "compiler/scope.gem"
+            gem_set_line(254);
             gem_v___for_i_108 = gem_add(gem_v___for_i_108, gem_int(1));
-#line 251 "compiler/scope.gem"
-            gem_set_line(251);
+#line 255 "compiler/scope.gem"
+            gem_set_line(255);
     GemVal _t4851 = gem_v_node;
     static GemICacheSlot _ic_743 = {0};
     GemVal _t4852 = gem_table_get_cached(_t4851, "defaults", &_ic_743);
             GemVal gem_v_d = gem_table_get(_t4852, gem_v_i);
-#line 252 "compiler/scope.gem"
-            gem_set_line(252);
+#line 256 "compiler/scope.gem"
+            gem_set_line(256);
             if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
-#line 253 "compiler/scope.gem"
-                gem_set_line(253);
+#line 257 "compiler/scope.gem"
+                gem_set_line(257);
     GemVal _t4853[] = {gem_v_inner};
                 GemVal gem_v_at = gem_fn___mod_scope_copy_scope_env(NULL, _t4853, 1);
-#line 254 "compiler/scope.gem"
-                gem_set_line(254);
+#line 258 "compiler/scope.gem"
+                gem_set_line(258);
                 GemVal gem_v___for_i_107 = gem_v_i;
-#line 254 "compiler/scope.gem"
-                gem_set_line(254);
+#line 258 "compiler/scope.gem"
+                gem_set_line(258);
                 GemVal gem_v___for_limit_107 = gem_len_1(gem_v_originals);
-#line 254 "compiler/scope.gem"
-                gem_set_line(254);
+#line 258 "compiler/scope.gem"
+                gem_set_line(258);
                 GemArenaMark _mk110;
                 gem_arena_mark(&_mk110);
                 while (1) {
@@ -22589,50 +22610,50 @@ static GemVal gem_fn___mod_scope_shadow_fn(void *_env, GemVal *args, int argc) {
                     }
     GemVal _t4854 = gem_v___for_i_107;
                     if (!gem_truthy(gem_lt(_t4854, gem_v___for_limit_107))) break;
-#line 254 "compiler/scope.gem"
-                    gem_set_line(254);
+#line 258 "compiler/scope.gem"
+                    gem_set_line(258);
                     GemVal gem_v_j = gem_v___for_i_107;
-#line 254 "compiler/scope.gem"
-                    gem_set_line(254);
+#line 258 "compiler/scope.gem"
+                    gem_set_line(258);
                     gem_v___for_i_107 = gem_add(gem_v___for_i_107, gem_int(1));
-#line 255 "compiler/scope.gem"
-                    gem_set_line(255);
+#line 259 "compiler/scope.gem"
+                    gem_set_line(259);
     GemVal _t4857 = gem_v_at;
     GemVal _t4855 = gem_v_originals;
     GemVal _t4856 = gem_table_get(_t4855, gem_v_j);
                     gem_table_set(_t4857, _t4856, gem_g___mod_scope_PENDING_PARAM);
                 }
 
-#line 257 "compiler/scope.gem"
-                gem_set_line(257);
+#line 261 "compiler/scope.gem"
+                gem_set_line(261);
                 if (gem_truthy(gem_neq(gem_v_rest_original, GEM_NIL))) {
-#line 258 "compiler/scope.gem"
-                    gem_set_line(258);
+#line 262 "compiler/scope.gem"
+                    gem_set_line(262);
     GemVal _t4859 = gem_v_at;
     GemVal _t4858 = gem_v_rest_original;
                     gem_table_set(_t4859, _t4858, gem_g___mod_scope_PENDING_PARAM);
                 }
-#line 260 "compiler/scope.gem"
-                gem_set_line(260);
+#line 264 "compiler/scope.gem"
+                gem_set_line(264);
     GemVal _t4863 = gem_g___mod_scope_shadow_node;
     GemVal _t4861 = gem_v_d;
     GemVal _t4860 = gem_v_at;
     GemVal _t4862[] = {_t4861, _t4860, GEM_STR_LIT("fn", 2), gem_v_ctx};
-    gem_check_callable(_t4863, "compiler/scope.gem", 260);
+    gem_check_callable(_t4863, "compiler/scope.gem", 264);
                 (void)(_t4863.fn(_t4863.env, _t4862, 4));
             }
         }
 
     }
-#line 264 "compiler/scope.gem"
-    gem_set_line(264);
+#line 268 "compiler/scope.gem"
+    gem_set_line(268);
     GemVal _t4868 = gem_g___mod_scope_shadow_stmts;
     GemVal _t4864 = gem_v_node;
     static GemICacheSlot _ic_744 = {0};
     GemVal _t4866 = gem_table_get_cached(_t4864, "body", &_ic_744);
     GemVal _t4865 = gem_v_inner;
     GemVal _t4867[] = {_t4866, _t4865, GEM_STR_LIT("fn", 2), gem_v_ctx};
-    gem_check_callable(_t4868, "compiler/scope.gem", 264);
+    gem_check_callable(_t4868, "compiler/scope.gem", 268);
     GemVal _t4869 = _t4868.fn(_t4868.env, _t4867, 4);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t4869, 1);
     gem_pop_frame();
@@ -22640,8 +22661,8 @@ static GemVal gem_fn___mod_scope_shadow_fn(void *_env, GemVal *args, int argc) {
 }
 
 static GemVal gem_fn___mod_scope_shadow_arm(void *_env, GemVal *args, int argc) {
-#line 297 "compiler/scope.gem"
-    gem_push_frame("scope.shadow_arm", "compiler/scope.gem", 297);
+#line 301 "compiler/scope.gem"
+    gem_push_frame("scope.shadow_arm", "compiler/scope.gem", 301);
     GemVal gem_v_cond = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_bindings = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_body = (argc > 2) ? args[2] : GEM_NIL;
@@ -22651,34 +22672,34 @@ static GemVal gem_fn___mod_scope_shadow_arm(void *_env, GemVal *args, int argc) 
     GemVal gem_v_block_kw = (argc > 6) ? args[6] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 298 "compiler/scope.gem"
-    gem_set_line(298);
+#line 302 "compiler/scope.gem"
+    gem_set_line(302);
     GemVal _t4870[] = {gem_v_env};
     GemVal gem_v_arm = gem_fn___mod_scope_copy_scope_env(NULL, _t4870, 1);
-#line 299 "compiler/scope.gem"
-    gem_set_line(299);
+#line 303 "compiler/scope.gem"
+    gem_set_line(303);
     GemVal _t4871[] = {gem_v_mode};
     GemVal gem_v_cm = gem_fn___mod_scope_shadow_child_mode(NULL, _t4871, 1);
-#line 300 "compiler/scope.gem"
-    gem_set_line(300);
+#line 304 "compiler/scope.gem"
+    gem_set_line(304);
     GemVal _t4876 = gem_g___mod_scope_shadow_node;
     GemVal _t4874 = gem_v_cond;
     GemVal _t4873 = gem_v_arm;
     GemVal _t4872 = gem_v_mode;
     GemVal _t4875[] = {_t4874, _t4873, _t4872, gem_v_ctx};
-    gem_check_callable(_t4876, "compiler/scope.gem", 300);
+    gem_check_callable(_t4876, "compiler/scope.gem", 304);
     (void)(_t4876.fn(_t4876.env, _t4875, 4));
-#line 301 "compiler/scope.gem"
-    gem_set_line(301);
+#line 305 "compiler/scope.gem"
+    gem_set_line(305);
     if (gem_truthy(gem_neq(gem_v_bindings, GEM_NIL))) {
-#line 302 "compiler/scope.gem"
-        gem_set_line(302);
+#line 306 "compiler/scope.gem"
+        gem_set_line(306);
         GemVal gem_v___for_items_111 = gem_for_items_1(gem_v_bindings);
-#line 302 "compiler/scope.gem"
-        gem_set_line(302);
+#line 306 "compiler/scope.gem"
+        gem_set_line(306);
         GemVal gem_v___for_i_111 = gem_int(0);
-#line 302 "compiler/scope.gem"
-        gem_set_line(302);
+#line 306 "compiler/scope.gem"
+        gem_set_line(306);
         GemArenaMark _mk111;
         gem_arena_mark(&_mk111);
         while (1) {
@@ -22689,21 +22710,21 @@ static GemVal gem_fn___mod_scope_shadow_arm(void *_env, GemVal *args, int argc) 
             }
     GemVal _t4877 = gem_v___for_i_111;
             if (!gem_truthy(gem_lt(_t4877, gem_for_len_1(gem_v___for_items_111)))) break;
-#line 302 "compiler/scope.gem"
-            gem_set_line(302);
+#line 306 "compiler/scope.gem"
+            gem_set_line(306);
     GemVal _t4878 = gem_v___for_items_111;
             GemVal gem_v_b = gem_table_get(_t4878, gem_v___for_i_111);
-#line 302 "compiler/scope.gem"
-            gem_set_line(302);
+#line 306 "compiler/scope.gem"
+            gem_set_line(306);
             gem_v___for_i_111 = gem_add(gem_v___for_i_111, gem_int(1));
-#line 303 "compiler/scope.gem"
-            gem_set_line(303);
+#line 307 "compiler/scope.gem"
+            gem_set_line(307);
     GemVal _t4880 = gem_g___mod_scope_is_node;
     GemVal _t4879[] = {gem_v_b, GEM_STR_LIT("let", 3)};
-    gem_check_callable(_t4880, "compiler/scope.gem", 303);
+    gem_check_callable(_t4880, "compiler/scope.gem", 307);
             if (gem_truthy(_t4880.fn(_t4880.env, _t4879, 2))) {
-#line 304 "compiler/scope.gem"
-                gem_set_line(304);
+#line 308 "compiler/scope.gem"
+                gem_set_line(308);
     GemVal _t4886 = gem_g___mod_scope_shadow_node;
     GemVal _t4881 = gem_v_b;
     static GemICacheSlot _ic_745 = {0};
@@ -22711,10 +22732,10 @@ static GemVal gem_fn___mod_scope_shadow_arm(void *_env, GemVal *args, int argc) 
     GemVal _t4883 = gem_v_arm;
     GemVal _t4882 = gem_v_mode;
     GemVal _t4885[] = {_t4884, _t4883, _t4882, gem_v_ctx};
-    gem_check_callable(_t4886, "compiler/scope.gem", 304);
+    gem_check_callable(_t4886, "compiler/scope.gem", 308);
                 (void)(_t4886.fn(_t4886.env, _t4885, 4));
-#line 305 "compiler/scope.gem"
-                gem_set_line(305);
+#line 309 "compiler/scope.gem"
+                gem_set_line(309);
     GemVal _t4889 = gem_v_b;
     GemVal _t4888 = gem_v_arm;
     GemVal _t4887 = gem_v_cm;
@@ -22724,18 +22745,18 @@ static GemVal gem_fn___mod_scope_shadow_arm(void *_env, GemVal *args, int argc) 
         }
 
     }
-#line 309 "compiler/scope.gem"
-    gem_set_line(309);
+#line 313 "compiler/scope.gem"
+    gem_set_line(313);
     GemVal _t4896 = gem_g___mod_scope_shadow_stmts;
     GemVal _t4894 = gem_v_body;
     GemVal _t4893 = gem_v_arm;
     GemVal _t4892 = gem_v_cm;
     GemVal _t4891 = gem_v_ctx;
     GemVal _t4895[] = {_t4894, _t4893, _t4892, _t4891, gem_v_block_kw};
-    gem_check_callable(_t4896, "compiler/scope.gem", 309);
+    gem_check_callable(_t4896, "compiler/scope.gem", 313);
     (void)(_t4896.fn(_t4896.env, _t4895, 5));
-#line 310 "compiler/scope.gem"
-    gem_set_line(310);
+#line 314 "compiler/scope.gem"
+    gem_set_line(314);
     GemVal _t4899 = gem_v_arm;
     GemVal _t4898 = gem_v_env;
     GemVal _t4897 = gem_v_ctx;
@@ -22747,8 +22768,8 @@ static GemVal gem_fn___mod_scope_shadow_arm(void *_env, GemVal *args, int argc) 
 }
 
 static GemVal gem_fn___mod_scope_scope_shadowing_lets(void *_env, GemVal *args, int argc) {
-#line 420 "compiler/scope.gem"
-    gem_push_frame("scope.scope_shadowing_lets", "compiler/scope.gem", 420);
+#line 424 "compiler/scope.gem"
+    gem_push_frame("scope.scope_shadowing_lets", "compiler/scope.gem", 424);
     GemVal gem_v_fn_defs = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_top_stmts = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_builtins = (argc > 2) ? args[2] : GEM_NIL;
@@ -22756,27 +22777,27 @@ static GemVal gem_fn___mod_scope_scope_shadowing_lets(void *_env, GemVal *args, 
     GemVal gem_v_report = (argc > 4) ? args[4] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 421 "compiler/scope.gem"
-    gem_set_line(421);
+#line 425 "compiler/scope.gem"
+    gem_set_line(425);
     GemVal _t4902 = gem_table_new_braces();
     GemVal gem_v_globals = _t4902;
-#line 422 "compiler/scope.gem"
-    gem_set_line(422);
+#line 426 "compiler/scope.gem"
+    gem_set_line(426);
     GemVal _t4903 = gem_v_top_stmts;
     GemVal _t4904[] = {_t4903, gem_v_globals};
     (void)(gem_fn___mod_scope_collect_top_let_names(NULL, _t4904, 2));
-#line 423 "compiler/scope.gem"
-    gem_set_line(423);
+#line 427 "compiler/scope.gem"
+    gem_set_line(427);
     GemVal _t4905 = gem_table_new_braces();
     GemVal gem_v_fns = _t4905;
-#line 424 "compiler/scope.gem"
-    gem_set_line(424);
+#line 428 "compiler/scope.gem"
+    gem_set_line(428);
     GemVal gem_v___for_items_118 = gem_for_items_1(gem_v_fn_defs);
-#line 424 "compiler/scope.gem"
-    gem_set_line(424);
+#line 428 "compiler/scope.gem"
+    gem_set_line(428);
     GemVal gem_v___for_i_118 = gem_int(0);
-#line 424 "compiler/scope.gem"
-    gem_set_line(424);
+#line 428 "compiler/scope.gem"
+    gem_set_line(428);
     GemArenaMark _mk112;
     gem_arena_mark(&_mk112);
     while (1) {
@@ -22787,26 +22808,26 @@ static GemVal gem_fn___mod_scope_scope_shadowing_lets(void *_env, GemVal *args, 
         }
     GemVal _t4906 = gem_v___for_i_118;
         if (!gem_truthy(gem_lt(_t4906, gem_for_len_1(gem_v___for_items_118)))) break;
-#line 424 "compiler/scope.gem"
-        gem_set_line(424);
+#line 428 "compiler/scope.gem"
+        gem_set_line(428);
     GemVal _t4907 = gem_v___for_items_118;
         GemVal gem_v_fd = gem_table_get(_t4907, gem_v___for_i_118);
-#line 424 "compiler/scope.gem"
-        gem_set_line(424);
+#line 428 "compiler/scope.gem"
+        gem_set_line(428);
         gem_v___for_i_118 = gem_add(gem_v___for_i_118, gem_int(1));
-#line 425 "compiler/scope.gem"
-        gem_set_line(425);
+#line 429 "compiler/scope.gem"
+        gem_set_line(429);
     GemVal _t4911 = gem_g___mod_scope_set_add;
     GemVal _t4909 = gem_v_fns;
     GemVal _t4908 = gem_v_fd;
     static GemICacheSlot _ic_746 = {0};
     GemVal _t4910[] = {_t4909, gem_table_get_cached(_t4908, "name", &_ic_746)};
-    gem_check_callable(_t4911, "compiler/scope.gem", 425);
+    gem_check_callable(_t4911, "compiler/scope.gem", 429);
         (void)(_t4911.fn(_t4911.env, _t4910, 2));
     }
 
-#line 427 "compiler/scope.gem"
-    gem_set_line(427);
+#line 431 "compiler/scope.gem"
+    gem_set_line(431);
     GemVal _t4912 = gem_table_new_braces();
     gem_table_set(_t4912, GEM_STR_LIT("globals", 7), gem_v_globals);
     gem_table_set(_t4912, GEM_STR_LIT("fns", 3), gem_v_fns);
@@ -22825,14 +22846,14 @@ static GemVal gem_fn___mod_scope_scope_shadowing_lets(void *_env, GemVal *args, 
     gem_table_set(_t4912, GEM_STR_LIT("closure_depth", 13), gem_int(0));
     gem_table_set(_t4912, GEM_STR_LIT("report", 6), gem_v_report);
     GemVal gem_v_ctx = _t4912;
-#line 430 "compiler/scope.gem"
-    gem_set_line(430);
+#line 434 "compiler/scope.gem"
+    gem_set_line(434);
     GemVal gem_v___for_items_119 = gem_for_items_1(gem_v_externs);
-#line 430 "compiler/scope.gem"
-    gem_set_line(430);
+#line 434 "compiler/scope.gem"
+    gem_set_line(434);
     GemVal gem_v___for_i_119 = gem_int(0);
-#line 430 "compiler/scope.gem"
-    gem_set_line(430);
+#line 434 "compiler/scope.gem"
+    gem_set_line(434);
     GemArenaMark _mk113;
     gem_arena_mark(&_mk113);
     while (1) {
@@ -22843,32 +22864,32 @@ static GemVal gem_fn___mod_scope_scope_shadowing_lets(void *_env, GemVal *args, 
         }
     GemVal _t4918 = gem_v___for_i_119;
         if (!gem_truthy(gem_lt(_t4918, gem_for_len_1(gem_v___for_items_119)))) break;
-#line 430 "compiler/scope.gem"
-        gem_set_line(430);
+#line 434 "compiler/scope.gem"
+        gem_set_line(434);
     GemVal _t4919 = gem_v___for_items_119;
         GemVal gem_v_e = gem_table_get(_t4919, gem_v___for_i_119);
-#line 430 "compiler/scope.gem"
-        gem_set_line(430);
+#line 434 "compiler/scope.gem"
+        gem_set_line(434);
         gem_v___for_i_119 = gem_add(gem_v___for_i_119, gem_int(1));
-#line 431 "compiler/scope.gem"
-        gem_set_line(431);
+#line 435 "compiler/scope.gem"
+        gem_set_line(435);
     GemVal _t4923 = gem_g___mod_scope_set_add;
     GemVal _t4920 = gem_v_ctx;
     static GemICacheSlot _ic_747 = {0};
     GemVal _t4921 = gem_table_get_cached(_t4920, "externs", &_ic_747);
     GemVal _t4922[] = {_t4921, gem_v_e};
-    gem_check_callable(_t4923, "compiler/scope.gem", 431);
+    gem_check_callable(_t4923, "compiler/scope.gem", 435);
         (void)(_t4923.fn(_t4923.env, _t4922, 2));
     }
 
-#line 433 "compiler/scope.gem"
-    gem_set_line(433);
+#line 437 "compiler/scope.gem"
+    gem_set_line(437);
     GemVal gem_v___for_items_120 = gem_for_items_1(gem_v_top_stmts);
-#line 433 "compiler/scope.gem"
-    gem_set_line(433);
+#line 437 "compiler/scope.gem"
+    gem_set_line(437);
     GemVal gem_v___for_i_120 = gem_int(0);
-#line 433 "compiler/scope.gem"
-    gem_set_line(433);
+#line 437 "compiler/scope.gem"
+    gem_set_line(437);
     GemArenaMark _mk114;
     gem_arena_mark(&_mk114);
     while (1) {
@@ -22879,36 +22900,36 @@ static GemVal gem_fn___mod_scope_scope_shadowing_lets(void *_env, GemVal *args, 
         }
     GemVal _t4924 = gem_v___for_i_120;
         if (!gem_truthy(gem_lt(_t4924, gem_for_len_1(gem_v___for_items_120)))) break;
-#line 433 "compiler/scope.gem"
-        gem_set_line(433);
+#line 437 "compiler/scope.gem"
+        gem_set_line(437);
     GemVal _t4925 = gem_v___for_items_120;
         GemVal gem_v_s = gem_table_get(_t4925, gem_v___for_i_120);
-#line 433 "compiler/scope.gem"
-        gem_set_line(433);
+#line 437 "compiler/scope.gem"
+        gem_set_line(437);
         gem_v___for_i_120 = gem_add(gem_v___for_i_120, gem_int(1));
-#line 434 "compiler/scope.gem"
-        gem_set_line(434);
+#line 438 "compiler/scope.gem"
+        gem_set_line(438);
     GemVal _t4929 = gem_g___mod_scope_shadow_collect_lets;
     GemVal _t4927 = gem_v_s;
     GemVal _t4926 = gem_v_ctx;
     static GemICacheSlot _ic_748 = {0};
     GemVal _t4928[] = {_t4927, gem_table_get_cached(_t4926, "later", &_ic_748)};
-    gem_check_callable(_t4929, "compiler/scope.gem", 434);
+    gem_check_callable(_t4929, "compiler/scope.gem", 438);
         (void)(_t4929.fn(_t4929.env, _t4928, 2));
     }
 
-#line 436 "compiler/scope.gem"
-    gem_set_line(436);
+#line 440 "compiler/scope.gem"
+    gem_set_line(440);
     GemVal _t4930 = gem_table_new_braces();
     GemVal gem_v_env = _t4930;
-#line 437 "compiler/scope.gem"
-    gem_set_line(437);
+#line 441 "compiler/scope.gem"
+    gem_set_line(441);
     GemVal gem_v___for_items_121 = gem_for_items_1(gem_v_top_stmts);
-#line 437 "compiler/scope.gem"
-    gem_set_line(437);
+#line 441 "compiler/scope.gem"
+    gem_set_line(441);
     GemVal gem_v___for_i_121 = gem_int(0);
-#line 437 "compiler/scope.gem"
-    gem_set_line(437);
+#line 441 "compiler/scope.gem"
+    gem_set_line(441);
     GemArenaMark _mk115;
     gem_arena_mark(&_mk115);
     while (1) {
@@ -22919,32 +22940,32 @@ static GemVal gem_fn___mod_scope_scope_shadowing_lets(void *_env, GemVal *args, 
         }
     GemVal _t4931 = gem_v___for_i_121;
         if (!gem_truthy(gem_lt(_t4931, gem_for_len_1(gem_v___for_items_121)))) break;
-#line 437 "compiler/scope.gem"
-        gem_set_line(437);
+#line 441 "compiler/scope.gem"
+        gem_set_line(441);
     GemVal _t4932 = gem_v___for_items_121;
         GemVal gem_v_s = gem_table_get(_t4932, gem_v___for_i_121);
-#line 437 "compiler/scope.gem"
-        gem_set_line(437);
+#line 441 "compiler/scope.gem"
+        gem_set_line(441);
         gem_v___for_i_121 = gem_add(gem_v___for_i_121, gem_int(1));
-#line 438 "compiler/scope.gem"
-        gem_set_line(438);
+#line 442 "compiler/scope.gem"
+        gem_set_line(442);
     GemVal _t4936 = gem_g___mod_scope_shadow_stmt;
     GemVal _t4934 = gem_v_s;
     GemVal _t4933 = gem_v_env;
     GemVal _t4935[] = {_t4934, _t4933, GEM_STR_LIT("module", 6), gem_v_ctx};
-    gem_check_callable(_t4936, "compiler/scope.gem", 438);
+    gem_check_callable(_t4936, "compiler/scope.gem", 442);
         (void)(_t4936.fn(_t4936.env, _t4935, 4));
     }
 
     {
-#line 440 "compiler/scope.gem"
-        gem_set_line(440);
+#line 444 "compiler/scope.gem"
+        gem_set_line(444);
         GemVal gem_v___for_items_122 = gem_for_items_1(gem_v_fn_defs);
-#line 440 "compiler/scope.gem"
-        gem_set_line(440);
+#line 444 "compiler/scope.gem"
+        gem_set_line(444);
         GemVal gem_v___for_i_122 = gem_int(0);
-#line 440 "compiler/scope.gem"
-        gem_set_line(440);
+#line 444 "compiler/scope.gem"
+        gem_set_line(444);
         GemArenaMark _mk116;
         gem_arena_mark(&_mk116);
         while (1) {
@@ -22955,15 +22976,15 @@ static GemVal gem_fn___mod_scope_scope_shadowing_lets(void *_env, GemVal *args, 
             }
     GemVal _t4937 = gem_v___for_i_122;
             if (!gem_truthy(gem_lt(_t4937, gem_for_len_1(gem_v___for_items_122)))) break;
-#line 440 "compiler/scope.gem"
-            gem_set_line(440);
+#line 444 "compiler/scope.gem"
+            gem_set_line(444);
     GemVal _t4938 = gem_v___for_items_122;
             GemVal gem_v_fd = gem_table_get(_t4938, gem_v___for_i_122);
-#line 440 "compiler/scope.gem"
-            gem_set_line(440);
+#line 444 "compiler/scope.gem"
+            gem_set_line(444);
             gem_v___for_i_122 = gem_add(gem_v___for_i_122, gem_int(1));
-#line 441 "compiler/scope.gem"
-            gem_set_line(441);
+#line 445 "compiler/scope.gem"
+            gem_set_line(445);
     GemVal _t4939 = gem_v_fd;
     GemVal _t4940[] = {_t4939, gem_v_ctx};
             (void)(gem_fn___mod_scope_shadow_named_fn(NULL, _t4940, 2));
@@ -22975,22 +22996,22 @@ static GemVal gem_fn___mod_scope_scope_shadowing_lets(void *_env, GemVal *args, 
 }
 
 static GemVal gem_fn___mod_scope_collect_module_namespaces(void *_env, GemVal *args, int argc) {
-#line 451 "compiler/scope.gem"
-    gem_push_frame("scope.collect_module_namespaces", "compiler/scope.gem", 451);
+#line 455 "compiler/scope.gem"
+    gem_push_frame("scope.collect_module_namespaces", "compiler/scope.gem", 455);
     GemVal gem_v_top_stmts = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_assigned = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_out = (argc > 2) ? args[2] : GEM_NIL;
-#line 452 "compiler/scope.gem"
-    gem_set_line(452);
+#line 456 "compiler/scope.gem"
+    gem_set_line(456);
     GemVal gem_v_rebound = gem_v_assigned;
-#line 453 "compiler/scope.gem"
-    gem_set_line(453);
+#line 457 "compiler/scope.gem"
+    gem_set_line(457);
     GemVal gem_v___for_items_125 = gem_for_items_1(gem_v_top_stmts);
-#line 453 "compiler/scope.gem"
-    gem_set_line(453);
+#line 457 "compiler/scope.gem"
+    gem_set_line(457);
     GemVal gem_v___for_i_125 = gem_int(0);
-#line 453 "compiler/scope.gem"
-    gem_set_line(453);
+#line 457 "compiler/scope.gem"
+    gem_set_line(457);
     GemArenaMark _mk117;
     gem_arena_mark(&_mk117);
     while (1) {
@@ -23001,26 +23022,26 @@ static GemVal gem_fn___mod_scope_collect_module_namespaces(void *_env, GemVal *a
         }
     GemVal _t4941 = gem_v___for_i_125;
         if (!gem_truthy(gem_lt(_t4941, gem_for_len_1(gem_v___for_items_125)))) break;
-#line 453 "compiler/scope.gem"
-        gem_set_line(453);
+#line 457 "compiler/scope.gem"
+        gem_set_line(457);
     GemVal _t4942 = gem_v___for_items_125;
         GemVal gem_v_s = gem_table_get(_t4942, gem_v___for_i_125);
-#line 453 "compiler/scope.gem"
-        gem_set_line(453);
+#line 457 "compiler/scope.gem"
+        gem_set_line(457);
         gem_v___for_i_125 = gem_add(gem_v___for_i_125, gem_int(1));
-#line 454 "compiler/scope.gem"
-        gem_set_line(454);
+#line 458 "compiler/scope.gem"
+        gem_set_line(458);
     GemVal _t4944 = gem_g___mod_scope_is_node;
     GemVal _t4943[] = {gem_v_s, GEM_STR_LIT("let", 3)};
-    gem_check_callable(_t4944, "compiler/scope.gem", 454);
+    gem_check_callable(_t4944, "compiler/scope.gem", 458);
         if (gem_truthy(_t4944.fn(_t4944.env, _t4943, 2))) {
-#line 455 "compiler/scope.gem"
-            gem_set_line(455);
+#line 459 "compiler/scope.gem"
+            gem_set_line(459);
     GemVal _t4947 = gem_g___mod_scope_is_node;
     GemVal _t4945 = gem_v_s;
     static GemICacheSlot _ic_749 = {0};
     GemVal _t4946[] = {gem_table_get_cached(_t4945, "value", &_ic_749), GEM_STR_LIT("table", 5)};
-    gem_check_callable(_t4947, "compiler/scope.gem", 455);
+    gem_check_callable(_t4947, "compiler/scope.gem", 459);
     GemVal _t4948 = _t4947.fn(_t4947.env, _t4946, 2);
     GemVal _t4951;
     if (!gem_truthy(_t4948)) {
@@ -23033,22 +23054,22 @@ static GemVal gem_fn___mod_scope_collect_module_namespaces(void *_env, GemVal *a
         _t4951 = gem_eq(gem_table_get_cached(_t4950, "frozen", &_ic_751), gem_bool(1));
     }
             if (gem_truthy(_t4951)) {
-#line 456 "compiler/scope.gem"
-                gem_set_line(456);
+#line 460 "compiler/scope.gem"
+                gem_set_line(460);
     GemVal _t4952 = gem_table_new_braces();
                 GemVal gem_v_fields = _t4952;
-#line 457 "compiler/scope.gem"
-                gem_set_line(457);
+#line 461 "compiler/scope.gem"
+                gem_set_line(461);
     GemVal _t4953 = gem_v_s;
     static GemICacheSlot _ic_752 = {0};
     GemVal _t4954 = gem_table_get_cached(_t4953, "value", &_ic_752);
     static GemICacheSlot _ic_753 = {0};
                 GemVal gem_v___for_items_123 = gem_for_items_1(gem_table_get_cached(_t4954, "entries", &_ic_753));
-#line 457 "compiler/scope.gem"
-                gem_set_line(457);
+#line 461 "compiler/scope.gem"
+                gem_set_line(461);
                 GemVal gem_v___for_i_123 = gem_int(0);
-#line 457 "compiler/scope.gem"
-                gem_set_line(457);
+#line 461 "compiler/scope.gem"
+                gem_set_line(461);
                 GemArenaMark _mk118;
                 gem_arena_mark(&_mk118);
                 while (1) {
@@ -23059,15 +23080,15 @@ static GemVal gem_fn___mod_scope_collect_module_namespaces(void *_env, GemVal *a
                     }
     GemVal _t4955 = gem_v___for_i_123;
                     if (!gem_truthy(gem_lt(_t4955, gem_for_len_1(gem_v___for_items_123)))) break;
-#line 457 "compiler/scope.gem"
-                    gem_set_line(457);
+#line 461 "compiler/scope.gem"
+                    gem_set_line(461);
     GemVal _t4956 = gem_v___for_items_123;
                     GemVal gem_v_e = gem_table_get(_t4956, gem_v___for_i_123);
-#line 457 "compiler/scope.gem"
-                    gem_set_line(457);
+#line 461 "compiler/scope.gem"
+                    gem_set_line(461);
                     gem_v___for_i_123 = gem_add(gem_v___for_i_123, gem_int(1));
-#line 458 "compiler/scope.gem"
-                    gem_set_line(458);
+#line 462 "compiler/scope.gem"
+                    gem_set_line(462);
     GemVal _t4957 = gem_v_e;
     static GemICacheSlot _ic_754 = {0};
     GemVal _t4958 = gem_eq(gem_type_1(gem_table_get_cached(_t4957, "key", &_ic_754)), GEM_STR_LIT("string", 6));
@@ -23079,12 +23100,12 @@ static GemVal gem_fn___mod_scope_collect_module_namespaces(void *_env, GemVal *a
     GemVal _t4959 = gem_v_e;
     static GemICacheSlot _ic_755 = {0};
     GemVal _t4960[] = {gem_table_get_cached(_t4959, "value", &_ic_755), GEM_STR_LIT("var", 3)};
-    gem_check_callable(_t4961, "compiler/scope.gem", 458);
+    gem_check_callable(_t4961, "compiler/scope.gem", 462);
         _t4962 = _t4961.fn(_t4961.env, _t4960, 2);
     }
                     if (gem_truthy(_t4962)) {
-#line 459 "compiler/scope.gem"
-                        gem_set_line(459);
+#line 463 "compiler/scope.gem"
+                        gem_set_line(463);
     GemVal _t4967 = gem_v_fields;
     GemVal _t4963 = gem_v_e;
     static GemICacheSlot _ic_756 = {0};
@@ -23097,32 +23118,32 @@ static GemVal gem_fn___mod_scope_collect_module_namespaces(void *_env, GemVal *a
                     }
                 }
 
-#line 462 "compiler/scope.gem"
-                gem_set_line(462);
+#line 466 "compiler/scope.gem"
+                gem_set_line(466);
     GemVal _t4969 = gem_v_out;
     GemVal _t4968 = gem_v_s;
     static GemICacheSlot _ic_759 = {0};
                 GemVal gem_v_prev = gem_table_get(_t4969, gem_table_get_cached(_t4968, "name", &_ic_759));
-#line 463 "compiler/scope.gem"
-                gem_set_line(463);
+#line 467 "compiler/scope.gem"
+                gem_set_line(467);
                 if (gem_truthy(gem_neq(gem_v_prev, GEM_NIL))) {
-#line 466 "compiler/scope.gem"
-                    gem_set_line(466);
+#line 470 "compiler/scope.gem"
+                    gem_set_line(470);
     GemVal _t4970[] = {gem_v_prev};
     GemVal _t4972 = gem_len_1(gem_keys_fn(NULL, _t4970, 1));
     GemVal _t4971[] = {gem_v_fields};
                     GemVal gem_v_same = gem_eq(_t4972, gem_len_1(gem_keys_fn(NULL, _t4971, 1)));
-#line 467 "compiler/scope.gem"
-                    gem_set_line(467);
+#line 471 "compiler/scope.gem"
+                    gem_set_line(471);
                     GemVal gem_v___for_tbl_124 = gem_v_fields;
-#line 467 "compiler/scope.gem"
-                    gem_set_line(467);
+#line 471 "compiler/scope.gem"
+                    gem_set_line(471);
                     GemVal gem_v___for_len_124 = gem_for_len_1(gem_v___for_tbl_124);
-#line 467 "compiler/scope.gem"
-                    gem_set_line(467);
+#line 471 "compiler/scope.gem"
+                    gem_set_line(471);
                     GemVal gem_v___for_i_124 = gem_int(0);
-#line 467 "compiler/scope.gem"
-                    gem_set_line(467);
+#line 471 "compiler/scope.gem"
+                    gem_set_line(471);
                     GemArenaMark _mk119;
                     gem_arena_mark(&_mk119);
                     while (1) {
@@ -23133,71 +23154,71 @@ static GemVal gem_fn___mod_scope_collect_module_namespaces(void *_env, GemVal *a
                         }
     GemVal _t4973 = gem_v___for_i_124;
                         if (!gem_truthy(gem_lt(_t4973, gem_v___for_len_124))) break;
-#line 467 "compiler/scope.gem"
-                        gem_set_line(467);
+#line 471 "compiler/scope.gem"
+                        gem_set_line(471);
     GemVal _t4974 = gem_v___for_tbl_124;
                         GemVal gem_v_k = gem_table_key_at_2(_t4974, gem_v___for_i_124);
-#line 467 "compiler/scope.gem"
-                        gem_set_line(467);
+#line 471 "compiler/scope.gem"
+                        gem_set_line(471);
     GemVal _t4975 = gem_v___for_tbl_124;
                         GemVal gem_v_v = gem_table_val_at_2(_t4975, gem_v___for_i_124);
-#line 467 "compiler/scope.gem"
-                        gem_set_line(467);
+#line 471 "compiler/scope.gem"
+                        gem_set_line(471);
                         gem_v___for_i_124 = gem_add(gem_v___for_i_124, gem_int(1));
-#line 468 "compiler/scope.gem"
-                        gem_set_line(468);
+#line 472 "compiler/scope.gem"
+                        gem_set_line(472);
     GemVal _t4976 = gem_v_prev;
     GemVal _t4977 = gem_table_get(_t4976, gem_v_k);
                         if (gem_truthy(gem_neq(_t4977, gem_v_v))) {
-#line 469 "compiler/scope.gem"
-                            gem_set_line(469);
+#line 473 "compiler/scope.gem"
+                            gem_set_line(473);
                             gem_v_same = gem_bool(0);
                         }
                     }
 
-#line 472 "compiler/scope.gem"
-                    gem_set_line(472);
+#line 476 "compiler/scope.gem"
+                    gem_set_line(476);
                     if (gem_truthy(gem_not(gem_v_same))) {
-#line 473 "compiler/scope.gem"
-                        gem_set_line(473);
+#line 477 "compiler/scope.gem"
+                        gem_set_line(477);
     GemVal _t4981 = gem_g___mod_scope_set_add;
     GemVal _t4979 = gem_v_rebound;
     GemVal _t4978 = gem_v_s;
     static GemICacheSlot _ic_760 = {0};
     GemVal _t4980[] = {_t4979, gem_table_get_cached(_t4978, "name", &_ic_760)};
-    gem_check_callable(_t4981, "compiler/scope.gem", 473);
+    gem_check_callable(_t4981, "compiler/scope.gem", 477);
                         (void)(_t4981.fn(_t4981.env, _t4980, 2));
                     }
                 }
-#line 476 "compiler/scope.gem"
-                gem_set_line(476);
+#line 480 "compiler/scope.gem"
+                gem_set_line(480);
     GemVal _t4984 = gem_v_out;
     GemVal _t4982 = gem_v_s;
     static GemICacheSlot _ic_761 = {0};
     GemVal _t4983 = gem_table_get_cached(_t4982, "name", &_ic_761);
                 gem_table_set(_t4984, _t4983, gem_v_fields);
             } else {
-#line 478 "compiler/scope.gem"
-                gem_set_line(478);
+#line 482 "compiler/scope.gem"
+                gem_set_line(482);
     GemVal _t4988 = gem_g___mod_scope_set_add;
     GemVal _t4986 = gem_v_rebound;
     GemVal _t4985 = gem_v_s;
     static GemICacheSlot _ic_762 = {0};
     GemVal _t4987[] = {_t4986, gem_table_get_cached(_t4985, "name", &_ic_762)};
-    gem_check_callable(_t4988, "compiler/scope.gem", 478);
+    gem_check_callable(_t4988, "compiler/scope.gem", 482);
                 (void)(_t4988.fn(_t4988.env, _t4987, 2));
             }
         }
     }
 
-#line 484 "compiler/scope.gem"
-    gem_set_line(484);
+#line 488 "compiler/scope.gem"
+    gem_set_line(488);
     GemVal gem_v___for_items_127 = gem_for_items_1(gem_v_top_stmts);
-#line 484 "compiler/scope.gem"
-    gem_set_line(484);
+#line 488 "compiler/scope.gem"
+    gem_set_line(488);
     GemVal gem_v___for_i_127 = gem_int(0);
-#line 484 "compiler/scope.gem"
-    gem_set_line(484);
+#line 488 "compiler/scope.gem"
+    gem_set_line(488);
     GemArenaMark _mk120;
     gem_arena_mark(&_mk120);
     while (1) {
@@ -23208,29 +23229,29 @@ static GemVal gem_fn___mod_scope_collect_module_namespaces(void *_env, GemVal *a
         }
     GemVal _t4989 = gem_v___for_i_127;
         if (!gem_truthy(gem_lt(_t4989, gem_for_len_1(gem_v___for_items_127)))) break;
-#line 484 "compiler/scope.gem"
-        gem_set_line(484);
+#line 488 "compiler/scope.gem"
+        gem_set_line(488);
     GemVal _t4990 = gem_v___for_items_127;
         GemVal gem_v_s = gem_table_get(_t4990, gem_v___for_i_127);
-#line 484 "compiler/scope.gem"
-        gem_set_line(484);
+#line 488 "compiler/scope.gem"
+        gem_set_line(488);
         gem_v___for_i_127 = gem_add(gem_v___for_i_127, gem_int(1));
-#line 485 "compiler/scope.gem"
-        gem_set_line(485);
+#line 489 "compiler/scope.gem"
+        gem_set_line(489);
     GemVal _t4992 = gem_g___mod_scope_is_node;
     GemVal _t4991[] = {gem_v_s, GEM_STR_LIT("block", 5)};
-    gem_check_callable(_t4992, "compiler/scope.gem", 485);
+    gem_check_callable(_t4992, "compiler/scope.gem", 489);
         if (gem_truthy(_t4992.fn(_t4992.env, _t4991, 2))) {
-#line 486 "compiler/scope.gem"
-            gem_set_line(486);
+#line 490 "compiler/scope.gem"
+            gem_set_line(490);
     GemVal _t4993 = gem_v_s;
     static GemICacheSlot _ic_763 = {0};
             GemVal gem_v___for_items_126 = gem_for_items_1(gem_table_get_cached(_t4993, "stmts", &_ic_763));
-#line 486 "compiler/scope.gem"
-            gem_set_line(486);
+#line 490 "compiler/scope.gem"
+            gem_set_line(490);
             GemVal gem_v___for_i_126 = gem_int(0);
-#line 486 "compiler/scope.gem"
-            gem_set_line(486);
+#line 490 "compiler/scope.gem"
+            gem_set_line(490);
             GemArenaMark _mk121;
             gem_arena_mark(&_mk121);
             while (1) {
@@ -23241,27 +23262,27 @@ static GemVal gem_fn___mod_scope_collect_module_namespaces(void *_env, GemVal *a
                 }
     GemVal _t4994 = gem_v___for_i_126;
                 if (!gem_truthy(gem_lt(_t4994, gem_for_len_1(gem_v___for_items_126)))) break;
-#line 486 "compiler/scope.gem"
-                gem_set_line(486);
+#line 490 "compiler/scope.gem"
+                gem_set_line(490);
     GemVal _t4995 = gem_v___for_items_126;
                 GemVal gem_v_b = gem_table_get(_t4995, gem_v___for_i_126);
-#line 486 "compiler/scope.gem"
-                gem_set_line(486);
+#line 490 "compiler/scope.gem"
+                gem_set_line(490);
                 gem_v___for_i_126 = gem_add(gem_v___for_i_126, gem_int(1));
-#line 487 "compiler/scope.gem"
-                gem_set_line(487);
+#line 491 "compiler/scope.gem"
+                gem_set_line(491);
     GemVal _t4997 = gem_g___mod_scope_is_node;
     GemVal _t4996[] = {gem_v_b, GEM_STR_LIT("let", 3)};
-    gem_check_callable(_t4997, "compiler/scope.gem", 487);
+    gem_check_callable(_t4997, "compiler/scope.gem", 491);
                 if (gem_truthy(_t4997.fn(_t4997.env, _t4996, 2))) {
-#line 488 "compiler/scope.gem"
-                    gem_set_line(488);
+#line 492 "compiler/scope.gem"
+                    gem_set_line(492);
     GemVal _t5001 = gem_g___mod_scope_set_add;
     GemVal _t4999 = gem_v_rebound;
     GemVal _t4998 = gem_v_b;
     static GemICacheSlot _ic_764 = {0};
     GemVal _t5000[] = {_t4999, gem_table_get_cached(_t4998, "name", &_ic_764)};
-    gem_check_callable(_t5001, "compiler/scope.gem", 488);
+    gem_check_callable(_t5001, "compiler/scope.gem", 492);
                     (void)(_t5001.fn(_t5001.env, _t5000, 2));
                 }
             }
@@ -23270,17 +23291,17 @@ static GemVal gem_fn___mod_scope_collect_module_namespaces(void *_env, GemVal *a
     }
 
     {
-#line 493 "compiler/scope.gem"
-        gem_set_line(493);
+#line 497 "compiler/scope.gem"
+        gem_set_line(497);
         GemVal gem_v___for_tbl_128 = gem_v_rebound;
-#line 493 "compiler/scope.gem"
-        gem_set_line(493);
+#line 497 "compiler/scope.gem"
+        gem_set_line(497);
         GemVal gem_v___for_len_128 = gem_for_len_1(gem_v___for_tbl_128);
-#line 493 "compiler/scope.gem"
-        gem_set_line(493);
+#line 497 "compiler/scope.gem"
+        gem_set_line(497);
         GemVal gem_v___for_i_128 = gem_int(0);
-#line 493 "compiler/scope.gem"
-        gem_set_line(493);
+#line 497 "compiler/scope.gem"
+        gem_set_line(497);
         GemArenaMark _mk122;
         gem_arena_mark(&_mk122);
         while (1) {
@@ -23291,19 +23312,19 @@ static GemVal gem_fn___mod_scope_collect_module_namespaces(void *_env, GemVal *a
             }
     GemVal _t5002 = gem_v___for_i_128;
             if (!gem_truthy(gem_lt(_t5002, gem_v___for_len_128))) break;
-#line 493 "compiler/scope.gem"
-            gem_set_line(493);
+#line 497 "compiler/scope.gem"
+            gem_set_line(497);
     GemVal _t5003 = gem_v___for_tbl_128;
             GemVal gem_v_name = gem_table_key_at_2(_t5003, gem_v___for_i_128);
-#line 493 "compiler/scope.gem"
-            gem_set_line(493);
+#line 497 "compiler/scope.gem"
+            gem_set_line(497);
     GemVal _t5004 = gem_v___for_tbl_128;
             GemVal gem_v__ = gem_table_val_at_2(_t5004, gem_v___for_i_128);
-#line 493 "compiler/scope.gem"
-            gem_set_line(493);
+#line 497 "compiler/scope.gem"
+            gem_set_line(497);
             gem_v___for_i_128 = gem_add(gem_v___for_i_128, gem_int(1));
-#line 494 "compiler/scope.gem"
-            gem_set_line(494);
+#line 498 "compiler/scope.gem"
+            gem_set_line(498);
     GemVal _t5005 = gem_v_out;
     GemVal _t5006[] = {_t5005, gem_v_name};
             (void)(gem_delete_fn(NULL, _t5006, 2));
@@ -83623,6 +83644,19 @@ static GemVal gem_fn_basename_no_ext(void *_env, GemVal *args, int argc) {
     return _t19110;
 }
 
+static GemVal gem_fn_shell_quote(void *_env, GemVal *args, int argc) {
+#line 1276 "compiler/main.gem"
+    static const GemLeafSite _leaf_site = {"shell_quote", "compiler/main.gem"};
+    gem_leaf_site = &_leaf_site;
+    GemVal gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
+#line 1277 "compiler/main.gem"
+    gem_leaf_line = 1277;
+    GemVal _t19111[] = {gem_v_s, GEM_STR_LIT("'", 1), GEM_STR_LIT("'\\''", 4)};
+    GemVal _t19112 = gem_add(gem_add(GEM_STR_LIT("'", 1), gem_str_replace_fn(NULL, _t19111, 3)), GEM_STR_LIT("'", 1));
+    gem_leaf_site = NULL;
+    return _t19112;
+}
+
 struct _closure___anon_193 {
     intptr_t _num_captures;
 };
@@ -83637,98 +83671,98 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
 #line 99 "compiler/liveness.gem"
         gem_set_line(99);
-        GemVal _t19120 = gem_bool(0);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19120, 1);
+        GemVal _t19122 = gem_bool(0);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19122, 1);
         gem_pop_frame();
-        return _t19120;
+        return _t19122;
     }
 #line 101 "compiler/liveness.gem"
     gem_set_line(101);
-    GemVal _t19121 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
-    GemVal _t19123;
-    if (gem_truthy(_t19121)) {
-        _t19123 = _t19121;
-    } else {
-    GemVal _t19122 = gem_v_node;
-    static GemICacheSlot _ic_2794 = {0};
-        _t19123 = gem_eq(gem_table_get_cached(_t19122, "tag", &_ic_2794), GEM_NIL);
-    }
+    GemVal _t19123 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
+    GemVal _t19125;
     if (gem_truthy(_t19123)) {
+        _t19125 = _t19123;
+    } else {
+    GemVal _t19124 = gem_v_node;
+    static GemICacheSlot _ic_2794 = {0};
+        _t19125 = gem_eq(gem_table_get_cached(_t19124, "tag", &_ic_2794), GEM_NIL);
+    }
+    if (gem_truthy(_t19125)) {
 #line 102 "compiler/liveness.gem"
         gem_set_line(102);
-        GemVal _t19124 = gem_bool(0);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19124, 1);
+        GemVal _t19126 = gem_bool(0);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19126, 1);
         gem_pop_frame();
-        return _t19124;
+        return _t19126;
     }
 #line 104 "compiler/liveness.gem"
     gem_set_line(104);
     GemVal gem_v___match_44 = gem_v_node;
-    GemVal _t19125 = gem_eq(gem_type_1(gem_v___match_44), GEM_STR_LIT("table", 5));
-    GemVal _t19127;
-    if (!gem_truthy(_t19125)) {
-        _t19127 = _t19125;
-    } else {
-    GemVal _t19126[] = {gem_v___match_44, GEM_STR_LIT("tag", 3)};
-        _t19127 = gem_has_key_fn(NULL, _t19126, 2);
-    }
-    GemVal _t19128;
+    GemVal _t19127 = gem_eq(gem_type_1(gem_v___match_44), GEM_STR_LIT("table", 5));
+    GemVal _t19129;
     if (!gem_truthy(_t19127)) {
-        _t19128 = _t19127;
+        _t19129 = _t19127;
     } else {
-        _t19128 = gem_eq(gem_table_get(gem_v___match_44, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("call", 4));
+    GemVal _t19128[] = {gem_v___match_44, GEM_STR_LIT("tag", 3)};
+        _t19129 = gem_has_key_fn(NULL, _t19128, 2);
     }
     GemVal _t19130;
-    if (!gem_truthy(_t19128)) {
-        _t19130 = _t19128;
+    if (!gem_truthy(_t19129)) {
+        _t19130 = _t19129;
     } else {
-    GemVal _t19129[] = {gem_v___match_44, GEM_STR_LIT("func", 4)};
-        _t19130 = gem_has_key_fn(NULL, _t19129, 2);
+        _t19130 = gem_eq(gem_table_get(gem_v___match_44, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("call", 4));
     }
-    if (gem_truthy(_t19130)) {
+    GemVal _t19132;
+    if (!gem_truthy(_t19130)) {
+        _t19132 = _t19130;
+    } else {
+    GemVal _t19131[] = {gem_v___match_44, GEM_STR_LIT("func", 4)};
+        _t19132 = gem_has_key_fn(NULL, _t19131, 2);
+    }
+    if (gem_truthy(_t19132)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_func = gem_table_get(gem_v___match_44, GEM_STR_LIT("func", 4));
 #line 106 "compiler/liveness.gem"
         gem_set_line(106);
-    GemVal _t19131[] = {gem_v_func, GEM_STR_LIT("var", 3)};
-    GemVal _t19132 = gem_fn___mod_liveness_is_liveness_node(NULL, _t19131, 2);
-    GemVal _t19135;
-    if (!gem_truthy(_t19132)) {
-        _t19135 = _t19132;
+    GemVal _t19133[] = {gem_v_func, GEM_STR_LIT("var", 3)};
+    GemVal _t19134 = gem_fn___mod_liveness_is_liveness_node(NULL, _t19133, 2);
+    GemVal _t19137;
+    if (!gem_truthy(_t19134)) {
+        _t19137 = _t19134;
     } else {
-    GemVal _t19133 = gem_v_func;
+    GemVal _t19135 = gem_v_func;
     static GemICacheSlot _ic_2795 = {0};
-    GemVal _t19134 = gem_table_get_cached(_t19133, "name", &_ic_2795);
-        _t19135 = gem_eq(_t19134, gem_v_fn_name);
+    GemVal _t19136 = gem_table_get_cached(_t19135, "name", &_ic_2795);
+        _t19137 = gem_eq(_t19136, gem_v_fn_name);
     }
-        GemVal _t19136 = _t19135;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19136, 1);
+        GemVal _t19138 = _t19137;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19138, 1);
         gem_pop_frame();
-        return _t19136;
+        return _t19138;
     } else {
-    GemVal _t19137 = gem_eq(gem_type_1(gem_v___match_44), GEM_STR_LIT("table", 5));
-    GemVal _t19139;
-    if (!gem_truthy(_t19137)) {
-        _t19139 = _t19137;
-    } else {
-    GemVal _t19138[] = {gem_v___match_44, GEM_STR_LIT("tag", 3)};
-        _t19139 = gem_has_key_fn(NULL, _t19138, 2);
-    }
-    GemVal _t19140;
+    GemVal _t19139 = gem_eq(gem_type_1(gem_v___match_44), GEM_STR_LIT("table", 5));
+    GemVal _t19141;
     if (!gem_truthy(_t19139)) {
-        _t19140 = _t19139;
+        _t19141 = _t19139;
     } else {
-        _t19140 = gem_eq(gem_table_get(gem_v___match_44, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("return", 6));
+    GemVal _t19140[] = {gem_v___match_44, GEM_STR_LIT("tag", 3)};
+        _t19141 = gem_has_key_fn(NULL, _t19140, 2);
     }
     GemVal _t19142;
-    if (!gem_truthy(_t19140)) {
-        _t19142 = _t19140;
+    if (!gem_truthy(_t19141)) {
+        _t19142 = _t19141;
     } else {
-    GemVal _t19141[] = {gem_v___match_44, GEM_STR_LIT("value", 5)};
-        _t19142 = gem_has_key_fn(NULL, _t19141, 2);
+        _t19142 = gem_eq(gem_table_get(gem_v___match_44, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("return", 6));
     }
-    if (gem_truthy(_t19142)) {
+    GemVal _t19144;
+    if (!gem_truthy(_t19142)) {
+        _t19144 = _t19142;
+    } else {
+    GemVal _t19143[] = {gem_v___match_44, GEM_STR_LIT("value", 5)};
+        _t19144 = gem_has_key_fn(NULL, _t19143, 2);
+    }
+    if (gem_truthy(_t19144)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_value = gem_table_get(gem_v___match_44, GEM_STR_LIT("value", 5));
@@ -83737,51 +83771,51 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
         if (gem_truthy(gem_neq(gem_v_value, GEM_NIL))) {
 #line 109 "compiler/liveness.gem"
             gem_set_line(109);
-    GemVal _t19145 = gem_g___mod_liveness__is_stc;
-    GemVal _t19143 = gem_v_fn_name;
-    GemVal _t19144[] = {_t19143, gem_v_value};
-    gem_check_callable(_t19145, "compiler/liveness.gem", 109);
-            GemVal _t19146 = _t19145.fn(_t19145.env, _t19144, 2);
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19146, 1);
+    GemVal _t19147 = gem_g___mod_liveness__is_stc;
+    GemVal _t19145 = gem_v_fn_name;
+    GemVal _t19146[] = {_t19145, gem_v_value};
+    gem_check_callable(_t19147, "compiler/liveness.gem", 109);
+            GemVal _t19148 = _t19147.fn(_t19147.env, _t19146, 2);
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19148, 1);
             gem_pop_frame();
-            return _t19146;
+            return _t19148;
         }
 #line 111 "compiler/liveness.gem"
         gem_set_line(111);
-        GemVal _t19147 = gem_bool(0);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19147, 1);
+        GemVal _t19149 = gem_bool(0);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19149, 1);
         gem_pop_frame();
-        return _t19147;
+        return _t19149;
     } else {
-    GemVal _t19148 = gem_eq(gem_type_1(gem_v___match_44), GEM_STR_LIT("table", 5));
-    GemVal _t19150;
-    if (!gem_truthy(_t19148)) {
-        _t19150 = _t19148;
-    } else {
-    GemVal _t19149[] = {gem_v___match_44, GEM_STR_LIT("tag", 3)};
-        _t19150 = gem_has_key_fn(NULL, _t19149, 2);
-    }
-    GemVal _t19151;
+    GemVal _t19150 = gem_eq(gem_type_1(gem_v___match_44), GEM_STR_LIT("table", 5));
+    GemVal _t19152;
     if (!gem_truthy(_t19150)) {
-        _t19151 = _t19150;
+        _t19152 = _t19150;
     } else {
-        _t19151 = gem_eq(gem_table_get(gem_v___match_44, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("if", 2));
+    GemVal _t19151[] = {gem_v___match_44, GEM_STR_LIT("tag", 3)};
+        _t19152 = gem_has_key_fn(NULL, _t19151, 2);
     }
     GemVal _t19153;
-    if (!gem_truthy(_t19151)) {
-        _t19153 = _t19151;
+    if (!gem_truthy(_t19152)) {
+        _t19153 = _t19152;
     } else {
-    GemVal _t19152[] = {gem_v___match_44, GEM_STR_LIT("then", 4)};
-        _t19153 = gem_has_key_fn(NULL, _t19152, 2);
+        _t19153 = gem_eq(gem_table_get(gem_v___match_44, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("if", 2));
     }
     GemVal _t19155;
     if (!gem_truthy(_t19153)) {
         _t19155 = _t19153;
     } else {
-    GemVal _t19154[] = {gem_v___match_44, GEM_STR_LIT("else", 4)};
+    GemVal _t19154[] = {gem_v___match_44, GEM_STR_LIT("then", 4)};
         _t19155 = gem_has_key_fn(NULL, _t19154, 2);
     }
-    if (gem_truthy(_t19155)) {
+    GemVal _t19157;
+    if (!gem_truthy(_t19155)) {
+        _t19157 = _t19155;
+    } else {
+    GemVal _t19156[] = {gem_v___match_44, GEM_STR_LIT("else", 4)};
+        _t19157 = gem_has_key_fn(NULL, _t19156, 2);
+    }
+    if (gem_truthy(_t19157)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_then_body = gem_table_get(gem_v___match_44, GEM_STR_LIT("then", 4));
@@ -83790,64 +83824,64 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
         GemVal gem_v_else_body = gem_table_get(gem_v___match_44, GEM_STR_LIT("else", 4));
 #line 113 "compiler/liveness.gem"
         gem_set_line(113);
-    GemVal _t19156 = gem_v_fn_name;
-    GemVal _t19157[] = {_t19156, gem_v_then_body};
-        if (gem_truthy(gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19157, 2))) {
+    GemVal _t19158 = gem_v_fn_name;
+    GemVal _t19159[] = {_t19158, gem_v_then_body};
+        if (gem_truthy(gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19159, 2))) {
 #line 114 "compiler/liveness.gem"
             gem_set_line(114);
-            GemVal _t19158 = gem_bool(1);
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19158, 1);
+            GemVal _t19160 = gem_bool(1);
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19160, 1);
             gem_pop_frame();
-            return _t19158;
+            return _t19160;
         }
 #line 116 "compiler/liveness.gem"
         gem_set_line(116);
         if (gem_truthy(gem_neq(gem_v_else_body, GEM_NIL))) {
 #line 117 "compiler/liveness.gem"
             gem_set_line(117);
-    GemVal _t19159 = gem_v_fn_name;
-    GemVal _t19160[] = {_t19159, gem_v_else_body};
-            GemVal _t19161 = gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19160, 2);
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19161, 1);
+    GemVal _t19161 = gem_v_fn_name;
+    GemVal _t19162[] = {_t19161, gem_v_else_body};
+            GemVal _t19163 = gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19162, 2);
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19163, 1);
             gem_pop_frame();
-            return _t19161;
+            return _t19163;
         }
 #line 119 "compiler/liveness.gem"
         gem_set_line(119);
-        GemVal _t19162 = gem_bool(0);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19162, 1);
+        GemVal _t19164 = gem_bool(0);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19164, 1);
         gem_pop_frame();
-        return _t19162;
+        return _t19164;
     } else {
-    GemVal _t19163 = gem_eq(gem_type_1(gem_v___match_44), GEM_STR_LIT("table", 5));
-    GemVal _t19165;
-    if (!gem_truthy(_t19163)) {
-        _t19165 = _t19163;
-    } else {
-    GemVal _t19164[] = {gem_v___match_44, GEM_STR_LIT("tag", 3)};
-        _t19165 = gem_has_key_fn(NULL, _t19164, 2);
-    }
-    GemVal _t19166;
+    GemVal _t19165 = gem_eq(gem_type_1(gem_v___match_44), GEM_STR_LIT("table", 5));
+    GemVal _t19167;
     if (!gem_truthy(_t19165)) {
-        _t19166 = _t19165;
+        _t19167 = _t19165;
     } else {
-        _t19166 = gem_eq(gem_table_get(gem_v___match_44, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("match", 5));
+    GemVal _t19166[] = {gem_v___match_44, GEM_STR_LIT("tag", 3)};
+        _t19167 = gem_has_key_fn(NULL, _t19166, 2);
     }
     GemVal _t19168;
-    if (!gem_truthy(_t19166)) {
-        _t19168 = _t19166;
+    if (!gem_truthy(_t19167)) {
+        _t19168 = _t19167;
     } else {
-    GemVal _t19167[] = {gem_v___match_44, GEM_STR_LIT("whens", 5)};
-        _t19168 = gem_has_key_fn(NULL, _t19167, 2);
+        _t19168 = gem_eq(gem_table_get(gem_v___match_44, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("match", 5));
     }
     GemVal _t19170;
     if (!gem_truthy(_t19168)) {
         _t19170 = _t19168;
     } else {
-    GemVal _t19169[] = {gem_v___match_44, GEM_STR_LIT("else", 4)};
+    GemVal _t19169[] = {gem_v___match_44, GEM_STR_LIT("whens", 5)};
         _t19170 = gem_has_key_fn(NULL, _t19169, 2);
     }
-    if (gem_truthy(_t19170)) {
+    GemVal _t19172;
+    if (!gem_truthy(_t19170)) {
+        _t19172 = _t19170;
+    } else {
+    GemVal _t19171[] = {gem_v___match_44, GEM_STR_LIT("else", 4)};
+        _t19172 = gem_has_key_fn(NULL, _t19171, 2);
+    }
+    if (gem_truthy(_t19172)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_whens = gem_table_get(gem_v___match_44, GEM_STR_LIT("whens", 5));
@@ -83870,8 +83904,8 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_fn_name, &gem_v_else_body, &gem_v_whens, &gem_v___for_i_45, &gem_v___for_limit_45};
                 gem_arena_reset_region(&_mk558, _rr, 5, NULL, 0);
             }
-    GemVal _t19171 = gem_v___for_i_45;
-            if (!gem_truthy(gem_lt(_t19171, gem_v___for_limit_45))) break;
+    GemVal _t19173 = gem_v___for_i_45;
+            if (!gem_truthy(gem_lt(_t19173, gem_v___for_limit_45))) break;
 #line 121 "compiler/liveness.gem"
             gem_set_line(121);
             GemVal gem_v_i = gem_v___for_i_45;
@@ -83880,18 +83914,18 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
             gem_v___for_i_45 = gem_add(gem_v___for_i_45, gem_int(1));
 #line 122 "compiler/liveness.gem"
             gem_set_line(122);
-    GemVal _t19174 = gem_v_fn_name;
-    GemVal _t19172 = gem_v_whens;
-    GemVal _t19173 = gem_table_get(_t19172, gem_v_i);
+    GemVal _t19176 = gem_v_fn_name;
+    GemVal _t19174 = gem_v_whens;
+    GemVal _t19175 = gem_table_get(_t19174, gem_v_i);
     static GemICacheSlot _ic_2796 = {0};
-    GemVal _t19175[] = {_t19174, gem_table_get_cached(_t19173, "body", &_ic_2796)};
-            if (gem_truthy(gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19175, 2))) {
+    GemVal _t19177[] = {_t19176, gem_table_get_cached(_t19175, "body", &_ic_2796)};
+            if (gem_truthy(gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19177, 2))) {
 #line 123 "compiler/liveness.gem"
                 gem_set_line(123);
-                GemVal _t19176 = gem_bool(1);
-                if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19176, 1);
+                GemVal _t19178 = gem_bool(1);
+                if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19178, 1);
                 gem_pop_frame();
-                return _t19176;
+                return _t19178;
             }
         }
 
@@ -83900,49 +83934,49 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
         if (gem_truthy(gem_neq(gem_v_else_body, GEM_NIL))) {
 #line 127 "compiler/liveness.gem"
             gem_set_line(127);
-    GemVal _t19177 = gem_v_fn_name;
-    GemVal _t19178[] = {_t19177, gem_v_else_body};
-            GemVal _t19179 = gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19178, 2);
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19179, 1);
+    GemVal _t19179 = gem_v_fn_name;
+    GemVal _t19180[] = {_t19179, gem_v_else_body};
+            GemVal _t19181 = gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19180, 2);
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19181, 1);
             gem_pop_frame();
-            return _t19179;
+            return _t19181;
         }
 #line 129 "compiler/liveness.gem"
         gem_set_line(129);
-        GemVal _t19180 = gem_bool(0);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19180, 1);
+        GemVal _t19182 = gem_bool(0);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19182, 1);
         gem_pop_frame();
-        return _t19180;
+        return _t19182;
     } else {
-    GemVal _t19181 = gem_eq(gem_type_1(gem_v___match_44), GEM_STR_LIT("table", 5));
-    GemVal _t19183;
-    if (!gem_truthy(_t19181)) {
-        _t19183 = _t19181;
-    } else {
-    GemVal _t19182[] = {gem_v___match_44, GEM_STR_LIT("tag", 3)};
-        _t19183 = gem_has_key_fn(NULL, _t19182, 2);
-    }
-    GemVal _t19184;
+    GemVal _t19183 = gem_eq(gem_type_1(gem_v___match_44), GEM_STR_LIT("table", 5));
+    GemVal _t19185;
     if (!gem_truthy(_t19183)) {
-        _t19184 = _t19183;
+        _t19185 = _t19183;
     } else {
-        _t19184 = gem_eq(gem_table_get(gem_v___match_44, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("receive_match", 13));
+    GemVal _t19184[] = {gem_v___match_44, GEM_STR_LIT("tag", 3)};
+        _t19185 = gem_has_key_fn(NULL, _t19184, 2);
     }
     GemVal _t19186;
-    if (!gem_truthy(_t19184)) {
-        _t19186 = _t19184;
+    if (!gem_truthy(_t19185)) {
+        _t19186 = _t19185;
     } else {
-    GemVal _t19185[] = {gem_v___match_44, GEM_STR_LIT("arms", 4)};
-        _t19186 = gem_has_key_fn(NULL, _t19185, 2);
+        _t19186 = gem_eq(gem_table_get(gem_v___match_44, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("receive_match", 13));
     }
     GemVal _t19188;
     if (!gem_truthy(_t19186)) {
         _t19188 = _t19186;
     } else {
-    GemVal _t19187[] = {gem_v___match_44, GEM_STR_LIT("after_body", 10)};
+    GemVal _t19187[] = {gem_v___match_44, GEM_STR_LIT("arms", 4)};
         _t19188 = gem_has_key_fn(NULL, _t19187, 2);
     }
-    if (gem_truthy(_t19188)) {
+    GemVal _t19190;
+    if (!gem_truthy(_t19188)) {
+        _t19190 = _t19188;
+    } else {
+    GemVal _t19189[] = {gem_v___match_44, GEM_STR_LIT("after_body", 10)};
+        _t19190 = gem_has_key_fn(NULL, _t19189, 2);
+    }
+    if (gem_truthy(_t19190)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_arms = gem_table_get(gem_v___match_44, GEM_STR_LIT("arms", 4));
@@ -83965,8 +83999,8 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_fn_name, &gem_v_after_body, &gem_v_arms, &gem_v___for_i_46, &gem_v___for_limit_46};
                 gem_arena_reset_region(&_mk559, _rr, 5, NULL, 0);
             }
-    GemVal _t19189 = gem_v___for_i_46;
-            if (!gem_truthy(gem_lt(_t19189, gem_v___for_limit_46))) break;
+    GemVal _t19191 = gem_v___for_i_46;
+            if (!gem_truthy(gem_lt(_t19191, gem_v___for_limit_46))) break;
 #line 131 "compiler/liveness.gem"
             gem_set_line(131);
             GemVal gem_v_i = gem_v___for_i_46;
@@ -83975,18 +84009,18 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
             gem_v___for_i_46 = gem_add(gem_v___for_i_46, gem_int(1));
 #line 132 "compiler/liveness.gem"
             gem_set_line(132);
-    GemVal _t19192 = gem_v_fn_name;
-    GemVal _t19190 = gem_v_arms;
-    GemVal _t19191 = gem_table_get(_t19190, gem_v_i);
+    GemVal _t19194 = gem_v_fn_name;
+    GemVal _t19192 = gem_v_arms;
+    GemVal _t19193 = gem_table_get(_t19192, gem_v_i);
     static GemICacheSlot _ic_2797 = {0};
-    GemVal _t19193[] = {_t19192, gem_table_get_cached(_t19191, "body", &_ic_2797)};
-            if (gem_truthy(gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19193, 2))) {
+    GemVal _t19195[] = {_t19194, gem_table_get_cached(_t19193, "body", &_ic_2797)};
+            if (gem_truthy(gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19195, 2))) {
 #line 133 "compiler/liveness.gem"
                 gem_set_line(133);
-                GemVal _t19194 = gem_bool(1);
-                if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19194, 1);
+                GemVal _t19196 = gem_bool(1);
+                if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19196, 1);
                 gem_pop_frame();
-                return _t19194;
+                return _t19196;
             }
         }
 
@@ -83995,53 +84029,53 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
         if (gem_truthy(gem_neq(gem_v_after_body, GEM_NIL))) {
 #line 137 "compiler/liveness.gem"
             gem_set_line(137);
-    GemVal _t19195 = gem_v_fn_name;
-    GemVal _t19196[] = {_t19195, gem_v_after_body};
-            GemVal _t19197 = gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19196, 2);
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19197, 1);
+    GemVal _t19197 = gem_v_fn_name;
+    GemVal _t19198[] = {_t19197, gem_v_after_body};
+            GemVal _t19199 = gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19198, 2);
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19199, 1);
             gem_pop_frame();
-            return _t19197;
+            return _t19199;
         }
 #line 139 "compiler/liveness.gem"
         gem_set_line(139);
-        GemVal _t19198 = gem_bool(0);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19198, 1);
+        GemVal _t19200 = gem_bool(0);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19200, 1);
         gem_pop_frame();
-        return _t19198;
+        return _t19200;
     } else {
-    GemVal _t19199 = gem_eq(gem_type_1(gem_v___match_44), GEM_STR_LIT("table", 5));
-    GemVal _t19201;
-    if (!gem_truthy(_t19199)) {
-        _t19201 = _t19199;
-    } else {
-    GemVal _t19200[] = {gem_v___match_44, GEM_STR_LIT("tag", 3)};
-        _t19201 = gem_has_key_fn(NULL, _t19200, 2);
-    }
-    GemVal _t19202;
+    GemVal _t19201 = gem_eq(gem_type_1(gem_v___match_44), GEM_STR_LIT("table", 5));
+    GemVal _t19203;
     if (!gem_truthy(_t19201)) {
-        _t19202 = _t19201;
+        _t19203 = _t19201;
     } else {
-        _t19202 = gem_eq(gem_table_get(gem_v___match_44, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("block", 5));
+    GemVal _t19202[] = {gem_v___match_44, GEM_STR_LIT("tag", 3)};
+        _t19203 = gem_has_key_fn(NULL, _t19202, 2);
     }
     GemVal _t19204;
-    if (!gem_truthy(_t19202)) {
-        _t19204 = _t19202;
+    if (!gem_truthy(_t19203)) {
+        _t19204 = _t19203;
     } else {
-    GemVal _t19203[] = {gem_v___match_44, GEM_STR_LIT("stmts", 5)};
-        _t19204 = gem_has_key_fn(NULL, _t19203, 2);
+        _t19204 = gem_eq(gem_table_get(gem_v___match_44, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("block", 5));
     }
-    if (gem_truthy(_t19204)) {
+    GemVal _t19206;
+    if (!gem_truthy(_t19204)) {
+        _t19206 = _t19204;
+    } else {
+    GemVal _t19205[] = {gem_v___match_44, GEM_STR_LIT("stmts", 5)};
+        _t19206 = gem_has_key_fn(NULL, _t19205, 2);
+    }
+    if (gem_truthy(_t19206)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_stmts = gem_table_get(gem_v___match_44, GEM_STR_LIT("stmts", 5));
 #line 141 "compiler/liveness.gem"
         gem_set_line(141);
-    GemVal _t19205 = gem_v_fn_name;
-    GemVal _t19206[] = {_t19205, gem_v_stmts};
-        GemVal _t19207 = gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19206, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19207, 1);
+    GemVal _t19207 = gem_v_fn_name;
+    GemVal _t19208[] = {_t19207, gem_v_stmts};
+        GemVal _t19209 = gem_fn___mod_liveness_liveness_has_self_tail_call(NULL, _t19208, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19209, 1);
         gem_pop_frame();
-        return _t19207;
+        return _t19209;
     }
     }
     }
@@ -84050,10 +84084,10 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
     }
 #line 143 "compiler/liveness.gem"
     gem_set_line(143);
-    GemVal _t19208 = gem_bool(0);
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19208, 1);
+    GemVal _t19210 = gem_bool(0);
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19210, 1);
     gem_pop_frame();
-    return _t19208;
+    return _t19210;
 }
 
 struct _closure___anon_194 {
@@ -84071,66 +84105,66 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
 #line 153 "compiler/liveness.gem"
         gem_set_line(153);
-        GemVal _t19209 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19209, 1);
+        GemVal _t19211 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19211, 1);
         gem_pop_frame();
-        return _t19209;
+        return _t19211;
     }
 #line 155 "compiler/liveness.gem"
     gem_set_line(155);
-    GemVal _t19210 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
-    GemVal _t19212;
-    if (gem_truthy(_t19210)) {
-        _t19212 = _t19210;
-    } else {
-    GemVal _t19211 = gem_v_node;
-    static GemICacheSlot _ic_2798 = {0};
-        _t19212 = gem_eq(gem_table_get_cached(_t19211, "tag", &_ic_2798), GEM_NIL);
-    }
+    GemVal _t19212 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
+    GemVal _t19214;
     if (gem_truthy(_t19212)) {
+        _t19214 = _t19212;
+    } else {
+    GemVal _t19213 = gem_v_node;
+    static GemICacheSlot _ic_2798 = {0};
+        _t19214 = gem_eq(gem_table_get_cached(_t19213, "tag", &_ic_2798), GEM_NIL);
+    }
+    if (gem_truthy(_t19214)) {
 #line 156 "compiler/liveness.gem"
         gem_set_line(156);
-        GemVal _t19213 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19213, 1);
+        GemVal _t19215 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19215, 1);
         gem_pop_frame();
-        return _t19213;
+        return _t19215;
     }
 #line 159 "compiler/liveness.gem"
     gem_set_line(159);
     GemVal gem_v___match_47 = gem_v_node;
-    GemVal _t19214 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19216;
-    if (!gem_truthy(_t19214)) {
-        _t19216 = _t19214;
-    } else {
-    GemVal _t19215[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19216 = gem_has_key_fn(NULL, _t19215, 2);
-    }
-    GemVal _t19217;
+    GemVal _t19216 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19218;
     if (!gem_truthy(_t19216)) {
-        _t19217 = _t19216;
+        _t19218 = _t19216;
     } else {
-        _t19217 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("var", 3));
+    GemVal _t19217[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19218 = gem_has_key_fn(NULL, _t19217, 2);
     }
     GemVal _t19219;
-    if (!gem_truthy(_t19217)) {
-        _t19219 = _t19217;
+    if (!gem_truthy(_t19218)) {
+        _t19219 = _t19218;
     } else {
-    GemVal _t19218[] = {gem_v___match_47, GEM_STR_LIT("name", 4)};
-        _t19219 = gem_has_key_fn(NULL, _t19218, 2);
+        _t19219 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("var", 3));
     }
-    if (gem_truthy(_t19219)) {
+    GemVal _t19221;
+    if (!gem_truthy(_t19219)) {
+        _t19221 = _t19219;
+    } else {
+    GemVal _t19220[] = {gem_v___match_47, GEM_STR_LIT("name", 4)};
+        _t19221 = gem_has_key_fn(NULL, _t19220, 2);
+    }
+    if (gem_truthy(_t19221)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_name = gem_table_get(gem_v___match_47, GEM_STR_LIT("name", 4));
 #line 161 "compiler/liveness.gem"
         gem_set_line(161);
-    GemVal _t19220 = gem_v_defined;
-        if (gem_truthy(gem_neq(gem_table_get(_t19220, gem_v_name), gem_bool(1)))) {
+    GemVal _t19222 = gem_v_defined;
+        if (gem_truthy(gem_neq(gem_table_get(_t19222, gem_v_name), gem_bool(1)))) {
 #line 162 "compiler/liveness.gem"
             gem_set_line(162);
-    GemVal _t19221 = gem_v_free;
-            gem_table_set(_t19221, gem_v_name, gem_bool(1));
+    GemVal _t19223 = gem_v_free;
+            gem_table_set(_t19223, gem_v_name, gem_bool(1));
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
             gem_pop_frame();
             return GEM_NIL;
@@ -84140,226 +84174,226 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
             return GEM_NIL;
         }
     } else {
-    GemVal _t19222 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19224;
-    if (!gem_truthy(_t19222)) {
-        _t19224 = _t19222;
-    } else {
-    GemVal _t19223[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19224 = gem_has_key_fn(NULL, _t19223, 2);
-    }
-    GemVal _t19225;
+    GemVal _t19224 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19226;
     if (!gem_truthy(_t19224)) {
-        _t19225 = _t19224;
+        _t19226 = _t19224;
     } else {
-        _t19225 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("int", 3));
+    GemVal _t19225[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19226 = gem_has_key_fn(NULL, _t19225, 2);
     }
-    if (gem_truthy(_t19225)) {
+    GemVal _t19227;
+    if (!gem_truthy(_t19226)) {
+        _t19227 = _t19226;
+    } else {
+        _t19227 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("int", 3));
+    }
+    if (gem_truthy(_t19227)) {
 #line 165 "compiler/liveness.gem"
         gem_set_line(165);
-        GemVal _t19226 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19226, 1);
+        GemVal _t19228 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19228, 1);
         gem_pop_frame();
-        return _t19226;
+        return _t19228;
     } else {
-    GemVal _t19227 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19229;
-    if (!gem_truthy(_t19227)) {
-        _t19229 = _t19227;
-    } else {
-    GemVal _t19228[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19229 = gem_has_key_fn(NULL, _t19228, 2);
-    }
-    GemVal _t19230;
+    GemVal _t19229 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19231;
     if (!gem_truthy(_t19229)) {
-        _t19230 = _t19229;
+        _t19231 = _t19229;
     } else {
-        _t19230 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("float", 5));
+    GemVal _t19230[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19231 = gem_has_key_fn(NULL, _t19230, 2);
     }
-    if (gem_truthy(_t19230)) {
+    GemVal _t19232;
+    if (!gem_truthy(_t19231)) {
+        _t19232 = _t19231;
+    } else {
+        _t19232 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("float", 5));
+    }
+    if (gem_truthy(_t19232)) {
 #line 167 "compiler/liveness.gem"
         gem_set_line(167);
-        GemVal _t19231 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19231, 1);
+        GemVal _t19233 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19233, 1);
         gem_pop_frame();
-        return _t19231;
+        return _t19233;
     } else {
-    GemVal _t19232 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19234;
-    if (!gem_truthy(_t19232)) {
-        _t19234 = _t19232;
-    } else {
-    GemVal _t19233[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19234 = gem_has_key_fn(NULL, _t19233, 2);
-    }
-    GemVal _t19235;
+    GemVal _t19234 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19236;
     if (!gem_truthy(_t19234)) {
-        _t19235 = _t19234;
+        _t19236 = _t19234;
     } else {
-        _t19235 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("string", 6));
+    GemVal _t19235[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19236 = gem_has_key_fn(NULL, _t19235, 2);
     }
-    if (gem_truthy(_t19235)) {
+    GemVal _t19237;
+    if (!gem_truthy(_t19236)) {
+        _t19237 = _t19236;
+    } else {
+        _t19237 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("string", 6));
+    }
+    if (gem_truthy(_t19237)) {
 #line 169 "compiler/liveness.gem"
         gem_set_line(169);
-        GemVal _t19236 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19236, 1);
+        GemVal _t19238 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19238, 1);
         gem_pop_frame();
-        return _t19236;
+        return _t19238;
     } else {
-    GemVal _t19237 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19239;
-    if (!gem_truthy(_t19237)) {
-        _t19239 = _t19237;
-    } else {
-    GemVal _t19238[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19239 = gem_has_key_fn(NULL, _t19238, 2);
-    }
-    GemVal _t19240;
+    GemVal _t19239 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19241;
     if (!gem_truthy(_t19239)) {
-        _t19240 = _t19239;
+        _t19241 = _t19239;
     } else {
-        _t19240 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("bool", 4));
+    GemVal _t19240[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19241 = gem_has_key_fn(NULL, _t19240, 2);
     }
-    if (gem_truthy(_t19240)) {
+    GemVal _t19242;
+    if (!gem_truthy(_t19241)) {
+        _t19242 = _t19241;
+    } else {
+        _t19242 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("bool", 4));
+    }
+    if (gem_truthy(_t19242)) {
 #line 171 "compiler/liveness.gem"
         gem_set_line(171);
-        GemVal _t19241 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19241, 1);
+        GemVal _t19243 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19243, 1);
         gem_pop_frame();
-        return _t19241;
+        return _t19243;
     } else {
-    GemVal _t19242 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19244;
-    if (!gem_truthy(_t19242)) {
-        _t19244 = _t19242;
-    } else {
-    GemVal _t19243[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19244 = gem_has_key_fn(NULL, _t19243, 2);
-    }
-    GemVal _t19245;
+    GemVal _t19244 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19246;
     if (!gem_truthy(_t19244)) {
-        _t19245 = _t19244;
+        _t19246 = _t19244;
     } else {
-        _t19245 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("nil", 3));
+    GemVal _t19245[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19246 = gem_has_key_fn(NULL, _t19245, 2);
     }
-    if (gem_truthy(_t19245)) {
+    GemVal _t19247;
+    if (!gem_truthy(_t19246)) {
+        _t19247 = _t19246;
+    } else {
+        _t19247 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("nil", 3));
+    }
+    if (gem_truthy(_t19247)) {
 #line 173 "compiler/liveness.gem"
         gem_set_line(173);
-        GemVal _t19246 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19246, 1);
+        GemVal _t19248 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19248, 1);
         gem_pop_frame();
-        return _t19246;
+        return _t19248;
     } else {
-    GemVal _t19247 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19249;
-    if (!gem_truthy(_t19247)) {
-        _t19249 = _t19247;
-    } else {
-    GemVal _t19248[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19249 = gem_has_key_fn(NULL, _t19248, 2);
-    }
-    GemVal _t19250;
+    GemVal _t19249 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19251;
     if (!gem_truthy(_t19249)) {
-        _t19250 = _t19249;
+        _t19251 = _t19249;
     } else {
-        _t19250 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("break", 5));
+    GemVal _t19250[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19251 = gem_has_key_fn(NULL, _t19250, 2);
     }
-    if (gem_truthy(_t19250)) {
+    GemVal _t19252;
+    if (!gem_truthy(_t19251)) {
+        _t19252 = _t19251;
+    } else {
+        _t19252 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("break", 5));
+    }
+    if (gem_truthy(_t19252)) {
 #line 175 "compiler/liveness.gem"
         gem_set_line(175);
-        GemVal _t19251 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19251, 1);
+        GemVal _t19253 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19253, 1);
         gem_pop_frame();
-        return _t19251;
+        return _t19253;
     } else {
-    GemVal _t19252 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19254;
-    if (!gem_truthy(_t19252)) {
-        _t19254 = _t19252;
-    } else {
-    GemVal _t19253[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19254 = gem_has_key_fn(NULL, _t19253, 2);
-    }
-    GemVal _t19255;
+    GemVal _t19254 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19256;
     if (!gem_truthy(_t19254)) {
-        _t19255 = _t19254;
+        _t19256 = _t19254;
     } else {
-        _t19255 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("continue", 8));
+    GemVal _t19255[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19256 = gem_has_key_fn(NULL, _t19255, 2);
     }
-    if (gem_truthy(_t19255)) {
+    GemVal _t19257;
+    if (!gem_truthy(_t19256)) {
+        _t19257 = _t19256;
+    } else {
+        _t19257 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("continue", 8));
+    }
+    if (gem_truthy(_t19257)) {
 #line 177 "compiler/liveness.gem"
         gem_set_line(177);
-        GemVal _t19256 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19256, 1);
+        GemVal _t19258 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19258, 1);
         gem_pop_frame();
-        return _t19256;
+        return _t19258;
     } else {
-    GemVal _t19257 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19259;
-    if (!gem_truthy(_t19257)) {
-        _t19259 = _t19257;
-    } else {
-    GemVal _t19258[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19259 = gem_has_key_fn(NULL, _t19258, 2);
-    }
-    GemVal _t19260;
+    GemVal _t19259 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19261;
     if (!gem_truthy(_t19259)) {
-        _t19260 = _t19259;
+        _t19261 = _t19259;
     } else {
-        _t19260 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("let", 3));
+    GemVal _t19260[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19261 = gem_has_key_fn(NULL, _t19260, 2);
     }
     GemVal _t19262;
-    if (!gem_truthy(_t19260)) {
-        _t19262 = _t19260;
+    if (!gem_truthy(_t19261)) {
+        _t19262 = _t19261;
     } else {
-    GemVal _t19261[] = {gem_v___match_47, GEM_STR_LIT("value", 5)};
-        _t19262 = gem_has_key_fn(NULL, _t19261, 2);
+        _t19262 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("let", 3));
     }
-    if (gem_truthy(_t19262)) {
+    GemVal _t19264;
+    if (!gem_truthy(_t19262)) {
+        _t19264 = _t19262;
+    } else {
+    GemVal _t19263[] = {gem_v___match_47, GEM_STR_LIT("value", 5)};
+        _t19264 = gem_has_key_fn(NULL, _t19263, 2);
+    }
+    if (gem_truthy(_t19264)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_value = gem_table_get(gem_v___match_47, GEM_STR_LIT("value", 5));
 #line 179 "compiler/liveness.gem"
         gem_set_line(179);
-    GemVal _t19266 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19264 = gem_v_value;
-    GemVal _t19263 = gem_v_defined;
-    GemVal _t19265[] = {_t19264, _t19263, gem_v_free};
-    gem_check_callable(_t19266, "compiler/liveness.gem", 179);
-        GemVal _t19267 = _t19266.fn(_t19266.env, _t19265, 3);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19267, 1);
+    GemVal _t19268 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19266 = gem_v_value;
+    GemVal _t19265 = gem_v_defined;
+    GemVal _t19267[] = {_t19266, _t19265, gem_v_free};
+    gem_check_callable(_t19268, "compiler/liveness.gem", 179);
+        GemVal _t19269 = _t19268.fn(_t19268.env, _t19267, 3);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19269, 1);
         gem_pop_frame();
-        return _t19267;
+        return _t19269;
     } else {
-    GemVal _t19268 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19270;
-    if (!gem_truthy(_t19268)) {
-        _t19270 = _t19268;
-    } else {
-    GemVal _t19269[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19270 = gem_has_key_fn(NULL, _t19269, 2);
-    }
-    GemVal _t19271;
+    GemVal _t19270 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19272;
     if (!gem_truthy(_t19270)) {
-        _t19271 = _t19270;
+        _t19272 = _t19270;
     } else {
-        _t19271 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("assign", 6));
+    GemVal _t19271[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19272 = gem_has_key_fn(NULL, _t19271, 2);
     }
     GemVal _t19273;
-    if (!gem_truthy(_t19271)) {
-        _t19273 = _t19271;
+    if (!gem_truthy(_t19272)) {
+        _t19273 = _t19272;
     } else {
-    GemVal _t19272[] = {gem_v___match_47, GEM_STR_LIT("name", 4)};
-        _t19273 = gem_has_key_fn(NULL, _t19272, 2);
+        _t19273 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("assign", 6));
     }
     GemVal _t19275;
     if (!gem_truthy(_t19273)) {
         _t19275 = _t19273;
     } else {
-    GemVal _t19274[] = {gem_v___match_47, GEM_STR_LIT("value", 5)};
+    GemVal _t19274[] = {gem_v___match_47, GEM_STR_LIT("name", 4)};
         _t19275 = gem_has_key_fn(NULL, _t19274, 2);
     }
-    if (gem_truthy(_t19275)) {
+    GemVal _t19277;
+    if (!gem_truthy(_t19275)) {
+        _t19277 = _t19275;
+    } else {
+    GemVal _t19276[] = {gem_v___match_47, GEM_STR_LIT("value", 5)};
+        _t19277 = gem_has_key_fn(NULL, _t19276, 2);
+    }
+    if (gem_truthy(_t19277)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_name = gem_table_get(gem_v___match_47, GEM_STR_LIT("name", 4));
@@ -84368,54 +84402,54 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         GemVal gem_v_value = gem_table_get(gem_v___match_47, GEM_STR_LIT("value", 5));
 #line 181 "compiler/liveness.gem"
         gem_set_line(181);
-    GemVal _t19276 = gem_v_defined;
-        if (gem_truthy(gem_neq(gem_table_get(_t19276, gem_v_name), gem_bool(1)))) {
+    GemVal _t19278 = gem_v_defined;
+        if (gem_truthy(gem_neq(gem_table_get(_t19278, gem_v_name), gem_bool(1)))) {
 #line 182 "compiler/liveness.gem"
             gem_set_line(182);
-    GemVal _t19277 = gem_v_free;
-            gem_table_set(_t19277, gem_v_name, gem_bool(1));
+    GemVal _t19279 = gem_v_free;
+            gem_table_set(_t19279, gem_v_name, gem_bool(1));
         }
 #line 184 "compiler/liveness.gem"
         gem_set_line(184);
-    GemVal _t19281 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19279 = gem_v_value;
-    GemVal _t19278 = gem_v_defined;
-    GemVal _t19280[] = {_t19279, _t19278, gem_v_free};
-    gem_check_callable(_t19281, "compiler/liveness.gem", 184);
-        GemVal _t19282 = _t19281.fn(_t19281.env, _t19280, 3);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19282, 1);
+    GemVal _t19283 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19281 = gem_v_value;
+    GemVal _t19280 = gem_v_defined;
+    GemVal _t19282[] = {_t19281, _t19280, gem_v_free};
+    gem_check_callable(_t19283, "compiler/liveness.gem", 184);
+        GemVal _t19284 = _t19283.fn(_t19283.env, _t19282, 3);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19284, 1);
         gem_pop_frame();
-        return _t19282;
+        return _t19284;
     } else {
-    GemVal _t19283 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19285;
-    if (!gem_truthy(_t19283)) {
-        _t19285 = _t19283;
-    } else {
-    GemVal _t19284[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19285 = gem_has_key_fn(NULL, _t19284, 2);
-    }
-    GemVal _t19286;
+    GemVal _t19285 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19287;
     if (!gem_truthy(_t19285)) {
-        _t19286 = _t19285;
+        _t19287 = _t19285;
     } else {
-        _t19286 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("anon_fn", 7));
+    GemVal _t19286[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19287 = gem_has_key_fn(NULL, _t19286, 2);
     }
     GemVal _t19288;
-    if (!gem_truthy(_t19286)) {
-        _t19288 = _t19286;
+    if (!gem_truthy(_t19287)) {
+        _t19288 = _t19287;
     } else {
-    GemVal _t19287[] = {gem_v___match_47, GEM_STR_LIT("params", 6)};
-        _t19288 = gem_has_key_fn(NULL, _t19287, 2);
+        _t19288 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("anon_fn", 7));
     }
     GemVal _t19290;
     if (!gem_truthy(_t19288)) {
         _t19290 = _t19288;
     } else {
-    GemVal _t19289[] = {gem_v___match_47, GEM_STR_LIT("body", 4)};
+    GemVal _t19289[] = {gem_v___match_47, GEM_STR_LIT("params", 6)};
         _t19290 = gem_has_key_fn(NULL, _t19289, 2);
     }
-    if (gem_truthy(_t19290)) {
+    GemVal _t19292;
+    if (!gem_truthy(_t19290)) {
+        _t19292 = _t19290;
+    } else {
+    GemVal _t19291[] = {gem_v___match_47, GEM_STR_LIT("body", 4)};
+        _t19292 = gem_has_key_fn(NULL, _t19291, 2);
+    }
+    if (gem_truthy(_t19292)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_params = gem_table_get(gem_v___match_47, GEM_STR_LIT("params", 6));
@@ -84424,44 +84458,44 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         GemVal gem_v_body = gem_table_get(gem_v___match_47, GEM_STR_LIT("body", 4));
 #line 186 "compiler/liveness.gem"
         gem_set_line(186);
-    GemVal _t19291[] = {gem_v_defined};
-        GemVal gem_v_inner = gem_fn___mod_liveness_lset_copy(NULL, _t19291, 1);
+    GemVal _t19293[] = {gem_v_defined};
+        GemVal gem_v_inner = gem_fn___mod_liveness_lset_copy(NULL, _t19293, 1);
 #line 187 "compiler/liveness.gem"
         gem_set_line(187);
-    GemVal _t19292 = gem_v_inner;
-    GemVal _t19293[] = {_t19292, gem_v_params};
-        (void)(gem_fn___mod_liveness_lset_add_array(NULL, _t19293, 2));
+    GemVal _t19294 = gem_v_inner;
+    GemVal _t19295[] = {_t19294, gem_v_params};
+        (void)(gem_fn___mod_liveness_lset_add_array(NULL, _t19295, 2));
 #line 188 "compiler/liveness.gem"
         gem_set_line(188);
-    GemVal _t19294 = gem_v_node;
+    GemVal _t19296 = gem_v_node;
     static GemICacheSlot _ic_2799 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t19294, "rest_param", &_ic_2799), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t19296, "rest_param", &_ic_2799), GEM_NIL))) {
 #line 189 "compiler/liveness.gem"
             gem_set_line(189);
-    GemVal _t19296 = gem_v_inner;
-    GemVal _t19295 = gem_v_node;
+    GemVal _t19298 = gem_v_inner;
+    GemVal _t19297 = gem_v_node;
     static GemICacheSlot _ic_2800 = {0};
-            gem_table_set(_t19296, gem_table_get_cached(_t19295, "rest_param", &_ic_2800), gem_bool(1));
+            gem_table_set(_t19298, gem_table_get_cached(_t19297, "rest_param", &_ic_2800), gem_bool(1));
         }
 #line 191 "compiler/liveness.gem"
         gem_set_line(191);
-    GemVal _t19300 = gem_g___mod_liveness__collect_free_stmts;
-    GemVal _t19298 = gem_v_body;
-    GemVal _t19297 = gem_v_inner;
-    GemVal _t19299[] = {_t19298, _t19297, gem_v_free};
-    gem_check_callable(_t19300, "compiler/liveness.gem", 191);
-        (void)(_t19300.fn(_t19300.env, _t19299, 3));
+    GemVal _t19302 = gem_g___mod_liveness__collect_free_stmts;
+    GemVal _t19300 = gem_v_body;
+    GemVal _t19299 = gem_v_inner;
+    GemVal _t19301[] = {_t19300, _t19299, gem_v_free};
+    gem_check_callable(_t19302, "compiler/liveness.gem", 191);
+        (void)(_t19302.fn(_t19302.env, _t19301, 3));
 #line 192 "compiler/liveness.gem"
         gem_set_line(192);
-    GemVal _t19301 = gem_v_node;
+    GemVal _t19303 = gem_v_node;
     static GemICacheSlot _ic_2801 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t19301, "defaults", &_ic_2801), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t19303, "defaults", &_ic_2801), GEM_NIL))) {
             {
 #line 193 "compiler/liveness.gem"
                 gem_set_line(193);
-    GemVal _t19302 = gem_v_node;
+    GemVal _t19304 = gem_v_node;
     static GemICacheSlot _ic_2802 = {0};
-                GemVal gem_v___for_items_48 = gem_for_items_1(gem_table_get_cached(_t19302, "defaults", &_ic_2802));
+                GemVal gem_v___for_items_48 = gem_for_items_1(gem_table_get_cached(_t19304, "defaults", &_ic_2802));
 #line 193 "compiler/liveness.gem"
                 gem_set_line(193);
                 GemVal gem_v___for_i_48 = gem_int(0);
@@ -84475,12 +84509,12 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
                         GemVal *_rr[] = {&gem_v___for_i_48, &gem_v_inner, &gem_v_free, &gem_v___for_items_48};
                         gem_arena_reset_region(&_mk560, _rr, 4, NULL, 0);
                     }
-    GemVal _t19303 = gem_v___for_i_48;
-                    if (!gem_truthy(gem_lt(_t19303, gem_for_len_1(gem_v___for_items_48)))) break;
+    GemVal _t19305 = gem_v___for_i_48;
+                    if (!gem_truthy(gem_lt(_t19305, gem_for_len_1(gem_v___for_items_48)))) break;
 #line 193 "compiler/liveness.gem"
                     gem_set_line(193);
-    GemVal _t19304 = gem_v___for_items_48;
-                    GemVal gem_v_d = gem_table_get(_t19304, gem_v___for_i_48);
+    GemVal _t19306 = gem_v___for_items_48;
+                    GemVal gem_v_d = gem_table_get(_t19306, gem_v___for_i_48);
 #line 193 "compiler/liveness.gem"
                     gem_set_line(193);
                     gem_v___for_i_48 = gem_add(gem_v___for_i_48, gem_int(1));
@@ -84489,12 +84523,12 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
                     if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
 #line 195 "compiler/liveness.gem"
                         gem_set_line(195);
-    GemVal _t19308 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19306 = gem_v_d;
-    GemVal _t19305 = gem_v_inner;
-    GemVal _t19307[] = {_t19306, _t19305, gem_v_free};
-    gem_check_callable(_t19308, "compiler/liveness.gem", 195);
-                        (void)(_t19308.fn(_t19308.env, _t19307, 3));
+    GemVal _t19310 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19308 = gem_v_d;
+    GemVal _t19307 = gem_v_inner;
+    GemVal _t19309[] = {_t19308, _t19307, gem_v_free};
+    gem_check_callable(_t19310, "compiler/liveness.gem", 195);
+                        (void)(_t19310.fn(_t19310.env, _t19309, 3));
                     }
                 }
                 if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
@@ -84507,64 +84541,64 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
             return GEM_NIL;
         }
     } else {
-    GemVal _t19309 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19311;
-    if (!gem_truthy(_t19309)) {
-        _t19311 = _t19309;
-    } else {
-    GemVal _t19310[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19311 = gem_has_key_fn(NULL, _t19310, 2);
-    }
-    GemVal _t19312;
+    GemVal _t19311 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19313;
     if (!gem_truthy(_t19311)) {
-        _t19312 = _t19311;
+        _t19313 = _t19311;
     } else {
-        _t19312 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("fn_def", 6));
+    GemVal _t19312[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19313 = gem_has_key_fn(NULL, _t19312, 2);
     }
-    if (gem_truthy(_t19312)) {
+    GemVal _t19314;
+    if (!gem_truthy(_t19313)) {
+        _t19314 = _t19313;
+    } else {
+        _t19314 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("fn_def", 6));
+    }
+    if (gem_truthy(_t19314)) {
 #line 200 "compiler/liveness.gem"
         gem_set_line(200);
-        GemVal _t19313 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19313, 1);
+        GemVal _t19315 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19315, 1);
         gem_pop_frame();
-        return _t19313;
+        return _t19315;
     } else {
-    GemVal _t19314 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19316;
-    if (!gem_truthy(_t19314)) {
-        _t19316 = _t19314;
-    } else {
-    GemVal _t19315[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19316 = gem_has_key_fn(NULL, _t19315, 2);
-    }
-    GemVal _t19317;
+    GemVal _t19316 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19318;
     if (!gem_truthy(_t19316)) {
-        _t19317 = _t19316;
+        _t19318 = _t19316;
     } else {
-        _t19317 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("if", 2));
+    GemVal _t19317[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19318 = gem_has_key_fn(NULL, _t19317, 2);
     }
     GemVal _t19319;
-    if (!gem_truthy(_t19317)) {
-        _t19319 = _t19317;
+    if (!gem_truthy(_t19318)) {
+        _t19319 = _t19318;
     } else {
-    GemVal _t19318[] = {gem_v___match_47, GEM_STR_LIT("cond", 4)};
-        _t19319 = gem_has_key_fn(NULL, _t19318, 2);
+        _t19319 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("if", 2));
     }
     GemVal _t19321;
     if (!gem_truthy(_t19319)) {
         _t19321 = _t19319;
     } else {
-    GemVal _t19320[] = {gem_v___match_47, GEM_STR_LIT("then", 4)};
+    GemVal _t19320[] = {gem_v___match_47, GEM_STR_LIT("cond", 4)};
         _t19321 = gem_has_key_fn(NULL, _t19320, 2);
     }
     GemVal _t19323;
     if (!gem_truthy(_t19321)) {
         _t19323 = _t19321;
     } else {
-    GemVal _t19322[] = {gem_v___match_47, GEM_STR_LIT("else", 4)};
+    GemVal _t19322[] = {gem_v___match_47, GEM_STR_LIT("then", 4)};
         _t19323 = gem_has_key_fn(NULL, _t19322, 2);
     }
-    if (gem_truthy(_t19323)) {
+    GemVal _t19325;
+    if (!gem_truthy(_t19323)) {
+        _t19325 = _t19323;
+    } else {
+    GemVal _t19324[] = {gem_v___match_47, GEM_STR_LIT("else", 4)};
+        _t19325 = gem_has_key_fn(NULL, _t19324, 2);
+    }
+    if (gem_truthy(_t19325)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_cond = gem_table_get(gem_v___match_47, GEM_STR_LIT("cond", 4));
@@ -84576,69 +84610,69 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         GemVal gem_v_el = gem_table_get(gem_v___match_47, GEM_STR_LIT("else", 4));
 #line 202 "compiler/liveness.gem"
         gem_set_line(202);
-    GemVal _t19327 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19325 = gem_v_cond;
-    GemVal _t19324 = gem_v_defined;
-    GemVal _t19326[] = {_t19325, _t19324, gem_v_free};
-    gem_check_callable(_t19327, "compiler/liveness.gem", 202);
-        (void)(_t19327.fn(_t19327.env, _t19326, 3));
+    GemVal _t19329 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19327 = gem_v_cond;
+    GemVal _t19326 = gem_v_defined;
+    GemVal _t19328[] = {_t19327, _t19326, gem_v_free};
+    gem_check_callable(_t19329, "compiler/liveness.gem", 202);
+        (void)(_t19329.fn(_t19329.env, _t19328, 3));
 #line 203 "compiler/liveness.gem"
         gem_set_line(203);
-    GemVal _t19331 = gem_g___mod_liveness__collect_free_stmts;
-    GemVal _t19329 = gem_v_thens;
-    GemVal _t19328 = gem_v_defined;
-    GemVal _t19330[] = {_t19329, _t19328, gem_v_free};
-    gem_check_callable(_t19331, "compiler/liveness.gem", 203);
-        (void)(_t19331.fn(_t19331.env, _t19330, 3));
+    GemVal _t19333 = gem_g___mod_liveness__collect_free_stmts;
+    GemVal _t19331 = gem_v_thens;
+    GemVal _t19330 = gem_v_defined;
+    GemVal _t19332[] = {_t19331, _t19330, gem_v_free};
+    gem_check_callable(_t19333, "compiler/liveness.gem", 203);
+        (void)(_t19333.fn(_t19333.env, _t19332, 3));
 #line 204 "compiler/liveness.gem"
         gem_set_line(204);
         if (gem_truthy(gem_neq(gem_v_el, GEM_NIL))) {
 #line 205 "compiler/liveness.gem"
             gem_set_line(205);
-    GemVal _t19335 = gem_g___mod_liveness__collect_free_stmts;
-    GemVal _t19333 = gem_v_el;
-    GemVal _t19332 = gem_v_defined;
-    GemVal _t19334[] = {_t19333, _t19332, gem_v_free};
-    gem_check_callable(_t19335, "compiler/liveness.gem", 205);
-            GemVal _t19336 = _t19335.fn(_t19335.env, _t19334, 3);
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19336, 1);
+    GemVal _t19337 = gem_g___mod_liveness__collect_free_stmts;
+    GemVal _t19335 = gem_v_el;
+    GemVal _t19334 = gem_v_defined;
+    GemVal _t19336[] = {_t19335, _t19334, gem_v_free};
+    gem_check_callable(_t19337, "compiler/liveness.gem", 205);
+            GemVal _t19338 = _t19337.fn(_t19337.env, _t19336, 3);
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19338, 1);
             gem_pop_frame();
-            return _t19336;
+            return _t19338;
         } else {
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
             gem_pop_frame();
             return GEM_NIL;
         }
     } else {
-    GemVal _t19337 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19339;
-    if (!gem_truthy(_t19337)) {
-        _t19339 = _t19337;
-    } else {
-    GemVal _t19338[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19339 = gem_has_key_fn(NULL, _t19338, 2);
-    }
-    GemVal _t19340;
+    GemVal _t19339 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19341;
     if (!gem_truthy(_t19339)) {
-        _t19340 = _t19339;
+        _t19341 = _t19339;
     } else {
-        _t19340 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("while", 5));
+    GemVal _t19340[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19341 = gem_has_key_fn(NULL, _t19340, 2);
     }
     GemVal _t19342;
-    if (!gem_truthy(_t19340)) {
-        _t19342 = _t19340;
+    if (!gem_truthy(_t19341)) {
+        _t19342 = _t19341;
     } else {
-    GemVal _t19341[] = {gem_v___match_47, GEM_STR_LIT("cond", 4)};
-        _t19342 = gem_has_key_fn(NULL, _t19341, 2);
+        _t19342 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("while", 5));
     }
     GemVal _t19344;
     if (!gem_truthy(_t19342)) {
         _t19344 = _t19342;
     } else {
-    GemVal _t19343[] = {gem_v___match_47, GEM_STR_LIT("body", 4)};
+    GemVal _t19343[] = {gem_v___match_47, GEM_STR_LIT("cond", 4)};
         _t19344 = gem_has_key_fn(NULL, _t19343, 2);
     }
-    if (gem_truthy(_t19344)) {
+    GemVal _t19346;
+    if (!gem_truthy(_t19344)) {
+        _t19346 = _t19344;
+    } else {
+    GemVal _t19345[] = {gem_v___match_47, GEM_STR_LIT("body", 4)};
+        _t19346 = gem_has_key_fn(NULL, _t19345, 2);
+    }
+    if (gem_truthy(_t19346)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_cond = gem_table_get(gem_v___match_47, GEM_STR_LIT("cond", 4));
@@ -84647,67 +84681,67 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         GemVal gem_v_body = gem_table_get(gem_v___match_47, GEM_STR_LIT("body", 4));
 #line 208 "compiler/liveness.gem"
         gem_set_line(208);
-    GemVal _t19348 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19346 = gem_v_cond;
-    GemVal _t19345 = gem_v_defined;
-    GemVal _t19347[] = {_t19346, _t19345, gem_v_free};
-    gem_check_callable(_t19348, "compiler/liveness.gem", 208);
-        (void)(_t19348.fn(_t19348.env, _t19347, 3));
+    GemVal _t19350 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19348 = gem_v_cond;
+    GemVal _t19347 = gem_v_defined;
+    GemVal _t19349[] = {_t19348, _t19347, gem_v_free};
+    gem_check_callable(_t19350, "compiler/liveness.gem", 208);
+        (void)(_t19350.fn(_t19350.env, _t19349, 3));
 #line 209 "compiler/liveness.gem"
         gem_set_line(209);
-    GemVal _t19352 = gem_g___mod_liveness__collect_free_stmts;
-    GemVal _t19350 = gem_v_body;
-    GemVal _t19349 = gem_v_defined;
-    GemVal _t19351[] = {_t19350, _t19349, gem_v_free};
-    gem_check_callable(_t19352, "compiler/liveness.gem", 209);
-        GemVal _t19353 = _t19352.fn(_t19352.env, _t19351, 3);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19353, 1);
+    GemVal _t19354 = gem_g___mod_liveness__collect_free_stmts;
+    GemVal _t19352 = gem_v_body;
+    GemVal _t19351 = gem_v_defined;
+    GemVal _t19353[] = {_t19352, _t19351, gem_v_free};
+    gem_check_callable(_t19354, "compiler/liveness.gem", 209);
+        GemVal _t19355 = _t19354.fn(_t19354.env, _t19353, 3);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19355, 1);
         gem_pop_frame();
-        return _t19353;
+        return _t19355;
     } else {
-    GemVal _t19354 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19356;
-    if (!gem_truthy(_t19354)) {
-        _t19356 = _t19354;
-    } else {
-    GemVal _t19355[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19356 = gem_has_key_fn(NULL, _t19355, 2);
-    }
-    GemVal _t19357;
+    GemVal _t19356 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19358;
     if (!gem_truthy(_t19356)) {
-        _t19357 = _t19356;
+        _t19358 = _t19356;
     } else {
-        _t19357 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("match", 5));
+    GemVal _t19357[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19358 = gem_has_key_fn(NULL, _t19357, 2);
     }
     GemVal _t19359;
-    if (!gem_truthy(_t19357)) {
-        _t19359 = _t19357;
+    if (!gem_truthy(_t19358)) {
+        _t19359 = _t19358;
     } else {
-    GemVal _t19358[] = {gem_v___match_47, GEM_STR_LIT("target", 6)};
-        _t19359 = gem_has_key_fn(NULL, _t19358, 2);
+        _t19359 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("match", 5));
     }
     GemVal _t19361;
     if (!gem_truthy(_t19359)) {
         _t19361 = _t19359;
     } else {
-    GemVal _t19360[] = {gem_v___match_47, GEM_STR_LIT("target_var", 10)};
+    GemVal _t19360[] = {gem_v___match_47, GEM_STR_LIT("target", 6)};
         _t19361 = gem_has_key_fn(NULL, _t19360, 2);
     }
     GemVal _t19363;
     if (!gem_truthy(_t19361)) {
         _t19363 = _t19361;
     } else {
-    GemVal _t19362[] = {gem_v___match_47, GEM_STR_LIT("whens", 5)};
+    GemVal _t19362[] = {gem_v___match_47, GEM_STR_LIT("target_var", 10)};
         _t19363 = gem_has_key_fn(NULL, _t19362, 2);
     }
     GemVal _t19365;
     if (!gem_truthy(_t19363)) {
         _t19365 = _t19363;
     } else {
-    GemVal _t19364[] = {gem_v___match_47, GEM_STR_LIT("else", 4)};
+    GemVal _t19364[] = {gem_v___match_47, GEM_STR_LIT("whens", 5)};
         _t19365 = gem_has_key_fn(NULL, _t19364, 2);
     }
-    if (gem_truthy(_t19365)) {
+    GemVal _t19367;
+    if (!gem_truthy(_t19365)) {
+        _t19367 = _t19365;
+    } else {
+    GemVal _t19366[] = {gem_v___match_47, GEM_STR_LIT("else", 4)};
+        _t19367 = gem_has_key_fn(NULL, _t19366, 2);
+    }
+    if (gem_truthy(_t19367)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_target = gem_table_get(gem_v___match_47, GEM_STR_LIT("target", 6));
@@ -84722,23 +84756,23 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         GemVal gem_v_el = gem_table_get(gem_v___match_47, GEM_STR_LIT("else", 4));
 #line 211 "compiler/liveness.gem"
         gem_set_line(211);
-    GemVal _t19369 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19367 = gem_v_target;
-    GemVal _t19366 = gem_v_defined;
-    GemVal _t19368[] = {_t19367, _t19366, gem_v_free};
-    gem_check_callable(_t19369, "compiler/liveness.gem", 211);
-        (void)(_t19369.fn(_t19369.env, _t19368, 3));
+    GemVal _t19371 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19369 = gem_v_target;
+    GemVal _t19368 = gem_v_defined;
+    GemVal _t19370[] = {_t19369, _t19368, gem_v_free};
+    gem_check_callable(_t19371, "compiler/liveness.gem", 211);
+        (void)(_t19371.fn(_t19371.env, _t19370, 3));
 #line 212 "compiler/liveness.gem"
         gem_set_line(212);
-    GemVal _t19370[] = {gem_v_defined};
-        GemVal gem_v_mdef = gem_fn___mod_liveness_lset_copy(NULL, _t19370, 1);
+    GemVal _t19372[] = {gem_v_defined};
+        GemVal gem_v_mdef = gem_fn___mod_liveness_lset_copy(NULL, _t19372, 1);
 #line 213 "compiler/liveness.gem"
         gem_set_line(213);
         if (gem_truthy(gem_neq(gem_v_target_var, GEM_NIL))) {
 #line 214 "compiler/liveness.gem"
             gem_set_line(214);
-    GemVal _t19371 = gem_v_mdef;
-            gem_table_set(_t19371, gem_v_target_var, gem_bool(1));
+    GemVal _t19373 = gem_v_mdef;
+            gem_table_set(_t19373, gem_v_target_var, gem_bool(1));
         }
 #line 216 "compiler/liveness.gem"
         gem_set_line(216);
@@ -84756,39 +84790,39 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v___for_items_50, &gem_v___for_i_50, &gem_v_el, &gem_v_defined, &gem_v_free, &gem_v_mdef};
                 gem_arena_reset_region(&_mk561, _rr, 6, NULL, 0);
             }
-    GemVal _t19372 = gem_v___for_i_50;
-            if (!gem_truthy(gem_lt(_t19372, gem_for_len_1(gem_v___for_items_50)))) break;
+    GemVal _t19374 = gem_v___for_i_50;
+            if (!gem_truthy(gem_lt(_t19374, gem_for_len_1(gem_v___for_items_50)))) break;
 #line 216 "compiler/liveness.gem"
             gem_set_line(216);
-    GemVal _t19373 = gem_v___for_items_50;
-            GemVal gem_v_w = gem_table_get(_t19373, gem_v___for_i_50);
+    GemVal _t19375 = gem_v___for_items_50;
+            GemVal gem_v_w = gem_table_get(_t19375, gem_v___for_i_50);
 #line 216 "compiler/liveness.gem"
             gem_set_line(216);
             gem_v___for_i_50 = gem_add(gem_v___for_i_50, gem_int(1));
 #line 217 "compiler/liveness.gem"
             gem_set_line(217);
-    GemVal _t19378 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19374 = gem_v_w;
+    GemVal _t19380 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19376 = gem_v_w;
     static GemICacheSlot _ic_2803 = {0};
-    GemVal _t19376 = gem_table_get_cached(_t19374, "value", &_ic_2803);
-    GemVal _t19375 = gem_v_mdef;
-    GemVal _t19377[] = {_t19376, _t19375, gem_v_free};
-    gem_check_callable(_t19378, "compiler/liveness.gem", 217);
-            (void)(_t19378.fn(_t19378.env, _t19377, 3));
+    GemVal _t19378 = gem_table_get_cached(_t19376, "value", &_ic_2803);
+    GemVal _t19377 = gem_v_mdef;
+    GemVal _t19379[] = {_t19378, _t19377, gem_v_free};
+    gem_check_callable(_t19380, "compiler/liveness.gem", 217);
+            (void)(_t19380.fn(_t19380.env, _t19379, 3));
 #line 218 "compiler/liveness.gem"
             gem_set_line(218);
-    GemVal _t19379[] = {gem_v_mdef};
-            GemVal gem_v_armdef = gem_fn___mod_liveness_lset_copy(NULL, _t19379, 1);
+    GemVal _t19381[] = {gem_v_mdef};
+            GemVal gem_v_armdef = gem_fn___mod_liveness_lset_copy(NULL, _t19381, 1);
 #line 219 "compiler/liveness.gem"
             gem_set_line(219);
-    GemVal _t19380 = gem_v_w;
+    GemVal _t19382 = gem_v_w;
     static GemICacheSlot _ic_2804 = {0};
-            if (gem_truthy(gem_neq(gem_table_get_cached(_t19380, "bindings", &_ic_2804), GEM_NIL))) {
+            if (gem_truthy(gem_neq(gem_table_get_cached(_t19382, "bindings", &_ic_2804), GEM_NIL))) {
 #line 220 "compiler/liveness.gem"
                 gem_set_line(220);
-    GemVal _t19381 = gem_v_w;
+    GemVal _t19383 = gem_v_w;
     static GemICacheSlot _ic_2805 = {0};
-                GemVal gem_v___for_items_49 = gem_for_items_1(gem_table_get_cached(_t19381, "bindings", &_ic_2805));
+                GemVal gem_v___for_items_49 = gem_for_items_1(gem_table_get_cached(_t19383, "bindings", &_ic_2805));
 #line 220 "compiler/liveness.gem"
                 gem_set_line(220);
                 GemVal gem_v___for_i_49 = gem_int(0);
@@ -84802,47 +84836,47 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
                         GemVal *_rr[] = {&gem_v___for_items_50, &gem_v___for_i_50, &gem_v_el, &gem_v_defined, &gem_v_free, &gem_v_mdef, &gem_v_w, &gem_v_armdef, &gem_v___for_i_49, &gem_v___for_items_49};
                         gem_arena_reset_region(&_mk562, _rr, 10, NULL, 0);
                     }
-    GemVal _t19382 = gem_v___for_i_49;
-                    if (!gem_truthy(gem_lt(_t19382, gem_for_len_1(gem_v___for_items_49)))) break;
+    GemVal _t19384 = gem_v___for_i_49;
+                    if (!gem_truthy(gem_lt(_t19384, gem_for_len_1(gem_v___for_items_49)))) break;
 #line 220 "compiler/liveness.gem"
                     gem_set_line(220);
-    GemVal _t19383 = gem_v___for_items_49;
-                    GemVal gem_v_b = gem_table_get(_t19383, gem_v___for_i_49);
+    GemVal _t19385 = gem_v___for_items_49;
+                    GemVal gem_v_b = gem_table_get(_t19385, gem_v___for_i_49);
 #line 220 "compiler/liveness.gem"
                     gem_set_line(220);
                     gem_v___for_i_49 = gem_add(gem_v___for_i_49, gem_int(1));
 #line 221 "compiler/liveness.gem"
                     gem_set_line(221);
-    GemVal _t19387 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19385 = gem_v_b;
-    GemVal _t19384 = gem_v_armdef;
-    GemVal _t19386[] = {_t19385, _t19384, gem_v_free};
-    gem_check_callable(_t19387, "compiler/liveness.gem", 221);
-                    (void)(_t19387.fn(_t19387.env, _t19386, 3));
+    GemVal _t19389 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19387 = gem_v_b;
+    GemVal _t19386 = gem_v_armdef;
+    GemVal _t19388[] = {_t19387, _t19386, gem_v_free};
+    gem_check_callable(_t19389, "compiler/liveness.gem", 221);
+                    (void)(_t19389.fn(_t19389.env, _t19388, 3));
 #line 222 "compiler/liveness.gem"
                     gem_set_line(222);
-    GemVal _t19388[] = {gem_v_b, GEM_STR_LIT("let", 3)};
-                    if (gem_truthy(gem_fn___mod_liveness_is_liveness_node(NULL, _t19388, 2))) {
+    GemVal _t19390[] = {gem_v_b, GEM_STR_LIT("let", 3)};
+                    if (gem_truthy(gem_fn___mod_liveness_is_liveness_node(NULL, _t19390, 2))) {
 #line 223 "compiler/liveness.gem"
                         gem_set_line(223);
-    GemVal _t19390 = gem_v_armdef;
-    GemVal _t19389 = gem_v_b;
+    GemVal _t19392 = gem_v_armdef;
+    GemVal _t19391 = gem_v_b;
     static GemICacheSlot _ic_2806 = {0};
-                        gem_table_set(_t19390, gem_table_get_cached(_t19389, "name", &_ic_2806), gem_bool(1));
+                        gem_table_set(_t19392, gem_table_get_cached(_t19391, "name", &_ic_2806), gem_bool(1));
                     }
                 }
 
             }
 #line 227 "compiler/liveness.gem"
             gem_set_line(227);
-    GemVal _t19395 = gem_g___mod_liveness__collect_free_stmts;
-    GemVal _t19391 = gem_v_w;
+    GemVal _t19397 = gem_g___mod_liveness__collect_free_stmts;
+    GemVal _t19393 = gem_v_w;
     static GemICacheSlot _ic_2807 = {0};
-    GemVal _t19393 = gem_table_get_cached(_t19391, "body", &_ic_2807);
-    GemVal _t19392 = gem_v_armdef;
-    GemVal _t19394[] = {_t19393, _t19392, gem_v_free};
-    gem_check_callable(_t19395, "compiler/liveness.gem", 227);
-            (void)(_t19395.fn(_t19395.env, _t19394, 3));
+    GemVal _t19395 = gem_table_get_cached(_t19393, "body", &_ic_2807);
+    GemVal _t19394 = gem_v_armdef;
+    GemVal _t19396[] = {_t19395, _t19394, gem_v_free};
+    gem_check_callable(_t19397, "compiler/liveness.gem", 227);
+            (void)(_t19397.fn(_t19397.env, _t19396, 3));
         }
 
 #line 229 "compiler/liveness.gem"
@@ -84850,57 +84884,57 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         if (gem_truthy(gem_neq(gem_v_el, GEM_NIL))) {
 #line 230 "compiler/liveness.gem"
             gem_set_line(230);
-    GemVal _t19399 = gem_g___mod_liveness__collect_free_stmts;
-    GemVal _t19397 = gem_v_el;
-    GemVal _t19396 = gem_v_defined;
-    GemVal _t19398[] = {_t19397, _t19396, gem_v_free};
-    gem_check_callable(_t19399, "compiler/liveness.gem", 230);
-            GemVal _t19400 = _t19399.fn(_t19399.env, _t19398, 3);
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19400, 1);
+    GemVal _t19401 = gem_g___mod_liveness__collect_free_stmts;
+    GemVal _t19399 = gem_v_el;
+    GemVal _t19398 = gem_v_defined;
+    GemVal _t19400[] = {_t19399, _t19398, gem_v_free};
+    gem_check_callable(_t19401, "compiler/liveness.gem", 230);
+            GemVal _t19402 = _t19401.fn(_t19401.env, _t19400, 3);
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19402, 1);
             gem_pop_frame();
-            return _t19400;
+            return _t19402;
         } else {
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
             gem_pop_frame();
             return GEM_NIL;
         }
     } else {
-    GemVal _t19401 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19403;
-    if (!gem_truthy(_t19401)) {
-        _t19403 = _t19401;
-    } else {
-    GemVal _t19402[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19403 = gem_has_key_fn(NULL, _t19402, 2);
-    }
-    GemVal _t19404;
+    GemVal _t19403 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19405;
     if (!gem_truthy(_t19403)) {
-        _t19404 = _t19403;
+        _t19405 = _t19403;
     } else {
-        _t19404 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("receive_match", 13));
+    GemVal _t19404[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19405 = gem_has_key_fn(NULL, _t19404, 2);
     }
     GemVal _t19406;
-    if (!gem_truthy(_t19404)) {
-        _t19406 = _t19404;
+    if (!gem_truthy(_t19405)) {
+        _t19406 = _t19405;
     } else {
-    GemVal _t19405[] = {gem_v___match_47, GEM_STR_LIT("arms", 4)};
-        _t19406 = gem_has_key_fn(NULL, _t19405, 2);
+        _t19406 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("receive_match", 13));
     }
     GemVal _t19408;
     if (!gem_truthy(_t19406)) {
         _t19408 = _t19406;
     } else {
-    GemVal _t19407[] = {gem_v___match_47, GEM_STR_LIT("after_ms", 8)};
+    GemVal _t19407[] = {gem_v___match_47, GEM_STR_LIT("arms", 4)};
         _t19408 = gem_has_key_fn(NULL, _t19407, 2);
     }
     GemVal _t19410;
     if (!gem_truthy(_t19408)) {
         _t19410 = _t19408;
     } else {
-    GemVal _t19409[] = {gem_v___match_47, GEM_STR_LIT("after_body", 10)};
+    GemVal _t19409[] = {gem_v___match_47, GEM_STR_LIT("after_ms", 8)};
         _t19410 = gem_has_key_fn(NULL, _t19409, 2);
     }
-    if (gem_truthy(_t19410)) {
+    GemVal _t19412;
+    if (!gem_truthy(_t19410)) {
+        _t19412 = _t19410;
+    } else {
+    GemVal _t19411[] = {gem_v___match_47, GEM_STR_LIT("after_body", 10)};
+        _t19412 = gem_has_key_fn(NULL, _t19411, 2);
+    }
+    if (gem_truthy(_t19412)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_arms = gem_table_get(gem_v___match_47, GEM_STR_LIT("arms", 4));
@@ -84912,19 +84946,19 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         GemVal gem_v_after_body = gem_table_get(gem_v___match_47, GEM_STR_LIT("after_body", 10));
 #line 233 "compiler/liveness.gem"
         gem_set_line(233);
-    GemVal _t19411[] = {gem_v_defined};
-        GemVal gem_v_rdef = gem_fn___mod_liveness_lset_copy(NULL, _t19411, 1);
+    GemVal _t19413[] = {gem_v_defined};
+        GemVal gem_v_rdef = gem_fn___mod_liveness_lset_copy(NULL, _t19413, 1);
 #line 234 "compiler/liveness.gem"
         gem_set_line(234);
-    GemVal _t19412 = gem_v_node;
+    GemVal _t19414 = gem_v_node;
     static GemICacheSlot _ic_2808 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t19412, "recv_var", &_ic_2808), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t19414, "recv_var", &_ic_2808), GEM_NIL))) {
 #line 235 "compiler/liveness.gem"
             gem_set_line(235);
-    GemVal _t19414 = gem_v_rdef;
-    GemVal _t19413 = gem_v_node;
+    GemVal _t19416 = gem_v_rdef;
+    GemVal _t19415 = gem_v_node;
     static GemICacheSlot _ic_2809 = {0};
-            gem_table_set(_t19414, gem_table_get_cached(_t19413, "recv_var", &_ic_2809), gem_bool(1));
+            gem_table_set(_t19416, gem_table_get_cached(_t19415, "recv_var", &_ic_2809), gem_bool(1));
         }
 #line 237 "compiler/liveness.gem"
         gem_set_line(237);
@@ -84942,45 +84976,45 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v___for_items_52, &gem_v___for_i_52, &gem_v_after_body, &gem_v_rdef, &gem_v_free, &gem_v_after_ms};
                 gem_arena_reset_region(&_mk563, _rr, 6, NULL, 0);
             }
-    GemVal _t19415 = gem_v___for_i_52;
-            if (!gem_truthy(gem_lt(_t19415, gem_for_len_1(gem_v___for_items_52)))) break;
+    GemVal _t19417 = gem_v___for_i_52;
+            if (!gem_truthy(gem_lt(_t19417, gem_for_len_1(gem_v___for_items_52)))) break;
 #line 237 "compiler/liveness.gem"
             gem_set_line(237);
-    GemVal _t19416 = gem_v___for_items_52;
-            GemVal gem_v_arm = gem_table_get(_t19416, gem_v___for_i_52);
+    GemVal _t19418 = gem_v___for_items_52;
+            GemVal gem_v_arm = gem_table_get(_t19418, gem_v___for_i_52);
 #line 237 "compiler/liveness.gem"
             gem_set_line(237);
             gem_v___for_i_52 = gem_add(gem_v___for_i_52, gem_int(1));
 #line 238 "compiler/liveness.gem"
             gem_set_line(238);
-    GemVal _t19422 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19417 = gem_v_arm;
+    GemVal _t19424 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19419 = gem_v_arm;
     static GemICacheSlot _ic_2810 = {0};
-    GemVal _t19418 = gem_table_get_cached(_t19417, "pattern", &_ic_2810);
+    GemVal _t19420 = gem_table_get_cached(_t19419, "pattern", &_ic_2810);
     static GemICacheSlot _ic_2811 = {0};
-    GemVal _t19420 = gem_table_get_cached(_t19418, "condition", &_ic_2811);
-    GemVal _t19419 = gem_v_rdef;
-    GemVal _t19421[] = {_t19420, _t19419, gem_v_free};
-    gem_check_callable(_t19422, "compiler/liveness.gem", 238);
-            (void)(_t19422.fn(_t19422.env, _t19421, 3));
+    GemVal _t19422 = gem_table_get_cached(_t19420, "condition", &_ic_2811);
+    GemVal _t19421 = gem_v_rdef;
+    GemVal _t19423[] = {_t19422, _t19421, gem_v_free};
+    gem_check_callable(_t19424, "compiler/liveness.gem", 238);
+            (void)(_t19424.fn(_t19424.env, _t19423, 3));
 #line 239 "compiler/liveness.gem"
             gem_set_line(239);
-    GemVal _t19423[] = {gem_v_rdef};
-            GemVal gem_v_armdef = gem_fn___mod_liveness_lset_copy(NULL, _t19423, 1);
+    GemVal _t19425[] = {gem_v_rdef};
+            GemVal gem_v_armdef = gem_fn___mod_liveness_lset_copy(NULL, _t19425, 1);
 #line 240 "compiler/liveness.gem"
             gem_set_line(240);
-    GemVal _t19424 = gem_v_arm;
+    GemVal _t19426 = gem_v_arm;
     static GemICacheSlot _ic_2812 = {0};
-    GemVal _t19425 = gem_table_get_cached(_t19424, "pattern", &_ic_2812);
+    GemVal _t19427 = gem_table_get_cached(_t19426, "pattern", &_ic_2812);
     static GemICacheSlot _ic_2813 = {0};
-            if (gem_truthy(gem_neq(gem_table_get_cached(_t19425, "bindings", &_ic_2813), GEM_NIL))) {
+            if (gem_truthy(gem_neq(gem_table_get_cached(_t19427, "bindings", &_ic_2813), GEM_NIL))) {
 #line 241 "compiler/liveness.gem"
                 gem_set_line(241);
-    GemVal _t19426 = gem_v_arm;
+    GemVal _t19428 = gem_v_arm;
     static GemICacheSlot _ic_2814 = {0};
-    GemVal _t19427 = gem_table_get_cached(_t19426, "pattern", &_ic_2814);
+    GemVal _t19429 = gem_table_get_cached(_t19428, "pattern", &_ic_2814);
     static GemICacheSlot _ic_2815 = {0};
-                GemVal gem_v___for_items_51 = gem_for_items_1(gem_table_get_cached(_t19427, "bindings", &_ic_2815));
+                GemVal gem_v___for_items_51 = gem_for_items_1(gem_table_get_cached(_t19429, "bindings", &_ic_2815));
 #line 241 "compiler/liveness.gem"
                 gem_set_line(241);
                 GemVal gem_v___for_i_51 = gem_int(0);
@@ -84994,47 +85028,47 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
                         GemVal *_rr[] = {&gem_v___for_items_52, &gem_v___for_i_52, &gem_v_after_body, &gem_v_rdef, &gem_v_free, &gem_v_after_ms, &gem_v_arm, &gem_v_armdef, &gem_v___for_i_51, &gem_v___for_items_51};
                         gem_arena_reset_region(&_mk564, _rr, 10, NULL, 0);
                     }
-    GemVal _t19428 = gem_v___for_i_51;
-                    if (!gem_truthy(gem_lt(_t19428, gem_for_len_1(gem_v___for_items_51)))) break;
+    GemVal _t19430 = gem_v___for_i_51;
+                    if (!gem_truthy(gem_lt(_t19430, gem_for_len_1(gem_v___for_items_51)))) break;
 #line 241 "compiler/liveness.gem"
                     gem_set_line(241);
-    GemVal _t19429 = gem_v___for_items_51;
-                    GemVal gem_v_b = gem_table_get(_t19429, gem_v___for_i_51);
+    GemVal _t19431 = gem_v___for_items_51;
+                    GemVal gem_v_b = gem_table_get(_t19431, gem_v___for_i_51);
 #line 241 "compiler/liveness.gem"
                     gem_set_line(241);
                     gem_v___for_i_51 = gem_add(gem_v___for_i_51, gem_int(1));
 #line 242 "compiler/liveness.gem"
                     gem_set_line(242);
-    GemVal _t19433 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19431 = gem_v_b;
-    GemVal _t19430 = gem_v_armdef;
-    GemVal _t19432[] = {_t19431, _t19430, gem_v_free};
-    gem_check_callable(_t19433, "compiler/liveness.gem", 242);
-                    (void)(_t19433.fn(_t19433.env, _t19432, 3));
+    GemVal _t19435 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19433 = gem_v_b;
+    GemVal _t19432 = gem_v_armdef;
+    GemVal _t19434[] = {_t19433, _t19432, gem_v_free};
+    gem_check_callable(_t19435, "compiler/liveness.gem", 242);
+                    (void)(_t19435.fn(_t19435.env, _t19434, 3));
 #line 243 "compiler/liveness.gem"
                     gem_set_line(243);
-    GemVal _t19434[] = {gem_v_b, GEM_STR_LIT("let", 3)};
-                    if (gem_truthy(gem_fn___mod_liveness_is_liveness_node(NULL, _t19434, 2))) {
+    GemVal _t19436[] = {gem_v_b, GEM_STR_LIT("let", 3)};
+                    if (gem_truthy(gem_fn___mod_liveness_is_liveness_node(NULL, _t19436, 2))) {
 #line 244 "compiler/liveness.gem"
                         gem_set_line(244);
-    GemVal _t19436 = gem_v_armdef;
-    GemVal _t19435 = gem_v_b;
+    GemVal _t19438 = gem_v_armdef;
+    GemVal _t19437 = gem_v_b;
     static GemICacheSlot _ic_2816 = {0};
-                        gem_table_set(_t19436, gem_table_get_cached(_t19435, "name", &_ic_2816), gem_bool(1));
+                        gem_table_set(_t19438, gem_table_get_cached(_t19437, "name", &_ic_2816), gem_bool(1));
                     }
                 }
 
             }
 #line 248 "compiler/liveness.gem"
             gem_set_line(248);
-    GemVal _t19441 = gem_g___mod_liveness__collect_free_stmts;
-    GemVal _t19437 = gem_v_arm;
+    GemVal _t19443 = gem_g___mod_liveness__collect_free_stmts;
+    GemVal _t19439 = gem_v_arm;
     static GemICacheSlot _ic_2817 = {0};
-    GemVal _t19439 = gem_table_get_cached(_t19437, "body", &_ic_2817);
-    GemVal _t19438 = gem_v_armdef;
-    GemVal _t19440[] = {_t19439, _t19438, gem_v_free};
-    gem_check_callable(_t19441, "compiler/liveness.gem", 248);
-            (void)(_t19441.fn(_t19441.env, _t19440, 3));
+    GemVal _t19441 = gem_table_get_cached(_t19439, "body", &_ic_2817);
+    GemVal _t19440 = gem_v_armdef;
+    GemVal _t19442[] = {_t19441, _t19440, gem_v_free};
+    gem_check_callable(_t19443, "compiler/liveness.gem", 248);
+            (void)(_t19443.fn(_t19443.env, _t19442, 3));
         }
 
 #line 250 "compiler/liveness.gem"
@@ -85042,55 +85076,55 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 251 "compiler/liveness.gem"
             gem_set_line(251);
-    GemVal _t19445 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19443 = gem_v_after_ms;
-    GemVal _t19442 = gem_v_rdef;
-    GemVal _t19444[] = {_t19443, _t19442, gem_v_free};
-    gem_check_callable(_t19445, "compiler/liveness.gem", 251);
-            (void)(_t19445.fn(_t19445.env, _t19444, 3));
+    GemVal _t19447 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19445 = gem_v_after_ms;
+    GemVal _t19444 = gem_v_rdef;
+    GemVal _t19446[] = {_t19445, _t19444, gem_v_free};
+    gem_check_callable(_t19447, "compiler/liveness.gem", 251);
+            (void)(_t19447.fn(_t19447.env, _t19446, 3));
         }
 #line 253 "compiler/liveness.gem"
         gem_set_line(253);
         if (gem_truthy(gem_neq(gem_v_after_body, GEM_NIL))) {
 #line 254 "compiler/liveness.gem"
             gem_set_line(254);
-    GemVal _t19449 = gem_g___mod_liveness__collect_free_stmts;
-    GemVal _t19447 = gem_v_after_body;
-    GemVal _t19446 = gem_v_rdef;
-    GemVal _t19448[] = {_t19447, _t19446, gem_v_free};
-    gem_check_callable(_t19449, "compiler/liveness.gem", 254);
-            GemVal _t19450 = _t19449.fn(_t19449.env, _t19448, 3);
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19450, 1);
+    GemVal _t19451 = gem_g___mod_liveness__collect_free_stmts;
+    GemVal _t19449 = gem_v_after_body;
+    GemVal _t19448 = gem_v_rdef;
+    GemVal _t19450[] = {_t19449, _t19448, gem_v_free};
+    gem_check_callable(_t19451, "compiler/liveness.gem", 254);
+            GemVal _t19452 = _t19451.fn(_t19451.env, _t19450, 3);
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19452, 1);
             gem_pop_frame();
-            return _t19450;
+            return _t19452;
         } else {
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
             gem_pop_frame();
             return GEM_NIL;
         }
     } else {
-    GemVal _t19451 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19453;
-    if (!gem_truthy(_t19451)) {
-        _t19453 = _t19451;
-    } else {
-    GemVal _t19452[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19453 = gem_has_key_fn(NULL, _t19452, 2);
-    }
-    GemVal _t19454;
+    GemVal _t19453 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19455;
     if (!gem_truthy(_t19453)) {
-        _t19454 = _t19453;
+        _t19455 = _t19453;
     } else {
-        _t19454 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("table", 5));
+    GemVal _t19454[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19455 = gem_has_key_fn(NULL, _t19454, 2);
     }
     GemVal _t19456;
-    if (!gem_truthy(_t19454)) {
-        _t19456 = _t19454;
+    if (!gem_truthy(_t19455)) {
+        _t19456 = _t19455;
     } else {
-    GemVal _t19455[] = {gem_v___match_47, GEM_STR_LIT("entries", 7)};
-        _t19456 = gem_has_key_fn(NULL, _t19455, 2);
+        _t19456 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("table", 5));
     }
-    if (gem_truthy(_t19456)) {
+    GemVal _t19458;
+    if (!gem_truthy(_t19456)) {
+        _t19458 = _t19456;
+    } else {
+    GemVal _t19457[] = {gem_v___match_47, GEM_STR_LIT("entries", 7)};
+        _t19458 = gem_has_key_fn(NULL, _t19457, 2);
+    }
+    if (gem_truthy(_t19458)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_entries = gem_table_get(gem_v___match_47, GEM_STR_LIT("entries", 7));
@@ -85111,53 +85145,53 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_53, &gem_v_defined, &gem_v_free, &gem_v___for_items_53};
                     gem_arena_reset_region(&_mk565, _rr, 4, NULL, 0);
                 }
-    GemVal _t19457 = gem_v___for_i_53;
-                if (!gem_truthy(gem_lt(_t19457, gem_for_len_1(gem_v___for_items_53)))) break;
+    GemVal _t19459 = gem_v___for_i_53;
+                if (!gem_truthy(gem_lt(_t19459, gem_for_len_1(gem_v___for_items_53)))) break;
 #line 257 "compiler/liveness.gem"
                 gem_set_line(257);
-    GemVal _t19458 = gem_v___for_items_53;
-                GemVal gem_v_e = gem_table_get(_t19458, gem_v___for_i_53);
+    GemVal _t19460 = gem_v___for_items_53;
+                GemVal gem_v_e = gem_table_get(_t19460, gem_v___for_i_53);
 #line 257 "compiler/liveness.gem"
                 gem_set_line(257);
                 gem_v___for_i_53 = gem_add(gem_v___for_i_53, gem_int(1));
 #line 258 "compiler/liveness.gem"
                 gem_set_line(258);
-    GemVal _t19463 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19459 = gem_v_e;
+    GemVal _t19465 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19461 = gem_v_e;
     static GemICacheSlot _ic_2818 = {0};
-    GemVal _t19461 = gem_table_get_cached(_t19459, "value", &_ic_2818);
-    GemVal _t19460 = gem_v_defined;
-    GemVal _t19462[] = {_t19461, _t19460, gem_v_free};
-    gem_check_callable(_t19463, "compiler/liveness.gem", 258);
-                (void)(_t19463.fn(_t19463.env, _t19462, 3));
+    GemVal _t19463 = gem_table_get_cached(_t19461, "value", &_ic_2818);
+    GemVal _t19462 = gem_v_defined;
+    GemVal _t19464[] = {_t19463, _t19462, gem_v_free};
+    gem_check_callable(_t19465, "compiler/liveness.gem", 258);
+                (void)(_t19465.fn(_t19465.env, _t19464, 3));
             }
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
             gem_pop_frame();
             return GEM_NIL;
         }
     } else {
-    GemVal _t19464 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19466;
-    if (!gem_truthy(_t19464)) {
-        _t19466 = _t19464;
-    } else {
-    GemVal _t19465[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19466 = gem_has_key_fn(NULL, _t19465, 2);
-    }
-    GemVal _t19467;
+    GemVal _t19466 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19468;
     if (!gem_truthy(_t19466)) {
-        _t19467 = _t19466;
+        _t19468 = _t19466;
     } else {
-        _t19467 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("array", 5));
+    GemVal _t19467[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19468 = gem_has_key_fn(NULL, _t19467, 2);
     }
     GemVal _t19469;
-    if (!gem_truthy(_t19467)) {
-        _t19469 = _t19467;
+    if (!gem_truthy(_t19468)) {
+        _t19469 = _t19468;
     } else {
-    GemVal _t19468[] = {gem_v___match_47, GEM_STR_LIT("elements", 8)};
-        _t19469 = gem_has_key_fn(NULL, _t19468, 2);
+        _t19469 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("array", 5));
     }
-    if (gem_truthy(_t19469)) {
+    GemVal _t19471;
+    if (!gem_truthy(_t19469)) {
+        _t19471 = _t19469;
+    } else {
+    GemVal _t19470[] = {gem_v___match_47, GEM_STR_LIT("elements", 8)};
+        _t19471 = gem_has_key_fn(NULL, _t19470, 2);
+    }
+    if (gem_truthy(_t19471)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_elements = gem_table_get(gem_v___match_47, GEM_STR_LIT("elements", 8));
@@ -85178,51 +85212,51 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_54, &gem_v_defined, &gem_v_free, &gem_v___for_items_54};
                     gem_arena_reset_region(&_mk566, _rr, 4, NULL, 0);
                 }
-    GemVal _t19470 = gem_v___for_i_54;
-                if (!gem_truthy(gem_lt(_t19470, gem_for_len_1(gem_v___for_items_54)))) break;
+    GemVal _t19472 = gem_v___for_i_54;
+                if (!gem_truthy(gem_lt(_t19472, gem_for_len_1(gem_v___for_items_54)))) break;
 #line 261 "compiler/liveness.gem"
                 gem_set_line(261);
-    GemVal _t19471 = gem_v___for_items_54;
-                GemVal gem_v_e = gem_table_get(_t19471, gem_v___for_i_54);
+    GemVal _t19473 = gem_v___for_items_54;
+                GemVal gem_v_e = gem_table_get(_t19473, gem_v___for_i_54);
 #line 261 "compiler/liveness.gem"
                 gem_set_line(261);
                 gem_v___for_i_54 = gem_add(gem_v___for_i_54, gem_int(1));
 #line 262 "compiler/liveness.gem"
                 gem_set_line(262);
-    GemVal _t19475 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19473 = gem_v_e;
-    GemVal _t19472 = gem_v_defined;
-    GemVal _t19474[] = {_t19473, _t19472, gem_v_free};
-    gem_check_callable(_t19475, "compiler/liveness.gem", 262);
-                (void)(_t19475.fn(_t19475.env, _t19474, 3));
+    GemVal _t19477 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19475 = gem_v_e;
+    GemVal _t19474 = gem_v_defined;
+    GemVal _t19476[] = {_t19475, _t19474, gem_v_free};
+    gem_check_callable(_t19477, "compiler/liveness.gem", 262);
+                (void)(_t19477.fn(_t19477.env, _t19476, 3));
             }
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
             gem_pop_frame();
             return GEM_NIL;
         }
     } else {
-    GemVal _t19476 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19478;
-    if (!gem_truthy(_t19476)) {
-        _t19478 = _t19476;
-    } else {
-    GemVal _t19477[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19478 = gem_has_key_fn(NULL, _t19477, 2);
-    }
-    GemVal _t19479;
+    GemVal _t19478 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19480;
     if (!gem_truthy(_t19478)) {
-        _t19479 = _t19478;
+        _t19480 = _t19478;
     } else {
-        _t19479 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("interp", 6));
+    GemVal _t19479[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19480 = gem_has_key_fn(NULL, _t19479, 2);
     }
     GemVal _t19481;
-    if (!gem_truthy(_t19479)) {
-        _t19481 = _t19479;
+    if (!gem_truthy(_t19480)) {
+        _t19481 = _t19480;
     } else {
-    GemVal _t19480[] = {gem_v___match_47, GEM_STR_LIT("parts", 5)};
-        _t19481 = gem_has_key_fn(NULL, _t19480, 2);
+        _t19481 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("interp", 6));
     }
-    if (gem_truthy(_t19481)) {
+    GemVal _t19483;
+    if (!gem_truthy(_t19481)) {
+        _t19483 = _t19481;
+    } else {
+    GemVal _t19482[] = {gem_v___match_47, GEM_STR_LIT("parts", 5)};
+        _t19483 = gem_has_key_fn(NULL, _t19482, 2);
+    }
+    if (gem_truthy(_t19483)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_parts = gem_table_get(gem_v___match_47, GEM_STR_LIT("parts", 5));
@@ -85243,88 +85277,88 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_55, &gem_v_defined, &gem_v_free, &gem_v___for_items_55};
                     gem_arena_reset_region(&_mk567, _rr, 4, NULL, 0);
                 }
-    GemVal _t19482 = gem_v___for_i_55;
-                if (!gem_truthy(gem_lt(_t19482, gem_for_len_1(gem_v___for_items_55)))) break;
+    GemVal _t19484 = gem_v___for_i_55;
+                if (!gem_truthy(gem_lt(_t19484, gem_for_len_1(gem_v___for_items_55)))) break;
 #line 265 "compiler/liveness.gem"
                 gem_set_line(265);
-    GemVal _t19483 = gem_v___for_items_55;
-                GemVal gem_v_p = gem_table_get(_t19483, gem_v___for_i_55);
+    GemVal _t19485 = gem_v___for_items_55;
+                GemVal gem_v_p = gem_table_get(_t19485, gem_v___for_i_55);
 #line 265 "compiler/liveness.gem"
                 gem_set_line(265);
                 gem_v___for_i_55 = gem_add(gem_v___for_i_55, gem_int(1));
 #line 266 "compiler/liveness.gem"
                 gem_set_line(266);
-    GemVal _t19487 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19485 = gem_v_p;
-    GemVal _t19484 = gem_v_defined;
-    GemVal _t19486[] = {_t19485, _t19484, gem_v_free};
-    gem_check_callable(_t19487, "compiler/liveness.gem", 266);
-                (void)(_t19487.fn(_t19487.env, _t19486, 3));
+    GemVal _t19489 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19487 = gem_v_p;
+    GemVal _t19486 = gem_v_defined;
+    GemVal _t19488[] = {_t19487, _t19486, gem_v_free};
+    gem_check_callable(_t19489, "compiler/liveness.gem", 266);
+                (void)(_t19489.fn(_t19489.env, _t19488, 3));
             }
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
             gem_pop_frame();
             return GEM_NIL;
         }
     } else {
-    GemVal _t19488 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19490;
-    if (!gem_truthy(_t19488)) {
-        _t19490 = _t19488;
-    } else {
-    GemVal _t19489[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19490 = gem_has_key_fn(NULL, _t19489, 2);
-    }
-    GemVal _t19491;
+    GemVal _t19490 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19492;
     if (!gem_truthy(_t19490)) {
-        _t19491 = _t19490;
+        _t19492 = _t19490;
     } else {
-        _t19491 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("block", 5));
+    GemVal _t19491[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19492 = gem_has_key_fn(NULL, _t19491, 2);
     }
     GemVal _t19493;
-    if (!gem_truthy(_t19491)) {
-        _t19493 = _t19491;
+    if (!gem_truthy(_t19492)) {
+        _t19493 = _t19492;
     } else {
-    GemVal _t19492[] = {gem_v___match_47, GEM_STR_LIT("stmts", 5)};
-        _t19493 = gem_has_key_fn(NULL, _t19492, 2);
+        _t19493 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("block", 5));
     }
-    if (gem_truthy(_t19493)) {
+    GemVal _t19495;
+    if (!gem_truthy(_t19493)) {
+        _t19495 = _t19493;
+    } else {
+    GemVal _t19494[] = {gem_v___match_47, GEM_STR_LIT("stmts", 5)};
+        _t19495 = gem_has_key_fn(NULL, _t19494, 2);
+    }
+    if (gem_truthy(_t19495)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_stmts = gem_table_get(gem_v___match_47, GEM_STR_LIT("stmts", 5));
 #line 269 "compiler/liveness.gem"
         gem_set_line(269);
-    GemVal _t19497 = gem_g___mod_liveness__collect_free_stmts;
-    GemVal _t19495 = gem_v_stmts;
-    GemVal _t19494 = gem_v_defined;
-    GemVal _t19496[] = {_t19495, _t19494, gem_v_free};
-    gem_check_callable(_t19497, "compiler/liveness.gem", 269);
-        GemVal _t19498 = _t19497.fn(_t19497.env, _t19496, 3);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19498, 1);
+    GemVal _t19499 = gem_g___mod_liveness__collect_free_stmts;
+    GemVal _t19497 = gem_v_stmts;
+    GemVal _t19496 = gem_v_defined;
+    GemVal _t19498[] = {_t19497, _t19496, gem_v_free};
+    gem_check_callable(_t19499, "compiler/liveness.gem", 269);
+        GemVal _t19500 = _t19499.fn(_t19499.env, _t19498, 3);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19500, 1);
         gem_pop_frame();
-        return _t19498;
+        return _t19500;
     } else {
-    GemVal _t19499 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
-    GemVal _t19501;
-    if (!gem_truthy(_t19499)) {
-        _t19501 = _t19499;
-    } else {
-    GemVal _t19500[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
-        _t19501 = gem_has_key_fn(NULL, _t19500, 2);
-    }
-    GemVal _t19502;
+    GemVal _t19501 = gem_eq(gem_type_1(gem_v___match_47), GEM_STR_LIT("table", 5));
+    GemVal _t19503;
     if (!gem_truthy(_t19501)) {
-        _t19502 = _t19501;
+        _t19503 = _t19501;
     } else {
-        _t19502 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("return", 6));
+    GemVal _t19502[] = {gem_v___match_47, GEM_STR_LIT("tag", 3)};
+        _t19503 = gem_has_key_fn(NULL, _t19502, 2);
     }
     GemVal _t19504;
-    if (!gem_truthy(_t19502)) {
-        _t19504 = _t19502;
+    if (!gem_truthy(_t19503)) {
+        _t19504 = _t19503;
     } else {
-    GemVal _t19503[] = {gem_v___match_47, GEM_STR_LIT("value", 5)};
-        _t19504 = gem_has_key_fn(NULL, _t19503, 2);
+        _t19504 = gem_eq(gem_table_get(gem_v___match_47, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("return", 6));
     }
-    if (gem_truthy(_t19504)) {
+    GemVal _t19506;
+    if (!gem_truthy(_t19504)) {
+        _t19506 = _t19504;
+    } else {
+    GemVal _t19505[] = {gem_v___match_47, GEM_STR_LIT("value", 5)};
+        _t19506 = gem_has_key_fn(NULL, _t19505, 2);
+    }
+    if (gem_truthy(_t19506)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_value = gem_table_get(gem_v___match_47, GEM_STR_LIT("value", 5));
@@ -85333,15 +85367,15 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         if (gem_truthy(gem_neq(gem_v_value, GEM_NIL))) {
 #line 272 "compiler/liveness.gem"
             gem_set_line(272);
-    GemVal _t19508 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19506 = gem_v_value;
-    GemVal _t19505 = gem_v_defined;
-    GemVal _t19507[] = {_t19506, _t19505, gem_v_free};
-    gem_check_callable(_t19508, "compiler/liveness.gem", 272);
-            GemVal _t19509 = _t19508.fn(_t19508.env, _t19507, 3);
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19509, 1);
+    GemVal _t19510 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19508 = gem_v_value;
+    GemVal _t19507 = gem_v_defined;
+    GemVal _t19509[] = {_t19508, _t19507, gem_v_free};
+    gem_check_callable(_t19510, "compiler/liveness.gem", 272);
+            GemVal _t19511 = _t19510.fn(_t19510.env, _t19509, 3);
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19511, 1);
             gem_pop_frame();
-            return _t19509;
+            return _t19511;
         } else {
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
             gem_pop_frame();
@@ -85368,43 +85402,43 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_56, &gem_v___for_len_56, &gem_v_free, &gem_v_defined, &gem_v___for_tbl_56};
                     gem_arena_reset_region(&_mk568, _rr, 5, NULL, 0);
                 }
-    GemVal _t19510 = gem_v___for_i_56;
-                if (!gem_truthy(gem_lt(_t19510, gem_v___for_len_56))) break;
+    GemVal _t19512 = gem_v___for_i_56;
+                if (!gem_truthy(gem_lt(_t19512, gem_v___for_len_56))) break;
 #line 276 "compiler/liveness.gem"
                 gem_set_line(276);
-    GemVal _t19511 = gem_v___for_tbl_56;
-                GemVal gem_v_nk = gem_table_key_at_2(_t19511, gem_v___for_i_56);
+    GemVal _t19513 = gem_v___for_tbl_56;
+                GemVal gem_v_nk = gem_table_key_at_2(_t19513, gem_v___for_i_56);
 #line 276 "compiler/liveness.gem"
                 gem_set_line(276);
-    GemVal _t19512 = gem_v___for_tbl_56;
-                GemVal gem_v_v = gem_table_val_at_2(_t19512, gem_v___for_i_56);
+    GemVal _t19514 = gem_v___for_tbl_56;
+                GemVal gem_v_v = gem_table_val_at_2(_t19514, gem_v___for_i_56);
 #line 276 "compiler/liveness.gem"
                 gem_set_line(276);
                 gem_v___for_i_56 = gem_add(gem_v___for_i_56, gem_int(1));
 #line 277 "compiler/liveness.gem"
                 gem_set_line(277);
-    GemVal _t19513 = gem_neq(gem_v_nk, GEM_STR_LIT("tag", 3));
-    GemVal _t19514;
-    if (!gem_truthy(_t19513)) {
-        _t19514 = _t19513;
+    GemVal _t19515 = gem_neq(gem_v_nk, GEM_STR_LIT("tag", 3));
+    GemVal _t19516;
+    if (!gem_truthy(_t19515)) {
+        _t19516 = _t19515;
     } else {
-        _t19514 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
+        _t19516 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
     }
-                if (gem_truthy(_t19514)) {
+                if (gem_truthy(_t19516)) {
 #line 278 "compiler/liveness.gem"
                     gem_set_line(278);
-    GemVal _t19515[] = {gem_v_v};
-                    GemVal gem_v_vks = gem_keys_fn(NULL, _t19515, 1);
+    GemVal _t19517[] = {gem_v_v};
+                    GemVal gem_v_vks = gem_keys_fn(NULL, _t19517, 1);
 #line 279 "compiler/liveness.gem"
                     gem_set_line(279);
-    GemVal _t19516 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
-    GemVal _t19517;
-    if (!gem_truthy(_t19516)) {
-        _t19517 = _t19516;
+    GemVal _t19518 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
+    GemVal _t19519;
+    if (!gem_truthy(_t19518)) {
+        _t19519 = _t19518;
     } else {
-        _t19517 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
+        _t19519 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
     }
-                    if (gem_truthy(_t19517)) {
+                    if (gem_truthy(_t19519)) {
 #line 280 "compiler/liveness.gem"
                         gem_set_line(280);
                         GemVal gem_v_vi = gem_int(0);
@@ -85418,21 +85452,21 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
                                 GemVal *_rr[] = {&gem_v___for_i_56, &gem_v___for_len_56, &gem_v_free, &gem_v_defined, &gem_v___for_tbl_56, &gem_v_v, &gem_v_vi};
                                 gem_arena_reset_region(&_mk569, _rr, 7, NULL, 0);
                             }
-    GemVal _t19518 = gem_v_vi;
-                            if (!gem_truthy(gem_lt(_t19518, gem_len_1(gem_v_v)))) break;
+    GemVal _t19520 = gem_v_vi;
+                            if (!gem_truthy(gem_lt(_t19520, gem_len_1(gem_v_v)))) break;
 #line 282 "compiler/liveness.gem"
                             gem_set_line(282);
-    GemVal _t19519 = gem_v_v;
-                            if (gem_truthy(gem_eq(gem_type_1(gem_table_get(_t19519, gem_v_vi)), GEM_STR_LIT("table", 5)))) {
+    GemVal _t19521 = gem_v_v;
+                            if (gem_truthy(gem_eq(gem_type_1(gem_table_get(_t19521, gem_v_vi)), GEM_STR_LIT("table", 5)))) {
 #line 283 "compiler/liveness.gem"
                                 gem_set_line(283);
-    GemVal _t19524 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19520 = gem_v_v;
-    GemVal _t19522 = gem_table_get(_t19520, gem_v_vi);
-    GemVal _t19521 = gem_v_defined;
-    GemVal _t19523[] = {_t19522, _t19521, gem_v_free};
-    gem_check_callable(_t19524, "compiler/liveness.gem", 283);
-                                (void)(_t19524.fn(_t19524.env, _t19523, 3));
+    GemVal _t19526 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19522 = gem_v_v;
+    GemVal _t19524 = gem_table_get(_t19522, gem_v_vi);
+    GemVal _t19523 = gem_v_defined;
+    GemVal _t19525[] = {_t19524, _t19523, gem_v_free};
+    gem_check_callable(_t19526, "compiler/liveness.gem", 283);
+                                (void)(_t19526.fn(_t19526.env, _t19525, 3));
                             }
 #line 285 "compiler/liveness.gem"
                             gem_set_line(285);
@@ -85441,12 +85475,12 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
                     } else {
 #line 288 "compiler/liveness.gem"
                         gem_set_line(288);
-    GemVal _t19528 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19526 = gem_v_v;
-    GemVal _t19525 = gem_v_defined;
-    GemVal _t19527[] = {_t19526, _t19525, gem_v_free};
-    gem_check_callable(_t19528, "compiler/liveness.gem", 288);
-                        (void)(_t19528.fn(_t19528.env, _t19527, 3));
+    GemVal _t19530 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19528 = gem_v_v;
+    GemVal _t19527 = gem_v_defined;
+    GemVal _t19529[] = {_t19528, _t19527, gem_v_free};
+    gem_check_callable(_t19530, "compiler/liveness.gem", 288);
+                        (void)(_t19530.fn(_t19530.env, _t19529, 3));
                     }
                 }
             }
@@ -85489,8 +85523,8 @@ static GemVal __anon_195(void *_env, GemVal *args, int argc) {
     gem_arena_point(&_ret_pt);
 #line 296 "compiler/liveness.gem"
     gem_set_line(296);
-    GemVal _t19529[] = {gem_v_defined};
-    GemVal gem_v_d = gem_fn___mod_liveness_lset_copy(NULL, _t19529, 1);
+    GemVal _t19531[] = {gem_v_defined};
+    GemVal gem_v_d = gem_fn___mod_liveness_lset_copy(NULL, _t19531, 1);
     {
 #line 297 "compiler/liveness.gem"
         gem_set_line(297);
@@ -85508,43 +85542,43 @@ static GemVal __anon_195(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_d, &gem_v___for_i_58, &gem_v_free, &gem_v___for_items_58};
                 gem_arena_reset_region(&_mk570, _rr, 4, NULL, 0);
             }
-    GemVal _t19530 = gem_v___for_i_58;
-            if (!gem_truthy(gem_lt(_t19530, gem_for_len_1(gem_v___for_items_58)))) break;
+    GemVal _t19532 = gem_v___for_i_58;
+            if (!gem_truthy(gem_lt(_t19532, gem_for_len_1(gem_v___for_items_58)))) break;
 #line 297 "compiler/liveness.gem"
             gem_set_line(297);
-    GemVal _t19531 = gem_v___for_items_58;
-            GemVal gem_v_s = gem_table_get(_t19531, gem_v___for_i_58);
+    GemVal _t19533 = gem_v___for_items_58;
+            GemVal gem_v_s = gem_table_get(_t19533, gem_v___for_i_58);
 #line 297 "compiler/liveness.gem"
             gem_set_line(297);
             gem_v___for_i_58 = gem_add(gem_v___for_i_58, gem_int(1));
 #line 298 "compiler/liveness.gem"
             gem_set_line(298);
-    GemVal _t19535 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19533 = gem_v_s;
-    GemVal _t19532 = gem_v_d;
-    GemVal _t19534[] = {_t19533, _t19532, gem_v_free};
-    gem_check_callable(_t19535, "compiler/liveness.gem", 298);
-            (void)(_t19535.fn(_t19535.env, _t19534, 3));
+    GemVal _t19537 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19535 = gem_v_s;
+    GemVal _t19534 = gem_v_d;
+    GemVal _t19536[] = {_t19535, _t19534, gem_v_free};
+    gem_check_callable(_t19537, "compiler/liveness.gem", 298);
+            (void)(_t19537.fn(_t19537.env, _t19536, 3));
 #line 299 "compiler/liveness.gem"
             gem_set_line(299);
-    GemVal _t19536[] = {gem_v_s, GEM_STR_LIT("let", 3)};
-            if (gem_truthy(gem_fn___mod_liveness_is_liveness_node(NULL, _t19536, 2))) {
+    GemVal _t19538[] = {gem_v_s, GEM_STR_LIT("let", 3)};
+            if (gem_truthy(gem_fn___mod_liveness_is_liveness_node(NULL, _t19538, 2))) {
 #line 300 "compiler/liveness.gem"
                 gem_set_line(300);
-    GemVal _t19538 = gem_v_d;
-    GemVal _t19537 = gem_v_s;
+    GemVal _t19540 = gem_v_d;
+    GemVal _t19539 = gem_v_s;
     static GemICacheSlot _ic_2819 = {0};
-                gem_table_set(_t19538, gem_table_get_cached(_t19537, "name", &_ic_2819), gem_bool(1));
+                gem_table_set(_t19540, gem_table_get_cached(_t19539, "name", &_ic_2819), gem_bool(1));
             } else {
 #line 301 "compiler/liveness.gem"
                 gem_set_line(301);
-    GemVal _t19539[] = {gem_v_s, GEM_STR_LIT("block", 5)};
-                if (gem_truthy(gem_fn___mod_liveness_is_liveness_node(NULL, _t19539, 2))) {
+    GemVal _t19541[] = {gem_v_s, GEM_STR_LIT("block", 5)};
+                if (gem_truthy(gem_fn___mod_liveness_is_liveness_node(NULL, _t19541, 2))) {
 #line 303 "compiler/liveness.gem"
                     gem_set_line(303);
-    GemVal _t19540 = gem_v_s;
+    GemVal _t19542 = gem_v_s;
     static GemICacheSlot _ic_2820 = {0};
-                    GemVal gem_v___for_items_57 = gem_for_items_1(gem_table_get_cached(_t19540, "stmts", &_ic_2820));
+                    GemVal gem_v___for_items_57 = gem_for_items_1(gem_table_get_cached(_t19542, "stmts", &_ic_2820));
 #line 303 "compiler/liveness.gem"
                     gem_set_line(303);
                     GemVal gem_v___for_i_57 = gem_int(0);
@@ -85558,25 +85592,25 @@ static GemVal __anon_195(void *_env, GemVal *args, int argc) {
                             GemVal *_rr[] = {&gem_v_d, &gem_v___for_i_58, &gem_v_free, &gem_v___for_items_58, &gem_v___for_i_57, &gem_v___for_items_57};
                             gem_arena_reset_region(&_mk571, _rr, 6, NULL, 0);
                         }
-    GemVal _t19541 = gem_v___for_i_57;
-                        if (!gem_truthy(gem_lt(_t19541, gem_for_len_1(gem_v___for_items_57)))) break;
+    GemVal _t19543 = gem_v___for_i_57;
+                        if (!gem_truthy(gem_lt(_t19543, gem_for_len_1(gem_v___for_items_57)))) break;
 #line 303 "compiler/liveness.gem"
                         gem_set_line(303);
-    GemVal _t19542 = gem_v___for_items_57;
-                        GemVal gem_v_inner = gem_table_get(_t19542, gem_v___for_i_57);
+    GemVal _t19544 = gem_v___for_items_57;
+                        GemVal gem_v_inner = gem_table_get(_t19544, gem_v___for_i_57);
 #line 303 "compiler/liveness.gem"
                         gem_set_line(303);
                         gem_v___for_i_57 = gem_add(gem_v___for_i_57, gem_int(1));
 #line 304 "compiler/liveness.gem"
                         gem_set_line(304);
-    GemVal _t19543[] = {gem_v_inner, GEM_STR_LIT("let", 3)};
-                        if (gem_truthy(gem_fn___mod_liveness_is_liveness_node(NULL, _t19543, 2))) {
+    GemVal _t19545[] = {gem_v_inner, GEM_STR_LIT("let", 3)};
+                        if (gem_truthy(gem_fn___mod_liveness_is_liveness_node(NULL, _t19545, 2))) {
 #line 305 "compiler/liveness.gem"
                             gem_set_line(305);
-    GemVal _t19545 = gem_v_d;
-    GemVal _t19544 = gem_v_inner;
+    GemVal _t19547 = gem_v_d;
+    GemVal _t19546 = gem_v_inner;
     static GemICacheSlot _ic_2821 = {0};
-                            gem_table_set(_t19545, gem_table_get_cached(_t19544, "name", &_ic_2821), gem_bool(1));
+                            gem_table_set(_t19547, gem_table_get_cached(_t19546, "name", &_ic_2821), gem_bool(1));
                         }
                     }
 
@@ -85602,77 +85636,77 @@ static GemVal __anon_196(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
 #line 317 "compiler/liveness.gem"
         gem_set_line(317);
-        GemVal _t19546 = gem_bool(0);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19546, 1);
+        GemVal _t19548 = gem_bool(0);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19548, 1);
         gem_pop_frame();
-        return _t19546;
+        return _t19548;
     }
 #line 319 "compiler/liveness.gem"
     gem_set_line(319);
-    GemVal _t19547 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
-    GemVal _t19549;
-    if (gem_truthy(_t19547)) {
-        _t19549 = _t19547;
-    } else {
-    GemVal _t19548 = gem_v_node;
-    static GemICacheSlot _ic_2822 = {0};
-        _t19549 = gem_eq(gem_table_get_cached(_t19548, "tag", &_ic_2822), GEM_NIL);
-    }
+    GemVal _t19549 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
+    GemVal _t19551;
     if (gem_truthy(_t19549)) {
+        _t19551 = _t19549;
+    } else {
+    GemVal _t19550 = gem_v_node;
+    static GemICacheSlot _ic_2822 = {0};
+        _t19551 = gem_eq(gem_table_get_cached(_t19550, "tag", &_ic_2822), GEM_NIL);
+    }
+    if (gem_truthy(_t19551)) {
 #line 320 "compiler/liveness.gem"
         gem_set_line(320);
-        GemVal _t19550 = gem_bool(0);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19550, 1);
-        gem_pop_frame();
-        return _t19550;
-    }
-#line 322 "compiler/liveness.gem"
-    gem_set_line(322);
-    GemVal _t19551 = gem_v_node;
-    static GemICacheSlot _ic_2823 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t19551, "tag", &_ic_2823), GEM_STR_LIT("break", 5)))) {
-#line 323 "compiler/liveness.gem"
-        gem_set_line(323);
-        GemVal _t19552 = gem_bool(1);
+        GemVal _t19552 = gem_bool(0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19552, 1);
         gem_pop_frame();
         return _t19552;
     }
-#line 327 "compiler/liveness.gem"
-    gem_set_line(327);
+#line 322 "compiler/liveness.gem"
+    gem_set_line(322);
     GemVal _t19553 = gem_v_node;
-    static GemICacheSlot _ic_2824 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t19553, "tag", &_ic_2824), GEM_STR_LIT("while", 5)))) {
-#line 328 "compiler/liveness.gem"
-        gem_set_line(328);
-        GemVal _t19554 = gem_bool(0);
+    static GemICacheSlot _ic_2823 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t19553, "tag", &_ic_2823), GEM_STR_LIT("break", 5)))) {
+#line 323 "compiler/liveness.gem"
+        gem_set_line(323);
+        GemVal _t19554 = gem_bool(1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19554, 1);
         gem_pop_frame();
         return _t19554;
     }
-#line 330 "compiler/liveness.gem"
-    gem_set_line(330);
+#line 327 "compiler/liveness.gem"
+    gem_set_line(327);
     GemVal _t19555 = gem_v_node;
-    static GemICacheSlot _ic_2825 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t19555, "tag", &_ic_2825), GEM_STR_LIT("anon_fn", 7)))) {
-#line 331 "compiler/liveness.gem"
-        gem_set_line(331);
+    static GemICacheSlot _ic_2824 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t19555, "tag", &_ic_2824), GEM_STR_LIT("while", 5)))) {
+#line 328 "compiler/liveness.gem"
+        gem_set_line(328);
         GemVal _t19556 = gem_bool(0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19556, 1);
         gem_pop_frame();
         return _t19556;
     }
-#line 333 "compiler/liveness.gem"
-    gem_set_line(333);
+#line 330 "compiler/liveness.gem"
+    gem_set_line(330);
     GemVal _t19557 = gem_v_node;
-    static GemICacheSlot _ic_2826 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t19557, "tag", &_ic_2826), GEM_STR_LIT("fn_def", 6)))) {
-#line 334 "compiler/liveness.gem"
-        gem_set_line(334);
+    static GemICacheSlot _ic_2825 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t19557, "tag", &_ic_2825), GEM_STR_LIT("anon_fn", 7)))) {
+#line 331 "compiler/liveness.gem"
+        gem_set_line(331);
         GemVal _t19558 = gem_bool(0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19558, 1);
         gem_pop_frame();
         return _t19558;
+    }
+#line 333 "compiler/liveness.gem"
+    gem_set_line(333);
+    GemVal _t19559 = gem_v_node;
+    static GemICacheSlot _ic_2826 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t19559, "tag", &_ic_2826), GEM_STR_LIT("fn_def", 6)))) {
+#line 334 "compiler/liveness.gem"
+        gem_set_line(334);
+        GemVal _t19560 = gem_bool(0);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19560, 1);
+        gem_pop_frame();
+        return _t19560;
     }
 #line 336 "compiler/liveness.gem"
     gem_set_line(336);
@@ -85693,43 +85727,43 @@ static GemVal __anon_196(void *_env, GemVal *args, int argc) {
             GemVal *_rr[] = {&gem_v___for_i_59, &gem_v___for_len_59, &gem_v___for_tbl_59};
             gem_arena_reset_region(&_mk572, _rr, 3, NULL, 0);
         }
-    GemVal _t19559 = gem_v___for_i_59;
-        if (!gem_truthy(gem_lt(_t19559, gem_v___for_len_59))) break;
+    GemVal _t19561 = gem_v___for_i_59;
+        if (!gem_truthy(gem_lt(_t19561, gem_v___for_len_59))) break;
 #line 336 "compiler/liveness.gem"
         gem_set_line(336);
-    GemVal _t19560 = gem_v___for_tbl_59;
-        GemVal gem_v_nk = gem_table_key_at_2(_t19560, gem_v___for_i_59);
+    GemVal _t19562 = gem_v___for_tbl_59;
+        GemVal gem_v_nk = gem_table_key_at_2(_t19562, gem_v___for_i_59);
 #line 336 "compiler/liveness.gem"
         gem_set_line(336);
-    GemVal _t19561 = gem_v___for_tbl_59;
-        GemVal gem_v_v = gem_table_val_at_2(_t19561, gem_v___for_i_59);
+    GemVal _t19563 = gem_v___for_tbl_59;
+        GemVal gem_v_v = gem_table_val_at_2(_t19563, gem_v___for_i_59);
 #line 336 "compiler/liveness.gem"
         gem_set_line(336);
         gem_v___for_i_59 = gem_add(gem_v___for_i_59, gem_int(1));
 #line 337 "compiler/liveness.gem"
         gem_set_line(337);
-    GemVal _t19562 = gem_neq(gem_v_nk, GEM_STR_LIT("tag", 3));
-    GemVal _t19563;
-    if (!gem_truthy(_t19562)) {
-        _t19563 = _t19562;
+    GemVal _t19564 = gem_neq(gem_v_nk, GEM_STR_LIT("tag", 3));
+    GemVal _t19565;
+    if (!gem_truthy(_t19564)) {
+        _t19565 = _t19564;
     } else {
-        _t19563 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
+        _t19565 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
     }
-        if (gem_truthy(_t19563)) {
+        if (gem_truthy(_t19565)) {
 #line 338 "compiler/liveness.gem"
             gem_set_line(338);
-    GemVal _t19564[] = {gem_v_v};
-            GemVal gem_v_vks = gem_keys_fn(NULL, _t19564, 1);
+    GemVal _t19566[] = {gem_v_v};
+            GemVal gem_v_vks = gem_keys_fn(NULL, _t19566, 1);
 #line 339 "compiler/liveness.gem"
             gem_set_line(339);
-    GemVal _t19565 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
-    GemVal _t19566;
-    if (!gem_truthy(_t19565)) {
-        _t19566 = _t19565;
+    GemVal _t19567 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
+    GemVal _t19568;
+    if (!gem_truthy(_t19567)) {
+        _t19568 = _t19567;
     } else {
-        _t19566 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
+        _t19568 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
     }
-            if (gem_truthy(_t19566)) {
+            if (gem_truthy(_t19568)) {
 #line 340 "compiler/liveness.gem"
                 gem_set_line(340);
                 GemVal gem_v_vi = gem_int(0);
@@ -85743,25 +85777,25 @@ static GemVal __anon_196(void *_env, GemVal *args, int argc) {
                         GemVal *_rr[] = {&gem_v___for_i_59, &gem_v___for_len_59, &gem_v___for_tbl_59, &gem_v_v, &gem_v_vi};
                         gem_arena_reset_region(&_mk573, _rr, 5, NULL, 0);
                     }
-    GemVal _t19567 = gem_v_vi;
-                    if (!gem_truthy(gem_lt(_t19567, gem_len_1(gem_v_v)))) break;
+    GemVal _t19569 = gem_v_vi;
+                    if (!gem_truthy(gem_lt(_t19569, gem_len_1(gem_v_v)))) break;
 #line 342 "compiler/liveness.gem"
                     gem_set_line(342);
-    GemVal _t19568 = gem_v_v;
-                    if (gem_truthy(gem_eq(gem_type_1(gem_table_get(_t19568, gem_v_vi)), GEM_STR_LIT("table", 5)))) {
+    GemVal _t19570 = gem_v_v;
+                    if (gem_truthy(gem_eq(gem_type_1(gem_table_get(_t19570, gem_v_vi)), GEM_STR_LIT("table", 5)))) {
 #line 343 "compiler/liveness.gem"
                         gem_set_line(343);
-    GemVal _t19571 = gem_g___mod_liveness__has_break_here;
-    GemVal _t19569 = gem_v_v;
-    GemVal _t19570[] = {gem_table_get(_t19569, gem_v_vi)};
-    gem_check_callable(_t19571, "compiler/liveness.gem", 343);
-                        if (gem_truthy(_t19571.fn(_t19571.env, _t19570, 1))) {
+    GemVal _t19573 = gem_g___mod_liveness__has_break_here;
+    GemVal _t19571 = gem_v_v;
+    GemVal _t19572[] = {gem_table_get(_t19571, gem_v_vi)};
+    gem_check_callable(_t19573, "compiler/liveness.gem", 343);
+                        if (gem_truthy(_t19573.fn(_t19573.env, _t19572, 1))) {
 #line 344 "compiler/liveness.gem"
                             gem_set_line(344);
-                            GemVal _t19572 = gem_bool(1);
-                            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19572, 1);
+                            GemVal _t19574 = gem_bool(1);
+                            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19574, 1);
                             gem_pop_frame();
-                            return _t19572;
+                            return _t19574;
                         }
                     }
 #line 347 "compiler/liveness.gem"
@@ -85771,16 +85805,16 @@ static GemVal __anon_196(void *_env, GemVal *args, int argc) {
             } else {
 #line 350 "compiler/liveness.gem"
                 gem_set_line(350);
-    GemVal _t19574 = gem_g___mod_liveness__has_break_here;
-    GemVal _t19573[] = {gem_v_v};
-    gem_check_callable(_t19574, "compiler/liveness.gem", 350);
-                if (gem_truthy(_t19574.fn(_t19574.env, _t19573, 1))) {
+    GemVal _t19576 = gem_g___mod_liveness__has_break_here;
+    GemVal _t19575[] = {gem_v_v};
+    gem_check_callable(_t19576, "compiler/liveness.gem", 350);
+                if (gem_truthy(_t19576.fn(_t19576.env, _t19575, 1))) {
 #line 351 "compiler/liveness.gem"
                     gem_set_line(351);
-                    GemVal _t19575 = gem_bool(1);
-                    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19575, 1);
+                    GemVal _t19577 = gem_bool(1);
+                    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19577, 1);
                     gem_pop_frame();
-                    return _t19575;
+                    return _t19577;
                 }
             }
         }
@@ -85788,10 +85822,10 @@ static GemVal __anon_196(void *_env, GemVal *args, int argc) {
 
 #line 356 "compiler/liveness.gem"
     gem_set_line(356);
-    GemVal _t19576 = gem_bool(0);
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19576, 1);
+    GemVal _t19578 = gem_bool(0);
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19578, 1);
     gem_pop_frame();
-    return _t19576;
+    return _t19578;
 }
 
 struct _closure___anon_197 {
@@ -85808,205 +85842,205 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
 #line 379 "compiler/liveness.gem"
         gem_set_line(379);
-        GemVal _t19577 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19577, 1);
+        GemVal _t19579 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19579, 1);
         gem_pop_frame();
-        return _t19577;
+        return _t19579;
     }
 #line 381 "compiler/liveness.gem"
     gem_set_line(381);
-    GemVal _t19578 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
-    GemVal _t19580;
-    if (gem_truthy(_t19578)) {
-        _t19580 = _t19578;
-    } else {
-    GemVal _t19579 = gem_v_node;
-    static GemICacheSlot _ic_2827 = {0};
-        _t19580 = gem_eq(gem_table_get_cached(_t19579, "tag", &_ic_2827), GEM_NIL);
-    }
+    GemVal _t19580 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
+    GemVal _t19582;
     if (gem_truthy(_t19580)) {
+        _t19582 = _t19580;
+    } else {
+    GemVal _t19581 = gem_v_node;
+    static GemICacheSlot _ic_2827 = {0};
+        _t19582 = gem_eq(gem_table_get_cached(_t19581, "tag", &_ic_2827), GEM_NIL);
+    }
+    if (gem_truthy(_t19582)) {
 #line 382 "compiler/liveness.gem"
         gem_set_line(382);
-        GemVal _t19581 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19581, 1);
+        GemVal _t19583 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19583, 1);
         gem_pop_frame();
-        return _t19581;
+        return _t19583;
     }
 #line 385 "compiler/liveness.gem"
     gem_set_line(385);
     GemVal gem_v___match_61 = gem_v_node;
-    GemVal _t19582 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19584;
-    if (!gem_truthy(_t19582)) {
-        _t19584 = _t19582;
-    } else {
-    GemVal _t19583[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19584 = gem_has_key_fn(NULL, _t19583, 2);
-    }
-    GemVal _t19585;
+    GemVal _t19584 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19586;
     if (!gem_truthy(_t19584)) {
-        _t19585 = _t19584;
+        _t19586 = _t19584;
     } else {
-        _t19585 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("var", 3));
+    GemVal _t19585[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19586 = gem_has_key_fn(NULL, _t19585, 2);
     }
     GemVal _t19587;
-    if (!gem_truthy(_t19585)) {
-        _t19587 = _t19585;
+    if (!gem_truthy(_t19586)) {
+        _t19587 = _t19586;
     } else {
-    GemVal _t19586[] = {gem_v___match_61, GEM_STR_LIT("name", 4)};
-        _t19587 = gem_has_key_fn(NULL, _t19586, 2);
+        _t19587 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("var", 3));
     }
-    if (gem_truthy(_t19587)) {
+    GemVal _t19589;
+    if (!gem_truthy(_t19587)) {
+        _t19589 = _t19587;
+    } else {
+    GemVal _t19588[] = {gem_v___match_61, GEM_STR_LIT("name", 4)};
+        _t19589 = gem_has_key_fn(NULL, _t19588, 2);
+    }
+    if (gem_truthy(_t19589)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_name = gem_table_get(gem_v___match_61, GEM_STR_LIT("name", 4));
 #line 387 "compiler/liveness.gem"
         gem_set_line(387);
-    GemVal _t19588 = gem_v_into;
-        gem_table_set(_t19588, gem_v_name, gem_bool(1));
+    GemVal _t19590 = gem_v_into;
+        gem_table_set(_t19590, gem_v_name, gem_bool(1));
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
         gem_pop_frame();
         return GEM_NIL;
     } else {
-    GemVal _t19589 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19591;
-    if (!gem_truthy(_t19589)) {
-        _t19591 = _t19589;
-    } else {
-    GemVal _t19590[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19591 = gem_has_key_fn(NULL, _t19590, 2);
-    }
-    GemVal _t19592;
+    GemVal _t19591 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19593;
     if (!gem_truthy(_t19591)) {
-        _t19592 = _t19591;
+        _t19593 = _t19591;
     } else {
-        _t19592 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("int", 3));
+    GemVal _t19592[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19593 = gem_has_key_fn(NULL, _t19592, 2);
     }
-    if (gem_truthy(_t19592)) {
+    GemVal _t19594;
+    if (!gem_truthy(_t19593)) {
+        _t19594 = _t19593;
+    } else {
+        _t19594 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("int", 3));
+    }
+    if (gem_truthy(_t19594)) {
 #line 389 "compiler/liveness.gem"
         gem_set_line(389);
-        GemVal _t19593 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19593, 1);
+        GemVal _t19595 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19595, 1);
         gem_pop_frame();
-        return _t19593;
+        return _t19595;
     } else {
-    GemVal _t19594 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19596;
-    if (!gem_truthy(_t19594)) {
-        _t19596 = _t19594;
-    } else {
-    GemVal _t19595[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19596 = gem_has_key_fn(NULL, _t19595, 2);
-    }
-    GemVal _t19597;
+    GemVal _t19596 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19598;
     if (!gem_truthy(_t19596)) {
-        _t19597 = _t19596;
+        _t19598 = _t19596;
     } else {
-        _t19597 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("float", 5));
+    GemVal _t19597[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19598 = gem_has_key_fn(NULL, _t19597, 2);
     }
-    if (gem_truthy(_t19597)) {
+    GemVal _t19599;
+    if (!gem_truthy(_t19598)) {
+        _t19599 = _t19598;
+    } else {
+        _t19599 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("float", 5));
+    }
+    if (gem_truthy(_t19599)) {
 #line 391 "compiler/liveness.gem"
         gem_set_line(391);
-        GemVal _t19598 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19598, 1);
+        GemVal _t19600 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19600, 1);
         gem_pop_frame();
-        return _t19598;
+        return _t19600;
     } else {
-    GemVal _t19599 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19601;
-    if (!gem_truthy(_t19599)) {
-        _t19601 = _t19599;
-    } else {
-    GemVal _t19600[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19601 = gem_has_key_fn(NULL, _t19600, 2);
-    }
-    GemVal _t19602;
+    GemVal _t19601 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19603;
     if (!gem_truthy(_t19601)) {
-        _t19602 = _t19601;
+        _t19603 = _t19601;
     } else {
-        _t19602 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("string", 6));
+    GemVal _t19602[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19603 = gem_has_key_fn(NULL, _t19602, 2);
     }
-    if (gem_truthy(_t19602)) {
+    GemVal _t19604;
+    if (!gem_truthy(_t19603)) {
+        _t19604 = _t19603;
+    } else {
+        _t19604 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("string", 6));
+    }
+    if (gem_truthy(_t19604)) {
 #line 393 "compiler/liveness.gem"
         gem_set_line(393);
-        GemVal _t19603 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19603, 1);
+        GemVal _t19605 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19605, 1);
         gem_pop_frame();
-        return _t19603;
+        return _t19605;
     } else {
-    GemVal _t19604 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19606;
-    if (!gem_truthy(_t19604)) {
-        _t19606 = _t19604;
-    } else {
-    GemVal _t19605[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19606 = gem_has_key_fn(NULL, _t19605, 2);
-    }
-    GemVal _t19607;
+    GemVal _t19606 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19608;
     if (!gem_truthy(_t19606)) {
-        _t19607 = _t19606;
+        _t19608 = _t19606;
     } else {
-        _t19607 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("bool", 4));
+    GemVal _t19607[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19608 = gem_has_key_fn(NULL, _t19607, 2);
     }
-    if (gem_truthy(_t19607)) {
+    GemVal _t19609;
+    if (!gem_truthy(_t19608)) {
+        _t19609 = _t19608;
+    } else {
+        _t19609 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("bool", 4));
+    }
+    if (gem_truthy(_t19609)) {
 #line 395 "compiler/liveness.gem"
         gem_set_line(395);
-        GemVal _t19608 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19608, 1);
+        GemVal _t19610 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19610, 1);
         gem_pop_frame();
-        return _t19608;
+        return _t19610;
     } else {
-    GemVal _t19609 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19611;
-    if (!gem_truthy(_t19609)) {
-        _t19611 = _t19609;
-    } else {
-    GemVal _t19610[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19611 = gem_has_key_fn(NULL, _t19610, 2);
-    }
-    GemVal _t19612;
+    GemVal _t19611 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19613;
     if (!gem_truthy(_t19611)) {
-        _t19612 = _t19611;
+        _t19613 = _t19611;
     } else {
-        _t19612 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("nil", 3));
+    GemVal _t19612[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19613 = gem_has_key_fn(NULL, _t19612, 2);
     }
-    if (gem_truthy(_t19612)) {
+    GemVal _t19614;
+    if (!gem_truthy(_t19613)) {
+        _t19614 = _t19613;
+    } else {
+        _t19614 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("nil", 3));
+    }
+    if (gem_truthy(_t19614)) {
 #line 397 "compiler/liveness.gem"
         gem_set_line(397);
-        GemVal _t19613 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19613, 1);
+        GemVal _t19615 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19615, 1);
         gem_pop_frame();
-        return _t19613;
+        return _t19615;
     } else {
-    GemVal _t19614 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19616;
-    if (!gem_truthy(_t19614)) {
-        _t19616 = _t19614;
-    } else {
-    GemVal _t19615[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19616 = gem_has_key_fn(NULL, _t19615, 2);
-    }
-    GemVal _t19617;
+    GemVal _t19616 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19618;
     if (!gem_truthy(_t19616)) {
-        _t19617 = _t19616;
+        _t19618 = _t19616;
     } else {
-        _t19617 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("binop", 5));
+    GemVal _t19617[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19618 = gem_has_key_fn(NULL, _t19617, 2);
     }
     GemVal _t19619;
-    if (!gem_truthy(_t19617)) {
-        _t19619 = _t19617;
+    if (!gem_truthy(_t19618)) {
+        _t19619 = _t19618;
     } else {
-    GemVal _t19618[] = {gem_v___match_61, GEM_STR_LIT("left", 4)};
-        _t19619 = gem_has_key_fn(NULL, _t19618, 2);
+        _t19619 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("binop", 5));
     }
     GemVal _t19621;
     if (!gem_truthy(_t19619)) {
         _t19621 = _t19619;
     } else {
-    GemVal _t19620[] = {gem_v___match_61, GEM_STR_LIT("right", 5)};
+    GemVal _t19620[] = {gem_v___match_61, GEM_STR_LIT("left", 4)};
         _t19621 = gem_has_key_fn(NULL, _t19620, 2);
     }
-    if (gem_truthy(_t19621)) {
+    GemVal _t19623;
+    if (!gem_truthy(_t19621)) {
+        _t19623 = _t19621;
+    } else {
+    GemVal _t19622[] = {gem_v___match_61, GEM_STR_LIT("right", 5)};
+        _t19623 = gem_has_key_fn(NULL, _t19622, 2);
+    }
+    if (gem_truthy(_t19623)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_l = gem_table_get(gem_v___match_61, GEM_STR_LIT("left", 4));
@@ -86015,123 +86049,123 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
         GemVal gem_v_r = gem_table_get(gem_v___match_61, GEM_STR_LIT("right", 5));
 #line 399 "compiler/liveness.gem"
         gem_set_line(399);
-    GemVal _t19624 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19622 = gem_v_l;
-    GemVal _t19623[] = {_t19622, gem_v_into};
-    gem_check_callable(_t19624, "compiler/liveness.gem", 399);
-        (void)(_t19624.fn(_t19624.env, _t19623, 2));
+    GemVal _t19626 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19624 = gem_v_l;
+    GemVal _t19625[] = {_t19624, gem_v_into};
+    gem_check_callable(_t19626, "compiler/liveness.gem", 399);
+        (void)(_t19626.fn(_t19626.env, _t19625, 2));
 #line 400 "compiler/liveness.gem"
         gem_set_line(400);
-    GemVal _t19627 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19625 = gem_v_r;
-    GemVal _t19626[] = {_t19625, gem_v_into};
-    gem_check_callable(_t19627, "compiler/liveness.gem", 400);
-        GemVal _t19628 = _t19627.fn(_t19627.env, _t19626, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19628, 1);
+    GemVal _t19629 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19627 = gem_v_r;
+    GemVal _t19628[] = {_t19627, gem_v_into};
+    gem_check_callable(_t19629, "compiler/liveness.gem", 400);
+        GemVal _t19630 = _t19629.fn(_t19629.env, _t19628, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19630, 1);
         gem_pop_frame();
-        return _t19628;
+        return _t19630;
     } else {
-    GemVal _t19629 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19631;
-    if (!gem_truthy(_t19629)) {
-        _t19631 = _t19629;
-    } else {
-    GemVal _t19630[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19631 = gem_has_key_fn(NULL, _t19630, 2);
-    }
-    GemVal _t19632;
+    GemVal _t19631 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19633;
     if (!gem_truthy(_t19631)) {
-        _t19632 = _t19631;
+        _t19633 = _t19631;
     } else {
-        _t19632 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("unop", 4));
+    GemVal _t19632[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19633 = gem_has_key_fn(NULL, _t19632, 2);
     }
     GemVal _t19634;
-    if (!gem_truthy(_t19632)) {
-        _t19634 = _t19632;
+    if (!gem_truthy(_t19633)) {
+        _t19634 = _t19633;
     } else {
-    GemVal _t19633[] = {gem_v___match_61, GEM_STR_LIT("expr", 4)};
-        _t19634 = gem_has_key_fn(NULL, _t19633, 2);
+        _t19634 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("unop", 4));
     }
-    if (gem_truthy(_t19634)) {
+    GemVal _t19636;
+    if (!gem_truthy(_t19634)) {
+        _t19636 = _t19634;
+    } else {
+    GemVal _t19635[] = {gem_v___match_61, GEM_STR_LIT("expr", 4)};
+        _t19636 = gem_has_key_fn(NULL, _t19635, 2);
+    }
+    if (gem_truthy(_t19636)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_e = gem_table_get(gem_v___match_61, GEM_STR_LIT("expr", 4));
 #line 402 "compiler/liveness.gem"
         gem_set_line(402);
-    GemVal _t19637 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19635 = gem_v_e;
-    GemVal _t19636[] = {_t19635, gem_v_into};
-    gem_check_callable(_t19637, "compiler/liveness.gem", 402);
-        GemVal _t19638 = _t19637.fn(_t19637.env, _t19636, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19638, 1);
+    GemVal _t19639 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19637 = gem_v_e;
+    GemVal _t19638[] = {_t19637, gem_v_into};
+    gem_check_callable(_t19639, "compiler/liveness.gem", 402);
+        GemVal _t19640 = _t19639.fn(_t19639.env, _t19638, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19640, 1);
         gem_pop_frame();
-        return _t19638;
+        return _t19640;
     } else {
-    GemVal _t19639 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19641;
-    if (!gem_truthy(_t19639)) {
-        _t19641 = _t19639;
-    } else {
-    GemVal _t19640[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19641 = gem_has_key_fn(NULL, _t19640, 2);
-    }
-    GemVal _t19642;
+    GemVal _t19641 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19643;
     if (!gem_truthy(_t19641)) {
-        _t19642 = _t19641;
+        _t19643 = _t19641;
     } else {
-        _t19642 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("dot", 3));
+    GemVal _t19642[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19643 = gem_has_key_fn(NULL, _t19642, 2);
     }
     GemVal _t19644;
-    if (!gem_truthy(_t19642)) {
-        _t19644 = _t19642;
+    if (!gem_truthy(_t19643)) {
+        _t19644 = _t19643;
     } else {
-    GemVal _t19643[] = {gem_v___match_61, GEM_STR_LIT("object", 6)};
-        _t19644 = gem_has_key_fn(NULL, _t19643, 2);
+        _t19644 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("dot", 3));
     }
-    if (gem_truthy(_t19644)) {
+    GemVal _t19646;
+    if (!gem_truthy(_t19644)) {
+        _t19646 = _t19644;
+    } else {
+    GemVal _t19645[] = {gem_v___match_61, GEM_STR_LIT("object", 6)};
+        _t19646 = gem_has_key_fn(NULL, _t19645, 2);
+    }
+    if (gem_truthy(_t19646)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_o = gem_table_get(gem_v___match_61, GEM_STR_LIT("object", 6));
 #line 404 "compiler/liveness.gem"
         gem_set_line(404);
-    GemVal _t19647 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19645 = gem_v_o;
-    GemVal _t19646[] = {_t19645, gem_v_into};
-    gem_check_callable(_t19647, "compiler/liveness.gem", 404);
-        GemVal _t19648 = _t19647.fn(_t19647.env, _t19646, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19648, 1);
+    GemVal _t19649 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19647 = gem_v_o;
+    GemVal _t19648[] = {_t19647, gem_v_into};
+    gem_check_callable(_t19649, "compiler/liveness.gem", 404);
+        GemVal _t19650 = _t19649.fn(_t19649.env, _t19648, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19650, 1);
         gem_pop_frame();
-        return _t19648;
+        return _t19650;
     } else {
-    GemVal _t19649 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19651;
-    if (!gem_truthy(_t19649)) {
-        _t19651 = _t19649;
-    } else {
-    GemVal _t19650[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19651 = gem_has_key_fn(NULL, _t19650, 2);
-    }
-    GemVal _t19652;
+    GemVal _t19651 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19653;
     if (!gem_truthy(_t19651)) {
-        _t19652 = _t19651;
+        _t19653 = _t19651;
     } else {
-        _t19652 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("index", 5));
+    GemVal _t19652[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19653 = gem_has_key_fn(NULL, _t19652, 2);
     }
     GemVal _t19654;
-    if (!gem_truthy(_t19652)) {
-        _t19654 = _t19652;
+    if (!gem_truthy(_t19653)) {
+        _t19654 = _t19653;
     } else {
-    GemVal _t19653[] = {gem_v___match_61, GEM_STR_LIT("object", 6)};
-        _t19654 = gem_has_key_fn(NULL, _t19653, 2);
+        _t19654 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("index", 5));
     }
     GemVal _t19656;
     if (!gem_truthy(_t19654)) {
         _t19656 = _t19654;
     } else {
-    GemVal _t19655[] = {gem_v___match_61, GEM_STR_LIT("key", 3)};
+    GemVal _t19655[] = {gem_v___match_61, GEM_STR_LIT("object", 6)};
         _t19656 = gem_has_key_fn(NULL, _t19655, 2);
     }
-    if (gem_truthy(_t19656)) {
+    GemVal _t19658;
+    if (!gem_truthy(_t19656)) {
+        _t19658 = _t19656;
+    } else {
+    GemVal _t19657[] = {gem_v___match_61, GEM_STR_LIT("key", 3)};
+        _t19658 = gem_has_key_fn(NULL, _t19657, 2);
+    }
+    if (gem_truthy(_t19658)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_o = gem_table_get(gem_v___match_61, GEM_STR_LIT("object", 6));
@@ -86140,51 +86174,51 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
         GemVal gem_v_k = gem_table_get(gem_v___match_61, GEM_STR_LIT("key", 3));
 #line 406 "compiler/liveness.gem"
         gem_set_line(406);
-    GemVal _t19659 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19657 = gem_v_o;
-    GemVal _t19658[] = {_t19657, gem_v_into};
-    gem_check_callable(_t19659, "compiler/liveness.gem", 406);
-        (void)(_t19659.fn(_t19659.env, _t19658, 2));
+    GemVal _t19661 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19659 = gem_v_o;
+    GemVal _t19660[] = {_t19659, gem_v_into};
+    gem_check_callable(_t19661, "compiler/liveness.gem", 406);
+        (void)(_t19661.fn(_t19661.env, _t19660, 2));
 #line 407 "compiler/liveness.gem"
         gem_set_line(407);
-    GemVal _t19662 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19660 = gem_v_k;
-    GemVal _t19661[] = {_t19660, gem_v_into};
-    gem_check_callable(_t19662, "compiler/liveness.gem", 407);
-        GemVal _t19663 = _t19662.fn(_t19662.env, _t19661, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19663, 1);
+    GemVal _t19664 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19662 = gem_v_k;
+    GemVal _t19663[] = {_t19662, gem_v_into};
+    gem_check_callable(_t19664, "compiler/liveness.gem", 407);
+        GemVal _t19665 = _t19664.fn(_t19664.env, _t19663, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19665, 1);
         gem_pop_frame();
-        return _t19663;
+        return _t19665;
     } else {
-    GemVal _t19664 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19666;
-    if (!gem_truthy(_t19664)) {
-        _t19666 = _t19664;
-    } else {
-    GemVal _t19665[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19666 = gem_has_key_fn(NULL, _t19665, 2);
-    }
-    GemVal _t19667;
+    GemVal _t19666 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19668;
     if (!gem_truthy(_t19666)) {
-        _t19667 = _t19666;
+        _t19668 = _t19666;
     } else {
-        _t19667 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("call", 4));
+    GemVal _t19667[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19668 = gem_has_key_fn(NULL, _t19667, 2);
     }
     GemVal _t19669;
-    if (!gem_truthy(_t19667)) {
-        _t19669 = _t19667;
+    if (!gem_truthy(_t19668)) {
+        _t19669 = _t19668;
     } else {
-    GemVal _t19668[] = {gem_v___match_61, GEM_STR_LIT("func", 4)};
-        _t19669 = gem_has_key_fn(NULL, _t19668, 2);
+        _t19669 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("call", 4));
     }
     GemVal _t19671;
     if (!gem_truthy(_t19669)) {
         _t19671 = _t19669;
     } else {
-    GemVal _t19670[] = {gem_v___match_61, GEM_STR_LIT("args", 4)};
+    GemVal _t19670[] = {gem_v___match_61, GEM_STR_LIT("func", 4)};
         _t19671 = gem_has_key_fn(NULL, _t19670, 2);
     }
-    if (gem_truthy(_t19671)) {
+    GemVal _t19673;
+    if (!gem_truthy(_t19671)) {
+        _t19673 = _t19671;
+    } else {
+    GemVal _t19672[] = {gem_v___match_61, GEM_STR_LIT("args", 4)};
+        _t19673 = gem_has_key_fn(NULL, _t19672, 2);
+    }
+    if (gem_truthy(_t19673)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_func = gem_table_get(gem_v___match_61, GEM_STR_LIT("func", 4));
@@ -86193,11 +86227,11 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
         GemVal gem_v_args = gem_table_get(gem_v___match_61, GEM_STR_LIT("args", 4));
 #line 409 "compiler/liveness.gem"
         gem_set_line(409);
-    GemVal _t19674 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19672 = gem_v_func;
-    GemVal _t19673[] = {_t19672, gem_v_into};
-    gem_check_callable(_t19674, "compiler/liveness.gem", 409);
-        (void)(_t19674.fn(_t19674.env, _t19673, 2));
+    GemVal _t19676 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19674 = gem_v_func;
+    GemVal _t19675[] = {_t19674, gem_v_into};
+    gem_check_callable(_t19676, "compiler/liveness.gem", 409);
+        (void)(_t19676.fn(_t19676.env, _t19675, 2));
         {
 #line 410 "compiler/liveness.gem"
             gem_set_line(410);
@@ -86215,50 +86249,50 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_62, &gem_v_into, &gem_v___for_items_62};
                     gem_arena_reset_region(&_mk574, _rr, 3, NULL, 0);
                 }
-    GemVal _t19675 = gem_v___for_i_62;
-                if (!gem_truthy(gem_lt(_t19675, gem_for_len_1(gem_v___for_items_62)))) break;
+    GemVal _t19677 = gem_v___for_i_62;
+                if (!gem_truthy(gem_lt(_t19677, gem_for_len_1(gem_v___for_items_62)))) break;
 #line 410 "compiler/liveness.gem"
                 gem_set_line(410);
-    GemVal _t19676 = gem_v___for_items_62;
-                GemVal gem_v_a = gem_table_get(_t19676, gem_v___for_i_62);
+    GemVal _t19678 = gem_v___for_items_62;
+                GemVal gem_v_a = gem_table_get(_t19678, gem_v___for_i_62);
 #line 410 "compiler/liveness.gem"
                 gem_set_line(410);
                 gem_v___for_i_62 = gem_add(gem_v___for_i_62, gem_int(1));
 #line 411 "compiler/liveness.gem"
                 gem_set_line(411);
-    GemVal _t19679 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19677 = gem_v_a;
-    GemVal _t19678[] = {_t19677, gem_v_into};
-    gem_check_callable(_t19679, "compiler/liveness.gem", 411);
-                (void)(_t19679.fn(_t19679.env, _t19678, 2));
+    GemVal _t19681 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19679 = gem_v_a;
+    GemVal _t19680[] = {_t19679, gem_v_into};
+    gem_check_callable(_t19681, "compiler/liveness.gem", 411);
+                (void)(_t19681.fn(_t19681.env, _t19680, 2));
             }
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
             gem_pop_frame();
             return GEM_NIL;
         }
     } else {
-    GemVal _t19680 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19682;
-    if (!gem_truthy(_t19680)) {
-        _t19682 = _t19680;
-    } else {
-    GemVal _t19681[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19682 = gem_has_key_fn(NULL, _t19681, 2);
-    }
-    GemVal _t19683;
+    GemVal _t19682 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19684;
     if (!gem_truthy(_t19682)) {
-        _t19683 = _t19682;
+        _t19684 = _t19682;
     } else {
-        _t19683 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("table", 5));
+    GemVal _t19683[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19684 = gem_has_key_fn(NULL, _t19683, 2);
     }
     GemVal _t19685;
-    if (!gem_truthy(_t19683)) {
-        _t19685 = _t19683;
+    if (!gem_truthy(_t19684)) {
+        _t19685 = _t19684;
     } else {
-    GemVal _t19684[] = {gem_v___match_61, GEM_STR_LIT("entries", 7)};
-        _t19685 = gem_has_key_fn(NULL, _t19684, 2);
+        _t19685 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("table", 5));
     }
-    if (gem_truthy(_t19685)) {
+    GemVal _t19687;
+    if (!gem_truthy(_t19685)) {
+        _t19687 = _t19685;
+    } else {
+    GemVal _t19686[] = {gem_v___match_61, GEM_STR_LIT("entries", 7)};
+        _t19687 = gem_has_key_fn(NULL, _t19686, 2);
+    }
+    if (gem_truthy(_t19687)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_entries = gem_table_get(gem_v___match_61, GEM_STR_LIT("entries", 7));
@@ -86279,52 +86313,52 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_63, &gem_v_into, &gem_v___for_items_63};
                     gem_arena_reset_region(&_mk575, _rr, 3, NULL, 0);
                 }
-    GemVal _t19686 = gem_v___for_i_63;
-                if (!gem_truthy(gem_lt(_t19686, gem_for_len_1(gem_v___for_items_63)))) break;
+    GemVal _t19688 = gem_v___for_i_63;
+                if (!gem_truthy(gem_lt(_t19688, gem_for_len_1(gem_v___for_items_63)))) break;
 #line 414 "compiler/liveness.gem"
                 gem_set_line(414);
-    GemVal _t19687 = gem_v___for_items_63;
-                GemVal gem_v_e = gem_table_get(_t19687, gem_v___for_i_63);
+    GemVal _t19689 = gem_v___for_items_63;
+                GemVal gem_v_e = gem_table_get(_t19689, gem_v___for_i_63);
 #line 414 "compiler/liveness.gem"
                 gem_set_line(414);
                 gem_v___for_i_63 = gem_add(gem_v___for_i_63, gem_int(1));
 #line 415 "compiler/liveness.gem"
                 gem_set_line(415);
-    GemVal _t19691 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19688 = gem_v_e;
+    GemVal _t19693 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19690 = gem_v_e;
     static GemICacheSlot _ic_2828 = {0};
-    GemVal _t19689 = gem_table_get_cached(_t19688, "value", &_ic_2828);
-    GemVal _t19690[] = {_t19689, gem_v_into};
-    gem_check_callable(_t19691, "compiler/liveness.gem", 415);
-                (void)(_t19691.fn(_t19691.env, _t19690, 2));
+    GemVal _t19691 = gem_table_get_cached(_t19690, "value", &_ic_2828);
+    GemVal _t19692[] = {_t19691, gem_v_into};
+    gem_check_callable(_t19693, "compiler/liveness.gem", 415);
+                (void)(_t19693.fn(_t19693.env, _t19692, 2));
             }
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
             gem_pop_frame();
             return GEM_NIL;
         }
     } else {
-    GemVal _t19692 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19694;
-    if (!gem_truthy(_t19692)) {
-        _t19694 = _t19692;
-    } else {
-    GemVal _t19693[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19694 = gem_has_key_fn(NULL, _t19693, 2);
-    }
-    GemVal _t19695;
+    GemVal _t19694 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19696;
     if (!gem_truthy(_t19694)) {
-        _t19695 = _t19694;
+        _t19696 = _t19694;
     } else {
-        _t19695 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("array", 5));
+    GemVal _t19695[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19696 = gem_has_key_fn(NULL, _t19695, 2);
     }
     GemVal _t19697;
-    if (!gem_truthy(_t19695)) {
-        _t19697 = _t19695;
+    if (!gem_truthy(_t19696)) {
+        _t19697 = _t19696;
     } else {
-    GemVal _t19696[] = {gem_v___match_61, GEM_STR_LIT("elements", 8)};
-        _t19697 = gem_has_key_fn(NULL, _t19696, 2);
+        _t19697 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("array", 5));
     }
-    if (gem_truthy(_t19697)) {
+    GemVal _t19699;
+    if (!gem_truthy(_t19697)) {
+        _t19699 = _t19697;
+    } else {
+    GemVal _t19698[] = {gem_v___match_61, GEM_STR_LIT("elements", 8)};
+        _t19699 = gem_has_key_fn(NULL, _t19698, 2);
+    }
+    if (gem_truthy(_t19699)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_elements = gem_table_get(gem_v___match_61, GEM_STR_LIT("elements", 8));
@@ -86345,50 +86379,50 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_64, &gem_v_into, &gem_v___for_items_64};
                     gem_arena_reset_region(&_mk576, _rr, 3, NULL, 0);
                 }
-    GemVal _t19698 = gem_v___for_i_64;
-                if (!gem_truthy(gem_lt(_t19698, gem_for_len_1(gem_v___for_items_64)))) break;
+    GemVal _t19700 = gem_v___for_i_64;
+                if (!gem_truthy(gem_lt(_t19700, gem_for_len_1(gem_v___for_items_64)))) break;
 #line 418 "compiler/liveness.gem"
                 gem_set_line(418);
-    GemVal _t19699 = gem_v___for_items_64;
-                GemVal gem_v_e = gem_table_get(_t19699, gem_v___for_i_64);
+    GemVal _t19701 = gem_v___for_items_64;
+                GemVal gem_v_e = gem_table_get(_t19701, gem_v___for_i_64);
 #line 418 "compiler/liveness.gem"
                 gem_set_line(418);
                 gem_v___for_i_64 = gem_add(gem_v___for_i_64, gem_int(1));
 #line 419 "compiler/liveness.gem"
                 gem_set_line(419);
-    GemVal _t19702 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19700 = gem_v_e;
-    GemVal _t19701[] = {_t19700, gem_v_into};
-    gem_check_callable(_t19702, "compiler/liveness.gem", 419);
-                (void)(_t19702.fn(_t19702.env, _t19701, 2));
+    GemVal _t19704 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19702 = gem_v_e;
+    GemVal _t19703[] = {_t19702, gem_v_into};
+    gem_check_callable(_t19704, "compiler/liveness.gem", 419);
+                (void)(_t19704.fn(_t19704.env, _t19703, 2));
             }
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
             gem_pop_frame();
             return GEM_NIL;
         }
     } else {
-    GemVal _t19703 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19705;
-    if (!gem_truthy(_t19703)) {
-        _t19705 = _t19703;
-    } else {
-    GemVal _t19704[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19705 = gem_has_key_fn(NULL, _t19704, 2);
-    }
-    GemVal _t19706;
+    GemVal _t19705 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19707;
     if (!gem_truthy(_t19705)) {
-        _t19706 = _t19705;
+        _t19707 = _t19705;
     } else {
-        _t19706 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("interp", 6));
+    GemVal _t19706[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19707 = gem_has_key_fn(NULL, _t19706, 2);
     }
     GemVal _t19708;
-    if (!gem_truthy(_t19706)) {
-        _t19708 = _t19706;
+    if (!gem_truthy(_t19707)) {
+        _t19708 = _t19707;
     } else {
-    GemVal _t19707[] = {gem_v___match_61, GEM_STR_LIT("parts", 5)};
-        _t19708 = gem_has_key_fn(NULL, _t19707, 2);
+        _t19708 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("interp", 6));
     }
-    if (gem_truthy(_t19708)) {
+    GemVal _t19710;
+    if (!gem_truthy(_t19708)) {
+        _t19710 = _t19708;
+    } else {
+    GemVal _t19709[] = {gem_v___match_61, GEM_STR_LIT("parts", 5)};
+        _t19710 = gem_has_key_fn(NULL, _t19709, 2);
+    }
+    if (gem_truthy(_t19710)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_parts = gem_table_get(gem_v___match_61, GEM_STR_LIT("parts", 5));
@@ -86409,57 +86443,57 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_65, &gem_v_into, &gem_v___for_items_65};
                     gem_arena_reset_region(&_mk577, _rr, 3, NULL, 0);
                 }
-    GemVal _t19709 = gem_v___for_i_65;
-                if (!gem_truthy(gem_lt(_t19709, gem_for_len_1(gem_v___for_items_65)))) break;
+    GemVal _t19711 = gem_v___for_i_65;
+                if (!gem_truthy(gem_lt(_t19711, gem_for_len_1(gem_v___for_items_65)))) break;
 #line 422 "compiler/liveness.gem"
                 gem_set_line(422);
-    GemVal _t19710 = gem_v___for_items_65;
-                GemVal gem_v_p = gem_table_get(_t19710, gem_v___for_i_65);
+    GemVal _t19712 = gem_v___for_items_65;
+                GemVal gem_v_p = gem_table_get(_t19712, gem_v___for_i_65);
 #line 422 "compiler/liveness.gem"
                 gem_set_line(422);
                 gem_v___for_i_65 = gem_add(gem_v___for_i_65, gem_int(1));
 #line 423 "compiler/liveness.gem"
                 gem_set_line(423);
-    GemVal _t19713 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19711 = gem_v_p;
-    GemVal _t19712[] = {_t19711, gem_v_into};
-    gem_check_callable(_t19713, "compiler/liveness.gem", 423);
-                (void)(_t19713.fn(_t19713.env, _t19712, 2));
+    GemVal _t19715 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19713 = gem_v_p;
+    GemVal _t19714[] = {_t19713, gem_v_into};
+    gem_check_callable(_t19715, "compiler/liveness.gem", 423);
+                (void)(_t19715.fn(_t19715.env, _t19714, 2));
             }
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
             gem_pop_frame();
             return GEM_NIL;
         }
     } else {
-    GemVal _t19714 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
-    GemVal _t19716;
-    if (!gem_truthy(_t19714)) {
-        _t19716 = _t19714;
-    } else {
-    GemVal _t19715[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
-        _t19716 = gem_has_key_fn(NULL, _t19715, 2);
-    }
-    GemVal _t19717;
+    GemVal _t19716 = gem_eq(gem_type_1(gem_v___match_61), GEM_STR_LIT("table", 5));
+    GemVal _t19718;
     if (!gem_truthy(_t19716)) {
-        _t19717 = _t19716;
+        _t19718 = _t19716;
     } else {
-        _t19717 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("anon_fn", 7));
+    GemVal _t19717[] = {gem_v___match_61, GEM_STR_LIT("tag", 3)};
+        _t19718 = gem_has_key_fn(NULL, _t19717, 2);
     }
     GemVal _t19719;
-    if (!gem_truthy(_t19717)) {
-        _t19719 = _t19717;
+    if (!gem_truthy(_t19718)) {
+        _t19719 = _t19718;
     } else {
-    GemVal _t19718[] = {gem_v___match_61, GEM_STR_LIT("params", 6)};
-        _t19719 = gem_has_key_fn(NULL, _t19718, 2);
+        _t19719 = gem_eq(gem_table_get(gem_v___match_61, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("anon_fn", 7));
     }
     GemVal _t19721;
     if (!gem_truthy(_t19719)) {
         _t19721 = _t19719;
     } else {
-    GemVal _t19720[] = {gem_v___match_61, GEM_STR_LIT("body", 4)};
+    GemVal _t19720[] = {gem_v___match_61, GEM_STR_LIT("params", 6)};
         _t19721 = gem_has_key_fn(NULL, _t19720, 2);
     }
-    if (gem_truthy(_t19721)) {
+    GemVal _t19723;
+    if (!gem_truthy(_t19721)) {
+        _t19723 = _t19721;
+    } else {
+    GemVal _t19722[] = {gem_v___match_61, GEM_STR_LIT("body", 4)};
+        _t19723 = gem_has_key_fn(NULL, _t19722, 2);
+    }
+    if (gem_truthy(_t19723)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_params = gem_table_get(gem_v___match_61, GEM_STR_LIT("params", 6));
@@ -86468,42 +86502,42 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
         GemVal gem_v_body = gem_table_get(gem_v___match_61, GEM_STR_LIT("body", 4));
 #line 426 "compiler/liveness.gem"
         gem_set_line(426);
-    GemVal _t19722[] = {gem_v_params};
-        GemVal gem_v_inner = gem_fn___mod_liveness_sorted_params_to_set(NULL, _t19722, 1);
+    GemVal _t19724[] = {gem_v_params};
+        GemVal gem_v_inner = gem_fn___mod_liveness_sorted_params_to_set(NULL, _t19724, 1);
 #line 427 "compiler/liveness.gem"
         gem_set_line(427);
-    GemVal _t19723 = gem_v_node;
+    GemVal _t19725 = gem_v_node;
     static GemICacheSlot _ic_2829 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t19723, "rest_param", &_ic_2829), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t19725, "rest_param", &_ic_2829), GEM_NIL))) {
 #line 428 "compiler/liveness.gem"
             gem_set_line(428);
-    GemVal _t19725 = gem_v_inner;
-    GemVal _t19724 = gem_v_node;
+    GemVal _t19727 = gem_v_inner;
+    GemVal _t19726 = gem_v_node;
     static GemICacheSlot _ic_2830 = {0};
-            gem_table_set(_t19725, gem_table_get_cached(_t19724, "rest_param", &_ic_2830), gem_bool(1));
+            gem_table_set(_t19727, gem_table_get_cached(_t19726, "rest_param", &_ic_2830), gem_bool(1));
         }
 #line 430 "compiler/liveness.gem"
         gem_set_line(430);
-    GemVal _t19726 = gem_table_new_braces();
-        GemVal gem_v_free = _t19726;
+    GemVal _t19728 = gem_table_new_braces();
+        GemVal gem_v_free = _t19728;
 #line 431 "compiler/liveness.gem"
         gem_set_line(431);
-    GemVal _t19730 = gem_g___mod_liveness__collect_free_stmts;
-    GemVal _t19728 = gem_v_body;
-    GemVal _t19727 = gem_v_inner;
-    GemVal _t19729[] = {_t19728, _t19727, gem_v_free};
-    gem_check_callable(_t19730, "compiler/liveness.gem", 431);
-        (void)(_t19730.fn(_t19730.env, _t19729, 3));
+    GemVal _t19732 = gem_g___mod_liveness__collect_free_stmts;
+    GemVal _t19730 = gem_v_body;
+    GemVal _t19729 = gem_v_inner;
+    GemVal _t19731[] = {_t19730, _t19729, gem_v_free};
+    gem_check_callable(_t19732, "compiler/liveness.gem", 431);
+        (void)(_t19732.fn(_t19732.env, _t19731, 3));
 #line 432 "compiler/liveness.gem"
         gem_set_line(432);
-    GemVal _t19731 = gem_v_node;
+    GemVal _t19733 = gem_v_node;
     static GemICacheSlot _ic_2831 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t19731, "defaults", &_ic_2831), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t19733, "defaults", &_ic_2831), GEM_NIL))) {
 #line 433 "compiler/liveness.gem"
             gem_set_line(433);
-    GemVal _t19732 = gem_v_node;
+    GemVal _t19734 = gem_v_node;
     static GemICacheSlot _ic_2832 = {0};
-            GemVal gem_v___for_items_66 = gem_for_items_1(gem_table_get_cached(_t19732, "defaults", &_ic_2832));
+            GemVal gem_v___for_items_66 = gem_for_items_1(gem_table_get_cached(_t19734, "defaults", &_ic_2832));
 #line 433 "compiler/liveness.gem"
             gem_set_line(433);
             GemVal gem_v___for_i_66 = gem_int(0);
@@ -86517,12 +86551,12 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v_into, &gem_v_free, &gem_v___for_i_66, &gem_v_inner, &gem_v___for_items_66};
                     gem_arena_reset_region(&_mk578, _rr, 5, NULL, 0);
                 }
-    GemVal _t19733 = gem_v___for_i_66;
-                if (!gem_truthy(gem_lt(_t19733, gem_for_len_1(gem_v___for_items_66)))) break;
+    GemVal _t19735 = gem_v___for_i_66;
+                if (!gem_truthy(gem_lt(_t19735, gem_for_len_1(gem_v___for_items_66)))) break;
 #line 433 "compiler/liveness.gem"
                 gem_set_line(433);
-    GemVal _t19734 = gem_v___for_items_66;
-                GemVal gem_v_d = gem_table_get(_t19734, gem_v___for_i_66);
+    GemVal _t19736 = gem_v___for_items_66;
+                GemVal gem_v_d = gem_table_get(_t19736, gem_v___for_i_66);
 #line 433 "compiler/liveness.gem"
                 gem_set_line(433);
                 gem_v___for_i_66 = gem_add(gem_v___for_i_66, gem_int(1));
@@ -86531,24 +86565,24 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
                 if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
 #line 435 "compiler/liveness.gem"
                     gem_set_line(435);
-    GemVal _t19738 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t19736 = gem_v_d;
-    GemVal _t19735 = gem_v_inner;
-    GemVal _t19737[] = {_t19736, _t19735, gem_v_free};
-    gem_check_callable(_t19738, "compiler/liveness.gem", 435);
-                    (void)(_t19738.fn(_t19738.env, _t19737, 3));
+    GemVal _t19740 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t19738 = gem_v_d;
+    GemVal _t19737 = gem_v_inner;
+    GemVal _t19739[] = {_t19738, _t19737, gem_v_free};
+    gem_check_callable(_t19740, "compiler/liveness.gem", 435);
+                    (void)(_t19740.fn(_t19740.env, _t19739, 3));
                 }
             }
 
         }
 #line 439 "compiler/liveness.gem"
         gem_set_line(439);
-    GemVal _t19739 = gem_v_into;
-    GemVal _t19740[] = {_t19739, gem_v_free};
-        GemVal _t19741 = gem_fn___mod_liveness_lset_union_into(NULL, _t19740, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19741, 1);
+    GemVal _t19741 = gem_v_into;
+    GemVal _t19742[] = {_t19741, gem_v_free};
+        GemVal _t19743 = gem_fn___mod_liveness_lset_union_into(NULL, _t19742, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19743, 1);
         gem_pop_frame();
-        return _t19741;
+        return _t19743;
     } else {
         {
 #line 442 "compiler/liveness.gem"
@@ -86570,43 +86604,43 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_67, &gem_v___for_len_67, &gem_v_into, &gem_v___for_tbl_67};
                     gem_arena_reset_region(&_mk579, _rr, 4, NULL, 0);
                 }
-    GemVal _t19742 = gem_v___for_i_67;
-                if (!gem_truthy(gem_lt(_t19742, gem_v___for_len_67))) break;
+    GemVal _t19744 = gem_v___for_i_67;
+                if (!gem_truthy(gem_lt(_t19744, gem_v___for_len_67))) break;
 #line 442 "compiler/liveness.gem"
                 gem_set_line(442);
-    GemVal _t19743 = gem_v___for_tbl_67;
-                GemVal gem_v_nk = gem_table_key_at_2(_t19743, gem_v___for_i_67);
+    GemVal _t19745 = gem_v___for_tbl_67;
+                GemVal gem_v_nk = gem_table_key_at_2(_t19745, gem_v___for_i_67);
 #line 442 "compiler/liveness.gem"
                 gem_set_line(442);
-    GemVal _t19744 = gem_v___for_tbl_67;
-                GemVal gem_v_v = gem_table_val_at_2(_t19744, gem_v___for_i_67);
+    GemVal _t19746 = gem_v___for_tbl_67;
+                GemVal gem_v_v = gem_table_val_at_2(_t19746, gem_v___for_i_67);
 #line 442 "compiler/liveness.gem"
                 gem_set_line(442);
                 gem_v___for_i_67 = gem_add(gem_v___for_i_67, gem_int(1));
 #line 443 "compiler/liveness.gem"
                 gem_set_line(443);
-    GemVal _t19745 = gem_neq(gem_v_nk, GEM_STR_LIT("tag", 3));
-    GemVal _t19746;
-    if (!gem_truthy(_t19745)) {
-        _t19746 = _t19745;
+    GemVal _t19747 = gem_neq(gem_v_nk, GEM_STR_LIT("tag", 3));
+    GemVal _t19748;
+    if (!gem_truthy(_t19747)) {
+        _t19748 = _t19747;
     } else {
-        _t19746 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
+        _t19748 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
     }
-                if (gem_truthy(_t19746)) {
+                if (gem_truthy(_t19748)) {
 #line 444 "compiler/liveness.gem"
                     gem_set_line(444);
-    GemVal _t19747[] = {gem_v_v};
-                    GemVal gem_v_vks = gem_keys_fn(NULL, _t19747, 1);
+    GemVal _t19749[] = {gem_v_v};
+                    GemVal gem_v_vks = gem_keys_fn(NULL, _t19749, 1);
 #line 445 "compiler/liveness.gem"
                     gem_set_line(445);
-    GemVal _t19748 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
-    GemVal _t19749;
-    if (!gem_truthy(_t19748)) {
-        _t19749 = _t19748;
+    GemVal _t19750 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
+    GemVal _t19751;
+    if (!gem_truthy(_t19750)) {
+        _t19751 = _t19750;
     } else {
-        _t19749 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
+        _t19751 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
     }
-                    if (gem_truthy(_t19749)) {
+                    if (gem_truthy(_t19751)) {
 #line 446 "compiler/liveness.gem"
                         gem_set_line(446);
                         GemVal gem_v_vi = gem_int(0);
@@ -86620,20 +86654,20 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
                                 GemVal *_rr[] = {&gem_v___for_i_67, &gem_v___for_len_67, &gem_v_into, &gem_v___for_tbl_67, &gem_v_v, &gem_v_vi};
                                 gem_arena_reset_region(&_mk580, _rr, 6, NULL, 0);
                             }
-    GemVal _t19750 = gem_v_vi;
-                            if (!gem_truthy(gem_lt(_t19750, gem_len_1(gem_v_v)))) break;
+    GemVal _t19752 = gem_v_vi;
+                            if (!gem_truthy(gem_lt(_t19752, gem_len_1(gem_v_v)))) break;
 #line 448 "compiler/liveness.gem"
                             gem_set_line(448);
-    GemVal _t19751 = gem_v_v;
-                            if (gem_truthy(gem_eq(gem_type_1(gem_table_get(_t19751, gem_v_vi)), GEM_STR_LIT("table", 5)))) {
+    GemVal _t19753 = gem_v_v;
+                            if (gem_truthy(gem_eq(gem_type_1(gem_table_get(_t19753, gem_v_vi)), GEM_STR_LIT("table", 5)))) {
 #line 449 "compiler/liveness.gem"
                                 gem_set_line(449);
-    GemVal _t19755 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19752 = gem_v_v;
-    GemVal _t19753 = gem_table_get(_t19752, gem_v_vi);
-    GemVal _t19754[] = {_t19753, gem_v_into};
-    gem_check_callable(_t19755, "compiler/liveness.gem", 449);
-                                (void)(_t19755.fn(_t19755.env, _t19754, 2));
+    GemVal _t19757 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19754 = gem_v_v;
+    GemVal _t19755 = gem_table_get(_t19754, gem_v_vi);
+    GemVal _t19756[] = {_t19755, gem_v_into};
+    gem_check_callable(_t19757, "compiler/liveness.gem", 449);
+                                (void)(_t19757.fn(_t19757.env, _t19756, 2));
                             }
 #line 451 "compiler/liveness.gem"
                             gem_set_line(451);
@@ -86642,11 +86676,11 @@ static GemVal __anon_197(void *_env, GemVal *args, int argc) {
                     } else {
 #line 454 "compiler/liveness.gem"
                         gem_set_line(454);
-    GemVal _t19758 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19756 = gem_v_v;
-    GemVal _t19757[] = {_t19756, gem_v_into};
-    gem_check_callable(_t19758, "compiler/liveness.gem", 454);
-                        (void)(_t19758.fn(_t19758.env, _t19757, 2));
+    GemVal _t19760 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19758 = gem_v_v;
+    GemVal _t19759[] = {_t19758, gem_v_into};
+    gem_check_callable(_t19760, "compiler/liveness.gem", 454);
+                        (void)(_t19760.fn(_t19760.env, _t19759, 2));
                     }
                 }
             }
@@ -86682,8 +86716,8 @@ static GemVal __anon_198(void *_env, GemVal *args, int argc) {
     gem_arena_point(&_ret_pt);
 #line 482 "compiler/liveness.gem"
     gem_set_line(482);
-    GemVal _t19759[] = {gem_v_live_out};
-    GemVal gem_v_live = gem_fn___mod_liveness_lset_copy(NULL, _t19759, 1);
+    GemVal _t19761[] = {gem_v_live_out};
+    GemVal gem_v_live = gem_fn___mod_liveness_lset_copy(NULL, _t19761, 1);
 #line 483 "compiler/liveness.gem"
     gem_set_line(483);
     GemVal gem_v_i = gem_sub(gem_len_1(gem_v_stmts), gem_int(1));
@@ -86700,22 +86734,22 @@ static GemVal __anon_198(void *_env, GemVal *args, int argc) {
         if (!gem_truthy(gem_ge(gem_v_i, gem_int(0)))) break;
 #line 485 "compiler/liveness.gem"
         gem_set_line(485);
-    GemVal _t19763 = gem_g___mod_liveness__transfer_stmt;
-    GemVal _t19760 = gem_v_stmts;
-    GemVal _t19761 = gem_table_get(_t19760, gem_v_i);
-    GemVal _t19762[] = {_t19761, gem_v_live};
-    gem_check_callable(_t19763, "compiler/liveness.gem", 485);
-        gem_v_live = _t19763.fn(_t19763.env, _t19762, 2);
+    GemVal _t19765 = gem_g___mod_liveness__transfer_stmt;
+    GemVal _t19762 = gem_v_stmts;
+    GemVal _t19763 = gem_table_get(_t19762, gem_v_i);
+    GemVal _t19764[] = {_t19763, gem_v_live};
+    gem_check_callable(_t19765, "compiler/liveness.gem", 485);
+        gem_v_live = _t19765.fn(_t19765.env, _t19764, 2);
 #line 486 "compiler/liveness.gem"
         gem_set_line(486);
         gem_v_i = gem_sub(gem_v_i, gem_int(1));
     }
 #line 488 "compiler/liveness.gem"
     gem_set_line(488);
-    GemVal _t19764 = gem_v_live;
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19764, 1);
+    GemVal _t19766 = gem_v_live;
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19766, 1);
     gem_pop_frame();
-    return _t19764;
+    return _t19766;
 }
 
 struct _closure___anon_199 {
@@ -86729,8 +86763,8 @@ static GemVal __anon_199(void *_env, GemVal *args, int argc) {
     gem_arena_point(&_ret_pt);
 #line 496 "compiler/liveness.gem"
     gem_set_line(496);
-    GemVal _t19765 = gem_table_new_braces();
-    GemVal gem_v_live_top = _t19765;
+    GemVal _t19767 = gem_table_new_braces();
+    GemVal gem_v_live_top = _t19767;
 #line 497 "compiler/liveness.gem"
     gem_set_line(497);
     GemVal gem_v_prev = GEM_NIL;
@@ -86750,63 +86784,63 @@ static GemVal __anon_199(void *_env, GemVal *args, int argc) {
         if (!gem_truthy(gem_lt(gem_v_iter, gem_int(64)))) break;
 #line 500 "compiler/liveness.gem"
         gem_set_line(500);
-    GemVal _t19766[] = {gem_v_live_top};
-        GemVal gem_v_live_after_body = gem_fn___mod_liveness_lset_copy(NULL, _t19766, 1);
+    GemVal _t19768[] = {gem_v_live_top};
+        GemVal gem_v_live_after_body = gem_fn___mod_liveness_lset_copy(NULL, _t19768, 1);
 #line 505 "compiler/liveness.gem"
         gem_set_line(505);
-    GemVal _t19767 = gem_v_live_after_body;
-    GemVal _t19768[] = {_t19767, gem_v_live_after};
-        (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19768, 2));
+    GemVal _t19769 = gem_v_live_after_body;
+    GemVal _t19770[] = {_t19769, gem_v_live_after};
+        (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19770, 2));
 #line 506 "compiler/liveness.gem"
         gem_set_line(506);
-    GemVal _t19772 = gem_g___mod_liveness__transfer_stmts;
-    GemVal _t19769 = gem_v_while_node;
+    GemVal _t19774 = gem_g___mod_liveness__transfer_stmts;
+    GemVal _t19771 = gem_v_while_node;
     static GemICacheSlot _ic_2833 = {0};
-    GemVal _t19770 = gem_table_get_cached(_t19769, "body", &_ic_2833);
-    GemVal _t19771[] = {_t19770, gem_v_live_after_body};
-    gem_check_callable(_t19772, "compiler/liveness.gem", 506);
-        GemVal gem_v_live_in_body = _t19772.fn(_t19772.env, _t19771, 2);
+    GemVal _t19772 = gem_table_get_cached(_t19771, "body", &_ic_2833);
+    GemVal _t19773[] = {_t19772, gem_v_live_after_body};
+    gem_check_callable(_t19774, "compiler/liveness.gem", 506);
+        GemVal gem_v_live_in_body = _t19774.fn(_t19774.env, _t19773, 2);
 #line 507 "compiler/liveness.gem"
         gem_set_line(507);
-    GemVal _t19773 = gem_table_new_braces();
-        GemVal gem_v_new_top = _t19773;
+    GemVal _t19775 = gem_table_new_braces();
+        GemVal gem_v_new_top = _t19775;
 #line 508 "compiler/liveness.gem"
         gem_set_line(508);
-    GemVal _t19777 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19774 = gem_v_while_node;
+    GemVal _t19779 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19776 = gem_v_while_node;
     static GemICacheSlot _ic_2834 = {0};
-    GemVal _t19775 = gem_table_get_cached(_t19774, "cond", &_ic_2834);
-    GemVal _t19776[] = {_t19775, gem_v_new_top};
-    gem_check_callable(_t19777, "compiler/liveness.gem", 508);
-        (void)(_t19777.fn(_t19777.env, _t19776, 2));
+    GemVal _t19777 = gem_table_get_cached(_t19776, "cond", &_ic_2834);
+    GemVal _t19778[] = {_t19777, gem_v_new_top};
+    gem_check_callable(_t19779, "compiler/liveness.gem", 508);
+        (void)(_t19779.fn(_t19779.env, _t19778, 2));
 #line 509 "compiler/liveness.gem"
         gem_set_line(509);
-    GemVal _t19778 = gem_v_new_top;
-    GemVal _t19779[] = {_t19778, gem_v_live_in_body};
-        (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19779, 2));
+    GemVal _t19780 = gem_v_new_top;
+    GemVal _t19781[] = {_t19780, gem_v_live_in_body};
+        (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19781, 2));
 #line 510 "compiler/liveness.gem"
         gem_set_line(510);
-    GemVal _t19780 = gem_neq(gem_v_prev, GEM_NIL);
-    GemVal _t19783;
-    if (!gem_truthy(_t19780)) {
-        _t19783 = _t19780;
+    GemVal _t19782 = gem_neq(gem_v_prev, GEM_NIL);
+    GemVal _t19785;
+    if (!gem_truthy(_t19782)) {
+        _t19785 = _t19782;
     } else {
-    GemVal _t19781 = gem_v_new_top;
-    GemVal _t19782[] = {_t19781, gem_v_prev};
-        _t19783 = gem_fn___mod_liveness_lset_eq(NULL, _t19782, 2);
+    GemVal _t19783 = gem_v_new_top;
+    GemVal _t19784[] = {_t19783, gem_v_prev};
+        _t19785 = gem_fn___mod_liveness_lset_eq(NULL, _t19784, 2);
     }
-        if (gem_truthy(_t19783)) {
+        if (gem_truthy(_t19785)) {
 #line 511 "compiler/liveness.gem"
             gem_set_line(511);
-            GemVal _t19784 = gem_v_new_top;
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19784, 1);
+            GemVal _t19786 = gem_v_new_top;
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19786, 1);
             gem_pop_frame();
-            return _t19784;
+            return _t19786;
         }
 #line 513 "compiler/liveness.gem"
         gem_set_line(513);
-    GemVal _t19785[] = {gem_v_new_top};
-        gem_v_prev = gem_fn___mod_liveness_lset_copy(NULL, _t19785, 1);
+    GemVal _t19787[] = {gem_v_new_top};
+        gem_v_prev = gem_fn___mod_liveness_lset_copy(NULL, _t19787, 1);
 #line 514 "compiler/liveness.gem"
         gem_set_line(514);
         gem_v_live_top = gem_v_new_top;
@@ -86816,10 +86850,10 @@ static GemVal __anon_199(void *_env, GemVal *args, int argc) {
     }
 #line 517 "compiler/liveness.gem"
     gem_set_line(517);
-    GemVal _t19786 = gem_v_live_top;
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19786, 1);
+    GemVal _t19788 = gem_v_live_top;
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19788, 1);
     gem_pop_frame();
-    return _t19786;
+    return _t19788;
 }
 
 struct _closure___anon_200 {
@@ -86836,62 +86870,62 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_s, GEM_NIL))) {
 #line 522 "compiler/liveness.gem"
         gem_set_line(522);
-        GemVal _t19787 = gem_v_live_out;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19787, 1);
+        GemVal _t19789 = gem_v_live_out;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19789, 1);
         gem_pop_frame();
-        return _t19787;
+        return _t19789;
     }
 #line 524 "compiler/liveness.gem"
     gem_set_line(524);
-    GemVal _t19788 = gem_neq(gem_type_1(gem_v_s), GEM_STR_LIT("table", 5));
-    GemVal _t19790;
-    if (gem_truthy(_t19788)) {
-        _t19790 = _t19788;
-    } else {
-    GemVal _t19789 = gem_v_s;
-    static GemICacheSlot _ic_2835 = {0};
-        _t19790 = gem_eq(gem_table_get_cached(_t19789, "tag", &_ic_2835), GEM_NIL);
-    }
+    GemVal _t19790 = gem_neq(gem_type_1(gem_v_s), GEM_STR_LIT("table", 5));
+    GemVal _t19792;
     if (gem_truthy(_t19790)) {
+        _t19792 = _t19790;
+    } else {
+    GemVal _t19791 = gem_v_s;
+    static GemICacheSlot _ic_2835 = {0};
+        _t19792 = gem_eq(gem_table_get_cached(_t19791, "tag", &_ic_2835), GEM_NIL);
+    }
+    if (gem_truthy(_t19792)) {
 #line 525 "compiler/liveness.gem"
         gem_set_line(525);
-        GemVal _t19791 = gem_v_live_out;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19791, 1);
+        GemVal _t19793 = gem_v_live_out;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19793, 1);
         gem_pop_frame();
-        return _t19791;
+        return _t19793;
     }
 #line 528 "compiler/liveness.gem"
     gem_set_line(528);
     GemVal gem_v___match_69 = gem_v_s;
-    GemVal _t19792 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t19794;
-    if (!gem_truthy(_t19792)) {
-        _t19794 = _t19792;
-    } else {
-    GemVal _t19793[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t19794 = gem_has_key_fn(NULL, _t19793, 2);
-    }
-    GemVal _t19795;
+    GemVal _t19794 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t19796;
     if (!gem_truthy(_t19794)) {
-        _t19795 = _t19794;
+        _t19796 = _t19794;
     } else {
-        _t19795 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("let", 3));
+    GemVal _t19795[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t19796 = gem_has_key_fn(NULL, _t19795, 2);
     }
     GemVal _t19797;
-    if (!gem_truthy(_t19795)) {
-        _t19797 = _t19795;
+    if (!gem_truthy(_t19796)) {
+        _t19797 = _t19796;
     } else {
-    GemVal _t19796[] = {gem_v___match_69, GEM_STR_LIT("name", 4)};
-        _t19797 = gem_has_key_fn(NULL, _t19796, 2);
+        _t19797 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("let", 3));
     }
     GemVal _t19799;
     if (!gem_truthy(_t19797)) {
         _t19799 = _t19797;
     } else {
-    GemVal _t19798[] = {gem_v___match_69, GEM_STR_LIT("value", 5)};
+    GemVal _t19798[] = {gem_v___match_69, GEM_STR_LIT("name", 4)};
         _t19799 = gem_has_key_fn(NULL, _t19798, 2);
     }
-    if (gem_truthy(_t19799)) {
+    GemVal _t19801;
+    if (!gem_truthy(_t19799)) {
+        _t19801 = _t19799;
+    } else {
+    GemVal _t19800[] = {gem_v___match_69, GEM_STR_LIT("value", 5)};
+        _t19801 = gem_has_key_fn(NULL, _t19800, 2);
+    }
+    if (gem_truthy(_t19801)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_name = gem_table_get(gem_v___match_69, GEM_STR_LIT("name", 4));
@@ -86900,56 +86934,56 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
         GemVal gem_v_value = gem_table_get(gem_v___match_69, GEM_STR_LIT("value", 5));
 #line 530 "compiler/liveness.gem"
         gem_set_line(530);
-    GemVal _t19800[] = {gem_v_live_out};
-        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t19800, 1);
+    GemVal _t19802[] = {gem_v_live_out};
+        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t19802, 1);
 #line 531 "compiler/liveness.gem"
         gem_set_line(531);
-    GemVal _t19801 = gem_v_live_in;
-    GemVal _t19802[] = {_t19801, gem_v_name};
-        (void)(gem_fn___mod_liveness_lset_remove(NULL, _t19802, 2));
+    GemVal _t19803 = gem_v_live_in;
+    GemVal _t19804[] = {_t19803, gem_v_name};
+        (void)(gem_fn___mod_liveness_lset_remove(NULL, _t19804, 2));
 #line 532 "compiler/liveness.gem"
         gem_set_line(532);
-    GemVal _t19805 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19803 = gem_v_value;
-    GemVal _t19804[] = {_t19803, gem_v_live_in};
-    gem_check_callable(_t19805, "compiler/liveness.gem", 532);
-        (void)(_t19805.fn(_t19805.env, _t19804, 2));
+    GemVal _t19807 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19805 = gem_v_value;
+    GemVal _t19806[] = {_t19805, gem_v_live_in};
+    gem_check_callable(_t19807, "compiler/liveness.gem", 532);
+        (void)(_t19807.fn(_t19807.env, _t19806, 2));
 #line 533 "compiler/liveness.gem"
         gem_set_line(533);
-        GemVal _t19806 = gem_v_live_in;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19806, 1);
+        GemVal _t19808 = gem_v_live_in;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19808, 1);
         gem_pop_frame();
-        return _t19806;
+        return _t19808;
     } else {
-    GemVal _t19807 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t19809;
-    if (!gem_truthy(_t19807)) {
-        _t19809 = _t19807;
-    } else {
-    GemVal _t19808[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t19809 = gem_has_key_fn(NULL, _t19808, 2);
-    }
-    GemVal _t19810;
+    GemVal _t19809 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t19811;
     if (!gem_truthy(_t19809)) {
-        _t19810 = _t19809;
+        _t19811 = _t19809;
     } else {
-        _t19810 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("assign", 6));
+    GemVal _t19810[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t19811 = gem_has_key_fn(NULL, _t19810, 2);
     }
     GemVal _t19812;
-    if (!gem_truthy(_t19810)) {
-        _t19812 = _t19810;
+    if (!gem_truthy(_t19811)) {
+        _t19812 = _t19811;
     } else {
-    GemVal _t19811[] = {gem_v___match_69, GEM_STR_LIT("name", 4)};
-        _t19812 = gem_has_key_fn(NULL, _t19811, 2);
+        _t19812 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("assign", 6));
     }
     GemVal _t19814;
     if (!gem_truthy(_t19812)) {
         _t19814 = _t19812;
     } else {
-    GemVal _t19813[] = {gem_v___match_69, GEM_STR_LIT("value", 5)};
+    GemVal _t19813[] = {gem_v___match_69, GEM_STR_LIT("name", 4)};
         _t19814 = gem_has_key_fn(NULL, _t19813, 2);
     }
-    if (gem_truthy(_t19814)) {
+    GemVal _t19816;
+    if (!gem_truthy(_t19814)) {
+        _t19816 = _t19814;
+    } else {
+    GemVal _t19815[] = {gem_v___match_69, GEM_STR_LIT("value", 5)};
+        _t19816 = gem_has_key_fn(NULL, _t19815, 2);
+    }
+    if (gem_truthy(_t19816)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_name = gem_table_get(gem_v___match_69, GEM_STR_LIT("name", 4));
@@ -86958,56 +86992,56 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
         GemVal gem_v_value = gem_table_get(gem_v___match_69, GEM_STR_LIT("value", 5));
 #line 535 "compiler/liveness.gem"
         gem_set_line(535);
-    GemVal _t19815[] = {gem_v_live_out};
-        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t19815, 1);
+    GemVal _t19817[] = {gem_v_live_out};
+        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t19817, 1);
 #line 536 "compiler/liveness.gem"
         gem_set_line(536);
-    GemVal _t19816 = gem_v_live_in;
-    GemVal _t19817[] = {_t19816, gem_v_name};
-        (void)(gem_fn___mod_liveness_lset_remove(NULL, _t19817, 2));
+    GemVal _t19818 = gem_v_live_in;
+    GemVal _t19819[] = {_t19818, gem_v_name};
+        (void)(gem_fn___mod_liveness_lset_remove(NULL, _t19819, 2));
 #line 537 "compiler/liveness.gem"
         gem_set_line(537);
-    GemVal _t19820 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19818 = gem_v_value;
-    GemVal _t19819[] = {_t19818, gem_v_live_in};
-    gem_check_callable(_t19820, "compiler/liveness.gem", 537);
-        (void)(_t19820.fn(_t19820.env, _t19819, 2));
+    GemVal _t19822 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19820 = gem_v_value;
+    GemVal _t19821[] = {_t19820, gem_v_live_in};
+    gem_check_callable(_t19822, "compiler/liveness.gem", 537);
+        (void)(_t19822.fn(_t19822.env, _t19821, 2));
 #line 538 "compiler/liveness.gem"
         gem_set_line(538);
-        GemVal _t19821 = gem_v_live_in;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19821, 1);
+        GemVal _t19823 = gem_v_live_in;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19823, 1);
         gem_pop_frame();
-        return _t19821;
+        return _t19823;
     } else {
-    GemVal _t19822 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t19824;
-    if (!gem_truthy(_t19822)) {
-        _t19824 = _t19822;
-    } else {
-    GemVal _t19823[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t19824 = gem_has_key_fn(NULL, _t19823, 2);
-    }
-    GemVal _t19825;
+    GemVal _t19824 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t19826;
     if (!gem_truthy(_t19824)) {
-        _t19825 = _t19824;
+        _t19826 = _t19824;
     } else {
-        _t19825 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("dot_assign", 10));
+    GemVal _t19825[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t19826 = gem_has_key_fn(NULL, _t19825, 2);
     }
     GemVal _t19827;
-    if (!gem_truthy(_t19825)) {
-        _t19827 = _t19825;
+    if (!gem_truthy(_t19826)) {
+        _t19827 = _t19826;
     } else {
-    GemVal _t19826[] = {gem_v___match_69, GEM_STR_LIT("object", 6)};
-        _t19827 = gem_has_key_fn(NULL, _t19826, 2);
+        _t19827 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("dot_assign", 10));
     }
     GemVal _t19829;
     if (!gem_truthy(_t19827)) {
         _t19829 = _t19827;
     } else {
-    GemVal _t19828[] = {gem_v___match_69, GEM_STR_LIT("value", 5)};
+    GemVal _t19828[] = {gem_v___match_69, GEM_STR_LIT("object", 6)};
         _t19829 = gem_has_key_fn(NULL, _t19828, 2);
     }
-    if (gem_truthy(_t19829)) {
+    GemVal _t19831;
+    if (!gem_truthy(_t19829)) {
+        _t19831 = _t19829;
+    } else {
+    GemVal _t19830[] = {gem_v___match_69, GEM_STR_LIT("value", 5)};
+        _t19831 = gem_has_key_fn(NULL, _t19830, 2);
+    }
+    if (gem_truthy(_t19831)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_object = gem_table_get(gem_v___match_69, GEM_STR_LIT("object", 6));
@@ -87016,65 +87050,65 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
         GemVal gem_v_value = gem_table_get(gem_v___match_69, GEM_STR_LIT("value", 5));
 #line 540 "compiler/liveness.gem"
         gem_set_line(540);
-    GemVal _t19830[] = {gem_v_live_out};
-        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t19830, 1);
+    GemVal _t19832[] = {gem_v_live_out};
+        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t19832, 1);
 #line 541 "compiler/liveness.gem"
         gem_set_line(541);
-    GemVal _t19833 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19831 = gem_v_object;
-    GemVal _t19832[] = {_t19831, gem_v_live_in};
-    gem_check_callable(_t19833, "compiler/liveness.gem", 541);
-        (void)(_t19833.fn(_t19833.env, _t19832, 2));
+    GemVal _t19835 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19833 = gem_v_object;
+    GemVal _t19834[] = {_t19833, gem_v_live_in};
+    gem_check_callable(_t19835, "compiler/liveness.gem", 541);
+        (void)(_t19835.fn(_t19835.env, _t19834, 2));
 #line 542 "compiler/liveness.gem"
         gem_set_line(542);
-    GemVal _t19836 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19834 = gem_v_value;
-    GemVal _t19835[] = {_t19834, gem_v_live_in};
-    gem_check_callable(_t19836, "compiler/liveness.gem", 542);
-        (void)(_t19836.fn(_t19836.env, _t19835, 2));
+    GemVal _t19838 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19836 = gem_v_value;
+    GemVal _t19837[] = {_t19836, gem_v_live_in};
+    gem_check_callable(_t19838, "compiler/liveness.gem", 542);
+        (void)(_t19838.fn(_t19838.env, _t19837, 2));
 #line 543 "compiler/liveness.gem"
         gem_set_line(543);
-        GemVal _t19837 = gem_v_live_in;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19837, 1);
+        GemVal _t19839 = gem_v_live_in;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19839, 1);
         gem_pop_frame();
-        return _t19837;
+        return _t19839;
     } else {
-    GemVal _t19838 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t19840;
-    if (!gem_truthy(_t19838)) {
-        _t19840 = _t19838;
-    } else {
-    GemVal _t19839[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t19840 = gem_has_key_fn(NULL, _t19839, 2);
-    }
-    GemVal _t19841;
+    GemVal _t19840 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t19842;
     if (!gem_truthy(_t19840)) {
-        _t19841 = _t19840;
+        _t19842 = _t19840;
     } else {
-        _t19841 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("index_assign", 12));
+    GemVal _t19841[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t19842 = gem_has_key_fn(NULL, _t19841, 2);
     }
     GemVal _t19843;
-    if (!gem_truthy(_t19841)) {
-        _t19843 = _t19841;
+    if (!gem_truthy(_t19842)) {
+        _t19843 = _t19842;
     } else {
-    GemVal _t19842[] = {gem_v___match_69, GEM_STR_LIT("object", 6)};
-        _t19843 = gem_has_key_fn(NULL, _t19842, 2);
+        _t19843 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("index_assign", 12));
     }
     GemVal _t19845;
     if (!gem_truthy(_t19843)) {
         _t19845 = _t19843;
     } else {
-    GemVal _t19844[] = {gem_v___match_69, GEM_STR_LIT("key", 3)};
+    GemVal _t19844[] = {gem_v___match_69, GEM_STR_LIT("object", 6)};
         _t19845 = gem_has_key_fn(NULL, _t19844, 2);
     }
     GemVal _t19847;
     if (!gem_truthy(_t19845)) {
         _t19847 = _t19845;
     } else {
-    GemVal _t19846[] = {gem_v___match_69, GEM_STR_LIT("value", 5)};
+    GemVal _t19846[] = {gem_v___match_69, GEM_STR_LIT("key", 3)};
         _t19847 = gem_has_key_fn(NULL, _t19846, 2);
     }
-    if (gem_truthy(_t19847)) {
+    GemVal _t19849;
+    if (!gem_truthy(_t19847)) {
+        _t19849 = _t19847;
+    } else {
+    GemVal _t19848[] = {gem_v___match_69, GEM_STR_LIT("value", 5)};
+        _t19849 = gem_has_key_fn(NULL, _t19848, 2);
+    }
+    if (gem_truthy(_t19849)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_object = gem_table_get(gem_v___match_69, GEM_STR_LIT("object", 6));
@@ -87086,72 +87120,72 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
         GemVal gem_v_value = gem_table_get(gem_v___match_69, GEM_STR_LIT("value", 5));
 #line 545 "compiler/liveness.gem"
         gem_set_line(545);
-    GemVal _t19848[] = {gem_v_live_out};
-        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t19848, 1);
+    GemVal _t19850[] = {gem_v_live_out};
+        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t19850, 1);
 #line 546 "compiler/liveness.gem"
         gem_set_line(546);
-    GemVal _t19851 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19849 = gem_v_object;
-    GemVal _t19850[] = {_t19849, gem_v_live_in};
-    gem_check_callable(_t19851, "compiler/liveness.gem", 546);
-        (void)(_t19851.fn(_t19851.env, _t19850, 2));
+    GemVal _t19853 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19851 = gem_v_object;
+    GemVal _t19852[] = {_t19851, gem_v_live_in};
+    gem_check_callable(_t19853, "compiler/liveness.gem", 546);
+        (void)(_t19853.fn(_t19853.env, _t19852, 2));
 #line 547 "compiler/liveness.gem"
         gem_set_line(547);
-    GemVal _t19854 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19852 = gem_v_key;
-    GemVal _t19853[] = {_t19852, gem_v_live_in};
-    gem_check_callable(_t19854, "compiler/liveness.gem", 547);
-        (void)(_t19854.fn(_t19854.env, _t19853, 2));
+    GemVal _t19856 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19854 = gem_v_key;
+    GemVal _t19855[] = {_t19854, gem_v_live_in};
+    gem_check_callable(_t19856, "compiler/liveness.gem", 547);
+        (void)(_t19856.fn(_t19856.env, _t19855, 2));
 #line 548 "compiler/liveness.gem"
         gem_set_line(548);
-    GemVal _t19857 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19855 = gem_v_value;
-    GemVal _t19856[] = {_t19855, gem_v_live_in};
-    gem_check_callable(_t19857, "compiler/liveness.gem", 548);
-        (void)(_t19857.fn(_t19857.env, _t19856, 2));
+    GemVal _t19859 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19857 = gem_v_value;
+    GemVal _t19858[] = {_t19857, gem_v_live_in};
+    gem_check_callable(_t19859, "compiler/liveness.gem", 548);
+        (void)(_t19859.fn(_t19859.env, _t19858, 2));
 #line 549 "compiler/liveness.gem"
         gem_set_line(549);
-        GemVal _t19858 = gem_v_live_in;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19858, 1);
+        GemVal _t19860 = gem_v_live_in;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19860, 1);
         gem_pop_frame();
-        return _t19858;
+        return _t19860;
     } else {
-    GemVal _t19859 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t19861;
-    if (!gem_truthy(_t19859)) {
-        _t19861 = _t19859;
-    } else {
-    GemVal _t19860[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t19861 = gem_has_key_fn(NULL, _t19860, 2);
-    }
-    GemVal _t19862;
+    GemVal _t19861 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t19863;
     if (!gem_truthy(_t19861)) {
-        _t19862 = _t19861;
+        _t19863 = _t19861;
     } else {
-        _t19862 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("if", 2));
+    GemVal _t19862[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t19863 = gem_has_key_fn(NULL, _t19862, 2);
     }
     GemVal _t19864;
-    if (!gem_truthy(_t19862)) {
-        _t19864 = _t19862;
+    if (!gem_truthy(_t19863)) {
+        _t19864 = _t19863;
     } else {
-    GemVal _t19863[] = {gem_v___match_69, GEM_STR_LIT("cond", 4)};
-        _t19864 = gem_has_key_fn(NULL, _t19863, 2);
+        _t19864 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("if", 2));
     }
     GemVal _t19866;
     if (!gem_truthy(_t19864)) {
         _t19866 = _t19864;
     } else {
-    GemVal _t19865[] = {gem_v___match_69, GEM_STR_LIT("then", 4)};
+    GemVal _t19865[] = {gem_v___match_69, GEM_STR_LIT("cond", 4)};
         _t19866 = gem_has_key_fn(NULL, _t19865, 2);
     }
     GemVal _t19868;
     if (!gem_truthy(_t19866)) {
         _t19868 = _t19866;
     } else {
-    GemVal _t19867[] = {gem_v___match_69, GEM_STR_LIT("else", 4)};
+    GemVal _t19867[] = {gem_v___match_69, GEM_STR_LIT("then", 4)};
         _t19868 = gem_has_key_fn(NULL, _t19867, 2);
     }
-    if (gem_truthy(_t19868)) {
+    GemVal _t19870;
+    if (!gem_truthy(_t19868)) {
+        _t19870 = _t19868;
+    } else {
+    GemVal _t19869[] = {gem_v___match_69, GEM_STR_LIT("else", 4)};
+        _t19870 = gem_has_key_fn(NULL, _t19869, 2);
+    }
+    if (gem_truthy(_t19870)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_cond = gem_table_get(gem_v___match_69, GEM_STR_LIT("cond", 4));
@@ -87163,11 +87197,11 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
         GemVal gem_v_el = gem_table_get(gem_v___match_69, GEM_STR_LIT("else", 4));
 #line 551 "compiler/liveness.gem"
         gem_set_line(551);
-    GemVal _t19871 = gem_g___mod_liveness__transfer_stmts;
-    GemVal _t19869 = gem_v_thens;
-    GemVal _t19870[] = {_t19869, gem_v_live_out};
-    gem_check_callable(_t19871, "compiler/liveness.gem", 551);
-        GemVal gem_v_live_then = _t19871.fn(_t19871.env, _t19870, 2);
+    GemVal _t19873 = gem_g___mod_liveness__transfer_stmts;
+    GemVal _t19871 = gem_v_thens;
+    GemVal _t19872[] = {_t19871, gem_v_live_out};
+    gem_check_callable(_t19873, "compiler/liveness.gem", 551);
+        GemVal gem_v_live_then = _t19873.fn(_t19873.env, _t19872, 2);
 #line 552 "compiler/liveness.gem"
         gem_set_line(552);
         GemVal gem_v___val_70 = GEM_NIL;
@@ -87176,112 +87210,112 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
         if (gem_truthy(gem_neq(gem_v_el, GEM_NIL))) {
 #line 552 "compiler/liveness.gem"
             gem_set_line(552);
-    GemVal _t19874 = gem_g___mod_liveness__transfer_stmts;
-    GemVal _t19872 = gem_v_el;
-    GemVal _t19873[] = {_t19872, gem_v_live_out};
-    gem_check_callable(_t19874, "compiler/liveness.gem", 552);
-            gem_v___val_70 = _t19874.fn(_t19874.env, _t19873, 2);
+    GemVal _t19876 = gem_g___mod_liveness__transfer_stmts;
+    GemVal _t19874 = gem_v_el;
+    GemVal _t19875[] = {_t19874, gem_v_live_out};
+    gem_check_callable(_t19876, "compiler/liveness.gem", 552);
+            gem_v___val_70 = _t19876.fn(_t19876.env, _t19875, 2);
         } else {
 #line 552 "compiler/liveness.gem"
             gem_set_line(552);
-    GemVal _t19875[] = {gem_v_live_out};
-            gem_v___val_70 = gem_fn___mod_liveness_lset_copy(NULL, _t19875, 1);
+    GemVal _t19877[] = {gem_v_live_out};
+            gem_v___val_70 = gem_fn___mod_liveness_lset_copy(NULL, _t19877, 1);
         }
 #line 552 "compiler/liveness.gem"
         gem_set_line(552);
         GemVal gem_v_live_else = gem_v___val_70;
 #line 553 "compiler/liveness.gem"
         gem_set_line(553);
-    GemVal _t19876[] = {gem_v_live_then};
-        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t19876, 1);
+    GemVal _t19878[] = {gem_v_live_then};
+        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t19878, 1);
 #line 554 "compiler/liveness.gem"
         gem_set_line(554);
-    GemVal _t19877 = gem_v_live_in;
-    GemVal _t19878[] = {_t19877, gem_v_live_else};
-        (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19878, 2));
+    GemVal _t19879 = gem_v_live_in;
+    GemVal _t19880[] = {_t19879, gem_v_live_else};
+        (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19880, 2));
 #line 555 "compiler/liveness.gem"
         gem_set_line(555);
-    GemVal _t19881 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19879 = gem_v_cond;
-    GemVal _t19880[] = {_t19879, gem_v_live_in};
-    gem_check_callable(_t19881, "compiler/liveness.gem", 555);
-        (void)(_t19881.fn(_t19881.env, _t19880, 2));
+    GemVal _t19883 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19881 = gem_v_cond;
+    GemVal _t19882[] = {_t19881, gem_v_live_in};
+    gem_check_callable(_t19883, "compiler/liveness.gem", 555);
+        (void)(_t19883.fn(_t19883.env, _t19882, 2));
 #line 556 "compiler/liveness.gem"
         gem_set_line(556);
-        GemVal _t19882 = gem_v_live_in;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19882, 1);
+        GemVal _t19884 = gem_v_live_in;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19884, 1);
         gem_pop_frame();
-        return _t19882;
+        return _t19884;
     } else {
-    GemVal _t19883 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t19885;
-    if (!gem_truthy(_t19883)) {
-        _t19885 = _t19883;
-    } else {
-    GemVal _t19884[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t19885 = gem_has_key_fn(NULL, _t19884, 2);
-    }
-    GemVal _t19886;
+    GemVal _t19885 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t19887;
     if (!gem_truthy(_t19885)) {
-        _t19886 = _t19885;
+        _t19887 = _t19885;
     } else {
-        _t19886 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("while", 5));
+    GemVal _t19886[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t19887 = gem_has_key_fn(NULL, _t19886, 2);
     }
-    if (gem_truthy(_t19886)) {
+    GemVal _t19888;
+    if (!gem_truthy(_t19887)) {
+        _t19888 = _t19887;
+    } else {
+        _t19888 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("while", 5));
+    }
+    if (gem_truthy(_t19888)) {
 #line 558 "compiler/liveness.gem"
         gem_set_line(558);
-    GemVal _t19889 = gem_g___mod_liveness__fixpoint_inner_loop;
-    GemVal _t19887 = gem_v_s;
-    GemVal _t19888[] = {_t19887, gem_v_live_out};
-    gem_check_callable(_t19889, "compiler/liveness.gem", 558);
-        GemVal _t19890 = _t19889.fn(_t19889.env, _t19888, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19890, 1);
+    GemVal _t19891 = gem_g___mod_liveness__fixpoint_inner_loop;
+    GemVal _t19889 = gem_v_s;
+    GemVal _t19890[] = {_t19889, gem_v_live_out};
+    gem_check_callable(_t19891, "compiler/liveness.gem", 558);
+        GemVal _t19892 = _t19891.fn(_t19891.env, _t19890, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19892, 1);
         gem_pop_frame();
-        return _t19890;
+        return _t19892;
     } else {
-    GemVal _t19891 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t19893;
-    if (!gem_truthy(_t19891)) {
-        _t19893 = _t19891;
-    } else {
-    GemVal _t19892[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t19893 = gem_has_key_fn(NULL, _t19892, 2);
-    }
-    GemVal _t19894;
+    GemVal _t19893 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t19895;
     if (!gem_truthy(_t19893)) {
-        _t19894 = _t19893;
+        _t19895 = _t19893;
     } else {
-        _t19894 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("match", 5));
+    GemVal _t19894[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t19895 = gem_has_key_fn(NULL, _t19894, 2);
     }
     GemVal _t19896;
-    if (!gem_truthy(_t19894)) {
-        _t19896 = _t19894;
+    if (!gem_truthy(_t19895)) {
+        _t19896 = _t19895;
     } else {
-    GemVal _t19895[] = {gem_v___match_69, GEM_STR_LIT("target", 6)};
-        _t19896 = gem_has_key_fn(NULL, _t19895, 2);
+        _t19896 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("match", 5));
     }
     GemVal _t19898;
     if (!gem_truthy(_t19896)) {
         _t19898 = _t19896;
     } else {
-    GemVal _t19897[] = {gem_v___match_69, GEM_STR_LIT("target_var", 10)};
+    GemVal _t19897[] = {gem_v___match_69, GEM_STR_LIT("target", 6)};
         _t19898 = gem_has_key_fn(NULL, _t19897, 2);
     }
     GemVal _t19900;
     if (!gem_truthy(_t19898)) {
         _t19900 = _t19898;
     } else {
-    GemVal _t19899[] = {gem_v___match_69, GEM_STR_LIT("whens", 5)};
+    GemVal _t19899[] = {gem_v___match_69, GEM_STR_LIT("target_var", 10)};
         _t19900 = gem_has_key_fn(NULL, _t19899, 2);
     }
     GemVal _t19902;
     if (!gem_truthy(_t19900)) {
         _t19902 = _t19900;
     } else {
-    GemVal _t19901[] = {gem_v___match_69, GEM_STR_LIT("else", 4)};
+    GemVal _t19901[] = {gem_v___match_69, GEM_STR_LIT("whens", 5)};
         _t19902 = gem_has_key_fn(NULL, _t19901, 2);
     }
-    if (gem_truthy(_t19902)) {
+    GemVal _t19904;
+    if (!gem_truthy(_t19902)) {
+        _t19904 = _t19902;
+    } else {
+    GemVal _t19903[] = {gem_v___match_69, GEM_STR_LIT("else", 4)};
+        _t19904 = gem_has_key_fn(NULL, _t19903, 2);
+    }
+    if (gem_truthy(_t19904)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_target = gem_table_get(gem_v___match_69, GEM_STR_LIT("target", 6));
@@ -87296,29 +87330,29 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
         GemVal gem_v_el = gem_table_get(gem_v___match_69, GEM_STR_LIT("else", 4));
 #line 560 "compiler/liveness.gem"
         gem_set_line(560);
-    GemVal _t19903 = gem_table_new_braces();
-        GemVal gem_v_merged = _t19903;
+    GemVal _t19905 = gem_table_new_braces();
+        GemVal gem_v_merged = _t19905;
 #line 561 "compiler/liveness.gem"
         gem_set_line(561);
         if (gem_truthy(gem_neq(gem_v_el, GEM_NIL))) {
 #line 562 "compiler/liveness.gem"
             gem_set_line(562);
-    GemVal _t19906 = gem_g___mod_liveness__transfer_stmts;
-    GemVal _t19904 = gem_v_el;
-    GemVal _t19905[] = {_t19904, gem_v_live_out};
-    gem_check_callable(_t19906, "compiler/liveness.gem", 562);
-            GemVal gem_v_live_else = _t19906.fn(_t19906.env, _t19905, 2);
+    GemVal _t19908 = gem_g___mod_liveness__transfer_stmts;
+    GemVal _t19906 = gem_v_el;
+    GemVal _t19907[] = {_t19906, gem_v_live_out};
+    gem_check_callable(_t19908, "compiler/liveness.gem", 562);
+            GemVal gem_v_live_else = _t19908.fn(_t19908.env, _t19907, 2);
 #line 563 "compiler/liveness.gem"
             gem_set_line(563);
-    GemVal _t19907 = gem_v_merged;
-    GemVal _t19908[] = {_t19907, gem_v_live_else};
-            (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19908, 2));
+    GemVal _t19909 = gem_v_merged;
+    GemVal _t19910[] = {_t19909, gem_v_live_else};
+            (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19910, 2));
         } else {
 #line 565 "compiler/liveness.gem"
             gem_set_line(565);
-    GemVal _t19909 = gem_v_merged;
-    GemVal _t19910[] = {_t19909, gem_v_live_out};
-            (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19910, 2));
+    GemVal _t19911 = gem_v_merged;
+    GemVal _t19912[] = {_t19911, gem_v_live_out};
+            (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19912, 2));
         }
 #line 567 "compiler/liveness.gem"
         gem_set_line(567);
@@ -87336,29 +87370,29 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v___for_items_73, &gem_v_target_var, &gem_v___for_i_73, &gem_v_live_out, &gem_v_merged, &gem_v_target};
                 gem_arena_reset_region(&_mk583, _rr, 6, NULL, 0);
             }
-    GemVal _t19911 = gem_v___for_i_73;
-            if (!gem_truthy(gem_lt(_t19911, gem_for_len_1(gem_v___for_items_73)))) break;
+    GemVal _t19913 = gem_v___for_i_73;
+            if (!gem_truthy(gem_lt(_t19913, gem_for_len_1(gem_v___for_items_73)))) break;
 #line 567 "compiler/liveness.gem"
             gem_set_line(567);
-    GemVal _t19912 = gem_v___for_items_73;
-            GemVal gem_v_w = gem_table_get(_t19912, gem_v___for_i_73);
+    GemVal _t19914 = gem_v___for_items_73;
+            GemVal gem_v_w = gem_table_get(_t19914, gem_v___for_i_73);
 #line 567 "compiler/liveness.gem"
             gem_set_line(567);
             gem_v___for_i_73 = gem_add(gem_v___for_i_73, gem_int(1));
 #line 570 "compiler/liveness.gem"
             gem_set_line(570);
-    GemVal _t19913 = gem_table_new();
-            GemVal gem_v_arm_stmts = _t19913;
+    GemVal _t19915 = gem_table_new();
+            GemVal gem_v_arm_stmts = _t19915;
 #line 571 "compiler/liveness.gem"
             gem_set_line(571);
-    GemVal _t19914 = gem_v_w;
+    GemVal _t19916 = gem_v_w;
     static GemICacheSlot _ic_2836 = {0};
-            if (gem_truthy(gem_neq(gem_table_get_cached(_t19914, "bindings", &_ic_2836), GEM_NIL))) {
+            if (gem_truthy(gem_neq(gem_table_get_cached(_t19916, "bindings", &_ic_2836), GEM_NIL))) {
 #line 572 "compiler/liveness.gem"
                 gem_set_line(572);
-    GemVal _t19915 = gem_v_w;
+    GemVal _t19917 = gem_v_w;
     static GemICacheSlot _ic_2837 = {0};
-                GemVal gem_v___for_items_71 = gem_for_items_1(gem_table_get_cached(_t19915, "bindings", &_ic_2837));
+                GemVal gem_v___for_items_71 = gem_for_items_1(gem_table_get_cached(_t19917, "bindings", &_ic_2837));
 #line 572 "compiler/liveness.gem"
                 gem_set_line(572);
                 GemVal gem_v___for_i_71 = gem_int(0);
@@ -87372,28 +87406,28 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
                         GemVal *_rr[] = {&gem_v___for_items_73, &gem_v_target_var, &gem_v___for_i_73, &gem_v_live_out, &gem_v_merged, &gem_v_target, &gem_v_w, &gem_v_arm_stmts, &gem_v___for_i_71, &gem_v___for_items_71};
                         gem_arena_reset_region(&_mk584, _rr, 10, NULL, 0);
                     }
-    GemVal _t19916 = gem_v___for_i_71;
-                    if (!gem_truthy(gem_lt(_t19916, gem_for_len_1(gem_v___for_items_71)))) break;
+    GemVal _t19918 = gem_v___for_i_71;
+                    if (!gem_truthy(gem_lt(_t19918, gem_for_len_1(gem_v___for_items_71)))) break;
 #line 572 "compiler/liveness.gem"
                     gem_set_line(572);
-    GemVal _t19917 = gem_v___for_items_71;
-                    GemVal gem_v_b = gem_table_get(_t19917, gem_v___for_i_71);
+    GemVal _t19919 = gem_v___for_items_71;
+                    GemVal gem_v_b = gem_table_get(_t19919, gem_v___for_i_71);
 #line 572 "compiler/liveness.gem"
                     gem_set_line(572);
                     gem_v___for_i_71 = gem_add(gem_v___for_i_71, gem_int(1));
 #line 573 "compiler/liveness.gem"
                     gem_set_line(573);
-    GemVal _t19918 = gem_v_arm_stmts;
-    GemVal _t19919[] = {_t19918, gem_v_b};
-                    (void)(gem_push_fn(NULL, _t19919, 2));
+    GemVal _t19920 = gem_v_arm_stmts;
+    GemVal _t19921[] = {_t19920, gem_v_b};
+                    (void)(gem_push_fn(NULL, _t19921, 2));
                 }
 
             }
 #line 576 "compiler/liveness.gem"
             gem_set_line(576);
-    GemVal _t19920 = gem_v_w;
+    GemVal _t19922 = gem_v_w;
     static GemICacheSlot _ic_2838 = {0};
-            GemVal gem_v___for_items_72 = gem_for_items_1(gem_table_get_cached(_t19920, "body", &_ic_2838));
+            GemVal gem_v___for_items_72 = gem_for_items_1(gem_table_get_cached(_t19922, "body", &_ic_2838));
 #line 576 "compiler/liveness.gem"
             gem_set_line(576);
             GemVal gem_v___for_i_72 = gem_int(0);
@@ -87407,43 +87441,43 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_items_73, &gem_v_target_var, &gem_v___for_i_73, &gem_v_live_out, &gem_v_merged, &gem_v_target, &gem_v_w, &gem_v_arm_stmts, &gem_v___for_i_72, &gem_v___for_items_72};
                     gem_arena_reset_region(&_mk585, _rr, 10, NULL, 0);
                 }
-    GemVal _t19921 = gem_v___for_i_72;
-                if (!gem_truthy(gem_lt(_t19921, gem_for_len_1(gem_v___for_items_72)))) break;
+    GemVal _t19923 = gem_v___for_i_72;
+                if (!gem_truthy(gem_lt(_t19923, gem_for_len_1(gem_v___for_items_72)))) break;
 #line 576 "compiler/liveness.gem"
                 gem_set_line(576);
-    GemVal _t19922 = gem_v___for_items_72;
-                GemVal gem_v_bs = gem_table_get(_t19922, gem_v___for_i_72);
+    GemVal _t19924 = gem_v___for_items_72;
+                GemVal gem_v_bs = gem_table_get(_t19924, gem_v___for_i_72);
 #line 576 "compiler/liveness.gem"
                 gem_set_line(576);
                 gem_v___for_i_72 = gem_add(gem_v___for_i_72, gem_int(1));
 #line 577 "compiler/liveness.gem"
                 gem_set_line(577);
-    GemVal _t19923 = gem_v_arm_stmts;
-    GemVal _t19924[] = {_t19923, gem_v_bs};
-                (void)(gem_push_fn(NULL, _t19924, 2));
+    GemVal _t19925 = gem_v_arm_stmts;
+    GemVal _t19926[] = {_t19925, gem_v_bs};
+                (void)(gem_push_fn(NULL, _t19926, 2));
             }
 
 #line 579 "compiler/liveness.gem"
             gem_set_line(579);
-    GemVal _t19927 = gem_g___mod_liveness__transfer_stmts;
-    GemVal _t19925 = gem_v_arm_stmts;
-    GemVal _t19926[] = {_t19925, gem_v_live_out};
-    gem_check_callable(_t19927, "compiler/liveness.gem", 579);
-            GemVal gem_v_live_arm = _t19927.fn(_t19927.env, _t19926, 2);
+    GemVal _t19929 = gem_g___mod_liveness__transfer_stmts;
+    GemVal _t19927 = gem_v_arm_stmts;
+    GemVal _t19928[] = {_t19927, gem_v_live_out};
+    gem_check_callable(_t19929, "compiler/liveness.gem", 579);
+            GemVal gem_v_live_arm = _t19929.fn(_t19929.env, _t19928, 2);
 #line 580 "compiler/liveness.gem"
             gem_set_line(580);
-    GemVal _t19931 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19928 = gem_v_w;
+    GemVal _t19933 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19930 = gem_v_w;
     static GemICacheSlot _ic_2839 = {0};
-    GemVal _t19929 = gem_table_get_cached(_t19928, "value", &_ic_2839);
-    GemVal _t19930[] = {_t19929, gem_v_live_arm};
-    gem_check_callable(_t19931, "compiler/liveness.gem", 580);
-            (void)(_t19931.fn(_t19931.env, _t19930, 2));
+    GemVal _t19931 = gem_table_get_cached(_t19930, "value", &_ic_2839);
+    GemVal _t19932[] = {_t19931, gem_v_live_arm};
+    gem_check_callable(_t19933, "compiler/liveness.gem", 580);
+            (void)(_t19933.fn(_t19933.env, _t19932, 2));
 #line 581 "compiler/liveness.gem"
             gem_set_line(581);
-    GemVal _t19932 = gem_v_merged;
-    GemVal _t19933[] = {_t19932, gem_v_live_arm};
-            (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19933, 2));
+    GemVal _t19934 = gem_v_merged;
+    GemVal _t19935[] = {_t19934, gem_v_live_arm};
+            (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19935, 2));
         }
 
 #line 583 "compiler/liveness.gem"
@@ -87451,60 +87485,60 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
         if (gem_truthy(gem_neq(gem_v_target_var, GEM_NIL))) {
 #line 584 "compiler/liveness.gem"
             gem_set_line(584);
-    GemVal _t19934 = gem_v_merged;
-    GemVal _t19935[] = {_t19934, gem_v_target_var};
-            (void)(gem_fn___mod_liveness_lset_remove(NULL, _t19935, 2));
+    GemVal _t19936 = gem_v_merged;
+    GemVal _t19937[] = {_t19936, gem_v_target_var};
+            (void)(gem_fn___mod_liveness_lset_remove(NULL, _t19937, 2));
         }
 #line 586 "compiler/liveness.gem"
         gem_set_line(586);
-    GemVal _t19938 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19936 = gem_v_target;
-    GemVal _t19937[] = {_t19936, gem_v_merged};
-    gem_check_callable(_t19938, "compiler/liveness.gem", 586);
-        (void)(_t19938.fn(_t19938.env, _t19937, 2));
+    GemVal _t19940 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19938 = gem_v_target;
+    GemVal _t19939[] = {_t19938, gem_v_merged};
+    gem_check_callable(_t19940, "compiler/liveness.gem", 586);
+        (void)(_t19940.fn(_t19940.env, _t19939, 2));
 #line 587 "compiler/liveness.gem"
         gem_set_line(587);
-        GemVal _t19939 = gem_v_merged;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19939, 1);
+        GemVal _t19941 = gem_v_merged;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19941, 1);
         gem_pop_frame();
-        return _t19939;
+        return _t19941;
     } else {
-    GemVal _t19940 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t19942;
-    if (!gem_truthy(_t19940)) {
-        _t19942 = _t19940;
-    } else {
-    GemVal _t19941[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t19942 = gem_has_key_fn(NULL, _t19941, 2);
-    }
-    GemVal _t19943;
+    GemVal _t19942 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t19944;
     if (!gem_truthy(_t19942)) {
-        _t19943 = _t19942;
+        _t19944 = _t19942;
     } else {
-        _t19943 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("receive_match", 13));
+    GemVal _t19943[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t19944 = gem_has_key_fn(NULL, _t19943, 2);
     }
     GemVal _t19945;
-    if (!gem_truthy(_t19943)) {
-        _t19945 = _t19943;
+    if (!gem_truthy(_t19944)) {
+        _t19945 = _t19944;
     } else {
-    GemVal _t19944[] = {gem_v___match_69, GEM_STR_LIT("arms", 4)};
-        _t19945 = gem_has_key_fn(NULL, _t19944, 2);
+        _t19945 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("receive_match", 13));
     }
     GemVal _t19947;
     if (!gem_truthy(_t19945)) {
         _t19947 = _t19945;
     } else {
-    GemVal _t19946[] = {gem_v___match_69, GEM_STR_LIT("after_ms", 8)};
+    GemVal _t19946[] = {gem_v___match_69, GEM_STR_LIT("arms", 4)};
         _t19947 = gem_has_key_fn(NULL, _t19946, 2);
     }
     GemVal _t19949;
     if (!gem_truthy(_t19947)) {
         _t19949 = _t19947;
     } else {
-    GemVal _t19948[] = {gem_v___match_69, GEM_STR_LIT("after_body", 10)};
+    GemVal _t19948[] = {gem_v___match_69, GEM_STR_LIT("after_ms", 8)};
         _t19949 = gem_has_key_fn(NULL, _t19948, 2);
     }
-    if (gem_truthy(_t19949)) {
+    GemVal _t19951;
+    if (!gem_truthy(_t19949)) {
+        _t19951 = _t19949;
+    } else {
+    GemVal _t19950[] = {gem_v___match_69, GEM_STR_LIT("after_body", 10)};
+        _t19951 = gem_has_key_fn(NULL, _t19950, 2);
+    }
+    if (gem_truthy(_t19951)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_arms = gem_table_get(gem_v___match_69, GEM_STR_LIT("arms", 4));
@@ -87516,49 +87550,49 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
         GemVal gem_v_after_body = gem_table_get(gem_v___match_69, GEM_STR_LIT("after_body", 10));
 #line 589 "compiler/liveness.gem"
         gem_set_line(589);
-    GemVal _t19950 = gem_table_new_braces();
-        GemVal gem_v_merged = _t19950;
+    GemVal _t19952 = gem_table_new_braces();
+        GemVal gem_v_merged = _t19952;
 #line 590 "compiler/liveness.gem"
         gem_set_line(590);
         if (gem_truthy(gem_neq(gem_v_after_body, GEM_NIL))) {
 #line 591 "compiler/liveness.gem"
             gem_set_line(591);
-    GemVal _t19953 = gem_g___mod_liveness__transfer_stmts;
-    GemVal _t19951 = gem_v_after_body;
-    GemVal _t19952[] = {_t19951, gem_v_live_out};
-    gem_check_callable(_t19953, "compiler/liveness.gem", 591);
-            GemVal gem_v_live_after = _t19953.fn(_t19953.env, _t19952, 2);
+    GemVal _t19955 = gem_g___mod_liveness__transfer_stmts;
+    GemVal _t19953 = gem_v_after_body;
+    GemVal _t19954[] = {_t19953, gem_v_live_out};
+    gem_check_callable(_t19955, "compiler/liveness.gem", 591);
+            GemVal gem_v_live_after = _t19955.fn(_t19955.env, _t19954, 2);
 #line 592 "compiler/liveness.gem"
             gem_set_line(592);
             if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 593 "compiler/liveness.gem"
                 gem_set_line(593);
-    GemVal _t19956 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19954 = gem_v_after_ms;
-    GemVal _t19955[] = {_t19954, gem_v_live_after};
-    gem_check_callable(_t19956, "compiler/liveness.gem", 593);
-                (void)(_t19956.fn(_t19956.env, _t19955, 2));
+    GemVal _t19958 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19956 = gem_v_after_ms;
+    GemVal _t19957[] = {_t19956, gem_v_live_after};
+    gem_check_callable(_t19958, "compiler/liveness.gem", 593);
+                (void)(_t19958.fn(_t19958.env, _t19957, 2));
             }
 #line 595 "compiler/liveness.gem"
             gem_set_line(595);
-    GemVal _t19957 = gem_v_merged;
-    GemVal _t19958[] = {_t19957, gem_v_live_after};
-            (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19958, 2));
+    GemVal _t19959 = gem_v_merged;
+    GemVal _t19960[] = {_t19959, gem_v_live_after};
+            (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19960, 2));
         }
 #line 597 "compiler/liveness.gem"
         gem_set_line(597);
         if (gem_truthy(gem_eq(gem_len_1(gem_v_arms), gem_int(0)))) {
 #line 600 "compiler/liveness.gem"
             gem_set_line(600);
-    GemVal _t19959 = gem_v_merged;
-    GemVal _t19960[] = {_t19959, gem_v_live_out};
-            (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19960, 2));
+    GemVal _t19961 = gem_v_merged;
+    GemVal _t19962[] = {_t19961, gem_v_live_out};
+            (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19962, 2));
 #line 601 "compiler/liveness.gem"
             gem_set_line(601);
-            GemVal _t19961 = gem_v_merged;
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19961, 1);
+            GemVal _t19963 = gem_v_merged;
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19963, 1);
             gem_pop_frame();
-            return _t19961;
+            return _t19963;
         }
 #line 603 "compiler/liveness.gem"
         gem_set_line(603);
@@ -87576,33 +87610,33 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v___for_items_76, &gem_v___for_i_76, &gem_v_live_out, &gem_v_merged, &gem_v_s};
                 gem_arena_reset_region(&_mk586, _rr, 5, NULL, 0);
             }
-    GemVal _t19962 = gem_v___for_i_76;
-            if (!gem_truthy(gem_lt(_t19962, gem_for_len_1(gem_v___for_items_76)))) break;
+    GemVal _t19964 = gem_v___for_i_76;
+            if (!gem_truthy(gem_lt(_t19964, gem_for_len_1(gem_v___for_items_76)))) break;
 #line 603 "compiler/liveness.gem"
             gem_set_line(603);
-    GemVal _t19963 = gem_v___for_items_76;
-            GemVal gem_v_arm = gem_table_get(_t19963, gem_v___for_i_76);
+    GemVal _t19965 = gem_v___for_items_76;
+            GemVal gem_v_arm = gem_table_get(_t19965, gem_v___for_i_76);
 #line 603 "compiler/liveness.gem"
             gem_set_line(603);
             gem_v___for_i_76 = gem_add(gem_v___for_i_76, gem_int(1));
 #line 604 "compiler/liveness.gem"
             gem_set_line(604);
-    GemVal _t19964 = gem_table_new();
-            GemVal gem_v_arm_stmts = _t19964;
+    GemVal _t19966 = gem_table_new();
+            GemVal gem_v_arm_stmts = _t19966;
 #line 605 "compiler/liveness.gem"
             gem_set_line(605);
-    GemVal _t19965 = gem_v_arm;
+    GemVal _t19967 = gem_v_arm;
     static GemICacheSlot _ic_2840 = {0};
-    GemVal _t19966 = gem_table_get_cached(_t19965, "pattern", &_ic_2840);
+    GemVal _t19968 = gem_table_get_cached(_t19967, "pattern", &_ic_2840);
     static GemICacheSlot _ic_2841 = {0};
-            if (gem_truthy(gem_neq(gem_table_get_cached(_t19966, "bindings", &_ic_2841), GEM_NIL))) {
+            if (gem_truthy(gem_neq(gem_table_get_cached(_t19968, "bindings", &_ic_2841), GEM_NIL))) {
 #line 606 "compiler/liveness.gem"
                 gem_set_line(606);
-    GemVal _t19967 = gem_v_arm;
+    GemVal _t19969 = gem_v_arm;
     static GemICacheSlot _ic_2842 = {0};
-    GemVal _t19968 = gem_table_get_cached(_t19967, "pattern", &_ic_2842);
+    GemVal _t19970 = gem_table_get_cached(_t19969, "pattern", &_ic_2842);
     static GemICacheSlot _ic_2843 = {0};
-                GemVal gem_v___for_items_74 = gem_for_items_1(gem_table_get_cached(_t19968, "bindings", &_ic_2843));
+                GemVal gem_v___for_items_74 = gem_for_items_1(gem_table_get_cached(_t19970, "bindings", &_ic_2843));
 #line 606 "compiler/liveness.gem"
                 gem_set_line(606);
                 GemVal gem_v___for_i_74 = gem_int(0);
@@ -87616,28 +87650,28 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
                         GemVal *_rr[] = {&gem_v___for_items_76, &gem_v___for_i_76, &gem_v_live_out, &gem_v_merged, &gem_v_s, &gem_v_arm, &gem_v_arm_stmts, &gem_v___for_i_74, &gem_v___for_items_74};
                         gem_arena_reset_region(&_mk587, _rr, 9, NULL, 0);
                     }
-    GemVal _t19969 = gem_v___for_i_74;
-                    if (!gem_truthy(gem_lt(_t19969, gem_for_len_1(gem_v___for_items_74)))) break;
+    GemVal _t19971 = gem_v___for_i_74;
+                    if (!gem_truthy(gem_lt(_t19971, gem_for_len_1(gem_v___for_items_74)))) break;
 #line 606 "compiler/liveness.gem"
                     gem_set_line(606);
-    GemVal _t19970 = gem_v___for_items_74;
-                    GemVal gem_v_b = gem_table_get(_t19970, gem_v___for_i_74);
+    GemVal _t19972 = gem_v___for_items_74;
+                    GemVal gem_v_b = gem_table_get(_t19972, gem_v___for_i_74);
 #line 606 "compiler/liveness.gem"
                     gem_set_line(606);
                     gem_v___for_i_74 = gem_add(gem_v___for_i_74, gem_int(1));
 #line 607 "compiler/liveness.gem"
                     gem_set_line(607);
-    GemVal _t19971 = gem_v_arm_stmts;
-    GemVal _t19972[] = {_t19971, gem_v_b};
-                    (void)(gem_push_fn(NULL, _t19972, 2));
+    GemVal _t19973 = gem_v_arm_stmts;
+    GemVal _t19974[] = {_t19973, gem_v_b};
+                    (void)(gem_push_fn(NULL, _t19974, 2));
                 }
 
             }
 #line 610 "compiler/liveness.gem"
             gem_set_line(610);
-    GemVal _t19973 = gem_v_arm;
+    GemVal _t19975 = gem_v_arm;
     static GemICacheSlot _ic_2844 = {0};
-            GemVal gem_v___for_items_75 = gem_for_items_1(gem_table_get_cached(_t19973, "body", &_ic_2844));
+            GemVal gem_v___for_items_75 = gem_for_items_1(gem_table_get_cached(_t19975, "body", &_ic_2844));
 #line 610 "compiler/liveness.gem"
             gem_set_line(610);
             GemVal gem_v___for_i_75 = gem_int(0);
@@ -87651,277 +87685,277 @@ static GemVal __anon_200(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_items_76, &gem_v___for_i_76, &gem_v_live_out, &gem_v_merged, &gem_v_s, &gem_v_arm, &gem_v_arm_stmts, &gem_v___for_i_75, &gem_v___for_items_75};
                     gem_arena_reset_region(&_mk588, _rr, 9, NULL, 0);
                 }
-    GemVal _t19974 = gem_v___for_i_75;
-                if (!gem_truthy(gem_lt(_t19974, gem_for_len_1(gem_v___for_items_75)))) break;
+    GemVal _t19976 = gem_v___for_i_75;
+                if (!gem_truthy(gem_lt(_t19976, gem_for_len_1(gem_v___for_items_75)))) break;
 #line 610 "compiler/liveness.gem"
                 gem_set_line(610);
-    GemVal _t19975 = gem_v___for_items_75;
-                GemVal gem_v_bs = gem_table_get(_t19975, gem_v___for_i_75);
+    GemVal _t19977 = gem_v___for_items_75;
+                GemVal gem_v_bs = gem_table_get(_t19977, gem_v___for_i_75);
 #line 610 "compiler/liveness.gem"
                 gem_set_line(610);
                 gem_v___for_i_75 = gem_add(gem_v___for_i_75, gem_int(1));
 #line 611 "compiler/liveness.gem"
                 gem_set_line(611);
-    GemVal _t19976 = gem_v_arm_stmts;
-    GemVal _t19977[] = {_t19976, gem_v_bs};
-                (void)(gem_push_fn(NULL, _t19977, 2));
+    GemVal _t19978 = gem_v_arm_stmts;
+    GemVal _t19979[] = {_t19978, gem_v_bs};
+                (void)(gem_push_fn(NULL, _t19979, 2));
             }
 
 #line 613 "compiler/liveness.gem"
             gem_set_line(613);
-    GemVal _t19980 = gem_g___mod_liveness__transfer_stmts;
-    GemVal _t19978 = gem_v_arm_stmts;
-    GemVal _t19979[] = {_t19978, gem_v_live_out};
-    gem_check_callable(_t19980, "compiler/liveness.gem", 613);
-            GemVal gem_v_live_arm = _t19980.fn(_t19980.env, _t19979, 2);
+    GemVal _t19982 = gem_g___mod_liveness__transfer_stmts;
+    GemVal _t19980 = gem_v_arm_stmts;
+    GemVal _t19981[] = {_t19980, gem_v_live_out};
+    gem_check_callable(_t19982, "compiler/liveness.gem", 613);
+            GemVal gem_v_live_arm = _t19982.fn(_t19982.env, _t19981, 2);
 #line 614 "compiler/liveness.gem"
             gem_set_line(614);
-    GemVal _t19981 = gem_v_arm;
+    GemVal _t19983 = gem_v_arm;
     static GemICacheSlot _ic_2845 = {0};
-    GemVal _t19982 = gem_table_get_cached(_t19981, "pattern", &_ic_2845);
+    GemVal _t19984 = gem_table_get_cached(_t19983, "pattern", &_ic_2845);
     static GemICacheSlot _ic_2846 = {0};
-            if (gem_truthy(gem_neq(gem_table_get_cached(_t19982, "condition", &_ic_2846), GEM_NIL))) {
+            if (gem_truthy(gem_neq(gem_table_get_cached(_t19984, "condition", &_ic_2846), GEM_NIL))) {
 #line 615 "compiler/liveness.gem"
                 gem_set_line(615);
-    GemVal _t19987 = gem_g___mod_liveness__uses_expr;
-    GemVal _t19983 = gem_v_arm;
+    GemVal _t19989 = gem_g___mod_liveness__uses_expr;
+    GemVal _t19985 = gem_v_arm;
     static GemICacheSlot _ic_2847 = {0};
-    GemVal _t19984 = gem_table_get_cached(_t19983, "pattern", &_ic_2847);
+    GemVal _t19986 = gem_table_get_cached(_t19985, "pattern", &_ic_2847);
     static GemICacheSlot _ic_2848 = {0};
-    GemVal _t19985 = gem_table_get_cached(_t19984, "condition", &_ic_2848);
-    GemVal _t19986[] = {_t19985, gem_v_live_arm};
-    gem_check_callable(_t19987, "compiler/liveness.gem", 615);
-                (void)(_t19987.fn(_t19987.env, _t19986, 2));
+    GemVal _t19987 = gem_table_get_cached(_t19986, "condition", &_ic_2848);
+    GemVal _t19988[] = {_t19987, gem_v_live_arm};
+    gem_check_callable(_t19989, "compiler/liveness.gem", 615);
+                (void)(_t19989.fn(_t19989.env, _t19988, 2));
             }
 #line 617 "compiler/liveness.gem"
             gem_set_line(617);
-    GemVal _t19988 = gem_v_merged;
-    GemVal _t19989[] = {_t19988, gem_v_live_arm};
-            (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19989, 2));
+    GemVal _t19990 = gem_v_merged;
+    GemVal _t19991[] = {_t19990, gem_v_live_arm};
+            (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t19991, 2));
         }
 
 #line 619 "compiler/liveness.gem"
         gem_set_line(619);
-    GemVal _t19990 = gem_v_s;
+    GemVal _t19992 = gem_v_s;
     static GemICacheSlot _ic_2849 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t19990, "recv_var", &_ic_2849), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t19992, "recv_var", &_ic_2849), GEM_NIL))) {
 #line 620 "compiler/liveness.gem"
             gem_set_line(620);
-    GemVal _t19992 = gem_v_merged;
-    GemVal _t19991 = gem_v_s;
+    GemVal _t19994 = gem_v_merged;
+    GemVal _t19993 = gem_v_s;
     static GemICacheSlot _ic_2850 = {0};
-    GemVal _t19993[] = {_t19992, gem_table_get_cached(_t19991, "recv_var", &_ic_2850)};
-            (void)(gem_fn___mod_liveness_lset_remove(NULL, _t19993, 2));
+    GemVal _t19995[] = {_t19994, gem_table_get_cached(_t19993, "recv_var", &_ic_2850)};
+            (void)(gem_fn___mod_liveness_lset_remove(NULL, _t19995, 2));
         }
 #line 622 "compiler/liveness.gem"
         gem_set_line(622);
-        GemVal _t19994 = gem_v_merged;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19994, 1);
+        GemVal _t19996 = gem_v_merged;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t19996, 1);
         gem_pop_frame();
-        return _t19994;
+        return _t19996;
     } else {
-    GemVal _t19995 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t19997;
-    if (!gem_truthy(_t19995)) {
-        _t19997 = _t19995;
-    } else {
-    GemVal _t19996[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t19997 = gem_has_key_fn(NULL, _t19996, 2);
-    }
-    GemVal _t19998;
+    GemVal _t19997 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t19999;
     if (!gem_truthy(_t19997)) {
-        _t19998 = _t19997;
+        _t19999 = _t19997;
     } else {
-        _t19998 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("block", 5));
+    GemVal _t19998[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t19999 = gem_has_key_fn(NULL, _t19998, 2);
     }
     GemVal _t20000;
-    if (!gem_truthy(_t19998)) {
-        _t20000 = _t19998;
+    if (!gem_truthy(_t19999)) {
+        _t20000 = _t19999;
     } else {
-    GemVal _t19999[] = {gem_v___match_69, GEM_STR_LIT("stmts", 5)};
-        _t20000 = gem_has_key_fn(NULL, _t19999, 2);
+        _t20000 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("block", 5));
     }
-    if (gem_truthy(_t20000)) {
+    GemVal _t20002;
+    if (!gem_truthy(_t20000)) {
+        _t20002 = _t20000;
+    } else {
+    GemVal _t20001[] = {gem_v___match_69, GEM_STR_LIT("stmts", 5)};
+        _t20002 = gem_has_key_fn(NULL, _t20001, 2);
+    }
+    if (gem_truthy(_t20002)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_stmts = gem_table_get(gem_v___match_69, GEM_STR_LIT("stmts", 5));
 #line 624 "compiler/liveness.gem"
         gem_set_line(624);
-    GemVal _t20003 = gem_g___mod_liveness__transfer_stmts;
-    GemVal _t20001 = gem_v_stmts;
-    GemVal _t20002[] = {_t20001, gem_v_live_out};
-    gem_check_callable(_t20003, "compiler/liveness.gem", 624);
-        GemVal _t20004 = _t20003.fn(_t20003.env, _t20002, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20004, 1);
+    GemVal _t20005 = gem_g___mod_liveness__transfer_stmts;
+    GemVal _t20003 = gem_v_stmts;
+    GemVal _t20004[] = {_t20003, gem_v_live_out};
+    gem_check_callable(_t20005, "compiler/liveness.gem", 624);
+        GemVal _t20006 = _t20005.fn(_t20005.env, _t20004, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20006, 1);
         gem_pop_frame();
-        return _t20004;
+        return _t20006;
     } else {
-    GemVal _t20005 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t20007;
-    if (!gem_truthy(_t20005)) {
-        _t20007 = _t20005;
-    } else {
-    GemVal _t20006[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t20007 = gem_has_key_fn(NULL, _t20006, 2);
-    }
-    GemVal _t20008;
+    GemVal _t20007 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t20009;
     if (!gem_truthy(_t20007)) {
-        _t20008 = _t20007;
+        _t20009 = _t20007;
     } else {
-        _t20008 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("return", 6));
+    GemVal _t20008[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t20009 = gem_has_key_fn(NULL, _t20008, 2);
     }
     GemVal _t20010;
-    if (!gem_truthy(_t20008)) {
-        _t20010 = _t20008;
+    if (!gem_truthy(_t20009)) {
+        _t20010 = _t20009;
     } else {
-    GemVal _t20009[] = {gem_v___match_69, GEM_STR_LIT("value", 5)};
-        _t20010 = gem_has_key_fn(NULL, _t20009, 2);
+        _t20010 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("return", 6));
     }
-    if (gem_truthy(_t20010)) {
+    GemVal _t20012;
+    if (!gem_truthy(_t20010)) {
+        _t20012 = _t20010;
+    } else {
+    GemVal _t20011[] = {gem_v___match_69, GEM_STR_LIT("value", 5)};
+        _t20012 = gem_has_key_fn(NULL, _t20011, 2);
+    }
+    if (gem_truthy(_t20012)) {
 #line 0 "compiler/liveness.gem"
         gem_set_line(0);
         GemVal gem_v_value = gem_table_get(gem_v___match_69, GEM_STR_LIT("value", 5));
 #line 628 "compiler/liveness.gem"
         gem_set_line(628);
-    GemVal _t20011 = gem_table_new_braces();
-        GemVal gem_v_live_in = _t20011;
+    GemVal _t20013 = gem_table_new_braces();
+        GemVal gem_v_live_in = _t20013;
 #line 629 "compiler/liveness.gem"
         gem_set_line(629);
         if (gem_truthy(gem_neq(gem_v_value, GEM_NIL))) {
 #line 630 "compiler/liveness.gem"
             gem_set_line(630);
-    GemVal _t20014 = gem_g___mod_liveness__uses_expr;
-    GemVal _t20012 = gem_v_value;
-    GemVal _t20013[] = {_t20012, gem_v_live_in};
-    gem_check_callable(_t20014, "compiler/liveness.gem", 630);
-            (void)(_t20014.fn(_t20014.env, _t20013, 2));
+    GemVal _t20016 = gem_g___mod_liveness__uses_expr;
+    GemVal _t20014 = gem_v_value;
+    GemVal _t20015[] = {_t20014, gem_v_live_in};
+    gem_check_callable(_t20016, "compiler/liveness.gem", 630);
+            (void)(_t20016.fn(_t20016.env, _t20015, 2));
         }
 #line 632 "compiler/liveness.gem"
         gem_set_line(632);
-        GemVal _t20015 = gem_v_live_in;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20015, 1);
+        GemVal _t20017 = gem_v_live_in;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20017, 1);
         gem_pop_frame();
-        return _t20015;
+        return _t20017;
     } else {
-    GemVal _t20016 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t20018;
-    if (!gem_truthy(_t20016)) {
-        _t20018 = _t20016;
-    } else {
-    GemVal _t20017[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t20018 = gem_has_key_fn(NULL, _t20017, 2);
-    }
-    GemVal _t20019;
+    GemVal _t20018 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t20020;
     if (!gem_truthy(_t20018)) {
-        _t20019 = _t20018;
+        _t20020 = _t20018;
     } else {
-        _t20019 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("break", 5));
+    GemVal _t20019[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t20020 = gem_has_key_fn(NULL, _t20019, 2);
     }
-    if (gem_truthy(_t20019)) {
+    GemVal _t20021;
+    if (!gem_truthy(_t20020)) {
+        _t20021 = _t20020;
+    } else {
+        _t20021 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("break", 5));
+    }
+    if (gem_truthy(_t20021)) {
 #line 639 "compiler/liveness.gem"
         gem_set_line(639);
-    GemVal _t20020[] = {gem_v_live_out};
-        GemVal _t20021 = gem_fn___mod_liveness_lset_copy(NULL, _t20020, 1);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20021, 1);
+    GemVal _t20022[] = {gem_v_live_out};
+        GemVal _t20023 = gem_fn___mod_liveness_lset_copy(NULL, _t20022, 1);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20023, 1);
         gem_pop_frame();
-        return _t20021;
+        return _t20023;
     } else {
-    GemVal _t20022 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t20024;
-    if (!gem_truthy(_t20022)) {
-        _t20024 = _t20022;
-    } else {
-    GemVal _t20023[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t20024 = gem_has_key_fn(NULL, _t20023, 2);
-    }
-    GemVal _t20025;
+    GemVal _t20024 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t20026;
     if (!gem_truthy(_t20024)) {
-        _t20025 = _t20024;
+        _t20026 = _t20024;
     } else {
-        _t20025 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("continue", 8));
+    GemVal _t20025[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t20026 = gem_has_key_fn(NULL, _t20025, 2);
     }
-    if (gem_truthy(_t20025)) {
+    GemVal _t20027;
+    if (!gem_truthy(_t20026)) {
+        _t20027 = _t20026;
+    } else {
+        _t20027 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("continue", 8));
+    }
+    if (gem_truthy(_t20027)) {
 #line 643 "compiler/liveness.gem"
         gem_set_line(643);
-    GemVal _t20026[] = {gem_v_live_out};
-        GemVal _t20027 = gem_fn___mod_liveness_lset_copy(NULL, _t20026, 1);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20027, 1);
+    GemVal _t20028[] = {gem_v_live_out};
+        GemVal _t20029 = gem_fn___mod_liveness_lset_copy(NULL, _t20028, 1);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20029, 1);
         gem_pop_frame();
-        return _t20027;
+        return _t20029;
     } else {
-    GemVal _t20028 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t20030;
-    if (!gem_truthy(_t20028)) {
-        _t20030 = _t20028;
-    } else {
-    GemVal _t20029[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t20030 = gem_has_key_fn(NULL, _t20029, 2);
-    }
-    GemVal _t20031;
+    GemVal _t20030 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t20032;
     if (!gem_truthy(_t20030)) {
-        _t20031 = _t20030;
+        _t20032 = _t20030;
     } else {
-        _t20031 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("fn_def", 6));
+    GemVal _t20031[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t20032 = gem_has_key_fn(NULL, _t20031, 2);
     }
-    if (gem_truthy(_t20031)) {
+    GemVal _t20033;
+    if (!gem_truthy(_t20032)) {
+        _t20033 = _t20032;
+    } else {
+        _t20033 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("fn_def", 6));
+    }
+    if (gem_truthy(_t20033)) {
 #line 647 "compiler/liveness.gem"
         gem_set_line(647);
-    GemVal _t20032[] = {gem_v_live_out};
-        GemVal _t20033 = gem_fn___mod_liveness_lset_copy(NULL, _t20032, 1);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20033, 1);
+    GemVal _t20034[] = {gem_v_live_out};
+        GemVal _t20035 = gem_fn___mod_liveness_lset_copy(NULL, _t20034, 1);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20035, 1);
         gem_pop_frame();
-        return _t20033;
+        return _t20035;
     } else {
-    GemVal _t20034 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
-    GemVal _t20036;
-    if (!gem_truthy(_t20034)) {
-        _t20036 = _t20034;
-    } else {
-    GemVal _t20035[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
-        _t20036 = gem_has_key_fn(NULL, _t20035, 2);
-    }
-    GemVal _t20037;
+    GemVal _t20036 = gem_eq(gem_type_1(gem_v___match_69), GEM_STR_LIT("table", 5));
+    GemVal _t20038;
     if (!gem_truthy(_t20036)) {
-        _t20037 = _t20036;
+        _t20038 = _t20036;
     } else {
-        _t20037 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("call", 4));
+    GemVal _t20037[] = {gem_v___match_69, GEM_STR_LIT("tag", 3)};
+        _t20038 = gem_has_key_fn(NULL, _t20037, 2);
     }
-    if (gem_truthy(_t20037)) {
+    GemVal _t20039;
+    if (!gem_truthy(_t20038)) {
+        _t20039 = _t20038;
+    } else {
+        _t20039 = gem_eq(gem_table_get(gem_v___match_69, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("call", 4));
+    }
+    if (gem_truthy(_t20039)) {
 #line 650 "compiler/liveness.gem"
         gem_set_line(650);
-    GemVal _t20038[] = {gem_v_live_out};
-        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t20038, 1);
+    GemVal _t20040[] = {gem_v_live_out};
+        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t20040, 1);
 #line 651 "compiler/liveness.gem"
         gem_set_line(651);
-    GemVal _t20041 = gem_g___mod_liveness__uses_expr;
-    GemVal _t20039 = gem_v_s;
-    GemVal _t20040[] = {_t20039, gem_v_live_in};
-    gem_check_callable(_t20041, "compiler/liveness.gem", 651);
-        (void)(_t20041.fn(_t20041.env, _t20040, 2));
+    GemVal _t20043 = gem_g___mod_liveness__uses_expr;
+    GemVal _t20041 = gem_v_s;
+    GemVal _t20042[] = {_t20041, gem_v_live_in};
+    gem_check_callable(_t20043, "compiler/liveness.gem", 651);
+        (void)(_t20043.fn(_t20043.env, _t20042, 2));
 #line 652 "compiler/liveness.gem"
         gem_set_line(652);
-        GemVal _t20042 = gem_v_live_in;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20042, 1);
+        GemVal _t20044 = gem_v_live_in;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20044, 1);
         gem_pop_frame();
-        return _t20042;
+        return _t20044;
     } else {
 #line 655 "compiler/liveness.gem"
         gem_set_line(655);
-    GemVal _t20043[] = {gem_v_live_out};
-        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t20043, 1);
+    GemVal _t20045[] = {gem_v_live_out};
+        GemVal gem_v_live_in = gem_fn___mod_liveness_lset_copy(NULL, _t20045, 1);
 #line 656 "compiler/liveness.gem"
         gem_set_line(656);
-    GemVal _t20046 = gem_g___mod_liveness__uses_expr;
-    GemVal _t20044 = gem_v_s;
-    GemVal _t20045[] = {_t20044, gem_v_live_in};
-    gem_check_callable(_t20046, "compiler/liveness.gem", 656);
-        (void)(_t20046.fn(_t20046.env, _t20045, 2));
+    GemVal _t20048 = gem_g___mod_liveness__uses_expr;
+    GemVal _t20046 = gem_v_s;
+    GemVal _t20047[] = {_t20046, gem_v_live_in};
+    gem_check_callable(_t20048, "compiler/liveness.gem", 656);
+        (void)(_t20048.fn(_t20048.env, _t20047, 2));
 #line 657 "compiler/liveness.gem"
         gem_set_line(657);
-        GemVal _t20047 = gem_v_live_in;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20047, 1);
+        GemVal _t20049 = gem_v_live_in;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20049, 1);
         gem_pop_frame();
-        return _t20047;
+        return _t20049;
     }
     }
     }
@@ -87953,82 +87987,82 @@ static GemVal __anon_201(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
 #line 735 "compiler/liveness.gem"
         gem_set_line(735);
-        GemVal _t20048 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20048, 1);
+        GemVal _t20050 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20050, 1);
         gem_pop_frame();
-        return _t20048;
+        return _t20050;
     }
 #line 737 "compiler/liveness.gem"
     gem_set_line(737);
-    GemVal _t20049 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
-    GemVal _t20051;
-    if (gem_truthy(_t20049)) {
-        _t20051 = _t20049;
-    } else {
-    GemVal _t20050 = gem_v_node;
-    static GemICacheSlot _ic_2851 = {0};
-        _t20051 = gem_eq(gem_table_get_cached(_t20050, "tag", &_ic_2851), GEM_NIL);
-    }
+    GemVal _t20051 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
+    GemVal _t20053;
     if (gem_truthy(_t20051)) {
+        _t20053 = _t20051;
+    } else {
+    GemVal _t20052 = gem_v_node;
+    static GemICacheSlot _ic_2851 = {0};
+        _t20053 = gem_eq(gem_table_get_cached(_t20052, "tag", &_ic_2851), GEM_NIL);
+    }
+    if (gem_truthy(_t20053)) {
 #line 738 "compiler/liveness.gem"
         gem_set_line(738);
-        GemVal _t20052 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20052, 1);
+        GemVal _t20054 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20054, 1);
         gem_pop_frame();
-        return _t20052;
+        return _t20054;
     }
 #line 740 "compiler/liveness.gem"
     gem_set_line(740);
-    GemVal _t20053 = gem_v_node;
+    GemVal _t20055 = gem_v_node;
     static GemICacheSlot _ic_2852 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20053, "tag", &_ic_2852), GEM_STR_LIT("anon_fn", 7)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20055, "tag", &_ic_2852), GEM_STR_LIT("anon_fn", 7)))) {
 #line 741 "compiler/liveness.gem"
         gem_set_line(741);
-    GemVal _t20054[] = {gem_v_defined};
-        GemVal gem_v_inner = gem_fn___mod_liveness_lset_copy(NULL, _t20054, 1);
+    GemVal _t20056[] = {gem_v_defined};
+        GemVal gem_v_inner = gem_fn___mod_liveness_lset_copy(NULL, _t20056, 1);
 #line 742 "compiler/liveness.gem"
         gem_set_line(742);
-    GemVal _t20056 = gem_v_inner;
-    GemVal _t20055 = gem_v_node;
+    GemVal _t20058 = gem_v_inner;
+    GemVal _t20057 = gem_v_node;
     static GemICacheSlot _ic_2853 = {0};
-    GemVal _t20057[] = {_t20056, gem_table_get_cached(_t20055, "params", &_ic_2853)};
-        (void)(gem_fn___mod_liveness_lset_add_array(NULL, _t20057, 2));
+    GemVal _t20059[] = {_t20058, gem_table_get_cached(_t20057, "params", &_ic_2853)};
+        (void)(gem_fn___mod_liveness_lset_add_array(NULL, _t20059, 2));
 #line 743 "compiler/liveness.gem"
         gem_set_line(743);
-    GemVal _t20058 = gem_v_node;
+    GemVal _t20060 = gem_v_node;
     static GemICacheSlot _ic_2854 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20058, "rest_param", &_ic_2854), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20060, "rest_param", &_ic_2854), GEM_NIL))) {
 #line 744 "compiler/liveness.gem"
             gem_set_line(744);
-    GemVal _t20060 = gem_v_inner;
-    GemVal _t20059 = gem_v_node;
+    GemVal _t20062 = gem_v_inner;
+    GemVal _t20061 = gem_v_node;
     static GemICacheSlot _ic_2855 = {0};
-            gem_table_set(_t20060, gem_table_get_cached(_t20059, "rest_param", &_ic_2855), gem_bool(1));
+            gem_table_set(_t20062, gem_table_get_cached(_t20061, "rest_param", &_ic_2855), gem_bool(1));
         }
 #line 746 "compiler/liveness.gem"
         gem_set_line(746);
-    GemVal _t20061 = gem_table_new_braces();
-        GemVal gem_v_free = _t20061;
+    GemVal _t20063 = gem_table_new_braces();
+        GemVal gem_v_free = _t20063;
 #line 747 "compiler/liveness.gem"
         gem_set_line(747);
-    GemVal _t20066 = gem_g___mod_liveness__collect_free_stmts;
-    GemVal _t20062 = gem_v_node;
+    GemVal _t20068 = gem_g___mod_liveness__collect_free_stmts;
+    GemVal _t20064 = gem_v_node;
     static GemICacheSlot _ic_2856 = {0};
-    GemVal _t20064 = gem_table_get_cached(_t20062, "body", &_ic_2856);
-    GemVal _t20063 = gem_v_inner;
-    GemVal _t20065[] = {_t20064, _t20063, gem_v_free};
-    gem_check_callable(_t20066, "compiler/liveness.gem", 747);
-        (void)(_t20066.fn(_t20066.env, _t20065, 3));
+    GemVal _t20066 = gem_table_get_cached(_t20064, "body", &_ic_2856);
+    GemVal _t20065 = gem_v_inner;
+    GemVal _t20067[] = {_t20066, _t20065, gem_v_free};
+    gem_check_callable(_t20068, "compiler/liveness.gem", 747);
+        (void)(_t20068.fn(_t20068.env, _t20067, 3));
 #line 748 "compiler/liveness.gem"
         gem_set_line(748);
-    GemVal _t20067 = gem_v_node;
+    GemVal _t20069 = gem_v_node;
     static GemICacheSlot _ic_2857 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20067, "defaults", &_ic_2857), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20069, "defaults", &_ic_2857), GEM_NIL))) {
 #line 749 "compiler/liveness.gem"
             gem_set_line(749);
-    GemVal _t20068 = gem_v_node;
+    GemVal _t20070 = gem_v_node;
     static GemICacheSlot _ic_2858 = {0};
-            GemVal gem_v___for_items_77 = gem_for_items_1(gem_table_get_cached(_t20068, "defaults", &_ic_2858));
+            GemVal gem_v___for_items_77 = gem_for_items_1(gem_table_get_cached(_t20070, "defaults", &_ic_2858));
 #line 749 "compiler/liveness.gem"
             gem_set_line(749);
             GemVal gem_v___for_i_77 = gem_int(0);
@@ -88042,12 +88076,12 @@ static GemVal __anon_201(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v_caps, &gem_v_free, &gem_v___for_i_77, &gem_v_inner, &gem_v___for_items_77};
                     gem_arena_reset_region(&_mk589, _rr, 5, NULL, 0);
                 }
-    GemVal _t20069 = gem_v___for_i_77;
-                if (!gem_truthy(gem_lt(_t20069, gem_for_len_1(gem_v___for_items_77)))) break;
+    GemVal _t20071 = gem_v___for_i_77;
+                if (!gem_truthy(gem_lt(_t20071, gem_for_len_1(gem_v___for_items_77)))) break;
 #line 749 "compiler/liveness.gem"
                 gem_set_line(749);
-    GemVal _t20070 = gem_v___for_items_77;
-                GemVal gem_v_d = gem_table_get(_t20070, gem_v___for_i_77);
+    GemVal _t20072 = gem_v___for_items_77;
+                GemVal gem_v_d = gem_table_get(_t20072, gem_v___for_i_77);
 #line 749 "compiler/liveness.gem"
                 gem_set_line(749);
                 gem_v___for_i_77 = gem_add(gem_v___for_i_77, gem_int(1));
@@ -88056,54 +88090,54 @@ static GemVal __anon_201(void *_env, GemVal *args, int argc) {
                 if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
 #line 751 "compiler/liveness.gem"
                     gem_set_line(751);
-    GemVal _t20074 = gem_g___mod_liveness__collect_free_node;
-    GemVal _t20072 = gem_v_d;
-    GemVal _t20071 = gem_v_inner;
-    GemVal _t20073[] = {_t20072, _t20071, gem_v_free};
-    gem_check_callable(_t20074, "compiler/liveness.gem", 751);
-                    (void)(_t20074.fn(_t20074.env, _t20073, 3));
+    GemVal _t20076 = gem_g___mod_liveness__collect_free_node;
+    GemVal _t20074 = gem_v_d;
+    GemVal _t20073 = gem_v_inner;
+    GemVal _t20075[] = {_t20074, _t20073, gem_v_free};
+    gem_check_callable(_t20076, "compiler/liveness.gem", 751);
+                    (void)(_t20076.fn(_t20076.env, _t20075, 3));
                 }
             }
 
         }
 #line 755 "compiler/liveness.gem"
         gem_set_line(755);
-    GemVal _t20075 = gem_v_caps;
-    GemVal _t20076[] = {_t20075, gem_v_free};
-        (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t20076, 2));
+    GemVal _t20077 = gem_v_caps;
+    GemVal _t20078[] = {_t20077, gem_v_free};
+        (void)(gem_fn___mod_liveness_lset_union_into(NULL, _t20078, 2));
 #line 756 "compiler/liveness.gem"
         gem_set_line(756);
-        GemVal _t20077 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20077, 1);
-        gem_pop_frame();
-        return _t20077;
-    }
-#line 758 "compiler/liveness.gem"
-    gem_set_line(758);
-    GemVal _t20078 = gem_v_node;
-    static GemICacheSlot _ic_2859 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20078, "tag", &_ic_2859), GEM_STR_LIT("fn_def", 6)))) {
-#line 759 "compiler/liveness.gem"
-        gem_set_line(759);
         GemVal _t20079 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20079, 1);
         gem_pop_frame();
         return _t20079;
     }
+#line 758 "compiler/liveness.gem"
+    gem_set_line(758);
+    GemVal _t20080 = gem_v_node;
+    static GemICacheSlot _ic_2859 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20080, "tag", &_ic_2859), GEM_STR_LIT("fn_def", 6)))) {
+#line 759 "compiler/liveness.gem"
+        gem_set_line(759);
+        GemVal _t20081 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20081, 1);
+        gem_pop_frame();
+        return _t20081;
+    }
 #line 765 "compiler/liveness.gem"
     gem_set_line(765);
-    GemVal _t20080[] = {gem_v_node};
-    if (gem_truthy(gem_fn___mod_liveness_liveness_is_spawn_with_closure(NULL, _t20080, 1))) {
+    GemVal _t20082[] = {gem_v_node};
+    if (gem_truthy(gem_fn___mod_liveness_liveness_is_spawn_with_closure(NULL, _t20082, 1))) {
 #line 766 "compiler/liveness.gem"
         gem_set_line(766);
-    GemVal _t20085 = gem_g___mod_liveness_collect_closure_captures_in_node;
-    GemVal _t20081 = gem_v_node;
+    GemVal _t20087 = gem_g___mod_liveness_collect_closure_captures_in_node;
+    GemVal _t20083 = gem_v_node;
     static GemICacheSlot _ic_2860 = {0};
-    GemVal _t20083 = gem_table_get_cached(_t20081, "func", &_ic_2860);
-    GemVal _t20082 = gem_v_defined;
-    GemVal _t20084[] = {_t20083, _t20082, gem_v_caps};
-    gem_check_callable(_t20085, "compiler/liveness.gem", 766);
-        (void)(_t20085.fn(_t20085.env, _t20084, 3));
+    GemVal _t20085 = gem_table_get_cached(_t20083, "func", &_ic_2860);
+    GemVal _t20084 = gem_v_defined;
+    GemVal _t20086[] = {_t20085, _t20084, gem_v_caps};
+    gem_check_callable(_t20087, "compiler/liveness.gem", 766);
+        (void)(_t20087.fn(_t20087.env, _t20086, 3));
 #line 767 "compiler/liveness.gem"
         gem_set_line(767);
         GemVal gem_v_i = gem_int(1);
@@ -88117,31 +88151,31 @@ static GemVal __anon_201(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_node, &gem_v_defined, &gem_v_caps, &gem_v_i};
                 gem_arena_reset_region(&_mk590, _rr, 4, NULL, 0);
             }
-    GemVal _t20087 = gem_v_i;
-    GemVal _t20086 = gem_v_node;
+    GemVal _t20089 = gem_v_i;
+    GemVal _t20088 = gem_v_node;
     static GemICacheSlot _ic_2861 = {0};
-            if (!gem_truthy(gem_lt(_t20087, gem_len_1(gem_table_get_cached(_t20086, "args", &_ic_2861))))) break;
+            if (!gem_truthy(gem_lt(_t20089, gem_len_1(gem_table_get_cached(_t20088, "args", &_ic_2861))))) break;
 #line 769 "compiler/liveness.gem"
             gem_set_line(769);
-    GemVal _t20093 = gem_g___mod_liveness_collect_closure_captures_in_node;
-    GemVal _t20088 = gem_v_node;
+    GemVal _t20095 = gem_g___mod_liveness_collect_closure_captures_in_node;
+    GemVal _t20090 = gem_v_node;
     static GemICacheSlot _ic_2862 = {0};
-    GemVal _t20089 = gem_table_get_cached(_t20088, "args", &_ic_2862);
-    GemVal _t20091 = gem_table_get(_t20089, gem_v_i);
-    GemVal _t20090 = gem_v_defined;
-    GemVal _t20092[] = {_t20091, _t20090, gem_v_caps};
-    gem_check_callable(_t20093, "compiler/liveness.gem", 769);
-            (void)(_t20093.fn(_t20093.env, _t20092, 3));
+    GemVal _t20091 = gem_table_get_cached(_t20090, "args", &_ic_2862);
+    GemVal _t20093 = gem_table_get(_t20091, gem_v_i);
+    GemVal _t20092 = gem_v_defined;
+    GemVal _t20094[] = {_t20093, _t20092, gem_v_caps};
+    gem_check_callable(_t20095, "compiler/liveness.gem", 769);
+            (void)(_t20095.fn(_t20095.env, _t20094, 3));
 #line 770 "compiler/liveness.gem"
             gem_set_line(770);
             gem_v_i = gem_add(gem_v_i, gem_int(1));
         }
 #line 772 "compiler/liveness.gem"
         gem_set_line(772);
-        GemVal _t20094 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20094, 1);
+        GemVal _t20096 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20096, 1);
         gem_pop_frame();
-        return _t20094;
+        return _t20096;
     }
     {
 #line 774 "compiler/liveness.gem"
@@ -88163,58 +88197,58 @@ static GemVal __anon_201(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v___for_i_78, &gem_v_defined, &gem_v_caps, &gem_v___for_tbl_78, &gem_v___for_len_78};
                 gem_arena_reset_region(&_mk591, _rr, 5, NULL, 0);
             }
-    GemVal _t20095 = gem_v___for_i_78;
-            if (!gem_truthy(gem_lt(_t20095, gem_v___for_len_78))) break;
+    GemVal _t20097 = gem_v___for_i_78;
+            if (!gem_truthy(gem_lt(_t20097, gem_v___for_len_78))) break;
 #line 774 "compiler/liveness.gem"
             gem_set_line(774);
-    GemVal _t20096 = gem_v___for_tbl_78;
-            GemVal gem_v_nk = gem_table_key_at_2(_t20096, gem_v___for_i_78);
+    GemVal _t20098 = gem_v___for_tbl_78;
+            GemVal gem_v_nk = gem_table_key_at_2(_t20098, gem_v___for_i_78);
 #line 774 "compiler/liveness.gem"
             gem_set_line(774);
-    GemVal _t20097 = gem_v___for_tbl_78;
-            GemVal gem_v_v = gem_table_val_at_2(_t20097, gem_v___for_i_78);
+    GemVal _t20099 = gem_v___for_tbl_78;
+            GemVal gem_v_v = gem_table_val_at_2(_t20099, gem_v___for_i_78);
 #line 774 "compiler/liveness.gem"
             gem_set_line(774);
             gem_v___for_i_78 = gem_add(gem_v___for_i_78, gem_int(1));
 #line 775 "compiler/liveness.gem"
             gem_set_line(775);
-    GemVal _t20098 = gem_neq(gem_v_nk, GEM_STR_LIT("tag", 3));
-    GemVal _t20099;
-    if (!gem_truthy(_t20098)) {
-        _t20099 = _t20098;
+    GemVal _t20100 = gem_neq(gem_v_nk, GEM_STR_LIT("tag", 3));
+    GemVal _t20101;
+    if (!gem_truthy(_t20100)) {
+        _t20101 = _t20100;
     } else {
-        _t20099 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
+        _t20101 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
     }
-            if (gem_truthy(_t20099)) {
+            if (gem_truthy(_t20101)) {
 #line 776 "compiler/liveness.gem"
                 gem_set_line(776);
-    GemVal _t20100[] = {gem_v_v};
-                GemVal gem_v_vks = gem_keys_fn(NULL, _t20100, 1);
+    GemVal _t20102[] = {gem_v_v};
+                GemVal gem_v_vks = gem_keys_fn(NULL, _t20102, 1);
 #line 777 "compiler/liveness.gem"
                 gem_set_line(777);
-    GemVal _t20101 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
-    GemVal _t20102;
-    if (!gem_truthy(_t20101)) {
-        _t20102 = _t20101;
+    GemVal _t20103 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
+    GemVal _t20104;
+    if (!gem_truthy(_t20103)) {
+        _t20104 = _t20103;
     } else {
-        _t20102 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
+        _t20104 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
     }
-                if (gem_truthy(_t20102)) {
+                if (gem_truthy(_t20104)) {
 #line 780 "compiler/liveness.gem"
                     gem_set_line(780);
-    GemVal _t20104 = gem_v_v;
-    GemVal _t20103 = gem_v_defined;
-    GemVal _t20105[] = {_t20104, _t20103, gem_v_caps};
-                    (void)(gem_fn___mod_liveness_collect_closure_captures_in_stmts(NULL, _t20105, 3));
+    GemVal _t20106 = gem_v_v;
+    GemVal _t20105 = gem_v_defined;
+    GemVal _t20107[] = {_t20106, _t20105, gem_v_caps};
+                    (void)(gem_fn___mod_liveness_collect_closure_captures_in_stmts(NULL, _t20107, 3));
                 } else {
 #line 782 "compiler/liveness.gem"
                     gem_set_line(782);
-    GemVal _t20109 = gem_g___mod_liveness_collect_closure_captures_in_node;
-    GemVal _t20107 = gem_v_v;
-    GemVal _t20106 = gem_v_defined;
-    GemVal _t20108[] = {_t20107, _t20106, gem_v_caps};
-    gem_check_callable(_t20109, "compiler/liveness.gem", 782);
-                    (void)(_t20109.fn(_t20109.env, _t20108, 3));
+    GemVal _t20111 = gem_g___mod_liveness_collect_closure_captures_in_node;
+    GemVal _t20109 = gem_v_v;
+    GemVal _t20108 = gem_v_defined;
+    GemVal _t20110[] = {_t20109, _t20108, gem_v_caps};
+    gem_check_callable(_t20111, "compiler/liveness.gem", 782);
+                    (void)(_t20111.fn(_t20111.env, _t20110, 3));
                 }
             }
         }
@@ -88235,8 +88269,8 @@ static GemVal __anon_202(void *_env, GemVal *args, int argc) {
     gem_arena_point(&_ret_pt);
 #line 855 "compiler/liveness.gem"
     gem_set_line(855);
-    GemVal _t20110[] = {gem_v_live_out};
-    GemVal gem_v_live = gem_fn___mod_liveness_lset_copy(NULL, _t20110, 1);
+    GemVal _t20112[] = {gem_v_live_out};
+    GemVal gem_v_live = gem_fn___mod_liveness_lset_copy(NULL, _t20112, 1);
 #line 856 "compiler/liveness.gem"
     gem_set_line(856);
     GemVal gem_v_i = gem_sub(gem_len_1(gem_v_stmts), gem_int(1));
@@ -88253,22 +88287,22 @@ static GemVal __anon_202(void *_env, GemVal *args, int argc) {
         if (!gem_truthy(gem_ge(gem_v_i, gem_int(0)))) break;
 #line 858 "compiler/liveness.gem"
         gem_set_line(858);
-    GemVal _t20114 = gem_g___mod_liveness__attach_node;
-    GemVal _t20111 = gem_v_stmts;
-    GemVal _t20112 = gem_table_get(_t20111, gem_v_i);
-    GemVal _t20113[] = {_t20112, gem_v_live};
-    gem_check_callable(_t20114, "compiler/liveness.gem", 858);
-        gem_v_live = _t20114.fn(_t20114.env, _t20113, 2);
+    GemVal _t20116 = gem_g___mod_liveness__attach_node;
+    GemVal _t20113 = gem_v_stmts;
+    GemVal _t20114 = gem_table_get(_t20113, gem_v_i);
+    GemVal _t20115[] = {_t20114, gem_v_live};
+    gem_check_callable(_t20116, "compiler/liveness.gem", 858);
+        gem_v_live = _t20116.fn(_t20116.env, _t20115, 2);
 #line 859 "compiler/liveness.gem"
         gem_set_line(859);
         gem_v_i = gem_sub(gem_v_i, gem_int(1));
     }
 #line 861 "compiler/liveness.gem"
     gem_set_line(861);
-    GemVal _t20115 = gem_v_live;
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20115, 1);
+    GemVal _t20117 = gem_v_live;
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20117, 1);
     gem_pop_frame();
-    return _t20115;
+    return _t20117;
 }
 
 struct _closure___anon_203 {
@@ -88284,55 +88318,55 @@ static GemVal __anon_203(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
 #line 871 "compiler/liveness.gem"
         gem_set_line(871);
-        GemVal _t20116 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20116, 1);
+        GemVal _t20118 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20118, 1);
         gem_pop_frame();
-        return _t20116;
+        return _t20118;
     }
 #line 873 "compiler/liveness.gem"
     gem_set_line(873);
-    GemVal _t20117 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
-    GemVal _t20119;
-    if (gem_truthy(_t20117)) {
-        _t20119 = _t20117;
-    } else {
-    GemVal _t20118 = gem_v_node;
-    static GemICacheSlot _ic_2863 = {0};
-        _t20119 = gem_eq(gem_table_get_cached(_t20118, "tag", &_ic_2863), GEM_NIL);
-    }
+    GemVal _t20119 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
+    GemVal _t20121;
     if (gem_truthy(_t20119)) {
+        _t20121 = _t20119;
+    } else {
+    GemVal _t20120 = gem_v_node;
+    static GemICacheSlot _ic_2863 = {0};
+        _t20121 = gem_eq(gem_table_get_cached(_t20120, "tag", &_ic_2863), GEM_NIL);
+    }
+    if (gem_truthy(_t20121)) {
 #line 874 "compiler/liveness.gem"
         gem_set_line(874);
-        GemVal _t20120 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20120, 1);
+        GemVal _t20122 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20122, 1);
         gem_pop_frame();
-        return _t20120;
+        return _t20122;
     }
 #line 876 "compiler/liveness.gem"
     gem_set_line(876);
-    GemVal _t20121 = gem_v_node;
+    GemVal _t20123 = gem_v_node;
     static GemICacheSlot _ic_2864 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20121, "tag", &_ic_2864), GEM_STR_LIT("anon_fn", 7)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20123, "tag", &_ic_2864), GEM_STR_LIT("anon_fn", 7)))) {
 #line 877 "compiler/liveness.gem"
         gem_set_line(877);
-    GemVal _t20126 = gem_g___mod_liveness__attach_stmts;
-    GemVal _t20122 = gem_v_node;
+    GemVal _t20128 = gem_g___mod_liveness__attach_stmts;
+    GemVal _t20124 = gem_v_node;
     static GemICacheSlot _ic_2865 = {0};
-    GemVal _t20124 = gem_table_get_cached(_t20122, "body", &_ic_2865);
-    GemVal _t20123 = gem_table_new_braces();
-    GemVal _t20125[] = {_t20124, _t20123};
-    gem_check_callable(_t20126, "compiler/liveness.gem", 877);
-        (void)(_t20126.fn(_t20126.env, _t20125, 2));
+    GemVal _t20126 = gem_table_get_cached(_t20124, "body", &_ic_2865);
+    GemVal _t20125 = gem_table_new_braces();
+    GemVal _t20127[] = {_t20126, _t20125};
+    gem_check_callable(_t20128, "compiler/liveness.gem", 877);
+        (void)(_t20128.fn(_t20128.env, _t20127, 2));
 #line 878 "compiler/liveness.gem"
         gem_set_line(878);
-    GemVal _t20127 = gem_v_node;
+    GemVal _t20129 = gem_v_node;
     static GemICacheSlot _ic_2866 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20127, "defaults", &_ic_2866), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20129, "defaults", &_ic_2866), GEM_NIL))) {
 #line 879 "compiler/liveness.gem"
             gem_set_line(879);
-    GemVal _t20128 = gem_v_node;
+    GemVal _t20130 = gem_v_node;
     static GemICacheSlot _ic_2867 = {0};
-            GemVal gem_v___for_items_81 = gem_for_items_1(gem_table_get_cached(_t20128, "defaults", &_ic_2867));
+            GemVal gem_v___for_items_81 = gem_for_items_1(gem_table_get_cached(_t20130, "defaults", &_ic_2867));
 #line 879 "compiler/liveness.gem"
             gem_set_line(879);
             GemVal gem_v___for_i_81 = gem_int(0);
@@ -88346,12 +88380,12 @@ static GemVal __anon_203(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_81, &gem_v___for_items_81};
                     gem_arena_reset_region(&_mk593, _rr, 2, NULL, 0);
                 }
-    GemVal _t20129 = gem_v___for_i_81;
-                if (!gem_truthy(gem_lt(_t20129, gem_for_len_1(gem_v___for_items_81)))) break;
+    GemVal _t20131 = gem_v___for_i_81;
+                if (!gem_truthy(gem_lt(_t20131, gem_for_len_1(gem_v___for_items_81)))) break;
 #line 879 "compiler/liveness.gem"
                 gem_set_line(879);
-    GemVal _t20130 = gem_v___for_items_81;
-                GemVal gem_v_d = gem_table_get(_t20130, gem_v___for_i_81);
+    GemVal _t20132 = gem_v___for_items_81;
+                GemVal gem_v_d = gem_table_get(_t20132, gem_v___for_i_81);
 #line 879 "compiler/liveness.gem"
                 gem_set_line(879);
                 gem_v___for_i_81 = gem_add(gem_v___for_i_81, gem_int(1));
@@ -88360,32 +88394,32 @@ static GemVal __anon_203(void *_env, GemVal *args, int argc) {
                 if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
 #line 881 "compiler/liveness.gem"
                     gem_set_line(881);
-    GemVal _t20132 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20131[] = {gem_v_d};
-    gem_check_callable(_t20132, "compiler/liveness.gem", 881);
-                    (void)(_t20132.fn(_t20132.env, _t20131, 1));
+    GemVal _t20134 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20133[] = {gem_v_d};
+    gem_check_callable(_t20134, "compiler/liveness.gem", 881);
+                    (void)(_t20134.fn(_t20134.env, _t20133, 1));
                 }
             }
 
         }
 #line 885 "compiler/liveness.gem"
         gem_set_line(885);
-        GemVal _t20133 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20133, 1);
-        gem_pop_frame();
-        return _t20133;
-    }
-#line 887 "compiler/liveness.gem"
-    gem_set_line(887);
-    GemVal _t20134 = gem_v_node;
-    static GemICacheSlot _ic_2868 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20134, "tag", &_ic_2868), GEM_STR_LIT("fn_def", 6)))) {
-#line 888 "compiler/liveness.gem"
-        gem_set_line(888);
         GemVal _t20135 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20135, 1);
         gem_pop_frame();
         return _t20135;
+    }
+#line 887 "compiler/liveness.gem"
+    gem_set_line(887);
+    GemVal _t20136 = gem_v_node;
+    static GemICacheSlot _ic_2868 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20136, "tag", &_ic_2868), GEM_STR_LIT("fn_def", 6)))) {
+#line 888 "compiler/liveness.gem"
+        gem_set_line(888);
+        GemVal _t20137 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20137, 1);
+        gem_pop_frame();
+        return _t20137;
     }
     {
 #line 890 "compiler/liveness.gem"
@@ -88407,43 +88441,43 @@ static GemVal __anon_203(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v___for_i_82, &gem_v___for_len_82, &gem_v___for_tbl_82};
                 gem_arena_reset_region(&_mk594, _rr, 3, NULL, 0);
             }
-    GemVal _t20136 = gem_v___for_i_82;
-            if (!gem_truthy(gem_lt(_t20136, gem_v___for_len_82))) break;
+    GemVal _t20138 = gem_v___for_i_82;
+            if (!gem_truthy(gem_lt(_t20138, gem_v___for_len_82))) break;
 #line 890 "compiler/liveness.gem"
             gem_set_line(890);
-    GemVal _t20137 = gem_v___for_tbl_82;
-            GemVal gem_v_nk = gem_table_key_at_2(_t20137, gem_v___for_i_82);
+    GemVal _t20139 = gem_v___for_tbl_82;
+            GemVal gem_v_nk = gem_table_key_at_2(_t20139, gem_v___for_i_82);
 #line 890 "compiler/liveness.gem"
             gem_set_line(890);
-    GemVal _t20138 = gem_v___for_tbl_82;
-            GemVal gem_v_v = gem_table_val_at_2(_t20138, gem_v___for_i_82);
+    GemVal _t20140 = gem_v___for_tbl_82;
+            GemVal gem_v_v = gem_table_val_at_2(_t20140, gem_v___for_i_82);
 #line 890 "compiler/liveness.gem"
             gem_set_line(890);
             gem_v___for_i_82 = gem_add(gem_v___for_i_82, gem_int(1));
 #line 891 "compiler/liveness.gem"
             gem_set_line(891);
-    GemVal _t20139 = gem_neq(gem_v_nk, GEM_STR_LIT("tag", 3));
-    GemVal _t20140;
-    if (!gem_truthy(_t20139)) {
-        _t20140 = _t20139;
+    GemVal _t20141 = gem_neq(gem_v_nk, GEM_STR_LIT("tag", 3));
+    GemVal _t20142;
+    if (!gem_truthy(_t20141)) {
+        _t20142 = _t20141;
     } else {
-        _t20140 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
+        _t20142 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
     }
-            if (gem_truthy(_t20140)) {
+            if (gem_truthy(_t20142)) {
 #line 892 "compiler/liveness.gem"
                 gem_set_line(892);
-    GemVal _t20141[] = {gem_v_v};
-                GemVal gem_v_vks = gem_keys_fn(NULL, _t20141, 1);
+    GemVal _t20143[] = {gem_v_v};
+                GemVal gem_v_vks = gem_keys_fn(NULL, _t20143, 1);
 #line 893 "compiler/liveness.gem"
                 gem_set_line(893);
-    GemVal _t20142 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
-    GemVal _t20143;
-    if (!gem_truthy(_t20142)) {
-        _t20143 = _t20142;
+    GemVal _t20144 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
+    GemVal _t20145;
+    if (!gem_truthy(_t20144)) {
+        _t20145 = _t20144;
     } else {
-        _t20143 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
+        _t20145 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
     }
-                if (gem_truthy(_t20143)) {
+                if (gem_truthy(_t20145)) {
 #line 894 "compiler/liveness.gem"
                     gem_set_line(894);
                     GemVal gem_v_vi = gem_int(0);
@@ -88457,19 +88491,19 @@ static GemVal __anon_203(void *_env, GemVal *args, int argc) {
                             GemVal *_rr[] = {&gem_v___for_i_82, &gem_v___for_len_82, &gem_v___for_tbl_82, &gem_v_v, &gem_v_vi};
                             gem_arena_reset_region(&_mk595, _rr, 5, NULL, 0);
                         }
-    GemVal _t20144 = gem_v_vi;
-                        if (!gem_truthy(gem_lt(_t20144, gem_len_1(gem_v_v)))) break;
+    GemVal _t20146 = gem_v_vi;
+                        if (!gem_truthy(gem_lt(_t20146, gem_len_1(gem_v_v)))) break;
 #line 896 "compiler/liveness.gem"
                         gem_set_line(896);
-    GemVal _t20145 = gem_v_v;
-                        if (gem_truthy(gem_eq(gem_type_1(gem_table_get(_t20145, gem_v_vi)), GEM_STR_LIT("table", 5)))) {
+    GemVal _t20147 = gem_v_v;
+                        if (gem_truthy(gem_eq(gem_type_1(gem_table_get(_t20147, gem_v_vi)), GEM_STR_LIT("table", 5)))) {
 #line 897 "compiler/liveness.gem"
                             gem_set_line(897);
-    GemVal _t20148 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20146 = gem_v_v;
-    GemVal _t20147[] = {gem_table_get(_t20146, gem_v_vi)};
-    gem_check_callable(_t20148, "compiler/liveness.gem", 897);
-                            (void)(_t20148.fn(_t20148.env, _t20147, 1));
+    GemVal _t20150 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20148 = gem_v_v;
+    GemVal _t20149[] = {gem_table_get(_t20148, gem_v_vi)};
+    gem_check_callable(_t20150, "compiler/liveness.gem", 897);
+                            (void)(_t20150.fn(_t20150.env, _t20149, 1));
                         }
 #line 899 "compiler/liveness.gem"
                         gem_set_line(899);
@@ -88478,10 +88512,10 @@ static GemVal __anon_203(void *_env, GemVal *args, int argc) {
                 } else {
 #line 902 "compiler/liveness.gem"
                     gem_set_line(902);
-    GemVal _t20150 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20149[] = {gem_v_v};
-    gem_check_callable(_t20150, "compiler/liveness.gem", 902);
-                    (void)(_t20150.fn(_t20150.env, _t20149, 1));
+    GemVal _t20152 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20151[] = {gem_v_v};
+    gem_check_callable(_t20152, "compiler/liveness.gem", 902);
+                    (void)(_t20152.fn(_t20152.env, _t20151, 1));
                 }
             }
         }
@@ -88505,192 +88539,192 @@ static GemVal __anon_204(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_s, GEM_NIL))) {
 #line 910 "compiler/liveness.gem"
         gem_set_line(910);
-        GemVal _t20151 = gem_v_live_out;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20151, 1);
+        GemVal _t20153 = gem_v_live_out;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20153, 1);
         gem_pop_frame();
-        return _t20151;
+        return _t20153;
     }
 #line 912 "compiler/liveness.gem"
     gem_set_line(912);
-    GemVal _t20152 = gem_neq(gem_type_1(gem_v_s), GEM_STR_LIT("table", 5));
-    GemVal _t20154;
-    if (gem_truthy(_t20152)) {
-        _t20154 = _t20152;
-    } else {
-    GemVal _t20153 = gem_v_s;
-    static GemICacheSlot _ic_2869 = {0};
-        _t20154 = gem_eq(gem_table_get_cached(_t20153, "tag", &_ic_2869), GEM_NIL);
-    }
+    GemVal _t20154 = gem_neq(gem_type_1(gem_v_s), GEM_STR_LIT("table", 5));
+    GemVal _t20156;
     if (gem_truthy(_t20154)) {
+        _t20156 = _t20154;
+    } else {
+    GemVal _t20155 = gem_v_s;
+    static GemICacheSlot _ic_2869 = {0};
+        _t20156 = gem_eq(gem_table_get_cached(_t20155, "tag", &_ic_2869), GEM_NIL);
+    }
+    if (gem_truthy(_t20156)) {
 #line 913 "compiler/liveness.gem"
         gem_set_line(913);
-        GemVal _t20155 = gem_v_live_out;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20155, 1);
+        GemVal _t20157 = gem_v_live_out;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20157, 1);
         gem_pop_frame();
-        return _t20155;
+        return _t20157;
     }
 #line 916 "compiler/liveness.gem"
     gem_set_line(916);
-    GemVal _t20156 = gem_v_s;
+    GemVal _t20158 = gem_v_s;
     static GemICacheSlot _ic_2870 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20156, "tag", &_ic_2870), GEM_STR_LIT("while", 5)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20158, "tag", &_ic_2870), GEM_STR_LIT("while", 5)))) {
 #line 917 "compiler/liveness.gem"
         gem_set_line(917);
-    GemVal _t20157 = gem_v_s;
-    GemVal _t20158[] = {_t20157, gem_v_live_out};
-        GemVal gem_v_r = gem_fn___mod_liveness_compute_loop_live_at_backedge(NULL, _t20158, 2);
+    GemVal _t20159 = gem_v_s;
+    GemVal _t20160[] = {_t20159, gem_v_live_out};
+        GemVal gem_v_r = gem_fn___mod_liveness_compute_loop_live_at_backedge(NULL, _t20160, 2);
 #line 918 "compiler/liveness.gem"
         gem_set_line(918);
-    GemVal _t20159 = gem_v_s;
+    GemVal _t20161 = gem_v_s;
     static GemICacheSlot _ic_2871 = {0};
-        if (gem_truthy(gem_eq(gem_table_get_cached(_t20159, "process_tail", &_ic_2871), gem_bool(1)))) {
+        if (gem_truthy(gem_eq(gem_table_get_cached(_t20161, "process_tail", &_ic_2871), gem_bool(1)))) {
 #line 919 "compiler/liveness.gem"
             gem_set_line(919);
-    GemVal _t20160 = gem_v_s;
-            gem_table_set(_t20160, GEM_STR_LIT("liveness_result", 15), gem_v_r);
+    GemVal _t20162 = gem_v_s;
+            gem_table_set(_t20162, GEM_STR_LIT("liveness_result", 15), gem_v_r);
         }
 #line 921 "compiler/liveness.gem"
         gem_set_line(921);
         GemVal gem_v___val_83 = GEM_NIL;
 #line 921 "compiler/liveness.gem"
         gem_set_line(921);
-    GemVal _t20161 = gem_v_r;
+    GemVal _t20163 = gem_v_r;
     static GemICacheSlot _ic_2872 = {0};
-        if (gem_truthy(gem_table_get_cached(_t20161, "ok", &_ic_2872))) {
+        if (gem_truthy(gem_table_get_cached(_t20163, "ok", &_ic_2872))) {
 #line 921 "compiler/liveness.gem"
             gem_set_line(921);
-    GemVal _t20162 = gem_v_r;
+    GemVal _t20164 = gem_v_r;
     static GemICacheSlot _ic_2873 = {0};
-            gem_v___val_83 = gem_table_get_cached(_t20162, "live", &_ic_2873);
+            gem_v___val_83 = gem_table_get_cached(_t20164, "live", &_ic_2873);
         } else {
 #line 921 "compiler/liveness.gem"
             gem_set_line(921);
-    GemVal _t20163[] = {gem_v_live_out};
-            gem_v___val_83 = gem_fn___mod_liveness_lset_copy(NULL, _t20163, 1);
+    GemVal _t20165[] = {gem_v_live_out};
+            gem_v___val_83 = gem_fn___mod_liveness_lset_copy(NULL, _t20165, 1);
         }
 #line 921 "compiler/liveness.gem"
         gem_set_line(921);
         GemVal gem_v_body_live_after = gem_v___val_83;
 #line 922 "compiler/liveness.gem"
         gem_set_line(922);
-    GemVal _t20167 = gem_g___mod_liveness__attach_stmts;
-    GemVal _t20164 = gem_v_s;
+    GemVal _t20169 = gem_g___mod_liveness__attach_stmts;
+    GemVal _t20166 = gem_v_s;
     static GemICacheSlot _ic_2874 = {0};
-    GemVal _t20165 = gem_table_get_cached(_t20164, "body", &_ic_2874);
-    GemVal _t20166[] = {_t20165, gem_v_body_live_after};
-    gem_check_callable(_t20167, "compiler/liveness.gem", 922);
-        (void)(_t20167.fn(_t20167.env, _t20166, 2));
+    GemVal _t20167 = gem_table_get_cached(_t20166, "body", &_ic_2874);
+    GemVal _t20168[] = {_t20167, gem_v_body_live_after};
+    gem_check_callable(_t20169, "compiler/liveness.gem", 922);
+        (void)(_t20169.fn(_t20169.env, _t20168, 2));
 #line 923 "compiler/liveness.gem"
         gem_set_line(923);
-    GemVal _t20170 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20168 = gem_v_s;
+    GemVal _t20172 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20170 = gem_v_s;
     static GemICacheSlot _ic_2875 = {0};
-    GemVal _t20169[] = {gem_table_get_cached(_t20168, "cond", &_ic_2875)};
-    gem_check_callable(_t20170, "compiler/liveness.gem", 923);
-        (void)(_t20170.fn(_t20170.env, _t20169, 1));
+    GemVal _t20171[] = {gem_table_get_cached(_t20170, "cond", &_ic_2875)};
+    gem_check_callable(_t20172, "compiler/liveness.gem", 923);
+        (void)(_t20172.fn(_t20172.env, _t20171, 1));
 #line 924 "compiler/liveness.gem"
         gem_set_line(924);
-    GemVal _t20171 = gem_v_r;
+    GemVal _t20173 = gem_v_r;
     static GemICacheSlot _ic_2876 = {0};
-        if (gem_truthy(gem_table_get_cached(_t20171, "ok", &_ic_2876))) {
+        if (gem_truthy(gem_table_get_cached(_t20173, "ok", &_ic_2876))) {
 #line 925 "compiler/liveness.gem"
             gem_set_line(925);
-    GemVal _t20172 = gem_v_r;
+    GemVal _t20174 = gem_v_r;
     static GemICacheSlot _ic_2877 = {0};
-    GemVal _t20173[] = {gem_table_get_cached(_t20172, "live", &_ic_2877)};
-            GemVal _t20174 = gem_fn___mod_liveness_lset_copy(NULL, _t20173, 1);
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20174, 1);
+    GemVal _t20175[] = {gem_table_get_cached(_t20174, "live", &_ic_2877)};
+            GemVal _t20176 = gem_fn___mod_liveness_lset_copy(NULL, _t20175, 1);
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20176, 1);
             gem_pop_frame();
-            return _t20174;
+            return _t20176;
         }
 #line 927 "compiler/liveness.gem"
         gem_set_line(927);
-    GemVal _t20177 = gem_g___mod_liveness__transfer_stmt;
-    GemVal _t20175 = gem_v_s;
-    GemVal _t20176[] = {_t20175, gem_v_live_out};
-    gem_check_callable(_t20177, "compiler/liveness.gem", 927);
-        GemVal _t20178 = _t20177.fn(_t20177.env, _t20176, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20178, 1);
+    GemVal _t20179 = gem_g___mod_liveness__transfer_stmt;
+    GemVal _t20177 = gem_v_s;
+    GemVal _t20178[] = {_t20177, gem_v_live_out};
+    gem_check_callable(_t20179, "compiler/liveness.gem", 927);
+        GemVal _t20180 = _t20179.fn(_t20179.env, _t20178, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20180, 1);
         gem_pop_frame();
-        return _t20178;
+        return _t20180;
     }
 #line 930 "compiler/liveness.gem"
     gem_set_line(930);
-    GemVal _t20179 = gem_v_s;
+    GemVal _t20181 = gem_v_s;
     static GemICacheSlot _ic_2878 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20179, "tag", &_ic_2878), GEM_STR_LIT("if", 2)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20181, "tag", &_ic_2878), GEM_STR_LIT("if", 2)))) {
 #line 931 "compiler/liveness.gem"
         gem_set_line(931);
-    GemVal _t20180 = gem_v_s;
+    GemVal _t20182 = gem_v_s;
     static GemICacheSlot _ic_2879 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20180, "then", &_ic_2879), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20182, "then", &_ic_2879), GEM_NIL))) {
 #line 932 "compiler/liveness.gem"
             gem_set_line(932);
-    GemVal _t20184 = gem_g___mod_liveness__attach_stmts;
-    GemVal _t20181 = gem_v_s;
+    GemVal _t20186 = gem_g___mod_liveness__attach_stmts;
+    GemVal _t20183 = gem_v_s;
     static GemICacheSlot _ic_2880 = {0};
-    GemVal _t20182 = gem_table_get_cached(_t20181, "then", &_ic_2880);
-    GemVal _t20183[] = {_t20182, gem_v_live_out};
-    gem_check_callable(_t20184, "compiler/liveness.gem", 932);
-            (void)(_t20184.fn(_t20184.env, _t20183, 2));
+    GemVal _t20184 = gem_table_get_cached(_t20183, "then", &_ic_2880);
+    GemVal _t20185[] = {_t20184, gem_v_live_out};
+    gem_check_callable(_t20186, "compiler/liveness.gem", 932);
+            (void)(_t20186.fn(_t20186.env, _t20185, 2));
         }
 #line 934 "compiler/liveness.gem"
         gem_set_line(934);
-    GemVal _t20185 = gem_v_s;
+    GemVal _t20187 = gem_v_s;
     static GemICacheSlot _ic_2881 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20185, "else", &_ic_2881), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20187, "else", &_ic_2881), GEM_NIL))) {
 #line 935 "compiler/liveness.gem"
             gem_set_line(935);
-    GemVal _t20189 = gem_g___mod_liveness__attach_stmts;
-    GemVal _t20186 = gem_v_s;
+    GemVal _t20191 = gem_g___mod_liveness__attach_stmts;
+    GemVal _t20188 = gem_v_s;
     static GemICacheSlot _ic_2882 = {0};
-    GemVal _t20187 = gem_table_get_cached(_t20186, "else", &_ic_2882);
-    GemVal _t20188[] = {_t20187, gem_v_live_out};
-    gem_check_callable(_t20189, "compiler/liveness.gem", 935);
-            (void)(_t20189.fn(_t20189.env, _t20188, 2));
+    GemVal _t20189 = gem_table_get_cached(_t20188, "else", &_ic_2882);
+    GemVal _t20190[] = {_t20189, gem_v_live_out};
+    gem_check_callable(_t20191, "compiler/liveness.gem", 935);
+            (void)(_t20191.fn(_t20191.env, _t20190, 2));
         }
 #line 937 "compiler/liveness.gem"
         gem_set_line(937);
-    GemVal _t20192 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20190 = gem_v_s;
+    GemVal _t20194 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20192 = gem_v_s;
     static GemICacheSlot _ic_2883 = {0};
-    GemVal _t20191[] = {gem_table_get_cached(_t20190, "cond", &_ic_2883)};
-    gem_check_callable(_t20192, "compiler/liveness.gem", 937);
-        (void)(_t20192.fn(_t20192.env, _t20191, 1));
+    GemVal _t20193[] = {gem_table_get_cached(_t20192, "cond", &_ic_2883)};
+    gem_check_callable(_t20194, "compiler/liveness.gem", 937);
+        (void)(_t20194.fn(_t20194.env, _t20193, 1));
 #line 938 "compiler/liveness.gem"
         gem_set_line(938);
-    GemVal _t20195 = gem_g___mod_liveness__transfer_stmt;
-    GemVal _t20193 = gem_v_s;
-    GemVal _t20194[] = {_t20193, gem_v_live_out};
-    gem_check_callable(_t20195, "compiler/liveness.gem", 938);
-        GemVal _t20196 = _t20195.fn(_t20195.env, _t20194, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20196, 1);
+    GemVal _t20197 = gem_g___mod_liveness__transfer_stmt;
+    GemVal _t20195 = gem_v_s;
+    GemVal _t20196[] = {_t20195, gem_v_live_out};
+    gem_check_callable(_t20197, "compiler/liveness.gem", 938);
+        GemVal _t20198 = _t20197.fn(_t20197.env, _t20196, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20198, 1);
         gem_pop_frame();
-        return _t20196;
+        return _t20198;
     }
 #line 941 "compiler/liveness.gem"
     gem_set_line(941);
-    GemVal _t20197 = gem_v_s;
+    GemVal _t20199 = gem_v_s;
     static GemICacheSlot _ic_2884 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20197, "tag", &_ic_2884), GEM_STR_LIT("match", 5)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20199, "tag", &_ic_2884), GEM_STR_LIT("match", 5)))) {
 #line 942 "compiler/liveness.gem"
         gem_set_line(942);
-    GemVal _t20200 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20198 = gem_v_s;
+    GemVal _t20202 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20200 = gem_v_s;
     static GemICacheSlot _ic_2885 = {0};
-    GemVal _t20199[] = {gem_table_get_cached(_t20198, "target", &_ic_2885)};
-    gem_check_callable(_t20200, "compiler/liveness.gem", 942);
-        (void)(_t20200.fn(_t20200.env, _t20199, 1));
+    GemVal _t20201[] = {gem_table_get_cached(_t20200, "target", &_ic_2885)};
+    gem_check_callable(_t20202, "compiler/liveness.gem", 942);
+        (void)(_t20202.fn(_t20202.env, _t20201, 1));
 #line 943 "compiler/liveness.gem"
         gem_set_line(943);
-    GemVal _t20201 = gem_v_s;
+    GemVal _t20203 = gem_v_s;
     static GemICacheSlot _ic_2886 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20201, "whens", &_ic_2886), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20203, "whens", &_ic_2886), GEM_NIL))) {
 #line 944 "compiler/liveness.gem"
             gem_set_line(944);
-    GemVal _t20202 = gem_v_s;
+    GemVal _t20204 = gem_v_s;
     static GemICacheSlot _ic_2887 = {0};
-            GemVal gem_v___for_items_85 = gem_for_items_1(gem_table_get_cached(_t20202, "whens", &_ic_2887));
+            GemVal gem_v___for_items_85 = gem_for_items_1(gem_table_get_cached(_t20204, "whens", &_ic_2887));
 #line 944 "compiler/liveness.gem"
             gem_set_line(944);
             GemVal gem_v___for_i_85 = gem_int(0);
@@ -88704,42 +88738,42 @@ static GemVal __anon_204(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_items_85, &gem_v___for_i_85, &gem_v_s, &gem_v_live_out};
                     gem_arena_reset_region(&_mk596, _rr, 4, NULL, 0);
                 }
-    GemVal _t20203 = gem_v___for_i_85;
-                if (!gem_truthy(gem_lt(_t20203, gem_for_len_1(gem_v___for_items_85)))) break;
+    GemVal _t20205 = gem_v___for_i_85;
+                if (!gem_truthy(gem_lt(_t20205, gem_for_len_1(gem_v___for_items_85)))) break;
 #line 944 "compiler/liveness.gem"
                 gem_set_line(944);
-    GemVal _t20204 = gem_v___for_items_85;
-                GemVal gem_v_w = gem_table_get(_t20204, gem_v___for_i_85);
+    GemVal _t20206 = gem_v___for_items_85;
+                GemVal gem_v_w = gem_table_get(_t20206, gem_v___for_i_85);
 #line 944 "compiler/liveness.gem"
                 gem_set_line(944);
                 gem_v___for_i_85 = gem_add(gem_v___for_i_85, gem_int(1));
 #line 945 "compiler/liveness.gem"
                 gem_set_line(945);
-    GemVal _t20208 = gem_g___mod_liveness__attach_stmts;
-    GemVal _t20205 = gem_v_w;
+    GemVal _t20210 = gem_g___mod_liveness__attach_stmts;
+    GemVal _t20207 = gem_v_w;
     static GemICacheSlot _ic_2888 = {0};
-    GemVal _t20206 = gem_table_get_cached(_t20205, "body", &_ic_2888);
-    GemVal _t20207[] = {_t20206, gem_v_live_out};
-    gem_check_callable(_t20208, "compiler/liveness.gem", 945);
-                (void)(_t20208.fn(_t20208.env, _t20207, 2));
+    GemVal _t20208 = gem_table_get_cached(_t20207, "body", &_ic_2888);
+    GemVal _t20209[] = {_t20208, gem_v_live_out};
+    gem_check_callable(_t20210, "compiler/liveness.gem", 945);
+                (void)(_t20210.fn(_t20210.env, _t20209, 2));
 #line 946 "compiler/liveness.gem"
                 gem_set_line(946);
-    GemVal _t20211 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20209 = gem_v_w;
+    GemVal _t20213 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20211 = gem_v_w;
     static GemICacheSlot _ic_2889 = {0};
-    GemVal _t20210[] = {gem_table_get_cached(_t20209, "value", &_ic_2889)};
-    gem_check_callable(_t20211, "compiler/liveness.gem", 946);
-                (void)(_t20211.fn(_t20211.env, _t20210, 1));
+    GemVal _t20212[] = {gem_table_get_cached(_t20211, "value", &_ic_2889)};
+    gem_check_callable(_t20213, "compiler/liveness.gem", 946);
+                (void)(_t20213.fn(_t20213.env, _t20212, 1));
 #line 947 "compiler/liveness.gem"
                 gem_set_line(947);
-    GemVal _t20212 = gem_v_w;
+    GemVal _t20214 = gem_v_w;
     static GemICacheSlot _ic_2890 = {0};
-                if (gem_truthy(gem_neq(gem_table_get_cached(_t20212, "bindings", &_ic_2890), GEM_NIL))) {
+                if (gem_truthy(gem_neq(gem_table_get_cached(_t20214, "bindings", &_ic_2890), GEM_NIL))) {
 #line 948 "compiler/liveness.gem"
                     gem_set_line(948);
-    GemVal _t20213 = gem_v_w;
+    GemVal _t20215 = gem_v_w;
     static GemICacheSlot _ic_2891 = {0};
-                    GemVal gem_v___for_items_84 = gem_for_items_1(gem_table_get_cached(_t20213, "bindings", &_ic_2891));
+                    GemVal gem_v___for_items_84 = gem_for_items_1(gem_table_get_cached(_t20215, "bindings", &_ic_2891));
 #line 948 "compiler/liveness.gem"
                     gem_set_line(948);
                     GemVal gem_v___for_i_84 = gem_int(0);
@@ -88753,21 +88787,21 @@ static GemVal __anon_204(void *_env, GemVal *args, int argc) {
                             GemVal *_rr[] = {&gem_v___for_items_85, &gem_v___for_i_85, &gem_v_s, &gem_v_live_out, &gem_v___for_i_84, &gem_v___for_items_84};
                             gem_arena_reset_region(&_mk597, _rr, 6, NULL, 0);
                         }
-    GemVal _t20214 = gem_v___for_i_84;
-                        if (!gem_truthy(gem_lt(_t20214, gem_for_len_1(gem_v___for_items_84)))) break;
+    GemVal _t20216 = gem_v___for_i_84;
+                        if (!gem_truthy(gem_lt(_t20216, gem_for_len_1(gem_v___for_items_84)))) break;
 #line 948 "compiler/liveness.gem"
                         gem_set_line(948);
-    GemVal _t20215 = gem_v___for_items_84;
-                        GemVal gem_v_b = gem_table_get(_t20215, gem_v___for_i_84);
+    GemVal _t20217 = gem_v___for_items_84;
+                        GemVal gem_v_b = gem_table_get(_t20217, gem_v___for_i_84);
 #line 948 "compiler/liveness.gem"
                         gem_set_line(948);
                         gem_v___for_i_84 = gem_add(gem_v___for_i_84, gem_int(1));
 #line 949 "compiler/liveness.gem"
                         gem_set_line(949);
-    GemVal _t20217 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20216[] = {gem_v_b};
-    gem_check_callable(_t20217, "compiler/liveness.gem", 949);
-                        (void)(_t20217.fn(_t20217.env, _t20216, 1));
+    GemVal _t20219 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20218[] = {gem_v_b};
+    gem_check_callable(_t20219, "compiler/liveness.gem", 949);
+                        (void)(_t20219.fn(_t20219.env, _t20218, 1));
                     }
 
                 }
@@ -88776,45 +88810,45 @@ static GemVal __anon_204(void *_env, GemVal *args, int argc) {
         }
 #line 954 "compiler/liveness.gem"
         gem_set_line(954);
-    GemVal _t20218 = gem_v_s;
+    GemVal _t20220 = gem_v_s;
     static GemICacheSlot _ic_2892 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20218, "else", &_ic_2892), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20220, "else", &_ic_2892), GEM_NIL))) {
 #line 955 "compiler/liveness.gem"
             gem_set_line(955);
-    GemVal _t20222 = gem_g___mod_liveness__attach_stmts;
-    GemVal _t20219 = gem_v_s;
+    GemVal _t20224 = gem_g___mod_liveness__attach_stmts;
+    GemVal _t20221 = gem_v_s;
     static GemICacheSlot _ic_2893 = {0};
-    GemVal _t20220 = gem_table_get_cached(_t20219, "else", &_ic_2893);
-    GemVal _t20221[] = {_t20220, gem_v_live_out};
-    gem_check_callable(_t20222, "compiler/liveness.gem", 955);
-            (void)(_t20222.fn(_t20222.env, _t20221, 2));
+    GemVal _t20222 = gem_table_get_cached(_t20221, "else", &_ic_2893);
+    GemVal _t20223[] = {_t20222, gem_v_live_out};
+    gem_check_callable(_t20224, "compiler/liveness.gem", 955);
+            (void)(_t20224.fn(_t20224.env, _t20223, 2));
         }
 #line 957 "compiler/liveness.gem"
         gem_set_line(957);
-    GemVal _t20225 = gem_g___mod_liveness__transfer_stmt;
-    GemVal _t20223 = gem_v_s;
-    GemVal _t20224[] = {_t20223, gem_v_live_out};
-    gem_check_callable(_t20225, "compiler/liveness.gem", 957);
-        GemVal _t20226 = _t20225.fn(_t20225.env, _t20224, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20226, 1);
+    GemVal _t20227 = gem_g___mod_liveness__transfer_stmt;
+    GemVal _t20225 = gem_v_s;
+    GemVal _t20226[] = {_t20225, gem_v_live_out};
+    gem_check_callable(_t20227, "compiler/liveness.gem", 957);
+        GemVal _t20228 = _t20227.fn(_t20227.env, _t20226, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20228, 1);
         gem_pop_frame();
-        return _t20226;
+        return _t20228;
     }
 #line 960 "compiler/liveness.gem"
     gem_set_line(960);
-    GemVal _t20227 = gem_v_s;
+    GemVal _t20229 = gem_v_s;
     static GemICacheSlot _ic_2894 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20227, "tag", &_ic_2894), GEM_STR_LIT("receive_match", 13)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20229, "tag", &_ic_2894), GEM_STR_LIT("receive_match", 13)))) {
 #line 961 "compiler/liveness.gem"
         gem_set_line(961);
-    GemVal _t20228 = gem_v_s;
+    GemVal _t20230 = gem_v_s;
     static GemICacheSlot _ic_2895 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20228, "arms", &_ic_2895), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20230, "arms", &_ic_2895), GEM_NIL))) {
 #line 962 "compiler/liveness.gem"
             gem_set_line(962);
-    GemVal _t20229 = gem_v_s;
+    GemVal _t20231 = gem_v_s;
     static GemICacheSlot _ic_2896 = {0};
-            GemVal gem_v___for_items_87 = gem_for_items_1(gem_table_get_cached(_t20229, "arms", &_ic_2896));
+            GemVal gem_v___for_items_87 = gem_for_items_1(gem_table_get_cached(_t20231, "arms", &_ic_2896));
 #line 962 "compiler/liveness.gem"
             gem_set_line(962);
             GemVal gem_v___for_i_87 = gem_int(0);
@@ -88828,61 +88862,61 @@ static GemVal __anon_204(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_items_87, &gem_v___for_i_87, &gem_v_s, &gem_v_live_out};
                     gem_arena_reset_region(&_mk598, _rr, 4, NULL, 0);
                 }
-    GemVal _t20230 = gem_v___for_i_87;
-                if (!gem_truthy(gem_lt(_t20230, gem_for_len_1(gem_v___for_items_87)))) break;
+    GemVal _t20232 = gem_v___for_i_87;
+                if (!gem_truthy(gem_lt(_t20232, gem_for_len_1(gem_v___for_items_87)))) break;
 #line 962 "compiler/liveness.gem"
                 gem_set_line(962);
-    GemVal _t20231 = gem_v___for_items_87;
-                GemVal gem_v_arm = gem_table_get(_t20231, gem_v___for_i_87);
+    GemVal _t20233 = gem_v___for_items_87;
+                GemVal gem_v_arm = gem_table_get(_t20233, gem_v___for_i_87);
 #line 962 "compiler/liveness.gem"
                 gem_set_line(962);
                 gem_v___for_i_87 = gem_add(gem_v___for_i_87, gem_int(1));
 #line 963 "compiler/liveness.gem"
                 gem_set_line(963);
-    GemVal _t20235 = gem_g___mod_liveness__attach_stmts;
-    GemVal _t20232 = gem_v_arm;
+    GemVal _t20237 = gem_g___mod_liveness__attach_stmts;
+    GemVal _t20234 = gem_v_arm;
     static GemICacheSlot _ic_2897 = {0};
-    GemVal _t20233 = gem_table_get_cached(_t20232, "body", &_ic_2897);
-    GemVal _t20234[] = {_t20233, gem_v_live_out};
-    gem_check_callable(_t20235, "compiler/liveness.gem", 963);
-                (void)(_t20235.fn(_t20235.env, _t20234, 2));
+    GemVal _t20235 = gem_table_get_cached(_t20234, "body", &_ic_2897);
+    GemVal _t20236[] = {_t20235, gem_v_live_out};
+    gem_check_callable(_t20237, "compiler/liveness.gem", 963);
+                (void)(_t20237.fn(_t20237.env, _t20236, 2));
 #line 964 "compiler/liveness.gem"
                 gem_set_line(964);
-    GemVal _t20236 = gem_v_arm;
+    GemVal _t20238 = gem_v_arm;
     static GemICacheSlot _ic_2898 = {0};
-                if (gem_truthy(gem_neq(gem_table_get_cached(_t20236, "pattern", &_ic_2898), GEM_NIL))) {
+                if (gem_truthy(gem_neq(gem_table_get_cached(_t20238, "pattern", &_ic_2898), GEM_NIL))) {
 #line 965 "compiler/liveness.gem"
                     gem_set_line(965);
-    GemVal _t20237 = gem_v_arm;
+    GemVal _t20239 = gem_v_arm;
     static GemICacheSlot _ic_2899 = {0};
-    GemVal _t20238 = gem_table_get_cached(_t20237, "pattern", &_ic_2899);
+    GemVal _t20240 = gem_table_get_cached(_t20239, "pattern", &_ic_2899);
     static GemICacheSlot _ic_2900 = {0};
-                    if (gem_truthy(gem_neq(gem_table_get_cached(_t20238, "condition", &_ic_2900), GEM_NIL))) {
+                    if (gem_truthy(gem_neq(gem_table_get_cached(_t20240, "condition", &_ic_2900), GEM_NIL))) {
 #line 966 "compiler/liveness.gem"
                         gem_set_line(966);
-    GemVal _t20242 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20239 = gem_v_arm;
+    GemVal _t20244 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20241 = gem_v_arm;
     static GemICacheSlot _ic_2901 = {0};
-    GemVal _t20240 = gem_table_get_cached(_t20239, "pattern", &_ic_2901);
+    GemVal _t20242 = gem_table_get_cached(_t20241, "pattern", &_ic_2901);
     static GemICacheSlot _ic_2902 = {0};
-    GemVal _t20241[] = {gem_table_get_cached(_t20240, "condition", &_ic_2902)};
-    gem_check_callable(_t20242, "compiler/liveness.gem", 966);
-                        (void)(_t20242.fn(_t20242.env, _t20241, 1));
+    GemVal _t20243[] = {gem_table_get_cached(_t20242, "condition", &_ic_2902)};
+    gem_check_callable(_t20244, "compiler/liveness.gem", 966);
+                        (void)(_t20244.fn(_t20244.env, _t20243, 1));
                     }
 #line 968 "compiler/liveness.gem"
                     gem_set_line(968);
-    GemVal _t20243 = gem_v_arm;
+    GemVal _t20245 = gem_v_arm;
     static GemICacheSlot _ic_2903 = {0};
-    GemVal _t20244 = gem_table_get_cached(_t20243, "pattern", &_ic_2903);
+    GemVal _t20246 = gem_table_get_cached(_t20245, "pattern", &_ic_2903);
     static GemICacheSlot _ic_2904 = {0};
-                    if (gem_truthy(gem_neq(gem_table_get_cached(_t20244, "bindings", &_ic_2904), GEM_NIL))) {
+                    if (gem_truthy(gem_neq(gem_table_get_cached(_t20246, "bindings", &_ic_2904), GEM_NIL))) {
 #line 969 "compiler/liveness.gem"
                         gem_set_line(969);
-    GemVal _t20245 = gem_v_arm;
+    GemVal _t20247 = gem_v_arm;
     static GemICacheSlot _ic_2905 = {0};
-    GemVal _t20246 = gem_table_get_cached(_t20245, "pattern", &_ic_2905);
+    GemVal _t20248 = gem_table_get_cached(_t20247, "pattern", &_ic_2905);
     static GemICacheSlot _ic_2906 = {0};
-                        GemVal gem_v___for_items_86 = gem_for_items_1(gem_table_get_cached(_t20246, "bindings", &_ic_2906));
+                        GemVal gem_v___for_items_86 = gem_for_items_1(gem_table_get_cached(_t20248, "bindings", &_ic_2906));
 #line 969 "compiler/liveness.gem"
                         gem_set_line(969);
                         GemVal gem_v___for_i_86 = gem_int(0);
@@ -88896,21 +88930,21 @@ static GemVal __anon_204(void *_env, GemVal *args, int argc) {
                                 GemVal *_rr[] = {&gem_v___for_items_87, &gem_v___for_i_87, &gem_v_s, &gem_v_live_out, &gem_v___for_i_86, &gem_v___for_items_86};
                                 gem_arena_reset_region(&_mk599, _rr, 6, NULL, 0);
                             }
-    GemVal _t20247 = gem_v___for_i_86;
-                            if (!gem_truthy(gem_lt(_t20247, gem_for_len_1(gem_v___for_items_86)))) break;
+    GemVal _t20249 = gem_v___for_i_86;
+                            if (!gem_truthy(gem_lt(_t20249, gem_for_len_1(gem_v___for_items_86)))) break;
 #line 969 "compiler/liveness.gem"
                             gem_set_line(969);
-    GemVal _t20248 = gem_v___for_items_86;
-                            GemVal gem_v_b = gem_table_get(_t20248, gem_v___for_i_86);
+    GemVal _t20250 = gem_v___for_items_86;
+                            GemVal gem_v_b = gem_table_get(_t20250, gem_v___for_i_86);
 #line 969 "compiler/liveness.gem"
                             gem_set_line(969);
                             gem_v___for_i_86 = gem_add(gem_v___for_i_86, gem_int(1));
 #line 970 "compiler/liveness.gem"
                             gem_set_line(970);
-    GemVal _t20250 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20249[] = {gem_v_b};
-    gem_check_callable(_t20250, "compiler/liveness.gem", 970);
-                            (void)(_t20250.fn(_t20250.env, _t20249, 1));
+    GemVal _t20252 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20251[] = {gem_v_b};
+    gem_check_callable(_t20252, "compiler/liveness.gem", 970);
+                            (void)(_t20252.fn(_t20252.env, _t20251, 1));
                         }
 
                     }
@@ -88920,256 +88954,256 @@ static GemVal __anon_204(void *_env, GemVal *args, int argc) {
         }
 #line 976 "compiler/liveness.gem"
         gem_set_line(976);
-    GemVal _t20251 = gem_v_s;
+    GemVal _t20253 = gem_v_s;
     static GemICacheSlot _ic_2907 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20251, "after_ms", &_ic_2907), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20253, "after_ms", &_ic_2907), GEM_NIL))) {
 #line 977 "compiler/liveness.gem"
             gem_set_line(977);
-    GemVal _t20254 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20252 = gem_v_s;
+    GemVal _t20256 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20254 = gem_v_s;
     static GemICacheSlot _ic_2908 = {0};
-    GemVal _t20253[] = {gem_table_get_cached(_t20252, "after_ms", &_ic_2908)};
-    gem_check_callable(_t20254, "compiler/liveness.gem", 977);
-            (void)(_t20254.fn(_t20254.env, _t20253, 1));
+    GemVal _t20255[] = {gem_table_get_cached(_t20254, "after_ms", &_ic_2908)};
+    gem_check_callable(_t20256, "compiler/liveness.gem", 977);
+            (void)(_t20256.fn(_t20256.env, _t20255, 1));
         }
 #line 979 "compiler/liveness.gem"
         gem_set_line(979);
-    GemVal _t20255 = gem_v_s;
+    GemVal _t20257 = gem_v_s;
     static GemICacheSlot _ic_2909 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20255, "after_body", &_ic_2909), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20257, "after_body", &_ic_2909), GEM_NIL))) {
 #line 980 "compiler/liveness.gem"
             gem_set_line(980);
-    GemVal _t20259 = gem_g___mod_liveness__attach_stmts;
-    GemVal _t20256 = gem_v_s;
+    GemVal _t20261 = gem_g___mod_liveness__attach_stmts;
+    GemVal _t20258 = gem_v_s;
     static GemICacheSlot _ic_2910 = {0};
-    GemVal _t20257 = gem_table_get_cached(_t20256, "after_body", &_ic_2910);
-    GemVal _t20258[] = {_t20257, gem_v_live_out};
-    gem_check_callable(_t20259, "compiler/liveness.gem", 980);
-            (void)(_t20259.fn(_t20259.env, _t20258, 2));
+    GemVal _t20259 = gem_table_get_cached(_t20258, "after_body", &_ic_2910);
+    GemVal _t20260[] = {_t20259, gem_v_live_out};
+    gem_check_callable(_t20261, "compiler/liveness.gem", 980);
+            (void)(_t20261.fn(_t20261.env, _t20260, 2));
         }
 #line 982 "compiler/liveness.gem"
         gem_set_line(982);
-    GemVal _t20262 = gem_g___mod_liveness__transfer_stmt;
-    GemVal _t20260 = gem_v_s;
-    GemVal _t20261[] = {_t20260, gem_v_live_out};
-    gem_check_callable(_t20262, "compiler/liveness.gem", 982);
-        GemVal _t20263 = _t20262.fn(_t20262.env, _t20261, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20263, 1);
+    GemVal _t20264 = gem_g___mod_liveness__transfer_stmt;
+    GemVal _t20262 = gem_v_s;
+    GemVal _t20263[] = {_t20262, gem_v_live_out};
+    gem_check_callable(_t20264, "compiler/liveness.gem", 982);
+        GemVal _t20265 = _t20264.fn(_t20264.env, _t20263, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20265, 1);
         gem_pop_frame();
-        return _t20263;
+        return _t20265;
     }
 #line 985 "compiler/liveness.gem"
     gem_set_line(985);
-    GemVal _t20264 = gem_v_s;
+    GemVal _t20266 = gem_v_s;
     static GemICacheSlot _ic_2911 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20264, "tag", &_ic_2911), GEM_STR_LIT("block", 5)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20266, "tag", &_ic_2911), GEM_STR_LIT("block", 5)))) {
 #line 986 "compiler/liveness.gem"
         gem_set_line(986);
-    GemVal _t20268 = gem_g___mod_liveness__attach_stmts;
-    GemVal _t20265 = gem_v_s;
+    GemVal _t20270 = gem_g___mod_liveness__attach_stmts;
+    GemVal _t20267 = gem_v_s;
     static GemICacheSlot _ic_2912 = {0};
-    GemVal _t20266 = gem_table_get_cached(_t20265, "stmts", &_ic_2912);
-    GemVal _t20267[] = {_t20266, gem_v_live_out};
-    gem_check_callable(_t20268, "compiler/liveness.gem", 986);
-        GemVal _t20269 = _t20268.fn(_t20268.env, _t20267, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20269, 1);
+    GemVal _t20268 = gem_table_get_cached(_t20267, "stmts", &_ic_2912);
+    GemVal _t20269[] = {_t20268, gem_v_live_out};
+    gem_check_callable(_t20270, "compiler/liveness.gem", 986);
+        GemVal _t20271 = _t20270.fn(_t20270.env, _t20269, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20271, 1);
         gem_pop_frame();
-        return _t20269;
+        return _t20271;
     }
 #line 989 "compiler/liveness.gem"
     gem_set_line(989);
-    GemVal _t20270 = gem_v_s;
-    static GemICacheSlot _ic_2913 = {0};
-    GemVal _t20271 = gem_eq(gem_table_get_cached(_t20270, "tag", &_ic_2913), GEM_STR_LIT("for", 3));
-    GemVal _t20273;
-    if (gem_truthy(_t20271)) {
-        _t20273 = _t20271;
-    } else {
     GemVal _t20272 = gem_v_s;
-    static GemICacheSlot _ic_2914 = {0};
-        _t20273 = gem_eq(gem_table_get_cached(_t20272, "tag", &_ic_2914), GEM_STR_LIT("for_kv", 6));
-    }
+    static GemICacheSlot _ic_2913 = {0};
+    GemVal _t20273 = gem_eq(gem_table_get_cached(_t20272, "tag", &_ic_2913), GEM_STR_LIT("for", 3));
     GemVal _t20275;
     if (gem_truthy(_t20273)) {
         _t20275 = _t20273;
     } else {
     GemVal _t20274 = gem_v_s;
-    static GemICacheSlot _ic_2915 = {0};
-        _t20275 = gem_eq(gem_table_get_cached(_t20274, "tag", &_ic_2915), GEM_STR_LIT("for_range", 9));
+    static GemICacheSlot _ic_2914 = {0};
+        _t20275 = gem_eq(gem_table_get_cached(_t20274, "tag", &_ic_2914), GEM_STR_LIT("for_kv", 6));
     }
+    GemVal _t20277;
     if (gem_truthy(_t20275)) {
+        _t20277 = _t20275;
+    } else {
+    GemVal _t20276 = gem_v_s;
+    static GemICacheSlot _ic_2915 = {0};
+        _t20277 = gem_eq(gem_table_get_cached(_t20276, "tag", &_ic_2915), GEM_STR_LIT("for_range", 9));
+    }
+    if (gem_truthy(_t20277)) {
 #line 990 "compiler/liveness.gem"
         gem_set_line(990);
-    GemVal _t20276 = gem_v_s;
+    GemVal _t20278 = gem_v_s;
     static GemICacheSlot _ic_2916 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20276, "iter", &_ic_2916), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20278, "iter", &_ic_2916), GEM_NIL))) {
 #line 991 "compiler/liveness.gem"
             gem_set_line(991);
-    GemVal _t20279 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20277 = gem_v_s;
+    GemVal _t20281 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20279 = gem_v_s;
     static GemICacheSlot _ic_2917 = {0};
-    GemVal _t20278[] = {gem_table_get_cached(_t20277, "iter", &_ic_2917)};
-    gem_check_callable(_t20279, "compiler/liveness.gem", 991);
-            (void)(_t20279.fn(_t20279.env, _t20278, 1));
+    GemVal _t20280[] = {gem_table_get_cached(_t20279, "iter", &_ic_2917)};
+    gem_check_callable(_t20281, "compiler/liveness.gem", 991);
+            (void)(_t20281.fn(_t20281.env, _t20280, 1));
         }
 #line 993 "compiler/liveness.gem"
         gem_set_line(993);
-    GemVal _t20280 = gem_v_s;
+    GemVal _t20282 = gem_v_s;
     static GemICacheSlot _ic_2918 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20280, "from", &_ic_2918), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20282, "from", &_ic_2918), GEM_NIL))) {
 #line 994 "compiler/liveness.gem"
             gem_set_line(994);
-    GemVal _t20283 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20281 = gem_v_s;
+    GemVal _t20285 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20283 = gem_v_s;
     static GemICacheSlot _ic_2919 = {0};
-    GemVal _t20282[] = {gem_table_get_cached(_t20281, "from", &_ic_2919)};
-    gem_check_callable(_t20283, "compiler/liveness.gem", 994);
-            (void)(_t20283.fn(_t20283.env, _t20282, 1));
+    GemVal _t20284[] = {gem_table_get_cached(_t20283, "from", &_ic_2919)};
+    gem_check_callable(_t20285, "compiler/liveness.gem", 994);
+            (void)(_t20285.fn(_t20285.env, _t20284, 1));
         }
 #line 996 "compiler/liveness.gem"
         gem_set_line(996);
-    GemVal _t20284 = gem_v_s;
+    GemVal _t20286 = gem_v_s;
     static GemICacheSlot _ic_2920 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20284, "to", &_ic_2920), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20286, "to", &_ic_2920), GEM_NIL))) {
 #line 997 "compiler/liveness.gem"
             gem_set_line(997);
-    GemVal _t20287 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20285 = gem_v_s;
+    GemVal _t20289 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20287 = gem_v_s;
     static GemICacheSlot _ic_2921 = {0};
-    GemVal _t20286[] = {gem_table_get_cached(_t20285, "to", &_ic_2921)};
-    gem_check_callable(_t20287, "compiler/liveness.gem", 997);
-            (void)(_t20287.fn(_t20287.env, _t20286, 1));
+    GemVal _t20288[] = {gem_table_get_cached(_t20287, "to", &_ic_2921)};
+    gem_check_callable(_t20289, "compiler/liveness.gem", 997);
+            (void)(_t20289.fn(_t20289.env, _t20288, 1));
         }
 #line 999 "compiler/liveness.gem"
         gem_set_line(999);
-    GemVal _t20291 = gem_g___mod_liveness__attach_stmts;
-    GemVal _t20288 = gem_v_s;
+    GemVal _t20293 = gem_g___mod_liveness__attach_stmts;
+    GemVal _t20290 = gem_v_s;
     static GemICacheSlot _ic_2922 = {0};
-    GemVal _t20289 = gem_table_get_cached(_t20288, "body", &_ic_2922);
-    GemVal _t20290[] = {_t20289, gem_v_live_out};
-    gem_check_callable(_t20291, "compiler/liveness.gem", 999);
-        (void)(_t20291.fn(_t20291.env, _t20290, 2));
+    GemVal _t20291 = gem_table_get_cached(_t20290, "body", &_ic_2922);
+    GemVal _t20292[] = {_t20291, gem_v_live_out};
+    gem_check_callable(_t20293, "compiler/liveness.gem", 999);
+        (void)(_t20293.fn(_t20293.env, _t20292, 2));
 #line 1000 "compiler/liveness.gem"
         gem_set_line(1000);
-    GemVal _t20294 = gem_g___mod_liveness__transfer_stmt;
-    GemVal _t20292 = gem_v_s;
-    GemVal _t20293[] = {_t20292, gem_v_live_out};
-    gem_check_callable(_t20294, "compiler/liveness.gem", 1000);
-        GemVal _t20295 = _t20294.fn(_t20294.env, _t20293, 2);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20295, 1);
+    GemVal _t20296 = gem_g___mod_liveness__transfer_stmt;
+    GemVal _t20294 = gem_v_s;
+    GemVal _t20295[] = {_t20294, gem_v_live_out};
+    gem_check_callable(_t20296, "compiler/liveness.gem", 1000);
+        GemVal _t20297 = _t20296.fn(_t20296.env, _t20295, 2);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20297, 1);
         gem_pop_frame();
-        return _t20295;
+        return _t20297;
     }
 #line 1005 "compiler/liveness.gem"
     gem_set_line(1005);
-    GemVal _t20297 = gem_g___mod_liveness__scan_anons;
-    GemVal _t20296[] = {gem_v_s};
-    gem_check_callable(_t20297, "compiler/liveness.gem", 1005);
-    (void)(_t20297.fn(_t20297.env, _t20296, 1));
+    GemVal _t20299 = gem_g___mod_liveness__scan_anons;
+    GemVal _t20298[] = {gem_v_s};
+    gem_check_callable(_t20299, "compiler/liveness.gem", 1005);
+    (void)(_t20299.fn(_t20299.env, _t20298, 1));
 #line 1006 "compiler/liveness.gem"
     gem_set_line(1006);
-    GemVal _t20300 = gem_g___mod_liveness__transfer_stmt;
-    GemVal _t20298 = gem_v_s;
-    GemVal _t20299[] = {_t20298, gem_v_live_out};
-    gem_check_callable(_t20300, "compiler/liveness.gem", 1006);
-    GemVal _t20301 = _t20300.fn(_t20300.env, _t20299, 2);
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20301, 1);
+    GemVal _t20302 = gem_g___mod_liveness__transfer_stmt;
+    GemVal _t20300 = gem_v_s;
+    GemVal _t20301[] = {_t20300, gem_v_live_out};
+    gem_check_callable(_t20302, "compiler/liveness.gem", 1006);
+    GemVal _t20303 = _t20302.fn(_t20302.env, _t20301, 2);
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20303, 1);
     gem_pop_frame();
-    return _t20301;
+    return _t20303;
 }
 
 struct _closure___anon_205 {
     intptr_t _num_captures;
 };
 static GemVal __anon_205(void *_env, GemVal *args, int argc) {
-    gem_push_frame("anonymous fn", "compiler/scope.gem", 174);
+    gem_push_frame("anonymous fn", "compiler/scope.gem", 178);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_out = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 175 "compiler/scope.gem"
-    gem_set_line(175);
-    GemVal _t20302 = gem_eq(gem_v_node, GEM_NIL);
-    GemVal _t20303;
-    if (gem_truthy(_t20302)) {
-        _t20303 = _t20302;
-    } else {
-        _t20303 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
-    }
-    if (gem_truthy(_t20303)) {
-#line 176 "compiler/scope.gem"
-        gem_set_line(176);
-        GemVal _t20304 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20304, 1);
-        gem_pop_frame();
-        return _t20304;
-    }
-#line 178 "compiler/scope.gem"
-    gem_set_line(178);
-    GemVal _t20305 = gem_v_node;
-    static GemICacheSlot _ic_2923 = {0};
-    GemVal _t20306 = gem_eq(gem_table_get_cached(_t20305, "tag", &_ic_2923), GEM_STR_LIT("anon_fn", 7));
-    GemVal _t20308;
-    if (gem_truthy(_t20306)) {
-        _t20308 = _t20306;
-    } else {
-    GemVal _t20307 = gem_v_node;
-    static GemICacheSlot _ic_2924 = {0};
-        _t20308 = gem_eq(gem_table_get_cached(_t20307, "tag", &_ic_2924), GEM_STR_LIT("fn_def", 6));
-    }
-    if (gem_truthy(_t20308)) {
 #line 179 "compiler/scope.gem"
-        gem_set_line(179);
-        GemVal _t20309 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20309, 1);
+    gem_set_line(179);
+    GemVal _t20304 = gem_eq(gem_v_node, GEM_NIL);
+    GemVal _t20305;
+    if (gem_truthy(_t20304)) {
+        _t20305 = _t20304;
+    } else {
+        _t20305 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
+    }
+    if (gem_truthy(_t20305)) {
+#line 180 "compiler/scope.gem"
+        gem_set_line(180);
+        GemVal _t20306 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20306, 1);
         gem_pop_frame();
-        return _t20309;
+        return _t20306;
     }
-#line 181 "compiler/scope.gem"
-    gem_set_line(181);
-    GemVal _t20310 = gem_v_node;
-    static GemICacheSlot _ic_2925 = {0};
-    GemVal _t20311 = gem_eq(gem_table_get_cached(_t20310, "tag", &_ic_2925), GEM_STR_LIT("let", 3));
-    GemVal _t20313;
-    if (!gem_truthy(_t20311)) {
-        _t20313 = _t20311;
-    } else {
-    GemVal _t20312 = gem_v_node;
-    static GemICacheSlot _ic_2926 = {0};
-        _t20313 = gem_neq(gem_table_get_cached(_t20312, "name", &_ic_2926), GEM_NIL);
-    }
-    GemVal _t20317;
-    if (!gem_truthy(_t20313)) {
-        _t20317 = _t20313;
-    } else {
-    GemVal _t20315 = gem_v_out;
-    GemVal _t20314 = gem_v_node;
-    static GemICacheSlot _ic_2927 = {0};
-    GemVal _t20316[] = {_t20315, gem_table_get_cached(_t20314, "name", &_ic_2927)};
-        _t20317 = gem_not(gem_has_key_fn(NULL, _t20316, 2));
-    }
-    if (gem_truthy(_t20317)) {
 #line 182 "compiler/scope.gem"
-        gem_set_line(182);
-    GemVal _t20321 = gem_v_out;
-    GemVal _t20318 = gem_v_node;
+    gem_set_line(182);
+    GemVal _t20307 = gem_v_node;
+    static GemICacheSlot _ic_2923 = {0};
+    GemVal _t20308 = gem_eq(gem_table_get_cached(_t20307, "tag", &_ic_2923), GEM_STR_LIT("anon_fn", 7));
+    GemVal _t20310;
+    if (gem_truthy(_t20308)) {
+        _t20310 = _t20308;
+    } else {
+    GemVal _t20309 = gem_v_node;
+    static GemICacheSlot _ic_2924 = {0};
+        _t20310 = gem_eq(gem_table_get_cached(_t20309, "tag", &_ic_2924), GEM_STR_LIT("fn_def", 6));
+    }
+    if (gem_truthy(_t20310)) {
+#line 183 "compiler/scope.gem"
+        gem_set_line(183);
+        GemVal _t20311 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20311, 1);
+        gem_pop_frame();
+        return _t20311;
+    }
+#line 185 "compiler/scope.gem"
+    gem_set_line(185);
+    GemVal _t20312 = gem_v_node;
+    static GemICacheSlot _ic_2925 = {0};
+    GemVal _t20313 = gem_eq(gem_table_get_cached(_t20312, "tag", &_ic_2925), GEM_STR_LIT("let", 3));
+    GemVal _t20315;
+    if (!gem_truthy(_t20313)) {
+        _t20315 = _t20313;
+    } else {
+    GemVal _t20314 = gem_v_node;
+    static GemICacheSlot _ic_2926 = {0};
+        _t20315 = gem_neq(gem_table_get_cached(_t20314, "name", &_ic_2926), GEM_NIL);
+    }
+    GemVal _t20319;
+    if (!gem_truthy(_t20315)) {
+        _t20319 = _t20315;
+    } else {
+    GemVal _t20317 = gem_v_out;
+    GemVal _t20316 = gem_v_node;
+    static GemICacheSlot _ic_2927 = {0};
+    GemVal _t20318[] = {_t20317, gem_table_get_cached(_t20316, "name", &_ic_2927)};
+        _t20319 = gem_not(gem_has_key_fn(NULL, _t20318, 2));
+    }
+    if (gem_truthy(_t20319)) {
+#line 186 "compiler/scope.gem"
+        gem_set_line(186);
+    GemVal _t20323 = gem_v_out;
+    GemVal _t20320 = gem_v_node;
     static GemICacheSlot _ic_2928 = {0};
-    GemVal _t20320 = gem_table_get_cached(_t20318, "name", &_ic_2928);
-    GemVal _t20319[] = {gem_v_node};
-        gem_table_set(_t20321, _t20320, gem_fn___mod_scope_shadow_decl_site(NULL, _t20319, 1));
+    GemVal _t20322 = gem_table_get_cached(_t20320, "name", &_ic_2928);
+    GemVal _t20321[] = {gem_v_node};
+        gem_table_set(_t20323, _t20322, gem_fn___mod_scope_shadow_decl_site(NULL, _t20321, 1));
     }
     {
-#line 184 "compiler/scope.gem"
-        gem_set_line(184);
+#line 188 "compiler/scope.gem"
+        gem_set_line(188);
         GemVal gem_v___for_tbl_105 = gem_v_node;
-#line 184 "compiler/scope.gem"
-        gem_set_line(184);
+#line 188 "compiler/scope.gem"
+        gem_set_line(188);
         GemVal gem_v___for_len_105 = gem_for_len_1(gem_v___for_tbl_105);
-#line 184 "compiler/scope.gem"
-        gem_set_line(184);
+#line 188 "compiler/scope.gem"
+        gem_set_line(188);
         GemVal gem_v___for_i_105 = gem_int(0);
-#line 184 "compiler/scope.gem"
-        gem_set_line(184);
+#line 188 "compiler/scope.gem"
+        gem_set_line(188);
         GemArenaMark _mk600;
         gem_arena_mark(&_mk600);
         while (1) {
@@ -89178,36 +89212,36 @@ static GemVal __anon_205(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v___for_i_105, &gem_v_out, &gem_v___for_tbl_105, &gem_v___for_len_105};
                 gem_arena_reset_region(&_mk600, _rr, 4, NULL, 0);
             }
-    GemVal _t20322 = gem_v___for_i_105;
-            if (!gem_truthy(gem_lt(_t20322, gem_v___for_len_105))) break;
-#line 184 "compiler/scope.gem"
-            gem_set_line(184);
-    GemVal _t20323 = gem_v___for_tbl_105;
-            GemVal gem_v_k = gem_table_key_at_2(_t20323, gem_v___for_i_105);
-#line 184 "compiler/scope.gem"
-            gem_set_line(184);
-    GemVal _t20324 = gem_v___for_tbl_105;
-            GemVal gem_v_v = gem_table_val_at_2(_t20324, gem_v___for_i_105);
-#line 184 "compiler/scope.gem"
-            gem_set_line(184);
+    GemVal _t20324 = gem_v___for_i_105;
+            if (!gem_truthy(gem_lt(_t20324, gem_v___for_len_105))) break;
+#line 188 "compiler/scope.gem"
+            gem_set_line(188);
+    GemVal _t20325 = gem_v___for_tbl_105;
+            GemVal gem_v_k = gem_table_key_at_2(_t20325, gem_v___for_i_105);
+#line 188 "compiler/scope.gem"
+            gem_set_line(188);
+    GemVal _t20326 = gem_v___for_tbl_105;
+            GemVal gem_v_v = gem_table_val_at_2(_t20326, gem_v___for_i_105);
+#line 188 "compiler/scope.gem"
+            gem_set_line(188);
             gem_v___for_i_105 = gem_add(gem_v___for_i_105, gem_int(1));
-#line 185 "compiler/scope.gem"
-            gem_set_line(185);
-    GemVal _t20325 = gem_neq(gem_v_k, GEM_STR_LIT("tag", 3));
-    GemVal _t20326;
-    if (!gem_truthy(_t20325)) {
-        _t20326 = _t20325;
+#line 189 "compiler/scope.gem"
+            gem_set_line(189);
+    GemVal _t20327 = gem_neq(gem_v_k, GEM_STR_LIT("tag", 3));
+    GemVal _t20328;
+    if (!gem_truthy(_t20327)) {
+        _t20328 = _t20327;
     } else {
-        _t20326 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
+        _t20328 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
     }
-            if (gem_truthy(_t20326)) {
-#line 186 "compiler/scope.gem"
-                gem_set_line(186);
-    GemVal _t20329 = gem_g___mod_scope_shadow_collect_lets;
-    GemVal _t20327 = gem_v_v;
-    GemVal _t20328[] = {_t20327, gem_v_out};
-    gem_check_callable(_t20329, "compiler/scope.gem", 186);
-                (void)(_t20329.fn(_t20329.env, _t20328, 2));
+            if (gem_truthy(_t20328)) {
+#line 190 "compiler/scope.gem"
+                gem_set_line(190);
+    GemVal _t20331 = gem_g___mod_scope_shadow_collect_lets;
+    GemVal _t20329 = gem_v_v;
+    GemVal _t20330[] = {_t20329, gem_v_out};
+    gem_check_callable(_t20331, "compiler/scope.gem", 190);
+                (void)(_t20331.fn(_t20331.env, _t20330, 2));
             }
         }
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
@@ -89220,40 +89254,40 @@ struct _closure___anon_206 {
     intptr_t _num_captures;
 };
 static GemVal __anon_206(void *_env, GemVal *args, int argc) {
-    gem_push_frame("anonymous fn", "compiler/scope.gem", 269);
+    gem_push_frame("anonymous fn", "compiler/scope.gem", 273);
     GemVal gem_v_stmts = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_env = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_mode = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_ctx = (argc > 3) ? args[3] : GEM_NIL;
     GemVal gem_v_block_kw;
     if (argc > 4) { gem_v_block_kw = args[4]; } else {
-    gem_set_line(269);
+    gem_set_line(273);
     gem_v_block_kw = GEM_NIL;
     }
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 270 "compiler/scope.gem"
-    gem_set_line(270);
+#line 274 "compiler/scope.gem"
+    gem_set_line(274);
     if (gem_truthy(gem_eq(gem_v_stmts, GEM_NIL))) {
-#line 271 "compiler/scope.gem"
-        gem_set_line(271);
-        GemVal _t20330 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20330, 1);
+#line 275 "compiler/scope.gem"
+        gem_set_line(275);
+        GemVal _t20332 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20332, 1);
         gem_pop_frame();
-        return _t20330;
+        return _t20332;
     }
-#line 273 "compiler/scope.gem"
-    gem_set_line(273);
-    GemVal _t20331[] = {gem_v_env};
-    GemVal gem_v_scope = gem_fn___mod_scope_copy_scope_env(NULL, _t20331, 1);
-#line 274 "compiler/scope.gem"
-    gem_set_line(274);
+#line 277 "compiler/scope.gem"
+    gem_set_line(277);
+    GemVal _t20333[] = {gem_v_env};
+    GemVal gem_v_scope = gem_fn___mod_scope_copy_scope_env(NULL, _t20333, 1);
+#line 278 "compiler/scope.gem"
+    gem_set_line(278);
     GemVal gem_v___for_items_109 = gem_for_items_1(gem_v_stmts);
-#line 274 "compiler/scope.gem"
-    gem_set_line(274);
+#line 278 "compiler/scope.gem"
+    gem_set_line(278);
     GemVal gem_v___for_i_109 = gem_int(0);
-#line 274 "compiler/scope.gem"
-    gem_set_line(274);
+#line 278 "compiler/scope.gem"
+    gem_set_line(278);
     GemArenaMark _mk601;
     gem_arena_mark(&_mk601);
     while (1) {
@@ -89262,94 +89296,94 @@ static GemVal __anon_206(void *_env, GemVal *args, int argc) {
             GemVal *_rr[] = {&gem_v_scope, &gem_v_env, &gem_v_ctx, &gem_v_block_kw, &gem_v___for_i_109, &gem_v_mode, &gem_v___for_items_109};
             gem_arena_reset_region(&_mk601, _rr, 7, NULL, 0);
         }
-    GemVal _t20332 = gem_v___for_i_109;
-        if (!gem_truthy(gem_lt(_t20332, gem_for_len_1(gem_v___for_items_109)))) break;
-#line 274 "compiler/scope.gem"
-        gem_set_line(274);
-    GemVal _t20333 = gem_v___for_items_109;
-        GemVal gem_v_s = gem_table_get(_t20333, gem_v___for_i_109);
-#line 274 "compiler/scope.gem"
-        gem_set_line(274);
+    GemVal _t20334 = gem_v___for_i_109;
+        if (!gem_truthy(gem_lt(_t20334, gem_for_len_1(gem_v___for_items_109)))) break;
+#line 278 "compiler/scope.gem"
+        gem_set_line(278);
+    GemVal _t20335 = gem_v___for_items_109;
+        GemVal gem_v_s = gem_table_get(_t20335, gem_v___for_i_109);
+#line 278 "compiler/scope.gem"
+        gem_set_line(278);
         gem_v___for_i_109 = gem_add(gem_v___for_i_109, gem_int(1));
-#line 275 "compiler/scope.gem"
-        gem_set_line(275);
-    GemVal _t20338 = gem_g___mod_scope_shadow_stmt;
-    GemVal _t20336 = gem_v_s;
-    GemVal _t20335 = gem_v_scope;
-    GemVal _t20334 = gem_v_mode;
-    GemVal _t20337[] = {_t20336, _t20335, _t20334, gem_v_ctx};
-    gem_check_callable(_t20338, "compiler/scope.gem", 275);
-        (void)(_t20338.fn(_t20338.env, _t20337, 4));
+#line 279 "compiler/scope.gem"
+        gem_set_line(279);
+    GemVal _t20340 = gem_g___mod_scope_shadow_stmt;
+    GemVal _t20338 = gem_v_s;
+    GemVal _t20337 = gem_v_scope;
+    GemVal _t20336 = gem_v_mode;
+    GemVal _t20339[] = {_t20338, _t20337, _t20336, gem_v_ctx};
+    gem_check_callable(_t20340, "compiler/scope.gem", 279);
+        (void)(_t20340.fn(_t20340.env, _t20339, 4));
     }
 
-#line 277 "compiler/scope.gem"
-    gem_set_line(277);
-    GemVal _t20341 = gem_v_scope;
-    GemVal _t20340 = gem_v_env;
-    GemVal _t20339 = gem_v_ctx;
-    GemVal _t20342[] = {_t20341, _t20340, _t20339, gem_v_block_kw};
-    GemVal _t20343 = gem_fn___mod_scope_shadow_end_scope(NULL, _t20342, 4);
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20343, 1);
+#line 281 "compiler/scope.gem"
+    gem_set_line(281);
+    GemVal _t20343 = gem_v_scope;
+    GemVal _t20342 = gem_v_env;
+    GemVal _t20341 = gem_v_ctx;
+    GemVal _t20344[] = {_t20343, _t20342, _t20341, gem_v_block_kw};
+    GemVal _t20345 = gem_fn___mod_scope_shadow_end_scope(NULL, _t20344, 4);
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20345, 1);
     gem_pop_frame();
-    return _t20343;
+    return _t20345;
 }
 
 struct _closure___anon_207 {
     intptr_t _num_captures;
 };
 static GemVal __anon_207(void *_env, GemVal *args, int argc) {
-    gem_push_frame("anonymous fn", "compiler/scope.gem", 282);
+    gem_push_frame("anonymous fn", "compiler/scope.gem", 286);
     GemVal gem_v_s = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_env = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_mode = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_ctx = (argc > 3) ? args[3] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 283 "compiler/scope.gem"
-    gem_set_line(283);
-    GemVal _t20345 = gem_g___mod_scope_is_node;
-    GemVal _t20344[] = {gem_v_s, GEM_STR_LIT("let", 3)};
-    gem_check_callable(_t20345, "compiler/scope.gem", 283);
-    if (gem_truthy(_t20345.fn(_t20345.env, _t20344, 2))) {
-#line 284 "compiler/scope.gem"
-        gem_set_line(284);
-    GemVal _t20351 = gem_g___mod_scope_shadow_node;
-    GemVal _t20346 = gem_v_s;
+#line 287 "compiler/scope.gem"
+    gem_set_line(287);
+    GemVal _t20347 = gem_g___mod_scope_is_node;
+    GemVal _t20346[] = {gem_v_s, GEM_STR_LIT("let", 3)};
+    gem_check_callable(_t20347, "compiler/scope.gem", 287);
+    if (gem_truthy(_t20347.fn(_t20347.env, _t20346, 2))) {
+#line 288 "compiler/scope.gem"
+        gem_set_line(288);
+    GemVal _t20353 = gem_g___mod_scope_shadow_node;
+    GemVal _t20348 = gem_v_s;
     static GemICacheSlot _ic_2929 = {0};
-    GemVal _t20349 = gem_table_get_cached(_t20346, "value", &_ic_2929);
-    GemVal _t20348 = gem_v_env;
-    GemVal _t20347 = gem_v_mode;
-    GemVal _t20350[] = {_t20349, _t20348, _t20347, gem_v_ctx};
-    gem_check_callable(_t20351, "compiler/scope.gem", 284);
-        (void)(_t20351.fn(_t20351.env, _t20350, 4));
-#line 285 "compiler/scope.gem"
-        gem_set_line(285);
-    GemVal _t20354 = gem_v_s;
-    GemVal _t20353 = gem_v_env;
-    GemVal _t20352 = gem_v_mode;
-    GemVal _t20355[] = {_t20354, _t20353, _t20352, gem_v_ctx};
-        GemVal _t20356 = gem_fn___mod_scope_shadow_bind(NULL, _t20355, 4);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20356, 1);
+    GemVal _t20351 = gem_table_get_cached(_t20348, "value", &_ic_2929);
+    GemVal _t20350 = gem_v_env;
+    GemVal _t20349 = gem_v_mode;
+    GemVal _t20352[] = {_t20351, _t20350, _t20349, gem_v_ctx};
+    gem_check_callable(_t20353, "compiler/scope.gem", 288);
+        (void)(_t20353.fn(_t20353.env, _t20352, 4));
+#line 289 "compiler/scope.gem"
+        gem_set_line(289);
+    GemVal _t20356 = gem_v_s;
+    GemVal _t20355 = gem_v_env;
+    GemVal _t20354 = gem_v_mode;
+    GemVal _t20357[] = {_t20356, _t20355, _t20354, gem_v_ctx};
+        GemVal _t20358 = gem_fn___mod_scope_shadow_bind(NULL, _t20357, 4);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20358, 1);
         gem_pop_frame();
-        return _t20356;
+        return _t20358;
     } else {
-#line 286 "compiler/scope.gem"
-        gem_set_line(286);
-    GemVal _t20358 = gem_g___mod_scope_is_node;
-    GemVal _t20357[] = {gem_v_s, GEM_STR_LIT("block", 5)};
-    gem_check_callable(_t20358, "compiler/scope.gem", 286);
-        if (gem_truthy(_t20358.fn(_t20358.env, _t20357, 2))) {
+#line 290 "compiler/scope.gem"
+        gem_set_line(290);
+    GemVal _t20360 = gem_g___mod_scope_is_node;
+    GemVal _t20359[] = {gem_v_s, GEM_STR_LIT("block", 5)};
+    gem_check_callable(_t20360, "compiler/scope.gem", 290);
+        if (gem_truthy(_t20360.fn(_t20360.env, _t20359, 2))) {
             {
-#line 287 "compiler/scope.gem"
-                gem_set_line(287);
-    GemVal _t20359 = gem_v_s;
+#line 291 "compiler/scope.gem"
+                gem_set_line(291);
+    GemVal _t20361 = gem_v_s;
     static GemICacheSlot _ic_2930 = {0};
-                GemVal gem_v___for_items_110 = gem_for_items_1(gem_table_get_cached(_t20359, "stmts", &_ic_2930));
-#line 287 "compiler/scope.gem"
-                gem_set_line(287);
+                GemVal gem_v___for_items_110 = gem_for_items_1(gem_table_get_cached(_t20361, "stmts", &_ic_2930));
+#line 291 "compiler/scope.gem"
+                gem_set_line(291);
                 GemVal gem_v___for_i_110 = gem_int(0);
-#line 287 "compiler/scope.gem"
-                gem_set_line(287);
+#line 291 "compiler/scope.gem"
+                gem_set_line(291);
                 GemArenaMark _mk602;
                 gem_arena_mark(&_mk602);
                 while (1) {
@@ -89358,42 +89392,42 @@ static GemVal __anon_207(void *_env, GemVal *args, int argc) {
                         GemVal *_rr[] = {&gem_v___for_i_110, &gem_v_env, &gem_v_mode, &gem_v_ctx, &gem_v___for_items_110};
                         gem_arena_reset_region(&_mk602, _rr, 5, NULL, 0);
                     }
-    GemVal _t20360 = gem_v___for_i_110;
-                    if (!gem_truthy(gem_lt(_t20360, gem_for_len_1(gem_v___for_items_110)))) break;
-#line 287 "compiler/scope.gem"
-                    gem_set_line(287);
-    GemVal _t20361 = gem_v___for_items_110;
-                    GemVal gem_v_c = gem_table_get(_t20361, gem_v___for_i_110);
-#line 287 "compiler/scope.gem"
-                    gem_set_line(287);
+    GemVal _t20362 = gem_v___for_i_110;
+                    if (!gem_truthy(gem_lt(_t20362, gem_for_len_1(gem_v___for_items_110)))) break;
+#line 291 "compiler/scope.gem"
+                    gem_set_line(291);
+    GemVal _t20363 = gem_v___for_items_110;
+                    GemVal gem_v_c = gem_table_get(_t20363, gem_v___for_i_110);
+#line 291 "compiler/scope.gem"
+                    gem_set_line(291);
                     gem_v___for_i_110 = gem_add(gem_v___for_i_110, gem_int(1));
-#line 288 "compiler/scope.gem"
-                    gem_set_line(288);
-    GemVal _t20366 = gem_g___mod_scope_shadow_stmt;
-    GemVal _t20364 = gem_v_c;
-    GemVal _t20363 = gem_v_env;
-    GemVal _t20362 = gem_v_mode;
-    GemVal _t20365[] = {_t20364, _t20363, _t20362, gem_v_ctx};
-    gem_check_callable(_t20366, "compiler/scope.gem", 288);
-                    (void)(_t20366.fn(_t20366.env, _t20365, 4));
+#line 292 "compiler/scope.gem"
+                    gem_set_line(292);
+    GemVal _t20368 = gem_g___mod_scope_shadow_stmt;
+    GemVal _t20366 = gem_v_c;
+    GemVal _t20365 = gem_v_env;
+    GemVal _t20364 = gem_v_mode;
+    GemVal _t20367[] = {_t20366, _t20365, _t20364, gem_v_ctx};
+    gem_check_callable(_t20368, "compiler/scope.gem", 292);
+                    (void)(_t20368.fn(_t20368.env, _t20367, 4));
                 }
                 if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
                 gem_pop_frame();
                 return GEM_NIL;
             }
         } else {
-#line 291 "compiler/scope.gem"
-            gem_set_line(291);
-    GemVal _t20371 = gem_g___mod_scope_shadow_node;
-    GemVal _t20369 = gem_v_s;
-    GemVal _t20368 = gem_v_env;
-    GemVal _t20367 = gem_v_mode;
-    GemVal _t20370[] = {_t20369, _t20368, _t20367, gem_v_ctx};
-    gem_check_callable(_t20371, "compiler/scope.gem", 291);
-            GemVal _t20372 = _t20371.fn(_t20371.env, _t20370, 4);
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20372, 1);
+#line 295 "compiler/scope.gem"
+            gem_set_line(295);
+    GemVal _t20373 = gem_g___mod_scope_shadow_node;
+    GemVal _t20371 = gem_v_s;
+    GemVal _t20370 = gem_v_env;
+    GemVal _t20369 = gem_v_mode;
+    GemVal _t20372[] = {_t20371, _t20370, _t20369, gem_v_ctx};
+    gem_check_callable(_t20373, "compiler/scope.gem", 295);
+            GemVal _t20374 = _t20373.fn(_t20373.env, _t20372, 4);
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20374, 1);
             gem_pop_frame();
-            return _t20372;
+            return _t20374;
         }
     }
 }
@@ -89402,193 +89436,193 @@ struct _closure___anon_208 {
     intptr_t _num_captures;
 };
 static GemVal __anon_208(void *_env, GemVal *args, int argc) {
-    gem_push_frame("anonymous fn", "compiler/scope.gem", 313);
+    gem_push_frame("anonymous fn", "compiler/scope.gem", 317);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_env = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_mode = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_ctx = (argc > 3) ? args[3] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 314 "compiler/scope.gem"
-    gem_set_line(314);
-    GemVal _t20373 = gem_eq(gem_v_node, GEM_NIL);
-    GemVal _t20374;
-    if (gem_truthy(_t20373)) {
-        _t20374 = _t20373;
-    } else {
-        _t20374 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
-    }
-    GemVal _t20376;
-    if (gem_truthy(_t20374)) {
-        _t20376 = _t20374;
-    } else {
-    GemVal _t20375 = gem_v_node;
-    static GemICacheSlot _ic_2931 = {0};
-        _t20376 = gem_eq(gem_table_get_cached(_t20375, "tag", &_ic_2931), GEM_NIL);
-    }
-    if (gem_truthy(_t20376)) {
-#line 315 "compiler/scope.gem"
-        gem_set_line(315);
-        GemVal _t20377 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20377, 1);
-        gem_pop_frame();
-        return _t20377;
-    }
-#line 317 "compiler/scope.gem"
-    gem_set_line(317);
-    GemVal _t20378 = gem_v_node;
-    static GemICacheSlot _ic_2932 = {0};
-    GemVal gem_v_tag = gem_table_get_cached(_t20378, "tag", &_ic_2932);
 #line 318 "compiler/scope.gem"
     gem_set_line(318);
-    GemVal _t20379[] = {gem_v_mode};
-    GemVal gem_v_cm = gem_fn___mod_scope_shadow_child_mode(NULL, _t20379, 1);
-#line 319 "compiler/scope.gem"
-    gem_set_line(319);
-    if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("var", 3)))) {
-#line 320 "compiler/scope.gem"
-        gem_set_line(320);
-    GemVal _t20383 = gem_v_node;
-    GemVal _t20380 = gem_v_node;
-    static GemICacheSlot _ic_2933 = {0};
-    GemVal _t20382 = gem_table_get_cached(_t20380, "name", &_ic_2933);
-    GemVal _t20381 = gem_v_env;
-    GemVal _t20384[] = {_t20383, _t20382, _t20381, gem_v_ctx};
-        (void)(gem_fn___mod_scope_shadow_check_use(NULL, _t20384, 4));
-#line 321 "compiler/scope.gem"
-        gem_set_line(321);
-    GemVal _t20386 = gem_v_env;
-    GemVal _t20385 = gem_v_node;
-    static GemICacheSlot _ic_2934 = {0};
-    GemVal _t20387[] = {_t20386, gem_table_get_cached(_t20385, "name", &_ic_2934)};
-    GemVal _t20388 = gem_has_key_fn(NULL, _t20387, 2);
-    GemVal _t20392;
-    if (!gem_truthy(_t20388)) {
-        _t20392 = _t20388;
+    GemVal _t20375 = gem_eq(gem_v_node, GEM_NIL);
+    GemVal _t20376;
+    if (gem_truthy(_t20375)) {
+        _t20376 = _t20375;
     } else {
-    GemVal _t20390 = gem_v_env;
-    GemVal _t20389 = gem_v_node;
-    static GemICacheSlot _ic_2935 = {0};
-    GemVal _t20391 = gem_table_get(_t20390, gem_table_get_cached(_t20389, "name", &_ic_2935));
-        _t20392 = gem_neq(_t20391, gem_g___mod_scope_PENDING_PARAM);
+        _t20376 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
     }
-        if (gem_truthy(_t20392)) {
-#line 322 "compiler/scope.gem"
-            gem_set_line(322);
-    GemVal _t20395 = gem_v_node;
-    GemVal _t20394 = gem_v_env;
-    GemVal _t20393 = gem_v_node;
-    static GemICacheSlot _ic_2936 = {0};
-            gem_table_set(_t20395, GEM_STR_LIT("name", 4), gem_table_get(_t20394, gem_table_get_cached(_t20393, "name", &_ic_2936)));
-        }
+    GemVal _t20378;
+    if (gem_truthy(_t20376)) {
+        _t20378 = _t20376;
     } else {
+    GemVal _t20377 = gem_v_node;
+    static GemICacheSlot _ic_2931 = {0};
+        _t20378 = gem_eq(gem_table_get_cached(_t20377, "tag", &_ic_2931), GEM_NIL);
+    }
+    if (gem_truthy(_t20378)) {
+#line 319 "compiler/scope.gem"
+        gem_set_line(319);
+        GemVal _t20379 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20379, 1);
+        gem_pop_frame();
+        return _t20379;
+    }
+#line 321 "compiler/scope.gem"
+    gem_set_line(321);
+    GemVal _t20380 = gem_v_node;
+    static GemICacheSlot _ic_2932 = {0};
+    GemVal gem_v_tag = gem_table_get_cached(_t20380, "tag", &_ic_2932);
+#line 322 "compiler/scope.gem"
+    gem_set_line(322);
+    GemVal _t20381[] = {gem_v_mode};
+    GemVal gem_v_cm = gem_fn___mod_scope_shadow_child_mode(NULL, _t20381, 1);
+#line 323 "compiler/scope.gem"
+    gem_set_line(323);
+    if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("var", 3)))) {
 #line 324 "compiler/scope.gem"
         gem_set_line(324);
-        if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("assign", 6)))) {
+    GemVal _t20385 = gem_v_node;
+    GemVal _t20382 = gem_v_node;
+    static GemICacheSlot _ic_2933 = {0};
+    GemVal _t20384 = gem_table_get_cached(_t20382, "name", &_ic_2933);
+    GemVal _t20383 = gem_v_env;
+    GemVal _t20386[] = {_t20385, _t20384, _t20383, gem_v_ctx};
+        (void)(gem_fn___mod_scope_shadow_check_use(NULL, _t20386, 4));
 #line 325 "compiler/scope.gem"
-            gem_set_line(325);
-    GemVal _t20401 = gem_g___mod_scope_shadow_node;
-    GemVal _t20396 = gem_v_node;
-    static GemICacheSlot _ic_2937 = {0};
-    GemVal _t20399 = gem_table_get_cached(_t20396, "value", &_ic_2937);
-    GemVal _t20398 = gem_v_env;
-    GemVal _t20397 = gem_v_mode;
-    GemVal _t20400[] = {_t20399, _t20398, _t20397, gem_v_ctx};
-    gem_check_callable(_t20401, "compiler/scope.gem", 325);
-            (void)(_t20401.fn(_t20401.env, _t20400, 4));
+        gem_set_line(325);
+    GemVal _t20388 = gem_v_env;
+    GemVal _t20387 = gem_v_node;
+    static GemICacheSlot _ic_2934 = {0};
+    GemVal _t20389[] = {_t20388, gem_table_get_cached(_t20387, "name", &_ic_2934)};
+    GemVal _t20390 = gem_has_key_fn(NULL, _t20389, 2);
+    GemVal _t20394;
+    if (!gem_truthy(_t20390)) {
+        _t20394 = _t20390;
+    } else {
+    GemVal _t20392 = gem_v_env;
+    GemVal _t20391 = gem_v_node;
+    static GemICacheSlot _ic_2935 = {0};
+    GemVal _t20393 = gem_table_get(_t20392, gem_table_get_cached(_t20391, "name", &_ic_2935));
+        _t20394 = gem_neq(_t20393, gem_g___mod_scope_PENDING_PARAM);
+    }
+        if (gem_truthy(_t20394)) {
 #line 326 "compiler/scope.gem"
             gem_set_line(326);
-    GemVal _t20405 = gem_v_node;
-    GemVal _t20402 = gem_v_node;
-    static GemICacheSlot _ic_2938 = {0};
-    GemVal _t20404 = gem_table_get_cached(_t20402, "name", &_ic_2938);
-    GemVal _t20403 = gem_v_env;
-    GemVal _t20406[] = {_t20405, _t20404, _t20403, gem_v_ctx};
-            (void)(gem_fn___mod_scope_shadow_check_use(NULL, _t20406, 4));
-#line 327 "compiler/scope.gem"
-            gem_set_line(327);
-    GemVal _t20408 = gem_v_env;
-    GemVal _t20407 = gem_v_node;
-    static GemICacheSlot _ic_2939 = {0};
-    GemVal _t20409[] = {_t20408, gem_table_get_cached(_t20407, "name", &_ic_2939)};
-    GemVal _t20410 = gem_has_key_fn(NULL, _t20409, 2);
-    GemVal _t20414;
-    if (!gem_truthy(_t20410)) {
-        _t20414 = _t20410;
+    GemVal _t20397 = gem_v_node;
+    GemVal _t20396 = gem_v_env;
+    GemVal _t20395 = gem_v_node;
+    static GemICacheSlot _ic_2936 = {0};
+            gem_table_set(_t20397, GEM_STR_LIT("name", 4), gem_table_get(_t20396, gem_table_get_cached(_t20395, "name", &_ic_2936)));
+        }
     } else {
-    GemVal _t20412 = gem_v_env;
-    GemVal _t20411 = gem_v_node;
-    static GemICacheSlot _ic_2940 = {0};
-    GemVal _t20413 = gem_table_get(_t20412, gem_table_get_cached(_t20411, "name", &_ic_2940));
-        _t20414 = gem_neq(_t20413, gem_g___mod_scope_PENDING_PARAM);
-    }
-            if (gem_truthy(_t20414)) {
 #line 328 "compiler/scope.gem"
-                gem_set_line(328);
-    GemVal _t20417 = gem_v_node;
-    GemVal _t20416 = gem_v_env;
-    GemVal _t20415 = gem_v_node;
-    static GemICacheSlot _ic_2941 = {0};
-                gem_table_set(_t20417, GEM_STR_LIT("name", 4), gem_table_get(_t20416, gem_table_get_cached(_t20415, "name", &_ic_2941)));
-            }
-        } else {
+        gem_set_line(328);
+        if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("assign", 6)))) {
+#line 329 "compiler/scope.gem"
+            gem_set_line(329);
+    GemVal _t20403 = gem_g___mod_scope_shadow_node;
+    GemVal _t20398 = gem_v_node;
+    static GemICacheSlot _ic_2937 = {0};
+    GemVal _t20401 = gem_table_get_cached(_t20398, "value", &_ic_2937);
+    GemVal _t20400 = gem_v_env;
+    GemVal _t20399 = gem_v_mode;
+    GemVal _t20402[] = {_t20401, _t20400, _t20399, gem_v_ctx};
+    gem_check_callable(_t20403, "compiler/scope.gem", 329);
+            (void)(_t20403.fn(_t20403.env, _t20402, 4));
 #line 330 "compiler/scope.gem"
             gem_set_line(330);
-    GemVal _t20418 = gem_eq(gem_v_tag, GEM_STR_LIT("let", 3));
-    GemVal _t20419;
-    if (gem_truthy(_t20418)) {
-        _t20419 = _t20418;
+    GemVal _t20407 = gem_v_node;
+    GemVal _t20404 = gem_v_node;
+    static GemICacheSlot _ic_2938 = {0};
+    GemVal _t20406 = gem_table_get_cached(_t20404, "name", &_ic_2938);
+    GemVal _t20405 = gem_v_env;
+    GemVal _t20408[] = {_t20407, _t20406, _t20405, gem_v_ctx};
+            (void)(gem_fn___mod_scope_shadow_check_use(NULL, _t20408, 4));
+#line 331 "compiler/scope.gem"
+            gem_set_line(331);
+    GemVal _t20410 = gem_v_env;
+    GemVal _t20409 = gem_v_node;
+    static GemICacheSlot _ic_2939 = {0};
+    GemVal _t20411[] = {_t20410, gem_table_get_cached(_t20409, "name", &_ic_2939)};
+    GemVal _t20412 = gem_has_key_fn(NULL, _t20411, 2);
+    GemVal _t20416;
+    if (!gem_truthy(_t20412)) {
+        _t20416 = _t20412;
     } else {
-        _t20419 = gem_eq(gem_v_tag, GEM_STR_LIT("block", 5));
+    GemVal _t20414 = gem_v_env;
+    GemVal _t20413 = gem_v_node;
+    static GemICacheSlot _ic_2940 = {0};
+    GemVal _t20415 = gem_table_get(_t20414, gem_table_get_cached(_t20413, "name", &_ic_2940));
+        _t20416 = gem_neq(_t20415, gem_g___mod_scope_PENDING_PARAM);
     }
-            if (gem_truthy(_t20419)) {
+            if (gem_truthy(_t20416)) {
 #line 332 "compiler/scope.gem"
                 gem_set_line(332);
-    GemVal _t20424 = gem_g___mod_scope_shadow_stmt;
-    GemVal _t20422 = gem_v_node;
-    GemVal _t20421 = gem_v_env;
-    GemVal _t20420 = gem_v_mode;
-    GemVal _t20423[] = {_t20422, _t20421, _t20420, gem_v_ctx};
-    gem_check_callable(_t20424, "compiler/scope.gem", 332);
-                (void)(_t20424.fn(_t20424.env, _t20423, 4));
-            } else {
-#line 333 "compiler/scope.gem"
-                gem_set_line(333);
-                if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("fn_def", 6)))) {
-#line 335 "compiler/scope.gem"
-                    gem_set_line(335);
-    GemVal _t20425 = gem_v_node;
-    GemVal _t20426[] = {_t20425, gem_v_ctx};
-                    (void)(gem_fn___mod_scope_shadow_named_fn(NULL, _t20426, 2));
-                } else {
+    GemVal _t20419 = gem_v_node;
+    GemVal _t20418 = gem_v_env;
+    GemVal _t20417 = gem_v_node;
+    static GemICacheSlot _ic_2941 = {0};
+                gem_table_set(_t20419, GEM_STR_LIT("name", 4), gem_table_get(_t20418, gem_table_get_cached(_t20417, "name", &_ic_2941)));
+            }
+        } else {
+#line 334 "compiler/scope.gem"
+            gem_set_line(334);
+    GemVal _t20420 = gem_eq(gem_v_tag, GEM_STR_LIT("let", 3));
+    GemVal _t20421;
+    if (gem_truthy(_t20420)) {
+        _t20421 = _t20420;
+    } else {
+        _t20421 = gem_eq(gem_v_tag, GEM_STR_LIT("block", 5));
+    }
+            if (gem_truthy(_t20421)) {
 #line 336 "compiler/scope.gem"
-                    gem_set_line(336);
-                    if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("anon_fn", 7)))) {
+                gem_set_line(336);
+    GemVal _t20426 = gem_g___mod_scope_shadow_stmt;
+    GemVal _t20424 = gem_v_node;
+    GemVal _t20423 = gem_v_env;
+    GemVal _t20422 = gem_v_mode;
+    GemVal _t20425[] = {_t20424, _t20423, _t20422, gem_v_ctx};
+    gem_check_callable(_t20426, "compiler/scope.gem", 336);
+                (void)(_t20426.fn(_t20426.env, _t20425, 4));
+            } else {
+#line 337 "compiler/scope.gem"
+                gem_set_line(337);
+                if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("fn_def", 6)))) {
 #line 339 "compiler/scope.gem"
-                        gem_set_line(339);
-    GemVal _t20427 = gem_v_ctx;
-    static GemICacheSlot _ic_2942 = {0};
-                        GemVal gem_v_saved_later = gem_table_get_cached(_t20427, "later", &_ic_2942);
+                    gem_set_line(339);
+    GemVal _t20427 = gem_v_node;
+    GemVal _t20428[] = {_t20427, gem_v_ctx};
+                    (void)(gem_fn___mod_scope_shadow_named_fn(NULL, _t20428, 2));
+                } else {
 #line 340 "compiler/scope.gem"
-                        gem_set_line(340);
-    GemVal _t20428 = gem_v_ctx;
+                    gem_set_line(340);
+                    if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("anon_fn", 7)))) {
+#line 343 "compiler/scope.gem"
+                        gem_set_line(343);
+    GemVal _t20429 = gem_v_ctx;
+    static GemICacheSlot _ic_2942 = {0};
+                        GemVal gem_v_saved_later = gem_table_get_cached(_t20429, "later", &_ic_2942);
+#line 344 "compiler/scope.gem"
+                        gem_set_line(344);
+    GemVal _t20430 = gem_v_ctx;
     static GemICacheSlot _ic_2943 = {0};
-                        GemVal gem_v_saved_outer = gem_table_get_cached(_t20428, "outer_later", &_ic_2943);
-#line 341 "compiler/scope.gem"
-                        gem_set_line(341);
-    GemVal _t20429[] = {gem_v_saved_outer};
-                        GemVal gem_v_outer = gem_fn___mod_scope_copy_scope_env(NULL, _t20429, 1);
-#line 342 "compiler/scope.gem"
-                        gem_set_line(342);
+                        GemVal gem_v_saved_outer = gem_table_get_cached(_t20430, "outer_later", &_ic_2943);
+#line 345 "compiler/scope.gem"
+                        gem_set_line(345);
+    GemVal _t20431[] = {gem_v_saved_outer};
+                        GemVal gem_v_outer = gem_fn___mod_scope_copy_scope_env(NULL, _t20431, 1);
+#line 346 "compiler/scope.gem"
+                        gem_set_line(346);
                         GemVal gem_v___for_tbl_112 = gem_v_saved_later;
-#line 342 "compiler/scope.gem"
-                        gem_set_line(342);
+#line 346 "compiler/scope.gem"
+                        gem_set_line(346);
                         GemVal gem_v___for_len_112 = gem_for_len_1(gem_v___for_tbl_112);
-#line 342 "compiler/scope.gem"
-                        gem_set_line(342);
+#line 346 "compiler/scope.gem"
+                        gem_set_line(346);
                         GemVal gem_v___for_i_112 = gem_int(0);
-#line 342 "compiler/scope.gem"
-                        gem_set_line(342);
+#line 346 "compiler/scope.gem"
+                        gem_set_line(346);
                         GemArenaMark _mk603;
                         gem_arena_mark(&_mk603);
                         while (1) {
@@ -89597,113 +89631,113 @@ static GemVal __anon_208(void *_env, GemVal *args, int argc) {
                                 GemVal *_rr[] = {&gem_v_ctx, &gem_v_saved_outer, &gem_v_saved_later, &gem_v_node, &gem_v_env, &gem_v_outer, &gem_v___for_tbl_112, &gem_v___for_i_112, &gem_v___for_len_112};
                                 gem_arena_reset_region(&_mk603, _rr, 9, NULL, 0);
                             }
-    GemVal _t20430 = gem_v___for_i_112;
-                            if (!gem_truthy(gem_lt(_t20430, gem_v___for_len_112))) break;
-#line 342 "compiler/scope.gem"
-                            gem_set_line(342);
-    GemVal _t20431 = gem_v___for_tbl_112;
-                            GemVal gem_v_k = gem_table_key_at_2(_t20431, gem_v___for_i_112);
-#line 342 "compiler/scope.gem"
-                            gem_set_line(342);
-    GemVal _t20432 = gem_v___for_tbl_112;
-                            GemVal gem_v_v = gem_table_val_at_2(_t20432, gem_v___for_i_112);
-#line 342 "compiler/scope.gem"
-                            gem_set_line(342);
+    GemVal _t20432 = gem_v___for_i_112;
+                            if (!gem_truthy(gem_lt(_t20432, gem_v___for_len_112))) break;
+#line 346 "compiler/scope.gem"
+                            gem_set_line(346);
+    GemVal _t20433 = gem_v___for_tbl_112;
+                            GemVal gem_v_k = gem_table_key_at_2(_t20433, gem_v___for_i_112);
+#line 346 "compiler/scope.gem"
+                            gem_set_line(346);
+    GemVal _t20434 = gem_v___for_tbl_112;
+                            GemVal gem_v_v = gem_table_val_at_2(_t20434, gem_v___for_i_112);
+#line 346 "compiler/scope.gem"
+                            gem_set_line(346);
                             gem_v___for_i_112 = gem_add(gem_v___for_i_112, gem_int(1));
-#line 343 "compiler/scope.gem"
-                            gem_set_line(343);
-    GemVal _t20434 = gem_v_outer;
-    GemVal _t20433 = gem_v_k;
-                            gem_table_set(_t20434, _t20433, gem_v_v);
+#line 347 "compiler/scope.gem"
+                            gem_set_line(347);
+    GemVal _t20436 = gem_v_outer;
+    GemVal _t20435 = gem_v_k;
+                            gem_table_set(_t20436, _t20435, gem_v_v);
                         }
 
-#line 345 "compiler/scope.gem"
-                        gem_set_line(345);
-    GemVal _t20435 = gem_v_ctx;
-                        gem_table_set(_t20435, GEM_STR_LIT("outer_later", 11), gem_v_outer);
-#line 346 "compiler/scope.gem"
-                        gem_set_line(346);
-    GemVal _t20437 = gem_v_ctx;
-    GemVal _t20436 = gem_table_new_braces();
-                        gem_table_set(_t20437, GEM_STR_LIT("later", 5), _t20436);
-#line 347 "compiler/scope.gem"
-                        gem_set_line(347);
-    GemVal _t20442 = gem_g___mod_scope_shadow_collect_lets;
-    GemVal _t20438 = gem_v_node;
-    static GemICacheSlot _ic_2944 = {0};
-    GemVal _t20440 = gem_table_get_cached(_t20438, "body", &_ic_2944);
-    GemVal _t20439 = gem_v_ctx;
-    static GemICacheSlot _ic_2945 = {0};
-    GemVal _t20441[] = {_t20440, gem_table_get_cached(_t20439, "later", &_ic_2945)};
-    gem_check_callable(_t20442, "compiler/scope.gem", 347);
-                        (void)(_t20442.fn(_t20442.env, _t20441, 2));
-#line 348 "compiler/scope.gem"
-                        gem_set_line(348);
-    GemVal _t20444 = gem_v_ctx;
-    GemVal _t20443 = gem_v_ctx;
-    static GemICacheSlot _ic_2946 = {0};
-                        gem_table_set(_t20444, GEM_STR_LIT("closure_depth", 13), gem_add(gem_table_get_cached(_t20443, "closure_depth", &_ic_2946), gem_int(1)));
 #line 349 "compiler/scope.gem"
                         gem_set_line(349);
-    GemVal _t20446 = gem_v_node;
-    GemVal _t20445 = gem_v_env;
-    GemVal _t20447[] = {_t20446, _t20445, gem_v_ctx};
-                        (void)(gem_fn___mod_scope_shadow_fn(NULL, _t20447, 3));
+    GemVal _t20437 = gem_v_ctx;
+                        gem_table_set(_t20437, GEM_STR_LIT("outer_later", 11), gem_v_outer);
 #line 350 "compiler/scope.gem"
                         gem_set_line(350);
-    GemVal _t20449 = gem_v_ctx;
-    GemVal _t20448 = gem_v_ctx;
-    static GemICacheSlot _ic_2947 = {0};
-                        gem_table_set(_t20449, GEM_STR_LIT("closure_depth", 13), gem_sub(gem_table_get_cached(_t20448, "closure_depth", &_ic_2947), gem_int(1)));
+    GemVal _t20439 = gem_v_ctx;
+    GemVal _t20438 = gem_table_new_braces();
+                        gem_table_set(_t20439, GEM_STR_LIT("later", 5), _t20438);
 #line 351 "compiler/scope.gem"
                         gem_set_line(351);
-    GemVal _t20450 = gem_v_ctx;
-                        gem_table_set(_t20450, GEM_STR_LIT("later", 5), gem_v_saved_later);
+    GemVal _t20444 = gem_g___mod_scope_shadow_collect_lets;
+    GemVal _t20440 = gem_v_node;
+    static GemICacheSlot _ic_2944 = {0};
+    GemVal _t20442 = gem_table_get_cached(_t20440, "body", &_ic_2944);
+    GemVal _t20441 = gem_v_ctx;
+    static GemICacheSlot _ic_2945 = {0};
+    GemVal _t20443[] = {_t20442, gem_table_get_cached(_t20441, "later", &_ic_2945)};
+    gem_check_callable(_t20444, "compiler/scope.gem", 351);
+                        (void)(_t20444.fn(_t20444.env, _t20443, 2));
 #line 352 "compiler/scope.gem"
                         gem_set_line(352);
-    GemVal _t20451 = gem_v_ctx;
-                        gem_table_set(_t20451, GEM_STR_LIT("outer_later", 11), gem_v_saved_outer);
-                    } else {
+    GemVal _t20446 = gem_v_ctx;
+    GemVal _t20445 = gem_v_ctx;
+    static GemICacheSlot _ic_2946 = {0};
+                        gem_table_set(_t20446, GEM_STR_LIT("closure_depth", 13), gem_add(gem_table_get_cached(_t20445, "closure_depth", &_ic_2946), gem_int(1)));
 #line 353 "compiler/scope.gem"
                         gem_set_line(353);
-                        if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("if", 2)))) {
+    GemVal _t20448 = gem_v_node;
+    GemVal _t20447 = gem_v_env;
+    GemVal _t20449[] = {_t20448, _t20447, gem_v_ctx};
+                        (void)(gem_fn___mod_scope_shadow_fn(NULL, _t20449, 3));
 #line 354 "compiler/scope.gem"
-                            gem_set_line(354);
-    GemVal _t20457 = gem_g___mod_scope_shadow_node;
-    GemVal _t20452 = gem_v_node;
-    static GemICacheSlot _ic_2948 = {0};
-    GemVal _t20455 = gem_table_get_cached(_t20452, "cond", &_ic_2948);
-    GemVal _t20454 = gem_v_env;
-    GemVal _t20453 = gem_v_mode;
-    GemVal _t20456[] = {_t20455, _t20454, _t20453, gem_v_ctx};
-    gem_check_callable(_t20457, "compiler/scope.gem", 354);
-                            (void)(_t20457.fn(_t20457.env, _t20456, 4));
+                        gem_set_line(354);
+    GemVal _t20451 = gem_v_ctx;
+    GemVal _t20450 = gem_v_ctx;
+    static GemICacheSlot _ic_2947 = {0};
+                        gem_table_set(_t20451, GEM_STR_LIT("closure_depth", 13), gem_sub(gem_table_get_cached(_t20450, "closure_depth", &_ic_2947), gem_int(1)));
 #line 355 "compiler/scope.gem"
-                            gem_set_line(355);
-    GemVal _t20463 = gem_g___mod_scope_shadow_stmts;
-    GemVal _t20458 = gem_v_node;
-    static GemICacheSlot _ic_2949 = {0};
-    GemVal _t20461 = gem_table_get_cached(_t20458, "then", &_ic_2949);
-    GemVal _t20460 = gem_v_env;
-    GemVal _t20459 = gem_v_cm;
-    GemVal _t20462[] = {_t20461, _t20460, _t20459, gem_v_ctx, GEM_STR_LIT("if", 2)};
-    gem_check_callable(_t20463, "compiler/scope.gem", 355);
-                            (void)(_t20463.fn(_t20463.env, _t20462, 5));
+                        gem_set_line(355);
+    GemVal _t20452 = gem_v_ctx;
+                        gem_table_set(_t20452, GEM_STR_LIT("later", 5), gem_v_saved_later);
 #line 356 "compiler/scope.gem"
-                            gem_set_line(356);
-    GemVal _t20464 = gem_v_node;
+                        gem_set_line(356);
+    GemVal _t20453 = gem_v_ctx;
+                        gem_table_set(_t20453, GEM_STR_LIT("outer_later", 11), gem_v_saved_outer);
+                    } else {
+#line 357 "compiler/scope.gem"
+                        gem_set_line(357);
+                        if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("if", 2)))) {
+#line 358 "compiler/scope.gem"
+                            gem_set_line(358);
+    GemVal _t20459 = gem_g___mod_scope_shadow_node;
+    GemVal _t20454 = gem_v_node;
+    static GemICacheSlot _ic_2948 = {0};
+    GemVal _t20457 = gem_table_get_cached(_t20454, "cond", &_ic_2948);
+    GemVal _t20456 = gem_v_env;
+    GemVal _t20455 = gem_v_mode;
+    GemVal _t20458[] = {_t20457, _t20456, _t20455, gem_v_ctx};
+    gem_check_callable(_t20459, "compiler/scope.gem", 358);
+                            (void)(_t20459.fn(_t20459.env, _t20458, 4));
+#line 359 "compiler/scope.gem"
+                            gem_set_line(359);
+    GemVal _t20465 = gem_g___mod_scope_shadow_stmts;
+    GemVal _t20460 = gem_v_node;
+    static GemICacheSlot _ic_2949 = {0};
+    GemVal _t20463 = gem_table_get_cached(_t20460, "then", &_ic_2949);
+    GemVal _t20462 = gem_v_env;
+    GemVal _t20461 = gem_v_cm;
+    GemVal _t20464[] = {_t20463, _t20462, _t20461, gem_v_ctx, GEM_STR_LIT("if", 2)};
+    gem_check_callable(_t20465, "compiler/scope.gem", 359);
+                            (void)(_t20465.fn(_t20465.env, _t20464, 5));
+#line 360 "compiler/scope.gem"
+                            gem_set_line(360);
+    GemVal _t20466 = gem_v_node;
     static GemICacheSlot _ic_2950 = {0};
-                            if (gem_truthy(gem_neq(gem_table_get_cached(_t20464, "elifs", &_ic_2950), GEM_NIL))) {
-#line 357 "compiler/scope.gem"
-                                gem_set_line(357);
-    GemVal _t20465 = gem_v_node;
+                            if (gem_truthy(gem_neq(gem_table_get_cached(_t20466, "elifs", &_ic_2950), GEM_NIL))) {
+#line 361 "compiler/scope.gem"
+                                gem_set_line(361);
+    GemVal _t20467 = gem_v_node;
     static GemICacheSlot _ic_2951 = {0};
-                                GemVal gem_v___for_items_113 = gem_for_items_1(gem_table_get_cached(_t20465, "elifs", &_ic_2951));
-#line 357 "compiler/scope.gem"
-                                gem_set_line(357);
+                                GemVal gem_v___for_items_113 = gem_for_items_1(gem_table_get_cached(_t20467, "elifs", &_ic_2951));
+#line 361 "compiler/scope.gem"
+                                gem_set_line(361);
                                 GemVal gem_v___for_i_113 = gem_int(0);
-#line 357 "compiler/scope.gem"
-                                gem_set_line(357);
+#line 361 "compiler/scope.gem"
+                                gem_set_line(361);
                                 GemArenaMark _mk604;
                                 gem_arena_mark(&_mk604);
                                 while (1) {
@@ -89712,107 +89746,107 @@ static GemVal __anon_208(void *_env, GemVal *args, int argc) {
                                         GemVal *_rr[] = {&gem_v_node, &gem_v_env, &gem_v_cm, &gem_v_ctx, &gem_v___for_i_113, &gem_v_mode, &gem_v___for_items_113};
                                         gem_arena_reset_region(&_mk604, _rr, 7, NULL, 0);
                                     }
-    GemVal _t20466 = gem_v___for_i_113;
-                                    if (!gem_truthy(gem_lt(_t20466, gem_for_len_1(gem_v___for_items_113)))) break;
-#line 357 "compiler/scope.gem"
-                                    gem_set_line(357);
-    GemVal _t20467 = gem_v___for_items_113;
-                                    GemVal gem_v_ei = gem_table_get(_t20467, gem_v___for_i_113);
-#line 357 "compiler/scope.gem"
-                                    gem_set_line(357);
+    GemVal _t20468 = gem_v___for_i_113;
+                                    if (!gem_truthy(gem_lt(_t20468, gem_for_len_1(gem_v___for_items_113)))) break;
+#line 361 "compiler/scope.gem"
+                                    gem_set_line(361);
+    GemVal _t20469 = gem_v___for_items_113;
+                                    GemVal gem_v_ei = gem_table_get(_t20469, gem_v___for_i_113);
+#line 361 "compiler/scope.gem"
+                                    gem_set_line(361);
                                     gem_v___for_i_113 = gem_add(gem_v___for_i_113, gem_int(1));
-#line 358 "compiler/scope.gem"
-                                    gem_set_line(358);
-    GemVal _t20473 = gem_g___mod_scope_shadow_node;
-    GemVal _t20468 = gem_v_ei;
+#line 362 "compiler/scope.gem"
+                                    gem_set_line(362);
+    GemVal _t20475 = gem_g___mod_scope_shadow_node;
+    GemVal _t20470 = gem_v_ei;
     static GemICacheSlot _ic_2952 = {0};
-    GemVal _t20471 = gem_table_get_cached(_t20468, "cond", &_ic_2952);
-    GemVal _t20470 = gem_v_env;
-    GemVal _t20469 = gem_v_mode;
-    GemVal _t20472[] = {_t20471, _t20470, _t20469, gem_v_ctx};
-    gem_check_callable(_t20473, "compiler/scope.gem", 358);
-                                    (void)(_t20473.fn(_t20473.env, _t20472, 4));
-#line 359 "compiler/scope.gem"
-                                    gem_set_line(359);
-    GemVal _t20479 = gem_g___mod_scope_shadow_stmts;
-    GemVal _t20474 = gem_v_ei;
+    GemVal _t20473 = gem_table_get_cached(_t20470, "cond", &_ic_2952);
+    GemVal _t20472 = gem_v_env;
+    GemVal _t20471 = gem_v_mode;
+    GemVal _t20474[] = {_t20473, _t20472, _t20471, gem_v_ctx};
+    gem_check_callable(_t20475, "compiler/scope.gem", 362);
+                                    (void)(_t20475.fn(_t20475.env, _t20474, 4));
+#line 363 "compiler/scope.gem"
+                                    gem_set_line(363);
+    GemVal _t20481 = gem_g___mod_scope_shadow_stmts;
+    GemVal _t20476 = gem_v_ei;
     static GemICacheSlot _ic_2953 = {0};
-    GemVal _t20477 = gem_table_get_cached(_t20474, "body", &_ic_2953);
-    GemVal _t20476 = gem_v_env;
-    GemVal _t20475 = gem_v_cm;
-    GemVal _t20478[] = {_t20477, _t20476, _t20475, gem_v_ctx, GEM_STR_LIT("if", 2)};
-    gem_check_callable(_t20479, "compiler/scope.gem", 359);
-                                    (void)(_t20479.fn(_t20479.env, _t20478, 5));
+    GemVal _t20479 = gem_table_get_cached(_t20476, "body", &_ic_2953);
+    GemVal _t20478 = gem_v_env;
+    GemVal _t20477 = gem_v_cm;
+    GemVal _t20480[] = {_t20479, _t20478, _t20477, gem_v_ctx, GEM_STR_LIT("if", 2)};
+    gem_check_callable(_t20481, "compiler/scope.gem", 363);
+                                    (void)(_t20481.fn(_t20481.env, _t20480, 5));
                                 }
 
                             }
-#line 362 "compiler/scope.gem"
-                            gem_set_line(362);
-    GemVal _t20485 = gem_g___mod_scope_shadow_stmts;
-    GemVal _t20480 = gem_v_node;
-    static GemICacheSlot _ic_2954 = {0};
-    GemVal _t20483 = gem_table_get_cached(_t20480, "else", &_ic_2954);
-    GemVal _t20482 = gem_v_env;
-    GemVal _t20481 = gem_v_cm;
-    GemVal _t20484[] = {_t20483, _t20482, _t20481, gem_v_ctx, GEM_STR_LIT("if", 2)};
-    gem_check_callable(_t20485, "compiler/scope.gem", 362);
-                            (void)(_t20485.fn(_t20485.env, _t20484, 5));
-                        } else {
-#line 363 "compiler/scope.gem"
-                            gem_set_line(363);
-                            if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("while", 5)))) {
-#line 364 "compiler/scope.gem"
-                                gem_set_line(364);
-    GemVal _t20491 = gem_g___mod_scope_shadow_node;
-    GemVal _t20486 = gem_v_node;
-    static GemICacheSlot _ic_2955 = {0};
-    GemVal _t20489 = gem_table_get_cached(_t20486, "cond", &_ic_2955);
-    GemVal _t20488 = gem_v_env;
-    GemVal _t20487 = gem_v_mode;
-    GemVal _t20490[] = {_t20489, _t20488, _t20487, gem_v_ctx};
-    gem_check_callable(_t20491, "compiler/scope.gem", 364);
-                                (void)(_t20491.fn(_t20491.env, _t20490, 4));
-#line 365 "compiler/scope.gem"
-                                gem_set_line(365);
-    GemVal _t20497 = gem_g___mod_scope_shadow_stmts;
-    GemVal _t20492 = gem_v_node;
-    static GemICacheSlot _ic_2956 = {0};
-    GemVal _t20495 = gem_table_get_cached(_t20492, "body", &_ic_2956);
-    GemVal _t20494 = gem_v_env;
-    GemVal _t20493 = gem_v_cm;
-    GemVal _t20496[] = {_t20495, _t20494, _t20493, gem_v_ctx};
-    gem_check_callable(_t20497, "compiler/scope.gem", 365);
-                                (void)(_t20497.fn(_t20497.env, _t20496, 4));
-                            } else {
 #line 366 "compiler/scope.gem"
-                                gem_set_line(366);
-                                if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("match", 5)))) {
+                            gem_set_line(366);
+    GemVal _t20487 = gem_g___mod_scope_shadow_stmts;
+    GemVal _t20482 = gem_v_node;
+    static GemICacheSlot _ic_2954 = {0};
+    GemVal _t20485 = gem_table_get_cached(_t20482, "else", &_ic_2954);
+    GemVal _t20484 = gem_v_env;
+    GemVal _t20483 = gem_v_cm;
+    GemVal _t20486[] = {_t20485, _t20484, _t20483, gem_v_ctx, GEM_STR_LIT("if", 2)};
+    gem_check_callable(_t20487, "compiler/scope.gem", 366);
+                            (void)(_t20487.fn(_t20487.env, _t20486, 5));
+                        } else {
 #line 367 "compiler/scope.gem"
-                                    gem_set_line(367);
-    GemVal _t20503 = gem_g___mod_scope_shadow_node;
-    GemVal _t20498 = gem_v_node;
-    static GemICacheSlot _ic_2957 = {0};
-    GemVal _t20501 = gem_table_get_cached(_t20498, "target", &_ic_2957);
-    GemVal _t20500 = gem_v_env;
-    GemVal _t20499 = gem_v_mode;
-    GemVal _t20502[] = {_t20501, _t20500, _t20499, gem_v_ctx};
-    gem_check_callable(_t20503, "compiler/scope.gem", 367);
-                                    (void)(_t20503.fn(_t20503.env, _t20502, 4));
+                            gem_set_line(367);
+                            if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("while", 5)))) {
 #line 368 "compiler/scope.gem"
-                                    gem_set_line(368);
-    GemVal _t20504 = gem_v_node;
+                                gem_set_line(368);
+    GemVal _t20493 = gem_g___mod_scope_shadow_node;
+    GemVal _t20488 = gem_v_node;
+    static GemICacheSlot _ic_2955 = {0};
+    GemVal _t20491 = gem_table_get_cached(_t20488, "cond", &_ic_2955);
+    GemVal _t20490 = gem_v_env;
+    GemVal _t20489 = gem_v_mode;
+    GemVal _t20492[] = {_t20491, _t20490, _t20489, gem_v_ctx};
+    gem_check_callable(_t20493, "compiler/scope.gem", 368);
+                                (void)(_t20493.fn(_t20493.env, _t20492, 4));
+#line 369 "compiler/scope.gem"
+                                gem_set_line(369);
+    GemVal _t20499 = gem_g___mod_scope_shadow_stmts;
+    GemVal _t20494 = gem_v_node;
+    static GemICacheSlot _ic_2956 = {0};
+    GemVal _t20497 = gem_table_get_cached(_t20494, "body", &_ic_2956);
+    GemVal _t20496 = gem_v_env;
+    GemVal _t20495 = gem_v_cm;
+    GemVal _t20498[] = {_t20497, _t20496, _t20495, gem_v_ctx};
+    gem_check_callable(_t20499, "compiler/scope.gem", 369);
+                                (void)(_t20499.fn(_t20499.env, _t20498, 4));
+                            } else {
+#line 370 "compiler/scope.gem"
+                                gem_set_line(370);
+                                if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("match", 5)))) {
+#line 371 "compiler/scope.gem"
+                                    gem_set_line(371);
+    GemVal _t20505 = gem_g___mod_scope_shadow_node;
+    GemVal _t20500 = gem_v_node;
+    static GemICacheSlot _ic_2957 = {0};
+    GemVal _t20503 = gem_table_get_cached(_t20500, "target", &_ic_2957);
+    GemVal _t20502 = gem_v_env;
+    GemVal _t20501 = gem_v_mode;
+    GemVal _t20504[] = {_t20503, _t20502, _t20501, gem_v_ctx};
+    gem_check_callable(_t20505, "compiler/scope.gem", 371);
+                                    (void)(_t20505.fn(_t20505.env, _t20504, 4));
+#line 372 "compiler/scope.gem"
+                                    gem_set_line(372);
+    GemVal _t20506 = gem_v_node;
     static GemICacheSlot _ic_2958 = {0};
-                                    if (gem_truthy(gem_neq(gem_table_get_cached(_t20504, "whens", &_ic_2958), GEM_NIL))) {
-#line 369 "compiler/scope.gem"
-                                        gem_set_line(369);
-    GemVal _t20505 = gem_v_node;
+                                    if (gem_truthy(gem_neq(gem_table_get_cached(_t20506, "whens", &_ic_2958), GEM_NIL))) {
+#line 373 "compiler/scope.gem"
+                                        gem_set_line(373);
+    GemVal _t20507 = gem_v_node;
     static GemICacheSlot _ic_2959 = {0};
-                                        GemVal gem_v___for_items_114 = gem_for_items_1(gem_table_get_cached(_t20505, "whens", &_ic_2959));
-#line 369 "compiler/scope.gem"
-                                        gem_set_line(369);
+                                        GemVal gem_v___for_items_114 = gem_for_items_1(gem_table_get_cached(_t20507, "whens", &_ic_2959));
+#line 373 "compiler/scope.gem"
+                                        gem_set_line(373);
                                         GemVal gem_v___for_i_114 = gem_int(0);
-#line 369 "compiler/scope.gem"
-                                        gem_set_line(369);
+#line 373 "compiler/scope.gem"
+                                        gem_set_line(373);
                                         GemArenaMark _mk605;
                                         gem_arena_mark(&_mk605);
                                         while (1) {
@@ -89821,63 +89855,63 @@ static GemVal __anon_208(void *_env, GemVal *args, int argc) {
                                                 GemVal *_rr[] = {&gem_v_node, &gem_v_env, &gem_v_cm, &gem_v_ctx, &gem_v___for_i_114, &gem_v_mode, &gem_v___for_items_114};
                                                 gem_arena_reset_region(&_mk605, _rr, 7, NULL, 0);
                                             }
-    GemVal _t20506 = gem_v___for_i_114;
-                                            if (!gem_truthy(gem_lt(_t20506, gem_for_len_1(gem_v___for_items_114)))) break;
-#line 369 "compiler/scope.gem"
-                                            gem_set_line(369);
-    GemVal _t20507 = gem_v___for_items_114;
-                                            GemVal gem_v_w = gem_table_get(_t20507, gem_v___for_i_114);
-#line 369 "compiler/scope.gem"
-                                            gem_set_line(369);
+    GemVal _t20508 = gem_v___for_i_114;
+                                            if (!gem_truthy(gem_lt(_t20508, gem_for_len_1(gem_v___for_items_114)))) break;
+#line 373 "compiler/scope.gem"
+                                            gem_set_line(373);
+    GemVal _t20509 = gem_v___for_items_114;
+                                            GemVal gem_v_w = gem_table_get(_t20509, gem_v___for_i_114);
+#line 373 "compiler/scope.gem"
+                                            gem_set_line(373);
                                             gem_v___for_i_114 = gem_add(gem_v___for_i_114, gem_int(1));
-#line 370 "compiler/scope.gem"
-                                            gem_set_line(370);
-    GemVal _t20508 = gem_v_w;
-    static GemICacheSlot _ic_2960 = {0};
-    GemVal _t20515 = gem_table_get_cached(_t20508, "value", &_ic_2960);
-    GemVal _t20509 = gem_v_w;
-    static GemICacheSlot _ic_2961 = {0};
-    GemVal _t20514 = gem_table_get_cached(_t20509, "bindings", &_ic_2961);
+#line 374 "compiler/scope.gem"
+                                            gem_set_line(374);
     GemVal _t20510 = gem_v_w;
+    static GemICacheSlot _ic_2960 = {0};
+    GemVal _t20517 = gem_table_get_cached(_t20510, "value", &_ic_2960);
+    GemVal _t20511 = gem_v_w;
+    static GemICacheSlot _ic_2961 = {0};
+    GemVal _t20516 = gem_table_get_cached(_t20511, "bindings", &_ic_2961);
+    GemVal _t20512 = gem_v_w;
     static GemICacheSlot _ic_2962 = {0};
-    GemVal _t20513 = gem_table_get_cached(_t20510, "body", &_ic_2962);
-    GemVal _t20512 = gem_v_env;
-    GemVal _t20511 = gem_v_mode;
-    GemVal _t20516[] = {_t20515, _t20514, _t20513, _t20512, _t20511, gem_v_ctx, GEM_STR_LIT("match", 5)};
-                                            (void)(gem_fn___mod_scope_shadow_arm(NULL, _t20516, 7));
+    GemVal _t20515 = gem_table_get_cached(_t20512, "body", &_ic_2962);
+    GemVal _t20514 = gem_v_env;
+    GemVal _t20513 = gem_v_mode;
+    GemVal _t20518[] = {_t20517, _t20516, _t20515, _t20514, _t20513, gem_v_ctx, GEM_STR_LIT("match", 5)};
+                                            (void)(gem_fn___mod_scope_shadow_arm(NULL, _t20518, 7));
                                         }
 
                                     }
-#line 373 "compiler/scope.gem"
-                                    gem_set_line(373);
-    GemVal _t20522 = gem_g___mod_scope_shadow_stmts;
-    GemVal _t20517 = gem_v_node;
+#line 377 "compiler/scope.gem"
+                                    gem_set_line(377);
+    GemVal _t20524 = gem_g___mod_scope_shadow_stmts;
+    GemVal _t20519 = gem_v_node;
     static GemICacheSlot _ic_2963 = {0};
-    GemVal _t20520 = gem_table_get_cached(_t20517, "else", &_ic_2963);
-    GemVal _t20519 = gem_v_env;
-    GemVal _t20518 = gem_v_cm;
-    GemVal _t20521[] = {_t20520, _t20519, _t20518, gem_v_ctx, GEM_STR_LIT("match", 5)};
-    gem_check_callable(_t20522, "compiler/scope.gem", 373);
-                                    (void)(_t20522.fn(_t20522.env, _t20521, 5));
+    GemVal _t20522 = gem_table_get_cached(_t20519, "else", &_ic_2963);
+    GemVal _t20521 = gem_v_env;
+    GemVal _t20520 = gem_v_cm;
+    GemVal _t20523[] = {_t20522, _t20521, _t20520, gem_v_ctx, GEM_STR_LIT("match", 5)};
+    gem_check_callable(_t20524, "compiler/scope.gem", 377);
+                                    (void)(_t20524.fn(_t20524.env, _t20523, 5));
                                 } else {
-#line 374 "compiler/scope.gem"
-                                    gem_set_line(374);
+#line 378 "compiler/scope.gem"
+                                    gem_set_line(378);
                                     if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("receive_match", 13)))) {
-#line 375 "compiler/scope.gem"
-                                        gem_set_line(375);
-    GemVal _t20523 = gem_v_node;
+#line 379 "compiler/scope.gem"
+                                        gem_set_line(379);
+    GemVal _t20525 = gem_v_node;
     static GemICacheSlot _ic_2964 = {0};
-                                        if (gem_truthy(gem_neq(gem_table_get_cached(_t20523, "arms", &_ic_2964), GEM_NIL))) {
-#line 376 "compiler/scope.gem"
-                                            gem_set_line(376);
-    GemVal _t20524 = gem_v_node;
+                                        if (gem_truthy(gem_neq(gem_table_get_cached(_t20525, "arms", &_ic_2964), GEM_NIL))) {
+#line 380 "compiler/scope.gem"
+                                            gem_set_line(380);
+    GemVal _t20526 = gem_v_node;
     static GemICacheSlot _ic_2965 = {0};
-                                            GemVal gem_v___for_items_115 = gem_for_items_1(gem_table_get_cached(_t20524, "arms", &_ic_2965));
-#line 376 "compiler/scope.gem"
-                                            gem_set_line(376);
+                                            GemVal gem_v___for_items_115 = gem_for_items_1(gem_table_get_cached(_t20526, "arms", &_ic_2965));
+#line 380 "compiler/scope.gem"
+                                            gem_set_line(380);
                                             GemVal gem_v___for_i_115 = gem_int(0);
-#line 376 "compiler/scope.gem"
-                                            gem_set_line(376);
+#line 380 "compiler/scope.gem"
+                                            gem_set_line(380);
                                             GemArenaMark _mk606;
                                             gem_arena_mark(&_mk606);
                                             while (1) {
@@ -89886,89 +89920,89 @@ static GemVal __anon_208(void *_env, GemVal *args, int argc) {
                                                     GemVal *_rr[] = {&gem_v_node, &gem_v_env, &gem_v_cm, &gem_v_ctx, &gem_v_mode, &gem_v___for_i_115, &gem_v___for_items_115};
                                                     gem_arena_reset_region(&_mk606, _rr, 7, NULL, 0);
                                                 }
-    GemVal _t20525 = gem_v___for_i_115;
-                                                if (!gem_truthy(gem_lt(_t20525, gem_for_len_1(gem_v___for_items_115)))) break;
-#line 376 "compiler/scope.gem"
-                                                gem_set_line(376);
-    GemVal _t20526 = gem_v___for_items_115;
-                                                GemVal gem_v_a = gem_table_get(_t20526, gem_v___for_i_115);
-#line 376 "compiler/scope.gem"
-                                                gem_set_line(376);
-                                                gem_v___for_i_115 = gem_add(gem_v___for_i_115, gem_int(1));
-#line 377 "compiler/scope.gem"
-                                                gem_set_line(377);
-                                                GemVal gem_v_cond = GEM_NIL;
-#line 378 "compiler/scope.gem"
-                                                gem_set_line(378);
-                                                GemVal gem_v_bindings = GEM_NIL;
-#line 379 "compiler/scope.gem"
-                                                gem_set_line(379);
-    GemVal _t20527 = gem_v_a;
-    static GemICacheSlot _ic_2966 = {0};
-                                                if (gem_truthy(gem_neq(gem_table_get_cached(_t20527, "pattern", &_ic_2966), GEM_NIL))) {
+    GemVal _t20527 = gem_v___for_i_115;
+                                                if (!gem_truthy(gem_lt(_t20527, gem_for_len_1(gem_v___for_items_115)))) break;
 #line 380 "compiler/scope.gem"
-                                                    gem_set_line(380);
-    GemVal _t20528 = gem_v_a;
-    static GemICacheSlot _ic_2967 = {0};
-    GemVal _t20529 = gem_table_get_cached(_t20528, "pattern", &_ic_2967);
-    static GemICacheSlot _ic_2968 = {0};
-                                                    gem_v_cond = gem_table_get_cached(_t20529, "condition", &_ic_2968);
+                                                gem_set_line(380);
+    GemVal _t20528 = gem_v___for_items_115;
+                                                GemVal gem_v_a = gem_table_get(_t20528, gem_v___for_i_115);
+#line 380 "compiler/scope.gem"
+                                                gem_set_line(380);
+                                                gem_v___for_i_115 = gem_add(gem_v___for_i_115, gem_int(1));
 #line 381 "compiler/scope.gem"
-                                                    gem_set_line(381);
-    GemVal _t20530 = gem_v_a;
-    static GemICacheSlot _ic_2969 = {0};
-    GemVal _t20531 = gem_table_get_cached(_t20530, "pattern", &_ic_2969);
-    static GemICacheSlot _ic_2970 = {0};
-                                                    gem_v_bindings = gem_table_get_cached(_t20531, "bindings", &_ic_2970);
-                                                }
+                                                gem_set_line(381);
+                                                GemVal gem_v_cond = GEM_NIL;
+#line 382 "compiler/scope.gem"
+                                                gem_set_line(382);
+                                                GemVal gem_v_bindings = GEM_NIL;
 #line 383 "compiler/scope.gem"
                                                 gem_set_line(383);
-    GemVal _t20537 = gem_v_cond;
-    GemVal _t20536 = gem_v_bindings;
+    GemVal _t20529 = gem_v_a;
+    static GemICacheSlot _ic_2966 = {0};
+                                                if (gem_truthy(gem_neq(gem_table_get_cached(_t20529, "pattern", &_ic_2966), GEM_NIL))) {
+#line 384 "compiler/scope.gem"
+                                                    gem_set_line(384);
+    GemVal _t20530 = gem_v_a;
+    static GemICacheSlot _ic_2967 = {0};
+    GemVal _t20531 = gem_table_get_cached(_t20530, "pattern", &_ic_2967);
+    static GemICacheSlot _ic_2968 = {0};
+                                                    gem_v_cond = gem_table_get_cached(_t20531, "condition", &_ic_2968);
+#line 385 "compiler/scope.gem"
+                                                    gem_set_line(385);
     GemVal _t20532 = gem_v_a;
+    static GemICacheSlot _ic_2969 = {0};
+    GemVal _t20533 = gem_table_get_cached(_t20532, "pattern", &_ic_2969);
+    static GemICacheSlot _ic_2970 = {0};
+                                                    gem_v_bindings = gem_table_get_cached(_t20533, "bindings", &_ic_2970);
+                                                }
+#line 387 "compiler/scope.gem"
+                                                gem_set_line(387);
+    GemVal _t20539 = gem_v_cond;
+    GemVal _t20538 = gem_v_bindings;
+    GemVal _t20534 = gem_v_a;
     static GemICacheSlot _ic_2971 = {0};
-    GemVal _t20535 = gem_table_get_cached(_t20532, "body", &_ic_2971);
-    GemVal _t20534 = gem_v_env;
-    GemVal _t20533 = gem_v_mode;
-    GemVal _t20538[] = {_t20537, _t20536, _t20535, _t20534, _t20533, gem_v_ctx, GEM_STR_LIT("receive", 7)};
-                                                (void)(gem_fn___mod_scope_shadow_arm(NULL, _t20538, 7));
+    GemVal _t20537 = gem_table_get_cached(_t20534, "body", &_ic_2971);
+    GemVal _t20536 = gem_v_env;
+    GemVal _t20535 = gem_v_mode;
+    GemVal _t20540[] = {_t20539, _t20538, _t20537, _t20536, _t20535, gem_v_ctx, GEM_STR_LIT("receive", 7)};
+                                                (void)(gem_fn___mod_scope_shadow_arm(NULL, _t20540, 7));
                                             }
 
                                         }
-#line 386 "compiler/scope.gem"
-                                        gem_set_line(386);
-    GemVal _t20544 = gem_g___mod_scope_shadow_node;
-    GemVal _t20539 = gem_v_node;
+#line 390 "compiler/scope.gem"
+                                        gem_set_line(390);
+    GemVal _t20546 = gem_g___mod_scope_shadow_node;
+    GemVal _t20541 = gem_v_node;
     static GemICacheSlot _ic_2972 = {0};
-    GemVal _t20542 = gem_table_get_cached(_t20539, "after_ms", &_ic_2972);
-    GemVal _t20541 = gem_v_env;
-    GemVal _t20540 = gem_v_mode;
-    GemVal _t20543[] = {_t20542, _t20541, _t20540, gem_v_ctx};
-    gem_check_callable(_t20544, "compiler/scope.gem", 386);
-                                        (void)(_t20544.fn(_t20544.env, _t20543, 4));
-#line 387 "compiler/scope.gem"
-                                        gem_set_line(387);
-    GemVal _t20550 = gem_g___mod_scope_shadow_stmts;
-    GemVal _t20545 = gem_v_node;
+    GemVal _t20544 = gem_table_get_cached(_t20541, "after_ms", &_ic_2972);
+    GemVal _t20543 = gem_v_env;
+    GemVal _t20542 = gem_v_mode;
+    GemVal _t20545[] = {_t20544, _t20543, _t20542, gem_v_ctx};
+    gem_check_callable(_t20546, "compiler/scope.gem", 390);
+                                        (void)(_t20546.fn(_t20546.env, _t20545, 4));
+#line 391 "compiler/scope.gem"
+                                        gem_set_line(391);
+    GemVal _t20552 = gem_g___mod_scope_shadow_stmts;
+    GemVal _t20547 = gem_v_node;
     static GemICacheSlot _ic_2973 = {0};
-    GemVal _t20548 = gem_table_get_cached(_t20545, "after_body", &_ic_2973);
-    GemVal _t20547 = gem_v_env;
-    GemVal _t20546 = gem_v_cm;
-    GemVal _t20549[] = {_t20548, _t20547, _t20546, gem_v_ctx, GEM_STR_LIT("receive", 7)};
-    gem_check_callable(_t20550, "compiler/scope.gem", 387);
-                                        (void)(_t20550.fn(_t20550.env, _t20549, 5));
+    GemVal _t20550 = gem_table_get_cached(_t20547, "after_body", &_ic_2973);
+    GemVal _t20549 = gem_v_env;
+    GemVal _t20548 = gem_v_cm;
+    GemVal _t20551[] = {_t20550, _t20549, _t20548, gem_v_ctx, GEM_STR_LIT("receive", 7)};
+    gem_check_callable(_t20552, "compiler/scope.gem", 391);
+                                        (void)(_t20552.fn(_t20552.env, _t20551, 5));
                                     } else {
-#line 389 "compiler/scope.gem"
-                                        gem_set_line(389);
+#line 393 "compiler/scope.gem"
+                                        gem_set_line(393);
                                         GemVal gem_v___for_tbl_116 = gem_v_node;
-#line 389 "compiler/scope.gem"
-                                        gem_set_line(389);
+#line 393 "compiler/scope.gem"
+                                        gem_set_line(393);
                                         GemVal gem_v___for_len_116 = gem_for_len_1(gem_v___for_tbl_116);
-#line 389 "compiler/scope.gem"
-                                        gem_set_line(389);
+#line 393 "compiler/scope.gem"
+                                        gem_set_line(393);
                                         GemVal gem_v___for_i_116 = gem_int(0);
-#line 389 "compiler/scope.gem"
-                                        gem_set_line(389);
+#line 393 "compiler/scope.gem"
+                                        gem_set_line(393);
                                         GemArenaMark _mk607;
                                         gem_arena_mark(&_mk607);
                                         while (1) {
@@ -89977,38 +90011,38 @@ static GemVal __anon_208(void *_env, GemVal *args, int argc) {
                                                 GemVal *_rr[] = {&gem_v___for_i_116, &gem_v_env, &gem_v_mode, &gem_v_ctx, &gem_v___for_tbl_116, &gem_v___for_len_116};
                                                 gem_arena_reset_region(&_mk607, _rr, 6, NULL, 0);
                                             }
-    GemVal _t20551 = gem_v___for_i_116;
-                                            if (!gem_truthy(gem_lt(_t20551, gem_v___for_len_116))) break;
-#line 389 "compiler/scope.gem"
-                                            gem_set_line(389);
-    GemVal _t20552 = gem_v___for_tbl_116;
-                                            GemVal gem_v_k = gem_table_key_at_2(_t20552, gem_v___for_i_116);
-#line 389 "compiler/scope.gem"
-                                            gem_set_line(389);
-    GemVal _t20553 = gem_v___for_tbl_116;
-                                            GemVal gem_v_v = gem_table_val_at_2(_t20553, gem_v___for_i_116);
-#line 389 "compiler/scope.gem"
-                                            gem_set_line(389);
+    GemVal _t20553 = gem_v___for_i_116;
+                                            if (!gem_truthy(gem_lt(_t20553, gem_v___for_len_116))) break;
+#line 393 "compiler/scope.gem"
+                                            gem_set_line(393);
+    GemVal _t20554 = gem_v___for_tbl_116;
+                                            GemVal gem_v_k = gem_table_key_at_2(_t20554, gem_v___for_i_116);
+#line 393 "compiler/scope.gem"
+                                            gem_set_line(393);
+    GemVal _t20555 = gem_v___for_tbl_116;
+                                            GemVal gem_v_v = gem_table_val_at_2(_t20555, gem_v___for_i_116);
+#line 393 "compiler/scope.gem"
+                                            gem_set_line(393);
                                             gem_v___for_i_116 = gem_add(gem_v___for_i_116, gem_int(1));
-#line 390 "compiler/scope.gem"
-                                            gem_set_line(390);
-    GemVal _t20554 = gem_neq(gem_v_k, GEM_STR_LIT("tag", 3));
-    GemVal _t20555;
-    if (!gem_truthy(_t20554)) {
-        _t20555 = _t20554;
+#line 394 "compiler/scope.gem"
+                                            gem_set_line(394);
+    GemVal _t20556 = gem_neq(gem_v_k, GEM_STR_LIT("tag", 3));
+    GemVal _t20557;
+    if (!gem_truthy(_t20556)) {
+        _t20557 = _t20556;
     } else {
-        _t20555 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
+        _t20557 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
     }
-                                            if (gem_truthy(_t20555)) {
-#line 391 "compiler/scope.gem"
-                                                gem_set_line(391);
-    GemVal _t20560 = gem_g___mod_scope_shadow_children;
-    GemVal _t20558 = gem_v_v;
-    GemVal _t20557 = gem_v_env;
-    GemVal _t20556 = gem_v_mode;
-    GemVal _t20559[] = {_t20558, _t20557, _t20556, gem_v_ctx};
-    gem_check_callable(_t20560, "compiler/scope.gem", 391);
-                                                (void)(_t20560.fn(_t20560.env, _t20559, 4));
+                                            if (gem_truthy(_t20557)) {
+#line 395 "compiler/scope.gem"
+                                                gem_set_line(395);
+    GemVal _t20562 = gem_g___mod_scope_shadow_children;
+    GemVal _t20560 = gem_v_v;
+    GemVal _t20559 = gem_v_env;
+    GemVal _t20558 = gem_v_mode;
+    GemVal _t20561[] = {_t20560, _t20559, _t20558, gem_v_ctx};
+    gem_check_callable(_t20562, "compiler/scope.gem", 395);
+                                                (void)(_t20562.fn(_t20562.env, _t20561, 4));
                                             }
                                         }
 
@@ -90021,58 +90055,58 @@ static GemVal __anon_208(void *_env, GemVal *args, int argc) {
             }
         }
     }
-#line 395 "compiler/scope.gem"
-    gem_set_line(395);
-    GemVal _t20561 = GEM_NIL;
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20561, 1);
+#line 399 "compiler/scope.gem"
+    gem_set_line(399);
+    GemVal _t20563 = GEM_NIL;
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20563, 1);
     gem_pop_frame();
-    return _t20561;
+    return _t20563;
 }
 
 struct _closure___anon_209 {
     intptr_t _num_captures;
 };
 static GemVal __anon_209(void *_env, GemVal *args, int argc) {
-    gem_push_frame("anonymous fn", "compiler/scope.gem", 400);
+    gem_push_frame("anonymous fn", "compiler/scope.gem", 404);
     GemVal gem_v_v = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_env = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_mode = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_ctx = (argc > 3) ? args[3] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 401 "compiler/scope.gem"
-    gem_set_line(401);
-    GemVal _t20562 = gem_v_v;
+#line 405 "compiler/scope.gem"
+    gem_set_line(405);
+    GemVal _t20564 = gem_v_v;
     static GemICacheSlot _ic_2974 = {0};
-    if (gem_truthy(gem_neq(gem_table_get_cached(_t20562, "tag", &_ic_2974), GEM_NIL))) {
-#line 402 "compiler/scope.gem"
-        gem_set_line(402);
-    GemVal _t20567 = gem_g___mod_scope_shadow_node;
-    GemVal _t20565 = gem_v_v;
-    GemVal _t20564 = gem_v_env;
-    GemVal _t20563 = gem_v_mode;
-    GemVal _t20566[] = {_t20565, _t20564, _t20563, gem_v_ctx};
-    gem_check_callable(_t20567, "compiler/scope.gem", 402);
-        (void)(_t20567.fn(_t20567.env, _t20566, 4));
-#line 403 "compiler/scope.gem"
-        gem_set_line(403);
-        GemVal _t20568 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20568, 1);
+    if (gem_truthy(gem_neq(gem_table_get_cached(_t20564, "tag", &_ic_2974), GEM_NIL))) {
+#line 406 "compiler/scope.gem"
+        gem_set_line(406);
+    GemVal _t20569 = gem_g___mod_scope_shadow_node;
+    GemVal _t20567 = gem_v_v;
+    GemVal _t20566 = gem_v_env;
+    GemVal _t20565 = gem_v_mode;
+    GemVal _t20568[] = {_t20567, _t20566, _t20565, gem_v_ctx};
+    gem_check_callable(_t20569, "compiler/scope.gem", 406);
+        (void)(_t20569.fn(_t20569.env, _t20568, 4));
+#line 407 "compiler/scope.gem"
+        gem_set_line(407);
+        GemVal _t20570 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20570, 1);
         gem_pop_frame();
-        return _t20568;
+        return _t20570;
     }
     {
-#line 405 "compiler/scope.gem"
-        gem_set_line(405);
+#line 409 "compiler/scope.gem"
+        gem_set_line(409);
         GemVal gem_v___for_tbl_117 = gem_v_v;
-#line 405 "compiler/scope.gem"
-        gem_set_line(405);
+#line 409 "compiler/scope.gem"
+        gem_set_line(409);
         GemVal gem_v___for_len_117 = gem_for_len_1(gem_v___for_tbl_117);
-#line 405 "compiler/scope.gem"
-        gem_set_line(405);
+#line 409 "compiler/scope.gem"
+        gem_set_line(409);
         GemVal gem_v___for_i_117 = gem_int(0);
-#line 405 "compiler/scope.gem"
-        gem_set_line(405);
+#line 409 "compiler/scope.gem"
+        gem_set_line(409);
         GemArenaMark _mk608;
         gem_arena_mark(&_mk608);
         while (1) {
@@ -90081,31 +90115,31 @@ static GemVal __anon_209(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v___for_i_117, &gem_v_env, &gem_v_mode, &gem_v_ctx, &gem_v___for_tbl_117, &gem_v___for_len_117};
                 gem_arena_reset_region(&_mk608, _rr, 6, NULL, 0);
             }
-    GemVal _t20569 = gem_v___for_i_117;
-            if (!gem_truthy(gem_lt(_t20569, gem_v___for_len_117))) break;
-#line 405 "compiler/scope.gem"
-            gem_set_line(405);
-    GemVal _t20570 = gem_v___for_tbl_117;
-            GemVal gem_v__ = gem_table_key_at_2(_t20570, gem_v___for_i_117);
-#line 405 "compiler/scope.gem"
-            gem_set_line(405);
-    GemVal _t20571 = gem_v___for_tbl_117;
-            GemVal gem_v_c = gem_table_val_at_2(_t20571, gem_v___for_i_117);
-#line 405 "compiler/scope.gem"
-            gem_set_line(405);
+    GemVal _t20571 = gem_v___for_i_117;
+            if (!gem_truthy(gem_lt(_t20571, gem_v___for_len_117))) break;
+#line 409 "compiler/scope.gem"
+            gem_set_line(409);
+    GemVal _t20572 = gem_v___for_tbl_117;
+            GemVal gem_v__ = gem_table_key_at_2(_t20572, gem_v___for_i_117);
+#line 409 "compiler/scope.gem"
+            gem_set_line(409);
+    GemVal _t20573 = gem_v___for_tbl_117;
+            GemVal gem_v_c = gem_table_val_at_2(_t20573, gem_v___for_i_117);
+#line 409 "compiler/scope.gem"
+            gem_set_line(409);
             gem_v___for_i_117 = gem_add(gem_v___for_i_117, gem_int(1));
-#line 406 "compiler/scope.gem"
-            gem_set_line(406);
+#line 410 "compiler/scope.gem"
+            gem_set_line(410);
             if (gem_truthy(gem_eq(gem_type_1(gem_v_c), GEM_STR_LIT("table", 5)))) {
-#line 407 "compiler/scope.gem"
-                gem_set_line(407);
-    GemVal _t20576 = gem_g___mod_scope_shadow_children;
-    GemVal _t20574 = gem_v_c;
-    GemVal _t20573 = gem_v_env;
-    GemVal _t20572 = gem_v_mode;
-    GemVal _t20575[] = {_t20574, _t20573, _t20572, gem_v_ctx};
-    gem_check_callable(_t20576, "compiler/scope.gem", 407);
-                (void)(_t20576.fn(_t20576.env, _t20575, 4));
+#line 411 "compiler/scope.gem"
+                gem_set_line(411);
+    GemVal _t20578 = gem_g___mod_scope_shadow_children;
+    GemVal _t20576 = gem_v_c;
+    GemVal _t20575 = gem_v_env;
+    GemVal _t20574 = gem_v_mode;
+    GemVal _t20577[] = {_t20576, _t20575, _t20574, gem_v_ctx};
+    gem_check_callable(_t20578, "compiler/scope.gem", 411);
+                (void)(_t20578.fn(_t20578.env, _t20577, 4));
             }
         }
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
@@ -90118,30 +90152,30 @@ struct _closure___anon_210 {
     intptr_t _num_captures;
 };
 static GemVal __anon_210(void *_env, GemVal *args, int argc) {
-    gem_push_frame("anonymous fn", "compiler/scope.gem", 505);
+    gem_push_frame("anonymous fn", "compiler/scope.gem", 509);
     GemVal gem_v_stmts = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_result = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 506 "compiler/scope.gem"
-    gem_set_line(506);
+#line 510 "compiler/scope.gem"
+    gem_set_line(510);
     if (gem_truthy(gem_eq(gem_v_stmts, GEM_NIL))) {
-#line 507 "compiler/scope.gem"
-        gem_set_line(507);
-        GemVal _t20577 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20577, 1);
+#line 511 "compiler/scope.gem"
+        gem_set_line(511);
+        GemVal _t20579 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20579, 1);
         gem_pop_frame();
-        return _t20577;
+        return _t20579;
     }
     {
-#line 509 "compiler/scope.gem"
-        gem_set_line(509);
+#line 513 "compiler/scope.gem"
+        gem_set_line(513);
         GemVal gem_v___for_i_129 = gem_int(0);
-#line 509 "compiler/scope.gem"
-        gem_set_line(509);
+#line 513 "compiler/scope.gem"
+        gem_set_line(513);
         GemVal gem_v___for_limit_129 = gem_len_1(gem_v_stmts);
-#line 509 "compiler/scope.gem"
-        gem_set_line(509);
+#line 513 "compiler/scope.gem"
+        gem_set_line(513);
         GemArenaMark _mk609;
         gem_arena_mark(&_mk609);
         while (1) {
@@ -90150,22 +90184,22 @@ static GemVal __anon_210(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_stmts, &gem_v___for_i_129, &gem_v_result, &gem_v___for_limit_129};
                 gem_arena_reset_region(&_mk609, _rr, 4, NULL, 0);
             }
-    GemVal _t20578 = gem_v___for_i_129;
-            if (!gem_truthy(gem_lt(_t20578, gem_v___for_limit_129))) break;
-#line 509 "compiler/scope.gem"
-            gem_set_line(509);
+    GemVal _t20580 = gem_v___for_i_129;
+            if (!gem_truthy(gem_lt(_t20580, gem_v___for_limit_129))) break;
+#line 513 "compiler/scope.gem"
+            gem_set_line(513);
             GemVal gem_v_i = gem_v___for_i_129;
-#line 509 "compiler/scope.gem"
-            gem_set_line(509);
+#line 513 "compiler/scope.gem"
+            gem_set_line(513);
             gem_v___for_i_129 = gem_add(gem_v___for_i_129, gem_int(1));
-#line 510 "compiler/scope.gem"
-            gem_set_line(510);
-    GemVal _t20582 = gem_g___mod_scope_collect_shadow_lets_in_node;
-    GemVal _t20579 = gem_v_stmts;
-    GemVal _t20580 = gem_table_get(_t20579, gem_v_i);
-    GemVal _t20581[] = {_t20580, gem_v_result};
-    gem_check_callable(_t20582, "compiler/scope.gem", 510);
-            (void)(_t20582.fn(_t20582.env, _t20581, 2));
+#line 514 "compiler/scope.gem"
+            gem_set_line(514);
+    GemVal _t20584 = gem_g___mod_scope_collect_shadow_lets_in_node;
+    GemVal _t20581 = gem_v_stmts;
+    GemVal _t20582 = gem_table_get(_t20581, gem_v_i);
+    GemVal _t20583[] = {_t20582, gem_v_result};
+    gem_check_callable(_t20584, "compiler/scope.gem", 514);
+            (void)(_t20584.fn(_t20584.env, _t20583, 2));
         }
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
         gem_pop_frame();
@@ -90177,135 +90211,135 @@ struct _closure___anon_211 {
     intptr_t _num_captures;
 };
 static GemVal __anon_211(void *_env, GemVal *args, int argc) {
-    gem_push_frame("anonymous fn", "compiler/scope.gem", 514);
+    gem_push_frame("anonymous fn", "compiler/scope.gem", 518);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_result = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 515 "compiler/scope.gem"
-    gem_set_line(515);
-    if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
-#line 516 "compiler/scope.gem"
-        gem_set_line(516);
-        GemVal _t20583 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20583, 1);
-        gem_pop_frame();
-        return _t20583;
-    }
-#line 518 "compiler/scope.gem"
-    gem_set_line(518);
-    if (gem_truthy(gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5)))) {
 #line 519 "compiler/scope.gem"
-        gem_set_line(519);
-        GemVal _t20584 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20584, 1);
+    gem_set_line(519);
+    if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
+#line 520 "compiler/scope.gem"
+        gem_set_line(520);
+        GemVal _t20585 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20585, 1);
         gem_pop_frame();
-        return _t20584;
+        return _t20585;
     }
-#line 521 "compiler/scope.gem"
-    gem_set_line(521);
-    GemVal _t20585 = gem_v_node;
-    static GemICacheSlot _ic_2975 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20585, "tag", &_ic_2975), GEM_NIL))) {
 #line 522 "compiler/scope.gem"
-        gem_set_line(522);
+    gem_set_line(522);
+    if (gem_truthy(gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5)))) {
+#line 523 "compiler/scope.gem"
+        gem_set_line(523);
         GemVal _t20586 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20586, 1);
         gem_pop_frame();
         return _t20586;
     }
-#line 524 "compiler/scope.gem"
-    gem_set_line(524);
-    GemVal _t20587 = gem_v_node;
-    static GemICacheSlot _ic_2976 = {0};
-    GemVal _t20588 = gem_eq(gem_table_get_cached(_t20587, "tag", &_ic_2976), GEM_STR_LIT("anon_fn", 7));
-    GemVal _t20590;
-    if (gem_truthy(_t20588)) {
-        _t20590 = _t20588;
-    } else {
-    GemVal _t20589 = gem_v_node;
-    static GemICacheSlot _ic_2977 = {0};
-        _t20590 = gem_eq(gem_table_get_cached(_t20589, "tag", &_ic_2977), GEM_STR_LIT("fn_def", 6));
-    }
-    if (gem_truthy(_t20590)) {
 #line 525 "compiler/scope.gem"
-        gem_set_line(525);
-        GemVal _t20591 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20591, 1);
+    gem_set_line(525);
+    GemVal _t20587 = gem_v_node;
+    static GemICacheSlot _ic_2975 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20587, "tag", &_ic_2975), GEM_NIL))) {
+#line 526 "compiler/scope.gem"
+        gem_set_line(526);
+        GemVal _t20588 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20588, 1);
         gem_pop_frame();
-        return _t20591;
+        return _t20588;
     }
-#line 527 "compiler/scope.gem"
-    gem_set_line(527);
-    GemVal _t20592 = gem_v_node;
-    static GemICacheSlot _ic_2978 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20592, "tag", &_ic_2978), GEM_STR_LIT("let", 3)))) {
 #line 528 "compiler/scope.gem"
-        gem_set_line(528);
-    GemVal _t20596 = gem_g___mod_scope_set_add;
-    GemVal _t20594 = gem_v_result;
-    GemVal _t20593 = gem_v_node;
-    static GemICacheSlot _ic_2979 = {0};
-    GemVal _t20595[] = {_t20594, gem_table_get_cached(_t20593, "name", &_ic_2979)};
-    gem_check_callable(_t20596, "compiler/scope.gem", 528);
-        (void)(_t20596.fn(_t20596.env, _t20595, 2));
+    gem_set_line(528);
+    GemVal _t20589 = gem_v_node;
+    static GemICacheSlot _ic_2976 = {0};
+    GemVal _t20590 = gem_eq(gem_table_get_cached(_t20589, "tag", &_ic_2976), GEM_STR_LIT("anon_fn", 7));
+    GemVal _t20592;
+    if (gem_truthy(_t20590)) {
+        _t20592 = _t20590;
+    } else {
+    GemVal _t20591 = gem_v_node;
+    static GemICacheSlot _ic_2977 = {0};
+        _t20592 = gem_eq(gem_table_get_cached(_t20591, "tag", &_ic_2977), GEM_STR_LIT("fn_def", 6));
+    }
+    if (gem_truthy(_t20592)) {
 #line 529 "compiler/scope.gem"
         gem_set_line(529);
-        GemVal _t20597 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20597, 1);
+        GemVal _t20593 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20593, 1);
         gem_pop_frame();
-        return _t20597;
+        return _t20593;
     }
 #line 531 "compiler/scope.gem"
     gem_set_line(531);
-    GemVal _t20598 = gem_v_node;
-    static GemICacheSlot _ic_2980 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20598, "tag", &_ic_2980), GEM_STR_LIT("block", 5)))) {
+    GemVal _t20594 = gem_v_node;
+    static GemICacheSlot _ic_2978 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20594, "tag", &_ic_2978), GEM_STR_LIT("let", 3)))) {
 #line 532 "compiler/scope.gem"
         gem_set_line(532);
-    GemVal _t20602 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
-    GemVal _t20599 = gem_v_node;
-    static GemICacheSlot _ic_2981 = {0};
-    GemVal _t20600 = gem_table_get_cached(_t20599, "stmts", &_ic_2981);
-    GemVal _t20601[] = {_t20600, gem_v_result};
-    gem_check_callable(_t20602, "compiler/scope.gem", 532);
-        (void)(_t20602.fn(_t20602.env, _t20601, 2));
+    GemVal _t20598 = gem_g___mod_scope_set_add;
+    GemVal _t20596 = gem_v_result;
+    GemVal _t20595 = gem_v_node;
+    static GemICacheSlot _ic_2979 = {0};
+    GemVal _t20597[] = {_t20596, gem_table_get_cached(_t20595, "name", &_ic_2979)};
+    gem_check_callable(_t20598, "compiler/scope.gem", 532);
+        (void)(_t20598.fn(_t20598.env, _t20597, 2));
 #line 533 "compiler/scope.gem"
         gem_set_line(533);
-        GemVal _t20603 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20603, 1);
+        GemVal _t20599 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20599, 1);
         gem_pop_frame();
-        return _t20603;
+        return _t20599;
     }
 #line 535 "compiler/scope.gem"
     gem_set_line(535);
-    GemVal _t20604 = gem_v_node;
-    static GemICacheSlot _ic_2982 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20604, "tag", &_ic_2982), GEM_STR_LIT("if", 2)))) {
+    GemVal _t20600 = gem_v_node;
+    static GemICacheSlot _ic_2980 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20600, "tag", &_ic_2980), GEM_STR_LIT("block", 5)))) {
 #line 536 "compiler/scope.gem"
         gem_set_line(536);
-    GemVal _t20608 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
-    GemVal _t20605 = gem_v_node;
-    static GemICacheSlot _ic_2983 = {0};
-    GemVal _t20606 = gem_table_get_cached(_t20605, "then", &_ic_2983);
-    GemVal _t20607[] = {_t20606, gem_v_result};
-    gem_check_callable(_t20608, "compiler/scope.gem", 536);
-        (void)(_t20608.fn(_t20608.env, _t20607, 2));
+    GemVal _t20604 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
+    GemVal _t20601 = gem_v_node;
+    static GemICacheSlot _ic_2981 = {0};
+    GemVal _t20602 = gem_table_get_cached(_t20601, "stmts", &_ic_2981);
+    GemVal _t20603[] = {_t20602, gem_v_result};
+    gem_check_callable(_t20604, "compiler/scope.gem", 536);
+        (void)(_t20604.fn(_t20604.env, _t20603, 2));
 #line 537 "compiler/scope.gem"
         gem_set_line(537);
-    GemVal _t20609 = gem_v_node;
+        GemVal _t20605 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20605, 1);
+        gem_pop_frame();
+        return _t20605;
+    }
+#line 539 "compiler/scope.gem"
+    gem_set_line(539);
+    GemVal _t20606 = gem_v_node;
+    static GemICacheSlot _ic_2982 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20606, "tag", &_ic_2982), GEM_STR_LIT("if", 2)))) {
+#line 540 "compiler/scope.gem"
+        gem_set_line(540);
+    GemVal _t20610 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
+    GemVal _t20607 = gem_v_node;
+    static GemICacheSlot _ic_2983 = {0};
+    GemVal _t20608 = gem_table_get_cached(_t20607, "then", &_ic_2983);
+    GemVal _t20609[] = {_t20608, gem_v_result};
+    gem_check_callable(_t20610, "compiler/scope.gem", 540);
+        (void)(_t20610.fn(_t20610.env, _t20609, 2));
+#line 541 "compiler/scope.gem"
+        gem_set_line(541);
+    GemVal _t20611 = gem_v_node;
     static GemICacheSlot _ic_2984 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20609, "elifs", &_ic_2984), GEM_NIL))) {
-#line 538 "compiler/scope.gem"
-            gem_set_line(538);
-    GemVal _t20610 = gem_v_node;
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20611, "elifs", &_ic_2984), GEM_NIL))) {
+#line 542 "compiler/scope.gem"
+            gem_set_line(542);
+    GemVal _t20612 = gem_v_node;
     static GemICacheSlot _ic_2985 = {0};
-            GemVal gem_v___for_items_130 = gem_for_items_1(gem_table_get_cached(_t20610, "elifs", &_ic_2985));
-#line 538 "compiler/scope.gem"
-            gem_set_line(538);
+            GemVal gem_v___for_items_130 = gem_for_items_1(gem_table_get_cached(_t20612, "elifs", &_ic_2985));
+#line 542 "compiler/scope.gem"
+            gem_set_line(542);
             GemVal gem_v___for_i_130 = gem_int(0);
-#line 538 "compiler/scope.gem"
-            gem_set_line(538);
+#line 542 "compiler/scope.gem"
+            gem_set_line(542);
             GemArenaMark _mk610;
             gem_arena_mark(&_mk610);
             while (1) {
@@ -90314,215 +90348,215 @@ static GemVal __anon_211(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v_node, &gem_v_result, &gem_v___for_i_130, &gem_v___for_items_130};
                     gem_arena_reset_region(&_mk610, _rr, 4, NULL, 0);
                 }
-    GemVal _t20611 = gem_v___for_i_130;
-                if (!gem_truthy(gem_lt(_t20611, gem_for_len_1(gem_v___for_items_130)))) break;
-#line 538 "compiler/scope.gem"
-                gem_set_line(538);
-    GemVal _t20612 = gem_v___for_items_130;
-                GemVal gem_v_ei = gem_table_get(_t20612, gem_v___for_i_130);
-#line 538 "compiler/scope.gem"
-                gem_set_line(538);
+    GemVal _t20613 = gem_v___for_i_130;
+                if (!gem_truthy(gem_lt(_t20613, gem_for_len_1(gem_v___for_items_130)))) break;
+#line 542 "compiler/scope.gem"
+                gem_set_line(542);
+    GemVal _t20614 = gem_v___for_items_130;
+                GemVal gem_v_ei = gem_table_get(_t20614, gem_v___for_i_130);
+#line 542 "compiler/scope.gem"
+                gem_set_line(542);
                 gem_v___for_i_130 = gem_add(gem_v___for_i_130, gem_int(1));
-#line 539 "compiler/scope.gem"
-                gem_set_line(539);
-    GemVal _t20616 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
-    GemVal _t20613 = gem_v_ei;
+#line 543 "compiler/scope.gem"
+                gem_set_line(543);
+    GemVal _t20618 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
+    GemVal _t20615 = gem_v_ei;
     static GemICacheSlot _ic_2986 = {0};
-    GemVal _t20614 = gem_table_get_cached(_t20613, "body", &_ic_2986);
-    GemVal _t20615[] = {_t20614, gem_v_result};
-    gem_check_callable(_t20616, "compiler/scope.gem", 539);
-                (void)(_t20616.fn(_t20616.env, _t20615, 2));
+    GemVal _t20616 = gem_table_get_cached(_t20615, "body", &_ic_2986);
+    GemVal _t20617[] = {_t20616, gem_v_result};
+    gem_check_callable(_t20618, "compiler/scope.gem", 543);
+                (void)(_t20618.fn(_t20618.env, _t20617, 2));
             }
 
         }
-#line 542 "compiler/scope.gem"
-        gem_set_line(542);
-    GemVal _t20620 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
-    GemVal _t20617 = gem_v_node;
-    static GemICacheSlot _ic_2987 = {0};
-    GemVal _t20618 = gem_table_get_cached(_t20617, "else", &_ic_2987);
-    GemVal _t20619[] = {_t20618, gem_v_result};
-    gem_check_callable(_t20620, "compiler/scope.gem", 542);
-        (void)(_t20620.fn(_t20620.env, _t20619, 2));
-#line 543 "compiler/scope.gem"
-        gem_set_line(543);
-        GemVal _t20621 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20621, 1);
-        gem_pop_frame();
-        return _t20621;
-    }
-#line 545 "compiler/scope.gem"
-    gem_set_line(545);
-    GemVal _t20622 = gem_v_node;
-    static GemICacheSlot _ic_2988 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20622, "tag", &_ic_2988), GEM_STR_LIT("while", 5)))) {
 #line 546 "compiler/scope.gem"
         gem_set_line(546);
-    GemVal _t20626 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
-    GemVal _t20623 = gem_v_node;
-    static GemICacheSlot _ic_2989 = {0};
-    GemVal _t20624 = gem_table_get_cached(_t20623, "body", &_ic_2989);
-    GemVal _t20625[] = {_t20624, gem_v_result};
-    gem_check_callable(_t20626, "compiler/scope.gem", 546);
-        (void)(_t20626.fn(_t20626.env, _t20625, 2));
+    GemVal _t20622 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
+    GemVal _t20619 = gem_v_node;
+    static GemICacheSlot _ic_2987 = {0};
+    GemVal _t20620 = gem_table_get_cached(_t20619, "else", &_ic_2987);
+    GemVal _t20621[] = {_t20620, gem_v_result};
+    gem_check_callable(_t20622, "compiler/scope.gem", 546);
+        (void)(_t20622.fn(_t20622.env, _t20621, 2));
 #line 547 "compiler/scope.gem"
         gem_set_line(547);
-        GemVal _t20627 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20627, 1);
+        GemVal _t20623 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20623, 1);
         gem_pop_frame();
-        return _t20627;
+        return _t20623;
     }
 #line 549 "compiler/scope.gem"
     gem_set_line(549);
-    GemVal _t20628 = gem_v_node;
-    static GemICacheSlot _ic_2990 = {0};
-    GemVal _t20629 = gem_eq(gem_table_get_cached(_t20628, "tag", &_ic_2990), GEM_STR_LIT("for", 3));
-    GemVal _t20631;
-    if (gem_truthy(_t20629)) {
-        _t20631 = _t20629;
-    } else {
-    GemVal _t20630 = gem_v_node;
-    static GemICacheSlot _ic_2991 = {0};
-        _t20631 = gem_eq(gem_table_get_cached(_t20630, "tag", &_ic_2991), GEM_STR_LIT("for_kv", 6));
+    GemVal _t20624 = gem_v_node;
+    static GemICacheSlot _ic_2988 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20624, "tag", &_ic_2988), GEM_STR_LIT("while", 5)))) {
+#line 550 "compiler/scope.gem"
+        gem_set_line(550);
+    GemVal _t20628 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
+    GemVal _t20625 = gem_v_node;
+    static GemICacheSlot _ic_2989 = {0};
+    GemVal _t20626 = gem_table_get_cached(_t20625, "body", &_ic_2989);
+    GemVal _t20627[] = {_t20626, gem_v_result};
+    gem_check_callable(_t20628, "compiler/scope.gem", 550);
+        (void)(_t20628.fn(_t20628.env, _t20627, 2));
+#line 551 "compiler/scope.gem"
+        gem_set_line(551);
+        GemVal _t20629 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20629, 1);
+        gem_pop_frame();
+        return _t20629;
     }
+#line 553 "compiler/scope.gem"
+    gem_set_line(553);
+    GemVal _t20630 = gem_v_node;
+    static GemICacheSlot _ic_2990 = {0};
+    GemVal _t20631 = gem_eq(gem_table_get_cached(_t20630, "tag", &_ic_2990), GEM_STR_LIT("for", 3));
     GemVal _t20633;
     if (gem_truthy(_t20631)) {
         _t20633 = _t20631;
     } else {
     GemVal _t20632 = gem_v_node;
-    static GemICacheSlot _ic_2992 = {0};
-        _t20633 = gem_eq(gem_table_get_cached(_t20632, "tag", &_ic_2992), GEM_STR_LIT("for_range", 9));
+    static GemICacheSlot _ic_2991 = {0};
+        _t20633 = gem_eq(gem_table_get_cached(_t20632, "tag", &_ic_2991), GEM_STR_LIT("for_kv", 6));
     }
+    GemVal _t20635;
     if (gem_truthy(_t20633)) {
-#line 550 "compiler/scope.gem"
-        gem_set_line(550);
+        _t20635 = _t20633;
+    } else {
     GemVal _t20634 = gem_v_node;
-    static GemICacheSlot _ic_2993 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20634, "var", &_ic_2993), GEM_NIL))) {
-#line 551 "compiler/scope.gem"
-            gem_set_line(551);
-    GemVal _t20638 = gem_g___mod_scope_set_add;
-    GemVal _t20636 = gem_v_result;
-    GemVal _t20635 = gem_v_node;
-    static GemICacheSlot _ic_2994 = {0};
-    GemVal _t20637[] = {_t20636, gem_table_get_cached(_t20635, "var", &_ic_2994)};
-    gem_check_callable(_t20638, "compiler/scope.gem", 551);
-            (void)(_t20638.fn(_t20638.env, _t20637, 2));
-        }
-#line 553 "compiler/scope.gem"
-        gem_set_line(553);
-    GemVal _t20639 = gem_v_node;
-    static GemICacheSlot _ic_2995 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20639, "kvar", &_ic_2995), GEM_NIL))) {
+    static GemICacheSlot _ic_2992 = {0};
+        _t20635 = gem_eq(gem_table_get_cached(_t20634, "tag", &_ic_2992), GEM_STR_LIT("for_range", 9));
+    }
+    if (gem_truthy(_t20635)) {
 #line 554 "compiler/scope.gem"
-            gem_set_line(554);
-    GemVal _t20643 = gem_g___mod_scope_set_add;
-    GemVal _t20641 = gem_v_result;
-    GemVal _t20640 = gem_v_node;
-    static GemICacheSlot _ic_2996 = {0};
-    GemVal _t20642[] = {_t20641, gem_table_get_cached(_t20640, "kvar", &_ic_2996)};
-    gem_check_callable(_t20643, "compiler/scope.gem", 554);
-            (void)(_t20643.fn(_t20643.env, _t20642, 2));
+        gem_set_line(554);
+    GemVal _t20636 = gem_v_node;
+    static GemICacheSlot _ic_2993 = {0};
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20636, "var", &_ic_2993), GEM_NIL))) {
+#line 555 "compiler/scope.gem"
+            gem_set_line(555);
+    GemVal _t20640 = gem_g___mod_scope_set_add;
+    GemVal _t20638 = gem_v_result;
+    GemVal _t20637 = gem_v_node;
+    static GemICacheSlot _ic_2994 = {0};
+    GemVal _t20639[] = {_t20638, gem_table_get_cached(_t20637, "var", &_ic_2994)};
+    gem_check_callable(_t20640, "compiler/scope.gem", 555);
+            (void)(_t20640.fn(_t20640.env, _t20639, 2));
         }
-#line 556 "compiler/scope.gem"
-        gem_set_line(556);
-    GemVal _t20644 = gem_v_node;
-    static GemICacheSlot _ic_2997 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20644, "vvar", &_ic_2997), GEM_NIL))) {
 #line 557 "compiler/scope.gem"
-            gem_set_line(557);
-    GemVal _t20648 = gem_g___mod_scope_set_add;
-    GemVal _t20646 = gem_v_result;
-    GemVal _t20645 = gem_v_node;
-    static GemICacheSlot _ic_2998 = {0};
-    GemVal _t20647[] = {_t20646, gem_table_get_cached(_t20645, "vvar", &_ic_2998)};
-    gem_check_callable(_t20648, "compiler/scope.gem", 557);
-            (void)(_t20648.fn(_t20648.env, _t20647, 2));
+        gem_set_line(557);
+    GemVal _t20641 = gem_v_node;
+    static GemICacheSlot _ic_2995 = {0};
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20641, "kvar", &_ic_2995), GEM_NIL))) {
+#line 558 "compiler/scope.gem"
+            gem_set_line(558);
+    GemVal _t20645 = gem_g___mod_scope_set_add;
+    GemVal _t20643 = gem_v_result;
+    GemVal _t20642 = gem_v_node;
+    static GemICacheSlot _ic_2996 = {0};
+    GemVal _t20644[] = {_t20643, gem_table_get_cached(_t20642, "kvar", &_ic_2996)};
+    gem_check_callable(_t20645, "compiler/scope.gem", 558);
+            (void)(_t20645.fn(_t20645.env, _t20644, 2));
         }
-#line 559 "compiler/scope.gem"
-        gem_set_line(559);
-    GemVal _t20649 = gem_v_node;
-    static GemICacheSlot _ic_2999 = {0};
-    GemVal _t20650 = gem_neq(gem_table_get_cached(_t20649, "name", &_ic_2999), GEM_NIL);
-    GemVal _t20655;
-    if (!gem_truthy(_t20650)) {
-        _t20655 = _t20650;
-    } else {
-    GemVal _t20651 = gem_v_node;
-    static GemICacheSlot _ic_3000 = {0};
-    GemVal _t20652 = gem_eq(gem_table_get_cached(_t20651, "tag", &_ic_3000), GEM_STR_LIT("for", 3));
-    GemVal _t20654;
-    if (gem_truthy(_t20652)) {
-        _t20654 = _t20652;
-    } else {
-    GemVal _t20653 = gem_v_node;
-    static GemICacheSlot _ic_3001 = {0};
-        _t20654 = gem_eq(gem_table_get_cached(_t20653, "tag", &_ic_3001), GEM_STR_LIT("for_range", 9));
-    }
-        _t20655 = _t20654;
-    }
-        if (gem_truthy(_t20655)) {
 #line 560 "compiler/scope.gem"
-            gem_set_line(560);
-    GemVal _t20659 = gem_g___mod_scope_set_add;
-    GemVal _t20657 = gem_v_result;
-    GemVal _t20656 = gem_v_node;
-    static GemICacheSlot _ic_3002 = {0};
-    GemVal _t20658[] = {_t20657, gem_table_get_cached(_t20656, "name", &_ic_3002)};
-    gem_check_callable(_t20659, "compiler/scope.gem", 560);
-            (void)(_t20659.fn(_t20659.env, _t20658, 2));
+        gem_set_line(560);
+    GemVal _t20646 = gem_v_node;
+    static GemICacheSlot _ic_2997 = {0};
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20646, "vvar", &_ic_2997), GEM_NIL))) {
+#line 561 "compiler/scope.gem"
+            gem_set_line(561);
+    GemVal _t20650 = gem_g___mod_scope_set_add;
+    GemVal _t20648 = gem_v_result;
+    GemVal _t20647 = gem_v_node;
+    static GemICacheSlot _ic_2998 = {0};
+    GemVal _t20649[] = {_t20648, gem_table_get_cached(_t20647, "vvar", &_ic_2998)};
+    gem_check_callable(_t20650, "compiler/scope.gem", 561);
+            (void)(_t20650.fn(_t20650.env, _t20649, 2));
         }
-#line 562 "compiler/scope.gem"
-        gem_set_line(562);
-    GemVal _t20663 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
-    GemVal _t20660 = gem_v_node;
-    static GemICacheSlot _ic_3003 = {0};
-    GemVal _t20661 = gem_table_get_cached(_t20660, "body", &_ic_3003);
-    GemVal _t20662[] = {_t20661, gem_v_result};
-    gem_check_callable(_t20663, "compiler/scope.gem", 562);
-        (void)(_t20663.fn(_t20663.env, _t20662, 2));
 #line 563 "compiler/scope.gem"
         gem_set_line(563);
-        GemVal _t20664 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20664, 1);
-        gem_pop_frame();
-        return _t20664;
+    GemVal _t20651 = gem_v_node;
+    static GemICacheSlot _ic_2999 = {0};
+    GemVal _t20652 = gem_neq(gem_table_get_cached(_t20651, "name", &_ic_2999), GEM_NIL);
+    GemVal _t20657;
+    if (!gem_truthy(_t20652)) {
+        _t20657 = _t20652;
+    } else {
+    GemVal _t20653 = gem_v_node;
+    static GemICacheSlot _ic_3000 = {0};
+    GemVal _t20654 = gem_eq(gem_table_get_cached(_t20653, "tag", &_ic_3000), GEM_STR_LIT("for", 3));
+    GemVal _t20656;
+    if (gem_truthy(_t20654)) {
+        _t20656 = _t20654;
+    } else {
+    GemVal _t20655 = gem_v_node;
+    static GemICacheSlot _ic_3001 = {0};
+        _t20656 = gem_eq(gem_table_get_cached(_t20655, "tag", &_ic_3001), GEM_STR_LIT("for_range", 9));
     }
-#line 565 "compiler/scope.gem"
-    gem_set_line(565);
-    GemVal _t20665 = gem_v_node;
-    static GemICacheSlot _ic_3004 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20665, "tag", &_ic_3004), GEM_STR_LIT("match", 5)))) {
+        _t20657 = _t20656;
+    }
+        if (gem_truthy(_t20657)) {
+#line 564 "compiler/scope.gem"
+            gem_set_line(564);
+    GemVal _t20661 = gem_g___mod_scope_set_add;
+    GemVal _t20659 = gem_v_result;
+    GemVal _t20658 = gem_v_node;
+    static GemICacheSlot _ic_3002 = {0};
+    GemVal _t20660[] = {_t20659, gem_table_get_cached(_t20658, "name", &_ic_3002)};
+    gem_check_callable(_t20661, "compiler/scope.gem", 564);
+            (void)(_t20661.fn(_t20661.env, _t20660, 2));
+        }
 #line 566 "compiler/scope.gem"
         gem_set_line(566);
-    GemVal _t20666 = gem_v_node;
-    static GemICacheSlot _ic_3005 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20666, "target_var", &_ic_3005), GEM_NIL))) {
+    GemVal _t20665 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
+    GemVal _t20662 = gem_v_node;
+    static GemICacheSlot _ic_3003 = {0};
+    GemVal _t20663 = gem_table_get_cached(_t20662, "body", &_ic_3003);
+    GemVal _t20664[] = {_t20663, gem_v_result};
+    gem_check_callable(_t20665, "compiler/scope.gem", 566);
+        (void)(_t20665.fn(_t20665.env, _t20664, 2));
 #line 567 "compiler/scope.gem"
-            gem_set_line(567);
-    GemVal _t20670 = gem_g___mod_scope_set_add;
-    GemVal _t20668 = gem_v_result;
-    GemVal _t20667 = gem_v_node;
-    static GemICacheSlot _ic_3006 = {0};
-    GemVal _t20669[] = {_t20668, gem_table_get_cached(_t20667, "target_var", &_ic_3006)};
-    gem_check_callable(_t20670, "compiler/scope.gem", 567);
-            (void)(_t20670.fn(_t20670.env, _t20669, 2));
-        }
+        gem_set_line(567);
+        GemVal _t20666 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20666, 1);
+        gem_pop_frame();
+        return _t20666;
+    }
 #line 569 "compiler/scope.gem"
-        gem_set_line(569);
-    GemVal _t20671 = gem_v_node;
+    gem_set_line(569);
+    GemVal _t20667 = gem_v_node;
+    static GemICacheSlot _ic_3004 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20667, "tag", &_ic_3004), GEM_STR_LIT("match", 5)))) {
+#line 570 "compiler/scope.gem"
+        gem_set_line(570);
+    GemVal _t20668 = gem_v_node;
+    static GemICacheSlot _ic_3005 = {0};
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20668, "target_var", &_ic_3005), GEM_NIL))) {
+#line 571 "compiler/scope.gem"
+            gem_set_line(571);
+    GemVal _t20672 = gem_g___mod_scope_set_add;
+    GemVal _t20670 = gem_v_result;
+    GemVal _t20669 = gem_v_node;
+    static GemICacheSlot _ic_3006 = {0};
+    GemVal _t20671[] = {_t20670, gem_table_get_cached(_t20669, "target_var", &_ic_3006)};
+    gem_check_callable(_t20672, "compiler/scope.gem", 571);
+            (void)(_t20672.fn(_t20672.env, _t20671, 2));
+        }
+#line 573 "compiler/scope.gem"
+        gem_set_line(573);
+    GemVal _t20673 = gem_v_node;
     static GemICacheSlot _ic_3007 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20671, "whens", &_ic_3007), GEM_NIL))) {
-#line 570 "compiler/scope.gem"
-            gem_set_line(570);
-    GemVal _t20672 = gem_v_node;
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20673, "whens", &_ic_3007), GEM_NIL))) {
+#line 574 "compiler/scope.gem"
+            gem_set_line(574);
+    GemVal _t20674 = gem_v_node;
     static GemICacheSlot _ic_3008 = {0};
-            GemVal gem_v___for_items_132 = gem_for_items_1(gem_table_get_cached(_t20672, "whens", &_ic_3008));
-#line 570 "compiler/scope.gem"
-            gem_set_line(570);
+            GemVal gem_v___for_items_132 = gem_for_items_1(gem_table_get_cached(_t20674, "whens", &_ic_3008));
+#line 574 "compiler/scope.gem"
+            gem_set_line(574);
             GemVal gem_v___for_i_132 = gem_int(0);
-#line 570 "compiler/scope.gem"
-            gem_set_line(570);
+#line 574 "compiler/scope.gem"
+            gem_set_line(574);
             GemArenaMark _mk611;
             gem_arena_mark(&_mk611);
             while (1) {
@@ -90531,30 +90565,30 @@ static GemVal __anon_211(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_132, &gem_v___for_items_132, &gem_v_node, &gem_v_result};
                     gem_arena_reset_region(&_mk611, _rr, 4, NULL, 0);
                 }
-    GemVal _t20673 = gem_v___for_i_132;
-                if (!gem_truthy(gem_lt(_t20673, gem_for_len_1(gem_v___for_items_132)))) break;
-#line 570 "compiler/scope.gem"
-                gem_set_line(570);
-    GemVal _t20674 = gem_v___for_items_132;
-                GemVal gem_v_w = gem_table_get(_t20674, gem_v___for_i_132);
-#line 570 "compiler/scope.gem"
-                gem_set_line(570);
+    GemVal _t20675 = gem_v___for_i_132;
+                if (!gem_truthy(gem_lt(_t20675, gem_for_len_1(gem_v___for_items_132)))) break;
+#line 574 "compiler/scope.gem"
+                gem_set_line(574);
+    GemVal _t20676 = gem_v___for_items_132;
+                GemVal gem_v_w = gem_table_get(_t20676, gem_v___for_i_132);
+#line 574 "compiler/scope.gem"
+                gem_set_line(574);
                 gem_v___for_i_132 = gem_add(gem_v___for_i_132, gem_int(1));
-#line 571 "compiler/scope.gem"
-                gem_set_line(571);
-    GemVal _t20675 = gem_v_w;
+#line 575 "compiler/scope.gem"
+                gem_set_line(575);
+    GemVal _t20677 = gem_v_w;
     static GemICacheSlot _ic_3009 = {0};
-                if (gem_truthy(gem_neq(gem_table_get_cached(_t20675, "bindings", &_ic_3009), GEM_NIL))) {
-#line 572 "compiler/scope.gem"
-                    gem_set_line(572);
-    GemVal _t20676 = gem_v_w;
+                if (gem_truthy(gem_neq(gem_table_get_cached(_t20677, "bindings", &_ic_3009), GEM_NIL))) {
+#line 576 "compiler/scope.gem"
+                    gem_set_line(576);
+    GemVal _t20678 = gem_v_w;
     static GemICacheSlot _ic_3010 = {0};
-                    GemVal gem_v___for_items_131 = gem_for_items_1(gem_table_get_cached(_t20676, "bindings", &_ic_3010));
-#line 572 "compiler/scope.gem"
-                    gem_set_line(572);
+                    GemVal gem_v___for_items_131 = gem_for_items_1(gem_table_get_cached(_t20678, "bindings", &_ic_3010));
+#line 576 "compiler/scope.gem"
+                    gem_set_line(576);
                     GemVal gem_v___for_i_131 = gem_int(0);
-#line 572 "compiler/scope.gem"
-                    gem_set_line(572);
+#line 576 "compiler/scope.gem"
+                    gem_set_line(576);
                     GemArenaMark _mk612;
                     gem_arena_mark(&_mk612);
                     while (1) {
@@ -90563,120 +90597,120 @@ static GemVal __anon_211(void *_env, GemVal *args, int argc) {
                             GemVal *_rr[] = {&gem_v___for_i_132, &gem_v___for_items_132, &gem_v_node, &gem_v_result, &gem_v_w, &gem_v___for_i_131, &gem_v___for_items_131};
                             gem_arena_reset_region(&_mk612, _rr, 7, NULL, 0);
                         }
-    GemVal _t20677 = gem_v___for_i_131;
-                        if (!gem_truthy(gem_lt(_t20677, gem_for_len_1(gem_v___for_items_131)))) break;
-#line 572 "compiler/scope.gem"
-                        gem_set_line(572);
-    GemVal _t20678 = gem_v___for_items_131;
-                        GemVal gem_v_b = gem_table_get(_t20678, gem_v___for_i_131);
-#line 572 "compiler/scope.gem"
-                        gem_set_line(572);
+    GemVal _t20679 = gem_v___for_i_131;
+                        if (!gem_truthy(gem_lt(_t20679, gem_for_len_1(gem_v___for_items_131)))) break;
+#line 576 "compiler/scope.gem"
+                        gem_set_line(576);
+    GemVal _t20680 = gem_v___for_items_131;
+                        GemVal gem_v_b = gem_table_get(_t20680, gem_v___for_i_131);
+#line 576 "compiler/scope.gem"
+                        gem_set_line(576);
                         gem_v___for_i_131 = gem_add(gem_v___for_i_131, gem_int(1));
-#line 573 "compiler/scope.gem"
-                        gem_set_line(573);
-    GemVal _t20679 = gem_eq(gem_type_1(gem_v_b), GEM_STR_LIT("table", 5));
-    GemVal _t20681;
-    if (!gem_truthy(_t20679)) {
-        _t20681 = _t20679;
-    } else {
-    GemVal _t20680 = gem_v_b;
-    static GemICacheSlot _ic_3011 = {0};
-        _t20681 = gem_neq(gem_table_get_cached(_t20680, "name", &_ic_3011), GEM_NIL);
-    }
-    GemVal _t20686;
+#line 577 "compiler/scope.gem"
+                        gem_set_line(577);
+    GemVal _t20681 = gem_eq(gem_type_1(gem_v_b), GEM_STR_LIT("table", 5));
+    GemVal _t20683;
     if (!gem_truthy(_t20681)) {
-        _t20686 = _t20681;
+        _t20683 = _t20681;
     } else {
     GemVal _t20682 = gem_v_b;
-    static GemICacheSlot _ic_3012 = {0};
-    GemVal _t20683 = gem_eq(gem_table_get_cached(_t20682, "tag", &_ic_3012), GEM_STR_LIT("let", 3));
-    GemVal _t20685;
-    if (gem_truthy(_t20683)) {
-        _t20685 = _t20683;
+    static GemICacheSlot _ic_3011 = {0};
+        _t20683 = gem_neq(gem_table_get_cached(_t20682, "name", &_ic_3011), GEM_NIL);
+    }
+    GemVal _t20688;
+    if (!gem_truthy(_t20683)) {
+        _t20688 = _t20683;
     } else {
     GemVal _t20684 = gem_v_b;
+    static GemICacheSlot _ic_3012 = {0};
+    GemVal _t20685 = gem_eq(gem_table_get_cached(_t20684, "tag", &_ic_3012), GEM_STR_LIT("let", 3));
+    GemVal _t20687;
+    if (gem_truthy(_t20685)) {
+        _t20687 = _t20685;
+    } else {
+    GemVal _t20686 = gem_v_b;
     static GemICacheSlot _ic_3013 = {0};
-        _t20685 = gem_eq(gem_table_get_cached(_t20684, "tag", &_ic_3013), GEM_STR_LIT("var", 3));
+        _t20687 = gem_eq(gem_table_get_cached(_t20686, "tag", &_ic_3013), GEM_STR_LIT("var", 3));
     }
-        _t20686 = _t20685;
+        _t20688 = _t20687;
     }
-                        if (gem_truthy(_t20686)) {
-#line 574 "compiler/scope.gem"
-                            gem_set_line(574);
-    GemVal _t20690 = gem_g___mod_scope_set_add;
-    GemVal _t20688 = gem_v_result;
-    GemVal _t20687 = gem_v_b;
+                        if (gem_truthy(_t20688)) {
+#line 578 "compiler/scope.gem"
+                            gem_set_line(578);
+    GemVal _t20692 = gem_g___mod_scope_set_add;
+    GemVal _t20690 = gem_v_result;
+    GemVal _t20689 = gem_v_b;
     static GemICacheSlot _ic_3014 = {0};
-    GemVal _t20689[] = {_t20688, gem_table_get_cached(_t20687, "name", &_ic_3014)};
-    gem_check_callable(_t20690, "compiler/scope.gem", 574);
-                            (void)(_t20690.fn(_t20690.env, _t20689, 2));
+    GemVal _t20691[] = {_t20690, gem_table_get_cached(_t20689, "name", &_ic_3014)};
+    gem_check_callable(_t20692, "compiler/scope.gem", 578);
+                            (void)(_t20692.fn(_t20692.env, _t20691, 2));
                         }
                     }
 
                 }
-#line 578 "compiler/scope.gem"
-                gem_set_line(578);
-    GemVal _t20694 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
-    GemVal _t20691 = gem_v_w;
+#line 582 "compiler/scope.gem"
+                gem_set_line(582);
+    GemVal _t20696 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
+    GemVal _t20693 = gem_v_w;
     static GemICacheSlot _ic_3015 = {0};
-    GemVal _t20692 = gem_table_get_cached(_t20691, "body", &_ic_3015);
-    GemVal _t20693[] = {_t20692, gem_v_result};
-    gem_check_callable(_t20694, "compiler/scope.gem", 578);
-                (void)(_t20694.fn(_t20694.env, _t20693, 2));
+    GemVal _t20694 = gem_table_get_cached(_t20693, "body", &_ic_3015);
+    GemVal _t20695[] = {_t20694, gem_v_result};
+    gem_check_callable(_t20696, "compiler/scope.gem", 582);
+                (void)(_t20696.fn(_t20696.env, _t20695, 2));
             }
 
         }
-#line 581 "compiler/scope.gem"
-        gem_set_line(581);
-    GemVal _t20698 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
-    GemVal _t20695 = gem_v_node;
-    static GemICacheSlot _ic_3016 = {0};
-    GemVal _t20696 = gem_table_get_cached(_t20695, "else", &_ic_3016);
-    GemVal _t20697[] = {_t20696, gem_v_result};
-    gem_check_callable(_t20698, "compiler/scope.gem", 581);
-        (void)(_t20698.fn(_t20698.env, _t20697, 2));
-#line 582 "compiler/scope.gem"
-        gem_set_line(582);
-        GemVal _t20699 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20699, 1);
-        gem_pop_frame();
-        return _t20699;
-    }
-#line 584 "compiler/scope.gem"
-    gem_set_line(584);
-    GemVal _t20700 = gem_v_node;
-    static GemICacheSlot _ic_3017 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20700, "tag", &_ic_3017), GEM_STR_LIT("receive_match", 13)))) {
 #line 585 "compiler/scope.gem"
         gem_set_line(585);
-    GemVal _t20701 = gem_v_node;
-    static GemICacheSlot _ic_3018 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20701, "recv_var", &_ic_3018), GEM_NIL))) {
+    GemVal _t20700 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
+    GemVal _t20697 = gem_v_node;
+    static GemICacheSlot _ic_3016 = {0};
+    GemVal _t20698 = gem_table_get_cached(_t20697, "else", &_ic_3016);
+    GemVal _t20699[] = {_t20698, gem_v_result};
+    gem_check_callable(_t20700, "compiler/scope.gem", 585);
+        (void)(_t20700.fn(_t20700.env, _t20699, 2));
 #line 586 "compiler/scope.gem"
-            gem_set_line(586);
-    GemVal _t20705 = gem_g___mod_scope_set_add;
-    GemVal _t20703 = gem_v_result;
-    GemVal _t20702 = gem_v_node;
-    static GemICacheSlot _ic_3019 = {0};
-    GemVal _t20704[] = {_t20703, gem_table_get_cached(_t20702, "recv_var", &_ic_3019)};
-    gem_check_callable(_t20705, "compiler/scope.gem", 586);
-            (void)(_t20705.fn(_t20705.env, _t20704, 2));
-        }
+        gem_set_line(586);
+        GemVal _t20701 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20701, 1);
+        gem_pop_frame();
+        return _t20701;
+    }
 #line 588 "compiler/scope.gem"
-        gem_set_line(588);
-    GemVal _t20706 = gem_v_node;
+    gem_set_line(588);
+    GemVal _t20702 = gem_v_node;
+    static GemICacheSlot _ic_3017 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20702, "tag", &_ic_3017), GEM_STR_LIT("receive_match", 13)))) {
+#line 589 "compiler/scope.gem"
+        gem_set_line(589);
+    GemVal _t20703 = gem_v_node;
+    static GemICacheSlot _ic_3018 = {0};
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20703, "recv_var", &_ic_3018), GEM_NIL))) {
+#line 590 "compiler/scope.gem"
+            gem_set_line(590);
+    GemVal _t20707 = gem_g___mod_scope_set_add;
+    GemVal _t20705 = gem_v_result;
+    GemVal _t20704 = gem_v_node;
+    static GemICacheSlot _ic_3019 = {0};
+    GemVal _t20706[] = {_t20705, gem_table_get_cached(_t20704, "recv_var", &_ic_3019)};
+    gem_check_callable(_t20707, "compiler/scope.gem", 590);
+            (void)(_t20707.fn(_t20707.env, _t20706, 2));
+        }
+#line 592 "compiler/scope.gem"
+        gem_set_line(592);
+    GemVal _t20708 = gem_v_node;
     static GemICacheSlot _ic_3020 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20706, "arms", &_ic_3020), GEM_NIL))) {
-#line 589 "compiler/scope.gem"
-            gem_set_line(589);
-    GemVal _t20707 = gem_v_node;
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20708, "arms", &_ic_3020), GEM_NIL))) {
+#line 593 "compiler/scope.gem"
+            gem_set_line(593);
+    GemVal _t20709 = gem_v_node;
     static GemICacheSlot _ic_3021 = {0};
-            GemVal gem_v___for_items_134 = gem_for_items_1(gem_table_get_cached(_t20707, "arms", &_ic_3021));
-#line 589 "compiler/scope.gem"
-            gem_set_line(589);
+            GemVal gem_v___for_items_134 = gem_for_items_1(gem_table_get_cached(_t20709, "arms", &_ic_3021));
+#line 593 "compiler/scope.gem"
+            gem_set_line(593);
             GemVal gem_v___for_i_134 = gem_int(0);
-#line 589 "compiler/scope.gem"
-            gem_set_line(589);
+#line 593 "compiler/scope.gem"
+            gem_set_line(593);
             GemArenaMark _mk613;
             gem_arena_mark(&_mk613);
             while (1) {
@@ -90685,43 +90719,43 @@ static GemVal __anon_211(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_134, &gem_v___for_items_134, &gem_v_node, &gem_v_result};
                     gem_arena_reset_region(&_mk613, _rr, 4, NULL, 0);
                 }
-    GemVal _t20708 = gem_v___for_i_134;
-                if (!gem_truthy(gem_lt(_t20708, gem_for_len_1(gem_v___for_items_134)))) break;
-#line 589 "compiler/scope.gem"
-                gem_set_line(589);
-    GemVal _t20709 = gem_v___for_items_134;
-                GemVal gem_v_a = gem_table_get(_t20709, gem_v___for_i_134);
-#line 589 "compiler/scope.gem"
-                gem_set_line(589);
+    GemVal _t20710 = gem_v___for_i_134;
+                if (!gem_truthy(gem_lt(_t20710, gem_for_len_1(gem_v___for_items_134)))) break;
+#line 593 "compiler/scope.gem"
+                gem_set_line(593);
+    GemVal _t20711 = gem_v___for_items_134;
+                GemVal gem_v_a = gem_table_get(_t20711, gem_v___for_i_134);
+#line 593 "compiler/scope.gem"
+                gem_set_line(593);
                 gem_v___for_i_134 = gem_add(gem_v___for_i_134, gem_int(1));
-#line 590 "compiler/scope.gem"
-                gem_set_line(590);
-    GemVal _t20710 = gem_v_a;
-    static GemICacheSlot _ic_3022 = {0};
-    GemVal _t20711 = gem_neq(gem_table_get_cached(_t20710, "pattern", &_ic_3022), GEM_NIL);
-    GemVal _t20714;
-    if (!gem_truthy(_t20711)) {
-        _t20714 = _t20711;
-    } else {
+#line 594 "compiler/scope.gem"
+                gem_set_line(594);
     GemVal _t20712 = gem_v_a;
+    static GemICacheSlot _ic_3022 = {0};
+    GemVal _t20713 = gem_neq(gem_table_get_cached(_t20712, "pattern", &_ic_3022), GEM_NIL);
+    GemVal _t20716;
+    if (!gem_truthy(_t20713)) {
+        _t20716 = _t20713;
+    } else {
+    GemVal _t20714 = gem_v_a;
     static GemICacheSlot _ic_3023 = {0};
-    GemVal _t20713 = gem_table_get_cached(_t20712, "pattern", &_ic_3023);
+    GemVal _t20715 = gem_table_get_cached(_t20714, "pattern", &_ic_3023);
     static GemICacheSlot _ic_3024 = {0};
-        _t20714 = gem_neq(gem_table_get_cached(_t20713, "bindings", &_ic_3024), GEM_NIL);
+        _t20716 = gem_neq(gem_table_get_cached(_t20715, "bindings", &_ic_3024), GEM_NIL);
     }
-                if (gem_truthy(_t20714)) {
-#line 591 "compiler/scope.gem"
-                    gem_set_line(591);
-    GemVal _t20715 = gem_v_a;
+                if (gem_truthy(_t20716)) {
+#line 595 "compiler/scope.gem"
+                    gem_set_line(595);
+    GemVal _t20717 = gem_v_a;
     static GemICacheSlot _ic_3025 = {0};
-    GemVal _t20716 = gem_table_get_cached(_t20715, "pattern", &_ic_3025);
+    GemVal _t20718 = gem_table_get_cached(_t20717, "pattern", &_ic_3025);
     static GemICacheSlot _ic_3026 = {0};
-                    GemVal gem_v___for_items_133 = gem_for_items_1(gem_table_get_cached(_t20716, "bindings", &_ic_3026));
-#line 591 "compiler/scope.gem"
-                    gem_set_line(591);
+                    GemVal gem_v___for_items_133 = gem_for_items_1(gem_table_get_cached(_t20718, "bindings", &_ic_3026));
+#line 595 "compiler/scope.gem"
+                    gem_set_line(595);
                     GemVal gem_v___for_i_133 = gem_int(0);
-#line 591 "compiler/scope.gem"
-                    gem_set_line(591);
+#line 595 "compiler/scope.gem"
+                    gem_set_line(595);
                     GemArenaMark _mk614;
                     gem_arena_mark(&_mk614);
                     while (1) {
@@ -90730,118 +90764,118 @@ static GemVal __anon_211(void *_env, GemVal *args, int argc) {
                             GemVal *_rr[] = {&gem_v___for_i_134, &gem_v___for_items_134, &gem_v_node, &gem_v_result, &gem_v_a, &gem_v___for_i_133, &gem_v___for_items_133};
                             gem_arena_reset_region(&_mk614, _rr, 7, NULL, 0);
                         }
-    GemVal _t20717 = gem_v___for_i_133;
-                        if (!gem_truthy(gem_lt(_t20717, gem_for_len_1(gem_v___for_items_133)))) break;
-#line 591 "compiler/scope.gem"
-                        gem_set_line(591);
-    GemVal _t20718 = gem_v___for_items_133;
-                        GemVal gem_v_b = gem_table_get(_t20718, gem_v___for_i_133);
-#line 591 "compiler/scope.gem"
-                        gem_set_line(591);
+    GemVal _t20719 = gem_v___for_i_133;
+                        if (!gem_truthy(gem_lt(_t20719, gem_for_len_1(gem_v___for_items_133)))) break;
+#line 595 "compiler/scope.gem"
+                        gem_set_line(595);
+    GemVal _t20720 = gem_v___for_items_133;
+                        GemVal gem_v_b = gem_table_get(_t20720, gem_v___for_i_133);
+#line 595 "compiler/scope.gem"
+                        gem_set_line(595);
                         gem_v___for_i_133 = gem_add(gem_v___for_i_133, gem_int(1));
-#line 592 "compiler/scope.gem"
-                        gem_set_line(592);
-    GemVal _t20719 = gem_eq(gem_type_1(gem_v_b), GEM_STR_LIT("table", 5));
-    GemVal _t20721;
-    if (!gem_truthy(_t20719)) {
-        _t20721 = _t20719;
-    } else {
-    GemVal _t20720 = gem_v_b;
-    static GemICacheSlot _ic_3027 = {0};
-        _t20721 = gem_neq(gem_table_get_cached(_t20720, "name", &_ic_3027), GEM_NIL);
-    }
-    GemVal _t20726;
+#line 596 "compiler/scope.gem"
+                        gem_set_line(596);
+    GemVal _t20721 = gem_eq(gem_type_1(gem_v_b), GEM_STR_LIT("table", 5));
+    GemVal _t20723;
     if (!gem_truthy(_t20721)) {
-        _t20726 = _t20721;
+        _t20723 = _t20721;
     } else {
     GemVal _t20722 = gem_v_b;
-    static GemICacheSlot _ic_3028 = {0};
-    GemVal _t20723 = gem_eq(gem_table_get_cached(_t20722, "tag", &_ic_3028), GEM_STR_LIT("let", 3));
-    GemVal _t20725;
-    if (gem_truthy(_t20723)) {
-        _t20725 = _t20723;
+    static GemICacheSlot _ic_3027 = {0};
+        _t20723 = gem_neq(gem_table_get_cached(_t20722, "name", &_ic_3027), GEM_NIL);
+    }
+    GemVal _t20728;
+    if (!gem_truthy(_t20723)) {
+        _t20728 = _t20723;
     } else {
     GemVal _t20724 = gem_v_b;
+    static GemICacheSlot _ic_3028 = {0};
+    GemVal _t20725 = gem_eq(gem_table_get_cached(_t20724, "tag", &_ic_3028), GEM_STR_LIT("let", 3));
+    GemVal _t20727;
+    if (gem_truthy(_t20725)) {
+        _t20727 = _t20725;
+    } else {
+    GemVal _t20726 = gem_v_b;
     static GemICacheSlot _ic_3029 = {0};
-        _t20725 = gem_eq(gem_table_get_cached(_t20724, "tag", &_ic_3029), GEM_STR_LIT("var", 3));
+        _t20727 = gem_eq(gem_table_get_cached(_t20726, "tag", &_ic_3029), GEM_STR_LIT("var", 3));
     }
-        _t20726 = _t20725;
+        _t20728 = _t20727;
     }
-                        if (gem_truthy(_t20726)) {
-#line 593 "compiler/scope.gem"
-                            gem_set_line(593);
-    GemVal _t20730 = gem_g___mod_scope_set_add;
-    GemVal _t20728 = gem_v_result;
-    GemVal _t20727 = gem_v_b;
+                        if (gem_truthy(_t20728)) {
+#line 597 "compiler/scope.gem"
+                            gem_set_line(597);
+    GemVal _t20732 = gem_g___mod_scope_set_add;
+    GemVal _t20730 = gem_v_result;
+    GemVal _t20729 = gem_v_b;
     static GemICacheSlot _ic_3030 = {0};
-    GemVal _t20729[] = {_t20728, gem_table_get_cached(_t20727, "name", &_ic_3030)};
-    gem_check_callable(_t20730, "compiler/scope.gem", 593);
-                            (void)(_t20730.fn(_t20730.env, _t20729, 2));
+    GemVal _t20731[] = {_t20730, gem_table_get_cached(_t20729, "name", &_ic_3030)};
+    gem_check_callable(_t20732, "compiler/scope.gem", 597);
+                            (void)(_t20732.fn(_t20732.env, _t20731, 2));
                         }
                     }
 
                 }
-#line 597 "compiler/scope.gem"
-                gem_set_line(597);
-    GemVal _t20734 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
-    GemVal _t20731 = gem_v_a;
+#line 601 "compiler/scope.gem"
+                gem_set_line(601);
+    GemVal _t20736 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
+    GemVal _t20733 = gem_v_a;
     static GemICacheSlot _ic_3031 = {0};
-    GemVal _t20732 = gem_table_get_cached(_t20731, "body", &_ic_3031);
-    GemVal _t20733[] = {_t20732, gem_v_result};
-    gem_check_callable(_t20734, "compiler/scope.gem", 597);
-                (void)(_t20734.fn(_t20734.env, _t20733, 2));
+    GemVal _t20734 = gem_table_get_cached(_t20733, "body", &_ic_3031);
+    GemVal _t20735[] = {_t20734, gem_v_result};
+    gem_check_callable(_t20736, "compiler/scope.gem", 601);
+                (void)(_t20736.fn(_t20736.env, _t20735, 2));
             }
 
         }
-#line 600 "compiler/scope.gem"
-        gem_set_line(600);
-    GemVal _t20735 = gem_v_node;
+#line 604 "compiler/scope.gem"
+        gem_set_line(604);
+    GemVal _t20737 = gem_v_node;
     static GemICacheSlot _ic_3032 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20735, "after_body", &_ic_3032), GEM_NIL))) {
-#line 601 "compiler/scope.gem"
-            gem_set_line(601);
-    GemVal _t20739 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
-    GemVal _t20736 = gem_v_node;
-    static GemICacheSlot _ic_3033 = {0};
-    GemVal _t20737 = gem_table_get_cached(_t20736, "after_body", &_ic_3033);
-    GemVal _t20738[] = {_t20737, gem_v_result};
-    gem_check_callable(_t20739, "compiler/scope.gem", 601);
-            (void)(_t20739.fn(_t20739.env, _t20738, 2));
-        }
-#line 603 "compiler/scope.gem"
-        gem_set_line(603);
-        GemVal _t20740 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20740, 1);
-        gem_pop_frame();
-        return _t20740;
-    }
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20737, "after_body", &_ic_3032), GEM_NIL))) {
 #line 605 "compiler/scope.gem"
-    gem_set_line(605);
-    GemVal _t20741 = GEM_NIL;
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20741, 1);
+            gem_set_line(605);
+    GemVal _t20741 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
+    GemVal _t20738 = gem_v_node;
+    static GemICacheSlot _ic_3033 = {0};
+    GemVal _t20739 = gem_table_get_cached(_t20738, "after_body", &_ic_3033);
+    GemVal _t20740[] = {_t20739, gem_v_result};
+    gem_check_callable(_t20741, "compiler/scope.gem", 605);
+            (void)(_t20741.fn(_t20741.env, _t20740, 2));
+        }
+#line 607 "compiler/scope.gem"
+        gem_set_line(607);
+        GemVal _t20742 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20742, 1);
+        gem_pop_frame();
+        return _t20742;
+    }
+#line 609 "compiler/scope.gem"
+    gem_set_line(609);
+    GemVal _t20743 = GEM_NIL;
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20743, 1);
     gem_pop_frame();
-    return _t20741;
+    return _t20743;
 }
 
 struct _closure___anon_212 {
     intptr_t _num_captures;
 };
 static GemVal __anon_212(void *_env, GemVal *args, int argc) {
-    gem_push_frame("anonymous fn", "compiler/scope.gem", 609);
+    gem_push_frame("anonymous fn", "compiler/scope.gem", 613);
     GemVal gem_v_stmts = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_result = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 610 "compiler/scope.gem"
-    gem_set_line(610);
-    GemVal _t20744 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
-    GemVal _t20742 = gem_v_stmts;
-    GemVal _t20743[] = {_t20742, gem_v_result};
-    gem_check_callable(_t20744, "compiler/scope.gem", 610);
-    GemVal _t20745 = _t20744.fn(_t20744.env, _t20743, 2);
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20745, 1);
+#line 614 "compiler/scope.gem"
+    gem_set_line(614);
+    GemVal _t20746 = gem_g___mod_scope_collect_shadow_lets_in_stmts;
+    GemVal _t20744 = gem_v_stmts;
+    GemVal _t20745[] = {_t20744, gem_v_result};
+    gem_check_callable(_t20746, "compiler/scope.gem", 614);
+    GemVal _t20747 = _t20746.fn(_t20746.env, _t20745, 2);
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20747, 1);
     gem_pop_frame();
-    return _t20745;
+    return _t20747;
 }
 
 struct _closure___anon_213 {
@@ -90858,15 +90892,15 @@ static GemVal __anon_213(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_stmts, GEM_NIL))) {
 #line 74 "compiler/loops.gem"
         gem_set_line(74);
-        GemVal _t20772 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20772, 1);
+        GemVal _t20774 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20774, 1);
         gem_pop_frame();
-        return _t20772;
+        return _t20774;
     }
 #line 76 "compiler/loops.gem"
     gem_set_line(76);
-    GemVal _t20773 = gem_table_new_braces();
-    GemVal gem_v_block_lets = _t20773;
+    GemVal _t20775 = gem_table_new_braces();
+    GemVal gem_v_block_lets = _t20775;
 #line 77 "compiler/loops.gem"
     gem_set_line(77);
     GemVal gem_v___for_items_249 = gem_for_items_1(gem_v_stmts);
@@ -90883,39 +90917,39 @@ static GemVal __anon_213(void *_env, GemVal *args, int argc) {
             GemVal *_rr[] = {&gem_v_stmts, &gem_v_scope, &gem_v_block_lets, &gem_v___for_i_249, &gem_v___for_items_249};
             gem_arena_reset_region(&_mk617, _rr, 5, NULL, 0);
         }
-    GemVal _t20774 = gem_v___for_i_249;
-        if (!gem_truthy(gem_lt(_t20774, gem_for_len_1(gem_v___for_items_249)))) break;
+    GemVal _t20776 = gem_v___for_i_249;
+        if (!gem_truthy(gem_lt(_t20776, gem_for_len_1(gem_v___for_items_249)))) break;
 #line 77 "compiler/loops.gem"
         gem_set_line(77);
-    GemVal _t20775 = gem_v___for_items_249;
-        GemVal gem_v_s = gem_table_get(_t20775, gem_v___for_i_249);
+    GemVal _t20777 = gem_v___for_items_249;
+        GemVal gem_v_s = gem_table_get(_t20777, gem_v___for_i_249);
 #line 77 "compiler/loops.gem"
         gem_set_line(77);
         gem_v___for_i_249 = gem_add(gem_v___for_i_249, gem_int(1));
 #line 78 "compiler/loops.gem"
         gem_set_line(78);
-    GemVal _t20777 = gem_g___mod_loops_is_node;
-    GemVal _t20776[] = {gem_v_s, GEM_STR_LIT("let", 3)};
-    gem_check_callable(_t20777, "compiler/loops.gem", 78);
-    GemVal _t20778 = _t20777.fn(_t20777.env, _t20776, 2);
-    GemVal _t20780;
-    if (!gem_truthy(_t20778)) {
-        _t20780 = _t20778;
+    GemVal _t20779 = gem_g___mod_loops_is_node;
+    GemVal _t20778[] = {gem_v_s, GEM_STR_LIT("let", 3)};
+    gem_check_callable(_t20779, "compiler/loops.gem", 78);
+    GemVal _t20780 = _t20779.fn(_t20779.env, _t20778, 2);
+    GemVal _t20782;
+    if (!gem_truthy(_t20780)) {
+        _t20782 = _t20780;
     } else {
-    GemVal _t20779 = gem_v_s;
+    GemVal _t20781 = gem_v_s;
     static GemICacheSlot _ic_3034 = {0};
-        _t20780 = gem_neq(gem_table_get_cached(_t20779, "name", &_ic_3034), GEM_NIL);
+        _t20782 = gem_neq(gem_table_get_cached(_t20781, "name", &_ic_3034), GEM_NIL);
     }
-        if (gem_truthy(_t20780)) {
+        if (gem_truthy(_t20782)) {
 #line 79 "compiler/loops.gem"
             gem_set_line(79);
-    GemVal _t20784 = gem_g___mod_loops_set_add;
-    GemVal _t20782 = gem_v_block_lets;
-    GemVal _t20781 = gem_v_s;
+    GemVal _t20786 = gem_g___mod_loops_set_add;
+    GemVal _t20784 = gem_v_block_lets;
+    GemVal _t20783 = gem_v_s;
     static GemICacheSlot _ic_3035 = {0};
-    GemVal _t20783[] = {_t20782, gem_table_get_cached(_t20781, "name", &_ic_3035)};
-    gem_check_callable(_t20784, "compiler/loops.gem", 79);
-            (void)(_t20784.fn(_t20784.env, _t20783, 2));
+    GemVal _t20785[] = {_t20784, gem_table_get_cached(_t20783, "name", &_ic_3035)};
+    gem_check_callable(_t20786, "compiler/loops.gem", 79);
+            (void)(_t20786.fn(_t20786.env, _t20785, 2));
         }
     }
 
@@ -90932,70 +90966,70 @@ static GemVal __anon_213(void *_env, GemVal *args, int argc) {
             GemVal *_rr[] = {&gem_v_i, &gem_v_stmts, &gem_v_scope, &gem_v_block_lets};
             gem_arena_reset_region(&_mk618, _rr, 4, NULL, 0);
         }
-    GemVal _t20785 = gem_v_i;
-        if (!gem_truthy(gem_lt(_t20785, gem_len_1(gem_v_stmts)))) break;
+    GemVal _t20787 = gem_v_i;
+        if (!gem_truthy(gem_lt(_t20787, gem_len_1(gem_v_stmts)))) break;
 #line 85 "compiler/loops.gem"
         gem_set_line(85);
-    GemVal _t20786 = gem_v_stmts;
-        GemVal gem_v_s = gem_table_get(_t20786, gem_v_i);
+    GemVal _t20788 = gem_v_stmts;
+        GemVal gem_v_s = gem_table_get(_t20788, gem_v_i);
 #line 86 "compiler/loops.gem"
         gem_set_line(86);
-    GemVal _t20789 = gem_g___mod_loops_set_union;
-    GemVal _t20787 = gem_v_scope;
-    GemVal _t20788[] = {_t20787, gem_v_block_lets};
-    gem_check_callable(_t20789, "compiler/loops.gem", 86);
-        GemVal gem_v_merged = _t20789.fn(_t20789.env, _t20788, 2);
+    GemVal _t20791 = gem_g___mod_loops_set_union;
+    GemVal _t20789 = gem_v_scope;
+    GemVal _t20790[] = {_t20789, gem_v_block_lets};
+    gem_check_callable(_t20791, "compiler/loops.gem", 86);
+        GemVal gem_v_merged = _t20791.fn(_t20791.env, _t20790, 2);
 #line 87 "compiler/loops.gem"
         gem_set_line(87);
-    GemVal _t20792 = gem_g___mod_loops_captured_arm_lets_node;
-    GemVal _t20790 = gem_v_s;
-    GemVal _t20791[] = {_t20790, gem_v_merged};
-    gem_check_callable(_t20792, "compiler/loops.gem", 87);
-        (void)(_t20792.fn(_t20792.env, _t20791, 2));
+    GemVal _t20794 = gem_g___mod_loops_captured_arm_lets_node;
+    GemVal _t20792 = gem_v_s;
+    GemVal _t20793[] = {_t20792, gem_v_merged};
+    gem_check_callable(_t20794, "compiler/loops.gem", 87);
+        (void)(_t20794.fn(_t20794.env, _t20793, 2));
 #line 89 "compiler/loops.gem"
         gem_set_line(89);
-    GemVal _t20794 = gem_g___mod_loops_is_node;
-    GemVal _t20793[] = {gem_v_s, GEM_STR_LIT("while", 5)};
-    gem_check_callable(_t20794, "compiler/loops.gem", 89);
-    GemVal _t20795 = _t20794.fn(_t20794.env, _t20793, 2);
-    GemVal _t20797;
-    if (!gem_truthy(_t20795)) {
-        _t20797 = _t20795;
-    } else {
-    GemVal _t20796 = gem_v_s;
-    static GemICacheSlot _ic_3036 = {0};
-        _t20797 = gem_eq(gem_table_get_cached(_t20796, "process_tail", &_ic_3036), gem_bool(1));
-    }
+    GemVal _t20796 = gem_g___mod_loops_is_node;
+    GemVal _t20795[] = {gem_v_s, GEM_STR_LIT("while", 5)};
+    gem_check_callable(_t20796, "compiler/loops.gem", 89);
+    GemVal _t20797 = _t20796.fn(_t20796.env, _t20795, 2);
     GemVal _t20799;
     if (!gem_truthy(_t20797)) {
         _t20799 = _t20797;
     } else {
     GemVal _t20798 = gem_v_s;
-    static GemICacheSlot _ic_3037 = {0};
-        _t20799 = gem_neq(gem_table_get_cached(_t20798, "liveness_result", &_ic_3037), GEM_NIL);
+    static GemICacheSlot _ic_3036 = {0};
+        _t20799 = gem_eq(gem_table_get_cached(_t20798, "process_tail", &_ic_3036), gem_bool(1));
     }
-    GemVal _t20802;
+    GemVal _t20801;
     if (!gem_truthy(_t20799)) {
-        _t20802 = _t20799;
+        _t20801 = _t20799;
     } else {
     GemVal _t20800 = gem_v_s;
-    static GemICacheSlot _ic_3038 = {0};
-    GemVal _t20801 = gem_table_get_cached(_t20800, "liveness_result", &_ic_3038);
-    static GemICacheSlot _ic_3039 = {0};
-        _t20802 = gem_eq(gem_table_get_cached(_t20801, "ok", &_ic_3039), gem_bool(1));
+    static GemICacheSlot _ic_3037 = {0};
+        _t20801 = gem_neq(gem_table_get_cached(_t20800, "liveness_result", &_ic_3037), GEM_NIL);
     }
-        if (gem_truthy(_t20802)) {
+    GemVal _t20804;
+    if (!gem_truthy(_t20801)) {
+        _t20804 = _t20801;
+    } else {
+    GemVal _t20802 = gem_v_s;
+    static GemICacheSlot _ic_3038 = {0};
+    GemVal _t20803 = gem_table_get_cached(_t20802, "liveness_result", &_ic_3038);
+    static GemICacheSlot _ic_3039 = {0};
+        _t20804 = gem_eq(gem_table_get_cached(_t20803, "ok", &_ic_3039), gem_bool(1));
+    }
+        if (gem_truthy(_t20804)) {
 #line 90 "compiler/loops.gem"
             gem_set_line(90);
-    GemVal _t20803 = gem_v_s;
+    GemVal _t20805 = gem_v_s;
     static GemICacheSlot _ic_3040 = {0};
-    GemVal _t20804 = gem_table_get_cached(_t20803, "liveness_result", &_ic_3040);
+    GemVal _t20806 = gem_table_get_cached(_t20805, "liveness_result", &_ic_3040);
     static GemICacheSlot _ic_3041 = {0};
-            GemVal gem_v_live = gem_table_get_cached(_t20804, "live", &_ic_3041);
+            GemVal gem_v_live = gem_table_get_cached(_t20806, "live", &_ic_3041);
 #line 91 "compiler/loops.gem"
             gem_set_line(91);
-    GemVal _t20805 = gem_table_new();
-            GemVal gem_v_to_hoist = _t20805;
+    GemVal _t20807 = gem_table_new();
+            GemVal gem_v_to_hoist = _t20807;
 #line 92 "compiler/loops.gem"
             gem_set_line(92);
             GemVal gem_v___for_tbl_250 = gem_v_live;
@@ -91015,38 +91049,38 @@ static GemVal __anon_213(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v_i, &gem_v_s, &gem_v_stmts, &gem_v_scope, &gem_v_block_lets, &gem_v_to_hoist, &gem_v___for_tbl_250, &gem_v_merged, &gem_v___for_i_250, &gem_v___for_len_250};
                     gem_arena_reset_region(&_mk619, _rr, 10, NULL, 0);
                 }
-    GemVal _t20806 = gem_v___for_i_250;
-                if (!gem_truthy(gem_lt(_t20806, gem_v___for_len_250))) break;
+    GemVal _t20808 = gem_v___for_i_250;
+                if (!gem_truthy(gem_lt(_t20808, gem_v___for_len_250))) break;
 #line 92 "compiler/loops.gem"
                 gem_set_line(92);
-    GemVal _t20807 = gem_v___for_tbl_250;
-                GemVal gem_v_n = gem_table_key_at_2(_t20807, gem_v___for_i_250);
+    GemVal _t20809 = gem_v___for_tbl_250;
+                GemVal gem_v_n = gem_table_key_at_2(_t20809, gem_v___for_i_250);
 #line 92 "compiler/loops.gem"
                 gem_set_line(92);
-    GemVal _t20808 = gem_v___for_tbl_250;
-                GemVal gem_v__ = gem_table_val_at_2(_t20808, gem_v___for_i_250);
+    GemVal _t20810 = gem_v___for_tbl_250;
+                GemVal gem_v__ = gem_table_val_at_2(_t20810, gem_v___for_i_250);
 #line 92 "compiler/loops.gem"
                 gem_set_line(92);
                 gem_v___for_i_250 = gem_add(gem_v___for_i_250, gem_int(1));
 #line 93 "compiler/loops.gem"
                 gem_set_line(93);
-    GemVal _t20811 = gem_g___mod_loops_set_contains;
-    GemVal _t20809 = gem_v_merged;
-    GemVal _t20810[] = {_t20809, gem_v_n};
-    gem_check_callable(_t20811, "compiler/loops.gem", 93);
-                if (gem_truthy(gem_not(_t20811.fn(_t20811.env, _t20810, 2)))) {
+    GemVal _t20813 = gem_g___mod_loops_set_contains;
+    GemVal _t20811 = gem_v_merged;
+    GemVal _t20812[] = {_t20811, gem_v_n};
+    gem_check_callable(_t20813, "compiler/loops.gem", 93);
+                if (gem_truthy(gem_not(_t20813.fn(_t20813.env, _t20812, 2)))) {
 #line 94 "compiler/loops.gem"
                     gem_set_line(94);
-    GemVal _t20812 = gem_v_s;
+    GemVal _t20814 = gem_v_s;
     static GemICacheSlot _ic_3042 = {0};
-    GemVal _t20813 = gem_table_get_cached(_t20812, "body", &_ic_3042);
-    GemVal _t20814[] = {_t20813, gem_v_n};
-                    if (gem_truthy(gem_fn___mod_loops_hoist_has_let(NULL, _t20814, 2))) {
+    GemVal _t20815 = gem_table_get_cached(_t20814, "body", &_ic_3042);
+    GemVal _t20816[] = {_t20815, gem_v_n};
+                    if (gem_truthy(gem_fn___mod_loops_hoist_has_let(NULL, _t20816, 2))) {
 #line 95 "compiler/loops.gem"
                         gem_set_line(95);
-    GemVal _t20815 = gem_v_to_hoist;
-    GemVal _t20816[] = {_t20815, gem_v_n};
-                        (void)(gem_push_fn(NULL, _t20816, 2));
+    GemVal _t20817 = gem_v_to_hoist;
+    GemVal _t20818[] = {_t20817, gem_v_n};
+                        (void)(gem_push_fn(NULL, _t20818, 2));
                     }
                 }
             }
@@ -91070,38 +91104,38 @@ static GemVal __anon_213(void *_env, GemVal *args, int argc) {
                         GemVal *_rr[] = {&gem_v_stmts, &gem_v_scope, &gem_v_block_lets, &gem_v___for_items_251, &gem_v___for_i_251, &gem_v_s, &gem_v_i};
                         gem_arena_reset_region(&_mk620, _rr, 7, NULL, 0);
                     }
-    GemVal _t20817 = gem_v___for_i_251;
-                    if (!gem_truthy(gem_lt(_t20817, gem_for_len_1(gem_v___for_items_251)))) break;
+    GemVal _t20819 = gem_v___for_i_251;
+                    if (!gem_truthy(gem_lt(_t20819, gem_for_len_1(gem_v___for_items_251)))) break;
 #line 108 "compiler/loops.gem"
                     gem_set_line(108);
-    GemVal _t20818 = gem_v___for_items_251;
-                    GemVal gem_v_n = gem_table_get(_t20818, gem_v___for_i_251);
+    GemVal _t20820 = gem_v___for_items_251;
+                    GemVal gem_v_n = gem_table_get(_t20820, gem_v___for_i_251);
 #line 108 "compiler/loops.gem"
                     gem_set_line(108);
                     gem_v___for_i_251 = gem_add(gem_v___for_i_251, gem_int(1));
 #line 109 "compiler/loops.gem"
                     gem_set_line(109);
-    GemVal _t20823 = gem_v_stmts;
-    GemVal _t20822 = gem_v_i;
-    GemVal _t20819 = gem_table_new_braces();
-    gem_table_set(_t20819, GEM_STR_LIT("tag", 3), GEM_STR_LIT("let", 3));
-    gem_table_set(_t20819, GEM_STR_LIT("name", 4), gem_v_n);
-    GemVal _t20820 = gem_table_new_braces();
-    gem_table_set(_t20820, GEM_STR_LIT("tag", 3), GEM_STR_LIT("nil", 3));
-    gem_table_set(_t20819, GEM_STR_LIT("value", 5), _t20820);
-    GemVal _t20821 = gem_v_s;
+    GemVal _t20825 = gem_v_stmts;
+    GemVal _t20824 = gem_v_i;
+    GemVal _t20821 = gem_table_new_braces();
+    gem_table_set(_t20821, GEM_STR_LIT("tag", 3), GEM_STR_LIT("let", 3));
+    gem_table_set(_t20821, GEM_STR_LIT("name", 4), gem_v_n);
+    GemVal _t20822 = gem_table_new_braces();
+    gem_table_set(_t20822, GEM_STR_LIT("tag", 3), GEM_STR_LIT("nil", 3));
+    gem_table_set(_t20821, GEM_STR_LIT("value", 5), _t20822);
+    GemVal _t20823 = gem_v_s;
     static GemICacheSlot _ic_3043 = {0};
-    gem_table_set(_t20819, GEM_STR_LIT("line", 4), gem_table_get_cached(_t20821, "line", &_ic_3043));
-    gem_table_set(_t20819, GEM_STR_LIT("rescue_placeholder", 18), gem_bool(1));
-    GemVal _t20824[] = {_t20823, _t20822, _t20819};
-                    (void)(gem_insert_fn(NULL, _t20824, 3));
+    gem_table_set(_t20821, GEM_STR_LIT("line", 4), gem_table_get_cached(_t20823, "line", &_ic_3043));
+    gem_table_set(_t20821, GEM_STR_LIT("rescue_placeholder", 18), gem_bool(1));
+    GemVal _t20826[] = {_t20825, _t20824, _t20821};
+                    (void)(gem_insert_fn(NULL, _t20826, 3));
 #line 110 "compiler/loops.gem"
                     gem_set_line(110);
-    GemVal _t20827 = gem_g___mod_loops_set_add;
-    GemVal _t20825 = gem_v_block_lets;
-    GemVal _t20826[] = {_t20825, gem_v_n};
-    gem_check_callable(_t20827, "compiler/loops.gem", 110);
-                    (void)(_t20827.fn(_t20827.env, _t20826, 2));
+    GemVal _t20829 = gem_g___mod_loops_set_add;
+    GemVal _t20827 = gem_v_block_lets;
+    GemVal _t20828[] = {_t20827, gem_v_n};
+    gem_check_callable(_t20829, "compiler/loops.gem", 110);
+                    (void)(_t20829.fn(_t20829.env, _t20828, 2));
 #line 111 "compiler/loops.gem"
                     gem_set_line(111);
                     gem_v_i = gem_add(gem_v_i, gem_int(1));
@@ -91132,61 +91166,61 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
 #line 121 "compiler/loops.gem"
         gem_set_line(121);
-        GemVal _t20828 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20828, 1);
+        GemVal _t20830 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20830, 1);
         gem_pop_frame();
-        return _t20828;
+        return _t20830;
     }
 #line 123 "compiler/loops.gem"
     gem_set_line(123);
     if (gem_truthy(gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5)))) {
 #line 124 "compiler/loops.gem"
         gem_set_line(124);
-        GemVal _t20829 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20829, 1);
-        gem_pop_frame();
-        return _t20829;
-    }
-#line 126 "compiler/loops.gem"
-    gem_set_line(126);
-    GemVal _t20830 = gem_v_node;
-    static GemICacheSlot _ic_3044 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20830, "tag", &_ic_3044), GEM_NIL))) {
-#line 127 "compiler/loops.gem"
-        gem_set_line(127);
         GemVal _t20831 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20831, 1);
         gem_pop_frame();
         return _t20831;
     }
+#line 126 "compiler/loops.gem"
+    gem_set_line(126);
+    GemVal _t20832 = gem_v_node;
+    static GemICacheSlot _ic_3044 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20832, "tag", &_ic_3044), GEM_NIL))) {
+#line 127 "compiler/loops.gem"
+        gem_set_line(127);
+        GemVal _t20833 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20833, 1);
+        gem_pop_frame();
+        return _t20833;
+    }
 #line 129 "compiler/loops.gem"
     gem_set_line(129);
-    GemVal _t20832 = gem_v_node;
-    static GemICacheSlot _ic_3045 = {0};
-    GemVal _t20833 = gem_eq(gem_table_get_cached(_t20832, "tag", &_ic_3045), GEM_STR_LIT("anon_fn", 7));
-    GemVal _t20835;
-    if (gem_truthy(_t20833)) {
-        _t20835 = _t20833;
-    } else {
     GemVal _t20834 = gem_v_node;
-    static GemICacheSlot _ic_3046 = {0};
-        _t20835 = gem_eq(gem_table_get_cached(_t20834, "tag", &_ic_3046), GEM_STR_LIT("fn_def", 6));
-    }
+    static GemICacheSlot _ic_3045 = {0};
+    GemVal _t20835 = gem_eq(gem_table_get_cached(_t20834, "tag", &_ic_3045), GEM_STR_LIT("anon_fn", 7));
+    GemVal _t20837;
     if (gem_truthy(_t20835)) {
+        _t20837 = _t20835;
+    } else {
+    GemVal _t20836 = gem_v_node;
+    static GemICacheSlot _ic_3046 = {0};
+        _t20837 = gem_eq(gem_table_get_cached(_t20836, "tag", &_ic_3046), GEM_STR_LIT("fn_def", 6));
+    }
+    if (gem_truthy(_t20837)) {
 #line 130 "compiler/loops.gem"
         gem_set_line(130);
-    GemVal _t20836 = gem_table_new_braces();
-        GemVal gem_v_inner_scope = _t20836;
+    GemVal _t20838 = gem_table_new_braces();
+        GemVal gem_v_inner_scope = _t20838;
 #line 131 "compiler/loops.gem"
         gem_set_line(131);
-    GemVal _t20837 = gem_v_node;
+    GemVal _t20839 = gem_v_node;
     static GemICacheSlot _ic_3047 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20837, "params", &_ic_3047), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20839, "params", &_ic_3047), GEM_NIL))) {
 #line 132 "compiler/loops.gem"
             gem_set_line(132);
-    GemVal _t20838 = gem_v_node;
+    GemVal _t20840 = gem_v_node;
     static GemICacheSlot _ic_3048 = {0};
-            GemVal gem_v___for_items_252 = gem_for_items_1(gem_table_get_cached(_t20838, "params", &_ic_3048));
+            GemVal gem_v___for_items_252 = gem_for_items_1(gem_table_get_cached(_t20840, "params", &_ic_3048));
 #line 132 "compiler/loops.gem"
             gem_set_line(132);
             GemVal gem_v___for_i_252 = gem_int(0);
@@ -91200,59 +91234,59 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v_scope, &gem_v_node, &gem_v_inner_scope, &gem_v___for_i_252, &gem_v___for_items_252};
                     gem_arena_reset_region(&_mk621, _rr, 5, NULL, 0);
                 }
-    GemVal _t20839 = gem_v___for_i_252;
-                if (!gem_truthy(gem_lt(_t20839, gem_for_len_1(gem_v___for_items_252)))) break;
+    GemVal _t20841 = gem_v___for_i_252;
+                if (!gem_truthy(gem_lt(_t20841, gem_for_len_1(gem_v___for_items_252)))) break;
 #line 132 "compiler/loops.gem"
                 gem_set_line(132);
-    GemVal _t20840 = gem_v___for_items_252;
-                GemVal gem_v_p = gem_table_get(_t20840, gem_v___for_i_252);
+    GemVal _t20842 = gem_v___for_items_252;
+                GemVal gem_v_p = gem_table_get(_t20842, gem_v___for_i_252);
 #line 132 "compiler/loops.gem"
                 gem_set_line(132);
                 gem_v___for_i_252 = gem_add(gem_v___for_i_252, gem_int(1));
 #line 133 "compiler/loops.gem"
                 gem_set_line(133);
-    GemVal _t20843 = gem_g___mod_loops_set_add;
-    GemVal _t20841 = gem_v_inner_scope;
-    GemVal _t20842[] = {_t20841, gem_v_p};
-    gem_check_callable(_t20843, "compiler/loops.gem", 133);
-                (void)(_t20843.fn(_t20843.env, _t20842, 2));
+    GemVal _t20845 = gem_g___mod_loops_set_add;
+    GemVal _t20843 = gem_v_inner_scope;
+    GemVal _t20844[] = {_t20843, gem_v_p};
+    gem_check_callable(_t20845, "compiler/loops.gem", 133);
+                (void)(_t20845.fn(_t20845.env, _t20844, 2));
             }
 
         }
 #line 136 "compiler/loops.gem"
         gem_set_line(136);
-    GemVal _t20844 = gem_v_node;
+    GemVal _t20846 = gem_v_node;
     static GemICacheSlot _ic_3049 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20844, "rest_param", &_ic_3049), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20846, "rest_param", &_ic_3049), GEM_NIL))) {
 #line 137 "compiler/loops.gem"
             gem_set_line(137);
-    GemVal _t20848 = gem_g___mod_loops_set_add;
-    GemVal _t20846 = gem_v_inner_scope;
-    GemVal _t20845 = gem_v_node;
+    GemVal _t20850 = gem_g___mod_loops_set_add;
+    GemVal _t20848 = gem_v_inner_scope;
+    GemVal _t20847 = gem_v_node;
     static GemICacheSlot _ic_3050 = {0};
-    GemVal _t20847[] = {_t20846, gem_table_get_cached(_t20845, "rest_param", &_ic_3050)};
-    gem_check_callable(_t20848, "compiler/loops.gem", 137);
-            (void)(_t20848.fn(_t20848.env, _t20847, 2));
+    GemVal _t20849[] = {_t20848, gem_table_get_cached(_t20847, "rest_param", &_ic_3050)};
+    gem_check_callable(_t20850, "compiler/loops.gem", 137);
+            (void)(_t20850.fn(_t20850.env, _t20849, 2));
         }
 #line 139 "compiler/loops.gem"
         gem_set_line(139);
-    GemVal _t20852 = gem_g___mod_loops_captured_arm_lets_stmts;
-    GemVal _t20849 = gem_v_node;
+    GemVal _t20854 = gem_g___mod_loops_captured_arm_lets_stmts;
+    GemVal _t20851 = gem_v_node;
     static GemICacheSlot _ic_3051 = {0};
-    GemVal _t20850 = gem_table_get_cached(_t20849, "body", &_ic_3051);
-    GemVal _t20851[] = {_t20850, gem_v_inner_scope};
-    gem_check_callable(_t20852, "compiler/loops.gem", 139);
-        (void)(_t20852.fn(_t20852.env, _t20851, 2));
+    GemVal _t20852 = gem_table_get_cached(_t20851, "body", &_ic_3051);
+    GemVal _t20853[] = {_t20852, gem_v_inner_scope};
+    gem_check_callable(_t20854, "compiler/loops.gem", 139);
+        (void)(_t20854.fn(_t20854.env, _t20853, 2));
 #line 140 "compiler/loops.gem"
         gem_set_line(140);
-    GemVal _t20853 = gem_v_node;
+    GemVal _t20855 = gem_v_node;
     static GemICacheSlot _ic_3052 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20853, "defaults", &_ic_3052), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20855, "defaults", &_ic_3052), GEM_NIL))) {
 #line 141 "compiler/loops.gem"
             gem_set_line(141);
-    GemVal _t20854 = gem_v_node;
+    GemVal _t20856 = gem_v_node;
     static GemICacheSlot _ic_3053 = {0};
-            GemVal gem_v___for_items_253 = gem_for_items_1(gem_table_get_cached(_t20854, "defaults", &_ic_3053));
+            GemVal gem_v___for_items_253 = gem_for_items_1(gem_table_get_cached(_t20856, "defaults", &_ic_3053));
 #line 141 "compiler/loops.gem"
             gem_set_line(141);
             GemVal gem_v___for_i_253 = gem_int(0);
@@ -91266,12 +91300,12 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_253, &gem_v_scope, &gem_v___for_items_253};
                     gem_arena_reset_region(&_mk622, _rr, 3, NULL, 0);
                 }
-    GemVal _t20855 = gem_v___for_i_253;
-                if (!gem_truthy(gem_lt(_t20855, gem_for_len_1(gem_v___for_items_253)))) break;
+    GemVal _t20857 = gem_v___for_i_253;
+                if (!gem_truthy(gem_lt(_t20857, gem_for_len_1(gem_v___for_items_253)))) break;
 #line 141 "compiler/loops.gem"
                 gem_set_line(141);
-    GemVal _t20856 = gem_v___for_items_253;
-                GemVal gem_v_d = gem_table_get(_t20856, gem_v___for_i_253);
+    GemVal _t20858 = gem_v___for_items_253;
+                GemVal gem_v_d = gem_table_get(_t20858, gem_v___for_i_253);
 #line 141 "compiler/loops.gem"
                 gem_set_line(141);
                 gem_v___for_i_253 = gem_add(gem_v___for_i_253, gem_int(1));
@@ -91280,55 +91314,55 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
                 if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
 #line 143 "compiler/loops.gem"
                     gem_set_line(143);
-    GemVal _t20859 = gem_g___mod_loops_captured_arm_lets_node;
-    GemVal _t20857 = gem_v_d;
-    GemVal _t20858[] = {_t20857, gem_v_scope};
-    gem_check_callable(_t20859, "compiler/loops.gem", 143);
-                    (void)(_t20859.fn(_t20859.env, _t20858, 2));
+    GemVal _t20861 = gem_g___mod_loops_captured_arm_lets_node;
+    GemVal _t20859 = gem_v_d;
+    GemVal _t20860[] = {_t20859, gem_v_scope};
+    gem_check_callable(_t20861, "compiler/loops.gem", 143);
+                    (void)(_t20861.fn(_t20861.env, _t20860, 2));
                 }
             }
 
         }
 #line 147 "compiler/loops.gem"
         gem_set_line(147);
-        GemVal _t20860 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20860, 1);
+        GemVal _t20862 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20862, 1);
         gem_pop_frame();
-        return _t20860;
+        return _t20862;
     }
 #line 149 "compiler/loops.gem"
     gem_set_line(149);
-    GemVal _t20861 = gem_v_node;
+    GemVal _t20863 = gem_v_node;
     static GemICacheSlot _ic_3054 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20861, "tag", &_ic_3054), GEM_STR_LIT("if", 2)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20863, "tag", &_ic_3054), GEM_STR_LIT("if", 2)))) {
 #line 150 "compiler/loops.gem"
         gem_set_line(150);
-    GemVal _t20865 = gem_g___mod_loops_captured_arm_lets_node;
-    GemVal _t20862 = gem_v_node;
+    GemVal _t20867 = gem_g___mod_loops_captured_arm_lets_node;
+    GemVal _t20864 = gem_v_node;
     static GemICacheSlot _ic_3055 = {0};
-    GemVal _t20863 = gem_table_get_cached(_t20862, "cond", &_ic_3055);
-    GemVal _t20864[] = {_t20863, gem_v_scope};
-    gem_check_callable(_t20865, "compiler/loops.gem", 150);
-        (void)(_t20865.fn(_t20865.env, _t20864, 2));
+    GemVal _t20865 = gem_table_get_cached(_t20864, "cond", &_ic_3055);
+    GemVal _t20866[] = {_t20865, gem_v_scope};
+    gem_check_callable(_t20867, "compiler/loops.gem", 150);
+        (void)(_t20867.fn(_t20867.env, _t20866, 2));
 #line 151 "compiler/loops.gem"
         gem_set_line(151);
-    GemVal _t20869 = gem_g___mod_loops_captured_arm_lets_stmts;
-    GemVal _t20866 = gem_v_node;
+    GemVal _t20871 = gem_g___mod_loops_captured_arm_lets_stmts;
+    GemVal _t20868 = gem_v_node;
     static GemICacheSlot _ic_3056 = {0};
-    GemVal _t20867 = gem_table_get_cached(_t20866, "then", &_ic_3056);
-    GemVal _t20868[] = {_t20867, gem_v_scope};
-    gem_check_callable(_t20869, "compiler/loops.gem", 151);
-        (void)(_t20869.fn(_t20869.env, _t20868, 2));
+    GemVal _t20869 = gem_table_get_cached(_t20868, "then", &_ic_3056);
+    GemVal _t20870[] = {_t20869, gem_v_scope};
+    gem_check_callable(_t20871, "compiler/loops.gem", 151);
+        (void)(_t20871.fn(_t20871.env, _t20870, 2));
 #line 152 "compiler/loops.gem"
         gem_set_line(152);
-    GemVal _t20870 = gem_v_node;
+    GemVal _t20872 = gem_v_node;
     static GemICacheSlot _ic_3057 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20870, "elifs", &_ic_3057), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20872, "elifs", &_ic_3057), GEM_NIL))) {
 #line 153 "compiler/loops.gem"
             gem_set_line(153);
-    GemVal _t20871 = gem_v_node;
+    GemVal _t20873 = gem_v_node;
     static GemICacheSlot _ic_3058 = {0};
-            GemVal gem_v___for_items_254 = gem_for_items_1(gem_table_get_cached(_t20871, "elifs", &_ic_3058));
+            GemVal gem_v___for_items_254 = gem_for_items_1(gem_table_get_cached(_t20873, "elifs", &_ic_3058));
 #line 153 "compiler/loops.gem"
             gem_set_line(153);
             GemVal gem_v___for_i_254 = gem_int(0);
@@ -91342,180 +91376,180 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v_node, &gem_v_scope, &gem_v___for_i_254, &gem_v___for_items_254};
                     gem_arena_reset_region(&_mk623, _rr, 4, NULL, 0);
                 }
-    GemVal _t20872 = gem_v___for_i_254;
-                if (!gem_truthy(gem_lt(_t20872, gem_for_len_1(gem_v___for_items_254)))) break;
+    GemVal _t20874 = gem_v___for_i_254;
+                if (!gem_truthy(gem_lt(_t20874, gem_for_len_1(gem_v___for_items_254)))) break;
 #line 153 "compiler/loops.gem"
                 gem_set_line(153);
-    GemVal _t20873 = gem_v___for_items_254;
-                GemVal gem_v_ei = gem_table_get(_t20873, gem_v___for_i_254);
+    GemVal _t20875 = gem_v___for_items_254;
+                GemVal gem_v_ei = gem_table_get(_t20875, gem_v___for_i_254);
 #line 153 "compiler/loops.gem"
                 gem_set_line(153);
                 gem_v___for_i_254 = gem_add(gem_v___for_i_254, gem_int(1));
 #line 154 "compiler/loops.gem"
                 gem_set_line(154);
-    GemVal _t20877 = gem_g___mod_loops_captured_arm_lets_stmts;
-    GemVal _t20874 = gem_v_ei;
+    GemVal _t20879 = gem_g___mod_loops_captured_arm_lets_stmts;
+    GemVal _t20876 = gem_v_ei;
     static GemICacheSlot _ic_3059 = {0};
-    GemVal _t20875 = gem_table_get_cached(_t20874, "body", &_ic_3059);
-    GemVal _t20876[] = {_t20875, gem_v_scope};
-    gem_check_callable(_t20877, "compiler/loops.gem", 154);
-                (void)(_t20877.fn(_t20877.env, _t20876, 2));
+    GemVal _t20877 = gem_table_get_cached(_t20876, "body", &_ic_3059);
+    GemVal _t20878[] = {_t20877, gem_v_scope};
+    gem_check_callable(_t20879, "compiler/loops.gem", 154);
+                (void)(_t20879.fn(_t20879.env, _t20878, 2));
             }
 
         }
 #line 157 "compiler/loops.gem"
         gem_set_line(157);
-    GemVal _t20881 = gem_g___mod_loops_captured_arm_lets_stmts;
-    GemVal _t20878 = gem_v_node;
+    GemVal _t20883 = gem_g___mod_loops_captured_arm_lets_stmts;
+    GemVal _t20880 = gem_v_node;
     static GemICacheSlot _ic_3060 = {0};
-    GemVal _t20879 = gem_table_get_cached(_t20878, "else", &_ic_3060);
-    GemVal _t20880[] = {_t20879, gem_v_scope};
-    gem_check_callable(_t20881, "compiler/loops.gem", 157);
-        (void)(_t20881.fn(_t20881.env, _t20880, 2));
+    GemVal _t20881 = gem_table_get_cached(_t20880, "else", &_ic_3060);
+    GemVal _t20882[] = {_t20881, gem_v_scope};
+    gem_check_callable(_t20883, "compiler/loops.gem", 157);
+        (void)(_t20883.fn(_t20883.env, _t20882, 2));
 #line 158 "compiler/loops.gem"
         gem_set_line(158);
-        GemVal _t20882 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20882, 1);
+        GemVal _t20884 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20884, 1);
         gem_pop_frame();
-        return _t20882;
+        return _t20884;
     }
 #line 160 "compiler/loops.gem"
     gem_set_line(160);
-    GemVal _t20883 = gem_v_node;
+    GemVal _t20885 = gem_v_node;
     static GemICacheSlot _ic_3061 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20883, "tag", &_ic_3061), GEM_STR_LIT("while", 5)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20885, "tag", &_ic_3061), GEM_STR_LIT("while", 5)))) {
 #line 161 "compiler/loops.gem"
         gem_set_line(161);
-    GemVal _t20887 = gem_g___mod_loops_captured_arm_lets_node;
-    GemVal _t20884 = gem_v_node;
+    GemVal _t20889 = gem_g___mod_loops_captured_arm_lets_node;
+    GemVal _t20886 = gem_v_node;
     static GemICacheSlot _ic_3062 = {0};
-    GemVal _t20885 = gem_table_get_cached(_t20884, "cond", &_ic_3062);
-    GemVal _t20886[] = {_t20885, gem_v_scope};
-    gem_check_callable(_t20887, "compiler/loops.gem", 161);
-        (void)(_t20887.fn(_t20887.env, _t20886, 2));
+    GemVal _t20887 = gem_table_get_cached(_t20886, "cond", &_ic_3062);
+    GemVal _t20888[] = {_t20887, gem_v_scope};
+    gem_check_callable(_t20889, "compiler/loops.gem", 161);
+        (void)(_t20889.fn(_t20889.env, _t20888, 2));
 #line 162 "compiler/loops.gem"
         gem_set_line(162);
-    GemVal _t20891 = gem_g___mod_loops_captured_arm_lets_stmts;
-    GemVal _t20888 = gem_v_node;
+    GemVal _t20893 = gem_g___mod_loops_captured_arm_lets_stmts;
+    GemVal _t20890 = gem_v_node;
     static GemICacheSlot _ic_3063 = {0};
-    GemVal _t20889 = gem_table_get_cached(_t20888, "body", &_ic_3063);
-    GemVal _t20890[] = {_t20889, gem_v_scope};
-    gem_check_callable(_t20891, "compiler/loops.gem", 162);
-        (void)(_t20891.fn(_t20891.env, _t20890, 2));
+    GemVal _t20891 = gem_table_get_cached(_t20890, "body", &_ic_3063);
+    GemVal _t20892[] = {_t20891, gem_v_scope};
+    gem_check_callable(_t20893, "compiler/loops.gem", 162);
+        (void)(_t20893.fn(_t20893.env, _t20892, 2));
 #line 163 "compiler/loops.gem"
         gem_set_line(163);
-        GemVal _t20892 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20892, 1);
+        GemVal _t20894 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20894, 1);
         gem_pop_frame();
-        return _t20892;
+        return _t20894;
     }
 #line 165 "compiler/loops.gem"
     gem_set_line(165);
-    GemVal _t20893 = gem_v_node;
-    static GemICacheSlot _ic_3064 = {0};
-    GemVal _t20894 = gem_eq(gem_table_get_cached(_t20893, "tag", &_ic_3064), GEM_STR_LIT("for", 3));
-    GemVal _t20896;
-    if (gem_truthy(_t20894)) {
-        _t20896 = _t20894;
-    } else {
     GemVal _t20895 = gem_v_node;
-    static GemICacheSlot _ic_3065 = {0};
-        _t20896 = gem_eq(gem_table_get_cached(_t20895, "tag", &_ic_3065), GEM_STR_LIT("for_kv", 6));
-    }
+    static GemICacheSlot _ic_3064 = {0};
+    GemVal _t20896 = gem_eq(gem_table_get_cached(_t20895, "tag", &_ic_3064), GEM_STR_LIT("for", 3));
     GemVal _t20898;
     if (gem_truthy(_t20896)) {
         _t20898 = _t20896;
     } else {
     GemVal _t20897 = gem_v_node;
-    static GemICacheSlot _ic_3066 = {0};
-        _t20898 = gem_eq(gem_table_get_cached(_t20897, "tag", &_ic_3066), GEM_STR_LIT("for_range", 9));
+    static GemICacheSlot _ic_3065 = {0};
+        _t20898 = gem_eq(gem_table_get_cached(_t20897, "tag", &_ic_3065), GEM_STR_LIT("for_kv", 6));
     }
+    GemVal _t20900;
     if (gem_truthy(_t20898)) {
+        _t20900 = _t20898;
+    } else {
+    GemVal _t20899 = gem_v_node;
+    static GemICacheSlot _ic_3066 = {0};
+        _t20900 = gem_eq(gem_table_get_cached(_t20899, "tag", &_ic_3066), GEM_STR_LIT("for_range", 9));
+    }
+    if (gem_truthy(_t20900)) {
 #line 166 "compiler/loops.gem"
         gem_set_line(166);
-    GemVal _t20902 = gem_g___mod_loops_set_union;
-    GemVal _t20900 = gem_v_scope;
-    GemVal _t20899 = gem_table_new_braces();
-    GemVal _t20901[] = {_t20900, _t20899};
-    gem_check_callable(_t20902, "compiler/loops.gem", 166);
-        GemVal gem_v_body_scope = _t20902.fn(_t20902.env, _t20901, 2);
+    GemVal _t20904 = gem_g___mod_loops_set_union;
+    GemVal _t20902 = gem_v_scope;
+    GemVal _t20901 = gem_table_new_braces();
+    GemVal _t20903[] = {_t20902, _t20901};
+    gem_check_callable(_t20904, "compiler/loops.gem", 166);
+        GemVal gem_v_body_scope = _t20904.fn(_t20904.env, _t20903, 2);
 #line 167 "compiler/loops.gem"
         gem_set_line(167);
-    GemVal _t20903 = gem_v_node;
+    GemVal _t20905 = gem_v_node;
     static GemICacheSlot _ic_3067 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20903, "var", &_ic_3067), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20905, "var", &_ic_3067), GEM_NIL))) {
 #line 168 "compiler/loops.gem"
             gem_set_line(168);
-    GemVal _t20907 = gem_g___mod_loops_set_add;
-    GemVal _t20905 = gem_v_body_scope;
-    GemVal _t20904 = gem_v_node;
+    GemVal _t20909 = gem_g___mod_loops_set_add;
+    GemVal _t20907 = gem_v_body_scope;
+    GemVal _t20906 = gem_v_node;
     static GemICacheSlot _ic_3068 = {0};
-    GemVal _t20906[] = {_t20905, gem_table_get_cached(_t20904, "var", &_ic_3068)};
-    gem_check_callable(_t20907, "compiler/loops.gem", 168);
-            (void)(_t20907.fn(_t20907.env, _t20906, 2));
+    GemVal _t20908[] = {_t20907, gem_table_get_cached(_t20906, "var", &_ic_3068)};
+    gem_check_callable(_t20909, "compiler/loops.gem", 168);
+            (void)(_t20909.fn(_t20909.env, _t20908, 2));
         }
 #line 170 "compiler/loops.gem"
         gem_set_line(170);
-    GemVal _t20908 = gem_v_node;
+    GemVal _t20910 = gem_v_node;
     static GemICacheSlot _ic_3069 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20908, "kvar", &_ic_3069), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20910, "kvar", &_ic_3069), GEM_NIL))) {
 #line 171 "compiler/loops.gem"
             gem_set_line(171);
-    GemVal _t20912 = gem_g___mod_loops_set_add;
-    GemVal _t20910 = gem_v_body_scope;
-    GemVal _t20909 = gem_v_node;
+    GemVal _t20914 = gem_g___mod_loops_set_add;
+    GemVal _t20912 = gem_v_body_scope;
+    GemVal _t20911 = gem_v_node;
     static GemICacheSlot _ic_3070 = {0};
-    GemVal _t20911[] = {_t20910, gem_table_get_cached(_t20909, "kvar", &_ic_3070)};
-    gem_check_callable(_t20912, "compiler/loops.gem", 171);
-            (void)(_t20912.fn(_t20912.env, _t20911, 2));
+    GemVal _t20913[] = {_t20912, gem_table_get_cached(_t20911, "kvar", &_ic_3070)};
+    gem_check_callable(_t20914, "compiler/loops.gem", 171);
+            (void)(_t20914.fn(_t20914.env, _t20913, 2));
         }
 #line 173 "compiler/loops.gem"
         gem_set_line(173);
-    GemVal _t20913 = gem_v_node;
+    GemVal _t20915 = gem_v_node;
     static GemICacheSlot _ic_3071 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20913, "vvar", &_ic_3071), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20915, "vvar", &_ic_3071), GEM_NIL))) {
 #line 174 "compiler/loops.gem"
             gem_set_line(174);
-    GemVal _t20917 = gem_g___mod_loops_set_add;
-    GemVal _t20915 = gem_v_body_scope;
-    GemVal _t20914 = gem_v_node;
+    GemVal _t20919 = gem_g___mod_loops_set_add;
+    GemVal _t20917 = gem_v_body_scope;
+    GemVal _t20916 = gem_v_node;
     static GemICacheSlot _ic_3072 = {0};
-    GemVal _t20916[] = {_t20915, gem_table_get_cached(_t20914, "vvar", &_ic_3072)};
-    gem_check_callable(_t20917, "compiler/loops.gem", 174);
-            (void)(_t20917.fn(_t20917.env, _t20916, 2));
+    GemVal _t20918[] = {_t20917, gem_table_get_cached(_t20916, "vvar", &_ic_3072)};
+    gem_check_callable(_t20919, "compiler/loops.gem", 174);
+            (void)(_t20919.fn(_t20919.env, _t20918, 2));
         }
 #line 176 "compiler/loops.gem"
         gem_set_line(176);
-    GemVal _t20918 = gem_v_node;
-    static GemICacheSlot _ic_3073 = {0};
-    GemVal _t20919 = gem_neq(gem_table_get_cached(_t20918, "name", &_ic_3073), GEM_NIL);
-    GemVal _t20924;
-    if (!gem_truthy(_t20919)) {
-        _t20924 = _t20919;
-    } else {
     GemVal _t20920 = gem_v_node;
-    static GemICacheSlot _ic_3074 = {0};
-    GemVal _t20921 = gem_eq(gem_table_get_cached(_t20920, "tag", &_ic_3074), GEM_STR_LIT("for", 3));
-    GemVal _t20923;
-    if (gem_truthy(_t20921)) {
-        _t20923 = _t20921;
+    static GemICacheSlot _ic_3073 = {0};
+    GemVal _t20921 = gem_neq(gem_table_get_cached(_t20920, "name", &_ic_3073), GEM_NIL);
+    GemVal _t20926;
+    if (!gem_truthy(_t20921)) {
+        _t20926 = _t20921;
     } else {
     GemVal _t20922 = gem_v_node;
+    static GemICacheSlot _ic_3074 = {0};
+    GemVal _t20923 = gem_eq(gem_table_get_cached(_t20922, "tag", &_ic_3074), GEM_STR_LIT("for", 3));
+    GemVal _t20925;
+    if (gem_truthy(_t20923)) {
+        _t20925 = _t20923;
+    } else {
+    GemVal _t20924 = gem_v_node;
     static GemICacheSlot _ic_3075 = {0};
-        _t20923 = gem_eq(gem_table_get_cached(_t20922, "tag", &_ic_3075), GEM_STR_LIT("for_range", 9));
+        _t20925 = gem_eq(gem_table_get_cached(_t20924, "tag", &_ic_3075), GEM_STR_LIT("for_range", 9));
     }
-        _t20924 = _t20923;
+        _t20926 = _t20925;
     }
-        if (gem_truthy(_t20924)) {
+        if (gem_truthy(_t20926)) {
 #line 177 "compiler/loops.gem"
             gem_set_line(177);
-    GemVal _t20928 = gem_g___mod_loops_set_add;
-    GemVal _t20926 = gem_v_body_scope;
-    GemVal _t20925 = gem_v_node;
+    GemVal _t20930 = gem_g___mod_loops_set_add;
+    GemVal _t20928 = gem_v_body_scope;
+    GemVal _t20927 = gem_v_node;
     static GemICacheSlot _ic_3076 = {0};
-    GemVal _t20927[] = {_t20926, gem_table_get_cached(_t20925, "name", &_ic_3076)};
-    gem_check_callable(_t20928, "compiler/loops.gem", 177);
-            (void)(_t20928.fn(_t20928.env, _t20927, 2));
+    GemVal _t20929[] = {_t20928, gem_table_get_cached(_t20927, "name", &_ic_3076)};
+    gem_check_callable(_t20930, "compiler/loops.gem", 177);
+            (void)(_t20930.fn(_t20930.env, _t20929, 2));
         }
 #line 179 "compiler/loops.gem"
         gem_set_line(179);
@@ -91536,85 +91570,85 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_node, &gem_v_body_scope, &gem_v___for_i_255, &gem_v_scope, &gem_v___for_tbl_255, &gem_v___for_len_255};
                 gem_arena_reset_region(&_mk624, _rr, 6, NULL, 0);
             }
-    GemVal _t20929 = gem_v___for_i_255;
-            if (!gem_truthy(gem_lt(_t20929, gem_v___for_len_255))) break;
+    GemVal _t20931 = gem_v___for_i_255;
+            if (!gem_truthy(gem_lt(_t20931, gem_v___for_len_255))) break;
 #line 179 "compiler/loops.gem"
             gem_set_line(179);
-    GemVal _t20930 = gem_v___for_tbl_255;
-            GemVal gem_v_k = gem_table_key_at_2(_t20930, gem_v___for_i_255);
+    GemVal _t20932 = gem_v___for_tbl_255;
+            GemVal gem_v_k = gem_table_key_at_2(_t20932, gem_v___for_i_255);
 #line 179 "compiler/loops.gem"
             gem_set_line(179);
-    GemVal _t20931 = gem_v___for_tbl_255;
-            GemVal gem_v_v = gem_table_val_at_2(_t20931, gem_v___for_i_255);
+    GemVal _t20933 = gem_v___for_tbl_255;
+            GemVal gem_v_v = gem_table_val_at_2(_t20933, gem_v___for_i_255);
 #line 179 "compiler/loops.gem"
             gem_set_line(179);
             gem_v___for_i_255 = gem_add(gem_v___for_i_255, gem_int(1));
 #line 180 "compiler/loops.gem"
             gem_set_line(180);
-    GemVal _t20932 = gem_neq(gem_v_k, GEM_STR_LIT("tag", 3));
-    GemVal _t20933;
-    if (!gem_truthy(_t20932)) {
-        _t20933 = _t20932;
+    GemVal _t20934 = gem_neq(gem_v_k, GEM_STR_LIT("tag", 3));
+    GemVal _t20935;
+    if (!gem_truthy(_t20934)) {
+        _t20935 = _t20934;
     } else {
-        _t20933 = gem_neq(gem_v_k, GEM_STR_LIT("body", 4));
+        _t20935 = gem_neq(gem_v_k, GEM_STR_LIT("body", 4));
     }
-    GemVal _t20934;
-    if (!gem_truthy(_t20933)) {
-        _t20934 = _t20933;
+    GemVal _t20936;
+    if (!gem_truthy(_t20935)) {
+        _t20936 = _t20935;
     } else {
-        _t20934 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
+        _t20936 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
     }
-            if (gem_truthy(_t20934)) {
+            if (gem_truthy(_t20936)) {
 #line 181 "compiler/loops.gem"
                 gem_set_line(181);
-    GemVal _t20937 = gem_g___mod_loops_captured_arm_lets_node;
-    GemVal _t20935 = gem_v_v;
-    GemVal _t20936[] = {_t20935, gem_v_scope};
-    gem_check_callable(_t20937, "compiler/loops.gem", 181);
-                (void)(_t20937.fn(_t20937.env, _t20936, 2));
+    GemVal _t20939 = gem_g___mod_loops_captured_arm_lets_node;
+    GemVal _t20937 = gem_v_v;
+    GemVal _t20938[] = {_t20937, gem_v_scope};
+    gem_check_callable(_t20939, "compiler/loops.gem", 181);
+                (void)(_t20939.fn(_t20939.env, _t20938, 2));
             }
         }
 
 #line 184 "compiler/loops.gem"
         gem_set_line(184);
-    GemVal _t20941 = gem_g___mod_loops_captured_arm_lets_stmts;
-    GemVal _t20938 = gem_v_node;
+    GemVal _t20943 = gem_g___mod_loops_captured_arm_lets_stmts;
+    GemVal _t20940 = gem_v_node;
     static GemICacheSlot _ic_3077 = {0};
-    GemVal _t20939 = gem_table_get_cached(_t20938, "body", &_ic_3077);
-    GemVal _t20940[] = {_t20939, gem_v_body_scope};
-    gem_check_callable(_t20941, "compiler/loops.gem", 184);
-        (void)(_t20941.fn(_t20941.env, _t20940, 2));
+    GemVal _t20941 = gem_table_get_cached(_t20940, "body", &_ic_3077);
+    GemVal _t20942[] = {_t20941, gem_v_body_scope};
+    gem_check_callable(_t20943, "compiler/loops.gem", 184);
+        (void)(_t20943.fn(_t20943.env, _t20942, 2));
 #line 185 "compiler/loops.gem"
         gem_set_line(185);
-        GemVal _t20942 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20942, 1);
+        GemVal _t20944 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20944, 1);
         gem_pop_frame();
-        return _t20942;
+        return _t20944;
     }
 #line 187 "compiler/loops.gem"
     gem_set_line(187);
-    GemVal _t20943 = gem_v_node;
+    GemVal _t20945 = gem_v_node;
     static GemICacheSlot _ic_3078 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20943, "tag", &_ic_3078), GEM_STR_LIT("match", 5)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20945, "tag", &_ic_3078), GEM_STR_LIT("match", 5)))) {
 #line 188 "compiler/loops.gem"
         gem_set_line(188);
-    GemVal _t20947 = gem_g___mod_loops_captured_arm_lets_node;
-    GemVal _t20944 = gem_v_node;
+    GemVal _t20949 = gem_g___mod_loops_captured_arm_lets_node;
+    GemVal _t20946 = gem_v_node;
     static GemICacheSlot _ic_3079 = {0};
-    GemVal _t20945 = gem_table_get_cached(_t20944, "target", &_ic_3079);
-    GemVal _t20946[] = {_t20945, gem_v_scope};
-    gem_check_callable(_t20947, "compiler/loops.gem", 188);
-        (void)(_t20947.fn(_t20947.env, _t20946, 2));
+    GemVal _t20947 = gem_table_get_cached(_t20946, "target", &_ic_3079);
+    GemVal _t20948[] = {_t20947, gem_v_scope};
+    gem_check_callable(_t20949, "compiler/loops.gem", 188);
+        (void)(_t20949.fn(_t20949.env, _t20948, 2));
 #line 189 "compiler/loops.gem"
         gem_set_line(189);
-    GemVal _t20948 = gem_v_node;
+    GemVal _t20950 = gem_v_node;
     static GemICacheSlot _ic_3080 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20948, "whens", &_ic_3080), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20950, "whens", &_ic_3080), GEM_NIL))) {
 #line 190 "compiler/loops.gem"
             gem_set_line(190);
-    GemVal _t20949 = gem_v_node;
+    GemVal _t20951 = gem_v_node;
     static GemICacheSlot _ic_3081 = {0};
-            GemVal gem_v___for_items_257 = gem_for_items_1(gem_table_get_cached(_t20949, "whens", &_ic_3081));
+            GemVal gem_v___for_items_257 = gem_for_items_1(gem_table_get_cached(_t20951, "whens", &_ic_3081));
 #line 190 "compiler/loops.gem"
             gem_set_line(190);
             GemVal gem_v___for_i_257 = gem_int(0);
@@ -91628,33 +91662,33 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_items_257, &gem_v___for_i_257, &gem_v_node, &gem_v_scope};
                     gem_arena_reset_region(&_mk625, _rr, 4, NULL, 0);
                 }
-    GemVal _t20950 = gem_v___for_i_257;
-                if (!gem_truthy(gem_lt(_t20950, gem_for_len_1(gem_v___for_items_257)))) break;
+    GemVal _t20952 = gem_v___for_i_257;
+                if (!gem_truthy(gem_lt(_t20952, gem_for_len_1(gem_v___for_items_257)))) break;
 #line 190 "compiler/loops.gem"
                 gem_set_line(190);
-    GemVal _t20951 = gem_v___for_items_257;
-                GemVal gem_v_w = gem_table_get(_t20951, gem_v___for_i_257);
+    GemVal _t20953 = gem_v___for_items_257;
+                GemVal gem_v_w = gem_table_get(_t20953, gem_v___for_i_257);
 #line 190 "compiler/loops.gem"
                 gem_set_line(190);
                 gem_v___for_i_257 = gem_add(gem_v___for_i_257, gem_int(1));
 #line 191 "compiler/loops.gem"
                 gem_set_line(191);
-    GemVal _t20955 = gem_g___mod_loops_set_union;
-    GemVal _t20953 = gem_v_scope;
-    GemVal _t20952 = gem_table_new_braces();
-    GemVal _t20954[] = {_t20953, _t20952};
-    gem_check_callable(_t20955, "compiler/loops.gem", 191);
-                GemVal gem_v_arm_scope = _t20955.fn(_t20955.env, _t20954, 2);
+    GemVal _t20957 = gem_g___mod_loops_set_union;
+    GemVal _t20955 = gem_v_scope;
+    GemVal _t20954 = gem_table_new_braces();
+    GemVal _t20956[] = {_t20955, _t20954};
+    gem_check_callable(_t20957, "compiler/loops.gem", 191);
+                GemVal gem_v_arm_scope = _t20957.fn(_t20957.env, _t20956, 2);
 #line 192 "compiler/loops.gem"
                 gem_set_line(192);
-    GemVal _t20956 = gem_v_w;
+    GemVal _t20958 = gem_v_w;
     static GemICacheSlot _ic_3082 = {0};
-                if (gem_truthy(gem_neq(gem_table_get_cached(_t20956, "bindings", &_ic_3082), GEM_NIL))) {
+                if (gem_truthy(gem_neq(gem_table_get_cached(_t20958, "bindings", &_ic_3082), GEM_NIL))) {
 #line 193 "compiler/loops.gem"
                     gem_set_line(193);
-    GemVal _t20957 = gem_v_w;
+    GemVal _t20959 = gem_v_w;
     static GemICacheSlot _ic_3083 = {0};
-                    GemVal gem_v___for_items_256 = gem_for_items_1(gem_table_get_cached(_t20957, "bindings", &_ic_3083));
+                    GemVal gem_v___for_items_256 = gem_for_items_1(gem_table_get_cached(_t20959, "bindings", &_ic_3083));
 #line 193 "compiler/loops.gem"
                     gem_set_line(193);
                     GemVal gem_v___for_i_256 = gem_int(0);
@@ -91668,91 +91702,91 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
                             GemVal *_rr[] = {&gem_v___for_items_257, &gem_v___for_i_257, &gem_v_node, &gem_v_scope, &gem_v_w, &gem_v_arm_scope, &gem_v___for_i_256, &gem_v___for_items_256};
                             gem_arena_reset_region(&_mk626, _rr, 8, NULL, 0);
                         }
-    GemVal _t20958 = gem_v___for_i_256;
-                        if (!gem_truthy(gem_lt(_t20958, gem_for_len_1(gem_v___for_items_256)))) break;
+    GemVal _t20960 = gem_v___for_i_256;
+                        if (!gem_truthy(gem_lt(_t20960, gem_for_len_1(gem_v___for_items_256)))) break;
 #line 193 "compiler/loops.gem"
                         gem_set_line(193);
-    GemVal _t20959 = gem_v___for_items_256;
-                        GemVal gem_v_b = gem_table_get(_t20959, gem_v___for_i_256);
+    GemVal _t20961 = gem_v___for_items_256;
+                        GemVal gem_v_b = gem_table_get(_t20961, gem_v___for_i_256);
 #line 193 "compiler/loops.gem"
                         gem_set_line(193);
                         gem_v___for_i_256 = gem_add(gem_v___for_i_256, gem_int(1));
 #line 194 "compiler/loops.gem"
                         gem_set_line(194);
-    GemVal _t20960 = gem_eq(gem_type_1(gem_v_b), GEM_STR_LIT("table", 5));
-    GemVal _t20962;
-    if (!gem_truthy(_t20960)) {
-        _t20962 = _t20960;
-    } else {
-    GemVal _t20961 = gem_v_b;
-    static GemICacheSlot _ic_3084 = {0};
-        _t20962 = gem_eq(gem_table_get_cached(_t20961, "tag", &_ic_3084), GEM_STR_LIT("var", 3));
-    }
+    GemVal _t20962 = gem_eq(gem_type_1(gem_v_b), GEM_STR_LIT("table", 5));
     GemVal _t20964;
     if (!gem_truthy(_t20962)) {
         _t20964 = _t20962;
     } else {
     GemVal _t20963 = gem_v_b;
-    static GemICacheSlot _ic_3085 = {0};
-        _t20964 = gem_neq(gem_table_get_cached(_t20963, "name", &_ic_3085), GEM_NIL);
+    static GemICacheSlot _ic_3084 = {0};
+        _t20964 = gem_eq(gem_table_get_cached(_t20963, "tag", &_ic_3084), GEM_STR_LIT("var", 3));
     }
-                        if (gem_truthy(_t20964)) {
+    GemVal _t20966;
+    if (!gem_truthy(_t20964)) {
+        _t20966 = _t20964;
+    } else {
+    GemVal _t20965 = gem_v_b;
+    static GemICacheSlot _ic_3085 = {0};
+        _t20966 = gem_neq(gem_table_get_cached(_t20965, "name", &_ic_3085), GEM_NIL);
+    }
+                        if (gem_truthy(_t20966)) {
 #line 195 "compiler/loops.gem"
                             gem_set_line(195);
-    GemVal _t20968 = gem_g___mod_loops_set_add;
-    GemVal _t20966 = gem_v_arm_scope;
-    GemVal _t20965 = gem_v_b;
+    GemVal _t20970 = gem_g___mod_loops_set_add;
+    GemVal _t20968 = gem_v_arm_scope;
+    GemVal _t20967 = gem_v_b;
     static GemICacheSlot _ic_3086 = {0};
-    GemVal _t20967[] = {_t20966, gem_table_get_cached(_t20965, "name", &_ic_3086)};
-    gem_check_callable(_t20968, "compiler/loops.gem", 195);
-                            (void)(_t20968.fn(_t20968.env, _t20967, 2));
+    GemVal _t20969[] = {_t20968, gem_table_get_cached(_t20967, "name", &_ic_3086)};
+    gem_check_callable(_t20970, "compiler/loops.gem", 195);
+                            (void)(_t20970.fn(_t20970.env, _t20969, 2));
                         }
                     }
 
                 }
 #line 199 "compiler/loops.gem"
                 gem_set_line(199);
-    GemVal _t20972 = gem_g___mod_loops_captured_arm_lets_stmts;
-    GemVal _t20969 = gem_v_w;
+    GemVal _t20974 = gem_g___mod_loops_captured_arm_lets_stmts;
+    GemVal _t20971 = gem_v_w;
     static GemICacheSlot _ic_3087 = {0};
-    GemVal _t20970 = gem_table_get_cached(_t20969, "body", &_ic_3087);
-    GemVal _t20971[] = {_t20970, gem_v_arm_scope};
-    gem_check_callable(_t20972, "compiler/loops.gem", 199);
-                (void)(_t20972.fn(_t20972.env, _t20971, 2));
+    GemVal _t20972 = gem_table_get_cached(_t20971, "body", &_ic_3087);
+    GemVal _t20973[] = {_t20972, gem_v_arm_scope};
+    gem_check_callable(_t20974, "compiler/loops.gem", 199);
+                (void)(_t20974.fn(_t20974.env, _t20973, 2));
             }
 
         }
 #line 202 "compiler/loops.gem"
         gem_set_line(202);
-    GemVal _t20976 = gem_g___mod_loops_captured_arm_lets_stmts;
-    GemVal _t20973 = gem_v_node;
+    GemVal _t20978 = gem_g___mod_loops_captured_arm_lets_stmts;
+    GemVal _t20975 = gem_v_node;
     static GemICacheSlot _ic_3088 = {0};
-    GemVal _t20974 = gem_table_get_cached(_t20973, "else", &_ic_3088);
-    GemVal _t20975[] = {_t20974, gem_v_scope};
-    gem_check_callable(_t20976, "compiler/loops.gem", 202);
-        (void)(_t20976.fn(_t20976.env, _t20975, 2));
+    GemVal _t20976 = gem_table_get_cached(_t20975, "else", &_ic_3088);
+    GemVal _t20977[] = {_t20976, gem_v_scope};
+    gem_check_callable(_t20978, "compiler/loops.gem", 202);
+        (void)(_t20978.fn(_t20978.env, _t20977, 2));
 #line 203 "compiler/loops.gem"
         gem_set_line(203);
-        GemVal _t20977 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20977, 1);
+        GemVal _t20979 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t20979, 1);
         gem_pop_frame();
-        return _t20977;
+        return _t20979;
     }
 #line 205 "compiler/loops.gem"
     gem_set_line(205);
-    GemVal _t20978 = gem_v_node;
+    GemVal _t20980 = gem_v_node;
     static GemICacheSlot _ic_3089 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t20978, "tag", &_ic_3089), GEM_STR_LIT("receive_match", 13)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t20980, "tag", &_ic_3089), GEM_STR_LIT("receive_match", 13)))) {
 #line 206 "compiler/loops.gem"
         gem_set_line(206);
-    GemVal _t20979 = gem_v_node;
+    GemVal _t20981 = gem_v_node;
     static GemICacheSlot _ic_3090 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t20979, "arms", &_ic_3090), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t20981, "arms", &_ic_3090), GEM_NIL))) {
 #line 207 "compiler/loops.gem"
             gem_set_line(207);
-    GemVal _t20980 = gem_v_node;
+    GemVal _t20982 = gem_v_node;
     static GemICacheSlot _ic_3091 = {0};
-            GemVal gem_v___for_items_259 = gem_for_items_1(gem_table_get_cached(_t20980, "arms", &_ic_3091));
+            GemVal gem_v___for_items_259 = gem_for_items_1(gem_table_get_cached(_t20982, "arms", &_ic_3091));
 #line 207 "compiler/loops.gem"
             gem_set_line(207);
             GemVal gem_v___for_i_259 = gem_int(0);
@@ -91766,46 +91800,46 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_items_259, &gem_v___for_i_259, &gem_v_node, &gem_v_scope};
                     gem_arena_reset_region(&_mk627, _rr, 4, NULL, 0);
                 }
-    GemVal _t20981 = gem_v___for_i_259;
-                if (!gem_truthy(gem_lt(_t20981, gem_for_len_1(gem_v___for_items_259)))) break;
+    GemVal _t20983 = gem_v___for_i_259;
+                if (!gem_truthy(gem_lt(_t20983, gem_for_len_1(gem_v___for_items_259)))) break;
 #line 207 "compiler/loops.gem"
                 gem_set_line(207);
-    GemVal _t20982 = gem_v___for_items_259;
-                GemVal gem_v_a = gem_table_get(_t20982, gem_v___for_i_259);
+    GemVal _t20984 = gem_v___for_items_259;
+                GemVal gem_v_a = gem_table_get(_t20984, gem_v___for_i_259);
 #line 207 "compiler/loops.gem"
                 gem_set_line(207);
                 gem_v___for_i_259 = gem_add(gem_v___for_i_259, gem_int(1));
 #line 208 "compiler/loops.gem"
                 gem_set_line(208);
-    GemVal _t20986 = gem_g___mod_loops_set_union;
-    GemVal _t20984 = gem_v_scope;
-    GemVal _t20983 = gem_table_new_braces();
-    GemVal _t20985[] = {_t20984, _t20983};
-    gem_check_callable(_t20986, "compiler/loops.gem", 208);
-                GemVal gem_v_arm_scope = _t20986.fn(_t20986.env, _t20985, 2);
+    GemVal _t20988 = gem_g___mod_loops_set_union;
+    GemVal _t20986 = gem_v_scope;
+    GemVal _t20985 = gem_table_new_braces();
+    GemVal _t20987[] = {_t20986, _t20985};
+    gem_check_callable(_t20988, "compiler/loops.gem", 208);
+                GemVal gem_v_arm_scope = _t20988.fn(_t20988.env, _t20987, 2);
 #line 209 "compiler/loops.gem"
                 gem_set_line(209);
-    GemVal _t20987 = gem_v_a;
-    static GemICacheSlot _ic_3092 = {0};
-    GemVal _t20988 = gem_neq(gem_table_get_cached(_t20987, "pattern", &_ic_3092), GEM_NIL);
-    GemVal _t20991;
-    if (!gem_truthy(_t20988)) {
-        _t20991 = _t20988;
-    } else {
     GemVal _t20989 = gem_v_a;
+    static GemICacheSlot _ic_3092 = {0};
+    GemVal _t20990 = gem_neq(gem_table_get_cached(_t20989, "pattern", &_ic_3092), GEM_NIL);
+    GemVal _t20993;
+    if (!gem_truthy(_t20990)) {
+        _t20993 = _t20990;
+    } else {
+    GemVal _t20991 = gem_v_a;
     static GemICacheSlot _ic_3093 = {0};
-    GemVal _t20990 = gem_table_get_cached(_t20989, "pattern", &_ic_3093);
+    GemVal _t20992 = gem_table_get_cached(_t20991, "pattern", &_ic_3093);
     static GemICacheSlot _ic_3094 = {0};
-        _t20991 = gem_neq(gem_table_get_cached(_t20990, "bindings", &_ic_3094), GEM_NIL);
+        _t20993 = gem_neq(gem_table_get_cached(_t20992, "bindings", &_ic_3094), GEM_NIL);
     }
-                if (gem_truthy(_t20991)) {
+                if (gem_truthy(_t20993)) {
 #line 210 "compiler/loops.gem"
                     gem_set_line(210);
-    GemVal _t20992 = gem_v_a;
+    GemVal _t20994 = gem_v_a;
     static GemICacheSlot _ic_3095 = {0};
-    GemVal _t20993 = gem_table_get_cached(_t20992, "pattern", &_ic_3095);
+    GemVal _t20995 = gem_table_get_cached(_t20994, "pattern", &_ic_3095);
     static GemICacheSlot _ic_3096 = {0};
-                    GemVal gem_v___for_items_258 = gem_for_items_1(gem_table_get_cached(_t20993, "bindings", &_ic_3096));
+                    GemVal gem_v___for_items_258 = gem_for_items_1(gem_table_get_cached(_t20995, "bindings", &_ic_3096));
 #line 210 "compiler/loops.gem"
                     gem_set_line(210);
                     GemVal gem_v___for_i_258 = gem_int(0);
@@ -91819,102 +91853,102 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
                             GemVal *_rr[] = {&gem_v___for_items_259, &gem_v___for_i_259, &gem_v_node, &gem_v_scope, &gem_v_a, &gem_v_arm_scope, &gem_v___for_i_258, &gem_v___for_items_258};
                             gem_arena_reset_region(&_mk628, _rr, 8, NULL, 0);
                         }
-    GemVal _t20994 = gem_v___for_i_258;
-                        if (!gem_truthy(gem_lt(_t20994, gem_for_len_1(gem_v___for_items_258)))) break;
+    GemVal _t20996 = gem_v___for_i_258;
+                        if (!gem_truthy(gem_lt(_t20996, gem_for_len_1(gem_v___for_items_258)))) break;
 #line 210 "compiler/loops.gem"
                         gem_set_line(210);
-    GemVal _t20995 = gem_v___for_items_258;
-                        GemVal gem_v_b = gem_table_get(_t20995, gem_v___for_i_258);
+    GemVal _t20997 = gem_v___for_items_258;
+                        GemVal gem_v_b = gem_table_get(_t20997, gem_v___for_i_258);
 #line 210 "compiler/loops.gem"
                         gem_set_line(210);
                         gem_v___for_i_258 = gem_add(gem_v___for_i_258, gem_int(1));
 #line 211 "compiler/loops.gem"
                         gem_set_line(211);
-    GemVal _t20996 = gem_eq(gem_type_1(gem_v_b), GEM_STR_LIT("table", 5));
-    GemVal _t20998;
-    if (!gem_truthy(_t20996)) {
-        _t20998 = _t20996;
-    } else {
-    GemVal _t20997 = gem_v_b;
-    static GemICacheSlot _ic_3097 = {0};
-        _t20998 = gem_eq(gem_table_get_cached(_t20997, "tag", &_ic_3097), GEM_STR_LIT("var", 3));
-    }
+    GemVal _t20998 = gem_eq(gem_type_1(gem_v_b), GEM_STR_LIT("table", 5));
     GemVal _t21000;
     if (!gem_truthy(_t20998)) {
         _t21000 = _t20998;
     } else {
     GemVal _t20999 = gem_v_b;
-    static GemICacheSlot _ic_3098 = {0};
-        _t21000 = gem_neq(gem_table_get_cached(_t20999, "name", &_ic_3098), GEM_NIL);
+    static GemICacheSlot _ic_3097 = {0};
+        _t21000 = gem_eq(gem_table_get_cached(_t20999, "tag", &_ic_3097), GEM_STR_LIT("var", 3));
     }
-                        if (gem_truthy(_t21000)) {
+    GemVal _t21002;
+    if (!gem_truthy(_t21000)) {
+        _t21002 = _t21000;
+    } else {
+    GemVal _t21001 = gem_v_b;
+    static GemICacheSlot _ic_3098 = {0};
+        _t21002 = gem_neq(gem_table_get_cached(_t21001, "name", &_ic_3098), GEM_NIL);
+    }
+                        if (gem_truthy(_t21002)) {
 #line 212 "compiler/loops.gem"
                             gem_set_line(212);
-    GemVal _t21004 = gem_g___mod_loops_set_add;
-    GemVal _t21002 = gem_v_arm_scope;
-    GemVal _t21001 = gem_v_b;
+    GemVal _t21006 = gem_g___mod_loops_set_add;
+    GemVal _t21004 = gem_v_arm_scope;
+    GemVal _t21003 = gem_v_b;
     static GemICacheSlot _ic_3099 = {0};
-    GemVal _t21003[] = {_t21002, gem_table_get_cached(_t21001, "name", &_ic_3099)};
-    gem_check_callable(_t21004, "compiler/loops.gem", 212);
-                            (void)(_t21004.fn(_t21004.env, _t21003, 2));
+    GemVal _t21005[] = {_t21004, gem_table_get_cached(_t21003, "name", &_ic_3099)};
+    gem_check_callable(_t21006, "compiler/loops.gem", 212);
+                            (void)(_t21006.fn(_t21006.env, _t21005, 2));
                         }
                     }
 
                 }
 #line 216 "compiler/loops.gem"
                 gem_set_line(216);
-    GemVal _t21008 = gem_g___mod_loops_captured_arm_lets_stmts;
-    GemVal _t21005 = gem_v_a;
+    GemVal _t21010 = gem_g___mod_loops_captured_arm_lets_stmts;
+    GemVal _t21007 = gem_v_a;
     static GemICacheSlot _ic_3100 = {0};
-    GemVal _t21006 = gem_table_get_cached(_t21005, "body", &_ic_3100);
-    GemVal _t21007[] = {_t21006, gem_v_arm_scope};
-    gem_check_callable(_t21008, "compiler/loops.gem", 216);
-                (void)(_t21008.fn(_t21008.env, _t21007, 2));
+    GemVal _t21008 = gem_table_get_cached(_t21007, "body", &_ic_3100);
+    GemVal _t21009[] = {_t21008, gem_v_arm_scope};
+    gem_check_callable(_t21010, "compiler/loops.gem", 216);
+                (void)(_t21010.fn(_t21010.env, _t21009, 2));
             }
 
         }
 #line 219 "compiler/loops.gem"
         gem_set_line(219);
-    GemVal _t21009 = gem_v_node;
+    GemVal _t21011 = gem_v_node;
     static GemICacheSlot _ic_3101 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t21009, "after_body", &_ic_3101), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t21011, "after_body", &_ic_3101), GEM_NIL))) {
 #line 220 "compiler/loops.gem"
             gem_set_line(220);
-    GemVal _t21013 = gem_g___mod_loops_captured_arm_lets_stmts;
-    GemVal _t21010 = gem_v_node;
+    GemVal _t21015 = gem_g___mod_loops_captured_arm_lets_stmts;
+    GemVal _t21012 = gem_v_node;
     static GemICacheSlot _ic_3102 = {0};
-    GemVal _t21011 = gem_table_get_cached(_t21010, "after_body", &_ic_3102);
-    GemVal _t21012[] = {_t21011, gem_v_scope};
-    gem_check_callable(_t21013, "compiler/loops.gem", 220);
-            (void)(_t21013.fn(_t21013.env, _t21012, 2));
+    GemVal _t21013 = gem_table_get_cached(_t21012, "after_body", &_ic_3102);
+    GemVal _t21014[] = {_t21013, gem_v_scope};
+    gem_check_callable(_t21015, "compiler/loops.gem", 220);
+            (void)(_t21015.fn(_t21015.env, _t21014, 2));
         }
 #line 222 "compiler/loops.gem"
         gem_set_line(222);
-        GemVal _t21014 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21014, 1);
+        GemVal _t21016 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21016, 1);
         gem_pop_frame();
-        return _t21014;
+        return _t21016;
     }
 #line 224 "compiler/loops.gem"
     gem_set_line(224);
-    GemVal _t21015 = gem_v_node;
+    GemVal _t21017 = gem_v_node;
     static GemICacheSlot _ic_3103 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t21015, "tag", &_ic_3103), GEM_STR_LIT("block", 5)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t21017, "tag", &_ic_3103), GEM_STR_LIT("block", 5)))) {
 #line 225 "compiler/loops.gem"
         gem_set_line(225);
-    GemVal _t21019 = gem_g___mod_loops_captured_arm_lets_stmts;
-    GemVal _t21016 = gem_v_node;
+    GemVal _t21021 = gem_g___mod_loops_captured_arm_lets_stmts;
+    GemVal _t21018 = gem_v_node;
     static GemICacheSlot _ic_3104 = {0};
-    GemVal _t21017 = gem_table_get_cached(_t21016, "stmts", &_ic_3104);
-    GemVal _t21018[] = {_t21017, gem_v_scope};
-    gem_check_callable(_t21019, "compiler/loops.gem", 225);
-        (void)(_t21019.fn(_t21019.env, _t21018, 2));
+    GemVal _t21019 = gem_table_get_cached(_t21018, "stmts", &_ic_3104);
+    GemVal _t21020[] = {_t21019, gem_v_scope};
+    gem_check_callable(_t21021, "compiler/loops.gem", 225);
+        (void)(_t21021.fn(_t21021.env, _t21020, 2));
 #line 226 "compiler/loops.gem"
         gem_set_line(226);
-        GemVal _t21020 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21020, 1);
+        GemVal _t21022 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21022, 1);
         gem_pop_frame();
-        return _t21020;
+        return _t21022;
     }
 #line 228 "compiler/loops.gem"
     gem_set_line(228);
@@ -91935,43 +91969,43 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
             GemVal *_rr[] = {&gem_v___for_len_261, &gem_v_scope, &gem_v___for_i_261, &gem_v___for_tbl_261};
             gem_arena_reset_region(&_mk629, _rr, 4, NULL, 0);
         }
-    GemVal _t21021 = gem_v___for_i_261;
-        if (!gem_truthy(gem_lt(_t21021, gem_v___for_len_261))) break;
+    GemVal _t21023 = gem_v___for_i_261;
+        if (!gem_truthy(gem_lt(_t21023, gem_v___for_len_261))) break;
 #line 228 "compiler/loops.gem"
         gem_set_line(228);
-    GemVal _t21022 = gem_v___for_tbl_261;
-        GemVal gem_v_k = gem_table_key_at_2(_t21022, gem_v___for_i_261);
+    GemVal _t21024 = gem_v___for_tbl_261;
+        GemVal gem_v_k = gem_table_key_at_2(_t21024, gem_v___for_i_261);
 #line 228 "compiler/loops.gem"
         gem_set_line(228);
-    GemVal _t21023 = gem_v___for_tbl_261;
-        GemVal gem_v_v = gem_table_val_at_2(_t21023, gem_v___for_i_261);
+    GemVal _t21025 = gem_v___for_tbl_261;
+        GemVal gem_v_v = gem_table_val_at_2(_t21025, gem_v___for_i_261);
 #line 228 "compiler/loops.gem"
         gem_set_line(228);
         gem_v___for_i_261 = gem_add(gem_v___for_i_261, gem_int(1));
 #line 229 "compiler/loops.gem"
         gem_set_line(229);
-    GemVal _t21024 = gem_neq(gem_v_k, GEM_STR_LIT("tag", 3));
-    GemVal _t21025;
-    if (!gem_truthy(_t21024)) {
-        _t21025 = _t21024;
+    GemVal _t21026 = gem_neq(gem_v_k, GEM_STR_LIT("tag", 3));
+    GemVal _t21027;
+    if (!gem_truthy(_t21026)) {
+        _t21027 = _t21026;
     } else {
-        _t21025 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
+        _t21027 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
     }
-        if (gem_truthy(_t21025)) {
+        if (gem_truthy(_t21027)) {
 #line 230 "compiler/loops.gem"
             gem_set_line(230);
-    GemVal _t21026[] = {gem_v_v};
-            GemVal gem_v_vks = gem_keys_fn(NULL, _t21026, 1);
+    GemVal _t21028[] = {gem_v_v};
+            GemVal gem_v_vks = gem_keys_fn(NULL, _t21028, 1);
 #line 231 "compiler/loops.gem"
             gem_set_line(231);
-    GemVal _t21027 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
-    GemVal _t21028;
-    if (!gem_truthy(_t21027)) {
-        _t21028 = _t21027;
+    GemVal _t21029 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
+    GemVal _t21030;
+    if (!gem_truthy(_t21029)) {
+        _t21030 = _t21029;
     } else {
-        _t21028 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
+        _t21030 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
     }
-            if (gem_truthy(_t21028)) {
+            if (gem_truthy(_t21030)) {
 #line 232 "compiler/loops.gem"
                 gem_set_line(232);
                 GemVal gem_v___for_items_260 = gem_for_items_1(gem_v_v);
@@ -91988,12 +92022,12 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
                         GemVal *_rr[] = {&gem_v___for_len_261, &gem_v_scope, &gem_v___for_i_261, &gem_v___for_tbl_261, &gem_v___for_i_260, &gem_v___for_items_260};
                         gem_arena_reset_region(&_mk630, _rr, 6, NULL, 0);
                     }
-    GemVal _t21029 = gem_v___for_i_260;
-                    if (!gem_truthy(gem_lt(_t21029, gem_for_len_1(gem_v___for_items_260)))) break;
+    GemVal _t21031 = gem_v___for_i_260;
+                    if (!gem_truthy(gem_lt(_t21031, gem_for_len_1(gem_v___for_items_260)))) break;
 #line 232 "compiler/loops.gem"
                     gem_set_line(232);
-    GemVal _t21030 = gem_v___for_items_260;
-                    GemVal gem_v_child = gem_table_get(_t21030, gem_v___for_i_260);
+    GemVal _t21032 = gem_v___for_items_260;
+                    GemVal gem_v_child = gem_table_get(_t21032, gem_v___for_i_260);
 #line 232 "compiler/loops.gem"
                     gem_set_line(232);
                     gem_v___for_i_260 = gem_add(gem_v___for_i_260, gem_int(1));
@@ -92002,32 +92036,32 @@ static GemVal __anon_214(void *_env, GemVal *args, int argc) {
                     if (gem_truthy(gem_eq(gem_type_1(gem_v_child), GEM_STR_LIT("table", 5)))) {
 #line 234 "compiler/loops.gem"
                         gem_set_line(234);
-    GemVal _t21033 = gem_g___mod_loops_captured_arm_lets_node;
-    GemVal _t21031 = gem_v_child;
-    GemVal _t21032[] = {_t21031, gem_v_scope};
-    gem_check_callable(_t21033, "compiler/loops.gem", 234);
-                        (void)(_t21033.fn(_t21033.env, _t21032, 2));
+    GemVal _t21035 = gem_g___mod_loops_captured_arm_lets_node;
+    GemVal _t21033 = gem_v_child;
+    GemVal _t21034[] = {_t21033, gem_v_scope};
+    gem_check_callable(_t21035, "compiler/loops.gem", 234);
+                        (void)(_t21035.fn(_t21035.env, _t21034, 2));
                     }
                 }
 
             } else {
 #line 238 "compiler/loops.gem"
                 gem_set_line(238);
-    GemVal _t21036 = gem_g___mod_loops_captured_arm_lets_node;
-    GemVal _t21034 = gem_v_v;
-    GemVal _t21035[] = {_t21034, gem_v_scope};
-    gem_check_callable(_t21036, "compiler/loops.gem", 238);
-                (void)(_t21036.fn(_t21036.env, _t21035, 2));
+    GemVal _t21038 = gem_g___mod_loops_captured_arm_lets_node;
+    GemVal _t21036 = gem_v_v;
+    GemVal _t21037[] = {_t21036, gem_v_scope};
+    gem_check_callable(_t21038, "compiler/loops.gem", 238);
+                (void)(_t21038.fn(_t21038.env, _t21037, 2));
             }
         }
     }
 
 #line 242 "compiler/loops.gem"
     gem_set_line(242);
-    GemVal _t21037 = GEM_NIL;
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21037, 1);
+    GemVal _t21039 = GEM_NIL;
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21039, 1);
     gem_pop_frame();
-    return _t21037;
+    return _t21039;
 }
 
 struct _closure___anon_215 {
@@ -92045,10 +92079,10 @@ static GemVal __anon_215(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_stmts, GEM_NIL))) {
 #line 304 "compiler/loops.gem"
         gem_set_line(304);
-        GemVal _t21038 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21038, 1);
+        GemVal _t21040 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21040, 1);
         gem_pop_frame();
-        return _t21038;
+        return _t21040;
     }
     {
 #line 306 "compiler/loops.gem"
@@ -92067,23 +92101,23 @@ static GemVal __anon_215(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v___for_i_266, &gem_v_is_pt, &gem_v_source_name, &gem_v___for_items_266};
                 gem_arena_reset_region(&_mk631, _rr, 4, NULL, 0);
             }
-    GemVal _t21039 = gem_v___for_i_266;
-            if (!gem_truthy(gem_lt(_t21039, gem_for_len_1(gem_v___for_items_266)))) break;
+    GemVal _t21041 = gem_v___for_i_266;
+            if (!gem_truthy(gem_lt(_t21041, gem_for_len_1(gem_v___for_items_266)))) break;
 #line 306 "compiler/loops.gem"
             gem_set_line(306);
-    GemVal _t21040 = gem_v___for_items_266;
-            GemVal gem_v_s = gem_table_get(_t21040, gem_v___for_i_266);
+    GemVal _t21042 = gem_v___for_items_266;
+            GemVal gem_v_s = gem_table_get(_t21042, gem_v___for_i_266);
 #line 306 "compiler/loops.gem"
             gem_set_line(306);
             gem_v___for_i_266 = gem_add(gem_v___for_i_266, gem_int(1));
 #line 307 "compiler/loops.gem"
             gem_set_line(307);
-    GemVal _t21044 = gem_g___mod_loops_walk_for_tagging_node;
-    GemVal _t21042 = gem_v_s;
-    GemVal _t21041 = gem_v_is_pt;
-    GemVal _t21043[] = {_t21042, _t21041, gem_v_source_name};
-    gem_check_callable(_t21044, "compiler/loops.gem", 307);
-            (void)(_t21044.fn(_t21044.env, _t21043, 3));
+    GemVal _t21046 = gem_g___mod_loops_walk_for_tagging_node;
+    GemVal _t21044 = gem_v_s;
+    GemVal _t21043 = gem_v_is_pt;
+    GemVal _t21045[] = {_t21044, _t21043, gem_v_source_name};
+    gem_check_callable(_t21046, "compiler/loops.gem", 307);
+            (void)(_t21046.fn(_t21046.env, _t21045, 3));
         }
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
         gem_pop_frame();
@@ -92106,70 +92140,70 @@ static GemVal __anon_216(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
 #line 313 "compiler/loops.gem"
         gem_set_line(313);
-        GemVal _t21045 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21045, 1);
+        GemVal _t21047 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21047, 1);
         gem_pop_frame();
-        return _t21045;
+        return _t21047;
     }
 #line 315 "compiler/loops.gem"
     gem_set_line(315);
     if (gem_truthy(gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5)))) {
 #line 316 "compiler/loops.gem"
         gem_set_line(316);
-        GemVal _t21046 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21046, 1);
-        gem_pop_frame();
-        return _t21046;
-    }
-#line 318 "compiler/loops.gem"
-    gem_set_line(318);
-    GemVal _t21047 = gem_v_node;
-    static GemICacheSlot _ic_3105 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t21047, "tag", &_ic_3105), GEM_NIL))) {
-#line 319 "compiler/loops.gem"
-        gem_set_line(319);
         GemVal _t21048 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21048, 1);
         gem_pop_frame();
         return _t21048;
     }
-#line 321 "compiler/loops.gem"
-    gem_set_line(321);
+#line 318 "compiler/loops.gem"
+    gem_set_line(318);
     GemVal _t21049 = gem_v_node;
-    static GemICacheSlot _ic_3106 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t21049, "tag", &_ic_3106), GEM_STR_LIT("fn_def", 6)))) {
-#line 324 "compiler/loops.gem"
-        gem_set_line(324);
+    static GemICacheSlot _ic_3105 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t21049, "tag", &_ic_3105), GEM_NIL))) {
+#line 319 "compiler/loops.gem"
+        gem_set_line(319);
         GemVal _t21050 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21050, 1);
         gem_pop_frame();
         return _t21050;
     }
+#line 321 "compiler/loops.gem"
+    gem_set_line(321);
+    GemVal _t21051 = gem_v_node;
+    static GemICacheSlot _ic_3106 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t21051, "tag", &_ic_3106), GEM_STR_LIT("fn_def", 6)))) {
+#line 324 "compiler/loops.gem"
+        gem_set_line(324);
+        GemVal _t21052 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21052, 1);
+        gem_pop_frame();
+        return _t21052;
+    }
 #line 326 "compiler/loops.gem"
     gem_set_line(326);
-    GemVal _t21051 = gem_v_node;
+    GemVal _t21053 = gem_v_node;
     static GemICacheSlot _ic_3107 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t21051, "tag", &_ic_3107), GEM_STR_LIT("anon_fn", 7)))) {
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t21053, "tag", &_ic_3107), GEM_STR_LIT("anon_fn", 7)))) {
 #line 329 "compiler/loops.gem"
         gem_set_line(329);
-    GemVal _t21056 = gem_g___mod_loops_walk_for_tagging_stmts;
-    GemVal _t21052 = gem_v_node;
+    GemVal _t21058 = gem_g___mod_loops_walk_for_tagging_stmts;
+    GemVal _t21054 = gem_v_node;
     static GemICacheSlot _ic_3108 = {0};
-    GemVal _t21054 = gem_table_get_cached(_t21052, "body", &_ic_3108);
-    GemVal _t21053 = gem_v_is_pt;
-    GemVal _t21055[] = {_t21054, _t21053, gem_v_source_name};
-    gem_check_callable(_t21056, "compiler/loops.gem", 329);
-        (void)(_t21056.fn(_t21056.env, _t21055, 3));
+    GemVal _t21056 = gem_table_get_cached(_t21054, "body", &_ic_3108);
+    GemVal _t21055 = gem_v_is_pt;
+    GemVal _t21057[] = {_t21056, _t21055, gem_v_source_name};
+    gem_check_callable(_t21058, "compiler/loops.gem", 329);
+        (void)(_t21058.fn(_t21058.env, _t21057, 3));
 #line 330 "compiler/loops.gem"
         gem_set_line(330);
-    GemVal _t21057 = gem_v_node;
+    GemVal _t21059 = gem_v_node;
     static GemICacheSlot _ic_3109 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t21057, "defaults", &_ic_3109), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t21059, "defaults", &_ic_3109), GEM_NIL))) {
 #line 331 "compiler/loops.gem"
             gem_set_line(331);
-    GemVal _t21058 = gem_v_node;
+    GemVal _t21060 = gem_v_node;
     static GemICacheSlot _ic_3110 = {0};
-            GemVal gem_v___for_items_267 = gem_for_items_1(gem_table_get_cached(_t21058, "defaults", &_ic_3110));
+            GemVal gem_v___for_items_267 = gem_for_items_1(gem_table_get_cached(_t21060, "defaults", &_ic_3110));
 #line 331 "compiler/loops.gem"
             gem_set_line(331);
             GemVal gem_v___for_i_267 = gem_int(0);
@@ -92183,12 +92217,12 @@ static GemVal __anon_216(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v___for_i_267, &gem_v_is_pt, &gem_v_source_name, &gem_v___for_items_267};
                     gem_arena_reset_region(&_mk632, _rr, 4, NULL, 0);
                 }
-    GemVal _t21059 = gem_v___for_i_267;
-                if (!gem_truthy(gem_lt(_t21059, gem_for_len_1(gem_v___for_items_267)))) break;
+    GemVal _t21061 = gem_v___for_i_267;
+                if (!gem_truthy(gem_lt(_t21061, gem_for_len_1(gem_v___for_items_267)))) break;
 #line 331 "compiler/loops.gem"
                 gem_set_line(331);
-    GemVal _t21060 = gem_v___for_items_267;
-                GemVal gem_v_d = gem_table_get(_t21060, gem_v___for_i_267);
+    GemVal _t21062 = gem_v___for_items_267;
+                GemVal gem_v_d = gem_table_get(_t21062, gem_v___for_i_267);
 #line 331 "compiler/loops.gem"
                 gem_set_line(331);
                 gem_v___for_i_267 = gem_add(gem_v___for_i_267, gem_int(1));
@@ -92197,134 +92231,134 @@ static GemVal __anon_216(void *_env, GemVal *args, int argc) {
                 if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
 #line 333 "compiler/loops.gem"
                     gem_set_line(333);
-    GemVal _t21064 = gem_g___mod_loops_walk_for_tagging_node;
-    GemVal _t21062 = gem_v_d;
-    GemVal _t21061 = gem_v_is_pt;
-    GemVal _t21063[] = {_t21062, _t21061, gem_v_source_name};
-    gem_check_callable(_t21064, "compiler/loops.gem", 333);
-                    (void)(_t21064.fn(_t21064.env, _t21063, 3));
+    GemVal _t21066 = gem_g___mod_loops_walk_for_tagging_node;
+    GemVal _t21064 = gem_v_d;
+    GemVal _t21063 = gem_v_is_pt;
+    GemVal _t21065[] = {_t21064, _t21063, gem_v_source_name};
+    gem_check_callable(_t21066, "compiler/loops.gem", 333);
+                    (void)(_t21066.fn(_t21066.env, _t21065, 3));
                 }
             }
 
         }
 #line 337 "compiler/loops.gem"
         gem_set_line(337);
-        GemVal _t21065 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21065, 1);
+        GemVal _t21067 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21067, 1);
         gem_pop_frame();
-        return _t21065;
+        return _t21067;
     }
 #line 339 "compiler/loops.gem"
     gem_set_line(339);
-    GemVal _t21066 = gem_v_node;
+    GemVal _t21068 = gem_v_node;
     static GemICacheSlot _ic_3111 = {0};
-    GemVal _t21067 = gem_eq(gem_table_get_cached(_t21066, "tag", &_ic_3111), GEM_STR_LIT("while", 5));
-    GemVal _t21068;
-    if (!gem_truthy(_t21067)) {
-        _t21068 = _t21067;
+    GemVal _t21069 = gem_eq(gem_table_get_cached(_t21068, "tag", &_ic_3111), GEM_STR_LIT("while", 5));
+    GemVal _t21070;
+    if (!gem_truthy(_t21069)) {
+        _t21070 = _t21069;
     } else {
-        _t21068 = gem_v_is_pt;
+        _t21070 = gem_v_is_pt;
     }
-    if (gem_truthy(_t21068)) {
+    if (gem_truthy(_t21070)) {
 #line 340 "compiler/loops.gem"
         gem_set_line(340);
         gem_table_set(gem_v_node, GEM_STR_LIT("process_tail", 12), gem_bool(1));
 #line 341 "compiler/loops.gem"
         gem_set_line(341);
-    GemVal _t21073 = gem_g___mod_loops_walk_for_tagging_stmts;
-    GemVal _t21069 = gem_v_node;
+    GemVal _t21075 = gem_g___mod_loops_walk_for_tagging_stmts;
+    GemVal _t21071 = gem_v_node;
     static GemICacheSlot _ic_3112 = {0};
-    GemVal _t21071 = gem_table_get_cached(_t21069, "body", &_ic_3112);
-    GemVal _t21070 = gem_v_is_pt;
-    GemVal _t21072[] = {_t21071, _t21070, gem_v_source_name};
-    gem_check_callable(_t21073, "compiler/loops.gem", 341);
-        (void)(_t21073.fn(_t21073.env, _t21072, 3));
+    GemVal _t21073 = gem_table_get_cached(_t21071, "body", &_ic_3112);
+    GemVal _t21072 = gem_v_is_pt;
+    GemVal _t21074[] = {_t21073, _t21072, gem_v_source_name};
+    gem_check_callable(_t21075, "compiler/loops.gem", 341);
+        (void)(_t21075.fn(_t21075.env, _t21074, 3));
 #line 342 "compiler/loops.gem"
         gem_set_line(342);
-        GemVal _t21074 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21074, 1);
+        GemVal _t21076 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21076, 1);
         gem_pop_frame();
-        return _t21074;
+        return _t21076;
     }
 #line 344 "compiler/loops.gem"
     gem_set_line(344);
-    GemVal _t21075 = gem_v_node;
-    static GemICacheSlot _ic_3113 = {0};
-    GemVal _t21076 = gem_eq(gem_table_get_cached(_t21075, "tag", &_ic_3113), GEM_STR_LIT("call", 4));
-    GemVal _t21080;
-    if (!gem_truthy(_t21076)) {
-        _t21080 = _t21076;
-    } else {
-    GemVal _t21079 = gem_g___mod_loops_is_node;
     GemVal _t21077 = gem_v_node;
-    static GemICacheSlot _ic_3114 = {0};
-    GemVal _t21078[] = {gem_table_get_cached(_t21077, "func", &_ic_3114), GEM_STR_LIT("var", 3)};
-    gem_check_callable(_t21079, "compiler/loops.gem", 344);
-        _t21080 = _t21079.fn(_t21079.env, _t21078, 2);
-    }
-    GemVal _t21085;
-    if (!gem_truthy(_t21080)) {
-        _t21085 = _t21080;
+    static GemICacheSlot _ic_3113 = {0};
+    GemVal _t21078 = gem_eq(gem_table_get_cached(_t21077, "tag", &_ic_3113), GEM_STR_LIT("call", 4));
+    GemVal _t21082;
+    if (!gem_truthy(_t21078)) {
+        _t21082 = _t21078;
     } else {
-    GemVal _t21084 = gem_g___mod_loops_is_spawn_callee_name;
-    GemVal _t21081 = gem_v_node;
-    static GemICacheSlot _ic_3115 = {0};
-    GemVal _t21082 = gem_table_get_cached(_t21081, "func", &_ic_3115);
-    static GemICacheSlot _ic_3116 = {0};
-    GemVal _t21083[] = {gem_table_get_cached(_t21082, "name", &_ic_3116)};
-    gem_check_callable(_t21084, "compiler/loops.gem", 344);
-        _t21085 = _t21084.fn(_t21084.env, _t21083, 1);
+    GemVal _t21081 = gem_g___mod_loops_is_node;
+    GemVal _t21079 = gem_v_node;
+    static GemICacheSlot _ic_3114 = {0};
+    GemVal _t21080[] = {gem_table_get_cached(_t21079, "func", &_ic_3114), GEM_STR_LIT("var", 3)};
+    gem_check_callable(_t21081, "compiler/loops.gem", 344);
+        _t21082 = _t21081.fn(_t21081.env, _t21080, 2);
     }
-    if (gem_truthy(_t21085)) {
+    GemVal _t21087;
+    if (!gem_truthy(_t21082)) {
+        _t21087 = _t21082;
+    } else {
+    GemVal _t21086 = gem_g___mod_loops_is_spawn_callee_name;
+    GemVal _t21083 = gem_v_node;
+    static GemICacheSlot _ic_3115 = {0};
+    GemVal _t21084 = gem_table_get_cached(_t21083, "func", &_ic_3115);
+    static GemICacheSlot _ic_3116 = {0};
+    GemVal _t21085[] = {gem_table_get_cached(_t21084, "name", &_ic_3116)};
+    gem_check_callable(_t21086, "compiler/loops.gem", 344);
+        _t21087 = _t21086.fn(_t21086.env, _t21085, 1);
+    }
+    if (gem_truthy(_t21087)) {
 #line 345 "compiler/loops.gem"
         gem_set_line(345);
-    GemVal _t21086 = gem_v_node;
-    static GemICacheSlot _ic_3117 = {0};
-    GemVal _t21087 = gem_neq(gem_table_get_cached(_t21086, "args", &_ic_3117), GEM_NIL);
-    GemVal _t21089;
-    if (!gem_truthy(_t21087)) {
-        _t21089 = _t21087;
-    } else {
     GemVal _t21088 = gem_v_node;
-    static GemICacheSlot _ic_3118 = {0};
-        _t21089 = gem_gt(gem_len_1(gem_table_get_cached(_t21088, "args", &_ic_3118)), gem_int(0));
-    }
-    GemVal _t21093;
+    static GemICacheSlot _ic_3117 = {0};
+    GemVal _t21089 = gem_neq(gem_table_get_cached(_t21088, "args", &_ic_3117), GEM_NIL);
+    GemVal _t21091;
     if (!gem_truthy(_t21089)) {
-        _t21093 = _t21089;
+        _t21091 = _t21089;
     } else {
-    GemVal _t21092 = gem_g___mod_loops_is_node;
     GemVal _t21090 = gem_v_node;
-    static GemICacheSlot _ic_3119 = {0};
-    GemVal _t21091[] = {gem_table_get(gem_table_get_cached(_t21090, "args", &_ic_3119), gem_int(0)), GEM_STR_LIT("anon_fn", 7)};
-    gem_check_callable(_t21092, "compiler/loops.gem", 345);
-        _t21093 = _t21092.fn(_t21092.env, _t21091, 2);
+    static GemICacheSlot _ic_3118 = {0};
+        _t21091 = gem_gt(gem_len_1(gem_table_get_cached(_t21090, "args", &_ic_3118)), gem_int(0));
     }
-        if (gem_truthy(_t21093)) {
+    GemVal _t21095;
+    if (!gem_truthy(_t21091)) {
+        _t21095 = _t21091;
+    } else {
+    GemVal _t21094 = gem_g___mod_loops_is_node;
+    GemVal _t21092 = gem_v_node;
+    static GemICacheSlot _ic_3119 = {0};
+    GemVal _t21093[] = {gem_table_get(gem_table_get_cached(_t21092, "args", &_ic_3119), gem_int(0)), GEM_STR_LIT("anon_fn", 7)};
+    gem_check_callable(_t21094, "compiler/loops.gem", 345);
+        _t21095 = _t21094.fn(_t21094.env, _t21093, 2);
+    }
+        if (gem_truthy(_t21095)) {
 #line 346 "compiler/loops.gem"
             gem_set_line(346);
-    GemVal _t21094 = gem_v_node;
+    GemVal _t21096 = gem_v_node;
     static GemICacheSlot _ic_3120 = {0};
-            GemVal gem_v_anon = gem_table_get(gem_table_get_cached(_t21094, "args", &_ic_3120), gem_int(0));
+            GemVal gem_v_anon = gem_table_get(gem_table_get_cached(_t21096, "args", &_ic_3120), gem_int(0));
 #line 347 "compiler/loops.gem"
             gem_set_line(347);
-    GemVal _t21098 = gem_g___mod_loops_walk_for_tagging_stmts;
-    GemVal _t21095 = gem_v_anon;
+    GemVal _t21100 = gem_g___mod_loops_walk_for_tagging_stmts;
+    GemVal _t21097 = gem_v_anon;
     static GemICacheSlot _ic_3121 = {0};
-    GemVal _t21096 = gem_table_get_cached(_t21095, "body", &_ic_3121);
-    GemVal _t21097[] = {_t21096, gem_bool(1), gem_v_source_name};
-    gem_check_callable(_t21098, "compiler/loops.gem", 347);
-            (void)(_t21098.fn(_t21098.env, _t21097, 3));
+    GemVal _t21098 = gem_table_get_cached(_t21097, "body", &_ic_3121);
+    GemVal _t21099[] = {_t21098, gem_bool(1), gem_v_source_name};
+    gem_check_callable(_t21100, "compiler/loops.gem", 347);
+            (void)(_t21100.fn(_t21100.env, _t21099, 3));
 #line 348 "compiler/loops.gem"
             gem_set_line(348);
-    GemVal _t21099 = gem_v_anon;
+    GemVal _t21101 = gem_v_anon;
     static GemICacheSlot _ic_3122 = {0};
-            if (gem_truthy(gem_neq(gem_table_get_cached(_t21099, "defaults", &_ic_3122), GEM_NIL))) {
+            if (gem_truthy(gem_neq(gem_table_get_cached(_t21101, "defaults", &_ic_3122), GEM_NIL))) {
 #line 349 "compiler/loops.gem"
                 gem_set_line(349);
-    GemVal _t21100 = gem_v_anon;
+    GemVal _t21102 = gem_v_anon;
     static GemICacheSlot _ic_3123 = {0};
-                GemVal gem_v___for_items_268 = gem_for_items_1(gem_table_get_cached(_t21100, "defaults", &_ic_3123));
+                GemVal gem_v___for_items_268 = gem_for_items_1(gem_table_get_cached(_t21102, "defaults", &_ic_3123));
 #line 349 "compiler/loops.gem"
                 gem_set_line(349);
                 GemVal gem_v___for_i_268 = gem_int(0);
@@ -92338,12 +92372,12 @@ static GemVal __anon_216(void *_env, GemVal *args, int argc) {
                         GemVal *_rr[] = {&gem_v_node, &gem_v_is_pt, &gem_v_source_name, &gem_v___for_i_268, &gem_v___for_items_268};
                         gem_arena_reset_region(&_mk633, _rr, 5, NULL, 0);
                     }
-    GemVal _t21101 = gem_v___for_i_268;
-                    if (!gem_truthy(gem_lt(_t21101, gem_for_len_1(gem_v___for_items_268)))) break;
+    GemVal _t21103 = gem_v___for_i_268;
+                    if (!gem_truthy(gem_lt(_t21103, gem_for_len_1(gem_v___for_items_268)))) break;
 #line 349 "compiler/loops.gem"
                     gem_set_line(349);
-    GemVal _t21102 = gem_v___for_items_268;
-                    GemVal gem_v_d = gem_table_get(_t21102, gem_v___for_i_268);
+    GemVal _t21104 = gem_v___for_items_268;
+                    GemVal gem_v_d = gem_table_get(_t21104, gem_v___for_i_268);
 #line 349 "compiler/loops.gem"
                     gem_set_line(349);
                     gem_v___for_i_268 = gem_add(gem_v___for_i_268, gem_int(1));
@@ -92352,12 +92386,12 @@ static GemVal __anon_216(void *_env, GemVal *args, int argc) {
                     if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
 #line 351 "compiler/loops.gem"
                         gem_set_line(351);
-    GemVal _t21106 = gem_g___mod_loops_walk_for_tagging_node;
-    GemVal _t21104 = gem_v_d;
-    GemVal _t21103 = gem_v_is_pt;
-    GemVal _t21105[] = {_t21104, _t21103, gem_v_source_name};
-    gem_check_callable(_t21106, "compiler/loops.gem", 351);
-                        (void)(_t21106.fn(_t21106.env, _t21105, 3));
+    GemVal _t21108 = gem_g___mod_loops_walk_for_tagging_node;
+    GemVal _t21106 = gem_v_d;
+    GemVal _t21105 = gem_v_is_pt;
+    GemVal _t21107[] = {_t21106, _t21105, gem_v_source_name};
+    gem_check_callable(_t21108, "compiler/loops.gem", 351);
+                        (void)(_t21108.fn(_t21108.env, _t21107, 3));
                     }
                 }
 
@@ -92375,31 +92409,31 @@ static GemVal __anon_216(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v_node, &gem_v_is_pt, &gem_v_source_name, &gem_v_i};
                     gem_arena_reset_region(&_mk634, _rr, 4, NULL, 0);
                 }
-    GemVal _t21108 = gem_v_i;
-    GemVal _t21107 = gem_v_node;
+    GemVal _t21110 = gem_v_i;
+    GemVal _t21109 = gem_v_node;
     static GemICacheSlot _ic_3124 = {0};
-                if (!gem_truthy(gem_lt(_t21108, gem_len_1(gem_table_get_cached(_t21107, "args", &_ic_3124))))) break;
+                if (!gem_truthy(gem_lt(_t21110, gem_len_1(gem_table_get_cached(_t21109, "args", &_ic_3124))))) break;
 #line 357 "compiler/loops.gem"
                 gem_set_line(357);
-    GemVal _t21114 = gem_g___mod_loops_walk_for_tagging_node;
-    GemVal _t21109 = gem_v_node;
+    GemVal _t21116 = gem_g___mod_loops_walk_for_tagging_node;
+    GemVal _t21111 = gem_v_node;
     static GemICacheSlot _ic_3125 = {0};
-    GemVal _t21110 = gem_table_get_cached(_t21109, "args", &_ic_3125);
-    GemVal _t21112 = gem_table_get(_t21110, gem_v_i);
-    GemVal _t21111 = gem_v_is_pt;
-    GemVal _t21113[] = {_t21112, _t21111, gem_v_source_name};
-    gem_check_callable(_t21114, "compiler/loops.gem", 357);
-                (void)(_t21114.fn(_t21114.env, _t21113, 3));
+    GemVal _t21112 = gem_table_get_cached(_t21111, "args", &_ic_3125);
+    GemVal _t21114 = gem_table_get(_t21112, gem_v_i);
+    GemVal _t21113 = gem_v_is_pt;
+    GemVal _t21115[] = {_t21114, _t21113, gem_v_source_name};
+    gem_check_callable(_t21116, "compiler/loops.gem", 357);
+                (void)(_t21116.fn(_t21116.env, _t21115, 3));
 #line 358 "compiler/loops.gem"
                 gem_set_line(358);
                 gem_v_i = gem_add(gem_v_i, gem_int(1));
             }
 #line 360 "compiler/loops.gem"
             gem_set_line(360);
-            GemVal _t21115 = GEM_NIL;
-            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21115, 1);
+            GemVal _t21117 = GEM_NIL;
+            if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21117, 1);
             gem_pop_frame();
-            return _t21115;
+            return _t21117;
         }
     }
 #line 366 "compiler/loops.gem"
@@ -92421,43 +92455,43 @@ static GemVal __anon_216(void *_env, GemVal *args, int argc) {
             GemVal *_rr[] = {&gem_v___for_i_269, &gem_v___for_len_269, &gem_v_source_name, &gem_v_is_pt, &gem_v___for_tbl_269};
             gem_arena_reset_region(&_mk635, _rr, 5, NULL, 0);
         }
-    GemVal _t21116 = gem_v___for_i_269;
-        if (!gem_truthy(gem_lt(_t21116, gem_v___for_len_269))) break;
+    GemVal _t21118 = gem_v___for_i_269;
+        if (!gem_truthy(gem_lt(_t21118, gem_v___for_len_269))) break;
 #line 366 "compiler/loops.gem"
         gem_set_line(366);
-    GemVal _t21117 = gem_v___for_tbl_269;
-        GemVal gem_v_k = gem_table_key_at_2(_t21117, gem_v___for_i_269);
+    GemVal _t21119 = gem_v___for_tbl_269;
+        GemVal gem_v_k = gem_table_key_at_2(_t21119, gem_v___for_i_269);
 #line 366 "compiler/loops.gem"
         gem_set_line(366);
-    GemVal _t21118 = gem_v___for_tbl_269;
-        GemVal gem_v_v = gem_table_val_at_2(_t21118, gem_v___for_i_269);
+    GemVal _t21120 = gem_v___for_tbl_269;
+        GemVal gem_v_v = gem_table_val_at_2(_t21120, gem_v___for_i_269);
 #line 366 "compiler/loops.gem"
         gem_set_line(366);
         gem_v___for_i_269 = gem_add(gem_v___for_i_269, gem_int(1));
 #line 367 "compiler/loops.gem"
         gem_set_line(367);
-    GemVal _t21119 = gem_neq(gem_v_k, GEM_STR_LIT("tag", 3));
-    GemVal _t21120;
-    if (!gem_truthy(_t21119)) {
-        _t21120 = _t21119;
+    GemVal _t21121 = gem_neq(gem_v_k, GEM_STR_LIT("tag", 3));
+    GemVal _t21122;
+    if (!gem_truthy(_t21121)) {
+        _t21122 = _t21121;
     } else {
-        _t21120 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
+        _t21122 = gem_eq(gem_type_1(gem_v_v), GEM_STR_LIT("table", 5));
     }
-        if (gem_truthy(_t21120)) {
+        if (gem_truthy(_t21122)) {
 #line 368 "compiler/loops.gem"
             gem_set_line(368);
-    GemVal _t21121[] = {gem_v_v};
-            GemVal gem_v_vks = gem_keys_fn(NULL, _t21121, 1);
+    GemVal _t21123[] = {gem_v_v};
+            GemVal gem_v_vks = gem_keys_fn(NULL, _t21123, 1);
 #line 369 "compiler/loops.gem"
             gem_set_line(369);
-    GemVal _t21122 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
-    GemVal _t21123;
-    if (!gem_truthy(_t21122)) {
-        _t21123 = _t21122;
+    GemVal _t21124 = gem_gt(gem_len_1(gem_v_vks), gem_int(0));
+    GemVal _t21125;
+    if (!gem_truthy(_t21124)) {
+        _t21125 = _t21124;
     } else {
-        _t21123 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
+        _t21125 = gem_eq(gem_type_1(gem_table_get(gem_v_vks, gem_int(0))), GEM_STR_LIT("int", 3));
     }
-            if (gem_truthy(_t21123)) {
+            if (gem_truthy(_t21125)) {
 #line 370 "compiler/loops.gem"
                 gem_set_line(370);
                 GemVal gem_v_vi = gem_int(0);
@@ -92471,21 +92505,21 @@ static GemVal __anon_216(void *_env, GemVal *args, int argc) {
                         GemVal *_rr[] = {&gem_v___for_i_269, &gem_v___for_len_269, &gem_v_source_name, &gem_v_is_pt, &gem_v___for_tbl_269, &gem_v_v, &gem_v_vi};
                         gem_arena_reset_region(&_mk636, _rr, 7, NULL, 0);
                     }
-    GemVal _t21124 = gem_v_vi;
-                    if (!gem_truthy(gem_lt(_t21124, gem_len_1(gem_v_v)))) break;
+    GemVal _t21126 = gem_v_vi;
+                    if (!gem_truthy(gem_lt(_t21126, gem_len_1(gem_v_v)))) break;
 #line 372 "compiler/loops.gem"
                     gem_set_line(372);
-    GemVal _t21125 = gem_v_v;
-                    if (gem_truthy(gem_eq(gem_type_1(gem_table_get(_t21125, gem_v_vi)), GEM_STR_LIT("table", 5)))) {
+    GemVal _t21127 = gem_v_v;
+                    if (gem_truthy(gem_eq(gem_type_1(gem_table_get(_t21127, gem_v_vi)), GEM_STR_LIT("table", 5)))) {
 #line 373 "compiler/loops.gem"
                         gem_set_line(373);
-    GemVal _t21130 = gem_g___mod_loops_walk_for_tagging_node;
-    GemVal _t21126 = gem_v_v;
-    GemVal _t21128 = gem_table_get(_t21126, gem_v_vi);
-    GemVal _t21127 = gem_v_is_pt;
-    GemVal _t21129[] = {_t21128, _t21127, gem_v_source_name};
-    gem_check_callable(_t21130, "compiler/loops.gem", 373);
-                        (void)(_t21130.fn(_t21130.env, _t21129, 3));
+    GemVal _t21132 = gem_g___mod_loops_walk_for_tagging_node;
+    GemVal _t21128 = gem_v_v;
+    GemVal _t21130 = gem_table_get(_t21128, gem_v_vi);
+    GemVal _t21129 = gem_v_is_pt;
+    GemVal _t21131[] = {_t21130, _t21129, gem_v_source_name};
+    gem_check_callable(_t21132, "compiler/loops.gem", 373);
+                        (void)(_t21132.fn(_t21132.env, _t21131, 3));
                     }
 #line 375 "compiler/loops.gem"
                     gem_set_line(375);
@@ -92494,22 +92528,22 @@ static GemVal __anon_216(void *_env, GemVal *args, int argc) {
             } else {
 #line 378 "compiler/loops.gem"
                 gem_set_line(378);
-    GemVal _t21134 = gem_g___mod_loops_walk_for_tagging_node;
-    GemVal _t21132 = gem_v_v;
-    GemVal _t21131 = gem_v_is_pt;
-    GemVal _t21133[] = {_t21132, _t21131, gem_v_source_name};
-    gem_check_callable(_t21134, "compiler/loops.gem", 378);
-                (void)(_t21134.fn(_t21134.env, _t21133, 3));
+    GemVal _t21136 = gem_g___mod_loops_walk_for_tagging_node;
+    GemVal _t21134 = gem_v_v;
+    GemVal _t21133 = gem_v_is_pt;
+    GemVal _t21135[] = {_t21134, _t21133, gem_v_source_name};
+    gem_check_callable(_t21136, "compiler/loops.gem", 378);
+                (void)(_t21136.fn(_t21136.env, _t21135, 3));
             }
         }
     }
 
 #line 382 "compiler/loops.gem"
     gem_set_line(382);
-    GemVal _t21135 = GEM_NIL;
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21135, 1);
+    GemVal _t21137 = GEM_NIL;
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21137, 1);
     gem_pop_frame();
-    return _t21135;
+    return _t21137;
 }
 
 struct _closure___anon_217 {
@@ -92538,36 +92572,36 @@ static GemVal __anon_217(void *_env, GemVal *args, int argc) {
             GemVal *_rr[] = {&gem_v_top_stmts, &gem_v_source_name, &gem_v___for_i_270, &gem_v___for_items_270};
             gem_arena_reset_region(&_mk637, _rr, 4, NULL, 0);
         }
-    GemVal _t21136 = gem_v___for_i_270;
-        if (!gem_truthy(gem_lt(_t21136, gem_for_len_1(gem_v___for_items_270)))) break;
+    GemVal _t21138 = gem_v___for_i_270;
+        if (!gem_truthy(gem_lt(_t21138, gem_for_len_1(gem_v___for_items_270)))) break;
 #line 391 "compiler/loops.gem"
         gem_set_line(391);
-    GemVal _t21137 = gem_v___for_items_270;
-        GemVal gem_v_fd = gem_table_get(_t21137, gem_v___for_i_270);
+    GemVal _t21139 = gem_v___for_items_270;
+        GemVal gem_v_fd = gem_table_get(_t21139, gem_v___for_i_270);
 #line 391 "compiler/loops.gem"
         gem_set_line(391);
         gem_v___for_i_270 = gem_add(gem_v___for_i_270, gem_int(1));
 #line 392 "compiler/loops.gem"
         gem_set_line(392);
-    GemVal _t21141 = gem_g___mod_loops_walk_for_tagging_stmts;
-    GemVal _t21138 = gem_v_fd;
+    GemVal _t21143 = gem_g___mod_loops_walk_for_tagging_stmts;
+    GemVal _t21140 = gem_v_fd;
     static GemICacheSlot _ic_3126 = {0};
-    GemVal _t21139 = gem_table_get_cached(_t21138, "body", &_ic_3126);
-    GemVal _t21140[] = {_t21139, gem_bool(1), gem_v_source_name};
-    gem_check_callable(_t21141, "compiler/loops.gem", 392);
-        (void)(_t21141.fn(_t21141.env, _t21140, 3));
+    GemVal _t21141 = gem_table_get_cached(_t21140, "body", &_ic_3126);
+    GemVal _t21142[] = {_t21141, gem_bool(1), gem_v_source_name};
+    gem_check_callable(_t21143, "compiler/loops.gem", 392);
+        (void)(_t21143.fn(_t21143.env, _t21142, 3));
     }
 
 #line 395 "compiler/loops.gem"
     gem_set_line(395);
-    GemVal _t21144 = gem_g___mod_loops_walk_for_tagging_stmts;
-    GemVal _t21142 = gem_v_top_stmts;
-    GemVal _t21143[] = {_t21142, gem_bool(1), gem_v_source_name};
-    gem_check_callable(_t21144, "compiler/loops.gem", 395);
-    GemVal _t21145 = _t21144.fn(_t21144.env, _t21143, 3);
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21145, 1);
+    GemVal _t21146 = gem_g___mod_loops_walk_for_tagging_stmts;
+    GemVal _t21144 = gem_v_top_stmts;
+    GemVal _t21145[] = {_t21144, gem_bool(1), gem_v_source_name};
+    gem_check_callable(_t21146, "compiler/loops.gem", 395);
+    GemVal _t21147 = _t21146.fn(_t21146.env, _t21145, 3);
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21147, 1);
     gem_pop_frame();
-    return _t21145;
+    return _t21147;
 }
 
 struct _closure___anon_218 {
@@ -92604,8 +92638,8 @@ static GemVal __anon_218(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_stmts, &gem_v___for_i_471, &gem_v___for_limit_471};
                 gem_arena_reset_region(&_mk638, _rr, 3, NULL, 0);
             }
-    GemVal _t21147 = gem_v___for_i_471;
-            if (!gem_truthy(gem_lt(_t21147, gem_v___for_limit_471))) break;
+    GemVal _t21149 = gem_v___for_i_471;
+            if (!gem_truthy(gem_lt(_t21149, gem_v___for_limit_471))) break;
 #line 148 "compiler/fold.gem"
             gem_set_line(148);
             GemVal gem_v_i = gem_v___for_i_471;
@@ -92614,13 +92648,13 @@ static GemVal __anon_218(void *_env, GemVal *args, int argc) {
             gem_v___for_i_471 = gem_add(gem_v___for_i_471, gem_int(1));
 #line 149 "compiler/fold.gem"
             gem_set_line(149);
-    GemVal _t21152 = gem_v_stmts;
-    GemVal _t21151 = gem_v_i;
-    GemVal _t21150 = gem_g___mod_fold_fold;
-    GemVal _t21148 = gem_v_stmts;
-    GemVal _t21149[] = {gem_table_get(_t21148, gem_v_i)};
-    gem_check_callable(_t21150, "compiler/fold.gem", 149);
-            gem_table_set(_t21152, _t21151, _t21150.fn(_t21150.env, _t21149, 1));
+    GemVal _t21154 = gem_v_stmts;
+    GemVal _t21153 = gem_v_i;
+    GemVal _t21152 = gem_g___mod_fold_fold;
+    GemVal _t21150 = gem_v_stmts;
+    GemVal _t21151[] = {gem_table_get(_t21150, gem_v_i)};
+    gem_check_callable(_t21152, "compiler/fold.gem", 149);
+            gem_table_set(_t21154, _t21153, _t21152.fn(_t21152.env, _t21151, 1));
         }
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
         gem_pop_frame();
@@ -92641,138 +92675,138 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
     if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
 #line 154 "compiler/fold.gem"
         gem_set_line(154);
-        GemVal _t21153 = GEM_NIL;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21153, 1);
+        GemVal _t21155 = GEM_NIL;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21155, 1);
         gem_pop_frame();
-        return _t21153;
+        return _t21155;
     }
 #line 155 "compiler/fold.gem"
     gem_set_line(155);
     if (gem_truthy(gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5)))) {
 #line 155 "compiler/fold.gem"
         gem_set_line(155);
-        GemVal _t21154 = gem_v_node;
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21154, 1);
-        gem_pop_frame();
-        return _t21154;
-    }
-#line 156 "compiler/fold.gem"
-    gem_set_line(156);
-    GemVal _t21155 = gem_v_node;
-    static GemICacheSlot _ic_3127 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t21155, "tag", &_ic_3127), GEM_NIL))) {
-#line 156 "compiler/fold.gem"
-        gem_set_line(156);
         GemVal _t21156 = gem_v_node;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21156, 1);
         gem_pop_frame();
         return _t21156;
     }
+#line 156 "compiler/fold.gem"
+    gem_set_line(156);
+    GemVal _t21157 = gem_v_node;
+    static GemICacheSlot _ic_3127 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t21157, "tag", &_ic_3127), GEM_NIL))) {
+#line 156 "compiler/fold.gem"
+        gem_set_line(156);
+        GemVal _t21158 = gem_v_node;
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21158, 1);
+        gem_pop_frame();
+        return _t21158;
+    }
 #line 158 "compiler/fold.gem"
     gem_set_line(158);
     GemVal gem_v___match_472 = gem_v_node;
-    GemVal _t21157 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21159;
-    if (!gem_truthy(_t21157)) {
-        _t21159 = _t21157;
-    } else {
-    GemVal _t21158[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21159 = gem_has_key_fn(NULL, _t21158, 2);
-    }
-    GemVal _t21160;
+    GemVal _t21159 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21161;
     if (!gem_truthy(_t21159)) {
-        _t21160 = _t21159;
+        _t21161 = _t21159;
     } else {
-        _t21160 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("binop", 5));
+    GemVal _t21160[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21161 = gem_has_key_fn(NULL, _t21160, 2);
     }
-    if (gem_truthy(_t21160)) {
+    GemVal _t21162;
+    if (!gem_truthy(_t21161)) {
+        _t21162 = _t21161;
+    } else {
+        _t21162 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("binop", 5));
+    }
+    if (gem_truthy(_t21162)) {
 #line 160 "compiler/fold.gem"
         gem_set_line(160);
-    GemVal _t21164 = gem_v_node;
-    GemVal _t21163 = gem_g___mod_fold_fold;
-    GemVal _t21161 = gem_v_node;
+    GemVal _t21166 = gem_v_node;
+    GemVal _t21165 = gem_g___mod_fold_fold;
+    GemVal _t21163 = gem_v_node;
     static GemICacheSlot _ic_3128 = {0};
-    GemVal _t21162[] = {gem_table_get_cached(_t21161, "left", &_ic_3128)};
-    gem_check_callable(_t21163, "compiler/fold.gem", 160);
-        gem_table_set(_t21164, GEM_STR_LIT("left", 4), _t21163.fn(_t21163.env, _t21162, 1));
+    GemVal _t21164[] = {gem_table_get_cached(_t21163, "left", &_ic_3128)};
+    gem_check_callable(_t21165, "compiler/fold.gem", 160);
+        gem_table_set(_t21166, GEM_STR_LIT("left", 4), _t21165.fn(_t21165.env, _t21164, 1));
 #line 161 "compiler/fold.gem"
         gem_set_line(161);
-    GemVal _t21168 = gem_v_node;
-    GemVal _t21167 = gem_g___mod_fold_fold;
-    GemVal _t21165 = gem_v_node;
+    GemVal _t21170 = gem_v_node;
+    GemVal _t21169 = gem_g___mod_fold_fold;
+    GemVal _t21167 = gem_v_node;
     static GemICacheSlot _ic_3129 = {0};
-    GemVal _t21166[] = {gem_table_get_cached(_t21165, "right", &_ic_3129)};
-    gem_check_callable(_t21167, "compiler/fold.gem", 161);
-        gem_table_set(_t21168, GEM_STR_LIT("right", 5), _t21167.fn(_t21167.env, _t21166, 1));
+    GemVal _t21168[] = {gem_table_get_cached(_t21167, "right", &_ic_3129)};
+    gem_check_callable(_t21169, "compiler/fold.gem", 161);
+        gem_table_set(_t21170, GEM_STR_LIT("right", 5), _t21169.fn(_t21169.env, _t21168, 1));
 #line 162 "compiler/fold.gem"
         gem_set_line(162);
-    GemVal _t21169[] = {gem_v_node};
-        GemVal _t21170 = gem_fn___mod_fold_try_fold_binop(NULL, _t21169, 1);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21170, 1);
+    GemVal _t21171[] = {gem_v_node};
+        GemVal _t21172 = gem_fn___mod_fold_try_fold_binop(NULL, _t21171, 1);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21172, 1);
         gem_pop_frame();
-        return _t21170;
+        return _t21172;
     } else {
-    GemVal _t21171 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21173;
-    if (!gem_truthy(_t21171)) {
-        _t21173 = _t21171;
-    } else {
-    GemVal _t21172[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21173 = gem_has_key_fn(NULL, _t21172, 2);
-    }
-    GemVal _t21174;
+    GemVal _t21173 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21175;
     if (!gem_truthy(_t21173)) {
-        _t21174 = _t21173;
+        _t21175 = _t21173;
     } else {
-        _t21174 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("unop", 4));
+    GemVal _t21174[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21175 = gem_has_key_fn(NULL, _t21174, 2);
     }
-    if (gem_truthy(_t21174)) {
+    GemVal _t21176;
+    if (!gem_truthy(_t21175)) {
+        _t21176 = _t21175;
+    } else {
+        _t21176 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("unop", 4));
+    }
+    if (gem_truthy(_t21176)) {
 #line 164 "compiler/fold.gem"
         gem_set_line(164);
-    GemVal _t21178 = gem_v_node;
-    GemVal _t21177 = gem_g___mod_fold_fold;
-    GemVal _t21175 = gem_v_node;
+    GemVal _t21180 = gem_v_node;
+    GemVal _t21179 = gem_g___mod_fold_fold;
+    GemVal _t21177 = gem_v_node;
     static GemICacheSlot _ic_3130 = {0};
-    GemVal _t21176[] = {gem_table_get_cached(_t21175, "expr", &_ic_3130)};
-    gem_check_callable(_t21177, "compiler/fold.gem", 164);
-        gem_table_set(_t21178, GEM_STR_LIT("expr", 4), _t21177.fn(_t21177.env, _t21176, 1));
+    GemVal _t21178[] = {gem_table_get_cached(_t21177, "expr", &_ic_3130)};
+    gem_check_callable(_t21179, "compiler/fold.gem", 164);
+        gem_table_set(_t21180, GEM_STR_LIT("expr", 4), _t21179.fn(_t21179.env, _t21178, 1));
 #line 165 "compiler/fold.gem"
         gem_set_line(165);
-    GemVal _t21179[] = {gem_v_node};
-        GemVal _t21180 = gem_fn___mod_fold_try_fold_unop(NULL, _t21179, 1);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21180, 1);
+    GemVal _t21181[] = {gem_v_node};
+        GemVal _t21182 = gem_fn___mod_fold_try_fold_unop(NULL, _t21181, 1);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21182, 1);
         gem_pop_frame();
-        return _t21180;
+        return _t21182;
     } else {
-    GemVal _t21181 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21183;
-    if (!gem_truthy(_t21181)) {
-        _t21183 = _t21181;
-    } else {
-    GemVal _t21182[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21183 = gem_has_key_fn(NULL, _t21182, 2);
-    }
-    GemVal _t21184;
+    GemVal _t21183 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21185;
     if (!gem_truthy(_t21183)) {
-        _t21184 = _t21183;
+        _t21185 = _t21183;
     } else {
-        _t21184 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("call", 4));
+    GemVal _t21184[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21185 = gem_has_key_fn(NULL, _t21184, 2);
     }
-    if (gem_truthy(_t21184)) {
+    GemVal _t21186;
+    if (!gem_truthy(_t21185)) {
+        _t21186 = _t21185;
+    } else {
+        _t21186 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("call", 4));
+    }
+    if (gem_truthy(_t21186)) {
 #line 167 "compiler/fold.gem"
         gem_set_line(167);
-    GemVal _t21188 = gem_v_node;
-    GemVal _t21187 = gem_g___mod_fold_fold;
-    GemVal _t21185 = gem_v_node;
+    GemVal _t21190 = gem_v_node;
+    GemVal _t21189 = gem_g___mod_fold_fold;
+    GemVal _t21187 = gem_v_node;
     static GemICacheSlot _ic_3131 = {0};
-    GemVal _t21186[] = {gem_table_get_cached(_t21185, "func", &_ic_3131)};
-    gem_check_callable(_t21187, "compiler/fold.gem", 167);
-        gem_table_set(_t21188, GEM_STR_LIT("func", 4), _t21187.fn(_t21187.env, _t21186, 1));
+    GemVal _t21188[] = {gem_table_get_cached(_t21187, "func", &_ic_3131)};
+    gem_check_callable(_t21189, "compiler/fold.gem", 167);
+        gem_table_set(_t21190, GEM_STR_LIT("func", 4), _t21189.fn(_t21189.env, _t21188, 1));
 #line 168 "compiler/fold.gem"
         gem_set_line(168);
-    GemVal _t21189 = gem_v_node;
+    GemVal _t21191 = gem_v_node;
     static GemICacheSlot _ic_3132 = {0};
-        GemVal gem_v_args = gem_table_get_cached(_t21189, "args", &_ic_3132);
+        GemVal gem_v_args = gem_table_get_cached(_t21191, "args", &_ic_3132);
 #line 169 "compiler/fold.gem"
         gem_set_line(169);
         GemVal gem_v___for_i_473 = gem_int(0);
@@ -92789,8 +92823,8 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_node, &gem_v_args, &gem_v___for_i_473, &gem_v___for_limit_473};
                 gem_arena_reset_region(&_mk639, _rr, 4, NULL, 0);
             }
-    GemVal _t21190 = gem_v___for_i_473;
-            if (!gem_truthy(gem_lt(_t21190, gem_v___for_limit_473))) break;
+    GemVal _t21192 = gem_v___for_i_473;
+            if (!gem_truthy(gem_lt(_t21192, gem_v___for_limit_473))) break;
 #line 169 "compiler/fold.gem"
             gem_set_line(169);
             GemVal gem_v_i = gem_v___for_i_473;
@@ -92799,111 +92833,111 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
             gem_v___for_i_473 = gem_add(gem_v___for_i_473, gem_int(1));
 #line 170 "compiler/fold.gem"
             gem_set_line(170);
-    GemVal _t21195 = gem_v_args;
-    GemVal _t21194 = gem_v_i;
-    GemVal _t21193 = gem_g___mod_fold_fold;
-    GemVal _t21191 = gem_v_args;
-    GemVal _t21192[] = {gem_table_get(_t21191, gem_v_i)};
-    gem_check_callable(_t21193, "compiler/fold.gem", 170);
-            gem_table_set(_t21195, _t21194, _t21193.fn(_t21193.env, _t21192, 1));
+    GemVal _t21197 = gem_v_args;
+    GemVal _t21196 = gem_v_i;
+    GemVal _t21195 = gem_g___mod_fold_fold;
+    GemVal _t21193 = gem_v_args;
+    GemVal _t21194[] = {gem_table_get(_t21193, gem_v_i)};
+    gem_check_callable(_t21195, "compiler/fold.gem", 170);
+            gem_table_set(_t21197, _t21196, _t21195.fn(_t21195.env, _t21194, 1));
         }
 
     } else {
-    GemVal _t21196 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21198;
-    if (!gem_truthy(_t21196)) {
-        _t21198 = _t21196;
-    } else {
-    GemVal _t21197[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21198 = gem_has_key_fn(NULL, _t21197, 2);
-    }
-    GemVal _t21199;
+    GemVal _t21198 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21200;
     if (!gem_truthy(_t21198)) {
-        _t21199 = _t21198;
+        _t21200 = _t21198;
     } else {
-        _t21199 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("dot", 3));
+    GemVal _t21199[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21200 = gem_has_key_fn(NULL, _t21199, 2);
     }
-    if (gem_truthy(_t21199)) {
+    GemVal _t21201;
+    if (!gem_truthy(_t21200)) {
+        _t21201 = _t21200;
+    } else {
+        _t21201 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("dot", 3));
+    }
+    if (gem_truthy(_t21201)) {
 #line 173 "compiler/fold.gem"
         gem_set_line(173);
-    GemVal _t21203 = gem_v_node;
-    GemVal _t21202 = gem_g___mod_fold_fold;
-    GemVal _t21200 = gem_v_node;
+    GemVal _t21205 = gem_v_node;
+    GemVal _t21204 = gem_g___mod_fold_fold;
+    GemVal _t21202 = gem_v_node;
     static GemICacheSlot _ic_3133 = {0};
-    GemVal _t21201[] = {gem_table_get_cached(_t21200, "object", &_ic_3133)};
-    gem_check_callable(_t21202, "compiler/fold.gem", 173);
-        gem_table_set(_t21203, GEM_STR_LIT("object", 6), _t21202.fn(_t21202.env, _t21201, 1));
+    GemVal _t21203[] = {gem_table_get_cached(_t21202, "object", &_ic_3133)};
+    gem_check_callable(_t21204, "compiler/fold.gem", 173);
+        gem_table_set(_t21205, GEM_STR_LIT("object", 6), _t21204.fn(_t21204.env, _t21203, 1));
     } else {
-    GemVal _t21204 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21206;
-    if (!gem_truthy(_t21204)) {
-        _t21206 = _t21204;
-    } else {
-    GemVal _t21205[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21206 = gem_has_key_fn(NULL, _t21205, 2);
-    }
-    GemVal _t21207;
+    GemVal _t21206 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21208;
     if (!gem_truthy(_t21206)) {
-        _t21207 = _t21206;
+        _t21208 = _t21206;
     } else {
-        _t21207 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("index", 5));
+    GemVal _t21207[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21208 = gem_has_key_fn(NULL, _t21207, 2);
     }
-    if (gem_truthy(_t21207)) {
+    GemVal _t21209;
+    if (!gem_truthy(_t21208)) {
+        _t21209 = _t21208;
+    } else {
+        _t21209 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("index", 5));
+    }
+    if (gem_truthy(_t21209)) {
 #line 175 "compiler/fold.gem"
         gem_set_line(175);
-    GemVal _t21211 = gem_v_node;
-    GemVal _t21210 = gem_g___mod_fold_fold;
-    GemVal _t21208 = gem_v_node;
+    GemVal _t21213 = gem_v_node;
+    GemVal _t21212 = gem_g___mod_fold_fold;
+    GemVal _t21210 = gem_v_node;
     static GemICacheSlot _ic_3134 = {0};
-    GemVal _t21209[] = {gem_table_get_cached(_t21208, "object", &_ic_3134)};
-    gem_check_callable(_t21210, "compiler/fold.gem", 175);
-        gem_table_set(_t21211, GEM_STR_LIT("object", 6), _t21210.fn(_t21210.env, _t21209, 1));
+    GemVal _t21211[] = {gem_table_get_cached(_t21210, "object", &_ic_3134)};
+    gem_check_callable(_t21212, "compiler/fold.gem", 175);
+        gem_table_set(_t21213, GEM_STR_LIT("object", 6), _t21212.fn(_t21212.env, _t21211, 1));
 #line 176 "compiler/fold.gem"
         gem_set_line(176);
-    GemVal _t21215 = gem_v_node;
-    GemVal _t21214 = gem_g___mod_fold_fold;
-    GemVal _t21212 = gem_v_node;
+    GemVal _t21217 = gem_v_node;
+    GemVal _t21216 = gem_g___mod_fold_fold;
+    GemVal _t21214 = gem_v_node;
     static GemICacheSlot _ic_3135 = {0};
-    GemVal _t21213[] = {gem_table_get_cached(_t21212, "key", &_ic_3135)};
-    gem_check_callable(_t21214, "compiler/fold.gem", 176);
-        gem_table_set(_t21215, GEM_STR_LIT("key", 3), _t21214.fn(_t21214.env, _t21213, 1));
+    GemVal _t21215[] = {gem_table_get_cached(_t21214, "key", &_ic_3135)};
+    gem_check_callable(_t21216, "compiler/fold.gem", 176);
+        gem_table_set(_t21217, GEM_STR_LIT("key", 3), _t21216.fn(_t21216.env, _t21215, 1));
     } else {
-    GemVal _t21216 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21218;
-    if (!gem_truthy(_t21216)) {
-        _t21218 = _t21216;
-    } else {
-    GemVal _t21217[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21218 = gem_has_key_fn(NULL, _t21217, 2);
-    }
-    GemVal _t21219;
+    GemVal _t21218 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21220;
     if (!gem_truthy(_t21218)) {
-        _t21219 = _t21218;
+        _t21220 = _t21218;
     } else {
-        _t21219 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("anon_fn", 7));
+    GemVal _t21219[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21220 = gem_has_key_fn(NULL, _t21219, 2);
     }
-    if (gem_truthy(_t21219)) {
+    GemVal _t21221;
+    if (!gem_truthy(_t21220)) {
+        _t21221 = _t21220;
+    } else {
+        _t21221 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("anon_fn", 7));
+    }
+    if (gem_truthy(_t21221)) {
 #line 178 "compiler/fold.gem"
         gem_set_line(178);
-    GemVal _t21222 = gem_g___mod_fold_fold_stmts;
-    GemVal _t21220 = gem_v_node;
+    GemVal _t21224 = gem_g___mod_fold_fold_stmts;
+    GemVal _t21222 = gem_v_node;
     static GemICacheSlot _ic_3136 = {0};
-    GemVal _t21221[] = {gem_table_get_cached(_t21220, "body", &_ic_3136)};
-    gem_check_callable(_t21222, "compiler/fold.gem", 178);
-        (void)(_t21222.fn(_t21222.env, _t21221, 1));
+    GemVal _t21223[] = {gem_table_get_cached(_t21222, "body", &_ic_3136)};
+    gem_check_callable(_t21224, "compiler/fold.gem", 178);
+        (void)(_t21224.fn(_t21224.env, _t21223, 1));
 #line 179 "compiler/fold.gem"
         gem_set_line(179);
-    GemVal _t21223 = gem_v_node;
+    GemVal _t21225 = gem_v_node;
     static GemICacheSlot _ic_3137 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t21223, "defaults", &_ic_3137), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t21225, "defaults", &_ic_3137), GEM_NIL))) {
 #line 180 "compiler/fold.gem"
             gem_set_line(180);
             GemVal gem_v___for_i_474 = gem_int(0);
 #line 180 "compiler/fold.gem"
             gem_set_line(180);
-    GemVal _t21224 = gem_v_node;
+    GemVal _t21226 = gem_v_node;
     static GemICacheSlot _ic_3138 = {0};
-            GemVal gem_v___for_limit_474 = gem_len_1(gem_table_get_cached(_t21224, "defaults", &_ic_3138));
+            GemVal gem_v___for_limit_474 = gem_len_1(gem_table_get_cached(_t21226, "defaults", &_ic_3138));
 #line 180 "compiler/fold.gem"
             gem_set_line(180);
             GemArenaMark _mk640;
@@ -92914,8 +92948,8 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v_node, &gem_v___for_i_474, &gem_v___for_limit_474};
                     gem_arena_reset_region(&_mk640, _rr, 3, NULL, 0);
                 }
-    GemVal _t21225 = gem_v___for_i_474;
-                if (!gem_truthy(gem_lt(_t21225, gem_v___for_limit_474))) break;
+    GemVal _t21227 = gem_v___for_i_474;
+                if (!gem_truthy(gem_lt(_t21227, gem_v___for_limit_474))) break;
 #line 180 "compiler/fold.gem"
                 gem_set_line(180);
                 GemVal gem_v_i = gem_v___for_i_474;
@@ -92924,48 +92958,48 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
                 gem_v___for_i_474 = gem_add(gem_v___for_i_474, gem_int(1));
 #line 181 "compiler/fold.gem"
                 gem_set_line(181);
-    GemVal _t21226 = gem_v_node;
+    GemVal _t21228 = gem_v_node;
     static GemICacheSlot _ic_3139 = {0};
-    GemVal _t21227 = gem_table_get_cached(_t21226, "defaults", &_ic_3139);
-                if (gem_truthy(gem_neq(gem_table_get(_t21227, gem_v_i), GEM_NIL))) {
+    GemVal _t21229 = gem_table_get_cached(_t21228, "defaults", &_ic_3139);
+                if (gem_truthy(gem_neq(gem_table_get(_t21229, gem_v_i), GEM_NIL))) {
 #line 182 "compiler/fold.gem"
                     gem_set_line(182);
-    GemVal _t21228 = gem_v_node;
+    GemVal _t21230 = gem_v_node;
     static GemICacheSlot _ic_3140 = {0};
-    GemVal _t21234 = gem_table_get_cached(_t21228, "defaults", &_ic_3140);
-    GemVal _t21233 = gem_v_i;
-    GemVal _t21232 = gem_g___mod_fold_fold;
-    GemVal _t21229 = gem_v_node;
+    GemVal _t21236 = gem_table_get_cached(_t21230, "defaults", &_ic_3140);
+    GemVal _t21235 = gem_v_i;
+    GemVal _t21234 = gem_g___mod_fold_fold;
+    GemVal _t21231 = gem_v_node;
     static GemICacheSlot _ic_3141 = {0};
-    GemVal _t21230 = gem_table_get_cached(_t21229, "defaults", &_ic_3141);
-    GemVal _t21231[] = {gem_table_get(_t21230, gem_v_i)};
-    gem_check_callable(_t21232, "compiler/fold.gem", 182);
-                    gem_table_set(_t21234, _t21233, _t21232.fn(_t21232.env, _t21231, 1));
+    GemVal _t21232 = gem_table_get_cached(_t21231, "defaults", &_ic_3141);
+    GemVal _t21233[] = {gem_table_get(_t21232, gem_v_i)};
+    gem_check_callable(_t21234, "compiler/fold.gem", 182);
+                    gem_table_set(_t21236, _t21235, _t21234.fn(_t21234.env, _t21233, 1));
                 }
             }
 
         }
     } else {
-    GemVal _t21235 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21237;
-    if (!gem_truthy(_t21235)) {
-        _t21237 = _t21235;
-    } else {
-    GemVal _t21236[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21237 = gem_has_key_fn(NULL, _t21236, 2);
-    }
-    GemVal _t21238;
+    GemVal _t21237 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21239;
     if (!gem_truthy(_t21237)) {
-        _t21238 = _t21237;
+        _t21239 = _t21237;
     } else {
-        _t21238 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("table", 5));
+    GemVal _t21238[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21239 = gem_has_key_fn(NULL, _t21238, 2);
     }
-    if (gem_truthy(_t21238)) {
+    GemVal _t21240;
+    if (!gem_truthy(_t21239)) {
+        _t21240 = _t21239;
+    } else {
+        _t21240 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("table", 5));
+    }
+    if (gem_truthy(_t21240)) {
 #line 187 "compiler/fold.gem"
         gem_set_line(187);
-    GemVal _t21239 = gem_v_node;
+    GemVal _t21241 = gem_v_node;
     static GemICacheSlot _ic_3142 = {0};
-        GemVal gem_v___for_items_475 = gem_for_items_1(gem_table_get_cached(_t21239, "entries", &_ic_3142));
+        GemVal gem_v___for_items_475 = gem_for_items_1(gem_table_get_cached(_t21241, "entries", &_ic_3142));
 #line 187 "compiler/fold.gem"
         gem_set_line(187);
         GemVal gem_v___for_i_475 = gem_int(0);
@@ -92979,73 +93013,73 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_node, &gem_v___for_i_475, &gem_v___for_items_475};
                 gem_arena_reset_region(&_mk641, _rr, 3, NULL, 0);
             }
-    GemVal _t21240 = gem_v___for_i_475;
-            if (!gem_truthy(gem_lt(_t21240, gem_for_len_1(gem_v___for_items_475)))) break;
+    GemVal _t21242 = gem_v___for_i_475;
+            if (!gem_truthy(gem_lt(_t21242, gem_for_len_1(gem_v___for_items_475)))) break;
 #line 187 "compiler/fold.gem"
             gem_set_line(187);
-    GemVal _t21241 = gem_v___for_items_475;
-            GemVal gem_v_e = gem_table_get(_t21241, gem_v___for_i_475);
+    GemVal _t21243 = gem_v___for_items_475;
+            GemVal gem_v_e = gem_table_get(_t21243, gem_v___for_i_475);
 #line 187 "compiler/fold.gem"
             gem_set_line(187);
             gem_v___for_i_475 = gem_add(gem_v___for_i_475, gem_int(1));
 #line 188 "compiler/fold.gem"
             gem_set_line(188);
-    GemVal _t21245 = gem_v_e;
-    GemVal _t21244 = gem_g___mod_fold_fold;
-    GemVal _t21242 = gem_v_e;
+    GemVal _t21247 = gem_v_e;
+    GemVal _t21246 = gem_g___mod_fold_fold;
+    GemVal _t21244 = gem_v_e;
     static GemICacheSlot _ic_3143 = {0};
-    GemVal _t21243[] = {gem_table_get_cached(_t21242, "value", &_ic_3143)};
-    gem_check_callable(_t21244, "compiler/fold.gem", 188);
-            gem_table_set(_t21245, GEM_STR_LIT("value", 5), _t21244.fn(_t21244.env, _t21243, 1));
+    GemVal _t21245[] = {gem_table_get_cached(_t21244, "value", &_ic_3143)};
+    gem_check_callable(_t21246, "compiler/fold.gem", 188);
+            gem_table_set(_t21247, GEM_STR_LIT("value", 5), _t21246.fn(_t21246.env, _t21245, 1));
 #line 189 "compiler/fold.gem"
             gem_set_line(189);
-    GemVal _t21246 = gem_v_e;
-    static GemICacheSlot _ic_3144 = {0};
-    GemVal _t21247 = gem_eq(gem_type_1(gem_table_get_cached(_t21246, "key", &_ic_3144)), GEM_STR_LIT("table", 5));
-    GemVal _t21250;
-    if (!gem_truthy(_t21247)) {
-        _t21250 = _t21247;
-    } else {
     GemVal _t21248 = gem_v_e;
+    static GemICacheSlot _ic_3144 = {0};
+    GemVal _t21249 = gem_eq(gem_type_1(gem_table_get_cached(_t21248, "key", &_ic_3144)), GEM_STR_LIT("table", 5));
+    GemVal _t21252;
+    if (!gem_truthy(_t21249)) {
+        _t21252 = _t21249;
+    } else {
+    GemVal _t21250 = gem_v_e;
     static GemICacheSlot _ic_3145 = {0};
-    GemVal _t21249 = gem_table_get_cached(_t21248, "key", &_ic_3145);
+    GemVal _t21251 = gem_table_get_cached(_t21250, "key", &_ic_3145);
     static GemICacheSlot _ic_3146 = {0};
-        _t21250 = gem_neq(gem_table_get_cached(_t21249, "tag", &_ic_3146), GEM_NIL);
+        _t21252 = gem_neq(gem_table_get_cached(_t21251, "tag", &_ic_3146), GEM_NIL);
     }
-            if (gem_truthy(_t21250)) {
+            if (gem_truthy(_t21252)) {
 #line 190 "compiler/fold.gem"
                 gem_set_line(190);
-    GemVal _t21254 = gem_v_e;
-    GemVal _t21253 = gem_g___mod_fold_fold;
-    GemVal _t21251 = gem_v_e;
+    GemVal _t21256 = gem_v_e;
+    GemVal _t21255 = gem_g___mod_fold_fold;
+    GemVal _t21253 = gem_v_e;
     static GemICacheSlot _ic_3147 = {0};
-    GemVal _t21252[] = {gem_table_get_cached(_t21251, "key", &_ic_3147)};
-    gem_check_callable(_t21253, "compiler/fold.gem", 190);
-                gem_table_set(_t21254, GEM_STR_LIT("key", 3), _t21253.fn(_t21253.env, _t21252, 1));
+    GemVal _t21254[] = {gem_table_get_cached(_t21253, "key", &_ic_3147)};
+    gem_check_callable(_t21255, "compiler/fold.gem", 190);
+                gem_table_set(_t21256, GEM_STR_LIT("key", 3), _t21255.fn(_t21255.env, _t21254, 1));
             }
         }
 
     } else {
-    GemVal _t21255 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21257;
-    if (!gem_truthy(_t21255)) {
-        _t21257 = _t21255;
-    } else {
-    GemVal _t21256[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21257 = gem_has_key_fn(NULL, _t21256, 2);
-    }
-    GemVal _t21258;
+    GemVal _t21257 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21259;
     if (!gem_truthy(_t21257)) {
-        _t21258 = _t21257;
+        _t21259 = _t21257;
     } else {
-        _t21258 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("array", 5));
+    GemVal _t21258[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21259 = gem_has_key_fn(NULL, _t21258, 2);
     }
-    if (gem_truthy(_t21258)) {
+    GemVal _t21260;
+    if (!gem_truthy(_t21259)) {
+        _t21260 = _t21259;
+    } else {
+        _t21260 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("array", 5));
+    }
+    if (gem_truthy(_t21260)) {
 #line 194 "compiler/fold.gem"
         gem_set_line(194);
-    GemVal _t21259 = gem_v_node;
+    GemVal _t21261 = gem_v_node;
     static GemICacheSlot _ic_3148 = {0};
-        GemVal gem_v_elems = gem_table_get_cached(_t21259, "elements", &_ic_3148);
+        GemVal gem_v_elems = gem_table_get_cached(_t21261, "elements", &_ic_3148);
 #line 195 "compiler/fold.gem"
         gem_set_line(195);
         GemVal gem_v___for_i_476 = gem_int(0);
@@ -93062,8 +93096,8 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_node, &gem_v_elems, &gem_v___for_i_476, &gem_v___for_limit_476};
                 gem_arena_reset_region(&_mk642, _rr, 4, NULL, 0);
             }
-    GemVal _t21260 = gem_v___for_i_476;
-            if (!gem_truthy(gem_lt(_t21260, gem_v___for_limit_476))) break;
+    GemVal _t21262 = gem_v___for_i_476;
+            if (!gem_truthy(gem_lt(_t21262, gem_v___for_limit_476))) break;
 #line 195 "compiler/fold.gem"
             gem_set_line(195);
             GemVal gem_v_i = gem_v___for_i_476;
@@ -93072,36 +93106,36 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
             gem_v___for_i_476 = gem_add(gem_v___for_i_476, gem_int(1));
 #line 196 "compiler/fold.gem"
             gem_set_line(196);
-    GemVal _t21265 = gem_v_elems;
-    GemVal _t21264 = gem_v_i;
-    GemVal _t21263 = gem_g___mod_fold_fold;
-    GemVal _t21261 = gem_v_elems;
-    GemVal _t21262[] = {gem_table_get(_t21261, gem_v_i)};
-    gem_check_callable(_t21263, "compiler/fold.gem", 196);
-            gem_table_set(_t21265, _t21264, _t21263.fn(_t21263.env, _t21262, 1));
+    GemVal _t21267 = gem_v_elems;
+    GemVal _t21266 = gem_v_i;
+    GemVal _t21265 = gem_g___mod_fold_fold;
+    GemVal _t21263 = gem_v_elems;
+    GemVal _t21264[] = {gem_table_get(_t21263, gem_v_i)};
+    gem_check_callable(_t21265, "compiler/fold.gem", 196);
+            gem_table_set(_t21267, _t21266, _t21265.fn(_t21265.env, _t21264, 1));
         }
 
     } else {
-    GemVal _t21266 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21268;
-    if (!gem_truthy(_t21266)) {
-        _t21268 = _t21266;
-    } else {
-    GemVal _t21267[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21268 = gem_has_key_fn(NULL, _t21267, 2);
-    }
-    GemVal _t21269;
+    GemVal _t21268 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21270;
     if (!gem_truthy(_t21268)) {
-        _t21269 = _t21268;
+        _t21270 = _t21268;
     } else {
-        _t21269 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("interp", 6));
+    GemVal _t21269[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21270 = gem_has_key_fn(NULL, _t21269, 2);
     }
-    if (gem_truthy(_t21269)) {
+    GemVal _t21271;
+    if (!gem_truthy(_t21270)) {
+        _t21271 = _t21270;
+    } else {
+        _t21271 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("interp", 6));
+    }
+    if (gem_truthy(_t21271)) {
 #line 199 "compiler/fold.gem"
         gem_set_line(199);
-    GemVal _t21270 = gem_v_node;
+    GemVal _t21272 = gem_v_node;
     static GemICacheSlot _ic_3149 = {0};
-        GemVal gem_v_parts = gem_table_get_cached(_t21270, "parts", &_ic_3149);
+        GemVal gem_v_parts = gem_table_get_cached(_t21272, "parts", &_ic_3149);
 #line 200 "compiler/fold.gem"
         gem_set_line(200);
         GemVal gem_v___for_i_477 = gem_int(0);
@@ -93118,8 +93152,8 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_node, &gem_v_parts, &gem_v___for_i_477, &gem_v___for_limit_477};
                 gem_arena_reset_region(&_mk643, _rr, 4, NULL, 0);
             }
-    GemVal _t21271 = gem_v___for_i_477;
-            if (!gem_truthy(gem_lt(_t21271, gem_v___for_limit_477))) break;
+    GemVal _t21273 = gem_v___for_i_477;
+            if (!gem_truthy(gem_lt(_t21273, gem_v___for_limit_477))) break;
 #line 200 "compiler/fold.gem"
             gem_set_line(200);
             GemVal gem_v_i = gem_v___for_i_477;
@@ -93128,179 +93162,179 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
             gem_v___for_i_477 = gem_add(gem_v___for_i_477, gem_int(1));
 #line 201 "compiler/fold.gem"
             gem_set_line(201);
-    GemVal _t21276 = gem_v_parts;
-    GemVal _t21275 = gem_v_i;
-    GemVal _t21274 = gem_g___mod_fold_fold;
-    GemVal _t21272 = gem_v_parts;
-    GemVal _t21273[] = {gem_table_get(_t21272, gem_v_i)};
-    gem_check_callable(_t21274, "compiler/fold.gem", 201);
-            gem_table_set(_t21276, _t21275, _t21274.fn(_t21274.env, _t21273, 1));
+    GemVal _t21278 = gem_v_parts;
+    GemVal _t21277 = gem_v_i;
+    GemVal _t21276 = gem_g___mod_fold_fold;
+    GemVal _t21274 = gem_v_parts;
+    GemVal _t21275[] = {gem_table_get(_t21274, gem_v_i)};
+    gem_check_callable(_t21276, "compiler/fold.gem", 201);
+            gem_table_set(_t21278, _t21277, _t21276.fn(_t21276.env, _t21275, 1));
         }
 
     } else {
-    GemVal _t21277 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21279;
-    if (!gem_truthy(_t21277)) {
-        _t21279 = _t21277;
-    } else {
-    GemVal _t21278[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21279 = gem_has_key_fn(NULL, _t21278, 2);
-    }
-    GemVal _t21280;
+    GemVal _t21279 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21281;
     if (!gem_truthy(_t21279)) {
-        _t21280 = _t21279;
+        _t21281 = _t21279;
     } else {
-        _t21280 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("let", 3));
+    GemVal _t21280[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21281 = gem_has_key_fn(NULL, _t21280, 2);
     }
-    if (gem_truthy(_t21280)) {
+    GemVal _t21282;
+    if (!gem_truthy(_t21281)) {
+        _t21282 = _t21281;
+    } else {
+        _t21282 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("let", 3));
+    }
+    if (gem_truthy(_t21282)) {
 #line 204 "compiler/fold.gem"
         gem_set_line(204);
-    GemVal _t21284 = gem_v_node;
-    GemVal _t21283 = gem_g___mod_fold_fold;
-    GemVal _t21281 = gem_v_node;
+    GemVal _t21286 = gem_v_node;
+    GemVal _t21285 = gem_g___mod_fold_fold;
+    GemVal _t21283 = gem_v_node;
     static GemICacheSlot _ic_3150 = {0};
-    GemVal _t21282[] = {gem_table_get_cached(_t21281, "value", &_ic_3150)};
-    gem_check_callable(_t21283, "compiler/fold.gem", 204);
-        gem_table_set(_t21284, GEM_STR_LIT("value", 5), _t21283.fn(_t21283.env, _t21282, 1));
+    GemVal _t21284[] = {gem_table_get_cached(_t21283, "value", &_ic_3150)};
+    gem_check_callable(_t21285, "compiler/fold.gem", 204);
+        gem_table_set(_t21286, GEM_STR_LIT("value", 5), _t21285.fn(_t21285.env, _t21284, 1));
     } else {
-    GemVal _t21285 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21287;
-    if (!gem_truthy(_t21285)) {
-        _t21287 = _t21285;
-    } else {
-    GemVal _t21286[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21287 = gem_has_key_fn(NULL, _t21286, 2);
-    }
-    GemVal _t21288;
+    GemVal _t21287 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21289;
     if (!gem_truthy(_t21287)) {
-        _t21288 = _t21287;
+        _t21289 = _t21287;
     } else {
-        _t21288 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("assign", 6));
+    GemVal _t21288[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21289 = gem_has_key_fn(NULL, _t21288, 2);
     }
-    if (gem_truthy(_t21288)) {
+    GemVal _t21290;
+    if (!gem_truthy(_t21289)) {
+        _t21290 = _t21289;
+    } else {
+        _t21290 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("assign", 6));
+    }
+    if (gem_truthy(_t21290)) {
 #line 206 "compiler/fold.gem"
         gem_set_line(206);
-    GemVal _t21292 = gem_v_node;
-    GemVal _t21291 = gem_g___mod_fold_fold;
-    GemVal _t21289 = gem_v_node;
+    GemVal _t21294 = gem_v_node;
+    GemVal _t21293 = gem_g___mod_fold_fold;
+    GemVal _t21291 = gem_v_node;
     static GemICacheSlot _ic_3151 = {0};
-    GemVal _t21290[] = {gem_table_get_cached(_t21289, "value", &_ic_3151)};
-    gem_check_callable(_t21291, "compiler/fold.gem", 206);
-        gem_table_set(_t21292, GEM_STR_LIT("value", 5), _t21291.fn(_t21291.env, _t21290, 1));
+    GemVal _t21292[] = {gem_table_get_cached(_t21291, "value", &_ic_3151)};
+    gem_check_callable(_t21293, "compiler/fold.gem", 206);
+        gem_table_set(_t21294, GEM_STR_LIT("value", 5), _t21293.fn(_t21293.env, _t21292, 1));
     } else {
-    GemVal _t21293 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21295;
-    if (!gem_truthy(_t21293)) {
-        _t21295 = _t21293;
-    } else {
-    GemVal _t21294[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21295 = gem_has_key_fn(NULL, _t21294, 2);
-    }
-    GemVal _t21296;
+    GemVal _t21295 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21297;
     if (!gem_truthy(_t21295)) {
-        _t21296 = _t21295;
+        _t21297 = _t21295;
     } else {
-        _t21296 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("dot_assign", 10));
+    GemVal _t21296[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21297 = gem_has_key_fn(NULL, _t21296, 2);
     }
-    if (gem_truthy(_t21296)) {
+    GemVal _t21298;
+    if (!gem_truthy(_t21297)) {
+        _t21298 = _t21297;
+    } else {
+        _t21298 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("dot_assign", 10));
+    }
+    if (gem_truthy(_t21298)) {
 #line 208 "compiler/fold.gem"
         gem_set_line(208);
-    GemVal _t21300 = gem_v_node;
-    GemVal _t21299 = gem_g___mod_fold_fold;
-    GemVal _t21297 = gem_v_node;
+    GemVal _t21302 = gem_v_node;
+    GemVal _t21301 = gem_g___mod_fold_fold;
+    GemVal _t21299 = gem_v_node;
     static GemICacheSlot _ic_3152 = {0};
-    GemVal _t21298[] = {gem_table_get_cached(_t21297, "object", &_ic_3152)};
-    gem_check_callable(_t21299, "compiler/fold.gem", 208);
-        gem_table_set(_t21300, GEM_STR_LIT("object", 6), _t21299.fn(_t21299.env, _t21298, 1));
+    GemVal _t21300[] = {gem_table_get_cached(_t21299, "object", &_ic_3152)};
+    gem_check_callable(_t21301, "compiler/fold.gem", 208);
+        gem_table_set(_t21302, GEM_STR_LIT("object", 6), _t21301.fn(_t21301.env, _t21300, 1));
 #line 209 "compiler/fold.gem"
         gem_set_line(209);
-    GemVal _t21304 = gem_v_node;
-    GemVal _t21303 = gem_g___mod_fold_fold;
-    GemVal _t21301 = gem_v_node;
+    GemVal _t21306 = gem_v_node;
+    GemVal _t21305 = gem_g___mod_fold_fold;
+    GemVal _t21303 = gem_v_node;
     static GemICacheSlot _ic_3153 = {0};
-    GemVal _t21302[] = {gem_table_get_cached(_t21301, "value", &_ic_3153)};
-    gem_check_callable(_t21303, "compiler/fold.gem", 209);
-        gem_table_set(_t21304, GEM_STR_LIT("value", 5), _t21303.fn(_t21303.env, _t21302, 1));
+    GemVal _t21304[] = {gem_table_get_cached(_t21303, "value", &_ic_3153)};
+    gem_check_callable(_t21305, "compiler/fold.gem", 209);
+        gem_table_set(_t21306, GEM_STR_LIT("value", 5), _t21305.fn(_t21305.env, _t21304, 1));
     } else {
-    GemVal _t21305 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21307;
-    if (!gem_truthy(_t21305)) {
-        _t21307 = _t21305;
-    } else {
-    GemVal _t21306[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21307 = gem_has_key_fn(NULL, _t21306, 2);
-    }
-    GemVal _t21308;
+    GemVal _t21307 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21309;
     if (!gem_truthy(_t21307)) {
-        _t21308 = _t21307;
+        _t21309 = _t21307;
     } else {
-        _t21308 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("index_assign", 12));
+    GemVal _t21308[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21309 = gem_has_key_fn(NULL, _t21308, 2);
     }
-    if (gem_truthy(_t21308)) {
+    GemVal _t21310;
+    if (!gem_truthy(_t21309)) {
+        _t21310 = _t21309;
+    } else {
+        _t21310 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("index_assign", 12));
+    }
+    if (gem_truthy(_t21310)) {
 #line 211 "compiler/fold.gem"
         gem_set_line(211);
-    GemVal _t21312 = gem_v_node;
-    GemVal _t21311 = gem_g___mod_fold_fold;
-    GemVal _t21309 = gem_v_node;
+    GemVal _t21314 = gem_v_node;
+    GemVal _t21313 = gem_g___mod_fold_fold;
+    GemVal _t21311 = gem_v_node;
     static GemICacheSlot _ic_3154 = {0};
-    GemVal _t21310[] = {gem_table_get_cached(_t21309, "object", &_ic_3154)};
-    gem_check_callable(_t21311, "compiler/fold.gem", 211);
-        gem_table_set(_t21312, GEM_STR_LIT("object", 6), _t21311.fn(_t21311.env, _t21310, 1));
+    GemVal _t21312[] = {gem_table_get_cached(_t21311, "object", &_ic_3154)};
+    gem_check_callable(_t21313, "compiler/fold.gem", 211);
+        gem_table_set(_t21314, GEM_STR_LIT("object", 6), _t21313.fn(_t21313.env, _t21312, 1));
 #line 212 "compiler/fold.gem"
         gem_set_line(212);
-    GemVal _t21316 = gem_v_node;
-    GemVal _t21315 = gem_g___mod_fold_fold;
-    GemVal _t21313 = gem_v_node;
+    GemVal _t21318 = gem_v_node;
+    GemVal _t21317 = gem_g___mod_fold_fold;
+    GemVal _t21315 = gem_v_node;
     static GemICacheSlot _ic_3155 = {0};
-    GemVal _t21314[] = {gem_table_get_cached(_t21313, "key", &_ic_3155)};
-    gem_check_callable(_t21315, "compiler/fold.gem", 212);
-        gem_table_set(_t21316, GEM_STR_LIT("key", 3), _t21315.fn(_t21315.env, _t21314, 1));
+    GemVal _t21316[] = {gem_table_get_cached(_t21315, "key", &_ic_3155)};
+    gem_check_callable(_t21317, "compiler/fold.gem", 212);
+        gem_table_set(_t21318, GEM_STR_LIT("key", 3), _t21317.fn(_t21317.env, _t21316, 1));
 #line 213 "compiler/fold.gem"
         gem_set_line(213);
-    GemVal _t21320 = gem_v_node;
-    GemVal _t21319 = gem_g___mod_fold_fold;
-    GemVal _t21317 = gem_v_node;
+    GemVal _t21322 = gem_v_node;
+    GemVal _t21321 = gem_g___mod_fold_fold;
+    GemVal _t21319 = gem_v_node;
     static GemICacheSlot _ic_3156 = {0};
-    GemVal _t21318[] = {gem_table_get_cached(_t21317, "value", &_ic_3156)};
-    gem_check_callable(_t21319, "compiler/fold.gem", 213);
-        gem_table_set(_t21320, GEM_STR_LIT("value", 5), _t21319.fn(_t21319.env, _t21318, 1));
+    GemVal _t21320[] = {gem_table_get_cached(_t21319, "value", &_ic_3156)};
+    gem_check_callable(_t21321, "compiler/fold.gem", 213);
+        gem_table_set(_t21322, GEM_STR_LIT("value", 5), _t21321.fn(_t21321.env, _t21320, 1));
     } else {
-    GemVal _t21321 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21323;
-    if (!gem_truthy(_t21321)) {
-        _t21323 = _t21321;
-    } else {
-    GemVal _t21322[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21323 = gem_has_key_fn(NULL, _t21322, 2);
-    }
-    GemVal _t21324;
+    GemVal _t21323 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21325;
     if (!gem_truthy(_t21323)) {
-        _t21324 = _t21323;
+        _t21325 = _t21323;
     } else {
-        _t21324 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("fn_def", 6));
+    GemVal _t21324[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21325 = gem_has_key_fn(NULL, _t21324, 2);
     }
-    if (gem_truthy(_t21324)) {
+    GemVal _t21326;
+    if (!gem_truthy(_t21325)) {
+        _t21326 = _t21325;
+    } else {
+        _t21326 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("fn_def", 6));
+    }
+    if (gem_truthy(_t21326)) {
 #line 215 "compiler/fold.gem"
         gem_set_line(215);
-    GemVal _t21327 = gem_g___mod_fold_fold_stmts;
-    GemVal _t21325 = gem_v_node;
+    GemVal _t21329 = gem_g___mod_fold_fold_stmts;
+    GemVal _t21327 = gem_v_node;
     static GemICacheSlot _ic_3157 = {0};
-    GemVal _t21326[] = {gem_table_get_cached(_t21325, "body", &_ic_3157)};
-    gem_check_callable(_t21327, "compiler/fold.gem", 215);
-        (void)(_t21327.fn(_t21327.env, _t21326, 1));
+    GemVal _t21328[] = {gem_table_get_cached(_t21327, "body", &_ic_3157)};
+    gem_check_callable(_t21329, "compiler/fold.gem", 215);
+        (void)(_t21329.fn(_t21329.env, _t21328, 1));
 #line 216 "compiler/fold.gem"
         gem_set_line(216);
-    GemVal _t21328 = gem_v_node;
+    GemVal _t21330 = gem_v_node;
     static GemICacheSlot _ic_3158 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t21328, "defaults", &_ic_3158), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t21330, "defaults", &_ic_3158), GEM_NIL))) {
 #line 217 "compiler/fold.gem"
             gem_set_line(217);
             GemVal gem_v___for_i_478 = gem_int(0);
 #line 217 "compiler/fold.gem"
             gem_set_line(217);
-    GemVal _t21329 = gem_v_node;
+    GemVal _t21331 = gem_v_node;
     static GemICacheSlot _ic_3159 = {0};
-            GemVal gem_v___for_limit_478 = gem_len_1(gem_table_get_cached(_t21329, "defaults", &_ic_3159));
+            GemVal gem_v___for_limit_478 = gem_len_1(gem_table_get_cached(_t21331, "defaults", &_ic_3159));
 #line 217 "compiler/fold.gem"
             gem_set_line(217);
             GemArenaMark _mk644;
@@ -93311,8 +93345,8 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
                     GemVal *_rr[] = {&gem_v_node, &gem_v___for_i_478, &gem_v___for_limit_478};
                     gem_arena_reset_region(&_mk644, _rr, 3, NULL, 0);
                 }
-    GemVal _t21330 = gem_v___for_i_478;
-                if (!gem_truthy(gem_lt(_t21330, gem_v___for_limit_478))) break;
+    GemVal _t21332 = gem_v___for_i_478;
+                if (!gem_truthy(gem_lt(_t21332, gem_v___for_limit_478))) break;
 #line 217 "compiler/fold.gem"
                 gem_set_line(217);
                 GemVal gem_v_i = gem_v___for_i_478;
@@ -93321,137 +93355,137 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
                 gem_v___for_i_478 = gem_add(gem_v___for_i_478, gem_int(1));
 #line 218 "compiler/fold.gem"
                 gem_set_line(218);
-    GemVal _t21331 = gem_v_node;
+    GemVal _t21333 = gem_v_node;
     static GemICacheSlot _ic_3160 = {0};
-    GemVal _t21332 = gem_table_get_cached(_t21331, "defaults", &_ic_3160);
-                if (gem_truthy(gem_neq(gem_table_get(_t21332, gem_v_i), GEM_NIL))) {
+    GemVal _t21334 = gem_table_get_cached(_t21333, "defaults", &_ic_3160);
+                if (gem_truthy(gem_neq(gem_table_get(_t21334, gem_v_i), GEM_NIL))) {
 #line 219 "compiler/fold.gem"
                     gem_set_line(219);
-    GemVal _t21333 = gem_v_node;
+    GemVal _t21335 = gem_v_node;
     static GemICacheSlot _ic_3161 = {0};
-    GemVal _t21339 = gem_table_get_cached(_t21333, "defaults", &_ic_3161);
-    GemVal _t21338 = gem_v_i;
-    GemVal _t21337 = gem_g___mod_fold_fold;
-    GemVal _t21334 = gem_v_node;
+    GemVal _t21341 = gem_table_get_cached(_t21335, "defaults", &_ic_3161);
+    GemVal _t21340 = gem_v_i;
+    GemVal _t21339 = gem_g___mod_fold_fold;
+    GemVal _t21336 = gem_v_node;
     static GemICacheSlot _ic_3162 = {0};
-    GemVal _t21335 = gem_table_get_cached(_t21334, "defaults", &_ic_3162);
-    GemVal _t21336[] = {gem_table_get(_t21335, gem_v_i)};
-    gem_check_callable(_t21337, "compiler/fold.gem", 219);
-                    gem_table_set(_t21339, _t21338, _t21337.fn(_t21337.env, _t21336, 1));
+    GemVal _t21337 = gem_table_get_cached(_t21336, "defaults", &_ic_3162);
+    GemVal _t21338[] = {gem_table_get(_t21337, gem_v_i)};
+    gem_check_callable(_t21339, "compiler/fold.gem", 219);
+                    gem_table_set(_t21341, _t21340, _t21339.fn(_t21339.env, _t21338, 1));
                 }
             }
 
         }
     } else {
-    GemVal _t21340 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21342;
-    if (!gem_truthy(_t21340)) {
-        _t21342 = _t21340;
-    } else {
-    GemVal _t21341[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21342 = gem_has_key_fn(NULL, _t21341, 2);
-    }
-    GemVal _t21343;
+    GemVal _t21342 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21344;
     if (!gem_truthy(_t21342)) {
-        _t21343 = _t21342;
+        _t21344 = _t21342;
     } else {
-        _t21343 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("if", 2));
+    GemVal _t21343[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21344 = gem_has_key_fn(NULL, _t21343, 2);
     }
-    if (gem_truthy(_t21343)) {
+    GemVal _t21345;
+    if (!gem_truthy(_t21344)) {
+        _t21345 = _t21344;
+    } else {
+        _t21345 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("if", 2));
+    }
+    if (gem_truthy(_t21345)) {
 #line 224 "compiler/fold.gem"
         gem_set_line(224);
-    GemVal _t21347 = gem_v_node;
-    GemVal _t21346 = gem_g___mod_fold_fold;
-    GemVal _t21344 = gem_v_node;
+    GemVal _t21349 = gem_v_node;
+    GemVal _t21348 = gem_g___mod_fold_fold;
+    GemVal _t21346 = gem_v_node;
     static GemICacheSlot _ic_3163 = {0};
-    GemVal _t21345[] = {gem_table_get_cached(_t21344, "cond", &_ic_3163)};
-    gem_check_callable(_t21346, "compiler/fold.gem", 224);
-        gem_table_set(_t21347, GEM_STR_LIT("cond", 4), _t21346.fn(_t21346.env, _t21345, 1));
+    GemVal _t21347[] = {gem_table_get_cached(_t21346, "cond", &_ic_3163)};
+    gem_check_callable(_t21348, "compiler/fold.gem", 224);
+        gem_table_set(_t21349, GEM_STR_LIT("cond", 4), _t21348.fn(_t21348.env, _t21347, 1));
 #line 225 "compiler/fold.gem"
         gem_set_line(225);
-    GemVal _t21350 = gem_g___mod_fold_fold_stmts;
-    GemVal _t21348 = gem_v_node;
+    GemVal _t21352 = gem_g___mod_fold_fold_stmts;
+    GemVal _t21350 = gem_v_node;
     static GemICacheSlot _ic_3164 = {0};
-    GemVal _t21349[] = {gem_table_get_cached(_t21348, "then", &_ic_3164)};
-    gem_check_callable(_t21350, "compiler/fold.gem", 225);
-        (void)(_t21350.fn(_t21350.env, _t21349, 1));
+    GemVal _t21351[] = {gem_table_get_cached(_t21350, "then", &_ic_3164)};
+    gem_check_callable(_t21352, "compiler/fold.gem", 225);
+        (void)(_t21352.fn(_t21352.env, _t21351, 1));
 #line 226 "compiler/fold.gem"
         gem_set_line(226);
-    GemVal _t21351 = gem_v_node;
+    GemVal _t21353 = gem_v_node;
     static GemICacheSlot _ic_3165 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t21351, "else", &_ic_3165), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t21353, "else", &_ic_3165), GEM_NIL))) {
 #line 226 "compiler/fold.gem"
             gem_set_line(226);
-    GemVal _t21354 = gem_g___mod_fold_fold_stmts;
-    GemVal _t21352 = gem_v_node;
+    GemVal _t21356 = gem_g___mod_fold_fold_stmts;
+    GemVal _t21354 = gem_v_node;
     static GemICacheSlot _ic_3166 = {0};
-    GemVal _t21353[] = {gem_table_get_cached(_t21352, "else", &_ic_3166)};
-    gem_check_callable(_t21354, "compiler/fold.gem", 226);
-            (void)(_t21354.fn(_t21354.env, _t21353, 1));
+    GemVal _t21355[] = {gem_table_get_cached(_t21354, "else", &_ic_3166)};
+    gem_check_callable(_t21356, "compiler/fold.gem", 226);
+            (void)(_t21356.fn(_t21356.env, _t21355, 1));
         }
     } else {
-    GemVal _t21355 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21357;
-    if (!gem_truthy(_t21355)) {
-        _t21357 = _t21355;
-    } else {
-    GemVal _t21356[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21357 = gem_has_key_fn(NULL, _t21356, 2);
-    }
-    GemVal _t21358;
+    GemVal _t21357 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21359;
     if (!gem_truthy(_t21357)) {
-        _t21358 = _t21357;
+        _t21359 = _t21357;
     } else {
-        _t21358 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("while", 5));
+    GemVal _t21358[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21359 = gem_has_key_fn(NULL, _t21358, 2);
     }
-    if (gem_truthy(_t21358)) {
+    GemVal _t21360;
+    if (!gem_truthy(_t21359)) {
+        _t21360 = _t21359;
+    } else {
+        _t21360 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("while", 5));
+    }
+    if (gem_truthy(_t21360)) {
 #line 228 "compiler/fold.gem"
         gem_set_line(228);
-    GemVal _t21362 = gem_v_node;
-    GemVal _t21361 = gem_g___mod_fold_fold;
-    GemVal _t21359 = gem_v_node;
+    GemVal _t21364 = gem_v_node;
+    GemVal _t21363 = gem_g___mod_fold_fold;
+    GemVal _t21361 = gem_v_node;
     static GemICacheSlot _ic_3167 = {0};
-    GemVal _t21360[] = {gem_table_get_cached(_t21359, "cond", &_ic_3167)};
-    gem_check_callable(_t21361, "compiler/fold.gem", 228);
-        gem_table_set(_t21362, GEM_STR_LIT("cond", 4), _t21361.fn(_t21361.env, _t21360, 1));
+    GemVal _t21362[] = {gem_table_get_cached(_t21361, "cond", &_ic_3167)};
+    gem_check_callable(_t21363, "compiler/fold.gem", 228);
+        gem_table_set(_t21364, GEM_STR_LIT("cond", 4), _t21363.fn(_t21363.env, _t21362, 1));
 #line 229 "compiler/fold.gem"
         gem_set_line(229);
-    GemVal _t21365 = gem_g___mod_fold_fold_stmts;
-    GemVal _t21363 = gem_v_node;
+    GemVal _t21367 = gem_g___mod_fold_fold_stmts;
+    GemVal _t21365 = gem_v_node;
     static GemICacheSlot _ic_3168 = {0};
-    GemVal _t21364[] = {gem_table_get_cached(_t21363, "body", &_ic_3168)};
-    gem_check_callable(_t21365, "compiler/fold.gem", 229);
-        (void)(_t21365.fn(_t21365.env, _t21364, 1));
+    GemVal _t21366[] = {gem_table_get_cached(_t21365, "body", &_ic_3168)};
+    gem_check_callable(_t21367, "compiler/fold.gem", 229);
+        (void)(_t21367.fn(_t21367.env, _t21366, 1));
     } else {
-    GemVal _t21366 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21368;
-    if (!gem_truthy(_t21366)) {
-        _t21368 = _t21366;
-    } else {
-    GemVal _t21367[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21368 = gem_has_key_fn(NULL, _t21367, 2);
-    }
-    GemVal _t21369;
+    GemVal _t21368 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21370;
     if (!gem_truthy(_t21368)) {
-        _t21369 = _t21368;
+        _t21370 = _t21368;
     } else {
-        _t21369 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("match", 5));
+    GemVal _t21369[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21370 = gem_has_key_fn(NULL, _t21369, 2);
     }
-    if (gem_truthy(_t21369)) {
+    GemVal _t21371;
+    if (!gem_truthy(_t21370)) {
+        _t21371 = _t21370;
+    } else {
+        _t21371 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("match", 5));
+    }
+    if (gem_truthy(_t21371)) {
 #line 231 "compiler/fold.gem"
         gem_set_line(231);
-    GemVal _t21373 = gem_v_node;
-    GemVal _t21372 = gem_g___mod_fold_fold;
-    GemVal _t21370 = gem_v_node;
+    GemVal _t21375 = gem_v_node;
+    GemVal _t21374 = gem_g___mod_fold_fold;
+    GemVal _t21372 = gem_v_node;
     static GemICacheSlot _ic_3169 = {0};
-    GemVal _t21371[] = {gem_table_get_cached(_t21370, "target", &_ic_3169)};
-    gem_check_callable(_t21372, "compiler/fold.gem", 231);
-        gem_table_set(_t21373, GEM_STR_LIT("target", 6), _t21372.fn(_t21372.env, _t21371, 1));
+    GemVal _t21373[] = {gem_table_get_cached(_t21372, "target", &_ic_3169)};
+    gem_check_callable(_t21374, "compiler/fold.gem", 231);
+        gem_table_set(_t21375, GEM_STR_LIT("target", 6), _t21374.fn(_t21374.env, _t21373, 1));
 #line 232 "compiler/fold.gem"
         gem_set_line(232);
-    GemVal _t21374 = gem_v_node;
+    GemVal _t21376 = gem_v_node;
     static GemICacheSlot _ic_3170 = {0};
-        GemVal gem_v___for_items_479 = gem_for_items_1(gem_table_get_cached(_t21374, "whens", &_ic_3170));
+        GemVal gem_v___for_items_479 = gem_for_items_1(gem_table_get_cached(_t21376, "whens", &_ic_3170));
 #line 232 "compiler/fold.gem"
         gem_set_line(232);
         GemVal gem_v___for_i_479 = gem_int(0);
@@ -93465,69 +93499,69 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_node, &gem_v___for_i_479, &gem_v___for_items_479};
                 gem_arena_reset_region(&_mk645, _rr, 3, NULL, 0);
             }
-    GemVal _t21375 = gem_v___for_i_479;
-            if (!gem_truthy(gem_lt(_t21375, gem_for_len_1(gem_v___for_items_479)))) break;
+    GemVal _t21377 = gem_v___for_i_479;
+            if (!gem_truthy(gem_lt(_t21377, gem_for_len_1(gem_v___for_items_479)))) break;
 #line 232 "compiler/fold.gem"
             gem_set_line(232);
-    GemVal _t21376 = gem_v___for_items_479;
-            GemVal gem_v_w = gem_table_get(_t21376, gem_v___for_i_479);
+    GemVal _t21378 = gem_v___for_items_479;
+            GemVal gem_v_w = gem_table_get(_t21378, gem_v___for_i_479);
 #line 232 "compiler/fold.gem"
             gem_set_line(232);
             gem_v___for_i_479 = gem_add(gem_v___for_i_479, gem_int(1));
 #line 233 "compiler/fold.gem"
             gem_set_line(233);
-    GemVal _t21380 = gem_v_w;
-    GemVal _t21379 = gem_g___mod_fold_fold;
-    GemVal _t21377 = gem_v_w;
+    GemVal _t21382 = gem_v_w;
+    GemVal _t21381 = gem_g___mod_fold_fold;
+    GemVal _t21379 = gem_v_w;
     static GemICacheSlot _ic_3171 = {0};
-    GemVal _t21378[] = {gem_table_get_cached(_t21377, "value", &_ic_3171)};
-    gem_check_callable(_t21379, "compiler/fold.gem", 233);
-            gem_table_set(_t21380, GEM_STR_LIT("value", 5), _t21379.fn(_t21379.env, _t21378, 1));
+    GemVal _t21380[] = {gem_table_get_cached(_t21379, "value", &_ic_3171)};
+    gem_check_callable(_t21381, "compiler/fold.gem", 233);
+            gem_table_set(_t21382, GEM_STR_LIT("value", 5), _t21381.fn(_t21381.env, _t21380, 1));
 #line 234 "compiler/fold.gem"
             gem_set_line(234);
-    GemVal _t21383 = gem_g___mod_fold_fold_stmts;
-    GemVal _t21381 = gem_v_w;
+    GemVal _t21385 = gem_g___mod_fold_fold_stmts;
+    GemVal _t21383 = gem_v_w;
     static GemICacheSlot _ic_3172 = {0};
-    GemVal _t21382[] = {gem_table_get_cached(_t21381, "body", &_ic_3172)};
-    gem_check_callable(_t21383, "compiler/fold.gem", 234);
-            (void)(_t21383.fn(_t21383.env, _t21382, 1));
+    GemVal _t21384[] = {gem_table_get_cached(_t21383, "body", &_ic_3172)};
+    gem_check_callable(_t21385, "compiler/fold.gem", 234);
+            (void)(_t21385.fn(_t21385.env, _t21384, 1));
         }
 
 #line 236 "compiler/fold.gem"
         gem_set_line(236);
-    GemVal _t21384 = gem_v_node;
+    GemVal _t21386 = gem_v_node;
     static GemICacheSlot _ic_3173 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t21384, "else", &_ic_3173), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t21386, "else", &_ic_3173), GEM_NIL))) {
 #line 236 "compiler/fold.gem"
             gem_set_line(236);
-    GemVal _t21387 = gem_g___mod_fold_fold_stmts;
-    GemVal _t21385 = gem_v_node;
+    GemVal _t21389 = gem_g___mod_fold_fold_stmts;
+    GemVal _t21387 = gem_v_node;
     static GemICacheSlot _ic_3174 = {0};
-    GemVal _t21386[] = {gem_table_get_cached(_t21385, "else", &_ic_3174)};
-    gem_check_callable(_t21387, "compiler/fold.gem", 236);
-            (void)(_t21387.fn(_t21387.env, _t21386, 1));
+    GemVal _t21388[] = {gem_table_get_cached(_t21387, "else", &_ic_3174)};
+    gem_check_callable(_t21389, "compiler/fold.gem", 236);
+            (void)(_t21389.fn(_t21389.env, _t21388, 1));
         }
     } else {
-    GemVal _t21388 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21390;
-    if (!gem_truthy(_t21388)) {
-        _t21390 = _t21388;
-    } else {
-    GemVal _t21389[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21390 = gem_has_key_fn(NULL, _t21389, 2);
-    }
-    GemVal _t21391;
+    GemVal _t21390 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21392;
     if (!gem_truthy(_t21390)) {
-        _t21391 = _t21390;
+        _t21392 = _t21390;
     } else {
-        _t21391 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("receive_match", 13));
+    GemVal _t21391[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21392 = gem_has_key_fn(NULL, _t21391, 2);
     }
-    if (gem_truthy(_t21391)) {
+    GemVal _t21393;
+    if (!gem_truthy(_t21392)) {
+        _t21393 = _t21392;
+    } else {
+        _t21393 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("receive_match", 13));
+    }
+    if (gem_truthy(_t21393)) {
 #line 238 "compiler/fold.gem"
         gem_set_line(238);
-    GemVal _t21392 = gem_v_node;
+    GemVal _t21394 = gem_v_node;
     static GemICacheSlot _ic_3175 = {0};
-        GemVal gem_v___for_items_480 = gem_for_items_1(gem_table_get_cached(_t21392, "arms", &_ic_3175));
+        GemVal gem_v___for_items_480 = gem_for_items_1(gem_table_get_cached(_t21394, "arms", &_ic_3175));
 #line 238 "compiler/fold.gem"
         gem_set_line(238);
         GemVal gem_v___for_i_480 = gem_int(0);
@@ -93541,109 +93575,109 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
                 GemVal *_rr[] = {&gem_v_node, &gem_v___for_i_480, &gem_v___for_items_480};
                 gem_arena_reset_region(&_mk646, _rr, 3, NULL, 0);
             }
-    GemVal _t21393 = gem_v___for_i_480;
-            if (!gem_truthy(gem_lt(_t21393, gem_for_len_1(gem_v___for_items_480)))) break;
+    GemVal _t21395 = gem_v___for_i_480;
+            if (!gem_truthy(gem_lt(_t21395, gem_for_len_1(gem_v___for_items_480)))) break;
 #line 238 "compiler/fold.gem"
             gem_set_line(238);
-    GemVal _t21394 = gem_v___for_items_480;
-            GemVal gem_v_arm = gem_table_get(_t21394, gem_v___for_i_480);
+    GemVal _t21396 = gem_v___for_items_480;
+            GemVal gem_v_arm = gem_table_get(_t21396, gem_v___for_i_480);
 #line 238 "compiler/fold.gem"
             gem_set_line(238);
             gem_v___for_i_480 = gem_add(gem_v___for_i_480, gem_int(1));
 #line 239 "compiler/fold.gem"
             gem_set_line(239);
-    GemVal _t21397 = gem_g___mod_fold_fold_stmts;
-    GemVal _t21395 = gem_v_arm;
+    GemVal _t21399 = gem_g___mod_fold_fold_stmts;
+    GemVal _t21397 = gem_v_arm;
     static GemICacheSlot _ic_3176 = {0};
-    GemVal _t21396[] = {gem_table_get_cached(_t21395, "body", &_ic_3176)};
-    gem_check_callable(_t21397, "compiler/fold.gem", 239);
-            (void)(_t21397.fn(_t21397.env, _t21396, 1));
+    GemVal _t21398[] = {gem_table_get_cached(_t21397, "body", &_ic_3176)};
+    gem_check_callable(_t21399, "compiler/fold.gem", 239);
+            (void)(_t21399.fn(_t21399.env, _t21398, 1));
         }
 
 #line 241 "compiler/fold.gem"
         gem_set_line(241);
-    GemVal _t21398 = gem_v_node;
+    GemVal _t21400 = gem_v_node;
     static GemICacheSlot _ic_3177 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t21398, "after_ms", &_ic_3177), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t21400, "after_ms", &_ic_3177), GEM_NIL))) {
 #line 241 "compiler/fold.gem"
             gem_set_line(241);
-    GemVal _t21402 = gem_v_node;
-    GemVal _t21401 = gem_g___mod_fold_fold;
-    GemVal _t21399 = gem_v_node;
+    GemVal _t21404 = gem_v_node;
+    GemVal _t21403 = gem_g___mod_fold_fold;
+    GemVal _t21401 = gem_v_node;
     static GemICacheSlot _ic_3178 = {0};
-    GemVal _t21400[] = {gem_table_get_cached(_t21399, "after_ms", &_ic_3178)};
-    gem_check_callable(_t21401, "compiler/fold.gem", 241);
-            gem_table_set(_t21402, GEM_STR_LIT("after_ms", 8), _t21401.fn(_t21401.env, _t21400, 1));
+    GemVal _t21402[] = {gem_table_get_cached(_t21401, "after_ms", &_ic_3178)};
+    gem_check_callable(_t21403, "compiler/fold.gem", 241);
+            gem_table_set(_t21404, GEM_STR_LIT("after_ms", 8), _t21403.fn(_t21403.env, _t21402, 1));
         }
 #line 242 "compiler/fold.gem"
         gem_set_line(242);
-    GemVal _t21403 = gem_v_node;
+    GemVal _t21405 = gem_v_node;
     static GemICacheSlot _ic_3179 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t21403, "after_body", &_ic_3179), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t21405, "after_body", &_ic_3179), GEM_NIL))) {
 #line 242 "compiler/fold.gem"
             gem_set_line(242);
-    GemVal _t21406 = gem_g___mod_fold_fold_stmts;
-    GemVal _t21404 = gem_v_node;
+    GemVal _t21408 = gem_g___mod_fold_fold_stmts;
+    GemVal _t21406 = gem_v_node;
     static GemICacheSlot _ic_3180 = {0};
-    GemVal _t21405[] = {gem_table_get_cached(_t21404, "after_body", &_ic_3180)};
-    gem_check_callable(_t21406, "compiler/fold.gem", 242);
-            (void)(_t21406.fn(_t21406.env, _t21405, 1));
+    GemVal _t21407[] = {gem_table_get_cached(_t21406, "after_body", &_ic_3180)};
+    gem_check_callable(_t21408, "compiler/fold.gem", 242);
+            (void)(_t21408.fn(_t21408.env, _t21407, 1));
         }
     } else {
-    GemVal _t21407 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21409;
-    if (!gem_truthy(_t21407)) {
-        _t21409 = _t21407;
-    } else {
-    GemVal _t21408[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21409 = gem_has_key_fn(NULL, _t21408, 2);
-    }
-    GemVal _t21410;
+    GemVal _t21409 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21411;
     if (!gem_truthy(_t21409)) {
-        _t21410 = _t21409;
+        _t21411 = _t21409;
     } else {
-        _t21410 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("return", 6));
+    GemVal _t21410[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21411 = gem_has_key_fn(NULL, _t21410, 2);
     }
-    if (gem_truthy(_t21410)) {
+    GemVal _t21412;
+    if (!gem_truthy(_t21411)) {
+        _t21412 = _t21411;
+    } else {
+        _t21412 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("return", 6));
+    }
+    if (gem_truthy(_t21412)) {
 #line 244 "compiler/fold.gem"
         gem_set_line(244);
-    GemVal _t21411 = gem_v_node;
+    GemVal _t21413 = gem_v_node;
     static GemICacheSlot _ic_3181 = {0};
-        if (gem_truthy(gem_neq(gem_table_get_cached(_t21411, "value", &_ic_3181), GEM_NIL))) {
+        if (gem_truthy(gem_neq(gem_table_get_cached(_t21413, "value", &_ic_3181), GEM_NIL))) {
 #line 244 "compiler/fold.gem"
             gem_set_line(244);
-    GemVal _t21415 = gem_v_node;
-    GemVal _t21414 = gem_g___mod_fold_fold;
-    GemVal _t21412 = gem_v_node;
+    GemVal _t21417 = gem_v_node;
+    GemVal _t21416 = gem_g___mod_fold_fold;
+    GemVal _t21414 = gem_v_node;
     static GemICacheSlot _ic_3182 = {0};
-    GemVal _t21413[] = {gem_table_get_cached(_t21412, "value", &_ic_3182)};
-    gem_check_callable(_t21414, "compiler/fold.gem", 244);
-            gem_table_set(_t21415, GEM_STR_LIT("value", 5), _t21414.fn(_t21414.env, _t21413, 1));
+    GemVal _t21415[] = {gem_table_get_cached(_t21414, "value", &_ic_3182)};
+    gem_check_callable(_t21416, "compiler/fold.gem", 244);
+            gem_table_set(_t21417, GEM_STR_LIT("value", 5), _t21416.fn(_t21416.env, _t21415, 1));
         }
     } else {
-    GemVal _t21416 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
-    GemVal _t21418;
-    if (!gem_truthy(_t21416)) {
-        _t21418 = _t21416;
-    } else {
-    GemVal _t21417[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
-        _t21418 = gem_has_key_fn(NULL, _t21417, 2);
-    }
-    GemVal _t21419;
+    GemVal _t21418 = gem_eq(gem_type_1(gem_v___match_472), GEM_STR_LIT("table", 5));
+    GemVal _t21420;
     if (!gem_truthy(_t21418)) {
-        _t21419 = _t21418;
+        _t21420 = _t21418;
     } else {
-        _t21419 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("program", 7));
+    GemVal _t21419[] = {gem_v___match_472, GEM_STR_LIT("tag", 3)};
+        _t21420 = gem_has_key_fn(NULL, _t21419, 2);
     }
-    if (gem_truthy(_t21419)) {
+    GemVal _t21421;
+    if (!gem_truthy(_t21420)) {
+        _t21421 = _t21420;
+    } else {
+        _t21421 = gem_eq(gem_table_get(gem_v___match_472, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("program", 7));
+    }
+    if (gem_truthy(_t21421)) {
 #line 246 "compiler/fold.gem"
         gem_set_line(246);
-    GemVal _t21422 = gem_g___mod_fold_fold_stmts;
-    GemVal _t21420 = gem_v_node;
+    GemVal _t21424 = gem_g___mod_fold_fold_stmts;
+    GemVal _t21422 = gem_v_node;
     static GemICacheSlot _ic_3183 = {0};
-    GemVal _t21421[] = {gem_table_get_cached(_t21420, "stmts", &_ic_3183)};
-    gem_check_callable(_t21422, "compiler/fold.gem", 246);
-        (void)(_t21422.fn(_t21422.env, _t21421, 1));
+    GemVal _t21423[] = {gem_table_get_cached(_t21422, "stmts", &_ic_3183)};
+    gem_check_callable(_t21424, "compiler/fold.gem", 246);
+        (void)(_t21424.fn(_t21424.env, _t21423, 1));
     }
     }
     }
@@ -93666,10 +93700,10 @@ static GemVal __anon_219(void *_env, GemVal *args, int argc) {
     }
 #line 249 "compiler/fold.gem"
     gem_set_line(249);
-    GemVal _t21423 = gem_v_node;
-    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21423, 1);
+    GemVal _t21425 = gem_v_node;
+    if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t21425, 1);
     gem_pop_frame();
-    return _t21423;
+    return _t21425;
 }
 
 static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
@@ -93677,19 +93711,19 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_push_frame("main", "compiler/main.gem", 0);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
-    GemVal _t19111 = gem_table_new_braces();
-    gem_table_set(_t19111, GEM_STR_LIT("split", 5), gem_make_fn(gem_fn___mod_string_split, NULL));
-    gem_table_set(_t19111, GEM_STR_LIT("index_of", 8), gem_make_fn(gem_fn___mod_string_index_of, NULL));
-    gem_table_set(_t19111, GEM_STR_LIT("join", 4), gem_make_fn(gem_fn___mod_string_join, NULL));
-    gem_table_set(_t19111, GEM_STR_LIT("trim", 4), gem_make_fn(gem_fn___mod_string_trim, NULL));
-    gem_table_set(_t19111, GEM_STR_LIT("starts_with", 11), gem_make_fn(gem_fn___mod_string_starts_with, NULL));
-    gem_table_set(_t19111, GEM_STR_LIT("ends_with", 9), gem_make_fn(gem_fn___mod_string_ends_with, NULL));
-    gem_table_set(_t19111, GEM_STR_LIT("upper", 5), gem_make_fn(gem_fn___mod_string_upper, NULL));
-    gem_table_set(_t19111, GEM_STR_LIT("lower", 5), gem_make_fn(gem_fn___mod_string_lower, NULL));
-    gem_table_set(_t19111, GEM_STR_LIT("contains", 8), gem_make_fn(gem_fn___mod_string_contains, NULL));
-    gem_table_set(_t19111, GEM_STR_LIT("repeat", 6), gem_make_fn(gem_fn___mod_string_repeat, NULL));
-    gem_table_freeze(_t19111);
-    gem_global_set(gem_gi_string, _t19111);
+    GemVal _t19113 = gem_table_new_braces();
+    gem_table_set(_t19113, GEM_STR_LIT("split", 5), gem_make_fn(gem_fn___mod_string_split, NULL));
+    gem_table_set(_t19113, GEM_STR_LIT("index_of", 8), gem_make_fn(gem_fn___mod_string_index_of, NULL));
+    gem_table_set(_t19113, GEM_STR_LIT("join", 4), gem_make_fn(gem_fn___mod_string_join, NULL));
+    gem_table_set(_t19113, GEM_STR_LIT("trim", 4), gem_make_fn(gem_fn___mod_string_trim, NULL));
+    gem_table_set(_t19113, GEM_STR_LIT("starts_with", 11), gem_make_fn(gem_fn___mod_string_starts_with, NULL));
+    gem_table_set(_t19113, GEM_STR_LIT("ends_with", 9), gem_make_fn(gem_fn___mod_string_ends_with, NULL));
+    gem_table_set(_t19113, GEM_STR_LIT("upper", 5), gem_make_fn(gem_fn___mod_string_upper, NULL));
+    gem_table_set(_t19113, GEM_STR_LIT("lower", 5), gem_make_fn(gem_fn___mod_string_lower, NULL));
+    gem_table_set(_t19113, GEM_STR_LIT("contains", 8), gem_make_fn(gem_fn___mod_string_contains, NULL));
+    gem_table_set(_t19113, GEM_STR_LIT("repeat", 6), gem_make_fn(gem_fn___mod_string_repeat, NULL));
+    gem_table_freeze(_t19113);
+    gem_global_set(gem_gi_string, _t19113);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     gem_global_set(gem_gi___mod_parser_make_program, gem_make_fn(gem_fn___mod_ast_make_program, NULL));
@@ -93836,185 +93870,185 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi___mod_lexer_make_error_sink, gem_make_fn(gem_fn___mod_errors_make_error_sink, NULL));
 #line 18 "compiler/builtins.gem"
     gem_set_line(18);
-    GemVal _t19112 = gem_table_new_braces();
-    gem_table_set(_t19112, GEM_STR_LIT("print", 5), GEM_STR_LIT("gem_print", 9));
-    gem_table_set(_t19112, GEM_STR_LIT("error", 5), GEM_STR_LIT("gem_error_fn", 12));
-    gem_table_set(_t19112, GEM_STR_LIT("len", 3), GEM_STR_LIT("gem_len_fn", 10));
-    gem_table_set(_t19112, GEM_STR_LIT("type", 4), GEM_STR_LIT("gem_type_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("to_string", 9), GEM_STR_LIT("gem_to_string_fn", 16));
-    gem_table_set(_t19112, GEM_STR_LIT("push", 4), GEM_STR_LIT("gem_push_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("pcall", 5), GEM_STR_LIT("gem_pcall_fn", 12));
-    gem_table_set(_t19112, GEM_STR_LIT("keys", 4), GEM_STR_LIT("gem_keys_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("str_replace", 11), GEM_STR_LIT("gem_str_replace_fn", 18));
-    gem_table_set(_t19112, GEM_STR_LIT("has_key", 7), GEM_STR_LIT("gem_has_key_fn", 14));
-    gem_table_set(_t19112, GEM_STR_LIT("substr", 6), GEM_STR_LIT("gem_substr_fn", 13));
-    gem_table_set(_t19112, GEM_STR_LIT("find", 4), GEM_STR_LIT("gem_find_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("chr", 3), GEM_STR_LIT("gem_chr_fn", 10));
-    gem_table_set(_t19112, GEM_STR_LIT("ord", 3), GEM_STR_LIT("gem_ord_fn", 10));
-    gem_table_set(_t19112, GEM_STR_LIT("to_int", 6), GEM_STR_LIT("gem_to_int_fn", 13));
-    gem_table_set(_t19112, GEM_STR_LIT("to_float", 8), GEM_STR_LIT("gem_to_float_fn", 15));
-    gem_table_set(_t19112, GEM_STR_LIT("buf_new", 7), GEM_STR_LIT("gem_buf_new_fn", 14));
-    gem_table_set(_t19112, GEM_STR_LIT("buf_push", 8), GEM_STR_LIT("gem_buf_push_fn", 15));
-    gem_table_set(_t19112, GEM_STR_LIT("build_string", 12), GEM_STR_LIT("gem_build_string_fn", 19));
-    gem_table_set(_t19112, GEM_STR_LIT("spawn", 5), GEM_STR_LIT("gem_spawn_builtin", 17));
-    gem_table_set(_t19112, GEM_STR_LIT("send", 4), GEM_STR_LIT("gem_send_builtin", 16));
-    gem_table_set(_t19112, GEM_STR_LIT("receive", 7), GEM_STR_LIT("gem_receive_builtin", 19));
-    gem_table_set(_t19112, GEM_STR_LIT("self", 4), GEM_STR_LIT("gem_self_builtin", 16));
-    gem_table_set(_t19112, GEM_STR_LIT("monitor", 7), GEM_STR_LIT("gem_monitor_builtin", 19));
-    gem_table_set(_t19112, GEM_STR_LIT("demonitor", 9), GEM_STR_LIT("gem_demonitor_builtin", 21));
-    gem_table_set(_t19112, GEM_STR_LIT("spawn_monitor", 13), GEM_STR_LIT("gem_spawn_monitor_builtin", 25));
-    gem_table_set(_t19112, GEM_STR_LIT("register", 8), GEM_STR_LIT("gem_register_builtin", 20));
-    gem_table_set(_t19112, GEM_STR_LIT("whereis", 7), GEM_STR_LIT("gem_whereis_builtin", 19));
-    gem_table_set(_t19112, GEM_STR_LIT("time_ms", 7), GEM_STR_LIT("gem_time_ms_builtin", 19));
-    gem_table_set(_t19112, GEM_STR_LIT("kill", 4), GEM_STR_LIT("gem_exit_builtin", 16));
-    gem_table_set(_t19112, GEM_STR_LIT("link", 4), GEM_STR_LIT("gem_link_builtin", 16));
-    gem_table_set(_t19112, GEM_STR_LIT("unlink", 6), GEM_STR_LIT("gem_unlink_builtin", 18));
-    gem_table_set(_t19112, GEM_STR_LIT("spawn_link", 10), GEM_STR_LIT("gem_spawn_link_builtin", 22));
-    gem_table_set(_t19112, GEM_STR_LIT("process_flag", 12), GEM_STR_LIT("gem_process_flag_builtin", 24));
-    gem_table_set(_t19112, GEM_STR_LIT("make_ref", 8), GEM_STR_LIT("gem_make_ref_builtin", 20));
-    gem_table_set(_t19112, GEM_STR_LIT("sleep", 5), GEM_STR_LIT("gem_sleep_builtin", 17));
-    gem_table_set(_t19112, GEM_STR_LIT("send_after", 10), GEM_STR_LIT("gem_send_after_builtin", 22));
-    gem_table_set(_t19112, GEM_STR_LIT("cancel_timer", 12), GEM_STR_LIT("gem_cancel_timer_builtin", 24));
-    gem_table_set(_t19112, GEM_STR_LIT("processes", 9), GEM_STR_LIT("gem_processes_builtin", 21));
-    gem_table_set(_t19112, GEM_STR_LIT("process_info", 12), GEM_STR_LIT("gem_process_info_builtin", 24));
-    gem_table_set(_t19112, GEM_STR_LIT("runtime_stats", 13), GEM_STR_LIT("gem_runtime_stats_builtin", 25));
-    gem_table_set(_t19112, GEM_STR_LIT("read_file", 9), GEM_STR_LIT("gem_read_file_fn", 16));
-    gem_table_set(_t19112, GEM_STR_LIT("write_file", 10), GEM_STR_LIT("gem_write_file_fn", 17));
-    gem_table_set(_t19112, GEM_STR_LIT("delete", 6), GEM_STR_LIT("gem_delete_fn", 13));
-    gem_table_set(_t19112, GEM_STR_LIT("pop", 3), GEM_STR_LIT("gem_pop_fn", 10));
-    gem_table_set(_t19112, GEM_STR_LIT("values", 6), GEM_STR_LIT("gem_values_fn", 13));
-    gem_table_set(_t19112, GEM_STR_LIT("eprint", 6), GEM_STR_LIT("gem_eprint_fn", 13));
-    gem_table_set(_t19112, GEM_STR_LIT("exit", 4), GEM_STR_LIT("gem_exit_process_fn", 19));
-    gem_table_set(_t19112, GEM_STR_LIT("argv", 4), GEM_STR_LIT("gem_argv_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("sort", 4), GEM_STR_LIT("gem_sort_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("floor", 5), GEM_STR_LIT("gem_floor_fn", 12));
-    gem_table_set(_t19112, GEM_STR_LIT("ceil", 4), GEM_STR_LIT("gem_ceil_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("round", 5), GEM_STR_LIT("gem_round_fn", 12));
-    gem_table_set(_t19112, GEM_STR_LIT("abs", 3), GEM_STR_LIT("gem_abs_fn", 10));
-    gem_table_set(_t19112, GEM_STR_LIT("pow", 3), GEM_STR_LIT("gem_pow_fn", 10));
-    gem_table_set(_t19112, GEM_STR_LIT("sqrt", 4), GEM_STR_LIT("gem_sqrt_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("random", 6), GEM_STR_LIT("gem_random_fn", 13));
-    gem_table_set(_t19112, GEM_STR_LIT("append_file", 11), GEM_STR_LIT("gem_append_file_fn", 18));
-    gem_table_set(_t19112, GEM_STR_LIT("getenv", 6), GEM_STR_LIT("gem_getenv_fn", 13));
-    gem_table_set(_t19112, GEM_STR_LIT("input", 5), GEM_STR_LIT("gem_input_fn", 12));
-    gem_table_set(_t19112, GEM_STR_LIT("read_stdin", 10), GEM_STR_LIT("gem_read_stdin_fn", 17));
-    gem_table_set(_t19112, GEM_STR_LIT("write_stdout", 12), GEM_STR_LIT("gem_write_stdout_fn", 19));
-    gem_table_set(_t19112, GEM_STR_LIT("insert", 6), GEM_STR_LIT("gem_insert_fn", 13));
-    gem_table_set(_t19112, GEM_STR_LIT("remove_at", 9), GEM_STR_LIT("gem_remove_at_fn", 16));
-    gem_table_set(_t19112, GEM_STR_LIT("band", 4), GEM_STR_LIT("gem_band_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("bor", 3), GEM_STR_LIT("gem_bor_fn", 10));
-    gem_table_set(_t19112, GEM_STR_LIT("bxor", 4), GEM_STR_LIT("gem_bxor_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("bnot", 4), GEM_STR_LIT("gem_bnot_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("bshl", 4), GEM_STR_LIT("gem_bshl_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("bshr", 4), GEM_STR_LIT("gem_bshr_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("file_exists", 11), GEM_STR_LIT("gem_file_exists_fn", 18));
-    gem_table_set(_t19112, GEM_STR_LIT("dirname", 7), GEM_STR_LIT("gem_dirname_fn", 14));
-    gem_table_set(_t19112, GEM_STR_LIT("path_join", 9), GEM_STR_LIT("gem_path_join_fn", 16));
-    gem_table_set(_t19112, GEM_STR_LIT("normalize_path", 14), GEM_STR_LIT("gem_normalize_path_fn", 21));
-    gem_table_set(_t19112, GEM_STR_LIT("remove_file", 11), GEM_STR_LIT("gem_remove_file_fn", 18));
-    gem_table_set(_t19112, GEM_STR_LIT("mkdir", 5), GEM_STR_LIT("gem_mkdir_fn", 12));
-    gem_table_set(_t19112, GEM_STR_LIT("list_dir", 8), GEM_STR_LIT("gem_list_dir_fn", 15));
-    gem_table_set(_t19112, GEM_STR_LIT("is_dir", 6), GEM_STR_LIT("gem_is_dir_fn", 13));
-    gem_table_set(_t19112, GEM_STR_LIT("exec", 4), GEM_STR_LIT("gem_exec_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("tcp_connect", 11), GEM_STR_LIT("gem_tcp_connect_fn", 18));
-    gem_table_set(_t19112, GEM_STR_LIT("tcp_listen", 10), GEM_STR_LIT("gem_tcp_listen_fn", 17));
-    gem_table_set(_t19112, GEM_STR_LIT("tcp_accept", 10), GEM_STR_LIT("gem_tcp_accept_fn", 17));
-    gem_table_set(_t19112, GEM_STR_LIT("tcp_read", 8), GEM_STR_LIT("gem_tcp_read_fn", 15));
-    gem_table_set(_t19112, GEM_STR_LIT("tcp_write", 9), GEM_STR_LIT("gem_tcp_write_fn", 16));
-    gem_table_set(_t19112, GEM_STR_LIT("tcp_close", 9), GEM_STR_LIT("gem_tcp_close_fn", 16));
-    gem_table_set(_t19112, GEM_STR_LIT("tcp_peer", 8), GEM_STR_LIT("gem_tcp_peer_fn", 15));
-    gem_table_set(_t19112, GEM_STR_LIT("tcp_fd", 6), GEM_STR_LIT("gem_tcp_fd_fn", 13));
-    gem_table_set(_t19112, GEM_STR_LIT("tcp_from_fd", 11), GEM_STR_LIT("gem_tcp_from_fd_fn", 18));
-    gem_table_set(_t19112, GEM_STR_LIT("claim", 5), GEM_STR_LIT("gem_claim_fn", 12));
-    gem_table_set(_t19112, GEM_STR_LIT("epoch_ms", 8), GEM_STR_LIT("gem_epoch_ms_fn", 15));
-    gem_table_set(_t19112, GEM_STR_LIT("format_time", 11), GEM_STR_LIT("gem_format_time_fn", 18));
-    gem_table_set(_t19112, GEM_STR_LIT("format_time_local", 17), GEM_STR_LIT("gem_format_time_local_fn", 24));
-    gem_table_set(_t19112, GEM_STR_LIT("sqlite_open", 11), GEM_STR_LIT("gem_sqlite_open_fn", 18));
-    gem_table_set(_t19112, GEM_STR_LIT("sqlite_close", 12), GEM_STR_LIT("gem_sqlite_close_fn", 19));
-    gem_table_set(_t19112, GEM_STR_LIT("sqlite_exec", 11), GEM_STR_LIT("gem_sqlite_exec_fn", 18));
-    gem_table_set(_t19112, GEM_STR_LIT("sqlite_query", 12), GEM_STR_LIT("gem_sqlite_query_fn", 19));
-    gem_table_set(_t19112, GEM_STR_LIT("sqlite_last_insert_id", 21), GEM_STR_LIT("gem_sqlite_last_insert_id_fn", 28));
-    gem_table_set(_t19112, GEM_STR_LIT("sqlite_changes", 14), GEM_STR_LIT("gem_sqlite_changes_fn", 21));
-    gem_table_set(_t19112, GEM_STR_LIT("__len", 5), GEM_STR_LIT("gem_len_fn", 10));
-    gem_table_set(_t19112, GEM_STR_LIT("__type", 6), GEM_STR_LIT("gem_type_fn", 11));
-    gem_table_set(_t19112, GEM_STR_LIT("__has_key", 9), GEM_STR_LIT("gem_has_key_fn", 14));
-    gem_table_set(_t19112, GEM_STR_LIT("__is_array_n", 12), GEM_STR_LIT("gem_is_array_n_fn", 17));
-    gem_table_set(_t19112, GEM_STR_LIT("__for_len", 9), GEM_STR_LIT("gem_for_len_fn", 14));
-    gem_table_set(_t19112, GEM_STR_LIT("__for_items", 11), GEM_STR_LIT("gem_for_items_fn", 16));
-    gem_table_set(_t19112, GEM_STR_LIT("__table_key_at", 14), GEM_STR_LIT("gem_table_key_at_fn", 19));
-    gem_table_set(_t19112, GEM_STR_LIT("__table_val_at", 14), GEM_STR_LIT("gem_table_val_at_fn", 19));
-    gem_global_set(gem_gi___mod_builtins_BUILTIN_FNS, _t19112);
+    GemVal _t19114 = gem_table_new_braces();
+    gem_table_set(_t19114, GEM_STR_LIT("print", 5), GEM_STR_LIT("gem_print", 9));
+    gem_table_set(_t19114, GEM_STR_LIT("error", 5), GEM_STR_LIT("gem_error_fn", 12));
+    gem_table_set(_t19114, GEM_STR_LIT("len", 3), GEM_STR_LIT("gem_len_fn", 10));
+    gem_table_set(_t19114, GEM_STR_LIT("type", 4), GEM_STR_LIT("gem_type_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("to_string", 9), GEM_STR_LIT("gem_to_string_fn", 16));
+    gem_table_set(_t19114, GEM_STR_LIT("push", 4), GEM_STR_LIT("gem_push_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("pcall", 5), GEM_STR_LIT("gem_pcall_fn", 12));
+    gem_table_set(_t19114, GEM_STR_LIT("keys", 4), GEM_STR_LIT("gem_keys_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("str_replace", 11), GEM_STR_LIT("gem_str_replace_fn", 18));
+    gem_table_set(_t19114, GEM_STR_LIT("has_key", 7), GEM_STR_LIT("gem_has_key_fn", 14));
+    gem_table_set(_t19114, GEM_STR_LIT("substr", 6), GEM_STR_LIT("gem_substr_fn", 13));
+    gem_table_set(_t19114, GEM_STR_LIT("find", 4), GEM_STR_LIT("gem_find_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("chr", 3), GEM_STR_LIT("gem_chr_fn", 10));
+    gem_table_set(_t19114, GEM_STR_LIT("ord", 3), GEM_STR_LIT("gem_ord_fn", 10));
+    gem_table_set(_t19114, GEM_STR_LIT("to_int", 6), GEM_STR_LIT("gem_to_int_fn", 13));
+    gem_table_set(_t19114, GEM_STR_LIT("to_float", 8), GEM_STR_LIT("gem_to_float_fn", 15));
+    gem_table_set(_t19114, GEM_STR_LIT("buf_new", 7), GEM_STR_LIT("gem_buf_new_fn", 14));
+    gem_table_set(_t19114, GEM_STR_LIT("buf_push", 8), GEM_STR_LIT("gem_buf_push_fn", 15));
+    gem_table_set(_t19114, GEM_STR_LIT("build_string", 12), GEM_STR_LIT("gem_build_string_fn", 19));
+    gem_table_set(_t19114, GEM_STR_LIT("spawn", 5), GEM_STR_LIT("gem_spawn_builtin", 17));
+    gem_table_set(_t19114, GEM_STR_LIT("send", 4), GEM_STR_LIT("gem_send_builtin", 16));
+    gem_table_set(_t19114, GEM_STR_LIT("receive", 7), GEM_STR_LIT("gem_receive_builtin", 19));
+    gem_table_set(_t19114, GEM_STR_LIT("self", 4), GEM_STR_LIT("gem_self_builtin", 16));
+    gem_table_set(_t19114, GEM_STR_LIT("monitor", 7), GEM_STR_LIT("gem_monitor_builtin", 19));
+    gem_table_set(_t19114, GEM_STR_LIT("demonitor", 9), GEM_STR_LIT("gem_demonitor_builtin", 21));
+    gem_table_set(_t19114, GEM_STR_LIT("spawn_monitor", 13), GEM_STR_LIT("gem_spawn_monitor_builtin", 25));
+    gem_table_set(_t19114, GEM_STR_LIT("register", 8), GEM_STR_LIT("gem_register_builtin", 20));
+    gem_table_set(_t19114, GEM_STR_LIT("whereis", 7), GEM_STR_LIT("gem_whereis_builtin", 19));
+    gem_table_set(_t19114, GEM_STR_LIT("time_ms", 7), GEM_STR_LIT("gem_time_ms_builtin", 19));
+    gem_table_set(_t19114, GEM_STR_LIT("kill", 4), GEM_STR_LIT("gem_exit_builtin", 16));
+    gem_table_set(_t19114, GEM_STR_LIT("link", 4), GEM_STR_LIT("gem_link_builtin", 16));
+    gem_table_set(_t19114, GEM_STR_LIT("unlink", 6), GEM_STR_LIT("gem_unlink_builtin", 18));
+    gem_table_set(_t19114, GEM_STR_LIT("spawn_link", 10), GEM_STR_LIT("gem_spawn_link_builtin", 22));
+    gem_table_set(_t19114, GEM_STR_LIT("process_flag", 12), GEM_STR_LIT("gem_process_flag_builtin", 24));
+    gem_table_set(_t19114, GEM_STR_LIT("make_ref", 8), GEM_STR_LIT("gem_make_ref_builtin", 20));
+    gem_table_set(_t19114, GEM_STR_LIT("sleep", 5), GEM_STR_LIT("gem_sleep_builtin", 17));
+    gem_table_set(_t19114, GEM_STR_LIT("send_after", 10), GEM_STR_LIT("gem_send_after_builtin", 22));
+    gem_table_set(_t19114, GEM_STR_LIT("cancel_timer", 12), GEM_STR_LIT("gem_cancel_timer_builtin", 24));
+    gem_table_set(_t19114, GEM_STR_LIT("processes", 9), GEM_STR_LIT("gem_processes_builtin", 21));
+    gem_table_set(_t19114, GEM_STR_LIT("process_info", 12), GEM_STR_LIT("gem_process_info_builtin", 24));
+    gem_table_set(_t19114, GEM_STR_LIT("runtime_stats", 13), GEM_STR_LIT("gem_runtime_stats_builtin", 25));
+    gem_table_set(_t19114, GEM_STR_LIT("read_file", 9), GEM_STR_LIT("gem_read_file_fn", 16));
+    gem_table_set(_t19114, GEM_STR_LIT("write_file", 10), GEM_STR_LIT("gem_write_file_fn", 17));
+    gem_table_set(_t19114, GEM_STR_LIT("delete", 6), GEM_STR_LIT("gem_delete_fn", 13));
+    gem_table_set(_t19114, GEM_STR_LIT("pop", 3), GEM_STR_LIT("gem_pop_fn", 10));
+    gem_table_set(_t19114, GEM_STR_LIT("values", 6), GEM_STR_LIT("gem_values_fn", 13));
+    gem_table_set(_t19114, GEM_STR_LIT("eprint", 6), GEM_STR_LIT("gem_eprint_fn", 13));
+    gem_table_set(_t19114, GEM_STR_LIT("exit", 4), GEM_STR_LIT("gem_exit_process_fn", 19));
+    gem_table_set(_t19114, GEM_STR_LIT("argv", 4), GEM_STR_LIT("gem_argv_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("sort", 4), GEM_STR_LIT("gem_sort_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("floor", 5), GEM_STR_LIT("gem_floor_fn", 12));
+    gem_table_set(_t19114, GEM_STR_LIT("ceil", 4), GEM_STR_LIT("gem_ceil_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("round", 5), GEM_STR_LIT("gem_round_fn", 12));
+    gem_table_set(_t19114, GEM_STR_LIT("abs", 3), GEM_STR_LIT("gem_abs_fn", 10));
+    gem_table_set(_t19114, GEM_STR_LIT("pow", 3), GEM_STR_LIT("gem_pow_fn", 10));
+    gem_table_set(_t19114, GEM_STR_LIT("sqrt", 4), GEM_STR_LIT("gem_sqrt_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("random", 6), GEM_STR_LIT("gem_random_fn", 13));
+    gem_table_set(_t19114, GEM_STR_LIT("append_file", 11), GEM_STR_LIT("gem_append_file_fn", 18));
+    gem_table_set(_t19114, GEM_STR_LIT("getenv", 6), GEM_STR_LIT("gem_getenv_fn", 13));
+    gem_table_set(_t19114, GEM_STR_LIT("input", 5), GEM_STR_LIT("gem_input_fn", 12));
+    gem_table_set(_t19114, GEM_STR_LIT("read_stdin", 10), GEM_STR_LIT("gem_read_stdin_fn", 17));
+    gem_table_set(_t19114, GEM_STR_LIT("write_stdout", 12), GEM_STR_LIT("gem_write_stdout_fn", 19));
+    gem_table_set(_t19114, GEM_STR_LIT("insert", 6), GEM_STR_LIT("gem_insert_fn", 13));
+    gem_table_set(_t19114, GEM_STR_LIT("remove_at", 9), GEM_STR_LIT("gem_remove_at_fn", 16));
+    gem_table_set(_t19114, GEM_STR_LIT("band", 4), GEM_STR_LIT("gem_band_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("bor", 3), GEM_STR_LIT("gem_bor_fn", 10));
+    gem_table_set(_t19114, GEM_STR_LIT("bxor", 4), GEM_STR_LIT("gem_bxor_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("bnot", 4), GEM_STR_LIT("gem_bnot_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("bshl", 4), GEM_STR_LIT("gem_bshl_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("bshr", 4), GEM_STR_LIT("gem_bshr_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("file_exists", 11), GEM_STR_LIT("gem_file_exists_fn", 18));
+    gem_table_set(_t19114, GEM_STR_LIT("dirname", 7), GEM_STR_LIT("gem_dirname_fn", 14));
+    gem_table_set(_t19114, GEM_STR_LIT("path_join", 9), GEM_STR_LIT("gem_path_join_fn", 16));
+    gem_table_set(_t19114, GEM_STR_LIT("normalize_path", 14), GEM_STR_LIT("gem_normalize_path_fn", 21));
+    gem_table_set(_t19114, GEM_STR_LIT("remove_file", 11), GEM_STR_LIT("gem_remove_file_fn", 18));
+    gem_table_set(_t19114, GEM_STR_LIT("mkdir", 5), GEM_STR_LIT("gem_mkdir_fn", 12));
+    gem_table_set(_t19114, GEM_STR_LIT("list_dir", 8), GEM_STR_LIT("gem_list_dir_fn", 15));
+    gem_table_set(_t19114, GEM_STR_LIT("is_dir", 6), GEM_STR_LIT("gem_is_dir_fn", 13));
+    gem_table_set(_t19114, GEM_STR_LIT("exec", 4), GEM_STR_LIT("gem_exec_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("tcp_connect", 11), GEM_STR_LIT("gem_tcp_connect_fn", 18));
+    gem_table_set(_t19114, GEM_STR_LIT("tcp_listen", 10), GEM_STR_LIT("gem_tcp_listen_fn", 17));
+    gem_table_set(_t19114, GEM_STR_LIT("tcp_accept", 10), GEM_STR_LIT("gem_tcp_accept_fn", 17));
+    gem_table_set(_t19114, GEM_STR_LIT("tcp_read", 8), GEM_STR_LIT("gem_tcp_read_fn", 15));
+    gem_table_set(_t19114, GEM_STR_LIT("tcp_write", 9), GEM_STR_LIT("gem_tcp_write_fn", 16));
+    gem_table_set(_t19114, GEM_STR_LIT("tcp_close", 9), GEM_STR_LIT("gem_tcp_close_fn", 16));
+    gem_table_set(_t19114, GEM_STR_LIT("tcp_peer", 8), GEM_STR_LIT("gem_tcp_peer_fn", 15));
+    gem_table_set(_t19114, GEM_STR_LIT("tcp_fd", 6), GEM_STR_LIT("gem_tcp_fd_fn", 13));
+    gem_table_set(_t19114, GEM_STR_LIT("tcp_from_fd", 11), GEM_STR_LIT("gem_tcp_from_fd_fn", 18));
+    gem_table_set(_t19114, GEM_STR_LIT("claim", 5), GEM_STR_LIT("gem_claim_fn", 12));
+    gem_table_set(_t19114, GEM_STR_LIT("epoch_ms", 8), GEM_STR_LIT("gem_epoch_ms_fn", 15));
+    gem_table_set(_t19114, GEM_STR_LIT("format_time", 11), GEM_STR_LIT("gem_format_time_fn", 18));
+    gem_table_set(_t19114, GEM_STR_LIT("format_time_local", 17), GEM_STR_LIT("gem_format_time_local_fn", 24));
+    gem_table_set(_t19114, GEM_STR_LIT("sqlite_open", 11), GEM_STR_LIT("gem_sqlite_open_fn", 18));
+    gem_table_set(_t19114, GEM_STR_LIT("sqlite_close", 12), GEM_STR_LIT("gem_sqlite_close_fn", 19));
+    gem_table_set(_t19114, GEM_STR_LIT("sqlite_exec", 11), GEM_STR_LIT("gem_sqlite_exec_fn", 18));
+    gem_table_set(_t19114, GEM_STR_LIT("sqlite_query", 12), GEM_STR_LIT("gem_sqlite_query_fn", 19));
+    gem_table_set(_t19114, GEM_STR_LIT("sqlite_last_insert_id", 21), GEM_STR_LIT("gem_sqlite_last_insert_id_fn", 28));
+    gem_table_set(_t19114, GEM_STR_LIT("sqlite_changes", 14), GEM_STR_LIT("gem_sqlite_changes_fn", 21));
+    gem_table_set(_t19114, GEM_STR_LIT("__len", 5), GEM_STR_LIT("gem_len_fn", 10));
+    gem_table_set(_t19114, GEM_STR_LIT("__type", 6), GEM_STR_LIT("gem_type_fn", 11));
+    gem_table_set(_t19114, GEM_STR_LIT("__has_key", 9), GEM_STR_LIT("gem_has_key_fn", 14));
+    gem_table_set(_t19114, GEM_STR_LIT("__is_array_n", 12), GEM_STR_LIT("gem_is_array_n_fn", 17));
+    gem_table_set(_t19114, GEM_STR_LIT("__for_len", 9), GEM_STR_LIT("gem_for_len_fn", 14));
+    gem_table_set(_t19114, GEM_STR_LIT("__for_items", 11), GEM_STR_LIT("gem_for_items_fn", 16));
+    gem_table_set(_t19114, GEM_STR_LIT("__table_key_at", 14), GEM_STR_LIT("gem_table_key_at_fn", 19));
+    gem_table_set(_t19114, GEM_STR_LIT("__table_val_at", 14), GEM_STR_LIT("gem_table_val_at_fn", 19));
+    gem_global_set(gem_gi___mod_builtins_BUILTIN_FNS, _t19114);
 #line 132 "compiler/builtins.gem"
     gem_set_line(132);
-    GemVal _t19113 = gem_table_new_braces();
-    gem_table_set(_t19113, GEM_STR_LIT("print", 5), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("eprint", 6), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("error", 5), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("len", 3), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("type", 4), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("to_string", 9), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("push", 4), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("keys", 4), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("values", 6), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("str_replace", 11), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("has_key", 7), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("substr", 6), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("find", 4), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("chr", 3), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("ord", 3), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("to_int", 6), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("to_float", 8), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("buf_new", 7), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("buf_push", 8), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("delete", 6), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("pop", 3), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("insert", 6), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("remove_at", 9), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("floor", 5), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("ceil", 4), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("round", 5), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("abs", 3), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("pow", 3), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("sqrt", 4), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("random", 6), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("band", 4), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("bor", 3), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("bxor", 4), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("bnot", 4), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("bshl", 4), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("bshr", 4), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("self", 4), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("make_ref", 8), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("time_ms", 7), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("epoch_ms", 8), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("tcp_peer", 8), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("tcp_fd", 6), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("tcp_from_fd", 11), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("claim", 5), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("runtime_stats", 13), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("__len", 5), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("__type", 6), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("__has_key", 9), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("__is_array_n", 12), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("__for_len", 9), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("__for_items", 11), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("__table_key_at", 14), gem_bool(1));
-    gem_table_set(_t19113, GEM_STR_LIT("__table_val_at", 14), gem_bool(1));
-    gem_global_set(gem_gi___mod_builtins_LEAF_BUILTINS, _t19113);
+    GemVal _t19115 = gem_table_new_braces();
+    gem_table_set(_t19115, GEM_STR_LIT("print", 5), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("eprint", 6), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("error", 5), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("len", 3), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("type", 4), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("to_string", 9), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("push", 4), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("keys", 4), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("values", 6), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("str_replace", 11), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("has_key", 7), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("substr", 6), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("find", 4), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("chr", 3), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("ord", 3), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("to_int", 6), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("to_float", 8), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("buf_new", 7), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("buf_push", 8), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("delete", 6), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("pop", 3), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("insert", 6), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("remove_at", 9), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("floor", 5), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("ceil", 4), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("round", 5), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("abs", 3), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("pow", 3), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("sqrt", 4), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("random", 6), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("band", 4), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("bor", 3), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("bxor", 4), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("bnot", 4), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("bshl", 4), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("bshr", 4), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("self", 4), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("make_ref", 8), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("time_ms", 7), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("epoch_ms", 8), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("tcp_peer", 8), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("tcp_fd", 6), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("tcp_from_fd", 11), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("claim", 5), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("runtime_stats", 13), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("__len", 5), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("__type", 6), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("__has_key", 9), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("__is_array_n", 12), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("__for_len", 9), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("__for_items", 11), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("__table_key_at", 14), gem_bool(1));
+    gem_table_set(_t19115, GEM_STR_LIT("__table_val_at", 14), gem_bool(1));
+    gem_global_set(gem_gi___mod_builtins_LEAF_BUILTINS, _t19115);
 #line 153 "compiler/builtins.gem"
     gem_set_line(153);
-    GemVal _t19114 = gem_table_new_braces();
-    gem_table_set(_t19114, GEM_STR_LIT("len/1", 5), GEM_STR_LIT("gem_len_1", 9));
-    gem_table_set(_t19114, GEM_STR_LIT("__len/1", 7), GEM_STR_LIT("gem_len_1", 9));
-    gem_table_set(_t19114, GEM_STR_LIT("type/1", 6), GEM_STR_LIT("gem_type_1", 10));
-    gem_table_set(_t19114, GEM_STR_LIT("__type/1", 8), GEM_STR_LIT("gem_type_1", 10));
-    gem_table_set(_t19114, GEM_STR_LIT("ord/1", 5), GEM_STR_LIT("gem_ord_1", 9));
-    gem_table_set(_t19114, GEM_STR_LIT("ord/2", 5), GEM_STR_LIT("gem_ord_2", 9));
-    gem_table_set(_t19114, GEM_STR_LIT("__for_len/1", 11), GEM_STR_LIT("gem_for_len_1", 13));
-    gem_table_set(_t19114, GEM_STR_LIT("__for_items/1", 13), GEM_STR_LIT("gem_for_items_1", 15));
-    gem_table_set(_t19114, GEM_STR_LIT("__table_key_at/2", 16), GEM_STR_LIT("gem_table_key_at_2", 18));
-    gem_table_set(_t19114, GEM_STR_LIT("__table_val_at/2", 16), GEM_STR_LIT("gem_table_val_at_2", 18));
-    gem_global_set(gem_gi___mod_builtins_DIRECT_BUILTINS, _t19114);
+    GemVal _t19116 = gem_table_new_braces();
+    gem_table_set(_t19116, GEM_STR_LIT("len/1", 5), GEM_STR_LIT("gem_len_1", 9));
+    gem_table_set(_t19116, GEM_STR_LIT("__len/1", 7), GEM_STR_LIT("gem_len_1", 9));
+    gem_table_set(_t19116, GEM_STR_LIT("type/1", 6), GEM_STR_LIT("gem_type_1", 10));
+    gem_table_set(_t19116, GEM_STR_LIT("__type/1", 8), GEM_STR_LIT("gem_type_1", 10));
+    gem_table_set(_t19116, GEM_STR_LIT("ord/1", 5), GEM_STR_LIT("gem_ord_1", 9));
+    gem_table_set(_t19116, GEM_STR_LIT("ord/2", 5), GEM_STR_LIT("gem_ord_2", 9));
+    gem_table_set(_t19116, GEM_STR_LIT("__for_len/1", 11), GEM_STR_LIT("gem_for_len_1", 13));
+    gem_table_set(_t19116, GEM_STR_LIT("__for_items/1", 13), GEM_STR_LIT("gem_for_items_1", 15));
+    gem_table_set(_t19116, GEM_STR_LIT("__table_key_at/2", 16), GEM_STR_LIT("gem_table_key_at_2", 18));
+    gem_table_set(_t19116, GEM_STR_LIT("__table_val_at/2", 16), GEM_STR_LIT("gem_table_val_at_2", 18));
+    gem_global_set(gem_gi___mod_builtins_DIRECT_BUILTINS, _t19116);
 #line 183 "compiler/builtins.gem"
     gem_set_line(183);
     gem_global_set(gem_gi___mod_builtins_BUILTIN_NAMES, gem_fn___mod_builtins_user_builtin_names(NULL, NULL, 0));
@@ -94041,54 +94075,54 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi___mod_parser_MAX_DEPTH, gem_int(1000));
 #line 23 "compiler/parser.gem"
     gem_set_line(23);
-    GemVal _t19115 = gem_table_new_braces();
-    gem_global_set(gem_gi___mod_parser_C_RESERVED, _t19115);
+    GemVal _t19117 = gem_table_new_braces();
+    gem_global_set(gem_gi___mod_parser_C_RESERVED, _t19117);
 #line 24 "compiler/parser.gem"
     gem_set_line(24);
-    GemVal _t19116 = gem_table_new();
-    gem_table_set(_t19116, gem_int(0), GEM_STR_LIT("auto", 4));
-    gem_table_set(_t19116, gem_int(1), GEM_STR_LIT("case", 4));
-    gem_table_set(_t19116, gem_int(2), GEM_STR_LIT("char", 4));
-    gem_table_set(_t19116, gem_int(3), GEM_STR_LIT("const", 5));
-    gem_table_set(_t19116, gem_int(4), GEM_STR_LIT("default", 7));
-    gem_table_set(_t19116, gem_int(5), GEM_STR_LIT("double", 6));
-    gem_table_set(_t19116, gem_int(6), GEM_STR_LIT("enum", 4));
-    gem_table_set(_t19116, gem_int(7), GEM_STR_LIT("float", 5));
-    gem_table_set(_t19116, gem_int(8), GEM_STR_LIT("goto", 4));
-    gem_table_set(_t19116, gem_int(9), GEM_STR_LIT("inline", 6));
-    gem_table_set(_t19116, gem_int(10), GEM_STR_LIT("int", 3));
-    gem_table_set(_t19116, gem_int(11), GEM_STR_LIT("long", 4));
-    gem_table_set(_t19116, gem_int(12), GEM_STR_LIT("register", 8));
-    gem_table_set(_t19116, gem_int(13), GEM_STR_LIT("restrict", 8));
-    gem_table_set(_t19116, gem_int(14), GEM_STR_LIT("short", 5));
-    gem_table_set(_t19116, gem_int(15), GEM_STR_LIT("signed", 6));
-    gem_table_set(_t19116, gem_int(16), GEM_STR_LIT("sizeof", 6));
-    gem_table_set(_t19116, gem_int(17), GEM_STR_LIT("static", 6));
-    gem_table_set(_t19116, gem_int(18), GEM_STR_LIT("struct", 6));
-    gem_table_set(_t19116, gem_int(19), GEM_STR_LIT("switch", 6));
-    gem_table_set(_t19116, gem_int(20), GEM_STR_LIT("typedef", 7));
-    gem_table_set(_t19116, gem_int(21), GEM_STR_LIT("union", 5));
-    gem_table_set(_t19116, gem_int(22), GEM_STR_LIT("unsigned", 8));
-    gem_table_set(_t19116, gem_int(23), GEM_STR_LIT("void", 4));
-    gem_table_set(_t19116, gem_int(24), GEM_STR_LIT("volatile", 8));
-    gem_table_set(_t19116, gem_int(25), GEM_STR_LIT("asm", 3));
-    gem_table_set(_t19116, gem_int(26), GEM_STR_LIT("typeof", 6));
-    gem_table_set(_t19116, gem_int(27), GEM_STR_LIT("_Alignas", 8));
-    gem_table_set(_t19116, gem_int(28), GEM_STR_LIT("_Alignof", 8));
-    gem_table_set(_t19116, gem_int(29), GEM_STR_LIT("_Atomic", 7));
-    gem_table_set(_t19116, gem_int(30), GEM_STR_LIT("_Bool", 5));
-    gem_table_set(_t19116, gem_int(31), GEM_STR_LIT("_Complex", 8));
-    gem_table_set(_t19116, gem_int(32), GEM_STR_LIT("_Generic", 8));
-    gem_table_set(_t19116, gem_int(33), GEM_STR_LIT("_Imaginary", 10));
-    gem_table_set(_t19116, gem_int(34), GEM_STR_LIT("_Noreturn", 9));
-    gem_table_set(_t19116, gem_int(35), GEM_STR_LIT("_Static_assert", 14));
-    gem_table_set(_t19116, gem_int(36), GEM_STR_LIT("_Thread_local", 13));
-    gem_table_set(_t19116, gem_int(37), GEM_STR_LIT("bool", 4));
-    gem_table_set(_t19116, gem_int(38), GEM_STR_LIT("int64_t", 7));
-    gem_table_set(_t19116, gem_int(39), GEM_STR_LIT("uint8_t", 7));
-    gem_table_set(_t19116, gem_int(40), GEM_STR_LIT("GemVal", 6));
-    gem_table_set(_t19116, gem_int(41), GEM_STR_LIT("GemBytes", 8));
-    gem_global_set(gem_gi___for_items_14, gem_for_items_1(_t19116));
+    GemVal _t19118 = gem_table_new();
+    gem_table_set(_t19118, gem_int(0), GEM_STR_LIT("auto", 4));
+    gem_table_set(_t19118, gem_int(1), GEM_STR_LIT("case", 4));
+    gem_table_set(_t19118, gem_int(2), GEM_STR_LIT("char", 4));
+    gem_table_set(_t19118, gem_int(3), GEM_STR_LIT("const", 5));
+    gem_table_set(_t19118, gem_int(4), GEM_STR_LIT("default", 7));
+    gem_table_set(_t19118, gem_int(5), GEM_STR_LIT("double", 6));
+    gem_table_set(_t19118, gem_int(6), GEM_STR_LIT("enum", 4));
+    gem_table_set(_t19118, gem_int(7), GEM_STR_LIT("float", 5));
+    gem_table_set(_t19118, gem_int(8), GEM_STR_LIT("goto", 4));
+    gem_table_set(_t19118, gem_int(9), GEM_STR_LIT("inline", 6));
+    gem_table_set(_t19118, gem_int(10), GEM_STR_LIT("int", 3));
+    gem_table_set(_t19118, gem_int(11), GEM_STR_LIT("long", 4));
+    gem_table_set(_t19118, gem_int(12), GEM_STR_LIT("register", 8));
+    gem_table_set(_t19118, gem_int(13), GEM_STR_LIT("restrict", 8));
+    gem_table_set(_t19118, gem_int(14), GEM_STR_LIT("short", 5));
+    gem_table_set(_t19118, gem_int(15), GEM_STR_LIT("signed", 6));
+    gem_table_set(_t19118, gem_int(16), GEM_STR_LIT("sizeof", 6));
+    gem_table_set(_t19118, gem_int(17), GEM_STR_LIT("static", 6));
+    gem_table_set(_t19118, gem_int(18), GEM_STR_LIT("struct", 6));
+    gem_table_set(_t19118, gem_int(19), GEM_STR_LIT("switch", 6));
+    gem_table_set(_t19118, gem_int(20), GEM_STR_LIT("typedef", 7));
+    gem_table_set(_t19118, gem_int(21), GEM_STR_LIT("union", 5));
+    gem_table_set(_t19118, gem_int(22), GEM_STR_LIT("unsigned", 8));
+    gem_table_set(_t19118, gem_int(23), GEM_STR_LIT("void", 4));
+    gem_table_set(_t19118, gem_int(24), GEM_STR_LIT("volatile", 8));
+    gem_table_set(_t19118, gem_int(25), GEM_STR_LIT("asm", 3));
+    gem_table_set(_t19118, gem_int(26), GEM_STR_LIT("typeof", 6));
+    gem_table_set(_t19118, gem_int(27), GEM_STR_LIT("_Alignas", 8));
+    gem_table_set(_t19118, gem_int(28), GEM_STR_LIT("_Alignof", 8));
+    gem_table_set(_t19118, gem_int(29), GEM_STR_LIT("_Atomic", 7));
+    gem_table_set(_t19118, gem_int(30), GEM_STR_LIT("_Bool", 5));
+    gem_table_set(_t19118, gem_int(31), GEM_STR_LIT("_Complex", 8));
+    gem_table_set(_t19118, gem_int(32), GEM_STR_LIT("_Generic", 8));
+    gem_table_set(_t19118, gem_int(33), GEM_STR_LIT("_Imaginary", 10));
+    gem_table_set(_t19118, gem_int(34), GEM_STR_LIT("_Noreturn", 9));
+    gem_table_set(_t19118, gem_int(35), GEM_STR_LIT("_Static_assert", 14));
+    gem_table_set(_t19118, gem_int(36), GEM_STR_LIT("_Thread_local", 13));
+    gem_table_set(_t19118, gem_int(37), GEM_STR_LIT("bool", 4));
+    gem_table_set(_t19118, gem_int(38), GEM_STR_LIT("int64_t", 7));
+    gem_table_set(_t19118, gem_int(39), GEM_STR_LIT("uint8_t", 7));
+    gem_table_set(_t19118, gem_int(40), GEM_STR_LIT("GemVal", 6));
+    gem_table_set(_t19118, gem_int(41), GEM_STR_LIT("GemBytes", 8));
+    gem_global_set(gem_gi___for_items_14, gem_for_items_1(_t19118));
 #line 24 "compiler/parser.gem"
     gem_set_line(24);
     gem_global_set(gem_gi___for_i_14, gem_int(0));
@@ -94101,19 +94135,19 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
         if (gem_arena_reset_due(&_mk557)) {
             gem_arena_reset_region(&_mk557, NULL, 0, NULL, 0);
         }
-    GemVal _t19117 = gem_g___for_i_14;
-        if (!gem_truthy(gem_lt(_t19117, gem_for_len_1(gem_g___for_items_14)))) break;
+    GemVal _t19119 = gem_g___for_i_14;
+        if (!gem_truthy(gem_lt(_t19119, gem_for_len_1(gem_g___for_items_14)))) break;
 #line 24 "compiler/parser.gem"
         gem_set_line(24);
-    GemVal _t19118 = gem_g___for_items_14;
-        GemVal gem_v_w = gem_table_get(_t19118, gem_g___for_i_14);
+    GemVal _t19120 = gem_g___for_items_14;
+        GemVal gem_v_w = gem_table_get(_t19120, gem_g___for_i_14);
 #line 24 "compiler/parser.gem"
         gem_set_line(24);
         gem_global_set(gem_gi___for_i_14, gem_add(gem_g___for_i_14, gem_int(1)));
 #line 25 "compiler/parser.gem"
         gem_set_line(25);
-    GemVal _t19119 = gem_g___mod_parser_C_RESERVED;
-        gem_table_set(_t19119, gem_v_w, gem_bool(1));
+    GemVal _t19121 = gem_g___mod_parser_C_RESERVED;
+        gem_table_set(_t19121, gem_v_w, gem_bool(1));
     }
 
 #line 0 "compiler/main.gem"
@@ -94254,53 +94288,53 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
 #line 11 "compiler/scope.gem"
     gem_set_line(11);
     gem_global_set(gem_gi___mod_scope_PENDING_PARAM, GEM_STR_LIT("\000pending param", 14));
-#line 90 "compiler/scope.gem"
-    gem_set_line(90);
+#line 94 "compiler/scope.gem"
+    gem_set_line(94);
     gem_global_set(gem_gi___mod_scope_shadow_node, GEM_NIL);
-#line 91 "compiler/scope.gem"
-    gem_set_line(91);
+#line 95 "compiler/scope.gem"
+    gem_set_line(95);
     gem_global_set(gem_gi___mod_scope_shadow_stmt, GEM_NIL);
-#line 92 "compiler/scope.gem"
-    gem_set_line(92);
+#line 96 "compiler/scope.gem"
+    gem_set_line(96);
     gem_global_set(gem_gi___mod_scope_shadow_stmts, GEM_NIL);
-#line 93 "compiler/scope.gem"
-    gem_set_line(93);
+#line 97 "compiler/scope.gem"
+    gem_set_line(97);
     gem_global_set(gem_gi___mod_scope_shadow_children, GEM_NIL);
-#line 173 "compiler/scope.gem"
-    gem_set_line(173);
+#line 177 "compiler/scope.gem"
+    gem_set_line(177);
     gem_global_set(gem_gi___mod_scope_shadow_collect_lets, GEM_NIL);
-#line 174 "compiler/scope.gem"
-    gem_set_line(174);
+#line 178 "compiler/scope.gem"
+    gem_set_line(178);
     gem_global_set(gem_gi___mod_scope_shadow_collect_lets, gem_make_fn(__anon_205, NULL));
-#line 269 "compiler/scope.gem"
-    gem_set_line(269);
+#line 273 "compiler/scope.gem"
+    gem_set_line(273);
     gem_global_set(gem_gi___mod_scope_shadow_stmts, gem_make_fn(__anon_206, NULL));
-#line 282 "compiler/scope.gem"
-    gem_set_line(282);
+#line 286 "compiler/scope.gem"
+    gem_set_line(286);
     gem_global_set(gem_gi___mod_scope_shadow_stmt, gem_make_fn(__anon_207, NULL));
-#line 313 "compiler/scope.gem"
-    gem_set_line(313);
+#line 317 "compiler/scope.gem"
+    gem_set_line(317);
     gem_global_set(gem_gi___mod_scope_shadow_node, gem_make_fn(__anon_208, NULL));
-#line 400 "compiler/scope.gem"
-    gem_set_line(400);
+#line 404 "compiler/scope.gem"
+    gem_set_line(404);
     gem_global_set(gem_gi___mod_scope_shadow_children, gem_make_fn(__anon_209, NULL));
-#line 502 "compiler/scope.gem"
-    gem_set_line(502);
+#line 506 "compiler/scope.gem"
+    gem_set_line(506);
     gem_global_set(gem_gi___mod_scope_collect_shadow_lets_in_node, GEM_NIL);
-#line 503 "compiler/scope.gem"
-    gem_set_line(503);
+#line 507 "compiler/scope.gem"
+    gem_set_line(507);
     gem_global_set(gem_gi___mod_scope_collect_shadow_lets_in_stmts, GEM_NIL);
-#line 505 "compiler/scope.gem"
-    gem_set_line(505);
+#line 509 "compiler/scope.gem"
+    gem_set_line(509);
     gem_global_set(gem_gi___mod_scope_collect_shadow_lets_in_stmts, gem_make_fn(__anon_210, NULL));
-#line 514 "compiler/scope.gem"
-    gem_set_line(514);
+#line 518 "compiler/scope.gem"
+    gem_set_line(518);
     gem_global_set(gem_gi___mod_scope_collect_shadow_lets_in_node, gem_make_fn(__anon_211, NULL));
-#line 608 "compiler/scope.gem"
-    gem_set_line(608);
+#line 612 "compiler/scope.gem"
+    gem_set_line(612);
     gem_global_set(gem_gi___mod_scope_collect_shadow_lets_in_fn, GEM_NIL);
-#line 609 "compiler/scope.gem"
-    gem_set_line(609);
+#line 613 "compiler/scope.gem"
+    gem_set_line(613);
     gem_global_set(gem_gi___mod_scope_collect_shadow_lets_in_fn, gem_make_fn(__anon_212, NULL));
 #line 0 "compiler/main.gem"
     gem_set_line(0);
@@ -94337,20 +94371,20 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi___mod_captures_collect_block_lets, gem_make_fn(gem_fn___mod_scope_collect_block_lets, NULL));
 #line 579 "compiler/captures.gem"
     gem_set_line(579);
-    GemVal _t20746 = gem_table_new_braces();
-    gem_global_set(gem_gi___mod_captures_non_escape_callees, _t20746);
+    GemVal _t20748 = gem_table_new_braces();
+    gem_global_set(gem_gi___mod_captures_non_escape_callees, _t20748);
 #line 580 "compiler/captures.gem"
     gem_set_line(580);
-    GemVal _t20748 = gem_g___mod_captures_set_add;
-    GemVal _t20747[] = {gem_g___mod_captures_non_escape_callees, GEM_STR_LIT("pcall", 5)};
-    gem_check_callable(_t20748, "compiler/captures.gem", 580);
-    (void)(_t20748.fn(_t20748.env, _t20747, 2));
+    GemVal _t20750 = gem_g___mod_captures_set_add;
+    GemVal _t20749[] = {gem_g___mod_captures_non_escape_callees, GEM_STR_LIT("pcall", 5)};
+    gem_check_callable(_t20750, "compiler/captures.gem", 580);
+    (void)(_t20750.fn(_t20750.env, _t20749, 2));
 #line 581 "compiler/captures.gem"
     gem_set_line(581);
-    GemVal _t20750 = gem_g___mod_captures_set_add;
-    GemVal _t20749[] = {gem_g___mod_captures_non_escape_callees, GEM_STR_LIT("sort", 4)};
-    gem_check_callable(_t20750, "compiler/captures.gem", 581);
-    (void)(_t20750.fn(_t20750.env, _t20749, 2));
+    GemVal _t20752 = gem_g___mod_captures_set_add;
+    GemVal _t20751[] = {gem_g___mod_captures_non_escape_callees, GEM_STR_LIT("sort", 4)};
+    gem_check_callable(_t20752, "compiler/captures.gem", 581);
+    (void)(_t20752.fn(_t20752.env, _t20751, 2));
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     gem_global_set(gem_gi___mod_codegen_collect_free_vars, gem_make_fn(gem_fn___mod_captures_collect_free_vars, NULL));
@@ -94425,37 +94459,37 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi___mod_callgraph_is_node, gem_make_fn(gem_fn___mod_cgutil_is_node, NULL));
 #line 12 "compiler/callgraph.gem"
     gem_set_line(12);
-    GemVal _t20751 = gem_table_new_braces();
-    gem_global_set(gem_gi___mod_callgraph_spawn_callees, _t20751);
+    GemVal _t20753 = gem_table_new_braces();
+    gem_global_set(gem_gi___mod_callgraph_spawn_callees, _t20753);
 #line 13 "compiler/callgraph.gem"
     gem_set_line(13);
-    GemVal _t20753 = gem_g___mod_callgraph_set_add;
-    GemVal _t20752[] = {gem_g___mod_callgraph_spawn_callees, GEM_STR_LIT("spawn", 5)};
-    gem_check_callable(_t20753, "compiler/callgraph.gem", 13);
-    (void)(_t20753.fn(_t20753.env, _t20752, 2));
+    GemVal _t20755 = gem_g___mod_callgraph_set_add;
+    GemVal _t20754[] = {gem_g___mod_callgraph_spawn_callees, GEM_STR_LIT("spawn", 5)};
+    gem_check_callable(_t20755, "compiler/callgraph.gem", 13);
+    (void)(_t20755.fn(_t20755.env, _t20754, 2));
 #line 14 "compiler/callgraph.gem"
     gem_set_line(14);
-    GemVal _t20755 = gem_g___mod_callgraph_set_add;
-    GemVal _t20754[] = {gem_g___mod_callgraph_spawn_callees, GEM_STR_LIT("spawn_link", 10)};
-    gem_check_callable(_t20755, "compiler/callgraph.gem", 14);
-    (void)(_t20755.fn(_t20755.env, _t20754, 2));
+    GemVal _t20757 = gem_g___mod_callgraph_set_add;
+    GemVal _t20756[] = {gem_g___mod_callgraph_spawn_callees, GEM_STR_LIT("spawn_link", 10)};
+    gem_check_callable(_t20757, "compiler/callgraph.gem", 14);
+    (void)(_t20757.fn(_t20757.env, _t20756, 2));
 #line 15 "compiler/callgraph.gem"
     gem_set_line(15);
-    GemVal _t20757 = gem_g___mod_callgraph_set_add;
-    GemVal _t20756[] = {gem_g___mod_callgraph_spawn_callees, GEM_STR_LIT("spawn_monitor", 13)};
-    gem_check_callable(_t20757, "compiler/callgraph.gem", 15);
-    (void)(_t20757.fn(_t20757.env, _t20756, 2));
+    GemVal _t20759 = gem_g___mod_callgraph_set_add;
+    GemVal _t20758[] = {gem_g___mod_callgraph_spawn_callees, GEM_STR_LIT("spawn_monitor", 13)};
+    gem_check_callable(_t20759, "compiler/callgraph.gem", 15);
+    (void)(_t20759.fn(_t20759.env, _t20758, 2));
 #line 19 "compiler/callgraph.gem"
     gem_set_line(19);
-    GemVal _t20758 = gem_table_new_braces();
-    gem_global_set(gem_gi___mod_callgraph_callback_builtins, _t20758);
+    GemVal _t20760 = gem_table_new_braces();
+    gem_global_set(gem_gi___mod_callgraph_callback_builtins, _t20760);
 #line 20 "compiler/callgraph.gem"
     gem_set_line(20);
-    GemVal _t20759 = gem_table_new();
-    gem_table_set(_t20759, gem_int(0), GEM_STR_LIT("pcall", 5));
-    gem_table_set(_t20759, gem_int(1), GEM_STR_LIT("sort", 4));
-    gem_table_set(_t20759, gem_int(2), GEM_STR_LIT("build_string", 12));
-    gem_global_set(gem_gi___for_items_210, gem_for_items_1(_t20759));
+    GemVal _t20761 = gem_table_new();
+    gem_table_set(_t20761, gem_int(0), GEM_STR_LIT("pcall", 5));
+    gem_table_set(_t20761, gem_int(1), GEM_STR_LIT("sort", 4));
+    gem_table_set(_t20761, gem_int(2), GEM_STR_LIT("build_string", 12));
+    gem_global_set(gem_gi___for_items_210, gem_for_items_1(_t20761));
 #line 20 "compiler/callgraph.gem"
     gem_set_line(20);
     gem_global_set(gem_gi___for_i_210, gem_int(0));
@@ -94468,38 +94502,38 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
         if (gem_arena_reset_due(&_mk615)) {
             gem_arena_reset_region(&_mk615, NULL, 0, NULL, 0);
         }
-    GemVal _t20760 = gem_g___for_i_210;
-        if (!gem_truthy(gem_lt(_t20760, gem_for_len_1(gem_g___for_items_210)))) break;
+    GemVal _t20762 = gem_g___for_i_210;
+        if (!gem_truthy(gem_lt(_t20762, gem_for_len_1(gem_g___for_items_210)))) break;
 #line 20 "compiler/callgraph.gem"
         gem_set_line(20);
-    GemVal _t20761 = gem_g___for_items_210;
-        GemVal gem_v_cb_name = gem_table_get(_t20761, gem_g___for_i_210);
+    GemVal _t20763 = gem_g___for_items_210;
+        GemVal gem_v_cb_name = gem_table_get(_t20763, gem_g___for_i_210);
 #line 20 "compiler/callgraph.gem"
         gem_set_line(20);
         gem_global_set(gem_gi___for_i_210, gem_add(gem_g___for_i_210, gem_int(1)));
 #line 21 "compiler/callgraph.gem"
         gem_set_line(21);
-    GemVal _t20764 = gem_g___mod_callgraph_set_add;
-    GemVal _t20762 = gem_g___mod_callgraph_callback_builtins;
-    GemVal _t20763[] = {_t20762, gem_v_cb_name};
-    gem_check_callable(_t20764, "compiler/callgraph.gem", 21);
-        (void)(_t20764.fn(_t20764.env, _t20763, 2));
+    GemVal _t20766 = gem_g___mod_callgraph_set_add;
+    GemVal _t20764 = gem_g___mod_callgraph_callback_builtins;
+    GemVal _t20765[] = {_t20764, gem_v_cb_name};
+    gem_check_callable(_t20766, "compiler/callgraph.gem", 21);
+        (void)(_t20766.fn(_t20766.env, _t20765, 2));
     }
 
 #line 24 "compiler/callgraph.gem"
     gem_set_line(24);
-    GemVal _t20765 = gem_table_new_braces();
-    gem_global_set(gem_gi___mod_callgraph_mutating_builtins, _t20765);
+    GemVal _t20767 = gem_table_new_braces();
+    gem_global_set(gem_gi___mod_callgraph_mutating_builtins, _t20767);
 #line 25 "compiler/callgraph.gem"
     gem_set_line(25);
-    GemVal _t20766 = gem_table_new();
-    gem_table_set(_t20766, gem_int(0), GEM_STR_LIT("push", 4));
-    gem_table_set(_t20766, gem_int(1), GEM_STR_LIT("pop", 3));
-    gem_table_set(_t20766, gem_int(2), GEM_STR_LIT("insert", 6));
-    gem_table_set(_t20766, gem_int(3), GEM_STR_LIT("delete", 6));
-    gem_table_set(_t20766, gem_int(4), GEM_STR_LIT("remove_at", 9));
-    gem_table_set(_t20766, gem_int(5), GEM_STR_LIT("sort", 4));
-    gem_global_set(gem_gi___for_items_211, gem_for_items_1(_t20766));
+    GemVal _t20768 = gem_table_new();
+    gem_table_set(_t20768, gem_int(0), GEM_STR_LIT("push", 4));
+    gem_table_set(_t20768, gem_int(1), GEM_STR_LIT("pop", 3));
+    gem_table_set(_t20768, gem_int(2), GEM_STR_LIT("insert", 6));
+    gem_table_set(_t20768, gem_int(3), GEM_STR_LIT("delete", 6));
+    gem_table_set(_t20768, gem_int(4), GEM_STR_LIT("remove_at", 9));
+    gem_table_set(_t20768, gem_int(5), GEM_STR_LIT("sort", 4));
+    gem_global_set(gem_gi___for_items_211, gem_for_items_1(_t20768));
 #line 25 "compiler/callgraph.gem"
     gem_set_line(25);
     gem_global_set(gem_gi___for_i_211, gem_int(0));
@@ -94512,22 +94546,22 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
         if (gem_arena_reset_due(&_mk616)) {
             gem_arena_reset_region(&_mk616, NULL, 0, NULL, 0);
         }
-    GemVal _t20767 = gem_g___for_i_211;
-        if (!gem_truthy(gem_lt(_t20767, gem_for_len_1(gem_g___for_items_211)))) break;
+    GemVal _t20769 = gem_g___for_i_211;
+        if (!gem_truthy(gem_lt(_t20769, gem_for_len_1(gem_g___for_items_211)))) break;
 #line 25 "compiler/callgraph.gem"
         gem_set_line(25);
-    GemVal _t20768 = gem_g___for_items_211;
-        GemVal gem_v_mb_name = gem_table_get(_t20768, gem_g___for_i_211);
+    GemVal _t20770 = gem_g___for_items_211;
+        GemVal gem_v_mb_name = gem_table_get(_t20770, gem_g___for_i_211);
 #line 25 "compiler/callgraph.gem"
         gem_set_line(25);
         gem_global_set(gem_gi___for_i_211, gem_add(gem_g___for_i_211, gem_int(1)));
 #line 26 "compiler/callgraph.gem"
         gem_set_line(26);
-    GemVal _t20771 = gem_g___mod_callgraph_set_add;
-    GemVal _t20769 = gem_g___mod_callgraph_mutating_builtins;
-    GemVal _t20770[] = {_t20769, gem_v_mb_name};
-    gem_check_callable(_t20771, "compiler/callgraph.gem", 26);
-        (void)(_t20771.fn(_t20771.env, _t20770, 2));
+    GemVal _t20773 = gem_g___mod_callgraph_set_add;
+    GemVal _t20771 = gem_g___mod_callgraph_mutating_builtins;
+    GemVal _t20772[] = {_t20771, gem_v_mb_name};
+    gem_check_callable(_t20773, "compiler/callgraph.gem", 26);
+        (void)(_t20773.fn(_t20773.env, _t20772, 2));
     }
 
 #line 0 "compiler/main.gem"
@@ -94706,27 +94740,27 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi___mod_lower_make_error_stmt, gem_make_fn(gem_fn___mod_ast_make_error_stmt, NULL));
 #line 416 "compiler/lower.gem"
     gem_set_line(416);
-    GemVal _t21146 = gem_table_new_braces();
-    gem_table_set(_t21146, GEM_STR_LIT("let", 3), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("assign", 6), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("dot_assign", 10), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("index_assign", 12), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("fn_def", 6), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("if", 2), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("while", 5), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("for_in", 6), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("for_range", 9), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("match", 5), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("receive_match", 13), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("return", 6), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("break", 5), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("continue", 8), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("block", 5), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("export", 6), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("extern_fn", 9), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("extern_include", 14), gem_bool(1));
-    gem_table_set(_t21146, GEM_STR_LIT("error_stmt", 10), gem_bool(1));
-    gem_global_set(gem_gi___mod_lower_STATEMENT_TAGS, _t21146);
+    GemVal _t21148 = gem_table_new_braces();
+    gem_table_set(_t21148, GEM_STR_LIT("let", 3), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("assign", 6), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("dot_assign", 10), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("index_assign", 12), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("fn_def", 6), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("if", 2), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("while", 5), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("for_in", 6), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("for_range", 9), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("match", 5), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("receive_match", 13), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("return", 6), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("break", 5), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("continue", 8), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("block", 5), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("export", 6), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("extern_fn", 9), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("extern_include", 14), gem_bool(1));
+    gem_table_set(_t21148, GEM_STR_LIT("error_stmt", 10), gem_bool(1));
+    gem_global_set(gem_gi___mod_lower_STATEMENT_TAGS, _t21148);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     gem_global_set(gem_gi_lower, gem_make_fn(gem_fn___mod_lower_lower, NULL));
@@ -94768,19 +94802,19 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi_print_all_errors, gem_make_fn(gem_fn___mod_errors_print_all_errors, NULL));
 #line 0 "compiler/main.gem"
     gem_set_line(0);
-    GemVal _t21424 = gem_table_new_braces();
-    gem_table_set(_t21424, GEM_STR_LIT("split", 5), gem_make_fn(gem_fn___mod_string_split, NULL));
-    gem_table_set(_t21424, GEM_STR_LIT("index_of", 8), gem_make_fn(gem_fn___mod_string_index_of, NULL));
-    gem_table_set(_t21424, GEM_STR_LIT("join", 4), gem_make_fn(gem_fn___mod_string_join, NULL));
-    gem_table_set(_t21424, GEM_STR_LIT("trim", 4), gem_make_fn(gem_fn___mod_string_trim, NULL));
-    gem_table_set(_t21424, GEM_STR_LIT("starts_with", 11), gem_make_fn(gem_fn___mod_string_starts_with, NULL));
-    gem_table_set(_t21424, GEM_STR_LIT("ends_with", 9), gem_make_fn(gem_fn___mod_string_ends_with, NULL));
-    gem_table_set(_t21424, GEM_STR_LIT("upper", 5), gem_make_fn(gem_fn___mod_string_upper, NULL));
-    gem_table_set(_t21424, GEM_STR_LIT("lower", 5), gem_make_fn(gem_fn___mod_string_lower, NULL));
-    gem_table_set(_t21424, GEM_STR_LIT("contains", 8), gem_make_fn(gem_fn___mod_string_contains, NULL));
-    gem_table_set(_t21424, GEM_STR_LIT("repeat", 6), gem_make_fn(gem_fn___mod_string_repeat, NULL));
-    gem_table_freeze(_t21424);
-    gem_global_set(gem_gi___mod_loader_string, _t21424);
+    GemVal _t21426 = gem_table_new_braces();
+    gem_table_set(_t21426, GEM_STR_LIT("split", 5), gem_make_fn(gem_fn___mod_string_split, NULL));
+    gem_table_set(_t21426, GEM_STR_LIT("index_of", 8), gem_make_fn(gem_fn___mod_string_index_of, NULL));
+    gem_table_set(_t21426, GEM_STR_LIT("join", 4), gem_make_fn(gem_fn___mod_string_join, NULL));
+    gem_table_set(_t21426, GEM_STR_LIT("trim", 4), gem_make_fn(gem_fn___mod_string_trim, NULL));
+    gem_table_set(_t21426, GEM_STR_LIT("starts_with", 11), gem_make_fn(gem_fn___mod_string_starts_with, NULL));
+    gem_table_set(_t21426, GEM_STR_LIT("ends_with", 9), gem_make_fn(gem_fn___mod_string_ends_with, NULL));
+    gem_table_set(_t21426, GEM_STR_LIT("upper", 5), gem_make_fn(gem_fn___mod_string_upper, NULL));
+    gem_table_set(_t21426, GEM_STR_LIT("lower", 5), gem_make_fn(gem_fn___mod_string_lower, NULL));
+    gem_table_set(_t21426, GEM_STR_LIT("contains", 8), gem_make_fn(gem_fn___mod_string_contains, NULL));
+    gem_table_set(_t21426, GEM_STR_LIT("repeat", 6), gem_make_fn(gem_fn___mod_string_repeat, NULL));
+    gem_table_freeze(_t21426);
+    gem_global_set(gem_gi___mod_loader_string, _t21426);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     gem_global_set(gem_gi_resolve_load_path, gem_make_fn(gem_fn___mod_loader_resolve_load_path, NULL));
@@ -94813,19 +94847,19 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi_normalize_newlines, gem_make_fn(gem_fn___mod_lexer_normalize_newlines, NULL));
 #line 0 "compiler/main.gem"
     gem_set_line(0);
-    GemVal _t21425 = gem_table_new_braces();
-    gem_table_set(_t21425, GEM_STR_LIT("split", 5), gem_make_fn(gem_fn___mod_string_split, NULL));
-    gem_table_set(_t21425, GEM_STR_LIT("index_of", 8), gem_make_fn(gem_fn___mod_string_index_of, NULL));
-    gem_table_set(_t21425, GEM_STR_LIT("join", 4), gem_make_fn(gem_fn___mod_string_join, NULL));
-    gem_table_set(_t21425, GEM_STR_LIT("trim", 4), gem_make_fn(gem_fn___mod_string_trim, NULL));
-    gem_table_set(_t21425, GEM_STR_LIT("starts_with", 11), gem_make_fn(gem_fn___mod_string_starts_with, NULL));
-    gem_table_set(_t21425, GEM_STR_LIT("ends_with", 9), gem_make_fn(gem_fn___mod_string_ends_with, NULL));
-    gem_table_set(_t21425, GEM_STR_LIT("upper", 5), gem_make_fn(gem_fn___mod_string_upper, NULL));
-    gem_table_set(_t21425, GEM_STR_LIT("lower", 5), gem_make_fn(gem_fn___mod_string_lower, NULL));
-    gem_table_set(_t21425, GEM_STR_LIT("contains", 8), gem_make_fn(gem_fn___mod_string_contains, NULL));
-    gem_table_set(_t21425, GEM_STR_LIT("repeat", 6), gem_make_fn(gem_fn___mod_string_repeat, NULL));
-    gem_table_freeze(_t21425);
-    gem_global_set(gem_gi___mod_rpc_string, _t21425);
+    GemVal _t21427 = gem_table_new_braces();
+    gem_table_set(_t21427, GEM_STR_LIT("split", 5), gem_make_fn(gem_fn___mod_string_split, NULL));
+    gem_table_set(_t21427, GEM_STR_LIT("index_of", 8), gem_make_fn(gem_fn___mod_string_index_of, NULL));
+    gem_table_set(_t21427, GEM_STR_LIT("join", 4), gem_make_fn(gem_fn___mod_string_join, NULL));
+    gem_table_set(_t21427, GEM_STR_LIT("trim", 4), gem_make_fn(gem_fn___mod_string_trim, NULL));
+    gem_table_set(_t21427, GEM_STR_LIT("starts_with", 11), gem_make_fn(gem_fn___mod_string_starts_with, NULL));
+    gem_table_set(_t21427, GEM_STR_LIT("ends_with", 9), gem_make_fn(gem_fn___mod_string_ends_with, NULL));
+    gem_table_set(_t21427, GEM_STR_LIT("upper", 5), gem_make_fn(gem_fn___mod_string_upper, NULL));
+    gem_table_set(_t21427, GEM_STR_LIT("lower", 5), gem_make_fn(gem_fn___mod_string_lower, NULL));
+    gem_table_set(_t21427, GEM_STR_LIT("contains", 8), gem_make_fn(gem_fn___mod_string_contains, NULL));
+    gem_table_set(_t21427, GEM_STR_LIT("repeat", 6), gem_make_fn(gem_fn___mod_string_repeat, NULL));
+    gem_table_freeze(_t21427);
+    gem_global_set(gem_gi___mod_rpc_string, _t21427);
 #line 19 "std/json.gem"
     gem_set_line(19);
     gem_global_set(gem_gi___mod_json_max_parse_depth, gem_int(1000));
@@ -94837,11 +94871,11 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi___mod_json_hex_digits, GEM_STR_LIT("0123456789abcdef", 16));
 #line 0 "compiler/main.gem"
     gem_set_line(0);
-    GemVal _t21426 = gem_table_new_braces();
-    gem_table_set(_t21426, GEM_STR_LIT("parse", 5), gem_make_fn(gem_fn___mod_json_parse, NULL));
-    gem_table_set(_t21426, GEM_STR_LIT("encode", 6), gem_make_fn(gem_fn___mod_json_encode, NULL));
-    gem_table_freeze(_t21426);
-    gem_global_set(gem_gi___mod_rpc_json, _t21426);
+    GemVal _t21428 = gem_table_new_braces();
+    gem_table_set(_t21428, GEM_STR_LIT("parse", 5), gem_make_fn(gem_fn___mod_json_parse, NULL));
+    gem_table_set(_t21428, GEM_STR_LIT("encode", 6), gem_make_fn(gem_fn___mod_json_encode, NULL));
+    gem_table_freeze(_t21428);
+    gem_global_set(gem_gi___mod_rpc_json, _t21428);
 #line 86 "lsp/rpc.gem"
     gem_set_line(86);
     gem_global_set(gem_gi___mod_rpc_ERR_PARSE, gem_int(-32700));
@@ -94883,81 +94917,35 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi___mod_rpc_CIK_KEYWORD, gem_int(14));
 #line 0 "compiler/main.gem"
     gem_set_line(0);
-    GemVal _t21427 = gem_table_new_braces();
-    gem_table_set(_t21427, GEM_STR_LIT("read_message", 12), gem_make_fn(gem_fn___mod_rpc_read_message, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("write_message", 13), gem_make_fn(gem_fn___mod_rpc_write_message, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("make_response", 13), gem_make_fn(gem_fn___mod_rpc_make_response, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("make_error_response", 19), gem_make_fn(gem_fn___mod_rpc_make_error_response, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("make_notification", 17), gem_make_fn(gem_fn___mod_rpc_make_notification, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("make_position", 13), gem_make_fn(gem_fn___mod_rpc_make_position, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("make_range", 10), gem_make_fn(gem_fn___mod_rpc_make_range, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("make_diagnostic", 15), gem_make_fn(gem_fn___mod_rpc_make_diagnostic, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("make_location", 13), gem_make_fn(gem_fn___mod_rpc_make_location, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("make_completion_item", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_item, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("make_completion_list", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_list, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("utf16_col_to_byte_col", 21), gem_make_fn(gem_fn___mod_rpc_utf16_col_to_byte_col, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("byte_col_to_utf16_col", 21), gem_make_fn(gem_fn___mod_rpc_byte_col_to_utf16_col, NULL));
-    gem_table_set(_t21427, GEM_STR_LIT("ERR_PARSE", 9), gem_g___mod_rpc_ERR_PARSE);
-    gem_table_set(_t21427, GEM_STR_LIT("ERR_INVALID_REQUEST", 19), gem_g___mod_rpc_ERR_INVALID_REQUEST);
-    gem_table_set(_t21427, GEM_STR_LIT("ERR_METHOD_NOT_FOUND", 20), gem_g___mod_rpc_ERR_METHOD_NOT_FOUND);
-    gem_table_set(_t21427, GEM_STR_LIT("ERR_INVALID_PARAMS", 18), gem_g___mod_rpc_ERR_INVALID_PARAMS);
-    gem_table_set(_t21427, GEM_STR_LIT("ERR_INTERNAL", 12), gem_g___mod_rpc_ERR_INTERNAL);
-    gem_table_set(_t21427, GEM_STR_LIT("ERR_SERVER_NOT_INITIALIZED", 26), gem_g___mod_rpc_ERR_SERVER_NOT_INITIALIZED);
-    gem_table_set(_t21427, GEM_STR_LIT("CIK_TEXT", 8), gem_g___mod_rpc_CIK_TEXT);
-    gem_table_set(_t21427, GEM_STR_LIT("CIK_METHOD", 10), gem_g___mod_rpc_CIK_METHOD);
-    gem_table_set(_t21427, GEM_STR_LIT("CIK_FUNCTION", 12), gem_g___mod_rpc_CIK_FUNCTION);
-    gem_table_set(_t21427, GEM_STR_LIT("CIK_FIELD", 9), gem_g___mod_rpc_CIK_FIELD);
-    gem_table_set(_t21427, GEM_STR_LIT("CIK_VARIABLE", 12), gem_g___mod_rpc_CIK_VARIABLE);
-    gem_table_set(_t21427, GEM_STR_LIT("CIK_MODULE", 10), gem_g___mod_rpc_CIK_MODULE);
-    gem_table_set(_t21427, GEM_STR_LIT("CIK_KEYWORD", 11), gem_g___mod_rpc_CIK_KEYWORD);
-    gem_table_freeze(_t21427);
-    gem_global_set(gem_gi___mod_server_rpc, _t21427);
-#line 0 "compiler/main.gem"
-    gem_set_line(0);
-    GemVal _t21428 = gem_table_new_braces();
-    gem_table_set(_t21428, GEM_STR_LIT("read_message", 12), gem_make_fn(gem_fn___mod_rpc_read_message, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("write_message", 13), gem_make_fn(gem_fn___mod_rpc_write_message, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("make_response", 13), gem_make_fn(gem_fn___mod_rpc_make_response, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("make_error_response", 19), gem_make_fn(gem_fn___mod_rpc_make_error_response, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("make_notification", 17), gem_make_fn(gem_fn___mod_rpc_make_notification, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("make_position", 13), gem_make_fn(gem_fn___mod_rpc_make_position, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("make_range", 10), gem_make_fn(gem_fn___mod_rpc_make_range, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("make_diagnostic", 15), gem_make_fn(gem_fn___mod_rpc_make_diagnostic, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("make_location", 13), gem_make_fn(gem_fn___mod_rpc_make_location, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("make_completion_item", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_item, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("make_completion_list", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_list, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("utf16_col_to_byte_col", 21), gem_make_fn(gem_fn___mod_rpc_utf16_col_to_byte_col, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("byte_col_to_utf16_col", 21), gem_make_fn(gem_fn___mod_rpc_byte_col_to_utf16_col, NULL));
-    gem_table_set(_t21428, GEM_STR_LIT("ERR_PARSE", 9), gem_g___mod_rpc_ERR_PARSE);
-    gem_table_set(_t21428, GEM_STR_LIT("ERR_INVALID_REQUEST", 19), gem_g___mod_rpc_ERR_INVALID_REQUEST);
-    gem_table_set(_t21428, GEM_STR_LIT("ERR_METHOD_NOT_FOUND", 20), gem_g___mod_rpc_ERR_METHOD_NOT_FOUND);
-    gem_table_set(_t21428, GEM_STR_LIT("ERR_INVALID_PARAMS", 18), gem_g___mod_rpc_ERR_INVALID_PARAMS);
-    gem_table_set(_t21428, GEM_STR_LIT("ERR_INTERNAL", 12), gem_g___mod_rpc_ERR_INTERNAL);
-    gem_table_set(_t21428, GEM_STR_LIT("ERR_SERVER_NOT_INITIALIZED", 26), gem_g___mod_rpc_ERR_SERVER_NOT_INITIALIZED);
-    gem_table_set(_t21428, GEM_STR_LIT("CIK_TEXT", 8), gem_g___mod_rpc_CIK_TEXT);
-    gem_table_set(_t21428, GEM_STR_LIT("CIK_METHOD", 10), gem_g___mod_rpc_CIK_METHOD);
-    gem_table_set(_t21428, GEM_STR_LIT("CIK_FUNCTION", 12), gem_g___mod_rpc_CIK_FUNCTION);
-    gem_table_set(_t21428, GEM_STR_LIT("CIK_FIELD", 9), gem_g___mod_rpc_CIK_FIELD);
-    gem_table_set(_t21428, GEM_STR_LIT("CIK_VARIABLE", 12), gem_g___mod_rpc_CIK_VARIABLE);
-    gem_table_set(_t21428, GEM_STR_LIT("CIK_MODULE", 10), gem_g___mod_rpc_CIK_MODULE);
-    gem_table_set(_t21428, GEM_STR_LIT("CIK_KEYWORD", 11), gem_g___mod_rpc_CIK_KEYWORD);
-    gem_table_freeze(_t21428);
-    gem_global_set(gem_gi___mod_handlers_rpc, _t21428);
-#line 0 "compiler/main.gem"
-    gem_set_line(0);
     GemVal _t21429 = gem_table_new_braces();
-    gem_table_set(_t21429, GEM_STR_LIT("split", 5), gem_make_fn(gem_fn___mod_string_split, NULL));
-    gem_table_set(_t21429, GEM_STR_LIT("index_of", 8), gem_make_fn(gem_fn___mod_string_index_of, NULL));
-    gem_table_set(_t21429, GEM_STR_LIT("join", 4), gem_make_fn(gem_fn___mod_string_join, NULL));
-    gem_table_set(_t21429, GEM_STR_LIT("trim", 4), gem_make_fn(gem_fn___mod_string_trim, NULL));
-    gem_table_set(_t21429, GEM_STR_LIT("starts_with", 11), gem_make_fn(gem_fn___mod_string_starts_with, NULL));
-    gem_table_set(_t21429, GEM_STR_LIT("ends_with", 9), gem_make_fn(gem_fn___mod_string_ends_with, NULL));
-    gem_table_set(_t21429, GEM_STR_LIT("upper", 5), gem_make_fn(gem_fn___mod_string_upper, NULL));
-    gem_table_set(_t21429, GEM_STR_LIT("lower", 5), gem_make_fn(gem_fn___mod_string_lower, NULL));
-    gem_table_set(_t21429, GEM_STR_LIT("contains", 8), gem_make_fn(gem_fn___mod_string_contains, NULL));
-    gem_table_set(_t21429, GEM_STR_LIT("repeat", 6), gem_make_fn(gem_fn___mod_string_repeat, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("read_message", 12), gem_make_fn(gem_fn___mod_rpc_read_message, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("write_message", 13), gem_make_fn(gem_fn___mod_rpc_write_message, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("make_response", 13), gem_make_fn(gem_fn___mod_rpc_make_response, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("make_error_response", 19), gem_make_fn(gem_fn___mod_rpc_make_error_response, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("make_notification", 17), gem_make_fn(gem_fn___mod_rpc_make_notification, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("make_position", 13), gem_make_fn(gem_fn___mod_rpc_make_position, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("make_range", 10), gem_make_fn(gem_fn___mod_rpc_make_range, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("make_diagnostic", 15), gem_make_fn(gem_fn___mod_rpc_make_diagnostic, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("make_location", 13), gem_make_fn(gem_fn___mod_rpc_make_location, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("make_completion_item", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_item, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("make_completion_list", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_list, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("utf16_col_to_byte_col", 21), gem_make_fn(gem_fn___mod_rpc_utf16_col_to_byte_col, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("byte_col_to_utf16_col", 21), gem_make_fn(gem_fn___mod_rpc_byte_col_to_utf16_col, NULL));
+    gem_table_set(_t21429, GEM_STR_LIT("ERR_PARSE", 9), gem_g___mod_rpc_ERR_PARSE);
+    gem_table_set(_t21429, GEM_STR_LIT("ERR_INVALID_REQUEST", 19), gem_g___mod_rpc_ERR_INVALID_REQUEST);
+    gem_table_set(_t21429, GEM_STR_LIT("ERR_METHOD_NOT_FOUND", 20), gem_g___mod_rpc_ERR_METHOD_NOT_FOUND);
+    gem_table_set(_t21429, GEM_STR_LIT("ERR_INVALID_PARAMS", 18), gem_g___mod_rpc_ERR_INVALID_PARAMS);
+    gem_table_set(_t21429, GEM_STR_LIT("ERR_INTERNAL", 12), gem_g___mod_rpc_ERR_INTERNAL);
+    gem_table_set(_t21429, GEM_STR_LIT("ERR_SERVER_NOT_INITIALIZED", 26), gem_g___mod_rpc_ERR_SERVER_NOT_INITIALIZED);
+    gem_table_set(_t21429, GEM_STR_LIT("CIK_TEXT", 8), gem_g___mod_rpc_CIK_TEXT);
+    gem_table_set(_t21429, GEM_STR_LIT("CIK_METHOD", 10), gem_g___mod_rpc_CIK_METHOD);
+    gem_table_set(_t21429, GEM_STR_LIT("CIK_FUNCTION", 12), gem_g___mod_rpc_CIK_FUNCTION);
+    gem_table_set(_t21429, GEM_STR_LIT("CIK_FIELD", 9), gem_g___mod_rpc_CIK_FIELD);
+    gem_table_set(_t21429, GEM_STR_LIT("CIK_VARIABLE", 12), gem_g___mod_rpc_CIK_VARIABLE);
+    gem_table_set(_t21429, GEM_STR_LIT("CIK_MODULE", 10), gem_g___mod_rpc_CIK_MODULE);
+    gem_table_set(_t21429, GEM_STR_LIT("CIK_KEYWORD", 11), gem_g___mod_rpc_CIK_KEYWORD);
     gem_table_freeze(_t21429);
-    gem_global_set(gem_gi___mod_doc_string, _t21429);
+    gem_global_set(gem_gi___mod_server_rpc, _t21429);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     GemVal _t21430 = gem_table_new_braces();
@@ -94988,7 +94976,7 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_table_set(_t21430, GEM_STR_LIT("CIK_MODULE", 10), gem_g___mod_rpc_CIK_MODULE);
     gem_table_set(_t21430, GEM_STR_LIT("CIK_KEYWORD", 11), gem_g___mod_rpc_CIK_KEYWORD);
     gem_table_freeze(_t21430);
-    gem_global_set(gem_gi___mod_doc_rpc, _t21430);
+    gem_global_set(gem_gi___mod_handlers_rpc, _t21430);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     GemVal _t21431 = gem_table_new_braces();
@@ -95003,7 +94991,53 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_table_set(_t21431, GEM_STR_LIT("contains", 8), gem_make_fn(gem_fn___mod_string_contains, NULL));
     gem_table_set(_t21431, GEM_STR_LIT("repeat", 6), gem_make_fn(gem_fn___mod_string_repeat, NULL));
     gem_table_freeze(_t21431);
-    gem_global_set(gem_gi___mod_symbols_string, _t21431);
+    gem_global_set(gem_gi___mod_doc_string, _t21431);
+#line 0 "compiler/main.gem"
+    gem_set_line(0);
+    GemVal _t21432 = gem_table_new_braces();
+    gem_table_set(_t21432, GEM_STR_LIT("read_message", 12), gem_make_fn(gem_fn___mod_rpc_read_message, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("write_message", 13), gem_make_fn(gem_fn___mod_rpc_write_message, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("make_response", 13), gem_make_fn(gem_fn___mod_rpc_make_response, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("make_error_response", 19), gem_make_fn(gem_fn___mod_rpc_make_error_response, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("make_notification", 17), gem_make_fn(gem_fn___mod_rpc_make_notification, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("make_position", 13), gem_make_fn(gem_fn___mod_rpc_make_position, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("make_range", 10), gem_make_fn(gem_fn___mod_rpc_make_range, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("make_diagnostic", 15), gem_make_fn(gem_fn___mod_rpc_make_diagnostic, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("make_location", 13), gem_make_fn(gem_fn___mod_rpc_make_location, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("make_completion_item", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_item, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("make_completion_list", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_list, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("utf16_col_to_byte_col", 21), gem_make_fn(gem_fn___mod_rpc_utf16_col_to_byte_col, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("byte_col_to_utf16_col", 21), gem_make_fn(gem_fn___mod_rpc_byte_col_to_utf16_col, NULL));
+    gem_table_set(_t21432, GEM_STR_LIT("ERR_PARSE", 9), gem_g___mod_rpc_ERR_PARSE);
+    gem_table_set(_t21432, GEM_STR_LIT("ERR_INVALID_REQUEST", 19), gem_g___mod_rpc_ERR_INVALID_REQUEST);
+    gem_table_set(_t21432, GEM_STR_LIT("ERR_METHOD_NOT_FOUND", 20), gem_g___mod_rpc_ERR_METHOD_NOT_FOUND);
+    gem_table_set(_t21432, GEM_STR_LIT("ERR_INVALID_PARAMS", 18), gem_g___mod_rpc_ERR_INVALID_PARAMS);
+    gem_table_set(_t21432, GEM_STR_LIT("ERR_INTERNAL", 12), gem_g___mod_rpc_ERR_INTERNAL);
+    gem_table_set(_t21432, GEM_STR_LIT("ERR_SERVER_NOT_INITIALIZED", 26), gem_g___mod_rpc_ERR_SERVER_NOT_INITIALIZED);
+    gem_table_set(_t21432, GEM_STR_LIT("CIK_TEXT", 8), gem_g___mod_rpc_CIK_TEXT);
+    gem_table_set(_t21432, GEM_STR_LIT("CIK_METHOD", 10), gem_g___mod_rpc_CIK_METHOD);
+    gem_table_set(_t21432, GEM_STR_LIT("CIK_FUNCTION", 12), gem_g___mod_rpc_CIK_FUNCTION);
+    gem_table_set(_t21432, GEM_STR_LIT("CIK_FIELD", 9), gem_g___mod_rpc_CIK_FIELD);
+    gem_table_set(_t21432, GEM_STR_LIT("CIK_VARIABLE", 12), gem_g___mod_rpc_CIK_VARIABLE);
+    gem_table_set(_t21432, GEM_STR_LIT("CIK_MODULE", 10), gem_g___mod_rpc_CIK_MODULE);
+    gem_table_set(_t21432, GEM_STR_LIT("CIK_KEYWORD", 11), gem_g___mod_rpc_CIK_KEYWORD);
+    gem_table_freeze(_t21432);
+    gem_global_set(gem_gi___mod_doc_rpc, _t21432);
+#line 0 "compiler/main.gem"
+    gem_set_line(0);
+    GemVal _t21433 = gem_table_new_braces();
+    gem_table_set(_t21433, GEM_STR_LIT("split", 5), gem_make_fn(gem_fn___mod_string_split, NULL));
+    gem_table_set(_t21433, GEM_STR_LIT("index_of", 8), gem_make_fn(gem_fn___mod_string_index_of, NULL));
+    gem_table_set(_t21433, GEM_STR_LIT("join", 4), gem_make_fn(gem_fn___mod_string_join, NULL));
+    gem_table_set(_t21433, GEM_STR_LIT("trim", 4), gem_make_fn(gem_fn___mod_string_trim, NULL));
+    gem_table_set(_t21433, GEM_STR_LIT("starts_with", 11), gem_make_fn(gem_fn___mod_string_starts_with, NULL));
+    gem_table_set(_t21433, GEM_STR_LIT("ends_with", 9), gem_make_fn(gem_fn___mod_string_ends_with, NULL));
+    gem_table_set(_t21433, GEM_STR_LIT("upper", 5), gem_make_fn(gem_fn___mod_string_upper, NULL));
+    gem_table_set(_t21433, GEM_STR_LIT("lower", 5), gem_make_fn(gem_fn___mod_string_lower, NULL));
+    gem_table_set(_t21433, GEM_STR_LIT("contains", 8), gem_make_fn(gem_fn___mod_string_contains, NULL));
+    gem_table_set(_t21433, GEM_STR_LIT("repeat", 6), gem_make_fn(gem_fn___mod_string_repeat, NULL));
+    gem_table_freeze(_t21433);
+    gem_global_set(gem_gi___mod_symbols_string, _t21433);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     gem_global_set(gem_gi___mod_symbols_resolve_load_path, gem_make_fn(gem_fn___mod_loader_resolve_load_path, NULL));
@@ -95042,53 +95076,9 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi___mod_doc_make_show_path, gem_make_fn(gem_fn___mod_loader_make_show_path, NULL));
 #line 28 "lsp/doc.gem"
     gem_set_line(28);
-    GemVal _t21432 = gem_g___mod_doc_find_install_root;
-    gem_check_callable(_t21432, "lsp/doc.gem", 28);
-    gem_global_set(gem_gi___mod_doc__install_root_path, _t21432.fn(_t21432.env, NULL, 0));
-#line 0 "compiler/main.gem"
-    gem_set_line(0);
-    GemVal _t21433 = gem_table_new_braces();
-    gem_table_set(_t21433, GEM_STR_LIT("open", 4), gem_make_fn(gem_fn___mod_doc_open, NULL));
-    gem_table_set(_t21433, GEM_STR_LIT("change", 6), gem_make_fn(gem_fn___mod_doc_change, NULL));
-    gem_table_set(_t21433, GEM_STR_LIT("close", 5), gem_make_fn(gem_fn___mod_doc_close, NULL));
-    gem_table_set(_t21433, GEM_STR_LIT("get_text", 8), gem_make_fn(gem_fn___mod_doc_get_text, NULL));
-    gem_table_set(_t21433, GEM_STR_LIT("get_symbols", 11), gem_make_fn(gem_fn___mod_doc_get_symbols, NULL));
-    gem_table_set(_t21433, GEM_STR_LIT("get_cache", 9), gem_make_fn(gem_fn___mod_doc_get_cache, NULL));
-    gem_table_set(_t21433, GEM_STR_LIT("publish_diagnostics", 19), gem_make_fn(gem_fn___mod_doc_publish_diagnostics, NULL));
-    gem_table_set(_t21433, GEM_STR_LIT("uri_to_path", 11), gem_make_fn(gem_fn___mod_doc_uri_to_path, NULL));
-    gem_table_freeze(_t21433);
-    gem_global_set(gem_gi___mod_handlers_doc, _t21433);
-#line 0 "compiler/main.gem"
-    gem_set_line(0);
-    GemVal _t21434 = gem_table_new_braces();
-    gem_table_set(_t21434, GEM_STR_LIT("read_message", 12), gem_make_fn(gem_fn___mod_rpc_read_message, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("write_message", 13), gem_make_fn(gem_fn___mod_rpc_write_message, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("make_response", 13), gem_make_fn(gem_fn___mod_rpc_make_response, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("make_error_response", 19), gem_make_fn(gem_fn___mod_rpc_make_error_response, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("make_notification", 17), gem_make_fn(gem_fn___mod_rpc_make_notification, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("make_position", 13), gem_make_fn(gem_fn___mod_rpc_make_position, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("make_range", 10), gem_make_fn(gem_fn___mod_rpc_make_range, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("make_diagnostic", 15), gem_make_fn(gem_fn___mod_rpc_make_diagnostic, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("make_location", 13), gem_make_fn(gem_fn___mod_rpc_make_location, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("make_completion_item", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_item, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("make_completion_list", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_list, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("utf16_col_to_byte_col", 21), gem_make_fn(gem_fn___mod_rpc_utf16_col_to_byte_col, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("byte_col_to_utf16_col", 21), gem_make_fn(gem_fn___mod_rpc_byte_col_to_utf16_col, NULL));
-    gem_table_set(_t21434, GEM_STR_LIT("ERR_PARSE", 9), gem_g___mod_rpc_ERR_PARSE);
-    gem_table_set(_t21434, GEM_STR_LIT("ERR_INVALID_REQUEST", 19), gem_g___mod_rpc_ERR_INVALID_REQUEST);
-    gem_table_set(_t21434, GEM_STR_LIT("ERR_METHOD_NOT_FOUND", 20), gem_g___mod_rpc_ERR_METHOD_NOT_FOUND);
-    gem_table_set(_t21434, GEM_STR_LIT("ERR_INVALID_PARAMS", 18), gem_g___mod_rpc_ERR_INVALID_PARAMS);
-    gem_table_set(_t21434, GEM_STR_LIT("ERR_INTERNAL", 12), gem_g___mod_rpc_ERR_INTERNAL);
-    gem_table_set(_t21434, GEM_STR_LIT("ERR_SERVER_NOT_INITIALIZED", 26), gem_g___mod_rpc_ERR_SERVER_NOT_INITIALIZED);
-    gem_table_set(_t21434, GEM_STR_LIT("CIK_TEXT", 8), gem_g___mod_rpc_CIK_TEXT);
-    gem_table_set(_t21434, GEM_STR_LIT("CIK_METHOD", 10), gem_g___mod_rpc_CIK_METHOD);
-    gem_table_set(_t21434, GEM_STR_LIT("CIK_FUNCTION", 12), gem_g___mod_rpc_CIK_FUNCTION);
-    gem_table_set(_t21434, GEM_STR_LIT("CIK_FIELD", 9), gem_g___mod_rpc_CIK_FIELD);
-    gem_table_set(_t21434, GEM_STR_LIT("CIK_VARIABLE", 12), gem_g___mod_rpc_CIK_VARIABLE);
-    gem_table_set(_t21434, GEM_STR_LIT("CIK_MODULE", 10), gem_g___mod_rpc_CIK_MODULE);
-    gem_table_set(_t21434, GEM_STR_LIT("CIK_KEYWORD", 11), gem_g___mod_rpc_CIK_KEYWORD);
-    gem_table_freeze(_t21434);
-    gem_global_set(gem_gi___mod_definition_rpc, _t21434);
+    GemVal _t21434 = gem_g___mod_doc_find_install_root;
+    gem_check_callable(_t21434, "lsp/doc.gem", 28);
+    gem_global_set(gem_gi___mod_doc__install_root_path, _t21434.fn(_t21434.env, NULL, 0));
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     GemVal _t21435 = gem_table_new_braces();
@@ -95101,7 +95091,51 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_table_set(_t21435, GEM_STR_LIT("publish_diagnostics", 19), gem_make_fn(gem_fn___mod_doc_publish_diagnostics, NULL));
     gem_table_set(_t21435, GEM_STR_LIT("uri_to_path", 11), gem_make_fn(gem_fn___mod_doc_uri_to_path, NULL));
     gem_table_freeze(_t21435);
-    gem_global_set(gem_gi___mod_definition_doc, _t21435);
+    gem_global_set(gem_gi___mod_handlers_doc, _t21435);
+#line 0 "compiler/main.gem"
+    gem_set_line(0);
+    GemVal _t21436 = gem_table_new_braces();
+    gem_table_set(_t21436, GEM_STR_LIT("read_message", 12), gem_make_fn(gem_fn___mod_rpc_read_message, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("write_message", 13), gem_make_fn(gem_fn___mod_rpc_write_message, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("make_response", 13), gem_make_fn(gem_fn___mod_rpc_make_response, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("make_error_response", 19), gem_make_fn(gem_fn___mod_rpc_make_error_response, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("make_notification", 17), gem_make_fn(gem_fn___mod_rpc_make_notification, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("make_position", 13), gem_make_fn(gem_fn___mod_rpc_make_position, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("make_range", 10), gem_make_fn(gem_fn___mod_rpc_make_range, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("make_diagnostic", 15), gem_make_fn(gem_fn___mod_rpc_make_diagnostic, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("make_location", 13), gem_make_fn(gem_fn___mod_rpc_make_location, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("make_completion_item", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_item, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("make_completion_list", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_list, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("utf16_col_to_byte_col", 21), gem_make_fn(gem_fn___mod_rpc_utf16_col_to_byte_col, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("byte_col_to_utf16_col", 21), gem_make_fn(gem_fn___mod_rpc_byte_col_to_utf16_col, NULL));
+    gem_table_set(_t21436, GEM_STR_LIT("ERR_PARSE", 9), gem_g___mod_rpc_ERR_PARSE);
+    gem_table_set(_t21436, GEM_STR_LIT("ERR_INVALID_REQUEST", 19), gem_g___mod_rpc_ERR_INVALID_REQUEST);
+    gem_table_set(_t21436, GEM_STR_LIT("ERR_METHOD_NOT_FOUND", 20), gem_g___mod_rpc_ERR_METHOD_NOT_FOUND);
+    gem_table_set(_t21436, GEM_STR_LIT("ERR_INVALID_PARAMS", 18), gem_g___mod_rpc_ERR_INVALID_PARAMS);
+    gem_table_set(_t21436, GEM_STR_LIT("ERR_INTERNAL", 12), gem_g___mod_rpc_ERR_INTERNAL);
+    gem_table_set(_t21436, GEM_STR_LIT("ERR_SERVER_NOT_INITIALIZED", 26), gem_g___mod_rpc_ERR_SERVER_NOT_INITIALIZED);
+    gem_table_set(_t21436, GEM_STR_LIT("CIK_TEXT", 8), gem_g___mod_rpc_CIK_TEXT);
+    gem_table_set(_t21436, GEM_STR_LIT("CIK_METHOD", 10), gem_g___mod_rpc_CIK_METHOD);
+    gem_table_set(_t21436, GEM_STR_LIT("CIK_FUNCTION", 12), gem_g___mod_rpc_CIK_FUNCTION);
+    gem_table_set(_t21436, GEM_STR_LIT("CIK_FIELD", 9), gem_g___mod_rpc_CIK_FIELD);
+    gem_table_set(_t21436, GEM_STR_LIT("CIK_VARIABLE", 12), gem_g___mod_rpc_CIK_VARIABLE);
+    gem_table_set(_t21436, GEM_STR_LIT("CIK_MODULE", 10), gem_g___mod_rpc_CIK_MODULE);
+    gem_table_set(_t21436, GEM_STR_LIT("CIK_KEYWORD", 11), gem_g___mod_rpc_CIK_KEYWORD);
+    gem_table_freeze(_t21436);
+    gem_global_set(gem_gi___mod_definition_rpc, _t21436);
+#line 0 "compiler/main.gem"
+    gem_set_line(0);
+    GemVal _t21437 = gem_table_new_braces();
+    gem_table_set(_t21437, GEM_STR_LIT("open", 4), gem_make_fn(gem_fn___mod_doc_open, NULL));
+    gem_table_set(_t21437, GEM_STR_LIT("change", 6), gem_make_fn(gem_fn___mod_doc_change, NULL));
+    gem_table_set(_t21437, GEM_STR_LIT("close", 5), gem_make_fn(gem_fn___mod_doc_close, NULL));
+    gem_table_set(_t21437, GEM_STR_LIT("get_text", 8), gem_make_fn(gem_fn___mod_doc_get_text, NULL));
+    gem_table_set(_t21437, GEM_STR_LIT("get_symbols", 11), gem_make_fn(gem_fn___mod_doc_get_symbols, NULL));
+    gem_table_set(_t21437, GEM_STR_LIT("get_cache", 9), gem_make_fn(gem_fn___mod_doc_get_cache, NULL));
+    gem_table_set(_t21437, GEM_STR_LIT("publish_diagnostics", 19), gem_make_fn(gem_fn___mod_doc_publish_diagnostics, NULL));
+    gem_table_set(_t21437, GEM_STR_LIT("uri_to_path", 11), gem_make_fn(gem_fn___mod_doc_uri_to_path, NULL));
+    gem_table_freeze(_t21437);
+    gem_global_set(gem_gi___mod_definition_doc, _t21437);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     gem_global_set(gem_gi___mod_workspace_build_symbols, gem_make_fn(gem_fn___mod_symbols_build_symbols, NULL));
@@ -95128,93 +95162,93 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi___mod_workspace_compute_stdlib_root, gem_make_fn(gem_fn___mod_loader_compute_stdlib_root, NULL));
 #line 28 "lsp/workspace.gem"
     gem_set_line(28);
-    GemVal _t21436 = gem_g___mod_workspace_find_install_root;
-    gem_check_callable(_t21436, "lsp/workspace.gem", 28);
-    gem_global_set(gem_gi___mod_workspace__install_root_path, _t21436.fn(_t21436.env, NULL, 0));
-#line 0 "compiler/main.gem"
-    gem_set_line(0);
-    GemVal _t21437 = gem_table_new_braces();
-    gem_table_set(_t21437, GEM_STR_LIT("start", 5), gem_make_fn(gem_fn___mod_workspace_start, NULL));
-    gem_table_set(_t21437, GEM_STR_LIT("lookup", 6), gem_make_fn(gem_fn___mod_workspace_lookup, NULL));
-    gem_table_freeze(_t21437);
-    gem_global_set(gem_gi___mod_definition_workspace, _t21437);
-#line 0 "compiler/main.gem"
-    gem_set_line(0);
-    GemVal _t21438 = gem_table_new_braces();
-    gem_table_set(_t21438, GEM_STR_LIT("identifier_at", 13), gem_make_fn(gem_fn___mod_position_identifier_at, NULL));
-    gem_table_set(_t21438, GEM_STR_LIT("line_col_to_offset", 18), gem_make_fn(gem_fn___mod_position_line_col_to_offset, NULL));
-    gem_table_set(_t21438, GEM_STR_LIT("prefix_at", 9), gem_make_fn(gem_fn___mod_position_prefix_at, NULL));
-    gem_table_set(_t21438, GEM_STR_LIT("is_ident_char", 13), gem_make_fn(gem_fn___mod_position_is_ident_char, NULL));
-    gem_table_set(_t21438, GEM_STR_LIT("is_ident_start", 14), gem_make_fn(gem_fn___mod_position_is_ident_start, NULL));
-    gem_table_freeze(_t21438);
-    gem_global_set(gem_gi___mod_definition_position, _t21438);
+    GemVal _t21438 = gem_g___mod_workspace_find_install_root;
+    gem_check_callable(_t21438, "lsp/workspace.gem", 28);
+    gem_global_set(gem_gi___mod_workspace__install_root_path, _t21438.fn(_t21438.env, NULL, 0));
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     GemVal _t21439 = gem_table_new_braces();
-    gem_table_set(_t21439, GEM_STR_LIT("handle", 6), gem_make_fn(gem_fn___mod_definition_handle, NULL));
+    gem_table_set(_t21439, GEM_STR_LIT("start", 5), gem_make_fn(gem_fn___mod_workspace_start, NULL));
+    gem_table_set(_t21439, GEM_STR_LIT("lookup", 6), gem_make_fn(gem_fn___mod_workspace_lookup, NULL));
     gem_table_freeze(_t21439);
-    gem_global_set(gem_gi___mod_handlers_definition, _t21439);
+    gem_global_set(gem_gi___mod_definition_workspace, _t21439);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     GemVal _t21440 = gem_table_new_braces();
-    gem_table_set(_t21440, GEM_STR_LIT("read_message", 12), gem_make_fn(gem_fn___mod_rpc_read_message, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("write_message", 13), gem_make_fn(gem_fn___mod_rpc_write_message, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("make_response", 13), gem_make_fn(gem_fn___mod_rpc_make_response, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("make_error_response", 19), gem_make_fn(gem_fn___mod_rpc_make_error_response, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("make_notification", 17), gem_make_fn(gem_fn___mod_rpc_make_notification, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("make_position", 13), gem_make_fn(gem_fn___mod_rpc_make_position, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("make_range", 10), gem_make_fn(gem_fn___mod_rpc_make_range, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("make_diagnostic", 15), gem_make_fn(gem_fn___mod_rpc_make_diagnostic, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("make_location", 13), gem_make_fn(gem_fn___mod_rpc_make_location, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("make_completion_item", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_item, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("make_completion_list", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_list, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("utf16_col_to_byte_col", 21), gem_make_fn(gem_fn___mod_rpc_utf16_col_to_byte_col, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("byte_col_to_utf16_col", 21), gem_make_fn(gem_fn___mod_rpc_byte_col_to_utf16_col, NULL));
-    gem_table_set(_t21440, GEM_STR_LIT("ERR_PARSE", 9), gem_g___mod_rpc_ERR_PARSE);
-    gem_table_set(_t21440, GEM_STR_LIT("ERR_INVALID_REQUEST", 19), gem_g___mod_rpc_ERR_INVALID_REQUEST);
-    gem_table_set(_t21440, GEM_STR_LIT("ERR_METHOD_NOT_FOUND", 20), gem_g___mod_rpc_ERR_METHOD_NOT_FOUND);
-    gem_table_set(_t21440, GEM_STR_LIT("ERR_INVALID_PARAMS", 18), gem_g___mod_rpc_ERR_INVALID_PARAMS);
-    gem_table_set(_t21440, GEM_STR_LIT("ERR_INTERNAL", 12), gem_g___mod_rpc_ERR_INTERNAL);
-    gem_table_set(_t21440, GEM_STR_LIT("ERR_SERVER_NOT_INITIALIZED", 26), gem_g___mod_rpc_ERR_SERVER_NOT_INITIALIZED);
-    gem_table_set(_t21440, GEM_STR_LIT("CIK_TEXT", 8), gem_g___mod_rpc_CIK_TEXT);
-    gem_table_set(_t21440, GEM_STR_LIT("CIK_METHOD", 10), gem_g___mod_rpc_CIK_METHOD);
-    gem_table_set(_t21440, GEM_STR_LIT("CIK_FUNCTION", 12), gem_g___mod_rpc_CIK_FUNCTION);
-    gem_table_set(_t21440, GEM_STR_LIT("CIK_FIELD", 9), gem_g___mod_rpc_CIK_FIELD);
-    gem_table_set(_t21440, GEM_STR_LIT("CIK_VARIABLE", 12), gem_g___mod_rpc_CIK_VARIABLE);
-    gem_table_set(_t21440, GEM_STR_LIT("CIK_MODULE", 10), gem_g___mod_rpc_CIK_MODULE);
-    gem_table_set(_t21440, GEM_STR_LIT("CIK_KEYWORD", 11), gem_g___mod_rpc_CIK_KEYWORD);
+    gem_table_set(_t21440, GEM_STR_LIT("identifier_at", 13), gem_make_fn(gem_fn___mod_position_identifier_at, NULL));
+    gem_table_set(_t21440, GEM_STR_LIT("line_col_to_offset", 18), gem_make_fn(gem_fn___mod_position_line_col_to_offset, NULL));
+    gem_table_set(_t21440, GEM_STR_LIT("prefix_at", 9), gem_make_fn(gem_fn___mod_position_prefix_at, NULL));
+    gem_table_set(_t21440, GEM_STR_LIT("is_ident_char", 13), gem_make_fn(gem_fn___mod_position_is_ident_char, NULL));
+    gem_table_set(_t21440, GEM_STR_LIT("is_ident_start", 14), gem_make_fn(gem_fn___mod_position_is_ident_start, NULL));
     gem_table_freeze(_t21440);
-    gem_global_set(gem_gi___mod_completion_rpc, _t21440);
+    gem_global_set(gem_gi___mod_definition_position, _t21440);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     GemVal _t21441 = gem_table_new_braces();
-    gem_table_set(_t21441, GEM_STR_LIT("open", 4), gem_make_fn(gem_fn___mod_doc_open, NULL));
-    gem_table_set(_t21441, GEM_STR_LIT("change", 6), gem_make_fn(gem_fn___mod_doc_change, NULL));
-    gem_table_set(_t21441, GEM_STR_LIT("close", 5), gem_make_fn(gem_fn___mod_doc_close, NULL));
-    gem_table_set(_t21441, GEM_STR_LIT("get_text", 8), gem_make_fn(gem_fn___mod_doc_get_text, NULL));
-    gem_table_set(_t21441, GEM_STR_LIT("get_symbols", 11), gem_make_fn(gem_fn___mod_doc_get_symbols, NULL));
-    gem_table_set(_t21441, GEM_STR_LIT("get_cache", 9), gem_make_fn(gem_fn___mod_doc_get_cache, NULL));
-    gem_table_set(_t21441, GEM_STR_LIT("publish_diagnostics", 19), gem_make_fn(gem_fn___mod_doc_publish_diagnostics, NULL));
-    gem_table_set(_t21441, GEM_STR_LIT("uri_to_path", 11), gem_make_fn(gem_fn___mod_doc_uri_to_path, NULL));
+    gem_table_set(_t21441, GEM_STR_LIT("handle", 6), gem_make_fn(gem_fn___mod_definition_handle, NULL));
     gem_table_freeze(_t21441);
-    gem_global_set(gem_gi___mod_completion_doc, _t21441);
+    gem_global_set(gem_gi___mod_handlers_definition, _t21441);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     GemVal _t21442 = gem_table_new_braces();
-    gem_table_set(_t21442, GEM_STR_LIT("start", 5), gem_make_fn(gem_fn___mod_workspace_start, NULL));
-    gem_table_set(_t21442, GEM_STR_LIT("lookup", 6), gem_make_fn(gem_fn___mod_workspace_lookup, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("read_message", 12), gem_make_fn(gem_fn___mod_rpc_read_message, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("write_message", 13), gem_make_fn(gem_fn___mod_rpc_write_message, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("make_response", 13), gem_make_fn(gem_fn___mod_rpc_make_response, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("make_error_response", 19), gem_make_fn(gem_fn___mod_rpc_make_error_response, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("make_notification", 17), gem_make_fn(gem_fn___mod_rpc_make_notification, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("make_position", 13), gem_make_fn(gem_fn___mod_rpc_make_position, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("make_range", 10), gem_make_fn(gem_fn___mod_rpc_make_range, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("make_diagnostic", 15), gem_make_fn(gem_fn___mod_rpc_make_diagnostic, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("make_location", 13), gem_make_fn(gem_fn___mod_rpc_make_location, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("make_completion_item", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_item, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("make_completion_list", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_list, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("utf16_col_to_byte_col", 21), gem_make_fn(gem_fn___mod_rpc_utf16_col_to_byte_col, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("byte_col_to_utf16_col", 21), gem_make_fn(gem_fn___mod_rpc_byte_col_to_utf16_col, NULL));
+    gem_table_set(_t21442, GEM_STR_LIT("ERR_PARSE", 9), gem_g___mod_rpc_ERR_PARSE);
+    gem_table_set(_t21442, GEM_STR_LIT("ERR_INVALID_REQUEST", 19), gem_g___mod_rpc_ERR_INVALID_REQUEST);
+    gem_table_set(_t21442, GEM_STR_LIT("ERR_METHOD_NOT_FOUND", 20), gem_g___mod_rpc_ERR_METHOD_NOT_FOUND);
+    gem_table_set(_t21442, GEM_STR_LIT("ERR_INVALID_PARAMS", 18), gem_g___mod_rpc_ERR_INVALID_PARAMS);
+    gem_table_set(_t21442, GEM_STR_LIT("ERR_INTERNAL", 12), gem_g___mod_rpc_ERR_INTERNAL);
+    gem_table_set(_t21442, GEM_STR_LIT("ERR_SERVER_NOT_INITIALIZED", 26), gem_g___mod_rpc_ERR_SERVER_NOT_INITIALIZED);
+    gem_table_set(_t21442, GEM_STR_LIT("CIK_TEXT", 8), gem_g___mod_rpc_CIK_TEXT);
+    gem_table_set(_t21442, GEM_STR_LIT("CIK_METHOD", 10), gem_g___mod_rpc_CIK_METHOD);
+    gem_table_set(_t21442, GEM_STR_LIT("CIK_FUNCTION", 12), gem_g___mod_rpc_CIK_FUNCTION);
+    gem_table_set(_t21442, GEM_STR_LIT("CIK_FIELD", 9), gem_g___mod_rpc_CIK_FIELD);
+    gem_table_set(_t21442, GEM_STR_LIT("CIK_VARIABLE", 12), gem_g___mod_rpc_CIK_VARIABLE);
+    gem_table_set(_t21442, GEM_STR_LIT("CIK_MODULE", 10), gem_g___mod_rpc_CIK_MODULE);
+    gem_table_set(_t21442, GEM_STR_LIT("CIK_KEYWORD", 11), gem_g___mod_rpc_CIK_KEYWORD);
     gem_table_freeze(_t21442);
-    gem_global_set(gem_gi___mod_completion_workspace, _t21442);
+    gem_global_set(gem_gi___mod_completion_rpc, _t21442);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     GemVal _t21443 = gem_table_new_braces();
-    gem_table_set(_t21443, GEM_STR_LIT("identifier_at", 13), gem_make_fn(gem_fn___mod_position_identifier_at, NULL));
-    gem_table_set(_t21443, GEM_STR_LIT("line_col_to_offset", 18), gem_make_fn(gem_fn___mod_position_line_col_to_offset, NULL));
-    gem_table_set(_t21443, GEM_STR_LIT("prefix_at", 9), gem_make_fn(gem_fn___mod_position_prefix_at, NULL));
-    gem_table_set(_t21443, GEM_STR_LIT("is_ident_char", 13), gem_make_fn(gem_fn___mod_position_is_ident_char, NULL));
-    gem_table_set(_t21443, GEM_STR_LIT("is_ident_start", 14), gem_make_fn(gem_fn___mod_position_is_ident_start, NULL));
+    gem_table_set(_t21443, GEM_STR_LIT("open", 4), gem_make_fn(gem_fn___mod_doc_open, NULL));
+    gem_table_set(_t21443, GEM_STR_LIT("change", 6), gem_make_fn(gem_fn___mod_doc_change, NULL));
+    gem_table_set(_t21443, GEM_STR_LIT("close", 5), gem_make_fn(gem_fn___mod_doc_close, NULL));
+    gem_table_set(_t21443, GEM_STR_LIT("get_text", 8), gem_make_fn(gem_fn___mod_doc_get_text, NULL));
+    gem_table_set(_t21443, GEM_STR_LIT("get_symbols", 11), gem_make_fn(gem_fn___mod_doc_get_symbols, NULL));
+    gem_table_set(_t21443, GEM_STR_LIT("get_cache", 9), gem_make_fn(gem_fn___mod_doc_get_cache, NULL));
+    gem_table_set(_t21443, GEM_STR_LIT("publish_diagnostics", 19), gem_make_fn(gem_fn___mod_doc_publish_diagnostics, NULL));
+    gem_table_set(_t21443, GEM_STR_LIT("uri_to_path", 11), gem_make_fn(gem_fn___mod_doc_uri_to_path, NULL));
     gem_table_freeze(_t21443);
-    gem_global_set(gem_gi___mod_completion_position, _t21443);
+    gem_global_set(gem_gi___mod_completion_doc, _t21443);
+#line 0 "compiler/main.gem"
+    gem_set_line(0);
+    GemVal _t21444 = gem_table_new_braces();
+    gem_table_set(_t21444, GEM_STR_LIT("start", 5), gem_make_fn(gem_fn___mod_workspace_start, NULL));
+    gem_table_set(_t21444, GEM_STR_LIT("lookup", 6), gem_make_fn(gem_fn___mod_workspace_lookup, NULL));
+    gem_table_freeze(_t21444);
+    gem_global_set(gem_gi___mod_completion_workspace, _t21444);
+#line 0 "compiler/main.gem"
+    gem_set_line(0);
+    GemVal _t21445 = gem_table_new_braces();
+    gem_table_set(_t21445, GEM_STR_LIT("identifier_at", 13), gem_make_fn(gem_fn___mod_position_identifier_at, NULL));
+    gem_table_set(_t21445, GEM_STR_LIT("line_col_to_offset", 18), gem_make_fn(gem_fn___mod_position_line_col_to_offset, NULL));
+    gem_table_set(_t21445, GEM_STR_LIT("prefix_at", 9), gem_make_fn(gem_fn___mod_position_prefix_at, NULL));
+    gem_table_set(_t21445, GEM_STR_LIT("is_ident_char", 13), gem_make_fn(gem_fn___mod_position_is_ident_char, NULL));
+    gem_table_set(_t21445, GEM_STR_LIT("is_ident_start", 14), gem_make_fn(gem_fn___mod_position_is_ident_start, NULL));
+    gem_table_freeze(_t21445);
+    gem_global_set(gem_gi___mod_completion_position, _t21445);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     gem_global_set(gem_gi___mod_completion_BUILTIN_NAMES, gem_g___mod_builtins_BUILTIN_NAMES);
@@ -95223,41 +95257,41 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi___mod_completion_MAX_ITEMS, gem_int(200));
 #line 0 "compiler/main.gem"
     gem_set_line(0);
-    GemVal _t21444 = gem_table_new_braces();
-    gem_table_set(_t21444, GEM_STR_LIT("handle", 6), gem_make_fn(gem_fn___mod_completion_handle, NULL));
-    gem_table_freeze(_t21444);
-    gem_global_set(gem_gi___mod_handlers_completion, _t21444);
+    GemVal _t21446 = gem_table_new_braces();
+    gem_table_set(_t21446, GEM_STR_LIT("handle", 6), gem_make_fn(gem_fn___mod_completion_handle, NULL));
+    gem_table_freeze(_t21446);
+    gem_global_set(gem_gi___mod_handlers_completion, _t21446);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
-    GemVal _t21445 = gem_table_new_braces();
-    gem_table_set(_t21445, GEM_STR_LIT("read_message", 12), gem_make_fn(gem_fn___mod_rpc_read_message, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("write_message", 13), gem_make_fn(gem_fn___mod_rpc_write_message, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("make_response", 13), gem_make_fn(gem_fn___mod_rpc_make_response, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("make_error_response", 19), gem_make_fn(gem_fn___mod_rpc_make_error_response, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("make_notification", 17), gem_make_fn(gem_fn___mod_rpc_make_notification, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("make_position", 13), gem_make_fn(gem_fn___mod_rpc_make_position, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("make_range", 10), gem_make_fn(gem_fn___mod_rpc_make_range, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("make_diagnostic", 15), gem_make_fn(gem_fn___mod_rpc_make_diagnostic, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("make_location", 13), gem_make_fn(gem_fn___mod_rpc_make_location, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("make_completion_item", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_item, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("make_completion_list", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_list, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("utf16_col_to_byte_col", 21), gem_make_fn(gem_fn___mod_rpc_utf16_col_to_byte_col, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("byte_col_to_utf16_col", 21), gem_make_fn(gem_fn___mod_rpc_byte_col_to_utf16_col, NULL));
-    gem_table_set(_t21445, GEM_STR_LIT("ERR_PARSE", 9), gem_g___mod_rpc_ERR_PARSE);
-    gem_table_set(_t21445, GEM_STR_LIT("ERR_INVALID_REQUEST", 19), gem_g___mod_rpc_ERR_INVALID_REQUEST);
-    gem_table_set(_t21445, GEM_STR_LIT("ERR_METHOD_NOT_FOUND", 20), gem_g___mod_rpc_ERR_METHOD_NOT_FOUND);
-    gem_table_set(_t21445, GEM_STR_LIT("ERR_INVALID_PARAMS", 18), gem_g___mod_rpc_ERR_INVALID_PARAMS);
-    gem_table_set(_t21445, GEM_STR_LIT("ERR_INTERNAL", 12), gem_g___mod_rpc_ERR_INTERNAL);
-    gem_table_set(_t21445, GEM_STR_LIT("ERR_SERVER_NOT_INITIALIZED", 26), gem_g___mod_rpc_ERR_SERVER_NOT_INITIALIZED);
-    gem_table_set(_t21445, GEM_STR_LIT("CIK_TEXT", 8), gem_g___mod_rpc_CIK_TEXT);
-    gem_table_set(_t21445, GEM_STR_LIT("CIK_METHOD", 10), gem_g___mod_rpc_CIK_METHOD);
-    gem_table_set(_t21445, GEM_STR_LIT("CIK_FUNCTION", 12), gem_g___mod_rpc_CIK_FUNCTION);
-    gem_table_set(_t21445, GEM_STR_LIT("CIK_FIELD", 9), gem_g___mod_rpc_CIK_FIELD);
-    gem_table_set(_t21445, GEM_STR_LIT("CIK_VARIABLE", 12), gem_g___mod_rpc_CIK_VARIABLE);
-    gem_table_set(_t21445, GEM_STR_LIT("CIK_MODULE", 10), gem_g___mod_rpc_CIK_MODULE);
-    gem_table_set(_t21445, GEM_STR_LIT("CIK_KEYWORD", 11), gem_g___mod_rpc_CIK_KEYWORD);
-    gem_table_freeze(_t21445);
-    gem_global_set(gem_gi___mod_diagnostics_rpc, _t21445);
+    GemVal _t21447 = gem_table_new_braces();
+    gem_table_set(_t21447, GEM_STR_LIT("read_message", 12), gem_make_fn(gem_fn___mod_rpc_read_message, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("write_message", 13), gem_make_fn(gem_fn___mod_rpc_write_message, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("make_response", 13), gem_make_fn(gem_fn___mod_rpc_make_response, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("make_error_response", 19), gem_make_fn(gem_fn___mod_rpc_make_error_response, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("make_notification", 17), gem_make_fn(gem_fn___mod_rpc_make_notification, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("make_position", 13), gem_make_fn(gem_fn___mod_rpc_make_position, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("make_range", 10), gem_make_fn(gem_fn___mod_rpc_make_range, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("make_diagnostic", 15), gem_make_fn(gem_fn___mod_rpc_make_diagnostic, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("make_location", 13), gem_make_fn(gem_fn___mod_rpc_make_location, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("make_completion_item", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_item, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("make_completion_list", 20), gem_make_fn(gem_fn___mod_rpc_make_completion_list, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("utf16_col_to_byte_col", 21), gem_make_fn(gem_fn___mod_rpc_utf16_col_to_byte_col, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("byte_col_to_utf16_col", 21), gem_make_fn(gem_fn___mod_rpc_byte_col_to_utf16_col, NULL));
+    gem_table_set(_t21447, GEM_STR_LIT("ERR_PARSE", 9), gem_g___mod_rpc_ERR_PARSE);
+    gem_table_set(_t21447, GEM_STR_LIT("ERR_INVALID_REQUEST", 19), gem_g___mod_rpc_ERR_INVALID_REQUEST);
+    gem_table_set(_t21447, GEM_STR_LIT("ERR_METHOD_NOT_FOUND", 20), gem_g___mod_rpc_ERR_METHOD_NOT_FOUND);
+    gem_table_set(_t21447, GEM_STR_LIT("ERR_INVALID_PARAMS", 18), gem_g___mod_rpc_ERR_INVALID_PARAMS);
+    gem_table_set(_t21447, GEM_STR_LIT("ERR_INTERNAL", 12), gem_g___mod_rpc_ERR_INTERNAL);
+    gem_table_set(_t21447, GEM_STR_LIT("ERR_SERVER_NOT_INITIALIZED", 26), gem_g___mod_rpc_ERR_SERVER_NOT_INITIALIZED);
+    gem_table_set(_t21447, GEM_STR_LIT("CIK_TEXT", 8), gem_g___mod_rpc_CIK_TEXT);
+    gem_table_set(_t21447, GEM_STR_LIT("CIK_METHOD", 10), gem_g___mod_rpc_CIK_METHOD);
+    gem_table_set(_t21447, GEM_STR_LIT("CIK_FUNCTION", 12), gem_g___mod_rpc_CIK_FUNCTION);
+    gem_table_set(_t21447, GEM_STR_LIT("CIK_FIELD", 9), gem_g___mod_rpc_CIK_FIELD);
+    gem_table_set(_t21447, GEM_STR_LIT("CIK_VARIABLE", 12), gem_g___mod_rpc_CIK_VARIABLE);
+    gem_table_set(_t21447, GEM_STR_LIT("CIK_MODULE", 10), gem_g___mod_rpc_CIK_MODULE);
+    gem_table_set(_t21447, GEM_STR_LIT("CIK_KEYWORD", 11), gem_g___mod_rpc_CIK_KEYWORD);
+    gem_table_freeze(_t21447);
+    gem_global_set(gem_gi___mod_diagnostics_rpc, _t21447);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     gem_global_set(gem_gi___mod_diagnostics_get_source_line, gem_make_fn(gem_fn___mod_errors_get_source_line, NULL));
@@ -95266,526 +95300,569 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
     gem_global_set(gem_gi___mod_diagnostics_DIAGNOSTIC_SOURCE, GEM_STR_LIT("gem", 3));
 #line 0 "compiler/main.gem"
     gem_set_line(0);
-    GemVal _t21446 = gem_table_new_braces();
-    gem_table_set(_t21446, GEM_STR_LIT("build_publishes", 15), gem_make_fn(gem_fn___mod_diagnostics_build_publishes, NULL));
-    gem_table_set(_t21446, GEM_STR_LIT("path_to_uri", 11), gem_make_fn(gem_fn___mod_diagnostics_path_to_uri, NULL));
-    gem_table_freeze(_t21446);
-    gem_global_set(gem_gi___mod_handlers_diagnostics, _t21446);
-#line 0 "compiler/main.gem"
-    gem_set_line(0);
-    GemVal _t21447 = gem_table_new_braces();
-    gem_table_set(_t21447, GEM_STR_LIT("make_dispatcher", 15), gem_make_fn(gem_fn___mod_handlers_make_dispatcher, NULL));
-    gem_table_freeze(_t21447);
-    gem_global_set(gem_gi___mod_server_handlers, _t21447);
-#line 0 "compiler/main.gem"
-    gem_set_line(0);
     GemVal _t21448 = gem_table_new_braces();
-    gem_table_set(_t21448, GEM_STR_LIT("start", 5), gem_make_fn(gem_fn___mod_workspace_start, NULL));
-    gem_table_set(_t21448, GEM_STR_LIT("lookup", 6), gem_make_fn(gem_fn___mod_workspace_lookup, NULL));
+    gem_table_set(_t21448, GEM_STR_LIT("build_publishes", 15), gem_make_fn(gem_fn___mod_diagnostics_build_publishes, NULL));
+    gem_table_set(_t21448, GEM_STR_LIT("path_to_uri", 11), gem_make_fn(gem_fn___mod_diagnostics_path_to_uri, NULL));
     gem_table_freeze(_t21448);
-    gem_global_set(gem_gi___mod_server_workspace, _t21448);
+    gem_global_set(gem_gi___mod_handlers_diagnostics, _t21448);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     GemVal _t21449 = gem_table_new_braces();
-    gem_table_set(_t21449, GEM_STR_LIT("run", 3), gem_make_fn(gem_fn___mod_server_run, NULL));
+    gem_table_set(_t21449, GEM_STR_LIT("make_dispatcher", 15), gem_make_fn(gem_fn___mod_handlers_make_dispatcher, NULL));
     gem_table_freeze(_t21449);
-    gem_global_set(gem_gi___mod_main_server, _t21449);
+    gem_global_set(gem_gi___mod_server_handlers, _t21449);
+#line 0 "compiler/main.gem"
+    gem_set_line(0);
+    GemVal _t21450 = gem_table_new_braces();
+    gem_table_set(_t21450, GEM_STR_LIT("start", 5), gem_make_fn(gem_fn___mod_workspace_start, NULL));
+    gem_table_set(_t21450, GEM_STR_LIT("lookup", 6), gem_make_fn(gem_fn___mod_workspace_lookup, NULL));
+    gem_table_freeze(_t21450);
+    gem_global_set(gem_gi___mod_server_workspace, _t21450);
+#line 0 "compiler/main.gem"
+    gem_set_line(0);
+    GemVal _t21451 = gem_table_new_braces();
+    gem_table_set(_t21451, GEM_STR_LIT("run", 3), gem_make_fn(gem_fn___mod_server_run, NULL));
+    gem_table_freeze(_t21451);
+    gem_global_set(gem_gi___mod_main_server, _t21451);
 #line 0 "compiler/main.gem"
     gem_set_line(0);
     gem_global_set(gem_gi_run_lsp, gem_make_fn(gem_fn___mod_main_run_lsp, NULL));
 #line 22 "compiler/main.gem"
     gem_set_line(22);
-    GemVal _t21450 = gem_g_find_install_root;
-    gem_check_callable(_t21450, "compiler/main.gem", 22);
-    gem_global_set(gem_gi_install_root, _t21450.fn(_t21450.env, NULL, 0));
+    GemVal _t21452 = gem_g_find_install_root;
+    gem_check_callable(_t21452, "compiler/main.gem", 22);
+    gem_global_set(gem_gi_install_root, _t21452.fn(_t21452.env, NULL, 0));
 #line 24 "compiler/main.gem"
     gem_set_line(24);
-    GemVal _t21451 = gem_g_build_keyword_set;
-    gem_check_callable(_t21451, "compiler/main.gem", 24);
-    gem_global_set(gem_gi_KEYWORDS, _t21451.fn(_t21451.env, NULL, 0));
+    GemVal _t21453 = gem_g_build_keyword_set;
+    gem_check_callable(_t21453, "compiler/main.gem", 24);
+    gem_global_set(gem_gi_KEYWORDS, _t21453.fn(_t21453.env, NULL, 0));
 #line 1169 "compiler/main.gem"
     gem_set_line(1169);
     gem_global_set(gem_gi_USAGE, GEM_STR_LIT("usage: gem <file.gem> [options] [args...]\n       gem lsp\n\nCompiles <file.gem> to C, builds it with cc and runs it. Arguments after\nthe file that are not options below are passed to the program.\n\noptions:\n  -c, --compile-only   compile to ./<file>, don't run\n  -o <name>            compile to <name> (implies -c)\n  --emit-c             print the generated C to stdout\n  --check              parse and analyze only; exit 1 on errors\n  --run                run after compiling (the default)\n  -h, --help           print this help\nsubcommands:\n  lsp                  start the language server on stdin/stdout", 604));
-#line 1277 "compiler/main.gem"
-    gem_set_line(1277);
-    gem_global_set(gem_gi_argc, gem_len_1(gem_argv_fn(NULL, NULL, 0)));
-#line 1278 "compiler/main.gem"
-    gem_set_line(1278);
-    if (gem_truthy(gem_lt(gem_g_argc, gem_int(2)))) {
-#line 1279 "compiler/main.gem"
-        gem_set_line(1279);
-    GemVal _t21452[] = {GEM_STR_LIT("no source file given", 20)};
-        (void)(gem_fn_usage_error(NULL, _t21452, 1));
-    }
-#line 1285 "compiler/main.gem"
-    gem_set_line(1285);
-    if (gem_truthy(gem_eq(gem_table_get(gem_argv_fn(NULL, NULL, 0), gem_int(1)), GEM_STR_LIT("lsp", 3)))) {
-#line 1286 "compiler/main.gem"
-        gem_set_line(1286);
-    GemVal _t21453 = gem_g_run_lsp;
-    gem_check_callable(_t21453, "compiler/main.gem", 1286);
-        (void)(_t21453.fn(_t21453.env, NULL, 0));
-#line 1287 "compiler/main.gem"
-        gem_set_line(1287);
-    GemVal _t21454[] = {gem_int(0)};
-        (void)(gem_exit_process_fn(NULL, _t21454, 1));
-    }
 #line 1290 "compiler/main.gem"
     gem_set_line(1290);
-    GemVal _t21455[] = {gem_argv_fn(NULL, NULL, 0)};
-    gem_global_set(gem_gi_cli, gem_fn_parse_args(NULL, _t21455, 1));
+    gem_global_set(gem_gi_argc, gem_len_1(gem_argv_fn(NULL, NULL, 0)));
+#line 1291 "compiler/main.gem"
+    gem_set_line(1291);
+    if (gem_truthy(gem_lt(gem_g_argc, gem_int(2)))) {
 #line 1292 "compiler/main.gem"
-    gem_set_line(1292);
-    GemVal _t21456 = gem_g_cli;
-    static GemICacheSlot _ic_3184 = {0};
-    if (gem_truthy(gem_eq(gem_table_get_cached(_t21456, "src_path", &_ic_3184), GEM_NIL))) {
-#line 1293 "compiler/main.gem"
-        gem_set_line(1293);
-    GemVal _t21457[] = {GEM_STR_LIT("no source file given", 20)};
-        (void)(gem_fn_usage_error(NULL, _t21457, 1));
+        gem_set_line(1292);
+    GemVal _t21454[] = {GEM_STR_LIT("no source file given", 20)};
+        (void)(gem_fn_usage_error(NULL, _t21454, 1));
     }
-#line 1296 "compiler/main.gem"
-    gem_set_line(1296);
-    GemVal _t21458 = gem_g_cli;
-    static GemICacheSlot _ic_3185 = {0};
-    gem_global_set(gem_gi_src_path, gem_table_get_cached(_t21458, "src_path", &_ic_3185));
+#line 1298 "compiler/main.gem"
+    gem_set_line(1298);
+    if (gem_truthy(gem_eq(gem_table_get(gem_argv_fn(NULL, NULL, 0), gem_int(1)), GEM_STR_LIT("lsp", 3)))) {
 #line 1299 "compiler/main.gem"
-    gem_set_line(1299);
-    GemVal _t21459[] = {gem_g_src_path};
-    if (gem_truthy(gem_is_dir_fn(NULL, _t21459, 1))) {
+        gem_set_line(1299);
+    GemVal _t21455 = gem_g_run_lsp;
+    gem_check_callable(_t21455, "compiler/main.gem", 1299);
+        (void)(_t21455.fn(_t21455.env, NULL, 0));
 #line 1300 "compiler/main.gem"
         gem_set_line(1300);
-    GemVal _t21460[] = {gem_add(gem_add(GEM_STR_LIT("gem: '", 6), gem_g_src_path), GEM_STR_LIT("' is a directory, not a source file", 35))};
-        (void)(gem_eprint_fn(NULL, _t21460, 1));
-#line 1301 "compiler/main.gem"
-        gem_set_line(1301);
-    GemVal _t21461[] = {gem_int(1)};
-        (void)(gem_exit_process_fn(NULL, _t21461, 1));
+    GemVal _t21456[] = {gem_int(0)};
+        (void)(gem_exit_process_fn(NULL, _t21456, 1));
     }
 #line 1303 "compiler/main.gem"
     gem_set_line(1303);
-    GemVal _t21462[] = {gem_g_src_path};
-    if (gem_truthy(gem_not(gem_file_exists_fn(NULL, _t21462, 1)))) {
-#line 1304 "compiler/main.gem"
-        gem_set_line(1304);
-    GemVal _t21463[] = {gem_add(gem_add(GEM_STR_LIT("gem: cannot open '", 18), gem_g_src_path), GEM_STR_LIT("'", 1))};
-        (void)(gem_eprint_fn(NULL, _t21463, 1));
+    GemVal _t21457[] = {gem_argv_fn(NULL, NULL, 0)};
+    gem_global_set(gem_gi_cli, gem_fn_parse_args(NULL, _t21457, 1));
 #line 1305 "compiler/main.gem"
-        gem_set_line(1305);
-    GemVal _t21464[] = {gem_int(1)};
-        (void)(gem_exit_process_fn(NULL, _t21464, 1));
+    gem_set_line(1305);
+    GemVal _t21458 = gem_g_cli;
+    static GemICacheSlot _ic_3184 = {0};
+    if (gem_truthy(gem_eq(gem_table_get_cached(_t21458, "src_path", &_ic_3184), GEM_NIL))) {
+#line 1306 "compiler/main.gem"
+        gem_set_line(1306);
+    GemVal _t21459[] = {GEM_STR_LIT("no source file given", 20)};
+        (void)(gem_fn_usage_error(NULL, _t21459, 1));
     }
-#line 1307 "compiler/main.gem"
-    gem_set_line(1307);
-    GemVal _t21467 = gem_g_normalize_newlines;
-    GemVal _t21465[] = {gem_g_src_path};
-    GemVal _t21466[] = {gem_read_file_fn(NULL, _t21465, 1)};
-    gem_check_callable(_t21467, "compiler/main.gem", 1307);
-    gem_global_set(gem_gi_source, _t21467.fn(_t21467.env, _t21466, 1));
 #line 1309 "compiler/main.gem"
     gem_set_line(1309);
-    GemVal _t21468 = gem_g_make_error_sink;
-    gem_check_callable(_t21468, "compiler/main.gem", 1309);
-    gem_global_set(gem_gi_sink, _t21468.fn(_t21468.env, NULL, 0));
-#line 1311 "compiler/main.gem"
-    gem_set_line(1311);
-    GemVal _t21472 = gem_g_parse_source;
-    GemVal _t21470 = gem_g_source;
-    GemVal _t21469 = gem_g_src_path;
-    GemVal _t21471[] = {_t21470, _t21469, gem_g_sink};
-    gem_check_callable(_t21472, "compiler/main.gem", 1311);
-    gem_global_set(gem_gi_ast, _t21472.fn(_t21472.env, _t21471, 3));
+    GemVal _t21460 = gem_g_cli;
+    static GemICacheSlot _ic_3185 = {0};
+    gem_global_set(gem_gi_src_path, gem_table_get_cached(_t21460, "src_path", &_ic_3185));
 #line 1312 "compiler/main.gem"
     gem_set_line(1312);
-    GemVal _t21473 = gem_g_ast;
-    GemVal _t21474[] = {_t21473, gem_g_src_path};
-    (void)(gem_fn_tag_source_file(NULL, _t21474, 2));
+    GemVal _t21461[] = {gem_g_src_path};
+    if (gem_truthy(gem_is_dir_fn(NULL, _t21461, 1))) {
 #line 1313 "compiler/main.gem"
-    gem_set_line(1313);
-    GemVal _t21475[] = {gem_g_src_path};
-    gem_global_set(gem_gi_base_dir, gem_dirname_fn(NULL, _t21475, 1));
+        gem_set_line(1313);
+    GemVal _t21462[] = {gem_add(gem_add(GEM_STR_LIT("gem: '", 6), gem_g_src_path), GEM_STR_LIT("' is a directory, not a source file", 35))};
+        (void)(gem_eprint_fn(NULL, _t21462, 1));
 #line 1314 "compiler/main.gem"
-    gem_set_line(1314);
-    GemVal _t21477 = gem_g_find_project_root;
-    GemVal _t21476[] = {gem_g_base_dir};
-    gem_check_callable(_t21477, "compiler/main.gem", 1314);
-    gem_global_set(gem_gi_project_root, _t21477.fn(_t21477.env, _t21476, 1));
-#line 1315 "compiler/main.gem"
-    gem_set_line(1315);
-    if (gem_truthy(gem_neq(gem_g_project_root, GEM_NIL))) {
-#line 1316 "compiler/main.gem"
-        gem_set_line(1316);
-    GemVal _t21478[] = {gem_g_project_root};
-        gem_global_set(gem_gi_project_root, gem_normalize_path_fn(NULL, _t21478, 1));
+        gem_set_line(1314);
+    GemVal _t21463[] = {gem_int(1)};
+        (void)(gem_exit_process_fn(NULL, _t21463, 1));
     }
+#line 1316 "compiler/main.gem"
+    gem_set_line(1316);
+    GemVal _t21464[] = {gem_g_src_path};
+    if (gem_truthy(gem_not(gem_file_exists_fn(NULL, _t21464, 1)))) {
+#line 1317 "compiler/main.gem"
+        gem_set_line(1317);
+    GemVal _t21465[] = {gem_add(gem_add(GEM_STR_LIT("gem: cannot open '", 18), gem_g_src_path), GEM_STR_LIT("'", 1))};
+        (void)(gem_eprint_fn(NULL, _t21465, 1));
 #line 1318 "compiler/main.gem"
-    gem_set_line(1318);
-    GemVal _t21481 = gem_g_compute_stdlib_root;
-    GemVal _t21479 = gem_g_install_root;
-    GemVal _t21480[] = {_t21479, gem_g_project_root};
-    gem_check_callable(_t21481, "compiler/main.gem", 1318);
-    gem_global_set(gem_gi_stdlib_root, _t21481.fn(_t21481.env, _t21480, 2));
-#line 1319 "compiler/main.gem"
-    gem_set_line(1319);
-    GemVal _t21484 = gem_g_make_show_path;
-    GemVal _t21482 = gem_g_src_path;
-    GemVal _t21483[] = {_t21482, gem_g_project_root};
-    gem_check_callable(_t21484, "compiler/main.gem", 1319);
-    gem_global_set(gem_gi_show_path, _t21484.fn(_t21484.env, _t21483, 2));
+        gem_set_line(1318);
+    GemVal _t21466[] = {gem_int(1)};
+        (void)(gem_exit_process_fn(NULL, _t21466, 1));
+    }
 #line 1320 "compiler/main.gem"
     gem_set_line(1320);
-    GemVal _t21485 = gem_table_new_braces();
-    gem_global_set(gem_gi_loaded, _t21485);
-#line 1321 "compiler/main.gem"
-    gem_set_line(1321);
-    GemVal _t21486 = gem_table_new_braces();
-    gem_global_set(gem_gi_module_bindings, _t21486);
+    GemVal _t21469 = gem_g_normalize_newlines;
+    GemVal _t21467[] = {gem_g_src_path};
+    GemVal _t21468[] = {gem_read_file_fn(NULL, _t21467, 1)};
+    gem_check_callable(_t21469, "compiler/main.gem", 1320);
+    gem_global_set(gem_gi_source, _t21469.fn(_t21469.env, _t21468, 1));
 #line 1322 "compiler/main.gem"
     gem_set_line(1322);
-    GemVal _t21487 = gem_table_new_braces();
-    gem_global_set(gem_gi_sources_by_file, _t21487);
-#line 1323 "compiler/main.gem"
-    gem_set_line(1323);
-    GemVal _t21489 = gem_g_sources_by_file;
-    GemVal _t21488 = gem_g_src_path;
-    gem_table_set(_t21489, _t21488, gem_g_source);
+    GemVal _t21470 = gem_g_make_error_sink;
+    gem_check_callable(_t21470, "compiler/main.gem", 1322);
+    gem_global_set(gem_gi_sink, _t21470.fn(_t21470.env, NULL, 0));
+#line 1324 "compiler/main.gem"
+    gem_set_line(1324);
+    GemVal _t21474 = gem_g_parse_source;
+    GemVal _t21472 = gem_g_source;
+    GemVal _t21471 = gem_g_src_path;
+    GemVal _t21473[] = {_t21472, _t21471, gem_g_sink};
+    gem_check_callable(_t21474, "compiler/main.gem", 1324);
+    gem_global_set(gem_gi_ast, _t21474.fn(_t21474.env, _t21473, 3));
 #line 1325 "compiler/main.gem"
     gem_set_line(1325);
-    GemVal _t21493 = gem_g_loaded;
-    GemVal _t21490[] = {gem_g_src_path};
-    GemVal _t21492 = gem_normalize_path_fn(NULL, _t21490, 1);
-    GemVal _t21491 = gem_table_new_braces();
-    gem_table_set(_t21491, GEM_STR_LIT("exported", 8), GEM_NIL);
-    gem_table_set(_t21491, GEM_STR_LIT("loading", 7), gem_bool(1));
-    gem_table_set(_t21491, GEM_STR_LIT("parent", 6), GEM_NIL);
-    gem_table_set(_t21493, _t21492, _t21491);
+    GemVal _t21475 = gem_g_ast;
+    GemVal _t21476[] = {_t21475, gem_g_src_path};
+    (void)(gem_fn_tag_source_file(NULL, _t21476, 2));
+#line 1326 "compiler/main.gem"
+    gem_set_line(1326);
+    GemVal _t21477[] = {gem_g_src_path};
+    gem_global_set(gem_gi_base_dir, gem_dirname_fn(NULL, _t21477, 1));
+#line 1327 "compiler/main.gem"
+    gem_set_line(1327);
+    GemVal _t21479 = gem_g_find_project_root;
+    GemVal _t21478[] = {gem_g_base_dir};
+    gem_check_callable(_t21479, "compiler/main.gem", 1327);
+    gem_global_set(gem_gi_project_root, _t21479.fn(_t21479.env, _t21478, 1));
+#line 1328 "compiler/main.gem"
+    gem_set_line(1328);
+    if (gem_truthy(gem_neq(gem_g_project_root, GEM_NIL))) {
+#line 1329 "compiler/main.gem"
+        gem_set_line(1329);
+    GemVal _t21480[] = {gem_g_project_root};
+        gem_global_set(gem_gi_project_root, gem_normalize_path_fn(NULL, _t21480, 1));
+    }
 #line 1331 "compiler/main.gem"
     gem_set_line(1331);
-    gem_global_set(gem_gi_resolved_ast, GEM_NIL);
+    GemVal _t21483 = gem_g_compute_stdlib_root;
+    GemVal _t21481 = gem_g_install_root;
+    GemVal _t21482[] = {_t21481, gem_g_project_root};
+    gem_check_callable(_t21483, "compiler/main.gem", 1331);
+    gem_global_set(gem_gi_stdlib_root, _t21483.fn(_t21483.env, _t21482, 2));
 #line 1332 "compiler/main.gem"
     gem_set_line(1332);
-    GemVal _t21494 = gem_g_sink;
-    static GemICacheSlot _ic_3186 = {0};
-    GemVal _t21495 = gem_table_get_cached(_t21494, "has_any", &_ic_3186);
-    gem_check_callable_field(_t21495, "has_any", "compiler/main.gem", 1332);
-    if (gem_truthy(gem_not(_t21495.fn(_t21495.env, NULL, 0)))) {
+    GemVal _t21486 = gem_g_make_show_path;
+    GemVal _t21484 = gem_g_src_path;
+    GemVal _t21485[] = {_t21484, gem_g_project_root};
+    gem_check_callable(_t21486, "compiler/main.gem", 1332);
+    gem_global_set(gem_gi_show_path, _t21486.fn(_t21486.env, _t21485, 2));
 #line 1333 "compiler/main.gem"
-        gem_set_line(1333);
-    GemVal _t21497 = gem_g_ast;
-    GemVal _t21496 = gem_g_src_path;
-    GemVal _t21498[] = {_t21497, _t21496, gem_g_show_path};
-        (void)(gem_fn_warn_shadowed_loop_conds(NULL, _t21498, 3));
+    gem_set_line(1333);
+    GemVal _t21487 = gem_table_new_braces();
+    gem_global_set(gem_gi_loaded, _t21487);
 #line 1334 "compiler/main.gem"
-        gem_set_line(1334);
-    GemVal _t21510 = gem_g_ast;
-    GemVal _t21509 = gem_g_base_dir;
-    GemVal _t21508 = gem_g_project_root;
-    GemVal _t21507 = gem_g_stdlib_root;
-    GemVal _t21506 = gem_g_loaded;
-    GemVal _t21505 = gem_g_module_bindings;
-    GemVal _t21504 = gem_g_sources_by_file;
-    GemVal _t21503 = gem_g_sink;
-    GemVal _t21502 = gem_g_show_path;
-    GemVal _t21499 = gem_table_new_braces();
-    GemVal _t21500 = gem_table_new_braces();
-    gem_table_set(_t21499, GEM_STR_LIT("prefixes", 8), _t21500);
-    GemVal _t21501 = gem_table_new_braces();
-    gem_table_set(_t21499, GEM_STR_LIT("symbols", 7), _t21501);
-    GemVal _t21511[] = {_t21510, _t21509, _t21508, _t21507, _t21506, _t21505, _t21504, _t21503, _t21502, _t21499};
-        gem_global_set(gem_gi_resolved_ast, gem_fn_resolve_loads(NULL, _t21511, 10));
-#line 1337 "compiler/main.gem"
-        gem_set_line(1337);
-    GemVal _t21512 = gem_g_resolved_ast;
-    static GemICacheSlot _ic_3187 = {0};
-    GemVal _t21513[] = {gem_table_get_cached(_t21512, "stmts", &_ic_3187)};
-        GemVal gem_v_entry_export = gem_fn_find_export_node(NULL, _t21513, 1);
+    gem_set_line(1334);
+    GemVal _t21488 = gem_table_new_braces();
+    gem_global_set(gem_gi_module_bindings, _t21488);
+#line 1335 "compiler/main.gem"
+    gem_set_line(1335);
+    GemVal _t21489 = gem_table_new_braces();
+    gem_global_set(gem_gi_sources_by_file, _t21489);
+#line 1336 "compiler/main.gem"
+    gem_set_line(1336);
+    GemVal _t21491 = gem_g_sources_by_file;
+    GemVal _t21490 = gem_g_src_path;
+    gem_table_set(_t21491, _t21490, gem_g_source);
 #line 1338 "compiler/main.gem"
-        gem_set_line(1338);
-        if (gem_truthy(gem_neq(gem_v_entry_export, GEM_NIL))) {
-#line 1339 "compiler/main.gem"
-            gem_set_line(1339);
-    GemVal _t21523 = gem_v_entry_export;
+    gem_set_line(1338);
+    GemVal _t21495 = gem_g_loaded;
+    GemVal _t21492[] = {gem_g_src_path};
+    GemVal _t21494 = gem_normalize_path_fn(NULL, _t21492, 1);
+    GemVal _t21493 = gem_table_new_braces();
+    gem_table_set(_t21493, GEM_STR_LIT("exported", 8), GEM_NIL);
+    gem_table_set(_t21493, GEM_STR_LIT("loading", 7), gem_bool(1));
+    gem_table_set(_t21493, GEM_STR_LIT("parent", 6), GEM_NIL);
+    gem_table_set(_t21495, _t21494, _t21493);
+#line 1344 "compiler/main.gem"
+    gem_set_line(1344);
+    gem_global_set(gem_gi_resolved_ast, GEM_NIL);
+#line 1345 "compiler/main.gem"
+    gem_set_line(1345);
+    GemVal _t21496 = gem_g_sink;
+    static GemICacheSlot _ic_3186 = {0};
+    GemVal _t21497 = gem_table_get_cached(_t21496, "has_any", &_ic_3186);
+    gem_check_callable_field(_t21497, "has_any", "compiler/main.gem", 1345);
+    if (gem_truthy(gem_not(_t21497.fn(_t21497.env, NULL, 0)))) {
+#line 1346 "compiler/main.gem"
+        gem_set_line(1346);
+    GemVal _t21499 = gem_g_ast;
+    GemVal _t21498 = gem_g_src_path;
+    GemVal _t21500[] = {_t21499, _t21498, gem_g_show_path};
+        (void)(gem_fn_warn_shadowed_loop_conds(NULL, _t21500, 3));
+#line 1347 "compiler/main.gem"
+        gem_set_line(1347);
+    GemVal _t21512 = gem_g_ast;
+    GemVal _t21511 = gem_g_base_dir;
+    GemVal _t21510 = gem_g_project_root;
+    GemVal _t21509 = gem_g_stdlib_root;
+    GemVal _t21508 = gem_g_loaded;
+    GemVal _t21507 = gem_g_module_bindings;
+    GemVal _t21506 = gem_g_sources_by_file;
+    GemVal _t21505 = gem_g_sink;
+    GemVal _t21504 = gem_g_show_path;
+    GemVal _t21501 = gem_table_new_braces();
+    GemVal _t21502 = gem_table_new_braces();
+    gem_table_set(_t21501, GEM_STR_LIT("prefixes", 8), _t21502);
+    GemVal _t21503 = gem_table_new_braces();
+    gem_table_set(_t21501, GEM_STR_LIT("symbols", 7), _t21503);
+    GemVal _t21513[] = {_t21512, _t21511, _t21510, _t21509, _t21508, _t21507, _t21506, _t21505, _t21504, _t21501};
+        gem_global_set(gem_gi_resolved_ast, gem_fn_resolve_loads(NULL, _t21513, 10));
+#line 1350 "compiler/main.gem"
+        gem_set_line(1350);
     GemVal _t21514 = gem_g_resolved_ast;
+    static GemICacheSlot _ic_3187 = {0};
+    GemVal _t21515[] = {gem_table_get_cached(_t21514, "stmts", &_ic_3187)};
+        GemVal gem_v_entry_export = gem_fn_find_export_node(NULL, _t21515, 1);
+#line 1351 "compiler/main.gem"
+        gem_set_line(1351);
+        if (gem_truthy(gem_neq(gem_v_entry_export, GEM_NIL))) {
+#line 1352 "compiler/main.gem"
+            gem_set_line(1352);
+    GemVal _t21525 = gem_v_entry_export;
+    GemVal _t21516 = gem_g_resolved_ast;
     static GemICacheSlot _ic_3188 = {0};
-    GemVal _t21515[] = {gem_table_get_cached(_t21514, "stmts", &_ic_3188)};
-    GemVal _t21522 = gem_fn_collect_module_top_names(NULL, _t21515, 1);
-    GemVal _t21516[] = {gem_g_src_path};
-    GemVal _t21521 = gem_fn_module_name_from_path(NULL, _t21516, 1);
-    GemVal _t21520 = gem_g_src_path;
-    GemVal _t21519 = gem_g_sources_by_file;
-    GemVal _t21518 = gem_g_sink;
-    GemVal _t21517 = gem_table_new_braces();
-    GemVal _t21524[] = {_t21523, _t21522, _t21521, _t21520, gem_bool(0), _t21519, _t21518, _t21517};
-            (void)(gem_fn_checked_exports(NULL, _t21524, 8));
+    GemVal _t21517[] = {gem_table_get_cached(_t21516, "stmts", &_ic_3188)};
+    GemVal _t21524 = gem_fn_collect_module_top_names(NULL, _t21517, 1);
+    GemVal _t21518[] = {gem_g_src_path};
+    GemVal _t21523 = gem_fn_module_name_from_path(NULL, _t21518, 1);
+    GemVal _t21522 = gem_g_src_path;
+    GemVal _t21521 = gem_g_sources_by_file;
+    GemVal _t21520 = gem_g_sink;
+    GemVal _t21519 = gem_table_new_braces();
+    GemVal _t21526[] = {_t21525, _t21524, _t21523, _t21522, gem_bool(0), _t21521, _t21520, _t21519};
+            (void)(gem_fn_checked_exports(NULL, _t21526, 8));
         }
     }
-#line 1343 "compiler/main.gem"
-    gem_set_line(1343);
-    GemVal _t21525 = gem_g_sink;
-    static GemICacheSlot _ic_3189 = {0};
-    GemVal _t21526 = gem_table_get_cached(_t21525, "has_any", &_ic_3189);
-    gem_check_callable_field(_t21526, "has_any", "compiler/main.gem", 1343);
-    if (gem_truthy(_t21526.fn(_t21526.env, NULL, 0))) {
-#line 1344 "compiler/main.gem"
-        gem_set_line(1344);
-    GemVal _t21529 = gem_g_print_all_errors;
-    GemVal _t21527 = gem_g_sink;
-    GemVal _t21528[] = {_t21527, gem_g_show_path};
-    gem_check_callable(_t21529, "compiler/main.gem", 1344);
-        (void)(_t21529.fn(_t21529.env, _t21528, 2));
-#line 1345 "compiler/main.gem"
-        gem_set_line(1345);
-    GemVal _t21530[] = {gem_int(1)};
-        (void)(gem_exit_process_fn(NULL, _t21530, 1));
-    }
-#line 1351 "compiler/main.gem"
-    gem_set_line(1351);
-    GemVal _t21531 = gem_g_resolved_ast;
-    static GemICacheSlot _ic_3190 = {0};
-    GemVal _t21532 = gem_table_get_cached(_t21531, "stmts", &_ic_3190);
-    GemVal _t21533[] = {_t21532, gem_g_module_bindings};
-    (void)(gem_fn_shadow_entry_builtins(NULL, _t21533, 2));
-#line 1352 "compiler/main.gem"
-    gem_set_line(1352);
-    GemVal _t21535 = gem_g_lower;
-    GemVal _t21534[] = {gem_g_resolved_ast};
-    gem_check_callable(_t21535, "compiler/main.gem", 1352);
-    gem_global_set(gem_gi_resolved_ast, _t21535.fn(_t21535.env, _t21534, 1));
-#line 1354 "compiler/main.gem"
-    gem_set_line(1354);
-    GemVal _t21537 = gem_g_fold_constants;
-    GemVal _t21536[] = {gem_g_resolved_ast};
-    gem_check_callable(_t21537, "compiler/main.gem", 1354);
-    (void)(_t21537.fn(_t21537.env, _t21536, 1));
 #line 1356 "compiler/main.gem"
     gem_set_line(1356);
-    GemVal _t21549 = gem_g_make_codegen;
-    GemVal _t21547 = gem_g_src_path;
-    GemVal _t21546 = gem_g_module_bindings;
-    GemVal _t21545 = gem_g_show_path;
-    GemVal _t21544 = gem_g_sources_by_file;
-    GemVal _t21543 = gem_g_sink;
-    GemVal _t21538[] = {gem_g_loaded};
-    GemVal _t21542 = gem_fn_build_global_display(NULL, _t21538, 1);
-    GemVal _t21541 = gem_g_normalize_load_path;
-    GemVal _t21539[] = {gem_g_stdlib_root, GEM_STR_LIT("std", 3)};
-    GemVal _t21540[] = {gem_path_join_fn(NULL, _t21539, 2)};
-    gem_check_callable(_t21541, "compiler/main.gem", 1356);
-    GemVal _t21548[] = {_t21547, _t21546, _t21545, _t21544, _t21543, _t21542, _t21541.fn(_t21541.env, _t21540, 1)};
-    gem_check_callable(_t21549, "compiler/main.gem", 1356);
-    gem_global_set(gem_gi_cg, _t21549.fn(_t21549.env, _t21548, 7));
-#line 1359 "compiler/main.gem"
-    gem_set_line(1359);
-    gem_global_set(gem_gi___val_625, GEM_NIL);
-#line 1359 "compiler/main.gem"
-    gem_set_line(1359);
-    GemVal _t21550 = gem_g_cli;
-    static GemICacheSlot _ic_3191 = {0};
-    GemVal _t21551 = gem_not(gem_table_get_cached(_t21550, "check", &_ic_3191));
-    GemVal _t21553;
-    if (!gem_truthy(_t21551)) {
-        _t21553 = _t21551;
-    } else {
-    GemVal _t21552 = gem_g_cli;
-    static GemICacheSlot _ic_3192 = {0};
-        _t21553 = gem_not(gem_table_get_cached(_t21552, "emit_c", &_ic_3192));
+    GemVal _t21527 = gem_g_sink;
+    static GemICacheSlot _ic_3189 = {0};
+    GemVal _t21528 = gem_table_get_cached(_t21527, "has_any", &_ic_3189);
+    gem_check_callable_field(_t21528, "has_any", "compiler/main.gem", 1356);
+    if (gem_truthy(_t21528.fn(_t21528.env, NULL, 0))) {
+#line 1357 "compiler/main.gem"
+        gem_set_line(1357);
+    GemVal _t21531 = gem_g_print_all_errors;
+    GemVal _t21529 = gem_g_sink;
+    GemVal _t21530[] = {_t21529, gem_g_show_path};
+    gem_check_callable(_t21531, "compiler/main.gem", 1357);
+        (void)(_t21531.fn(_t21531.env, _t21530, 2));
+#line 1358 "compiler/main.gem"
+        gem_set_line(1358);
+    GemVal _t21532[] = {gem_int(1)};
+        (void)(gem_exit_process_fn(NULL, _t21532, 1));
     }
-    if (gem_truthy(_t21553)) {
-#line 1360 "compiler/main.gem"
-        gem_set_line(1360);
-    GemVal _t21554[] = {gem_g_src_path};
-        gem_global_set(gem_gi___val_625, gem_add(gem_add(GEM_STR_LIT("/tmp/gem_", 9), gem_fn_basename_no_ext(NULL, _t21554, 1)), GEM_STR_LIT(".c", 2)));
-    } else {
-#line 1359 "compiler/main.gem"
-        gem_set_line(1359);
-        gem_global_set(gem_gi___val_625, GEM_NIL);
-    }
-#line 1359 "compiler/main.gem"
-    gem_set_line(1359);
-    gem_global_set(gem_gi_c_file, gem_g___val_625);
-#line 1362 "compiler/main.gem"
-    gem_set_line(1362);
-    GemVal _t21555 = gem_g_cg;
-    static GemICacheSlot _ic_3193 = {0};
-    GemVal _t21558 = gem_table_get_cached(_t21555, "compile", &_ic_3193);
-    GemVal _t21556 = gem_g_resolved_ast;
-    GemVal _t21557[] = {_t21556, gem_g_c_file};
-    gem_check_callable_field(_t21558, "compile", "compiler/main.gem", 1362);
-    gem_global_set(gem_gi_c_code, _t21558.fn(_t21558.env, _t21557, 2));
+#line 1364 "compiler/main.gem"
+    gem_set_line(1364);
+    GemVal _t21533 = gem_g_resolved_ast;
+    static GemICacheSlot _ic_3190 = {0};
+    GemVal _t21534 = gem_table_get_cached(_t21533, "stmts", &_ic_3190);
+    GemVal _t21535[] = {_t21534, gem_g_module_bindings};
+    (void)(gem_fn_shadow_entry_builtins(NULL, _t21535, 2));
+#line 1365 "compiler/main.gem"
+    gem_set_line(1365);
+    GemVal _t21537 = gem_g_lower;
+    GemVal _t21536[] = {gem_g_resolved_ast};
+    gem_check_callable(_t21537, "compiler/main.gem", 1365);
+    gem_global_set(gem_gi_resolved_ast, _t21537.fn(_t21537.env, _t21536, 1));
 #line 1367 "compiler/main.gem"
     gem_set_line(1367);
-    GemVal _t21559 = gem_g_sink;
-    static GemICacheSlot _ic_3194 = {0};
-    GemVal _t21560 = gem_table_get_cached(_t21559, "has_any", &_ic_3194);
-    gem_check_callable_field(_t21560, "has_any", "compiler/main.gem", 1367);
-    if (gem_truthy(_t21560.fn(_t21560.env, NULL, 0))) {
-#line 1368 "compiler/main.gem"
-        gem_set_line(1368);
-    GemVal _t21563 = gem_g_print_all_errors;
-    GemVal _t21561 = gem_g_sink;
-    GemVal _t21562[] = {_t21561, gem_g_show_path};
-    gem_check_callable(_t21563, "compiler/main.gem", 1368);
-        (void)(_t21563.fn(_t21563.env, _t21562, 2));
+    GemVal _t21539 = gem_g_fold_constants;
+    GemVal _t21538[] = {gem_g_resolved_ast};
+    gem_check_callable(_t21539, "compiler/main.gem", 1367);
+    (void)(_t21539.fn(_t21539.env, _t21538, 1));
 #line 1369 "compiler/main.gem"
-        gem_set_line(1369);
-    GemVal _t21564[] = {gem_int(1)};
-        (void)(gem_exit_process_fn(NULL, _t21564, 1));
+    gem_set_line(1369);
+    GemVal _t21551 = gem_g_make_codegen;
+    GemVal _t21549 = gem_g_src_path;
+    GemVal _t21548 = gem_g_module_bindings;
+    GemVal _t21547 = gem_g_show_path;
+    GemVal _t21546 = gem_g_sources_by_file;
+    GemVal _t21545 = gem_g_sink;
+    GemVal _t21540[] = {gem_g_loaded};
+    GemVal _t21544 = gem_fn_build_global_display(NULL, _t21540, 1);
+    GemVal _t21543 = gem_g_normalize_load_path;
+    GemVal _t21541[] = {gem_g_stdlib_root, GEM_STR_LIT("std", 3)};
+    GemVal _t21542[] = {gem_path_join_fn(NULL, _t21541, 2)};
+    gem_check_callable(_t21543, "compiler/main.gem", 1369);
+    GemVal _t21550[] = {_t21549, _t21548, _t21547, _t21546, _t21545, _t21544, _t21543.fn(_t21543.env, _t21542, 1)};
+    gem_check_callable(_t21551, "compiler/main.gem", 1369);
+    gem_global_set(gem_gi_cg, _t21551.fn(_t21551.env, _t21550, 7));
+#line 1373 "compiler/main.gem"
+    gem_set_line(1373);
+    gem_global_set(gem_gi_work_dir, GEM_NIL);
+#line 1374 "compiler/main.gem"
+    gem_set_line(1374);
+    gem_global_set(gem_gi_c_file, GEM_NIL);
+#line 1375 "compiler/main.gem"
+    gem_set_line(1375);
+    GemVal _t21552 = gem_g_cli;
+    static GemICacheSlot _ic_3191 = {0};
+    GemVal _t21553 = gem_not(gem_table_get_cached(_t21552, "check", &_ic_3191));
+    GemVal _t21555;
+    if (!gem_truthy(_t21553)) {
+        _t21555 = _t21553;
+    } else {
+    GemVal _t21554 = gem_g_cli;
+    static GemICacheSlot _ic_3192 = {0};
+        _t21555 = gem_not(gem_table_get_cached(_t21554, "emit_c", &_ic_3192));
     }
+    if (gem_truthy(_t21555)) {
 #line 1376 "compiler/main.gem"
-    gem_set_line(1376);
-    GemVal _t21565 = gem_g_cli;
-    static GemICacheSlot _ic_3195 = {0};
-    if (gem_truthy(gem_table_get_cached(_t21565, "check", &_ic_3195))) {
+        gem_set_line(1376);
+        gem_global_set(gem_gi_work_dir, gem_fn_gem_temp_dir(NULL, NULL, 0));
 #line 1377 "compiler/main.gem"
         gem_set_line(1377);
-    GemVal _t21566[] = {gem_int(0)};
-        (void)(gem_exit_process_fn(NULL, _t21566, 1));
+        if (gem_truthy(gem_eq(gem_g_work_dir, GEM_NIL))) {
+#line 1378 "compiler/main.gem"
+            gem_set_line(1378);
+    GemVal _t21556[] = {GEM_STR_LIT("gem: cannot create a work directory under $TMPDIR (or /tmp)\n", 60)};
+            (void)(gem_eprint_fn(NULL, _t21556, 1));
+#line 1379 "compiler/main.gem"
+            gem_set_line(1379);
+    GemVal _t21557[] = {gem_int(1)};
+            (void)(gem_exit_process_fn(NULL, _t21557, 1));
+        }
+#line 1381 "compiler/main.gem"
+        gem_set_line(1381);
+    GemVal _t21559 = gem_add(gem_g_work_dir, GEM_STR_LIT("/", 1));
+    GemVal _t21558[] = {gem_g_src_path};
+        gem_global_set(gem_gi_c_file, gem_add(gem_add(_t21559, gem_fn_basename_no_ext(NULL, _t21558, 1)), GEM_STR_LIT(".c", 2)));
     }
-#line 1382 "compiler/main.gem"
-    gem_set_line(1382);
-    GemVal _t21567 = gem_g_cli;
-    static GemICacheSlot _ic_3196 = {0};
-    if (gem_truthy(gem_table_get_cached(_t21567, "emit_c", &_ic_3196))) {
 #line 1383 "compiler/main.gem"
-        gem_set_line(1383);
-    GemVal _t21568[] = {gem_g_c_code};
-        (void)(gem_print(NULL, _t21568, 1));
-    } else {
-#line 1387 "compiler/main.gem"
-        gem_set_line(1387);
-    GemVal _t21569[] = {gem_g_src_path};
-        GemVal gem_v_base = gem_fn_basename_no_ext(NULL, _t21569, 1);
+    gem_set_line(1383);
+    GemVal _t21560 = gem_g_cg;
+    static GemICacheSlot _ic_3193 = {0};
+    GemVal _t21563 = gem_table_get_cached(_t21560, "compile", &_ic_3193);
+    GemVal _t21561 = gem_g_resolved_ast;
+    GemVal _t21562[] = {_t21561, gem_g_c_file};
+    gem_check_callable_field(_t21563, "compile", "compiler/main.gem", 1383);
+    gem_global_set(gem_gi_c_code, _t21563.fn(_t21563.env, _t21562, 2));
 #line 1388 "compiler/main.gem"
-        gem_set_line(1388);
-        GemVal gem_v_tmp_c = gem_g_c_file;
-#line 1392 "compiler/main.gem"
-        gem_set_line(1392);
-    GemVal _t21570 = gem_g_cli;
-    static GemICacheSlot _ic_3197 = {0};
-        GemVal gem_v_out_name = gem_table_get_cached(_t21570, "out_name", &_ic_3197);
-#line 1393 "compiler/main.gem"
-        gem_set_line(1393);
-        if (gem_truthy(gem_eq(gem_v_out_name, GEM_NIL))) {
-#line 1394 "compiler/main.gem"
-            gem_set_line(1394);
-    GemVal _t21571 = gem_g_cli;
-    static GemICacheSlot _ic_3198 = {0};
-            if (gem_truthy(gem_table_get_cached(_t21571, "run", &_ic_3198))) {
-#line 1395 "compiler/main.gem"
-                gem_set_line(1395);
-                gem_v_out_name = gem_add(gem_add(GEM_STR_LIT("/tmp/gem_", 9), gem_v_base), GEM_STR_LIT("_bin", 4));
-            } else {
+    gem_set_line(1388);
+    GemVal _t21564 = gem_g_sink;
+    static GemICacheSlot _ic_3194 = {0};
+    GemVal _t21565 = gem_table_get_cached(_t21564, "has_any", &_ic_3194);
+    gem_check_callable_field(_t21565, "has_any", "compiler/main.gem", 1388);
+    if (gem_truthy(_t21565.fn(_t21565.env, NULL, 0))) {
+#line 1389 "compiler/main.gem"
+        gem_set_line(1389);
+    GemVal _t21568 = gem_g_print_all_errors;
+    GemVal _t21566 = gem_g_sink;
+    GemVal _t21567[] = {_t21566, gem_g_show_path};
+    gem_check_callable(_t21568, "compiler/main.gem", 1389);
+        (void)(_t21568.fn(_t21568.env, _t21567, 2));
+#line 1390 "compiler/main.gem"
+        gem_set_line(1390);
+    GemVal _t21569[] = {gem_int(1)};
+        (void)(gem_exit_process_fn(NULL, _t21569, 1));
+    }
 #line 1397 "compiler/main.gem"
-                gem_set_line(1397);
+    gem_set_line(1397);
+    GemVal _t21570 = gem_g_cli;
+    static GemICacheSlot _ic_3195 = {0};
+    if (gem_truthy(gem_table_get_cached(_t21570, "check", &_ic_3195))) {
+#line 1398 "compiler/main.gem"
+        gem_set_line(1398);
+    GemVal _t21571[] = {gem_int(0)};
+        (void)(gem_exit_process_fn(NULL, _t21571, 1));
+    }
+#line 1403 "compiler/main.gem"
+    gem_set_line(1403);
+    GemVal _t21572 = gem_g_cli;
+    static GemICacheSlot _ic_3196 = {0};
+    if (gem_truthy(gem_table_get_cached(_t21572, "emit_c", &_ic_3196))) {
+#line 1404 "compiler/main.gem"
+        gem_set_line(1404);
+    GemVal _t21573[] = {gem_g_c_code};
+        (void)(gem_print(NULL, _t21573, 1));
+    } else {
+#line 1408 "compiler/main.gem"
+        gem_set_line(1408);
+    GemVal _t21574[] = {gem_g_src_path};
+        GemVal gem_v_base = gem_fn_basename_no_ext(NULL, _t21574, 1);
+#line 1409 "compiler/main.gem"
+        gem_set_line(1409);
+        GemVal gem_v_tmp_c = gem_g_c_file;
+#line 1414 "compiler/main.gem"
+        gem_set_line(1414);
+    GemVal _t21575 = gem_g_cli;
+    static GemICacheSlot _ic_3197 = {0};
+        GemVal gem_v_out_name = gem_table_get_cached(_t21575, "out_name", &_ic_3197);
+#line 1415 "compiler/main.gem"
+        gem_set_line(1415);
+        if (gem_truthy(gem_eq(gem_v_out_name, GEM_NIL))) {
+#line 1416 "compiler/main.gem"
+            gem_set_line(1416);
+    GemVal _t21576 = gem_g_cli;
+    static GemICacheSlot _ic_3198 = {0};
+            if (gem_truthy(gem_table_get_cached(_t21576, "run", &_ic_3198))) {
+#line 1417 "compiler/main.gem"
+                gem_set_line(1417);
+    GemVal _t21577 = gem_add(gem_g_work_dir, GEM_STR_LIT("/", 1));
+                gem_v_out_name = gem_add(_t21577, gem_v_base);
+            } else {
+#line 1419 "compiler/main.gem"
+                gem_set_line(1419);
                 gem_v_out_name = gem_add(GEM_STR_LIT("./", 2), gem_v_base);
             }
         }
-#line 1402 "compiler/main.gem"
-        gem_set_line(1402);
-    GemVal _t21572 = gem_v_tmp_c;
-    GemVal _t21573[] = {_t21572, gem_g_c_code};
-        (void)(gem_write_file_fn(NULL, _t21573, 2));
-#line 1405 "compiler/main.gem"
-        gem_set_line(1405);
-    GemVal _t21574[] = {gem_g_install_root, GEM_STR_LIT("runtime", 7)};
-        GemVal gem_v_runtime_dir = gem_path_join_fn(NULL, _t21574, 2);
-#line 1407 "compiler/main.gem"
-        gem_set_line(1407);
-    GemVal _t21575[] = {gem_g_install_root, GEM_STR_LIT("build/libgem_runtime.a", 22)};
-        GemVal gem_v_runtime_lib = gem_path_join_fn(NULL, _t21575, 2);
-#line 1408 "compiler/main.gem"
-        gem_set_line(1408);
-        GemVal gem_v___val_626 = GEM_NIL;
-#line 1408 "compiler/main.gem"
-        gem_set_line(1408);
-    GemVal _t21576[] = {gem_v_runtime_lib};
-        if (gem_truthy(gem_file_exists_fn(NULL, _t21576, 1))) {
-#line 1409 "compiler/main.gem"
-            gem_set_line(1409);
-    GemVal _t21577 = gem_add(gem_add(GEM_STR_LIT("cc -o ", 6), gem_v_out_name), GEM_STR_LIT(" ", 1));
-    GemVal _t21578 = gem_add(gem_add(_t21577, gem_v_tmp_c), GEM_STR_LIT(" -I ", 4));
-    GemVal _t21579 = gem_add(gem_add(_t21578, gem_v_runtime_dir), GEM_STR_LIT(" -std=gnu11 -O2 -pthread ", 25));
-            gem_v___val_626 = gem_add(gem_add(_t21579, gem_v_runtime_lib), GEM_STR_LIT(" -lm", 4));
-        } else {
-#line 1411 "compiler/main.gem"
-            gem_set_line(1411);
-    GemVal _t21580 = gem_add(gem_add(GEM_STR_LIT("cc -o ", 6), gem_v_out_name), GEM_STR_LIT(" ", 1));
-    GemVal _t21581 = gem_add(gem_add(_t21580, gem_v_tmp_c), GEM_STR_LIT(" ", 1));
-    GemVal _t21582 = gem_add(gem_add(_t21581, gem_v_runtime_dir), GEM_STR_LIT("/gem_*.c ", 9));
-    GemVal _t21583 = gem_add(gem_add(_t21582, gem_v_runtime_dir), GEM_STR_LIT("/sqlite3.c -I ", 14));
-            gem_v___val_626 = gem_add(gem_add(_t21583, gem_v_runtime_dir), GEM_STR_LIT(" -std=gnu11 -O2 -pthread -lm", 28));
-        }
-#line 1408 "compiler/main.gem"
-        gem_set_line(1408);
-        GemVal gem_v_cc_cmd = gem_v___val_626;
-#line 1414 "compiler/main.gem"
-        gem_set_line(1414);
-    GemVal _t21584[] = {gem_v_cc_cmd};
-        GemVal gem_v_cc_ret = gem_exec_fn(NULL, _t21584, 1);
-#line 1415 "compiler/main.gem"
-        gem_set_line(1415);
-        if (gem_truthy(gem_neq(gem_v_cc_ret, gem_int(0)))) {
-#line 1419 "compiler/main.gem"
-            gem_set_line(1419);
-    GemVal _t21585[] = {gem_v_cc_ret};
-    GemVal _t21586[] = {gem_add(gem_add(GEM_STR_LIT("gem: compilation failed (cc exited with ", 40), gem_to_string_fn(NULL, _t21585, 1)), GEM_STR_LIT(")\n", 2))};
-            (void)(gem_eprint_fn(NULL, _t21586, 1));
-#line 1420 "compiler/main.gem"
-            gem_set_line(1420);
-    GemVal _t21587[] = {gem_v_cc_ret};
-            (void)(gem_exit_process_fn(NULL, _t21587, 1));
-        }
-#line 1425 "compiler/main.gem"
-        gem_set_line(1425);
-    GemVal _t21588 = gem_g_cli;
-    static GemICacheSlot _ic_3199 = {0};
-        if (gem_truthy(gem_table_get_cached(_t21588, "run", &_ic_3199))) {
-#line 1426 "compiler/main.gem"
-            gem_set_line(1426);
-            GemVal gem_v_run_cmd = gem_v_out_name;
+#line 1424 "compiler/main.gem"
+        gem_set_line(1424);
+    GemVal _t21578 = gem_v_tmp_c;
+    GemVal _t21579[] = {_t21578, gem_g_c_code};
+        (void)(gem_write_file_fn(NULL, _t21579, 2));
 #line 1427 "compiler/main.gem"
-            gem_set_line(1427);
+        gem_set_line(1427);
+    GemVal _t21580[] = {gem_g_install_root, GEM_STR_LIT("runtime", 7)};
+        GemVal gem_v_runtime_dir = gem_path_join_fn(NULL, _t21580, 2);
+#line 1429 "compiler/main.gem"
+        gem_set_line(1429);
+    GemVal _t21581[] = {gem_g_install_root, GEM_STR_LIT("build/libgem_runtime.a", 22)};
+        GemVal gem_v_runtime_lib = gem_path_join_fn(NULL, _t21581, 2);
+#line 1430 "compiler/main.gem"
+        gem_set_line(1430);
+    GemVal _t21582[] = {gem_v_out_name};
+        GemVal gem_v_q_out = gem_fn_shell_quote(NULL, _t21582, 1);
+#line 1431 "compiler/main.gem"
+        gem_set_line(1431);
+    GemVal _t21583[] = {gem_v_tmp_c};
+        GemVal gem_v_q_c = gem_fn_shell_quote(NULL, _t21583, 1);
+#line 1432 "compiler/main.gem"
+        gem_set_line(1432);
+    GemVal _t21584[] = {gem_v_runtime_dir};
+        GemVal gem_v_q_rt = gem_fn_shell_quote(NULL, _t21584, 1);
+#line 1433 "compiler/main.gem"
+        gem_set_line(1433);
+        GemVal gem_v___val_625 = GEM_NIL;
+#line 1433 "compiler/main.gem"
+        gem_set_line(1433);
+    GemVal _t21585[] = {gem_v_runtime_lib};
+        if (gem_truthy(gem_file_exists_fn(NULL, _t21585, 1))) {
+#line 1434 "compiler/main.gem"
+            gem_set_line(1434);
+    GemVal _t21586 = gem_add(gem_add(GEM_STR_LIT("cc -o ", 6), gem_v_q_out), GEM_STR_LIT(" ", 1));
+    GemVal _t21587 = gem_add(gem_add(_t21586, gem_v_q_c), GEM_STR_LIT(" -I ", 4));
+    GemVal _t21589 = gem_add(gem_add(_t21587, gem_v_q_rt), GEM_STR_LIT(" -std=gnu11 -O2 -pthread ", 25));
+    GemVal _t21588[] = {gem_v_runtime_lib};
+            gem_v___val_625 = gem_add(gem_add(_t21589, gem_fn_shell_quote(NULL, _t21588, 1)), GEM_STR_LIT(" -lm", 4));
+        } else {
+#line 1436 "compiler/main.gem"
+            gem_set_line(1436);
+    GemVal _t21590 = gem_add(gem_add(GEM_STR_LIT("cc -o ", 6), gem_v_q_out), GEM_STR_LIT(" ", 1));
+    GemVal _t21591 = gem_add(gem_add(_t21590, gem_v_q_c), GEM_STR_LIT(" ", 1));
+    GemVal _t21592 = gem_add(gem_add(_t21591, gem_v_q_rt), GEM_STR_LIT("/gem_*.c ", 9));
+    GemVal _t21593 = gem_add(gem_add(_t21592, gem_v_q_rt), GEM_STR_LIT("/sqlite3.c -I ", 14));
+            gem_v___val_625 = gem_add(gem_add(_t21593, gem_v_q_rt), GEM_STR_LIT(" -std=gnu11 -O2 -pthread -lm", 28));
+        }
+#line 1433 "compiler/main.gem"
+        gem_set_line(1433);
+        GemVal gem_v_cc_cmd = gem_v___val_625;
+#line 1439 "compiler/main.gem"
+        gem_set_line(1439);
+    GemVal _t21594[] = {gem_v_cc_cmd};
+        GemVal gem_v_cc_ret = gem_exec_fn(NULL, _t21594, 1);
+#line 1440 "compiler/main.gem"
+        gem_set_line(1440);
+        if (gem_truthy(gem_neq(gem_v_cc_ret, gem_int(0)))) {
+#line 1444 "compiler/main.gem"
+            gem_set_line(1444);
+    GemVal _t21595[] = {gem_v_cc_ret};
+    GemVal _t21596 = gem_add(gem_add(GEM_STR_LIT("gem: compilation failed (cc exited with ", 40), gem_to_string_fn(NULL, _t21595, 1)), GEM_STR_LIT("); the C is in ", 15));
+    GemVal _t21597[] = {gem_add(gem_add(_t21596, gem_v_tmp_c), GEM_STR_LIT("\n", 1))};
+            (void)(gem_eprint_fn(NULL, _t21597, 1));
+#line 1445 "compiler/main.gem"
+            gem_set_line(1445);
+    GemVal _t21598[] = {gem_v_cc_ret};
+            (void)(gem_exit_process_fn(NULL, _t21598, 1));
+        }
+#line 1447 "compiler/main.gem"
+        gem_set_line(1447);
+    GemVal _t21599[] = {gem_v_tmp_c};
+        (void)(gem_remove_file_fn(NULL, _t21599, 1));
+#line 1451 "compiler/main.gem"
+        gem_set_line(1451);
+        GemVal gem_v_run_ret = gem_int(0);
+#line 1452 "compiler/main.gem"
+        gem_set_line(1452);
+    GemVal _t21600 = gem_g_cli;
+    static GemICacheSlot _ic_3199 = {0};
+        if (gem_truthy(gem_table_get_cached(_t21600, "run", &_ic_3199))) {
+#line 1453 "compiler/main.gem"
+            gem_set_line(1453);
+            GemVal gem_v_run_cmd = gem_v_q_out;
+#line 1454 "compiler/main.gem"
+            gem_set_line(1454);
             GemVal gem_v_i = gem_int(0);
-#line 1428 "compiler/main.gem"
-            gem_set_line(1428);
-            int _t21591 = 0;
+#line 1455 "compiler/main.gem"
+            gem_set_line(1455);
+            int _t21603 = 0;
             GemArenaMark _mk647;
             gem_arena_mark(&_mk647);
             while (1) {
                 gem_yield_check();
                 if (gem_arena_reset_due(&_mk647)) {
-                    GemVal *_rr[] = {&gem_v_i, &gem_v_run_cmd};
-                    gem_arena_reset_region(&_mk647, _rr, 2, NULL, 0);
+                    GemVal *_rr[] = {&gem_v_out_name, &gem_v_i, &gem_v_run_cmd};
+                    gem_arena_reset_region(&_mk647, _rr, 3, NULL, 0);
                 }
-    GemVal _t21590 = gem_v_i;
-    GemVal _t21589 = gem_g_cli;
+    GemVal _t21602 = gem_v_i;
+    GemVal _t21601 = gem_g_cli;
     static GemICacheSlot _ic_3200 = {0};
-                if (!gem_truthy(gem_lt(_t21590, gem_len_1(gem_table_get_cached(_t21589, "run_args", &_ic_3200))))) break;
-#line 1429 "compiler/main.gem"
-                gem_set_line(1429);
-                gem_string_append_to(&gem_v_run_cmd, GEM_STR_LIT(" ", 1), &_t21591);
-    GemVal _t21592 = gem_g_cli;
+                if (!gem_truthy(gem_lt(_t21602, gem_len_1(gem_table_get_cached(_t21601, "run_args", &_ic_3200))))) break;
+#line 1456 "compiler/main.gem"
+                gem_set_line(1456);
+                gem_string_append_to(&gem_v_run_cmd, GEM_STR_LIT(" ", 1), &_t21603);
+    GemVal _t21604 = gem_g_cli;
     static GemICacheSlot _ic_3201 = {0};
-    GemVal _t21593 = gem_table_get_cached(_t21592, "run_args", &_ic_3201);
-                gem_string_append_to(&gem_v_run_cmd, gem_table_get(_t21593, gem_v_i), &_t21591);
+    GemVal _t21605 = gem_table_get_cached(_t21604, "run_args", &_ic_3201);
+    GemVal _t21606[] = {gem_table_get(_t21605, gem_v_i)};
+                gem_string_append_to(&gem_v_run_cmd, gem_fn_shell_quote(NULL, _t21606, 1), &_t21603);
 
-#line 1430 "compiler/main.gem"
-                gem_set_line(1430);
+#line 1457 "compiler/main.gem"
+                gem_set_line(1457);
                 gem_v_i = gem_add(gem_v_i, gem_int(1));
             }
-            if (_t21591) gem_v_run_cmd = gem_string_finish(gem_v_run_cmd);
-#line 1432 "compiler/main.gem"
-            gem_set_line(1432);
-    GemVal _t21594[] = {gem_v_run_cmd};
-            GemVal gem_v_run_ret = gem_exec_fn(NULL, _t21594, 1);
-#line 1433 "compiler/main.gem"
-            gem_set_line(1433);
-            if (gem_truthy(gem_neq(gem_v_run_ret, gem_int(0)))) {
-#line 1434 "compiler/main.gem"
-                gem_set_line(1434);
-    GemVal _t21595[] = {gem_v_run_ret};
-                (void)(gem_exit_process_fn(NULL, _t21595, 1));
-            }
+            if (_t21603) gem_v_run_cmd = gem_string_finish(gem_v_run_cmd);
+#line 1459 "compiler/main.gem"
+            gem_set_line(1459);
+    GemVal _t21607[] = {gem_v_run_cmd};
+            gem_v_run_ret = gem_exec_fn(NULL, _t21607, 1);
+#line 1460 "compiler/main.gem"
+            gem_set_line(1460);
+    GemVal _t21608[] = {gem_v_out_name};
+            (void)(gem_remove_file_fn(NULL, _t21608, 1));
+        }
+#line 1462 "compiler/main.gem"
+        gem_set_line(1462);
+    GemVal _t21609[] = {gem_g_work_dir};
+        (void)(gem_fn_gem_rmdir(NULL, _t21609, 1));
+#line 1463 "compiler/main.gem"
+        gem_set_line(1463);
+        if (gem_truthy(gem_neq(gem_v_run_ret, gem_int(0)))) {
+#line 1464 "compiler/main.gem"
+            gem_set_line(1464);
+    GemVal _t21610[] = {gem_v_run_ret};
+            (void)(gem_exit_process_fn(NULL, _t21610, 1));
         }
     }
     gem_pop_frame();

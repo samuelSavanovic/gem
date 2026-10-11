@@ -4411,6 +4411,10 @@
             "named": true
           },
           {
+            "type": "assignment",
+            "named": true
+          },
+          {
             "type": "binary_expression",
             "named": true
           },
