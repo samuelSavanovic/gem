@@ -64,8 +64,7 @@ app.get("/list") do |req|
   http.response(200, {"X-L": ["a", 2]}, "x")
 end
 print(err(fn() http.set_cookie(http.ok("x"), "a", nil) end))
-let dir = "/tmp/gem_209_static"
-exec("rm -rf {dir}")
+let dir = "/tmp/gem_209_static_{epoch_ms()}_{random(1000000)}"
 mkdir(dir)
 write_file("{dir}/my file.txt", "spaced")
 app.static("/files", dir)

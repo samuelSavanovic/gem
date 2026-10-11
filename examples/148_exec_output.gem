@@ -15,7 +15,7 @@ spawn do
 end
 receive()
 
-let out = "/tmp/gem_148_out"
+let out = "/tmp/gem_148_out_{epoch_ms()}_{random(1000000)}"
 exec("printf captured > {out}")
 print("read back:", read_file(out))
 remove_file(out)

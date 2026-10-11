@@ -14,12 +14,14 @@ if [[ ! -f "$COMPILER" ]]; then
 fi
 
 cd "$ROOT"
+BIN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/gem_examples.XXXXXX")
+trap 'rm -rf "$BIN_DIR"' EXIT
 # Numeric order (09, 10, ..., 99, 100), independent of the locale's collation.
 examples=$(printf '%s\n' examples/[0-9]*.gem | LC_ALL=C sort -t/ -k2,2n)
 # NUL bytes are dropped (90_bytes_extern writes some): a shell variable
 # can't hold them.
 actual=$( for f in $examples; do
-    bin="/tmp/gem_$(basename "$f" .gem)"
+    bin="$BIN_DIR/$(basename "$f" .gem)"
     "$COMPILER" "$f" -o "$bin" 2>/dev/null
     { "$bin" 2>&1 || true; } | tr -d '\000'
 done )

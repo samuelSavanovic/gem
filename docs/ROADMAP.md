@@ -98,8 +98,9 @@ Std API that programs need and the std modules lack:
 - **`http.json_response` with a status**: a JSON 201/404 needs `http.response(status, {"Content-Type":
   ...}, json.encode(x))`. Add an optional `status` param.
 - **The port bound by `http.start({port: 0})`**: an ephemeral port works but nothing reports it, so tests
-  can't use one. Return `{pid, port}` (needs the bound port from `tcp_listen`, e.g. a `tcp_local_port`
-  builtin).
+  can't use one, and the networking examples listen on fixed ports: two `make test` runs on one machine
+  fail each other's. Return `{pid, port}` (needs the bound port from `tcp_listen`, e.g. a
+  `tcp_local_port` builtin).
 - **Multi-value query keys in `url.build_query`**: `{tags: ["a", "b"]}` should give `tags=a&tags=b`; today
   the table's `to_string` text is encoded. `parse_query` would need a matching opt-in (last value wins now).
 - **Parsing dates in `std/time`**: nothing turns an ISO 8601 or HTTP date back into epoch ms, and `format`

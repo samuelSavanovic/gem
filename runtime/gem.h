@@ -854,6 +854,12 @@ extern char **gem_stored_argv;
    install root; not a Gem builtin. */
 char *gem_exe_path(void);
 
+/* A new directory under $TMPDIR (else /tmp), in a static buffer, or NULL;
+   and rmdir, 1 on success. Used by the compiler through `extern fn` for
+   its work directory; not Gem builtins. */
+char *gem_temp_dir(void);
+int64_t gem_rmdir(const char *path);
+
 /* ─── Helpers used by codegen ─── */
 
 const char *gem_type_str(GemVal v);

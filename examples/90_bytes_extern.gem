@@ -26,10 +26,11 @@ push(b, "CD")
 let s2 = to_string(b)
 let n2 = write(1, s2)
 
-write_file("/tmp/gem_bytes_test", "X\0Y\0Z")
-let s3 = read_file("/tmp/gem_bytes_test")
+let bytes_path = "/tmp/gem_90_bytes_{epoch_ms()}_{random(1000000)}"
+write_file(bytes_path, "X\0Y\0Z")
+let s3 = read_file(bytes_path)
 let n3 = write(1, s3)
-remove_file("/tmp/gem_bytes_test")
+remove_file(bytes_path)
 
 print("")
 print("s1 len={len(s1)} wrote={n1}")

@@ -13,8 +13,10 @@ if [ ! -d "$SUITE_DIR" ]; then
 fi
 
 echo "Compiling test harness..."
-BINARY="/tmp/gem_test_json_suite"
-$GEM $TEST_SRC -o "$BINARY"
+BIN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/gem_json_suite.XXXXXX")
+trap 'rm -rf "$BIN_DIR"' EXIT
+BINARY="$BIN_DIR/test_file"
+"$GEM" "$TEST_SRC" -o "$BINARY"
 
 y_pass=0; y_fail=0; y_total=0
 n_pass=0; n_fail=0; n_total=0

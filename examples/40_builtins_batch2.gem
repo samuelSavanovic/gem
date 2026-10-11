@@ -47,12 +47,13 @@ end
 print("random range:", all_ok)
 
 # ─── append_file ───
-let test_path = "/tmp/gem_test_append.txt"
+let test_path = "/tmp/gem_40_append_{epoch_ms()}_{random(1000000)}.txt"
 write_file(test_path, "line1\n")
 append_file(test_path, "line2\n")
 append_file(test_path, "line3\n")
 let content = read_file(test_path)
 print("append_file:", content == "line1\nline2\nline3\n")
+remove_file(test_path)
 
 # ─── getenv ───
 let path = getenv("HOME")

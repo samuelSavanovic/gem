@@ -36,12 +36,12 @@ $(GEM): $(STAGE0) $(RUNTIME_LIB)
 
 # Regenerate stage0.c from current compiler sources (requires working build/gem)
 bootstrap: $(GEM)
-	$(GEM) $(COMPILER_DIR)/main.gem --emit-c > /tmp/gem_stage0_new.c
+	$(GEM) $(COMPILER_DIR)/main.gem --emit-c > $(BUILD_DIR)/stage0_new.c
 	@# Verify the new stage0 can compile itself before replacing
-	$(CC) -o /tmp/gem_stage0_verify /tmp/gem_stage0_new.c -I $(RUNTIME_DIR) -I $(COMPILER_DIR) $(CFLAGS) $(LDFLAGS) $(RUNTIME_LIB) $(LDLIBS)
-	/tmp/gem_stage0_verify $(COMPILER_DIR)/main.gem --emit-c > /tmp/gem_stage0_roundtrip.c
-	@diff -q /tmp/gem_stage0_new.c /tmp/gem_stage0_roundtrip.c > /dev/null || (echo "FAILED: stage0.c does not roundtrip" && exit 1)
-	cp /tmp/gem_stage0_new.c $(STAGE0)
+	$(CC) -o $(BUILD_DIR)/stage0_verify $(BUILD_DIR)/stage0_new.c -I $(RUNTIME_DIR) -I $(COMPILER_DIR) $(CFLAGS) $(LDFLAGS) $(RUNTIME_LIB) $(LDLIBS)
+	$(BUILD_DIR)/stage0_verify $(COMPILER_DIR)/main.gem --emit-c > $(BUILD_DIR)/stage0_roundtrip.c
+	@diff -q $(BUILD_DIR)/stage0_new.c $(BUILD_DIR)/stage0_roundtrip.c > /dev/null || (echo "FAILED: stage0.c does not roundtrip" && exit 1)
+	cp $(BUILD_DIR)/stage0_new.c $(STAGE0)
 	@echo "bootstrap/stage0.c regenerated and verified"
 
 test: $(GEM) test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-recursion-memory test-lsp test-example-apps
@@ -102,4 +102,4 @@ test-json-suite: $(GEM)
 	@bash test_json_suite/run.sh
 
 clean:
-	rm -rf $(BUILD_DIR) /tmp/gem_*
+	rm -rf $(BUILD_DIR)

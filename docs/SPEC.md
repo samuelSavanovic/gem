@@ -34,7 +34,7 @@ A source path that cannot be read prints one line on stderr and exits 1: `gem: c
 
 Nesting is limited, so that neither the compiler nor the C compiler runs out of stack. Each statement, expression, unary operator and pattern opens a level while it is parsed (a top-level statement and its expression are two; each `elif` of a chain nests one more), and opening more than 200 is a compile error (`nested too deeply: more than 200 levels`). Counting also each link of an operator chain (`a + b + c`) or postfix chain (`t.a.b`, `t[0][1]`, `f()()`), more than 1,000 levels is a compile error too (`expression too deep: more than 1000 levels`). Split such code with `let` or a helper fn.
 
-The default behavior (`gem foo.gem`) writes generated C to `/tmp/gem_<basename>.c`, compiles it to `/tmp/gem_<basename>_bin`, and runs it. Extra positional arguments after the source path are forwarded to the program via `argv()`.
+The default behavior (`gem foo.gem`) writes generated C to `<basename>.c` in a new directory under `$TMPDIR` (else `/tmp`), compiles it to `<basename>` there, runs it, and removes the directory. Extra positional arguments after the source path are forwarded to the program via `argv()`, each as one argument. When `cc` fails, the directory is kept, and `gem` prints where the C file is.
 
 `-c` (or `--compile-only`) keeps the artifact: compiles to `./<basename>` and exits without running. `-o <name>` does the same but lets you pick the path.
 
