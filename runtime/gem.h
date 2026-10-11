@@ -701,6 +701,7 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_close_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_peer_fn(void *_env, GemVal *args, int argc);
+GemVal gem_tcp_local_port_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_fd_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_from_fd_fn(void *_env, GemVal *args, int argc);
 GemVal gem_claim_fn(void *_env, GemVal *args, int argc);

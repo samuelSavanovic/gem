@@ -172,19 +172,16 @@ fn html(body)
   {status: 200, headers: {"Content-Type": "text/html; charset=utf-8"}, body: body}
 end
 
-## Returns a 200 response with `data` encoded by `json.encode`, as
-## `application/json; charset=utf-8`.
+## Returns a response with `data` encoded by `json.encode`, as
+## `application/json; charset=utf-8`; `status` is 200 unless given.
 ##
 ##   http.json_response({id: 7, tags: ["a"]})    # body {"id":7,"tags":["a"]}
-##
-## For another status, build it with `response`:
-##
-##   http.response(201, {"Content-Type": "application/json; charset=utf-8"}, json.encode(data))
+##   http.json_response({error: "no such note"}, 404)
 ##
 ## Raises what `json.encode` raises for data it can't encode (a fn, for
 ## one); in a handler that is a 500.
-fn json_response(data)
-  {status: 200, headers: {"Content-Type": "application/json; charset=utf-8"}, body: json.encode(data)}
+fn json_response(data, status = 200)
+  {status: status, headers: {"Content-Type": "application/json; charset=utf-8"}, body: json.encode(data)}
 end
 
 ## Returns a redirect to `location` with an empty plain-text body;
@@ -1664,6 +1661,7 @@ fn server_main(host, port, cfg, starter, ref, watch)
     return nil
   end
   let listen_fd = claim(l.value)
+  let bound_port = tcp_local_port(listen_fd)
   process_flag("trap_exit", true)
   if watch != nil
     monitor(watch)
@@ -1677,7 +1675,7 @@ fn server_main(host, port, cfg, starter, ref, watch)
     return nil
   end
   let acceptor = a.value
-  send(starter, {tag: "_http_started", ref: ref, error: nil})
+  send(starter, {tag: "_http_started", ref: ref, port: bound_port})
   # A short connection has usually finished by the time the server runs:
   # its "_http_closing" is queued right behind its "_http_conn". So the
   # server takes every queued message before it monitors the connections
@@ -1715,10 +1713,10 @@ fn check_int(caller, name, v, min)
 end
 
 ## Starts a server for `router_ref` without blocking and returns
-## `{pid}`, the server process.
+## `{pid, port}`: the server process and the port it listens on.
 ##
-## Options: `port` (default 8080, 0 to 65535; 0 binds a free port but
-## nothing tells you which), `host`
+## Options: `port` (default 8080, 0 to 65535; 0 binds a free port, which
+## the returned `port` names), `host`
 ## (an IP address, default "0.0.0.0"; "127.0.0.1" for local only),
 ## `max_body` (bytes, default 8 MB; a bigger body gets 413),
 ## `idle_timeout_ms` (default 30000: the longest wait for each read, also
@@ -1791,14 +1789,13 @@ fn launch(caller, router_ref, watch, opts)
     error("{caller}: {s.error}")
   end
   receive
+  when {tag: "_http_started", ref: ^ref, port: port}
+    {pid: s.value, port: port}
   when {tag: "_http_started", ref: ^ref, error: e}
-    if e != nil
-      error("{caller}: {e}")
-    end
+    error("{caller}: {e}")
   after STOP_TIMEOUT_MS
     error("{caller}: the server process did not start")
   end
-  {pid: s.value}
 end
 
 # Ends the monitor of `pid` a request took: `added` is what its `monitor`

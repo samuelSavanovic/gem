@@ -7,8 +7,6 @@
 load "std/http"
 load "std/string"
 
-let PORT = 18185
-
 let app = http.router()
 app.get("/hello") do |req|
   http.ok("hello")
@@ -133,8 +131,8 @@ end
 
 fn run_limits()
   print("-- limits")
-  let port = PORT + 1
-  let small = http.start(app, {port: port, host: "127.0.0.1", max_body: 10, request_timeout_ms: 300, idle_timeout_ms: 500})
+  let small = http.start(app, {port: 0, host: "127.0.0.1", max_body: 10, request_timeout_ms: 300, idle_timeout_ms: 500})
+  let port = small.port
   print(exchange(port, ["POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 10\r\nConnection: close\r\n\r\n0123456789"]))
   print(exchange(port, ["POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 11\r\n\r\n01234567890"]))
   print(exchange(port, ["POST /echo HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\n\r\n6\r\n012345\r\n5\r\n67890\r\n0\r\n\r\n"]))
@@ -162,8 +160,8 @@ end
 
 fn run_stop()
   print("-- http.stop")
-  let port = PORT + 2
-  let server = http.start(app, {port: port, host: "127.0.0.1"})
+  let server = http.start(app, {port: 0, host: "127.0.0.1"})
+  let port = server.port
   print(exchange(port, ["GET /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"]))
   # A kept-alive connection is closed by stop too.
   let idle = tcp_connect("127.0.0.1", port)
@@ -206,13 +204,15 @@ fn json_str(v)
   "\"{v}\""
 end
 
+let main_server = http.start(app, {port: 0, host: "127.0.0.1"})
+let PORT = main_server.port
+
 fn main()
-  let server = http.start(app, {port: PORT, host: "127.0.0.1"})
   run_chunked()
   run_responses()
   run_connection()
   run_limits()
   run_killed()
   run_stop()
-  http.stop(server)
+  http.stop(main_server)
 end

@@ -6,8 +6,6 @@
 load "std/http"
 load "std/string"
 
-let PORT = 18177
-
 let app = http.router()
 app.get("/boom") do |req|
   error("kaboom")
@@ -57,30 +55,39 @@ fn exchange(port, pieces)
   "{substr(raw, 0, line_end)} [{substr(raw, head_end + 4, len(raw) - head_end - 4)}]"
 end
 
-fn get(path, extra = "")
-  exchange(PORT, ["GET {path} HTTP/1.1\r\nHost: t\r\n{extra}Connection: close\r\n\r\n"])
+fn get(port, path, extra = "")
+  exchange(port, ["GET {path} HTTP/1.1\r\nHost: t\r\n{extra}Connection: close\r\n\r\n"])
 end
 
-fn run_requests()
+fn run_requests(port)
   print("-- default bodies")
-  print(get("/missing"))
-  print(get("/boom"))
-  print(get("/nil"))
+  print(get(port, "/missing"))
+  print(get(port, "/boom"))
+  print(get(port, "/nil"))
 
   print("-- headers")
-  print(get("/headers", "X-Mixed-Case:  padded \t\r\nhOsT2:no-space\r\nX-Dup: 1\r\nx-dup: 2\r\n"))
-  print(get("/cookies", "cookie: a=1;b=2\r\nCOOKIE: c=3\r\n"))
+  print(get(port, "/headers", "X-Mixed-Case:  padded \t\r\nhOsT2:no-space\r\nX-Dup: 1\r\nx-dup: 2\r\n"))
+  print(get(port, "/cookies", "cookie: a=1;b=2\r\nCOOKIE: c=3\r\n"))
 
   print("-- malformed")
-  print(get("/echo", "Content-Length: abc\r\n"))
-  print(get("/echo", "Content-Length: -4\r\n"))
-  print(exchange(PORT, ["NONSENSE\r\n\r\n"]))
-  print(exchange(PORT, ["GET /hello HTTP/1.1\r\nX-Big: {string.repeat("a", 65537 - 28)}"]))
+  print(get(port, "/echo", "Content-Length: abc\r\n"))
+  print(get(port, "/echo", "Content-Length: -4\r\n"))
+  print(exchange(port, ["NONSENSE\r\n\r\n"]))
+  print(exchange(port, ["GET /hello HTTP/1.1\r\nX-Big: {string.repeat("a", 65537 - 28)}"]))
 
   print("-- head split across writes, then a pipelined pair")
-  print(exchange(PORT, ["GET /hello HTTP/1.1\r\nHost: t\r", "\nConnection: close\r", "\n", "\r", "\n"]))
+  print(exchange(port, ["GET /hello HTTP/1.1\r\nHost: t\r", "\nConnection: close\r", "\n", "\r", "\n"]))
   let pair = "POST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 3\r\n\r\nonePOST /echo HTTP/1.1\r\nHost: t\r\nContent-Length: 3\r\nConnection: close\r\n\r\ntwo"
-  print(exchange(PORT, [pair]))
+  print(exchange(port, [pair]))
+end
+
+# A port nothing listens on now, for a server whose handle the test never
+# gets.
+fn free_port()
+  let l = tcp_listen("127.0.0.1", 0)
+  let port = tcp_local_port(l)
+  tcp_close(l)
+  port
 end
 
 # Runs http.serve in a process and kills its server process with `reason`.
@@ -112,12 +119,12 @@ fn run_serve(reason, port)
 end
 
 fn main()
-  let server = http.start(app, {port: PORT, host: "127.0.0.1"})
+  let server = http.start(app, {port: 0, host: "127.0.0.1"})
   print("start returns pid: {type(server.pid)}")
   print("escape: {http.html_escape("<a href='x'>&\"</a>")}")
-  run_requests()
+  run_requests(server.port)
   print("-- serve")
-  run_serve("shutdown", 18178)
-  run_serve("boom", 18179)
+  run_serve("shutdown", free_port())
+  run_serve("boom", free_port())
   kill(server.pid, "shutdown")
 end

@@ -74,14 +74,13 @@ cat > "$dir/http.gem" <<'GEM'
 load "std/http"
 load "std/string"
 
-let PORT = 18201
 let app = http.router()
 app.get("/hello") do |req|
   http.ok("hello")
 end
 
-fn get()
-  let fd = tcp_connect("127.0.0.1", PORT)
+fn get(port)
+  let fd = tcp_connect("127.0.0.1", port)
   tcp_write(fd, "GET /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n")
   let acc = buf_new()
   let chunk = tcp_read(fd, 8192, 2000)
@@ -97,7 +96,7 @@ fn get()
 end
 
 fn main()
-  let server = http.start(app, {port: PORT, host: "127.0.0.1"})
+  let server = http.start(app, {port: 0, host: "127.0.0.1"})
   let fillers = []
   let full = false
   while not full
@@ -108,10 +107,10 @@ fn main()
     end)
     if r.ok then push(fillers, r.value) else full = true end
   end
-  print(get())
+  print(get(server.port))
   send(fillers[0], {tag: "stop"})
   sleep(10)
-  print(get())
+  print(get(server.port))
   for i = 1, len(fillers)
     send(fillers[i], {tag: "stop"})
   end

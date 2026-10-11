@@ -10,8 +10,6 @@ load "std/http"
 load "std/request"
 load "std/string"
 
-let PORT = 18188
-
 let app = http.router()
 app.get("/x") do |req|
   http.ok("x path={req.path} a={req.query.a}")
@@ -169,8 +167,8 @@ end
 
 fn run_trap()
   print("-- a handler that traps exits")
-  let port = PORT + 1
-  let server = http.start(app, {port: port, host: "127.0.0.1"})
+  let server = http.start(app, {port: 0, host: "127.0.0.1"})
+  let port = server.port
   # It turned trap_exit on in an earlier request: stop still closes the
   # kept-alive connection.
   let fd = tcp_connect("127.0.0.1", port)
@@ -199,9 +197,18 @@ fn run_trap()
   http.stop(again.value)
 end
 
+# A port nothing listens on now, for a server whose handle the test never
+# gets.
+fn free_port()
+  let l = tcp_listen("127.0.0.1", 0)
+  let port = tcp_local_port(l)
+  tcp_close(l)
+  port
+end
+
 fn run_serve_killed()
   print("-- the caller of serve is killed")
-  let port = PORT + 2
+  let port = free_port()
   let caller = spawn(fn()
     http.serve(app, {port: port, host: "127.0.0.1"})
   end)
@@ -220,19 +227,21 @@ end
 fn run_route_plus()
   let app = http.router()
   app.get("/tags/:name", fn(req) http.ok("[{req.params.name}]") end)
-  let server = http.start(app, {port: PORT + 9, host: "127.0.0.1"})
-  print("route param +:", request.get("http://127.0.0.1:{PORT + 9}/tags/c++%2B").body)
+  let server = http.start(app, {port: 0, host: "127.0.0.1"})
+  print("route param +:", request.get("http://127.0.0.1:{server.port}/tags/c++%2B").body)
   http.stop(server)
 end
 
+let main_server = http.start(app, {port: 0, host: "127.0.0.1"})
+let PORT = main_server.port
+
 fn main()
-  let server = http.start(app, {port: PORT, host: "127.0.0.1"})
   run_heads()
   run_protocol()
   run_responses()
   run_cookies()
   run_request()
-  http.stop(server)
+  http.stop(main_server)
   run_trap()
   run_serve_killed()
   run_route_plus()

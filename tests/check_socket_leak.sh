@@ -51,9 +51,8 @@ if [ "$limit" != unlimited ] && [ "$limit" -lt 1400 ]; then
 fi
 
 cat > "$dir/leak.gem" <<'GEM'
-let PORT = to_int(argv()[1])
-let N = to_int(argv()[2])
-let FILL = to_int(argv()[3])
+let N = to_int(argv()[1])
+let FILL = to_int(argv()[2])
 let me = self()
 
 fn fds()
@@ -90,7 +89,8 @@ fn acceptor(l, reg)
 end
 
 fn main()
-  let l = tcp_listen("127.0.0.1", PORT)
+  let l = tcp_listen("127.0.0.1", 0)
+  let port = tcp_local_port(l)
   let reg = spawn(registry)
   let acc = spawn do
     acceptor(l, reg)
@@ -101,7 +101,7 @@ fn main()
   let before = fds()
   let eofs = 0
   for i = 0, 2 * N
-    let c = tcp_connect("127.0.0.1", PORT)
+    let c = tcp_connect("127.0.0.1", port)
     tcp_write(c, "x")
     let r = tcp_read(c, 16, 5000)
     tcp_close(c)
@@ -113,12 +113,13 @@ fn main()
   sleep(20)
   print("honeypot shape", before, fds(), "eofs", eofs == 2 * N)
 
-  let l2 = tcp_listen("127.0.0.1", PORT + 1)
+  let l2 = tcp_listen("127.0.0.1", 0)
+  let port2 = tcp_local_port(l2)
   before = fds()
   let pids = []
   let clients = []
   for i = 0, N
-    push(clients, tcp_connect("127.0.0.1", PORT + 1))
+    push(clients, tcp_connect("127.0.0.1", port2))
     let s = tcp_accept(l2)
     push(pids, spawn do
       claim(s)
@@ -143,12 +144,13 @@ fn main()
 
   # A listener that never accepts: once its backlog is full, connects to
   # it stay in progress (Linux) or are reset (macOS).
-  let l3 = tcp_listen("127.0.0.1", PORT + 2)
+  let l3 = tcp_listen("127.0.0.1", 0)
+  let port3 = tcp_local_port(l3)
   before = fds()
   let connectors = []
   for i = 0, FILL
     push(connectors, spawn do
-      let r = pcall tcp_connect("127.0.0.1", PORT + 2)
+      let r = pcall tcp_connect("127.0.0.1", port3)
       send(me, if r.ok then "connected" else "refused" end)
       receive()
     end)
@@ -180,7 +182,7 @@ end
 GEM
 "$GEM" "$dir/leak.gem" -o "$dir/leak" 2>"$dir/err" || { echo "FAIL: leak.gem doesn't compile"; cat "$dir/err"; exit 1; }
 
-out=$("$dir/leak" 19331 "$N" "$FILL" 2>"$dir/stderr")
+out=$("$dir/leak" "$N" "$FILL" 2>"$dir/stderr")
 echo "$out" | sed 's/^/  /'
 crashes=$(grep -c "Runtime Error" "$dir/stderr")
 check "half of the honeypot sessions crash" "$N" "$crashes"
@@ -213,11 +215,11 @@ fn acceptor(l)
   receive()
 end
 
-let l = tcp_listen("127.0.0.1", 19334)
+let l = tcp_listen("127.0.0.1", 0)
 let a = spawn do
   acceptor(l)
 end
-let c = tcp_connect("127.0.0.1", 19334)
+let c = tcp_connect("127.0.0.1", tcp_local_port(l))
 tcp_write(c, "x")
 sleep(50)
 print("acceptor owns", process_info(a).resources)
@@ -234,8 +236,8 @@ gem_resources: process P (acceptor) exited (killed) after using 1 socket owned b
 gem_resources: process P (main) exited (normal) leaving 2 sockets open with no owner" "$got"
 
 cat > "$dir/count.gem" <<'GEM'
-let l = tcp_listen("127.0.0.1", 19335)
-let c = tcp_connect("127.0.0.1", 19335)
+let l = tcp_listen("127.0.0.1", 0)
+let c = tcp_connect("127.0.0.1", tcp_local_port(l))
 claim(tcp_accept(l))
 GEM
 "$GEM" "$dir/count.gem" -o "$dir/count" 2>"$dir/err" || { echo "FAIL: count.gem doesn't compile"; cat "$dir/err"; exit 1; }

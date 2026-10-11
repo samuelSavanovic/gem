@@ -1,11 +1,10 @@
 # tcp_read distinguishes timeout (nil) from EOF ("").
 
-let port = 9126
 let main_pid = self()
 
 let server_pid = spawn() do
-  let server = tcp_listen("0.0.0.0", port)
-  send(main_pid, "listening")
+  let server = tcp_listen("127.0.0.1", 0)
+  send(main_pid, {listening: tcp_local_port(server)})
   let conn = tcp_accept(server)
   # Hold connection open silently until told to close.
   receive
@@ -16,9 +15,8 @@ let server_pid = spawn() do
   tcp_close(server)
 end
 
-receive
-when "listening"
-  nil
+let port = receive
+when {listening: p} then p
 end
 
 let sock = tcp_connect("127.0.0.1", port)

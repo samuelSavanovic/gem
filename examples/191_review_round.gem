@@ -117,12 +117,12 @@ sleep(50)
 print(gen_server.call(timed, "get"))
 
 print("-- 4. http: Host and bare LF")
-let PORT = 18191
 let app = http.router()
 app.get("/hello") do |req|
   http.ok("hello")
 end
-let server = http.start(app, {port: PORT, host: "127.0.0.1"})
+let server = http.start(app, {port: 0, host: "127.0.0.1"})
+let PORT = server.port
 
 # The status line of the response to `pieces` (each written separately).
 fn status_of(...pieces)
@@ -159,11 +159,11 @@ print("CRLF, split:", status_of("GET /hello HTTP/1.1\r\nHost: t\r\nConnection: c
 http.stop(server)
 
 print("-- 5. request: Transfer-Encoding, trailers, Set-Cookie")
-let next_port = 19191
-
-# Serves one connection: reads the request head, sends `raw`, closes.
-fn serve_once(port, raw)
-  let lfd = tcp_listen("127.0.0.1", port)
+# Serves one connection on a free port, which it returns: reads the
+# request head, sends `raw`, closes.
+fn serve_once(raw)
+  let lfd = tcp_listen("127.0.0.1", 0)
+  let port = tcp_local_port(lfd)
   spawn do
     let c = tcp_accept(lfd)
     let got = ""
@@ -178,12 +178,11 @@ fn serve_once(port, raw)
     tcp_close(c)
     tcp_close(lfd)
   end
+  port
 end
 
 fn try_get(label, raw)
-  next_port = next_port + 1
-  serve_once(next_port, raw)
-  let r = pcall request.get("http://127.0.0.1:{next_port}/")
+  let r = pcall request.get("http://127.0.0.1:{serve_once(raw)}/")
   if r.ok
     let names = keys(r.value.headers)
     sort(names)
@@ -227,7 +226,8 @@ print((pcall sqlite_query(db, "SELECT ? AS a", {})).error)
 sqlite_close(db)
 
 print("-- 8. nil means no timeout")
-let lfd = tcp_listen("127.0.0.1", 18192)
+let lfd = tcp_listen("127.0.0.1", 0)
+let raw_port = tcp_local_port(lfd)
 spawn do
   let peer = tcp_accept(lfd)
   sleep(50)
@@ -235,7 +235,7 @@ spawn do
   sleep(100)
   tcp_close(peer)
 end
-let c = tcp_connect("127.0.0.1", 18192)
+let c = tcp_connect("127.0.0.1", raw_port)
 t0 = time_ms()
 let r0 = tcp_read(c, 100, 0)
 let rneg = tcp_read(c, 100, -5)

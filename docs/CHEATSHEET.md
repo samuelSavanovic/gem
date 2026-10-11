@@ -152,7 +152,7 @@ let r = pcall some_fn()              # {ok: bool, value/error: ..., stack: [{nam
 # Collections:   push, pop, keys, values, sort, insert, delete, remove_at, has_key
 # Strings:       find, str_replace, substr, chr, ord, buf_new, buf_push, build_string
 # Filesystem:    read_file, write_file, append_file, file_exists, remove_file, mkdir, list_dir, is_dir, dirname, path_join, normalize_path, exec
-# TCP:           tcp_listen, tcp_accept, tcp_connect, tcp_read, tcp_write, tcp_close, tcp_peer, tcp_fd, tcp_from_fd
+# TCP:           tcp_listen, tcp_accept, tcp_connect, tcp_read, tcp_write, tcp_close, tcp_peer, tcp_local_port, tcp_fd, tcp_from_fd
 # Resources:     a socket (type "socket") or db handle (type "sqlite") belongs to its opener; claim(r) makes the
 #                caller its owner. Closed when a claimer exits, or when the opener crashes or is killed; anyone may close
 # Time:          time_ms, epoch_ms, format_time, format_time_local
@@ -180,7 +180,7 @@ end
 # std/http       response, ok, html, json_response, redirect, not_found, bad_request, server_error,
 #                set_cookie, delete_cookie, parse_form, html_escape, router, start, serve, stop
 #                (start opts {port, host, max_body = 8 MB, idle_timeout_ms, request_timeout_ms, write_timeout_ms = 30000, nil: none};
-#                start returns {pid}; stop(server) closes every socket; HEAD uses the GET route;
+#                start returns {pid, port} (port 0: a free one); stop(server) closes every socket; HEAD uses the GET route;
 #                set_cookie raises on ; , whitespace or control bytes: url.encode values)
 # std/request    get, post, put, patch, delete, request  (http:// only; opts {body, headers, timeout_ms = 30000, nil: none};
 #                returns {status, headers (lowercase names), body (chunked decoded)})
@@ -194,7 +194,7 @@ end
 # std/dynamic_supervisor  start, start_child, terminate_child, which_children, stop
 #   child template {start, restart, shutdown}, as a supervisor child spec
 # std/task       async, await, await_all
-# std/gen_server start, call, cast, reply
+# std/gen_server start, call, cast, reply, stop
 #   start returns once init has; an init that raises makes it raise
 # std/test       case, assert, assert_eq, assert_neq, assert_throws, run  (assert_eq is deep, takes an optional msg; run exits 1 on failure)
 

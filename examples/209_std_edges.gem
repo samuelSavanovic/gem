@@ -68,8 +68,8 @@ let dir = "/tmp/gem_209_static_{epoch_ms()}_{random(1000000)}"
 mkdir(dir)
 write_file("{dir}/my file.txt", "spaced")
 app.static("/files", dir)
-let server = http.start(app, {port: 18471, host: "127.0.0.1"})
-let base = "http://127.0.0.1:18471"
+let server = http.start(app, {port: 0, host: "127.0.0.1"})
+let base = "http://127.0.0.1:{server.port}"
 print(request.get("{base}/nil").status, request.get("{base}/table").status)
 print(request.get("{base}/list").headers["x-l"])
 let file = request.get("{base}/files/my%20file.txt")
@@ -79,7 +79,8 @@ http.stop(server)
 exec("rm -rf {dir}")
 
 print("== an early answer")
-let l = tcp_listen("127.0.0.1", 18472)
+let l = tcp_listen("127.0.0.1", 0)
+let listen_port = tcp_local_port(l)
 spawn do
   let c = tcp_accept(l)
   tcp_read(c, 4096, 1000)
@@ -87,5 +88,5 @@ spawn do
   tcp_close(c)
 end
 let big = string.repeat("x", 32 * 1024 * 1024)
-print(request.post("http://127.0.0.1:18472/up", {body: big}).status)
+print(request.post("http://127.0.0.1:{listen_port}/up", {body: big}).status)
 tcp_close(l)

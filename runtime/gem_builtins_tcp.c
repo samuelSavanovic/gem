@@ -1,7 +1,7 @@
 /*
  * gem_builtins_tcp.c — TCP socket builtins: tcp_listen, tcp_connect,
  *                       tcp_accept, tcp_read, tcp_write, tcp_close,
- *                       tcp_peer, tcp_fd, tcp_from_fd.
+ *                       tcp_peer, tcp_local_port, tcp_fd, tcp_from_fd.
  *
  * A socket is a resource value (gem_resource.c). Every builtin resolves it
  * to its entry, and again after every wait: a socket closed meanwhile, by
@@ -505,6 +505,26 @@ GemVal gem_tcp_peer_fn(void *_env, GemVal *args, int argc) {
     gem_table_set(result, gem_string("ip"), gem_string(ip));
     gem_table_set(result, gem_string("port"), gem_int(port));
     return result;
+}
+
+/* ─── Built-in: tcp_local_port ─── */
+
+/* The port the socket is bound to on this machine: the one a listening
+   socket took for port 0, or a connection's local port. */
+GemVal gem_tcp_local_port_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    int fd = gem_res_get(gem_tcp_arg0(args, argc), GEM_RES_SOCKET, "tcp_local_port")->fd;
+    struct sockaddr_storage addr;
+    socklen_t addr_len = sizeof(addr);
+    if (getsockname(fd, (struct sockaddr *)&addr, &addr_len) < 0) {
+        char buf[256];
+        snprintf(buf, sizeof(buf), "tcp_local_port: getsockname failed: %s", strerror(errno));
+        gem_error(buf);
+    }
+    if (addr.ss_family == AF_INET) return gem_int(ntohs(((struct sockaddr_in *)&addr)->sin_port));
+    if (addr.ss_family == AF_INET6) return gem_int(ntohs(((struct sockaddr_in6 *)&addr)->sin6_port));
+    gem_error("tcp_local_port: not a TCP socket");
+    return GEM_NIL;
 }
 
 /* ─── Built-in: tcp_fd ─── */

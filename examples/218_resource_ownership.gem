@@ -7,13 +7,14 @@
 load "std/task"
 
 let me = self()
-let l = tcp_listen("127.0.0.1", 18218)
+let l = tcp_listen("127.0.0.1", 0)
+let port = tcp_local_port(l)
 
 # Spawns a process that connects, sends its socket here and runs body(c);
 # returns [pid, client socket, server socket].
 fn pair(body)
   let pid = spawn do
-    let c = tcp_connect("127.0.0.1", 18218)
+    let c = tcp_connect("127.0.0.1", port)
     send(me, {tag: "sock", sock: c})
     body(c)
   end
@@ -98,7 +99,7 @@ kill(p[0], "shutdown")
 print("orderly shutdown:", closed(p[2]))
 
 print("== claim moves a socket main opened")
-let c = tcp_connect("127.0.0.1", 18218)
+let c = tcp_connect("127.0.0.1", port)
 let s = tcp_accept(l)
 let before = process_info(self()).resources
 let session = spawn do
@@ -112,7 +113,7 @@ print("closed with the session:", tcp_read(c, 16, 1000) == "")
 tcp_close(c)
 
 print("== helpers that only use a socket leave it open")
-c = tcp_connect("127.0.0.1", 18218)
+c = tcp_connect("127.0.0.1", port)
 s = tcp_accept(l)
 let h = spawn do
   tcp_write(c, "from helper", 1000)
@@ -130,7 +131,7 @@ wait_down(h)
 print("after a crash, a kill and a return:", read_n(s, 12))
 
 print("== a task that opens a socket hands over a live one")
-let t = task.async(fn() tcp_connect("127.0.0.1", 18218) end)
+let t = task.async(fn() tcp_connect("127.0.0.1", port) end)
 let tc = task.await(t, 1000)
 let ts = tcp_accept(l)
 tcp_write(tc, "alive", 1000)
@@ -156,7 +157,7 @@ tcp_close(c)
 
 print("== a closed socket's owner count drops")
 let n = process_info(self()).resources
-c = tcp_connect("127.0.0.1", 18218)
+c = tcp_connect("127.0.0.1", port)
 print(process_info(self()).resources == n + 1)
 tcp_close(c)
 print(process_info(self()).resources == n)
