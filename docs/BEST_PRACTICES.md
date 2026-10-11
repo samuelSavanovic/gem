@@ -1356,9 +1356,14 @@ thousands where memory mappings allow), but not an unbounded number. `spawn` rai
 - `spawn: process table full` past the process limit: 262,144 by default,
   lower when the environment sets `GEM_MAX_PROCS`;
 - `spawn: too many processes for the system's memory-mapping limit (...)`
-  on Linux, which comes first: at about 14,000 live processes with the
-  default `vm.max_map_count` (65,530), leaving the rest of the limit to
-  the processes already running. Raise that sysctl to go further;
+  on Linux: at about 14,000 live processes with the kernel's default
+  `vm.max_map_count` (65,530), leaving the rest of the limit to the
+  processes already running. Raise that sysctl to go further. Where a
+  distribution sets it to 1,048,576 (Ubuntu 26.04), this comes only at
+  about 229,000 processes, so on a machine with less than about 5 GB the
+  system runs out of memory first and kills the program, which no `pcall`
+  catches: cap the count yourself (as below), or lower the limit with
+  `GEM_MAX_MAPS`;
 - `spawn: cannot map a stack for a new process (N processes alive)` when
   the system refuses the memory (a `ulimit -v`).
 

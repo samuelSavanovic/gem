@@ -11,8 +11,8 @@
 #
 # Note: `write` is unbuffered while `print` is line/full-buffered — the
 # binary write output appears at issue time; print output flushes at exit.
-# Embedded NULs are stripped by the test harness's bash command-substitution
-# capture, so the binary blobs render as `hibyeABCDXYZ` in the diff.
+# The test harness (examples/run_all.sh) drops NUL bytes from the output,
+# so the binary blobs render as `hibyeABCDXYZ` in the diff.
 
 extern fn write(fd: Int, buf: Bytes) -> Int
 

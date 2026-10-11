@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include <setjmp.h>
+#include <stdatomic.h>
 
 /* minicoro forward declaration — full impl is in gem_scheduler.c.
    minicoro.h uses this same typedef, so guard against redefinition. */
@@ -296,6 +297,16 @@ static inline void gem_set_line(int line) {
     if (gem_call_depth > 0 && gem_call_depth <= GEM_MAX_CALL_DEPTH) {
         gem_call_stack[gem_call_depth - 1].line = line;
     }
+}
+
+/* Emitted before every call into C code reached through `extern fn`. The
+ * stack overflow handler (gem_scheduler.c) reads the call stack while that
+ * code runs; when the C compiler can see the callee's body (an `extern
+ * include` header) and it touches no Gem state, the compiler may drop or
+ * delay the stores to the call stack before the call, so the handler would
+ * report an earlier line. The fence keeps them before the call. */
+static inline void gem_native_call_fence(void) {
+    atomic_signal_fence(memory_order_seq_cst);
 }
 
 /* ─── Constructors ─── */
