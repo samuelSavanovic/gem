@@ -2,11 +2,11 @@
 
 What `PLAN.md` ("Deployment", "Success criteria") asks of the host,
 as files: a systemd unit, an nftables ruleset and a health query. Written
-for Debian or Ubuntu on a dedicated 1 GB KVM VPS.
+for Debian or Ubuntu on a dedicated 4 GB KVM VPS (a Hetzner CX23).
 
 | File | Install as | What it does |
 |---|---|---|
-| `honeypot.service` | `/etc/systemd/system/honeypot.service` | runs the honeypot unprivileged (`DynamicUser`) in a sandbox, restarts it on any exit, caps its memory at 700 MB |
+| `honeypot.service` | `/etc/systemd/system/honeypot.service` | runs the honeypot unprivileged (`DynamicUser`) in a sandbox, restarts it on any exit, caps its memory at 2 GB |
 | `honeypot.env` | `/etc/honeypot.env` | the build's commit and the honeypot's flags |
 | `honeypot.nft` | `/etc/nftables.conf` | port 23 redirected to 2323, SSH in, everything else in dropped; outbound denied but for DNS, NTP and package updates, and the honeypot's user denied even those, with a counter |
 | `health.sql` | | the metrics by day, against the success criteria |
@@ -27,14 +27,14 @@ from a 15 GB VM with the session cap out of the way. This run uses the
 deploy's cap and memory limit on the real machine, for 8 hours:
 
 ```sh
-TARGETS=honeypot DURATION=8h GUARD_RSS_MB=700 \
-  HONEYPOT_SERVER_ARGS="--max-sessions 300" \
-  HONEYPOT_ARGS="--idle 150 --garbage-rate 1 --iac-rate 0.5 --bot-rate 2 --long-line-s 120" \
+TARGETS=honeypot DURATION=8h GUARD_RSS_MB=2048 \
+  HONEYPOT_SERVER_ARGS="--max-sessions 1000" HONEYPOT_ARGS="--idle 800" \
   benchmarks/soak/run.sh
 ```
 
-It holds about 210 sessions open (150 idle, 50 drips, the rest short) and
-writes about 375 MB of database an hour, about 3 GB in all, in
+It holds about 860 sessions open (800 idle, 50 drips, the rest short), below
+the cap so no client is refused, and writes about 690 MB of database an
+hour (a 10-minute run on an M1 Pro), about 5.5 GB in all, in
 `benchmarks/soak/logs/`: delete it afterwards. Every check in its report
 must PASS. Run it in `tmux` or under `nohup`, so a dropped SSH connection
 doesn't stop it.
@@ -56,6 +56,9 @@ If SSH listens on a port other than 22, set `SSH_PORT` in
 `/etc/nftables.conf` first. The ruleset replaces every other rule on the
 host (`flush ruleset`), and the provider's firewall should allow the same:
 22 and 23 in.
+
+The honeypot listens on IPv4 only (`tcp_listen` has no IPv6,
+`docs/ROADMAP.md`), so port 23 on the host's IPv6 address reaches nothing.
 
 Check it from another machine: `nc VPS_IP 23` gets the `login:` prompt,
 and `nc VPS_IP 2323` times out. On the VPS:
@@ -110,9 +113,11 @@ writable executable mapping) and `systemd-analyze security` (1.6, "OK").
 A blocked call fails with `EPERM` rather than killing the process, so a
 runtime change that needs a new one shows as an error in the journal.
 
-`--max-sessions 300` and `MemoryMax=700M` go together: an idle session
+`--max-sessions 1000` and `MemoryMax=2G` go together: an idle session
 holds about 76 KB, but one whose client keeps sending holds up to about
-1.1 MB (OPTIMIZATIONS.md, "A loop keeps its high-water memory"), so 300
-of those take about 330 MB. The rest of the program is small beside that:
-53 MB of RSS at 213 sessions in a short soak, 133 MB after a 5,000-session
-peak. On a VPS with more memory, raise both.
+1.1 MB (OPTIMIZATIONS.md, "A loop keeps its high-water memory"), so 1,000
+of those take about 1.1 GB. The rest of the program is small beside that:
+a peak footprint of 122 MB at 870 sessions in a 10-minute run of the soak
+above on an M1 Pro, 133 MB of RSS after a 5,000-session peak on Linux. The other 2 GB of the 4 GB VPS are
+for the system and for reading the data. On a 1 GB VPS, start near
+`--max-sessions 300` with `MemoryMax=700M`.

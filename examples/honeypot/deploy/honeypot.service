@@ -24,7 +24,7 @@ WorkingDirectory=/var/lib/honeypot
 UMask=0077
 
 # --max-sessions in /etc/honeypot.env is sized to this (README.md).
-MemoryMax=700M
+MemoryMax=2G
 MemorySwapMax=0
 LimitNOFILE=4096
 # The scheduler thread and 4 I/O workers.

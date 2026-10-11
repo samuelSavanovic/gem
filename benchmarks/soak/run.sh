@@ -35,7 +35,7 @@
 #   HONEYPOT_SERVER_ARGS
 #                  extra options for the honeypot itself, after the run's
 #                  own (a later flag wins), e.g. the deploy's
-#                  "--max-sessions 300" (examples/honeypot/deploy/README.md)
+#                  "--max-sessions 1000" (examples/honeypot/deploy/README.md)
 #
 # Every sample is flushed and fsynced as it is taken, so stopping a run
 # (Ctrl-C, SIGTERM, a closed terminal, a crash) keeps everything sampled so
