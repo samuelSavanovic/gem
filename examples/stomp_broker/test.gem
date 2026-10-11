@@ -7,7 +7,6 @@ load "./frame"
 load "./broker"
 load "./registry"
 
-let PORT = 61699
 let WAIT_MS = 2000
 let QUIET_MS = 200
 
@@ -109,7 +108,8 @@ end
 
 # ─── Broker ────────────────────────────────────────────────────
 
-let listener = tcp_listen("127.0.0.1", PORT)
+let listener = tcp_listen("127.0.0.1", 0)
+let PORT = tcp_local_port(listener)
 let sup = broker.start(listener, {write_timeout_ms: 300})
 
 test.case("connect") do

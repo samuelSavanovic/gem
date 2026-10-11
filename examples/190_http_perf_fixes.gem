@@ -9,8 +9,6 @@ load "std/http"
 load "std/request"
 load "std/string"
 
-let PORT = 18190
-
 let app = http.router()
 app.get("/headers") do |req|
   let names = keys(req.headers)
@@ -77,13 +75,12 @@ fn get(path, extra = "")
   summary(exchange(["GET {path} HTTP/1.1\r\nHost: t\r\n{extra}Connection: close\r\n\r\n"]))
 end
 
+# Prints what `f()` returned or raised, with the main server's port as
+# PORT.
 fn try(label, f)
   let r = pcall f()
-  if r.ok
-    print("{label}: ok {r.value}")
-  else
-    print("{label}: error {r.error}")
-  end
+  let line = if r.ok then "{label}: ok {r.value}" else "{label}: error {r.error}" end
+  print(str_replace(line, " {PORT}:", " PORT:"))
 end
 
 fn head_tests()
@@ -151,13 +148,13 @@ end
 
 fn start_stop_tests()
   print("-- start / stop")
-  try("start nil", fn() http.start(nil, {port: PORT + 1, host: "127.0.0.1"}) end)
-  try("start string", fn() http.start("app", {port: PORT + 1, host: "127.0.0.1"}) end)
-  try("start table", fn() http.start({}, {port: PORT + 1, host: "127.0.0.1"}) end)
-  try("serve nil", fn() http.serve(nil, {port: PORT + 1, host: "127.0.0.1"}) end)
-  try("serve bad opt", fn() http.serve(app, {port: PORT + 1, host: "127.0.0.1", max_body: -1}) end)
+  try("start nil", fn() http.start(nil, {port: 0, host: "127.0.0.1"}) end)
+  try("start string", fn() http.start("app", {port: 0, host: "127.0.0.1"}) end)
+  try("start table", fn() http.start({}, {port: 0, host: "127.0.0.1"}) end)
+  try("serve nil", fn() http.serve(nil, {port: 0, host: "127.0.0.1"}) end)
+  try("serve bad opt", fn() http.serve(app, {port: 0, host: "127.0.0.1", max_body: -1}) end)
   try("port in use", fn() http.start(app, {port: PORT, host: "127.0.0.1"}) end)
-  try("bad host", fn() http.start(app, {port: PORT + 1, host: "nowhere"}) end)
+  try("bad host", fn() http.start(app, {port: 0, host: "nowhere"}) end)
   try("stop timeout", fn() http.stop(12345, "soon") end)
   try("stop nil timeout", fn() http.stop(12345, nil) end)
 end
@@ -179,9 +176,11 @@ fn capture_once(listen_fd, parent)
   send(parent, {tag: "head", text: acc})
 end
 
-# The request std/request sends for `f(url)`, CRLF shown as "|".
-fn sent_request(port, f)
-  let listen_fd = tcp_listen("127.0.0.1", port)
+# The request std/request sends for `f(url)`, CRLF shown as "|" and the
+# port as PORT.
+fn sent_request(f)
+  let listen_fd = tcp_listen("127.0.0.1", 0)
+  let port = tcp_local_port(listen_fd)
   let me = self()
   spawn(fn()
     capture_once(listen_fd, me)
@@ -198,19 +197,18 @@ fn sent_request(port, f)
   if not r.ok
     return "error {r.error}"
   end
-  str_replace(text, "\r\n", "|")
+  str_replace(str_replace(text, "\r\n", "|"), ":{port}|", ":PORT|")
 end
 
 fn request_tests()
   print("-- request")
-  let port = PORT + 2
-  print(sent_request(port, fn(u) request.post(u) end))
-  print(sent_request(port + 1, fn(u) request.put(u, {body: ""}) end))
-  print(sent_request(port + 2, fn(u) request.patch(u) end))
-  print(sent_request(port + 3, fn(u) request.post(u, {body: "", headers: {"content-length": "0"}}) end))
-  print(sent_request(port + 4, fn(u) request.get(u) end))
-  print(sent_request(port + 5, fn(u) request.delete(u) end))
-  print(sent_request(port + 6, fn(u) request.post(u, {body: "abc"}) end))
+  print(sent_request(fn(u) request.post(u) end))
+  print(sent_request(fn(u) request.put(u, {body: ""}) end))
+  print(sent_request(fn(u) request.patch(u) end))
+  print(sent_request(fn(u) request.post(u, {body: "", headers: {"content-length": "0"}}) end))
+  print(sent_request(fn(u) request.get(u) end))
+  print(sent_request(fn(u) request.delete(u) end))
+  print(sent_request(fn(u) request.post(u, {body: "abc"}) end))
   try("name with space", fn() request.get("http://127.0.0.1:1/", {headers: {"X A": "v"}}) end)
   try("name with colon", fn() request.get("http://127.0.0.1:1/", {headers: {"X-A:b": "v"}}) end)
   try("empty name", fn() request.get("http://127.0.0.1:1/", {headers: {"": "v"}}) end)
@@ -219,13 +217,15 @@ fn request_tests()
   try("nil value", fn() request.post("http://127.0.0.1:1/", {headers: {"X-N": nil}}) end)
 end
 
+let main_server = http.start(app, {port: 0, host: "127.0.0.1"})
+let PORT = main_server.port
+
 fn main()
-  let server = http.start(app, {port: PORT, host: "127.0.0.1"})
   head_tests()
   body_tests()
   static_tests()
   cookie_tests()
   start_stop_tests()
-  http.stop(server)
+  http.stop(main_server)
   request_tests()
 end

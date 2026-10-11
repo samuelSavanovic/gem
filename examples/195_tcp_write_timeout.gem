@@ -4,7 +4,6 @@
 load "std/http"
 load "std/request"
 
-let PORT = 18295
 let me = self()
 
 # 32 MB: more than a loopback socket's send and receive buffers hold.
@@ -19,12 +18,12 @@ let payload = build_string() do |add|
   end
 end
 
-# A listener that accepts one connection and doesn't read from it until
-# told to close it.
-fn silent_server(port, parent)
+# A listener on a free port that accepts one connection and doesn't read
+# from it until told to close it.
+fn silent_server(parent)
   spawn do
-    let l = tcp_listen("127.0.0.1", port)
-    send(parent, "listening")
+    let l = tcp_listen("127.0.0.1", 0)
+    send(parent, {listening: tcp_local_port(l)})
     let fd = tcp_accept(l)
     receive
     when "close" then nil
@@ -34,17 +33,17 @@ fn silent_server(port, parent)
   end
 end
 
+# The port a listener spawned above reports.
 fn wait_listening()
   receive
-  when "listening" then nil
+  when {listening: port} then port
   end
 end
 
 # 1. A peer that doesn't read: the write gives up at its deadline and
 #    returns how much it wrote.
-let srv = silent_server(PORT, me)
-wait_listening()
-let fd = tcp_connect("127.0.0.1", PORT)
+let srv = silent_server(me)
+let fd = tcp_connect("127.0.0.1", wait_listening())
 let t0 = time_ms()
 let n = tcp_write(fd, payload, 200)
 let took = time_ms() - t0
@@ -64,8 +63,8 @@ tcp_close(fd)
 
 # 2. A write that fits completes as usual, with or without a timeout.
 let srv2 = spawn do
-  let l = tcp_listen("127.0.0.1", PORT + 1)
-  send(me, "listening")
+  let l = tcp_listen("127.0.0.1", 0)
+  send(me, {listening: tcp_local_port(l)})
   let c = tcp_accept(l)
   let got = ""
   while len(got) < 6
@@ -79,8 +78,7 @@ let srv2 = spawn do
   tcp_close(c)
   tcp_close(l)
 end
-wait_listening()
-let fd2 = tcp_connect("127.0.0.1", PORT + 1)
+let fd2 = tcp_connect("127.0.0.1", wait_listening())
 print("2: wrote {tcp_write(fd2, "abc", 1000)} and {tcp_write(fd2, "def", nil)}")
 receive
 when {got: got} then print("2: peer got {got}")
@@ -92,8 +90,8 @@ tcp_close(fd2)
 #    no bytes for write_timeout_ms, instead of holding it.
 let app = http.router()
 app.get("/big", fn(req) http.ok(payload) end)
-let server = http.start(app, {port: PORT + 2, host: "127.0.0.1", write_timeout_ms: 200})
-let c3 = tcp_connect("127.0.0.1", PORT + 2)
+let server = http.start(app, {port: 0, host: "127.0.0.1", write_timeout_ms: 200})
+let c3 = tcp_connect("127.0.0.1", server.port)
 tcp_write(c3, "GET /big HTTP/1.1\r\nHost: x\r\n\r\n")
 sleep(1500)
 let total = 0
@@ -110,24 +108,24 @@ while true
 end
 print("3: closed early: {eof}, got only part: {total < len(payload)}")
 tcp_close(c3)
-let bad_opt = pcall http.start(app, {port: PORT + 2, write_timeout_ms: 0})
+let bad_opt = pcall http.start(app, {port: 0, write_timeout_ms: 0})
 print("3: {bad_opt.error}")
 http.stop(server)
 
 # 4. std/request: sending the body counts against timeout_ms.
-let srv4 = silent_server(PORT, me)
-wait_listening()
+let srv4 = silent_server(me)
+let port4 = wait_listening()
 t0 = time_ms()
-let r4 = pcall request.post("http://127.0.0.1:{PORT}/up", {body: payload, timeout_ms: 300})
-print("4: {r4.error}")
+let r4 = pcall request.post("http://127.0.0.1:{port4}/up", {body: payload, timeout_ms: 300})
+print("4: {str_replace(r4.error, ":{port4}/", ":PORT/")}")
 print("4: within the deadline: {time_ms() - t0 < 1500}")
 send(srv4, "close")
 
 # 5. A timed-out `receive ... after` before a write with no timeout
 #    doesn't cut the write short.
 let srv5 = spawn do
-  let l = tcp_listen("127.0.0.1", PORT + 3)
-  send(me, "listening")
+  let l = tcp_listen("127.0.0.1", 0)
+  send(me, {listening: tcp_local_port(l)})
   let c = tcp_accept(l)
   sleep(300)
   let got = 0
@@ -142,8 +140,7 @@ let srv5 = spawn do
   tcp_close(c)
   tcp_close(l)
 end
-wait_listening()
-let fd5 = tcp_connect("127.0.0.1", PORT + 3)
+let fd5 = tcp_connect("127.0.0.1", wait_listening())
 receive
 when "never" then nil
 after 10 then nil
@@ -160,17 +157,18 @@ print(http.delete_cookie(http.ok("x"), "sid", {path: nil}).headers["Set-Cookie"]
 
 # 7. A `receive ... after` that matched a message leaves no deadline
 #    behind for a later tcp_accept or tcp_read with no timeout.
+let l7 = tcp_listen("127.0.0.1", 0)
+let port7 = tcp_local_port(l7)
 let srv7 = spawn do
   sleep(20)
   send(me, "hello")
   sleep(300)
-  let c = tcp_connect("127.0.0.1", PORT + 4)
+  let c = tcp_connect("127.0.0.1", port7)
   sleep(200)
   tcp_write(c, "data")
   sleep(100)
   tcp_close(c)
 end
-let l7 = tcp_listen("127.0.0.1", PORT + 4)
 receive
 when "hello" then nil
 after 100 then print("7: unexpected timeout")
@@ -183,14 +181,15 @@ receive
 when "never" then nil
 after 10 then nil
 end
+let l7b = tcp_listen("127.0.0.1", 0)
+let port7b = tcp_local_port(l7b)
 let srv7b = spawn do
-  let c = tcp_connect("127.0.0.1", PORT + 5)
+  let c = tcp_connect("127.0.0.1", port7b)
   sleep(300)
   tcp_write(c, "late")
   sleep(100)
   tcp_close(c)
 end
-let l7b = tcp_listen("127.0.0.1", PORT + 5)
 let c7b = tcp_accept(l7b)
 print("7: read after a timed-out receive: {tcp_read(c7b, 100)}")
 tcp_close(c7b)
@@ -198,8 +197,8 @@ tcp_close(l7b)
 
 # 8. write_timeout_ms bounds the wait for progress, not the whole
 #    response: a slow client that keeps reading gets all of it.
-let server8 = http.start(app, {port: PORT + 6, host: "127.0.0.1", write_timeout_ms: 200})
-let c8 = tcp_connect("127.0.0.1", PORT + 6)
+let server8 = http.start(app, {port: 0, host: "127.0.0.1", write_timeout_ms: 200})
+let c8 = tcp_connect("127.0.0.1", server8.port)
 tcp_write(c8, "GET /big HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
 let got8 = 0
 let t8 = time_ms()
@@ -218,5 +217,5 @@ http.stop(server8)
 # 9. An explicit nil option is nil: an error that names the option.
 print((pcall http.start(app, {port: nil})).error)
 print((pcall http.start(app, {host: nil})).error)
-print((pcall request.get("http://127.0.0.1:{PORT}/", {headers: nil})).error)
-print((pcall request.get("http://127.0.0.1:{PORT}/", {body: nil})).error)
+print((pcall request.get("http://127.0.0.1:1/", {headers: nil})).error)
+print((pcall request.get("http://127.0.0.1:1/", {body: nil})).error)

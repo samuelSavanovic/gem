@@ -1,0 +1,126 @@
+# tcp_local_port, http.start on port 0, json_response with a status,
+# gen_server.stop.
+load "std/http"
+load "std/request"
+load "std/gen_server"
+
+print("== tcp_local_port ==")
+let l = tcp_listen("127.0.0.1", 0)
+let port = tcp_local_port(l)
+print("bound a free port:", type(port), port > 0)
+let c = tcp_connect("127.0.0.1", port)
+let s = tcp_accept(l)
+print("client's local port is the server's peer port:", tcp_local_port(c) == tcp_peer(s).port)
+print("accepted socket has the listening port:", tcp_local_port(s) == port)
+tcp_close(c)
+tcp_close(s)
+tcp_close(l)
+print((pcall tcp_local_port(l)).error)
+print((pcall tcp_local_port(3)).error)
+print((pcall tcp_local_port()).error)
+
+print("== http.start on port 0 ==")
+let app = http.router()
+app.get("/made") do |req|
+  http.json_response({id: 7}, 201)
+end
+app.get("/plain") do |req|
+  http.json_response([1, 2])
+end
+let server = http.start(app, {port: 0, host: "127.0.0.1"})
+print("handle keys:", type(server.pid), type(server.port), server.port > 0)
+let made = request.get("http://127.0.0.1:{server.port}/made")
+print(made.status, made.headers["content-type"], made.body)
+let plain = request.get("http://127.0.0.1:{server.port}/plain")
+print(plain.status, plain.body)
+let second = http.start(app, {port: 0, host: "127.0.0.1"})
+print("two servers, two ports:", second.port != server.port)
+print((pcall http.start(app, {port: server.port, host: "127.0.0.1"})).ok)
+http.stop(second)
+http.stop(server)
+print((pcall request.get("http://127.0.0.1:{server.port}/plain", {timeout_ms: 1000})).ok)
+
+print("== gen_server.stop ==")
+let COUNTER = {
+  init: fn() {state: 0} end,
+  handle_call: fn(msg, from, n) {reply: n, state: n} end,
+  handle_cast: fn(msg, n)
+    if msg == "slow" then sleep(200) end
+    if type(msg) == "table" then send(msg.tell, {count: n + 1}) end
+    {state: n + 1}
+  end,
+  handle_info: fn(msg, n) {state: n} end
+}
+
+# Messages queued before the stop are handled first.
+let me = self()
+let g = gen_server.start(COUNTER)
+let watcher = spawn do
+  monitor(g.pid)
+  receive
+  when {tag: "DOWN", reason: r} then send(me, {watched: r})
+  end
+end
+sleep(10)
+gen_server.cast(g, "incr")
+gen_server.cast(g, {tell: me})
+print("stop:", gen_server.stop(g))
+print(receive when {count: n} then "handled before the stop: {n}" after 0 then "cast lost" end)
+print(receive when {watched: r} then r end)
+print((pcall gen_server.call(g, "get")).error)
+# Stopping a server already gone, by handle or pid.
+print("again:", gen_server.stop(g), gen_server.stop(g.pid))
+
+# A reason other than "normal" reaches monitors and links.
+let g2 = gen_server.start(COUNTER)
+let linked = spawn do
+  link(g2.pid)
+  sleep(10000)
+end
+sleep(10)
+monitor(linked)
+gen_server.stop(g2, "shutdown")
+print(receive when {tag: "DOWN", pid: ^linked, reason: r} then "linked process: {r}" end)
+
+# A server that traps exits stops all the same.
+let TRAPPER = {
+  init: fn()
+    process_flag("trap_exit", true)
+    {state: nil}
+  end,
+  handle_call: fn(msg, from, s) {reply: s, state: s} end,
+  handle_cast: fn(msg, s) {state: s} end,
+  handle_info: fn(msg, s) {state: s} end
+}
+let g3 = gen_server.start(TRAPPER)
+let p3 = g3.pid
+monitor(p3)
+gen_server.stop(g3, "done")
+print(receive when {tag: "DOWN", pid: ^p3, reason: r} then "trapper: {r}" end)
+
+# By name; the caller's own monitor still gets its DOWN.
+let g4 = gen_server.start(COUNTER)
+let p4 = g4.pid
+register("counter226", p4)
+monitor(p4)
+gen_server.stop("counter226")
+print(receive when {tag: "DOWN", pid: ^p4, reason: r} then "own monitor: {r}" end)
+print(whereis("counter226"))
+print((pcall gen_server.stop("counter226")).error)
+
+# A server busy past the timeout: stop raises, and the server still stops.
+let g5 = gen_server.start(COUNTER)
+gen_server.cast(g5, "slow")
+print((pcall gen_server.stop(g5, "normal", 50)).error)
+let p5 = g5.pid
+monitor(p5)
+print(receive when {tag: "DOWN", pid: ^p5, reason: r} then "later: {r}" after 1000 then "still running" end)
+
+# Bad arguments raise before anything is sent.
+let g6 = gen_server.start(COUNTER)
+print((pcall gen_server.stop(g6, 42)).error)
+print((pcall gen_server.stop(g6, "normal", "soon")).error)
+print((pcall gen_server.stop([])).error)
+print("still up:", gen_server.call(g6, "get"))
+gen_server.stop(g6)
+print("leftover messages:", receive after 50 then "none" end)

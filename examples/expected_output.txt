@@ -720,8 +720,8 @@ test5: parent died: now-fatal
 Stack trace:
   at anonymous fn (examples/34_gen_server.gem:97)
   at gen_server.loop (std/gen_server.gem:116)
-  at gen_server.serve (std/gen_server.gem:237)
-  at anonymous fn (std/gen_server.gem:195)
+  at gen_server.serve (std/gen_server.gem:242)
+  at anonymous fn (std/gen_server.gem:200)
 test1: after incr 10 = 10
 test3: count=2 first=raw1 second=raw2
 test4: ok=false err=gen_server.call: server exited: kaboom from server
@@ -1161,7 +1161,7 @@ false
 Results: 56 passed, 0 failed
 http: GET /error: intentional error
 Stack trace:
-  at anonymous fn (examples/51_http_server_test.gem:43)
+  at anonymous fn (examples/51_http_server_test.gem:41)
 Results: 12 passed, 0 failed
 Results: 12 passed, 0 failed
 test1: 2000
@@ -2731,8 +2731,8 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_call_result (std/gen_server.gem:110)
   at gen_server.loop (std/gen_server.gem:117)
-  at gen_server.serve (std/gen_server.gem:237)
-  at anonymous fn (std/gen_server.gem:195)
+  at gen_server.serve (std/gen_server.gem:242)
+  at anonymous fn (std/gen_server.gem:200)
 6: gen_server.call: server exited: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 6]: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
@@ -2744,8 +2744,8 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_call_result (std/gen_server.gem:110)
   at gen_server.loop (std/gen_server.gem:117)
-  at gen_server.serve (std/gen_server.gem:237)
-  at anonymous fn (std/gen_server.gem:195)
+  at gen_server.serve (std/gen_server.gem:242)
+  at anonymous fn (std/gen_server.gem:200)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 7]: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
@@ -2757,8 +2757,8 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_call_result (std/gen_server.gem:110)
   at gen_server.loop (std/gen_server.gem:117)
-  at gen_server.serve (std/gen_server.gem:237)
-  at anonymous fn (std/gen_server.gem:195)
+  at gen_server.serve (std/gen_server.gem:242)
+  at anonymous fn (std/gen_server.gem:200)
 6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
 
 [Runtime Error in process 8]: gen_server: handle_cast returned nil, expected {state: state}
@@ -2770,8 +2770,8 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_state_result (std/gen_server.gem:91)
   at gen_server.loop (std/gen_server.gem:127)
-  at gen_server.serve (std/gen_server.gem:237)
-  at anonymous fn (std/gen_server.gem:195)
+  at gen_server.serve (std/gen_server.gem:242)
+  at anonymous fn (std/gen_server.gem:200)
 6: cast nil -> gen_server: handle_cast returned nil, expected {state: state}
 
 [Runtime Error in process 9]: gen_server: handle_info returned an int, expected {state: state}
@@ -2782,9 +2782,9 @@ Stack trace:
 Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_state_result (std/gen_server.gem:91)
-  at gen_server.loop (std/gen_server.gem:140)
-  at gen_server.serve (std/gen_server.gem:237)
-  at anonymous fn (std/gen_server.gem:195)
+  at gen_server.loop (std/gen_server.gem:145)
+  at gen_server.serve (std/gen_server.gem:242)
+  at anonymous fn (std/gen_server.gem:200)
 6: info int -> gen_server: handle_info returned an int, expected {state: state}
 7: info saw ["call", "cast", "gs_reply"]
 8: monitors after 300 callers=1
@@ -2794,7 +2794,7 @@ escape: &lt;a href=&#x27;x&#x27;&gt;&amp;&quot;&lt;/a&gt;
 HTTP/1.1 404 Not Found [Not Found]
 http: GET /boom: kaboom
 Stack trace:
-  at anonymous fn (examples/177_http_std_fixes.gem:13)
+  at anonymous fn (examples/177_http_std_fixes.gem:11)
 HTTP/1.1 500 Internal Server Error [Internal Server Error]
 http: GET /nil: handler returned nil, not a response table
 HTTP/1.1 500 Internal Server Error [Internal Server Error]
@@ -2906,14 +2906,14 @@ bad content-length: error: request.get: invalid Content-Length "-1"
 short body: error: request.get: connection closed before the end of the body (10 bytes expected)
 empty reply: error: request.get: connection closed before a response arrived
 closed in headers: error: request.get: connection closed inside the response headers
-silent: error: request.get: timed out after 100 ms waiting for http://127.0.0.1:19815/
+silent: error: request.get: timed out after 100 ms waiting for http://127.0.0.1:PORT/
 silent took about 100 ms: true
-slow body: error: request.get: timed out after 100 ms waiting for http://127.0.0.1:19816/
+slow body: error: request.get: timed out after 100 ms waiting for http://127.0.0.1:PORT/
 in time: 200 {"content-length": "2"} ok
 no timeout: 200 {"content-length": "2"} ok
 zero timeout: request.get: timeout_ms must be an int > 0 (milliseconds) or nil, got 0
 bad timeout: request.get: timeout_ms must be an int > 0 (milliseconds) or nil, got string
-echo: 200 {"content-length": "73"} GET / HTTP/1.1|Host: 127.0.0.1:19819|Connection: close|X-Token: t1||
+echo: 200 {"content-length": "73"} GET / HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close|X-Token: t1||
 host has port: true
 POST /?q=1 HTTP/1.1|Connection: close|Content-Length: 3|Host: example.test||abc
 true
@@ -2932,7 +2932,7 @@ bad body: request.post: body must be a string, got int
 bad method: request.request: invalid character (byte 32) in method
 refused: request.get: cannot connect to 127.0.0.1:1: tcp_connect: connect failed: Connection refused
 leak check bad status: error: request.get: malformed status line "garbage"
-leak check timeout: error: request.get: timed out after 50 ms waiting for http://127.0.0.1:19823/
+leak check timeout: error: request.get: timed out after 50 ms waiting for http://127.0.0.1:PORT/
 leak check refused: request.get: cannot connect to 127.0.0.1:1: tcp_connect: connect failed: Connection refused
 fds leaked: false
 sqlite_query: expected a database handle, got int
@@ -3262,8 +3262,8 @@ Stack trace:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_call_result (std/gen_server.gem:100)
   at gen_server.loop (std/gen_server.gem:117)
-  at gen_server.serve (std/gen_server.gem:237)
-  at anonymous fn (std/gen_server.gem:195)
+  at gen_server.serve (std/gen_server.gem:242)
+  at anonymous fn (std/gen_server.gem:200)
 gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
 -- 7. init returning a table with a state field
 {state: "idle", count: 0}
@@ -3305,7 +3305,7 @@ HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Co
 http: GET /cookie_inject: http.set_cookie: invalid cookie value "1
 X-Evil: 1" (no ;, comma, whitespace or control bytes)
 Stack trace:
-  at anonymous fn (examples/185_http_hardening.gem:23)
+  at anonymous fn (examples/185_http_hardening.gem:21)
 HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
 http: GET /status/1000: invalid response: status 1000 is not from 200 to 999 (1xx responses are not supported)
 HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
@@ -3448,14 +3448,14 @@ Stack trace:
   at gen_server.check_result_timeout (std/gen_server.gem:85)
   at gen_server.check_call_result (std/gen_server.gem:106)
   at gen_server.loop (std/gen_server.gem:117)
-  at gen_server.serve (std/gen_server.gem:237)
-  at anonymous fn (std/gen_server.gem:195)
+  at gen_server.serve (std/gen_server.gem:242)
+  at anonymous fn (std/gen_server.gem:200)
 gen_server.call: server exited: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
 gen_server: init raised at:
   at gen_server.check_result_timeout (std/gen_server.gem:85)
   at gen_server.check_state_result (std/gen_server.gem:93)
-  at gen_server.run_init (std/gen_server.gem:217)
-  at anonymous fn (std/gen_server.gem:225)
+  at gen_server.run_init (std/gen_server.gem:222)
+  at anonymous fn (std/gen_server.gem:230)
 gen_server.start: init failed: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
 -- control bytes in the request head
 ok: HTTP/1.1 200 OK
@@ -3624,11 +3624,11 @@ expires float: error http.set_cookie: expires must be an int (epoch ms), got flo
 n=v; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax
 http: GET /expires: http.set_cookie: expires must be an int (epoch ms), got string
 Stack trace:
-  at anonymous fn (examples/190_http_perf_fixes.gem:40)
+  at anonymous fn (examples/190_http_perf_fixes.gem:38)
 500 Internal Server Error
 http: GET /json_fn: json.encode: cannot encode a fn
 Stack trace:
-  at anonymous fn (examples/190_http_perf_fixes.gem:43)
+  at anonymous fn (examples/190_http_perf_fixes.gem:41)
 500 Internal Server Error
 -- start / stop
 start nil: error http.start: expected a router from http.router(), got nil
@@ -3636,18 +3636,18 @@ start string: error http.start: expected a router from http.router(), got string
 start table: error http.start: expected a router from http.router(), got table
 serve nil: error http.serve: expected a router from http.router(), got nil
 serve bad opt: error http.serve: max_body must be an int >= 0, got -1
-port in use: error http.start: tcp_listen: bind failed on port 18190: Address already in use
+port in use: error http.start: tcp_listen: bind failed on port PORT: Address already in use
 bad host: error http.start: tcp_listen: cannot resolve 'nowhere'
 stop timeout: error http.stop: timeout_ms must be an int (milliseconds) or nil, got string
 stop nil timeout: ok nil
 -- request
-POST /p HTTP/1.1|Host: 127.0.0.1:18192|Connection: close|Content-Length: 0||
-PUT /p HTTP/1.1|Host: 127.0.0.1:18193|Connection: close|Content-Length: 0||
-PATCH /p HTTP/1.1|Host: 127.0.0.1:18194|Connection: close|Content-Length: 0||
-POST /p HTTP/1.1|Host: 127.0.0.1:18195|Connection: close|content-length: 0||
-GET /p HTTP/1.1|Host: 127.0.0.1:18196|Connection: close||
-DELETE /p HTTP/1.1|Host: 127.0.0.1:18197|Connection: close||
-POST /p HTTP/1.1|Host: 127.0.0.1:18198|Connection: close|Content-Length: 3||abc
+POST /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close|Content-Length: 0||
+PUT /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close|Content-Length: 0||
+PATCH /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close|Content-Length: 0||
+POST /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close|content-length: 0||
+GET /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close||
+DELETE /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close||
+POST /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close|Content-Length: 3||abc
 name with space: error request.get: invalid character (byte 32) in header name
 name with colon: error request.get: invalid header name "X-A:b" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)
 empty name: error request.get: invalid header name "" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)
@@ -3672,8 +3672,8 @@ gen_server.call: server exited: noproc left: 0
 gen_server: init raised at:
   at gen_server.bad_result (std/gen_server.gem:78)
   at gen_server.check_state_result (std/gen_server.gem:91)
-  at gen_server.run_init (std/gen_server.gem:217)
-  at anonymous fn (std/gen_server.gem:225)
+  at gen_server.run_init (std/gen_server.gem:222)
+  at anonymous fn (std/gen_server.gem:230)
 gen_server.start: init failed: gen_server: init returned an int, expected {state: state}
 got timeout
 -- 4. http: Host and bare LF
@@ -3858,7 +3858,7 @@ Stack trace:
 http: closing a connection: the client took no bytes of a 33554542-byte response for 200 ms
 3: closed early: true, got only part: true
 3: http.start: write_timeout_ms must be an int > 0 (milliseconds) or nil, got 0
-4: request.post: timed out after 300 ms waiting for http://127.0.0.1:18295/up
+4: request.post: timed out after 300 ms waiting for http://127.0.0.1:PORT/up
 4: within the deadline: true
 5: wrote all: true
 5: peer got all: true
@@ -3950,17 +3950,17 @@ supervisor: exiting on an error raised at:
 1 registered by init: true
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:216)
-  at anonymous fn (std/gen_server.gem:225)
+  at gen_server.run_init (std/gen_server.gem:221)
+  at anonymous fn (std/gen_server.gem:230)
 2 gen_server.start: init failed: two init 1 failed
 3 gen_server.start: server exited: gone
 4 after setup: ready
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:216)
-  at anonymous fn (std/gen_server.gem:225)
+  at gen_server.run_init (std/gen_server.gem:221)
+  at anonymous fn (std/gen_server.gem:230)
 supervisor: restart of child "five" failed: gen_server.start: init failed: five init 2 failed
-  at gen_server.start (std/gen_server.gem:207)
+  at gen_server.start (std/gen_server.gem:212)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:158)
   at supervisor.start_child (std/supervisor.gem:81)
@@ -3970,30 +3970,30 @@ supervisor: restart of child "five" failed: gen_server.start: init failed: five 
 5 inits: ["five1", "five2", "five3"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:216)
-  at anonymous fn (std/gen_server.gem:225)
+  at gen_server.run_init (std/gen_server.gem:221)
+  at anonymous fn (std/gen_server.gem:230)
 supervisor: restart of child "six" failed: gen_server.start: init failed: six init 2 failed
-  at gen_server.start (std/gen_server.gem:207)
+  at gen_server.start (std/gen_server.gem:212)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:170)
   at supervisor.start_child (std/supervisor.gem:81)
   at anonymous fn (std/supervisor.gem:239)
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:216)
-  at anonymous fn (std/gen_server.gem:225)
+  at gen_server.run_init (std/gen_server.gem:221)
+  at anonymous fn (std/gen_server.gem:230)
 supervisor: restart of child "six" failed: gen_server.start: init failed: six init 3 failed
-  at gen_server.start (std/gen_server.gem:207)
+  at gen_server.start (std/gen_server.gem:212)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:170)
   at supervisor.start_child (std/supervisor.gem:81)
   at anonymous fn (std/supervisor.gem:239)
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:216)
-  at anonymous fn (std/gen_server.gem:225)
+  at gen_server.run_init (std/gen_server.gem:221)
+  at anonymous fn (std/gen_server.gem:230)
 supervisor: restart of child "six" failed: gen_server.start: init failed: six init 4 failed
-  at gen_server.start (std/gen_server.gem:207)
+  at gen_server.start (std/gen_server.gem:212)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:170)
   at supervisor.start_child (std/supervisor.gem:81)
@@ -4011,10 +4011,10 @@ Stack trace:
 6 inits: ["six1", "six2", "six3", "six4"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:216)
-  at anonymous fn (std/gen_server.gem:225)
+  at gen_server.run_init (std/gen_server.gem:221)
+  at anonymous fn (std/gen_server.gem:230)
 supervisor: restart of child "b" failed: gen_server.start: init failed: b init 2 failed
-  at gen_server.start (std/gen_server.gem:207)
+  at gen_server.start (std/gen_server.gem:212)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:179)
   at supervisor.start_child (std/supervisor.gem:81)
@@ -4022,15 +4022,15 @@ supervisor: restart of child "b" failed: gen_server.start: init failed: b init 2
 7 children: ["a:true", "b:true", "c:true"] inits: ["a2", "b2", "b3", "c2"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:216)
-  at anonymous fn (std/gen_server.gem:225)
+  at gen_server.run_init (std/gen_server.gem:221)
+  at anonymous fn (std/gen_server.gem:230)
 8 dynamic_supervisor.start_child: gen_server.start: init failed: eight_bad init 1 failed
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
-  at gen_server.run_init (std/gen_server.gem:216)
-  at anonymous fn (std/gen_server.gem:225)
+  at gen_server.run_init (std/gen_server.gem:221)
+  at anonymous fn (std/gen_server.gem:230)
 dynamic_supervisor: restart of a child failed: gen_server.start: init failed: eight init 2 failed
-  at gen_server.start (std/gen_server.gem:207)
+  at gen_server.start (std/gen_server.gem:212)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:194)
   at dynamic_supervisor.start_from_template (std/dynamic_supervisor.gem:107)
@@ -4040,8 +4040,8 @@ dynamic_supervisor: restart of a child failed: gen_server.start: init failed: ei
 8 inits: ["eight_bad1", "eight1", "eight2", "eight3"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:209)
-  at gen_server.run_init (std/gen_server.gem:216)
-  at anonymous fn (std/gen_server.gem:225)
+  at gen_server.run_init (std/gen_server.gem:221)
+  at anonymous fn (std/gen_server.gem:230)
 9 gen_server.start: init failed: trapped then failed
 10 still there: true
 10 down: boom child gone: nil
@@ -4406,7 +4406,7 @@ truthy falsy
 false attempt to call nil value (field nope)
 false type error in +: got nil and int
 listening socket: nil
-client sees: 127.0.0.1 18320
+client sees: 127.0.0.1 true
 server sees: 127.0.0.1 int true
 ["in session", "127.0.0.1", true]
 read after peer close: true
@@ -4466,24 +4466,24 @@ tcp_from_fd: expected an int fd, got string
 == unclaimed: closed when the opener dies abnormally
 
 [Runtime Error in process 1]: session crashed
-  --> examples/218_resource_ownership.gem:51
+  --> examples/218_resource_ownership.gem:52
     |
- 51 | let p = pair(fn(c) error("session crashed") end)
+ 52 | let p = pair(fn(c) error("session crashed") end)
     |
 Stack trace:
-  at anonymous fn (examples/218_resource_ownership.gem:51)
-  at anonymous fn (examples/218_resource_ownership.gem:18)
+  at anonymous fn (examples/218_resource_ownership.gem:52)
+  at anonymous fn (examples/218_resource_ownership.gem:19)
 crash: true
 kill shutdown: true
 kill kill: true
 
 [Runtime Error in process 5]: linked crash
-  --> examples/218_resource_ownership.gem:61
+  --> examples/218_resource_ownership.gem:62
     |
- 61 |   spawn_link(fn() error("linked crash") end)
+ 62 |   spawn_link(fn() error("linked crash") end)
     |
 Stack trace:
-  at anonymous fn (examples/218_resource_ownership.gem:61)
+  at anonymous fn (examples/218_resource_ownership.gem:62)
 link exit: true
 == unclaimed: open when the opener returns
 still usable: 2 hi
@@ -4491,13 +4491,13 @@ still usable: 2 hi
 normal return: true
 
 [Runtime Error in process 8]: claimed crash
-  --> examples/218_resource_ownership.gem:79
+  --> examples/218_resource_ownership.gem:80
     |
- 79 |   error("claimed crash")
+ 80 |   error("claimed crash")
     |
 Stack trace:
-  at anonymous fn (examples/218_resource_ownership.gem:79)
-  at anonymous fn (examples/218_resource_ownership.gem:18)
+  at anonymous fn (examples/218_resource_ownership.gem:80)
+  at anonymous fn (examples/218_resource_ownership.gem:19)
 crash: true
 kill: true
 orderly shutdown: true
@@ -4507,12 +4507,12 @@ closed with the session: true
 == helpers that only use a socket leave it open
 
 [Runtime Error in process 12]: helper crashed
-  --> examples/218_resource_ownership.gem:119
+  --> examples/218_resource_ownership.gem:120
      |
- 119 |   error("helper crashed")
+ 120 |   error("helper crashed")
      |
 Stack trace:
-  at anonymous fn (examples/218_resource_ownership.gem:119)
+  at anonymous fn (examples/218_resource_ownership.gem:120)
 after a crash, a kill and a return: from helper!
 == a task that opens a socket hands over a live one
 alive
@@ -4590,3 +4590,35 @@ closed: true
 refused spawns: 0
 claimer: normal, rows 1
 killed openers: rows 21, failed reads 0
+== tcp_local_port ==
+bound a free port: int true
+client's local port is the server's peer port: true
+accepted socket has the listening port: true
+tcp_local_port: socket is closed
+tcp_local_port: expected a socket, got int
+tcp_local_port: expected a socket, got nil
+== http.start on port 0 ==
+handle keys: int int true
+201 application/json; charset=utf-8 {"id":7}
+200 [1,2]
+two servers, two ports: true
+false
+false
+== gen_server.stop ==
+stop: nil
+handled before the stop: 2
+normal
+gen_server.call: server exited: noproc
+again: nil nil
+linked process: shutdown
+trapper: done
+own monitor: normal
+nil
+gen_server.stop: no process registered as "counter226"
+gen_server.stop: the server did not stop within 50 ms
+later: normal
+gen_server.stop: reason must be a string, got int
+gen_server.stop: timeout must be an int (milliseconds) or nil, got string
+gen_server.stop: expected a {pid} handle, a pid or a registered name, got table
+still up: 0
+leftover messages: none

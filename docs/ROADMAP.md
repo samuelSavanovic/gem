@@ -88,19 +88,13 @@ Design include paths and compiler flags alongside the linker flags rather than a
 
 Std API that programs need and the std modules lack:
 
-- **`gen_server.stop`**: there is no way to stop a server except `kill(h.pid, reason)` or a supervisor. Add
-  `stop(target, reason = "normal", timeout_ms = 5000)` that waits for the exit, like `supervisor.stop`,
-  and maybe a `{stop: reason, reply?, state}` callback result (Erlang's `{stop, ...}`).
+- **A gen_server stopping itself**: a callback ends its server by raising (reported as a crash) or with
+  `kill(self(), reason)`, which a server that traps exits only gets as an `EXIT` message. Maybe a
+  `{stop: reason, reply?, state}` callback result (Erlang's `{stop, ...}`).
 - **Dropping late replies**: after a `gen_server.call`, `supervisor.which_children` or a
   `dynamic_supervisor` call times out, the late reply still lands in the caller's mailbox and nothing
   removes it. Erlang solves this with process aliases (a reply to a deactivated alias is dropped). Needs a
   runtime alias or a per-ref "drop" set checked at delivery.
-- **`http.json_response` with a status**: a JSON 201/404 needs `http.response(status, {"Content-Type":
-  ...}, json.encode(x))`. Add an optional `status` param.
-- **The port bound by `http.start({port: 0})`**: an ephemeral port works but nothing reports it, so tests
-  can't use one, and the networking examples listen on fixed ports: two `make test` runs on one machine
-  fail each other's. Return `{pid, port}` (needs the bound port from `tcp_listen`, e.g. a
-  `tcp_local_port` builtin).
 - **Multi-value query keys in `url.build_query`**: `{tags: ["a", "b"]}` should give `tags=a&tags=b`; today
   the table's `to_string` text is encoded. `parse_query` would need a matching opt-in (last value wins now).
 - **Parsing dates in `std/time`**: nothing turns an ISO 8601 or HTTP date back into epoch ms, and `format`

@@ -9,7 +9,6 @@ load "./rset"
 load "./keyspace"
 load "./server"
 
-let PORT = 63791
 let WAIT_MS = 2000
 
 # ─── Protocol ──────────────────────────────────────────────────
@@ -251,7 +250,8 @@ end
 
 # ─── End to end ────────────────────────────────────────────────
 
-let listener = tcp_listen("127.0.0.1", PORT)
+let listener = tcp_listen("127.0.0.1", 0)
+let PORT = tcp_local_port(listener)
 let sup = server.start(listener)
 
 test.case("commands over TCP") do

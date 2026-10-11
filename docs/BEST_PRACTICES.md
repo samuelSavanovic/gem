@@ -1002,7 +1002,7 @@ stack, so a hostile input gets a clear error instead of a stack overflow.
 | Need | Reach for |
 |---|---|
 | Run work concurrently, collect results | `task.async(f)` / `task.await(t, ms)` / `task.await_all(ts, ms)` |
-| A server with state and request/reply | `gen_server` (module of callbacks, `start`, `call`, `cast`) |
+| A server with state and request/reply | `gen_server` (module of callbacks, `start`, `call`, `cast`, `stop`) |
 | Restart processes that crash | `supervisor` (fixed children), `dynamic_supervisor` (children started on demand) |
 | Something else | a `receive` loop |
 
@@ -1076,7 +1076,9 @@ A process that traps exits (a supervisor, an http server) handles a
 still registered, when `kill` returns (except for `kill(pid, "kill")`,
 below, which also skips its cleanup). To stop one and know it is gone,
 monitor it and wait for its `DOWN`, which is what `supervisor.stop`,
-`dynamic_supervisor.stop` and `http.stop` do:
+`dynamic_supervisor.stop` and `http.stop` do (`gen_server.stop` waits the
+same way, but sends a stop message the server handles after the ones
+queued before it):
 
 ```gem
 let pid = sup.pid
@@ -1473,6 +1475,16 @@ r.value
 Stop an `http.start` server with `http.stop(server)`: it closes the
 listening socket, so the port is free again (killing it with `"kill"`
 does too).
+
+A test server takes port `0` and reads the port it got from the handle,
+so two test runs on one machine can't collide (a raw listener:
+`tcp_listen(host, 0)` and `tcp_local_port(l)`):
+
+```gem
+let server = http.start(app, {port: 0, host: "127.0.0.1"})
+print(request.get("http://127.0.0.1:{server.port}/").body)
+http.stop(server)
+```
 
 ### A restartable child opens what it claims **(trap)**
 

@@ -15,8 +15,9 @@ fn err(f)
   (pcall f()).error
 end
 
-let l = tcp_listen("127.0.0.1", 18217)
-let c = tcp_connect("127.0.0.1", 18217)
+let l = tcp_listen("127.0.0.1", 0)
+let port = tcp_local_port(l)
+let c = tcp_connect("127.0.0.1", port)
 let s = tcp_accept(l)
 let db = sqlite_open(":memory:")
 

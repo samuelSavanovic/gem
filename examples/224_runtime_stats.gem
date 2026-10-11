@@ -54,9 +54,10 @@ let s3 = runtime_stats()
 print("after it died:", s3.procs, s3.memory < s2.memory)
 
 # Resources: open ones, and those nobody owns.
-let l = tcp_listen("127.0.0.1", 18324)
+let l = tcp_listen("127.0.0.1", 0)
+let port = tcp_local_port(l)
 let opener = spawn do
-  send(me, tcp_connect("127.0.0.1", 18324))
+  send(me, tcp_connect("127.0.0.1", port))
 end
 let c = receive()
 let a = tcp_accept(l)

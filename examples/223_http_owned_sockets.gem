@@ -27,10 +27,10 @@ fn get(port, path)
 end
 
 print("== killed with \"kill\"")
-let srv = http.start(app, {port: 18223, host: "127.0.0.1"})
-print(get(18223, "/"))
+let srv = http.start(app, {port: 0, host: "127.0.0.1"})
+print(get(srv.port, "/"))
 kill(srv.pid, "kill")
-let r = pcall tcp_listen("127.0.0.1", 18223)
+let r = pcall tcp_listen("127.0.0.1", srv.port)
 print("port free:", r.ok)
 tcp_close(r.value)
 
@@ -38,10 +38,14 @@ print("== the caller killed while the server starts")
 # The killer's process slot lies between the caller's and the server's, so
 # within one scheduler pass it runs after the caller starts waiting for the
 # server and before the server has run.
+# The caller never gets the server's handle, so take a free port first.
+let probe = tcp_listen("127.0.0.1", 0)
+let port = tcp_local_port(probe)
+tcp_close(probe)
 let me = self()
 let caller = spawn do
   sleep(20)
-  http.start(app, {port: 18224, host: "127.0.0.1"})
+  http.start(app, {port: port, host: "127.0.0.1"})
   receive()
 end
 spawn do
@@ -61,11 +65,11 @@ when "killed"
   nil
 end
 sleep(50)
-print("server still serves:", get(18224, "/"))
+print("server still serves:", get(port, "/"))
 
 print("== stop while a handler is in a blocking call")
-srv = http.start(app, {port: 18225, host: "127.0.0.1"})
-let c = tcp_connect("127.0.0.1", 18225)
+srv = http.start(app, {port: 0, host: "127.0.0.1"})
+let c = tcp_connect("127.0.0.1", srv.port)
 tcp_write(c, "GET /block HTTP/1.1\r\nHost: x\r\n\r\n")
 sleep(100)
 http.stop(srv)

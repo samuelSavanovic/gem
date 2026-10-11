@@ -4,8 +4,6 @@
 load "std/request"
 load "std/string"
 
-let BASE_PORT = 19790
-
 # Reads one request head (and nothing past it).
 fn read_request(c)
   let got = ""
@@ -19,12 +17,13 @@ fn read_request(c)
   got
 end
 
-# Serves one connection on `port`: sends `pieces` (with a short pause
+# Serves one connection on a free port, which it returns: sends `pieces` (with a short pause
 # between them) and closes; or, with `hold_ms`, sends nothing and keeps
 # the connection open that long first; `linger_ms` keeps it open after the
 # pieces. A piece "<echo>" sends back the request.
-fn serve_once(port, pieces, hold_ms = 0, linger_ms = 0)
-  let lfd = tcp_listen("127.0.0.1", port)
+fn serve_once(pieces, hold_ms = 0, linger_ms = 0)
+  let lfd = tcp_listen("127.0.0.1", 0)
+  let port = tcp_local_port(lfd)
   spawn do
     let c = tcp_accept(lfd)
     let req = read_request(c)
@@ -45,25 +44,27 @@ fn serve_once(port, pieces, hold_ms = 0, linger_ms = 0)
     tcp_close(c)
     tcp_close(lfd)
   end
+  port
 end
 
-let next_port = BASE_PORT
+let last_port = nil
 
 fn url_for(port, path = "/")
   "http://127.0.0.1:{port}{path}"
 end
 
-# Runs a request against a fresh server and prints the outcome.
+# Runs a request against a fresh server and prints the outcome, with the
+# server's port as PORT; `last_port` keeps it.
 fn try_get(label, pieces, opts = {}, hold_ms = 0, linger_ms = 0)
-  next_port = next_port + 1
-  serve_once(next_port, pieces, hold_ms, linger_ms)
-  let r = pcall request.get(url_for(next_port), opts)
-  if r.ok
+  last_port = serve_once(pieces, hold_ms, linger_ms)
+  let r = pcall request.get(url_for(last_port), opts)
+  let line = if r.ok
     let body = str_replace(r.value.body, "\r\n", "|")
-    print("{label}: {r.value.status} {r.value.headers} {body}")
+    "{label}: {r.value.status} {r.value.headers} {body}"
   else
-    print("{label}: error: {r.error}")
+    "{label}: error: {r.error}"
   end
+  print(str_replace(line, "127.0.0.1:{last_port}", "127.0.0.1:PORT"))
   r
 end
 
@@ -122,14 +123,10 @@ try_url("bad timeout", fn() request.get(url_for(1), {timeout_ms: "soon"}) end)
 # ─── What is sent ───
 
 let echoed = try_get("echo", ["<echo>"], {headers: {"X-Token": "t1"}}).value.body
-print("host has port: {string.contains(echoed, "Host: 127.0.0.1:{next_port}\r\n")}")
-next_port = next_port + 1
-serve_once(next_port, ["<echo>"])
-let posted = request.post(url_for(next_port, "?q=1#frag"), {body: "abc", headers: {Host: "example.test"}}).body
+print("host has port: {string.contains(echoed, "Host: 127.0.0.1:{last_port}\r\n")}")
+let posted = request.post(url_for(serve_once(["<echo>"]), "?q=1#frag"), {body: "abc", headers: {Host: "example.test"}}).body
 print(str_replace(posted, "\r\n", "|"))
-next_port = next_port + 1
-serve_once(next_port, ["<echo>"])
-print(request.request("HEAD", url_for(next_port, "/h")).body == "")
+print(request.request("HEAD", url_for(serve_once(["<echo>"]), "/h")).body == "")
 
 # ─── Bad input to the client ───
 

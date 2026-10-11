@@ -4,8 +4,6 @@ load "std/http"
 load "std/json"
 load "std/string"
 
-let port = 19880
-
 # ─── Setup routes ───
 
 let r = http.router()
@@ -54,7 +52,8 @@ spawn() do
   let pass = 0
   let fail = 0
 
-  let server = http.start(tr, {port: port})
+  let server = http.start(tr, {port: 0})
+  let port = server.port
   sleep(100)
 
   # Helper to make HTTP requests
