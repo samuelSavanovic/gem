@@ -45,7 +45,11 @@ doesn't stop it.
 cd /opt/gem/examples/honeypot/deploy
 cp honeypot.nft /etc/nftables.conf
 nft -c -f /etc/nftables.conf           # check it before it can lock you out
+systemd-run --on-active=180 --unit=nft-rollback /usr/sbin/nft flush ruleset   # undone in 3 minutes
 systemctl enable --now nftables
+# From another machine, check that a new connection gets in (ssh root@VPS_IP true),
+# then, within the 3 minutes:
+systemctl stop nft-rollback.timer
 sed "s/^HONEYPOT_COMMIT=.*/HONEYPOT_COMMIT=$(git -C /opt/gem rev-parse --short HEAD)/" honeypot.env > /etc/honeypot.env
 cp honeypot.service /etc/systemd/system/
 systemctl daemon-reload
@@ -55,18 +59,31 @@ systemctl enable --now honeypot
 If SSH listens on a port other than 22, set `SSH_PORT` in
 `/etc/nftables.conf` first. The ruleset replaces every other rule on the
 host (`flush ruleset`), and the provider's firewall should allow the same:
-22 and 23 in.
+22 and 23 in. An SSH session that is open when the ruleset first loads can
+stall for a few minutes (on Ubuntu 26.04 it did, then recovered); new
+connections get in at once.
 
 The honeypot listens on IPv4 only (`tcp_listen` has no IPv6,
 `docs/ROADMAP.md`), so port 23 on the host's IPv6 address reaches nothing.
 
 Check it from another machine: `nc VPS_IP 23` gets the `login:` prompt,
-and `nc VPS_IP 2323` times out. On the VPS:
+and `nc VPS_IP 2323` times out. The fake login lets in the third attempt
+(`--accept-on`), so a hand-typed session sees `Login incorrect` twice. On
+the VPS:
 
 ```sh
 systemctl status honeypot
 journalctl -u honeypot -f                              # stderr: crashes, restarts
 nft list counter inet honeypot honeypot_egress         # must stay at 0 packets
+```
+
+The egress deny, once: a connection out from a dynamic user must time out
+and raise the counter, one from root must not. Then reset the counter:
+
+```sh
+systemd-run --wait --pipe -p DynamicUser=yes curl -sS -m 5 http://example.com   # times out
+curl -sS -m 5 -o /dev/null -w '%{http_code}\n' http://example.com               # 200
+nft reset counter inet honeypot honeypot_egress
 ```
 
 After a minute, the health query (below) should show a row with `fds_extra`
