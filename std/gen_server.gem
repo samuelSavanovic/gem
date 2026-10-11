@@ -18,10 +18,10 @@
 ## `call` raises as `gen_server.call: server exited: gen_server: ...`.
 ## Extra keys in a result are ignored (`{stop: ...}` does nothing).
 ##
-## There is no stop: end a server with `kill(h.pid, reason)`, or run it
-## under a supervisor and stop that. `start` takes no name: to call by
-## name, `register(name, h.pid)`; under a supervisor, do it in the child's
-## `start` fn so a restart registers the new server.
+## `stop` ends a server; one under a supervisor may be restarted (a
+## permanent child always is), so stop the supervisor instead. `start`
+## takes no name: to call by name, `register(name, h.pid)`; under a
+## supervisor, do it in the child's `start` fn so a restart registers it.
 
 # The pid for a `{pid}` handle, a bare pid or a registered name.
 fn target_pid(target, caller)
@@ -126,6 +126,11 @@ fn loop(module, state, pending)
     let result = module.handle_cast(msg, state)
     check_state_result("handle_cast", result)
     loop(module, result.state, set_timeout(pending, result.timeout))
+  when {tag: "_gs_stop", reason: reason}
+    # An `init` or callback may have trapped exits, which would make the
+    # kill a message.
+    process_flag("trap_exit", false)
+    kill(self(), reason)
   when {tag: "_gs_timeout", ref: ref}
     if pending == nil or ref != pending.ref
       # Queued before a callback cancelled or replaced that timeout.
@@ -169,8 +174,8 @@ end
 ## that long, `handle_info` gets `"timeout"`. It covers only the next
 ## wait: return it from every callback to keep it. A plain `"timeout"`
 ## message looks the same to `handle_info`. `handle_info` gets every
-## message that isn't a call or a cast, such as the `DOWN` of a process
-## the server monitors.
+## message that isn't a call, a cast or a stop, such as the `DOWN` of a
+## process the server monitors.
 ##
 ## Raises, and starts nothing, if `module` is not a table or a callback is
 ## not a fn.
@@ -361,4 +366,47 @@ fn reply(from, value)
   nil
 end
 
-export start, call, cast, reply
+## Stops the server with exit `reason` and returns nil once it has
+## exited. A server already gone, given by pid or handle, returns nil too.
+##
+##   gen_server.stop(counter)
+##   gen_server.stop("counter", "shutdown", nil)   # by name, no timeout
+##
+## The stop is a message: the server first handles the messages queued
+## before it, then exits, so a `cast` sent before `stop` is handled. A
+## `call` queued behind the stop fails with `gen_server.call: server
+## exited: <reason>`. Monitors and links of the server see `reason`
+## (`"kill"` as `"killed"`, as for `kill`); a linked process that doesn't
+## trap exits dies with it unless it is `"normal"`.
+##
+## Waits at most `timeout_ms` (nil: no limit), then raises
+## `gen_server.stop: the server did not stop within <ms> ms`; the server
+## still stops once it reaches the message. Raises for a `target` that is
+## not a handle, pid or registered name, and for a `reason` that is not a
+## string. Takes the server's `DOWN`, unless the caller monitors it
+## itself: that monitor still gets it.
+fn stop(target, reason = "normal", timeout_ms = 5000)
+  let pid = target_pid(target, "gen_server.stop")
+  if type(reason) != "string"
+    error("gen_server.stop: reason must be a string, got {type(reason)}")
+  end
+  check_timeout(timeout_ms, "gen_server.stop")
+  let added = monitor(pid)
+  send(pid, {tag: "_gs_stop", reason: reason})
+  if timeout_ms == nil
+    receive
+    when {tag: "DOWN", pid: ^pid, reason: r}
+      return_down(pid, added, r)
+    end
+    return nil
+  end
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: r}
+    return_down(pid, added, r)
+  after timeout_ms
+    drop_monitor(pid, added)
+    error("gen_server.stop: the server did not stop within {timeout_ms} ms")
+  end
+end
+
+export start, call, cast, reply, stop

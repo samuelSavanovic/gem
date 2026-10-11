@@ -6,12 +6,13 @@ extern include "unistd.h"
 extern blocking fn usleep(us: Int) -> Int
 
 let me = self()
-let l = tcp_listen("127.0.0.1", 18221)
-let other = tcp_connect("127.0.0.1", 18221)
+let l = tcp_listen("127.0.0.1", 0)
+let port = tcp_local_port(l)
+let other = tcp_connect("127.0.0.1", port)
 let other_srv = tcp_accept(l)
 
 let pid = spawn do
-  let c = tcp_connect("127.0.0.1", 18221)
+  let c = tcp_connect("127.0.0.1", port)
   claim(c)
   send(me, "connected")
   usleep(300000)
@@ -31,7 +32,7 @@ print(tcp_read(other_srv, 32, 1000))
 
 # Claimed by another process while parked: it is that process's now.
 let pid2 = spawn do
-  let c = tcp_connect("127.0.0.1", 18221)
+  let c = tcp_connect("127.0.0.1", port)
   send(me, {tag: "sock", sock: c})
   usleep(200000)
 end

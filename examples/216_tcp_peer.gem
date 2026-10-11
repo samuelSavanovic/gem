@@ -2,13 +2,14 @@
 # reset the connection.
 
 let me = self()
-let l = tcp_listen("127.0.0.1", 18320)
+let l = tcp_listen("127.0.0.1", 0)
+let listen_port = tcp_local_port(l)
 print("listening socket:", tcp_peer(l))
 
-let c = tcp_connect("127.0.0.1", 18320)
+let c = tcp_connect("127.0.0.1", listen_port)
 let s = tcp_accept(l)
 let client_side = tcp_peer(c)
-print("client sees:", client_side.ip, client_side.port)
+print("client sees:", client_side.ip, client_side.port == listen_port)
 let server_side = tcp_peer(s)
 print("server sees:", server_side.ip, type(server_side.port), server_side.port > 0)
 
@@ -30,7 +31,7 @@ print("after writing to it:", tcp_peer(s))
 tcp_close(s)
 
 # Closing with unread data sends a reset; the server's socket then has no peer.
-let c2 = tcp_connect("127.0.0.1", 18320)
+let c2 = tcp_connect("127.0.0.1", listen_port)
 let s2 = tcp_accept(l)
 tcp_write(s2, "unread", 1000)
 sleep(20)

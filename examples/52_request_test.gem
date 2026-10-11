@@ -5,8 +5,6 @@ load "std/json"
 load "std/string"
 load "std/request"
 
-let port = 19881
-
 # ─── Setup test server ───
 
 let r = http.router()
@@ -54,10 +52,10 @@ spawn() do
   let pass = 0
   let fail = 0
 
-  let server = http.start(tr, {port: port})
+  let server = http.start(tr, {port: 0})
   sleep(100)
 
-  let base = "http://127.0.0.1:" + to_string(port)
+  let base = "http://127.0.0.1:" + to_string(server.port)
 
   # GET
   let resp = request.get(base + "/")

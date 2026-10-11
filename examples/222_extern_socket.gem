@@ -9,10 +9,11 @@ extern fn gem_example_sock_write(sock: Socket, s: String) -> Int
 extern blocking fn gem_example_sock_write_later(sock: Socket, ms: Int, s: String) -> Int
 
 let me = self()
-let l = tcp_listen("127.0.0.1", 18222)
+let l = tcp_listen("127.0.0.1", 0)
+let port = tcp_local_port(l)
 
 fn pair()
-  let c = tcp_connect("127.0.0.1", 18222)
+  let c = tcp_connect("127.0.0.1", port)
   [c, tcp_accept(l)]
 end
 
@@ -59,7 +60,7 @@ tcp_close(p[1])
 # Its own sockets are parked: open for everyone until the call returns.
 print("== a socket the call uses, owned by its killed caller")
 let owner = spawn do
-  let c = tcp_connect("127.0.0.1", 18222)
+  let c = tcp_connect("127.0.0.1", port)
   send(me, c)
   gem_example_sock_write_later(c, 200, "own")
 end

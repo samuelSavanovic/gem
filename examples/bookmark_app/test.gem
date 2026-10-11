@@ -8,13 +8,12 @@ load "std/test"
 load "std/url"
 load "./bookmarks"
 
-let PORT = 18080
-let BASE = "http://127.0.0.1:{PORT}"
 let FORM = {"Content-Type": "application/x-www-form-urlencoded"}
 
 log.set_level("warn")
 let db = bookmarks.open_db(":memory:")
-let server = http.start(bookmarks.routes(db, "./static"), {port: PORT, host: "127.0.0.1"})
+let server = http.start(bookmarks.routes(db, "./static"), {port: 0, host: "127.0.0.1"})
+let BASE = "http://127.0.0.1:{server.port}"
 
 fn post(path, body)
   request.post("{BASE}{path}", {body: body, headers: FORM})

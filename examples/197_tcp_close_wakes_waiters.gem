@@ -7,7 +7,7 @@ extern fn close(fd: Int) -> Int
 
 let me = self()
 
-let l = tcp_listen("127.0.0.1", 18296)
+let l = tcp_listen("127.0.0.1", 0)
 spawn do
   let r = pcall tcp_accept(l)
   send(me, ["accept", r.ok, r.error])
@@ -18,7 +18,7 @@ print(receive())
 
 # The new listener reuses the closed fd number; the old waiter must not
 # accept its connection.
-let l2 = tcp_listen("127.0.0.1", 18297)
+let l2 = tcp_listen("127.0.0.1", 0)
 spawn do
   let r = pcall tcp_accept(l2)
   send(me, ["accept on reused fd", r.ok, r.error])
@@ -26,15 +26,17 @@ end
 sleep(20)
 let l2_fd = tcp_fd(l2)
 tcp_close(l2)
-let l3 = tcp_listen("127.0.0.1", 18298)
+let l3 = tcp_listen("127.0.0.1", 0)
+let port3 = tcp_local_port(l3)
 print("fd reused:", tcp_fd(l3) == l2_fd, "same socket:", l3 == l2)
-let c3 = tcp_connect("127.0.0.1", 18298)
+let c3 = tcp_connect("127.0.0.1", port3)
 print(receive())
 let s3 = tcp_accept(l3)
 print("new listener still accepts:", type(s3))
 
-let l4 = tcp_listen("127.0.0.1", 18299)
-let c = tcp_connect("127.0.0.1", 18299)
+let l4 = tcp_listen("127.0.0.1", 0)
+let port4 = tcp_local_port(l4)
+let c = tcp_connect("127.0.0.1", port4)
 let s = tcp_accept(l4)
 spawn do
   let r = pcall tcp_read(c)
@@ -56,7 +58,7 @@ let big = build_string() do |add|
     add("x")
   end
 end
-let c6 = tcp_connect("127.0.0.1", 18299)
+let c6 = tcp_connect("127.0.0.1", port4)
 let s6 = tcp_accept(l4)
 spawn do
   let r = pcall tcp_write(c6, big)
@@ -69,7 +71,7 @@ tcp_close(s6)
 
 # A close that bypasses tcp_close (here a C extern, through tcp_fd, which
 # C code must not do) is seen through poll.
-let l5 = tcp_listen("127.0.0.1", 18300)
+let l5 = tcp_listen("127.0.0.1", 0)
 spawn do
   let r = pcall tcp_accept(l5)
   send(me, ["accept, closed from C", r.ok, r.error])

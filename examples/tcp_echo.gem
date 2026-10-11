@@ -1,6 +1,5 @@
 # TCP echo server, one process per connection, and a client that checks it.
 
-let PORT = 9125
 let TIMEOUT_MS = 2000
 
 # Claims the socket the acceptor handed over, so it closes however this
@@ -38,8 +37,8 @@ fn serve(listener)
   end
 end
 
-fn round_trip(msg)
-  let fd = tcp_connect("127.0.0.1", PORT)
+fn round_trip(port, msg)
+  let fd = tcp_connect("127.0.0.1", port)
   let r = pcall do
     if tcp_write(fd, msg, TIMEOUT_MS) < len(msg)
       error("tcp_echo: write failed")
@@ -54,13 +53,14 @@ fn round_trip(msg)
 end
 
 fn main()
-  let listener = tcp_listen("127.0.0.1", PORT)
+  let listener = tcp_listen("127.0.0.1", 0)
+  let port = tcp_local_port(listener)
   let server = spawn do
     serve(listener)
   end
 
   for msg in ["hello from gem", "second connection"]
-    let reply = round_trip(msg)
+    let reply = round_trip(port, msg)
     if reply != msg
       error("tcp_echo: sent {msg}, got {reply}")
     end
