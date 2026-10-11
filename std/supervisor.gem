@@ -217,11 +217,7 @@ fn stop_all_for_restart(state, dead_idx)
     i -= 1
   end
   for j = 0, len(specs)
-    if revive[j]
-      children[j] = pending(specs[j])
-    else
-      children[j] = not_running(specs[j])
-    end
+    children[j] = if revive[j] then pending(specs[j]) else not_running(specs[j]) end
   end
 end
 
