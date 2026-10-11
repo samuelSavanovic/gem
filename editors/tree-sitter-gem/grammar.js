@@ -324,10 +324,11 @@ module.exports = grammar({
       optional(field('block', choice($.do_block, $.param_brace_block, $.brace_block))),
     )),
 
-    // `pcall <expr>` is `pcall(fn() <expr> end)`.
+    // `pcall <expr>` is `pcall(fn() <expr> end)`; the expression can be an
+    // assignment, as in compiler/parser.gem.
     pcall_expression: $ => prec.right(-2, seq(
       alias($._pcall_prefix, 'pcall'),
-      field('body', $._expression),
+      field('body', choice($._expression, $.assignment)),
     )),
 
     member_expression: $ => prec.left(9, seq(
