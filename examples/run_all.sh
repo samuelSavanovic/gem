@@ -16,10 +16,12 @@ fi
 cd "$ROOT"
 # Numeric order (09, 10, ..., 99, 100), independent of the locale's collation.
 examples=$(printf '%s\n' examples/[0-9]*.gem | LC_ALL=C sort -t/ -k2,2n)
+# NUL bytes are dropped (90_bytes_extern writes some): a shell variable
+# can't hold them.
 actual=$( for f in $examples; do
     bin="/tmp/gem_$(basename "$f" .gem)"
     "$COMPILER" "$f" -o "$bin" 2>/dev/null
-    "$bin" 2>&1 || true
+    { "$bin" 2>&1 || true; } | tr -d '\000'
 done )
 
 if diff -u "$EXPECTED" <(echo "$actual") > /dev/null 2>&1; then

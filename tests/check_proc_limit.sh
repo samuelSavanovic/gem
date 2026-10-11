@@ -2,9 +2,9 @@
 # The process limit: GEM_MAX_PROCS lowers it, spawn past it raises
 # "spawn: process table full" (catchable), std/http answers a connection it
 # can't spawn a process for with 503 and keeps accepting, and a bad
-# GEM_MAX_PROCS stops the program before it runs. Also: spawn's headroom
-# under Linux's vm.max_map_count, and thread-pool work from more than 1024
-# processes at once. runtime_stats() reports the limit and the refusals.
+# GEM_MAX_PROCS or GEM_MAX_MAPS stops the program before it runs. Also:
+# spawn's headroom under Linux's vm.max_map_count, and thread-pool work from
+# more than 1024 processes at once. runtime_stats() reports the limit and the refusals.
 #
 # Run from the repo root: tests/check_proc_limit.sh
 
@@ -126,7 +126,9 @@ check "http stderr" "http: spawn: process table full; refusing a connection" \
   "$(grep '^http:' "$dir/http_err")"
 
 # Linux: spawn stops with headroom left under vm.max_map_count, so the
-# processes already running (main here) can still allocate.
+# processes already running (main here) can still allocate. GEM_MAX_MAPS
+# holds the limit at the kernel's default: a distro's 1,048,576 lets about
+# 229,000 processes spawn, more than a 4 GB machine has memory for.
 if [ -r /proc/sys/vm/max_map_count ]; then
   cat > "$dir/maps.gem" <<'GEM'
 load "std/string"
@@ -154,7 +156,7 @@ GEM
   "$GEM" "$dir/maps.gem" -o "$dir/maps" 2>"$dir/err" || { echo "FAIL: maps.gem doesn't compile"; cat "$dir/err"; exit 1; }
   check "map limit headroom" "true
 spawn after an exit: true
-main still allocates 200000" "$("$dir/maps" 2>/dev/null)"
+main still allocates 200000" "$(GEM_MAX_MAPS=65530 "$dir/maps" 2>/dev/null)"
 fi
 
 # 2000 thread-pool requests queued at once: four `exec("sleep 1")` calls
@@ -200,6 +202,16 @@ GEM
 "$GEM" "$dir/one.gem" -o "$dir/one" 2>"$dir/err" || { echo "FAIL: one.gem doesn't compile"; cat "$dir/err"; exit 1; }
 check "GEM_MAX_PROCS above the maximum" "1" \
   "$(GEM_MAX_PROCS=99999999999999999999 "$dir/one" 2>&1)"
+
+for bad in 0 -5 abc 12x "" " 5" "+3"; do
+  out=$(GEM_MAX_MAPS=$bad "$dir/one" 2>&1)
+  code=$?
+  check "GEM_MAX_MAPS='$bad'" "gem: GEM_MAX_MAPS must be a number of memory mappings (at least 1), got '$bad'
+exit 1" "$out
+exit $code"
+done
+check "GEM_MAX_MAPS above the system's" "1" \
+  "$(GEM_MAX_MAPS=99999999999999999999 "$dir/one" 2>&1)"
 
 if [ "$fails" -eq 0 ]; then
   echo "proc limit: ok"
