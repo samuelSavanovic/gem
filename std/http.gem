@@ -1133,11 +1133,7 @@ fn serialize_response(resp, keep_alive, head_only = false)
     if not bodiless
       add("Content-Length: ", len(body), "\r\n")
     end
-    if keep_alive
-      add("Connection: keep-alive\r\n")
-    else
-      add("Connection: close\r\n")
-    end
+    add("Connection: ", if keep_alive then "keep-alive" else "close" end, "\r\n")
     if resp.headers != nil
       for k, v in resp.headers
         if not is_framing_header(k)

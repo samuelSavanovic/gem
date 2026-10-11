@@ -613,13 +613,13 @@ Stack trace:
   at anonymous fn (examples/30_supervisor.gem:13)
 
 [Runtime Error in process 10]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:373
+  --> std/supervisor.gem:369
      |
- 373 |     error(res.error)
+ 369 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:373)
-  at anonymous fn (std/supervisor.gem:496)
+  at supervisor.sup_main (std/supervisor.gem:369)
+  at anonymous fn (std/supervisor.gem:492)
 test4: supervisor crashed: supervisor: max restart intensity reached
 test1: equal_self=true different=true
 test2: type=ref
@@ -3218,13 +3218,13 @@ armed timeout fired
 inner links its children: 3 true
 
 [Runtime Error in process 6]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:373
+  --> std/supervisor.gem:369
      |
- 373 |     error(res.error)
+ 369 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:373)
-  at anonymous fn (std/supervisor.gem:496)
+  at supervisor.sup_main (std/supervisor.gem:369)
+  at anonymous fn (std/supervisor.gem:492)
 inner restarted: true
 old db dead: true
 new db: true 0
@@ -3553,13 +3553,13 @@ Stack trace:
   at anonymous fn (examples/189_otp_shutdown.gem:102)
 
 [Runtime Error in process 12]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:373
+  --> std/supervisor.gem:369
      |
- 373 |     error(res.error)
+ 369 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:373)
-  at anonymous fn (std/supervisor.gem:496)
+  at supervisor.sup_main (std/supervisor.gem:369)
+  at anonymous fn (std/supervisor.gem:492)
 3 down: supervisor: max restart intensity reached true ["t:shutdown"]
 
 [Runtime Error in process 20]: boom
@@ -3577,7 +3577,7 @@ Stack trace:
 supervisor: exiting on an error raised at:
   at bad_start (examples/189_otp_shutdown.gem:152)
   at supervisor.start_child (std/supervisor.gem:81)
-  at anonymous fn (std/supervisor.gem:357)
+  at anonymous fn (std/supervisor.gem:353)
 7 start: supervisor.start: child "bad" failed to start: start broke nil ["a:shutdown"]
 8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got nil
 8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got string
@@ -3926,24 +3926,24 @@ nil true false true
 supervisor: exiting on an error raised at:
   at boom (examples/201_supervisor_start_waits.gem:30)
   at supervisor.start_child (std/supervisor.gem:81)
-  at anonymous fn (std/supervisor.gem:357)
+  at anonymous fn (std/supervisor.gem:353)
 5 supervisor.start: child "bad" failed to start: boom
 5 name free: nil
 5 restarted under the same name: true
 supervisor: exiting on an error raised at:
   at supervisor.target_pid (std/supervisor.gem:53)
   at supervisor.start_child (std/supervisor.gem:82)
-  at anonymous fn (std/supervisor.gem:357)
+  at anonymous fn (std/supervisor.gem:353)
 6 supervisor.start: child "ghost" failed to start: supervisor: start of child "ghost": no process registered as "nobody201"
 supervisor: exiting on an error raised at:
   at boom (examples/201_supervisor_start_waits.gem:30)
   at supervisor.start_child (std/supervisor.gem:81)
-  at anonymous fn (std/supervisor.gem:357)
+  at anonymous fn (std/supervisor.gem:353)
 supervisor: exiting on an error raised at:
-  at supervisor.start (std/supervisor.gem:521)
+  at supervisor.start (std/supervisor.gem:517)
   at anonymous fn (examples/201_supervisor_start_waits.gem:103)
   at supervisor.start_child (std/supervisor.gem:81)
-  at anonymous fn (std/supervisor.gem:357)
+  at anonymous fn (std/supervisor.gem:353)
 7 supervisor.start: child "inner" failed to start: supervisor.start: child "bad" failed to start: boom
 8 supervisor.start: supervisor exited: killed
 9 leftovers: {}
@@ -3964,7 +3964,7 @@ supervisor: restart of child "five" failed: gen_server.start: init failed: five 
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:158)
   at supervisor.start_child (std/supervisor.gem:81)
-  at anonymous fn (std/supervisor.gem:243)
+  at anonymous fn (std/supervisor.gem:239)
 5 pending: -1
 5 running again: true init 3
 5 inits: ["five1", "five2", "five3"]
@@ -3977,7 +3977,7 @@ supervisor: restart of child "six" failed: gen_server.start: init failed: six in
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:170)
   at supervisor.start_child (std/supervisor.gem:81)
-  at anonymous fn (std/supervisor.gem:243)
+  at anonymous fn (std/supervisor.gem:239)
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
   at gen_server.run_init (std/gen_server.gem:216)
@@ -3987,7 +3987,7 @@ supervisor: restart of child "six" failed: gen_server.start: init failed: six in
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:170)
   at supervisor.start_child (std/supervisor.gem:81)
-  at anonymous fn (std/supervisor.gem:243)
+  at anonymous fn (std/supervisor.gem:239)
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)
   at gen_server.run_init (std/gen_server.gem:216)
@@ -3997,16 +3997,16 @@ supervisor: restart of child "six" failed: gen_server.start: init failed: six in
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:170)
   at supervisor.start_child (std/supervisor.gem:81)
-  at anonymous fn (std/supervisor.gem:243)
+  at anonymous fn (std/supervisor.gem:239)
 
 [Runtime Error in process 10]: supervisor: max restart intensity reached
-  --> std/supervisor.gem:373
+  --> std/supervisor.gem:369
      |
- 373 |     error(res.error)
+ 369 |     error(res.error)
      |
 Stack trace:
-  at supervisor.sup_main (std/supervisor.gem:373)
-  at anonymous fn (std/supervisor.gem:496)
+  at supervisor.sup_main (std/supervisor.gem:369)
+  at anonymous fn (std/supervisor.gem:492)
 6 down: supervisor: max restart intensity reached
 6 inits: ["six1", "six2", "six3", "six4"]
 gen_server: init raised at:
@@ -4018,7 +4018,7 @@ supervisor: restart of child "b" failed: gen_server.start: init failed: b init 2
   at start_flaky (examples/202_gen_server_start_waits_init.gem:78)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:179)
   at supervisor.start_child (std/supervisor.gem:81)
-  at anonymous fn (std/supervisor.gem:243)
+  at anonymous fn (std/supervisor.gem:239)
 7 children: ["a:true", "b:true", "c:true"] inits: ["a2", "b2", "b3", "c2"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:67)

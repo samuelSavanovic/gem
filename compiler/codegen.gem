@@ -2023,8 +2023,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     buf_push(b, "{p2}{matched_tmp} = -1;\n")
     # An `after`-only receive (no arms) takes no message: skip the scan
     # and just wait for the deadline, leaving the mailbox as it is.
-    let scan_open = if len(arms) == 0 then "{p2}while (0) \{\n" else "{p2}while ({cur_tmp}) \{\n" end
-    buf_push(b, scan_open)
+    buf_push(b, if len(arms) == 0 then "{p2}while (0) \{\n" else "{p2}while ({cur_tmp}) \{\n" end)
     let p3 = pad_for(indent + 2)
     buf_push(b, "{p3}{recv_tmp} = {cur_tmp}->value;\n")
 
@@ -2371,11 +2370,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         w_args = w_args + ", "
       end
       w_first = false
-      if params[i]["type"] == "Bytes"
-        w_args = w_args + "a->_p{i}, a->_p{i}_len"
-      else
-        w_args = w_args + "a->_p{i}"
-      end
+      w_args = w_args + if params[i]["type"] == "Bytes" then "a->_p{i}, a->_p{i}_len" else "a->_p{i}" end
     end
     let w_call = "{c_sym}({w_args})"
 
@@ -2515,11 +2510,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         d_args = d_args + ", "
       end
       d_first = false
-      if params[i]["type"] == "Bytes"
-        d_args = d_args + "_p{i}, _p{i}_len"
-      else
-        d_args = d_args + "_p{i}"
-      end
+      d_args = d_args + if params[i]["type"] == "Bytes" then "_p{i}, _p{i}_len" else "_p{i}" end
     end
     let d_call = "{c_sym}({d_args})"
 

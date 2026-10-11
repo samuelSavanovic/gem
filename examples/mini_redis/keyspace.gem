@@ -486,11 +486,7 @@ fn pop_list(db, args, now, front)
   let out = []
   let n = if count != nil then count else 1 end
   while len(out) < n and deque.size(l.items) > 0
-    if front
-      push(out, deque.pop_front(l.items))
-    else
-      push(out, deque.pop_back(l.items))
-    end
+    push(out, if front then deque.pop_front(l.items) else deque.pop_back(l.items) end)
   end
   if deque.size(l.items) == 0
     remove_key(db, args[1])
