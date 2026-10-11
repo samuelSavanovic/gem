@@ -571,11 +571,32 @@ static int gem_proc_table_commit(int n) {
 static long gem_map_limit = 0;
 static long gem_map_system = 0;
 
+/* The GEM_MAX_MAPS environment variable, which lowers the system's limit:
+   0 when it is not set, else digits only and at least 1. A number past
+   any vm.max_map_count (an int) stops growing, so it can't overflow. */
+static long gem_map_env(void) {
+    const char *env = getenv("GEM_MAX_MAPS");
+    if (!env) return 0;
+    long n = 0;
+    int ok = *env != '\0';
+    for (const char *c = env; *c && ok; c++) {
+        if (*c < '0' || *c > '9') ok = 0;
+        else if (n <= 1000000000L) n = n * 10 + (*c - '0');
+    }
+    if (!ok || n < 1) {
+        fprintf(stderr, "gem: GEM_MAX_MAPS must be a number of memory mappings (at least 1), got '%s'\n", env);
+        exit(1);
+    }
+    return n;
+}
+
 static void gem_map_limit_init(void) {
+    long lower = gem_map_env();
     FILE *f = fopen("/proc/sys/vm/max_map_count", "r");
     if (!f) return;
     long n = 0;
     if (fscanf(f, "%ld", &n) == 1 && n > 0) {
+        if (lower > 0 && lower < n) n = lower;
         long headroom = n / 8 > 1024 ? n / 8 : 1024;
         gem_map_system = n;
         gem_map_limit = n > headroom ? n - headroom : 1;
