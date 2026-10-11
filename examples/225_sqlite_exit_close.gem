@@ -4,7 +4,7 @@
 
 load "std/sqlite"
 
-let PATH = "/tmp/gem_225_exit_close.db"
+let PATH = "/tmp/gem_225_exit_close_{epoch_ms()}_{random(1000000)}.db"
 
 fn wait_down(pid)
   receive

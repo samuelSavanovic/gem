@@ -86,7 +86,7 @@ make test-json         # run examples/json_parser.gem
 make test-example-apps # run the larger example programs' own tests (part of make test)
 make test-json-suite   # run JSONTestSuite parser conformance (clones to /tmp on first run)
 make test-lsp          # smoke-test the `gem lsp` subcommand (canned initialize/didOpen/shutdown session)
-make clean             # remove build/ and /tmp/gem_*
+make clean             # remove build/
 ```
 
 After changing compiler sources, or a std module the compiler or LSP loads (`std/string`, `std/json`), run `make bootstrap` to update `stage0.c`. The bootstrap target verifies the new stage0 can compile itself (fixed-point check) before replacing it. If a change alters the C the compiler emits for itself (codegen output), the built-in roundtrip fails on the first pass, because `build/gem` still runs the old codegen. Build a compiler from the new sources first, then bootstrap:

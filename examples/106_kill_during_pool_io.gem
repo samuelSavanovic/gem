@@ -8,8 +8,7 @@ extern include "string.h"
 extern blocking fn usleep(usec: Int) -> Int
 extern blocking fn strdup(s: String) -> String
 
-let dir = "/tmp/gem_106_pool_io"
-exec("rm -rf {dir}")
+let dir = "/tmp/gem_106_pool_io_{epoch_ms()}_{random(1000000)}"
 mkdir(dir)
 write_file("{dir}/in.txt", "some input")
 

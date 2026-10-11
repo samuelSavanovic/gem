@@ -2,8 +2,8 @@
 # size 0, pipes report none) until end of file, in main and in a spawned
 # process. Regular files keep the sized fast path, binary-safe.
 
-let fifo = "/tmp/gem_147_fifo"
-exec("rm -f {fifo} && mkfifo {fifo}")
+let fifo = "/tmp/gem_147_fifo_{epoch_ms()}_{random(1000000)}"
+exec("mkfifo {fifo}")
 exec("printf 'hello\\nfrom a pipe' > {fifo} &")
 let s = read_file(fifo)
 print(len(s), s)
@@ -26,7 +26,7 @@ else
 end
 
 # Regular files: empty, exactly-sized, binary.
-let path = "/tmp/gem_147_file"
+let path = "/tmp/gem_147_file_{epoch_ms()}_{random(1000000)}"
 write_file(path, "")
 print(len(read_file(path)))
 write_file(path, "a\0b\0")

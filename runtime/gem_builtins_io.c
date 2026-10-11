@@ -2,7 +2,8 @@
  * gem_builtins_io.c — File I/O and filesystem builtins: read_file, write_file,
  *                      append_file, file_exists, dirname, path_join,
  *                      normalize_path, remove_file, mkdir, list_dir, is_dir, exec;
- *                      plus gem_exe_path (the running binary's real path).
+ *                      plus gem_exe_path (the running binary's real path) and
+ *                      gem_temp_dir/gem_rmdir (the compiler's work directory).
  */
 
 #include "gem.h"
@@ -268,6 +269,30 @@ char *gem_exe_path(void) {
     if (!ok) snprintf(resolved, sizeof(resolved), "%s", argv0 ? argv0 : "");
     done = 1;
     return resolved;
+}
+
+/* ─── gem_temp_dir, gem_rmdir: the compiler's work directory ───
+ *
+ * Not builtins: the compiler calls them through `extern fn`
+ * (compiler/main.gem) to keep each compile's C file, and the binary it
+ * runs, in a directory no other compile uses. gem_temp_dir makes a new
+ * directory with mkdtemp under $TMPDIR (else /tmp) and returns its path
+ * in a static buffer, or NULL when it can't. gem_rmdir removes an empty
+ * directory and returns 1, else 0. */
+
+char *gem_temp_dir(void) {
+    static char dir[PATH_MAX];
+    const char *tmp = getenv("TMPDIR");
+    if (!tmp || !*tmp) tmp = "/tmp";
+    size_t n = strlen(tmp);
+    while (n > 1 && tmp[n - 1] == '/') n--;
+    int len = snprintf(dir, sizeof(dir), "%.*s/gem-XXXXXX", (int)n, tmp);
+    if (len < 0 || (size_t)len >= sizeof(dir)) return NULL;
+    return mkdtemp(dir);
+}
+
+int64_t gem_rmdir(const char *path) {
+    return rmdir(path) == 0 ? 1 : 0;
 }
 
 /* ─── Built-in: remove_file ─── */
