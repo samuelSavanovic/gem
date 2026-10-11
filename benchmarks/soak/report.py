@@ -292,7 +292,7 @@ def target_report(name, d, args):
                            f"late window, limit {args.backlog}"))
 
     if name == "honeypot":
-        hp_checks, hp_lines = honeypot_report(d)
+        hp_checks, hp_lines = honeypot_report(d, bool(status.get("settled_s")))
         checks += hp_checks
     else:
         hp_lines = []
@@ -341,8 +341,10 @@ def target_report(name, d, args):
                    else "PASS")
 
 
-def honeypot_report(d):
-    """Checks and summary lines from the honeypot's weekly databases."""
+def honeypot_report(d, settle_ran):
+    """Checks and summary lines from the honeypot's weekly databases.
+    `settle_ran` is false when run.sh was stopped by a signal and skipped
+    the settle period: the last sample is then one taken under load."""
     files = sorted(glob.glob(os.path.join(d, "work", "data", "honeypot-*.db")))
     if not files:
         return [("database written", "FAIL", "no honeypot-*.db in work/data")], []
@@ -388,8 +390,10 @@ def honeypot_report(d):
     fd_note = (f"limit {fd_limit}: {first['fds']} at the start, +{HONEYPOT_FD_SLACK}" if baseline
                else "not judged: no sample before the load")
     peak = max(metrics, key=lambda m: m["sessions"] or 0)
-    checks.append(("settled after the load", "PASS" if settled else "FAIL",
-                   f"last sample: {last['sessions']} sessions, {last['resources_open']} resources "
+    verdict = "SKIPPED" if not settle_ran else "PASS" if settled else "FAIL"
+    skipped = "not judged: the run was stopped before the settle period; " if not settle_ran else ""
+    checks.append(("settled after the load", verdict,
+                   f"{skipped}last sample: {last['sessions']} sessions, {last['resources_open']} resources "
                    f"open (limit {HONEYPOT_IDLE_RESOURCES}), {last['fds']} fds ({fd_note}), "
                    f"{last['procs']} processes, arena {last['memory'] / 1048576:.1f} MB; at the peak "
                    f"{peak['sessions']} sessions, {peak['procs']} processes, {peak['fds']} fds, "
