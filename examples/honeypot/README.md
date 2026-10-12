@@ -132,6 +132,10 @@ Choices worth knowing:
 - **Nothing is ever run or fetched.** `wget`, `curl`, `tftp` and
   `ftpget` record the URL; `wget` and `curl` print fake progress, and
   running a downloaded file prints nothing.
+- **The device is an ARM BusyBox box.** `uname -m` says `armv7l`,
+  `/proc/cpuinfo` an ARMv7 core, and `cat` of `/proc/self/exe`,
+  `/bin/busybox`, `/bin/sh` or `/bin/echo` prints the ELF header and
+  program headers of a 32-bit ARM executable, not a whole binary.
 - **The shell does no I/O.** `shell.line` takes a line and returns the
   text to send and the events, so the tests drive it without sockets.
 - **Negotiation answers each request at most once.** The server offers `WILL
@@ -203,7 +207,8 @@ has gone (`benchmarks/README.md`, "soak").
   after that keeps the start of the input, not the bytes that caused it.
 - **Commands are split roughly.** `$VAR` and globs are kept as typed. A
   command substitution (`$(...)`, backquotes) runs, but all of a line's
-  run before its commands, whatever `&&` and `||` decide, and its output
-  isn't split into words. `(...)` and `{ ...; }` groups aren't parsed. In
+  outside `(...)` groups run before its commands, whatever `&&` and `||`
+  decide, and its output isn't split into words. A `(...)` group runs as
+  a subshell; `{ ...; }` groups aren't parsed. In
   a pipeline, filters like `grep` and `head` pass their input through
   unchanged.
