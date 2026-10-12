@@ -6,6 +6,9 @@
 ##   write(shell.greeting(sh))                  # "\nlocalhost login: "
 ##   let r = shell.line(sh, "root")             # {out: "Password: ", events: []}
 ##
+## Variables start from `device.env()`; `NAME=value`, `export` and
+## `unset` change them.
+##
 ## Output uses "\n" line ends. Events are tables with a `kind`: `login`
 ## (`user`, `password`, `ok`), `command` (`line`), `url` (`url`, `via`)
 ## and `echo` (`bytes`, what an `echo -e` decoded).
@@ -14,6 +17,9 @@ load "std/string"
 load "./device"
 
 let MAX_DEPTH = 4
+
+# The parameters named by one character other than a letter.
+let SPECIALS = "?$#@*!-0123456789"
 
 let ESCAPES = {n: "\n", t: "\t", r: "\r", a: chr(7), b: chr(8), f: chr(12), v: chr(11), e: chr(27)}
 ESCAPES["\\"] = "\\"
@@ -35,7 +41,7 @@ let APPLETS = {
   echo: applet_echo, cat: applet_cat, uname: applet_uname, ps: applet_ps,
   ls: applet_ls, false: applet_false, exit: applet_exit, logout: applet_exit, wget: applet_wget,
   curl: applet_curl, tftp: applet_tftp, ftpget: applet_ftpget, ping: applet_ping,
-  hostname: applet_hostname, id: applet_id
+  hostname: applet_hostname, id: applet_id, export: applet_export, unset: applet_unset
 }
 
 let PING_VALUE = {"-c": true, "-s": true, "-t": true, "-I": true, "-W": true, "-w": true}
@@ -47,7 +53,7 @@ let PING_VALUE = {"-c": true, "-s": true, "-t": true, "-I": true, "-W": true, "-
 fn new({accept_on = 3, accept_chance = 0.0, max_logins = 10, max_commands = 500} = {})
   {
     stage: "login", user: nil, attempts: 0, commands: 0, logged_in: false, closed: nil,
-    hostname: device.HOSTNAME,
+    hostname: device.HOSTNAME, vars: device.env(), status: 0,
     accept_on: accept_on, accept_chance: accept_chance, max_logins: max_logins,
     max_commands: max_commands
   }
@@ -133,20 +139,22 @@ end
 
 # ─── Parsing a command line ────────────────────────────────────
 
-# Splits a line into simple commands, each `{words, op, quiet, quiet_err}`:
-# `op` is the operator after it (";", "&&", "||", "|", or nil at the end;
-# "&" counts as ";"), `quiet` is true when its stdout is redirected and
-# `quiet_err` when its stderr is. Quotes and backslashes work as in sh. A
-# command substitution (`$(...)` or backquotes, also inside double
-# quotes) becomes `expand(inner)`, or stays as written when `expand` is
-# nil; its output isn't split into words. A command that starts with
-# `(` is a group: its `group` is the text up to the matching `)`, parsed
-# when it runs, and words after the `)` are ignored. `$VAR` and globs
-# stay as written.
-fn parse(text, expand = nil)
+# Splits a line into simple commands, each `{words, op, quiet, quiet_err,
+# src}`: `op` is the operator after it (";", "&&", "||", "|", or nil at
+# the end; "&" counts as ";"), `quiet` is true when its stdout is
+# redirected and `quiet_err` when its stderr is, and `src` is its text.
+# Quotes and backslashes work as in sh. A command substitution (`$(...)`
+# or backquotes, also inside double quotes) becomes `expand(inner)`, or
+# stays as written when `expand` is nil; its output isn't split into
+# words. A parameter (`$NAME`, `${NAME}`, `$?`, ...) becomes
+# `lookup(name)`, split into words at blanks outside double quotes, or
+# stays as written when `lookup` is nil. A command that starts with `(`
+# is a group: its `group` is the text up to the matching `)`, parsed when
+# it runs, and words after the `)` are ignored. Globs stay as written.
+fn parse(text, expand = nil, lookup = nil)
   let p = {
     cmds: [], cur: new_cmd(), word: buf_new(), in_word: false, target: nil,
-    expand: expand
+    expand: expand, lookup: lookup, text: text, start: 0
   }
   let n = len(text)
   let i = 0
@@ -171,6 +179,8 @@ fn parse(text, expand = nil)
     elif starts_substitution(text, i)
       p.in_word = true
       i = substitution(p, text, i)
+    elif c == "$" and p.lookup != nil
+      i = parameter_word(p, text, i, false)
     elif c == "&" and i + 1 < n and text[i + 1] == ">"
       end_word(p)
       p.cur.quiet = true
@@ -193,7 +203,8 @@ fn parse(text, expand = nil)
       i += 1
     end
   end
-  end_cmd(p, nil)
+  let stop = if i < n then i else n end
+  end_cmd(p, nil, stop, n)
   p.cmds
 end
 
@@ -215,13 +226,17 @@ fn end_word(p)
   p.in_word = false
 end
 
-fn end_cmd(p, op)
+# Ends the command whose text runs up to `stop`; the next one starts at
+# `next`.
+fn end_cmd(p, op, stop, next)
   end_word(p)
   if len(p.cur.words) > 0 or p.cur.group != nil
     p.cur.op = op
+    p.cur.src = substr(p.text, p.start, stop - p.start)
     push(p.cmds, p.cur)
   end
   p.cur = new_cmd()
+  p.start = next
 end
 
 # Reads a double-quoted string from `i` (past the opening quote); returns
@@ -239,6 +254,8 @@ fn double_quoted(p, text, i)
       i += 2
     elif starts_substitution(text, i)
       i = substitution(p, text, i)
+    elif c == "$" and p.lookup != nil
+      i = parameter_word(p, text, i, true)
     else
       buf_push(p.word, c)
       i += 1
@@ -279,6 +296,77 @@ fn substitution(p, text, i)
   next
 end
 
+# Reads the parameter at `i` into the word; returns the offset past it.
+# A `$` that names no parameter stays as written. Outside double quotes
+# (`quoted` false) the value is split into words at spaces, tabs and line
+# ends, so an empty value adds no word.
+fn parameter_word(p, text, i, quoted)
+  let ref = parameter_ref(text, i)
+  if ref == nil
+    p.in_word = true
+    buf_push(p.word, "$")
+    return i + 1
+  end
+  let value = p.lookup(ref.name)
+  if quoted
+    buf_push(p.word, value)
+    return ref.next
+  end
+  for c in value
+    if c == " " or c == "\t" or c == "\n"
+      end_word(p)
+    else
+      p.in_word = true
+      buf_push(p.word, c)
+    end
+  end
+  ref.next
+end
+
+# The parameter a `$` at `i` names, as `{name, next}` with `next` the
+# offset past it, or nil: `$NAME`, `${NAME}`, or one of SPECIALS with or
+# without braces.
+fn parameter_ref(text, i)
+  let n = len(text)
+  if i + 1 >= n
+    return nil
+  end
+  let c = text[i + 1]
+  if c == '{'
+    let close = find(text, '}', i + 2)
+    if close < 0
+      return nil
+    end
+    let name = substr(text, i + 2, close - i - 2)
+    let special = len(name) == 1 and find(SPECIALS, name, 0) >= 0
+    return if special or is_name(name) then {name: name, next: close + 1} end
+  end
+  if find(SPECIALS, c, 0) >= 0
+    return {name: c, next: i + 2}
+  end
+  let k = i + 1
+  while k < n and name_byte(ord(text, k), k == i + 1)
+    k += 1
+  end
+  if k == i + 1 then nil else {name: substr(text, i + 1, k - i - 1), next: k} end
+end
+
+fn is_name(s)
+  if len(s) == 0
+    return false
+  end
+  for k = 0, len(s)
+    if not name_byte(ord(s, k), k == 0) then return false end
+  end
+  true
+end
+
+# A letter, digit or `_`; not a digit when `first`.
+fn name_byte(b, first)
+  let letter = (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or b == 95
+  letter or (not first and b >= 48 and b <= 57)
+end
+
 # The offset of the `)` that closes a `(` just before `start`, or the end
 # of the line when none does. Parentheses in quotes or after a backslash
 # don't count.
@@ -317,14 +405,14 @@ fn operator(p, text, i)
   let c = text[i]
   let doubled = i + 1 < len(text) and text[i + 1] == c
   if c == ";"
-    end_cmd(p, ";")
+    end_cmd(p, ";", i, i + 1)
     return i + 1
   end
   if doubled
-    end_cmd(p, c + c)
+    end_cmd(p, c + c, i, i + 2)
     return i + 2
   end
-  end_cmd(p, if c == "&" then ";" else "|" end)
+  end_cmd(p, if c == "&" then ";" else "|" end, i, i + 1)
   i + 1
 end
 
@@ -366,11 +454,11 @@ end
 # does, on fake exit statuses. A pipeline prints its first command's
 # output when the rest are filters (`grep`, `head`, ...), else the last
 # non-filter's. The errors of every command it runs that keeps its stderr
-# go to `err`, by default the output itself. A line's command
-# substitutions outside groups all run first, when it is parsed, whatever
-# `&&` and `||` then skip; a group's run when the group does.
-# Substitutions and groups together nest up to MAX_DEPTH deep: deeper,
-# a substitution stays as written and a group prints nothing.
+# go to `err`, by default the output itself. A command's substitutions
+# and parameters expand just before it runs, so `$?` and variables see
+# the commands before it. Substitutions and groups together nest up to
+# MAX_DEPTH deep: deeper, a substitution stays as written and a group
+# prints nothing.
 fn run_line(sh, text, events, depth = 0, err = nil)
   let out = buf_new()
   run_list(sh, text, events, depth, out, if err == nil then out else err end)
@@ -383,7 +471,8 @@ fn run_list(sh, text, events, depth, out, err)
   let expand = if depth < MAX_DEPTH
     fn(inner) substitute(sh, inner, events, depth + 1, err) end
   end
-  let cmds = parse(text, expand)
+  let lookup = fn(name) parameter(sh, name) end
+  let cmds = parse(text)
   let status = 0
   let prev_op = ";"
   let i = 0
@@ -394,7 +483,8 @@ fn run_list(sh, text, events, depth, out, err)
     end
     let skip = (prev_op == "&&" and status != 0) or (prev_op == "||" and status == 0)
     if not skip
-      status = run_pipeline(sh, cmds, i, j, out, err, events, depth)
+      status = run_pipeline(sh, cmds, i, j, {out: out, err: err, events: events, depth: depth, expand: expand, lookup: lookup})
+      sh.status = status
     end
     prev_op = cmds[j].op
     i = j + 1
@@ -415,40 +505,99 @@ fn substitute(sh, inner, events, depth, err)
   substr(out, 0, n)
 end
 
-# A group runs in a subshell: an `exit` in it ends only the group.
+# A group runs in a subshell: an `exit` in it ends only the group, and
+# the variables and hostname it sets are gone after it.
 fn run_group(sh, inner, events, depth)
   if depth >= MAX_DEPTH
     return result("")
   end
   let closed = sh.closed
+  let vars = sh.vars
+  let hostname = sh.hostname
+  sh.vars = {}
+  for name, value in vars
+    sh.vars[name] = value
+  end
   let out = buf_new()
   let err = buf_new()
   let status = run_list(sh, inner, events, depth + 1, out, err)
   sh.closed = closed
+  sh.vars = vars
+  sh.hostname = hostname
   result(to_string(out), to_string(err), status)
 end
 
-fn run_pipeline(sh, cmds, first, last, out, err, events, depth)
+# `ctx` holds run_list's `out`, `err`, `events`, `depth`, and the
+# `expand` and `lookup` each command is parsed again with.
+fn run_pipeline(sh, cmds, first, last, ctx)
   let shown = ""
   let status = 0
   for k = first, last + 1
-    let cmd = cmds[k]
+    let parsed = parse(cmds[k].src, ctx.expand, ctx.lookup)
+    if len(parsed) == 0
+      status = 0
+      continue
+    end
+    let cmd = parsed[0]
     if k > first and cmd.group == nil and has_key(device.FILTERS, command_name(cmd.words[0]))
       status = 0
       continue
     end
     let r = if cmd.group != nil
-      run_group(sh, cmd.group, events, depth)
+      run_group(sh, cmd.group, ctx.events, ctx.depth)
     else
-      run(sh, cmd.words, events)
+      run_command(sh, cmd.words, ctx.events)
     end
-    if not cmd.quiet_err then buf_push(err, r.err) end
+    if not cmd.quiet_err then buf_push(ctx.err, r.err) end
     shown = if cmd.quiet then "" else r.out end
     status = r.status
     if sh.closed then break end
   end
-  buf_push(out, shown)
+  buf_push(ctx.out, shown)
   status
+end
+
+# The value of parameter `name`. The shell runs with no positional
+# parameters, so `$1`, `$@` and the like are empty, as are unset
+# variables.
+fn parameter(sh, name)
+  match name
+  when "?" then to_string(sh.status)
+  when "$" then device.SHELL_PID
+  when "#" then "0"
+  when "0" then "-sh"
+  else if has_key(sh.vars, name) then sh.vars[name] else "" end
+  end
+end
+
+# Runs a simple command. Leading `NAME=value` words set variables when
+# nothing follows them; before a command they are dropped.
+fn run_command(sh, words, events)
+  let k = 0
+  while k < len(words) and is_assignment(words[k])
+    k += 1
+  end
+  if k == len(words)
+    for w in words
+      assign(sh, w)
+    end
+    return result("")
+  end
+  let rest = []
+  for w = k, len(words)
+    push(rest, words[w])
+  end
+  run(sh, rest, events)
+end
+
+fn is_assignment(word)
+  let eq = find(word, "=", 0)
+  eq > 0 and is_name(substr(word, 0, eq))
+end
+
+fn assign(sh, word)
+  let eq = find(word, "=", 0)
+  sh.vars[substr(word, 0, eq)] = substr(word, eq + 1)
 end
 
 # The applet a command word names: `/bin/cat` is `cat`; any other path
@@ -666,6 +815,20 @@ end
 
 fn applet_false(sh, args, events)
   result("", "", 1)
+end
+
+fn applet_export(sh, args, events)
+  for arg in args
+    if is_assignment(arg) then assign(sh, arg) end
+  end
+  result("")
+end
+
+fn applet_unset(sh, args, events)
+  for arg in args
+    if has_key(sh.vars, arg) then delete(sh.vars, arg) end
+  end
+  result("")
 end
 
 fn applet_exit(sh, args, events)
