@@ -47,7 +47,10 @@ let APPLETS = {
 let PING_VALUE = {"-c": true, "-s": true, "-t": true, "-I": true, "-W": true, "-w": true}
 
 ## Makes the state for one connection. The `accept_on`th login attempt
-## succeeds, and each earlier one with probability `accept_chance`. The
+## succeeds, and so does each earlier one whose user and password are in
+## a fixed `accept_chance` share of all pairs, so before the `accept_on`th
+## attempt a pair gets the same answer in every session and from every
+## client. The
 ## session is over after `max_logins` failed attempts, or `max_commands`
 ## command lines.
 fn new({accept_on = 3, accept_chance = 0.0, max_logins = 10, max_commands = 500} = {})
@@ -108,7 +111,7 @@ end
 
 fn password_line(sh, text, events)
   sh.attempts = sh.attempts + 1
-  let lucky = sh.accept_chance > 0.0 and random() < sh.accept_chance
+  let lucky = credential_slot(sh.user, text) < sh.accept_chance
   let ok = sh.attempts >= sh.accept_on or lucky
   push(events, {kind: "login", user: sh.user, password: text, ok: ok})
   if not ok
@@ -122,6 +125,16 @@ fn password_line(sh, text, events)
   sh.stage = "shell"
   sh.logged_in = true
   "\n" + device.MOTD + device.PROMPT
+end
+
+# Where the pair `user`, `password` falls in [0, 1): FNV-1a over both.
+fn credential_slot(user, password)
+  let s = user + chr(0) + password
+  let h = 2166136261
+  for k = 0, len(s)
+    h = band(bxor(h, ord(s, k)) * 16777619, 4294967295)
+  end
+  to_float(h) / 4294967296.0
 end
 
 fn shell_line(sh, text, events)

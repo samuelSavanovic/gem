@@ -45,7 +45,7 @@ Socket ownership is in place, so the honeypot closes nothing on `DOWN`: each ses
 
 ## Fake device
 
-A cheap BusyBox IoT box: `login:`, `Password:`, then `# `. Login is accepted after N attempts or at random (configurable), and every username/password pair is recorded.
+A cheap BusyBox IoT box: `login:`, `Password:`, then `# `. Login is accepted on the Nth attempt (configurable) or for a fixed share of username/password pairs, and every username/password pair is recorded.
 
 Canned responses first for:
 
