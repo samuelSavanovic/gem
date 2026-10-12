@@ -9,8 +9,9 @@
 ##
 ## A handler gets a request table and returns a response table {status,
 ## headers, body}; the builders below make one. The request has just
-## these keys (no client address, no raw query string): `method` ("HEAD"
-## when a HEAD runs a GET route); `path`, raw (not percent-decoded),
+## these keys (no raw query string): `method` ("HEAD"
+## when a HEAD runs a GET route); `peer`, the client's address as
+## {ip, port} (the TCP peer: behind a proxy, the proxy's); `path`, raw (not percent-decoded),
 ## without the query; `query`, as by `url.parse_query` ({} when none; a
 ## repeated key keeps its last value); `params` (see `router`);
 ## `headers`, lowercase names, a repeated header's values joined with
@@ -68,6 +69,7 @@ let MAX_EMPTY_LINE_HEADS = 16
 let DRAIN_QUIET_MS = 100
 let REFUSE_DRAIN_MS = 50
 let STOP_TIMEOUT_MS = 5000
+let RAW_BYTES = 4096
 let TEXT_PLAIN = "text/plain; charset=utf-8"
 
 # The bytes from `lo` to `hi` (inclusive), minus those in `except`.
@@ -548,10 +550,15 @@ end
 # ─── Reading requests ───
 
 # A connection's reader: the bytes received but not yet consumed (`data`
-# from `pos` on), and the deadline for the request being read (nil while
-# waiting for its first byte).
-fn new_reader(fd, cfg)
-  {fd: fd, data: "", pos: 0, deadline: nil, idle_ms: cfg.idle_ms, request_ms: cfg.request_ms, write_ms: cfg.write_ms}
+# from `pos` on), when the request being read started and its deadline
+# (both nil while waiting for its first byte), and what `on_event` reports:
+# the bytes read and the requests answered in all, why the connection
+# ended (`ended`), the request
+# being served (`head`, its text, and `req`, nil until they are read),
+# the start of a head too malformed to keep (`raw`) and the error of the
+# request's handler.
+fn new_reader(fd, peer, cfg)
+  {fd: fd, peer: peer, data: "", pos: 0, started: nil, deadline: nil, idle_ms: cfg.idle_ms, request_ms: cfg.request_ms, write_ms: cfg.write_ms, bytes_in: 0, answered: 0, ended: nil, head: nil, req: nil, raw: nil, handler_error: nil}
 end
 
 fn pending(rd)
@@ -560,32 +567,49 @@ end
 
 # Starts the clock for the request being read.
 fn start_deadline(rd)
-  if rd.deadline == nil and rd.request_ms != nil
-    rd.deadline = time_ms() + rd.request_ms
+  if rd.started == nil
+    rd.started = time_ms()
+    if rd.request_ms != nil
+      rd.deadline = rd.started + rd.request_ms
+    end
   end
 end
 
 # The next bytes from the peer: each read waits at most `idle_ms` (nil:
 # no limit), and never past the request's deadline. nil when the peer
-# closed or the time ran out.
+# closed ("" from tcp_read, also for a reset) or the time ran out, with
+# the reason in `rd.ended`.
 fn read_more(rd)
   let wait = rd.idle_ms
   if rd.deadline != nil
     let left = rd.deadline - time_ms()
     if left <= 0
+      rd.ended = "timeout"
       return nil
     end
     if wait == nil or left < wait
       wait = left
     end
   end
-  # nil = timeout, "" = EOF; both end the connection.
   let chunk = tcp_read(rd.fd, READ_SIZE, wait)
-  if chunk == nil or chunk == ""
+  if chunk == nil
+    rd.ended = if rd.started == nil then "idle" else "timeout" end
+    return nil
+  elif chunk == ""
+    rd.ended = "closed"
     return nil
   end
+  rd.bytes_in = rd.bytes_in + len(chunk)
   start_deadline(rd)
   chunk
+end
+
+# The first RAW_BYTES of `s`.
+fn raw_prefix(s)
+  if len(s) <= RAW_BYTES
+    return s
+  end
+  substr(s, 0, RAW_BYTES)
 end
 
 # Appends the next bytes to the reader; false when there are none. (For
@@ -633,6 +657,7 @@ fn read_head(rd)
   end
   if found < 0
     if find(rd.data, "\n\n", rd.pos) >= 0
+      rd.raw = raw_prefix(substr(rd.data, rd.pos, len(rd.data) - rd.pos))
       return {bare_lf: true}
     end
     let acc = buf_new()
@@ -649,20 +674,20 @@ fn read_head(rd)
       let at = find(window, "\r\n\r\n", 0)
       if at >= 0
         found = have - len(tail) + at
-      elif find(window, "\n\n", 0) >= 0
-        return {bare_lf: true}
       end
       buf_push(acc, chunk)
       have += len(chunk)
-      tail = last_bytes(window, 3)
-      if found < 0 and have > MAX_HEADER_BYTES
-        return {too_large: true}
+      if found < 0 and (have > MAX_HEADER_BYTES or find(window, "\n\n", 0) >= 0)
+        rd.raw = raw_prefix(to_string(acc))
+        return if find(window, "\n\n", 0) >= 0 then {bare_lf: true} else {too_large: true} end
       end
+      tail = last_bytes(window, 3)
     end
     rd.data = to_string(acc)
     rd.pos = 0
   end
   if found - rd.pos > MAX_HEADER_BYTES
+    rd.raw = substr(rd.data, rd.pos, RAW_BYTES)
     return {too_large: true}
   end
   let head = substr(rd.data, rd.pos, found - rd.pos)
@@ -1233,19 +1258,64 @@ fn report_error(what, stack)
 end
 
 # Runs the handler. Returns its response, or a 500 after reporting the
-# error (or what is wrong with the response) on stderr.
-fn call_handler(handler, req)
+# error (or what is wrong with the response) on stderr and keeping it in
+# `rd.handler_error`.
+fn call_handler(handler, req, rd)
   let r = pcall handler(req)
   if not r.ok
     report_error("{req.method} {req.path}: {r.error}", r.stack)
+    rd.handler_error = r.error
     return server_error()
   end
   let problem = response_problem(r.value)
   if problem != nil
     report_error("{req.method} {req.path}: {problem}", [])
+    rd.handler_error = problem
     return server_error()
   end
   r.value
+end
+
+# ─── Events ───
+
+# Calls the server's `on_event` with `ev`; an error in it goes to stderr
+# and changes nothing else.
+fn notify(cfg, ev)
+  let r = pcall cfg.on_event(ev)
+  if not r.ok
+    eprint("http: on_event: {r.error}")
+  end
+end
+
+# Reports the response just sent for the request `rd` is serving (`raw`:
+# the start of what was read, for a request the server rejected).
+fn request_event(cfg, rd, status, bytes_out, raw = nil)
+  let req = rd.req
+  let ms = if rd.started == nil then 0 else time_ms() - rd.started end
+  let ev = {kind: "request", peer: rd.peer, status: status, ms: ms, bytes_out: bytes_out}
+  if req != nil
+    ev.method = req.method
+    ev.path = req.path
+    ev.headers = req.headers
+  end
+  if rd.handler_error != nil
+    ev.error = rd.handler_error
+  end
+  if raw != nil
+    ev.raw = raw
+  end
+  notify(cfg, ev)
+end
+
+# The start of the request `rd` was reading: the malformed bytes kept by
+# read_head, else the head's text, else what is unread.
+fn raw_of(rd)
+  if rd.raw != nil
+    return rd.raw
+  elif rd.head != nil
+    return raw_prefix(rd.head)
+  end
+  raw_prefix(substr(rd.data, rd.pos, pending(rd)))
 end
 
 # ─── Connections ───
@@ -1253,33 +1323,51 @@ end
 # Reads and discards what the peer still sends, until it pauses for
 # DRAIN_QUIET_MS or `total_ms` (default 1 s) have passed, so that closing with unread
 # request bytes doesn't reset the connection before the peer has read the
-# response.
+# response. Returns the number of bytes read.
 fn drain(fd, total_ms = 1000)
   let until = time_ms() + total_ms
+  let n = 0
   while time_ms() < until
     let chunk = tcp_read(fd, READ_SIZE, DRAIN_QUIET_MS)
     if chunk == nil or chunk == ""
-      return nil
+      return n
     end
+    n += len(chunk)
   end
-  nil
+  n
 end
 
 # Answers `status` with its default text, then drains; the connection is
 # to be closed (returns false).
-fn reject(rd, status, head_only = false)
+fn reject(rd, cfg, status, head_only = false)
   let resp = response(status, {"Content-Type": TEXT_PLAIN}, status_text(status))
-  tcp_write(rd.fd, serialize_response(resp, false, head_only), rd.write_ms)
-  drain(rd.fd)
+  let out = serialize_response(resp, false, head_only)
+  tcp_write(rd.fd, out, rd.write_ms)
+  rd.answered = rd.answered + 1
+  rd.ended = "rejected"
+  if cfg.on_event != nil
+    request_event(cfg, rd, status, len(out), raw_of(rd))
+  end
+  rd.bytes_in = rd.bytes_in + drain(rd.fd)
   false
 end
 
-# The process table is full: 503, then close. The acceptor runs this, so
+# `spawn` failed (the process table or memory is full): 503, then close. The acceptor runs this, so
 # the write doesn't wait: a fresh socket takes the short response at once.
 fn refuse(fd)
   let resp = response(503, {"Content-Type": TEXT_PLAIN}, status_text(503))
   tcp_write(fd, serialize_response(resp, false), 0)
   drain(fd, REFUSE_DRAIN_MS)
+  tcp_close(fd)
+end
+
+# Over a connection cap: 503 and close, from the acceptor, so nothing
+# waits. The one read takes what the client has sent already, which makes
+# a reset (and the 503 lost) less likely.
+fn refuse_now(fd)
+  let resp = response(503, {"Content-Type": TEXT_PLAIN}, status_text(503))
+  tcp_write(fd, serialize_response(resp, false), 0)
+  tcp_read(fd, READ_SIZE, 0)
   tcp_close(fd)
 end
 
@@ -1315,6 +1403,7 @@ fn read_body(rd, cfg, head, req)
   let expect = headers["expect"]
   if expect != nil and string.lower(expect) == "100-continue" and not head.http10
     if not send_all(rd, "HTTP/1.1 100 Continue\r\n\r\n")
+      rd.ended = "write_failed"
       return false
     end
   end
@@ -1422,7 +1511,12 @@ end
 
 # Serves one request. Returns true to keep the connection open.
 fn process_one_request(rd, cfg)
+  rd.started = nil
   rd.deadline = nil
+  rd.head = nil
+  rd.req = nil
+  rd.raw = nil
+  rd.handler_error = nil
   if pending(rd) > 0
     start_deadline(rd)
   end
@@ -1431,13 +1525,14 @@ fn process_one_request(rd, cfg)
     return false
   end
   if raw.too_large
-    return reject(rd, 431)
+    return reject(rd, cfg, 431)
   elif raw.only_empty or raw.bare_lf
-    return reject(rd, 400)
+    return reject(rd, cfg, 400)
   end
+  rd.head = raw.text
   let head = parse_head(raw.text)
   if type(head) == "int"
-    return reject(rd, head)
+    return reject(rd, cfg, head)
   end
   let head_only = head.method == "HEAD"
   let headers = head.headers
@@ -1449,13 +1544,15 @@ fn process_one_request(rd, cfg)
     headers: headers,
     body: "",
     cookies: parse_cookies(headers["cookie"]),
-    params: {}
+    params: {},
+    peer: {ip: rd.peer.ip, port: rd.peer.port}
   }
+  rd.req = req
   let bad = read_body(rd, cfg, head, req)
   if bad == false
     return false
   elif bad != nil
-    return reject(rd, bad, head_only)
+    return reject(rd, cfg, bad, head_only)
   end
 
   let tokens = token_list(headers["connection"])
@@ -1469,7 +1566,7 @@ fn process_one_request(rd, cfg)
   let resp = nil
   if matched != nil
     req.params = matched.params
-    resp = call_handler(matched.handler, req)
+    resp = call_handler(matched.handler, req, rd)
     if stop_requested(cfg.server)
       keep_alive = false
     end
@@ -1479,8 +1576,16 @@ fn process_one_request(rd, cfg)
   if response_closes(resp)
     keep_alive = false
   end
-  if not send_all(rd, serialize_response(resp, keep_alive, head_only))
+  let out = serialize_response(resp, keep_alive, head_only)
+  rd.answered = rd.answered + 1
+  if not send_all(rd, out)
     keep_alive = false
+    rd.ended = "write_failed"
+  elif not keep_alive
+    rd.ended = "done"
+  end
+  if cfg.on_event != nil
+    request_event(cfg, rd, resp.status, len(out))
   end
   keep_alive
 end
@@ -1489,8 +1594,9 @@ end
 # response: a slow client that keeps taking bytes gets all of it. Each
 # tcp_write waits up to write_ms; one that writes nothing ends the
 # response, so a client that stops taking bytes loses its connection
-# between write_ms and twice that after its last byte (logged), as does
-# one that has gone (not logged). Returns false when the response was cut.
+# between write_ms and twice that after its last byte (logged); one that
+# has gone ends it when a write fails (not logged). Returns false when the
+# response was cut.
 fn send_all(rd, out)
   let rest = out
   while true
@@ -1511,10 +1617,13 @@ end
 # Keep-alive loop: serve requests on `fd` until the peer closes, goes idle,
 # or a request or response asks to close. Claims the socket first, so it
 # closes however this process ends; a connection that ends here tells the
-# server, which then needs no monitor for it.
-fn handle_connection(fd, cfg)
+# server, which then needs no monitor for it. An error in std/http itself
+# (not in a handler) answers 500 and ends the connection; `on_event` gets
+# it with its stack and the start of the request.
+fn handle_connection(fd, peer, cfg)
   claim(fd)
-  let rd = new_reader(fd, cfg)
+  let opened = if cfg.on_event != nil then time_ms() else 0 end
+  let rd = new_reader(fd, peer, cfg)
   let open = true
   while open
     let r = pcall process_one_request(rd, cfg)
@@ -1522,39 +1631,38 @@ fn handle_connection(fd, cfg)
       open = r.value
     else
       eprint("http: internal error: {r.error}")
-      pcall reject(rd, 500)
+      if cfg.on_event != nil
+        notify(cfg, {kind: "crash", peer: peer, error: r.error, stack: r.stack, raw: raw_of(rd)})
+      end
+      pcall reject(rd, cfg, 500)
+      rd.ended = "error"
       open = false
     end
   end
   send(cfg.server, {tag: "_http_closing", pid: self()})
   tcp_close(fd)
+  if cfg.on_event != nil
+    notify(cfg, {kind: "close", peer: peer, reason: rd.ended, requests: rd.answered, bytes_in: rd.bytes_in, ms: time_ms() - opened})
+  end
 end
 
 # ─── Server ───
 
 # Accept loop: a process per connection, registered with the server
-# process. When the process table is full, that connection gets a 503;
+# process. When `spawn` fails, that connection gets a 503;
 # when accepting fails (out of file descriptors), the loop logs it once
-# and retries every ACCEPT_BACKOFF_MS until it succeeds again.
+# and retries every ACCEPT_BACKOFF_MS until it succeeds again. With a
+# connection cap, the loop monitors each connection and counts the live
+# ones (`counts`, see new_counts); it reads their DOWNs before each
+# decision, so the counts are current whenever they are used.
 fn accept_loop(listen_fd, cfg)
   let failing = false
+  let counts = if cfg.max_conns != nil or cfg.max_per_ip != nil then new_counts() else nil end
   while true
     let a = pcall tcp_accept(listen_fd)
     if a.ok
       failing = false
-      let fd = a.value
-      let r = pcall spawn(fn()
-        handle_connection(fd, cfg)
-      end)
-      if r.ok
-        # Registered here, not by the connection on its first run: the
-        # acceptor is killed before the server's shut-down sweep, so every
-        # connection it spawned is in the server's mailbox by then.
-        send(cfg.server, {tag: "_http_conn", pid: r.value, fd: fd})
-      else
-        eprint("http: {r.error}; refusing a connection")
-        pcall refuse(fd)
-      end
+      accept_one(a.value, cfg, counts)
     else
       if not failing
         eprint("http: {a.error}; retrying every {ACCEPT_BACKOFF_MS} ms")
@@ -1563,6 +1671,98 @@ fn accept_loop(listen_fd, cfg)
       sleep(ACCEPT_BACKOFF_MS)
     end
   end
+end
+
+# The live connections by pid (to their peer's IP), how many there are in
+# all and per IP.
+fn new_counts()
+  {live: {}, total: 0, per_ip: {}}
+end
+
+# Counts out the connections whose DOWN has arrived.
+fn reap(counts)
+  let more = true
+  while more
+    receive
+    when {tag: "DOWN", pid: pid}
+      let ip = delete(counts.live, pid)
+      if ip != nil
+        counts.total = counts.total - 1
+        let n = counts.per_ip[ip] - 1
+        if n == 0
+          delete(counts.per_ip, ip)
+        else
+          counts.per_ip[ip] = n
+        end
+      end
+    after 0
+      more = false
+    end
+  end
+end
+
+# The cap a new connection from `ip` would pass, or nil.
+fn over_cap(counts, cfg, ip)
+  if cfg.max_conns != nil and counts.total >= cfg.max_conns
+    return "max_connections"
+  end
+  if cfg.max_per_ip != nil
+    let n = counts.per_ip[ip]
+    if n != nil and n >= cfg.max_per_ip
+      return "max_per_ip"
+    end
+  end
+  nil
+end
+
+# Starts a connection process for `fd`, or refuses it. A client that has
+# reset before its address could be read is closed without one.
+fn accept_one(fd, cfg, counts)
+  let p = pcall tcp_peer(fd)
+  if not p.ok or p.value == nil
+    pcall tcp_close(fd)
+    return nil
+  end
+  let peer = p.value
+  if counts != nil
+    reap(counts)
+    let cap = over_cap(counts, cfg, peer.ip)
+    if cap != nil
+      pcall refuse_now(fd)
+      if cfg.on_event != nil
+        notify(cfg, {kind: "refused", peer: peer, reason: cap})
+      end
+      return nil
+    end
+  end
+  let r = if counts == nil
+    pcall spawn(fn()
+      handle_connection(fd, peer, cfg)
+    end)
+  else
+    pcall spawn_monitor(fn()
+      handle_connection(fd, peer, cfg)
+    end)
+  end
+  if not r.ok
+    eprint("http: {r.error}; refusing a connection")
+    pcall refuse(fd)
+    if cfg.on_event != nil
+      notify(cfg, {kind: "refused", peer: peer, reason: "spawn_failed", error: r.error})
+    end
+    return nil
+  end
+  let pid = if counts == nil then r.value else r.value.pid end
+  if counts != nil
+    counts.live[pid] = peer.ip
+    counts.total = counts.total + 1
+    let n = counts.per_ip[peer.ip]
+    counts.per_ip[peer.ip] = if n == nil then 1 else n + 1 end
+  end
+  # Registered here, not by the connection on its first run: the
+  # acceptor is killed before the server's shut-down sweep, so every
+  # connection it spawned is in the server's mailbox by then.
+  send(cfg.server, {tag: "_http_conn", pid: pid, fd: fd})
 end
 
 # A message to the server process, from a connection or the runtime:
@@ -1728,8 +1928,50 @@ end
 ## after the last byte it took, so one that stops reading can't hold its
 ## connection; a slow one that keeps reading gets the whole response). A timeout of nil means no limit; past a read
 ## one, the connection is closed without a response, past the write one,
-## it is closed with the response cut short and a line on stderr. Other
-## keys are ignored.
+## it is closed with the response cut short and a line on stderr.
+## `max_connections` and `max_per_ip` (ints >= 1, default nil: no limit)
+## cap the open connections, in all and per client IP; a connection over
+## a cap gets a 503 and is closed at once (a client that has sent more
+## than the server could read at once may see a reset instead). `on_event` (a fn, default nil) is
+## called with a table for each thing below. Other keys are ignored.
+##
+## `on_event` is how a server watches what never reaches a handler. Each
+## event has `kind` and `peer` ({ip, port}); what it holds of the request
+## (`method`, `path`, `headers`, `raw`) comes from the client, unchecked
+## and of any length up to the server's limits:
+##
+## - "request", after each response (also a 400, 404, 413, 431 or 500
+##   the server sent itself): `status`, `ms` (from the request's first
+##   byte), `bytes_out`; `method`, `path` and `headers` once the head was
+##   read; `error` when the handler raised or returned an invalid
+##   response; `raw`, the first 4 KB of the request head, when the server
+##   rejected the request (400, 413, 431, 501, 505, or the 500 after a
+##   "crash").
+## - "close", when a connection ends: `reason`, `requests` (responses
+##   sent), `bytes_in`, `ms` (how long it was open). The reasons:
+##   "closed" (by the client, a reset included), "idle" (no request
+##   within `idle_timeout_ms`), "timeout" (a request not read in time),
+##   "done" (a response closed it: `Connection: close`, HTTP/1.0),
+##   "rejected" (after the server rejected a request: 400, 413, 431, 501
+##   or 505),
+##   "write_failed" (the client took no bytes in time, or was gone) and
+##   "error" (below). A connection killed by `stop` reports nothing.
+## - "refused", for a connection closed when accepted: `reason` is
+##   "max_connections", "max_per_ip" or "spawn_failed" (no process for
+##   it: then also `error`).
+## - "crash", for an error raised in std/http's own code (a bug, a socket
+##   error other than a reset, or a router whose `match` raises; a
+##   handler's error is a "request" with `error`): `error`, `stack` and `raw` (the first
+##   4 KB of the request). The client gets a 500, and a "close" with
+##   reason "error" follows.
+##
+## `on_event` runs in the connection's process ("refused" in the
+## acceptor's, so no connection is accepted meanwhile); an error in it
+## goes to stderr. Keep it quick, usually a `send` to a process that
+## records the events:
+##
+##   let recorder = spawn do record_loop() end
+##   http.start(app, {port: 80, max_per_ip: 32, on_event: fn(ev) send(recorder, ev) end})
 ##
 ##   let server = http.start(app, {port: 8080, host: "127.0.0.1"})
 ##   ...
@@ -1765,7 +2007,7 @@ fn launch(caller, router_ref, watch, opts)
   if type(opts) != "table"
     error("{caller}: opts must be a table, got {type(opts)}")
   end
-  let {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS, write_timeout_ms = DEFAULT_WRITE_TIMEOUT_MS} = opts
+  let {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS, write_timeout_ms = DEFAULT_WRITE_TIMEOUT_MS, max_connections = nil, max_per_ip = nil, on_event = nil} = opts
   if type(port) != "int" or port < 0 or port > 65535
     error("{caller}: port must be an int from 0 to 65535, got {port}")
   end
@@ -1776,10 +2018,19 @@ fn launch(caller, router_ref, watch, opts)
   idle_timeout_ms = timeout_opt(caller, "idle_timeout_ms", idle_timeout_ms)
   request_timeout_ms = timeout_opt(caller, "request_timeout_ms", request_timeout_ms)
   write_timeout_ms = timeout_opt(caller, "write_timeout_ms", write_timeout_ms)
+  if max_connections != nil
+    check_int(caller, "max_connections", max_connections, 1)
+  end
+  if max_per_ip != nil
+    check_int(caller, "max_per_ip", max_per_ip, 1)
+  end
+  if on_event != nil and type(on_event) != "fn"
+    error("{caller}: on_event must be a fn or nil, got {type(on_event)}")
+  end
   if type(router_ref) != "table" or type(router_ref.match) != "fn"
     error("{caller}: expected a router from http.router(), got {type(router_ref)}")
   end
-  let cfg = {router: router_ref, max_body: max_body, idle_ms: idle_timeout_ms, request_ms: request_timeout_ms, write_ms: write_timeout_ms, server: nil}
+  let cfg = {router: router_ref, max_body: max_body, idle_ms: idle_timeout_ms, request_ms: request_timeout_ms, write_ms: write_timeout_ms, max_conns: max_connections, max_per_ip: max_per_ip, on_event: on_event, server: nil}
   let me = self()
   let ref = make_ref()
   let s = pcall spawn(fn()

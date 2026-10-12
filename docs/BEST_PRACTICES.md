@@ -1372,7 +1372,11 @@ thousands where memory mappings allow), but not an unbounded number. `spawn` rai
 Spawning 5,000 one-line tasks in a loop is fine. What needs care is
 spawning in proportion to outside load: an acceptor that spawns per
 connection should catch the error and close the connection (std/http
-answers 503 and keeps accepting), or one burst kills the acceptor. Fan-out
+answers 503 and keeps accepting), or one burst kills the acceptor. A
+server open to the internet should cap its connections well below that
+(`http.start`'s `max_connections` and `max_per_ip`), and can watch what
+its handlers never see (malformed requests, timeouts, refusals) through
+`on_event`. Fan-out
 over a list of unknown length (`task.async` per item) should cap how many
 are in flight.
 

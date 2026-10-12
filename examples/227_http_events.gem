@@ -1,0 +1,207 @@
+# std/http for a public server: the client's address in `req.peer`,
+# `on_event` reporting requests (also those no handler saw), connection
+# ends with their reason, refused connections and errors in std/http
+# itself, and the `max_connections` / `max_per_ip` caps.
+
+load "std/http"
+load "std/string"
+
+let app = http.router()
+app.get("/hello") do |req|
+  http.ok("hello")
+end
+app.get("/peer") do |req|
+  http.ok("{req.peer.ip} {type(req.peer.port)}")
+end
+app.get("/fail") do |req|
+  error("handler broke")
+end
+
+# Every event goes to `to` as {tag: "ev", ev}.
+fn forward(to)
+  fn(ev) send(to, {tag: "ev", ev: ev}) end
+end
+
+fn next_event()
+  receive
+  when {tag: "ev", ev: ev} then ev
+  after 3000 then nil
+  end
+end
+
+# One line per event, without what varies between runs (ms, ports).
+fn show(ev)
+  if ev == nil
+    return "no event"
+  end
+  let out = build_string do |add|
+    add(ev.kind, " ", ev.peer.ip)
+    if ev.kind == "request"
+      add(" ", ev.status, " ", ev.method, " ", ev.path, " out=", ev.bytes_out, " ms_ok=", type(ev.ms) == "int" and ev.ms >= 0)
+      if ev.headers != nil
+        add(" host=", ev.headers.host)
+      end
+      if ev.error != nil
+        add(" error=", ev.error)
+      end
+      if ev.raw != nil
+        add(" raw=", len(ev.raw), ":", str_replace(substr(ev.raw, 0, 20), "\r\n", "|"))
+      end
+    elif ev.kind == "close"
+      add(" ", ev.reason, " requests=", ev.requests, " in=", ev.bytes_in, " ms_ok=", type(ev.ms) == "int" and ev.ms >= 0)
+    elif ev.kind == "refused"
+      add(" ", ev.reason)
+    elif ev.kind == "crash"
+      add(" ", ev.error, " stack=", len(ev.stack) > 0, " raw=", str_replace(ev.raw, "\r\n", "|"))
+    end
+  end
+  out
+end
+
+# Prints the next `n` events.
+fn show_events(n)
+  for i = 0, n
+    print("  {show(next_event())}")
+  end
+end
+
+# Sends `text`, then reads until the server closes; the status line.
+fn exchange(port, text)
+  let c = tcp_connect("127.0.0.1", port)
+  if text != ""
+    tcp_write(c, text)
+  end
+  let acc = buf_new()
+  let chunk = tcp_read(c, 8192, 3000)
+  while chunk != nil and chunk != ""
+    buf_push(acc, chunk)
+    chunk = tcp_read(c, 8192, 3000)
+  end
+  tcp_close(c)
+  let s = to_string(acc)
+  let eol = find(s, "\r\n", 0)
+  if eol < 0 then s else substr(s, 0, eol) end
+end
+
+fn get(path)
+  "GET {path} HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"
+end
+
+fn run_events()
+  let srv = http.start(app, {port: 0, host: "127.0.0.1", idle_timeout_ms: 300, request_timeout_ms: 600, on_event: forward(self())})
+  let port = srv.port
+
+  print("== req.peer")
+  let c = tcp_connect("127.0.0.1", port)
+  tcp_write(c, get("/peer"))
+  let body = tcp_read(c, 4096, 2000)
+  tcp_close(c)
+  print(substr(body, find(body, "\r\n\r\n", 0) + 4, 100))
+  show_events(2)
+
+  print("== a response that closes")
+  print(exchange(port, get("/hello")))
+  show_events(2)
+
+  print("== keep-alive, then the client closes")
+  let k = tcp_connect("127.0.0.1", port)
+  tcp_write(k, "GET /hello HTTP/1.1\r\nHost: t\r\n\r\nGET /nope HTTP/1.1\r\nHost: t\r\n\r\n")
+  sleep(200)
+  tcp_close(k)
+  show_events(3)
+
+  print("== handler error")
+  print(exchange(port, get("/fail")))
+  show_events(2)
+
+  print("== malformed request line")
+  print(exchange(port, "BAD\r\nHost: t\r\n\r\n"))
+  show_events(2)
+
+  print("== head over 64 KB")
+  print(exchange(port, "GET / HTTP/1.1\r\nX-Big: {string.repeat("a", 70000)}\r\n\r\n"))
+  show_events(2)
+
+  print("== body over max_body")
+  print(exchange(port, "POST /hello HTTP/1.1\r\nHost: t\r\nContent-Length: 99999999999\r\n\r\n"))
+  show_events(2)
+
+  print("== idle connection")
+  print("[{exchange(port, "")}]")
+  show_events(1)
+
+  print("== request not finished in time")
+  print("[{exchange(port, "GET /hello HTTP/1.1\r\nHo")}]")
+  show_events(1)
+
+  http.stop(srv)
+end
+
+fn run_crash()
+  print("== an error in std/http itself (a router whose match raises)")
+  let broken = {match: fn(method, path) error("router broke") end}
+  let srv = http.start(broken, {port: 0, host: "127.0.0.1", on_event: forward(self())})
+  print(exchange(srv.port, get("/x")))
+  show_events(3)
+  http.stop(srv)
+end
+
+fn run_caps()
+  print("== max_per_ip: 2")
+  let srv = http.start(app, {port: 0, host: "127.0.0.1", max_per_ip: 2, on_event: forward(self())})
+  let a = tcp_connect("127.0.0.1", srv.port)
+  let b = tcp_connect("127.0.0.1", srv.port)
+  sleep(100)
+  print(exchange(srv.port, get("/hello")))
+  show_events(1)
+  tcp_close(a)
+  show_events(1)
+  print(exchange(srv.port, get("/hello")))
+  show_events(2)
+  tcp_close(b)
+  show_events(1)
+  http.stop(srv)
+
+  print("== max_connections: 1")
+  let srv2 = http.start(app, {port: 0, host: "127.0.0.1", max_connections: 1, on_event: forward(self())})
+  let held = tcp_connect("127.0.0.1", srv2.port)
+  sleep(100)
+  print(exchange(srv2.port, get("/hello")))
+  show_events(1)
+  tcp_close(held)
+  show_events(1)
+  print(exchange(srv2.port, get("/hello")))
+  show_events(2)
+  http.stop(srv2)
+
+  print("== caps without on_event")
+  let srv3 = http.start(app, {port: 0, host: "127.0.0.1", max_connections: 1})
+  let h = tcp_connect("127.0.0.1", srv3.port)
+  sleep(100)
+  print(exchange(srv3.port, get("/hello")))
+  tcp_close(h)
+  sleep(100)
+  print(exchange(srv3.port, get("/hello")))
+  http.stop(srv3)
+end
+
+fn run_options()
+  print("== options")
+  for opts in [{max_connections: 0}, {max_per_ip: "2"}, {on_event: "f"}]
+    let r = pcall http.start(app, {port: 0, host: "127.0.0.1", max_connections: opts.max_connections, max_per_ip: opts.max_per_ip, on_event: opts.on_event})
+    print(r.error)
+  end
+
+  print("== on_event that raises")
+  let srv = http.start(app, {port: 0, host: "127.0.0.1", on_event: fn(ev) error("observer broke") end})
+  print(exchange(srv.port, get("/hello")))
+  print(exchange(srv.port, get("/hello")))
+  http.stop(srv)
+end
+
+fn main()
+  run_events()
+  run_crash()
+  run_caps()
+  run_options()
+end
