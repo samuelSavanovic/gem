@@ -34,8 +34,11 @@ let CURL_VALUE = {"-o": true, "-A": true, "-H": true, "-d": true, "-X": true, "-
 let APPLETS = {
   echo: applet_echo, cat: applet_cat, uname: applet_uname, ps: applet_ps,
   ls: applet_ls, false: applet_false, exit: applet_exit, logout: applet_exit, wget: applet_wget,
-  curl: applet_curl, tftp: applet_tftp, ftpget: applet_ftpget
+  curl: applet_curl, tftp: applet_tftp, ftpget: applet_ftpget, ping: applet_ping,
+  hostname: applet_hostname, id: applet_id
 }
+
+let PING_VALUE = {"-c": true, "-s": true, "-t": true, "-I": true, "-W": true, "-w": true}
 
 ## Makes the state for one connection. The `accept_on`th login attempt
 ## succeeds, and each earlier one with probability `accept_chance`. The
@@ -44,6 +47,7 @@ let APPLETS = {
 fn new({accept_on = 3, accept_chance = 0.0, max_logins = 10, max_commands = 500} = {})
   {
     stage: "login", user: nil, attempts: 0, commands: 0, logged_in: false, closed: nil,
+    hostname: device.HOSTNAME,
     accept_on: accept_on, accept_chance: accept_chance, max_logins: max_logins,
     max_commands: max_commands
   }
@@ -135,8 +139,10 @@ end
 # `quiet_err` when its stderr is. Quotes and backslashes work as in sh. A
 # command substitution (`$(...)` or backquotes, also inside double
 # quotes) becomes `expand(inner)`, or stays as written when `expand` is
-# nil; its output isn't split into words. `$VAR` and globs stay as
-# written.
+# nil; its output isn't split into words. A command that starts with
+# `(` is a group: its `group` is the text up to the matching `)`, parsed
+# when it runs, and words after the `)` are ignored. `$VAR` and globs
+# stay as written.
 fn parse(text, expand = nil)
   let p = {
     cmds: [], cur: new_cmd(), word: buf_new(), in_word: false, target: nil,
@@ -177,6 +183,10 @@ fn parse(text, expand = nil)
       i = redirect(p, text, i)
     elif c == "#" and not p.in_word
       break
+    elif c == "(" and not p.in_word and len(p.cur.words) == 0 and p.cur.group == nil
+      let close = closing_paren(text, i + 1)
+      p.cur.group = substr(text, i + 1, close - i - 1)
+      i = close + 1
     else
       p.in_word = true
       buf_push(p.word, c)
@@ -207,7 +217,7 @@ end
 
 fn end_cmd(p, op)
   end_word(p)
-  if len(p.cur.words) > 0
+  if len(p.cur.words) > 0 or p.cur.group != nil
     p.cur.op = op
     push(p.cmds, p.cur)
   end
@@ -258,18 +268,8 @@ fn substitution(p, text, i)
     end
   else
     start = i + 2
-    let depth = 1
-    let k = start
-    while k < n
-      if text[k] == "(" then depth += 1 end
-      if text[k] == ")" then depth -= 1 end
-      if depth == 0
-        stop = k
-        next = k + 1
-        break
-      end
-      k += 1
-    end
+    stop = closing_paren(text, start)
+    next = if stop < n then stop + 1 else n end
   end
   if p.expand == nil
     buf_push(p.word, substr(text, i, next - i))
@@ -277,6 +277,40 @@ fn substitution(p, text, i)
     buf_push(p.word, p.expand(substr(text, start, stop - start)))
   end
   next
+end
+
+# The offset of the `)` that closes a `(` just before `start`, or the end
+# of the line when none does. Parentheses in quotes or after a backslash
+# don't count.
+fn closing_paren(text, start)
+  let n = len(text)
+  let depth = 1
+  let k = start
+  while k < n
+    let c = text[k]
+    if c == "\\"
+      k += 1
+    elif c == "'"
+      k = find(text, "'", k + 1)
+      if k < 0 then return n end
+    elif c == "\""
+      k += 1
+      while k < n and text[k] != "\""
+        if text[k] == "\\" then k += 1 end
+        k += 1
+      end
+      if k >= n then return n end
+    elif c == "("
+      depth += 1
+    elif c == ")"
+      depth -= 1
+      if depth == 0
+        return k
+      end
+    end
+    k += 1
+  end
+  n
 end
 
 fn operator(p, text, i)
@@ -333,13 +367,19 @@ end
 # output when the rest are filters (`grep`, `head`, ...), else the last
 # non-filter's. The errors of every command it runs that keeps its stderr
 # go to `err`, by default the output itself. A line's command
-# substitutions all run first, when it is parsed, whatever `&&` and `||`
-# then skip. They nest up to MAX_DEPTH deep; deeper ones stay as written.
+# substitutions outside groups all run first, when it is parsed, whatever
+# `&&` and `||` then skip; a group's run when the group does.
+# Substitutions and groups together nest up to MAX_DEPTH deep: deeper,
+# a substitution stays as written and a group prints nothing.
 fn run_line(sh, text, events, depth = 0, err = nil)
   let out = buf_new()
-  if err == nil
-    err = out
-  end
+  run_list(sh, text, events, depth, out, if err == nil then out else err end)
+  to_string(out)
+end
+
+# Runs `text` with its output into `out` and its errors into `err`;
+# returns the status of the last pipeline it ran.
+fn run_list(sh, text, events, depth, out, err)
   let expand = if depth < MAX_DEPTH
     fn(inner) substitute(sh, inner, events, depth + 1, err) end
   end
@@ -354,12 +394,12 @@ fn run_line(sh, text, events, depth = 0, err = nil)
     end
     let skip = (prev_op == "&&" and status != 0) or (prev_op == "||" and status == 0)
     if not skip
-      status = run_pipeline(sh, cmds, i, j, out, err, events)
+      status = run_pipeline(sh, cmds, i, j, out, err, events, depth)
     end
     prev_op = cmds[j].op
     i = j + 1
   end
-  to_string(out)
+  status
 end
 
 # The output of `inner` without its trailing line ends, as `$(...)` gives;
@@ -375,16 +415,33 @@ fn substitute(sh, inner, events, depth, err)
   substr(out, 0, n)
 end
 
-fn run_pipeline(sh, cmds, first, last, out, err, events)
+# A group runs in a subshell: an `exit` in it ends only the group.
+fn run_group(sh, inner, events, depth)
+  if depth >= MAX_DEPTH
+    return result("")
+  end
+  let closed = sh.closed
+  let out = buf_new()
+  let err = buf_new()
+  let status = run_list(sh, inner, events, depth + 1, out, err)
+  sh.closed = closed
+  result(to_string(out), to_string(err), status)
+end
+
+fn run_pipeline(sh, cmds, first, last, out, err, events, depth)
   let shown = ""
   let status = 0
   for k = first, last + 1
     let cmd = cmds[k]
-    if k > first and has_key(device.FILTERS, command_name(cmd.words[0]))
+    if k > first and cmd.group == nil and has_key(device.FILTERS, command_name(cmd.words[0]))
       status = 0
       continue
     end
-    let r = run(sh, cmd.words, events)
+    let r = if cmd.group != nil
+      run_group(sh, cmd.group, events, depth)
+    else
+      run(sh, cmd.words, events)
+    end
     if not cmd.quiet_err then buf_push(err, r.err) end
     shown = if cmd.quiet then "" else r.out end
     status = r.status
@@ -565,9 +622,33 @@ fn applet_uname(sh, args, events)
   end
   let parts = []
   for field in ["s", "n", "r", "v", "m", "o"]
-    if has_key(want, field) then push(parts, device.UNAME[field]) end
+    if has_key(want, field)
+      push(parts, if field == "n" then sh.hostname else device.UNAME[field] end)
+    end
   end
   result(string.join(parts, " ") + "\n")
+end
+
+fn applet_ping(sh, args, events)
+  let host = first_operand(args, PING_VALUE)
+  if host == nil
+    return result("", device.PING_USAGE, 1)
+  end
+  result("PING {host} ({host}): 56 data bytes\nping: sendto: Network is unreachable\n", "", 1)
+end
+
+# `hostname NAME` sets the name `hostname` and `uname -n` print.
+fn applet_hostname(sh, args, events)
+  let name = first_operand(args, {})
+  if name == nil
+    return result(sh.hostname + "\n")
+  end
+  sh.hostname = name
+  result("")
+end
+
+fn applet_id(sh, args, events)
+  result(device.ID)
 end
 
 fn applet_ps(sh, args, events)
@@ -642,14 +723,18 @@ fn applet_wget(sh, args, events)
   push(events, {kind: "url", url: url, via: "wget"})
   let host = url_host(url)
   let file = url_file(url)
-  for k = 0, len(args) - 1
-    if args[k] == "-O" then file = args[k + 1] end
+  for k = 0, len(args)
+    if args[k] == "-O" and k + 1 < len(args)
+      file = args[k + 1]
+    elif string.starts_with(args[k], "-O") and len(args[k]) > 2
+      file = substr(args[k], 2)
+    end
   end
   let progress = build_string do |add|
     add("Connecting to ", host, " (", host, ":80)\n")
-    add("saving to '", file, "'\n")
+    add(if file == "-" then "writing to stdout\n" else "saving to '{file}'\n" end)
     add(file, "            100% |*******************************| 51234   0:00:00 ETA\n")
-    add("'", file, "' saved\n")
+    add(if file == "-" then "written to stdout\n" else "'{file}' saved\n" end)
   end
   result("", progress)
 end

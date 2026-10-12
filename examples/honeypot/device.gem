@@ -59,6 +59,42 @@ nobody:x:65534:65534:nobody:/nonexistent:/bin/false
 
 """
 
+let HEX_DIGITS = "0123456789abcdef"
+
+# The bytes `hex` spells, two lowercase digits a byte; spaces and line
+# ends are skipped.
+fn unhex(hex)
+  let out = buf_new()
+  let i = 0
+  while i < len(hex)
+    if hex[i] == " " or hex[i] == "\n"
+      i += 1
+    else
+      buf_push(out, chr(find(HEX_DIGITS, hex[i], 0) * 16 + find(HEX_DIGITS, hex[i + 1], 0)))
+      i += 2
+    end
+  end
+  to_string(out)
+end
+
+# The start of the BusyBox binary that `/bin/busybox`, `/bin/sh`,
+# `/bin/echo` and `/proc/self/exe` hold: the ELF header and program
+# headers of a 32-bit little-endian ARM (EABI5) executable (EXIDX, two
+# LOADs, GNU_STACK). No byte is "\n", which the session turns into CR LF,
+# or "\r", which a telnet client can take for a line end.
+let BUSYBOX_ELF = unhex("""
+7f454c46 01010100 00000000 00000000 0200 2800 01000000 308f0000 34000000 f4c50c00 00020005
+3400 2000 0400 2800 1b00 1a00
+01000070 243a0c00 24ba0c00 24ba0c00 c8080000 c8080000 04000000 04000000
+01000000 00000000 00800000 00800000 ec420c00 ec420c00 05000000 00800000
+01000000 044f0c00 044f0e00 044f0e00 081d0000 445b0000 06000000 00800000
+51e57464 00000000 00000000 00000000 00000000 00000000 06000000 10000000
+""")
+
+for path in ["/bin/busybox", "/bin/sh", "/bin/echo", "/proc/self/exe"]
+  FILES[path] = BUSYBOX_ELF
+end
+
 let PS = """
   PID USER       VSZ STAT COMMAND
     1 root      1536 S    init
@@ -97,4 +133,28 @@ Usage: busybox [function [arguments]...]
 
 """
 
-export HOSTNAME, BANNER, MOTD, PROMPT, UNAME, FILES, PS, LS_ROOT, SILENT, FILTERS, BUSYBOX_USAGE
+let PING_USAGE = """
+BusyBox v1.24.1 (2017-01-04 16:39:08 CST) multi-call binary.
+
+Usage: ping [OPTIONS] HOST
+
+Send ICMP ECHO_REQUEST packets to network hosts
+
+	-4,-6		Force IP or IPv6 name resolution
+	-c CNT		Send only CNT pings
+	-s SIZE		Send SIZE data bytes in packets (default:56)
+	-t TTL		Set TTL
+	-I IFACE/IP	Use interface or IP address as source
+	-W SEC		Seconds to wait for the first response (default:10)
+			(after all -c CNT packets are sent)
+	-w SEC		Seconds until ping exits (default:infinite)
+			(can exit earlier with -c CNT)
+	-q		Quiet, only display output at start
+			and when finished
+
+"""
+
+let ID = "uid=0(root) gid=0(root)\n"
+
+export HOSTNAME, BANNER, MOTD, PROMPT, UNAME, FILES, BUSYBOX_ELF, PS, LS_ROOT, SILENT, FILTERS,
+  BUSYBOX_USAGE, PING_USAGE, ID
