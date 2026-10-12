@@ -205,10 +205,11 @@ has gone (`benchmarks/README.md`, "soak").
 
 - **Only the first 64 KB of a session's input are stored**, so a crash
   after that keeps the start of the input, not the bytes that caused it.
-- **Commands are split roughly.** `$VAR` and globs are kept as typed. A
-  command substitution (`$(...)`, backquotes) runs, but all of a line's
-  outside `(...)` groups run before its commands, whatever `&&` and `||`
-  decide, and its output isn't split into words. A `(...)` group runs as
-  a subshell; `{ ...; }` groups aren't parsed. In
-  a pipeline, filters like `grep` and `head` pass their input through
-  unchanged.
+- **Commands are split roughly.** Globs are kept as typed. Variables
+  (`$NAME`, `${NAME}`, `$?`, `$$`) expand as each command runs, but only
+  the plain forms: `${NAME:-word}` and the like stay as typed, and the
+  positional parameters are empty. A command substitution (`$(...)`,
+  backquotes) runs when its command does; its output isn't split into
+  words. A `(...)` group runs as a subshell; `{ ...; }` groups aren't
+  parsed. In a pipeline, filters like `grep` and `head` pass their input
+  through unchanged.

@@ -115,7 +115,7 @@ let LS_ROOT = "bin   dev   etc   home  lib   mnt   proc  root  sbin  sys   tmp  
 let SILENT = {
   enable: true, system: true, shell: true, sh: true, linuxshell: true, su: true,
   cd: true, chmod: true, rm: true, mkdir: true, cp: true, mv: true, touch: true,
-  kill: true, killall: true, sleep: true, export: true, ulimit: true
+  kill: true, killall: true, sleep: true, ulimit: true
 }
 SILENT["true"] = true
 SILENT[":"] = true
@@ -156,5 +156,16 @@ Send ICMP ECHO_REQUEST packets to network hosts
 
 let ID = "uid=0(root) gid=0(root)\n"
 
+## The pid `$$` gives: the `-sh` in PS.
+let SHELL_PID = "611"
+
+## A fresh table of the login shell's variables.
+fn env()
+  {
+    HOME: "/root", PATH: "/sbin:/usr/sbin:/bin:/usr/bin", SHELL: "/bin/sh",
+    USER: "root", LOGNAME: "root", TERM: "vt100", PWD: "/", PS1: "# ", IFS: " \t\n"
+  }
+end
+
 export HOSTNAME, BANNER, MOTD, PROMPT, UNAME, FILES, BUSYBOX_ELF, PS, LS_ROOT, SILENT, FILTERS,
-  BUSYBOX_USAGE, PING_USAGE, ID
+  BUSYBOX_USAGE, PING_USAGE, ID, SHELL_PID, env
