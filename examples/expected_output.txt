@@ -4622,3 +4622,75 @@ gen_server.stop: timeout must be an int (milliseconds) or nil, got string
 gen_server.stop: expected a {pid} handle, a pid or a registered name, got table
 still up: 0
 leftover messages: none
+== req.peer
+127.0.0.1 int
+  request 127.0.0.1 200 GET /peer out=112 ms_ok=true host=t
+  close 127.0.0.1 done requests=1 in=50 ms_ok=true
+== a response that closes
+HTTP/1.1 200 OK
+  request 127.0.0.1 200 GET /hello out=103 ms_ok=true host=t
+  close 127.0.0.1 done requests=1 in=51 ms_ok=true
+== keep-alive, then the client closes
+  request 127.0.0.1 200 GET /hello out=108 ms_ok=true host=t
+  request 127.0.0.1 404 GET /nope out=119 ms_ok=true host=t
+  close 127.0.0.1 closed requests=2 in=63 ms_ok=true
+== handler error
+http: GET /fail: handler broke
+Stack trace:
+  at anonymous fn (examples/227_http_events.gem:17)
+HTTP/1.1 500 Internal Server Error
+  request 127.0.0.1 500 GET /fail out=139 ms_ok=true host=t error=handler broke
+  close 127.0.0.1 done requests=1 in=50 ms_ok=true
+== malformed request line
+HTTP/1.1 400 Bad Request
+  request 127.0.0.1 400 nil nil out=119 ms_ok=true raw=12:BAD|Host: t
+  close 127.0.0.1 rejected requests=1 in=16 ms_ok=true
+== head over 64 KB
+HTTP/1.1 431 Request Header Fields Too Large
+  request 127.0.0.1 431 nil nil out=159 ms_ok=true raw=4096:GET / HTTP/1.1|X-Bi
+  close 127.0.0.1 rejected requests=1 in=70027 ms_ok=true
+== body over max_body
+HTTP/1.1 413 Content Too Large
+  request 127.0.0.1 413 POST /hello out=131 ms_ok=true host=t raw=58:POST /hello HTTP/1.1
+  close 127.0.0.1 rejected requests=1 in=62 ms_ok=true
+== idle connection
+[]
+  close 127.0.0.1 idle requests=0 in=0 ms_ok=true
+== request not finished in time
+[]
+  close 127.0.0.1 timeout requests=0 in=23 ms_ok=true
+== an error in std/http itself (a router whose match raises)
+http: internal error: router broke
+HTTP/1.1 500 Internal Server Error
+  crash 127.0.0.1 router broke stack=true raw=GET /x HTTP/1.1|Host: t|Connection: close
+  request 127.0.0.1 500 GET /x out=139 ms_ok=true host=t raw=43:GET /x HTTP/1.1|Hos
+  close 127.0.0.1 error requests=1 in=47 ms_ok=true
+== max_per_ip: 2
+HTTP/1.1 503 Service Unavailable
+  refused 127.0.0.1 max_per_ip
+  close 127.0.0.1 closed requests=0 in=0 ms_ok=true
+HTTP/1.1 200 OK
+  request 127.0.0.1 200 GET /hello out=103 ms_ok=true host=t
+  close 127.0.0.1 done requests=1 in=51 ms_ok=true
+  close 127.0.0.1 closed requests=0 in=0 ms_ok=true
+== max_connections: 1
+HTTP/1.1 503 Service Unavailable
+  refused 127.0.0.1 max_connections
+  close 127.0.0.1 closed requests=0 in=0 ms_ok=true
+HTTP/1.1 200 OK
+  request 127.0.0.1 200 GET /hello out=103 ms_ok=true host=t
+  close 127.0.0.1 done requests=1 in=51 ms_ok=true
+== caps without on_event
+HTTP/1.1 503 Service Unavailable
+HTTP/1.1 200 OK
+== options
+http.start: max_connections must be an int >= 1, got 0
+http.start: max_per_ip must be an int >= 1, got 2
+http.start: on_event must be a fn or nil, got string
+== on_event that raises
+http: on_event: observer broke
+http: on_event: observer broke
+HTTP/1.1 200 OK
+http: on_event: observer broke
+http: on_event: observer broke
+HTTP/1.1 200 OK
