@@ -28,8 +28,9 @@ mkdir -p /usr/local/share/httpd && cp -R examples/httpd/static /usr/local/share/
 ## 2. Soak on the VPS, before opening port 80
 
 The hostile hour (`benchmarks/soak/run.sh`, target `httpd`) with the
-deploy's caps, for 8 hours, with the load generator niced so the server
-gets the CPU it will have:
+deploy's caps, for 8 hours, while the honeypot keeps serving. The whole
+run is niced, the server it starts included (`run.sh` doesn't use the
+unit's `CPUQuota` and `Nice`), so it yields to the live honeypot:
 
 ```sh
 TARGETS=httpd DURATION=8h GUARD_RSS_MB=512 nice -n 10 benchmarks/soak/run.sh

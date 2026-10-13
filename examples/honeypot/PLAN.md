@@ -5,7 +5,7 @@ A telnet honeypot written in Gem, run for weeks on a cheap VPS with a public IPv
 1. Capture what botnets try (credentials, commands, malware URLs).
 2. **A real-world stress test of Gem.** Bots send garbage, wrong protocols, slow drips and connection floods. The goal is to find runtime and std bugs, memory or fd leaks, and perf cliffs under hostile, long-lived load. Crashes are signal, not noise.
 
-Telnet only; SSH is out of scope. An HTTP honeypot on :80 via std/http is an optional later phase.
+Telnet only; SSH is out of scope. Port 80 on the same host is `examples/httpd`, a std/http site run as its own service, not part of the honeypot.
 
 ## Non-negotiables
 
@@ -33,7 +33,7 @@ Socket ownership is in place, so the honeypot closes nothing on `DOWN`: each ses
 - **recorder**: the only process that touches sqlite. Batches inserts in a transaction (every 200 events or 1 s). Stores every session's raw input (the first 64 KB) as it arrives, so it survives a crash of the session and, but for the last second, of the whole program. Past a backlog of 10,000 messages it drops all but the events that open and end a session's row and the metrics, and logs how many it dropped.
 - **metrics sampler**: every minute records RSS (`/proc/self/status`, Linux only), open fds (`list_dir("/dev/fd")`), `runtime_stats()` (live processes, arena memory, open and ownerless resources, reset time, resets over 10 and 100 ms and refused spawns since the last sample), live sessions and their IPs, the recorder's backlog and dropped events, the uptime and the Gem commit. Crashes and cap hits are counted from their own tables.
 - **dashboard** (later, maybe never): `sqlite_query` and `sqlite_exec` run on the scheduler thread, so heavy aggregate queries in-process would stall every session. Either the recorder keeps rollup tables, or the dashboard is a separate OS process reading the WAL database. Until then the `sqlite3` CLI over SSH is the dashboard.
-- A top-level supervisor over acceptor, registry, recorder and sampler.
+- A top-level supervisor over the recorder, the sampler and a `one_for_all` front supervisor of the registry and the acceptor (README.md, "Design").
 
 ## Telnet
 
@@ -79,7 +79,7 @@ All configurable, all logged when hit: max concurrent sessions (global and per I
 
 ## Testing
 
-- `test.gem` in this directory (std/test) covers the pure parts: the IAC parser including sequences split across reads, the line splitter, the command responses.
+- `test.gem` in this directory (std/test) covers the pure parts (the IAC parser including sequences split across reads, the line splitter, the command responses) and drives the server over TCP: caps, crashes, a recorder that restarts, the metrics.
 - A replayer (not written yet) sends stored crash input back over TCP. Crashes that reproduce become numbered examples or `docs/KNOWN_BUGS.md` entries.
 - A hostile load generator under `benchmarks/soak/` runs the local fuzz hour (`TARGETS=honeypot benchmarks/soak/run.sh`): random bytes, IAC floods, a 10 MB line with no newline, 1-byte-per-second drips, 5,000 idle connections, connect and reset, half-close, clients that never read, Mirai-style scripts and a checked canary. RSS and fds must be flat once the connections close. It passes on macOS and on Linux (`benchmarks/README.md`, "Recorded runs"); after the load RSS keeps the peak's process table slots, about 22 KB per process at the peak (OPTIMIZATIONS.md, "Per-process footprint").
 - Success in production is defined before deploy: see Success criteria.
@@ -88,7 +88,7 @@ All configurable, all logged when hit: max concurrent sessions (global and per I
 
 `deploy/` has the systemd unit, the nftables ruleset, the flags and the health query, and `deploy/README.md` the steps.
 
-- A dedicated VPS running nothing else. Gem's runtime is C, so a memory-safety bug could mean remote code execution on the box.
+- A dedicated VPS running nothing but this and `examples/httpd`, each as its own sandboxed `DynamicUser` service. Gem's runtime is C, so a memory-safety bug could mean remote code execution on the box.
 - Port 23 redirected to 2323 with nftables; the program runs unprivileged.
 - `--max-sessions` sized to the VM's memory: an idle session holds about 76 KB of arena, but one that keeps sending holds up to about 1.1 MB, since its loop resets only once it has allocated 1 MB (OPTIMIZATIONS.md, "A loop keeps its high-water memory"), so the default 1,000 slow clients could take about 1 GB. The deploy's 4 GB VM keeps the default 1,000 with `MemoryMax=2G`; on a 1 GB VM, start near 300, with `MemoryMax` below the RAM.
 - Egress default-deny in nftables (DNS, package updates, NTP and SSH replies only) plus the provider firewall: the "no outbound connections" rule is enforced by the host, not only by the code.
@@ -128,5 +128,5 @@ Crashes don't fail the week: they are what the honeypot is for. Each one is tria
 3. IAC parser, line splitter, fake login and shell on :2323, with `test.gem` (done: see README.md).
 4. Crash-data path, recorder and schema (done: see README.md).
 5. Limits, metrics sampler, local fuzz hour (done: see README.md).
-6. Deploy on :23 (`deploy/`: the unit, the firewall and the health query are done; the soak on the VPS and the deploy are not), watch the first day's traffic, extend the fake commands.
-7. Optional: rollups or a dashboard; an HTTP honeypot on :80 under the same supervisor.
+6. Deploy on :23 (`deploy/`: the unit, the firewall and the health query; the soak on the VPS, `benchmarks/soak/results/2026-10-11_cx23_honeypot`, stopped at 6 h 36 m of 8 h for go-live with every steady-state check passing; live since 2026-10-11: done), watch the first day's traffic, extend the fake commands.
+7. Optional: rollups or a dashboard. (Port 80 is `examples/httpd`, a separate program and service on the same host.)

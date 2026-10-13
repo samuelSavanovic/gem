@@ -17,7 +17,7 @@ For example:
 ## Project Structure
 
 ```
-compiler/             # self-hosting compiler (lexer, parser, AST, errors, liveness, lower, fold, codegen, loader, main)
+compiler/             # self-hosting compiler (lexer, parser, AST, errors, liveness, lower, fold, codegen, loader, builtins, main)
                       #   codegen.gem emits C; its analyses live beside it: scope (shadowing lets, module namespaces),
                       #   captures (free vars, boxing, non-escaping closures), tco (self/mutual tail calls), callgraph,
                       #   loops (arm-let hoist, reset tagging), append (in-place string append), cgutil (shared helpers)
@@ -46,7 +46,7 @@ runtime/              # C runtime — split by category:
   sqlite3.c/sqlite3.h #   SQLite amalgamation (vendored)
 bootstrap/stage0.c    # checked-in C output — bootstrap artifact for clean builds
 build/gem             # compiled compiler binary (gitignored, built from stage0.c)
-examples/             # numbered tests (01–224) + run_all.sh; plus larger programs that test themselves (tests/check_example_apps.sh):
+examples/             # numbered tests (01, 02, ...) + run_all.sh; plus larger programs that test themselves (tests/check_example_apps.sh):
                       #   json_parser.gem, tcp_echo.gem, bookmark_app/ (HTMX + sqlite web app), stomp_broker/ (OTP-style STOMP broker),
                       #   logstat/ (CLI access-log analyzer, its own gem.toml project; the text-processing perf yardstick),
                       #   mini_redis/ (Redis-protocol server; the yardstick for long-lived state, connections and fan-out),
@@ -55,7 +55,11 @@ examples/             # numbered tests (01–224) + run_all.sh; plus larger prog
                       #   jobqueue/ (job queue on a dynamic_supervisor worker pool under seeded fault injection; the yardstick for failure under load),
                       #   honeypot/ (telnet honeypot: a fake BusyBox login and shell; meant for weeks of hostile traffic, plan in PLAN.md, server setup in deploy/)
                       #   httpd/ (public website on std/http that records every connection, request and rejection; the honeypot's HTTP twin, plan in PLAN.md, server setup in deploy/)
+                      #   modules/, support/: the modules and C headers the numbered tests load
+tests/                # check_*.sh (wired into make test), broken/ (programs that must not compile), notes/ (expected compiler notes), lsp/ (LSP smoke tests)
+test_json_suite/      # make test-json-suite: JSONTestSuite conformance runner
 docs/SPEC.md          # language spec (source of truth for all language decisions)
+docs/CHEATSHEET.md    # syntax, builtins and std modules on one page
 docs/BEST_PRACTICES.md    # how to write Gem: idioms, traps, std conventions (new code follows it)
 docs/OPTIMIZATIONS.md     # tracked future performance improvements
 docs/OPTIMIZATIONS_LOG.md # shipped optimizations + work logs + benchmark anchors
@@ -63,6 +67,7 @@ docs/ROADMAP.md           # future capabilities (features, not perf)
 docs/KNOWN_BUGS.md        # bugs found and not yet fixed, each with a repro
 docs/LSP_ROADMAP.md       # Gem LSP: current state, limits, plan
 docs/archive/             # measurements and design notes of earlier designs, kept for reference (not current state)
+docs/design/              # design notes for shipped mechanisms (process_owned_resources.md)
 editors/vscode/       # VS Code extension (TextMate grammar)
 editors/tree-sitter-gem/  # tree-sitter grammar for Helix (+ queries)
 benchmarks/           # wrk harness for examples/bookmark_app (run.sh) + node_baseline reference impl
@@ -86,7 +91,7 @@ make test              # run all numbered examples in examples/ against expected
 make test-json         # run examples/json_parser.gem
 make test-example-apps # run the larger example programs' own tests (part of make test)
 make test-json-suite   # run JSONTestSuite parser conformance (clones to /tmp on first run)
-make test-lsp          # smoke-test the `gem lsp` subcommand (canned initialize/didOpen/shutdown session)
+make test-lsp          # smoke-test the `gem lsp` subcommand (tests/lsp/*.sh: lifecycle, symbols, definition, completion, diagnostics, malformed input)
 make clean             # remove build/
 ```
 
