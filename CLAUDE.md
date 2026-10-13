@@ -54,7 +54,7 @@ examples/             # numbered tests (01–224) + run_all.sh; plus larger prog
                       #   gemgrep/ (recursive grep on libc's regcomp/regexec via extern fn + a header of static helpers; the yardstick for C interop),
                       #   jobqueue/ (job queue on a dynamic_supervisor worker pool under seeded fault injection; the yardstick for failure under load),
                       #   honeypot/ (telnet honeypot: a fake BusyBox login and shell; meant for weeks of hostile traffic, plan in PLAN.md, server setup in deploy/)
-                      #   httpd/ (public website on std/http that records every connection, request and rejection; the honeypot's HTTP twin, plan in PLAN.md)
+                      #   httpd/ (public website on std/http that records every connection, request and rejection; the honeypot's HTTP twin, plan in PLAN.md, server setup in deploy/)
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 docs/BEST_PRACTICES.md    # how to write Gem: idioms, traps, std conventions (new code follows it)
 docs/OPTIMIZATIONS.md     # tracked future performance improvements

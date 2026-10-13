@@ -20,7 +20,10 @@ build/gem test.gem                                  # the tests (part of make te
 ```
 
 (`build/gem` here is the repository's compiler, `../../build/gem` from
-this directory.)
+this directory.) From the repository's root,
+`TARGETS=httpd benchmarks/soak/run.sh` runs an hour of hostile load
+against it (`benchmarks/README.md`, "soak"), and `deploy/README.md` sets
+it up on a server: systemd, nftables, the health query.
 
 These limits have a flag that takes a positive int: `--max-connections`
 (default 1,000), `--max-per-ip` (32), `--max-body` (65,536 bytes),
@@ -116,6 +119,7 @@ httpd_sup (supervisor, one_for_one)
 | `sampler.gem` | the metrics: memory, fds, processes, resets |
 | `static/` | the stylesheet and the image |
 | `test.gem` | unit tests and end-to-end tests over TCP |
+| `deploy/` | the systemd unit, the nftables fragment and the health query for a server |
 
 Choices worth knowing:
 
