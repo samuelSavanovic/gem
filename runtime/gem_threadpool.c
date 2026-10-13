@@ -17,11 +17,17 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 
+/* The workers wait on blocking calls rather than compute, so their number
+   is how many blocking operations run at once. GEM_POOL_SIZE is the
+   default; the GEM_POOL_SIZE environment variable sets it at startup, up
+   to GEM_POOL_MAX. */
 #ifndef GEM_POOL_SIZE
 #define GEM_POOL_SIZE 4
 #endif
+#define GEM_POOL_MAX 256
 
-static pthread_t gem_io_workers[GEM_POOL_SIZE];
+static pthread_t gem_io_workers[GEM_POOL_MAX];
+static int gem_io_nworkers = 0;
 /* Ring of submitted requests, grown as needed: every process can have one
    request in flight, and there can be many thousands of processes. */
 static GemIORequest **gem_io_queue = NULL;
@@ -157,6 +163,25 @@ static void *gem_io_worker_fn(void *arg) {
     return NULL;
 }
 
+/* The pool size: the GEM_POOL_SIZE environment variable when it is set
+   (digits only, at least 1; a larger number than GEM_POOL_MAX means
+   GEM_POOL_MAX), else GEM_POOL_SIZE. */
+static int gem_pool_size(void) {
+    const char *env = getenv("GEM_POOL_SIZE");
+    if (!env) return GEM_POOL_SIZE;
+    long n = 0;
+    int ok = *env != '\0';
+    for (const char *c = env; *c && ok; c++) {
+        if (*c < '0' || *c > '9') ok = 0;
+        else if (n <= GEM_POOL_MAX) n = n * 10 + (*c - '0');
+    }
+    if (!ok || n < 1) {
+        fprintf(stderr, "gem: GEM_POOL_SIZE must be a number of worker threads (at least 1), got '%s'\n", env);
+        exit(1);
+    }
+    return n < GEM_POOL_MAX ? (int)n : GEM_POOL_MAX;
+}
+
 void gem_threadpool_init(void) {
     if (pipe(gem_io_wake_pipe_fds) != 0) {
         perror("gem: pipe failed for threadpool wake-pipe");
@@ -168,8 +193,19 @@ void gem_threadpool_init(void) {
     }
 
     gem_io_shutdown_flag = 0;
-    for (int i = 0; i < GEM_POOL_SIZE; i++)
-        pthread_create(&gem_io_workers[i], NULL, gem_io_worker_fn, NULL);
+    int want = gem_pool_size();
+    gem_io_nworkers = 0;
+    for (int i = 0; i < want; i++) {
+        if (pthread_create(&gem_io_workers[gem_io_nworkers], NULL, gem_io_worker_fn, NULL) != 0) break;
+        gem_io_nworkers++;
+    }
+    if (gem_io_nworkers == 0) {
+        fprintf(stderr, "gem: cannot start a thread for the I/O pool\n");
+        exit(1);
+    }
+    /* A limit on threads (ulimit -u, systemd's TasksMax) can stop it short. */
+    if (gem_io_nworkers < want)
+        fprintf(stderr, "gem: started %d of %d I/O pool threads (GEM_POOL_SIZE)\n", gem_io_nworkers, want);
 }
 
 void gem_threadpool_shutdown(void) {
@@ -178,8 +214,9 @@ void gem_threadpool_shutdown(void) {
     pthread_cond_broadcast(&gem_io_cond);
     pthread_mutex_unlock(&gem_io_mutex);
 
-    for (int i = 0; i < GEM_POOL_SIZE; i++)
+    for (int i = 0; i < gem_io_nworkers; i++)
         pthread_join(gem_io_workers[i], NULL);
+    gem_io_nworkers = 0;
 
     if (gem_io_wake_pipe_fds[0] >= 0) close(gem_io_wake_pipe_fds[0]);
     if (gem_io_wake_pipe_fds[1] >= 0) close(gem_io_wake_pipe_fds[1]);
