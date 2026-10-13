@@ -7,16 +7,18 @@
 #   DURATION=2m benchmarks/soak/run.sh              # a short check of the harness
 #   TARGETS=mini_redis DURATION=4h benchmarks/soak/run.sh
 #   TARGETS=honeypot benchmarks/soak/run.sh         # the hostile hour on the honeypot
+#   TARGETS=httpd benchmarks/soak/run.sh            # the hostile hour on examples/httpd
 #   python3 benchmarks/soak/report.py <run dir>     # the report again, any time
 #
 # Targets (run in the order TARGETS gives): mini_redis, stomp (examples/stomp_broker), bookmark
-# (examples/bookmark_app), honeypot (examples/honeypot). Each gets a fresh
+# (examples/bookmark_app), honeypot (examples/honeypot), httpd
+# (examples/httpd). Each gets a fresh
 # server, built once at the start, run with GEM_DIAG=1 (or the GEM_DIAG
 # given). benchmarks/README.md ("soak") says what each load does and what
 # the report checks.
 #
 # Env:
-#   TARGETS        targets to run (default "mini_redis stomp bookmark honeypot")
+#   TARGETS        targets to run (default "mini_redis stomp bookmark honeypot httpd")
 #   DURATION       per target: seconds, or with s/m/h (default 1h)
 #   SAMPLE_S       seconds between samples (default DURATION/120, 2..30)
 #   GUARD_RSS_MB   kill a server whose RSS passes this (default 4096)
@@ -25,17 +27,21 @@
 #   GEM_DIAG       the servers' GEM_DIAG (default 1; 2 adds a line per
 #                  reset of 1 ms or more to server.log). The build runs
 #                  without it.
-#   MINI_REDIS_PORT (default 6395), HONEYPOT_PORT (default 2333); stomp
+#   MINI_REDIS_PORT (default 6395), HONEYPOT_PORT (default 2333),
+#                  HTTPD_PORT (default 8090); stomp
 #                  uses 61613 and bookmark 8080, which those programs fix
-#   SETTLE_S       seconds the honeypot runs on after its load has gone
-#                  (default 30), so its metrics show what it gives back
-#   MINI_REDIS_ARGS, STOMP_ARGS, BOOKMARK_ARGS, HONEYPOT_ARGS
+#   SETTLE_S       seconds the honeypot and httpd run on after their load has gone
+#                  (default 30), so their metrics show what they give back
+#   MINI_REDIS_ARGS, STOMP_ARGS, BOOKMARK_ARGS, HONEYPOT_ARGS, HTTPD_ARGS
 #                  extra options for that target's load generator, e.g.
 #                  MINI_REDIS_ARGS="--rate 8000 --subs 50" (see --help)
 #   HONEYPOT_SERVER_ARGS
 #                  extra options for the honeypot itself, after the run's
 #                  own (a later flag wins), e.g. the deploy's
 #                  "--max-sessions 1000" (examples/honeypot/deploy/README.md)
+#   HTTPD_SERVER_ARGS
+#                  the same for httpd, which runs with the deploy's caps
+#                  (examples/httpd/deploy/README.md)
 #
 # Every sample is flushed and fsynced as it is taken, so stopping a run
 # (Ctrl-C, SIGTERM, a closed terminal, a crash) keeps everything sampled so
@@ -52,11 +58,12 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PYTHON=${PYTHON:-python3}
-TARGETS=${TARGETS:-"mini_redis stomp bookmark honeypot"}
+TARGETS=${TARGETS:-"mini_redis stomp bookmark honeypot httpd"}
 DURATION=${DURATION:-1h}
 GUARD_RSS_MB=${GUARD_RSS_MB:-4096}
 MINI_REDIS_PORT=${MINI_REDIS_PORT:-6395}
 HONEYPOT_PORT=${HONEYPOT_PORT:-2333}
+HTTPD_PORT=${HTTPD_PORT:-8090}
 SETTLE_S=${SETTLE_S:-30}
 OUT=${OUT:-"$SCRIPT_DIR/logs/$(date +%Y%m%d-%H%M%S)"}
 SERVER_DIAG=${GEM_DIAG:-1}
@@ -80,12 +87,12 @@ fi
 for t in $TARGETS; do
   case $t in
     mini_redis|stomp|bookmark) ;;
-    honeypot)
-      # Its load holds 5,000 idle connections open, on both ends.
+    honeypot|httpd)
+      # Their loads hold thousands of connections open, on both ends.
       if (( $(ulimit -Sn) < 16384 )); then
-        ulimit -Sn 16384 2> /dev/null || die "honeypot needs 16384 open files: raise the hard limit (ulimit -Hn)"
+        ulimit -Sn 16384 2> /dev/null || die "$t needs 16384 open files: raise the hard limit (ulimit -Hn)"
       fi ;;
-    *) die "unknown target '$t' (mini_redis, stomp, bookmark, honeypot)" ;;
+    *) die "unknown target '$t' (mini_redis, stomp, bookmark, honeypot, httpd)" ;;
   esac
 done
 command -v "$PYTHON" > /dev/null || die "$PYTHON not found"
@@ -97,6 +104,7 @@ port_of() {
     stomp) echo 61613 ;;
     bookmark) echo 8080 ;;
     honeypot) echo "$HONEYPOT_PORT" ;;
+    httpd) echo "$HTTPD_PORT" ;;
   esac
 }
 
@@ -134,6 +142,8 @@ OUT="$(cd "$OUT" && pwd)"
   [[ -n "${BOOKMARK_ARGS:-}" ]] && echo "BOOKMARK_ARGS: $BOOKMARK_ARGS"
   [[ -n "${HONEYPOT_ARGS:-}" ]] && echo "HONEYPOT_ARGS: $HONEYPOT_ARGS"
   [[ -n "${HONEYPOT_SERVER_ARGS:-}" ]] && echo "HONEYPOT_SERVER_ARGS: $HONEYPOT_SERVER_ARGS"
+  [[ -n "${HTTPD_ARGS:-}" ]] && echo "HTTPD_ARGS: $HTTPD_ARGS"
+  [[ -n "${HTTPD_SERVER_ARGS:-}" ]] && echo "HTTPD_SERVER_ARGS: $HTTPD_SERVER_ARGS"
 } > "$OUT/meta.txt"
 cat "$OUT/meta.txt"
 echo "run directory: $OUT"
@@ -146,6 +156,7 @@ for t in $TARGETS; do
     stomp) src=examples/stomp_broker/main.gem ;;
     bookmark) src=examples/bookmark_app/app.gem ;;
     honeypot) src=examples/honeypot/main.gem ;;
+    httpd) src=examples/httpd/main.gem ;;
   esac
   echo "building $t"
   "$ROOT/build/gem" "$ROOT/$src" -o "$OUT/bin/$t" > "$OUT/bin/$t.build.log" 2>&1 \
@@ -239,6 +250,21 @@ run_target() {
         --port "$port" --data data --metrics-ms 10000 --max-per-ip 100000 --max-sessions 20000 \
         --commit "$(git -C "$ROOT" rev-parse --short HEAD)" ${HONEYPOT_SERVER_ARGS:-}) > "$dir/server.log" 2>&1 &
       load=honeypot_load.py; extra=${HONEYPOT_ARGS:-} ;;
+    httpd)
+      # The deploy's caps (1,000 connections, 32 per IP): the load sends
+      # from many loopback addresses, all but its crowd and bursts under
+      # the caps. Where only 127.0.0.1 is loopback (macOS), the per-IP cap
+      # is out of the way instead. Metrics every 10 s in work/data.
+      mkdir -p "$dir/work/data"
+      cp -R "$ROOT/examples/httpd/static" "$dir/work/static"
+      local per_ip=""
+      "$PYTHON" -c 'import socket; socket.socket().bind(("127.0.0.2", 0))' 2> /dev/null \
+        || per_ip="--max-per-ip 100000"
+      # shellcheck disable=SC2086 # per_ip and HTTPD_SERVER_ARGS are lists of options
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG="$SERVER_DIAG" exec "$OUT/bin/httpd" \
+        --port "$port" --data data --static static --metrics-ms 10000 $per_ip \
+        --commit "$(git -C "$ROOT" rev-parse --short HEAD)" ${HTTPD_SERVER_ARGS:-}) > "$dir/server.log" 2>&1 &
+      load=httpd_load.py; extra=${HTTPD_ARGS:-} ;;
   esac
   server_pid=$!
   echo "server_pid=$server_pid" >> "$dir/status.txt"
@@ -291,7 +317,7 @@ run_target() {
   st=$?
   load_pid=""
   echo "load_exit=$st" >> "$dir/status.txt"
-  if [[ $t == honeypot && $STOPPING == 0 ]]; then
+  if [[ ($t == honeypot || $t == httpd) && $STOPPING == 0 ]]; then
     echo "  settling for ${SETTLE_S} s"
     sleep "$SETTLE_S"
     echo "settled_s=$SETTLE_S" >> "$dir/status.txt"

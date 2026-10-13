@@ -23,7 +23,7 @@ The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the
 
 `stomp/` loads `examples/stomp_broker` (a STOMP message broker) with topic fan-out, slow subscribers and work queues; there is no control implementation. See [below](#stomp).
 
-`soak/` is not a benchmark: it runs the long-lived servers (mini_redis, stomp_broker, bookmark_app, and the honeypot under hostile clients) under a steady mixed load for an hour each and checks that they stay up, answer correctly, and keep memory, file descriptors and latency flat; see [below](#soak).
+`soak/` is not a benchmark: it runs the long-lived servers (mini_redis, stomp_broker, bookmark_app, and the honeypot and httpd under hostile clients) under a steady mixed load for an hour each and checks that they stay up, answer correctly, and keep memory, file descriptors and latency flat; see [below](#soak).
 
 ## Baselines
 
@@ -197,9 +197,10 @@ The other harnesses run each server for seconds to a few minutes. `soak/run.sh` 
 
 ```bash
 DURATION=2m benchmarks/soak/run.sh               # a short run: does the harness work here?
-benchmarks/soak/run.sh                           # the four targets, an hour each
+benchmarks/soak/run.sh                           # the five targets, an hour each
 TARGETS=mini_redis DURATION=4h benchmarks/soak/run.sh
 TARGETS=honeypot benchmarks/soak/run.sh          # the honeypot's hostile hour
+TARGETS=httpd benchmarks/soak/run.sh             # examples/httpd's hostile hour
 MINI_REDIS_ARGS="--rate 8000 --subs 50" TARGETS=mini_redis benchmarks/soak/run.sh
 GEM_DIAG=2 TARGETS=mini_redis DURATION=5m benchmarks/soak/run.sh  # plus a server.log line per reset of 1 ms or more
 python3 benchmarks/soak/report.py benchmarks/soak/logs/<run>   # the report again
@@ -213,20 +214,23 @@ Each target gets a fresh server, built once at the start (a build error stops th
 | `stomp` | 200 SENDs/s to 4 topics with 30 subscribers that leave and rejoin (UNSUBSCRIBE + DISCONNECT, or an abrupt close); 200 jobs/s to a queue with 4 workers; 10 connections/s that SEND and DISCONNECT with a receipt | messages in order with no gaps; every job delivered at most once, and the backlog (sent − received) bounded |
 | `bookmark` | 4 readers at 200 GETs/s in all (`/`, `/bookmarks`, edit forms); one writer at 20 POST/PUT/DELETEs per second keeping the table near 100 rows; 10 one-request connections/s | after each change, the list the app answers with against the writer's model of the table; the pages readers get |
 | `honeypot` | hostile telnet clients, all at once: 5,000 idle connections (reopened when the server's 60 s idle timeout closes them), 50 clients typing a byte a second (until the 10-minute session cap), 20 connect-and-resets/s, 5 Mirai-style scripts/s, 5 random-byte sessions/s, 2 telnet command floods/s, a 10 MB line every 30 s, 2 half-closed clients/s, a client that never reads every 5 s; 2 canary bots/s that log in, run commands and exit | the canary's output and its whole session's time; that every client that waits for the login prompt gets it, and every half-closed client is closed; then the server's own database (below) |
+| `httpd` | hostile HTTP clients, all at once, from many loopback addresses: 600 idle connections from 60 addresses and 100 from one (over the 32 per IP, so the rest are refused and retry every second), 50 clients sending a request head a byte a second, a burst of 1,200 connections every 2 minutes (past the 1,000 cap), 20 scanner requests/s, 5 malformed heads/s, 5 random-byte connections/s, 20 connect-and-resets/s, a 1 MB header every 10 s, an oversized or misframed body every second, a pipeline of 200 GETs every second, 2 half-closed requests/s, a client that never reads 5,000 pipelined responses every 5 s; 2 canaries/s that GET `/`, `/stats` and a static file on one connection; the probe is a new connection's `GET /stats` | every answer of the canary, scanners, malformed heads, pipelines and half-closed clients (status, and body where it is ours); that a refusal comes only in a burst; then the server's own database (below) |
 
 The honeypot's clients all come from 127.0.0.1, so `run.sh` starts it with its per-IP and session caps out of the way (`HONEYPOT_SERVER_ARGS` adds flags after those, as the soak in `examples/honeypot/deploy/README.md` does with the deploy's session cap), and it needs 16,384 open files (`run.sh` raises the soft limit, or stops when the hard limit is lower). Once its load has gone, `run.sh` leaves it running for `SETTLE_S` seconds (default 30) before stopping it; its samples from then are left out of the steadiness checks, and its own metrics (every 10 s) show what it gave back. The report reads its database (`work/data/honeypot-*.db`) for four more checks: no session crashed, none ended as `lost`, its recorder dropped no events, and its last metrics row has no live session, at most 2 resources open (the listener and the database), and at most 2 more open fds than its first row, which the server records as it starts (the fds are not judged when a session had started by then).
 
-Apart from the honeypot's, there are no slow consumers and no unbounded tables: stomp_broker queues a slow subscriber's messages for up to 10 s and then drops it (`examples/stomp_broker/README.md`, "Known limits"), so memory would follow the consumers rather than the broker, and bookmark_app's list grows with the table ("POST phase is O(N²)" above), which would read as a leak. jobqueue isn't a target yet: a run has a fixed number of jobs and keeps a record of each to check its invariants, so its memory grows with the run by design; it needs a mode that runs for a duration and drops finished records first.
+httpd runs with the deploy's caps (1,000 connections, 32 per IP, 10 s timeouts). Its load sends from 127.0.0.2 and up, which Linux routes to loopback with no setup; where 127.0.0.2 isn't loopback (macOS), every client comes from 127.0.0.1 and `run.sh` lifts the per-IP cap instead. It too needs 16,384 open files, settles for `SETTLE_S`, and has its database (`work/data/httpd-*.db`) read for the honeypot's four checks: no crash in std/http, no connection ended as `lost`, no event dropped, and settled after the load (no open connection, at most 2 resources, at most 2 fds over the first row's). A canary or probe refused during a burst (by `max_connections`, which the burst passes on purpose) is counted, not an error.
+
+Apart from the honeypot's and httpd's, there are no slow consumers and no unbounded tables: stomp_broker queues a slow subscriber's messages for up to 10 s and then drops it (`examples/stomp_broker/README.md`, "Known limits"), so memory would follow the consumers rather than the broker, and bookmark_app's list grows with the table ("POST phase is O(N²)" above), which would read as a leak. jobqueue isn't a target yet: a run has a fixed number of jobs and keeps a record of each to check its invariants, so its memory grows with the run by design; it needs a mode that runs for a duration and drops finished records first.
 
 Alongside the load, `sample.py` samples the server's RSS (and on macOS its physical footprint), CPU time and open file descriptors (`DURATION`/120 seconds apart, 2 to 30). Results land in `soak/logs/<timestamp>/` (gitignored), one directory per target:
 
 | File | What it holds |
 |---|---|
-| `load.csv` | a row per interval: throughput, latency p50/p99/max of each kind of request, errors by kind, a probe (one timed request per interval: mini_redis's is a DBSIZE on a connection it keeps open, stomp's and bookmark's a new connection's first answer, the honeypot's a new connection's login prompt) |
+| `load.csv` | a row per interval: throughput, latency p50/p99/max of each kind of request, errors by kind, a probe (one timed request per interval: mini_redis's is a DBSIZE on a connection it keeps open, stomp's and bookmark's a new connection's first answer, the honeypot's a new connection's login prompt, httpd's a new connection's `GET /stats`) |
 | `server.csv` | a row per sample: RSS, physical footprint (macOS), CPU time and percent, open fds (on macOS `lsof`'s count, mapped files included: compare a run with itself) |
 | `errors.log` | the first 200 errors in full; the rest are counted |
 | `server.log` | the server's output, with its `GEM_DIAG` statistics at the end when it was shut down cleanly (mini_redis with `SHUTDOWN`; the others have no clean shutdown, so SIGTERM ends them without the statistics) |
-| `work/` | the server's working directory; the honeypot's database is in `work/data` |
+| `work/` | the server's working directory; the honeypot's and httpd's databases are in `work/data` |
 | `status.txt` | how the target ended: the load's exit, whether the server was alive, what the sampler saw |
 | `load.csv.done` | the load's totals and why it stopped |
 
@@ -237,16 +241,17 @@ Alongside the load, `sample.py` samples the server's RSS (and on macOS its physi
 | Check | Passes when |
 |---|---|
 | ran to the end | the load reached its deadline and the server was alive at the end |
-| no errors | no wrong answer, gap, duplicate or I/O error (`errors.log` lists them), and no failed probe; for the honeypot, `honeypot_load.py --help` says which of its clients' I/O errors count |
+| no errors | no wrong answer, gap, duplicate or I/O error (`errors.log` lists them), and no failed probe; for the honeypot and httpd, `honeypot_load.py --help` and `httpd_load.py --help` say which of their clients' I/O errors count |
 | memory steady | memory grew at most 10 MB, or 5% of the late memory if more, over the second half (least-squares slope). On macOS memory is the physical footprint, which leaves out the pages the server has handed back with `MADV_FREE_REUSABLE` (the runtime does so with the stacks it caches); RSS counts those until the kernel reclaims them, and rises and falls with that. Elsewhere it is RSS |
 | fds steady | the late median of open fds is at most 10 above the early one |
-| throughput steady | the late median rate of the target's main counter (mini_redis ops, stomp deliveries, bookmark reads, honeypot canaries) is at least 0.9× the early one. The load is paced: a server that falls behind gets fewer requests rather than queueing them, and mini_redis's and bookmark's latencies are timed from each request's send, so there it shows in throughput rather than in latency. The honeypot's load starts each client on schedule however the last one fared, so there a slow server shows in its session latency instead |
+| throughput steady | the late median rate of the target's main counter (mini_redis ops, stomp deliveries, bookmark reads, honeypot and httpd canaries) is at least 0.9× the early one. The load is paced: a server that falls behind gets fewer requests rather than queueing them, and mini_redis's and bookmark's latencies are timed from each request's send, so there it shows in throughput rather than in latency. The honeypot's load starts each client on schedule however the last one fared, so there a slow server shows in its session latency instead |
 | CPU steady | the server's late median CPU % is at most 1.5× the early one, or at most 10 points above it: the same paced work should cost the same |
 | `<latency>` steady | each latency's late median (of the interval p99s; of the probe's single timings) is at most 1.5× the early one, or at most 1 ms above it |
 | queue backlog bounded | (stomp) at most 1,000 jobs in the late window |
 | no session crashes, no lost sessions, recorder kept up, settled after the load | (honeypot) from its database, as above |
+| no crashes in std/http, no lost connections, recorder kept up, settled after the load | (httpd) from its database, as above |
 
-The steadiness checks (all but the first two and the honeypot's database checks; memory judges the second half's slope and the backlog the late window, the others compare early with late) only count in a run of at least 10 minutes; in a shorter one they are shown and the verdict is SHORT RUN, which says the harness works, not that the server is steady. In a run that long, a check with fewer than three samples in its early or late window fails (a sampler or probe that stopped partway). `report.py --help` lists the thresholds. `run.sh` exits 0 when no target failed and the run was not stopped (so also for SHORT RUN).
+The steadiness checks (all but the first two and the honeypot's and httpd's database checks; memory judges the second half's slope and the backlog the late window, the others compare early with late) only count in a run of at least 10 minutes; in a shorter one they are shown and the verdict is SHORT RUN, which says the harness works, not that the server is steady. In a run that long, a check with fewer than three samples in its early or late window fails (a sampler or probe that stopped partway). `report.py --help` lists the thresholds. `run.sh` exits 0 when no target failed and the run was not stopped (so also for SHORT RUN).
 
 ### Recorded runs
 

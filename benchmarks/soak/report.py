@@ -19,9 +19,10 @@ is SHORT RUN, which says the harness works,
 not that the server is steady. In a run that long, a check whose early or
 late window has fewer than three samples fails.
 
-The honeypot's report also reads the database it wrote (work/data): its
-crashes, sessions it lost, events its recorder dropped, and its metrics
-after the load has gone (run.sh lets it settle for SETTLE_S).
+The honeypot's and httpd's reports also read the database each wrote
+(work/data): its crashes, sessions or connections it lost, events its
+recorder dropped, and its metrics after the load has gone (run.sh lets
+it settle for SETTLE_S).
 """
 
 import argparse
@@ -39,10 +40,11 @@ LATENCIES = {
     "stomp": ["deliver_p99_ms", "job_p99_ms", "probe_ms"],
     "bookmark": ["read_p99_ms", "write_p99_ms", "probe_ms"],
     "honeypot": ["session_p99_ms", "probe_ms"],
+    "httpd": ["canary_p99_ms", "probe_ms"],
 }
 # The counter whose rate per interval stands for the target's throughput.
 THROUGHPUT = {"mini_redis": "ops", "stomp": "delivered", "bookmark": "reads",
-              "honeypot": "canaries"}
+              "honeypot": "canaries", "httpd": "canaries"}
 # Counters summed over the run, shown in the totals line.
 COUNTERS = {
     "mini_redis": ["ops", "conns", "published", "delivered", "sub_sessions"],
@@ -50,12 +52,15 @@ COUNTERS = {
     "bookmark": ["reads", "writes", "conns"],
     "honeypot": ["canaries", "bots", "garbage", "iac", "long_lines", "drips_done", "idle_opened",
                  "resets", "halfcloses", "nonreaders"],
+    "httpd": ["canaries", "scans", "malformed", "garbage", "bigheads", "bodies", "pipelines",
+              "nonreaders", "slowloris_done", "idle_opened", "crowd_opened", "refused_crowd",
+              "burst_conns", "burst_refused", "refused_during_burst", "resets", "halfcloses"],
 }
-TARGETS = ("mini_redis", "stomp", "bookmark", "honeypot")
-# The resources the honeypot holds with no session live: the listener and
-# the database.
+TARGETS = ("mini_redis", "stomp", "bookmark", "honeypot", "httpd")
+# The resources the honeypot (or httpd) holds with no session (or
+# connection) live: the listener and the database.
 HONEYPOT_IDLE_RESOURCES = 2
-# Open fds the settled honeypot may hold beyond its baseline.
+# Open fds the settled honeypot (or httpd) may hold beyond its baseline.
 HONEYPOT_FD_SLACK = 2
 SPARK = "▁▂▃▄▅▆▇█"
 # The checks that use the early and late windows (memory: the second
@@ -294,6 +299,9 @@ def target_report(name, d, args):
     if name == "honeypot":
         hp_checks, hp_lines = honeypot_report(d, bool(status.get("settled_s")))
         checks += hp_checks
+    elif name == "httpd":
+        hp_checks, hp_lines = httpd_report(d, bool(status.get("settled_s")))
+        checks += hp_checks
     else:
         hp_lines = []
 
@@ -408,6 +416,74 @@ def honeypot_report(d, settle_ran):
         + f"{sum(m['resets_over_10ms'] or 0 for m in metrics)}, over 100 ms "
         + f"{sum(m['resets_over_100ms'] or 0 for m in metrics)}; spawns refused "
         + f"{sum(m['spawn_refused'] or 0 for m in metrics)}.",
+        "",
+    ]
+    return checks, lines
+
+
+def httpd_report(d, settle_ran):
+    """Checks and summary lines from httpd's weekly databases, as
+    honeypot_report's. The recorder may drop requests in a burst of
+    refusals; it must never drop an open, close, crash or metrics event,
+    which it keeps while shedding, so a drop shows as a lost connection."""
+    files = sorted(glob.glob(os.path.join(d, "work", "data", "httpd-*.db")))
+    if not files:
+        return [("database written", "FAIL", "no httpd-*.db in work/data")], []
+    conns, statuses, caps, crashes, metrics = {}, {}, {}, {}, []
+    bad_input = 0
+    for f in files:
+        db = sqlite3.connect(f"file:{f}?mode=ro", uri=True)
+        db.row_factory = sqlite3.Row
+        for table, key, into in (("connections", "coalesce(end_reason, '(open)')", conns),
+                                 ("requests", "status", statuses), ("cap_events", "cap", caps),
+                                 ("crashes", "reason", crashes)):
+            for r in db.execute(f"SELECT {key} AS k, count(*) AS n FROM {table} GROUP BY 1"):
+                into[r["k"]] = into.get(r["k"], 0) + r["n"]
+        bad_input += db.execute("SELECT count(*) FROM bad_input").fetchone()[0]
+        metrics += [dict(r) for r in db.execute("SELECT * FROM metrics")]
+        db.close()
+    metrics.sort(key=lambda m: m["time_ms"])
+    checks = []
+    n_crash = sum(crashes.values())
+    top = sorted(crashes.items(), key=lambda kv: -kv[1])[:5]
+    checks.append(("no crashes in std/http", "PASS" if n_crash == 0 else "FAIL",
+                   f"{n_crash} crashes" + "".join(f"; {n}× {k[:120]!r}" for k, n in top)))
+    lost = conns.get("lost", 0)
+    checks.append(("no lost connections", "PASS" if lost == 0 else "FAIL",
+                   f"{lost} connections ended as lost (their close never reached the recorder)"))
+    if not metrics:
+        checks.append(("metrics recorded", "FAIL", "no rows in the metrics table"))
+        return checks, []
+    dropped = sum(m["events_dropped"] or 0 for m in metrics)
+    backlog = max(m["backlog"] or 0 for m in metrics)
+    checks.append(("recorder kept up", "PASS" if dropped == 0 else "FAIL",
+                   f"{dropped} events dropped, largest backlog {backlog} messages"))
+    last, first = metrics[-1], metrics[0]
+    baseline = first["connections"] == 0 and len(metrics) > 1
+    fd_limit = first["fds"] + HONEYPOT_FD_SLACK if baseline else None
+    settled = (last["connections"] == 0 and last["resources_open"] <= HONEYPOT_IDLE_RESOURCES
+               and (fd_limit is None or last["fds"] <= fd_limit))
+    fd_note = (f"limit {fd_limit}: {first['fds']} at the start, +{HONEYPOT_FD_SLACK}" if baseline
+               else "not judged: no sample before the load")
+    peak = max(metrics, key=lambda m: m["connections"] or 0)
+    verdict = "SKIPPED" if not settle_ran else "PASS" if settled else "FAIL"
+    skipped = "not judged: the run was stopped before the settle period; " if not settle_ran else ""
+    checks.append(("settled after the load", verdict,
+                   f"{skipped}last sample: {last['connections']} connections, {last['resources_open']} "
+                   f"resources open (limit {HONEYPOT_IDLE_RESOURCES}), {last['fds']} fds ({fd_note}), "
+                   f"{last['procs']} processes, arena {last['memory'] / 1048576:.1f} MB; at the peak "
+                   f"{peak['connections']} connections, {peak['procs']} processes, {peak['fds']} fds, "
+                   f"arena {peak['memory'] / 1048576:.0f} MB"))
+
+    def counts(t):
+        return ", ".join(f"{k} {v:,}" for k, v in sorted(t.items(), key=lambda kv: -kv[1])) or "none"
+
+    lines = [
+        f"httpd database: connections by end reason: {counts(conns)}; requests by status: "
+        f"{counts(statuses)}; caps hit: {counts(caps)}; {bad_input:,} bad_input rows; resets "
+        f"over 10 ms {sum(m['resets_over_10ms'] or 0 for m in metrics)}, over 100 ms "
+        f"{sum(m['resets_over_100ms'] or 0 for m in metrics)}; spawns refused "
+        f"{sum(m['spawn_refused'] or 0 for m in metrics)}.",
         "",
     ]
     return checks, lines
