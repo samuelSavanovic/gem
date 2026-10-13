@@ -124,8 +124,9 @@ executable mapping. It reads its static files from
 `/usr/local/share/httpd`, which `ProtectSystem=strict` leaves readable.
 
 `--max-connections 1000` and `MemoryMax=512M` go together. The soak's
-load peaks at about 66 MB of RSS (a 5-minute run on a Linux x86_64 VM,
-up to 1,000 connections during its bursts). The worst a client can do
+load peaks at 68 MB of RSS (its hour on a Linux x86_64 VM,
+`benchmarks/soak/results/2026-10-13_linux-vm_httpd`, with 999
+connections at the peak of its bursts). The worst a client can do
 is pipeline requests and never read the answers: 900 connections that
 each sent 5,000 pipelined GETs took the server to 195 MB (about 210 KB
 a connection), and 900 that stalled partway through a 64 KB body or

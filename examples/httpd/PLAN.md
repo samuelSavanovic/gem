@@ -2,6 +2,8 @@
 
 A small website served by `std/http` on port 80 of the honeypot's VPS (`examples/honeypot/PLAN.md`, "Hosting requirements"), run for weeks. Its purpose is the honeypot's second one, for the HTTP stack: **a real-world stress test of Gem.** Anything on a public port 80 gets exploit scanners, malformed requests, slowloris, header floods and clients that never read. The goal is to find bugs, leaks and perf cliffs in `std/http`, `std/url`, the tcp builtins and the scheduler under that load. It is not an HTTP honeypot: no fake vulnerable endpoints, and anything without a route gets a plain 404.
 
+Worth it: with the honeypot about 40 hours in, port 80 on the same host, opened with only a firewall counter behind it, drew about as many connection attempts as the honeypot's port 23.
+
 ## Non-negotiables
 
 - **Never act on request content** beyond routing it: no outbound connections, no file access outside the static dir, no shelling out.
@@ -57,14 +59,14 @@ All configurable, all logged when hit: max connections (global 1,000, per IP 32)
 ## Testing
 
 - `test.gem` here (std/test): the routes, `/stats`, the recorder's batching against a temp database, run by `tests/check_example_apps.sh`.
-- A hostile load target under `benchmarks/soak/` (`TARGETS=httpd`): scanner-style GETs replayed from a list, malformed request lines and headers, a 1 MB header, slowloris (one byte per second), bodies past `max_body`, pipelined floods, clients that never read, connect-and-reset, 2,000 idle connections from one IP and from many, and a checked canary request. RSS and fds must be flat once the connections close.
+- A hostile load target under `benchmarks/soak/` (`TARGETS=httpd`, `httpd_load.py`), run with the deploy's caps: scanner-style requests replayed from a list, malformed request lines and headers, a 1 MB header, slowloris (one byte per second), bodies past `max_body`, pipelined floods, clients that never read, connect-and-reset, 600 idle connections from 60 IPs, 100 from one (over the per-IP cap), a burst of 1,200 every 2 minutes (over the global cap), and a checked canary. The held connections stay under the global cap but for the bursts: 2,000 held for good would keep the canary refused. RSS and fds must be flat once the connections close.
 
 ## Deployment
 
 `deploy/`: systemd unit, firewall fragment, health query, README with the steps.
 
 - **Same VPS as the honeypot, own service.** Both are throwaway Gem programs on a box that holds nothing else of value; each runs as its own `DynamicUser` with its state dir mode `0750` and `UMask=0077` (as `examples/honeypot/deploy/honeypot.service`), so neither can read the other's state. The unit is the honeypot's sandbox plus `CPUQuota=100%` (one of the two vCPUs) and `Nice=5`, so a flood on :80 can't starve the honeypot.
-- **Firewall:** the host ruleset (`examples/honeypot/deploy/honeypot.nft`) gets `include "/etc/nftables.d/*.nft"`, and this directory's fragment adds port 80 → 8080 and the matching input rule. The egress counter already covers every `DynamicUser` UID, so it covers both services and must stay at 0. The provider's firewall (the Hetzner Cloud Firewall, set in Hetzner's console, not in this repository) gets TCP 80 in.
+- **Firewall:** the host ruleset (`examples/honeypot/deploy/honeypot.nft`) ends with `include "/etc/nftables.d/*.nft"`, and this directory's fragment adds port 80 → 8080, a counter of new connections, and the matching input rule. The egress counter already covers every `DynamicUser` UID, so it covers both services and must stay at 0. The provider's firewall (the Hetzner Cloud Firewall, set in Hetzner's console, not in this repository) gets TCP 80 in.
 - **Port 443 is out of scope:** `std/http` has no TLS, and `docs/ROADMAP.md` puts server TLS behind a reverse proxy, which would hide the bytes this is meant to test.
 
 ## Success criteria
@@ -77,5 +79,5 @@ All configurable, all logged when hit: max connections (global 1,000, per IP 32)
 
 1. `std/http`: `req.peer`, `max_connections` / `max_per_ip`, `on_event`, crash reporting (done), and the `"open"` event (done).
 2. This directory: routes, recorder, sampler, `test.gem`, README (done).
-3. The hostile load target and the local soak hour.
-4. Deploy: unit, firewall fragment, health query, the 8-hour soak on the VPS, then open :80.
+3. The hostile load target (done) and the local soak hour: Linux PASS (`benchmarks/soak/results/2026-10-13_linux-vm_httpd`), macOS to do.
+4. Deploy: unit, firewall fragment, health query (done); the 8-hour soak on the VPS, then open :80.

@@ -8,7 +8,7 @@ for Debian or Ubuntu on a dedicated 4 GB KVM VPS (a Hetzner CX23).
 |---|---|---|
 | `honeypot.service` | `/etc/systemd/system/honeypot.service` | runs the honeypot unprivileged (`DynamicUser`) in a sandbox, restarts it on any exit, caps its memory at 2 GB |
 | `honeypot.env` | `/etc/honeypot.env` | the build's commit and the honeypot's flags |
-| `honeypot.nft` | `/etc/nftables.conf` | port 23 redirected to 2323, SSH in, everything else in dropped; outbound denied but for DNS, NTP and package updates, and the honeypot's user denied even those, with a counter |
+| `honeypot.nft` | `/etc/nftables.conf` | port 23 redirected to 2323, SSH in, everything else in dropped; outbound denied but for DNS, NTP and package updates, and the honeypot's user denied even those, with a counter; then the fragments in `/etc/nftables.d/` (`examples/httpd/deploy/httpd.nft`'s port 80) |
 | `health.sql` | | the metrics by day, against the success criteria |
 
 ## 1. Build
