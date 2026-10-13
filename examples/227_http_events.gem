@@ -1,7 +1,7 @@
 # std/http for a public server: the client's address in `req.peer`,
-# `on_event` reporting requests (also those no handler saw), connection
-# ends with their reason, refused connections and errors in std/http
-# itself, and the `max_connections` / `max_per_ip` caps.
+# `on_event` reporting connection starts, requests (also those no handler
+# saw), connection ends with their reason, refused connections and errors
+# in std/http itself, and the `max_connections` / `max_per_ip` caps.
 
 load "std/http"
 load "std/string"
@@ -97,42 +97,42 @@ fn run_events()
   let body = tcp_read(c, 4096, 2000)
   tcp_close(c)
   print(substr(body, find(body, "\r\n\r\n", 0) + 4, 100))
-  show_events(2)
+  show_events(3)
 
   print("== a response that closes")
   print(exchange(port, get("/hello")))
-  show_events(2)
+  show_events(3)
 
   print("== keep-alive, then the client closes")
   let k = tcp_connect("127.0.0.1", port)
   tcp_write(k, "GET /hello HTTP/1.1\r\nHost: t\r\n\r\nGET /nope HTTP/1.1\r\nHost: t\r\n\r\n")
   sleep(200)
   tcp_close(k)
-  show_events(3)
+  show_events(4)
 
   print("== handler error")
   print(exchange(port, get("/fail")))
-  show_events(2)
+  show_events(3)
 
   print("== malformed request line")
   print(exchange(port, "BAD\r\nHost: t\r\n\r\n"))
-  show_events(2)
+  show_events(3)
 
   print("== head over 64 KB")
   print(exchange(port, "GET / HTTP/1.1\r\nX-Big: {string.repeat("a", 70000)}\r\n\r\n"))
-  show_events(2)
+  show_events(3)
 
   print("== body over max_body")
   print(exchange(port, "POST /hello HTTP/1.1\r\nHost: t\r\nContent-Length: 99999999999\r\n\r\n"))
-  show_events(2)
+  show_events(3)
 
   print("== idle connection")
   print("[{exchange(port, "")}]")
-  show_events(1)
+  show_events(2)
 
   print("== request not finished in time")
   print("[{exchange(port, "GET /hello HTTP/1.1\r\nHo")}]")
-  show_events(1)
+  show_events(2)
 
   http.stop(srv)
 end
@@ -142,7 +142,7 @@ fn run_crash()
   let broken = {match: fn(method, path) error("router broke") end}
   let srv = http.start(broken, {port: 0, host: "127.0.0.1", on_event: forward(self())})
   print(exchange(srv.port, get("/x")))
-  show_events(3)
+  show_events(4)
   http.stop(srv)
 end
 
@@ -153,11 +153,11 @@ fn run_caps()
   let b = tcp_connect("127.0.0.1", srv.port)
   sleep(100)
   print(exchange(srv.port, get("/hello")))
-  show_events(1)
+  show_events(3)
   tcp_close(a)
   show_events(1)
   print(exchange(srv.port, get("/hello")))
-  show_events(2)
+  show_events(3)
   tcp_close(b)
   show_events(1)
   http.stop(srv)
@@ -167,11 +167,11 @@ fn run_caps()
   let held = tcp_connect("127.0.0.1", srv2.port)
   sleep(100)
   print(exchange(srv2.port, get("/hello")))
-  show_events(1)
+  show_events(2)
   tcp_close(held)
   show_events(1)
   print(exchange(srv2.port, get("/hello")))
-  show_events(2)
+  show_events(3)
   http.stop(srv2)
 
   print("== caps without on_event")
