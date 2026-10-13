@@ -103,8 +103,8 @@ Std API that programs need and the std modules lack:
 - **Stopping what a supervised child spawned**: `supervisor.stop` stops direct children only; a task a
   worker is awaiting keeps running (tasks aren't linked to their owner). A linked `task.async` variant, or
   tasks dying with their owner, would make a supervised shutdown complete.
-- **More from the http request**: the client address, the raw query string and multi-value query/form
-  parsing. On the client side, cookie help in `std/request` (today: split `set-cookie` by hand).
+- **More from the http request**: the raw query string and multi-value query/form parsing (the
+  client address is `req.peer`). On the client side, cookie help in `std/request` (today: split `set-cookie` by hand).
 - **Naming a gen_server at start**: `gen_server.start(module, {name})` that registers before `init`, so a
   supervised restart can't leave a window where the name is unregistered.
 - **More `std/mime` types**: `text/javascript` for `ext`, `.wav`, `.ogg`, `.md`, `.yaml`, `.map`.
