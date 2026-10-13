@@ -325,8 +325,9 @@ with no step; count down with a `while`.
 `for k, v in tbl` visits keys in `keys(tbl)` order (insertion order for
 string keys, until a `delete` moves the last key into the hole); on an
 array, `k` is the index. The single-variable form `for x in t` is for
-arrays only: on a table with any other key it raises (`for: one loop
-variable needs an array or a string, ...`). Use `for k, v in t` or
+arrays (and strings, see [Strings are bytes](#strings-are-bytes)) only:
+on a table with any other key it raises (`for: one loop variable needs
+an array or a string, ...`). Use `for k, v in t` or
 `values(t)`.
 
 ### Don't add or remove entries of what you're iterating **(trap)**
@@ -568,7 +569,8 @@ Any variable named `string`, `table`, `json`, `time` (or like any module
 the file loads) hides the module, and `json.encode(x)` then fails only at
 runtime (`field access on non-table`, or `attempt to call nil value` if
 the variable holds a table). A module-level `let` of that name
-hides it for the whole file, functions defined above the `let` included.
+hides it in every function of the file, those above the `let` included,
+from the moment the `let` runs.
 Pick another name.
 
 Naming a function or variable like a builtin (`fn error`, `let len = 3`)
@@ -626,8 +628,9 @@ On an array all three take the same time (1M appends: 40–60 ms).
 
 `delete` is for string-keyed tables. On an array it moves the last element
 into the hole: `["a", "b", "c", "d"]` after `delete(arr, 0)` is
-`{3: "d", 1: "b", 2: "c"}`. After that, `arr[0]` is `nil` and `for x in arr`
-visits `nil, "b", "c"` and never reaches `"d"`.
+`{3: "d", 1: "b", 2: "c"}`. After that, `arr[0]` is `nil`, an index loop
+`for i = 0, len(arr)` sees `nil, "b", "c"` and never reaches `"d"`, and
+`for x in arr` raises (the keys are no longer `0 .. n-1`).
 
 ```gem
 remove_at(arr, i)              # arrays: shifts the rest left, returns the element
@@ -719,7 +722,8 @@ sort(people, fn(a, b) a.age - b.age end)
 exponent (`1e2`) parse as floats. Convert first (`to_int`, `floor`) when
 values may come from either. `<` and the other orderings do compare ints
 with floats numerically; only equality doesn't. A float always prints with a
-decimal point or an exponent (`2.0`, `1e+16`), an int never does.
+decimal point or an exponent (`2.0`, `1e+16`), or as `inf` or `nan`; an
+int never does.
 
 ### Integer arithmetic follows C
 
@@ -873,8 +877,9 @@ spawned after it, so set it first; that includes `log.set_level`, which
 must run before `http.start`. Name constants in `UPPER_SNAKE` (`READ_SIZE`,
 `STATUS_TEXT`) so it's obvious they never change.
 
-The copy is lazy: a child copies a module-level variable the first time it
-reads it, and pays nothing for the ones it never reads. Large module state
+The child's own copy is lazy: it copies a module-level variable into its
+memory the first time it reads it. The spawn itself still snapshots every
+variable changed since the previous spawn (next section). Large module state
 still costs time: a child reading a module-level array of 200,000 small
 records spent a few hundred milliseconds copying it. Keep large data in a
 process that answers queries, or pass a child only what it needs.
@@ -1516,9 +1521,9 @@ supervisor.start({
 
 `input()` returns the next line of stdin, of any length and NUL bytes
 included, without its `\n` or `\r\n`, and `nil` at the end. There is no
-way to read a *file* a line at a time: `read_file` and split it yourself
-(see `examples/logstat/lib/source.gem`), which holds the whole file in
-memory, twice while it is read.
+way to read a *file* a line at a time: `read_file` and walk it with `find`
+and `substr` (as `examples/logstat/lib/source.gem` does), which holds the
+whole file in memory (twice if you `string.split` it).
 
 ### Write large output in one piece
 
@@ -1690,8 +1695,9 @@ ones that bite.
   `puts`). Without any `extern include`, the compiler writes its own
   prototype from the extern types, which clashes with libc's.
 - Types are checked, not converted: a `Float` parameter rejects `2` (pass
-  `2.0` or `to_float(n)`). The argument count must match exactly: too few
-  or too many raise. `extern blocking fn` can't take or return a `Table`.
+  `2.0` or `to_float(n)`). The argument count must match exactly: a
+  wrong count is a compile error for a direct call and raises through a
+  value. `extern blocking fn` can't take or return a `Table`.
 - A `Ptr` is an int in Gem, and `NULL` comes back as `0`, not `nil`.
   `0` is truthy, so `if not p` never catches a `NULL` **(trap)**: compare
   with `p == 0`.
@@ -1843,14 +1849,14 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | Module-level state written from an `http` handler | per-connection copy, no `note:` | keep state in a process |
 | A variable named `json`, `string`, `table`... | module hidden; runtime error | another name |
 | Expression continued on the next line | parse error, or a silent separate statement | named `let`s |
-| `delete(arr, i)` | hole in the array; `for` misses the last element | `remove_at(arr, i)` |
+| `delete(arr, i)` | hole in the array; `for x in` raises, an index loop misses the last element | `remove_at(arr, i)` |
 | `delete`/`remove_at`/`push` on what a `for` iterates | skips or adds entries, visits `nil` | iterate a snapshot (`keys(tbl)`) |
 | `t.x = nil` to remove a key | key stays | `delete(t, "x")` |
 | `id in seen` on an int-keyed set | scans values | `has_key(seen, id)` |
 | Large set or index with tables as keys | quadratic | key by an id the tables carry |
 | `match` with no arm matching | yields `nil` silently | add an `else` |
 | `when NAME` meant to compare with a variable | always matches, binds a new `NAME` | `when ^NAME` |
-| `nil` passed for a defaulted parameter or option field | parameter (field) is `nil` | leave the argument (key) out |
+| `nil` passed for a defaulted parameter or option field | parameter (field) is `nil` (but a `= {}` option bag becomes `{}`) | leave the argument (key) out |
 | `pcall(f(x))` | `f(x)` runs outside the protection: not caught | `pcall f(x)`, `pcall do ... end` |
 | Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
 | `2.0 == 2` | `false` | convert first |
