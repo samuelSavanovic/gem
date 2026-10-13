@@ -861,7 +861,7 @@ Pending timers are kept in a min-heap ordered by deadline that grows as needed; 
 
 ```
 let info = process_info(pid)
-# info == {state: "ready", mailbox_len: 0, links: [], monitors: [],
+# info == {state: "ready", mailbox_len: 0, links: {}, monitors: {},
 #          trap_exit: false, exit_reason: nil, resources: 0, memory: 69632}
 # (memory: 81920 on macOS arm64, whose pages are 16 KB)
 ```
@@ -951,7 +951,7 @@ The first declaration generates the C call `write(fd, buf, buf_len)` — three C
 **Constructing a `Bytes` argument from Gem.** There is no separate `Bytes` type at the Gem level — a `Bytes` parameter accepts any Gem `String`. Strings are already binary-safe (`len(s)` is the byte length, embedded NULs are preserved), so any operation that produces a string produces a valid `Bytes` payload:
 
 ```
-let s1 = "header\0\x01\x02data"          # literal with embedded NUL
+let s1 = "header\0" + chr(1) + chr(2) + "data"   # embedded NUL and control bytes
 let s2 = read_file("/path/to/blob")      # raw file bytes
 let s3 = tcp_read(sock, 1024)            # raw socket bytes
 let s4 = build_string() do |add|         # assembled binary
@@ -1348,7 +1348,7 @@ end
 
 `argv()` — returns the command-line arguments as an integer-indexed array. `argv()[0]` is the program name.
 
-`sort(arr)` — sorts an array (a table whose keys are exactly `0 .. n-1`, in any order) in place using the default ordering (numbers < strings, within type: numeric/lexicographic). Returns the table. Any other table raises `sort: expected an array (keys 0 .. n-1), got a table with other keys`, and a second argument that is neither a fn nor `nil` raises `sort: comparator must be a fn, got <type>`.
+`sort(arr)` — sorts an array (a table whose keys are exactly `0 .. n-1`, in any order) in place using the default ordering: numbers ascending, strings by byte order, and mixed types in the order nil, bools, numbers, strings, fns, tables (bools, fns and tables tie among themselves, in no set order). Returns the table. Any other table raises `sort: expected an array (keys 0 .. n-1), got a table with other keys`, and a second argument that is neither a fn nor `nil` raises `sort: comparator must be a fn, got <type>`.
 
 `sort(arr, cmp)` — sorts with a custom comparator function. `cmp(a, b)` must return a negative number if a < b, 0 if equal, positive if a > b. The sort is stable (elements the comparator calls equal keep their order). A comparator may sort other arrays itself, and may run while other processes sort. The comparator sees the array as it was before the sort, and what it stores into the array's slots (`arr[i] = x`) is lost (changes inside an element table are kept): the sorted result is written back at the end. A comparator that returns anything but an int or a float (a bool, `nil`) raises `sort: the comparator must return a number (negative, zero or positive), got <type>`. If it raises, the error propagates and the array is left as it was; one that changes the length of the array being sorted raises `sort: the comparator changed the length of the table being sorted`.
 
@@ -1688,7 +1688,7 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 - A response is valid when `status` is an int from 200 to 999 (1xx interim responses are not supported), `body` is `nil` or a string, and `headers` is `nil` or a table of header name → value. A value is a string, number or bool, sent as `"{value}"`, or an array of them, sent as one header line per element (`set_cookie` uses this for several cookies); a `nil` value or another table makes the response invalid. A header name must be an HTTP token (letters, digits and ``!#$%&'*+-.^_`|~``: no spaces, `:` or control bytes, not empty), and a value containing CR or LF makes the response invalid (it could inject headers). The server writes `Content-Length` and `Connection` itself and drops a handler's own `Content-Length`, `Transfer-Encoding` and `Connection` headers (in any case); a handler's `Connection` header that lists `close` still closes the connection after the response.
 - `http.ok(body[, content_type])` — 200 response. Default content type: `"text/plain; charset=utf-8"`.
 - `http.html(body)` — 200 with `text/html; charset=utf-8`.
-- `http.json_response(data[, status])` — `application/json` response. Auto-encodes `data` via `json.encode`. Default status: 200.
+- `http.json_response(data[, status])` — `application/json; charset=utf-8` response. Auto-encodes `data` via `json.encode`. Default status: 200.
 - `http.redirect(url[, status])` — redirect response. Default status: 302.
 - `http.not_found([body])` — 404. Default body: `"Not Found"`.
 - `http.bad_request([body])` — 400. Default body: `"Bad Request"`.
