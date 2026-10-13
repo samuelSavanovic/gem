@@ -67,10 +67,12 @@ and a tree walker over tables), `examples/gemgrep/` (a recursive grep
 on libc's regex through `extern fn`: a C object behind a `Ptr`, file
 contents as `Bytes`), `examples/jobqueue/` (a job queue whose workers
 crash, hang and get killed under a `dynamic_supervisor`: retries,
-deadlines, restart intensity) and `examples/honeypot/` (a telnet
+deadlines, restart intensity), `examples/honeypot/` (a telnet
 honeypot: a byte-level protocol parser fed across reads, a process per
 connection that claims its socket, timeouts on every read and write, one
-process that owns a sqlite database and batches its writes)
+process that owns a sqlite database and batches its writes) and
+`examples/httpd/` (a public `std/http` site that records its traffic
+through `on_event`)
 follow this doc and test themselves with
 `std/test`; read them for how the pieces fit together.
 

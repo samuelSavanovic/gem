@@ -1,0 +1,113 @@
+## server — the supervision tree: the recorder, the HTTP server and the
+## sampler; and the observer that turns std/http's events into the
+## recorder's.
+##
+##   let sup = server.start({port: 8080, host: "127.0.0.1"})
+##   server.stop(sup)
+
+load "std/http"
+load "std/string"
+load "std/supervisor"
+load "std/table"
+load "./recorder"
+load "./sampler"
+load "./site"
+
+let RECORDER = "httpd_recorder"
+
+let MAX_PATH = 1024
+let MAX_AGENT = 256
+let MAX_METHOD = 64
+
+fn clip(s, n)
+  if s == nil or len(s) <= n then s else substr(s, 0, n) end
+end
+
+fn trace_text(stack)
+  string.join(table.map(stack, fn(f) "at {f.name} ({f.file}:{f.line})" end), "\n")
+end
+
+## The recorder's event for std/http's `ev`, or nil for a kind it doesn't
+## know: the fields it stores, clipped, with the connection's pid (the
+## caller's, as on_event runs in the connection's process) as `conn`.
+fn event_of(ev, conn)
+  let peer = ev.peer
+  match ev.kind
+  when "open"
+    {kind: "open", conn: conn, ip: peer.ip, port: peer.port}
+  when "request"
+    let agent = if ev.headers == nil then nil else ev.headers["user-agent"] end
+    {
+      kind: "request", conn: conn, ip: peer.ip, port: peer.port, status: ev.status, ms: ev.ms,
+      bytes_out: ev.bytes_out, method: clip(ev.method, MAX_METHOD), path: clip(ev.path, MAX_PATH),
+      agent: clip(agent, MAX_AGENT), error: ev.error, raw: ev.raw
+    }
+  when "close"
+    {
+      kind: "close", conn: conn, ip: peer.ip, port: peer.port, reason: ev.reason,
+      requests: ev.requests, bytes_in: ev.bytes_in, ms: ev.ms
+    }
+  when "refused"
+    {kind: "refused", ip: peer.ip, port: peer.port, reason: ev.reason, error: ev.error}
+  when "crash"
+    {kind: "crash", conn: conn, ip: peer.ip, port: peer.port, error: ev.error, trace: trace_text(ev.stack), raw: ev.raw}
+  else
+    nil
+  end
+end
+
+## The `on_event` fn that sends each event to `events` (a pid or a
+## registered name).
+fn observer(events)
+  fn(ev)
+    let out = event_of(ev, self())
+    if out != nil
+      recorder.emit(events, out)
+    end
+  end
+end
+
+## Starts the server and returns the supervisor's handle.
+## Options: `port` and `host`, where it listens; `static`, the directory
+## `/static/` serves; `max_connections`, `max_per_ip`, `max_body`,
+## `idle_ms`, `request_ms` and `write_ms`, std/http's caps and timeouts
+## (http.start); `data`, `keep_weeks`, `log` and `max_backlog`, the
+## recorder's `dir`, `keep_weeks`, `log` and `max_backlog` (see
+## recorder.start); `metrics_ms` and `commit`, how often the sampler
+## records the metrics, and the build they name; `events`, a pid to send
+## the events to instead of the recorder, which then isn't started.
+fn start({
+  port = 8080, host = "127.0.0.1", static = "static", max_connections = 1000, max_per_ip = 32,
+  max_body = 65536, idle_ms = 10000, request_ms = 10000, write_ms = 10000,
+  data = "httpd_data", keep_weeks = 8, log = false, max_backlog = 10000,
+  metrics_ms = 60000, commit = nil, events = nil
+} = {})
+  let to = if events == nil then RECORDER else events end
+  let http_opts = {
+    port: port, host: host, max_connections: max_connections, max_per_ip: max_per_ip,
+    max_body: max_body, idle_timeout_ms: idle_ms, request_timeout_ms: request_ms,
+    write_timeout_ms: write_ms, on_event: observer(to)
+  }
+  let since = epoch_ms()
+  let children = []
+  if events == nil
+    push(children, {id: "recorder", start: fn()
+      recorder.start(RECORDER, {
+        dir: data, keep_weeks: keep_weeks, log: log, since: since, max_backlog: max_backlog
+      })
+    end})
+  end
+  push(children, {id: "http", start: fn() http.start(site.router(to, static), http_opts) end})
+  push(children, {id: "sampler", start: fn()
+    sampler.start({events: to, every_ms: metrics_ms, commit: commit, since: since})
+  end})
+  supervisor.start({strategy: "one_for_one", name: "httpd_sup", children: children})
+end
+
+## Stops the server: the HTTP server closes its listener and its
+## connections, and the recorder stores what it holds.
+fn stop(sup)
+  supervisor.stop(sup)
+end
+
+export event_of, observer, start, stop

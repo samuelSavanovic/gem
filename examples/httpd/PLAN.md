@@ -18,7 +18,7 @@ Done: `http.start` has what an internet-facing server needs (SPEC, "Server"; `ex
 |---|---|
 | Client address | `req.peer`, `{ip, port}`, read once per connection right after the accept |
 | Connection caps | `max_connections` and `max_per_ip`: over a cap, a 503 and an immediate close, and a `"refused"` event |
-| Observing what never reaches a handler | `on_event`: `"request"` after every response (the server's own 400/404/413/431/500 included, with the first 4 KB of a rejected head as `raw`), `"close"` with the reason (closed, idle, timeout, done, rejected, write_failed, error), `"refused"` |
+| Observing what never reaches a handler | `on_event`: `"open"` when a connection's process starts (so slowloris sockets that never send a byte are counted), `"request"` after every response (the server's own 400/404/413/431/500 included, with the first 4 KB of a rejected head as `raw`), `"close"` with the reason (closed, idle, timeout, done, rejected, write_failed, error), `"refused"` |
 | Crash data | `"crash"` for an error in std/http's own code: its message, stack and the first 4 KB of the request; the client gets a 500 and the server keeps running |
 
 `on_event` runs in the connection process (`"refused"` in the acceptor), so this program's observer only sends each event to the recorder.
@@ -26,8 +26,8 @@ Done: `http.start` has what an internet-facing server needs (SPEC, "Server"; `ex
 ## Process layout
 
 - **http server**: `http.start` with the routes, the caps and `on_event`, under the top-level supervisor.
-- **recorder**: the only process that touches sqlite. Batches inserts (every 200 events or 1 s), sheds all but session-level and metrics events past a backlog of 10,000. One database file per week. Keeps in-memory counters for `/stats`.
-- **sampler**: every minute records RSS, open fds, `runtime_stats()`, open connections and their IPs, the recorder's backlog and dropped events, uptime and the Gem commit.
+- **recorder**: the only process that touches sqlite. Batches inserts (every 200 events or 1 s), sheds all but connection opens and closes, crashes and metrics past a backlog of 10,000. One database file per week. Keeps in-memory counters for `/stats`, and the open connections (from the `"open"` and `"close"` events), which it adds to each metrics row.
+- **sampler**: every minute records RSS, open fds, `runtime_stats()`, and (filled in by the recorder) open connections and their IPs, the recorder's backlog and dropped events, uptime and the Gem commit.
 - A top-level supervisor over the server, recorder and sampler.
 
 The honeypot's recorder and sampler are the model, copied, not shared, so the two programs change independently.
@@ -44,10 +44,10 @@ There's no domain and nothing links to the IP, so almost all traffic will be sca
 ## Storage (sqlite)
 
 - `connections`: id, ip, port, start/end time, end reason, requests, bytes in/out
-- `requests`: connection_id, time, method, path (first 1 KB), status, bytes in/out, ms, user agent (first 256 bytes)
+- `requests`: connection_id, time, method (first 64 bytes), path (first 1 KB), status, bytes out, ms, user agent (first 256 bytes), the handler's error (std/http reports no per-request bytes in; the connection's `bytes_in` covers them)
 - `bad_input`: connection_id, time, status, the first 4 KB read (BLOB)
 - `crashes`: connection_id, time, reason, trace, the bytes read (BLOB)
-- `cap_events`: ip, time, cap, detail
+- `cap_events`: ip, time, cap, detail (refused connections, and the recorder's backlog)
 - `metrics`: as the honeypot's, plus open connections
 
 ## Limits
@@ -75,7 +75,7 @@ All configurable, all logged when hit: max connections (global 1,000, per IP 32)
 
 ## Phases
 
-1. `std/http`: `req.peer`, `max_connections` / `max_per_ip`, `on_event`, crash reporting (done).
-2. This directory: routes, recorder, sampler, `test.gem`, README.
+1. `std/http`: `req.peer`, `max_connections` / `max_per_ip`, `on_event`, crash reporting (done), and the `"open"` event (done).
+2. This directory: routes, recorder, sampler, `test.gem`, README (done).
 3. The hostile load target and the local soak hour.
 4. Deploy: unit, firewall fragment, health query, the 8-hour soak on the VPS, then open :80.
