@@ -115,6 +115,18 @@ Std API that programs need and the std modules lack:
 
 `##` doc comments (BEST_PRACTICES.md, "Document the public API with `##`") document the public API of std and user modules, but nothing reads them yet. Needs: a `gem doc <file>` subcommand that prints (or writes HTML for) a module's header and its exported functions' docs, with a comment collection an LSP hover could reuse; and a doctest pass that runs each `call    # result` example line and compares the printed value, wired into `make test` for std, so docs can't drift from behavior (as Rust's doctests do). Trade-off: examples have to stay self-contained one-liners for the checker; a multi-line example would need an explicit marker.
 
+## Catching typos in option bags (P1)
+
+std configures most things with a table of string-named options (`supervisor.start({strategy: "one_for_all"})`, child specs, `http.start`), and a typo there is easy. A misspelled *value* is mostly caught already: `strategy: "one_for_al"`, `restart: "permanant"` and `log.set_level("warnign")` raise as the call runs. A misspelled *key* is not: a destructured option bag (`fn start({strategy = "one_for_one"} = {})`) ignores keys it doesn't name, so `{stratgy: "one_for_all"}` silently runs with the default, and `http.start` documents "other keys are ignored".
+
+What needs building, in order:
+
+1. **Unknown keys raise, for every destructured option bag.** The compiler already emits the prelude that unpacks the bag; it also checks that the table has no other keys and raises `<fn>: unknown option "stratgy" (did you mean "strategy"?)`. Every std function and every user fn in that style gets it with nothing new to learn. A bag that means to take more keys says so with a rest entry in the pattern (`{port = 8080, ...rest}`), the opt-out. Trade-off: it changes behaviour; code that passes a larger table through on purpose starts raising, so the change finds those call sites first (std's "other keys are ignored" docs go).
+2. **"Did you mean" on the value checks** std already makes (strategy, restart, log level), from a small edit-distance helper, and `process_flag: unknown flag` names the flag.
+3. **The same check at compile time** where the compiler can see both sides: a direct call passing a table literal to a destructured parameter, as most `supervisor.start(...)` and `http.start(...)` calls do, gets the error at compile time, like a wrong argument count does today.
+
+Not planned: atoms/symbols or enum types. They add a concept, and they don't catch the typo (in Erlang `one_for_al` is a valid atom); checking the value is what catches it. Out of reach of all three: typos in a program's own comparisons (`ev.kind == "requst"`, a `receive` pattern with a misspelled tag), which just never match; warning on those needs the compiler to know which strings can reach a comparison.
+
 ## Debugger / breakpoints (P2)
 
 Stack traces on `error()` are good; there's no interactive step-through, breakpoint, or variable-inspection story. Pairs with `LSP_ROADMAP.md` but is a separate capability — typically a DAP (Debug Adapter Protocol) server that the runtime cooperates with (instrumented `gem_set_line` callbacks, ability to pause a coroutine, mailbox/process inspection).
