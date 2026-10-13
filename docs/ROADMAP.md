@@ -111,6 +111,17 @@ Std API that programs need and the std modules lack:
 - **One rule for what a child's `start` returns**: `supervisor` accepts a pid, a `{pid}` handle or a
   registered name; `dynamic_supervisor` rejects a name. Pick one for both.
 
+## Keep-alive connections in `std/request` (P2)
+
+Every `request.<fn>` call opens a connection, sends `Connection: close` and closes it, so each request pays a TCP connect (a round trip to a remote host) and leaves a socket in TIME_WAIT. Measured on loopback against a Go server (4-core Linux VM, 2026-10-13): a Gem client with 100 processes doing GETs reached about 11,800 requests/s; a Go client opening a connection per request about 17,700, and reusing connections about 47,100. Gem's gap at a new connection per request is its one scheduler thread; reusing connections is the larger one, and it grows with the distance to the server.
+
+What needs building: a pool of idle connections per host and port, reused by later calls in the same process.
+
+- **Where the pool lives.** Module-level state is per process, which fits (each process's pool, its sockets claimed by it), but a `spawn` copies module state into the child: the pool must skip sockets another process owns, or key itself by `self()`. An explicit handle (`let c = request.client()`, then `c.get(url)`) avoids that and makes the lifetime plain, at the cost of a concept; the implicit pool keeps `request.get` as it is.
+- **Stale connections.** A server closes an idle connection whenever it likes, so a reused socket can fail on its first write or read; the call retries once on a fresh connection for idempotent methods (GET, HEAD, PUT, DELETE), and never for POST and PATCH.
+- **Bounds.** At most a few idle connections per host, an idle timeout shorter than common servers' (std/http's is 30 s by default), and responses read to their end before the socket goes back (a body cut short or `Connection: close` from the server drops it).
+- **Name lookups.** A host name is resolved on the scheduler thread, so every process stalls during the lookup (BEST_PRACTICES, "Know what blocks every process"); a pool keyed by host name could cache the address it connected to for its lifetime, short of a resolver on the thread pool.
+
 ## `gem doc` and checked doc examples (P3)
 
 `##` doc comments (BEST_PRACTICES.md, "Document the public API with `##`") document the public API of std and user modules, but nothing reads them yet. Needs: a `gem doc <file>` subcommand that prints (or writes HTML for) a module's header and its exported functions' docs, with a comment collection an LSP hover could reuse; and a doctest pass that runs each `call    # result` example line and compares the printed value, wired into `make test` for std, so docs can't drift from behavior (as Rust's doctests do). Trade-off: examples have to stay self-contained one-liners for the checker; a multi-line example would need an explicit marker.
