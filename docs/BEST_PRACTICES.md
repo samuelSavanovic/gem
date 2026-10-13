@@ -1261,7 +1261,31 @@ slower: 2,000 round trips took 11 ms with an empty mailbox and 1.1 s with
 1,000 stale messages in it.
 
 - A process's main loop ends its `receive` with a catch-all arm
-  (`when other`) that drops or logs unknown messages.
+  (`when other`) that logs what it didn't expect. A message nobody
+  matches is usually a typo: a `send` with `{tag: "icn"}` for a loop
+  waiting on `"inc"` is silently dropped by a `when other nil`, and
+  logging it is how the typo shows up. Give the messages you mean to
+  ignore (a reply that came after its caller gave up, a `DOWN` you no
+  longer care about) their own arm, so the log holds only surprises,
+  and clip what you print: a message can be large.
+
+  ```gem
+  fn counter_loop(n)
+    while true
+      receive
+      when {tag: "inc"}
+        n += 1
+      when {tag: "get", from: from, ref: ref}
+        send(from, {tag: "count", ref: ref, value: n})
+      when other
+        log.warn("counter: unexpected message {substr(to_string(other), 0, 200)}")
+      end
+    end
+  end
+  ```
+
+  A `send(c, {tag: "icn"})` to it prints
+  `[WARN] counter: unexpected message {tag: "icn"}`; the program goes on.
 - A *request/reply wait* never uses a catch-all, and never `receive()`
   (which takes the next message, whatever it is): it would take messages
   that belong to someone else, such as a task result or another call's
@@ -1870,7 +1894,7 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | `link` to a process that may have exited | caller dies with `noproc` | `spawn_link` |
 | Reply pattern without `^ref` | takes a stale reply | `ref: ^ref` |
 | `receive()` or catch-all in a reply wait | steals other replies | selective `receive ... when` |
-| Stale messages nobody matches | every `receive` slows down | catch-all in main loops |
+| Stale messages nobody matches | every `receive` slows down; a misspelled tag is dropped unseen | catch-all in main loops that logs |
 | Calls from a process that also collects a stream of messages | every reply wait scans the stream: quadratic | make the calls from a separate process |
 | A long-lived process holding 100,000s of records | full resets copy them all and stall every process (0.04–0.5 s) | bound or shard the state |
 | `after` in a busy server loop | never fires | `send_after` ticks |

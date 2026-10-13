@@ -12,6 +12,7 @@
 ## database is one file per week in `dir`, `httpd-YYYY-MM-DD.db` after the
 ## week's Monday (UTC); the tables are in SCHEMA.
 
+load "std/log"
 load "std/sqlite"
 load "std/string"
 load "std/table"
@@ -452,7 +453,7 @@ fn loop(st)
       write_pending(st)
       return nil
     when other
-      nil
+      log.warn("recorder: unexpected message {substr(to_string(other), 0, 200)}")
     end
   end
 end

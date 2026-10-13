@@ -2,6 +2,7 @@
 ## event: memory, file descriptors, processes, arena resets. The recorder
 ## adds the open connections.
 
+load "std/log"
 load "std/string"
 load "./recorder"
 
@@ -48,7 +49,7 @@ fn loop(cfg)
       recorder.emit(cfg.events, sample(cfg, prev, stats))
       prev = stats
     when other
-      nil
+      log.warn("sampler: unexpected message {substr(to_string(other), 0, 200)}")
     end
   end
 end
