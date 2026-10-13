@@ -122,6 +122,17 @@ What needs building: a pool of idle connections per host and port, reused by lat
 - **Bounds.** At most a few idle connections per host, an idle timeout shorter than common servers' (std/http's is 30 s by default), and responses read to their end before the socket goes back (a body cut short or `Connection: close` from the server drops it).
 - **Name lookups.** A host name is resolved on the scheduler thread, so every process stalls during the lookup (BEST_PRACTICES, "Know what blocks every process"); a pool keyed by host name could cache the address it connected to for its lifetime, short of a resolver on the thread pool.
 
+## Name lookups off the scheduler thread (P2)
+
+`tcp_connect` and `tcp_listen` resolve a host name with `getaddrinfo` on the scheduler thread (`gem_tcp_resolve4`, runtime/gem_builtins_tcp.c; an IP literal skips it), and POSIX has no non-blocking `getaddrinfo`, so every process stops for the whole lookup: microseconds for `localhost` or a name in `/etc/hosts`, a network round trip uncached, and with a resolver that doesn't answer `timeout × attempts` per nameserver (up to about 12 s with `timeout:2 attempts:3` and two nameservers). Measured (2026-10-13, a stub resolver that answers after 2 s): `tcp_connect("example.com", 80)` took 2,003 ms, and a process ticking every 10 ms meanwhile had a 2,012 ms gap. BEST_PRACTICES lists it under "Know what blocks every process".
+
+What needs building, best fit first:
+
+- **`getaddrinfo` on a worker thread.** The caller parks, as for `read_file`; IP literals keep the inline path. A lookup can't be cancelled, so a killed caller leaves its worker busy until the resolver times out, and slow lookups must not take every worker of the I/O pool and stall file reads: a lane of its own, or a cap on lookups in flight (OPTIMIZATIONS.md, "The thread pool's size is a fixed 4").
+- **`getaddrinfo_a`**: glibc's asynchronous form, Linux only.
+- **A DNS client over non-blocking UDP** (as c-ares): cancellable and threadless, but it re-implements `/etc/hosts`, search domains, `nsswitch` and retries.
+- **A cache** on top of any of them, as the keep-alive pool would keep the address it connected to ("Keep-alive connections in `std/request`"); `getaddrinfo` returns no TTL, so a runtime cache would hold an answer for a fixed short time.
+
 ## `gem doc` and checked doc examples (P3)
 
 `##` doc comments (BEST_PRACTICES.md, "Document the public API with `##`") document the public API of std and user modules, but nothing reads them yet. Needs: a `gem doc <file>` subcommand that prints (or writes HTML for) a module's header and its exported functions' docs, with a comment collection an LSP hover could reuse; and a doctest pass that runs each `call    # result` example line and compares the printed value, wired into `make test` for std, so docs can't drift from behavior (as Rust's doctests do). Trade-off: examples have to stay self-contained one-liners for the checker; a multi-line example would need an explicit marker.
