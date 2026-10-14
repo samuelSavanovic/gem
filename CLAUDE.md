@@ -58,7 +58,7 @@ examples/             # numbered tests (01, 02, ...) + run_all.sh; plus larger p
                       #   honeypot/ (telnet honeypot: a fake BusyBox login and shell; meant for weeks of hostile traffic, plan in PLAN.md, server setup in deploy/)
                       #   httpd/ (public website on std/http that records every connection, request and rejection; the honeypot's HTTP twin, plan in PLAN.md, server setup in deploy/)
                       #   modules/, support/: the modules and C headers the numbered tests load
-tests/                # check_*.sh (wired into make test; check_rules.sh lints the grep-able rules below and the builtin list), broken/ (programs that must not compile), notes/ (expected compiler notes), lsp/ (LSP smoke tests)
+tests/                # check_*.sh (wired into make test; check_rules.sh lints the grep-able rules below and the builtin list), fuzz/ (fuzzers, see make fuzz-*), broken/ (programs that must not compile), notes/ (expected compiler notes), lsp/ (LSP smoke tests)
 test_json_suite/      # make test-json-suite: JSONTestSuite conformance runner
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 docs/CHEATSHEET.md    # syntax, builtins and std modules on one page
@@ -102,6 +102,9 @@ make test-stress       # the examples, example apps and the compiler under GEM_R
 make debug             # build/debug/libgem_runtime.a: -DGEM_DEBUG (GEM_ASSERT invariants, poisoned freed memory, heap check after resets)
 make asan              # build/asan/libgem_runtime.a: the debug runtime plus ASan and UBSan; a program uses either with GEM_RUNTIME=debug|asan
 make test-debug        # the numbered examples on the debug runtime under GEM_RESET_STRESS=1
+make fuzz-diff         # generated programs (tests/fuzz/gen_program.py): -O2 vs -O0 vs stress (vs debug with FUZZ_ARGS=--debug) must print the same
+make fuzz-frontend     # mutated examples through `gem --check`: compile errors only, never a compiler crash (portable)
+make fuzz-parser       # libFuzzer on the lexer, parser, lower and fold in process (clang with libFuzzer; tests/fuzz/run_libfuzzer.sh)
 make clean             # remove build/
 ```
 
@@ -204,7 +207,7 @@ After a `grammar.js` change, regenerate, rebuild and check that every `.gem` fil
   - Every return of a fn body with a return point goes through `return_str` / `return_nil_str` in codegen.gem.
   - Every copy, free and reset walk over values is iterative (`gem_copy_shallow` + worklist in gem_copy.c), so the depth of user data never reaches the C stack; keep new walks iterative (printing recurses, capped at `GEM_FMT_MAX_DEPTH`).
   - Every copy and free walks a closure env as `[intptr_t n][GemVal *box × n]`, so a closure the runtime builds itself (e.g. `build_string`'s `add`) must use that layout too.
-  - The reset threshold is `gem_reset_threshold` (1 MB, or `GEM_RESET_STRESS` bytes), never the `GEM_ARENA_RESET_THRESHOLD` macro directly. A change to resets passes `make test-stress` and `make test-debug` (the debug runtime's heap check, `gem_debug_check_reset` in gem_copy.c, walks what the soundness argument says must be intact; a new place a pointer into the region can live gets a line there too).
+  - The reset threshold is `gem_reset_threshold` (1 MB, or `GEM_RESET_STRESS` bytes), never the `GEM_ARENA_RESET_THRESHOLD` macro directly. A change to resets passes `make test-stress` and `make test-debug` (the debug runtime's heap check, `gem_debug_check_reset` in gem_copy.c, walks what the soundness argument says must be intact; a new place a pointer into the region can live gets a line there too), and a few hundred seeds of `make fuzz-diff FUZZ_ARGS=--debug`.
 - **Module globals are per-process** (overview: gem.h and `runtime/gem_copy.c`, "Module globals"): top-level bindings compile to per-process slots (`gem_g_<name>` reads through `gem_global_get(i)`, writes are `gem_global_set(i, v)`, read-modify-write lvalues `(*gem_global_ref(i))`; `is_global_ref` in codegen.gem decides slot vs local). `spawn` copies them lazily, per slot, through refcounted snapshot units the parent reuses until it changes them. Rules:
   - Never emit a raw `gem_cur_globals[i]` access: the read must fault in lazy slots and the write must drop the slot's snapshot unit.
   - **Every runtime path that changes a table's entries must call `gem_table_check_mutable`** (in addition to `gem_table_written`); a new kind of mutable value reachable from module state must be stamped or make its unit single-use (`saw_mutable`, as buffers and pinned boxes do).

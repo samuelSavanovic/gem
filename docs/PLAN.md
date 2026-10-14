@@ -88,7 +88,8 @@ The order is the order of the work.
    asserts, freed regions poisoned instead of zeroed (a dangling read
    crashes instead of reading nil), and a heap check after each reset;
    an ASan/UBSan build next to it.
-7. **Fuzzing.** A generator of random Gem programs run differentially
+7. **Fuzzing.** ✓ Done (PR 1: `make fuzz-diff`, `make fuzz-frontend`,
+   `make fuzz-parser`, a quick run in `make test`). A generator of random Gem programs run differentially
    (default threshold against stress, `-O0` against `-O2`), and a
    libFuzzer harness on the lexer and parser.
 8. **Shrink BEST_PRACTICES.** Every trap A removes goes, its trap-index
