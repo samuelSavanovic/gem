@@ -98,6 +98,7 @@ make test-json-suite   # run JSONTestSuite parser conformance (clones to /tmp on
 make test-lsp          # smoke-test the `gem lsp` subcommand (tests/lsp/*.sh: lifecycle, symbols, definition, completion, diagnostics, malformed input)
 make test-tls          # tls_connect + https:// against local openssl s_server instances and a test CA (part of make test; skips without an OpenSSL 3 CLI)
 make test-tls-online   # tls_connect + https:// against real sites (example.com, google.com, badssl.com); needs the internet, not part of make test
+make test-stress       # the examples, example apps and the compiler under GEM_RESET_STRESS=1 (resets at almost every back-edge); not part of make test
 make clean             # remove build/
 ```
 
@@ -200,6 +201,7 @@ After a `grammar.js` change, regenerate, rebuild and check that every `.gem` fil
   - Every return of a fn body with a return point goes through `return_str` / `return_nil_str` in codegen.gem.
   - Every copy, free and reset walk over values is iterative (`gem_copy_shallow` + worklist in gem_copy.c), so the depth of user data never reaches the C stack; keep new walks iterative (printing recurses, capped at `GEM_FMT_MAX_DEPTH`).
   - Every copy and free walks a closure env as `[intptr_t n][GemVal *box × n]`, so a closure the runtime builds itself (e.g. `build_string`'s `add`) must use that layout too.
+  - The reset threshold is `gem_reset_threshold` (1 MB, or `GEM_RESET_STRESS` bytes), never the `GEM_ARENA_RESET_THRESHOLD` macro directly. A change to resets passes `make test-stress`.
 - **Module globals are per-process** (overview: gem.h and `runtime/gem_copy.c`, "Module globals"): top-level bindings compile to per-process slots (`gem_g_<name>` reads through `gem_global_get(i)`, writes are `gem_global_set(i, v)`, read-modify-write lvalues `(*gem_global_ref(i))`; `is_global_ref` in codegen.gem decides slot vs local). `spawn` copies them lazily, per slot, through refcounted snapshot units the parent reuses until it changes them. Rules:
   - Never emit a raw `gem_cur_globals[i]` access: the read must fault in lazy slots and the write must drop the slot's snapshot unit.
   - **Every runtime path that changes a table's entries must call `gem_table_check_mutable`** (in addition to `gem_table_written`); a new kind of mutable value reachable from module state must be stamped or make its unit single-use (`saw_mutable`, as buffers and pinned boxes do).

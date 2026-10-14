@@ -16,7 +16,7 @@ STAGE0 = bootstrap/stage0.c
 BUILD_DIR = build
 GEM = $(BUILD_DIR)/gem
 
-.PHONY: FORCE build test test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-lsp test-example-apps bootstrap clean
+.PHONY: FORCE build test-reset-stress test test-stress test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-lsp test-example-apps bootstrap clean
 
 # Build the compiler from the checked-in stage0.c
 build: $(GEM)
@@ -57,8 +57,17 @@ bootstrap: $(GEM)
 	cp $(BUILD_DIR)/stage0_new.c $(STAGE0)
 	@echo "bootstrap/stage0.c regenerated and verified"
 
-test: $(GEM) test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-resolve test-tls test-recursion-memory test-lsp test-example-apps
+test: $(GEM) test-reset-stress test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-resolve test-tls test-recursion-memory test-lsp test-example-apps
 	@bash examples/run_all.sh
+
+# Not part of `make test` (about as long again): the examples, the example
+# apps and the compiler compiling itself, with GEM_RESET_STRESS=1 (every
+# loop resets at almost every back-edge).
+test-stress: $(GEM)
+	@bash tests/check_stress.sh
+
+test-reset-stress: $(GEM)
+	@bash tests/check_reset_stress.sh
 
 test-broken: $(GEM)
 	@bash tests/check_broken.sh
