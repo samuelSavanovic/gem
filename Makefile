@@ -16,7 +16,7 @@ STAGE0 = bootstrap/stage0.c
 BUILD_DIR = build
 GEM = $(BUILD_DIR)/gem
 
-.PHONY: FORCE build test-reset-stress test test-rules test-stress test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-lsp test-example-apps bootstrap clean
+.PHONY: FORCE build debug asan test-debug test-reset-stress test test-rules test-stress test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-lsp test-example-apps bootstrap clean
 
 # Build the compiler from the checked-in stage0.c
 build: $(GEM)
@@ -46,6 +46,35 @@ $(RUNTIME_LIB): $(RUNTIME_OBJS) $(SQLITE_OBJ)
 $(GEM): $(STAGE0) $(RUNTIME_LIB)
 	@mkdir -p $(BUILD_DIR)
 	$(CC) -o $@ $(STAGE0) -I $(RUNTIME_DIR) -I $(COMPILER_DIR) $(CFLAGS) $(LDFLAGS) $(RUNTIME_LIB) $(LDLIBS)
+
+# Debug runtimes, next to build/libgem_runtime.a: a program built with
+# GEM_RUNTIME=debug (or asan) links build/debug (build/asan) instead and is
+# compiled with the same flags. debug: -DGEM_DEBUG (invariant asserts,
+# poisoned freed memory, a heap check after every reset; gem.h "Debug
+# runtime"). asan: the same plus AddressSanitizer and UBSan.
+DEBUG_CFLAGS = -std=gnu11 -O1 -g -fno-omit-frame-pointer -DGEM_DEBUG
+ASAN_CFLAGS = $(DEBUG_CFLAGS) -fsanitize=address,undefined -fno-sanitize-recover=undefined
+
+debug: $(GEM) $(BUILD_DIR)/debug/libgem_runtime.a
+asan: $(GEM) $(BUILD_DIR)/asan/libgem_runtime.a
+
+$(BUILD_DIR)/debug/%.o: $(RUNTIME_DIR)/%.c $(RUNTIME_DIR)/gem.h $(TLS_CFLAGS)
+	@mkdir -p $(BUILD_DIR)/debug
+	$(CC) -c -o $@ $< -I $(RUNTIME_DIR) $(DEBUG_CFLAGS) $$(cat $(TLS_CFLAGS))
+
+$(BUILD_DIR)/asan/%.o: $(RUNTIME_DIR)/%.c $(RUNTIME_DIR)/gem.h $(TLS_CFLAGS)
+	@mkdir -p $(BUILD_DIR)/asan
+	$(CC) -c -o $@ $< -I $(RUNTIME_DIR) $(ASAN_CFLAGS) $$(cat $(TLS_CFLAGS))
+
+$(BUILD_DIR)/debug/libgem_runtime.a: $(patsubst $(RUNTIME_DIR)/%.c,$(BUILD_DIR)/debug/%.o,$(RUNTIME_SRCS)) $(SQLITE_OBJ)
+	ar rcs $@ $^
+
+$(BUILD_DIR)/asan/libgem_runtime.a: $(patsubst $(RUNTIME_DIR)/%.c,$(BUILD_DIR)/asan/%.o,$(RUNTIME_SRCS)) $(SQLITE_OBJ)
+	ar rcs $@ $^
+
+# The numbered examples on the debug runtime, under reset stress.
+test-debug: debug
+	@GEM_RUNTIME=debug GEM_RESET_STRESS=1 bash examples/run_all.sh
 
 # Regenerate stage0.c from current compiler sources (requires working build/gem)
 bootstrap: $(GEM)

@@ -1187,6 +1187,8 @@ let USAGE = """
   environment:
     CC                   the C compiler (default cc)
     CFLAGS, LDFLAGS      more flags for it, split at spaces
+    GEM_RUNTIME          release (default), debug or asan: the runtime to
+                         link (make debug, make asan build the other two)
   subcommands:
     lsp                  start the language server on stdin/stdout
   """
@@ -1446,7 +1448,25 @@ else
   # Build cc command
   let runtime_dir = path_join(install_root, "runtime")
 
+  # GEM_RUNTIME=debug or asan links a debug runtime (`make debug`, `make
+  # asan`) and compiles the program with its flags: gem.h's inline code
+  # checks its invariants too.
+  let runtime_kind = getenv("GEM_RUNTIME")
   let runtime_lib = path_join(install_root, "build/libgem_runtime.a")
+  let c_flags = " -std=gnu11 -O2 -pthread"
+  if runtime_kind == "debug" or runtime_kind == "asan"
+    runtime_lib = path_join(install_root, "build/" + runtime_kind + "/libgem_runtime.a")
+    if not file_exists(runtime_lib)
+      eprint("gem: GEM_RUNTIME=" + runtime_kind + " needs " + runtime_lib + ": run 'make " + runtime_kind + "' first")
+      exit(2)
+    end
+    c_flags = " -std=gnu11 -O1 -g -fno-omit-frame-pointer -DGEM_DEBUG -pthread"
+    if runtime_kind == "asan"
+      c_flags = c_flags + " -fsanitize=address,undefined -fno-sanitize-recover=undefined"
+    end
+  elif runtime_kind != nil and runtime_kind != "" and runtime_kind != "release"
+    usage_error("GEM_RUNTIME must be release, debug or asan, not '" + runtime_kind + "'")
+  end
   let q_out = shell_quote(out_name)
   let q_c = shell_quote(tmp_c)
   let q_rt = shell_quote(runtime_dir)
@@ -1480,7 +1500,6 @@ else
       lib_flags = lib_flags + " " + tls_libs
     end
   end
-  let c_flags = " -std=gnu11 -O2 -pthread"
   if env_cflags != nil and env_cflags != ""
     c_flags = c_flags + " " + env_cflags
   end

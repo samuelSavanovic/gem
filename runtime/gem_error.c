@@ -264,3 +264,16 @@ void gem_raise_error(const char *msg) {
 void gem_error(const char *msg) {
     gem_raise_error(msg);
 }
+
+/* A failed GEM_ASSERT (debug runtime only): the broken invariant, where the
+   runtime checked it, and the Gem frame running; then abort, for a core
+   dump or a debugger. */
+void gem_assert_fail(const char *cond, const char *what, const char *file, int line) {
+    fprintf(stderr, "gem: runtime invariant broken: %s (%s) at %s:%d\n", what, cond, file, line);
+    if (gem_call_depth > 0 && gem_call_depth <= GEM_MAX_CALL_DEPTH) {
+        GemFrame *f = &gem_call_stack[gem_call_depth - 1];
+        fprintf(stderr, "  in %s (%s:%d)\n", f->name, f->file, f->line);
+    }
+    fflush(stderr);
+    abort();
+}

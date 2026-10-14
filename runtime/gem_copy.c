@@ -807,11 +807,212 @@ static void gem_rekey_index(GemTable *t, const int *moved, int n_moved) {
 
 /* Sets *copied_out, *scanned_out and *region_out to the bytes the reset
    copied, scanned and found in its region. */
+#ifdef GEM_DEBUG
+/* ─── Heap check after a reset (debug runtime) ───
+ *
+ * Walks what the reset's soundness argument says must be intact: the
+ * roots, the pinned boxes, the module slots, the mailbox, the tables of
+ * the remembered log and the arena's older buffers. Every pointer it meets
+ * must stay out of the freed region and, inside one of the process's
+ * arena blocks, below that block's used mark (past it is free, poisoned
+ * memory); every value must have a known type; every string keeps its NUL
+ * at slen. The walk goes into objects newer than the mark's base point
+ * (what this loop's resets keep) and only looks at the pointers of older
+ * ones. A table older than the mark that the remembered log names is
+ * checked whole, which can cost far more than the reset did (a big table
+ * written by every iteration), so the checks are paid from a budget: each
+ * reset adds what it freed and copied, each check takes 64 bytes per value
+ * it looked at, and a reset that finds the budget in debt skips its check.
+ * A loop's resets are so all checked until checking costs more than
+ * resetting, and after that one check runs per that many bytes. */
+typedef struct { const char *lo, *hi; } GemDbgBlock;
+typedef struct {
+    GemProcess *proc;
+    const GemRegion *freed;
+    GemRegion kept;
+    GemDbgBlock *blocks;
+    int nblocks;
+    struct { void *key; char value; } *seen;
+    GemVal *stack;     /* stb_ds array: values left to check */
+    const char *where;
+    size_t visits;
+} GemDbgCheck;
+
+static long long gem_dbg_budget = 0;
+
+static int gem_dbg_block_cmp(const void *a, const void *b) {
+    const GemDbgBlock *x = (const GemDbgBlock *)a, *y = (const GemDbgBlock *)b;
+    return (x->lo > y->lo) - (x->lo < y->lo);
+}
+
+__attribute__((noreturn, cold))
+static void gem_dbg_fail(GemDbgCheck *c, const char *what, const void *p) {
+    char buf[256];
+    snprintf(buf, sizeof(buf), "heap check after a reset: %s (%p, reached from %s)", what, p, c->where);
+    gem_assert_fail("gem_debug_check_reset", buf, __FILE__, __LINE__);
+}
+
+static void gem_dbg_ptr(GemDbgCheck *c, const void *p, size_t n) {
+    if (!p) return;
+    const char *q = (const char *)p;
+    if (gem_region_contains(c->freed, q)) gem_dbg_fail(c, "a pointer into the freed region", p);
+    int lo = 0, hi = c->nblocks - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (q < c->blocks[mid].lo) hi = mid - 1;
+        else if (q >= c->blocks[mid].hi) lo = mid + 1;
+        else {
+            if (q + n > c->blocks[mid].hi) gem_dbg_fail(c, "a pointer past the used part of an arena block", p);
+            return;
+        }
+    }
+}
+
+static int gem_dbg_first_visit(GemDbgCheck *c, void *p) {
+    if (!gem_region_contains(&c->kept, p)) return 0;
+    if (hmgeti(c->seen, p) >= 0) return 0;
+    hmput(c->seen, p, 1);
+    return 1;
+}
+
+static void gem_dbg_val(GemDbgCheck *c, GemVal v) {
+    c->visits++;
+    if ((unsigned)v.type > VAL_LAZY) gem_dbg_fail(c, "a value with no known type (freed or never written memory)", NULL);
+    arrput(c->stack, v);
+}
+
+static void gem_dbg_drain(GemDbgCheck *c) {
+    while (arrlen(c->stack) > 0) {
+        GemVal v = arrpop(c->stack);
+        switch (v.type) {
+            case VAL_STRING:
+                gem_dbg_ptr(c, v.sval, (size_t)v.slen + 1);
+                if (v.slen < 0) gem_dbg_fail(c, "a string with a negative length", v.sval);
+                if (gem_region_contains(&c->kept, v.sval) && v.sval[v.slen] != '\0')
+                    gem_dbg_fail(c, "a string with no NUL at slen", v.sval);
+                break;
+            case VAL_TABLE: {
+                GemTable *t = v.table;
+                gem_dbg_ptr(c, t, sizeof(GemTable));
+                if (!gem_dbg_first_visit(c, t)) break;
+                if (t->len < 0 || t->len > t->cap) gem_dbg_fail(c, "a table with len outside 0..cap", t);
+                gem_dbg_ptr(c, t->keys, sizeof(GemVal) * (size_t)t->len);
+                gem_dbg_ptr(c, t->vals, sizeof(GemVal) * (size_t)t->len);
+                for (int i = 0; i < t->len; i++) { gem_dbg_val(c, t->keys[i]); gem_dbg_val(c, t->vals[i]); }
+                break;
+            }
+            case VAL_BUFFER: {
+                GemBuffer *b = v.buffer;
+                gem_dbg_ptr(c, b, sizeof(GemBuffer));
+                if (!gem_dbg_first_visit(c, b)) break;
+                if (b->len < 0 || b->len > b->cap) gem_dbg_fail(c, "a buffer with len outside 0..cap", b);
+                gem_dbg_ptr(c, b->data, (size_t)b->len);
+                break;
+            }
+            case VAL_FN: {
+                if (!v.env) break;
+                gem_dbg_ptr(c, v.env, sizeof(intptr_t));
+                if (!gem_dbg_first_visit(c, v.env)) break;
+                intptr_t n = *(intptr_t *)v.env;
+                if (n < 0 || n > 1 << 20) gem_dbg_fail(c, "a closure env with a bad field count", v.env);
+                gem_dbg_ptr(c, v.env, sizeof(intptr_t) + sizeof(GemVal *) * (size_t)n);
+                GemVal **boxes = (GemVal **)((char *)v.env + sizeof(intptr_t));
+                for (intptr_t i = 0; i < n; i++) {
+                    gem_dbg_ptr(c, boxes[i], sizeof(GemVal));
+                    if (boxes[i] && gem_dbg_first_visit(c, boxes[i])) gem_dbg_val(c, *boxes[i]);
+                    else if (boxes[i] && !gem_region_contains(&c->kept, boxes[i])) {
+                        /* an older box: only its contents' pointer */
+                        GemVal bv = *boxes[i];
+                        if ((unsigned)bv.type > VAL_LAZY) gem_dbg_fail(c, "a capture box with no known type", boxes[i]);
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
+static void gem_debug_check_reset(GemProcess *proc, const GemArenaMark *mark, const GemRegion *freed,
+                                  GemVal **roots, int n_roots, GemVal **pinned_roots, int n_pinned,
+                                  size_t reset_bytes) {
+    gem_dbg_budget += (long long)reset_bytes;
+    if (gem_dbg_budget < 0) return;
+    GemArena *arena = &proc->arena;
+    GemDbgCheck c = {0};
+    c.proc = proc;
+    c.freed = freed;
+    for (GemArenaBlock *b = arena->head; b; b = b->next) c.nblocks++;
+    c.blocks = (GemDbgBlock *)malloc(sizeof(GemDbgBlock) * (size_t)(c.nblocks ? c.nblocks : 1));
+    int i = 0;
+    for (GemArenaBlock *b = arena->head; b; b = b->next, i++) {
+        GEM_ASSERT(b->used <= b->cap, "an arena block used past its capacity");
+        c.blocks[i].lo = b->data;
+        c.blocks[i].hi = b->data + b->used;
+    }
+    qsort(c.blocks, (size_t)c.nblocks, sizeof(GemDbgBlock), gem_dbg_block_cmp);
+    GemArenaBlock *bb = mark->base.block;
+    gem_region_build(&c.kept, bb->data + mark->base.used, bb->data + bb->used, bb->next);
+
+    c.where = "a root of the reset";
+    for (int k = 0; k < n_roots; k++) gem_dbg_val(&c, *roots[k]);
+    gem_dbg_drain(&c);
+    c.where = "a pinned root";
+    for (int k = 0; k < n_pinned; k++) gem_dbg_val(&c, *pinned_roots[k]);
+    gem_dbg_drain(&c);
+    c.where = "a module slot";
+    if (proc->globals) for (int k = 0; k < gem_n_globals; k++) gem_dbg_val(&c, proc->globals[k]);
+    gem_dbg_drain(&c);
+    c.where = "a pinned box";
+    if (proc->pinned_boxes) {
+        for (size_t k = 0; k < hmlenu(proc->pinned_boxes); k++)
+            gem_dbg_val(&c, *(GemVal *)proc->pinned_boxes[k].key);
+    }
+    gem_dbg_drain(&c);
+    c.where = "the mailbox";
+    for (GemMsgNode *n = proc->mailbox.head; n; n = n->next) {
+        gem_dbg_ptr(&c, n, sizeof(GemMsgNode));
+        gem_dbg_val(&c, n->value);
+    }
+    gem_dbg_drain(&c);
+    c.where = "a table in the remembered log";
+    for (size_t k = 0; k < arena->rem_len; k++) {
+        GemTable *t = arena->rem[k].t;
+        gem_dbg_ptr(&c, t, sizeof(GemTable));
+        gem_dbg_val(&c, (GemVal){ .type = VAL_TABLE, .magic = GEM_MAGIC, .table = t });
+        if (!gem_region_contains(&c.kept, t)) {
+            /* older table: check its entries here, the walk skips it */
+            gem_dbg_ptr(&c, t->keys, sizeof(GemVal) * (size_t)t->len);
+            gem_dbg_ptr(&c, t->vals, sizeof(GemVal) * (size_t)t->len);
+            for (int j = 0; j < t->len; j++) { gem_dbg_val(&c, t->keys[j]); gem_dbg_val(&c, t->vals[j]); }
+        }
+    }
+    gem_dbg_drain(&c);
+    c.where = "an arena buffer";
+    for (GemBuffer *b = arena->buffer_list; b; b = b->arena_next) {   /* all: few in practice */
+        gem_dbg_ptr(&c, b, sizeof(GemBuffer));
+        gem_dbg_ptr(&c, b->data, (size_t)b->len);
+    }
+    c.where = "the arena's table list";
+    for (GemTable *t = arena->table_list; t && t != mark->base.tables; t = t->arena_next)
+        gem_dbg_ptr(&c, t, sizeof(GemTable));
+
+    gem_dbg_budget -= 64 * (long long)(c.visits + (size_t)c.nblocks);
+    hmfree(c.seen);
+    arrfree(c.stack);
+    free(c.blocks);
+    free(c.kept.ranges);
+}
+#endif
+
 static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_roots,
                                   GemVal **pinned_roots, int n_pinned,
                                   size_t *copied_out, size_t *scanned_out, size_t *region_out) {
     GemProcess *proc = &gem_proc_table[gem_current_pid];
     GemArena *arena = &proc->arena;
+    GEM_ASSERT(mark->base.arena == arena && mark->young.arena == arena,
+               "a reset of a mark taken in another process's arena");
 
     /* Full reset from the base point before the first promotion and once
        the kept memory has doubled; otherwise only what is newer than the
@@ -1023,6 +1224,9 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
     arena->bytes_freed += region_used;
     if (!tail_free) {
         if (mb->dirty < mb->used) mb->dirty = mb->used;
+#ifdef GEM_DEBUG
+        memset(mb->data + pt->used, GEM_POISON_BYTE, mb->used - pt->used);
+#endif
         mb->used = pt->used;
     }
 
@@ -1077,6 +1281,9 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
     }
     if (budget < gem_reset_threshold) budget = gem_reset_threshold;
     mark->trigger = arena->bytes_allocated + budget;
+#ifdef GEM_DEBUG
+    gem_debug_check_reset(proc, mark, &region, roots, n_roots, pinned_roots, n_pinned, region_used + copied);
+#endif
     free(region.ranges);
 }
 
