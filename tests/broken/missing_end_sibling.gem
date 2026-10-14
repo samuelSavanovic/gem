@@ -1,0 +1,17 @@
+# The first of two sibling blocks has no `end`: the `end` meant for `foo`
+# closes the first `while`, one column further out than it opened, and
+# the error points at that `while`, not at the end of the file.
+# expect: this `while` has no `end`: the file ended first
+# expect: missing_end_sibling.gem:9:3
+# expect: the `end` at line 15 is indented like an enclosing block
+fn foo(n)
+  let i = 0
+  while i < n
+    i += 1
+  while i > 0
+    i -= 1
+  end
+  print(i)
+end
+
+foo(3)

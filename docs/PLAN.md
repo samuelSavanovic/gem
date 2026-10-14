@@ -117,8 +117,11 @@ The order is the order of the work.
    "did you mean".
 7. **Small std gaps** from ROADMAP "std API gaps": json `indent`, mime
    types, `time.parse`, gen_server names.
-8. **Error messages:** "did you mean" for undefined names; a missing
+8. **Error messages:** ✓ Done (PR 3). "did you mean" for undefined names; a missing
    `end` points at the construct it closes.
+   *Landed:* the block is the first whose `end` was indented unlike its
+   opening line, else the innermost open one; reported once, when a
+   named `fn` at column 1 lands inside a body or the file ends.
 
 ## Track C: deeper on servers (after A and B)
 
