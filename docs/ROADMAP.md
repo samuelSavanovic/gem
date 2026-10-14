@@ -163,13 +163,11 @@ reset at each line, and needs no new concept. Reads should go through the
 I/O thread pool in large blocks, like `read_file`, so they don't block
 every process the way `input()` does.
 
-## Process-owned resources closed on exit (P2)
+## `exec` children as owned resources (P2)
 
-Sockets and SQLite handles are owned resources (SPEC "Owned Resources", design in `docs/design/process_owned_resources.md`): values of their own types in one runtime table, closed when a process that claimed them (`claim(r)`) exits or when their opener crashes or is killed. A command started by `exec` is not one yet: it keeps running after its process is killed, because `system()` does not expose the child's pid. Erlang ties every port to an owning process; supervisors make this pressing, since they kill a child with the untrappable `"kill"` once its `shutdown` budget runs out.
+Sockets and SQLite handles are owned resources (SPEC "Owned Resources", design in `docs/design/process_owned_resources.md`): values of their own types in one runtime table, closed when a process that claimed them (`claim(r)`) exits or when their opener crashes or is killed. A command started by `exec` is not one yet: it keeps running after its process is killed. Erlang ties every port to an owning process; supervisors make this pressing, since they kill a child with the untrappable `"kill"` once its `shutdown` budget runs out.
 
-What remains:
-
-- `exec`'s child process as a third resource kind: `posix_spawn` + `waitpid` so the child can be signalled when its owner dies. It registers a close callback in `runtime/gem_resource.c` and gets `claim` for free.
+`exec` already starts its child with `posix_spawn` and waits with `waitpid` (`gem_run_shell`, runtime/gem_builtins_io.c). What remains: register the child as a third resource kind (a `GEM_RES_*` kind with a close that signals it, in `runtime/gem_resource.c`), which gives it `claim` and the exit close for free.
 
 ## IPv6 sockets (P3)
 
