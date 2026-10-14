@@ -1,0 +1,218 @@
+## csv — read and write comma-separated values (RFC 4180).
+##
+##   load "std/csv"
+##   csv.parse("name,age\nann,31\n")                  # [["name", "age"], ["ann", "31"]]
+##   csv.parse("name,age\nann,31\n", {header: true})  # [{name: "ann", age: "31"}]
+##   csv.encode([["a", "b,c"], [1, nil]])             # "a,\"b,c\"\n1,\n"
+##
+## A field in double quotes may hold the separator, quotes (doubled: `""`)
+## and line breaks. Rows end at `\n` or `\r\n`; a last row without one
+## counts, and an empty line is a row of one empty field (`header`
+## records skip it). Fields come back as strings, never converted:
+## `to_int` what should be numbers. `sep` sets another one-byte separator
+## (`"\t"`, `";"`).
+##
+## Malformed input raises `csv.parse: line <n>: <what>`: a quote inside an
+## unquoted field, text after a closing quote, a quoted field left open at
+## the end.
+
+fn check_sep(fname, sep)
+  if type(sep) != "string" or len(sep) != 1 or sep == "\"" or sep == "\n" or sep == "\r"
+    error("csv.{fname}: sep must be one byte other than a quote or a line break, got {sep}")
+  end
+end
+
+## Returns the rows of CSV text `text`, each an array of field strings; or,
+## with `header`, one record per row after the first, keyed by the first
+## row's fields (a row shorter than the header leaves the rest out, one
+## longer raises).
+fn parse(text, {sep = ",", header = false} = {})
+  if type(text) != "string"
+    error("csv.parse: text must be a string, got {type(text)}")
+  end
+  check_sep("parse", sep)
+  let s = ord(sep, 0)
+  let rows = []
+  let row = []
+  let n = len(text)
+  let i = 0
+  let line = 1
+  let field_start = 0
+  while i <= n
+    if i == n
+      if not (len(row) == 0 and field_start == n)
+        push(row, substr(text, field_start, n - field_start))
+        push(rows, row)
+      end
+      break
+    end
+    let c = ord(text, i)
+    if c == 34 and i == field_start
+      # A quoted field: up to the quote not doubled.
+      let out = buf_new()
+      let j = i + 1
+      let start_line = line
+      let closed = false
+      while j < n
+        let q = find(text, "\"", j)
+        if q < 0
+          break
+        end
+        let piece = substr(text, j, q - j)
+        line += count_newlines(piece)
+        buf_push(out, piece)
+        if q + 1 < n and ord(text, q + 1) == 34
+          buf_push(out, "\"")
+          j = q + 2
+        else
+          j = q + 1
+          closed = true
+          break
+        end
+      end
+      if not closed
+        error("csv.parse: line {start_line}: a quoted field is never closed")
+      end
+      push(row, to_string(out))
+      if j == n
+        push(rows, row)
+        row = []
+        field_start = n
+        break
+      end
+      let d = ord(text, j)
+      if d == s
+        i = j + 1
+        field_start = i
+      elif d == 10
+        push(rows, row)
+        row = []
+        line += 1
+        i = j + 1
+        field_start = i
+      elif d == 13 and j + 1 < n and ord(text, j + 1) == 10
+        push(rows, row)
+        row = []
+        line += 1
+        i = j + 2
+        field_start = i
+      else
+        error("csv.parse: line {line}: text after a closing quote")
+      end
+      continue
+    end
+    if c == s
+      push(row, substr(text, field_start, i - field_start))
+      i += 1
+      field_start = i
+    elif c == 10
+      let stop = if i > field_start and ord(text, i - 1) == 13 then i - 1 else i end
+      push(row, substr(text, field_start, stop - field_start))
+      push(rows, row)
+      row = []
+      line += 1
+      i += 1
+      field_start = i
+    elif c == 34
+      error("csv.parse: line {line}: a quote inside an unquoted field")
+    else
+      i += 1
+    end
+  end
+  if not header
+    return rows
+  end
+  records(rows)
+end
+
+fn count_newlines(s)
+  let k = 0
+  let p = find(s, "\n")
+  while p >= 0
+    k += 1
+    p = find(s, "\n", p + 1)
+  end
+  k
+end
+
+fn records(rows)
+  let out = []
+  if len(rows) == 0
+    return out
+  end
+  let names = rows[0]
+  for r = 1, len(rows)
+    let row = rows[r]
+    if len(row) == 1 and row[0] == ""
+      continue
+    end
+    if len(row) > len(names)
+      error("csv.parse: line {r + 1}: {len(row)} fields, but the header has {len(names)}")
+    end
+    let rec = {}
+    for k = 0, len(row)
+      rec[names[k]] = row[k]
+    end
+    push(out, rec)
+  end
+  out
+end
+
+# One field: as it is, or quoted when it holds the separator, a quote, a
+# line break, or space at either end.
+fn field(v, sep)
+  let t = if v == nil then "" elif type(v) == "string" then v else to_string(v) end
+  let n = len(t)
+  if n == 0
+    return t
+  end
+  let quote = find(t, sep) >= 0 or find(t, "\"") >= 0 or find(t, "\n") >= 0 or find(t, "\r") >= 0 or ord(t, 0) == 32 or ord(t, n - 1) == 32
+  if quote
+    return "\"" + str_replace(t, "\"", "\"\"") + "\""
+  end
+  t
+end
+
+## Returns one CSV line for the array `row` (no line break): nil as an
+## empty field, other values as `to_string` gives them, quoted when they
+## hold the separator, a quote, a line break, or a space at either end.
+##
+##   csv.encode_row(["a", "say \"hi\"", 3])    # "a,\"say \"\"hi\"\"\",3"
+fn encode_row(row, {sep = ","} = {})
+  check_sep("encode_row", sep)
+  build_string do |add|
+    for i = 0, len(row)
+      if i > 0
+        add(sep)
+      end
+      add(field(row[i], sep))
+    end
+  end
+end
+
+## Returns CSV text for `rows`, each line ended by `\n`. A row is an
+## array; with `columns` (an array of names), a row is a record, written
+## as those fields in that order after a header line naming them.
+##
+##   csv.encode([{n: "a", v: 1}], {columns: ["n", "v"]})    # "n,v\na,1\n"
+fn encode(rows, {sep = ",", columns = nil} = {})
+  check_sep("encode", sep)
+  build_string do |add|
+    if columns != nil
+      add(encode_row(columns, {sep: sep}), "\n")
+    end
+    for r in rows
+      if columns != nil
+        let line = []
+        for c in columns
+          push(line, r[c])
+        end
+        add(encode_row(line, {sep: sep}), "\n")
+      else
+        add(encode_row(r, {sep: sep}), "\n")
+      end
+    end
+  end
+end
+
+export parse, encode, encode_row
