@@ -112,9 +112,13 @@ The order is the order of the work.
    libraries are not in the key.
 2. **Install and project commands.** ✓ Done. `make install PREFIX=…`; `gem new`,
    `gem test` (runs `test.gem`), `gem build` from `gem.toml`.
-3. **Script basics.** `exec` that captures stdout/stderr and the status;
+3. **Script basics.** ✓ Done (PR 4). `exec` that captures stdout/stderr and the status;
    a line reader for files and stdin (ROADMAP "Line-at-a-time input");
    `std/args`; `rename`, `stat`, `setenv`.
+   *Landed:* `exec_capture(cmd, input?)`; `read_file(path, offset,
+   count)` and `read_stdin()`; `std/io` (`lines`, `reader`,
+   `read_lines`); `std/args`; `string.closest`. stdin lines still come
+   from `input()`, which blocks every process.
 4. **`std/regex`** on POSIX `regcomp`/`regexec` in the runtime (gemgrep
    proves it).
 5. **Encodings.** base64, hex, sha256/HMAC (OpenSSL is already found for

@@ -26,7 +26,7 @@ compiler/             # self-hosting compiler (lexer, parser, checks, AST, error
                       #   captures (free vars, boxing, non-escaping closures), tco (self/mutual tail calls), callgraph,
                       #   loops (arm-let hoist, reset tagging), append (in-place string append), cgutil (shared helpers)
 lsp/                  # language server: main (entry), rpc (framing+types), server (loop), handlers (lifecycle+textDocument), doc (per-uri process), workspace (cross-file AST cache), diagnostics, definition, completion, symbols, position (cursor helpers). Dispatched from compiler/main.gem when argv[1] == "lsp"
-std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, task, supervisor, dynamic_supervisor, gen_server, test)
+std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, io, args, task, supervisor, dynamic_supervisor, gen_server, test)
 runtime/              # C runtime — split by category:
   gem.h               #   public API, tagged values, process table, scheduler decls
   gem_core.c          #   value constructors, table internals, equality
@@ -41,7 +41,7 @@ runtime/              # C runtime — split by category:
   gem_builtins_collection.c  # push, pop, keys, values, sort, insert, delete
   gem_builtins_string.c      # find, str_replace, substr, chr/ord, buf_* API; gem_bytes_span (std/http's and std/request's extern helper)
   gem_builtins_math.c        # math ops, random, bitwise operations
-  gem_builtins_io.c          # file I/O, filesystem ops, exec
+  gem_builtins_io.c          # file I/O, filesystem ops (rename, stat), exec, exec_capture, read_file ranges
   gem_builtins_tcp.c         # TCP socket operations (non-blocking)
   gem_builtins_sqlite.c      # SQLite operations (open, close, exec, query, etc.)
   gem_builtins_tls.c         # tls_connect + tcp_read/tcp_write/close of TLS sockets, on OpenSSL 3 or later (a stub that raises without it)

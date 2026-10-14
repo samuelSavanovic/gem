@@ -38,14 +38,15 @@ Contents: [Before you start](#before-you-start) ·
 builds an optimized binary (1.5–1.75x faster on Linux x86_64, 2.3–2.8x on
 macOS arm64: measure with it); `--check` prints the `note:`/`warning:` lines.
 `gem new`/`test`/`build` work on a `gem.toml` project. `argv()[0]` is the
-program (after `--`, options go to it); `getenv(name)` reads the environment.
+program (after `--`, options go to it; `std/args` parses them); `getenv(name)`
+reads the environment.
 
 **Builtins and std modules.** Builtins (`print`, `len`, `push`, `keys`,
 `spawn`, `send`, ...) are always there; the list is in
 [`CHEATSHEET.md`](CHEATSHEET.md). The rest lives in std modules: `load
 "std/json"` binds `json.parse`, `json.encode`, and so on. The modules are
 `string`, `table`, `math`, `time`, `log`, `json`, `url`, `mime`, `http`,
-`request`, `sqlite`, `task`, `gen_server`, `supervisor`,
+`request`, `sqlite`, `io`, `args`, `task`, `gen_server`, `supervisor`,
 `dynamic_supervisor` and `test`.
 
 **Blocks.** A call can take a closure as its last argument, written after
@@ -701,7 +702,7 @@ processes until they return.
 | Yields to other processes | Blocks everything |
 |---|---|
 | `tcp_*`, `tls_connect`, `sleep`, `receive` | `sqlite_query`, `sqlite_exec`; a TLS handshake's crypto (about 1 ms) |
-| `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, `extern blocking fn` (a pool of 4 threads) | `file_exists`, `is_dir`, `list_dir`, `mkdir`, `remove_file`; plain `extern fn`, `input`, `read_stdin`; `print` to a slow pipe |
+| `read_file`, `write_file`, `append_file`, `exec`, `exec_capture`, `sqlite_open`, `sqlite_close`, `extern blocking fn` (a pool of 4 threads) | `file_exists`, `is_dir`, `stat`, `list_dir`, `mkdir`, `rename`, `remove_file`; plain `extern fn`, `input`, `read_stdin`; `print` to a slow pipe |
 
 Keep sqlite queries short and indexed: a one-second query stalls every
 process for a second.
@@ -747,12 +748,22 @@ accepts).
 
 ### Reading and writing in bulk
 
-`input()` returns the next stdin line without its `\n`, `nil` at the end.
-Files are read whole with `read_file`; walk them with `find` and `substr`
-(`examples/logstat/lib/source.gem`). `print` flushes every line: a
+Read a file or stdin a line at a time with `std/io`: `io.lines(path) do
+|line| ... end` (`"-"` is stdin) reads 64 KB blocks, so memory stays flat:
+a 200 MB log took 0.9 s at a 4 MB peak, against 1.2 s and the whole file
+in memory for `read_file` and a `find` loop. `io.reader(path)` gives the
+lines one `next()` at a time, for stopping early. `print` flushes every line: a
 million lines took 0.6 s with `print` and 0.3 s as one `write_stdout` of
 a `build_string` (2.7 s against 0.16 s on macOS arm64), so write bulk
 output in one piece.
+
+### Run commands with `exec_capture`
+
+`exec_capture(cmd)` returns `{status, stdout, stderr}`; pass the
+command's input as a second argument instead of a temporary file. `exec`
+is for commands whose output goes to the terminal. Both run `sh -c`, so
+quote what you splice into the command, and check `status`: a command
+that fails doesn't raise.
 
 ### Pass timeouts to reads, check writes
 

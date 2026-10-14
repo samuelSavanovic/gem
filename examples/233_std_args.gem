@@ -1,0 +1,56 @@
+# std/args: options, flags, values, positional arguments, mistakes, help.
+load "std/args"
+
+let SPEC = {
+  name: "demo",
+  about: "Count lines in files.",
+  usage: "[options] <file>...",
+  options: {
+    top: {short: "n", default: 10, help: "rows to show"},
+    format: {default: "text", choices: ["text", "json"], help: "output format"},
+    verbose: {short: "v", type: "flag", help: "say more"},
+    quiet: {short: "q", type: "flag"},
+    dry_run: {type: "flag", help: "change nothing"},
+    exclude: {short: "x", multi: true, help: "skip files matching this"},
+    ratio: {type: "float", value: "R"},
+    out: {required: true}
+  },
+  min_args: 1,
+  max_args: 3
+}
+
+fn show(list)
+  let r = args.try_parse(SPEC, list)
+  if not r.ok
+    print("error:", r.error)
+  elif r.value.help != nil
+    print("help asked")
+  else
+    let v = r.value
+    print(v.top, v.format, v.verbose, v.quiet, v.dry_run, v.exclude, v.ratio, v.out, v.args)
+  end
+end
+
+show(["--out", "o", "a"])
+show(["-n", "5", "--format=json", "-vq", "--dry-run", "-xfoo", "--exclude", "bar", "--ratio", "0.5", "--out=o", "a", "-", "--", "-n"])
+show(["-n5", "--top=7", "--dry_run", "--out", "o", "b"])
+show(["--verbos", "--out", "o", "a"])
+show(["--format", "jsn", "--out", "o", "a"])
+show(["-n", "x", "--out", "o", "a"])
+show(["--ratio", "abc", "--out", "o", "a"])
+show(["--out", "o", "-n"])
+show(["--out", "o"])
+show(["--out", "o", "a", "b", "c", "d"])
+show(["a"])
+show(["--verbose=1", "--out", "o", "a"])
+show(["-z", "--out", "o", "a"])
+show(["--help"])
+show(["-vh"])
+show([42])
+write_stdout(args.help(SPEC))
+
+print(pcall(fn() args.try_parse({options: {x: {shrt: "y"}}}, []) end).error)
+print(pcall(fn() args.try_parse({option: {}}, []) end).error)
+print(pcall(fn() args.try_parse({options: {x: {type: "bool"}}}, []) end).error)
+print(pcall(fn() args.try_parse({options: {x: {short: "xy"}}}, []) end).error)
+print(args.parse({}, ["q", "r"]).args)

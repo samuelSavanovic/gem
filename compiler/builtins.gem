@@ -95,6 +95,10 @@ let BUILTIN_FNS = {
   list_dir: "gem_list_dir_fn",
   is_dir: "gem_is_dir_fn",
   exec: "gem_exec_fn",
+  exec_capture: "gem_exec_capture_fn",
+  rename: "gem_rename_fn",
+  stat: "gem_stat_fn",
+  setenv: "gem_setenv_fn",
   tcp_connect: "gem_tcp_connect_fn",
   tcp_listen: "gem_tcp_listen_fn",
   tcp_accept: "gem_tcp_accept_fn",
@@ -142,6 +146,7 @@ let LEAF_BUILTINS = {
   random: true, band: true, bor: true, bxor: true, bnot: true, bshl: true,
   bshr: true, self: true, make_ref: true, time_ms: true, epoch_ms: true,
   tcp_peer: true, tcp_local_port: true, tcp_fd: true, tcp_from_fd: true, claim: true, runtime_stats: true,
+  rename: true, stat: true, setenv: true,
   __len: true, __type: true, __has_key: true, __is_array_n: true,
   __for_len: true, __for_items: true, __table_key_at: true, __table_val_at: true,
   __match_fail: true

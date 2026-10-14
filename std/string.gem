@@ -4,6 +4,7 @@
 ##   let parts = string.split("a,b,c", ",")    # ["a", "b", "c"]
 ##   string.join(parts, "-")                   # "a-b-c"
 ##   string.index_of("hello", "l")             # 2
+##   string.closest("lenght", ["length"])      # "length"
 ##
 ## Strings are bytes: positions are byte offsets, `upper` and `lower`
 ## change ASCII letters only, and `trim` strips ASCII whitespace. Any
@@ -221,4 +222,57 @@ fn repeat(s, n)
   end
 end
 
-export split, index_of, join, trim, starts_with, ends_with, upper, lower, contains, repeat
+# Edit distance between `a` and `b`: insertions, deletions and
+# substitutions of one byte each.
+fn distance(a, b)
+  let alen = len(a)
+  let blen = len(b)
+  if alen == 0 then return blen end
+  if blen == 0 then return alen end
+  let prev = []
+  for j = 0, blen + 1
+    push(prev, j)
+  end
+  let curr = []
+  for i = 1, alen + 1
+    curr[0] = i
+    for j = 1, blen + 1
+      let cost = if ord(a, i - 1) == ord(b, j - 1) then 0 else 1 end
+      let m = prev[j] + 1
+      if curr[j - 1] + 1 < m then m = curr[j - 1] + 1 end
+      if prev[j - 1] + cost < m then m = prev[j - 1] + cost end
+      curr[j] = m
+    end
+    let tmp = prev
+    prev = curr
+    curr = tmp
+  end
+  prev[blen]
+end
+
+## Returns the string of `candidates` (an array) closest to `word`, or nil
+## when none is close: at most one edit away for a `word` of up to 4
+## bytes, two for a longer one (an edit adds, removes or changes a byte).
+## For "did you mean" messages. Non-string candidates are skipped; `word`
+## itself is never returned.
+##
+##   string.closest("stratgy", ["strategy", "restart"])    # "strategy"
+##   string.closest("xyz", ["strategy"])                   # nil
+fn closest(word, candidates)
+  word = text("closest", "word", word)
+  let best = nil
+  let best_d = 999
+  for c in candidates
+    if type(c) == "string" and c != word
+      let d = distance(word, c)
+      if d < best_d
+        best_d = d
+        best = c
+      end
+    end
+  end
+  let limit = if len(word) <= 4 then 1 else 2 end
+  if best_d <= limit then best end
+end
+
+export split, index_of, join, trim, starts_with, ends_with, upper, lower, contains, repeat, closest
