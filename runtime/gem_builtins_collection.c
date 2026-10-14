@@ -194,15 +194,8 @@ GemVal gem_in_fn(void *_env, GemVal *args, int argc) {
     GemVal needle = args[1];
     gem_table_index(t);
 
-    /* No string keys (arrays, int-keyed tables): scan values for membership */
-    if (t->nstr == 0) {
-        for (int i = 0; i < t->len; i++) {
-            if (gem_val_eq(t->vals[i], needle)) return gem_bool(1);
-        }
-        return gem_bool(0);
-    }
-
-    /* String-keyed table: check if needle is a key */
+    /* `x in t` is has_key(t, x) on every table: an array's keys are its
+       indexes (table.contains looks for a value). */
     if (needle.type == VAL_STRING) {
         return gem_bool(gem_table_str_pos(t, needle.sval, needle.slen) >= 0);
     }
@@ -229,6 +222,14 @@ GemVal gem_delete_fn(void *_env, GemVal *args, int argc) {
     }
 
     if (pos < 0) return GEM_NIL;
+    /* On an array, delete would move the last element into the hole:
+       remove_at shifts the rest left instead. */
+    if (t->is_array && key.type == VAL_INT) {
+        char buf[200];
+        snprintf(buf, sizeof(buf), "delete: %lld is an index of an array; use remove_at(arr, %lld), which shifts the rest left (delete is for keys)",
+                 (long long)key.ival, (long long)key.ival);
+        gem_error(buf);
+    }
     GemVal removed = t->vals[pos];
 
     if (key.type == VAL_STRING) {

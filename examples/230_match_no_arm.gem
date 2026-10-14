@@ -1,0 +1,79 @@
+# A `match` with no `else` raises when no arm matches ("no match for
+# <value>"), as Erlang's case_clause does; `else nil` keeps a match that
+# may match nothing. delete on an array index raises (remove_at shifts).
+
+fn kind(code)
+  match code
+  when 200 then "ok"
+  when 404 then "missing"
+  end
+end
+
+print(kind(200), kind(404))
+for v in [500, "x", nil, [1, "two"], {tag: "t"}, 1.5]
+  let r = pcall kind(v)
+  print(r.ok, r.error)
+end
+
+# the error points at the match, inside the fn
+let r = pcall kind(1)
+print(r.stack[0].name, r.stack[0].line)
+
+# a long value is cut at 200 bytes
+let big = []
+for i = 0, 100
+  push(big, "item{i}")
+end
+let rb = pcall kind(big)
+print(len(rb.error), substr(rb.error, len(rb.error) - 3, 3))
+
+# as a value, in a statement, nested, with patterns
+fn shape(v)
+  let s = match v
+  when [x, y] then "pair {x} {y}"
+  when {tag: t} then "tagged {t}"
+  end
+  s
+end
+print(shape([1, 2]), shape({tag: "a"}))
+print(pcall shape(3))
+
+fn quiet(v)
+  match v
+  when 1 then "one"
+  else nil
+  end
+end
+print(quiet(1), quiet(2))
+
+# receive is unchanged: a message no arm matches stays in the mailbox
+send(self(), "other")
+send(self(), {tag: "want"})
+receive
+when {tag: "want"} then print("got want")
+end
+receive
+when m then print("left:", m)
+end
+
+# a raise in a spawned process ends that process, with the value in the reason
+let me = self()
+let pid = spawn do
+  kind(418)
+end
+monitor(pid)
+receive
+when {tag: "DOWN", reason: reason} then print("DOWN", reason)
+end
+
+# delete on an array: use remove_at
+let arr = ["a", "b", "c"]
+let d = pcall delete(arr, 0)
+print(d.ok, d.error)
+print(arr, remove_at(arr, 0), arr)
+print(delete(arr, 7), arr)
+let rec = {a: 1, b: 2}
+print(delete(rec, "a"), rec)
+let ids = {}
+ids[42] = true
+print(delete(ids, 42), len(ids))

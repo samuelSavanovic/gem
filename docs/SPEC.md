@@ -1038,7 +1038,7 @@ The wrapper checks the Gem-level type of each argument and that enough arguments
 
 `%` takes integers only (a float operand raises). Integer division and `%` by zero raise `division by zero`, and so does float division by zero (no `inf`). Integer arithmetic wraps on overflow (two's complement), division included: `INT64_MIN / -1` is `INT64_MIN`, and `INT64_MIN % -1` is `0`. `<`, `<=`, `>`, `>=` compare an int with a float numerically, but `==` never equates them (`2 == 2.0` is `false`).
 
-`x in tbl` — membership test. For tables with no string keys (arrays, and int-keyed tables such as `seen[5] = true`): returns `true` if `x` equals any value (linear scan), so use `has_key` to test an int key. For string-keyed tables: returns `true` if `x` is a key in the table (same as `has_key(tbl, x)`). A right operand that isn't a table raises `in: right operand must be a table, got <type>`. Precedence is at the comparison level (same as `==`, `<`, etc.).
+`x in tbl` — key test, the same as `has_key(tbl, x)` on every table: a record's keys, an int-keyed set's members (`seen[5] = true`, then `5 in seen`), an array's indexes (`0 in [10, 20]` is `true`, `10 in [10, 20]` is `false`). To look for a value in an array, use `table.contains(arr, x)`. A right operand that isn't a table raises `in: right operand must be a table, got <type>`. Precedence is at the comparison level (same as `==`, `<`, etc.).
 
 **Equality semantics:** `==` compares by value for primitives (int, float, string, bool, nil) and by identity (reference) for tables, functions, and refs. Two distinct tables with identical contents are not equal: `{a: 1} == {a: 1}` is `false`. The same table reference compared to itself is `true`.
 
@@ -1354,7 +1354,7 @@ end
 
 `append_file(path, content)` — appends the string `content` to `path`. Creates the file if it doesn't exist. Opens in binary mode. Raises an error on failure.
 
-`delete(tbl, key)` — removes the entry for `key` from the table. Returns the removed value, or `nil` if the key was not found. Uses swap-remove internally (O(1) but does not preserve insertion order). For ordered removal from arrays, use `remove_at`.
+`delete(tbl, key)` — removes the entry for `key` from the table. Returns the removed value, or `nil` if the key was not found. Uses swap-remove internally (O(1) but does not preserve insertion order). An int key of an array (a table whose keys are exactly `0 .. n-1`) raises `delete: <i> is an index of an array; use remove_at(arr, <i>), which shifts the rest left (delete is for keys)`: moving the last element into the hole would leave a table that is no longer an array. Remove from arrays with `remove_at`.
 
 `pop(arr)` — removes and returns the last element of an array table. Errors on empty table.
 

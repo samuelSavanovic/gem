@@ -25,8 +25,9 @@ print(json.encode([10, 20, 30]))
 print(json.encode([]))
 print(json.encode([[], [1], {a: []}]))
 # keys 0 .. n-1 in any order are still an array, written in index order
-let shuffled = ["a", "b", "c"]
-delete(shuffled, 0)
+let shuffled = []
+shuffled[2] = "c"
+shuffled[1] = "b"
 print(json.encode(shuffled))
 shuffled[0] = "A"
 print(json.encode(shuffled))
