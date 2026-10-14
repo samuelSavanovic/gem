@@ -13,6 +13,7 @@
  */
 
 #include "gem.h"
+#include "stb_ds.h"
 #include <errno.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -98,22 +99,95 @@ int gem_tcp_port(GemVal v, const char *who) {
     return (int)v.ival;
 }
 
+/* Lookups in flight by host name, so processes asking for the same name
+   meanwhile wait on one lookup. Read and written on the scheduler thread
+   only. The table holds a reference to each request (GemIORequest.refs);
+   an entry whose lookup is done leaves the table when a waiter resumes,
+   when its name is asked for again, or in a sweep once the table has
+   doubled since the last one (every waiter may have given up). */
+typedef struct { char *key; GemIORequest *value; } GemLookupEntry;
+static GemLookupEntry *gem_lookups = NULL;
+static ptrdiff_t gem_lookups_sweep_at = 64;
+
+static int gem_lookup_done(GemIORequest *req) {
+    return __atomic_load_n(&req->done, __ATOMIC_ACQUIRE);
+}
+
+static void gem_lookup_forget(const char *host, GemIORequest *req) {
+    if (shget(gem_lookups, host) != req) return;
+    shdel(gem_lookups, host);
+    gem_io_release(req);
+}
+
+/* A lookup of `host` for the running process to wait on, holding one
+   reference for it: the one in flight, or a new one. NULL when it can't
+   be queued. */
+static GemIORequest *gem_lookup_start(const char *host) {
+    if (!gem_lookups) sh_new_strdup(gem_lookups);
+    GemIORequest *req = shget(gem_lookups, host);
+    if (req && !gem_lookup_done(req)) {
+        __sync_add_and_fetch(&req->refs, 1);
+        return req;
+    }
+    if (req) gem_lookup_forget(host, req);
+    req = gem_io_submit(GEM_IO_RESOLVE, host, NULL, 0);
+    if (!req) return NULL;
+    __sync_add_and_fetch(&req->refs, 1);
+    shput(gem_lookups, host, req);
+    if (shlen(gem_lookups) >= gem_lookups_sweep_at) {
+        /* Backwards: shdel moves the last entry into the deleted slot. */
+        for (ptrdiff_t i = shlen(gem_lookups) - 1; i >= 0; i--) {
+            GemIORequest *r = gem_lookups[i].value;
+            if (!gem_lookup_done(r)) continue;
+            shdel(gem_lookups, gem_lookups[i].key);
+            gem_io_release(r);
+        }
+        ptrdiff_t n = shlen(gem_lookups) * 2;
+        gem_lookups_sweep_at = n > 64 ? n : 64;
+    }
+    return req;
+}
+
 /* Sets *out to `host`'s IPv4 address: a dotted quad as is, a name through
-   getaddrinfo (which blocks the scheduler thread while it resolves). */
-static void gem_tcp_resolve4(const char *host, struct in_addr *out, const char *who) {
+   getaddrinfo on the thread pool's resolver lane, while the calling process
+   waits and the others run (outside any process, inline). `deadline` (gem_now_ms time, -1 for none)
+   bounds the wait: past it, "<who>: connect to <host>:<port> timed out"
+   is raised and the lookup finishes on its worker unread. */
+static void gem_tcp_resolve4(const char *host, int port, int64_t deadline,
+                             struct in_addr *out, const char *who) {
     if (inet_pton(AF_INET, host, out) == 1) return;
-    struct addrinfo hints, *res = NULL;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    int rc = getaddrinfo(host, NULL, &hints, &res);
-    if (rc != 0 || res == NULL) {
-        char buf[256];
-        snprintf(buf, sizeof(buf), "%s: cannot resolve '%s'", who, host);
+    char buf[512];
+    if (gem_current_pid < 0) {
+        uint32_t a;
+        if (gem_resolve4(host, &a) != NULL) {
+            snprintf(buf, sizeof(buf), "%s: cannot resolve '%s'", who, host);
+            gem_error(buf);
+        }
+        out->s_addr = a;
+        return;
+    }
+    GemIORequest *req = gem_lookup_start(host);
+    if (!req) {
+        snprintf(buf, sizeof(buf), "%s: cannot resolve '%s': no thread for name lookups", who, host);
         gem_error(buf);
     }
-    *out = ((struct sockaddr_in *)res->ai_addr)->sin_addr;
-    freeaddrinfo(res);
+    GemProcess *proc = &gem_proc_table[gem_current_pid];
+    proc->io_request = req;
+    int done = gem_io_pool_yield_until(deadline);
+    proc->io_request = NULL;
+    if (!done) {
+        snprintf(buf, sizeof(buf), "%s: connect to %s:%d timed out", who, host, port);
+        gem_io_release(req);
+        gem_error(buf);
+    }
+    gem_lookup_forget(host, req);
+    if (req->error_msg) {
+        snprintf(buf, sizeof(buf), "%s: cannot resolve '%s'", who, host);
+        gem_io_release(req);
+        gem_error(buf);
+    }
+    out->s_addr = req->addr4;
+    gem_io_release(req);
 }
 
 /* Every blocking wait here starts from a clean slate: no deadline and no
@@ -138,7 +212,7 @@ GemVal gem_tcp_connect_to(const char *host, int port, int64_t deadline, const ch
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons((uint16_t)port);
-    gem_tcp_resolve4(host, &addr.sin_addr, who);
+    gem_tcp_resolve4(host, port, deadline, &addr.sin_addr, who);
 
     int fd = socket(AF_INET, GEM_SOCK_STREAM, 0);
     if (fd < 0) {
@@ -235,7 +309,7 @@ GemVal gem_tcp_listen_fn(void *_env, GemVal *args, int argc) {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons((uint16_t)port);
-    gem_tcp_resolve4(host, &addr.sin_addr, "tcp_listen");
+    gem_tcp_resolve4(host, port, -1, &addr.sin_addr, "tcp_listen");
 
     int fd = socket(AF_INET, GEM_SOCK_STREAM, 0);
     if (fd < 0) {
