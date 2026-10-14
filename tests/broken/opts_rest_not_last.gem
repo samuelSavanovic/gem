@@ -1,0 +1,7 @@
+# `...rest` in a destructured parameter takes the keys the pattern doesn't
+# name, so it must come last.
+# expect: `...rest` must be the last entry of the pattern
+fn f({...rest, a = 1} = {})
+  a
+end
+f()

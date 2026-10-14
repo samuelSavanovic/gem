@@ -488,11 +488,31 @@ fn exchange(rd, req_str, method)
   read_response(rd, method)
 end
 
+# Raises `<who>: unknown <what> "<key>"<where>`, naming the closest allowed
+# key, for a key of table `t` that `allowed` (an array of names) doesn't
+# hold.
+fn check_keys(who, what, t, allowed, where = "")
+  for k, _ in t
+    let known = false
+    for a in allowed
+      if a == k
+        known = true
+      end
+    end
+    if not known
+      let near = if type(k) == "string" then string.closest(k, allowed) end
+      let hint = if near != nil then " (did you mean \"{near}\"?)" else "" end
+      error("{who}: unknown {what} \"{k}\"{where}{hint}")
+    end
+  end
+end
+
 # The whole call; `name` ("request.get") prefixes every error.
 fn do_request(name, method, raw_url, opts)
   if type(opts) != "table"
     error("{name}: opts must be a table, got {type(opts)}")
   end
+  check_keys(name, "option", opts, ["headers", "body", "timeout_ms", "ca_file"])
   let {headers = {}, body = "", timeout_ms = DEFAULT_TIMEOUT_MS, ca_file = nil} = opts
   if type(method) != "string" or method == ""
     error("{name}: method must be a non-empty string")

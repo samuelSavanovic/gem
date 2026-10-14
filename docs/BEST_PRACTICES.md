@@ -276,7 +276,11 @@ fn call(target, msg, timeout_ms = 5000)
 fn serve(router, {port = 8080, host = "0.0.0.0"} = {})
 ```
 
-Keep `...rest` for real variadics. A default applies only when the
+A key the bag's pattern doesn't name raises (`serve: unknown option
+"prot" (did you mean "port"?)`); end the pattern with `...rest` to take
+the other keys instead, for options passed on. std's option tables and
+child specs are checked the same way. Keep `...rest` parameters for real
+variadics. A default applies only when the
 argument (or key) is left out: passing `nil` gives `nil` **(trap)**, so a
 caller that forwards an option it may not have (`{port: opts.port}`)
 passes `nil`, not the default. Leave the key out instead. The trailing

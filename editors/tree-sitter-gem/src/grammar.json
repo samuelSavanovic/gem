@@ -734,6 +734,10 @@
         {
           "type": "SYMBOL",
           "name": "destructure_default"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "spread_param"
         }
       ]
     },

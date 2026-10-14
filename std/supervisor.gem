@@ -35,6 +35,8 @@
 # reverse spec order (a restarted child keeps its place); then it exits. A nested supervisor does the same, so the
 # whole tree is down when it exits.
 
+load "std/string"
+
 let STRATEGIES = {one_for_one: true, one_for_all: true}
 let RESTARTS = {permanent: true, transient: true, temporary: true}
 # How long a child gets to exit after "shutdown" before it is killed, when
@@ -372,6 +374,32 @@ fn sup_main(state, caller, ref)
   kill(self(), reason)
 end
 
+# Raises `<who>: unknown <what> "<key>"<where>`, naming the closest allowed
+# key, for a key of table `t` that `allowed` (an array of names) doesn't
+# hold.
+fn check_keys(who, what, t, allowed, where = "")
+  for k, _ in t
+    let known = false
+    for a in allowed
+      if a == k
+        known = true
+      end
+    end
+    if not known
+      let near = if type(k) == "string" then string.closest(k, allowed) end
+      let hint = if near != nil then " (did you mean \"{near}\"?)" else "" end
+      error("{who}: unknown {what} \"{k}\"{where}{hint}")
+    end
+  end
+end
+
+# A value that isn't one of `table`'s keys: " (did you mean \"x\"?)" for
+# the closest one, or "".
+fn value_hint(v, table)
+  let near = if type(v) == "string" then string.closest(v, keys(table)) end
+  if near != nil then " (did you mean \"{near}\"?)" else "" end
+end
+
 # Raises `supervisor.start: ...` for a child list that isn't an array of
 # `{id, start, restart, shutdown}` specs with distinct ids.
 fn check_children(children)
@@ -386,6 +414,7 @@ fn check_children(children)
     if spec.id == nil
       error("supervisor.start: a child spec has no id")
     end
+    check_keys("supervisor.start", "key", spec, ["id", "start", "restart", "shutdown"], " in child \"{spec.id}\"")
     if has_key(seen, spec.id)
       error("supervisor.start: duplicate child id \"{spec.id}\"")
     end
@@ -395,7 +424,7 @@ fn check_children(children)
     end
     let restart = restart_of(spec)
     if not has_key(RESTARTS, restart)
-      error("supervisor.start: unknown restart \"{restart}\" for child \"{spec.id}\"")
+      error("supervisor.start: unknown restart \"{restart}\" for child \"{spec.id}\"{value_hint(restart, RESTARTS)}")
     end
     if has_key(spec, "shutdown") and spec.shutdown != nil and type(spec.shutdown) != "int"
       error("supervisor.start: shutdown of child \"{spec.id}\" must be an int (milliseconds) or nil, got {type(spec.shutdown)}")
@@ -466,9 +495,10 @@ fn start(spec)
   if type(spec) != "table"
     error("supervisor.start: expected a spec table \{strategy, children, ...\}, got {type(spec)}")
   end
+  check_keys("supervisor.start", "option", spec, ["strategy", "max_restarts", "max_seconds", "children", "name"])
   let {strategy = "one_for_one", max_restarts = 3, max_seconds = 5000, children = [], name = nil} = spec
   if not has_key(STRATEGIES, strategy)
-    error("supervisor.start: unknown strategy \"{strategy}\"")
+    error("supervisor.start: unknown strategy \"{strategy}\"{value_hint(strategy, STRATEGIES)}")
   end
   if type(max_restarts) != "int"
     error("supervisor.start: max_restarts must be an int, got {type(max_restarts)}")

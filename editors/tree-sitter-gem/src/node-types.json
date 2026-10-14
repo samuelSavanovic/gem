@@ -387,6 +387,10 @@
         {
           "type": "identifier",
           "named": true
+        },
+        {
+          "type": "spread_param",
+          "named": true
         }
       ]
     }
@@ -5102,6 +5106,10 @@
         },
         {
           "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "spread_param",
           "named": true
         }
       ]
