@@ -652,6 +652,11 @@ GemVal gem_error_fn(void *_env, GemVal *args, int argc);
 GemVal gem_len_fn(void *_env, GemVal *args, int argc);
 GemVal gem_type_fn(void *_env, GemVal *args, int argc);
 GemVal gem_to_string_fn(void *_env, GemVal *args, int argc);
+GemVal gem_check_opts_fn(void *_env, GemVal *args, int argc);
+/* Raises `<who>: unknown option "<k>"` (with the closest name) for a key
+   of table `bag` not among `names` (nlen bytes, NUL-separated). */
+void gem_check_opt_keys(GemVal bag, const char *who, const char *names, int nlen);
+GemVal gem_opts_rest_fn(void *_env, GemVal *args, int argc);
 GemVal gem_push_fn(void *_env, GemVal *args, int argc);
 GemVal gem_pcall_fn(void *_env, GemVal *args, int argc);
 GemVal gem_keys_fn(void *_env, GemVal *args, int argc);

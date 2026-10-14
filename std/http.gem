@@ -1936,7 +1936,8 @@ end
 ## cap the open connections, in all and per client IP; a connection over
 ## a cap gets a 503 and is closed at once (a client that has sent more
 ## than the server could read at once may see a reset instead). `on_event` (a fn, default nil) is
-## called with a table for each thing below. Other keys are ignored.
+## called with a table for each thing below. Any other key raises
+## `http.start: unknown option "<key>"`, naming the closest one.
 ##
 ## `on_event` is how a server watches what never reaches a handler. Each
 ## event has `kind` and `peer` ({ip, port}); what it holds of the request
@@ -1989,6 +1990,27 @@ end
 ## "normal") kills it, so it can be a supervisor child. Killing it closes
 ## the port and every connection; the untrappable "kill" frees the port
 ## too, but leaves open connections serving until they end.
+let START_OPTIONS = ["port", "host", "max_body", "idle_timeout_ms", "request_timeout_ms", "write_timeout_ms", "max_connections", "max_per_ip", "on_event"]
+
+# Raises `<who>: unknown <what> "<key>"<where>`, naming the closest allowed
+# key, for a key of table `t` that `allowed` (an array of names) doesn't
+# hold.
+fn check_keys(who, what, t, allowed, where = "")
+  for k, _ in t
+    let known = false
+    for a in allowed
+      if a == k
+        known = true
+      end
+    end
+    if not known
+      let near = if type(k) == "string" then string.closest(k, allowed) end
+      let hint = if near != nil then " (did you mean \"{near}\"?)" else "" end
+      error("{who}: unknown {what} \"{k}\"{where}{hint}")
+    end
+  end
+end
+
 fn start(router_ref, opts = {})
   launch("http.start", router_ref, nil, opts)
 end
@@ -2012,6 +2034,7 @@ fn launch(caller, router_ref, watch, opts)
   if type(opts) != "table"
     error("{caller}: opts must be a table, got {type(opts)}")
   end
+  check_keys(caller, "option", opts, START_OPTIONS)
   let {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS, write_timeout_ms = DEFAULT_WRITE_TIMEOUT_MS, max_connections = nil, max_per_ip = nil, on_event = nil} = opts
   if type(port) != "int" or port < 0 or port > 65535
     error("{caller}: port must be an int from 0 to 65535, got {port}")

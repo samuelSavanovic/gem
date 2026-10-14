@@ -2082,7 +2082,9 @@ GemVal gem_process_flag_builtin(void *_env, GemVal *args, int argc) {
         proc->trap_exit = gem_truthy(args[1]) ? 1 : 0;
         return gem_bool(old);
     }
-    gem_error("process_flag: unknown flag");
+    char buf[200];
+    snprintf(buf, sizeof(buf), "process_flag: unknown flag \"%.60s\" (the one flag is \"trap_exit\")", args[0].sval);
+    gem_error(buf);
     return GEM_NIL;
 }
 

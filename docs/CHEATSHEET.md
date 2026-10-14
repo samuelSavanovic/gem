@@ -24,6 +24,8 @@ fn log(level, ...msgs)               # variadic (rest param)
 end
 fn server({port = 8080, host = "0.0.0.0"} = {})   # destructured params
 end                                                # `= {}` makes the bag optional / nil-tolerant
+                                                   # a key not in the pattern raises: unknown option "prot" (did you mean "port"?)
+fn wrap({level = 1, ...rest} = {}) end             # ...rest: the other keys, no check
 
 # Closures / anonymous functions
 let f = fn(x) x * 2 end              # inside a fn or block: let helper = fn() ... end

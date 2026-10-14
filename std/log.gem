@@ -14,6 +14,7 @@
 ## `http.start`), or in the process that logs.
 
 load "std/time"
+load "std/string"
 
 let LEVELS = {debug: 0, info: 1, warn: 2, error: 3}
 
@@ -33,7 +34,9 @@ end
 ## Raises on any other `level` (names are lowercase).
 fn set_level(level)
   if not has_key(LEVELS, level)
-    raise("log.set_level: unknown level {level}; use \"debug\", \"info\", \"warn\" or \"error\"")
+    let near = if type(level) == "string" then string.closest(level, keys(LEVELS)) end
+    let hint = if near != nil then " (did you mean \"{near}\"?)" else "" end
+    raise("log.set_level: unknown level {level}{hint}; use \"debug\", \"info\", \"warn\" or \"error\"")
   end
   min_level = LEVELS[level]
 end

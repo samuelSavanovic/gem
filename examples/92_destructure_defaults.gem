@@ -42,7 +42,20 @@ print(server())                                    # all defaults
 print(server(nil))                                 # nil-coerced to {}
 print(server({}))                                  # empty
 print(server({port: 9000}))                        # only port
-print(server({port: 7000, host: "::1", x: "ig"}))  # extras ignored
+print(pcall(fn() server({port: 7000, host: "::1", x: "ig"}) end).error)  # a key it doesn't name raises
+print(pcall(fn() server({prot: 7000}) end).error)  # with the closest name
+
+# ─── `...rest` takes the other keys (and turns the check off) ───
+fn pass_on({level = 1, ...rest} = {})
+  "{level} {rest}"
+end
+print(pass_on({level: 2, color: "red"}), pass_on())
+
+# Without defaults, a destructured param isn't an option bag: no check.
+fn sum_xy({x, y})
+  x + y
+end
+print(sum_xy({x: 1, y: 2, z: 3}))
 print(server({port: nil}))                         # explicit nil stays
 
 # ─── Mixing regular params with destructure params ───
