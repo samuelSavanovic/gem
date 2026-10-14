@@ -128,7 +128,7 @@ What needs building: a pool of idle connections per host and port, reused by lat
 
 What needs building, best fit first:
 
-- **`getaddrinfo` on a worker thread.** The caller parks, as for `read_file`; IP literals keep the inline path. A lookup can't be cancelled, so a killed caller leaves its worker busy until the resolver times out, and slow lookups must not take every worker of the I/O pool and stall file reads: a lane of its own, or a cap on lookups in flight (OPTIMIZATIONS.md, "The thread pool's size is a fixed 4").
+- **`getaddrinfo` on a worker thread.** The caller parks, as for `read_file`; IP literals keep the inline path. A lookup can't be cancelled, so a killed caller leaves its worker busy until the resolver times out, and slow lookups must not take every worker of the I/O pool and stall file reads: a lane of its own, or a cap on lookups in flight (OPTIMIZATIONS.md, "Slow pool calls hold every worker; more workers slow the fast ones").
 - **`getaddrinfo_a`**: glibc's asynchronous form, Linux only.
 - **A DNS client over non-blocking UDP** (as c-ares): cancellable and threadless, but it re-implements `/etc/hosts`, search domains, `nsswitch` and retries.
 - **A cache** on top of any of them, as the keep-alive pool would keep the address it connected to ("Keep-alive connections in `std/request`"); `getaddrinfo` returns no TTL, so a runtime cache would hold an answer for a fixed short time.

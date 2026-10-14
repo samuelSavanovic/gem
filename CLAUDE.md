@@ -31,7 +31,7 @@ runtime/              # C runtime — split by category:
   gem_ops.c           #   arithmetic and comparison operators
   gem_error.c         #   error handling, stack trace printing
   gem_scheduler.c     #   process table + run state, coroutine scheduler, mailbox, process lifecycle, I/O polling, process stacks + overflow handling
-  gem_threadpool.c    #   worker thread pool for blocking I/O (4 workers)
+  gem_threadpool.c    #   worker thread pool for blocking I/O (4 workers; the GEM_POOL_SIZE env var sets it)
   gem_resource.c      #   resource table: sockets and sqlite handles as owned resources, claim, close at a process's exit
   gem_builtins_core.c #   print, error, len, type, conversions, pcall, argv, etc.
   gem_builtins_collection.c  # push, pop, keys, values, sort, insert, delete
@@ -79,6 +79,7 @@ benchmarks/           # wrk harness for examples/bookmark_app (run.sh) + node_ba
                       #   lox/                   — examples/lox vs the same interpreter in Python on bench/*.lox, with an output diff
                       #   gemgrep/               — examples/gemgrep vs GNU grep -E and a Python twin on a generated tree, with output diffs
                       #   jobqueue/              — examples/jobqueue vs Python asyncio and Elixir/OTP twins on six fault scenarios; checks their invariants
+                      #   threadpool/            — not in measure_all.sh: the I/O thread pool's size (GEM_POOL_SIZE) swept over three loads
                       #   soak/                  — not in measure_all.sh: the example servers under an hour of checked load: flat memory, fds, throughput, CPU, latency? (milestone reports in results/)
 ```
 
@@ -209,7 +210,7 @@ After a `grammar.js` change, regenerate, rebuild and check that every `.gem` fil
   - A tcp builtin resolves its socket with `gem_res_get` and again with `gem_res_lookup` after every `gem_io_yield`, and never touches the fd once the entry is gone: the number may already name a new file.
   - A socket an `extern blocking fn` got as a `Socket` param is busy until the call returns (`gem_res_busy_begin`/`_end`, called by the codegen'd wrapper, or by the scheduler for a killed caller's parked request): closing it then only retires it (`dead`), and its fd closes when the last busy call ends.
   - A new kind (an `exec` child, a TLS stream) adds a `GEM_RES_*` kind with its names in `gem_res_kinds` and its close in `gem_res_close_n`, and gets `claim`, the exit close and the diagnostics for free.
-- TCP builtins use non-blocking sockets + `poll()` in the scheduler loop. `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close` and `extern blocking fn` calls run on a 4-worker thread pool; the other filesystem and sqlite builtins run inline.
+- TCP builtins use non-blocking sockets + `poll()` in the scheduler loop. `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close` and `extern blocking fn` calls run on a thread pool (4 workers, `GEM_POOL_SIZE` at startup, tests/check_proc_limit.sh); the other filesystem and sqlite builtins run inline. More workers make fast pool calls slower (benchmarks/threadpool), so slow work isn't fixed by a bigger pool.
 - A `GemIORequest` (runtime/gem.h) is shared by the worker and the requesting process, and each side calls `gem_io_release` exactly once; the last release frees it. A process can be killed mid-request, so a builtin that submits to the pool copies its result out, then releases, and never frees the request or its args by hand. File and `exec` requests (`gem_io_submit`) keep their inputs and outputs in request fields that the last release frees. Other work goes through `gem_io_submit_extern(fn, args, free_args)`, where `free_args` frees anything in `args` the requester hasn't taken (see the sqlite builtins, and `_blk_<name>_free` in codegen for `extern blocking fn`).
 - Selective receive (`receive ... when ... end`) scans the mailbox and removes the first matching message, leaving others queued.
 - Process monitoring, linking, and `trap_exit` follow Erlang semantics. Named processes via `register`/`whereis` with auto-cleanup on death.

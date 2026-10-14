@@ -23,6 +23,8 @@ The app's routes live in `examples/bookmark_app/bookmarks.gem` (`app.gem` is the
 
 `stomp/` loads `examples/stomp_broker` (a STOMP message broker) with topic fan-out, slow subscribers and work queues; there is no control implementation. See [below](#stomp).
 
+`threadpool/run.sh` sweeps the runtime's I/O thread pool (the `GEM_POOL_SIZE` environment variable, 1 to 64 workers) over three loads in `threadpool/bench.gem`: 64 processes reading a small file, 16 readers beside 4 or 16 processes holding a worker for 100 ms at a time, and a sqlite/append/read mix; it prints each run's operations per second and latency p50/p99/max (microseconds, from a C clock in `threadpool/helpers.h`), and the start time of an empty program at each size. It needs only a built `build/gem` and takes about 5 minutes; it is not part of `measure_all.sh`. The results and what they decided are in `../docs/OPTIMIZATIONS_LOG.md`, "Thread pool size from `GEM_POOL_SIZE`, measured".
+
 `soak/` is not a benchmark: it runs the long-lived servers (mini_redis, stomp_broker, bookmark_app, and the honeypot and httpd under hostile clients) under a steady mixed load for an hour each and checks that they stay up, answer correctly, and keep memory, file descriptors and latency flat; see [below](#soak).
 
 ## Baselines

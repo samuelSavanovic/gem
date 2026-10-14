@@ -1449,14 +1449,24 @@ processes.
 | Yields to other processes | Blocks everything |
 |---|---|
 | `tcp_*` (except name lookup, see right), `sleep`, `receive` | `tcp_connect` to a host *name* (DNS lookup runs inline) |
-| `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, `extern blocking fn` (4-thread pool) | `sqlite_query`, `sqlite_exec`, and the close of a database at its owner's exit |
+| `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, `extern blocking fn` (a pool of 4 threads) | `sqlite_query`, `sqlite_exec`, and the close of a database at its owner's exit |
 | | `file_exists`, `is_dir`, `list_dir`, `mkdir`, `remove_file`, `normalize_path` |
 | | plain `extern fn`, `input`, `read_stdin`; `print`, `eprint`, `write_stdout` to a slow pipe |
 
 Keep sqlite queries short and indexed: a one-second query stalls every
 process for that second. Use `extern blocking fn` for any C call that can take more than
-about a millisecond. The pool has 4 workers, so four long `exec` calls
-delay every file read behind them.
+about a millisecond. The pool has 4 workers **(trap)**: four long calls
+(`exec`, an `extern blocking fn`) take all of them, and every file read
+waits behind them. 16 processes reading a small file made about 77,000
+reads/s; beside four processes each making 100 ms calls, about 240, each
+read waiting about 100 ms (`benchmarks/threadpool`, Linux x86_64 VM).
+Keep long calls fewer than the workers: run them from a few processes,
+or raise the pool with the `GEM_POOL_SIZE` environment variable above
+the number that can run at once (with 8 workers the reads ran at about
+70,000/s beside the four). Don't raise it further than that: on Linux,
+more workers make every fast call slower (the 16 readers alone: 77,000
+reads/s with 4 workers, 46,000 with 8 or 16; on an M-series Mac, about
+98,000 at 4, 8 and 16).
 
 ### Claim a resource in the process responsible for it
 
@@ -1906,6 +1916,7 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | `gen_server.call` to a server that has already died | `server exited: noproc` (by name: `no process registered`), not why it died | monitor it: the `DOWN` has the reason |
 | `spawn` per connection or per item, unguarded | raises at the process or memory limit (~14,000 on stock Linux); the acceptor dies | catch it, or cap in-flight work |
 | Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
+| As many long `exec` / `extern blocking fn` calls as pool workers (4) | every file read waits behind them (77,000 reads/s to 240) | fewer long calls at once, or `GEM_POOL_SIZE` above their number |
 | `extern blocking fn` called once per line or item | a thread hand-off and argument copies per call: 100x slower | plain `extern fn` for quick calls |
 | `if not p` on a `Ptr` | `NULL` is `0`, which is truthy | `p == 0` |
 | A `Ptr` sent, captured by `spawn`, or left when its process dies | shared or leaked C object; use after free | one process makes, uses and frees it, on every path |

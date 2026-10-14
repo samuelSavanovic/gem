@@ -2,7 +2,8 @@
 # The process limit: GEM_MAX_PROCS lowers it, spawn past it raises
 # "spawn: process table full" (catchable), std/http answers a connection it
 # can't spawn a process for with 503 and keeps accepting, and a bad
-# GEM_MAX_PROCS or GEM_MAX_MAPS stops the program before it runs. Also:
+# GEM_MAX_PROCS, GEM_MAX_MAPS or GEM_POOL_SIZE stops the program before it
+# runs, and GEM_POOL_SIZE sets the I/O pool's size. Also:
 # spawn's headroom under Linux's vm.max_map_count, and thread-pool work from
 # more than 1024 processes at once. runtime_stats() reports the limit and the refusals.
 #
@@ -211,6 +212,32 @@ exit $code"
 done
 check "GEM_MAX_MAPS above the system's" "1" \
   "$(GEM_MAX_MAPS=99999999999999999999 "$dir/one" 2>&1)"
+
+# GEM_POOL_SIZE: the number of I/O pool workers (a thread each, beside the
+# scheduler's), capped at 256; anything but digits for at least 1 stops the
+# program. The thread count is read from /proc, so Linux only.
+for bad in 0 -5 abc 12x "" " 5" "+3"; do
+  out=$(GEM_POOL_SIZE=$bad "$dir/one" 2>&1)
+  code=$?
+  check "GEM_POOL_SIZE='$bad'" "gem: GEM_POOL_SIZE must be a number of worker threads (at least 1), got '$bad'
+exit 1" "$out
+exit $code"
+done
+if [ -r /proc/self/status ]; then
+  cat > "$dir/threads.gem" <<'GEM'
+load "std/string"
+for line in string.split(read_file("/proc/self/status"), "\n")
+  if string.starts_with(line, "Threads:")
+    print(string.trim(substr(line, 8)))
+  end
+end
+GEM
+  "$GEM" "$dir/threads.gem" -o "$dir/threads" > /dev/null
+  check "4 workers by default" "5" "$("$dir/threads")"
+  check "GEM_POOL_SIZE=1" "2" "$(GEM_POOL_SIZE=1 "$dir/threads")"
+  check "GEM_POOL_SIZE=16" "17" "$(GEM_POOL_SIZE=16 "$dir/threads")"
+  check "GEM_POOL_SIZE above 256" "257" "$(GEM_POOL_SIZE=99999999999999999999 "$dir/threads")"
+fi
 
 if [ "$fails" -eq 0 ]; then
   echo "proc limit: ok"

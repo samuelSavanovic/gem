@@ -27,7 +27,8 @@ UMask=0077
 MemoryMax=2G
 MemorySwapMax=0
 LimitNOFILE=4096
-# The scheduler thread and 4 I/O workers.
+# The scheduler thread and 4 I/O workers (GEM_POOL_SIZE raises the 4:
+# raise this with it).
 TasksMax=32
 
 NoNewPrivileges=yes

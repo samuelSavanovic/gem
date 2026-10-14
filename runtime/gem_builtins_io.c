@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <limits.h>
+#include <spawn.h>
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
@@ -352,6 +353,18 @@ GemVal gem_is_dir_fn(void *_env, GemVal *args, int argc) {
 
 /* ─── Built-in: exec (run a shell command, return exit code) ─── */
 
+extern char **environ;
+
+int gem_run_shell(const char *cmd) {
+    char *argv[] = {"sh", "-c", (char *)cmd, NULL};
+    pid_t pid;
+    if (posix_spawn(&pid, "/bin/sh", NULL, NULL, argv, environ) != 0) return -1;
+    int status;
+    while (waitpid(pid, &status, 0) < 0)
+        if (errno != EINTR) return -1;
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
 GemVal gem_exec_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1 || args[0].type != VAL_STRING) {
@@ -370,7 +383,5 @@ GemVal gem_exec_fn(void *_env, GemVal *args, int argc) {
         return gem_int(code);
     }
 
-    int ret = system(args[0].sval);
-    int code = WIFEXITED(ret) ? WEXITSTATUS(ret) : -1;
-    return gem_int(code);
+    return gem_int(gem_run_shell(args[0].sval));
 }
