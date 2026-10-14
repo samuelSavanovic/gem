@@ -41,8 +41,7 @@ for_loops([1, 2])
 
 fn shadowing(x)
   let _sh1_x = "mine"
-  if true
-    let x = 2
+  for x in [2]
     print(_sh1_x, x)
   end
 end

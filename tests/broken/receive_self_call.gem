@@ -1,0 +1,37 @@
+# A fn with a `receive` that calls itself other than as its last action is
+# a compile error: a process loop whose stack grows with every message.
+# Three errors.
+# expect: `serve` waits for messages (`receive`) and calls itself here before it is done
+fn serve(state)
+  receive
+  when {tag: "stop"} then nil
+  when msg
+    serve(state + 1)
+    print("handled")
+  end
+end
+
+fn count(n)
+  let r = receive
+  when {tag: "inc"} then count(n + 1) + 0
+  end
+  push([], count(n))
+  r
+end
+
+# Not errors: tail calls in arms, `return`, through if/match, a closure.
+fn fine(n)
+  receive
+  when {tag: "a"}
+    fine(n + 1)
+  when {tag: "b"}
+    if n > 3 then return fine(0) end
+    match n
+    when 1 then fine(2)
+    else fine(n)
+    end
+  when {tag: "c"}
+    spawn do fine(1) end
+    fine(n)
+  end
+end

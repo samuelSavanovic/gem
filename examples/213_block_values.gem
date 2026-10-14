@@ -20,7 +20,7 @@ print(grade(95), grade(85), grade(10))
 
 fn describe(v)
   let d = match v
-  when {tag: "pt", x: x, y: y} then "point {x},{y}"
+  when {tag: "pt", x: px, y: py} then "point {px},{py}"
   when [a, b] then "pair {a} {b}"
   when 0 then "zero"
   else "other"

@@ -70,10 +70,10 @@ end
 closure_in_earlier_block()
 # A module's exported `let`, reassigned by the module.
 print(bvns.f(if c then bvns.set(); 1 end))
-# A shorthand pattern binding named like a loaded module.
+# A block value assigning a field of a pattern binding.
 match {string: {f: fn(v) "old {v}" end}}
-when {string}
-  print(string.f(if c then string.f = fn(v) "new {v}" end; 1 end))
+when {string: str}
+  print(str.f(if c then str.f = fn(v) "new {v}" end; 1 end))
 end
 let total = 5
 total += if c then t("rhs") end == "rhs" and 1 or 0

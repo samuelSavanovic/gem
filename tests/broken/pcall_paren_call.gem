@@ -1,0 +1,13 @@
+# `pcall(f(x))` is a compile error: f(x) runs before pcall gets its value,
+# outside the protection. Two errors.
+# expect: `pcall(f(x))` runs the call before `pcall` gets its result
+fn risky(x) error("boom {x}") end
+let a = pcall(risky(1))
+let b = pcall(risky(2).field)
+let c = pcall(math_helpers.risky(3))
+
+# Not errors: the keyword form, a fn value, a closure.
+let d = pcall risky(4)
+let e = pcall(fn() risky(5) end)
+let f = risky
+let g = pcall(f)

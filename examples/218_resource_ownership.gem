@@ -19,8 +19,8 @@ fn pair(body)
     body(c)
   end
   let c = receive
-  when {tag: "sock", sock: c}
-    c
+  when {tag: "sock", sock: sock}
+    sock
   end
   [pid, c, tcp_accept(l)]
 end

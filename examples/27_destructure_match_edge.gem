@@ -73,12 +73,13 @@ else
   print("7: FAIL - else")
 end
 
-# 8. Binding shadows outer variable
+# 8. A binding next to an outer variable of the key's name (binding the
+#    key's own name, `{name: name}`, is a compile error: it hides it)
 let name = "outer"
 let t8 = {name: "inner"}
 match t8
-when {name: name}
-  print("8: {name}")
+when {name: inner}
+  print("8: {inner}")
 end
 # Pattern bindings are scoped to the arm (top level included): after the
 # match, name is still "outer"

@@ -11,7 +11,7 @@ end
 
 fn mid_expr(t)
   print("in mid_expr")
-  t[0] + 1
+  let v = t[0] + 1
   "unreached"
 end
 

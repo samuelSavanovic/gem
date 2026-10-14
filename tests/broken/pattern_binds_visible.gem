@@ -1,0 +1,29 @@
+# A bare name in a `when` pattern that names a visible binding is a
+# compile error: it binds a new variable and matches anything, where
+# `^name` compares. Four errors.
+# expect: `STATUS_OK` in this pattern binds a new variable and matches anything
+let STATUS_OK = 200
+fn classify(code, tag)
+  match code
+  when STATUS_OK then "ok"
+  else "error"
+  end
+  match {tag: "x", code: 1}
+  when {tag: tag} then "tag"
+  when {code} then "code"
+  else nil
+  end
+  receive
+  when [classify, x] then x
+  end
+end
+
+# Not errors: pins, new names, `_`, a name bound in an earlier arm only.
+fn fine(v)
+  match v
+  when ^STATUS_OK then 1
+  when {tag: t} then t
+  when [a, _] then a
+  when a then a
+  end
+end

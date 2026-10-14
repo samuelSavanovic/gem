@@ -2,6 +2,7 @@
 # Takes a token array from the lexer, returns an AST using constructors from ast.gem.
 # Produces the EXACT same AST shape as the bootstrap compiler.
 
+load "./checks" (check_semantics)
 load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_for_in, make_for_range, make_match_arm, make_pat_table, make_pat_table_entry, make_pat_array, make_pat_literal, make_pat_name, make_pat_pin, make_pat_error, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
 load "./lexer" (tokenize, normalize_newlines, check_reserved_names)
 load "./errors" (make_error_sink)
@@ -112,7 +113,11 @@ fn parse_source(source, file, sink)
   end
   check_reserved_names(tokens, source, file, sink)
   let p = make_parser(tokens, source, file, sink)
-  p.parse()
+  let ast = p.parse()
+  if sink.count() == errors_before
+    check_semantics(ast, source, file, sink)
+  end
+  ast
 end
 
 # Pattern names split into the ones the pattern binds and the `^` pins.
@@ -182,6 +187,9 @@ fn make_parser(tokens, source, file, sink)
   # the parser is (0 outside one).
   let pat_bound = {}
   let pat_level = 0
+  # The names the pattern being parsed binds, with where they are written:
+  # a `when` arm keeps them (match_arm.binds) for compiler/checks.gem.
+  let pat_binds = []
   # Nesting of the statement being parsed: 1 for a statement directly in
   # the file's top-level code, more inside any block (if/while/for/match/
   # receive arms, fn and do bodies). Named fns and externs live only at 1.
@@ -289,6 +297,7 @@ fn make_parser(tokens, source, file, sink)
       report(tok.line, tok.col, len(tok.value), "'{tok.value}' is bound twice in this pattern", "a repeated name doesn't compare the values; pin it with `^{tok.value}` against an earlier binding, or compare in the body")
     end
     pat_bound[tok.value] = true
+    push(pat_binds, {name: tok.value, line: tok.line, col: tok.col})
   end
 
   # A module-scope binding of `tok`'s name (kind "let", "load", "fn" or
@@ -305,15 +314,23 @@ fn make_parser(tokens, source, file, sink)
       top_names[name] = {kind: kind, line: tok.line}
       return nil
     end
-    let rebindable = {let: true, load: true}
+    # A `let` and the module namespace a `load` binds (kind "module"):
+    # the `let` would hide the module in every fn of the file.
+    if (prev.kind == "module" and kind == "let") or (prev.kind == "let" and kind == "module")
+      let mline = if prev.kind == "module" then prev.line else tok.line end
+      report(tok.line, tok.col, if span == nil then len(name) else span end, "`{name}` names the module loaded at line {mline}; a module-level `let {name}` would hide it in every fn of this file", "pick another name for the variable")
+      return nil
+    end
+    let rebindable = {let: true, load: true, module: true}
     if rebindable[prev.kind] and rebindable[kind]
       return nil
     end
+    let shown = if prev.kind == "module" then "load" else prev.kind end
     let article = if prev.kind == "extern fn" then "an" else "a" end
     if span == nil
       span = len(name)
     end
-    report(tok.line, tok.col, span, "`{name}` is already defined at line {prev.line} ({article} `{prev.kind}`)", "pick another name; a module-level name has one definition (only a `let` can be repeated, and it rebinds the name)")
+    report(tok.line, tok.col, span, "`{name}` is already defined at line {prev.line} ({article} `{shown}`)", "pick another name; a module-level name has one definition (only a `let` can be repeated, and it rebinds the name)")
   end
 
   # NUMBER token `t` holds an integer literal that doesn't fit in an int.
@@ -1133,6 +1150,11 @@ fn make_parser(tokens, source, file, sink)
           end
         end
 
+        # `pcall(f(x))`: f(x) runs first, as pcall's argument, outside
+        # the protection.
+        if node.tag == "var" and node.name == "pcall" and len(args) == 1 and type(args[0]) == "table" and args[0].tag == "call"
+          report(node.line, node.col, len("pcall"), "`pcall(f(x))` runs the call before `pcall` gets its result, so an error in it is not caught", "write `pcall f(x)` (no parentheses), or `pcall do ... end` for several statements")
+        end
         node = make_call(node, args, call_line)
         continue
       end
@@ -1530,6 +1552,7 @@ fn make_parser(tokens, source, file, sink)
     end
     if pat_level == 0
       pat_bound = {}
+      pat_binds = []
     end
     pat_level += 1
     let p = parse_pattern_fn()
@@ -1578,13 +1601,13 @@ fn make_parser(tokens, source, file, sink)
   # Anything else → expression arm (equality with the match target).
   let parse_when_arm = fn()
     let pt = peek().type
-    if pt == "\{" or pt == "[" or pt == "^"
+    if pt == "\{" or pt == "[" or pt == "^" or (pt == "NAME" and ends_arm_head(peek_at(1).type))
       let pat = parse_arm_pattern()
-      return make_match_arm(pat, nil, parse_arm_body())
-    end
-    if pt == "NAME" and ends_arm_head(peek_at(1).type)
-      let pat = parse_arm_pattern()
-      return make_match_arm(pat, nil, parse_arm_body())
+      let binds = pat_binds
+      pat_binds = []
+      let arm = make_match_arm(pat, nil, parse_arm_body())
+      arm.binds = binds
+      return arm
     end
     let wstart = peek()
     let wval = parse_banned("when")
@@ -1628,6 +1651,7 @@ fn make_parser(tokens, source, file, sink)
         let names = []
         let dflts = []
         pat_bound = {}
+        pat_binds = []
         skip_nl()
         while peek().type != "}" and not at_end()
           let _lp = pos
@@ -1675,6 +1699,7 @@ fn make_parser(tokens, source, file, sink)
         let names = []
         let dflts = []
         pat_bound = {}
+        pat_binds = []
         skip_nl()
         while peek().type != "]" and not at_end()
           let _lp = pos
@@ -1929,7 +1954,7 @@ fn make_parser(tokens, source, file, sink)
         let alias_tok = expect("NAME")
         alias_name = alias_tok.value
         if at_top
-          note_top_name(alias_tok, "load")
+          note_top_name(alias_tok, "module")
         end
       elif peek().type == "("
         advance()
@@ -1963,7 +1988,7 @@ fn make_parser(tokens, source, file, sink)
         if len(base) > 4 and substr(base, len(base) - 4, 4) == ".gem"
           base = substr(base, 0, len(base) - 4)
         end
-        note_top_name({type: "NAME", value: base, line: path_tok.line, col: path_tok.col}, "load", len(path) + 2)
+        note_top_name({type: "NAME", value: base, line: path_tok.line, col: path_tok.col}, "module", len(path) + 2)
       end
       return {tag: "load", path: path, alias: alias_name, selective: selective, selective_pos: selective_pos, line: t.line, col: t.col}
     end
@@ -2107,6 +2132,9 @@ fn make_parser(tokens, source, file, sink)
     let e = parse_assign_fn()
     if type(e) == "table" and e.line == nil
       e.line = t.line
+    end
+    if type(e) == "table"
+      e.stmt_col = t.col
     end
     e
   end

@@ -30,7 +30,7 @@ end
 # 4. Mixed literal + binding
 let resp = {ok: true, value: 42}
 match resp
-when {ok: false, error: msg}
+when {ok: false, error: err}
   print("4: FAIL - error branch")
 when {ok: true, value: v}
   print("4: value={v}")
@@ -189,10 +189,11 @@ else
   print("19: FAIL")
 end
 
-# 20. Regular variable expression match (regression)
+# 20. A variable's value as an arm: pinned (a bare `expected` would bind a
+#     new variable, a compile error since one is in scope)
 let expected = "hello"
 match "hello"
-when expected
+when ^expected
   print("20: var expr match works")
 else
   print("20: FAIL")

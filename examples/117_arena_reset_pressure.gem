@@ -159,8 +159,8 @@ for i = 0, 500
   send(worker, {n: i, pad: "p{i}"})
 end
 receive
-when {total: t}
-  print("mailbox", t)
+when {total: total}
+  print("mailbox", total)
 end
 
 # 12. Mutual tail recursion keeping the caller's temporaries.
