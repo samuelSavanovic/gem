@@ -4,7 +4,7 @@
 
 fn drain_loop()
   receive
-  when m
+  when _msg
     drain_loop()
   end
 end

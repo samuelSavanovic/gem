@@ -2045,8 +2045,8 @@ fn launch(caller, router_ref, watch, opts)
     error("{caller}: {s.error}")
   end
   receive
-  when {tag: "_http_started", ref: ^ref, port: port}
-    {pid: s.value, port: port}
+  when {tag: "_http_started", ref: ^ref, port: bound_port}
+    {pid: s.value, port: bound_port}
   when {tag: "_http_started", ref: ^ref, error: e}
     error("{caller}: {e}")
   after STOP_TIMEOUT_MS

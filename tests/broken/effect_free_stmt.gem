@@ -1,0 +1,33 @@
+# An expression statement with no effect is a compile error: in the middle
+# of a block, or at the end of a block whose value isn't used (a loop body,
+# the top-level code). Six errors.
+# expect: a negation on its own does nothing
+fn total(a, b)
+  let t = a
+  - b
+  t
+end
+
+fn loop(xs)
+  for x in xs
+    x + 1
+  end
+  let n = 0
+  while n < 2
+    n += 1
+    n
+  end
+  "the value"
+  n
+end
+
+[1, 2]
+"top-level string"
+
+# Not errors: a fn's or branch's value, a bare `nil`, calls.
+fn fine(c)
+  if c then "yes" else nil end
+  print("x")
+  nil
+  c
+end

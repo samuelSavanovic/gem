@@ -52,37 +52,38 @@ for p in [1, 2]
 end
 print("5: {gs[0]()} {gs[1]()} {gs[2]()} {gs[3]()}")
 
-# 6. let in an if body shadows; the initializer reads the outer binding
+# 6. a let in an if body reading the outer binding (a let of the outer
+#    name there would be a compile error: it hides it)
 let z = 1
 if true
-  let z = z + 41
-  z += 1
-  push(fs, fn() z end)
+  let z2 = z + 41
+  z2 += 1
+  push(fs, fn() z2 end)
 end
 z = 3
 print("6: {fs[2]()} z={z}")
 
-# 7. assigning the outer binding before shadowing it in the same block
+# 7. assigning the outer binding in a block
 if true
   x = 5
-  let x = 6
-  x = 7
+  let x2 = 6
+  x2 = 7
 end
 print("7: x={x}")
 
 # 8. elif / else arms, while body
 let w = "g"
 if false
-  let w = "a"
+  let wa = "a"
 elif true
-  let w = "b"
-  push(fs, fn() w end)
+  let wb = "b"
+  push(fs, fn() wb end)
 else
-  let w = "c"
+  let wc = "c"
 end
 let n = 0
 while n < 2
-  let w = "loop {n}"
+  let wl = "loop {n}"
   n += 1
 end
 print("8: {fs[3]()} w={w}")
@@ -103,13 +104,13 @@ print("9: {c1} {c2} {c3} i={i}")
 # 10. match and receive bindings are scoped to their arm
 let name = "outer"
 match {name: "inner"}
-when {name: name}
-  push(fs, fn() name end)
+when {name: inner}
+  push(fs, fn() inner end)
 end
 send(self(), {name: "msg"})
 receive
-when {name: name}
-  push(fs, fn() name end)
+when {name: got_name}
+  push(fs, fn() got_name end)
 end
 print("10: {fs[4]()} {fs[5]()} name={name}")
 
@@ -137,16 +138,17 @@ end
 let got = sort([receive(), receive()])
 print("13: {got[0]} {got[1]} x={x}")
 
-# 14. a long-running loop whose body shadows top-level names
+# 14. a long-running loop whose body makes block locals next to
+#     top-level names
 let msg = "global"
 let total = 0
 let keep = []
 let m = 0
 while true
-  let msg = "iter {m}"
+  let it_msg = "iter {m}"
   if m % 2 == 0
-    let total = m * 2
-    push(keep, fn() "{msg}:{total}" end)
+    let doubled = m * 2
+    push(keep, fn() "{it_msg}:{doubled}" end)
   end
   total += 1
   m += 1

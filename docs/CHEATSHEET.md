@@ -8,9 +8,8 @@ let x = 10
 let {a, b} = tbl                     # table destructuring
 let [first, second] = arr            # array destructuring
 let {port = 8080, host = "0.0.0.0"} = opts   # field defaults (fire on a missing key, not nil)
-let x = x + 1                        # in a fn/block: new variable shadowing the old x (to block end)
-                                     # (warned in a loop when nothing there assigns x and the loop's condition
-                                     #  or the code after the loop reads it)
+let x = x + 1                        # same block: new variable shadowing the old x (to block end)
+                                     # a let hiding an enclosing block's x (same fn) is a compile error: x = ... assigns
                                      # a let is visible only to the end of its block (if/loop body/arm):
 let s = if c then 1 else 2 end       #   give the if a value to use it after the block
 

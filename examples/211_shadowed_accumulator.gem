@@ -1,16 +1,24 @@
 # `let x = ...x...` in a loop body declares a new `x` each iteration,
-# computed from the outer one, which never changes: the compiler warns
-# when the code after the loop reads the outer `x` and nothing in the loop
-# assigns it (tests/notes/211_shadowed_accumulator.expected).
+# computed from the outer one, which never changes. Hiding a variable of
+# an enclosing block of the same fn is a compile error
+# (tests/broken/let_hides_outer.gem); hiding a module-level variable from
+# inside a fn is allowed, and the compiler warns when the code after the
+# loop reads the outer `x` and nothing in the loop assigns it
+# (tests/notes/211_shadowed_accumulator.expected).
 
 let total = 0
-for x in [1, 2, 3]
-  let total = total + x
+let out = ""
+let count = 0
+
+fn summed()
+  for x in [1, 2, 3]
+    let total = total + x
+  end
+  print("total", total)
 end
-print("total", total)
+summed()
 
 fn joined(words)
-  let out = ""
   for w in words
     if w != ""
       let out = out + w
@@ -21,7 +29,6 @@ end
 print("joined", joined(["a", "b"]))
 
 fn counted(items)
-  let count = 0
   match items
   when [_, _]
     for i = 0, 2
@@ -44,14 +51,13 @@ fn quiet(lines, path)
   let line = "outer"
   for line in lines
     let line = line + "!"
-    let path = path + "/" + line
-    let k = 1
-    let k = k + 1
-    let m = m + 1
+    let p = path + "/" + line
+    let k2 = 1
+    let k2 = k2 + 1
     m += 1
     let f = fn() let acc = acc + "y" end
-    print(path, k)
+    print(p, k2)
   end
-  print(n, m, acc, line, k)
+  print(n, m - 1, acc, line, k)
 end
 quiet(["a"], "p")

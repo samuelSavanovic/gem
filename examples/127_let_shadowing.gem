@@ -106,8 +106,8 @@ fn loops()
   let x = 1
   let i = 0
   while i < 3
-    let x = x + i
-    print("w", x)
+    let xw = x + i
+    print("w", xw)
     i += 1
   end
   for x in [10, 20]
@@ -115,26 +115,26 @@ fn loops()
     print("f", x)
   end
   for i = 0, 3
-    let x = x * 100 + i
-    print("r", x)
+    let xr = x * 100 + i
+    print("r", xr)
   end
   for k, v in {a: 1}
-    let x = v + x
-    print("kv", k, x)
+    let xk = v + x
+    print("kv", k, xk)
   end
   print(x, i)
 end
 loops()
 
-# match arm bindings shadow
+# match arm bindings (a bare name of a visible binding is a compile error)
 fn m(v)
   let a = "outer"
   match v
-  when [a, b]
-    print("arm", a, b)
-  when {a}
-    let a = a + 1
-    print("tbl", a)
+  when [a1, b]
+    print("arm", a1, b)
+  when {a: a2}
+    let a2 = a2 + 1
+    print("tbl", a2)
   else
     print("else", a)
   end
@@ -144,14 +144,14 @@ m([1, 2])
 m({a: 41})
 m(3)
 
-# receive arm bindings shadow
+# receive arm bindings
 fn r()
   let msg = "outer"
   send(self(), {msg: "hi"})
   receive
-  when {msg}
-    let msg = msg + "!"
-    print("recv", msg)
+  when {msg: got}
+    let got = got + "!"
+    print("recv", got)
   end
   print("after", msg)
 end
@@ -166,12 +166,12 @@ fn k()
 end
 print(k(), g)
 
-# assignment after a shadow targets the new variable; outer unchanged after the block
+# a block local next to a param; the param unchanged after the block
 fn assigns(n)
   if n > 0
-    let n = n + 1
-    n = n * 2
-    print("inner", n)
+    let n2 = n + 1
+    n2 = n2 * 2
+    print("inner", n2)
   end
   n
 end
@@ -195,15 +195,15 @@ fn ds(p)
 end
 ds(0)
 
-# param shadowed in nested ifs
+# locals of nested ifs next to a param
 fn nest(n)
   if true
-    let n = n + 1
+    let n1 = n + 1
     if true
-      let n = n * 10
-      print(n)
+      let n2 = n1 * 10
+      print(n2)
     end
-    print(n)
+    print(n1)
   end
   n
 end
@@ -214,15 +214,15 @@ let base = 1
 if true
   let y = base + 1
   if true
-    let y = y * 10
-    print("inner y", y)
+    let y10 = y * 10
+    print("inner y", y10)
   end
   print("outer y", y)
   let fs = []
   let kk = 0
   while kk < 3
-    let y = y + kk
-    push(fs, fn() y end)
+    let yk = y + kk
+    push(fs, fn() yk end)
     kk += 1
   end
   print(fs[0](), fs[1](), fs[2](), y)
@@ -233,9 +233,9 @@ for base in [5, 6]
 end
 print("base", base)
 match {base: 7}
-when {base}
-  let base = base + 1
-  print("match", base)
+when {base: b7}
+  let b7 = b7 + 1
+  print("match", b7)
 end
 print("base", base)
 # module-level re-let rebinds the module binding (named fns see it)
@@ -281,11 +281,11 @@ fn build(n)
   let i = 0
   while i < n
     let outer = t
-    let t = {s: "item-{i}-" + "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", n: i}
-    let s = t.s
+    let it = {s: "item-{i}-" + "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", n: i}
+    let s = it.s
     if i % 25000 == 0
       push(outer.items, s)
-      outer.total = outer.total + t.n
+      outer.total = outer.total + it.n
     end
     i += 1
   end
@@ -300,11 +300,11 @@ fn build2(n)
   let i = 0
   while i < n
     let acc2 = acc
-    let total = total + i
-    let acc = "s{i}:" + "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+    let total2 = total + i
+    let item = "s{i}:" + "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
     if i % 30000 == 0
-      push(acc2, acc)
-      print(total)
+      push(acc2, item)
+      print(total2)
     end
     i += 1
   end
@@ -323,9 +323,9 @@ print(pr.count, pr.s)
 let tbl = {n: 0, log: []}
 let j = 0
 while j < 110000
-  let tbl = {n: j, s: "t{j}" + "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"}
+  let row = {n: j, s: "t{j}" + "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"}
   if j % 50000 == 0
-    print(tbl.s)
+    print(row.s)
   end
   j += 1
 end

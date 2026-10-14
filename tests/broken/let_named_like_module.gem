@@ -1,0 +1,13 @@
+# A module-level `let` named like a module the file loads is a compile
+# error: it would hide the module in every fn of the file. Two errors.
+# expect: `json` names the module loaded at line 4
+load "std/json"
+load "std/string" as str
+let json = json.encode([1])
+let str = "s"
+
+# Not errors: a local of a fn, another name.
+fn local()
+  let json2 = 1
+  json2
+end

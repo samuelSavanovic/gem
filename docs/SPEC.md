@@ -149,6 +149,7 @@ A `let` always declares a new variable. If a variable of the same name is alread
 - Later code, including assignments (`n = …`, `n += 1`), refers to the new variable. The old one is not changed.
 - Closures created before the shadowing `let` keep the old variable; closures created after it see the new one.
 - A shadow made inside a nested block (`if`/`elif`/`else`, `while` and `for` bodies, `match`/`receive` arms, closure bodies) ends with that block: after it the outer variable is visible again, unchanged. In a loop body every iteration starts from the outer variable.
+- **A `let` in a nested block that hides a variable of an enclosing block of the same function** (a parameter, or a `let` or `for` variable of an enclosing block; in top-level code, a module-level binding or a `let` of an enclosing top-level block) **is a compile error**: `` `let total` hides the `total` of an enclosing block (line 6): it makes a new variable, and the outer one keeps its value ``. To change the outer variable, assign it; for a new one, pick another name. A `let` of a name the same block already declares (an earlier `let` there, the `for` variable of that loop, a pattern binding of that arm) rebinds it there and is allowed, as is a `let` in a closure or a named function, which is a function of its own: `let n = n - 1` at the top of a body, `for line in lines` with `let line = string.trim(line)` in the loop, `fn() let x = 1 ... end` next to an outer `x`.
 - `for` loop variables and `match`/`receive` pattern bindings are lets of their body and shadow the same way.
 - A parameter (plain, defaulted, rest or destructured) shadows an outer variable, a module-level binding, a named or `extern` function or a builtin of the same name in the whole function body, closures and `do` blocks in it included: in `fn show(item) fn() item end end` the closure reads the argument even when a top-level `fn item` exists.
 - **Warning:** a `let` in a `while` body (at any depth, not inside a closure) that shadows a variable the loop's condition reads, when nothing in the loop body assigns that name (`x = …` or `x += …`, closures included), gets a compile-time warning on stderr. The condition reads the outer variable, which then can't change through it: `while i < n` with `let i = i + 1` in the body never ends. To advance the counter, assign it: `i = i + 1`. Any assignment to the name in the body turns the warning off, as does renaming the new variable. A name that a module-level variable has is not warned about when a function or closure of the same file assigns it, since a call in the loop can change the module-level variable.
@@ -159,15 +160,15 @@ fn f(n)
   let before = fn() n end
   let n = n - 1        # new n, initialized from the parameter
   if n > 0
-    let n = n * 10     # shadows until `end`
-    print(n)           # 40
+    let n10 = n * 10   # `let n` here would be a compile error
+    print(n10)         # 40
   end
   print(n, before())   # 4 5
 end
 f(5)
 ```
 
-The exception is a `let` directly in a file's top-level code: that declares the module-level binding of the name (see below), of which there is one per name. A second top-level `let` of the same name rebinds that module-level binding, as an assignment would; named functions and closures, which always read module-level bindings live, see the new value. A module-level name has one kind of definition: a `fn`, an `extern fn`, or `let`s (the names a `load` binds count as `let`s). A `fn` or `extern fn` with the name of another module-level `let`, `load` binding, `fn` or `extern fn` in the same file, in either order, is a compile error at the second definition (`` `helper` is already defined at line 1 (a `let`)``).
+The exception is a `let` directly in a file's top-level code: that declares the module-level binding of the name (see below), of which there is one per name. A second top-level `let` of the same name rebinds that module-level binding, as an assignment would; named functions and closures, which always read module-level bindings live, see the new value. A module-level name has one kind of definition: a `fn`, an `extern fn`, or `let`s (the names a `load` binds count as `let`s). A module-level `let` named like a module the file loads (`load "std/json"` and `let json = ...`, or `load "x" as m` and `let m = ...`), in either order, is a compile error: it would hide the module in every function of the file (`` `json` names the module loaded at line 1; a module-level `let json` would hide it in every fn of this file ``). A `fn` or `extern fn` with the name of another module-level `let`, `load` binding, `fn` or `extern fn` in the same file, in either order, is a compile error at the second definition (`` `helper` is already defined at line 1 (a `let`)``).
 
 ### Destructuring
 
@@ -234,7 +235,7 @@ let result = add(
 )
 ```
 
-Table and array literals may span lines the same way. Other expressions may not: a line break after a binary operator or inside parentheses ends the statement (`let t = (1 +` followed by `2)` on the next line is a parse error), and a line that starts with `-` is a new statement (`let x = 1` followed by `- 2` on the next line leaves `x` at `1`). Parameter lists in a `fn` definition must fit on one line. Split a long condition into named `let`s.
+Table and array literals may span lines the same way. Other expressions may not: a line break after a binary operator or inside parentheses ends the statement (`let t = (1 +` followed by `2)` on the next line is a parse error), and a line that starts with `-` is a new statement (`let x = 1` followed by `- 2` on the next line is the statement `- 2`). An expression statement that does nothing (no call and no assignment in it: a literal other than `nil`, a variable, an operator, a field or index read, an array literal) is a compile error, `` a negation on its own does nothing (in the middle of a block) ``, where its value is not used: anywhere but the last statement of a block, and also as the last statement of a loop body or of top-level code. The last statement of a function, closure or `if`/`match`/`receive` branch is the block's value and may be anything; a bare `nil` is always allowed, to write an empty branch. Parameter lists in a `fn` definition must fit on one line. Split a long condition into named `let`s.
 
 A parameter list names each parameter once (destructured fields and the rest parameter included); a repeated name is a compile error, `duplicate parameter 'a'`. A call to a named function, an `extern fn`, or a module-level `let name = fn(...)` that is declared once and never assigned, by name or as a module export (`m.f(...)`), is checked at compile time: it must pass at least the parameters without a default and at most all of them (any number more with a rest parameter), else it is a compile error, `` `h` takes 2 arguments, called with 1 ``, whose hint shows the declaration. A trailing `do` block counts as the last argument. A call through a value (a variable, parameter or table field holding a function) is not checked: there, extra arguments are dropped and missing ones are `nil` (or the parameter's default). To make a parameter optional, give it a default (`b = nil`). Calling a non-function value is a runtime error.
 
@@ -535,7 +536,7 @@ Pattern rules:
 - `[p1, p2, ...]` — checks target is a table with exactly N entries whose keys are the ints `0 .. N-1`, then recursively matches each element. A record with N string keys, or an array with an extra string key, does not match. `[]` matches any empty table (`{}` and `[]` are the same value). There is no rest element: `[x, y]` never matches a 3-element array.
 - There are no guards or alternatives: an expression arm whose expression is a comparison (`==`, `!=`, `<`, `>`, `<=`, `>=`), `in`, `and`, `or` or `not` (`when v > 5`, `when "a" or "b"`) is a compile error, `` a `when` arm can't test a condition ``, since it would compare the target with the expression's value (`true`/`false`, or an operand of `and`/`or`). Use an `if` chain, or one arm per value.
 - A literal (int, float, string, bool) in pattern position matches by equality. `nil` is also a literal — `when nil` matches only `nil`, it does not bind a variable.
-- A name in pattern position is a variable binding — always matches and binds the matched value.
+- A name in pattern position is a variable binding — always matches and binds the matched value. A name that is already visible there (a local, a parameter, a module-level binding, a function, a name a `load` binds) is a compile error, since the arm would match anything where a comparison was almost always meant: `` `STATUS_OK` in this pattern binds a new variable and matches anything; it doesn't compare with the `STATUS_OK` in scope ``. Pin it (`^STATUS_OK`) to compare, or pick another name; `_` never counts.
 - `^name` (a pin) matches by equality with the current value of the variable `name`; it binds nothing. The pinned name must already be in scope, and only a plain variable name can be pinned — bind an expression like `t.ref` to a local first. `when ^x` works at the top of a `match` or `receive` arm as well as inside table and array patterns. The comparison is `==`, so a pinned table matches only that same table — never a copy received in a message. Pin primitives and refs.
 - A bare name after `when` (e.g., `when x`) is a catch-all that binds the entire match target.
 - A pattern binds each name once: `when [x, x]` is a compile error (`'x' is bound twice in this pattern`), not an equality test; pin an earlier binding (`^x`) or compare in the body. `_` may repeat. Destructuring `let`s follow the same rule, and `for k, v` needs two different names.
@@ -621,6 +622,8 @@ loop(10000000, 0)         # works — would overflow without TCO
 ```
 
 TCO applies to every named function (`fn name(...)`), including ones with default, rest, or destructured parameters. A self tail call behaves exactly like a real call: an omitted argument evaluates its default (seeing the new values of earlier parameters), extra arguments go into a fresh rest table, and a closure created in one iteration keeps that iteration's parameter bindings. Anonymous functions are not optimized. Non-tail calls (where the result is used in a further expression, e.g. `n * f(n-1)`) remain normal recursive calls.
+
+A named function that waits for messages (a `receive` in its body, outside closures) and calls itself other than in tail position (the last expression of the body or of a branch there, or `return f(...)`) is a compile error: such a process loop keeps a stack frame per message until the process overflows its stack (`` `serve` waits for messages (`receive`) and calls itself here before it is done: ... ``). Calls in closures (`spawn do serve(s) end`) don't count.
 
 Mutual tail recursion between named functions (`fn A` tail-calls `fn B`, which tail-calls `fn A`, through any number of functions) is also run at constant stack depth, as long as no function in the cycle has rest or default parameters, a parameter that a nested closure assigns to, or more than 16 parameters. A cycle that does not qualify grows the stack on every call; write such a loop as direct self-recursion or use `while`.
 
@@ -1223,7 +1226,7 @@ when {ok: false, error: msg}
 end
 ```
 
-**Function form** — `pcall(f)` calls `f()` with zero arguments. Useful when the body contains multiple statements:
+**Function form** — `pcall(f)` calls `f()` with zero arguments. Useful when the body contains multiple statements. Its argument is evaluated first, unprotected, so `pcall(f(x))` (a call as the argument) is a compile error, `` `pcall(f(x))` runs the call before `pcall` gets its result, so an error in it is not caught ``; write `pcall f(x)`:
 
 ```
 let result = pcall(fn()
