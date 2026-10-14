@@ -222,37 +222,42 @@ fn repeat(s, n)
   end
 end
 
-# Edit distance between `a` and `b`: insertions, deletions and
-# substitutions of one byte each.
+# Edit distance between `a` and `b`: inserting, removing or changing a
+# byte, or swapping two neighbouring bytes, is one edit each.
 fn distance(a, b)
   let alen = len(a)
   let blen = len(b)
   if alen == 0 then return blen end
   if blen == 0 then return alen end
+  let before = []
   let prev = []
   for j = 0, blen + 1
     push(prev, j)
+    push(before, 0)
   end
-  let curr = []
   for i = 1, alen + 1
-    curr[0] = i
+    let curr = [i]
     for j = 1, blen + 1
       let cost = if ord(a, i - 1) == ord(b, j - 1) then 0 else 1 end
       let m = prev[j] + 1
       if curr[j - 1] + 1 < m then m = curr[j - 1] + 1 end
       if prev[j - 1] + cost < m then m = prev[j - 1] + cost end
-      curr[j] = m
+      if i > 1 and j > 1 and ord(a, i - 1) == ord(b, j - 2) and ord(a, i - 2) == ord(b, j - 1) and before[j - 2] + 1 < m
+        m = before[j - 2] + 1
+      end
+      push(curr, m)
     end
-    let tmp = prev
+    before = prev
     prev = curr
-    curr = tmp
   end
   prev[blen]
 end
 
 ## Returns the string of `candidates` (an array) closest to `word`, or nil
 ## when none is close: at most one edit away for a `word` of up to 4
-## bytes, two for a longer one (an edit adds, removes or changes a byte).
+## bytes, two for a longer one (an edit adds, removes or changes a byte,
+## or swaps two neighbouring ones); else one that is `word` followed by
+## `_` and more (`timeout` finds `timeout_ms`).
 ## For "did you mean" messages. Non-string candidates are skipped; `word`
 ## itself is never returned.
 ##
@@ -272,7 +277,17 @@ fn closest(word, candidates)
     end
   end
   let limit = if len(word) <= 4 then 1 else 2 end
-  if best_d <= limit then best end
+  if best_d <= limit
+    return best
+  end
+  # `timeout` for `timeout_ms`: a candidate that is `word` and a suffix
+  # after `_`.
+  for c in candidates
+    if type(c) == "string" and len(word) >= 3 and starts_with(c, word + "_")
+      return c
+    end
+  end
+  nil
 end
 
 export split, index_of, join, trim, starts_with, ends_with, upper, lower, contains, repeat, closest

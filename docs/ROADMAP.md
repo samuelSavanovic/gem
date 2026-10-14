@@ -121,11 +121,13 @@ What needs building: a pool of idle connections per host and port, reused by lat
 
 `##` doc comments (BEST_PRACTICES.md, "Document the public API with `##`") document the public API of std and user modules, but nothing reads them yet. Needs: a `gem doc <file>` subcommand that prints (or writes HTML for) a module's header and its exported functions' docs, with a comment collection an LSP hover could reuse; and a doctest pass that runs each `call    # result` example line and compares the printed value, wired into `make test` for std, so docs can't drift from behavior (as Rust's doctests do). Trade-off: examples have to stay self-contained one-liners for the checker; a multi-line example would need an explicit marker.
 
-## Catching typos in option bags and message tags (P1)
+## Catching typos in option bags and message tags (P1; steps 1–2 done)
 
 std configures most things with a table of string-named options (`supervisor.start({strategy: "one_for_all"})`, child specs, `http.start`), and a typo there is easy. A misspelled *value* is mostly caught already: `strategy: "one_for_al"`, `restart: "permanant"` and `log.set_level("warnign")` raise as the call runs. A misspelled *key* is not: a destructured option bag (`fn start({strategy = "one_for_one"} = {})`) ignores keys it doesn't name, so `{stratgy: "one_for_all"}` silently runs with the default, and `http.start` documents "other keys are ignored".
 
 What needs building, in order (1–3 for option bags, 4 for messages):
+
+Steps 1 and 2 are done (PLAN.md B6): a destructured parameter with defaults raises for an unknown key, `...rest` opts out, std checks its option tables and child specs, and the value checks name the closest value. Step 3 and 4 remain.
 
 1. **Unknown keys raise, for every destructured option bag.** The compiler already emits the prelude that unpacks the bag; it also checks that the table has no other keys and raises `<fn>: unknown option "stratgy" (did you mean "strategy"?)`. Every std function and every user fn in that style gets it with nothing new to learn. A bag that means to take more keys says so with a rest entry in the pattern (`{port = 8080, ...rest}`), the opt-out. Trade-off: it changes behaviour; code that passes a larger table through on purpose starts raising, so the change finds those call sites first (std's "other keys are ignored" docs go).
 2. **"Did you mean" on the value checks** std already makes (strategy, restart, log level), from a small edit-distance helper, and `process_flag: unknown flag` names the flag.

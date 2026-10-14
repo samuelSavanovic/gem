@@ -56,6 +56,7 @@ expected=(
   "missing_end:1:1"
   "missing_end_sibling:1:1"
   "did_you_mean:5:5"
+  "opts_rest_not_last:1:1"
   "missing_then_branches:1:4"
   "receive_no_arms:3:3"
   "multi_undeclared:3:5"

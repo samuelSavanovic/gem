@@ -131,8 +131,15 @@ The order is the order of the work.
    the runtime instead of OpenSSL, which is optional and linked only for
    TLS), `std/utf8`, `std/csv`. Left: full Unicode case mapping (`ß` to
    `SS`, scripts past Armenian).
-6. **Option-bag typos** (ROADMAP P1, steps 1–2): unknown keys raise, with
+6. **Option-bag typos** ✓ Done (PR 4). (ROADMAP P1, steps 1–2): unknown keys raise, with
    "did you mean".
+   *Landed:* a destructured parameter with defaults checks its keys
+   (`__check_opts`, emitted by the parser); `...rest` in the pattern
+   takes the others and opts out; a pattern without defaults stays a
+   record. std's plain `opts` tables (http.start/serve, request.*,
+   supervisor and dynamic_supervisor specs, tls_connect) check theirs
+   explicitly; strategy, restart, log level and process_flag name the
+   closest value.
 7. **Small std gaps** from ROADMAP "std API gaps": json `indent`, mime
    types, `time.parse`, gen_server names.
 8. **Error messages:** ✓ Done. "did you mean" for undefined names; a missing

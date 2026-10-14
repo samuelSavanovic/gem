@@ -1,0 +1,50 @@
+# Option bags: an unknown key raises, naming the closest known one.
+load "std/supervisor"
+load "std/dynamic_supervisor"
+load "std/http"
+load "std/request"
+load "std/log"
+load "std/string"
+
+# A destructured parameter with defaults is an option bag: the compiler
+# checks its keys.
+fn serve({port = 8080, host = "0.0.0.0", timeout_ms = 1000} = {})
+  "{host}:{port} {timeout_ms}"
+end
+fn tag({level = 1, ...rest} = {})
+  "{level} {rest}"
+end
+let block = fn({x = 1} = {}) x end
+
+fn err(f)
+  pcall(f).error
+end
+
+print(serve({port: 1}))
+print(err(fn() serve({prot: 1}) end))
+print(err(fn() serve({timeout: 5}) end))
+print(err(fn() serve({verbose: true}) end))
+print(err(fn() serve({0: 1}) end))
+print(err(fn() block({y: 2}) end))
+print(tag({level: 3, color: "red"}))
+
+# std checks its option tables and child specs the same way.
+fn idle()
+  spawn do
+    receive
+    when m then nil
+    end
+  end
+end
+print(err(fn() supervisor.start({stratgy: "one_for_all", children: []}) end))
+print(err(fn() supervisor.start({strategy: "one_for_al", children: []}) end))
+print(err(fn() supervisor.start({children: [{id: "a", start: idle, restrat: "temporary"}]}) end))
+print(err(fn() supervisor.start({children: [{id: "a", start: idle, restart: "permanant"}]}) end))
+print(err(fn() dynamic_supervisor.start({child: {start: idle}, max_restart: 1}) end))
+print(err(fn() dynamic_supervisor.start({child: {start: idle, shutdwn: 1}}) end))
+print(err(fn() dynamic_supervisor.start({child: {start: idle, restart: "transiant"}}) end))
+print(err(fn() http.start(http.router(), {prot: 0}) end))
+print(err(fn() request.get("http://127.0.0.1:1/", {timeout: 5}) end))
+print(err(fn() log.set_level("wrn") end))
+print(err(fn() process_flag("trap_exits", true) end))
+print(string.closest("lenght", ["length", "width"]), string.closest("x", ["length"]))

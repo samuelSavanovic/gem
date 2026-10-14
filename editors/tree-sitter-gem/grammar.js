@@ -145,6 +145,7 @@ module.exports = grammar({
     _destructure_field: $ => choice(
       $.identifier,
       $.destructure_default,
+      $.spread_param,
     ),
 
     destructure_default: $ => seq(

@@ -4,6 +4,7 @@
  */
 
 #include "gem.h"
+#include <pthread.h>
 #include <errno.h>
 #include <limits.h>
 #include <sys/types.h>
@@ -637,4 +638,116 @@ GemVal gem_read_stdin_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_make_ref_builtin(void *_env, GemVal *args, int argc) {
     (void)_env; (void)args; (void)argc;
     return gem_make_ref();
+}
+
+/* ─── Internal: __check_opts, __opts_rest (option bags) ───
+ * The parser emits these for a destructured parameter shaped like an
+ * option bag (one with an outer default or a field default):
+ * __check_opts(bag, names) raises for a key the pattern doesn't name,
+ * with the closest name; a pattern with `...rest` gets
+ * __opts_rest(bag, names), the other entries, instead. `names` is the
+ * pattern's field names separated by NUL bytes. A bag that isn't a table
+ * is left to the field reads, which raise for it. */
+
+/* Byte edit distance, for "did you mean"; names past 63 bytes compare as
+   far apart. */
+static int gem_edit_distance(const char *a, int an, const char *b, int bn) {
+    /* Optimal string alignment: insert, delete, change, or swap two
+       neighbouring bytes, one edit each. */
+    if (an > 63 || bn > 63) return 99;
+    int pp[64], prev[64], cur[64];
+    for (int j = 0; j <= bn; j++) prev[j] = j;
+    for (int i = 1; i <= an; i++) {
+        cur[0] = i;
+        for (int j = 1; j <= bn; j++) {
+            int c = prev[j - 1] + (a[i - 1] != b[j - 1]);
+            if (prev[j] + 1 < c) c = prev[j] + 1;
+            if (cur[j - 1] + 1 < c) c = cur[j - 1] + 1;
+            if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] && pp[j - 2] + 1 < c) c = pp[j - 2] + 1;
+            cur[j] = c;
+        }
+        memcpy(pp, prev, sizeof(int) * (size_t)(bn + 1));
+        memcpy(prev, cur, sizeof(int) * (size_t)(bn + 1));
+    }
+    return prev[bn];
+}
+
+/* Whether `key` (len klen) is one of the NUL-separated `names`. */
+static int gem_opt_named(const char *names, int nlen, const char *key, int klen) {
+    int start = 0;
+    for (int i = 0; i <= nlen; i++) {
+        if (i == nlen || names[i] == '\0') {
+            if (i - start == klen && memcmp(names + start, key, (size_t)klen) == 0) return 1;
+            start = i + 1;
+        }
+    }
+    return 0;
+}
+
+void gem_check_opt_keys(GemVal bag, const char *who, const char *names, int nlen) {
+    if (bag.type != VAL_TABLE) return;
+    GemTable *t = bag.table;
+    for (int i = 0; i < t->len; i++) {
+        GemVal k = t->keys[i];
+        if (k.type == VAL_STRING && gem_opt_named(names, nlen, k.sval, k.slen)) continue;
+        GemVal ks = k.type == VAL_STRING ? k : gem_to_string_fn(NULL, &k, 1);
+        const char *best = NULL;
+        int best_len = 0, best_d = 99, start = 0;
+        for (int j = 0; j <= nlen; j++) {
+            if (j == nlen || names[j] == '\0') {
+                int d = gem_edit_distance(ks.sval, ks.slen, names + start, j - start);
+                if (d < best_d) { best_d = d; best = names + start; best_len = j - start; }
+                start = j + 1;
+            }
+        }
+        int limit = ks.slen <= 4 ? 1 : 2;
+        if (!(best && best_d <= limit)) {
+            /* `timeout` for `timeout_ms`: a name that is the key, `_` and more. */
+            best = NULL;
+            start = 0;
+            for (int j = 0; j <= nlen && ks.slen >= 3; j++) {
+                if (j == nlen || names[j] == '\0') {
+                    int l = j - start;
+                    if (l > ks.slen && names[start + ks.slen] == '_' && memcmp(names + start, ks.sval, (size_t)ks.slen) == 0) {
+                        best = names + start; best_len = l;
+                        break;
+                    }
+                    start = j + 1;
+                }
+            }
+            best_d = 0;
+        }
+        char hint[160] = "";
+        if (best && best_d <= limit) snprintf(hint, sizeof(hint), " (did you mean \"%.*s\"?)", best_len, best);
+        char buf[512];
+        snprintf(buf, sizeof(buf), "%s%sunknown option \"%.*s\"%s", who ? who : "", who ? ": " : "",
+                 ks.slen > 100 ? 100 : (int)ks.slen, ks.sval, hint);
+        gem_error(buf);
+    }
+}
+
+GemVal gem_check_opts_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_TABLE) return GEM_NIL;
+    /* The function the bag was passed to: the leaf running, else the
+       innermost frame. */
+    const char *fname = gem_leaf_site ? gem_leaf_site->name
+        : (gem_call_depth > 0 && gem_call_depth <= GEM_MAX_CALL_DEPTH) ? gem_call_stack[gem_call_depth - 1].name : NULL;
+    gem_check_opt_keys(args[0], fname, args[1].sval, args[1].slen);
+    return GEM_NIL;
+}
+
+GemVal gem_opts_rest_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    GemVal out = gem_table_new_braces();
+    if (argc < 2 || args[0].type != VAL_TABLE) return out;
+    GemTable *t = args[0].table;
+    const char *names = args[1].sval;
+    int nlen = args[1].slen;
+    for (int i = 0; i < t->len; i++) {
+        GemVal k = t->keys[i];
+        if (k.type == VAL_STRING && gem_opt_named(names, nlen, k.sval, k.slen)) continue;
+        gem_table_set(out, k, t->vals[i]);
+    }
+    return out;
 }

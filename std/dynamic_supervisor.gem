@@ -41,6 +41,8 @@
 # the child inside the supervisor, which answers nothing else meanwhile. Requests are answered with `_dsup_reply`
 # messages carrying a pcall-shaped result.
 
+load "std/string"
+
 let RESTARTS = {permanent: true, transient: true, temporary: true}
 # How long a child gets to exit after "shutdown" before it is killed, when
 # neither the template nor the child's handle says (see the top of the
@@ -379,6 +381,25 @@ fn dsup_main(state, caller, ref)
   kill(self(), reason)
 end
 
+# Raises `<who>: unknown <what> "<key>"<where>`, naming the closest allowed
+# key, for a key of table `t` that `allowed` (an array of names) doesn't
+# hold.
+fn check_keys(who, what, t, allowed, where = "")
+  for k, _ in t
+    let known = false
+    for a in allowed
+      if a == k
+        known = true
+      end
+    end
+    if not known
+      let near = if type(k) == "string" then string.closest(k, allowed) end
+      let hint = if near != nil then " (did you mean \"{near}\"?)" else "" end
+      error("{who}: unknown {what} \"{k}\"{where}{hint}")
+    end
+  end
+end
+
 ## Spawns a dynamic supervisor with no children and returns its handle
 ## `{pid, shutdown: nil}`.
 ##
@@ -417,6 +438,7 @@ fn start(opts)
   if type(opts) != "table"
     error("dynamic_supervisor.start: expected an options table \{child, ...\}, got {type(opts)}")
   end
+  check_keys("dynamic_supervisor.start", "option", opts, ["child", "max_restarts", "max_seconds", "name"])
   let {child, max_restarts = 3, max_seconds = 5000, name = nil} = opts
   if type(child) != "table"
     error("dynamic_supervisor.start: expected a child template \{start, restart, shutdown\}, got {type(child)}")
@@ -424,9 +446,12 @@ fn start(opts)
   if type(child.start) != "fn"
     error("dynamic_supervisor.start: the child template's start must be a fn, got {type(child.start)}")
   end
+  check_keys("dynamic_supervisor.start", "key", child, ["start", "restart", "shutdown"], " in the child template")
   let {start, restart = "permanent"} = child
   if not has_key(RESTARTS, restart)
-    error("dynamic_supervisor.start: unknown restart \"{restart}\"")
+    let near = if type(restart) == "string" then string.closest(restart, keys(RESTARTS)) end
+    let hint = if near != nil then " (did you mean \"{near}\"?)" else "" end
+    error("dynamic_supervisor.start: unknown restart \"{restart}\"{hint}")
   end
   if type(max_restarts) != "int"
     error("dynamic_supervisor.start: max_restarts must be an int, got {type(max_restarts)}")

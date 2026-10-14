@@ -356,6 +356,8 @@ GemVal gem_tls_connect_fn(void *_env, GemVal *args, int argc) {
         snprintf(buf, sizeof(buf), "tls_connect: opts must be a table, got %s", gem_type_str(opts));
         gem_error(buf);
     }
+    static const char TLS_OPTS[] = "timeout_ms\0ca_file\0server_name";
+    gem_check_opt_keys(opts, "tls_connect", TLS_OPTS, (int)sizeof(TLS_OPTS) - 1);
     int64_t timeout_ms = -1;
     if (opts.type == VAL_TABLE) {
         GemVal t = gem_table_get(opts, gem_string("timeout_ms"));

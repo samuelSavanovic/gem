@@ -341,7 +341,17 @@ set_cookie(resp, "sid", "abc", nil)      # same — nil is coerced to {}
 set_cookie(resp, "sid", "abc", {secure: true})
 ```
 
-Extra fields in the caller's table are ignored (partial match). Patterns are flat (no nested destructuring) and table-only — array-destructured parameters are not supported. Param destructuring composes with regular and rest parameters, and with tail call optimization.
+**Option bags reject unknown keys.** A destructured parameter with a field default or a trailing `= <default>` is an option bag: when the function is called, a key of the table that the pattern doesn't name raises `<fn>: unknown option "<key>"`, with the closest field when one is near (`start: unknown option "prot" (did you mean "port"?)`; `<fn>` is the function's frame name, `anonymous fn` for a `fn` literal). The check runs at the start of the body, before the fields are read; a non-table argument is left to the field reads. A pattern without defaults (`fn add({x, y})`) takes a record, not options: extra fields are ignored.
+
+A last entry `...rest` takes the keys the pattern doesn't name, in a new table (empty when there are none), and turns the check off — for options passed on to another function:
+
+```
+fn log_line(msg, {level = "info", ...rest} = {})
+  write(level, msg, rest)        # rest: every other option, as given
+end
+```
+
+Patterns are flat (no nested destructuring) and table-only — array-destructured parameters are not supported. `...rest` is only for parameters (a `let` pattern has none). Param destructuring composes with regular and rest parameters, and with tail call optimization.
 
 ## Blocks
 
@@ -1350,7 +1360,7 @@ end
 
 `spawn_link(fn)` — atomically spawns a new process and links it to the caller. No race window between spawn and link. Returns the new pid.
 
-`process_flag("trap_exit", bool)` — sets the `trap_exit` flag on the current process. Returns the previous value (bool). When `trap_exit` is `true`, exit signals from linked processes are converted to `{tag: "EXIT", pid: <pid>, reason: <reason>}` messages in the process's mailbox instead of killing the process. A process that doesn't trap exits dies when a linked process exits with a reason other than `"normal"`; when that process is main, the program reports `main process killed by linked process <pid>: <reason>` with main's stack trace on stderr and exits with status 1.
+`process_flag("trap_exit", bool)` — sets the `trap_exit` flag on the current process. Returns the previous value (bool). When `trap_exit` is `true`, exit signals from linked processes are converted to `{tag: "EXIT", pid: <pid>, reason: <reason>}` messages in the process's mailbox instead of killing the process. A process that doesn't trap exits dies when a linked process exits with a reason other than `"normal"`; when that process is main, the program reports `main process killed by linked process <pid>: <reason>` with main's stack trace on stderr and exits with status 1. An unknown flag raises `process_flag: unknown flag "<name>"`.
 
 `sleep(ms)` — suspends the current process for `ms` milliseconds. Works in any process, including the main program.
 
@@ -1508,7 +1518,7 @@ Every TCP builtin that takes a socket raises `<builtin>: expected a socket, got 
 
 ## TLS
 
-`tls_connect(host, port[, opts])` — opens a TCP connection to `host:port` as `tcp_connect` does, then makes it a TLS connection (TLS 1.2 or 1.3) as a client, and returns it as a socket (`type` `"socket"`): `tcp_read`, `tcp_write`, `tcp_close`, `tcp_peer`, `tcp_local_port` and `claim` work on it as on any socket, with the same arguments, results, timeouts and waits, reading and writing plaintext, except at the end of the stream and after a short write (both below). `tcp_fd` and a `Socket` extern parameter refuse it. A TLS socket is an owned resource like any other: the calling process owns it from before the connect, so a process killed mid-handshake closes it. `tcp_close` discards input that has arrived and nobody read, up to 1 MB, without waiting (a TLS 1.3 server's session tickets, for one: closing with input unread resets the connection, and the end of what was written can be lost), sends the TLS close alert when the socket can take it at once, then closes.
+`tls_connect(host, port[, opts])` — opens a TCP connection to `host:port` as `tcp_connect` does, then makes it a TLS connection (TLS 1.2 or 1.3) as a client, and returns it as a socket (`type` `"socket"`): `tcp_read`, `tcp_write`, `tcp_close`, `tcp_peer`, `tcp_local_port` and `claim` work on it as on any socket, with the same arguments, results, timeouts and waits, reading and writing plaintext, except at the end of the stream and after a short write (both below). `tcp_fd` and a `Socket` extern parameter refuse it. A TLS socket is an owned resource like any other: the calling process owns it from before the connect, so a process killed mid-handshake closes it. `tcp_close` discards input that has arrived and nobody read, up to 1 MB, without waiting (a TLS 1.3 server's session tickets, for one: closing with input unread resets the connection, and the end of what was written can be lost), sends the TLS close alert when the socket can take it at once, then closes. A key of `opts` other than `timeout_ms`, `ca_file` and `server_name` raises `tls_connect: unknown option "<key>"`, naming the closest one.
 
 The server's certificate is always verified: its chain must lead to a trusted certificate, and it must name `host` (a DNS name, matched with `*.` wildcards, or an IP address). `host` is also sent as the server name (SNI) unless it is an IP address. The trusted certificates are the system's, as OpenSSL finds them in its own directory (`openssl version -d` shows it): on Debian and Ubuntu the distribution's CA bundle under `/etc/ssl/certs`, on macOS Homebrew OpenSSL's `cert.pem`; the `SSL_CERT_FILE` and `SSL_CERT_DIR` environment variables override them. The first `tls_connect` that uses them reads them, on the scheduler thread, so every process waits for that once.
 
@@ -1646,6 +1656,8 @@ All three `load` forms use the same two-step path resolution. When a module has 
 ## Standard Library (std/)
 
 Each std file uses `export` to expose a single namespace table. When loaded, the module table is bound to the basename (e.g., `string`, `table`, `math`).
+
+A std function that takes an option table, a spec or a child spec (`http.start`, `request.get`, `supervisor.start`, `dynamic_supervisor.start`, `regex.find`, ...) raises for a key it doesn't know, naming the closest known one: `http.start: unknown option "prot" (did you mean "port"?)`, `supervisor.start: unknown key "restrat" in child "a" (did you mean "restart"?)`. A value it checks against a fixed set (a strategy, a restart type, a log level) names the closest value the same way.
 
 ```
 load "std/string"
