@@ -310,8 +310,8 @@ fn main()
   sleep(50)
   tcp_close(s2)
   receive
-  when {tag: "read", r: r}
-    print("closed while reading:", r)
+  when {tag: "read", r: got}
+    print("closed while reading:", got)
   after 5000
     print("closed while reading: no wake")
   end
