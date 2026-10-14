@@ -1070,6 +1070,22 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     exit(1)
   end
 
+  # "did you mean" for an undeclared name: the closest local of the fn,
+  # module-level binding, named fn or builtin (find_closest_export's
+  # distance), or nil.
+  let suggest_name = fn(name)
+    let cands = []
+    for src in [local_names, top_level_vars, defined_fns, builtin_fns]
+      for k, _ in src
+        if type(k) == "string" and k != name and not (len(k) >= 2 and substr(k, 0, 2) == "__")
+          push(cands, k)
+        end
+      end
+    end
+    let best = find_closest_export(name, cands)
+    if best != nil then "did you mean `{best}`?" end
+  end
+
   let check_assign_target = fn(name, node)
     if set_contains(local_names, name) or set_contains(top_level_vars, name) or set_contains(boxed_vars, name)
       return nil
@@ -1078,7 +1094,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       let shown = display_name(name)
       sink.report(source_of(node), file_of(node), node.line, node.col, len(shown), "cannot assign to function `{shown}`", nil)
     else
-      sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", "use `let {name} = ...` to declare")
+      let near = suggest_name(name)
+      let hint = if near != nil then "{near} To declare a new variable, use `let {name} = ...`" else "use `let {name} = ...` to declare" end
+      sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", hint)
     end
   end
 
@@ -1130,7 +1148,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
           # let/load). Report and emit GEM_NIL so codegen continues; the
           # driver gates final emission on sink.has_any() so this never
           # reaches `cc`.
-          sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", nil)
+          sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", suggest_name(name))
           return {expr: "GEM_NIL", setup: ""}
         end
       end
