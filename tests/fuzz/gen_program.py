@@ -177,8 +177,11 @@ class Gen:
             self.emit(ind, "let {} = {}".format(v, self.rec_expr(sc)))
             sc["rec"].append(v)
         elif k == "assign":
-            if sc["int"] and (not sc["str"] or self.chance(0.6)):
-                v = r.choice(sc["int"])
+            # never a loop counter or variable (k, w, e) or the depth d:
+            # the loops must stay bounded
+            ints = [v for v in sc["int"] if v[0] in "ixc"]
+            if ints and (not sc["str"] or self.chance(0.6)):
+                v = r.choice(ints)
                 if self.chance(0.3):
                     self.emit(ind, "{} = ({} + {}) % {}".format(v, v, self.int_expr(sc), MOD))
                 else:
