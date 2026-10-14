@@ -177,8 +177,14 @@ end
 ## message that isn't a call, a cast or a stop, such as the `DOWN` of a
 ## process the server monitors.
 ##
-## Raises, and starts nothing, if `module` is not a table or a callback is
-## not a fn.
+## With `name`, the server is registered under that name before `init`
+## runs, so `call(name, ...)` and `whereis(name)` find it from the start
+## (and, under a supervisor, a restarted server takes its name back
+## before anyone can see it missing); the name is freed when the server
+## exits.
+##
+## Raises, and starts nothing, if `module` is not a table, a callback is
+## not a fn, or `name` is not a string or is already registered.
 ##
 ## Returns once `init` has returned, so what `init` does (registering a
 ## name, binding a port) is done by then. `init` runs in the server while
@@ -192,12 +198,25 @@ end
 ##
 ## The server is neither linked to nor monitored by the caller, so either
 ## can die without taking the other along.
-fn start(module)
+fn start(module, {name = nil} = {})
   check_module(module)
+  if name != nil
+    if type(name) != "string"
+      error("gen_server.start: name must be a string, got {type(name)}")
+    end
+    if whereis(name) != nil
+      error("gen_server.start: the name \"{name}\" is already registered")
+    end
+  end
   let caller = self()
   let ref = make_ref()
   let pid = spawn do
     serve(module, caller, ref)
+  end
+  # The new process hasn't run yet: registering here puts the name in place
+  # before its `init`.
+  if name != nil
+    register(name, pid)
   end
   monitor(pid)
   receive

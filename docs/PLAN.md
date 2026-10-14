@@ -140,8 +140,11 @@ The order is the order of the work.
    supervisor and dynamic_supervisor specs, tls_connect) check theirs
    explicitly; strategy, restart, log level and process_flag name the
    closest value.
-7. **Small std gaps** from ROADMAP "std API gaps": json `indent`, mime
+7. **Small std gaps** ✓ Done (PR 4). From ROADMAP "std API gaps": json `indent`, mime
    types, `time.parse`, gen_server names.
+   *Landed:* `json.encode(v, {indent})`; 21 more mime extensions and
+   `text/javascript`; `time.parse` (ISO 8601, the three HTTP forms) and
+   `%L`; `gen_server.start(module, {name})`.
 8. **Error messages:** ✓ Done. "did you mean" for undefined names; a missing
    `end` points at the construct it closes.
    The block named is the first whose `end` was indented unlike its

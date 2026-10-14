@@ -8,9 +8,12 @@
 ##
 ## Both ignore case and take a string or a buffer. Any other argument
 ## raises `mime.<fn>: <arg> must be a string, got <type>`. The known
-## extensions are html htm css js mjs json xml txt csv png jpg jpeg gif
-## svg ico webp avif woff woff2 ttf otf pdf zip gz mp3 mp4 webm wasm; any
-## other (.wav, .ogg, .md, .yaml, .map...) is application/octet-stream.
+## extensions are html htm css js mjs json xml txt md csv yaml yml toml
+## map ics rss atom png jpg jpeg gif svg ico webp avif bmp tif tiff woff
+## woff2 ttf otf pdf zip gz tar mp3 wav ogg oga flac m4a mp4 ogv mov webm
+## wasm; any other is application/octet-stream. JavaScript is
+## `text/javascript` (RFC 9239); `ext` also knows the older
+## `application/javascript`.
 
 load "std/string"
 
@@ -18,12 +21,20 @@ let types = {
   html: "text/html",
   htm: "text/html",
   css: "text/css",
-  js: "application/javascript",
-  mjs: "application/javascript",
+  js: "text/javascript",
+  mjs: "text/javascript",
   json: "application/json",
   xml: "application/xml",
   txt: "text/plain",
+  md: "text/markdown",
   csv: "text/csv",
+  yaml: "application/yaml",
+  yml: "application/yaml",
+  toml: "application/toml",
+  map: "application/json",
+  ics: "text/calendar",
+  rss: "application/rss+xml",
+  atom: "application/atom+xml",
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
@@ -32,6 +43,9 @@ let types = {
   ico: "image/x-icon",
   webp: "image/webp",
   avif: "image/avif",
+  bmp: "image/bmp",
+  tif: "image/tiff",
+  tiff: "image/tiff",
   woff: "font/woff",
   woff2: "font/woff2",
   ttf: "font/ttf",
@@ -39,13 +53,33 @@ let types = {
   pdf: "application/pdf",
   zip: "application/zip",
   gz: "application/gzip",
+  tar: "application/x-tar",
   mp3: "audio/mpeg",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  oga: "audio/ogg",
+  flac: "audio/flac",
+  m4a: "audio/mp4",
   mp4: "video/mp4",
+  ogv: "video/ogg",
+  mov: "video/quicktime",
   webm: "video/webm",
   wasm: "application/wasm"
 }
 
-let charset_prefixes = ["text/", "application/json", "application/javascript", "application/xml"]
+let charset_prefixes = ["text/", "application/json", "application/javascript", "application/xml", "application/yaml", "application/toml"]
+
+# Content types `ext` knows besides those in `types`: older names of the
+# same type.
+let aliases = {
+  "application/javascript": ".js",
+  "application/x-javascript": ".js",
+  "text/x-markdown": ".md",
+  "application/x-yaml": ".yaml",
+  "text/yaml": ".yaml",
+  "audio/x-wav": ".wav",
+  "audio/wave": ".wav"
+}
 
 # The string to work on: a string, or a buffer's contents.
 fn text(fname, what, v)
@@ -131,7 +165,7 @@ fn ext(content_type)
       return ".{e}"
     end
   end
-  nil
+  aliases[base]
 end
 
 export lookup, ext
