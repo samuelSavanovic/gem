@@ -636,8 +636,7 @@ end
 ## Transfer-Encoding header, a non-string body, a malformed response or
 ## one cut short.
 ##
-## Resolving a host name (rather than an IP address) blocks every
-## process until it is done.
+## The deadline covers resolving a host name too.
 fn request(method, raw_url, opts = {})
   do_request("request.request", method, raw_url, opts)
 end

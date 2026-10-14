@@ -1448,8 +1448,7 @@ processes.
 
 | Yields to other processes | Blocks everything |
 |---|---|
-| `tcp_*` and `tls_connect` (except name lookup, see right), `sleep`, `receive` | `tcp_connect` and `tls_connect` to a host *name* (DNS lookup runs inline) |
-| | the first `tls_connect` without `ca_file`, which reads the system's CA certificates (about 8 ms, M-series Mac), and each TLS handshake's crypto (about 1 ms) |
+| `tcp_*` and `tls_connect` (a host name's lookup included), `sleep`, `receive` | the first `tls_connect` without `ca_file`, which reads the system's CA certificates (about 8 ms, M-series Mac), and each TLS handshake's crypto (about 1 ms) |
 | `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, `extern blocking fn` (a pool of 4 threads) | `sqlite_query`, `sqlite_exec`, and the close of a database at its owner's exit |
 | | `file_exists`, `is_dir`, `list_dir`, `mkdir`, `remove_file`, `normalize_path` |
 | | plain `extern fn`, `input`, `read_stdin`; `print`, `eprint`, `write_stdout` to a slow pipe |
@@ -1871,7 +1870,7 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
   code: a one-line `##` per module and exported function is enough, and a
   `#` comment earns its place only by saying what the code can't, such
   as a design choice that's easy to undo by mistake or a Gem behaviour
-  the reader wouldn't expect (a lookup that blocks every process, a
+  the reader wouldn't expect (a `sqlite_query` that blocks every process, a
   process that traps exits so it can close its socket). Don't narrate
   what the next line does.
 - Keep functions short. Prefer a well-named helper to a long arm inside a
@@ -1922,7 +1921,7 @@ raises in Gem instead of reaching C (`examples/gemgrep/regex.gem`).
 | A child's `start` or a gen_server's `init` waiting for an answer from its starter | deadlock error, or a wait for good or until a timeout | pass it in the spec, or `send(self(), ...)` in `init` |
 | `gen_server.call` to a server that has already died | `server exited: noproc` (by name: `no process registered`), not why it died | monitor it: the `DOWN` has the reason |
 | `spawn` per connection or per item, unguarded | raises at the process or memory limit (~14,000 on stock Linux); the acceptor dies | catch it, or cap in-flight work |
-| Blocking call (`sqlite_query`, DNS, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
+| Blocking call (`sqlite_query`, plain `extern fn`) | all processes stall | keep short; `extern blocking fn` |
 | As many long `exec` / `extern blocking fn` calls as pool workers (4) | every file read waits behind them (77,000 reads/s to 240) | fewer long calls at once, or `GEM_POOL_SIZE` above their number |
 | `extern blocking fn` called once per line or item | a thread hand-off and argument copies per call: 100x slower | plain `extern fn` for quick calls |
 | `if not p` on a `Ptr` | `NULL` is `0`, which is truthy | `p == 0` |

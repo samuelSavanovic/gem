@@ -6,6 +6,15 @@
  * to a worker thread so the scheduler can continue running other coroutines. A wake-pipe notifies the scheduler when work completes.
  * Each worker releases its request after signalling the wake-pipe; see
  * GemIORequest in gem.h for the ownership rules.
+ *
+ * Name lookups (GEM_IO_RESOLVE: tcp_connect, tls_connect and tcp_listen
+ * given a host name) run on a lane of their own, so they never hold the
+ * workers file I/O needs. A lookup can't be cancelled, and one a
+ * nameserver doesn't answer waits for the resolver's timeouts, so the
+ * lane's workers are detached and the program's exit doesn't wait for
+ * them. The lane starts a worker when a lookup is queued and no idle
+ * worker is left to take it, up to GEM_RESOLVER_MAX, and a worker idle
+ * for GEM_RESOLVER_IDLE_S seconds exits.
  */
 
 #include "gem.h"
@@ -15,6 +24,10 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <time.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
 
 /* The workers wait on blocking calls rather than compute, so their number
    is how many blocking operations run at once. GEM_POOL_SIZE is the
@@ -25,17 +38,29 @@
 #endif
 #define GEM_POOL_MAX 256
 
-static pthread_t gem_io_workers[GEM_POOL_MAX];
-static int gem_io_nworkers = 0;
-/* Ring of submitted requests, grown as needed: every process can have one
-   request in flight, and there can be many thousands of processes. */
-static GemIORequest **gem_io_queue = NULL;
-static int gem_io_q_cap = 0;
-static int gem_io_q_head = 0;
-static int gem_io_q_tail = 0;
-static int gem_io_q_count = 0;
+#define GEM_RESOLVER_MAX 16
+#define GEM_RESOLVER_IDLE_S 10
+
+/* A lane: a queue and the workers that take from it. The queue is a ring
+   of submitted requests, grown as needed: there can be many thousands of
+   processes, each with a request in flight, and a lookup its process
+   stopped waiting for stays queued until a worker takes it. */
+typedef struct {
+    pthread_t workers[GEM_POOL_MAX];   /* the I/O lane's, joined at shutdown */
+    int nworkers;
+    int idle;                          /* workers waiting for a request */
+    int elastic;                       /* workers start on demand and exit when idle */
+    GemIORequest **queue;
+    int q_cap, q_head, q_tail, q_count;
+    pthread_cond_t cond;
+} GemIOLane;
+
+enum { GEM_LANE_IO, GEM_LANE_RESOLVE, GEM_LANES };
+static GemIOLane gem_io_lanes[GEM_LANES] = {
+    { .cond = PTHREAD_COND_INITIALIZER },
+    { .cond = PTHREAD_COND_INITIALIZER, .elastic = 1 },
+};
 static pthread_mutex_t gem_io_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t gem_io_cond = PTHREAD_COND_INITIALIZER;
 static int gem_io_wake_pipe_fds[2] = {-1, -1};
 static volatile int gem_io_shutdown_flag = 0;
 
@@ -130,19 +155,49 @@ static void gem_io_do_exec(GemIORequest *req) {
     req->exit_code = gem_run_shell(req->path);
 }
 
+const char *gem_resolve4(const char *host, uint32_t *addr) {
+    struct addrinfo hints, *res = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    int rc = getaddrinfo(host, NULL, &hints, &res);
+    if (rc != 0) return gai_strerror(rc);
+    if (res == NULL) return "no address";
+    *addr = ((struct sockaddr_in *)res->ai_addr)->sin_addr.s_addr;
+    freeaddrinfo(res);
+    return NULL;
+}
+
+static void gem_io_do_resolve(GemIORequest *req) {
+    const char *err = gem_resolve4(req->path, &req->addr4);
+    if (err) req->error_msg = strdup(err);
+}
+
 static void *gem_io_worker_fn(void *arg) {
-    (void)arg;
+    GemIOLane *lane = (GemIOLane *)arg;
     for (;;) {
         pthread_mutex_lock(&gem_io_mutex);
-        while (gem_io_q_count == 0 && !gem_io_shutdown_flag)
-            pthread_cond_wait(&gem_io_cond, &gem_io_mutex);
-        if (gem_io_shutdown_flag && gem_io_q_count == 0) {
+        lane->idle++;
+        int expired = 0;
+        while (lane->q_count == 0 && !gem_io_shutdown_flag && !expired) {
+            if (!lane->elastic) {
+                pthread_cond_wait(&lane->cond, &gem_io_mutex);
+                continue;
+            }
+            struct timespec until;
+            clock_gettime(CLOCK_REALTIME, &until);
+            until.tv_sec += GEM_RESOLVER_IDLE_S;
+            expired = pthread_cond_timedwait(&lane->cond, &gem_io_mutex, &until) == ETIMEDOUT;
+        }
+        lane->idle--;
+        if (lane->q_count == 0) {
+            if (lane->elastic) lane->nworkers--;
             pthread_mutex_unlock(&gem_io_mutex);
             break;
         }
-        GemIORequest *req = gem_io_queue[gem_io_q_head];
-        gem_io_q_head = (gem_io_q_head + 1) % gem_io_q_cap;
-        gem_io_q_count--;
+        GemIORequest *req = lane->queue[lane->q_head];
+        lane->q_head = (lane->q_head + 1) % lane->q_cap;
+        lane->q_count--;
         pthread_mutex_unlock(&gem_io_mutex);
 
         switch (req->op) {
@@ -151,6 +206,7 @@ static void *gem_io_worker_fn(void *arg) {
             case GEM_IO_APPEND_FILE: gem_io_do_write(req, "ab"); break;
             case GEM_IO_EXEC:        gem_io_do_exec(req); break;
             case GEM_IO_EXTERN:      req->extern_fn(req->extern_args); break;
+            case GEM_IO_RESOLVE:     gem_io_do_resolve(req); break;
         }
 
         __atomic_store_n(&req->done, 1, __ATOMIC_RELEASE);
@@ -191,31 +247,53 @@ void gem_threadpool_init(void) {
     }
 
     gem_io_shutdown_flag = 0;
+    GemIOLane *lane = &gem_io_lanes[GEM_LANE_IO];
     int want = gem_pool_size();
-    gem_io_nworkers = 0;
+    lane->nworkers = 0;
     for (int i = 0; i < want; i++) {
-        if (pthread_create(&gem_io_workers[gem_io_nworkers], NULL, gem_io_worker_fn, NULL) != 0) break;
-        gem_io_nworkers++;
+        if (pthread_create(&lane->workers[lane->nworkers], NULL, gem_io_worker_fn, lane) != 0) break;
+        lane->nworkers++;
     }
-    if (gem_io_nworkers == 0) {
+    if (lane->nworkers == 0) {
         fprintf(stderr, "gem: cannot start a thread for the I/O pool\n");
         exit(1);
     }
     /* A limit on threads (ulimit -u, systemd's TasksMax) can stop it short. */
-    if (gem_io_nworkers < want)
-        fprintf(stderr, "gem: started %d of %d I/O pool threads (GEM_POOL_SIZE)\n", gem_io_nworkers, want);
+    if (lane->nworkers < want)
+        fprintf(stderr, "gem: started %d of %d I/O pool threads (GEM_POOL_SIZE)\n", lane->nworkers, want);
 }
 
+/* Start a detached worker for an elastic lane when the queue, with one
+   more request, would hold more requests than it has idle workers, and
+   it has fewer than GEM_RESOLVER_MAX. Call with gem_io_mutex held.
+   Returns 0 when the lane has no worker and none could start. */
+static int gem_io_grow(GemIOLane *lane) {
+    if (lane->idle > lane->q_count || lane->nworkers >= GEM_RESOLVER_MAX) return 1;
+    pthread_t t;
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    if (pthread_create(&t, &attr, gem_io_worker_fn, lane) == 0) lane->nworkers++;
+    pthread_attr_destroy(&attr);
+    return lane->nworkers > 0;
+}
+
+/* Joins the I/O lane's workers, not the resolver lane's: a lookup can't be
+   cut short. While resolver workers exist the wake pipe stays open, so one
+   that finishes later never writes to an fd number reused meanwhile. */
 void gem_threadpool_shutdown(void) {
     pthread_mutex_lock(&gem_io_mutex);
     gem_io_shutdown_flag = 1;
-    pthread_cond_broadcast(&gem_io_cond);
+    for (int l = 0; l < GEM_LANES; l++)
+        pthread_cond_broadcast(&gem_io_lanes[l].cond);
     pthread_mutex_unlock(&gem_io_mutex);
 
-    for (int i = 0; i < gem_io_nworkers; i++)
-        pthread_join(gem_io_workers[i], NULL);
-    gem_io_nworkers = 0;
+    GemIOLane *lane = &gem_io_lanes[GEM_LANE_IO];
+    for (int i = 0; i < lane->nworkers; i++)
+        pthread_join(lane->workers[i], NULL);
+    lane->nworkers = 0;
 
+    if (gem_io_lanes[GEM_LANE_RESOLVE].nworkers > 0) return;
     if (gem_io_wake_pipe_fds[0] >= 0) close(gem_io_wake_pipe_fds[0]);
     if (gem_io_wake_pipe_fds[1] >= 0) close(gem_io_wake_pipe_fds[1]);
     gem_io_wake_pipe_fds[0] = gem_io_wake_pipe_fds[1] = -1;
@@ -232,25 +310,28 @@ void gem_io_release(GemIORequest *req) {
     free(req);
 }
 
-/* Append `req` to the queue and wake a worker. Call with gem_io_mutex held.
-   Returns 0 (queue unchanged) when the queue can't grow. */
+/* Append `req` to its lane's queue and wake a worker. Call with
+   gem_io_mutex held. Returns 0 (queue unchanged) when the queue can't grow
+   or an elastic lane has no worker and can't start one. */
 static int gem_io_enqueue(GemIORequest *req) {
-    if (gem_io_q_count == gem_io_q_cap) {
-        int cap = gem_io_q_cap ? gem_io_q_cap * 2 : 1024;
+    GemIOLane *lane = &gem_io_lanes[req->op == GEM_IO_RESOLVE ? GEM_LANE_RESOLVE : GEM_LANE_IO];
+    if (lane->elastic && !gem_io_grow(lane)) return 0;
+    if (lane->q_count == lane->q_cap) {
+        int cap = lane->q_cap ? lane->q_cap * 2 : 1024;
         GemIORequest **q = (GemIORequest **)malloc(sizeof(GemIORequest *) * (size_t)cap);
         if (!q) return 0;
-        for (int i = 0; i < gem_io_q_count; i++)
-            q[i] = gem_io_queue[(gem_io_q_head + i) % gem_io_q_cap];
-        free(gem_io_queue);
-        gem_io_queue = q;
-        gem_io_q_cap = cap;
-        gem_io_q_head = 0;
-        gem_io_q_tail = gem_io_q_count;
+        for (int i = 0; i < lane->q_count; i++)
+            q[i] = lane->queue[(lane->q_head + i) % lane->q_cap];
+        free(lane->queue);
+        lane->queue = q;
+        lane->q_cap = cap;
+        lane->q_head = 0;
+        lane->q_tail = lane->q_count;
     }
-    gem_io_queue[gem_io_q_tail] = req;
-    gem_io_q_tail = (gem_io_q_tail + 1) % gem_io_q_cap;
-    gem_io_q_count++;
-    pthread_cond_signal(&gem_io_cond);
+    lane->queue[lane->q_tail] = req;
+    lane->q_tail = (lane->q_tail + 1) % lane->q_cap;
+    lane->q_count++;
+    pthread_cond_signal(&lane->cond);
     return 1;
 }
 
