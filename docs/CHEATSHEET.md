@@ -177,6 +177,8 @@ end
 # std/string     split, join, trim, upper, lower, repeat, index_of(s, x, start = 0), contains,
 #                starts_with, ends_with, closest(word, candidates) (did-you-mean)
 # std/io         lines(path, f), reader(path) -> {next}, read_lines(path)   ("-": stdin; 64 KB blocks, flat memory)
+# std/regex      test, find, find_all, replace, replace_first, split, escape, check_pattern   (POSIX ERE + \d \w \s;
+#                opts {icase, multiline}; match {text, start, stop, groups}; replace "\1" or fn(m); no \b)
 # std/args       parse(spec), try_parse(spec, list), help(spec)
 #   spec {name, about, usage, options: {top: {short: "n", default: 10, help}, v: {type: "flag"}, x: {multi: true}}, min_args, max_args}
 #   -> {top, v, x, args: [positional]}; --help prints help; a mistake prints usage and exits 2
