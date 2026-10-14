@@ -8,6 +8,32 @@ its entry in the same change, along with any **(bug)** rule in
 
 ## Compiler
 
+### Pattern bindings are emitted at line 0
+
+A variable a `match` or `receive` pattern binds is emitted with
+`#line 0` and `gem_set_line(0)` (`gem_leaf_line = 0` in a leaf fn).
+Run from a file in the repository's root:
+
+```gem
+fn f(m)
+  match m
+  when {a: a}
+    print(a)
+  end
+end
+f({a: 1})
+```
+
+`build/gem f.gem --emit-c` shows `#line 0 "f.gem"` before
+`GemVal gem_v_a = gem_table_get(...)`. `cc -Wpedantic` warns about each
+one (clang: `-Wgnu-zero-line-directive`), and a debugger or profiler
+puts the binding on line 0. Runtime traces are unaffected: a binding is
+a field read that cannot raise, and the next statement sets its own
+line. `pattern_to_cond` in compiler/lower.gem builds the bindings with
+`make_let(name, target, 0)` (the `pat_table` shorthand and `pat_name`
+cases); the pattern's line would do. Part of "A pass over the generated
+C" in docs/OPTIMIZATIONS.md.
+
 ## Runtime
 
 ## Standard library

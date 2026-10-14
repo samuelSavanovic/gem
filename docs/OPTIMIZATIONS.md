@@ -83,6 +83,15 @@ Small strings (< 16 bytes) could be interned in a global table, turning equality
 
 ## Codegen Output
 
+### A pass over the generated C (P2)
+Reading the C that `build/gem <file> --emit-c` prints for a small program (`examples/55_while_true_process_loop.gem`: a `while true` process loop with a `match`, a top-level `for`) shows clean code with a few obvious costs. One pass over the emitted shapes, with `--emit-c` output of a few examples before and after:
+- **Top-level `for` counters live in module slots.** At the top level of a file, the `__for_i_N` / `__for_limit_N` temporaries `lower` makes are module bindings, so every iteration reads and writes them through `gem_global_get` / `gem_global_set`. `for i = 0, 50000000` with `let x = i + 1` as its body takes 391 ms at the top level and 240 ms inside a fn (macOS arm64, M1 Pro). Generated names no other process or fn can see could stay C locals of `gem_user_main`.
+- **`match` arms on tables repeat their checks.** Each arm tests `__type(target) == "table"` again, and each key is hashed twice: `__has_key` and then `gem_table_get` for the comparison or the binding. The type test could run once per `match`, and a key's presence and value could come from one lookup.
+- **Repeated `gem_set_line`.** A top-level `for` emits `#line 29` / `gem_set_line(29)` three times in a row before its body. One per change of line is enough.
+- **Pattern bindings at line 0**: a bug, in docs/KNOWN_BUGS.md ("Pattern bindings are emitted at line 0").
+
+Related entries in this section: "Large C frames", "`match` on string literals compares bytes arm by arm" and "Dead code elimination" (an unused `let` inside a loop still builds its value).
+
 ### Don't pin plain local reads for left-to-right evaluation (P2)
 Left-to-right evaluation (`left_to_right` / `operands` / `pin_operand` in codegen.gem) copies every operand that isn't a literal or a temp into a C temp when a later operand runs code, plain C locals (`gem_v_s`, `gem_v__for_i_N`) included. On a 50M-iteration `s = s + t[i % 10] * 2 + len(t) - (i % 7)` loop that is +9–10% over the old (wrong-order) code on macOS arm64 (1.78 s vs 1.62 s); removing just the local pins gets back about a third of it. A plain unboxed local can only change mid-expression through a later operand that assigns it, which after "assignment is a statement" means a non-escaping closure assigning it through its stack env (`g(x, pcall x = 2)` must still read the old `x`). So: treat `gem_v_<name>` as inert unless a later operand of the same expression assigns `name` (directly, or in a non-escaping closure's `stack_env_writes`). Boxed locals and module slots stay pinned.
 
