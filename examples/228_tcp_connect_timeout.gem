@@ -1,0 +1,20 @@
+# tcp_connect's optional timeout_ms: a connection made within it, nil for
+# no limit, and the errors for a bad timeout and a refused connect.
+
+let l = tcp_listen("127.0.0.1", 0)
+let port = tcp_local_port(l)
+let c = tcp_connect("127.0.0.1", port, 1000)
+let s = tcp_accept(l)
+tcp_write(c, "hi")
+print("within the timeout:", tcp_read(s, 16, 1000))
+tcp_close(c)
+tcp_close(s)
+
+let c2 = tcp_connect("127.0.0.1", port, nil)
+print("nil timeout:", type(c2))
+tcp_close(c2)
+tcp_close(tcp_accept(l))
+
+print((pcall tcp_connect("127.0.0.1", port, "soon")).error)
+print((pcall tcp_connect("127.0.0.1", 1, 1000)).error)
+tcp_close(l)

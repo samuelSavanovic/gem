@@ -40,6 +40,8 @@ runtime/              # C runtime — split by category:
   gem_builtins_io.c          # file I/O, filesystem ops, exec
   gem_builtins_tcp.c         # TCP socket operations (non-blocking)
   gem_builtins_sqlite.c      # SQLite operations (open, close, exec, query, etc.)
+  gem_builtins_tls.c         # tls_connect + tcp_read/tcp_write/close of TLS sockets, on OpenSSL 3 or later (a stub that raises without it)
+  tls_config.sh       #   run by make: finds OpenSSL 3 or later, writes build/tls_cflags (for gem_builtins_tls.c) and build/tls_libs (the compiler links programs with them)
   gem_builtins_time.c        # time/clock builtins
   minicoro.h          #   single-header coroutine library (vendored)
   stb_ds.h            #   single-header hash maps/arrays (vendored)
@@ -93,6 +95,8 @@ make test-json         # run examples/json_parser.gem
 make test-example-apps # run the larger example programs' own tests (part of make test)
 make test-json-suite   # run JSONTestSuite parser conformance (clones to /tmp on first run)
 make test-lsp          # smoke-test the `gem lsp` subcommand (tests/lsp/*.sh: lifecycle, symbols, definition, completion, diagnostics, malformed input)
+make test-tls          # tls_connect + https:// against local openssl s_server instances and a test CA (part of make test; skips without an OpenSSL 3 CLI)
+make test-tls-online   # tls_connect + https:// against real sites (example.com, google.com, badssl.com); needs the internet, not part of make test
 make clean             # remove build/
 ```
 
@@ -209,7 +213,9 @@ After a `grammar.js` change, regenerate, rebuild and check that every `.gem` fil
   - Every runtime path that closes a resource goes through the table (`gem_res_close`, or `gem_res_take` for a kind that closes itself, like `sqlite_close` through the pool); never `close()` a socket's fd directly.
   - A tcp builtin resolves its socket with `gem_res_get` and again with `gem_res_lookup` after every `gem_io_yield`, and never touches the fd once the entry is gone: the number may already name a new file.
   - A socket an `extern blocking fn` got as a `Socket` param is busy until the call returns (`gem_res_busy_begin`/`_end`, called by the codegen'd wrapper, or by the scheduler for a killed caller's parked request): closing it then only retires it (`dead`), and its fd closes when the last busy call ends.
-  - A new kind (an `exec` child, a TLS stream) adds a `GEM_RES_*` kind with its names in `gem_res_kinds` and its close in `gem_res_close_n`, and gets `claim`, the exit close and the diagnostics for free.
+  - A new kind (an `exec` child) adds a `GEM_RES_*` kind with its names in `gem_res_kinds` and its close in `gem_res_close_n`, and gets `claim`, the exit close and the diagnostics for free.
+  - A TLS socket is a `GEM_RES_SOCKET` entry whose `ptr` holds its TLS session (gem_builtins_tls.c), so every socket path (close, waking waiters, exit close, `claim`) covers it. A builtin that reads or writes a socket's fd itself must hand a TLS one to `gem_tls_ops` (as `tcp_read`/`tcp_write` do) or refuse it (as `tcp_fd` and `Socket` extern params do): its fd carries ciphertext.
+- **TLS links only where it's used**: gem_builtins_tcp.c and gem_resource.c reach the TLS code only through the `gem_tls_ops` pointer that `tls_connect` sets, so `libgem_runtime.a` pulls in gem_builtins_tls.o (and its OpenSSL symbols) only for a program whose emitted C names `gem_tls_connect_fn` (one that loads std/request does, whether it makes a request or not); the compiler adds `build/tls_libs` to the `cc` command exactly then. Keep any new reference to TLS code behind that pointer. `make build` reruns tls_config.sh every time; a change of `build/tls_cflags` rebuilds gem_builtins_tls.o, the runtime library and `build/gem` from stage0, so rebuild the compiler from source after it when stage0 is behind the sources.
 - TCP builtins use non-blocking sockets + `poll()` in the scheduler loop. `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close` and `extern blocking fn` calls run on a thread pool (4 workers, `GEM_POOL_SIZE` at startup, tests/check_proc_limit.sh); the other filesystem and sqlite builtins run inline. More workers make fast pool calls slower (benchmarks/threadpool), so slow work isn't fixed by a bigger pool.
 - A `GemIORequest` (runtime/gem.h) is shared by the worker and the requesting process, and each side calls `gem_io_release` exactly once; the last release frees it. A process can be killed mid-request, so a builtin that submits to the pool copies its result out, then releases, and never frees the request or its args by hand. File and `exec` requests (`gem_io_submit`) keep their inputs and outputs in request fields that the last release frees. Other work goes through `gem_io_submit_extern(fn, args, free_args)`, where `free_args` frees anything in `args` the requester hasn't taken (see the sqlite builtins, and `_blk_<name>_free` in codegen for `extern blocking fn`).
 - Selective receive (`receive ... when ... end`) scans the mailbox and removes the first matching message, leaving others queued.

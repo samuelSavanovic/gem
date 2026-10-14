@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Check the driver's one-line errors for a source path it cannot read:
 # exact stderr, empty stdout, exit status 1, no stack trace. Then run
-# mode: paths and arguments with spaces and quotes, the work directory.
+# mode: paths and arguments with spaces and quotes, the work directory;
+# and the flags and environment that reach cc.
 #
 # Run from the repo root: tests/check_cli.sh
 
@@ -70,6 +71,50 @@ if [ "$status" != 1 ] || [ "$c_file" = "$err" ] || [ ! -f "$c_file" ] || [ "${c_
   echo "  got  status $status, stderr: $err"
   fails=$((fails + 1))
 fi
+
+# C compiler flags: -I, -L and -l before the source file (attached or
+# not), CFLAGS and LDFLAGS from the environment, and CC; a library the
+# program needs and isn't given fails in cc. After the source file, -l is
+# the program's.
+mkdir -p "$tmp/c/include" "$tmp/c/lib"
+printf '#include <stdint.h>\nint64_t gemcli_add(int64_t a, int64_t b);\n' > "$tmp/c/include/gemcli.h"
+printf '#include <stdint.h>\nint64_t gemcli_add(int64_t a, int64_t b) { return a + b + GEMCLI_EXTRA; }\n' > "$tmp/c/gemcli.c"
+cc -c -DGEMCLI_EXTRA=0 -o "$tmp/c/gemcli.o" "$tmp/c/gemcli.c" && ar rcs "$tmp/c/lib/libgemcli.a" "$tmp/c/gemcli.o"
+printf 'extern include "gemcli.h"\nextern fn gemcli_add(a: Int, b: Int) -> Int\nprint(gemcli_add(2, 3))\n' > "$tmp/c/use.gem"
+printf 'print(argv()[1])\n' > "$tmp/c/args.gem"
+printf '#!/bin/sh\ntouch "%s/c/cc_used"\nexec cc "$@"\n' "$tmp" > "$tmp/c/mycc"
+chmod +x "$tmp/c/mycc"
+
+# run_check <name> <want stdout> <want status> <command...>
+run_check() {
+  local name=$1 want_out=$2 want_status=$3
+  shift 3
+  total=$((total + 1))
+  local out status
+  out=$("$@" 2>/dev/null)
+  status=$?
+  if [ "$out" != "$want_out" ] || [ "$status" != "$want_status" ]; then
+    echo "FAIL: $name"
+    echo "  want status $want_status, stdout: $want_out"
+    echo "  got  status $status, stdout: $out"
+    fails=$((fails + 1))
+  fi
+}
+run_check "-I -L -l" 5 0 "$GEM" -I "$tmp/c/include" -L "$tmp/c/lib" -l gemcli "$tmp/c/use.gem"
+run_check "-I<dir> -L<dir> -l<lib>" 5 0 "$GEM" "-I$tmp/c/include" "-L$tmp/c/lib" -lgemcli "$tmp/c/use.gem"
+run_check "no -l: cc fails" "" 1 "$GEM" -I "$tmp/c/include" "$tmp/c/use.gem"
+run_check "CFLAGS and LDFLAGS" 5 0 env CFLAGS="-I$tmp/c/include" LDFLAGS="-L$tmp/c/lib -lgemcli" "$GEM" "$tmp/c/use.gem"
+run_check "CC" 5 0 env CC="$tmp/c/mycc" "$GEM" "-I$tmp/c/include" "-L$tmp/c/lib" -lgemcli "$tmp/c/use.gem"
+total=$((total + 1))
+if [ ! -f "$tmp/c/cc_used" ]; then
+  echo "FAIL: CC names the C compiler"
+  fails=$((fails + 1))
+fi
+run_check "-l after the source is the program's" "-lgemcli" 0 "$GEM" "$tmp/c/args.gem" -lgemcli
+check "gem: -l requires an argument
+usage: gem <file.gem> [options] [args...]   (gem --help for more)" 2 -l
+check "gem: -L requires an argument
+usage: gem <file.gem> [options] [args...]   (gem --help for more)" 2 -L ""
 
 if [ "$fails" -gt 0 ]; then
   echo

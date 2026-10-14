@@ -9,12 +9,14 @@ RUNTIME_OBJS = $(patsubst $(RUNTIME_DIR)/%.c,$(BUILD_DIR)/%.o,$(RUNTIME_SRCS))
 SQLITE_SRC = $(RUNTIME_DIR)/sqlite3.c
 SQLITE_OBJ = $(BUILD_DIR)/sqlite3.o
 RUNTIME_LIB = $(BUILD_DIR)/libgem_runtime.a
+TLS_OBJ = $(BUILD_DIR)/gem_builtins_tls.o
+TLS_CFLAGS = $(BUILD_DIR)/tls_cflags
 COMPILER_DIR = compiler
 STAGE0 = bootstrap/stage0.c
 BUILD_DIR = build
 GEM = $(BUILD_DIR)/gem
 
-.PHONY: build test test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-recursion-memory test-lsp test-example-apps bootstrap clean
+.PHONY: FORCE build test test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-lsp test-example-apps bootstrap clean
 
 # Build the compiler from the checked-in stage0.c
 build: $(GEM)
@@ -22,6 +24,17 @@ build: $(GEM)
 $(BUILD_DIR)/%.o: $(RUNTIME_DIR)/%.c $(RUNTIME_DIR)/gem.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) -c -o $@ $< -I $(RUNTIME_DIR) $(CFLAGS)
+
+# OpenSSL's flags, from runtime/tls_config.sh, which runs on every build
+# and rewrites build/tls_cflags and build/tls_libs only when they change.
+$(TLS_CFLAGS): FORCE
+	@mkdir -p $(BUILD_DIR)
+	@CC="$(CC)" sh runtime/tls_config.sh $(BUILD_DIR)
+
+$(TLS_OBJ): $(RUNTIME_DIR)/gem_builtins_tls.c $(RUNTIME_DIR)/gem.h $(TLS_CFLAGS)
+	$(CC) -c -o $@ $< -I $(RUNTIME_DIR) $(CFLAGS) $$(cat $(TLS_CFLAGS))
+
+FORCE:
 
 $(SQLITE_OBJ): $(SQLITE_SRC)
 	@mkdir -p $(BUILD_DIR)
@@ -44,7 +57,7 @@ bootstrap: $(GEM)
 	cp $(BUILD_DIR)/stage0_new.c $(STAGE0)
 	@echo "bootstrap/stage0.c regenerated and verified"
 
-test: $(GEM) test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-recursion-memory test-lsp test-example-apps
+test: $(GEM) test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-recursion-memory test-lsp test-example-apps
 	@bash examples/run_all.sh
 
 test-broken: $(GEM)
@@ -70,6 +83,13 @@ test-proc-limit: $(GEM)
 
 test-socket-leak: $(GEM)
 	@bash tests/check_socket_leak.sh
+
+test-tls: $(GEM)
+	@bash tests/check_tls.sh
+
+# Not part of `make test`: needs the internet.
+test-tls-online: $(GEM)
+	@bash tests/check_tls_online.sh
 
 test-recursion-memory: $(GEM)
 	@bash tests/check_recursion_memory.sh

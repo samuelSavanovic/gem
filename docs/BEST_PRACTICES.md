@@ -1448,7 +1448,8 @@ processes.
 
 | Yields to other processes | Blocks everything |
 |---|---|
-| `tcp_*` (except name lookup, see right), `sleep`, `receive` | `tcp_connect` to a host *name* (DNS lookup runs inline) |
+| `tcp_*` and `tls_connect` (except name lookup, see right), `sleep`, `receive` | `tcp_connect` and `tls_connect` to a host *name* (DNS lookup runs inline) |
+| | the first `tls_connect` without `ca_file`, which reads the system's CA certificates (about 8 ms, M-series Mac), and each TLS handshake's crypto (about 1 ms) |
 | `read_file`, `write_file`, `append_file`, `exec`, `sqlite_open`, `sqlite_close`, `extern blocking fn` (a pool of 4 threads) | `sqlite_query`, `sqlite_exec`, and the close of a database at its owner's exit |
 | | `file_exists`, `is_dir`, `list_dir`, `mkdir`, `remove_file`, `normalize_path` |
 | | plain `extern fn`, `input`, `read_stdin`; `print`, `eprint`, `write_stdout` to a slow pipe |
@@ -1578,6 +1579,10 @@ end)
 
 ### Pass timeouts to reads, check writes
 
+- `tcp_connect(host, port, timeout_ms)` and `tls_connect(host, port,
+  {timeout_ms: ms})` bound the connect (and the TLS handshake); without
+  one, a host that drops the packets holds the caller until the system
+  gives up, a minute or more.
 - `tcp_read(fd, n, timeout_ms)` returns `""` at end of stream and `nil` on
   timeout. Library code should always pass a timeout; without one, a silent
   peer blocks the caller forever. As with `after`, a timeout of `0` or
@@ -1724,7 +1729,9 @@ ones that bite.
   the path relative to the `.gem` file (`"support/helpers.h"`; in a
   loaded module, relative to the module). The header comes before
   `gem.h`, so include `"gem.h"` in it if it uses `GemVal` or `GemBytes`.
-  The program links only libc, libm and pthreads.
+  The program links only libc, libm and pthreads (and OpenSSL when it
+  uses `tls_connect` or `std/request`): name any other library before the source file,
+  `gem -L /opt/foo/lib -lfoo app.gem`, with `-I <dir>` for its headers.
 - For a libc function, `extern include` its header (`"stdio.h"` for
   `puts`). Without any `extern include`, the compiler writes its own
   prototype from the extern types, which clashes with libc's.

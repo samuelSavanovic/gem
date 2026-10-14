@@ -7,6 +7,9 @@
  * to its entry, and again after every wait: a socket closed meanwhile, by
  * any process or by its owner's exit, raises "<builtin>: socket is closed"
  * instead of touching an fd number that may already name a new file.
+ *
+ * A socket tls_connect returned carries a TLS session (GemResEntry.ptr):
+ * tcp_read and tcp_write hand it to gem_builtins_tls.c through gem_tls_ops.
  */
 
 #include "gem.h"
@@ -21,6 +24,10 @@
 #ifdef __APPLE__
 #include <libproc.h>
 #endif
+
+/* Set by the first tls_connect, before any socket carries a TLS session,
+   so a program whose code never names it links no TLS code. */
+const GemTlsOps *gem_tls_ops = NULL;
 
 static void gem_set_nonblocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
@@ -82,7 +89,7 @@ static GemVal gem_tcp_arg0(GemVal *args, int argc) {
     return argc >= 1 ? args[0] : GEM_NIL;
 }
 
-static int gem_tcp_port(GemVal v, const char *who) {
+int gem_tcp_port(GemVal v, const char *who) {
     if (v.ival < 0 || v.ival > 65535) {
         char buf[128];
         snprintf(buf, sizeof(buf), "%s: port must be from 0 to 65535, got %lld", who, (long long)v.ival);
@@ -122,24 +129,21 @@ static GemProcess *gem_tcp_begin_wait(void) {
 
 /* ─── Built-in: tcp_connect ─── */
 
-GemVal gem_tcp_connect_fn(void *_env, GemVal *args, int argc) {
-    (void)_env;
-    if (argc < 2 || args[0].type != VAL_STRING || args[1].type != VAL_INT) {
-        gem_error("tcp_connect: expected (string host, int port)");
-    }
-    const char *host = args[0].sval;
-    int port = gem_tcp_port(args[1], "tcp_connect");
-
+/* A connected socket to host:port, owned by the running process, for
+   builtin `who` (tcp_connect, tls_connect). `deadline` (gem_now_ms time,
+   -1 for none) bounds the wait for the connection: past it the socket is
+   closed and "<who>: connect to <host>:<port> timed out" raised. */
+GemVal gem_tcp_connect_to(const char *host, int port, int64_t deadline, const char *who) {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons((uint16_t)port);
-    gem_tcp_resolve4(host, &addr.sin_addr, "tcp_connect");
+    gem_tcp_resolve4(host, &addr.sin_addr, who);
 
     int fd = socket(AF_INET, GEM_SOCK_STREAM, 0);
     if (fd < 0) {
         char buf[256];
-        snprintf(buf, sizeof(buf), "tcp_connect: socket failed: %s", strerror(errno));
+        snprintf(buf, sizeof(buf), "%s: socket failed: %s", who, strerror(errno));
         gem_error(buf);
     }
     gem_set_cloexec(fd);
@@ -148,25 +152,40 @@ GemVal gem_tcp_connect_fn(void *_env, GemVal *args, int argc) {
     GemVal sock = gem_tcp_register(fd);
 
     if (gem_current_pid >= 0) {
-        gem_tcp_begin_wait();
+        GemProcess *proc = gem_tcp_begin_wait();
         gem_set_nonblocking(fd);
         int rc = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
         if (rc < 0 && errno != EINPROGRESS) {
             char buf[256];
-            snprintf(buf, sizeof(buf), "tcp_connect: connect failed: %s", strerror(errno));
+            snprintf(buf, sizeof(buf), "%s: connect failed: %s", who, strerror(errno));
             gem_res_close(gem_res_lookup(sock));
             gem_error(buf);
         }
         if (rc < 0) {
+            proc->deadline_ms = deadline;
             gem_io_yield(fd, 1, sock);
+            int timed_out = deadline >= 0 && (proc->timed_out || gem_now_ms() >= deadline);
+            proc->timed_out = 0;
+            proc->deadline_ms = -1;
             GemResEntry *e = gem_res_lookup(sock);
-            if (!e) gem_error("tcp_connect: connect failed: socket closed while connecting");
+            char buf[512];
+            if (!e) {
+                snprintf(buf, sizeof(buf), "%s: connect failed: socket closed while connecting", who);
+                gem_error(buf);
+            }
             int err = 0;
             socklen_t errlen = sizeof(err);
             if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &errlen) < 0) err = errno;
             if (err != 0) {
-                char buf[256];
-                snprintf(buf, sizeof(buf), "tcp_connect: connect failed: %s", strerror(err));
+                snprintf(buf, sizeof(buf), "%s: connect failed: %s", who, strerror(err));
+                gem_res_close(e);
+                gem_error(buf);
+            }
+            /* Woken by the deadline: still connecting unless a peer is there. */
+            struct sockaddr_storage peer;
+            socklen_t peer_len = sizeof(peer);
+            if (timed_out && getpeername(fd, (struct sockaddr *)&peer, &peer_len) < 0) {
+                snprintf(buf, sizeof(buf), "%s: connect to %s:%d timed out", who, host, port);
                 gem_res_close(e);
                 gem_error(buf);
             }
@@ -176,11 +195,30 @@ GemVal gem_tcp_connect_fn(void *_env, GemVal *args, int argc) {
 
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         char buf[256];
-        snprintf(buf, sizeof(buf), "tcp_connect: connect failed: %s", strerror(errno));
+        snprintf(buf, sizeof(buf), "%s: connect failed: %s", who, strerror(errno));
         gem_res_close(gem_res_lookup(sock));
         gem_error(buf);
     }
     return sock;
+}
+
+/* timeout_ms, as for tcp_read: nil or omitted waits for the connection;
+   an int is a deadline, and one <= 0 gives up unless it connects at once. */
+GemVal gem_tcp_connect_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_STRING || args[1].type != VAL_INT) {
+        gem_error("tcp_connect: expected (string host, int port[, int timeout_ms])");
+    }
+    int64_t deadline = -1;
+    if (argc >= 3 && args[2].type == VAL_INT) {
+        deadline = gem_now_ms() + (args[2].ival > 0 ? args[2].ival : 0);
+    } else if (argc >= 3 && args[2].type != VAL_NIL) {
+        char errbuf[160];
+        snprintf(errbuf, sizeof(errbuf), "tcp_connect: timeout_ms must be an int (milliseconds) or nil, got %s",
+                 gem_type_str(args[2]));
+        gem_error(errbuf);
+    }
+    return gem_tcp_connect_to(args[0].sval, gem_tcp_port(args[1], "tcp_connect"), deadline, "tcp_connect");
 }
 
 /* ─── Built-in: tcp_listen ─── */
@@ -273,7 +311,8 @@ GemVal gem_tcp_accept_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     GemVal sock = gem_tcp_arg0(args, argc);
-    int fd = gem_res_get(sock, GEM_RES_SOCKET, "tcp_read")->fd;
+    GemResEntry *ent = gem_res_get(sock, GEM_RES_SOCKET, "tcp_read");
+    int fd = ent->fd;
     size_t max_bytes = 4096;
     if (argc >= 2 && args[1].type == VAL_INT) {
         max_bytes = (size_t)args[1].ival;
@@ -292,6 +331,7 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
                  gem_type_str(args[2]));
         gem_error(errbuf);
     }
+    if (ent->ptr) return gem_tls_ops->read(sock, max_bytes, has_timeout, timeout_ms);
 
     if (gem_current_pid >= 0) {
         GemProcess *proc = gem_tcp_begin_wait();
@@ -370,7 +410,8 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
 GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     GemVal sock = gem_tcp_arg0(args, argc);
-    int fd = gem_res_get(sock, GEM_RES_SOCKET, "tcp_write")->fd;
+    GemResEntry *ent = gem_res_get(sock, GEM_RES_SOCKET, "tcp_write");
+    int fd = ent->fd;
     if (argc < 2 || (args[1].type != VAL_STRING && args[1].type != VAL_BUFFER)) {
         gem_error("tcp_write: expected (socket, string|buffer data[, int timeout_ms])");
     }
@@ -398,6 +439,7 @@ GemVal gem_tcp_write_fn(void *_env, GemVal *args, int argc) {
         data = args[1].buffer->data;
         total = (size_t)args[1].buffer->len;
     }
+    if (ent->ptr) return gem_tls_ops->write(sock, data, total, has_timeout, timeout_ms);
 
     if (gem_current_pid >= 0) {
         GemProcess *proc = gem_tcp_begin_wait();
@@ -530,10 +572,13 @@ GemVal gem_tcp_local_port_fn(void *_env, GemVal *args, int argc) {
 /* ─── Built-in: tcp_fd ─── */
 
 /* The socket's fd number, for extern fns: valid while the socket is open,
-   and C code must not close it (tcp_close does). */
+   and C code must not close it (tcp_close does). A TLS socket's fd carries
+   the encrypted stream, so it has none to give. */
 GemVal gem_tcp_fd_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    return gem_int(gem_res_get(gem_tcp_arg0(args, argc), GEM_RES_SOCKET, "tcp_fd")->fd);
+    GemResEntry *e = gem_res_get(gem_tcp_arg0(args, argc), GEM_RES_SOCKET, "tcp_fd");
+    if (e->ptr) gem_error("tcp_fd: a TLS socket has no fd to give to C");
+    return gem_int(e->fd);
 }
 
 /* ─── Built-in: tcp_from_fd ─── */

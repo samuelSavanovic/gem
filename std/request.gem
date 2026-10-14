@@ -1,10 +1,11 @@
-## request — HTTP/1.1 client for http:// URLs (no https: Gem has no TLS).
+## request — HTTP/1.1 client for http:// and https:// URLs.
 ##
 ##   load "std/request"
 ##   let resp = request.get("http://127.0.0.1:8080/items?page=2")
 ##   resp.status                     # 200
 ##   resp.headers["content-type"]    # "text/plain; charset=utf-8"
 ##   resp.body                       # "page 2"
+##   request.get("https://example.com/").status    # 200
 ##
 ## Every fn takes an optional `opts` table (`body`, `headers`,
 ## `timeout_ms`; see `request`) and returns `{status, headers, body}` for
@@ -17,6 +18,12 @@
 ## The socket belongs to the caller: a caller killed mid-call (a
 ## `task.await` timeout) closes it as it dies. Still, bound a request with
 ## `timeout_ms` rather than by killing the process.
+##
+## An https:// request verifies the server's certificate against the
+## system's trust store (or `ca_file`) and checks it names the URL's host
+## (`tls_connect`); it fails with `request.<fn>: cannot connect to
+## <host>:<port>: tls_connect: certificate verify failed ...` otherwise.
+## There is no way to turn the check off.
 
 load "std/string"
 
@@ -87,15 +94,13 @@ fn parse_url(name, raw_url)
   check_text(name, "URL", raw_url, false)
   let sep = string.index_of(raw_url, "://")
   if sep < 0
-    error("{name}: URL must start with http:// (got \"{raw_url}\")")
+    error("{name}: URL must start with http:// or https:// (got \"{raw_url}\")")
   end
   let scheme = string.lower(substr(raw_url, 0, sep))
-  if scheme == "https"
-    error("{name}: https is not supported (Gem has no TLS): {raw_url}")
+  if scheme != "http" and scheme != "https"
+    error("{name}: unsupported URL scheme \"{scheme}\" (only http:// and https:// are supported)")
   end
-  if scheme != "http"
-    error("{name}: unsupported URL scheme \"{scheme}\" (only http:// is supported)")
-  end
+  let tls = scheme == "https"
 
   let s = substr(raw_url, sep + 3, len(raw_url) - sep - 3)
   let hash = find_byte(s, 35)
@@ -125,7 +130,8 @@ fn parse_url(name, raw_url)
     error("{name}: IPv6 address literals are not supported: {raw_url}")
   end
   let host = authority
-  let port = 80
+  let default_port = if tls then 443 else 80 end
+  let port = default_port
   let colon = find_byte(authority, 58)
   if colon >= 0
     host = substr(authority, 0, colon)
@@ -143,7 +149,7 @@ fn parse_url(name, raw_url)
   if host == ""
     error("{name}: URL has no host: {raw_url}")
   end
-  {host: host, port: port, path: path}
+  {host: host, port: port, path: path, tls: tls, default_port: default_port}
 end
 
 # ─── Reading ───
@@ -437,7 +443,7 @@ fn build_request(name, method, parsed, headers, body)
   build_string do |add|
     add(method, " ", parsed.path, " HTTP/1.1\r\n")
     if not has_key(given, "host")
-      if parsed.port == 80
+      if parsed.port == parsed.default_port
         add("Host: ", parsed.host, "\r\n")
       else
         add("Host: ", parsed.host, ":", parsed.port, "\r\n")
@@ -479,7 +485,7 @@ fn do_request(name, method, raw_url, opts)
   if type(opts) != "table"
     error("{name}: opts must be a table, got {type(opts)}")
   end
-  let {headers = {}, body = "", timeout_ms = DEFAULT_TIMEOUT_MS} = opts
+  let {headers = {}, body = "", timeout_ms = DEFAULT_TIMEOUT_MS, ca_file = nil} = opts
   if type(method) != "string" or method == ""
     error("{name}: method must be a non-empty string")
   end
@@ -495,15 +501,32 @@ fn do_request(name, method, raw_url, opts)
   elif timeout_ms != nil and timeout_ms <= 0
     error("{name}: timeout_ms must be an int > 0 (milliseconds) or nil, got {timeout_ms}")
   end
+  if ca_file != nil and type(ca_file) != "string"
+    error("{name}: ca_file must be a string or nil, got {type(ca_file)}")
+  end
   let parsed = parse_url(name, raw_url)
   let req_str = build_request(name, method, parsed, headers, body)
 
   let deadline = if timeout_ms != nil then time_ms() + timeout_ms end
-  let conn = pcall tcp_connect(parsed.host, parsed.port)
+  let rd = {name: name, url: raw_url, fd: nil, data: "", pos: 0, deadline: deadline, timeout_ms: timeout_ms}
+  let wait = if deadline != nil then deadline - time_ms() end
+  # tls_connect takes only a timeout > 0; a deadline that has run out is
+  # caught after the connect, by the check below or by exchange.
+  if wait != nil and wait < 1
+    wait = 1
+  end
+  let conn = if parsed.tls
+    pcall tls_connect(parsed.host, parsed.port, {timeout_ms: wait, ca_file: ca_file})
+  else
+    pcall tcp_connect(parsed.host, parsed.port, wait)
+  end
   if not conn.ok
+    if deadline != nil and time_ms() >= deadline
+      timeout_error(rd)
+    end
     error("{name}: cannot connect to {parsed.host}:{parsed.port}: {conn.error}")
   end
-  let rd = {name: name, url: raw_url, fd: conn.value, data: "", pos: 0, deadline: deadline, timeout_ms: timeout_ms}
+  rd.fd = conn.value
   let r = pcall exchange(rd, req_str, method)
   tcp_close(conn.value)
   if not r.ok
@@ -561,8 +584,9 @@ end
 ## `raw_url` and returns `{status, headers, body}`. `method` is sent as
 ## given: "get" goes out lowercase.
 ##
-## `raw_url` is `http://host[:port][/path][?query][#fragment]`: port 80
-## by default, a missing path is `/`, the fragment is not sent. It is
+## `raw_url` is `http://host[:port][/path][?query][#fragment]`, or the
+## same with `https://`: port 80 (443 for https) by default, a missing
+## path is `/`, the fragment is not sent. It is
 ## sent as given: a space raises (`invalid character (byte 32) in URL`),
 ## so encode path segments and query values with `url.encode` (or build
 ## the query with `url.build_query`).
@@ -578,9 +602,12 @@ end
 ##   `Content-Length` are added unless `headers` sets them (in any case);
 ##   nothing else is, Content-Type included.
 ## - `timeout_ms`: an int > 0, default 30000, or nil for no limit. One
-##   deadline for the whole call, not per read: sending the request and
-##   waiting for the response count against it. Connecting is not cut
-##   short by it.
+##   deadline for the whole call, not per read: connecting, the TLS
+##   handshake, sending the request and waiting for the response all
+##   count against it.
+## - `ca_file`: for https, a PEM file of the certificates to trust in
+##   place of the system's (a private CA, a test server's own); nil, the
+##   default, trusts the system's.
 ##
 ## In the result, `status` is an int, `headers` maps lowercase names to
 ## trimmed values (a repeated header's values joined with ", ", but
@@ -595,7 +622,7 @@ end
 ## Raises `request.<fn>: timed out after <ms> ms waiting for <url>` when
 ## the deadline passes, and `request.<fn>: cannot connect to
 ## <host>:<port>: ...` when the connect fails. Also raises for a URL
-## that is not plain http (https, credentials, IPv6 literals), a header
+## that is not plain http or https (credentials, IPv6 literals), a header
 ## name that is not an HTTP token, a nil header value, CR, LF or other
 ## control bytes in the method, a header or the URL, a
 ## Transfer-Encoding header, a non-string body, a malformed response or
