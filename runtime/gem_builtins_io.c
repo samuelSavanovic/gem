@@ -296,6 +296,64 @@ int64_t gem_rmdir(const char *path) {
     return rmdir(path) == 0 ? 1 : 0;
 }
 
+/* ─── The compiler's binary cache (compiler/main.gem, run mode) ───
+ *
+ * Not builtins either, for the same reason. gem_hash_hex hashes bytes to
+ * 32 hex digits (two 64-bit FNV-1a lanes with different offsets): a cache
+ * key, not a cryptographic hash. gem_file_hash hashes a file's contents,
+ * "" when it can't be read. gem_mkdirs is mkdir -p (1 on success, the
+ * directory existing included); gem_rename renames atomically within a
+ * file system (1 on success). */
+
+static void gem_fnv2(const uint8_t *p, size_t n, uint64_t *a, uint64_t *b) {
+    for (size_t i = 0; i < n; i++) {
+        *a = (*a ^ p[i]) * 0x100000001b3ULL;
+        *b = (*b ^ p[i]) * 0x100000001b3ULL;
+        *b ^= *b >> 29;
+    }
+}
+
+char *gem_hash_hex(const uint8_t *data, int64_t len) {
+    static char out[33];
+    uint64_t a = 0xcbf29ce484222325ULL, b = 0x84222325cbf29ce4ULL;
+    gem_fnv2(data, (size_t)len, &a, &b);
+    snprintf(out, sizeof(out), "%016llx%016llx", (unsigned long long)a, (unsigned long long)b);
+    return out;
+}
+
+char *gem_file_hash(const char *path) {
+    static char out[33];
+    FILE *f = fopen(path, "rb");
+    if (!f) { out[0] = 0; return out; }
+    uint64_t a = 0xcbf29ce484222325ULL, b = 0x84222325cbf29ce4ULL;
+    uint8_t buf[65536];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0) gem_fnv2(buf, n, &a, &b);
+    fclose(f);
+    snprintf(out, sizeof(out), "%016llx%016llx", (unsigned long long)a, (unsigned long long)b);
+    return out;
+}
+
+int64_t gem_mkdirs(const char *path) {
+    char tmp[PATH_MAX];
+    size_t n = strlen(path);
+    if (n == 0 || n >= sizeof(tmp)) return 0;
+    memcpy(tmp, path, n + 1);
+    for (size_t i = 1; i < n; i++) {
+        if (tmp[i] == '/') {
+            tmp[i] = 0;
+            if (mkdir(tmp, 0755) != 0 && errno != EEXIST) return 0;
+            tmp[i] = '/';
+        }
+    }
+    if (mkdir(tmp, 0755) != 0 && errno != EEXIST) return 0;
+    return 1;
+}
+
+int64_t gem_rename(const char *from, const char *to) {
+    return rename(from, to) == 0 ? 1 : 0;
+}
+
 /* ─── Built-in: remove_file ─── */
 
 GemVal gem_remove_file_fn(void *_env, GemVal *args, int argc) {

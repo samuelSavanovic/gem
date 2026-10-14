@@ -891,6 +891,10 @@ char *gem_exe_path(void);
    its work directory; not Gem builtins. */
 char *gem_temp_dir(void);
 int64_t gem_rmdir(const char *path);
+char *gem_hash_hex(const uint8_t *data, int64_t len);
+char *gem_file_hash(const char *path);
+int64_t gem_mkdirs(const char *path);
+int64_t gem_rename(const char *from, const char *to);
 
 /* ─── Helpers used by codegen ─── */
 

@@ -1194,6 +1194,8 @@ let USAGE = """
     --check              parse and analyze only; exit 1 on errors
     --run                run after compiling (the default)
     -h, --help           print this help
+    --                   after <file.gem>: the rest goes to the program,
+                         options included
   C compiler flags, before <file.gem> only:
     -l<lib>, -l <lib>    link the library (after the runtime)
     -L<dir>, -L <dir>    search <dir> for libraries
@@ -1205,6 +1207,10 @@ let USAGE = """
                          link (make debug, make asan build the other two)
   subcommands:
     lsp                  start the language server on stdin/stdout
+  run mode (gem <file.gem>) builds at -O0 and caches the binary by a hash of
+  the C, the runtime and the cc flags, in $GEM_CACHE_DIR (else
+  $XDG_CACHE_HOME/gem, else ~/.cache/gem); -o and -c build at -O2.
+  GEM_CACHE=off turns the cache off.
   """
 
 # A command-line mistake: a short message and the usage line on stderr,
@@ -1229,11 +1235,18 @@ fn parse_args(args)
 
   let argc = len(args)
   let i = 1
-  let run_arg_count = 0
 
   while i < argc
     let arg = args[i]
-    if arg == "--emit-c"
+    if result.src_path != nil and arg == "--"
+      # After the file, `--` ends the options: the rest is the program's.
+      i += 1
+      while i < argc
+        push(result.run_args, args[i])
+        i += 1
+      end
+      break
+    elif arg == "--emit-c"
       result.emit_c = true
     elif arg == "--check"
       result.check = true
@@ -1270,8 +1283,7 @@ fn parse_args(args)
       result.src_path = arg
     else
       # extra positional — passed to the program when running
-      result.run_args[run_arg_count] = arg
-      run_arg_count += 1
+      push(result.run_args, arg)
     end
     i += 1
   end
@@ -1320,6 +1332,89 @@ end
 # call them.
 extern fn gem_temp_dir() -> String
 extern fn gem_rmdir(path: String) -> Int
+extern fn gem_hash_hex(data: Bytes) -> String
+extern fn gem_file_hash(path: String) -> String
+extern fn gem_mkdirs(path: String) -> Int
+extern fn gem_rename(from: String, to: String) -> Int
+
+# ─── Binary cache (run mode) ──────────────────────────────────
+# `gem file.gem` keeps the binary it builds in
+# <cache>/<key>/<basename>, <cache> being $GEM_CACHE_DIR, else
+# $XDG_CACHE_HOME/gem, else ~/.cache/gem. The key hashes the C (which
+# holds every source file's code, so any change to the program, a module
+# it loads or the compiler changes it), the cc command's flags, the
+# runtime library's contents and those of the headers `extern include`
+# names (the C has their paths, not their contents). Libraries named by
+# `-l` are not hashed. GEM_CACHE=off turns the cache off. Returns the
+# binary's path, or nil when the cache is off or has no directory.
+let CACHE_MAX_ENTRIES = 256
+
+fn cache_root()
+  let set = getenv("GEM_CACHE_DIR")
+  if set != nil and set != ""
+    return set
+  end
+  let xdg = getenv("XDG_CACHE_HOME")
+  if xdg != nil and xdg != ""
+    return path_join(xdg, "gem")
+  end
+  let home = getenv("HOME")
+  if home == nil or home == ""
+    return nil
+  end
+  path_join(home, ".cache/gem")
+end
+
+fn cached_binary(c_code, c_file, parts, base)
+  if getenv("GEM_CACHE") == "off"
+    return nil
+  end
+  let root = cache_root()
+  if root == nil
+    return nil
+  end
+  # The C names its own file in #line directives: a new work directory
+  # every run, so it is left out.
+  let key_text = build_string do |add|
+    add(if c_file != nil then str_replace(c_code, c_file, "") else c_code end)
+    for p in parts
+      add("\n|part| ")
+      add(p)
+    end
+    for line in string.split(c_code, "\n")
+      if string.starts_with(line, "#include \"/")
+        let path = substr(line, 10, len(line) - 11)
+        add("\n|header| {path} {gem_file_hash(path)}")
+      end
+    end
+  end
+  let key = gem_hash_hex(key_text)
+  if not file_exists(path_join(root, key))
+    prune_cache(root)
+  end
+  path_join(path_join(root, key), base)
+end
+
+# Past CACHE_MAX_ENTRIES entries, empty the cache (it refills with what
+# is run again). An entry is a directory holding one binary.
+fn prune_cache(root)
+  if not is_dir(root)
+    return nil
+  end
+  let entries = list_dir(root)
+  if len(entries) < CACHE_MAX_ENTRIES
+    return nil
+  end
+  for e in entries
+    let dir = path_join(root, e)
+    if is_dir(dir)
+      for f in list_dir(dir)
+        remove_file(path_join(dir, f))
+      end
+      gem_rmdir(dir)
+    end
+  end
+end
 
 # ─── Main ─────────────────────────────────────────────────────
 
@@ -1467,7 +1562,10 @@ else
   # checks its invariants too.
   let runtime_kind = getenv("GEM_RUNTIME")
   let runtime_lib = path_join(install_root, "build/libgem_runtime.a")
-  let c_flags = " -std=gnu11 -O2 -pthread"
+  # `gem file.gem` (run mode) builds at -O0, about 5x faster than -O2, and
+  # caches the binary (cached_binary below); a build for keeps (-o, -c)
+  # gets -O2.
+  let c_flags = if cli.run then " -std=gnu11 -O0 -pthread" else " -std=gnu11 -O2 -pthread" end
   if runtime_kind == "debug" or runtime_kind == "asan"
     runtime_lib = path_join(install_root, "build/" + runtime_kind + "/libgem_runtime.a")
     if not file_exists(runtime_lib)
@@ -1523,7 +1621,23 @@ else
     cc + " -o " + q_out + " " + q_c + " " + q_rt + "/gem_*.c " + q_rt + "/sqlite3.c" + inc_flags + " -I " + q_rt + c_flags + lib_flags + " -lm"
   end
 
-  let cc_ret = exec(cc_cmd)
+  # Run mode: the binary of an earlier run with the same C, runtime, cc
+  # flags and extern headers is run as it is.
+  let cache_bin = nil
+  if cli.run
+    cache_bin = cached_binary(c_code, tmp_c, [cc, inc_flags, c_flags, lib_flags, runtime_lib, gem_file_hash(runtime_lib)], base)
+  end
+  let cache_hit = cache_bin != nil and file_exists(cache_bin)
+  let cc_ret = if cache_hit then 0 else exec(cc_cmd) end
+  if cache_hit
+    out_name = cache_bin
+    q_out = shell_quote(out_name)
+  elif cc_ret == 0 and cache_bin != nil
+    if gem_mkdirs(dirname(cache_bin)) == 1 and gem_rename(out_name, cache_bin) == 1
+      out_name = cache_bin
+      q_out = shell_quote(out_name)
+    end
+  end
   if cc_ret != 0
     # Don't use error() here — cc has already printed its own diagnostics to
     # stderr, and a Gem stack trace pointing at this driver line would be
@@ -1531,7 +1645,9 @@ else
     eprint("gem: compilation failed (cc exited with " + to_string(cc_ret) + "); the C is in " + tmp_c + "\n")
     exit(cc_ret)
   end
-  remove_file(tmp_c)
+  if file_exists(tmp_c)
+    remove_file(tmp_c)
+  end
 
   # ─── Run mode ───────────────────────────────────────────────
 
@@ -1544,7 +1660,9 @@ else
       i += 1
     end
     run_ret = exec(run_cmd)
-    remove_file(out_name)
+    if out_name != cache_bin
+      remove_file(out_name)
+    end
   end
   gem_rmdir(work_dir)
   if run_ret != 0
