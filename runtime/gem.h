@@ -664,6 +664,7 @@ GemVal gem_has_key_fn(void *_env, GemVal *args, int argc);
 GemVal gem_is_array_n_fn(void *_env, GemVal *args, int argc);
 GemVal gem_in_fn(void *_env, GemVal *args, int argc);
 GemVal gem_substr_fn(void *_env, GemVal *args, int argc);
+GemVal gem_match_fail_fn(void *_env, GemVal *args, int argc);
 GemVal gem_find_fn(void *_env, GemVal *args, int argc);
 GemVal gem_chr_fn(void *_env, GemVal *args, int argc);
 GemVal gem_ord_fn(void *_env, GemVal *args, int argc);

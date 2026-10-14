@@ -117,6 +117,7 @@ let b1 = bad_server(fn(msg, from, s)
   match msg
   when "known"
     {reply: 1, state: s}
+  else nil
   end
 end, ok_cast, ok_cast)
 print("6: {error_of(pcall gen_server.call(b1, "unknown"))}")

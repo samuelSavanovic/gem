@@ -65,11 +65,12 @@ when {id: ^wanted}                   # ^pin: equals existing var `wanted`, no bi
   mine()
 when 0 then zero()                   # one-line arm: `then` (as in `if ... then`)
                                      # no guards: `when x > 5` is a compile error
+                                     # a bare name already in scope is a compile error: pin it (^x)
 else
   fallback()
-end
+end                                  # no else and no arm matching raises "no match for <value>"; `else nil` to allow it
 
-# if / match / receive give a value, anywhere an expression goes (nil when no branch is taken)
+# if / match / receive give a value, anywhere an expression goes (nil when an if takes no branch)
 let size = if n > 10 then "big" else "small" end
 print("{n} item{if n == 1 then "" else "s" end}")
 total += match op

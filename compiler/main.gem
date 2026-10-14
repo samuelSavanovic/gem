@@ -423,6 +423,8 @@ fn rename_node(node, rmap, shadowed)
     end
   when {tag: "block", stmts: stmts}
     rename_stmts(stmts, rmap, shadowed)
+  else
+    nil
   end
 end
 
