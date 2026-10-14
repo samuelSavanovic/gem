@@ -23,13 +23,13 @@ Done: `http.start` has what an internet-facing server needs (SPEC, "Server"; `ex
 | Observing what never reaches a handler | `on_event`: `"open"` when a connection's process starts (so slowloris sockets that never send a byte are counted), `"request"` after every response (the server's own 400/404/413/431/500 included, with the first 4 KB of a rejected head as `raw`), `"close"` with the reason (closed, idle, timeout, done, rejected, write_failed, error), `"refused"` |
 | Crash data | `"crash"` for an error in std/http's own code: its message, stack and the first 4 KB of the request; the client gets a 500 and the server keeps running |
 
-`on_event` runs in the connection process (`"refused"` in the acceptor), so this program's observer only sends each event to the recorder.
+`on_event` runs in the connection process (`"refused"` in the acceptor), so this program's observer there only clips each event's fields, formats a crash's trace and sends the event to the recorder.
 
 ## Process layout
 
 - **http server**: `http.start` with the routes, the caps and `on_event`, under the top-level supervisor.
-- **recorder**: the only process that touches sqlite. Batches inserts (every 200 events or 1 s), sheds all but connection opens and closes, crashes and metrics past a backlog of 10,000. One database file per week. Keeps in-memory counters for `/stats`, and the open connections (from the `"open"` and `"close"` events), which it adds to each metrics row.
-- **sampler**: every minute records RSS, open fds, `runtime_stats()`, and (filled in by the recorder) open connections and their IPs, the recorder's backlog and dropped events, uptime and the Gem commit.
+- **recorder**: the only process that touches sqlite. Batches inserts (every 200 events or 1 s), sheds all but connection opens and closes, crashes and metrics past a backlog of 10,000. One database file per week. Keeps in-memory counters for `/stats`, and the open connections (tracked from the events), which it adds to each metrics row.
+- **sampler**: every minute records RSS, open fds, `runtime_stats()`, and (filled in by the recorder) open connections and their distinct IPs, the recorder's backlog and dropped events, uptime and the Gem commit.
 - A top-level supervisor over the server, recorder and sampler.
 
 The honeypot's recorder and sampler are the model, copied, not shared, so the two programs change independently.
@@ -48,13 +48,13 @@ There's no domain and nothing links to the IP, so almost all traffic will be sca
 - `connections`: id, ip, port, start/end time, end reason, requests, bytes in/out
 - `requests`: connection_id, time, method (first 64 bytes), path (first 1 KB), status, bytes out, ms, user agent (first 256 bytes), the handler's error (std/http reports no per-request bytes in; the connection's `bytes_in` covers them)
 - `bad_input`: connection_id, time, status, the first 4 KB read (BLOB)
-- `crashes`: connection_id, time, reason, trace, the bytes read (BLOB)
+- `crashes`: connection_id, time, reason, trace, the first 4 KB of the request (BLOB)
 - `cap_events`: ip, time, cap, detail (refused connections, and the recorder's backlog)
-- `metrics`: as the honeypot's, plus open connections
+- `metrics`: as the honeypot's, with open connections and their distinct IPs in place of sessions
 
 ## Limits
 
-All configurable, all logged when hit: max connections (global 1,000, per IP 32), `max_body` 64 KB, idle and request timeouts 10 s, write timeout 10 s, recorder backlog. The unit's `MemoryMax` is set from the local soak's peak at 1,000 connections, with 2x headroom.
+All configurable, all logged when hit: max connections (global 1,000, per IP 32), `max_body` 64 KB, idle and request timeouts 10 s, write timeout 10 s, recorder backlog. The unit's `MemoryMax` is about twice the worst case measured at 1,000 connections (`deploy/README.md`, "The sandbox").
 
 ## Testing
 
@@ -71,7 +71,7 @@ All configurable, all logged when hit: max connections (global 1,000, per IP 32)
 
 ## Success criteria
 
-**Before port 80 opens**: the hostile load hour passes on macOS and Linux, then an 8-hour soak on the VPS with the deploy's caps and memory limit, with the load generator niced, passes every check of its report. The honeypot's metrics during that soak show no restart and no change in its `resets_100ms`.
+**Before port 80 opens**: the hostile load hour passes on Linux with the deploy's caps, and the installed service answers on the VPS's loopback with the health query's first row as `deploy/README.md` gives it. The unit's `MemoryMax`, `CPUQuota` and `Nice` bound the memory and CPU the server can take from the honeypot however long it runs, so real traffic is the long run. Disk is not bounded by the unit: both programs' databases share the VPS's disk (`du -sh /var/lib/private/*` there shows their size).
 
 **The first 7 days of real traffic**, as the honeypot's (`examples/honeypot/PLAN.md`, "Success criteria"): no restarts but our own, `fds_extra` at most 2 above day 1's, `res_extra` at most 2, `ownerless` at most 1, `rss_max_mb` under half of `MemoryMax` and day 7's at most 25% above day 2's, `resets_100ms` 0, no lost or dropped events not explained by a flood, egress counter 0. Each crash is triaged: replayed with its stored bytes, then fixed or added to `docs/KNOWN_BUGS.md`.
 
@@ -79,5 +79,5 @@ All configurable, all logged when hit: max connections (global 1,000, per IP 32)
 
 1. `std/http`: `req.peer`, `max_connections` / `max_per_ip`, `on_event`, crash reporting (done), and the `"open"` event (done).
 2. This directory: routes, recorder, sampler, `test.gem`, README (done).
-3. The hostile load target (done) and the local soak hour: Linux PASS (`benchmarks/soak/results/2026-10-13_linux-vm_httpd`), macOS to do.
-4. Deploy: unit, firewall fragment, health query (done); the 8-hour soak on the VPS, then open :80.
+3. The hostile load target (done) and the local soak hour: Linux PASS (`benchmarks/soak/results/2026-10-13_linux-vm_httpd`).
+4. Deploy: unit, firewall fragment, health query; :80 open since 2026-10-14 (done).

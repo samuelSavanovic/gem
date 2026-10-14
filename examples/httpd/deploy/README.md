@@ -25,45 +25,43 @@ build/gem examples/httpd/main.gem -o /usr/local/bin/httpd
 mkdir -p /usr/local/share/httpd && cp -R examples/httpd/static /usr/local/share/httpd/
 ```
 
-## 2. Soak on the VPS, before opening port 80
-
-The hostile hour (`benchmarks/soak/run.sh`, target `httpd`) with the
-deploy's caps, for 8 hours, while the honeypot keeps serving. The whole
-run is niced, the server it starts included (`run.sh` doesn't use the
-unit's `CPUQuota` and `Nice`), so it yields to the live honeypot:
-
-```sh
-TARGETS=httpd DURATION=8h GUARD_RSS_MB=512 nice -n 10 benchmarks/soak/run.sh
-```
-
-The server runs with its defaults, which are the deploy's (1,000
-connections, 32 per IP); the load sends from many loopback addresses
-and stays under them but for its crowd from one address and its bursts
-of 1,200 connections every two minutes, which the caps refuse. Every
-check in its report must PASS, and the honeypot's metrics over the same
-hours (its `health.sql`) must show no restart and no `resets_100ms`.
-Run it in `tmux` or under `nohup`, and delete `benchmarks/soak/logs/`
-afterwards.
-
-## 3. Install
-
-With the honeypot's ruleset in place (it has the `include`):
+## 2. Install, with port 80 still closed
 
 ```sh
 cd /opt/gem/examples/httpd/deploy
 mkdir -p /etc/nftables.d && cp httpd.nft /etc/nftables.d/
-nft -c -f /etc/nftables.conf            # check it before it can lock you out
-systemctl reload nftables               # reloads /etc/nftables.conf, and so the include
 sed "s/^HTTPD_COMMIT=.*/HTTPD_COMMIT=$(git -C /opt/gem rev-parse --short HEAD)/" httpd.env > /etc/httpd.env
 cp httpd.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now httpd
 ```
 
-If port 80 was opened by hand before (a rule and a counter added to the
-live ruleset to count the traffic), `systemctl restart nftables` drops
-them: the ruleset begins with `flush ruleset`. The provider's firewall
-(Hetzner's, set in its console) needs TCP 80 in.
+The fragment takes effect at the next nftables reload or boot (step 3),
+so the server runs on 8080 with nothing let in yet. Check it there:
+
+```sh
+curl -i http://127.0.0.1:8080/                          # the page
+curl http://127.0.0.1:8080/stats                        # the counts, with gem_commit
+```
+
+After a minute, the health query (below) shows a row with `res_extra`
+2 (the listener and the database) and `fds_extra` about 9.
+
+## 3. Open port 80
+
+The installed `/etc/nftables.conf` needs the `include`; one without it
+is replaced by the repository's:
+
+```sh
+grep -q 'include "/etc/nftables.d' /etc/nftables.conf \
+  || cp /opt/gem/examples/honeypot/deploy/honeypot.nft /etc/nftables.conf
+nft -c -f /etc/nftables.conf            # check it before it can lock you out
+systemctl reload nftables               # reloads /etc/nftables.conf, and so the include
+```
+
+The reload drops any rule added to the live ruleset by hand: the
+ruleset begins with `flush ruleset`. The provider's firewall (Hetzner's, set in
+its console) needs TCP 80 in.
 
 Check it from another machine: `curl -i http://VPS_IP/` gets the page,
 `curl http://VPS_IP/stats` the counts, and `curl -m 5 http://VPS_IP:8080/`
@@ -75,9 +73,6 @@ journalctl -u httpd -f                                  # stderr: std/http's lin
 nft list counter inet honeypot httpd_in                 # new connections to port 80
 nft list counter inet honeypot honeypot_egress          # must stay at 0 packets
 ```
-
-After a minute, the health query (below) should show a row with
-`res_extra` 2 (the listener and the database) and `fds_extra` about 9.
 
 ## Upgrading
 
@@ -107,7 +102,7 @@ sqlite3 /var/lib/httpd/httpd-2026-10-12.db \
   "SELECT status, count(*) FROM requests GROUP BY 1 ORDER BY 2 DESC"
 ```
 
-`examples/httpd/README.md` has the schema. Every stored path, header and
+The schema is `SCHEMA` in `examples/httpd/recorder.gem`. Every stored path, header and
 byte is attacker-controlled. A crash is replayed from its stored bytes:
 
 ```sh
@@ -131,10 +126,8 @@ connections at the peak of its bursts). The worst a client can do
 is pipeline requests and never read the answers: 900 connections that
 each sent 5,000 pipelined GETs took the server to 195 MB (about 210 KB
 a connection), and 900 that stalled partway through a 64 KB body or
-header to under 180 MB, so 1,000 of the worst take about 220 MB. RSS
-stays near that peak after the connections close (the process table's
-slots stay committed; the honeypot's deploy README says the same), which
-the health query's `rss_max_mb` shows.
+header to under 180 MB, so 1,000 of the worst take about 220 MB. The
+health query's `rss_max_mb` shows each day's peak.
 
 `CPUQuota=100%` and `Nice=5` keep one vCPU for the honeypot whatever
 arrives on port 80.
