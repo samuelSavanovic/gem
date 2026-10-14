@@ -93,7 +93,7 @@ The order is the order of the work.
    `make fuzz-parser`, a quick run in `make test`). A generator of random Gem programs run differentially
    (default threshold against stress, `-O0` against `-O2`), and a
    libFuzzer harness on the lexer and parser.
-8. **Shrink BEST_PRACTICES.** Every trap A removes goes, its trap-index
+8. **Shrink BEST_PRACTICES.** ✓ Done (PR 2: 985 lines). Every trap A removes goes, its trap-index
    row too; restated SPEC material and runtime internals move out.
    Target: under 1,000 lines.
 
