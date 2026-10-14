@@ -364,13 +364,21 @@ fn read_chunked(rd)
       malformed_chunked(rd, "chunk data not followed by CRLF")
     end
   end
-  # Trailer section; a server that closes instead of sending the final
-  # empty line is tolerated.
+  # Trailer section. The body is whole by now, so a server that closes
+  # instead of sending the final empty line is tolerated, over TLS too,
+  # where a close without the close alert makes tcp_read raise.
+  let skipped = pcall skip_trailer(rd)
+  if not skipped.ok and not string.starts_with(skipped.error, "tcp_read: the TLS connection was ")
+    error(skipped.error)
+  end
+  to_string(out)
+end
+
+fn skip_trailer(rd)
   let line = read_line(rd)
   while line != nil and line != ""
     line = read_line(rd)
   end
-  to_string(out)
 end
 
 fn has_no_body(method, status)
