@@ -1366,6 +1366,8 @@ end
 
 `read_file(path)` — reads the entire file at `path` and returns its contents as a string. Opens in binary mode (no newline translation). Files whose size isn't known up front (`/proc` and `/sys` files, pipes, devices such as `/dev/stdin`) are read until end of file. Raises an error if the file cannot be opened (`read_file: cannot open '<path>': <reason>`, the system's reason such as `No such file or directory` or `Permission denied`; `write_file`, `append_file` and `list_dir` say why the same way), is a directory, is larger than the string limit (see Strings), or a read fails.
 
+`read_file(path, offset, count)` — reads up to `count` bytes of the file at `path` starting at byte `offset`, and returns them; `""` at or past the end of the file, so a file can be walked in blocks (`std/io` does). The file is opened for each call, so nothing stays open between calls. A pipe or device (which can't seek) is read past `offset` first. Runs on the thread pool, like `read_file(path)`. A negative `offset` or `count` raises `read_file: negative offset` (`count`); errors opening or reading the file are those of `read_file(path)`. Any other number of arguments than 1 or 3 raises.
+
 `write_file(path, content)` — writes the string `content` to `path`, overwriting any existing file. Opens in binary mode. Raises an error if the file cannot be opened or if the write fails.
 
 `append_file(path, content)` — appends the string `content` to `path`. Creates the file if it doesn't exist. Opens in binary mode. Raises an error on failure.
@@ -1404,11 +1406,15 @@ end
 
 `getenv(name)` — returns the value of environment variable `name` as a string, or `nil` if not set.
 
+`setenv(name, value)` — sets environment variable `name` to the string `value` for this program and the commands `exec` and `exec_capture` run afterwards; `value` nil removes it. Returns nil. An empty `name`, one with `=` or a NUL byte, or a `value` with a NUL byte raises. The environment is the program's, shared by every process.
+
 `input()` — reads a line from stdin, of any length and binary-safe (NUL bytes are kept), stripping the trailing `\n` or `\r\n`. A last line without a newline is returned as is. Returns `nil` on EOF.
 
 `input(prompt)` — prints `prompt` to stdout (no newline), then reads a line from stdin.
 
 `read_stdin(n)` — reads exactly `n` bytes from stdin and returns them as a binary-safe string. Returns `""` for `n == 0`. On EOF the returned string may be shorter than `n` (or empty if EOF arrives first). Blocks the OS thread on `fread` — does not yield to the scheduler. Intended for length-framed protocols (e.g. LSP `Content-Length` bodies); for line-oriented input use `input()`.
+
+`read_stdin()` — reads stdin to its end and returns everything as a binary-safe string (`""` when it is already at its end). Blocks the OS thread, like `read_stdin(n)`. Raises when the input passes the string limit.
 
 `write_stdout(s)` — writes `s` to stdout as raw bytes (no trailing newline), after anything `print` left buffered. It returns once every byte is written (on a non-blocking stdout it waits until stdout takes them); a write error, such as a closed reader, drops the rest. Binary-safe (uses the string's stored length, not `strlen`). Pair with `read_stdin` when implementing framed stdio protocols where the receiver expects the frame on the wire as soon as the writer is done.
 
@@ -1445,6 +1451,12 @@ end
 `is_dir(path)` — returns `true` if `path` exists and is a directory, `false` otherwise. Argument must be a string.
 
 `exec(command)` — runs `command` via the system shell (`sh -c`). Blocks until the command exits. Returns the exit code as an integer (0 on success). The shell expands glob patterns and environment variables in `command`. The command inherits the program's stdout and stderr, so its output goes straight to the terminal (or wherever the program's output goes), the same from `main` and from a spawned process; `exec` does not capture it. To capture output, redirect it inside `command` (`exec("ls > /tmp/out.txt")`) and `read_file` the result.
+
+`exec_capture(command[, input])` — runs `command` via the system shell (`sh -c`) and returns `{status, stdout, stderr}`: the exit status (`-1` when the command could not start or was killed by a signal, as for `exec`) and everything it wrote to its stdout and stderr, as binary-safe strings. `input` (a string) is written to the command's stdin; without it (or with `nil`) its stdin is at its end at once, so a command that reads stdin never waits on the terminal. Like `exec`, it runs on the thread pool, so other processes run while the command does, and it holds a pool worker until the command exits. Output past the string limit raises `exec_capture: the command's stdout is over the string limit of 2147483646 bytes` (`stderr`). A command started by `exec` or `exec_capture` gets the default handling of `SIGPIPE` (the runtime ignores it), so a pipeline such as `yes | head -n 2` ends.
+
+`rename(from, to)` — renames (moves) the file or directory `from` to `to` with `rename(2)`, replacing a file at `to`; atomic within one file system. Returns `true` on success, `false` on failure (no such file, another file system, no permission). Both arguments must be strings. Runs inline.
+
+`stat(path)` — returns `{size, mtime, mode, type}` for the file at `path`, or nil when there is none: `size` in bytes, `mtime` the last change in milliseconds since the epoch (as `epoch_ms()`), `mode` the permission bits (`rw-r--r--` is `420`), and `type` `"file"`, `"dir"`, `"link"` (only for a link whose target is missing) or `"other"`. Follows symlinks. Runs inline.
 
 ## Owned Resources
 
@@ -1654,6 +1666,7 @@ table.each(parts) { |item| print(item) }
 - `string.starts_with(s, prefix)` / `string.ends_with(s, suffix)` — boolean prefix/suffix check; the empty string is a prefix and suffix of everything.
 - `string.upper(s)` / `string.lower(s)` — ASCII case conversion; other bytes (UTF-8 included) are unchanged.
 - `string.repeat(s, n)` — `s` repeated `n` times (`""` for `n <= 0`). `n` must be an int.
+- `string.closest(word, candidates)` — the string of the array `candidates` closest to `word` by edit distance (one byte added, removed or changed per edit), or nil when none is within 1 edit (for a `word` of up to 4 bytes) or 2 (longer). Non-string candidates and `word` itself are skipped. For "did you mean" messages: `closest("stratgy", ["strategy"])` is `"strategy"`.
 
 `std/table` — exports `table` table:
 
@@ -1715,6 +1728,18 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 - `url.parse_query(str)` — parse a query string like `"a=1&b=hello+world&c=%2F"` into a table `{a: "1", b: "hello world", c: "/"}`. Decodes both keys and values, splitting each pair at its first `=`. A key without `=` gets `""`, pairs with an empty key are dropped, and for duplicate keys the last value wins.
 - `url.build_query(table)` — build a query string from a table, in key order. Keys and values are converted with `to_string` and encoded; keys whose value is `nil` are left out.
 - `url.parse(target)` — split a request target on the first `?`. Returns `{path: "/users/123", query_string: "q=foo&page=2", query: {q: "foo", page: "2"}}`. If no `?`, `query_string` is `""` and `query` is `{}`. A `#fragment` is dropped from the end first. The path is returned as written (not decoded).
+
+`std/io` — exports `io` table: a file, or stdin, a line at a time. A path `"-"` is stdin, read with `input()` (which blocks every process while it waits); a file is read in 64 KB blocks with `read_file(path, offset, count)` on the thread pool, so memory stays flat whatever the file's size and nothing stays open between blocks. Lines come without their `\n` or `\r\n`; a last line without a newline comes as it is; an empty file has no lines. A path that can't be read raises `read_file`'s error at the first block; a path that isn't a string raises `io.<fn>: path must be a string, got <type>`.
+
+- `io.lines(path, f)` — call `f(line)` for each line, in order; returns nil.
+- `io.reader(path)` — a reader `r`: `r.next()` returns the next line, or nil at the end (and after it). It holds no open file, so a reader dropped unfinished leaks nothing.
+- `io.read_lines(path)` — every line, as an array (the whole file in memory).
+
+`std/args` — exports `args` table: command-line options. A spec is `{name, about, usage, options, min_args, max_args}` (`name` defaults to the file name of `argv()[0]`; `usage` to `[options] [args...]`, `[options]` when `max_args` is 0); `options` maps each option's name to `{short, help, default, type, multi, choices, required, value}`. `type` is `"string"`, `"int"`, `"float"` or `"flag"`, by default the type of `default` (an int or a float), else `"string"`. The result holds each option under its name (the value given; else its `default`, `false` for a flag, `[]` for a `multi` option, which collects every occurrence, or nil) and the positional arguments in `args` (so no option may be named `args`). On the command line, an option `dry_run` is `--dry-run` or `--dry_run`; a value comes as `--top 5`, `--top=5`, `-n 5` or `-n5`; flags combine (`-vq`) and a flag given a value (`--verbose=1`) is a mistake; `--` ends the options; `-` alone is an argument. `-h` and `--help` ask for the help unless the spec defines them. A spec with an unknown key, an unknown `type` or a `short` of more than one letter raises `args: ...` (with the closest known key for an unknown one).
+
+- `args.parse(spec[, list])` — parse `list` (default: `argv()` without its first element) and return the result. `--help` prints the help to stdout and exits 0. A mistake (an unknown option, named with the closest known one; a missing or ill-typed value; a value not in `choices`; a missing `required` option; too few or too many arguments) prints `<name>: <message>`, the usage line and `(--help for more)` on stderr and exits 2.
+- `args.try_parse(spec[, list])` — the same, but returns `{ok: true, value: result}` or `{ok: false, error: message}` and never prints or exits; `--help` sets `result.help` to the help text.
+- `args.help(spec)` — the help text: the usage line, `about`, and one line per option with its `help`, `choices` and default.
 
 `std/time` — exports `time` table:
 

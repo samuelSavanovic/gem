@@ -512,6 +512,29 @@ GemVal gem_getenv_fn(void *_env, GemVal *args, int argc) {
     return gem_string(val);
 }
 
+/* ─── Built-in: setenv(name, value) ─── */
+/* value nil removes the variable. Commands exec runs afterwards see the
+   change (it passes environ). */
+
+GemVal gem_setenv_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_STRING || (args[1].type != VAL_STRING && args[1].type != VAL_NIL)) {
+        char buf[160]; snprintf(buf, sizeof(buf), "setenv: expected (string, string or nil), got (%s, %s)", argc < 1 ? "nothing" : gem_type_str(args[0]), argc < 2 ? "nothing" : gem_type_str(args[1])); gem_error(buf);
+    }
+    const char *name = args[0].sval;
+    if (name[0] == '\0' || strchr(name, '=') || (int64_t)strlen(name) != args[0].slen) {
+        gem_error("setenv: the name must be non-empty, without '=' or a NUL byte");
+    }
+    if (args[1].type != VAL_NIL && (int64_t)strlen(args[1].sval) != args[1].slen) {
+        gem_error("setenv: the value contains a NUL byte");
+    }
+    pthread_rwlock_wrlock(&gem_env_lock);
+    int rc = args[1].type == VAL_NIL ? unsetenv(name) : setenv(name, args[1].sval, 1);
+    pthread_rwlock_unlock(&gem_env_lock);
+    if (rc != 0) gem_error("setenv: out of memory");
+    return GEM_NIL;
+}
+
 /* ─── Built-in: input (read line from stdin) ─── */
 
 GemVal gem_input_fn(void *_env, GemVal *args, int argc) {
@@ -576,8 +599,27 @@ GemVal gem_write_stdout_fn(void *_env, GemVal *args, int argc) {
 
 GemVal gem_read_stdin_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
-    if (argc < 1 || args[0].type != VAL_INT) {
-        char buf[128]; snprintf(buf, sizeof(buf), "read_stdin: expected int, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    if (argc < 1 || args[0].type == VAL_NIL) {
+        /* No count: everything up to the end of stdin. */
+        size_t cap = 65536, len = 0;
+        char *buf = (char *)malloc(cap);
+        for (;;) {
+            if (len == cap) {
+                if (len > (size_t)GEM_MAX_STRLEN) { free(buf); gem_strlen_check(len, "read_stdin"); }
+                cap *= 2;
+                buf = (char *)realloc(buf, cap);
+            }
+            size_t got = fread(buf + len, 1, cap - len, stdin);
+            if (got == 0) break;
+            len += got;
+        }
+        if (len > (size_t)GEM_MAX_STRLEN) { free(buf); gem_strlen_check(len, "read_stdin"); }
+        GemVal r = gem_string_with_len(buf, (int64_t)len);
+        free(buf);
+        return r;
+    }
+    if (args[0].type != VAL_INT) {
+        char buf[128]; snprintf(buf, sizeof(buf), "read_stdin: expected int, got %s", gem_type_str(args[0])); gem_error(buf);
     }
     int64_t n = args[0].ival;
     if (n < 0) { gem_error("read_stdin: negative length"); }

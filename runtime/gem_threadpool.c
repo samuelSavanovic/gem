@@ -142,7 +142,7 @@ static void gem_io_do_write(GemIORequest *req, const char *mode) {
         req->error_msg = strdup(buf);
         return;
     }
-    size_t nwritten = fwrite(req->content, 1, req->content_len, f);
+    size_t nwritten = req->content_len ? fwrite(req->content, 1, req->content_len, f) : 0;
     fclose(f);
     if (nwritten != req->content_len) {
         char buf[512];
@@ -153,6 +153,17 @@ static void gem_io_do_write(GemIORequest *req, const char *mode) {
 
 static void gem_io_do_exec(GemIORequest *req) {
     req->exit_code = gem_run_shell(req->path);
+}
+
+static void gem_io_do_read_range(GemIORequest *req) {
+    req->result_data = gem_read_file_range(req->path, req->offset, req->count,
+                                           &req->result_len, &req->error_msg);
+}
+
+static void gem_io_do_exec_capture(GemIORequest *req) {
+    req->exit_code = gem_run_capture(req->path, req->content, req->content_len,
+                                     &req->result_data, &req->result_len,
+                                     &req->err_data, &req->err_len, &req->error_msg);
 }
 
 const char *gem_resolve4(const char *host, uint32_t *addr) {
@@ -207,6 +218,8 @@ static void *gem_io_worker_fn(void *arg) {
             case GEM_IO_EXEC:        gem_io_do_exec(req); break;
             case GEM_IO_EXTERN:      req->extern_fn(req->extern_args); break;
             case GEM_IO_RESOLVE:     gem_io_do_resolve(req); break;
+            case GEM_IO_READ_RANGE:  gem_io_do_read_range(req); break;
+            case GEM_IO_EXEC_CAPTURE: gem_io_do_exec_capture(req); break;
         }
 
         __atomic_store_n(&req->done, 1, __ATOMIC_RELEASE);
@@ -306,6 +319,7 @@ void gem_io_release(GemIORequest *req) {
     free(req->path);
     free(req->content);
     free(req->result_data);
+    free(req->err_data);
     free(req->error_msg);
     free(req->busy);
     if (req->free_extern) req->free_extern(req->extern_args);
@@ -355,6 +369,25 @@ GemIORequest *gem_io_submit(GemIOOp op, const char *path,
         pthread_mutex_unlock(&gem_io_mutex);
         free(req->path);
         free(req->content);
+        free(req);
+        return NULL;
+    }
+    pthread_mutex_unlock(&gem_io_mutex);
+    return req;
+}
+
+GemIORequest *gem_io_submit_range(const char *path, int64_t offset, int64_t count) {
+    GemIORequest *req = (GemIORequest *)calloc(1, sizeof(GemIORequest));
+    req->op = GEM_IO_READ_RANGE;
+    req->requester_pid = gem_current_pid;
+    req->refs = 2;
+    req->path = strdup(path);
+    req->offset = offset;
+    req->count = count;
+    pthread_mutex_lock(&gem_io_mutex);
+    if (!gem_io_enqueue(req)) {
+        pthread_mutex_unlock(&gem_io_mutex);
+        free(req->path);
         free(req);
         return NULL;
     }

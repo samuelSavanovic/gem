@@ -4752,6 +4752,72 @@ a ["b", "c"]
 nil ["b", "c"]
 1 {b: 2}
 true 0
+3 [out
+] [err
+]
+HELLO
+0
+y
+y
+
+50000
+200000
+-1
+3456 [] 89 []
+read_file: negative offset
+read_file: expected 1 or 3 arguments (path, offset, count), got 2
+false
+10 file int int dir nil
+true false 0123456789
+false
+v1 v1
+nil
+setenv: the name must be non-empty, without '=' or a NUL byte
+from a process
+
+4 ["a", "bb", "", "ccc"] true nil ["a", "bb", "", "ccc"]
+0 {} true nil {}
+1 [""] true nil [""]
+1 ["no newline"] true nil ["no newline"]
+30002 358894 100000
+row 0 row 1
+false true
+io.lines: path must be a string, got int
+10 text false false false {} nil o ["a"]
+5 json true true true ["foo", "bar"] 0.5 o ["a", "-", "-n"]
+7 text false false true {} nil o ["b"]
+error: unknown option '--verbos' (did you mean '--verbose'?)
+error: --format must be one of text, json, got 'jsn' (did you mean 'json'?)
+error: -n expects an integer, got 'x'
+error: --ratio expects a number, got 'abc'
+error: -n needs a value
+error: expected an argument
+error: expected at most 3 arguments, got 4
+error: missing --out
+error: --verbose takes no value
+error: unknown option '-z'
+help asked
+help asked
+error: argument 0 must be a string, got int
+usage: demo [options] <file>...
+
+Count lines in files.
+
+options:
+  -n, --top TOP          rows to show (default: 10)
+      --format FORMAT    output format (one of: text, json) (default: text)
+  -v, --verbose          say more
+  -q, --quiet
+      --dry-run          change nothing
+  -x, --exclude EXCLUDE  skip files matching this
+      --ratio R
+      --out OUT
+  -h, --help             show this help
+args: unknown key `shrt` in option `x` (did you mean `short`?)
+args: unknown key `option` in the spec (did you mean `options`?)
+args: option `x` has type `bool`; the types are string, int, float and flag
+args: option `x`: short must be one letter, got xy
+["q", "r"]
 {ok: true, value: 6}
 false boom 1
 boom 2

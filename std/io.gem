@@ -1,0 +1,139 @@
+## io — read a file, or stdin, a line at a time.
+##
+##   load "std/io"
+##   io.lines("access.log") do |line|
+##     count += 1
+##   end
+##   let r = io.reader("-")           # "-" reads stdin
+##   let first = r.next()             # nil at the end
+##
+## Lines come without their `\n` (or `\r\n`); a last line with no newline
+## comes as it is, and an empty file has no lines. A file is read in
+## 64 KB blocks with `read_file(path, offset, count)`, so memory stays
+## flat however large it is, and nothing stays open between blocks: a
+## process that dies mid-file leaves nothing behind. Block reads go
+## through the I/O thread pool, so other processes run meanwhile. stdin
+## (`"-"`) is read with `input()`, which blocks every process while it
+## waits for a line.
+##
+## A path that can't be read raises `read_file`'s error (`read_file:
+## cannot open '<path>': ...`) at the first block.
+
+let BLOCK = 65536
+
+fn check_path(fname, path)
+  if type(path) != "string"
+    error("io.{fname}: path must be a string, got {type(path)}")
+  end
+end
+
+# The line of `text` from `start` to the newline at `nl`, without a `\r`
+# before it.
+fn cut(text, start, nl)
+  if nl > start and ord(text, nl - 1) == 13
+    return substr(text, start, nl - 1 - start)
+  end
+  substr(text, start, nl - start)
+end
+
+## Calls `f(line)` for each line of the file at `path` (`"-"`: stdin), in
+## order, and returns nil. To stop early, use `reader`.
+##
+##   io.lines("names.txt") do |name|
+##     print(name)
+##   end
+fn lines(path, f)
+  check_path("lines", path)
+  if path == "-"
+    let line = input()
+    while line != nil
+      f(line)
+      line = input()
+    end
+    return nil
+  end
+  let offset = 0
+  let rest = ""
+  while true
+    let chunk = read_file(path, offset, BLOCK)
+    if chunk == ""
+      break
+    end
+    offset += len(chunk)
+    let text = if rest == "" then chunk else rest + chunk end
+    let pos = 0
+    let nl = find(text, "\n", pos)
+    while nl >= 0
+      f(cut(text, pos, nl))
+      pos = nl + 1
+      nl = find(text, "\n", pos)
+    end
+    rest = substr(text, pos)
+  end
+  if rest != ""
+    f(rest)
+  end
+  nil
+end
+
+## Returns a reader of the lines of the file at `path` (`"-"`: stdin):
+## `r.next()` returns the next line, or nil at the end (and on every call
+## after it). The reader holds no open file, so dropping it unfinished
+## leaks nothing.
+##
+##   let r = io.reader("data.csv")
+##   let header = r.next()
+##   let row = r.next()
+##   while row != nil
+##     handle(header, row)
+##     row = r.next()
+##   end
+fn reader(path)
+  check_path("reader", path)
+  if path == "-"
+    return {next: fn() input() end}
+  end
+  let offset = 0
+  let buf = ""
+  let pos = 0
+  let at_end = false
+  let next = fn()
+    while true
+      let nl = find(buf, "\n", pos)
+      if nl >= 0
+        let line = cut(buf, pos, nl)
+        pos = nl + 1
+        return line
+      end
+      if at_end
+        if pos < len(buf)
+          let last = substr(buf, pos)
+          pos = len(buf)
+          return last
+        end
+        return nil
+      end
+      let chunk = read_file(path, offset, BLOCK)
+      offset += len(chunk)
+      if chunk == ""
+        at_end = true
+      end
+      buf = substr(buf, pos) + chunk
+      pos = 0
+    end
+  end
+  {next: next}
+end
+
+## Returns every line of the file at `path` (`"-"`: stdin) as an array.
+## Holds the whole file in memory: for a large file, use `lines`.
+fn read_lines(path)
+  check_path("read_lines", path)
+  let out = []
+  lines(path) do |line|
+    push(out, line)
+  end
+  out
+end
+
+export lines, reader, read_lines

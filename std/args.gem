@@ -1,0 +1,401 @@
+## args — command-line options and arguments.
+##
+##   load "std/args"
+##   let opts = args.parse({
+##     about: "Count lines in files.",
+##     usage: "[options] <file>...",
+##     options: {
+##       top: {short: "n", default: 10, help: "rows to show"},
+##       format: {default: "text", choices: ["text", "json"]},
+##       verbose: {short: "v", type: "flag", help: "say more"},
+##       exclude: {multi: true, help: "skip files matching this"}
+##     },
+##     min_args: 1
+##   })
+##   opts.top          # 10, or the int after --top / -n
+##   opts.verbose      # true when -v or --verbose was given
+##   opts.exclude      # every --exclude value, in order ([] if none)
+##   opts.args         # the positional arguments: ["a.log", "b.log"]
+##
+## An option `dry_run` is written `--dry-run` (`--dry_run` works too).
+## Values come as `--top 5`, `--top=5`, `-n 5` or `-n5`; flags combine
+## (`-vq`). `--` ends the options, and `-` alone is an argument (stdin, by
+## convention). `-h` and `--help` print the help and exit 0, unless the
+## spec takes them.
+##
+## An option's spec takes: `short` (one letter), `help`, `default`,
+## `type` (`"string"`, `"int"`, `"float"` or `"flag"`; default: the type
+## of `default`, else `"string"`), `multi` (every occurrence is kept, in an
+## array), `choices` (the values allowed), `required`, and `value` (the
+## value's name in the help, default the option's name in capitals). An
+## option left out is its `default`, `false` for a flag, `[]` for `multi`,
+## else nil. `min_args` and `max_args` bound the positional arguments;
+## `name` (default: the program's file name) and `about` go in the help.
+##
+## `parse` prints a mistake (an unknown option, with the closest known one,
+## a missing value, a value that isn't an int, too few arguments) on
+## stderr with the usage line, and exits with status 2; `try_parse`
+## returns it instead. A spec with a mistake (an unknown key, a `short`
+## of more than one letter) raises `args: ...`.
+
+load "std/string"
+
+let OPTION_KEYS = ["short", "help", "default", "type", "multi", "choices", "required", "value"]
+let SPEC_KEYS = ["name", "about", "usage", "options", "min_args", "max_args"]
+let TYPES = ["string", "int", "float", "flag"]
+
+fn program_name()
+  let path = argv()[0]
+  let slash = -1
+  for i = 0, len(path)
+    if ord(path, i) == 47
+      slash = i
+    end
+  end
+  substr(path, slash + 1)
+end
+
+fn dashed(name)
+  str_replace(name, "_", "-")
+end
+
+fn check_keys(what, t, allowed)
+  for k, _ in t
+    if not table_has(allowed, k)
+      let near = string.closest(to_string(k), allowed)
+      let hint = if near != nil then " (did you mean `{near}`?)" else "" end
+      error("args: unknown key `{k}` in {what}{hint}")
+    end
+  end
+end
+
+fn table_has(arr, x)
+  for v in arr
+    if v == x
+      return true
+    end
+  end
+  false
+end
+
+# The spec checked, with each option's type worked out: {name, about,
+# usage, min, max, opts: [{name, long, short, type, ...}], by_long,
+# by_short}.
+fn compile(spec)
+  if type(spec) != "table"
+    error("args: the spec must be a table, got {type(spec)}")
+  end
+  check_keys("the spec", spec, SPEC_KEYS)
+  let options = if has_key(spec, "options") then spec.options else {} end
+  let c = {
+    name: if has_key(spec, "name") then spec.name else program_name() end,
+    about: spec.about,
+    usage: spec.usage,
+    min: if has_key(spec, "min_args") then spec.min_args else 0 end,
+    max: spec.max_args,
+    opts: [],
+    by_long: {},
+    by_short: {}
+  }
+  for name, o in options
+    if name == "args"
+      error("args: an option can't be named `args` (the positional arguments go there)")
+    end
+    if type(o) != "table"
+      error("args: option `{name}` must be a table, got {type(o)}")
+    end
+    check_keys("option `{name}`", o, OPTION_KEYS)
+    let t = o.type
+    if t == nil
+      t = if has_key(o, "default") and type(o.default) == "int" then "int" elif has_key(o, "default") and type(o.default) == "float" then "float" else "string" end
+    end
+    if not table_has(TYPES, t)
+      error("args: option `{name}` has type `{t}`; the types are string, int, float and flag")
+    end
+    let opt = {
+      name: name,
+      long: dashed(name),
+      short: o.short,
+      type: t,
+      help: o.help,
+      multi: o.multi == true,
+      choices: o.choices,
+      required: o.required == true,
+      has_default: has_key(o, "default"),
+      default: o.default,
+      value: if o.value != nil then o.value else string.upper(name) end
+    }
+    if opt.short != nil and (type(opt.short) != "string" or len(opt.short) != 1)
+      error("args: option `{name}`: short must be one letter, got {opt.short}")
+    end
+    push(c.opts, opt)
+    c.by_long[opt.long] = opt
+    c.by_long[name] = opt
+    if opt.short != nil
+      c.by_short[opt.short] = opt
+    end
+  end
+  c
+end
+
+## Returns the help text for `spec`: the usage line, `about`, and a line
+## per option with its `help` and default.
+fn help(spec)
+  let c = compile(spec)
+  help_text(c)
+end
+
+fn usage_line(c)
+  let usage = if c.usage != nil then c.usage elif c.max == 0 then "[options]" else "[options] [args...]" end
+  "usage: {c.name} {usage}"
+end
+
+fn help_text(c)
+  let rows = []
+  for o in c.opts
+    let left = if o.short != nil then "-{o.short}, " else "    " end
+    left = left + "--{o.long}"
+    if o.type != "flag"
+      left = left + " {o.value}"
+    end
+    let right = if o.help != nil then o.help else "" end
+    if o.choices != nil
+      right = right + " (one of: {string.join(o.choices, ", ")})"
+    end
+    if o.has_default and o.type != "flag"
+      right = right + " (default: {o.default})"
+    end
+    push(rows, [left, string.trim(right)])
+  end
+  if not ("help" in c.by_long)
+    let left = if "h" in c.by_short then "    --help" else "-h, --help" end
+    push(rows, [left, "show this help"])
+  end
+  let width = 0
+  for r in rows
+    if len(r[0]) > width
+      width = len(r[0])
+    end
+  end
+  build_string do |add|
+    add(usage_line(c), "\n")
+    if c.about != nil
+      add("\n", c.about, "\n")
+    end
+    add("\noptions:\n")
+    for r in rows
+      if r[1] == ""
+        add("  ", r[0], "\n")
+      else
+        add("  ", r[0], string.repeat(" ", width - len(r[0]) + 2), r[1], "\n")
+      end
+    end
+  end
+end
+
+fn fail(msg)
+  {ok: false, error: msg}
+end
+
+# The option's value from text `v`, or {error}.
+fn convert(o, v, shown)
+  let val = v
+  if o.type == "int"
+    let r = pcall to_int(v)
+    if not r.ok
+      return {error: "{shown} expects an integer, got '{v}'"}
+    end
+    val = r.value
+  elif o.type == "float"
+    let r = pcall to_float(v)
+    if not r.ok
+      return {error: "{shown} expects a number, got '{v}'"}
+    end
+    val = r.value
+  end
+  if o.choices != nil and not table_has(o.choices, val)
+    let near = if type(val) == "string" then string.closest(val, o.choices) end
+    let hint = if near != nil then " (did you mean '{near}'?)" else "" end
+    return {error: "{shown} must be one of {string.join(o.choices, ", ")}, got '{v}'{hint}"}
+  end
+  {value: val}
+end
+
+fn unknown(c, shown, long)
+  let names = []
+  for o in c.opts
+    push(names, o.long)
+  end
+  let near = string.closest(long, names)
+  let hint = if near != nil then " (did you mean '--{near}'?)" else "" end
+  "unknown option '{shown}'{hint}"
+end
+
+fn store(out, o, v)
+  if o.multi
+    push(out[o.name], v)
+  else
+    out[o.name] = v
+  end
+end
+
+## Parses `list` (default: the program's arguments, `argv()` without its
+## first) against `spec`, and returns `{ok: true, value: opts}` or `{ok:
+## false, error: message}`; never prints or exits. `--help` sets
+## `opts.help` to the help text instead of printing it.
+fn try_parse(spec, list = nil)
+  let c = compile(spec)
+  if list == nil
+    list = []
+    let all = argv()
+    for i = 1, len(all)
+      push(list, all[i])
+    end
+  end
+  let out = {args: []}
+  let seen = {}
+  for o in c.opts
+    if o.multi
+      out[o.name] = []
+    elif o.type == "flag"
+      out[o.name] = false
+    elif o.has_default
+      out[o.name] = o.default
+    else
+      out[o.name] = nil
+    end
+  end
+  let takes_help = "help" in c.by_long
+  let takes_h = "h" in c.by_short
+  let i = 0
+  let n = len(list)
+  while i < n
+    let a = list[i]
+    i += 1
+    if type(a) != "string"
+      return fail("argument {i - 1} must be a string, got {type(a)}")
+    end
+    if a == "--"
+      while i < n
+        push(out.args, list[i])
+        i += 1
+      end
+      break
+    end
+    if (a == "--help" and not takes_help) or (a == "-h" and not takes_h)
+      out.help = help_text(c)
+      continue
+    end
+    if string.starts_with(a, "--")
+      let body = substr(a, 2)
+      let eq = find(body, "=")
+      let long = if eq >= 0 then substr(body, 0, eq) else body end
+      if not (long in c.by_long)
+        return fail(unknown(c, "--{long}", long))
+      end
+      let o = c.by_long[long]
+      seen[o.name] = true
+      if o.type == "flag"
+        if eq >= 0
+          return fail("--{o.long} takes no value")
+        end
+        out[o.name] = true
+        continue
+      end
+      let v = nil
+      if eq >= 0
+        v = substr(body, eq + 1)
+      elif i < n
+        v = list[i]
+        i += 1
+      else
+        return fail("--{o.long} needs a value")
+      end
+      let r = convert(o, v, "--{o.long}")
+      if r.error != nil
+        return fail(r.error)
+      end
+      store(out, o, r.value)
+      continue
+    end
+    if len(a) > 1 and ord(a, 0) == 45
+      # -abc: flags, the last one (or one with text after it) may take a value
+      let j = 1
+      while j < len(a)
+        let ch = a[j]
+        if not (ch in c.by_short)
+          if ch == "h" and not takes_h
+            out.help = help_text(c)
+            j += 1
+            continue
+          end
+          return fail("unknown option '-{ch}'")
+        end
+        let o = c.by_short[ch]
+        seen[o.name] = true
+        j += 1
+        if o.type == "flag"
+          out[o.name] = true
+          continue
+        end
+        let v = nil
+        if j < len(a)
+          v = substr(a, j)
+        elif i < n
+          v = list[i]
+          i += 1
+        else
+          return fail("-{ch} needs a value")
+        end
+        let r = convert(o, v, "-{ch}")
+        if r.error != nil
+          return fail(r.error)
+        end
+        store(out, o, r.value)
+        break
+      end
+      continue
+    end
+    push(out.args, a)
+  end
+  if out.help != nil
+    return {ok: true, value: out}
+  end
+  for o in c.opts
+    if o.required and not (o.name in seen)
+      return fail("missing --{o.long}")
+    end
+  end
+  let na = len(out.args)
+  if na < c.min
+    return fail(if c.min == 1 then "expected an argument" else "expected at least {c.min} arguments, got {na}" end)
+  end
+  if c.max != nil and na > c.max
+    return fail(if c.max == 0 then "unexpected argument '{out.args[0]}'" else "expected at most {c.max} arguments, got {na}" end)
+  end
+  {ok: true, value: out}
+end
+
+## Parses the program's arguments (or `list`) against `spec` and returns
+## the options and `args`, as described above. On `--help` it prints the
+## help and exits 0; on a mistake it prints `<name>: <message>`, the
+## usage line and a pointer to `--help` on stderr, and exits 2.
+fn parse(spec, list = nil)
+  let r = try_parse(spec, list)
+  if r.ok
+    if r.value.help != nil
+      write_stdout(r.value.help)
+      exit(0)
+    end
+    return r.value
+  end
+  let c = compile(spec)
+  eprint("{c.name}: {r.error}")
+  eprint(usage_line(c))
+  if not ("help" in c.by_long)
+    eprint("(--help for more)")
+  end
+  exit(2)
+end
+
+export parse, try_parse, help

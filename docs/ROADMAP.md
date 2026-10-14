@@ -145,24 +145,6 @@ A process monitors a target at most once (`gem_monitor_fn` in `runtime/gem_sched
 
 What needs building: Erlang-style refs (`monitor` returns a ref, `demonitor(ref)`), with a per-process list of the targets it monitors so an exiting process removes its entries eagerly. Trade-off: one more list per process, maintained on every `monitor`, and refs in the API.
 
-## Line-at-a-time input from files and stdin (P2)
-
-A program can read a file only whole (`read_file`), so a log analyzer
-holds the whole log in memory (twice at the peak, see OPTIMIZATIONS.md)
-and a file larger than memory, or than the 2 GiB string limit, can't be
-processed at all. stdin has `input()` (one line), `read_stdin(n)`
-(n bytes) and `read_file("/dev/stdin")` (all of it, held whole).
-`examples/logstat` reads files and stdin.
-
-What needs building: a line reader over a file or stdin, e.g.
-`read_lines(path) do |line| ... end` with `"-"` for stdin, or an open
-handle with `read_line(h)` and `close(h)`, plus `read_stdin()` with no count
-reading to EOF. The callback form keeps the handle out of the user's hands
-(no leak when the process dies), runs inside one loop the compiler can
-reset at each line, and needs no new concept. Reads should go through the
-I/O thread pool in large blocks, like `read_file`, so they don't block
-every process the way `input()` does.
-
 ## `exec` children as owned resources (P2)
 
 Sockets and SQLite handles are owned resources (SPEC "Owned Resources", design in `docs/design/process_owned_resources.md`): values of their own types in one runtime table, closed when a process that claimed them (`claim(r)`) exits or when their opener crashes or is killed. A command started by `exec` is not one yet: it keeps running after its process is killed. Erlang ties every port to an owning process; supervisors make this pressing, since they kill a child with the untrappable `"kill"` once its `shutdown` budget runs out.
