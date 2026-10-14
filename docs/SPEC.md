@@ -40,6 +40,8 @@ The default behavior (`gem foo.gem`) writes generated C to `<basename>.c` in a n
 
 `--emit-c` prints C to stdout and exits. This is what the bootstrapping Makefile targets use.
 
+`GEM_RUNTIME` in the compiler's environment picks the runtime a program is linked with: `release` (the default), `debug` (built by `make debug`: the runtime checks its invariants, poisons the memory a reset frees and checks the heap after resets; a broken invariant prints `gem: runtime invariant broken: ...` and aborts) or `asan` (built by `make asan`: the debug runtime with AddressSanitizer and UndefinedBehaviorSanitizer). The two debug ones compile the program at `-O1 -g`, and are for finding bugs in the compiler and runtime, not for running programs. Any other value is a usage error (exit 2), and a debug runtime that hasn't been built is an error naming the `make` target.
+
 `--check` runs the parser, load resolution, and codegen analysis but skips emitting C and invoking `cc`. Exits 0 silently on success; on failure, prints the same caret-context diagnostic that the normal compile path produces and exits 1. Intended for editor save hooks, pre-commit, and CI lint.
 
 ## Values and Types

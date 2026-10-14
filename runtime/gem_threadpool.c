@@ -300,7 +300,9 @@ void gem_threadpool_shutdown(void) {
 }
 
 void gem_io_release(GemIORequest *req) {
-    if (__sync_sub_and_fetch(&req->refs, 1) != 0) return;
+    int left = __sync_sub_and_fetch(&req->refs, 1);
+    GEM_ASSERT(left >= 0, "an I/O request released more times than it was shared");
+    if (left != 0) return;
     free(req->path);
     free(req->content);
     free(req->result_data);

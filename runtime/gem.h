@@ -65,6 +65,26 @@ void gem_arena_free_blocks(GemArenaBlock *block);  /* munmap a block chain */
 #ifndef GEM_ARENA_RESET_THRESHOLD
 #define GEM_ARENA_RESET_THRESHOLD (1 * 1024 * 1024)
 #endif
+/* ─── Debug runtime (make debug / make asan, GEM_RUNTIME=debug|asan) ───
+ *
+ * Built with -DGEM_DEBUG: GEM_ASSERT checks the runtime's invariants, a
+ * reset poisons the memory it gives back (0xDB, so a dangling read sees a
+ * garbage type, not nil) and keeps freed blocks PROT_NONE for a while
+ * before unmapping them (so a dangling access faults), and every reset
+ * ends with a heap check (gem_copy.c, gem_debug_check_reset). Without
+ * GEM_DEBUG all of it compiles away. */
+#ifdef GEM_DEBUG
+#define GEM_ASSERT(cond, what) \
+    do { if (__builtin_expect(!(cond), 0)) gem_assert_fail(#cond, (what), __FILE__, __LINE__); } while (0)
+#else
+#define GEM_ASSERT(cond, what) ((void)0)
+#endif
+#if defined(__GNUC__)
+__attribute__((noreturn, cold))
+#endif
+void gem_assert_fail(const char *cond, const char *what, const char *file, int line);
+#define GEM_POISON_BYTE 0xDB
+
 /* The threshold in effect: GEM_ARENA_RESET_THRESHOLD, or the byte count in
    the GEM_RESET_STRESS env var, read once by gem_init (stress mode: with
    GEM_RESET_STRESS=1 a loop resets at every back-edge that allocated
@@ -826,6 +846,7 @@ __attribute__((cold))
 #endif
 void gem_global_unshare(int i);
 static inline GemVal gem_global_get(int i) {
+    GEM_ASSERT(i >= 0 && i < gem_n_globals && gem_cur_globals, "a module slot read outside the slot table");
     /* Test the tag in place, then copy the slot whole: copying first and
        testing the copy makes gcc patch the copy's tag and reload it, a
        store-forwarding stall on every read. */
@@ -833,6 +854,7 @@ static inline GemVal gem_global_get(int i) {
     return gem_cur_globals[i];
 }
 static inline void gem_global_set(int i, GemVal v) {
+    GEM_ASSERT(i >= 0 && i < gem_n_globals && gem_cur_globals, "a module slot write outside the slot table");
     if (__builtin_expect(GEM_GLOBALS_OUT(gem_cur_globals)[i] != NULL, 0)) gem_global_unshare(i);
     gem_cur_globals[i] = v;
 }

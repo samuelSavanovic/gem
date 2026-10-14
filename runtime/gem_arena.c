@@ -86,11 +86,39 @@ GemArenaBlock *gem_arena_append_block(GemArena *arena, GemArenaBlock *after, siz
     return nb;
 }
 
+#ifdef GEM_DEBUG
+/* Debug runtime: freed blocks stay mapped, PROT_NONE, until
+   GEM_QUARANTINE_BLOCKS later frees push them out, so a dangling pointer
+   into one faults instead of reading memory a new block reuses. */
+#define GEM_QUARANTINE_BLOCKS 256
+static struct { void *p; size_t n; } gem_quarantine[GEM_QUARANTINE_BLOCKS];
+static int gem_quarantine_next = 0;
+
+static void gem_arena_unmap(void *p, size_t n) {
+    if (mprotect(p, n, PROT_NONE) != 0) {
+        munmap(p, n);
+        gem_runtime_maps--;
+        return;
+    }
+    if (gem_quarantine[gem_quarantine_next].p) {
+        munmap(gem_quarantine[gem_quarantine_next].p, gem_quarantine[gem_quarantine_next].n);
+        gem_runtime_maps--;
+    }
+    gem_quarantine[gem_quarantine_next].p = p;
+    gem_quarantine[gem_quarantine_next].n = n;
+    gem_quarantine_next = (gem_quarantine_next + 1) % GEM_QUARANTINE_BLOCKS;
+}
+#else
+static void gem_arena_unmap(void *p, size_t n) {
+    munmap(p, n);
+    gem_runtime_maps--;
+}
+#endif
+
 void gem_arena_free_blocks(GemArenaBlock *block) {
     while (block) {
         GemArenaBlock *next = block->next;
-        munmap(block, sizeof(GemArenaBlock) + block->cap);
-        gem_runtime_maps--;
+        gem_arena_unmap(block, sizeof(GemArenaBlock) + block->cap);
         block = next;
     }
 }

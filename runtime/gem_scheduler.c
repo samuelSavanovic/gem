@@ -788,6 +788,7 @@ static void gem_waitlist_remove(GemWaitList *wl, int slot) {
    structures in step. Entering WAITING or IO_WAIT reads deadline_ms;
    entering IO_WAIT reads io_request (set: a thread pool wait). */
 static void gem_proc_set_state(int slot, GemProcState st) {
+    GEM_ASSERT(slot >= 0 && slot < gem_proc_hwm, "a process slot outside the table's high-water mark");
     GemProcess *p = &gem_proc_table[slot];
     switch (p->state) {
         case GEM_PROC_READY:   gem_ready_clear(slot); break;
@@ -1462,7 +1463,9 @@ static void gem_run_proc(int i) {
     gem_cur_globals = proc->globals;
     gem_running_slot = i;
     gem_stack_limit = (uintptr_t)proc->stack_lo + GEM_STACK_RED_ZONE;
+    GEM_ASSERT(gem_tail_fn == NULL, "the mutual-TCO TLB is set while no body runs");
     mco_resume(proc->coro);
+    GEM_ASSERT(gem_tail_fn == NULL, "a process yielded with the mutual-TCO TLB set");
     gem_stack_limit = 0;
     gem_running_slot = -1;
     proc->call_depth = gem_call_depth;
