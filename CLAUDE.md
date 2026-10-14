@@ -65,6 +65,7 @@ docs/CHEATSHEET.md    # syntax, builtins and std modules on one page
 docs/BEST_PRACTICES.md    # how to write Gem: idioms, traps, std conventions (new code follows it)
 docs/OPTIMIZATIONS.md     # tracked future performance improvements
 docs/OPTIMIZATIONS_LOG.md # shipped optimizations + work logs + benchmark anchors
+docs/PLAN.md              # the current direction: tracks A (trustworthy) and B (daily driver), in order
 docs/ROADMAP.md           # future capabilities (features, not perf)
 docs/KNOWN_BUGS.md        # bugs found and not yet fixed, each with a repro
 docs/LSP_ROADMAP.md       # Gem LSP: current state, limits, plan
