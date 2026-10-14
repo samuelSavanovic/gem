@@ -65,6 +65,11 @@ void gem_arena_free_blocks(GemArenaBlock *block);  /* munmap a block chain */
 #ifndef GEM_ARENA_RESET_THRESHOLD
 #define GEM_ARENA_RESET_THRESHOLD (1 * 1024 * 1024)
 #endif
+/* The threshold in effect: GEM_ARENA_RESET_THRESHOLD, or the byte count in
+   the GEM_RESET_STRESS env var, read once by gem_init (stress mode: with
+   GEM_RESET_STRESS=1 a loop resets at every back-edge that allocated
+   since the last reset, hysteresis permitting; make test-stress). */
+extern size_t gem_reset_threshold;
 
 /* ─── Region marks (per-iteration arena reset) ───
  *
@@ -91,7 +96,7 @@ typedef struct {
     uint64_t clock;            /* gem_mut_clock epoch that began there (see gem_table_written) */
     GemArena *arena;           /* the arena it is a point of */
     size_t ret_trig;           /* bytes_allocated - bytes_freed at that point, plus
-                                  GEM_ARENA_RESET_THRESHOLD (gem_ret_reset_due) */
+                                  gem_reset_threshold (gem_ret_reset_due) */
 } GemArenaPoint;
 
 /* Two points: `base`, where the loop started, and `young`, the end of what
@@ -1416,14 +1421,14 @@ static inline void gem_arena_point(GemArenaPoint *pt) {
     pt->pin_seq = a->pin_seq;
     pt->clock = ++gem_mut_clock;
     pt->arena = a;
-    pt->ret_trig = a->bytes_allocated - a->bytes_freed + GEM_ARENA_RESET_THRESHOLD;
+    pt->ret_trig = a->bytes_allocated - a->bytes_freed + gem_reset_threshold;
 }
 
 static inline void gem_arena_mark(GemArenaMark *m) {
     GemArena *a = gem_current_arena();
     gem_arena_point(&m->base);
     m->young = m->base;
-    m->trigger = a->bytes_allocated + GEM_ARENA_RESET_THRESHOLD;
+    m->trigger = a->bytes_allocated + gem_reset_threshold;
     m->old_bytes = 0;
     m->old_limit = 0;
     m->rem_window = 0;
@@ -1435,7 +1440,7 @@ static inline int gem_arena_reset_due(const GemArenaMark *m) {
 }
 
 /* A return reset may be due once the memory the call allocated and no
-   reset has freed yet is at least GEM_ARENA_RESET_THRESHOLD: every reset
+   reset has freed yet is at least gem_reset_threshold: every reset
    during the call frees only memory newer than the point, so the arena's
    allocated-minus-freed count has grown by that much, plus the
    remembered-log entries the call added (counted as allocation, see

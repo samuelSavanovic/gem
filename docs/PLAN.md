@@ -53,10 +53,19 @@ What the review found, in short:
 
 The order is the order of the work.
 
-1. **Reset stress mode.** `GEM_RESET_STRESS` (env var, read at startup)
+1. **Reset stress mode.** ✓ Done (PR 1). `GEM_RESET_STRESS` (env var, read at startup)
    lowers the reset threshold so every loop resets almost every
    iteration; a `make test-stress` target runs the examples and the
    example apps under it. Root-cause 117's mapping growth first.
+   *Landed:* `GEM_RESET_STRESS=<bytes>`; `make test-stress` (examples,
+   example apps, and the compiler compiling itself, which must emit the
+   same C); `tests/check_reset_stress.sh` in `make test`. 117's growth:
+   every reset mapped a fresh 64 KB block for its copies and another for
+   the next allocations, even when it copied nothing; a loop that ends
+   right after (sort's comparator, called from top-level code with no
+   enclosing loop to free them) left both behind, 33,000 times. A reset
+   that copies nothing now maps nothing. Left: a reset that copies
+   something still leaves its copy block's tail (OPTIMIZATIONS, P2).
 2. **Silent-semantics pass in the compiler.** Turn the silent traps into
    compile errors or warnings, each a local check on the AST:
    - a `let` that hides a local of an enclosing block of the same fn;

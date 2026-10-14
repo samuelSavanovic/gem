@@ -665,7 +665,7 @@ void gem_pin_free_all(GemProcess *proc) {
  * loop keeps once more: the first reset of a mark, and any reset once the
  * bytes kept since the last full one exceed twice what that one kept (four
  * times, when it kept at least half of its region: the kept data is mostly
- * live), plus GEM_ARENA_RESET_THRESHOLD. Kept memory so stays below about
+ * live), plus gem_reset_threshold. Kept memory so stays below about
  * two (four) times what the last full reset kept, and each full copy is
  * paid for by the promotions that led to it.
  *
@@ -721,8 +721,8 @@ void gem_pin_free_all(GemProcess *proc) {
  * reset.
  *
  * Hysteresis: the next reset for this mark fires after the loop allocates
- * max(GEM_ARENA_RESET_THRESHOLD, 2 * bytes copied + bytes scanned / 2) after
- * a young reset, or max(GEM_ARENA_RESET_THRESHOLD, bytes scanned / 2) after
+ * max(gem_reset_threshold, 2 * bytes copied + bytes scanned / 2) after
+ * a young reset, or max(gem_reset_threshold, bytes scanned / 2) after
  * a full one, so each reset's work is paid for by at least as much fresh
  * allocation or promotion. */
 
@@ -1025,10 +1025,21 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
         if (mb->dirty < mb->used) mb->dirty = mb->used;
         mb->used = pt->used;
     }
-    free(region.ranges);
 
     size_t copied = arena->bytes_allocated - bytes_before;
     gem_diag_note_reset(copied, scanned, region_bytes, full);
+
+    /* A reset that copied nothing maps no block: an empty copy block is
+       given back, and allocation goes on in mb after the point. Otherwise
+       each reset of a loop that ends right after it (a sort comparator's,
+       a callback's) would leave a mapping or two behind for an enclosing
+       loop's reset to free, and with no such loop they pile up (under
+       GEM_RESET_STRESS, past vm.max_map_count). */
+    if (copied == 0 && !tail_free) {
+        gem_arena_free_blocks(mb->next);
+        mb->next = NULL;
+        arena->current = mb;
+    }
 
     /* Promote: what this reset kept now counts as older. The young point
        moves to the end of the copies, and new allocations start in a fresh
@@ -1043,8 +1054,8 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
     mark->young.pin_seq = arena->pin_seq;
     mark->young.clock = ++gem_mut_clock;
     mark->young.arena = arena;
-    mark->young.ret_trig = arena->bytes_allocated - arena->bytes_freed + GEM_ARENA_RESET_THRESHOLD;
-    gem_arena_append_block(arena, last, 0);
+    mark->young.ret_trig = arena->bytes_allocated - arena->bytes_freed + gem_reset_threshold;
+    if (copied > 0) gem_arena_append_block(arena, last, 0);
     *copied_out = copied;
     *scanned_out = scanned;
     *region_out = region_used;
@@ -1056,7 +1067,7 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
            grow four times before the next one, not twice. */
         size_t factor = (mark->old_bytes > 0 && 2 * copied >= region_bytes) ? 4 : 2;
         mark->old_bytes = copied;
-        mark->old_limit = factor * copied + GEM_ARENA_RESET_THRESHOLD;
+        mark->old_limit = factor * copied + gem_reset_threshold;
         /* The full copy is paid for by the promotions that led to it, so
            the next reset waits only for the usual young allocation. */
         budget = scanned / 2;
@@ -1064,8 +1075,9 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
         mark->old_bytes += copied;
         budget = 2 * copied + scanned / 2;
     }
-    if (budget < GEM_ARENA_RESET_THRESHOLD) budget = GEM_ARENA_RESET_THRESHOLD;
+    if (budget < gem_reset_threshold) budget = gem_reset_threshold;
     mark->trigger = arena->bytes_allocated + budget;
+    free(region.ranges);
 }
 
 void gem_remember_table(GemTable *t) {
@@ -1123,7 +1135,7 @@ void gem_arena_reset_region(GemArenaMark *mark, GemVal **roots, int n_roots,
 void gem_arena_reset_return(const GemArenaPoint *pt, GemVal *ret, int own_frames) {
     if (gem_current_pid < 0 || gem_call_depth <= own_frames) return;
     GemArena *arena = &gem_proc_table[gem_current_pid].arena;
-    size_t live = arena->bytes_allocated - arena->bytes_freed - (pt->ret_trig - GEM_ARENA_RESET_THRESHOLD);
+    size_t live = arena->bytes_allocated - arena->bytes_freed - (pt->ret_trig - gem_reset_threshold);
     if (live + (arena->bytes_allocated - arena->ret_at) < arena->ret_min) return;
     gem_diag_init();
     double t0 = gem_diag_now();
