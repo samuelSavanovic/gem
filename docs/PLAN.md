@@ -119,8 +119,12 @@ The order is the order of the work.
    count)` and `read_stdin()`; `std/io` (`lines`, `reader`,
    `read_lines`); `std/args`; `string.closest`. stdin lines still come
    from `input()`, which blocks every process.
-4. **`std/regex`** on POSIX `regcomp`/`regexec` in the runtime (gemgrep
+4. **`std/regex`** ✓ Done (PR 4). On POSIX `regcomp`/`regexec` in the runtime (gemgrep
    proves it).
+   *Landed:* `test`, `find`, `find_all`, `replace(_first)`, `split`,
+   `escape`, `check_pattern`; `\d \w \s` rewritten for POSIX so a pattern
+   means the same on glibc and macOS; a 64-entry compile cache. Left:
+   word boundaries and lazy quantifiers (POSIX has neither).
 5. **Encodings.** base64, hex, sha256/HMAC (OpenSSL is already found for
    TLS), CSV, UTF-8 helpers (code points, case mapping).
 6. **Option-bag typos** (ROADMAP P1, steps 1–2): unknown keys raise, with

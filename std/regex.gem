@@ -1,0 +1,264 @@
+## regex — regular expressions: test, find, find_all, replace, split.
+##
+##   load "std/regex"
+##   regex.test("^[a-z]+$", "hello")                 # true
+##   let m = regex.find("(\\w+)@(\\w+)", "mail bob@example now")
+##   m.text                                           # "bob@example"
+##   m.groups                                         # ["bob", "example"]
+##   regex.replace("\\d+", "a1b22", "#")              # "a#b#"
+##   regex.split(",\\s*", "a, b,c")                   # ["a", "b", "c"]
+##
+## Patterns are POSIX extended regexes (`|`, `+`, `?`, `{m,n}`, `(...)`
+## groups, `[[:alpha:]]` classes, `\1` back-references), plus `\d`, `\w`,
+## `\s` and their negations `\D`, `\W`, `\S`, and `\t`, `\n`, `\r`. Word
+## boundaries (`\b`) and lazy quantifiers (`*?`) aren't supported; a
+## pattern that doesn't compile raises `regex: bad pattern '<p>': <why>`.
+## In a Gem string literal a backslash is written twice (`"\\d+"`).
+##
+## Every function takes an option bag: `icase` (ignore case) and
+## `multiline` (`^` and `$` also match at line breaks, and `.` and `[^x]`
+## don't match a newline). Positions are byte offsets. A match is
+## `{text, start, stop, groups}`: `stop` is the offset after the match,
+## and `groups` holds each group's text, nil for a group that took no
+## part. Compiled patterns are cached, so passing the same pattern string
+## each time costs nothing extra.
+##
+## Matching runs inline on the scheduler thread: a long match on a large
+## string holds up every other process while it runs.
+
+load "std/string"
+
+# This module's `find` hides the builtin here: searches use string.index_of.
+extern fn gem_regex_exec(pat: String, flags: Int, s: Bytes, start: Int) -> Table
+extern fn gem_regex_groups(pat: String, flags: Int) -> Int
+
+let METACHARS = '.[]()*+?{}|^$\\'
+
+fn check(fname, pattern, s)
+  if type(pattern) != "string"
+    error("regex.{fname}: pattern must be a string, got {type(pattern)}")
+  end
+  if type(s) != "string"
+    error("regex.{fname}: s must be a string, got {type(s)}")
+  end
+end
+
+fn flag_bits(icase, multiline)
+  let f = 0
+  if icase
+    f += 1
+  end
+  if multiline
+    f += 2
+  end
+  f
+end
+
+# The match table for offsets `m` (gem_regex_exec's array) in `s`.
+fn to_match(s, m)
+  let groups = []
+  let g = 2
+  while g < len(m)
+    push(groups, if m[g] < 0 then nil else substr(s, m[g], m[g + 1] - m[g]) end)
+    g += 2
+  end
+  {text: substr(s, m[0], m[1] - m[0]), start: m[0], stop: m[1], groups: groups}
+end
+
+## Returns true when `pattern` matches somewhere in `s`.
+##
+##   regex.test("^\\d{4}-\\d{2}$", "2026-10")        # true
+##   regex.test("ABC", "xabcx", {icase: true})        # true
+fn test(pattern, s, {icase = false, multiline = false} = {})
+  check("test", pattern, s)
+  gem_regex_exec(pattern, flag_bits(icase, multiline), s, 0) != nil
+end
+
+## Returns the first match of `pattern` in `s` at or after byte `start`,
+## or nil.
+##
+##   regex.find("(\\d+)-(\\d+)", "pages 10-12").groups   # ["10", "12"]
+##   regex.find("x", "abc")                              # nil
+fn find(pattern, s, {icase = false, multiline = false, start = 0} = {})
+  check("find", pattern, s)
+  let m = gem_regex_exec(pattern, flag_bits(icase, multiline), s, start)
+  if m == nil
+    return nil
+  end
+  to_match(s, m)
+end
+
+## Returns every match of `pattern` in `s`, left to right, as an array of
+## match tables. Matches don't overlap; after an empty match the search
+## moves on one byte.
+##
+##   table.map(regex.find_all("\\d+", "a1b22c333"), fn(m) m.text end)   # ["1", "22", "333"]
+fn find_all(pattern, s, {icase = false, multiline = false} = {})
+  check("find_all", pattern, s)
+  let flags = flag_bits(icase, multiline)
+  let out = []
+  let pos = 0
+  let n = len(s)
+  while pos <= n
+    let m = gem_regex_exec(pattern, flags, s, pos)
+    if m == nil
+      break
+    end
+    push(out, to_match(s, m))
+    pos = if m[1] > m[0] then m[1] else m[1] + 1 end
+  end
+  out
+end
+
+# `repl` with \0..\9 replaced by the match's text and groups, and \\ by a
+# backslash.
+fn expand(repl, s, m)
+  if string.index_of(repl, "\\") < 0
+    return repl
+  end
+  build_string do |add|
+    let i = 0
+    let n = len(repl)
+    while i < n
+      let c = ord(repl, i)
+      if c == 92 and i + 1 < n
+        let d = ord(repl, i + 1)
+        if d >= 48 and d <= 57
+          let g = (d - 48) * 2
+          if g + 1 < len(m) and m[g] >= 0
+            add(substr(s, m[g], m[g + 1] - m[g]))
+          end
+          i += 2
+          continue
+        end
+        if d == 92
+          add("\\")
+          i += 2
+          continue
+        end
+      end
+      add(repl[i])
+      i += 1
+    end
+  end
+end
+
+fn replace_n(fname, pattern, s, repl, limit, flags)
+  check(fname, pattern, s)
+  let rt = type(repl)
+  if rt != "string" and rt != "fn"
+    error("regex.{fname}: repl must be a string or a fn, got {rt}")
+  end
+  let n = len(s)
+  let count = 0
+  let pos = 0
+  let last = 0
+  let out = build_string do |add|
+    while pos <= n and (limit < 0 or count < limit)
+      let m = gem_regex_exec(pattern, flags, s, pos)
+      if m == nil
+        break
+      end
+      add(substr(s, last, m[0] - last))
+      if rt == "string"
+        add(expand(repl, s, m))
+      else
+        add(repl(to_match(s, m)))
+      end
+      last = m[1]
+      count += 1
+      if m[1] > m[0]
+        pos = m[1]
+      else
+        if m[1] < n
+          add(s[m[1]])
+        end
+        last = m[1] + 1
+        pos = m[1] + 1
+      end
+    end
+    if last < n
+      add(substr(s, last))
+    end
+  end
+  out
+end
+
+## Returns `s` with every match of `pattern` replaced by `repl`: a string,
+## in which `\0` is the whole match, `\1`..`\9` its groups (an unmatched
+## group gives "") and `\\` a backslash; or a fn called with each match
+## table, whose result is added as `to_string` would.
+##
+##   regex.replace("(\\w+)@(\\w+)", "bob@host", "\\2 at \\1")   # "host at bob"
+##   regex.replace("\\d+", "a1b22", fn(m) "<{m.text}>" end)       # "a<1>b<22>"
+fn replace(pattern, s, repl, {icase = false, multiline = false} = {})
+  replace_n("replace", pattern, s, repl, -1, flag_bits(icase, multiline))
+end
+
+## Like `replace`, but replaces only the first match.
+fn replace_first(pattern, s, repl, {icase = false, multiline = false} = {})
+  replace_n("replace_first", pattern, s, repl, 1, flag_bits(icase, multiline))
+end
+
+## Splits `s` at every match of `pattern` and returns the pieces. As with
+## `string.split`, matches next to each other or at either end give empty
+## pieces; an empty match doesn't split.
+##
+##   regex.split("\\s*,\\s*", "a , b,c")    # ["a", "b", "c"]
+##   regex.split("x", "")                   # [""]
+fn split(pattern, s, {icase = false, multiline = false} = {})
+  check("split", pattern, s)
+  let flags = flag_bits(icase, multiline)
+  let out = []
+  let n = len(s)
+  let pos = 0
+  let last = 0
+  while pos <= n
+    let m = gem_regex_exec(pattern, flags, s, pos)
+    if m == nil
+      break
+    end
+    if m[1] > m[0]
+      push(out, substr(s, last, m[0] - last))
+      last = m[1]
+      pos = m[1]
+    else
+      pos = m[1] + 1
+    end
+  end
+  push(out, substr(s, last))
+  out
+end
+
+## Returns `s` with every regex metacharacter backslash-escaped, so the
+## result matches `s` literally.
+##
+##   regex.escape("1+1=2?")    # "1\\+1=2\\?"
+fn escape(s)
+  if type(s) != "string"
+    error("regex.escape: s must be a string, got {type(s)}")
+  end
+  build_string do |add|
+    for i = 0, len(s)
+      let ch = s[i]
+      if string.index_of(METACHARS, ch) >= 0
+        add("\\")
+      end
+      add(ch)
+    end
+  end
+end
+
+## Returns nil when `pattern` compiles, else the reason it doesn't (the
+## message `test` and the others would raise).
+##
+##   regex.check_pattern("a(b")    # "regex: bad pattern 'a(b': ..."
+fn check_pattern(pattern, {icase = false, multiline = false} = {})
+  if type(pattern) != "string"
+    error("regex.check_pattern: pattern must be a string, got {type(pattern)}")
+  end
+  let r = pcall gem_regex_groups(pattern, flag_bits(icase, multiline))
+  if r.ok then nil else r.error end
+end
+
+export test, find, find_all, replace, replace_first, split, escape, check_pattern
