@@ -1,0 +1,47 @@
+# libFuzzer harness for the compiler's front end: each input is lexed,
+# parsed, lowered and constant-folded. Bad source must come back as
+# compile errors in the sink; anything that raises instead (an internal
+# error of the compiler) or crashes is a bug, and the input is the repro.
+#
+# Built and run by `make fuzz-parser` (clang with libFuzzer, Linux);
+# tests/fuzz/fuzz_frontend.py fuzzes the whole compiler anywhere.
+
+load "../../compiler/parser" (parse_source)
+load "../../compiler/lower" (lower)
+load "../../compiler/fold" (fold_constants)
+load "../../compiler/errors" (make_error_sink)
+
+extern include "libfuzzer_driver.h"
+extern fn gem_fuzz_main() -> Int
+extern fn gem_fuzz_abort() -> Int
+
+fn front_end(src)
+  let sink = make_error_sink()
+  let ast = parse_source(src, "fuzz.gem", sink)
+  if not sink.has_any()
+    fold_constants(lower(ast))
+  end
+end
+
+# One iteration of a loop, so its back-edge reset frees what the input
+# allocated: libFuzzer calls this from C millions of times, outside any
+# Gem loop.
+fn fuzz_one(src)
+  let n = 0
+  while n < 1
+    let r = pcall front_end(src)
+    if not r.ok
+      eprint("parser_fuzz: internal error: {r.error}")
+      for f in r.stack
+        eprint("  at {f.name} ({f.file}:{f.line})")
+      end
+      gem_fuzz_abort()
+    end
+    n += 1
+  end
+end
+
+fn main()
+  fuzz_one("let x = 1\n")
+  exit(gem_fuzz_main())
+end
