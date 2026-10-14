@@ -1741,6 +1741,16 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 - `args.try_parse(spec[, list])` — the same, but returns `{ok: true, value: result}` or `{ok: false, error: message}` and never prints or exits; `--help` sets `result.help` to the help text.
 - `args.help(spec)` — the help text: the usage line, `about`, and one line per option with its `help`, `choices` and default.
 
+`std/regex` — exports `regex` table: regular expressions. Patterns are POSIX extended regexes (`|`, `+`, `?`, `{m,n}`, groups, bracket expressions with `[:class:]`s, `\1` back-references) plus `\d`, `\w`, `\s`, their negations `\D`, `\W`, `\S` (outside brackets; `\d`, `\w`, `\s` also inside them) and `\t`, `\n`, `\r`, so a pattern means the same on every platform. Word boundaries (`\b`, `\B`, `\<`, `\>`) raise; there are no lazy quantifiers or lookarounds. A pattern that doesn't compile raises `regex: bad pattern '<pattern>': <why>`. A pattern stops at a NUL byte; the string searched may hold them. Every function takes an option bag `{icase, multiline}` (`multiline`: `^` and `$` also match at line breaks, and `.` and `[^...]` don't match `\n`). Positions are byte offsets. A match is `{text, start, stop, groups}` (`stop` is the offset after it; `groups[i]` is group `i + 1`'s text, nil when it took no part). Compiled patterns are kept in a cache of 64 (keyed by pattern and options). Matching runs on the scheduler thread, like a plain `extern fn`. A `pattern` or `s` that isn't a string raises `regex.<fn>: <arg> must be a string, got <type>`.
+
+- `regex.test(pattern, s, opts)` — true when `pattern` matches somewhere in `s`.
+- `regex.find(pattern, s, {icase, multiline, start = 0})` — the first match at or after byte `start`, or nil. `^` matches at `start` only when it is 0 (or follows a newline in `multiline` mode).
+- `regex.find_all(pattern, s, opts)` — every match, left to right, not overlapping; after an empty match the search moves on one byte (`find_all("x*", "axxb")` gives 4 matches: "", "xx", "", "").
+- `regex.replace(pattern, s, repl, opts)` — `s` with every match replaced: `repl` is a string, where `\0` is the match, `\1`..`\9` its groups (an unmatched one gives `""`) and `\\` a backslash, or a fn called with each match, whose result is added as `to_string` would. `regex.replace_first` replaces the first match only.
+- `regex.split(pattern, s, opts)` — the pieces between matches; matches at either end or next to each other give empty pieces, and empty matches don't split (`split("x", "")` is `[""]`).
+- `regex.escape(s)` — `s` with every metacharacter escaped, a pattern matching `s` literally.
+- `regex.check_pattern(pattern, opts)` — nil when `pattern` compiles, else the message the others would raise.
+
 `std/time` — exports `time` table:
 
 - `time.now()` — returns the current wall-clock time as milliseconds since the Unix epoch (int). Alias for `epoch_ms()`.

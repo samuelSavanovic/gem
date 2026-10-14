@@ -4818,6 +4818,25 @@ args: unknown key `option` in the spec (did you mean `options`?)
 args: option `x` has type `bool`; the types are string, int, float and flag
 args: option `x`: short must be one letter, got xy
 ["q", "r"]
+true false true
+bob@example 5 16 ["bob", "example"]
+nil [nil, "b"]
+["1", "22", "333"]
+4 4
+a#b# host at bob a<1>b<22>
+-a-b-c- f0o a\\b
+["a", "b", "c"] [""] ["", "a", ""] ["ab"]
+1\+1=2\? false true
+regex: bad pattern 'a(b': Unmatched ( or \( nil
+regex: bad pattern '\bfoo': word boundaries (\b, \B, \<, \>) aren't supported
+nil 2
+3 nil
+true false true false
+2
+q
+regex.test: pattern must be a string, got int regex.replace: repl must be a string or a fn, got int
+true [a][]
+200
 {ok: true, value: 6}
 false boom 1
 boom 2

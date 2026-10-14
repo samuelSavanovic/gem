@@ -1,0 +1,31 @@
+# std/regex: test, find, find_all, replace, replace_first, split, escape, check_pattern;
+# options, empty matches, groups, \d \w \s, errors.
+load "std/regex"
+load "std/table"
+print(regex.test("^[a-z]+$", "hello"), regex.test("^[a-z]+$", "Hello"), regex.test("^[a-z]+$", "Hello", {icase: true}))
+let m = regex.find("(\\w+)@(\\w+)", "mail bob@example now")
+print(m.text, m.start, m.stop, m.groups)
+print(regex.find("x", "abc"), regex.find("(a)|(b)", "b").groups)
+print(table.map(regex.find_all("\\d+", "a1b22c333"), fn(x) x.text end))
+print(len(regex.find_all("", "abc")), len(regex.find_all("x*", "axxb")))
+print(regex.replace("\\d+", "a1b22", "#"), regex.replace("(\\w+)@(\\w+)", "bob@host", "\\2 at \\1"), regex.replace("\\d+", "a1b22", fn(x) "<{x.text}>" end))
+print(regex.replace("x*", "abc", "-"), regex.replace_first("o", "foo", "0"), regex.replace("\\\\", "a\\b", "\\\\\\\\"))
+print(regex.split(",\\s*", "a, b,c"), regex.split("x", ""), regex.split(",", ",a,"), regex.split("x*", "ab"))
+print(regex.escape("1+1=2?"), regex.test(regex.escape("a.b"), "axb"), regex.test(regex.escape("a.b"), "a.b"))
+print(regex.check_pattern("a(b"), regex.check_pattern("a(b)"))
+print(pcall(fn() regex.test("\\bfoo", "foo") end).error)
+print(regex.find("^b", "a\nb"), regex.find("^b", "a\nb", {multiline: true}).start)
+print(regex.find("b", "abcb", {start: 2}).start, regex.find("^c", "abc", {start: 2}))
+print(regex.test("[\\d]x", "5x"), regex.test("\\D", "5"), regex.test("\\s", "a b"), regex.test("[^\\d]", "55"))
+print(regex.find("a", "x\0a").start)
+print(regex.find("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)(l)(m)(n)(o)(p)(q)", "abcdefghijklmnopq").groups[16])
+print(pcall(fn() regex.test(1, "a") end).error, pcall(fn() regex.replace("a", "a", 3) end).error)
+print(regex.test("é", "café"), regex.replace("(a)|b", "ab", "[\\1]"))
+# Compiled patterns are cached: many patterns in turn still work.
+let hits = 0
+for i = 0, 200
+  if regex.test("^k{i}$", "k{i}")
+    hits += 1
+  end
+end
+print(hits)

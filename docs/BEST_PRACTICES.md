@@ -46,7 +46,7 @@ reads the environment.
 [`CHEATSHEET.md`](CHEATSHEET.md). The rest lives in std modules: `load
 "std/json"` binds `json.parse`, `json.encode`, and so on. The modules are
 `string`, `table`, `math`, `time`, `log`, `json`, `url`, `mime`, `http`,
-`request`, `sqlite`, `io`, `args`, `task`, `gen_server`, `supervisor`,
+`request`, `sqlite`, `io`, `args`, `regex`, `task`, `gen_server`, `supervisor`,
 `dynamic_supervisor` and `test`.
 
 **Blocks.** A call can take a closure as its last argument, written after
@@ -217,7 +217,9 @@ A `while` with a cursor suits tokenizers and frame parsers; read bytes
 with `ord(s, i)`, which doesn't allocate. But `str_replace`, `substr` and
 `find` (and `string.index_of`, `split`, `contains`) run in C: a needle 1
 MB into a string is found in well under 1 ms with `find`, against about
-25 ms with an `ord` loop.
+25 ms with an `ord` loop. For a pattern, `std/regex` tests a short line
+in about 0.5 µs (patterns are compiled once and cached); in a Gem string
+its backslashes are doubled (`"\\d+"`).
 
 ---
 

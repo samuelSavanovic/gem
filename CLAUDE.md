@@ -26,7 +26,7 @@ compiler/             # self-hosting compiler (lexer, parser, checks, AST, error
                       #   captures (free vars, boxing, non-escaping closures), tco (self/mutual tail calls), callgraph,
                       #   loops (arm-let hoist, reset tagging), append (in-place string append), cgutil (shared helpers)
 lsp/                  # language server: main (entry), rpc (framing+types), server (loop), handlers (lifecycle+textDocument), doc (per-uri process), workspace (cross-file AST cache), diagnostics, definition, completion, symbols, position (cursor helpers). Dispatched from compiler/main.gem when argv[1] == "lsp"
-std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, io, args, task, supervisor, dynamic_supervisor, gen_server, test)
+std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, io, args, regex, task, supervisor, dynamic_supervisor, gen_server, test)
 runtime/              # C runtime — split by category:
   gem.h               #   public API, tagged values, process table, scheduler decls
   gem_core.c          #   value constructors, table internals, equality
@@ -47,6 +47,7 @@ runtime/              # C runtime — split by category:
   gem_builtins_tls.c         # tls_connect + tcp_read/tcp_write/close of TLS sockets, on OpenSSL 3 or later (a stub that raises without it)
   tls_config.sh       #   run by make: finds OpenSSL 3 or later, writes build/tls_cflags (for gem_builtins_tls.c) and build/tls_libs (the compiler links programs with them)
   gem_builtins_time.c        # time/clock builtins
+  gem_builtins_text.c        # not builtins: the C side of std/regex (regcomp/regexec with a pattern cache) and the encoding modules, reached by extern fn
   minicoro.h          #   single-header coroutine library (vendored)
   stb_ds.h            #   single-header hash maps/arrays (vendored)
   sqlite3.c/sqlite3.h #   SQLite amalgamation (vendored)

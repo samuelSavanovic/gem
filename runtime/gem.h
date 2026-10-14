@@ -1423,6 +1423,9 @@ const char *gem_resolve4(const char *host, uint32_t *addr);
    it could not start or did not exit normally. Threads can run it at once
    (macOS's system() lets one run at a time). */
 int gem_run_shell(const char *cmd);
+/* std/regex (gem_builtins_text.c), reached through extern fn. */
+GemVal gem_regex_exec(const char *pat, int64_t flags, const uint8_t *s, int64_t slen, int64_t start);
+int64_t gem_regex_groups(const char *pat, int64_t flags);
 /* Held for writing by setenv, for reading around posix_spawn(environ). */
 extern pthread_rwlock_t gem_env_lock;
 /* Run `cmd` with `/bin/sh -c`, feeding it `in` (in_len bytes; stdin is
