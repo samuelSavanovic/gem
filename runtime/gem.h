@@ -722,6 +722,10 @@ GemVal gem_mkdir_fn(void *_env, GemVal *args, int argc);
 GemVal gem_list_dir_fn(void *_env, GemVal *args, int argc);
 GemVal gem_is_dir_fn(void *_env, GemVal *args, int argc);
 GemVal gem_exec_fn(void *_env, GemVal *args, int argc);
+GemVal gem_exec_capture_fn(void *_env, GemVal *args, int argc);
+GemVal gem_rename_fn(void *_env, GemVal *args, int argc);
+GemVal gem_stat_fn(void *_env, GemVal *args, int argc);
+GemVal gem_setenv_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_connect_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_listen_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_accept_fn(void *_env, GemVal *args, int argc);
@@ -1023,6 +1027,8 @@ typedef enum {
     GEM_IO_EXEC,
     GEM_IO_EXTERN,
     GEM_IO_RESOLVE,      /* getaddrinfo of `path`, on the resolver lane */
+    GEM_IO_READ_RANGE,   /* read_file(path, offset, count) */
+    GEM_IO_EXEC_CAPTURE, /* exec_capture: `content` is the child's stdin */
 } GemIOOp;
 
 /* A request is shared by the worker thread and the requesting process. Each
@@ -1044,6 +1050,9 @@ typedef struct {
     size_t result_len;
     char *error_msg;       /* malloc'd error string, or NULL on success */
     int exit_code;         /* output for exec */
+    int64_t offset, count; /* input for a read range */
+    char *err_data;        /* malloc'd output: exec_capture's stderr */
+    size_t err_len;
     uint32_t addr4;        /* output for resolve: the IPv4 address, network byte order */
     void (*extern_fn)(void *);  /* for GEM_IO_EXTERN: worker calls this */
     void *extern_args;          /* for GEM_IO_EXTERN: malloc'd args struct */
@@ -1397,6 +1406,8 @@ GemIORequest *gem_io_submit(GemIOOp op, const char *path,
    runs before NULL is returned. */
 GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args,
                                    void (*free_args)(void *));
+/* read_file(path, offset, count) on the pool (GEM_IO_READ_RANGE). */
+GemIORequest *gem_io_submit_range(const char *path, int64_t offset, int64_t count);
 void gem_io_release(GemIORequest *req);
 /* Read the whole file at `path` into a malloc'd, NUL-terminated buffer
    (*out_len bytes, binary-safe). Regular files are read with one fread sized
@@ -1412,6 +1423,21 @@ const char *gem_resolve4(const char *host, uint32_t *addr);
    it could not start or did not exit normally. Threads can run it at once
    (macOS's system() lets one run at a time). */
 int gem_run_shell(const char *cmd);
+/* Held for writing by setenv, for reading around posix_spawn(environ). */
+extern pthread_rwlock_t gem_env_lock;
+/* Run `cmd` with `/bin/sh -c`, feeding it `in` (in_len bytes; stdin is
+   /dev/null when in is NULL) and collecting its stdout and stderr into
+   malloc'd buffers (*out, *err; NUL-terminated). Returns the exit status,
+   -1 when it could not start or did not exit normally; sets *errmsg
+   (malloc'd) when an output passed the string limit. Thread-safe. */
+int gem_run_capture(const char *cmd, const char *in, size_t in_len,
+                    char **out, size_t *out_len, char **err, size_t *err_len,
+                    char **errmsg);
+/* Read up to `count` bytes of `path` from byte `offset` into a malloc'd,
+   NUL-terminated buffer; "" past the end. NULL with a malloc'd *err_msg
+   on failure. Safe to call from a worker thread. */
+char *gem_read_file_range(const char *path, int64_t offset, int64_t count,
+                          size_t *out_len, char **err_msg);
 /* Drain the thread pool's wake pipe; returns 1 when a request may have
    completed since the last call (the scheduler then checks its pool waiters). */
 int gem_io_check_completions(void);

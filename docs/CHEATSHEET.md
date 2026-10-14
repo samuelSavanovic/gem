@@ -149,10 +149,12 @@ let r = pcall some_fn()              # {ok: bool, value/error: ..., stack: [{nam
 # Stack: 8 MB per process; overflow raises "stack overflow in <fn>" (pcall-catchable, kills only that process)
 
 # Common builtins
-# I/O & process: print, eprint, error, pcall, len, type, to_string, to_int, to_float, exit, kill, argv, getenv, input, read_stdin, write_stdout, sleep
+# I/O & process: print, eprint, error, pcall, len, type, to_string, to_int, to_float, exit, kill, argv, getenv, setenv, input, read_stdin, write_stdout, sleep
 # Collections:   push, pop, keys, values, sort, insert, delete (a key; lists: remove_at), remove_at, has_key
 # Strings:       find, str_replace, substr, chr, ord, buf_new, buf_push, build_string
-# Filesystem:    read_file, write_file, append_file, file_exists, remove_file, mkdir, list_dir, is_dir, dirname, path_join, normalize_path, exec
+# Filesystem:    read_file, write_file, append_file, file_exists, remove_file, rename, stat, mkdir, list_dir, is_dir, dirname, path_join, normalize_path
+#                read_file(path, offset, count): a block ("" past the end); stat(path) -> {size, mtime, mode, type} or nil
+# Commands:      exec(cmd) -> status (output to the terminal); exec_capture(cmd, input?) -> {status, stdout, stderr}
 # TCP:           tcp_listen, tcp_accept, tcp_connect, tcp_read, tcp_write, tcp_close, tcp_peer, tcp_local_port, tcp_fd, tcp_from_fd
 # TLS:           tls_connect(host, port, {timeout_ms, ca_file, server_name}) -> a socket for tcp_read/tcp_write/tcp_close;
 #                verifies the certificate and host name against the system's CAs (or ca_file), always;
@@ -173,7 +175,11 @@ end
 
 # Std library modules
 # std/string     split, join, trim, upper, lower, repeat, index_of(s, x, start = 0), contains,
-#                starts_with, ends_with
+#                starts_with, ends_with, closest(word, candidates) (did-you-mean)
+# std/io         lines(path, f), reader(path) -> {next}, read_lines(path)   ("-": stdin; 64 KB blocks, flat memory)
+# std/args       parse(spec), try_parse(spec, list), help(spec)
+#   spec {name, about, usage, options: {top: {short: "n", default: 10, help}, v: {type: "flag"}, x: {multi: true}}, min_args, max_args}
+#   -> {top, v, x, args: [positional]}; --help prints help; a mistake prints usage and exits 2
 # std/table      each, map, filter, reduce, find, any, all, count, reverse, unique, contains, index_of,
 #                slice, concat, copy, flatten, flat_map, zip, group_by, sort
 # std/math       min, max, clamp, assert

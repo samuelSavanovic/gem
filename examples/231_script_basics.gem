@@ -1,0 +1,57 @@
+# exec_capture, read_file with an offset and a count, stat, rename, setenv.
+
+let r = exec_capture("echo out; echo err >&2; exit 3")
+print(r.status, "[{r.stdout}]", "[{r.stderr}]")
+print(exec_capture("tr a-z A-Z", "hello").stdout)
+print(len(exec_capture("cat").stdout))             # no input: stdin is at its end
+print(exec_capture("yes | head -n 2").stdout)       # the child gets SIGPIPE back
+let lines = build_string do |add|
+  for i = 0, 50000
+    add("line {i}\n")
+  end
+end
+print(string_trim(exec_capture("wc -l", lines).stdout))
+print(len(exec_capture("head -c 200000 /dev/zero").stdout))
+print(exec_capture("kill -9 $$").status)
+
+fn string_trim(s)
+  let n = len(s)
+  while n > 0 and (ord(s, n - 1) == 10 or ord(s, n - 1) == 32)
+    n -= 1
+  end
+  let i = 0
+  while i < n and ord(s, i) == 32
+    i += 1
+  end
+  substr(s, i, n - i)
+end
+
+let dir = exec_capture("mktemp -d").stdout
+dir = substr(dir, 0, len(dir) - 1)
+let path = path_join(dir, "a.txt")
+write_file(path, "0123456789")
+print(read_file(path, 3, 4), "[{read_file(path, 20, 4)}]", read_file(path, 8, 100), "[{read_file(path, 0, 0)}]")
+print(pcall(fn() read_file(path, -1, 2) end).error)
+print(pcall(fn() read_file(path, 0) end).error)
+print(pcall(fn() read_file(dir, 0, 1) end).ok)
+
+let st = stat(path)
+print(st.size, st.type, type(st.mode), type(st.mtime), stat(dir).type, stat(path_join(dir, "none")))
+print(rename(path, path_join(dir, "b.txt")), file_exists(path), read_file(path_join(dir, "b.txt")))
+print(rename(path, path_join(dir, "c.txt")))
+
+setenv("GEM_EXAMPLE_231", "v1")
+print(getenv("GEM_EXAMPLE_231"), exec_capture("printf %s \"$GEM_EXAMPLE_231\"").stdout)
+setenv("GEM_EXAMPLE_231", nil)
+print(getenv("GEM_EXAMPLE_231"))
+print(pcall(fn() setenv("A=B", "x") end).error)
+
+let done = make_ref()
+let parent = self()
+spawn do
+  send(parent, {ref: done, out: exec_capture("echo from a process").stdout})
+end
+receive
+when {ref: ^done, out: out} then print(out)
+end
+exec("rm -rf '{dir}'")
