@@ -985,12 +985,16 @@ typedef enum {
     GEM_IO_APPEND_FILE,
     GEM_IO_EXEC,
     GEM_IO_EXTERN,
+    GEM_IO_RESOLVE,      /* getaddrinfo of `path`, on the resolver lane */
 } GemIOOp;
 
 /* A request is shared by the worker thread and the requesting process. Each
-   side calls gem_io_release once when it is finished with it, and the second
-   release frees the request and everything it owns. If the requester is
-   killed while waiting, gem_free_proc_slot releases on its behalf. Every
+   side calls gem_io_release once when it is finished with it, and the last
+   release frees the request and everything it owns. A name lookup can have
+   more holders: every process waiting on it and the table of lookups in
+   flight (gem_builtins_tcp.c) each take a reference (refs) and release it.
+   If a requester is killed while waiting, gem_free_proc_slot releases on
+   its behalf. Every
    field below is malloc-owned, never arena memory, so the request outlives
    the requester's arena. */
 typedef struct {
@@ -1003,6 +1007,7 @@ typedef struct {
     size_t result_len;
     char *error_msg;       /* malloc'd error string, or NULL on success */
     int exit_code;         /* output for exec */
+    uint32_t addr4;        /* output for resolve: the IPv4 address, network byte order */
     void (*extern_fn)(void *);  /* for GEM_IO_EXTERN: worker calls this */
     void *extern_args;          /* for GEM_IO_EXTERN: malloc'd args struct */
     void (*free_extern)(void *); /* frees extern_args and whatever it still owns */
@@ -1182,6 +1187,10 @@ void gem_io_wake_closing(void);
 /* Yield the current coroutine for a thread pool I/O request.
    Sets state to IO_WAIT; caller must set proc->io_request first. */
 void gem_io_pool_yield(void);
+/* gem_io_pool_yield bounded by `deadline` (gem_now_ms time, -1 for none):
+   1 when the request is done, 0 when the deadline passed first (the
+   worker still holds its reference and releases it when it finishes). */
+int gem_io_pool_yield_until(int64_t deadline);
 
 /* Process name registry (stb_ds string hash map: name → pid) */
 typedef struct {
@@ -1358,6 +1367,10 @@ void gem_io_release(GemIORequest *req);
    Returns NULL with a malloc'd message in *err_msg on failure (cannot open,
    directory, read error). Safe to call from a worker thread. */
 char *gem_read_whole_file(const char *path, size_t *out_len, char **err_msg);
+/* Look up `host`'s first IPv4 address (getaddrinfo; blocks while it
+   resolves) into *addr, in network byte order. Returns NULL, or the
+   reason it failed (a static string). Safe to call from a worker thread. */
+const char *gem_resolve4(const char *host, uint32_t *addr);
 /* Run `cmd` with `/bin/sh -c` and wait for it: its exit status, or -1 when
    it could not start or did not exit normally. Threads can run it at once
    (macOS's system() lets one run at a time). */

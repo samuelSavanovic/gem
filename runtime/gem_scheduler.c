@@ -631,8 +631,9 @@ static int gem_proc_alloc_slot(void) {
  *   - the ready set: a three-level bitmap over slots, so a pass can run the
  *     READY processes in slot order at a cost proportional to the READY
  *     ones;
- *   - the deadline heap: WAITING processes (receive ... after, sleep) and
- *     fd waiters (a tcp timeout) with a deadline, keyed by deadline_ms;
+ *   - the deadline heap: WAITING processes (receive ... after, sleep), fd
+ *     waiters (a tcp timeout) and pool waiters (a name lookup's timeout)
+ *     with a deadline, keyed by deadline_ms;
  *   - the fd waiter list (polled) and the pool waiter list (checked when
  *     the thread pool signals a completion);
  *   - a count of WAITING processes.
@@ -784,7 +785,7 @@ static void gem_waitlist_remove(GemWaitList *wl, int slot) {
 }
 
 /* Move the process in `slot` to state `st`, keeping the run-state
-   structures in step. Entering WAITING or an fd wait reads deadline_ms;
+   structures in step. Entering WAITING or IO_WAIT reads deadline_ms;
    entering IO_WAIT reads io_request (set: a thread pool wait). */
 static void gem_proc_set_state(int slot, GemProcState st) {
     GemProcess *p = &gem_proc_table[slot];
@@ -810,6 +811,7 @@ static void gem_proc_set_state(int slot, GemProcState st) {
             if (p->io_request) {
                 p->wait_kind = GEM_WAIT_POOL;
                 gem_waitlist_add(&gem_pool_waiters, slot);
+                if (p->deadline_ms >= 0) gem_dl_push(slot, p->deadline_ms);
             } else {
                 p->wait_kind = GEM_WAIT_FD;
                 gem_waitlist_add(&gem_fd_waiters, slot);
@@ -1281,10 +1283,19 @@ int gem_slot_of_pid(int64_t pid) {
 }
 
 void gem_io_pool_yield(void) {
-    if (gem_current_pid < 0 || gem_current_pid >= gem_proc_hwm) return;
+    gem_io_pool_yield_until(-1);
+}
+
+int gem_io_pool_yield_until(int64_t deadline) {
+    if (gem_current_pid < 0 || gem_current_pid >= gem_proc_hwm) return 0;
     GemProcess *proc = &gem_proc_table[gem_current_pid];
+    proc->deadline_ms = deadline;
+    proc->timed_out = 0;
     gem_proc_set_state(gem_current_pid, GEM_PROC_IO_WAIT);
     mco_yield(proc->coro);
+    proc->deadline_ms = -1;
+    proc->timed_out = 0;
+    return __atomic_load_n(&proc->io_request->done, __ATOMIC_ACQUIRE);
 }
 
 void gem_io_yield(int fd, int for_write, GemVal sock) {

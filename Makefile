@@ -57,7 +57,7 @@ bootstrap: $(GEM)
 	cp $(BUILD_DIR)/stage0_new.c $(STAGE0)
 	@echo "bootstrap/stage0.c regenerated and verified"
 
-test: $(GEM) test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-recursion-memory test-lsp test-example-apps
+test: $(GEM) test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-resolve test-tls test-recursion-memory test-lsp test-example-apps
 	@bash examples/run_all.sh
 
 test-broken: $(GEM)
@@ -83,6 +83,9 @@ test-proc-limit: $(GEM)
 
 test-socket-leak: $(GEM)
 	@bash tests/check_socket_leak.sh
+
+test-resolve: $(GEM)
+	@bash tests/check_resolve.sh
 
 test-tls: $(GEM)
 	@bash tests/check_tls.sh

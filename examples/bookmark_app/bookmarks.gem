@@ -146,8 +146,6 @@ fn extract_title(page)
   title
 end
 
-# The host name lookup blocks every process, and the connect isn't bounded
-# by the timeout; the timeout bounds the rest.
 fn fetch_title(page_url)
   let r = pcall request.get(page_url, {timeout_ms: FETCH_TIMEOUT_MS})
   if not r.ok

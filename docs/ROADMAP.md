@@ -115,18 +115,7 @@ What needs building: a pool of idle connections per host and port, reused by lat
 - **Where the pool lives.** Module-level state is per process, which fits (each process's pool, its sockets claimed by it), but a `spawn` copies module state into the child: the pool must skip sockets another process owns, or key itself by `self()`. An explicit handle (`let c = request.client()`, then `c.get(url)`) avoids that and makes the lifetime plain, at the cost of a concept; the implicit pool keeps `request.get` as it is.
 - **Stale connections.** A server closes an idle connection whenever it likes, so a reused socket can fail on its first write or read; the call retries once on a fresh connection for idempotent methods (GET, HEAD, PUT, DELETE), and never for POST and PATCH.
 - **Bounds.** At most a few idle connections per host, an idle timeout shorter than common servers' (std/http's is 30 s by default), and responses read to their end before the socket goes back (a body cut short or `Connection: close` from the server drops it).
-- **Name lookups.** A host name is resolved on the scheduler thread, so every process stalls during the lookup (BEST_PRACTICES, "Know what blocks every process"); a pool keyed by host name could cache the address it connected to for its lifetime, short of a resolver on the thread pool.
-
-## Name lookups off the scheduler thread (P2)
-
-`tcp_connect` and `tcp_listen` resolve a host name with `getaddrinfo` on the scheduler thread (`gem_tcp_resolve4`, runtime/gem_builtins_tcp.c; an IP literal skips it), and POSIX has no non-blocking `getaddrinfo`, so every process stops for the whole lookup: microseconds for `localhost` or a name in `/etc/hosts`, a network round trip uncached, and with a resolver that doesn't answer `timeout × attempts` per nameserver (up to about 12 s with `timeout:2 attempts:3` and two nameservers). Measured (2026-10-13, a stub resolver that answers after 2 s): `tcp_connect("example.com", 80)` took 2,003 ms, and a process ticking every 10 ms meanwhile had a 2,012 ms gap. BEST_PRACTICES lists it under "Know what blocks every process".
-
-What needs building, best fit first:
-
-- **`getaddrinfo` on a worker thread.** The caller parks, as for `read_file`; IP literals keep the inline path. A lookup can't be cancelled, so a killed caller leaves its worker busy until the resolver times out, and slow lookups must not take every worker of the I/O pool and stall file reads: a lane of its own, or a cap on lookups in flight (OPTIMIZATIONS.md, "Slow pool calls hold every worker; more workers slow the fast ones").
-- **`getaddrinfo_a`**: glibc's asynchronous form, Linux only.
-- **A DNS client over non-blocking UDP** (as c-ares): cancellable and threadless, but it re-implements `/etc/hosts`, search domains, `nsswitch` and retries.
-- **A cache** on top of any of them, as the keep-alive pool would keep the address it connected to ("Keep-alive connections in `std/request`"); `getaddrinfo` returns no TTL, so a runtime cache would hold an answer for a fixed short time.
+- **Name lookups.** A call to a host name looks it up unless a lookup of that name is already running (`getaddrinfo` on the resolver threads, runtime/gem_threadpool.c: a thread hand-off, and a round trip when the system doesn't cache the answer). A pool keyed by host name keeps the address it connected to for its connections' lifetime; `getaddrinfo` returns no TTL, so a cache of answers beyond that would hold one for a fixed short time.
 
 ## `gem doc` and checked doc examples (P3)
 
@@ -184,7 +173,7 @@ What remains:
 
 ## IPv6 sockets (P3)
 
-`tcp_listen` and `tcp_connect` take IPv4 addresses and names only (`gem_tcp_resolve4`, `socket(AF_INET, …)` in `runtime/gem_builtins_tcp.c`); `tcp_peer` and `tcp_from_fd` already handle IPv6. A server can't listen on `::`, so the honeypot answers on its host's IPv4 address only. Needs `getaddrinfo` with `AF_UNSPEC` (or `AF_INET6` with `IPV6_V6ONLY` off for a dual-stack listener) and `sockaddr_storage` throughout; resolving a name still blocks the scheduler thread.
+`tcp_listen` and `tcp_connect` take IPv4 addresses and names only (`gem_tcp_resolve4`, `socket(AF_INET, …)` in `runtime/gem_builtins_tcp.c`); `tcp_peer` and `tcp_from_fd` already handle IPv6. A server can't listen on `::`, so the honeypot answers on its host's IPv4 address only. Needs `getaddrinfo` with `AF_UNSPEC` (or `AF_INET6` with `IPV6_V6ONLY` off for a dual-stack listener) and `sockaddr_storage` throughout (`gem_resolve4`, runtime/gem_threadpool.c, asks for IPv4 only).
 
 ## Shared read-mostly data between processes (P2)
 
