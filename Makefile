@@ -16,7 +16,7 @@ STAGE0 = bootstrap/stage0.c
 BUILD_DIR = build
 GEM = $(BUILD_DIR)/gem
 
-.PHONY: FORCE build debug asan test-debug test-reset-stress test test-rules test-stress test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-lsp test-example-apps bootstrap clean
+.PHONY: FORCE build debug asan test-debug test-reset-stress fuzz-diff fuzz-frontend fuzz-parser test-fuzz test test-rules test-stress test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-lsp test-example-apps bootstrap clean
 
 # Build the compiler from the checked-in stage0.c
 build: $(GEM)
@@ -76,6 +76,22 @@ $(BUILD_DIR)/asan/libgem_runtime.a: $(patsubst $(RUNTIME_DIR)/%.c,$(BUILD_DIR)/a
 test-debug: debug
 	@GEM_RUNTIME=debug GEM_RESET_STRESS=1 bash examples/run_all.sh
 
+# Fuzzing (tests/fuzz/; not part of make test except test-fuzz's quick
+# run). FUZZ_ARGS passes options: make fuzz-diff FUZZ_ARGS="--seeds 1:1000".
+fuzz-diff: $(GEM)
+	@python3 tests/fuzz/diff.py $(FUZZ_ARGS)
+
+fuzz-frontend: $(GEM)
+	@python3 tests/fuzz/fuzz_frontend.py $(FUZZ_ARGS)
+
+fuzz-parser: $(GEM)
+	@sh tests/fuzz/run_libfuzzer.sh $(FUZZ_ARGS)
+
+# A few seeds and mutants on every make test, so the fuzzers keep working.
+test-fuzz: $(GEM)
+	@python3 tests/fuzz/diff.py --seeds 1:9
+	@python3 tests/fuzz/fuzz_frontend.py --iters 300
+
 # Regenerate stage0.c from current compiler sources (requires working build/gem)
 bootstrap: $(GEM)
 	$(GEM) $(COMPILER_DIR)/main.gem --emit-c > $(BUILD_DIR)/stage0_new.c
@@ -86,7 +102,7 @@ bootstrap: $(GEM)
 	cp $(BUILD_DIR)/stage0_new.c $(STAGE0)
 	@echo "bootstrap/stage0.c regenerated and verified"
 
-test: $(GEM) test-rules test-reset-stress test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-resolve test-tls test-recursion-memory test-lsp test-example-apps
+test: $(GEM) test-rules test-reset-stress test-fuzz test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-resolve test-tls test-recursion-memory test-lsp test-example-apps
 	@bash examples/run_all.sh
 
 test-rules:
