@@ -218,9 +218,8 @@ A `while` with a cursor suits tokenizers and frame parsers; read bytes
 with `ord(s, i)`, which doesn't allocate. But `str_replace`, `substr` and
 `find` (and `string.index_of`, `split`, `contains`) run in C: a needle 1
 MB into a string is found in well under 1 ms with `find`, against about
-25 ms with an `ord` loop. For a pattern, `std/regex` tests a short line
-in about 0.5 µs (patterns are compiled once and cached); in a Gem string
-its backslashes are doubled (`"\\d+"`).
+25 ms with an `ord` loop. `std/regex` tests a short line in about 0.5 µs
+(patterns are cached; write `"\\d+"` for `\d+`).
 
 ---
 
@@ -276,11 +275,10 @@ fn call(target, msg, timeout_ms = 5000)
 fn serve(router, {port = 8080, host = "0.0.0.0"} = {})
 ```
 
-A key the bag's pattern doesn't name raises (`serve: unknown option
-"prot" (did you mean "port"?)`); end the pattern with `...rest` to take
-the other keys instead, for options passed on. std's option tables and
-child specs are checked the same way. Keep `...rest` parameters for real
-variadics. A default applies only when the
+A key the pattern doesn't name raises (`serve: unknown option "prot"
+(did you mean "port"?)`), as in std's option tables; `...rest` at the
+end of the pattern takes the others instead. Keep `...rest` parameters for
+real variadics. A default applies only when the
 argument (or key) is left out: passing `nil` gives `nil` **(trap)**, so a
 caller that forwards an option it may not have (`{port: opts.port}`)
 passes `nil`, not the default. Leave the key out instead. The trailing
@@ -419,10 +417,9 @@ s)`, `to_string(buf)` (`print(buf)` shows `<buffer:N>`, not the text).
 
 `len` is the byte count (`len("é")` is `2`), `s[i]` is a 1-byte string,
 `ord(s, i)` the byte value, and `for ch in s` walks bytes. Slice with
-`substr(s, start, count)`. There are no `\x` or `\u` escapes; use
-`chr(n)` (a byte) or `utf8.char(n)` (a code point). Strings may contain
-`\0`. For text by characters, `std/utf8` counts, slices and changes case
-(`utf8.len("é")` is `1`).
+`substr(s, start, count)`. No `\x` or `\u` escapes: use `chr(n)` (a
+byte) or `utf8.char(n)`. Strings may contain `\0`. `std/utf8` works by
+characters (`utf8.len("é")` is `1`).
 
 ---
 
@@ -652,9 +649,8 @@ let this one only collect.
 ### Registered names
 
 `register("db", pid)` lets others `send("db", msg)` and `whereis("db")`;
-register from the parent after `spawn`, or start a gen_server with
-`gen_server.start(module, {name: "db"})`, which registers it before its
-`init`.
+register from the parent after `spawn`, or with
+`gen_server.start(module, {name: "db"})` (before its `init` runs).
 `send` to a dead pid drops the message, but `send("db", msg)` raises once
 the process has died **(trap)**, say while a supervisor restarts it:
 check `whereis` for `nil`, or `pcall` the send.
@@ -759,22 +755,19 @@ accepts).
 
 ### Reading and writing in bulk
 
-Read a file or stdin a line at a time with `std/io`: `io.lines(path) do
-|line| ... end` (`"-"` is stdin) reads 64 KB blocks, so memory stays flat:
-a 200 MB log took 0.9 s at a 4 MB peak, against 1.2 s and the whole file
-in memory for `read_file` and a `find` loop. `io.reader(path)` gives the
-lines one `next()` at a time, for stopping early. `print` flushes every line: a
+Read lines with `std/io`: `io.lines(path) do |line| ... end` (`"-"`:
+stdin) reads 64 KB blocks, so a 200 MB log took 0.9 s at a 4 MB peak
+(`read_file` and `find`: 1.2 s, the whole file in memory); `io.reader`
+stops early. `print` flushes every line: a
 million lines took 0.6 s with `print` and 0.3 s as one `write_stdout` of
 a `build_string` (2.7 s against 0.16 s on macOS arm64), so write bulk
 output in one piece.
 
 ### Run commands with `exec_capture`
 
-`exec_capture(cmd)` returns `{status, stdout, stderr}`; pass the
-command's input as a second argument instead of a temporary file. `exec`
-is for commands whose output goes to the terminal. Both run `sh -c`, so
-quote what you splice into the command, and check `status`: a command
-that fails doesn't raise.
+`exec_capture(cmd, input)` returns `{status, stdout, stderr}`; `exec`
+only sends output to the terminal. Both run `sh -c`: quote what you
+splice in, and check `status`, as a failing command doesn't raise.
 
 ### Pass timeouts to reads, check writes
 
