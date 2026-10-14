@@ -1,6 +1,6 @@
 # Process-owned resources: design
 
-Status: **implemented** (see "As implemented" at the end for where the code differs in detail). Phase 2 of `examples/honeypot/PLAN.md`; implements ROADMAP "Process-owned resources closed on exit" for sockets and sqlite handles. Measured against `build/gem` at d07ae59.
+Status: **implemented** (see "As implemented" at the end for where the code differs in detail). Phase 2 of `examples/honeypot/PLAN.md`; implements owned resources for sockets and sqlite handles (`exec` children remain: ROADMAP "`exec` children as owned resources"). Measured against `build/gem` at d07ae59.
 
 Third version, after two reviews. The first moved ownership implicitly whenever a resource was captured by `spawn` or sent, so every short-lived helper (a reader, a `task.async`, a watchdog) took sockets over by accident. The second used `tcp_claim` with owner-only close; its review found that normal exits leaked, that owner-only close did no safety work, and that sockets and sqlite followed two models. "Rejected designs" says why each alternative lost.
 
