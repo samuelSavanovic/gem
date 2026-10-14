@@ -1,0 +1,45 @@
+# std gaps: json.encode indent, more mime types, time.parse and %L, gen_server.start name.
+load "std/gen_server"
+load "std/json"
+load "std/mime"
+load "std/time"
+let v = {name: "gem", tags: ["a", "b"], empty: {}, list: [], nested: {x: [1, {y: nil}]}}
+print(json.encode(v))
+print(json.encode(v, {indent: 2}))
+print(json.encode([1, 2], {indent: "\t"}))
+print(json.encode({}, {indent: 2}), json.encode([], {indent: 2}), json.encode(3, {indent: 2}))
+print(json.encode([1], {indent: 0}))
+print(json.parse(json.encode(v, {indent: 4})).nested.x[0])
+print(pcall(fn() json.encode(1, {indent: -1}) end).error, pcall(fn() json.encode(1, {indent: true}) end).error, pcall(fn() json.encode(1, {indnt: 2}) end).error)
+for e in ["a.js", "x.wav", "R.MD", "c.yml", "m.map", "f.ogg", "q.zzz"]
+  print(mime.lookup(e))
+end
+print(mime.ext("application/javascript"), mime.ext("text/javascript; charset=utf-8"), mime.ext("audio/ogg"), mime.ext("application/yaml"), mime.ext("text/yaml"), mime.ext("x/y"))
+let cases = ["2026-04-28T14:30:00.123Z", "2026-04-28T16:30:00+02:00", "2026-04-28T09:30:00-0500", "2026-04-28T14:30Z", "2026-04-28 14:30:00", "2026-04-28", "1970-01-01T00:00:00Z", "1969-12-31T23:59:59.999Z", "2000-02-29", "2026-02-29", "2026-02-30", "2026-13-01", "2026-04-28T24:00:00Z", "2026-04-28T14:30:00.1Z", "2026-04-28T14:30:00.123456Z", "2026-04-28x", "2026-04-28T14:30:00+0", "Tue, 28 Apr 2026 14:30:00 GMT", "Sunday, 06-Nov-94 08:49:37 GMT", "Sun Nov  6 08:49:37 1994", "Sun, 06 Nov 1994 08:49:37 GMT", "  2026-04-28  ", "", "garbage", "Tue, 28 Foo 2026 14:30:00 GMT", "0001-01-01", "9999-12-31T23:59:59Z"]
+for c in cases
+  let ms = time.parse(c)
+  print("[{c}]", ms, if ms != nil then time.format(ms, "%Y-%m-%dT%H:%M:%S.%LZ") else "" end)
+end
+print(time.format(1777386600123, "%H:%M:%S.%L %%L"), time.format(-1, "%L"))
+print(pcall(fn() time.parse(5) end).error)
+let COUNTER = {
+  init: fn() {state: {n: 0, me: whereis("counter")}} end,
+  handle_call: fn(msg, from, st)
+    if msg == "get" then {reply: st.n, state: st} else {reply: st.me, state: st} end
+  end,
+  handle_cast: fn(msg, st)
+    st.n = st.n + 1
+    {state: st}
+  end,
+  handle_info: fn(msg, st) {state: st} end
+}
+let s = gen_server.start(COUNTER, {name: "counter"})
+gen_server.cast("counter", "inc")
+print(gen_server.call("counter", "get"), gen_server.call("counter", "me") == s.pid, whereis("counter") == s.pid)
+print(pcall(fn() gen_server.start(COUNTER, {name: "counter"}) end).error)
+print(pcall(fn() gen_server.start(COUNTER, {name: 5}) end).error)
+print(pcall(fn() gen_server.start(COUNTER, {nme: "x"}) end).error)
+gen_server.stop("counter")
+print(whereis("counter"))
+let bad = {init: fn() error("boom") end, handle_call: COUNTER.handle_call, handle_cast: COUNTER.handle_cast, handle_info: COUNTER.handle_info}
+print(pcall(fn() gen_server.start(bad, {name: "b"}) end).ok, whereis("b"))

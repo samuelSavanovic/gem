@@ -13,8 +13,8 @@
 ## and a non-string `fmt` `time.<fn>: fmt must be a string, got <type>`.
 ## For measuring durations use the `time_ms()` builtin, which a change
 ## of the system clock can't move.
-## There is no parser (nothing turns an ISO 8601 or HTTP date back into
-## ms), and `fmt` has no milliseconds specifier.
+## Besides `strftime`'s, `fmt` takes `%L`, the milliseconds as three
+## digits. `parse` reads ISO 8601 and HTTP dates back into ms.
 
 # Raises unless `ms` is an int and `fmt` a string, naming `time.<caller>`.
 fn check(caller, ms, fmt)
@@ -32,12 +32,39 @@ fn now()
   epoch_ms()
 end
 
+# `fmt` with each `%L` replaced by the milliseconds of `ms` (`%%` kept).
+fn with_millis(ms, fmt)
+  if find(fmt, "%L") < 0
+    return fmt
+  end
+  let m = ((ms % 1000) + 1000) % 1000
+  let digits = if m < 10 then "00{m}" elif m < 100 then "0{m}" else "{m}" end
+  build_string do |add|
+    let i = 0
+    let n = len(fmt)
+    while i < n
+      if ord(fmt, i) == 37 and i + 1 < n
+        if fmt[i + 1] == "L"
+          add(digits)
+        else
+          add(substr(fmt, i, 2))
+        end
+        i += 2
+      else
+        add(fmt[i])
+        i += 1
+      end
+    end
+  end
+end
+
 ## Returns `ms` formatted with `fmt`, in UTC.
 ##
-##   time.format(1777386600123, "%H:%M:%S")    # "14:30:00"
+##   time.format(1777386600123, "%H:%M:%S")       # "14:30:00"
+##   time.format(1777386600123, "%H:%M:%S.%L")    # "14:30:00.123"
 fn format(ms, fmt)
   check("format", ms, fmt)
-  format_time(ms, fmt)
+  format_time(ms, with_millis(ms, fmt))
 end
 
 ## Returns `ms` formatted with `fmt`, in the machine's local time zone
@@ -46,7 +73,7 @@ end
 ##   time.format_local(1777386600123, "%H:%M %Z")    # "16:30 CEST" in Paris
 fn format_local(ms, fmt)
   check("format_local", ms, fmt)
-  format_time_local(ms, fmt)
+  format_time_local(ms, with_millis(ms, fmt))
 end
 
 ## Returns `ms` (default: now) as an RFC 7231 date, for HTTP headers.
@@ -74,4 +101,255 @@ fn date(ms = epoch_ms())
   format_time(ms, "%Y-%m-%d")
 end
 
-export now, format, format_local, http_date, iso8601, date
+# ─── parse ─────────────────────────────────────────────────────
+# Days from 1970-01-01 to the date y-m-d (proleptic Gregorian), from
+# Howard Hinnant's days_from_civil.
+fn days_from_civil(y, m, d)
+  if m <= 2
+    y -= 1
+  end
+  let era = (if y >= 0 then y else y - 399 end) / 400
+  let yoe = y - era * 400
+  let mp = if m > 2 then m - 3 else m + 9 end
+  let doy = (153 * mp + 2) / 5 + d - 1
+  let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+  era * 146097 + doe - 719468
+end
+
+fn is_leap(y)
+  (y % 4 == 0 and y % 100 != 0) or y % 400 == 0
+end
+
+fn days_in_month(y, m)
+  if m == 2
+    return if is_leap(y) then 29 else 28 end
+  end
+  if m == 4 or m == 6 or m == 9 or m == 11 then 30 else 31 end
+end
+
+# The int of the `n` digits of `s` at `i`, or nil.
+fn digits(s, i, n)
+  if i + n > len(s)
+    return nil
+  end
+  let v = 0
+  for k = i, i + n
+    let c = ord(s, k)
+    if c < 48 or c > 57
+      return nil
+    end
+    v = v * 10 + c - 48
+  end
+  v
+end
+
+# Epoch ms for a checked date and time, or nil when a field is out of range.
+fn to_ms(y, mo, d, h, mi, sec, ms)
+  if mo < 1 or mo > 12 or d < 1 or d > days_in_month(y, mo) or h > 23 or mi > 59 or sec > 60
+    return nil
+  end
+  ((days_from_civil(y, mo, d) * 24 + h) * 60 + mi) * 60000 + sec * 1000 + ms
+end
+
+let MONTHS = {Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12}
+
+# ISO 8601: YYYY-MM-DD, then optionally T (or a space) HH:MM[:SS[.fff]] and
+# Z or ±HH:MM (±HHMM, ±HH); no zone means UTC.
+fn parse_iso(s)
+  let y = digits(s, 0, 4)
+  let mo = digits(s, 5, 2)
+  let d = digits(s, 8, 2)
+  if y == nil or mo == nil or d == nil or s[4] != "-" or s[7] != "-"
+    return nil
+  end
+  let n = len(s)
+  if n == 10
+    return to_ms(y, mo, d, 0, 0, 0, 0)
+  end
+  if s[10] != "T" and s[10] != "t" and s[10] != " "
+    return nil
+  end
+  let h = digits(s, 11, 2)
+  let mi = digits(s, 14, 2)
+  if h == nil or mi == nil or s[13] != ":"
+    return nil
+  end
+  let i = 16
+  let sec = 0
+  let ms = 0
+  if i < n and s[i] == ":"
+    sec = digits(s, i + 1, 2)
+    if sec == nil
+      return nil
+    end
+    i += 3
+    if i < n and (s[i] == "." or s[i] == ",")
+      i += 1
+      let start = i
+      while i < n and ord(s, i) >= 48 and ord(s, i) <= 57
+        if i - start < 3
+          ms = ms * 10 + ord(s, i) - 48
+        end
+        i += 1
+      end
+      if i == start
+        return nil
+      end
+      let got = i - start
+      while got < 3
+        ms *= 10
+        got += 1
+      end
+    end
+  end
+  let offset = 0
+  if i == n
+    offset = 0
+  elif (s[i] == "Z" or s[i] == "z") and i + 1 == n
+    offset = 0
+  elif s[i] == "+" or s[i] == "-"
+    let sign = if s[i] == "+" then 1 else -1 end
+    let oh = digits(s, i + 1, 2)
+    if oh == nil
+      return nil
+    end
+    let rest = n - (i + 3)
+    let om = 0
+    if rest == 3 and s[i + 3] == ":"
+      om = digits(s, i + 4, 2)
+    elif rest == 2
+      om = digits(s, i + 3, 2)
+    elif rest != 0
+      return nil
+    end
+    if om == nil or oh > 23 or om > 59
+      return nil
+    end
+    offset = sign * (oh * 60 + om) * 60000
+  else
+    return nil
+  end
+  let base = to_ms(y, mo, d, h, mi, sec, ms)
+  if base == nil then nil else base - offset end
+end
+
+# HTTP dates (RFC 9110): "Sun, 06 Nov 1994 08:49:37 GMT", the obsolete
+# "Sunday, 06-Nov-94 08:49:37 GMT" and asctime's "Sun Nov  6 08:49:37 1994".
+fn parse_http(s)
+  let parts = []
+  for p in str_split_spaces(s)
+    push(parts, p)
+  end
+  if len(parts) == 4 and parts[3] == "GMT" and string_ends(parts[0], ",")
+    let dmy = str_split_char(parts[1], "-")
+    if len(dmy) == 3
+      # Sunday, 06-Nov-94 08:49:37 GMT: a two-digit year in 1970-2069
+      let y2 = digits(dmy[2], 0, 2)
+      if y2 == nil or len(dmy[2]) != 2
+        return nil
+      end
+      return hms(if y2 < 70 then 2000 + y2 else 1900 + y2 end, MONTHS[dmy[1]], digits(dmy[0], 0, 2), parts[2], len(dmy[0]) == 2)
+    end
+    return nil
+  end
+  if len(parts) == 6 and parts[5] == "GMT" and string_ends(parts[0], ",")
+    let y = digits(parts[3], 0, 4)
+    if y == nil or len(parts[3]) != 4
+      return nil
+    end
+    return hms(y, MONTHS[parts[2]], digits(parts[1], 0, 2), parts[4], len(parts[1]) == 2)
+  end
+  if len(parts) == 5
+    # Sun Nov  6 08:49:37 1994
+    let y = digits(parts[4], 0, 4)
+    let d = if len(parts[2]) == 1 then digits(parts[2], 0, 1) elif len(parts[2]) == 2 then digits(parts[2], 0, 2) end
+    if y == nil or len(parts[4]) != 4 or d == nil
+      return nil
+    end
+    return hms(y, MONTHS[parts[1]], d, parts[3], true)
+  end
+  nil
+end
+
+fn hms(y, mo, d, t, ok)
+  if not ok or mo == nil or d == nil or len(t) != 8 or t[2] != ":" or t[5] != ":"
+    return nil
+  end
+  let h = digits(t, 0, 2)
+  let mi = digits(t, 3, 2)
+  let sec = digits(t, 6, 2)
+  if h == nil or mi == nil or sec == nil
+    return nil
+  end
+  to_ms(y, mo, d, h, mi, sec, 0)
+end
+
+fn str_split_spaces(s)
+  let out = []
+  let i = 0
+  let n = len(s)
+  while i < n
+    while i < n and ord(s, i) == 32
+      i += 1
+    end
+    let start = i
+    while i < n and ord(s, i) != 32
+      i += 1
+    end
+    if i > start
+      push(out, substr(s, start, i - start))
+    end
+  end
+  out
+end
+
+fn str_split_char(s, ch)
+  let out = []
+  let start = 0
+  let p = find(s, ch)
+  while p >= 0
+    push(out, substr(s, start, p - start))
+    start = p + 1
+    p = find(s, ch, start)
+  end
+  push(out, substr(s, start))
+  out
+end
+
+fn string_ends(s, suffix)
+  len(s) >= len(suffix) and substr(s, len(s) - len(suffix)) == suffix
+end
+
+## Returns the epoch ms of a date written in ISO 8601 or as an HTTP date,
+## or nil when `s` is neither (or names a day that doesn't exist).
+##
+## ISO 8601: `YYYY-MM-DD` (midnight UTC), optionally followed by `T` (or a
+## space) and `HH:MM`, `:SS` and a fraction (to the millisecond; more
+## digits are dropped), then `Z`, an offset `±HH:MM` (`±HHMM`, `±HH`), or
+## nothing for UTC. HTTP: `Sun, 06 Nov 1994 08:49:37 GMT`, and the older
+## forms RFC 9110 still accepts (`Sunday, 06-Nov-94 08:49:37 GMT`, whose
+## two-digit year is taken as 1970–2069, and asctime's `Sun Nov  6
+## 08:49:37 1994`). Surrounding spaces are ignored.
+##
+##   time.parse("2026-04-28T14:30:00.123Z")         # 1777386600123
+##   time.parse("2026-04-28T16:30:00+02:00")        # 1777386600000
+##   time.parse("Tue, 28 Apr 2026 14:30:00 GMT")    # 1777386600000
+##   time.parse("2026-02-30")                       # nil
+fn parse(s)
+  if type(s) != "string"
+    error("time.parse: s must be a string, got {type(s)}")
+  end
+  let t = s
+  while len(t) > 0 and ord(t, 0) == 32
+    t = substr(t, 1)
+  end
+  while len(t) > 0 and ord(t, len(t) - 1) == 32
+    t = substr(t, 0, len(t) - 1)
+  end
+  if len(t) >= 10 and ord(t, 0) >= 48 and ord(t, 0) <= 57
+    return parse_iso(t)
+  end
+  parse_http(t)
+end
+
+export now, format, format_local, http_date, iso8601, date, parse

@@ -564,7 +564,17 @@ fn encode_key(k, buf)
   end
 end
 
-fn encode_table(t, buf, depth)
+# A line break and `ind` repeated `n` times, when indenting (`ind` not nil).
+fn newline(buf, ind, n)
+  if ind != nil
+    buf_push(buf, "\n")
+    for i = 0, n
+      buf_push(buf, ind)
+    end
+  end
+end
+
+fn encode_table(t, buf, depth, ind)
   if depth > max_encode_depth
     error("json.encode: nesting deeper than {max_encode_depth} levels (or a cyclic table)")
   end
@@ -577,9 +587,13 @@ fn encode_table(t, buf, depth)
         buf_push(buf, ",")
       end
       first = false
+      newline(buf, ind, depth)
       encode_key(k, buf)
-      buf_push(buf, ":")
-      encode_value(v, buf, depth)
+      buf_push(buf, if ind != nil then ": " else ":" end)
+      encode_value(v, buf, depth, ind)
+    end
+    if not first
+      newline(buf, ind, depth - 1)
     end
     buf_push(buf, '}')
     return nil
@@ -602,12 +616,16 @@ fn encode_table(t, buf, depth)
     if i > 0
       buf_push(buf, ",")
     end
-    encode_value(items[i], buf, depth)
+    newline(buf, ind, depth)
+    encode_value(items[i], buf, depth, ind)
+  end
+  if len(items) > 0
+    newline(buf, ind, depth - 1)
   end
   buf_push(buf, "]")
 end
 
-fn encode_value(val, buf, depth)
+fn encode_value(val, buf, depth, ind)
   let t = type(val)
   if t == "string"
     encode_string(val, buf)
@@ -622,7 +640,7 @@ fn encode_value(val, buf, depth)
     end
     buf_push(buf, val)
   elif t == "table"
-    encode_table(val, buf, depth + 1)
+    encode_table(val, buf, depth + 1, ind)
   else
     error("json.encode: cannot encode a {t}")
   end
@@ -630,7 +648,10 @@ end
 
 # ─── Public API: encode ───────────────────────────────────────────
 
-## Returns `val` as compact JSON text (no spaces or newlines).
+## Returns `val` as JSON text: compact (no spaces or newlines), or with
+## `indent` (a number of spaces, or a string such as `"\t"`) one member or
+## element per line, nested ones indented by one more step, and `": "`
+## after keys; empty tables stay `{}` and `[]`.
 ##
 ## A table whose keys are exactly the ints 0 .. n-1, in whatever order
 ## they were added, becomes an array; any other table becomes an object,
@@ -647,14 +668,29 @@ end
 ##   json.encode([])                     # "[]"
 ##   json.encode({0: "a", 2: "b"})       # '{"0":"a","2":"b"}'
 ##   json.encode(2.0)                    # "2.0"
+##   json.encode({a: [1]}, {indent: 2})  # "{\n  \"a\": [\n    1\n  ]\n}"
 ##
 ## Raises for an infinite or NaN float, which JSON can't write, for a fn,
 ## buffer or other value with no JSON form, for a table
 ## key of any type but string or int (a computed float key too), and for
-## nesting deeper than 1,000 levels, which includes any cyclic table.
-fn encode(val)
+## nesting deeper than 1,000 levels, which includes any cyclic table, and
+## for an `indent` that isn't an int from 0 to 16 or a string.
+fn encode(val, {indent = nil} = {})
+  let ind = indent
+  if type(indent) == "int"
+    if indent < 0 or indent > 16
+      error("json.encode: indent must be 0 to 16 spaces, got {indent}")
+    end
+    ind = build_string do |add|
+      for i = 0, indent
+        add(" ")
+      end
+    end
+  elif indent != nil and type(indent) != "string"
+    error("json.encode: indent must be an int or a string, got {type(indent)}")
+  end
   let buf = buf_new()
-  encode_value(val, buf, 0)
+  encode_value(val, buf, 0, ind)
   to_string(buf)
 end
 

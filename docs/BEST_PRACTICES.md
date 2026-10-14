@@ -652,7 +652,9 @@ let this one only collect.
 ### Registered names
 
 `register("db", pid)` lets others `send("db", msg)` and `whereis("db")`;
-register from the parent after `spawn`, or in a gen_server's `init`.
+register from the parent after `spawn`, or start a gen_server with
+`gen_server.start(module, {name: "db"})`, which registers it before its
+`init`.
 `send` to a dead pid drops the message, but `send("db", msg)` raises once
 the process has died **(trap)**, say while a supervisor restarts it:
 check `whereis` for `nil`, or `pcall` the send.
