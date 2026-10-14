@@ -314,7 +314,7 @@ end
 ##   let msg = test.assert_throws(fn() error("bad") end)    # "bad"
 ##
 ## An error raised with a non-string value comes back as pcall reports
-## it: `error({code: 1})` gives the string "error".
+## it, as its `to_string` text: `error({code: 1})` gives "{code: 1}".
 fn assert_throws(body)
   if type(body) != "fn"
     error("test.assert_throws: body must be a fn, got {type(body)}")

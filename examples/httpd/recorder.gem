@@ -1,0 +1,524 @@
+## recorder — the only process that touches the database: stores the
+## server's events in sqlite, in batches, and keeps the counts `/stats`
+## shows.
+##
+##   recorder.start("httpd_recorder", {dir: "httpd_data"})
+##   recorder.emit("httpd_recorder", {kind: "open", conn: pid, ip: "1.2.3.4", port: 5})
+##   recorder.stats("httpd_recorder")     # the counts, or nil
+##   recorder.sync("httpd_recorder")      # the database file, all written
+##
+## An event is a table with a `kind`; a connection's events carry the
+## connection process's pid as `conn`, and its `ip` and `port`. The
+## database is one file per week in `dir`, `httpd-YYYY-MM-DD.db` after the
+## week's Monday (UTC); the tables are in SCHEMA.
+
+load "std/log"
+load "std/sqlite"
+load "std/string"
+load "std/table"
+load "std/time"
+
+let HEX = "0123456789abcdef"
+
+# Fields `format` shows in front, or not at all.
+let HEAD = {time: true, conn: true, kind: true}
+
+let DAY_MS = 86400000
+let BATCH = 200
+let FLUSH_MS = 1000
+
+# The kinds of event the recorder keeps while it sheds its backlog: those
+# that open and end the connections' rows, and the metrics.
+let KEEP = {open: true, close: true, crash: true, metrics: true}
+
+# The fields of a `metrics` event, in the order of the table's columns.
+let METRICS = [
+  "uptime_ms", "rss_kb", "fds", "procs", "memory", "resources_open", "resources_ownerless",
+  "connections", "connection_ips", "reset_ms", "resets_over_10ms", "resets_over_100ms",
+  "spawn_refused", "backlog", "events_dropped", "gem_commit"
+]
+
+let METRICS_INSERT = "INSERT INTO metrics(time_ms, {string.join(METRICS, ", ")}) VALUES (?{string.repeat(", ?", len(METRICS))})"
+
+# Times are epoch ms. A connection's row has no end while it is open.
+# `requests` and `bytes_in` come from its close event; `bytes_out` is the
+# sum of its responses the recorder saw, also those it shed.
+let SCHEMA = """
+CREATE TABLE IF NOT EXISTS connections(
+  id INTEGER PRIMARY KEY, pid INTEGER, ip TEXT, port INTEGER,
+  start_ms INTEGER, end_ms INTEGER, end_reason TEXT,
+  requests INTEGER, bytes_in INTEGER, bytes_out INTEGER);
+CREATE TABLE IF NOT EXISTS requests(
+  connection_id INTEGER REFERENCES connections(id), time_ms INTEGER,
+  method TEXT, path TEXT, status INTEGER, bytes_out INTEGER, ms INTEGER,
+  user_agent TEXT, error TEXT);
+CREATE INDEX IF NOT EXISTS requests_connection ON requests(connection_id);
+CREATE TABLE IF NOT EXISTS bad_input(
+  connection_id INTEGER REFERENCES connections(id), time_ms INTEGER,
+  status INTEGER, bytes BLOB);
+CREATE TABLE IF NOT EXISTS crashes(
+  connection_id INTEGER REFERENCES connections(id), time_ms INTEGER,
+  reason TEXT, trace TEXT, bytes BLOB);
+CREATE TABLE IF NOT EXISTS cap_events(
+  time_ms INTEGER, ip TEXT, cap TEXT, detail TEXT);
+CREATE TABLE IF NOT EXISTS metrics(
+  time_ms INTEGER, uptime_ms INTEGER, rss_kb INTEGER, fds INTEGER, procs INTEGER,
+  memory INTEGER, resources_open INTEGER, resources_ownerless INTEGER, connections INTEGER,
+  connection_ips INTEGER, reset_ms REAL, resets_over_10ms INTEGER, resets_over_100ms INTEGER,
+  spawn_refused INTEGER, backlog INTEGER, events_dropped INTEGER, gem_commit TEXT);
+"""
+
+fn pid_of(target)
+  if type(target) == "string" then whereis(target) else target end
+end
+
+## Sends `ev` to the recorder at `target` (a pid or a registered name),
+## stamped with the time. An event for a name nobody holds, as while the
+## recorder restarts, is dropped.
+fn emit(target, ev)
+  ev.time = epoch_ms()
+  let to = pid_of(target)
+  if to != nil
+    send(to, {tag: "httpd_event", event: ev})
+  end
+end
+
+# Sends `tag` with a fresh ref to the recorder at `target`; the `value` of
+# its reply, or nil when none comes within `timeout_ms`.
+fn ask(target, tag, timeout_ms)
+  let to = pid_of(target)
+  if to == nil
+    return nil
+  end
+  let ref = make_ref()
+  send(to, {tag: tag, from: self(), ref: ref})
+  receive
+  when {tag: "_httpd_reply", ref: ^ref, value: value} then value
+  after timeout_ms then nil
+  end
+end
+
+## Has the recorder at `target` store every event it has received, and
+## returns the path of the database file it writes, or nil when no
+## recorder answers within `timeout_ms`.
+fn sync(target, timeout_ms = 5000)
+  ask(target, "_httpd_sync", timeout_ms)
+end
+
+## The counts of everything the recorder at `target` has received since
+## it started, or nil when it doesn't answer within `timeout_ms`:
+## `since` (epoch ms), `requests` (status, as a string, to count),
+## `closes` (end reason to count), `refused` (cap to count), `crashes`,
+## `open` (connections open now), `dropped` (events not stored), and
+## `metrics`, the last metrics event (nil before the first).
+fn stats(target, timeout_ms = 1000)
+  ask(target, "_httpd_stats", timeout_ms)
+end
+
+## Quotes `s` for a log line: printable ASCII stays, `"` and `\` get a
+## backslash, every other byte is `\xHH`.
+##
+##   recorder.quote("a\"b" + chr(0))     # "\"a\\\"b\\x00\""
+fn quote(s)
+  build_string do |add|
+    add("\"")
+    let start = 0
+    for i = 0, len(s)
+      let b = ord(s, i)
+      if b < 32 or b > 126 or b == 34 or b == 92
+        add(substr(s, start, i - start))
+        if b == 34 or b == 92
+          add("\\", chr(b))
+        else
+          add("\\x", HEX[bshr(b, 4)], HEX[band(b, 15)])
+        end
+        start = i + 1
+      end
+    end
+    add(substr(s, start, len(s) - start), "\"")
+  end
+end
+
+## The log line for `ev`: its time, connection and kind, then its other
+## fields but nil ones as `name=value`, strings quoted.
+fn format(ev)
+  build_string do |add|
+    add(time.iso8601(ev.time))
+    if ev.conn != nil
+      add(" conn=", ev.conn)
+    end
+    add(" ", ev.kind)
+    for k, v in ev
+      if v != nil and not has_key(HEAD, k)
+        add(" ", k, "=", if type(v) == "string" then quote(v) else to_string(v) end)
+      end
+    end
+  end
+end
+
+## The name of the database file for time `ms`, after the Monday (UTC)
+## that starts its week.
+##
+##   recorder.file_name(1760054400000)    # "httpd-2025-10-06.db" (a Friday)
+fn file_name(ms)
+  let days = ms / DAY_MS
+  let monday = days - (days + 3) % 7
+  "httpd-{time.date(monday * DAY_MS)}.db"
+end
+
+## Deletes the weekly database files in `dir` past the newest `keep`
+## (with their `-wal` and `-shm` files), never the file named `current`.
+fn prune(dir, keep, current = nil)
+  let weeks = week_files(dir)
+  for i = 0, len(weeks) - keep
+    if weeks[i] != current
+      for suffix in ["", "-wal", "-shm"]
+        remove_file(path_join(dir, weeks[i] + suffix))
+      end
+    end
+  end
+end
+
+fn now(st)
+  if st.clock == nil then epoch_ms() else st.clock() end
+end
+
+# The weekly database files in `dir`, oldest first.
+fn week_files(dir)
+  let weeks = table.filter(list_dir(dir), fn(f)
+    string.starts_with(f, "httpd-") and string.ends_with(f, ".db")
+  end)
+  sort(weeks)
+end
+
+# Opens the week's file when the week has changed since the last write.
+# A connection open across the change has its row in the old file ended
+# as `week_end`, and gets a new one in the new file.
+fn use_file(st)
+  let name = file_name(now(st))
+  if name == st.file
+    return nil
+  end
+  if st.db != nil
+    sqlite.exec(st.db, "BEGIN")
+    for conn, row in st.rows
+      sqlite.query(st.db, "UPDATE connections SET end_ms = ?, end_reason = 'week_end' WHERE id = ?", [epoch_ms(), row])
+    end
+    sqlite.exec(st.db, "COMMIT")
+    sqlite.close(st.db)
+  end
+  st.db = sqlite.open(path_join(st.dir, name))
+  claim(st.db)
+  sqlite.exec(st.db, SCHEMA)
+  st.file = name
+  st.rows = {}
+  prune(st.dir, st.keep_weeks, name)
+end
+
+# The row of the connection `ev` belongs to, made at its first event in
+# this file (its open, or any event when the open was in another week's
+# file or lost with a recorder that crashed).
+fn row_of(st, ev)
+  let row = st.rows[ev.conn]
+  if row == nil
+    sqlite.query(st.db, "INSERT INTO connections(pid, ip, port, start_ms) VALUES (?, ?, ?, ?)", [
+      ev.conn, ev.ip, ev.port, ev.time
+    ])
+    row = sqlite.last_id(st.db)
+    st.rows[ev.conn] = row
+  end
+  row
+end
+
+fn store(st, ev)
+  let db = st.db
+  match ev.kind
+  when "open"
+    row_of(st, ev)
+  when "request"
+    let row = row_of(st, ev)
+    sqlite.query(db, "INSERT INTO requests(connection_id, time_ms, method, path, status, bytes_out, ms, user_agent, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+      row, ev.time, ev.method, ev.path, ev.status, ev.bytes_out, ev.ms, ev.agent, ev.error
+    ])
+    if ev.raw != nil
+      sqlite.query(db, "INSERT INTO bad_input(connection_id, time_ms, status, bytes) VALUES (?, ?, ?, CAST(? AS BLOB))", [
+        row, ev.time, ev.status, ev.raw
+      ])
+    end
+  when "close"
+    sqlite.query(db, "UPDATE connections SET start_ms = ?, end_ms = ?, end_reason = ?, requests = ?, bytes_in = ?, bytes_out = ? WHERE id = ?", [
+      ev.start_ms, ev.time, ev.reason, ev.requests, ev.bytes_in, ev.bytes_out, row_of(st, ev)
+    ])
+    delete(st.rows, ev.conn)
+  when "crash"
+    sqlite.query(db, "INSERT INTO crashes(connection_id, time_ms, reason, trace, bytes) VALUES (?, ?, ?, ?, CAST(? AS BLOB))", [
+      row_of(st, ev), ev.time, ev.error, ev.trace, ev.raw
+    ])
+  when "refused"
+    sqlite.query(db, "INSERT INTO cap_events(time_ms, ip, cap, detail) VALUES (?, ?, ?, ?)", [
+      ev.time, ev.ip, ev.reason, ev.error
+    ])
+  when "cap"
+    sqlite.query(db, "INSERT INTO cap_events(time_ms, ip, cap, detail) VALUES (?, ?, ?, ?)", [
+      ev.time, nil, ev.cap, ev.detail
+    ])
+  when "metrics"
+    let values = [ev.time]
+    for f in METRICS
+      push(values, ev[f])
+    end
+    sqlite.query(db, METRICS_INSERT, values)
+  else
+    error("recorder: unknown event kind {ev.kind}")
+  end
+end
+
+# Stores the pending events in one transaction. A failure crashes the
+# recorder, whose handle then closes and rolls the batch back.
+fn write_pending(st)
+  if len(st.pending) == 0
+    return nil
+  end
+  use_file(st)
+  sqlite.exec(st.db, "BEGIN")
+  for ev in st.pending
+    store(st, ev)
+  end
+  sqlite.exec(st.db, "COMMIT")
+  st.pending = []
+end
+
+fn bump(counts, key)
+  counts[key] = if has_key(counts, key) then counts[key] + 1 else 1 end
+end
+
+# Counts `ev` and tracks the open connections, for every event received,
+# also those shed later. A connection is open from its first event (its
+# open, unless that went to a recorder that crashed). A close gets the
+# connection's start and the bytes its responses sent; a metrics event,
+# the open connections and their IPs.
+fn track(st, ev)
+  let c = st.counts
+  if ev.conn != nil and ev.kind != "close" and not has_key(st.live, ev.conn)
+    st.live[ev.conn] = {ip: ev.ip, start_ms: ev.time, bytes_out: 0, dead: false}
+  end
+  match ev.kind
+  when "request"
+    bump(c.requests, "{ev.status}")
+    let conn = st.live[ev.conn]
+    if conn != nil
+      conn.bytes_out = conn.bytes_out + ev.bytes_out
+    end
+  when "close"
+    bump(c.closes, ev.reason)
+    let conn = delete(st.live, ev.conn)
+    ev.start_ms = ev.time - ev.ms
+    ev.bytes_out = if conn == nil then nil else conn.bytes_out end
+  when "refused"
+    bump(c.refused, ev.reason)
+  when "crash"
+    c.crashes = c.crashes + 1
+  when "metrics"
+    let ips = {}
+    for conn, info in st.live
+      ips[info.ip] = true
+    end
+    ev.connections = len(st.live)
+    ev.connection_ips = len(ips)
+    st.last_metrics = ev
+  else
+    nil
+  end
+end
+
+# Starts shedding once the mailbox holds more than `max_backlog` messages,
+# and stops once it holds fewer than half as many, logging what it
+# dropped as a `recorder_backlog` cap event.
+fn shedding(st)
+  let backlog = process_info(self()).mailbox_len
+  if st.shedding and backlog < st.max_backlog / 2
+    st.shedding = false
+    let counts = table.map(keys(st.shed), fn(k) "{k} {st.shed[k]}" end)
+    add(st, {kind: "cap", cap: "recorder_backlog", detail: "dropped {st.shed_n} events: {string.join(counts, ", ")}", time: epoch_ms()})
+    st.shed = {}
+    st.shed_n = 0
+  elif not st.shedding and backlog > st.max_backlog
+    st.shedding = true
+  end
+  st.shedding
+end
+
+# Drops `ev` while shedding, unless it is of a kind in KEEP.
+fn receive_event(st, ev)
+  track(st, ev)
+  if not shedding(st) or has_key(KEEP, ev.kind)
+    if ev.kind == "metrics"
+      ev.backlog = process_info(self()).mailbox_len
+      ev.events_dropped = st.dropped
+      st.dropped = 0
+    end
+    add(st, ev)
+    return nil
+  end
+  bump(st.shed, ev.kind)
+  st.shed_n = st.shed_n + 1
+  st.dropped = st.dropped + 1
+  st.counts.dropped = st.counts.dropped + 1
+end
+
+fn add(st, ev)
+  if st.log
+    print(format(ev))
+  end
+  push(st.pending, ev)
+  if len(st.pending) >= BATCH
+    write_pending(st)
+  elif not st.timer
+    st.timer = true
+    send_after(self(), {tag: "_httpd_flush"}, FLUSH_MS)
+  end
+end
+
+# Takes over the rows a recorder before this one left open in the week's
+# file: those of connections opened since `since` are live connections
+# of this program, for the sweep to end once they die; older ones are of
+# a program that has ended, and are ended as `lost`. Rows open in other
+# weeks' files are ended too: as `lost` from before `since`, else as
+# `week_end`, since a live connection gets a new row in the week's file.
+fn adopt(st, since)
+  for f in week_files(st.dir)
+    if f != st.file
+      let db = sqlite.open(path_join(st.dir, f))
+      sqlite.query(db, "UPDATE connections SET end_ms = ?, end_reason = CASE WHEN start_ms < ? THEN 'lost' ELSE 'week_end' END WHERE end_ms IS NULL", [
+        epoch_ms(), since
+      ])
+      sqlite.close(db)
+    end
+  end
+  let open = sqlite.query(st.db, "SELECT c.id, c.pid, c.ip, c.start_ms, (SELECT coalesce(sum(r.bytes_out), 0) FROM requests r WHERE r.connection_id = c.id) AS bytes_out FROM connections c WHERE c.end_ms IS NULL")
+  sqlite.exec(st.db, "BEGIN")
+  for r in open
+    if r.start_ms < since
+      sqlite.query(st.db, "UPDATE connections SET end_ms = ?, end_reason = 'lost' WHERE id = ?", [epoch_ms(), r.id])
+    else
+      st.rows[r.pid] = r.id
+      st.live[r.pid] = {ip: r.ip, start_ms: r.start_ms, bytes_out: r.bytes_out, dead: false}
+    end
+  end
+  sqlite.exec(st.db, "COMMIT")
+end
+
+# Ends the connections whose process died without a close the recorder
+# got (killed by a server restart, or the close was lost with a recorder
+# that crashed). One found dead is ended at the next sweep, so the events
+# it sent before dying are in by then.
+fn sweep(st)
+  let t = now(st)
+  for conn in keys(st.live)
+    let info = st.live[conn]
+    if info.dead
+      receive_event(st, {kind: "close", conn: conn, ip: info.ip, time: t, reason: "lost", ms: t - info.start_ms})
+    elif process_info(conn) == nil
+      info.dead = true
+    end
+  end
+  write_pending(st)
+end
+
+fn counts_of(st)
+  let c = st.counts
+  {
+    since: c.since, requests: c.requests, closes: c.closes, refused: c.refused,
+    crashes: c.crashes, open: len(st.live), dropped: c.dropped, metrics: st.last_metrics
+  }
+end
+
+fn loop(st)
+  while true
+    receive
+    when {tag: "httpd_event", event: ev}
+      receive_event(st, ev)
+    when {tag: "_httpd_stats", from: from, ref: ref}
+      send(from, {tag: "_httpd_reply", ref: ref, value: counts_of(st)})
+    when {tag: "_httpd_flush"}
+      st.timer = false
+      write_pending(st)
+    when {tag: "_httpd_sweep"}
+      sweep(st)
+      send_after(self(), {tag: "_httpd_sweep"}, st.sweep_ms)
+    when {tag: "_httpd_sync", from: from, ref: ref}
+      write_pending(st)
+      send(from, {tag: "_httpd_reply", ref: ref, value: if st.file == nil then nil else path_join(st.dir, st.file) end})
+    when {tag: "EXIT"}
+      write_pending(st)
+      return nil
+    when other
+      log.warn("recorder: unexpected message {substr(to_string(other), 0, 200)}")
+    end
+  end
+end
+
+## Starts the recorder under the registered `name` and returns its pid,
+## with the week's file open.
+## Options: `dir`, the directory of the database files (made if missing);
+## `keep_weeks`, how many weekly files to keep; `log`, true to also print
+## a line per event it keeps on stdout; `sweep_ms`, how often it looks for
+## connections that died without their close reaching it; `since`, when
+## the program started (default: now), so that the connections this
+## week's file has open from before then are ended as `lost`, and later
+## ones are taken over from a recorder that crashed; `max_backlog`, how
+## many messages may wait in its mailbox before it drops every event but
+## those that open and end a connection's row and the metrics (until
+## fewer than half as many wait); `clock`, a fn returning the epoch ms
+## that picks the week's file, for tests.
+##
+## It fills a `metrics` event's `connections` and `connection_ips` (the
+## open connections it knows of, and their IPs), `backlog` (the messages
+## waiting) and `events_dropped` (the events it dropped since the last
+## metrics event).
+##
+## Raises `recorder.start: ...` when the file can't be opened. Traps
+## exits: an exit signal from its supervisor makes it store what it holds,
+## then return.
+fn start(name, {
+  dir = "httpd_data", keep_weeks = 8, log = false, sweep_ms = 60000, since = epoch_ms(),
+  max_backlog = 10000, clock = nil
+} = {})
+  if not is_dir(dir)
+    mkdir(dir)
+  end
+  # Returns once the recorder traps exits (an exit signal that came
+  # sooner would kill it before it stored anything) and has opened the
+  # week's file, or raises why it couldn't.
+  let parent = self()
+  let ref = make_ref()
+  let pid = spawn do
+    process_flag("trap_exit", true)
+    let st = {
+      dir: dir, keep_weeks: keep_weeks, log: log, sweep_ms: sweep_ms, clock: clock,
+      db: nil, file: nil, pending: [], timer: false, rows: {}, live: {},
+      max_backlog: max_backlog, shedding: false, shed: {}, shed_n: 0, dropped: 0,
+      counts: {since: epoch_ms(), requests: {}, closes: {}, refused: {}, crashes: 0, dropped: 0},
+      last_metrics: nil
+    }
+    let r = pcall do
+      use_file(st)
+      adopt(st, since)
+    end
+    send(parent, {tag: "_httpd_ready", ref: ref, error: if r.ok then nil else r.error end})
+    if r.ok
+      send_after(self(), {tag: "_httpd_sweep"}, sweep_ms)
+      loop(st)
+    end
+  end
+  receive
+  when {tag: "_httpd_ready", ref: ^ref, error: err}
+    if err != nil
+      error("recorder.start: {err}")
+    end
+  end
+  register(name, pid)
+  pid
+end
+
+export emit, sync, stats, quote, format, file_name, prune, start

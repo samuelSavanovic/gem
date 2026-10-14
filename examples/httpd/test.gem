@@ -1,0 +1,474 @@
+# Tests for the public HTTP server: the event log lines, the observer's
+# events, the database, then the server driven over TCP.
+
+load "std/test"
+load "std/json"
+load "std/request"
+load "std/sqlite"
+load "std/string"
+load "std/table"
+load "./recorder"
+load "./server"
+
+let WAIT_MS = 2000
+let REC = "httpd_test_recorder"
+
+# A fresh directory for `body(dir)`, removed afterwards.
+fn with_dir(body)
+  let dir = "/tmp/gem_httpd_test_{epoch_ms()}_{floor(random() * 1000000)}"
+  mkdir(dir)
+  let r = pcall body(dir)
+  exec("rm -rf '{dir}'")
+  if not r.ok
+    error(r.error)
+  end
+end
+
+# Stops the recorder `pid` and waits for it to exit.
+fn stop_recorder(pid)
+  monitor(pid)
+  kill(pid, "shutdown")
+  receive
+  when {tag: "DOWN", pid: ^pid} then nil
+  after WAIT_MS then error("recorder did not stop")
+  end
+end
+
+fn rows(file, sql)
+  let db = sqlite.open(file)
+  let r = sqlite.query(db, sql)
+  sqlite.close(db)
+  r
+end
+
+# ─── Event log lines ───────────────────────────────────────────
+
+test.case("recorder quotes every unprintable byte") do
+  test.assert_eq(recorder.quote("ab"), "\"ab\"")
+  test.assert_eq(recorder.quote("a\"b\\c" + chr(0) + chr(27) + "[" + chr(255) + "\n"), "\"a\\\"b\\\\c\\x00\\x1b[\\xff\\x0a\"")
+  test.assert_eq(recorder.quote(""), "\"\"")
+end
+
+test.case("recorder formats an event, without its nil fields") do
+  let ev = {kind: "request", conn: 7, time: 0, status: 404, path: "/a b", error: nil}
+  test.assert_eq(recorder.format(ev), "1970-01-01T00:00:00Z conn=7 request status=404 path=\"/a b\"")
+  test.assert_eq(recorder.format({kind: "refused", ip: "1.2.3.4", time: 0}), "1970-01-01T00:00:00Z refused ip=\"1.2.3.4\"")
+end
+
+# ─── The observer ──────────────────────────────────────────────
+
+test.case("observer: keeps what is stored, clipped") do
+  let peer = {ip: "1.2.3.4", port: 5}
+  test.assert_eq(server.event_of({kind: "open", peer: peer}, 9), {kind: "open", conn: 9, ip: "1.2.3.4", port: 5})
+  let long = string.repeat("a", 5000)
+  let req = server.event_of({
+    kind: "request", peer: peer, status: 404, ms: 3, bytes_out: 120, method: long, path: "/" + long,
+    headers: {"user-agent": long, host: "x"}
+  }, 9)
+  test.assert_eq([len(req.method), len(req.path), len(req.agent)], [64, 1024, 256])
+  test.assert_eq([req.status, req.ms, req.bytes_out, req.raw, req.error], [404, 3, 120, nil, nil])
+  let bad = server.event_of({kind: "request", peer: peer, status: 400, ms: 0, bytes_out: 90, raw: "BAD\r\n"}, 9)
+  test.assert_eq([bad.method, bad.path, bad.agent, bad.raw], [nil, nil, nil, "BAD\r\n"])
+  let crash = server.event_of({
+    kind: "crash", peer: peer, error: "boom", raw: "GET /",
+    stack: [{name: "f", file: "http.gem", line: 3}, {name: "g", file: "http.gem", line: 9}]
+  }, 9)
+  test.assert_eq(crash.trace, "at f (http.gem:3)\nat g (http.gem:9)")
+  test.assert_eq(server.event_of({kind: "refused", peer: peer, reason: "max_per_ip"}, 9), {
+    kind: "refused", ip: "1.2.3.4", port: 5, reason: "max_per_ip", error: nil
+  })
+  test.assert_eq(server.event_of({kind: "close", peer: peer, reason: "idle", requests: 0, bytes_in: 0, ms: 10}, 9).reason, "idle")
+  test.assert_eq(server.event_of({kind: "new", peer: peer}, 9), nil)
+end
+
+# ─── The database ──────────────────────────────────────────────
+
+test.case("recorder: one file per week, from Monday") do
+  test.assert_eq(recorder.file_name(1760054400000), "httpd-2025-10-06.db")
+  test.assert_eq(recorder.file_name(1759708800000), "httpd-2025-10-06.db")
+  test.assert_eq(recorder.file_name(1759708799999), "httpd-2025-09-29.db")
+  test.assert_eq(recorder.file_name(1760313600000), "httpd-2025-10-13.db")
+end
+
+test.case("recorder: prune keeps the newest weeks and the current one") do
+  with_dir do |dir|
+    for f in ["httpd-2025-09-29.db", "httpd-2025-09-29.db-wal", "httpd-2025-10-06.db", "httpd-2025-10-13.db", "honeypot-2025-09-22.db"]
+      write_file(path_join(dir, f), "")
+    end
+    recorder.prune(dir, 2)
+    test.assert_eq(sort(list_dir(dir)), ["honeypot-2025-09-22.db", "httpd-2025-10-06.db", "httpd-2025-10-13.db"])
+    recorder.prune(dir, 1, "httpd-2025-10-06.db")
+    test.assert_eq(sort(list_dir(dir)), ["honeypot-2025-09-22.db", "httpd-2025-10-06.db", "httpd-2025-10-13.db"])
+  end
+end
+
+test.case("recorder: stores events by connection") do
+  with_dir do |dir|
+    let pid = recorder.start(REC, {dir: dir, clock: fn() 1760054400000 end})
+    let raw = "GET /" + chr(0) + chr(255) + "\r\n"
+    let evs = [
+      {kind: "open", conn: 10, ip: "1.2.3.4", port: 5555},
+      {kind: "request", conn: 10, ip: "1.2.3.4", port: 5555, status: 200, ms: 1, bytes_out: 100, method: "GET", path: "/", agent: "bot/1"},
+      {kind: "request", conn: 10, ip: "1.2.3.4", port: 5555, status: 404, ms: 0, bytes_out: 50, method: "GET", path: "/.env"},
+      {kind: "close", conn: 10, ip: "1.2.3.4", port: 5555, reason: "idle", requests: 2, bytes_in: 80, ms: 10000},
+      {kind: "open", conn: 11, ip: "5.6.7.8", port: 1},
+      {kind: "request", conn: 11, ip: "5.6.7.8", port: 1, status: 400, ms: 0, bytes_out: 90, raw: raw},
+      {kind: "close", conn: 11, ip: "5.6.7.8", port: 1, reason: "rejected", requests: 1, bytes_in: 9, ms: 2},
+      {kind: "open", conn: 12, ip: "9.9.9.9", port: 2},
+      {kind: "crash", conn: 12, ip: "9.9.9.9", port: 2, error: "boom", trace: "at f (x.gem:1)", raw: "GET /x"},
+      {kind: "request", conn: 12, ip: "9.9.9.9", port: 2, status: 500, ms: 0, bytes_out: 70, raw: "GET /x"},
+      {kind: "close", conn: 12, ip: "9.9.9.9", port: 2, reason: "error", requests: 1, bytes_in: 6, ms: 1},
+      {kind: "request", conn: 13, ip: "3.3.3.3", port: 3, status: 200, ms: 0, bytes_out: 1, method: "HEAD", path: "/"},
+      {kind: "refused", ip: "6.6.6.6", port: 4, reason: "max_per_ip"},
+      {kind: "refused", ip: "6.6.6.7", port: 4, reason: "spawn_failed", error: "spawn: process table full"}
+    ]
+    for ev in evs
+      recorder.emit(REC, ev)
+    end
+    let file = recorder.sync(REC)
+    test.assert_eq(file, path_join(dir, "httpd-2025-10-06.db"))
+    let conns = rows(file, "SELECT pid, ip, port, end_reason, requests, bytes_in, bytes_out, end_ms - start_ms AS ms FROM connections ORDER BY id")
+    test.assert_eq(conns, [
+      {pid: 10, ip: "1.2.3.4", port: 5555, end_reason: "idle", requests: 2, bytes_in: 80, bytes_out: 150, ms: 10000},
+      {pid: 11, ip: "5.6.7.8", port: 1, end_reason: "rejected", requests: 1, bytes_in: 9, bytes_out: 90, ms: 2},
+      {pid: 12, ip: "9.9.9.9", port: 2, end_reason: "error", requests: 1, bytes_in: 6, bytes_out: 70, ms: 1},
+      {pid: 13, ip: "3.3.3.3", port: 3, end_reason: nil, requests: nil, bytes_in: nil, bytes_out: nil, ms: nil}
+    ])
+    test.assert_eq(rows(file, "SELECT c.pid, r.method, r.path, r.status, r.bytes_out, r.user_agent FROM requests r JOIN connections c ON c.id = r.connection_id ORDER BY r.rowid"), [
+      {pid: 10, method: "GET", path: "/", status: 200, bytes_out: 100, user_agent: "bot/1"},
+      {pid: 10, method: "GET", path: "/.env", status: 404, bytes_out: 50, user_agent: nil},
+      {pid: 11, method: nil, path: nil, status: 400, bytes_out: 90, user_agent: nil},
+      {pid: 12, method: nil, path: nil, status: 500, bytes_out: 70, user_agent: nil},
+      {pid: 13, method: "HEAD", path: "/", status: 200, bytes_out: 1, user_agent: nil}
+    ])
+    test.assert_eq(rows(file, "SELECT status, typeof(bytes) AS t, bytes FROM bad_input ORDER BY rowid"), [
+      {status: 400, t: "blob", bytes: raw},
+      {status: 500, t: "blob", bytes: "GET /x"}
+    ])
+    test.assert_eq(rows(file, "SELECT c.pid, x.reason, x.trace, x.bytes FROM crashes x JOIN connections c ON c.id = x.connection_id"), [
+      {pid: 12, reason: "boom", trace: "at f (x.gem:1)", bytes: "GET /x"}
+    ])
+    test.assert_eq(rows(file, "SELECT ip, cap, detail FROM cap_events ORDER BY rowid"), [
+      {ip: "6.6.6.6", cap: "max_per_ip", detail: nil},
+      {ip: "6.6.6.7", cap: "spawn_failed", detail: "spawn: process table full"}
+    ])
+    stop_recorder(pid)
+  end
+end
+
+test.case("recorder: counts everything it receives") do
+  with_dir do |dir|
+    let pid = recorder.start(REC, {dir: dir})
+    test.assert_eq(recorder.stats(pid).metrics, nil)
+    recorder.emit(pid, {kind: "open", conn: 1, ip: "1.1.1.1", port: 1})
+    recorder.emit(pid, {kind: "open", conn: 2, ip: "1.1.1.1", port: 2})
+    recorder.emit(pid, {kind: "open", conn: 3, ip: "2.2.2.2", port: 3})
+    for status in [200, 200, 404, 400]
+      recorder.emit(pid, {kind: "request", conn: 1, ip: "1.1.1.1", port: 1, status: status, ms: 0, bytes_out: 1})
+    end
+    recorder.emit(pid, {kind: "close", conn: 1, ip: "1.1.1.1", port: 1, reason: "rejected", requests: 4, bytes_in: 1, ms: 1})
+    recorder.emit(pid, {kind: "crash", conn: 2, ip: "1.1.1.1", port: 2, error: "x", trace: "", raw: ""})
+    recorder.emit(pid, {kind: "refused", ip: "3.3.3.3", port: 1, reason: "max_connections"})
+    recorder.emit(pid, {kind: "metrics", procs: 9, rss_kb: 1000, uptime_ms: 5000})
+    let s = recorder.stats(pid)
+    test.assert_eq([s.requests, s.closes, s.refused, s.crashes, s.open, s.dropped], [
+      {"200": 2, "404": 1, "400": 1}, {rejected: 1}, {max_connections: 1}, 1, 2, 0
+    ])
+    test.assert_eq([s.metrics.procs, s.metrics.connections, s.metrics.connection_ips], [9, 2, 2])
+    test.assert(s.since <= epoch_ms())
+    stop_recorder(pid)
+    test.assert_eq(recorder.stats(pid, 100), nil)
+    test.assert_eq(recorder.stats("httpd_nobody"), nil)
+  end
+end
+
+test.case("recorder: a new week starts a new file, an old one is pruned") do
+  with_dir do |dir|
+    # The recorder's clock is a fn the spawn copies, so the time it
+    # returns lives in a file this process changes.
+    let now_file = path_join(dir, "now")
+    let set_now = fn(ms) write_file(now_file, to_string(ms)) end
+    let week = 7 * 86400000
+    set_now(1760054400000)
+    let pid = recorder.start(REC, {dir: dir, keep_weeks: 2, clock: fn() to_int(read_file(now_file)) end})
+    recorder.emit(pid, {kind: "open", conn: 20, ip: "1.2.3.4", port: 9})
+    let first = recorder.sync(pid)
+    set_now(1760054400000 + week)
+    recorder.emit(pid, {kind: "request", conn: 20, ip: "1.2.3.4", port: 9, status: 200, ms: 0, bytes_out: 5, method: "GET", path: "/"})
+    let second = recorder.sync(pid)
+    test.assert_neq(first, second)
+    test.assert_eq(rows(second, "SELECT pid, ip, port FROM connections"), [{pid: 20, ip: "1.2.3.4", port: 9}])
+    test.assert_eq(rows(second, "SELECT path FROM requests"), [{path: "/"}])
+    test.assert_eq(rows(first, "SELECT end_reason FROM connections"), [{end_reason: "week_end"}])
+    set_now(1760054400000 + 2 * week)
+    recorder.emit(pid, {kind: "close", conn: 20, ip: "1.2.3.4", port: 9, reason: "closed", requests: 1, bytes_in: 10, ms: 5})
+    let third = recorder.sync(pid)
+    test.assert_eq(file_exists(first), false)
+    test.assert(file_exists(second))
+    test.assert_eq(rows(third, "SELECT pid, end_reason, bytes_out FROM connections"), [{pid: 20, end_reason: "closed", bytes_out: 5}])
+    stop_recorder(pid)
+  end
+end
+
+test.case("recorder: stores what it holds when it is stopped") do
+  with_dir do |dir|
+    let pid = recorder.start(REC, {dir: dir})
+    recorder.emit(pid, {kind: "refused", ip: "1.1.1.1", port: 1, reason: "max_per_ip"})
+    stop_recorder(pid)
+    let file = path_join(dir, recorder.file_name(epoch_ms()))
+    test.assert_eq(rows(file, "SELECT cap FROM cap_events"), [{cap: "max_per_ip"}])
+  end
+end
+
+test.case("recorder: ends the rows of connections that died unseen") do
+  with_dir do |dir|
+    let pid = recorder.start(REC, {dir: dir, sweep_ms: 20})
+    let conn = spawn do
+      receive
+      when {tag: "go"} then nil
+      end
+    end
+    recorder.emit(pid, {kind: "open", conn: conn, ip: "4.4.4.4", port: 4})
+    recorder.emit(pid, {kind: "request", conn: conn, ip: "4.4.4.4", port: 4, status: 200, ms: 0, bytes_out: 7})
+    sleep(100)
+    test.assert_eq(recorder.stats(pid).open, 1)
+    send(conn, {tag: "go"})
+    let deadline = time_ms() + WAIT_MS
+    while recorder.stats(pid).open != 0
+      if time_ms() > deadline then error("the dead connection is still open") end
+      sleep(20)
+    end
+    let file = recorder.sync(pid)
+    test.assert_eq(rows(file, "SELECT end_reason, bytes_out FROM connections"), [{end_reason: "lost", bytes_out: 7}])
+    test.assert_eq(recorder.stats(pid).closes, {lost: 1})
+    stop_recorder(pid)
+  end
+end
+
+test.case("recorder: a new recorder ends the rows the last one left open") do
+  with_dir do |dir|
+    let pid = recorder.start(REC, {dir: dir})
+    let alive = spawn do
+      receive
+      when {tag: "go"} then nil
+      end
+    end
+    recorder.emit(pid, {kind: "open", conn: 50, ip: "5.5.5.5", port: 5})
+    recorder.sync(pid)
+    sleep(5)
+    recorder.emit(pid, {kind: "open", conn: alive, ip: "6.6.6.6", port: 6})
+    recorder.emit(pid, {kind: "request", conn: alive, ip: "6.6.6.6", port: 6, status: 200, ms: 0, bytes_out: 11})
+    let file = recorder.sync(pid)
+    kill(pid, "kill")
+    sleep(20)
+    # Connection 50 is from a run that ended; `alive` from this one.
+    let since = rows(file, "SELECT max(start_ms) AS t FROM connections")[0].t
+    let again = recorder.start(REC, {dir: dir, since: since})
+    test.assert_eq(rows(file, "SELECT pid, end_reason FROM connections ORDER BY id"), [
+      {pid: 50, end_reason: "lost"}, {pid: alive, end_reason: nil}
+    ])
+    test.assert_eq(recorder.stats(again).open, 1)
+    recorder.emit(again, {kind: "close", conn: alive, ip: "6.6.6.6", port: 6, reason: "closed", requests: 1, bytes_in: 3, ms: 1})
+    recorder.sync(again)
+    test.assert_eq(rows(file, "SELECT end_reason, bytes_out FROM connections WHERE pid = {alive}"), [{end_reason: "closed", bytes_out: 11}])
+    send(alive, {tag: "go"})
+    stop_recorder(again)
+  end
+end
+
+test.case("recorder: sheds requests past its backlog, never opens, closes and metrics") do
+  with_dir do |dir|
+    let pid = recorder.start(REC, {dir: dir, max_backlog: 50})
+    recorder.emit(pid, {kind: "open", conn: 40, ip: "1.1.1.1", port: 1})
+    for i = 0, 1000
+      recorder.emit(pid, {kind: "request", conn: 40, ip: "1.1.1.1", port: 1, status: 404, ms: 0, bytes_out: 2, method: "GET", path: "/{i}"})
+    end
+    recorder.emit(pid, {kind: "close", conn: 40, ip: "1.1.1.1", port: 1, reason: "closed", requests: 1000, bytes_in: 1, ms: 1})
+    recorder.emit(pid, {kind: "metrics", procs: 7, gem_commit: "abc"})
+    let file = recorder.sync(pid)
+    let kept = rows(file, "SELECT count(*) AS n FROM requests")[0].n
+    let dropped = 1000 - kept
+    test.assert(dropped > 900, "dropped {dropped}")
+    test.assert_eq(rows(file, "SELECT cap, detail FROM cap_events"), [{cap: "recorder_backlog", detail: "dropped {dropped} events: request {dropped}"}])
+    test.assert_eq(rows(file, "SELECT end_reason, bytes_out FROM connections"), [{end_reason: "closed", bytes_out: 2000}])
+    test.assert_eq(rows(file, "SELECT procs, gem_commit, events_dropped, backlog, connections FROM metrics"), [
+      {procs: 7, gem_commit: "abc", events_dropped: dropped, backlog: 1, connections: 0}
+    ])
+    let s = recorder.stats(pid)
+    test.assert_eq([s.requests, s.dropped], [{"404": 1000}, dropped])
+    stop_recorder(pid)
+  end
+end
+
+# ─── Over TCP ──────────────────────────────────────────────────
+
+fn free_port()
+  let l = tcp_listen("127.0.0.1", 0)
+  let port = tcp_local_port(l)
+  tcp_close(l)
+  port
+end
+
+# Runs `body(port)` against a server on a free port, recording in `dir`.
+fn with_server(dir, opts, body)
+  opts.port = free_port()
+  opts.data = dir
+  opts.static = "static"
+  let sup = server.start(opts)
+  let r = pcall body(opts.port)
+  server.stop(sup)
+  if not r.ok
+    error(r.error)
+  end
+end
+
+fn url(port, path)
+  "http://127.0.0.1:{port}{path}"
+end
+
+# Sends `text` raw, then reads until the server closes; the status line.
+fn exchange(port, text)
+  let c = tcp_connect("127.0.0.1", port)
+  tcp_write(c, text, 1000)
+  let acc = buf_new()
+  let chunk = tcp_read(c, 8192, WAIT_MS)
+  while chunk != nil and chunk != ""
+    buf_push(acc, chunk)
+    chunk = tcp_read(c, 8192, WAIT_MS)
+  end
+  tcp_close(c)
+  let s = to_string(acc)
+  let eol = find(s, "\r\n", 0)
+  if eol < 0 then s else substr(s, 0, eol) end
+end
+
+# Syncs the recorder until `sql` gives `n` rows; returns them.
+fn await_rows(sql, n)
+  let deadline = time_ms() + WAIT_MS
+  while true
+    let r = rows(recorder.sync("httpd_recorder"), sql)
+    if len(r) >= n then return r end
+    if time_ms() > deadline then error("await_rows: wanted {n} rows of {sql}, got {r}") end
+    sleep(20)
+  end
+end
+
+test.case("tcp: the page, static files, the 404 and a malformed request") do
+  with_dir do |dir|
+    with_server(dir, {}) do |port|
+      let page = request.get(url(port, "/"), {headers: {"User-Agent": "test/1"}})
+      test.assert_eq(page.status, 200)
+      test.assert(string.contains(page.body, "<title>Gem</title>"))
+      let css = request.get(url(port, "/static/style.css"))
+      test.assert_eq([css.status, css.headers["content-type"]], [200, "text/css; charset=utf-8"])
+      test.assert_eq(request.get(url(port, "/static/gem.svg")).headers["content-type"], "image/svg+xml")
+      test.assert_eq(request.get(url(port, "/static/../server.gem")).status, 404)
+      test.assert_eq(request.get(url(port, "/wp-login.php")).status, 404)
+      test.assert_eq(exchange(port, "BAD" + chr(1) + "\r\n\r\n"), "HTTP/1.1 400 Bad Request")
+      let reqs = await_rows("SELECT method, path, status, user_agent FROM requests ORDER BY rowid", 6)
+      test.assert_eq(reqs[0], {method: "GET", path: "/", status: 200, user_agent: "test/1"})
+      test.assert_eq(table.map(reqs, fn(r) r.status end), [200, 200, 200, 404, 404, 400])
+      test.assert_eq(await_rows("SELECT status, bytes FROM bad_input", 1), [{status: 400, bytes: "BAD" + chr(1)}])
+      let conns = await_rows("SELECT ip, end_reason, requests FROM connections WHERE end_reason IS NOT NULL ORDER BY id", 6)
+      test.assert_eq(conns[5], {ip: "127.0.0.1", end_reason: "rejected", requests: 1})
+    end
+  end
+end
+
+test.case("tcp: /stats shows the counts and nothing a client sent") do
+  with_dir do |dir|
+    with_server(dir, {metrics_ms: 50, commit: "test"}) do |port|
+      request.get(url(port, "/.env?x=<script>"))
+      exchange(port, "GET / HTTP/1.1\r\nX: " + chr(1) + "\r\n\r\n")
+      sleep(150)
+      let r = request.get(url(port, "/stats"))
+      test.assert_eq([r.status, r.headers["content-type"]], [200, "application/json; charset=utf-8"])
+      test.assert(not string.contains(r.body, ".env") and not string.contains(r.body, "127.0.0.1"), r.body)
+      let s = json.parse(r.body)
+      test.assert_eq([s.requests, s.connections.open, s.connections.ended, s.refused, s.crashes], [
+        {"404": 1, "400": 1}, 1, {done: 1, rejected: 1}, {}, 0
+      ])
+      test.assert_eq([s.gem_commit, s.events_dropped], ["test", 0])
+      test.assert(s.processes > 3 and s.uptime_s >= 0, r.body)
+    end
+  end
+end
+
+test.case("tcp: /stats is a 503 when the recorder doesn't answer") do
+  with_dir do |dir|
+    let opts = {port: free_port(), static: "static", events: self()}
+    let sup = server.start(opts)
+    let r = pcall request.get(url(opts.port, "/stats"))
+    server.stop(sup)
+    test.assert(r.ok, "{r.error}")
+    test.assert_eq([r.value.status, json.parse(r.value.body)], [503, {error: "recorder unavailable"}])
+  end
+end
+
+test.case("tcp: a connection over the per-IP cap is refused and recorded") do
+  with_dir do |dir|
+    with_server(dir, {max_per_ip: 2}) do |port|
+      let a = tcp_connect("127.0.0.1", port)
+      let b = tcp_connect("127.0.0.1", port)
+      await_rows("SELECT id FROM connections", 2)
+      test.assert_eq(exchange(port, "GET / HTTP/1.1\r\nHost: x\r\n\r\n"), "HTTP/1.1 503 Service Unavailable")
+      test.assert_eq(await_rows("SELECT ip, cap FROM cap_events", 1), [{ip: "127.0.0.1", cap: "max_per_ip"}])
+      tcp_close(a)
+      tcp_close(b)
+      await_rows("SELECT id FROM connections WHERE end_reason = 'closed'", 2)
+      test.assert_eq(request.get(url(port, "/")).status, 200)
+    end
+  end
+end
+
+test.case("tcp: idle and slow clients are timed out and recorded") do
+  with_dir do |dir|
+    with_server(dir, {idle_ms: 100, request_ms: 300}) do |port|
+      let idle = tcp_connect("127.0.0.1", port)
+      let slow = tcp_connect("127.0.0.1", port)
+      tcp_write(slow, "GET / HTTP/1.1\r\n", 1000)
+      for i = 0, 5
+        sleep(80)
+        tcp_write(slow, "X: y\r\n", 1000)
+      end
+      test.assert_eq(tcp_read(idle, 10, WAIT_MS), "")
+      tcp_close(idle)
+      tcp_close(slow)
+      let ends = await_rows("SELECT end_reason FROM connections WHERE end_reason IS NOT NULL ORDER BY end_reason", 2)
+      test.assert_eq(ends, [{end_reason: "idle"}, {end_reason: "timeout"}])
+    end
+  end
+end
+
+test.case("tcp: the sampler's metrics carry the open connections") do
+  with_dir do |dir|
+    with_server(dir, {metrics_ms: 50, commit: "test"}) do |port|
+      let held = tcp_connect("127.0.0.1", port)
+      let rows_seen = await_rows("SELECT * FROM metrics WHERE connections = 1 AND resources_open >= 3", 1)
+      tcp_close(held)
+      let m = rows_seen[0]
+      test.assert_eq([m.connections, m.connection_ips, m.gem_commit], [1, 1, "test"])
+      test.assert(m.fds > 3 and m.procs > 3 and m.memory > 0, "{m}")
+      test.assert_eq([m.resets_over_100ms, m.spawn_refused], [0, 0])
+    end
+  end
+end
+
+test.case("tcp: a recorder that crashes restarts and the server keeps serving") do
+  with_dir do |dir|
+    with_server(dir, {}) do |port|
+      test.assert_eq(request.get(url(port, "/")).status, 200)
+      let old = whereis("httpd_recorder")
+      kill(old, "kill")
+      let deadline = time_ms() + WAIT_MS
+      while whereis("httpd_recorder") == nil or whereis("httpd_recorder") == old
+        if time_ms() > deadline then error("the recorder did not restart") end
+        sleep(10)
+      end
+      test.assert_eq(request.get(url(port, "/nope")).status, 404)
+      test.assert_eq(len(await_rows("SELECT status FROM requests WHERE status = 404", 1)), 1)
+    end
+  end
+end
+
+test.run()

@@ -445,7 +445,7 @@ end
 ##
 ## A number without `.` or exponent is an int; one with them is a float,
 ## and so is an integer too big for 64 bits. A number too small for a
-## float reads as 0.0. Escapes, `\uXXXX` surrogate pairs included,
+## float reads as the nearest subnormal, or 0.0 (-0.0 when negative). Escapes, `\uXXXX` surrogate pairs included,
 ## become UTF-8. Object members keep their source order. A repeated
 ## object key keeps its last value. A JSON `null` reads as nil; a null
 ## object member keeps its key (`has_key` is true) but `o.a` is nil, the

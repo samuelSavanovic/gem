@@ -1,0 +1,63 @@
+# The httpd example as a systemd service: install as
+# /etc/systemd/system/httpd.service, with its settings in /etc/httpd.env
+# (README.md in this directory). The honeypot's sandbox, plus a CPU cap
+# and a lower priority, so a flood on :80 can't starve the honeypot.
+[Unit]
+Description=Gem public HTTP server (examples/httpd)
+# The firewall's egress deny must be in place before the server runs.
+Requires=nftables.service
+After=network-online.target nftables.service
+Wants=network-online.target
+# A restart is a finding (PLAN.md, "Success criteria"), so keep restarting.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/httpd.env
+ExecStart=/usr/local/bin/httpd --bind 0.0.0.0 --port 8080 --static /usr/local/share/httpd/static --data /var/lib/httpd --commit ${HTTPD_COMMIT} $HTTPD_ARGS
+Restart=always
+RestartSec=5
+
+DynamicUser=yes
+StateDirectory=httpd
+StateDirectoryMode=0750
+WorkingDirectory=/var/lib/httpd
+UMask=0077
+
+# --max-connections in /etc/httpd.env is sized to this (README.md).
+MemoryMax=512M
+MemorySwapMax=0
+LimitNOFILE=4096
+# The scheduler thread and 4 I/O workers.
+TasksMax=32
+# One of the two vCPUs, and behind the honeypot when both are busy.
+CPUQuota=100%
+Nice=5
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+# The stack cache asks which pages are resident (runtime/gem_scheduler.c).
+SystemCallFilter=mincore
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

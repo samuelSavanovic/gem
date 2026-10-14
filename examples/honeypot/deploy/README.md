@@ -8,7 +8,7 @@ for Debian or Ubuntu on a dedicated 4 GB KVM VPS (a Hetzner CX23).
 |---|---|---|
 | `honeypot.service` | `/etc/systemd/system/honeypot.service` | runs the honeypot unprivileged (`DynamicUser`) in a sandbox, restarts it on any exit, caps its memory at 2 GB |
 | `honeypot.env` | `/etc/honeypot.env` | the build's commit and the honeypot's flags |
-| `honeypot.nft` | `/etc/nftables.conf` | port 23 redirected to 2323, SSH in, everything else in dropped; outbound denied but for DNS, NTP and package updates, and the honeypot's user denied even those, with a counter |
+| `honeypot.nft` | `/etc/nftables.conf` | port 23 redirected to 2323, SSH in, everything else in dropped; outbound denied but for DNS, NTP and package updates, and the honeypot's user denied even those, with a counter; then the fragments in `/etc/nftables.d/` (`examples/httpd/deploy/httpd.nft`'s port 80) |
 | `health.sql` | | the metrics by day, against the success criteria |
 
 ## 1. Build
@@ -22,9 +22,11 @@ build/gem examples/honeypot/main.gem -o /usr/local/bin/honeypot
 
 ## 2. Soak on the VPS, before opening port 23
 
-The soak results so far (`benchmarks/README.md`, "Recorded runs") came
+The other soak results (`benchmarks/README.md`, "Recorded runs") came
 from a 15 GB VM with the session cap out of the way. This run uses the
-deploy's cap and memory limit on the real machine, for 8 hours:
+deploy's cap and memory limit on the real machine, for 8 hours (run on
+the CX23 on 2026-10-11: `benchmarks/soak/results/2026-10-11_cx23_honeypot`,
+stopped at 6 h 36 m for go-live, every steady-state check passing):
 
 ```sh
 TARGETS=honeypot DURATION=8h GUARD_RSS_MB=2048 \

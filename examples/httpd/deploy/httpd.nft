@@ -1,0 +1,22 @@
+# Port 80 for the httpd example: install as /etc/nftables.d/httpd.nft,
+# included at the end of the honeypot's /etc/nftables.conf
+# (examples/honeypot/deploy/honeypot.nft), whose table it adds to. HTTP on
+# port 80 is redirected to the server's 8080; 8080 itself stays closed from
+# outside. The honeypot's egress counter already covers this service's
+# DynamicUser UID.
+
+define HTTPD_PORT = 8080
+
+table inet honeypot {
+	# Every new connection to port 80, to compare with the server's own
+	# counts: `nft list counter inet honeypot httpd_in`.
+	counter httpd_in {}
+
+	chain prerouting {
+		tcp dport 80 counter name httpd_in redirect to :$HTTPD_PORT
+	}
+
+	chain input {
+		tcp dport $HTTPD_PORT ct status dnat accept
+	}
+}

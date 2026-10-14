@@ -103,17 +103,53 @@ Std API that programs need and the std modules lack:
 - **Stopping what a supervised child spawned**: `supervisor.stop` stops direct children only; a task a
   worker is awaiting keeps running (tasks aren't linked to their owner). A linked `task.async` variant, or
   tasks dying with their owner, would make a supervised shutdown complete.
-- **More from the http request**: the client address, the raw query string and multi-value query/form
-  parsing. On the client side, cookie help in `std/request` (today: split `set-cookie` by hand).
+- **More from the http request**: the raw query string and multi-value query/form parsing (the
+  client address is `req.peer`). On the client side, cookie help in `std/request` (today: split `set-cookie` by hand).
 - **Naming a gen_server at start**: `gen_server.start(module, {name})` that registers before `init`, so a
   supervised restart can't leave a window where the name is unregistered.
 - **More `std/mime` types**: `text/javascript` for `ext`, `.wav`, `.ogg`, `.md`, `.yaml`, `.map`.
 - **One rule for what a child's `start` returns**: `supervisor` accepts a pid, a `{pid}` handle or a
   registered name; `dynamic_supervisor` rejects a name. Pick one for both.
 
+## Keep-alive connections in `std/request` (P2)
+
+Every `request.<fn>` call opens a connection, sends `Connection: close` and closes it, so each request pays a TCP connect (a round trip to a remote host) and leaves a socket in TIME_WAIT. Measured on loopback against a Go server (4-core Linux VM, 2026-10-13): a Gem client with 100 processes doing GETs reached about 11,800 requests/s; a Go client opening a connection per request about 17,700, and reusing connections about 47,100. Gem's gap at a new connection per request is its one scheduler thread; reusing connections is the larger one, and it grows with the distance to the server.
+
+What needs building: a pool of idle connections per host and port, reused by later calls in the same process.
+
+- **Where the pool lives.** Module-level state is per process, which fits (each process's pool, its sockets claimed by it), but a `spawn` copies module state into the child: the pool must skip sockets another process owns, or key itself by `self()`. An explicit handle (`let c = request.client()`, then `c.get(url)`) avoids that and makes the lifetime plain, at the cost of a concept; the implicit pool keeps `request.get` as it is.
+- **Stale connections.** A server closes an idle connection whenever it likes, so a reused socket can fail on its first write or read; the call retries once on a fresh connection for idempotent methods (GET, HEAD, PUT, DELETE), and never for POST and PATCH.
+- **Bounds.** At most a few idle connections per host, an idle timeout shorter than common servers' (std/http's is 30 s by default), and responses read to their end before the socket goes back (a body cut short or `Connection: close` from the server drops it).
+- **Name lookups.** A host name is resolved on the scheduler thread, so every process stalls during the lookup (BEST_PRACTICES, "Know what blocks every process"); a pool keyed by host name could cache the address it connected to for its lifetime, short of a resolver on the thread pool.
+
+## Name lookups off the scheduler thread (P2)
+
+`tcp_connect` and `tcp_listen` resolve a host name with `getaddrinfo` on the scheduler thread (`gem_tcp_resolve4`, runtime/gem_builtins_tcp.c; an IP literal skips it), and POSIX has no non-blocking `getaddrinfo`, so every process stops for the whole lookup: microseconds for `localhost` or a name in `/etc/hosts`, a network round trip uncached, and with a resolver that doesn't answer `timeout × attempts` per nameserver (up to about 12 s with `timeout:2 attempts:3` and two nameservers). Measured (2026-10-13, a stub resolver that answers after 2 s): `tcp_connect("example.com", 80)` took 2,003 ms, and a process ticking every 10 ms meanwhile had a 2,012 ms gap. BEST_PRACTICES lists it under "Know what blocks every process".
+
+What needs building, best fit first:
+
+- **`getaddrinfo` on a worker thread.** The caller parks, as for `read_file`; IP literals keep the inline path. A lookup can't be cancelled, so a killed caller leaves its worker busy until the resolver times out, and slow lookups must not take every worker of the I/O pool and stall file reads: a lane of its own, or a cap on lookups in flight (OPTIMIZATIONS.md, "The thread pool's size is a fixed 4").
+- **`getaddrinfo_a`**: glibc's asynchronous form, Linux only.
+- **A DNS client over non-blocking UDP** (as c-ares): cancellable and threadless, but it re-implements `/etc/hosts`, search domains, `nsswitch` and retries.
+- **A cache** on top of any of them, as the keep-alive pool would keep the address it connected to ("Keep-alive connections in `std/request`"); `getaddrinfo` returns no TTL, so a runtime cache would hold an answer for a fixed short time.
+
 ## `gem doc` and checked doc examples (P3)
 
 `##` doc comments (BEST_PRACTICES.md, "Document the public API with `##`") document the public API of std and user modules, but nothing reads them yet. Needs: a `gem doc <file>` subcommand that prints (or writes HTML for) a module's header and its exported functions' docs, with a comment collection an LSP hover could reuse; and a doctest pass that runs each `call    # result` example line and compares the printed value, wired into `make test` for std, so docs can't drift from behavior (as Rust's doctests do). Trade-off: examples have to stay self-contained one-liners for the checker; a multi-line example would need an explicit marker.
+
+## Catching typos in option bags and message tags (P1)
+
+std configures most things with a table of string-named options (`supervisor.start({strategy: "one_for_all"})`, child specs, `http.start`), and a typo there is easy. A misspelled *value* is mostly caught already: `strategy: "one_for_al"`, `restart: "permanant"` and `log.set_level("warnign")` raise as the call runs. A misspelled *key* is not: a destructured option bag (`fn start({strategy = "one_for_one"} = {})`) ignores keys it doesn't name, so `{stratgy: "one_for_all"}` silently runs with the default, and `http.start` documents "other keys are ignored".
+
+What needs building, in order (1–3 for option bags, 4 for messages):
+
+1. **Unknown keys raise, for every destructured option bag.** The compiler already emits the prelude that unpacks the bag; it also checks that the table has no other keys and raises `<fn>: unknown option "stratgy" (did you mean "strategy"?)`. Every std function and every user fn in that style gets it with nothing new to learn. A bag that means to take more keys says so with a rest entry in the pattern (`{port = 8080, ...rest}`), the opt-out. Trade-off: it changes behaviour; code that passes a larger table through on purpose starts raising, so the change finds those call sites first (std's "other keys are ignored" docs go).
+2. **"Did you mean" on the value checks** std already makes (strategy, restart, log level), from a small edit-distance helper, and `process_flag: unknown flag` names the flag.
+3. **The same check at compile time** where the compiler can see both sides: a direct call passing a table literal to a destructured parameter, as most `supervisor.start(...)` and `http.start(...)` calls do, gets the error at compile time, like a wrong argument count does today.
+
+4. **Message tags no `send` produces.** A `receive` pattern with a misspelled tag never matches, and a `send` with one is dropped by the receiver's catch-all; Erlang has the same hole (a mailbox has no type), and typed actor systems (Gleam, Akka Typed) close it with a message type per process. Gem can close most of it without types: the compiler sees the whole program, std included, and every message comes from a `send` or `send_after` in it or from the runtime (`DOWN`, `EXIT`). It collects the literal tags the sends build and warns on a `receive` pattern whose literal tag none of them produces, naming the nearest tag that is produced (`warning: no send produces tag "_hp_flsh" (did you mean "_hp_flush"?)`). A send whose tag is not a literal can produce anything, so it keeps the check quiet for the patterns it could match; the warning never becomes an error. Possibly the reverse too (a literal tag no pattern names), though catch-alls and pass-through code make that one noisier. Until then, BEST_PRACTICES ("Keep mailboxes clean") has a main loop's catch-all log what it didn't expect, so a sender's typo shows. Trade-off: once distribution exists, a remote node's sends are invisible, and the check must become per-program or weaker.
+
+Not planned: atoms/symbols or enum types. They add a concept, and they don't catch the typo (in Erlang `one_for_al` is a valid atom); checking the value is what catches it. Out of reach of all four: typos in a program's own string comparisons (`ev.kind == "requst"`), which just never match; warning on those needs the compiler to know which strings can reach a comparison.
 
 ## Debugger / breakpoints (P2)
 
