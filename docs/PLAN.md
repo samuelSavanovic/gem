@@ -79,7 +79,7 @@ The order is the order of the work.
    Erlang's `case_clause`; `else nil` keeps the old behaviour.
 4. **Data traps fixed at the source.** `delete(arr, i)` on an array
    index raises (use `remove_at`); `in` means has-key on every table.
-5. **Rule lint in `make test`.** A script that flags direct `->state =`,
+5. **Rule lint in `make test`.** ✓ Done (PR 1, `tests/check_rules.sh`). A script that flags direct `->state =`,
    `gem_cur_globals[` outside gem.h, `close(` in socket code outside an
    allowlist, `mco_create`, and a builtin-list check (`BUILTIN_FNS`
    against SPEC, CHEATSHEET and both grammars).
