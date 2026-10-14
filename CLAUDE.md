@@ -26,7 +26,7 @@ compiler/             # self-hosting compiler (lexer, parser, checks, AST, error
                       #   captures (free vars, boxing, non-escaping closures), tco (self/mutual tail calls), callgraph,
                       #   loops (arm-let hoist, reset tagging), append (in-place string append), cgutil (shared helpers)
 lsp/                  # language server: main (entry), rpc (framing+types), server (loop), handlers (lifecycle+textDocument), doc (per-uri process), workspace (cross-file AST cache), diagnostics, definition, completion, symbols, position (cursor helpers). Dispatched from compiler/main.gem when argv[1] == "lsp"
-std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, io, args, regex, task, supervisor, dynamic_supervisor, gen_server, test)
+std/                  # standard library (string, table, math, time, log, http, request, json, url, mime, sqlite, io, args, regex, base64, hex, crypto, utf8, csv, task, supervisor, dynamic_supervisor, gen_server, test)
 runtime/              # C runtime — split by category:
   gem.h               #   public API, tagged values, process table, scheduler decls
   gem_core.c          #   value constructors, table internals, equality

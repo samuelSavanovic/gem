@@ -1751,6 +1751,39 @@ Coverage: html, htm, css, js, mjs, json, xml, txt, csv, png, jpg, jpeg, gif, svg
 - `regex.escape(s)` — `s` with every metacharacter escaped, a pattern matching `s` literally.
 - `regex.check_pattern(pattern, opts)` — nil when `pattern` compiles, else the message the others would raise.
 
+`std/base64` — exports `base64` table (RFC 4648). A non-string argument raises `base64.<fn>: s must be a string, got <type>`.
+
+- `base64.encode(s)` — `s` in standard base64 (`+`, `/`, `=` padding).
+- `base64.encode_url(s)` — `s` in the URL-safe alphabet (`-`, `_`), unpadded.
+- `base64.decode(s)` — the bytes `s` encodes, in either alphabet, padded or not, skipping spaces, tabs and line breaks; nil for anything that isn't base64 (another character, a lone final character, data after the padding, nonzero leftover bits).
+
+`std/hex` — exports `hex` table.
+
+- `hex.encode(s)` — each byte of `s` as two lowercase hex digits.
+- `hex.decode(s)` — the bytes hex text `s` encodes (either case), or nil for an odd length or a non-hex character.
+
+`std/crypto` — exports `crypto` table. SHA-256 (FIPS 180-4) and HMAC-SHA256 (RFC 2104), written in C in the runtime (no OpenSSL needed). The raw forms return 32 bytes, the `_hex` forms 64 lowercase hex digits. A non-string argument raises `crypto.<fn>: <arg> must be a string, got <type>`. Runs inline.
+
+- `crypto.sha256(s)` / `crypto.sha256_hex(s)` — the digest of `s`.
+- `crypto.hmac_sha256(key, msg)` / `crypto.hmac_sha256_hex(key, msg)` — the HMAC of `msg` under `key` (a key over 64 bytes is hashed first).
+- `crypto.equal(a, b)` — true when `a` and `b` hold the same bytes, in a time that depends only on their lengths (for checking MACs and tokens).
+
+`std/utf8` — exports `utf8` table: text by characters (code points) instead of bytes. A byte that isn't part of a valid UTF-8 sequence (a stray continuation byte, a truncated or overlong sequence, a surrogate, past U+10FFFF) counts as one character: `codepoints` gives it as 65533, `chars` as its one byte, `upper`/`lower` keep it. A non-string `s` raises `utf8.<fn>: s must be a string, got <type>`.
+
+- `utf8.len(s)` — the number of characters.
+- `utf8.valid(s)` — true when `s` is valid UTF-8.
+- `utf8.chars(s)` / `utf8.codepoints(s)` — the characters as strings, or as ints.
+- `utf8.char(cp)` — the UTF-8 string of a code point, or of an array of them; raises `utf8.char: <cp> is not a Unicode scalar value` for a negative one, a surrogate or one past 1114111.
+- `utf8.sub(s, start[, count])` — `count` characters from character `start` (to the end without `count`); a negative `start` counts from the end; `""` past the end.
+- `utf8.upper(s)` / `utf8.lower(s)` — simple one-to-one case mapping for ASCII, Latin-1, Latin Extended-A, Greek, Cyrillic, Armenian and fullwidth Latin letters; mappings that change the number of characters (`ß` to `SS`) and other scripts are left as they are.
+- `utf8.reverse(s)` — `s` reversed by characters.
+
+`std/csv` — exports `csv` table (RFC 4180). Options: `sep` (one byte, not a quote or line break; default `","`).
+
+- `csv.parse(text, {sep, header = false})` — the rows of `text`, each an array of field strings (never converted). A field in double quotes may hold the separator, `""` for a quote, and line breaks. Rows end at `\n` or `\r\n`; a last row needs none; an empty line is a row of one empty field; `""` has no rows. With `header`, the first row names the fields and the result is one record per later row (empty lines skipped; a shorter row leaves the rest out, a longer one raises). Malformed input raises `csv.parse: line <n>: <what>` (a quote inside an unquoted field, text after a closing quote, a quoted field never closed).
+- `csv.encode(rows, {sep, columns = nil})` — CSV text, one `\n`-ended line per row. Rows are arrays; with `columns`, records, written as those fields after a header line.
+- `csv.encode_row(row, {sep})` — one line, no line break: nil as an empty field, other values as `to_string` gives them, quoted when they hold the separator, a quote, a line break, or a space at either end.
+
 `std/time` — exports `time` table:
 
 - `time.now()` — returns the current wall-clock time as milliseconds since the Unix epoch (int). Alias for `epoch_ms()`.

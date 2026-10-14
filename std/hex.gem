@@ -1,0 +1,37 @@
+## hex — encode bytes as hexadecimal text and back.
+##
+##   load "std/hex"
+##   hex.encode("hi")      # "6869"
+##   hex.decode("6869")    # "hi"
+##
+## An argument that isn't a string raises `hex.<fn>: s must be a string,
+## got <type>`.
+
+extern fn gem_hex_encode(s: Bytes) -> Table
+extern fn gem_hex_decode(s: Bytes) -> Table
+
+fn check(fname, s)
+  if type(s) != "string"
+    error("hex.{fname}: s must be a string, got {type(s)}")
+  end
+end
+
+## Returns each byte of `s` as two lowercase hex digits.
+##
+##   hex.encode("\n")    # "0a"
+fn encode(s)
+  check("encode", s)
+  gem_hex_encode(s)
+end
+
+## Returns the bytes hex text `s` encodes (either case), or nil for an odd
+## length or a character that isn't a hex digit.
+##
+##   hex.decode("4A4b")    # "JK"
+##   hex.decode("abc")     # nil
+fn decode(s)
+  check("decode", s)
+  gem_hex_decode(s)
+end
+
+export encode, decode

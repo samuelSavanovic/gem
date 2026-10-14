@@ -4837,6 +4837,44 @@ q
 regex.test: pattern must be a string, got int regex.replace: repl must be a string or a fn, got int
 true [a][]
 200
+aGVsbG8=  YQ== YWI= YWJj
+hello hello hi nil nil nil hi
+-_8 true
+true true true
+68690a JK nil nil
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1
+cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0
+f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8
+60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54
+32 true false false
+5 6 ["a", "ñ", "b"] [233, 8364, 128512] € hi
+éll bc   ñ
+STRAßE Ÿ S ÀÉÎ ΩΜΈΓΑ Σ Ϊ ПРИВЕТ ЁЖ ǆ àéî ωμέγα привет ёж ÿ āă ĺ
+true false false [97, 65533, 98] 2
+€bña utf8.char: 55296 is not a Unicode scalar value utf8.len: s must be a string, got int
+[["name", "age"], ["ann", "31"]]
+[["name", "age"], ["ann", "31"], ["bob", ""]]
+[{name: "ann", age: "31"}, {name: "bob", age: "40"}]
+{} [[""]] [["a"]] [["a", ""]] [["", "", ""]]
+[["a,b", "say \"hi\"", "line\nbreak"], ["x", ""]]
+[["q"]] [["a", "b"], ["1", "2"]]
+csv.parse: line 2: a quote inside an unquoted field
+csv.parse: line 1: text after a closing quote
+csv.parse: line 2: a quoted field is never closed
+csv.parse: line 2: 2 fields, but the header has 1
+csv.parse: sep must be one byte other than a quote or a line break, got ,,
+a,"b,c"
+1,
+"say ""hi"""," pad","x
+y"
+
+[["a", "b,c"], ["1", ""], ["say \"hi\"", " pad", "x\ny"]]
+n,v
+a,1
+b,
+
+a;2.5;true
 {ok: true, value: 6}
 false boom 1
 boom 2

@@ -1,0 +1,50 @@
+## base64 — encode bytes as base64 text and back (RFC 4648).
+##
+##   load "std/base64"
+##   base64.encode("hello")          # "aGVsbG8="
+##   base64.decode("aGVsbG8=")       # "hello"
+##   base64.encode_url(token)        # URL- and filename-safe, no padding
+##
+## Strings are bytes, so any string (binary data, UTF-8 text) encodes. An
+## argument that isn't a string raises `base64.<fn>: s must be a string,
+## got <type>`.
+
+extern fn gem_base64_encode(s: Bytes, url: Int) -> Table
+extern fn gem_base64_decode(s: Bytes) -> Table
+
+fn check(fname, s)
+  if type(s) != "string"
+    error("base64.{fname}: s must be a string, got {type(s)}")
+  end
+end
+
+## Returns `s` in standard base64 (`+` and `/`, padded with `=`).
+##
+##   base64.encode("hi")    # "aGk="
+fn encode(s)
+  check("encode", s)
+  gem_base64_encode(s, 0)
+end
+
+## Returns `s` in URL-safe base64 (`-` and `_`, no padding), as JWTs and
+## URLs use it.
+##
+##   base64.encode_url(chr(251) + chr(255))    # "-_8"
+fn encode_url(s)
+  check("encode_url", s)
+  gem_base64_encode(s, 1)
+end
+
+## Returns the bytes base64 text `s` encodes, or nil when `s` isn't base64.
+## Takes either alphabet, with or without padding, and skips spaces, tabs
+## and line breaks (as in PEM and MIME bodies).
+##
+##   base64.decode("aGk=")     # "hi"
+##   base64.decode("aGk")      # "hi"
+##   base64.decode("a*b")      # nil
+fn decode(s)
+  check("decode", s)
+  gem_base64_decode(s)
+end
+
+export encode, encode_url, decode

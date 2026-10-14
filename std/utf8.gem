@@ -1,0 +1,145 @@
+## utf8 — UTF-8 text by characters instead of bytes.
+##
+##   load "std/utf8"
+##   utf8.len("héllo")            # 5 (len gives 6: é is 2 bytes)
+##   utf8.chars("añb")            # ["a", "ñ", "b"]
+##   utf8.codepoints("é")         # [233]
+##   utf8.char(8364)              # "€"
+##   utf8.sub("héllo", 1, 3)      # "éll"
+##   utf8.upper("straße")         # "STRAßE"
+##
+## A character is one code point (an accent written as a separate
+## combining mark is a character of its own). A byte that isn't part of a
+## valid UTF-8 sequence counts as one character: `codepoints` gives it as
+## 65533 (U+FFFD), `chars` as its one byte, and `upper`/`lower` keep it;
+## `valid` tells whether there are any. A `s` that isn't a string raises
+## `utf8.<fn>: s must be a string, got <type>`.
+
+# This module's `len` hides the builtin here; counts come from the C side.
+extern fn gem_utf8_len(s: Bytes) -> Int
+extern fn gem_utf8_valid(s: Bytes) -> Bool
+extern fn gem_utf8_split(s: Bytes, as_strings: Int) -> Table
+extern fn gem_utf8_char(cp: Int) -> Table
+extern fn gem_utf8_offset(s: Bytes, index: Int) -> Int
+extern fn gem_utf8_case(s: Bytes, upper: Int) -> Table
+
+fn check(fname, s)
+  if type(s) != "string"
+    error("utf8.{fname}: s must be a string, got {type(s)}")
+  end
+end
+
+## Returns the number of characters in `s`.
+fn len(s)
+  check("len", s)
+  gem_utf8_len(s)
+end
+
+## Returns true when `s` is valid UTF-8 (no stray, overlong or surrogate
+## sequences).
+##
+##   utf8.valid("é")         # true
+##   utf8.valid(chr(233))    # false: Latin-1, not UTF-8
+fn valid(s)
+  check("valid", s)
+  gem_utf8_valid(s)
+end
+
+## Returns the characters of `s`, each as a string of its bytes.
+fn chars(s)
+  check("chars", s)
+  gem_utf8_split(s, 1)
+end
+
+## Returns the code points of `s` as ints.
+fn codepoints(s)
+  check("codepoints", s)
+  gem_utf8_split(s, 0)
+end
+
+## Returns the UTF-8 string of code point `cp`, or of each code point of
+## the array `cp`. Raises for a negative one, a surrogate (55296..57343)
+## or one past 1114111.
+##
+##   utf8.char([104, 105])    # "hi"
+fn char(cp)
+  if type(cp) == "int"
+    let s = gem_utf8_char(cp)
+    if s == nil
+      error("utf8.char: {cp} is not a Unicode scalar value")
+    end
+    return s
+  end
+  if type(cp) != "table"
+    error("utf8.char: cp must be an int or an array of ints, got {type(cp)}")
+  end
+  build_string do |add|
+    for c in cp
+      add(char(c))
+    end
+  end
+end
+
+## Returns `count` characters of `s` from character `start` (to the end
+## without `count`); fewer at the end of `s`, "" past it. A negative
+## `start` counts from the end.
+##
+##   utf8.sub("añbc", 1, 2)    # "ñb"
+##   utf8.sub("añbc", -2)      # "bc"
+fn sub(s, start, count = nil)
+  check("sub", s)
+  if start < 0
+    start = gem_utf8_len(s) + start
+    if start < 0
+      start = 0
+    end
+  end
+  let from = gem_utf8_offset(s, start)
+  if from < 0
+    return ""
+  end
+  if count == nil
+    return substr(s, from)
+  end
+  if count <= 0
+    return ""
+  end
+  let rest = substr(s, from)
+  let to = gem_utf8_offset(rest, count)
+  if to < 0
+    return rest
+  end
+  substr(rest, 0, to)
+end
+
+## Returns `s` in upper case: ASCII, Latin-1 and Latin Extended-A
+## letters, Greek, Cyrillic, Armenian and fullwidth Latin. Mappings that
+## change the length (ß to SS) aren't made; other characters are kept.
+fn upper(s)
+  check("upper", s)
+  gem_utf8_case(s, 1)
+end
+
+## Returns `s` in lower case, for the same scripts as `upper`.
+##
+##   utf8.lower("ÀÉÎ Ωμέγα")    # "àéî ωμέγα"
+fn lower(s)
+  check("lower", s)
+  gem_utf8_case(s, 0)
+end
+
+## Returns `s` reversed by characters (not bytes, which would break
+## multi-byte ones).
+fn reverse(s)
+  check("reverse", s)
+  let cs = gem_utf8_split(s, 1)
+  build_string do |add|
+    let i = gem_utf8_len(s) - 1
+    while i >= 0
+      add(cs[i])
+      i -= 1
+    end
+  end
+end
+
+export len, valid, chars, codepoints, char, sub, upper, lower, reverse

@@ -179,6 +179,10 @@ end
 # std/io         lines(path, f), reader(path) -> {next}, read_lines(path)   ("-": stdin; 64 KB blocks, flat memory)
 # std/regex      test, find, find_all, replace, replace_first, split, escape, check_pattern   (POSIX ERE + \d \w \s;
 #                opts {icase, multiline}; match {text, start, stop, groups}; replace "\1" or fn(m); no \b)
+# std/base64     encode, encode_url, decode (nil if not base64)     std/hex   encode, decode
+# std/crypto     sha256, sha256_hex, hmac_sha256, hmac_sha256_hex, equal (constant time)
+# std/utf8       len, valid, chars, codepoints, char(cp), sub(s, start, n), upper, lower, reverse
+# std/csv        parse(text, {sep, header}), encode(rows, {sep, columns}), encode_row
 # std/args       parse(spec), try_parse(spec, list), help(spec)
 #   spec {name, about, usage, options: {top: {short: "n", default: 10, help}, v: {type: "flag"}, x: {multi: true}}, min_args, max_args}
 #   -> {top, v, x, args: [positional]}; --help prints help; a mistake prints usage and exits 2

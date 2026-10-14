@@ -46,7 +46,8 @@ reads the environment.
 [`CHEATSHEET.md`](CHEATSHEET.md). The rest lives in std modules: `load
 "std/json"` binds `json.parse`, `json.encode`, and so on. The modules are
 `string`, `table`, `math`, `time`, `log`, `json`, `url`, `mime`, `http`,
-`request`, `sqlite`, `io`, `args`, `regex`, `task`, `gen_server`, `supervisor`,
+`request`, `sqlite`, `io`, `args`, `regex`, `base64`, `hex`, `crypto`,
+`utf8`, `csv`, `task`, `gen_server`, `supervisor`,
 `dynamic_supervisor` and `test`.
 
 **Blocks.** A call can take a closure as its last argument, written after
@@ -415,7 +416,9 @@ s)`, `to_string(buf)` (`print(buf)` shows `<buffer:N>`, not the text).
 `len` is the byte count (`len("é")` is `2`), `s[i]` is a 1-byte string,
 `ord(s, i)` the byte value, and `for ch in s` walks bytes. Slice with
 `substr(s, start, count)`. There are no `\x` or `\u` escapes; use
-`chr(n)`. Strings may contain `\0`.
+`chr(n)` (a byte) or `utf8.char(n)` (a code point). Strings may contain
+`\0`. For text by characters, `std/utf8` counts, slices and changes case
+(`utf8.len("é")` is `1`).
 
 ---
 
