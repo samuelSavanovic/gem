@@ -125,8 +125,12 @@ The order is the order of the work.
    `escape`, `check_pattern`; `\d \w \s` rewritten for POSIX so a pattern
    means the same on glibc and macOS; a 64-entry compile cache. Left:
    word boundaries and lazy quantifiers (POSIX has neither).
-5. **Encodings.** base64, hex, sha256/HMAC (OpenSSL is already found for
+5. **Encodings.** ✓ Done (PR 4). base64, hex, sha256/HMAC (OpenSSL is already found for
    TLS), CSV, UTF-8 helpers (code points, case mapping).
+   *Landed:* `std/base64`, `std/hex`, `std/crypto` (SHA-256 written in
+   the runtime instead of OpenSSL, which is optional and linked only for
+   TLS), `std/utf8`, `std/csv`. Left: full Unicode case mapping (`ß` to
+   `SS`, scripts past Armenian).
 6. **Option-bag typos** (ROADMAP P1, steps 1–2): unknown keys raise, with
    "did you mean".
 7. **Small std gaps** from ROADMAP "std API gaps": json `indent`, mime

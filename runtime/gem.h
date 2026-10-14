@@ -1426,6 +1426,20 @@ int gem_run_shell(const char *cmd);
 /* std/regex (gem_builtins_text.c), reached through extern fn. */
 GemVal gem_regex_exec(const char *pat, int64_t flags, const uint8_t *s, int64_t slen, int64_t start);
 int64_t gem_regex_groups(const char *pat, int64_t flags);
+/* std/base64, std/hex, std/crypto, std/utf8 (gem_builtins_text.c). */
+GemVal gem_base64_encode(const uint8_t *s, int64_t n, int64_t url);
+GemVal gem_base64_decode(const uint8_t *s, int64_t n);
+GemVal gem_hex_encode(const uint8_t *s, int64_t n);
+GemVal gem_hex_decode(const uint8_t *s, int64_t n);
+GemVal gem_sha256(const uint8_t *s, int64_t n);
+GemVal gem_hmac_sha256(const uint8_t *key, int64_t klen, const uint8_t *msg, int64_t mlen);
+int gem_bytes_equal_ct(const uint8_t *a, int64_t an, const uint8_t *b, int64_t bn);
+int64_t gem_utf8_len(const uint8_t *s, int64_t n);
+int gem_utf8_valid(const uint8_t *s, int64_t n);
+GemVal gem_utf8_split(const uint8_t *s, int64_t n, int64_t as_strings);
+GemVal gem_utf8_char(int64_t cp);
+int64_t gem_utf8_offset(const uint8_t *s, int64_t n, int64_t index);
+GemVal gem_utf8_case(const uint8_t *s, int64_t n, int64_t upper);
 /* Held for writing by setenv, for reading around posix_spawn(environ). */
 extern pthread_rwlock_t gem_env_lock;
 /* Run `cmd` with `/bin/sh -c`, feeding it `in` (in_len bytes; stdin is
