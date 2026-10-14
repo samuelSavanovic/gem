@@ -314,8 +314,17 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
     GemResEntry *ent = gem_res_get(sock, GEM_RES_SOCKET, "tcp_read");
     int fd = ent->fd;
     size_t max_bytes = 4096;
-    if (argc >= 2 && args[1].type == VAL_INT) {
+    if (argc >= 2 && args[1].type == VAL_INT && args[1].ival > 0) {
         max_bytes = (size_t)args[1].ival;
+    } else if (argc >= 2 && args[1].type != VAL_NIL) {
+        char errbuf[160];
+        if (args[1].type == VAL_INT)
+            snprintf(errbuf, sizeof(errbuf), "tcp_read: max_bytes must be an int > 0 or nil, got %lld",
+                     (long long)args[1].ival);
+        else
+            snprintf(errbuf, sizeof(errbuf), "tcp_read: max_bytes must be an int > 0 or nil, got %s",
+                     gem_type_str(args[1]));
+        gem_error(errbuf);
     }
     /* timeout_ms: nil or omitted waits until data or EOF; an int is a
        deadline, and one <= 0 (a remaining time that has run out) only takes

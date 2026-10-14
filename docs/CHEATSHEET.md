@@ -154,7 +154,8 @@ let r = pcall some_fn()              # {ok: bool, value/error: ..., stack: [{nam
 # Filesystem:    read_file, write_file, append_file, file_exists, remove_file, mkdir, list_dir, is_dir, dirname, path_join, normalize_path, exec
 # TCP:           tcp_listen, tcp_accept, tcp_connect, tcp_read, tcp_write, tcp_close, tcp_peer, tcp_local_port, tcp_fd, tcp_from_fd
 # TLS:           tls_connect(host, port, {timeout_ms, ca_file, server_name}) -> a socket for tcp_read/tcp_write/tcp_close;
-#                verifies the certificate and host name against the system's CAs (or ca_file), always
+#                verifies the certificate and host name against the system's CAs (or ca_file), always;
+#                tcp_read raises when the server closes without its TLS close alert
 # Resources:     a socket (type "socket") or db handle (type "sqlite") belongs to its opener; claim(r) makes the
 #                caller its owner. Closed when a claimer exits, or when the opener crashes or is killed; anyone may close
 # Time:          time_ms, epoch_ms, format_time, format_time_local
