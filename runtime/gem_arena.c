@@ -13,6 +13,7 @@
 #include "stb_ds.h"
 
 GemArena gem_global_arena;
+size_t gem_reset_threshold = GEM_ARENA_RESET_THRESHOLD;
 
 #define GEM_ARENA_INITIAL_BLOCK (64 * 1024)
 #define GEM_ARENA_MAX_BLOCK    (1024 * 1024)

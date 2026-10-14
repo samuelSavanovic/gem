@@ -53,6 +53,18 @@ void gem_init(int argc, char **argv) {
      * pipe/file) so long-running processes don't lose output on SIGKILL. */
     setvbuf(stdout, NULL, _IOLBF, 0);
 
+    /* Reset stress mode (gem.h, gem_reset_threshold): GEM_RESET_STRESS=<bytes>. */
+    const char *stress = getenv("GEM_RESET_STRESS");
+    if (stress && *stress) {
+        char *end;
+        long long n = strtoll(stress, &end, 10);
+        if (*end || n < 1) {
+            fprintf(stderr, "gem: GEM_RESET_STRESS must be a positive byte count, got '%s'\n", stress);
+            exit(2);
+        }
+        gem_reset_threshold = (size_t)n;
+    }
+
     gem_arena_init(&gem_global_arena);
     gem_init_char_cache();
 }

@@ -897,6 +897,8 @@ let s = runtime_stats()
 
 The reset figures and `spawn_refused` only grow: a sampler takes the difference between two calls (`resets_over_10ms` going up between two samples means a pause of 10 ms or more in between). The others are counts at the time of the call.
 
+`GEM_RESET_STRESS=<bytes>` in the environment lowers the allocation a loop makes between two resets from 1 MB to that many bytes (and so the allocation that makes a recursive function's return reset), for testing: with `GEM_RESET_STRESS=1` a loop resets at almost every back-edge that allocated something (the spacing that keeps reset work proportional to allocation still applies). A program must print the same with and without it; `make test-stress` checks the examples, the example apps and the compiler. A value that isn't a positive integer is an error at startup (exit 2).
+
 `GEM_DIAG=1` in the environment prints a summary on stderr when the program exits, as `gem_diag:` lines: the reset totals (once a reset has run; the line has no duration counts) and the process and resource counts; `GEM_DIAG=2` also prints a `gem_reset:` line for every reset that takes 1 ms or more, with the process and the function it ran in.
 
 ## C Interop
