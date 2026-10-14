@@ -123,7 +123,8 @@ let BUILTIN_FNS = {
   __for_len: "gem_for_len_fn",
   __for_items: "gem_for_items_fn",
   __table_key_at: "gem_table_key_at_fn",
-  __table_val_at: "gem_table_val_at_fn"
+  __table_val_at: "gem_table_val_at_fn",
+  __match_fail: "gem_match_fail_fn"
 }
 
 # Builtins a leaf function may call (codegen.gem, "Leaf-function
@@ -142,7 +143,8 @@ let LEAF_BUILTINS = {
   bshr: true, self: true, make_ref: true, time_ms: true, epoch_ms: true,
   tcp_peer: true, tcp_local_port: true, tcp_fd: true, tcp_from_fd: true, claim: true, runtime_stats: true,
   __len: true, __type: true, __has_key: true, __is_array_n: true,
-  __for_len: true, __for_items: true, __table_key_at: true, __table_val_at: true
+  __for_len: true, __for_items: true, __table_key_at: true, __table_val_at: true,
+  __match_fail: true
 }
 
 # Builtins with a direct C entry point for one arity: "<name>/<argc>" →

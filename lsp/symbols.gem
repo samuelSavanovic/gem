@@ -283,6 +283,8 @@ fn walk_node(node, scope, acc)
         alias: node.alias
       })
     end
+  else
+    nil
   end
 end
 

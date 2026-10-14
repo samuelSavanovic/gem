@@ -465,8 +465,10 @@ else loop(n - 1, acc + n)
 end
 ```
 
-A branch that ends in a statement (a `let`, a loop, an assignment) gives `nil`, and so do an `if`
-with no `else` whose conditions are all false and a `match` with no `else` whose arms all fail. A
+A branch that ends in a statement (a `let`, a loop, an assignment) gives `nil`, and so does an `if`
+with no `else` whose conditions are all false. A `match` with no `else` whose arms all fail raises
+`no match for <value>` (the target as `print` shows it inside a table, strings quoted, cut at 200
+bytes), as Erlang's `case_clause` does; write `else nil` for a `match` that may match nothing. A
 branch may end in `return`, `break` or `continue`, which leaves the function or loop before the rest
 of the expression runs (`print(if x == nil then return 0 else x end)`); in a `while` condition,
 `break` and `continue` are a compile error (inside another loop, `` `break` can't be used in a

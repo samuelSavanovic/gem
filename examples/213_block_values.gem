@@ -29,9 +29,10 @@ fn describe(v)
 end
 print(describe({tag: "pt", x: 1, y: 2}), describe([3, 4]), describe(0), describe("z"))
 
-print("-- no branch taken, or a branch ending in a statement: nil")
+print("-- no branch taken (else nil), or a branch ending in a statement: nil")
 let unmatched = match 5
 when 1 then "one"
+else nil
 end
 let ends_in_let = if true
   let tmp = 3

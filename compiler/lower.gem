@@ -448,7 +448,13 @@ fn finish_block(node, finish)
     for arm in node.whens
       arm.body = finish_branch(arm.body, finish)
     end
-    node.else = finish_branch(node.else, finish)
+    # The else lower_match adds to a match without one raises; finishing
+    # it here would make it a branch that gives nil.
+    if node.else == nil
+      node.no_else = true
+    else
+      node.else = finish_branch(node.else, finish)
+    end
   else
     for arm in node.arms
       arm.body = finish_branch(arm.body, finish)
@@ -889,7 +895,14 @@ fn lower_match(node, state)
   for arm in node.whens
     push(whens, lower_arm(arm, target_var_expr, state))
   end
-  let else_body = lower_stmts_or_nil(node.else, state)
+  # No `else`: no arm matching raises (`no match for <value>`), as
+  # Erlang's case_clause does. `else nil` keeps a match that may match
+  # nothing.
+  let else_body = if node.else != nil and node.no_else != true
+    lower_stmts_or_nil(node.else, state)
+  else
+    [stamp(make_call(make_var("__match_fail"), [target_var_expr], node.line), node.file)]
+  end
   let result = make_match(target_lowered, whens, else_body, node.line, match_var)
   tag_file(result, node.file)
   result

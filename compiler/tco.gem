@@ -56,6 +56,8 @@ fn is_self_tail_call(fn_name, node)
     return false
   when {tag: "block", stmts: stmts}
     return has_self_tail_call(fn_name, stmts)
+  else
+    nil
   end
   return false
 end

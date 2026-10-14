@@ -156,6 +156,8 @@ fn walk_for_fields(node, target_name, acc)
     for p in parts
       walk_for_fields(p, target_name, acc)
     end
+  else
+    nil
   end
 end
 
