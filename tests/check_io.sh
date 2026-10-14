@@ -2,7 +2,8 @@
 # input() reads whole lines from stdin: any length, NUL bytes kept, a
 # trailing "\n" or "\r\n" stripped, a last line without a newline returned,
 # nil at EOF. read_file and read_stdin raise for a string over the limit
-# (2,147,483,646 bytes). print and eprint write NUL bytes.
+# (2,147,483,646 bytes). print and eprint write NUL bytes. exec calls from
+# different processes run at once, up to the pool's workers.
 #
 # Run from the repo root: tests/check_io.sh
 
@@ -87,6 +88,23 @@ if ! cmp -s "$dir/nul.want" "$dir/nul.out"; then
   od -c "$dir/nul.out"
   fails=$((fails + 1))
 fi
+
+cat > "$dir/execs.gem" <<'GEM'
+let t = time_ms()
+let me = self()
+for i = 0, 8
+  spawn(fn()
+    exec("sleep 0.3")
+    send(me, "done")
+  end)
+end
+for i = 0, 8
+  receive()
+end
+print(time_ms() - t < 1200)
+GEM
+"$GEM" "$dir/execs.gem" -o "$dir/execs" 2>"$dir/err" || { echo "FAIL: execs.gem doesn't compile"; cat "$dir/err"; exit 1; }
+check "8 exec calls on 8 workers run at once" "true" "$(GEM_POOL_SIZE=8 "$dir/execs")"
 
 if [ "$fails" -gt 0 ]; then
   exit 1

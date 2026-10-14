@@ -158,6 +158,33 @@ Desugaring now uses `__table_key_at` / `__table_val_at` to index directly into t
 ### Thread pool for async I/O (Phase 1) ✓ Done
 4 OS worker threads (`runtime/gem_threadpool.c`) handle `read_file`, `write_file`, `append_file`, `exec`, and `extern blocking fn` when called from a spawned process. The coroutine yields on submission; a wake-pipe notifies the scheduler on completion. Top-level (non-coroutine) I/O remains synchronous. The Gem-facing API is unchanged.
 
+### Thread pool size from `GEM_POOL_SIZE`, measured ✓ Done (2026-10-13)
+The pool's size was a compile-time 4 that no measurement had chosen. It is now read from the `GEM_POOL_SIZE` environment variable at startup (1 to 256, default 4; runtime/gem_threadpool.c, tests/check_proc_limit.sh), and `benchmarks/threadpool/run.sh` sweeps it over three loads (`bench.gem`: 64 readers of a 4 KB file; 16 readers beside 4 or 16 processes making 100 ms `extern blocking fn` calls; 16 processes doing a sqlite open/query/close, an `append_file` and a `read_file`), 3 runs of 3 s each (medians; Linux x86_64 VM, 4 cores):
+
+| Workers | 64 readers, reads/s | 16 readers beside 4 slow, reads/s | beside 16 slow | mixed, ops/s | empty program start |
+|---|---|---|---|---|---|
+| 1 | 145,700 | 42 (p50 401 ms) | 10 | 4,460 | 1.9 ms |
+| 2 | 73,700 | 80 | 21 | 4,240 | 2.2 ms |
+| 4 | 63,700 | 237 (p50 100 ms) | 48 | 4,940 | 2.1 ms |
+| 8 | 49,700 | 70,500 (p50 0.19 ms) | 101 | 4,510 | 2.2 ms |
+| 16 | 46,000 | 50,600 | 549 (p99 101 ms) | 3,440 | 3.1 ms |
+| 32 | 44,300 | 44,900 | 47,000 | 3,540 | 3.9 ms |
+| 64 | 47,300 | 47,500 | 44,000 | 3,900 | 5.7 ms |
+
+The same sweep on macOS (Darwin arm64, 10 cores):
+
+| Workers | 64 readers, reads/s | 16 readers beside 4 slow, reads/s | beside 16 slow | mixed, ops/s | empty program start |
+|---|---|---|---|---|---|
+| 1 | 60,600 | 42 (p50 417 ms) | 10 | 2,200 | 6.5 ms |
+| 2 | 104,900 | 90 | 21 | 3,170 | 3.5 ms |
+| 4 | 85,700 | 377 (p50 6 ms) | 48 | 4,070 | 3.3 ms |
+| 8 | 101,200 | 94,700 (p50 0.17 ms) | 122 | 4,030 | 3.4 ms |
+| 16 | 98,700 | 98,900 | 631 | 3,820 | 3.7 ms |
+| 32 | 96,100 | 90,300 | 92,400 | 3,990 | 3.6 ms |
+| 64 | 90,600 | 86,000 | 89,300 | 4,040 | 4.0 ms |
+
+Without slow calls, the 16 readers made about 77,000 reads/s with 4 workers and 46,000 with 8 or 16 on Linux; on macOS about 98,000 with 4, 105,000 with 8 and 96,000 with 16, so the slowdown from more workers is Linux's. An idle worker costs about 9 KB of RSS and an 8 MB stack reservation (2.2 MB RSS at 4 workers, 2.8 at 64, 4.4 at 256). The default stays 4: a bigger pool only moves the head-of-line cliff (reads crawl at the slow calls' pace until the workers outnumber them) and, on Linux, makes every fast call slower. What is left is in OPTIMIZATIONS.md, "Slow pool calls hold every worker; more workers slow the fast ones".
+
 ### Non-blocking sockets for TCP builtins ✓ Done
 TCP builtins (`tcp_accept`, `tcp_read`, `tcp_write`, `tcp_connect`) use non-blocking sockets + `gem_io_yield(fd, direction)` to yield to the scheduler's `poll()` set. No thread pool involvement — the scheduler resumes the coroutine directly when the fd is ready.
 

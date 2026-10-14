@@ -1,0 +1,118 @@
+# The I/O thread pool under three loads, at whatever GEM_POOL_SIZE the
+# run has. Prints one line: the scenario, then name=value pairs.
+#
+#   bench reads                 64 processes reading a 4 KB file for 3 s
+#   bench hol [slow]            `slow` processes (default 4) each holding a
+#                               worker 100 ms at a time, beside 16 readers
+#   bench mixed                 16 processes: sqlite open/query/close,
+#                               append_file, read_file
+
+extern include "helpers.h"
+extern fn bench_now_us() -> Int
+extern blocking fn bench_block_ms(ms: Int) -> Int
+
+let RUN_US = 3000000
+let DIR = "/tmp/gem_bench_threadpool"
+
+fn percentile(sorted, q)
+  if len(sorted) == 0 then return 0 end
+  let i = floor(len(sorted) * q)
+  sorted[if i >= len(sorted) then len(sorted) - 1 else i end]
+end
+
+# Reads `file` until `stop_us`, timing each read; sends the times.
+fn reader(parent, file, stop_us)
+  let lat = []
+  while bench_now_us() < stop_us
+    let t = bench_now_us()
+    read_file(file)
+    push(lat, bench_now_us() - t)
+  end
+  send(parent, {tag: "lat", lat: lat})
+end
+
+fn slow_worker(parent, stop_us)
+  let n = 0
+  while bench_now_us() < stop_us
+    bench_block_ms(100)
+    n += 1
+  end
+  send(parent, {tag: "slow", n: n})
+end
+
+fn mixed_worker(parent, i, stop_us)
+  let lat = []
+  let db_file = "{DIR}/db{i}.sqlite"
+  let log_file = "{DIR}/log{i}.txt"
+  while bench_now_us() < stop_us
+    let t = bench_now_us()
+    let db = sqlite_open(db_file)
+    sqlite_query(db, "SELECT 1")
+    sqlite_close(db)
+    append_file(log_file, "line\n")
+    read_file(log_file)
+    push(lat, bench_now_us() - t)
+  end
+  send(parent, {tag: "lat", lat: lat})
+end
+
+# Collects `n` latency lists; prints ops/s, p50, p99 and max in us.
+fn report(name, n, extra)
+  let all = []
+  for i = 0, n
+    receive
+    when {tag: "lat", lat: lat}
+      for x in lat
+        push(all, x)
+      end
+    end
+  end
+  sort(all)
+  let secs = RUN_US / 1000000.0
+  print("{name} ops_per_s={floor(len(all) / secs)} p50_us={percentile(all, 0.5)} p99_us={percentile(all, 0.99)} max_us={percentile(all, 1.0)}{extra}")
+end
+
+fn main()
+  let args = argv()
+  let scenario = if len(args) > 1 then args[1] else "reads" end
+  exec("rm -rf {DIR} && mkdir -p {DIR}")
+  let file = "{DIR}/data.txt"
+  write_file(file, build_string do |add|
+    for i = 0, 64
+      add("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde\n")
+    end
+  end)
+  let me = self()
+  let stop = bench_now_us() + RUN_US
+  if scenario == "reads"
+    for i = 0, 64
+      spawn do reader(me, file, stop) end
+    end
+    report("reads", 64, "")
+  elif scenario == "hol"
+    let slow = if len(args) > 2 then to_int(args[2]) else 4 end
+    for i = 0, slow
+      spawn do slow_worker(me, stop) end
+    end
+    for i = 0, 16
+      spawn do reader(me, file, stop) end
+    end
+    report("hol slow={slow}", 16, "")
+    let slow_done = 0
+    for i = 0, slow
+      receive
+      when {tag: "slow", n: n} then slow_done += n
+      end
+    end
+    print("  slow_calls={slow_done}")
+  elif scenario == "mixed"
+    for i = 0, 16
+      spawn do mixed_worker(me, i, stop) end
+    end
+    report("mixed", 16, "")
+  else
+    eprint("usage: bench reads | hol [slow] | mixed")
+    exit(2)
+  end
+  exec("rm -rf {DIR}")
+end
