@@ -1182,6 +1182,7 @@ end
 
 let USAGE = """
   usage: gem <file.gem> [options] [args...]
+         gem new <name> | gem test [args...] | gem build
          gem lsp
 
   Compiles <file.gem> to C, builds it with cc and runs it. Arguments after
@@ -1207,6 +1208,11 @@ let USAGE = """
                          link (make debug, make asan build the other two)
   subcommands:
     lsp                  start the language server on stdin/stdout
+    new <name>           make a project: <name>/ with gem.toml, main.gem, test.gem
+    test [args...]       run the project's test.gem (the project: the nearest
+                         directory with a gem.toml, here or above)
+    build [cc flags]     build the project's main (gem.toml `main`, default
+                         main.gem) at -O2 into build/<name>
   run mode (gem <file.gem>) builds at -O0 and caches the binary by a hash of
   the C, the runtime and the cc flags, in $GEM_CACHE_DIR (else
   $XDG_CACHE_HOME/gem, else ~/.cache/gem); -o and -c build at -O2.
@@ -1416,6 +1422,113 @@ fn prune_cache(root)
   end
 end
 
+# ─── Project commands: gem new, gem test, gem build ────────────
+# A project is a directory with a gem.toml. gem.toml holds `key = "value"`
+# lines (`#` comments; other lines, such as `[sections]`, are ignored):
+# `name` (default: the directory's name) and `main` (default "main.gem").
+
+fn read_toml(path)
+  let out = {}
+  if not file_exists(path)
+    return out
+  end
+  for raw in string.split(read_file(path), "\n")
+    let line = string.trim(raw)
+    let eq = find(line, "=")
+    if line != "" and not string.starts_with(line, "#") and eq > 0
+      let key = string.trim(substr(line, 0, eq))
+      let value = string.trim(substr(line, eq + 1))
+      if len(value) >= 2 and string.starts_with(value, "\"") and string.ends_with(value, "\"")
+        value = substr(value, 1, len(value) - 2)
+      end
+      out[key] = value
+    end
+  end
+  out
+end
+
+fn project_root_or_exit(cmd)
+  let root = find_project_root(".")
+  if root == nil
+    eprint("gem {cmd}: no gem.toml in this directory or above it (`gem new <name>` makes a project)")
+    exit(1)
+  end
+  root
+end
+
+fn new_project(name)
+  if name == nil or name == "" or string.starts_with(name, "-")
+    usage_error("gem new needs a project name: gem new <name>")
+  end
+  if file_exists(name)
+    eprint("gem new: '{name}' already exists")
+    exit(1)
+  end
+  if not mkdir(name)
+    eprint("gem new: cannot create '{name}'")
+    exit(1)
+  end
+  let base = basename_no_ext(name)
+  write_file(path_join(name, "gem.toml"), "name = \"{base}\"\nmain = \"main.gem\"\n")
+  write_file(path_join(name, "main.gem"), "# {base}: run with `gem main.gem`, test with `gem test`, build with `gem build`.\n\nfn greeting(who)\n  \"hello, \{who}\"\nend\n\nfn main()\n  print(greeting(\"world\"))\nend\n\nexport greeting\n")
+  write_file(path_join(name, "test.gem"), "load \"std/test\"\nload \"./main\"\n\ntest.case(\"greeting\") do\n  test.assert_eq(main.greeting(\"gem\"), \"hello, gem\")\nend\n\ntest.run()\n")
+  write_file(path_join(name, ".gitignore"), "build/\n")
+  print("created {name}/ (gem.toml, main.gem, test.gem); in it:")
+  print("  gem main.gem   runs it")
+  print("  gem test       runs test.gem")
+  print("  gem build      builds build/{base}")
+end
+
+# `gem new` runs here; `gem test` and `gem build` become the arguments of
+# a plain run or build of the project's file.
+fn project_command_args(args)
+  if len(args) < 2
+    return args
+  end
+  let cmd = args[1]
+  if cmd == "new"
+    new_project(if len(args) > 2 then args[2] else nil end)
+    exit(0)
+  end
+  if cmd == "test"
+    let root = project_root_or_exit("test")
+    let test_file = path_join(root, "test.gem")
+    if not file_exists(test_file)
+      eprint("gem test: no test.gem in {root}")
+      exit(1)
+    end
+    let out = [args[0], test_file]
+    for i = 2, len(args)
+      push(out, args[i])
+    end
+    return out
+  end
+  if cmd == "build"
+    let root = project_root_or_exit("build")
+    let conf = read_toml(path_join(root, "gem.toml"))
+    let name = if conf.name != nil and conf.name != "" then conf.name else basename_no_ext(root) end
+    let entry = path_join(root, if conf.main != nil and conf.main != "" then conf.main else "main.gem" end)
+    if not file_exists(entry)
+      eprint("gem build: no {entry} (set `main` in gem.toml)")
+      exit(1)
+    end
+    let out_dir = path_join(root, "build")
+    if not is_dir(out_dir) and not mkdir(out_dir)
+      eprint("gem build: cannot create {out_dir}")
+      exit(1)
+    end
+    let out = [args[0]]
+    for i = 2, len(args)
+      push(out, args[i])
+    end
+    push(out, entry)
+    push(out, "-o")
+    push(out, path_join(out_dir, name))
+    return out
+  end
+  args
+end
+
 # ─── Main ─────────────────────────────────────────────────────
 
 let argc = len(argv())
@@ -1431,7 +1544,7 @@ if argv()[1] == "lsp"
   exit(0)
 end
 
-let cli = parse_args(argv())
+let cli = parse_args(project_command_args(argv()))
 
 if cli.src_path == nil
   usage_error("no source file given")

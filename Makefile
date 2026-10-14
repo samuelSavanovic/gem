@@ -19,7 +19,7 @@ BUILD_DIR = build
 export GEM_CACHE_DIR ?= $(CURDIR)/$(BUILD_DIR)/cache
 GEM = $(BUILD_DIR)/gem
 
-.PHONY: FORCE build debug asan test-debug test-reset-stress fuzz-diff fuzz-frontend fuzz-parser test-fuzz test test-rules test-stress test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-cache test-lsp test-example-apps bootstrap clean
+.PHONY: FORCE build install uninstall debug asan test-debug test-reset-stress fuzz-diff fuzz-frontend fuzz-parser test-fuzz test test-rules test-stress test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-cache test-install test-lsp test-example-apps bootstrap clean
 
 # Build the compiler from the checked-in stage0.c
 build: $(GEM)
@@ -49,6 +49,27 @@ $(RUNTIME_LIB): $(RUNTIME_OBJS) $(SQLITE_OBJ)
 $(GEM): $(STAGE0) $(RUNTIME_LIB)
 	@mkdir -p $(BUILD_DIR)
 	$(CC) -o $@ $(STAGE0) -I $(RUNTIME_DIR) -I $(COMPILER_DIR) $(CFLAGS) $(LDFLAGS) $(RUNTIME_LIB) $(LDLIBS)
+
+# make install PREFIX=<dir> (default /usr/local; DESTDIR for staging):
+# <PREFIX>/lib/gem holds the compiler (build/gem), the runtime library and
+# headers, and std/, laid out as in the repo (the compiler finds them two
+# levels above its real path); <PREFIX>/bin/gem links to the compiler.
+PREFIX ?= /usr/local
+INSTALL_ROOT = $(DESTDIR)$(PREFIX)/lib/gem
+
+install: $(GEM)
+	@mkdir -p $(INSTALL_ROOT)/build $(INSTALL_ROOT)/runtime $(DESTDIR)$(PREFIX)/bin
+	cp $(GEM) $(RUNTIME_LIB) $(INSTALL_ROOT)/build/
+	@if [ -f $(BUILD_DIR)/tls_libs ]; then cp $(BUILD_DIR)/tls_libs $(INSTALL_ROOT)/build/; fi
+	@for k in debug asan; do if [ -f $(BUILD_DIR)/$$k/libgem_runtime.a ]; then mkdir -p $(INSTALL_ROOT)/build/$$k && cp $(BUILD_DIR)/$$k/libgem_runtime.a $(INSTALL_ROOT)/build/$$k/; fi; done
+	cp $(RUNTIME_DIR)/*.h $(INSTALL_ROOT)/runtime/
+	rm -rf $(INSTALL_ROOT)/std
+	cp -R std $(INSTALL_ROOT)/std
+	ln -sf ../lib/gem/build/gem $(DESTDIR)$(PREFIX)/bin/gem
+	@echo "installed: $(DESTDIR)$(PREFIX)/bin/gem"
+
+uninstall:
+	rm -rf $(INSTALL_ROOT) $(DESTDIR)$(PREFIX)/bin/gem
 
 # Debug runtimes, next to build/libgem_runtime.a: a program built with
 # GEM_RUNTIME=debug (or asan) links build/debug (build/asan) instead and is
@@ -106,15 +127,19 @@ bootstrap: $(GEM)
 	cp $(BUILD_DIR)/stage0_new.c $(STAGE0)
 	@echo "bootstrap/stage0.c regenerated and verified"
 
-test: $(GEM) test-rules test-reset-stress test-fuzz test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-resolve test-tls test-recursion-memory test-cache test-lsp test-example-apps
+test: $(GEM) test-rules test-reset-stress test-fuzz test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-resolve test-tls test-recursion-memory test-cache test-install test-lsp test-example-apps
 	@bash examples/run_all.sh
 
 test-rules:
 	@bash tests/check_rules.sh
 
-# The run-mode binary cache (tests/check_cache.sh).
+# The run-mode binary cache (tests/check_cache.sh), and make install plus
+# the project commands from the installed compiler (tests/check_install.sh).
 test-cache: $(GEM)
 	@bash tests/check_cache.sh
+
+test-install: $(GEM)
+	@bash tests/check_install.sh
 
 # Not part of `make test` (about as long again): the examples, the example
 # apps and the compiler compiling itself, with GEM_RESET_STRESS=1 (every
