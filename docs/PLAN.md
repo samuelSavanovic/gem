@@ -109,7 +109,7 @@ The order is the order of the work.
    `GEM_CACHE=off`, `GEM_CACHE_DIR`; at most 256 entries, then emptied.
    `--` after the file passes options to the program. Left: `-l`
    libraries are not in the key.
-2. **Install and project commands.** `make install PREFIX=…`; `gem new`,
+2. **Install and project commands.** ✓ Done (PR 3). `make install PREFIX=…`; `gem new`,
    `gem test` (runs `test.gem`), `gem build` from `gem.toml`.
 3. **Script basics.** `exec` that captures stdout/stderr and the status;
    a line reader for files and stdin (ROADMAP "Line-at-a-time input");

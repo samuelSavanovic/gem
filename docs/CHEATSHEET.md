@@ -209,4 +209,11 @@ extern include "stdio.h"                 # a libc fn needs its header; your own:
 extern fn puts(s: String) -> Int
 extern blocking fn net_read(fd: Int) -> String
 # gem -I<dir> -L<dir> -l<lib> app.gem   C flags go before the file; CC, CFLAGS, LDFLAGS from the environment
+
+# Command line
+# gem app.gem [args]        build at -O0 (cached in ~/.cache/gem; GEM_CACHE=off) and run; -- passes options on
+# gem app.gem -o app        build at -O2, don't run        gem --check app.gem   errors only
+# gem new demo              demo/ with gem.toml (name, main), main.gem, test.gem
+# gem test [args]           run the project's test.gem     gem build   main at -O2 into build/<name>
+# make install PREFIX=~/.local                              puts gem in $PREFIX/bin
 ```

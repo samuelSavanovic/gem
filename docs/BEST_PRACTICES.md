@@ -34,11 +34,15 @@ Contents: [Before you start](#before-you-start) ·
 
 ## Before you start
 
-**Running.** `gem prog.gem` compiles and runs a program; `gem prog.gem -o
-prog` only builds it; `gem --check prog.gem` only checks it and prints
-the compiler's `note:` and `warning:` lines. `argv()` returns the
-arguments (the program name at `argv()[0]`); `getenv(name)` reads the
-environment.
+**Running.** `gem prog.gem` compiles and runs a program, building at
+`-O0` and caching the binary, so running it again unchanged starts at
+once; `gem prog.gem -o prog` builds an optimized binary (up to 2x faster: use
+it to measure); `gem --check prog.gem` only checks it and prints the
+compiler's `note:` and `warning:` lines. `gem new name` starts a project
+(`gem.toml`, `main.gem`, `test.gem`), and in it `gem test` runs
+`test.gem` and `gem build` builds `build/<name>`. `argv()` returns the
+arguments (the program name at `argv()[0]`; after `gem prog.gem --`,
+options are the program's too); `getenv(name)` reads the environment.
 
 **Builtins and std modules.** Builtins (`print`, `len`, `push`, `keys`,
 `spawn`, `send`, ...) are always there; the list is in
