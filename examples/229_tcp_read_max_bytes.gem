@@ -1,0 +1,15 @@
+# tcp_read's max_bytes: an int > 0 or nil (4096); anything else raises,
+# 0 included (it would read nothing and look like the end of the stream).
+
+let l = tcp_listen("127.0.0.1", 0)
+let c = tcp_connect("127.0.0.1", tcp_local_port(l))
+let s = tcp_accept(l)
+tcp_write(s, "hello")
+print("max 2:", tcp_read(c, 2, 1000))
+print("nil:", tcp_read(c, nil, 1000))
+print((pcall tcp_read(c, 0, 100)).error)
+print((pcall tcp_read(c, -1, 100)).error)
+print((pcall tcp_read(c, "8", 100)).error)
+tcp_close(c)
+tcp_close(s)
+tcp_close(l)

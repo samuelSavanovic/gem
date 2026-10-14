@@ -4,8 +4,9 @@
 # `openssl s_server` serving files (-WWW) and swallowing what it reads,
 # and listeners in the Gem program itself that never answer or answer in
 # plain HTTP. Checks verification and its messages, reads and writes of
-# 1 MB, timeouts, closed sockets, concurrent handshakes, and that killed
-# processes leave no fds behind.
+# 1 MB, timeouts, a write left short with a record in flight and its
+# continuation, a server that dies mid-stream, closed sockets, concurrent
+# handshakes, and that killed processes leave no fds behind.
 #
 # Needs an OpenSSL 3 or later command-line tool (`openssl` on PATH or Homebrew's
 # openssl@3); skips without one. A Gem built without OpenSSL only checks
@@ -24,7 +25,7 @@ fi
 
 dir=$(mktemp -d)
 pids=()
-trap '{ kill "${pids[@]}"; wait; } 2>/dev/null; rm -rf "$dir"' EXIT
+trap '{ kill "${pids[@]}"; wait; } 2>/dev/null; [ -n "${KEEP:-}" ] && echo "kept $dir" || rm -rf "$dir"' EXIT
 
 fails=0
 check() {
@@ -105,14 +106,20 @@ serve() {
     exit 1
   fi
   eval "port_$name=$p"
+  eval "pid_$name=$!"
 }
 
 serve good good.pem -WWW
 serve wrong wrong.pem -WWW
 port_expired=0
 [ "$expired" = 1 ] && serve expired expired.pem -WWW
-# Writes what it reads to its log.
+# Write what they read to their logs. The client stops `stall` (SIGSTOP)
+# so a write fills the socket, and kills `cut` mid-stream.
 serve sink good.pem
+serve stall good.pem
+serve cut good.pem
+# Its death (the client kills it) isn't reported.
+disown "$pid_cut"
 cd - > /dev/null
 
 # ─── The client ───
@@ -129,6 +136,10 @@ let expired = to_int(args[4])
 let sink = to_int(args[5])
 let big_file = args[6]
 let hello_file = args[7]
+let stall = to_int(args[8])
+let stall_pid = args[9]
+let cut = to_int(args[10])
+let cut_pid = args[11]
 
 fn fds()
   len(list_dir("/dev/fd"))
@@ -184,6 +195,9 @@ fn main()
   print("bad opts:", err(pcall tls_connect("localhost", good, {timeout_ms: 0})))
   print("opts not a table:", err(pcall tls_connect("localhost", good, 5)))
   print("ca_file not a string:", err(pcall tls_connect("localhost", good, {ca_file: 5})))
+  let long_name = string.repeat("a", 300)
+  let ln = err(pcall tls_connect("localhost", good, {ca_file: ca, server_name: long_name}))
+  print("server_name too long:", str_replace(ln, long_name, "<300 a>"))
   print("refused:", err(pcall tls_connect("127.0.0.1", 1)))
 
   # Concurrent handshakes and requests from four processes.
@@ -222,6 +236,36 @@ fn main()
   print("read after close:", err(pcall tcp_read(s, 100)))
   print("write after close:", err(pcall tcp_write(s, "x")))
   tcp_close(s)
+
+  # A write that fills the socket of a stopped server stops short with a
+  # record in flight; the next write must start with the bytes it didn't
+  # count, and then everything arrives in order.
+  let st = tls_connect("localhost", stall, opts)
+  let stall_data = build_string do |add|
+    for i = 0, 131072
+      add("stall-", substr(to_string(1000000 + i), 1), "-0123456789abcdef0123456789abcdef0123456789abcdef---")
+    end
+  end
+  exec("kill -STOP {stall_pid}")
+  let n = tcp_write(st, stall_data, 300)
+  print("short write:", n < len(stall_data), n % 64)
+  print("then other data:", err(pcall tcp_write(st, "other", 300)))
+  print("then empty:", tcp_write(st, "", 0))
+  let more = tcp_write(st, substr(stall_data, n), 0)
+  print("then the rest, no wait:", more % 64)
+  n = n + more
+  exec("kill -CONT {stall_pid}")
+  print("then the rest:", tcp_write(st, substr(stall_data, n), 20000) == len(stall_data) - n)
+  tcp_close(st)
+
+  # A server that dies without the TLS close alert: the read raises.
+  let c = tls_connect("localhost", cut, opts)
+  tcp_write(c, "x")
+  sleep(100)
+  exec("kill -9 {cut_pid}")
+  let cr = err(pcall tcp_read(c, 100, 5000))
+  print("server died:", substr(cr, 0, string.index_of(cr, " was ") + 4))
+  tcp_close(c)
 
   let quiet = tcp_listen("127.0.0.1", 0)
   let quiet_port = tcp_local_port(quiet)
@@ -276,7 +320,8 @@ end
 GEM
 
 "$GEM" "$dir/client.gem" -o "$dir/client" 2> "$dir/err" || { echo "FAIL: client.gem doesn't compile"; cat "$dir/err"; exit 1; }
-got=$("$dir/client" "$dir/ca.pem" "$port_good" "$port_wrong" "$port_expired" "$port_sink" "$dir/www/big.bin" "$dir/www/hello.txt" 2>&1 \
+got=$("$dir/client" "$dir/ca.pem" "$port_good" "$port_wrong" "$port_expired" "$port_sink" "$dir/www/big.bin" "$dir/www/hello.txt" \
+  "$port_stall" "$pid_stall" "$port_cut" "$pid_cut" 2>&1 \
   | sed -e "s/:$port_good/:GOOD/g" -e "s/:$port_wrong/:WRONG/g" -e "s/:$port_expired/:EXPIRED/g")
 want_expired=""
 [ "$expired" = 1 ] && want_expired="
@@ -289,10 +334,11 @@ system trust store: request.get: cannot connect to localhost:GOOD: tls_connect: 
 wrong name: tls_connect: certificate verify failed for localhost:WRONG: hostname mismatch
 server_name: tls_connect: certificate verify failed for localhost:GOOD (server name other.example): hostname mismatch$want_expired
 bad ca_file: tls_connect: cannot load ca_file '/nonexistent/ca.pem': No such file or directory
-not a PEM file: tls_connect: cannot load ca_file '$dir/www/hello.txt': no certificates in it
+not a PEM file: tls_connect: cannot load ca_file '$dir/www/hello.txt': no certificate or crl found
 bad opts: tls_connect: timeout_ms must be an int > 0 (milliseconds) or nil, got 0
 opts not a table: tls_connect: opts must be a table, got int
 ca_file not a string: tls_connect: ca_file must be a non-empty string without NUL bytes, got int
+server_name too long: tls_connect: invalid server name '<300 a>'
 refused: tls_connect: connect failed: Connection refused
 concurrent: [200, 200, 200, 200]
 type: socket
@@ -303,6 +349,12 @@ tcp_fd: tcp_fd: a TLS socket has no fd to give to C
 peer port: true
 read after close: tcp_read: socket is closed
 write after close: tcp_write: socket is closed
+short write: true 0
+then other data: tcp_write: an earlier tcp_write on this TLS socket timed out with 16384 bytes in flight; the next write must start with the bytes it didn't count
+then empty: 0
+then the rest, no wait: 0
+then the rest: true
+server died: tcp_read: the TLS connection was
 handshake timeout: tls_connect: handshake with 127.0.0.1:QUIET timed out
 plain HTTP server: tls_connect: handshake with 127.0.0.1:PLAIN failed:
 killed mid-handshake: true true
@@ -312,6 +364,81 @@ closed while reading: tcp_read: socket is closed" "$got"
 # 64-byte block (it prints what it reads, with lines of its own around).
 got=$(grep -o 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef "$dir/sink.log" | wc -l | tr -d ' ')
 check "the sink got the whole write" 16384 "$got"
+# The stalled server is still draining its socket when the client exits.
+# Its blocks are numbered: each must come once, in order.
+for _ in $(seq 100); do
+  got=$(grep -o 'stall-[0-9]\{6\}-0123456789abcdef0123456789abcdef0123456789abcdef---' "$dir/stall.log" \
+    | awk -F- '$2 + 0 != NR - 1 { print "block " NR - 1 " is " $2; bad = 1; exit } END { if (!bad) print NR }')
+  [ "$got" = 131072 ] && break
+  sleep 0.1
+done
+check "the stalled server got the whole write, in order" 131072 "$got"
+
+# No CA certificate where OpenSSL looks: the error names the places.
+cat > "$dir/nostore.gem" <<'GEM'
+let r = pcall tls_connect("localhost", to_int(argv()[1]))
+print(r.error)
+GEM
+got=$(SSL_CERT_FILE=/nonexistent/cert.pem SSL_CERT_DIR=/nonexistent/certs "$GEM" "$dir/nostore.gem" "$port_good" 2>&1 \
+  | sed -e "s/:$port_good/:GOOD/g")
+check "no trust store" "tls_connect: certificate verify failed for localhost:GOOD: unable to get local issuer certificate (no trusted certificates found in /nonexistent/cert.pem or /nonexistent/certs; set SSL_CERT_FILE or SSL_CERT_DIR)" "$got"
+# A CA directory with certificates, none of them the issuer: no hint.
+mkdir "$dir/cadir"
+cp "$dir/wrong.pem" "$dir/cadir/unrelated.pem"
+got=$(SSL_CERT_FILE=/nonexistent/cert.pem SSL_CERT_DIR="$dir/cadir" "$GEM" "$dir/nostore.gem" "$port_good" 2>&1 \
+  | sed -e "s/:$port_good/:GOOD/g")
+check "a CA directory without the issuer" "tls_connect: certificate verify failed for localhost:GOOD: unable to get local issuer certificate" "$got"
+
+# A server that ends its responses without the TLS close alert (Python's
+# ssl module closes without one): a chunked body is whole at its last
+# chunk, a body that runs to the end of the stream may be cut short.
+if command -v python3 > /dev/null; then
+  cat > "$dir/noalert.py" <<'PY'
+import socket, ssl, sys
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ctx.load_cert_chain(sys.argv[1], sys.argv[2])
+srv = socket.socket()
+srv.bind(("127.0.0.1", 0))
+srv.listen(8)
+print(srv.getsockname()[1], flush=True)
+bodies = {
+    b"/chunked": b"Transfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n0\r\n",
+    b"/to-eof": b"\r\nhi",
+}
+while True:
+    conn, _ = srv.accept()
+    try:
+        s = ctx.wrap_socket(conn, server_side=True)
+        req = b""
+        while b"\r\n\r\n" not in req:
+            req += s.recv(4096)
+        path = req.split(b" ")[1]
+        s.sendall(b"HTTP/1.1 200 OK\r\nConnection: close\r\n" + bodies.get(path, b"\r\n"))
+        s.close()
+    except (ssl.SSLError, OSError):
+        conn.close()
+PY
+  python3 "$dir/noalert.py" "$dir/good.pem" "$dir/leaf.key" > "$dir/noalert.port" 2> "$dir/noalert.log" &
+  pids+=($!)
+  disown "$!"
+  for _ in $(seq 100); do
+    [ -s "$dir/noalert.port" ] && break
+    sleep 0.05
+  done
+  port_noalert=$(cat "$dir/noalert.port")
+  cat > "$dir/noalert.gem" <<'GEM'
+load "std/request"
+let opts = {ca_file: argv()[1], timeout_ms: 5000}
+let base = "https://localhost:{argv()[2]}"
+print("chunked:", request.get("{base}/chunked", opts).body)
+print("to the end of the stream:", (pcall request.get("{base}/to-eof", opts)).error)
+GEM
+  got=$("$GEM" "$dir/noalert.gem" "$dir/ca.pem" "$port_noalert" 2>&1)
+  check "no close alert" "chunked: hi
+to the end of the stream: request.get: tcp_read: the TLS connection was closed before the server's close alert; the data may be cut short" "$got"
+else
+  echo "note: no python3, the close-alert checks for std/request are skipped"
+fi
 
 if [ "$fails" -gt 0 ]; then
   echo "$fails TLS check(s) failed"
