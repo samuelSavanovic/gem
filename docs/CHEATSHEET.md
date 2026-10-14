@@ -180,7 +180,7 @@ end
 # std/http       response, ok, html, json_response, redirect, not_found, bad_request, server_error,
 #                set_cookie, delete_cookie, parse_form, html_escape, router, start, serve, stop
 #                (start opts {port, host, max_body = 8 MB, idle_timeout_ms, request_timeout_ms, write_timeout_ms = 30000, nil: none,
-#                max_connections, max_per_ip, on_event = nil; on_event(ev): ev.kind request|close|refused|crash};
+#                max_connections, max_per_ip, on_event = nil; on_event(ev): ev.kind open|request|close|refused|crash};
 #                req.peer = {ip, port};
 #                start returns {pid, port} (port 0: a free one); stop(server) closes every socket; HEAD uses the GET route;
 #                set_cookie raises on ; , whitespace or control bytes: url.encode values)

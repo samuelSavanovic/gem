@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the larger example programs, each of which checks itself: the JSON
 # parser and the bookmark app, STOMP broker, mini_redis, logstat, lox,
-# gemgrep, jobqueue and honeypot test suites (std/test, exit status 1 on a
+# gemgrep, jobqueue, honeypot and httpd test suites (std/test, exit status 1 on a
 # failing case), and the TCP echo program (raises on a bad echo). Each one
 # is built and run from its own directory: the bookmark app looks its
 # static files up relative to the cwd, and lox's tests read its bench
@@ -59,6 +59,7 @@ run lox_test examples/lox test.gem
 run gemgrep_test examples/gemgrep test.gem
 run jobqueue_test examples/jobqueue test.gem
 run honeypot_test examples/honeypot test.gem
+run httpd_test examples/httpd test.gem
 
 # logstat end to end: a generated log, read from a file and from stdin, and
 # the exit statuses for a bad flag (2) and an unreadable file (1).
@@ -148,7 +149,7 @@ else
 fi
 
 # The entry points the tests don't build.
-for f in examples/bookmark_app/app.gem examples/stomp_broker/main.gem examples/mini_redis/main.gem examples/lox/main.gem examples/gemgrep/main.gem examples/jobqueue/main.gem examples/honeypot/main.gem; do
+for f in examples/bookmark_app/app.gem examples/stomp_broker/main.gem examples/mini_redis/main.gem examples/lox/main.gem examples/gemgrep/main.gem examples/jobqueue/main.gem examples/honeypot/main.gem examples/httpd/main.gem; do
   if ! "$GEM" --check "$f" > "$T/check.out" 2>&1 || [ -s "$T/check.out" ]; then
     echo "FAIL: gem --check $f:"
     cat "$T/check.out"

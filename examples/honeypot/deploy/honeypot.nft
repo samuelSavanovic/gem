@@ -51,3 +51,7 @@ table inet honeypot {
 		log prefix "egress drop: " level info
 	}
 }
+
+# Other services' fragments add to the table above (the httpd example's
+# port 80: examples/httpd/deploy/httpd.nft). An empty directory is fine.
+include "/etc/nftables.d/*.nft"

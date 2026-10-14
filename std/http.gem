@@ -1623,6 +1623,9 @@ end
 fn handle_connection(fd, peer, cfg)
   claim(fd)
   let opened = if cfg.on_event != nil then time_ms() else 0 end
+  if cfg.on_event != nil
+    notify(cfg, {kind: "open", peer: peer})
+  end
   let rd = new_reader(fd, peer, cfg)
   let open = true
   while open
@@ -1940,8 +1943,9 @@ end
 ## (`method`, `path`, `headers`, `raw`) comes from the client, unchecked
 ## and of any length up to the server's limits:
 ##
-## - "request", after each response (also a 400, 404, 413, 431 or 500
-##   the server sent itself): `status`, `ms` (from the request's first
+## - "open", when a connection process starts, before it reads a byte.
+## - "request", after each response (also a 400, 404, 413, 431, 500,
+##   501 or 505 the server sent itself): `status`, `ms` (from the request's first
 ##   byte), `bytes_out`; `method`, `path` and `headers` once the head was
 ##   read; `error` when the handler raised or returned an invalid
 ##   response; `raw`, the first 4 KB of the request head, when the server
@@ -1965,7 +1969,8 @@ end
 ##   4 KB of the request). The client gets a 500, and a "close" with
 ##   reason "error" follows.
 ##
-## `on_event` runs in the connection's process ("refused" in the
+## Every connection that gets an "open" gets a "close", unless it is
+## killed. `on_event` runs in the connection's process ("refused" in the
 ## acceptor's, so no connection is accepted meanwhile); an error in it
 ## goes to stderr. Keep it quick, usually a `send` to a process that
 ## records the events:

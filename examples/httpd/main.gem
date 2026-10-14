@@ -1,0 +1,61 @@
+# A small public website on std/http that records everything its clients
+# do. See README.md and PLAN.md.
+#
+#   httpd [--port 8080] [--bind 127.0.0.1] [--static static] [--data httpd_data] [--log]
+#         [--commit ID] [--max-connections 1000] [--max-per-ip 32] ... (see INT_FLAGS)
+
+load "std/string"
+load "./server"
+
+# The flags that set an option of server.start to a positive int.
+let INT_FLAGS = {
+  "--port": "port", "--keep-weeks": "keep_weeks", "--max-connections": "max_connections",
+  "--max-per-ip": "max_per_ip", "--max-body": "max_body", "--idle-ms": "idle_ms",
+  "--request-ms": "request_ms", "--write-ms": "write_ms", "--max-backlog": "max_backlog",
+  "--metrics-ms": "metrics_ms"
+}
+
+# The flags that set an option to a string.
+let STRING_FLAGS = {"--bind": "host", "--static": "static", "--data": "data", "--commit": "commit"}
+
+fn usage()
+  eprint("usage: httpd [--bind ADDRESS] [--static DIR] [--data DIR] [--log] [--commit ID]")
+  eprint("             [{string.join(sort(keys(INT_FLAGS)), " N] [")} N]")
+  exit(2)
+end
+
+fn int_arg(value)
+  let r = pcall to_int(value)
+  if not r.ok or r.value < 1 then usage() end
+  r.value
+end
+
+fn main()
+  let args = argv()
+  let opts = {host: "127.0.0.1", port: 8080, static: "static"}
+  let i = 1
+  while i < len(args)
+    if args[i] == "--log"
+      opts.log = true
+      i += 1
+      continue
+    end
+    if i + 1 >= len(args)
+      usage()
+    end
+    if has_key(INT_FLAGS, args[i])
+      opts[INT_FLAGS[args[i]]] = int_arg(args[i + 1])
+    elif has_key(STRING_FLAGS, args[i])
+      opts[STRING_FLAGS[args[i]]] = args[i + 1]
+    else
+      usage()
+    end
+    i += 2
+  end
+  if not is_dir(opts.static)
+    eprint("httpd: {opts.static} is not a directory (--static DIR)")
+    exit(2)
+  end
+  server.start(opts)
+  eprint("httpd listening on {opts.host}:{opts.port}")
+end
