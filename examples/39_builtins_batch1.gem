@@ -14,9 +14,13 @@ let d2 = {x: 10}
 let r = delete(d2, "missing")
 print("delete missing:", r)
 
-# delete from integer-keyed table
-let arr = [10, 20, 30]
-let dr = delete(arr, 1)
+# delete from an integer-keyed table (not an array: on an array index
+# delete raises, remove_at shifts)
+let arr = {}
+arr[5] = 10
+arr[7] = 20
+arr[9] = 30
+let dr = delete(arr, 7)
 print("delete int key:", dr)
 print("delete int len:", len(arr))
 

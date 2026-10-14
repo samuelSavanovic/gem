@@ -99,7 +99,7 @@ multi-line literal
 # Numbers — 42 is an int, 2.0 a float (no exponent literals; to_float("1e-7")); 2 == 2.0 is false
 # Floats print as the shortest text that reads back exactly: 0.1, 2.0, -0.0, 1e-05, 1e+16, inf, nan
 
-# Operators — and/or/not (NOT &&/||/!), x in tbl, x in arr
+# Operators — and/or/not (NOT &&/||/!), x in tbl (= has_key(tbl, x), on arrays too: a value → table.contains)
 # Tables — { key: val } or [1, 2, 3], dot access, bracket access (negative indexing supported; arr[i] past the end is nil, a string index out of range raises)
 # Logical — nil and false are falsy, everything else truthy
 
@@ -149,7 +149,7 @@ let r = pcall some_fn()              # {ok: bool, value/error: ..., stack: [{nam
 
 # Common builtins
 # I/O & process: print, eprint, error, pcall, len, type, to_string, to_int, to_float, exit, kill, argv, getenv, input, read_stdin, write_stdout, sleep
-# Collections:   push, pop, keys, values, sort, insert, delete, remove_at, has_key
+# Collections:   push, pop, keys, values, sort, insert, delete (keys; an array index raises), remove_at, has_key
 # Strings:       find, str_replace, substr, chr, ord, buf_new, buf_push, build_string
 # Filesystem:    read_file, write_file, append_file, file_exists, remove_file, mkdir, list_dir, is_dir, dirname, path_join, normalize_path, exec
 # TCP:           tcp_listen, tcp_accept, tcp_connect, tcp_read, tcp_write, tcp_close, tcp_peer, tcp_local_port, tcp_fd, tcp_from_fd

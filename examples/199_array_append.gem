@@ -17,8 +17,9 @@ a[3] = 40
 a[5] = 61
 push(a, 70)
 print(a, len(a), a[4], has_key(a, 4), has_key(a, 5))
-let b = [1, 2, 3]
-delete(b, 0)
+let b = []
+b[2] = 3
+b[1] = 2
 b[3] = "x"
 push(b, "y")
 print(b)

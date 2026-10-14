@@ -76,9 +76,9 @@ The order is the order of the work.
    - an effect-free expression statement (the `- 2` on its own line);
    - a fn with a `receive` that calls itself in non-tail position;
    - a module-level `let` named like a loaded module.
-3. **`match` with no matching arm raises** (`no match for <value>`), as
+3. **`match` with no matching arm raises** ✓ Done (PR 2) (`no match for <value>`), as
    Erlang's `case_clause`; `else nil` keeps the old behaviour.
-4. **Data traps fixed at the source.** `delete(arr, i)` on an array
+4. **Data traps fixed at the source.** ✓ Done (PR 2). `delete(arr, i)` on an array
    index raises (use `remove_at`); `in` means has-key on every table.
 5. **Rule lint in `make test`.** ✓ Done (PR 1, `tests/check_rules.sh`). A script that flags direct `->state =`,
    `gem_cur_globals[` outside gem.h, `close(` in socket code outside an
