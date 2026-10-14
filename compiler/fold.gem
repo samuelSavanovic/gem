@@ -244,6 +244,8 @@ fold = fn(node)
     if node.value != nil then node.value = fold(node.value) end
   when {tag: "program"}
     fold_stmts(node.stmts)
+  else
+    nil
   end
 
   node

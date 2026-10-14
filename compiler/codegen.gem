@@ -1193,6 +1193,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     when {tag: "index", object: object, key: key}
       let o = operands(compile_expr(object), key)
       return {expr: "gem_table_get({o.left}, {o.right})", setup: o.setup}
+    else
+      nil
     end
 
     codegen_error(node, "unknown expression node: {node.tag}")
@@ -1625,6 +1627,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(b, "\n")
       end
       return to_string(b)
+    else
+      nil
     end
 
     let r = compile_expr(node)
@@ -1731,6 +1735,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       return "{compile_stmt(node, indent)}\n{return_nil_str(p)}"
     when {tag: "fn_def"}
       return "{compile_stmt(node, indent)}\n{return_nil_str(p)}"
+    else
+      nil
     end
 
     let r = compile_expr(node)

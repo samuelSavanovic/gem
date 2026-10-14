@@ -37,10 +37,11 @@ fn match_else_only(val)
 end
 print(match_else_only(42))     # fallback
 
-# ── Match with no when and no else ──────────────────────────────
+# ── Match with no when and only `else nil` ───────────────────────
 
 fn match_empty(val)
   match val
+  else nil
   end
   "after"
 end

@@ -211,6 +211,25 @@ GemVal gem_error_fn(void *_env, GemVal *args, int argc) {
     return GEM_NIL;
 }
 
+/* ─── Internal: a `match` no arm of which matched ─── */
+
+/* lower() gives a `match` with no `else` an else branch calling
+   `__match_fail(<target>)`: it raises "no match for <value>", the value
+   as print shows it nested (strings quoted), cut at 200 bytes. */
+GemVal gem_match_fail_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    GemBuffer b;
+    b.cap = 64;
+    b.len = 0;
+    b.data = (char *)gem_alloc(b.cap);
+    gem_format_value_to_buf(argc > 0 ? args[0] : GEM_NIL, &b, 1);
+    char msg[256];
+    if (b.len > 200) snprintf(msg, sizeof(msg), "no match for %.200s...", b.data);
+    else snprintf(msg, sizeof(msg), "no match for %.*s", b.len, b.data);
+    gem_raise_error(msg);
+    return GEM_NIL;
+}
+
 /* ─── Built-in: error with location ─── */
 
 GemVal gem_error_at_fn(const char *file, int line, GemVal *args, int argc) {

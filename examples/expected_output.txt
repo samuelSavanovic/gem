@@ -4304,7 +4304,7 @@ socket
 big small
 A B nil
 point 1,2 pair 3 4 zero other
--- no branch taken, or a branch ending in a statement: nil
+-- no branch taken (else nil), or a branch ending in a statement: nil
 nil nil 6
 -- the block reads the outer variable it shadows
 1 5
@@ -4333,8 +4333,8 @@ early late
 small 1
 big 2
 -- an error in a branch reports its own line
-165
-174
+166
+175
 5
 mine 1
 2 mine
