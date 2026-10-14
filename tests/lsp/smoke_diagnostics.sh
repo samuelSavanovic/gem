@@ -145,10 +145,9 @@ for end in ("start", "end"):
     if not isinstance(pos.get("line"), int) or not isinstance(pos.get("character"), int):
         print(f"FAIL: range.{end} missing integer line/character: {pos}", file=sys.stderr)
         sys.exit(1)
-# The error is on the missing `end` after line "  a + b\n", so it points
-# somewhere on line 2 (0-indexed) or beyond — definitely > 0.
-if rng["start"]["line"] < 1:
-    print(f"FAIL: expected error on line >= 1 (0-indexed), got {rng['start']['line']}", file=sys.stderr)
+# The `fn` has no `end`: the error points at the `fn` on line 0.
+if rng["start"]["line"] != 0 or "has no `end`" not in d["message"]:
+    print(f"FAIL: expected the missing-end error at line 0, got {rng['start']['line']}: {d['message']}", file=sys.stderr)
     sys.exit(1)
 # end position should be >= start.
 if (rng["end"]["line"], rng["end"]["character"]) < (rng["start"]["line"], rng["start"]["character"]):

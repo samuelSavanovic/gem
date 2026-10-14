@@ -436,6 +436,80 @@ fn make_parser(tokens, source, file, sink)
     t
   end
 
+  # Blocks waiting for their `end`, innermost last ({tok, kw}): open_block
+  # pushes one at its opening keyword, expect_end pops it. A missing `end`
+  # shows up later (a named fn at column 1 inside a body, or the end of the
+  # file), and the error then points at the block that has none: the
+  # first block whose `end` was indented unlike its opening line (that
+  # `end` most likely belongs to an enclosing block), else the innermost
+  # open block. Once that is reported, the end of the file adds nothing.
+  let open_blocks = []
+  let end_suspect = nil
+  let missing_end_reported = false
+  # First column of a token on each line (the line's indentation).
+  let line_indent = {}
+  for tok in tokens
+    if not has_key(line_indent, tok.line)
+      line_indent[tok.line] = tok.col
+    end
+  end
+
+  let open_block = fn(tok, kw)
+    push(open_blocks, {tok: tok, kw: kw})
+  end
+
+  let report_missing_end = fn(blk, why)
+    missing_end_reported = true
+    let hint = "close it with `end` (every `if`, `while`, `for`, `fn`, `do`, `match` and `receive` block ends with one)"
+    if blk.end_line != nil
+      hint = "{hint}; the `end` at line {blk.end_line} is indented like an enclosing block, so it most likely closes that one"
+    else
+      hint = "{hint}; the first line indented less than its body is usually where it belongs"
+    end
+    report(blk.tok.line, blk.tok.col, len(blk.kw), "this `{blk.kw}` has no `end`: {why}", hint)
+  end
+
+  # The block a missing `end` most likely belongs to, or nil.
+  let missing_end_block = fn()
+    if end_suspect != nil
+      return end_suspect
+    end
+    if len(open_blocks) > 0
+      return open_blocks[len(open_blocks) - 1]
+    end
+    nil
+  end
+
+  # The `end` of the block `kw` opened by `open_tok`. When the file ends
+  # first, the error points at the block that has no `end`, not at the end
+  # of the file.
+  let expect_end = fn(open_tok, kw)
+    let i = len(open_blocks) - 1
+    while i >= 0 and open_blocks[i].tok != open_tok
+      i -= 1
+    end
+    let blk = if i >= 0 then open_blocks[i] else {tok: open_tok, kw: kw} end
+    while i >= 0 and len(open_blocks) > i
+      pop(open_blocks)
+    end
+    let t = tokens[pos]
+    if t.type == "EOF" and open_tok != nil and open_tok.line != nil
+      if not missing_end_reported
+        let culprit = missing_end_block()
+        if culprit == nil
+          culprit = blk
+        end
+        report_missing_end(culprit, "the file ended first")
+      end
+      return {type: "end", value: "end", line: t.line, col: t.col, synthetic: true}
+    end
+    let first_on_line = pos == 0 or tokens[pos - 1].line != t.line
+    if t.type == "end" and end_suspect == nil and open_tok != nil and first_on_line and t.line != open_tok.line and line_indent[open_tok.line] != t.col
+      end_suspect = {tok: open_tok, kw: kw, end_line: t.line}
+    end
+    expect("end")
+  end
+
   # Parse the type name of an extern parameter (`is_ret` false) or return
   # (`is_ret` true) and report it if it is not a marshalable extern type.
   let expect_extern_type = fn(is_ret, is_blocking)
@@ -848,6 +922,7 @@ fn make_parser(tokens, source, file, sink)
     # Anonymous function: fn(params) body end
     if t.type == "fn"
       advance()
+      open_block(t, "fn")
       let saved_ban = block_ban
       block_ban = nil
       expect("(")
@@ -858,7 +933,7 @@ fn make_parser(tokens, source, file, sink)
       let body = parse_fn_body()
       leave_fn_body(saved_loops)
       fn_depth -= 1
-      expect("end")
+      expect_end(t, "fn")
       block_ban = saved_ban
       return make_anon_fn(pr.params, pr.rest_param, with_prelude(pr.prelude, body), pr.defaults, t.line)
     end
@@ -1002,8 +1077,10 @@ fn make_parser(tokens, source, file, sink)
   # `do [|params|] body end` → anonymous fn
   # `is_spawn`: the block is the body of `spawn do ... end`.
   let parse_do_block = fn(is_spawn = false)
-    let do_line = peek().line
+    let do_tok = peek()
+    let do_line = do_tok.line
     expect("do")
+    open_block(do_tok, "do")
     let saved_ban = block_ban
     block_ban = nil
     let bp = parse_block_params()
@@ -1013,7 +1090,7 @@ fn make_parser(tokens, source, file, sink)
     let body = parse_fn_body()
     leave_fn_body(saved_loops)
     fn_depth -= 1
-    expect("end")
+    expect_end(do_tok, "do")
     block_ban = saved_ban
     let block = make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, body), bp.defaults, do_line)
     block.do_block = true
@@ -1766,11 +1843,17 @@ fn make_parser(tokens, source, file, sink)
       if at_top
         note_top_name(name_tok, "fn")
       end
-      if fn_depth > 0
+      let culprit = if t.col == 1 and (fn_depth > 0 or stmt_depth > 1) then missing_end_block() end
+      if culprit != nil
+        if not missing_end_reported
+          report_missing_end(culprit, "`fn {name}` at line {line} starts a new top-level function inside it")
+        end
+      elif fn_depth > 0
         report(line, t.col, len(name) + 3, "named fn inside function body is not supported", "use: let {name} = fn(...) ... end")
       elif stmt_depth > 1
         report(line, t.col, len(name) + 3, "named fn inside a block is not supported", "define it at the top level, or use: let {name} = fn(...) ... end")
       end
+      open_block(t, "fn")
       expect("(")
       let pr = parse_params()
       expect(")")
@@ -1779,7 +1862,7 @@ fn make_parser(tokens, source, file, sink)
       let body = parse_fn_body()
       leave_fn_body(saved_loops)
       fn_depth -= 1
-      expect("end")
+      expect_end(t, "fn")
       return make_fn_def(name, pr.params, pr.rest_param, with_prelude(pr.prelude, body), line, pr.defaults)
     end
 
@@ -1787,6 +1870,9 @@ fn make_parser(tokens, source, file, sink)
     if t.type == "if" or t.type == "elif"
       let line = t.line
       advance()
+      if t.type == "if"
+        open_block(t, "if")
+      end
       let cond = parse_header_expr(t.value)
       if is_assign_node(cond)
         report_assign_as_value(cond, "assignment is not allowed in condition; use '==' for comparison")
@@ -1808,7 +1894,7 @@ fn make_parser(tokens, source, file, sink)
       end
       # Only consume "end" for the outermost if (elif branches don't have their own end)
       if t.type == "if"
-        expect("end")
+        expect_end(t, "if")
       end
       return make_if(cond, then_body, else_body, line)
     end
@@ -1817,6 +1903,7 @@ fn make_parser(tokens, source, file, sink)
     if t.type == "while"
       let line = t.line
       advance()
+      open_block(t, "while")
       let saved_cond_depth = while_cond_depth
       while_cond_depth = loop_depth
       let cond = parse_header_expr("while")
@@ -1827,7 +1914,7 @@ fn make_parser(tokens, source, file, sink)
       loop_depth += 1
       let wbody = parse_body()
       loop_depth -= 1
-      expect("end")
+      expect_end(t, "while")
       return make_while(cond, wbody, line)
     end
 
@@ -1837,6 +1924,7 @@ fn make_parser(tokens, source, file, sink)
     if t.type == "for"
       let line = t.line
       advance()
+      open_block(t, "for")
       let var_name = expect("NAME").value
 
       if peek().type == "," and peek_at(1).type == "NAME"
@@ -1852,7 +1940,7 @@ fn make_parser(tokens, source, file, sink)
         loop_depth += 1
         let fbody = parse_body()
         loop_depth -= 1
-        expect("end")
+        expect_end(t, "for")
         return make_for_in(var_name, val_name, tbl_expr, fbody, line)
       elif peek().type == "in"
         # for x in items ... end
@@ -1861,7 +1949,7 @@ fn make_parser(tokens, source, file, sink)
         loop_depth += 1
         let fbody = parse_body()
         loop_depth -= 1
-        expect("end")
+        expect_end(t, "for")
         return make_for_in(var_name, nil, items_expr, fbody, line)
       elif peek().type == "="
         # for i = start, end ... end
@@ -1872,7 +1960,7 @@ fn make_parser(tokens, source, file, sink)
         loop_depth += 1
         let fbody = parse_body()
         loop_depth -= 1
-        expect("end")
+        expect_end(t, "for")
         return make_for_range(var_name, start_expr, end_expr, fbody, line)
       else
         let bad = peek()
@@ -1895,6 +1983,7 @@ fn make_parser(tokens, source, file, sink)
     if t.type == "match"
       let line = t.line
       advance()
+      open_block(t, "match")
       let target = parse_expr()
       skip_nl()
       let arms = []
@@ -1907,7 +1996,7 @@ fn make_parser(tokens, source, file, sink)
         advance()
         parse_body()
       end
-      expect("end")
+      expect_end(t, "match")
       # target_var (gensym name) is filled in by lower(); leave nil here
       # so the parser stays gensym-free.
       return make_match(target, arms, else_body, line, nil)
@@ -2108,6 +2197,7 @@ fn make_parser(tokens, source, file, sink)
       if rnext == "when" or rnext == "after"
         let rline = t.line
         advance()
+        open_block(t, "receive")
         skip_nl()
         let rarms = []
         while peek().type == "when"
@@ -2127,7 +2217,7 @@ fn make_parser(tokens, source, file, sink)
           end
           rafter_body = parse_body()
         end
-        expect("end")
+        expect_end(t, "receive")
         # recv_var (gensym name) is filled in by lower(); structural
         # arms here use the same match_arm shape as `match` statements.
         return make_receive_match(rarms, rafter_ms, rafter_body, rline, nil)
