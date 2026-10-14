@@ -17,8 +17,9 @@ C runtime is minimal glue code wiring together two libraries plus a per-process 
 ## Compiler CLI
 
 ```
-gem <file.gem>              # compile to a temp binary and run it
+gem <file.gem>              # compile (at -O0, cached) and run it
 gem <file.gem> [args...]    # run, passing extra args through to the program
+gem <file.gem> -- [args...] # the same; after --, options go to the program too
 gem <file.gem> -c           # compile to ./<basename>, don't run
 gem <file.gem> -o <name>    # compile to <name>, don't run (implies -c)
 gem <file.gem> --emit-c     # print generated C to stdout (used for bootstrapping)
@@ -34,9 +35,11 @@ A source path that cannot be read prints one line on stderr and exits 1: `gem: c
 
 Nesting is limited, so that neither the compiler nor the C compiler runs out of stack. Each statement, expression, unary operator and pattern opens a level while it is parsed (a top-level statement and its expression are two; each `elif` of a chain nests one more), and opening more than 200 is a compile error (`nested too deeply: more than 200 levels`). Counting also each link of an operator chain (`a + b + c`) or postfix chain (`t.a.b`, `t[0][1]`, `f()()`), more than 1,000 levels is a compile error too (`expression too deep: more than 1000 levels`). Split such code with `let` or a helper fn.
 
-The default behavior (`gem foo.gem`) writes generated C to `<basename>.c` in a new directory under `$TMPDIR` (else `/tmp`), compiles it to `<basename>` there, runs it, and removes the directory. Extra positional arguments after the source path are forwarded to the program via `argv()`, each as one argument. When `cc` fails, the directory is kept, and `gem` prints where the C file is.
+The default behavior (`gem foo.gem`) writes generated C to `<basename>.c` in a new directory under `$TMPDIR` (else `/tmp`), compiles it at `-O0` (fast to build; Gem code runs up to about 2x slower than at `-O2`, while the runtime library stays optimized: 1.75x on the lox interpreter's fib), runs it, and removes the directory. Extra positional arguments after the source path are forwarded to the program via `argv()`, each as one argument; after `--`, every argument is the program's, options included (`gem tool.gem -- --check`). When `cc` fails, the directory is kept, and `gem` prints where the C file is.
 
-`-c` (or `--compile-only`) keeps the artifact: compiles to `./<basename>` and exits without running. `-o <name>` does the same but lets you pick the path.
+**Binary cache.** Run mode keeps the binary it builds and runs it again, without calling `cc`, while nothing it is built from has changed: the key is a hash of the generated C (which holds the code of every file the program loads, so editing the program or a module, or changing the compiler, changes it), the `cc` command and its flags (`CC`, `CFLAGS`, `LDFLAGS`, `-I`/`-L`/`-l`), the runtime library's contents and those of the headers `extern include` names. Libraries named with `-l` are not part of the key: after rebuilding one, run once with `GEM_CACHE=off`. The cache lives in `$GEM_CACHE_DIR`, else `$XDG_CACHE_HOME/gem`, else `~/.cache/gem`; it holds up to 256 binaries and is emptied when a new one would go past that. `GEM_CACHE=off` builds every time and keeps nothing. `argv()[0]` is the cached binary's path.
+
+`-c` (or `--compile-only`) keeps the artifact: compiles at `-O2` to `./<basename>` and exits without running. `-o <name>` does the same but lets you pick the path.
 
 `--emit-c` prints C to stdout and exits. This is what the bootstrapping Makefile targets use.
 

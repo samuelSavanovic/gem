@@ -101,9 +101,14 @@ The order is the order of the work.
 
 ## Track B: a daily driver
 
-1. **Fast edit-run loop.** `gem file.gem` compiles at `-O0` and caches
+1. **Fast edit-run loop.** ✓ Done (PR 3). `gem file.gem` compiles at `-O0` and caches
    the binary by a hash of its sources, the runtime and the flags; `-o`
    keeps `-O2`.
+   *Landed:* the key hashes the C (every loaded file's code), the cc
+   command, the runtime library's and `extern include` headers' contents;
+   `GEM_CACHE=off`, `GEM_CACHE_DIR`; at most 256 entries, then emptied.
+   `--` after the file passes options to the program. Left: `-l`
+   libraries are not in the key.
 2. **Install and project commands.** `make install PREFIX=…`; `gem new`,
    `gem test` (runs `test.gem`), `gem build` from `gem.toml`.
 3. **Script basics.** `exec` that captures stdout/stderr and the status;

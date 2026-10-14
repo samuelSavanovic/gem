@@ -14,9 +14,12 @@ TLS_CFLAGS = $(BUILD_DIR)/tls_cflags
 COMPILER_DIR = compiler
 STAGE0 = bootstrap/stage0.c
 BUILD_DIR = build
+# Programs the tests run (`gem file.gem`) cache their binaries here, not in
+# the user's ~/.cache/gem; a GEM_CACHE_DIR set outside wins.
+export GEM_CACHE_DIR ?= $(CURDIR)/$(BUILD_DIR)/cache
 GEM = $(BUILD_DIR)/gem
 
-.PHONY: FORCE build debug asan test-debug test-reset-stress fuzz-diff fuzz-frontend fuzz-parser test-fuzz test test-rules test-stress test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-lsp test-example-apps bootstrap clean
+.PHONY: FORCE build debug asan test-debug test-reset-stress fuzz-diff fuzz-frontend fuzz-parser test-fuzz test test-rules test-stress test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-cache test-lsp test-example-apps bootstrap clean
 
 # Build the compiler from the checked-in stage0.c
 build: $(GEM)
@@ -103,11 +106,15 @@ bootstrap: $(GEM)
 	cp $(BUILD_DIR)/stage0_new.c $(STAGE0)
 	@echo "bootstrap/stage0.c regenerated and verified"
 
-test: $(GEM) test-rules test-reset-stress test-fuzz test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-resolve test-tls test-recursion-memory test-lsp test-example-apps
+test: $(GEM) test-rules test-reset-stress test-fuzz test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-resolve test-tls test-recursion-memory test-cache test-lsp test-example-apps
 	@bash examples/run_all.sh
 
 test-rules:
 	@bash tests/check_rules.sh
+
+# The run-mode binary cache (tests/check_cache.sh).
+test-cache: $(GEM)
+	@bash tests/check_cache.sh
 
 # Not part of `make test` (about as long again): the examples, the example
 # apps and the compiler compiling itself, with GEM_RESET_STRESS=1 (every
