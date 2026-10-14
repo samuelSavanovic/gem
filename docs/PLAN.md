@@ -83,7 +83,8 @@ The order is the order of the work.
    `gem_cur_globals[` outside gem.h, `close(` in socket code outside an
    allowlist, `mco_create`, and a builtin-list check (`BUILTIN_FNS`
    against SPEC, CHEATSHEET and both grammars).
-6. **Debug runtime.** `make debug` builds a runtime with invariant
+6. **Debug runtime.** ✓ Done (PR 1: `make debug`, `make asan`,
+   `GEM_RUNTIME=debug|asan`, `make test-debug`). `make debug` builds a runtime with invariant
    asserts, freed regions poisoned instead of zeroed (a dangling read
    crashes instead of reading nil), and a heap check after each reset;
    an ASan/UBSan build next to it.
