@@ -1,5 +1,6 @@
 # Tables, functions and string buffers compare by identity: a value equals
 # itself and nothing else, whatever its contents.
+load "std/table"
 let t = {a: 1}
 let alias = t
 let f = fn() 1 end
@@ -9,7 +10,7 @@ print("equal contents: {t == {a: 1}}")
 print("same fn: {f == f}; other fn: {f == fn() 1 end}")
 let b = buf_new()
 print("same buffer: {b == b}; other buffer: {b == buf_new()} type={type(b)}")
-print("table in array: {t in [1, t]}; copy in array: {{a: 1} in [t]}")
+print("table in array: {table.contains([1, t], t)}; copy in array: {table.contains([t], {a: 1})}")
 
 # A table works as a key, looked up by identity.
 let m = {}
