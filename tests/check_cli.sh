@@ -111,6 +111,8 @@ if [ ! -f "$tmp/c/cc_used" ]; then
   fails=$((fails + 1))
 fi
 run_check "-l after the source is the program's" "-lgemcli" 0 "$GEM" "$tmp/c/args.gem" -lgemcli
+run_check "-- passes the rest to the program" "--check" 0 "$GEM" "$tmp/c/args.gem" -- --check -o x
+run_check "-- before the source file is unknown" "" 2 "$GEM" -- "$tmp/c/args.gem"
 check "gem: -l requires an argument
 usage: gem <file.gem> [options] [args...]   (gem --help for more)" 2 -l
 check "gem: -L requires an argument
