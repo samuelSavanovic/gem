@@ -1,6 +1,6 @@
-# Loaded by 123_toplevel_for_capture.gem. Block-scoped lets in a module's
-# top-level code that reuse a module name (or a name the loading program
-# uses at its top level) must shadow, not write either slot.
+# Loaded by 123_toplevel_for_capture.gem. Block-scoped names in a module's
+# top-level code (a `for` variable) that reuse a module name (or a name the
+# loading program uses at its top level) must shadow, not write either slot.
 let x = 1
 let fs = []
 for x in [10, 20]
@@ -8,8 +8,8 @@ for x in [10, 20]
 end
 let z = "mod-z"
 if true
-  let z = "block-z"
-  push(fs, fn() z end)
+  let bz = "block-z"
+  push(fs, fn() bz end)
 end
 for y in ["mod-loop"]
   push(fs, fn() y end)

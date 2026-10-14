@@ -1,0 +1,545 @@
+# compiler/checks.gem — compile errors for code that runs but silently
+# doesn't do what it says. Runs on the parser's AST (before lower, so it
+# sees `for`, `match` and patterns as written), once per file, from
+# parse_source; the LSP reports them like any compile error.
+#
+#   - a `let` in a nested block that hides a variable of an enclosing
+#     block of the same fn (or of top-level code): it makes a new variable
+#     where an assignment was almost always meant;
+#   - a bare name in a `when` pattern that names a visible binding: it
+#     binds a new variable and always matches, where `^name` compares;
+#   - an expression statement with no effect (no call, no assignment):
+#     the `- 2` of a subtraction continued on the next line, a value left
+#     in the middle of a block;
+#   - a fn with a `receive` that calls itself other than as its last
+#     action: a process loop whose stack and memory grow per message.
+#
+# The parser reports the others of the kind itself: `pcall(f(x))`, and a
+# module-level `let` named like a module the file loads.
+#
+# Names starting with `__` are the parser's own and are skipped.
+
+# A frame is one fn body (or the file's top-level code): its blocks, from
+# the outermost (params and the body's own lets) to the innermost, each a
+# table name → line of its declaration. `outer` is the frame of the
+# enclosing fn for a closure (patterns see its names too), nil otherwise.
+fn new_frame(outer)
+  {blocks: [{}], outer: outer}
+end
+
+fn generated(name)
+  type(name) != "string" or (len(name) >= 2 and substr(name, 0, 2) == "__")
+end
+
+# The column of `name` on line `line` of the source, after `prefix` when
+# given (`let`), else its first whole-word occurrence; 1 when not found.
+fn name_col(ctx, line, name, prefix = nil)
+  if line == nil
+    return 1
+  end
+  let text = ctx.line_text(line)
+  let from = 0
+  if prefix != nil
+    let a = find(text, prefix)
+    if a >= 0
+      from = a + len(prefix)
+    end
+  end
+  let n = len(name)
+  let i = find(text, name, from)
+  while i >= 0
+    let before_ok = i == 0 or not is_word_byte(ord(text, i - 1))
+    let after_ok = i + n >= len(text) or not is_word_byte(ord(text, i + n))
+    if before_ok and after_ok
+      return i + 1
+    end
+    i = find(text, name, i + 1)
+  end
+  1
+end
+
+fn is_word_byte(c)
+  (c >= 97 and c <= 122) or (c >= 65 and c <= 90) or (c >= 48 and c <= 57) or c == 95
+end
+
+# Where `name` is declared in the frame's enclosing blocks (all but the
+# innermost), or nil. A name the innermost block already declares (an
+# earlier `let`, the `for` variable) is rebound in that same block, which
+# hides nothing new.
+fn enclosing_decl(frame, name)
+  let n = len(frame.blocks)
+  if has_key(frame.blocks[n - 1], name)
+    return nil
+  end
+  let i = n - 2
+  while i >= 0
+    let b = frame.blocks[i]
+    if has_key(b, name)
+      return b[name]
+    end
+    i -= 1
+  end
+  nil
+end
+
+# Is `name` visible here: a local of this frame or an enclosing fn's, or
+# a module-level binding?
+fn visible(ctx, frame, name)
+  let f = frame
+  while f != nil
+    for b in f.blocks
+      if has_key(b, name)
+        return true
+      end
+    end
+    f = f.outer
+  end
+  has_key(ctx.module_names, name)
+end
+
+fn declare(frame, name, line)
+  if not generated(name)
+    frame.blocks[len(frame.blocks) - 1][name] = line
+  end
+end
+
+fn push_block(frame)
+  push(frame.blocks, {})
+end
+
+fn pop_block(frame)
+  pop(frame.blocks)
+end
+
+# ─── Expressions with no effect ───
+
+let pure_expr = nil
+pure_expr = fn(e)
+  if e == nil or type(e) != "table"
+    return true
+  end
+  let tag = e.tag
+  if tag == "int" or tag == "float" or tag == "string" or tag == "bool" or tag == "nil" or tag == "var"
+    return true
+  end
+  if tag == "binop"
+    return pure_expr(e.left) and pure_expr(e.right)
+  end
+  if tag == "unop"
+    return pure_expr(e.expr)
+  end
+  if tag == "dot"
+    return pure_expr(e.object)
+  end
+  if tag == "index"
+    return pure_expr(e.object) and pure_expr(e.key)
+  end
+  if tag == "array"
+    for x in e.elements
+      if not pure_expr(x) then return false end
+    end
+    return true
+  end
+  if tag == "interp"
+    for p in e.parts
+      if type(p) == "table" and not pure_expr(p) then return false end
+    end
+    return true
+  end
+  false
+end
+
+# What an effect-free statement looks like, for the message.
+fn pure_kind(e)
+  if e.tag == "unop" and e.op == "-"
+    return "a negation"
+  end
+  if e.tag == "var"
+    return "a variable"
+  end
+  if e.tag == "binop"
+    return "an operation"
+  end
+  "a value"
+end
+
+# ─── Statements ───
+
+let check_stmts = nil
+let check_node = nil
+
+# `value_used`: the block's last statement is its value (a fn body, an
+# `if`/`match`/`receive` branch); a loop body or the top-level code has
+# none.
+check_stmts = fn(ctx, frame, stmts, value_used)
+  if stmts == nil
+    return nil
+  end
+  let n = len(stmts)
+  for i = 0, n
+    let s = stmts[i]
+    # A bare `nil` is the way to write an empty branch or body on purpose.
+    if type(s) == "table" and s.tag != nil and s.tag != "nil" and pure_expr(s)
+      if i < n - 1 or not value_used
+        let where = if i < n - 1 then "in the middle of a block" else "at the end of a block whose value is not used" end
+        let hint = if s.tag == "unop" and s.op == "-"
+          "an expression can't continue on the next line: put the operator at the end of the line above, or the whole expression on one line"
+        else
+          "remove it, or use the value: assign it, pass it to a call, or `return` it"
+        end
+        let line = s.line
+        let col = s.stmt_col
+        ctx.report(line, col, 1, "{pure_kind(s)} on its own does nothing ({where})", hint)
+      end
+    end
+    check_node(ctx, frame, s)
+  end
+end
+
+fn check_body_block(ctx, frame, stmts, value_used)
+  push_block(frame)
+  check_stmts(ctx, frame, stmts, value_used)
+  pop_block(frame)
+end
+
+fn check_let(ctx, frame, s)
+  if generated(s.name)
+    return nil
+  end
+  let decl = enclosing_decl(frame, s.name)
+  if decl != nil
+    let where = if decl > 0 then " (line {decl})" else "" end
+    ctx.report(s.line, name_col(ctx, s.line, s.name, "let"), len(s.name),
+      "`let {s.name}` hides the `{s.name}` of an enclosing block{where}: it makes a new variable, and the outer one keeps its value",
+      "to change the outer variable, assign it: `{s.name} = ...`; for a new one, pick another name")
+  end
+  declare(frame, s.name, if s.line != nil then s.line else 0 end)
+end
+
+# A `when` arm's pattern bindings (match_arm.binds, from the parser): a
+# bare name that names a visible binding.
+fn check_arm_binds(ctx, frame, arm)
+  if arm.binds == nil
+    return nil
+  end
+  for b in arm.binds
+    if b.name != "_" and not generated(b.name) and visible(ctx, frame, b.name)
+      ctx.report(b.line, b.col, len(b.name),
+        "`{b.name}` in this pattern binds a new variable and matches anything; it doesn't compare with the `{b.name}` in scope",
+        "write `^{b.name}` to compare with its value, or pick another name for a new binding")
+    end
+  end
+end
+
+fn check_arm(ctx, frame, arm)
+  check_arm_binds(ctx, frame, arm)
+  push_block(frame)
+  if arm.binds != nil
+    for b in arm.binds
+      declare(frame, b.name, b.line)
+    end
+  end
+  if arm.expr != nil
+    check_node(ctx, frame, arm.expr)
+  end
+  check_stmts(ctx, frame, arm.body, true)
+  pop_block(frame)
+end
+
+fn check_fn(ctx, outer, node)
+  let frame = new_frame(outer)
+  if node.params != nil
+    for p in node.params
+      declare(frame, p, if node.line != nil then node.line else 0 end)
+    end
+  end
+  if node.rest_param != nil
+    declare(frame, node.rest_param, 0)
+  end
+  if node.defaults != nil
+    for d in node.defaults
+      if d != nil
+        check_node(ctx, frame, d)
+      end
+    end
+  end
+  check_stmts(ctx, frame, node.body, true)
+  if node.tag == "fn_def"
+    check_receive_loop(ctx, node)
+  end
+end
+
+check_node = fn(ctx, frame, node)
+  if node == nil or type(node) != "table"
+    return nil
+  end
+  let tag = node.tag
+  if tag == nil
+    # a tagless container: arg list, table entries
+    for _, c in node
+      check_node(ctx, frame, c)
+    end
+    return nil
+  end
+  if tag == "let"
+    check_node(ctx, frame, node.value)
+    check_let(ctx, frame, node)
+  elif tag == "block"
+    # transparent: a destructuring `let`'s lets belong to this block
+    for c in node.stmts
+      check_node(ctx, frame, c)
+    end
+  elif tag == "fn_def" or tag == "anon_fn"
+    check_fn(ctx, if tag == "anon_fn" then frame end, node)
+  elif tag == "if"
+    check_node(ctx, frame, node.cond)
+    check_body_block(ctx, frame, node.then, true)
+    check_body_block(ctx, frame, node.else, true)
+  elif tag == "while"
+    check_node(ctx, frame, node.cond)
+    check_body_block(ctx, frame, node.body, false)
+  elif tag == "for_in" or tag == "for_range"
+    check_node(ctx, frame, node.items)
+    check_node(ctx, frame, node.start)
+    check_node(ctx, frame, node.end_)
+    push_block(frame)
+    declare(frame, node.var_name, node.line)
+    if node.val_name != nil
+      declare(frame, node.val_name, node.line)
+    end
+    check_stmts(ctx, frame, node.body, false)
+    pop_block(frame)
+  elif tag == "match"
+    check_node(ctx, frame, node.target)
+    if node.whens != nil
+      for arm in node.whens
+        check_arm(ctx, frame, arm)
+      end
+    end
+    check_body_block(ctx, frame, node.else, true)
+  elif tag == "receive_match"
+    if node.arms != nil
+      for arm in node.arms
+        check_arm(ctx, frame, arm)
+      end
+    end
+    check_node(ctx, frame, node.after_ms)
+    check_body_block(ctx, frame, node.after_body, true)
+  else
+    for k, v in node
+      if k != "tag" and type(v) == "table"
+        check_node(ctx, frame, v)
+      end
+    end
+  end
+end
+
+# ─── Process loops: a fn with a `receive` calling itself ───
+
+# Does `node` hold a `receive` block outside nested fns?
+let has_receive = nil
+has_receive = fn(node)
+  if node == nil or type(node) != "table"
+    return false
+  end
+  if node.tag == "receive_match"
+    return true
+  end
+  if node.tag == "anon_fn" or node.tag == "fn_def"
+    return false
+  end
+  for k, v in node
+    if k != "tag" and type(v) == "table" and has_receive(v)
+      return true
+    end
+  end
+  false
+end
+
+# Mark the calls in tail position of `stmts` (a fn body or a branch in
+# tail position) in `tails`: the last statement, through the branches of
+# an `if`, `match` or `receive` there.
+let mark_tails = nil
+let mark_tail_expr = nil
+mark_tail_expr = fn(e, tails)
+  if e == nil or type(e) != "table"
+    return nil
+  end
+  if e.tag == "call"
+    tails[e] = true
+  elif e.tag == "if"
+    mark_tails(e.then, tails)
+    mark_tails(e.else, tails)
+  elif e.tag == "match"
+    if e.whens != nil
+      for arm in e.whens
+        mark_tails(arm.body, tails)
+      end
+    end
+    mark_tails(e.else, tails)
+  elif e.tag == "receive_match"
+    if e.arms != nil
+      for arm in e.arms
+        mark_tails(arm.body, tails)
+      end
+    end
+    mark_tails(e.after_body, tails)
+  end
+end
+mark_tails = fn(stmts, tails)
+  if stmts == nil or len(stmts) == 0
+    return nil
+  end
+  let last = stmts[len(stmts) - 1]
+  if type(last) == "table" and last.tag == "return"
+    mark_tail_expr(last.value, tails)
+  else
+    mark_tail_expr(last, tails)
+  end
+end
+
+# Every `return <call>` is a tail call too, wherever it is.
+let mark_returns = nil
+mark_returns = fn(node, tails)
+  if node == nil or type(node) != "table"
+    return nil
+  end
+  if node.tag == "anon_fn" or node.tag == "fn_def"
+    return nil
+  end
+  if node.tag == "return"
+    mark_tail_expr(node.value, tails)
+  end
+  for k, v in node
+    if k != "tag" and type(v) == "table"
+      mark_returns(v, tails)
+    end
+  end
+end
+
+let find_self_calls = nil
+find_self_calls = fn(node, name, out)
+  if node == nil or type(node) != "table"
+    return nil
+  end
+  if node.tag == "anon_fn" or node.tag == "fn_def"
+    return nil
+  end
+  if node.tag == "call" and type(node.func) == "table" and node.func.tag == "var" and node.func.name == name
+    push(out, node)
+  end
+  for k, v in node
+    if k != "tag" and type(v) == "table"
+      find_self_calls(v, name, out)
+    end
+  end
+end
+
+fn check_receive_loop(ctx, fd)
+  if fd.name == nil or generated(fd.name) or not has_receive(fd.body)
+    return nil
+  end
+  let calls = []
+  for s in fd.body
+    find_self_calls(s, fd.name, calls)
+  end
+  if len(calls) == 0
+    return nil
+  end
+  let tails = {}
+  mark_tails(fd.body, tails)
+  for s in fd.body
+    mark_returns(s, tails)
+  end
+  for c in calls
+    if not has_key(tails, c)
+      let line = c.line
+      let col = if c.func.col != nil then c.func.col else name_col(ctx, line, fd.name) end
+      ctx.report(line, col, len(fd.name),
+        "`{fd.name}` waits for messages (`receive`) and calls itself here before it is done: each message handled keeps a stack frame and its memory, until the process overflows its stack",
+        "make the call the last thing the fn does (the last expression of its branch, or `return {fd.name}(...)`), or loop with `while`")
+    end
+  end
+end
+
+# ─── Entry ───
+
+# Module-level names: top-level `let`s (destructuring too), named fns,
+# extern fns and the names `load`s bind.
+fn collect_module_names(stmts, out)
+  for s in stmts
+    if type(s) != "table"
+      continue
+    end
+    if s.tag == "let" and not generated(s.name)
+      out[s.name] = true
+    elif s.tag == "block"
+      collect_module_names(s.stmts, out)
+    elif (s.tag == "fn_def" or s.tag == "extern_fn") and s.name != nil
+      out[s.name] = true
+    elif s.tag == "load"
+      if s.alias != nil
+        out[s.alias] = true
+      end
+      if s.selective != nil
+        for n in s.selective
+          out[n] = true
+        end
+      end
+      if s.alias == nil and s.selective == nil and type(s.path) == "string"
+        out[load_base_name(s.path)] = true
+      end
+    end
+  end
+end
+
+# The namespace a plain `load "<path>"` binds: the file's base name.
+fn load_base_name(path)
+  let start = 0
+  for i = 0, len(path)
+    if ord(path, i) == 47
+      start = i + 1
+    end
+  end
+  let base = substr(path, start, len(path) - start)
+  if len(base) > 4 and substr(base, len(base) - 4, 4) == ".gem"
+    base = substr(base, 0, len(base) - 4)
+  end
+  base
+end
+
+fn check_semantics(ast, source, file, sink)
+  let lines = nil
+  let line_text = fn(n)
+    if lines == nil
+      lines = split_lines(source)
+    end
+    if n >= 1 and n <= len(lines) then lines[n - 1] else "" end
+  end
+  let ctx = {
+    module_names: {},
+    line_text: line_text,
+    report: fn(line, col, span, msg, hint)
+      sink.report(source, file, line, col, span, msg, hint)
+    end
+  }
+  collect_module_names(ast.stmts, ctx.module_names)
+  let top = new_frame(nil)
+  check_stmts(ctx, top, ast.stmts, false)
+end
+
+fn split_lines(source)
+  let out = []
+  let start = 0
+  let n = len(source)
+  let i = find(source, "\n")
+  while i >= 0
+    push(out, substr(source, start, i - start))
+    start = i + 1
+    i = find(source, "\n", start)
+  end
+  push(out, substr(source, start, n - start))
+  out
+end
+
+export check_semantics

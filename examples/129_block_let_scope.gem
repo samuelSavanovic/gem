@@ -11,10 +11,10 @@ fn declare_before(c)
 end
 print(declare_before(true), declare_before(false))
 
-# A let in every branch shadows an outer `x` only inside its branch.
+# A let in every branch is visible only inside its branch.
 fn outer_wins(c)
   let x = 1
-  if c then let x = 2 else let x = 3 end
+  if c then let x2 = 2 else let x3 = 3 end
   x
 end
 print(outer_wins(true), outer_wins(false))
@@ -114,9 +114,9 @@ print(closure_in_block())
 # the file is module-level and visible to fns declared anywhere.
 let m = 7
 if true
-  let m = 8
-  let only_here = m + 1
-  print(m, only_here)
+  let m8 = 8
+  let only_here = m8 + 1
+  print(m8, only_here)
 end
 print(m)
 

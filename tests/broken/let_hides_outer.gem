@@ -1,0 +1,51 @@
+# A `let` in a nested block that hides a variable of an enclosing block of
+# the same fn (or of the top-level code) is a compile error: it makes a
+# new variable where an assignment was almost always meant. Five errors.
+# expect: `let total` hides the `total` of an enclosing block
+fn sum(xs)
+  let total = 0
+  for x in xs
+    let total = total + x
+  end
+  total
+end
+
+fn branch(n, c)
+  if c
+    let n = n + 1
+  elif n > 3
+    let n = 0
+  end
+  while n < 3
+    match n
+    when 1 then let n = 5
+    else nil
+    end
+    n += 1
+  end
+  n
+end
+
+let count = 0
+for i in [1]
+  let count = count + i
+end
+
+# Not errors: a re-let in the same block, a for variable, a `let` in a
+# closure or a named fn, a re-let next to the for variable.
+fn fine(n, lines)
+  let n = n + 1
+  for n in [1]
+    let n = n * 2
+  end
+  let f = fn() let n = 3; n end
+  for line in lines
+    let line = line + "!"
+  end
+  n + f()
+end
+let count = 1
+fn count_local()
+  let count = 2
+  count
+end
