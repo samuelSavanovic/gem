@@ -27,6 +27,9 @@ gem <file.gem> --check      # parse + analyze, exit 0 on success, 1 on error
 gem <file.gem> --run        # accepted as a no-op; run is the default
 gem --help                  # print usage (also -h), exit 0
 gem lsp                     # start the language server on stdin/stdout
+gem new <name>              # make a project directory <name>/
+gem test [args...]          # run the project's test.gem
+gem build [cc flags]        # build the project's main at -O2 into build/<name>
 ```
 
 Options can come before or after the source path. Before it, an argument starting with `-` that is not one of the options above is a usage error: `gem` prints a short message and the usage line on stderr and exits 2 (as for a missing source path or `-o` without a name). After the source path, an unknown argument is passed to the program, so `gem prog.gem --help` gives `--help` to `prog.gem`.
@@ -40,6 +43,16 @@ The default behavior (`gem foo.gem`) writes generated C to `<basename>.c` in a n
 **Binary cache.** Run mode keeps the binary it builds and runs it again, without calling `cc`, while nothing it is built from has changed: the key is a hash of the generated C (which holds the code of every file the program loads, so editing the program or a module, or changing the compiler, changes it), the `cc` command and its flags (`CC`, `CFLAGS`, `LDFLAGS`, `-I`/`-L`/`-l`), the runtime library's contents and those of the headers `extern include` names. Libraries named with `-l` are not part of the key: after rebuilding one, run once with `GEM_CACHE=off`. The cache lives in `$GEM_CACHE_DIR`, else `$XDG_CACHE_HOME/gem`, else `~/.cache/gem`; it holds up to 256 binaries and is emptied when a new one would go past that. `GEM_CACHE=off` builds every time and keeps nothing. `argv()[0]` is the cached binary's path.
 
 `-c` (or `--compile-only`) keeps the artifact: compiles at `-O2` to `./<basename>` and exits without running. `-o <name>` does the same but lets you pick the path.
+
+**Projects.** A project is a directory with a `gem.toml` (see Modules, "Project root marker"). `gem.toml` holds `key = "value"` lines; `#` starts a comment, and other lines (`[sections]`) are ignored. Two keys are read: `name` (default: the directory's name) and `main` (the entry file, default `main.gem`).
+
+- `gem new <name>` makes `<name>/` holding a `gem.toml` (`name` and `main`), a `main.gem` whose `fn main` prints `hello, world`, a `test.gem` with one `std/test` case, and a `.gitignore` for `build/`. It refuses a directory that exists (exit 1); a missing name is a usage error (exit 2).
+- `gem test [args...]` runs the project's `test.gem` in run mode, passing the arguments to it, and exits with its status.
+- `gem build [cc flags]` compiles the project's `main` at `-O2` to `build/<name>` under the project root; `-I`/`-L`/`-l` flags are passed to `cc`.
+
+Both find the project from the current directory upwards (the nearest directory with a `gem.toml`), so they work from any subdirectory; with none, they print `gem test: no gem.toml in this directory or above it` (or `gem build: ...`) and exit 1.
+
+**Install.** `make install` (in the repository, after `make build`) copies the compiler, the runtime library and headers and `std/` to `$(PREFIX)/lib/gem/` (`PREFIX` defaults to `/usr/local`; `DESTDIR` stages it) and links `$(PREFIX)/bin/gem` to the compiler, which finds the rest two levels above its real path (see Modules, "install root"). `make uninstall` removes both.
 
 `--emit-c` prints C to stdout and exits. This is what the bootstrapping Makefile targets use.
 
