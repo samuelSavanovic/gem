@@ -14,7 +14,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <sys/wait.h>
 #include <sys/stat.h>
 
 /* The workers wait on blocking calls rather than compute, so their number
@@ -128,8 +127,7 @@ static void gem_io_do_write(GemIORequest *req, const char *mode) {
 }
 
 static void gem_io_do_exec(GemIORequest *req) {
-    int ret = system(req->path);
-    req->exit_code = WIFEXITED(ret) ? WEXITSTATUS(ret) : -1;
+    req->exit_code = gem_run_shell(req->path);
 }
 
 static void *gem_io_worker_fn(void *arg) {

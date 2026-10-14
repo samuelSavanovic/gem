@@ -1338,6 +1338,10 @@ void gem_io_release(GemIORequest *req);
    Returns NULL with a malloc'd message in *err_msg on failure (cannot open,
    directory, read error). Safe to call from a worker thread. */
 char *gem_read_whole_file(const char *path, size_t *out_len, char **err_msg);
+/* Run `cmd` with `/bin/sh -c` and wait for it: its exit status, or -1 when
+   it could not start or did not exit normally. Threads can run it at once
+   (macOS's system() lets one run at a time). */
+int gem_run_shell(const char *cmd);
 /* Drain the thread pool's wake pipe; returns 1 when a request may have
    completed since the last call (the scheduler then checks its pool waiters). */
 int gem_io_check_completions(void);

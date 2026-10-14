@@ -1463,9 +1463,10 @@ read waiting about 100 ms (`benchmarks/threadpool`, Linux x86_64 VM).
 Keep long calls fewer than the workers: run them from a few processes,
 or raise the pool with the `GEM_POOL_SIZE` environment variable above
 the number that can run at once (with 8 workers the reads ran at about
-70,000/s beside the four). Don't raise it further than that: more
-workers make every fast call slower (the 16 readers alone: 77,000
-reads/s with 4 workers, 46,000 with 8 or 16).
+70,000/s beside the four). Don't raise it further than that: on Linux,
+more workers make every fast call slower (the 16 readers alone: 77,000
+reads/s with 4 workers, 46,000 with 8 or 16; on an M-series Mac, about
+98,000 at 4, 8 and 16).
 
 ### Claim a resource in the process responsible for it
 
