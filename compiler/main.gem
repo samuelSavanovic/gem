@@ -1180,6 +1180,13 @@ let USAGE = """
     --check              parse and analyze only; exit 1 on errors
     --run                run after compiling (the default)
     -h, --help           print this help
+  C compiler flags, before <file.gem> only:
+    -l<lib>, -l <lib>    link the library (after the runtime)
+    -L<dir>, -L <dir>    search <dir> for libraries
+    -I<dir>, -I <dir>    search <dir> for the headers of `extern include`
+  environment:
+    CC                   the C compiler (default cc)
+    CFLAGS, LDFLAGS      more flags for it, split at spaces
   subcommands:
     lsp                  start the language server on stdin/stdout
   """
@@ -1200,7 +1207,8 @@ fn parse_args(args)
     check: false,
     run: true,
     compile_only: false,
-    run_args: []
+    run_args: [],
+    cc_flags: []
   }
 
   let argc = len(args)
@@ -1226,6 +1234,18 @@ fn parse_args(args)
     elif result.src_path == nil and (arg == "-h" or arg == "--help")
       print(USAGE)
       exit(0)
+    elif result.src_path == nil and len(arg) >= 2 and (substr(arg, 0, 2) == "-l" or substr(arg, 0, 2) == "-L" or substr(arg, 0, 2) == "-I")
+      # Flags for cc, before the file only: after it, `-l` is the program's.
+      let flag = substr(arg, 0, 2)
+      let value = substr(arg, 2)
+      if value == ""
+        i += 1
+        if i >= argc or args[i] == ""
+          usage_error(flag + " requires an argument")
+        end
+        value = args[i]
+      end
+      push(result.cc_flags, flag + value)
     elif result.src_path == nil and len(arg) > 1 and substr(arg, 0, 1) == "-"
       # Before the source file, an unknown flag is a mistake, not a path.
       # After it, the program gets it like any other argument.
@@ -1430,10 +1450,44 @@ else
   let q_out = shell_quote(out_name)
   let q_c = shell_quote(tmp_c)
   let q_rt = shell_quote(runtime_dir)
+  # -I flags go before the runtime's own; -L and -l after the runtime, which
+  # libraries they name may be needed by. CC, CFLAGS and LDFLAGS are used as
+  # the shell splits them.
+  let cc = getenv("CC")
+  if cc == nil or cc == ""
+    cc = "cc"
+  end
+  let env_cflags = getenv("CFLAGS")
+  let env_ldflags = getenv("LDFLAGS")
+  let inc_flags = ""
+  let lib_flags = ""
+  for f in cli.cc_flags
+    if substr(f, 0, 2) == "-I"
+      inc_flags = inc_flags + " " + shell_quote(f)
+    else
+      lib_flags = lib_flags + " " + shell_quote(f)
+    end
+  end
+  if env_ldflags != nil and env_ldflags != ""
+    lib_flags = " " + env_ldflags + lib_flags
+  end
+  # tls_connect's object needs OpenSSL, whose flags `make build` found
+  # (runtime/tls_config.sh). A program that never names it links without.
+  let tls_libs_file = path_join(install_root, "build/tls_libs")
+  if find(c_code, "gem_tls_connect_fn") >= 0 and file_exists(tls_libs_file)
+    let tls_libs = string.trim(read_file(tls_libs_file))
+    if tls_libs != ""
+      lib_flags = lib_flags + " " + tls_libs
+    end
+  end
+  let c_flags = " -std=gnu11 -O2 -pthread"
+  if env_cflags != nil and env_cflags != ""
+    c_flags = c_flags + " " + env_cflags
+  end
   let cc_cmd = if file_exists(runtime_lib)
-    "cc -o " + q_out + " " + q_c + " -I " + q_rt + " -std=gnu11 -O2 -pthread " + shell_quote(runtime_lib) + " -lm"
+    cc + " -o " + q_out + " " + q_c + inc_flags + " -I " + q_rt + c_flags + " " + shell_quote(runtime_lib) + lib_flags + " -lm"
   else
-    "cc -o " + q_out + " " + q_c + " " + q_rt + "/gem_*.c " + q_rt + "/sqlite3.c -I " + q_rt + " -std=gnu11 -O2 -pthread -lm"
+    cc + " -o " + q_out + " " + q_c + " " + q_rt + "/gem_*.c " + q_rt + "/sqlite3.c" + inc_flags + " -I " + q_rt + c_flags + lib_flags + " -lm"
   end
 
   let cc_ret = exec(cc_cmd)

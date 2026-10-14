@@ -705,6 +705,7 @@ GemVal gem_tcp_local_port_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_fd_fn(void *_env, GemVal *args, int argc);
 GemVal gem_tcp_from_fd_fn(void *_env, GemVal *args, int argc);
 GemVal gem_claim_fn(void *_env, GemVal *args, int argc);
+GemVal gem_tls_connect_fn(void *_env, GemVal *args, int argc);
 GemVal gem_epoch_ms_fn(void *_env, GemVal *args, int argc);
 GemVal gem_format_time_fn(void *_env, GemVal *args, int argc);
 GemVal gem_format_time_local_fn(void *_env, GemVal *args, int argc);
@@ -1266,7 +1267,8 @@ typedef struct {
     int fd;              /* GEM_RES_SOCKET */
     uint64_t dev, ino;   /* the fd's identity when it was registered (st_dev / st_ino;
                             on macOS a socket's kernel id for ino) */
-    void *ptr;           /* GEM_RES_SQLITE: the sqlite3 * */
+    void *ptr;           /* GEM_RES_SQLITE: the sqlite3 *; GEM_RES_SOCKET: its TLS
+                            session (gem_builtins_tls.c), NULL for plain TCP */
 } GemResEntry;
 
 /* Register a new resource owned by the running process (none outside a
@@ -1318,6 +1320,24 @@ const char *gem_res_print_name(int kind);
 void gem_res_diag_counts(int *open, int *ownerless);
 /* Close callbacks of the kinds, run at a process's exit. */
 void gem_tcp_close_fd_checked(int fd, uint64_t dev, uint64_t ino);
+
+/* TLS sockets (gem_builtins_tls.c). The socket builtins and the resource
+   table reach TLS code only through gem_tls_ops, which the first
+   tls_connect sets, so a program whose code never names it links without the
+   TLS library. read and write implement tcp_read and tcp_write (the
+   arguments already checked); close sends a TLS socket's close_notify
+   if it can without waiting and frees its session (GemResEntry.ptr),
+   before the fd closes. */
+typedef struct {
+    GemVal (*read)(GemVal sock, size_t max_bytes, int has_timeout, int64_t timeout_ms);
+    GemVal (*write)(GemVal sock, const char *data, size_t total, int has_timeout, int64_t timeout_ms);
+    void (*close)(void *tls);
+} GemTlsOps;
+extern const GemTlsOps *gem_tls_ops;
+/* tcp_connect for builtin `who`, with `deadline` (gem_now_ms time, -1 for
+   none) bounding the wait for the connection; and the port check. */
+GemVal gem_tcp_connect_to(const char *host, int port, int64_t deadline, const char *who);
+int gem_tcp_port(GemVal v, const char *who);
 void gem_sqlite_exit_close(void *db);
 
 /* ─── Thread pool for async I/O ─── */

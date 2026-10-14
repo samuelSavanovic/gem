@@ -2917,9 +2917,9 @@ echo: 200 {"content-length": "73"} GET / HTTP/1.1|Host: 127.0.0.1:PORT|Connectio
 host has port: true
 POST /?q=1 HTTP/1.1|Connection: close|Content-Length: 3|Host: example.test||abc
 true
-https: request.get: https is not supported (Gem has no TLS): https://example.com/
-ftp: request.get: unsupported URL scheme "ftp" (only http:// is supported)
-no scheme: request.get: URL must start with http:// (got "example.com/x")
+ca_file: request.get: ca_file must be a string or nil, got int
+ftp: request.get: unsupported URL scheme "ftp" (only http:// and https:// are supported)
+no scheme: request.get: URL must start with http:// or https:// (got "example.com/x")
 no host: request.get: URL has no host: http:///x
 bad port: request.get: invalid port "abc" in URL http://127.0.0.1:abc/
 port range: request.get: invalid port "70000" in URL http://127.0.0.1:70000/
@@ -4711,3 +4711,7 @@ http: on_event: observer broke
 http: on_event: observer broke
 http: on_event: observer broke
 HTTP/1.1 200 OK
+within the timeout: hi
+nil timeout: socket
+tcp_connect: timeout_ms must be an int (milliseconds) or nil, got string
+tcp_connect: connect failed: Connection refused
