@@ -254,8 +254,10 @@ static void gem_res_close_n(const int32_t *idx, int n) {
         }
         GemResEntry e = gem_res[idx[k]];
         gem_res_free_entry(idx[k]);
-        if (e.kind == GEM_RES_SOCKET) gem_tcp_close_fd_checked(e.fd, e.dev, e.ino);
-        else if (e.kind == GEM_RES_SQLITE) gem_sqlite_exit_close(e.ptr);
+        if (e.kind == GEM_RES_SOCKET) {
+            if (e.ptr) gem_tls_ops->close(e.ptr);
+            gem_tcp_close_fd_checked(e.fd, e.dev, e.ino);
+        } else if (e.kind == GEM_RES_SQLITE) gem_sqlite_exit_close(e.ptr);
     }
 }
 
@@ -461,6 +463,10 @@ int gem_extern_socket_fd(GemVal v, const char *fn, int argi) {
     GemResEntry *e = gem_res_lookup(v);
     if (!e) {
         snprintf(buf, sizeof(buf), "%s: arg %d: socket is closed", fn, argi);
+        gem_error(buf);
+    }
+    if (e->ptr) {
+        snprintf(buf, sizeof(buf), "%s: arg %d: a TLS socket can't be passed to C", fn, argi);
         gem_error(buf);
     }
     gem_res_note_user(v.res_slot);

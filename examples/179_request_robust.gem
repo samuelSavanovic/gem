@@ -130,7 +130,7 @@ print(request.request("HEAD", url_for(serve_once(["<echo>"]), "/h")).body == "")
 
 # ─── Bad input to the client ───
 
-try_url("https", fn() request.get("https://example.com/") end)
+try_url("ca_file", fn() request.get("https://127.0.0.1:1/", {ca_file: 5}) end)
 try_url("ftp", fn() request.get("ftp://example.com/") end)
 try_url("no scheme", fn() request.get("example.com/x") end)
 try_url("no host", fn() request.get("http:///x") end)

@@ -153,6 +153,8 @@ let r = pcall some_fn()              # {ok: bool, value/error: ..., stack: [{nam
 # Strings:       find, str_replace, substr, chr, ord, buf_new, buf_push, build_string
 # Filesystem:    read_file, write_file, append_file, file_exists, remove_file, mkdir, list_dir, is_dir, dirname, path_join, normalize_path, exec
 # TCP:           tcp_listen, tcp_accept, tcp_connect, tcp_read, tcp_write, tcp_close, tcp_peer, tcp_local_port, tcp_fd, tcp_from_fd
+# TLS:           tls_connect(host, port, {timeout_ms, ca_file, server_name}) -> a socket for tcp_read/tcp_write/tcp_close;
+#                verifies the certificate and host name against the system's CAs (or ca_file), always
 # Resources:     a socket (type "socket") or db handle (type "sqlite") belongs to its opener; claim(r) makes the
 #                caller its owner. Closed when a claimer exits, or when the opener crashes or is killed; anyone may close
 # Time:          time_ms, epoch_ms, format_time, format_time_local
@@ -184,7 +186,7 @@ end
 #                req.peer = {ip, port};
 #                start returns {pid, port} (port 0: a free one); stop(server) closes every socket; HEAD uses the GET route;
 #                set_cookie raises on ; , whitespace or control bytes: url.encode values)
-# std/request    get, post, put, patch, delete, request  (http:// only; opts {body, headers, timeout_ms = 30000, nil: none};
+# std/request    get, post, put, patch, delete, request  (http:// and https://; opts {body, headers, timeout_ms = 30000, nil: none, ca_file};
 #                returns {status, headers (lowercase names), body (chunked decoded)})
 # std/url        encode, decode, parse, parse_query, build_query
 # std/mime       lookup, ext
@@ -204,4 +206,5 @@ end
 extern include "stdio.h"                 # a libc fn needs its header; your own: path relative to the .gem file
 extern fn puts(s: String) -> Int
 extern blocking fn net_read(fd: Int) -> String
+# gem -I<dir> -L<dir> -l<lib> app.gem   C flags go before the file; CC, CFLAGS, LDFLAGS from the environment
 ```

@@ -106,6 +106,7 @@ let BUILTIN_FNS = {
   tcp_fd: "gem_tcp_fd_fn",
   tcp_from_fd: "gem_tcp_from_fd_fn",
   claim: "gem_claim_fn",
+  tls_connect: "gem_tls_connect_fn",
   epoch_ms: "gem_epoch_ms_fn",
   format_time: "gem_format_time_fn",
   format_time_local: "gem_format_time_local_fn",
