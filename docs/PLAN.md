@@ -101,16 +101,16 @@ The order is the order of the work.
 
 ## Track B: a daily driver
 
-1. **Fast edit-run loop.** ✓ Done (PR 3). `gem file.gem` compiles at `-O0` and caches
+1. **Fast edit-run loop.** ✓ Done. `gem file.gem` compiles at `-O0` and caches
    the binary by a hash of its sources, the runtime and the flags; `-o`
    keeps `-O2`.
-   *Landed:* the key hashes the C (every loaded file's code), the cc
+   The key hashes the C (every loaded file's code), the cc
    command, the contents of the runtime library, the runtime headers and
    `extern include` headers;
    `GEM_CACHE=off`, `GEM_CACHE_DIR`; at most 256 entries, then emptied.
    `--` after the file passes options to the program. Left: `-l`
    libraries are not in the key.
-2. **Install and project commands.** ✓ Done (PR 3). `make install PREFIX=…`; `gem new`,
+2. **Install and project commands.** ✓ Done. `make install PREFIX=…`; `gem new`,
    `gem test` (runs `test.gem`), `gem build` from `gem.toml`.
 3. **Script basics.** `exec` that captures stdout/stderr and the status;
    a line reader for files and stdin (ROADMAP "Line-at-a-time input");
@@ -123,9 +123,9 @@ The order is the order of the work.
    "did you mean".
 7. **Small std gaps** from ROADMAP "std API gaps": json `indent`, mime
    types, `time.parse`, gen_server names.
-8. **Error messages:** ✓ Done (PR 3). "did you mean" for undefined names; a missing
+8. **Error messages:** ✓ Done. "did you mean" for undefined names; a missing
    `end` points at the construct it closes.
-   *Landed:* the block is the first whose `end` was indented unlike its
+   The block named is the first whose `end` was indented unlike its
    opening line, else the innermost open one; reported once, when a
    named `fn` at column 1 lands inside a body or the file ends.
 
