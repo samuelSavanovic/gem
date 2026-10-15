@@ -25,6 +25,14 @@ fn show(path)
   print(len(got), got, json_like(got) == json_like(again), r.next(), io.read_lines(path))
 end
 
+fn table_lens(a)
+  let out = []
+  for x in a
+    push(out, len(x))
+  end
+  out
+end
+
 fn json_like(a)
   let out = ""
   for x in a
@@ -63,4 +71,28 @@ print(r.next(), r.next())
 let missing = pcall(fn() io.lines(path_join(dir, "none"), fn(l) nil end) end)
 print(missing.ok, find(missing.error, "No such file") > 0)
 print(pcall(fn() io.lines(42, fn(l) nil end) end).error)
+
+# A \r\n split across two blocks, and a long line with no final newline.
+let crlf = file("crlf", build_string do |add| for i = 0, 65535 add("y") end add("\r\nz\r\n") end)
+print(table_lens(io.read_lines(crlf)))
+let tail = file("tail", build_string do |add| for i = 0, 200000 add("t") end end)
+print(table_lens(io.read_lines(tail)), len(io.reader(tail).next()))
+
+# A FIFO can't be reopened at an offset: read whole, nothing lost.
+let fifo = path_join(dir, "fifo")
+exec("mkfifo '{fifo}' && (seq 1 30000 > '{fifo}' &)")
+let count = 0
+let sum = 0
+io.lines(fifo) do |line|
+  count += 1
+  sum += to_int(line)
+end
+print(count, sum)
+exec("(printf 'one\ntwo\n' > '{fifo}' &)")
+let fr = io.reader(fifo)
+print(fr.next(), fr.next(), fr.next())
+exec("(printf 'abcdef' > '{fifo}' &)")
+print(read_file(fifo, 0, 3))
+let bad = pcall(fn() read_file(fifo, 2, 3) end)
+print(find(bad.error, "is not a regular file") > 0)
 exec("rm -rf '{dir}'")

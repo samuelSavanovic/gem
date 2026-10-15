@@ -503,19 +503,82 @@ GemVal gem_argv_fn(void *_env, GemVal *args, int argc) {
     return result;
 }
 
+/* ─── The runtime's environment: getenv, setenv ───
+ *
+ * getenv and setenv work on a copy of the process environment the runtime
+ * owns (gem_env, "NAME=VALUE" strings), made from environ when first used;
+ * exec and exec_capture pass a snapshot of it to their children
+ * (gem_env_snapshot). libc's environ is never changed after startup:
+ * other threads read it (getaddrinfo on the resolver lane, sqlite and
+ * extern blocking fns on the pool), and libc's setenv could move it under
+ * them. gem_env_mu
+ * guards gem_env, which pool threads snapshot. */
+
+static pthread_mutex_t gem_env_mu = PTHREAD_MUTEX_INITIALIZER;
+static char **gem_env = NULL;     /* malloc'd strings; NULL until first used */
+static size_t gem_env_n = 0, gem_env_cap = 0;
+
+extern char **environ;
+
+/* Call with gem_env_mu held. */
+static void gem_env_init_locked(void) {
+    if (gem_env) return;
+    size_t n = 0;
+    while (environ && environ[n]) n++;
+    gem_env_cap = n + 8;
+    gem_env = (char **)malloc(gem_env_cap * sizeof(char *));
+    for (size_t i = 0; i < n; i++) gem_env[i] = strdup(environ[i]);
+    gem_env_n = n;
+}
+
+/* The index of `name` in gem_env, or -1. Call with gem_env_mu held. */
+static long gem_env_find_locked(const char *name, size_t nlen) {
+    for (size_t i = 0; i < gem_env_n; i++) {
+        if (strncmp(gem_env[i], name, nlen) == 0 && gem_env[i][nlen] == '=') return (long)i;
+    }
+    return -1;
+}
+
+char **gem_env_snapshot(void) {
+    pthread_mutex_lock(&gem_env_mu);
+    gem_env_init_locked();
+    size_t bytes = (gem_env_n + 1) * sizeof(char *);
+    for (size_t i = 0; i < gem_env_n; i++) bytes += strlen(gem_env[i]) + 1;
+    char **out = (char **)malloc(bytes);
+    char *p = (char *)(out + gem_env_n + 1);
+    for (size_t i = 0; i < gem_env_n; i++) {
+        size_t len = strlen(gem_env[i]) + 1;
+        memcpy(p, gem_env[i], len);
+        out[i] = p;
+        p += len;
+    }
+    out[gem_env_n] = NULL;
+    pthread_mutex_unlock(&gem_env_mu);
+    return out;
+}
+
 /* ─── Built-in: getenv ─── */
 
 GemVal gem_getenv_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1 || args[0].type != VAL_STRING) { char buf[128]; snprintf(buf, sizeof(buf), "getenv: expected string, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
-    const char *val = getenv(args[0].sval);
+    const char *name = args[0].sval;
+    size_t nlen = strlen(name);
+    if (nlen == 0 || strchr(name, '=') || (int64_t)nlen != args[0].slen) return GEM_NIL;
+    char *val = NULL;
+    pthread_mutex_lock(&gem_env_mu);
+    gem_env_init_locked();
+    long i = gem_env_find_locked(name, nlen);
+    if (i >= 0) val = strdup(gem_env[i] + nlen + 1);
+    pthread_mutex_unlock(&gem_env_mu);
     if (!val) return GEM_NIL;
-    return gem_string(val);
+    GemVal r = gem_string(val);
+    free(val);
+    return r;
 }
 
 /* ─── Built-in: setenv(name, value) ─── */
-/* value nil removes the variable. Commands exec runs afterwards see the
-   change (it passes environ). */
+/* value nil removes the variable. */
 
 GemVal gem_setenv_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
@@ -523,16 +586,34 @@ GemVal gem_setenv_fn(void *_env, GemVal *args, int argc) {
         char buf[160]; snprintf(buf, sizeof(buf), "setenv: expected (string, string or nil), got (%s, %s)", argc < 1 ? "nothing" : gem_type_str(args[0]), argc < 2 ? "nothing" : gem_type_str(args[1])); gem_error(buf);
     }
     const char *name = args[0].sval;
-    if (name[0] == '\0' || strchr(name, '=') || (int64_t)strlen(name) != args[0].slen) {
+    size_t nlen = strlen(name);
+    if (nlen == 0 || strchr(name, '=') || (int64_t)nlen != args[0].slen) {
         gem_error("setenv: the name must be non-empty, without '=' or a NUL byte");
     }
-    if (args[1].type != VAL_NIL && (int64_t)strlen(args[1].sval) != args[1].slen) {
-        gem_error("setenv: the value contains a NUL byte");
+    char *entry = NULL;
+    if (args[1].type != VAL_NIL) {
+        if ((int64_t)strlen(args[1].sval) != args[1].slen) gem_error("setenv: the value contains a NUL byte");
+        size_t vlen = (size_t)args[1].slen;
+        entry = (char *)malloc(nlen + vlen + 2);
+        memcpy(entry, name, nlen);
+        entry[nlen] = '=';
+        memcpy(entry + nlen + 1, args[1].sval, vlen + 1);
     }
-    pthread_rwlock_wrlock(&gem_env_lock);
-    int rc = args[1].type == VAL_NIL ? unsetenv(name) : setenv(name, args[1].sval, 1);
-    pthread_rwlock_unlock(&gem_env_lock);
-    if (rc != 0) gem_error("setenv: out of memory");
+    pthread_mutex_lock(&gem_env_mu);
+    gem_env_init_locked();
+    long i = gem_env_find_locked(name, nlen);
+    if (i >= 0) {
+        free(gem_env[i]);
+        if (entry) gem_env[i] = entry;
+        else gem_env[i] = gem_env[--gem_env_n];
+    } else if (entry) {
+        if (gem_env_n + 1 >= gem_env_cap) {
+            gem_env_cap *= 2;
+            gem_env = (char **)realloc(gem_env, gem_env_cap * sizeof(char *));
+        }
+        gem_env[gem_env_n++] = entry;
+    }
+    pthread_mutex_unlock(&gem_env_mu);
     return GEM_NIL;
 }
 

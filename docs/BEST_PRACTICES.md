@@ -19,8 +19,7 @@ Mistakes the compiler reports by name (a `let` in a nested block hiding a
 variable of the same function, an unpinned name in a pattern, a statement
 that does nothing) aren't repeated here: the message says what to do.
 
-Contents: [Before you start](#before-you-start) ·
-[A first program](#a-first-program) ·
+Contents: [Before you start](#before-you-start) · [A first program](#a-first-program) ·
 [Variables and scope](#variables-and-scope) · [Loops](#loops) ·
 [Control flow](#control-flow) · [Functions](#functions) ·
 [Tables and arrays](#tables-and-arrays) · [Numbers](#numbers) ·
@@ -250,9 +249,9 @@ else b end).name`. Details: SPEC "Control Flow".
 Use `if` for boolean conditions and `match` to branch on a tag, a literal
 or a table's shape (`match pcall parse(input)` with arms `when {ok: true,
 value: ast}` and `when {ok: false, error: msg}`). A table pattern matches
-when the listed keys match; extra keys are ignored. A bare name binds; to compare with a variable or
-constant, pin it (`when ^STATUS_OK`). There are no guards or
-alternatives: use an `if` chain or one arm per value.
+when the listed keys match; extra keys are ignored. A bare name binds; to
+compare with a variable or constant, pin it (`when ^STATUS_OK`). There are
+no guards or alternatives: use an `if` chain or one arm per value.
 
 A `match` with no `else` raises `no match for <value>` when no arm
 matches: write `else nil` when that's fine, or `else error("store:
@@ -275,14 +274,15 @@ fn call(target, msg, timeout_ms = 5000)
 fn serve(router, {port = 8080, host = "0.0.0.0"} = {})
 ```
 
-A key the pattern doesn't name raises (`serve: unknown option "prot"
-(did you mean "port"?)`), as in std's option tables; `...rest` at the
-end of the pattern takes the others instead. Keep `...rest` parameters for
-real variadics. A default applies only when the
-argument (or key) is left out: passing `nil` gives `nil` **(trap)**, so a
-caller that forwards an option it may not have (`{port: opts.port}`)
-passes `nil`, not the default. Leave the key out instead. The trailing
-`= {}` makes the bag optional; a `nil` bag also becomes `{}`.
+The trailing `= {}` makes an option bag: optional (a `nil` bag becomes
+`{}` too), and a key the pattern doesn't name raises (`serve: unknown
+option "prot" (did you mean "port"?)`), as in std's option tables;
+`...rest` at the end of the pattern takes the others instead. Without it
+(`fn handle({type, data = nil})`) the pattern takes a record and ignores
+other keys. Keep `...rest` parameters for real variadics. A default
+applies only when the argument (or key) is left out: passing `nil` gives
+`nil` **(trap)**, so a caller that forwards an option it may not have
+(`{port: opts.port}`) passes `nil`, not the default. Leave the key out.
 
 ### Arity is checked only for direct calls
 
@@ -757,11 +757,11 @@ accepts).
 
 Read lines with `std/io`: `io.lines(path) do |line| ... end` (`"-"`:
 stdin) reads 64 KB blocks, so a 200 MB log took 0.9 s at a 4 MB peak
-(`read_file` and `find`: 1.2 s, the whole file in memory); `io.reader`
-stops early. `print` flushes every line: a
-million lines took 0.6 s with `print` and 0.3 s as one `write_stdout` of
-a `build_string` (2.7 s against 0.16 s on macOS arm64), so write bulk
-output in one piece.
+(0.4 s on macOS arm64; `read_file` and `find`: 1.2 s, the whole file in
+memory); a pipe or `<(cmd)` path is read whole. `io.reader` stops early.
+`print` flushes every line: a million lines took 0.6 s with `print` and
+0.3 s as one `write_stdout` of a `build_string` (2.7 s against 0.16 s on
+macOS arm64), so write bulk output in one piece.
 
 ### Run commands with `exec_capture`
 

@@ -8,13 +8,16 @@
 ##   let first = r.next()             # nil at the end
 ##
 ## Lines come without their `\n` (or `\r\n`); a last line with no newline
-## comes as it is, and an empty file has no lines. A file is read in
-## 64 KB blocks with `read_file(path, offset, count)`, so memory stays
+## comes as it is, and an empty file has no lines. A regular file is read
+## in 64 KB blocks with `read_file(path, offset, count)`, so memory stays
 ## flat however large it is, and nothing stays open between blocks: a
-## process that dies mid-file leaves nothing behind. Block reads go
-## through the I/O thread pool, so other processes run meanwhile. stdin
-## (`"-"`) is read with `input()`, which blocks every process while it
-## waits for a line.
+## process that dies mid-file leaves nothing behind. A pipe or FIFO
+## (`/dev/stdin`, a `<(cmd)` path) can't be reopened at an offset, so it
+## is read whole, with `read_file(path)`, before its first line; so is a
+## device.
+## File reads go through the I/O thread pool, so other processes run
+## meanwhile. stdin (`"-"`) is read with `input()`, which blocks every
+## process while it waits for a line.
 ##
 ## A path that can't be read raises `read_file`'s error (`read_file:
 ## cannot open '<path>': ...`) at the first block.
@@ -36,6 +39,42 @@ fn cut(text, start, nl)
   substr(text, start, nl - start)
 end
 
+# A fn returning the file's next block on each call, "" at the end. A
+# regular file is read in blocks; anything else (stat type "other": a
+# pipe, FIFO or device) is one block, the whole of it.
+fn block_source(path)
+  let st = stat(path)
+  let in_blocks = st == nil or st.type == "file"
+  let offset = 0
+  let done = false
+  fn()
+    if done
+      return ""
+    end
+    if not in_blocks
+      done = true
+      return read_file(path)
+    end
+    let chunk = read_file(path, offset, BLOCK)
+    offset += len(chunk)
+    done = chunk == ""
+    chunk
+  end
+end
+
+# The pieces of a line that spans blocks, joined; collecting them keeps a
+# long line linear.
+fn join_parts(parts)
+  if len(parts) == 1
+    return parts[0]
+  end
+  build_string do |add|
+    for part in parts
+      add(part)
+    end
+  end
+end
+
 ## Calls `f(line)` for each line of the file at `path` (`"-"`: stdin), in
 ## order, and returns nil. To stop early, use `reader`.
 ##
@@ -52,26 +91,34 @@ fn lines(path, f)
     end
     return nil
   end
-  let offset = 0
-  let rest = ""
+  let next_block = block_source(path)
+  let parts = []
   while true
-    let chunk = read_file(path, offset, BLOCK)
+    let chunk = next_block()
     if chunk == ""
       break
     end
-    offset += len(chunk)
-    let text = if rest == "" then chunk else rest + chunk end
     let pos = 0
-    let nl = find(text, "\n", pos)
-    while nl >= 0
-      f(cut(text, pos, nl))
+    let nl = find(chunk, "\n", 0)
+    if nl >= 0 and len(parts) > 0
+      push(parts, substr(chunk, 0, nl + 1))
+      let line = join_parts(parts)
+      parts = []
+      f(cut(line, 0, len(line) - 1))
       pos = nl + 1
-      nl = find(text, "\n", pos)
+      nl = find(chunk, "\n", pos)
     end
-    rest = substr(text, pos)
+    while nl >= 0
+      f(cut(chunk, pos, nl))
+      pos = nl + 1
+      nl = find(chunk, "\n", pos)
+    end
+    if pos < len(chunk)
+      push(parts, substr(chunk, pos))
+    end
   end
-  if rest != ""
-    f(rest)
+  if len(parts) > 0
+    f(join_parts(parts))
   end
   nil
 end
@@ -93,33 +140,37 @@ fn reader(path)
   if path == "-"
     return {next: fn() input() end}
   end
-  let offset = 0
-  let buf = ""
+  let next_block = block_source(path)
+  let chunk = ""
   let pos = 0
-  let at_end = false
+  let parts = []
   let next = fn()
     while true
-      let nl = find(buf, "\n", pos)
+      let nl = find(chunk, "\n", pos)
       if nl >= 0
-        let line = cut(buf, pos, nl)
+        let start = pos
         pos = nl + 1
-        return line
-      end
-      if at_end
-        if pos < len(buf)
-          let last = substr(buf, pos)
-          pos = len(buf)
-          return last
+        if len(parts) == 0
+          return cut(chunk, start, nl)
         end
-        return nil
+        push(parts, substr(chunk, start, nl + 1 - start))
+        let line = join_parts(parts)
+        parts = []
+        return cut(line, 0, len(line) - 1)
       end
-      let chunk = read_file(path, offset, BLOCK)
-      offset += len(chunk)
-      if chunk == ""
-        at_end = true
+      if pos < len(chunk)
+        push(parts, substr(chunk, pos))
       end
-      buf = substr(buf, pos) + chunk
+      chunk = next_block()
       pos = 0
+      if chunk == ""
+        if len(parts) == 0
+          return nil
+        end
+        let last = join_parts(parts)
+        parts = []
+        return last
+      end
     end
   end
   {next: next}
