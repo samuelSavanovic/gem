@@ -5,15 +5,19 @@
 # Runtime rules (each match outside its allowlist fails):
 #   - GemProcess.state changes only in gem_proc_set_state;
 #   - gem_cur_globals[ only in gem.h (and in no compiler output);
-#   - close( in the socket code only on an fd no resource entry owns yet,
-#     or through gem_tcp_close_fd_checked (gem_res_close is the way);
+#   - close( (a space before the paren too) in the socket code only on an
+#     fd no resource entry owns yet, or through gem_tcp_close_fd_checked
+#     (gem_res_close is the way);
 #   - mco_create only in gem_coro_create.
 # An allowlist entry is `file|line text|count`: the trimmed source line and
 # how many times it may appear in that file, so a new copy of an allowed
-# line fails too. C comments are dropped before matching.
+# line fails too. C comments (block, whole-line and trailing //) are
+# dropped before matching.
 #
 # Builtins: every user-visible name in BUILTIN_FNS (compiler/builtins.gem)
-# is documented in SPEC.md (as `name(` or `name`) and CHEATSHEET.md, and
+# is documented in SPEC.md (as `name(` or `name`) and CHEATSHEET.md (as a
+# call `name(` or `name do`, as `name`, or as an entry of one of its
+# `# Category: a, b, c` builtin lists), and
 # the VS Code and tree-sitter builtin lists hold exactly those names;
 # LEAF_BUILTINS and DIRECT_BUILTINS name only builtins.
 #
@@ -26,11 +30,12 @@ fails=0
 fail() { echo "FAIL: $*"; fails=$((fails + 1)); }
 
 # strip_comments <file>: the file with C comments (and Gem # comments in a
-# .gem file) blanked, line count unchanged.
+# .gem file) blanked, line count unchanged. A // inside a "string" stays.
 strip_comments() {
   case $1 in
     *.gem) sed -e 's/^[[:space:]]*#.*//' "$1" ;;
-    *) perl -0pe 's{/\*.*?\*/}{ (my $c = $&) =~ s/[^\n]//g; $c }gse; s{^[ \t]*//[^\n]*}{}gm' "$1" ;;
+    *) perl -0pe 's{/\*.*?\*/}{ (my $c = $&) =~ s/[^\n]//g; $c }gse;
+                  s{^((?:[^"\n/]|/(?!/)|"(?:[^"\\\n]|\\.)*")*)//[^\n]*}{$1}gm' "$1" ;;
   esac
 }
 
@@ -75,7 +80,7 @@ check_rule "gem_cur_globals[ is used only in gem.h" \
   $(ls runtime/gem_*.c) compiler/*.gem
 
 check_rule "a socket fd is closed only through the resource table" \
-  '(^|[^_[:alnum:]>.])close\(' \
+  '(^|[^_[:alnum:]>.])close[[:space:]]*\(' \
   'runtime/gem_builtins_tcp.c|close(fd);|3' \
   runtime/gem_builtins_tcp.c runtime/gem_builtins_tls.c runtime/gem_resource.c runtime/gem_scheduler.c
 
@@ -98,7 +103,8 @@ if [ "$(printf '%s\n' "$names" | wc -l)" -lt 50 ]; then
 fi
 for n in $names; do
   grep -qE "\`$n[(\`]" docs/SPEC.md || fail "builtin $n is not in docs/SPEC.md"
-  grep -qw "$n" docs/CHEATSHEET.md || fail "builtin $n is not in docs/CHEATSHEET.md"
+  grep -qE "(^|[^_[:alnum:].])$n(\(| do( |\$))|\`$n\`|^# [A-Za-z/ &]+:(.*,)?[[:space:]]+$n([,(]|[[:space:]]*\$)" docs/CHEATSHEET.md \
+    || fail "builtin $n is not in docs/CHEATSHEET.md"
 done
 for table in LEAF_BUILTINS DIRECT_BUILTINS; do
   for n in $(builtin_block $table | sort -u); do

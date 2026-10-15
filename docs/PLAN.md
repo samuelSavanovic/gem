@@ -1,11 +1,11 @@
 # Plan: a practical Gem
 
-The direction chosen after a review of the whole project on 2026-10-14.
+The direction chosen on 2026-10-14.
 The yardstick is **practical**: its owner (and later, maybe, others) can
 build and run real programs without surprises and without knowing how the
 runtime works. Two tracks, A before B where they compete; C comes after.
 
-What the review found, in short:
+Where the project stood on 2026-10-14, in short:
 
 - **Strong:** concurrency and staying up (every soak 0 errors; the
   honeypot live since 2026-10-11 with no runtime bug; jobqueue at or above
@@ -33,13 +33,13 @@ What the review found, in short:
 - The silent-semantics checks (A2) are **compile errors**, not warnings.
   Code in the repo that trips them (compiler, std, lsp, examples) is
   fixed in the same change.
-- A `match` with no matching arm **raises** (A3); `else nil` keeps the
-  old behaviour.
+- A `match` with no matching arm **raises** (A3); `else nil` gives nil, as
+  without it today.
 - `gem file.gem` builds at **`-O0` with a cache**; `gem -o` keeps `-O2`
   (B1).
 - The work lands in four stacked PRs, each branched from the one before
-  and pushed once `make test` passes for each item in it; reviewed and
-  run on macOS before merging, in order:
+  and pushed once `make test` passes for each item in it; each runs on
+  macOS before it merges, in order:
   1. `plan/a-safety-net`: this plan, A1 reset stress mode, A5 rule lint,
      A6 debug runtime and sanitizers, A7 fuzzing.
   2. `plan/a-semantics`: A2 silent-semantics errors, A3 `match` raises,
@@ -59,13 +59,13 @@ The order is the order of the work.
    example apps under it. Root-cause 117's mapping growth first.
    *Landed:* `GEM_RESET_STRESS=<bytes>`; `make test-stress` (examples,
    example apps, and the compiler compiling itself, which must emit the
-   same C); `tests/check_reset_stress.sh` in `make test`. 117's growth:
-   every reset mapped a fresh 64 KB block for its copies and another for
-   the next allocations, even when it copied nothing; a loop that ends
-   right after (sort's comparator, called from top-level code with no
-   enclosing loop to free them) left both behind, 33,000 times. A reset
-   that copies nothing now maps nothing. Left: a reset that copies
-   something still leaves its copy block's tail (OPTIMIZATIONS, P2).
+   same C); `tests/check_reset_stress.sh` in `make test`. 117's growth
+   came from resets that mapped a fresh 64 KB block for their copies and
+   another for the next allocations even when they copied nothing, in a
+   loop that ends right after (sort's comparator, called from top-level
+   code with no enclosing loop to free them). A reset that copies nothing
+   maps nothing. Left: a reset that copies something leaves its copy
+   block's tail (OPTIMIZATIONS, P2).
 2. **Silent-semantics pass in the compiler.** Turn the silent traps into
    compile errors or warnings, each a local check on the AST:
    - a `let` that hides a local of an enclosing block of the same fn;
@@ -76,7 +76,7 @@ The order is the order of the work.
    - a fn with a `receive` that calls itself in non-tail position;
    - a module-level `let` named like a loaded module.
 3. **`match` with no matching arm raises** (`no match for <value>`), as
-   Erlang's `case_clause`; `else nil` keeps the old behaviour.
+   Erlang's `case_clause`; `else nil` gives nil.
 4. **Data traps fixed at the source.** `delete(arr, i)` on an array
    index raises (use `remove_at`); `in` means has-key on every table.
 5. **Rule lint in `make test`.** ✓ Done (PR 1, `tests/check_rules.sh`). A script that flags direct `->state =`,

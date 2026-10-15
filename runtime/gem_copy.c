@@ -1233,8 +1233,11 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
     size_t copied = arena->bytes_allocated - bytes_before;
     gem_diag_note_reset(copied, scanned, region_bytes, full);
 
-    /* A reset that copied nothing maps no block: an empty copy block is
-       given back, and allocation goes on in mb after the point. Otherwise
+    /* A reset that copied nothing maps no block, and allocation goes on in
+       mb right after the point. With tail_free the copies were to go into
+       mb's tail, so no block was mapped and arena->current is mb already;
+       otherwise the empty copy block appended above is given back here
+       (mb->used is back at the point, set just above). Otherwise
        each reset of a loop that ends right after it (a sort comparator's,
        a callback's) would leave a mapping or two behind for an enclosing
        loop's reset to free, and with no such loop they pile up (under
