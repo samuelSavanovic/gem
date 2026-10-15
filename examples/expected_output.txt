@@ -4829,6 +4829,10 @@ args: unknown key `option` in the spec (did you mean `options`?)
 args: option `x` has type `bool`; the types are string, int, float and flag
 args: option `x`: short must be one letter, got xy
 ["q", "r"]
+true false ["a"] ["x", "y"] {}
+true true ["b", "c"] ["x", "y"] [2]
+--color takes no value
+args: option `x` is a flag; its default must be true or false, got string
 true false true
 bob@example 5 16 ["bob", "example"]
 nil [nil, "b"]
@@ -4853,6 +4857,9 @@ true [a][]
 regex: bad pattern '[\q]': inside [...] the escapes are \d \w \s \t \n \r and a backslash before punctuation regex: bad pattern '[a-\]]': an escaped ']', '[', '^' or '-' inside [...] can't start or end a range ["!", "^"]
 ["aa", "a", ""] ["", "", ""] ["xy", "xay"]
 regex: bad pattern '(a)\1': back-references (\1 .. \9) aren't supported regex: bad pattern 'a+?': a quantifier can't follow another (there are no lazy quantifiers) regex: bad pattern 'a{': '{' starts a bound such as {2}, {1,3}, {2,} or {,3}; write \{ for the character
+true true false true true
+true true true true false
+regex: bad pattern '\q': unknown escape: a letter or digit after a backslash must be one of d D w W s S t n r regex: bad pattern 'a\0': unknown escape: a letter or digit after a backslash must be one of d D w W s S t n r regex: bad pattern '\A': unknown escape: a letter or digit after a backslash must be one of d D w W s S t n r regex: bad pattern '\<': word boundaries (\b, \B, \<, \>) aren't supported
 aGVsbG8=  YQ== YWI= YWJj
 hello hello hi nil nil nil hi
 -_8 true
@@ -4879,6 +4886,7 @@ csv.parse: line 2: a quote inside an unquoted field
 csv.parse: line 1: text after a closing quote
 csv.parse: line 2: a quoted field is never closed
 csv.parse: line 2: 2 fields, but the header has 1
+csv.parse: line 4: 3 fields, but the header has 2
 csv.parse: sep must be one byte other than a quote or a line break, got ,,
 a,"b,c"
 1,

@@ -653,7 +653,8 @@ GemVal gem_len_fn(void *_env, GemVal *args, int argc);
 GemVal gem_type_fn(void *_env, GemVal *args, int argc);
 GemVal gem_to_string_fn(void *_env, GemVal *args, int argc);
 GemVal gem_check_opts_fn(void *_env, GemVal *args, int argc);
-/* Raises `<who>: unknown option "<k>"` (with the closest name) for a key
+/* Raises `<who>: unknown option "<k>"` (with the closest name, when one
+   is close enough) for a key
    of table `bag` not among `names` (nlen bytes, NUL-separated). */
 void gem_check_opt_keys(GemVal bag, const char *who, const char *names, int nlen);
 GemVal gem_opts_rest_fn(void *_env, GemVal *args, int argc);
@@ -906,7 +907,15 @@ char *gem_hash_hex(const uint8_t *data, int64_t len);
 char *gem_file_hash(const char *path);
 int64_t gem_mkdirs(const char *path);
 int64_t gem_link(const char *from, const char *to);
+int64_t gem_rename(const char *from, const char *to);
 int64_t gem_file_age(const char *path);
+/* Runs the program at `path` with the arguments in `args` (each followed
+   by a NUL byte) and every descriptor the caller has that isn't
+   close-on-exec: with `replace`, in place of the calling process
+   (returning -1 only when that fails), else as a child, returning its
+   exit status (128 + the signal for a signal's death, -1 when it
+   couldn't start). The compiler's run mode, through `extern fn`. */
+int64_t gem_run_program(const char *path, const uint8_t *args, int64_t len, int64_t replace);
 
 /* ─── Helpers used by codegen ─── */
 
@@ -1420,6 +1429,11 @@ void gem_io_release(GemIORequest *req);
    Returns NULL with a malloc'd message in *err_msg on failure (cannot open,
    directory, read error). Safe to call from a worker thread. */
 char *gem_read_whole_file(const char *path, size_t *out_len, char **err_msg);
+/* fopen with the descriptor close-on-exec from the start, so a command
+   another thread starts meanwhile doesn't inherit it. `mode` is "r",
+   "rb", "w", "wb", "a" or "ab"; NULL with errno set on failure. Every
+   fopen in the runtime goes through it. */
+FILE *gem_fopen(const char *path, const char *mode);
 /* Look up `host`'s first IPv4 address (getaddrinfo; blocks while it
    resolves) into *addr, in network byte order. Returns NULL, or the
    reason it failed (a static string). Safe to call from a worker thread. */

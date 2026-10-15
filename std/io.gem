@@ -40,8 +40,10 @@ fn cut(text, start, nl)
 end
 
 # A fn returning the file's next block on each call, "" at the end. A
-# regular file is read in blocks; anything else (stat type "other": a
-# pipe, FIFO or device) is one block, the whole of it.
+# regular file (or a path stat finds nothing at) is read in blocks;
+# anything else (a pipe, FIFO, device, directory or dangling link) is
+# one read_file(path), the whole of it, which raises for a directory or
+# a dangling link.
 fn block_source(path)
   let st = stat(path)
   let in_blocks = st == nil or st.type == "file"

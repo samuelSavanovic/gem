@@ -592,7 +592,7 @@ static long gem_map_env(void) {
 
 static void gem_map_limit_init(void) {
     long lower = gem_map_env();
-    FILE *f = fopen("/proc/sys/vm/max_map_count", "r");
+    FILE *f = gem_fopen("/proc/sys/vm/max_map_count", "r");
     if (!f) return;
     long n = 0;
     if (fscanf(f, "%ld", &n) == 1 && n > 0) {

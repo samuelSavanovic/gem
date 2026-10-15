@@ -375,7 +375,7 @@ fn sup_main(state, caller, ref)
 end
 
 # Raises `<who>: unknown <what> "<key>"<where>`, naming the closest allowed
-# key, for a key of table `t` that `allowed` (an array of names) doesn't
+# key when one is close enough (string.closest), for a key of table `t` that `allowed` (an array of names) doesn't
 # hold.
 fn check_keys(who, what, t, allowed, where = "")
   for k, _ in t
@@ -394,7 +394,7 @@ fn check_keys(who, what, t, allowed, where = "")
 end
 
 # A value that isn't one of `table`'s keys: " (did you mean \"x\"?)" for
-# the closest one, or "".
+# the closest one when one is close enough, or "".
 fn value_hint(v, table)
   let near = if type(v) == "string" then string.closest(v, keys(table)) end
   if near != nil then " (did you mean \"{near}\"?)" else "" end

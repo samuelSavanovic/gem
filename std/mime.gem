@@ -67,7 +67,7 @@ let types = {
   wasm: "application/wasm"
 }
 
-let charset_prefixes = ["text/", "application/json", "application/javascript", "application/xml", "application/yaml", "application/toml"]
+let charset_prefixes = ["text/", "application/json", "application/xml", "application/yaml", "application/toml"]
 
 # Content types `ext` knows besides those in `types`: older names of the
 # same type.
@@ -123,7 +123,7 @@ end
 ## Returns the content type for a path's extension, or for a bare
 ## extension: "index.html", ".html" and "html" all give the same type.
 ##
-## Text types (text/*, JSON, JavaScript, application/xml) get
+## Text types (text/*, JSON, application/xml, YAML, TOML) get
 ## "; charset=utf-8"; image/svg+xml doesn't. An unknown or missing
 ## extension gives "application/octet-stream". Only the last `.` of the
 ## last path segment counts.

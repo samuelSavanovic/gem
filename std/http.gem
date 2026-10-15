@@ -1937,7 +1937,8 @@ end
 ## a cap gets a 503 and is closed at once (a client that has sent more
 ## than the server could read at once may see a reset instead). `on_event` (a fn, default nil) is
 ## called with a table for each thing below. Any other key raises
-## `http.start: unknown option "<key>"`, naming the closest one.
+## `http.start: unknown option "<key>"`, naming the closest one when one
+## is close enough.
 ##
 ## `on_event` is how a server watches what never reaches a handler. Each
 ## event has `kind` and `peer` ({ip, port}); what it holds of the request
@@ -1993,7 +1994,7 @@ end
 let START_OPTIONS = ["port", "host", "max_body", "idle_timeout_ms", "request_timeout_ms", "write_timeout_ms", "max_connections", "max_per_ip", "on_event"]
 
 # Raises `<who>: unknown <what> "<key>"<where>`, naming the closest allowed
-# key, for a key of table `t` that `allowed` (an array of names) doesn't
+# key when one is close enough (string.closest), for a key of table `t` that `allowed` (an array of names) doesn't
 # hold.
 fn check_keys(who, what, t, allowed, where = "")
   for k, _ in t

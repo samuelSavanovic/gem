@@ -125,4 +125,56 @@ echo '/* changed */' >> "$R/runtime/gem.h"
 out=$("$R/build/gem" "$T/p/tmp.gem")
 [ "$out" = tmp ] && [ "$(entries)" = 2 ] || fail "runtime header changed: $out, $(entries) entries, expected 2"
 
+# the program gets gem's descriptors (a <(cmd) path), new, cached or not;
+# a SIGTERM ends a cached one itself, and gem exits 143 for an uncached one
+echo 'print(read_file(argv()[1]))' > "$T/p/fd.gem"
+for mode in new cached off; do
+  if [ $mode = off ]; then export GEM_CACHE=off; fi
+  out=$("$GEM" "$T/p/fd.gem" <(printf 'piped'))
+  [ "$out" = piped ] || fail "<(cmd) path, $mode: $out"
+  echo 'exec("kill -TERM $PPID")' > "$T/p/sig.gem"
+  echo 'sleep(5000)' >> "$T/p/sig.gem"
+  "$GEM" "$T/p/sig.gem"
+  st=$?
+  [ $st = 143 ] || fail "killed by SIGTERM, $mode: exit status $st, expected 143"
+  unset GEM_CACHE
+done
+
+# argv()[0] is the entry's binary, which replaced gem
+cat > "$T/p/self.gem" <<'GEM'
+print(argv()[0])
+GEM
+p1=$("$GEM" "$T/p/self.gem")
+p2=$("$GEM" "$T/p/self.gem")
+case "$p1" in
+  "$GEM_CACHE_DIR"/[!.]*/self) ;;
+  *) fail "argv()[0] of a new entry: $p1" ;;
+esac
+[ "$p1" = "$p2" ] && [ -x "$p2" ] || fail "argv()[0] of a cached run: $p2, first $p1"
+
+# runs of a new program at the same time all build and run it
+echo 'print("same")' > "$T/p/same.gem"
+for i in 1 2 3 4 5 6; do ("$GEM" "$T/p/same.gem" > "$T/same.$i" 2>&1; echo $? >> "$T/same.$i") & done
+wait
+for i in 1 2 3 4 5 6; do
+  [ "$(cat "$T/same.$i")" = "$(printf 'same\n0')" ] || fail "concurrent run $i: $(cat "$T/same.$i")"
+done
+[ -z "$(ls "$GEM_CACHE_DIR/.tmp" | grep '^gem-')" ] || fail "run directories left after concurrent runs: $(ls "$GEM_CACHE_DIR/.tmp")"
+
+# runs of a cached program while another run empties the cache (moving
+# the entries into .tmp): each runs it, from the cache or built again
+echo 'print("emptied")' > "$T/p/emptied.gem"
+"$GEM" "$T/p/emptied.gem" > /dev/null
+for round in 1 2 3 4 5; do
+  for i in $(seq 1 256); do mkdir -p "$GEM_CACHE_DIR/fake$i"; done
+  echo "print($round)" > "$T/p/new$round.gem"
+  for i in 1 2 3 4 5 6; do ("$GEM" "$T/p/emptied.gem" > "$T/emptied.$i" 2>&1; echo $? >> "$T/emptied.$i") & done
+  "$GEM" "$T/p/new$round.gem" > /dev/null || fail "emptying run $round failed"
+  wait
+  for i in 1 2 3 4 5 6; do
+    [ "$(cat "$T/emptied.$i")" = "$(printf 'emptied\n0')" ] || fail "run while the cache is emptied, round $round, $i: $(cat "$T/emptied.$i")"
+  done
+done
+[ -d "$GEM_CACHE_DIR/.tmp/fake1" ] || fail "emptying the cache: fake1 not moved into .tmp"
+
 if [ $fails -eq 0 ]; then echo "cache: OK"; else exit 1; fi

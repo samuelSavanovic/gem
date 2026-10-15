@@ -386,7 +386,7 @@ GemVal gem_tls_connect_fn(void *_env, GemVal *args, int argc) {
         if (!ctx) gem_tls_fail(sock, "tls_connect: cannot create a TLS context");
         ERR_clear_error();
         int open_errno = 0;
-        FILE *f = fopen(ca_file, "r");
+        FILE *f = gem_fopen(ca_file, "r");
         if (f) fclose(f); else open_errno = errno;
         if (open_errno || SSL_CTX_load_verify_locations(ctx, ca_file, NULL) != 1) {
             snprintf(buf, sizeof(buf), "tls_connect: cannot load ca_file '%s': %s", ca_file,

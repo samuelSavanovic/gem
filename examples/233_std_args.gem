@@ -54,3 +54,17 @@ print(pcall(fn() args.try_parse({option: {}}, []) end).error)
 print(pcall(fn() args.try_parse({options: {x: {type: "bool"}}}, []) end).error)
 print(pcall(fn() args.try_parse({options: {x: {short: "xy"}}}, []) end).error)
 print(args.parse({}, ["q", "r"]).args)
+
+let DEFAULTS = {options: {
+  color: {default: true},
+  loud: {type: "flag", default: false},
+  tag: {multi: true, default: "a"},
+  path: {multi: true, default: ["x", "y"]},
+  level: {multi: true, type: "int"}
+}}
+let d = args.try_parse(DEFAULTS, []).value
+print(d.color, d.loud, d.tag, d.path, d.level)
+d = args.try_parse(DEFAULTS, ["--color", "--loud", "--tag", "b", "--tag", "c", "--level", "2"]).value
+print(d.color, d.loud, d.tag, d.path, d.level)
+print(args.try_parse(DEFAULTS, ["--color=no"]).error)
+print(pcall(fn() args.try_parse({options: {x: {type: "flag", default: "yes"}}}, []) end).error)

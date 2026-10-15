@@ -88,7 +88,7 @@ static char gem_src_dir[PATH_MAX];
 /* Read line `line` of `path` into gem_src_line (newline stripped).
  * Returns 1 if the file opened and has that line. */
 static int gem_read_source_line(const char *path, int line) {
-    FILE *f = fopen(path, "r");
+    FILE *f = gem_fopen(path, "r");
     if (!f) return 0;
     int cur = 1, found = 0;
     while (fgets(gem_src_line, sizeof(gem_src_line), f)) {
