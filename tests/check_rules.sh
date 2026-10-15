@@ -103,7 +103,7 @@ if [ "$(printf '%s\n' "$names" | wc -l)" -lt 50 ]; then
 fi
 for n in $names; do
   grep -qE "\`$n[(\`]" docs/SPEC.md || fail "builtin $n is not in docs/SPEC.md"
-  grep -qE "(^|[^_[:alnum:].])$n(\(| do( |\$))|\`$n\`|^# [A-Za-z/ &]+:(.*,)?[[:space:]]+$n([,(]|[[:space:]]*\$)" docs/CHEATSHEET.md \
+  grep -qE "(^|[^_[:alnum:].])$n(\(| do( |\$))|\`$n\`|^# [A-Za-z/ &]+:(.*,)?[[:space:]]+$n[[:space:]]*([,(]|\$)" docs/CHEATSHEET.md \
     || fail "builtin $n is not in docs/CHEATSHEET.md"
 done
 for table in LEAF_BUILTINS DIRECT_BUILTINS; do
