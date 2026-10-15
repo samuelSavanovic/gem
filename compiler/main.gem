@@ -915,11 +915,23 @@ fn find_shadowed_accumulators(ast, changed_by_fns, report)
   scan_block(ast.stmts, [])
 end
 
-fn warn_shadowed_loop_conds(ast, file, show_path)
+# Prints the warnings of `file`: the ones parsing recorded in `sink`
+# (sink.warn) and the loop `let`s found here, in line order.
+fn print_file_warnings(ast, file, show_path, sink)
   let warned = {}
   # Messages by line, printed in line order once the walk is done.
   let by_line = {}
   let lines = []
+  for e in sink.warnings()
+    if e.file == file and e.line != nil
+      if by_line[e.line] == nil
+        by_line[e.line] = []
+        push(lines, e.line)
+      end
+      let hint = if e.hint != nil then ". Hint: {e.hint}." else "." end
+      push(by_line[e.line], "warning: {show_path(file)}:{e.line}: {e.msg}{hint}")
+    end
+  end
   # A module-level variable can also change through a named fn the loop
   # calls, so a top-level `let` that some fn in this file assigns never
   # counts as unassigned.
@@ -1108,7 +1120,7 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       let parse_failed = sink.count() > errors_before or sink.suppressed()
       tag_source_file(loaded_ast, full_path)
       if not parse_failed
-        warn_shadowed_loop_conds(loaded_ast, full_path, show_path)
+        print_file_warnings(loaded_ast, full_path, show_path, sink)
       end
       let loaded_dir = dirname(full_path)
       let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, registry)
@@ -1367,7 +1379,7 @@ loaded[normalize_path(src_path)] = {exported: nil, loading: true, parent: nil}
 # print_all_errors pass either way.
 let resolved_ast = nil
 if not sink.has_any()
-  warn_shadowed_loop_conds(ast, src_path, show_path)
+  print_file_warnings(ast, src_path, show_path, sink)
   resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, {prefixes: {}, symbols: {}})
   # The entry file's `export` names what it would export when loaded; check
   # it as a loaded module's is checked.

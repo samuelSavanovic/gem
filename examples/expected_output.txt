@@ -1213,19 +1213,22 @@ total: 400000
 done
 hello from worker
 true
-true
-false
-true
 false
 false
 true
 true
-false
-false
 true
 false
+true false
+true false
+true
 false
-false
+true false false
+true false false
+false true
+true
+true true false
+false false false
 true true false
 false in: right operand must be a table, got string
 
@@ -4127,14 +4130,14 @@ mixed 11 m 81 true true
 mixed extra 1 m m nil 1
 array+tag 4 t 3 true true
 int-keyed in false true
-emptied in false false
+emptied in true false
 tricky 1 2 3 4 5 6 nil nil
 tricky big 12 1 2 3 4 5 6 nil nil
 cache r0 r11 r29 174
 cache shifting 3,3,3 3 2
 sorted record sort: expected an array (keys 0 .. n-1), got a table with other keys 3 1
 sorted big sort: expected an array (keys 0 .. n-1), got a table with other keys 12 12
-insert 4 15 30 false
+insert 4 15 30 true
 remove_at 3 15 false
 echo 1 11 nil yes yes 3 21 19 true 2
 spawned sees 1 9 10
@@ -4727,25 +4730,32 @@ false no match for nil
 false no match for [1, "two"]
 false no match for {tag: "t"}
 false no match for 1.5
-kind 6
+kind 7
 216 ...
 pair 1 2 tagged a
-{ok: false, error: "no match for 3", stack: [{name: "shape", file: "examples/230_match_no_arm.gem", line: 32}, {name: "anonymous fn", file: "examples/230_match_no_arm.gem", line: 39}]}
+{ok: false, error: "no match for 3", stack: [{name: "shape", file: "examples/230_match_no_arm.gem", line: 33}, {name: "anonymous fn", file: "examples/230_match_no_arm.gem", line: 40}]}
 one nil
 got want
 left: other
 
 [Runtime Error in process 1]: no match for 418
-  --> examples/230_match_no_arm.gem:6
+  --> examples/230_match_no_arm.gem:7
    |
- 6 |   match code
+ 7 |   match code
    |
 Stack trace:
-  at kind (examples/230_match_no_arm.gem:6)
-  at anonymous fn (examples/230_match_no_arm.gem:62)
+  at kind (examples/230_match_no_arm.gem:7)
+  at anonymous fn (examples/230_match_no_arm.gem:63)
 DOWN no match for 418
-false delete: 0 is an index of an array; use remove_at(arr, 0), which shifts the rest left (delete is for keys)
-["b", "c"] a ["b", "c"]
+a {2: "c", 1: "b"} nil true
+a ["b", "c"]
 nil ["b", "c"]
 1 {b: 2}
 true 0
+{ok: true, value: 6}
+false boom 1
+boom 2
+boom 3
+10
+60
+done

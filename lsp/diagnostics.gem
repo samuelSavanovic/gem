@@ -12,10 +12,11 @@
 # than the one analyzed goes to that file's URI, plus an empty one for
 # the analyzed file when it has no errors, which clears its squiggles.
 #
-# Severity mapping: the sink holds only errors, so everything is severity
-# 1 (Error). Codegen warnings and notes (a loop that can't reset, a loop
-# `let` shadowing an accumulator) come from the full compile pipeline,
-# which the LSP doesn't run.
+# Severity mapping: the sink's errors are severity 1 (Error), its warnings
+# (sink.warn: `pcall(f(x))`, a `receive` fn calling itself before it is
+# done) severity 2 (Warning). The other warnings and notes (a loop that
+# can't reset, a loop `let` shadowing an accumulator) come from the full
+# compile pipeline (compiler/main.gem, codegen), which the LSP doesn't run.
 
 load "./rpc"
 load "../compiler/errors" (get_source_line)
@@ -71,8 +72,8 @@ fn entry_message(e)
   e.msg
 end
 
-fn entry_to_diagnostic(e)
-  rpc.make_diagnostic(entry_range(e), 1, entry_message(e), DIAGNOSTIC_SOURCE)
+fn entry_to_diagnostic(e, severity)
+  rpc.make_diagnostic(entry_range(e), severity, entry_message(e), DIAGNOSTIC_SOURCE)
 end
 
 # Returns a list of {uri, diagnostics} payloads — one per distinct file
@@ -88,11 +89,11 @@ fn build_publishes(entry_uri, cache)
   # so squiggles render top-to-bottom.
   let by_file = {}
   let order = []
-  for e in cache.sink.drain()
+  let add = fn(e, severity)
     if e.line == nil
       # No location → can't draw a squiggle. Skip for v1; these are
       # compiler-bug paths and shouldn't surface from the LSP's analyze pass.
-      continue
+      return nil
     end
     let path = e.file
     if path == nil
@@ -102,7 +103,13 @@ fn build_publishes(entry_uri, cache)
       by_file[path] = []
       push(order, path)
     end
-    push(by_file[path], entry_to_diagnostic(e))
+    push(by_file[path], entry_to_diagnostic(e, severity))
+  end
+  for e in cache.sink.drain()
+    add(e, 1)
+  end
+  for e in cache.sink.warnings()
+    add(e, 2)
   end
 
   let publishes = []

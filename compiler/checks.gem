@@ -1,8 +1,9 @@
-# compiler/checks.gem — compile errors for code that runs but silently
-# doesn't do what it says. Runs on the parser's AST (before lower, so it
-# sees `for`, `match` and patterns as written), once per file, from
-# parse_source; the LSP reports them like any compile error.
+# compiler/checks.gem — compile errors and warnings for code that runs
+# but silently doesn't do what it says. Runs on the parser's AST (before
+# lower, so it sees `for`, `match` and patterns as written), once per file,
+# from parse_source; the LSP reports them like the parser's diagnostics.
 #
+# Errors:
 #   - a `let` in a nested block that hides a variable of an enclosing
 #     block of the same fn (or of top-level code): it makes a new variable
 #     where an assignment was almost always meant;
@@ -10,12 +11,14 @@
 #     binds a new variable and always matches, where `^name` compares;
 #   - an expression statement with no effect (no call, no assignment):
 #     the `- 2` of a subtraction continued on the next line, a value left
-#     in the middle of a block;
-#   - a fn with a `receive` that calls itself other than as its last
-#     action: a process loop whose stack and memory grow per message.
+#     in the middle of a block.
 #
-# The parser reports the others of the kind itself: `pcall(f(x))`, and a
-# module-level `let` named like a module the file loads.
+# Warnings (sink.warn):
+#   - a fn with a `receive` that calls itself other than as its last
+#     action: as a process loop, its stack and memory grow per message.
+#
+# The parser reports the others of the kind itself: `pcall(f(x))` (a
+# warning), and a module-level `let` named like a module the file loads.
 #
 # Names starting with `__` are the parser's own and are skipped.
 
@@ -455,9 +458,9 @@ fn check_receive_loop(ctx, fd)
     if not has_key(tails, c)
       let line = c.line
       let col = if c.func.col != nil then c.func.col else name_col(ctx, line, fd.name) end
-      ctx.report(line, col, len(fd.name),
-        "`{fd.name}` waits for messages (`receive`) and calls itself here before it is done: each message handled keeps a stack frame and its memory, until the process overflows its stack",
-        "make the call the last thing the fn does (the last expression of its branch, or `return {fd.name}(...)`), or loop with `while`")
+      ctx.warn(line, col, len(fd.name),
+        "`{fd.name}` waits for messages (`receive`) and calls itself here before it is done, so each call keeps its stack frame and memory until the call returns; as a process loop, the stack grows with every message handled",
+        "for a loop, make the call the last thing the fn does (the last expression of its branch, or `return {fd.name}(...)`), or loop with `while`")
     end
   end
 end
@@ -521,6 +524,9 @@ fn check_semantics(ast, source, file, sink)
     line_text: line_text,
     report: fn(line, col, span, msg, hint)
       sink.report(source, file, line, col, span, msg, hint)
+    end,
+    warn: fn(line, col, span, msg, hint)
+      sink.warn(source, file, line, col, span, msg, hint)
     end
   }
   collect_module_names(ast.stmts, ctx.module_names)
