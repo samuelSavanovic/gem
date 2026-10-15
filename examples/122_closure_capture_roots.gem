@@ -1,4 +1,4 @@
-# A closure passed to pcall / sort (or a pcall do-block) gets a stack env
+# A closure passed to pcall (or a pcall do-block) gets a stack env
 # whose fields point at the caller's own locals, so an assign in the
 # closure stores straight into the caller's frame. When that assign runs
 # inside a loop of the closure, the stored value is younger than the loop's
@@ -116,7 +116,8 @@ fn case_return()
   print("return", last)
 end
 
-# sort comparator with its own loop
+# sort comparator with its own loop (a sort closure gets a pinned box for
+# a capture it assigns, and sort resets after the comparator calls)
 fn case_sort()
   let note = nil
   let calls = 0

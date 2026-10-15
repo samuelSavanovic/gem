@@ -3157,7 +3157,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     scope_shadowing_lets(fn_defs, top_stmts, builtin_fns, extern_names, report_out_of_scope)
 
     # Mark non-escaping closures (immediate-call-site args to allowlisted
-    # callees like pcall/sort). Must run before any capture analysis below
+    # callees like pcall). Must run before any capture analysis below
     # — find_captured_in_scope reads the non_escaping flag.
     for fd in fn_defs
       mark_non_escaping_stmts(fd.body, fd)

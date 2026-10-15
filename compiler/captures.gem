@@ -1,5 +1,5 @@
 # Free-variable, capture and closure-write analysis, plus the non-escaping
-# closure marking that lets a `pcall` / `sort` closure skip boxing. Codegen
+# closure marking that lets a `pcall` closure skip boxing. Codegen
 # uses these to decide what a closure captures and which locals need a
 # pinned box (see compile_anon_fn / compile_fn in codegen.gem).
 #
@@ -239,7 +239,7 @@ fn walk_captures_node(node, scope_vars, captured, is_global)
   match node
   when {tag: "anon_fn", params: params, rest_param: rest_param, body: body}
     if node.non_escaping == true
-      # Marked as immediate-call arg of an allowlisted callee (pcall/sort)
+      # Marked as immediate-call arg of an allowlisted callee (pcall)
       # with no nested anon_fns. References to outer scope_vars don't
       # force boxing in the enclosing frame.
       return nil
@@ -569,16 +569,17 @@ end
 # ─── Non-escaping closure detection ──
 #
 # Mark anon_fn nodes that appear as the immediate argument of a call to an
-# allowlisted callee (`pcall`, `sort`). Such closures are invoked
-# synchronously and discarded — they cannot outlive the C frame holding
-# their captures, so the enclosing function need not box those captures.
+# allowlisted callee (`pcall`). Such closures are invoked synchronously and
+# discarded — they cannot outlive the C frame holding their captures, so the
+# enclosing function need not box those captures. `sort` is not on the
+# list: it resets the arena after its comparator calls, and that reset
+# can't see captures the comparator assigns in its creator's C locals.
 # Conservative: we only mark closures whose own body contains no nested
 # anon_fns, sidestepping the case where a nested escaping closure could
 # smuggle outer captures past the synchronous call.
 
 let non_escape_callees = {}
 set_add(non_escape_callees, "pcall")
-set_add(non_escape_callees, "sort")
 
 fn contains_anon_fn(node)
   if node == nil
