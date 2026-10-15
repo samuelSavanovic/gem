@@ -5,7 +5,7 @@
  * only when it loads one of them.
  *
  * Regex: POSIX extended regexes (libc's regcomp/regexec), rewritten first
- * (gem_rx_translate) so a pattern means the same on glibc and macOS. Compiled
+ * (gem_rx_translate) into forms glibc and macOS read alike. Compiled
  * patterns are cached (GEM_RX_CACHE entries, keyed by pattern and flags,
  * the oldest replaced first); only the scheduler thread runs Gem code,
  * so the cache needs no lock.
@@ -168,14 +168,18 @@ fail:
     return (size_t)-1;
 }
 
-/* The pattern rewritten so libc's regcomp reads it the same on glibc and
-   macOS, which disagree on everything the rewrite touches:
+/* The pattern rewritten for libc's regcomp, in forms glibc and macOS
+   read alike:
    - \d \D \w \W \s \S become bracket expressions, \t \n \r the bytes, and
      bracket expressions are written as gem_rx_bracket writes them;
+   - a backslash before any other character that isn't a letter or digit
+     (or \< \>, below) is that character: an ERE metacharacter stays
+     escaped, and any other loses the backslash;
    - `{,n}` becomes `{0,n}`, and an empty alternative (an empty pattern,
      `a|`, `(|a)`) matches the empty string through `x{0}`;
    - NULL (and a message in *err) for what one of them can't do, such as
-     word boundaries (\b \B \< \>), back-references (\1 .. \9), a
+     word boundaries (\b \B \< \>), back-references (\1 .. \9), any
+     other backslash before a letter or digit, a
      quantifier with nothing to repeat or after another one (`a**`, `a+?`),
      a '{' that doesn't start a bound, a bound past 255, and for a malformed
      pattern (unbalanced parentheses, gem_rx_bracket's errors). */
@@ -266,8 +270,15 @@ static char *gem_rx_translate(const char *pat, const char **err) {
                 case 'n': rep = "\n"; break;
                 case 'r': rep = "\r"; break;
             }
-            if (rep) sb_puts(&b, rep);
-            else sb_put(&b, pat + i, 2);
+            if (rep) {
+                sb_puts(&b, rep);
+            } else if ((k >= 'a' && k <= 'z') || (k >= 'A' && k <= 'Z') || (k >= '0' && k <= '9')) {
+                RX_FAIL("unknown escape: a letter or digit after a backslash must be one of d D w W s S t n r");
+            } else if (strchr(".[]()*+?{}|^$\\", k)) {
+                sb_put(&b, pat + i, 2);
+            } else {
+                sb_put(&b, &k, 1);
+            }
             i++;
             continue;
         }

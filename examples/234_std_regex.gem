@@ -39,3 +39,7 @@ print(regex.check_pattern("[\\q]"), regex.check_pattern("[a-\\]]"), texts("[!-^]
 # Read the same on every platform, or raise.
 print(texts('a{,2}', "aaa"), texts("", "ab"), texts("x(a|)y", "xy xay"))
 print(regex.check_pattern("(a)\\1"), regex.check_pattern("a+?"), regex.check_pattern('a{'))
+# Outside brackets: punctuation after a backslash is that character (not \< \>); another letter or digit raises.
+print(regex.test("a\\'b", "a'b"), regex.test("a\\`b", "a`b"), regex.test("a\\.b", "axb"), regex.test('\{2\}', '{2}'), regex.test("a\\-b\\/c\\@", "a-b/c@"))
+print(regex.test('^\d{4}-\d{2}$', "2026-10"), regex.test("^\\d\{4\}$", "2026"), regex.test("^\\d{4}$", "54"), regex.test(regex.escape('a{2}'), 'a{2}'), regex.test(regex.escape('a{2}'), 'aa'))
+print(regex.check_pattern("\\q"), regex.check_pattern("a\\0"), regex.check_pattern("\\A"), regex.check_pattern("\\<"))

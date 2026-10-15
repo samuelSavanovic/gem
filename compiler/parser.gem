@@ -731,11 +731,12 @@ fn make_parser(tokens, source, file, sink)
           push(defaults, nil)
         end
 
-        # A pattern with an outer default (`{port = 80} = {}`) is an option
-        # bag: it raises for a key it doesn't name (__check_opts), unless it
-        # takes the rest (`...rest`, __opts_rest). One without is a record
-        # pattern and ignores other keys. The names travel as one string
-        # literal, separated by NUL bytes.
+        # A pattern with `...rest` binds the keys it doesn't name to rest
+        # (__opts_rest). Otherwise, a pattern with an outer default
+        # (`{port = 80} = {}`) is an option bag: it raises for a key it
+        # doesn't name (__check_opts). One with neither is a record pattern
+        # and ignores other keys. The names travel as one string literal,
+        # separated by NUL bytes.
         let is_bag = defaults[len(defaults) - 1] != nil
         let name_list = build_string do |add|
           for di = 0, len(dnames)

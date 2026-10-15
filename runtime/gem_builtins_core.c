@@ -722,13 +722,14 @@ GemVal gem_make_ref_builtin(void *_env, GemVal *args, int argc) {
 }
 
 /* ─── Internal: __check_opts, __opts_rest (option bags) ───
- * The parser emits these for a destructured parameter shaped like an
- * option bag (one with an outer default or a field default):
- * __check_opts(bag, names) raises for a key the pattern doesn't name,
- * with the closest name; a pattern with `...rest` gets
- * __opts_rest(bag, names), the other entries, instead. `names` is the
- * pattern's field names separated by NUL bytes. A bag that isn't a table
- * is left to the field reads, which raise for it. */
+ * The parser emits these for a destructured parameter:
+ * __opts_rest(bag, names), the entries the pattern doesn't name, for a
+ * pattern with `...rest`; otherwise __check_opts(bag, names), which
+ * raises for a key the pattern doesn't name, with the closest name when
+ * one is close enough, for a pattern with an outer default. `names` is the
+ * pattern's field names separated by NUL bytes. __check_opts leaves a bag
+ * that isn't a table to the field reads, which raise for it;
+ * __opts_rest gives {} for one. */
 
 /* Byte edit distance, for "did you mean"; names past 63 bytes compare as
    far apart. */

@@ -24,7 +24,7 @@ Where the project stood on 2026-10-14, in short:
   with no cache (3.3 s for a 70-line program, 12 s for mini_redis; 0.6 s
   and 1.8 s at `-O0`); no install, `gem test` or `gem new`; no regex,
   captured `exec` output, file line reader, argument parser, base64/sha,
-  CSV or UTF-8 helpers.
+  CSV or UTF-8 helpers. Track B below covers each.
 
 ## Decisions (2026-10-14)
 
@@ -58,7 +58,7 @@ The order is the order of the work.
    after one (a sort comparator's, called from top-level code with no
    enclosing loop) leaves no mapping behind: at a 1 KB threshold,
    117_arena_reset_pressure's arena ends at 45 MB, and at 7.1 GB when
-   such resets map blocks (macOS). Left: a reset that copies
+   such resets map blocks (macOS). Remaining: a reset that copies
    something leaves blocks behind when its loop ends right after it,
    for good when no enclosing loop resets (OPTIMIZATIONS, P2).
 2. **Silent-semantics pass in the compiler.** ✓ Done (compiler/checks.gem
@@ -104,53 +104,54 @@ The order is the order of the work.
 1. **Fast edit-run loop.** ✓ Done. `gem file.gem` compiles at `-O0` and caches
    the binary by a hash of its sources, the runtime and the flags; `-o`
    keeps `-O2`.
-   The key hashes the C (every loaded file's code), the cc
+   *Built:* the key hashes the C (every loaded file's code), the cc
    command, the contents of the runtime library, the runtime headers and
    `extern include` headers;
    `GEM_CACHE=off`, `GEM_CACHE_DIR`; at most 256 entries, then emptied.
-   `--` after the file passes options to the program. Left: `-l`
+   `--` after the file passes options to the program. Remaining: `-l`
    libraries are not in the key.
 2. **Install and project commands.** ✓ Done. `make install PREFIX=…`; `gem new`,
    `gem test` (runs `test.gem`), `gem build` from `gem.toml`.
-3. **Script basics.** ✓ Done (PR 4). `exec` that captures stdout/stderr and the status;
-   a line reader for files and stdin (ROADMAP "Line-at-a-time input");
-   `std/args`; `rename`, `stat`, `setenv`.
-   *Landed:* `exec_capture(cmd, input?)`; `read_file(path, offset,
+3. **Script basics.** ✓ Done. `exec` that captures stdout/stderr and the status;
+   a line reader for files and stdin; `std/args`; `rename`, `stat`,
+   `setenv`.
+   *Built:* `exec_capture(cmd, input?)`; `read_file(path, offset,
    count)` and `read_stdin()`; `std/io` (`lines`, `reader`,
-   `read_lines`); `std/args`; `string.closest`. stdin lines still come
-   from `input()`, which blocks every process.
-4. **`std/regex`** ✓ Done (PR 4). On POSIX `regcomp`/`regexec` in the runtime (gemgrep
+   `read_lines`); `std/args`; `string.closest`. Remaining: stdin lines
+   come from `input()`, which blocks every process.
+4. **`std/regex`** ✓ Done. On POSIX `regcomp`/`regexec` in the runtime (gemgrep
    proves it).
-   *Landed:* `test`, `find`, `find_all`, `replace(_first)`, `split`,
+   *Built:* `test`, `find`, `find_all`, `replace(_first)`, `split`,
    `escape`, `check_pattern`; patterns rewritten for POSIX (`\d \w \s`,
-   escapes inside `[...]`, `{,n}`, empty alternatives) so a pattern means
-   the same on glibc and macOS, and what the two read differently
-   (back-references, stacked quantifiers) raises; a 64-entry compile
-   cache. Left: word boundaries, back-references and lazy quantifiers.
-5. **Encodings.** ✓ Done (PR 4). base64, hex, sha256/HMAC (OpenSSL is already found for
+   escapes inside `[...]`, `{,n}`, empty alternatives) into forms glibc
+   and macOS read alike, and what the two read differently
+   (back-references, stacked quantifiers, other escaped letters) raises;
+   a 64-entry compile cache. Remaining: word boundaries, back-references
+   and lazy quantifiers.
+5. **Encodings.** ✓ Done. base64, hex, sha256/HMAC (OpenSSL is already found for
    TLS), CSV, UTF-8 helpers (code points, case mapping).
-   *Landed:* `std/base64`, `std/hex`, `std/crypto` (SHA-256 written in
+   *Built:* `std/base64`, `std/hex`, `std/crypto` (SHA-256 written in
    the runtime instead of OpenSSL, which is optional and linked only for
-   TLS), `std/utf8`, `std/csv`. Left: full Unicode case mapping (`ß` to
-   `SS`, scripts past Armenian).
-6. **Option-bag typos** ✓ Done (PR 4). (ROADMAP P1, steps 1–2): unknown keys raise, with
-   "did you mean".
-   *Landed:* a destructured parameter with an outer default (`{port =
+   TLS), `std/utf8`, `std/csv`. Remaining: full Unicode case mapping (`ß`
+   to `SS`, scripts past Armenian).
+6. **Option-bag typos** ✓ Done. Unknown keys raise, with "did you mean"
+   (ROADMAP "Catching typos in option bags and message tags").
+   *Built:* a destructured parameter with an outer default (`{port =
    80} = {}`) is an option bag and checks its keys (`__check_opts`,
    emitted by the parser); `...rest` in the pattern takes the others and
    opts out; a pattern without an outer default stays a record, field
    defaults or not. std's plain `opts` tables (http.start/serve, request.*,
    supervisor and dynamic_supervisor specs, tls_connect) check theirs
-   explicitly; strategy, restart, log level and process_flag name the
-   closest value.
-7. **Small std gaps** ✓ Done (PR 4). From ROADMAP "std API gaps": json `indent`, mime
+   explicitly; strategy, restart and log level name the closest value
+   when one is close enough, and process_flag names its one flag.
+7. **Small std gaps** ✓ Done. From ROADMAP "std API gaps": json `indent`, mime
    types, `time.parse`, gen_server names.
-   *Landed:* `json.encode(v, {indent})`; 21 more mime extensions and
+   *Built:* `json.encode(v, {indent})`; 19 more mime extensions and
    `text/javascript`; `time.parse` (ISO 8601, the three HTTP forms) and
    `%L`; `gen_server.start(module, {name})`.
 8. **Error messages:** ✓ Done. "did you mean" for undefined names; a missing
    `end` points at the construct it closes.
-   The block named is the first whose `end` was indented unlike its
+   *Built:* the block is the first whose `end` was indented unlike its
    opening line, else the innermost open one; reported once, when a
    named `fn` at column 1 lands inside a body or the file ends.
 
@@ -168,7 +169,8 @@ package manager (until there is a second user).
 
 ## Housekeeping
 
-- ROADMAP: re-score the priorities against this plan.
+- ROADMAP: re-score the priorities against this plan ("`exec` children
+  as owned resources": `exec` already uses `posix_spawn`).
 - A fresh benchmark baseline (the last is 2026-10-07, before TLS, the
   resolver lane and expressions as values).
 - Commit the live honeypot's and httpd's health data now and then.

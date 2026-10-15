@@ -4,8 +4,8 @@
  *                      normalize_path, remove_file, mkdir, list_dir, is_dir, exec;
  *                      plus gem_exe_path (the running binary's real path) and
  *                      gem_temp_dir/gem_temp_dir_in/gem_rmdir (the compiler's work directories),
- *                      gem_hash_hex/gem_file_hash/gem_mkdirs/gem_link/gem_file_age
- *                      (the compiler's binary cache).
+ *                      gem_hash_hex/gem_file_hash/gem_mkdirs/gem_link/gem_rename/gem_file_age
+ *                      (the compiler's binary cache) and gem_run_program (its run mode).
  */
 
 #if defined(__linux__) && !defined(_GNU_SOURCE)
@@ -28,6 +28,18 @@
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
+
+FILE *gem_fopen(const char *path, const char *mode) {
+    int flags = O_CLOEXEC;
+    if (mode[0] == 'r') flags |= O_RDONLY;
+    else if (mode[0] == 'w') flags |= O_WRONLY | O_CREAT | O_TRUNC;
+    else flags |= O_WRONLY | O_CREAT | O_APPEND;
+    int fd = open(path, flags, 0666);
+    if (fd < 0) return NULL;
+    FILE *f = fdopen(fd, mode);
+    if (!f) { int e = errno; close(fd); errno = e; }
+    return f;
+}
 
 /* ─── Built-in: read_file ─── */
 
@@ -55,7 +67,7 @@ char *gem_read_file_range(const char *path, int64_t offset, int64_t count,
         *err_msg = strdup(msg);
         return NULL;
     }
-    FILE *f = fopen(path, "rb");
+    FILE *f = gem_fopen(path, "rb");
     if (!f) {
         snprintf(msg, sizeof(msg), "cannot open '%s': %s", path, strerror(errno));
         *err_msg = strdup(msg);
@@ -225,7 +237,7 @@ GemVal gem_write_file_fn(void *_env, GemVal *args, int argc) {
         return GEM_NIL;
     }
 
-    FILE *f = fopen(path, "wb");
+    FILE *f = gem_fopen(path, "wb");
     if (!f) {
         char buf[512]; snprintf(buf, sizeof(buf), "write_file: cannot open '%s' for writing: %s", path, strerror(errno)); gem_error(buf);
     }
@@ -266,7 +278,7 @@ GemVal gem_append_file_fn(void *_env, GemVal *args, int argc) {
         return GEM_NIL;
     }
 
-    FILE *f = fopen(path, "ab");
+    FILE *f = gem_fopen(path, "ab");
     if (!f) { char buf[512]; snprintf(buf, sizeof(buf), "append_file: cannot open '%s': %s", path, strerror(errno)); gem_error(buf); }
     size_t nwritten = fwrite(content, 1, len, f);
     fclose(f);
@@ -281,7 +293,7 @@ GemVal gem_file_exists_fn(void *_env, GemVal *args, int argc) {
     if (argc < 1 || args[0].type != VAL_STRING) {
         char buf[128]; snprintf(buf, sizeof(buf), "file_exists: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
     }
-    FILE *f = fopen(args[0].sval, "rb");
+    FILE *f = gem_fopen(args[0].sval, "rb");
     if (f) { fclose(f); return gem_bool(1); }
     return gem_bool(0);
 }
@@ -442,9 +454,10 @@ int64_t gem_rmdir(const char *path) {
  * "" when it can't be read. gem_mkdirs is mkdir -p (1 on success, the
  * directory existing included; 0 when the path, or one of its parents,
  * exists and is not a directory); gem_link makes `to` a hard link to
- * `from` (1 on success; 0 when `to` exists or `from` doesn't);
+ * `from` (1 on success; 0 when `to` exists or `from` doesn't); gem_rename
+ * is rename(2) (1 on success);
  * gem_file_age is the seconds since a file's inode last changed (its
- * st_ctime, which a new link sets), -1 when it can't be read. */
+ * st_ctime, which a new link or a rename sets), -1 when it can't be read. */
 
 static void gem_fnv2(const uint8_t *p, size_t n, uint64_t *a, uint64_t *b) {
     for (size_t i = 0; i < n; i++) {
@@ -464,7 +477,7 @@ char *gem_hash_hex(const uint8_t *data, int64_t len) {
 
 char *gem_file_hash(const char *path) {
     static char out[33];
-    FILE *f = fopen(path, "rb");
+    FILE *f = gem_fopen(path, "rb");
     if (!f) { out[0] = 0; return out; }
     uint64_t a = 0xcbf29ce484222325ULL, b = 0x84222325cbf29ce4ULL;
     uint8_t buf[65536];
@@ -496,10 +509,58 @@ int64_t gem_link(const char *from, const char *to) {
     return link(from, to) == 0 ? 1 : 0;
 }
 
+int64_t gem_rename(const char *from, const char *to) {
+    return rename(from, to) == 0 ? 1 : 0;
+}
+
 int64_t gem_file_age(const char *path) {
     struct stat st;
     if (lstat(path, &st) != 0) return -1;
     return (int64_t)(time(NULL) - st.st_ctime);
+}
+
+int64_t gem_run_program(const char *path, const uint8_t *args, int64_t len, int64_t replace) {
+    int64_t argc = 1;
+    for (int64_t i = 0; i < len; i++) if (args[i] == 0) argc++;
+    char **argv = (char **)malloc(sizeof(char *) * (size_t)(argc + 1));
+    argv[0] = (char *)path;
+    int64_t k = 1, start = 0;
+    for (int64_t i = 0; i < len; i++) {
+        if (args[i] == 0) { argv[k++] = (char *)args + start; start = i + 1; }
+    }
+    argv[k] = NULL;
+    char **envp = gem_env_snapshot();
+    int64_t ret = -1;
+    if (replace) {
+        /* The runtime ignores SIGPIPE; the program starts as from a shell. */
+        fflush(NULL);
+        signal(SIGPIPE, SIG_DFL);
+        sigset_t none, old;
+        sigemptyset(&none);
+        sigprocmask(SIG_SETMASK, &none, &old);
+        execve(path, argv, envp);
+        sigprocmask(SIG_SETMASK, &old, NULL);
+        signal(SIGPIPE, SIG_IGN);
+    } else {
+        posix_spawnattr_t attr;
+        posix_spawnattr_init(&attr);
+        sigset_t def;
+        sigemptyset(&def);
+        sigaddset(&def, SIGPIPE);
+        posix_spawnattr_setsigdefault(&attr, &def);
+        posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGDEF);
+        pid_t pid;
+        if (posix_spawn(&pid, path, NULL, &attr, argv, envp) == 0) {
+            int status;
+            while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+            if (WIFEXITED(status)) ret = WEXITSTATUS(status);
+            else if (WIFSIGNALED(status)) ret = 128 + WTERMSIG(status);
+        }
+        posix_spawnattr_destroy(&attr);
+    }
+    free(envp);
+    free(argv);
+    return ret;
 }
 
 /* ─── Built-in: remove_file ─── */
@@ -556,7 +617,7 @@ GemVal gem_rename_fn(void *_env, GemVal *args, int argc) {
 }
 
 /* stat(path): nil when nothing is there, else {size, mtime (ms since the
-   epoch), mode (the permission bits), type: "file" | "dir" | "link" |
+   epoch), mode (the permission and mode bits, st_mode & 07777), type: "file" | "dir" | "link" |
    "other"}. Follows symlinks, like is_dir; a dangling link is "link". */
 GemVal gem_stat_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
@@ -597,11 +658,12 @@ GemVal gem_is_dir_fn(void *_env, GemVal *args, int argc) {
  *
  * exec and exec_capture start `/bin/sh -c cmd` with posix_spawn on a pool
  * thread, passing the environment getenv and setenv see
- * (gem_env_snapshot). A child must inherit only its stdin, stdout and
- * stderr. On Linux the pipes and sockets the runtime makes while pool
- * threads may be spawning are close-on-exec from the moment they exist
- * (pipe2, accept4, SOCK_CLOEXEC); macOS has no such calls, so every spawn
- * there sets POSIX_SPAWN_CLOEXEC_DEFAULT, which closes every other
+ * (gem_env_snapshot). A child must inherit none of the runtime's own
+ * descriptors besides stdin, stdout and stderr. The files the runtime opens are close-on-exec from the moment
+ * they exist (gem_fopen), and on Linux so are the pipes and sockets it
+ * makes while pool threads may be spawning (pipe2, accept4,
+ * SOCK_CLOEXEC); macOS has no such calls for those, so every exec and
+ * exec_capture spawn there sets POSIX_SPAWN_CLOEXEC_DEFAULT, which closes every other
  * descriptor in the child. Otherwise a command started on one worker could hold the write
  * end of another exec_capture's pipe, and that exec_capture would wait
  * until the command exits. */

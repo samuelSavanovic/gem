@@ -8,7 +8,8 @@
 ## The raw forms return 32 bytes; the `_hex` forms return them as 64
 ## lowercase hex digits. Strings are bytes, so text hashes as its UTF-8
 ## bytes. An argument that isn't a string raises `crypto.<fn>: <arg> must
-## be a string, got <type>`. Hashing runs inline, at a few hundred MB/s.
+## be a string, got <type>`. Hashing runs inline on the scheduler thread,
+## at about 175 MB/s (macOS arm64, `-o` build).
 
 load "std/hex"
 

@@ -13,8 +13,9 @@
 ## (`"\t"`, `";"`).
 ##
 ## Malformed input raises `csv.parse: line <n>: <what>`: a quote inside an
-## unquoted field, text after a closing quote, a quoted field left open at
-## the end.
+## unquoted field, text after a closing quote (both at the line they are
+## on), a quoted field left open at the end, and with `header` a row
+## longer than the header (both at the line the field or row starts on).
 
 fn check_sep(fname, sep)
   if type(sep) != "string" or len(sep) != 1 or sep == "\"" or sep == "\n" or sep == "\r"
@@ -34,15 +35,19 @@ fn parse(text, {sep = ",", header = false} = {})
   let s = ord(sep, 0)
   let rows = []
   let row = []
+  # The line each row starts on, for the header check's errors.
+  let starts = []
   let n = len(text)
   let i = 0
   let line = 1
   let field_start = 0
+  let row_line = 1
   while i <= n
     if i == n
       if not (len(row) == 0 and field_start == n)
         push(row, substr(text, field_start, n - field_start))
         push(rows, row)
+        push(starts, row_line)
       end
       break
     end
@@ -76,6 +81,7 @@ fn parse(text, {sep = ",", header = false} = {})
       push(row, to_string(out))
       if j == n
         push(rows, row)
+        push(starts, row_line)
         row = []
         field_start = n
         break
@@ -86,14 +92,18 @@ fn parse(text, {sep = ",", header = false} = {})
         field_start = i
       elif d == 10
         push(rows, row)
+        push(starts, row_line)
         row = []
         line += 1
+        row_line = line
         i = j + 1
         field_start = i
       elif d == 13 and j + 1 < n and ord(text, j + 1) == 10
         push(rows, row)
+        push(starts, row_line)
         row = []
         line += 1
+        row_line = line
         i = j + 2
         field_start = i
       else
@@ -109,8 +119,10 @@ fn parse(text, {sep = ",", header = false} = {})
       let stop = if i > field_start and ord(text, i - 1) == 13 then i - 1 else i end
       push(row, substr(text, field_start, stop - field_start))
       push(rows, row)
+      push(starts, row_line)
       row = []
       line += 1
+      row_line = line
       i += 1
       field_start = i
     elif c == 34
@@ -122,7 +134,7 @@ fn parse(text, {sep = ",", header = false} = {})
   if not header
     return rows
   end
-  records(rows)
+  records(rows, starts)
 end
 
 fn count_newlines(s)
@@ -135,7 +147,7 @@ fn count_newlines(s)
   k
 end
 
-fn records(rows)
+fn records(rows, starts)
   let out = []
   if len(rows) == 0
     return out
@@ -147,7 +159,7 @@ fn records(rows)
       continue
     end
     if len(row) > len(names)
-      error("csv.parse: line {r + 1}: {len(row)} fields, but the header has {len(names)}")
+      error("csv.parse: line {starts[r]}: {len(row)} fields, but the header has {len(names)}")
     end
     let rec = {}
     for k = 0, len(row)

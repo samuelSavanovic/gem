@@ -1,4 +1,4 @@
-## regex — regular expressions: test, find, find_all, replace, split.
+## regex — regular expressions: test, find, find_all, replace, split, escape.
 ##
 ##   load "std/regex"
 ##   regex.test("^[a-z]+$", "hello")                 # true
@@ -10,21 +10,28 @@
 ##
 ## Patterns are POSIX extended regexes (`|`, `+`, `?`, `{m,n}`, `{,n}`,
 ## `(...)` groups, `[[:alpha:]]` classes), plus `\d`, `\w`, `\s` and their
-## negations `\D`, `\W`, `\S`, and `\t`, `\n`, `\r`. Inside `[...]`, a
-## backslash escapes punctuation (`[\]\-]`) and `\d \w \s \t \n \r` work
-## too. A pattern means the same on every platform. Word boundaries
-## (`\b`), back-references (`\1`) and lazy quantifiers (`*?`) aren't
-## supported; a pattern that doesn't compile raises `regex: bad pattern
-## '<p>': <why>`. In a Gem string literal a backslash is written twice
-## (`"\\d+"`).
+## negations `\D`, `\W`, `\S`, and `\t`, `\n`, `\r`; a backslash before
+## any other character that isn't a letter or digit stands for that
+## character (`\.`, `\{`, `\'`), except `\<` and `\>`; before any other
+## letter or digit it raises. Inside `[...]`, a backslash
+## escapes punctuation (`[\]\-]`) and `\d \w \s \t \n \r` work too.
+## Word boundaries (`\b`, `\<`, `\>`), back-references
+## (`\1`) and lazy quantifiers (`*?`) aren't supported; a pattern that
+## doesn't compile raises `regex: bad pattern '<p>': <why>`.
 ##
-## Every function takes an option bag: `icase` (ignore case) and
+## In a double-quoted Gem string a backslash is written twice (`"\\d+"`),
+## and a bound such as `{4}` is interpolation: `"\\d{4}"` is `\d4`. Write
+## such patterns in single quotes (`'\d{4}'`), or escape the braces
+## (`"\\d\{4\}"`).
+##
+## Every function but `escape` takes an option bag: `icase` (ignore case) and
 ## `multiline` (`^` and `$` also match at line breaks, and `.` and `[^x]`
 ## don't match a newline). Positions are byte offsets. A match is
 ## `{text, start, stop, groups}`: `stop` is the offset after the match,
 ## and `groups` holds each group's text, nil for a group that took no
-## part. Compiled patterns are cached, so passing the same pattern string
-## each time costs nothing extra.
+## part. Up to 64 compiled patterns (with their options) are cached; when
+## the cache is full, the one compiled longest ago makes room. A pattern
+## used again while it is cached isn't compiled again.
 ##
 ## Matching runs inline on the scheduler thread: a long match on a large
 ## string holds up every other process while it runs.
@@ -70,7 +77,7 @@ end
 
 ## Returns true when `pattern` matches somewhere in `s`.
 ##
-##   regex.test("^\\d{4}-\\d{2}$", "2026-10")        # true
+##   regex.test('^\d{4}-\d{2}$', "2026-10")          # true
 ##   regex.test("ABC", "xabcx", {icase: true})        # true
 fn test(pattern, s, {icase = false, multiline = false} = {})
   check("test", pattern, s)

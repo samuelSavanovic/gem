@@ -217,8 +217,7 @@ A `while` with a cursor suits tokenizers and frame parsers; read bytes
 with `ord(s, i)`, which doesn't allocate. But `str_replace`, `substr` and
 `find` (and `string.index_of`, `split`, `contains`) run in C: a needle 1
 MB into a string is found in well under 1 ms with `find`, against about
-25 ms with an `ord` loop. `std/regex` tests a short line in about 0.5 µs
-(patterns are cached; write `"\\d+"` for `\d+`).
+25 ms with an `ord` loop. `std/regex` tests a short line in about 0.5 µs.
 
 ---
 
@@ -390,7 +389,7 @@ answer 400, or a bad id becomes a 500.
 
 `"user {id} not found"`, not `"user " + to_string(id) + ...`. Any
 expression works inside the braces; use single quotes for literal braces
-(`'{"key": 1}'`).
+(`'{"key": 1}'`) and regexes: `"\\d{4}"` is the pattern `\d4` **(trap)**.
 
 ### Building strings
 
@@ -755,10 +754,10 @@ accepts).
 
 ### Reading and writing in bulk
 
-Read lines with `std/io`: `io.lines(path) do |line| ... end` (`"-"`:
-stdin) reads 64 KB blocks, so a 200 MB log took 0.9 s at a 4 MB peak
-(0.4 s on macOS arm64; `read_file` and `find`: 1.2 s, the whole file in
-memory); a pipe or `<(cmd)` path is read whole. `io.reader` stops early.
+Read lines with `std/io`: `io.lines(path) do |line| ... end` reads a
+file in 64 KB blocks: a 200 MB log took 0.26 s at a 4 MB peak (0.19 s and
+420 MB with `read_file` and `find`; macOS arm64). A pipe is read whole,
+and `"-"` (stdin) by `input()`, which blocks every process.
 `print` flushes every line: a million lines took 0.6 s with `print` and
 0.3 s as one `write_stdout` of a `build_string` (2.7 s against 0.16 s on
 macOS arm64), so write bulk output in one piece.
@@ -986,6 +985,7 @@ their own. Zeroing a handle after the free (`h.ptr = 0`) and checking for
 | Large set or index with tables as keys | quadratic | key by an id the tables carry |
 | `2.0 == 2` | `false` | convert first |
 | String accumulator read inside its loop | quadratic | `build_string` |
+| Regex bound `{4}` in a double-quoted pattern | interpolated: `\d4` | single quotes |
 | Module-level `let` used as shared state | each process changes its own copy | keep shared state in a process |
 | Module-level table pushed to between spawns | copied into every child: O(n²) | a local of `fn main` |
 | `loop(state)` then more statements, across fns | stack and memory grow until overflow | self call as the last expression |

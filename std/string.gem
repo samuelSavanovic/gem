@@ -256,7 +256,8 @@ end
 ## Returns the string of `candidates` (an array) closest to `word`, or nil
 ## when none is close: at most one edit away for a `word` of up to 4
 ## bytes, two for a longer one (an edit adds, removes or changes a byte,
-## or swaps two neighbouring ones); else one that is `word` followed by
+## or swaps two neighbouring ones). When none is that close and `word`
+## has at least 3 bytes, the first candidate that is `word` followed by
 ## `_` and more (`timeout` finds `timeout_ms`).
 ## For "did you mean" messages. Non-string candidates are skipped; `word`
 ## itself is never returned.

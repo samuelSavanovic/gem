@@ -489,7 +489,7 @@ fn exchange(rd, req_str, method)
 end
 
 # Raises `<who>: unknown <what> "<key>"<where>`, naming the closest allowed
-# key, for a key of table `t` that `allowed` (an array of names) doesn't
+# key when one is close enough (string.closest), for a key of table `t` that `allowed` (an array of names) doesn't
 # hold.
 fn check_keys(who, what, t, allowed, where = "")
   for k, _ in t

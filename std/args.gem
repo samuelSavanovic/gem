@@ -25,15 +25,18 @@
 ##
 ## An option's spec takes: `short` (one letter), `help`, `default`,
 ## `type` (`"string"`, `"int"`, `"float"` or `"flag"`; default: the type
-## of `default`, else `"string"`), `multi` (every occurrence is kept, in an
-## array), `choices` (the values allowed), `required`, and `value` (the
-## value's name in the help, default the option's name in capitals). An
-## option left out is its `default`, `false` for a flag, `[]` for `multi`,
-## else nil. `min_args` and `max_args` bound the positional arguments;
+## of `default`, `"flag"` for a `true` or `false` one, else `"string"`),
+## `multi` (every occurrence is kept, in an array), `choices` (the values
+## allowed), `required`, and `value` (the value's name in the help,
+## default the option's name in capitals). An option left out is its
+## `default` (for `multi`, a table default as it is and any other in a
+## one-element array), else `false` for a flag, `[]` for `multi`, nil for
+## the rest. A flag's `default` must be `true` or `false`. `min_args` and `max_args` bound the positional arguments;
 ## `name` (default: the program's file name) and `about` go in the help.
 ##
-## `parse` prints a mistake (an unknown option, with the closest known one,
-## a missing value, a value that isn't an int, too few arguments) on
+## `parse` prints a mistake (an unknown option, with the closest long one
+## when one is close enough; an unknown short option gets no hint; a
+## missing value, a value that isn't an int, too few arguments) on
 ## stderr with the usage line, and exits with status 2; `try_parse`
 ## returns it instead. A spec with a mistake (an unknown key, a `short`
 ## of more than one letter) raises `args: ...`.
@@ -107,10 +110,14 @@ fn compile(spec)
     check_keys("option `{name}`", o, OPTION_KEYS)
     let t = o.type
     if t == nil
-      t = if has_key(o, "default") and type(o.default) == "int" then "int" elif has_key(o, "default") and type(o.default) == "float" then "float" else "string" end
+      let dt = if has_key(o, "default") then type(o.default) else nil end
+      t = if dt == "int" or dt == "float" then dt elif dt == "bool" then "flag" else "string" end
     end
     if not table_has(TYPES, t)
       error("args: option `{name}` has type `{t}`; the types are string, int, float and flag")
+    end
+    if t == "flag" and has_key(o, "default") and type(o.default) != "bool"
+      error("args: option `{name}` is a flag; its default must be true or false, got {type(o.default)}")
     end
     let opt = {
       name: name,
@@ -257,7 +264,7 @@ fn try_parse(spec, list = nil)
   for o in c.opts
     if o.multi
       out[o.name] = []
-    elif o.type == "flag"
+    elif o.type == "flag" and not o.has_default
       out[o.name] = false
     elif o.has_default
       out[o.name] = o.default
@@ -364,6 +371,9 @@ fn try_parse(spec, list = nil)
   for o in c.opts
     if o.required and not (o.name in seen)
       return fail("missing --{o.long}")
+    end
+    if o.multi and o.has_default and not (o.name in seen)
+      out[o.name] = if type(o.default) == "table" then o.default else [o.default] end
     end
   end
   let na = len(out.args)

@@ -68,7 +68,7 @@ char *gem_read_whole_file(const char *path, size_t *out_len, char **err_msg) {
     char msg[512];
     *out_len = 0;
     *err_msg = NULL;
-    FILE *f = fopen(path, "rb");
+    FILE *f = gem_fopen(path, "rb");
     if (!f) {
         snprintf(msg, sizeof(msg), "cannot open '%s': %s", path, strerror(errno));
         *err_msg = strdup(msg);
@@ -135,7 +135,7 @@ static void gem_io_do_read(GemIORequest *req) {
 }
 
 static void gem_io_do_write(GemIORequest *req, const char *mode) {
-    FILE *f = fopen(req->path, mode);
+    FILE *f = gem_fopen(req->path, mode);
     if (!f) {
         char buf[512];
         snprintf(buf, sizeof(buf), "cannot open '%s' for writing: %s", req->path, strerror(errno));

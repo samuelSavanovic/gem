@@ -1,5 +1,6 @@
 # std/base64, std/hex, std/crypto (SHA-256, HMAC, constant-time equal), std/utf8, std/csv.
-# Digests checked against the FIPS 180-4 and RFC 4231 vectors.
+# SHA-256 digests are FIPS 180-4 vectors; the second HMAC is RFC 4231 test
+# case 6, the first matches `openssl dgst -sha256 -hmac key`.
 load "std/base64"
 load "std/hex"
 load "std/crypto"
@@ -33,6 +34,7 @@ print(pcall(fn() csv.parse("a\nb\"c\n") end).error)
 print(pcall(fn() csv.parse("\"a\"x\n") end).error)
 print(pcall(fn() csv.parse("x\n\"a\nb") end).error)
 print(pcall(fn() csv.parse("a\n1,2\n", {header: true}) end).error)
+print(pcall(fn() csv.parse("a,b\n\"x\ny\",1\n\"p\nq\nr\",2,3\n", {header: true}) end).error)
 print(pcall(fn() csv.parse("a", {sep: ",,"}) end).error)
 let text = csv.encode([["a", "b,c"], [1, nil], ["say \"hi\"", " pad", "x\ny"]])
 print(text)
