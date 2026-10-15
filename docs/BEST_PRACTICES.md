@@ -54,10 +54,8 @@ it as `do |params| ... end`: `table.filter(nums) do |n| n % 2 == 0 end` is
 `table.filter(nums, fn(n) n % 2 == 0 end)`. `spawn do ... end`, `pcall do
 ... end` and `build_string do |add| ... end` are the same form.
 
-**Larger programs.** The apps under `examples/` (`bookmark_app`,
-`stomp_broker`, `logstat`, `mini_redis`, `lox`, `gemgrep`, `jobqueue`,
-`honeypot`, `httpd`) test themselves with `std/test`; read them for how
-the pieces fit together.
+**Larger programs.** The apps under `examples/` test themselves with
+`std/test`; read them for how the pieces fit together.
 
 **Words this doc uses.** *Array*: a table with keys `0 .. n-1`. *Record*:
 a table with string keys. *Process*: a lightweight thread with its own
@@ -283,12 +281,6 @@ applies only when the argument (or key) is left out: passing `nil` gives
 `nil` **(trap)**, so a caller that forwards an option it may not have
 (`{port: opts.port}`) passes `nil`, not the default. Leave the key out.
 
-### Arity is checked only for direct calls
-
-A direct call to a named fn or module export with the wrong argument
-count is a compile error. A call through a value (a callback) isn't
-checked: extra arguments are dropped and missing ones are `nil`.
-
 ### Don't reuse module names for local variables **(trap)**
 
 A local or parameter named like a loaded module (`string`, `json`, ...)
@@ -299,6 +291,9 @@ name is the module's API (`log.error`).
 
 ### Small rules
 
+- A wrong argument count is a compile error only in a direct call to a
+  named fn or module export; a call through a value drops extra arguments
+  and passes `nil` for missing ones.
 - `pcall f(x)` or `pcall do ... end` catches errors, giving `{ok: true,
   value: v}` or `{ok: false, error: message, stack: trace}`.
   `pcall(f(x))` runs `f(x)` unprotected and calls the fn it returns
@@ -480,7 +475,9 @@ long-running process stays in constant memory as long as it is a loop.
 message adds a stack frame and keeps its memory, until `stack overflow`.
 The compiler warns about that in a function with a `receive`, but not in a
 cycle through several functions (`loop` → `handle` → `loop`): keep each
-call the last thing its function does.
+call the last thing its function does. `warning: ... cannot reset
+per-process arena at this loop's back-edge` on a `while true` means its
+memory grows without bound; restructure the loop as the warning says.
 
 ```gem
 fn serve_loop(state)
@@ -492,10 +489,6 @@ fn serve_loop(state)
   end
 end
 ```
-
-`warning: ... cannot reset per-process arena at this loop's back-edge` on
-a `while true` means its memory grows without bound; restructure the loop
-as the warning says.
 
 ### A process holding a lot of data pauses every process **(trap)**
 
@@ -703,15 +696,13 @@ the program, monitor the process (or `task.await` it).
 
 Gem code is preempted at loop back-edges and tail calls; non-tail
 recursion (a naive `fib(30)`) and blocking builtins hold up **all**
-processes until they return.
+processes until they return: keep sqlite queries short and indexed, as a
+one-second query stalls every process for a second.
 
 | Yields to other processes | Blocks everything |
 |---|---|
 | `tcp_*`, `tls_connect`, `sleep`, `receive` | `sqlite_query`, `sqlite_exec`; a TLS handshake's crypto (about 1 ms) |
 | `read_file`, `write_file`, `append_file`, `exec`, `exec_capture`, `sqlite_open`, `sqlite_close`, `extern blocking fn` (a pool of 4 threads) | `file_exists`, `is_dir`, `stat`, `list_dir`, `mkdir`, `rename`, `remove_file`; plain `extern fn`, `input`, `read_stdin`; `print` to a slow pipe |
-
-Keep sqlite queries short and indexed: a one-second query stalls every
-process for a second.
 
 The pool has 4 workers **(trap)**: four long calls (`exec`, an `extern
 blocking fn`) take all of them, and every file read waits behind them
@@ -867,10 +858,9 @@ each function's doc doesn't repeat them. A small module needs about a
 dozen lines; a large one (std/http, the OTP modules) can need two or three
 times that, as long as every line is a rule that holds across functions.
 A rule about one function goes on that function. A design overview that
-only maintainers need goes in a `#` block after the `load`s.
-
-Private functions don't get `##`. Give one a `#` comment when its
-contract isn't obvious from its name.
+only maintainers need goes in a `#` block after the `load`s. Private
+functions don't get `##`; give one a `#` comment when its contract isn't
+obvious from its name.
 
 ### Accept a pid or a `{pid}` handle in one place
 
@@ -882,8 +872,7 @@ helper.
 
 ## C interop
 
-The full rules are in [`SPEC.md`](SPEC.md) ("C Interop"); these are the
-ones that bite.
+The full rules are in [`SPEC.md`](SPEC.md) "C Interop"; these bite.
 
 - Put the C code in a header of `static` functions and `extern include
   "<path>"` it (relative to the `.gem` file) before the `extern fn`s; for
@@ -945,28 +934,22 @@ their own. Zeroing a handle after the free (`h.ptr = 0`) and checking for
 
 - Two-space indent, `snake_case` for functions and variables, `UPPER_SNAKE`
   for module constants.
-- Keep `if ... then ... end` and `when ... then ...` on one line only when
+- Keep functions short: prefer a well-named helper to a long `match` arm.
+  Put `if ... then ... end` and `when ... then ...` on one line only when
   they are short.
 - An expression can't continue on the next line, even inside parentheses
   (only call arguments and table literals can). Split a long condition
   into named `let`s.
-- Comments say *why*, not what. Document every module and every exported
-  function with `##` (see
-  [Document the public API with `##`](#document-the-public-api-with-)),
-  and give a private function a `#` comment when its contract isn't
-  obvious from its name.
-- How much to comment depends on who reads the code. A library (std, or
-  a module other code loads) has callers who don't read its source, so
-  its `##` docs are complete. Application code and examples are read as
-  code: a one-line `##` per module and exported function is enough, and a
-  `#` comment earns its place only by saying what the code can't, such
-  as a design choice that's easy to undo by mistake or a Gem behaviour
-  the reader wouldn't expect (a `sqlite_query` that blocks every process, a
-  process that traps exits so it can close its socket). Don't narrate
-  what the next line does.
-- Keep functions short. Prefer a well-named helper to a long arm inside a
-  `match`.
-
+- Comments say *why*, not what; don't narrate the next line. How much
+  to comment depends on who reads the code. A library (std, or a module
+  other code loads) has callers who don't read its source, so its `##`
+  docs are complete ([Document the public API with
+  `##`](#document-the-public-api-with-)). Application code and examples
+  are read as code: a one-line `##` per module and exported function is
+  enough, and a `#` comment only says what the code can't: a design
+  choice that's easy to undo by mistake, or a Gem behaviour the reader
+  wouldn't expect (a `sqlite_query` that blocks every process, a process
+  that traps exits so it can close its socket).
 ---
 
 ## Trap index
