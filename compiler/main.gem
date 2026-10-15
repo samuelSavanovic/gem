@@ -1365,13 +1365,17 @@ extern fn gem_run_program(path: String, args: Bytes, replace: Int) -> Int
 # system, and the run hard-links it into its entry, so a run never sees
 # a half-written entry. The entry's binary then replaces the gem process
 # (its path is argv()[0]); an execve that fails because the entry is gone
-# (another run emptied the cache) counts as a miss. Emptying the cache
-# moves the entries into .tmp rather than removing their binaries: macOS
+# (another run emptied the cache) counts as a miss. The binary runs as a
+# child of gem instead when the cache is off or has no writable
+# directory, when the link into the entry fails with no entry there, and
+# when the entry is gone twice in a row. Emptying the cache moves the
+# entries into .tmp and never removes an entry's binary in place: macOS
 # kills a process whose binary loses its last link while execve is still
 # loading it.
 let CACHE_MAX_ENTRIES = 256
 # A new key's first run removes, under .tmp, the run directories
-# unchanged for a day (those of runs killed while building) and the
+# unchanged for a day (those left by a gem killed while building, or
+# while the binary ran as its child from the run directory) and the
 # entries moved there more than a minute before.
 let CACHE_STALE_SECONDS = 86400
 let CACHE_MOVED_SECONDS = 60
@@ -1459,7 +1463,10 @@ fn remove_flat_dir(dir)
 end
 
 # Past CACHE_MAX_ENTRIES entries, empty the cache (it refills with what
-# is run again) by moving its entries into `staging`. An entry is a
+# is run again) by moving its entries into `staging` as
+# `<entry>.<suffix>`, the suffix that of a directory made with mkdtemp,
+# which no other call gets while the moves run. An entry that can't be
+# moved (its new name taken included) stays in place. An entry is a
 # directory holding one binary; names starting with `.` are not entries.
 fn prune_cache(root, staging)
   if not is_dir(root)
@@ -1474,12 +1481,18 @@ fn prune_cache(root, staging)
   if len(entries) < CACHE_MAX_ENTRIES
     return nil
   end
+  let claim = gem_temp_dir_in(staging)
+  if claim == nil
+    return nil
+  end
+  let suffix = substr(claim, len(claim) - 6, 6)
   for e in entries
     let dir = path_join(root, e)
-    if is_dir(dir) and gem_rename(dir, path_join(staging, e)) != 1
-      remove_flat_dir(dir)
+    if is_dir(dir)
+      gem_rename(dir, path_join(staging, e + "." + suffix))
     end
   end
+  gem_rmdir(claim)
 end
 
 fn remove_stale_runs(staging)

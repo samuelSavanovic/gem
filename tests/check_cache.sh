@@ -175,6 +175,19 @@ for round in 1 2 3 4 5; do
     [ "$(cat "$T/emptied.$i")" = "$(printf 'emptied\n0')" ] || fail "run while the cache is emptied, round $round, $i: $(cat "$T/emptied.$i")"
   done
 done
-[ -d "$GEM_CACHE_DIR/.tmp/fake1" ] || fail "emptying the cache: fake1 not moved into .tmp"
+ls -d "$GEM_CACHE_DIR"/.tmp/fake1.* > /dev/null 2>&1 || fail "emptying the cache: fake1 not moved into .tmp"
+
+# emptying the cache twice within a minute, the same entry built again in
+# between: both of its binaries are kept under .tmp, none removed in place
+rm -rf "$GEM_CACHE_DIR"
+echo 'print("twice")' > "$T/p/twice.gem"
+for round in 1 2; do
+  "$GEM" "$T/p/twice.gem" > /dev/null || fail "twice: run $round failed"
+  for i in $(seq 1 256); do mkdir -p "$GEM_CACHE_DIR/fake$i"; done
+  echo "print($round)" > "$T/p/wipe$round.gem"
+  "$GEM" "$T/p/wipe$round.gem" > /dev/null || fail "twice: emptying run $round failed"
+done
+n=$(ls "$GEM_CACHE_DIR"/.tmp/*/twice 2>/dev/null | wc -l | tr -d ' ')
+[ "$n" = 2 ] || fail "emptying the cache twice: $n moved binaries of the entry, expected 2"
 
 if [ $fails -eq 0 ]; then echo "cache: OK"; else exit 1; fi

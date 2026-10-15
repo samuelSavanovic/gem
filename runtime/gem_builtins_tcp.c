@@ -42,8 +42,8 @@ static void gem_set_nonblocking(int fd) {
    hold it: by socket() and accept4() themselves where SOCK_CLOEXEC exists
    (Linux), and by fcntl right after socket() and accept() in every case.
    Without SOCK_CLOEXEC (macOS) a command starting between the two could
-   inherit the new socket, but every spawn there sets
-   POSIX_SPAWN_CLOEXEC_DEFAULT (gem_builtins_io.c). */
+   inherit the new socket, but every exec and exec_capture spawn there
+   sets POSIX_SPAWN_CLOEXEC_DEFAULT (gem_builtins_io.c). */
 #ifdef SOCK_CLOEXEC
 #define GEM_SOCK_STREAM (SOCK_STREAM | SOCK_CLOEXEC)
 #else
