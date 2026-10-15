@@ -101,6 +101,7 @@ make test-tls-online   # tls_connect + https:// against real sites (example.com,
 make test-stress       # the examples, example apps and the compiler under GEM_RESET_STRESS=1 (resets at almost every back-edge); not part of make test
 make debug             # build/debug/libgem_runtime.a: -DGEM_DEBUG (GEM_ASSERT invariants, poisoned freed memory, heap check after resets)
 make asan              # build/asan/libgem_runtime.a: the debug runtime plus ASan and UBSan; a program uses either with GEM_RUNTIME=debug|asan
+                       #   on macOS arm64 ASan reports stack errors in ~20 numbered examples (process kills, gen_server, sockets, stack overflow; SPEC "GEM_RUNTIME"): check a report before trusting it
 make test-debug        # the numbered examples on the debug runtime under GEM_RESET_STRESS=1
 make fuzz-diff         # generated programs (tests/fuzz/gen_program.py): -O2 vs -O0 vs stress (vs debug with FUZZ_ARGS=--debug) must print the same
 make fuzz-frontend     # mutated examples through `gem --check`: compile errors only, never a compiler crash (portable)

@@ -3,7 +3,8 @@
 # compile errors in the sink; anything that raises instead (an internal
 # error of the compiler) or crashes is a bug, and the input is the repro.
 #
-# Built and run by `make fuzz-parser` (clang with libFuzzer, Linux);
+# Built and run by `make fuzz-parser` (a clang with libFuzzer's runtime:
+# tests/fuzz/run_libfuzzer.sh);
 # tests/fuzz/fuzz_frontend.py fuzzes the whole compiler anywhere.
 
 load "../../compiler/parser" (parse_source)
@@ -12,7 +13,7 @@ load "../../compiler/fold" (fold_constants)
 load "../../compiler/errors" (make_error_sink)
 
 extern include "libfuzzer_driver.h"
-extern fn gem_fuzz_main() -> Int
+extern fn gem_fuzz_main(target: Table) -> Int
 extern fn gem_fuzz_abort() -> Int
 
 fn front_end(src)
@@ -43,5 +44,5 @@ end
 
 fn main()
   fuzz_one("let x = 1\n")
-  exit(gem_fuzz_main())
+  exit(gem_fuzz_main({run: fuzz_one}))
 end
