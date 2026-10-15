@@ -89,7 +89,7 @@ expected=(
   "nested_too_deep:1:1"
   "expression_too_deep:1:1"
   "postfix_too_deep:1:1"
-  "call_arity:12:12"
+  "call_arity:13:13"
   "pcall_spawn_args:5:5"
   "pcall_expr_form:2:2"
   "when_condition:6:6"

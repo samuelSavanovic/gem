@@ -661,7 +661,9 @@ fn import_bindings(load_node, mod_name, mangle, exported, bad, module_bindings, 
       let pos = load_node.selective_pos[i]
       i += 1
       if is_exported[sel_name] != nil
-        push(result, make_let(sel_name, make_var(prefix + sel_name), 0))
+        let imported = make_let(sel_name, make_var(prefix + sel_name), 0)
+        imported.selective_import = true
+        push(result, imported)
       else
         if bad[sel_name] == nil
           let hint = if len(exported) > 0
