@@ -4,14 +4,15 @@
     tests/fuzz/diff.py [--seeds A:B] [--jobs N] [--keep DIR] [--debug]
 
 For each seed, tests/fuzz/gen_program.py writes a program; it is built
-twice, at the default -O2 and with CFLAGS=-O0, and run as
+at the default -O2 and with CFLAGS=-O0 (and, with --debug, a third time
+on the debug runtime), and run as
   - the -O2 build,
   - the -O2 build under GEM_RESET_STRESS=1 (every loop resets at almost
     every back-edge),
   - the -O0 build,
   - with --debug, a GEM_RUNTIME=debug build under GEM_RESET_STRESS=1
-    (needs `make debug`): invariant asserts and a heap check after every
-    reset.
+    (needs `make debug`): invariant asserts and heap checks after resets
+    (budgeted: gem_debug_check_reset in runtime/gem_copy.c).
 All runs must print the same and exit with the same status. A seed that
 doesn't, or whose program fails to compile, is reported and its program
 kept in --keep (default build/fuzz_failures/) for a repro. Exit status 1

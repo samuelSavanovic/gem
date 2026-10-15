@@ -17,11 +17,9 @@ Where the project stood on 2026-10-14, in short:
   They are written up as rules, so the doc grows (1,932 lines, longer than
   SPEC) instead of shrinking.
 - **Soundness rests on memory:** ~14 hand-kept runtime invariants (write
-  barrier, reset roots, I/O request lifecycle, …) with no assertion, debug
-  build, sanitizer or fuzzer behind them. Resets fire only after 1 MB, so
-  most tests never reset. With the threshold at 1 KB all 223 examples gave
-  the right output, but 117_arena_reset_pressure ran out of memory
-  mappings after 108,509 resets.
+  barrier, reset roots, I/O request lifecycle, …). Resets fire only after
+  1 MB, so most tests never reset. A1 and A5–A7 below are the checks
+  behind them.
 - **Not yet a daily driver for scripts:** every run compiles at `-O2`
   with no cache (3.3 s for a 70-line program, 12 s for mini_redis; 0.6 s
   and 1.8 s at `-O0`); no install, `gem test` or `gem new`; no regex,
@@ -37,35 +35,32 @@ Where the project stood on 2026-10-14, in short:
   without it today.
 - `gem file.gem` builds at **`-O0` with a cache**; `gem -o` keeps `-O2`
   (B1).
-- The work lands in four stacked PRs, each branched from the one before
-  and pushed once `make test` passes for each item in it; each runs on
-  macOS before it merges, in order:
-  1. `plan/a-safety-net`: this plan, A1 reset stress mode, A5 rule lint,
-     A6 debug runtime and sanitizers, A7 fuzzing.
-  2. `plan/a-semantics`: A2 silent-semantics errors, A3 `match` raises,
-     A4 data traps, A8 shorter BEST_PRACTICES.
-  3. `plan/b-dev-loop`: B1 fast edit-run loop, B2 install and project
-     commands, B8 error messages.
-  4. `plan/b-std`: B3 script basics, B4 regex, B5 encodings, B6
-     option-bag typos, B7 std gaps.
+- The items land in four groups, in this order:
+  1. A1 reset stress mode, A5 rule lint, A6 debug runtime and
+     sanitizers, A7 fuzzing.
+  2. A2 silent-semantics errors, A3 `match` raises, A4 data traps, A8
+     shorter BEST_PRACTICES.
+  3. B1 fast edit-run loop, B2 install and project commands, B8 error
+     messages.
+  4. B3 script basics, B4 regex, B5 encodings, B6 option-bag typos, B7
+     std gaps.
 
 ## Track A: trustworthy
 
 The order is the order of the work.
 
-1. **Reset stress mode.** ✓ Done (PR 1). `GEM_RESET_STRESS` (env var, read at startup)
-   lowers the reset threshold so every loop resets almost every
-   iteration; a `make test-stress` target runs the examples and the
-   example apps under it. Root-cause 117's mapping growth first.
-   *Landed:* `GEM_RESET_STRESS=<bytes>`; `make test-stress` (examples,
-   example apps, and the compiler compiling itself, which must emit the
-   same C); `tests/check_reset_stress.sh` in `make test`. 117's growth
-   came from resets that mapped a fresh 64 KB block for their copies and
-   another for the next allocations even when they copied nothing, in a
-   loop that ends right after (sort's comparator, called from top-level
-   code with no enclosing loop to free them). A reset that copies nothing
-   maps nothing. Left: a reset that copies something leaves its copy
-   block's tail (OPTIMIZATIONS, P2).
+1. **Reset stress mode.** ✓ Done. `GEM_RESET_STRESS=<bytes>` (env var,
+   read at startup) lowers the reset threshold so every loop resets
+   almost every iteration. `make test-stress` runs the examples, the
+   example apps and the compiler compiling itself (which must emit the
+   same C) under it; `tests/check_reset_stress.sh` runs in `make test`.
+   A reset that copies nothing maps no block, so a loop that ends right
+   after one (a sort comparator's, called from top-level code with no
+   enclosing loop) leaves no mapping behind: at a 1 KB threshold,
+   117_arena_reset_pressure's arena ends at 45 MB, and at 7.1 GB when
+   such resets map blocks (macOS). Left: a reset that copies
+   something leaves blocks behind when its loop ends right after it,
+   for good when no enclosing loop resets (OPTIMIZATIONS, P2).
 2. **Silent-semantics pass in the compiler.** Turn the silent traps into
    compile errors or warnings, each a local check on the AST:
    - a `let` that hides a local of an enclosing block of the same fn;
@@ -79,19 +74,22 @@ The order is the order of the work.
    Erlang's `case_clause`; `else nil` gives nil.
 4. **Data traps fixed at the source.** `delete(arr, i)` on an array
    index raises (use `remove_at`); `in` means has-key on every table.
-5. **Rule lint in `make test`.** ✓ Done (PR 1, `tests/check_rules.sh`). A script that flags direct `->state =`,
+5. **Rule lint in `make test`.** ✓ Done (`tests/check_rules.sh`). A script that flags direct `->state =`,
    `gem_cur_globals[` outside gem.h, `close(` in socket code outside an
    allowlist, `mco_create`, and a builtin-list check (`BUILTIN_FNS`
    against SPEC, CHEATSHEET and both grammars).
-6. **Debug runtime.** ✓ Done (PR 1: `make debug`, `make asan`,
-   `GEM_RUNTIME=debug|asan`, `make test-debug`). `make debug` builds a runtime with invariant
-   asserts, freed regions poisoned instead of zeroed (a dangling read
-   crashes instead of reading nil), and a heap check after each reset;
-   an ASan/UBSan build next to it.
-7. **Fuzzing.** ✓ Done (PR 1: `make fuzz-diff`, `make fuzz-frontend`,
+6. **Debug runtime.** ✓ Done (`make debug`, `make asan`,
+   `GEM_RUNTIME=debug|asan`, `make test-debug`). `make debug` builds a
+   runtime with invariant asserts, the block tail a reset gives back
+   poisoned (a release build leaves the old bytes there until the tail is
+   reused) and freed blocks kept `PROT_NONE` for a while, so a dangling
+   access reads a value of no known type or faults, and heap checks after
+   resets, as many as a budget of what the resets cost allows; an
+   ASan/UBSan build next to it.
+7. **Fuzzing.** ✓ Done (`make fuzz-diff`, `make fuzz-frontend`,
    `make fuzz-parser`, a quick run in `make test`). A generator of random Gem programs run differentially
    (default threshold against stress, `-O0` against `-O2`), and a
-   libFuzzer harness on the lexer and parser.
+   libFuzzer harness on the lexer, parser, lower and fold.
 8. **Shrink BEST_PRACTICES.** Every trap A removes goes, its trap-index
    row too; restated SPEC material and runtime internals move out.
    Target: under 1,000 lines.
@@ -131,9 +129,7 @@ package manager (until there is a second user).
 
 ## Housekeeping
 
-- ROADMAP: re-score the priorities against this plan; "Process-owned
-  resources closed on exit" is down to `exec` children, and `exec`
-  already uses `posix_spawn`.
+- ROADMAP: re-score the priorities against this plan.
 - A fresh benchmark baseline (the last is 2026-10-07, before TLS, the
   resolver lane and expressions as values).
 - Commit the live honeypot's and httpd's health data now and then.

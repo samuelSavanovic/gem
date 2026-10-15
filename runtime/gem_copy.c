@@ -815,8 +815,8 @@ static void gem_rekey_index(GemTable *t, const int *moved, int n_moved) {
  * the remembered log and the arena's older buffers. Every pointer it meets
  * must stay out of the freed region and, inside one of the process's
  * arena blocks, below that block's used mark (past it is free, poisoned
- * memory); every value must have a known type; every string keeps its NUL
- * at slen. The walk goes into objects newer than the mark's base point
+ * memory); every value must have a known type; every string newer than
+ * the mark's base point keeps its NUL at slen. The walk goes into objects newer than the mark's base point
  * (what this loop's resets keep) and only looks at the pointers of older
  * ones. A table older than the mark that the remembered log names is
  * checked whole, which can cost far more than the reset did (a big table
@@ -1241,7 +1241,7 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
        each reset of a loop that ends right after it (a sort comparator's,
        a callback's) would leave a mapping or two behind for an enclosing
        loop's reset to free, and with no such loop they pile up (under
-       GEM_RESET_STRESS, past vm.max_map_count). */
+       GEM_RESET_STRESS, past Linux's vm.max_map_count). */
     if (copied == 0 && !tail_free) {
         gem_arena_free_blocks(mb->next);
         mb->next = NULL;
