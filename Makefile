@@ -50,8 +50,9 @@ $(GEM): $(STAGE0) $(RUNTIME_LIB)
 # Debug runtimes, next to build/libgem_runtime.a: a program built with
 # GEM_RUNTIME=debug (or asan) links build/debug (build/asan) instead and is
 # compiled with the same flags. debug: -DGEM_DEBUG (invariant asserts,
-# poisoned freed memory, a heap check after every reset; gem.h "Debug
-# runtime"). asan: the same plus AddressSanitizer and UBSan.
+# poisoned freed memory, heap checks after resets, as many as a budget
+# allows; gem.h "Debug runtime"). asan: the same plus AddressSanitizer and
+# UBSan.
 DEBUG_CFLAGS = -std=gnu11 -O1 -g -fno-omit-frame-pointer -DGEM_DEBUG
 ASAN_CFLAGS = $(DEBUG_CFLAGS) -fsanitize=address,undefined -fno-sanitize-recover=undefined
 

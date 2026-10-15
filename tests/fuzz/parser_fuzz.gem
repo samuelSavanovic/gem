@@ -5,7 +5,9 @@
 #
 # Built and run by `make fuzz-parser` (a clang with libFuzzer's runtime:
 # tests/fuzz/run_libfuzzer.sh);
-# tests/fuzz/fuzz_frontend.py fuzzes the whole compiler anywhere.
+# tests/fuzz/fuzz_frontend.py runs mutated programs through `gem --check`
+# (load resolution and codegen's analyses too, no C emitted), with no
+# libFuzzer needed.
 
 load "../../compiler/parser" (parse_source)
 load "../../compiler/lower" (lower)
@@ -24,21 +26,14 @@ fn front_end(src)
   end
 end
 
-# One iteration of a loop, so its back-edge reset frees what the input
-# allocated: libFuzzer calls this from C millions of times, outside any
-# Gem loop.
 fn fuzz_one(src)
-  let n = 0
-  while n < 1
-    let r = pcall front_end(src)
-    if not r.ok
-      eprint("parser_fuzz: internal error: {r.error}")
-      for f in r.stack
-        eprint("  at {f.name} ({f.file}:{f.line})")
-      end
-      gem_fuzz_abort()
+  let r = pcall front_end(src)
+  if not r.ok
+    eprint("parser_fuzz: internal error: {r.error}")
+    for f in r.stack
+      eprint("  at {f.name} ({f.file}:{f.line})")
     end
-    n += 1
+    gem_fuzz_abort()
   end
 end
 

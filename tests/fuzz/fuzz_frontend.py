@@ -91,7 +91,6 @@ def one(args):
     base = r.choice(corpus)
     with open(base, encoding="utf-8", errors="replace") as f:
         src = mutate(r, f.read())
-    # a mutant must not reach outside the corpus through `load`
     path = os.path.join(work, "m{}_{}.gem".format(seed, i))
     with open(path, "w") as f:
         f.write(src)
@@ -114,8 +113,9 @@ def main():
     a = ap.parse_args()
     corpus = sorted(glob.glob(os.path.join(ROOT, "examples", "[0-9]*.gem")) +
                     glob.glob(os.path.join(ROOT, "tests", "broken", "*.gem")))
-    # the mutants sit next to examples/modules' users only by name: run them
-    # from a copy of examples/ so relative loads still resolve
+    # the mutants are written to a work directory holding copies of
+    # examples/modules and examples/support, the modules and C headers the
+    # numbered examples name by relative path
     work = tempfile.mkdtemp(prefix="gem_fuzzfe_")
     shutil.copytree(os.path.join(ROOT, "examples", "modules"), os.path.join(work, "modules"))
     shutil.copytree(os.path.join(ROOT, "examples", "support"), os.path.join(work, "support"))

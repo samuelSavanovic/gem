@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Reset stress mode (make test-stress): run the numbered examples, the
 # example apps and the compiler with GEM_RESET_STRESS set, so every loop
-# resets at almost every back-edge and every return of a recursive fn
-# resets, and check they behave exactly as without it. A reset that loses
+# resets at almost every back-edge and a recursive fn's return may reset
+# once its call has allocated that many bytes (gem_arena_reset_return
+# keeps its own spacing, from what the last return reset copied and
+# scanned), and check they behave exactly as without it. A reset that loses
 # or corrupts a live value shows up as a diff, a crash or a test failure.
 #
 # GEM_RESET_STRESS=<bytes> (default 1) is the reset threshold; the
