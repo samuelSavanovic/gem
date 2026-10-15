@@ -1,4 +1,5 @@
-# Option bags: an unknown key raises, naming the closest known one.
+# Option bags: an unknown key raises, naming the closest known one when one
+# is close enough.
 load "std/supervisor"
 load "std/dynamic_supervisor"
 load "std/http"
@@ -6,8 +7,8 @@ load "std/request"
 load "std/log"
 load "std/string"
 
-# A destructured parameter with an outer default is an option bag: the
-# compiler checks its keys. Without one it takes a record and ignores
+# A destructured parameter with an outer default is an option bag: its
+# keys are checked when the function is called. Without one it takes a record and ignores
 # other keys, field defaults or not.
 fn serve({port = 8080, host = "0.0.0.0", timeout_ms = 1000} = {})
   "{host}:{port} {timeout_ms}"

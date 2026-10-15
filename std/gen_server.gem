@@ -178,10 +178,10 @@ end
 ## process the server monitors.
 ##
 ## With `name`, the server is registered under that name before `init`
-## runs, so `call(name, ...)` and `whereis(name)` find it from the start
-## (and, under a supervisor, a restarted server takes its name back
-## before anyone can see it missing); the name is freed when the server
-## exits.
+## runs, so `call(name, ...)` and `whereis(name)` find it from the start,
+## and a server restarted by a supervisor holds the name before its own
+## `init` runs. Between the old server's death and the restart,
+## `whereis(name)` is `nil`. The name is freed when the server exits.
 ##
 ## Raises, and starts nothing, if `module` is not a table, a callback is
 ## not a fn, or `name` is not a string or is already registered.

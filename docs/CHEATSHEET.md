@@ -181,7 +181,8 @@ end
 #                starts_with, ends_with, closest(word, candidates) (did-you-mean)
 # std/io         lines(path, f), reader(path) -> {next}, read_lines(path)   ("-": stdin; 64 KB blocks, flat memory; a pipe is read whole)
 # std/regex      test, find, find_all, replace, replace_first, split, escape, check_pattern   (POSIX ERE + \d \w \s;
-#                opts {icase, multiline}; match {text, start, stop, groups}; replace "\1" or fn(m); no \b or \1 in patterns)
+#                opts {icase, multiline}; match {text, start, stop, groups}; replace "\1" or fn(m); no \b or \1 in patterns;
+#                a bound in double quotes interpolates: write '\d{4}')
 # std/base64     encode, encode_url, decode (nil if not base64)     std/hex   encode, decode
 # std/crypto     sha256, sha256_hex, hmac_sha256, hmac_sha256_hex, equal (constant time)
 # std/utf8       len, valid, chars, codepoints, char(cp), sub(s, start, n), upper, lower, reverse
