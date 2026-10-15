@@ -309,7 +309,8 @@ int64_t gem_rmdir(const char *path) {
  * with different offsets, the second with a shift-xor after each byte): a cache
  * key, not a cryptographic hash. gem_file_hash hashes a file's contents,
  * "" when it can't be read. gem_mkdirs is mkdir -p (1 on success, the
- * directory existing included); gem_link makes `to` a hard link to
+ * directory existing included; 0 when the path, or one of its parents,
+ * exists and is not a directory); gem_link makes `to` a hard link to
  * `from` (1 on success; 0 when `to` exists or `from` doesn't);
  * gem_file_age is the seconds since a file's inode last changed (its
  * st_ctime, which a new link sets), -1 when it can't be read. */
@@ -355,8 +356,9 @@ int64_t gem_mkdirs(const char *path) {
             tmp[i] = '/';
         }
     }
-    if (mkdir(tmp, 0755) != 0 && errno != EEXIST) return 0;
-    return 1;
+    if (mkdir(tmp, 0755) == 0) return 1;
+    struct stat st;
+    return errno == EEXIST && stat(tmp, &st) == 0 && S_ISDIR(st.st_mode) ? 1 : 0;
 }
 
 int64_t gem_link(const char *from, const char *to) {

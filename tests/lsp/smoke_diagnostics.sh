@@ -25,8 +25,8 @@ FIXTURE="$FIXTURE_DIR/broken.gem"
 URI="file://$FIXTURE"
 
 # Source with a parse error: `fn` block missing its `end`. The
-# parser reports "expected 'end' but got 'EOF'" (or similar) without
-# crashing, which is exactly the diagnostics path we're exercising.
+# parser reports "this `fn` has no `end`: ..." without crashing, which
+# is the diagnostics path this test exercises.
 BROKEN=$'fn add(a, b)\n  a + b\n'
 CLEAN=$'fn add(a, b)\n  a + b\nend\n'
 

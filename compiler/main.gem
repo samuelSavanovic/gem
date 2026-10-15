@@ -1491,7 +1491,7 @@ end
 # A project is a directory with a gem.toml. gem.toml holds `key = "value"`
 # lines (`#` starts a comment, on a line of its own or after a value;
 # other lines, such as `[sections]`, are ignored):
-# `name` (default: the directory's name) and `main` (default "main.gem").
+# `name` (default: the directory's name, without a trailing `.gem`) and `main` (default "main.gem").
 
 fn read_toml(path)
   let out = {}
