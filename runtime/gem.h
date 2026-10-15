@@ -87,6 +87,23 @@ __attribute__((noreturn, cold))
 void gem_assert_fail(const char *cond, const char *what, const char *file, int line);
 #define GEM_POISON_BYTE 0xDB
 
+/* GEM_ASAN_UNPOISON(p, n) marks n bytes at p addressable for ASan (the
+   asan runtime); without ASan it compiles away. */
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define GEM_ASAN 1
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__) && !defined(GEM_ASAN)
+#define GEM_ASAN 1
+#endif
+#ifdef GEM_ASAN
+void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
+#define GEM_ASAN_UNPOISON(p, n) __asan_unpoison_memory_region((p), (n))
+#else
+#define GEM_ASAN_UNPOISON(p, n) ((void)0)
+#endif
+
 /* The threshold in effect: GEM_ARENA_RESET_THRESHOLD, or the byte count in
    the GEM_RESET_STRESS env var, read once by gem_init (stress mode: with
    GEM_RESET_STRESS=1 a loop resets at every back-edge that allocated
@@ -1164,14 +1181,27 @@ void gem_pin_free_all(GemProcess *proc);
 #define GEM_MAX_PROCS 262144
 #endif
 
+/* Under ASan every process stack and its red zone are GEM_STACK_SCALE
+ * times their size, to make room for its larger frames (redzones, and a
+ * program compiled at -O1). A deep recursion can still overflow sooner
+ * there than in a release build. */
+#ifndef GEM_STACK_SCALE
+#ifdef GEM_ASAN
+#define GEM_STACK_SCALE 4
+#else
+#define GEM_STACK_SCALE 1
+#endif
+#endif
+
 #ifndef GEM_CORO_STACK_SIZE
-/* 8 MB, the same as the main process and a default OS thread stack, so a
+/* 8 MB (times GEM_STACK_SCALE), the same as the main process, so a
  * function recurses as deep in a spawned process as in main. Stacks are
  * mmap'd (gem_scheduler.c, "Process stacks"): this is reserved address
  * space, and only the pages a process actually touches cost memory (an
  * idle process touches a few KB). 1024 processes reserve 8 GB of virtual
- * address space, which 64-bit Linux and macOS hand out freely. */
-#define GEM_CORO_STACK_SIZE (8 * 1024 * 1024)
+ * address space in a release build, which 64-bit Linux and macOS hand out
+ * freely. */
+#define GEM_CORO_STACK_SIZE (GEM_STACK_SCALE * 8 * 1024 * 1024)
 #endif
 
 #ifndef GEM_STACK_RED_ZONE
@@ -1179,7 +1209,7 @@ void gem_pin_free_all(GemProcess *proc);
  * not enter: a call whose frame would land there raises "stack overflow"
  * (catchable by pcall) instead. Leaves room for the error path itself and
  * for C runtime code (and libc) called by the deepest Gem frame. */
-#define GEM_STACK_RED_ZONE (256 * 1024)
+#define GEM_STACK_RED_ZONE (GEM_STACK_SCALE * 256 * 1024)
 #endif
 
 /* Slot-indexed; never moves, so a GemProcess * stays valid across spawns.

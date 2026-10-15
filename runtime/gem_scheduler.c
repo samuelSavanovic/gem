@@ -23,6 +23,14 @@
 #include "gem.h"
 #include "stb_ds.h"
 
+#ifdef GEM_ASAN
+/* LeakSanitizer (Linux) is off unless ASAN_OPTIONS turns it on: it also
+   reports memory that only the process table and the arenas, both mmap'd,
+   point to. */
+const char *__asan_default_options(void);
+const char *__asan_default_options(void) { return "detect_leaks=0"; }
+#endif
+
 /* ─── Globals ─── */
 
 GemProcess *gem_proc_table = NULL;
@@ -153,9 +161,9 @@ static int *gem_poll_pids = NULL;
  * Every process (main included) runs on a minicoro stack that we map
  * ourselves. minicoro lays a coroutine out as one block,
  *     [mco_coro | _mco_context | storage | stack]
- * with the stack growing down toward the header, so an overflow used to
- * scribble over the coroutine's own bookkeeping and then whatever malloc
- * put next to it. We map the block with mmap instead and pad the (unused)
+ * with the stack growing down toward the header, so in a malloc'd block an
+ * overflow scribbles over the coroutine's own bookkeeping and then whatever
+ * malloc put next to it. We map the block with mmap and pad the (unused)
  * storage area so that it ends in a PROT_NONE guard region directly below
  * the stack:
  *
@@ -281,6 +289,10 @@ static int gem_stack_pages_resident(char *lo, char *keep) {
 static void gem_coro_stack_free(void *ptr, size_t size, void *udata) {
     size_t len = gem_round_up(size, gem_page_size);
     size_t guard_off = (size_t)udata;
+    /* A process killed while suspended leaves its frames' redzones
+       poisoned in ASan's shadow, and a stack reused from the cache would
+       inherit them. */
+    GEM_ASAN_UNPOISON(ptr, len);
     if (len == gem_stack_cache_block && guard_off == gem_stack_cache_guard_off &&
         gem_stack_cache_len < GEM_STACK_CACHE_MAX) {
         char *lo = (char *)ptr + guard_off + gem_guard_size;
@@ -357,12 +369,27 @@ void gem_stack_overflow(const char *name) {
 static _Alignas(16) char gem_rescue_stack[64 * 1024];
 static volatile int gem_rescue_slot = -1;
 
+#ifdef GEM_ASAN
+/* Under ASan the rescue announces both stack changes as fiber switches:
+   onto the rescue stack, then (in the same call) back to the process's
+   stack for the longjmp, which gem_coro_entry completes on landing. The
+   process stack's fake stack waits in gem_rescue_fake meanwhile. */
+static void *gem_rescue_fake;
+static const void *gem_rescue_back_bottom;
+static size_t gem_rescue_back_size;
+#endif
+
 static void gem_stack_overflow_rescue(void) {
     int slot = gem_rescue_slot;
     GemProcess *proc = &gem_proc_table[slot];
     gem_current_pid = slot;
     gem_stack_limit = 0;
     proc->stack_overflowed = 1;
+#ifdef GEM_ASAN
+    __sanitizer_start_switch_fiber(&gem_rescue_fake, gem_rescue_stack, sizeof gem_rescue_stack);
+    __sanitizer_finish_switch_fiber(NULL, &gem_rescue_back_bottom, &gem_rescue_back_size);
+    __sanitizer_start_switch_fiber(NULL, gem_rescue_back_bottom, gem_rescue_back_size);
+#endif
     longjmp(proc->proc_jmp, 1);
 }
 
@@ -1103,6 +1130,15 @@ static void gem_coro_entry(mco_coro *co) {
         proc = &gem_proc_table[gem_current_pid];
         if (proc->stack_overflowed) {
             proc->stack_overflowed = 0;
+#ifdef GEM_ASAN
+            /* The frames the overflow abandoned, and the rescue's own, keep
+               their redzones poisoned until cleared here. */
+            __sanitizer_finish_switch_fiber(gem_rescue_fake, NULL, NULL);
+            gem_rescue_fake = NULL;
+            GEM_ASAN_UNPOISON(proc->stack_lo,
+                              (size_t)((char *)__builtin_frame_address(0) - proc->stack_lo));
+            GEM_ASAN_UNPOISON(gem_rescue_stack, sizeof gem_rescue_stack);
+#endif
             /* Name the innermost recorded Gem frame: the guard is reached
                by C code (a builtin or extern fn) that it called. */
             char msg[256];
@@ -1341,7 +1377,7 @@ static int64_t gem_earliest_timer_deadline(void) {
 }
 
 #ifndef GEM_MAIN_STACK_SIZE
-#define GEM_MAIN_STACK_SIZE (8 * 1024 * 1024)
+#define GEM_MAIN_STACK_SIZE (GEM_STACK_SCALE * 8 * 1024 * 1024)
 #endif
 
 void gem_run_main(GemFnPtr fn, void *env) {
