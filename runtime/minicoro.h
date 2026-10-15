@@ -300,7 +300,10 @@ struct mco_coro {
   unsigned char* storage;
   size_t bytes_stored;
   size_t storage_size;
-  void* asan_prev_stack; /* Used by address sanitizer. */
+  void* asan_prev_stack; /* Used by address sanitizer: the coroutine's fake stack while it is suspended. */
+  void* asan_back_fake; /* Used by address sanitizer: the resumer's fake stack while the coroutine runs. */
+  const void* asan_back_bottom; /* Used by address sanitizer: the resumer's stack. */
+  size_t asan_back_size; /* Used by address sanitizer. */
   void* tsan_prev_fiber; /* Used by thread sanitizer. */
   void* tsan_fiber; /* Used by thread sanitizer. */
   size_t magic_number; /* Used to check stack overflow. */
@@ -575,13 +578,11 @@ static MCO_FORCE_INLINE void _mco_prepare_jumpin(mco_coro* co) {
   }
   mco_current_co = co;
 #ifdef _MCO_USE_ASAN
-  if(prev_co) {
-    void* bottom_old = NULL;
-    size_t size_old = 0;
-    __sanitizer_finish_switch_fiber(prev_co->asan_prev_stack, (const void**)&bottom_old, &size_old);
-    prev_co->asan_prev_stack = NULL;
-  }
-  __sanitizer_start_switch_fiber(&co->asan_prev_stack, co->stack_base, co->stack_size);
+  /* Every switch is announced with start on the stack being left and
+     completed with finish on the stack switched to (_mco_asan_landed in the
+     coroutine, _mco_asan_returned in the resumer), so ASan always knows
+     which stack is running. */
+  __sanitizer_start_switch_fiber(&co->asan_back_fake, co->stack_base, co->stack_size);
 #endif
 #ifdef _MCO_USE_TSAN
   co->tsan_prev_fiber = __tsan_get_current_fiber();
@@ -600,13 +601,9 @@ static MCO_FORCE_INLINE void _mco_prepare_jumpout(mco_coro* co) {
   }
   mco_current_co = prev_co;
 #ifdef _MCO_USE_ASAN
-  void* bottom_old = NULL;
-  size_t size_old = 0;
-  __sanitizer_finish_switch_fiber(co->asan_prev_stack, (const void**)&bottom_old, &size_old);
-  co->asan_prev_stack = NULL;
-  if(prev_co) {
-    __sanitizer_start_switch_fiber(&prev_co->asan_prev_stack, bottom_old, size_old);
-  }
+  /* A dead coroutine passes NULL, so ASan drops its fake stack. */
+  __sanitizer_start_switch_fiber(co->state == MCO_DEAD ? NULL : &co->asan_prev_stack,
+                                 co->asan_back_bottom, co->asan_back_size);
 #endif
 #ifdef _MCO_USE_TSAN
   void* tsan_prev_fiber = co->tsan_prev_fiber;
@@ -615,10 +612,31 @@ static MCO_FORCE_INLINE void _mco_prepare_jumpout(mco_coro* co) {
 #endif
 }
 
+/* On the coroutine's stack, right after switching to it. */
+static MCO_FORCE_INLINE void _mco_asan_landed(mco_coro* co) {
+#ifdef _MCO_USE_ASAN
+  __sanitizer_finish_switch_fiber(co->asan_prev_stack, &co->asan_back_bottom, &co->asan_back_size);
+  co->asan_prev_stack = NULL;
+#else
+  _MCO_UNUSED(co);
+#endif
+}
+
+/* On the resumer's stack, right after the coroutine switched back. */
+static MCO_FORCE_INLINE void _mco_asan_returned(mco_coro* co) {
+#ifdef _MCO_USE_ASAN
+  __sanitizer_finish_switch_fiber(co->asan_back_fake, NULL, NULL);
+  co->asan_back_fake = NULL;
+#else
+  _MCO_UNUSED(co);
+#endif
+}
+
 static void _mco_jumpin(mco_coro* co);
 static void _mco_jumpout(mco_coro* co);
 
 static MCO_NO_INLINE void _mco_main(mco_coro* co) {
+  _mco_asan_landed(co);
   co->func(co); /* Run the coroutine function. */
   co->state = MCO_DEAD; /* Coroutine finished successfully, set state to dead. */
   _mco_jumpout(co); /* Jump back to the old context .*/
@@ -1807,6 +1825,7 @@ mco_result mco_resume(mco_coro* co) {
   }
   co->state = MCO_RUNNING; /* The coroutine is now running. */
   _mco_jumpin(co);
+  _mco_asan_returned(co);
   return MCO_SUCCESS;
 }
 
@@ -1819,8 +1838,13 @@ mco_result mco_yield(mco_coro* co) {
   /* Asyncify already checks for stack overflow. */
 #else
   /* This check happens when the stack overflow already happened, but better later than never. */
+#if defined(__GNUC__) || defined(__clang__)
+  /* Not the address of a local: under ASan a local can live on a heap-allocated fake stack. */
+  size_t stack_addr = (size_t)__builtin_frame_address(0);
+#else
   volatile size_t dummy;
   size_t stack_addr = (size_t)&dummy;
+#endif
   size_t stack_min = (size_t)co->stack_base;
   size_t stack_max = stack_min + co->stack_size;
   if(co->magic_number != MCO_MAGIC_NUMBER || stack_addr < stack_min || stack_addr > stack_max) { /* Stack overflow. */
@@ -1834,6 +1858,7 @@ mco_result mco_yield(mco_coro* co) {
   }
   co->state = MCO_SUSPENDED; /* The coroutine is now suspended. */
   _mco_jumpout(co);
+  _mco_asan_landed(co);
   return MCO_SUCCESS;
 }
 

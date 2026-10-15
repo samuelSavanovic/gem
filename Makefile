@@ -5,6 +5,8 @@ LDLIBS = -lm
 
 RUNTIME_DIR = runtime
 RUNTIME_SRCS = $(wildcard $(RUNTIME_DIR)/gem_*.c)
+# The headers the runtime's own sources include.
+RUNTIME_HDRS = $(RUNTIME_DIR)/gem.h $(RUNTIME_DIR)/stb_ds.h $(RUNTIME_DIR)/minicoro.h $(RUNTIME_DIR)/sqlite3.h
 RUNTIME_OBJS = $(patsubst $(RUNTIME_DIR)/%.c,$(BUILD_DIR)/%.o,$(RUNTIME_SRCS))
 SQLITE_SRC = $(RUNTIME_DIR)/sqlite3.c
 SQLITE_OBJ = $(BUILD_DIR)/sqlite3.o
@@ -24,7 +26,7 @@ GEM = $(BUILD_DIR)/gem
 # Build the compiler from the checked-in stage0.c
 build: $(GEM)
 
-$(BUILD_DIR)/%.o: $(RUNTIME_DIR)/%.c $(RUNTIME_DIR)/gem.h
+$(BUILD_DIR)/%.o: $(RUNTIME_DIR)/%.c $(RUNTIME_HDRS)
 	@mkdir -p $(BUILD_DIR)
 	$(CC) -c -o $@ $< -I $(RUNTIME_DIR) $(CFLAGS)
 
@@ -34,7 +36,7 @@ $(TLS_CFLAGS): FORCE
 	@mkdir -p $(BUILD_DIR)
 	@CC="$(CC)" sh runtime/tls_config.sh $(BUILD_DIR)
 
-$(TLS_OBJ): $(RUNTIME_DIR)/gem_builtins_tls.c $(RUNTIME_DIR)/gem.h $(TLS_CFLAGS)
+$(TLS_OBJ): $(RUNTIME_DIR)/gem_builtins_tls.c $(RUNTIME_HDRS) $(TLS_CFLAGS)
 	$(CC) -c -o $@ $< -I $(RUNTIME_DIR) $(CFLAGS) $$(cat $(TLS_CFLAGS))
 
 FORCE:
@@ -86,11 +88,11 @@ ASAN_CFLAGS = $(DEBUG_CFLAGS) -fsanitize=address,undefined -fno-sanitize-recover
 debug: $(GEM) $(BUILD_DIR)/debug/libgem_runtime.a
 asan: $(GEM) $(BUILD_DIR)/asan/libgem_runtime.a
 
-$(BUILD_DIR)/debug/%.o: $(RUNTIME_DIR)/%.c $(RUNTIME_DIR)/gem.h $(TLS_CFLAGS)
+$(BUILD_DIR)/debug/%.o: $(RUNTIME_DIR)/%.c $(RUNTIME_HDRS) $(TLS_CFLAGS)
 	@mkdir -p $(BUILD_DIR)/debug
 	$(CC) -c -o $@ $< -I $(RUNTIME_DIR) $(DEBUG_CFLAGS) $$(cat $(TLS_CFLAGS))
 
-$(BUILD_DIR)/asan/%.o: $(RUNTIME_DIR)/%.c $(RUNTIME_DIR)/gem.h $(TLS_CFLAGS)
+$(BUILD_DIR)/asan/%.o: $(RUNTIME_DIR)/%.c $(RUNTIME_HDRS) $(TLS_CFLAGS)
 	@mkdir -p $(BUILD_DIR)/asan
 	$(CC) -c -o $@ $< -I $(RUNTIME_DIR) $(ASAN_CFLAGS) $$(cat $(TLS_CFLAGS))
 
