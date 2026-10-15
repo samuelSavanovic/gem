@@ -6,8 +6,9 @@ load "std/request"
 load "std/log"
 load "std/string"
 
-# A destructured parameter with defaults is an option bag: the compiler
-# checks its keys.
+# A destructured parameter with an outer default is an option bag: the
+# compiler checks its keys. Without one it takes a record and ignores
+# other keys, field defaults or not.
 fn serve({port = 8080, host = "0.0.0.0", timeout_ms = 1000} = {})
   "{host}:{port} {timeout_ms}"
 end
@@ -15,6 +16,9 @@ fn tag({level = 1, ...rest} = {})
   "{level} {rest}"
 end
 let block = fn({x = 1} = {}) x end
+fn handle({type, data = nil})
+  "{type} {data}"
+end
 
 fn err(f)
   pcall(f).error
@@ -27,6 +31,7 @@ print(err(fn() serve({verbose: true}) end))
 print(err(fn() serve({0: 1}) end))
 print(err(fn() block({y: 2}) end))
 print(tag({level: 3, color: "red"}))
+print(handle({type: "ping", from: 7}))
 
 # std checks its option tables and child specs the same way.
 fn idle()

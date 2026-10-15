@@ -125,7 +125,7 @@ std configures most things with a table of string-named options (`supervisor.sta
 
 What needs building, in order (1–3 for option bags, 4 for messages):
 
-Steps 1 and 2 are done (PLAN.md B6): a destructured parameter with defaults raises for an unknown key, `...rest` opts out, std checks its option tables and child specs, and the value checks name the closest value. Step 3 and 4 remain.
+Steps 1 and 2 are done (PLAN.md B6): a destructured parameter with an outer default (`{port = 80} = {}`) raises for an unknown key, `...rest` opts out, std checks its option tables and child specs, and the value checks name the closest value. Step 3 and 4 remain.
 
 1. **Unknown keys raise, for every destructured option bag.** The compiler already emits the prelude that unpacks the bag; it also checks that the table has no other keys and raises `<fn>: unknown option "stratgy" (did you mean "strategy"?)`. Every std function and every user fn in that style gets it with nothing new to learn. A bag that means to take more keys says so with a rest entry in the pattern (`{port = 8080, ...rest}`), the opt-out. Trade-off: it changes behaviour; code that passes a larger table through on purpose starts raising, so the change finds those call sites first (std's "other keys are ignored" docs go).
 2. **"Did you mean" on the value checks** std already makes (strategy, restart, log level), from a small edit-distance helper, and `process_flag: unknown flag` names the flag.

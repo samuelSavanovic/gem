@@ -51,11 +51,12 @@ fn pass_on({level = 1, ...rest} = {})
 end
 print(pass_on({level: 2, color: "red"}), pass_on())
 
-# Without defaults, a destructured param isn't an option bag: no check.
+# Without the outer `= {}`, a destructured param takes a record, not
+# options: other keys are ignored, field defaults or not.
 fn sum_xy({x, y})
   x + y
 end
-print(sum_xy({x: 1, y: 2, z: 3}))
+print(sum_xy({x: 1, y: 2, z: 3}), add({x: 1, z: 3}))
 print(server({port: nil}))                         # explicit nil stays
 
 # ─── Mixing regular params with destructure params ───
