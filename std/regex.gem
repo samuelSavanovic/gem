@@ -8,12 +8,15 @@
 ##   regex.replace("\\d+", "a1b22", "#")              # "a#b#"
 ##   regex.split(",\\s*", "a, b,c")                   # ["a", "b", "c"]
 ##
-## Patterns are POSIX extended regexes (`|`, `+`, `?`, `{m,n}`, `(...)`
-## groups, `[[:alpha:]]` classes, `\1` back-references), plus `\d`, `\w`,
-## `\s` and their negations `\D`, `\W`, `\S`, and `\t`, `\n`, `\r`. Word
-## boundaries (`\b`) and lazy quantifiers (`*?`) aren't supported; a
-## pattern that doesn't compile raises `regex: bad pattern '<p>': <why>`.
-## In a Gem string literal a backslash is written twice (`"\\d+"`).
+## Patterns are POSIX extended regexes (`|`, `+`, `?`, `{m,n}`, `{,n}`,
+## `(...)` groups, `[[:alpha:]]` classes), plus `\d`, `\w`, `\s` and their
+## negations `\D`, `\W`, `\S`, and `\t`, `\n`, `\r`. Inside `[...]`, a
+## backslash escapes punctuation (`[\]\-]`) and `\d \w \s \t \n \r` work
+## too. A pattern means the same on every platform. Word boundaries
+## (`\b`), back-references (`\1`) and lazy quantifiers (`*?`) aren't
+## supported; a pattern that doesn't compile raises `regex: bad pattern
+## '<p>': <why>`. In a Gem string literal a backslash is written twice
+## (`"\\d+"`).
 ##
 ## Every function takes an option bag: `icase` (ignore case) and
 ## `multiline` (`^` and `$` also match at line breaks, and `.` and `[^x]`
