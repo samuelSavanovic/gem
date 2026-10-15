@@ -81,8 +81,6 @@ expected=(
   "let_hides_outer:5:5"
   "pattern_binds_visible:4:4"
   "effect_free_stmt:6:6"
-  "receive_self_call:3:3"
-  "pcall_paren_call:2:2"
   "let_named_like_module:2:2"
   "tq_unterminated_eof:1:1"
   "nested_too_deep:1:1"

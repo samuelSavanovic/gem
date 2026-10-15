@@ -1,34 +1,53 @@
-# `x in t` is has_key(t, x) on every table: a record's keys, a set's
-# members, an array's indexes. To look for a value in an array, use
-# table.contains.
-load "std/table"
+# `x in t`: on a non-empty array (keys exactly 0 .. n-1, in any order)
+# it looks for a value equal to x; on any other table it is has_key(t, x).
 
-# record: key check
+# array: a value test
+print(3 in [1, 2, 3])               # true
+print(99 in [1, 2, 3])              # false
+print(0 in [1, 2, 3])               # false: 0 is an index, not a value
+print("a" in ["a", "b", "c"])       # true
+print(nil in [nil, 1, 2])           # true
+print(1.5 in [1.0, 1.5, 2.0])       # true
+print(2 in [1.0, 2.0])              # false: 2 == 2.0 is false
+print(42 in [42], 42 in [43])       # true false
+
+# an array filled in any order is still an array
+let rev = {}
+rev[2] = "c"
+rev[1] = "b"
+rev[0] = "a"
+print("b" in rev, 1 in rev)         # true false
+
+# tables compare by identity
+let inner = {a: 1}
+let nested = [inner, [1, 2]]
+print(inner in nested)              # true
+print({a: 1} in nested)             # false: another table
+
+# record: key test
 let tbl = {name: "gem", version: 1}
-print("name" in tbl)        # true
-print("version" in tbl)     # true
-print("missing" in tbl)     # false
+print("name" in tbl, "missing" in tbl, "gem" in tbl)   # true false false
 
-# int-keyed set: member check, by key (not a scan of the values)
+# sparse int-keyed set: key test
 let seen = {}
 seen[42] = true
 seen[7] = true
-print(42 in seen)           # true
-print(8 in seen)            # false
-print(true in seen)         # false: true is a value, not a key
+print(42 in seen, 8 in seen, true in seen)   # true false false
 
-# array: its keys are its indexes
-let arr = [10, 20, 30]
-print(0 in arr)             # true
-print(2 in arr)             # true
-print(3 in arr)             # false
-print(20 in arr)            # false: 20 is a value
-print(table.contains(arr, 20))   # true
-print(table.contains(arr, 99))   # false
+# an int-keyed set whose keys are exactly 0 .. n-1 is an array: values
+let dense = {}
+dense[1] = true
+dense[0] = true
+print(0 in dense, true in dense)    # false true
+print(has_key(dense, 0))            # true
+
+# mixed keys: key test
+let mixed = [10, 20]
+mixed.tag = "t"
+print("tag" in mixed, 1 in mixed, 20 in mixed)   # true true false
 
 # empty tables
-print(1 in [])              # false
-print("a" in {})            # false
+print(1 in [], "a" in {}, nil in [])   # false false false
 
 # nil, float and bool keys
 let odd = {}

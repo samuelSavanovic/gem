@@ -67,7 +67,8 @@ The order is the order of the work.
    that copies nothing now maps nothing. Left: a reset that copies
    something still leaves its copy block's tail (OPTIMIZATIONS, P2).
 2. **Silent-semantics pass in the compiler.** ✓ Done (PR 2, compiler/checks.gem
-   and the parser; all compile errors). Turn the silent traps into
+   and the parser; `pcall(f(x))` and the `receive` self call are
+   warnings, the rest compile errors). Turn the silent traps into
    compile errors or warnings, each a local check on the AST:
    - a `let` that hides a local of an enclosing block of the same fn;
    - a bare name in a pattern that names a visible binding (`when C`
@@ -78,8 +79,11 @@ The order is the order of the work.
    - a module-level `let` named like a loaded module.
 3. **`match` with no matching arm raises** ✓ Done (PR 2) (`no match for <value>`), as
    Erlang's `case_clause`; `else nil` keeps the old behaviour.
-4. **Data traps fixed at the source.** ✓ Done (PR 2). `delete(arr, i)` on an array
-   index raises (use `remove_at`); `in` means has-key on every table.
+4. **Data traps fixed at the source.** ✓ Done (PR 2). `x in t` tests the
+   values of a non-empty array (keys exactly `0 .. n-1`, whatever the
+   order they were added in) and is `has_key` on every other table, so an
+   int-keyed set with other keys finds its ids. `delete` is a key delete
+   on every table; `remove_at` removes an element from a list.
 5. **Rule lint in `make test`.** ✓ Done (PR 1, `tests/check_rules.sh`). A script that flags direct `->state =`,
    `gem_cur_globals[` outside gem.h, `close(` in socket code outside an
    allowlist, `mco_create`, and a builtin-list check (`BUILTIN_FNS`
@@ -93,7 +97,7 @@ The order is the order of the work.
    `make fuzz-parser`, a quick run in `make test`). A generator of random Gem programs run differentially
    (default threshold against stress, `-O0` against `-O2`), and a
    libFuzzer harness on the lexer and parser.
-8. **Shrink BEST_PRACTICES.** ✓ Done (PR 2: 985 lines). Every trap A removes goes, its trap-index
+8. **Shrink BEST_PRACTICES.** ✓ Done (PR 2: 995 lines). Every trap A removes goes, its trap-index
    row too; restated SPEC material and runtime internals move out.
    Target: under 1,000 lines.
 
