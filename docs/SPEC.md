@@ -625,7 +625,7 @@ loop(10000000, 0)         # works — would overflow without TCO
 
 TCO applies to every named function (`fn name(...)`), including ones with default, rest, or destructured parameters. A self tail call behaves exactly like a real call: an omitted argument evaluates its default (seeing the new values of earlier parameters), extra arguments go into a fresh rest table, and a closure created in one iteration keeps that iteration's parameter bindings. Anonymous functions are not optimized. Non-tail calls (where the result is used in a further expression, e.g. `n * f(n-1)`) remain normal recursive calls.
 
-A named function that waits for messages (a `receive` in its body, outside closures) and calls itself other than in tail position (the last expression of the body or of a branch there, or `return f(...)`) is a compile error: such a process loop keeps a stack frame per message until the process overflows its stack (`` `serve` waits for messages (`receive`) and calls itself here before it is done: ... ``). Calls in closures (`spawn do serve(s) end`) don't count.
+A named function that waits for messages (a `receive` in its body, outside closures) and calls itself other than in tail position (the last expression of the body or of a branch there, or `return f(...)`) gets a compile-time warning on stderr (`` `serve` waits for messages (`receive`) and calls itself here before it is done, ... ``): each such call keeps its stack frame and memory until it returns, so as a process loop the stack grows with every message handled. Bounded recursion (receiving a known number of messages) is fine. Calls in closures (`spawn do serve(s) end`) don't count.
 
 Mutual tail recursion between named functions (`fn A` tail-calls `fn B`, which tail-calls `fn A`, through any number of functions) is also run at constant stack depth, as long as no function in the cycle has rest or default parameters, a parameter that a nested closure assigns to, or more than 16 parameters. A cycle that does not qualify grows the stack on every call; write such a loop as direct self-recursion or use `while`.
 
@@ -1038,7 +1038,7 @@ The wrapper checks the Gem-level type of each argument and that enough arguments
 
 `%` takes integers only (a float operand raises). Integer division and `%` by zero raise `division by zero`, and so does float division by zero (no `inf`). Integer arithmetic wraps on overflow (two's complement), division included: `INT64_MIN / -1` is `INT64_MIN`, and `INT64_MIN % -1` is `0`. `<`, `<=`, `>`, `>=` compare an int with a float numerically, but `==` never equates them (`2 == 2.0` is `false`).
 
-`x in tbl` — key test, the same as `has_key(tbl, x)` on every table: a record's keys, an int-keyed set's members (`seen[5] = true`, then `5 in seen`), an array's indexes (`0 in [10, 20]` is `true`, `10 in [10, 20]` is `false`). To look for a value in an array, use `table.contains(arr, x)`. A right operand that isn't a table raises `in: right operand must be a table, got <type>`. Precedence is at the comparison level (same as `==`, `<`, etc.).
+`x in tbl` — membership test. On a non-empty array (a table whose keys are exactly the ints `0 .. n-1`, in whatever order they were added) it tests the values: `true` if some element `== x` (a linear scan; tables compare by identity), so `20 in [10, 20]` is `true` and `0 in [10, 20]` is `false`. On any other table (string keys, sparse or mixed int keys, an empty table) it is `has_key(tbl, x)`: a record's keys, an int-keyed set's members (`seen[5] = true`, then `5 in seen`). An int-keyed set whose keys happen to be exactly `0 .. n-1` is an array, so `in` tests its values there; test an int-keyed set with `has_key`. A right operand that isn't a table raises `in: right operand must be a table, got <type>`. Precedence is at the comparison level (same as `==`, `<`, etc.).
 
 **Equality semantics:** `==` compares by value for primitives (int, float, string, bool, nil) and by identity (reference) for tables, functions, and refs. Two distinct tables with identical contents are not equal: `{a: 1} == {a: 1}` is `false`. The same table reference compared to itself is `true`.
 
@@ -1228,7 +1228,7 @@ when {ok: false, error: msg}
 end
 ```
 
-**Function form** — `pcall(f)` calls `f()` with zero arguments. Useful when the body contains multiple statements. Its argument is evaluated first, unprotected, so `pcall(f(x))` (a call as the argument) is a compile error, `` `pcall(f(x))` runs the call before `pcall` gets its result, so an error in it is not caught ``; write `pcall f(x)`:
+**Function form** — `pcall(f)` calls `f()` with zero arguments. Useful when the body contains multiple statements. Its argument is evaluated first, unprotected, so `pcall(f(x))` (a call as the argument) runs `f(x)` outside the protection and calls the fn it returns; it compiles with a warning on stderr (`` `pcall(f(x))` runs f(x) before `pcall` is called, so an error raised in f(x) is not caught; ... ``). It is right when `f(x)` returns the fn to call (`pcall(make_handler(3))`); to catch the call's own errors, write `pcall f(x)`:
 
 ```
 let result = pcall(fn()
@@ -1354,7 +1354,7 @@ end
 
 `append_file(path, content)` — appends the string `content` to `path`. Creates the file if it doesn't exist. Opens in binary mode. Raises an error on failure.
 
-`delete(tbl, key)` — removes the entry for `key` from the table. Returns the removed value, or `nil` if the key was not found. Uses swap-remove internally (O(1) but does not preserve insertion order). An int key of an array (a table whose keys are exactly `0 .. n-1`) raises `delete: <i> is an index of an array; use remove_at(arr, <i>), which shifts the rest left (delete is for keys)`: moving the last element into the hole would leave a table that is no longer an array. Remove from arrays with `remove_at`.
+`delete(tbl, key)` — removes the entry for `key` from the table. Returns the removed value, or `nil` if the key was not found. Uses swap-remove internally (O(1) but does not preserve insertion order). On an array it removes the key too: `delete(arr, 0)` on `["a", "b", "c"]` leaves the keys `1` and `2`, a table that is no longer an array. To remove an element from a list, use `remove_at`, which shifts the rest left.
 
 `pop(arr)` — removes and returns the last element of an array table. Errors on empty table.
 

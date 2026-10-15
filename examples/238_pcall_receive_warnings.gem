@@ -1,0 +1,57 @@
+# Two patterns compile with a warning (tests/notes/238_*.expected): they
+# are right in some programs and a bug in most.
+
+fn risky(x) error("boom {x}") end
+fn make_handler(n)
+  fn() n * 2 end
+end
+
+# `pcall(f(x))` runs f(x) first: pcall catches errors of the fn it returns.
+print(pcall(make_handler(3)))
+let outer = pcall do
+  pcall(risky(1))
+end
+print(outer.ok, outer.error)
+# Not warned: the keyword form, a fn value, a closure.
+print((pcall risky(2)).error)
+print((pcall(fn() risky(3) end)).error)
+let h = make_handler(5)
+print(pcall(h).value)
+
+# A fn with a `receive` that calls itself other than as its last action:
+# each call keeps its frame until it returns. Bounded, it is fine.
+fn sum_next(n)
+  if n == 0
+    return 0
+  end
+  receive
+  when {tag: "num", v: v} then v + sum_next(n - 1)
+  end
+end
+
+for i = 1, 4
+  send(self(), {tag: "num", v: i * 10})
+end
+print(sum_next(3))
+
+# Not warned: tail calls in arms, `return`, through if/match, a closure.
+fn countdown(n)
+  if n == 0
+    return "done"
+  end
+  receive
+  when {tag: "tick"}
+    if n > 5 then return countdown(0) end
+    match n
+    when 1 then countdown(0)
+    else countdown(n - 1)
+    end
+  when {tag: "spawn"}
+    spawn do countdown(0) end
+    countdown(n)
+  end
+end
+for i = 0, 3
+  send(self(), {tag: "tick"})
+end
+print(countdown(3))

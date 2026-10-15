@@ -255,6 +255,14 @@ fn make_parser(tokens, source, file, sink)
     sink.report(source, file, line, col, span, msg, hint)
   end
 
+  # Records a compiler warning (sink.warn) at the given location.
+  let warn = fn(line, col, span, msg, hint)
+    if nest_overflow
+      return nil
+    end
+    sink.warn(source, file, line, col, span, msg, hint)
+  end
+
   # Reports the first nesting overflow, at the token that went over.
   let report_nest = fn(msg, hint)
     if not nest_overflow
@@ -1151,9 +1159,9 @@ fn make_parser(tokens, source, file, sink)
         end
 
         # `pcall(f(x))`: f(x) runs first, as pcall's argument, outside
-        # the protection.
+        # the protection. Right when f(x) returns the fn to call.
         if node.tag == "var" and node.name == "pcall" and len(args) == 1 and type(args[0]) == "table" and args[0].tag == "call"
-          report(node.line, node.col, len("pcall"), "`pcall(f(x))` runs the call before `pcall` gets its result, so an error in it is not caught", "write `pcall f(x)` (no parentheses), or `pcall do ... end` for several statements")
+          warn(node.line, node.col, len("pcall"), "`pcall(f(x))` runs f(x) before `pcall` is called, so an error raised in f(x) is not caught; `pcall` catches errors only of the fn f(x) returns", "to catch errors of the call itself, write `pcall f(x)` (no parentheses), or `pcall do ... end` for several statements")
         end
         node = make_call(node, args, call_line)
         continue

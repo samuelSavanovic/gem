@@ -1,6 +1,7 @@
 # A `match` with no `else` raises when no arm matches ("no match for
 # <value>"), as Erlang's case_clause does; `else nil` keeps a match that
-# may match nothing. delete on an array index raises (remove_at shifts).
+# may match nothing. delete removes a key, also from an array (remove_at
+# removes an element and shifts the rest).
 
 fn kind(code)
   match code
@@ -46,7 +47,7 @@ fn quiet(v)
 end
 print(quiet(1), quiet(2))
 
-# receive is unchanged: a message no arm matches stays in the mailbox
+# receive doesn't raise: a message no arm matches stays in the mailbox
 send(self(), "other")
 send(self(), {tag: "want"})
 receive
@@ -66,12 +67,13 @@ receive
 when {tag: "DOWN", reason: reason} then print("DOWN", reason)
 end
 
-# delete on an array: use remove_at
+# delete on an array removes the key: the table keeps keys 1 and 2, so it
+# is no longer an array; remove_at shifts the rest left
 let arr = ["a", "b", "c"]
-let d = pcall delete(arr, 0)
-print(d.ok, d.error)
-print(arr, remove_at(arr, 0), arr)
-print(delete(arr, 7), arr)
+print(delete(arr, 0), arr, arr[0], has_key(arr, 2))
+let list = ["a", "b", "c"]
+print(remove_at(list, 0), list)
+print(delete(list, 7), list)
 let rec = {a: 1, b: 2}
 print(delete(rec, "a"), rec)
 let ids = {}

@@ -17,8 +17,8 @@ otherwise. Two markers:
 
 Mistakes the compiler or runtime reports by name (a `let` hiding an outer
 variable, an unpinned name in a pattern, a statement that does nothing,
-`pcall(f(x))`, a `match` with no arm matching) aren't repeated here: the
-message says what to do.
+a `match` with no arm matching) aren't repeated here: the message says
+what to do.
 
 Contents: [Before you start](#before-you-start) ·
 [A first program](#a-first-program) ·
@@ -295,6 +295,9 @@ name is the module's API (`log.error`).
 
 - `pcall f(x)` or `pcall do ... end` catches errors, giving `{ok: true,
   value: v}` or `{ok: false, error: message, stack: trace}`.
+  `pcall(f(x))` runs `f(x)` unprotected and calls the fn it returns
+  **(trap)**: an error in `f(x)` itself is not caught. The compiler warns
+  about it; it's right only when `f(x)` returns the fn to call.
 - If the entry file defines `fn main`, the compiler calls it after the
   top-level code; calling it yourself runs it twice **(trap)**.
 
@@ -307,18 +310,23 @@ name is the module's API (`log.error`).
 ```gem
 push(items, x)                 # not items[len(items)] = x or a counter
 remove_at(arr, i)              # arrays: shifts the rest left
-delete(tbl, "key")             # keys of records; raises on an array index
+delete(tbl, "key")             # keys; delete(arr, i) before the end leaves a hole
 ```
 
 Assigning `nil` doesn't remove a key **(trap)**: after `t.x = nil`, `x` is
 still in `keys(t)`, `len(t)` and `json.encode(t)`. Use `delete`.
 
-### Test keys with `has_key` or `in`
+### Test keys with `has_key`, values with `in`
 
-`tbl[k] != nil` can't tell "missing" from "present and nil";
-`has_key(tbl, k)` and `k in tbl` can, on every table (`seen[id] = true`,
-then `id in seen`). On an array the keys are the indexes: look for a value
-with `table.contains(arr, x)`.
+`tbl[k] != nil` can't tell "missing" from "present and nil"; `has_key(tbl,
+k)` can. `x in t` looks for a value in a non-empty array (keys exactly
+`0 .. n-1`) and for a key in any other table: `20 in [10, 20]` and
+`"name" in record` are both `true`.
+
+An int-keyed set is an array when its keys happen to be exactly `0 .. n-1`,
+and then `in` tests its values **(trap)**: with `seen[0] = true` and
+`seen[1] = true`, `1 in seen` is `false` and `true in seen` is `true`.
+Test an int-keyed set with `has_key(seen, id)`.
 
 Scalar keys are hashed, but a table used as a key is found by a linear
 scan, so a large set of tables is quadratic **(trap)**: 20,000 tables as
@@ -461,7 +469,7 @@ function that calls itself as its last action (a *tail call*). So a
 long-running process stays in constant memory as long as it is a loop.
 `loop(state)` followed by any other statement is an ordinary call: every
 message adds a stack frame and keeps its memory, until `stack overflow`.
-The compiler rejects that in a function with a `receive`, but not in a
+The compiler warns about that in a function with a `receive`, but not in a
 cycle through several functions (`loop` → `handle` → `loop`): keep each
 call the last thing its function does.
 
@@ -954,6 +962,8 @@ their own. Zeroing a handle after the free (`h.ptr = 0`) and checking for
 | A local named `json`, `string`, `table`... | module hidden; runtime error | another name |
 | Calling `main()` when `fn main` exists | runs twice | let the compiler call it |
 | `t.x = nil` to remove a key | key stays | `delete(t, "x")` |
+| `id in seen` on an int-keyed set with keys `0 .. n-1` | tests values: it's an array | `has_key(seen, id)` |
+| `pcall(f(x))` | an error in `f(x)` isn't caught (compiler warns) | `pcall f(x)` |
 | Large set or index with tables as keys | quadratic | key by an id the tables carry |
 | `2.0 == 2` | `false` | convert first |
 | String accumulator read inside its loop | quadratic | `build_string` |

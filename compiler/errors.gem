@@ -120,13 +120,28 @@ fn make_error_sink()
     count += 1
   end
 
+  # Warnings: code that compiles and may well be right, but often isn't.
+  # They don't count as errors (has_any, count) and have no cap.
+  let warnings = []
+  let warn_dedup = {}
+  let warn = fn(source, file, line, col, span_len, msg, hint)
+    let key = "{file}:{line}:{col}:{msg}"
+    if has_key(warn_dedup, key)
+      return
+    end
+    warn_dedup[key] = true
+    push(warnings, {source: source, file: file, line: line, col: col,
+                    span: span_len, msg: msg, hint: hint})
+  end
+
   let has_any = fn() count > 0 end
   let drain = fn() errors end
   let count_fn = fn() count end
   let was_suppressed = fn() suppressed end
+  let warnings_fn = fn() warnings end
 
   {report: report, has_any: has_any, drain: drain, count: count_fn,
-   suppressed: was_suppressed}
+   suppressed: was_suppressed, warn: warn, warnings: warnings_fn}
 end
 
 # show_path maps a record's file to the path printed in its `-->` line

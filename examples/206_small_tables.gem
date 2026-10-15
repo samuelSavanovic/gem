@@ -66,8 +66,8 @@ let arr = [1, 2, 3]
 arr.tag = "t"
 print("array+tag", len(arr), arr.tag, arr[2], has_key(arr, "tag"), "tag" in arr)
 
-# 4. `in` tests keys on every table, string keys or not, before and after
-#    its string keys are deleted.
+# 4. `in` tests the values of an array (keys exactly 0 .. n-1) and the keys
+#    of any other table; deleting its string keys can make a table an array.
 let ints = {}
 ints[5] = "five"
 print("int-keyed in", "five" in ints, 5 in ints)
