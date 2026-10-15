@@ -8,6 +8,9 @@
  *                      (the compiler's binary cache).
  */
 
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE   /* pipe2 */
+#endif
 #include "gem.h"
 #include <errno.h>
 #include <sys/stat.h>
@@ -30,41 +33,71 @@
 
 /* read_file(path, offset, count): up to `count` bytes from byte `offset`,
    "" past the end. Opens the file for each call, so a caller walking a file
-   in blocks holds nothing open between calls. */
+   in blocks holds nothing open between calls. Only a file that keeps its
+   bytes between opens (a regular file, a block device) can be read from an
+   offset past 0: a pipe, FIFO or terminal would hand each open new data,
+   so offset > 0 raises for those. */
+#define GEM_NO_OFFSET_FMT "'%s' is not a regular file: it can be read from offset 0 only (read it whole with read_file(path))"
+
+static int gem_keeps_bytes(const struct stat *st) {
+    return S_ISREG(st->st_mode) || S_ISBLK(st->st_mode);
+}
+
 char *gem_read_file_range(const char *path, int64_t offset, int64_t count,
                           size_t *out_len, char **err_msg) {
     char msg[512];
     *out_len = 0;
     *err_msg = NULL;
+    struct stat st;
+    /* Refused before the open too: opening a FIFO waits for a writer. */
+    if (offset > 0 && stat(path, &st) == 0 && !S_ISDIR(st.st_mode) && !gem_keeps_bytes(&st)) {
+        snprintf(msg, sizeof(msg), GEM_NO_OFFSET_FMT, path);
+        *err_msg = strdup(msg);
+        return NULL;
+    }
     FILE *f = fopen(path, "rb");
     if (!f) {
         snprintf(msg, sizeof(msg), "cannot open '%s': %s", path, strerror(errno));
         *err_msg = strdup(msg);
         return NULL;
     }
-    struct stat st;
-    if (fstat(fileno(f), &st) == 0 && S_ISDIR(st.st_mode)) {
+    if (fstat(fileno(f), &st) != 0) {
+        fclose(f);
+        snprintf(msg, sizeof(msg), "cannot stat '%s': %s", path, strerror(errno));
+        *err_msg = strdup(msg);
+        return NULL;
+    }
+    if (S_ISDIR(st.st_mode)) {
         fclose(f);
         snprintf(msg, sizeof(msg), "'%s' is a directory", path);
         *err_msg = strdup(msg);
         return NULL;
     }
-    char *data = (char *)malloc((size_t)count + 1);
-    size_t len = 0;
-    int at = fseeko(f, (off_t)offset, SEEK_SET) == 0;
-    if (!at && !S_ISREG(st.st_mode)) {
-        /* A pipe or device can't seek: read past `offset` bytes. */
-        char skipbuf[65536];
-        int64_t skip = offset;
-        while (skip > 0) {
-            size_t want = skip < (int64_t)sizeof(skipbuf) ? (size_t)skip : sizeof(skipbuf);
-            size_t got = fread(skipbuf, 1, want, f);
-            if (got == 0) break;
-            skip -= (int64_t)got;
-        }
-        at = skip == 0;
+    if (offset > 0 && (!gem_keeps_bytes(&st) || fseeko(f, (off_t)offset, SEEK_SET) != 0)) {
+        fclose(f);
+        snprintf(msg, sizeof(msg), GEM_NO_OFFSET_FMT, path);
+        *err_msg = strdup(msg);
+        return NULL;
     }
-    if (at) len = fread(data, 1, (size_t)count, f);
+    /* The buffer starts at what st_size says is left of a regular file
+       (unless it reports 0, as procfs files do), else at 64 KB, and grows
+       while bytes keep arriving. */
+    size_t want = (size_t)count, cap;
+    if (S_ISREG(st.st_mode) && st.st_size > 0) {
+        int64_t left = (int64_t)st.st_size > offset ? (int64_t)st.st_size - offset : 0;
+        cap = (int64_t)want < left ? want : (size_t)left;
+    } else {
+        cap = want < 65536 ? want : 65536;
+    }
+    char *data = (char *)malloc(cap + 1);
+    size_t len = 0;
+    for (;;) {
+        len += fread(data + len, 1, cap - len, f);
+        if (len < cap || len == want) break;   /* end of file, or done */
+        cap = cap ? cap * 2 : 4096;
+        if (cap > want) cap = want;
+        data = (char *)realloc(data, cap + 1);
+    }
     if (ferror(f)) {
         fclose(f);
         free(data);
@@ -560,13 +593,18 @@ GemVal gem_is_dir_fn(void *_env, GemVal *args, int argc) {
     return gem_bool(S_ISDIR(st.st_mode) ? 1 : 0);
 }
 
-/* ─── Built-in: exec (run a shell command, return exit code) ─── */
-
-extern char **environ;
-
-/* setenv may move environ while a pool thread hands it to posix_spawn:
-   setenv takes this lock for writing, a spawn for reading. */
-pthread_rwlock_t gem_env_lock = PTHREAD_RWLOCK_INITIALIZER;
+/* ─── Built-in: exec (run a shell command, return exit code) ───
+ *
+ * exec and exec_capture start `/bin/sh -c cmd` with posix_spawn on a pool
+ * thread, passing the environment getenv and setenv see
+ * (gem_env_snapshot). A child must inherit only its stdin, stdout and
+ * stderr. On Linux the pipes and sockets the runtime makes while pool
+ * threads may be spawning are close-on-exec from the moment they exist
+ * (pipe2, accept4, SOCK_CLOEXEC); macOS has no such calls, so every spawn
+ * there sets POSIX_SPAWN_CLOEXEC_DEFAULT, which closes every other
+ * descriptor in the child. Otherwise a command started on one worker could hold the write
+ * end of another exec_capture's pipe, and that exec_capture would wait
+ * until the command exits. */
 
 /* The runtime ignores SIGPIPE (a write to a closed socket returns an
    error instead); a child gets the default back, so `yes | head` ends. */
@@ -576,18 +614,36 @@ static void gem_spawn_attr_init(posix_spawnattr_t *attr) {
     sigemptyset(&def);
     sigaddset(&def, SIGPIPE);
     posix_spawnattr_setsigdefault(attr, &def);
-    posix_spawnattr_setflags(attr, POSIX_SPAWN_SETSIGDEF);
+    short flags = POSIX_SPAWN_SETSIGDEF;
+#ifdef POSIX_SPAWN_CLOEXEC_DEFAULT
+    flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
+#endif
+    posix_spawnattr_setflags(attr, flags);
+}
+
+/* Starts `/bin/sh -c cmd` with the file actions `fa` (NULL: none) and the
+   runtime's environment; 0 or an errno, like posix_spawn. */
+static int gem_spawn_shell(pid_t *pid, const char *cmd, posix_spawn_file_actions_t *fa) {
+    char *argv[] = {"sh", "-c", (char *)cmd, NULL};
+    posix_spawnattr_t attr;
+    gem_spawn_attr_init(&attr);
+    char **envp = gem_env_snapshot();
+    int rc = posix_spawn(pid, "/bin/sh", fa, &attr, argv, envp);
+    free(envp);
+    posix_spawnattr_destroy(&attr);
+    return rc;
 }
 
 int gem_run_shell(const char *cmd) {
-    char *argv[] = {"sh", "-c", (char *)cmd, NULL};
     pid_t pid;
-    posix_spawnattr_t attr;
-    gem_spawn_attr_init(&attr);
-    pthread_rwlock_rdlock(&gem_env_lock);
-    int rc = posix_spawn(&pid, "/bin/sh", NULL, &attr, argv, environ);
-    pthread_rwlock_unlock(&gem_env_lock);
-    posix_spawnattr_destroy(&attr);
+    posix_spawn_file_actions_t fa;
+    posix_spawn_file_actions_init(&fa);
+#ifdef POSIX_SPAWN_CLOEXEC_DEFAULT
+    /* The child keeps the program's stdin, stdout and stderr. */
+    for (int fd = 0; fd <= 2; fd++) posix_spawn_file_actions_addinherit_np(&fa, fd);
+#endif
+    int rc = gem_spawn_shell(&pid, cmd, &fa);
+    posix_spawn_file_actions_destroy(&fa);
     if (rc != 0) return -1;
     int status;
     while (waitpid(pid, &status, 0) < 0)
@@ -595,14 +651,17 @@ int gem_run_shell(const char *cmd) {
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
-/* A pipe whose ends close on exec, so a child another thread spawns
-   meanwhile doesn't hold them open (the dup2 in the file actions clears
+/* A pipe whose ends close on exec (the dup2 in the file actions clears
    the flag on the child's own copies). */
 static int gem_cloexec_pipe(int fds[2]) {
+#ifdef __linux__
+    return pipe2(fds, O_CLOEXEC);
+#else
     if (pipe(fds) != 0) return -1;
     fcntl(fds[0], F_SETFD, FD_CLOEXEC);
     fcntl(fds[1], F_SETFD, FD_CLOEXEC);
     return 0;
+#endif
 }
 
 typedef struct { char *data; size_t len, cap; int over; } GemGrowBuf;
@@ -639,15 +698,9 @@ int gem_run_capture(const char *cmd, const char *in, size_t in_len,
     else posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);
     posix_spawn_file_actions_adddup2(&fa, pout[1], 1);
     posix_spawn_file_actions_adddup2(&fa, perr[1], 2);
-    posix_spawnattr_t attr;
-    gem_spawn_attr_init(&attr);
-    char *argv[] = {"sh", "-c", (char *)cmd, NULL};
     pid_t pid;
-    pthread_rwlock_rdlock(&gem_env_lock);
-    int rc = posix_spawn(&pid, "/bin/sh", &fa, &attr, argv, environ);
-    pthread_rwlock_unlock(&gem_env_lock);
+    int rc = gem_spawn_shell(&pid, cmd, &fa);
     posix_spawn_file_actions_destroy(&fa);
-    posix_spawnattr_destroy(&attr);
     close(pout[1]); close(perr[1]);
     if (in) close(pin[0]);
     if (rc != 0) {

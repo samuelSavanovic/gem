@@ -122,9 +122,11 @@ The order is the order of the work.
 4. **`std/regex`** ✓ Done (PR 4). On POSIX `regcomp`/`regexec` in the runtime (gemgrep
    proves it).
    *Landed:* `test`, `find`, `find_all`, `replace(_first)`, `split`,
-   `escape`, `check_pattern`; `\d \w \s` rewritten for POSIX so a pattern
-   means the same on glibc and macOS; a 64-entry compile cache. Left:
-   word boundaries and lazy quantifiers (POSIX has neither).
+   `escape`, `check_pattern`; patterns rewritten for POSIX (`\d \w \s`,
+   escapes inside `[...]`, `{,n}`, empty alternatives) so a pattern means
+   the same on glibc and macOS, and what the two read differently
+   (back-references, stacked quantifiers) raises; a 64-entry compile
+   cache. Left: word boundaries, back-references and lazy quantifiers.
 5. **Encodings.** ✓ Done (PR 4). base64, hex, sha256/HMAC (OpenSSL is already found for
    TLS), CSV, UTF-8 helpers (code points, case mapping).
    *Landed:* `std/base64`, `std/hex`, `std/crypto` (SHA-256 written in
@@ -133,10 +135,11 @@ The order is the order of the work.
    `SS`, scripts past Armenian).
 6. **Option-bag typos** ✓ Done (PR 4). (ROADMAP P1, steps 1–2): unknown keys raise, with
    "did you mean".
-   *Landed:* a destructured parameter with defaults checks its keys
-   (`__check_opts`, emitted by the parser); `...rest` in the pattern
-   takes the others and opts out; a pattern without defaults stays a
-   record. std's plain `opts` tables (http.start/serve, request.*,
+   *Landed:* a destructured parameter with an outer default (`{port =
+   80} = {}`) is an option bag and checks its keys (`__check_opts`,
+   emitted by the parser); `...rest` in the pattern takes the others and
+   opts out; a pattern without an outer default stays a record, field
+   defaults or not. std's plain `opts` tables (http.start/serve, request.*,
    supervisor and dynamic_supervisor specs, tls_connect) check theirs
    explicitly; strategy, restart, log level and process_flag name the
    closest value.

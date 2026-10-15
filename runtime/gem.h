@@ -1445,8 +1445,9 @@ GemVal gem_utf8_split(const uint8_t *s, int64_t n, int64_t as_strings);
 GemVal gem_utf8_char(int64_t cp);
 int64_t gem_utf8_offset(const uint8_t *s, int64_t n, int64_t index);
 GemVal gem_utf8_case(const uint8_t *s, int64_t n, int64_t upper);
-/* Held for writing by setenv, for reading around posix_spawn(environ). */
-extern pthread_rwlock_t gem_env_lock;
+/* The environment getenv and setenv see, as a NULL-terminated envp for
+   posix_spawn: one malloc'd block, freed with free(). Thread-safe. */
+char **gem_env_snapshot(void);
 /* Run `cmd` with `/bin/sh -c`, feeding it `in` (in_len bytes; stdin is
    /dev/null when in is NULL) and collecting its stdout and stderr into
    malloc'd buffers (*out, *err; NUL-terminated). Returns the exit status,
