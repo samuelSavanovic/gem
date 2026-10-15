@@ -41,23 +41,26 @@ fn counted(items)
 end
 print("counted", counted([1, 2]))
 
-# No warning: the loop variable, an earlier let of the body, an assignment
-# in the loop, a let inside a closure, or no read after the loop.
-fn quiet(lines, path)
-  let n = 0
-  let k = 0
-  let m = 0
+# No warning, for a `let` hiding a module-level variable in a loop: of
+# the loop variable, after an earlier let of the body, with an assignment
+# in the loop, with no read after the loop, or inside a closure.
+let k = 0
+let m = 0
+let tag = ""
+
+fn quiet(lines)
   let acc = ""
   let line = "outer"
   for line in lines
     let line = line + "!"
-    let p = path + "/" + line
-    let k2 = 1
-    let k2 = k2 + 1
+    let k = 1
+    let k = k + 1
+    let m = m + 1
     m += 1
+    let tag = tag + line
     let f = fn() let acc = acc + "y" end
-    print(p, k2)
+    print(line, k, m, tag)
   end
-  print(n, m - 1, acc, line, k)
+  print(acc, line, k, m)
 end
-quiet(["a"], "p")
+quiet(["a"])

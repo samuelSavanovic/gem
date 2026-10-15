@@ -73,8 +73,9 @@ else
   print("7: FAIL - else")
 end
 
-# 8. A binding next to an outer variable of the key's name (binding the
-#    key's own name, `{name: name}`, is a compile error: it hides it)
+# 8. A binding next to an outer variable of the key's name (`{name: name}`
+#    is a compile error here: `name` is already visible, so a bare `name`
+#    in the pattern is an error; `^name` compares with it)
 let name = "outer"
 let t8 = {name: "inner"}
 match t8

@@ -4277,8 +4277,8 @@ true
 total 0
 joined 
 counted 0
-p/a! 2
-0 0  outer 0
+a! 2 2 a!
+ outer 0 0
 -- for with one variable needs an array or a string
 for: one loop variable needs an array or a string, got a table with the key "a"; use two (`for k, v in ...`) for its entries, or iterate `values(...)`
 for: one loop variable needs an array or a string, got a table with the key 5; use two (`for k, v in ...`) for its entries, or iterate `values(...)`

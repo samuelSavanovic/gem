@@ -80,7 +80,7 @@ expected=(
   "eof_after_dot:1:1"
   "let_hides_outer:5:5"
   "pattern_binds_visible:4:4"
-  "effect_free_stmt:6:6"
+  "effect_free_stmt:9:9"
   "let_named_like_module:2:2"
   "tq_unterminated_eof:1:1"
   "nested_too_deep:1:1"
