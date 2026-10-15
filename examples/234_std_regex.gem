@@ -29,3 +29,13 @@ for i = 0, 200
   end
 end
 print(hits)
+# Escapes inside [...]: control bytes, and punctuation wherever it stands.
+fn texts(p, s)
+  table.map(regex.find_all(p, s), fn(x) x.text end)
+end
+print(texts("[\\t ]+", "a\t b\\t"), texts("[\\]a]", "a]b"), texts("[a\\-z]", "b-z"), texts("[\\^]", "a^b"))
+print(texts("[x\\]\\[\\^\\-]", "]x[^-y"), texts("[\\\\.]", "a\\b.c"), texts("[^\\^\\n]", "a^\nb"), texts("[!-\\/]", "a!/b."))
+print(regex.check_pattern("[\\q]"), regex.check_pattern("[a-\\]]"), texts("[!-^]", "a!^_"))
+# Read the same on every platform, or raise.
+print(texts('a{,2}', "aaa"), texts("", "ab"), texts("x(a|)y", "xy xay"))
+print(regex.check_pattern("(a)\\1"), regex.check_pattern("a+?"), regex.check_pattern('a{'))

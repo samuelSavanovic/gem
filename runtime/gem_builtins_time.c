@@ -13,18 +13,27 @@ GemVal gem_epoch_ms_fn(void *_env, GemVal *args, int argc) {
     return gem_int((int64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000);
 }
 
-/* For UTC: `fmt` with %z, %Z and %s replaced by "+0000", "UTC" and the
- * epoch seconds, which strftime would take from the local zone (macOS for
- * all three; glibc for %s, through mktime). "%%" is kept as it is. A
- * trailing \x01 is appended in both cases (see format_tm). Caller frees. */
-static char *prepare_fmt(const char *fmt, int64_t secs, int utc) {
+/* `fmt` with %Y and %F's year written as at least four digits (`year`;
+ * glibc writes year 1 as "1", macOS as "0001"), and for UTC with %z, %Z
+ * and %s replaced by "+0000", "UTC" and the epoch seconds, which strftime
+ * would take from the local zone (macOS for all three; glibc for %s,
+ * through mktime). "%%" is kept as it is. A trailing \x01 is appended (see
+ * format_tm). Caller frees. */
+static char *prepare_fmt(const char *fmt, int64_t secs, int utc, long year) {
     size_t len = strlen(fmt);
     char *out = (char *)malloc(len * 21 + 2);
     if (!out) return NULL;
     size_t o = 0;
     for (size_t i = 0; i < len; i++) {
-        if (utc && fmt[i] == '%' && i + 1 < len) {
+        if (fmt[i] == '%' && i + 1 < len) {
             char c = fmt[i + 1];
+            if (c == 'Y' || c == 'F') {
+                o += (size_t)sprintf(out + o, year < 0 ? "%05ld" : "%04ld", year);
+                if (c == 'F') { memcpy(out + o, "-%m-%d", 6); o += 6; }
+                i++;
+                continue;
+            }
+            if (!utc) { out[o++] = fmt[i]; out[o++] = fmt[++i]; continue; }
             if (c == 'z') { memcpy(out + o, "+0000", 5); o += 5; i++; continue; }
             if (c == 'Z') { memcpy(out + o, "UTC", 3); o += 3; i++; continue; }
             if (c == 's') { o += (size_t)sprintf(out + o, "%lld", (long long)secs); i++; continue; }
@@ -57,7 +66,7 @@ static GemVal format_tm(int64_t ms, const char *fmt, int local, const char *who)
     /* strftime returns 0 both for output that doesn't fit and for empty
      * output (such as "%p" in some locales), so the format gets a trailing
      * \x01: a result is never empty, and 0 always means "too small". */
-    char *f = prepare_fmt(fmt, secs64, !local);
+    char *f = prepare_fmt(fmt, secs64, !local, (long)tm_buf.tm_year + 1900);
     if (!f) gem_error("out of memory");
     /* The last try has room for GEM_FORMAT_TIME_MAX bytes, the \x01 and
      * the terminator. */

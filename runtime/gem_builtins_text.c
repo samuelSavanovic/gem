@@ -4,9 +4,8 @@
  * modules reach these through `extern fn`, so a program links this file
  * only when it loads one of them.
  *
- * Regex: POSIX extended regexes (libc's regcomp/regexec) with the Perl
- * shorthands \d \w \s (and \D \W \S) rewritten into bracket expressions
- * first, so a pattern means the same on glibc and macOS. Compiled
+ * Regex: POSIX extended regexes (libc's regcomp/regexec), rewritten first
+ * (gem_rx_translate) so a pattern means the same on glibc and macOS. Compiled
  * patterns are cached (GEM_RX_CACHE entries, keyed by pattern and flags,
  * the oldest replaced first); only the scheduler thread runs Gem code,
  * so the cache needs no lock.
@@ -46,49 +45,209 @@ static void sb_put(GemSb *b, const char *s, size_t n) {
 
 static void sb_puts(GemSb *b, const char *s) { sb_put(b, s, strlen(s)); }
 
-/* The pattern with \d \D \w \W \s \S rewritten for POSIX; NULL (and a
-   message in *err) for an escape POSIX has no way to say (\b \B). Inside
-   a bracket expression the positive classes become their [:class:]
-   members; a negated one there can't be written and is an error too. */
+/* A bracket expression, collected so it can be written back in the order
+   POSIX needs: a literal ']' first, '[' '^' '-' after everything else
+   ('-' last), so an escaped one can sit anywhere in the pattern. */
+typedef struct {
+    GemSb body;
+    int close, open, caret, dash;   /* literal ']', '[', '^', '-' */
+    int after_range_dash;           /* body ends with a range's '-' */
+} GemRxSet;
+
+static const char *GEM_RX_RANGE_ERR =
+    "an escaped ']', '[', '^' or '-' inside [...] can't start or end a range";
+
+/* Adds the literal byte `c` to the set; `next` is the pattern from the
+   byte after it, `raw`: c was not escaped. NULL, or an error message. An
+   unescaped '[', '^' or '-' at either end of a range stays in place, where
+   POSIX reads it the same (a range never comes first in the body). */
+static const char *rx_set_literal(GemRxSet *set, char c, const char *next, int raw) {
+    int special = c == ']' || c == '[' || c == '^' || c == '-';
+    int starts_range = next[0] == '-' && next[1] != ']' && next[1] != '\0';
+    if (special && raw && (set->after_range_dash || (starts_range && c != '-' && set->body.n > 0))) {
+        sb_put(&set->body, &c, 1);
+    } else if (special) {
+        if (set->after_range_dash || starts_range)
+            return raw ? "a range first in [...] can't start with ']', '[', '^' or '-'" : GEM_RX_RANGE_ERR;
+        if (c == ']') set->close = 1;
+        else if (c == '[') set->open = 1;
+        else if (c == '^') set->caret = 1;
+        else set->dash = 1;
+    } else {
+        sb_put(&set->body, &c, 1);
+    }
+    set->after_range_dash = 0;
+    return NULL;
+}
+
+/* Translates the bracket expression at pat[i] == '[' onto `b`; returns
+   the index of its closing ']', or (size_t)-1 with *err set. Inside it
+   \d \w \s become their members, \t \n \r the control bytes, and a
+   backslash before punctuation that character itself. */
+static size_t gem_rx_bracket(const char *pat, size_t n, size_t i, GemSb *b, const char **err) {
+    GemRxSet set = {0};
+    sb_put(&set.body, "", 0);
+    size_t j = i + 1;
+    int neg = 0;
+    if (j < n && pat[j] == '^') { neg = 1; j++; }
+    size_t first = j;
+    while (j < n && (pat[j] != ']' || j == first)) {
+        char c = pat[j];
+        if (c == '[' && j + 1 < n && (pat[j + 1] == ':' || pat[j + 1] == '.' || pat[j + 1] == '=')) {
+            char close[3] = { pat[j + 1], ']', 0 };
+            const char *e = strstr(pat + j + 2, close);
+            if (!e) { *err = "unclosed [:class:] inside [...]"; goto fail; }
+            size_t end = (size_t)(e - pat) + 2;
+            sb_put(&set.body, pat + j, end - j);
+            set.after_range_dash = 0;
+            j = end;
+            continue;
+        }
+        if (c == '-' && j != first && j + 1 < n && pat[j + 1] != ']') {
+            if (set.body.n == 0 || set.after_range_dash) { *err = GEM_RX_RANGE_ERR; goto fail; }
+            sb_put(&set.body, "-", 1);
+            set.after_range_dash = 1;
+            j++;
+            continue;
+        }
+        char lit = c;
+        size_t step = 1;
+        if (c == '\\' && j + 1 < n) {
+            char k = pat[j + 1];
+            const char *rep = NULL;
+            step = 2;
+            switch (k) {
+                case 'd': rep = "0-9"; break;
+                case 'w': rep = "[:alnum:]_"; break;
+                case 's': rep = "[:space:]"; break;
+                case 'D': case 'W': case 'S':
+                    *err = "a negated class (\\D, \\W, \\S) can't go inside [...]";
+                    goto fail;
+                case 't': lit = '\t'; break;
+                case 'n': lit = '\n'; break;
+                case 'r': lit = '\r'; break;
+                default:
+                    if ((k >= '0' && k <= '9') || (k >= 'a' && k <= 'z') || (k >= 'A' && k <= 'Z') || (unsigned char)k >= 0x80 || k == ' ') {
+                        *err = "inside [...] the escapes are \\d \\w \\s \\t \\n \\r and a backslash before punctuation";
+                        goto fail;
+                    }
+                    lit = k;
+            }
+            if (rep) {
+                if (set.after_range_dash) { *err = "a class (\\d, \\w, \\s) can't end a range"; goto fail; }
+                sb_puts(&set.body, rep);
+                j += step;
+                continue;
+            }
+        }
+        const char *e = rx_set_literal(&set, lit, pat + j + step, step == 1);
+        if (e) { *err = e; goto fail; }
+        j += step;
+    }
+    if (j >= n) { *err = "unclosed [...]"; goto fail; }
+    if (!neg && set.caret && !set.close && !set.open && !set.dash && set.body.n == 0) {
+        sb_puts(b, "\\^");                 /* [\^] alone: just the caret */
+    } else {
+        sb_put(b, "[", 1);
+        if (neg) sb_put(b, "^", 1);
+        if (set.close) sb_put(b, "]", 1);
+        if (!neg && !set.close && set.body.n == 0 && set.caret && !set.open) {
+            sb_put(b, "-^", 2);             /* '^' first would negate */
+            set.caret = set.dash = 0;
+        }
+        sb_put(b, set.body.p, set.body.n);
+        if (set.open) sb_put(b, "[", 1);
+        if (set.caret) sb_put(b, "^", 1);
+        if (set.dash) sb_put(b, "-", 1);
+        sb_put(b, "]", 1);
+    }
+    free(set.body.p);
+    return j;
+fail:
+    free(set.body.p);
+    return (size_t)-1;
+}
+
+/* The pattern rewritten so libc's regcomp reads it the same on glibc and
+   macOS, which disagree on everything the rewrite touches:
+   - \d \D \w \W \s \S become bracket expressions, \t \n \r the bytes, and
+     bracket expressions are written as gem_rx_bracket writes them;
+   - `{,n}` becomes `{0,n}`, and an empty alternative (an empty pattern,
+     `a|`, `(|a)`) matches the empty string through `x{0}`;
+   - NULL (and a message in *err) for what one of them can't do, such as
+     word boundaries (\b \B \< \>), back-references (\1 .. \9), a
+     quantifier with nothing to repeat or after another one (`a**`, `a+?`),
+     a '{' that doesn't start a bound, a bound past 255, and for a malformed
+     pattern (unbalanced parentheses, gem_rx_bracket's errors). */
 static char *gem_rx_translate(const char *pat, const char **err) {
     GemSb b = {0};
     sb_put(&b, "", 0);
     size_t n = strlen(pat);
+    int atom = 0;        /* the last token can take a quantifier */
+    int quantified = 0;  /* the last token is a quantifier */
+    int alt_empty = 1;   /* nothing yet in the current alternative */
+    int depth = 0;       /* open groups */
+#define RX_FAIL(msg) do { free(b.p); *err = (msg); return NULL; } while (0)
     for (size_t i = 0; i < n; i++) {
         char c = pat[i];
-        if (c == '[') {
-            /* Copy a bracket expression, rewriting \d \w \s inside it. */
-            size_t j = i + 1;
-            sb_put(&b, "[", 1);
-            if (j < n && pat[j] == '^') { sb_put(&b, "^", 1); j++; }
-            if (j < n && pat[j] == ']') { sb_put(&b, "]", 1); j++; }
-            while (j < n && pat[j] != ']') {
-                if (pat[j] == '[' && j + 1 < n && (pat[j + 1] == ':' || pat[j + 1] == '.' || pat[j + 1] == '=')) {
-                    char close[3] = { pat[j + 1], ']', 0 };
-                    const char *e = strstr(pat + j + 2, close);
-                    size_t end = e ? (size_t)(e - pat) + 2 : n;
-                    sb_put(&b, pat + j, end - j);
-                    j = end;
-                } else if (pat[j] == '\\' && j + 1 < n && strchr("dwsDWS", pat[j + 1])) {
-                    char k = pat[j + 1];
-                    if (k == 'd') sb_puts(&b, "0-9");
-                    else if (k == 'w') sb_puts(&b, "[:alnum:]_");
-                    else if (k == 's') sb_puts(&b, "[:space:]");
-                    else { free(b.p); *err = "a negated class (\\D, \\W, \\S) can't go inside [...]"; return NULL; }
-                    j += 2;
-                } else if (pat[j] == '\\' && j + 1 < n && pat[j + 1] == '\\') {
-                    sb_put(&b, "\\", 1);   /* inside brackets a backslash is itself */
-                    j += 2;
-                } else {
-                    sb_put(&b, pat + j, 1);
-                    j++;
-                }
-            }
-            if (j < n) sb_put(&b, "]", 1);
-            i = j;
+        if (c == '|' || c == ')') {
+            if (c == ')' && depth-- == 0) RX_FAIL("parentheses not balanced");
+            if (alt_empty) sb_puts(&b, "x{0}");
+            sb_put(&b, &c, 1);
+            alt_empty = c == '|';
+            atom = c == ')';
+            quantified = 0;
             continue;
         }
-        if (c == '\\' && i + 1 < n) {
+        if (c == '*' || c == '+' || c == '?' || c == '{') {
+            size_t end = i;
+            if (c == '{') {
+                size_t j = i + 1;
+                long lo = -1, hi = -1;
+                while (j < n && pat[j] >= '0' && pat[j] <= '9') { lo = (lo < 0 ? 0 : lo) * 10 + (pat[j] - '0'); if (lo > 100000) lo = 100000; j++; }
+                if (j < n && pat[j] == ',') {
+                    j++;
+                    while (j < n && pat[j] >= '0' && pat[j] <= '9') { hi = (hi < 0 ? 0 : hi) * 10 + (pat[j] - '0'); if (hi > 100000) hi = 100000; j++; }
+                } else {
+                    hi = lo;
+                }
+                if (j >= n || pat[j] != '}' || (lo < 0 && hi < 0))
+                    RX_FAIL("'{' starts a bound such as {2}, {1,3}, {2,} or {,3}; write \\{ for the character");
+                if (lo > 255 || hi > 255) RX_FAIL("a bound can't pass 255");
+                if (hi >= 0 && lo > hi) RX_FAIL("a bound's minimum is over its maximum");
+                end = j;
+            }
+            if (quantified) RX_FAIL("a quantifier can't follow another (there are no lazy quantifiers)");
+            if (!atom) RX_FAIL("a quantifier needs something before it to repeat");
+            if (c == '{' && pat[i + 1] == ',') {
+                sb_puts(&b, "{0");
+                sb_put(&b, pat + i + 1, end - i);
+            } else {
+                sb_put(&b, pat + i, end - i + 1);
+            }
+            i = end;
+            atom = 0;
+            quantified = 1;
+            continue;
+        }
+        alt_empty = 0;
+        quantified = 0;
+        atom = 1;
+        if (c == '[') {
+            size_t end = gem_rx_bracket(pat, n, i, &b, err);
+            if (end == (size_t)-1) { free(b.p); return NULL; }
+            i = end;
+            continue;
+        }
+        if (c == '(' || c == '^' || c == '$') {
+            sb_put(&b, &c, 1);
+            atom = 0;
+            alt_empty = c == '(';
+            if (c == '(') depth++;
+            continue;
+        }
+        if (c == '\\') {
+            if (i + 1 >= n) RX_FAIL("the pattern ends in a backslash");
             char k = pat[i + 1];
             const char *rep = NULL;
             switch (k) {
@@ -99,9 +258,10 @@ static char *gem_rx_translate(const char *pat, const char **err) {
                 case 's': rep = "[[:space:]]"; break;
                 case 'S': rep = "[^[:space:]]"; break;
                 case 'b': case 'B': case '<': case '>':
-                    free(b.p);
-                    *err = "word boundaries (\\b, \\B, \\<, \\>) aren't supported";
-                    return NULL;
+                    RX_FAIL("word boundaries (\\b, \\B, \\<, \\>) aren't supported");
+                case '1': case '2': case '3': case '4': case '5':
+                case '6': case '7': case '8': case '9':
+                    RX_FAIL("back-references (\\1 .. \\9) aren't supported");
                 case 't': rep = "\t"; break;
                 case 'n': rep = "\n"; break;
                 case 'r': rep = "\r"; break;
@@ -113,7 +273,28 @@ static char *gem_rx_translate(const char *pat, const char **err) {
         }
         sb_put(&b, &c, 1);
     }
+    if (depth > 0) RX_FAIL("parentheses not balanced");
+#undef RX_FAIL
+    if (alt_empty) sb_puts(&b, "x{0}");
     return b.p;
+}
+
+/* regcomp's error, in words of our own: glibc's and macOS's regerror
+   texts differ. */
+static const char *gem_rx_why(int rc) {
+    switch (rc) {
+        case REG_EBRACK: return "brackets not balanced";
+        case REG_EPAREN: return "parentheses not balanced";
+        case REG_EBRACE: return "braces not balanced";
+        case REG_BADBR: return "bad bound in {...}";
+        case REG_ERANGE: return "bad range in [...]";
+        case REG_ECTYPE: return "unknown [:class:]";
+        case REG_ECOLLATE: return "unknown collating element";
+        case REG_EESCAPE: return "bad escape";
+        case REG_BADRPT: return "a quantifier needs something before it to repeat";
+        case REG_ESPACE: return "out of memory";
+        default: return "invalid pattern";
+    }
 }
 
 static GemRxEntry *gem_rx_get(const char *pat, int64_t flags) {
@@ -134,9 +315,7 @@ static GemRxEntry *gem_rx_get(const char *pat, int64_t flags) {
     int rc = regcomp(&rx, posix, cflags);
     free(posix);
     if (rc != 0) {
-        char why[200];
-        regerror(rc, &rx, why, sizeof(why));
-        char buf[600]; snprintf(buf, sizeof(buf), "regex: bad pattern '%.200s': %s", pat, why);
+        char buf[600]; snprintf(buf, sizeof(buf), "regex: bad pattern '%.200s': %s", pat, gem_rx_why(rc));
         gem_error(buf);
     }
     GemRxEntry *e = &gem_rx_cache[gem_rx_next];
@@ -544,7 +723,7 @@ static int32_t gem_case_map(int32_t c, int upper) {
 
 /* s with each character case-mapped; invalid bytes are kept as they are. */
 GemVal gem_utf8_case(const uint8_t *s, int64_t n, int64_t upper) {
-    gem_strlen_check((size_t)n, "utf8.upper");
+    gem_strlen_check((size_t)n, upper ? "utf8.upper" : "utf8.lower");
     char *out = (char *)malloc((size_t)n + 1);
     size_t o = 0;
     int32_t cp;
