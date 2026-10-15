@@ -15,10 +15,9 @@ otherwise. Two markers:
   listed in [`KNOWN_BUGS.md`](KNOWN_BUGS.md). When the bug is fixed, the
   rule goes.
 
-Mistakes the compiler or runtime reports by name (a `let` hiding an outer
-variable, an unpinned name in a pattern, a statement that does nothing,
-a `match` with no arm matching) aren't repeated here: the message says
-what to do.
+Mistakes the compiler reports by name (a `let` in a nested block hiding a
+variable of the same function, an unpinned name in a pattern, a statement
+that does nothing) aren't repeated here: the message says what to do.
 
 Contents: [Before you start](#before-you-start) ·
 [A first program](#a-first-program) ·
@@ -56,8 +55,8 @@ it as `do |params| ... end`: `table.filter(nums) do |n| n % 2 == 0 end` is
 
 **Larger programs.** The apps under `examples/` (`bookmark_app`,
 `stomp_broker`, `logstat`, `mini_redis`, `lox`, `gemgrep`, `jobqueue`,
-`honeypot`, `httpd`) follow this doc and test themselves with `std/test`;
-read them for how the pieces fit together.
+`honeypot`, `httpd`) test themselves with `std/test`; read them for how
+the pieces fit together.
 
 **Words this doc uses.** *Array*: a table with keys `0 .. n-1`. *Record*:
 a table with string keys. *Process*: a lightweight thread with its own
@@ -164,7 +163,9 @@ but holds its value only once the `let` has run: read earlier (by
 top-level code above it, or a function called from there), it is `nil`
 **(trap)**. Put module-level `let`s at the top. Each process has its own
 copy ([State and memory](#state-and-memory)), so they are for constants
-and configuration.
+and configuration. In a function, `let total = total + x` makes a local
+from the module-level `total`, which keeps its value, and the compiler
+says nothing **(trap)**: to change it, assign (`total = total + x`).
 
 ### Closures
 
@@ -328,14 +329,16 @@ and then `in` tests its values **(trap)**: with `seen[0] = true` and
 `seen[1] = true`, `1 in seen` is `false` and `true in seen` is `true`.
 Test an int-keyed set with `has_key(seen, id)`.
 
-Scalar keys are hashed, but a table used as a key is found by a linear
+A table of more than 8 entries finds a scalar key through a hash index (a
+smaller one scans), but a table used as a key is always found by a linear
 scan, so a large set of tables is quadratic **(trap)**: 20,000 tables as
 keys took 0.27 s. Key such a set by an id the tables carry.
 
 ### Arrays, records, identity
 
-- A table is an array or a record; mixing string keys into an array makes
-  `len`, `in` and `for` unpredictable.
+- A table is an array or a record; a string key added to an array makes
+  it a record: `len` counts the string key too, `in` tests keys instead
+  of values, and a one-variable `for` raises.
 - Tables compare by identity: `{a: 1} == {a: 1}` is `false`, and so is a
   pinned table in a pattern. Compare fields or an id (`test.assert_eq`
   compares by structure).
@@ -492,8 +495,7 @@ as the warning says.
 
 Now and then a long-running loop copies everything it keeps alive, and
 processes share one thread, so nothing else runs meanwhile: about 0.04 s
-at 100,000 small records, 0.25 s at 300,000. That is long enough for a
-100 ms timer to fire before a 20 ms job reports. Bound what a long-lived
+at 100,000 small records, 0.25 s at 300,000. Bound what a long-lived
 process keeps (expire finished records, keep counts, not histories) or
 split it across processes, and leave deadlines room. `runtime_stats()`
 counts slow resets (`resets_over_10ms`, ...) and
@@ -658,8 +660,9 @@ up its starter too.
 
 ### Only the pending call learns why a server died **(trap)**
 
-A `gen_server.call` waiting when the server dies raises `server exited:
-<reason>`; later calls raise `noproc` (or `no process registered`). To act
+A `gen_server.call` waiting when the server dies raises `gen_server.call:
+server exited: <reason>`; later calls raise `...: server exited: noproc`
+(by handle or pid) or `...: no process registered as "<name>"`. To act
 on the reason, monitor the server.
 
 ### `spawn` can fail: catch it where load decides **(trap)**
@@ -957,6 +960,7 @@ their own. Zeroing a handle after the free (`h.ptr = 0`) and checking for
 | Trap | What happens | Do instead |
 |---|---|---|
 | Module-level variable read before its `let` runs | `nil` | module-level `let`s at the top |
+| `let total = total + x` in a fn, `total` module-level | a local; the module-level one keeps its value (no warning) | `total = total + x` |
 | `delete`/`remove_at`/`push` on what a `for` iterates | skips or adds entries, visits `nil` | iterate a snapshot (`keys(tbl)`) |
 | `nil` passed for a defaulted parameter or option field | it is `nil` | leave the argument (key) out |
 | A local named `json`, `string`, `table`... | module hidden; runtime error | another name |
@@ -983,7 +987,7 @@ their own. Zeroing a handle after the free (`h.ptr = 0`) and checking for
 | Calls from a process that also collects a stream | quadratic reply waits | calls from a separate process |
 | `send` to a registered name whose process died | raises | `whereis` + check, or `pcall` |
 | `start` or `init` waiting on its starter | deadlock, or a wait for good | pass it in the spec, or `send(self(), ...)` |
-| `gen_server.call` to a dead server | `noproc`, not why it died | monitor it |
+| `gen_server.call` to a dead server | `server exited: noproc` or `no process registered`, not why it died | monitor it |
 | `spawn` per connection or item, unguarded | raises at the limit; the acceptor dies | catch it, or cap in-flight work |
 | Long `exec` / `extern blocking fn` calls filling the pool | every file read waits | fewer at once, or `GEM_POOL_SIZE` |
 | Session that doesn't `claim` its socket | stays open after a crash | `claim(sock)` first |

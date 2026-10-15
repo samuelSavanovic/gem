@@ -1,7 +1,8 @@
 # compiler/checks.gem — compile errors and warnings for code that runs
 # but silently doesn't do what it says. Runs on the parser's AST (before
 # lower, so it sees `for`, `match` and patterns as written), once per file,
-# from parse_source; the LSP reports them like the parser's diagnostics.
+# from parse_source when the lexer and parser reported no errors for the
+# file; the LSP reports them like the parser's diagnostics.
 #
 # Errors:
 #   - a `let` in a nested block that hides a variable of an enclosing
@@ -9,9 +10,10 @@
 #     where an assignment was almost always meant;
 #   - a bare name in a `when` pattern that names a visible binding: it
 #     binds a new variable and always matches, where `^name` compares;
-#   - an expression statement with no effect (no call, no assignment):
-#     the `- 2` of a subtraction continued on the next line, a value left
-#     in the middle of a block.
+#   - an expression statement with no effect (a fn literal, or an
+#     expression with no call and no assignment in it): the `- 2` of a
+#     subtraction continued on the next line, a value left in the middle
+#     of a block.
 #
 # Warnings (sink.warn):
 #   - a fn with a `receive` that calls itself other than as its last
@@ -143,13 +145,20 @@ pure_expr = fn(e)
     end
     return true
   end
+  if tag == "table"
+    for en in e.entries
+      if not pure_expr(en.key) or not pure_expr(en.value) then return false end
+    end
+    return true
+  end
   if tag == "interp"
     for p in e.parts
       if type(p) == "table" and not pure_expr(p) then return false end
     end
     return true
   end
-  false
+  # A fn literal makes a closure; its body runs only when called.
+  tag == "anon_fn"
 end
 
 # What an effect-free statement looks like, for the message.
@@ -162,6 +171,9 @@ fn pure_kind(e)
   end
   if e.tag == "binop"
     return "an operation"
+  end
+  if e.tag == "anon_fn"
+    return "a fn literal"
   end
   "a value"
 end

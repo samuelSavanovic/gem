@@ -1,6 +1,6 @@
 # An expression statement with no effect is a compile error: in the middle
 # of a block, or at the end of a block whose value isn't used (a loop body,
-# the top-level code). Six errors.
+# the top-level code). Nine errors.
 # expect: a negation on its own does nothing
 fn total(a, b)
   let t = a
@@ -24,10 +24,19 @@ end
 [1, 2]
 "top-level string"
 
-# Not errors: a fn's or branch's value, a bare `nil`, calls.
+fn literals(k)
+  {a: 1, b: [k]}
+  fn(x) print(x) end
+  {1: k, n: -k}
+  nil
+end
+
+# Not errors: a fn's or branch's value, a bare `nil`, calls, a table
+# literal with a call in it.
 fn fine(c)
   if c then "yes" else nil end
   print("x")
+  {a: print("y")}
   nil
   c
 end
