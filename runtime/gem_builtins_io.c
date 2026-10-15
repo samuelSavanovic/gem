@@ -1,7 +1,8 @@
 /*
  * gem_builtins_io.c — File I/O and filesystem builtins: read_file, write_file,
  *                      append_file, file_exists, dirname, path_join,
- *                      normalize_path, remove_file, mkdir, list_dir, is_dir, exec;
+ *                      normalize_path, remove_file, mkdir, list_dir, rename,
+ *                      stat, is_dir, exec, exec_capture;
  *                      plus gem_exe_path (the running binary's real path) and
  *                      gem_temp_dir/gem_temp_dir_in/gem_rmdir (the compiler's work directories),
  *                      gem_hash_hex/gem_file_hash/gem_mkdirs/gem_link/gem_rename/gem_file_age

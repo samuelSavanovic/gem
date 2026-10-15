@@ -215,7 +215,8 @@ A `while` with a cursor suits tokenizers and frame parsers; read bytes
 with `ord(s, i)`, which doesn't allocate. But `str_replace`, `substr` and
 `find` (and `string.index_of`, `split`, `contains`) run in C: a needle 1
 MB into a string is found in well under 1 ms with `find`, against about
-25 ms with an `ord` loop. `std/regex` tests a short line in about 0.5 µs.
+25 ms with an `ord` loop. `std/regex` tests a 20- to 80-byte line in
+0.15–4 µs (`-o` build, macOS arm64; unanchored `[a-z]+@` is slowest).
 
 ---
 
@@ -291,9 +292,10 @@ name is the module's API (`log.error`).
 
 ### Small rules
 
-- A wrong argument count is a compile error only in a direct call to a
-  named fn or module export; a call through a value drops extra arguments
-  and passes `nil` for missing ones.
+- A wrong argument count is a compile error in a call by name to a
+  file's named fn, `extern fn` or once-bound module-level `let f = fn`,
+  or to one as `m.f`; through any other binding a Gem fn drops extra
+  arguments and gets `nil` for missing ones (an `extern fn` raises).
 - `pcall f(x)` or `pcall do ... end` catches errors, giving `{ok: true,
   value: v}` or `{ok: false, error: message, stack: trace}`.
   `pcall(f(x))` runs `f(x)` unprotected and calls the fn it returns
