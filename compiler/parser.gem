@@ -627,16 +627,6 @@ fn make_parser(tokens, source, file, sink)
   # prelude: array of statements desugared from destructuring params, to be
   #          prepended to the function body by the caller.
 
-  # Whether any entry of `dflts` (a pattern's field defaults) is set.
-  let has_key_default = fn(dflts)
-    for d in dflts
-      if d != nil
-        return true
-      end
-    end
-    false
-  end
-
   let parse_params = fn()
     let params = []
     let rest_param = nil
@@ -741,11 +731,12 @@ fn make_parser(tokens, source, file, sink)
           push(defaults, nil)
         end
 
-        # An option bag (an outer default, or a field default) raises for a
-        # key its pattern doesn't name (__check_opts), unless the pattern
-        # takes the rest (`...rest`, __opts_rest). The names travel as one
-        # string literal, separated by NUL bytes.
-        let is_bag = has_key_default(ddflts) or len(defaults) > 0 and defaults[len(defaults) - 1] != nil
+        # A pattern with an outer default (`{port = 80} = {}`) is an option
+        # bag: it raises for a key it doesn't name (__check_opts), unless it
+        # takes the rest (`...rest`, __opts_rest). One without is a record
+        # pattern and ignores other keys. The names travel as one string
+        # literal, separated by NUL bytes.
+        let is_bag = defaults[len(defaults) - 1] != nil
         let name_list = build_string do |add|
           for di = 0, len(dnames)
             if di > 0

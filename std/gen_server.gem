@@ -19,9 +19,9 @@
 ## Extra keys in a result are ignored (`{stop: ...}` does nothing).
 ##
 ## `stop` ends a server; one under a supervisor may be restarted (a
-## permanent child always is), so stop the supervisor instead. `start`
-## takes no name: to call by name, `register(name, h.pid)`; under a
-## supervisor, do it in the child's `start` fn so a restart registers it.
+## permanent child always is), so stop the supervisor instead. To call by
+## name, `gen_server.start(module, {name: "db"})`: the name is registered
+## before `init` runs, and a server a supervisor restarts takes it back.
 
 # The pid for a `{pid}` handle, a bare pid or a registered name.
 fn target_pid(target, caller)
