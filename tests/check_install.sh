@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# make install PREFIX=<dir>, then the installed gem from elsewhere: a
-# program loading std, gem new, gem test, gem build, and the errors of
-# gem test / gem build outside a project.
+# make install PREFIX=<dir> (twice, over the first install), then the
+# installed gem from elsewhere: a program loading std, gem new, gem test,
+# gem build, project names they refuse, and the errors of gem test /
+# gem build outside a project.
 #
 # Run from the repo root: tests/check_install.sh
 
@@ -14,6 +15,7 @@ fails=0
 fail() { echo "FAIL: $*"; fails=$((fails + 1)); }
 
 make -s install PREFIX="$T/prefix" > "$T/install.log" 2>&1 || { cat "$T/install.log"; echo "FAIL: make install"; exit 1; }
+make -s install PREFIX="$T/prefix" > "$T/install.log" 2>&1 || { cat "$T/install.log"; echo "FAIL: make install over an install"; exit 1; }
 G="$T/prefix/bin/gem"
 [ -x "$G" ] || { echo "FAIL: no $G"; exit 1; }
 
@@ -48,11 +50,32 @@ cd ../..
 
 # a gem.toml naming another entry and binary
 mkdir -p other && cd other
-printf '# a comment\nname = "tool"\nmain = "src/app.gem"\n[extra]\n' > gem.toml
+printf '# a comment\nname = "tool"  # the binary\nmain = src/app.gem # unquoted\n[extra]\n' > gem.toml
 mkdir -p src && echo 'print("app")' > src/app.gem
 "$G" build > /dev/null 2>&1 || fail "gem build with main = src/app.gem"
 [ "$(./build/tool 2>&1)" = app ] || fail "build/tool"
 cd ..
+
+# gem test hands every argument to test.gem, options included
+mkdir -p targs && cd targs
+echo 'name = "targs"' > gem.toml
+echo 'print(argv()[1], argv()[2])' > test.gem
+out=$("$G" test --check -o 2>&1)
+[ "$out" = "--check -o" ] || fail "gem test --check -o: $out"
+cd ..
+
+# a name that can't be a file under build/
+for bad in '../evil' 'a/b' '.hidden' '-x'; do
+  mkdir -p badname && printf 'name = "%s"\n' "$bad" > badname/gem.toml && echo 'print(1)' > badname/main.gem
+  out=$(cd badname && "$G" build 2>&1); st=$?
+  [ $st = 1 ] && case $out in *"can't name"*) true ;; *) false ;; esac || fail "gem build with name = $bad: $st $out"
+done
+[ -e evil ] && fail "gem build wrote ../evil"
+for bad in '.hidden' 'sub/.x' 'a..b'; do
+  out=$("$G" new "$bad" 2>&1); st=$?
+  [ $st = 1 ] && [ ! -e "$bad" ] || fail "gem new $bad: $st $out"
+done
+out=$("$G" new trailing/ 2>&1) && grep -q 'name = "trailing"' trailing/gem.toml || fail "gem new trailing/: $out"
 
 mkdir -p empty && cd empty
 out=$("$G" test 2>&1); st=$?

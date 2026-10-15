@@ -886,15 +886,18 @@ extern char **gem_stored_argv;
    install root; not a Gem builtin. */
 char *gem_exe_path(void);
 
-/* A new directory under $TMPDIR (else /tmp), in a static buffer, or NULL;
-   and rmdir, 1 on success. Used by the compiler through `extern fn` for
-   its work directory; not Gem builtins. */
+/* A new directory under $TMPDIR (else /tmp), or under a given parent, in
+   a static buffer, or NULL; and rmdir, 1 on success. Used by the compiler
+   through `extern fn` for its work directories and binary cache
+   (runtime/gem_builtins_io.c); not Gem builtins. */
 char *gem_temp_dir(void);
+char *gem_temp_dir_in(const char *parent);
 int64_t gem_rmdir(const char *path);
 char *gem_hash_hex(const uint8_t *data, int64_t len);
 char *gem_file_hash(const char *path);
 int64_t gem_mkdirs(const char *path);
-int64_t gem_rename(const char *from, const char *to);
+int64_t gem_link(const char *from, const char *to);
+int64_t gem_file_age(const char *path);
 
 /* ─── Helpers used by codegen ─── */
 
