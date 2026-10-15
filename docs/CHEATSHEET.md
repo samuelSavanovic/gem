@@ -23,8 +23,9 @@ end
 fn log(level, ...msgs)               # variadic (rest param)
 end
 fn server({port = 8080, host = "0.0.0.0"} = {})   # destructured params
-end                                                # `= {}` makes the bag optional / nil-tolerant
+end                                                # `= {}` makes it an option bag, optional and nil-tolerant:
                                                    # a key not in the pattern raises: unknown option "prot" (did you mean "port"?)
+fn handle({type, data = nil}) end                  # no `= {}`: a record pattern, other keys ignored
 fn wrap({level = 1, ...rest} = {}) end             # ...rest: the other keys, no check
 
 # Closures / anonymous functions
@@ -178,9 +179,9 @@ end
 # Std library modules
 # std/string     split, join, trim, upper, lower, repeat, index_of(s, x, start = 0), contains,
 #                starts_with, ends_with, closest(word, candidates) (did-you-mean)
-# std/io         lines(path, f), reader(path) -> {next}, read_lines(path)   ("-": stdin; 64 KB blocks, flat memory)
+# std/io         lines(path, f), reader(path) -> {next}, read_lines(path)   ("-": stdin; 64 KB blocks, flat memory; a pipe is read whole)
 # std/regex      test, find, find_all, replace, replace_first, split, escape, check_pattern   (POSIX ERE + \d \w \s;
-#                opts {icase, multiline}; match {text, start, stop, groups}; replace "\1" or fn(m); no \b)
+#                opts {icase, multiline}; match {text, start, stop, groups}; replace "\1" or fn(m); no \b or \1 in patterns)
 # std/base64     encode, encode_url, decode (nil if not base64)     std/hex   encode, decode
 # std/crypto     sha256, sha256_hex, hmac_sha256, hmac_sha256_hex, equal (constant time)
 # std/utf8       len, valid, chars, codepoints, char(cp), sub(s, start, n), upper, lower, reverse

@@ -1374,7 +1374,7 @@ fn-req: 0 5 8
 server: unknown option "x"
 server: unknown option "prot" (did you mean "port"?)
 2 {color: "red"} 1 {}
-3
+3 1
 0.0.0.0:nil/nil
 sid=abc;Path=/;Secure=false
 sid=abc;Path=/;Secure=false
@@ -4776,6 +4776,8 @@ false
 v1 v1
 nil
 setenv: the name must be non-empty, without '=' or a NUL byte
+b=c 0 nil nil
+unset true
 from a process
 
 4 ["a", "bb", "", "ccc"] true nil ["a", "bb", "", "ccc"]
@@ -4786,6 +4788,12 @@ from a process
 row 0 row 1
 false true
 io.lines: path must be a string, got int
+[65535, 1]
+[200000] 200000
+30000 450015000
+one two nil
+abc
+true
 10 text false false false {} nil o ["a"]
 5 json true true true ["foo", "bar"] 0.5 o ["a", "-", "-n"]
 7 text false false true {} nil o ["b"]
@@ -4830,7 +4838,7 @@ a#b# host at bob a<1>b<22>
 -a-b-c- f0o a\\b
 ["a", "b", "c"] [""] ["", "a", ""] ["ab"]
 1\+1=2\? false true
-regex: bad pattern 'a(b': Unmatched ( or \( nil
+regex: bad pattern 'a(b': parentheses not balanced nil
 regex: bad pattern '\bfoo': word boundaries (\b, \B, \<, \>) aren't supported
 nil 2
 3 nil
@@ -4840,6 +4848,11 @@ q
 regex.test: pattern must be a string, got int regex.replace: repl must be a string or a fn, got int
 true [a][]
 200
+["\t "] ["a", "]"] ["-", "z"] ["^"]
+["]", "x", "[", "^", "-"] ["\\", "."] ["a", "b"] ["!", "/", "."]
+regex: bad pattern '[\q]': inside [...] the escapes are \d \w \s \t \n \r and a backslash before punctuation regex: bad pattern '[a-\]]': an escaped ']', '[', '^' or '-' inside [...] can't start or end a range ["!", "^"]
+["aa", "a", ""] ["", "", ""] ["xy", "xay"]
+regex: bad pattern '(a)\1': back-references (\1 .. \9) aren't supported regex: bad pattern 'a+?': a quantifier can't follow another (there are no lazy quantifiers) regex: bad pattern 'a{': '{' starts a bound such as {2}, {1,3}, {2,} or {,3}; write \{ for the character
 aGVsbG8=  YQ== YWI= YWJj
 hello hello hi nil nil nil hi
 -_8 true
@@ -4885,6 +4898,7 @@ serve: unknown option "verbose"
 serve: unknown option "0"
 anonymous fn: unknown option "y" (did you mean "x"?)
 3 {color: "red"}
+ping nil
 supervisor.start: unknown option "stratgy" (did you mean "strategy"?)
 supervisor.start: unknown strategy "one_for_al" (did you mean "one_for_all"?)
 supervisor.start: unknown key "restrat" in child "a" (did you mean "restart"?)
@@ -4958,7 +4972,7 @@ application/octet-stream
 [] nil 
 [garbage] nil 
 [Tue, 28 Foo 2026 14:30:00 GMT] nil 
-[0001-01-01] -62135596800000 1-01-01T00:00:00.000Z
+[0001-01-01] -62135596800000 0001-01-01T00:00:00.000Z
 [9999-12-31T23:59:59Z] 253402300799000 9999-12-31T23:59:59.000Z
 14:30:00.123 %L 999
 time.parse: s must be a string, got int

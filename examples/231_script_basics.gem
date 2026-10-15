@@ -45,6 +45,11 @@ print(getenv("GEM_EXAMPLE_231"), exec_capture("printf %s \"$GEM_EXAMPLE_231\"").
 setenv("GEM_EXAMPLE_231", nil)
 print(getenv("GEM_EXAMPLE_231"))
 print(pcall(fn() setenv("A=B", "x") end).error)
+setenv("GEM_EXAMPLE_231", "a")
+setenv("GEM_EXAMPLE_231", "b=c")
+print(getenv("GEM_EXAMPLE_231"), exec("test \"$GEM_EXAMPLE_231\" = b=c"), getenv(""), getenv("A=B"))
+setenv("GEM_EXAMPLE_231", nil)
+print(exec_capture('printf %s "${GEM_EXAMPLE_231-unset}"').stdout, getenv("PATH") != nil)
 
 let done = make_ref()
 let parent = self()

@@ -12,6 +12,9 @@
  * tcp_read and tcp_write hand it to gem_builtins_tls.c through gem_tls_ops.
  */
 
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE   /* accept4 */
+#endif
 #include "gem.h"
 #include "stb_ds.h"
 #include <errno.h>
@@ -36,10 +39,11 @@ static void gem_set_nonblocking(int fd) {
 }
 
 /* Every socket is marked close-on-exec, so a command `exec` starts doesn't
-   hold it: by socket() itself where SOCK_CLOEXEC exists, and by fcntl right
-   after socket() and accept() in every case. `exec` runs on a pool thread,
-   so a command starting between an accept() (or, without SOCK_CLOEXEC, a
-   socket()) and that fcntl can still inherit the new socket. */
+   hold it: by socket() and accept4() themselves where SOCK_CLOEXEC exists
+   (Linux), and by fcntl right after socket() and accept() in every case.
+   Without SOCK_CLOEXEC (macOS) a command starting between the two could
+   inherit the new socket, but every spawn there sets
+   POSIX_SPAWN_CLOEXEC_DEFAULT (gem_builtins_io.c). */
 #ifdef SOCK_CLOEXEC
 #define GEM_SOCK_STREAM (SOCK_STREAM | SOCK_CLOEXEC)
 #else
@@ -48,6 +52,14 @@ static void gem_set_nonblocking(int fd) {
 
 static void gem_set_cloexec(int fd) {
     fcntl(fd, F_SETFD, FD_CLOEXEC);
+}
+
+static int gem_accept(int server_fd, struct sockaddr *addr, socklen_t *len) {
+#if defined(__linux__) && defined(SOCK_CLOEXEC)
+    return accept4(server_fd, addr, len, SOCK_CLOEXEC);
+#else
+    return accept(server_fd, addr, len);
+#endif
 }
 
 /* The identity of the open file behind fd, or -1 when fd is not open:
@@ -353,7 +365,7 @@ GemVal gem_tcp_accept_fn(void *_env, GemVal *args, int argc) {
     if (gem_current_pid >= 0) {
         gem_tcp_begin_wait();
         while (1) {
-            int fd = accept(server_fd, (struct sockaddr *)&addr, &addr_len);
+            int fd = gem_accept(server_fd, (struct sockaddr *)&addr, &addr_len);
             if (fd >= 0) {
                 gem_set_cloexec(fd);
                 gem_set_nonblocking(fd);
@@ -370,7 +382,7 @@ GemVal gem_tcp_accept_fn(void *_env, GemVal *args, int argc) {
         }
     }
 
-    int fd = accept(server_fd, (struct sockaddr *)&addr, &addr_len);
+    int fd = gem_accept(server_fd, (struct sockaddr *)&addr, &addr_len);
     if (fd < 0) {
         char buf[256];
         snprintf(buf, sizeof(buf), "tcp_accept: accept failed: %s", strerror(errno));
