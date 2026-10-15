@@ -95,7 +95,7 @@ The order is the order of the work.
    `make fuzz-parser`, a quick run in `make test`). A generator of random Gem programs run differentially
    (default threshold against stress, `-O0` against `-O2`), and a
    libFuzzer harness on the lexer, parser, lower and fold.
-8. **Shrink BEST_PRACTICES.** ✓ Done (997 lines). Every trap A removes goes, its trap-index
+8. **Shrink BEST_PRACTICES.** ✓ Done (999 lines). Every trap A removes goes, its trap-index
    row too; restated SPEC material and runtime internals move out.
    Target: under 1,000 lines.
 
@@ -125,9 +125,10 @@ The order is the order of the work.
    `escape`, `check_pattern`; patterns rewritten for POSIX (`\d \w \s`,
    escapes inside `[...]`, `{,n}`, empty alternatives) into forms glibc
    and macOS read alike, and what the two read differently
-   (back-references, stacked quantifiers, other escaped letters) raises;
-   a 64-entry compile cache. Remaining: word boundaries, back-references
-   and lazy quantifiers.
+   (back-references, word boundaries `\b \B \< \>`, stacked quantifiers
+   such as `*?`, other escaped letters) raises; a 64-entry compile cache.
+   Remaining: support for word boundaries, back-references and lazy
+   quantifiers.
 5. **Encodings.** ✓ Done. base64, hex, sha256/HMAC (OpenSSL is already found for
    TLS), CSV, UTF-8 helpers (code points, case mapping).
    *Built:* `std/base64`, `std/hex`, `std/crypto` (SHA-256 written in

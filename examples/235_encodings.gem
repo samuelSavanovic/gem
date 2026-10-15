@@ -22,6 +22,7 @@ print(len(crypto.sha256("x")), crypto.equal("abc", "abc"), crypto.equal("abc", "
 print(utf8.len("héllo"), len("héllo"), utf8.chars("añb"), utf8.codepoints("é€😀"), utf8.char(8364), utf8.char([104, 105]))
 print(utf8.sub("héllo", 1, 3), utf8.sub("añbc", -2), utf8.sub("abc", 5), utf8.sub("abc", 1, 0), utf8.sub("añ", 1))
 print(utf8.upper("straße ÿ ſ àéî ωμέγα ς ϊ привет ёж ǆ"), utf8.lower("ÀÉÎ ΩΜΈΓΑ ПРИВЕТ ЁЖ Ÿ ĀĂ Ĺ"))
+print(utf8.upper("ı ſ İ"), utf8.lower("İ ı ſ I"))
 print(utf8.valid("é"), utf8.valid(chr(233)), utf8.valid(chr(237) + chr(160) + chr(128)), utf8.codepoints("a" + chr(255) + "b"), utf8.len(chr(255) + chr(254)))
 print(utf8.reverse("añb€"), pcall(fn() utf8.char(55296) end).error, pcall(fn() utf8.len(3) end).error)
 print(csv.parse("name,age\nann,31\n"))

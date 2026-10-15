@@ -694,6 +694,7 @@ static int32_t gem_case_map(int32_t c, int upper) {
             if (odd_low ? (c % 2 == 0) : (c % 2 == 1)) return c - 1;
             return c;
         }
+        if (c == 0x131) return 'I';
         if (c == 0x17f) return 'S';
         if (c >= 0x3b1 && c <= 0x3cb && c != 0x3c2) return c - 32;
         if (c == 0x3c2) return 0x3a3;
@@ -712,6 +713,7 @@ static int32_t gem_case_map(int32_t c, int upper) {
     if (c >= 'A' && c <= 'Z') return c + 32;
     if (c >= 0xc0 && c <= 0xde && c != 0xd7) return c + 32;
     if (c == 0x178) return 0xff;
+    if (c == 0x130) return 'i';
     if (c >= 0x100 && c <= 0x17f && c != 0x130 && c != 0x131 && c != 0x138 && c != 0x149 && c != 0x17f) {
         int odd_low = (c >= 0x139 && c <= 0x148) || (c >= 0x179 && c <= 0x17e);
         if (odd_low ? (c % 2 == 1) : (c % 2 == 0)) return c + 1;
@@ -742,7 +744,8 @@ GemVal gem_utf8_case(const uint8_t *s, int64_t n, int64_t upper) {
         int len = gem_utf8_next(s, n, i, &cp);
         if (cp < 0) { out[o++] = (char)s[i]; i += 1; continue; }
         int32_t m = gem_case_map(cp, (int)upper);
-        /* No mapping makes a character longer (ſ -> S makes one shorter),
+        /* No mapping makes a character longer (ſ -> S, ı -> I and İ -> i
+           make one shorter),
            so the output fits in n bytes. */
         o += gem_utf8_put(out + o, m);
         i += len;
