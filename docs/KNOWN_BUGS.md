@@ -36,6 +36,23 @@ C" in docs/OPTIMIZATIONS.md.
 
 ## Runtime
 
+### stb_ds's 8-byte key hash shifts into an int's sign bit
+
+`stbds_hash_bytes` (runtime/stb_ds.h, the `len == 8` case) builds the
+hash from `d[i] << 24` with `d` an `unsigned char *`, so a byte of 128
+or more shifts into the sign bit of an `int`: undefined behaviour, which
+the `asan` runtime's UBSan stops at. Repro:
+
+```bash
+make asan
+GEM_RUNTIME=asan build/gem examples/203_many_processes.gem -o /tmp/p203 && /tmp/p203
+```
+
+prints `runtime/stb_ds.h:1180:61: runtime error: left shift of 219 by 24
+places cannot be represented in type 'int'` and aborts. Release builds
+print the right output. Casting each byte to `size_t` before the shift
+would do.
+
 ## Standard library
 
 ## Language server
