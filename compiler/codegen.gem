@@ -809,6 +809,12 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     for ef in extern_fns_list
       arity[ef.name] = {min: len(ef.params), max: len(ef.params), def: ef}
     end
+    # A selective import (`load "m" (f)`) binds `let f = <m's f>`.
+    for s in top_stmts
+      if s.tag == "let" and is_node(s.value, "var") and s.selective_import == true and arity[s.value.name] != nil and top_let_count[s.name] == 1 and not set_contains(assigned, s.name) and set_contains(top_level_vars, s.name)
+        arity[s.name] = arity[s.value.name]
+      end
+    end
     let reported = {}
     let check = fn(call, name, shown, loc, span)
       let a = arity[name]
