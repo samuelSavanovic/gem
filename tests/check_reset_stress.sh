@@ -7,7 +7,7 @@
 #     what they leave (a sort comparator's, called from top-level code),
 #     leave no memory mappings behind when their resets copy nothing (a
 #     mapping kept per reset runs a program like 117 out of
-#     vm.max_map_count at a 1 KB threshold);
+#     Linux's vm.max_map_count at a 1 KB threshold);
 #   - a bad GEM_RESET_STRESS value is refused at startup.
 #
 # Run from the repo root: tests/check_reset_stress.sh

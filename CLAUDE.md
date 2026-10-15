@@ -58,7 +58,7 @@ examples/             # numbered tests (01, 02, ...) + run_all.sh; plus larger p
                       #   honeypot/ (telnet honeypot: a fake BusyBox login and shell; meant for weeks of hostile traffic, plan in PLAN.md, server setup in deploy/)
                       #   httpd/ (public website on std/http that records every connection, request and rejection; the honeypot's HTTP twin, plan in PLAN.md, server setup in deploy/)
                       #   modules/, support/: the modules and C headers the numbered tests load
-tests/                # check_*.sh (wired into make test; check_rules.sh lints the grep-able rules below and the builtin list), fuzz/ (fuzzers, see make fuzz-*), broken/ (programs that must not compile), notes/ (expected compiler notes), lsp/ (LSP smoke tests)
+tests/                # check_*.sh (wired into make test, except check_stress.sh (make test-stress) and check_tls_online.sh (make test-tls-online); check_rules.sh lints the grep-able rules below and the builtin list), fuzz/ (fuzzers, see make fuzz-*), broken/ (programs that must not compile), notes/ (expected compiler notes), lsp/ (LSP smoke tests)
 test_json_suite/      # make test-json-suite: JSONTestSuite conformance runner
 docs/SPEC.md          # language spec (source of truth for all language decisions)
 docs/CHEATSHEET.md    # syntax, builtins and std modules on one page
@@ -99,7 +99,7 @@ make test-lsp          # smoke-test the `gem lsp` subcommand (tests/lsp/*.sh: li
 make test-tls          # tls_connect + https:// against local openssl s_server instances and a test CA (part of make test; skips without an OpenSSL 3 CLI)
 make test-tls-online   # tls_connect + https:// against real sites (example.com, google.com, badssl.com); needs the internet, not part of make test
 make test-stress       # the examples, example apps and the compiler under GEM_RESET_STRESS=1 (resets at almost every back-edge); not part of make test
-make debug             # build/debug/libgem_runtime.a: -DGEM_DEBUG (GEM_ASSERT invariants, poisoned freed memory, heap check after resets)
+make debug             # build/debug/libgem_runtime.a: -DGEM_DEBUG (GEM_ASSERT invariants, poisoned freed memory, budgeted heap checks after resets)
 make asan              # build/asan/libgem_runtime.a: the debug runtime plus ASan and UBSan; a program uses either with GEM_RUNTIME=debug|asan
                        #   on macOS arm64 ASan reports stack errors in ~20 numbered examples (process kills, gen_server, sockets, stack overflow; SPEC "GEM_RUNTIME"): check a report before trusting it
 make test-debug        # the numbered examples on the debug runtime under GEM_RESET_STRESS=1

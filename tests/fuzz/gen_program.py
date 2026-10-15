@@ -10,11 +10,14 @@ builds of one program must print the same: default against
 GEM_RESET_STRESS=1, -O2 against -O0. They lean on what region resets have
 to get right: values kept across loop iterations, tables created before a
 loop and filled inside it, module state written in loops, closures that
-assign their captures, self and mutual tail calls, deep non-tail
-recursion, pcall, string building, and messages between processes.
+assign their captures, self tail calls, a mutual tail-call chain of up
+to 50,000 calls, non-tail recursion (up to 5 levels), pcall, string
+building, and messages between processes.
 
-Ints stay below MOD (a prime) after every operation, so no arithmetic
-overflows, divides by zero or goes negative; no floats are used, so fused
+Sums, products and differences are reduced mod MOD (a prime; MOD is added
+before a difference is reduced), and every other int is a small literal,
+a counter, a length or a stored copy of such a result, so no int comes
+near int64's range and the only divisor is MOD; no floats are used, so fused
 multiply-adds can't make -O2 differ from -O0.
 """
 

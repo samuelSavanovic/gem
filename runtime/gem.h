@@ -68,11 +68,13 @@ void gem_arena_free_blocks(GemArenaBlock *block);  /* munmap a block chain */
 /* ─── Debug runtime (make debug / make asan, GEM_RUNTIME=debug|asan) ───
  *
  * Built with -DGEM_DEBUG: GEM_ASSERT checks the runtime's invariants, a
- * reset poisons the memory it gives back (0xDB, so a dangling read sees a
- * garbage type, not nil) and keeps freed blocks PROT_NONE for a while
- * before unmapping them (so a dangling access faults), and every reset
- * ends with a heap check (gem_copy.c, gem_debug_check_reset). Without
- * GEM_DEBUG all of it compiles away. */
+ * reset poisons the block tail it gives back (0xDB, so a dangling read
+ * sees a value of no known type; a release build leaves the old bytes
+ * there until the tail is handed out again, zeroed then in both builds)
+ * and keeps freed blocks PROT_NONE for a while before unmapping them (so
+ * a dangling access faults), and resets end with a heap check as long as
+ * the checks have cost no more than the resets (gem_copy.c,
+ * gem_debug_check_reset). Without GEM_DEBUG all of it compiles away. */
 #ifdef GEM_DEBUG
 #define GEM_ASSERT(cond, what) \
     do { if (__builtin_expect(!(cond), 0)) gem_assert_fail(#cond, (what), __FILE__, __LINE__); } while (0)
