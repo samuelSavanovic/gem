@@ -75,4 +75,54 @@ echo 'print(undefined_name)' > "$T/p/bad.gem"
 out=$(GEM_CACHE_DIR=/dev/null/nope "$GEM" "$T/p/off.gem")
 [ "$out" = off ] || fail "unwritable cache: $out"
 
+# $TMPDIR elsewhere than the cache: the entry is still made (the binary is
+# built and linked under the cache's own directory)
+mkdir -p "$T/othertmp"
+echo 'print("tmp")' > "$T/p/tmp.gem"
+out=$(TMPDIR="$T/othertmp" "$GEM" "$T/p/tmp.gem")
+[ "$out" = tmp ] && [ "$(entries)" = 5 ] || fail "TMPDIR elsewhere: $out, $(entries) entries, expected 5"
+# and on another file system, when one is at hand
+devof() { stat -c %d "$1" 2>/dev/null || stat -f %d "$1"; }
+other=""
+for d in /dev/shm "${XDG_RUNTIME_DIR:-}"; do
+  if [ -n "$d" ] && [ -d "$d" ] && [ -w "$d" ] && [ "$(devof "$d")" != "$(devof "$T")" ]; then other=$d; break; fi
+done
+if [ -n "$other" ]; then
+  O=$(mktemp -d "$other/gem_cache.XXXXXX")
+  echo 'print("fs")' > "$T/p/fs.gem"
+  out=$(TMPDIR="$O" "$GEM" "$T/p/fs.gem")
+  [ "$out" = fs ] && [ "$(entries)" = 6 ] || fail "TMPDIR on another file system: $out, $(entries) entries, expected 6"
+  rm -rf "$O"
+else
+  echo "cache: no second file system at hand, skipping the cross-file-system case"
+fi
+# a run leaves nothing in .tmp
+[ -z "$(ls "$GEM_CACHE_DIR/.tmp")" ] || fail ".tmp not empty: $(ls "$GEM_CACHE_DIR/.tmp")"
+
+# an entry removed after its run: the next run builds it again
+rm -rf "$GEM_CACHE_DIR"/*
+out=$("$GEM" "$T/p/tmp.gem")
+[ "$out" = tmp ] && [ "$(entries)" = 1 ] || fail "removed entry: $out, $(entries) entries, expected 1"
+
+# 256 entries: the next new one empties the cache first
+for i in $(seq 1 255); do mkdir "$GEM_CACHE_DIR/fake$i"; done
+echo 'print("full")' > "$T/p/full.gem"
+"$GEM" "$T/p/full.gem" > /dev/null || fail "full cache: the run failed"
+[ "$(entries)" = 1 ] || fail "full cache: $(entries) entries after a new one, expected 1"
+[ -d "$GEM_CACHE_DIR/.tmp" ] || fail "full cache: .tmp removed"
+
+# the runtime's headers are part of the key: a copy of the install root
+# whose gem.h changes
+R="$T/root"
+mkdir -p "$R/build"
+cp -R runtime std "$R/"
+cp build/libgem_runtime.a "$R/build/"
+if [ -f build/tls_libs ]; then cp build/tls_libs "$R/build/"; fi
+cp "$GEM" "$R/build/gem"
+rm -rf "$GEM_CACHE_DIR"/*
+"$R/build/gem" "$T/p/tmp.gem" > /dev/null || fail "copied install root"
+echo '/* changed */' >> "$R/runtime/gem.h"
+out=$("$R/build/gem" "$T/p/tmp.gem")
+[ "$out" = tmp ] && [ "$(entries)" = 2 ] || fail "runtime header changed: $out, $(entries) entries, expected 2"
+
 if [ $fails -eq 0 ]; then echo "cache: OK"; else exit 1; fi

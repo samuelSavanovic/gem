@@ -105,7 +105,8 @@ The order is the order of the work.
    the binary by a hash of its sources, the runtime and the flags; `-o`
    keeps `-O2`.
    *Landed:* the key hashes the C (every loaded file's code), the cc
-   command, the runtime library's and `extern include` headers' contents;
+   command, the contents of the runtime library, the runtime headers and
+   `extern include` headers;
    `GEM_CACHE=off`, `GEM_CACHE_DIR`; at most 256 entries, then emptied.
    `--` after the file passes options to the program. Left: `-l`
    libraries are not in the key.

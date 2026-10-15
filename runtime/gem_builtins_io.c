@@ -3,13 +3,16 @@
  *                      append_file, file_exists, dirname, path_join,
  *                      normalize_path, remove_file, mkdir, list_dir, is_dir, exec;
  *                      plus gem_exe_path (the running binary's real path) and
- *                      gem_temp_dir/gem_rmdir (the compiler's work directory).
+ *                      gem_temp_dir/gem_temp_dir_in/gem_rmdir (the compiler's work directories),
+ *                      gem_hash_hex/gem_file_hash/gem_mkdirs/gem_link/gem_file_age
+ *                      (the compiler's binary cache).
  */
 
 #include "gem.h"
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <libgen.h>
@@ -272,24 +275,27 @@ char *gem_exe_path(void) {
     return resolved;
 }
 
-/* ─── gem_temp_dir, gem_rmdir: the compiler's work directory ───
+/* ─── gem_temp_dir, gem_temp_dir_in, gem_rmdir: work directories ───
  *
  * Not builtins: the compiler calls them through `extern fn`
  * (compiler/main.gem) to keep each compile's C file, and the binary it
  * runs, in a directory no other compile uses. gem_temp_dir makes a new
- * directory with mkdtemp under $TMPDIR (else /tmp) and returns its path
- * in a static buffer, or NULL when it can't. gem_rmdir removes an empty
- * directory and returns 1, else 0. */
+ * directory with mkdtemp under $TMPDIR (else /tmp), gem_temp_dir_in one
+ * under `parent`; both return its path in a static buffer, or NULL when
+ * they can't. gem_rmdir removes an empty directory and returns 1, else 0. */
 
-char *gem_temp_dir(void) {
+char *gem_temp_dir_in(const char *parent) {
     static char dir[PATH_MAX];
-    const char *tmp = getenv("TMPDIR");
-    if (!tmp || !*tmp) tmp = "/tmp";
-    size_t n = strlen(tmp);
-    while (n > 1 && tmp[n - 1] == '/') n--;
-    int len = snprintf(dir, sizeof(dir), "%.*s/gem-XXXXXX", (int)n, tmp);
+    size_t n = strlen(parent);
+    while (n > 1 && parent[n - 1] == '/') n--;
+    int len = snprintf(dir, sizeof(dir), "%.*s/gem-XXXXXX", (int)n, parent);
     if (len < 0 || (size_t)len >= sizeof(dir)) return NULL;
     return mkdtemp(dir);
+}
+
+char *gem_temp_dir(void) {
+    const char *tmp = getenv("TMPDIR");
+    return gem_temp_dir_in(tmp && *tmp ? tmp : "/tmp");
 }
 
 int64_t gem_rmdir(const char *path) {
@@ -298,12 +304,15 @@ int64_t gem_rmdir(const char *path) {
 
 /* ─── The compiler's binary cache (compiler/main.gem, run mode) ───
  *
- * Not builtins either, for the same reason. gem_hash_hex hashes bytes to
- * 32 hex digits (two 64-bit FNV-1a lanes with different offsets): a cache
+ * Not builtins either: the compiler calls them through `extern fn`.
+ * gem_hash_hex hashes bytes to 32 hex digits (two 64-bit FNV-1a lanes
+ * with different offsets, the second with a shift-xor after each byte): a cache
  * key, not a cryptographic hash. gem_file_hash hashes a file's contents,
  * "" when it can't be read. gem_mkdirs is mkdir -p (1 on success, the
- * directory existing included); gem_rename renames atomically within a
- * file system (1 on success). */
+ * directory existing included); gem_link makes `to` a hard link to
+ * `from` (1 on success; 0 when `to` exists or `from` doesn't);
+ * gem_file_age is the seconds since a file's inode last changed (its
+ * st_ctime, which a new link sets), -1 when it can't be read. */
 
 static void gem_fnv2(const uint8_t *p, size_t n, uint64_t *a, uint64_t *b) {
     for (size_t i = 0; i < n; i++) {
@@ -350,8 +359,14 @@ int64_t gem_mkdirs(const char *path) {
     return 1;
 }
 
-int64_t gem_rename(const char *from, const char *to) {
-    return rename(from, to) == 0 ? 1 : 0;
+int64_t gem_link(const char *from, const char *to) {
+    return link(from, to) == 0 ? 1 : 0;
+}
+
+int64_t gem_file_age(const char *path) {
+    struct stat st;
+    if (lstat(path, &st) != 0) return -1;
+    return (int64_t)(time(NULL) - st.st_ctime);
 }
 
 /* ─── Built-in: remove_file ─── */

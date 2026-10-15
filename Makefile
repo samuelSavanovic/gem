@@ -54,11 +54,14 @@ $(GEM): $(STAGE0) $(RUNTIME_LIB)
 # <PREFIX>/lib/gem holds the compiler (build/gem), the runtime library and
 # headers, and std/, laid out as in the repo (the compiler finds them two
 # levels above its real path); <PREFIX>/bin/gem links to the compiler.
+# The old files are removed before the copies: on arm64 macOS, a signed
+# binary overwritten in place is killed when it runs.
 PREFIX ?= /usr/local
 INSTALL_ROOT = $(DESTDIR)$(PREFIX)/lib/gem
 
 install: $(GEM)
 	@mkdir -p $(INSTALL_ROOT)/build $(INSTALL_ROOT)/runtime $(DESTDIR)$(PREFIX)/bin
+	rm -f $(INSTALL_ROOT)/build/gem $(INSTALL_ROOT)/build/libgem_runtime.a $(INSTALL_ROOT)/build/debug/libgem_runtime.a $(INSTALL_ROOT)/build/asan/libgem_runtime.a
 	cp $(GEM) $(RUNTIME_LIB) $(INSTALL_ROOT)/build/
 	@if [ -f $(BUILD_DIR)/tls_libs ]; then cp $(BUILD_DIR)/tls_libs $(INSTALL_ROOT)/build/; fi
 	@for k in debug asan; do if [ -f $(BUILD_DIR)/$$k/libgem_runtime.a ]; then mkdir -p $(INSTALL_ROOT)/build/$$k && cp $(BUILD_DIR)/$$k/libgem_runtime.a $(INSTALL_ROOT)/build/$$k/; fi; done
