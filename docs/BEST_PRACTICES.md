@@ -36,7 +36,8 @@ Contents: [Before you start](#before-you-start) ·
 
 **Running.** `gem prog.gem` compiles and runs a program, building at
 `-O0` and caching the binary, so running it again unchanged starts at
-once; `gem prog.gem -o prog` builds an optimized binary (1.5–2.5x faster: use
+once; `gem prog.gem -o prog` builds an optimized binary (about 1.5–3x faster: on
+the lox benches 1.5–1.75x on Linux x86_64, 2.3–2.8x on macOS arm64; use
 it to measure); `gem --check prog.gem` only checks it and prints the
 compiler's `note:` and `warning:` lines. `gem new name` starts a project
 (`gem.toml`, `main.gem`, `test.gem`), and in it `gem test` runs
