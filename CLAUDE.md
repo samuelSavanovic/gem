@@ -19,8 +19,9 @@ For example:
 ```
 compiler/             # self-hosting compiler (lexer, parser, checks, AST, errors, liveness, lower, fold, codegen, loader, builtins, main)
                       #   checks.gem: compile errors for code that runs but silently does something else (a let hiding an
-                      #   enclosing block's variable, a pattern name already in scope, a statement with no effect, a receive
-                      #   loop calling itself in non-tail position); run by parse_source on the pre-lower AST, so the LSP gets them
+                      #   enclosing block's variable, a pattern name already in scope, a statement with no effect) and a warning
+                      #   (a receive loop calling itself in non-tail position); run by parse_source on the pre-lower AST when
+                      #   the file lexed and parsed without errors, so the LSP gets them
                       #   codegen.gem emits C; its analyses live beside it: scope (shadowing lets, module namespaces),
                       #   captures (free vars, boxing, non-escaping closures), tco (self/mutual tail calls), callgraph,
                       #   loops (arm-let hoist, reset tagging), append (in-place string append), cgutil (shared helpers)
