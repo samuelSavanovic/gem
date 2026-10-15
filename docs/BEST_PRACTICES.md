@@ -34,16 +34,11 @@ Contents: [Before you start](#before-you-start) ·
 
 ## Before you start
 
-**Running.** `gem prog.gem` compiles and runs a program, building at
-`-O0` and caching the binary, so running it again unchanged starts at
-once; `gem prog.gem -o prog` builds an optimized binary (about 1.5–3x faster: on
-the lox benches 1.5–1.75x on Linux x86_64, 2.3–2.8x on macOS arm64; use
-it to measure); `gem --check prog.gem` only checks it and prints the
-compiler's `note:` and `warning:` lines. `gem new name` starts a project
-(`gem.toml`, `main.gem`, `test.gem`), and in it `gem test` runs
-`test.gem` and `gem build` builds `build/<name>`. `argv()` returns the
-arguments (the program name at `argv()[0]`; after `gem prog.gem --`,
-options are the program's too); `getenv(name)` reads the environment.
+**Running.** `gem prog.gem` builds at `-O0`, caches and runs it; `-o prog`
+builds an optimized binary (1.5–1.75x faster on Linux x86_64, 2.3–2.8x on
+macOS arm64: measure with it); `--check` prints the `note:`/`warning:` lines.
+`gem new`/`test`/`build` work on a `gem.toml` project. `argv()[0]` is the
+program (after `--`, options go to it); `getenv(name)` reads the environment.
 
 **Builtins and std modules.** Builtins (`print`, `len`, `push`, `keys`,
 `spawn`, `send`, ...) are always there; the list is in
