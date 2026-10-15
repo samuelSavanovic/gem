@@ -1,8 +1,10 @@
 # A direct call to a named fn, an extern fn or a module export passes at
 # least the required parameters and at most all of them (no limit with a
-# rest parameter). A call through a value is not checked.
+# rest parameter), and so does one to a name a selective `load` imports.
+# A call through a value is not checked.
 # expect: `two` takes 2 arguments, called with 1
 load "std/table"
+load "std/table" (map)
 extern fn strlen(s: String) -> Int
 fn two(a, b) a end
 fn opt(a, b = 1) a end
@@ -18,6 +20,7 @@ none(1)
 blk([1]) do |x| x end
 strlen()
 table.map([1])
+map([1])
 let f = fn()
   two()
 end
