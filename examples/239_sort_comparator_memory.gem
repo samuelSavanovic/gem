@@ -1,0 +1,122 @@
+# sort frees what its comparator allocates as it goes, and keeps what the
+# comparator stores in older tables, module bindings and captured variables
+# (examples/122_closure_capture_roots.gem checks a capture assigned inside
+# the comparator's own loop).
+
+let seen = []
+let last_key = nil
+
+fn shuffled(n)
+  let xs = []
+  for i = 0, n - 1
+    push(xs, (i * 7919) % n)
+  end
+  xs
+end
+
+fn is_sorted(xs)
+  for i = 1, len(xs) - 1
+    if xs[i - 1] > xs[i]
+      return false
+    end
+  end
+  true
+end
+
+# A comparator whose loop builds strings: memory stays flat.
+let xs = shuffled(2000)
+let before = runtime_stats().memory
+sort(xs, fn(a, b)
+  let parts = []
+  let i = 0
+  while i < 3
+    push(parts, "p{i}-{a}-{b}")
+    i = i + 1
+  end
+  a - b
+end)
+let grew_kb = (runtime_stats().memory - before) / 1024
+print("garbage: sorted {is_sorted(xs)}, grew under 8 MB {grew_kb < 8192}")
+
+# What the comparator keeps: pushes onto an older array, a module binding,
+# and variables of the enclosing fn that it assigns (captured).
+fn case_keep()
+  let ys = shuffled(500)
+  let last_pair = nil
+  let calls = 0
+  sort(ys, fn(a, b)
+    calls = calls + 1
+    if calls % 50 == 0
+      push(seen, {a: a, b: b, tag: "pair {a}-{b}"})
+    end
+    last_key = "key {a}/{b}"
+    last_pair = [a, b, "{a},{b}"]
+    let i = 0
+    while i < 3
+      let junk = "junk {i} {a}"
+      i = i + 1
+    end
+    a - b
+  end)
+  let intact = true
+  for s in seen
+    if s.tag != "pair {s.a}-{s.b}"
+      intact = false
+    end
+  end
+  print("kept: sorted {is_sorted(ys)}, {len(seen) == floor(calls / 50)} entries, intact {intact}")
+  print("kept: {last_key == "key {last_pair[0]}/{last_pair[1]}"} {last_pair[2] == "{last_pair[0]},{last_pair[1]}"}")
+end
+case_keep()
+
+# A sort inside the comparator.
+let zs = shuffled(200)
+sort(zs, fn(a, b)
+  let inner = [b, a, "x{a}"]
+  sort(inner, fn(p, q) len("{p}") - len("{q}") end)
+  a - b
+end)
+print("nested: sorted {is_sorted(zs)}")
+
+# A comparator that raises leaves the array as it was.
+let ws = shuffled(300)
+let copy = []
+for w in ws
+  push(copy, w)
+end
+let n = 0
+let r = pcall do
+  sort(ws, fn(a, b)
+    n = n + 1
+    let junk = "junk {a} {b}"
+    if n == 1000
+      error("stop at {junk}")
+    end
+    a - b
+  end)
+end
+let same = true
+for i = 0, len(ws) - 1
+  if ws[i] != copy[i]
+    same = false
+  end
+end
+print("raise: ok={r.ok} unchanged {same} error starts {find(r.error, "stop at junk") == 0}")
+
+# A comparator returning a freshly built non-number names its type.
+let bad = pcall do
+  sort(shuffled(100), fn(a, b) "{a}{b}" end)
+end
+print("bad result: {bad.error}")
+
+# A comparator that spawns and waits for a reply.
+let me = self()
+let vs = shuffled(64)
+sort(vs, fn(a, b)
+  spawn do
+    send(me, {tag: "diff", d: "{a - b}"})
+  end
+  let reply = receive()
+  to_int(reply.d)
+end)
+print("spawning: sorted {is_sorted(vs)}")

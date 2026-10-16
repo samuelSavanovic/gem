@@ -690,11 +690,13 @@ spawn(fn() accept_loop(fd) end)
 
 Garbage made outside any loop (straight-line code, or before a loop starts) is freed when an enclosing loop resets, when an enclosing call of a function that can recurse returns, or when the process exits.
 
+`sort` with a comparator resets like a loop after each comparator call: once a reset is due, what the calls allocated is freed, and what they stored in older tables, module bindings or captured variables is kept.
+
 ### Return resets
 
 The return of a function that can recurse is a reset point too. When a call starts, the runtime remembers how much of the arena is in use; when it returns, if the call has allocated at least 1 MB that no reset during it has freed, the runtime copies the return value (if any) — and, as for a loop, the process's module state and mailbox and anything stored into older tables, buffers or captured variables — into fresh memory and frees the rest of what the call allocated. Memory allocated before the call is never moved or freed by it. After a return reset, the next one also waits until the returning call's unfreed memory and what the process has allocated since add up to twice what that reset copied (four times, when it kept most of what it found), plus half of what it scanned, so a recursion that hands a growing result up its levels copies it a number of times logarithmic in its size, not once per level.
 
-A function can recurse when the compiler finds it on a cycle of calls. A call through a variable, a parameter or a table field, and a call to `pcall`, `sort` or `build_string` (which call the function they are given), count as calls of every closure and of every named function used as a value, so recursion through closures and callbacks is found too. Other functions have no return reset. A closure written directly as the argument of `pcall` or `sort` usually has none either, and the body of a process skips it (its arena is freed when it exits). A call that ends by raising an error frees nothing at that point; its garbage is freed by the next enclosing loop or return reset.
+A function can recurse when the compiler finds it on a cycle of calls. A call through a variable, a parameter or a table field, and a call to `pcall`, `sort` or `build_string` (which call the function they are given), count as calls of every closure and of every named function used as a value, so recursion through closures and callbacks is found too. Other functions have no return reset. A closure written directly as the argument of `pcall` usually has none either, and the body of a process skips it (its arena is freed when it exits). A call that ends by raising an error frees nothing at that point; its garbage is freed by the next enclosing loop or return reset.
 
 ### When the back-edge reset cannot fire
 

@@ -1,5 +1,5 @@
 # Non-escaping closure optimization: when a closure literal is the immediate
-# argument of pcall or sort, codegen skips boxing the captured params on the
+# argument of pcall, codegen skips boxing the captured params on the
 # enclosing function and stack-allocates the env. The closure body must still
 # observe its captures correctly, including mutations.
 
@@ -26,7 +26,7 @@ fn pcall_error_path(label)
 end
 print(pcall_error_path("test3"))  # false
 
-# Test 4: sort with a capturing comparator (non-escaping).
+# Test 4: sort with a capturing comparator.
 fn sort_with_threshold(arr, t)
   sort(arr, fn(a, b)
     let aa = a

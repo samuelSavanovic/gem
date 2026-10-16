@@ -712,8 +712,8 @@ void gem_pin_free_all(GemProcess *proc) {
  * log it, so case 3 finds it; and every mark held by an enclosing loop or
  * call is older than the point, since loops in the caller cannot reach
  * their back-edge during the call, while loops in the callee have ended
- * or are left by this return. A non-escaping closure (a pcall or sort
- * argument, mark_non_escaping) can write its creator's C locals, which
+ * or are left by this return. A non-escaping closure (a pcall argument,
+ * mark_non_escaping) can write its creator's C locals, which
  * its loops' resets root but a return reset would not, so it has no
  * return point; nor does a mutual-TCO body, whose return carries
  * the next body's args in the global gem_tail_args: its trampoline resets

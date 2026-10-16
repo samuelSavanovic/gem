@@ -58,9 +58,9 @@ The order is the order of the work.
    after one (a sort comparator's, called from top-level code with no
    enclosing loop) leaves no mapping behind: at a 1 KB threshold,
    117_arena_reset_pressure's arena ends at 45 MB, and at 7.1 GB when
-   such resets map blocks (macOS). Remaining: a reset that copies
-   something leaves blocks behind when its loop ends right after it,
-   for good when no enclosing loop resets (OPTIMIZATIONS, P2).
+   such resets map blocks (macOS). `sort` resets after its comparator
+   calls, so a comparator's loop doesn't leave blocks behind at every
+   call either.
 2. **Silent-semantics pass in the compiler.** ✓ Done (compiler/checks.gem
    and the parser; `pcall(f(x))` and the `receive` self call are
    warnings, the rest compile errors). Turn the silent traps into
